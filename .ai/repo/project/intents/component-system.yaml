@@ -31,6 +31,10 @@ satisfaction:
   criterion: "A sequencer pattern opens in the Studio and plays end to end in the cockpit, with level, scope and playhead moving and the node census 0 after stop"
   evidence: command
   ref: "node --test tests/unit/studio-open-sequence.test.mjs && node tests/browser/studio-cockpit.cjs --only song-pipeline"
+- id: keys-one-component
+  criterion: "Every key and Space is bound once, through one registry that refuses a second owner of a chord in the same scope, and handled by one document dispatcher that passes through IME, text fields, a focused control's own keys and unowned chords and pairs each press with one release; key listeners outside src/js/ui/keys/ only shrink"
+  evidence: command
+  ref: "node --test tests/unit/keys-registry.test.mjs"
 - id: generated-docs
   criterion: docs/ui-catalog.md is generated from the declarations and current
   evidence: command
@@ -51,6 +55,10 @@ satisfaction:
   criterion: "Every declared kind, component, node type and parameter names its plan and its rule or ADR ids in its trace and every id resolves; Majordomus serves each from a current generated knowledge record (knowledge validate reports nothing under .ai/repo/knowledge/components/, context resolve on its source module returns the component contract); and the allowance of untraced declarations is empty"
   evidence: command
   ref: "node --test tests/unit/component-trace.test.mjs tests/unit/component-links.test.mjs tests/unit/component-kb.test.mjs && node scripts/ui-catalog.mjs --check"
+- id: panels-arrangeable
+  criterion: "Every workspace's declared panels move, resize and reorder per device, stack and reorder on a phone, reset per page with one undo, never store layout in the document, hash or history, never hide a panel that owns sound or a capture, and every Move keeps focus and reading order equal to the visual order"
+  evidence: command
+  ref: "node --test tests/unit/panels-layout.test.mjs && node tests/browser/panels.cjs"
 governance:
 - "rule:project.rules-name-their-enforcement"
 - "rule:project.majordomus-layer-current"

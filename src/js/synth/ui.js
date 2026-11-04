@@ -1,24 +1,25 @@
-// The SYNTH workspace (plan K058-K066, K103 part, K104, K106 part): the DOM/Alpine adapter of the
-// Synth panel, composed into the Studio part (ui/studio/workspace.js), which owns the ONE store
-// and the ONE transport. The panel is a projection of the StudioModel (rule
-// project.studio-model-is-canonical): knobs dispatch NODE_PARAM_SET, amounts and cables one
-// BATCH each, and it re-reads the model after every change, so an edit made in Studio shows
-// here and nothing is ever repaired behind the user's back.
+// The SYNTH workspace (plan K058-K066, K103-K106 parts): the Synth panel's DOM/Alpine adapter,
+// composed into the Studio part (ui/studio/workspace.js), which owns the ONE store and ONE
+// transport. The panel projects the StudioModel (project.studio-model-is-canonical): knobs
+// dispatch NODE_PARAM_SET, amounts and cables one BATCH each, and it re-reads the model after
+// every change, so a Studio edit shows here and nothing is repaired behind the user's back.
 //
-// Audio: the keyboard, the on-screen keys and MIDI play the panel through ONE path, synthSink()
-// (src/js/midi/notes.js `route`): the first note arms the transport (transport.arm: the Synth's
-// nodes only, no timeline), then transport.live drives the Keys node. Leaving the workspace,
-// Escape, page hide and STOP disarm; a measurement owning the output refuses the arm.
+// Audio: keyboard, on-screen keys and MIDI play the panel through synthSink() (midi/notes.js
+// route): the first note arms the transport, transport.live drives the Keys node; the Studio's
+// keys take studioSink() (studio-sink.js), one path on any document. Leaving, Escape,
+// page hide and STOP disarm; a measurement owning the output refuses the arm.
 //
-// Tabs (Q019; PR B): Panel holds the semi-modular voice, Engines the polyphonic engines
-// (panels/engines.js); the keys play the Keys node on Panel and the chosen engine on Engines,
-// through the same sink. Switching tab releases every held note first.
+// Tabs (Q019): Panel holds the mono voice, Engines the polyphonic engines; the keys play the
+// Keys node or the chosen engine through the same sink; a tab change releases held notes.
 //
 //   createSynthUi({ get, setupAudio, announce }) -> the component part
 //     get() -> { handle, transport }   the workspace's store handle and transport (late-bound)
 
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
+import { routedNode } from './picker.js';
+import { createDock } from './dock.js';
+import { SYNTH_TEXT, insertDecision } from './insert.js';
 import {
   STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, createAmountMemory, jackReason,
   jackState, panelCables, patchCable, restoreNormals, setAmount, unpatch,
@@ -34,38 +35,13 @@ import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
-import { isSemanticallyEqual } from '../studio/schema.js';
-import { REFERENCE_TEMPLATE_ID, templateModel } from '../studio/templates/index.js';
+import { createXyTab } from './view/xy-tab.js';
+import { createStudioSink } from './studio-sink.js';
+import { applyFace, faceChips, faceClass } from './view/faces.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
-export const SYNTH_TEXT = Object.freeze({
-  inserted: `Inserted the ${SEMI_MONO.title} into the Studio document; it feeds Master Output. `
-    + 'Undo removes it.',
-  /** Master holds one input: inserting the panel takes it from the document's chain. */
-  takes: (names) => `Master Output is fed by ${names} in this Studio document. Inserting the `
-    + `${SEMI_MONO.title} takes Master Output from it (Undo gives it back).`,
-  took: (names) => `Inserted the ${SEMI_MONO.title} into the Studio document; it took Master `
-    + `Output from ${names}. Undo removes the panel and gives it back.`,
-  notInserted: 'The Synth panel is not in this Studio document: press Insert first.',
-  armed: 'Synth armed: the keys play the panel.',
-  disarmed: 'Synth disarmed: no note sounds.',
-  refused: 'The Synth did not arm: the output belongs to the measurement. Stop it first (Esc).',
-  direction: 'A cable runs from an output jack to an input jack.',
-});
+export { SYNTH_TEXT, insertDecision };
 const DRAG_PX = 4;
-
-/**
- * Whether opening the workspace (or a note, Arm, a preset, a link) may insert the panel by
- * itself: when that cuts nothing, or when the document is still the untouched reference
- * template the app opens with (no work of the user's to cut; the notice says what it took and
- * Undo gives it back). A document the user has changed whose own chain feeds Master Output
- * gets the panel only from the Insert button. -> { auto, cuts: [edge] }
- */
-export function insertDecision(model, panel = SEMI_MONO) {
-  const cuts = panel.cutsOf(model);
-  if (!cuts.length) return { auto: true, cuts };
-  return { auto: isSemanticallyEqual(model, templateModel(REFERENCE_TEMPLATE_ID)), cuts };
-}
 
 export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   registry = NODE_REGISTRY } = {}) {
@@ -77,6 +53,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   let pending = null; // tap-tap connect: the first jack
   let selected = null; // a selected cable id
   let layout = null;
+  let face = 'panel'; // below xl: the module cards or the patch bay (view/faces.js)
   const memory = createAmountMemory(panel); // amount depths of this session (normals.js)
   // The folded cards (K062): view state of this page, never in history, the hash or browser
   // storage (the README's privacy inventory lists no Synth key), so a reload expands them.
@@ -88,6 +65,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     : ENGINE_IDS[0]);
   /** The module the keys play now: Keys on the Panel tab, the chosen engine on Engines. */
   const playedModule = () => (tab() === 'engines' ? engineId() : 'keys');
+  /** The node the keys play: the one routed by the picker (K066), else the tab's module. */
+  const played = () => routedNode(model(), registry) || nodes().get(playedModule());
   const handle = () => get().handle;
   const transport = () => {
     setupAudio();
@@ -101,6 +80,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (cmp) cmp.synth.status = text;
     announce(text, { assertive });
   };
+  const studioSink = createStudioSink({ get, setupAudio, say, registry,
+    ensureAudio: () => cmp && cmp.ensureAudio && cmp.ensureAudio() });
   const dispatch = (action) => {
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
@@ -326,10 +307,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!el || !cmp) return;
     const focus = document.activeElement;
     const keep = focus && el.contains(focus) ? ['data-knob', 'data-option', 'data-toggle',
-      'data-jack', 'data-collapse', 'data-fold-all'].map((a) => [a, focus.getAttribute(a),
+      'data-jack', 'data-collapse', 'data-fold-all', 'data-xy-surface', 'data-xy-axis']
+      .map((a) => [a, focus.getAttribute(a),
       focus.getAttribute('data-v')])
       .find(([, v]) => v) : null;
     if (!present()) {
+      xy.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
         + 'text-gray-700 dark:text-gray-300"><p>This Studio document has no Synth panel.</p>'
@@ -360,17 +343,18 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     el.innerHTML = `<nav aria-label="${engines ? 'Synth engines' : 'Synth sections'}" `
       + 'class="sticky top-0 z-20 -mx-4 mb-3 flex snap-x snap-mandatory gap-2 overflow-x-auto '
       + `bg-gray-50 px-4 py-2 dark:bg-gray-900 ${engines ? 'lg:flex-wrap' : 'xl:hidden'}" `
-      + `>${chips}<button type="button" data-goto="bay" `
-      + `class="${CHIP} border-primary-600 text-primary-700 dark:text-primary-400">PATCH BAY`
-      + '</button></nav>'
+      + `>${faceChips(face)}${chips}</nav>`
       + '<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">'
-      + '<div><div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
+      + `<div data-face-of="panel" class="${faceClass(face, 'panel')}">`
+      + '<div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
       + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
+      + (tab() === 'xy' ? xy.html() : '')
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
-      + 'xl:sticky xl:top-4" aria-labelledby="synth-bay-title" data-osc="synth.bay" '
+      + `xl:sticky xl:top-4 ${faceClass(face, 'bay')}" data-face-of="bay" `
+      + 'aria-labelledby="synth-bay-title" data-osc="synth.bay" '
       + 'data-module="bay"><h3 id="synth-bay-title" class="text-sm font-bold tracking-widest '
       + 'text-gray-900 dark:text-white">PATCH BAY</h3><p class="mt-1 text-xs text-gray-500 '
       + 'dark:text-gray-400">Every input is normalled: it plays with no cable. A cable into a '
@@ -383,6 +367,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
     renderBay();
+    xy.mount();
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
     if (keep) {
@@ -391,6 +376,16 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const again = el.querySelector(sel);
       if (again) again.focus({ preventScroll: true });
     }
+  }
+
+  /** Show one face below xl without rebuilding the view; the bay is laid out again at the
+   *  width it now has. */
+  function showFace(f) {
+    const el = host();
+    if (!el) return;
+    face = f;
+    applyFace(el, f);
+    if (f === 'bay') renderBay();
   }
 
   const shapeOf = () => {
@@ -415,6 +410,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function refresh() {
     memory.note(model());
+    dock.sync();
     if (!cmp || cmp.workspace !== 'synth') return;
     const t = get().transport;
     cmp.synth.armed = !!(t && t.armed);
@@ -497,10 +493,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const t = e.target.closest('[data-option],[data-toggle],[data-goto],[data-cable],'
       + '[data-remove-cable],[data-restore-normal],[data-restore-module],[data-insert-panel],'
       + '[data-engine],[data-blocked],[data-break-normal],[data-connect-to],[data-connect-cancel],'
-      + '[data-collapse],[data-fold-all]');
+      + '[data-collapse],[data-fold-all],[data-face]');
     if (!t) return;
     const d = t.dataset;
     if (d.engine) {
+      dock.unroute();
       showTab('engines', d.engine);
       say(`${panel.module(d.engine).label}: the keys play this engine.`);
     } else if (d.blocked) {
@@ -516,7 +513,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const why = document.getElementById(`${d.toggle}-why`);
         say(why ? why.textContent : 'This control is disabled.');
       } else if (x) setControl(d.toggle, !valueOf(x));
+    } else if (d.face) {
+      showFace(d.face);
+      const first = host().querySelector('[data-osc="synth.modules"] [data-module]');
+      gotoSection(d.face === 'bay' ? 'bay' : first && first.dataset.module);
+      const again = host().querySelector(`[data-face="${d.face}"]`);
+      if (again) again.focus({ preventScroll: true });
     } else if (d.goto) {
+      if (face !== 'panel') showFace('panel');
       gotoSection(d.goto);
     } else if (d.cable) {
       selected = selected === d.cable ? null : d.cable;
@@ -690,6 +694,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     setControl(k.dataset.knob, x.c.kind === 'amount' ? 0 : x.c.initial);
   }
 
+
+  // K097 XY tab
+  const xy = createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab,
+    BTN, cmp: () => cmp });
+
   // ------------------------------------------------------------------ notes
 
   function noteOn(note, velocity) {
@@ -705,7 +714,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       say(SYNTH_TEXT.armed);
       if (cmp) cmp.synth.armed = !!t.armed;
     }
-    const target = nodes().get(playedModule());
+    const target = played();
     if (!target) {
       say(`${panel.module(playedModule()).label} was removed in Studio: Restore module first.`,
         true);
@@ -718,7 +727,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   function noteOff(note) {
     const t = get().transport;
-    const k = present() ? nodes().get(playedModule()) : null;
+    const k = present() ? played() : null;
     return t && k ? t.live(k.id, { kind: 'off', note }).ok : false;
   }
 
@@ -727,9 +736,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const t = get().transport;
     if (!t || !present() || !t.playing) return 0;
     let n = 0;
-    for (const id of ['keys', ...ENGINE_IDS]) {
-      const node = nodes().get(id);
-      if (node) n += t.live(node.id, { kind: 'all-off' }).released || 0;
+    const all = ['keys', ...ENGINE_IDS, 'xy'].map((id) => nodes().get(id));
+    for (const x of new Set([...all, played()])) {
+      if (x) n += t.live(x.id, { kind: 'all-off' }).released || 0;
     }
     return n;
   }
@@ -771,8 +780,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const info = panel.tabs.find((x) => x.id === next);
     cmp.synth.title = info.title;
     cmp.synth.description = info.description;
+    dock.sync();
     requestAnimationFrame(renderAll);
   }
+
+  const dock = createDock({ panel, registry, cmp: () => cmp, model, present, played,
+    ensurePanel, dispatch, say, allOff });
 
   // ------------------------------------------------------------------ the part
 
@@ -780,19 +793,21 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synth: {
       title: panel.title,
       description: panel.description,
-      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.id === 'panel' ? 'Panel' : 'Engines' })),
+      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.label })),
       tab: 'panel',
       engine: ENGINE_IDS[0],
-      presets: PRESETS.map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
+      presets: [...PRESETS, ...xy.presets].map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
       preset: 'init',
       armed: false,
       status: '',
       link: '',
+      dock: dock.state(), // K066, beside the piano (synth/dock.js)
     },
 
     synthInit() {
       cmp = this;
       memory.note(model());
+      dock.sync();
       handle().subscribe(() => queueMicrotask(refresh));
       const el = document.querySelector('[data-osc="synth-view"]');
       if (el) {
@@ -831,6 +846,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synthSink() {
       return { noteOn, noteOff, allOff };
     },
+    studioSink: () => studioSink.active(),
 
     synthArm() {
       const t = transport();
@@ -849,6 +865,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     synthPreset(id) {
       if (!ensurePanel()) return false;
+      if (xy.has(id)) return xy.preset(id);
       const r = presetAction(model(), panel, id);
       if (r.reason) { say(r.reason, true); return false; }
       const done = dispatch(r.action);
@@ -860,6 +877,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       }
       return done.ok;
     },
+
+    ...dock.methods,
 
     /** The tab strip (Panel | Engines). */
     synthTab(id) {
@@ -904,10 +923,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     /** Test and debug reads (window.OSCILLA.app.synthDebug(); not a contract). */
     synthDebug() {
       const t = get().transport;
-      const played = present() ? nodes().get(playedModule()) : null;
+      const on = present() ? played() : null;
       return { present: present(), armed: !!(t && t.armed), held: t ? t.heldNotes() : [],
-        tab: tab(), engine: engineId(), played: played ? played.id : null,
-        voices: t && played && typeof t.liveVoices === 'function' ? t.liveVoices(played.id) : 0,
+        tab: tab(), engine: engineId(), played: on ? on.id : null,
+        voices: t && on && typeof t.liveVoices === 'function' ? t.liveVoices(on.id) : 0,
         nodes: Object.fromEntries([...nodes()].map(([k, n]) => [k, n ? n.id : null])),
         cables: userCables(), link: present() ? linkNow() : '' };
     },

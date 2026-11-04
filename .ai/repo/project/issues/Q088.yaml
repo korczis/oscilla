@@ -1,0 +1,32 @@
+id: Q088
+milestone: M121
+title: "Owner decision: which content musical-practice exercises first: the riffs, the patches or the scales"
+slug: owner-decision-which-content-musical-practice-exercises-first
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "The first exercise type refers to existing OSCILLA content, and the candidates are owned elsewhere: (a) the original riffs of the music library (K149, M120), played back as notes clips; (b) the Studio patches (src/js/studio/patches.js, schema oscilla-patch), an exercise about the sound a patch or parameter makes; (c) scales, which src/js/core/music.js computes (SCALE_MODES, scaleNote) but which no library holds as content entries today. Which comes first? The proposal says 'Create guided exercises only from real, serializable, testable OSCILLA content'."
+why: "The owner's proposal 'Interactive learning and musical practice' (pasted into the af session at 2026-11-03T01:34Z, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Answered by the owner on 2026-11-03 (~19:3xZ, AskUserQuestion in the oscilla-af session): 'Riffs'. The first exercise type is the music library's original riffs (K149, M120), played back as notes clips and then played by the learner, so it depends on K149 and K099's notes clip being on main. The owner_decision evidence is recorded once this plan is on main."
+scope:
+  - ".ai/repo/project/issues/Q088.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names (a), (b) or (c) as the first exercise content, and whether the others follow or are descoped."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-03
+updated_at: 2026-11-03T22:23:07Z
+started_at: 2026-11-03T22:22:56Z
+started_event: sha256:0fd916012081ddee59ca68f107c677969ee786cd1088d4bca64f63f71d5ed5e4
+completed_at: 2026-11-03T22:23:07Z
+completed_event: sha256:07a11560d73d185b5ec62f12368ff71234d6a92ef034c75a823d336be4ff0e30
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af, 2026-11-03 ~19:3xZ, the musical-practice owner questions"
+    result: "The owner answered: 'Riffs'. The first exercise type is the music library's original riffs (K149, M120), played back as notes clips and then played by the learner; it depends on K149 and K099's notes clip being on main."
+    commit: e006eb259da505cb40f3e95005343029e0bb77c7
+    recorded_at: 2026-11-03T22:21:18Z

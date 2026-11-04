@@ -1,0 +1,19 @@
+id: M119
+title: "Owner decisions of the song-reconstruction proposal"
+slug: owner-decisions-of-the-song-reconstruction-proposal
+order: 992
+priority: p2
+problem: "The owner's OSCILLA RECONSTRUCT pack (2026-11-02, marked 'Status: PROPOSAL') is recorded as the proposed intent song-reconstruction, which names no milestone and no criterion. The research that mapped the pack onto the plan (P00 gap map, P01 alignment) raised questions only the owner can answer: the intent's standing (Q072), the licence of what is reconstructed and of the fixtures (Q073, the pack's Q-A), where a local companion lives and whether it breaches product-direction's 'no backend' (Q074, Q-B and Q-C), the order of the first slice (Q075, Q-D), inverse synthesis (Q076, Q-E), the share of the gzip budget (Q077, Q-F) and the name and the issue prefix (Q078, Q-G)."
+current_state: "Opened on 2026-11-02. Q072-Q075 were answered by the owner on 2026-11-02 at about 22:20 UTC through AskUserQuestion in the oscilla-b0 session, and each records the answer as owner_decision evidence; Q076, Q077 and Q078 are open. Like M063, M084, M088 and M104 it is named by no intent, so the proposal stays unplanned; once the independent critique of song-reconstruction is recorded (Q072), the slices planned from it name these questions in depends_on."
+outcome: "Every question of the song-reconstruction proposal is answered by the owner, or under a delegation the owner gave, and recorded, and the intent is planned from the answers and its critique, or cancelled."
+acceptance_criteria:
+  - "Every Q issue of this milestone carries owner_decision evidence with its date and source, or is cancelled with the reason."
+validation:
+  - "manual"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Nobody asks the owner the open three: the coordinator raises Q078 before the first issue of the intent is filed (it names the prefix), Q077 before the first view lands in dist, and Q076 only after the import and lineage milestones have evidence."
+  - "An answer read as acceptance of the intent: Q072 keeps it proposed until an independent critique is recorded; no answer here marks it accepted."
+created_at: 2026-11-02
+updated_at: 2026-11-02

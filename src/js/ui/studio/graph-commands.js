@@ -9,7 +9,8 @@
 //     nudge, endNudge, tidy, toggleMute, onPress(), destroy() }
 //     ctx: { viewport, store, registry, svc, view(), setView(v), centerPoint(),
 //            clientToGraph(x, y), isOverViewport(x, y), focusNode(id), isShown(),
-//            nodeHeights() -> Map id -> logical height (tidy rows; 0 when unmeasured) }
+//            nodeGeometry() -> Map id -> { h, anchors } (the measured cards, for L),
+//            viewSize() -> { w, h } px of the graph viewport (L's wrap gate) }
 //     store.hold(fn), when the store has it (workspace.js createStoreHandle), runs a command of
 //     many actions with one projection update at its end (docs/v31/performance.md editMs).
 //
@@ -20,10 +21,9 @@
 //     its signal) that the validator accepts on the graph without the node (probeConnection,
 //     with the bridges already planned); none -> reason. A bridge is muted ({ muted: true })
 //     when either cable it replaces was. `dropped`: the names of the sources no bridge carries
-//   tidyPositions(model, { registry, heights }) -> Map id -> { x, y }   L: compactLayout's
-//     columns and rows from the graph's top-left corner, NODE_WIDTH + TIDY_COLUMN_GAP apart,
-//     each row below the tallest node of the one above (TIDY_DEFAULT_HEIGHT when unknown) plus
-//     TIDY_ROW_GAP, on the grid. Deterministic: the model and the heights decide
+//   L: graph-layout.js tidyLayout (plan V637, ADR 0087), the layered layout of the measured
+//     cards with the fewest crossings, wrapped into rows only when the graph does not fit the
+//     viewport at the coarse fit zoom. Deterministic: the model, the cards and the viewport decide
 //   muteTargets(model, edgeIds) -> { muted, edgeIds } | null   M: mute every selected cable,
 //     or unmute them when every one is muted
 
@@ -32,15 +32,12 @@ import { copySubgraph } from '../../studio/actions.js';
 import { defaultEdgeProps } from '../../studio/ports.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { withoutNodes } from '../../studio/schema.js';
-import { NODE_WIDTH, nudgeDelta, panBy, snap, snapPoint } from './graph-geometry.js';
-import { compactLayout } from './graph-layout.js';
+import { NODE_WIDTH, nudgeDelta, panBy, snapPoint } from './graph-geometry.js';
+import { tidyLayout } from './graph-layout.js';
 import { connectionTargets, probeConnection } from './graph-view.js';
 import { focusSelection, toggleFocusedSelection } from './graph-keys.js';
 
 const NODE_HEAD_OFFSET = 18; // logical units above the pointer where an inserted node's top sits
-export const TIDY_COLUMN_GAP = 72;
-export const TIDY_ROW_GAP = 48;
-export const TIDY_DEFAULT_HEIGHT = 120;
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -86,26 +83,6 @@ export function bridgePlan(model, nodeId, registry = NODE_REGISTRY) {
   const dropped = edges.length ? [...new Set(ins.filter((i) => !used.has(i))
     .map((i) => nameOf(i.from.node)))] : [];
   return { edges, reason: edges.length ? null : reason, dropped };
-}
-
-export function tidyPositions(model, { registry = NODE_REGISTRY, heights = null } = {}) {
-  const layout = compactLayout(model, { registry });
-  const out = new Map();
-  const nodes = model.graph.nodes;
-  if (!nodes.length) return out;
-  const ox = snap(Math.min(...nodes.map((n) => n.position.x)));
-  const oy = snap(Math.min(...nodes.map((n) => n.position.y)));
-  const rowH = new Array(layout.rows).fill(0);
-  for (const n of layout.nodes) {
-    const hgt = heights && heights.get(n.id) > 0 ? heights.get(n.id) : TIDY_DEFAULT_HEIGHT;
-    rowH[n.row] = Math.max(rowH[n.row], hgt);
-  }
-  const rowY = [oy];
-  for (let r = 1; r < layout.rows; r++) rowY[r] = rowY[r - 1] + rowH[r - 1] + TIDY_ROW_GAP;
-  for (const n of layout.nodes) {
-    out.set(n.id, { x: ox + n.col * (NODE_WIDTH + TIDY_COLUMN_GAP), y: snap(rowY[n.row]) });
-  }
-  return out;
 }
 
 export function muteTargets(model, edgeIds) {
@@ -320,11 +297,12 @@ export function createGraphCommands(ctx) {
       dropped: plan.dropped });
   }
 
-  /** L (K009): every node to its tidyPositions place, one NODE_MOVE gesture. */
+  /** L (K009, V637): every node to its tidyLayout place, one NODE_MOVE gesture. */
   function tidy() {
     const m = model();
-    const heights = ctx.nodeHeights ? ctx.nodeHeights() : null;
-    const pos = tidyPositions(m, { registry, heights });
+    const lay = tidyLayout(m, ctx.viewSize ? ctx.viewSize() : null, { registry,
+      geometry: ctx.nodeGeometry ? ctx.nodeGeometry() : null });
+    const pos = lay.positions;
     const moves = m.graph.nodes.filter((n) => {
       const p = pos.get(n.id);
       return p && (p.x !== n.position.x || p.y !== n.position.y);
@@ -349,7 +327,8 @@ export function createGraphCommands(ctx) {
       announce(announceAction(failed), { assertive: true });
       return false;
     }
-    announce(`Tidied the graph: ${plural(moves.length, 'node')} moved`);
+    announce(`Tidied the graph: ${plural(moves.length, 'node')} moved${
+      lay.rows > 1 ? `, in ${lay.rows} rows` : ''}`);
     return true;
   }
 

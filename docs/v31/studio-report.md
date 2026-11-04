@@ -51,7 +51,7 @@ no audio node; the compiler builds each one with the existing engine's builders 
 | Category | Count | Node types |
 | --- | --- | --- |
 | Sources | 11 | Oscillator `oscillator`, Noise `noise`, Sweep `sweep`, Sequence `sequence`, Microphone `microphone`, VCO `vco`, Additive engine `additive-voice`, FM engine `fm-voice`, AM/ring engine `am-voice`, Wavetable engine `wavetable-voice`, Percussion engine `perc-voice` |
-| Modulation | 6 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro`, Keys `keys` |
+| Modulation | 7 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro`, Keys `keys`, XY Pad `xy-pad` |
 | Processing | 7 | Gain `gain`, Filter `filter`, Pan `pan`, Stereo Split `stereo-split`, Mixer `mixer`, Drive `drive`, Ring `ring` |
 | Analysis | 5 | Scope `scope`, Spectrum `spectrum`, Spectrogram `spectrogram`, Meter `meter`, RTA `rta` |
 | Output | 2 | Master Output `master`, Recorder/Export `recorder` |
@@ -95,7 +95,7 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 | Model field | Values |
 | --- | --- |
 | Track kinds | event, measurement |
-| Clip kinds | pattern, event, measurement |
+| Clip kinds | pattern, event, measurement, notes |
 | Clip time bases | absolute, tempo |
 | Event clip actions | gate, trigger |
 | Measurement clip steps | noise-check, pre-roll, stimulus, capture, tail, analysis |
@@ -143,6 +143,13 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 | stereo-beat | Stereo Beat | synthesis |
 | filter-automation | Filter Automation | synthesis |
 | measurement-sweep | Measurement Sweep | measurement |
+| first-patch | First Patch | synthesis |
+| filter-envelope-synth | Filter Envelope Synth | synthesis |
+| fm-chime | FM Chime | synthesis |
+| ring-mod | Ring Mod | synthesis |
+| drive-lead | Drive Lead | synthesis |
+| macro-pad | Macro Pad | synthesis |
+| step-bass | Step Bass | synthesis |
 | demo-song | Demo song: Lantern in the Slag Yard | synthesis |
 <!-- templates:end -->
 
@@ -187,9 +194,10 @@ Further unit tests cover the Studio outside the `v31-studio-` prefix (`v4-*`, `v
 - `tests/browser/v31-studio-workflows.cjs`
 - `tests/browser/v31-studio-links.cjs`
 - `tests/browser/v31-studio-runtime.cjs`
-- `tests/browser/synth.cjs`
-- `tests/browser/synth-engines.cjs`
 <!-- browser-suites:end -->
+
+The Synth's suites (`tests/browser/synth.cjs`, `tests/browser/synth-engines.cjs`,
+`tests/browser/xy-pad.cjs`) run in `npm run test:synth` since K075, after the integration map.
 
 For this report only the unit tests were run (`npm run verify`); the browser suites and the
 release gate were not.
@@ -329,6 +337,9 @@ evidence) are what the Studio's measurement records rely on.
 | [0041](../../.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md) | Run comparison is semantic and classifies execution vs presentation changes | accepted |
 | [0042](../../.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md) | Studio operation trace: one correlation id, bounded, not evidence | accepted |
 | [0048](../../.ai/repo/adrs/0048-connected-records-over-stored-fields.md) | Connected records come from stored fields only, and read present only when the identity verifies | accepted |
+| [0084](../../.ai/repo/adrs/0084-the-studio-timeline-carries-notes-clips-instrument-tracks-and-a-session-grid.md) | The Studio timeline carries notes clips with a piano roll, several instrument tracks, a session grid and later MIDI output (amends ADR 0058 decision 5) | accepted |
+| [0086](../../.ai/repo/adrs/0086-one-notes-array-the-step-grid-is-a-projection-of-the-notes-clip.md) | One notes array: the step grid, the piano roll and the beat machine edit the notes clip, on the one transport and scheduler | proposed |
+| [0087](../../.ai/repo/adrs/0087-the-studio-tidy-is-a-hand-written-layered-layout-with-a-gated-row-wrap.md) | The Studio Tidy (L) is a hand-written layered layout with a gated min-cut row wrap; no layout library enters dist | proposed |
 <!-- adrs:end -->
 
 ## Not built

@@ -1102,6 +1102,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0055', 'repository operation: how a merge train lands'],
   ['0056', 'repository operation: when the Majordomus CI pin moves'],
   ['0057', 'release evidence: what proves a static Pages deployment'],
+  ['0082', 'release engineering: the gate verdict of a release is the CI run of its own pull'
+    + ' request (rule project.release-receipt-binds-gate v2, tests/unit/release-ci-receipt'
+    + '.test.mjs); it adds no capability of the page'],
   ['0060', 'a product-path decision (Q003): no commercial path before v4.0; it adds no'
     + ' capability of the page'],
   ['0061', 'the UI system (Flowbite Pro on Tailwind, built and inlined): rule'
@@ -1115,6 +1118,15 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0081', 'a proposed decision (J001): the component contract and its Majordomus projection;'
     + ' nothing implements it yet, and G001\'s claim cites it when the catalogue ships, and this'
     + ' entry then fails as stale'],
+  ['0084', 'a scope decision (Q062): notes clips, instrument tracks and a session grid on the'
+    + ' Studio timeline; nothing implements it yet, and K099\'s claim cites it when the notes clip'
+    + ' kind ships, and this entry then fails as stale'],
+  ['0085', 'an accepted decision (song-reconstruction critique, finding'
+    + ' lineage-and-acceptance-have-no-home): where reconstruction lineage and acceptance live;'
+    + ' nothing implements it yet, and the first issue of that intent cites it when it ships'],
+  ['0086', 'a proposed decision (programs B and C): one notes array edited by the step grid, the'
+    + ' piano roll and the beat machine; nothing implements it yet, and K099\'s claim cites it'
+    + ' when the notes clip kind ships, and this entry then fails as stale'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */

@@ -36,4 +36,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:14:05Z
+started_at: 2026-11-03T00:13:34Z
+started_event: sha256:932e025ec5473db612fce5a2e3011a7490f115ca2361ede9672dc8d15e7d4b33
+completed_at: 2026-11-03T00:14:05Z
+completed_event: sha256:21b6602350586da409591406ad68ec35d9bfa44a625d50fbdb3bfe14aecc2916
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/sequencer-editor.test.mjs tests/unit/sequencer-timeline.test.mjs; node tests/browser/sequencer.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc, member #306); currentPassBlock unit test and seq-playhead-after-edit in tests/browser/sequencer.cjs; CI run 41357644373 green on the train head c2a6f6c5; Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:13:53Z

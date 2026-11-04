@@ -98,6 +98,9 @@ import { mountInspector } from './inspector.js';
 import { mountLibrary } from './library-panel.js';
 import { compactTime, mountCompact } from './compact.js';
 import { STUDIO_STORE_FALLBACK_TEXT, mountPatches, recordId } from './patches-panel.js';
+import { mountPatchBrowser } from '../patch-browser.js';
+import { registerSynthSources } from '../../synth/library.js';
+import { registerRiffSource } from '../../studio/riffs/source.js';
 import { mountStudioTimeline } from './timeline-editor.js';
 import { studioBackTarget, workspacePhrase } from '../cross-links.js';
 import { WORKSPACE_LABELS } from '../shortcuts.js';
@@ -1063,6 +1066,8 @@ export function createStudioUi(svc = {}) {
       onAllowMicrophone: (id) => allowMicrophone(id),
       micError: (id) => ctx.micErrors.get(id) || '',
       micBusy: () => ctx.micBusy,
+      userPatches: () => library().then((l) => l.patches()),
+      openLibrary: () => cmp.patchLibraryOpen(),
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
@@ -1109,6 +1114,19 @@ export function createStudioUi(svc = {}) {
       downloadFile,
       ...dialogSvc,
     });
+    // K102: the one patch library, shared by the Synth and the Studio, in the patches dialog.
+    const libBody = document.querySelector('#osc-dlg-studio-library > div');
+    const browserHost = libBody ? libBody.insertBefore(document.createElement('div'),
+      libBody.lastElementChild) : null;
+    registerSynthSources();
+    registerRiffSource(svc, cmp);
+    ctx.browser = browserHost ? mountPatchBrowser(browserHost, { store: ctx.handle, announce,
+      userPatches: () => library().then((l) => l.patches()),
+      savePatch: (p) => library().then(async (l) => l.savePatch(p, { now: new Date(),
+        id: recordId('patch', p.name, (await l.list()).map((r) => r.id)) })),
+      show: () => ctx.patches.openLibrary(),
+      target: () => (cmp.workspace === 'studio' ? ctx.handle.getSelection().nodes[0] : null) })
+      : null;
     // Each Studio dialog holds its live regions before anything is said in it (V272 C4).
     for (const d of document.querySelectorAll('dialog[data-osc-studio-dialog]')) dialogRegions(d);
     const tlHost = document.querySelector('[data-osc="studio.timeline"]');
@@ -1568,12 +1586,13 @@ export function createStudioUi(svc = {}) {
     studioBack() {
       this.setWorkspace(studioBackTarget(this.studio.backTo));
       // The button that had focus is now hidden: focus the compact Studio's Expand (the way
-      // back) where it is shown, else the workspace's tab, never <body> (WCAG 2.4.3; V431 U6).
+      // back) where it is shown, else the workspace's sidebar entry, never <body> (WCAG 2.4.3;
+      // V431 U6).
       requestAnimationFrame(() => {
         const a = document.activeElement;
         if (a && a !== document.body && a.getClientRects().length) return;
         const to = [document.querySelector('[data-osc="studio.compact.expand"]'),
-          document.querySelector('.osc-nav .osc-tab.is-active')]
+          document.querySelector('#osc-nav [aria-current="page"]')]
           .find((el) => el && el.getClientRects().length);
         if (to) to.focus({ preventScroll: true });
       });
@@ -1599,6 +1618,10 @@ export function createStudioUi(svc = {}) {
       return true;
     },
 
+    /** The patch library (K102), from the Synth, the Studio or the Inspector's Presets. */
+    patchLibraryOpen(opts = {}) {
+      if (ctx.browser) ctx.browser.open({ from: this.workspace, ...opts });
+    },
     studioOpenLibrary() {
       if (ctx.patches) ctx.patches.openLibrary();
     },
@@ -1712,6 +1735,7 @@ export function createStudioUi(svc = {}) {
       if (ctx.dirty && ctx.dirty.isDirty(ctx.handle.getModel())) {
         this.notify('warning', 'Pattern not opened', 'This Studio has unsaved changes, so the '
           + 'pattern did not replace them. Save or export them in Studio, then open the pattern '
+          // data-osc-link: alert.action
           + 'again.', { action: { href: '#m=studio', text: 'Open Studio' } });
         announce('The pattern was not opened: this Studio has unsaved changes.',
           { assertive: true });
@@ -1797,6 +1821,7 @@ export function createStudioUi(svc = {}) {
       const url = this.studioLinkUrl();
       if (!url) return null;
       try {
+        // data-osc-link: studio.copyLink
         window.history.replaceState(window.history.state, '', url);
       } catch (e) { /* file:// in some */ }
       this.studio.link = url;

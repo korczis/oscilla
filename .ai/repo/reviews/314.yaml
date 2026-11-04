@@ -1,0 +1,139 @@
+# Review verdict for pull request #314, plan item C018 (OSCILLA PACK 03, finding persist-3):
+# presets, History and the config link restore the lab settings they claim (branch
+# feat/c018-lab-state-round-trip). Reviewed head 71e478bede67 (== origin at fetch). Delta
+# re-review by dev-68 of the builder's fix since dev-68's previous verdict (9b7f84b1,
+# changes-requested, reviewed head e2c3782e784b, R-3 P2 open). Built by the builder's session;
+# dev-68 did not build, merge or edit this change.
+#
+# Delta e2c3782e..71e478be: the previous verdict commit and one fix commit (71e478be, R-3, R-4,
+# R-6): phase-stereo.js setCfg, workbench.js labLinkParam/configLinkNote, the unit test,
+# navigation.cjs lab-state-round-trip, tests/README.md, dist. No main merge: the merge base is
+# still cdda563c, origin/main is now 27ce813e. main changed no src/js file and not the one
+# guarded path the PR changes (src/js/core/storage.js); the files both sides change are
+# dist/index.html, README.md, src/index.html and tests/README.md, none guarded (R-11).
+#
+# The digest: `node scripts/review-verdict.mjs --content --list --base origin/main` at the
+# head, over src/js/core/storage.js: 665ddbe0...5c55, unchanged since the previous verdict and
+# as the builder claims. The branch's scripts/review-verdict.mjs is identical to origin/main's
+# (git diff origin/main HEAD -- scripts/review-verdict.mjs empty). Validated with --pr 314.
+#
+# Lenses: (a) every restore path writes pan and the phase offset (Δφ B) to the controls and to
+# the sound; (b) no step on a sounding param (the delta touches no audio file); (c) the tests
+# kill the fix's mutants; (d) commit message and tests/README vs code.
+#
+# Restore paths (lens a), read: preset load, History recall, `lab=` link (at load through
+# labsApplyPending, after load through labsApplyLinkHash) and the config-file import all end in
+# applyLabSections -> labs.phase.update -> setCfg (src/js/ui/lab-state.js:64), which now writes
+# the Pan slider (value, --osc-fill, aria-valuetext) and the offset field; the slider's own
+# input and the dual-oscillator Alpine effect go through setCfg too. There is no phase-lab
+# reset or undo; built-in presets and Learn demos do not touch the labs (R-9). To the sound:
+# unchanged by the delta; setCfg's emit -> main.js onChange: setDualPhase (click-free restart
+# of a held dual voice) and liveRouter.wrapper.refresh (stereo.js setTargetAtTime from the
+# router's own apply(true) anchor); a held centred dual voice stays centred (R-1).
+#
+# Runs at the head (this worktree; node_modules symlinked read-only, nothing installed):
+# node scripts/build.mjs --check: up to date. node --test lab-state-round-trip, navigation,
+# v4-connections 49/49. Full unit suite 3283/3287: 3 failures outside the delta (about.test
+# release line 3.14 has no About station, the local v3.14.0 tag is main's; version-authority x2
+# EISDIR on the untracked node_modules symlink), 1 skipped. navigation.cjs --only
+# lab-state-round-trip, chromium file and http: 2/2 PASS each (OSC_LOAD_MAX=500: the machine's
+# load was ~53 on 18 cores); control values 0.5 / 75.00% / 90 after preset, History, link and
+# the link at 390x844, panAfterTouch 0.5.
+#
+# Mutants (git-archive copies, each rebuilt): M1 setCfg without the Pan write-back: unit 9/9
+# pass, browser fails preset, history, link, touchKeepsPan, linkAtPhoneWidth. M2 without the
+# offset write-back: browser fails preset, history, link, linkAtPhoneWidth. M3 Pan value without
+# its fill: browser fails the same four. M4 labLinkParam without the LAB_PARAM_MAX cap: unit
+# fails (R-6 test). M5 labsApplyPending never applies (the first pass's M10): unit fails. 5/5
+# killed. Probe (chromium, head dist): a `lab=` link with phaseDeg 450 and pan 0.333 leaves
+# config 450 / 0.333 and the controls '450' (invalid, max 359) / '0.33' (R-10).
+#
+# Closed: R-3 (P2), R-4, R-6. Open: R-1, R-2, R-5, R-7 to R-11, all P3. Nothing blocks.
+schema: review-verdict/v1
+pr: 314
+verdict: merge
+reviewer: dev-68
+content: 665ddbe00956b838fbee70bf80d48962dbc395b645501cfc94dd143accb15c55
+findings:
+  - id: R-3
+    severity: P2
+    status: closed
+    title: >-
+      Closed by 71e478be: setCfg (src/js/labs/phase-stereo.js) writes the Pan slider (value,
+      --osc-fill, aria-valuetext) and the phase-offset field for every path that sets the lab,
+      and preset, History, lab= link and config import all go through it. navigation.cjs
+      lab-state-round-trip sets both through their controls and asserts the control values
+      after each restore, a slider touch after the link (keeps 0.5) and the link at 390x844;
+      passes on the head (chromium file, http) and fails for M1 (no pan write-back), M2 (no
+      offset write-back) and M3 (value without fill).
+  - id: R-1
+    severity: P3
+    status: open
+    title: >-
+      Unchanged by the delta: a restored pan never reaches a dual voice already sounding
+      centred (needsRouter, src/js/main.js:140, is evaluated at play time; no live router to
+      refresh); the next note pans. Pre-existing for the Pan slider itself on main.
+  - id: R-2
+    severity: P3
+    status: open
+    title: >-
+      Unchanged: engine.setPeriodicWave (src/js/audio/audio-engine.js) swaps a sounding
+      voice's wave with no dip, a one-sample step; pre-existing, through _switchWaves would fix
+      it.
+  - id: R-4
+    severity: P3
+    status: closed
+    title: >-
+      Closed by 71e478be: the unit test runs workbench.js's own labsApplyLinkHash,
+      labsApplyPending, labLinkParam and configLinkNote; M5 (labsApplyPending never applies,
+      the first pass's M10) now fails the unit test.
+  - id: R-5
+    severity: P3
+    status: open
+    title: >-
+      Narrowed: the browser check now asserts the control values, but no check plays a voice;
+      a held-voice assertion (live filter stage, carrier type, L/R balance) is still missing,
+      so R-1 and R-2 pass every check.
+  - id: R-6
+    severity: P3
+    status: closed
+    title: >-
+      Closed by 71e478be: labLinkParam returns null past LAB_PARAM_MAX, so Copy config URL never
+      makes a lab= value the page refuses, and configLinkNote says the lab settings are not in
+      the link and to save a config file; M4 (no cap) fails the unit test.
+  - id: R-7
+    severity: P3
+    status: open
+    title: >-
+      Unchanged (parseLabSections not touched): an empty phaseStereo section ({} with no
+      numeric key) counts as applied and as a valid lab= link. Read, not run.
+  - id: R-8
+    severity: P3
+    status: open
+    title: >-
+      Unchanged: the restored labs do not reach the held note's envelope, the Sequencer or
+      Studio; pre-existing and not claimed.
+  - id: R-9
+    severity: P3
+    status: open
+    title: >-
+      Unchanged: built-in presets, Learn demos and records without labs keep the current labs
+      while their toast names only the preset; PACK03 needs a stated rule (reset or keep).
+  - id: R-10
+    severity: P3
+    status: open
+    title: >-
+      New: a restore does not bring values into the controls' domain. parseLabSections accepts
+      any finite phaseDeg and pan, setCfg clamps pan but never normalises phaseDeg (only the
+      field's change handler does), so a lab= link or config file with phaseDeg 450 shows '450'
+      in a max=359 field (checkValidity false) and stores 450 in the next snapshot; pan 0.333
+      shows '0.33' (step 0.01) and the next slider touch moves it to 0.33. Probe, chromium.
+      The sound is right (the engine normalises). Normalise phaseDeg in setCfg.
+  - id: R-11
+    severity: P3
+    status: open
+    title: >-
+      New, housekeeping: the branch does not merge cleanly with origin/main 27ce813e
+      (git merge-tree: conflicts in dist/index.html and tests/README.md, neither guarded; main
+      changed no src/js file). Merge main and rebuild dist before landing; the digest stands as
+      long as main leaves src/js/core/storage.js alone.

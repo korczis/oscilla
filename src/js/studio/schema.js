@@ -49,6 +49,7 @@ import { BLOCK_SCHEMA, DEFAULT_TEMPO_BPM, MAX_TEMPO_BPM, MIN_TEMPO_BPM, defaultP
   from '../sequencer/model.js';
 import { CLIP_KINDS } from './nodes/common.js';
 import { EDGE_PROPERTY_FIELDS, canConnect, defaultEdgeProps } from './ports.js';
+import { sortNotes } from './notes.js';
 import { NODE_REGISTRY, projectParams } from './registry.js';
 
 export const STUDIO_SCHEMA_VERSION = 1;
@@ -61,7 +62,7 @@ export { CLIP_KINDS };
 export const TRACK_KINDS = Object.freeze(['event', 'measurement']);
 /** Clip kinds each track kind holds (§82, §84). Automation lives in lanes, not clips. */
 export const TRACK_CLIP_KINDS = Object.freeze({
-  event: Object.freeze(['pattern', 'event']),
+  event: Object.freeze(['pattern', 'event', 'notes']),
   measurement: Object.freeze(['measurement']),
 });
 /** Event clip actions: gate (on for the clip's duration) or trigger (one pulse at its start). */
@@ -268,7 +269,10 @@ function normalizeEdges(list, nodes, registry) {
   });
 }
 
-/** A clip payload with its kind's defaults (pattern: block params; measurement: action). */
+/**
+ * A clip payload with its kind's defaults (pattern: block params; measurement: action; notes:
+ * an empty list, and the notes sorted by (at, note), notes.js).
+ */
 export function normalizeClipPayload(kind, payload) {
   const p = copyPlain(obj(payload));
   if (kind === 'pattern') {
@@ -279,6 +283,9 @@ export function normalizeClipPayload(kind, payload) {
     return { ...p, blockType: type, params };
   }
   if (kind === 'measurement') return { ...p, action: str(p.action, 'stimulus') };
+  if (kind === 'notes') {
+    return { ...p, notes: Array.isArray(p.notes) ? sortNotes(p.notes) : p.notes ?? [] };
+  }
   return p;
 }
 
@@ -381,7 +388,8 @@ export function normalizeStudio(json, { registry = NODE_REGISTRY } = {}) {
         scrollX: num(vt.scrollX, 0),
       },
     },
-    metadata: { title: str(meta.title) || DEFAULT_TITLE, notes: str(meta.notes) },
+    metadata: { title: str(meta.title) || DEFAULT_TITLE, notes: str(meta.notes),
+      ...(str(meta.noteTarget) ? { noteTarget: meta.noteTarget } : {}) },
   };
 }
 
@@ -521,7 +529,8 @@ export function collectIds(model) {
 export function withoutNodes(model, ids) {
   const gone = new Set(ids);
   const t = model.timeline;
-  return { ...model,
+  const { noteTarget, ...meta } = model.metadata;
+  return { ...model, metadata: gone.has(noteTarget) ? meta : model.metadata,
     graph: { ...model.graph, nodes: model.graph.nodes.filter((n) => !gone.has(n.id)),
       edges: model.graph.edges.filter((e) => !gone.has(e.from.node) && !gone.has(e.to.node)) },
     timeline: { ...t,

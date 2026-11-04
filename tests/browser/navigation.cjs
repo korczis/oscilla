@@ -30,6 +30,13 @@
 //   copy-link         Copy config URL keeps `mr` and the Studio keys and names the workspace; the
 //                     copied URL reopens the same workspace, template, view and recipe; after a
 //                     `m=learn` link and a switch to Playground it writes `m=playground`
+//   lab-state-round-trip  (C018) a custom preset, a History recall and the copied config link
+//                     opened in a fresh page each restore the Filter, Envelope, Additive and pan
+//                     settings after they were changed, the Pan slider and the phase-offset
+//                     field included (a slider touch after the link keeps the restored pan;
+//                     the link also at 390x844);
+//                     the link toast (or the copy dialog) names what it restores and that
+//                     the sequence is not included
 //   guard-saved-metadata  after a save, a name typed and not stored, a failed "Update name and
 //                     notes" and a rename being typed in Experiments each arm the guard
 //   guard-memory-store    with IndexedDB refused, a saved experiment and a saved Studio project
@@ -85,6 +92,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const shell = require('./lib/shell.cjs');
 const seam = require('./lib/measure-seam.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
 
@@ -216,16 +224,9 @@ const H = {
     if (!stayed) await H.ready(page);
     return { dialog, stayed };
   },
-  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
   navTo: async (page, ws) => {
-    const item = `[data-osc="nav.${ws}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
+    await shell.navTo(page, ws);
     await page.waitForFunction((w) => window.OSCILLA.app.workspace === w, ws,
       { timeout: 15000 });
     await H.frames(page);
@@ -527,6 +528,149 @@ function defineChecks() {
     }), url, reopened, r, playground: pg.hash };
   });
 
+  def('lab-state-round-trip', async (ctx) => {
+    // C018 (finding persist-3): a custom preset, a History entry and the copied config link
+    // each restore the Filter, Envelope, Additive and pan settings after they were changed.
+    // On the merge base all three stored the V1 instrument only.
+    const labsOf = (pg) => pg.evaluate(() => {
+      const L = window.OSCILLA.labs;
+      // R-3 of the #314 review: the restore reaches the controls as well as the lab state.
+      const panEl = document.getElementById('osc-stereo-pan');
+      const offEl = document.querySelector('[data-osc="phase.offset"]');
+      return { filter: { enabled: L.filter.config.enabled,
+        frequency: Math.round(L.filter.config.frequency), Q: +L.filter.config.Q.toFixed(2) },
+      envelope: { enabled: L.envelope.enabled, a: L.envelope.adsr.a },
+      additive: L.additive.enabled, pan: L.phase.config.pan, phaseDeg: L.phase.config.phaseDeg,
+      controls: { pan: panEl.value, panFill: panEl.style.getPropertyValue('--osc-fill'),
+        offset: offEl.value } };
+    });
+    const SAVED = { filter: { enabled: true, frequency: 300, Q: 4 },
+      envelope: { enabled: true, a: 0.5 }, additive: true, pan: 0.5, phaseDeg: 90,
+      controls: { pan: '0.5', panFill: '75.00%', offset: '90' } };
+    const same = (v) => JSON.stringify(v) === JSON.stringify(SAVED);
+    // Pan and the phase offset are set through their controls, as a user sets them, so a
+    // restore that leaves a control stale shows as the value set before it.
+    const setControls = (pg, pan, offset) => pg.evaluate(([p, o]) => {
+      const panEl = document.getElementById('osc-stereo-pan');
+      panEl.value = String(p);
+      panEl.dispatchEvent(new Event('input', { bubbles: true }));
+      const offEl = document.querySelector('[data-osc="phase.offset"]');
+      offEl.value = String(o);
+      offEl.dispatchEvent(new Event('change', { bubbles: true }));
+    }, [pan, offset]);
+    const change = async (pg) => {
+      await pg.evaluate(() => {
+        const L = window.OSCILLA.labs;
+        L.filter.update({ enabled: false, frequency: 5000, Q: 0.707 });
+        L.envelope.update({ enabled: false, adsr: { a: 0.01, d: 0.1, s: 0.7, r: 0.3 } });
+        L.additive.update({ enabled: false });
+      });
+      await setControls(pg, 0, 45);
+    };
+    const page = await H.open(ctx, ctx.baseUrl);
+    await setControls(page, 0.5, 90);
+    await page.evaluate(() => {
+      const L = window.OSCILLA.labs;
+      const a = window.OSCILLA.app;
+      L.filter.update({ enabled: true, frequency: 300, Q: 4 });
+      L.envelope.update({ enabled: true, adsr: { a: 0.5, d: 0.1, s: 0.5, r: 0.3 } });
+      L.additive.update({ enabled: true });
+      a.saveName = 'lab state round trip';
+      a.savePreset();
+      // History entries are written when a plan plays (instrument.js addHistory).
+      a.addHistory(a.currentPlan().plan);
+    });
+    const saved = await labsOf(page);
+    await page.evaluate(() => window.OSCILLA.app.copyConfigUrl());
+    // The toast when the clipboard took it, else the dialog with the link (file://).
+    const note = await until(() => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const toast = a.alerts.find((x) => x.title === 'Config link copied');
+      if (toast) return toast.message;
+      const el = document.querySelector('[data-osc="copy.note"]');
+      return el && el.closest('dialog[open]') && el.textContent.trim() ? el.textContent.trim()
+        : null;
+    }), { ms: 5000, what: 'lab-state-round-trip: the copy toast or the copy dialog' })
+      .catch(() => ''); // judged below, with the restores
+    const url = await page.evaluate(() => window.location.href);
+    await page.evaluate(() => {
+      for (const d of document.querySelectorAll('dialog[open]')) d.close();
+    });
+    await change(page);
+    const changed = await labsOf(page);
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.loadPresetFromView(a.presetsFor('custom')[0]);
+    });
+    const afterPreset = await until(async () => {
+      const v = await labsOf(page);
+      return same(v) ? v : null;
+    }, { ms: 5000, what: 'lab-state-round-trip: the custom preset restores the labs' })
+      .catch(() => labsOf(page));
+    const presetToast = await page.evaluate(() => {
+      const t = window.OSCILLA.app.alerts.at(-1);
+      return t ? t.message : null;
+    });
+    await change(page);
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.recallHistory(a.history[0]);
+    });
+    const afterHistory = await until(async () => {
+      const v = await labsOf(page);
+      return same(v) ? v : null;
+    }, { ms: 5000, what: 'lab-state-round-trip: the History recall restores the labs' })
+      .catch(() => labsOf(page));
+    await page.close();
+    const fresh = await H.open(ctx, url);
+    const afterLink = await until(async () => {
+      const v = await labsOf(fresh);
+      return same(v) ? v : null;
+    }, { ms: 8000, what: 'lab-state-round-trip: the copied link restores the labs' })
+      .catch(() => labsOf(fresh));
+    // The next touch of the Pan slider starts from the restored pan, not the stale control.
+    const panAfterTouch = await fresh.evaluate(() => {
+      const el = document.getElementById('osc-stereo-pan');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      return window.OSCILLA.labs.phase.config.pan;
+    });
+    const linkHash = H.params(new URL(url).hash);
+    await fresh.close();
+    // The same link at phone width (390x844): the controls sit in the narrow layout there.
+    const phoneCtx = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+      reducedMotion: 'reduce' });
+    let afterPhone = null;
+    try {
+      const phone = await phoneCtx.newPage();
+      phone.setDefaultTimeout(15000);
+      phone.on('pageerror', (e) => ctx.errors.push(`pageerror (390x844): ${e.message}`));
+      await phone.goto(url, { waitUntil: 'load' });
+      await H.ready(phone);
+      afterPhone = await until(async () => {
+        const v = await labsOf(phone);
+        return same(v) ? v : null;
+      }, { ms: 8000, what: 'lab-state-round-trip: the copied link restores the labs at 390x844' })
+        .catch(() => labsOf(phone));
+    } finally {
+      await phoneCtx.close();
+    }
+    return { ...H.verdict({
+      savedAsSet: same(saved),
+      changedFirst: !same(changed),
+      preset: same(afterPreset),
+      presetToastNamesLabs: /Filter, Envelope, Additive and Phase & Stereo/.test(presetToast || ''),
+      history: same(afterHistory),
+      link: same(afterLink),
+      touchKeepsPan: panAfterTouch === SAVED.pan,
+      linkAtPhoneWidth: same(afterPhone),
+      linkHasLabKey: typeof linkHash.lab === 'string' && linkHash.lab.length > 0
+        && linkHash.v === '1',
+      noteNamesLabs: /Filter, Envelope, Additive and Phase & Stereo/.test(note),
+      noteSaysNoSequence: /sequence is not included/.test(note),
+    }), saved, changed, afterPreset, afterHistory, afterLink, panAfterTouch, afterPhone, note,
+    presetToast, linkLength: url.length };
+  });
+
   def('guard-saved-metadata', async (ctx) => {
     // After a save: a name or notes typed and not stored yet, a failed "Update name and notes",
     // and a rename being typed in Experiments each arm the guard until stored or dropped.
@@ -807,9 +951,12 @@ function defineChecks() {
       landed.push({ ...l, workspace: (await H.state(p)).workspace });
       await p.close();
     }
+    // One link per workspace, read from the code (ui/app.js WORKSPACES) and not restated: a
+    // hard-coded twelve broke when Synth became a workspace (#367).
+    const { WORKSPACES } = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js',
+      'ui', 'app.js')).href);
     return { ...H.verdict({
-      // Synth (#329, owner Q019: top-level after Studio) is the thirteenth workspace.
-      thirteen: links.length === 13,
+      everyWorkspace: links.map((l) => l.id).sort().join() === [...WORKSPACES].sort().join(),
       hrefs: links.every((l) => l.href === `#m=${l.id}`),
       landed: landed.every((l) => l.workspace === l.id),
       modifiedLeftToBrowser: modified.prevented === false && modified.workspace === 'playground',
@@ -914,7 +1061,8 @@ function defineChecks() {
       focusedLinkKeepsSpace: onLink.heard === 'none' && !onLink.claimed }), wrong, got, onLink };
   });
 
-  // Review of #159: Presets says "Press TRIGGER (or Space) to play it" after Load and stays in
+  // Review of #159: Presets says "Press Space to play it here" after Load (A1: and links to the
+  // workspace whose TRIGGER plays it, never "Press TRIGGER" on a page without one) and stays in
   // Presets, where no Play control is shown at this width. Space must do what the notice says.
   def('space-after-preset-load', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
@@ -924,7 +1072,8 @@ function defineChecks() {
       const a = window.OSCILLA.app;
       const alert = a.alerts.find((x) => /^Loaded/.test(x.title));
       const said = alert ? `${alert.title} ${alert.message}` : '';
-      return said ? { workspace: a.workspace, said } : null;
+      return said ? { workspace: a.workspace, said,
+        coarse: matchMedia('(pointer: coarse)').matches } : null;
     }), { ms: 8000, what: 'Load in Presets announces the loaded preset' });
     const controls = await page.evaluate(() => ['source.hold', 'source.trigger', 'status.play']
       .filter((k) => {
@@ -935,7 +1084,9 @@ function defineChecks() {
     await page.close();
     return { ...H.verdict({
       staysInPresets: loaded.workspace === 'presets',
-      noticeNamesSpace: /Space/.test(loaded.said),
+      // A coarse pointer has no Space: the notice sends the tap to the Playground (A1).
+      noticeNamesSpace: loaded.coarse ? /Open the Playground to play it/.test(loaded.said)
+        : /Space/.test(loaded.said),
       spacePlaysIt: space.heard === 'instrument',
     }), loaded, controls, space };
   });
@@ -1052,9 +1203,10 @@ function defineChecks() {
         : null;
     }, sel);
     // B6: the logo goes home.
-    const logo = { name: await nameOf('.osc-brand'),
-      title: await page.getAttribute('.osc-brand', 'title') };
-    await page.click('.osc-brand');
+    const BRAND = '[data-osc="header.brand"]'; // the Pro navbar's logo (F002)
+    const logo = { name: await nameOf(BRAND),
+      title: await page.getAttribute(BRAND, 'title') };
+    await page.click(BRAND);
     logo.reached = await reach(() => page.evaluate(() => (window.OSCILLA.app.workspace
       === 'playground' ? new URLSearchParams(window.location.hash.slice(1)).get('m') : null)),
     'control-names: the logo opens the Playground');

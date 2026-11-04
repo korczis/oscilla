@@ -43,7 +43,9 @@
 // MIN_CLIP_S long), transport and view values. Tempo-linked clips (`musical`, §90-§91):
 // musical-measurement (a measurement clip is never musical), invalid-musical (beats out of range,
 // or seconds that disagree with the beats at the transport tempo by more than
-// MUSICAL_TOLERANCE_S).
+// MUSICAL_TOLERANCE_S). Notes clips (notes.js, through clipRules): tempo-linked, payload
+// { notes } only, every note { at, note, len, vel } in range and within the clip, one note per
+// (at, note); the import limits notesPerClip and notesPerDocument bound them.
 
 import { utf8Length, scanUntrusted } from '../experiments/validate.js';
 import { ID_PATTERN, createChecker } from '../experiments/schema.js';
@@ -51,7 +53,7 @@ import { BLOCK_SCHEMA, normalizeBlock } from '../sequencer/model.js';
 import { SAMPLE_RATE_LIMITS } from '../measurement/stimulus.js';
 import { clipTarget } from './clip-targets.js';
 import { canConnect, describePort, validateEdgeProps } from './ports.js';
-import { NODE_REGISTRY, validateParamValue } from './registry.js';
+import { NODE_REGISTRY, playsNotes, validateParamValue } from './registry.js';
 import { clipRules } from './timeline.js';
 import {
   AUTOMATION_CURVES, MARKER_KINDS, MIN_CLIP_S, MUSICAL_TOLERANCE_S, NAME_MAX_CHARS,
@@ -83,6 +85,8 @@ export const STUDIO_IMPORT_LIMITS = Object.freeze({
   automationLanes: 512,
   automationPoints: 20000,
   pointsPerLane: 4096,
+  notesPerClip: 4096,
+  notesPerDocument: 65536,
   markers: 512,
   stringChars: 256,
   notesChars: NOTES_MAX_CHARS,
@@ -590,7 +594,7 @@ function validateTimeline(model, registry, sink, ids, nodeById) {
   }
 }
 
-function validateRest(model, sink) {
+function validateRest(model, sink, registry = NODE_REGISTRY) {
   if (model.kind !== STUDIO_KIND) sink.error('invalid-structure', `kind must be ${STUDIO_KIND}.`);
   if (model.schemaVersion !== STUDIO_SCHEMA_VERSION) {
     sink.error('invalid-structure', `schemaVersion must be ${STUDIO_SCHEMA_VERSION}.`);
@@ -617,6 +621,15 @@ function validateRest(model, sink) {
   }
   const meta = model.metadata;
   checkName(meta.title, 'metadata.title', sink, TITLE_MAX_CHARS);
+  // K066: the node the keys play, when not the Synth's own; it must exist and play notes.
+  if (meta.noteTarget !== undefined) {
+    const n = model.graph.nodes.find((x) => x.id === meta.noteTarget);
+    if (!n || !playsNotes(n.type, registry)) {
+      sink.error('invalid-note-target', n ? `${n.metadata.name} does not play notes: the keys `
+        + 'play a node with the notes or hits capability.' : `The keys play "${
+        String(meta.noteTarget)}", which is not in this Studio.`, { path: 'metadata.noteTarget' });
+    }
+  }
   if (typeof meta.notes !== 'string' || meta.notes.length > NOTES_MAX_CHARS) {
     sink.error('invalid-name', `Notes must be at most ${NOTES_MAX_CHARS} characters.`,
       { path: 'metadata.notes' });
@@ -632,7 +645,7 @@ export function validateStudioModel(model, { registry = NODE_REGISTRY } = {}) {
   const ids = new Set();
   const { order, nodeById } = validateGraph(model, registry, sink, ids);
   validateTimeline(model, registry, sink, ids, nodeById);
-  validateRest(model, sink);
+  validateRest(model, sink, registry);
   const errors = sink.diagnostics.filter((d) => d.severity === 'error');
   const warnings = sink.diagnostics.filter((d) => d.severity === 'warning');
   return { ok: errors.length === 0, errors, warnings, diagnostics: sink.diagnostics,
@@ -692,6 +705,15 @@ function structure(c, doc, lim, registry) {
   for (const lane of lanes) points += Array.isArray(lane && lane.points) ? lane.points.length : 0;
   if (points > lim.automationPoints) {
     c.add('timeline.automation', `more than ${lim.automationPoints} automation points (import `
+      + 'limit)', 'limit-exceeded');
+    return false;
+  }
+  const notesOf = (x) => (x && x.kind === 'notes' && x.payload && Array.isArray(x.payload.notes)
+    ? x.payload.notes : null);
+  let notes = 0;
+  for (const x of clips) notes += (notesOf(x) || []).length;
+  if (notes > lim.notesPerDocument) {
+    c.add('timeline.clips', `more than ${lim.notesPerDocument} notes in one Studio (import `
       + 'limit)', 'limit-exceeded');
     return false;
   }
@@ -762,9 +784,13 @@ function structure(c, doc, lim, registry) {
     c.num(x.start, `${p}.start`, 0, TIMELINE_MAX_S);
     c.num(x.duration, `${p}.duration`, MIN_CLIP_S, TIMELINE_MAX_S);
     if (x.target !== undefined && x.target !== null) id(x.target, `${p}.target`);
-    if (x.payload !== undefined) {
-      const payload = c.json(x.payload, `${p}.payload`, { depth: 3, keys: 32, array: 64,
-        string: lim.stringChars });
+    if ((notesOf(x) || []).length > lim.notesPerClip) {
+      c.add(`${p}.payload.notes`, `more than ${lim.notesPerClip} notes in one clip (import `
+        + 'limit)', 'limit-exceeded');
+    } else if (x.payload !== undefined) {
+      // A notes clip's list is bounded by notesPerClip, every other payload list by 64.
+      const payload = c.json(x.payload, `${p}.payload`, { depth: 3, keys: 32,
+        array: notesOf(x) ? lim.notesPerClip : 64, string: lim.stringChars });
       if (payload !== undefined && (payload === null || typeof payload !== 'object'
         || Array.isArray(payload))) c.add(`${p}.payload`, 'must be an object');
     }
@@ -832,8 +858,15 @@ function structure(c, doc, lim, registry) {
       }
     }
   }
-  if (doc.metadata !== undefined && c.keys(doc.metadata, 'metadata', [], ['title', 'notes'])) {
+  if (doc.metadata !== undefined
+    && c.keys(doc.metadata, 'metadata', [], ['title', 'notes', 'noteTarget'])) {
     if (doc.metadata.title !== undefined) s(doc.metadata.title, 'metadata.title', TITLE_MAX_CHARS);
+    if (doc.metadata.noteTarget !== undefined) {
+      const t = doc.metadata.noteTarget;
+      if (typeof t !== 'string' || !ID_PATTERN.test(t)) {
+        c.add('metadata.noteTarget', 'is no node id');
+      }
+    }
     if (doc.metadata.notes !== undefined) {
       c.str(doc.metadata.notes, 'metadata.notes', lim.notesChars, { multiline: true });
     }

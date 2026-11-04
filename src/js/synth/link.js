@@ -60,7 +60,7 @@ export function linkAction(model0, panel, link, { registry = NODE_REGISTRY } = {
   const model = clean.model;
   const steps = [
     ...clean.steps,
-    ...presetAction(model, panel, p.id, { all: true }).action.steps,
+    presetAction(model, panel, p.id, { all: true }).action, // one PATCH_REPLACE step
   ];
   const given = new Map(link.values);
   const nodes = panel.resolve(model);

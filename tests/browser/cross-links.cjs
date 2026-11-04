@@ -37,7 +37,19 @@
 //                   Studio's Back, returns to the Sequencer, named so, focus not on <body>
 //   learn-tool      (P5, one-way link 2) a Learn topic's "Open <tool>" opens the tool; its
 //                   notice carries "Back to the lesson: <topic>", which returns to Learn with
-//                   the topic current; a topic without a tool has no link
+//                   the topic current; a topic without a tool has no link; A1: the topics the
+//                   page audit found unlinked (Nyquist, AM, Logarithmic perception, Ultrasound)
+//                   link to theirs
+//   synth-links     (A1) Filter Lab, Synthesis, the Sequencer and Presets each show "Open the
+//                   Synth" (ui/counterparts.js, read at start), hidden on the Playground grid;
+//                   it opens the Synth with focus on its heading, Back returns, Forward reopens
+//   about-workspaces (A1) every entry of About's workspace list but About's own is a link that
+//                   opens its workspace (WORKSPACES, read at start) with focus on its heading;
+//                   Back returns to About
+//   preset-load     (A1) Load in Presets stays in Presets and its notice says Space (under a
+//                   coarse pointer, "Open the Playground to play it"), never "Press TRIGGER"; the
+//                   notice's "Open the Playground" opens the Playground
+//                   with focus on its heading, Back returns to Presets
 //   learn-demo-back (one-way link 2) a Learn demo's notice carries the way back to the lesson;
 //                   left untouched it still closes on its own (the notices are in flow)
 //   citations       (B10) every Bioacoustics citation link names its source, not the raw URL,
@@ -86,6 +98,21 @@ const LAB_STUDIO = [
     'Back to the Sequencer'],
   ['measure.toStudio', 'measure', 'measurement-sweep', 'Measurement Sweep', 'Back to Measure'],
 ];
+
+// Read from their sources at start (loadModel), so a list written here cannot go stale:
+// ui/app.js WORKSPACES, and the counterparts written in a workspace's own panel.
+const WORKSPACES = [];
+const PANEL_COUNTERPARTS = [];
+async function loadModel() {
+  const src = (...p) => pathToFileURL(path.join(ROOT, 'src', 'js', ...p)).href;
+  WORKSPACES.push(...(await import(src('ui', 'app.js'))).WORKSPACES);
+  const { COUNTERPARTS } = await import(src('ui', 'counterparts.js'));
+  for (const c of COUNTERPARTS.filter((x) => x.osc)) {
+    for (const from of c.from) {
+      PANEL_COUNTERPARTS.push({ osc: c.osc[from], from, to: c.workspace, label: c.label });
+    }
+  }
+}
 
 let failures = 0;
 let passes = 0;
@@ -214,7 +241,7 @@ async function runLeg(name, origin) {
       const page = await H.open(context, base);
       const skip = await H.name(page, '.osc-skip');
       const help = await H.name(page, '[data-osc="header.help"]');
-      const brand = await H.name(page, '.osc-brand');
+      const brand = await H.name(page, '[data-osc="header.brand"]');
       check(leg, 'the skip link, the "?" button and the logo say what they do',
         skip && skip.text === 'Skip to main content: Playground'
         && help && help.label === 'Keyboard shortcuts' && help.title === 'Keyboard shortcuts'
@@ -224,7 +251,7 @@ async function runLeg(name, origin) {
       const wrong = [];
       for (const input of INPUTS) {
         await H.roundTrip(page, { label: 'logo', from: 'measure', to: 'playground',
-          selector: '.osc-brand', input }, wrong);
+          selector: '[data-osc="header.brand"]', input }, wrong);
       }
       check(leg, 'the logo goes home and Back returns (pointer, keyboard, touch)',
         !wrong.length, wrong.join(' | '));
@@ -477,7 +504,7 @@ async function runLeg(name, origin) {
       const wrong = [];
       const tools = await page.evaluate(async () => {
         window.OSCILLA.app.setWorkspace('learn');
-        return [...document.querySelectorAll('#osc-view-learn .osc-learn-item')].map((li) => {
+        return [...document.querySelectorAll('#osc-view-learn li[data-topic]')].map((li) => {
           const a = li.querySelector('[data-osc="learn.tool"]');
           return { title: li.querySelector('h3').textContent.trim(),
             href: a ? a.getAttribute('href') : null, text: a ? a.textContent.trim() : null };
@@ -488,14 +515,15 @@ async function runLeg(name, origin) {
         wrong.push(`tool links on ${withTool.length} of ${tools.length} topics`);
       }
       const cases = [['Harmonics', 'analyzer'], ['Beating', 'synthesis'],
-        ['Speaker limitations', 'measure']];
+        ['Speaker limitations', 'measure'], ['Nyquist limit', 'analyzer'], ['AM', 'synth'],
+        ['Logarithmic perception', 'measure'], ['Ultrasound', 'compare']];
       for (let k = 0; k < cases.length; k += 1) {
         const [topic, ws] = cases[k];
-        const input = INPUTS[k];
+        const input = INPUTS[k % INPUTS.length];
         const t = withTool.find((x) => x.title === topic);
         if (!t || t.href !== `#m=${ws}`) { wrong.push(`${topic}: ${JSON.stringify(t)}`); continue; }
         await H.setWorkspace(page, 'learn');
-        const sel = `#osc-view-learn .osc-learn-item:has(> h3:text-is("${topic}")) `
+        const sel = `#osc-view-learn li[data-topic]:has(> h3:text-is("${topic}")) `
           + '[data-osc="learn.tool"]';
         await H.activate(page, sel, input);
         const s = await H.arrived(page, ws, `${topic} (${input}) opens ${ws}`);
@@ -513,9 +541,9 @@ async function runLeg(name, origin) {
           `${topic} (${input}): the notice returns to Learn`);
         if (!back) { wrong.push(`${topic} (${input}): the notice did not return to Learn`); continue; }
         const topicId = await page.evaluate((tt) => {
-          const li = [...document.querySelectorAll('#osc-view-learn .osc-learn-item')]
+          const li = [...document.querySelectorAll('#osc-view-learn li[data-topic]')]
             .find((x) => x.querySelector('h3').textContent.trim() === tt);
-          return li && li.classList.contains('is-current');
+          return li && li.getAttribute('aria-current') === 'true';
         }, topic);
         if (!topicId) wrong.push(`${topic}: not the current lesson after the way back`);
         const gone = await until(() => page.evaluate(() =>
@@ -535,7 +563,7 @@ async function runLeg(name, origin) {
       const wrong = [];
       for (const input of INPUTS) {
         await H.setWorkspace(page, 'learn');
-        await H.activate(page, '#osc-view-learn .osc-learn-item:has(> h3:text-is("Frequency")) '
+        await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frequency")) '
           + '[data-osc="learn.demo"]', input);
         const s = await H.until(page, 'playground', (x) => x.workspace === 'playground',
           `Demo (${input}) opens the Playground`);
@@ -557,7 +585,7 @@ async function runLeg(name, origin) {
       // The notices are in flow: one that never closed would push the page down until
       // dismissed. Untouched (focus on Hold to Play, the pointer away), it closes on its own.
       await H.setWorkspace(page, 'learn');
-      await H.activate(page, '#osc-view-learn .osc-learn-item:has(> h3:text-is("Frequency")) '
+      await H.activate(page, '#osc-view-learn li[data-topic]:has(> h3:text-is("Frequency")) '
         + '[data-osc="learn.demo"]', 'keyboard');
       const offered = await until(() => page.evaluate(() =>
         !!document.querySelector('[data-osc="alert.action"]')),
@@ -571,6 +599,86 @@ async function runLeg(name, origin) {
       check(leg, 'a Learn demo leads back to its lesson (one-way link 2)',
         !wrong.length, wrong.join(' | '));
       await page.close();
+    }
+
+    if (want('synth-links')) {
+      const page = await H.open(context, base);
+      const wrong = [];
+      let i = 0;
+      for (const { osc, from, to, label } of PANEL_COUNTERPARTS) {
+        const input = INPUTS[i % INPUTS.length];
+        i += 1;
+        const sel = `[data-osc="${osc}"]`;
+        await H.setWorkspace(page, 'playground');
+        const grid = await H.name(page, sel);
+        if (!grid || grid.shown) wrong.push(`${osc} is shown on the Playground grid`);
+        await H.setWorkspace(page, from);
+        const link = await H.name(page, sel);
+        if (!link || !link.shown || link.href !== `#m=${to}` || link.text !== label) {
+          wrong.push(`${osc}: ${JSON.stringify(link)}`);
+          continue;
+        }
+        await H.roundTrip(page, { label: osc, from, to, selector: sel, input }, wrong);
+      }
+      check(leg, `${PANEL_COUNTERPARTS.length} workspaces open the Synth by their own link, and `
+        + 'Back returns (A1)', PANEL_COUNTERPARTS.length >= 4 && !wrong.length,
+      wrong.join(' | '));
+      await page.close();
+    }
+
+    if (want('about-workspaces')) {
+      const page = await H.open(context, base);
+      const wrong = [];
+      const targets = WORKSPACES.filter((w) => w !== 'about');
+      await H.setWorkspace(page, 'about');
+      const self = await page.evaluate(() => !!document.querySelector(
+        '[data-osc="about.workspace.about"] a'));
+      if (self) wrong.push('About\'s own entry is a link');
+      for (let k = 0; k < targets.length; k += 1) {
+        const w = targets[k];
+        const sel = `[data-osc="about.open.${w}"]`;
+        await H.setWorkspace(page, 'about');
+        const link = await H.name(page, sel);
+        if (!link || link.href !== `#m=${w}`) {
+          wrong.push(`${w}: ${JSON.stringify(link)}`);
+          continue;
+        }
+        await H.roundTrip(page, { label: `About → ${w}`, from: 'about', to: w, selector: sel,
+          input: INPUTS[k % INPUTS.length] }, wrong);
+      }
+      check(leg, `About's workspace list opens each of ${targets.length} workspaces, and Back `
+        + 'returns (A1)', targets.length >= 11 && !wrong.length, wrong.join(' | '));
+      await page.close();
+    }
+
+    if (want('preset-load')) {
+      const wrong = [];
+      for (const input of INPUTS) {
+        const page = await H.open(context, base);
+        await H.setWorkspace(page, 'presets');
+        await H.activate(page, '[data-osc="presets.load"]:not([disabled])', input);
+        const said = await until(() => page.evaluate(() => {
+          const a = window.OSCILLA.app;
+          const n = a.alerts.find((x) => /^Loaded/.test(x.title));
+          return n ? { workspace: a.workspace, message: n.message,
+            action: n.action && n.action.text,
+            coarse: matchMedia('(pointer: coarse)').matches } : null;
+        }), { ms: NAV_MS, what: `Load (${input}) announces the preset` }).catch(() => null);
+        // A keyboard plays it with Space; a coarse pointer (no Space) is sent to the tap.
+        const words = said && (said.coarse ? /^Open the Playground to play it with /
+          : /^(Press|Hold) Space to play it here/);
+        if (!said || said.workspace !== 'presets' || !words.test(said.message)
+          || /^Press TRIGGER/.test(said.message) || said.action !== 'Open the Playground') {
+          wrong.push(`${input}: ${JSON.stringify(said)}`);
+          await page.close();
+          continue;
+        }
+        await H.roundTrip(page, { label: 'preset notice', from: 'presets', to: 'playground',
+          selector: '[data-osc="alert.action"]', input }, wrong);
+        await page.close();
+      }
+      check(leg, 'Load in Presets says what plays the preset there and its notice opens the '
+        + 'Playground (A1)', !wrong.length, wrong.join(' | '));
     }
 
     if (want('citations')) {
@@ -603,6 +711,7 @@ async function runLeg(name, origin) {
 
 (async () => {
   await RUN.ready();
+  await loadModel();
   for (const b of RUN.browsers) {
     for (const o of RUN.origins) await runLeg(b, o);
   }

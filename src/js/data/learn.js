@@ -10,6 +10,7 @@
 import {
   FILTER_PREVIEW_SAMPLE_RATE, OCTAVE_STEP_FREQUENCIES, PROVISIONAL_SAMPLE_RATE,
 } from '../core/constants.js';
+import { encodeStudioLink } from '../core/url-state-studio.js';
 
 const kHz = (hz) => `${hz / 1000} kHz`;
 
@@ -27,6 +28,7 @@ export const LEARN_INSTRUMENT_TOPICS = Object.freeze([
       + '(1.00 oct per octave, exact in the digital domain); the gate opens the envelopes. The '
       + 'filter peak rings but does not self-oscillate, the pulse width is set, not modulated, '
       + 'and the S&H steps a seeded random source: it samples no input.',
+    // data-osc-link: learn.demo
     demo: { label: 'Open the Synth panel', viz: 'spectrum', href: '#m=synth&yp=init' } },
   { id: 'synthesis-engines', title: 'Synthesis engines',
     body: 'The Synth Engines tab holds polyphonic engines, up to 16 voices each. Additive sums '
@@ -39,7 +41,7 @@ export const LEARN_INSTRUMENT_TOPICS = Object.freeze([
       + 'and filtered noise that decay to -60 dB rel. Harmonics above 0.95 times the digital '
       + 'Nyquist limit are dropped and counted. The plucked string and FM operator feedback need '
       + 'a loop in the audio graph, which project.no-silent-feedback refuses for now.',
-    demo: { label: 'Open the FM bell', viz: 'spectrum',
+    demo: { label: 'Open the FM bell', viz: 'spectrum', // data-osc-link: learn.demo
       href: '#m=synth&yt=engines&ye=fm&yp=fm-bell' } },
 ]);
 // V1: LEARN_TOPICS (index.html@a7b7a23)
@@ -99,3 +101,16 @@ export const LEARN_VIZ_TARGETS = Object.freeze({
   harmonics: 'harmonics',
   interference: 'phase',
 });
+
+/**
+ * V617: concept cards, shown after the V1 topics (LEARN_TOPICS stays the V1 list). A concept
+ * card has no demo; its link is an OSCILLA address (the Studio link of core/url-state-studio.js),
+ * so following it adds one history entry and Back returns to Learn.
+ */
+export const LEARN_CONCEPTS = [
+  { id: 'signal-path', title: 'Signal path', body: 'A signal path is the route a sound takes from its source through processing to the output. In the Studio each box is a node and each cable carries one signal; only what reaches the Master Output is heard.',
+    link: { label: 'Open the First patch in Studio', href: `#${encodeStudioLink({ templateId: 'first-patch' })}` } },
+];
+
+/** What the Learn view lists: the topics, then the concept cards. */
+export const LEARN_CARDS = [...LEARN_TOPICS, ...LEARN_CONCEPTS];

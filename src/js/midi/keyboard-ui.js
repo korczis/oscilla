@@ -31,6 +31,45 @@ export const KEYBOARD_REFUSED = Object.freeze({
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
 
+/** The dock's Pro buttons (one class list, bound as kbdBtn, so the markup carries it once): 44 px
+ *  on a coarse pointer (V634). */
+export const KBD_BTN = [
+  'inline-flex h-9 items-center justify-center rounded-lg border border-solid',
+  'border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100',
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+  'aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white',
+  'dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700',
+  'dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11',
+  '[@media(pointer:coarse)]:min-w-11',
+].join(' ');
+
+/** The narrowest white key a finger plays without its neighbour: the 44 px touch target. */
+export const TOUCH_KEY_MIN = 44;
+
+/**
+ * How many octaves the on-screen keys show in `width` CSS px (V634). A fine pointer keeps the
+ * drawing's own choice, two below 560 px and three above; a coarse one shows as many whole
+ * octaves as keep every white key (seven per octave and the top C) at least TOUCH_KEY_MIN wide,
+ * one at the least and three at the most, and the Octave buttons move them.
+ */
+export function keysOctaves(width, { coarse = false } = {}) {
+  if (!coarse) return width < 560 ? 2 : 3;
+  const whites = Math.floor(Math.max(0, width) / TOUCH_KEY_MIN);
+  return Math.max(1, Math.min(3, Math.floor((whites - 1) / 7)));
+}
+
+/**
+ * Whether the keys are touched rather than pointed at, and whether they carry the computer
+ * keys' letters: a letter names a key nobody can press where no fine pointer, and so most
+ * likely no hardware keyboard, is attached (a phone), so there the keys show only their notes.
+ */
+export function keysInput(win) {
+  const mq = (q) => Boolean(win && typeof win.matchMedia === 'function'
+    && win.matchMedia(q).matches);
+  const coarse = mq('(pointer: coarse)');
+  return { coarse, lettered: !coarse || mq('(any-pointer: fine)') };
+}
+
 /** True when `el` takes typed keys itself: a text field, a select, an editable element. */
 export function takesText(el) {
   if (!el || !el.tagName) return false;
@@ -63,10 +102,24 @@ export function createKeyboardUi({ win = window } = {}) {
     kbdHeld: '',
     kbdSounding: false,
     kbdRange: '',
+    // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
+    // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
+    kbdMore: false,
+    kbdBtn: KBD_BTN,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {
       return KEYBOARD_VIEWS.includes(this.workspace) ? this.workspace : null;
+    },
+    /** The keys dock over the page's bottom edge, the same component in the Synth and the
+     *  Studio (the owner's report of 2026-11-03); the Playground keeps them under its panels. */
+    get kbdDocked() {
+      return this.kbdView === 'synth' || this.kbdView === 'studio';
+    },
+    /** The on-screen keys show wherever they play; in the Studio only while armed, so the
+     *  disarmed dock is one row and the graph keeps the height (the owner's report). */
+    get kbdKeysShown() {
+      return this.kbdView !== 'studio' || this.kbdArmedHere;
     },
     get kbdArmedHere() {
       const v = this.kbdView;
@@ -174,7 +227,7 @@ export function createKeyboardUi({ win = window } = {}) {
       }
 
       if (doc && typeof doc.querySelector === 'function') {
-        const mount = () => { view = mountKeys(win, doc, kb) || view; };
+        const mount = () => { view = mountKeys(win, doc, kb) || view; trackDockHeight(win, doc); };
         if (typeof cmp.$nextTick === 'function') cmp.$nextTick(mount); else mount();
       }
     },
@@ -210,6 +263,29 @@ export function createKeyboardUi({ win = window } = {}) {
 }
 
 /**
+ * The band the docked keyboard covers at the bottom of the viewport (the dock and the status
+ * bar under it) as --osc-dock-h on the root, 0px unless the dock is fixed over the page (the
+ * Synth dock): the Synth view reserves it below its content and the page keeps it as scroll
+ * padding, so no control and no focused element ends under the dock (WCAG 2.4.11).
+ */
+function trackDockHeight(win, doc) {
+  const dock = doc.querySelector('[data-osc="keyboard"]');
+  const root = doc.documentElement;
+  if (!dock || !root || typeof win.ResizeObserver !== 'function') return;
+  const set = () => {
+    const fixed = win.getComputedStyle(dock).position === 'fixed';
+    const top = dock.getBoundingClientRect().top;
+    const h = fixed && top > 0 ? Math.ceil(win.innerHeight - top) : 0;
+    root.style.setProperty('--osc-dock-h', `${h}px`);
+  };
+  new win.ResizeObserver(set).observe(dock);
+  if (typeof win.MutationObserver === 'function') {
+    new win.MutationObserver(set).observe(dock, { attributes: true, attributeFilter: ['class'] });
+  }
+  set();
+}
+
+/**
  * The on-screen keys: the canvas under data-osc="keyboard.keys", sized to its box, drawn
  * when what is held or the octave changes, and played by pointers (one note per pointer, a
  * drag glides from key to key). Returns { draw, resize } or null without a canvas.
@@ -220,10 +296,13 @@ function mountKeys(win, doc, kb) {
   const box = canvas.parentElement;
   // The keyboard's place in the grid of the main area and the canvas size are set here until
   // the keyboard moves into its Pro card (plan F001 to F003, ADR 0061): it follows every panel
-  // of the Playground, full width, at every width.
-  if (box && box.style) {
-    box.style.order = '14';
-    box.style.gridColumn = '1 / -1';
+  // of the Playground, full width, at every width. The grid item is the keyboard group, not
+  // the canvas's parent: since the keys show only while armed in the Studio, the canvas sits
+  // in its own x-show wrapper, and placing that wrapper left the group first in the grid.
+  const item = (canvas.closest && canvas.closest('[data-osc="keyboard"]')) || box;
+  if (item && item.style) {
+    item.style.order = '14';
+    item.style.gridColumn = '1 / -1';
   }
   const ctx = canvas.getContext('2d');
   let width = 0;
@@ -231,13 +310,14 @@ function mountKeys(win, doc, kb) {
   let range = visibleRange(kb.base, 3);
   const labels = {};
   const label = (note) => {
+    if (!keysInput(win).lettered) return null;
     const code = codeForNote(note, kb.base);
     return code ? (labels[code] || KEY_LABELS[code]) : null;
   };
   const view = {
     draw() {
       if (!ctx || !width) return;
-      const octaves = width < 560 ? 2 : 3;
+      const octaves = keysOctaves(width, keysInput(win));
       range = visibleRange(kb.base, octaves);
       const lit = (note) => (kb.isLit(note)
         ? kb.held.find((h) => h.note === note).sources : null);

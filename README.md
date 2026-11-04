@@ -98,13 +98,19 @@ definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
 
 ## Navigation
 
-The header has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
+The sidebar has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
 **Synthesis**, **Learn**, **Studio**, **Synth** and **About**, in that order. Analyze and Synthesis are
 groups. Analyze opens Analyzer, Filter Lab and Compare; Synthesis opens Synthesis, Sequencer and
-Presets. A group is a button that shows its list of workspaces: Enter or Space opens it and Tab
-walks the list, or ArrowDown opens it on the current workspace and the arrow keys move. Escape
-closes it. Every V2 workspace is still there under the same name, and only the way to it has
-changed.
+Presets. Every workspace is one tap away: the groups start expanded, and a group's button
+collapses or expands its list (the choice is kept). On a desktop (1024 px and wider) the sidebar
+sits beside the workspace and its button in the top bar collapses it to icons (kept too; it
+expands while the pointer or focus is in it); on a phone or tablet it is a drawer behind the
+menu button, over a backdrop. The arrow keys, Home and End move through the sidebar, Escape
+closes the drawer (or, on a desktop, collapses the group you are in) and focus returns to the
+button that opened it. **Find a workspace** (in the top bar, or at the top of the drawer)
+filters the list by name or by what the workspace does, and Enter opens the first match. Every
+V2 workspace is still there under the same name, and only the way to it has changed; the
+entries come from one registry (`src/js/ui/shell.js`), so adding a workspace is one row there.
 
 - **The address names the workspace.** Each switch writes `m=<workspace>` into the page address
   (`#m=measure`, `#m=analyzer`, …) and adds one browser history entry, also from `file://`.
@@ -113,7 +119,9 @@ changed.
   Studio keys win over `m`, and `m` wins over a recipe link's `mr`, so `#m=studio&mr=…` opens
   Studio and still loads the recipe into Measure
   ([ADR 0045](.ai/repo/adrs/0045-workspace-in-history-one-hash-dispatcher-unsaved-guard.md)).
-  **Copy config URL** keeps the recipe and Studio keys that are in the address. Each nav item
+  **Copy config URL** keeps the recipe and Studio keys that are in the address, and writes the
+  instrument (the V1 keys) and the Filter, Envelope, Additive and Phase & Stereo settings (one
+  `lab=` key); the sequence is not in a link, it travels in the config file. Each nav item
   links to its workspace's address, so opening it in a new tab opens that workspace. A link
   that is refused does not stay in the address or in history: an `m` that names no page (or
   two) says "Page link not applied" once and changes no workspace, an instrument link that
@@ -170,13 +178,17 @@ changed.
 - **ADSR:** an attack/decay/sustain/release envelope with a draggable graph. It shapes every
   note of the instrument: a held tone, a continuous sweep, a finite tone and each step of the
   instrument's programmed patterns, where it shrinks to fit a short step. An edit reaches the
-  note that sounds: a new release in place, anything else by a click-free restart of the
-  note, once per slider or graph drag, when the drag ends, and once per run of arrow keys on
-  a slider, a quarter of a second after the last key is let go (at once when the focus
-  leaves it). A release edited while a note is held (here, or Settings Release with the
+  note that sounds: a new release in place, a new Sustain (or switching the Envelope off) by a
+  short glide of the held level on the same note, anything else (Attack, Decay, switching it
+  on, a programmed pattern's steps) by a click-free restart of the note, once per slider or
+  graph drag, when the drag ends, and once per run of arrow keys on a slider, a quarter of a
+  second after the last key is let go (at once when the focus leaves it). The Sequencer's
+  blocks keep their own envelopes, so the lab never reaches them. A release edited while a note is held (here, or Settings Release with the
   envelope off) is the one letting go of that note uses, shortened to end by the hard limit
   or a pattern's own end; a note that reaches either, or a Trigger note's end, fades over the
-  release it started with. The Pattern sequencer and Studio keep their own envelopes.
+  release it started with. The Pattern sequencer and Studio keep their own envelopes. A lab field
+  answers a committed entry with the value that applies: one past its limit reads as the limit
+  (Attack 5000 ms reads 2 s), and text that does not parse gives way to the value in use.
 - **Additive synthesis:** a harmonic editor. The bars you see are the same coefficients that
   build the waveform you hear. It applies to single-oscillator sources, not to the dual
   oscillator.
@@ -216,6 +228,8 @@ is in the [algorithm notes](docs/v3/algorithms.md).
   ABORTED or ERROR). The preset CHARACTERIZE PLAYBACK CHAIN runs a noise check and then a
   20 Hz-20 kHz log sweep, three times, at the LOW digital level. Expert settings add the sweep
   range and duration, the number of runs (1-10), mean or median aggregation, timing and phase.
+  A step the setup check blocks says why: a sweep it refuses shows the reason on the Stimulus
+  step (for example `f1 must be ≥ 1 Hz` for a start frequency of -1 Hz).
 - **Setup check.** Before anything plays, OSCILLA checks the microphone permission, the input
   device, the sample rate, the input level and the background noise. It requests echo
   cancellation, noise suppression and automatic gain control off, and reads back what the
@@ -662,8 +676,8 @@ through the user's whole journey in Chromium, Firefox and WebKit:
 Each gap above is an expected failure of that suite, named by its plan issue. It runs every
 time, and it fails the suite once it starts passing, so its mark is removed when the work
 lands. MIDI notes sounding through the engine (V502), a Drive node for the driven tone (K012)
-and a keyboard view whose key lights and sounds (K026, V504) have landed: the suite checks
-them as steps of the journey.
+and a keyboard view whose key lights and sounds (K026) have landed: the suite checks them as
+steps of the journey. The notes beside the spectrum and waveform (V504) have not.
 
 ## Safety and measurement limits
 
@@ -852,12 +866,13 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | --- | --- | --- |
 | Unit | `tests/unit/` | Pure modules (DSP, analysis, sequencer, charts), the packer, the artifact rules and the release tooling, all under `node --test` |
 | V1 freeze | `tests/freeze/` | Golden vectors that pin V1 behaviour ([ADR 0014](.ai/repo/adrs/0014-v1-behaviour-frozen-by-golden-vectors.md)) |
-| Browser | `npm run test:browser`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page: the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), link integrity and route hygiene (`tests/browser/link-integrity.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), the workspaces against the interface audit (`tests/browser/ui-current.cjs`), a phone's audio unlock and playback session (`tests/browser/touch-audio.cjs`), the demo song journey (`tests/browser/demo-song.cjs`), the cross-links between workspaces as round trips (`tests/browser/cross-links.cjs`), the first-screen entry-path inventory (`tests/browser/first-screen.cjs`), the navigable-surface census against its contract (`tests/browser/surface-census.cjs`, held statically by `tests/unit/surface-census.test.mjs`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
+| Browser | `npm run test:browser`, `test:census`, `test:engine`, `test:dsp`, `test:labs`, `test:sequencer` | Playwright suites on the built page (`test:browser` runs each of its suites through `tests/browser/lib/run-suites.cjs`, which runs them all and fails when any failed): the app gate (`tests/browser/app.cjs`), layout (`tests/browser/layout.cjs`), the V2 final-QA regressions (`tests/browser/qa-regressions.cjs`), navigation history and unsaved work (`tests/browser/navigation.cjs`), link integrity and route hygiene (`tests/browser/link-integrity.cjs`), the deep-link inventory and the Flowbite Pro shell (`tests/browser/ui-flowbite-pro.cjs`), the workspaces against the interface audit (`tests/browser/ui-current.cjs`), a phone's audio unlock and playback session (`tests/browser/touch-audio.cjs`), the demo song journey (`tests/browser/demo-song.cjs`), the cross-links between workspaces as round trips (`tests/browser/cross-links.cjs`), the first-screen entry-path inventory (`tests/browser/first-screen.cjs`), the navigable-surface census against its contract (`tests/browser/surface-census.cjs`, held statically by `tests/unit/surface-census.test.mjs`), the six user journeys (`tests/browser/journeys.cjs`), the control census (`tests/browser/control-census.cjs`, `npm run test:census`), the V1 engine port (`tests/browser/engine-v1port.cjs`), DSP (`tests/browser/dsp.cjs`), labs (`tests/browser/labs.cjs`) and the sequencer (`tests/browser/sequencer.cjs`) |
 | Visual | `scripts/visual-gate.mjs`, `tests/visual/` | The 1536x1024 reference and named regions, compared region by region with thresholds measured from run-to-run variance ([ADR 0029](.ai/repo/adrs/0029-visual-regression-in-the-release-gate.md)) |
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
 | V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
-| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`), and the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), and the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`) |
+| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`) |
+| Synth line browser | `npm run test:synth` | The integration map first: every link between workspaces, instruments and labs of `tests/browser/integration-map.json`, walked by pointer, keyboard and touch with Back, Forward and a reload (`tests/browser/integration-map.cjs`); then the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`), the Synth XY pad's scale steps, timbre axis, presets, keys and touch (`tests/browser/xy-pad.cjs`) and the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`) |
 | Studio visual | `scripts/visual-studio.mjs`, `tests/visual/studio/` | Studio at 1536x1024 and its GRAPH and TIMELINE subviews at 390x844, against the accepted reference for each environment (part of `npm run test:visual`) |
 
 Every V3 browser check runs on a TEST CONTEXT digital loopback or a fake microphone. No
@@ -871,6 +886,18 @@ checks and `labs-basic`), each judged where it acts (the live filter stage and t
 level, the next note's envelope, the dual voice, the stereo router) and in a view that shows
 it; the Sequencer panel's Tempo (BPM), Loop, timeline, block fields, Move, Add, Delete and
 transport are driven in `tests/browser/sequencer.cjs`.
+
+The control census (`tests/browser/control-census.cjs`) holds a row for every control of every
+workspace: it discovers the controls from the page, fails on one without a row, drives each by
+pointer and keyboard and reads back its effect (the engine voice or node parameter, the lab
+stage and the tone's level, the sequencer model, the Studio store, a readout or a view, a
+download), or names the suite that does, or the debt record that lists it. The user journeys
+(`tests/browser/journeys.cjs`) set parameters and start, change them while sounding, compare
+every affected view with the engine, stop and restart ten times with a node census, save and
+restore through the config link, presets, the config file, Studio projects and experiments, and
+check that invalid input is refused with a message that names the field or the reason. Where a
+confirmed defect has an open fix, the check is an expected failure that names the finding and
+the pull request, and fails once the defect stops reproducing.
 
 `npm run release-gate` is the authority on what the gate runs and in what order; the table
 names every suite and visual script its `test:release` runs (`tests/unit/docs-derived.test.mjs`
@@ -899,16 +926,21 @@ run it alone.
      proposes the level, with a reason for each commit.
   2. `npm run release:prepare` starts from a clean tree. It bumps `package.json` once (or
      confirms an untagged version), refreshes `src/data/roadmap.json` from the plan, rebuilds,
-     and runs `version:check`, the release gate (with `OSC_ROADMAP_CHECK=1`, so a roadmap that
-     differs from the plan fails it) and `majordomus doctor`. If anything fails, it restores
-     the files. It never tags. Land the
-     result on `main` through a pull request. It refuses to start while the newest release has
+     and runs `version:check` and `npm run verify` (with `OSC_ROADMAP_CHECK=1`, so a roadmap
+     that differs from the plan fails it). If anything fails, it restores the files. It never
+     tags. Land the result on `main` through a pull request, by merge commit: the CI run of
+     that pull request is the release's gate verdict (the CI receipt,
+     [ADR 0082](.ai/repo/adrs/0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md)).
+     `-- --local-gate` instead runs the full release gate and `majordomus doctor` here and
+     writes a local gate receipt. It refuses to start while the newest release has
      no record (step 4), and it refuses the first stable release of a new major (`X.0.0`, and
      equally `X.0.1` or `X.1.0` typed into `package.json`) that no published `X.0.0-rc.N`
      preceded (`npm run release:prepare -- --prerelease` cuts the candidate;
      [ADR 0047](.ai/repo/adrs/0047-a-major-release-is-preceded-by-a-release-candidate-v3-0-0-wa.md)).
-     The gate receipt it writes binds every tracked file except the release records, so any
-     other pull request merged before the publish means running it again
+     Either verdict binds the whole tree (the CI receipt: main's HEAD is the merge of the
+     release pull request with the tree its newest green CI run tested, every job `ci.yml`
+     declares green; the local receipt: every tracked file except the release records), so
+     any other pull request merged before the publish means a new verdict
      (rule `project.release-receipt-binds-gate`).
   3. `npm run release:publish` is a dry run by default. With `-- --yes`, on `main`, it creates
      the annotated tag `vX.Y.Z`, pushes it, waits for the Pages deployment, verifies it, and
@@ -918,6 +950,15 @@ run it alone.
      and whether that commit precedes `HEAD`, and so does a run list it cannot read; a run
      GitHub still calls `queued` while its deploy job has run is slow, not stuck, and is
      waited for. It never watches a run of which no job has started. It prints the `majordomus finish` line that verifies the published commit.
+     Run it from a checkout on branch `main` at `origin/main`, normally the primary checkout
+     (`git switch main && git merge --ff-only origin/main`): a linked worktree on a detached
+     `HEAD` is refused with that instruction. A publish interrupted after its tag was pushed is
+     finished by re-running it there; it resumes after the tag (R021). Every `gh` call and
+     every `git ls-remote`/`push` it makes is bounded (60 s a call, `--pages-timeout` for
+     `gh run watch`) and retried at most twice on a transient failure (a timeout,
+     `ECONNRESET`, `can't assign requested address`, an HTTP 5xx); a call out of attempts is
+     named in the refusal with its reason (`scripts/release-bounded.mjs`, shared with
+     `release:record`, `release:verify-deploy` and `release-cadence.mjs`).
   4. `npm run release:record -- --version X.Y.Z` writes the release record
      `.ai/repo/releases/vX.Y.Z.yaml` (Majordomus `release/v1`): the tag and its commit, the
      channel, when the GitHub Release was published, its notes, and the attached file's
@@ -1050,10 +1091,10 @@ Browser storage holds only these keys and one database, `oscilla-experiments` (v
 
 | Storage | Key | Contents |
 | --- | --- | --- |
-| localStorage | `oscilla.presets` | Your saved presets |
+| localStorage | `oscilla.presets` | Your saved presets (the instrument and the Filter, Envelope, Additive and Phase & Stereo settings; not the sequence) |
 | localStorage | `oscilla.v2.theme` | Light or dark theme |
 | localStorage | `oscilla.v2.analysisTab` | The last analysis tab |
-| sessionStorage | `oscilla.history` | Recently played configurations (this tab only) |
+| sessionStorage | `oscilla.history` | Recently played configurations with the lab settings they were played with (this tab only) |
 | sessionStorage | `oscilla.safetyNoticeCollapsed` | Whether the safety notice was collapsed |
 | IndexedDB | `oscilla-experiments`, object store `experiments` | Your saved experiments, in the exported file form |
 | IndexedDB | `oscilla-experiments`, object store `summaries` | One small row per experiment for the list (name, date, schema and product version, quality status, result hash, size, its definition version, and the repeat, duplicate and Studio hashes it stores) |

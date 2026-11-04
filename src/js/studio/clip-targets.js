@@ -15,7 +15,7 @@
 //   clipTarget(node, use, registry = NODE_REGISTRY) -> { holds, plays, how, code, reason,
 //                                                        errors }
 //     node    the model node the clip plays on (its own target, else its track's), or null
-//     use     { kind: 'pattern' | 'event' | 'measurement', action? } for a clip (its
+//     use     { kind: 'pattern' | 'event' | 'measurement' | 'notes', action? } for a clip (its
 //             payload.action; an event clip without one is a gate), or
 //             { kind: 'automation', param } for a lane
 //     holds   the store keeps it: a model with it validates, a file saved with it loads
@@ -28,12 +28,14 @@
 //     errors  the store's errors: [{ code, message, path, nodeId? }] (path relative to the clip)
 //
 // Holding and playing differ on purpose. The store holds what the registry declares (a node
-// type's clipKinds, a parameter's `automatable`) so that a file saved by an earlier build keeps
-// loading; the transport plays a subset of it; the UI offers only what plays, and reports what is
-// held but not played with this reason where docs/v31/timeline.md "Clip-target policy" lists. The
-// subset is the table below: pattern clips play on a
-// Sequence or an Oscillator, event clips only as gates on an Envelope, measurement clips always
-// (as data), and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
+// type's clipKinds; for a notes clip, a type that plays notes, registry.js playsNotes: Keys, the
+// XY pad, the voice engines; a parameter's `automatable`) so that a file saved by an earlier
+// build keeps loading; the transport plays a subset of it; the UI offers only what plays, and
+// reports what is held but not played with this reason where docs/v31/timeline.md "Clip-target
+// policy" lists. The subset is the table below: pattern clips play on a Sequence or an
+// Oscillator, event clips only as gates on an Envelope, measurement clips always
+// (as data), notes clips not yet (K099 part 1: held, reported with the notesUnplayed reason),
+// and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
 // a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
 // high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), a shelf ignores its Q,
 // and a filter's gain is ignored by Web Audio for every type but peaking and the shelves.
@@ -41,7 +43,7 @@
 // verdict for every node type, clip kind, action and parameter in the registry.
 
 import { usesGain, usesQ } from '../audio/filters.js';
-import { NODE_REGISTRY } from './registry.js';
+import { NODE_REGISTRY, playsNotes } from './registry.js';
 import { EVENT_ACTIONS, MEASUREMENT_ACTIONS } from './schema.js';
 
 /** Node types a measurement clip action requires as its target (null: any or none). */
@@ -85,6 +87,10 @@ export const CLIP_TARGET_TEXT = Object.freeze({
     + `${name} is not played.`,
   eventTarget: (name) => `Only gate events on an Envelope are played; this clip on ${name} is `
     + 'not.',
+  notesTarget: (type) => 'A notes clip needs a target that plays notes (Keys, the XY pad or a '
+    + `voice engine); ${/^[AEIOU]/.test(type) ? 'an' : 'a'} ${type} node does not play notes.`,
+  notesUnplayed: (name) => `Notes clips are kept but not played yet; this clip on ${name} is `
+    + 'not played.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
     + 'mis-scaled, so it is not applied.',
   filterQUnused: 'Web Audio ignores Q for the low-shelf and high-shelf types; a Q lane or '
@@ -126,9 +132,12 @@ export function clipTarget(node, use, registry = NODE_REGISTRY) {
   const def = node ? registry.get(node.type) : null;
   const name = node ? node.metadata.name : '';
   const errors = [];
-  if (def && !def.clipKinds.includes(kind)) {
-    errors.push(err('invalid-clip-target', `${name} cannot play ${kind} clips.`, 'target',
-      { nodeId: node.id }));
+  const refused = def && (kind === 'notes' ? !playsNotes(node.type, registry)
+    : !def.clipKinds.includes(kind));
+  if (refused) {
+    errors.push(err('invalid-clip-target', kind === 'notes'
+      ? CLIP_TARGET_TEXT.notesTarget(def.displayName) : `${name} cannot play ${kind} clips.`,
+    'target', { nodeId: node.id }));
   }
   if (kind === 'event') {
     const action = use.action === undefined ? 'gate' : use.action;
@@ -159,6 +168,10 @@ export function clipTarget(node, use, registry = NODE_REGISTRY) {
     return verdict(errors, !first, 'measurement', first && first.code, first && first.message);
   }
   if (errors.length) return verdict(errors, false, null, errors[0].code, errors[0].message);
+  if (kind === 'notes') {
+    if (!node) return verdict(errors, false, null, 'no-target', CLIP_TARGET_TEXT.noTarget);
+    return verdict(errors, false, null, 'notes-unplayed', CLIP_TARGET_TEXT.notesUnplayed(name));
+  }
   if (kind !== 'pattern') return verdict(errors, false, null, null, null);
   if (!node) return verdict(errors, false, null, 'no-target', CLIP_TARGET_TEXT.noTarget);
   const how = PATTERN_PLAY[node.type] || null;

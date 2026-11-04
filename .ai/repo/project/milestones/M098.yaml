@@ -13,6 +13,6 @@ evidence_required:
   - "milestone_verified"
 risks:
   - "README is touched by about thirty open pull requests; P006 lands on top of E028 (#286), which already rewrote the top of README."
-  - "P007's social preview is set in the repository settings by hand; gh cannot upload it, so its evidence is the owner's action read back through gh, and the card goes stale whenever the first screen changes (P007 waits for P002)."
+  - "P007's social preview is set in the repository settings by hand; gh cannot upload it, so its evidence is the owner's action read back through gh, and the card goes stale whenever the first screen changes (P007 waits for P012, the live landing)."
 created_at: 2026-10-30
 updated_at: 2026-10-30

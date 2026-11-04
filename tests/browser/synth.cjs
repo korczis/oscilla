@@ -50,11 +50,45 @@
 //              850.3 Hz)
 //   s-look     the rendered panel: no legacy svg stroke on a jack or a plate, every jack ring and
 //              cable colour 3:1+ and every plate label 4.5:1+ on its background in the dark and
-//              light themes, a focused jack shows its focus ring, a card folds (aria-expanded)
+//              light themes (read from the layer's [data-ring] and [data-stroke] hooks), a nut
+//              under every jack, a plug on each cable end and two screws on every plate (F013
+//              W1), a focused jack shows its focus ring, a card folds (aria-expanded)
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
+//   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
+//              lists every notes node (8, the XY pad too) and New Synth voice; arrows and
+//              Enter route the keys to the FM engine in one undo entry (a note then takes an FM voice) and undo
+//              routes them back; the waveform radiogroup by arrow keys turns VCO 1's saw into a
+//              square (its 2nd harmonic 30 dB+ below the 3rd); a quick preset by pointer (tap
+//              on the phone) is one entry and the Studio Inspector shows the same LPF cutoff at
+//              the same revision. Reload keeps nothing (the Synth stores nothing; the copied
+//              link, s-link, reopens a preset)
+//   s-nodepreset K020: in the Studio Inspector of the panel's LPF, the Presets menu button opens
+//              a role=menu; arrows and Enter choose Dark low-pass: one undo entry, the cutoff
+//              field reads 400, every edge kept, and the darker filter is heard (the 1-4 kHz
+//              band 4 dB+ further below the fundamental; EG 2 still opens it by its amount)
+//   s-library  K102, the one patch library, inside the dialog osc-dlg-studio-library (desktop
+//              and phone): the Synth's Library button (a tap
+//              on the phone) opens the dialog; the instrument filter keeps the FM engine's two
+//              patches in a role=listbox; arrows reach FM keys and Insert adds it in one undo
+//              entry, the keys play it at once (a note takes a voice of the new node); in the
+//              Studio the node is in the graph and the same library, opened from the
+//              Inspector's Presets menu (on the phone, whose Studio folds the Inspector away,
+//              through the same opener), lists FM keys as in use
+//   s-libxy    K102 with K097: the library's tag filter 'xy' lists the XY pad's four built-in
+//              presets; Enter on the first applies it in one undo entry and the pad takes its
+//              scale; a name and Save the XY pad as a preset save it, listed under 'xy' at once
+//   s-riffs    K149 with K102: the library's Riffs category lists the original riffs, each said
+//              as "Original, in the style of <genre> (<era>)", Insert its only way in; Listen
+//              is heard (RMS above -40 dB rel), Stop falls below -70 dB rel and neither adds an
+//              undo entry (an ephemeral audition, Q032); Enter
+//              inserts the first in one undo entry: an event track of its name with its clips
+//              on an Oscillator that reaches the Master Output
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
-//              a section chip lands its plate's heading below the sticky chip bar, the docked
+//              with six cables patched every jack and cable end scrolls clear of the dock,
+//              the Patch bay chip shows the bay at the card's width with the cards hidden, its
+//              text 12 px+ and no two jack labels overlapping (V636), a section chip brings the
+//              cards back and lands its plate's heading below the sticky chip bar, the docked
 //              keys are visible and a tap on them sounds
 'use strict';
 
@@ -84,7 +118,8 @@ const LAUNCH = {
   webkit: {},
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
-const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look']);
+const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
+  's-library']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -149,11 +184,21 @@ async function openSynth(context, base, hash = '#m=synth') {
   return page;
 }
 const knob = (page, cid) => page.locator(`[data-knob="${cid}"]`);
+/** Below xl the Synth shows one face, the cards or the bay: press its chip when it is not shown
+ *  (at xl the Panel chip is hidden and both faces show, so this does nothing). */
+async function face(page, f) {
+  const chip = page.locator(`[data-face="${f}"]`);
+  if (await chip.isVisible() && await chip.getAttribute('aria-pressed') !== 'true') {
+    await chip.click();
+  }
+}
 async function keyKnob(page, cid, key) {
+  await face(page, 'panel');
   await knob(page, cid).focus();
   await page.keyboard.press(key);
 }
 async function typeKnob(page, cid, text) {
+  await face(page, 'panel');
   await knob(page, cid).focus();
   await page.keyboard.press('Enter');
   const input = page.locator('[data-osc="synth.panel"] input[type="text"]');
@@ -162,6 +207,7 @@ async function typeKnob(page, cid, text) {
 }
 const option = (page, cid, v) => page.locator(`[data-option="${cid}"][data-v="${v}"]`).click();
 async function tapJack(page, id) {
+  await face(page, 'bay');
   await page.locator(`[data-jack="${id}"]`).focus();
   await page.keyboard.press('Enter');
 }
@@ -349,6 +395,7 @@ function defineChecks() {
       await page.keyboard.up(code);
       await silent(page, 'the note releases');
     }
+    await face(page, 'bay');
     await page.locator(`[data-remove-cable="${d.cables[0].id}"]`).click();
     await hold(page, 'KeyD');
     await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4 * 2 ** (4 / 12)),
@@ -494,6 +541,270 @@ function defineChecks() {
       && after.sel.length >= 14, before, after };
   });
 
+  def('s-dock', async ({ page, size }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const out = {};
+    // The picker: a menu button; the keyboard walks its role=menu items, Enter routes.
+    const d0 = await dbg(page);
+    const fm = d0.nodes.fm;
+    // V635: on a phone the instrument row is folded behind the dock's More button.
+    const more = page.locator('[data-osc="keyboard.more"]');
+    if (await more.isVisible()) {
+      await more.click();
+      await until(() => page.locator('[data-osc="synth.pick"]').isVisible(),
+        { ms: 5000, what: 'More unfolds the instrument row' });
+      out.unfolded = await more.getAttribute('aria-expanded');
+    }
+    const pick = page.locator('#osc-synth-pick');
+    await pick.focus();
+    await page.keyboard.press('Enter');
+    const menu = page.locator('[data-osc="synth.pick.menu"]');
+    await until(() => menu.isVisible(), { ms: 5000, what: 'the instrument menu opens' });
+    out.items = await menu.locator('[role="menuitem"]').count();
+    out.expanded = await pick.getAttribute('aria-expanded');
+    const before = await depth();
+    const focused = () => page.evaluate(() => (document.activeElement
+      && document.activeElement.getAttribute('role') === 'menuitem'
+      ? document.activeElement.dataset.pick : null));
+    await until(async () => (await focused()) !== null, { ms: 5000,
+      what: 'focus enters the instrument menu' });
+    // Step down one item at a time, each step confirmed, until FM has the focus (bounded by
+    // the item count), then choose it.
+    for (let i = 0; i < out.items && (await focused()) !== fm; i++) {
+      const at = await focused();
+      await page.keyboard.press('ArrowDown');
+      await until(async () => (await focused()) !== at, { ms: 5000,
+        what: 'ArrowDown moves the focus to the next item' });
+    }
+    await until(async () => (await focused()) === fm, { ms: 5000,
+      what: 'the focus reaches the FM engine' });
+    await page.keyboard.press('Enter');
+    await until(async () => (await dbg(page)).played === fm, { ms: 5000,
+      what: 'Enter routes the keys to the FM engine' });
+    out.routeEntries = (await depth()) - before;
+    out.label = await page.evaluate(() => window.OSCILLA.studio.store.undoLabel());
+    await hold(page, 'KeyA');
+    await until(async () => (await dbg(page)).voices >= 1, { ms: SOUND_MS,
+      what: 'a note takes an FM voice' });
+    await page.keyboard.up('KeyA');
+    await page.evaluate(() => window.OSCILLA.studio.store.undo());
+    await until(async () => (await dbg(page)).played === d0.played, { ms: 5000,
+      what: 'undo routes the keys back' });
+    // The waveform radiogroup by keyboard: Saw -> Square on VCO 1, heard.
+    await keyKnob(page, 'mix.level2', 'Home');
+    await keyKnob(page, 'lpf.frequency', 'End');
+    const f = C4 / 2;
+    await hold(page, 'KeyA');
+    await sound(page, (q) => peakAt(q, 2 * f) && peakAt(q, 3 * f), "the saw's 2nd harmonic");
+    await page.locator('[data-osc="synth.dock.wave"] [aria-checked="true"]').focus();
+    await page.keyboard.press('ArrowRight');
+    await until(() => page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.metadata.panel && n.metadata.panel.module === 'vco1').params.waveform
+      === 'square'), { ms: 5000, what: 'the arrow key chooses Square' });
+    const sq = await sound(page, (q) => peakAt(q, 3 * f) && levelAt(q, 2 * f)
+      <= levelAt(q, 3 * f) - 30, "the square's 2nd harmonic is 30 dB below its 3rd");
+    out.square = [levelAt(sq, 2 * f), levelAt(sq, 3 * f)];
+    await page.locator('#osc-synth-title').click();
+    await page.keyboard.up('KeyA');
+    // A quick preset by pointer or touch, linked to the Studio Inspector.
+    const b0 = await depth();
+    const bass = page.locator('[data-osc="synth.dock.preset"] [data-v="bass"]');
+    if (size === 'phone') await bass.tap(); else await bass.click();
+    await until(async () => (await depth()) === b0 + 1, { ms: 5000,
+      what: 'the Bass quick preset is one undo entry' });
+    const rev = await page.evaluate(() => window.OSCILLA.studio.store.getRevision());
+    const lpf = d0.nodes.lpf;
+    await page.locator('[data-osc="synth.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'Studio opens' });
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: [id] } }), lpf);
+    const field = page.locator('[data-osc="studio.inspector.param"][data-key="frequency"]');
+    await until(async () => /180/.test(await field.inputValue().catch(() => '')),
+      { ms: 10000, what: 'the Inspector shows the LPF cutoff of Bass (180 Hz)' });
+    out.inspector = await field.inputValue();
+    out.sameRevision = rev === await page.evaluate(() => window.OSCILLA.studio.store
+      .getRevision());
+    return { ok: out.items === 9 && out.expanded === 'true' && out.routeEntries === 1
+      && /^Play .* from the keys$/.test(out.label) && out.sameRevision, ...out };
+  });
+
+  def('s-nodepreset', async ({ page }) => {
+    const d0 = await dbg(page);
+    await keyKnob(page, 'lpf.frequency', 'End');
+    await hold(page, 'KeyA');
+    const open = tilt(await steady(page, tilt, 'the open filter settles'));
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the note releases');
+    const before = await page.evaluate(() => ({ depth: window.OSCILLA.studio.store.debugInfo()
+      .undoDepth, edges: window.OSCILLA.studio.model.graph.edges.map((e) => e.id).join() }));
+    await page.locator('[data-osc="synth.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'Studio opens' });
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: [id] } }), d0.nodes.lpf);
+    const btn = page.locator('[data-osc="studio.inspector.presets"]');
+    await until(() => btn.isVisible(), { ms: 10000, what: 'the Inspector shows Presets' });
+    await btn.focus();
+    await page.keyboard.press('Enter');
+    const menu = page.locator('[data-osc="studio.inspector.presets.menu"]');
+    await until(() => menu.isVisible(), { ms: 5000, what: 'the preset menu opens' });
+    await page.keyboard.press('ArrowDown'); // Default, then Dark low-pass
+    await until(() => page.evaluate(() => document.activeElement.dataset.preset === 'dark'),
+      { ms: 5000, what: 'the arrow reaches Dark low-pass' });
+    await page.keyboard.press('Enter');
+    const field = page.locator('[data-osc="studio.inspector.param"][data-key="frequency"]');
+    await until(async () => /^400/.test(await field.inputValue().catch(() => '')),
+      { ms: 10000, what: 'the cutoff field reads 400' });
+    const after = await page.evaluate(() => ({ depth: window.OSCILLA.studio.store.debugInfo()
+      .undoDepth, edges: window.OSCILLA.studio.model.graph.edges.map((e) => e.id).join(),
+    label: window.OSCILLA.studio.store.undoLabel() }));
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'synth'),
+      { ms: 10000, what: 'back in the Synth' });
+    await hold(page, 'KeyA');
+    const dark = tilt(await steady(page, tilt, 'the dark low-pass settles'));
+    await page.keyboard.up('KeyA');
+    return { ok: after.depth === before.depth + 1 && after.edges === before.edges
+      && /^Preset Dark low-pass/.test(after.label) && dark <= open - 4, label: after.label,
+    tilt: [open, dark] };
+  });
+
+  def('s-library', async ({ page, size }) => {
+    const press = (loc) => (size === 'phone' ? loc.tap() : loc.click());
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const dlg = page.locator('[data-osc="library"]');
+    const libraryButton = page.locator('[data-osc="synth.library"]');
+    if (size === 'phone') await libraryButton.tap(); else await libraryButton.click();
+    await until(() => dlg.isVisible(), { ms: 10000, what: 'the patch library opens' });
+    await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
+    const list = page.locator('[data-osc="library.list"]');
+    const names = await list.locator('[role="option"] span:first-child').allTextContents();
+    await list.focus();
+    await page.keyboard.press('ArrowDown');
+    await until(async () => (await page.locator('[data-osc="library.name"]').textContent())
+      === 'FM keys', { ms: 5000, what: 'the arrow reaches FM keys' });
+    const before = await depth();
+    await press(page.locator('[data-osc="library.insert"]'));
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'Insert is one undo entry' });
+    const added = await page.evaluate(() => window.OSCILLA.studio.model.metadata.noteTarget);
+    await press(page.locator('[data-osc="studio.saved.close"]'));
+    await until(async () => !(await dlg.isVisible()), { ms: 5000, what: 'the library closes' });
+    await hold(page, 'KeyA');
+    await until(async () => { const d = await dbg(page); return d.played === added
+      && d.voices >= 1; }, { ms: SOUND_MS, what: 'a note takes a voice of the inserted engine' });
+    await page.keyboard.up('KeyA');
+    await page.locator('[data-osc="synth.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'Studio opens' });
+    const inGraph = await page.evaluate((id) => window.OSCILLA.studio.model.graph.nodes
+      .some((n) => n.id === id), added);
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: [id] } }), added);
+    if (size === 'phone') { // the phone's Studio folds its Inspector away: the same opener
+      await page.evaluate(() => window.OSCILLA.app.patchLibraryOpen());
+    } else {
+      const btn = page.locator('[data-osc="studio.inspector.presets"]');
+      await until(() => btn.isVisible(), { ms: 10000, what: 'the Inspector shows Presets' });
+      await btn.click();
+      await page.locator('[data-osc="studio.inspector.presets.library"]').click();
+    }
+    await until(() => dlg.isVisible(), { ms: 10000, what: 'the library opens from the Studio' });
+    await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
+    const row = list.locator('[role="option"]', { hasText: 'FM keys' });
+    await until(async () => /in use/.test(await row.textContent()), { ms: 5000,
+      what: 'the Studio lists FM keys as in use' });
+    return { ok: JSON.stringify(names) === '["FM bell","FM keys"]' && inGraph, names, added };
+  });
+
+  def('s-libxy', async ({ page }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const pad = () => page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.metadata.panel && n.metadata.panel.module === 'xy').params);
+    await page.locator('[data-osc="synth.library"]').click();
+    const list = page.locator('[data-osc="library.list"]');
+    await until(() => list.isVisible(), { ms: 10000, what: 'the patch library opens' });
+    const tag = page.locator('[data-osc="library.tag"]');
+    await until(async () => (await tag.locator('option[value="xy"]').count()) === 1,
+      { ms: 10000, what: 'the xy tag is offered' });
+    await tag.selectOption('xy');
+    const options = list.locator('[role="option"]');
+    const built = await options.count();
+    const before = await depth();
+    await list.focus();
+    await page.keyboard.press('Enter');
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'Enter applies the first XY preset in one undo entry' });
+    const p = await pad();
+    await page.locator('[data-osc="library.saveName"]').fill('Night drive');
+    await page.locator('[data-osc="library.save.xy"]').click();
+    await until(async () => (await options.count()) === built + 1
+      && /Night drive/.test(await list.textContent()), { ms: 10000,
+      what: 'the saved XY preset is listed under xy' });
+    return { ok: built === 4 && p.mode === 'minor-pentatonic', built, mode: p.mode };
+  });
+
+  def('s-riffs', async ({ page }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    await page.locator('[data-osc="synth.library"]').click();
+    const list = page.locator('[data-osc="library.list"]');
+    await until(() => list.isVisible(), { ms: 10000, what: 'the patch library opens' });
+    const inst = page.locator('[data-osc="library.instrument"]');
+    await until(async () => (await inst.locator('option[value="riffs"]').count()) === 1,
+      { ms: 10000, what: 'the Riffs category is offered' });
+    await inst.selectOption('riffs');
+    const options = list.locator('[role="option"]');
+    const count = await options.count();
+    const name = await page.locator('[data-osc="library.name"]').textContent();
+    const style = await page.locator('[data-osc="library.detail.text"]').textContent();
+    const modes = await page.locator('[data-osc="library.detail"] [data-mode]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('data-mode')));
+    const before = await depth();
+    const listen = page.locator('[data-osc="library.listen"]');
+    await listen.click();
+    const heard = await sound(page, (q) => q.rmsDb > -40, 'Listen plays the riff');
+    // What sounds is the riff's own plan, never the instrument's tone rebuilt over it.
+    const plan = await page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && v.plan ? v.plan.label : null;
+    });
+    const pressed = await listen.getAttribute('aria-pressed');
+    // Stopped from outside (any other owner's stop): the button follows the sound at once.
+    await page.evaluate(() => window.OSCILLA.engine.stopAll());
+    await until(async () => (await listen.getAttribute('aria-pressed')) === 'false', { ms: 2000,
+      what: 'a stop from outside releases the Listen button' });
+    await listen.click();
+    await sound(page, (q) => q.rmsDb > -40, 'Listen plays the riff again');
+    await listen.click();
+    const hushed = await sound(page, (q) => q.rmsDb < -70, 'Stop ends the audition');
+    const unsaved = (await depth()) === before;
+    await list.focus();
+    await page.keyboard.press('Enter');
+    await until(async () => (await depth()) === before + 1, { ms: 5000,
+      what: 'Enter inserts the first riff in one undo entry' });
+    const added = await page.evaluate((title) => {
+      const m = window.OSCILLA.studio.model;
+      const track = m.timeline.tracks.find((t) => t.name === title);
+      const osc = track && m.graph.nodes.find((n) => n.id === track.target);
+      const master = m.graph.nodes.find((n) => n.type === 'master');
+      const reach = new Set(osc ? [osc.id] : []);
+      for (let grew = true; grew;) {
+        grew = false;
+        for (const e of m.graph.edges) {
+          if (reach.has(e.from.node) && !reach.has(e.to.node)) grew = !!reach.add(e.to.node);
+        }
+      }
+      return { track: !!track, osc: osc ? osc.type : null, master: !!master && reach.has(master.id),
+        clips: track ? m.timeline.clips.filter((c) => c.trackId === track.id).length : 0 };
+    }, name);
+    return { ok: count >= 12 && /^Original, in the style of /.test(style)
+      && JSON.stringify(modes) === '["insert"]' && added.track && added.osc === 'oscillator'
+      && added.master && added.clips > 0 && pressed === 'true' && unsaved
+      && plan === `Riff ${name}`, plan, count, name, style,
+    modes, added, heard: heard.rmsDb, hushed: hushed.rmsDb, pressed, unsaved };
+  });
+
   def('s-escape', async ({ page }) => {
     await hold(page, 'KeyA');
     await sound(page, (q) => q.rmsDb > -40, 'a held note sounds');
@@ -605,16 +916,24 @@ function defineChecks() {
         + '[data-jack] > :nth-child(4)')].concat([...document.querySelectorAll(
         '[data-module] > svg rect')]).filter((el) => getComputedStyle(el).stroke !== 'none')
         .length;
-      const rings = [...svg.querySelectorAll('[data-jack] > :nth-child(3)')]
+      // The layer's hooks (ui/synth/jack.js, cable.js), never child order.
+      const rings = [...svg.querySelectorAll('[data-jack] [data-ring]')]
         .map((el) => ratio(paint(el.getAttribute('stroke')), card));
-      const wires = [...svg.querySelectorAll('[data-cable] > path:last-child')]
+      const wires = [...svg.querySelectorAll('[data-cable] [data-stroke]')]
         .map((el) => ratio(paint(el.getAttribute('stroke')), card));
+      // F013 W1: a nut under every jack, a plug on each cable end, two screws on every plate.
+      const PLATE = '[data-osc="synth.panel"] section[data-module]:not([data-osc="synth.bay"])';
+      const hw = { nuts: svg.querySelectorAll('[data-nut]').length,
+        jacks: svg.querySelectorAll('[data-jack]').length,
+        plugs: svg.querySelectorAll('[data-plug]').length,
+        plates: document.querySelectorAll(PLATE).length,
+        screws: document.querySelectorAll(`${PLATE} [data-screw]`).length };
       const top = paint(getComputedStyle(document.querySelector('[data-osc="synth.panel"]'))
         .getPropertyValue('--osc-surface-3'));
       const labels = [...document.querySelectorAll('[data-module] [id$="-label"]')]
         .map((el) => ratio(hex(getComputedStyle(el).color), top));
       return { card, leaks, ring: Math.min(...rings), wire: Math.min(...wires),
-        label: Math.min(...labels), wires: wires.length };
+        label: Math.min(...labels), wires: wires.length, hw };
     });
     // One cable from each of the six source colours' modules, so every cable colour is drawn.
     for (const [a, b] of [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
@@ -632,9 +951,9 @@ function defineChecks() {
       await until(() => page.evaluate((t) => {
         const doc = document.documentElement;
         const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
-        const ring = document.querySelector('[data-jack="out.audio:in"] > :nth-child(3)');
+        const ring = document.querySelector('[data-jack="out.audio:in"] [data-ring]');
         return doc.dataset.theme === t && ring && ring.getAttribute('stroke') !== null
-          && document.querySelector('[data-jack="mg.rate:in"] > :nth-child(3)')
+          && document.querySelector('[data-jack="mg.rate:in"] [data-ring]')
             .getAttribute('stroke') === dim;
       }, theme), { ms: 10000, what: `the ${theme} theme redraws the bay` });
       themes[theme] = await look();
@@ -651,6 +970,7 @@ function defineChecks() {
         off: other && getComputedStyle(other).opacity };
     });
     // Fold: a card header is a disclosure button.
+    await face(page, 'panel');
     await page.locator('[data-collapse="lpf"]').click();
     const fold = await page.evaluate(() => ({
       expanded: document.querySelector('[data-collapse="lpf"]').getAttribute('aria-expanded'),
@@ -658,7 +978,9 @@ function defineChecks() {
       summary: !!document.querySelector('[data-summary="lpf"]') }));
     await page.locator('[data-fold-all="open"]').click();
     const ok = Object.values(themes).every((t) => t.leaks === 0 && t.ring >= 3 && t.wire >= 3
-      && t.label >= 4.5 && t.wires === 6) && focus.on === '1' && focus.off === '0'
+      && t.label >= 4.5 && t.wires === 6 && t.hw.nuts === t.hw.jacks && t.hw.jacks > 0
+      && t.hw.plugs === 12 && t.hw.plates > 0 && t.hw.screws === 2 * t.hw.plates)
+      && focus.on === '1' && focus.off === '0'
       && fold.expanded === 'false' && fold.knobs === 0 && fold.summary;
     return { ok, themes, focus, fold };
   });
@@ -693,9 +1015,84 @@ function defineChecks() {
       }).map((el) => el.getAttribute('data-knob') || el.getAttribute('data-option')
         || (el.parentNode && el.parentNode.getAttribute && el.parentNode.getAttribute('data-jack')));
       const kb = document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect();
+      // The text floor (ui/synth/label.js, F013 W1): no plate text below 12 px.
+      const tiny = [...document.querySelectorAll('[data-osc="synth.panel"] [data-module] '
+        + 'span, [data-osc="synth.panel"] [data-module] output, '
+        + '[data-osc="synth.panel"] [data-module] p')]
+        .filter((el) => el.getBoundingClientRect().width > 0
+          && parseFloat(getComputedStyle(el).fontSize) < 12)
+        .map((el) => (el.id || el.className || el.tagName).slice(0, 40));
       return { scroll: document.documentElement.scrollWidth, inner: window.innerWidth,
-        small, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
+        small, tiny, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
     });
+    // The bay face (B2): the whole width under the chip bar, its text 12 px and up, every
+    // jack a 44 px target; a module chip brings the cards back.
+    await page.locator('[data-face="bay"]').tap();
+    const bay = await page.evaluate(() => {
+      const svg = document.querySelector('[data-osc="synth.bay.svg"]').getBoundingClientRect();
+      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+        .getBoundingClientRect();
+      const cards = document.querySelector('[data-face-of="panel"]').getBoundingClientRect();
+      const fonts = [...document.querySelectorAll('[data-osc="synth.bay.svg"] text')]
+        .map((t) => parseFloat(getComputedStyle(t).fontSize));
+      const jacks = [...document.querySelectorAll('[data-jack] > rect:first-child')]
+        .map((r) => r.getBoundingClientRect()).filter((r) => r.width < 43.5 || r.height < 43.5);
+      const labels = [...document.querySelectorAll('[data-jack] text')]
+        .map((t) => t.getBoundingClientRect());
+      const overlaps = labels.filter((a, i) => labels.some((b, k) => k > i
+        && a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5
+        && b.top < a.bottom - 0.5)).length;
+      const card = document.querySelector('[data-osc="synth.bay"]');
+      return { width: Math.round(svg.width), card: Math.round(card.clientWidth),
+        inner: window.innerWidth,
+        gap: Math.round(svg.top - bar.bottom), cardsHidden: cards.height === 0,
+        minFont: Math.min(...fonts), small: jacks.length, overlaps,
+        pressed: document.querySelector('[data-face="bay"]').getAttribute('aria-pressed') };
+    });
+    if (!(bay.cardsHidden && bay.card >= bay.inner - 56 && bay.width >= bay.card - 25
+      && bay.minFont >= 12 && !bay.small
+      && !bay.overlaps && bay.pressed === 'true')) {
+      return { ok: false, detail: 'the bay face', bay };
+    }
+    // No control may be covered (phone-whole): with six cables patched, every jack and every
+    // cable end scrolls clear of the dock (the page pads its bottom by --osc-dock-h) and below
+    // the chip bar, and a tap there lands on the jack itself (a plug takes no pointer).
+    for (const [a, b] of [['keys.velocity', 'vco2.tune'], ['vco1.audio', 'ring.modulator'],
+      ['vco2.audio', 'mix.in4'], ['ring.audio', 'mix.in3'], ['noise.audio', 'mix.in1'],
+      ['mix.audio', 'vca.audio']]) {
+      await tapJack(page, `${a}:out`);
+      await tapJack(page, `${b}:in`);
+    }
+    const reach = await page.evaluate(() => {
+      const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
+      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+        .getBoundingClientRect();
+      const svg = document.querySelector('[data-osc="synth.bay.svg"]');
+      const ends = [...svg.querySelectorAll('[data-jack]')].map((el) => [el, el])
+        .concat([...svg.querySelectorAll('[data-plug] circle:first-child')]
+          .map((el) => [el, null]));
+      // The scroller: the nearest ancestor that scrolls, else the page. An explicit scroll, as
+      // Firefox does not scroll an SVG <g> by scrollIntoView.
+      let box = svg.parentElement;
+      while (box && !(box.scrollHeight > box.clientHeight
+        && /auto|scroll/.test(getComputedStyle(box).overflowY))) box = box.parentElement;
+      const scroller = box || document.scrollingElement;
+      const covered = [];
+      for (const [el, self] of ends) {
+        const q = el.getBoundingClientRect();
+        scroller.scrollBy(0, q.top + q.height / 2 - (bar.bottom + dock.top) / 2);
+        const r = el.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        const jack = hit && hit.closest('[data-jack]');
+        if (r.bottom > dock.top || r.top < bar.bottom || !jack || (self && jack !== self)) {
+          covered.push((self || el.parentNode).getAttribute('data-jack') || 'plug');
+        }
+      }
+      return { ends: ends.length, covered, dock: Math.round(dock.height) };
+    });
+    if (reach.ends !== 62 + 12 || reach.covered.length) {
+      return { ok: false, detail: 'a jack or a cable end stays under the dock', reach };
+    }
     await page.locator('[data-goto="lpf"]').tap();
     const chip = await page.evaluate(() => {
       const h = document.querySelector('#synth-m-lpf').getBoundingClientRect();
@@ -713,8 +1110,9 @@ function defineChecks() {
     const p = await sound(page, (q) => q.rmsDb > -45, 'a press on the docked keys sounds');
     await page.mouse.up();
     await silent(page, 'releasing the key silences it');
-    return { ok: m.scroll <= m.inner && m.small.length === 0 && m.kb.bottom <= m.kb.h
-      && m.kb.top > 0, ...m, chip, rmsDb: p.rmsDb };
+    return { ok: m.scroll <= m.inner && m.small.length === 0 && m.tiny.length === 0
+      && m.kb.bottom <= m.kb.h
+      && m.kb.top > 0, ...m, bay, reach, chip, rmsDb: p.rmsDb };
   });
   return checks;
 }

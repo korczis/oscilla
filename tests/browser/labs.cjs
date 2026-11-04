@@ -482,6 +482,51 @@ async function runEngine(engine, base) {
   check('click a bar selects that harmonic', sel.selected === 3 && sel.field === '3',
     JSON.stringify(sel));
 
+  // (3b) U013: with the additive switch off the chart draws the same bars dimmed and labelled
+  // BYPASSED, and its host's name says so; a state restored with enabled false shows it too.
+  const addState = () => page.evaluate(() => {
+    const { labs } = window.__labs;
+    const c = document.querySelector('#osc-chart-additive canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let h = 0;
+    for (let i = 0; i < d.length; i += 4) h = (h * 31 + d[i] + d[i + 1] * 7 + d[i + 3]) >>> 0;
+    return { lab: labs.additive.enabled, chart: labs.additive.chart.isEnabled(), pixels: h,
+      label: document.querySelector('#osc-chart-additive').getAttribute('aria-label'),
+      bars: JSON.stringify(labs.additive.chart.getBars()) };
+  });
+  // Whatever the switch starts at, toggling it changes the drawing and the name and never the
+  // bars; the off reading names the bypass, and toggling back restores the first drawing.
+  const addFirst = await addState();
+  await page.click('#osc-add-enable');
+  const addToggled = await settled(addState,
+    (v) => v.lab === !addFirst.lab && v.chart === v.lab,
+    { ms: 5000, what: 'additive chart follows the switch' });
+  const addOn = addFirst.lab ? addFirst : addToggled;
+  const addOff = addFirst.lab ? addToggled : addFirst;
+  check('U013: the additive chart shows the switch off (pixels, name, state; same bars)',
+    addOn.lab === true && addOn.chart === true && addOff.lab === false && addOff.chart === false
+      && addOff.pixels !== addOn.pixels && addOff.label !== addOn.label
+      && /bypassed/i.test(addOff.label) && !/bypassed/i.test(addOn.label)
+      && addOff.bars === addOn.bars,
+    JSON.stringify({ on: { ...addOn, bars: undefined }, off: { ...addOff, bars: undefined } }));
+  await page.click('#osc-add-enable');
+  const addBack = await settled(addState, (v) => v.lab === addFirst.lab && v.chart === v.lab,
+    { ms: 5000, what: 'additive chart follows the switch back' });
+  check('U013: switched back the chart is what it was',
+    addBack.pixels === addFirst.pixels && addBack.label === addFirst.label,
+    JSON.stringify({ ...addBack, bars: undefined }));
+  await page.evaluate(() => window.__labs.labs.additive.update({ enabled: true }));
+  await settled(addState, (v) => v.lab === true && v.chart === true,
+    { ms: 5000, what: 'additive on before the restore' });
+  await page.evaluate(() => window.__labs.labs.additive.update({ enabled: false }));
+  const addRestored = await settled(addState, (v) => v.lab === false && v.chart === false,
+    { ms: 5000, what: 'additive chart follows a restored state' });
+  check('U013: a state restored with enabled false shows the bypassed chart',
+    addRestored.chart === false && addRestored.label === addOff.label
+      && addRestored.pixels === addOff.pixels,
+    JSON.stringify({ ...addRestored, bars: undefined }));
+  await page.evaluate((on) => window.__labs.labs.additive.update({ enabled: on }), addFirst.lab);
+
   await openWorkspace(page, 'analyzer');
   // (4) Spectrogram: non-floor pixels on the tone row, floor elsewhere.
   // The panel was hidden until its workspace opened (#278), and a hidden view writes no column

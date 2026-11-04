@@ -1,0 +1,30 @@
+# Review verdict for pull request #386, lane A: F002 Pro shell and phone-first layout (branch
+# feat/a-connect-phone). Reviewed head 90fe2d0b against origin/main 32b439e6 (b9381299 for the
+# rule-test collision below). The builders are oscilla-21 and oscilla-b0 (F001/F002 origin); the
+# reviewer, oscilla-af, built none of it.
+#
+# The digest: the base branch's scripts/review-verdict.mjs, run from `git archive origin/main
+# scripts`: 88752a6f...9b3f over the 3 guarded paths it names.
+#
+# What was read and holds:
+# - .github/workflows/ci.yml: a comment only (the browser step runs test:browser through
+#   tests/browser/lib/run-suites.cjs, review #330 F5); main's 30-minute step bound inside the
+#   45-minute job is unchanged.
+# - test:browser (not guarded, read because the comment names it): run-suites.cjs runs every
+#   named suite whatever the one before returned, keeps OSC_BROWSERS/OSC_ORIGINS, bounds each
+#   suite by OSC_SUITE_MS (20 min default, a non-positive value refuses with exit 2), and the
+#   list at 90fe2d0b keeps all 12 suites of main, touch-audio.cjs included.
+# - scripts/build-config.mjs and scripts/build.mjs: DARK_THEME_SELECTOR becomes
+#   :root:not([data-theme="light"]), the same "every theme but light" that tailwind.config.cjs
+#   darkMode uses, so the plugin's .dark rules and the dark: variant agree (review #330 F3); a
+#   comment records the F002 size; no fetch, no runtime asset, nothing file:// cannot load.
+#
+# Verdict: merge. No P0 or P1.
+schema: review-verdict/v1
+pr: 386
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 88752a6feb778bf529809289b9bbed3ef8f4b8c38c8e761bb0b0b05947ad9b3f
+findings:
+  - { id: R1, severity: P2, status: open, title: "tests/unit/rule-a-phone-sounds.test.mjs (main, #387) asserts the literal 'node tests/browser/touch-audio.cjs' in test:browser; the run-suites form names it as a runner argument, so npm test fails once this branch merges main: accept both forms (a suite run by node directly or an argument of tests/browser/lib/run-suites.cjs) in the merge" }
+  - { id: R2, severity: P3, status: open, title: "build-config.mjs:29 DARK_CLASS replaces .dark anywhere in a selector; a compound .dark.x (the class on the same element) would become :root:not(...).x, which no flowbite rule uses today; a comment or an assertion that every match is an ancestor would hold it" }

@@ -340,6 +340,27 @@ export class StudioFakeContext extends FakeContext {
   }
 }
 
+/**
+ * A fake OfflineAudioContext constructor (offline-renderer.js render): a StudioFakeContext,
+ * suspended until startRendering, which resolves with an empty buffer of the asked length.
+ * Each context built is pushed onto `made`, so a test can read what was built and scheduled.
+ */
+export function fakeOfflineCtor(made) {
+  return class extends StudioFakeContext {
+    constructor({ numberOfChannels, length, sampleRate }) {
+      super({ sampleRate, state: 'suspended' });
+      this.numberOfChannels = numberOfChannels;
+      this.length = length;
+      made.push(this);
+    }
+
+    startRendering() {
+      return Promise.resolve(this.createBuffer(this.numberOfChannels, this.length,
+        this.sampleRate));
+    }
+  };
+}
+
 /** Manual timers: run() fires everything due at or before a virtual millisecond clock. */
 export function fakeTimers() {
   let id = 0;

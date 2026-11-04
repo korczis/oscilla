@@ -1,19 +1,18 @@
 // Studio graph commands of plan K009 (spec §50; rule typed-ports): Shift+Delete deletes the
 // selected node and bridges its input to its outputs where the validator allows it, L tidies the
-// graph into signal order as one NODE_MOVE gesture (deterministic, from compactLayout), M mutes
-// or unmutes the selected connections. The keys are tests/unit/studio-graph-keys.test.mjs.
-//   src/js/ui/studio/graph-commands.js bridgePlan, tidyPositions, muteTargets, createGraphCommands
+// graph into signal order as one NODE_MOVE gesture (deterministic, from graph-layout.js
+// tidyLayout, plan V637: tests/unit/studio-graph-layout.test.mjs), M mutes or unmutes the
+// selected connections. The keys are tests/unit/studio-graph-keys.test.mjs.
+//   src/js/ui/studio/graph-commands.js bridgePlan, muteTargets, createGraphCommands
 //   node --test tests/unit/studio-graph-commands.test.mjs
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  TIDY_COLUMN_GAP, TIDY_DEFAULT_HEIGHT, TIDY_ROW_GAP, bridgePlan, createGraphCommands,
-  muteTargets, tidyPositions,
+  bridgePlan, createGraphCommands, muteTargets,
 } from '../../src/js/ui/studio/graph-commands.js';
-import { compactLayout } from '../../src/js/ui/studio/graph-layout.js';
-import { NODE_WIDTH } from '../../src/js/ui/studio/graph-geometry.js';
+import { tidyLayout } from '../../src/js/ui/studio/graph-layout.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
@@ -37,7 +36,7 @@ function harness(m = synth(), { gate = null, hold = false } = {}) {
     svc: { announce: (text, opts) => said.push({ text, assertive: !!(opts && opts.assertive) }) },
     view: () => ({ panX: 0, panY: 0, zoom: 1 }), setView() {}, centerPoint: () => ({ x: 0, y: 0 }),
     clientToGraph: () => ({ x: 0, y: 0 }), isOverViewport: () => true, focusNode: () => true,
-    isShown: () => false, nodeHeights: () => new Map() });
+    isShown: () => false, nodeGeometry: () => new Map(), viewSize: () => ({ w: 0, h: 0 }) });
   const select = (sel) => store.dispatch({ type: 'SELECTION_CHANGE', selection: sel });
   return { store, cmd, said, select, holds, depth: () => store.debugInfo().undoDepth };
 }
@@ -108,26 +107,6 @@ test('K009 Shift+Delete without a possible bridge deletes plainly and announces 
   assert.match(h2.said.at(-1).text, /No bridge: select one node to bridge it\.$/);
 });
 
-test('K009 tidyPositions puts compactLayout columns and rows on the grid, deterministic', () => {
-  const m = synth();
-  const layout = compactLayout(m);
-  const pos = tidyPositions(m);
-  const step = NODE_WIDTH + TIDY_COLUMN_GAP;
-  const row1 = 160 + TIDY_DEFAULT_HEIGHT + TIDY_ROW_GAP;
-  assert.deepEqual(Object.fromEntries(pos), {
-    'osc-1': { x: 40, y: 160 }, 'env-1': { x: 40 + step, y: 160 },
-    'filter-1': { x: 40 + 2 * step, y: 160 }, 'master-1': { x: 40 + 3 * step, y: 160 },
-    'lfo-1': { x: 40, y: row1 }, 'spectrum-1': { x: 40 + 3 * step, y: row1 } });
-  for (const n of layout.nodes) {
-    assert.equal(pos.get(n.id).x, 40 + n.col * step, n.id);
-  }
-  for (const p of pos.values()) assert.ok(p.x % 8 === 0 && p.y % 8 === 0, 'on the grid');
-  assert.deepEqual(tidyPositions(m), pos, 'deterministic');
-  // A taller row pushes the next one down by its tallest node.
-  const tall = tidyPositions(m, { heights: new Map([['filter-1', 200]]) });
-  assert.equal(tall.get('lfo-1').y, 160 + 200 + TIDY_ROW_GAP);
-});
-
 test('K009 L is one NODE_MOVE gesture; a tidy graph does not change again', () => {
   const h = harness();
   const d0 = h.depth();
@@ -136,7 +115,7 @@ test('K009 L is one NODE_MOVE gesture; a tidy graph does not change again', () =
   assert.equal(h.store.debugInfo().lastAction.type, 'NODE_MOVE');
   assert.equal(h.store.debugInfo().lastAction.label, 'Tidy the graph');
   const after = h.store.getModel();
-  for (const [id, p] of tidyPositions(after)) {
+  for (const [id, p] of tidyLayout(after, null).positions) {
     const n = after.graph.nodes.find((x) => x.id === id);
     assert.deepEqual(n.position, p, id);
   }
@@ -251,8 +230,9 @@ test('K009 L and M each run in one store hold: the projections update once', () 
   assert.equal(h.said.at(-1).text, 'Muted 3 connections');
 });
 
-test('K009 L with unmeasured cards (a hidden graph) uses the default row height', () => {
+test('K009 L with unmeasured cards (a hidden graph) uses the default card geometry', () => {
   const m = synth();
-  const zero = new Map(m.graph.nodes.map((n) => [n.id, 0]));
-  assert.deepEqual(tidyPositions(m, { heights: zero }), tidyPositions(m));
+  const zero = new Map(m.graph.nodes.map((n) => [n.id, { h: 0, anchors: new Map() }]));
+  assert.deepEqual(tidyLayout(m, null, { geometry: zero }).positions,
+    tidyLayout(m, null).positions);
 });

@@ -80,8 +80,9 @@ async function runOne(name) {
       (t) => t === 'playback', 'touch-audio: the page asks for a playback audio session');
     check('audio-session-playback', session.ok, `navigator.audioSession.type is ${session.last}`);
 
-    // One tap on a part of the page that starts nothing: only the unlock acts on it.
-    await page.tap('.osc-header');
+    // One tap on a part of the page that starts nothing: only the unlock acts on it (the page
+    // header's workspace name; the Pro shell, F002, replaced .osc-header).
+    await page.tap('[data-osc="page.title"]');
     const state = await pollFor(() => page.evaluate(() => {
       const ctx = window.OSCILLA.engine.ctx;
       return ctx ? ctx.state : 'none';

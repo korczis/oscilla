@@ -25,4 +25,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-11-02T22:42:15Z
+started_at: 2026-11-02T22:41:51Z
+started_event: sha256:96358d11910fb7e0659cda28364345a5ec62d8c9158665f44493eed3f04009ac
+completed_at: 2026-11-02T22:42:15Z
+completed_event: sha256:db102a077997b6ea2dcce2cf60f27f25a2a9f16076fd6fb99114b9bff1967bb0
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/midi/notes.test.mjs; node tests/browser/midi.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc47ea5f5bce48ed90904bd101455ff43a, member #261); MIDI Note On/Off and velocity sound through the AudioEngine voices: tests/unit/midi/notes.test.mjs on the fake context and midi-seam-notes in tests/browser/midi.cjs with synthetic MIDI events from the stub; CI run 41357644373 green on the train head c2a6f6c5 (unit, npm test and the browser gate in chromium, firefox and webkit from file:// and /oscilla/), Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge), member verdict .ai/repo/reviews/261.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:42:07Z

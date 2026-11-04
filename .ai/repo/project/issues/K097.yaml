@@ -13,6 +13,20 @@ scope:
   - "src/js/studio/registry.js"
   - "src/js/studio/adapters"
   - "src/js/ui/synth"
+  - "src/js/synth"
+  - "src/js/ui/kinds/xy-pad.js"
+  - "src/js/charts/drag-math.js"
+  - "src/js/core/music.js"
+  - "src/js/core/url-state-synth.js"
+  - "src/js/studio/live-notes.js"
+  - "src/js/studio/patches.js"
+  - "src/index.html"
+  - "tests/unit/v31-studio-model.test.mjs"
+  - "tests/unit/synth-engines.test.mjs"
+  - "docs/v31/studio-model.md"
+  - "docs/v31/studio-report.md"
+  - "README.md"
+  - "package.json"
   - "tests/unit/ui-flowbite-pro-baseline.json"
   - "tests/browser/integration-map.json"
   - "tests/unit/xy-pad.test.mjs"
@@ -34,7 +48,7 @@ acceptance_criteria:
   - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
   - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
   - "Every link it adds (open in, send to, a modulation route, a probe or a jump between views) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it: the control works by pointer and by keyboard, the target shows the same Studio revision, focus lands on the target heading, and Back, Forward and reload keep the state."
-  - "Every string it adds passes tests/unit/instrument-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
+  - "Every string it adds passes tests/unit/synth-wording.test.mjs (added by K059): no product, brand or model name, no analog-modelling or vintage claim, and every approximation it makes labelled where it is shown (project.no-fake-science)."
   - "Its chrome uses the Flowbite Pro component where Pro has one (card, button, button group, input, dropdown, tabs, tooltip, popover), adapted from that block, lands after F002, is recorded as migrated (never pending) and lowers or keeps the ratchet; the instrument visuals Pro has no component for (the knob arc, the cable layer, the piano keys, the pad surface) are inline SVG and Tailwind utilities inside Pro cards, as the ADR 0061 resolution note of K058 records; it adds no osc-* class token, no legacy selector, no inline style and no stylesheet (project.ui-uses-flowbite-pro, project.visual-identity-lock v2, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); every continuous instrument parameter it shows is the knob of K058 (D11)."
   - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat or fix change, a unit test that fails on the merge base (project.fail-first)."
   - "scripts/size-report.mjs shows at most 3 KB gzip added, compiled CSS included, with the base and head figures in the pull request body; the sum of the line's figures stays within the cap Q023 records, under the gzip budget of scripts/build-config.mjs (1.2 MB by the owner's decision of 2026-10-29) (project.single-file-deliverable)."
@@ -45,5 +59,6 @@ validation:
   - "npm test"
 evidence_required:
   - "verified"
+current_state: "Built feature-first on 2026-11-01, ahead of W010 and its chain (W001, G003, N003, K043, K045), under the owner's direction relayed by the coordinator ('vse integrovano se vsim, vse reuse, vse zobecnene, vse propojene, maximalne reuse existujici kod, zapojuj, integruj ... vyuzivej stavajicich features'): the dependency order is inverted, not removed. The pad surface lands where W010 plans it, src/js/ui/kinds/xy-pad.js over charts/drag-math.js and the knob's parameter value model, so W010 later adds its other consumers (the Filter Lab and ADSR handles), its catalog declaration and its N003 slider views instead of a second pad. XY presets are ordinary patches of studio/patches.js (category 'xy' and a scale), so the one patch library of K066/K102 lists them. Not built here: the step grid's scale control the Linked criterion names (no step grid exists yet; core/music.js SCALE_MODES is the scale table it will share) and tests/browser/integration-map.json (the file does not exist yet)."
 created_at: 2026-10-29
-updated_at: 2026-10-30
+updated_at: 2026-11-01

@@ -5,13 +5,18 @@ kind: rule
 title: Visual identity lock - the Flowbite Pro interface around OSCILLA's own domain views, with one narrowing for the Synth panel surface
 description: Every surface's interface (shell, panels, dialogs, controls) is Flowbite Pro on Tailwind themed to OSCILLA, and the domain views (charts, Signal Path, the Studio graph and timeline) keep OSCILLA's own visual language inside Pro cards; no surface imports the visual identity of another audio product, flow editor or UI kit. Version 3 keeps every guarantee of version 2 and narrows one, the skeuomorphism ban, on one surface only, the Synth panel surface, by the owner's order of 2026-10-30.
 statement: The interface of every surface, Studio included, is built from Flowbite Pro on Tailwind (project.ui-uses-flowbite-pro, ADR 0061), themed with OSCILLA's palette in dark and light; the domain views (charts, Signal Path, the Studio graph, nodes, cables and timeline, the spectrogram, meters and readouts) keep OSCILLA's own visual language, the dataviz rules and tabular numerals as the content of Pro cards; no surface imports the visual identity of another audio product, of a generic flow editor or of another UI kit; no surface carries a skeuomorphic analog-synth treatment except the Synth panel surface (the module plates, knobs, patch bay, jacks and cables drawn by src/js/synth/view), which may draw a two-token tonal plate gradient, rotary knobs with one highlight and a value ring, jacks as rings and cables with sag and a soft shadow, every colour read from an OSCILLA token, with no wood, photographic or bitmap texture, no screws or rivets, and no brand mark, logo, product name, product colourway, panel layout or other trade dress of any product; and with the logo hidden the screen still obviously belongs to OSCILLA.
-status: active
+status: deprecated
 class: blocking
 depends_on: []
 tags: [design, visual, studio, synth, v3, flowbite]
 x-majordomus:
   tests: [tests/unit/ui-flowbite-pro.test.mjs, tests/unit/synth-panel-tokens.test.mjs, tests/unit/synth-wording.test.mjs]
 ---
+
+> Deprecated on 2026-11-02: superseded by `visual-identity-lock.v4.md`, which restates every
+> clause below and lifts the one narrowing, the skeuomorphism ban on the Synth panel surface,
+> to the whole app, with the hardware elements the owner chose (Q071; ADR 0061's resolution
+> note of 2026-11-02). This file is kept as history and binds nothing.
 
 # Rationale
 
@@ -120,7 +125,7 @@ is a review rejection even when every functional test passes.
   `src/styles/tokens.css`.
 - `tests/unit/synth-wording.test.mjs` (in `npm test`): no product, brand or model name and no
   "analog", "vintage", "warm" or "fat" claim in the Synth's code, markup or Learn copy.
-- `tests/browser/synth.cjs` check `s-look` (in `npm run test:studio`: CI's studio job and the
+- `tests/browser/synth.cjs` check `s-look` (in `npm run test:synth`: CI's studio job and the
   release gate): on the rendered Synth panel, in the dark and the light theme, no legacy `svg`
   stroke on a jack or a plate, every jack ring and every cable colour at 3:1 or more on the
   bay card, every plate label at 4.5:1 or more on its plate, a keyboard-focused jack's ring

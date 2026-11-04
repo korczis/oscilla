@@ -40,8 +40,8 @@
 // a Diagnostic plus its `phase`: PLAY refused (start returns its code too) with disposed,
 // claim-failed, claim-refused or play-refused (the runtime refused to apply or start the model;
 // entity: the runtime diagnostic's), or a live edit's edit-refused / sync-refused.
-// debugInfo().unplayed = [{ id, code, reason }], code: no-target, pattern-target, event-target, target-unavailable,
-// no-parameter.
+// debugInfo().unplayed = [{ id, code, reason }], code: no-target, pattern-target, event-target,
+// notes-unplayed (a notes clip, K099 part 1), target-unavailable, no-parameter.
 //
 // Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). start, stop,
 // sync and admit are one operation each, or join the caller's. Steps, owner 'transport': `play`
@@ -851,6 +851,10 @@ export function createStudioTransport({
       measures.set(it.key, data);
       unplayed.delete(it.clipId);
       measure({ type: 'schedule', ...data, model });
+    } else if (it.type === 'notes') {
+      // Held, not played yet (K099 part 1): listed with the policy's code and reason.
+      const v = clipTarget(nodeOf(model, it.target), { kind: 'notes' }, registry);
+      skip(it, v.code, v.reason);
     }
   }
 

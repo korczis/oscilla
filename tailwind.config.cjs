@@ -7,32 +7,38 @@
 //   - transitionProperty width, which the sidebar's transition-width needs;
 //   - Inter first in the sans stack, then the system stack of src/styles/tokens.css. No font is
 //     downloaded: Inter applies only where it is installed.
-// darkMode follows OSCILLA's own two-state theme (data-theme="dark" | "light" on <html>), so the
-// dark: variant matches [data-theme="dark"] and never the media query. The flowbite plugin's
-// own dark rules hard-code a .dark ancestor instead; scripts/build.mjs rewrites it to
-// [data-theme="dark"] (darkThemeSelector, scripts/build-config.mjs), as OSCILLA never sets
-// class="dark".
+// darkMode follows OSCILLA's own two-state theme (data-theme="dark" | "light" on <html>) and
+// never the media query. Dark is every theme but light: tokens.css is dark on :root and light
+// only on [data-theme="light"], and ui/theme.js reads an absent attribute as dark, so the dark:
+// variant matches unless the element is in [data-theme="light"] (review #330 F3: on
+// [data-theme="dark"] alone the shell turned light under the dark legacy text when the
+// attribute was absent). :not(:where(...)) adds no specificity, as the selector strategy's
+// :where() did. The flowbite plugin's own dark rules hard-code a .dark ancestor instead;
+// scripts/build.mjs rewrites it to the same theme (darkThemeSelector,
+// scripts/build-config.mjs), as OSCILLA never sets class="dark".
 //
-// Preflight is off and the flowbite plugin runs with forms: false: its form base styles restyle
-// every input, select, checkbox, radio and range by element selector, so the legacy interface
-// would no longer render as before. F002 turns them on with the migration.
+// The colours follow rule project.visual-identity-lock v4 (Q071): primary is the Tailwind blue
+// scale and every other colour key maps to an OSCILLA token, so the Pro surfaces keep the
+// Tailwind gray palette the deployed site shows (F002's own navy scale was never deployed and
+// is dropped in lane A's merge of main, 2026-11-04).
 //
-// F002 prerequisite, the border trap (review #253, R-3): preflight is what gives every element
-// border-width:0, border-style:solid and border-color:theme(borderColor.DEFAULT). Without it a
-// Tailwind border utility (.border, .border-b, .border-blue-600 from the tabs' activeClasses)
-// sets only a width or a colour and the border style stays the browser's `none`, so it draws
-// nothing. Before F002 puts the first Pro markup in, it restores that part of preflight, scoped
-// to the Pro shell's root so legacy elements keep their native borders, with a test that the
-// compiled CSS gives a .border element a solid style.
+// Preflight and the flowbite plugin's form base styles are on (F002): the Pro shell's borders,
+// buttons and the search field need them (the border trap of review #253, R-3). They stay out
+// of the legacy interface's way because src/styles/tailwind.css compiles the whole base inside
+// the cascade layer tailwind-base: the legacy stylesheets are unlayered, so every legacy rule
+// wins over every base rule whatever their specificity or order (input[type="range"] thumbs and
+// body's line-height included), and the base only fills what the legacy CSS leaves unsaid.
+// Tailwind's utilities stay unlayered and after the legacy CSS, as F001 placed them.
 //
 // Order: this file lands only after #250 is on main (ADR 0061, rule
 // project.ui-uses-flowbite-pro and the ratchet tests/unit/ui-flowbite-pro.test.mjs). Until
 // then the ADR it cites does not exist on main.
-const colors = require('tailwindcss/colors');
-
 const SYSTEM_SANS = ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto',
   'sans-serif'];
 const SYSTEM_MONO = ['ui-monospace', '"SF Mono"', 'Menlo', 'Consolas', 'monospace'];
+
+const colors = require('tailwindcss/colors');
+
 
 /** @type {import('tailwindcss').Config} */
 module.exports = {
@@ -58,10 +64,7 @@ module.exports = {
       './node_modules/flowbite/lib/esm/components/{drawer,dropdown,collapse,tooltip,tabs}/index.js',
     ],
   },
-  darkMode: ['selector', '[data-theme="dark"]'],
-  corePlugins: {
-    preflight: false,
-  },
+  darkMode: ['variant', '&:not(:where([data-theme="light"], [data-theme="light"] *))'],
   // Classes the Pro shell's script toggles (sidebar collapse and the dropdown/backdrop states):
   // they never appear literally in the markup it starts from.
   safelist: [
@@ -79,10 +82,25 @@ module.exports = {
         body: ['Inter', ...SYSTEM_SANS],
         mono: SYSTEM_MONO,
       },
+      // The hardware treatment's intensity (project.visual-identity-lock v4, "decent"): the
+      // synth-theme layer reads these keys, never a literal; tests/unit/visual-identity-lock-v4
+      // holds their bounds (sheen <= 0.25, texture <= 0.08, cable shadow <= 0.4, wood <= 16px,
+      // LED glow <= 6px).
+      opacity: {
+        'hw-sheen': '0.12',
+        'hw-texture': '0.04',
+        'hw-shadow': '0.3',
+      },
+      width: {
+        'hw-wood': '0.75rem',
+      },
+      boxShadow: {
+        'hw-led': '0 0 4px currentColor',
+      },
       transitionProperty: {
         width: 'width',
       },
     },
   },
-  plugins: [require('flowbite/plugin')({ forms: false })],
+  plugins: [require('flowbite/plugin')({ forms: true })],
 };

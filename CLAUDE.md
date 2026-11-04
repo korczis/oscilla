@@ -21,8 +21,9 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 `project.visual-identity-lock`, `project.no-inert-surfaces`, `project.ui-uses-flowbite-pro`
 (ADR 0061: the UI is Flowbite Pro on Tailwind, built and inlined at build time; no other kit,
 no Pro source file committed; the legacy surfaces, osc-* class tokens, class names, CSS
-and inline styles in `tests/unit/ui-flowbite-pro-baseline.json` only shrink). Read them
-before changing `src/`.
+and inline styles in `tests/unit/ui-flowbite-pro-baseline.json` only shrink),
+`project.a-phone-sounds` (the instrument sounds on a phone; its proving suite stays in the
+gate with the browser's gesture rule on). Read them before changing `src/`.
 Releases are bound by `project.release-receipt-binds-gate`, `project.release-flow-complete`
 (the flow, in order) and `project.deploy-often`. Four more bind how the repository is worked on:
 `project.rules-name-their-enforcement`, `project.no-conflict-markers`,
@@ -42,7 +43,7 @@ limit (`OSC_LOAD_MAX`, `OSC_LOAD_WAIT_MS`; see `tests/README.md`).
 How a change reaches `main` is ruled too: `project.ci-bounded` (every workflow job and
 network step bounded, pinned, retried), `project.fail-first` (a `feat`/`fix` PR's unit tests
 fail on the merge base, or the body says `fail-first: n/a <reason>`) and
-`project.review-verdict` (a PR touching the audio, analysis, experiments, studio,
+`project.review-verdict` (a PR touching the audio, analysis, experiments, studio, synth,
 measurement, calibration, storage or safety paths, the MEASURE, Experiments and Findings
 adapters, the build, stamp, deploy-verification and release scripts and the release rules'
 tests, anything under `.github/`, or the programs and tests of these three rules needs a
@@ -74,8 +75,10 @@ aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrit
 
 Releases: the version lives only in `package.json` (`version:check` rejects a hard-coded copy
 of the current version elsewhere, this file included). On a clean tree `release:prepare`
-bumps it and runs the gate; land `chore(release): vX.Y.Z` by PR (nothing else merges until
-the publish: the receipt binds the whole tree); on main `release:publish`, then `-- --yes`;
+bumps it, rebuilds and runs `verify` (the full local gate only with `--local-gate`); land
+`chore(release): vX.Y.Z` by PR with `--merge` (its CI run is the gate verdict, ADR 0082; nothing
+else merges until the publish: the verdict binds the whole tree); on main `release:publish`,
+then `-- --yes`;
 `verify-deploy` fails Pages on a mismatch; land the release record by a small PR
 (`chore/release-record-vX.Y.Z`) before the next `release:prepare`, which refuses without it.
 `node scripts/release-cadence.mjs` says whether a release is overdue (24 h).

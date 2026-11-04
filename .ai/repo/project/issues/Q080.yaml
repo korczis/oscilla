@@ -1,0 +1,34 @@
+id: Q080
+milestone: M069
+serves:
+  - "connected-instrument#riff-library"
+title: "Owner decision: original library entries carry the MIT licence"
+slug: owner-decision-original-library-entries-are-mit
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Asked in Claude Code session oscilla-af on 2026-11-02 through AskUserQuestion, after the R01 rights audit of the music library pack: 'What licence do OSCILLA's own original riffs and songs carry? This is separate from the MIT licence on the code, and it decides the licence field of every original entry.' Options: MIT, same as code (Recommended) / CC0 / CC BY 4.0 / All rights reserved."
+why: "The owner's music library pack of 2026-11-02 (OSCILLA_MUSIC_LIBRARY_MASTER_PROMPT) leaves this to the owner; the riff library (K149) and its scale-up are built from the answer."
+current_state: "Answered by the owner on 2026-11-02: 'MIT, same as code (Recommended)'. Every original entry's licence field is MIT, the licence of the code."
+scope:
+  - ".ai/repo/project/issues/Q080.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+  - "The answer names one of the options offered."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+started_at: 2026-11-02T22:47:08Z
+started_event: sha256:dd3066e6f3052949ede99479448bc3852bfac1b5610a56689924c6df72a85fc8
+updated_at: 2026-11-02T22:47:31Z
+completed_at: 2026-11-02T22:47:31Z
+completed_event: sha256:1060635646b8fd17aadca57205d0c5c8d80461d78cde100a284f64488d5619e0
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af (claude-code 901211e2), 2026-11-02, after the R01 rights audit of the music library pack"
+    result: "The owner answered: 'MIT, same as code (Recommended)' (verbatim option label)."
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:47:23Z

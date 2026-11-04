@@ -140,7 +140,7 @@ const DYNAMIC = [
   },
   {
     prefix: 'is-',
-    values: ['blocked', 'done', 'todo', 'warn'],
+    values: ['blocked', 'current', 'done', 'todo', 'warn'],
     builder: { file: 'src/index.html', text: ":class=\"'is-' + s.status\"" },
     why: 'a MEASURE step carries its status (and a note its severity, \'is-\' + n.severity)',
   },

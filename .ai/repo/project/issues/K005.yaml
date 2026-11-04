@@ -31,4 +31,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:18:36Z
+started_at: 2026-11-02T23:41:25Z
+started_event: sha256:f2479b0d78d3e94dfb9658c047aede31b46e40c80de81ada6d372f950a03ced3
+completed_at: 2026-11-02T23:41:53Z
+completed_event: sha256:f76d3d7c057a753ef0a6bfaa7a009ad45bde1cdab0e50aaaff2c1775371934a8
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-adapters-headroom.test.mjs; tests/unit/source-size-budget.test.mjs"
+    result: "The adapters are split by category on main (2931af34): analysis, engine-hooks, engines, instrument, measurement, modulation, nodes, output, processing, sources, voices; the largest, engines.js, is 18 606 B, 21 394 B under the 40 000 B default cap; nodes.js is 6 965 B (40 583 of 45 000 at e2720e07). studio-adapters-headroom.test.mjs (2/2, its mutation reproduces e2720e07's nodes.js) lands with this record (branch chore/plan-done-385); landed through #267 in train #367 (11cc9fbc)."
+    artifact: "tests/unit/studio-adapters-headroom.test.mjs"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-02T23:41:46Z
+  - covers: verified
+    type: ci
+    command: "node scripts/review-verdict.mjs --pr 267 (base copy); node --test tests/unit/studio-adapters-headroom.test.mjs"
+    result: "The split landed as member #267 of train #367 (main merge commit 11cc9fbc), reviewed: verdict .ai/repo/reviews/267.yaml (merge) and the train verdict .ai/repo/reviews/367.yaml (merge); E017."
+    artifact: ".ai/repo/reviews/267.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:18:36Z

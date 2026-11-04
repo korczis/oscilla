@@ -1,0 +1,126 @@
+intent: studio-box-system
+reviewed_at: "32b439e620c7ffc23a8fdc5b3dc55024cbc0c534"
+reviewed_by: "claude-opus-5.5 (independent critic, not the plan's author or coordinator, 2026-11-02); benchmark: the owner-relayed Studio and UI audit of 2026-11-02"
+findings:
+  - id: landed-work-not-recorded
+    class: delivery_verification
+    subject: "M080"
+    finding: "Work this plan depends on is already on main but the plan still reports it as open, so it blocks issues for no reason. K006-K009 landed with #268 (merged 2026-11-02; c6a9194e, f328b7d5 and e4ac5b1b are ancestors of origin/main), but majordomus plan list shows K008 and K009 BLOCKED, and those two hold V611, V612, V613 and V614 at waves 3-4. V631's test landed as 1c570770 (2026-10-30, tests/unit/studio-model-invariants.test.mjs is on main), yet V631 is READY and V611-V614, V616 and V632 still wait on it. Q031 and Q032 record the owner's answers of 2026-10-29 in current_state, but the owner_decision evidence was never added, so V620 and V625 stay blocked on them. The audit's first rule is to close existing issues with evidence instead of letting the plan sprawl. Separately, V611-V614 describe K008/K009 behaviour as future in their Before lines (V614: 'K009 adds M on edges'), and those lines are now stale."
+    blocking: false
+    resolution:
+      state: open
+      because: "Partly addressed 2026-11-02, chore(plan) from a worktree at main 32b439e6: V631 is done (evidence: studio-model-invariants 6/6; 1c570770 via #348 and 49d86223, on main through #367 at 11cc9fbc; no verdict needed). Q031 (b) and Q032 (a) are done with owner_decision evidence that quotes their current_state (the owner's answers of 2026-10-29 as relayed by the coordinator). K007, K008 and K009 carry verified evidence (their unit tests pass on main; #268 merged into #367; no verdict needed) but stay BLOCKED, because K006 is not done: its criterion's tests/unit/studio-graph-editor-headroom.test.mjs was never written, and graph-gestures.js is 30 153 B on main, 9 847 B under the 40 000 B cap where the criterion asks 10 000 B (it had 19 392 B of room at K006's own commit feb5c644; K007 and K008 grew it). K006 needs that test and a split or an amended criterion; then K006-K009 can be started and done. The Before lines of V611-V614 are not re-verified here. It stays open because the remainder lies in K006, which serves playable-instrument, not this intent, so it cannot be planned into a studio-box-system issue."
+  - id: filter-reference-slice-not-planned
+    class: insufficient_work
+    subject: "studio-box-system#box-faces"
+    finding: "The audit names the Filter node as M081's reference slice. That means one node is finished end to end, against an 8-point definition of done, before the pattern spreads. The plan instead slices across every node type: V619 declares faces for every type, V622 folds every box, V620 puts every parameter on every face, and V621 draws a view for every type. The Filter is never finished as a unit until all four have landed, and V621 alone sits at wave 18. No issue's acceptance criteria quote the 8 points, and no check names the Filter as the reference (V620's 'face-knobs' check drags the Filter cutoff, but only as one example of the general face)."
+    blocking: false
+    resolution:
+      state: open
+      because: "Before V622 or V620 starts, re-slice them so that the first pull request builds the Filter face end to end (type, cutoff, Q, bypass, runtime state, live response) with the 8-point definition of done as its acceptance criteria. The remaining node types then follow as table-driven extensions of the same face. V619 can stay registry-wide because it is declaration only."
+  - id: filter-dod-points-unplanned
+    class: missed_requirement
+    subject: "V620"
+    finding: "No issue plans three of the audit's 8 points. (5) 'A refused edit changes neither the model nor the running sound': V620 refuses an out-of-range typed value, but no check reads the runtime after the refusal, and V633 covers graph gestures only, not parameter edits. (6) 'While playing, requested and applied value are distinguishable': V620 draws N006's measured dot only on knobs with incoming CONTROL edges, so a smoothed or clamped unmodulated parameter shows only the requested value. (8) 'Browser tests cover file://, the Pages sub-path, desktop and phone': the browser checks of V620, V621, V622 and V623 run a desktop page with a hasTouch context. A touch context is not a phone viewport, and no check names file:// or the Pages sub-path. The owner's mobile-first order of 2026-11-02 makes the phone leg binding, and N008 is already designed at 390x844."
+    blocking: false
+    resolution:
+      state: open
+      because: "Add the three points to V620's acceptance criteria, or to the Filter reference slice if one is split out. Point 5: after a refused edit, the runtime node set and the parameter's applied value are unchanged. Point 6: the face shows the applied value next to the requested one while playing, read from the engine, never from AudioParam.value. Point 8: the face checks run at a phone viewport (390x844) and through both file:// and the Pages sub-path."
+  - id: detail-levels-and-legibility
+    class: missed_requirement
+    subject: "V622"
+    finding: "The audit proposes three detail levels on the one StudioModel. Collapsed shows type, name, status, ports and one key value. Normal shows the primary parameters with units, bypass or mute, and signal state. Expanded shows the live mini scope or characteristic, every control and the context actions. V622 and N008 build two levels: collapsed (title, ports, up to three primary parameters, live view) and expanded (every section). Nothing defines the minimal level a 300-node graph needs. The audit also lists legibility as a P1 problem (node names 10.5 px, categories 9 px, ports 9.5 px, too small when zoomed out), but no face issue sets a minimum rendered text size or a zoom-dependent level of detail."
+    blocking: false
+    resolution:
+      state: open
+      because: "Either amend V622 to three levels (collapsed, normal, expanded) with the audit's content for each, or record why two levels meet it. Add a face criterion for the minimum rendered text size at the zoom levels the graph allows, and decide whether a zoomed-out graph drops to the collapsed level automatically (view state, never saved)."
+  - id: three-ways-to-silence-a-box
+    class: unproven_assumption
+    subject: "V622"
+    finding: "The plan puts three overlapping 'silence this box' controls on one box, and no issue says how they relate. (1) V614's box mute mutes every outgoing edge, and V622 shows it as a face toggle. (2) K022 adds a generic bypass parameter, which V623 offers as a menu item. (3) The Filter already has an 'enabled' boolean parameter with click-free bypass (src/js/studio/nodes/processing.js:83), which V620 would put on the face as a toggle because every parameter is on the face. On a Filter all three would appear, each with different semantics (mute silences downstream, bypass passes signal through) and different hash effects. The audit asks for one 'bypass/mute' on the normal face, and the Filter definition of done names 'bypass' as a single item."
+    blocking: false
+    resolution:
+      state: open
+      because: "Before V622 and V623 start, the plan should say which control the face shows and how they relate. For example: K022's bypass replaces the Filter's enabled through a migration, or enabled is the Filter's bypass and K022 skips the Filter. It should also say whether box mute is a face control or only a key (M). The intent's box-faces criterion should name the result."
+  - id: face-views-unbounded-taps
+    class: regression_risk
+    subject: "V621"
+    finding: "V621 gives 'every sounding box' an output level, plus a waveform for sources, and its readout row says the level comes from 'the same probe tap as V616'. V616's tap is defined as one AnalyserNode on one edge at a time. Nothing bounds how many taps the face views create. On the 300-node fixture with every box expanded (V622's own performance criterion), viewport culling still leaves dozens of visible boxes. V624 then reads 'the face views' taps' for every AUDIO cable on top of that. The audit says 'no unbounded new AudioNodes', and project.audio-engine-discipline v2 requires engine-owned, counted nodes. The plan has no cap and no test of the count."
+    blocking: false
+    resolution:
+      state: open
+      because: "V621 should state the tap budget, for example at most N analysers, shared per source output, created only for visible boxes while playing and released when culled. studio-face-views.test.mjs should assert that the engine node count stays within that bound on the 300-node fixture while playing and returns to its stopped value. V624 should reuse those taps without adding its own."
+  - id: filter-curve-not-engine-data
+    class: unproven_assumption
+    subject: "V621"
+    finding: "The audit says live views come only from the one AudioEngine's real data. V621 draws the Filter's response curve from 'the biquad response math K043 and K048 use', which is a computation from the model's parameters. Its only test checks that curve 'against the biquad formulas within 0.05 dB', which compares the formula with itself. The owner's answer to Q011 (2026-10-29) is a computed curve labelled 'computed' and checked against the real node while playing. Neither the label rule nor the comparison with the running node is in V621's criteria. While a cutoff is modulated, a curve drawn from the model shows the requested value, not the applied one, which hides definition-of-done point 6."
+    blocking: false
+    resolution:
+      state: open
+      because: "V621 should state the source in each state. While playing, it reads the running BiquadFilterNode's getFrequencyResponse through the engine, or labels the curve 'computed' at all times. A browser check should compare the computed curve with the running node within a stated tolerance, as Q011 decided. The readout-truth row should name which of the two sources it describes."
+  - id: studio-face-names-the-synth-knob
+    class: regression_risk
+    subject: "V620"
+    finding: "project.visual-identity-lock v3 (2026-10-30) allows the hardware look only on the Synth panel surface (src/js/synth/view/face.js, knob.js, bay.js). It states that the narrowing does not reach the Studio graph's nodes and cables. The audit repeats this: the Studio stays technical. Yet V620 is titled 'Every parameter on the box face, with the synth knob', and every Wave 2 criterion in M081 (V615, V620-V627, V629, V630) cites project.visual-identity-lock v2, which is superseded. V620 means K058's flat knob (src/js/ui/kinds/param/knob.js, D11), but its wording invites reuse of the Synth panel's hardware knob on the graph, and no check forbids that. V620's negative case also says that a parameter without a face control 'fails K105's contract', although its own objective says it no longer waits on K105, whose declaration half moved to N001."
+    blocking: false
+    resolution:
+      state: open
+      because: "Retitle V620 to 'the flat knob (K058)', cite project.visual-identity-lock v3 in every Wave 2 criterion, and add a unit assertion that src/js/ui/studio/ imports nothing from src/js/synth/view/. Replace the K105 reference with N001's declaration."
+  - id: wrong-guarded-path-claim
+    class: delivery_verification
+    subject: "V621"
+    finding: "V621 says 'Its paths are not guarded (scripts/review-verdict.mjs GUARDED), so no verdict is needed', but its scope lists src/js/studio/probe.js, and GUARDED contains 'src/js/studio/*' (scripts/review-verdict.mjs:63). The pull request will need a reviewer's verdict, and the issue tells the builder it does not."
+    blocking: false
+    resolution:
+      state: open
+      because: "Correct V621's criterion so that it requires a reviewer's verdict (project.review-verdict). Re-derive the guarded claim of every M080/M081 issue from its scope with isGuarded() instead of writing it by hand."
+  - id: v618-targets-the-wrong-cost
+    class: insufficient_work
+    subject: "V618"
+    finding: "V618's main change, 'pan and zoom change one transform on the world layer per frame instead of per-node work', already exists: applyView sets a single translate and scale on the world layer (src/js/ui/studio/graph-editor.js:109-117), and docs/v31/performance.md says a node drag moves only the dragged nodes and their cables. The per-frame costs that grow with the graph are elsewhere. While the minimap is shown, applyView calls minimap.render(), which computes the rects of every node and writes four attributes per node on every pan frame (graph-minimap.js:144-160). It also sets --osc-sg-z, which restyles every cable's stroke on each zoom step (studio.css:297, 361). The slow path the audit measured ('updating all 200 cables ... hundreds of ms to ~1.2 s') is M on all 200 cables at 290-1020 ms. performance.md traces it to one whole-model validation per EDGE_UPDATE inside a batch, and notes that a multi-edge EDGE_UPDATE 'has not been built'. V618 does not touch that path, while V613 (fan-out) and V614 (box mute) add more multi-edge batches of the same shape."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "V618"
+      because: "2026-11-02: V618 is amended. Its Before line, verified on main at 32b439e6, says pan and zoom are already one transform and names the costs that grow with the graph: the shown minimap's per-node read and redraw on every applyView, the --osc-sg-z write that restyles every cable's hit stroke on each zoom step, and one whole-model validation per EDGE_UPDATE in M (performance.md: 290-1020 ms on 200 cables; a probe measured 354 ms as 200 EDGE_UPDATE against 3.2 ms as one BATCH, CPU time). Its objective removes those per-frame costs, and makes M one BATCH, the K061 action already on main (validated once), so src/js/studio/actions.js, a guarded path, is not touched and no verdict is needed. The budget of M on all 600 cables is at most 4 times one validated EDGE_UPDATE. V613 and V614 are named to build their multi-cable edits as one BATCH; their own criteria are not changed here."
+  - id: large-graph-budgets-not-measurable
+    class: delivery_verification
+    subject: "studio-box-system#large-graphs"
+    finding: "No baseline exists for the 300-node budgets. V618's Before line records only that the 300-node rows are missing, and nothing has been measured at 300 nodes / 600 edges. The browser budget '16.7 ms median on a quiet machine' brings back the wall-time judgement that plan E029 removed: on the shared Mac at loads of 55-110, wall-time budgets failed on every batch, which is why performance.md now judges CPU time. 'Records each frame's duration through a PerformanceObserver' has no cross-browser entry type: long-animation-frame is Chromium only, so the Firefox and WebKit legs cannot be measured as written. V622 adds an escape hatch ('or the slice states which it meets'), which lets the builder pick the budget it passes. The criterion's ref runs only tests/unit/v31-studio-performance.test.mjs, which already exists and passes on main for 100 nodes, so the criterion can read as met before V618 lands."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "V618"
+      because: "2026-11-02: V618 is amended. Its first commit records the 300-node and 100-node figures measured on the merge base in docs/v31/performance.md (Node on CPU time; pan, zoom, drag and M per browser) as the named baseline. Its budgets are CPU time (the E029 harness) or ratios measured in the same run: the BATCH against one validated EDGE_UPDATE, and pan and zoom frames on 300 nodes against 100 nodes interleaved in one page. One browser method serves every engine (performance.now from the input to a forced style and layout read, median of 9, through the suite.cjs load gate), and no PerformanceObserver frame type is used. The 16.7 ms quiet-machine budget is gone. Not changed here: V622's escape hatch ('or the slice states which it meets') and the intent's large-graphs ref, which an intent's closing issue swaps (project README, 'Shared files and closing issues'); both stay as the critic found them."
+  - id: criterion-refs-omit-browser-legs
+    class: delivery_verification
+    subject: "studio-box-system"
+    finding: "Three satisfaction refs leave out the checks that prove half of their criterion. model-and-views runs only tests/unit/studio-model-invariants.test.mjs. That file is already on main (V631), and the cross-view identity half is proven only by V632's browser check 'view-identity'. compile-and-playback runs only the unit test, while 'the intended audible effect' is V633's offline-render browser check (tests/browser/v31-studio-runtime.cjs --only gestures). large-graphs runs only the unit test (see large-graph-budgets-not-measurable). Each of these criteria can therefore read as satisfied while its behavioural half is unproven."
+    blocking: false
+    resolution:
+      state: open
+      because: "Add to each criterion's ref the browser checks that its serving issues name: v31-studio-graph.cjs --only view-identity, v31-studio-runtime.cjs --only gestures, and v31-studio-workflows.cjs --only large-graph."
+  - id: audit-p1-items-sit-at-the-dag-tail
+    class: unproven_assumption
+    subject: "M081"
+    finding: "The audit ranks M080 and M081 as P1, yet both milestones are p2, and M081's P1 items sit at the end of the dependency graph. V621 (live views) is at wave 18 because of K016, which itself waits on E004, F002, F008, K053, K036, W003 and W004. V623 (context actions) is at wave 18 because of K020 and K022. V624 (cable activity) is at wave 19. V616 (the cable probe, an audit M080 item) is at wave 11 because of K064, although M080's own risk says 'whichever lands first owns src/js/studio/probe.js', which contradicts V616's depends_on K064. Several of these edges have no stated need. The Filter response curve and the level bar do not need K016's analysis-node views. V623 already uses 'absent until it lands' for Group and Listen, and could do the same for Presets (K020) and Bypass (K022)."
+    blocking: false
+    resolution:
+      state: open
+      because: "Remove V616's depends_on K064, as M080's risk already allows. Split V621 so that the level, waveform and Filter curve views do not wait on K016, and only the analysis-node views do. Change V623 so that its Presets and Bypass items are 'absent until K020/K022 land' instead of depends_on. Raise M080 and M081 to the audit's P1, or record why they stay p2."
+  - id: plan-sprawl-against-the-audit
+    class: unnecessary_work
+    subject: "M081"
+    finding: "M080 and M081 together hold 23 issues, against the audit's instruction to close existing work instead of filing '50 new issues'. Its P1 lists are 'magnetic cables, exact refusal, insert, fan-out, search, align, probe' for M080 and 'parameters on node faces, live views, context actions, cable activity, listen' for M081. Five issues are outside both lists and wait on the deepest chains. V626 (comments), V629 (reroutes) and V630 (group faces) depend on V601, at wave 17. V601 is itself P2 in the audit (studio-completion M048), and studio-completion's critique still has open 'spec-says-optional-not-asked' and groups-versus-ADR-0030 findings on it. V627 (previews) and V615 (multi-selection edits, wave 17 through E004) are not in the audit at all. V633 is a verification-only issue for gestures that V612-V614 each already check while playing ('plays the Studio and waits until the runtime revision includes the inserted node')."
+    blocking: false
+    resolution:
+      state: open
+      because: "Defer V626, V629, V630, V627 and V615 to a later wave or milestone, and move the comments-and-reroutes criterion with them (or record it as a non-goal of this wave). Fold V633's runtime-equivalence assertion into V612, V613 and V614, each in its own pull request so that fail-first holds. The intent would then cover the audit's P1 items with about 15 issues."
+  - id: line-budget-oversubscribed
+    class: unproven_assumption
+    subject: "M081"
+    finding: "M081 states a ceiling of 35 KB gzip for M080 and M081 together. The per-issue allowances add up to more than that: M080 is 12 KB (V610 1.5, V611 2, V612 1.5, V613 1, V614 1, V616 2, V617 1, V618 1, V619 1) and M081 is 26.5 KB (V615 1.5, V620 6, V621 4, V622 1.5, V623 3, V624 2, V625 1.5, V626 2, V627 2, V629 1.5, V630 1.5), so the total is 38.5 KB. Every issue quotes 'about 355 KB of headroom at origin/main b67d1e58', but dist/index.html is 914 997 B gzip at 32b439e6, which leaves about 285 KB of headroom."
+    blocking: false
+    resolution:
+      state: open
+      because: "Reconcile the per-issue allowances with the 35 KB ceiling (deferring the issues in plan-sprawl-against-the-audit would do it), and restate the headroom from a current measurement or drop the stale figure."

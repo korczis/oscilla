@@ -15,6 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const shell = require('./lib/shell.cjs');
 const { until } = require('./lib/wait.cjs');
 const seam = require('./lib/measure-seam.cjs');
 
@@ -176,16 +177,9 @@ const H = {
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     document.body.focus();
   }),
-  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
   navTo: async (page, ws) => {
-    const item = `[data-osc="nav.${ws}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
+    await shell.navTo(page, ws);
   },
   workspace: async (page, ws) => {
     await H.navTo(page, ws);
@@ -336,6 +330,9 @@ function auditControls() {
   document.querySelectorAll('[data-osc]').forEach((el) => {
     if (!el.matches(INTERACTIVE)) return;
     if (el.id === 'osc-import-file') return; // opened by the Import menu items
+    // The phone drawer's backdrop (F002) is a pointer-only twin of the menu button and Escape
+    // (tabindex -1, aria-hidden): its keyboard and screen-reader way is the menu button.
+    if (el.dataset.osc === 'sidebar.backdrop') return;
     // The STUDIO workspace and its dialogs are audited, state by state, by
     // tests/browser/v31-studio-graph.cjs (controls-labelled); its file input is opened by the
     // Import button. The compact widget in the Playground stays in this audit.
@@ -370,7 +367,7 @@ function focusObscured() {
   const iy = Math.min(2, r.height / 4);
   const pts = [[r.left + r.width / 2, r.top + r.height / 2], [r.left + ix, r.top + iy],
     [r.right - ix, r.top + iy], [r.left + ix, r.bottom - iy], [r.right - ix, r.bottom - iy]];
-  const COVER = '.osc-header, .osc-statusbar, [data-osc="alerts"], .osc-hints';
+  const COVER = '[role="banner"], .osc-statusbar, [data-osc="alerts"], .osc-hints';
   const coverOf = (hit) => {
     const bar = hit.closest(COVER);
     if (bar && !bar.contains(el)) return bar.className.split(' ')[0];
@@ -484,18 +481,17 @@ function phoneBars() {
     return out;
   };
   const bad = [];
-  const header = document.querySelector('.osc-header');
+  // The Pro navbar (F002): the menu button, the brand and the actions in one row; the
+  // workspaces are in the drawer behind the menu button.
+  const header = document.querySelector('[role="banner"]');
   const hb = header.getBoundingClientRect();
-  const nav = header.querySelector('.osc-nav').getBoundingClientRect();
-  const top = boxes([...header.querySelectorAll('.osc-brand, .osc-header-actions > *')]);
-  const hparts = [...top, { n: 'osc-nav', b: nav }];
+  const hparts = boxes([...header.querySelectorAll('[data-osc="header.menu"], '
+    + '[data-osc="header.brand"], [data-osc="header.actions"] > *')]);
   bad.push(...overlaps(hparts).map((o) => `header ${o}`));
   for (const p of hparts) {
     if (p.b.left < hb.left - 0.5 || p.b.right > hb.right + 0.5) bad.push(`${p.n} outside header`);
+    if (p.b.top < hb.top - 0.5 || p.b.bottom > hb.bottom + 0.5) bad.push(`${p.n} outside header`);
   }
-  // On phones the workspace strip is the header's second row, under the brand and actions.
-  const firstRow = Math.max(...top.map((p) => p.b.bottom));
-  if (nav.top < firstRow - 0.5) bad.push(`nav row ${nav.top} above ${firstRow}`);
   let next = header.nextElementSibling;
   while (next && !vis(next)) next = next.nextElementSibling;
   if (next && next.getBoundingClientRect().top < hb.bottom - 0.5) {
@@ -1001,8 +997,8 @@ function defineChecks() {
     await page.click('#osc-source-pattern');
     await collect();
     await page.click('#osc-source-osc');
-    for (const menu of ['#osc-nav-group-analyze', '#osc-nav-group-synthesis', '#osc-overflow',
-      '#osc-export', '#osc-seq-add']) {
+    // The sidebar groups start expanded (F002), so their items are already collected.
+    for (const menu of ['#osc-overflow', '#osc-export', '#osc-seq-add']) {
       await page.click(menu);
       await collect();
       await page.keyboard.press('Escape');
@@ -1256,15 +1252,42 @@ function defineChecks() {
       a.exps.panel = 'detail';
       a.alerts = [];
     });
+    // Presets' empty state (lane A wave 3): the Custom tab with no saved preset.
+    await H.workspace(page, 'presets');
+    await page.evaluate(() => { window.OSCILLA.app.customPresets = []; });
+    await page.click('[data-osc="presets.tab"][data-value="custom"]');
+    await page.waitForSelector('[data-osc="page.emptyAction"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    // A preset above this device's limit: its reason and the way to a tone within it (journey 20).
+    await page.click('[data-osc="presets.tab"][data-value="high"]');
+    await page.waitForSelector('[data-osc="presets.altPlayground"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.click('[data-osc="presets.tab"][data-value="reference"]');
     await H.workspace(page, 'playground');
     await page.setViewportSize({ width: 375, height: 800 });
     await H.workspace(page, 'measure');
+    await collect();
+    // The page header's Related menu on a phone (lane A wave 3).
+    await page.click('[data-osc="page.relatedMenu"]');
+    await page.waitForSelector('[data-osc="page.relatedItem"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.keyboard.press('Escape');
+    // V635: on a phone the Synth folds its instrument row behind the keyboard's More button.
+    await H.workspace(page, 'synth');
     await collect();
     await H.workspace(page, 'playground');
     await sleep(200);
     await page.click('#osc-sb-actions-toggle');
     await collect();
     await page.click('#osc-sb-actions-toggle');
+    // The phone drawer (F002) holds its own search field.
+    await page.click('[data-osc="header.menu"]');
+    await page.waitForSelector('[data-osc="sidebar.search"]', { state: 'visible', timeout: 5000 });
+    await collect();
+    await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 1536, height: 1024 });
     await sleep(200);
     const list = [...seen.values()];
@@ -1640,17 +1663,42 @@ function defineChecks() {
       await setLabRelease(`${Math.round(initial.labR * 1000)} ms`, initial.labR).catch(() => {});
       await setLab(initial.labOn).catch(() => {});
       await setSettings(initial.release).catch(() => {});
+      // Restoring the lab release types into its field (Synthesis on a phone): leave neither
+      // that focus nor that workspace to the next check.
+      await H.focusBody(page).catch(() => {});
+      if (await mode().catch(() => 'playground') !== 'playground') {
+        await H.navTo(page, 'playground').catch(() => {});
+      }
     }
     return { ok: res.settings.ok && res.lab.ok && res.limited.ok, ...res };
   });
 
   def('frequency-slider-and-fine-steps', async ({ page }) => {
+    // Held Space plays the Playground's voice only while no text field has focus (K153's
+    // dispatcher leaves Space to a field): open the Playground and wait until nothing holds focus
+    // (a field edited by an earlier check took it back once, CI #385: focus INPUT
+    // #osc-env-release-value in Synthesis).
+    if (await page.evaluate(() => window.OSCILLA.app.workspace) !== 'playground') {
+      await H.navTo(page, 'playground');
+    }
     await H.continuous(page, true);
-    await H.focusBody(page);
+    await until(async () => {
+      await H.focusBody(page);
+      return page.evaluate(() => window.OSCILLA.app.workspace === 'playground'
+        && (!document.activeElement || document.activeElement === document.body));
+    }, { ms: 8000, what: 'frequency-slider-and-fine-steps: the Playground, nothing focused' });
     await page.keyboard.down(' ');
-    // The held Space starts the engine voice; wait for it rather than for a fixed time.
-    await U.poll(() => page.evaluate(() => !!window.OSCILLA.engine.voice?.carrier),
-      (v) => v, 'held Space starts the engine voice');
+    // The held Space starts the engine voice; wait for it rather than for a fixed time. The
+    // polled value says why it did not (the output owner, a typing target or an open modal
+    // that keyGuard() honours, a suspended context) when the deadline passes.
+    await U.poll(() => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const el = document.activeElement;
+      return { carrier: !!window.OSCILLA.engine.voice?.carrier, playing: !!a.playing,
+        owner: a.outputOwner ?? null, ctx: window.OSCILLA.engine.ctx?.state ?? null,
+        workspace: a.workspace, focus: el ? `${el.tagName}#${el.id}` : null,
+        modal: !!document.querySelector('[data-oscilla-modal][aria-modal="true"]') };
+    }), (v) => v.carrier, 'held Space starts the engine voice');
     const read = () => page.evaluate(() => ({ app: window.OSCILLA.app.frequency,
       eng: window.OSCILLA.engine.voice?.carrier?.frequency.value,
       readout: document.querySelector('#osc-freq-value').textContent }));
@@ -2207,115 +2255,126 @@ function defineChecks() {
     return { ok, res };
   });
 
-  // V371 (spec §73, §75, §198): eight top-level entries; ANALYZE and SYNTHESIS are disclosure
-  // groups whose items are the V2 workspaces with their old nav ids. Every workspace is reached
-  // by keyboard (Tab through an open group; arrows from its button), aria-current marks the item
-  // (page) and its group (true), Escape and a click outside close a group, focus never drops,
-  // and the dropdown stays inside the viewport at desktop and phone widths.
+  // V371 (spec §73, §75, §198) in the Pro sidebar (F002): nine top-level entries from the
+  // registry; ANALYZE and SYNTHESIS are collapsible groups that start expanded, so every
+  // workspace is one press away. Tab walks the entries in order (a group's items after its
+  // button), the arrows, Home and End move through them, aria-current marks the item (page) and
+  // its group (true); a group's button collapses and expands its list, and Escape in the list
+  // collapses it with focus back on the button. On a phone the sidebar is a drawer behind the
+  // menu button: it opens with focus on the current workspace, a press on an item closes it over
+  // that workspace (focus never drops), and Escape closes it with focus back on the button.
   def('nav-groups-keyboard', async ({ page, browserName }) => {
     // The navigation's own order (ui/app.js navTopLevel; Synth after Studio, Q019).
     const TOP = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
         'app.js')).href)).navTopLevel();
+    const ORDER = ['nav.playground', 'nav.measure', 'nav.experiments', 'nav-group.analyze',
+      'nav.analyzer', 'nav.filter', 'nav.compare', 'nav-group.synthesis', 'nav.synthesis',
+      'nav.sequencer', 'nav.presets', 'nav.learn', 'nav.studio', 'nav.synth', 'nav.about'];
     const GROUPS = { analyze: ['analyzer', 'filter', 'compare'],
       synthesis: ['synthesis', 'sequencer', 'presets'] };
     const state = () => page.evaluate(() => {
       const q = (s) => document.querySelector(s);
+      const shown = (el) => !!el && el.getClientRects().length > 0;
       return { mode: q('#osc-app').dataset.mode,
         active: document.activeElement && document.activeElement !== document.body
-          ? document.activeElement.dataset.osc : 'BODY',
+          ? document.activeElement.dataset.osc || document.activeElement.tagName : 'BODY',
         current: [...document.querySelectorAll('#osc-nav [aria-current]')]
           .map((e) => `${e.dataset.osc}=${e.getAttribute('aria-current')}`),
         expanded: [...document.querySelectorAll('[data-osc^="nav-group."]')]
-          .filter((b) => b.getAttribute('aria-expanded') === 'true').map((b) => b.dataset.osc) };
+          .filter((b) => b.getAttribute('aria-expanded') === 'true').map((b) => b.dataset.osc),
+        drawer: shown(q('#osc-sidebar')) && getComputedStyle(q('#osc-sidebar')).position === 'fixed',
+        sidebar: shown(q('#osc-sidebar')) };
     });
+    const settle = (pred, what) => until(async () => {
+      const v = await state();
+      return pred(v) ? v : null;
+    }, { ms: 3000, what }).catch(() => state());
     const res = { bad: [] };
     const want = (cond, msg) => { if (!cond) res.bad.push(msg); };
     res.top = await page.evaluate(() => [...document.querySelectorAll('#osc-nav > li')]
       .map((li) => li.querySelector(':scope > a, :scope > button').dataset.osc));
     want(JSON.stringify(res.top) === JSON.stringify(TOP), `top level ${res.top.join(',')}`);
-    for (const w of [1536, 375]) {
-      await page.setViewportSize({ width: w, height: w > 400 ? 1024 : 812 });
-      await sleep(150);
-      // Tab order: the top level in order, an open group's items right after its button.
-      // WebKit (macOS default) skips links and buttons on Tab unless the user opts in, so the
-      // Tab paths run in chromium and firefox; the arrow paths run everywhere.
-      if (browserName !== 'webkit') {
-        await H.workspace(page, 'playground');
-        await page.focus('[data-osc="nav.playground"]');
-        const seen = ['nav.playground'];
-        for (let i = 0; i < TOP.length - 1; i++) {
-          await page.keyboard.press('Tab');
-          seen.push((await state()).active);
-        }
-        want(JSON.stringify(seen) === JSON.stringify(TOP), `${w} tab order ${seen.join(',')}`);
+    // Desktop: the sidebar is a column; every workspace is one press, by Tab or by arrow.
+    await page.setViewportSize({ width: 1536, height: 1024 });
+    await H.workspace(page, 'playground');
+    const desk = await state();
+    want(desk.sidebar && !desk.drawer && desk.expanded.length === 2,
+      `1536 sidebar open, groups expanded: ${JSON.stringify(desk)}`);
+    // WebKit (macOS default) skips links and buttons on Tab unless the user opts in, so the
+    // Tab path runs in chromium and firefox; the arrow path runs everywhere.
+    if (browserName !== 'webkit') {
+      await page.focus('[data-osc="nav.playground"]');
+      const seen = ['nav.playground'];
+      for (let i = 0; i < ORDER.length - 1; i++) {
+        await page.keyboard.press('Tab');
+        seen.push((await state()).active);
       }
-      for (const [g, items] of Object.entries(GROUPS)) {
-        const btn = `[data-osc="nav-group.${g}"]`;
-        for (const [i, ws] of items.entries()) {
-          // Tab path: Enter opens, Tab walks into the list, Enter on the item navigates.
-          if (browserName !== 'webkit') {
-            await H.workspace(page, 'playground');
-            await page.focus(btn);
-            await page.keyboard.press('Enter');
-            for (let k = 0; k <= i; k++) await page.keyboard.press('Tab');
-            const at = (await state()).active;
-            want(at === `nav.${ws}`, `${w} tab into ${g} reached ${at}, not nav.${ws}`);
-            await page.keyboard.press('Enter');
-            await sleep(120);
-            const v = await state();
-            want(v.mode === ws, `${w} tab ${ws}: mode ${v.mode}`);
-          }
-          // Arrow path: ArrowDown opens on the current (or first) item, Home, then ArrowDown.
-          await H.workspace(page, 'playground');
-          await page.focus(btn);
-          await page.keyboard.press('ArrowDown');
-          await sleep(60);
-          const open = await page.evaluate((sel) => {
-            const panel = document.getElementById(document.querySelector(sel)
-              .getAttribute('aria-controls'));
-            const r = panel.getBoundingClientRect();
-            const items = [...panel.querySelectorAll('a')].map((a) => a.getBoundingClientRect());
-            const hit = items.every((b) => {
-              const el = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
-              return el && panel.contains(el);
-            });
-            return { shown: r.width > 0 && r.height > 0, inside: r.left >= 0 && r.top >= 0
-              && r.right <= innerWidth && r.bottom <= innerHeight, hit,
-              minH: Math.min(...items.map((b) => b.height)) };
-          }, btn);
-          want(open.shown && open.inside && open.hit, `${w} ${g} panel ${JSON.stringify(open)}`);
-          await page.keyboard.press('Home');
-          for (let k = 0; k < i; k++) await page.keyboard.press('ArrowDown');
-          await page.keyboard.press('Enter');
-          await sleep(120);
-          const v = await state();
-          want(v.mode === ws && v.active === `nav-group.${g}` && !v.expanded.length
-            && v.current.includes(`nav.${ws}=page`) && v.current.includes(`nav-group.${g}=true`)
-            && v.current.length === 2, `${w} arrow ${ws}: ${JSON.stringify(v)}`);
-        }
-        // Escape closes and returns focus to the button; reopening marks the current item.
-        await page.focus(btn);
-        await page.keyboard.press('ArrowDown');
-        await sleep(60);
-        const reopened = await state();
-        want(reopened.active === `nav.${items.at(-1)}`, `${w} reopen ${g} at ${reopened.active}`);
-        await page.keyboard.press('Escape');
-        await sleep(60);
-        const esc = await state();
-        want(!esc.expanded.length && esc.active === `nav-group.${g}`,
-          `${w} escape ${g} ${JSON.stringify(esc)}`);
-        // Click toggles; a click elsewhere closes.
-        await page.click(btn);
-        want((await state()).expanded.includes(`nav-group.${g}`), `${w} click opens ${g}`);
-        await page.click('.osc-header', { position: { x: 3, y: 3 } });
-        await sleep(60);
-        want(!(await state()).expanded.length, `${w} outside click closes ${g}`);
-      }
-      // A top-level workspace clears the group mark.
-      await H.workspace(page, 'learn');
-      const learn = await state();
-      want(JSON.stringify(learn.current) === '["nav.learn=page"]', `${w} learn ${learn.current}`);
+      want(JSON.stringify(seen) === JSON.stringify(ORDER), `1536 tab order ${seen.join(',')}`);
     }
+    await page.focus('[data-osc="nav.playground"]');
+    const walked = ['nav.playground'];
+    for (let i = 0; i < ORDER.length - 1; i++) {
+      await page.keyboard.press('ArrowDown');
+      walked.push((await state()).active);
+    }
+    want(JSON.stringify(walked) === JSON.stringify(ORDER), `1536 arrows ${walked.join(',')}`);
+    await page.keyboard.press('Home');
+    want((await state()).active === 'nav.playground', '1536 Home');
+    await page.keyboard.press('End');
+    want((await state()).active === 'nav.about', '1536 End');
+    for (const [g, items] of Object.entries(GROUPS)) {
+      for (const ws of items) {
+        await H.workspace(page, 'playground');
+        await page.focus(`[data-osc="nav.${ws}"]`);
+        await page.keyboard.press('Enter');
+        const v = await settle((x) => x.mode === ws, `1536 Enter on nav.${ws}`);
+        want(v.mode === ws && v.active === `nav.${ws}` && v.current.includes(`nav.${ws}=page`)
+          && v.current.includes(`nav-group.${g}=true`) && v.current.length === 2,
+        `1536 enter ${ws}: ${JSON.stringify(v)}`);
+      }
+      // Escape in the list collapses the group, focus back on its button; the button reopens.
+      await page.focus(`[data-osc="nav.${items[0]}"]`);
+      await page.keyboard.press('Escape');
+      const esc = await settle((x) => !x.expanded.includes(`nav-group.${g}`), `escape ${g}`);
+      want(!esc.expanded.includes(`nav-group.${g}`) && esc.active === `nav-group.${g}`,
+        `1536 escape ${g} ${JSON.stringify(esc)}`);
+      await page.keyboard.press('Enter');
+      const re = await settle((x) => x.expanded.includes(`nav-group.${g}`), `reopen ${g}`);
+      want(re.expanded.includes(`nav-group.${g}`), `1536 Enter reopens ${g}`);
+    }
+    // A top-level workspace clears the group mark.
+    await H.workspace(page, 'learn');
+    const learn = await state();
+    want(JSON.stringify(learn.current) === '["nav.learn=page"]', `1536 learn ${learn.current}`);
+    // Phone: the drawer.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await H.workspace(page, 'playground');
+    const closed = await settle((x) => !x.sidebar, '375 the drawer starts closed');
+    want(!closed.sidebar, `375 drawer closed at start ${JSON.stringify(closed)}`);
+    for (const ws of ['analyzer', 'presets', 'about']) {
+      await page.click('[data-osc="header.menu"]');
+      // Focus moves into the drawer once Alpine has rendered it (its next tick).
+      const open = await settle((x) => x.drawer && x.active !== 'header.menu',
+        `375 the drawer opens for ${ws}, focus inside`);
+      want(open.drawer && open.active === 'nav.playground',
+        `375 drawer opens on the current workspace ${JSON.stringify(open)}`);
+      await page.click(`[data-osc="nav.${ws}"]`);
+      const v = await settle((x) => x.mode === ws && !x.sidebar, `375 tap ${ws}`);
+      want(v.mode === ws && !v.sidebar && v.active !== 'BODY',
+        `375 tap ${ws} closes the drawer: ${JSON.stringify(v)}`);
+      await H.workspace(page, 'playground');
+    }
+    await page.click('[data-osc="header.menu"]');
+    await settle((x) => x.drawer, '375 the drawer opens for Escape');
+    await page.keyboard.press('Escape');
+    const esc = await settle((x) => !x.sidebar, '375 Escape closes the drawer');
+    want(!esc.sidebar && esc.active === 'header.menu', `375 escape ${JSON.stringify(esc)}`);
+    await page.click('[data-osc="header.menu"]');
+    await settle((x) => x.drawer, '375 the drawer opens for the backdrop');
+    // At once, as a hurried tap would: the backdrop appears with the drawer, in the same frame.
+    await page.mouse.click(360, 600);
+    const tapOut = await settle((x) => !x.sidebar, '375 a tap on the backdrop closes it');
+    want(!tapOut.sidebar && tapOut.mode === 'playground', `375 backdrop ${JSON.stringify(tapOut)}`);
     await page.setViewportSize({ width: 1536, height: 1024 });
     await H.workspace(page, 'playground');
     return { ok: !res.bad.length, top: res.top, bad: res.bad.slice(0, 8) };
@@ -3526,9 +3585,10 @@ function defineChecks() {
     return { ok, ...res };
   });
 
-  // #296 R-2: the Envelope lab has a live path. With no pattern change or new note, a held
-  // tone follows the panel: Sustain typed in its field (a click-free restart at the new level),
-  // Release alone (in place, the same voice), and the power switch (off: level 1, on: back).
+  // #296 R-2, C008: the Envelope lab has a live path. With no pattern change or new note, a held
+  // tone follows the panel: Sustain typed in its field (a glide of the held level, the same
+  // voice), Release alone (in place, the same voice), the power switch off (a glide to level
+  // 1, the same voice) and on (a click-free restart with the ADSR).
   // R-1: with the Envelope on, a continuous ping-pong sweep holds at the sustain too.
   // Run at the desktop size and at 390x844, where the panel's controls are reached by scrolling.
   const envelopeFollowsHeld = async (page) => {
@@ -3565,7 +3625,8 @@ function defineChecks() {
     res.start = await held(null, 'envelope-follows-held: held tone at sustain 0.6', 0.6);
     await page.fill('#osc-env-sustain-value', '0.1');
     await page.dispatchEvent('#osc-env-sustain-value', 'change');
-    res.sustain = await held(res.start.id, 'envelope-follows-held: Sustain 0.1 reaches it', 0.1);
+    // C008: a Sustain edit glides the held level on the same voice
+    res.sustain = await held(null, 'envelope-follows-held: Sustain 0.1 reaches it', 0.1);
     res.ratio = res.start.peak > 0 ? res.sustain.peak / res.start.peak : null;
     await page.fill('#osc-env-release-value', '50');
     await page.dispatchEvent('#osc-env-release-value', 'change');
@@ -3573,8 +3634,8 @@ function defineChecks() {
       const v = window.OSCILLA.engine.voice;
       return v && Math.abs(v.release - 0.05) < 1e-9 ? { id: v.id, r: v.adsr.r } : null;
     }), { ms: 5000, what: 'envelope-follows-held: Release 50 ms reaches the held voice' });
-    await page.click('#osc-env-enable'); // off while it sounds
-    res.off = await held(res.sustain.id, 'envelope-follows-held: Envelope off reaches it', 1);
+    await page.click('#osc-env-enable'); // off while it sounds: a glide to level 1 (C008)
+    res.off = await held(null, 'envelope-follows-held: Envelope off reaches it', 1);
     await page.click('#osc-env-enable'); // on again
     res.on = await held(res.off.id, 'envelope-follows-held: Envelope on reaches it', 0.1);
     await page.evaluate(() => window.OSCILLA.app.stopNow());
@@ -3602,6 +3663,8 @@ function defineChecks() {
     await quiet(page, 'envelope-follows-held: quiet at the end');
     await H.workspace(page, 'playground');
     const ok = res.start.adsr.s === 0.6 && res.sustain.adsr.s === 0.1
+      && res.sustain.id === res.start.id && res.off.id === res.sustain.id
+      && res.on.id !== res.off.id
       && res.sustain.viz.s === 0.1 && res.ratio > 0.1 && res.ratio < 0.25
       && res.release.id === res.sustain.id && res.release.r === 0.05
       && res.off.adsr === null && res.off.viz === null && !res.off.lab && res.off.release > 0
@@ -3620,8 +3683,9 @@ function defineChecks() {
     return { ok: Object.values(res).every((r) => r.ok), ...res };
   });
 
-  // #296 R-7: a drag is one edit. The Sustain slider dragged in 20 'input' events and the
-  // graph's S handle dragged in 20 pointer moves leave the held voice sounding (no restart, no
+  // #296 R-7: a drag is one edit. The Decay slider dragged in 20 'input' events and the
+  // graph's A handle dragged in 20 pointer moves (edits that restart the note; a Sustain drag
+  // glides it, `env-sustain-held-note`) leave the held voice sounding (no restart, no
   // extra voice) until the drag ends; its 'change' / pointerup restarts it once, at the value
   // the drag ended on. The counters are engine 'play' events and audibleVoiceCount, sampled
   // after each event's handlers have run. At the desktop size and at 390x844.
@@ -3662,17 +3726,17 @@ function defineChecks() {
       const id = window.OSCILLA.engine.voice.id;
       c.plays = 0;
       c.maxAudible = 0;
-      const el = document.querySelector('#osc-env-sustain');
+      const el = document.querySelector('#osc-env-decay');
       for (let i = 1; i <= 20; i++) {
-        el.value = (0.6 - (0.5 * i) / 20).toFixed(2);
+        el.value = String(500 + i * 10);
         el.dispatchEvent(new Event('input', { bubbles: true }));
       }
       const during = { plays: c.plays, maxAudible: c.maxAudible,
         same: window.OSCILLA.engine.voice.id === id };
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      return { during, plays: c.plays, lab: window.OSCILLA.labs.envelope.adsr.s };
+      return { during, plays: c.plays, lab: window.OSCILLA.labs.envelope.adsr.d };
     });
-    res.afterSlider = await voiceAt(res.start.id, 'Sustain 0.1 after the slider drag', 0.1);
+    res.afterSlider = await voiceAt(res.start.id, 'the Decay drag restarted it at the sustain', 0.6);
     const canvas = page.locator('#osc-chart-envelope canvas');
     await canvas.scrollIntoViewIfNeeded({ timeout: 5000 });
     const at = await page.evaluate(() => {
@@ -3680,20 +3744,19 @@ function defineChecks() {
       const c = document.querySelector('#osc-chart-envelope canvas').getBoundingClientRect();
       window.__r7.plays = 0;
       window.__r7.maxAudible = 0;
-      return { x: c.left + l.handles.sustain.x, y: c.top + l.handles.sustain.y,
+      return { x: c.left + l.handles.attack.x, y: c.top + l.handles.attack.y,
         id: window.OSCILLA.engine.voice.id };
     });
     await page.mouse.move(at.x, at.y);
     await page.mouse.down();
-    await page.mouse.move(at.x, at.y - 30, { steps: 20 });
+    await page.mouse.move(at.x + 40, at.y, { steps: 20 });
     res.graphDuring = await page.evaluate((id) => ({ plays: window.__r7.plays,
       maxAudible: window.__r7.maxAudible, same: window.OSCILLA.engine.voice.id === id,
-      lab: window.OSCILLA.labs.envelope.adsr.s }), at.id);
+      lab: window.OSCILLA.labs.envelope.adsr.a }), at.id);
     await page.mouse.up();
     res.graph = await page.evaluate(() => ({ plays: window.__r7.plays,
-      lab: window.OSCILLA.labs.envelope.adsr.s }));
-    res.afterGraph = await voiceAt(at.id, 'the graph drag\'s sustain reaches the held voice',
-      res.graph.lab);
+      lab: window.OSCILLA.labs.envelope.adsr.a }));
+    res.afterGraph = await voiceAt(at.id, 'the Attack drag restarts the held voice', 0.6);
     await page.evaluate(() => {
       const c = window.__r7;
       c.off(); c.unsample(); delete window.__r7;
@@ -3706,8 +3769,8 @@ function defineChecks() {
     const s = res.slider;
     const g = res.graphDuring;
     const ok = s.during.plays === 0 && s.during.same && s.during.maxAudible === 1
-      && s.plays === 1 && Math.abs(s.lab - 0.1) < 1e-9
-      && g.plays === 0 && g.same && g.maxAudible === 1 && g.lab > 0.1 + 1e-6
+      && s.plays === 1 && Math.abs(s.lab - 0.1) > 1e-6
+      && g.plays === 0 && g.same && g.maxAudible === 1 && g.lab > 0.01 + 1e-6
       && res.graph.plays === 1;
     return { ok, ...res };
   };
@@ -3723,7 +3786,7 @@ function defineChecks() {
   });
 
   // #296 R-9: the keyboard is one edit too. A range input fires 'input' and 'change' for
-  // every arrow step, so the Sustain slider's keys settle while one is down and its keyup
+  // every arrow step, so the Decay slider's keys settle while one is down and its keyup
   // commits once after the lab's keyCommitMs. ArrowLeft held for 20 auto-repeats leaves the
   // held voice sounding (no restart, one audible voice) and restarts it once, at the value it
   // stopped on; 20 ArrowRight presses restart it once, plus one per gap between a keyup and
@@ -3749,7 +3812,7 @@ function defineChecks() {
       O.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 }, enabled: true });
       a.holding = true; a.play('hold');
       const e = O.engine;
-      const el = document.querySelector('#osc-env-sustain');
+      const el = document.querySelector('#osc-env-decay');
       const c = { plays: 0, maxAudible: 0, downs: [], ups: [] };
       window.__r9 = c;
       c.off = e.on((t) => { if (t === 'play') c.plays++; });
@@ -3770,11 +3833,11 @@ function defineChecks() {
         return e.voice.id;
       };
       c.read = (id) => ({ plays: c.plays, maxAudible: c.maxAudible, downs: c.downs.length,
-        same: e.voice.id === id, lab: O.labs.envelope.adsr.s, slider: Number(el.value) });
+        same: e.voice.id === id, lab: O.labs.envelope.adsr.d, slider: Number(el.value) });
     });
     const res = { windowMs: await page.evaluate(() => window.OSCILLA.labs.envelope.keyCommitMs) };
     res.start = await voiceAt(null, 'held tone at sustain 0.6', 0.6);
-    const slider = page.locator('#osc-env-sustain');
+    const slider = page.locator('#osc-env-decay');
     await slider.scrollIntoViewIfNeeded({ timeout: 5000 });
     await slider.focus({ timeout: 5000 });
 
@@ -3784,7 +3847,7 @@ function defineChecks() {
     res.held = await page.evaluate((v) => window.__r9.read(v), id);
     await page.keyboard.up('ArrowLeft');
     res.heldPlays = await committed('the held keys commit', 1);
-    res.afterHeld = await voiceAt(res.start.id, 'Sustain 0.4 after the held key', 0.4);
+    res.afterHeld = await voiceAt(res.start.id, 'the held key restarted it at the sustain', 0.6);
     res.heldEnd = await page.evaluate((v) => window.__r9.read(v), id);
 
     // 20 presses of ArrowRight
@@ -3792,7 +3855,7 @@ function defineChecks() {
     for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight');
     res.pressed = await page.evaluate((v) => window.__r9.read(v), id);
     res.pressPlays = await committed('the presses commit', 1);
-    res.afterPresses = await voiceAt(res.afterHeld.id, 'Sustain 0.6 after the presses', 0.6);
+    res.afterPresses = await voiceAt(res.afterHeld.id, 'the presses restarted it', 0.6);
     res.pressEnd = await page.evaluate((w) => {
       const c = window.__r9;
       let gaps = 0;
@@ -3811,8 +3874,7 @@ function defineChecks() {
     await page.mouse.up();
     res.dragPlays = await committed('the mouse drag commits', 1);
     res.drag = await page.evaluate((v) => window.__r9.read(v), id);
-    res.afterDrag = await voiceAt(res.afterPresses.id, 'the drag\'s sustain reaches the voice',
-      res.drag.lab);
+    res.afterDrag = await voiceAt(res.afterPresses.id, 'the drag restarted it', 0.6);
     res.dragEnd = await page.evaluate((v) => window.__r9.read(v), id);
 
     await page.evaluate(() => {
@@ -3829,10 +3891,10 @@ function defineChecks() {
     const d = res.dragDuring;
     const ok = res.windowMs > 0 && res.windowMs <= 500
       && h.downs === 20 && h.plays === 0 && h.same && h.maxAudible === 1
-      && Math.abs(h.lab - 0.4) < 1e-9 && res.heldEnd.plays === 1
+      && h.lab < 0.1 - 1e-6 && res.heldEnd.plays === 1
       && res.pressed.downs === 20 && res.pressEnd.ups === 20
       && res.pressEnd.plays >= 1 && res.pressEnd.plays <= 1 + res.pressEnd.gaps
-      && d.plays === 0 && d.same && d.maxAudible === 1 && d.lab < 0.6 - 1e-6
+      && d.plays === 0 && d.same && d.maxAudible === 1 && Math.abs(d.lab - res.heldEnd.lab) > 1e-9
       && res.dragEnd.plays === 1;
     return { ok, ...res };
   };
@@ -3953,6 +4015,103 @@ function defineChecks() {
     }, filterBefore);
     const ok = Object.values(res.sizes).every((r) => r.ok)
       && Object.values(res.plain).every((p) => p.flagged === 0 && p.polls > 1);
+    return { ok, ...res };
+  });
+
+  // ---- C008: the Envelope Lab's Sustain and power switch on a held note (one voice, a glide)
+  const C8 = {
+    db: (x) => 20 * Math.log10(Math.max(x, 1e-9)),
+    // The Envelope panel lives in Synthesis; the path is the bridge state the canvas draws.
+    open: async (page) => {
+      await H.stopAll(page);
+      await until(async () => (await H.nodes(page)) === 0,
+        { ms: 5000, what: 'C008: no voice before the check' });
+      await H.continuous(page, true);
+      await H.navTo(page, 'synthesis');
+      await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
+        === 'synthesis'), { ms: 8000, what: 'C008: Synthesis workspace open' });
+      await page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        if (a.source !== 'single') a.setDualSource(false);
+        a.setWaveform('sine'); a.setPattern('tone'); a.setGainPct(57); // clear of the limiter
+        window.OSCILLA.labs.filter.update({ enabled: false });
+        // The lab defaults (an earlier check may have left other times).
+        window.OSCILLA.labs.envelope.update({ adsr: { a: 0.01, d: 0.1, s: 0.6, r: 0.3 } });
+      });
+    },
+    envelope: async (page, on) => {
+      if (await page.evaluate(() => window.OSCILLA.labs.envelope.enabled) !== on) {
+        await page.click('#osc-env-enable');
+      }
+      await until(() => page.evaluate((v) => window.OSCILLA.labs.envelope.enabled === v, on),
+        { ms: 3000, what: `C008: Envelope switch ${on ? 'on' : 'off'}` });
+    },
+    type: async (page, sel, text) => {
+      await page.fill(sel, text);
+      await page.press(sel, 'Enter');
+    },
+    latch: (page) => page.evaluate(() => window.OSCILLA.app.toggleLatch()),
+    // The held level once two analyser windows in a row agree within 0.2 dB and `want` holds.
+    steady: async (page, what, want = () => true) => {
+      let prev = -Infinity;
+      return until(async () => {
+        const v = await H.peak(page);
+        const ok = v > 1e-4 && Math.abs(C8.db(v) - C8.db(prev)) < 0.2 && want(v);
+        prev = v;
+        return ok ? v : null;
+      }, { ms: 8000, what });
+    },
+    voice: (page) => page.evaluate(() => {
+      const v = window.OSCILLA.engine.voice;
+      return v && !v.ended ? { id: v.id, adsr: v.adsr ? { ...v.adsr } : null } : null;
+    }),
+    end: async (page) => {
+      await H.stopAll(page);
+      const n = await until(async () => ((await H.nodes(page)) === 0 ? 'zero' : null),
+        { ms: 5000, what: 'C008: engine.activeNodeCount returns to 0 after stop' })
+        .catch(() => 'nonzero');
+      return n === 'zero';
+    },
+  };
+
+  // dead-controls-3, control-census-3: Sustain and the power switch reach a held note.
+  def('env-sustain-held-note', async ({ page }) => {
+    const res = {};
+    await C8.open(page);
+    await page.evaluate(() => window.OSCILLA.app.setFrequency(1000));
+    // The envelope-off level of the same note is the reference.
+    await C8.envelope(page, false);
+    await C8.latch(page);
+    // The sine's peak is the master gain once the filter bypass of the earlier check has glided.
+    const gain = await page.evaluate(() => window.OSCILLA.app.gainLevel);
+    res.offRef = await C8.steady(page, 'C008: held 1 kHz note with the envelope off',
+      (v) => Math.abs(C8.db(v) - C8.db(gain)) < 1);
+    res.stop1 = await C8.end(page);
+    await C8.envelope(page, true);
+    await C8.type(page, '#osc-env-sustain-value', '0.6');
+    await C8.latch(page);
+    res.s06 = await C8.steady(page, 'C008: held note settles at sustain 0.6',
+      (v) => Math.abs(C8.db(v) - C8.db(res.offRef * 0.6)) < 1);
+    res.voice06 = await C8.voice(page);
+    await C8.type(page, '#osc-env-sustain-value', '0.1');
+    res.s01 = await C8.steady(page, 'C008: sustain 0.1 lowers the held note 14 to 17 dB', (v) => {
+      const drop = C8.db(res.s06) - C8.db(v);
+      return drop >= 14 && drop <= 17;
+    });
+    res.voice01 = await C8.voice(page);
+    await C8.envelope(page, false);
+    res.off = await C8.steady(page, 'C008: envelope off brings the held note to the off level',
+      (v) => Math.abs(C8.db(v) - C8.db(res.offRef)) <= 1);
+    res.voiceOff = await C8.voice(page);
+    res.stop2 = await C8.end(page);
+    await C8.type(page, '#osc-env-sustain-value', '0.6');
+    res.dropDb = +(C8.db(res.s06) - C8.db(res.s01)).toFixed(2);
+    res.offDb = +(C8.db(res.off) - C8.db(res.offRef)).toFixed(2);
+    const sameVoice = res.voice06 && res.voice01 && res.voiceOff
+      && res.voice06.id === res.voice01.id && res.voice01.id === res.voiceOff.id;
+    const ok = !!sameVoice && res.dropDb >= 14 && res.dropDb <= 17 && Math.abs(res.offDb) <= 1
+      && Math.abs(res.voice01.adsr.s - 0.1) < 1e-9 && res.voiceOff.adsr === null
+      && res.stop1 && res.stop2;
     return { ok, ...res };
   });
 
@@ -4130,9 +4289,15 @@ function defineChecks() {
         const r = await page.evaluate(() => {
           const a = document.activeElement;
           if (!a || a === document.body) return { body: true };
-          // The compact Studio's chips share a data-osc; their node or clip id tells them apart.
-          const key = a.id || (a.dataset.osc ? [a.dataset.osc, a.dataset.nodeId,
-            a.dataset.clipId].filter(Boolean).join(':') : a.outerHTML.slice(0, 60));
+          // One key per element: two toasts' dismiss buttons have the same markup, and with the
+          // sidebar's entries ahead of them (F002) the second one used to read as a repeat; the
+          // compact Studio's chips, which share a data-osc, are told apart the same way.
+          const ids = window.__oscFocusKeys || (window.__oscFocusKeys = new WeakMap());
+          if (!ids.has(a)) {
+            window.__oscFocusN = (window.__oscFocusN || 0) + 1;
+            ids.set(a, window.__oscFocusN);
+          }
+          const key = `${a.id || a.dataset.osc || a.tagName}#${ids.get(a)}`;
           const box = a.getBoundingClientRect();
           const region = document.querySelector('[data-osc="alerts"]');
           const inAlert = region.contains(a);
@@ -4252,9 +4417,10 @@ function defineChecks() {
         await enter();
         await sleep(150);
         const r = await page.evaluate(() => {
-          const header = document.querySelector('.osc-header');
+          const header = document.querySelector('[role="banner"]');
           const hb = header.getBoundingClientRect();
-          const parts = [...header.querySelectorAll('.osc-brand, .osc-nav, .osc-header-actions > *')]
+          const parts = [...header.querySelectorAll('[data-osc="header.menu"], '
+            + '[data-osc="header.brand"], [data-osc="header.actions"] > *')]
             .filter((el) => el.getBoundingClientRect().width > 0);
           const boxes = parts.map((el) => ({ el: el.className.split(' ')[0] || el.tagName, b: el.getBoundingClientRect() }));
           const overlaps = [];
@@ -4319,7 +4485,7 @@ function defineChecks() {
             if (!hit || el.contains(hit) || hit.contains(el)) continue;
             const label = hit.closest('label');
             if (label && (label.control === el || label.contains(el))) continue;
-            const bar = hit.closest('.osc-statusbar, .osc-header, [data-osc="alerts"]');
+            const bar = hit.closest('.osc-statusbar, [role="banner"], [data-osc="alerts"]');
             if (bar && !bar.contains(el)) {
               bad.push(`${el.id || el.dataset.osc || el.tagName} under ${bar.className.split(' ')[0]}`);
               break;
@@ -4806,9 +4972,12 @@ function defineChecks() {
           .map((a) => a.dataset.osc.slice('nav.'.length)),
         workspaceIds: [...view.querySelectorAll('[data-osc="about.workspaces"] > li')]
           .filter(shown).map((li) => li.dataset.osc.slice('about.workspace.'.length)),
-        next: [...view.querySelectorAll('[data-osc="about.next"] > li')].filter(shown)
-          .map((li) => ({ id: li.dataset.milestone,
+        // What comes next: now and next shown, later folded behind its count
+        next: [...view.querySelectorAll('[data-osc="about.next"] li[data-milestone]')]
+          .filter(shown).map((li) => ({ id: li.dataset.milestone, phase: li.dataset.phase,
             text: li.textContent.replace(/\s+/g, ' ').trim() })),
+        laterToggle: { text: q('[data-osc="about.next.later-toggle"]')?.textContent.trim(),
+          expanded: q('[data-osc="about.next.later-toggle"]')?.getAttribute('aria-expanded') },
         othersHidden: ['#osc-view-learn', '#osc-view-presets', '#osc-panel-source', '#osc-panel-analysis']
           .every((s) => !shown(q(s))),
       };
@@ -4816,9 +4985,27 @@ function defineChecks() {
     const v = res.view;
     const roadmap = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'data',
       'roadmap.json'), 'utf8')).milestones;
-    res.roadmapOk = roadmap.length > 0 && v.next.length === roadmap.length
-      && roadmap.every((m, i) => v.next[i].id === m.id && v.next[i].text.includes(m.title)
-        && v.next[i].text.includes(`${m.done} of ${m.required} done`));
+    // the page's order: now, next, later, each in the plan order
+    const byPhase = ['now', 'next', 'later'].flatMap((p) => roadmap.filter((m) => m.phase === p));
+    const later = roadmap.filter((m) => m.phase === 'later');
+    const folded = byPhase.filter((m) => m.phase !== 'later');
+    // unfold later through its button: every milestone, in the page's order
+    await page.click('[data-osc="about.next.later-toggle"]');
+    res.nextOpen = await until(() => page.evaluate(() => {
+      const t = document.querySelector('[data-osc="about.next.later-toggle"]');
+      const list = document.querySelector('[data-osc="about.next.later"]');
+      if (t.getAttribute('aria-expanded') !== 'true' || !list.getClientRects().length) return null;
+      return [...document.querySelectorAll('[data-osc="about.next"] li[data-milestone]')]
+        .filter((li) => li.getClientRects().length).map((li) => li.dataset.milestone);
+    }), { ms: 5000, what: 'About: Later unfolds' });
+    await page.click('[data-osc="about.next.later-toggle"]');
+    const same = (list, want) => list.length === want.length
+      && want.every((m, i) => list[i].id === m.id && list[i].text.includes(m.title)
+        && list[i].text.includes(`${m.done} of ${m.required} done`));
+    res.roadmapOk = roadmap.length > 0 && same(v.next, folded)
+      && v.laterToggle.expanded === 'false'
+      && v.laterToggle.text === `Show the ${later.length} later milestones`
+      && res.nextOpen.join() === byPhase.map((m) => m.id).join();
     res.workspacesOk = v.navIds.length > 0 && v.workspaceIds.join() === v.navIds.join();
     res.headlineOk = !!v.headline && !/\bone night\b|\bthrowaway\b/i.test(v.headline);
     // Reduced motion: the one-shot trace draw collapses to (near) zero duration.
