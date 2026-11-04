@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-02
-updated_at: 2026-11-02
+updated_at: 2026-11-04T20:00:41Z
+started_at: 2026-11-04T20:00:28Z
+started_event: sha256:34c3cd0d68f924f3e775e6b92c7a6ad2fe69485f5ed0eb7cef759aa9edd7988f
+completed_at: 2026-11-04T20:00:41Z
+completed_event: sha256:8b3c90abfb48b1ab0b81a88ead4cd6e34c82cb6c9ec11d0f5f3a9b135fb461b8
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "Decided by the coordinating session oscilla-b0 on 2026-11-04 under the owner's delegation of the same day ('mas muj max clearance / continue autonomously / no need for human / fill gaps', sent with the RECONSTRUCT pack paths); the owner may override it"
+    result: "The reconstruction views take whatever the 1.2 MB gzip cap (Q023, E027) leaves, with no reserved share: each pull request that adds a view reports its gzip delta (scripts/size-report.mjs), and the first views issue measures and records its cost before it lands. Reason: no measurement exists, and a byte share fixed without one would be invented (project.no-fake-science); the cap itself already bounds the views."
+    commit: 76bfc300653e2bdc09e5dc6e07b22d805c729449
+    recorded_at: 2026-11-04T19:59:51Z
