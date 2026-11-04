@@ -54,6 +54,10 @@
 //              tab the keys routed to FM, QWERTY A held, the ADDITIVE chip clicked (the tab
 //              and engine unchanged, the route cleared), A up: below -70 dB rel and no held
 //              note. Fails on 3c22d01a (the FM voice stays held)
+//   s-radioroute the engine radio reads the model's route (review S4): on the Engines tab the
+//              keys routed to FM (the dock's choice): FM is the one checked engine and its
+//              plate is shown, not ADDITIVE's; QWERTY A sounds and its release falls below
+//              -70 dB rel. Fails on 3c22d01a (ADDITIVE checked while the keys play FM)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -853,6 +857,29 @@ function defineChecks() {
       what: 'no note is held after the key is up' });
     const census = await counts(page);
     return { ok: true, on: on.rmsDb, off: off.rmsDb, census };
+  });
+
+  // Review of src/js/synth (oscilla-21, S4): the engine radio reads the model's route.
+  const enginesShown = (page) => page.evaluate(() => ({
+    on: [...document.querySelectorAll('[data-engine][aria-checked="true"]')]
+      .map((x) => x.dataset.engine),
+    plates: [...document.querySelectorAll('[data-osc="synth.modules"] [data-module]')]
+      .map((x) => x.dataset.module) }));
+  def('s-radioroute', async ({ page }) => {
+    await tabTo(page, 'engines');
+    const fm = (await dbg(page)).nodes.fm;
+    await page.evaluate((id) => window.OSCILLA.app.synthPick(id), fm);
+    const shown = await until(async () => {
+      const x = await enginesShown(page);
+      return x.on.join() === 'fm' && x.plates.includes('fm') && !x.plates.includes('additive')
+        && x;
+    }, { ms: 10000, what: 'the radio checks FM and shows its plate, as the keys play FM' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the FM engine sounds the held key');
+    const d = await dbg(page);
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the key up releases the FM voice');
+    return { ok: d.played === fm && d.engine === 'fm', shown, on: on.rmsDb, off: off.rmsDb };
   });
 
   def('s-riffs', async ({ page }) => {

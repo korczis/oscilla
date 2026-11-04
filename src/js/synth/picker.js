@@ -10,6 +10,10 @@
 //     chosen engine on Engines); New Synth voice inserts the panel (its BATCH), whose Keys the
 //     keys then play; with the panel there it is disabled and says why
 //   routedNode(model) -> node | null   the node metadata.noteTarget names, when it plays notes
+//   playedEngine(model, panel, chosen, registry) -> engine module id | null   the engine the
+//     Engines tab checks and shows (review S4: from the model's route, never a copy): the
+//     routed node when it is one of the panel's engines, null when the route names any other
+//     node, else `chosen`, the tab's own choice
 //   WAVES, waveOf(model, panel, osc) -> wave id, waveAction(model, panel, osc, wave) -> action
 //     sine, triangle, saw, square, pulse (the VCO's Wave; its width is the VCO's Pulse width
 //     knob) and noise (the Mixer: the oscillator's level to 0, the noise level up), each ONE
@@ -31,6 +35,14 @@ export function routedNode(model, registry = NODE_REGISTRY) {
   const id = model.metadata.noteTarget;
   const n = id ? model.graph.nodes.find((x) => x.id === id) : null;
   return n && playsNotes(n.type, registry) ? n : null;
+}
+
+export function playedEngine(model, panel, chosen, registry = NODE_REGISTRY) {
+  const r = routedNode(model, registry);
+  if (!r) return chosen;
+  const res = panel.resolve(model);
+  return panel.modulesOf('engines').map((m) => m.id)
+    .find((id) => res.get(id) && res.get(id).id === r.id) || null;
 }
 
 export function instrumentChoices(model, panel, { registry = NODE_REGISTRY, current = null } = {}) {

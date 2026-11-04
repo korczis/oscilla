@@ -17,7 +17,7 @@
 
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
-import { routedNode } from './picker.js';
+import { playedEngine, routedNode } from './picker.js';
 import { createDock } from './dock.js';
 import { SYNTH_TEXT, insertDecision } from './insert.js';
 import {
@@ -63,8 +63,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   const ENGINE_IDS = panel.modulesOf('engines').map((m) => m.id);
   const tab = () => (cmp ? cmp.synth.tab : 'panel');
-  const engineId = () => (cmp && ENGINE_IDS.includes(cmp.synth.engine) ? cmp.synth.engine
-    : ENGINE_IDS[0]);
+  const engineId = () => playedEngine(model(), panel, cmp && ENGINE_IDS.includes(cmp.synth
+    .engine) ? cmp.synth.engine : ENGINE_IDS[0], registry);
   /** The module the keys play now: Keys on the Panel tab, the chosen engine on Engines. */
   const playedModule = () => (tab() === 'engines' ? engineId() : 'keys');
   /** The node the keys play: the one routed by the picker (K066), else the tab's module. */
@@ -501,7 +501,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!t) return;
     const d = t.dataset;
     if (d.engine) {
-      allOff(); // before the route changes what the keys play (review S3)
+      allOff();
       dock.unroute();
       showTab('engines', d.engine);
       say(`${panel.module(d.engine).label}: the keys play this engine.`);

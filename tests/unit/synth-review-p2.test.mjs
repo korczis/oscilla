@@ -20,6 +20,7 @@ import { createIdGenerator, createStudioStore } from '../../src/js/studio/action
 import { templateModel, REFERENCE_TEMPLATE_ID } from '../../src/js/studio/templates/index.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
+import { enginePickerHtml } from '../../src/js/synth/view/engines.js';
 
 /** The Synth part on the real transport, mounted as Alpine would; `click(dataset)` is a click
  *  on an element of the view carrying those data attributes (the part's delegated listener). */
@@ -75,4 +76,50 @@ test('S3: the engine chip releases a note held on a routed node outside the pane
   assert.deepEqual(transport.heldNotes(), [], 'the chip released the held note first');
   sink.noteOff(62);
   assert.deepEqual(transport.heldNotes(), []);
+});
+
+// ---------------------------------------------------------------- S4: the radio reads the route
+
+test('S4: keys routed to a panel engine: the Engines tab checks and shows that engine', () => {
+  const { cmp, st } = synthRig();
+  const fm = nodeOf(st.getModel(), 'fm');
+  assert.equal(cmp.synthPick(fm.id), true);
+  cmp.synthTab('engines');
+  const d = cmp.synthDebug();
+  assert.equal(d.played, fm.id, 'the keys play FM');
+  assert.equal(d.engine, 'fm', 'the radio checks (and the plate shows) the engine the keys play');
+});
+
+test('S4: keys routed outside the engines: no engine is checked, and the tab says why', () => {
+  const st = panelStore();
+  assert.equal(st.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', name: 'FM 2',
+    position: { x: 0, y: 1200 } }).ok, true);
+  const ext = st.getModel().graph.nodes.at(-1);
+  const { cmp } = synthRig(st);
+  assert.equal(cmp.synthPick(ext.id), true);
+  cmp.synthTab('engines');
+  assert.equal(cmp.synthDebug().engine, null, 'no engine of the tab plays');
+  const ids = PANEL.modulesOf('engines').map((m) => m.id);
+  const html = enginePickerHtml({ panel: PANEL, ids, on: null,
+    resolved: PANEL.resolve(st.getModel()) });
+  assert.equal(/aria-checked="true"/.test(html), false);
+  assert.match(html, /data-osc="synth.engine-elsewhere"/);
+});
+
+test('S4: an engine preset clears the route in its own BATCH; undo gives the route back', () => {
+  const st = panelStore();
+  assert.equal(st.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', name: 'FM 2',
+    position: { x: 0, y: 1200 } }).ok, true);
+  const ext = st.getModel().graph.nodes.at(-1);
+  const { cmp } = synthRig(st);
+  assert.equal(cmp.synthPick(ext.id), true);
+  const depth = st.debugInfo().undoDepth;
+  assert.equal(cmp.synthPreset('fm-bell'), true);
+  assert.equal(st.debugInfo().undoDepth, depth + 1, 'one history entry');
+  assert.equal(st.getModel().metadata.noteTarget, undefined, 'the route is cleared');
+  const d = cmp.synthDebug();
+  assert.equal(d.engine, 'fm');
+  assert.equal(d.played, nodeOf(st.getModel(), 'fm').id, 'the keys play the preset\'s engine');
+  st.undo();
+  assert.equal(st.getModel().metadata.noteTarget, ext.id);
 });
