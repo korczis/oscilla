@@ -33,7 +33,7 @@ import { NODE_DEFINITIONS, NODE_REGISTRY, createNodeRegistry }
 import { CATEGORIES, defineNode, numberParam } from '../../src/js/studio/nodes/common.js';
 import { lexJs, scanHooks, scanSources, stringLiteralsOf }
   from '../../scripts/ui-catalog/scan.mjs';
-import { checkCatalog, checkRepository, reader, unknownHooks }
+import { checkCatalog, checkRepository, reader, runnableFiles, unknownHooks }
   from '../../scripts/ui-catalog/check.mjs';
 import { undeclaredAllowance } from '../../scripts/ui-catalog/allowance.mjs';
 
@@ -291,6 +291,19 @@ test('a bound data-osc: a conditional of literals yields each hook, anything els
   assert.deepEqual(census.sites.map((s) => [s.line, s.expr]), [[2, 'name']]);
   const p = world((w) => { w.files[FX_HTML] += '\n<p :data-osc="on ? \'fx.play\' : osc"></p>'; });
   assert.match(refused(p, `${FX_HTML}:2`), /built at run time and no pattern/);
+  // A pattern may name the page as the site of a bound value; a file outside src/ never.
+  const page = world((w) => {
+    w.files[FX_HTML] += '\n<a :data-osc="\'fx.go.\' + k"></a>';
+    w.files[FX_TEST] += " q('fx.go.home');";
+    w.decls.push({ id: 'fx.go', pattern: { template: 'fx.go.{key}', keys: ['home'],
+      sites: [FX_HTML] }, kind: 'open', label: 'Go', state: 'ui.workspace',
+    docs: 'Opens the fixture page that the entry names.' });
+    w.traces['fx.go'] = { ...w.traces['fx.play'] };
+  });
+  assert.deepEqual(page, []);
+  throwsFor('fx.site', { pattern: { template: 'fx.{key}', keys: ['a'], sites: ['tests/fx.html'] },
+    kind: 'readout', label: 'S', docs: 'A fixture pattern built outside the source tree.',
+    state: { none: 'it shows fixture text and nothing else' } }, /pattern\.sites must name/);
 });
 
 test('refused: a hook only the running page shows', () => {
@@ -357,6 +370,15 @@ test('refused: a test file that names the hook only in a comment, or that no scr
     w.traces['fx.play'].tests = ['tests/helpers/fx.mjs'];
   });
   assert.match(refused(unrun, 'fx.play'), /run by neither npm test nor a script/);
+});
+
+test('a suite runner runs the files it is given, so they count as run; its helpers do not', () => {
+  const runs = runnableFiles(ROOT);
+  assert.ok(runs.has('tests/browser/lib/run-suites.cjs'));
+  for (const f of ['tests/browser/app.cjs', 'tests/browser/synth.cjs', 'tests/browser/xy-pad.cjs']) {
+    assert.ok(runs.has(f), f);
+  }
+  assert.equal(runs.has('tests/browser/lib/suite.cjs'), false);
 });
 
 test('refused: a docs sentence equal to the label or copied from another declaration', () => {

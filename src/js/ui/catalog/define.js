@@ -15,7 +15,8 @@
 //   hooks   more hooks when one component carries several (a slider and its text field)
 //   pattern { template: 'studio.tl.{key}', keys: [...], sites: ['src/js/...'] }: a hook built
 //           at run time, expanded to one concrete hook per enumerated key; `sites` names the
-//           modules that build it
+//           modules that build it (src/js/**.js, or the page src/<name>.html for a bound
+//           :data-osc of its markup)
 //   param   a section 79 descriptor of studio/nodes/common.js (numberParam, enumParam, ...)
 //   state   a canonical state path of sources.js, or { none: '<reason, five words or more>' }
 //           on the kinds of STATE_NONE_KINDS
@@ -29,6 +30,8 @@ const FIELDS = ['id', 'kind', 'label', 'docs', 'state', 'hooks', 'pattern', 'par
   'in', 'links', 'related', 'disabled'];
 const HOOK = /^[A-Za-z][\w.-]*$/;
 const KEY = /^[\w.-]+$/;
+// A module of src/js, or the page whose markup binds :data-osc (scripts/ui-catalog/scan.mjs).
+const SITE = /^src\/(?:js\/.+\.js|[\w-]+\.html)$/;
 // Every field the common.js helpers give a descriptor; a hand-written object lacks some.
 const PARAM_FIELDS = ['key', 'label', 'type', 'default', 'step', 'unit', 'scale', 'options',
   'nullable', 'automatable', 'modulatable', 'softRange'];
@@ -56,8 +59,9 @@ function patternProblems(p) {
   if (!isList(p.keys) || !p.keys.length || !p.keys.every((k) => KEY.test(k))) {
     out.push('pattern.keys must enumerate the keys');
   } else if (new Set(p.keys).size !== p.keys.length) out.push('pattern.keys repeat a key');
-  if (!isList(p.sites) || !p.sites.length || !p.sites.every((s) => /^src\/js\/.+\.js$/.test(s))) {
-    out.push('pattern.sites must name the src/js modules that build the hook');
+  if (!isList(p.sites) || !p.sites.length || !p.sites.every((s) => SITE.test(s))) {
+    out.push('pattern.sites must name the src/js modules or the src/*.html page that build the '
+      + 'hook');
   }
   return out;
 }

@@ -280,7 +280,13 @@ export async function loadTraces(root = ROOT) {
   return out;
 }
 
-/** The files `npm test` (tests/unit/**\/*.test.mjs) and the package.json scripts run. */
+/** The suite runners of package.json: `node <runner> a.cjs b.cjs ...` runs every file named. */
+export const SUITE_RUNNERS = Object.freeze(['tests/browser/lib/run-suites.cjs']);
+
+/**
+ * The files `npm test` (tests/unit/**\/*.test.mjs) and the package.json scripts run: the file
+ * each `node <file>` command starts and, for a suite runner, every file it is given.
+ */
 export function runnableFiles(root = ROOT) {
   const files = new Set();
   const walk = (rel) => {
@@ -293,7 +299,12 @@ export function runnableFiles(root = ROOT) {
   walk('tests/unit');
   const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
   for (const script of Object.values(pkg.scripts || {})) {
-    for (const m of script.matchAll(/\bnode\s+([\w./-]+\.(?:c|m)?js)\b/g)) files.add(m[1]);
+    for (const m of script.matchAll(/\bnode\s+([\w./-]+\.(?:c|m)?js)\b([^&|;]*)/g)) {
+      files.add(m[1]);
+      if (SUITE_RUNNERS.includes(m[1])) {
+        for (const a of m[2].matchAll(/(?:^|\s)([\w./-]+\.(?:c|m)?js)(?=\s|$)/g)) files.add(a[1]);
+      }
+    }
   }
   return files;
 }
