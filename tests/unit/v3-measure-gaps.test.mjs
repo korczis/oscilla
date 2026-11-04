@@ -408,7 +408,7 @@ test('V353: only the experiment and Studio adapters import the experiment store'
   // The Playground (core, audio, instrument, labs, visualization, app shell, main) never does:
   // a store that fails leaves it untouched (spec §227).
   assert.deepEqual(importers, ['src/js/studio/library.js', 'src/js/ui/experiments.js',
-    'src/js/ui/studio/workspace.js']);
+    'src/js/ui/studio/workspace/files.js']);
   const main = readFileSync(join(ROOT, 'src/js/main.js'), 'utf8');
   assert.doesNotMatch(main, /indexedDB/);
   // The Experiments store opens lazily: only on its workspace or a save, never at start-up. Every

@@ -85,6 +85,12 @@
 //                        and the first and second upper sidebands over the carrier are
 //                        J1(1)/J0(1) and J2(1)/J0(1) within 1 dB (the text's index 1; the
 //                        lines at 440 ± 616·k do not coincide)
+//   armed-play-refused   armed (transport.arm, as the Synth keys arm it), a PLAY refused through
+//                        the transport's Inject hook debugRefuseNextPlay (its output claim; it
+//                        refuses outside TEST CONTEXT, entered by measure.useLoopback): Play
+//                        is released, the reason is in the alert region, the runtime census is
+//                        0, and an edit after it leaves the Inspector 'not-applied', never
+//                        'behind' (K169)
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -1337,6 +1343,72 @@ function defineChecks(fx) {
     }), ring, fm: { ...fm, floor: fmFloor, j1OverJ0Db: Number(j1OverJ0Db.toFixed(2)),
       j2OverJ0Db: Number(j2OverJ0Db.toFixed(2)) },
     capDbfs: Number((20 * Math.log10(cap)).toFixed(2)), rmsFloorDb, rows };
+  });
+
+  // K169: a PLAY refused while armed stops the armed run and says so, and the next edit is not
+  // stranded 'behind'. The refusal is forced through the transport's Inject hook
+  // (transport.debugRefuseNextPlay: the next PLAY's output claim is refused), which works only
+  // in TEST CONTEXT (ADR 0052): the page enters it as the other Inject users do
+  // (measure.useLoopback) and leaves it after. PLAY is the compact widget's (app.studioPlay),
+  // which plays while armed.
+  def('armed-play-refused', async ({ page }) => {
+    // Outside TEST CONTEXT first (an earlier check may have left the page in it).
+    const outside = await page.evaluate(() => {
+      const m = window.OSCILLA.measure;
+      return { left: m.useMicrophone(), loopback: window.OSCILLA.app.meas.loopback,
+        hook: window.OSCILLA.studio.transport.debugRefuseNextPlay() };
+    });
+    await page.evaluate(() => window.OSCILLA.measure.useLoopback());
+    await H.fresh(page);
+    await H.recordLive(page);
+    const view = () => page.evaluate(() => {
+      const s = window.OSCILLA.studio;
+      const c = s.counts();
+      const st = document.querySelector('[data-osc="studio.inspector.runtimeState"]');
+      const e = s.transport.debugInfo().lastError;
+      return { ...c, armed: s.transport.armed,
+        pressed: document.querySelector('[data-osc="studio.play"]').getAttribute('aria-pressed'),
+        inspector: st ? st.dataset.state : null, lastError: e ? e.code : null };
+    });
+    const armedOk = await page.evaluate(() => window.OSCILLA.studio.transport.arm().ok);
+    const armed = await until(async () => {
+      const v = await view();
+      return v.armed && v.runtimeState === 'running' && v.pressed === 'true' ? v : null;
+    }, { ms: 5000, what: 'armed-play-refused: the armed run plays and Play is pressed' });
+    const played = await page.evaluate(() => ({
+      hook: window.OSCILLA.studio.transport.debugRefuseNextPlay(),
+      ok: window.OSCILLA.app.studioPlay() }));
+    // An edit after the refused PLAY; nothing selected, the Inspector shows its Runtime state.
+    const edit = await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      const r = st.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'frequency',
+        value: 900 });
+      st.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [] } });
+      return { ok: r.ok, reason: r.reason || null };
+    });
+    const said = 'Studio did not start: The audio output is in use by another program.';
+    const after = await until(async () => {
+      const v = await view();
+      const live = await H.live(page);
+      return v.pressed === 'false' && !v.playing && !v.armed && v.runtimeState === 'idle'
+        && v.runtimeNodes === 0 && v.runtimeSources === 0 && v.engineNodes === 0
+        && v.engineSources === 0 && v.inspector !== null && v.inspector !== 'behind'
+        && live.includes(said) ? { ...v, live } : null;
+    }, { ms: 5000, what: 'armed-play-refused: Play released, the reason said, census 0, '
+      + 'the Inspector not behind' });
+    await page.evaluate(() => window.OSCILLA.measure.useMicrophone());
+    return { ...H.verdict({
+      hookRefusedOutside: outside.left && !outside.loopback && outside.hook === false,
+      armed: armedOk && !!armed,
+      refused: played.hook === true && played.ok === false,
+      edited: edit.ok,
+      released: after.pressed === 'false' && !after.playing && !after.armed,
+      census0: after.runtimeNodes === 0 && after.engineNodes === 0
+        && after.engineSources === 0,
+      announced: after.live.includes(said),
+      notBehind: after.inspector === 'not-applied',
+      refusalKept: after.lastError === 'claim-refused',
+    }), outside, armed, edit, after: { ...after, live: after.live.slice(-3) } };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
