@@ -658,10 +658,12 @@ test('the knob keeps capHi as its sheen unless the highlight shows on the cap in
   });
 
 // Slice C (SW-02, SW-07): a switch's highlight follows the knob's rule (d). The toggle's lever
-// and ball (control.edge, a grey metal that does not flip with the theme) and the slide's cap
-// (control.cap) each carry a sheen at hw-sheen; it is the depth highlight where the highlight
-// shows on that face in both themes, (b) |ΔL*| >= 3 and lighter, with (c) 3:1, and capHi where
-// it does not. Computed from tokens.css, so a palette change moves the paint with it.
+// and ball (control.edge, a grey metal that does not flip with the theme) carry a sheen at
+// hw-sheen; it is the depth highlight where the highlight shows on that face in both themes,
+// (b) |ΔL*| >= 3 and lighter, with (c) 3:1, and capHi where it does not. Computed from
+// tokens.css, so a palette change moves the paint with it. Review of slice C, finding 6: the
+// slide cap's capHi strip did not show in dark (ΔL* +1.26) and darkened the light cap (-1.41),
+// and the highlight does not show on control.cap, so a slide carries no sheen until D-PAL.
 test('a switch\'s sheen is the highlight where it shows on its face in both themes, else capHi',
   () => {
     const N = SYNTH_TOKEN_NAMES.control;
@@ -682,6 +684,11 @@ test('a switch\'s sheen is the highlight where it shows on its face in both them
       const want = shows(face) ? TOKENS.control.highlight : TOKENS.control.capHi;
       const sheens = [...svg.matchAll(/<\w+\b[^>]*\sdata-sheen[\w-]*=""[^>]*>/g)]
         .map((m) => m[0]);
+      if (what === 'slide') {
+        assert.deepEqual(sheens, [], 'the slide cap: no sheen until D-PAL\'s cap roles');
+        lines.push(`slide sheen on ${face}: none (D-PAL)`);
+        continue;
+      }
       assert.ok(sheens.length >= 1, `${what}: a sheen`);
       for (const el of sheens) {
         assert.match(el, /\sclass="opacity-hw-sheen"/, `${what}: at hw-sheen`);

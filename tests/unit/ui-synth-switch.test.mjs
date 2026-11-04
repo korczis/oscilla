@@ -142,6 +142,12 @@ const pointsOf = (el) => [...attrOf(el, 'd').matchAll(/[ML]\s*(-?[\d.]+)[\s,]+(-
 // (track), a tapered lever (root 4, tip 7, 18 long) ending in a ball r3.5 that points at the
 // selected legend, a side highlight at hw-sheen, and a copy of lever and ball in the depth shade
 // at hw-shadow, shadowDy (1) below, 2 while dragging. No housing; every hit stays 44.
+// Review of slice C: the washer is the quiet knurl with a control.edge rim (finding 4: a
+// track-grey washer round a darker nut read as a socket, and the nut's edge vanished on it);
+// lever and ball carry no outline, their depth is the cast shadow (finding 4: the surface.edge
+// outline was a cartoon line in dark and a white halo in light); the nut's lower facets are
+// shaded; the nut's flats lie top and bottom and the ball keeps its glint (finding 7: neither
+// was checked).
 test('slice C 1 (SW-02): a toggle is a bat-handle lever on a hex nut and washer, no housing',
   () => {
     for (const p of [BOOL, TWO]) {
@@ -157,13 +163,39 @@ test('slice C 1 (SW-02): a toggle is a bat-handle lever on a hex nut and washer,
           assert.equal(hex.length, 6, `${where}: a hexagon`);
           assert.match(attrOf(nut, 'd'), /Z$/, `${where}: closed`);
           for (const [x, y] of hex) near(Math.hypot(x, y), 8, 0.02, `${where}: nut vertex r`);
+          // Flats top and bottom: two vertices share the top y and two the bottom, and the
+          // other two are the nut's left and right corners, on the x axis.
+          const hy = hex.map(([, y]) => y);
+          for (const edgeY of [Math.min(...hy), Math.max(...hy)]) {
+            assert.equal(hex.filter(([, y]) => Math.abs(y - edgeY) < 1e-6).length, 2,
+              `${where}: a flat at y ${edgeY}`);
+          }
+          assert.deepEqual(hex.filter(([, y]) => Math.abs(y) < 1e-6).map(([x]) => x)
+            .sort((a, b) => a - b), [-8, 8], `${where}: its corners left and right`);
           assert.equal(attrOf(nut, 'fill'), TOKENS.control.capHi, `${where}: the nut in capHi`);
           assert.equal(attrOf(nut, 'stroke'), TOKENS.control.edge, `${where}: its edge`);
           assert.equal(n(nut, 'stroke-width'), 1.5, `${where}: its edge 1.5`);
           const washer = part(svg, 'data-washer');
           assert.ok(washer && washer.startsWith('<circle'), `${where}: a washer`);
           assert.deepEqual([n(washer, 'cx'), n(washer, 'cy'), n(washer, 'r')], [0, 0, 9.5]);
-          assert.equal(attrOf(washer, 'fill'), TOKENS.control.track, `${where}: in track`);
+          assert.equal(attrOf(washer, 'fill'), TOKENS.control.knurl, `${where}: the quiet knurl`);
+          assert.equal(attrOf(washer, 'stroke'), TOKENS.control.edge, `${where}: its rim`);
+          assert.equal(n(washer, 'stroke-width'), 1, `${where}: a 1 rim`);
+          // The nut's lower facets, away from the light, in the bezel's quiet neutral: three
+          // of its vertices and its centre, over the nut and under the lever.
+          const facet = part(svg, 'data-facet');
+          assert.ok(facet && facet.startsWith('<path'), `${where}: a shaded facet`);
+          const fp = pointsOf(facet);
+          for (const [x, y] of fp) {
+            assert.ok(Math.hypot(x, y) < 1e-6 || hex.some(([hx, hy]) => Math.abs(hx - x) < 1e-6
+              && Math.abs(hy - y) < 1e-6), `${where}: the facet's (${x}, ${y}) is the nut's`);
+          }
+          const cx = fp.reduce((a, [x]) => a + x, 0) / fp.length;
+          const cy = fp.reduce((a, [, y]) => a + y, 0) / fp.length;
+          assert.ok(cx > 0 && cy > 0, `${where}: the lower right, away from the light`);
+          assert.equal(attrOf(facet, 'fill'), TOKENS.control.bezel, `${where}: the facet's paint`);
+          assert.equal(attrOf(facet, 'class'), undefined, `${where}: opaque, no intensity`);
+          assert.ok(svg.indexOf('data-nut=""') < svg.indexOf('data-facet=""'), 'over the nut');
           assert.ok(svg.indexOf('data-washer=""') < svg.indexOf('data-nut=""'), 'under the nut');
           // The lever: a trapezoid from the nut's centre, 4 wide there, 7 at 18 out.
           const dir = Math.sign(L.options[i].legend.y);
@@ -182,7 +214,9 @@ test('slice C 1 (SW-02): a toggle is a bat-handle lever on a hex nut and washer,
           assert.deepEqual([n(ball, 'cx'), n(ball, 'cy'), n(ball, 'r')], [0, 18 * dir, 3.5]);
           for (const el of [lever, ball]) {
             assert.equal(attrOf(el, 'fill'), TOKENS.control.edge, `${where}: grey metal`);
+            assert.equal(attrOf(el, 'stroke'), 'none', `${where}: no outline`);
           }
+          assert.ok(svg.indexOf('data-facet=""') < svg.indexOf('data-lever=""'), 'the lever over');
           assert.ok(svg.indexOf('data-nut=""') < svg.indexOf('data-lever=""')
             && svg.indexOf('data-lever=""') < svg.indexOf('data-ball=""'), `${where}: in order`);
           // The highlight and the shadow.
@@ -192,6 +226,15 @@ test('slice C 1 (SW-02): a toggle is a bat-handle lever on a hex nut and washer,
             assert.equal(attrOf(s, 'class'), 'opacity-hw-sheen', `${where}: at hw-sheen`);
             assert.ok(svg.indexOf(s) > svg.indexOf('data-ball=""'), `${where}: over the lever`);
           }
+          // The ball's glint, on its upper left, inside it.
+          const glint = part(svg, 'data-sheen-ball');
+          assert.ok(glint && glint.startsWith('<circle'), `${where}: the ball's glint`);
+          assert.equal(attrOf(glint, 'class'), 'opacity-hw-sheen', `${where}: at hw-sheen`);
+          assert.equal(attrOf(glint, 'fill'), attrOf(sheen[0], 'fill'), `${where}: the sheen's`);
+          const [gx, gy] = [n(glint, 'cx'), n(glint, 'cy') - 18 * dir];
+          assert.ok(gx < 0 && gy < 0, `${where}: the glint up and left of the ball's centre`);
+          assert.ok(Math.hypot(gx, gy) + n(glint, 'r') <= 3.5 + 1e-6, `${where}: inside the ball`);
+          assert.ok(svg.indexOf(glint) > svg.indexOf('data-ball=""'), `${where}: over the ball`);
           const sh = part(svg, 'data-shadow');
           assert.ok(sh && sh.startsWith('<path'), `${where}: the lever's shadow`);
           assert.equal(attrOf(sh, 'class'), 'opacity-hw-shadow', `${where}: at hw-shadow`);
@@ -224,6 +267,62 @@ test('slice C 1 (SW-02): a toggle is a bat-handle lever on a hex nut and washer,
     }
   });
 
+/** CIELAB L* of a #rrggbb colour (ui-synth-tokens.test.mjs's): how light a part reads. */
+const lstarOf = (hex) => {
+  const y = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+    .reduce((a, c, i) => a + [0.2126, 0.7152, 0.0722][i] * c, 0);
+  const d = 6 / 29;
+  return 116 * (y > d ** 3 ? Math.cbrt(y) : y / (3 * d * d) + 4 / 29) - 16;
+};
+
+// Review of slice C, findings 3 and 4, on the resolved colours of both themes. The washer is
+// darker than the nut, so the nut reads as a part standing on it, not a socket cut into a disk,
+// and the nut's edge holds 3:1 on the washer. A disabled toggle is quieter than an enabled one:
+// its lever and ball in a quieter role than control.edge (control.disabled was the same token,
+// so nothing changed: M7), its nut never lighter than the enabled nut (plateLo made it the
+// brightest part in light), its nut edge and washer rim the knob's quiet disabled edge
+// (control.knurl), no facet and no highlight. The lever still differs from the plate.
+test('review C 3/4: the washer is darker than the nut; a disabled toggle is quieter, not louder',
+  async () => {
+    const themes = await tokenThemes();
+    const hex = (t, paint) => tokenHex(t, tokenName(paint));
+    const plates = [TOKENS.surface.card, TOKENS.surface.plateHi];
+    for (const p of [BOOL, TWO]) {
+      for (const value of (p.type === 'boolean' ? [false, true] : p.options.map((o) => o[0]))) {
+        const on = draw(p, { value });
+        const off = draw(p, { value, state: { disabled: true } });
+        const where = `${p.key} ${value}`;
+        for (const [theme, t] of Object.entries(themes)) {
+          const w = `${where} ${theme}`;
+          const L = (svg, flag, a = 'fill') => lstarOf(hex(t, attrOf(part(svg, flag), a)));
+          assert.ok(L(on, 'data-washer') < L(on, 'data-nut'), `${w}: the washer `
+            + `${L(on, 'data-washer').toFixed(1)} darker than the nut ${L(on, 'data-nut').toFixed(1)}`);
+          const edgeOnWasher = contrastOf(hex(t, attrOf(part(on, 'data-nut'), 'stroke')),
+            hex(t, attrOf(part(on, 'data-washer'), 'fill')));
+          assert.ok(edgeOnWasher >= 3, `${w}: the nut's edge on the washer ${edgeOnWasher.toFixed(2)}`);
+          assert.ok(L(off, 'data-nut') <= L(on, 'data-nut') + 1e-9, `${w}: the disabled nut `
+            + `${L(off, 'data-nut').toFixed(1)} never lighter than ${L(on, 'data-nut').toFixed(1)}`);
+          for (const flag of ['data-lever', 'data-ball']) {
+            const lit = hex(t, attrOf(part(on, flag), 'fill'));
+            const dim = hex(t, attrOf(part(off, flag), 'fill'));
+            for (const ground of plates.map((g) => tokenHex(t, tokenName(g)))) {
+              const [a, b] = [contrastOf(dim, ground), contrastOf(lit, ground)];
+              assert.ok(a < b, `${w}: the disabled ${flag} ${a.toFixed(2)} quieter than ${b.toFixed(2)}`);
+              assert.ok(a >= 1.05, `${w}: the disabled ${flag} still seen on the plate ${a.toFixed(2)}`);
+            }
+          }
+        }
+        assert.equal(attrOf(part(off, 'data-nut'), 'stroke'), TOKENS.control.knurl, where);
+        assert.equal(attrOf(part(off, 'data-washer'), 'stroke'), TOKENS.control.knurl, where);
+        assert.equal(part(off, 'data-facet'), null, `${where}: a flat nut`);
+        assert.equal(parts(off, 'data-sheen').length + parts(off, 'data-sheen-ball').length, 0,
+          `${where}: no highlight`);
+        assert.ok(part(off, 'data-shadow'), `${where}: the lever still casts its shadow`);
+      }
+    }
+  });
+
 // ---------------------------------------------------------------- slide
 
 test('slide: a slot 4 wide, the cap at the selected index, a detent per position', () => {
@@ -244,8 +343,11 @@ test('slide: a slot 4 wide, the cap at the selected index, a detent per position
 });
 
 // Slice C, assertion 2 (SW-06): the detent marks sat on the far side of the cap from the
-// legends and read as minus signs. They lie between the cap and its legend: from capW/2 + 2 to
-// 4 further, the legend 4 past that; the hit box starts just left of the cap (-capW/2 - 1).
+// legends and read as minus signs. They lie on the legend side, ending capW/2 + 6 out, the
+// legend 4 past that. Review of slice C: a 4-unit mark just before each legend read as a list
+// dash ("- Sqr") (finding 5), so each detent starts at the slot (slotW/2 + 1.5) and the marks
+// read as a scale the cap travels along; and a hit box starting at -capW/2 - 1 put the focus
+// ring's stroke over the cap's left edge (finding 2), so it starts 4 left of the cap.
 test('slice C 2 (SW-06): a slide\'s detents lie on the legend side, between cap and legend',
   () => {
     for (const p of [ENUM(3), WAVE]) {
@@ -254,8 +356,8 @@ test('slice C 2 (SW-06): a slide\'s detents lie on the legend side, between cap 
         const svg = draw(p, { zoom, value: p.options[1][0] });
         const capW = n(part(svg, 'data-cap'), 'width');
         assert.equal(capW, 14, `${p.key}: the cap 14 wide`);
-        const tickIn = capW / 2 + 2;
-        const tickOut = tickIn + 4;
+        const tickIn = n(part(svg, 'data-slot'), 'width') / 2 + 1.5;
+        const tickOut = capW / 2 + 6;
         const detents = parts(svg, 'data-detent');
         assert.equal(detents.length, p.options.length, `${p.key}: a detent per position`);
         for (const [i, d] of detents.entries()) {
@@ -266,18 +368,52 @@ test('slice C 2 (SW-06): a slide\'s detents lie on the legend side, between cap 
         for (const o of L.options) {
           assert.equal(o.legend.x, tickOut + 4, `${p.key} at ${zoom}: legendX`);
           assert.equal(o.legend.anchor, 'start');
-          assert.equal(o.hit.x, -capW / 2 - 1, `${p.key} at ${zoom}: the hit box from the cap`);
+          assert.equal(o.hit.x, -capW / 2 - 4, `${p.key} at ${zoom}: the hit box 4 left of the cap`);
           assert.ok(inside(legendBox(o.legend), o.hit), `${p.key} at ${zoom}: legend in its hit`);
         }
       }
     }
   });
 
+// Review of slice C, finding 2: with the hit box from -capW/2 - 1 the focus ring (its box inset
+// 1, stroke 2) painted over the cap's left edge, and at zoom 2 and above a pitch of 22 put its
+// top and bottom across the cap too. The ring's stroke never meets the cap's box (stroke
+// included), for every focused option at every selected one and zoom.
+test('review C 2: a slide\'s focus ring never crosses its cap', () => {
+  for (const p of [ENUM(3), WAVE, ...REGISTRY_CHOICES.filter(({ p: q }) => switchStyle(q)
+    === 'slide').map(({ p: q }) => q)]) {
+    for (const zoom of [0.25, 1, 1.45, 2, 3]) {
+      const L = switchLayout(p, { zoom });
+      for (const [v] of p.options) {
+        for (const o of L.options) {
+          const where = `${p.key} at ${zoom}, ${v} selected, ${o.value} focused`;
+          const svg = draw(p, { zoom, value: v, state: { focus: { option: o.value } } });
+          const ring = part(svg, 'data-focus');
+          const sw = n(ring, 'stroke-width') / 2;
+          const box = (el, d) => ({ x: n(el, 'x') - d, y: n(el, 'y') - d,
+            width: n(el, 'width') + 2 * d, height: n(el, 'height') + 2 * d });
+          const outer = box(ring, sw);
+          const inner = box(ring, -sw);
+          const capEl = part(svg, 'data-cap');
+          const cap = box(capEl, n(capEl, 'stroke-width') / 2);
+          assert.ok(inside(cap, inner, -1e-9) || !overlap(cap, outer), `${where}: the ring `
+            + `${JSON.stringify(outer)} crosses the cap ${JSON.stringify(cap)}`);
+        }
+      }
+    }
+  }
+});
+
 // Slice C, assertion 3 (SW-07): the cap was a flat 16 x 12 box with one bar, and the slot ran
-// past it at an end stop. The cap is 14 x 18 with three grip lines (edge 1, pointer 1.5,
-// edge 1) and a sheen strip along its top; the slot ends capH/2 - 1 past the outermost
-// position, so at either end stop the cap hides the slot's end.
-test('slice C 3 (SW-07): a slide cap is 14 x 18 with three grips and a top sheen, no nub',
+// past it at an end stop. The cap is 14 x 18 with three grip lines; the slot ends capH/2 - 1
+// past the outermost position, so at either end stop the cap hides the slot's end. Review of
+// slice C: three equal bars in an outlined box read as a menu icon (finding 5), so the outer two
+// are quiet ridges (control.knurl, 1) inside the cap and the middle one is the index line
+// (control.pointer, 1.5) running past the cap's edge to its detent; and the top sheen strip in
+// capHi did not show in dark (ΔL* +1.26) and darkened the light cap (finding 6), while the
+// highlight is not visible on the cap in both themes (rule b), so the cap has no sheen until
+// D-PAL's cap roles (todo below).
+test('slice C 3 (SW-07): a slide cap is 14 x 18 with a ridged grip and an index line, no nub',
   () => {
     for (const p of [ENUM(3), WAVE]) {
       for (const zoom of [1, 3]) {
@@ -296,21 +432,25 @@ test('slice C 3 (SW-07): a slide cap is 14 x 18 with three grips and a top sheen
             assert.equal(grips.length, 3, `${where}: three grip lines`);
             assert.deepEqual(grips.map((g) => n(g, 'stroke-width')), [1, 1.5, 1], where);
             const ptr = state.disabled ? TOKENS.control.disabled : TOKENS.control.pointer;
-            assert.deepEqual(grips.map((g) => attrOf(g, 'stroke')), [TOKENS.control.edge, ptr,
-              TOKENS.control.edge], `${where}: edge, pointer, edge`);
-            assert.equal(n(grips[1], 'y1'), yc, `${where}: the middle grip at the cap's centre`);
+            assert.deepEqual(grips.map((g) => attrOf(g, 'stroke')), [TOKENS.control.knurl, ptr,
+              TOKENS.control.knurl], `${where}: ridge, index, ridge`);
+            assert.equal(n(grips[1], 'y1'), yc, `${where}: the index line at the cap's centre`);
             for (const g of grips) {
               assert.equal(n(g, 'y1'), n(g, 'y2'), `${where}: a level grip`);
-              assert.ok(n(g, 'x1') > -7 && n(g, 'x2') < 7, `${where}: inside the cap`);
+              assert.ok(n(g, 'x1') > -7, `${where}: from inside the cap`);
               assert.ok(Math.abs(n(g, 'y1') - yc) + n(g, 'stroke-width') / 2 < 9, where);
             }
-            const sheen = part(svg, 'data-sheen');
-            assert.ok(sheen, `${where}: a sheen strip`);
-            assert.equal(attrOf(sheen, 'class'), 'opacity-hw-sheen', where);
-            assert.ok(n(sheen, 'y') >= top && n(sheen, 'y') + n(sheen, 'height') <= n(grips[0],
-              'y1') - 0.5, `${where}: along the top, above the grips`);
-            assert.ok(n(sheen, 'x') >= -7 && n(sheen, 'x') + n(sheen, 'width') <= 7, where);
-            assert.ok(svg.indexOf(sheen) > svg.indexOf(cap), `${where}: over the cap`);
+            for (const g of [grips[0], grips[2]]) {
+              assert.ok(n(g, 'x2') < 7, `${where}: a ridge inside the cap`);
+            }
+            // The index line runs past the cap's edge (its stroke included) to the detent.
+            const detent = parts(svg, 'data-detent')[i];
+            assert.ok(n(grips[1], 'x2') > 7 + n(cap, 'stroke-width') / 2 + 0.5,
+              `${where}: the index line past the cap`);
+            assert.ok(n(grips[1], 'x2') > n(detent, 'x1') && n(grips[1], 'x2') < n(detent, 'x2'),
+              `${where}: ending on its detent`);
+            assert.ok(svg.indexOf(grips[1]) > svg.indexOf(cap), `${where}: over the cap`);
+            assert.equal(parts(svg, 'data-sheen').length, 0, `${where}: no sheen (D-PAL)`);
             // No nub: the slot (its stroke too) ends inside the cap at an end stop.
             const slot = part(svg, 'data-slot');
             const sw = n(slot, 'stroke-width') / 2;
@@ -327,6 +467,9 @@ test('slice C 3 (SW-07): a slide cap is 14 x 18 with three grips and a top sheen
       }
     }
   });
+
+test.todo('D-PAL (oscilla-21, Q071): the slide cap\'s top sheen, once --osc-knob-cap-hi '
+  + 'shows on the cap in both themes (rule b); also: a dark cap lighter than its plate');
 
 // ---------------------------------------------------------------- rotary
 
@@ -381,10 +524,14 @@ test('window: the dial, a display-window frame for the caller\'s text, a legend 
 });
 
 // Slice C, assertion 4 (SW-13, C4): focus ringed only the legend, nothing on the dial. A focused
-// rotary or window also rings the dial: a circle concentric with it at its skirt + 3, in the
-// focus colour, 2 wide, drawn under the detents so it never covers the scale; the legend's box
-// stays ringed too. A toggle and a slide have no dial to ring.
-test('slice C 4 (SW-13): a focused dial is ringed at its skirt + 3, and its legend box too',
+// rotary or window also rings the dial: a circle concentric with it, in the focus colour, 2
+// wide; the legend's box stays ringed too. A toggle and a slide have no dial to ring. Review of
+// slice C, finding 1: the plan's skirt + 3 lay on the detent scale (18.5k to 21.75k), covering
+// 46% of each tick beside the 44 knob and 90% beside a 30 one, and the cyan selected detent
+// merged into the ring (1.14:1). C4's own words hold instead: outside the scale, never over it.
+// The ring is 1 past the ticks' outer end (tickOut·k + 2, 2 wide) at every knob width, and the
+// numerals, leaders and hit boxes all clear it.
+test('slice C 4 (SW-13): a focused dial is ringed outside its scale, and its legend box too',
   () => {
     for (const p of DIALS) {
       for (const knob of KNOB_WIDTHS) {
@@ -396,11 +543,30 @@ test('slice C 4 (SW-13): a focused dial is ringed at its skirt + 3, and its lege
           const ring = part(svg, 'data-dial-focus');
           assert.ok(ring && ring.startsWith('<circle'), `${where}: the dial's ring`);
           assert.deepEqual([n(ring, 'cx'), n(ring, 'cy')], [0, 0], `${where}: concentric`);
-          near(n(ring, 'r'), L.dial.skirt + 3, 0.01, `${where}: at skirt + 3`);
+          const k = (knob ?? CONTROL_BOX.knob.width) / CONTROL_BOX.knob.width;
+          near(n(ring, 'r'), 21.75 * k + 2, 0.01, `${where}: 1 past the ticks`);
+          // The ring's band never meets the scale's: every detent's radii, butt corners in.
+          const [r0, r1] = [n(ring, 'r') - 1, n(ring, 'r') + 1];
+          for (const d of parts(svg, 'data-detent')) {
+            const half = n(d, 'stroke-width') / 2;
+            const ends = [Math.hypot(n(d, 'x1'), n(d, 'y1')), Math.hypot(n(d, 'x2'), n(d, 'y2'))];
+            const lo = Math.min(...ends);
+            const hi = Math.hypot(Math.max(...ends), half);
+            near(lo, 18.5 * k, 0.02, `${where}: a detent from tickIn·k`);
+            assert.ok(hi < r0 || lo > r1, `${where}: the ring [${r0}, ${r1}] on the scale `
+              + `[${lo}, ${hi}]`);
+          }
+          for (const lead of parts(svg, 'data-leader')) {
+            assert.ok(Math.hypot(n(lead, 'x1'), n(lead, 'y1')) >= r1 + 0.5 - 1e-6,
+              `${where}: a leader from outside the ring`);
+          }
+          for (const o of L.options.filter((x) => x.numeral)) {
+            assert.ok(reachOf(numeralBox(o.numeral)) >= r1 + 1 - 1e-6,
+              `${where}: numeral ${o.number} clear of the ring`);
+          }
           assert.equal(attrOf(ring, 'fill'), 'none', where);
           assert.equal(attrOf(ring, 'stroke'), TOKENS.control.focus, `${where}: the focus colour`);
           assert.equal(n(ring, 'stroke-width'), 2, `${where}: 2 wide`);
-          assert.ok(svg.indexOf(ring) < svg.indexOf('data-detent=""'), `${where}: under the scale`);
           const box = part(svg, 'data-focus');
           const o = focus === true ? L.options.find((x) => x.value === p.default) : other;
           assert.ok(box, `${where}: the legend's box`);
@@ -804,7 +970,7 @@ test('edges, lever, ticks and LED hold 3:1 on surface-2 and surface-3, legends 4
   const grounds = ['--osc-surface-2', '--osc-surface-3'];
   assert.deepEqual([N.surface.card, N.surface.plateHi], grounds);
   const graphic = [['edge', N.control.edge], ['lever', N.control.edge],
-    ['washer', N.control.track], ['grip', N.control.pointer],
+    ['washer rim', N.control.edge], ['grip', N.control.pointer],
     ['detent', N.control.track], ['selected detent', N.control.ring],
     ['focus', N.control.focus], ['LED lit', N.control.ring], ['LED ring', N.control.edge]];
   const text = [['legend', N.text.label], ['selected legend', N.text.value]];
@@ -826,7 +992,7 @@ test('edges, lever, ticks and LED hold 3:1 on surface-2 and surface-3, legends 4
   const svg = draw(BOOL, { led: { source: 'x', lit: false } });
   assert.equal(attrOf(part(svg, 'data-nut'), 'stroke'), TOKENS.control.edge);
   assert.equal(attrOf(part(svg, 'data-lever'), 'fill'), TOKENS.control.edge);
-  assert.equal(attrOf(part(svg, 'data-washer'), 'fill'), TOKENS.control.track);
+  assert.equal(attrOf(part(svg, 'data-washer'), 'stroke'), TOKENS.control.edge);
   assert.equal(attrOf(part(svg, 'data-lens'), 'stroke'), TOKENS.control.edge);
   for (const d of parts(draw(WAVE), 'data-detent')) {
     assert.ok([TOKENS.control.track, TOKENS.control.ring].includes(attrOf(d, 'stroke')));
@@ -842,16 +1008,20 @@ test('the window frame and the toggle\'s nut edge are control.edge, 3:1 on what 
         const svg = draw(p, { state });
         const nut = part(svg, 'data-nut');
         const washer = part(svg, 'data-washer');
-        const edge = state.disabled ? TOKENS.control.disabled : TOKENS.control.edge;
+        // Disabled, both are the knob's quiet disabled edge (review of slice C, finding 3): a
+        // disabled control is exempt from 3:1 (WCAG 1.4.11), and it must not look enabled.
+        const edge = state.disabled ? TOKENS.control.knurl : TOKENS.control.edge;
         assert.equal(attrOf(nut, 'stroke'), edge, `${p.key}: the nut's edge`);
+        assert.equal(attrOf(washer, 'stroke'), edge, `${p.key}: the washer's rim`);
+        if (state.disabled) continue;
         for (const [theme, t] of Object.entries(themes)) {
-          // The nut's edge on its face; the washer, the silhouette, on the plate.
+          // The nut's edge on its face; the washer's rim, the silhouette, on the plate.
           const r = ratio(t, attrOf(nut, 'stroke'), attrOf(nut, 'fill'));
           assert.ok(r >= 3, `${theme} ${p.key} ${JSON.stringify(state)}: the nut edge on the `
             + `nut ${r.toFixed(2)}`);
           for (const ground of [TOKENS.surface.card, TOKENS.surface.plateHi]) {
-            const w = ratio(t, attrOf(washer, 'fill'), ground);
-            assert.ok(w >= 3, `${theme} ${p.key}: the washer on ${ground} ${w.toFixed(2)}`);
+            const w = ratio(t, attrOf(washer, 'stroke'), ground);
+            assert.ok(w >= 3, `${theme} ${p.key}: the washer's rim on ${ground} ${w.toFixed(2)}`);
           }
         }
       }
@@ -930,9 +1100,12 @@ test('states: hover lights the edge and the hovered legend, focus rings the opti
     assert.equal(n(own, 'x'), Number((sel.hit.x + 1).toFixed(2)), 'focus true: the selected one');
     const off = draw(p, { state: { disabled: true } });
     assert.match(off, /^<g [^>]*data-disabled=""/);
-    const ind = part(off, 'data-lever') || part(off, 'data-grip') || part(off, 'data-pointer');
-    assert.equal(attrOf(ind, attrOf(ind, 'fill') === 'none' || /<line/.test(ind) ? 'stroke'
-      : 'fill'), TOKENS.control.disabled, `${p.key}: the indicator dims`);
+    const lever = part(off, 'data-lever');
+    // A toggle's lever is control.edge enabled, so it dims to a quieter role (review of slice
+    // C, finding 3); a slide's index line and a dial's pointer dim to control.disabled.
+    const ind = lever || parts(off, 'data-grip')[1] || part(off, 'data-pointer');
+    assert.equal(attrOf(ind, lever ? 'fill' : 'stroke'), lever ? TOKENS.control.bezel
+      : TOKENS.control.disabled, `${p.key}: the indicator dims`);
   }
 });
 

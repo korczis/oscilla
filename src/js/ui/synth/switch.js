@@ -1,12 +1,13 @@
 // The synth-theme layer's switches drawn as hardware (plan F013 entry 5, slice S5; K058): pure
 // functions, no listener, no document. An enum or a boolean is drawn by its position count:
-//   2      toggle   a bat handle (slice C, SW-02): a hex nut r8 on a washer r9.5, a lever
-//                   tapering from 4 to 7 over 18 with a ball r3.5, pointing at the selected
-//                   legend (the second option up, as controlSvg's switch has it), its shadow
-//                   and highlight; an optional LED beside it
-//   3-4    slide    a slot 4 wide hidden under a 14 x 18 cap at either stop, three grip lines,
-//                   a detent per position between the cap and its legend, legends to the right
-//                   (index 0 at the bottom; SW-06, SW-07)
+//   2      toggle   a bat handle (slice C, SW-02): a hex nut r8, its lower facets shaded, on a
+//                   darker washer r9.5, a lever tapering from 4 to 7 over 18 with a ball r3.5,
+//                   pointing at the selected legend (the second option up, as controlSvg's
+//                   switch has it), its shadow and highlight; an optional LED beside it
+//   3-4    slide    a slot 4 wide hidden under a 14 x 18 cap at either stop, two ridges and an
+//                   index line running past the cap to its detent, a detent per position from
+//                   the slot towards its legend, legends to the right (index 0 at the bottom;
+//                   SW-06, SW-07)
 //   5-8    rotary   a detented rotary selector: the knob's face itself (knob.js's knobFace:
 //                   cast shadow, toothed skirt, side wall, cap, sheen, hover overlay, pointer),
 //                   scaled to the knob beside it (`knob`, graph units, CONTROL_BOX.knob.width by
@@ -73,13 +74,15 @@ const PAD = 6;
  *  `nutW` edge) on a washer, a lever `length` long from the nut's centre, `root` wide there and
  *  `tip` wide at its end, a ball of radius `ball` on that end, the legends `gap` past the ball,
  *  the lever's shadow shadowDy (shadowDragDy while dragging) below it. */
-const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, root: 4, tip: 7, length: 18,
-  ball: 3.5, leverW: 1, gap: 4, ledGap: 3.5, shadowDy: 1, shadowDragDy: 2 });
-/** A slide (slice C, SW-06, SW-07), graph units: a slot slotW wide, a capW x capH cap with three
- *  grip lines gripGap apart, a detent from capW / 2 + 2 to 4 further, the legend 4 past it. */
-const SLIDE = Object.freeze({ slotW: 4, capW: 14, capH: 18, tickIn: 9, tickOut: 13,
-  legendX: 17, pitchPad: 8, gripW: 1.5, gripEdgeW: 1, gripGap: 4, gripX: 5, sheenH: 2.5,
-  sheenInset: 1.5, shadowDy: 1, shadowDragDy: 2 });
+const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, washerW: 1, root: 4, tip: 7,
+  length: 18, ball: 3.5, gap: 4, ledGap: 3.5, shadowDy: 1, shadowDragDy: 2 });
+/** A slide (slice C, SW-06, SW-07), graph units: a slot slotW wide, a capW x capH cap with two
+ *  ridges gripGap from its index line (gripX either side, the index line to indexOut), a detent
+ *  from 1.5 past the slot to capW / 2 + 6, the legend 4 past it; each hit box's edge is `clear`
+ *  past the cap's on every side, so the focus ring (inset 1, 2 wide) clears the cap's stroke. */
+const SLIDE = Object.freeze({ slotW: 4, capW: 14, capH: 18, tickIn: 3.5, tickOut: 13,
+  legendX: 17, pitchPad: 8, clear: 4, gripW: 1.5, gripEdgeW: 1, gripGap: 4, gripX: 5,
+  indexOut: 9, shadowDy: 1, shadowDragDy: 2 });
 /** A dial in the units of the knob beside it (scaled by knob / CONTROL_BOX.knob.width): the
  *  knob's own face (knob.js's knobFace, one drawing for both: review of slice A, finding 5) and a
  *  detent per position from outside the skirt to r 21.75, its butt corners in the knob's box. */
@@ -92,8 +95,9 @@ const RING = Object.freeze({ radius: 60, radiusStep: 2, radiusMax: 240, margin: 
 /** A dial of this many detents or more numbers them. */
 export const NUMBERED_MIN = 7;
 const WINDOW = Object.freeze({ minW: 88, pad: 10, gap: 8, gridGap: 10, gridMaxW: 6 * HIT_PX });
-/** A focused dial's ring past its skirt, and its width (C4: outside the skirt, under the scale). */
-const DIAL_FOCUS = Object.freeze({ gap: 3, w: 2 });
+/** A focused dial's ring: `gap` past its ticks' outer end, `w` wide (C4: outside the scale,
+ *  never over it; review of slice C, finding 1: at the skirt + 3 it lay on the ticks). */
+const DIAL_FOCUS = Object.freeze({ gap: 1, w: 2 });
 const SHADOW_CLASS = 'opacity-hw-shadow';
 const SHEEN_CLASS = 'opacity-hw-sheen';
 
@@ -151,7 +155,7 @@ function textBox(lg) {
 }
 
 /** How far a toggle's lever reaches from the nut's centre, its ball's edge included. */
-const LEVER_REACH = TOGGLE.length + TOGGLE.ball + TOGGLE.leverW / 2;
+const LEVER_REACH = TOGGLE.length + TOGGLE.ball;
 
 function toggleLayout(opts, H, F) {
   const T = TOGGLE;
@@ -166,17 +170,17 @@ function toggleLayout(opts, H, F) {
     const hw = up(Math.max(H, w + 2 * PAD, 2 * T.washer + 2 * PAD));
     return option(i, o, legend, rect(-hw / 2, dir < 0 ? -reachY : 0, hw, reachY));
   });
-  const side = Math.max(T.washer, T.nut + T.nutW / 2, T.ball + T.leverW / 2);
+  const side = Math.max(T.washer + T.washerW / 2, T.nut + T.nutW / 2, T.ball);
   return { options, mech: [-side, -LEVER_REACH, side, T.length + T.ball + T.shadowDragDy] };
 }
 
 function slideLayout(opts, H, F) {
   const S = SLIDE;
   const n = opts.length;
-  const pitch = up(Math.max(H, F + S.pitchPad));
+  const pitch = up(Math.max(H, F + S.pitchPad, S.capH + 2 * S.clear));
   const yAt = (i) => num(((n - 1) / 2 - i) * pitch);
-  // The hit box starts just left of the cap, so a press on the cap is its option's.
-  const x0 = -S.capW / 2 - 1;
+  // The hit box starts S.clear left of the cap, so a press on the cap is its option's.
+  const x0 = -S.capW / 2 - S.clear;
   const options = opts.map((o, i) => {
     const w = legendWidth(o[2], F);
     const legend = { x: S.legendX, y: yAt(i), anchor: 'start', size: F, width: w };
@@ -205,22 +209,28 @@ const grown = (r, d) => ({ x: r.x - d, y: r.y - d, width: r.width + 2 * d,
 /**
  * The dial of n detents beside a knob `knob` units wide, legends F units: its scale, skirt and
  * tick radius; the numerals when `numbers` (the least radius, from the ticks outward,
- * at which every numeral clears the ticks by RING.numberGap and its neighbours by
- * RING.numberApart); `radius`, the circle that holds the dial and its numerals; `extent`, the
- * half side of the square that does; and `leaderIn`, where a leader may start.
+ * at which every numeral clears the ticks by RING.numberGap, the focus ring and its neighbours
+ * by RING.numberApart); `radius`, the circle that holds the dial, its focus ring and its
+ * numerals; `extent`, the half side of the square that does; and `leaderIn`, where a leader may
+ * start (past the focus ring).
  */
 function dialOf(n, knob, F, numbers) {
   const k = knob / CONTROL_BOX.knob.width;
   const tickOut = DIAL.tickOut * k;
-  const base = (CONTROL_BOX.knob.width / 2) * k + RING.margin;
+  // A focused dial's ring lies outside the scale, so all that surrounds the dial clears it.
+  const ringOut = tickOut + DIAL_FOCUS.gap + DIAL_FOCUS.w;
+  const knobR = (CONTROL_BOX.knob.width / 2) * k;
+  const base = Math.max(knobR, ringOut) + RING.margin;
   if (!numbers) {
     return { scale: k, skirt: num(KNOB.skirt * k), tickOut: num(tickOut), numerals: null,
-      radius: num(base), extent: num(base), leaderIn: num(base + RING.leaderGap - RING.margin) };
+      radius: num(base), extent: num(base),
+      leaderIn: num(Math.max(knobR + RING.leaderGap, ringOut + RING.margin)) };
   }
+  const least = Math.max(tickOut + RING.numberGap, ringOut + RING.numberApart);
   for (let r = tickOut; ; r += RING.numberStep) {
     const ms = numeralsAt(n, r, F);
     const boxes = ms.map(textBox);
-    const clear = boxes.every((b) => reach(b) >= tickOut + RING.numberGap);
+    const clear = boxes.every((b) => reach(b) >= least);
     const apart = boxes.every((a, i) => boxes.slice(i + 1).every((b) => !overlaps(grown(a,
       RING.numberApart / 2), grown(b, RING.numberApart / 2))));
     if (clear && apart) {
@@ -394,8 +404,11 @@ export function switchOptions(param, opts) {
 // ---------------------------------------------------------------- the drawing
 
 const pathOf = (pts) => `M ${pts.map((p) => p.join(' ')).join(' L ')} Z`;
-/** The nut's six vertices, flats top and bottom. */
-const NUT = pathOf(Array.from({ length: 6 }, (_, i) => polar(TOGGLE.nut, 30 + 60 * i)));
+/** The nut's six vertices, flats top and bottom, and its two lower-right facets (with its
+ *  centre), away from the light. */
+const NUT_AT = Array.from({ length: 6 }, (_, i) => polar(TOGGLE.nut, 30 + 60 * i));
+const NUT = pathOf(NUT_AT);
+const FACET = pathOf([[0, 0], ...NUT_AT.slice(1, 4)]);
 
 /** The lever and its ball as one outline, `dir` 1 down or -1 up, `dy` below: the shadow's shape
  *  (one path, so where lever and ball meet is not shaded twice). It starts at the ball's far
@@ -412,12 +425,17 @@ function leverOutline(dir, dy) {
 }
 
 /**
- * The bat-handle toggle (SW-02): washer (control.track), hex nut (capHi, its edge control.edge,
- * control.pointer on hover), the lever's shadow (control.shade at hw-shadow), the tapered lever
- * and its ball in control.edge (a grey metal that keeps its tone in both themes, 3:1 on the
- * plates and on the nut), and their highlight (control.highlight at hw-sheen: it shows on
- * control.edge in both themes, amendment (b) and (c); ui-synth-tokens.test.mjs). Disabled (C1):
- * the nut flat in plateLo, lever and edges control.disabled, no highlight.
+ * The bat-handle toggle (SW-02): the washer (control.knurl, darker than the nut in both themes,
+ * its rim control.edge, 3:1 on the plates), the hex nut (capHi, its edge control.edge, 3:1 on
+ * nut and washer, control.pointer on hover) with its lower facets in control.bezel (no depth
+ * role shows on capHi in both themes, rule b), the lever's shadow (control.shade at hw-shadow),
+ * the tapered lever and its ball in control.edge (a grey metal that keeps its tone in both
+ * themes, 3:1 on the plates and on the nut; no outline, the shadow gives its depth), and their
+ * highlight (control.highlight at hw-sheen: it shows on control.edge in both themes, amendment
+ * (b) and (c); ui-synth-tokens.test.mjs). Disabled (C1; review of slice C, finding 3): lever and
+ * ball in control.bezel, quieter than control.edge; the nut flat in capHi, never lighter than
+ * enabled; its edge and the washer's rim the knob's quiet disabled edge (control.knurl); no
+ * highlight.
  */
 function toggleShapes(L, sel, t, st) {
   const T = TOGGLE;
@@ -425,24 +443,24 @@ function toggleShapes(L, sel, t, st) {
   const dim = st.disabled;
   const dir = sel === 1 ? -1 : 1;
   const dy = st.dragging ? T.shadowDragDy : T.shadowDy;
-  const metal = esc(dim ? c.disabled : c.edge);
+  const metal = esc(dim ? c.bezel : c.edge);
+  const rim = esc(dim ? c.knurl : c.edge);
   const ty = num(T.length * dir);
   const lever = pathOf([[-T.root / 2, 0], [T.root / 2, 0], [T.tip / 2, ty], [-T.tip / 2, ty]]);
   // The highlight: a strip down the lever's lit (left) side from inside the ball, and a glint on
   // the ball's upper left.
   const strip = pathOf([[-2.6, ty], [-1.5, num(2 * dir)], [-0.75, num(2 * dir)], [-1.4, ty]]);
   const hi = esc(c.highlight);
-  return `<circle data-washer="" cx="0" cy="0" r="${T.washer}" fill="${esc(c.track)}" `
-    + 'stroke="none"/>'
-    + `<path data-nut="" d="${NUT}" fill="${esc(dim ? t.surface.plateLo : c.capHi)}" `
-    + `stroke="${esc(dim ? c.disabled : (st.hover ? c.pointer : c.edge))}" `
+  return `<circle data-washer="" cx="0" cy="0" r="${T.washer}" fill="${esc(c.knurl)}" `
+    + `stroke="${rim}" stroke-width="${T.washerW}"/>`
+    + `<path data-nut="" d="${NUT}" fill="${esc(c.capHi)}" `
+    + `stroke="${dim ? rim : esc(st.hover ? c.pointer : c.edge)}" `
     + `stroke-width="${T.nutW}" stroke-linejoin="round"/>`
+    + (dim ? '' : `<path data-facet="" d="${FACET}" fill="${esc(c.bezel)}" stroke="none"/>`)
     + `<path data-shadow="" class="${SHADOW_CLASS}" d="${leverOutline(dir, dy)}" `
     + `fill="${esc(c.shade)}" stroke="none"/>`
-    + `<path data-lever="" d="${lever}" fill="${metal}" stroke="${esc(t.surface.edge)}" `
-    + `stroke-width="${T.leverW}" stroke-linejoin="round"/>`
-    + `<circle data-ball="" cx="0" cy="${ty}" r="${T.ball}" fill="${metal}" `
-    + `stroke="${esc(t.surface.edge)}" stroke-width="${T.leverW}"/>`
+    + `<path data-lever="" d="${lever}" fill="${metal}" stroke="none"/>`
+    + `<circle data-ball="" cx="0" cy="${ty}" r="${T.ball}" fill="${metal}" stroke="none"/>`
     + (dim ? '' : `<path data-sheen="" class="${SHEEN_CLASS}" d="${strip}" fill="${hi}" `
       + 'stroke="none"/>'
       + `<circle data-sheen-ball="" class="${SHEEN_CLASS}" cx="-1.2" cy="${num(ty - 1.2)}" `
@@ -451,10 +469,12 @@ function toggleShapes(L, sel, t, st) {
 
 /**
  * The slide (SW-06, SW-07): a slot ending capH / 2 - 1 past the outermost position (so the cap
- * hides its end at either stop), a detent per position between the cap and its legend, the
- * cap's shadow (control.shade at hw-shadow), the capW x capH cap, a sheen strip along its top
- * (capHi at hw-sheen: the highlight does not show on the light theme's white cap, so the cap
- * keeps the knob's capHi, rule (d)) and three grip lines (edge, pointer, edge).
+ * hides its end at either stop), a detent per position from the slot towards its legend (a
+ * scale the cap travels along), the cap's shadow (control.shade at hw-shadow), the capW x capH
+ * cap, two quiet ridges (control.knurl) and the index line (control.pointer) running past the
+ * cap's edge onto its detent. No sheen: capHi does not show on the dark cap and darkens the
+ * light one, and the highlight does not show on the cap in both themes (rule b), so it waits on
+ * D-PAL's cap roles (review of slice C, findings 5 and 6).
  */
 function slideShapes(L, sel, t, st) {
   const S = SLIDE;
@@ -465,8 +485,8 @@ function slideShapes(L, sel, t, st) {
   const dy = st.dragging ? S.shadowDragDy : S.shadowDy;
   const cap = (attrs, y) => `<rect ${attrs} x="${-S.capW / 2}" y="${num(y - S.capH / 2)}" `
     + `width="${S.capW}" height="${S.capH}" rx="2"`;
-  const grip = (y, paint, w) => `<line data-grip="" x1="${-S.gripX}" y1="${num(y)}" `
-    + `x2="${S.gripX}" y2="${num(y)}" stroke="${esc(paint)}" stroke-width="${w}"/>`;
+  const grip = (y, paint, w, x2 = S.gripX) => `<line data-grip="" x1="${-S.gripX}" `
+    + `y1="${num(y)}" x2="${x2}" y2="${num(y)}" stroke="${esc(paint)}" stroke-width="${w}"/>`;
   return `<rect data-slot="" x="${-S.slotW / 2}" y="${num(-end)}" width="${S.slotW}" `
     + `height="${num(2 * end)}" rx="${S.slotW / 2}" fill="${esc(t.surface.edge)}" `
     + `stroke="${esc(st.hover ? c.pointer : c.edge)}" stroke-width="1"/>`
@@ -477,12 +497,9 @@ function slideShapes(L, sel, t, st) {
     + 'stroke="none"/>'
     + `${cap('data-cap=""', yc)} fill="${esc(c.cap)}" stroke="${esc(c.edge)}" `
     + 'stroke-width="1.5"/>'
-    + `<rect data-sheen="" class="${SHEEN_CLASS}" x="${-S.capW / 2 + S.sheenInset}" `
-    + `y="${num(yc - S.capH / 2 + S.sheenInset)}" width="${S.capW - 2 * S.sheenInset}" `
-    + `height="${S.sheenH}" rx="1" fill="${esc(c.capHi)}" stroke="none"/>`
-    + grip(yc - S.gripGap, c.edge, S.gripEdgeW)
-    + grip(yc, st.disabled ? c.disabled : c.pointer, S.gripW)
-    + grip(yc + S.gripGap, c.edge, S.gripEdgeW);
+    + grip(yc - S.gripGap, c.knurl, S.gripEdgeW)
+    + grip(yc, st.disabled ? c.disabled : c.pointer, S.gripW, S.indexOut)
+    + grip(yc + S.gripGap, c.knurl, S.gripEdgeW);
 }
 
 function dialShapes(L, sel, t, st, uid) {
@@ -559,8 +576,8 @@ function checkLed(led, id) {
  * `state` is { hover, focus, dragging, disabled }: hover (true, or { option: v }) lights the
  * mechanism's edge in control.pointer and that option's legend; focus (true: the selected
  * option, or { option: v }) rings that option's hit box in control.focus, 2 wide, inside it, and
- * a dial too, at its skirt + 3 under its detents (SW-13, C4); dragging lifts the shadow;
- * disabled dims the indicator (control.disabled) and the legends (text.dim) and marks the group
+ * a dial too, 1 past its ticks, outside the scale (SW-13, C4); dragging lifts the shadow;
+ * disabled dims the indicator (control.disabled; a toggle's lever control.bezel) and the legends (text.dim) and marks the group
  * data-disabled (the caller's buttons carry aria-disabled and the reason). The selected option's
  * legend is text.value at weight 600, a window grid's as printed, with no underline (SW-08).
  * `led` ({ source, lit }, a toggle's alone) draws the LED;
@@ -585,11 +602,10 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
   const hover = stateIndex(st.hover, sel, opts);
   const focus = stateIndex(st.focus, sel, opts);
   const tx = tokens.text;
-  // SW-13 (C4): a focused dial is ringed too, concentric past its skirt and under its detents,
-  // so the ring never covers the scale.
+  // SW-13 (C4): a focused dial is ringed too, concentric, outside its scale, never over it.
   let out = L.dial && focus >= 0 ? `<circle data-dial-focus="" cx="0" cy="0" `
-    + `r="${num(L.dial.skirt + DIAL_FOCUS.gap)}" fill="none" stroke="${esc(tokens.control.focus)}" `
-    + `stroke-width="${DIAL_FOCUS.w}"/>` : '';
+    + `r="${num(L.dial.tickOut + DIAL_FOCUS.gap + DIAL_FOCUS.w / 2)}" fill="none" `
+    + `stroke="${esc(tokens.control.focus)}" stroke-width="${DIAL_FOCUS.w}"/>` : '';
   out += SHAPES[L.style](L, sel, tokens, st, uid ?? `${id}.dial`);
   if (legends) {
     for (const o of L.options) {
