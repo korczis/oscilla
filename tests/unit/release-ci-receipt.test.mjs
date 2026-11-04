@@ -6,8 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  CI_WORKFLOW, GH_ATTEMPTS, GH_TIMEOUT_MS, ciReceiptProblems, expectedJobs, gatherCiReceipt,
-  judgedRun,
+  CI_WORKFLOW, GH_ATTEMPTS, GH_TIMEOUT_MS, RERUN_ONLY_IF, ciReceiptProblems, expectedJobs,
+  gatherCiReceipt, judgedRun,
 } from '../../scripts/release-ci-receipt.mjs';
 import { gateVerdict } from '../../scripts/release-publish.mjs';
 import * as prep from '../../scripts/release-prepare.mjs';
@@ -94,6 +94,30 @@ test('a job missing, skipped, cancelled or from another run or sha refuses', () 
   only(facts({ jobs: [...jobsOf(r), { ...jobsOf(r)[0], name: 'extra' }] }),
     /a job "extra" that .* does not declare/);
   only(facts({ jobs: null }), /jobs of run 900 could not be read/);
+});
+
+test('the flake ledger is the one re-run-only job, by its ci.yml condition (E010)', () => {
+  assert.equal(WORKFLOW.rerunOnly.length, 1, WORKFLOW.rerunOnly.join());
+  assert.match(WORKFLOW.rerunOnly[0], /flake ledger/i);
+  assert.ok(CI_TEXT.includes(`if: ${RERUN_ONLY_IF}`), 'ci.yml carries the condition verbatim');
+});
+
+test('a first attempt with the flake ledger skipped by its own condition verifies', () => {
+  const r = run({ run_attempt: 1 });
+  const ledger = WORKFLOW.rerunOnly[0];
+  const jobs = jobsOf(r).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
+  assert.deepEqual(ciReceiptProblems(facts({ runs: [r], jobs })), []);
+});
+
+test('from the second attempt the flake ledger must succeed; any other skip still refuses', () => {
+  const ledger = WORKFLOW.rerunOnly[0];
+  const r2 = run({ run_attempt: 2 });
+  const skipLedger = jobsOf(r2).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
+  only(facts({ runs: [r2], jobs: skipLedger }), /flake ledger.*completed\/skipped/i);
+  const r1 = run({ run_attempt: 1 });
+  const other = WORKFLOW.jobs.find((n) => n !== ledger && /Browser gate/.test(n));
+  const skipOther = jobsOf(r1).map((j) => (j.name === other ? { ...j, conclusion: 'skipped' } : j));
+  only(facts({ runs: [r1], jobs: skipOther }), /Browser gate.*completed\/skipped/);
 });
 
 test('the run is on another sha, or none: refuses', () => {
