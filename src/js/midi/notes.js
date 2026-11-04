@@ -28,6 +28,7 @@
 import { clamp } from '../core/math.js';
 import { midiToFrequency } from '../core/music.js';
 import { WAVEFORMS } from '../core/constants.js';
+import { createHeldNotes, sameSink } from './held-notes.js';
 
 /**
  * The velocity law: amplitude (velocity / 127)^2, that is 40 log10(velocity / 127) dB. The
@@ -72,21 +73,27 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   refused = () => {}, route = () => null } = {}) {
   let refusing = null;
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
-  // Where each held key sounds, fixed at its note-on: the Synth sink, or ENGINE (the
-  // Playground's note voices). Its note-off goes there, whatever route() answers by then, so a
-  // key held across a workspace switch is released where it sounds and never left sounding.
-  const ENGINE = 'engine';
-  const via = new Map();
+  // Where each held key sounds, fixed at its note-on (src/js/midi/held-notes.js, K178): the
+  // routed sink, or ENGINE (the Playground's note voices). Its note-off goes there, whatever
+  // route() answers by then, so a key held across a workspace switch is released where it
+  // sounds and never left sounding.
+  const ENGINE = Object.freeze({ noteOff: (note, info) => (engine ? engine.noteOff(info.key)
+    : false) });
+  const held = createHeldNotes();
+  // The input a source belongs to: the keyboard's `kbd-<source>`, else a MIDI input's number.
+  const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
+    ? source.slice(4) : 'midi');
 
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
     const key = keyOf(source, channel, note);
     const sink = route(); // the Synth panel plays the note instead (K065), one path for all
-    if (sink) {
-      via.set(key, sink);
-      return sink.noteOn(note, velocity);
-    }
-    via.set(key, ENGINE);
+    const to = sink || ENGINE;
+    // A re-press on the same player retriggers there (the engine fades the old note under the
+    // new one); on another player hold() first releases it where it sounded.
+    if (sameSink(held.sinkOf(key), to)) held.releaseKey(key, 're-press');
+    held.hold(key, { sink: to, note, velocity, input: inputOf(source) });
+    if (sink) return sink.noteOn(note, velocity);
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = ownedBy();
     if (by) {
@@ -110,11 +117,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
   function noteOff(note, source = 0, channel = 0) {
     const key = keyOf(source, channel, note);
-    const held = via.get(key);
-    via.delete(key);
-    const sink = held === undefined ? route() : held; // a key not held here: where it would be
-    if (sink && sink !== ENGINE) return sink.noteOff(note);
-    return engine ? engine.noteOff(key) : false;
+    // A key not held here: where it would sound now.
+    const sink = held.releaseKey(key) || route() || ENGINE;
+    return sink === ENGINE ? ENGINE.noteOff(note, { key }) : sink.noteOff(note);
   }
 
   return {
@@ -132,8 +137,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       } else if (e.kind === 'all-sound-off' || e.kind === 'all-notes-off') {
         const sink = route();
         if (sink) sink.allOff();
-        via.clear();
         engine.notesOff(e.kind === 'all-sound-off');
+        // A key still held on another player (routed before a switch) is released there.
+        held.releaseAll('all-off');
       }
       return e;
     },
@@ -142,8 +148,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     silence() {
       const sink = route();
       const n = sink ? sink.allOff() : 0;
-      via.clear();
-      return (engine ? engine.notesOff(true) : 0) + n;
+      const sounding = engine ? engine.notesOff(true) : 0;
+      held.releaseAll('silence');
+      return sounding + n;
     },
   };
 }
