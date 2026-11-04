@@ -5,7 +5,9 @@
 //
 //   plays     the component method that gives the workspace's note sink (null: the Playground
 //             voice of the AudioEngine plays the note)
-//   armed     whether the computer keyboard is armed when the workspace first opens
+//   armed     whether the computer keyboard is armed when the workspace first opens: armed
+//             everywhere, so the keys play at once in every workspace as in the Synth (the
+//             owner's decision of 2026-11-05 on K178); Arm switches them off and on
 //   leave     the sink method run when the workspace is left (the Studio disarms an armed-only
 //             run, K176), or null
 //   yieldsTo  a surface that owns the notes there and collapses the dock (K171, 26's rule:
@@ -14,9 +16,9 @@
 //   routeOf(workspace) -> its row (the Playground's for a workspace not listed)
 
 export const KEY_ROUTES = Object.freeze({
-  playground: Object.freeze({ plays: null, armed: false, leave: null, yieldsTo: null }),
+  playground: Object.freeze({ plays: null, armed: true, leave: null, yieldsTo: null }),
   synth: Object.freeze({ plays: 'synthSink', armed: true, leave: null, yieldsTo: null }),
-  studio: Object.freeze({ plays: 'studioSink', armed: false, leave: 'leave', yieldsTo: null }),
+  studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave', yieldsTo: null }),
 });
 
 export const routeOf = (workspace) => KEY_ROUTES[workspace] || KEY_ROUTES.playground;

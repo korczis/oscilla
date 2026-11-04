@@ -18,10 +18,11 @@ test('one table: each workspace names its sink, its first arm state and its leav
   assert.deepEqual({ ...mod.KEY_ROUTES.synth },
     { plays: 'synthSink', armed: true, leave: null, yieldsTo: null });
   assert.deepEqual({ ...mod.KEY_ROUTES.studio },
-    { plays: 'studioSink', armed: false, leave: 'leave', yieldsTo: null });
+    { plays: 'studioSink', armed: true, leave: 'leave', yieldsTo: null });
   assert.equal(mod.KEY_ROUTES.playground.plays, null, 'the Playground voice plays');
   assert.equal(mod.routeOf('measure'), mod.KEY_ROUTES.playground, 'an unlisted workspace');
-  assert.deepEqual(mod.armedDefaults(), { playground: false, synth: true, studio: false });
+  // The owner's decision of 2026-11-05: the keys play at once in every workspace.
+  assert.deepEqual(mod.armedDefaults(), { playground: true, synth: true, studio: true });
   assert.ok(Object.isFrozen(mod.KEY_ROUTES) && Object.isFrozen(mod.KEY_ROUTES.synth));
 });
 
