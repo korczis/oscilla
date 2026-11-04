@@ -23,9 +23,9 @@
 | id | severity | status | issue / owner |
 |---|---|---|---|
 | S1 | P1 | open, verified | K174 (26) |
-| S2 | P1 | open, verified | K175 (26) |
-| S18 | P1 | open, verified (W1b review R1, on main through #410) | K175 (26, with dev-53) |
-| S19 | P1 | open, verified (W1b review R2, on main through #410) | K176 (dev-53) |
+| S2 | P1 | open, verified; still reproduces at train 5's 2301794d (the Playground engine path records no sink) | K175 (26, with dev-53) |
+| S18 | P1 | fixed by 2124f226 (train 5, #413), pending merge | K175 |
+| S19 | P1 | fixed by 2124f226 (train 5, #413), refined by 1ef29135 (train 6), pending merge | K176 |
 | S3 | P2 | open, verified | 26, with K175 |
 | S4 | P2 | open, verified | 26 |
 | S5 | P2 | open, verified | 26 |

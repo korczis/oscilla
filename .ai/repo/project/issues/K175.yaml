@@ -2,7 +2,7 @@ id: K175
 milestone: M064
 serves:
   - "connected-instrument#piano-keyboard"
-title: "A note is released through the sink that started it (retroactive review S2 and S18)"
+title: "A note is released through the sink that started it, the Playground engine included (retroactive review S2 and S18)"
 slug: a-note-is-released-through-the-sink-that-started-it
 priority: p1
 profile: implementation
@@ -18,6 +18,7 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on: []
+current_state: "Partly fixed, pending merge. S18 (a note held through the Studio sink) is fixed by 2124f226 (dev-53, fix/studio-keyboard, in train 5 #413): midi/notes.js remembers the sink per note key at note-on (`sunk`) and the off goes through it. S2 still reproduces at origin/int/train-5b 2301794d: a note the Playground engine plays has no sink, so noteOn records nothing and its off, after a switch to the Synth, takes route() and goes to the Synth sink, leaving the Playground voice sounding. The remaining fix: noteOn records the engine path too (the key mapped to no sink), so the off goes to the engine. Owners: 26 with dev-53."
 acceptance_criteria:
   - "Fail-first: a unit test holds a note through the Playground sink, switches the route to the Synth and releases it, and asserts the Playground voice is released; the same for a note held through the Studio sink; it fails on the merge base (project.fail-first)."
   - "Browser (every gate browser): a continuous Playground MIDI note held across a switch to the Synth, and a Studio-keyboard note held across leaving the Studio, each end on release; the engine's live note census returns to idle."

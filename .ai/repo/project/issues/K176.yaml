@@ -16,6 +16,7 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on: []
+current_state: "Fixed by 2124f226 (dev-53, fix/studio-keyboard, in train 5 #413), pending merge: studio-sink's leave() ends an armed-only run (allOff, disarm) and leaves a PLAYed run alone; refined in fix/keys-followups 1ef29135 (train 6), where a PLAYed run keeps its held map (98's R2 on #413). Done when those land with the criteria below met; no further code is planned here."
 acceptance_criteria:
   - "Fail-first: a unit test plays a note through the Studio sink (arming an idle transport), leaves the Studio and asserts the transport is disarmed; a run started with PLAY is left playing; it fails on the merge base (project.fail-first)."
   - "Browser (every gate browser): a Studio-keyboard note, then the Playground: its keys sound and no 'Studio is playing' refusal is shown."
