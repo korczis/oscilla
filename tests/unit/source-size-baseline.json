@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 284000,
+    "src/index.html": 285000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 63000,
     "src/js/experiments/validate.js": 64000,
@@ -103,6 +103,12 @@
       "cap": 63000,
       "pr": 404,
       "reason": "C018's lab restore (#314) meets the synth train's instrument hooks in the one instrument module; 230 bytes past 62 000 after instrument-labs.js took C018's V1 lab hooks"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 285000,
+      "pr": 414,
+      "reason": "the 3.19 About station (project.about-names-current-release) takes src/index.html 442 bytes past 284 000; the release adds no other markup"
     }
   ]
 }

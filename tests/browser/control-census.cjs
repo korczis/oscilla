@@ -1511,11 +1511,28 @@ family({ id: 'links.workspace', control: WS_LINK,
             if (ws !== 'playground') await op.navTo(fresh.page, ws);
             const link = fresh.page.locator(WS_LINK).nth(l.i);
             if (how === 'pointer') await link.click();
-            else { await link.focus(); await fresh.page.keyboard.press('Enter'); }
+            else {
+              // focus() does not wait for the link to show, as click() does: a link under an
+              // x-show still settling (exp.toMeasure while the experiments load) took the Enter
+              // on the body under CI load (#410, firefox). Wait for it as the pointer does.
+              await link.waitFor({ state: 'visible', timeout: ROW_MS });
+              await link.focus();
+              await fresh.page.keyboard.press('Enter');
+            }
             const ok = await until(() => fresh.page.evaluate((w) =>
               window.OSCILLA.app.workspace === w, m), { ms: ROW_MS,
               what: `${l.osc} (${ws}, ${how}) opens ${m}` }).catch(() => false);
-            if (!ok) bad.push(`${ws} ${l.osc} ${how}: the workspace is not ${m}`);
+            if (!ok) {
+              // The last state, so a lost Enter (focus elsewhere, the hash unchanged) reads apart
+              // from a slow hand-off (the hash moved, the workspace not yet).
+              const last = await fresh.page.evaluate(() => {
+                const a = document.activeElement;
+                return { workspace: window.OSCILLA.app.workspace, hash: location.hash,
+                  focus: a ? (a.dataset && a.dataset.osc) || a.tagName : null };
+              }).catch(() => null);
+              bad.push(`${ws} ${l.osc} ${how}: the workspace is not ${m} `
+                + `(last ${JSON.stringify(last)})`);
+            }
           } finally {
             await fresh.context.close().catch(() => {});
           }
