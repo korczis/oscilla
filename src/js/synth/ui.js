@@ -90,7 +90,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const studioSink = createStudioSink({ get, setupAudio, say, registry,
     ensureAudio: () => cmp && cmp.ensureAudio && cmp.ensureAudio() });
   const dispatch = (action) => {
-    gestures.flush(); // any edit, a cable too, ends a wheel burst (21's P3)
+    gestures.flush(); // any edit, a cable too, ends a wheel burst
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
     else memory.note(model());
@@ -810,6 +810,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         if (old === 'synth' && ws !== 'synth') {
           pending = null;
           disarm(false);
+          xy.destroy(); // T3
         }
         if (ws === 'synth') {
           syncArmed();
