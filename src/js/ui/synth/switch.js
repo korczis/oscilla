@@ -6,14 +6,14 @@
 //                   LED beside it
 //   3-4    slide    a slot 4 wide, a 16 x 12 cap at the selected index, a detent per position,
 //                   legends to the right (index 0 at the bottom)
-//   5-8    rotary   a detented rotary selector: the knob's face (knob.js's: skirt, its 24-ridge
-//                   knurl, cap with its shadow and highlight) at the size of the knob beside it
-//                   (`knob`, graph units, CONTROL_BOX.knob.width by default), a pointer, a
-//                   detent per position over 270° ending inside that knob's box, the selected
-//                   one lit, and the legends around it at r >= 60, the radius the least that
-//                   keeps every 44 px hit box apart and clear of the dial (searched to 240,
-//                   scaled by the hit box below zoom 1; only legends too long for that are
-//                   refused, naming the zoom)
+//   5-8    rotary   a detented rotary selector: the knob's face itself (knob.js's knobFace:
+//                   cast shadow, toothed skirt, side wall, cap, sheen, hover overlay, pointer),
+//                   scaled to the knob beside it (`knob`, graph units, CONTROL_BOX.knob.width by
+//                   default), pointing at the selected detent, a detent per position over
+//                   270° ending inside that knob's box, the selected one lit, and the legends
+//                   around it at r >= 60, the radius the least that keeps every 44 px hit box
+//                   apart and clear of the dial (searched to 240, scaled by the hit box below
+//                   zoom 1; only legends too long for that are refused, naming the zoom)
 //   9-12   window   the same dial with a display-window frame above it for the selected name
 //                   (the frame only: its text is the caller's, at layout.window) and a legend
 //                   grid of 44 px cells below it
@@ -45,11 +45,12 @@
 //   switchOptions(param, opts)               layout.options: per option { index, value, label,
 //                                            legend: { x, y, anchor, size, width, text }, hit,
 //                                            number, numeral }
-//   switchSvg({ value, param, tokens, zoom, state, led, legends, knob, numbers, numberLegends })
+//   switchSvg({ value, param, tokens, zoom, state, led, legends, knob, numbers, numberLegends,
+//     uid })                                 (uid names a dial's gradients; else '<param id>.dial')
 //                                            the drawing, an SVG <g>
 //   SWITCH_STYLES, LEGEND_PX, NUMBERED_MIN, legendWidth
 
-import { CONTROL_BOX, clampValue, formatValue, HIT_PX } from './knob.js';
+import { CONTROL_BOX, clampValue, formatValue, HIT_PX, KNOB, knobFace } from './knob.js';
 import { legendWidth, LEGEND_PX } from './legend.js';
 import { LED, ledBox, ledSvg } from './led.js';
 
@@ -70,16 +71,10 @@ const TOGGLE = Object.freeze({ w: 18, h: 30, rx: 4, edgeW: 1.5, leverW: 8, lever
   bushing: 5.5, gap: 4, ledGap: 3.5, shadowDy: 1, shadowDragDy: 2 });
 const SLIDE = Object.freeze({ slotW: 4, capW: 16, capH: 12, tickIn: -13, tickOut: -10,
   legendX: 14, pitchPad: 8, gripW: 2 });
-/** The knob's face in its CONTROL_BOX.knob units, as knob.js draws it (its KNOB: the skirt and
- *  its edge, the 24-ridge knurl from r 14.5 to 16, the cap, the pointer's width; the knob tests
- *  pin each), so a dial at the knob's size is the knob's face. */
-const KNOB_FACE = Object.freeze({ skirt: 16, edgeW: 1.5, knurlIn: 14.5, knurlOut: 16, knurls: 24,
-  cap: 12, pointerW: 2.5 });
 /** A dial in the units of the knob beside it (scaled by knob / CONTROL_BOX.knob.width): the
- *  knob's face (KNOB_FACE), a pointer from the cap's centre to the knurl, and a detent per
- *  position from outside the skirt to r 21.75, so its butt corners stay in the knob's box. */
-const DIAL = Object.freeze({ sweep: 270, pointerIn: 3, pointerOut: 14, tickIn: 18.5,
-  tickOut: 21.75, tickW: 1.5, litW: 2, shadowDy: 1, shadowDragDy: 2, sheen: [-3.5, -4.5, 5, 3.5] });
+ *  knob's own face (knob.js's knobFace, one drawing for both: review of slice A, finding 5) and a
+ *  detent per position from outside the skirt to r 21.75, its butt corners in the knob's box. */
+const DIAL = Object.freeze({ sweep: 270, tickIn: 18.5, tickOut: 21.75, tickW: 1.5, litW: 2 });
 /** A dial's surroundings, graph units: the ring's least radius, its search step and limit, the
  *  gap past the dial a leader starts at, and the numerals' gap past the ticks, their search step
  *  and the space kept between two of them. */
@@ -90,7 +85,6 @@ export const NUMBERED_MIN = 7;
 const WINDOW = Object.freeze({ minW: 88, pad: 10, gap: 8, gridGap: 10, gridMaxW: 6 * HIT_PX,
   barW: 2 });
 const SHADOW_CLASS = 'opacity-hw-shadow';
-const SHEEN_CLASS = 'opacity-hw-sheen';
 
 const num = (x) => Number(x.toFixed(2)) + 0; // + 0: never -0
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
@@ -205,7 +199,7 @@ function dialOf(n, knob, F, numbers) {
   const tickOut = DIAL.tickOut * k;
   const base = (CONTROL_BOX.knob.width / 2) * k + RING.margin;
   if (!numbers) {
-    return { scale: k, skirt: num(KNOB_FACE.skirt * k), tickOut: num(tickOut), numerals: null,
+    return { scale: k, skirt: num(KNOB.skirt * k), tickOut: num(tickOut), numerals: null,
       radius: num(base), extent: num(base), leaderIn: num(base + RING.leaderGap - RING.margin) };
   }
   for (let r = tickOut; ; r += RING.numberStep) {
@@ -219,7 +213,7 @@ function dialOf(n, knob, F, numbers) {
         Math.abs(b.x + b.width)), Math.max(Math.abs(b.y), Math.abs(b.y + b.height)))));
       const side = Math.max(...boxes.map((b) => Math.max(Math.abs(b.x), Math.abs(b.x + b.width),
         Math.abs(b.y), Math.abs(b.y + b.height))));
-      return { scale: k, skirt: num(KNOB_FACE.skirt * k), tickOut: num(tickOut), numerals: ms,
+      return { scale: k, skirt: num(KNOB.skirt * k), tickOut: num(tickOut), numerals: ms,
         numeralR: num(r), radius: num(Math.max(base, far + RING.margin)),
         extent: num(Math.max(base, side + RING.margin)),
         leaderIn: num(Math.max(base, far) + RING.leaderGap) };
@@ -425,16 +419,8 @@ function slideShapes(L, sel, t, st) {
     + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" stroke-width="${S.gripW}"/>`;
 }
 
-/** Radial strokes from r0 to r1 at each angle, as one path's 'M x y L x y' segments. */
-const radialPath = (r0, r1, angles) => angles.map((deg) => {
-  const [x0, y0] = polar(r0, deg);
-  const [x1, y1] = polar(r1, deg);
-  return `M ${x0} ${y0} L ${x1} ${y1}`;
-}).join(' ');
-
-function dialShapes(L, sel, t, st) {
+function dialShapes(L, sel, t, st, uid) {
   const D = DIAL;
-  const K = KNOB_FACE;
   const k = L.dial.scale;
   const s = (x) => num(x * k);
   const c = t.control;
@@ -464,26 +450,9 @@ function dialShapes(L, sel, t, st) {
       + `fill="${esc(st.disabled ? tx.dim : (o.index === sel ? tx.value : tx.label))}" `
       + `stroke="none">${o.number}</text>`;
   }
-  const [px0, py0] = polar(D.pointerIn * k, dialAngle(sel, n));
-  const [px1, py1] = polar(D.pointerOut * k, dialAngle(sel, n));
-  const ridges = Array.from({ length: K.knurls }, (_, i) => (i * 360) / K.knurls);
-  const [hx, hy, hrx, hry] = D.sheen.map(s);
   const w = L.window;
-  return out
-    + `<circle data-skirt="" cx="0" cy="0" r="${s(K.skirt)}" fill="${esc(t.surface.card)}" `
-    + `stroke="${esc(st.hover ? c.pointer : c.edge)}" stroke-width="${s(K.edgeW)}"/>`
-    + `<path d="${radialPath(K.knurlIn * k, K.knurlOut * k, ridges)}" data-knurl="" `
-    + `fill="none" stroke="${esc(c.knurl)}" stroke-width="${s(1)}"/>`
-    + `<circle data-shadow="" class="${SHADOW_CLASS}" cx="0" `
-    + `cy="${s(st.dragging ? D.shadowDragDy : D.shadowDy)}" r="${s(K.cap)}" `
-    + `fill="${esc(t.surface.edge)}" stroke="none"/>`
-    + `<circle data-cap="" cx="0" cy="0" r="${s(K.cap)}" fill="${esc(c.cap)}" `
-    + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
-    + `<ellipse class="${SHEEN_CLASS}" cx="${hx}" cy="${hy}" rx="${hrx}" ry="${hry}" `
-    + `fill="${esc(c.capHi)}" stroke="none"/>`
-    + `<line data-pointer="" x1="${px0}" y1="${py0}" x2="${px1}" y2="${py1}" `
-    + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" stroke-width="${s(K.pointerW)}" `
-    + 'stroke-linecap="round"/>'
+  return `${out}<g data-face="" transform="scale(${Number(k.toFixed(4))})">`
+    + `${knobFace(dialAngle(sel, n), t, st, uid)}</g>`
     + (w ? `<rect data-window="" x="${w.x}" y="${w.y}" width="${w.width}" height="${w.height}" `
       + `rx="2" fill="${esc(t.surface.edge)}" stroke="${esc(c.edge)}" stroke-width="1"/>` : '');
 }
@@ -533,7 +502,7 @@ function checkLed(led, id) {
  * legend is. A setpoint: no animation.
  */
 export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = null,
-  legends = true, knob = CONTROL_BOX.knob.width, numberLegends = false, numbers } = {}) {
+  legends = true, knob = CONTROL_BOX.knob.width, numberLegends = false, numbers, uid } = {}) {
   if (!tokens || !tokens.control || !tokens.surface || !tokens.text) {
     throw new TypeError('switchSvg needs the synth tokens (synthTokens(el)).');
   }
@@ -548,7 +517,7 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
   const hover = stateIndex(st.hover, sel, opts);
   const focus = stateIndex(st.focus, sel, opts);
   const tx = tokens.text;
-  let out = SHAPES[L.style](L, sel, tokens, st);
+  let out = SHAPES[L.style](L, sel, tokens, st, uid ?? `${id}.dial`);
   if (legends) {
     for (const o of L.options) {
       const lit = o.index === sel || o.index === hover;

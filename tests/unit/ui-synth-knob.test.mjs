@@ -936,7 +936,8 @@ test('slice A 3: a side-wall linear and a sheen radial gradient, ids from uid, n
       assert.equal(stops.length, 4, 'two stops each');
       for (const st of stops) {
         assert.doesNotMatch(st, /opacity/, `no stop-opacity: ${st}`);
-        assert.ok([t.cap, t.capHi].includes(attrOf(st, 'stop-color')), `a token stop: ${st}`);
+        assert.ok([t.cap, t.capHi, TOKENS.surface.edge].includes(attrOf(st, 'stop-color')),
+          `a token stop: ${st}`);
       }
       assert.doesNotMatch(svg, /stop-opacity|fill-opacity|\sopacity=/);
       const sheen = /<radialGradient\b[^>]*>/.exec(svg)[0];
@@ -988,8 +989,10 @@ test('knob: the unlit arc (1.25) and the value arc (2.5) are r 18.5, over 270°;
       const skirt = part(svg, 'data-skirt');
       assert.match(skirt, /^<path /);
       near(Math.max(...vertices(skirt).map(([x, y]) => Math.hypot(x, y))), 16, 0.02);
-      assert.equal(attrOf(skirt, 'stroke'), TOKENS.surface.edge, 'K3: the edge in surface.edge');
-      assert.equal(numOf(skirt, 'stroke-width'), 1.5);
+      // Review of slice A, finding 1: surface.edge held 1.04-1.23:1 on the plates, so the body had
+      // no silhouette; the edge is control.edge (3:1 on both plates, ui-synth-tokens.test.mjs).
+      assert.equal(attrOf(skirt, 'stroke'), t.edge, 'the silhouette edge in control.edge');
+      assert.equal(numOf(skirt, 'stroke-width'), 1);
       const cap = part(svg, 'data-cap');
       assert.match(cap, /^<circle /);
       assert.equal(numOf(cap, 'r'), 12, 'Ø24');
@@ -998,21 +1001,39 @@ test('knob: the unlit arc (1.25) and the value arc (2.5) are r 18.5, over 270°;
   }
 });
 
-// Slice A (K3): the skirt is one closed toothed outline, 40 teeth from r 16 to r 15.4, and the
-// dashed 24-stroke knurl ring that made four concentric rings a bullseye is gone.
-test('knob: the skirt is one closed path of 40 teeth, r 16 and 15.4 alternating; no knurl', () => {
+// Slice A (K3): the skirt is one closed toothed outline and the dashed 24-stroke knurl ring that
+// made four concentric rings a bullseye is gone. Review of slice A, finding 2: 40 teeth 0.6 deep
+// were 0.87 px at the panel's 64 px, an anti-aliased fuzz; 30 teeth from r 16 to r 14.8 are
+// 1.75 px deep and 4.9 px apart there, ridges a moulded part shows.
+test('knob: the skirt is one closed path of 30 teeth, r 16 and 14.8 alternating; no knurl', () => {
   for (const state of [{}, { disabled: true }, { hover: true }]) {
     const svg = draw('knob', { state });
     const skirt = part(svg, 'data-skirt');
     assert.match(attrOf(skirt, 'd'), /^M [^MZ]+ Z$/, 'one closed path');
     const r = vertices(skirt).map(([x, y]) => Math.hypot(x, y));
-    assert.equal(r.length, 80, '40 teeth: 80 vertices');
-    r.forEach((ri, i) => near(ri, i % 2 ? 15.4 : 16, 0.02));
+    assert.equal(r.length, 60, '30 teeth: 60 vertices');
+    r.forEach((ri, i) => near(ri, i % 2 ? 14.8 : 16, 0.02));
     const deg = vertices(skirt).map(([x, y]) => angleAt(x, y));
-    deg.forEach((d, i) => near(((d - deg[0] + 720) % 360), i * 4.5, 0.15));
+    deg.forEach((d, i) => near(((d - deg[0] + 720) % 360), i * 6, 0.15));
     assert.equal(part(svg, 'data-knurl'), null, `${JSON.stringify(state)}: no knurl layer`);
-    assert.ok(!svg.includes(`stroke="${TOKENS.control.knurl}"`), 'nothing in --osc-border');
+    if (!state.disabled) {
+      assert.ok(!svg.includes(`stroke="${TOKENS.control.knurl}"`), 'nothing in --osc-border');
+    }
   }
+});
+
+// Review of slice A, finding 2: a tooth reads as a ridge only when it is deep and wide enough on
+// screen at the panel's 64 px knob (zoom 64/44): at least 1.5 px deep, at least 3 px apart, and
+// 24 to 30 of them (a coarse moulded knurl, not a sawblade).
+test('knob: the teeth are at least 1.5 px deep and 3 px apart on the panel\'s 64 px knob', () => {
+  const { teeth, skirt, toothIn } = KNOB_CORE.KNOB;
+  const z = 64 / 44;
+  assert.ok(teeth >= 24 && teeth <= 30, `${teeth} teeth`);
+  assert.ok(skirt - toothIn >= 1.2 - 1e-9, `${skirt - toothIn} units deep`);
+  assert.ok((skirt - toothIn) * z >= 1.5, `${((skirt - toothIn) * z).toFixed(2)} px deep`);
+  assert.ok(((2 * Math.PI * skirt) / teeth) * z >= 3, 'a pitch of at least 3 px');
+  const r = vertices(part(draw('knob'), 'data-skirt')).map(([x, y]) => Math.hypot(x, y));
+  assert.ok((Math.max(...r) - Math.min(...r)) * z >= 1.5, 'as drawn');
 });
 
 // Slice A (K2): a butt-ended pointer from r 5 to r 12 on the cap, continued on the skirt by a
@@ -1043,21 +1064,45 @@ test('knob: the pointer runs r 5 to 12, 2 wide and butt, and on the skirt r 12.5
 });
 
 // Slice A (K6-core): the hover overlay is always emitted, as the panel's focus ring is, hidden
-// by visibility unless hovered, so a host can reveal it with group-hover; the skirt's own edge
-// stays surface.edge in every state but disabled.
-test('knob: a data-hover skirt-edge overlay in control.pointer is always emitted', () => {
-  const t = TOKENS.control;
-  for (const state of [{}, { focus: true }, { dragging: true }, { hover: true },
-    { disabled: true }, { disabled: true, hover: true }]) {
-    const svg = draw('knob', { state });
-    const h = part(svg, 'data-hover');
-    assert.ok(h, `${JSON.stringify(state)}: the overlay`);
-    assert.equal(attrOf(h, 'd'), attrOf(part(svg, 'data-skirt'), 'd'), 'the skirt\'s outline');
-    assert.equal(attrOf(h, 'fill'), 'none');
-    assert.equal(attrOf(h, 'stroke'), t.pointer);
-    const shown = state.hover && !state.disabled;
-    assert.equal(attrOf(h, 'visibility'), shown ? undefined : 'hidden', JSON.stringify(state));
-    assert.ok(svg.indexOf(h) > svg.indexOf(part(svg, 'data-skirt')), 'over the skirt');
+// by visibility unless hovered, so a host can reveal it with group-hover. Review of slice A,
+// finding 4: a 1.5-wide control.pointer stroke round every tooth vertex was a jagged star ring
+// (C5: hover brightens the edge, never a loud ring). It is one thin circle at the teeth's root
+// (r toothIn, at most 1 wide) in the cap highlight (control.capHi), under both pointer segments;
+// a control.pointer circle there rendered as a hard 17:1 ring in both themes.
+test('knob: a data-hover circle at the teeth\'s root, thin, under the pointer, always emitted',
+  () => {
+    const t = TOKENS.control;
+    for (const state of [{}, { focus: true }, { dragging: true }, { hover: true },
+      { disabled: true }, { disabled: true, hover: true }]) {
+      const svg = draw('knob', { state });
+      const where = JSON.stringify(state);
+      const h = part(svg, 'data-hover');
+      assert.ok(h, `${where}: the overlay`);
+      assert.match(h, /^<circle /, `${where}: a circle, not the toothed outline`);
+      assert.equal(numOf(h, 'r'), KNOB_CORE.KNOB.toothIn, `${where}: at the teeth's root`);
+      assert.ok(numOf(h, 'stroke-width') <= 1, `${where}: at most 1 wide`);
+      assert.equal(attrOf(h, 'fill'), 'none');
+      assert.equal(attrOf(h, 'stroke'), t.capHi, `${where}: the cap's highlight, not a ring`);
+      const shown = state.hover && !state.disabled;
+      assert.equal(attrOf(h, 'visibility'), shown ? undefined : 'hidden', where);
+      assert.ok(svg.indexOf(h) > svg.indexOf(part(svg, 'data-skirt')), `${where}: over the skirt`);
+      for (const flag of ['data-pointer', 'data-pointer-skirt']) {
+        assert.ok(svg.indexOf(h) < svg.indexOf(part(svg, flag)), `${where}: under ${flag}`);
+      }
+    }
+  });
+
+// Review of slice A, finding 7: the uid is sanitised to an id's characters, so a uid with a
+// space, a ')' or a '#' still names a gradient every url(#...) paint resolves.
+test('knob: a uid with a space, \')\' or \'#\' still names ids every url(#) resolves', () => {
+  for (const uid of ['a b)c#d', 'osc 1(cutoff)', '#x"y<z>']) {
+    const svg = draw('knob', { uid });
+    const ids = [...svg.matchAll(/\sid="([^"]*)"/g)].map((m) => m[1]);
+    assert.ok(ids.length >= 2, `${uid}: the gradients`);
+    for (const id of ids) assert.match(id, /^[\w.:-]+$/, `${uid}: an id's characters: ${id}`);
+    const refs = [...svg.matchAll(/url\(#([^)]*)\)/g)].map((m) => m[1]);
+    assert.ok(refs.length >= 2, `${uid}: the paints`);
+    for (const r of refs) assert.ok(ids.includes(r), `${uid}: url(#${r}) resolves`);
   }
 });
 
@@ -1216,11 +1261,13 @@ test('knob: the applied arc lies on the skirt face, clear of the cap, the teeth 
     }
   });
 
-// C1 (one disabled language, co-signed by p2 and dev-53): a disabled knob draws no value arc,
-// the track only; its cap and skirt flattened to plateLo (no side wall, no sheen); its pointer
-// and its edge in control.disabled. The absent value mark is a shape cue, so S7 holds without
-// colour alone.
-test('knob: disabled (C1) is the track only, a flat plateLo body, pointer and edge disabled',
+// C1 (one disabled language, co-signed by p2 and dev-53): a disabled knob draws no value mark,
+// the track only (review of slice A, finding 9: no applied arc either); its cap and skirt
+// flattened to plateLo (no side wall, no sheen); its pointer in control.disabled. Review of
+// slice A, finding 3: an edge in control.disabled made the disabled knob louder than an enabled
+// one, so its edge is the quiet control.knurl. The absent value mark is a shape cue, so S7 holds
+// without colour alone.
+test('knob: disabled (C1) is the track only, a flat plateLo body, pointer disabled, edge quiet',
   () => {
     const t = TOKENS.control;
     const BIP = { ...LIN, min: -50, max: 50, default: 0 };
@@ -1229,9 +1276,13 @@ test('knob: disabled (C1) is the track only, a flat plateLo body, pointer and ed
         const value = fromNorm(i / 20, p);
         for (const state of [{ disabled: true }, { disabled: true, focus: true, hover: true,
           dragging: true }]) {
-          const off = controlSvg({ kind: 'knob', value, param: p, tokens: TOKENS, state });
+          const applied = fromNorm(1 - i / 20, p);
+          const off = controlSvg({ kind: 'knob', value, applied, param: p, tokens: TOKENS,
+            state });
           const where = `${p.id} n ${i / 20} ${JSON.stringify(state)}`;
           assert.equal(part(off, 'data-ring'), null, `${where}: no value arc`);
+          assert.equal(part(off, 'data-applied'), null, `${where}: no applied mark`);
+          assert.ok(!off.includes(`stroke="${t.applied}"`), `${where}: nothing in applied`);
           assert.ok(part(off, 'data-track'), `${where}: the track`);
           assert.doesNotMatch(off, /stroke-dasharray/, `${where}: no dashes`);
           assert.ok(!off.includes(`stroke="${t.ring}"`), where);
@@ -1241,7 +1292,7 @@ test('knob: disabled (C1) is the track only, a flat plateLo body, pointer and ed
           }
           assert.equal(part(off, 'data-side'), null, `${where}: flat, no side wall`);
           assert.equal(part(off, 'data-sheen'), null, `${where}: flat, no sheen`);
-          assert.equal(attrOf(part(off, 'data-skirt'), 'stroke'), t.disabled, `${where}: edge`);
+          assert.equal(attrOf(part(off, 'data-skirt'), 'stroke'), t.knurl, `${where}: quiet edge`);
           for (const flag of ['data-pointer', 'data-pointer-skirt']) {
             assert.equal(attrOf(part(off, flag), 'stroke'), t.disabled, `${where} ${flag}`);
           }
@@ -1249,6 +1300,8 @@ test('knob: disabled (C1) is the track only, a flat plateLo body, pointer and ed
       }
     }
     assert.ok(part(draw('knob'), 'data-ring'), 'an enabled knob keeps its value arc');
+    assert.ok(part(controlSvg({ kind: 'knob', value: 70, applied: 30, param: LIN, tokens: TOKENS }),
+      'data-applied'), 'and its applied mark');
   });
 
 // C1 rewrote S7's comment in knob.js: no dashed disabled arc remains, and the comment says the

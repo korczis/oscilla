@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { SYNTH_TOKEN_NAMES, synthTokens, tokensFrom } from '../../src/js/ui/synth/tokens.js';
 import { controlSvg } from '../../src/js/ui/synth/knob.js';
 import { xySvg } from '../../src/js/ui/synth/xy.js';
+import { switchSvg } from '../../src/js/ui/synth/switch.js';
 import { knobSvg } from '../../src/js/synth/view/knob.js';
 import { PANEL_TOKENS } from '../../src/js/synth/view/tokens.js';
 import { NAMED, TOKENS, intensityLiterals } from './ui-synth-fixture.mjs';
@@ -253,12 +254,13 @@ test('every graphic role of the knob, fader and switch holds 3:1 on the plate, t
 });
 
 // A part is seen against what it is drawn over, not only against the plate (review of S2,
-// finding 1): the knob's applied arc lies on the skirt face (surface.card), the pointer, lit or
-// disabled, on the cap. The value arc over the unlit arc is told apart by width, not colour
+// finding 1): the knob's applied arc lies on the skirt face (control.cap since slice A; review
+// of slice A, finding 10), the pointer, lit or disabled, on the cap. The value arc over the
+// unlit arc is told apart by width, not colour
 // (ui-synth-knob.test.mjs), because no existing token pair holds 3:1 there in both themes.
 test('every knob part holds 3:1 on the part it is drawn over, in both themes', () => {
   const N = SYNTH_TOKEN_NAMES;
-  const pairs = [['control.applied on surface.card', N.control.applied, N.surface.card],
+  const pairs = [['control.applied on control.cap', N.control.applied, N.control.cap],
     ['control.pointer on control.cap', N.control.pointer, N.control.cap],
     ['control.disabled on control.cap', N.control.disabled, N.control.cap],
     ['control.focus on surface.plateLo', N.control.focus, N.surface.plateLo]];
@@ -285,9 +287,10 @@ test('slice A 8: the pointer on the cap and skirt, and the track on the plates, 
   for (const state of [{}, { hover: true }, { dragging: true }, { disabled: true }]) {
     const svg = controlSvg({ kind: 'knob', value: 70, applied: 30, param, tokens: TOKENS,
       state });
+    // A disabled knob draws no applied mark (C1; review of slice A, finding 9).
     const want = [['data-pointer', 'data-cap'], ['data-pointer-skirt', 'data-skirt'],
-      ['data-applied', 'data-skirt']].map(([fg, bg]) => [fg, paint(svg, fg, 'stroke'), bg,
-      paint(svg, bg, 'fill')]);
+      ...(state.disabled ? [] : [['data-applied', 'data-skirt']])].map(([fg, bg]) => [fg,
+      paint(svg, fg, 'stroke'), bg, paint(svg, bg, 'fill')]);
     for (const plate of PLATES) {
       want.push(['data-track', paint(svg, 'data-track', 'stroke'), 'plate', plate]);
     }
@@ -300,8 +303,83 @@ test('slice A 8: the pointer on the cap and skirt, and the track on the plates, 
       }
     }
   }
-  assert.ok(pairs >= 40, `${pairs} pairs`);
+  assert.ok(pairs >= 38, `${pairs} pairs`);
   assert.deepEqual(short, [], 'under 3:1 on the part beneath');
+});
+
+/** The skirt edge's paint as controlSvg draws a knob in `state`. */
+const skirtEdge = (state) => varOf(/\sstroke="([^"]*)"/.exec(/<path\b[^>]*\sdata-skirt=""[^>]*>/
+  .exec(controlSvg({ kind: 'knob', value: 70, tokens: TOKENS, state, param: { key: 'level',
+    unit: '%', min: 0, max: 100, step: 1, default: 50 } }))[0])[1]);
+
+// Review of slice A, finding 1: the skirt (control.cap) is 1.00-1.21:1 on the plates and its edge
+// in surface.edge 1.04-1.23:1, so the knob read as a hole in the dark plate and faded into the
+// light one. The silhouette is the skirt's edge: at least 1.5:1 asked, and it holds the layer's
+// 3:1 for a graphic on both plates in both themes, in every enabled state, as drawn.
+test('slice A review 1: the knob\'s silhouette edge holds 3:1 on both plates, both themes', () => {
+  const short = [];
+  for (const state of [{}, { hover: true }, { dragging: true }, { focus: true }]) {
+    const edge = skirtEdge(state);
+    for (const [theme, t] of Object.entries(themes())) {
+      for (const plate of PLATES) {
+        const ratio = contrast(hexOf(t, edge), hexOf(t, plate));
+        if (ratio < 3) short.push(`${JSON.stringify(state)} ${theme} ${edge} on ${plate}: `
+          + `${ratio.toFixed(2)}`);
+      }
+    }
+  }
+  assert.deepEqual(short, [], 'the silhouette under 3:1 on a plate');
+});
+
+// Review of slice A, finding 3: a disabled skirt edged in control.disabled (3.6-4.4:1) was a
+// heavy sawblade louder than any enabled knob (1.04-1.23:1 then). A disabled knob's edge is never
+// more prominent than an enabled one's, on either plate, in either theme.
+test('slice A review 3: a disabled knob\'s edge is no louder than an enabled one\'s', () => {
+  const on = skirtEdge({});
+  const off = skirtEdge({ disabled: true });
+  assert.notEqual(off, SYNTH_TOKEN_NAMES.control.disabled, 'not the disabled pointer\'s role');
+  const loud = [];
+  for (const [theme, t] of Object.entries(themes())) {
+    for (const plate of PLATES) {
+      const [a, b] = [on, off].map((x) => contrast(hexOf(t, x), hexOf(t, plate)));
+      if (b > a) loud.push(`${theme} on ${plate}: disabled ${b.toFixed(2)} > ${a.toFixed(2)}`);
+    }
+  }
+  assert.deepEqual(loud, []);
+});
+
+/** The stops of the knob's gradient whose id ends in `-${which}`, as token names. */
+function knobStops(which) {
+  const svg = controlSvg({ kind: 'knob', value: 70, tokens: TOKENS, param: { key: 'level',
+    unit: '%', min: 0, max: 100, step: 1, default: 50 } });
+  const g = new RegExp(`<(?:linear|radial)Gradient\\b[^>]*\\sid="[^"]*-${which}"[^>]*>(.*?)<`
+    + '/(?:linear|radial)Gradient>').exec(svg);
+  assert.ok(g, `the ${which} gradient`);
+  return [...g[1].matchAll(/\sstop-color="([^"]*)"/g)].map((m) => varOf(m[1]));
+}
+
+// Review of slice A, finding 8: the side wall ran capHi (top) to cap, and the light theme's capHi
+// (L* 89) is darker than its cap (L* 100), so the top darkened while the cast shadow says the
+// light comes from above. The side wall's lit stop (the top) is never darker than its shaded one
+// (the foot) in either theme.
+test('slice A review 8: the side wall is lit from above in both themes', () => {
+  const [top, foot] = knobStops('side');
+  for (const [theme, t] of Object.entries(themes())) {
+    assert.ok(lstar(hexOf(t, top)) >= lstar(hexOf(t, foot)), `${theme}: ${top} L* `
+      + `${lstar(hexOf(t, top)).toFixed(1)} under ${foot} ${lstar(hexOf(t, foot)).toFixed(1)}`);
+  }
+});
+
+// The sheen's lit stop is capHi by amendment (d) (oscilla-21) until the highlight shows on the
+// cap in both themes, and no token is lighter than the light theme's cap: the inversion there
+// waits for D-PAL's --osc-knob-cap/-cap-hi (C6), which this test then holds.
+test('slice A review 8: the sheen is lit at its focus in both themes (awaits D-PAL)', {
+  todo: 'D-PAL --osc-knob-cap-hi (oscilla-21, C6): the light capHi is darker than the cap',
+}, () => {
+  const [lit, rest] = knobStops('sheen');
+  for (const t of Object.values(themes())) {
+    assert.ok(lstar(hexOf(t, lit)) >= lstar(hexOf(t, rest)));
+  }
 });
 
 // S7 (W1b re-review): the unlit knob arc measured 1.10:1 (dark) and 1.40:1 (light) on the plate,
@@ -411,6 +489,11 @@ function layerUses() {
       uses.push(...depthUses(controlSvg({ kind, value, param, tokens: TOKENS, state }),
         `knob.js ${kind} ${JSON.stringify(state)}`, TOKENS.surface.card));
     }
+    // A dial is the knob's face (review of slice A, finding 5): its cast shadow is judged too.
+    const dial = { key: 'wave', type: 'enum', default: 'a', options: ['a', 'b', 'c', 'd', 'e']
+      .map((v) => [v, v.toUpperCase()]) };
+    uses.push(...depthUses(switchSvg({ value: 'b', param: dial, tokens: TOKENS, state }),
+      `switch.js dial ${JSON.stringify(state)}`, TOKENS.surface.card));
   }
   const panel = Object.fromEntries(Object.entries(PANEL_TOKENS).map(([k, n]) => [k, `var(${n})`]));
   for (const disabled of [false, true]) {
@@ -441,6 +524,8 @@ function depthPairs() {
 test('the depth roles are drawn only through their intensity class, each over a face', () => {
   const uses = layerUses();
   const parts = new Set(uses.map((u) => `${u.role} ${u.part}`));
+  assert.ok(uses.some((u) => u.where.startsWith('switch.js dial') && u.part === 'data-cast-shadow'),
+    'a dial casts the knob\'s shadow');
   for (const want of ['--osc-hw-shade data-cast-shadow', '--osc-hw-shade data-puck-shadow',
     '--osc-hw-shade data-recess', '--osc-hw-highlight data-puck-highlight']) {
     assert.ok(parts.has(want), `drawn: ${want} (${[...parts].join(', ')})`);

@@ -9,7 +9,7 @@
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
 //   parseValue                                                         typed entry (Enter)
 //   formatValue, ariaAttrs                                             the value as text, ARIA
-//   controlSvg, controlBox, CONTROL_BOX, FADER_CAP                     the drawing, an SVG <g>
+//   controlSvg, controlBox, CONTROL_BOX, FADER_CAP, KNOB, knobFace     the drawing, an SVG <g>
 
 import { formatFrequencyCompact, formatMs } from '../../core/frequency.js';
 import { sig } from '../../core/math.js';
@@ -527,26 +527,25 @@ function arcPath(r, a, b) {
   return `M ${x0} ${y0} A ${r} ${r} 0 ${e - s > 180 ? 1 : 0} 1 ${x1} ${y1}`;
 }
 
-// Graph units; every part inside the 44 box (focus ring to r 22, the detent's butt corners at
-// r 21.75). The unlit arc is half the value arc's width (no token pair holds 3:1 between them);
-// the value arc clears the ticks by 0.5. Slice A, a moulded part: a cast shadow on the plate
-// (control.shade, hw-shadow), a toothed skirt in the cap's colour edged in surface.edge, side
-// wall and sheen gradients of token stops at hw-sheen (ids from `uid`), a butt pointer on cap
-// and skirt. C1 (S7; one disabled language, co-signed by p2 and dev-53): disabled draws no
-// value arc, the track only; cap and skirt flattened to plateLo (no side wall, no sheen); pointer
-// and edge in control.disabled. The absent value mark is a shape cue, not colour alone.
-export const KNOB = Object.freeze({ arc: 18.5, arcW: 2.5, trackW: 1.25, skirt: 16, toothIn: 15.4,
-  teeth: 40, edgeW: 1.5, cap: 12, pointerIn: 5, pointerOut: 12, pointerW: 2, skirtPtrIn: 12.5,
-  skirtPtrW: 1.5, tickIn: 20.75, tickOut: 22, ticks: 11, tickZoom: 1.25, detentOut: 21.75,
+// Graph units, in the 44 box. The unlit arc is half the value arc's width (no token pair holds
+// 3:1 between them). Slice A: cast shadow (control.shade); skirt of 30 teeth 1.2 deep (1.75 px
+// at 64 px) in the cap's colour, its silhouette edge control.edge (3:1 on the plates); side wall
+// (lit top) and sheen gradients at hw-sheen; butt pointer on cap and skirt; hover a thin circle
+// (C5). C1 (S7, co-signed by p2 and dev-53): disabled draws no value arc, no applied mark, the
+// track only; cap and skirt plateLo (no side wall, no sheen), the pointer control.disabled, the
+// edge the quiet control.knurl. The absent value mark is a shape cue, not colour alone.
+export const KNOB = Object.freeze({ arc: 18.5, arcW: 2.5, trackW: 1.25, skirt: 16, toothIn: 14.8,
+  teeth: 30, edgeW: 1, hoverW: 1, cap: 12, pointerIn: 5, pointerOut: 12, pointerW: 2,
+  skirtPtrIn: 12.5, skirtPtrW: 1.5, tickIn: 20.75, tickOut: 22, ticks: 11, tickZoom: 1.25,
+  detentOut: 21.75,
   detentW: 1.5, applied: 13.5, appliedW: 1.5, appliedMinDeg: 5, focus: 21, focusW: 2,
   shadowGrow: 0.5, shadowDx: 0.75, shadowDy: 1.5, shadowDragDy: 2.5, sheenFx: -4, sheenFy: -5 });
 /** A fader's cap, graph units: w across the travel, h along it. */
 export const FADER_CAP = Object.freeze({ w: 28, h: 14 });
 const FADER = { capW: FADER_CAP.w, capH: FADER_CAP.h, trackW: 4, grip: 3 };
 const SWITCH = { w: 14, h: 28, inset: 2, leverW: 10 };
-/** The cap highlight's intensity class: the hw-sheen key of tailwind.config.cjs. */
+/** The intensity classes: tailwind.config.cjs's hw-sheen and hw-shadow keys. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
-/** The cap shadow's intensity class: the hw-shadow key, as the cable's shadow. */
 const SHADOW_CLASS = 'opacity-hw-shadow';
 
 const faderBox = (tr) => Object.freeze({ x: -22, y: -(tr / 2 + 10), width: 44, height: tr + 20 });
@@ -631,6 +630,38 @@ const line = (flag, r0, r1, deg, paint, w) => {
 const stops = (a, b) => `<stop offset="0" stop-color="${esc(a)}"/>`
   + `<stop offset="1" stop-color="${esc(b)}"/>`;
 
+/** The knob's face, pointer at `deg`: shadow, `under`, skirt, side wall, `mid`, cap, sheen,
+ *  hover, pointer (st: controlSvg's; ids knob-`uid`). switch.js's dial draws it too. */
+export function knobFace(deg, t, st = {}, uid = 'knob', under = '', mid = '') {
+  const c = t.control;
+  const k = KNOB;
+  const dim = st.disabled;
+  const body = esc(dim ? t.surface.plateLo : c.cap);
+  const id = `knob-${String(uid).replace(/[^\w.:-]/g, '_')}`;
+  const ptr = dim ? c.disabled : c.pointer;
+  return `<circle data-cast-shadow="" class="${SHADOW_CLASS}" cx="${k.shadowDx}" `
+    + `cy="${st.dragging ? k.shadowDragDy : k.shadowDy}" r="${k.skirt + k.shadowGrow}" `
+    + `fill="${esc(c.shade)}" stroke="none"/>${under}`
+    + `<path d="${TEETH}" data-skirt="" fill="${body}" `
+    + `stroke="${esc(dim ? c.knurl : c.edge)}" stroke-width="${k.edgeW}"/>`
+    + (dim ? '' : `<defs><linearGradient id="${id}-side" x1="0" y1="0" x2="0" y2="1">`
+      + `${stops(c.cap, t.surface.edge)}</linearGradient><radialGradient id="${id}-sheen" `
+      + `gradientUnits="userSpaceOnUse" cx="0" cy="0" r="${k.cap}" fx="${k.sheenFx}" `
+      + `fy="${k.sheenFy}">${stops(c.capHi, c.cap)}</radialGradient></defs>`
+      + `<path d="${TEETH}" data-side="" class="${SHEEN_CLASS}" fill="url(#${id}-side)" `
+      + 'stroke="none"/>')
+    + mid
+    + `<circle data-cap="" cx="0" cy="0" r="${k.cap}" fill="${body}" `
+    + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
+    + (dim ? '' : `<circle data-sheen="" class="${SHEEN_CLASS}" cx="0" cy="0" r="${k.cap}" `
+      + `fill="url(#${id}-sheen)" stroke="none"/>`)
+    // K6-core: always emitted, shown on hover (or a host's group-hover), never disabled.
+    + `<circle data-hover="" cx="0" cy="0" r="${k.toothIn}" fill="none" stroke="${esc(c.capHi)}" `
+    + `stroke-width="${k.hoverW}"${st.hover && !dim ? '' : ' visibility="hidden"'}/>`
+    + line('data-pointer', k.pointerIn, k.pointerOut, deg, ptr, k.pointerW)
+    + line('data-pointer-skirt', k.skirtPtrIn, k.skirt, deg, ptr, k.skirtPtrW);
+}
+
 function knobShapes(value, applied, p, t, st, zoom, uid) {
   const c = t.control;
   const dim = st.disabled;
@@ -641,10 +672,7 @@ function knobShapes(value, applied, p, t, st, zoom, uid) {
   // a detent tick there; any other range starts at its minimum.
   const bipolar = p.min < 0 && p.max > 0;
   const origin = bipolar ? angle(0) : -half;
-  const k = KNOB;
-  let out = `<circle data-cast-shadow="" class="${SHADOW_CLASS}" cx="${k.shadowDx}" `
-    + `cy="${st.dragging ? k.shadowDragDy : k.shadowDy}" r="${k.skirt + k.shadowGrow}" `
-    + `fill="${esc(c.shade)}" stroke="none"/>`;
+  let out = '';
   if (zoom >= KNOB.tickZoom) {
     const at = Array.from({ length: KNOB.ticks }, (_, i) => -half + (i * SWEEP_DEG)
       / (KNOB.ticks - 1));
@@ -664,40 +692,18 @@ function knobShapes(value, applied, p, t, st, zoom, uid) {
     out += `<path d="${arcPath(KNOB.arc, origin, a)}" data-ring="" fill="none" `
       + `stroke="${esc(c.ring)}" stroke-width="${KNOB.arcW}" stroke-linecap="round"/>`;
   }
-  const body = esc(dim ? t.surface.plateLo : c.cap);
-  const id = esc(`knob-${uid}`);
-  out += `<path d="${TEETH}" data-skirt="" fill="${body}" `
-    + `stroke="${esc(dim ? c.disabled : t.surface.edge)}" stroke-width="${k.edgeW}"/>`;
-  if (!dim) {
-    out += `<defs><linearGradient id="${id}-side" x1="0" y1="0" x2="0" y2="1">`
-      + `${stops(c.capHi, c.cap)}</linearGradient><radialGradient id="${id}-sheen" `
-      + `gradientUnits="userSpaceOnUse" cx="0" cy="0" r="${k.cap}" fx="${k.sheenFx}" `
-      + `fy="${k.sheenFy}">${stops(c.capHi, c.cap)}</radialGradient></defs>`
-      + `<path d="${TEETH}" data-side="" class="${SHEEN_CLASS}" fill="url(#${id}-side)" `
-      + 'stroke="none"/>';
-  }
-  if (applied !== null) {
+  let mid = '';
+  if (!dim && applied !== null) {
     // From the same origin; at the origin itself a short arc, so the split is still seen.
     const b = angle(applied);
     const [s0, s1] = Math.abs(b - origin) < KNOB.appliedMinDeg
       ? [b - KNOB.appliedMinDeg / 2, b + KNOB.appliedMinDeg / 2] : [origin, b];
-    out += `<path d="${arcPath(KNOB.applied, s0, s1)}" data-applied="" fill="none" `
+    mid = `<path d="${arcPath(KNOB.applied, s0, s1)}" data-applied="" fill="none" `
       + `stroke="${esc(c.applied)}" stroke-width="${KNOB.appliedW}" stroke-linecap="round"/>`;
   }
-  const ptr = dim ? c.disabled : c.pointer;
-  return out
-    + `<circle data-cap="" cx="0" cy="0" r="${k.cap}" fill="${body}" `
-    + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
-    + (dim ? '' : `<circle data-sheen="" class="${SHEEN_CLASS}" cx="0" cy="0" r="${k.cap}" `
-      + `fill="url(#${id}-sheen)" stroke="none"/>`)
-    + line('data-pointer', k.pointerIn, k.pointerOut, a, ptr, k.pointerW)
-    + line('data-pointer-skirt', k.skirtPtrIn, k.skirt, a, ptr, k.skirtPtrW)
-    // K6-core: always emitted, as the panel's focus ring is; shown on hover (a host may reveal it
-    // with group-hover), never on a disabled knob.
-    + `<path d="${TEETH}" data-hover="" fill="none" stroke="${esc(c.pointer)}" `
-    + `stroke-width="${k.edgeW}"${st.hover && !dim ? '' : ' visibility="hidden"'}/>`
-    + (st.focus ? `<circle data-focus="" cx="0" cy="0" r="${k.focus}" fill="none" `
-      + `stroke="${esc(c.focus)}" stroke-width="${k.focusW}"/>` : '');
+  return knobFace(a, t, st, uid, out, mid)
+    + (st.focus ? `<circle data-focus="" cx="0" cy="0" r="${KNOB.focus}" fill="none" `
+      + `stroke="${esc(c.focus)}" stroke-width="${KNOB.focusW}"/>` : '');
 }
 
 function faderShapes(value, applied, p, t, st, zoom, tr) {
@@ -772,12 +778,11 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
 
 /**
  * One control as an SVG '<g>' centred in controlBox(kind, orientation), drawn only from `tokens`
- * (synthTokens): knob = cast shadow, unlit arc (control.track), value arc (control.ring; from
- * zero with a detent tick across zero; none disabled, C1), toothed skirt, cap and sheen, pointer,
- * hover overlay, ticks from zoom 1.25, focus ring (KNOB above); `uid` names its gradients (else
- * the parameter's id); fader = slot in control.track, value fill (from zero across zero), a
- * FADER_CAP cap edged in control.edge (control.pointer dragged), three grip lines, the centre on
- * the value; 'horizontal' turns it (rotate(90): more to the right), `travel` (FADER_TRAVEL) its
+ * (synthTokens): knob = ticks from zoom 1.25, unlit arc, value arc (from zero across zero, a
+ * detent there), knobFace, focus ring; `uid` names its gradients (else the parameter's id);
+ * fader = slot in control.track, value fill (from zero across zero), a FADER_CAP cap edged in
+ * control.edge (control.pointer dragged), three grip lines, the centre on the value;
+ * 'horizontal' turns it (rotate(90): more to the right), `travel` (FADER_TRAVEL) its
  * length; switch = a lever position per option (an enum of up to four or a boolean), detents past
  * two. `applied`, elsewhere than `value`, marks the engine's value (a knob's arc at r 13.5 in
  * control.applied, else a control.pointer line). `state` is { focus, dragging, disabled, hover }.
@@ -805,7 +810,6 @@ export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, stat
     + `<rect data-hit="" x="${num(-w / 2)}" y="${num(-h / 2)}" width="${w}" `
     + `height="${h}" fill="none" stroke="none" pointer-events="all"/>`
     + `<g pointer-events="none"${turn}>${shapes(v, appliedAt(applied, v, param), param, tokens, st,
-      zoom, kind === 'knob' ? String(uid ?? idOf(param)).replace(/[^\w.:-]/g, '_')
-        : travelOf(kind, travel))}</g>`
+      zoom, kind === 'knob' ? uid ?? idOf(param) : travelOf(kind, travel))}</g>`
     + '</g>';
 }

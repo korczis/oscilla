@@ -241,47 +241,53 @@ const radialsOf = (el) => [...attrOf(el, 'd').matchAll(/M (\S+) (\S+) L (\S+) (\
 const near = (a, b, eps, what) => assert.ok(Math.abs(a - b) <= eps, `${what}: ${a} vs ${b}`);
 
 // Review of W1c, finding 4: the selector's skirt was r 17 at 1:1 beside 64 px knobs, about half
-// their size, and its knurl a dashed ring the panel added. A dial is now the knob's face at the
-// size of the knob beside it: the knob's skirt (r 16 of its 44 box), a 24-ridge knurl from
-// r 14.5 to 16 in control.knurl (the knob's own until slice A gave it a toothed skirt), its cap,
-// all scaled by knob / CONTROL_BOX.knob.width, and its detents end inside that knob's box.
-test('a dial is the knob\'s face at the knob\'s size: skirt, knurl, cap, detents in its box',
+// their size, and its knurl a dashed ring the panel added. Review of slice A, finding 5: the dial
+// kept the old face (a card skirt, 24 ridges, a cap shadow, an ellipse sheen, a round pointer)
+// beside the redrawn knob, two knob languages on one panel. A dial is the knob's face itself
+// (knob.js's knobFace: cast shadow, toothed skirt, side wall, cap, sheen, hover overlay, both
+// pointer segments), drawn in a group scaled by knob / CONTROL_BOX.knob.width, and its detents
+// end inside that knob's box.
+const faceOf = (svg) => /<g data-face="" transform="scale\(([\d.]+)\)">/.exec(svg);
+test('a dial is the knob\'s face at the knob\'s size: skirt, body, sheen, pointer, detents',
   () => {
   // The knob's own face, as controlSvg draws it: what a dial at the default knob width repeats.
   const KNOB_P = { key: 'k', type: 'number', min: 0, max: 1, default: 0.5 };
-  const knobFace = controlSvg({ kind: 'knob', value: 0.5, param: KNOB_P, tokens: TOKENS });
-  const dialFace = draw(ENUM(5));
-  for (const [attr, keys] of [['data-skirt', ['stroke-width']], ['data-cap', ['r']]]) {
-    for (const a of keys) {
-      assert.equal(attrOf(part(dialFace, attr), a), attrOf(part(knobFace, attr), a),
-        `the dial's ${attr} ${a} is the knob's`);
+  for (const state of [{}, { hover: true }, { dragging: true }, { disabled: true }]) {
+    const knobFace = controlSvg({ kind: 'knob', value: 0.5, param: KNOB_P, tokens: TOKENS, uid: 'u',
+      state });
+    const dialFace = draw(ENUM(5), { uid: 'u', state });
+    const where = JSON.stringify(state);
+    for (const flag of ['data-cast-shadow', 'data-skirt', 'data-side', 'data-cap', 'data-sheen',
+      'data-hover']) {
+      assert.equal(part(dialFace, flag), part(knobFace, flag), `${where}: the dial's ${flag}`);
     }
+    assert.equal(/<defs>.*?<\/defs>/.exec(dialFace)?.[0], /<defs>.*?<\/defs>/.exec(knobFace)?.[0],
+      `${where}: the same gradients`);
+    for (const flag of ['data-pointer', 'data-pointer-skirt']) {
+      const [d, k] = [part(dialFace, flag), part(knobFace, flag)];
+      assert.ok(d, `${where}: the dial's ${flag}`);
+      for (const a of ['stroke', 'stroke-width', 'stroke-linecap']) {
+        assert.equal(attrOf(d, a), attrOf(k, a), `${where}: ${flag} ${a}`);
+      }
+      const r = (e) => [Math.hypot(n(e, 'x1'), n(e, 'y1')), Math.hypot(n(e, 'x2'), n(e, 'y2'))];
+      r(d).forEach((x, i) => near(x, r(k)[i], 0.02, `${where}: ${flag} radius ${i}`));
+    }
+    assert.equal(part(dialFace, 'data-knurl'), null, `${where}: no knurl of its own`);
+    assert.doesNotMatch(dialFace, /<ellipse /, `${where}: no ellipse sheen`);
+    assert.equal(part(dialFace, 'data-shadow'), null, `${where}: no cap shadow`);
   }
-  // Since slice A the knob's skirt is a toothed outline (its tips at r 16) and it has no knurl;
-  // the dial keeps its knurled skirt of the same size until the selector face is redrawn (K14).
-  const knobSkirt = Math.max(...[...attrOf(part(knobFace, 'data-skirt'), 'd')
-    .matchAll(/[ML] (\S+) (\S+)/g)].map((m) => Math.hypot(Number(m[1]), Number(m[2]))));
-  near(n(part(dialFace, 'data-skirt'), 'r'), knobSkirt, 0.02, 'the dial\'s skirt is the knob\'s');
+  assert.doesNotMatch(SRC, /KNOB_FACE|knurls/, 'switch.js keeps no copy of the knob\'s face');
   for (const p of DIALS) {
     for (const knob of KNOB_WIDTHS) {
       const k = (knob ?? CONTROL_BOX.knob.width) / CONTROL_BOX.knob.width;
       const where = `${p.key} beside a ${knob ?? 44} knob`;
       const svg = draw(p, { knob });
-      near(n(part(svg, 'data-skirt'), 'r'), 16 * k, 0.01, `${where}: the knob's skirt`);
-      near(n(part(svg, 'data-skirt'), 'stroke-width'), 1.5 * k, 0.01, `${where}: its edge`);
-      near(n(part(svg, 'data-cap'), 'r'), 12 * k, 0.01, `${where}: the knob's cap`);
-      const knurl = part(svg, 'data-knurl');
-      assert.ok(knurl, `${where}: a knurl of the core's own`);
-      assert.equal(attrOf(knurl, 'stroke'), TOKENS.control.knurl, `${where}: the knurl role`);
-      near(n(knurl, 'stroke-width'), k, 0.01, `${where}: a knob ridge's width`);
-      const ridges = radialsOf(knurl);
-      assert.equal(ridges.length, 24, `${where}: the knob's 24 ridges`);
-      for (const [i, [r0, r1, a]] of ridges.entries()) {
-        near(r0, 14.5 * k, 0.02, `${where}: ridge ${i} from`);
-        near(r1, 16 * k, 0.02, `${where}: ridge ${i} to`);
-        const want = ((i * 15 + 180) % 360) - 180;
-        near(((a + 540) % 360) - 180, want, 0.1, `${where}: ridge ${i} evenly spaced`);
-      }
+      const face = faceOf(svg);
+      assert.ok(face, `${where}: the knob's face group`);
+      near(Number(face[1]), k, 1e-4, `${where}: scaled to the knob beside it`);
+      assert.ok(svg.indexOf(face[0]) < svg.indexOf('data-skirt=""')
+        && svg.indexOf('data-pointer-skirt=""') < svg.indexOf('</g>', svg.indexOf(face[0])),
+      `${where}: the face lies in the group`);
       for (const d of parts(svg, 'data-detent')) {
         const r = Math.max(Math.hypot(n(d, 'x1'), n(d, 'y1')), Math.hypot(n(d, 'x2'), n(d, 'y2')));
         assert.ok(r > 16 * k, `${where}: a detent outside the skirt`);
@@ -519,7 +525,10 @@ test('every registry enum and boolean: 44 px hit boxes that never overlap, insid
       assert.deepEqual(shapesWithoutStroke(svg), [], `${where}: every shape sets its stroke`);
       const known = new Set(tokenValues());
       for (const paint of paints(svg)) {
-        assert.ok(paint === 'none' || known.has(paint), `${where}: ${paint} is not a token`);
+        // A dial's url(#id) is the knob face's gradient of token stops, defined in this drawing.
+        const ref = /^url\(#([^)]+)\)$/.exec(paint);
+        assert.ok(paint === 'none' || known.has(paint) || (ref && svg.includes(` id="${ref[1]}"`)),
+          `${where}: ${paint} is not a token`);
       }
     }
   }
@@ -677,7 +686,13 @@ test('states: hover lights the edge and the hovered legend, focus rings the opti
     const edgeOf = (svg) => attrOf(part(svg, 'data-housing') || part(svg, 'data-slot')
       || part(svg, 'data-skirt'), 'stroke');
     assert.equal(edgeOf(plain), TOKENS.control.edge, p.key);
-    assert.equal(edgeOf(draw(p, { state: { hover: true } })), TOKENS.control.pointer, p.key);
+    const hovered = draw(p, { state: { hover: true } });
+    if (faceOf(hovered)) {
+      // A dial is the knob's face: hover shows its overlay (review of slice A, finding 5).
+      assert.equal(attrOf(part(plain, 'data-hover'), 'visibility'), 'hidden', p.key);
+      assert.equal(attrOf(part(hovered, 'data-hover'), 'visibility'), undefined, p.key);
+      assert.equal(attrOf(part(hovered, 'data-hover'), 'stroke'), TOKENS.control.capHi, p.key);
+    } else assert.equal(edgeOf(hovered), TOKENS.control.pointer, p.key);
     const other = L.options.find((o) => o.value !== p.default);
     const hov = draw(p, { state: { hover: { option: other.value } } });
     const t = parts(hov, 'data-legend').find((x) => attrOf(x, 'data-index')
@@ -702,13 +717,16 @@ test('states: hover lights the edge and the hovered legend, focus rings the opti
 
 test('dragging lifts the shadow; the shadow and the sheen are the hw-* classes', () => {
   for (const p of [BOOL, WAVE, ENUM(5), ENUM(12)]) {
-    const sh = (svg) => part(svg, 'data-shadow');
+    // A dial casts the knob's shadow in the depth shade (review of slice A, finding 5).
+    const dial = Boolean(faceOf(draw(p)));
+    const sh = (svg) => part(svg, dial ? 'data-cast-shadow' : 'data-shadow');
     const at = (el) => n(el, 'y') + n(el, 'cy');
     assert.ok(at(sh(draw(p, { state: { dragging: true } }))) > at(sh(draw(p))), p.key);
     assert.equal(attrOf(sh(draw(p)), 'class'), 'opacity-hw-shadow');
-    assert.equal(attrOf(sh(draw(p)), 'fill'), TOKENS.surface.edge);
+    assert.equal(attrOf(sh(draw(p)), 'fill'), dial ? TOKENS.control.shade : TOKENS.surface.edge);
   }
-  assert.match(draw(ENUM(5)), /<ellipse class="opacity-hw-sheen"/, 'the dial cap\'s highlight');
+  assert.match(draw(ENUM(5)), /<circle data-sheen="" class="opacity-hw-sheen"/,
+    'the dial cap\'s highlight is the knob\'s sheen');
 });
 
 // ---------------------------------------------------------------- v4: intensity, LED, motion
