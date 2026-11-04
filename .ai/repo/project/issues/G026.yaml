@@ -1,0 +1,32 @@
+id: G026
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+title: "One app shell: the Flowbite Pro shell (F002) frames every workspace, full screen included"
+slug: one-app-shell-the-pro-shell-everywhere
+priority: p2
+profile: implementation
+objective: "Lands as refactor(ui). The Flowbite Pro shell of F002 (lane A, #386: navbar, sidebar, page header from the workspace registry) is the one app shell; a workspace's own chrome (the Synth's header row, the Studio's full-screen frame) renders inside it or through its page-header and frame parameters, never as a second shell; the census counts shell modules and its baseline lists any second one until it migrates."
+why: "Owner order of 2026-11-04 (M123): every control family unified, parametrized, reused, no parallel implementations."
+scope:
+  - "src/js/ui/shell.js"
+  - "src/js/ui/studio"
+  - "src/js/synth"
+  - "src/index.html"
+  - "src/js/ui/catalog"
+  - "tests"
+  - "dist"
+depends_on:
+  - "G021"
+acceptance_criteria:
+  - "The family has one implementing module, named in its catalogue declarations; its G021 baseline entries leave and the census passes with them gone (fail-first: the census fails on the merge base with the entries removed)."
+  - "Every place the family appears renders through that module with its parameters (skin, size, range, labels); no behaviour, key binding or ARIA of any place changes except where the PR lists it with its reason; the visual references change only where the PR re-accepts them with the reason."
+  - "Every gate browser, file:// and the /oscilla/ sub-path; the affected browser suites pass; a non-builder's verdict where a guarded path changes (project.review-verdict v2)."
+validation:
+  - "node --test tests/unit/ui-families.test.mjs"
+  - "npm test"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04

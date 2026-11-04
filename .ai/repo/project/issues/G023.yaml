@@ -1,0 +1,32 @@
+id: G023
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+title: "One switch and one slider: one model each, the Pro and the hardware look as parameters"
+slug: one-switch-and-one-slider-model-each-skinned-by-parameter
+priority: p2
+profile: implementation
+objective: "Lands as refactor(ui). Switches (toggle, radio choice, segmented) and sliders (range, fader) each get one model module (state, keys, ARIA, the value mapping) that the app's Flowbite Pro controls (G008's catalogue render) and the synth layer's hardware controls (src/js/ui/synth/switch.js, the fader) both render through, the skin a parameter; the ad hoc copies in src/index.html, the Studio Inspector and src/js/synth/view/face.js migrate onto them."
+why: "Owner order of 2026-11-04 (M123): every control family unified, parametrized, reused, no parallel implementations."
+scope:
+  - "src/js/ui/catalog"
+  - "src/js/ui/synth"
+  - "src/js/synth/view"
+  - "src/js/ui/studio"
+  - "src/index.html"
+  - "tests"
+  - "dist"
+depends_on:
+  - "G021"
+acceptance_criteria:
+  - "The family has one implementing module, named in its catalogue declarations; its G021 baseline entries leave and the census passes with them gone (fail-first: the census fails on the merge base with the entries removed)."
+  - "Every place the family appears renders through that module with its parameters (skin, size, range, labels); no behaviour, key binding or ARIA of any place changes except where the PR lists it with its reason; the visual references change only where the PR re-accepts them with the reason."
+  - "Every gate browser, file:// and the /oscilla/ sub-path; the affected browser suites pass; a non-builder's verdict where a guarded path changes (project.review-verdict v2)."
+validation:
+  - "node --test tests/unit/ui-families.test.mjs"
+  - "npm test"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04

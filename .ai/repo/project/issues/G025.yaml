@@ -1,0 +1,30 @@
+id: G025
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+title: "One keyboard: midi/keyboard-ui.js is the keyboard of every surface"
+slug: one-keyboard-every-surface-reuses-it
+priority: p2
+profile: implementation
+objective: "Lands as refactor(ui). The on-screen keyboard family (src/js/midi/keyboard.js, keyboard-ui.js, keyboard-view.js) is the one implementation; the Synth dock, the Studio keyboard (through its sink), the XY tab and the live landing's hero (P012) mount it with parameters and never draw a second keyboard; its keys go through the K153 registry."
+why: "Owner order of 2026-11-04 (M123): every control family unified, parametrized, reused, no parallel implementations."
+scope:
+  - "src/js/midi"
+  - "src/js/synth"
+  - "src/js/ui/catalog"
+  - "tests"
+  - "dist"
+depends_on:
+  - "G021"
+acceptance_criteria:
+  - "The family has one implementing module, named in its catalogue declarations; its G021 baseline entries leave and the census passes with them gone (fail-first: the census fails on the merge base with the entries removed)."
+  - "Every place the family appears renders through that module with its parameters (skin, size, range, labels); no behaviour, key binding or ARIA of any place changes except where the PR lists it with its reason; the visual references change only where the PR re-accepts them with the reason."
+  - "Every gate browser, file:// and the /oscilla/ sub-path; the affected browser suites pass; a non-builder's verdict where a guarded path changes (project.review-verdict v2)."
+validation:
+  - "node --test tests/unit/ui-families.test.mjs"
+  - "npm test"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04
