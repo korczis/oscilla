@@ -140,6 +140,9 @@ const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
 const C4 = 261.6256;
+// The FM engine at its Init values sounds C4 at about -55 dB rel (measured in chromium on the
+// Mac, 48 kHz): heard is 6 dB below that, still 9 dB above the release's -70 dB rel.
+const FM_HEARD_DB = -61;
 const ARM_STALL_MS = 20; // per connect(): measured to reproduce V4 on b3f7d006 in chromium
 
 // ------------------------------------------------------------------------------ page probes
@@ -846,7 +849,7 @@ function defineChecks() {
     await until(async () => (await dbg(page)).played === fm, { ms: 10000,
       what: 'the keys play the FM engine' });
     await hold(page, 'KeyA');
-    const on = await sound(page, (q) => q.rmsDb > -40, 'the FM engine sounds the held key');
+    const on = await sound(page, (q) => q.rmsDb > FM_HEARD_DB, 'the FM engine sounds the held key');
     // The chip of the engine the tab shows: no tab or engine change, only the route goes.
     await page.locator('[data-engine="additive"]').click();
     await until(async () => (await dbg(page)).played === (await dbg(page)).nodes.additive,
