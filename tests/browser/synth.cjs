@@ -878,7 +878,7 @@ function defineChecks() {
         && x;
     }, { ms: 10000, what: 'the radio checks FM and shows its plate, as the keys play FM' });
     await hold(page, 'KeyA');
-    const on = await sound(page, (q) => q.rmsDb > -40, 'the FM engine sounds the held key');
+    const on = await sound(page, (q) => q.rmsDb > FM_HEARD_DB, 'the FM engine sounds the held key');
     const d = await dbg(page);
     await page.keyboard.up('KeyA');
     const off = await silent(page, 'the key up releases the FM voice');
