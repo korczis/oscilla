@@ -11,14 +11,19 @@
 //     mixed: something the panel did not patch (a Studio edge) feeds the jack while its normals
 //     still sound; breakNormals(model, panel, jackId) is the panel's way to make it 'patched'
 //   jackReason(model, panel, jackId) -> why a cable into the jack would do nothing, or null
-//   cableProps(model, panel, from, to, { memory }) -> the props a new cable gets
-//   patchCable(model, panel, fromJack, toJack, { registry, memory }) -> { action } | { reason }
-//   unpatch(model, panel, edgeId, { memory }) -> { action } | { reason }
-//   restoreNormals(model, panel, jackId, { memory }) -> { action } | { reason }
+//   cableProps(model, panel, from, to) -> the props a new cable gets
+//   patchCable(model, panel, fromJack, toJack, { registry }) -> { action } | { reason }
+//   unpatch(model, panel, edgeId) -> { action } | { reason }
+//   restoreNormals(model, panel, jackId) -> { action } | { reason }
 //   amountEdges(model, panel, amount) -> [edge];  setAmount(model, panel, amount, depth) -> action
-//   createAmountMemory(panel) -> { note(model), depth(amountKey) }   the last depth of each
-//     amount knob in this session, so a knob whose every edge a cable broke comes back at its
-//     setting when the normal is restored (the model holds a depth only on an edge)
+//   amountDepth(model, panel, amount) -> depth | null   the knob's: its first edge's, else the
+//     depth the model remembers for it
+//   rememberAmounts(model, panel, steps) -> steps   the steps, and when they remove every edge
+//     of an amount knob, METADATA_SET { synthAmounts } of its depth in the same BATCH: a knob
+//     whose every edge a cable broke comes back at its setting when the normal is restored
+//     (review S10: the depth is the model's, metadata.synthAmounts, presentation state outside
+//     studioHash; never a page's memory). patchCable, unpatch and breakNormals return it so.
+//     An edge removed in the Studio graph is the Studio's edit: its knob comes back declared.
 //
 // A new cable's props (review of #329): the props of the normal it replaces when it has the
 // same source; else polarity and mapping of a normal of the jack whose source has the same
@@ -139,24 +144,24 @@ export function jackReason(model, panel, jack) {
   return null;
 }
 
-export function createAmountMemory(panel) {
-  const depths = new Map();
-  return {
-    note(model) {
-      for (const a of panel.amounts) {
-        const e = amountEdges(model, panel, a)[0];
-        if (e) depths.set(a.key, e.props.depth);
-      }
-    },
-    depth: (key) => (depths.has(key) ? depths.get(key) : null),
-  };
+export function rememberAmounts(model, panel, steps) {
+  const gone = new Set(steps.filter((s) => s.type === 'EDGE_REMOVE').flatMap((s) => s.edgeIds));
+  const had = (model.metadata || {}).synthAmounts || {};
+  const kept = panel.amounts.map((a) => [a.key, amountEdges(model, panel, a)])
+    .filter(([k, edges]) => edges.length && edges.every((e) => gone.has(e.id))
+      && had[k] !== edges[0].props.depth)
+    .map(([k, edges]) => [k, edges[0].props.depth]);
+  return kept.length ? [...steps, { type: 'METADATA_SET', synthAmounts: Object.fromEntries(kept) }]
+    : steps;
 }
 
-/** The depth amount knob `a` shows: its first edge's, else the session memory's, else null. */
-function amountDepth(model, panel, a, memory) {
+/** The depth amount knob `a` shows: its first edge's, else the model's remembered one, else
+ *  null (metadata.synthAmounts, rememberAmounts). */
+export function amountDepth(model, panel, a) {
   const e = amountEdges(model, panel, a)[0];
   if (e) return e.props.depth;
-  return memory ? memory.depth(a.key) : null;
+  const kept = ((model.metadata || {}).synthAmounts || {})[a.key];
+  return Number.isFinite(kept) ? kept : null;
 }
 const coverOf = (panel, from, to) => panel.amounts.find((a) => a.source === from
   && a.to.includes(to)) || null;
@@ -165,8 +170,7 @@ const CONTROL_KEYS = ['depth', 'polarity', 'mapping', 'offset'];
 const pick = (props) => Object.fromEntries(CONTROL_KEYS.filter((k) => props[k] !== undefined)
   .map((k) => [k, props[k]]));
 
-export function cableProps(model, panel, from, to, { registry = NODE_REGISTRY, memory = null }
-  = {}) {
+export function cableProps(model, panel, from, to, { registry = NODE_REGISTRY } = {}) {
   const inp = portOf(panel, to, 'in', registry);
   if (!inp || inp.type !== 'CONTROL') return undefined;
   const b = splitJack(to);
@@ -189,7 +193,7 @@ export function cableProps(model, panel, from, to, { registry = NODE_REGISTRY, m
       mapping: log ? 'log' : 'linear', offset: 0 };
   }
   const a = coverOf(panel, from, to);
-  const d = a ? amountDepth(model, panel, a, memory) : null;
+  const d = a ? amountDepth(model, panel, a) : null;
   if (d !== null) props.depth = d;
   return props;
 }
@@ -200,8 +204,7 @@ const portOf = (panel, jack, dir, registry) => {
   return m ? registry.port(m.node, port, dir) : null;
 };
 
-export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY, memory = null }
-  = {}) {
+export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY } = {}) {
   const { id } = nodeIds(model, panel);
   const a = splitJack(from);
   const b = splitJack(to);
@@ -227,15 +230,16 @@ export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY, m
   if (gone.length) steps.push({ type: 'EDGE_REMOVE', edgeIds: gone });
   steps.push({ type: 'EDGE_ADD', from: { node: id(a.module), port: a.port },
     to: { node: id(b.module), port: b.port },
-    props: cableProps(model, panel, from, to, { registry, memory }) });
-  return { action: { type: 'BATCH', label: `Patch ${from} to ${to}`, steps } };
+    props: cableProps(model, panel, from, to, { registry }) });
+  return { action: { type: 'BATCH', label: `Patch ${from} to ${to}`,
+    steps: rememberAmounts(model, panel, steps) } };
 }
 
 /**
  * Normal edges of `jack` that are missing, as EDGE_ADD steps with their own ids; a normal an
  * amount knob covers comes back at the knob's depth (read before the cable is removed).
  */
-export function normalSteps(model, panel, jack, { memory = null } = {}) {
+export function normalSteps(model, panel, jack) {
   const { id } = nodeIds(model, panel);
   const { normals } = panelEdges(model, panel);
   const steps = [];
@@ -245,7 +249,7 @@ export function normalSteps(model, panel, jack, { memory = null } = {}) {
     if (!id(a.module) || !id(b.module)) continue;
     if (model.graph.edges.some((e) => e.id === n.edgeId)) continue;
     const cover = coverOf(panel, n.from, n.to);
-    const d = cover ? amountDepth(model, panel, cover, memory) : null;
+    const d = cover ? amountDepth(model, panel, cover) : null;
     steps.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: id(a.module), port: a.port },
       to: { node: id(b.module), port: b.port },
       props: d === null ? n.props : { ...n.props, depth: d } });
@@ -253,7 +257,7 @@ export function normalSteps(model, panel, jack, { memory = null } = {}) {
   return steps;
 }
 
-export function unpatch(model, panel, edgeId, { memory = null } = {}) {
+export function unpatch(model, panel, edgeId) {
   const e = model.graph.edges.find((x) => x.id === edgeId);
   if (!e) return { reason: 'That cable is not patched.' };
   const map = panel.resolve(model);
@@ -262,12 +266,13 @@ export function unpatch(model, panel, edgeId, { memory = null } = {}) {
   const steps = [{ type: 'EDGE_REMOVE', edgeIds: [edgeId] }];
   const rest = jack ? cablesInto(model, panel, jack, { foreign: true })
     .filter((x) => x.id !== edgeId) : [1];
-  if (jack && !rest.length) steps.push(...normalSteps(model, panel, jack, { memory }));
-  return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`, steps } };
+  if (jack && !rest.length) steps.push(...normalSteps(model, panel, jack));
+  return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`,
+    steps: rememberAmounts(model, panel, steps) } };
 }
 
-export function restoreNormals(model, panel, jack, { memory = null } = {}) {
-  const steps = normalSteps(model, panel, jack, { memory });
+export function restoreNormals(model, panel, jack) {
+  const steps = normalSteps(model, panel, jack);
   if (!steps.length) return { reason: 'Nothing to restore: every normal of this jack is there.' };
   return { action: { type: 'BATCH', label: `Restore normal into ${jack}`, steps } };
 }
@@ -279,7 +284,7 @@ export function breakNormals(model, panel, jack) {
     .map((n) => normals.get(n.id).id);
   if (!ids.length) return { reason: 'No normal of this jack is sounding.' };
   return { action: { type: 'BATCH', label: `Break normal into ${jack}`,
-    steps: [{ type: 'EDGE_REMOVE', edgeIds: ids }] } };
+    steps: rememberAmounts(model, panel, [{ type: 'EDGE_REMOVE', edgeIds: ids }]) } };
 }
 
 export function amountEdges(model, panel, amount) {

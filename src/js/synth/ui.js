@@ -21,8 +21,8 @@ import { playedEngine, routedNode } from './picker.js';
 import { createDock } from './dock.js';
 import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
-  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, createAmountMemory, jackReason,
-  jackState, panelCables, patchCable, restoreNormals, setAmount, unpatch,
+  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, jackReason, jackState, panelCables,
+  patchCable, restoreNormals, setAmount, unpatch,
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
@@ -56,7 +56,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   let selected = null; // a selected cable id
   let layout = null;
   let face = 'panel'; // below xl: the module cards or the patch bay (view/faces.js)
-  const memory = createAmountMemory(panel); // amount depths of this session (normals.js)
   // The folded cards (K062): view state of this page, never in history, the hash or browser
   // storage (the README's privacy inventory lists no Synth key), so a reload expands them.
   let collapsed = new Set();
@@ -89,7 +88,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const dispatch = (action) => {
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
-    else memory.note(model());
     return r;
   };
   /** A jack's friendly name ('VCO 1 Audio'), as its accessible name starts. */
@@ -174,7 +172,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const jb = jackOf(b);
     if (!ja || !jb || ja.direction === jb.direction) return say(SYNTH_TEXT.direction, true);
     const [from, to] = ja.direction === 'out' ? [ja.id, jb.id] : [jb.id, ja.id];
-    const r = patchCable(model(), panel, from, to, { registry, memory });
+    const r = patchCable(model(), panel, from, to, { registry });
     if (r.reason) return say(r.reason, true);
     const done = dispatch(r.action);
     if (done.ok) say(`Patched ${jackName(from)} to ${jackName(to)}.`);
@@ -398,7 +396,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   function refresh() {
-    memory.note(model());
     dock.sync();
     follow(get().transport);
     if (!cmp || cmp.workspace !== 'synth') return;
@@ -517,12 +514,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       say(selected ? 'Cable selected: Delete removes it.' : 'Cable deselected.');
       renderBay();
     } else if (d.removeCable) {
-      const r = unpatch(model(), panel, d.removeCable, { memory });
+      const r = unpatch(model(), panel, d.removeCable);
       pending = null;
       if (r.reason) say(r.reason, true);
       else if (dispatch(r.action).ok) say('Cable removed; the normal is restored.');
     } else if (d.restoreNormal) {
-      const r = restoreNormals(model(), panel, d.restoreNormal, { memory });
+      const r = restoreNormals(model(), panel, d.restoreNormal);
       if (r.reason) say(r.reason);
       else dispatch(r.action);
     } else if (d.breakNormal) {
@@ -637,7 +634,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
       e.preventDefault();
-      const r = unpatch(model(), panel, selected, { memory });
+      const r = unpatch(model(), panel, selected);
       selected = null;
       if (!r.reason) dispatch(r.action);
     }
@@ -749,7 +746,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synthInit() {
       cmp = this;
       follow(get().transport);
-      memory.note(model());
       dock.sync();
       handle().subscribe(() => queueMicrotask(refresh));
       const el = document.querySelector('[data-osc="synth-view"]');

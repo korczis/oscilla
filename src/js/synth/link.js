@@ -13,10 +13,15 @@
 // the values and the link's cables apply on that panel. A cable takes the depth of the amount
 // knob that covers it (its source and its jack), from the link or else from the preset,
 // because linkOf records an amount only where it differs from the preset. Normals a cable
-// breaks are removed once, however many cables break them.
+// breaks are removed once, however many cables break them. A knob whose every edge a cable
+// broke is linked at the depth the model remembers (metadata.synthAmounts, normals.js
+// rememberAmounts), and linkAction remembers it on the receiver in the same BATCH, so removing
+// the cable there brings the knob back at the sender's setting (review S10).
 
 import { NODE_REGISTRY } from '../studio/registry.js';
-import { amountEdges, normalSteps, panelCables, panelEdges, patchCable } from './normals.js';
+import {
+  amountDepth, amountEdges, normalSteps, panelCables, panelEdges, patchCable,
+} from './normals.js';
 import { presetAction, presetOf, presetValues } from './presets.js';
 
 /**
@@ -52,10 +57,8 @@ export function linkOf(model, panel, presetId) {
     if (!n || mod.def.maxInstances === 1) continue;
     for (const c of panel.faceOf(mod.id)) {
       if (c.kind === 'amount') {
-        const e = amountEdges(model, panel, c.amount)[0];
-        if (e && e.props.depth !== (p.amounts[c.key] ?? 0)) {
-          values.push([`${mod.id}.${c.key}`, e.props.depth]);
-        }
+        const d = amountDepth(model, panel, c.amount);
+        if (d !== null && d !== (p.amounts[c.key] ?? 0)) values.push([`${mod.id}.${c.key}`, d]);
       } else if (n.params[c.key] !== base[mod.id][c.key]) {
         values.push([`${mod.id}.${c.key}`, n.params[c.key]]);
       }
@@ -95,18 +98,24 @@ export function linkAction(model0, panel, link, { registry = NODE_REGISTRY, modu
     const r = patchCable(model, panel, from, to, { registry });
     if (!r.action) continue;
     for (const s of r.action.steps) {
+      if (s.type === 'METADATA_SET') continue; // remembered below, at the link's depths
       if (s.type === 'EDGE_REMOVE') {
         const ids = s.edgeIds.filter((id) => !removed.has(id));
         ids.forEach((id) => removed.add(id));
         if (ids.length) steps.push({ ...s, edgeIds: ids });
         continue;
       }
-      const a = panel.amounts.find((x) => x.source === from && x.to.includes(to));
+      const a = s.type === 'EDGE_ADD'
+        && panel.amounts.find((x) => x.source === from && x.to.includes(to));
       if (!a) { steps.push(s); continue; }
       const key = `${a.module}.${a.key}`;
       const depth = given.has(key) ? given.get(key) : (p.amounts[a.key] ?? 0);
       steps.push({ ...s, props: { ...(s.props || {}), depth } });
     }
   }
+  const kept = panel.amounts.filter((a) => ours(a.module)).map((a) => [a, amountEdges(model,
+    panel, a)]).filter(([, edges]) => edges.length && edges.every((e) => removed.has(e.id)))
+    .map(([a]) => [a.key, given.get(`${a.module}.${a.key}`) ?? p.amounts[a.key] ?? 0]);
+  if (kept.length) steps.push({ type: 'METADATA_SET', synthAmounts: Object.fromEntries(kept) });
   return { type: 'BATCH', label: 'Apply link to Synth panel', steps };
 }

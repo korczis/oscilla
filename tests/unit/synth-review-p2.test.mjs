@@ -25,7 +25,12 @@ import { enginePickerHtml } from '../../src/js/synth/view/engines.js';
 import { createXyTab } from '../../src/js/synth/view/xy-tab.js';
 import { xyPresetAction } from '../../src/js/synth/view/xy-wiring.js';
 import * as XY from '../../src/js/synth/xy.js';
-import { panelCables } from '../../src/js/synth/normals.js';
+import { panelCables, patchCable, setAmount, unpatch } from '../../src/js/synth/normals.js';
+import { linkAction, linkOf } from '../../src/js/synth/link.js';
+import { PRESETS } from '../../src/js/synth/presets.js';
+import { decodeSynthLink, encodeSynthLink } from '../../src/js/core/url-state-synth.js';
+import { normalizeStudio, serializeStudio, studioHash } from '../../src/js/studio/schema.js';
+import { validateStudioModel } from '../../src/js/studio/validate.js';
 import { gateTargets } from '../../src/js/studio/live-notes.js';
 
 /** The Synth part on the real transport, mounted as Alpine would; `click(dataset)` is a click
@@ -196,3 +201,68 @@ test('S8: the Panel tab shows the reason with Unpatch the pad, one BATCH that re
     assert.deepEqual(panelCables(st.getModel(), PANEL).filter((c) => c.fromModule === 'xy'), []);
     assert.equal(XYTAB.html(), '');
   });
+
+// ---------------------------------------------------------------- S10: the knob memory is the model's
+
+const amountOf = (key) => PANEL.amounts.find((a) => a.key === key);
+const lpfFrom = (m, mid) => m.graph.edges.filter((e) => e.from.node === nodeOf(m, mid).id
+  && e.to.node === nodeOf(m, 'lpf').id && e.to.port === 'frequency');
+/** The document as saved and opened again: a new store, a new Synth part, no page memory. */
+const reopened = (m) => createStudioStore(normalizeStudio(JSON.parse(serializeStudio(m))),
+  { idGenerator: createIdGenerator() });
+
+test('S10: a knob a cable broke comes back at its setting after a reload (the model holds it)',
+  () => {
+    const st = panelStore();
+    assert.equal(st.dispatch(setAmount(st.getModel(), PANEL, amountOf('lpf-eg2'), 3.5)).ok, true);
+    const { cmp } = synthRig(st);
+    // MG into LPF cutoff breaks the n21 and n22 normals, the EG 2 amount's only edge among them.
+    assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'mg.control', 'lpf.frequency')
+      .action).ok, true);
+    assert.deepEqual(lpfFrom(st.getModel(), 'eg2'), []);
+    assert.equal(st.getModel().metadata.synthAmounts['lpf-eg2'], 3.5,
+      'the BATCH that removed the knob\'s last edge kept its depth in the model');
+    assert.ok(cmp.synthDebug().present);
+    const again = reopened(st.getModel()); // a reload: the page's state is gone
+    const rig = synthRig(again);
+    const cable = panelCables(again.getModel(), PANEL).find((c) => c.to === 'lpf.frequency');
+    rig.click({ removeCable: cable.id });
+    assert.deepEqual(lpfFrom(again.getModel(), 'eg2').map((e) => e.props.depth), [3.5],
+      'the normal comes back at the knob\'s setting, not its declared depth');
+  });
+
+test('S10: the depth is presentation state: saved and validated, outside studioHash', () => {
+  const st = panelStore();
+  const hash = studioHash(st.getModel());
+  assert.equal(st.dispatch({ type: 'METADATA_SET', synthAmounts: { 'lpf-eg2': 3.5 } }).ok, true);
+  assert.deepEqual(st.getModel().metadata.synthAmounts, { 'lpf-eg2': 3.5 });
+  assert.equal(studioHash(st.getModel()), hash, 'no edge carries it: the hash is unchanged');
+  assert.equal(st.dispatch({ type: 'METADATA_SET', synthAmounts: { 'lpf-mg': 1 } }).ok, true);
+  assert.deepEqual(st.getModel().metadata.synthAmounts, { 'lpf-eg2': 3.5, 'lpf-mg': 1 },
+    'METADATA_SET merges');
+  const saved = normalizeStudio(JSON.parse(serializeStudio(st.getModel())));
+  assert.deepEqual(saved.metadata.synthAmounts, { 'lpf-eg2': 3.5, 'lpf-mg': 1 },
+    'the saved document keeps it');
+  assert.equal(validateStudioModel(saved).ok, true);
+  const bad = { ...saved, metadata: { ...saved.metadata, synthAmounts: { 'lpf-eg2': 'x' } } };
+  assert.equal(validateStudioModel(bad).ok, false, 'a non-number depth is refused');
+  st.undo();
+  assert.deepEqual(st.getModel().metadata.synthAmounts, { 'lpf-eg2': 3.5 }, 'undoable');
+});
+
+test('S10: a link carries a broken knob\'s depth; the receiver brings it back at that depth', () => {
+  const sender = panelStore();
+  assert.equal(sender.dispatch(setAmount(sender.getModel(), PANEL, amountOf('lpf-eg2'), 3.5)).ok,
+    true);
+  assert.equal(sender.dispatch(patchCable(sender.getModel(), PANEL, 'mg.control',
+    'lpf.frequency').action).ok, true);
+  const link = decodeSynthLink(encodeSynthLink(linkOf(sender.getModel(), PANEL, 'init')), PANEL,
+    PRESETS);
+  assert.equal(link.ok, true, link.reason);
+  const receiver = panelStore();
+  assert.equal(receiver.dispatch(linkAction(receiver.getModel(), PANEL, link.link)).ok, true);
+  assert.equal(receiver.getModel().metadata.synthAmounts['lpf-eg2'], 3.5);
+  const cable = panelCables(receiver.getModel(), PANEL).find((c) => c.to === 'lpf.frequency');
+  assert.equal(receiver.dispatch(unpatch(receiver.getModel(), PANEL, cable.id).action).ok, true);
+  assert.deepEqual(lpfFrom(receiver.getModel(), 'eg2').map((e) => e.props.depth), [3.5]);
+});

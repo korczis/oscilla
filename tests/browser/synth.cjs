@@ -40,6 +40,11 @@
 //   s-relink   MG patched into LPF cutoff (the jacks of a normal) is a cable: listed, in the
 //              link the Copy link button writes; the link reopens the cable at the same depth
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
+//   s-knobmemory a knob a cable broke keeps its depth in the model (review S10): LPF EG 2 ->
+//              cutoff typed 3.5, MG patched into LPF cutoff (it breaks that knob's normal): the
+//              document remembers 3.5 (metadata.synthAmounts); Copy link opened in a new page,
+//              the cable removed there: the EG 2 normal is back at 3.5 and the knob reads 3.50.
+//              Fails on 3c22d01a (the receiver brings it back at its declared 2)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
@@ -552,6 +557,38 @@ function defineChecks() {
     return { ok: /yc=/.test(hash) && JSON.stringify(d2.cables.map((c) => [c.from, c.to]))
       === JSON.stringify([['mg.control', 'lpf.frequency']]) && JSON.stringify(a) === '[3]'
       && JSON.stringify(b) === '[3]', hash, here, there, depths: [a, b] };
+  });
+
+  // Review of src/js/synth (oscilla-21, S10): a knob a cable broke keeps its depth in the
+  // model, so the link's receiver brings it back at the sender's setting.
+  def('s-knobmemory', async ({ page, context, base }) => {
+    await typeKnob(page, 'lpf.lpf-eg2', '3.5');
+    await tapJack(page, 'mg.control:out');
+    await tapJack(page, 'lpf.frequency:in');
+    await until(async () => (await dbg(page)).cables.some((c) => c.to === 'lpf.frequency'),
+      { ms: 10000, what: 'MG is patched into LPF cutoff' });
+    const kept = await page.evaluate(() => (window.OSCILLA.studio.model.metadata.synthAmounts
+      || {})['lpf-eg2']);
+    await page.locator('[data-osc="synth.copy-link"]').click();
+    const link = await until(() => page.evaluate(() => window.OSCILLA.app.synth.link || null),
+      { ms: 10000, what: 'Copy link shows the link' });
+    const again = await openSynth(context, base, link.slice(link.indexOf('#')));
+    try {
+      await face(again, 'bay');
+      await again.locator('[data-osc="synth.cables"] [data-remove-cable]').first().click();
+      const depth = await until(() => again.evaluate(() => {
+        const ids = window.OSCILLA.app.synthDebug().nodes;
+        const e = window.OSCILLA.studio.model.graph.edges.find((x) => x.from.node === ids.eg2
+          && x.to.node === ids.lpf && x.to.port === 'frequency');
+        return e ? e.props.depth : null;
+      }), { ms: 10000, what: 'removing the cable restores the EG 2 normal' });
+      await face(again, 'panel');
+      const shown = (await again.locator('[data-value="lpf.lpf-eg2"]').textContent()).trim();
+      return { ok: kept === 3.5 && depth === 3.5 && /^\+?3\.50?\b/.test(shown), kept, depth, shown,
+        link };
+    } finally {
+      await again.close();
+    }
   });
 
   def('s-studio', async ({ page }) => {
