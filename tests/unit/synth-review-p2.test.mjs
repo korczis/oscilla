@@ -12,7 +12,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
-import { createSynthUi } from '../../src/js/synth/ui.js';
+import { SYNTH_TEXT, createSynthUi } from '../../src/js/synth/ui.js';
+import { NEW_VOICE } from '../../src/js/synth/picker.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
@@ -122,4 +123,32 @@ test('S4: an engine preset clears the route in its own BATCH; undo gives the rou
   assert.equal(d.played, nodeOf(st.getModel(), 'fm').id, 'the keys play the preset\'s engine');
   st.undo();
   assert.equal(st.getModel().metadata.noteTarget, ext.id);
+});
+
+// ---------------------------------------------------------------- S5: New Synth voice = Insert
+
+test('S5: New Synth voice inserts as Insert does: below the user\'s nodes, with the notice', () => {
+  const st = createStudioStore(templateModel(REFERENCE_TEMPLATE_ID),
+    { idGenerator: createIdGenerator() });
+  assert.equal(st.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', name: 'FM 2',
+    position: { x: 0, y: 900 } }).ok, true); // a changed document: no insert by itself
+  const ext = st.getModel().graph.nodes.at(-1);
+  assert.equal(st.dispatch({ type: 'METADATA_SET', noteTarget: ext.id }).ok, true);
+  const cuts = PANEL.cutsOf(st.getModel());
+  assert.ok(cuts.length, 'the document\'s own chain feeds Master Output');
+  const names = [...new Set(cuts.map((e) => st.getModel().graph.nodes
+    .find((n) => n.id === e.from.node).metadata.name))].join(', ');
+  const top = Math.max(...st.getModel().graph.nodes.map((n) => n.position.y));
+  const before = new Set(st.getModel().graph.nodes.map((n) => n.id));
+  const { cmp } = synthRig(st);
+  const depth = st.debugInfo().undoDepth;
+  assert.equal(cmp.synthPick(NEW_VOICE), true);
+  assert.equal(st.debugInfo().undoDepth, depth + 1, 'one history entry');
+  assert.equal(cmp.synth.status, SYNTH_TEXT.took(names), 'the notice names the feed it took');
+  const added = st.getModel().graph.nodes.filter((n) => !before.has(n.id));
+  assert.ok(added.length > 10 && added.every((n) => n.position.y > top),
+    'the panel is placed below the user\'s nodes');
+  assert.equal(st.getModel().metadata.noteTarget, undefined, 'the route is cleared');
+  assert.equal(cmp.synthDebug().played, nodeOf(st.getModel(), 'keys').id,
+    'the keys play the new voice');
 });

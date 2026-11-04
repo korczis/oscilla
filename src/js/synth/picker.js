@@ -5,10 +5,12 @@
 //     every node with the notes or hits capability (registry.js playsNotes: the panel's Keys,
 //     the engines, a kit once it lands), in graph order, then New Synth voice; choice = { id,
 //     name, kind, selected, disabled, reason }
-//   routeAction(model, panel, id) -> { action } | { reason }   one history entry: METADATA_SET
-//     { noteTarget } (the panel's own Keys clears it: the tab then chooses, Keys on Panel, the
-//     chosen engine on Engines); New Synth voice inserts the panel (its BATCH), whose Keys the
-//     keys then play; with the panel there it is disabled and says why
+//   routeAction(model, panel, id) -> { action, text? } | { reason }   one history entry:
+//     METADATA_SET { noteTarget } (the panel's own Keys clears it: the tab then chooses, Keys on
+//     Panel, the chosen engine on Engines); New Synth voice inserts the panel as Insert does
+//     (insert.js insertAction: below the document's nodes, the route cleared in its BATCH, and
+//     `text` the notice naming the Master feed it took; review S5), whose Keys the keys then
+//     play; with the panel there it is disabled and says why
 //   routedNode(model) -> node | null   the node metadata.noteTarget names, when it plays notes
 //   playedEngine(model, panel, chosen, registry) -> engine module id | null   the engine the
 //     Engines tab checks and shows (review S4: from the model's route, never a copy): the
@@ -20,6 +22,7 @@
 //     NODE_PARAM_SET, or ONE BATCH when a wave brings the oscillator's level back
 
 import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
+import { insertAction } from './insert.js';
 
 export const NEW_VOICE = 'new-voice';
 export const NEW_VOICE_TAKEN = 'This Studio already holds the Synth panel, and Master Output '
@@ -58,7 +61,7 @@ export function instrumentChoices(model, panel, { registry = NODE_REGISTRY, curr
 export function routeAction(model, panel, id, { registry = NODE_REGISTRY } = {}) {
   if (id === NEW_VOICE) {
     if (panel.resolve(model).get('keys')) return { reason: NEW_VOICE_TAKEN };
-    return { action: panel.instantiate(model) };
+    return insertAction(model, panel, { explicit: true, unroute: true });
   }
   const n = model.graph.nodes.find((x) => x.id === id);
   if (!n) return { reason: `There is no node "${String(id)}".` };

@@ -19,7 +19,7 @@ import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
 import { playedEngine, routedNode } from './picker.js';
 import { createDock } from './dock.js';
-import { SYNTH_TEXT, insertDecision } from './insert.js';
+import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
   STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, createAmountMemory, jackReason,
   jackState, panelCables, patchCable, restoreNormals, setAmount, unpatch,
@@ -99,30 +99,15 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const j = m && m.jacks.find((x) => x.port === port);
     return m && j ? `${m.label} ${j.label}` : String(id);
   };
-  const feedNames = (cuts) => {
-    const byId = new Map(model().graph.nodes.map((n) => [n.id, n]));
-    return [...new Set(cuts.map((e) => (byId.get(e.from.node) || { metadata: {} }).metadata.name
-      || e.from.node))].join(', ');
-  };
 
-  /**
-   * Insert the panel when the document has none: by itself when insertDecision allows it,
-   * else only from the Insert button (`explicit`); the notice names the Master feed it took.
-   */
-  function ensurePanel({ explicit = false } = {}) {
+  /** Insert the panel when the document has none (insert.js insertAction: by itself where
+   *  insertDecision allows it, else only `explicit`); the notice names the feed it took. */
+  function ensurePanel(opts) {
     if (present()) return true;
-    const m = model();
-    const { auto, cuts } = insertDecision(m, panel);
-    if (!auto && !explicit) {
-      say(`${SYNTH_TEXT.notInserted} ${SYNTH_TEXT.takes(feedNames(cuts))}`);
-      return false;
-    }
-    const names = cuts.length ? feedNames(cuts) : '';
-    const ys = m.graph.nodes.map((n) => n.position.y);
-    const at = { x: 0, y: (ys.length ? Math.max(...ys) : 0) + 240 };
-    const r = dispatch(panel.instantiate(m, { at }));
-    if (r.ok) say(names ? SYNTH_TEXT.took(names) : SYNTH_TEXT.inserted);
-    return r.ok;
+    const r = insertAction(model(), panel, opts);
+    const ok = !!r.action && dispatch(r.action).ok;
+    if (ok || !r.action) say(ok ? r.text : r.reason);
+    return ok;
   }
 
   // ------------------------------------------------------------------ controls
@@ -321,7 +306,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
         + 'text-gray-700 dark:text-gray-300"><p>This Studio document has no Synth panel.</p>'
         + (cuts.length ? `<p class="mt-2" data-osc="synth.insert-cuts">`
-          + `${esc(SYNTH_TEXT.takes(feedNames(cuts)))}</p>` : '')
+          + `${esc(SYNTH_TEXT.takes(feedNames(model(), cuts)))}</p>` : '')
         + '<button type="button" data-insert-panel="" class="mt-3 rounded-lg bg-primary-600 px-4 '
         + 'h-11 font-medium text-white focus:outline-none focus-visible:ring-2 '
         + `focus-visible:ring-primary-500">Insert the ${esc(panel.title)}</button></div>`;

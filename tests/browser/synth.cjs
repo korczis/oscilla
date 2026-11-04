@@ -58,6 +58,11 @@
 //              keys routed to FM (the dock's choice): FM is the one checked engine and its
 //              plate is shown, not ADDITIVE's; QWERTY A sounds and its release falls below
 //              -70 dB rel. Fails on 3c22d01a (ADDITIVE checked while the keys play FM)
+//   s-newvoice New Synth voice keeps the insert contract (review S5): the workspace's insert
+//              undone and a node of the user's added (Insert is offered), the dock's New Synth
+//              voice says the Master feed it took and places every node it adds below the
+//              user's; A sounds and its release falls below -70 dB rel. Fails on 3c22d01a
+//              ("The keys play KEYBOARD.", the panel at the top)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -883,6 +888,43 @@ function defineChecks() {
     await page.keyboard.up('KeyA');
     const off = await silent(page, 'the key up releases the FM voice');
     return { ok: d.played === fm && d.engine === 'fm', shown, on: on.rmsDb, off: off.rmsDb };
+  });
+
+  // Review of src/js/synth (oscilla-21, S5): New Synth voice keeps the insert contract.
+  def('s-newvoice', async ({ page }) => {
+    // A document without the panel whose own chain feeds Master Output, changed by the user:
+    // the workspace's own insert undone, then a node of the user's.
+    await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      st.undo();
+      st.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', name: 'FM 2',
+        position: { x: 0, y: 900 } });
+    });
+    await until(async () => !(await dbg(page)).present && page.locator('[data-insert-panel]')
+      .isVisible(), { ms: 10000, what: 'the view offers Insert, the panel gone' });
+    const mine = await page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .map((n) => ({ id: n.id, y: n.position.y })));
+    const top = Math.max(...mine.map((n) => n.y));
+    await page.locator('#osc-synth-pick').click();
+    const menu = page.locator('[data-osc="synth.pick.menu"]');
+    await until(() => menu.isVisible(), { ms: 5000, what: 'the instrument menu opens' });
+    // By the keyboard, as s-dock chooses (a pointer click on the item outlives the menu it
+    // closes: Playwright waits on the detached item)
+    await menu.locator('[data-pick="new-voice"]').focus();
+    await page.keyboard.press('Enter');
+    const said = await until(async () => {
+      const t = await page.locator('[data-osc="synth.status"]').textContent();
+      return /took Master Output from/.test(t) && t;
+    }, { ms: 10000, what: 'New Synth voice says the Master feed it took' });
+    // The panel's own nodes: Master Output is the document's one, kept where it is.
+    const placed = await page.evaluate((had) => window.OSCILLA.studio.model.graph.nodes
+      .filter((n) => !had.includes(n.id)).map((n) => n.position.y), mine.map((n) => n.id));
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the new voice sounds the held key');
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the key up releases the new voice');
+    return { ok: placed.length > 10 && placed.every((y) => y > top), said, top,
+      lowest: Math.min(...placed), on: on.rmsDb, off: off.rmsDb };
   });
 
   def('s-riffs', async ({ page }) => {
