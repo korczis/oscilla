@@ -307,6 +307,44 @@ test('slice A 8: the pointer on the cap and skirt, and the track on the plates, 
   assert.deepEqual(short, [], 'under 3:1 on the part beneath');
 });
 
+// Slice S: a knob of every size (lg, md, sm) is the same part scaled, so each part keeps the
+// paint it has at md, and the same pairs hold 3:1 in both themes at every size.
+test('slice S: a knob of every size paints its parts as md does, so each pair holds 3:1', () => {
+  const param = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+  const flags = ['data-pointer', 'data-pointer-skirt', 'data-cap', 'data-skirt', 'data-track',
+    'data-ring', 'data-applied', 'data-ticks', 'data-focus'];
+  const paintsOf = (svg) => flags.map((f) => {
+    const tag = new RegExp(`<\\w+\\b[^>]*\\s${f}=""[^>]*>`).exec(svg);
+    assert.ok(tag, `${f} drawn`);
+    return [f, (/\sstroke="([^"]*)"/.exec(tag[0]) || [])[1],
+      (/\sfill="([^"]*)"/.exec(tag[0]) || [])[1]];
+  });
+  const short = [];
+  for (const state of [{ focus: true }, { hover: true, focus: true }, { dragging: true,
+    focus: true }]) {
+    const at = (size) => controlSvg({ kind: 'knob', value: 70, applied: 30, param, size,
+      tokens: TOKENS, state, zoom: 2 });
+    const md = paintsOf(at('md'));
+    for (const size of ['lg', 'sm']) {
+      assert.match(at(size), new RegExp(`data-size="${size}"`), `${size} is drawn at its size`);
+      assert.deepEqual(paintsOf(at(size)), md, `${size} ${JSON.stringify(state)}: md's paints`);
+    }
+    const p = Object.fromEntries(md.map(([f, s, fill]) => [f, { s: varOf(s), f: varOf(fill) }]));
+    const want = [['pointer', p['data-pointer'].s, p['data-cap'].f],
+      ['pointer-skirt', p['data-pointer-skirt'].s, p['data-skirt'].f],
+      ['applied', p['data-applied'].s, p['data-skirt'].f],
+      ...PLATES.flatMap((pl) => [['track', p['data-track'].s, pl],
+        ['ticks', p['data-ticks'].s, pl], ['focus', p['data-focus'].s, pl]])];
+    for (const [theme, t] of Object.entries(themes())) {
+      for (const [what, f, b] of want) {
+        const ratio = contrast(hexOf(t, f), hexOf(t, b));
+        if (ratio < 3) short.push(`${theme} ${what} ${f} on ${b}: ${ratio.toFixed(2)}`);
+      }
+    }
+  }
+  assert.deepEqual(short, [], 'under 3:1 at some size');
+});
+
 /** The skirt edge's paint as controlSvg draws a knob in `state`. */
 const skirtEdge = (state) => varOf(/\sstroke="([^"]*)"/.exec(/<path\b[^>]*\sdata-skirt=""[^>]*>/
   .exec(controlSvg({ kind: 'knob', value: 70, tokens: TOKENS, state, param: { key: 'level',

@@ -1937,11 +1937,14 @@ test('fader: a press on the cap grabs it where it is; on the slot, a page toward
     /point/);
 });
 
-test('feel.js is a pure core too: no DOM, no listener, only knob.js imported', () => {
+// Slice S moved the feel into the neutral models (src/js/ui/controls/): feel.js re-exports them,
+// so its importers keep their names; ui-controls-model.test.mjs proves they are the same functions.
+test('feel.js is a pure re-export: no DOM, no listener, only the two models imported', () => {
   const src = readFileSync(new URL('../../src/js/ui/synth/feel.js', import.meta.url), 'utf8')
     .replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(src, /addEventListener|document\.|window\.|getComputedStyle|setTimeout/);
-  assert.deepEqual([...src.matchAll(/\bfrom '([^']+)'/g)].map((m) => m[1]), ['./knob.js']);
+  assert.deepEqual([...src.matchAll(/\bfrom '([^']+)'/g)].map((m) => m[1]),
+    ['../controls/knob-model.js', '../controls/slider-model.js']);
   assert.deepEqual(intensityLiterals(src), []);
   assert.deepEqual(colourLiterals(src), []);
   const knob = readFileSync(new URL('../../src/js/ui/synth/knob.js', import.meta.url), 'utf8');
