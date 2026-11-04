@@ -13,4 +13,6 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/app.cjs'] }),
   'seq.unsaved': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/navigation.cjs'] }),
+  'copy.note': entry({ source: 'src/index.html', plan: ['G001', 'C018'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/navigation.cjs'] }),
 };

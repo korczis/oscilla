@@ -1,26 +1,31 @@
-// Declarations: the workspace navigation (ui/app.js; the bar in src/index.html). The grouped
-// entries are built at run time and declared as patterns whose keys are the values the callers
-// pass; the Synth entry is a literal link (plan issue G001).
+// Declarations: the workspace navigation (the sidebar of src/index.html, rendered from the one
+// registry of ui/shell.js; ui/app.js navTopLevel). Every entry is built at run time from the
+// registry, so both are patterns whose keys are the registry's own ids: a workspace entry
+// nav.<workspace> and a group button nav-group.<group> (plan issues G001, F002).
 // Trace: scripts/ui-catalog/trace/navigation.mjs.
 
+import { GROUP_REGISTRY, WORKSPACE_IDS } from '../../shell.js';
 import { defineComponent } from '../define.js';
 
 export default [
   defineComponent({
     id: 'nav.groups',
-    pattern: { template: 'nav-group.{key}', keys: ['analyze', 'synthesis'],
-      sites: ['src/js/ui/app.js'] },
+    pattern: { template: 'nav-group.{key}', keys: Object.keys(GROUP_REGISTRY),
+      sites: ['src/index.html', 'src/js/ui/app.js', 'src/js/ui/shell.js'] },
     kind: 'open',
-    label: 'ANALYZE, SYNTHESIS',
+    label: 'Analyze, Synthesis',
     docs: 'Opens the menu of workspaces grouped under one navigation entry.',
-    state: 'ui.navOpen',
+    state: 'ui.navExpanded',
+    in: 'sidebar',
   }),
   defineComponent({
-    id: 'nav.synth',
+    id: 'nav.workspaces',
+    pattern: { template: 'nav.{key}', keys: [...WORKSPACE_IDS], sites: ['src/index.html'] },
     kind: 'open',
-    label: 'Synth',
-    docs: 'Opens the Synth workspace, the semi-modular voice with its patch bay and keys.',
+    label: 'Workspace entry',
+    docs: 'Opens its workspace from the sidebar, or from the phone drawer, which then closes.',
     state: 'ui.workspace',
-    effect: { route: 'synth' },
+    effect: { route: 'the workspace of the entry' },
+    in: 'sidebar',
   }),
 ];

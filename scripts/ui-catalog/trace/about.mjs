@@ -4,13 +4,20 @@
 // The docs-only part: it lives outside src/, so the app never imports or bundles it.
 
 const entry = (e) => ({ plan: ['G001'], intents: ['component-system#contract-and-registry'],
-  adrs: ['adr-0081'], ...e });
+  adrs: ['adr-0081'], source: 'src/index.html', ...e });
 
 export default {
-  'about.workspaces': entry({ source: 'src/index.html',
+  'about.workspaces': entry({ plan: ['G001', 'U006'],
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/unit/about-current.test.mjs',
       'tests/browser/app.cjs'] }),
-  'about.next': entry({ source: 'src/index.html',
+  'about.workspace': entry({ plan: ['G001', 'U006'],
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'about.open': entry({ plan: ['G001', 'U006'],
+    tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'about.next': entry({ plan: ['G001', 'U002'],
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/unit/about-current.test.mjs',
       'tests/browser/app.cjs'] }),
+  'about.next.later-toggle': entry({ plan: ['G001', 'U002'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/unit/about-current.test.mjs',
+      'tests/browser/app.cjs', 'tests/browser/control-census.cjs'] }),
 };

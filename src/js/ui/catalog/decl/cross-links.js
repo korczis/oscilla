@@ -1,6 +1,7 @@
 // Declarations: the links between workspaces (src/index.html; ui/counterparts.js and
 // ui/app.js counterpartLink, ui/workbench.js for the lesson tools and the alerts,
-// ui/studio/workspace.js studioOpenSequence). A link to a Studio template carries its id in the
+// ui/studio/workspace.js studioOpenSequence; the Synth links of ui/app.js counterpartLink, the
+// lesson card links of data/learn.js). A link to a Studio template carries its id in the
 // URL key st, so it names studio.model; a link to a workspace names ui.workspace.
 // Trace: scripts/ui-catalog/trace/cross-links.mjs.
 
@@ -127,5 +128,53 @@ export default [
     docs: 'Opens the workspace a lesson names as its tool; the lesson stays where it was.',
     state: 'ui.workspace',
     effect: { route: 'the workspace of the lesson tool' },
+  }),
+  defineComponent({
+    id: 'learn.link',
+    kind: 'open',
+    label: 'Open the First patch in Studio',
+    docs: 'Opens the Studio template a lesson card links to, such as the First patch.',
+    state: 'studio.model',
+    effect: { route: 'studio, the template of the lesson card' },
+  }),
+  defineComponent({
+    id: 'seq.toSynth',
+    kind: 'open',
+    label: 'Open the Synth',
+    docs: 'Opens the Synth from the Sequencer to play the pattern ideas on a voice.',
+    state: 'ui.workspace',
+    effect: { route: 'synth' },
+  }),
+  defineComponent({
+    id: 'filter.toSynth',
+    kind: 'open',
+    label: 'Open the Synth',
+    docs: 'Opens the Synth from the Filter Lab to hear a filter shape a voice.',
+    state: 'ui.workspace',
+    effect: { route: 'synth' },
+  }),
+  defineComponent({
+    id: 'dual.toSynth',
+    kind: 'open',
+    label: 'Open the Synth',
+    docs: 'Opens the Synth from the dual-oscillator lab to play two detuned oscillators.',
+    state: 'ui.workspace',
+    effect: { route: 'synth' },
+  }),
+  defineComponent({
+    id: 'presets.toSynth',
+    kind: 'open',
+    label: 'Open the Synth',
+    docs: 'Opens the Synth from Presets, where the voice has presets of its own.',
+    state: 'ui.workspace',
+    effect: { route: 'synth' },
+  }),
+  defineComponent({
+    id: 'presets.altPlayground',
+    kind: 'open',
+    label: 'Set a tone within the limits',
+    docs: 'Opens the Playground when a preset is beyond the limits, to set a tone that loads.',
+    state: 'ui.workspace',
+    effect: { route: 'playground' },
   }),
 ];
