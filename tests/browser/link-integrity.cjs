@@ -56,8 +56,8 @@
 //                   initialized, with no AudioContext created, no getUserMedia and no voice;
 //                   one link per topic of cross-links.js LEARN_TOOLS, none dead.
 //   journey-19      (pack G 19) About's version is package.json's (the build's BUILD.label) and
-//                   its "What comes next" lists src/data/roadmap.json's milestones in order with
-//                   their done and required counts.
+//                   its "What comes next" lists src/data/roadmap.json's milestones by phase (now,
+//                   next, later), each in the plan order, with their done and required counts.
 //   journey-20      (pack G 20) on lane A's pages (Filter Lab, Synthesis, Sequencer, Presets,
 //                   Learn, About) and the shell, at 1536x1024 and 390x844, in their states (every
 //                   Presets category, an export running), every shown disabled control states a
@@ -157,8 +157,11 @@ async function loadModel() {
   const { COUNTERPARTS, PANEL_LINKS, CONTENT_LINKS } = await import(src('ui', 'counterparts.js'));
   JOURNEY.learnTools = (await import(src('ui', 'cross-links.js'))).LEARN_TOOLS;
   JOURNEY.version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
-  JOURNEY.roadmap = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'data', 'roadmap.json'),
-    'utf8')).milestones.map((m) => [m.id, `${m.done} of ${m.required} done`]);
+  // About shows them by phase (now, next, later; U002), each phase in the plan order.
+  const milestones = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'data', 'roadmap.json'),
+    'utf8')).milestones;
+  JOURNEY.roadmap = ['now', 'next', 'later'].flatMap((ph) => milestones
+    .filter((m) => m.phase === ph).map((m) => [m.id, `${m.done} of ${m.required} done`]));
   {
     const rows = new Map();
     const add = (from, ref) => {
