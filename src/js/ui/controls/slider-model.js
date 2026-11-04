@@ -1,4 +1,5 @@
 // ui-family: slider model
+// ui-family: switch model
 // The control family's one slider model (oscilla-21's G023, slice S): what a control whose
 // handle slides along a travel means, on top of the knob model (knob-model.js) and never a copy
 // of it. A fader's cap and a lever switch's handle follow the pointer over their travel, so the
@@ -10,6 +11,8 @@
 //   FADER_TRAVEL, FADER_CAP, travelOf      a fader's travel (FADER_TRAVEL unless given), checked
 //   faderPress                             a press: on the cap a relative grab, off it a page
 //   switchPositions, leverOf, LEVER_SLOT   a lever switch: its positions and its handle's travel
+//                                          (the switch family's model; switch.js still counts
+//                                          its styles' positions itself until G023 merges it)
 //   pixelsPerRangeFor                      the drag over the whole range, every kind
 
 import {

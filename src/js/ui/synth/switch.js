@@ -1,3 +1,4 @@
+// ui-family: switch skin hardware
 // The synth-theme layer's switches drawn as hardware (plan F013 entry 5, slice S5; K058): pure
 // functions, no listener, no document. An enum or a boolean is drawn by its position count:
 //   2      toggle   a bat handle (slice C, SW-02): a hex nut r8, its lower facets shaded, on a

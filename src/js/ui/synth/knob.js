@@ -1,4 +1,6 @@
 // ui-family: knob skin hardware
+// ui-family: slider skin hardware
+// ui-family: switch skin hardware
 // The synth-theme layer's control skin (plan K058; API agreed 2026-11-02; slice S): a knob,
 // fader and switch drawn as hardware, an SVG <g> from tokens, on the control family's one knob
 // model (src/js/ui/controls/knob-model.js) and one slider model (slider-model.js), which it
@@ -218,8 +220,8 @@ function knobShapes(value, applied, p, t, st, zoom, uid, size = 'md') {
       + `stroke="${esc(c.focus)}" stroke-width="${KNOB.focusW}"/>` : '');
 }
 
-// ui-family: slider skin hardware
-// The fader and the lever switch drawn as hardware, on the slider model's travel.
+// The fader (slider skin) and the lever switch (switch skin) drawn as hardware, on the slider
+// model's travel and the switch model's positions.
 
 function faderShapes(value, applied, p, t, st, zoom, tr) {
   const c = t.control;
@@ -296,7 +298,8 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
  * `tokens` (synthTokens): knob = scale ticks once tickZoom × md's size on screen, unlit arc
  * (control.track), value arc (control.ring; from zero with a detent tick across zero), knobFace,
  * focus ring; `uid` names its gradients (else the parameter's id); `size` (KNOB_SIZES: lg, md,
- * sm; md unless given) scales it about its centre, its box with it; fader = slot in
+ * sm; md unless given, and any kind's; lg and sm a knob's alone) scales it about its centre,
+ * its box with it; fader = slot in
  * control.track, value fill (from zero across zero), a FADER_CAP cap edged in control.edge
  * (control.pointer dragged), three grip lines, the centre one on the value; 'horizontal' turns
  * it (rotate(90): more to the right), `travel` (default FADER_TRAVEL) its length; switch = a

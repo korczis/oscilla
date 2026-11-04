@@ -127,23 +127,55 @@ const walk = (dir) => readdirSync(join(ROOT, dir)).flatMap((f) => {
   return statSync(join(ROOT, p)).isDirectory() ? walk(p) : [p];
 });
 
-test('every ui-family marker is present once per module, and there is one model each', () => {
+/** The module's header: its leading run of '//' lines, where G021 wants its markers. */
+const headerOf = (src) => src.split('\n').filter((l, i, all) => all.slice(0, i + 1)
+  .every((x) => /^\/\//.test(x))).join('\n');
+const SWITCH = 'src/js/ui/synth/switch.js';
+
+// G021's convention: `// ui-family: <id> model` or `// ui-family: <id> skin <name>` at the top of
+// every implementing module (review of S, finding 4): knob.js draws the knob, the fader and the
+// lever switch, switch.js the switch's every style, and the lever's positions are the switch
+// family's model (G023 makes switch a family of its own), so each says so in its header.
+test('every ui-family marker heads its module once, and there is one model each', () => {
+  const want = { [MODEL]: ['knob model'], [SLIDER]: ['slider model', 'switch model'],
+    [SKIN]: ['knob skin hardware', 'slider skin hardware', 'switch skin hardware'],
+    [SWITCH]: ['switch skin hardware'] };
+  for (const [p, names] of Object.entries(want)) {
+    assert.deepEqual(markers(headerOf(read(p))), names, `${p}: its header's markers`);
+  }
   assert.equal(read(MODEL).split('\n')[0], '// ui-family: knob model');
   assert.equal(read(SLIDER).split('\n')[0], '// ui-family: slider model');
   assert.equal(read(SKIN).split('\n')[0], '// ui-family: knob skin hardware');
-  assert.deepEqual(markers(read(SKIN)), ['knob skin hardware', 'slider skin hardware']);
-  const skin = read(SKIN);
-  const marker = skin.indexOf('// ui-family: slider skin hardware');
-  assert.ok(marker > 0 && marker < skin.indexOf('function faderShapes'),
-    'the slider skin marker heads the fader drawing');
   const census = new Map();
   for (const p of walk('src/js').filter((x) => x.endsWith('.js'))) {
     const found = markers(read(p));
     assert.equal(new Set(found).size, found.length, `${p}: a marker twice`);
-    for (const name of found) census.set(name, [...(census.get(name) || []), p]);
+    assert.deepEqual(found, markers(headerOf(read(p))), `${p}: a marker below its header`);
+    for (const name of found) {
+      assert.match(name, /^[a-z][\w-]* (model|skin [a-z][\w-]*)$/, `${p}: '${name}'`);
+      census.set(name, [...(census.get(name) || []), p]);
+    }
   }
   assert.deepEqual(census.get('knob model'), [MODEL], 'one knob model');
   assert.deepEqual(census.get('slider model'), [SLIDER], 'one slider model');
+  assert.deepEqual(census.get('switch model'), [SLIDER], 'one switch model');
+});
+
+// What a skin still decides that is its family's model's, until its slice merges it (G021's
+// baseline takes these over when it lands, and they only shrink): an entry whose code is gone
+// fails here, so it is removed with the fix.
+const MODEL_DUPLICATES = Object.freeze([
+  { slice: 'G023', module: SWITCH, signature: /\bconst MAX_POSITIONS = 12;/,
+    what: 'how many positions a switch has (2 to 12, by style) beside the switch model\'s '
+      + 'switchPositions (2 to 4, a lever\'s)' },
+]);
+
+test('a skin\'s second definition of its model is recorded with the slice that merges it', () => {
+  for (const d of MODEL_DUPLICATES) {
+    assert.match(d.slice, /^G02[1-6]$/, d.what);
+    assert.match(read(d.module), d.signature, `${d.module}: ${d.what} is gone; drop the entry`);
+  }
+  assert.match(read(SLIDER), /export function switchPositions\(/, 'the switch model counts');
 });
 
 // Slice A condensed five JSDoc blocks to fit knob.js under the 40 000-byte cap; the model has the
@@ -348,7 +380,7 @@ test('size: label sizes per tier, never under 12 px', () => {
   for (const s of Object.values(K.KNOB_SIZES)) assert.ok(s.labelPx >= 12);
 });
 
-test('size: a fader or a switch has none, and an unknown size is refused', () => {
+test('size: md is any kind\'s, lg and sm a knob\'s alone, and an unknown size is refused', () => {
   for (const kind of ['fader', 'switch']) {
     const param = kind === 'switch' ? { key: 'on', type: 'boolean', default: false } : LIN;
     assert.throws(() => K.controlBox(kind, 'vertical', { size: 'sm' }),
