@@ -28,10 +28,10 @@
 # .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (and at
 # least one path changed) in a pull request into main is the answer `runtime=false` (a train
 # or stacked base runs everything: the head's `gate` would satisfy main's required check too),
-# and then the engine, suites, measure, studio, browser and visual jobs are skipped;
+# and then the engine, suites, measure, studio, browser, census and visual jobs are skipped;
 # anything else, an empty diff, an error or a missing answer runs them (fail closed). unit, knowledge, fail-first and review-verdict always
 # run: the plan, knowledge and build:check tests guard what a non-runtime change can break.
-# `gate` accepts a skipped job only when it is one of those six and `changes` succeeded with
+# `gate` accepts a skipped job only when it is one of those seven and `changes` succeeded with
 # `runtime=false`. ci.yml is started by pull_request only (project.ci-bounded, `triggers`), so
 # nothing on main is path-gated here; the classifier answers runtime for any other event.
 # Tested by tests/unit/ci-changes.test.mjs.
@@ -359,6 +359,8 @@ jobs:
 
   census:
     name: Control census (${{ matrix.browser }})
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-latest
     # the sum of the step limits (15 + 13 + 35), rounded up (project.ci-bounded)
     timeout-minutes: 65
@@ -568,7 +570,7 @@ jobs:
             --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
 
   gate:
-    # The required check. Every job it judges succeeded, or (E026) is one of the six path-gated
+    # The required check. Every job it judges succeeded, or (E026) is one of the seven path-gated
     # jobs and was skipped while `changes` succeeded with runtime=false. A skip for any other
     # reason, a cancelled or failed job, and a failed or silent `changes` fail it. It needs
     # flake-ledger too (gate-needs: every job), and the verdict drops that job's entry before
@@ -593,7 +595,7 @@ jobs:
             | all(.value.result == "success"
                 or ($nonruntime and .value.result == "skipped"
                     and (.key as $k
-                         | ["engine", "suites", "measure", "studio", "browser", "visual"]
+                         | ["engine", "suites", "measure", "studio", "browser", "census", "visual"]
                          | any(. == $k))))
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
