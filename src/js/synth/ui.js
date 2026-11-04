@@ -1,18 +1,16 @@
-// The SYNTH workspace (plan K058-K066, K103 part, K104, K106 part): the DOM/Alpine adapter of the
-// Synth panel, composed into the Studio part (ui/studio/workspace.js), which owns the ONE store
-// and the ONE transport. The panel is a projection of the StudioModel (rule
-// project.studio-model-is-canonical): knobs dispatch NODE_PARAM_SET, amounts and cables one
-// BATCH each, and it re-reads the model after every change, so an edit made in Studio shows
-// here and nothing is ever repaired behind the user's back.
+// The SYNTH workspace (plan K058-K066, K103-K106 parts): the Synth panel's DOM/Alpine adapter,
+// composed into the Studio part (ui/studio/workspace.js), which owns the ONE store and ONE
+// transport. The panel projects the StudioModel (project.studio-model-is-canonical): knobs
+// dispatch NODE_PARAM_SET, amounts and cables one BATCH each, and it re-reads the model after
+// every change, so a Studio edit shows here and nothing is repaired behind the user's back.
 //
-// Audio: the keyboard, the on-screen keys and MIDI play the panel through ONE path, synthSink()
-// (src/js/midi/notes.js `route`): the first note arms the transport (transport.arm: the Synth's
-// nodes only, no timeline), then transport.live drives the Keys node. Leaving the workspace,
-// Escape, page hide and STOP disarm; a measurement owning the output refuses the arm.
+// Audio: keyboard, on-screen keys and MIDI play the panel through synthSink() (midi/notes.js
+// route): the first note arms the transport, transport.live drives the Keys node; the Studio's
+// keys take studioSink() (studio-sink.js), one path on any document. Leaving, Escape,
+// page hide and STOP disarm; a measurement owning the output refuses the arm.
 //
-// Tabs (Q019; PR B): Panel holds the semi-modular voice, Engines the polyphonic engines
-// (panels/engines.js); the keys play the Keys node on Panel and the chosen engine on Engines,
-// through the same sink. Switching tab releases every held note first.
+// Tabs (Q019): Panel holds the mono voice, Engines the polyphonic engines; the keys play the
+// Keys node or the chosen engine through the same sink; a tab change releases held notes.
 //
 //   createSynthUi({ get, setupAudio, announce }) -> the component part
 //     get() -> { handle, transport }   the workspace's store handle and transport (late-bound)
@@ -38,6 +36,7 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { createStudioSink } from './studio-sink.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
@@ -81,6 +80,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (cmp) cmp.synth.status = text;
     announce(text, { assertive });
   };
+  const studioSink = createStudioSink({ get, setupAudio, say, registry,
+    ensureAudio: () => cmp && cmp.ensureAudio && cmp.ensureAudio() });
   const dispatch = (action) => {
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
@@ -845,6 +846,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synthSink() {
       return { noteOn, noteOff, allOff };
     },
+    studioSink: () => studioSink.active(),
 
     synthArm() {
       const t = transport();

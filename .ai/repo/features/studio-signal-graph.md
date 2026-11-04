@@ -31,7 +31,8 @@ analysis cycles before anything reaches Web Audio (ADR 0033). Modulation depth, 
 mapping and offset live on the control edge (ADR 0037).
 
 The graph editor (`src/js/ui/studio/graph-editor.js`) offers a node library and a searchable
-picker, cable drag with compatible inputs emphasised, a cable dropped on blank canvas to add
+picker (one fuzzy, meaning-first ranking for the library, the picker and `/` search:
+`registry.js` `rankSearch`, V610), cable drag with compatible inputs emphasised, a cable dropped on blank canvas to add
 an accepting node, rectangle selection, copy, paste, duplicate and delete, pan, zoom and
 frame, `/` search, L to tidy the graph (a layered layout with the fewest crossings it finds,
 wrapped into rows on a narrow viewport; positions only, one undo step, ADR 0087), and an

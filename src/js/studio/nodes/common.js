@@ -34,8 +34,12 @@ export const CATEGORIES = Object.freeze({
   MEASUREMENT: 'MEASUREMENT',
 });
 
-/** Clip kinds of the timeline (§84); a node type lists the kinds that may target it. */
-export const CLIP_KINDS = Object.freeze(['pattern', 'event', 'measurement']);
+/**
+ * Clip kinds of the timeline (§84); a node type lists the kinds that may target it, except
+ * `notes` (K099, studio/notes.js), which targets every type that plays notes (registry.js
+ * playsNotes).
+ */
+export const CLIP_KINDS = Object.freeze(['pattern', 'event', 'measurement', 'notes']);
 
 /** Library order and labels (§29-§30). */
 export const CATEGORY_ORDER = Object.freeze([

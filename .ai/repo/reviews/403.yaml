@@ -1,0 +1,8 @@
+schema: review-verdict/v1
+pr: 403
+verdict: merge
+reviewer: oscilla-af
+content: b6dd0edaee264aeba7662832afd349af31dd560e847c2cec0c283a13a57dfc3b
+findings:
+  - { id: R1, severity: P3, status: closed, title: user-guide template line over 100 characters }
+  - { id: R2, severity: P3, status: closed, title: Ring Mod Learn text said f - 470 Hz where the difference folds to its magnitude }

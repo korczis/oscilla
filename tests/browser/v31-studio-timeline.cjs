@@ -380,6 +380,56 @@ function defineChecks() {
       }, { a: a.start, b: b.start, det, c, back, dupFocus, delFocus, said });
     } },
 
+    // K099 part 1: a notes clip's form has no Action list (the measurement actions it fell back
+    // to would be refused, project.no-inert-surfaces); it shows the notes read-only, a fixed
+    // time base with its reason, and a working Start field.
+    { name: 'notes-clip-form', fn: async ({ page }) => {
+      await fresh(page);
+      const id = await page.evaluate(() => {
+        const st = window.OSCILLA.studio.store;
+        const keys = st.dispatch({ type: 'NODE_ADD', nodeType: 'keys', position: { x: 0, y: 0 } })
+          .created.nodes[0];
+        const track = st.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys })
+          .created.tracks[0];
+        const notes = [{ at: 0, note: 60, len: 1, vel: 0.8 },
+          { at: 1, note: 64, len: 1, vel: 0.5 }];
+        const r = st.dispatch({ type: 'CLIP_ADD', trackId: track, kind: 'notes', startBeats: 0,
+          durationBeats: 4, payload: { notes } });
+        return r.ok ? r.created.clips[0] : null;
+      });
+      const D = `${TL} [data-osc="studio.tl.details"]`;
+      const sel = `.osc-stl [data-clip="${id}"]`;
+      await until(() => page.$(sel), { ms: 4000, what: 'the notes clip is drawn' });
+      await H.focus(page, sel);
+      await page.keyboard.press('Enter');
+      await until(() => page.evaluate((d) => !document.querySelector(d).hidden, D),
+        { ms: 4000, what: 'the notes clip details open' });
+      const form = await page.evaluate((d) => {
+        const root = document.querySelector(d);
+        const type = root.querySelector('[data-field="type"]');
+        const tb = root.querySelector('[data-field="timebase"]');
+        const hint = tb && document.getElementById(tb.getAttribute('aria-describedby'));
+        return { tag: type && type.tagName, text: type && type.textContent,
+          label: type && root.querySelector(`label[for="${type.id}"]`).textContent,
+          timeBaseDisabled: !!(tb && tb.disabled), hint: hint && hint.textContent,
+          start: !!root.querySelector('input[data-field="start"]') };
+      }, D);
+      await page.fill(`${D} [data-field="start"]`, '1');
+      await page.press(`${D} [data-field="start"]`, 'Enter');
+      const moved = await until(async () => {
+        const c = await H.clip(page, id);
+        return c && near(c.start, 1) ? c : null;
+      }, { ms: 4000, what: 'the Start field moves the notes clip' });
+      await page.keyboard.press('Escape');
+      return result({
+        noActionList: form.tag === 'OUTPUT' && form.label === 'Notes',
+        readOnlyLine: /^Notes clip · 2 notes\. The notes are kept; editing and playback arrive /
+          .test(form.text || ''),
+        timeBaseFixed: form.timeBaseDisabled && /always tempo-linked/.test(form.hint || ''),
+        startWorks: form.start && near(moved.musical.startBeats, 2),
+      }, { id, form, moved });
+    } },
+
     { name: 'create-split', fn: async ({ page }) => {
       await fresh(page);
       await page.click('.osc-stl [data-key="track-add:track-1"]');

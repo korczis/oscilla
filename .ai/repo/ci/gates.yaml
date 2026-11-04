@@ -13,19 +13,25 @@
 #     and repository programs as the job's steps, a leg narrowed with OSC_BROWSERS as the
 #     job's env narrows it. Setup (npm ci, browser and PulseAudio installs, artifact upload)
 #     is not part of a gate;
-#   - ci.yml starts on every pull request and filters no path. The aggregate's `if: always()`
-#     and (E026) the path-gated jobs' `needs.changes.outputs.runtime != 'false'` are its only
-#     job conditions: in CI, the base branch's .github/scripts/ci-changes.mjs skips the engine,
-#     suites, measure, studio, browser and visual jobs for a pull request whose every changed
-#     path is under .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a
-#     top-level *.md. A local task keeps them: the model does not encode that allowlist (a
-#     path class cannot say "every path outside these"), so it over-selects rather than skip
-#     a gate the classifier would run. Every gate is `always: true`: every plan selects it,
-#     and any changed file can make a recorded run of it stale. The one path class covers the
-#     whole tree and names no gate, so a plan reads "affected" with every gate selected as
-#     always, never "a changed path is in no class";
+#   - ci.yml starts on every pull request and filters no path. Its only job conditions are the
+#     aggregate's `if: always()`, the flake ledger's (E010: it runs after every job the
+#     aggregate judges, on a re-run only, and is skipped on a first attempt; it is never path
+#     gated) and (E026) the path-gated jobs' `needs.changes.outputs.runtime != 'false'`: in CI,
+#     the base branch's .github/scripts/ci-changes.mjs skips the engine, suites, measure,
+#     studio, browser and visual jobs for a pull request whose every changed path is under
+#     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md. A
+#     local task keeps them: the model does not encode that allowlist (a path class cannot say
+#     "every path outside these"), so it over-selects rather than skip a gate the classifier
+#     would run. Every gate is `always: true`: every plan selects it, and any changed file can
+#     make a recorded run of it stale. The one path class covers the whole tree and names no
+#     gate, so a plan reads "affected" with every gate selected as always, never "a changed
+#     path is in no class";
 #   - `gate` is the aggregate that branch protection requires; it `requires` every gate of
-#     the jobs it `needs`, so a failing one leaves it blocked rather than queued.
+#     the jobs it `needs`, so a failing one leaves it blocked rather than queued. It needs
+#     flake-ledger as it needs every job, and its verdict (ci.yml's env VERDICT) drops that
+#     job's entry first and only then applies E026's rule, so the ledger reports and never
+#     decides the aggregate and its skip is never read as a path-gated one. `runs` lists
+#     commands, not the conditions ci.yml runs them under.
 #
 # Not modelled: .github/workflows/pages.yml (a push to main deploys and verifies Pages, after
 # the change has landed; no gate of a task measures it), main-checks.yml (a push to main runs
@@ -218,8 +224,15 @@ gates:
       - census-firefox
       - census-webkit
       - visual
+      - flake-ledger
     runs: echo "$RESULTS" | jq -e "$VERDICT"
-    summary: the required check of branch protection; every job it needs succeeded, or is a path-gated job skipped while changes succeeded with runtime=false (E026)
+    summary: the required check of branch protection; with flake-ledger's entry dropped first, every job it needs succeeded, or is a path-gated job skipped while changes succeeded with runtime=false (E026); the ledger's result, a skip included, never counts
+
+  - id: flake-ledger
+    job: flake-ledger
+    always: true
+    runs: node scripts/flake-ledger.mjs --repo <owner/name> --run <run> --attempt <attempt> --out flake-ledger.json
+    summary: on a re-run only (github.run_attempt above 1; skipped on a first attempt, and never path gated), after every job the aggregate judges, records every job whose last earlier run failed and which passed on this attempt (E010); it reports and decides nothing, and the aggregate drops its result before judging
 
 classes:
   # ci.yml filters no path: a change anywhere runs every job, which `always` already says.

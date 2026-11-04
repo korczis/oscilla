@@ -4,8 +4,10 @@
 // the action an editor dispatches at gesture end (§86: commit at gesture end).
 //
 // Tracks and clips (§82-§84). Track kinds exist only where semantics differ:
-//   event        pattern clips (the sequencer's blocks, played by one voice per contiguous run)
-//                and event clips (gate / trigger of the target node)
+//   event        pattern clips (the sequencer's blocks, played by one voice per contiguous run),
+//                event clips (gate / trigger of the target node) and notes clips
+//                ({ notes: [{ at, note, len, vel }] } in beats, tempo-linked, on a node that
+//                plays notes; notes.js, K099: held, not played yet)
 //   measurement  measurement clips (noise-check, pre-roll, stimulus, capture, tail, analysis)
 //   automation   lanes in timeline.automation (one per node parameter), not clips (automation.js)
 //   markers      annotations / anchors (§96), never clips and never executed
@@ -34,6 +36,7 @@ import { BLOCK_SCHEMA } from '../sequencer/model.js';
 import { CONTRACT_LIMITS, TIMING_LIMITS } from '../measurement/engine.js';
 import { DURATION_LIMITS } from '../measurement/stimulus.js';
 import { MEASUREMENT_TARGETS, clipTarget, clipUse } from './clip-targets.js';
+import { notesRules } from './notes.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
   CLIP_KINDS, EVENT_ACTIONS, MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S,
@@ -286,7 +289,8 @@ export function clipDurationBounds(clip) {
  * every action and every import) and the editor (validateClip): track and clip kind, start,
  * duration (MIN_CLIP_S and the timeline end, then clipDurationBounds: the pattern block's or the
  * measurement engine's limits), target, event and measurement actions, a measurement clip's
- * target type, a logarithmic stimulus sweep, and no musical time on a measurement clip. Returns
+ * target type, a logarithmic stimulus sweep, no musical time on a measurement clip, and a notes
+ * clip's tempo link, payload and notes (notes.js notesRules). Returns
  * error diagnostics with paths relative to the clip. opts: { registry, trackById, nodeById }.
  */
 export function clipRules(model, clip, { registry = NODE_REGISTRY, trackById = null,
@@ -322,6 +326,8 @@ export function clipRules(model, clip, { registry = NODE_REGISTRY, trackById = n
     err('musical-measurement', 'A measurement clip is always placed in seconds; musical time '
       + 'never enters a measurement experiment.', 'musical');
   }
+  // A notes clip: tempo-linked, its payload and every note (notes.js, K099).
+  if (clip.kind === 'notes') for (const e of notesRules(clip)) err(e.code, e.message, e.path);
   const targetId = clip.target ?? (track ? track.target : null);
   const node = targetId == null ? null
     : (nodeById ? nodeById.get(targetId) : model.graph.nodes.find((n) => n.id === targetId));

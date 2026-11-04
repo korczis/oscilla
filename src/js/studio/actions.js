@@ -492,8 +492,9 @@ const REDUCERS = {
     const kind = a.kind || TRACK_CLIP_KINDS[track.kind][0];
     if (!CLIP_KINDS.includes(kind)) reject(`Unknown clip kind "${String(kind)}".`);
     if (a.target != null) requireNode(model, a.target);
-    const timeBase = a.timeBase || (a.startBeats != null || a.durationBeats != null ? 'tempo'
-      : 'absolute');
+    // A notes clip is tempo-linked by default: its notes are beats (notes.js).
+    const timeBase = a.timeBase || (kind === 'notes' || a.startBeats != null
+      || a.durationBeats != null ? 'tempo' : 'absolute');
     if (!CLIP_TIME_BASES.includes(timeBase)) reject(`Unknown time base "${String(timeBase)}".`);
     const spb = 60 / model.transport.tempo;
     let clip = {

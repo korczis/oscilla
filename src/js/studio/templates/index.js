@@ -32,14 +32,26 @@ import stereoBeat from './stereo-beat.js';
 import filterAutomation from './filter-automation.js';
 import measurementSweep from './measurement-sweep.js';
 import demoSong from './demo-song.js';
+import firstPatch from './first-patch.js';
+import filterEnvelopeSynth from './filter-envelope-synth.js';
+import fmChime from './fm-chime.js';
+import ringMod from './ring-mod.js';
+import driveLead from './drive-lead.js';
+import macroPad from './macro-pad.js';
+import stepBass from './step-bass.js';
 
 export const TEMPLATE_ID_PATTERN = /^[a-z][a-z0-9-]{0,47}$/;
 export const TEMPLATE_CATEGORIES = Object.freeze(['synthesis', 'measurement']);
 /** Learn text bounds: a summary sentence and at most four short points (§194). */
 export const LEARN_LIMITS = Object.freeze({ summaryChars: 200, points: 4, pointChars: 200 });
 
+/** The synthesis template pack of plan issue K014, in library order (before the Demo song). */
+const TEMPLATE_PACK = [filterEnvelopeSynth, fmChime, ringMod, driveLead, macroPad, stepBass];
+export const TEMPLATE_PACK_IDS = Object.freeze(TEMPLATE_PACK.map((t) => t.id));
+
 export const STUDIO_TEMPLATES = Object.freeze([basicTone, subtractiveSynth, sweepSequence,
-  stereoBeat, filterAutomation, measurementSweep, demoSong].map((t) => deepFreeze(t)));
+  stereoBeat, filterAutomation, measurementSweep, firstPatch, ...TEMPLATE_PACK, demoSong]
+  .map((t) => deepFreeze(t)));
 
 /** The id of the §257 reference fixture (the Basic Synth of the specification). */
 export const REFERENCE_TEMPLATE_ID = 'subtractive-synth';
