@@ -58,6 +58,7 @@ import {
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
 import { NOTE_NAMES, SCALE_MODES } from '../core/music.js';
+import { withArticle } from './a11y.js';
 
 export const PATCH_KIND = 'oscilla-patch';
 export const PATCH_SCHEMA_VERSION = 1;
@@ -458,8 +459,9 @@ export function patchParams(model, patch, onto, { registry = NODE_REGISTRY } = {
     const node = byId.get(map[src.id]);
     if (!node) throw new PatchError(`There is no node "${String(map[src.id])}".`);
     if (node.type !== src.type) {
-      throw new PatchError(`${node.metadata.name} is a ${registry.get(node.type).displayName}; `
-        + `the patch sets a ${registry.get(src.type).displayName}.`);
+      throw new PatchError(`${node.metadata.name} is `
+        + `${withArticle(registry.get(node.type).displayName)}; the patch sets `
+        + `${withArticle(registry.get(src.type).displayName)}.`);
     }
     params.set(node.id, src.params);
   }

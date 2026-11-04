@@ -8,6 +8,7 @@
 //   createLaneEditor(api) -> { head(lane), row(lane), pointerDown(e), dblClick(e), key(cmd, el) }
 // `api` is the timeline editor's internal interface (timeline-editor.js).
 
+import { withArticle } from '../../studio/a11y.js';
 import { automationScale, nudgePointAction } from '../../studio/automation.js';
 import { snapTime } from '../../studio/timeline.js';
 import {
@@ -25,7 +26,8 @@ export function createLaneEditor(api) {
     const info = infoOf(model, lane);
     const name = info ? info.name : `${lane.target.node} ${lane.target.param}`;
     const add = el('button', { type: 'button', class: 'osc-icon-btn osc-icon-btn--sm osc-stl-hbtn',
-      'data-key': `lane-add:${lane.id}`, 'aria-label': `Add a ${name} point at the playhead`,
+      'data-key': `lane-add:${lane.id}`,
+      'aria-label': `Add ${withArticle(name)} point at the playhead`,
       title: 'Add point at playhead',
       on: { click: () => addAt(lane.id, api.playheadPosition()) } }, [spriteIcon('i-plus')]);
     const remove = el('button', { type: 'button',

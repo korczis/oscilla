@@ -43,6 +43,7 @@
 // verdict for every node type, clip kind, action and parameter in the registry.
 
 import { usesGain, usesQ } from '../audio/filters.js';
+import { withArticle } from './a11y.js';
 import { NODE_REGISTRY, playsNotes } from './registry.js';
 import { EVENT_ACTIONS, MEASUREMENT_ACTIONS } from './schema.js';
 
@@ -88,7 +89,7 @@ export const CLIP_TARGET_TEXT = Object.freeze({
   eventTarget: (name) => `Only gate events on an Envelope are played; this clip on ${name} is `
     + 'not.',
   notesTarget: (type) => 'A notes clip needs a target that plays notes (Keys, the XY pad or a '
-    + `voice engine); ${/^[AEIOU]/.test(type) ? 'an' : 'a'} ${type} node does not play notes.`,
+    + `voice engine); ${withArticle(type)} node does not play notes.`,
   notesUnplayed: (name) => `Notes clips are kept but not played yet; this clip on ${name} is `
     + 'not played.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '

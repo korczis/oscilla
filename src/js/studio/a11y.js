@@ -20,6 +20,10 @@
 //   announceLabel(label) -> past-tense sentence of a history label
 //   announceSelection(model, selection) -> "Filter 1 selected" | "Tone clip on Track 1
 //     selected" | "3 nodes selected" | ...     clipLabel(clip) -> "Tone", "Noise check", ...
+//   indefiniteArticle(word) -> 'a' | 'an'      by how the word is said (K172): "an LFO",
+//     "an RTA", "a VCO", "a Filter", "an Oscillator", "a Unison"
+//   withArticle(word, { capital }) -> "an LFO" | "A Filter"   the one article for every node
+//     label (or kind) the Studio speaks or shows; no other module picks 'a' or 'an' itself
 //
 // INVARIANTS: no text contains pointer coordinates, positions or per-frame values (§143-§144):
 // a move is "Moved Filter 1", never where to. Names come from node metadata as plain text; the
@@ -46,6 +50,43 @@ const STATUS_WORDS = Object.freeze({
 });
 
 const TAP_VERBS = Object.freeze({ recorder: 'records', capture: 'captures' });
+
+/** Letters whose spoken name begins with a vowel sound: "ef", "aitch", "el", "em", "ar", ... */
+const VOWEL_SOUND_LETTERS = 'AEFHILMNORSX';
+
+/** Word starts said with a consonant sound although spelled with a vowel ("a unison"). */
+const CONSONANT_SOUND_START = /^(?:eu|one\b|once\b|uni|u[cfklrst][aeiou]|ubiq)/i;
+
+/** Word starts said with a vowel sound although spelled with a consonant ("an hour"). */
+const VOWEL_SOUND_START = /^(?:hour|honest|honou?r|heir)/i;
+
+/** Capitalised words said as words, not letter by letter ("a MIDI input", "a WAV file"). */
+const SAID_AS_WORDS = new Set(['MIDI', 'WAV', 'JSON', 'RAM', 'ROM', 'OSCILLA']);
+
+/**
+ * 'a' or 'an' for `word`, by how it is said rather than its first letter (K172). A first token
+ * of two or more capitals or digits ("LFO", "RTA", "FM engine", "AM/ring", "XY Pad") is an
+ * initialism read letter by letter, so the article follows the first letter's name ("an LFO",
+ * "a VCO"); so is a lone capital ("an X"). An acronym said as a word (SAID_AS_WORDS: "a
+ * MIDI") and every other word go by their spoken start: "an Oscillator", "a Filter", "a
+ * Unison", "an Umbrella", "a European", "an hour".
+ */
+export function indefiniteArticle(word) {
+  const s = String(word ?? '').trim();
+  const head = s.split(/[\s/,.;:()-]/)[0];
+  if (/^[A-Z][A-Z0-9]*$/.test(head) && !SAID_AS_WORDS.has(head)) {
+    return VOWEL_SOUND_LETTERS.includes(head[0]) ? 'an' : 'a';
+  }
+  if (VOWEL_SOUND_START.test(s)) return 'an';
+  if (CONSONANT_SOUND_START.test(s)) return 'a';
+  return /^[aeiou]/i.test(s) ? 'an' : 'a';
+}
+
+/** `word` with its indefinite article: "an LFO", "a Filter"; `capital` starts a sentence. */
+export function withArticle(word, { capital = false } = {}) {
+  const a = indefiniteArticle(word);
+  return `${capital ? a[0].toUpperCase() + a.slice(1) : a} ${word}`;
+}
 
 const CLIP_WORDS = Object.freeze({ 'noise-check': 'Noise check', 'pre-roll': 'Pre-roll',
   stimulus: 'Stimulus', capture: 'Capture', tail: 'Tail', analysis: 'Analysis', gate: 'Gate',

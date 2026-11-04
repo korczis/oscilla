@@ -42,6 +42,13 @@ import {
   CLIP_KINDS, EVENT_ACTIONS, MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S,
   TRACK_CLIP_KINDS, TRACK_KINDS,
 } from './schema.js';
+import { withArticle } from './a11y.js';
+
+/** "An event clip cannot go on a measurement track." (a11y.js picks the articles, K172). */
+function clipKindMismatch(clip, track) {
+  return `${withArticle(clip.kind, { capital: true })} clip cannot go on `
+    + `${withArticle(track.kind)} track.`;
+}
 
 // ---------------------------------------------------------------- constants
 
@@ -306,7 +313,7 @@ export function clipRules(model, clip, { registry = NODE_REGISTRY, trackById = n
   }
   const allowed = track && TRACK_CLIP_KINDS[track.kind];
   if (allowed && !allowed.includes(clip.kind)) {
-    err('clip-kind-mismatch', `A ${clip.kind} clip cannot go on a ${track.kind} track.`, 'kind');
+    err('clip-kind-mismatch', clipKindMismatch(clip, track), 'kind');
   }
   const okStart = finite(clip.start) && clip.start >= 0 && clip.start <= TIMELINE_MAX_S;
   if (!okStart) {
@@ -467,7 +474,7 @@ function snapContext(model, clip) {
 export function clipTrackReason(model, track, clip, registry = NODE_REGISTRY) {
   if (!track) return 'There is no such track.';
   if (!TRACK_CLIP_KINDS[track.kind].includes(clip.kind)) {
-    return `A ${clip.kind} clip cannot go on a ${track.kind} track.`;
+    return clipKindMismatch(clip, track);
   }
   const id = clip.target ?? track.target;
   const node = id == null ? null : model.graph.nodes.find((n) => n.id === id) || null;

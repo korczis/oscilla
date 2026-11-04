@@ -1186,7 +1186,7 @@ test('timeline actions validate references and undo exactly', () => {
   fail({ type: 'CLIP_ADD', trackId: track, start: -1, duration: 1 }, /between 0/);
   fail({ type: 'CLIP_RESIZE', clipId: clip, duration: 0.001 }, /at least/);
   fail({ type: 'CLIP_ADD', trackId: track, start: 0, duration: 1, kind: 'measurement',
-    payload: { action: 'stimulus' } }, /cannot go on a event track/);
+    payload: { action: 'stimulus' } }, /cannot go on an event track/);
   fail({ type: 'CLIP_ADD', trackId: track, start: 0, duration: 1,
     payload: { blockType: 'laser' } }, /Unknown pattern block type/);
   fail({ type: 'AUTOMATION_POINT_ADD', target: { node: ids.filter, param: 'type' }, time: 0,
