@@ -49,6 +49,14 @@
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
+//              made outside the Synth while it is shown (page hide; before any Studio visit):
+//              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
+//              Synth: it reads Arm, Arm arms and a key sounds. Fails on 9cf786ac (Disarm stays)
+//   s-xyengine an XY preset writes only the voice it plays (review S6): drawbar 1 of the
+//              additive engine set by Home, then XY bass from the Preset menu (one undo entry,
+//              the pad in D Dorian): the drawbar keeps its value in the model and on its face.
+//              Fails on 9cf786ac (the drawbar is back at 1.00)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -875,6 +883,78 @@ function defineChecks() {
       && /Night drive/.test(await list.textContent()), { ms: 10000,
       what: 'the saved XY preset is listed under xy' });
     return { ok: built === 4 && p.mode === 'minor-pentatonic', built, mode: p.mode };
+  });
+
+  // Review of src/js/synth (oscilla-21, S1): the Arm button is the transport's armed flag.
+  const armText = (page) => page.locator('[data-osc="synth.arm"]').textContent()
+    .then((x) => x.trim());
+  async function armedNow(page, what) {
+    await page.locator('[data-osc="synth.arm"]').click();
+    await until(async () => (await dbg(page)).armed && (await armText(page)) === 'Disarm',
+      { ms: 10000, what });
+  }
+  async function readsArm(page, what) {
+    await until(async () => !(await dbg(page)).armed && (await armText(page)) === 'Arm',
+      { ms: 10000, what });
+  }
+  def('s-armstop', async ({ page }) => {
+    await armedNow(page, 'Arm arms the panel and the button reads Disarm');
+    // A Stop the Synth did not make while it is shown: page hide stops the Studio transport.
+    // Before any Studio visit nothing else re-reads the Synth, so a copy would stay Disarm.
+    await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+    await readsArm(page, 'a transport Stop made outside the Synth reads Arm');
+    await armedNow(page, 'Arm arms after a Stop made outside the Synth');
+    // The review's path: to the Studio, its Stop, back to the Synth.
+    await page.locator('[data-osc="nav.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'the Studio opens' });
+    await page.locator('[data-osc="studio.stop"]').click();
+    await page.locator('[data-osc="nav.synth"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'synth'),
+      { ms: 10000, what: 'back in the Synth' });
+    await readsArm(page, 'after the Studio and its Stop the button reads Arm');
+    await armedNow(page, 'Arm arms again after the Studio Stop');
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the re-armed panel sounds');
+    await page.keyboard.up('KeyA');
+    return { ok: true, on: on.rmsDb };
+  });
+
+  // Review of src/js/synth (oscilla-21, S6): an XY preset writes the voice it plays, never an
+  // engine of the Engines tab.
+  def('s-xyengine', async ({ page }) => {
+    const KNOB = 'additive.h1';
+    const param = () => page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.metadata.panel && n.metadata.panel.module === 'additive').params.h1);
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const tabTo = async (id) => {
+      await page.locator(`#osc-synth-tab-${id}`).click();
+      await until(async () => (await dbg(page)).tab === id, { ms: 10000,
+        what: `the ${id} tab opens` });
+    };
+    await tabTo('engines');
+    await until(() => knob(page, KNOB).isVisible(), { ms: 10000,
+      what: 'the additive engine shows its drawbars' });
+    const initial = await param();
+    await keyKnob(page, KNOB, 'Home');
+    await until(async () => (await param()) !== initial, { ms: 10000,
+      what: 'Home moves drawbar 1' });
+    const set = await param();
+    const text = (await page.locator(`[data-value="${KNOB}"]`).textContent()).trim();
+    await tabTo('xy');
+    const before = await depth();
+    await page.locator('#osc-synth-preset').selectOption('xy-bass');
+    await until(async () => (await depth()) === before + 1, { ms: 10000,
+      what: 'the XY bass preset is one undo entry' });
+    const mode = await page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.metadata.panel && n.metadata.panel.module === 'xy').params.mode);
+    const after = await param();
+    await tabTo('engines');
+    await until(() => knob(page, KNOB).isVisible(), { ms: 10000,
+      what: 'the additive engine is shown again' });
+    const shown = (await page.locator(`[data-value="${KNOB}"]`).textContent()).trim();
+    return { ok: mode === 'dorian' && after === set && shown === text, initial, set, after,
+      text, shown, mode };
   });
 
   def('s-riffs', async ({ page }) => {
