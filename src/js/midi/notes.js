@@ -117,6 +117,21 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     return engine ? engine.noteOff(key) : false;
   }
 
+  /** Every sink a held key went to and the route's own, each told allOff once (a fresh sink
+   *  object per call is one sink by its allOff), then nothing held: a note held across a
+   *  workspace switch is released too (21's T1 on Train 6). Returns what they released. */
+  function sinksAllOff() {
+    const seen = new Set();
+    let n = 0;
+    for (const s of [route(), ...via.values()]) {
+      if (!s || s === ENGINE || typeof s.allOff !== 'function' || seen.has(s.allOff)) continue;
+      seen.add(s.allOff);
+      n += Number(s.allOff()) || 0;
+    }
+    via.clear();
+    return n;
+  }
+
   return {
     noteOn,
     noteOff,
@@ -130,9 +145,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       } else if (e.kind === 'note-off') {
         noteOff(e.note, source, e.channel);
       } else if (e.kind === 'all-sound-off' || e.kind === 'all-notes-off') {
-        const sink = route();
-        if (sink) sink.allOff();
-        via.clear();
+        sinksAllOff();
         engine.notesOff(e.kind === 'all-sound-off');
       }
       return e;
@@ -140,9 +153,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
 
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
     silence() {
-      const sink = route();
-      const n = sink ? sink.allOff() : 0;
-      via.clear();
+      const n = sinksAllOff();
       return (engine ? engine.notesOff(true) : 0) + n;
     },
   };
