@@ -12,24 +12,24 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 0.03,
-      "totalExclData": 0.03,
+      "total": 1.68,
+      "totalExclData": 2,
       "regions": {
         "header": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 14.39,
+          "mismatchExclData": 14.39,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "sidebar": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 4.2,
+          "mismatchExclData": 4.2,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "pageHeader": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 2.22,
+          "mismatchExclData": 2.22,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -70,8 +70,8 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 0.18,
-          "mismatchExclData": 0.27,
+          "mismatch": 0.2,
+          "mismatchExclData": 0.31,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -82,8 +82,8 @@
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 0.57,
-          "mismatchExclData": 0.57,
+          "mismatch": 0.64,
+          "mismatchExclData": 0.64,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -310,6 +310,24 @@
           "rise": 0,
           "reason": "F002 Pro admin shell merged into lane A with wave 3's registry page header: the navbar, sidebar and page header replace the V2 header (rule project.visual-identity-lock: a migrated view gets a new reference); reference.png is the merged first screen, regions remeasured from the DOM",
           "date": "2026-11-02"
+        },
+        {
+          "region": "header",
+          "rise": 14.39,
+          "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
+          "date": "2026-11-04"
+        },
+        {
+          "region": "sidebar",
+          "rise": 4.2,
+          "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
+          "date": "2026-11-04"
+        },
+        {
+          "region": "pageHeader",
+          "rise": 2.22,
+          "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
+          "date": "2026-11-04"
         }
       ]
     },
@@ -324,30 +342,30 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 3.7,
-      "totalExclData": 3.92,
+      "total": 5.28,
+      "totalExclData": 5.8,
       "regions": {
         "header": {
-          "mismatch": 2.18,
-          "mismatchExclData": 2.18,
+          "mismatch": 15.74,
+          "mismatchExclData": 15.74,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "sidebar": {
-          "mismatch": 1.49,
-          "mismatchExclData": 1.49,
+          "mismatch": 5.62,
+          "mismatchExclData": 5.62,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "pageHeader": {
-          "mismatch": 6.82,
-          "mismatchExclData": 6.82,
+          "mismatch": 9.01,
+          "mismatchExclData": 9.01,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "sentence": {
-          "mismatch": 13.81,
-          "mismatchExclData": 13.81,
+          "mismatch": 13.78,
+          "mismatchExclData": 13.78,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -682,6 +700,24 @@
           "rise": 4.51,
           "reason": "F002 Pro admin shell merged into lane A with wave 3's registry page header: the navbar, sidebar and page header replace the V2 header (rule project.visual-identity-lock: a migrated view gets a new reference); reference.png is the merged first screen, regions remeasured from the DOM",
           "date": "2026-11-02"
+        },
+        {
+          "region": "header",
+          "rise": 13.56,
+          "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
+          "date": "2026-11-04"
+        },
+        {
+          "region": "sidebar",
+          "rise": 4.13,
+          "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
+          "date": "2026-11-04"
+        },
+        {
+          "region": "pageHeader",
+          "rise": 2.19,
+          "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
+          "date": "2026-11-04"
         }
       ]
     }
