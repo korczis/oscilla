@@ -877,10 +877,10 @@ row({ id: 'studio.tl.track-delete.pointer', ws: 'studio',
   control: '[data-key^="track-del:"]', how: 'pointer', act: async (page) => {
     await page.locator('[data-key^="track-del:"]').first().click(); },
   expect: (s, b) => s.studio.tracks === b.studio.tracks - 1 || s.dialogs.length > b.dialogs.length });
-// The editor's own zoom (applied to its world element) is the one to compare: on a fresh Studio
-// the model still holds the default 1 while the graph shows its fitted zoom, which it commits
-// only after a change, so a model-only comparison passed or failed by the viewport's height
-// (the docked keys, M086). The model must end at the editor's zoom.
+// The editor's own zoom (applied to its world element) is the one to compare, and the model must
+// end at it. Until K170 a fresh model held the default 1 while the graph showed its fitted zoom,
+// so a model-only comparison passed or failed by the viewport's height (the docked keys, M086);
+// K170 commits the fit at once, and the row keeps judging what is shown.
 for (const [k, cmp] of [['zoomIn', (a, b) => a > b], ['zoomOut', (a, b) => a < b]]) {
   row({ id: `studio.graph.${k}.pointer`, ws: 'studio', control: `[data-osc="studio.graph.${k}"]`,
     how: 'pointer', act: D.click(`[data-osc="studio.graph.${k}"]`),
