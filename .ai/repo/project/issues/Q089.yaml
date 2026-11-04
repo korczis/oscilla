@@ -1,0 +1,25 @@
+id: Q089
+milestone: M122
+serves:
+  - "first-run-experience#first-screen-chosen"
+title: "Owner decision: /oscilla/ opens a new live landing, superseding Q004"
+slug: owner-decision-oscilla-opens-a-new-live-landing
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's decision of 2026-11-03 that supersedes Q004: the plain address /oscilla/ (and file:// with no hash) opens a new live landing, a workspace of the same application on the one AudioEngine and the one StudioModel, not a second site; the Playground moves to #m=playground and every existing #m=... link keeps opening its workspace (ADR 0045's one hash dispatcher, with the default route changed and noted there). The landing's playable hero on a phone is the XY pad (K097) with the touch keyboard under it, sounding on the first tap; the other surfaces (Synth, sequencer, compact Studio, MIDI, Measure, Experiments) appear as compact live projections that open their full workspace, derived from the workspace registry and the UI catalogue, never a hand-written feature list."
+why: "The owner wrote in their ChatGPT Oscilla project (conversation 'Kompletní redesign landing page', 2026-11-03, read in Claude Code session oscilla-21 at the owner's link): \"projekt se posunul, landing page https://korczis.github.io/oscilla potrebuje kompletni redesign, mat to maximalne reprezentuje projekt, umozni snadno vyzkouset, snadno demonstruje funguje na mobilech, vse propojuje, nejedna se o lehky rewamp, ale kompletni novy from scratch landing / melo by byt catchy / byt plne funkcni / umoznit hned vyzkouset features / byt derived / inferred / generic / dynamic / napr oscipadd ci synth ci sequencer ci flow ci midi ci keyboard chci hned mit moznost vyzkouset na mobilu na first page, vse zive, realne, reused compoinents, napojene na zive vse\". Because public-discoverability holds that a wish for a landing page is not a decision, the session asked the owner (AskUserQuestion, 2026-11-03): what /oscilla/ opens — answered 'New live landing' (the Playground at #m=playground, every #m= link kept, Q004 superseded); and the playable hero on a phone — answered 'XY pad + keyboard'."
+current_state: "Decided by the owner on 2026-11-03 in session oscilla-21 (AskUserQuestion, quoted in why). The owner_decision evidence is recorded on main after this plan change lands (majordomus plan start, evidence --covers owner_decision, done), quoting the two answers. Until that evidence is on main Q089 is not DONE, so first-run-experience#first-screen-chosen (which judges Q089 DONE) does not count as met from this plan change. Q004 stays as the record of the 2026-10-29 choice, marked superseded by this issue; P002 is cancelled with a pointer here; P008, M099 and the in-app-entry criterion of public-discoverability move onto the landing's parts."
+scope:
+  - ".ai/repo/project/issues/Q089.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision) in the owner's words with date and source: the ChatGPT conversation quoted in why and the two AskUserQuestion answers of 2026-11-03."
+  - "It is specific enough for P012 to state testable criteria: the route /oscilla/ and an empty hash open the landing, #m=playground and every entry of the deep-link inventory open what they open today, and the phone hero is the XY pad with the keyboard."
+  - "Q004 is not deleted: its current_state names this issue as superseding it."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-03
+updated_at: 2026-11-03

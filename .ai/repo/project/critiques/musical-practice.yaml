@@ -1,0 +1,28 @@
+intent: musical-practice
+reviewed_at: "e1525b1c"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-af session; the plan was drafted by oscilla-b0, who built none of it, and af wrote none of it)"
+findings:
+  - id: onset-error-needs-a-stated-clock
+    class: unproven_assumption
+    subject: "musical-practice"
+    finding: "The intent grades the onset error in milliseconds but names no clock. Keyboard and MIDI events carry event.timeStamp and MIDIMessageEvent.timeStamp on the performance clock, while playback, count-in and loop run on the AudioContext clock. Without a stated mapping and without the output latency shown, every keyboard and MIDI grade is biased by the output latency the browser adds, and the bias differs per device."
+    blocking: false
+    resolution:
+      state: open
+      because: "Addressed in the intent's own text at 09bb3f19 (it stays open until the intent is planned and an issue serving a criterion carries it): an invariant measures the onset error on the audio clock (performance time mapped to context time through getOutputTimestamp) and shows the outputLatency and baseLatency the browser reports with each result, never silently subtracted (2026-11-03)."
+  - id: microphone-claim-verified
+    class: delivery_verification
+    subject: "musical-practice"
+    finding: "The microphone invariant cites src/js/analysis/peak-detector.js. Checked on main: createPitchDetector reports frequencyHz with confidence (the NSDF peak, 0..1) and uncertaintyHz, the peak reader reports uncertaintyHz, and src/js/analysis has no onset detector. So 'no microphone timing criterion is graded until a plan-backed decision adds one' is what the code supports."
+    blocking: false
+    resolution:
+      state: rejected
+      because: "Rejected as a defect: the claim matches the code at c3045229, so nothing changes (2026-11-03)."
+  - id: owner-questions-answered-bounds-open
+    class: missed_requirement
+    subject: "Q085"
+    finding: "The owner answered Q085-Q088 in the af session on 2026-11-03 (AskUserQuestion): Q085 'Per exercise, bounded', Q086 'Locally, clearable', Q087 'None', Q088 'Riffs'. The option text of Q085 gave example bounds (30-150 ms, 10-50 cents) that were the critic's, not the owner's, so the bounds themselves are not decided; and Q088's answer makes the first exercise type depend on K149 (riff library) and K099 (the notes clip)."
+    blocking: false
+    resolution:
+      state: open
+      because: "09bb3f19 records the four answers in current_state, states that the bounds stay open and that the first exercise slice proposes them for the owner's acceptance; the owner_decision evidence is recorded once the plan is on main (2026-11-03)."
