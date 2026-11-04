@@ -11,10 +11,13 @@
 // --measure-noise), above a floor. The record at this acceptance (the W1b chain: the adoption
 // with the synth-theme core's S9/S10 and the knob's W1c, chromium 153.0.8010.12), the largest
 // count over every view, at threshold 0.05 / 0:
-//   STABILITY darwin-arm64 0 / 145 (10 runs), linux-x64 8 / 169 (10 runs)
-// (W1b on the look of dev-53's 40fc071d measured darwin 0 / 154 over 10 runs and linux 8 / 248
-// over 20; W1b's first acceptance measured darwin 0 / 338 and linux 2 / 92 over 10 runs each,
-// against the references of b1eb3e6d; one global faint bound of 1000 px followed from the 338.)
+//   STABILITY darwin-arm64 15 / 225 (10 runs), linux-x64 50 / 1167 (10 runs)
+// (W1b's hardware look, the rack bay with nuts and plugs, re-accepted ten views; its noisiest
+// is desktop-bay-light, linux 50 / 1167 over 20 runs; before it, darwin 0 / 145 and linux
+// 8 / 169 over 10 runs; W1b on the look of dev-53's 40fc071d measured darwin 0 / 154 over 10
+// runs and linux 8 / 248 over 20; W1b's first acceptance measured darwin 0 / 338 and linux
+// 2 / 92 over 10 runs each, against the references of b1eb3e6d; one global faint bound of
+// 1000 px followed from the 338.)
 // The seeded mutations, each built into a scratch dist and recorded per view and environment by
 // --record-seed (environments.<env>.seeds), are the standing proof that the bounds still catch a
 // small edit: SEEDS below names the views each must fail, and the test fails when any of them
