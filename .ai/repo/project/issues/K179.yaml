@@ -1,0 +1,31 @@
+id: K179
+milestone: M048
+serves:
+  - "studio-completion#voice-opens-in-studio"
+title: "Live Studio playback lets the last note's release finish before the transport ends"
+slug: live-studio-playback-lets-the-last-notes-release-finish
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio). Found by V605's fixes (2026-11-04) and asked for by its reviewer (prismatic-majordomus-98): live Studio playback ends STOP_PAD_S (10 ms, sequencer/compiler.js) after the timeline's last clip (transport.js, the end check at anchorEndTime + STOP_PAD_S) and then fades out, so an envelope release longer than about 25 ms is cut short live, while the offline render (and V605's residual) judges the full release: a voice opened from the Playground does not sound the same live as it renders. The transport's end time takes the longest release still sounding at the last clip's end into account (each Envelope's release, and each voice engine's release, from the compiled plan), so playback ends after the last release has fallen to the floor and then stops as today. The cause is the stop pad, not the start fade, so it is separate from K177."
+why: "V605 review (prismatic-majordomus-98, 2026-11-04): a release over about 25 ms is cut short live, a 'does not sound the same live' gap the offline render cannot see."
+scope:
+  - "src/js/studio/transport.js"
+  - "src/js/studio/timeline-compiler.js"
+  - "tests/unit/v31-studio-transport.test.mjs"
+  - "tests/browser/qa-regressions.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "V605"
+acceptance_criteria:
+  - "A unit test, failing on the merge base, on the transport's fake engine: a timeline whose last clip gates an Envelope with a 300 ms release ends no earlier than the clip end plus the release (and STOP_PAD_S), and a timeline with no release ends as today."
+  - "A browser check (qa-regressions.cjs signal-path-open-in-studio-plays or v31-studio-transport): a voice opened from the Playground with a 300 ms release, played live, is still above the floor 200 ms after its gate ends and silent with census 0 after the release, in chromium, firefox and webkit, within named until() deadlines."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and a unit test that fails on the merge base (project.fail-first)."
+  - "tests/README.md rows are updated; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v31-studio-transport.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04
