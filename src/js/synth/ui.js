@@ -501,6 +501,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!t) return;
     const d = t.dataset;
     if (d.engine) {
+      allOff(); // before the route changes what the keys play (review S3)
       dock.unroute();
       showTab('engines', d.engine);
       say(`${panel.module(d.engine).label}: the keys play this engine.`);

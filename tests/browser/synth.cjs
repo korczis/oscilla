@@ -50,6 +50,10 @@
 //              additive engine set by Home, then XY bass from the Preset menu (one undo entry,
 //              the pad in D Dorian): the drawbar keeps its value in the model and on its face.
 //              Fails on 9cf786ac (the drawbar is back at 1.00)
+//   s-chiprelease a note-off releases the node its note-on played (review S3): on the Engines
+//              tab the keys routed to FM, QWERTY A held, the ADDITIVE chip clicked (the tab
+//              and engine unchanged, the route cleared), A up: below -70 dB rel and no held
+//              note. Fails on 3c22d01a (the FM voice stays held)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -823,6 +827,32 @@ function defineChecks() {
     const shown = (await page.locator(`[data-value="${KNOB}"]`).textContent()).trim();
     return { ok: mode === 'dorian' && after === set && shown === text, initial, set, after,
       text, shown, mode };
+  });
+
+  // Review of src/js/synth (oscilla-21, S3): a note-off releases the node its note-on played.
+  const tabTo = async (page, id) => {
+    await page.locator(`#osc-synth-tab-${id}`).click();
+    await until(async () => (await dbg(page)).tab === id, { ms: 10000,
+      what: `the ${id} tab opens` });
+  };
+  def('s-chiprelease', async ({ page }) => {
+    await tabTo(page, 'engines');
+    const fm = (await dbg(page)).nodes.fm;
+    await page.evaluate((id) => window.OSCILLA.app.synthPick(id), fm);
+    await until(async () => (await dbg(page)).played === fm, { ms: 10000,
+      what: 'the keys play the FM engine' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the FM engine sounds the held key');
+    // The chip of the engine the tab shows: no tab or engine change, only the route goes.
+    await page.locator('[data-engine="additive"]').click();
+    await until(async () => (await dbg(page)).played === (await dbg(page)).nodes.additive,
+      { ms: 10000, what: 'the chip routes the keys to the additive engine' });
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the FM voice is released after the chip and key up');
+    await until(async () => (await dbg(page)).held.length === 0, { ms: 10000,
+      what: 'no note is held after the key is up' });
+    const census = await counts(page);
+    return { ok: true, on: on.rmsDb, off: off.rmsDb, census };
   });
 
   def('s-riffs', async ({ page }) => {
