@@ -46,7 +46,14 @@ test('a jack label fits its pitch and its accessible name keeps the whole label'
   assert.equal(bay.shortLabel('Control', 'out'), 'CV ▸');
   assert.equal(bay.shortLabel('Resonance'), 'Res');
   assert.equal(bay.shortLabel('Gate', 'out'), 'Gate ▸');
-  const { svg } = svgAt(358);
+  // 21's T6: the panel's own labels all fit by abbreviation now, so a full-length label is drawn
+  // from a panel whose first jack has one ('Squelchiness'); without it the "held" branch below
+  // never ran and the test passed vacuously.
+  const first = PANEL.modules[0].id;
+  const long = Object.create(PANEL, { jacksOf: { value: (id) => PANEL.jacksOf(id)
+    .map((j, i) => (id === first && i === 0 ? { ...j, label: 'Squelchiness' } : j)) } });
+  const svg = bay.baySvg({ panel: long, layout: bay.bayLayout(long, 358),
+    tokens: panelTokens(null) });
   const jackText = /<text [^>]*text-anchor="middle"[^>]*>([^<]*)<\/text>/g;
   const labels = [...svg.matchAll(jackText)]
     .map((m) => m[1].replace(/&[a-z]+;/g, '_'));
@@ -58,14 +65,15 @@ test('a jack label fits its pitch and its accessible name keeps the whole label'
     .map((m) => ({ n: m[2].replace(/&[a-z]+;/g, '_').length,
       len: +(m[1].match(/textLength="([\d.]+)"/) || [])[1] || 0,
       adjust: /lengthAdjust="spacingAndGlyphs"/.test(m[1]) }));
-  // The panel's own labels now fit by abbreviation; any full-length one is still held.
+  // The panel's own labels now fit by abbreviation; the long one is held, and so would any other.
+  assert.ok(fit.some((f) => f.n === bay.LABEL_MAX), 'a full-length label is drawn and judged');
   for (const f of fit) {
     if (f.n === bay.LABEL_MAX) {
       assert.ok(f.adjust && f.len > 0 && f.len <= bay.JACK_PITCH - 6, JSON.stringify(f));
     } else assert.equal(f.len, 0, 'a shorter label is not squeezed');
   }
-  for (const m of PANEL.modules) {
-    for (const j of PANEL.jacksOf(m.id)) {
+  for (const m of long.modules) {
+    for (const j of long.jacksOf(m.id)) {
       const key = j.key.replace(/[.]/g, '\\.');
       const g = svg.match(new RegExp(`data-jack="${key}" aria-label="([^"]*)"`));
       assert.ok(g && g[1].includes(j.label.replace(/&/g, '&amp;')), `${j.key} names ${j.label}`);
