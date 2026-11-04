@@ -1,0 +1,76 @@
+# Review verdict for pull request #373, "fix(release): bound every gh call in the release scripts
+# and say how to publish from main" (branch fix/release-scripts-bounded-gh; builder oscilla-b0).
+# Reviewed head c5a584d5 against its merge base 60103776 (origin/main is 11cc9fbc; the PR is
+# behind, not conflicting). This reviewer (oscilla-dev-53) built none of it.
+#
+# The digest is scripts/review-verdict.mjs from `git archive origin/main scripts`, run --content
+# --list --base-branch origin/main in a detached worktree at the head: a554d491...6de over 7 paths
+# (release-bounded, release-cadence, release-publish, release-record, verify-deploy and the two
+# unit tests).
+#
+# What was checked:
+# - release-bounded.mjs: every call gets a per-attempt bound (60 s network, 180 s release
+#   transfer, 20 min local) with SIGKILL; only network calls retry, at most 3 attempts, 5 s then
+#   10 s apart; a call that can act twice (gh workflow run, gh release create, gh issue
+#   create/comment/close) retries only when it failed to connect, so no second Pages dispatch or
+#   second Release; a refusal (not found, not authenticated) is never retried; a signal-killed
+#   child reports 128 and a timed-out one 124. boundedFetch bounds the body too (the signal covers
+#   the stream) and returns a 4xx without retrying.
+# - release-publish.mjs: every precondition and step names its failing call and reason; gh run
+#   watch is bounded by --pages-timeout and not restarted after a timeout; git push of the tag is
+#   retried, which is safe (a second push of the same tag is up to date); the branch refusal
+#   names FROM_MAIN, the way out from a linked worktree.
+# - release-record.mjs, release-cadence.mjs, verify-deploy.mjs: the same runner or boundedFetch;
+#   verify-deploy keeps attempts 1 per request because --attempts is its own retry, so the
+#   number of requests does not multiply.
+# - The release unit tests at the head: 78 pass, 0 fail (release-bounded, release-publish,
+#   release-record, release-cadence, verify-deploy).
+#
+# Delta at 47071c9a (content 272bddf8...36b over the same 7 paths), against the judged c5a584d5:
+# - L1 closed: release-record's gh release download passes --clobber, so a retry replaces a partial
+#   file (gh 2.98: --clobber overwrites existing files of the same name).
+# - L2 closed: boundedRunner takes opts.budgetMs; each attempt is bounded by the smaller of its own
+#   bound and what is left of the budget (the pause before a retry counts against it), and no
+#   attempt after the first starts once it is spent. The Pages watch passes --pages-timeout as the
+#   budget, so the watch is bounded by it in all.
+# - The two new release-bounded tests pin both; the release unit tests at the head: 80 of
+#   release-bounded, release-publish, release-record, release-cadence and verify-deploy pass.
+# - L3 (P2, pre-existing on main, not introduced here): publish() writes notes.md and a dist copy
+#   into a fresh mkdtemp oscilla-release-* and never removes it, and release-publish.test.mjs
+#   (fixtureRepo, oscilla-gate-tree-*) and release-record.test.mjs (oscilla-records-*) leave
+#   their fixture repositories behind; every npm run verify leaks them. On this machine on
+#   2026-11-02 they held about 24 GB of the temporary directory with the disk at 7 GiB free.
+#
+# Delta at e5c8eecb (content f1573a00...fdf), against the judged 47071c9a:
+# - L3 closed: publish() removes its oscilla-release-* directory in a finally, whatever gh release
+#   create answers; the fake gh of release-publish.test.mjs reads the notes when the Release is
+#   created, since the file is gone after. The fixture repositories of release-publish
+#   (oscilla-gate-tree-) and release-record (oscilla-records-) are removed at process exit;
+#   release-record's and release-provenance's single-test directories use t.after. A new test
+#   runs a publish to the Release step under a TMPDIR it owns and finds no oscilla-release-* left.
+# - Proven here: TMPDIR=<a fresh directory> node --test tests/unit/release-*.test.mjs passes 126
+#   of 126 and leaves the directory empty.
+#
+# Verdict: merge. No P0 or P1; L1, L2 and L3 closed.
+#
+# Delta review, 2026-11-03, by oscilla-af (claude-code 901211e2), as the fallback reviewer the
+# coordinator named, at 2f560e4a (417f3217 merges main 2931af34, which brought R028's CI
+# receipt; 2f560e4a adds a test). The content moved from f1573a00 to 3e583c0d through that merge.
+# Read: git diff 2931af34..2f560e4a over the release scripts and tests. release-publish.mjs keeps
+# R028's gateVerdict and CI-receipt header and routes defaultSh through boundedRunner; R028's
+# gatherCiReceipt passes { timeout } and { env }, which boundedRunner now accepts (timeout as an
+# alias of timeoutMs, env merged into process.env), and a timed-out call answers status 124,
+# which the receipt reads as unreadable and refuses on, so it still fails closed. TMPDIR=<fresh>
+# node --test release-bounded, release-ci-receipt, release-publish, release-record and
+# release-provenance: 97/0. The reviewer of the delta is not #373's builder (R028 is af's; the
+# adaptation to it is #373's). New finding L4 (P3, open). Verdict: merge; L1-L3 as dev-53 closed them.
+schema: review-verdict/v1
+pr: 373
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 3e583c0d34bc99c0cfc168d5c80f7f206c8cd98a1c8478acb6c03fe879c4aebf
+findings:
+  - { id: L1, severity: P3, status: closed, title: "release-record's gh release download --output is retried after a transient failure without --clobber, so a first attempt that left a partial file can turn the retry into an 'already exists' refusal; delete the file before a retry or pass --clobber (the temporary directory is new per call)" }
+  - { id: L2, severity: P3, status: closed, title: "gh run watch is restarted after a non-timeout transient failure, so the total wait can exceed --pages-timeout by up to two further attempts; the stated bound is per attempt, not for the watch as a whole" }
+  - { id: L3, severity: P2, status: closed, title: "pre-existing on main: publish() never removes its mkdtemp oscilla-release-* (notes and a 2.7 MB dist copy), and the release-publish and release-record tests leave their fixture repositories in the temporary directory, so every npm run verify leaks them; remove each in a finally / t.after" }
+  - { id: L4, severity: P3, status: open, title: "release-ci-receipt.mjs ghJson already tries each read twice; through boundedRunner each attempt is itself retried up to NET_ATTEMPTS times, so one unreadable GitHub read can take up to 6 attempts of 60 s before the receipt refuses; bounded, but drop one of the two retry layers" }

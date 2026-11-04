@@ -21,6 +21,7 @@ scope:
 depends_on:
   - "K014"
 acceptance_criteria:
+  - "The LFO gains a modulatable `depth` parameter in this hash epoch, and one Macro drives an LFO depth through a CONTROL edge with per-edge depth and polarity, in a unit test that fails on the merge base (moved here from K013 on 2026-11-03: an LFO depth input changes an existing node definition)."
   - "STUDIO_HASH_VERSION is bumped exactly once and every new parameter of the list is in that bump, in a unit test that fails on the merge base."
   - "A document and an experiment saved under hash v1 reload with \"saved under hash v1, migrated\" and their original hash in provenance; their render is unchanged with the new parameters at their defaults."
   - "The pull request lists every re-pinned template, and ADR 0030 carries the note."

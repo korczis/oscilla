@@ -361,7 +361,7 @@ names the check that enforces it. The ones an extension meets most often:
 | [`project.studio-model-is-canonical`](../.ai/repo/rules/project/studio-model-is-canonical.v1.md) | Studio state lives in the StudioModel; views only read it |
 | [`project.no-inert-surfaces`](../.ai/repo/rules/project/no-inert-surfaces.v1.md) | no placeholder copy, no control without an effect |
 | [`project.ui-uses-flowbite-pro`](../.ai/repo/rules/project/ui-uses-flowbite-pro.v1.md) | new UI on Flowbite Pro; the legacy interface never grows |
-| [`project.visual-identity-lock`](../.ai/repo/rules/project/visual-identity-lock.v2.md) | the domain views keep OSCILLA's look |
+| [`project.visual-identity-lock`](../.ai/repo/rules/project/visual-identity-lock.v4.md) | the domain views keep OSCILLA's look; a restrained hardware treatment, tokens only, no product's identity |
 | [`project.single-file-deliverable`](../.ai/repo/rules/project/single-file-deliverable.v2.md) | one self-contained `dist/index.html` |
 | [`project.suite-harness`](../.ai/repo/rules/project/suite-harness.v1.md) and [`project.bounded-test-timing`](../.ai/repo/rules/project/bounded-test-timing.v2.md) | browser checks through the harness, with bounded waits |
 

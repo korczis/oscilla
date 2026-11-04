@@ -1,5 +1,5 @@
-// project.visual-identity-lock v3 (the instrument-panel carve-out): the Synth's panel, knob,
-// jack and cable drawings take every colour from an OSCILLA token read at run time
+// project.visual-identity-lock v4 (the app-wide hardware treatment, Q071): the Synth's panel,
+// knob, jack and cable drawings take every colour from an OSCILLA token read at run time
 // (src/js/synth/view/tokens.js); no hex, rgb(a), hsl(a) or named colour literal, and no url()
 // but an in-SVG fragment reference (a gradient), so no bitmap, texture or remote image.
 import test from 'node:test';

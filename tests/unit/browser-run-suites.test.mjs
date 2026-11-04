@@ -30,7 +30,7 @@ const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 const SUITES = ['app', 'layout', 'qa-regressions', 'navigation', 'link-integrity',
   'ui-flowbite-pro', 'midi', 'ui-current', 'touch-audio', 'demo-song', 'cross-links',
-  'first-screen', 'surface-census'].map((s) => `tests/browser/${s}.cjs`);
+  'first-screen', 'surface-census', 'journeys'].map((s) => `tests/browser/${s}.cjs`);
 
 test('test:browser runs its suites through the runner, none chained with &&', () => {
   const cmd = pkg.scripts['test:browser'];

@@ -31,6 +31,45 @@ export const KEYBOARD_REFUSED = Object.freeze({
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
 
+/** The dock's Pro buttons (one class list, bound as kbdBtn, so the markup carries it once): 44 px
+ *  on a coarse pointer (V634). */
+export const KBD_BTN = [
+  'inline-flex h-9 items-center justify-center rounded-lg border border-solid',
+  'border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100',
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300',
+  'aria-pressed:border-primary-600 aria-pressed:bg-primary-600 aria-pressed:text-white',
+  'dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700',
+  'dark:aria-pressed:bg-primary-500 [@media(pointer:coarse)]:min-h-11',
+  '[@media(pointer:coarse)]:min-w-11',
+].join(' ');
+
+/** The narrowest white key a finger plays without its neighbour: the 44 px touch target. */
+export const TOUCH_KEY_MIN = 44;
+
+/**
+ * How many octaves the on-screen keys show in `width` CSS px (V634). A fine pointer keeps the
+ * drawing's own choice, two below 560 px and three above; a coarse one shows as many whole
+ * octaves as keep every white key (seven per octave and the top C) at least TOUCH_KEY_MIN wide,
+ * one at the least and three at the most, and the Octave buttons move them.
+ */
+export function keysOctaves(width, { coarse = false } = {}) {
+  if (!coarse) return width < 560 ? 2 : 3;
+  const whites = Math.floor(Math.max(0, width) / TOUCH_KEY_MIN);
+  return Math.max(1, Math.min(3, Math.floor((whites - 1) / 7)));
+}
+
+/**
+ * Whether the keys are touched rather than pointed at, and whether they carry the computer
+ * keys' letters: a letter names a key nobody can press where no fine pointer, and so most
+ * likely no hardware keyboard, is attached (a phone), so there the keys show only their notes.
+ */
+export function keysInput(win) {
+  const mq = (q) => Boolean(win && typeof win.matchMedia === 'function'
+    && win.matchMedia(q).matches);
+  const coarse = mq('(pointer: coarse)');
+  return { coarse, lettered: !coarse || mq('(any-pointer: fine)') };
+}
+
 /** True when `el` takes typed keys itself: a text field, a select, an editable element. */
 export function takesText(el) {
   if (!el || !el.tagName) return false;
@@ -63,6 +102,10 @@ export function createKeyboardUi({ win = window } = {}) {
     kbdHeld: '',
     kbdSounding: false,
     kbdRange: '',
+    // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
+    // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
+    kbdMore: false,
+    kbdBtn: KBD_BTN,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {
@@ -254,13 +297,14 @@ function mountKeys(win, doc, kb) {
   let range = visibleRange(kb.base, 3);
   const labels = {};
   const label = (note) => {
+    if (!keysInput(win).lettered) return null;
     const code = codeForNote(note, kb.base);
     return code ? (labels[code] || KEY_LABELS[code]) : null;
   };
   const view = {
     draw() {
       if (!ctx || !width) return;
-      const octaves = width < 560 ? 2 : 3;
+      const octaves = keysOctaves(width, keysInput(win));
       range = visibleRange(kb.base, octaves);
       const lit = (note) => (kb.isLit(note)
         ? kb.held.find((h) => h.note === note).sources : null);

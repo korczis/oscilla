@@ -18,4 +18,16 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T23:38:29Z
+started_at: 2026-11-02T23:38:08Z
+started_event: sha256:2e4eee75f27b2af53b47cbccdbb5d6300f5cf46a7cfa7c45dcff5751ad3e0be2
+completed_at: 2026-11-02T23:38:29Z
+completed_event: sha256:0cb1c144fbde1ee72730ae32da692d06044a0b287536604094bbf6ee3cbaa93a
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0 (claude-code abd8bbe3), 2026-11-03 about 00:0xZ, relayed to oscilla-26"
+    result: "Owner chose 'Up to 8 voices, 1/8 gain (Recommended)': an engine node holds up to 8 voices at 1/8 gain each, as V502's note voices do; the semi-modular panel stays monophonic."
+    artifact: ".ai/repo/project/issues/Q021.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-02T23:38:23Z

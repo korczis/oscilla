@@ -146,3 +146,94 @@ findings:
       state: planned
       issue: "G011"
       because: "Open in Studio is a same-tab control with no href until V604's draft store is done, because a new tab would open a Studio without the cockpit's document; G011 states it and tests it, and G012's same-tab path stays the proof of keeping the selection (2026-11-01)."
+  # af's critique of the U068 draft (2026-11-03); resolutions by the plan builder (oscilla-21)
+  - id: css-order-is-not-focus-order
+    class: unproven_assumption
+    subject: "U068"
+    finding: "The draft said focus order follows the arranged order through the grid's order property. CSS order and grid placement change only the visual order; Tab order and the screen-reader reading order stay in DOM order (WCAG 1.3.2, 2.4.3)."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "U068 moves the panel roots in the DOM (insertBefore inside the workspace grid after the model commits; no x-for over panels, so Alpine keeps the moved roots' bindings) and never uses CSS order; a criterion tabs from the panel before the new position to the moved one and compares the accessibility tree's order with the visual order in every gate browser; the intent criterion adds that every Move keeps focus and reading order equal to the visual order (2026-11-03)."
+  - id: stop-visible-is-contradicted
+    class: missed_requirement
+    subject: "U068"
+    finding: "A panel collapsed before playback hides Stop the moment sound starts, and a panel moved to the end of a long page leaves the viewport, so 'Stop stays in the viewport' cannot hold with 'moves'. The owner's intent was that Stop is always reachable."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Option (a): the status bar's Play/Stop (status.play, in view at every width) and Escape (page.escape) stop whatever owns output, the instrument, the Studio transport and a Measure capture, and U068 adds what they do not yet stop; an ownsOutput panel collapsed while idle expands when sound or a capture starts and cannot collapse while it owns output; the criterion moves the panel last, scrolls to the top and finds status.play in view and effective at 390x844 and 1536x1024 (2026-11-03)."
+  - id: one-folding-owner
+    class: insufficient_work
+    subject: "U068"
+    finding: "K062 persists the Synth cards' expanded set and V622 folds Studio boxes as saved node state; U068's collapsed-per-panel would be a third folding store unless its level is stated."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "U068's collapse is the panel frame's own level; K062 and V622 stay the owners of theirs, and no Synth card is an arrangeable panel (params-controls.md 7.1) (2026-11-03)."
+  - id: phone-definition
+    class: insufficient_work
+    subject: "U068"
+    finding: "Coarse pointer or width < 640 puts a 1024 px touch tablet into one column; the owner said phone."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Phone is the content column narrower than 640 px, a container query on <main>, whatever the pointer (2026-11-03)."
+  - id: coverage-not-vacuous
+    class: unproven_assumption
+    subject: "U068"
+    finding: "'Every workspace's declared panels' passes with zero declarations."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Playground, Analyzer, Studio, Synth and Measure are named; a census test derived from the catalogue requires at least two arrangeable panels each and one ownsOutput panel where the workspace sounds or captures (2026-11-03)."
+  - id: default-layout-unchanged
+    class: regression_risk
+    subject: "U068"
+    finding: "The default layout must render exactly today's page."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "The default is today's DOM order and spans; npm run visual and the visual gate stay unchanged with no stored layout, and iphone.cjs census reach does not fall (2026-11-03)."
+  - id: storage-unavailable
+    class: regression_risk
+    subject: "U068"
+    finding: "localStorage can throw (private mode, blocked storage)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Reads and writes are inside try/catch with the default layout as fallback; a criterion runs the iphone.cjs journey with denyCapabilities and a unit fixture whose storage throws (2026-11-03)."
+  - id: touch-drag
+    class: unproven_assumption
+    subject: "U068"
+    finding: "Without touch-action: none and pointer capture on the handle a phone drag scrolls the page; synthetic pointer holds lose capture (#388)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "The handle has touch-action: none and pointer capture; the criterion uses trusted touch and mouse input (2026-11-03)."
+  - id: key-names
+    class: insufficient_work
+    subject: "U068"
+    finding: "The Move and Wider/Narrower keys were unnamed and not shown free in the K153 registry, including the Synth's armed keys."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Alt+Shift+ArrowUp/ArrowDown move and Alt+Shift+ArrowLeft/ArrowRight narrow and widen, in the focus scope of a panel handle only; keys-registry.test.mjs shows one owner each and no clash with the Synth's armed keys (2026-11-03)."
+  - id: standard-criteria
+    class: missed_requirement
+    subject: "U068"
+    finding: "The Pro toast and dropdown with the ratchet not rising, the size report with base and head, wording, tests/README rows and fail-first were not criteria."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "All five are acceptance criteria of U068 (2026-11-03)."

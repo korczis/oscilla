@@ -33,4 +33,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T22:46:37Z
+started_at: 2026-11-02T22:46:14Z
+started_event: sha256:68e3525b2e0b1033b6ced67b9f60beee10896c2b223e92afc94956cabaca6c73
+completed_at: 2026-11-02T22:46:37Z
+completed_event: sha256:9e730aac2f220e58922f78e8f2856483a5d0c07a9c2a6a86638afa22b563ceaf
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/sequencer-model.test.mjs; node tests/browser/sequencer.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc47ea5f5bce48ed90904bd101455ff43a, member #266); a tempo change changes the offline render length of the default sequence; stored ms sequences unchanged; freeze tests green; CI run 41357644373 green on the train head c2a6f6c5 (unit, npm test and the browser gate in chromium, firefox and webkit from file:// and /oscilla/), Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge), member verdict .ai/repo/reviews/266.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:46:31Z

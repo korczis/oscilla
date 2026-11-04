@@ -41,4 +41,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:12:29Z
+started_at: 2026-11-03T00:11:58Z
+started_event: sha256:44039597a4158f8147ff86ce66d1f478b356f7d5b5a738ef7a20ce49736736ef
+completed_at: 2026-11-03T00:12:29Z
+completed_event: sha256:476d0f6efd0a81413cfcf1f3ee11596f49fb2c0455dd9f640902d25e2d0c77cc
+evidence:
+  - covers: verified
+    type: ci
+    command: "node tests/browser/app.cjs; node tests/browser/labs.cjs"
+    result: "landed in C-line train B #380 (main merge commit 10db73d0, member #293): setDualRouter routes the dual voices live (pan-live-dual in app.cjs, labs.cjs); review verdicts .ai/repo/reviews/293.yaml and .ai/repo/reviews/380.yaml (merge)"
+    artifact: ".ai/repo/reviews/293.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:12:20Z

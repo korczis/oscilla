@@ -1,0 +1,33 @@
+id: K150
+milestone: M067
+serves:
+- "connected-instrument#patch-bay-generic"
+title: One patch bay for any typed ports; the Synth panel and Studio nodes are its sources
+slug: one-patch-bay-for-any-typed-ports
+priority: p2
+profile: implementation
+objective: "Move the Synth patch bay's layout and drawing into src/js/ui/patch/patch-bay.js over a generic source ({ groups: [{ id, label, jacks }], nameOf }), keep synth/view/bay.js as the panel's adapter with the names ui.js and the tests use, and add ui/patch/studio-source.js: every node of a StudioModel (or the ones named) as a group of jacks from its registry ports, every document edge between them as a cable, and the jack states that follow. An analysis jack draws as a square, the Studio's PORT_VISUALS shape. The extraction is behaviour-neutral: the Synth bay's markup is byte-identical before and after for six widths and every jack state, so the visual gate shows no rise. The next issue draws a Studio rack with it (a back-panel view of every node, cables hanging across units)."
+why: "Owner direction of 2026-11-02, in Czech: \"make it modular / make it patchable / make it generic\", \"pstchbay musi byt rozsirenejsi\", \"vse se vsim propojene\" and \"patchbay ... viditelne, hezke, sexy, funkni\". The bay drew only the Synth panel's jacks; any other node could not be patched or seen on it. b0 (lane coordinator) asked for the extraction first and behaviour-neutral, then the Studio feed."
+scope:
+- src/js/ui/patch/patch-bay.js
+- src/js/ui/patch/studio-source.js
+- src/js/synth/view/bay.js
+- tests/unit/patch-bay-generic.test.mjs
+- tests/README.md
+- .ai/repo/project/intents/connected-instrument.yaml
+- .ai/repo/project/issues/K150.yaml
+- dist
+depends_on:
+- V636
+acceptance_criteria:
+- "Before: VERIFIED: the bay's layout and drawing take only a Synth panel (panel.modules, panel.jacksOf)."
+- "After: patchLayout and patchSvg take any source; the Synth bay's markup is identical to before; a StudioModel source has one group per node with its registry ports and one cable per edge inside the source."
+- "Negative cases: an edge leaving the chosen nodes is not drawn; a node type the registry does not know is left out."
+- "Rollback: revert the merge commit; no stored record or schema changes."
+validation:
+- node --test tests/unit/patch-bay-generic.test.mjs
+- node tests/browser/synth.cjs
+evidence_required:
+- verified
+created_at: '2026-11-02'
+updated_at: '2026-11-02'

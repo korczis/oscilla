@@ -2,7 +2,7 @@
 // verify-dist's provenance gate and verify-deploy's live checks. Expected versions come from
 // package.json; fixture versions use major 40 so version:check never mistakes them.
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -34,8 +34,9 @@ test('source digest: order-independent, sensitive to content and to paths', () =
   assert.throws(() => digestEntries([a[0], a[0]]), /duplicate/);
 });
 
-test('source inputs: src/**, licenses/**, LICENSE, package and build files; no dotfiles', () => {
+test('source inputs: src/**, licenses/**, LICENSE, package and build files; no dotfiles', (t) => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-inputs-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
   for (const f of ['src/js/a.js', 'src/.DS_Store', 'licenses/x.LICENSE', 'scripts/build.mjs',
     'scripts/build-config.mjs', 'scripts/verify-dist.mjs', 'scripts/pack-single-file.mjs',
     'LICENSE', 'package.json', 'package-lock.json', 'README.md', 'tests/t.mjs']) {

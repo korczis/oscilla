@@ -127,23 +127,22 @@
   /* Typography */
   --osc-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --osc-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  /* Calibrated against text extents measured on reference.png (tools/textext.mjs).
-     The phone floor (ui-current#phone-whole): below a 768 px viewport no text is under 12 px.
-     --osc-fs-floor is 12px there and 0px from 768 px (a step: the clamp saturates within
-     0.012 px of 768), so max(<desktop size>, floor) is the desktop size, unchanged, from 768 px
-     and 12 px below. It resolves where it is used, against that viewport. A size under 12 px
-     anywhere in src/styles is written max(<size>, var(--osc-fs-floor))
-     (tests/unit/phone-font-floor.test.mjs). */
+  /* Calibrated against text extents measured on reference.png (tools/textext.mjs). The sizes
+     under 12 px are those values from a 1280 px viewport up, and 12 px from 480 px down, linear
+     between (V634): a phone reads no text under 12 px, and the reference stays as measured.
+     --osc-fs-floor (lane A, ui-current#phone-whole) is 12px below a 768 px viewport and 0px
+     from 768 px; a legacy size under 12 px elsewhere in src/styles is written
+     max(<size>, var(--osc-fs-floor)) (tests/unit/phone-font-floor.test.mjs). */
+  --osc-fs-2xs: clamp(10px, calc(13.2px - 0.25vw), 12px);
+  --osc-fs-xs: clamp(10.5px, calc(12.9px - 0.1875vw), 12px);
+  --osc-fs-sm: clamp(11.5px, calc(12.3px - 0.0625vw), 12px);
   --osc-fs-floor: clamp(0px, calc((768px - 100vw) * 1000), 12px);
-  --osc-fs-2xs: max(10px, var(--osc-fs-floor));
-  --osc-fs-xs: max(10.5px, var(--osc-fs-floor));
-  --osc-fs-sm: max(11.5px, var(--osc-fs-floor));
   --osc-fs-md: 12.5px;
   --osc-fs-lg: 13px;
   --osc-fs-xl: 14.25px;
   --osc-fs-nav: 13px;
-  --osc-fs-tab: max(10.6px, var(--osc-fs-floor));
-  --osc-fs-control: max(11px, var(--osc-fs-floor));
+  --osc-fs-tab: clamp(10.6px, calc(12.84px - 0.175vw), 12px);
+  --osc-fs-control: clamp(11px, calc(12.6px - 0.125vw), 12px);
   --osc-fs-readout: 40px;
   --osc-fs-readout-unit: 22px;
   --osc-fw-regular: 400;

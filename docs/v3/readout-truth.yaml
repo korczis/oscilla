@@ -707,3 +707,20 @@ readouts:
     limitations: Describes the workspace, not its current state; hidden below 1280 px
     tests: [tests/unit/workspace-registry.test.mjs]
     label: VERIFIED
+  - key: copy.note
+    readout: Config link dialog note beside the manual-copy link
+    quantity: >-
+      What the copied config link restores (the instrument, and the lab settings when it
+      carries them)
+    unit: text
+    source: [src/js/ui/workbench.js, src/js/ui/lab-state.js]
+    algorithm: >-
+      configLinkNote(): the instrument alone with no lab mounted, else the instrument and the
+      four labs the `lab=` key carries, or that the labs are left out of a link too long
+    resolution: one sentence for the current link
+    calibration: none
+    limitations: >-
+      Says the lab settings are left out when they are longer than a link may carry
+      (LAB_PARAM_MAX); the sequence is never in a link
+    tests: [tests/unit/lab-state-round-trip.test.mjs, tests/browser/navigation.cjs]
+    label: VERIFIED

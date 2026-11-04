@@ -1275,6 +1275,9 @@ function defineChecks() {
       .catch(() => {});
     await collect();
     await page.keyboard.press('Escape');
+    // V635: on a phone the Synth folds its instrument row behind the keyboard's More button.
+    await H.workspace(page, 'synth');
+    await collect();
     await H.workspace(page, 'playground');
     await sleep(200);
     await page.click('#osc-sb-actions-toggle');
@@ -4969,9 +4972,12 @@ function defineChecks() {
           .map((a) => a.dataset.osc.slice('nav.'.length)),
         workspaceIds: [...view.querySelectorAll('[data-osc="about.workspaces"] > li')]
           .filter(shown).map((li) => li.dataset.osc.slice('about.workspace.'.length)),
-        next: [...view.querySelectorAll('[data-osc="about.next"] > li')].filter(shown)
-          .map((li) => ({ id: li.dataset.milestone,
+        // What comes next: now and next shown, later folded behind its count
+        next: [...view.querySelectorAll('[data-osc="about.next"] li[data-milestone]')]
+          .filter(shown).map((li) => ({ id: li.dataset.milestone, phase: li.dataset.phase,
             text: li.textContent.replace(/\s+/g, ' ').trim() })),
+        laterToggle: { text: q('[data-osc="about.next.later-toggle"]')?.textContent.trim(),
+          expanded: q('[data-osc="about.next.later-toggle"]')?.getAttribute('aria-expanded') },
         othersHidden: ['#osc-view-learn', '#osc-view-presets', '#osc-panel-source', '#osc-panel-analysis']
           .every((s) => !shown(q(s))),
       };
@@ -4979,9 +4985,27 @@ function defineChecks() {
     const v = res.view;
     const roadmap = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'data',
       'roadmap.json'), 'utf8')).milestones;
-    res.roadmapOk = roadmap.length > 0 && v.next.length === roadmap.length
-      && roadmap.every((m, i) => v.next[i].id === m.id && v.next[i].text.includes(m.title)
-        && v.next[i].text.includes(`${m.done} of ${m.required} done`));
+    // the page's order: now, next, later, each in the plan order
+    const byPhase = ['now', 'next', 'later'].flatMap((p) => roadmap.filter((m) => m.phase === p));
+    const later = roadmap.filter((m) => m.phase === 'later');
+    const folded = byPhase.filter((m) => m.phase !== 'later');
+    // unfold later through its button: every milestone, in the page's order
+    await page.click('[data-osc="about.next.later-toggle"]');
+    res.nextOpen = await until(() => page.evaluate(() => {
+      const t = document.querySelector('[data-osc="about.next.later-toggle"]');
+      const list = document.querySelector('[data-osc="about.next.later"]');
+      if (t.getAttribute('aria-expanded') !== 'true' || !list.getClientRects().length) return null;
+      return [...document.querySelectorAll('[data-osc="about.next"] li[data-milestone]')]
+        .filter((li) => li.getClientRects().length).map((li) => li.dataset.milestone);
+    }), { ms: 5000, what: 'About: Later unfolds' });
+    await page.click('[data-osc="about.next.later-toggle"]');
+    const same = (list, want) => list.length === want.length
+      && want.every((m, i) => list[i].id === m.id && list[i].text.includes(m.title)
+        && list[i].text.includes(`${m.done} of ${m.required} done`));
+    res.roadmapOk = roadmap.length > 0 && same(v.next, folded)
+      && v.laterToggle.expanded === 'false'
+      && v.laterToggle.text === `Show the ${later.length} later milestones`
+      && res.nextOpen.join() === byPhase.map((m) => m.id).join();
     res.workspacesOk = v.navIds.length > 0 && v.workspaceIds.join() === v.navIds.join();
     res.headlineOk = !!v.headline && !/\bone night\b|\bthrowaway\b/i.test(v.headline);
     // Reduced motion: the one-shot trace draw collapses to (near) zero duration.

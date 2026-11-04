@@ -36,4 +36,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-02T15:08:09Z
+started_at: 2026-11-02T15:07:47Z
+started_event: sha256:d445b8d487efd753c64b2a10ea44f1f36b1ef49a3b0ec70fd318367f03c3cea9
+completed_at: 2026-11-02T15:08:09Z
+completed_event: sha256:697d029181a8e2bac941fbb12b6312ebd832ccd86e1b58c09e63267e57b0f62e
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/demo-song.test.mjs tests/unit/v31-studio-templates.test.mjs; node tests/browser/demo-song.cjs (CI run 41357644373)"
+    result: "unit 43/43 pass at main 66635acc; landed in #367 (11cc9fbc, aa79735e merged the demo-song slice); every browser gate including demo-song green in #367's CI run 41357644373 on head c2a6f6c5; review verdict .ai/repo/reviews/367.yaml"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 66635acc6aa2af776a875de458b800896eecddcb
+    recorded_at: 2026-11-02T15:08:02Z

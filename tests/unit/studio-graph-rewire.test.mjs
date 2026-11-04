@@ -4,7 +4,7 @@
 // each as one history entry (EDGE_REMOVE then EDGE_ADD). A drop the validator refuses (type,
 // feedback cycle) leaves the model, history, revision and runtime unchanged, with its sentence.
 //   src/js/ui/studio/graph-view.js probeRewire, connectionTargets(..., { rewire, detach })
-//   src/js/ui/studio/graph-gestures.js rewireCable
+//   src/js/ui/studio/graph-rewire.js rewireCable
 //   node --test tests/unit/studio-graph-rewire.test.mjs
 
 import test from 'node:test';
@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import {
   connectionTargets, probeConnection, probeRewire,
 } from '../../src/js/ui/studio/graph-view.js';
-import { bodyTarget, rewireCable } from '../../src/js/ui/studio/graph-gestures.js';
+import { bodyTarget, rewireCable } from '../../src/js/ui/studio/graph-rewire.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { AUDIO_FEEDBACK_MESSAGE } from '../../src/js/studio/validate.js';

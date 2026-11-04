@@ -22,8 +22,11 @@ const ROOT = new URL('../../', import.meta.url).pathname;
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 const stripComments = (css) => css.replace(/\/\*[\s\S]*?\*\//g, '');
 const FLOOR = 12;
-const PHONE_WIDTHS = [320, 360, 390, 430, 767, 767.98];
-const WIDE_WIDTHS = [768, 1024, 1279, 1280, 1536, 1920];
+// V634 (main, train 3) writes the scale's sub-12 px tokens as clamp(<desktop>, calc(a - b vw),
+// 12px): 12 px from 480 px down, the desktop size from 1280 px up, linear between; legacy sizes
+// elsewhere take max(<px>, var(--osc-fs-floor)), the lane A step at 768 px.
+const PHONE_WIDTHS = [320, 360, 390, 430, 480];
+const WIDE_WIDTHS = [1280, 1536, 1920];
 
 // The desktop sizes of the type scale (tokens.css, calibrated on reference.png): from 768 px
 // they are unchanged by the floor.
@@ -51,8 +54,7 @@ const SMALL_FONT_DEBT = new Set([
 // Tailwind text-[<n>px] classes under 12 px, by file: the Synth panel faces and the XY pad's
 // axis labels (text-[10px], main's #385, merged in after this floor landed): the Synth lane.
 // Only shrinks, as above.
-const SMALL_TEXT_CLASS_DEBT = new Set(['src/js/synth/view/face.js',
-  'src/js/ui/kinds/xy-pad.js']);
+const SMALL_TEXT_CLASS_DEBT = new Set(['src/js/ui/kinds/xy-pad.js']);
 
 /** The body of the first `@media <query> {` block of `css`, braces matched. */
 function mediaBlock(css, query) {
@@ -93,11 +95,17 @@ function floorAt(value, vw) {
 }
 
 /** A font size value at a viewport width: <n>px, or max(<n>px, var(--osc-fs-floor)). */
-function sizeAt(value, floor) {
+function sizeAt(value, floor, width) {
   const px = /^(\d+(?:\.\d+)?)px$/.exec(value);
   if (px) return Number(px[1]);
+  const clamp = /^clamp\((\d+(?:\.\d+)?)px,\s*calc\((\d+(?:\.\d+)?)px\s*-\s*(\d+(?:\.\d+)?)vw\),\s*(\d+(?:\.\d+)?)px\)$/
+    .exec(value);
+  if (clamp) {
+    const [lo, a, b, hi] = clamp.slice(1).map(Number);
+    return Math.round(Math.min(hi, Math.max(lo, a - (b * width) / 100)) * 1000) / 1000;
+  }
   const max = /^max\((\d+(?:\.\d+)?)px,\s*var\(--osc-fs-floor\)\)$/.exec(value);
-  assert.ok(max, `not a px size nor max(<px>, var(--osc-fs-floor)): ${value}`);
+  assert.ok(max, `not a px size, a V634 clamp nor max(<px>, var(--osc-fs-floor)): ${value}`);
   return Math.max(Number(max[1]), floor);
 }
 
@@ -112,7 +120,7 @@ test('--osc-fs-floor is 12 px below a 768 px viewport and 0 px from 768 px', () 
   for (const w of WIDE_WIDTHS) assert.equal(floorAt(v, w), 0, `at ${w} px`);
 });
 
-test('every --osc-fs-* token is at least 12 px on a phone and its desktop size from 768 px', () => {
+test('every --osc-fs-* token is at least 12 px on a phone and its desktop size from 1280 px', () => {
   const floorValue = rootDecls['--osc-fs-floor'];
   const names = Object.keys(rootDecls)
     .filter((k) => /^--osc-fs-/.test(k) && k !== '--osc-fs-floor');
@@ -121,11 +129,11 @@ test('every --osc-fs-* token is at least 12 px on a phone and its desktop size f
   for (const n of names) {
     const desktop = DESKTOP_FS[n.slice('--osc-fs-'.length)];
     for (const w of PHONE_WIDTHS) {
-      const s = sizeAt(rootDecls[n], floorAt(floorValue, w));
+      const s = sizeAt(rootDecls[n], floorAt(floorValue, w), w);
       assert.ok(s >= FLOOR, `${n} is ${s} px at ${w} px, under ${FLOOR} px`);
     }
     for (const w of WIDE_WIDTHS) {
-      assert.equal(sizeAt(rootDecls[n], floorAt(floorValue, w)), desktop, `${n} at ${w} px`);
+      assert.equal(sizeAt(rootDecls[n], floorAt(floorValue, w), w), desktop, `${n} at ${w} px`);
     }
   }
 });
