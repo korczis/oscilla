@@ -5,16 +5,18 @@
 // which renders the card into the panel view and mounts the pad after it.
 //
 // While the panel's keys sound nothing (xy.js keysSilence: the pad's cables replaced their gate
-// normals), the Panel tab says why above its cards, with Unpatch the pad, one BATCH (review S8,
-// project.no-inert-surfaces); on the XY tab the pad plays, and a key says it (notes-sink.js).
+// normals), the Panel tab says why above its cards, with Unpatch the pad (xy-wiring.js
+// keysSilenceHtml, review S8, project.no-inert-surfaces); on the XY tab the pad plays, and a key
+// says it (notes-sink.js).
 //
 //   createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab, BTN,
 //     cmp }) -> { presets, has(id), html(), mount(), destroy(), preset(id) }
 //     html() is the tab's markup: the notice on the Panel tab, the card on XY
 
-import { KEYS_SILENT, XY_RECIPES, keysSilence, xyUnpatchAction } from '../xy.js';
-import { XY_TEXT, mountSynthXy, xyPresetAction } from './xy-wiring.js';
-import { esc } from './face.js';
+import { XY_RECIPES } from '../xy.js';
+import {
+  XY_TEXT, keysSilenceHtml, mountSynthXy, wireKeysSilence, xyPresetAction,
+} from './xy-wiring.js';
 
 export { XY_TEXT };
 
@@ -22,25 +24,8 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
   showTab, BTN, cmp }) {
   let mounted = null; // the shared mount, re-made with the panel
 
-  /** The Panel tab's notice while the keys sound nothing, with Unpatch the pad when the pad's
-   *  cables are the cause (on the XY tab the pad plays, and a key says the same). */
-  function silence() {
-    const q = tab() === 'panel' ? keysSilence(model(), panel) : null;
-    const undo = q && q.pad ? `<button type="button" data-xy-unpatch="" class="${BTN}">`
-      + 'Unpatch the pad</button>' : '';
-    return q ? '<div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-yellow-50 p-3 '
-      + 'text-sm text-yellow-800 dark:bg-gray-800 dark:text-yellow-300" role="alert" '
-      + `data-osc="synth.keys-silent"><p>${esc(q.reason)}</p>${undo}</div>` : '';
-  }
-
-  function unpatchPad() {
-    const a = xyUnpatchAction(model(), panel);
-    if (a.reason) say(a.reason, true);
-    else if (dispatch(a.action).ok) say(KEYS_SILENT.unpatched);
-  }
-
   function html() {
-    if (tab() !== 'xy') return silence();
+    if (tab() !== 'xy') return tab() === 'panel' ? keysSilenceHtml(model(), panel, BTN) : '';
     const card = '<section class="bg-white rounded-lg shadow dark:bg-gray-800 mb-3 p-3" '
       + 'data-osc="synth.xy" aria-labelledby="synth-xy-title"><h3 id="synth-xy-title" '
       + 'class="text-sm font-bold tracking-widest text-gray-900 dark:text-white">XY PAD</h3>';
@@ -72,8 +57,7 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
 
   function mount() {
     destroy();
-    const u = host() && host().querySelector('[data-xy-unpatch]');
-    if (u) u.addEventListener('click', unpatchPad);
+    wireKeysSilence(host(), { model, panel, dispatch, say });
     const body = tab() === 'xy' && host().querySelector('[data-osc="synth.xy"] [data-xy-body]');
     if (!body || !nodes().get('xy')) return;
     const c = cmp();
