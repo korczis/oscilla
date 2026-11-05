@@ -67,9 +67,9 @@
 // touch).
 //
 // The note owner (K171): the mounted pad plays the notes (enabled from the first touch, K183),
-// so while it is mounted the mount claims the notes of its home workspace for 'xy-pad'
-// (midi/dock-yield.js claimNotes) and drops the claim when it is destroyed; mount.notes says
-// which. The docked keyboard derives its state from that claim and its route (midi/routes.js
+// so while it is mounted and shown (a box on screen, R7) the mount claims the notes of its
+// home workspace for 'xy-pad' (midi/dock-yield.js claimNotes) and drops the claim when it is
+// hidden or destroyed; mount.notes says which. The docked keyboard derives its state from that claim and its route (midi/routes.js
 // dockState); nothing here touches the dock.
 //
 // The pad's view (S3) is what the pad sends, drawn: each X cell is labelled by the note of
@@ -94,7 +94,7 @@ import {
 } from '../xy.js';
 import { limitBoundText } from '../../studio/compiler.js';
 import { esc } from './face.js';
-import { claimNotes } from '../../midi/dock-yield.js';
+import { claimNotes, hasBox } from '../../midi/dock-yield.js';
 import { knobModel } from './knob.js';
 
 export const XY_TEXT = Object.freeze({
@@ -504,14 +504,30 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     owns = 'xy-pad'; // mounted and playable: enabled from the first touch (K183)
   }
   const win = host.ownerDocument && host.ownerDocument.defaultView;
-  if (owns) {
-    claimNotes(win, { id: uid, owner: owns, home: HOME[owner] || owner,
-      el: box.querySelector('[data-xy-surface]') || box });
+  // The pad owns the notes only while it is shown (K171 R7): a box on screen, not a face hidden
+  // below xl (`max-xl:hidden`) or a closed tab; its ResizeObserver follows it shown and hidden.
+  const surface = owns ? box.querySelector('[data-xy-surface]') || box : null;
+  let claimed = false;
+  const shown = () => typeof surface.getBoundingClientRect !== 'function'
+    || hasBox(surface.getBoundingClientRect());
+  const sync = () => {
+    if (destroyed || !surface || shown() === claimed) return;
+    claimed = !claimed;
+    claimNotes(win, claimed ? { id: uid, owner: owns, home: HOME[owner] || owner, el: surface }
+      : { id: uid, owner: null });
+  };
+  if (surface) {
+    sync();
+    if (win && typeof win.ResizeObserver === 'function') {
+      const ro = new win.ResizeObserver(sync);
+      ro.observe(surface);
+      offs.push(() => ro.disconnect());
+    }
   }
 
   return {
     get view() { return view; },
-    get notes() { return destroyed ? null : owns; },
+    get notes() { return claimed ? owns : null; },
     owner,
     release,
     destroy() {
@@ -524,7 +540,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       while (offs.length) offs.pop()();
       if (input && typeof input.off === 'function') input.off();
       target.unwire();
-      if (owns) claimNotes(win, { id: uid, owner: null });
+      if (claimed) claimNotes(win, { id: uid, owner: null });
+      claimed = false;
     },
   };
 }

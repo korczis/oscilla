@@ -23,7 +23,12 @@
 //     yields, re-place the surface the same way.
 //
 // The user's expansion stays until the owner changes (the owner, not a re-mount of the same
-// surface: claims made and dropped within one task settle before the rule is read).
+// surface: claims made and dropped within one task settle before the rule is read). A re-mount
+// that hands over a new surface element while the dock yields places that element as a state
+// change does (`replace`): a re-render can move its scroller (Firefox shifts it by the content
+// the re-mount rebuilt above the pad). A resize, a rotation or the dock's own size settling
+// re-places the surface only where the dock now covers it (dockCovers), and nothing is ever
+// placed from a surface with no box (a hidden face, a closed tab: an empty rect).
 
 import { dockRoom, dockState, dockYields, routeOf } from './routes.js';
 
@@ -70,6 +75,7 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
   let owner = null;
   let expanded = false; // the user's expansion, until the owner changes
   let pending = null; // the reason of a scheduled evaluation
+  let surface = null; // the owner's surface element as last applied
 
   const ownerOf = (ws) => {
     let found = null;
@@ -89,12 +95,16 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
     const input = { route: routeOf(v.workspace), owner, userExpanded: expanded };
     const next = dockState(input);
     const y = dockYields(input);
-    if (next === state && y === yields) return state;
+    const el = c ? c.el : null;
+    // The same state with a new surface (a re-mount while the dock yields): placed again.
+    const replace = next === state && y === yields && y && !!el && el !== surface;
+    if (next === state && y === yields && !replace) return state;
     const was = state;
     state = next;
     yields = y;
+    surface = el;
     if (next === 'collapsed' && was !== 'collapsed') release();
-    apply(next, { yields: y, why, owner, expanded, el: c ? c.el : null });
+    apply(next, { yields: y, why, owner, expanded, el, replace });
     return state;
   }
 
@@ -177,13 +187,24 @@ export function roomTop(win, el) {
  */
 export function reveal(win, el, dock, gap = 8) {
   if (!el || !el.isConnected || typeof el.getBoundingClientRect !== 'function') return 0;
-  const sc = scrollerOf(win, el);
   const r = el.getBoundingClientRect();
+  if (!hasBox(r)) return 0; // a surface not shown: nothing to bring into view
+  const sc = scrollerOf(win, el);
   const ceil = roomTop(win, el);
   const { by } = dockRoom({ pad: { top: r.top, bottom: r.bottom },
     dockTop: dock.getBoundingClientRect().top, ceil, gap });
   if (by) sc.scrollTop += by;
   return by;
+}
+
+/** Whether rect r is a box on screen: a height, and a width where the rect names one. */
+export const hasBox = (r) => !!r && r.bottom > r.top && !(Number.isFinite(r.width) && r.width <= 0);
+
+/** Whether the dock's top is above the bottom of el's box (the dock covers part of it). */
+export function dockCovers(el, dock, gap = 8) {
+  if (!el || !el.isConnected || typeof el.getBoundingClientRect !== 'function') return false;
+  const r = el.getBoundingClientRect();
+  return hasBox(r) && r.bottom > dock.getBoundingClientRect().top - gap;
 }
 
 /** The dock drawn: its handle, its status line, its folded children. */
@@ -251,7 +272,8 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     const place = () => {
       band();
       chrome(info.el);
-      if (info.yields && (collapsed ? info.why !== 'user' : info.why === 'user')) {
+      const moved = collapsed ? info.why !== 'user' : info.why === 'user';
+      if (info.yields && (info.replace || moved)) {
         reveal(win, info.el, dock);
       }
     };
@@ -264,21 +286,20 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   handle.addEventListener('click', () => ctl.toggle());
   for (const d of (LIVE.get(win) || new Map()).values()) ctl.claim(d);
   win.addEventListener(NOTES_EVENT, (e) => ctl.claim(e.detail));
-  // A resize or a rotation: the chrome measured again and, while the dock yields, the owner's
-  // surface re-placed against the dock (folded or unfolded), as a state change places it.
+  // A resize or a rotation: the chrome measured again and, while the dock yields and covers the
+  // owner's surface, the surface re-placed against the dock (folded or unfolded).
+  const replace = () => {
+    if (ctl.yields && surface && dockCovers(surface, dock)) reveal(win, surface, dock);
+  };
   win.addEventListener('resize', () => {
     band();
     chrome();
-    if (ctl.yields && surface) reveal(win, surface, dock);
+    replace();
   });
   // The dock's own size settles after a state change (the keys' canvas is laid out after the
-  // component draws it, later in WebKit): while it yields, the pad is placed against the dock
-  // as it now stands (reveal moves nothing where the pad is already whole above it).
-  if (typeof win.ResizeObserver === 'function') {
-    new win.ResizeObserver(() => {
-      if (ctl.yields && surface) reveal(win, surface, dock);
-    }).observe(dock);
-  }
+  // component draws it, later in WebKit): where it then covers the pad, the pad is placed
+  // against the dock as it now stands.
+  if (typeof win.ResizeObserver === 'function') new win.ResizeObserver(replace).observe(dock);
   if (typeof cmp.$watch === 'function') cmp.$watch('workspace', () => ctl.update('workspace'));
   ctl.update('init');
   return ctl;

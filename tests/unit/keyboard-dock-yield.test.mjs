@@ -526,3 +526,89 @@ test('no surface sets the dock state: dock-yield.js alone applies the rule', () 
   // The dock's folded children are hidden only there; the markup carries no dock state.
   assert.doesNotMatch(src['src/index.html'], /kbdDockYields|kbdDockToggle|data-dock-keep/);
 });
+
+// ---------------------------------------------------------------- placement (review of #425)
+
+test('a re-mount handing over a new surface while the dock yields places that surface',
+  async () => {
+    // Firefox moved the scroller by the content an XY re-mount rebuilt above the pad (the pad
+    // at -227 px at 1280 x 720): the new surface is placed as a state change places it.
+    const d = fakeDom({ vh: 720, pad: [200, 620] });
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp: { workspace: 'synth' },
+      dock: d.dock, release: () => 0 });
+    ctl.claim({ ...PAD, el: d.surface });
+    ctl.update('init');
+    await Promise.resolve();
+    assert.equal(d.page.scrollTop, 0, 'whole above the folded dock: nothing moves');
+    const again = { ...d.surface }; // the re-mounted surface, the same box
+    again.getBoundingClientRect = d.surface.getBoundingClientRect;
+    d.page.scrollTop = 540; // what the re-render did to the scroller
+    ctl.claim({ id: PAD.id, owner: null });
+    ctl.claim({ ...PAD, id: 'synth-xy-2', el: again });
+    await Promise.resolve();
+    assert.equal(ctl.state, 'collapsed');
+    assert.equal(d.page.scrollTop, 200, 'the new surface is placed: its top at the top');
+  });
+
+test('a resize or the dock settling re-places the pad only where the dock covers it (R6)',
+  async () => {
+    const d = fakeDom({ vh: 1024, pad: [200, 620] });
+    const seen = [];
+    d.win.ResizeObserver = class { constructor(fn) { seen.push(fn); } observe() {} };
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp: { workspace: 'synth' },
+      dock: d.dock, release: () => 0 });
+    ctl.claim({ ...PAD, el: d.surface });
+    ctl.update('init');
+    await Promise.resolve();
+    assert.equal(ctl.yields, true);
+    // The user scrolled the pad partly above the view: the folded dock covers none of it.
+    d.page.scrollTop = 300;
+    for (const f of d.listeners.resize || []) f();
+    assert.equal(d.page.scrollTop, 300, 'a resize with the pad clear of the dock moves nothing');
+    seen[0]();
+    assert.equal(d.page.scrollTop, 300, 'nor does the dock settling');
+    // Scrolled so the folded dock (top 964) covers the pad's bottom: placed above it.
+    d.page.scrollTop = -400;
+    for (const f of d.listeners.resize || []) f();
+    assert.equal(d.page.scrollTop, -400 + (1020 - 956), 'covered: the pad is placed above it');
+  });
+
+test('nothing is placed from a surface with no box, and a hidden pad claims nothing (R7)',
+  async () => {
+    const d = fakeDom({ vh: 720, pad: [200, 620] });
+    d.surface.getBoundingClientRect = () => ({ top: -100, bottom: -100, width: 0, height: 0 });
+    assert.equal(yieldMod.reveal(d.win, d.surface, d.dock), 0, 'reveal on an empty rect: 0');
+    assert.equal(d.page.scrollTop, 0);
+    assert.equal(yieldMod.hasBox({ top: 0, bottom: 10, width: 0 }), false, 'no width: no box');
+    assert.equal(yieldMod.hasBox({ top: 0, bottom: 10, width: 4 }), true);
+    // The XY mount: a surface hidden at mount (a face below xl) claims the notes only once it
+    // is shown, and drops the claim when it is hidden again.
+    const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
+    const mountPad = () => ({ model: { gated: false, end() {} }, destroy() {} });
+    const win = fakeWin();
+    let observed = null;
+    win.ResizeObserver = class {
+      constructor(fn) { observed = fn; }
+      observe() {}
+      disconnect() { observed = null; }
+    };
+    const host = fakeEl(win);
+    let box = { top: 0, bottom: 0, width: 0, height: 0 };
+    const surface = host.querySelector('[data-osc="synth.xy.pad"]').querySelector('[data-xy-surface]');
+    surface.getBoundingClientRect = () => box;
+    const m = mountSynthXy(host, { store: panelStore(), panel: PANEL, mountPad });
+    const claims = () => win.seen.filter((e) => e.type === yieldMod.NOTES_EVENT)
+      .map((e) => e.detail.owner);
+    assert.deepEqual(claims(), [], 'hidden at mount: no claim');
+    assert.equal(m.notes, null);
+    box = { top: 100, bottom: 388, width: 300, height: 288 };
+    observed();
+    assert.deepEqual(claims(), ['xy-pad'], 'shown: claimed');
+    assert.equal(m.notes, 'xy-pad');
+    box = { top: 0, bottom: 0, width: 0, height: 0 };
+    observed();
+    assert.deepEqual(claims(), ['xy-pad', null], 'hidden again: dropped');
+    m.destroy();
+    assert.deepEqual(claims(), ['xy-pad', null], 'destroy drops nothing more');
+    assert.equal(observed, null, 'the observer is disconnected');
+  });
