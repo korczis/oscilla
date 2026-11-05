@@ -1,0 +1,30 @@
+id: K176
+milestone: M064
+serves:
+  - "connected-instrument#piano-keyboard"
+title: "The Studio keyboard disarms what it armed when the Studio is left (retroactive review S19)"
+slug: the-studio-keyboard-disarms-what-it-armed
+priority: p1
+profile: implementation
+objective: "Lands as fix(synth). src/js/synth/studio-sink.js arms the shared transport on the first note when it is not playing, and nothing disarms it on leaving the Studio, so `studioOwnsOutput()` stays true: the Playground keys and MIDI are refused with 'Studio is playing' and MEASURE's setup counts it as other audio. Leaving the Studio disarms a run the sink armed for live notes only (armed-only), never a run the user started with PLAY. Found by the retroactive review at 447bb27b (docs/reviews/synth-retroactive-447bb27b.md, S19; W1b review R2; K060)."
+why: "Owner decision K060 ('Retroactive review', 2026-11-03); output ownership that outlives its surface breaks project.no-silent-feedback and blocks other workspaces."
+scope:
+  - "src/js/synth/studio-sink.js"
+  - "src/js/ui/studio/workspace.js"
+  - "tests/unit"
+  - "tests/browser/v31-studio-workflows.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+current_state: "Built, landing with train 5: fixed by dev-53's 2124f226 (fix/studio-keyboard, #413), where studio-sink's leave(), called from midi/ui.js on leaving the Studio, ends an armed-only run (allOff, disarm) and leaves a PLAYed run alone; 1ef29135 (train 6) keeps a PLAYed run's held map (98's R2 on #413). Done with evidence once both are on main and the criteria below hold there."
+acceptance_criteria:
+  - "Fail-first: a unit test plays a note through the Studio sink (arming an idle transport), leaves the Studio and asserts the transport is disarmed; a run started with PLAY is left playing; it fails on the merge base (project.fail-first)."
+  - "Browser (every gate browser): a Studio-keyboard note, then the Playground: its keys sound and no 'Studio is playing' refusal is shown."
+  - "src/js/synth is guarded (project.review-verdict v2): a non-builder's verdict."
+validation:
+  - "npm test"
+  - "node tests/browser/v31-studio-workflows.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04

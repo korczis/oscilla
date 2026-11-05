@@ -18,4 +18,15 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-02
-updated_at: 2026-11-02
+updated_at: 2026-11-04T20:00:16Z
+started_at: 2026-11-04T20:00:04Z
+started_event: sha256:9a480bdd320d967423c34be22bdee525a4e51fd2848bffd8404972c52a4e0715
+completed_at: 2026-11-04T20:00:16Z
+completed_event: sha256:c208f731bd1384fb73cc22c48380dacf298927ca533551f4310bebe2e078f30e
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0 (claude-code abd8bbe3), 2026-11-03, the song-reconstruction owner questions"
+    result: "The owner answered: 'Optional experiment later' (verbatim option label): (a), inverse synthesis and MIDI-conditioned regeneration are a separate, optional experimental milestone, only after the artifact, import, lineage, companion and views milestones have evidence."
+    commit: 76bfc300653e2bdc09e5dc6e07b22d805c729449
+    recorded_at: 2026-11-04T19:59:45Z
