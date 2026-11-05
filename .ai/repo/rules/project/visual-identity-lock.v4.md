@@ -182,7 +182,7 @@ The closed list: `--osc-wood-hi`, `--osc-wood-lo`, `--osc-plate-hi`, `--osc-plat
   ΔL* +8.12); the LED is
   the brightest shade of `--osc-red` holding 3:1 on the bezel, its seat, the card and both plates
   in both themes; the keys, the display glass and the wood follow the same pattern (the test
-  states each). The chassis is the one role no search pins: a seam is unlit, so black, and the
+  states each; the key gap holds 3.03:1 on key white #f6f6f6 (3.28:1 on #ffffff)). The chassis is the one role no search pins: a seam is unlit, so black, and the
   test measures that it shows on every plate and the card.
 - **What is drawn on them, measured too** (review of D-PAL, 11-05). The keys are judged with
   the colours the keyboard draws on them (a held key's fill 3:1 on the key it replaces, a legend

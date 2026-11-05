@@ -180,7 +180,8 @@
   /* Seams and rails (PF-14): unlit, black. */
   --osc-chassis: #000000;
   /* Keys (LXK-02, LXK-07): white shows on every plate, black is the cap material (4.5:1 on
-     white), the gap the lightest grey 3:1 on white. What the keyboard draws on them is measured
+     white), the gap the lightest grey 3:1 on the white key: 3.03:1 on key white #f6f6f6
+     (3.28:1 on #ffffff). What the keyboard draws on them is measured
      too (ui-synth-palette.test.mjs): no white key carries today's dark MIDI fill, so the fills
      and legends change with LXK-02, not the key. */
   --osc-hw-key-white: #f6f6f6;
@@ -254,7 +255,8 @@
   --osc-block-sweep: #5b3fc4;
   --osc-shadow-panel: 0 1px 2px rgb(16 32 56 / 8%);
   /* Depth: the lightest tint of --osc-text (the palette's navy ink) that passes the depth tests
-     on every face the shade is drawn over; the highlight is white, as in dark. */
+     on every face the shade is drawn over, D-PAL's plate pair (top and foot) among them; the
+     highlight is white, as in dark. */
   --osc-hw-shade: #cacdd0;
   --osc-hw-highlight: #ffffff;
   /* D-PAL plate pair: the white top, the surface-3 foot (lit from above in light too). */

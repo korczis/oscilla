@@ -289,7 +289,11 @@ test('the keys (LXK-02, LXK-07): white and black 4.5:1, the gap 3:1 on white, bo
   const b = valueIn('dark', '--osc-hw-key-black');
   const g = valueIn('dark', '--osc-hw-key-gap');
   assert.ok(contrast(w, b) >= 4.5, 'white and black print each other\'s legend');
-  assert.ok(contrast(g, w) >= 3, 'the gap shows between white keys');
+  // V1 (oscilla-21): the ratio is stated on the key it is drawn between, not on page white.
+  assert.ok(contrast(g, w) >= 3, 'the gap shows between white keys: 3.03:1 on key white '
+    + '#f6f6f6 (3.28:1 on #ffffff)');
+  assert.deepEqual([contrast(g, w), contrast(g, '#ffffff')].map((x) => x.toFixed(2)),
+    ['3.03', '3.28'], 'the stated key-gap ratios are the measured ones');
   assert.ok(Math.abs(lstar(g) - lstar(b)) >= MIN_DL, 'a black key reads over the gap');
   assert.ok(offEveryPlate(w) && offEveryPlate(b), 'the keybed shows on every plate');
 });

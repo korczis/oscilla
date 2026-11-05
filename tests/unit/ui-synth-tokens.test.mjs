@@ -931,8 +931,17 @@ test('the light shade is the lightest tint of the palette\'s navy ink that passe
     // new hue enters the palette, and the shadow stays as restrained as visibility allows.
     const { dark, light } = themes();
     const N = SYNTH_TOKEN_NAMES.control;
-    const faces = [...new Set(depthPairs().filter((p) => p.role === N.shade).map((p) => p.face))];
+    // The panel's knob stands on D-PAL's plate pair (PF-04), which dev-53's mapping moves the
+    // panel to, so it is judged on both plates and not on today's adapter plate. dev-53 (11-05)
+    // found the white top alone lets #d3d5d8 pass; that tint fails (b) on the foot (ΔL* -2.09 on
+    // #e4eaf2) and moves the foot's own derivation, so the pick is judged on top and foot.
+    const onPanel = (u) => u.where.startsWith('the panel\'s knob');
+    const faces = [...new Set(layerUses().filter((u) => u.role === N.shade)
+      .flatMap((u) => (onPanel(u) ? Object.values(SYNTH_TOKEN_NAMES.plate) : [u.face])))];
     assert.ok(faces.length >= 2, `the shade's faces: ${faces.join(', ')}`);
+    for (const plate of Object.values(SYNTH_TOKEN_NAMES.plate)) {
+      assert.ok(faces.includes(plate), `judged on D-PAL's ${plate} (faces: ${faces.join(', ')})`);
+    }
     const a = Number(HW['hw-shadow']);
     const passes = (t, hex) => faces.every((f) => contrast(hex, hexOf(t, f)) >= 1.15
       && -deltaL(hex, hexOf(t, f), a) >= MIN_DL);
@@ -1225,4 +1234,44 @@ test('a token set without the D-PAL roles draws the caps as before (the panel, u
   const led = switchSvg({ value: true, param: BOOL, tokens: PRE_DPAL_TOKENS,
     led: { source: 's', lit: true } });
   assert.equal(attr(tagOf(led, 'data-lens'), 'fill'), c.ring, 'a lit LED in the ring, as before');
+});
+
+// C5 measured (af's condition on the one hover language, A1): the hovered edge of a knob, a dial
+// and a slide cap, drawn by the real controls with the real tokens, in both themes: (a) it holds
+// 3:1 non-text contrast (WCAG 1.4.11) on both D-PAL plates the cap sits on; (b) the hover is more
+// than a change of colour (another width or outline), or the hovered and resting strokes differ
+// by 3:1 themselves. No hover role is added here: a failure is an amendment's to settle.
+test('C5: the hovered cap edge holds 3:1 on both D-PAL plates and 3:1 off its rest stroke', () => {
+  const parts = [
+    ['knob', (state) => controlSvg({ kind: 'knob', value: 70, param: NUM, tokens: TOKENS, state }),
+      'data-skirt'],
+    ['dial', (state) => switchSvg({ value: 'b', param: DIAL5, tokens: TOKENS, state }),
+      'data-skirt'],
+    ['slide', (state) => switchSvg({ value: 'a', param: SLIDE3, tokens: TOKENS, state }),
+      'data-cap'],
+  ];
+  const outline = (el) => ['d', 'x', 'y', 'width', 'height', 'rx'].map((a) => attr(el, a))
+    .join(' ');
+  const plates = Object.values(SYNTH_TOKEN_NAMES.plate);
+  const short = [];
+  for (const [what, draw, edgeFlag] of parts) {
+    const rest = tagOf(draw({}), edgeFlag);
+    const hover = tagOf(draw({ hover: true }), 'data-hover');
+    assert.ok(rest && hover, `${what}: a resting ${edgeFlag} and a shown data-hover`);
+    assert.equal(attr(hover, 'visibility'), undefined, `${what}: the hover edge is shown`);
+    const shapeCue = attr(hover, 'stroke-width') !== attr(rest, 'stroke-width')
+      || outline(hover) !== outline(rest);
+    for (const [theme, t] of Object.entries(themes())) {
+      const h = hexOf(t, varOf(attr(hover, 'stroke')));
+      const r = hexOf(t, varOf(attr(rest, 'stroke')));
+      const onPlates = plates.map((p) => contrast(h, hexOf(t, p)));
+      const off = contrast(h, r);
+      console.log(`C5 ${theme} ${what}: hover ${h} on ${plates.join(', ')} `
+        + `${onPlates.map((x) => x.toFixed(2)).join(', ')}:1; rest ${r}, hover/rest `
+        + `${off.toFixed(2)}:1; shape cue ${shapeCue}`);
+      if (Math.min(...onPlates) < 3) short.push(`${theme} ${what} (a) ${Math.min(...onPlates)}`);
+      if (!shapeCue && off < 3) short.push(`${theme} ${what} (b) ${off}`);
+    }
+  }
+  assert.deepEqual(short, [], 'C5 holds for every cap in both themes');
 });
