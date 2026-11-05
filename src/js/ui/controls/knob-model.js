@@ -9,10 +9,11 @@
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
 //   originOf                                                           where a value starts
+//   valuePositions                                                     each value's position
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
 //   parseValue                                                         typed entry (Enter)
 //   formatValue, ariaAttrs                                             the value as text, ARIA
-//   dragAnchor, reanchorDrag, dragAt                                   a drag from its anchor
+//   dragAnchor, reanchorDrag, dragAt, dragTo                           a drag from its anchor
 //   gestureOf, cancelGesture, GESTURE_IDLE_MS                          one undo entry per gesture
 //   choicesOf, optionIndex, idOf, orientationOf, zoomOf, kindOf,       shared with the slider
 //   pointOf                                                            model and the skins
@@ -194,6 +195,19 @@ export function originOf(p) {
   return min < 0 && max > 0 ? 0 : min;
 }
 
+/** The position (0..1) of every value an integer or a choice can take, in order, when it takes 2
+ *  to `max` of them (a scale draws one mark per value); else, or for any other number, null. */
+export function valuePositions(p, max) {
+  const opts = choicesOf(p);
+  if (opts) return opts.length >= 2 && opts.length <= max ? opts.map((o) => toNorm(o[0], p)) : null;
+  if (p.type !== 'integer') return null;
+  const { min, max: top } = rangeOf(p);
+  const q = quantumOf(p, false);
+  const count = Math.floor(clean((top - min) / q) + 1e-9) + 1;
+  if (count < 2 || count > max) return null;
+  return Array.from({ length: count }, (_, i) => toNorm(min + i * q, p));
+}
+
 /** The value a double-click returns to: the default, else min (a choice: its first option). */
 export function defaultValue(p) {
   if (choicesOf(p)) return clampValue(p.default, p);
@@ -336,7 +350,9 @@ export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest
   const identifier = p.type === 'integer'
     && (max - min) / (quantumOf(p, false) || 1) > WHEEL_FLOOR_MAX_STEPS;
   const floor = WHEEL_STEP / (fine ? FINE_DIV : 1);
-  const n0 = toNorm(v0, p);
+  // ERG-15: the floor is measured from the start on the grid, so a notch from a fine value is
+  // one notch from it, then quantised (0.511 up is 0.52), never a grid unit past it (0.53).
+  const n0 = toNorm(quantize(v0, p, { fine }), p);
   const short = (v) => Math.abs(toNorm(v, p) - n0) < Math.abs(steps) * floor - 1e-12;
   if (!identifier && short(next)) {
     next = quantize(fromNorm(n0 + steps * floor, p), p, { fine });
@@ -623,6 +639,24 @@ export function dragAt(anchor, point, p, { pixelsPerRange = DRAG_PX_PER_RANGE } 
   const v0 = clampValue(anchor.value, p);
   const moved = toNorm(next, p) - toNorm(v0, p);
   return d === 0 || Math.sign(moved) === Math.sign(d) ? v0 : next;
+}
+
+/**
+ * A move of a drag (ERG-14): `{ value, anchor }`, the value dragAt gives with the pointer at
+ * `point`, and the anchor the next move is measured from. Where the value stands at an end of
+ * the range with the pointer pushing past it, the anchor moves there (that end, this point, the
+ * same fine, kind and orientation), so an overshoot leaves no dead zone: the first move back
+ * moves the value. Anywhere else the anchor is kept, the same object. A host keeps the returned
+ * anchor for its next move; reanchorDrag still answers a change of Shift.
+ */
+export function dragTo(anchor, point, p, { pixelsPerRange = DRAG_PX_PER_RANGE } = {}) {
+  const value = dragAt(anchor, point, p, { pixelsPerRange });
+  const { x, y } = pointOf(point, 'dragTo');
+  const d = anchor.orientation === 'horizontal' ? anchor.x - x : y - anchor.y;
+  const n = toNorm(value, p);
+  const past = (n >= 1 && d < 0) || (n <= 0 && d > 0);
+  return Object.freeze({ value, anchor: past ? dragAnchor(value, { x, y }, { fine: anchor.fine,
+    orientation: anchor.orientation, kind: anchor.kind }) : anchor });
 }
 
 // ---------------------------------------------------------------- one undo entry per gesture

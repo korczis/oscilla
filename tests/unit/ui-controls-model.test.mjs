@@ -43,7 +43,8 @@ const HW_VOCAB = (() => {
 
 const KNOB_MODEL_NAMES = ['clampValue', 'toNorm', 'fromNorm', 'quantize', 'defaultValue',
   'stepOption', 'parseValue', 'formatValue', 'ariaAttrs', 'dragValue', 'pixelsPerRangeFor',
-  'wheelValue', 'knobKey', 'gestureOf', 'dragAnchor', 'reanchorDrag', 'dragAt', 'cancelGesture'];
+  'wheelValue', 'knobKey', 'gestureOf', 'dragAnchor', 'reanchorDrag', 'dragAt', 'dragTo',
+  'cancelGesture'];
 const KNOB_MODEL_CONSTANTS = { DRAG_PX_PER_RANGE: 200, FINE_DIV: 10, HIT_PX: 44, SWEEP_DEG: 270,
   LOG_STEPS: 200, WHEEL_NOTCH_PX: 100, WHEEL_LINE_PX: 100 / 3, WHEEL_STEP: 0.01,
   GESTURE_IDLE_MS: 400 };
@@ -70,11 +71,14 @@ test('knob-model.js holds the model, the input and the gestures', () => {
 });
 
 test('slider-model.js holds the fader\'s travel and press on top of the knob model', () => {
-  assert.equal(S.FADER_TRAVEL, 64, 'today\'s travel (slice B moves it)');
+  assert.equal(S.FADER_TRAVEL, 96, 'slice B\'s travel (FS-06)');
+  assert.deepEqual({ ...S.FADER_TRAVELS }, { adsr: 96, mixer: 112, output: 112, vca: 112 },
+    'the per-role travel a host asks for (FS-06)');
+  assert.equal(S.faderTravel('mixer'), 112);
   assert.deepEqual(S.FADER_CAP, { w: 28, h: 14 });
   assert.equal(typeof S.faderPress, 'function');
   assert.equal(typeof S.pixelsPerRangeFor, 'function');
-  assert.equal(S.pixelsPerRangeFor('fader', 2), 128);
+  assert.equal(S.pixelsPerRangeFor('fader', 2), 192);
   assert.equal(S.pixelsPerRangeFor('knob', 2), M.pixelsPerRangeFor('knob', 2));
   assert.throws(() => S.travelOf('fader', 3), /travel/);
   const src = read(SLIDER).replace(/^\s*\/\/.*$/gm, '');
@@ -86,17 +90,18 @@ test('slider-model.js holds the fader\'s travel and press on top of the knob mod
 });
 
 test('the skin and feel.js re-export the models: the same functions, every name kept', () => {
-  for (const name of [...KNOB_MODEL_NAMES.filter((n) => !/gesture|drag(Anchor|At)|reanchor/i
+  for (const name of [...KNOB_MODEL_NAMES.filter((n) => !/gesture|drag(Anchor|At|To)|reanchor/i
     .test(n) && n !== 'cancelGesture' && n !== 'pixelsPerRangeFor'),
   ...Object.keys(KNOB_MODEL_CONSTANTS).filter((n) => n !== 'GESTURE_IDLE_MS')]) {
     assert.ok(name in K, `knob.js exports ${name}`);
     assert.equal(K[name], M[name], `knob.js's ${name} is knob-model's`);
   }
-  for (const name of ['FADER_TRAVEL', 'FADER_CAP', 'pixelsPerRangeFor']) {
+  for (const name of ['FADER_TRAVEL', 'FADER_TRAVELS', 'FADER_CAP', 'faderTravel',
+    'pixelsPerRangeFor']) {
     assert.equal(K[name], S[name], `knob.js's ${name} is slider-model's`);
   }
-  for (const name of ['gestureOf', 'dragAnchor', 'reanchorDrag', 'dragAt', 'cancelGesture',
-    'GESTURE_IDLE_MS']) {
+  for (const name of ['gestureOf', 'dragAnchor', 'reanchorDrag', 'dragAt', 'dragTo',
+    'cancelGesture', 'GESTURE_IDLE_MS']) {
     assert.equal(F[name], M[name], `feel.js's ${name} is knob-model's`);
   }
   assert.equal(F.faderPress, S.faderPress, 'feel.js\'s faderPress is slider-model\'s');
@@ -650,7 +655,7 @@ test('the slider model and the skin answer through the knob model: a probed rule
         const svg = k.controlSvg({ kind, value: 50, param: pan, tokens: TOKENS });
         assert.doesNotMatch(svg, /data-detent=""/, `${kind}: the model's origin, not its own`);
       }
-      const FILL = new RegExp('<rect x="-2" y="([^"]+)" width="4" height="([^"]+)" rx="2" '
+      const FILL = new RegExp('<rect x="-1" y="([^"]+)" width="2" height="([^"]+)" rx="1" '
         + 'fill="[^"]+" stroke="none"');
       const fill = (p) => FILL.exec(k.controlSvg({ kind: 'fader', value: 50, param: p,
         tokens: TOKENS })).slice(1);

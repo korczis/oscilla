@@ -9,19 +9,26 @@
 // (src/js/ui/synth/knob.js is the synth theme's and re-exports it).
 //
 //   FADER_TRAVEL, FADER_CAP, travelOf      a fader's travel (FADER_TRAVEL unless given), checked
-//   faderPress                             a press: on the cap a relative grab, off it a page
+//   FADER_TRAVELS, faderTravel             the travel a host gives a fader of each role
+//   faderPress                             a press: near the cap a relative grab, off it a page
 //   switchPositions, leverOf, LEVER_SLOT   a lever switch: its positions and its handle's travel
 //                                          (the switch family's model; switch.js still counts
 //                                          its styles' positions itself until G023 merges it)
 //   pixelsPerRangeFor                      the drag over the whole range, every kind
 
 import {
-  choicesOf, clampValue, idOf, kindOf, knobKey, orientationOf,
+  choicesOf, clampValue, HIT_PX, idOf, kindOf, knobKey, orientationOf,
   pixelsPerRangeFor as knobPixelsPerRange, pointOf, toNorm, zoomOf,
 } from './knob-model.js';
 
-/** A fader's cap travel, graph units: a drag over it at zoom z is FADER_TRAVEL × z px. */
-export const FADER_TRAVEL = 64;
+/** A fader's cap travel, graph units: a drag over it at zoom z is FADER_TRAVEL × z px. FS-06:
+ *  96, so a pixel is about 1 % of the range at zoom 1 (64 was 1.56 %, only twice the cap). */
+export const FADER_TRAVEL = 96;
+/** The travel a host gives a fader by its role (FS-06; the owner's default, D-OWN-1: faders for
+ *  an envelope's ADSR, a mixer's levels, the output and the VCA): an envelope's four stand side
+ *  by side at FADER_TRAVEL, a level gets the longer 112 for its finer hand. */
+export const FADER_TRAVELS = Object.freeze({ adsr: FADER_TRAVEL, mixer: 112, output: 112,
+  vca: 112 });
 /** A fader's cap, graph units: w across the travel, h along it. */
 export const FADER_CAP = Object.freeze({ w: 28, h: 14 });
 /** A lever switch's slot, graph units: its length and the inset at each end. */
@@ -38,6 +45,16 @@ export function travelOf(kind, travel) {
     throw new RangeError(`travel: at least ${FADER_CAP.h} graph units, not ${travel}.`);
   }
   return travel;
+}
+
+/** The travel of a fader of `role` (FADER_TRAVELS), to pass as `travel` to every call that draws,
+ *  measures or presses it; an unknown role is refused, so a typo never falls back silently. */
+export function faderTravel(role) {
+  if (typeof role !== 'string' || !Object.hasOwn(FADER_TRAVELS, role)) {
+    throw new Error(`faderTravel: role is one of ${Object.keys(FADER_TRAVELS).join(', ')}, `
+      + `not '${String(role)}'.`);
+  }
+  return FADER_TRAVELS[role];
 }
 
 /** How many positions a switch of `p` has: one per option of an enum (at most
@@ -76,20 +93,25 @@ export function pixelsPerRangeFor(kind, zoom = 1, param, { travel } = {}) {
 }
 
 /**
- * A press on a fader at `point` (graph units from its centre, page axes): on the cap's span
- * along the travel (FADER_CAP.h) { grab: true } with the value as it is, so the drag anchors
- * there and the cap never jumps to the pointer; elsewhere one page step toward the press, as
- * PageUp or PageDown (knobKey) would, held at the ends. `travel` is the fader's (controlSvg's;
- * FADER_TRAVEL unless given); vertical or horizontal (right is more).
+ * A press on a fader at `point` (graph units from its centre, page axes): within the grab zone
+ * along the travel { grab: true } with the value as it is, so the drag anchors there and the cap
+ * never jumps to the pointer; elsewhere one page step toward the press, as PageUp or PageDown
+ * (knobKey) would, held at the ends. The grab zone (FS-05) is half a finger, HIT_PX / 2 screen
+ * px at `zoom` (1 unless given), either side of the cap's centre, and never less than the cap's
+ * own half (FADER_CAP.h / 2), so a finger that lands beside the cap takes it and does not page.
+ * `travel` is the fader's (controlSvg's; FADER_TRAVEL unless given, faderTravel for a role);
+ * vertical or horizontal (right is more).
  */
 export function faderPress({ value, param, point, orientation = 'vertical',
-  travel = FADER_TRAVEL } = {}) {
+  travel = FADER_TRAVEL, zoom = 1 } = {}) {
   const { x, y } = pointOf(point, 'faderPress');
   const along = orientationOf(orientation, 'fader') === 'vertical' ? -y : x;
   travelOf('fader', travel);
+  zoomOf(zoom, 'faderPress');
   const v = clampValue(value, param);
   const cap = travel * toNorm(v, param) - travel / 2;
-  if (Math.abs(along - cap) <= FADER_CAP.h / 2) return { grab: true, value: v };
+  const reach = Math.max(FADER_CAP.h / 2, HIT_PX / (2 * zoom));
+  if (Math.abs(along - cap) <= reach) return { grab: true, value: v };
   const key = along > cap ? 'PageUp' : 'PageDown';
   return { grab: false, value: knobKey({ key }, { value: v, param }) };
 }

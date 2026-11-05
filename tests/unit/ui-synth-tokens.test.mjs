@@ -737,10 +737,17 @@ function layerUses() {
   const params = { x: { key: 'x', label: 'X', type: 'integer', min: 0, max: 14, step: 1,
     default: 7 }, y: { key: 'y', label: 'Y', unit: 'Hz', type: 'number', min: 20, max: 20000,
     scale: 'log', default: 1000 } };
+  // The pad's two axis faders are knob.js's own (ui-synth-xy.test.mjs holds that the markup is
+  // controlSvg's), each in its own translate and rotate, which this parse does not apply; since
+  // slice B they cast the cap's shadow (FS-04) onto the host's plate, so they are judged above as
+  // knob.js's fader and taken out of the pad's drawing here.
+  const AXIS = /<g data-xy-axis="[xy]"[^>]*><g data-control="fader">.*?<\/g><\/g><\/g>/g;
   for (const state of [{}, { touched: true }, { focus: 'pad' }, { disabled: true },
     { disabled: true, touched: true }]) {
-    uses.push(...depthUses(xySvg({ x: 3, y: 440, gate: Boolean(state.touched), source: 's',
-      params, tokens: TOKENS, state }), `xy.js ${JSON.stringify(state)}`));
+    const pad = xySvg({ x: 3, y: 440, gate: Boolean(state.touched), source: 's', params,
+      tokens: TOKENS, state });
+    assert.equal([...pad.matchAll(AXIS)].length, 2, 'the two axis faders are found');
+    uses.push(...depthUses(pad.replace(AXIS, ''), `xy.js ${JSON.stringify(state)}`));
   }
   return uses;
 }
@@ -1145,6 +1152,37 @@ test('D-PAL look: the fader cap is lit and sheened as the knob and slide are', (
       `${theme}: the sheen shows on the lit tone, ΔL* ${deltaL(hexOf(t, N.highlight), hi, a)}`);
   }
 });
+
+// Slice B (FS-04): the fader cap's lower lip shows on the cap in both themes (rule b, opaque:
+// |ΔL*| >= 3). The plan's surface.edge (--osc-bg) cannot: on the theme-invariant black material
+// it does not show in dark and is a near-white line in light, so the lip would flip with the
+// theme against C6; the material's lit tone is the flange catching the top light, alike in both.
+// Its scale, detent and value fill (FS-03, FS-07) are graphic roles, 3:1 on what they lie over.
+test('slice B: the fader\'s lip shows on its cap, its scale and fill hold 3:1, both themes',
+  () => {
+    const N = SYNTH_TOKEN_NAMES;
+    const fader = controlSvg({ kind: 'fader', value: 70, param: NUM, tokens: TOKENS });
+    const lip = varOf(attr(tagOf(fader, 'data-lip'), 'fill'));
+    const cap = varOf(attr(tagOf(fader, 'data-cap'), 'fill'));
+    assert.deepEqual([lip, cap], [N.control.knobCapHi, N.control.knobCap]);
+    const bi = controlSvg({ kind: 'fader', value: 0.5, tokens: TOKENS,
+      param: { key: 'pan', min: -1, max: 1, default: 0 } });
+    const marks = [varOf(attr(tagOf(fader, 'data-ticks'), 'stroke')),
+      varOf(attr(tagOf(bi, 'data-detent'), 'stroke'))];
+    for (const [theme, t] of Object.entries(themes())) {
+      const dl = Math.abs(lstar(hexOf(t, lip)) - lstar(hexOf(t, cap)));
+      assert.ok(dl >= MIN_DL, `${theme}: the lip shows on the cap, ΔL* ${dl.toFixed(2)}`);
+      const edge = Math.abs(lstar(hexOf(t, N.surface.edge)) - lstar(hexOf(t, cap)));
+      if (theme === 'dark') assert.ok(edge < MIN_DL, `dark: surface.edge would not show (${edge})`);
+      for (const m of marks) {
+        for (const plate of ALL_PLATES) {
+          assert.ok(contrast(hexOf(t, m), hexOf(t, plate)) >= 3, `${theme} ${m} on ${plate}`);
+        }
+      }
+      assert.ok(contrast(hexOf(t, N.control.ring), hexOf(t, N.surface.edge)) >= 3,
+        `${theme}: the 2-wide fill on the slot`);
+    }
+  });
 
 test('D-PAL look: the slide\'s index reads in two paints, the cap ink and the lit detent', () => {
   const c = TOKENS.control;

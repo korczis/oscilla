@@ -23,8 +23,8 @@ import * as KNOB_CORE from '../../src/js/ui/synth/knob.js';
 import * as FEEL from '../../src/js/ui/synth/feel.js';
 import { NODE_DEFINITIONS } from '../../src/js/studio/registry.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
-import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals }
-  from './ui-synth-fixture.mjs';
+import { TOKENS, PRE_DPAL_TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues,
+  intensityLiterals } from './ui-synth-fixture.mjs';
 
 const LIN = Object.freeze({ id: 'level', label: 'Level', unit: '%', min: 0, max: 100, step: 1,
   scale: 'lin', default: 50 });
@@ -1418,7 +1418,8 @@ test('knob: the unlit arc is control.track in every state, disabled too (S7)', (
 
 test('fader and switch: the slot and the body are outlined in control.track (3:1)', () => {
   const t = TOKENS;
-  const slot = /<g pointer-events="none"><rect [^>]*>/.exec(draw('fader'))[0];
+  // Since slice B the fader's scale precedes its slot (FS-03): the slot is its first rect.
+  const slot = /<rect [^>]*>/.exec(/<g pointer-events="none">(.*)$/.exec(draw('fader'))[1])[0];
   assert.equal(attrOf(slot, 'stroke'), t.control.track);
   assert.equal(attrOf(slot, 'fill'), t.surface.edge);
   const body = /<g pointer-events="none"><rect [^>]*>/.exec(draw('switch'))[0];
@@ -2001,24 +2002,28 @@ test('fader: a press on the cap grabs it where it is; on the slot, a page toward
     const press = (value, d, c, param = LIN) => CORE.faderPress({ value, param,
       point: pt(d, c), orientation });
     const cap = (v) => FADER_TRAVEL * toNorm(v, LIN) - FADER_TRAVEL / 2;
+    // On the cap or within half a finger of it (slice B, FS-05: HIT_PX / 2 at zoom 1), a grab.
     for (const v of [0, 50, 70, 100]) {
-      for (const [d, c] of [[0, 0], [6.9, 0], [-6.9, 13], [3, -20]]) {
+      for (const [d, c] of [[0, 0], [6.9, 0], [-6.9, 13], [3, -20], [21.9, 0], [-21.9, 4]]) {
         assert.deepEqual(press(v, cap(v) + d, c), { grab: true, value: v },
           `${orientation} v ${v}: on the cap (${d}, ${c})`);
       }
     }
-    assert.deepEqual(press(50, cap(50) + 20, 0), { grab: false, value: 60 }, 'a page up');
-    assert.deepEqual(press(50, cap(50) - 7.5, 5), { grab: false, value: 40 }, 'a page down');
-    assert.deepEqual(press(100, 31, 0), { grab: true, value: 100 });
-    assert.deepEqual(press(95, 40, 0), { grab: false, value: 100 }, 'held at the end');
-    assert.deepEqual(press(true, 30, 0, BOOL), { grab: true, value: true });
-    assert.deepEqual(press(false, 30, 0, BOOL), { grab: false, value: true }, 'one option');
+    assert.deepEqual(press(50, cap(50) + 30, 0), { grab: false, value: 60 }, 'a page up');
+    assert.deepEqual(press(50, cap(50) - 22.5, 5), { grab: false, value: 40 }, 'a page down');
+    assert.deepEqual(press(100, 47, 0), { grab: true, value: 100 });
+    assert.deepEqual(press(70, 48, 0), { grab: false, value: 80 }, 'a page toward the top');
+    assert.deepEqual(press(95, 48, 0, { ...LIN, step: 10 }), { grab: true, value: 95 },
+      'within reach of the cap at 95');
+    assert.deepEqual(press(true, 47, 0, BOOL), { grab: true, value: true });
+    assert.deepEqual(press(false, 47, 0, BOOL), { grab: false, value: true }, 'one option');
+    assert.deepEqual(press(10, 48, 0), { grab: false, value: 20 }, 'a page, then the next');
     // The grab is relative: the anchor at the press, and the value moves only with the hand.
     const ppr = pixelsPerRangeFor('fader', 1);
     const a = CORE.dragAnchor(70, pt(cap(70) + 5, 4), { orientation, kind: 'fader' });
     assert.equal(CORE.dragAt(a, pt(cap(70) + 5, 4), LIN, { pixelsPerRange: ppr }), 70,
       'grabbed off centre, it does not jump to the pointer');
-    near(CORE.dragAt(a, pt(cap(70) + 5 + 6.4, 4), LIN, { pixelsPerRange: ppr }), 80, 1e-9);
+    near(CORE.dragAt(a, pt(cap(70) + 5 + ppr / 10), LIN, { pixelsPerRange: ppr }), 80, 1e-9);
   }
   assert.throws(() => CORE.faderPress({ value: 1, param: LIN, point: { x: NaN, y: 0 } }),
     /point/);
@@ -2195,7 +2200,253 @@ test('fader: an optional travel (default FADER_TRAVEL, unchanged) sizes its box,
     // A press reads the same travel: on the cap at 70 % of 128, and a page toward the slot.
     const press = (point, travel) => CORE.faderPress({ value: 70, param: LIN, point, travel });
     assert.deepEqual(press({ x: 0, y: -(128 * 0.7 - 64) }, 128), { grab: true, value: 70 });
-    assert.deepEqual(press({ x: 0, y: -(64 * 0.7 - 32) }, 128), { grab: false, value: 60 });
-    assert.deepEqual(press({ x: 0, y: -(64 * 0.7 - 32) }), { grab: true, value: 70 },
-      'the default travel unchanged');
+    assert.deepEqual(press({ x: 0, y: -(128 * 0.4 - 64) }, 128), { grab: false, value: 60 });
+    assert.deepEqual(press({ x: 0, y: -(FADER_TRAVEL * 0.7 - FADER_TRAVEL / 2) }),
+      { grab: true, value: 70 }, 'the default travel');
+    assert.deepEqual(press({ x: 0, y: -(FADER_TRAVEL * 0.4 - FADER_TRAVEL / 2) }),
+      { grab: false, value: 60 }, 'the default travel: 28.8 units off the cap pages');
   });
+
+// ---------------------------------------------------------------- slice B: the fader is ready
+// Plan slice B (FS-03 to FS-07, ERG-14, ERG-15): a scale beside the slot, a moulded cap (a cast
+// shadow under it, the material's sheen on it, a lower lip), a grab zone a finger finds, a
+// travel of 96 with a per-role travel for the hosts, a value fill inside the slot walls, a drag
+// that has no dead zone after an end stop, and a wheel notch stepped from the value it starts at.
+
+/** The fader's drawing from `opts`, a LIN fader at 70 unless given. */
+const fader = (opts = {}) => controlSvg({ kind: 'fader', value: 70, param: LIN, tokens: TOKENS,
+  ...opts });
+/** One straight segment of a path, 'M x y L x y'. */
+const SEG = /M (-?[\d.]+) (-?[\d.]+) L (-?[\d.]+) (-?[\d.]+)/g;
+/** The scale's marks: [y, x0, x1] per segment of the data-ticks path, both sides. */
+const tickSegs = (svg) => {
+  const d = attrOf(part(svg, 'data-ticks'), 'd') || '';
+  return [...d.matchAll(SEG)].map((m) => {
+    const [x0, y0, x1, y1] = m.slice(1).map(Number);
+    assert.equal(y0, y1, 'a mark runs across the travel');
+    return [y0, x0, x1];
+  });
+};
+/** The marks' distinct positions along the travel, top to bottom. */
+const tickYs = (svg) => [...new Set(tickSegs(svg).map(([y]) => y))].sort((a, b) => a - b);
+
+test('slice B 1 (FS-03): a scale of 11 marks, majors at 0, 5 and 10 to ±21, inside the box',
+  () => {
+    for (const travel of [undefined, 112, 64]) {
+      const tr = travel ?? FADER_TRAVEL;
+      for (const state of [{}, { focus: true }, { dragging: true }, { disabled: true }]) {
+        const svg = fader({ travel, state });
+        const ticks = part(svg, 'data-ticks');
+        assert.ok(ticks, `travel ${tr}: a data-ticks path`);
+        assert.equal(attrOf(ticks, 'stroke'), TOKENS.control.track, 'in control.track');
+        assert.equal(attrOf(ticks, 'fill'), 'none');
+        assert.equal(numOf(ticks, 'stroke-width'), 1);
+        const ys = tickYs(svg);
+        assert.equal(ys.length, 11, `travel ${tr}: 11 marks`);
+        ys.forEach((y, i) => near(y, -tr / 2 + (i * tr) / 10, 0.01));
+        const box = CORE.controlBox('fader', 'vertical', { travel });
+        for (const [y, x0, x1] of tickSegs(svg)) {
+          const i = Math.round((y + tr / 2) / (tr / 10));
+          const reach = i % 5 === 0 ? 21 : 19;
+          assert.deepEqual([Math.abs(x0), Math.abs(x1)].sort((a, b) => a - b), [16, reach],
+            `travel ${tr} mark ${i}: from ±16 to ±${reach}`);
+          assert.ok(Math.max(Math.abs(x0), Math.abs(x1)) <= -box.x, 'inside the 44 box');
+        }
+        assert.equal(tickSegs(svg).length, 22, 'each mark on both sides of the slot');
+      }
+    }
+    // An integer axis of XY.gridMax (25) values or fewer has one mark per value; more, 11.
+    for (const [max, want] of [[4, 5], [24, 25], [25, 11], [1, 2]]) {
+      const P = { key: 'n', label: 'N', type: 'integer', min: 0, max, step: 1, default: 0 };
+      const ys = tickYs(fader({ value: 0, param: P }));
+      assert.equal(ys.length, want, `0..${max}: ${want} marks`);
+      if (want !== 11) {
+        ys.forEach((y, i) => near(y, FADER_TRAVEL / 2 - FADER_TRAVEL * toNorm(max - i, P), 0.01,
+          `0..${max}: the mark of value ${max - i}`));
+      }
+    }
+    // A bipolar range has a centre detent of width 1.5 at zero; a unipolar one none.
+    for (const P of [SMOOTH, INT, { key: 'b', min: -12, max: 36, step: 1, default: 0 }]) {
+      const det = part(fader({ value: 0, param: P }), 'data-detent');
+      assert.ok(det, `${P.id ?? P.key}: a detent`);
+      assert.equal(numOf(det, 'stroke-width'), 1.5);
+      assert.equal(attrOf(det, 'stroke'), TOKENS.control.track);
+      const y0 = FADER_TRAVEL / 2 - FADER_TRAVEL * toNorm(0, P);
+      const segs = [...attrOf(det, 'd').matchAll(SEG)].map((m) => m.slice(1).map(Number));
+      assert.equal(segs.length, 2, 'both sides');
+      for (const [x0, ya, x1, yb] of segs) {
+        near(ya, y0, 0.01);
+        near(yb, y0, 0.01);
+        assert.deepEqual([Math.abs(x0), Math.abs(x1)].sort((a, b) => a - b), [16, 21]);
+      }
+    }
+    assert.equal(part(fader(), 'data-detent'), null, 'a range from min has no detent');
+  });
+
+test('slice B 2 (FS-04): a cast shadow under the cap, the sheen and a lower lip on it', () => {
+  const c = TOKENS.control;
+  const capRe = /<rect data-cap=""[^>]*>/;
+  for (const [state, dy] of [[{}, 1], [{ dragging: true }, 2], [{ focus: true }, 1]]) {
+    const svg = fader({ state });
+    const cap = capRe.exec(svg)[0];
+    const at = svg.indexOf(cap);
+    const shadow = part(svg, 'data-shadow');
+    assert.ok(shadow, `${JSON.stringify(state)}: a data-shadow rect`);
+    assert.ok(svg.indexOf(shadow) < at, 'the shadow precedes the cap');
+    assert.match(shadow, /^<rect /);
+    assert.match(shadow, /\sclass="opacity-hw-shadow"/);
+    assert.equal(attrOf(shadow, 'fill'), c.shade, 'the depth shade');
+    assert.equal(attrOf(shadow, 'stroke'), 'none');
+    assert.deepEqual([numOf(shadow, 'width'), numOf(shadow, 'height')],
+      [numOf(cap, 'width'), numOf(cap, 'height')], 'the cap\'s own size');
+    near(numOf(shadow, 'y') - numOf(cap, 'y'), dy, 1e-9, `${JSON.stringify(state)}: dy ${dy}`);
+    assert.ok(numOf(shadow, 'x') - numOf(cap, 'x') >= 0, 'offset away from the light, or none');
+    const sheen = part(svg, 'data-sheen');
+    assert.ok(svg.indexOf(sheen) > at, 'the sheen follows the cap');
+    assert.match(sheen, /\sclass="opacity-hw-sheen"/);
+    const lip = part(svg, 'data-lip');
+    assert.ok(lip, 'a lower lip');
+    assert.ok(svg.indexOf(lip) > at, 'the lip follows the cap');
+    assert.equal(numOf(lip, 'height'), 1, 'one unit');
+    const [cx, cy, cw, ch] = ['x', 'y', 'width', 'height'].map((a) => numOf(cap, a));
+    near(numOf(lip, 'y') + 1, cy + ch - 0.5, 1e-9, 'along the cap\'s foot, inside its stroke');
+    assert.ok(numOf(lip, 'x') >= cx + 0.5 && numOf(lip, 'x') + numOf(lip, 'width')
+      <= cx + cw - 0.5, 'inside the cap');
+    // D-PAL: the plan's surface.edge lip cannot show on the cap material (C6), so on it the
+    // lip is the material's lit tone; a token set before D-PAL keeps surface.edge.
+    assert.equal(attrOf(lip, 'fill'), c.knobCapHi, 'the material\'s lit tone (D-PAL)');
+    const grips = [...svg.matchAll(/<line data-grip="[^"]*"[^>]*>/g)].map((m) => m[0]);
+    const lowGrip = Math.max(...grips.map((g) => numOf(g, 'y1') + numOf(g, 'stroke-width') / 2));
+    assert.ok(numOf(lip, 'y') >= lowGrip + 0.5, 'the lip clear of the grips');
+  }
+  const old = controlSvg({ kind: 'fader', value: 70, param: LIN, tokens: PRE_DPAL_TOKENS });
+  assert.equal(attrOf(part(old, 'data-lip'), 'fill'), PRE_DPAL_TOKENS.surface.edge,
+    'before D-PAL: the lip in surface.edge, as the plan drew it');
+  assert.equal(part(fader({ state: { disabled: true } }), 'data-lip'), null,
+    'disabled: a flat cap (C1)');
+});
+
+test('slice B 3 (FS-05): a press within half a finger (HIT_PX / 2) of the cap grabs it', () => {
+  for (const orientation of ['vertical', 'horizontal']) {
+    const pt = (d) => (orientation === 'vertical' ? { x: 0, y: -d } : { x: d, y: 0 });
+    const cap = FADER_TRAVEL * toNorm(50, LIN) - FADER_TRAVEL / 2;
+    const press = (d, zoom) => CORE.faderPress({ value: 50, param: LIN, point: pt(cap + d),
+      orientation, zoom });
+    for (const d of [21, -21, 22, -22]) {
+      assert.deepEqual(press(d, 1), { grab: true, value: 50 }, `${orientation}: ${d} at zoom 1`);
+    }
+    assert.deepEqual(press(21), { grab: true, value: 50 }, 'zoom 1 by default');
+    assert.deepEqual(press(23, 1), { grab: false, value: 60 }, 'past it, a page');
+    assert.deepEqual(press(-23, 1), { grab: false, value: 40 });
+    // Graph units: half of HIT_PX screen px at the zoom, never less than half the cap.
+    assert.deepEqual(press(10.9, 2), { grab: true, value: 50 }, 'zoom 2: 11 units');
+    assert.deepEqual(press(11.2, 2), { grab: false, value: 60 });
+    assert.deepEqual(press(6.9, 4), { grab: true, value: 50 }, 'zoom 4: the cap\'s own 7');
+    assert.deepEqual(press(7.2, 4), { grab: false, value: 60 });
+    assert.deepEqual(press(43.9, 0.5), { grab: true, value: 50 }, 'zoom 0.5: 44 units');
+    for (const zoom of [0, -1, NaN, Infinity, '1']) {
+      assert.throws(() => press(0, zoom), /zoom/, `zoom ${zoom}`);
+    }
+  }
+});
+
+test('slice B 4 (FS-06): a 96 travel, a per-role travel for hosts, honoured by every part',
+  async () => {
+    assert.equal(FADER_TRAVEL, 96);
+    assert.deepEqual({ ...CONTROL_BOX.fader }, { x: -22, y: -58, width: 44, height: 116 });
+    const capAt = (svg) => {
+      const c = part(svg, 'data-cap');
+      return numOf(c, 'y') + numOf(c, 'height') / 2;
+    };
+    near(capAt(fader({ value: LIN.max, travel: 112 })), -56, 0.005, 'travel 112 at max');
+    near(capAt(fader({ value: LIN.min, travel: 112 })), 56, 0.005, 'travel 112 at min');
+    assert.equal(hitOf(fader({ travel: 112 }))[3], 132, 'its hit as long as its box');
+    // The per-role travel (FS-06; the owner's default: faders for the EG's ADSR, the mixer, the
+    // output and the VCA): a host asks by role and passes the travel to every call.
+    assert.deepEqual({ ...CORE.FADER_TRAVELS }, { adsr: 96, mixer: 112, output: 112, vca: 112 });
+    assert.ok(Object.isFrozen(CORE.FADER_TRAVELS));
+    for (const [role, tr] of Object.entries(CORE.FADER_TRAVELS)) {
+      assert.equal(CORE.faderTravel(role), tr, role);
+      assert.equal(pixelsPerRangeFor('fader', 1, LIN, { travel: CORE.faderTravel(role) }), tr);
+      assert.equal(CORE.controlBox('fader', 'vertical', { travel: tr }).height, tr + 20);
+    }
+    for (const role of ['knob', '', undefined, 'toString', 'ADSR']) {
+      assert.throws(() => CORE.faderTravel(role), /role/, `role ${String(role)}`);
+    }
+    // The XY pad's faders keep the puck's travel, whatever FADER_TRAVEL is.
+    const { xyLayout } = await import('../../src/js/ui/synth/xy.js');
+    const L = xyLayout();
+    assert.equal(L.faders.x.travel, L.travel.width);
+    assert.notEqual(L.faders.x.travel, FADER_TRAVEL);
+  });
+
+test('slice B 5 (FS-07): the fill is 2 wide inside the slot walls; bipolar from zero', () => {
+  const fillOf = (svg) => {
+    const m = new RegExp('<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)" '
+      + 'rx="([^"]+)" fill="([^"]+)" stroke="none"/>').exec(svg);
+    return m && { x: Number(m[1]), y: Number(m[2]), width: Number(m[3]), height: Number(m[4]),
+      rx: Number(m[5]), fill: m[6] };
+  };
+  for (const state of [{}, { dragging: true }, { disabled: true }]) {
+    const f = fillOf(fader({ state }));
+    assert.deepEqual([f.x, f.width, f.rx], [-1, 2, 1], JSON.stringify(state));
+  }
+  const yOf = (v, p) => FADER_TRAVEL / 2 - FADER_TRAVEL * toNorm(v, p);
+  const up = fillOf(fader({ value: 0.5, param: SMOOTH }));
+  near(up.y, yOf(0.5, SMOOTH), 0.01);
+  near(up.y + up.height, yOf(0, SMOOTH), 0.01, 'a bipolar fill still starts at zero');
+  const down = fillOf(fader({ value: -0.5, param: SMOOTH }));
+  near(down.y, yOf(0, SMOOTH), 0.01);
+  assert.equal(down.x, -1);
+});
+
+test('slice B 6 (ERG-14): after overshooting an end, the first move back moves the value',
+  () => {
+    const cases = [
+      ['knob', 'vertical', DRAG_PX_PER_RANGE],
+      ['fader', 'vertical', pixelsPerRangeFor('fader', 1)],
+      ['fader', 'horizontal', pixelsPerRangeFor('fader', 1)],
+    ];
+    for (const [kind, orientation, ppr] of cases) {
+      // A point `d` px toward more from the press.
+      const pt = (d) => (orientation === 'vertical' ? { x: 0, y: -d } : { x: d, y: 0 });
+      const toMax = ppr / 2; // from 50, the max is half the range away
+      const a = CORE.dragAnchor(50, pt(0), { kind, orientation });
+      const over = CORE.dragTo(a, pt(toMax + 100), LIN, { pixelsPerRange: ppr });
+      assert.equal(over.value, 100, `${kind} ${orientation}: held at the max`);
+      assert.ok(Object.isFrozen(over));
+      const back = CORE.dragTo(over.anchor, pt(toMax + 50), LIN, { pixelsPerRange: ppr });
+      assert.ok(back.value < 100, `${kind} ${orientation}: 50 px back moves it (${back.value})`);
+      near(back.value, quantize(100 - (50 / ppr) * 100, LIN), 1e-9,
+        `${kind} ${orientation}: as far as the hand came back`);
+      // The same, as a host's stream of moves: 5 px events up past the end, then back.
+      let r = { value: 50, anchor: a };
+      for (let d = 5; d <= toMax + 100; d += 5) {
+        r = CORE.dragTo(r.anchor, pt(d), LIN, { pixelsPerRange: ppr });
+      }
+      assert.equal(r.value, 100);
+      r = CORE.dragTo(r.anchor, pt(Math.floor((toMax + 100) / 5) * 5 - 10), LIN,
+        { pixelsPerRange: ppr });
+      assert.ok(r.value < 100, `${kind} ${orientation}: off the max at once (${r.value})`);
+      // And at the min.
+      const under = CORE.dragTo(a, pt(-(toMax + 100)), LIN, { pixelsPerRange: ppr });
+      assert.equal(under.value, 0);
+      assert.ok(CORE.dragTo(under.anchor, pt(-(toMax + 50)), LIN, { pixelsPerRange: ppr })
+        .value > 0, `${kind} ${orientation}: off the min`);
+      // Within the range dragTo is dragAt, and the anchor is kept.
+      const mid = CORE.dragTo(a, pt(10), LIN, { pixelsPerRange: ppr });
+      assert.equal(mid.value, CORE.dragAt(a, pt(10), LIN, { pixelsPerRange: ppr }));
+      assert.equal(mid.anchor, a, 'the same anchor');
+    }
+  });
+
+test('slice B 7 (ERG-15): a wheel notch steps from the value, then quantises', () => {
+  assert.deepEqual(wheelValue(0.511, -WHEEL_NOTCH_PX, FLOAT), { value: 0.52, rest: 0 },
+    'from 0.511 one notch up is 0.52, not 0.53');
+  assert.deepEqual(wheelValue(0.511, WHEEL_NOTCH_PX, FLOAT), { value: 0.5, rest: 0 });
+  assert.deepEqual(wheelValue(0.519, -WHEEL_NOTCH_PX, FLOAT), { value: 0.53, rest: 0 });
+  assert.deepEqual(wheelValue(0.519, WHEEL_NOTCH_PX, FLOAT), { value: 0.51, rest: 0 });
+  assert.equal(wheelValue(50.4, -WHEEL_NOTCH_PX, LIN).value, 51);
+  assert.equal(wheelValue(50.6, -WHEEL_NOTCH_PX, LIN).value, 52);
+  assert.equal(wheelValue(0.511, -2 * WHEEL_NOTCH_PX, FLOAT).value, 0.53, 'two notches');
+});

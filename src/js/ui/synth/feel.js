@@ -5,11 +5,11 @@
 // importers use (src/js/synth/gestures.js and the tests), the same functions, not copies; new
 // code imports the models. It adds no listener and reads no document (K153).
 //
-//   dragAnchor, reanchorDrag, dragAt           a drag measured from an anchor (knob model)
+//   dragAnchor, reanchorDrag, dragAt, dragTo   a drag measured from an anchor (knob model)
 //   gestureOf, cancelGesture, GESTURE_IDLE_MS  one undo entry per gesture (knob model)
 //   faderPress                                 a press on a fader (slider model)
 
 export {
-  cancelGesture, dragAnchor, dragAt, GESTURE_IDLE_MS, gestureOf, reanchorDrag,
+  cancelGesture, dragAnchor, dragAt, dragTo, GESTURE_IDLE_MS, gestureOf, reanchorDrag,
 } from '../controls/knob-model.js';
 export { faderPress } from '../controls/slider-model.js';

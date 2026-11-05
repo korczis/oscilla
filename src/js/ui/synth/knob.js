@@ -13,12 +13,13 @@
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures (model)
 //   parseValue, formatValue, ariaAttrs                                 typed entry, text, ARIA
 //   controlSvg, controlBox, CONTROL_BOX, FADER_CAP, KNOB, knobFace     the drawing, an SVG <g>
+//   FADER_TRAVEL, FADER_TRAVELS, faderTravel, FADER_TICKS              a fader's travel, its scale
 //   KNOB_SIZES                                                         a knob's size: lg, md, sm
 //   capMaterial                                                        C6's cap material
 
 import {
   choicesOf, clampValue, HIT_PX, idOf, optionIndex, orientationOf, originOf, SWEEP_DEG, toNorm,
-  zoomOf,
+  valuePositions, zoomOf,
 } from '../controls/knob-model.js';
 import { FADER_CAP, FADER_TRAVEL, leverOf, LEVER_SLOT, switchPositions, travelOf }
   from '../controls/slider-model.js';
@@ -28,7 +29,9 @@ export {
   fromNorm, HIT_PX, knobKey, LOG_STEPS, parseValue, quantize, stepOption, SWEEP_DEG, toNorm,
   WHEEL_LINE_PX, WHEEL_NOTCH_PX, WHEEL_STEP, wheelValue,
 } from '../controls/knob-model.js';
-export { FADER_CAP, FADER_TRAVEL, pixelsPerRangeFor } from '../controls/slider-model.js';
+export {
+  FADER_CAP, FADER_TRAVEL, FADER_TRAVELS, faderTravel, pixelsPerRangeFor,
+} from '../controls/slider-model.js';
 
 const num = (x) => Number(x.toFixed(2));
 /** Up to the next 0.02, so a hit never rounds under HIT_PX screen px (as led.js's). */
@@ -98,7 +101,20 @@ function sizeOf(kind, size) {
   return size;
 }
 
-const FADER = { capW: FADER_CAP.w, capH: FADER_CAP.h, trackW: 4, grip: 3 };
+// Slice B, graph units: the slot (4 wide) and its value fill, 2 wide and inside the slot's walls
+// (FS-07); a scale either side of the slot in control.track (FS-03): FADER_TICKS.marks marks over
+// the travel from ±tickIn to ±tickOut, the majors (0, 5 and 10, or an axis's ends and middle)
+// to ±majorOut, one mark per value on an integer or choice axis of up to perValue values, and a
+// detent at zero on a range across it (detentW, as the knob's); the cap moulded (FS-04): a cast
+// shadow in control.shade at hw-shadow (shadowDx, down by shadowDy, shadowDragDy while dragged:
+// the light is the knob's, from above and left), and on it the material's lit tone and sheen
+// along its top and a lower lip of `lip` along its foot, the material's lit tone too (the flange
+// catching the light; before D-PAL surface.edge, the plan's); the focus ring at ±focusX, outside
+// the minor marks, as the knob's ring crosses its scale's tips.
+export const FADER_TICKS = Object.freeze({ marks: 11, tickIn: 16, tickOut: 19, majorOut: 21,
+  perValue: 25, detentW: 1.5 });
+const FADER = { capW: FADER_CAP.w, capH: FADER_CAP.h, trackW: 4, fillW: 2, grip: 3,
+  shadowDx: 0.5, shadowDy: 1, shadowDragDy: 2, lip: 1, focusX: 21 };
 const SWITCH = { w: 14, h: LEVER_SLOT.h, inset: LEVER_SLOT.inset, leverW: 10 };
 /** The intensity classes: tailwind.config.cjs's hw-sheen and hw-shadow keys. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
@@ -273,44 +289,75 @@ function knobShapes(value, applied, p, t, st, zoom, uid, size = 'md') {
 // The fader (slider skin) and the lever switch (switch skin) drawn as hardware, on the slider
 // model's travel and the switch model's positions.
 
+/** The fader scale's positions along the travel (0..1): one per value of an integer axis, or per
+ *  option of a choice, of up to FADER_TICKS.perValue (xy.js's XY.gridMax, its grid's rule; the
+ *  model's valuePositions), else FADER_TICKS.marks equal divisions. */
+const faderNorms = (p) => valuePositions(p, FADER_TICKS.perValue)
+  ?? Array.from({ length: FADER_TICKS.marks }, (_, i) => i / (FADER_TICKS.marks - 1));
+
+/** Horizontal strokes at each `y`, from ±x0 to ±x1(i) on both sides of the slot, one path. */
+const marksAt = (ys, x0, x1) => ys.map((y, i) => `M ${-x1(i)} ${y} L ${-x0} ${y} `
+  + `M ${x0} ${y} L ${x1(i)} ${y}`).join(' ');
+
 function faderShapes(value, applied, p, t, st, zoom, tr) {
   const c = t.control;
   const m = capMaterial(t);
+  const F = FADER;
+  const T = FADER_TICKS;
   const live = m.dpal && !st.disabled;
   const half = tr / 2;
   const yOf = (v) => num(half - tr * toNorm(v, p));
   const y = yOf(value);
   const top = -half - 2;
   const len = tr + 4;
-  const tw = FADER.trackW;
-  const ax = FADER.capW / 2 + 3;
+  const tw = F.trackW;
+  const ax = F.capW / 2 + 3;
   // The value fill runs from the bottom, or from zero on a range across zero (as the knob's arc).
   const zero = originOf(p);
-  const from = toNorm(zero, p) > 0 ? yOf(zero) : half + 2;
+  const bipolar = zero !== null && toNorm(zero, p) > 0;
+  const from = bipolar ? yOf(zero) : half + 2;
   const [f0, f1] = y < from ? [y, from] : [from, y];
-  const [cw, ch, g] = [FADER.capW, FADER.capH, FADER.grip];
+  const [cw, ch, g] = [F.capW, F.capH, F.grip];
+  const capY = num(y - ch / 2);
   const grip = (dy, role, paint, w) => `<line data-grip="${role}" x1="${-cw / 2 + 4}" `
     + `y1="${num(y + dy)}" x2="${cw / 2 - 4}" y2="${num(y + dy)}" stroke="${esc(paint)}" `
     + `stroke-width="${w}"/>`;
   const reach = half + ch / 2 + 2;
-  return `<rect x="${-tw / 2}" y="${top}" width="${tw}" height="${len}" rx="${tw / 2}" `
+  const norms = faderNorms(p);
+  const last = norms.length - 1;
+  const ticks = marksAt(norms.map((n) => num(half - tr * n)), T.tickIn,
+    (i) => ((2 * i) % last === 0 ? T.majorOut : T.tickOut));
+  return `<path data-ticks="" d="${ticks}" fill="none" stroke="${esc(c.track)}" `
+    + 'stroke-width="1"/>'
+    + (bipolar ? `<path data-detent="" d="${marksAt([yOf(zero)], T.tickIn, () => T.majorOut)}" `
+      + `fill="none" stroke="${esc(c.track)}" stroke-width="${T.detentW}"/>` : '')
+    + `<rect x="${-tw / 2}" y="${top}" width="${tw}" height="${len}" rx="${tw / 2}" `
     + `fill="${esc(t.surface.edge)}" stroke="${esc(c.track)}" stroke-width="1"/>`
-    + (f1 - f0 > 0.01 ? `<rect x="${-tw / 2}" y="${f0}" width="${tw}" height="${num(f1 - f0)}" `
-      + `rx="${tw / 2}" fill="${esc(st.disabled ? c.disabled : c.ring)}" stroke="none"/>` : '')
+    + (f1 - f0 > 0.01 ? `<rect x="${-F.fillW / 2}" y="${f0}" width="${F.fillW}" `
+      + `height="${num(f1 - f0)}" rx="${F.fillW / 2}" `
+      + `fill="${esc(st.disabled ? c.disabled : c.ring)}" stroke="none"/>` : '')
     + (applied !== null ? `<line data-applied="" x1="${-ax}" y1="${yOf(applied)}" x2="${ax}" `
       + `y2="${yOf(applied)}" stroke="${esc(c.pointer)}" stroke-width="1"/>` : '')
-    + `<rect data-cap="" x="${-cw / 2}" y="${num(y - ch / 2)}" width="${cw}" height="${ch}" `
+    // FS-04: the cap's cast shadow, the knob's light; lower while the cap is held.
+    + `<rect data-shadow="" class="${SHADOW_CLASS}" x="${num(-cw / 2 + F.shadowDx)}" `
+    + `y="${num(capY + (st.dragging ? F.shadowDragDy : F.shadowDy))}" width="${cw}" `
+    + `height="${ch}" rx="2" fill="${esc(c.shade)}" stroke="none"/>`
+    + `<rect data-cap="" x="${-cw / 2}" y="${capY}" width="${cw}" height="${ch}" `
     + `rx="2" fill="${esc(m.body)}" stroke="${esc(st.dragging ? c.pointer : c.edge)}" `
     + 'stroke-width="1"/>'
     // D-PAL: the material's lit tone along the top and a sheen strip on it, as the knob's and the
     // slide's (review of D-PAL, finding 7); a disabled cap is flat (C1).
-    + (live ? `<rect data-cap-hi="" x="${-cw / 2 + 1}" y="${num(y - ch / 2 + 1)}" `
+    + (live ? `<rect data-cap-hi="" x="${-cw / 2 + 1}" y="${num(capY + 1)}" `
       + `width="${cw - 2}" height="2" rx="1" fill="${esc(m.hi)}" stroke="none"/>`
-      + `<rect data-sheen="" class="${SHEEN_CLASS}" x="${-cw / 2 + 4}" y="${num(y - ch / 2 + 1)}" `
+      + `<rect data-sheen="" class="${SHEEN_CLASS}" x="${-cw / 2 + 4}" y="${num(capY + 1)}" `
       + `width="${cw - 8}" height="1" rx="0.5" fill="${esc(c.highlight)}" stroke="none"/>` : '')
+    // FS-04: the lower lip along the cap's foot, inside its stroke (flat when disabled, C1).
+    + (st.disabled ? '' : `<rect data-lip="" x="${-cw / 2 + 1}" `
+      + `y="${num(capY + ch - 0.5 - F.lip)}" width="${cw - 2}" height="${F.lip}" `
+      + `fill="${esc(m.dpal ? m.hi : t.surface.edge)}" stroke="none"/>`)
     + grip(-g, '', c.edge, 1) + grip(0, 'centre', st.disabled ? c.disabled : m.ink, 1.5)
     + grip(g, '', c.edge, 1)
-    + (st.focus ? `<rect data-focus="" x="${-cw / 2 - 3}" y="${-reach}" width="${cw + 6}" `
+    + (st.focus ? `<rect data-focus="" x="${-F.focusX}" y="${-reach}" width="${2 * F.focusX}" `
       + `height="${2 * reach}" rx="3" fill="none" stroke="${esc(c.focus)}" stroke-width="2"/>`
       : '');
 }
@@ -360,11 +407,13 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
  * (control.track), value arc (control.ring; from zero with a detent tick across zero), knobFace,
  * focus ring; `uid` names its gradients (else the parameter's id); `size` (KNOB_SIZES: lg, md, sm;
  * md unless given, and any kind's; lg and sm a knob's alone) scales it about its centre, its box
- * with it; fader = slot in control.track, value fill (from zero across zero), a FADER_CAP cap edged
- * in control.edge (control.pointer dragged), three grip lines, the centre one on the value, and
- * with the cap material its lit tone along the top and a sheen strip (flat when disabled);
- * 'horizontal' turns it (rotate(90): more to the right), `travel` (default FADER_TRAVEL) its
- * length; switch = a lever position per option of an enum of up to four or a boolean, detents past
+ * with it; fader = a scale either side in control.track (FADER_TICKS; a detent at zero across
+ * zero), slot in control.track, a 2-wide value fill inside it (from zero across zero), a FADER_CAP
+ * cap casting its shadow (control.shade at hw-shadow, lower while dragged), edged in control.edge
+ * (control.pointer dragged), three grip lines, the centre one on the value, a lower lip, and with
+ * the cap material its lit tone along the top and a sheen strip (flat when disabled);
+ * 'horizontal' turns it (rotate(90): more to the right), `travel` (default FADER_TRAVEL; a role's
+ * is faderTravel's) its length; switch = a lever position per option of an enum of up to four or a boolean, detents past
  * two. `applied`, elsewhere than `value`, marks the engine's value (a knob's arc at r 13.5 in
  * control.applied, else a control.pointer line). `state` is { focus, dragging, disabled, hover }.
  * An invisible hit rect of at least HIT_PX / zoom (rounded up), never under the box, takes the
