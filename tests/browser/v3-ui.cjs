@@ -1429,8 +1429,9 @@ function defineChecks(fixtures) {
       const el = document.querySelector('[data-osc="exp.stimulusFinding"]');
       return el && el.offsetParent !== null ? el.textContent.trim() : '';
     });
-    await page.click('[data-osc="exp.repeat"]', { timeout: 5000 })
-      .catch(() => page.evaluate((id) => window.OSCILLA.app.experimentsRepeat(id), res.id));
+    // The button itself: a hidden, disabled or unwired Repeat fails here, never falls back to
+    // experimentsRepeat (the control-drive ratchet refuses that fallback in tests/browser).
+    await page.click('[data-osc="exp.repeat"]', { timeout: 5000 });
     await sleep(150);
     res.repeat = await lastAlert();
     res.workspace = await page.evaluate(() => window.OSCILLA.app.workspace);
