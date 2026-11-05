@@ -28,7 +28,14 @@
 // The debt is the entries with no deep link or no test. Its count may not exceed its value in
 // any earlier commit of the census file (git log / git show; skipped without that history,
 // like tests/unit/no-inert-surfaces.test.mjs, and failed under GitHub Actions when no commit
-// holds the file). The running page is tests/browser/surface-census.cjs.
+// holds the file). The entries with no test are a debt of their own, ratcheted apart, because
+// in the combined count a test removed from an entry that also has no deep link changes
+// nothing: the census records them by key in noTestDebt, which must be exactly the entries
+// whose tests are empty, and their count may not exceed the count of any earlier commit whose
+// record was judged the same way: the census names its judge in noTestDebtJudge
+// (NO_TEST_JUDGE, the Locators below), and a commit without that judge (before the record, or
+// a record made while a test named a surface by any matching text) is no baseline, since its
+// count holds false test assignments. The running page is tests/browser/surface-census.cjs.
 //
 // Locators (namesOf, matched on codeOf: the file with its // and /* */ comments blanked). A
 // test file names a surface only through one of these forms. "Quoted" is '...', "..." or `...`;
@@ -572,9 +579,66 @@ export function judge(census, inventory, { fileText, issueIds }) {
 export const debtOf = (census) => (census.surfaces || [])
   .filter((e) => e.deepLink === null || !(Array.isArray(e.tests) && e.tests.length));
 
+/** The commits whose census held fewer entries of `of` than `count`: [[sha, was]]. */
+const raisedAbove = (count, history, of) => history
+  .map(({ sha, census }) => [sha, of(census).length]).filter(([, was]) => count > was);
+
 /** The commits whose census held less debt than `count`: [[sha, was]]. */
-export const debtRaised = (count, history) => history
-  .map(({ sha, census }) => [sha, debtOf(census).length]).filter(([, was]) => count > was);
+export const debtRaised = (count, history) => raisedAbove(count, history, debtOf);
+
+/** The entries with no test, whatever their deep link. */
+export const noTestOf = (census) => (census.surfaces || [])
+  .filter((e) => !(Array.isArray(e.tests) && e.tests.length));
+const keyOf = (e) => `${e.kind}:${e.id}`;
+
+/**
+ * The judge the noTestDebt record is made under: a test names a surface only through a
+ * locator in its code (the Locators of the header). Only a commit whose census names this
+ * judge is a baseline of the no-test ratchet.
+ */
+export const NO_TEST_JUDGE = 'code-locator';
+/** The commits of `history` whose no-test count is comparable: recorded under NO_TEST_JUDGE. */
+export const judgedHistory = (history) => history.filter(({ census }) => census
+  && Array.isArray(census.noTestDebt) && census.noTestDebtJudge === NO_TEST_JUDGE);
+
+/**
+ * The problems of the no-test debt: the record `noTestDebt` (entry keys) is not exactly the
+ * entries with no test, it does not name NO_TEST_JUDGE, or their count is above the count of
+ * a commit of `history` recorded under that judge.
+ */
+export function noTestProblems(census, history) {
+  const out = [];
+  const record = census && census.noTestDebt;
+  if (!Array.isArray(record)) {
+    out.push(`${P} ${CENSUS_REL} records no noTestDebt list (the keys of the entries with no `
+      + 'test)');
+  }
+  if (!census || census.noTestDebtJudge !== NO_TEST_JUDGE) {
+    out.push(`${P} ${CENSUS_REL} names noTestDebtJudge ${JSON.stringify(census
+      && census.noTestDebtJudge)}, not "${NO_TEST_JUDGE}" (the judge its record is made under)`);
+  }
+  const keysListed = Array.isArray(record) ? record : [];
+  const listed = new Set(keysListed);
+  const twice = new Set(keysListed.filter((k, i) => keysListed.indexOf(k) !== i));
+  if (twice.size) {
+    out.push(`${P} noTestDebt lists ${[...twice].join(', ')} more than once; list each key once`);
+  }
+  const now = noTestOf(census);
+  const keys = new Set(now.map(keyOf));
+  for (const k of now.map(keyOf).filter((x) => !listed.has(x))) {
+    out.push(`${P} ${k.replace(/:/, ' "')}" has no test and noTestDebt does not list it; `
+      + 'name the test that exercises it');
+  }
+  for (const k of [...listed].filter((x) => !keys.has(x))) {
+    out.push(`${P} noTestDebt lists ${k}, which is not an entry with no test; remove it`);
+  }
+  const raised = raisedAbove(now.length, judgedHistory(history), noTestOf);
+  if (raised.length) {
+    out.push(`${P} the no-test debt grew to ${now.length}; it may only shrink:\n  `
+      + raised.map(([sha, was]) => `${was} at ${sha}`).join('\n  '));
+  }
+  return out;
+}
 
 // ------------------------------------------------------------------------------ the tree
 const fileText = (rel) => (isFile(rel) ? read(rel) : null);
@@ -609,6 +673,8 @@ test('the census prints its debt: the entries with no deep link or no test', (t)
   t.diagnostic(`debt ${debt.length}: ${debt.map((e) => `${e.kind}:${e.id}`
     + `${e.deepLink === null ? ' (no deep link)' : ''}${e.tests.length ? '' : ' (no test)'}`)
     .join(', ')}`);
+  const noTest = noTestOf(CENSUS());
+  t.diagnostic(`no test ${noTest.length}: ${noTest.map(keyOf).join(', ')}`);
   assert.ok(Array.isArray(debt));
 });
 
@@ -823,6 +889,101 @@ test('mutation: debt above an earlier commit is refused, debt paid off is not', 
   const now = { surfaces: [e(null, ['x']), e('#m=c', [])] };
   assert.equal(debtOf(now).length, 2, 'a null deep link and an empty test list each count');
   assert.deepEqual(debtRaised(debtOf(now).length, history), [['lowered', 1]]);
+});
+
+test('the no-test debt is recorded and only shrinks: noTestDebt lists exactly the entries '
+  + 'with no test, and no more of them than in any earlier commit', (t) => {
+  const history = censusHistory();
+  if (!history || !history.length) {
+    if (history && process.env.GITHUB_ACTIONS === 'true') {
+      assert.fail(`${P} no commit holds ${CENSUS_REL}: the CI unit job checks out with `
+        + 'fetch-depth: 0');
+    }
+    // Without history the record is still judged against the tree.
+    const p = noTestProblems(CENSUS(), []);
+    assert.deepEqual(p, [], p.join('\n'));
+    t.skip(`no git history of ${CENSUS_REL} here; the record alone was judged`);
+    return;
+  }
+  const p = noTestProblems(CENSUS(), history);
+  assert.deepEqual(p, [], p.join('\n'));
+});
+
+test('mutation: a test taken from an entry that also has no deep link is refused by the '
+  + 'no-test ratchet, though the combined debt does not move', () => {
+  const tree = TREE();
+  const census = CENSUS();
+  const head = [{ sha: 'head', census }];
+  assert.deepEqual(noTestProblems(census, head), [], 'the census as it stands is not refused');
+  const key = 'subview:analysis.tab:waveform';
+  const entry = census.surfaces.find((e) => keyOf(e) === key);
+  assert.ok(entry && entry.deepLink === null && entry.tests.length, `${key} has a test and no `
+    + 'deep link (the case the combined count cannot see)');
+  const withEntry = (c, patch) => ({ ...c, surfaces: c.surfaces.map((e) => (
+    keyOf(e) === key ? { ...e, ...patch } : e)) });
+  const untested = withEntry(census, { tests: [] });
+  // What U063 alone sees: the census is valid and the combined debt is unchanged.
+  assert.deepEqual(judge(untested, deriveInventory(tree), CTX()), []);
+  assert.deepEqual(debtRaised(debtOf(untested).length, head), []);
+  // The record no longer matches the tree.
+  let p = noTestProblems(untested, head);
+  assert.ok(p.some((x) => /subview "analysis\.tab:waveform" has no test and noTestDebt does not/
+    .test(x)), p.join('\n'));
+  // Listing it as well is a rise above the newest record.
+  const listed = { ...untested, noTestDebt: [...census.noTestDebt, key] };
+  p = noTestProblems(listed, head);
+  assert.ok(p.some((x) => new RegExp(`no-test debt grew to ${census.noTestDebt.length + 1}; `
+    + `it may only shrink:\\n  ${census.noTestDebt.length} at head`).test(x)), p.join('\n'));
+  // An entry given a test leaves the record stale until it is removed from it.
+  const [first] = census.noTestDebt;
+  const paid = { ...census, surfaces: census.surfaces.map((e) => (keyOf(e) === first
+    ? { ...e, tests: ['tests/browser/app.cjs'] } : e)) };
+  p = noTestProblems(paid, head);
+  assert.ok(p.some((x) => x.includes(`noTestDebt lists ${first}, which is not an entry with no `
+    + 'test')), p.join('\n'));
+  const settled = { ...paid, noTestDebt: census.noTestDebt.slice(1) };
+  assert.deepEqual(noTestProblems(settled, head), [], 'debt paid off and recorded');
+  // A key listed twice is refused by name, though the entries with no test are unchanged.
+  const doubled = { ...census, noTestDebt: [...census.noTestDebt, first] };
+  p = noTestProblems(doubled, head);
+  assert.ok(p.some((x) => x.includes(`noTestDebt lists ${first} more than once`)), p.join('\n'));
+  // No record at all is refused.
+  const { noTestDebt, ...unrecorded } = census;
+  assert.ok(Array.isArray(noTestDebt));
+  assert.ok(noTestProblems(unrecorded, head).some((x) => /records no noTestDebt list/.test(x)));
+});
+
+test('mutation: only a commit recorded under the code-locator judge is a no-test baseline; '
+  + 'a lower count made by text matching or before the record is not', () => {
+  const census = CENSUS();
+  const n = census.noTestDebt.length;
+  assert.ok(n > 1, 'the census records more than one entry with no test');
+  assert.equal(census.noTestDebtJudge, NO_TEST_JUDGE, 'the census names its judge');
+  // A lower count recorded while a test named a surface by any matching text (no judge).
+  const [first] = census.noTestDebt;
+  const fewer = { ...census, surfaces: census.surfaces.map((e) => (keyOf(e) === first
+    ? { ...e, tests: ['tests/browser/app.cjs'] } : e)), noTestDebt: census.noTestDebt.slice(1) };
+  const { noTestDebtJudge, ...textual } = fewer;
+  assert.equal(noTestDebtJudge, NO_TEST_JUDGE);
+  // A lower count before the record existed at all.
+  const { noTestDebt, ...unrecorded } = { ...textual };
+  assert.ok(Array.isArray(noTestDebt));
+  const history = [{ sha: 'textual', census: textual }, { sha: 'unrecorded', census: unrecorded }];
+  assert.deepEqual(judgedHistory(history), [], 'neither is a baseline');
+  assert.deepEqual(noTestProblems(census, history), [], 'their lower count does not judge');
+  // The same lower count recorded under the judge is a baseline, and the rise is refused.
+  const judged = [...history, { sha: 'judged', census: fewer }];
+  assert.deepEqual(judgedHistory(judged).map(({ sha }) => sha), ['judged']);
+  const p = noTestProblems(census, judged);
+  assert.ok(p.some((x) => new RegExp(`no-test debt grew to ${n}; it may only shrink:\\n  `
+    + `${n - 1} at judged$`).test(x)), p.join('\n'));
+  // The census itself must name the judge: none, or another one, is refused by name.
+  const unjudged = { ...census };
+  delete unjudged.noTestDebtJudge;
+  for (const c of [unjudged, { ...census, noTestDebtJudge: 'text' }]) {
+    assert.ok(noTestProblems(c, []).some((x) => /names noTestDebtJudge .*, not "code-locator"/
+      .test(x)), JSON.stringify(c.noTestDebtJudge));
+  }
 });
 
 test('names: a file names a surface by a locator in its code: id, data-osc with value, address, '
