@@ -1269,12 +1269,11 @@
 
 /* The signal path and the clips side by side where both fit, the clips under the path where
    they do not (the 548 px column of the Playground's third row, P002), so the path is never
-   clipped: 448 px holds the default document's path with its padding and border in the widest
-   face measured (438 px of scroll width in DejaVu Sans on the linux CI runners, 412 px of path
-   on macOS; #386 with the Pro sidebar narrowed the row past the old 424). */
+   clipped: 424 px holds the default document's path (398 px on macOS, about 422 px in DejaVu
+   Sans on the linux CI runners, with its padding and border; see .osc-sc-node). */
 .osc-sc-body {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 448px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 424px), 1fr));
   gap: 12px;
   min-width: 0;
 }
@@ -1308,9 +1307,11 @@
   width: max-content;
 }
 
+/* 6 px a side: four columns of the default path fit the 429 px the Studio column keeps beside
+   the Pro sidebar at 1536 px even in DejaVu Sans (#386: 8 px made 438 px of scroll there). */
 .osc-sc-node {
   height: 24px;
-  padding: 0 8px;
+  padding: 0 6px;
   border: 1px solid var(--osc-border-strong);
   border-radius: var(--osc-radius-sm);
   background: var(--osc-surface-1);

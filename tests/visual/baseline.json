@@ -12,8 +12,8 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 1.76,
-      "totalExclData": 2.1,
+      "total": 1.75,
+      "totalExclData": 2.08,
       "regions": {
         "header": {
           "mismatch": 14.39,
@@ -70,20 +70,20 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 0.8,
-          "mismatchExclData": 1.21,
+          "mismatch": 0.06,
+          "mismatchExclData": 0.09,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "studio": {
-          "mismatch": 0,
-          "mismatchExclData": 0,
+          "mismatch": 1.08,
+          "mismatchExclData": 1.2,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 2.54,
-          "mismatchExclData": 2.54,
+          "mismatch": 0.18,
+          "mismatchExclData": 0.18,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
