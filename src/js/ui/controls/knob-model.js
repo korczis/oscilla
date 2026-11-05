@@ -41,7 +41,9 @@ import { validateParamValue } from '../../studio/registry.js';
  * @property {'lin'|'linear'|'log'} [scale] equal differences (the default) or equal ratios
  * @property {*} [default] the value a double-click returns to
  * @property {'number'|'integer'|'enum'|'boolean'} [type] a number unless given
- * @property {Array<[*, string]>} [options] an enum's [value, label] pairs, in order
+ * @property {Array<[*, string] | [*, string, string]>} [options] an enum's [value, label] pairs,
+ *   in order; a third element is the option's short printed legend (a switch's legend where the
+ *   label does not fit: 'Minor pent.'), narrower than the label, which stays its accessible name
  */
 
 /** Vertical drag over the whole range of a knob, px; fine (Shift) divides it by FINE_DIV. */

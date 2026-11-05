@@ -26,14 +26,20 @@
 // outside the ticks (layout option.number, option.numeral), the selected one lit; with
 // `numberLegends` each legend reads "n · label" (legend.text), as a hardware algorithm chart.
 // The drawing is aria-hidden and takes no pointer: the caller keeps each option a
-// [data-option][data-v][aria-checked] radio button (never the slider role of ariaAttrs) and
-// places it at switchLayout's hit box, at least HIT_PX screen px a side at the given zoom and
-// never overlapping another; the box holds the legend. Graph units: 1 is 1 CSS px at zoom 1,
+// [data-option][data-v][aria-checked] radio button (never the slider role of ariaAttrs), named
+// by the option's `name` (its full label), and places it at switchLayout's hit box, at least
+// HIT_PX screen px a side at the given zoom and never overlapping another; the box holds the
+// legend. Graph units: 1 is 1 CSS px at zoom 1,
 // the mechanism centred on the origin; layout.box holds everything drawn and every hit box
 // (zoom >= 1: at a smaller zoom the boxes grow with the 44 px rule and the box with them).
 // Legends are LEGEND_PX screen px at any zoom, in text.label (4.5:1), the selected or hovered
 // one in text.value at weight 600, text.dim while disabled; their width is an estimate from the
-// glyphs (legendWidth, measured at either weight), used only to lay the boxes out. Colours are
+// glyphs (legendWidth, measured at either weight), used only to lay the boxes out. An option may
+// print a short legend, its tuple's third element ([value, label, short]: 'Minor pent.' for
+// 'Minor pentatonic'): every style measures and draws the short, the option's accessible name
+// (option.name) stays the full label, and a window's frame still holds the full name (the caller
+// prints the selected one there); a short no narrower than legendWidth's of the label is refused,
+// as is one that is not text. Colours are
 // tokens passed in (synthTokens; project.visual-identity-lock) and no number sets an intensity
 // (v4): a shadow is class opacity-hw-shadow in the depth shade (control.shade), a highlight
 // opacity-hw-sheen (the depth highlight where it shows on its face in both themes, else capHi),
@@ -48,8 +54,8 @@
 //                                            zoom, knob, legendPx, radius, pitch, dial, box,
 //                                            options, window, led } (graph units)
 //   switchOptions(param, opts)               layout.options: per option { index, value, label,
-//                                            legend: { x, y, anchor, size, width, text }, hit,
-//                                            number, numeral }
+//                                            name, legend: { x, y, anchor, size, width, text },
+//                                            hit, number, numeral }
 //   switchSvg({ value, param, tokens, zoom, state, led, legends, knob, numbers, numberLegends,
 //     uid })                                 (uid names a dial's gradients; else '<param id>.dial')
 //                                            the drawing, an SVG <g>
@@ -123,15 +129,36 @@ const polar = (r, deg) => [num(r * Math.sin(rad(deg))), num(-r * Math.cos(rad(de
 
 // ---------------------------------------------------------------- options and style
 
-/** The [value, label] options: an enum's own, Off/On of a boolean; a number is refused. */
+/** The [value, label] or [value, label, short] options: an enum's own, Off/On of a boolean; a
+ *  number is refused, and so is a short legend that is not text or does not print narrower. */
 function optionsOf(p) {
   if (p && p.type === 'boolean') return [false, true].map((v) => [v, formatValue(v, p)]);
   if (p && p.type === 'enum') {
     clampValue(undefined, p); // refuses an enum with no option
+    for (const o of p.options) shortOf(o, idOf(p));
     return p.options;
   }
   throw new Error(`${idOf(p)}: a switch is for an enum or a boolean; draw a number as a knob `
     + 'or a fader.');
+}
+
+/** An option's short printed legend (its third element), or null; refused unless it is text that
+ *  legendWidth lays out narrower than the label (it is printed where the label does not fit). */
+function shortOf(o, id) {
+  if (o.length < 3 || o[2] === undefined || o[2] === null) return null;
+  const [value, label, short] = o;
+  if (typeof short !== 'string' || !short.trim()) {
+    throw new TypeError(`${id}: option ${String(value)}'s short legend is non-empty text, not `
+      + `${typeof short === 'string' ? 'blank' : String(short)}.`);
+  }
+  const ws = legendWidth(short);
+  const wl = legendWidth(label);
+  if (!(ws < wl)) {
+    throw new Error(`${id}: option ${String(value)}'s short legend "${short}" (${ws} wide) is not `
+      + `narrower than its label "${label}" (${wl}); a short legend prints shorter, or is left `
+      + 'out.');
+  }
+  return short;
 }
 
 /** The style of a switch for `param`, by its position count (SWITCH_STYLES). */
@@ -156,7 +183,9 @@ const overlaps = (a, b) => a.x < b.x + b.width - 1e-9 && b.x < a.x + a.width - 1
 /** The least distance from the origin to a rect. */
 const reach = (r) => Math.hypot(Math.max(r.x, Math.min(0, r.x + r.width)),
   Math.max(r.y, Math.min(0, r.y + r.height)));
-const option = (index, [value, label, text], legend, hit) => ({ index, value, label,
+/** An option of the layout from [value, label, text, name]: the legend prints `text` (the short
+ *  legend where there is one), `name` (the full label) is its accessible name. */
+const option = (index, [value, label, text, name], legend, hit) => ({ index, value, label, name,
   legend: { ...legend, text }, hit, number: null, numeral: null });
 
 /** A legend's text box from its anchor point. */
@@ -325,7 +354,9 @@ function windowLayout(opts, H, F, id, zoom, dial) {
       width: legendWidth(o[2], F) };
     return option(i, o, legend, rect(x, y, cellW, cellH));
   });
-  const ww = Math.max(WINDOW.minW, widest + 2 * WINDOW.pad);
+  // The frame holds the selected option's full name (the caller's text), never its short.
+  const named = Math.max(...opts.map((o) => legendWidth(o[3], F)));
+  const ww = Math.max(WINDOW.minW, named + 2 * WINDOW.pad);
   const wh = F + WINDOW.pad;
   const win = rect(-ww / 2, -(dial.extent + WINDOW.gap + wh), ww, wh);
   return { options, window: win, mech: dialMech(dial) };
@@ -345,8 +376,10 @@ function deepFreeze(o) {
  * default), the legend size (LEGEND_PX screen px), the rotary's legend radius, the slide's pitch,
  * the dial ({ scale, skirt, tickOut, radius, extent }: the circle and the square half side that
  * hold it and its numerals; null on a toggle or a slide), per option its legend ({ x, y,
- * anchor: 'start' | 'middle' | 'end', size, width, text }: text the label, or "n · label" with
- * `numberLegends` on a numbered dial) and its hit box (at least HIT_PX / zoom a side, holding the
+ * anchor: 'start' | 'middle' | 'end', size, width, text }: text the label, or its short legend
+ * where it has one, "n · " before it with `numberLegends` on a numbered dial), its accessible
+ * `name` (the full label, "n · label" with `numberLegends`: what the caller's radio announces)
+ * and its hit box (at least HIT_PX / zoom a side, holding the
  * legend, never overlapping another, clear of a dial and its numerals), its detent's number
  * (1..n on a dial of NUMBERED_MIN or more detents, or as `numbers` says; else null) and that
  * numeral's place ({ x, y, anchor: 'middle', size, width } or null), the window's frame (the
@@ -378,8 +411,10 @@ export function switchLayout(param, { zoom = 1, led = false, knob = CONTROL_BOX.
   const dial = isDial ? dialOf(base.length, knob, F, numbers ?? base.length >= NUMBERED_MIN)
     : null;
   const numbered = Boolean(dial && dial.numerals);
-  const opts = base.map(([v, label], i) => [v, label, numbered && numberLegends
-    ? `${i + 1} · ${label}` : String(label)]);
+  // [value, label, the printed text, the accessible name]: "n · label" with numberLegends.
+  const n0 = (text, i) => (numbered && numberLegends ? `${i + 1} · ${text}` : String(text));
+  const opts = base.map((o, i) => [o[0], o[1], n0(shortOf(o, idOf(param)) ?? o[1], i),
+    n0(o[1], i)]);
   const L = LAYOUTS[style](opts, H, F, idOf(param), zoom, dial);
   if (numbered) {
     L.options.forEach((o, i) => {
