@@ -10,12 +10,14 @@
 //   - in first-party script uses fetch, XMLHttpRequest, dynamic import(), import.meta, a service
 //     worker, importScripts, a worker or worklet loaded from a path, WebSocket/EventSource,
 //     sendBeacon or localhost, assigns an absolute URL to .src/.href/.srcset/.poster (or by
-//     setAttribute), sets new Image().src or new Audio()/Video() from anything but a data:/blob:
-//     literal, writes an absolute URL into a resource attribute of an HTML string, or reaches
+//     setAttribute/attribute; location.href is navigation, not a load), sets new Image().src or
+//     new Audio()/Video() from anything but a data:/blob: literal, writes an absolute URL into a
+//     resource attribute of an HTML string or into a CSS url() of a script string, or reaches
 //     fetch by a computed member (window["fe"+"tch"], x["fetch"]),
-//   - embeds a vendor whose network sites (fetch, XMLHttpRequest, ..., an i18n loadPath) are not
-//     each in VENDOR_NETWORK, or whose inventoried site is reachable: the vendor references its
-//     entry more often than the inventory proves, or first-party script calls its entry API,
+//   - embeds a vendor with a NETWORK_PRIMITIVES occurrence (fetch, XMLHttpRequest, a DOM URL
+//     sink, a CSS url(), open()/location, ..., an i18n loadPath) outside its VENDOR_NETWORK
+//     sites, or whose inventoried site is reachable: the vendor references its entry more often
+//     than the inventory proves, or first-party script uses the vendor API that reaches it,
 //   - carries a source map reference,
 //   - embeds a vendor script that is not byte-identical to the pinned package file,
 //   - lacks the third-party notice for every vendor and every build-time package
@@ -75,10 +77,16 @@ const FORBIDDEN_JS = [
   // literals only; a URL built from parts and assigned through a variable stays outside it,
   // which is why the constructors that load whatever they are given are refused unless the
   // argument is a data:/blob: literal.
-  [/\.(?:src|href|srcset|poster)\s*=\s*(['"`])\s*(?:https?:)?\/\//i,
+  // location.href is a navigation (as an <a href> is a destination), not a resource load.
+  [/(?<!\blocation)\.(?:src|href|srcset|poster)\s*=\s*(['"`])\s*(?:https?:)?\/\//i,
     'an absolute URL assigned to .src/.href/.srcset/.poster'],
-  [/\bsetAttribute\s*\(\s*(['"`])(?:src|href|srcset|poster)\1\s*,\s*(['"`])\s*(?:https?:)?\/\//i,
-    'an absolute URL set by setAttribute(src/href/srcset/poster)'],
+  // setAttribute, setAttributeNS and p5.Element.attribute(name, value), which calls it.
+  [new RegExp('(?:\\bsetAttribute(?:NS\\s*\\([^,()]*,|\\s*\\()|\\battribute\\s*\\()\\s*([\'"`])'
+    + '(?:src|href|srcset|poster|data|xlink:href)\\1\\s*,\\s*([\'"`])\\s*(?:https?:)?\\/\\/', 'i'),
+  'an absolute URL set by setAttribute/attribute(src/href/srcset/poster/data)'],
+  // A CSS url() in a script string (el.style.backgroundImage, p5.Element.style, a <style> text).
+  [/\burl\(\s*\\?(['"`]?)\s*(?:https?:)?\/\//i,
+    'an absolute URL in a CSS url() of a script string'],
   [/\bnew\s+Image\s*\([^()]*\)\s*\.src\s*=\s*(?!(['"`])(?:data|blob):)/,
     'new Image().src from anything but a data:/blob: literal'],
   [/\bnew\s+(?:Audio|Video)\s*\(\s*(?!\)|(['"`])(?:data|blob):)/,
@@ -96,21 +104,36 @@ const FORBIDDEN_JS = [
 ];
 
 // The network sites of every pinned vendor (R040). Vendor code is verified by identity, not by
-// the FORBIDDEN_JS scan, so each place a vendor can reach the network is listed here with the
-// proof that the shipped page never reaches it:
-//   - `markers`: verbatim fragments of the site in the vendor bytes. Every NETWORK_PRIMITIVES
-//     occurrence in the vendor must fall inside a marker of this inventory, so a new site in a
-//     vendor upgrade (or a stale inventory) fails until it is listed and proven;
-//   - `refs` [pattern, n]: the site's entry is referenced exactly n times in the vendor (its
-//     definition and export), so no vendor code calls, aliases or exports it further;
-//   - `firstParty`: the vendor API names whose call reaches the site; first-party script may
-//     call none of them.
+// the FORBIDDEN_JS scan, so each place in a vendor that hands a URL to the browser through one
+// of the NETWORK_PRIMITIVES is listed here, with the proof that the shipped page never reaches
+// it or the reason (`why`) the shipped page cannot reach the network through it:
+//   - `markers`: verbatim fragments of the site in the vendor bytes, each found exactly once
+//     (or [fragment, n]: exactly n times). Every NETWORK_PRIMITIVES occurrence in the vendor
+//     must fall inside a marker of this inventory, so a new site in a vendor upgrade (or a stale
+//     inventory) fails until it is listed and proven;
+//   - `refs` [pattern, n, entry]: the site's entry is referenced exactly n times in the vendor
+//     (its definition and export), so no vendor code calls, aliases or exports it further;
+//   - `firstParty`: the vendor API whose use reaches the site; first-party script may not use
+//     it (firstPartyUse: a name alone refuses every reference, [name, 'call'] every call,
+//     [name, 'url'] every call given a string other than a data:/blob: literal; each also
+//     refuses a computed key that names it, literally or assembled from its fragments);
+//   - `why`: for a site no first-party API is refused for, why the shipped page cannot reach the
+//     network through it (it runs only on a first-party value FORBIDDEN_JS scans, or it loads
+//     nothing from the network).
+// HTML handed to innerHTML/insertAdjacentHTML is not a primitive: markup the vendor builds is
+// held by the "resource attribute in an HTML string" primitive, and markup first-party script
+// passes in (p5's createDiv, html(), ...) is first-party script that FORBIDDEN_JS scans.
+//
 // p5@1.11.3 carries the i18next HTTP backend with a loadPath on cdn.jsdelivr.net. Only the
 // translator's initialize() starts it; the unminified build calls it from init.js, the minified
 // build that ships here replaces that call by Promise.resolve() (`n=Promise.resolve()`), and
 // the module is private to the bundle (no global exposes it), so the count of 2 is the proof.
-const P5_FETCH_API = ['httpDo', 'httpGet', 'httpPost', 'loadJSON', 'loadStrings', 'loadXML',
-  'loadTable', 'loadBytes', 'loadShader', 'loadImage', 'loadModel'];
+// The rest of p5's sites were enumerated from the 1.11.3 bytes by NETWORK_PRIMITIVES itself.
+const P5_HTTP_DO = ['httpDo', 'httpGet', 'httpPost', 'loadJSON', 'loadStrings', 'loadXML',
+  'loadTable', 'loadBytes', 'loadShader', 'loadModel'];
+const P5_FETCH_API = [...P5_HTTP_DO, 'loadImage'];
+const URL_ATTR_NAMES = 'src|href|srcset|poster|data|action|formaction|background|xlink:href'
+  + '|ping|manifest|imagesrcset|lowsrc|longdesc|codebase|archive';
 export const NETWORK_PRIMITIVES = [
   [/(?<![\w$])fetch\s*\(/g, 'fetch('],
   [/\bXMLHttpRequest\b/g, 'XMLHttpRequest'],
@@ -118,6 +141,17 @@ export const NETWORK_PRIMITIVES = [
   [/\b(?:WebSocket|EventSource)\b/g, 'WebSocket/EventSource'],
   [/\bimportScripts\s*\(/g, 'importScripts('],
   [/\bloadPath\b/g, 'loadPath'],
+  [/\.(?:src|href|srcset|poster)\s*=(?!=)/g, 'a .src/.href/.srcset/.poster assignment'],
+  [new RegExp(`\\bsetAttribute(?:NS\\s*\\([^,()]*,|\\s*\\()\\s*(?:(['"])(?:${URL_ATTR_NAMES})\\1`
+    + '|(?![\'"]))', 'g'), 'setAttribute of a URL attribute or of a computed name'],
+  [/\bnew\s+(?:Image|Audio|Video)\b/g, 'new Image/Audio/Video'],
+  [/(?<!\bnew\s+)\burl\(|@import\b/gi, 'a CSS url()/@import'],
+  [new RegExp('(?<![\\w$])open\\s*\\(|\\blocation\\.href\\s*=(?!=)|(?<![\\w$.])location=(?!=)'
+    + '|\\blocation\\.(?:assign|replace)\\s*\\(', 'g'), 'open()/a location change'],
+  [new RegExp(`(?<![\\w:.$-])(?:${URL_ATTR_NAMES})\\s*=\\s*\\\\?["']`, 'g'),
+    'a resource attribute in an HTML string'],
+  [/\bsrcdoc\b/g, 'srcdoc'],
+  [/\.style\s*\[\s*(?!['"])|\.setProperty\s*\(|\bcssText\b/g, 'a computed CSS property'],
 ];
 export const VENDOR_NETWORK = new Map([['p5', [
   {
@@ -126,22 +160,160 @@ export const VENDOR_NETWORK = new Map([['p5', [
       'var o=this.options.loadPath', 'Promise.race([fetch(e,t)'],
     refs: [/(?<![\w$])initialize(?![\w$])/g, 2, "the translator's initialize()"],
   },
-  { site: 'loadImage', markers: ['mode:"cors"});return fetch(o,e)'], firstParty: ['loadImage'] },
-  { site: 'httpDo', markers: [':fetch(p))'], firstParty: P5_FETCH_API },
+  {
+    site: 'loadImage',
+    markers: ['mode:"cors"});return fetch(o,e)', '((t=new Image).onload=function(){',
+      '(t.crossOrigin="Anonymous"),t.src=o)'],
+    firstParty: ['loadImage'],
+  },
+  {
+    site: 'httpDo (fetch, and JSONP by a <script src>)',
+    markers: [':fetch(p))',
+      'document.createElement("script"));n.setAttribute("src",""+a+u+"="+r)'],
+    firstParty: P5_HTTP_DO,
+  },
   { site: 'loadModel (HEAD)', markers: ['fetch(t,{method:"HEAD"})'], firstParty: ['loadModel'] },
   {
-    site: 'opentype.js load (loadFont)',
-    markers: ['kr(e,t){var r=new XMLHttpRequest'],
+    site: 'loadFont (opentype.js load, and an @font-face url())',
+    markers: ['kr(e,t){var r=new XMLHttpRequest;r.open("get",e,!0)',
+      '"\\n@font-face {\\nfont-family: ".concat(r,";\\nsrc: url(")'],
     firstParty: ['loadFont'],
   },
   {
     site: 'the whatwg-fetch polyfill behind every fetch site',
-    markers: ['n=new XMLHttpRequest;n.onload'],
+    markers: ['n=new XMLHttpRequest;n.onload', 'n.open(t.method,t.url,!0)'],
     firstParty: P5_FETCH_API,
+  },
+  { site: 'createImg', markers: ['(r.crossOrigin=o[2]),r.src=o[0]'], firstParty: ['createImg'] },
+  {
+    site: 'createVideo/createAudio (<source src>)',
+    markers: ['c=document.createElement("source");c.setAttribute("src",u)'],
+    firstParty: ['createVideo', 'createAudio'],
+  },
+  {
+    site: 'cursor() given an image URL (a CSS url())',
+    markers: ['"url(".concat(e,") ")'],
+    firstParty: [['cursor', 'call']],
+  },
+  {
+    site: 'downloadFile() given a URL (<a href download> clicked)',
+    markers: ['((o=document.createElement("a")).href=e,o.download=r'],
+    // p5's own callers (save*, saveCanvas, saveFrames, saveGif, writeFile) pass a Blob or a
+    // canvas data: URL; the app has a downloadFile of its own, so the bare name is not refused.
+    firstParty: [['downloadFile', 'url']],
+  },
+  {
+    site: 'the p5.MediaElement src setter',
+    markers: ['var r=document.createElement("source");r.src=e,o.appendChild(r),n.elt.src=e'],
+    why: 'runs only on a first-party .src assignment to a p5.MediaElement, which FORBIDDEN_JS '
+      + 'reads as any .src assignment (an absolute URL literal is refused)',
+  },
+  {
+    site: "createCapture's <video>",
+    markers: ['d.srcObject=t:d.src=window.URL.createObjectURL(t)}catch(e){d.src=t}'],
+    why: "the camera's MediaStream (srcObject, or its blob: URL), never a network URL",
+  },
+  {
+    site: 'createA',
+    markers: ['return o.href=e,o.innerHTML=t'],
+    why: 'a link destination, as an <a href> in markup; following it is navigation, not a load',
+  },
+  {
+    site: 'FileSaver saveAs (downloadFile given a Blob)',
+    markers: ['u.href=o,u.download=r', 'a.open(e,"_blank")||(a.location.href=e)',
+      '!t&&a.open(o,"_blank")||(a.location.href=o)'],
+    why: 'a blob: or data: URL of the Blob it is given',
+  },
+  {
+    site: "opentype.js Font.download",
+    markers: ['e.addEventListener("writeend",function(){location.href=r.toURL()}'],
+    why: "a filesystem: URL of the font's own bytes, on a font only loadFont makes",
+  },
+  {
+    site: 'p5.Element.attribute',
+    markers: ['this.elt.setAttribute(e,t),this)', 'this.elt.childNodes[r].setAttribute(e,t)'],
+    why: "the caller's own attribute; FORBIDDEN_JS refuses a first-party absolute URL to it",
+  },
+  {
+    site: 'p5.Element.style',
+    markers: ['this.elt.style[n[0].trim()]=n[1].trim())}}else this.elt.style[e]=t'],
+    why: "the caller's own CSS; FORBIDDEN_JS refuses a first-party absolute CSS url()",
+  },
+  {
+    site: 'p5.XML',
+    markers: ['o.setAttribute(r[n].nodeName,r[n].nodeValue)', 'this.DOM.setAttribute(e,t)'],
+    why: 'nodes of an XML document (document.implementation.createDocument), which load nothing',
+  },
+  {
+    site: "core-js's Object.create fallback",
+    markers: ['e=c("iframe"),t="java"+h+":",e.style.display="none",u.appendChild(e),'
+      + 'e.src=String(t),(t=e.contentWindow.document).open()'],
+    why: 'a javascript: URL and an inline script (document.F=Object) in a hidden iframe',
+  },
+  {
+    site: "core-js's URL polyfill",
+    markers: ['u||(o.href=m.call(o)'],
+    why: 'a field of a URL object, not an element',
+  },
+  {
+    site: 'WebGL source fields',
+    markers: ['this.size=e,this.src=t,this.dst=r', 'this.src=t,this.glTex=void 0'],
+    why: "fields of a RenderBuffer and a Texture (an attribute name, a texture's image object)",
+  },
+  {
+    site: "the accessible text table's shape links",
+    markers: [['<a href="#\'.concat(e,"shape")', 3]],
+    why: 'in-page #fragment links',
   },
 ]]]);
 
-const callOf = (names) => new RegExp(`(?:^|[^\\w$])(?:${names.join('|')})\\s*\\(`);
+const nameRe = (name) => name.replace(/[$]/g, '\\$');
+
+// A key assembled from literal fragments of `name`: a + chain or a template literal whose every
+// literal piece is part of the name, three or more characters in all ("load"+"Image",
+// `load${x}`, "lo"+k+"Image"). A name built otherwise at run time is outside a static scan.
+const CONCAT = new RegExp('(?:([\'"])(?:(?!\\1)[^\\\\\\n]|\\\\.)*\\1|[\\w$.]+)'
+  + '(?:\\s*\\+\\s*(?:([\'"])(?:(?!\\2)[^\\\\\\n]|\\\\.)*\\2|[\\w$.]+))+|`[^`]*\\$\\{[^`]*`', 'g');
+function assembledName(body, names) {
+  for (const m of body.matchAll(CONCAT)) {
+    const pieces = m[0].startsWith('`')
+      ? m[0].slice(1, -1).split(/\$\{[^}]*\}/)
+      : [...m[0].matchAll(/(['"])((?:(?!\1)[^\\\n]|\\.)*)\1/g)].map((s) => s[2]);
+    const lit = pieces.filter(Boolean);
+    if (lit.join('').length < 3) continue;
+    const name = names.find((n) => lit.every((p) => n.includes(p)));
+    if (name) return { name, index: m.index };
+  }
+  return null;
+}
+
+/**
+ * Where first-party script uses a vendor API that reaches a network site, or null.
+ * @param {string} body
+ * @param {string | [string, 'call' | 'url']} entry  see VENDOR_NETWORK `firstParty`
+ * @returns {{index: number, form: string} | null}
+ */
+export function firstPartyUse(body, entry) {
+  const [name, form = 'any'] = typeof entry === 'string' ? [entry] : entry;
+  const n = nameRe(name);
+  const forms = {
+    any: [new RegExp(`(?<![\\w$])${n}(?![\\w$])`), `a reference to ${name}`],
+    call: [new RegExp(`(?<![\\w$])${n}\\s*(?:\\?\\.\\s*)?(?:\\(|\\.\\s*(?:call|apply|bind)\\b)`),
+      `a call of ${name}()`],
+    url: [new RegExp(`(?<![\\w$])${n}\\s*(?:\\?\\.\\s*)?\\(\\s*(['"\`])(?!data:|blob:)`),
+      `${name}() given a URL`],
+  };
+  const [re, what] = forms[form];
+  const direct = body.match(re);
+  if (direct) return { index: direct.index, form: what };
+  const literal = body.match(new RegExp(`(['"\`])${n}\\1`));
+  if (literal) return { index: literal.index, form: `a computed key "${name}"` };
+  const assembled = assembledName(body, [name]);
+  if (assembled) return { index: assembled.index, form: `a key assembled to ${name}` };
+  return null;
+}
+
+const markerOf = (marker) => (typeof marker === 'string' ? [marker, 1] : marker);
 
 /**
  * Problems of one vendor's network inventory against its verbatim code.
@@ -153,11 +325,21 @@ export function vendorNetworkProblems(id, code, inventory = VENDOR_NETWORK) {
   const sites = inventory.get(id.slice(0, id.lastIndexOf('@'))) || [];
   const problems = [];
   const spans = [];
-  for (const { site, markers, refs } of sites) {
+  for (const { site, markers, refs, firstParty, why } of sites) {
+    if (!refs && !firstParty?.length && !why) {
+      problems.push(`vendor ${id}: ${site} has no proof (refs, firstParty or why)`);
+    }
     for (const marker of markers) {
-      const at = code.indexOf(marker);
-      if (at < 0) problems.push(`vendor ${id}: ${site} marker not found (stale inventory)`);
-      else spans.push([at, at + marker.length]);
+      const [text, n] = markerOf(marker);
+      let seen = 0;
+      for (let at = code.indexOf(text); at >= 0; at = code.indexOf(text, at + 1)) {
+        spans.push([at, at + text.length]);
+        seen += 1;
+      }
+      if (seen === 0) problems.push(`vendor ${id}: ${site} marker not found (stale inventory)`);
+      else if (seen !== n) {
+        problems.push(`vendor ${id}: ${site} marker found ${seen} times, the inventory names ${n}`);
+      }
     }
     if (refs) {
       const [re, n, entry] = refs;
@@ -388,14 +570,16 @@ export function verifyHtml(html, {
   }
   if (appScripts === 0) problems.push('no first-party script found');
   for (const id of seenVendors) {
-    for (const { site, firstParty } of vendorNetwork.get(id.slice(0, id.lastIndexOf('@'))) || []) {
-      if (!firstParty) continue;
-      const re = callOf(firstParty);
-      for (const body of appBodies) {
-        const hit = body.match(re);
-        if (!hit) continue;
-        const context = body.slice(Math.max(0, hit.index - 40), hit.index + 40);
-        problems.push(`first-party script reaches vendor ${id} ${site}: …${context}…`);
+    for (const { site, firstParty = [] } of vendorNetwork.get(id.slice(0, id.lastIndexOf('@')))
+      || []) {
+      for (const entry of firstParty) {
+        for (const body of appBodies) {
+          const hit = firstPartyUse(body, entry);
+          if (!hit) continue;
+          const context = body.slice(Math.max(0, hit.index - 40), hit.index + 40);
+          problems.push(`first-party script reaches vendor ${id} ${site} by ${hit.form}: `
+            + `…${context}…`);
+        }
       }
     }
   }
@@ -490,7 +674,8 @@ function main() {
     process.exit(1);
   }
   console.log('  PASS no file/remote references, no module/fetch/import()/service worker/DOM '
-    + 'runtime load; every vendor network site inventoried and unreachable; budget ok');
+    + 'runtime load; every vendor network site inventoried (its API refused, unreachable, or '
+    + 'listed with its reason); budget ok');
   console.log(`  PASS provenance: banner and metadata region name v${version}, `
     + `source digest ${sourceDigest} (recomputed), channel "source"`);
 }

@@ -5,8 +5,8 @@ import * as verifyDist from '../../scripts/verify-dist.mjs';
 
 // A namespace import, so that on a base without the R040 exports each case fails by itself.
 const {
-  cssReferences, decodeCssEscapes, pinnedVendors, VENDOR_NETWORK, vendorNetworkProblems,
-  verifyHtml,
+  cssReferences, decodeCssEscapes, firstPartyUse, NETWORK_PRIMITIVES, pinnedVendors,
+  VENDOR_NETWORK, vendorNetworkProblems, verifyHtml,
 } = verifyDist;
 
 const VENDOR = 'window.lib=function(){return fetch("x")};';
@@ -236,9 +236,11 @@ test('every network string in the pinned p5 is inventoried and unreachable (R040
   assert.ok(P5.includes('e("./internationalization");var n=Promise.resolve();'),
     'the minified init.js waits on Promise.resolve(), not on the translator');
   for (const { firstParty = [] } of VENDOR_NETWORK.get('p5')) {
-    for (const api of firstParty) {
-      assert.ok(p5Check(P5, `p.${api}("x.json")`).some((p) => p.includes('reaches vendor p5@')),
-        `a first-party ${api}() reaches the vendor`);
+    for (const entry of firstParty) {
+      const api = typeof entry === 'string' ? entry : entry[0];
+      assert.ok(p5Check(P5, `p.${api}("https://t.example/x.json")`)
+        .some((p) => p.includes('reaches vendor p5@')),
+      `a first-party ${api}() reaches the vendor`);
     }
   }
 });
@@ -254,6 +256,118 @@ test('a p5 whose init calls the translator\'s initialize() is refused (R040)', (
   // A new fetch site appended to the vendor is refused too.
   assert.ok(p5Check(`${P5};fetch("https://cdn.example/x")`)
     .some((p) => /fetch\( at \d+ is in no VENDOR_NETWORK site/.test(p)));
+});
+
+test('attribute()/setAttributeNS() and a CSS url() in a script string fail (R040 review)', () => {
+  fails(doc({ app: 'img.attribute("src","https://t.example/p.gif")' }), /setAttribute\/attribute/);
+  fails(doc({ app: 'u.setAttributeNS(null,"href","https://t.example/s.svg#i")' }),
+    /setAttribute\/attribute/);
+  const css = /CSS url\(\) of a script string/;
+  fails(doc({ app: 'a.style.backgroundImage="url(https://t.example/b.png)"' }), css);
+  fails(doc({ app: "el.style('background', 'url(\"//t.example/b.png\")')" }), css);
+  // A navigation, a data: url() and an attribute that loads nothing stay clean.
+  const app = 'location.href="https://example.org/";a.style.backgroundImage="url(data:,)";'
+    + 'b.attribute("title","https://example.org/")';
+  assert.deepEqual(check(doc({ app })), []);
+});
+
+// Every site of the p5 inventory that names a first-party API, one family at a time.
+const P5_SITES = VENDOR_NETWORK.get('p5');
+const families = P5_SITES.filter(({ firstParty }) => firstParty?.length);
+const entries = (site) => site.firstParty.map((e) => (typeof e === 'string' ? [e, 'any'] : e));
+const usesOf = (api, form) => {
+  const arg = '"https://t.example/x"';
+  const uses = [`${api}(${arg})`, `p.${api}(${arg})`, `this.${api}(${arg})`,
+    `p["${api}"](${arg})`, `p[\`${api}\`](${arg})`,
+    `p["${api.slice(0, 2)}"+"${api.slice(2)}"](${arg})`,
+    `p[\`${api.slice(0, 3)}\${k}\`](${arg})`, `p?.${api}(${arg})`];
+  if (form !== 'url') uses.push(`p.${api}.call(p,${arg})`);
+  if (form === 'any') uses.push(`const f=p.${api};f(${arg})`);
+  return uses;
+};
+
+test('each p5 API family is refused in every first-party form (R040 review)', () => {
+  // The p5@1.11.3 APIs whose use reaches a network site, enumerated from its bytes; a name
+  // dropped from the inventory (or a form weakened) fails here.
+  const refused = new Map(families.flatMap(entries));
+  assert.deepEqual([...refused].sort(), [
+    ['createAudio', 'any'], ['createImg', 'any'], ['createVideo', 'any'], ['cursor', 'call'],
+    ['downloadFile', 'url'], ['httpDo', 'any'], ['httpGet', 'any'], ['httpPost', 'any'],
+    ['loadBytes', 'any'], ['loadFont', 'any'], ['loadImage', 'any'], ['loadJSON', 'any'],
+    ['loadModel', 'any'], ['loadShader', 'any'], ['loadStrings', 'any'], ['loadTable', 'any'],
+    ['loadXML', 'any'],
+  ]);
+  for (const site of families) {
+    for (const [api, form] of entries(site)) {
+      for (const app of usesOf(api, form)) {
+        const refused = p5Check(P5, app).some((p) => p.includes(`reaches vendor ${P5_ID} `));
+        assert.ok(refused, `${site.site}: ${app} is refused`);
+      }
+    }
+  }
+});
+
+test('the call-only and URL-only forms leave the app\'s own words alone (R040 review)', () => {
+  // uPlot's cursor object, p5's noCursor() and the app's own downloadFile(blob) pass.
+  const app = 'let n=e.cursor.points;p.noCursor();t.downloadFile(vR(_.patch));'
+    + 'const o={downloadFile:i};d.downloadFile("data:text/plain,x")';
+  assert.deepEqual(p5Check(P5, app), []);
+  assert.equal(firstPartyUse(app, ['cursor', 'call']), null);
+  assert.equal(firstPartyUse(app, ['downloadFile', 'url']), null);
+  assert.ok(firstPartyUse('p.cursor(p.HAND)', ['cursor', 'call']));
+  assert.ok(firstPartyUse('t.downloadFile(`https://x/${f}`)', ['downloadFile', 'url']));
+});
+
+test('mutation: each family\'s refusal and each site\'s markers are load-bearing (R040)', () => {
+  for (const site of P5_SITES) {
+    // Without the site, a primitive of the shipped p5 lies in no site.
+    const without = new Map([['p5', P5_SITES.filter((s) => s !== site)]]);
+    assert.ok(vendorNetworkProblems(P5_ID, P5, without)
+      .some((p) => / is in no VENDOR_NETWORK site/.test(p)), `${site.site} covers a primitive`);
+  }
+  for (const site of families) {
+    for (const [api] of entries(site)) {
+      // Without the API in any site, its direct call passes again.
+      const stripped = new Map([['p5', P5_SITES.map((s) => ({
+        ...s,
+        firstParty: s.firstParty?.filter((e) => (typeof e === 'string' ? e : e[0]) !== api),
+        why: s.why || 'mutated',
+      }))]]);
+      const problems = verifyHtml(p5Doc(P5, `p.${api}("https://t.example/x")`), {
+        vendors: new Map([[P5_ID, P5]]), budget: { rawBytes: 1e8, gzipBytes: 1e8 },
+        vendorNetwork: stripped,
+      }).problems;
+      assert.deepEqual(problems, [], `${api} is refused only by its own entry`);
+    }
+  }
+});
+
+test('the p5 primitives cover DOM sinks, CSS url() and navigation, not only fetch (R040)', () => {
+  const kinds = NETWORK_PRIMITIVES.map(([, what]) => what);
+  for (const k of ['fetch(', 'XMLHttpRequest', 'a .src/.href/.srcset/.poster assignment',
+    'setAttribute of a URL attribute or of a computed name', 'new Image/Audio/Video',
+    'a CSS url()/@import', 'open()/a location change', 'a resource attribute in an HTML string',
+    'a computed CSS property']) assert.ok(kinds.includes(k), k);
+  // The sites the review found unlisted are each refused when appended to the vendor.
+  for (const added of ['r.src=o[0]', 'c.setAttribute("src",u)', 'n.setAttribute(e,t)',
+    'document.head.append(new Image)', 's.style.cursor="url("+e+")"', 'window.open(u)',
+    'x.innerHTML=\'<img src="\'+u+\'">\'', 'e.style[k]=v']) {
+    assert.ok(p5Check(`${P5};${added}`).some((p) => / is in no VENDOR_NETWORK site/.test(p)),
+      `${added} appended to p5 is refused`);
+  }
+});
+
+test('a marker count other than the inventory\'s, or a site without proof, fails (R040)', () => {
+  const twice = `${VENDOR}${VENDOR}`;
+  const once = new Map([['lib', [{ site: 'lib()', markers: ['return fetch("x")'], why: 'w' }]]]);
+  assert.ok(vendorNetworkProblems('lib@1.0.0', twice, once)
+    .some((p) => /marker found 2 times, the inventory names 1/.test(p)));
+  const counted = new Map([['lib', [{ site: 'lib()', markers: [['return fetch("x")', 2]],
+    why: 'w' }]]]);
+  assert.deepEqual(vendorNetworkProblems('lib@1.0.0', twice, counted), []);
+  const bare = new Map([['lib', [{ site: 'lib()', markers: ['return fetch("x")'] }]]]);
+  assert.ok(vendorNetworkProblems('lib@1.0.0', VENDOR, bare)
+    .some((p) => /lib\(\) has no proof/.test(p)));
 });
 
 test('the committed dist passes with the R040 forms and the p5 inventory in force', () => {
