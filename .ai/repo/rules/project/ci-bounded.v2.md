@@ -1,0 +1,262 @@
+---
+id: project.ci-bounded
+version: 2
+kind: rule
+title: Every CI job and network step is bounded, pinned and retried
+description: Every workflow job and every step that installs, downloads or runs a browser suite has its own time limit; installs go through one bounded wrapper, downloads retry, are digest-checked and are never executed, nothing is made non-fatal, gate needs every job, and ci.yml starts on a pull request and its merge-queue entry only.
+statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit, every container image to a tag and every job's runs-on to a versioned runner image (never a label ending in -latest); no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request and merge_group only (ADR 0083), its fail-first and review-verdict jobs judge the pull request the merge-queue ref names on merge_group, refusing unless HEAD is the queue's merge commit of that pull request's head (two parents, HEAD^1 the base whose sha the merge-queue ref names, HEAD^2 the pull request's headRefOid; the queue's merge method is MERGE and its grouping ALLGREEN), and no merge_group run is cancelled in progress.
+status: active
+class: blocking
+depends_on: []
+tags: [ci, process, reliability]
+---
+
+# Version 2 (ADR 0083, owner decision 2026-11-02)
+
+Pull requests land through GitHub's merge queue (ADR 0083): CI runs on `merge_group` as well,
+on main plus the queued pull requests ahead, so a landing no longer makes the others BEHIND.
+The `triggers` clause admits `merge_group` beside `pull_request`, and only those two.
+
+# Rationale
+
+Each clause is a failure that happened.
+
+- #153: a WebKit `playwright install --with-deps` took 827 s (apt at 158 kB/s), the job's
+  15 minutes ran out 75 s into a healthy engine suite, and the run read as a product hang in
+  the check that had just started. A limit on the job alone cannot say which step used it up.
+- #152: the Firefox job died at its 15-minute limit after 12 minutes of apt.
+- #145: an install hang held a docs-only pull request.
+- #120: the Majordomus release download had no retry, so one transient asset error stalled
+  every merge, and `install.sh` was fetched unpinned, so what CI ran could change under it.
+- #420 (2026-11-05): `ubuntu-latest` moved to `ubuntu-26.04` between two runs. The same tree's
+  Synth legend check (synth.cjs s-choices) overran its plate by 1.4 px in three engines on the
+  26.04 host fonts and passed in the pinned Playwright container. A moving runner label changes
+  the fonts and packages under a browser suite without a commit.
+
+`ci.yml` was fixed job by job after each of these, and `pages.yml` was not: on the commit this
+rule was written against, the Pages smoke still installed its browser with a bare
+`npx playwright install --with-deps` and a bare `apt-get`, with no step limit. A convention
+that is repaired where it last hurt regresses in the next job somebody adds.
+
+# Required behaviour
+
+- A job declares a positive `timeout-minutes`, written as a number (an expression such as
+  `${{ vars.LIMIT }}` cannot be read here and is refused). The one exception is a job that calls a
+  reusable workflow (a job-level `uses:`), where GitHub accepts none: the limits are the
+  called workflow's jobs', and a local one is checked as a workflow file itself.
+- A step declares its own `timeout-minutes` when its `run` installs through
+  `.github/scripts/ci-install.sh`, runs `curl`, `wget`, any `gh` command or `verify-deploy`,
+  or runs a browser suite. The browser suites are not listed by hand: they are the npm
+  scripts of `package.json` whose command, with `npm run <x>` expanded, starts a file of
+  `tests/browser/` or a `scripts/visual-*` program, however the script is started (`npm run`
+  with options before or after `run`, `node --run`, `yarn`, `pnpm`); a `run` that names `tests/browser`,
+  `tests/visual` or `scripts/visual-*` itself (after a `cd`, say) or runs `playwright test`
+  counts too. A step that uses a local composite action whose steps do any of this carries
+  the limit, since a composite action's steps cannot.
+- `playwright install`, `playwright install-deps`, `apt`, `apt-get`, `aptitude` and `dpkg -i`
+  appear as a command in no workflow, in no composite action (an `action.yml` anywhere under
+  `.github/`), in no other shell script under `.github/` or `scripts/` and in no script of
+  `package.json` (where `npm run <x>` or a `postinstall` under `npm ci` would hide it),
+  whatever options stand between the program and its verb
+  (`apt-get -o Acquire::Retries=3 install` is the same install) and whether or not it is
+  named by its path (`/usr/bin/apt-get`). A plain `echo` or `printf` line and a
+  `command -v <name>` lookup name a program without running it and are not read as one. The
+  wrapper bounds each install by wall time and retries it once, against the next mirror for
+  apt, and must keep doing so.
+- A download is `curl` with `--retry <n>` and `--connect-timeout <s>` (`wget`: `--tries`
+  and `--connect-timeout`). Whatever it fetches is checked with `sha256sum -c` in the same
+  step against a 64-hex digest written in the workflow, however it is kept: `-o`, a `>`
+  redirect, a pipe into `tar` or `tee`, or printed. Only a download that says it keeps
+  nothing (`-o /dev/null`, `> /dev/null`, `--spider`, and no pipe) needs the flags alone.
+  A check that has to read a response body that changes (a deployed page, an API answer)
+  cannot carry a pinned digest and has no allowed `curl` form: it is written as a Node
+  program, as `scripts/verify-deploy.mjs` and the live smoke are.
+- A download is never executed: not piped into a shell or another interpreter (`sh`, `bash`,
+  `python`, `node`, `perl`, `ruby`, ...), not substituted into a command (`$(curl ...)`,
+  `<(curl ...)`, backticks), and not fetched in a step that uses `eval`. A digest check
+  elsewhere in the step does not excuse it.
+- `uses:` names a version tag (`@v7`) or a full commit; a container image names a tag other
+  than `latest`, or a digest; `runs-on` names a versioned runner image (`ubuntu-24.04`), and no
+  label of it ends in `-latest`, in any letter case. A label list, a runner group's `labels` and
+  `${{ matrix.<key> }}` (its values in `strategy.matrix` and its `include` rows) are each read;
+  any other expression in `runs-on` is refused, since what it yields is decided at run time.
+  Moving to a newer image is a commit of its own, judged by the suites like any other change.
+- Nothing is made non-fatal: no job and no step sets `continue-on-error` (GitHub reports such
+  a job as succeeded, so `gate` would pass over its failure); no line that installs,
+  downloads, checks a digest or runs a browser suite throws its failure away with
+  `|| true`, `|| :`, `|| exit 0`, a trailing `|| echo ...` or a trailing `; true`; and no
+  step that has such a line turns `set +e` on. Other ways to ignore a failure are listed
+  below as not seen.
+- `gate` runs with `if: always()`, its `needs` list every other job of its workflow, and it
+  fails unless every one of them succeeded. A job that `gate` does not need is not required
+  by branch protection, whatever it checks. The one exception is path gating (E026): the
+  engine, suites, measure, studio, browser, census and visual jobs of `ci.yml` (`GATED_JOBS`
+  in `.github/scripts/ci-changes.mjs`) carry `needs: changes` and
+  `if: needs.changes.outputs.runtime != 'false'`, and `gate` accepts their skip only when the
+  `changes` job succeeded with `runtime=false`, the answer of the base branch's
+  `.github/scripts/ci-changes.mjs` (every changed path a regular file under
+  `.ai/repo/project/`, `.ai/repo/reviews/`, `.ai/repo/releases/`, `docs/` or a top-level
+  `*.md`, in a pull request into `main`; a pull request into any other base runs everything,
+  because its `gate` lands on the head commit that main's required check reads too; a base
+  without the classifier answers `runtime=true`, and the pull request's own copy never
+  decides). On `merge_group` (version 2) the same classifier judges the queued pull request:
+  the base is the queue's `base_ref`, and the changed paths are `HEAD^1..HEAD`, the queue's
+  merge of that pull request onto main plus the pull requests ahead, provided HEAD has exactly
+  two parents and the base is an ancestor of `HEAD^1` (otherwise everything runs). A skip of any other job or for any other
+  reason, a cancelled or failed job, and a failed or silent `changes` fail it. The only other
+  job condition in `ci.yml` is the flake ledger's (E010), which runs on a re-run only and
+  which `gate` needs but does not judge.
+- A workflow with a `gate` job is started by `pull_request` and `merge_group` and nothing
+  else (version 2, ADR 0083). Its `fail-first` and `review-verdict` jobs judge a pull
+  request: on `pull_request` the event's, on `merge_group` the one the queue ref names
+  (`gh-readonly-queue/main/pr-<N>-<sha>`, read by `.github/scripts/queued-pr.sh`), with
+  review-verdict measuring `HEAD^1..HEAD`, the queue's merge of that pull request. A manual
+  run on a pull request's branch would have none to judge, and its `gate` would land on the
+  same commit as the required check.
+- `HEAD^1..HEAD` is one pull request's whole change only when the queue merges each pull
+  request with a merge commit and every entry's own run must pass. So the queue in the
+  ruleset of `main` uses merge method **MERGE** and grouping strategy **ALLGREEN** (ADR 0083;
+  setting it is the owner's act). Under REBASE or SQUASH a pull request of a runtime commit
+  then a docs commit lands as linear commits whose last is docs only; under HEADGREEN a docs
+  pull request queued behind a runtime one could be the only run that gates both. Inside the
+  run: `.github/scripts/queued-pr.sh` refuses (exit 2) a HEAD without exactly two parents or
+  whose HEAD^1 is not the sha the queue ref names (`gh-readonly-queue/<base>/pr-<N>-<sha>`:
+  GitHub's `<sha>` is the entry's base, HEAD^1, not the pull request's head) and binds
+  `DIFF_BASE` to it, `--check-head` refuses a HEAD^2 that is not the pull request's
+  `headRefOid`, and the `changes` classifier answers `runtime=true` for a
+  queue head without exactly two parents. Grouping is not visible inside a run: ALLGREEN is
+  held only by the ruleset.
+- The script's answer is read as `vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"`, never
+  `eval "$(...)"`, which under `bash -e` carries on after the script's exit 2. It prints only
+  a number, branch names that pass an allowlist (`^[A-Za-z0-9._/-]+$`, no `..`, no leading `-`
+  or `/`) and a sha, so the eval runs nothing else.
+- In a workflow started by `merge_group`, no `concurrency` (the workflow's or a job's) sets
+  `cancel-in-progress` to anything but `false` or exactly
+  `${{ github.event_name == 'pull_request' }}`: a cancelled queue run drops its group out of
+  the queue (rule id `queue-cancel`).
+
+By convention, not checked: a job's limit is the sum of its steps', rounded up.
+
+Not covered, and bounded only by their job's limit: `npm ci` (npm retries its own fetches)
+and the `uses:` actions themselves (checkout, setup-node, upload-artifact, the Pages
+actions). Whether a pinned runner image is still offered by GitHub is not checked: a retired
+label fails the job at queue time, which is loud.
+
+# Enforcement
+
+`scripts/ci-workflow-rules.mjs` parses every `.github/workflows/*.yml` and every composite
+action (`action.yml` under `.github/`), reads every `*.sh` under `.github/` and `scripts/`,
+and reports each violation with its rule, file, job and step. The parser is `scripts/yaml-subset.mjs`, a strict reader (pinned by
+`tests/unit/yaml-subset.test.mjs`) that throws on YAML it does not implement, so a workflow
+it cannot read fails the test instead of passing unread.
+`tests/unit/ci-workflows.test.mjs` runs it in `npm test`, so in `npm run verify`, in
+`npm run release-gate` and in the `unit` job of `ci.yml`, which `gate` needs:
+
+- "the repository has no violation" fails on any of the above in any workflow file, including
+  one added later.
+- The `mutation:` tests apply each violation to a copy of the real `ci.yml` or `pages.yml`
+  (a job without a limit, a bare `npx playwright install --with-deps`, a bare `apt-get`, apt
+  behind `-o <value>`, `-t <release>` or `--option <value>`, inside `sh -c "..."` and as
+  `apt install`, `dpkg --force-all -i`, an unbounded install, suite or download step, a suite
+  run after `cd tests/browser`, `playwright test`, a `gh` command, a `curl` without `--retry`
+  or `--connect-timeout`, a download with no digest check or no pinned digest whether kept
+  with `-o`, `>`, `>>`, `| tee` or printed, an installer piped into `sh`, `bash`, `zsh`,
+  `python3`, `node`, `perl` or `ruby`, through `sudo -E` or `env`, `bash <(curl ...)`,
+  `sh -c "$(curl ...)"`, backticks, `eval`, `continue-on-error` on a job and on a step,
+  `|| true` after a suite and after an install, an install in a composite action, in a
+  script under `scripts/` and behind a local action used without a limit, each job in turn
+  removed from `gate.needs`, a new job nobody added to it, `gate` without `if: always()`,
+  `workflow_dispatch` or `push` added to `ci.yml`'s triggers, an action on a branch, an image
+  without a tag, `runs-on: ubuntu-latest` in `ci.yml` (alone and in a label list) and in
+  `pages.yml`, a `-latest` runner in a matrix value, a matrix `include` row, a runner group's
+  labels, another OS (`macos-latest`, `windows-latest`), another letter case and a container
+  job, an unresolvable `runs-on` expression and a matrix key with no values, a reusable workflow on a branch, an install in a script of `package.json`
+  including `postinstall`, apt and dpkg by their path, a suite behind `npm run -s`,
+  `npm --silent run`, `node --run`, `yarn` and `pnpm`, a failure thrown away with
+  `|| exit 0`, `|| echo`, `; true` or `set +e`, a digest check followed by `|| true`, a
+  download after a quoted `#`) and require the checker to name that rule
+  and that job and nothing else. A checker that stopped looking fails here. The same tests
+  hold the forms that must stay allowed: `ci-install.sh apt <package>`, a path containing
+  `apt`, `dpkg -l`, a digest-checked download, a discarded probe, `|| true` on a cleanup, a
+  job that calls a reusable workflow, an `echo` that mentions apt or curl, `command -v curl`,
+  `--retry "$VAR"`, a pre-release version tag, `|| { ...; exit 1; }`.
+- "the pull-request rules are judged by the base branch's programs" fails unless the last
+  command of the `fail-first` and of the `review-verdict` job is exactly its call of
+  `.github/scripts/base-rule.sh` with its exact arguments, unconditional, and the step fails
+  when there is no pull request; both read the queued pull request with the assign-then-eval
+  form and no `eval "$(`, and check the queued head with `--check-head` after `gh pr view`
+  (which asks for `headRefOid`), and fail-first keeps its `headRefOid` fallback just before its
+  call; "a rule job whose call can no longer refuse" applies such edits (among them an
+  `eval "$(...)"`, a missing `--check-head`, a missing `headRefOid`) and requires each to be
+  reported.
+- "a merge-queue run that can be cancelled" sets `cancel-in-progress` to `true`, another
+  expression and a quoted string, in the workflow and in a job, and requires `queue-cancel`;
+  `false`, and any value in a workflow without `merge_group`, pass. The triggers mutations add
+  `push`, `workflow_dispatch`, `pull_request_target` and `schedule` beside the two.
+
+`tests/unit/queued-pr.test.mjs` holds `.github/scripts/queued-pr.sh` in fixture repositories:
+the pull request and base on both events; a ref not anchored at both ends, a base that
+disagrees with or lacks the event's `base_ref`, `pr-0` and a leading zero, a greedy base
+(`.../pr-1-<sha>/pr-N-<sha>`), `..`, a leading `-` or `/` and shell metacharacters in either
+base each exit 2 with nothing printed, and, run as the jobs run it under `bash -eo pipefail`,
+never reach the rest of the step or print injected output; a rebase (one parent) or octopus
+(three) queue head and a HEAD^1 other than the ref's sha refuse, GitHub's shape (the ref's sha
+is HEAD^1) passes with `DIFF_BASE` that sha and the earlier model (the ref naming HEAD^2)
+refuses; `--check-head` passes only the pull request's `headRefOid`, end to end after the eval
+too, and is a no-op without a queued head whatever `headRefOid` is; the old `eval "$(...)"` form
+is shown to carry on after exit 2 and the assignment form to stop.
+
+`tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
+retry flags, the verdict program).
+
+`tests/unit/ci-changes.test.mjs` holds the path-gating exception: it runs the `gate` job's
+own `VERDICT` with `jq` on every combination of results (a skip passes only for the
+`GATED_JOBS` and only on `runtime=false` from a successful `changes`), the classifier's
+fail-closed table (a `.md` under `tests/`, renames into or out of the allowlist, deletions,
+names with spaces, links and submodules, an empty diff, any event but a pull request and its
+merge-queue entry, any base but `main`), the merge-queue case against git (version 2: the
+queued pull request judged by `HEAD^1..HEAD`, so a runtime pull request ahead in the queue is
+not counted and a runtime one behind a docs one runs everything; a base that the queue head's
+first parent does not contain runs everything; a rebase (one parent) or octopus (three)
+queue head runs everything; a head with no parent and a base git cannot read give no answer,
+never a skip), and
+the wiring: exactly the `GATED_JOBS` carry that condition, every browser leg is among them,
+the four judge and unit jobs none, no job condition reads the event (so both events gate
+alike), the `changes` step takes its base from `GITHUB_BASE_REF` or the queue's `base_ref`,
+and it runs only the base branch's blob of the classifier, or answers `runtime=true` when the
+base has none.
+`tests/unit/ci-gates-model.test.mjs` refuses any other job condition in `ci.yml`.
+
+What the test cannot see:
+
+- Whether a limit is long enough or short enough, and whether a pinned tag still points at
+  the commit it did. Those stay with whoever reads a slow run.
+- Shell it does not read: a program in another language that downloads or installs
+  (`scripts/*.mjs`, an inline `node -e` or `python -c`), and a shell script outside
+  `.github/` and `scripts/`. The patterns are matched per logical line, so an install built
+  from variables (`$PM install`) is not recognised.
+- Other ways to keep a download or ignore a failure: a failure swallowed by
+  `if ! <suite>; then ...; fi` or by a `|| echo` with a separator inside its quotes; two
+  downloads in one step with a digest check that covers one of them (the clause holds per
+  step, not per file); a sums file that was itself downloaded; `gh release download`,
+  `git clone`, `npx <remote package>`, `aria2c` and `docker run`, which are not read as
+  downloads (a `gh` command still needs its step limit).
+- Whether the path-gating allowlist is right. A file under it that a browser or visual
+  suite read directly would go untested on a pull request that changes only it; on
+  2026-10-29 none did (`tests/browser/lib/suite.cjs` reads `tests/README.md`, which is not
+  in the allowlist), and a file the build reads changes `dist/index.html` too, which the
+  always-running `npm run build:check` holds to the tree.
+- The runner of a called reusable workflow: a caller's `with:` input that a called workflow
+  feeds to its own `runs-on` is read where that workflow's jobs are checked, which is only for
+  a local one (an expression there is refused).
+- YAML the strict reader does not implement (anchors, a multi-line flow sequence): the file
+  is refused as unreadable, which is a refusal of a legal workflow, not a pass.
+- A pull request that rewrites the workflow. On a pull request GitHub runs the workflow file
+  the pull request carries, so a change to `ci.yml` is judged by this test as that pull
+  request leaves it. What holds such a change back is `project.review-verdict`: everything
+  under `.github/`, this checker and this test are guarded paths there.
+
+# Failure behaviour
+
+`npm test` fails and names the rule, the file, the job and the step. The fix is in the
+workflow or in `ci-install.sh`, never an exception in the checker.

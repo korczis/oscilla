@@ -388,19 +388,38 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (String(gate.if || '').replace(/\s/g, '') !== 'always()') {
       add('gate-needs', 'gate', null, 'gate must run with `if: always()` to report a failed job');
     }
-    // The gate is the required check, and two of its jobs judge the pull request itself. A run
-    // without a pull request (a manual dispatch on the PR's branch) would give them nothing to
-    // judge and still put a green `gate` on the same commit.
+    // The gate is the required check, and two of its jobs judge the pull request itself: on a
+    // pull_request run the event's, on a merge_group run the one the queue ref names (ADR 0083).
+    // A run without a pull request (a manual dispatch or a push on the PR's branch) would give
+    // them nothing to judge and still put a green `gate` on the same commit.
     const { on } = doc;
     const triggers = typeof on === 'string' ? [on]
       : Array.isArray(on) ? on.map(String) : Object.keys(on || {});
-    if (triggers.length !== 1 || triggers[0] !== 'pull_request') {
-      add('triggers', null, null, 'a workflow with a gate job is started by pull_request only,'
-        + ` not by: ${triggers.join(', ') || '(nothing)'}`);
+    const allowed = ['pull_request', 'merge_group'];
+    if (!triggers.includes('pull_request') || triggers.some((t) => !allowed.includes(t))) {
+      add('triggers', null, null, 'a workflow with a gate job is started by pull_request and'
+        + ` merge_group only, not by: ${triggers.join(', ') || '(nothing)'}`);
+    }
+    // ADR 0083: a cancelled merge-queue run drops its group out of the queue, so wherever a
+    // workflow that the queue starts sets concurrency, cancel-in-progress is off or exactly
+    // QUEUE_SAFE_CANCEL (on for a pull request's older run, never for a queue run).
+    if (triggers.includes('merge_group')) {
+      const scopes = [[null, doc.concurrency],
+        ...Object.entries(doc.jobs || {}).map(([id, j]) => [id, j && j.concurrency])];
+      for (const [id, c] of scopes) {
+        if (!c || typeof c !== 'object' || !('cancel-in-progress' in c)) continue;
+        const v = c['cancel-in-progress'];
+        if (v === false || v === 'false' || v === QUEUE_SAFE_CANCEL) continue;
+        add('queue-cancel', id, null, `cancel-in-progress is ${JSON.stringify(v)}: a merge-queue `
+          + `run must never be cancelled (ADR 0083); use false or ${QUEUE_SAFE_CANCEL}`);
+      }
     }
   }
   return out;
 }
+
+/** The one cancel-in-progress a workflow started by merge_group may set besides false. */
+export const QUEUE_SAFE_CANCEL = "${{ github.event_name == 'pull_request' }}";
 
 /** The steps of a composite action's YAML ([] for any other kind of action). */
 function actionSteps(text) {

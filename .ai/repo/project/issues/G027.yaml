@@ -1,0 +1,43 @@
+id: G027
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+  - "component-system#one-modeler-per-curve"
+title: "One ADSR envelope modeler: the lab graph is the envelope editor of the Studio, the Synth, the sequencer and the labs"
+slug: one-adsr-envelope-modeler-everywhere
+priority: p1
+profile: implementation
+objective: "Lands as feat(ui) after G029. The envelope family's model is the law the voice schedules, src/js/audio/envelope.js (adsrEvents, envelopePoints; the V1 voices, the Studio voices and the Studio envelope node already schedule through it), and its one editor skin is the lab's graph (src/js/charts/envelope-graph.js with charts/drag-math.js), bound through G029. Surfaces: the Envelope lab page becomes the full-size modeler with a target picker (the Playground voice while it is transitional, every Studio envelope node, the Synth's EG 1 and EG 2); the Studio Inspector and the Synth's EG plates embed the same modeler bound to their node, so no third ADSR graph or curve exists. Its handles are at least 44 x 44 px, keyboard steps, fine adjust, reset and typed entry come from the knob family's interaction model (G022), reduced motion is honoured, and a parameter a panel fixes (K187) shows locked with its reason and refuses a drag. It absorbs U069's move of the envelope chart into the Synth the way U071 is absorbed for the filter: the lab page stays until a three-engine walk proves each of its controls in its new home."
+why: "Owner order of 2026-11-05 (in session oscilla-21), verbatim: \"must be connected with pannels, asdr envelope modeler, filter modeler / integrated into studio, sequencer ... / one way - dry - everything bus connected + integrated + mj way / deduplicate functionality / components - modularize / generalize - infer / derive\". Settled among the LLM sessions without the owner (the owner's order of the same day): af's critique (binding, not a parameter layer; the V1 voice transitional; computed vs live labelled), 26's answers (the store as the only write path through a gesture; bind on the store's selection change) and dev-53's (the sequencer target after K189 slice 3)."
+depends_on:
+  - "G029"
+  - "G022"
+  - "K189"
+scope:
+  - "src/js/charts/envelope-graph.js"
+  - "src/js/labs/envelope.js"
+  - "src/js/ui/modelers"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/synth/view"
+  - "src/index.html"
+  - "tests/unit/envelope-modeler.test.mjs"
+  - "tests/browser/modelers.cjs"
+  - "tests/README.md"
+  - "dist"
+current_state: "Not started. The graph is used by labs/envelope.js only (charts/envelope-graph.js); the Studio envelope node and the Synth's EG plates have numbers and knobs, no curve editor. K152 (Train 7 prep) draws a second ADSR curve in synth/view/scopes.js (envelope(p)); G021's census flags it; dev-53 asked to draw it from envelopePoints."
+acceptance_criteria:
+  - "Fail-first: tests/unit/envelope-modeler.test.mjs fails on the merge base."
+  - "One law: every envelope curve the app draws (lab, Inspector, Synth plate, scopes) is envelopePoints of audio/envelope.js; G021's envelope family has no listed duplicate."
+  - "Per target kind (Playground voice, Studio envelope node, Synth EG 1), in chromium, firefox and webkit: a handle drag and a keyboard step change the target, read back from its owner (the Studio model or the V1 lab state), and the sounding note's envelope follows through the owner's live-update rule."
+  - "Locked: a K187-fixed parameter shows its reason and a drag on it changes nothing."
+  - "Phone 390x844 touch: every handle is at least 44 x 44 px, and a trusted touch drag moves it without scrolling the page."
+  - "No loss: the lab page stays until the three-engine walk of its controls passes in their new homes; then its route redirects there (ADR 0045)."
+  - "Standard: Pro card and toast blocks with the ui-flowbite-pro ratchet not rising, tests/README rows, size report, fail-first."
+validation:
+  - "node --test tests/unit/envelope-modeler.test.mjs"
+  - "node tests/browser/modelers.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

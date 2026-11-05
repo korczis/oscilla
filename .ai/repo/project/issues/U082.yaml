@@ -1,0 +1,32 @@
+id: U082
+milestone: M054
+serves:
+  - "ui-current#phone-focus-follows-detail"
+title: "On a phone, opening a detail moves focus into it and scrolls it into view"
+slug: on-a-phone-opening-a-detail-moves-focus-into-it-and-scrolls-it
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Panel Excellence criterion 11. At 390x844 a detail opened from a list (an experiment or finding in Experiments, a preset, a Studio node in the Inspector) can open below the fold with focus left on the list item, so a phone or screen-reader user sees and hears nothing change (af: the criterion is proposed; this issue's browser leg decides each case). After: opening a detail at a phone width moves focus to the detail's heading and scrolls it into the viewport through one helper (src/js/ui/focus-detail.js)."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 11."
+scope:
+  - "src/js/ui/focus-detail.js"
+  - "src/js/ui/experiments.js"
+  - "src/js/ui/findings.js"
+  - "src/js/ui/app.js"
+  - "src/js/ui/studio"
+  - "tests/browser/phone-detail-focus.cjs"
+  - "package.json"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/browser/phone-detail-focus.cjs at 390x844 under a coarse pointer opens a saved experiment, a finding, a preset and a Studio node, and fails on the merge base for each case where document.activeElement is outside the detail or the detail's heading is outside the viewport. It is wired into npm run test:release. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "At 1536x1024 focus behaviour is unchanged (asserted for the same four cases)."
+  - "Guarded (src/js/ui/experiments.js, src/js/ui/findings.js): prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+validation:
+  - "node tests/browser/phone-detail-focus.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

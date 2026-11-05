@@ -1,0 +1,30 @@
+id: C046
+milestone: M090
+serves:
+  - "coherent-state#lab-lists-match-engine"
+title: "Every option list a lab shows equals the engine's list, or the lab states the gap"
+slug: every-option-list-a-lab-shows-equals-the-engines-list-or-the
+priority: p2
+profile: implementation
+objective: "Lands as fix(labs). Panel Excellence criterion 10. At main 68b117f3 the Filter Lab offers 5 filter types while the engine exports 8 (FILTER_TYPES in src/js/audio/filters.js:30-31), and a type set from a link or preset outside the five leaves a stale radio checked (af: inferred). After: the Filter Lab's type list is rendered from FILTER_TYPES, or the three it leaves out are named in the panel; a type outside the shown list never leaves another radio checked."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 10 and the Filter Lab Inventory row."
+scope:
+  - "src/index.html"
+  - "src/js/labs/filter-lab.js"
+  - "tests/unit/lab-enumerations.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/lab-enumerations.test.mjs compares each lab's shown option values (from src/index.html and the lab modules) with the engine's exported list (FILTER_TYPES first) and fails on the merge base on the Filter Lab's 5 of 8."
+  - "On the head the lists are equal, or the gap is stated in the panel and listed in the test with that statement's text; a mutation that adds a type to FILTER_TYPES without the UI or a stated gap fails."
+  - "Setting a type that the lab does not show (through the link state) checks no radio and the panel names the type in effect (asserted in the same unit test)."
+  - "src/js/audio is guarded only if filters.js changes; then prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Controls: the Filter Lab's type list is a consumer of M123's one switch family (G023; component-system#one-implementation-per-family, M123 on origin/chore/plan-unified-controls); growing it to the engine's list adds no parallel radio widget. Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock v4 holds (the Flowbite Pro interface themed by OSCILLA's tokens around its own domain views; ADR 0061, accepted) (owner's words relayed by af, 2026-11-05: 'vsechny komponenty abstrahuj, reuse, dry, parametrizuj')."
+validation:
+  - "node --test tests/unit/lab-enumerations.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

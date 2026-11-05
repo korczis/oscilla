@@ -1,0 +1,22 @@
+id: Q090
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "LLM decision: the top-nav folds, the voice cap and the safety default (af and b0, 2026-11-05)"
+slug: llm-decision-the-top-nav-folds-the-voice-cap-and-the-safety
+priority: p1
+profile: routine
+objective: "Record the decisions af proposed and b0 accepted on 2026-11-05 (mesh messages af->b0 and b0->af). D1: the engine voice cap follows Q021 (up to 8 voices, 1/8 gain each); MAX_VOICES = 16 in src/js/synth/voice-pool.js is a defect (K180). D2: the Synthesis page folds into Synth (U069). D3: Presets folds into one library (K147, U070). D4: Filter Lab folds into the Synth and Studio filter with a live before/after spectrum (K082, U071). D5: Compare splits: mic and phase/Lissajous to Analyzer, Bioacoustics to Learn; Experiments keeps the only 'compare' (U072). D6: Analyzer is the one analysis page with a source picker and a Play; Device & Limits also reaches a status-bar settings menu, one gesture from every page, keyboard included (U073). D7: the V2 Sequencer page stays until the M065 step sequencer in Synth Arrange plays the same patterns with the import proven, then folds (U074); its own oscillators move to the output owner before that, in the bus work. D8: the 2 s hold limit stays the default (safety). Binding on D2-D7: no page is retired before everything it offers is live, reachable and sounding in its new home, proven in three engines (b0: the owner's 'views feel lost' and 'zadny kroky zpet'). The resulting nav is Landing/Playground, Synth, Studio, Analyzer, Measure, Experiments, Learn, About, after F002 (#386)."
+why: "af nav-pages audit wf_ed1cc8d6-3e8 and Play audit wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0), after the owner's complaint in the af session 2026-11-04/05: views feel lost, Play does not work on most pages, nothing runs through one bus, engines are not wrapped, many top-nav pages are obsolete, unconnected, not realtime, poor. Decided by af and b0 on 2026-11-05 under the owner's order of that day 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090)."
+scope:
+  - ".ai/repo/project/issues/Q090.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers decision) with the two mesh messages' dates, senders and the eight items, and the no-loss condition quoted."
+  - "U069-U074 and K180 name Q090 in their why; none of U069-U074 removes a page without its no-loss check."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

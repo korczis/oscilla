@@ -30,4 +30,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:04:38Z
+started_at: 2026-11-05T00:03:50Z
+started_event: sha256:77db1e08fc2eac439c4e0c6f1b65afeb7ff54f9e52c6c0cb69e803df49cfa5a0
+completed_at: 2026-11-05T00:04:38Z
+completed_event: sha256:5d027c5c79b030e217b3ecf9073fff3d992abcd3d9fbb43524f61e5974aaa0df
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/size-report.test.mjs && npm run verify-dist && npm run build:check"
+    result: "On a git archive of origin/main 6d5efa89: size-report 11 pass, 0 fail. verify-dist PASS (gzip 937.5 KiB of 1171.9 KiB, raw 3179.4 of 4101.6 KiB, budget ok). build:check: dist/index.html is up to date (v3.19.0)."
+    artifact: "d9db6bdf20b73dae635f3398436baa267f021767"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:03:34Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/279.yaml"
+    result: "Review verdict .ai/repo/reviews/279.yaml (verdict: merge) is on origin/main; landed as #279 (merge d9db6bdf on main's first-parent line), main commit d9db6bdf20b73dae635f3398436baa267f021767."
+    artifact: ".ai/repo/reviews/279.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:03:41Z
