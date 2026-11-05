@@ -465,7 +465,12 @@ async function runOne(engine, baseline, recorded) {
 
 (async () => {
   await RUN.ready();
-  const baseline = fs.existsSync(BASELINE_FILE) ? JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8')).debt : {};
+  const file = fs.existsSync(BASELINE_FILE) ? JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'))
+    : {};
+  const baseline = file.debt || {};
+  // Why a debt is open, per `<engine/phone/workspace>.<kind>`: the issue that removes it. --record
+  // keeps every reason whose debt is still there and drops one whose count reached 0.
+  const reasons = file.reasons || {};
   const recorded = {};
   let failed = 0;
   for (const b of BROWSERS) {
@@ -479,10 +484,15 @@ async function runOne(engine, baseline, recorded) {
   if (RECORD) {
     const merged = { ...baseline, ...recorded };
     const sorted = Object.fromEntries(Object.keys(merged).sort().map((k) => [k, merged[k]]));
+    const kept = Object.fromEntries(Object.entries(reasons).filter(([k]) => {
+      const [key, kind] = [k.slice(0, k.lastIndexOf('.')), k.slice(k.lastIndexOf('.') + 1)];
+      return sorted[key] && sorted[key][kind] > 0;
+    }).sort(([a], [b]) => a.localeCompare(b)));
     fs.writeFileSync(BASELINE_FILE, `${JSON.stringify({
       note: 'Reach debt of tests/browser/iphone.cjs per engine/phone/workspace: off-edge, covered and '
         + 'tiny controls. It only shrinks: a lower count is written with --record, a higher one fails.',
       debt: sorted,
+      reasons: kept,
     }, null, 2)}\n`);
     console.log(`recorded ${Object.keys(recorded).length} entries in ${path.relative(process.cwd(), BASELINE_FILE)}`);
   }

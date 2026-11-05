@@ -261,5 +261,9 @@
       "covered": 0,
       "tiny": 0
     }
+  },
+  "reasons": {
+    "webkit/iPhone 13/synth.covered": "U095: WebKit leaves a Synth control under the docked keys after scrollIntoView (Chromium and Firefox 0); one shell fix (26)",
+    "webkit/iPhone SE/synth.covered": "U095: WebKit leaves a Synth control under the docked keys after scrollIntoView (Chromium and Firefox 0); one shell fix (26)"
   }
 }
