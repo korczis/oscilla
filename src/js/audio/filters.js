@@ -205,3 +205,39 @@ export function createFilterStage(ctx, cfg = {}, { track = identity } = {}) {
     },
   };
 }
+
+/**
+ * The Web Audio biquad's COMPUTED magnitude in dB at f (Audio EQ Cookbook coefficients, linear
+ * Q for every type, shelves S = 1), beside the live node's getFrequencyResponse: what a plate or
+ * a chart draws from parameters alone, labelled computed where it is shown (no-fake-science).
+ */
+export function biquadDb(type, f0, Q, gainDb, f, sampleRate = 48000) {
+  const w0 = (2 * Math.PI * Math.min(f0, sampleRate / 2 - 1)) / sampleRate;
+  const cos = Math.cos(w0);
+  const sin = Math.sin(w0);
+  const A = 10 ** (gainDb / 40);
+  const q = Math.max(1e-4, Q);
+  const alpha = sin / (2 * q);
+  const aS = (sin / 2) * Math.SQRT2;
+  const sA = 2 * Math.sqrt(A) * aS;
+  const c = {
+    lowpass: [(1 - cos) / 2, 1 - cos, (1 - cos) / 2, 1 + alpha, -2 * cos, 1 - alpha],
+    highpass: [(1 + cos) / 2, -(1 + cos), (1 + cos) / 2, 1 + alpha, -2 * cos, 1 - alpha],
+    bandpass: [alpha, 0, -alpha, 1 + alpha, -2 * cos, 1 - alpha],
+    notch: [1, -2 * cos, 1, 1 + alpha, -2 * cos, 1 - alpha],
+    allpass: [1 - alpha, -2 * cos, 1 + alpha, 1 + alpha, -2 * cos, 1 - alpha],
+    peaking: [1 + alpha * A, -2 * cos, 1 - alpha * A, 1 + alpha / A, -2 * cos, 1 - alpha / A],
+    lowshelf: [A * ((A + 1) - (A - 1) * cos + sA), 2 * A * ((A - 1) - (A + 1) * cos),
+      A * ((A + 1) - (A - 1) * cos - sA), (A + 1) + (A - 1) * cos + sA,
+      -2 * ((A - 1) + (A + 1) * cos), (A + 1) + (A - 1) * cos - sA],
+    highshelf: [A * ((A + 1) + (A - 1) * cos + sA), -2 * A * ((A - 1) + (A + 1) * cos),
+      A * ((A + 1) + (A - 1) * cos - sA), (A + 1) - (A - 1) * cos + sA,
+      2 * ((A - 1) - (A + 1) * cos), (A + 1) - (A - 1) * cos - sA],
+  }[type];
+  if (!c) return 0;
+  const w = (2 * Math.PI * f) / sampleRate;
+  const mag = (x0, x1, x2) => Math.hypot(x0 + x1 * Math.cos(w) + x2 * Math.cos(2 * w),
+    x1 * Math.sin(w) + x2 * Math.sin(2 * w));
+  const h = mag(c[0], c[1], c[2]) / mag(c[3], c[4], c[5]);
+  return 20 * Math.log10(Math.max(h, 1e-9));
+}

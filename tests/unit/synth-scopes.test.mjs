@@ -17,11 +17,12 @@ import { panelTokens } from '../../src/js/synth/view/tokens.js';
 import { panelStore } from './synth-fixture.mjs';
 
 const sc = await import('../../src/js/synth/view/scopes.js').catch(() => ({}));
+const filters = await import('../../src/js/audio/filters.js');
 const tokens = panelTokens(null);
 const near = (a, b, eps, what) => assert.ok(Math.abs(a - b) <= eps, `${what}: ${a} vs ${b}`);
 
 test('the filter curve is the Web Audio biquad for the linear Q', () => {
-  const db = sc.biquadDb;
+  const db = filters.biquadDb; // the one computed response, audio/filters.js
   assert.equal(typeof db, 'function');
   near(db('lowpass', 1000, Math.SQRT1_2, 0, 1000), -3.0103, 0.01, 'lowpass at cutoff');
   near(db('highpass', 1000, Math.SQRT1_2, 0, 1000), -3.0103, 0.01, 'highpass at cutoff');
@@ -51,7 +52,8 @@ test('each scope is a labelled image of the parameters it draws', () => {
     + 'drag to set the sustain');
   const lpf = sc.scopeOf('filter', { type: 'lowpass', frequency: 1200, Q: 0.7071, gain: 0,
     enabled: true }, tokens);
-  assert.match(lpf.label, /^lowpass response, 1\.2 kHz, Q 0\.71, 20 Hz to 20 kHz; drag/);
+  assert.match(lpf.label,
+    /^lowpass response \(computed\), 1\.2 kHz, Q 0\.71, 20 Hz to 20 kHz; drag/);
   assert.equal(sc.scopeOf('mixer', {}, tokens), null, 'a module without a curve has none');
   for (const s of [vco, lfo, env, lpf]) {
     const shapes = s.svg.match(/<(line|polyline)\b[^>]*>/g);
@@ -94,4 +96,17 @@ test('a drag on a scope sets the parameter it draws, on the drawing\'s own axis'
   assert.equal(sc.scopeValue(box, at(0.5, 0), 'lfo', rate), 1, 'the LFO rate on its log scale');
   const lpf = sc.scopeOf('filter', { type: 'lowpass', frequency: 500, Q: 1, gain: 0 }, tokens);
   assert.match(lpf.label, /; drag to set the cutoff$/);
+});
+
+// One way (the owner's order of 2026-11-05, 21's G021 families): the plate draws the envelope
+// from audio/envelope.js envelopePoints, the law the voices schedule, and the filter from
+// audio/filters.js biquadDb, the one computed response; scopes.js defines neither.
+test('the scopes draw the one envelope law and the one filter response', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../../src/js/synth/view/scopes.js', import.meta.url), 'utf8');
+  assert.match(src, /import \{ biquadDb \} from '\.\.\/\.\.\/audio\/filters\.js'/);
+  assert.match(src, /import \{ envelopePoints \} from '\.\.\/\.\.\/audio\/envelope\.js'/);
+  assert.doesNotMatch(src, /function biquadDb|Math\.cos\(w0\)/, 'no filter response of its own');
+  assert.match(src, /\/\/ ui-family: envelope skin plate/);
+  assert.match(src, /\/\/ ui-family: filter-response skin plate/);
 });

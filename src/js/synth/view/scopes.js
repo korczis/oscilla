@@ -4,15 +4,21 @@
 // the same frame. The filter response is the Web Audio biquad of the specification (Audio EQ
 // Cookbook coefficients) for the LINEAR Q the Studio stores (audio/filters.js nodeQ gives the
 // node the dB value that makes it the same response), at the sample rate given (48 kHz unless
-// the caller passes the context's). Pure markup; every shape sets its own stroke.
+// the caller passes the context's), computed by audio/filters.js biquadDb; the envelope is
+// audio/envelope.js envelopePoints, the law the voices schedule. Pure markup; every shape sets
+// its own stroke.
+// ui-family: envelope skin plate
+// ui-family: filter-response skin plate
 //
 //   scopeOf(nodeType, params, tokens, { sampleRate }) -> { svg, label } | null
-//   biquadDb(type, f0, Q, gainDb, f, sampleRate) -> the magnitude in dB at f
 //   refreshScope(el, moduleId, nodeType, params, tokens) -> redraws the plate's scope in place
 //   scopeDrive(nodeType, params) -> the parameter a drag on the scope sets, or null:
 //     a filter's cutoff (x, on the drawing's log axis), a pulse's width (x), an LFO's rate (x,
 //     the knob's own scale) and an envelope's sustain (y). The knob stays the keyboard control.
 //   scopeValue(box, event, nodeType, param) -> that parameter's value under the pointer
+
+import { biquadDb } from '../../audio/filters.js';
+import { envelopePoints } from '../../audio/envelope.js';
 
 const W = 120;
 const H = 44;
@@ -53,38 +59,6 @@ function cycles(shape, n, width) {
   return out;
 }
 
-/** The Web Audio biquad's magnitude in dB at f (linear Q for every type; shelves S = 1). */
-export function biquadDb(type, f0, Q, gainDb, f, sampleRate = 48000) {
-  const w0 = (2 * Math.PI * Math.min(f0, sampleRate / 2 - 1)) / sampleRate;
-  const cos = Math.cos(w0);
-  const sin = Math.sin(w0);
-  const A = 10 ** (gainDb / 40);
-  const q = Math.max(1e-4, Q);
-  const alpha = sin / (2 * q);
-  const aS = (sin / 2) * Math.SQRT2;
-  const sA = 2 * Math.sqrt(A) * aS;
-  const c = {
-    lowpass: [(1 - cos) / 2, 1 - cos, (1 - cos) / 2, 1 + alpha, -2 * cos, 1 - alpha],
-    highpass: [(1 + cos) / 2, -(1 + cos), (1 + cos) / 2, 1 + alpha, -2 * cos, 1 - alpha],
-    bandpass: [alpha, 0, -alpha, 1 + alpha, -2 * cos, 1 - alpha],
-    notch: [1, -2 * cos, 1, 1 + alpha, -2 * cos, 1 - alpha],
-    allpass: [1 - alpha, -2 * cos, 1 + alpha, 1 + alpha, -2 * cos, 1 - alpha],
-    peaking: [1 + alpha * A, -2 * cos, 1 - alpha * A, 1 + alpha / A, -2 * cos, 1 - alpha / A],
-    lowshelf: [A * ((A + 1) - (A - 1) * cos + sA), 2 * A * ((A - 1) - (A + 1) * cos),
-      A * ((A + 1) - (A - 1) * cos - sA), (A + 1) + (A - 1) * cos + sA,
-      -2 * ((A - 1) + (A + 1) * cos), (A + 1) + (A - 1) * cos - sA],
-    highshelf: [A * ((A + 1) + (A - 1) * cos + sA), -2 * A * ((A - 1) + (A + 1) * cos),
-      A * ((A + 1) + (A - 1) * cos - sA), (A + 1) - (A - 1) * cos + sA,
-      2 * ((A - 1) - (A + 1) * cos), (A + 1) - (A - 1) * cos - sA],
-  }[type];
-  if (!c) return 0;
-  const w = (2 * Math.PI * f) / sampleRate;
-  const mag = (x0, x1, x2) => Math.hypot(x0 + x1 * Math.cos(w) + x2 * Math.cos(2 * w),
-    x1 * Math.sin(w) + x2 * Math.sin(2 * w));
-  const h = mag(c[0], c[1], c[2]) / mag(c[3], c[4], c[5]);
-  return 20 * Math.log10(Math.max(h, 1e-9));
-}
-
 const xOfHz = (f) => (Math.log10(f / F_LO) / Math.log10(F_HI / F_LO)) * W;
 const yOfDb = (db) => 2 + ((DB_TOP - Math.max(DB_BOTTOM, Math.min(DB_TOP, db)))
   / (DB_TOP - DB_BOTTOM)) * (H - 4);
@@ -98,14 +72,16 @@ function response(p, sampleRate) {
   return out;
 }
 
+/** The envelope as it plays: audio/envelope.js envelopePoints samples the very schedule
+ *  applyAdsr and releaseAt give a voice (curve shapes included), held a quarter of its length. */
 function envelope(p) {
   const [a, d, r] = [p.attack, p.decay, p.release].map((v) => Math.max(0, Number(v) || 0));
-  const hold = Math.max(0.05, 0.25 * (a + d + r));
-  const k = W / (a + d + hold + r || 1);
+  const e = envelopePoints({ a, d, s: Math.max(0, Math.min(1, Number(p.sustain) || 0)), r },
+    { holdS: Math.max(0.05, 0.25 * (a + d + r)), samples: 48 });
   const top = 4;
   const floor = H - 3;
-  const sus = floor - (floor - top) * Math.max(0, Math.min(1, p.sustain));
-  return [[0, floor], [a * k, top], [(a + d) * k, sus], [(a + d + hold) * k, sus], [W, floor]];
+  const k = W / (e.totalS || 1);
+  return Array.from(e.t, (t, i) => [t * k, floor - (floor - top) * e.v[i]]);
 }
 
 export function scopeOf(nodeType, p, t, { sampleRate = 48000 } = {}) {
@@ -128,7 +104,7 @@ export function scopeOf(nodeType, p, t, { sampleRate = 48000 } = {}) {
     grid = `<line x1="0" y1="${y0}" x2="${W}" y2="${y0}" stroke="${t.track}" stroke-width="1" `
       + `stroke-dasharray="2 3"/><line x1="${xc}" y1="0" x2="${xc}" y2="${H}" `
       + `stroke="${t.track}" stroke-width="1"/>`;
-    label = `${p.type} response, ${fmtHz(p.frequency)}, Q ${(+p.Q).toFixed(2)}`
+    label = `${p.type} response (computed), ${fmtHz(p.frequency)}, Q ${(+p.Q).toFixed(2)}`
       + `${['peaking', 'lowshelf', 'highshelf'].includes(p.type) ? `, ${p.gain} dB` : ''}`
       + ', 20 Hz to 20 kHz';
     if (p.enabled === false) label += ', bypassed';

@@ -877,7 +877,8 @@ function defineChecks() {
         label: document.querySelector('[data-scope="lpf"] svg').getAttribute('aria-label') };
     });
     return { ok: Math.abs(after.hz - 632.5) < 20 && after.depth === before.depth + 1
-      && after.value !== before.value && /^lowpass response, 6\d\d(\.\d)? Hz, /.test(after.label),
+      && after.value !== before.value
+      && /^lowpass response \(computed\), 6\d\d(\.\d)? Hz, /.test(after.label),
     before, after };
   });
 
