@@ -606,16 +606,17 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   // ---- input
-  // `since` is the session epoch the caller started in: a cancel() (release) while the caller
-  // was awaiting the context or the worklet module bumps the epoch, and nothing may be opened
-  // for a session that was already released (the input and the recorder would leak).
+  // `since` is the caller's session epoch: release() bumps it; nothing opens for a released
+  // session (it would leak). A pending open (a prompt) races release(), which
+  // rejects its callers at once (98 R1); a stream granted late is closed.
   const abortedSince = (since) => since !== epoch || disposed;
   async function ensureInput(ctx, since = epoch) {
     if (abortedSince(since)) throw new MeasurementError('ABORTED');
     if (input) return input;
-    if (inputPending) return inputPending;
+    if (inputPending) return inputPending.promise;
     const my = since;
-    inputPending = (async () => {
+    const pending = {};
+    const opening = (async () => {
       const opened = await openInput(ctx, { register, unregister });
       if (my !== epoch || disposed) {
         try { opened.close(); } catch (e) { /* ignore */ }
@@ -625,10 +626,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       input = opened;
       return input;
     })();
+    pending.promise = Promise.race([opening, new Promise((_, no) => { pending.abort = no; })]);
+    inputPending = pending;
     try {
-      return await inputPending;
+      return await pending.promise;
     } finally {
-      inputPending = null;
+      if (inputPending === pending) inputPending = null;
     }
   }
 
@@ -739,6 +742,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   // ---- release everything of the current session
   function release(err) {
     epoch += 1;
+    if (inputPending) inputPending.abort(new MeasurementError('ABORTED'));
+    inputPending = null;
     const info = err && err.detail;
     dropLive(info && info.reason ? info.reason : (err && err.code) || 'released');
     const ctx = engine.ctx;
