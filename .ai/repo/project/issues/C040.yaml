@@ -23,6 +23,7 @@ acceptance_criteria:
   - "The sentence at src/index.html:909 is true on the head: no workspace in which #osc-panel-mic has no client rects keeps a lab microphone track live."
   - "Non-goals, unchanged: a resize across a breakpoint within one workspace, the panel's Flowbite Pro migration, renaming the settings gear, Measure's own input, the output owner."
   - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml. dist is rebuilt; npm run verify passes."
+  - "Controls: the microphone toggle is a consumer of M123's one switch (G023; component-system#one-implementation-per-family, M123 on origin/chore/plan-unified-controls); no parallel toggle is added. Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock holds (owner's words relayed by af, 2026-11-05: 'vsechny komponenty abstrahuj, reuse, dry, parametrizuj')."
 validation:
   - "node --test tests/unit/mic-release-on-leave.test.mjs tests/unit/mic-detach-on-close.test.mjs"
   - "node tests/browser/app.cjs"

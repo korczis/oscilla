@@ -21,7 +21,7 @@ depends_on:
 acceptance_criteria:
   - "Fail-first: tests/unit/engine-wiring.test.mjs dispatches, per engine, an EDGE_ADD whose port type or direction the declaration does not allow and expects a refusal with the model and history unchanged; on the merge base (K189 landed, canConnect not yet consulting the engine declaration) the wrong-type connection is accepted, so the case fails naming the engine and the port."
   - "tests/unit/engine-layers.test.mjs gains the wiring case: the wiring module imports the declaration and nothing of instantiation, presets or runtime; a mutation that adds such an import fails."
-  - "Jacks: the patch bay consumes M123's one patch bay (G024, src/js/ui/patch/patch-bay.js rendering from the port contract, K165) and adds no second bay; project.visual-identity-lock holds."
+  - "Jacks: the patch bay consumes M123's one patch bay (G024, src/js/ui/patch/patch-bay.js rendering from the port contract, K165) and adds no second bay; project.visual-identity-lock holds. Arturia and iMS-20 are a quality bar, not a look (owner, relayed by af 2026-11-05)."
   - "Guarded paths (src/js/studio/*, src/js/synth/*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-26."
 validation:
   - "node --test tests/unit/engine-wiring.test.mjs tests/unit/engine-layers.test.mjs tests/unit/v31-studio-model.test.mjs"
