@@ -15,7 +15,7 @@ scope:
 depends_on: []
 acceptance_criteria:
   - "The decision is recorded as evidence on this issue (covers owner_decision) with the mesh thread, date, the deferral, the 21 subviews it covers and the ratchet that holds them, attributed to af with b0."
-  - "U075's link-debt ratchet names the 21 subviews as held, not as resolved."
+  - "On main, the census link-debt ratchet (surface-census.test.mjs) holds the 21 subviews as deepLink null with a deepLinkWhyNot and refuses a rise in that debt; none of them is counted as resolved."
 validation:
   - "manual"
 evidence_required:

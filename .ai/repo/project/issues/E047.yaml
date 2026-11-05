@@ -14,13 +14,13 @@ scope:
   - ".ai/repo/rules/project/no-fake-science.v2.md"
   - "tests/README.md"
 depends_on:
-  - "E045"
+  - "E049"
 acceptance_criteria:
   - "Fail-first: a fixture claim whose note quotes a unit test title that does not exist is refused by knowledge-integrity; on the merge base it passes."
   - "midi-support-state is status guaranteed with implementation and test; a planned claim whose named issue is DONE fails a check."
   - "Claims for the output ceiling, the hard time limit, the loop cap, continuous persistence and Nyquist exist, each naming its test file and quoted test title, and each resolves."
   - "no-fake-science.v2.md no longer says persistence is not machine-checked."
-  - "Not a guarded path under v2. Lane: af."
+  - "Not a guarded path under v2; in scope of R033 once it lands. Lane: af."
 validation:
   - "node --test tests/unit/knowledge-integrity.test.mjs"
   - "npm test"

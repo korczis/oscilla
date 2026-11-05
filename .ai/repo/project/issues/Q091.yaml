@@ -2,7 +2,7 @@ id: Q091
 milestone: M011
 serves:
   - "release-provenance#gate-runs-every-suite"
-title: "LLM decision: project.review-verdict v3 guards every tracked src path fail-closed, the rules' own enforcement, and a generated About station (af with b0, 2026-11-05)"
+title: "LLM decision: project.review-verdict v3 guards every tracked src path fail-closed, the rules' own enforcement, a generated About station, and a second seat for screens (af with b0, 2026-11-05)"
 slug: llm-decision-review-verdict-v3-guards-every-tracked-src-path
 priority: p1
 profile: routine
