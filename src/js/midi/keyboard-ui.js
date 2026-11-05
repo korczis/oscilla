@@ -24,7 +24,8 @@ import {
 } from './keyboard.js';
 import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
-import { armedDefaults, routeOf } from './routes.js';
+import { armedDefaults, keysShown, routeOf } from './routes.js';
+import { mountDockYield } from './dock-yield.js';
 
 export const KEYBOARD_REFUSED = Object.freeze({
   measurement: 'Keyboard notes do not play while the measurement owns the output: stop it '
@@ -98,6 +99,7 @@ export function createKeyboardUi({ win = window } = {}) {
   let kb = null;
   let notes = null;
   let view = null; // { canvas, layout, octaves, draw() }
+  let dock = null; // the dock's yield to the note owner (K171, midi/dock-yield.js)
   const pads = new Set(); // the XY pads' gate releases (kbdPad, K183)
   // Two releases (K183 review F4): the keys' own notes (the computer keys' and the on-screen
   // keys', inputs 'keys' and 'pointer') for a Disarm and the dock's fold, which never cut the
@@ -121,6 +123,10 @@ export function createKeyboardUi({ win = window } = {}) {
     // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
     kbdMore: false,
     kbdBtn: KBD_BTN,
+    // The note owner and the user's expansion as the dock last applied them (midi/dock-yield.js
+    // sets both on a state change): what kbdKeysShown reads through routes.js keysShown.
+    kbdNoteOwner: null,
+    kbdDockExpanded: false,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {
@@ -131,10 +137,12 @@ export function createKeyboardUi({ win = window } = {}) {
     get kbdDocked() {
       return this.kbdView === 'synth' || this.kbdView === 'studio';
     },
-    /** The on-screen keys show wherever they play; in the Studio only while armed, so the
-     *  disarmed dock is one row and the graph keeps the height (the owner's report). */
+    /** The on-screen keys show wherever the dock is docked (routes.js keysShown, the dock's one
+     *  rule, K171): folded where a pad owns the notes, they go with it; in the Studio only
+     *  while armed, so the disarmed dock is one row and the graph keeps the height. */
     get kbdKeysShown() {
-      return this.kbdView !== 'studio' || this.kbdArmedHere;
+      return keysShown({ route: routeOf(this.kbdView), owner: this.kbdNoteOwner,
+        userExpanded: this.kbdDockExpanded }) && (this.kbdView !== 'studio' || this.kbdArmedHere);
     },
     get kbdArmedHere() {
       const v = this.kbdView;
@@ -245,7 +253,12 @@ export function createKeyboardUi({ win = window } = {}) {
       }
 
       if (doc && typeof doc.querySelector === 'function') {
-        const mount = () => { view = mountKeys(win, doc, kb) || view; trackDockHeight(win, doc); };
+        const mount = () => {
+          view = mountKeys(win, doc, kb) || view;
+          dock = dock || mountDockYield({ win, doc, cmp, buttonClass: KBD_BTN,
+            dock: doc.querySelector('[data-osc="keyboard"]'), band: trackDockHeight(win, doc),
+            release: kbdReleaseKeys });
+        };
         if (typeof cmp.$nextTick === 'function') cmp.$nextTick(mount); else mount();
       }
     },
@@ -295,6 +308,14 @@ export function createKeyboardUi({ win = window } = {}) {
       if (kb) kb.clear('midi');
     },
 
+    /** The dock's handle (K171): unfold or fold the keys where a pad owns the notes. */
+    kbdDockToggle() {
+      return dock ? dock.toggle() : false;
+    },
+    get kbdDockYields() {
+      return !!dock && dock.yields;
+    },
+
     /** Let go of the keys' own notes (Disarm, the dock's fold), never an XY pad's; returns how
      *  many keys or pointers held one. */
     kbdReleaseKeys() {
@@ -311,12 +332,13 @@ export function createKeyboardUi({ win = window } = {}) {
  * The band the docked keyboard covers at the bottom of the viewport (the dock and the status
  * bar under it) as --osc-dock-h on the root, 0px unless the dock is fixed over the page (the
  * Synth dock): the Synth view reserves it below its content and the page keeps it as scroll
- * padding, so no control and no focused element ends under the dock (WCAG 2.4.11).
+ * padding, so no control and no focused element ends under the dock (WCAG 2.4.11). Returns
+ * the measurement, which the dock's yield runs again before it scrolls (K171).
  */
 function trackDockHeight(win, doc) {
   const dock = doc.querySelector('[data-osc="keyboard"]');
   const root = doc.documentElement;
-  if (!dock || !root || typeof win.ResizeObserver !== 'function') return;
+  if (!dock || !root || typeof win.ResizeObserver !== 'function') return () => {};
   const set = () => {
     const fixed = win.getComputedStyle(dock).position === 'fixed';
     const top = dock.getBoundingClientRect().top;
@@ -328,6 +350,7 @@ function trackDockHeight(win, doc) {
     new win.MutationObserver(set).observe(dock, { attributes: true, attributeFilter: ['class'] });
   }
   set();
+  return set;
 }
 
 /**

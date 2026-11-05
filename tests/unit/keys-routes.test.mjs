@@ -16,7 +16,7 @@ test('one table: each workspace names its sink, its first arm state and its leav
   assert.equal(typeof mod.routeOf, 'function');
   assert.deepEqual(Object.keys(mod.KEY_ROUTES).sort(), ['playground', 'studio', 'synth']);
   assert.deepEqual({ ...mod.KEY_ROUTES.synth },
-    { plays: 'synthSink', armed: true, leave: null, editors: null, yieldsTo: null });
+    { plays: 'synthSink', armed: true, leave: null, editors: null, yieldsTo: 'xy-pad' });
   // The Studio's graph and timeline keep their letter shortcuts while they have the focus.
   assert.deepEqual({ ...mod.KEY_ROUTES.studio },
     { plays: 'studioSink', armed: true, leave: 'leave',

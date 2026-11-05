@@ -6,7 +6,7 @@
 // the one patch catalog, and synth/xy.js xyInsertAction cables Y at the panel's insertion.
 //
 //   mountSynthXy(host, { store, transport, panel, owner, app, arm, say, jackName, dispatch,
-//     notes, mountPad }) -> { view, owner, release(reason), destroy() }
+//     notes, mountPad }) -> { view, owner, notes, release(reason), destroy() }
 //     store      the Studio store handle (getModel, dispatch): the one writer of the document
 //     transport  the Studio transport, or a function returning it (late-bound: null before
 //                audio); the pad's X and Y reach its node through transport.live, never the
@@ -61,6 +61,12 @@
 // lift) shows "Tap once to start audio" on that line; once the context runs, within the same
 // gesture or the next, a note still held is played again (project.a-phone-sounds, the cold first
 // touch).
+//
+// The note owner (K171): the mounted pad plays the notes (enabled from the first touch, K183),
+// so while it is mounted the mount claims the notes of its home workspace for 'xy-pad'
+// (midi/dock-yield.js claimNotes) and drops the claim when it is destroyed; mount.notes says
+// which. The docked keyboard derives its state from that claim and its route (midi/routes.js
+// dockState); nothing here touches the dock.
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
@@ -69,6 +75,7 @@ import {
   XY_RECIPES, xyPatchAction, xyPresetPatch, xyRoom, xyTarget, xyTargetAction, xyTargets,
 } from '../xy.js';
 import { esc } from './face.js';
+import { claimNotes } from '../../midi/dock-yield.js';
 
 export const XY_TEXT = Object.freeze({
   missing: 'The XY pad is not in this Studio document: press Add the XY pad first.',
@@ -200,6 +207,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   const offs = [];
   let view = null;
   let destroyed = false;
+  let owns = null; // 'xy-pad' while the pad is mounted and playable: it owns the notes (K171)
   let heard = null; // the transport whose Stop this mount listens to
   let offHeard = () => {};
   let held = null; // the note the pad holds in the keys' note layer, while its gate is open
@@ -395,10 +403,17 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       },
     });
     show(pos); // the cursor shown; the node hears nothing before the first touch
+    owns = 'xy-pad'; // mounted and playable: enabled from the first touch (K183)
+  }
+  const win = host.ownerDocument && host.ownerDocument.defaultView;
+  if (owns) {
+    claimNotes(win, { id: uid, owner: owns, home: HOME[owner] || owner,
+      el: box.querySelector('[data-xy-surface]') || box });
   }
 
   return {
     get view() { return view; },
+    get notes() { return destroyed ? null : owns; },
     owner,
     release,
     destroy() {
@@ -411,6 +426,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       while (offs.length) offs.pop()();
       if (input && typeof input.off === 'function') input.off();
       target.unwire();
+      if (owns) claimNotes(win, { id: uid, owner: null });
     },
   };
 }

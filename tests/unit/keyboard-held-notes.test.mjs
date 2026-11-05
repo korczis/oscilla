@@ -194,8 +194,8 @@ test('component: the XY pad as one more input of the keys, released with them', 
   assert.equal(cmp.kbdPad(null), null, 'a pad without a release is refused');
 });
 
-// K183 review F4: a Disarm lets go of the keys' own notes (kbdReleaseKeys, as the dock's fold
-// will, K171), never the XY pad's: the pad is not the keys; the panic (blur, hide, Escape, a
+// K183 review F4, K171: a Disarm and the dock's fold let go of the keys' own notes
+// (kbdReleaseKeys, the fold's release in midi/dock-yield.js), never the XY pad's: the pad is not the keys; the panic (blur, hide, Escape, a
 // workspace switch, All Notes Off) still cuts the pad's note with the keys'.
 test('component: Disarm releases the keys\' notes and keeps the pad\'s; the panic cuts both',
   async () => {

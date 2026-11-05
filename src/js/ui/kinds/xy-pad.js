@@ -135,6 +135,16 @@ const WHY = 'pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2 rou
   + 'border border-solid border-gray-300 bg-white px-3 py-2 text-center text-sm font-medium '
   + 'text-gray-900 shadow-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white';
 
+// The pad's height follows the room that is really there (K171, the OSCILLA-pad audit S2): at
+// most the dynamic viewport less the app chrome above the pad (--osc-chrome-h) and the band the
+// docked keyboard covers (--osc-dock-h), both measured by midi/dock-yield.js, and a gap; 14rem
+// on a phone and 18rem from sm up where the room allows, never less than 6rem, so the whole pad
+// fits above the dock at 1536 x 1024, 1280 x 720, 390 x 844 and 375 x 667, folded and unfolded
+// with its keys (at 375 x 667 the unfolded keys leave about 7.5rem). Each class is one string,
+// as the build's class scan reads it.
+const ROOM = 'h-56 min-h-24 sm:h-72 '
+  + 'max-h-[calc(100dvh_-_var(--osc-chrome-h,0px)_-_var(--osc-dock-h,0px)_-_0.5rem)]';
+
 let mounted = 0;
 
 export function mountXyPad(host, opts) {
@@ -153,7 +163,7 @@ export function mountXyPad(host, opts) {
     + `<div role="application" tabindex="0" data-xy-surface="pad" aria-roledescription="XY pad" `
     + `aria-label="${esc(label)}" aria-describedby="${esc([`${uid}-d`, ...(disabled
       ? [`${uid}-w`] : []), ...describedBy].join(' '))}" `
-    + `aria-disabled="${disabled ? 'true' : 'false'}" class="relative h-56 w-full sm:h-72 `
+    + `aria-disabled="${disabled ? 'true' : 'false'}" class="relative ${ROOM} w-full `
     + 'touch-none select-none overflow-hidden rounded-lg focus:outline-none '
     + `focus-visible:ring-4 focus-visible:ring-primary-500 ${disabled ? SURFACE_OFF
       : 'bg-gray-900'}">`

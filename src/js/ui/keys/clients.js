@@ -8,9 +8,12 @@
 //     'instrument.space'  Space, Hold to Play in the workspaces whose Space owner is the
 //                         instrument (ui/shortcuts.js SPACE_OWNER, ADR 0050): held it plays,
 //                         released it stops, a programmed pattern triggers once
+//     'keys.dock'         Alt+K, where the docked keyboard yields to a pad that owns the notes
+//                         (K171, midi/dock-yield.js): unfold or fold the keys, as its handle does
 //   pageKeyContext(cmp) -> { workspace, view }   what the dispatcher scopes keys by; the
 //     Synth's view is its tab ('panel', 'engines', 'xy')
 import { instrumentTakesSpace } from '../shortcuts.js';
+import { DOCK_KEY } from '../../midi/dock-yield.js';
 
 export const pageKeyContext = (cmp) => ({ workspace: cmp.workspace,
   view: cmp.workspace === 'synth' && cmp.synth ? cmp.synth.tab || null : null });
@@ -28,6 +31,10 @@ export function bindPageKeys({ keys, cmp, stopSequencer }) {
       when: () => instrumentTakesSpace(cmp.workspace), group: 'Instrument',
       label: 'Hold to Play (a programmed pattern triggers once)',
       run: (e) => cmp.onKeyDown(e), up: (e) => cmp.onKeyUp(e) }),
+    keys.bind({ id: 'keys.dock', keys: [DOCK_KEY], scope: { workspace: '*' },
+      when: () => !!cmp.kbdDockYields, group: 'Keyboard',
+      label: 'Unfold or fold the keyboard where a pad plays the notes (its handle)',
+      run: () => cmp.kbdDockToggle() }),
   ];
   return () => offs.forEach((off) => off());
 }

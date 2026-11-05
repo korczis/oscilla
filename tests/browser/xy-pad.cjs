@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // OSCILLA Synth XY tab (plan K097, K167) on the built dist/index.html in chromium, firefox and
-// webkit, at 1536 x 1024 and 390 x 844 (touch). Every sound check reads the engine's analyser
-// after the safety chain or the runtime's own pad handle, never the DOM alone.
+// webkit, at 1536 x 1024, 1280 x 720 (x-dock-desktop) and 390 x 844 (touch). Every sound check
+// reads the engine's analyser after the safety chain or the runtime's own pad handle, never the
+// DOM alone.
 //
 //   node tests/browser/xy-pad.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
 //        [--only x-link,x-pointer]
@@ -12,7 +13,8 @@
 // opens a page and is reported as skipped, never counted as a check (K148): a leg whose every
 // check was skipped prints a SKIP line and reports nothing.
 //
-// Checks (desktop; the phone leg runs x-first and x-touch, the phone-cold leg x-cold-touch):
+// Checks (desktop; the phone leg runs x-first and x-touch, the phone-cold leg x-cold-touch, the
+// phone-dock and phone-dock-se legs x-dock-yields, the laptop leg x-dock-desktop):
 //   x-link     linked: #m=synth&yt=xy opens the XY tab; the XY lead preset chosen in the preset
 //              menu is one undo entry that sets the pad's scale on its face (C, minor
 //              pentatonic) and cables Y alone into LPF Cutoff, no Pitch or Gate cable (K183
@@ -70,6 +72,33 @@
 //              starts it running even under the gesture rule, so there the line must never say
 //              it); the lift silences, the line says the pad plays, a second held touch sounds
 //              and its release silences; no touch edits the document
+//   x-dock-yields    (K171; 390 x 844 and 375 x 667, the iPhone 13 and SE sizes; touch, mobile
+//              where the engine has it, the gesture rule ON; every engine) from the Synth's
+//              own entry on its Panel tab (no pad mounted: the keys own the notes, the dock
+//              docked with its keys shown), the XY tab opened by a tap: the pad is playable at
+//              once (K183) and owns the notes, and with no scroll by the test the whole pad is
+//              inside the first viewport and nothing covers it (elementFromPoint at its four
+//              corners, 8 px in for its rounded border, and its centre is the pad), the docked
+//              keyboard folded to its handle (aria-expanded false, the keys not drawn), visible
+//              below the pad; the first tap on the pad sounds (the engine's analyser, sampled
+//              every frame from before the tap, a tap of two input events: CDP touch in
+//              chromium, the pointer in webkit and firefox; its peak above -60 dB, a short note
+//              over the -70 dB silence line); while the pad owns the notes a held computer key A
+//              sounds C4 (the analyser) and its release silences; the handle unfolds the dock,
+//              with its keys shown, and folds it again by tap, by Enter on the focused handle
+//              and by Alt+K (the key registry), the pad whole above it each time; a computer
+//              key held with the dock unfolded is released when it folds
+//   x-dock-desktop   (K171; 1536 x 1024 and 1280 x 720, the owner's screenshot of 2026-11-05: the
+//              dock covered the pad's lower part) on the XY tab as the owner meets it (the pad
+//              owns the notes), with no scroll by the test, nothing covers the pad:
+//              elementFromPoint at its four corners, 2 px inside its rounded border, and its
+//              centre is the pad, never the dock; the dock is folded to its handle
+//              (aria-expanded false, the keys not drawn), the handle visible inside the viewport
+//              below the pad and the element at its centre; a pointer held on the pad sounds,
+//              and unfolding the dock by Alt+K (the pad whole above it, its height following the
+//              room: 100dvh less the chrome and --osc-dock-h, the keys shown) and folding it
+//              again by Alt+K leave the pad's note sounding (the fold releases only the keys'
+//              notes); the lift silences
 'use strict';
 
 const fs = require('node:fs');
@@ -100,13 +129,20 @@ const LAUNCH = {
 // engagement, stated; the other engines as they ship.
 const GESTURE_LAUNCH = { chromium: { args: ['--autoplay-policy=user-gesture-required'] },
   firefox: {}, webkit: {} };
-const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 },
-  'phone-cold': { width: 390, height: 844 } };
+const SIZES = { desktop: { width: 1536, height: 1024 }, laptop: { width: 1280, height: 720 },
+  phone: { width: 390, height: 844 }, 'phone-cold': { width: 390, height: 844 },
+  'phone-dock': { width: 390, height: 844 }, 'phone-dock-se': { width: 375, height: 667 } };
 const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-cold-touch': 'phone-cold' };
-// x-first runs on the desktop and the phone legs.
-const LEGS_OF = { 'x-first': ['desktop', 'phone'] };
+// x-first runs on the desktop and the phone legs; K171 holds at the iPhone 13 and SE sizes,
+// and at 1536 x 1024 and 1280 x 720 with a mouse.
+const LEGS_OF = { 'x-first': ['desktop', 'phone'],
+  'x-dock-yields': ['phone-dock', 'phone-dock-se'], 'x-dock-desktop': ['desktop', 'laptop'] };
+// The legs with the browser's gesture rule on and mobile emulation where the engine has it.
+const GESTURE_LEGS = new Set(['phone-cold', 'phone-dock', 'phone-dock-se']);
 // The checks about the XY lead preset; every other one opens the tab as the owner meets it.
 const PRESET_OF = { 'x-link': 'xy-lead', 'x-pointer': 'xy-lead' };
+// The tab a check opens the Synth on (default the XY tab): x-dock-yields starts on its Panel.
+const TAB_OF = { 'x-dock-yields': 'panel' };
 // Checks that open their own page (x-cold-touch: with no user activation before its touch).
 const SELF_OPEN = new Set(['x-cold-touch']);
 // Engines a check cannot run on, with the reason (reported as a skip, never as a check).
@@ -759,6 +795,187 @@ function defineChecks() {
     return { ok: true, coldSeen, lines: after.lines.slice(0, 4),
       off: Number(off.rmsDb.toFixed(1)) };
   });
+
+  // ---- K171: the docked keyboard yields to the pad that owns the notes
+  const HANDLE = '[data-osc="keyboard.handle"]';
+  /** The dock and the pad as the first viewport shows them, read without scrolling. */
+  const dockView = (page, IN = 8) => page.evaluate((IN) => {
+    const dock = document.querySelector('[data-osc="keyboard"]');
+    const handle = document.querySelector('[data-osc="keyboard.handle"]');
+    const keys = document.querySelector('[data-osc="keyboard.keys"]');
+    const s = document.querySelector('[data-xy-surface]');
+    const shown = (el) => !!el && !el.closest('[hidden]') && el.getClientRects().length > 0;
+    const r = (el) => { const b = el.getBoundingClientRect(); return { top: b.top, bottom: b.bottom,
+      left: b.left, right: b.right }; };
+    const pad = s ? r(s) : null;
+    // IN px inside the pad's rounded border, on each corner's diagonal (a corner's own hit test
+    // follows its radius: 2 px in from the box's corner is outside an 8 px arc).
+    const rad = s ? parseFloat(getComputedStyle(s).borderTopLeftRadius) || 0 : 0;
+    const d = rad > IN ? rad - (rad - IN) / Math.SQRT2 : IN;
+    const pts = pad ? [[pad.left + d, pad.top + d], [pad.right - d, pad.top + d],
+      [pad.left + d, pad.bottom - d], [pad.right - d, pad.bottom - d],
+      [(pad.left + pad.right) / 2, (pad.top + pad.bottom) / 2]] : [];
+    const hits = pts.map(([x, y]) => {
+      const e = document.elementFromPoint(x, y);
+      return !!e && e.closest('[data-xy-surface]') === s;
+    });
+    return { vh: window.innerHeight, vw: window.innerWidth, pad, hits,
+      state: dock.getAttribute('data-dock-state'), handle: shown(handle) ? r(handle) : null,
+      expanded: handle ? handle.getAttribute('aria-expanded') : null,
+      keys: shown(keys), folded: [...dock.children]
+        .filter((c) => c.hidden && !c.hasAttribute('data-dock-keep')).length,
+      held: window.OSCILLA.app.kbdHeld, disabled: s ? s.getAttribute('aria-disabled') : null,
+      handleHit: shown(handle) ? (() => {
+        const b = handle.getBoundingClientRect();
+        const e = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2);
+        return !!e && handle.contains(e);
+      })() : false, dockTop: dock.getBoundingClientRect().top };
+  }, IN);
+  const inView = (v) => !!v.pad && v.pad.top >= 0 && v.pad.bottom <= v.vh && v.pad.left >= 0
+    && v.pad.right <= v.vw && v.hits.length === 5 && v.hits.every(Boolean);
+  // The keys are drawn wherever the dock is unfolded and hidden with it folded (routes.js
+  // keysShown, the dock's one rule); unfolded, the pad stays whole above the dock (its height
+  // follows the room).
+  // whole: false where the test itself moved the focus (and so the page) since the last unfold.
+  async function dockIs(page, want, what, { IN = 8, whole = true } = {}) {
+    let v = null;
+    try {
+      await until(async () => {
+        v = await dockView(page, IN);
+        return v.state === want && v.expanded === String(want !== 'collapsed')
+          && v.keys === (want === 'docked')
+          && (!whole || (inView(v) && v.pad.bottom <= v.dockTop));
+      }, { ms: SOUND_MS, what });
+    } catch (e) {
+      throw new Error(`${e.message}; last ${JSON.stringify(v)}`);
+    }
+    return v;
+  }
+
+  def('x-dock-yields', async ({ page, browserName }) => {
+    const before = await dockView(page); // the Synth's Panel tab: no pad, the keys own the notes
+    await page.tap('#osc-synth-tab-xy'); // the pad, playable at once (K183), owns the notes
+    let v = null;
+    await until(async () => {
+      v = await dockView(page);
+      return v.disabled === 'false' && v.state === 'collapsed' && inView(v) && !!v.handle;
+    }, { ms: SOUND_MS, what: 'the playable pad is whole in the first viewport, the dock folded' });
+    if (before.state !== 'docked' || !before.keys || v.expanded !== 'false' || v.keys
+      || v.handle.top < v.pad.bottom || v.handle.bottom > v.vh) {
+      return { ok: false, detail: 'the dock did not fold to a handle below the pad', before, v };
+    }
+    // The first tap on the pad sounds: the analyser is sampled every frame from before it.
+    await page.evaluate(() => {
+      const w = window;
+      w.__k171Peak = -Infinity;
+      const tick = () => {
+        const e = w.OSCILLA.engine;
+        if (e.ctx && e.analyser && e.ctx.state === 'running') {
+          const d = new Float32Array(e.analyser.fftSize);
+          e.analyser.getFloatTimeDomainData(d);
+          let s = 0;
+          for (const x of d) s += x * x;
+          w.__k171Peak = Math.max(w.__k171Peak, 10 * Math.log10(s / d.length + 1e-24));
+        }
+        if (w.__k171Peak !== null) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    const c = { x: (v.pad.left + v.pad.right) / 2, y: (v.pad.top + v.pad.bottom) / 2 };
+    // A finger's tap: its start and its end are two input events, never one task (Playwright's
+    // touchscreen.tap delivers both at once, a press no finger makes). Chromium taps by CDP
+    // touch; webkit and firefox, without CDP touch, press with the pointer.
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart',
+        touchPoints: [{ x: c.x, y: c.y, id: 1 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } else {
+      await page.mouse.move(c.x, c.y);
+      await page.mouse.down();
+      await page.mouse.up();
+    }
+    let peak = null;
+    await until(async () => {
+      peak = await page.evaluate(() => window.__k171Peak);
+      return peak > -60; // a tap is a short note: well above the -70 dB silence line
+    }, { ms: SOUND_MS, what: 'the first tap on the pad sounds (the engine analyser)' });
+    await page.evaluate(() => { window.__k171Peak = null; });
+    await silent(page, 'the tap ends silent');
+    // While the pad owns the notes the computer keys still play: a held A sounds C4.
+    await page.locator('#osc-synth-tab-xy').focus();
+    const keyDb = await keyA(page, 'the pad owns the notes, the dock folded');
+    // The handle unfolds and folds the keys: by tap, by Enter on it, by Alt+K.
+    await page.tap(HANDLE);
+    const tapped = await dockIs(page, 'docked', 'a tap on the handle unfolds the keys');
+    await page.tap(HANDLE);
+    await dockIs(page, 'collapsed', 'a second tap folds them');
+    await page.locator(HANDLE).focus();
+    await page.keyboard.press('Enter');
+    await dockIs(page, 'docked', 'Enter on the focused handle unfolds the keys');
+    await page.keyboard.press('Enter');
+    await dockIs(page, 'collapsed', 'Enter again folds them');
+    await page.locator('[data-xy-surface]').focus();
+    await page.keyboard.press('Alt+KeyK');
+    const keyed = await dockIs(page, 'docked', 'Alt+K (the key registry) unfolds the keys');
+    // A computer key held while the dock is unfolded is released when it folds.
+    await page.locator('#osc-synth-tab-xy').focus();
+    await page.keyboard.down('KeyA');
+    await until(async () => !!(await dockView(page)).held, { ms: SOUND_MS,
+      what: 'the computer key A holds a note with the dock unfolded' });
+    await page.keyboard.press('Alt+KeyK');
+    const folded = await dockIs(page, 'collapsed', 'Alt+K folds the dock', { whole: false });
+    await until(async () => !(await dockView(page)).held, { ms: SOUND_MS,
+      what: 'folding the keys released the held note' });
+    await page.keyboard.up('KeyA');
+    return { ok: true, pad: v.pad, handle: v.handle, peak: Number(peak.toFixed(1)), keyDb,
+      tapped: tapped.state, keyed: keyed.state, folded: folded.folded };
+  });
+
+  def('x-dock-desktop', async ({ page, sizeName }) => {
+    // The pad, playable as the tab opens (K183), owns the notes: the dock folds at this size too.
+    let v = null;
+    try {
+      await until(async () => {
+        v = await dockView(page, 2);
+        return v.disabled === 'false' && v.state === 'collapsed' && inView(v) && !!v.handle;
+      }, { ms: SOUND_MS, what: `the playable pad is whole at ${sizeName}, the dock folded` });
+    } catch (e) {
+      return { ok: false, detail: e.message, v };
+    }
+    const ok = v.expanded === 'false' && !v.keys && v.folded > 0 && v.handleHit
+      && v.handle.top >= v.pad.bottom && v.handle.bottom <= v.vh;
+    if (!ok) {
+      return { ok, detail: 'the dock covers the pad or hides its handle', vw: v.vw, vh: v.vh,
+        pad: v.pad, handle: v.handle, hits: v.hits, keys: v.keys };
+    }
+    // Unfolded by the user (Alt+K, the key registry): the keys show and the pad stays whole
+    // above the dock; Alt+K folds it again. A note the pad holds meanwhile keeps sounding: the
+    // fold releases only the keys' own notes, never the pad's.
+    await page.locator('[data-xy-surface]').focus();
+    await page.keyboard.press('Alt+KeyK');
+    const open = await dockIs(page, 'docked',
+      `Alt+K unfolds the dock at ${sizeName}, the pad whole`, { IN: 2 });
+    await page.keyboard.press('Alt+KeyK');
+    // A fold by the user moves nothing: the pad is where the unfold put it.
+    const folded = await dockIs(page, 'collapsed', `Alt+K folds it at ${sizeName}`, { IN: 2 });
+    const p = { x: (folded.pad.left + folded.pad.right) / 2,
+      y: (folded.pad.top + folded.pad.bottom) / 2 };
+    const hold = await press(page, p);
+    await loud(page, 'a pointer held on the pad sounds');
+    await page.keyboard.press('Alt+KeyK');
+    await dockIs(page, 'docked', `Alt+K unfolds the dock while the pad sounds`,
+      { IN: 2, whole: false });
+    await page.keyboard.press('Alt+KeyK');
+    await dockIs(page, 'collapsed', 'Alt+K folds it while the pad sounds', { IN: 2,
+      whole: false });
+    const held = await loud(page, 'the fold left the pad\'s note sounding');
+    await hold.lift();
+    const off = await silent(page, 'the lift silences');
+    return { ok, vw: v.vw, vh: v.vh, pad: v.pad, handle: v.handle, open: { pad: open.pad,
+      dockTop: open.dockTop }, held: Number(held.rmsDb.toFixed(1)),
+      off: Number(off.rmsDb.toFixed(1)) };
+  });
   return checks;
 }
 
@@ -770,7 +987,7 @@ const skipOf = (name, sizeName, browserName) => ((SKIP_OF[`${name}/${sizeName}`]
   || SKIP_OF[name]) || {})[browserName] || null;
 
 async function runLeg(browserName, sizeName, base, leg) {
-  const cold = sizeName === 'phone-cold';
+  const cold = GESTURE_LEGS.has(sizeName); // the gesture rule on, mobile where it exists
   const results = {};
   const todo = defineChecks().filter(({ name }) => runsAt(name, sizeName));
   // K148: a skip is recorded under this leg's own key and never counted as a check.
@@ -788,7 +1005,7 @@ async function runLeg(browserName, sizeName, base, leg) {
   try {
     for (const { name, fn } of run) {
       const context = await browser.newContext({ viewport: SIZES[sizeName],
-        hasTouch: sizeName !== 'desktop',
+        hasTouch: sizeName.startsWith('phone'),
         // Firefox has no mobile emulation (Playwright refuses isMobile there).
         ...(cold && browserName !== 'firefox' ? { isMobile: true } : {}) });
       const errors = [];
@@ -797,7 +1014,8 @@ async function runLeg(browserName, sizeName, base, leg) {
       try {
         // x-cold-touch opens its own page: no wait of the harness may grant an activation.
         const page = SELF_OPEN.has(name) ? null
-          : await openXy(context, base, { preset: PRESET_OF[name] || null });
+          : await openXy(context, base, { preset: PRESET_OF[name] || null,
+            tab: TAB_OF[name] || 'xy' });
         const v = await bounded(fn({ page, context, base, browserName, sizeName }),
           { ms: CHECK_MS, what: `${name} finishes` });
         results[name] = { ...v, ok: v.ok && errors.length === 0, errors: errors.slice(0, 4),
