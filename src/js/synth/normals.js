@@ -7,7 +7,9 @@
 //     cables: non-normal edges between panel modules; foreign: edges into a panel jack from a
 //     node outside the panel (a Studio edit)
 //   panelCables(model, panel) -> [{ id, from, to, fromModule }]   the cables as jack ids
-//   jackState(model, panel, jackId) -> 'normalled' | 'patched' | 'mixed' | 'open' | 'free'
+//   jackState(model, panel, jackId)
+//     -> 'normalled' | 'summing' | 'patched' | 'mixed' | 'open' | 'free'
+//     summing: a performance cable (`adds`) feeds the jack and adds to its sounding normals
 //     mixed: something the panel did not patch (a Studio edge) feeds the jack while its normals
 //     still sound; breakNormals(model, panel, jackId) is the panel's way to make it 'patched'
 //   jackReason(model, panel, jackId) -> why a cable into the jack would do nothing, or null
@@ -19,6 +21,12 @@
 //   createAmountMemory(panel) -> { note(model), depth(amountKey) }   the last depth of each
 //     amount knob in this session, so a knob whose every edge a cable broke comes back at its
 //     setting when the normal is restored (the model holds a depth only on an edge)
+//
+// A cable from a performance output (a module's `adds`, panels/xy.js: the XY pad's X and Y,
+// K183) adds to what is normalled at its jack instead of replacing it: patchCable breaks no
+// normal for it, jackState reads the jack as 'summing' (its normals sound, the cable adds to
+// them; the bay draws and names it so, ui/patch/patch-bay.js), and removing the last
+// replacing cable restores the normals whatever performance cable stays.
 //
 // A new cable's props (review of #329): the props of the normal it replaces when it has the
 // same source; else polarity and mapping of a normal of the jack whose source has the same
@@ -37,6 +45,19 @@ const nodeIds = (model, panel) => {
 };
 const endsAt = (e, node, port) => e.to.node === node && e.to.port === port;
 const startsAt = (e, node, port) => e.from.node === node && e.from.port === port;
+/** Whether jack `from` ('module.port') is a performance output whose cables add (`adds`). */
+const addsFrom = (panel, from) => {
+  const { module, port } = splitJack(from);
+  const m = panel.module(module);
+  return !!m && (m.adds || []).includes(port);
+};
+/** Whether edge `e` leaves a performance output of the panel. */
+const addsEdge = (model, panel, e) => {
+  for (const [mid, n] of panel.resolve(model)) {
+    if (n && n.id === e.from.node) return addsFrom(panel, `${mid}.${e.from.port}`);
+  }
+  return false;
+};
 
 /**
  * The edge that is normal `n`, if present: its own id (`panel-instance-nX`, the id instantiate,
@@ -93,9 +114,13 @@ export function jackState(model, panel, jack) {
   const rows = panel.normals.filter((n) => n.to === jack);
   const { normals } = panelEdges(model, panel);
   const live = rows.some((n) => normals.has(n.id));
-  if (cablesInto(model, panel, jack, { foreign: true }).length) return live ? 'mixed' : 'patched';
+  // A performance cable beside a sounding normal adds to it: the jack sums (K183).
+  const all = cablesInto(model, panel, jack, { foreign: true });
+  const fed = all.filter((e) => !live || !addsEdge(model, panel, e));
+  if (fed.length) return live ? 'mixed' : 'patched';
   if (!rows.length) return 'free';
-  return live ? 'normalled' : 'open';
+  if (!live) return 'open';
+  return all.length ? 'summing' : 'normalled';
 }
 
 /**
@@ -122,6 +147,7 @@ export function brokenByRemoval(model, panel) {
 
 export const STATE_TEXT = Object.freeze({
   normalled: 'normalled', patched: 'patched', free: 'free',
+  summing: 'normalled, a performance cable adds to the normals',
   open: 'open: normal removed in Studio',
   mixed: 'patched in Studio while its normal still sounds',
 });
@@ -216,8 +242,8 @@ export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY, m
   if (why) return { reason: why };
   const steps = [];
   const { normals } = panelEdges(model, panel);
-  const broken = panel.normals.filter((n) => n.to === to && normals.has(n.id))
-    .map((n) => normals.get(n.id).id);
+  const broken = addsFrom(panel, from) ? [] : panel.normals
+    .filter((n) => n.to === to && normals.has(n.id)).map((n) => normals.get(n.id).id);
   const replaced = inp.multiple ? []
     : cablesInto(model, panel, to, { foreign: true }).map((e) => e.id);
   const same = model.graph.edges.find((e) => startsAt(e, id(a.module), a.port)
@@ -261,7 +287,7 @@ export function unpatch(model, panel, edgeId, { memory = null } = {}) {
   for (const [mid, node] of map) if (node && node.id === e.to.node) jack = `${mid}.${e.to.port}`;
   const steps = [{ type: 'EDGE_REMOVE', edgeIds: [edgeId] }];
   const rest = jack ? cablesInto(model, panel, jack, { foreign: true })
-    .filter((x) => x.id !== edgeId) : [1];
+    .filter((x) => x.id !== edgeId && !addsEdge(model, panel, x)) : [1];
   if (jack && !rest.length) steps.push(...normalSteps(model, panel, jack, { memory }));
   return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`, steps } };
 }

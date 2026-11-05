@@ -378,3 +378,62 @@ test('notes.js: silence and All Notes Off release a key held on a player left be
   notes.handle([0xb0, 123, 0], 2);
   assert.deepEqual(calls, [['engine', 'notesOff'], ['synth', 'off', 50]]);
 });
+
+// K183 (option B, af 2026-11-05): the XY pad slides its one held note between scale cells
+// without a new gate, so a held key moves to a new key on the same sink and input, and the
+// caller sends the sink's legato (or a note-off and a note-on).
+function legatoRig() {
+  const offs = [];
+  const sink = { noteOff: (note, info) => offs.push([note, info.reason]) };
+  const other = { noteOff: (note, info) => offs.push(['other', note, info.reason]) };
+  const held = createHeldNotes();
+  const events = [];
+  held.on((e) => events.push([e.type, e.key, e.reason]));
+  return { held, sink, other, offs, events };
+}
+
+test('legato moves a held key to a new key on its sink and input, with no note-off', () => {
+  const { held, sink, offs, events } = legatoRig();
+  held.hold('xy:0:60', { sink, note: 60, velocity: 100, input: 'xy' });
+  assert.equal(held.legato('xy:0:60', 'xy:0:63', { note: 63 }), sink);
+  assert.deepEqual(held.held(), [{ key: 'xy:0:63', note: 63, velocity: 100, input: 'xy', sink }]);
+  assert.deepEqual(offs, []);
+  assert.deepEqual(events.slice(1), [['release', 'xy:0:60', 'legato'],
+    ['hold', 'xy:0:63', 'legato']]);
+  assert.ok(RELEASE_REASONS.includes('legato'));
+});
+
+test('legato of a key that is not held changes nothing and returns null', () => {
+  const { held, offs, events } = legatoRig();
+  assert.equal(held.legato('xy:0:60', 'xy:0:63', { note: 63 }), null);
+  assert.deepEqual(held.held(), []);
+  assert.deepEqual(offs, []);
+  assert.deepEqual(events, []);
+});
+
+test('legato onto a key held elsewhere first releases that key on its own sink', () => {
+  const { held, sink, other, offs } = legatoRig();
+  held.hold('xy:0:60', { sink, note: 60, input: 'xy' });
+  held.hold('xy:0:63', { sink: other, note: 63, input: 'xy' });
+  held.legato('xy:0:60', 'xy:0:63', { note: 63, velocity: 70 });
+  assert.deepEqual(offs, [['other', 63, 're-press']]);
+  assert.deepEqual(held.held().map((e) => [e.key, e.velocity, e.sink === sink]),
+    [['xy:0:63', 70, true]]);
+});
+
+test('a slid key is released by releaseAll like any other (no entry outlives it)', () => {
+  const { held, sink, offs } = legatoRig();
+  held.hold('xy:0:60', { sink, note: 60, input: 'xy' });
+  held.legato('xy:0:60', 'xy:0:62', { note: 62 });
+  held.legato('xy:0:62', 'xy:0:65', { note: 65 });
+  assert.equal(held.releaseAll('hide', { input: 'xy' }), 1);
+  assert.deepEqual(offs, [[65, 'hide']]);
+  assert.equal(held.size, 0);
+});
+
+test('legato to the same key is a no-op that returns the sink', () => {
+  const { held, sink, events } = legatoRig();
+  held.hold('xy:0:60', { sink, note: 60, input: 'xy' });
+  assert.equal(held.legato('xy:0:60', 'xy:0:60', { note: 60 }), sink);
+  assert.equal(events.length, 1);
+});

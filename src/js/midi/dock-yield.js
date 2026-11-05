@@ -13,10 +13,14 @@
 //   mountDockYield({ win, doc, cmp, dock, band, release, buttonClass }) -> the same, drawn:
 //     a one-line handle (data-osc="keyboard.handle", aria-expanded) and a status line, both
 //     made here so src/index.html carries nothing; folded, every other child of the dock is
-//     hidden, held notes are released through the keyboard's own release path, the band the
+//     hidden, the keys' held notes are released (the keyboard's fold release: its own inputs,
+//     never the pad's), the component's kbdNoteOwner and kbdDockExpanded are set (its
+//     kbdKeysShown reads them through routes.js keysShown), the band the
 //     dock covers is measured again (--osc-dock-h) and the owner's surface is brought into view
 //     above the handle (reveal); unfolded by the user, the surface is brought above the dock
-//     where it fits there whole (routes.js dockRoom), else its top to the top of the room.
+//     where it fits there whole (routes.js dockRoom), else its top to the top of the room. A
+//     resize or a rotation measures the chrome again and, while the dock yields, re-places the
+//     surface the same way.
 //
 // The user's expansion stays until the owner changes (the owner, not a re-mount of the same
 // surface: claims made and dropped within one task settle before the rule is read).
@@ -54,7 +58,8 @@ export function dockSentence(state, { yields, owner, why }) {
 
 /**
  * read()  -> { workspace }
- * apply(state, { yields, why, owner, el, first })   draws a changed state
+ * apply(state, { yields, why, owner, expanded, el })   draws a changed state (expanded: the
+ *   user's expansion, which keysShown reads with the owner)
  * release()  lets go of every note the keys hold
  * defer(fn)  runs fn once the current task's claims settle (default queueMicrotask)
  */
@@ -89,7 +94,7 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
     state = next;
     yields = y;
     if (next === 'collapsed' && was !== 'collapsed') release();
-    apply(next, { yields: y, why, owner, el: c ? c.el : null, first: was === null });
+    apply(next, { yields: y, why, owner, expanded, el: c ? c.el : null });
     return state;
   }
 
@@ -232,6 +237,11 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     }
     if (collapsed && focusIn) handle.focus();
     status.textContent = dockSentence(state, info);
+    // What the keyboard's kbdKeysShown reads (routes.js keysShown), on the reactive component.
+    if (cmp) {
+      cmp.kbdNoteOwner = info.owner || null;
+      cmp.kbdDockExpanded = !!info.expanded;
+    }
     band(); // the band the dock covers, measured again before anything is scrolled to
     chrome(info.el); // and the app chrome above the owner's surface: the pad's height follows
     // Folded by the owner, or unfolded by the user: the pad above the dock (a fold by the
@@ -245,7 +255,13 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   handle.addEventListener('click', () => ctl.toggle());
   for (const d of (LIVE.get(win) || new Map()).values()) ctl.claim(d);
   win.addEventListener(NOTES_EVENT, (e) => ctl.claim(e.detail));
-  win.addEventListener('resize', () => chrome());
+  // A resize or a rotation: the chrome measured again and, while the dock yields, the owner's
+  // surface re-placed against the dock (folded or unfolded), as a state change places it.
+  win.addEventListener('resize', () => {
+    band();
+    chrome();
+    if (ctl.yields && surface) reveal(win, surface, dock);
+  });
   if (typeof cmp.$watch === 'function') cmp.$watch('workspace', () => ctl.update('workspace'));
   ctl.update('init');
   return ctl;

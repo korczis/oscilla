@@ -94,7 +94,8 @@ export function patchLayout(source, width) {
 
 
 const STATE_LABEL = { open: 'open: normal removed in Studio',
-  mixed: 'patched in Studio while its normal still sounds' };
+  mixed: 'patched in Studio while its normal still sounds',
+  summing: 'normalled, a performance cable adds to the normals' };
 
 /**
  * The accessible name of a jack: module, label, direction, signal type, its state and, while a
@@ -108,7 +109,9 @@ export function portLabel(source, j, st, verdict = null) {
 }
 
 /**
- * state: 'normalled' | 'patched' | 'mixed' | 'open' | 'free' (normals.js jackState).
+ * state: 'normalled' | 'summing' | 'patched' | 'mixed' | 'open' | 'free' (normals.js
+ * jackState). A summing jack (K183: a performance cable adds to its sounding normals) keeps the
+ * normal's inner glyph and takes its cable's colour on the ring: both sources show at once.
  * verdicts: Map<jack key, { ok, reason }> while a connection is pending (ui.js).
  * Every shape sets its own stroke: an inherited `svg { stroke }` of the legacy stylesheet must
  * never draw on the panel. A jack shows keyboard focus with its own ring (group-focus-visible).
@@ -143,16 +146,17 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
     .join('');
   const jacks = [...layout.jacks.values()].map(({ x, y, jack: j }) => {
     const st = states.get(j.key) || 'free';
-    const ring = pending === j.key ? t.focus : compatible.has(j.key) ? t.accent
-      : st === 'open' || st === 'mixed' ? t.refuse : t.jackRing;
     const src = j.direction === 'out' ? j.module : feederOf(j.key);
+    const ring = pending === j.key ? t.focus : compatible.has(j.key) ? t.accent
+      : st === 'open' || st === 'mixed' ? t.refuse
+        : st === 'summing' ? colourOf(src || j.module) : t.jackRing;
     const text = shortLabel(j.label, j.direction);
     return jackSvg({ key: j.key, x, y, shape: PORT_VISUALS[j.type].shape, tokens: t,
       label: portLabel(source, j, st, pending && pending !== j.key ? verdicts.get(j.key) : null),
       pressed: pending === j.key, ring, dashed: st === 'open' || st === 'mixed',
       ringWidth: pending === j.key || compatible.has(j.key) ? 3.5 : 2,
       inner: st === 'patched' || st === 'mixed' ? colourOf(src || j.module)
-        : st === 'normalled' ? t.normal : t.jack,
+        : st === 'normalled' || st === 'summing' ? t.normal : t.jack,
       text, fit: labelFit(text), textSize: BAY_TEXT });
   }).join('');
   // A cord hangs inside the bay (box) as the layer draws it, a plug on each end over its jack;

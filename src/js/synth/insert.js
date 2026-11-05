@@ -16,6 +16,8 @@ export const SYNTH_TEXT = Object.freeze({
     + `Output from ${names}. Undo removes the panel and gives it back.`,
   notInserted: 'The Synth panel is not in this Studio document: press Insert first.',
   armed: 'Synth armed: the keys play the panel.',
+  /** What the keys and the XY pad play, named from the route's node (K183 S6). */
+  plays: (name) => `Synth armed: the keys and the XY pad play ${name}.`,
   disarmed: 'Synth disarmed: no note sounds.',
   refused: 'The Synth did not arm: the output belongs to the measurement. Stop it first (Esc).',
   direction: 'A cable runs from an output jack to an input jack.',

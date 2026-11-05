@@ -4,8 +4,10 @@
 // yieldsTo) and the note owner, at every size and pointer; routes.js dockRoom says where the
 // pad goes against the dock (whole above it where it fits, its top at the top else); the note
 // owner is derived from the claims of the mounted surfaces (the XY pad's mount claims the notes
-// while it is patched into the voice); src/js/midi/dock-yield.js alone applies the rule, and only
-// src/js/midi/keyboard-ui.js mounts it. The handle's key is bound through the one key registry.
+// while it is mounted, playable from the first touch since K183); src/js/midi/dock-yield.js alone
+// applies the rule, and only src/js/midi/keyboard-ui.js mounts it. The on-screen keys are drawn
+// by the same rule (routes.js keysShown: wherever the dock is docked, review of #425). The
+// handle's key is bound through the one key registry.
 //
 //   node --test tests/unit/keyboard-dock-yield.test.mjs
 import test from 'node:test';
@@ -85,10 +87,12 @@ test('dockRoom: the pad whole above the dock where it fits, its top at the top e
         for (const top of [-500, -40, 0, 56, 130, 300, 700, 1200]) {
           for (const h of [0, 120, 300, 420, 560, 900]) {
             const pad = { top, bottom: top + h };
-            const { fits, by } = routes.dockRoom({ pad, dockTop, ceil, gap });
+            const r = routes.dockRoom({ pad, dockTop, ceil, gap });
+            const { by } = r;
             const floor = dockTop - gap;
+            const fits = h <= floor - ceil; // the room holds the whole pad
             const at = JSON.stringify({ pad, dockTop, ceil, gap, fits, by });
-            assert.equal(fits, h <= floor - ceil, `fits iff the room holds the pad: ${at}`);
+            assert.deepEqual(Object.keys(r), ['by'], `one output, the scroll: ${at}`);
             const t = top - by;
             const b = top + h - by;
             if (fits) {
@@ -109,47 +113,61 @@ test('dockRoom: the pad whole above the dock where it fits, its top at the top e
   // The sizes the browser check holds (a 420 px pad under a 56 px bar).
   const desk = (vh) => routes.dockRoom({ pad: { top: 200, bottom: 620 }, dockTop: vh - 60,
     ceil: 56 });
-  assert.deepEqual(desk(1024), { fits: true, by: 0 }, '1536 x 1024: folded, nothing moves');
-  assert.deepEqual(desk(720), { fits: true, by: 0 }, '1280 x 720: folded, nothing moves');
+  assert.deepEqual(desk(1024), { by: 0 }, '1536 x 1024: folded, nothing moves');
+  assert.deepEqual(desk(720), { by: 0 }, '1280 x 720: folded, nothing moves');
   assert.deepEqual(routes.dockRoom({ pad: { top: 200, bottom: 620 }, dockTop: 500, ceil: 56 }),
-    { fits: true, by: 128 }, 'unfolded where both fit: the pad moves up above the keys');
+    { by: 128 }, 'unfolded where both fit: the pad moves up above the keys');
   assert.deepEqual(routes.dockRoom({ pad: { top: 200, bottom: 620 }, dockTop: 400, ceil: 56 }),
-    { fits: false, by: 144 }, 'unfolded where both do not fit: the pad top at the top');
+    { by: 144 }, 'unfolded where both do not fit: the pad top at the top');
   for (const bad of [{}, { pad: null, dockTop: 500 }, { pad: { top: 0, bottom: NaN },
     dockTop: 500 }, { pad: { top: 10, bottom: 0 }, dockTop: 500 }, { pad: { top: 0,
     bottom: 10 } }]) {
-    assert.deepEqual(routes.dockRoom(bad), { fits: false, by: 0 }, JSON.stringify(bad));
+    assert.deepEqual(routes.dockRoom(bad), { by: 0 }, JSON.stringify(bad));
   }
-  assert.deepEqual(routes.dockRoom(), { fits: false, by: 0 });
+  assert.deepEqual(routes.dockRoom(), { by: 0 });
 });
 
-test('keysShown: no on-screen keys on the tab of the surface the dock yields to', async () => {
+test('keysShown is the dock rule: keys drawn wherever the dock is docked, never by tab', async () => {
   assert.equal(typeof routes.keysShown, 'function', 'routes.js exports keysShown');
-  assert.equal(routes.SURFACE_TAB[SYNTH().yieldsTo], 'xy', 'the XY pad is drawn on its XY tab');
-  for (const workspace of ['synth', 'studio', 'playground', 'measure', undefined]) {
-    for (const tab of ['xy', 'panel', 'sound', undefined, null]) {
-      const want = !(workspace === 'synth' && tab === 'xy');
-      assert.equal(routes.keysShown({ workspace, tab }), want, JSON.stringify({ workspace, tab }));
+  assert.equal(routes.SURFACE_TAB, undefined, 'no second rule by tab (review of #425, F2)');
+  for (const ws of ['synth', 'studio', 'playground', 'measure', undefined]) {
+    const route = routes.routeOf(ws);
+    for (const owner of ['xy-pad', null, 'keys']) {
+      for (const userExpanded of [false, true]) {
+        const want = routes.dockState({ route, owner, userExpanded }) === 'docked';
+        assert.equal(routes.keysShown({ route, owner, userExpanded }), want,
+          JSON.stringify({ ws, owner, userExpanded }));
+      }
     }
   }
   assert.equal(routes.keysShown(), true);
-  // The keyboard's kbdKeysShown reads it (the Studio's armed-only rule kept); the computer keys
-  // stay armed: only the drawing goes.
+  // The keyboard's kbdKeysShown reads it from the owner and the expansion the dock applied (the
+  // Studio's armed-only rule kept); the computer keys stay armed in every state.
   const { createKeyboardUi } = await import('../../src/js/midi/keyboard-ui.js');
   const ui = createKeyboardUi({ win: {} });
-  const at = (workspace, tab, armed = true) => {
+  const at = (workspace, tab, { owner = null, expanded = false, armed = true } = {}) => {
     const c = Object.defineProperties({}, Object.getOwnPropertyDescriptors(ui));
     c.workspace = workspace;
     c.synth = { tab };
     c.kbdArmed = { ...c.kbdArmed, [workspace]: armed };
+    c.kbdNoteOwner = owner;
+    c.kbdDockExpanded = expanded;
     return c;
   };
-  assert.equal(at('synth', 'xy').kbdKeysShown, false, "the Synth's XY tab draws no keys");
-  assert.equal(at('synth', 'xy').kbdArmedHere, true, 'the computer keys still play there');
+  assert.equal(at('synth', 'xy').kbdKeysShown, true,
+    'XY tab, owner null (no pad owns the notes): the keys are shown, the dock is no inert row');
+  assert.equal(at('synth', 'xy', { owner: 'xy-pad' }).kbdKeysShown, false,
+    'the pad owns the notes: folded with the dock');
+  assert.equal(at('synth', 'xy', { owner: 'xy-pad' }).kbdArmedHere, true,
+    'the computer keys still play there');
+  assert.equal(at('synth', 'xy', { owner: 'xy-pad', expanded: true }).kbdKeysShown, true,
+    'unfolded by the user: the keys are shown and play');
   assert.equal(at('synth', 'panel').kbdKeysShown, true);
-  assert.equal(at('playground', 'xy').kbdKeysShown, true);
+  assert.equal(at('playground', 'xy', { owner: 'xy-pad' }).kbdKeysShown, true,
+    'a route that never yields');
   assert.equal(at('studio', 'xy').kbdKeysShown, true);
-  assert.equal(at('studio', 'xy', false).kbdKeysShown, false, 'the disarmed Studio, as before');
+  assert.equal(at('studio', 'xy', { armed: false }).kbdKeysShown, false,
+    'the disarmed Studio, as before');
 });
 
 test("the pad's height follows the room: 100dvh less the chrome and the dock's band", () => {
@@ -343,8 +361,7 @@ test('unfolded by the user, the pad goes above the keys; folded, nothing moves',
     assert.equal(ctl.state, 'docked');
     assert.equal(d.page.scrollTop, want, why);
     const r = d.surface.getBoundingClientRect();
-    const room = routes.dockRoom({ pad: r, dockTop: unfolded, ceil: 0 });
-    if (room.fits) assert.ok(r.bottom <= unfolded - 8, `${why}: the keys do not cover it`);
+    if (r.bottom - r.top <= unfolded - 8) assert.ok(r.bottom <= unfolded - 8, `${why}: the keys do not cover it`);
     else assert.equal(r.top, 0, why);
     assert.equal(ctl.toggle(), true);
     assert.equal(ctl.state, 'collapsed');
@@ -384,28 +401,59 @@ function fakeEl(win) {
   };
 }
 
-test('the XY mount claims the notes while it is patched into the voice, then drops it', async () => {
-  const { mountSynthXy, xyVoiceAction } = await import('../../src/js/synth/view/xy-wiring.js');
+test('the XY mount claims the notes while the pad is mounted, then drops it', async () => {
+  const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
   const mountPad = () => ({ model: { gated: false, end() {} }, destroy() {} });
-  for (const patched of [true, false]) {
+  // K183: the pad is playable from the first touch, so a mounted pad owns the notes; a
+  // document whose XY pad was removed mounts none and claims nothing.
+  for (const present of [true, false]) {
     const st = panelStore();
-    if (patched) assert.equal(st.dispatch(xyVoiceAction(st.getModel(), PANEL).action).ok, true);
+    if (!present) {
+      const id = PANEL.resolve(st.getModel()).get('xy').id;
+      assert.equal(st.dispatch({ type: 'NODE_REMOVE', nodeId: id }).ok, true);
+    }
     const win = fakeWin();
     const host = fakeEl(win);
-    const m = mountSynthXy(host, { store: st, panel: PANEL, phone: () => true, mountPad });
+    const m = mountSynthXy(host, { store: st, panel: PANEL, mountPad });
     const claims = win.seen.filter((e) => e.type === yieldMod.NOTES_EVENT);
-    assert.equal(m.notes, patched ? 'xy-pad' : null);
+    assert.equal(m.notes, present ? 'xy-pad' : null);
     assert.deepEqual(claims.map((e) => [e.detail.owner, e.detail.home]),
-      patched ? [['xy-pad', 'synth']] : [], patched ? 'patched: claimed' : 'unpatched: no claim');
-    if (patched) assert.ok(claims[0].detail.el, "the claim names the pad's surface");
+      present ? [['xy-pad', 'synth']] : [], present ? 'mounted: claimed' : 'no pad: no claim');
+    if (present) assert.ok(claims[0].detail.el, "the claim names the pad's surface");
     m.destroy();
     m.destroy();
     const after = win.seen.filter((e) => e.type === yieldMod.NOTES_EVENT);
     assert.equal(m.notes, null);
-    assert.deepEqual(after.map((e) => e.detail.owner), patched ? ['xy-pad', null] : [],
+    assert.deepEqual(after.map((e) => e.detail.owner), present ? ['xy-pad', null] : [],
       'destroy drops the claim once');
   }
 });
+
+test('the dock tells the keyboard its owner and expansion; a resize re-places the pad',
+  async () => {
+    const d = fakeDom({ vh: 720, unfolded: 720 - 260, pad: [200, 620] });
+    const cmp = { workspace: 'synth', kbdNoteOwner: null, kbdDockExpanded: false };
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp, dock: d.dock,
+      release: () => 0 });
+    ctl.claim({ ...PAD, el: d.surface });
+    ctl.update('init');
+    await Promise.resolve();
+    assert.deepEqual([cmp.kbdNoteOwner, cmp.kbdDockExpanded], ['xy-pad', false]);
+    ctl.toggle();
+    assert.deepEqual([cmp.kbdNoteOwner, cmp.kbdDockExpanded], ['xy-pad', true]);
+    const placed = d.page.scrollTop;
+    assert.equal(placed, 168, 'unfolded: the pad above the keys');
+    // A rotation moves the page under the pad: the resize places it against the dock again.
+    d.page.scrollTop = 0;
+    for (const f of d.listeners.resize || []) f();
+    assert.equal(d.page.scrollTop, placed, 'a resize re-places the pad while the dock yields');
+    ctl.claim({ id: PAD.id, owner: null });
+    await Promise.resolve();
+    assert.deepEqual([cmp.kbdNoteOwner, cmp.kbdDockExpanded], [null, false]);
+    d.page.scrollTop = 0;
+    for (const f of d.listeners.resize || []) f();
+    assert.equal(d.page.scrollTop, 0, 'where it does not yield, a resize moves nothing');
+  });
 
 // ---------------------------------------------------------------- the handle's key
 
@@ -457,8 +505,12 @@ test('no surface sets the dock state: dock-yield.js alone applies the rule', () 
   assert.deepEqual(having(/['"]osc:notes['"]/), [own], 'surfaces claim through claimNotes');
   assert.deepEqual(having(/\bmountDockYield\b/), [own, 'src/js/midi/keyboard-ui.js'],
     'keyboard-ui.js is the one call site');
-  assert.match(src['src/js/midi/keyboard-ui.js'], /mountDockYield\(\{[^}]*release: kbdRelease/,
-    'the fold releases through the keyboard\'s own release path');
+  assert.match(src['src/js/midi/keyboard-ui.js'],
+    /mountDockYield\(\{[^}]*release: kbdFoldRelease \}/,
+    'the fold releases through the keyboard\'s fold release (its own inputs, not the pad\'s)');
+  assert.match(src['src/js/midi/keyboard-ui.js'],
+    /const kbdFoldRelease = \(\) => \(kb \? kb\.releaseAll\(\) : 0\);/,
+    'the fold release lets go of the keys\' own notes only');
   assert.deepEqual(having(/\bclaimNotes\s*\(/), [own, 'src/js/synth/view/xy-wiring.js'],
     'the XY mount is the one surface that claims the notes');
   assert.deepEqual(having(/keyboard\.handle/), [own], 'the handle is made in dock-yield.js');

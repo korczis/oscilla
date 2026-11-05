@@ -12,6 +12,9 @@
 //   hide, Escape and when the view is left (ADR 0062).
 // - The keys light up whoever plays them: the computer keyboard, a pointer, a MIDI input.
 // - While a note sounds, the analysis views show the live output (vizInputs: playing).
+// - The XY pad is one more input of this note layer (K183, kbdPad): its notes are 'kbd-xy', and
+//   every forced release of the keys (blur, page hide, Escape, a workspace switch, a disarm)
+//   closes the pad's gate too and then releases whatever the 'xy' input still holds.
 // The controllers stay out of reactive state; the component holds plain values only.
 
 import {
@@ -96,7 +99,15 @@ export function createKeyboardUi({ win = window } = {}) {
   let notes = null;
   let view = null; // { canvas, layout, octaves, draw() }
   let dock = null; // the dock's yield to the note owner (K171, midi/dock-yield.js)
-  const kbdRelease = () => (kb ? kb.releaseAll() : 0);
+  const pads = new Set(); // the XY pads' gate releases (kbdPad, K183)
+  const kbdRelease = () => {
+    let n = kb ? kb.releaseAll() : 0;
+    for (const release of [...pads]) n += release('keys') || 0;
+    return n + (notes ? notes.releaseInput('xy', 'all-off') : 0);
+  };
+  // The dock's fold (K171): the notes of the keys it hides, the computer keys' and the on-screen
+  // keys' (inputs 'keys' and 'pointer'), never the pad's 'kbd-xy' note that owns the notes.
+  const kbdFoldRelease = () => (kb ? kb.releaseAll() : 0);
 
   return {
     kbdArmed: armedDefaults(), // per workspace, from the one route table (midi/routes.js)
@@ -109,6 +120,10 @@ export function createKeyboardUi({ win = window } = {}) {
     // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
     kbdMore: false,
     kbdBtn: KBD_BTN,
+    // The note owner and the user's expansion as the dock last applied them (midi/dock-yield.js
+    // sets both on a state change): what kbdKeysShown reads through routes.js keysShown.
+    kbdNoteOwner: null,
+    kbdDockExpanded: false,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {
@@ -119,13 +134,12 @@ export function createKeyboardUi({ win = window } = {}) {
     get kbdDocked() {
       return this.kbdView === 'synth' || this.kbdView === 'studio';
     },
-    /** The on-screen keys show wherever they play; in the Studio only while armed, so the
-     *  disarmed dock is one row and the graph keeps the height (the owner's report); not on
-     *  the Synth's XY tab, where the pad is the instrument (routes.js keysShown, K171). */
+    /** The on-screen keys show wherever the dock is docked (routes.js keysShown, the dock's one
+     *  rule, K171): folded where a pad owns the notes, they go with it; in the Studio only
+     *  while armed, so the disarmed dock is one row and the graph keeps the height. */
     get kbdKeysShown() {
-      const tab = this.synth && this.synth.tab;
-      return keysShown({ workspace: this.kbdView, tab })
-        && (this.kbdView !== 'studio' || this.kbdArmedHere);
+      return keysShown({ route: routeOf(this.kbdView), owner: this.kbdNoteOwner,
+        userExpanded: this.kbdDockExpanded }) && (this.kbdView !== 'studio' || this.kbdArmedHere);
     },
     get kbdArmedHere() {
       const v = this.kbdView;
@@ -240,10 +254,32 @@ export function createKeyboardUi({ win = window } = {}) {
           view = mountKeys(win, doc, kb) || view;
           dock = dock || mountDockYield({ win, doc, cmp, buttonClass: KBD_BTN,
             dock: doc.querySelector('[data-osc="keyboard"]'), band: trackDockHeight(win, doc),
-            release: kbdRelease });
+            release: kbdFoldRelease });
         };
         if (typeof cmp.$nextTick === 'function') cmp.$nextTick(mount); else mount();
       }
+    },
+
+    /**
+     * The XY pad as one more input of the keys (K183): -> { noteOn(note, velocity, source),
+     * noteOff(note, source), legato(from, to, source), velocity(), off() } on this note layer,
+     * or null before kbdInit. `release(reason)` closes the pad's gate; the keys' forced
+     * releases call it until off().
+     */
+    kbdPad(release) {
+      if (!notes || typeof release !== 'function') return null;
+      const cmp = this;
+      pads.add(release);
+      return {
+        noteOn(note, velocity, source) {
+          if (typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
+          return notes.noteOn(note, velocity, source);
+        },
+        noteOff: (note, source) => notes.noteOff(note, source),
+        legato: (from, to, source) => notes.legato(from, to, source),
+        velocity: () => (kb ? kb.velocity : 100),
+        off: () => { pads.delete(release); },
+      };
     },
 
     /** Arm or disarm the computer keyboard in the view in sight. */
@@ -277,6 +313,11 @@ export function createKeyboardUi({ win = window } = {}) {
       return !!dock && dock.yields;
     },
 
+    /** The dock's fold release: the keys' own held notes (computer and on-screen keys), never
+     *  the XY pad's; returns how many keys or pointers held one. */
+    kbdFoldRelease() {
+      return kbdFoldRelease();
+    },
     /** Let go of every note the keyboard plays; returns how many keys or pointers held one. */
     kbdReleaseAll() {
       return kbdRelease();

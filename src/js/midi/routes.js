@@ -21,12 +21,13 @@
 //   routeOf(workspace) -> its row (the Playground's for a workspace not listed)
 //   dockState({ route, owner, userExpanded }) -> 'docked' | 'collapsed'
 //             the one rule of the dock (K171), applied by midi/dock-yield.js alone
-//   keysShown({ workspace, tab }) -> whether the on-screen keys are drawn: not on the tab of
-//             the surface the dock yields to (the Synth's XY tab: the pad is the instrument
-//             there, the computer keys still play); the keyboard's kbdKeysShown reads it
-//   dockRoom({ pad, dockTop, ceil, gap }) -> { fits, by }
-//             where the owner's surface goes against the dock: whether it fits whole above
-//             the dock's top, and the scroll that puts it there (dock-yield.js reveal)
+//   keysShown({ route, owner, userExpanded }) -> whether the on-screen keys are drawn: wherever
+//             the dock is docked (dockState, the same rule), so folded they go with the dock and
+//             unfolded they show and play; the keyboard's kbdKeysShown reads it (the computer
+//             keys play in either state)
+//   dockRoom({ pad, dockTop, ceil, gap }) -> { by }
+//             where the owner's surface goes against the dock: the scroll that puts it whole
+//             above the dock's top, or its top at the top of the room (dock-yield.js reveal)
 
 export const KEY_ROUTES = Object.freeze({
   playground: Object.freeze({ plays: null, armed: true, leave: null, editors: null,
@@ -62,33 +63,29 @@ export function dockState({ route, owner, userExpanded = false } = {}) {
   return dockYields({ route, owner }) && userExpanded !== true ? 'collapsed' : 'docked';
 }
 
-/** The tab each surface a route yields to is drawn on (the Synth's XY pad: its XY tab). */
-export const SURFACE_TAB = Object.freeze({ 'xy-pad': 'xy' });
-
 /**
- * Whether the on-screen keys are drawn in a workspace's tab: not on the tab of the surface its
- * route yields the dock to (the owner's OSCILLA-pad audit, S2: on the XY tab the pad is the
- * instrument, so the dock holds no second one; the computer keys still play the notes).
+ * Whether the on-screen keys are drawn: wherever the dock is docked, never by a second rule
+ * (review of #425: a tab rule hid the keys where the keys owned the notes, an inert dock on a
+ * phone). Folded where a pad owns the notes, they go with the dock; unfolded by the user, or
+ * where no surface owns the notes (the XY tab without its pad), they show and play.
  */
-export function keysShown({ workspace, tab } = {}) {
-  const route = routeOf(workspace);
-  return !(route.yieldsTo && SURFACE_TAB[route.yieldsTo] === tab);
+export function keysShown({ route, owner, userExpanded = false } = {}) {
+  return dockState({ route, owner, userExpanded }) === 'docked';
 }
 
 /**
  * Where the owner's surface goes against the dock (viewport px, pure): pad { top, bottom } the
  * surface's rect, dockTop the dock's top, ceil the top of the room (the scrolling ancestor's
- * top, 0 for the page), gap the space kept above the dock. fits: the whole surface has room
- * between ceil and the dock's top, so the pad and the keys are both shown; by: the least
- * scroll that puts the surface's bottom above the dock's top (0 when it already is), or, where
- * it does not fit, the scroll that puts its top at ceil. Unknown input: { fits: false, by: 0 }.
+ * top, 0 for the page), gap the space kept above the dock. by: the least scroll that puts the
+ * surface's bottom above the dock's top (0 when it already is), or, where the whole surface has
+ * no room between ceil and the dock's top, the scroll that puts its top at ceil. Unknown
+ * input: { by: 0 }.
  */
 export function dockRoom({ pad, dockTop, ceil = 0, gap = 8 } = {}) {
   const n = [pad && pad.top, pad && pad.bottom, dockTop, ceil, gap];
-  if (!n.every(Number.isFinite) || pad.bottom < pad.top) return { fits: false, by: 0 };
+  if (!n.every(Number.isFinite) || pad.bottom < pad.top) return { by: 0 };
   const floor = dockTop - gap;
-  const fits = pad.bottom - pad.top <= floor - ceil;
   let by = pad.bottom > floor ? pad.bottom - floor : 0;
   if (pad.top - by < ceil) by = pad.top - ceil;
-  return { fits, by };
+  return { by };
 }
