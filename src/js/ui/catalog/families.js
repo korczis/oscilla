@@ -10,6 +10,7 @@
 // Every module that implements a family says so in a marker comment among its first lines:
 //   // ui-family: <id> model
 //   // ui-family: <id> skin <name>
+//   // ui-family: <id> part <name>      a pure helper of the model (the model imports it)
 //   // ui-family: <id> not: <reason>    a signature match that is not the family (a domain view)
 // scripts/ui-catalog/families.mjs finds the implementers by those markers and by each family's
 // source signature, so a module cannot leave a family by omitting the marker;
@@ -37,6 +38,10 @@ export const FAMILIES = Object.freeze({
     what: 'the ADSR curve law the voice schedules, and every drawing or editor of it' }),
   'filter-response': Object.freeze({ slice: 'G028', model: 'src/js/audio/filters.js',
     what: 'the filter stage and its magnitude response, live or computed' }),
+  // The oscilla-pad (the owner's order of 2026-11-05: "no kaosspad (oscilla-pad)"): one
+  // two-parameter surface, OSCILLA's own, whose looks are skins of one model.
+  pad: Object.freeze({ slice: 'G030', model: 'src/js/ui/kinds/xy-pad.js',
+    what: 'the oscilla-pad: two declared parameters on one surface, its pointer and keys' }),
 });
 
 export const FAMILY_IDS = Object.freeze(Object.keys(FAMILIES));

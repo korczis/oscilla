@@ -11,6 +11,7 @@
 //
 // A marker is a line comment among the first MARKER_LINES lines of a module:
 //   // ui-family: <id> model | // ui-family: <id> skin <name> | // ui-family: <id> not: <reason>
+//   // ui-family: <id> part <name>   a pure helper of the model: the model module imports it
 // A signature is matched on the code with comments removed (string contents kept, so markup in
 // a template counts). Problem kinds:
 //   unmarked       the module matches the family's signature and carries no marker for it
@@ -18,6 +19,7 @@
 //   model-missing  the table's model module does not exist or carries no model marker
 //   skin-logic     a skin matches the family's value-logic signature (it re-implements the model)
 //   bad-marker     a marker naming no family, or one malformed
+//   loose-part     a part marker on a module the family's model does not import
 //   foreign-attr   the module writes data-ui-family="<id>" (markup, setAttribute or dataset) but
 //                  is neither the family's model nor one of its skins: only those mark a render
 
@@ -27,7 +29,7 @@ import path from 'node:path';
 import { lexJs } from './scan.mjs';
 
 export const MARKER_LINES = 40;
-const MARKER = /^\s*\/\/\s*ui-family:\s*(\S+)\s+(model|skin|not:)\s*(.*)$/;
+const MARKER = /^\s*\/\/\s*ui-family:\s*(\S+)\s+(model|skin|part|not:)\s*(.*)$/;
 
 // The source signatures: what implementing a family looks like in code. Each is narrow enough
 // that a consumer (a module importing the model, or setting a value the model computed) does
@@ -56,6 +58,9 @@ export const SIGNATURES = Object.freeze({
   // a filter's magnitude response: the live stage, or a biquad formula computing it
   'filter-response': [/\bfunction\s+createFilterStage\s*\(/,
     /\bfunction\s+biquad(Db|Magnitude|Response)\s*\(/],
+  // the oscilla-pad: a two-parameter surface model, or a point-to-position mapping of a pad
+  pad: [/\bfunction\s+createXyModel\s*\(/, /\bfunction\s+xyFromPoint\s*\(/,
+    /\bfunction\s+xyValue\s*\(/],
 });
 
 // The value logic a skin must not hold (it is the model's): the first signatures of the families
@@ -66,7 +71,23 @@ const VALUE_LOGIC = Object.freeze({
   keyboard: SIGNATURES.keyboard,
   envelope: SIGNATURES.envelope,
   'filter-response': SIGNATURES['filter-response'],
+  pad: [/\bfunction\s+xyFromPoint\s*\(/, /\bfunction\s+xyValue\s*\(/],
 });
+
+/** The modules `file`'s static imports name, resolved against its folder (src/js paths). */
+function importsOf(file, text) {
+  const dir = file.split('/').slice(0, -1);
+  const out = new Set();
+  for (const m of text.matchAll(/^\s*import\s[^'"]*['"](\.{1,2}\/[^'"]+)['"]/gm)) {
+    const parts = [...dir];
+    for (const seg of m[1].split('/')) {
+      if (seg === '..') parts.pop();
+      else if (seg !== '.') parts.push(seg);
+    }
+    out.add(parts.join('/'));
+  }
+  return out;
+}
 
 /** The markers of a module's first lines: [{ family, role, rest }] or a bad marker. */
 function markersOf(text) {
@@ -105,8 +126,8 @@ export function familyCensus(files, families) {
       if (m.bad || !ids.includes(m.family)) {
         add(m.family || '?', file, 'bad-marker', `a ui-family marker that names no family: ${
           m.bad || m.family}`);
-      } else if (m.role === 'skin' && !m.rest) {
-        add(m.family, file, 'bad-marker', 'a skin marker without its name');
+      } else if ((m.role === 'skin' || m.role === 'part') && !m.rest) {
+        add(m.family, file, 'bad-marker', `a ${m.role} marker without its name`);
       } else if (m.role === 'not' && m.rest.split(/\s+/).length < 4) {
         add(m.family, file, 'bad-marker', 'a not: marker needs a reason of four words or more');
       }
@@ -130,6 +151,13 @@ export function familyCensus(files, families) {
         }
         if (m.role === 'skin' && matches(code, VALUE_LOGIC[id] || [])) {
           add(id, file, 'skin-logic', `a ${id} skin that holds the model's value logic`);
+        }
+        if (m.role === 'part') {
+          const model = families[id].model;
+          if (!model || !files[model] || !importsOf(model, files[model]).has(file)) {
+            add(id, file, 'loose-part', `a ${id} part that the ${id} model (${model || 'none'}) `
+              + 'does not import');
+          }
         }
       }
       if (matched && !mine.length) {

@@ -49,14 +49,14 @@ test('the tree: every family problem is a listed duplicate and every listed one 
       'a duplicate that is gone: remove its baseline entry (the baseline only shrinks)');
   });
 
-test('the table: eight families, each model named exists with its marker, each with its slice',
+test('the table: nine families, each model named exists with its marker, each with its slice',
   async () => {
     const { FAMILIES } = await load();
     assert.deepEqual(Object.keys(FAMILIES).sort(),
-      ['app-shell', 'envelope', 'filter-response', 'keyboard', 'knob', 'patch-bay', 'slider',
-        'switch']);
+      ['app-shell', 'envelope', 'filter-response', 'keyboard', 'knob', 'pad', 'patch-bay',
+        'slider', 'switch']);
     for (const [id, f] of Object.entries(FAMILIES)) {
-      assert.match(f.slice, /^G02[2-8]$/, `${id}: the slice that unifies it`);
+      assert.match(f.slice, /^G0(2[2-9]|30)$/, `${id}: the slice that unifies it`);
       if (!f.model) continue;
       const text = readFileSync(at(f.model), 'utf8');
       assert.match(text, new RegExp(`^// ui-family: ${id} model$`, 'm'), `${id}: model marker`);
@@ -163,6 +163,22 @@ test('mutation: a second ADSR curve law or a computed biquad response is an impl
     assert.deepEqual(census.familyCensus(files, fam).problems.map((p) => `${p.family} ${p.file}`),
       ['envelope src/js/a.js', 'filter-response src/js/b.js']);
   });
+
+test('mutation: a part is a helper the model imports; a loose one fails', async () => {
+  const { census } = await load();
+  const fam = { pad: Object.freeze({ slice: 'G030', model: 'src/js/p/model.js', what: 'x' }) };
+  const model = "// ui-family: pad model\nimport { at } from './maths.js';\n"
+    + 'export function createXyModel() { return at; }\n';
+  const part = '// ui-family: pad part maths\nexport function xyFromPoint() { return 0; }\n';
+  const kinds = (files) => census.familyCensus(files, fam).problems.map((p) => p.kind).sort();
+  assert.deepEqual(kinds({ 'src/js/p/model.js': model, 'src/js/p/maths.js': part }), []);
+  assert.deepEqual(kinds({ 'src/js/p/model.js': model, 'src/js/q/maths.js': part }),
+    ['loose-part']);
+  // a skin with its own point-to-position mapping holds the model's value logic
+  assert.deepEqual(kinds({ 'src/js/p/model.js': model, 'src/js/p/maths.js': part,
+    'src/js/p/skin.js': '// ui-family: pad skin hardware\nexport function xyValue() {}\n' }),
+  ['skin-logic']);
+});
 
 test('mutation: a baseline entry whose duplicate is gone fails (the baseline only shrinks)',
   async () => {
