@@ -9,6 +9,7 @@ import { initialAnnouncements } from '../../measurement/views/announcements.js';
 import {
   inputDeviceView, TEST_CONTEXT_INPUT_VALUE,
 } from '../../measurement/views/input-devices.js';
+import { rtaLiveAvailability } from './constants.js';
 
 /** The input functions over `ctx`; `ops` holds those of the other parts. */
 export function createInput(ctx, svc, ops) {
@@ -147,7 +148,7 @@ export function createInput(ctx, svc, ops) {
     m.levelForm.reading = null;
     ctx.loopback = !!on;
     m.loopback = !!on;
-    m.rtaLive.available = !!on || microphoneAvailable();
+    Object.assign(m.rtaLive, rtaLiveAvailability(!!on || microphoneAvailable()));
     if (ctx.me && ctx.me.state === S.READY) ctx.me.reset(); // releases the checked input
     ops.disposeEngine();
     ctx.bar = initialQualityBar();

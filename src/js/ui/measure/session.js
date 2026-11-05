@@ -6,7 +6,6 @@
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../../measurement/state-machine.js';
 import { createMeasurementEngine, assessMeasurement } from '../../measurement/engine.js';
-import { MIC_UNAVAILABLE_TEXT } from '../../audio/microphone.js';
 import { createCaptureIo, createLoopbackIo, LOOPBACK_LABEL } from '../../measurement/capture.js';
 import {
   measureFlow, expertFields, recipeFromFields, CHARACTERIZE_PLAYBACK_CHAIN, OUTPUT_LEVEL_CHOICES,
@@ -31,7 +30,7 @@ import { createResponseChart, createIrChart, createRtaChart } from '../../charts
 import {
   MEASURE_RESULT_TABS, IR_SPANS, RTA_MODE_CHOICES, RTA_AVERAGING_CHOICES, RESPONSE_QUANTITIES,
   LIVE_RTA_FIELDS, LIVE_FIELD_HELP, LEVEL_FROM_TEST_CONTEXT, LEVEL_FROM_MICROPHONE,
-  MANUAL_TEST_CONTEXT_LABEL, FIELD_DEFAULTS, plain, levelId,
+  MANUAL_TEST_CONTEXT_LABEL, FIELD_DEFAULTS, plain, levelId, rtaLiveAvailability,
 } from './constants.js';
 
 /** The closure state of one MEASURE workspace (never Alpine-reactive). */
@@ -320,8 +319,7 @@ export function measureStatePart(ctx, svc, ops) {
       normAvail: { none: { ok: true, reason: null }, '1k': { ok: true, reason: null },
         band: { ok: true, reason: null } },
       rtaLive: { running: false, starting: false, error: null, kind: null,
-        available: !!svc.loopback || ops.microphoneAvailable(),
-        unavailableText: MIC_UNAVAILABLE_TEXT },
+        ...rtaLiveAvailability(!!svc.loopback || ops.microphoneAvailable()) },
       response: null,
       ir: null,
       rta: null,
