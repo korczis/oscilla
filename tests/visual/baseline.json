@@ -12,8 +12,8 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 1.68,
-      "totalExclData": 2,
+      "total": 1.76,
+      "totalExclData": 2.1,
       "regions": {
         "header": {
           "mismatch": 14.39,
@@ -70,8 +70,8 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 0.2,
-          "mismatchExclData": 0.31,
+          "mismatch": 0.8,
+          "mismatchExclData": 1.21,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -82,8 +82,8 @@
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 0.64,
-          "mismatchExclData": 0.64,
+          "mismatch": 2.54,
+          "mismatchExclData": 2.54,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
