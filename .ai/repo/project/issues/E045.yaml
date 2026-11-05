@@ -50,5 +50,5 @@ evidence:
     command: "node --test tests/unit/ci-workflows.test.mjs tests/unit/release-ci-receipt.test.mjs (main cfd87133); #433 CI run all green"
     result: "Every acceptance criterion re-checked on main cfd87133 by af (2026-11-05): ci.yml starts on pull_request and merge_group only, queued-pr.sh present; ci-bounded v2 triggers and the release receipt's merge_group cases pass by fixture (63/63, 16 merge_group cases in release-ci-receipt.test.mjs); ADR 0083 status accepted with the owner's decision of 2026-11-02; fail-first and the reviewer's verdict (.ai/repo/reviews/433.yaml, seat 98, MERGE, content ad8293da) are on #433. Not yet live: no merge_group run exists until the owner's O1 ruleset flip; the first queue entry's run is the live proof of the receipt and trigger paths."
     artifact: ".ai/repo/reviews/433.yaml"
-    commit: 470b1182a5cd76fa3217ef410aa4ffbfcde22f57
+    commit: cfd8713343079d6eca243eb7b16e830deded6686
     recorded_at: 2026-11-05T08:48:24Z
