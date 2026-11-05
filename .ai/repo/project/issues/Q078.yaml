@@ -18,4 +18,21 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-02
-updated_at: 2026-11-02
+updated_at: 2026-11-04T20:48:29Z
+started_at: 2026-11-04T20:01:03Z
+started_event: sha256:f828da5fa1028909e4b7fafeaf6b289ad8133503f3a0cb6e09433b0abbd8f1b2
+completed_at: 2026-11-04T20:01:21Z
+completed_event: sha256:49eb98ef227aa463a4fbc41e4f605ce97d8671d8d740be805488e11cd62476dd
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "Decided by the coordinating session oscilla-b0 on 2026-11-04 under the owner's delegation of the same day ('mas muj max clearance / continue autonomously / no need for human / fill gaps', sent with the RECONSTRUCT pack paths); the owner may override it"
+    result: "The intent id song-reconstruction is confirmed, and its issues take the prefix X. Reason: of the free letters A, B, I, O, X and Z, I and O read as the digits 1 and 0 in an id, A and B stay free for broader product lines, and X reads as extraction. The prefix joins the README's list in the change that adds the first X issue."
+    commit: 76bfc300653e2bdc09e5dc6e07b22d805c729449
+    recorded_at: 2026-11-04T19:59:58Z
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af, 2026-11-04 ~20:0xZ, confirming the coordinating session's delegated decision"
+    result: "The owner answered: 'Keep name + X' (verbatim option label): the intent id song-reconstruction stays and its issues take the prefix X."
+    commit: ab2f4fa2d041d8973118b3ba316a57a01e5e8424
+    recorded_at: 2026-11-04T20:48:29Z
