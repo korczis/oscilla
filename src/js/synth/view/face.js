@@ -128,7 +128,7 @@ function switchHtml(cid, c, value, reason, tokens) {
     + `aria-checked="${o.value === value}" data-option="${cid}" data-v="${esc(o.value)}" `
     + `tabindex="${o === stop ? 0 : -1}" `
     + `class="${RADIO} ${reason ? 'cursor-not-allowed' : 'cursor-pointer'}">`
-    + `<span class="sr-only">${esc(o.legend.text)}</span></button></foreignObject>`).join('');
+    + `<span class="sr-only">${esc(o.name ?? o.legend.text)}</span></button></foreignObject>`).join('');
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
     + `<svg viewBox="${b.x} ${b.y} ${b.width} ${b.height}" width="${b.width}" height="${b.height}" `

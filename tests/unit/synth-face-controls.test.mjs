@@ -257,7 +257,8 @@ test('each option is an invisible 44 px radio over its legend at the layout\'s h
       assert.ok(cls.includes(reason ? 'cursor-not-allowed' : 'cursor-pointer'), cid);
       assert.ok(!cls.some((k) => /^(?:dark:)?(?:bg|text)-(?!transparent|xs)/.test(k)),
         `${cid}: no visible fill or text colour: ${cls.join(' ')}`);
-      assert.equal(r.inner, `<span class="sr-only">${esc(o.legend.text)}</span>`, cid);
+      // Named by the full label (o.name), whatever short legend is drawn (p2's core shorts).
+      assert.equal(r.inner, `<span class="sr-only">${esc(o.name ?? o.legend.text)}</span>`, cid);
     });
     for (let i = 0; i < radios.length; i++) {
       for (let j = i + 1; j < radios.length; j++) {
@@ -386,8 +387,10 @@ test('an unpacked dial carries no numerals: nothing on the plate would print the
   assert.ok(unpacked.some((x) => x.cid === 'xy.mode'), unpacked.map((x) => x.cid).join(' '));
   for (const { cid, c } of unpacked) {
     assert.equal(count(block(cid), /data-number=""/g), 0, `${cid}: no numeral`);
+    // A legend prints the option's short text where it has one (26's XY scales), else its label.
     assert.ok(choiceLayout(c.param).options.every((o) => o.number === null
-      && o.legend.text === o.label), `${cid}: its legends are its labels`);
+      && o.legend.text === (c.param.options.find((t) => t[0] === o.value)[2] ?? o.label)),
+    `${cid}: its legends are its labels, or their short legends`);
   }
 });
 
@@ -601,4 +604,15 @@ test('a knob readout is one line: a short physical unit, never over 10 character
   const level = /<div role="slider"[^>]*>/.exec(block('out.level'))[0];
   assert.match(level, /aria-valuetext="[\d.]+ logical gain"/, 'the unit stays in the text');
   assert.match(block('out.level'), /data-value="out\.level">[\d.]+<\/output>/);
+});
+
+// A short printed legend (p2's core, 26's XY scales: 'Minor pent.') never becomes the radio's
+// name: a screen reader reads the full label ('Minor pentatonic'), the drawing the short one.
+test('a choice\'s radios are named by the full label, not the short printed legend', () => {
+  const b = block('xy.mode');
+  const names = [...b.matchAll(/<span class="sr-only">([^<]*)<\/span><\/button>/g)]
+    .map((m) => m[1]);
+  assert.ok(names.includes('Minor pentatonic'), names.join(', '));
+  assert.ok(names.includes('Natural minor'), names.join(', '));
+  assert.ok(!names.some((n) => /pent\.|Nat\. minor/.test(n)), `no short name: ${names.join(', ')}`);
 });
