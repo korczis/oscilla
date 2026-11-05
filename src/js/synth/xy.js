@@ -6,7 +6,12 @@
 // `category: 'xy'` with its `scale` beside the graph, so the one patch library saves, lists,
 // exports and imports it like any other patch. The built-in ones are recipes over a panel
 // preset (presets.js) that xyPresetPatch turns into that patch on the document's own panel.
+// An XY preset is the voice the pad plays: the modules of the Panel and XY tabs (xyScope) and
+// the cables between them. Applying one writes those nodes and edges only, as a node preset
+// writes its named nodes (K020): the Engines tab's modules and every cable into them keep their
+// values, built-in or saved, whatever the patch carries.
 //
+//   xyScope(panel) -> [module id]          the modules an XY preset holds and writes
 //   XY_VOICE                       the cables that let the pad play the voice
 //   xyTargets(panel) -> [{ id, label }]   the CONTROL inputs Y may drive (the timbre targets)
 //   xyTarget(model, panel) -> jack | null the input Y drives now
@@ -20,6 +25,7 @@
 import { createPatch, patchParams } from '../studio/patches.js';
 import { linkAction, linkOf } from './link.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
+import { XY_TAB } from './panels/xy.js';
 
 export const XY_CATEGORY = 'xy';
 export const XY_VOICE = Object.freeze([['xy.pitch', 'vco1.pitch'], ['xy.pitch', 'vco2.pitch'],
@@ -37,6 +43,9 @@ export const XY_RECIPES = Object.freeze([
   { id: 'xy-bell', base: 'ring-bell', scale: { mode: 'major', key: 'E' }, y: 'vco2.tune',
     values: [['xy.glide', 0.05]], name: 'XY bell: E major, Y detunes VCO 2 against the ring' },
 ].map((r) => Object.freeze(r)));
+
+export const xyScope = (panel) => [...panel.modulesOf(panel.tabs[0].id),
+  ...panel.modulesOf(XY_TAB.id)].map((m) => m.id);
 
 export function xyTargets(panel) {
   return panel.modulesOf('panel').flatMap((m) => panel.jacksOf(m.id)
@@ -74,7 +83,8 @@ export function xyPatchOf(model, panel, { name, description = '' }) {
   const res = panel.resolve(model);
   const pad = res.get('xy');
   if (!pad) throw new RangeError('The Synth panel has no XY pad: Restore module first.');
-  return createPatch(model, [...res.values()].filter(Boolean).map((n) => n.id), { name,
+  const ids = xyScope(panel).map((mid) => res.get(mid)).filter(Boolean).map((n) => n.id);
+  return createPatch(model, ids, { name,
     description, category: XY_CATEGORY, scale: { mode: pad.params.mode, key: pad.params.key } });
 }
 
@@ -110,7 +120,7 @@ function afterSteps(model, steps) {
 export function xyPresetPatch(model, panel, recipe) {
   const a = linkAction(model, panel, { preset: recipe.base,
     values: [...recipe.values, ['xy.mode', recipe.scale.mode], ['xy.key', recipe.scale.key]],
-    cables: [...XY_VOICE, ['xy.y', recipe.y]] });
+    cables: [...XY_VOICE, ['xy.y', recipe.y]] }, { modules: xyScope(panel) });
   return xyPatchOf(afterSteps(model, a.steps), panel, { name: recipe.name });
 }
 
@@ -123,7 +133,8 @@ export function xyPatchAction(model, panel, patch) {
   if (!panel.resolve(doc).get('xy')) {
     return { reason: `"${patch.name}" holds no XY pad of the ${panel.title}.` };
   }
-  const steps = linkAction(model, panel, linkOf(doc, panel, 'init')).steps;
+  const steps = linkAction(model, panel, linkOf(doc, panel, 'init'),
+    { modules: xyScope(panel) }).steps;
   const pad = panel.resolve(model).get('xy');
   if (patch.scale && pad) {
     steps.push({ type: 'NODE_PARAM_SET', nodeId: pad.id, params: { ...patch.scale } });

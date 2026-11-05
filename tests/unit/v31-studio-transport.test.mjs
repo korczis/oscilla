@@ -1195,6 +1195,12 @@ for (const hold of [false, true]) {
 
 // ---------------------------------------------------------------- K169: a PLAY refused while armed
 
+async function stopFast(s, transport) {
+  const stopped = transport.stop({ fast: true });
+  s.fx.advance(0.5);
+  await stopped;
+}
+
 /**
  * The reference template with the Synth panel, armed as the Synth keys arm it, on a store whose
  * commit gate is transport.admit (the workspace's). `fault` makes the next PLAY fail after it left
@@ -1334,6 +1340,22 @@ test('K169: debugRefuseNextPlay is an Inject hook: outside TEST CONTEXT it refus
   ok(transport.start()); // once
   transport.stop({ fast: true });
   s.fx.advance(0.5);
+});
+
+// 98's R1 on #413: a hook armed in TEST CONTEXT and left pending when it ended never refuses a
+// real PLAY; it is dropped, not kept for the next TEST CONTEXT either.
+test('K169: a pending debugRefuseNextPlay is dropped once TEST CONTEXT ends', async () => {
+  const s = setup();
+  let inside = true;
+  const transport = createStudioTransport({ runtime: s.runtime, engine: s.engine,
+    store: s.store, testContext: () => inside });
+  assert.equal(transport.debugRefuseNextPlay(), true, 'armed in TEST CONTEXT');
+  inside = false;
+  ok(transport.start()); // a real PLAY outside it is not refused
+  await stopFast(s, transport);
+  inside = true;
+  ok(transport.start()); // and the dropped hook does not come back
+  await stopFast(s, transport);
 });
 
 test('K169 review R2: a STOP whose release of the owned parameters throws still stops and says '

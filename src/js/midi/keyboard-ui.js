@@ -20,6 +20,7 @@ import {
 } from './keyboard.js';
 import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
+import { armedDefaults, routeOf } from './routes.js';
 
 export const KEYBOARD_REFUSED = Object.freeze({
   measurement: 'Keyboard notes do not play while the measurement owns the output: stop it '
@@ -96,7 +97,7 @@ export function createKeyboardUi({ win = window } = {}) {
   const kbdRelease = () => (kb ? kb.releaseAll() : 0);
 
   return {
-    kbdArmed: { playground: false, studio: false, synth: true }, // the Synth plays from its keys
+    kbdArmed: armedDefaults(), // per workspace, from the one route table (midi/routes.js)
     kbdBase: 60,
     kbdVelocity: 100,
     kbdHeld: '',
@@ -175,6 +176,9 @@ export function createKeyboardUi({ win = window } = {}) {
         if (e.key === 'Escape') { kbdRelease(); return; }
         if (!cmp.kbdArmedHere || !playableEvent(e)) return;
         if (takesText(e.target) || takesText(doc && doc.activeElement) || modalOpen()) return;
+        // An editor that owns its letters keeps them while it has the focus (KEY_ROUTES).
+        const { editors } = routeOf(cmp.workspace);
+        if (editors && e.target && e.target.closest && e.target.closest(editors)) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         kb.keyDown(e.code, e.repeat);

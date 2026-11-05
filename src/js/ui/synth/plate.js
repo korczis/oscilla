@@ -4,13 +4,14 @@
 //   - the plate: a vertical gradient between two OSCILLA surface tokens;
 //   - a brushed finish: fine horizontal hairlines in an SVG pattern, drawn at the hw-texture
 //     intensity (class opacity-hw-texture, never a literal opacity);
-//   - two screws in the lower corners: a cap and its slot, sized in CSS pixels so a stretched
+//   - two screws in the lower corners: a cap and its cross slot, sized in CSS pixels so a stretched
 //     plate never draws them oval. They are decoration: aria-hidden, no pointer.
 // The plate takes no pointer and holds no text; its card stays a Flowbite Pro card.
 //
 //   plateSvg({ id, tokens }) -> markup: the plate's background, first child of its card
 //   screwSvg({ side, tokens }) -> markup: one screw, absolutely placed ('left' | 'right')
-//   tokens: { plateHi, plateLo, edge, cap, dim } (synth/view/tokens.js panelTokens)
+//   tokens: { plateHi, plateLo, edge, dim } (synth/view/tokens.js panelTokens): the cap is the
+//   dim token, so it stands off both plate surfaces, and its slot the edge token
 
 const HIDDEN = 'aria-hidden="true" focusable="false"';
 
@@ -32,10 +33,11 @@ export function plateSvg({ id, tokens }) {
 export function screwSvg({ side, tokens }) {
   const t = tokens;
   const at = side === 'right' ? 'right-0.5' : 'left-0.5';
-  const slot = side === 'right' ? 'M3 7L7 3' : 'M3 3L7 7';
+  // A cross head, so it reads as a screw and never as a resize grip (p2's W1b review, V5).
+  const slot = side === 'right' ? 'M5 2.4V7.6M2.4 5H7.6' : 'M3.2 3.2L6.8 6.8M6.8 3.2L3.2 6.8';
   return `<svg class="pointer-events-none absolute bottom-0.5 ${at} h-2.5 w-2.5" `
     + `viewBox="0 0 10 10" ${HIDDEN} data-screw="${side}">`
-    + `<circle cx="5" cy="5" r="4.2" fill="${t.cap}" stroke="${t.edge}" stroke-width="0.8"/>`
-    + `<path d="${slot}" stroke="${t.dim}" stroke-width="1.2" stroke-linecap="round" `
+    + `<circle cx="5" cy="5" r="4.2" fill="${t.dim}" stroke="${t.edge}" stroke-width="0.8"/>`
+    + `<path d="${slot}" stroke="${t.edge}" stroke-width="1.2" stroke-linecap="round" `
     + 'fill="none"/></svg>';
 }

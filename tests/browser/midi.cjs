@@ -59,6 +59,13 @@
 //                               the on-screen keys light a MIDI note while it sounds (K026);
 //                               starting the sequencer stops held notes, a Note On while it plays
 //                               is refused and said once, and after it stops a note sounds again
+//   midi-seam-sink              review of src/js/synth (S2): a stub Note On in the Playground,
+//                               then the Synth workspace, then its Note Off: the note-off frees
+//                               the Playground note (zero live oscillators, zero engine notes)
+//                               instead of reaching the Synth and leaving it sounding
+//   keys-one-keyboard           K178: with the stub device, the Playground, the Synth and the
+//                               Studio take one octave, light and sound the same keys for QWERTY
+//                               and MIDI, and release them on Escape and on a workspace switch
 //   keyboard-everywhere         M086: the same A plays the Playground (a note voice), the Synth
 //                               panel and the Studio graph (its Keys node through the Studio
 //                               transport, no Playground voice), the keys docked in both
@@ -877,6 +884,134 @@ async function seamNotes(browser, b, origin, url) {
   }
 }
 
+// midi-seam-sink (review of src/js/synth, S2): a note-off goes where its note-on sounded. A
+// Playground note held across a switch to the Synth workspace is released on the Playground
+// (before, the note-off was routed at release time to the Synth and the note kept sounding).
+async function seamSink(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-sink';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape'); // the dialog closes before any note sounds
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+    const ws = () => page.evaluate(() => window.OSCILLA.app.workspace);
+    const from = await ws();
+    await msg([0x90, 60, 100]);
+    const on = await heard(page, (m) => m.state === 'running' && m.live === 1 && m.notes === 1,
+      `${leg}: a Playground note sounds`);
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    await until(async () => (await ws()) === 'synth', { ms: STEP_MS,
+      what: `${leg}: the Synth workspace opens` });
+    const held = await heard(page, (m) => m.notes === 1 && m.live === 1,
+      `${leg}: the switch itself leaves the held note sounding`);
+    await msg([0x80, 60, 0]);
+    const off = await heard(page, (m) => m.notes === 0 && m.live === 0,
+      `${leg}: the note-off frees the Playground note`);
+    check(leg, id, 'a Playground note held across a switch to the Synth is released by its '
+      + 'Note Off on the Playground', from === 'playground' && !on.timedOut && !held.timedOut
+      && !off.timedOut && errors.length === 0,
+    JSON.stringify({ from, on: on.notes, held: held.notes, off, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
+// keys-one-keyboard (K178, the owner's question of 2026-11-04: why does the keyboard behave
+// differently in every workspace): with the stub MIDI device connected, the Playground, the Synth
+// and the Studio (the Synth panel's nodes, visited first) each take the same octave (Z/X set once, in the Playground), light
+// the same keys for QWERTY and MIDI, sound them, and release them the same way on Escape and on
+// a workspace switch, leaving nothing held and nothing lit.
+async function keysOneKeyboard(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keys-one-keyboard';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  const app = (f) => page.evaluate(f);
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w
+      && window.OSCILLA.app.kbdView === w, ws), { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+    if (!await app(() => window.OSCILLA.app.kbdArmedHere)) {
+      await page.locator('[data-osc="keyboard.arm"]').click();
+    }
+    await page.locator('[data-osc="keyboard.readout"]').click({ force: true });
+  };
+  const held = () => app(() => window.OSCILLA.app.kbdHeld);
+  const quiet = (what) => until(async () => ((await held()) === '' ? true : null),
+    { ms: STEP_MS, what }).then(() => true, () => false);
+  try {
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click();
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+    await go('playground');
+    // The keyboard ignores keys while any modal is open (keyboard-ui.js modalOpen): the Settings
+    // dialog's modal state may outlive its open attribute, so wait for what the keys wait for.
+    await until(() => app(() => !document.querySelector(
+      'dialog[open], [data-oscilla-modal][aria-modal="true"]')), { ms: STEP_MS,
+      what: `${leg}: no modal holds the keys` });
+    await page.keyboard.press('KeyX'); // one octave up, here only
+    const rows = [];
+    const order = ['playground', 'synth', 'studio'];
+    for (const [i, ws] of order.entries()) {
+      await go(ws);
+      const base = await app(() => window.OSCILLA.app.kbdBase);
+      await page.keyboard.down('KeyA');
+      const qwerty = await until(async () => (await held()) || null,
+        { ms: STEP_MS, what: `${leg}: A lights in ${ws}` }).catch(() => '');
+      const qSound = await heard(page, (x) => x.peak > 0.005, `${leg}: A sounds in ${ws}`);
+      await page.keyboard.up('KeyA');
+      const qOff = await quiet(`${leg}: A unlit in ${ws}`);
+      await msg([0x90, 64, 100]);
+      const midi = await until(async () => (await held()) || null,
+        { ms: STEP_MS, what: `${leg}: MIDI E4 lights in ${ws}` }).catch(() => '');
+      await msg([0x80, 64, 0]);
+      const mOff = await quiet(`${leg}: MIDI E4 unlit in ${ws}`);
+      await page.keyboard.down('KeyA');
+      await until(async () => (await held()) || null, { ms: STEP_MS,
+        what: `${leg}: A held in ${ws}` }).catch(() => '');
+      await page.keyboard.press('Escape');
+      const esc = await quiet(`${leg}: Escape releases A in ${ws}`);
+      await page.keyboard.up('KeyA');
+      await go(ws); // Escape may have disarmed the keys
+      await page.keyboard.down('KeyA');
+      await until(async () => (await held()) || null, { ms: STEP_MS,
+        what: `${leg}: A held again in ${ws}` }).catch(() => '');
+      const next = order[(i + 1) % order.length];
+      await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), next);
+      const sw = await quiet(`${leg}: leaving ${ws} releases A`);
+      await page.keyboard.up('KeyA');
+      const silent = await heard(page, (x) => x.peak < 0.001, `${leg}: silent after ${ws}`);
+      rows.push({ ws, base, qwerty, qSound: !qSound.timedOut, qOff, midi, mOff, esc, sw,
+        silent: !silent.timedOut });
+    }
+    const want = { base: 72, qwerty: 'C5', qSound: true, qOff: true, midi: 'E4 (MIDI)',
+      mOff: true, esc: true, sw: true, silent: true };
+    const bad = rows.filter((r) => Object.entries(want).some(([k, v]) => r[k] !== v));
+    check(leg, id, 'the Playground, the Synth and the Studio take the same octave, light and '
+      + 'sound the same keys for QWERTY and MIDI, and release them on Escape and on a switch',
+    bad.length === 0 && errors.length === 0, JSON.stringify({ bad, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
 // keyboard-everywhere (M086; the owner's report of 2026-11-03): the same computer key plays on
 // the Playground, the Synth and the Studio through the one keyboard component, and the Studio's
 // keys reach its graph (the Keys node, through the Studio transport), not the Playground voice.
@@ -1146,8 +1281,10 @@ async function main() {
             await measured(browser, b, origin, url, site);
             await seamChecks(browser, b, origin, url, site);
             await seamNotes(browser, b, origin, url);
+            await seamSink(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
+            await keysOneKeyboard(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);
           }

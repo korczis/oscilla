@@ -125,8 +125,7 @@ test('component: a held MIDI note and a held computer key sound past the limit',
   const { r, cmp, port, key } = await componentRig();
   port.send([0x90, 60, 100]);
   assert.equal(typeof cmp.kbdToggle, 'function', 'the keyboard is part of the component');
-  cmp.kbdToggle();
-  assert.equal(cmp.kbdArmedHere, true, 'armed in the Playground');
+  assert.equal(cmp.kbdArmedHere, true, 'armed in the Playground from the start (K178)');
   const down = key('keydown', 'KeyA');
   assert.equal(down.defaultPrevented, true, 'an armed key is the keyboard\'s');
   assert.equal(r.engine.noteCount, 2, 'the MIDI note and the key A both sound');
@@ -140,7 +139,6 @@ test('component: a held MIDI note and a held computer key sound past the limit',
 
 test('component: blur, hide, pagehide and Escape force-release every held note', async () => {
   const { r, cmp, port, fire, key, doc } = await componentRig();
-  cmp.kbdToggle();
   const releases = {
     blur: () => fire('win:blur'),
     hidden: () => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; },
@@ -162,12 +160,15 @@ test('component: blur, hide, pagehide and Escape force-release every held note',
   }
 });
 
+// K178 (the owner's decision of 2026-11-05): the keys are armed at once in every workspace that
+// plays them; Arm switches a workspace's keys off and on, each on its own.
 test('component: armed per view, never Space, never while typing', async () => {
   const { r, cmp, key } = await componentRig();
+  cmp.kbdToggle(); // switched off in the Playground
   let e = key('keydown', 'KeyA');
-  assert.equal(e.defaultPrevented, false, 'not armed: the key is not taken');
+  assert.equal(e.defaultPrevented, false, 'switched off: the key is not taken');
   assert.equal(r.engine.noteCount, 0);
-  cmp.kbdToggle();
+  cmp.kbdToggle(); // and on again
   e = key('keydown', 'Space');
   assert.equal(e.defaultPrevented, false, 'Space is never the keyboard\'s (ADR 0050)');
   assert.equal(r.engine.noteCount, 0);
@@ -177,8 +178,9 @@ test('component: armed per view, never Space, never while typing', async () => {
   assert.equal(e.defaultPrevented, false, 'Ctrl+A is a shortcut, not a note');
   assert.equal(r.engine.noteCount, 0);
   cmp.workspace = 'studio';
+  cmp.kbdToggle(); // switched off in the Studio only
   e = key('keydown', 'KeyA');
-  assert.equal(e.defaultPrevented, false, 'armed in the Playground is not armed in the Studio');
+  assert.equal(e.defaultPrevented, false, 'switched off in the Studio, the Playground unchanged');
   cmp.kbdToggle();
   e = key('keydown', 'KeyA');
   assert.equal(e.stopped, true, 'armed in the Studio: before Studio\'s own A');
