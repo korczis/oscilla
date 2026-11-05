@@ -19,13 +19,16 @@
 //                     a queue group of more than one pull request fails the base-in-head fact,
 //                     since HEAD^1 is then another pull request's queue commit;
 //     an older green run, or a run whose latest attempt is red, does not count;
-//   - every job ci.yml declares (a matrix job once per value) is in that run's latest jobs, on
-//     the run's head, and succeeded: a missing, skipped or cancelled job, or a job no ci.yml
-//     declares, refuses (a path-gated job skipped for a non-runtime change too: a release
-//     changes package.json, so its run skips none). One exemption, on either event: the job
-//     with id flake-ledger whose `if:` is exactly RERUN_ONLY_IF (E010) may be
-//     `completed`/`skipped` on its own first attempt, and must succeed from attempt 2; ci.yml
-//     must declare exactly one such job and no two jobs may share a name;
+//   - every job the base's ci.yml declares (R037: read with `git show B:ci.yml`, the gate main
+//     had when the release branched; the checkout's copy is the release tree's own, so it can
+//     only add) and every job the release tree's ci.yml adds beyond it (a matrix job once per
+//     value) is in that run's latest jobs, on the run's head, and succeeded: a missing, skipped
+//     or cancelled job, a base job the release tree dropped, or a job neither copy declares,
+//     refuses (a path-gated job skipped for a non-runtime change too: a release changes
+//     package.json, so its run skips none). One exemption, on either event: the job with id
+//     flake-ledger whose `if:` is exactly RERUN_ONLY_IF (E010) may be `completed`/`skipped` on
+//     its own first attempt, and must succeed from attempt 2; each copy of ci.yml must declare
+//     exactly one such job and no two jobs may share a name;
 //   - the committed roadmap matches the plan (tests/unit/about-current.test.mjs with
 //     OSC_ROADMAP_CHECK=1, the one check the local gate ran that CI does not).
 // Each fact that cannot be read is a problem of its own, never an empty answer.
@@ -99,7 +102,10 @@ export function expectedJobs(ciText) {
  * Pure judgement of the gathered facts (empty = the CI receipt verifies).
  * @param {{ head: string, parents: string[]|null, headTree: string|null, prTree: string|null,
  *   baseInPr: boolean|null, workflow: { name: string|null, jobs: string[], problems: string[] },
+ *   baseWorkflow: { jobs: string[], rerunOnly?: string[], problems: string[] }|null,
  *   pulls: object[]|null, runs: object[]|null, jobs: object[]|null, roadmap: boolean }} f
+ *   workflow is the release tree's ci.yml (the checkout's, HEAD's); baseWorkflow the base's,
+ *   read from the merge's first parent (R037), null when it could not be read.
  */
 export function ciReceiptProblems(f) {
   const problems = [...(f.workflow?.problems || [])];
@@ -110,6 +116,10 @@ export function ciReceiptProblems(f) {
       + 'judges the merge of the release pull request'];
   }
   const [base, pr] = f.parents;
+  // R037: the job set is the base's ci.yml, the gate main had when the release branched. It is
+  // a fact of its own, read from the first parent; unreadable or broken, it refuses.
+  if (!f.baseWorkflow) problems.push(`${CI_WORKFLOW} of the base ${short(base)} could not be read`);
+  else problems.push(...(f.baseWorkflow.problems || []).map((p) => `base ${short(base)}: ${p}`));
   if (!f.headTree || !f.prTree) problems.push('the trees of HEAD and of its pull request head '
     + `${short(pr)} could not be read`);
   else if (f.headTree !== f.prTree) {
@@ -198,14 +208,17 @@ function runProblems(f, event, allRuns, allJobs) {
     return [...problems, `the jobs of run ${newest.id} could not be read`];
   }
   const byName = new Map(allJobs.map((j) => [j.name, j]));
-  for (const name of f.workflow.jobs) {
+  const { by, rerunOnly } = declaredJobs(f);
+  const base = f.parents?.[0];
+  const copy = (name) => (by.get(name) === 'base'
+    ? `${CI_WORKFLOW} of the base ${short(base)}` : CI_WORKFLOW);
+  for (const [name] of by) {
     const j = byName.get(name);
-    if (!j) problems.push(`run ${newest.id} has no job "${name}" (${CI_WORKFLOW} declares it)`);
+    if (!j) problems.push(`run ${newest.id} has no job "${name}" (${copy(name)} declares it)`);
     else if (j.run_id !== newest.id || j.head_sha !== sha) {
       problems.push(`job "${name}" ran on ${short(j.head_sha)} in run ${j.run_id}, not on `
         + `${short(sha)} in run ${newest.id}`);
-    } else if (j.status === 'completed' && j.conclusion === 'skipped'
-      && (f.workflow.rerunOnly || []).includes(name)
+    } else if (j.status === 'completed' && j.conclusion === 'skipped' && rerunOnly.has(name)
       && Number(j.run_attempt ?? newest.run_attempt) === 1) {
       // a re-run-only job is skipped on a first attempt by its own condition (E010)
     } else if (j.status !== 'completed' || j.conclusion !== 'success') {
@@ -213,11 +226,28 @@ function runProblems(f, event, allRuns, allJobs) {
     }
   }
   for (const j of allJobs) {
-    if (!f.workflow.jobs.includes(j.name)) {
-      problems.push(`run ${newest.id} has a job "${j.name}" that ${CI_WORKFLOW} does not declare`);
+    if (!by.has(j.name)) {
+      problems.push(`run ${newest.id} has a job "${j.name}" that ${CI_WORKFLOW} does not declare, `
+        + `at the base ${short(base)} or at HEAD`);
     }
   }
   return problems;
+}
+
+/**
+ * The jobs a run must carry and which copy of ci.yml declares each (R037): every job of the
+ * base's copy, the gate main had when the release branched (`base`), and every job the release
+ * tree's own copy adds beyond it (`head`); a run job in neither is undeclared. A base job the
+ * release tree dropped is still required, and its refusal names the base. The re-run-only
+ * exemption (E010) holds for the ledger either copy names.
+ */
+function declaredJobs(f) {
+  const by = new Map();
+  for (const name of f.workflow?.jobs || []) by.set(name, 'head');
+  for (const name of f.baseWorkflow?.jobs || []) by.set(name, 'base');
+  const rerunOnly = new Set([...(f.workflow?.rerunOnly || []),
+    ...(f.baseWorkflow?.rerunOnly || [])]);
+  return { by, rerunOnly };
 }
 
 /** The run judged, for the log line of a verified receipt: the pull request's, else the queue's. */
@@ -260,11 +290,16 @@ export function gatherCiReceipt({ sh, root, head }) {
     ciText = readFileSync(path.join(root, CI_WORKFLOW), 'utf8');
   } catch { /* judged as no jobs */ }
   const facts = { head, parents, headTree: tree(head), prTree: null, baseInPr: null,
-    workflow: expectedJobs(ciText), pulls: null, runs: null, jobs: null, roadmap: false };
+    workflow: expectedJobs(ciText), baseWorkflow: null, pulls: null, runs: null, jobs: null,
+    roadmap: false };
   const [cmd, args] = ROADMAP_CHECK;
   facts.roadmap = sh(cmd, args, { env: { OSC_ROADMAP_CHECK: '1' } }).status === 0;
   if (!parents || parents.length !== 2) return facts;
   const [base, pr] = parents;
+  // R037: the job set is the base's ci.yml, read from the merge's first parent; the checkout's
+  // copy (ciText) is the release tree's own and says only what it adds.
+  const shown = sh('git', ['show', `${base}:${CI_WORKFLOW}`]);
+  facts.baseWorkflow = shown.status === 0 ? expectedJobs(shown.stdout || '') : null;
   facts.prTree = tree(pr);
   const anc = sh('git', ['merge-base', '--is-ancestor', base, pr]).status;
   facts.baseInPr = anc === 0 ? true : anc === 1 ? false : null;
