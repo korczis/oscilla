@@ -560,3 +560,62 @@ test('U092: each roadmap item reads its title first, then "N of M issues done"',
   assert.deepEqual(roadmapItemProblems(old, 'now'), ['the now item reads its count before its '
     + 'title', 'the now item\'s count does not say "N of M issues done"']);
 });
+
+// ------------------------------------------------- U090: the credits name every shipped library
+// What ships is what the build says: its runtime dependencies (package.json), the vendor
+// scripts it inlines (VENDOR_SCRIPTS) and the packages whose content reaches dist without an
+// import (BUILD_TIME_ASSETS). Each is credited by its name, followed by its licence (the first
+// parenthesis after the name), as its package.json states it.
+/** The name About credits each shipped package by; a package without one fails. */
+export const CREDIT_NAMES = Object.freeze({
+  alpinejs: 'Alpine.js', uplot: 'uPlot', p5: 'p5.js', flowbite: 'Flowbite',
+  tailwindcss: 'Tailwind CSS', 'lucide-static': 'Lucide',
+});
+
+/** The credits line: the text of the dd after "Built with". */
+export function creditsText(markup) {
+  const at = aboutView(markup).indexOf('<dt>Built with</dt>');
+  if (at < 0) return '';
+  const rest = aboutView(markup).slice(at);
+  return text(rest.slice(rest.indexOf('<dd>'), rest.indexOf('</dd>')));
+}
+
+/** Each shipped package the credits leave out or credit with another licence, one string each. */
+export function creditProblems(markup, shipped, licenceOf) {
+  const credits = creditsText(markup);
+  const problems = [];
+  for (const pkg of shipped) {
+    const name = CREDIT_NAMES[pkg];
+    if (!name) {
+      problems.push(`${pkg} ships but has no credit name (CREDIT_NAMES)`);
+      continue;
+    }
+    const at = credits.search(new RegExp(`(?<![\\w.])${name.replace(/\./g, '\\.')}(?![\\w])`));
+    if (at < 0) {
+      problems.push(`${pkg} ships but the credits do not name ${name}`);
+      continue;
+    }
+    const licence = credits.slice(at).match(/\(([^,)]+)/)?.[1].trim();
+    if (licence !== licenceOf(pkg)) {
+      problems.push(`${name} is credited ${licence}, its package says ${licenceOf(pkg)}`);
+    }
+  }
+  return problems;
+}
+
+test('U090: the credits name every library the page ships, with its licence', async () => {
+  const { VENDOR_SCRIPTS, BUILD_TIME_ASSETS } = await import('../../scripts/build-config.mjs');
+  const pkg = JSON.parse(read('package.json'));
+  const shipped = [...new Set([...Object.keys(pkg.dependencies),
+    ...VENDOR_SCRIPTS.map((v) => v.pkg), ...BUILD_TIME_ASSETS])];
+  const licenceOf = (p) => JSON.parse(read(`node_modules/${p}/package.json`)).license;
+  assert.ok(shipped.includes('flowbite') && shipped.includes('p5'), shipped.join(', '));
+  assert.deepEqual(creditProblems(html, shipped, licenceOf), []);
+  // mutation: a library dropped from the line, or credited under another licence, is named
+  const dropped = html.replace(/(<dt>Built with<\/dt><dd>[\s\S]*?)Lucide\s+\(ISC\),\s*/, '$1');
+  assert.notEqual(dropped, html, 'Lucide (ISC) is in the credits');
+  assert.deepEqual(creditProblems(dropped, ['lucide-static'], licenceOf),
+    ['lucide-static ships but the credits do not name Lucide']);
+  assert.deepEqual(creditProblems(html, ['left-pad'], licenceOf),
+    ['left-pad ships but has no credit name (CREDIT_NAMES)']);
+});
