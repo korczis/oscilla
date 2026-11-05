@@ -886,18 +886,27 @@ test('slice A A2 (D-PAL): a knob\'s and a dial\'s depth shows on both D-PAL plat
   }
 });
 
-test('slice A A2: on today\'s dark plateLo no shade can show; the body\'s own tone does', () => {
+// A measurement of today's dark foot, --osc-surface-1, by its name (review of D-PAL, finding 3):
+// it does not follow surface.plateLo, so the plates moving to plate.* (dev-53, PF-04) leaves it
+// true; the D-PAL foot is judged by the test above. The body is judged on every plate the layer
+// may name.
+test('slice A A2: on today\'s dark foot (surface-1) no shade can show; the body\'s own tone does',
+  () => {
+  const TODAY_FOOT = '--osc-surface-1';
   const { dark } = themes();
-  const plate = hexOf(dark, SYNTH_TOKEN_NAMES.surface.plateLo);
+  const plate = hexOf(dark, TODAY_FOOT);
   const shade = hexOf(dark, SYNTH_TOKEN_NAMES.control.shade);
   for (const a of [Number(HW['hw-shadow']), 0.4]) {
     assert.ok(deltaL(shade, plate, a) > -MIN_DL, `measured: ΔL* ${deltaL(shade, plate, a)
       .toFixed(2)} at ${a}`);
   }
   for (const [theme, t] of Object.entries(themes())) {
-    const body = Math.abs(lstar(hexOf(t, SYNTH_TOKEN_NAMES.control.knobCap))
-      - lstar(hexOf(t, SYNTH_TOKEN_NAMES.surface.plateLo)));
-    assert.ok(body >= MIN_DL, `${theme}: the cap's body on plateLo ΔL* ${body.toFixed(2)}`);
+    for (const foot of new Set([TODAY_FOOT, SYNTH_TOKEN_NAMES.surface.plateLo,
+      SYNTH_TOKEN_NAMES.plate.lo])) {
+      const body = Math.abs(lstar(hexOf(t, SYNTH_TOKEN_NAMES.control.knobCap))
+        - lstar(hexOf(t, foot)));
+      assert.ok(body >= MIN_DL, `${theme}: the cap's body on ${foot} ΔL* ${body.toFixed(2)}`);
+    }
   }
 });
 
@@ -1086,11 +1095,74 @@ test('C6: every cap is the cap material and its ink the cap ink, in every enable
     assert.equal(attr(tagOf(slide, 'data-cap'), 'fill'), c.knobCap, `slide ${where}`);
     const grips = [...slide.matchAll(/<line data-grip=""[^>]*>/g)].map((m) => m[0]);
     assert.equal(attr(grips[1], 'stroke'), c.capInk, `slide ${where}: the index on the cap`);
-    // Past the cap's edge the index runs on the plate, so there it is control.pointer.
-    const tip = tagOf(slide, 'data-index-tip');
-    assert.equal(attr(tip, 'stroke'), c.pointer, `slide ${where}: the index past the cap`);
-    assert.equal(Number(attr(tip, 'x2')), Number(attr(grips[1], 'x2')), 'the same end');
-    assert.ok(Number(attr(tip, 'x1')) >= 7 + 0.75, 'from outside the cap\'s stroke');
+    // Past the cap's edge the selected detent carries the index (the slide's two paints, below).
+    assert.equal(tagOf(slide, 'data-index-tip'), undefined, `slide ${where}: no pointer stub`);
+  }
+});
+
+// Review of D-PAL, finding 7: one material looks one way on every control. The fader's cap, like
+// the knob's side wall and the slide's cap, carries the material's lit tone (control.knobCapHi,
+// along its top, clear of the grips) and a sheen strip in the highlight at hw-sheen, each shown
+// on what it is drawn over (rule b, |ΔL*| >= 3) in both themes; disabled, neither (C1: a flat
+// cap). The slide's index reads in two paints, not three: the cap ink on the cap up to the cap's
+// stroke, and past it the selected detent at the same height, in the lit ring (no pointer stub
+// between them).
+test('D-PAL look: the fader cap is lit and sheened as the knob and slide are', () => {
+  const c = TOKENS.control;
+  const N = SYNTH_TOKEN_NAMES.control;
+  for (const state of [{}, { hover: true }, { focus: true }, { dragging: true }]) {
+    const where = JSON.stringify(state);
+    const fader = controlSvg({ kind: 'fader', value: 70, param: NUM, tokens: TOKENS, state });
+    const cap = tagOf(fader, 'data-cap');
+    const lit = tagOf(fader, 'data-cap-hi');
+    const sheen = tagOf(fader, 'data-sheen');
+    assert.ok(lit, `fader ${where}: a lit tone`);
+    assert.equal(attr(lit, 'fill'), c.knobCapHi, `fader ${where}: the lit tone is knobCapHi`);
+    assert.ok(sheen, `fader ${where}: a sheen`);
+    assert.equal(attr(sheen, 'fill'), c.highlight, `fader ${where}: the sheen is the highlight`);
+    assert.match(sheen, /\sclass="opacity-hw-sheen"/, `fader ${where}: at hw-sheen`);
+    // Both inside the cap's stroke, along its top, and clear of the top grip.
+    const [cx, cy, cw] = ['x', 'y', 'width'].map((a) => Number(attr(cap, a)));
+    const topGrip = Math.min(...[...fader.matchAll(/<line data-grip="[^"]*"[^>]*>/g)]
+      .map((m) => Number(attr(m[0], 'y1'))));
+    for (const [what, el] of [['lit tone', lit], ['sheen', sheen]]) {
+      const [x, y, w, h] = ['x', 'y', 'width', 'height'].map((a) => Number(attr(el, a)));
+      assert.ok(x >= cx + 0.5 && x + w <= cx + cw - 0.5 && y >= cy + 0.5,
+        `fader ${where}: the ${what} inside the cap's stroke`);
+      assert.ok(y + h <= topGrip - 0.5, `fader ${where}: the ${what} clear of the grips`);
+    }
+  }
+  const off = controlSvg({ kind: 'fader', value: 70, param: NUM, tokens: TOKENS,
+    state: { disabled: true } });
+  assert.equal(tagOf(off, 'data-cap-hi'), undefined, 'disabled: a flat cap (C1)');
+  assert.equal(tagOf(off, 'data-sheen'), undefined, 'disabled: no sheen (C1)');
+  const a = Number(HW['hw-sheen']);
+  for (const [theme, t] of Object.entries(themes())) {
+    const body = hexOf(t, N.knobCap);
+    const hi = hexOf(t, N.knobCapHi);
+    assert.ok(lstar(hi) - lstar(body) >= MIN_DL, `${theme}: the lit tone shows on the cap`);
+    assert.ok(deltaL(hexOf(t, N.highlight), hi, a) >= MIN_DL,
+      `${theme}: the sheen shows on the lit tone, ΔL* ${deltaL(hexOf(t, N.highlight), hi, a)}`);
+  }
+});
+
+test('D-PAL look: the slide\'s index reads in two paints, the cap ink and the lit detent', () => {
+  const c = TOKENS.control;
+  for (const value of ['a', 'b', 'c']) {
+    const slide = switchSvg({ value, param: SLIDE3, tokens: TOKENS });
+    assert.equal(tagOf(slide, 'data-index-tip'), undefined, `${value}: no pointer stub`);
+    const cap = tagOf(slide, 'data-cap');
+    const edge = Number(attr(cap, 'x')) + Number(attr(cap, 'width'));
+    const inset = Number(attr(cap, 'stroke-width')) / 2;
+    const index = [...slide.matchAll(/<line data-grip=""[^>]*>/g)].map((m) => m[0])[1];
+    assert.equal(attr(index, 'stroke'), c.capInk, `${value}: the index in the cap ink`);
+    assert.ok(Number(attr(index, 'x2')) <= edge - inset, `${value}: it ends inside the stroke`);
+    const y = attr(index, 'y1');
+    const lit = [...slide.matchAll(/<line data-detent=""[^>]*>/g)].map((m) => m[0])
+      .filter((d) => attr(d, 'y1') === y);
+    assert.equal(lit.length, 1, `${value}: one detent at the index's height`);
+    assert.equal(attr(lit[0], 'stroke'), c.ring, `${value}: past the cap, the lit detent`);
+    assert.ok(Number(attr(lit[0], 'x2')) > edge + inset, `${value}: it shows past the cap`);
   }
 });
 
@@ -1142,6 +1214,8 @@ test('a token set without the D-PAL roles draws the caps as before (the panel, u
   const fader = controlSvg({ kind: 'fader', value: 70, param: NUM, tokens: PRE_DPAL_TOKENS });
   assert.equal(attr(tagOf(fader, 'data-cap'), 'fill'), c.cap);
   assert.equal(attr(/<line data-grip="centre"[^>]*>/.exec(fader)[0], 'stroke'), c.pointer);
+  assert.equal(tagOf(fader, 'data-cap-hi'), undefined, 'no lit tone, as before');
+  assert.equal(tagOf(fader, 'data-sheen'), undefined, 'no sheen, as before');
   const lever = controlSvg({ kind: 'switch', value: true, param: BOOL, tokens: PRE_DPAL_TOKENS });
   assert.equal(attr(tagOf(lever, 'data-cap'), 'stroke'), PRE_DPAL_TOKENS.surface.edge);
   const slide = switchSvg({ value: 'b', param: SLIDE3, tokens: PRE_DPAL_TOKENS });

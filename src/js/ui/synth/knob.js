@@ -276,6 +276,7 @@ function knobShapes(value, applied, p, t, st, zoom, uid, size = 'md') {
 function faderShapes(value, applied, p, t, st, zoom, tr) {
   const c = t.control;
   const m = capMaterial(t);
+  const live = m.dpal && !st.disabled;
   const half = tr / 2;
   const yOf = (v) => num(half - tr * toNorm(v, p));
   const y = yOf(value);
@@ -301,6 +302,12 @@ function faderShapes(value, applied, p, t, st, zoom, tr) {
     + `<rect data-cap="" x="${-cw / 2}" y="${num(y - ch / 2)}" width="${cw}" height="${ch}" `
     + `rx="2" fill="${esc(m.body)}" stroke="${esc(st.dragging ? c.pointer : c.edge)}" `
     + 'stroke-width="1"/>'
+    // D-PAL: the material's lit tone along the top and a sheen strip on it, as the knob's and the
+    // slide's (review of D-PAL, finding 7); a disabled cap is flat (C1).
+    + (live ? `<rect data-cap-hi="" x="${-cw / 2 + 1}" y="${num(y - ch / 2 + 1)}" `
+      + `width="${cw - 2}" height="2" rx="1" fill="${esc(m.hi)}" stroke="none"/>`
+      + `<rect data-sheen="" class="${SHEEN_CLASS}" x="${-cw / 2 + 4}" y="${num(y - ch / 2 + 1)}" `
+      + `width="${cw - 8}" height="1" rx="0.5" fill="${esc(c.highlight)}" stroke="none"/>` : '')
     + grip(-g, '', c.edge, 1) + grip(0, 'centre', st.disabled ? c.disabled : m.ink, 1.5)
     + grip(g, '', c.edge, 1)
     + (st.focus ? `<rect data-focus="" x="${-cw / 2 - 3}" y="${-reach}" width="${cw + 6}" `
@@ -354,7 +361,8 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
  * focus ring; `uid` names its gradients (else the parameter's id); `size` (KNOB_SIZES: lg, md, sm;
  * md unless given, and any kind's; lg and sm a knob's alone) scales it about its centre, its box
  * with it; fader = slot in control.track, value fill (from zero across zero), a FADER_CAP cap edged
- * in control.edge (control.pointer dragged), three grip lines, the centre one on the value;
+ * in control.edge (control.pointer dragged), three grip lines, the centre one on the value, and
+ * with the cap material its lit tone along the top and a sheen strip (flat when disabled);
  * 'horizontal' turns it (rotate(90): more to the right), `travel` (default FADER_TRAVEL) its
  * length; switch = a lever position per option of an enum of up to four or a boolean, detents past
  * two. `applied`, elsewhere than `value`, marks the engine's value (a knob's arc at r 13.5 in

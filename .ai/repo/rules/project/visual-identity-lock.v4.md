@@ -177,21 +177,36 @@ The closed list: `--osc-wood-hi`, `--osc-wood-lo`, `--osc-plate-hi`, `--osc-plat
   cue composited over it at its intensity class. In short: the plate pair puts the lighter of
   today's two plate surfaces at the top in both themes (PF-04) and the foot where the depth shade
   shows; the cap material is the lightest grey whose inks (the pointer, the applied arc, the
-  grips) hold 3:1 and whose body shows on every plate, with a lit tone 3 L* above it; the LED is
+  grips) hold 3:1 and whose body shows on every plate, and its lit tone the lightest grey at
+  least 3 L* above it on which every ink still holds 3:1 (the light purple stops it: measured,
+  ΔL* +8.12); the LED is
   the brightest shade of `--osc-red` holding 3:1 on the bezel, its seat, the card and both plates
   in both themes; the keys, the display glass and the wood follow the same pattern (the test
   states each). The chassis is the one role no search pins: a seam is unlit, so black, and the
   test measures that it shows on every plate and the card.
+- **What is drawn on them, measured too** (review of D-PAL, 11-05). The keys are judged with
+  the colours the keyboard draws on them (a held key's fill 3:1 on the key it replaces, a legend
+  4.5:1 on its key, the outline the gap's rule): no white key carries today's dark MIDI fill, so
+  LXK-02 brings the fills and legends with it, and the palette test records what falls short
+  until it does. The plates are judged with the parts that stand on them: on the D-PAL foot the
+  LED bezel's body (`control.capHi`) falls under its 1.3:1, and no foot on the derivation's line
+  both shows the shade and holds it, so the plate move (PF-04) brings a bezel decision with it;
+  the palette test records that too.
 - **C6, theme-invariant.** Every role but the plate pair and the two depth roles has one value
-  in both themes, declared on `:root` only and never on `[data-theme="light"]`; the knob caps,
-  the switch levers and slide caps, and the fader caps are drawn in `--osc-knob-cap` and
-  `--osc-knob-cap-hi` in both themes, and the chassis is dark in both.
+  in both themes, declared on `:root` only and never on `[data-theme="light"]`, and the chassis
+  is dark in both. The layer's core controls (`src/js/ui/synth/`) draw the knob caps and a
+  dial's face, the lever of a two-position `controlSvg` switch, the slide caps and the fader caps
+  in `--osc-knob-cap`, with its lit tone `--osc-knob-cap-hi`, when the token set they are given
+  carries the cap material; the toggle's bat-handle lever stays `control.edge`, because it is
+  metal and not a cap. The Synth panel draws them so once dev-53 maps the roles into its token
+  set; until that change its controls draw as they did before this amendment.
 - **The guard.** A role of the list is named only in `src/styles/tokens.css`, under
   `src/js/ui/synth` and under `src/js/synth/view` (`paletteRolesOutsideLayer` in
   `tests/unit/visual-identity-lock-v4.test.mjs`, which replaces the depth roles' guard and keeps
   it as the same rule over two names); a surface that wants a hardware colour takes it from the
   layer's token set, never by the role's name. A role's name in tokens.css is a token, not the
-  hardware vocabulary.
+  hardware vocabulary. The guard matches a role's literal name, so a name built at run time
+  (`'--osc-knob-' + 'cap'`) passes it: a static guard's limit, which the review catches.
 - **The ratchet exception.** The clause above that tokens.css "cannot gain a declaration under
   the ratchet of `project.ui-uses-flowbite-pro`" now reads: it gains none outside the closed list.
   The Flowbite Pro measure (`TOKENS_UNRECORDED` in `scripts/ui-flowbite-pro-measure.mjs`) counts

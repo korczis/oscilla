@@ -20,9 +20,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { TOKENS_UNRECORDED } from '../../scripts/ui-flowbite-pro-measure.mjs';
+import { keyColours } from '../../src/js/midi/keyboard-view.js';
+import { SYNTH_TOKEN_NAMES } from '../../src/js/ui/synth/tokens.js';
 
 const ROOT = new URL('../../', import.meta.url);
 const TOKENS_CSS = readFileSync(new URL('src/styles/tokens.css', ROOT), 'utf8');
+const RULE = readFileSync(new URL('.ai/repo/rules/project/visual-identity-lock.v4.md', ROOT),
+  'utf8');
 const HW = createRequire(import.meta.url)('../../tailwind.config.cjs').theme.extend.opacity;
 const MIN_DL = 3;
 
@@ -325,6 +329,164 @@ test('wood (PF-02): reads as wood in both themes, its grain shows, its cheek off
   }
   assert.ok(offEveryPlate(lo, ['--osc-surface-2']) && offEveryPlate(hi, ['--osc-surface-2']),
     'the cheek shows beside every plate and the card');
+});
+
+// ---------------------------------------------------------------- review of D-PAL (11-05)
+
+// Finding 1: the text says what the derivation does. The lit tone is not "3 L* above" the cap:
+// it is the lightest grey at least 3 L* above it on which every ink still holds 3:1, so it lands
+// where the light purple stops it, and the text states the measured lift.
+test('the rule and tokens.css state the cap\'s lit tone as the derivation picks it', () => {
+  const lift = (lstar(valueIn('dark', '--osc-knob-cap-hi'))
+    - lstar(valueIn('dark', '--osc-knob-cap'))).toFixed(2);
+  const at = RULE.indexOf('# Amendment of 2026-11-05 (D-PAL)');
+  const amendment = RULE.slice(at, RULE.indexOf('\n# ', at + 1));
+  const comment = /\/\*(?:(?!\*\/)[\s\S])*The cap material[\s\S]*?\*\//.exec(TOKENS_CSS)?.[0] || '';
+  for (const [where, text] of [['tokens.css', comment], ['the rule\'s amendment', amendment]]) {
+    const flat = text.replace(/\s+/g, ' ');
+    assert.doesNotMatch(flat, /lit tone 3 L\* above/, `${where}: not "3 L* above"`);
+    const from = flat.indexOf('lit tone');
+    assert.ok(from >= 0, `${where} states the lit tone`);
+    const says = flat.slice(from, from + 240);
+    assert.match(says, /the lightest grey at least 3 L\* above/, `${where}: the search`);
+    assert.match(says, /every ink still holds 3:1/, `${where}: its stop`);
+    assert.match(says, new RegExp(`(?:ΔL\\*|dL\\*) \\+${lift.replace('.', '\\.')}`),
+      `${where}: the measured lift, +${lift}`);
+  }
+});
+
+/** A token's value in a theme, `var()` resolved, or '' (no assertion: keyboard-view reads fonts
+ *  through the same lookup). */
+function resolved(theme, name) {
+  let v = THEMES[theme][name];
+  for (let i = 0; i < 8 && /^var\(/.test(v || ''); i++) {
+    v = THEMES[theme][/^var\((--[\w-]+)\)$/.exec(v)[1]];
+  }
+  return v || '';
+}
+const KEY_INKS = ['lit', 'midi', 'label', 'blackLabel', 'onLit', 'edge'];
+/** What src/js/midi/keyboard-view.js draws on the keys today, read through its own keyColours
+ *  from tokens.css in each theme. */
+function keyboardInks(theme) {
+  const had = Object.hasOwn(globalThis, 'getComputedStyle');
+  const was = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = () => ({ getPropertyValue: (n) => resolved(theme, n) });
+  try {
+    const c = keyColours({}, { documentElement: { dataset: theme === 'light'
+      ? { theme: 'light' } : {} } });
+    return Object.fromEntries(KEY_INKS.map((r) => [r, c[r].toLowerCase()]));
+  } finally {
+    if (had) globalThis.getComputedStyle = was;
+    else delete globalThis.getComputedStyle;
+  }
+}
+/** The keys' rules for what is drawn on them, in each theme: a held key's fill (lit, midi) is a
+ *  state graphic, 3:1 on the key it replaces, white or black (WCAG 1.4.11); a legend 4.5:1 on its
+ *  key (label on the white key, blackLabel on the black); a held key's legend (onLit) 4.5:1 on
+ *  each fill; the outline between keys (edge) the gap's rule, 3:1 on white and ΔL* >= 3 off
+ *  black. `inks(theme)` -> { lit, midi, label, blackLabel, onLit, edge }. */
+function keyShortfalls(inks) {
+  const short = [];
+  for (const th of BOTH) {
+    const k = inks(th);
+    const white = valueIn(th, '--osc-hw-key-white');
+    const black = valueIn(th, '--osc-hw-key-black');
+    const need = (what, fg, bg, on, min) => {
+      const r = contrast(fg, bg);
+      if (r < min) short.push(`${th} ${what} ${fg} on ${on}: ${r.toFixed(2)} < ${min}`);
+    };
+    for (const s of ['lit', 'midi']) {
+      need(s, k[s], white, 'the white key', 3);
+      need(s, k[s], black, 'the black key', 3);
+      need('onLit', k.onLit, k[s], `the ${s} fill`, 4.5);
+    }
+    need('label', k.label, white, 'the white key', 4.5);
+    need('blackLabel', k.blackLabel, black, 'the black key', 4.5);
+    need('edge', k.edge, white, 'the white key', 3);
+    if (Math.abs(lstar(k.edge) - lstar(black)) < MIN_DL) {
+      short.push(`${th} edge ${k.edge} off the black key: ΔL* `
+        + `${(lstar(k.edge) - lstar(black)).toFixed(2)}`);
+    }
+  }
+  return short;
+}
+
+// Finding 2: the keys were derived without the colours the keyboard draws on them. Measured on
+// the D-PAL keys, keyboard-view's colours of today fall short where listed (the held keys' legends
+// on their fills fall short today too, on today's keys); dev-53's LXK-02 change
+// (the keys take key.white, key.black and key.gap) must bring the map below with it, and each
+// entry leaves this list as that change fixes it (a fix not recorded fails here, as DPAL_PENDING).
+const KEYS_PENDING = [
+  'dark onLit #ffffff on the lit fill: 4.04 < 4.5',
+  'dark midi #34db7b on the white key: 1.68 < 3',
+  'dark onLit #ffffff on the midi fill: 1.82 < 4.5',
+  'dark label #94a9bd on the white key: 2.24 < 4.5',
+  'dark edge #020b15 off the black key: ΔL* 1.12',
+  'light onLit #ffffff on the midi fill: 3.28 < 4.5',
+  'light edge #e9eef4 on the white key: 1.08 < 3',
+];
+test('the keys (LXK-02): what the keyboard draws on them, measured on the D-PAL keys', () => {
+  assert.deepEqual(keyShortfalls(keyboardInks), KEYS_PENDING,
+    'dev-53 (LXK-02): the keys inherit these shortfalls; the map below carries none');
+});
+
+test('the keys cannot carry today\'s dark MIDI fill; the map dev-53 takes carries every ink',
+  () => {
+  // While a fill of today falls short on the white key (KEYS_PENDING): with the fills in the white
+  // key's derivation, what the search finds is no white key, as it fails the keys' own rule,
+  // 4.5:1 against the black key. So the fill changes, not the key.
+  if (KEYS_PENDING.some((e) => / (?:lit|midi) #\w+ on the white key/.test(e))) {
+    const fills = BOTH.flatMap((th) => [keyboardInks(th).lit, keyboardInks(th).midi]);
+    const w = search(grey, (c) => offEveryPlate(c) && fills.every((f) => contrast(f, c) >= 3));
+    assert.ok(w === null || contrast(w, valueIn('dark', '--osc-hw-key-black')) < 4.5,
+      `a white key that carries every fill of today: ${w}`);
+  }
+  // The map for LXK-02 (the handover to dev-53): existing palette roles, no shortfall in
+  // either theme. The fills are the palette's fill roles (white text on them, tokens.css), the
+  // legends each key's opposite (the keys print each other's legend), the outline the gap.
+  const MAP = { lit: '--osc-blue-fill', midi: '--osc-green-deep', label: '--osc-hw-key-black',
+    blackLabel: '--osc-hw-key-white', onLit: '--osc-text-on-accent', edge: '--osc-hw-key-gap' };
+  assert.deepEqual(keyShortfalls((th) => Object.fromEntries(Object.entries(MAP)
+    .map(([r, n]) => [r, valueIn(th, n)]))), []);
+});
+
+// Finding 3: the panel's plates move to plate.* in dev-53's change (PF-04). The layer's LED bezel
+// stands on a plate (led.js; ui-synth-led.test.mjs, which reads surface.plateLo and so measures
+// whichever plate the layer names): its ring control.bezel at 1.1:1 on every plate (the
+// palette's best neutral on the dark plates) and its body control.capHi at 1.3:1 on the foot.
+// Measured on the D-PAL pair, the move must bring what is listed with it.
+const PLATE_MOVE_PENDING = [
+  'dark control.capHi (--osc-surface-4) on --osc-plate-lo: 1.29 < 1.3',
+  'light control.capHi (--osc-surface-4) on --osc-plate-lo: 1.09 < 1.3',
+];
+test('the plate move (PF-04): the LED bezel on the D-PAL pair, and what the move must bring',
+  () => {
+  const N = SYNTH_TOKEN_NAMES.control;
+  const short = [];
+  const need = (th, role, plate, min) => {
+    const r = contrast(valueIn(th, N[role]), valueIn(th, plate));
+    if (r < min) {
+      short.push(`${th} control.${role} (${N[role]}) on ${plate}: ${r.toFixed(2)} < ${min}`);
+    }
+  };
+  for (const th of BOTH) {
+    for (const plate of PLATES_DPAL) need(th, 'bezel', plate, 1.1);
+    need(th, 'capHi', '--osc-plate-lo', 1.3);
+  }
+  assert.deepEqual(short, PLATE_MOVE_PENDING, 'dev-53 (PF-04): the plate move inherits these; '
+    + 'each leaves this list as the move fixes it');
+  // The foot cannot absorb it: on the foot's line no step both lets the shade show (the plate
+  // derivation's rule) and holds the bezel body at 1.3:1, in either theme, so the body's role
+  // (or its 1.3:1) changes with the move, not the plate.
+  const shadow = Number(HW['hw-shadow']);
+  for (const th of BOTH) {
+    const [hi, low] = PLATES_NOW.map((n) => valueIn(th, n)).sort((x, y) => lstar(y) - lstar(x));
+    const shade = valueIn(th, '--osc-hw-shade');
+    const both = search((k) => mixOf(low, hi, k), (c) => contrast(shade, c) >= 1.15
+      && deltaL(shade, c, shadow) <= -MIN_DL && lstar(hi) - lstar(c) >= MIN_DL
+      && contrast(valueIn(th, N.capHi), c) >= 1.3);
+    assert.equal(both, null, `${th}: no foot satisfies both`);
+  }
 });
 
 test('the measured table of every role (printed for the review)', () => {

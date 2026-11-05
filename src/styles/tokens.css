@@ -172,14 +172,17 @@
   --osc-plate-hi: #142233;
   --osc-plate-lo: #0b1826;
   /* The cap material (knob caps, switch levers, fader caps; K11, C6): the lightest grey whose
-     inks (the pointer, the applied arc, the grips) hold 3:1 and whose body shows on every plate,
-     with a lit tone 3 L* above it for the side wall. */
+     inks (the pointer, the applied arc, the grips) hold 3:1 and whose body shows on every plate.
+     Its lit tone (the side wall's top, a chamfer) is the lightest grey at least 3 L* above it on
+     which every ink still holds 3:1, so the light purple stops it: measured dL* +8.12. */
   --osc-knob-cap: #060606;
   --osc-knob-cap-hi: #1b1b1b;
   /* Seams and rails (PF-14): unlit, black. */
   --osc-chassis: #000000;
   /* Keys (LXK-02, LXK-07): white shows on every plate, black is the cap material (4.5:1 on
-     white), the gap the lightest grey 3:1 on white. */
+     white), the gap the lightest grey 3:1 on white. What the keyboard draws on them is measured
+     too (ui-synth-palette.test.mjs): no white key carries today's dark MIDI fill, so the fills
+     and legends change with LXK-02, not the key. */
   --osc-hw-key-white: #f6f6f6;
   --osc-hw-key-black: #060606;
   --osc-hw-key-gap: #8e8e8e;

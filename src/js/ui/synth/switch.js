@@ -7,7 +7,7 @@
 //                   legend (the second option up, as controlSvg's switch has it), its shadow
 //                   and highlight; an optional LED beside it
 //   3-4    slide    a slot 4 wide hidden under a 14 x 18 cap at either stop, two ridges and an
-//                   index line running past the cap to its detent, a detent per position from
+//                   index line meeting its lit detent at the cap, a detent per position from
 //                   the slot towards its legend, legends to the right (index 0 at the bottom;
 //                   SW-06, SW-07)
 //   5-8    rotary   a detented rotary selector: the knob's face itself (knob.js's knobFace:
@@ -539,8 +539,9 @@ function toggleShapes(L, sel, t, st) {
  * slice C, C5: 3:1 on the cap, so it reads gripped at 2x; control.knurl was 1.18:1 in dark) and
  * the index line running past the cap's edge onto its detent. Disabled (C1; C6): the selected
  * detent and the index line control.disabled, the ridges control.knurl. D-PAL (C6): the cap
- * material, the index in its ink and past the cap's stroke (on the plate) control.pointer, a top
- * sheen strip in the highlight (it shows on the material, rule b; slice C findings 5, 6).
+ * material, the index in its ink up to the cap's stroke, where the lit detent at its height
+ * carries it on (two paints, no stub between them: review of D-PAL, finding 7), a top sheen strip
+ * in the highlight (it shows on the material, rule b; slice C findings 5, 6).
  */
 function slideShapes(L, sel, t, st) {
   const S = SLIDE;
@@ -572,9 +573,7 @@ function slideShapes(L, sel, t, st) {
       + `width="9" height="2" rx="1" fill="${esc(c.highlight)}" stroke="none"/>` : '')
     + hoverEdge(`rect ${capAt(yc)} stroke-width="1.5"`, t, st)
     + grip(yc - S.gripGap, ridge, S.gripEdgeW)
-    + grip(yc, st.disabled ? c.disabled : m.ink, S.gripW, S.indexOut)
-    + (live ? `<line data-index-tip="" x1="7.75" y1="${num(yc)}" x2="${S.indexOut}" `
-      + `y2="${num(yc)}" stroke="${esc(c.pointer)}" stroke-width="${S.gripW}"/>` : '')
+    + grip(yc, st.disabled ? c.disabled : m.ink, S.gripW, live ? S.capW / 2 - 0.75 : S.indexOut)
     + grip(yc + S.gripGap, ridge, S.gripEdgeW);
 }
 

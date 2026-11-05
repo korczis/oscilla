@@ -433,9 +433,10 @@ test('review C 2: a slide\'s focus ring never crosses its cap', () => {
 // are quiet ridges (control.knurl, 1) inside the cap and the middle one is the index line
 // (control.pointer, 1.5) running past the cap's edge to its detent; and the top sheen strip in
 // capHi did not show in dark (ΔL* +1.26) and darkened the light cap (finding 6). D-PAL (C6): the
-// cap is the cap material, its index line the cap ink (over the cap) with control.pointer past
-// the cap's stroke (on the plate), and the highlight shows on it in both themes, so the cap
-// carries its top sheen strip at hw-sheen (rule b; ui-synth-tokens.test.mjs judges it).
+// cap is the cap material, its index line the cap ink up to the cap's stroke, where the lit
+// detent carries it on (review of D-PAL, finding 7: a control.pointer stub past the stroke drew
+// the line in three colours), and the highlight shows on it in both themes, so the cap carries
+// its top sheen strip at hw-sheen (rule b; ui-synth-tokens.test.mjs judges it).
 test('slice C 3 (SW-07): a slide cap is 14 x 18 with a ridged grip and an index line, no nub',
   () => {
     for (const p of [ENUM(3), WAVE]) {
@@ -473,12 +474,23 @@ test('slice C 3 (SW-07): a slide cap is 14 x 18 with a ridged grip and an index 
             for (const g of [grips[0], grips[2]]) {
               assert.ok(n(g, 'x2') < 7, `${where}: a ridge inside the cap`);
             }
-            // The index line runs past the cap's edge (its stroke included) to the detent.
+            // The index meets its detent: disabled, one line past the cap's edge (its stroke
+            // included) onto the detent, both control.disabled; enabled (D-PAL, review finding
+            // 7), the cap ink ends inside the cap's stroke and the lit detent at its height,
+            // from under the cap, carries it on past the cap: two paints, no stub between.
             const detent = parts(svg, 'data-detent')[i];
-            assert.ok(n(grips[1], 'x2') > 7 + n(cap, 'stroke-width') / 2 + 0.5,
-              `${where}: the index line past the cap`);
-            assert.ok(n(grips[1], 'x2') > n(detent, 'x1') && n(grips[1], 'x2') < n(detent, 'x2'),
-              `${where}: ending on its detent`);
+            const rim = 7 + n(cap, 'stroke-width') / 2;
+            if (state.disabled) {
+              assert.ok(n(grips[1], 'x2') > rim + 0.5, `${where}: the index line past the cap`);
+              assert.ok(n(grips[1], 'x2') > n(detent, 'x1')
+                && n(grips[1], 'x2') < n(detent, 'x2'), `${where}: ending on its detent`);
+            } else {
+              assert.ok(n(grips[1], 'x2') <= 7 - n(cap, 'stroke-width') / 2,
+                `${where}: the cap ink ends inside the cap's stroke`);
+              assert.ok(n(detent, 'x1') < 7 && n(detent, 'x2') > rim + 0.5,
+                `${where}: the lit detent carries it on past the cap`);
+              assert.equal(n(detent, 'y1'), yc, `${where}: at the index's height`);
+            }
             assert.ok(svg.indexOf(grips[1]) > svg.indexOf(cap), `${where}: over the cap`);
             assert.equal(attrOf(cap, 'fill'), TOKENS.control.knobCap, `${where}: C6`);
             const sheens = parts(svg, 'data-sheen');

@@ -1049,6 +1049,24 @@ test('mutation: D-PAL: a closed-list role outside the layer, or an unlisted wood
     assert.deepEqual(amendmentRoles('# Rationale\n'), []);
   });
 
+// Review of D-PAL, findings 6 and 8: the amendment says what is drawn and what the guard sees.
+// The core's controls draw the cap material; the Synth panel draws it once dev-53 maps the roles
+// (DPAL_PENDING in synth-face-controls.test.mjs); the toggle's bat-handle lever stays metal. The
+// guard matches a role's literal name, so a name built at run time passes it: a static guard's
+// limit, stated in the rule and shown here, for the reviewer to catch.
+test('D-PAL: the amendment says what is drawn today and what the guard cannot see', () => {
+  const rule = read('.ai/repo/rules/project/visual-identity-lock.v4.md');
+  const at = rule.indexOf('# Amendment of 2026-11-05 (D-PAL)');
+  const section = rule.slice(at, rule.indexOf('\n# ', at + 1)).replace(/\s+/g, ' ');
+  assert.doesNotMatch(section, /fader caps are drawn in/, 'no claim that the panel draws it');
+  assert.match(section, /Synth panel [^.]*dev-53/, 'the panel adopts the roles with dev-53');
+  assert.match(section, /bat-handle lever[\s\S]{0,60}metal/, 'the toggle\'s lever stays metal');
+  assert.match(section, /literal name/, 'the guard matches a literal name');
+  assert.match(section, /built at run time/, 'and says what passes it');
+  assert.deepEqual(paletteRolesOutsideLayer(f('src/js/midi/keyboard-view.js',
+    "v('--osc-knob-' + 'cap', '#000')")), [], 'the stated limit: a built name passes');
+});
+
 test('mutation: a palette change and an intensity beyond its bound are caught', () => {
   const css = ':root {\n  --osc-bg: #0b1220;\n  --osc-touch: 44px;\n}\n'
     + '[data-theme="light"] {\n  --osc-bg: #e9eef4;\n}\n';
