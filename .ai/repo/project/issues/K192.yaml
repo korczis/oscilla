@@ -1,0 +1,35 @@
+id: K192
+milestone: M068
+serves:
+  - "connected-instrument#engines"
+title: "The voice wrapper, slice 4 of 4: engine presets carry their type and scope, and the runtime says per update whether it applies now or from the next note"
+slug: voice-wrapper-presets-and-runtime
+priority: p1
+profile: implementation
+objective: "Lands as fix(engines). Slice 4 (PRESETS AND RUNTIME) of the voice wrapper split from K189 by af's critique of 96daa67b (BLOCKING 6). Line numbers at origin/main a19f1ff6. Engine presets are keyed by type (enginePresets, src/js/studio/node-presets.js:79-83) and a whole-panel preset resets every module by design ({ all: true }, src/js/synth/presets.js:13, src/js/synth/link.js:63). After: every engine preset names its type and its scope (node, engine tab, panel), a node-scope preset leaves sibling modules deep-equal, and the runtime reports per parameter update whether it applies now or from the next note, in K185's trace vocabulary (scheduled, owned, stored), which this slice consumes rather than re-declares. The fixed-parameter skip is K187's (Q092) and is not re-decided here."
+why: "af's critique of 96daa67b (BLOCKING 6, slice 4 without its own fail-first); pack 06 section C ('never let a single-node preset secretly reset sibling modules')."
+scope:
+  - "src/js/studio/node-presets.js"
+  - "src/js/synth/presets.js"
+  - "src/js/studio/runtime.js"
+  - "tests/unit/engine-presets-scope.test.mjs"
+  - "tests/unit/engine-layers.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K191"
+  - "K185"
+  - "K187"
+acceptance_criteria:
+  - "Fail-first: tests/unit/engine-presets-scope.test.mjs asserts every engine preset names its type and scope and fails on the merge base naming the presets without one; applying a node-scope preset leaves every sibling module deep-equal (a fixture that resets a sibling fails)."
+  - "The runtime trace reports applies-now (scheduled or owned) or next-note (stored) per parameter, using K185's verbs; one case per engine with a next-note parameter."
+  - "tests/unit/engine-layers.test.mjs gains the preset and runtime cases: presets import the declaration only, the runtime imports no preset module; with K189-K191 the four layers are proven separate, and a mutation that crosses any boundary fails."
+  - "Controls: a preset applied on the face moves M123's one knob and switch (G022, G023) and no second preset widget is added; project.visual-identity-lock holds."
+  - "Guarded paths (src/js/studio/*, src/js/synth/*): prismatic-majordomus-98 writes the verdict; oscilla-21 checks the synth values. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/engine-presets-scope.test.mjs tests/unit/engine-layers.test.mjs tests/unit/studio-node-presets.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

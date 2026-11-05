@@ -1,0 +1,33 @@
+id: K190
+milestone: M068
+serves:
+  - "connected-instrument#engines"
+title: "The voice wrapper, slice 2 of 4: every engine's ports are typed and validated by canConnect, and the panel's series chain gives way to declared jacks"
+slug: voice-wrapper-wiring-typed-engine-ports
+priority: p0
+profile: implementation
+objective: "Lands as fix(engines). Slice 2 (WIRING) of the voice wrapper split from K189 by af's critique of 96daa67b (BLOCKING 6). Line numbers at origin/main a19f1ff6. After K189 declares each engine's ports, every engine connection is validated by canConnect of src/js/studio/ports.js against that declaration (type and direction), and the Synth panel's series chain (the semi-mono panel's fixed module order) gives way to declared jacks the patch bay draws from the port contract; the mixer stays K108. A refused connection leaves the model unchanged and says why (project.typed-ports), and a feedback path is refused (project.no-silent-feedback)."
+why: "af's critique of 96daa67b (BLOCKING 6): slices 2-4 had no fail-first; pack 06 section B (wiring)."
+scope:
+  - "src/js/studio/ports.js"
+  - "src/js/studio/nodes/engines.js"
+  - "src/js/synth/panels/semi-mono.js"
+  - "tests/unit/engine-wiring.test.mjs"
+  - "tests/unit/engine-layers.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K189"
+acceptance_criteria:
+  - "Fail-first: tests/unit/engine-wiring.test.mjs dispatches, per engine, an EDGE_ADD whose port type or direction the declaration does not allow and expects a refusal with the model and history unchanged; on the merge base (K189 landed, canConnect not yet consulting the engine declaration) the wrong-type connection is accepted, so the case fails naming the engine and the port."
+  - "tests/unit/engine-layers.test.mjs gains the wiring case: the wiring module imports the declaration and nothing of instantiation, presets or runtime; a mutation that adds such an import fails."
+  - "Jacks: the patch bay consumes M123's one patch bay (G024, src/js/ui/patch/patch-bay.js rendering from the port contract, K165) and adds no second bay; project.visual-identity-lock holds."
+  - "Guarded paths (src/js/studio/*, src/js/synth/*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/engine-wiring.test.mjs tests/unit/engine-layers.test.mjs tests/unit/v31-studio-model.test.mjs"
+  - "node tests/browser/synth.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

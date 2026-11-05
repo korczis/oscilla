@@ -6,7 +6,7 @@ title: "Two instances of one engine are independent, and a whole-panel preset ne
 slug: two-engine-instances-are-independent
 priority: p2
 profile: implementation
-objective: "Lands as test(studio). No test isolates two fm-voice instances (an edit, a note or a preset on one must not reach the other) or a whole-panel preset from the engine-tab nodes (pack 06 section C: 'never let a single-node preset secretly reset sibling modules'). After: tests/unit/engine-instances.test.mjs builds two fm-voice nodes and a panel with engine tabs and proves independence of parameters, voices and presets; it is the instantiation check the voice wrapper K189 must keep green."
+objective: "Lands as test(studio). No test isolates two fm-voice instances (an edit, a note or a preset on one must not reach the other) or a whole-panel preset from the engine-tab nodes (pack 06 section C: 'never let a single-node preset secretly reset sibling modules'). After: tests/unit/engine-instances.test.mjs builds two fm-voice nodes and a panel with engine tabs and proves independence of parameters, voices and presets; it is the instantiation check the voice wrapper must keep green (K191's slice; this file stays K188's and is not in K191's scope)."
 why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice 06 (uncovered: no instance-isolation test)."
 scope:
   - "tests/unit/engine-instances.test.mjs"
