@@ -456,7 +456,12 @@ export function noTestProblems(census, history) {
     out.push(`${P} ${CENSUS_REL} records no noTestDebt list (the keys of the entries with no `
       + 'test)');
   }
-  const listed = new Set(Array.isArray(record) ? record : []);
+  const keysListed = Array.isArray(record) ? record : [];
+  const listed = new Set(keysListed);
+  const twice = new Set(keysListed.filter((k, i) => keysListed.indexOf(k) !== i));
+  if (twice.size) {
+    out.push(`${P} noTestDebt lists ${[...twice].join(', ')} more than once; list each key once`);
+  }
   const now = noTestOf(census);
   const keys = new Set(now.map(keyOf));
   for (const k of now.map(keyOf).filter((x) => !listed.has(x))) {
@@ -507,7 +512,8 @@ test('the census prints its debt: the entries with no deep link or no test', (t)
   t.diagnostic(`debt ${debt.length}: ${debt.map((e) => `${e.kind}:${e.id}`
     + `${e.deepLink === null ? ' (no deep link)' : ''}${e.tests.length ? '' : ' (no test)'}`)
     .join(', ')}`);
-  t.diagnostic(`no test ${noTestOf(CENSUS()).length}: ${noTestOf(CENSUS()).map(keyOf).join(', ')}`);
+  const noTest = noTestOf(CENSUS());
+  t.diagnostic(`no test ${noTest.length}: ${noTest.map(keyOf).join(', ')}`);
   assert.ok(Array.isArray(debt));
 });
 
@@ -724,6 +730,10 @@ test('mutation: a test taken from an entry that also has no deep link is refused
     + 'test')), p.join('\n'));
   const settled = { ...paid, noTestDebt: census.noTestDebt.slice(1) };
   assert.deepEqual(noTestProblems(settled, head), [], 'debt paid off and recorded');
+  // A key listed twice is refused by name, though the entries with no test are unchanged.
+  const doubled = { ...census, noTestDebt: [...census.noTestDebt, first] };
+  p = noTestProblems(doubled, head);
+  assert.ok(p.some((x) => x.includes(`noTestDebt lists ${first} more than once`)), p.join('\n'));
   // No record at all is refused.
   const { noTestDebt, ...unrecorded } = census;
   assert.ok(Array.isArray(noTestDebt));
