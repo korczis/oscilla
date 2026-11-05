@@ -59,7 +59,7 @@ import {
   outputLabel,
   DEFAULT_OUTPUT_LABEL,
 } from '../../src/js/charts/device-panel.js';
-import { barSlotAt } from '../../src/js/charts/additive-chart.js';
+import { additiveChartLabel, barSlotAt } from '../../src/js/charts/additive-chart.js';
 import { shortName, rangeLabel } from '../../src/js/charts/bio-chart.js';
 import { fieldsForType, timelineWindow } from '../../src/js/labs/sequencer-panel.js';
 import { defaultCustomPartials, presetPartials } from '../../src/js/labs/additive.js';
@@ -375,19 +375,14 @@ test('additive: bar slots, default table, presets', () => {
   assert.deepEqual(keep, custom);
 });
 
-// U013: the Additive chart names its state. Imported dynamically so that, on a tree without the
-// export, this test fails alone and the rest of the file still runs.
-test('additive: the chart label says when additive synthesis is bypassed (U013)', async () => {
-  const m = await import('../../src/js/charts/additive-chart.js');
-  assert.equal(typeof m.additiveChartLabel, 'function',
-    'additive-chart.js exports additiveChartLabel');
-  assert.equal(m.additiveChartLabel(true), 'Harmonic amplitudes 1 to 10');
-  const off = m.additiveChartLabel(false);
-  assert.notEqual(off, m.additiveChartLabel(true));
-  assert.match(off, /^Harmonic amplitudes 1 to 10/);
-  assert.match(off, /additive synthesis (is )?bypassed/i);
+test('additive: the chart names its bypassed state (U013)', () => {
+  assert.equal(additiveChartLabel(true), 'Harmonic amplitudes 1 to 10');
+  const off = additiveChartLabel(false);
+  assert.notEqual(off, additiveChartLabel(true));
+  assert.match(off, /^Harmonic amplitudes 1 to 10, bypassed/);
+  assert.match(off, /additive synthesis is off/);
   assert.match(off, /plain waveform/);
-  assert.equal(m.additiveChartLabel(true, 8), 'Harmonic amplitudes 1 to 8');
+  assert.equal(additiveChartLabel(true, 8), 'Harmonic amplitudes 1 to 8');
 });
 
 test('bio labels use the sourced values', () => {

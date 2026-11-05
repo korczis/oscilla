@@ -41,7 +41,9 @@ import { observeSize } from '../charts/chart-theme.js';
 import { on, setText, setAttr } from './dom.js';
 
 export const TIMELINE_OPTIONS = Object.freeze({ minSpanS: 3.75, headroomRatio: 0.1, blockY: 5,
-  blockH: 40, gapPx: 4, minPxPerS: 66 });
+  blockH: 40, gapPx: 4, minPxPerS: 66, phoneBlockPx: 72, phoneMaxPxPerS: 480 });
+/** The phone width of src/styles/responsive.css (ui/app.js PHONE_QUERY). */
+const PHONE_QUERY = '(max-width: 767.98px)';
 
 /** The shortest block the lane draws: 24 px, 44 px under a coarse pointer (U022). */
 export const MIN_BLOCK_PX = 24;
@@ -50,17 +52,25 @@ export const TOUCH_BLOCK_PX = 44;
 /**
  * Horizontal window of the lane: { spanS, contentPx, maxScrollPx }. The whole sequence (plus
  * headroom) fits the lane until it would need fewer than minPxPerS; then the content is wider
- * than the lane by the factor the extra duration needs. blocks ([{ durationS, minPx }]) bound
- * it as well (U022): the pixels per second grow until every block is at least its minPx wide
- * after the gap, and the lane scrolls. The scale stays linear: one pixels-per-second for every
- * block, so a width never misstates a duration.
+ * than the lane by the factor the extra duration needs. Two floors raise the pixels per second
+ * further, and the lane scrolls: with minBlockPx (a phone) the shortest block (shortestS) is
+ * drawn at least that wide, so its label reads instead of "T...", up to maxPxPerS; and blocks
+ * ([{ durationS, minPx }]) bound it block by block (U022): every block is at least its minPx
+ * wide after the gap. The scale stays linear: one pixels-per-second for every block, so a
+ * width never misstates a duration.
  */
 export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.minSpanS,
-  headroomRatio = TIMELINE_OPTIONS.headroomRatio, minPxPerS = TIMELINE_OPTIONS.minPxPerS,
-  blocks = [], gapPx = TIMELINE_OPTIONS.gapPx }) {
+  headroomRatio = TIMELINE_OPTIONS.headroomRatio,
+  minPxPerS: basePxPerS = TIMELINE_OPTIONS.minPxPerS, minBlockPx = 0, shortestS = 0,
+  maxPxPerS = TIMELINE_OPTIONS.phoneMaxPxPerS, blocks = [], gapPx = TIMELINE_OPTIONS.gapPx }) {
+  const readable = minBlockPx > 0 && shortestS > 0;
+  const minPxPerS = readable
+    ? Math.max(basePxPerS, Math.min(maxPxPerS, minBlockPx / shortestS)) : basePxPerS;
   const w = Math.max(1, laneW || 1);
   const spanS = Math.max(minSpanS, (durationS > 0 ? durationS : 0) * (1 + headroomRatio));
-  let visibleS = Math.min(spanS, Math.max(minSpanS, w / minPxPerS));
+  // The reference's ~4 s axis is a floor of the visible window, except where it would draw the
+  // shortest block narrower than minBlockPx.
+  let visibleS = Math.min(spanS, Math.max(readable ? 0 : minSpanS, w / minPxPerS));
   let needPxPerS = 0;
   for (const b of blocks) {
     if (b && b.durationS > 0 && b.minPx > 0) {
@@ -70,6 +80,11 @@ export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.m
   if (needPxPerS > 0) visibleS = Math.min(visibleS, w / needPxPerS);
   const contentPx = (w * spanS) / visibleS;
   return { spanS, contentPx, maxScrollPx: Math.max(0, contentPx - w) };
+}
+/** The shortest block of the sequence in seconds (every block carries a name); 0 if none. */
+export function shortestBlockS(model) {
+  const ms = model.blocks.map((b) => b.durationMs).filter((d) => d > 0);
+  return ms.length ? Math.min(...ms) / 1000 : 0;
 }
 const DRAG_THRESHOLD_PX = 4;
 /** Message line while an edit waits for the next pass (sequencer/editor.js next-pass rule). */
@@ -332,7 +347,12 @@ export function mount(rootEl, adapter) {
     const floor = coarsePointer() ? TOUCH_BLOCK_PX : MIN_BLOCK_PX;
     const blocks = layout(0, w).map((r) => ({ durationS: r.endS - r.startS,
       minPx: Math.max(floor, nameNeedPx(blockEl(r), r.label)) }));
-    win = timelineWindow({ durationS, laneW: w, blocks, gapPx: TIMELINE_OPTIONS.gapPx });
+    // On a phone the shortest block is drawn at least phoneBlockPx wide as well.
+    const phone = typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
+    const readable = phone ? { minBlockPx: TIMELINE_OPTIONS.phoneBlockPx,
+      shortestS: shortestBlockS(editor.model) } : {};
+    win = timelineWindow({ durationS, laneW: w, blocks, gapPx: TIMELINE_OPTIONS.gapPx,
+      ...readable });
     scrollPx = Math.min(win.maxScrollPx, Math.max(0, scrollPx));
     rects = layout(-scrollPx, win.contentPx);
     const seen = new Set();

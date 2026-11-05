@@ -47,6 +47,15 @@
 //   s-relink   MG patched into LPF cutoff (the jacks of a normal) is a cable: listed, in the
 //              link the Copy link button writes; the link reopens the cable at the same depth
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
+//   s-linkprops Copy link carries a cable's own props (review S7): MG patched into LPF cutoff,
+//              that edge set unipolar with offset 0.25 (the Studio Inspector's EDGE_UPDATE):
+//              the copied link opened in a new page holds the cable with the same props.
+//              Fails on 3c22d01a (bipolar, offset 0 there)
+//   s-knobmemory a knob a cable broke keeps its depth in the model (review S10): LPF EG 2 ->
+//              cutoff typed 3.5, MG patched into LPF cutoff (it breaks that knob's normal): the
+//              document remembers 3.5 (metadata.synthAmounts); Copy link opened in a new page,
+//              the cable removed there: the EG 2 normal is back at 3.5 and the knob reads 3.50.
+//              Fails on 3c22d01a (the receiver brings it back at its declared 2)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
@@ -57,6 +66,24 @@
 //              additive engine set by Home, then XY bass from the Preset menu (one undo entry,
 //              the pad in D Dorian): the drawbar keeps its value in the model and on its face.
 //              Fails on 9cf786ac (the drawbar is back at 1.00)
+//   s-chiprelease a note-off releases the node its note-on played (review S3): on the Engines
+//              tab the keys routed to FM, QWERTY A held, the ADDITIVE chip clicked (the tab
+//              and engine unchanged, the route cleared), A up: below -70 dB rel and no held
+//              note. Fails on 3c22d01a (the FM voice stays held)
+//   s-radioroute the engine radio reads the model's route (review S4): on the Engines tab the
+//              keys routed to FM (the dock's choice): FM is the one checked engine and its
+//              plate is shown, not ADDITIVE's; QWERTY A sounds and its release falls below
+//              -70 dB rel. Fails on 3c22d01a (ADDITIVE checked while the keys play FM)
+//   s-newvoice New Synth voice keeps the insert contract (review S5): the workspace's insert
+//              undone and a node of the user's added (Insert is offered), the dock's New Synth
+//              voice says the Master feed it took and places every node it adds below the
+//              user's; A sounds and its release falls below -70 dB rel. Fails on 3c22d01a
+//              ("The keys play KEYBOARD.", the panel at the top)
+//   s-keysilent a keyboard the pad's cables silenced says why (review S8): XY lead from the
+//              Preset menu, then the Panel tab's Init: the tab shows why the keys sound nothing
+//              with Unpatch the pad; QWERTY A stays below -70 dB rel and the status says why;
+//              Unpatch the pad removes the pad's cables and the notice, and A sounds again
+//              (RMS above -40 dB rel). Fails on 3c22d01a (no notice, a silent key says nothing)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -152,6 +179,9 @@ const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
 const C4 = 261.6256;
+// The FM engine at its Init values sounds C4 at about -55 dB rel (measured in chromium on the
+// Mac, 48 kHz): heard is 6 dB below that, still 9 dB above the release's -70 dB rel.
+const FM_HEARD_DB = -61;
 const ARM_STALL_MS = 20; // per connect(): measured to reproduce V4 on b3f7d006 in chromium
 
 // ------------------------------------------------------------------------------ page probes
@@ -668,6 +698,70 @@ function defineChecks() {
       && JSON.stringify(b) === '[3]', hash, here, there, depths: [a, b] };
   });
 
+  // Review of src/js/synth (oscilla-21, S7): Copy link carries a cable's own props.
+  def('s-linkprops', async ({ page, context, base }) => {
+    await tapJack(page, 'mg.control:out');
+    await tapJack(page, 'lpf.frequency:in');
+    await until(async () => (await dbg(page)).cables.some((c) => c.to === 'lpf.frequency'),
+      { ms: 10000, what: 'MG is patched into LPF cutoff' });
+    const props = (pg) => pg.evaluate(() => {
+      const c = window.OSCILLA.app.synthDebug().cables.find((x) => x.to === 'lpf.frequency');
+      const e = c && window.OSCILLA.studio.model.graph.edges.find((x) => x.id === c.id);
+      return e ? e.props : null;
+    });
+    // The Studio Inspector's edit of that edge: one EDGE_UPDATE through the one store.
+    await page.evaluate(() => {
+      const c = window.OSCILLA.app.synthDebug().cables.find((x) => x.to === 'lpf.frequency');
+      window.OSCILLA.studio.store.dispatch({ type: 'EDGE_UPDATE', edgeId: c.id,
+        props: { polarity: 'unipolar', offset: 0.25 } });
+    });
+    const here = await props(page);
+    await page.locator('[data-osc="synth.copy-link"]').click();
+    const link = await until(() => page.evaluate(() => window.OSCILLA.app.synth.link || null),
+      { ms: 10000, what: 'Copy link shows the link' });
+    const again = await openSynth(context, base, link.slice(link.indexOf('#')));
+    try {
+      const there = await until(() => props(again), { ms: 10000,
+        what: 'the reopened link holds the cable' });
+      return { ok: here.polarity === 'unipolar' && here.offset === 0.25
+        && JSON.stringify(there) === JSON.stringify(here), here, there, link };
+    } finally {
+      await again.close();
+    }
+  });
+
+  // Review of src/js/synth (oscilla-21, S10): a knob a cable broke keeps its depth in the
+  // model, so the link's receiver brings it back at the sender's setting.
+  def('s-knobmemory', async ({ page, context, base }) => {
+    await typeKnob(page, 'lpf.lpf-eg2', '3.5');
+    await tapJack(page, 'mg.control:out');
+    await tapJack(page, 'lpf.frequency:in');
+    await until(async () => (await dbg(page)).cables.some((c) => c.to === 'lpf.frequency'),
+      { ms: 10000, what: 'MG is patched into LPF cutoff' });
+    const kept = await page.evaluate(() => (window.OSCILLA.studio.model.metadata.synthAmounts
+      || {})['lpf-eg2']);
+    await page.locator('[data-osc="synth.copy-link"]').click();
+    const link = await until(() => page.evaluate(() => window.OSCILLA.app.synth.link || null),
+      { ms: 10000, what: 'Copy link shows the link' });
+    const again = await openSynth(context, base, link.slice(link.indexOf('#')));
+    try {
+      await face(again, 'bay');
+      await again.locator('[data-osc="synth.cables"] [data-remove-cable]').first().click();
+      const depth = await until(() => again.evaluate(() => {
+        const ids = window.OSCILLA.app.synthDebug().nodes;
+        const e = window.OSCILLA.studio.model.graph.edges.find((x) => x.from.node === ids.eg2
+          && x.to.node === ids.lpf && x.to.port === 'frequency');
+        return e ? e.props.depth : null;
+      }), { ms: 10000, what: 'removing the cable restores the EG 2 normal' });
+      await face(again, 'panel');
+      const shown = (await again.locator('[data-value="lpf.lpf-eg2"]').textContent()).trim();
+      return { ok: kept === 3.5 && depth === 3.5 && /^\+?3\.50?\b/.test(shown), kept, depth, shown,
+        link };
+    } finally {
+      await again.close();
+    }
+  });
+
   def('s-studio', async ({ page }) => {
     await hold(page, 'KeyA');
     await sound(page, (q) => q.rmsDb > -40, 'the panel sounds before Studio opens');
@@ -958,6 +1052,124 @@ function defineChecks() {
     const shown = (await page.locator(`[data-value="${KNOB}"]`).textContent()).trim();
     return { ok: mode === 'dorian' && after === set && shown === text, initial, set, after,
       text, shown, mode };
+  });
+
+  // Review of src/js/synth (oscilla-21, S3): a note-off releases the node its note-on played.
+  const tabTo = async (page, id) => {
+    await page.locator(`#osc-synth-tab-${id}`).click();
+    await until(async () => (await dbg(page)).tab === id, { ms: 10000,
+      what: `the ${id} tab opens` });
+  };
+  def('s-chiprelease', async ({ page }) => {
+    await tabTo(page, 'engines');
+    const fm = (await dbg(page)).nodes.fm;
+    await page.evaluate((id) => window.OSCILLA.app.synthPick(id), fm);
+    await until(async () => (await dbg(page)).played === fm, { ms: 10000,
+      what: 'the keys play the FM engine' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > FM_HEARD_DB, 'the FM engine sounds the held key');
+    // The chip of the engine the tab shows: no tab or engine change, only the route goes.
+    await page.locator('[data-engine="additive"]').click();
+    await until(async () => (await dbg(page)).played === (await dbg(page)).nodes.additive,
+      { ms: 10000, what: 'the chip routes the keys to the additive engine' });
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the FM voice is released after the chip and key up');
+    await until(async () => (await dbg(page)).held.length === 0, { ms: 10000,
+      what: 'no note is held after the key is up' });
+    const census = await counts(page);
+    return { ok: true, on: on.rmsDb, off: off.rmsDb, census };
+  });
+
+  // Review of src/js/synth (oscilla-21, S4): the engine radio reads the model's route.
+  const enginesShown = (page) => page.evaluate(() => ({
+    on: [...document.querySelectorAll('[data-engine][aria-checked="true"]')]
+      .map((x) => x.dataset.engine),
+    plates: [...document.querySelectorAll('[data-osc="synth.modules"] [data-module]')]
+      .map((x) => x.dataset.module) }));
+  def('s-radioroute', async ({ page }) => {
+    await tabTo(page, 'engines');
+    const fm = (await dbg(page)).nodes.fm;
+    await page.evaluate((id) => window.OSCILLA.app.synthPick(id), fm);
+    const shown = await until(async () => {
+      const x = await enginesShown(page);
+      return x.on.join() === 'fm' && x.plates.includes('fm') && !x.plates.includes('additive')
+        && x;
+    }, { ms: 10000, what: 'the radio checks FM and shows its plate, as the keys play FM' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > FM_HEARD_DB, 'the FM engine sounds the held key');
+    const d = await dbg(page);
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the key up releases the FM voice');
+    return { ok: d.played === fm && d.engine === 'fm', shown, on: on.rmsDb, off: off.rmsDb };
+  });
+
+  // Review of src/js/synth (oscilla-21, S5): New Synth voice keeps the insert contract.
+  def('s-newvoice', async ({ page }) => {
+    // A document without the panel whose own chain feeds Master Output, changed by the user:
+    // the workspace's own insert undone, then a node of the user's.
+    await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      st.undo();
+      st.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', name: 'FM 2',
+        position: { x: 0, y: 900 } });
+    });
+    await until(async () => !(await dbg(page)).present && page.locator('[data-insert-panel]')
+      .isVisible(), { ms: 10000, what: 'the view offers Insert, the panel gone' });
+    const mine = await page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .map((n) => ({ id: n.id, y: n.position.y })));
+    const top = Math.max(...mine.map((n) => n.y));
+    await page.locator('#osc-synth-pick').click();
+    const menu = page.locator('[data-osc="synth.pick.menu"]');
+    await until(() => menu.isVisible(), { ms: 5000, what: 'the instrument menu opens' });
+    // By the keyboard, as s-dock chooses (a pointer click on the item outlives the menu it
+    // closes: Playwright waits on the detached item)
+    await menu.locator('[data-pick="new-voice"]').focus();
+    await page.keyboard.press('Enter');
+    const said = await until(async () => {
+      const t = await page.locator('[data-osc="synth.status"]').textContent();
+      return /took Master Output from/.test(t) && t;
+    }, { ms: 10000, what: 'New Synth voice says the Master feed it took' });
+    // The panel's own nodes: Master Output is the document's one, kept where it is.
+    const placed = await page.evaluate((had) => window.OSCILLA.studio.model.graph.nodes
+      .filter((n) => !had.includes(n.id)).map((n) => n.position.y), mine.map((n) => n.id));
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the new voice sounds the held key');
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the key up releases the new voice');
+    return { ok: placed.length > 10 && placed.every((y) => y > top), said, top,
+      lowest: Math.min(...placed), on: on.rmsDb, off: off.rmsDb };
+  });
+
+  // Review of src/js/synth (oscilla-21, S8): a keyboard the pad's cables silenced says why.
+  def('s-keysilent', async ({ page }) => {
+    const status = () => page.locator('[data-osc="synth.status"]').textContent();
+    await tabTo(page, 'xy');
+    await page.locator('#osc-synth-preset').selectOption('xy-lead');
+    await until(async () => (await dbg(page)).cables.some((c) => c.from === 'xy.gate'),
+      { ms: 10000, what: 'XY lead patches the pad into the voice' });
+    await tabTo(page, 'panel');
+    await page.locator('#osc-synth-preset').selectOption('init');
+    const notice = page.locator('[data-osc="synth.keys-silent"]');
+    await until(() => notice.isVisible(), { ms: 10000,
+      what: 'the Panel tab says why the keys sound nothing' });
+    const text = (await notice.textContent()).trim();
+    await hold(page, 'KeyA');
+    const quiet = await silent(page, 'the held key sounds nothing (the pad has the gates)');
+    const said = await until(async () => {
+      const t = await status();
+      return /The keys sound nothing/.test(t) && t;
+    }, { ms: 10000, what: 'the key says why it sounds nothing' });
+    await page.keyboard.up('KeyA');
+    await notice.locator('[data-xy-unpatch]').click();
+    await until(async () => !(await dbg(page)).cables.some((c) => c.from.startsWith('xy.'))
+      && !(await notice.count()), { ms: 10000,
+      what: 'Unpatch the pad removes its cables and the notice' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the keys play the voice again');
+    await page.keyboard.up('KeyA');
+    const off = await silent(page, 'the key up releases the voice');
+    return { ok: /Unpatch the pad/.test(text), text, said, quiet: quiet.rmsDb, on: on.rmsDb,
+      off: off.rmsDb };
   });
 
   def('s-riffs', async ({ page }) => {

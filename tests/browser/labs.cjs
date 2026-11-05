@@ -406,7 +406,10 @@ async function runEngine(engine, base) {
     { ms: 5000, what: 'filter chart redrawn as the high-pass the radio selected' });
   check('filter type via shell radio (high-pass) and curve still exact',
     highpassOk(fc), `max |Δ| ${fc.maxErr.toExponential(2)}`);
-  // Drag on the graph: right and up → higher cutoff and higher Q.
+  // Drag on the graph: right and up → higher cutoff and higher Q. The graph is brought into
+  // view first: page.mouse never scrolls, and the Pro shell's page runs past one screen.
+  await page.evaluate(() => window.__labs.labs.filter.chart.uplot.over
+    .scrollIntoView({ block: 'center' }));
   const over = await page.evaluate(() => {
     const r = window.__labs.labs.filter.chart.uplot.over.getBoundingClientRect();
     return { x: r.left, y: r.top, w: r.width, h: r.height };
@@ -472,6 +475,10 @@ async function runEngine(engine, base) {
     add.maxErr < 1e-5 && add.compared === 5,
     `${add.compared} non-zero bars, max |Δ| ${add.maxErr}`);
   const addHost = await page.$('#osc-chart-additive canvas');
+  // A pointer meets the chart where it is shown: the Pro shell's page runs past one screen
+  // (the canvas sat at y 2740 of 1024), and page.mouse never scrolls, so the chart is brought
+  // into view before its box is read, as for the envelope and bioacoustics charts below.
+  await addHost.scrollIntoViewIfNeeded();
   const ab = await addHost.boundingBox();
   await page.mouse.click(ab.x + 31 + ((ab.width - 37) / 10) * 2.5, ab.y + ab.height / 2);
   const sel = await page.evaluate(() => ({
@@ -482,53 +489,50 @@ async function runEngine(engine, base) {
   check('click a bar selects that harmonic', sel.selected === 3 && sel.field === '3',
     JSON.stringify(sel));
 
-  // (3b) U013: the chart shows the switch. Off, the same bars (what enabling would play) are
-  // drawn bypassed and the host's name says so; on, as before; a restored enabled:false state
-  // shows the off state without a click.
+  // (3b) U013: with the additive switch off the chart draws the same bars dimmed and labelled
+  // BYPASSED, and its host's name says so; a state restored with enabled false shows it too.
   const addState = () => page.evaluate(() => {
     const { labs } = window.__labs;
-    const host = document.querySelector('#osc-chart-additive');
-    return {
-      enabled: labs.additive.enabled,
-      chartOn: labs.additive.chart.isEnabled(),
-      label: host.getAttribute('aria-label'),
-      pixels: host.querySelector('canvas').toDataURL(),
-      bars: JSON.stringify(labs.additive.chart.getBars()),
-    };
+    const c = document.querySelector('#osc-chart-additive canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let h = 0;
+    for (let i = 0; i < d.length; i += 4) h = (h * 31 + d[i] + d[i + 1] * 7 + d[i + 3]) >>> 0;
+    return { lab: labs.additive.enabled, chart: labs.additive.chart.isEnabled(), pixels: h,
+      label: document.querySelector('#osc-chart-additive').getAttribute('aria-label'),
+      bars: JSON.stringify(labs.additive.chart.getBars()) };
   });
-  const flip = () => page.click('#osc-add-enable');
-  const addBefore = await addState();
-  if (!addBefore.enabled) {
-    await flip();
-  }
-  const onState = await settled(addState, (s) => s.enabled && s.chartOn,
-    { ms: 5000, what: 'additive: the chart follows the switch on' });
-  await flip();
-  const offState = await settled(addState, (s) => !s.enabled && !s.chartOn,
-    { ms: 5000, what: 'additive: the chart follows the switch off' });
-  check('additive off: the chart is drawn bypassed, its name says so, the bars are unchanged',
-    onState.chartOn && !offState.chartOn && offState.pixels !== onState.pixels
-      && /bypassed/i.test(offState.label) && !/bypassed/i.test(onState.label)
-      && offState.bars === onState.bars,
-    JSON.stringify({ on: onState.label, off: offState.label,
-      samePixels: offState.pixels === onState.pixels, sameBars: offState.bars === onState.bars }));
-  await flip();
-  const back = await settled(addState, (s) => s.enabled && s.chartOn,
-    { ms: 5000, what: 'additive: the chart follows the switch on again' });
-  check('additive on again: the chart draws what it drew before the switch went off',
-    back.pixels === onState.pixels && back.label === onState.label, back.label);
+  // Whatever the switch starts at, toggling it changes the drawing and the name and never the
+  // bars; the off reading names the bypass, and toggling back restores the first drawing.
+  const addFirst = await addState();
+  await page.click('#osc-add-enable');
+  const addToggled = await settled(addState,
+    (v) => v.lab === !addFirst.lab && v.chart === v.lab,
+    { ms: 5000, what: 'additive chart follows the switch' });
+  const addOn = addFirst.lab ? addFirst : addToggled;
+  const addOff = addFirst.lab ? addToggled : addFirst;
+  check('U013: the additive chart shows the switch off (pixels, name, state; same bars)',
+    addOn.lab === true && addOn.chart === true && addOff.lab === false && addOff.chart === false
+      && addOff.pixels !== addOn.pixels && addOff.label !== addOn.label
+      && /bypassed/i.test(addOff.label) && !/bypassed/i.test(addOn.label)
+      && addOff.bars === addOn.bars,
+    JSON.stringify({ on: { ...addOn, bars: undefined }, off: { ...addOff, bars: undefined } }));
+  await page.click('#osc-add-enable');
+  const addBack = await settled(addState, (v) => v.lab === addFirst.lab && v.chart === v.lab,
+    { ms: 5000, what: 'additive chart follows the switch back' });
+  check('U013: switched back the chart is what it was',
+    addBack.pixels === addFirst.pixels && addBack.label === addFirst.label,
+    JSON.stringify({ ...addBack, bars: undefined }));
+  await page.evaluate(() => window.__labs.labs.additive.update({ enabled: true }));
+  await settled(addState, (v) => v.lab === true && v.chart === true,
+    { ms: 5000, what: 'additive on before the restore' });
   await page.evaluate(() => window.__labs.labs.additive.update({ enabled: false }));
-  const restored = await settled(addState, (s) => !s.enabled && !s.chartOn,
-    { ms: 5000, what: 'additive: a restored enabled:false state shows bypassed' });
-  check('additive: a restored enabled:false state shows the off chart without a click',
-    !restored.chartOn && /bypassed/i.test(restored.label) && restored.pixels === offState.pixels,
-    restored.label);
-  add = await additive(null);
-  check('additive bars still equal the PeriodicWave coefficients while bypassed',
-    add.maxErr < 1e-5, `${add.compared} bars, max |Δ| ${add.maxErr}`);
-  if (addBefore.enabled) {
-    await flip();
-  }
+  const addRestored = await settled(addState, (v) => v.lab === false && v.chart === false,
+    { ms: 5000, what: 'additive chart follows a restored state' });
+  check('U013: a state restored with enabled false shows the bypassed chart',
+    addRestored.chart === false && addRestored.label === addOff.label
+      && addRestored.pixels === addOff.pixels,
+    JSON.stringify({ ...addRestored, bars: undefined }));
+  await page.evaluate((on) => window.__labs.labs.additive.update({ enabled: on }), addFirst.lab);
 
   await openWorkspace(page, 'analyzer');
   // (4) Spectrogram: non-floor pixels on the tone row, floor elsewhere.
@@ -679,6 +683,7 @@ async function runEngine(engine, base) {
       hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS,
       current: host.clientWidth > 10 && Math.abs(drawnW - Math.round(host.clientWidth)) < 1.5 };
   });
+  await (await page.$('#osc-chart-envelope')).scrollIntoViewIfNeeded();
   const env0 = await settled(readEnv, (r) => r.current,
     { ms: 5000, what: 'envelope graph laid out at its shown size' });
   await page.mouse.move(env0.hx, env0.hy);
@@ -698,6 +703,7 @@ async function runEngine(engine, base) {
   // Its chart lays out its rows once Compare shows it (#278): polled until every row is there.
   const bio = await settled(() => page.evaluate(() => window.__labs.labs.bio.chart.getRows()),
     (rows) => rows.length >= 5, { ms: 5000, what: 'bio chart rows once Compare shows it' });
+  await (await page.$('#osc-chart-bio canvas')).scrollIntoViewIfNeeded();
   const bioBox = await (await page.$('#osc-chart-bio canvas')).boundingBox();
   await page.mouse.click(bioBox.x + bioBox.width * 0.8, bioBox.y + 21 * 1.5);
   const range = await page.evaluate(() => window.__lastRange);

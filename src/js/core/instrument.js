@@ -62,6 +62,7 @@ import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
 import { LEARN_TOPICS } from '../data/learn.js';
+import { presetLoadedNotice } from './preset-notice.js';
 import { V1_LAB_HOOKS, restoreRecordLabs } from './instrument-labs.js';
 
 let alertSeq = 0;
@@ -942,11 +943,15 @@ export function createInstrument(deps = {}) {
       if (headphonesConfirmed && p.cfg.dual?.binaural) this.dual.binaural = true;
       const { issues, also } = restoreRecordLabs(this, p, 'preset', cfgIssues); // V2, C018
       this.loadedLabel = p.name;
-      const play = this.isProgrammed ? 'Press TRIGGER (or Space) to play it.' : 'Press and hold HOLD TO PLAY.';
+      const play = presetLoadedNotice(this.mode, this.isProgrammed, this.source,
+        !!host.matchMedia && host.matchMedia('(pointer: coarse)').matches);
       if (issues) {
         this.notify('warning', 'Preset partly applied',
           `${issues} value(s) were invalid and kept at their previous setting.${also ? ` ${also}` : ''}`);
-      } else this.notify('success', `Loaded “${p.name}”`, also ? `${also} ${play}` : play);
+      } else {
+        this.notify('success', `Loaded “${p.name}”`, also ? `${also} ${play.message}` : play.message,
+          { action: play.action });
+      }
     },
 
 
@@ -1071,6 +1076,7 @@ export function createInstrument(deps = {}) {
     async copyConfigLink() {
       const url = `${location.href.split('#')[0]}#${this.configLinkHash()}`;
       try {
+        // data-osc-link: action.copyUrl
         host.history.replaceState(host.history.state ?? null, '', url);
       } catch (e) { /* file:// in some browsers */ }
       this.copyUrl = url;

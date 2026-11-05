@@ -119,7 +119,8 @@ export function mountCompact(host, svc) {
     text: compactTime(0) });
   const title = h('span', { class: 'osc-sc-doc', 'data-osc': 'studio.compact.title' });
   const expand = h('button', { type: 'button', class: 'osc-btn osc-btn-primary osc-sc-expand',
-    'data-osc': 'studio.compact.expand', text: 'Expand Studio', onClick: () => svc.expand() });
+    'data-osc': 'studio.compact.expand', 'data-osc-link': 'open-in', text: 'Expand Studio',
+    onClick: () => svc.expand() });
   const links = s('svg', { class: 'osc-sc-links', 'aria-hidden': 'true' });
   const pathGrid = h('div', { class: 'osc-sc-grid', role: 'group',
     'aria-label': 'Studio signal path', 'data-osc': 'studio.compact.path' });
@@ -145,9 +146,9 @@ export function mountCompact(host, svc) {
     summary,
   ]);
   host.setAttribute('aria-labelledby', 'osc-sc-title');
-  // A chip reached with Tab is brought fully into its scrolling box, as the nav strip's tabs are
-  // (keepNavTabInView): a box partly showing a chip is not scrolled by the browser (WCAG 2.4.11;
-  // the Synth voice of #329 makes the path wider than the Playground column).
+  // A chip reached with Tab is brought fully into its scrolling box (keepInScrollerView): a box
+  // partly showing a chip is not scrolled by the browser (WCAG 2.4.11; the Synth voice of #329
+  // makes the path wider than the Playground column).
   for (const box of [path, clipsBox]) {
     box.addEventListener('focusin', (e) => {
       const chip = e.target && e.target.closest

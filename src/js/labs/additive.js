@@ -22,7 +22,9 @@ import { createAdditiveChart } from '../charts/additive-chart.js';
 import { parseNumber, clamp } from '../charts/axes.js';
 import { on, onUi, bindSwitch, setSlider, setField } from './dom.js';
 
-export const HARMONIC_COUNT = 10;
+import { HARMONIC_COUNT } from './lab-defaults.js';
+
+export { HARMONIC_COUNT } from './lab-defaults.js';
 const PRESET_SHAPES = { sine: 'sine', square: 'square', saw: 'sawtooth', triangle: 'triangle' };
 const GAIN_MIN_DB = -60;
 
@@ -131,7 +133,6 @@ export function mount(rootEl, adapter) {
   function render() {
     const bars = coefficients();
     if (chart) {
-      // U013: the switch off draws the bars bypassed (they do not play), on or restored alike.
       chart.setEnabled(q('#osc-add-enable') ? enable.value : true);
       chart.setBars(bars, selected);
     }

@@ -32,9 +32,40 @@
 //                   (B11: Compare got the Analyzer's).
 //   history-walk    the nav walk through every workspace is one entry each; Back and Forward,
 //                   once per step, visit them in order.
-//   exits           every workspace shows the nav (a way onward) and at least one in-content
-//                   control that leads to another workspace, except the ones in NO_EXIT_OK.
-//   actions         the cross-workspace controls (ACTIONS) land where their label says.
+//   exits           every workspace has a way onward derived from the registry (lane A wave 3,
+//                   src/js/ui/shell.js WORKSPACE_REGISTRY related): the page header renders
+//                   exactly its related pages, at least one, each an address routeOfHash sends
+//                   to that workspace; and every workspace shows the nav and at least one
+//                   in-content control that leads to another workspace, except the ones in
+//                   NO_EXIT_OK.
+//   actions         the cross-workspace controls (ACTIONS) land where their label says: the
+//                   header About, Measure → Experiments, the compact Studio and its Back, the
+//                   Filter Lab back, a Learn demo, every link of About's workspace list and
+//                   every Synth link of Filter Lab, Synthesis, the Sequencer and Presets.
+//   related-census  P07 (lane A wave 3): every route of the registry's related pages and of
+//                   the panel and content links (counterparts.js PANEL_LINKS, CONTENT_LINKS),
+//                   from each workspace that shows it, walked as its rows of the integration map
+//                   (K075, tests/browser/integration-map.json) by the one walker
+//                   (lib/link-walk.cjs walkRow, judgeRow): the visible link is enabled and named,
+//                   activating it opens an initialized target (the workspace, ready; a Studio
+//                   template applied) with focus on its heading or inside its view, Back
+//                   returns to the source and Forward to the target, and a fresh page at the
+//                   address (a deep link) opens the target too; no AudioContext is created and
+//                   no getUserMedia called (the link is activated by script, without the pointer
+//                   that unlocks audio, main.js), and no voice sounds. Keyboard activation (Enter
+//                   on the first strip link) opens its target without sound or microphone.
+//   journey-18      (pack G 18) every Learn concept's tool link opens its working workspace,
+//                   initialized, with no AudioContext created, no getUserMedia and no voice;
+//                   one link per topic of cross-links.js LEARN_TOOLS, none dead.
+//   journey-19      (pack G 19) About's version is package.json's (the build's BUILD.label) and
+//                   its "What comes next" lists src/data/roadmap.json's milestones by phase (now,
+//                   next, later), each in the plan order, with their done and required counts.
+//   journey-20      (pack G 20) on lane A's pages (Filter Lab, Synthesis, Sequencer, Presets,
+//                   Learn, About) and the shell, at 1536x1024 and 390x844, in their states (every
+//                   Presets category, an export running), every shown disabled control states a
+//                   visible reason (aria-describedby to shown text, or a shown [data-osc-reason]
+//                   inside it) and sits beside an enabled way onward (a shown link or button in
+//                   its row or menu).
 //   no-console-errors
 //
 // Waits are condition polls through lib/wait.cjs with a named wall-clock deadline (rule
@@ -44,8 +75,12 @@
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const fs = require('node:fs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until } = require('./lib/wait.cjs');
+// The one walker (K075): the page helpers, the audio probe, and walkRow / judgeRow, which the
+// integration map's suite drives over every row of tests/browser/integration-map.json.
+const walk = require('./lib/link-walk.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -60,9 +95,8 @@ const playwright = RUN.playwright;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const want = (name) => !ONLY || ONLY.has(name);
 
-const READY_MS = 30000;
-const NAV_MS = 10000;
-const TRAVERSE_MS = 5000;
+const { READY_MS, NAV_MS, H } = walk;
+const MAP = JSON.parse(fs.readFileSync(path.join(__dirname, 'integration-map.json'), 'utf8'));
 
 // The workspaces and the Studio templates are read from their sources at start (loadModel):
 // ui/app.js WORKSPACES (Synth after Studio, Q019) and studio/templates STUDIO_TEMPLATES (#287
@@ -98,6 +132,59 @@ async function loadModel() {
   TEMPLATES.push(...(await import(src('studio', 'templates', 'index.js'))).STUDIO_TEMPLATES
     .map((t) => t.id));
   ROUTES.push(...routesOf());
+  ACTIONS.push(...WORKSPACES.filter((w) => w !== 'about').map((w) => [`About list → ${w}`,
+    'about', `[data-osc="about.open.${w}"]`, w]));
+  // The registry's related pages: each address must route to its workspace (the app's own
+  // routeOfHash), and each Related link of the page header is a cross-workspace control.
+  // The strip shows the related pages the content does not already link to (cross-links.js
+  // pageRelatedOf); every related page is shown once, in the strip or in the content.
+  const { WORKSPACE_REGISTRY, relatedHref } = await import(src('ui', 'shell.js'));
+  const { pageRelatedOf } = await import(src('ui', 'cross-links.js'));
+  const { routeOfHash } = await import(src('ui', 'navigation.js'));
+  for (const w of WORKSPACE_REGISTRY) {
+    const hrefs = (w.related || []).map(relatedHref);
+    REGISTRY_RELATED[w.id] = hrefs;
+    RELATED[w.id] = pageRelatedOf(w.id).map(relatedHref);
+    for (const [i, r] of (w.related || []).entries()) {
+      const route = routeOfHash(hrefs[i]);
+      if (!route || route.workspace !== r.id || route.badRoute) {
+        RELATED_BAD.push(`${w.id}: ${hrefs[i]} routes to ${route && route.workspace}`);
+      }
+      // A Studio template address opens its template dialog in the Studio (the cross-links
+      // suite follows those); a workspace address in the strip is clicked here.
+      if (!r.hash && RELATED[w.id].includes(hrefs[i])) {
+        ACTIONS.push([`${w.id} Related → ${r.id}`, w.id,
+          `[data-osc="page.relatedLink"][href="${hrefs[i]}"]`, r.id]);
+      }
+    }
+  }
+  const { COUNTERPARTS, PANEL_LINKS, CONTENT_LINKS } = await import(src('ui', 'counterparts.js'));
+  JOURNEY.learnTools = (await import(src('ui', 'cross-links.js'))).LEARN_TOOLS;
+  JOURNEY.version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+  // About shows them by phase (now, next, later; U002), each phase in the plan order.
+  const milestones = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'data', 'roadmap.json'),
+    'utf8')).milestones;
+  JOURNEY.roadmap = ['now', 'next', 'later'].flatMap((ph) => milestones
+    .filter((m) => m.phase === ph).map((m) => [m.id, `${m.done} of ${m.required} done`]));
+  {
+    const rows = new Map();
+    const add = (from, ref) => {
+      const href = `#m=${ref}`;
+      const route = routeOfHash(href);
+      const tpl = /&st=([a-z0-9-]+)/.exec(ref);
+      rows.set(`${from} ${href}`, [from, href, route && route.workspace, tpl ? tpl[1] : null]);
+    };
+    for (const w of WORKSPACE_REGISTRY) {
+      for (const r of w.related || []) add(w.id, relatedHref(r).slice(3));
+    }
+    for (const l of [...PANEL_LINKS, ...CONTENT_LINKS]) for (const f of l.from) add(f, l.to);
+    CENSUS.push(...rows.values());
+  }
+  for (const c of COUNTERPARTS.filter((x) => x.osc)) {
+    for (const w of c.from) {
+      ACTIONS.push([`${w} → ${c.workspace}`, w, `[data-osc="${c.osc[w]}"]`, c.workspace]);
+    }
+  }
   // A Studio template's deep link (#294, #278: "Open ... in Studio"), any shipped template.
   ALLOWED_HREF.push(new RegExp(`^#m=studio&st=(${TEMPLATES.join('|')})$`));
 }
@@ -127,6 +214,15 @@ const GARBAGE = [
   ['%E0%A4%A', 'playground', [], null],
   [`m=${'a'.repeat(5000)}`, 'playground', [], 'm=playground', [PAGE]],
 ];
+// P07 census rows, [from, href, target workspace, template or null], read at start.
+const CENSUS = [];
+// Pack G journeys: the Learn tools (cross-links.js LEARN_TOOLS), the package version and the
+// committed roadmap, read at start.
+const JOURNEY = { learnTools: {}, version: null, roadmap: [] };
+// The registry's related addresses per workspace, and the ones that do not route there.
+const RELATED = {};
+const REGISTRY_RELATED = {};
+const RELATED_BAD = [];
 // [name, from, selector, expected workspace]
 const ACTIONS = [
   ['header About', 'playground', '[data-osc="header.about"]', 'about',
@@ -140,11 +236,16 @@ const ACTIONS = [
   // control is named "Back to the Playground" (#294 U010).
   ['Filter Lab back', 'filter', '#osc-filter-fullscreen', 'playground'],
   ['Learn demo', 'learn', '[data-osc="learn.demo"]', 'playground'],
+  // A1 connect, appended by loadModel from their sources: every workspace link of About's list
+  // (ui/app.js WORKSPACES) and every counterpart link written in a workspace's own panel
+  // (ui/counterparts.js COUNTERPARTS: Filter Lab, Synthesis, the Sequencer and Presets to the
+  // Synth).
 ];
 // Workspaces whose only way onward is the nav today (links.md, "dead ends"). Shrinks only.
 // The cross-links pull request (#294) and #273 gave Analyzer, Compare, Synthesis and
-// Experiments (B12, its empty lists now link to Measure) an in-content exit.
-const NO_EXIT_OK = new Set(['presets', 'about']);
+// Experiments (B12, its empty lists now link to Measure) an in-content exit; A1 connect gave
+// Presets its Synth link and About its workspace list, each entry a link.
+const NO_EXIT_OK = new Set([]);
 // Rendered links that do not yet say they open a new tab (B10: the Bioacoustics citations,
 // src/js/labs/bioacoustics.js), owned by the cross-links pull request. Each is reported as
 // KNOWN, never skipped silently; a listed href that is healed fails the run until it is removed
@@ -166,95 +267,6 @@ function check(leg, name, ok, detail = '') {
   console.log(`  ${ok ? 'PASS' : 'FAIL'} [${leg}] ${name}${!ok && detail ? ` — ${detail}` : ''}`);
 }
 
-// ------------------------------------------------------------------------------ page helpers
-const H = {
-  async ready(page) {
-    await page.waitForSelector('html[data-ready="true"]', { timeout: READY_MS });
-    await until(() => page.evaluate(() => !!(window.OSCILLA.app && window.OSCILLA.app.studio
-      && window.OSCILLA.app.studio.ready)), { ms: READY_MS, what: 'Studio ready' });
-  },
-  state: (page) => page.evaluate(() => {
-    const a = window.OSCILLA.app;
-    const el = document.activeElement;
-    const cur = document.querySelector('.osc-nav [aria-current="page"]');
-    const nav = document.querySelector('.osc-nav');
-    return { workspace: a.workspace, hash: location.hash, href: location.href,
-      current: cur ? cur.dataset.osc : null, histLen: history.length,
-      navVisible: !!nav && nav.getClientRects().length > 0,
-      focusHeading: !!el && /^H[1-4]$/.test(el.tagName) };
-  }),
-  async open(context, base, hash) {
-    const page = await context.newPage();
-    await page.goto(hash ? `${base}#${hash}` : base, { waitUntil: 'load', timeout: READY_MS });
-    await H.ready(page);
-    return page;
-  },
-  async at(page, workspace, what) {
-    return until(async () => {
-      const s = await H.state(page);
-      return s.workspace === workspace ? s : null;
-    }, { ms: NAV_MS, what });
-  },
-  /** Back / Forward and the state once the address has changed. */
-  async traverse(page, dir) {
-    const before = await page.evaluate(() => location.href);
-    await page.evaluate((d) => (d === 'back' ? history.back() : history.forward()), dir);
-    await until(() => page.evaluate((b) => location.href !== b, before),
-      { ms: TRAVERSE_MS, what: `history.${dir}() changes the address` });
-    // The router answers popstate synchronously; one frame lets Alpine render it.
-    await page.evaluate(() => new Promise((r) => { requestAnimationFrame(() => r()); }));
-    return H.state(page);
-  },
-  /**
-   * The state once a refused or repaired link has been applied: the workspace `w`, none of
-   * `gone` in the address, and the address `expect` (without '#') when one is named. The poll
-   * ends on the asserted condition itself (project.bounded-test-timing). null at the deadline.
-   */
-  async settled(page, w, gone, expect, what) {
-    return until(async () => {
-      const s = await H.state(page);
-      const q = new URLSearchParams(s.hash.replace(/^#/, ''));
-      const ends = expect === null || (typeof expect === 'function' ? expect(q)
-        : s.hash === `#${expect}`);
-      return s.workspace === w && !gone.some((k) => q.has(k)) && ends ? s : null;
-    }, { ms: NAV_MS, what }).catch(() => null);
-  },
-  /** The warnings shown now (the notice stack, core/instrument.js notify). */
-  warnings: (page) => page.evaluate(() => window.OSCILLA.app.alerts
-    .filter((a) => a.level === 'warning' || a.level === 'error').map((a) => a.title)),
-  async setWorkspace(page, w) {
-    await page.evaluate((x) => window.OSCILLA.app.setWorkspace(x), w);
-    return H.at(page, w, `setWorkspace(${w})`);
-  },
-  async navTo(page, w) {
-    const item = `[data-osc="nav.${w}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
-    return H.at(page, w, `nav to ${w}`);
-  },
-  links: (page) => page.evaluate(() => [...document.querySelectorAll('a[href]')]
-    .filter((a) => a.getClientRects().length > 0)
-    .map((a) => ({ href: a.getAttribute('href'), target: a.getAttribute('target'),
-      rel: a.getAttribute('rel') || '', text: a.textContent.replace(/\s+/g, ' ').trim(),
-      anchorOk: a.getAttribute('href').startsWith('#') && !a.getAttribute('href').includes('=')
-        ? !!document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1)))
-        : null }))),
-  /** In-content controls (outside header and status bar) that name another workspace. */
-  exits: (page) => page.evaluate(() => {
-    const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|synthOpenStudio/;
-    return [...document.querySelectorAll('main button, main a[href^="#m="]')]
-      .filter((el) => el.getClientRects().length > 0)
-      .filter((el) => el.tagName === 'A' || NAV.test(el.getAttribute('@click') || '')
-        || el.dataset.osc === 'studio.compact.expand')
-      .map((el) => el.dataset.osc || el.textContent.trim());
-  }),
-};
-
 // ------------------------------------------------------------------------------ one leg
 async function runLeg(name, origin) {
   const leg = `${name}/${origin}`;
@@ -268,6 +280,8 @@ async function runLeg(name, origin) {
     p.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
   });
   console.log(`\n${leg} (${browser.version()})`);
+  await context.addInitScript(walk.probe);
+
   try {
     if (want('hrefs') || want('nav-hrefs') || want('exits')) {
       const page = await H.open(context, base, '');
@@ -296,7 +310,13 @@ async function runLeg(name, origin) {
           else if (blank && !hinted) bad.push(`${w}: ${l.href} does not say it opens a new tab`);
           else if (NEW_TAB_HINT_DEBT.has(l.href)) debtHealed.add(l.href);
         }
-        exitsOf[w] = { nav: (await H.state(page)).navVisible, exits: await H.exits(page) };
+        exitsOf[w] = { nav: (await H.state(page)).navVisible, exits: await H.exits(page),
+          related: await until(async () => {
+            const r = await H.related(page);
+            return JSON.stringify(r) === JSON.stringify(RELATED[w]) ? r : null;
+          }, { ms: NAV_MS, what: `exits: ${w}'s Related strip is rendered` })
+            .catch(() => H.related(page)),
+          content: await H.contentLinks(page) };
       }
       if (want('hrefs')) {
         if (debtSeen.size) {
@@ -319,6 +339,16 @@ async function runLeg(name, origin) {
           || (!exitsOf[w].exits.length && !NO_EXIT_OK.has(w)));
         const healed = [...NO_EXIT_OK].filter((w) => exitsOf[w].exits.length);
         check(leg, 'every workspace has a way onward', !dead.length, JSON.stringify(dead));
+        const unrelated = WORKSPACES.filter((w) => !(REGISTRY_RELATED[w] || []).length
+          || JSON.stringify(exitsOf[w].related) !== JSON.stringify(RELATED[w])
+          || REGISTRY_RELATED[w].some((h) => !exitsOf[w].related.includes(h)
+            && !exitsOf[w].content.includes(h))
+          || exitsOf[w].related.some((h) => exitsOf[w].content.includes(h)))
+          .map((w) => `${w}: strip ${JSON.stringify(exitsOf[w].related)} (want `
+            + `${JSON.stringify(RELATED[w] || [])}), content ${JSON.stringify(exitsOf[w].content)}`
+            + `, registry ${JSON.stringify(REGISTRY_RELATED[w] || [])}`);
+        check(leg, 'every workspace shows each related page once, in its strip or its content',
+          !unrelated.length && !RELATED_BAD.length, [...unrelated, ...RELATED_BAD].join(' | '));
         check(leg, 'NO_EXIT_OK lists only workspaces that still lack an in-content exit',
           !healed.length, `remove ${healed.join(', ')} from NO_EXIT_OK`);
       }
@@ -504,6 +534,169 @@ async function runLeg(name, origin) {
         && JSON.stringify(fwd) === JSON.stringify(WORKSPACES.slice(1)),
         JSON.stringify({ back, fwd }));
       await page.close();
+    }
+
+    if (want('related-census')) {
+      const bad = [];
+      const read = (page) => page.evaluate(() => {
+        const a = window.OSCILLA.app;
+        const el = document.activeElement;
+        return { workspace: a.workspace, ready: document.documentElement.dataset.ready,
+          studio: !!(a.studio && a.studio.ready), audit: window.__oscAudit,
+          voice: !!window.OSCILLA.engine.voice, playing: !!a.playing,
+          focus: el ? (el.id || el.dataset.osc || el.tagName) : null,
+          focusOk: !!el && (/^H[1-4]$/.test(el.tagName)
+            || !!el.closest('[data-osc-modes], main section')) };
+      });
+      // Each census route is a row of the integration map (K075), walked by the one walker
+      // (lib/link-walk.cjs walkRow) with the element's own click(): the control shown, enabled
+      // and named, its target initialized and focused, Back and Forward, a reload of the
+      // address (a deep link) at the same target state with no AudioContext or microphone at
+      // load, and no AudioContext, microphone or voice from the click. The integration map's
+      // suite walks the same rows by pointer, keyboard and touch.
+      let walked = 0;
+      for (const [from, href] of CENSUS) {
+        // The rows a fresh page at the source shows: a row whose source needs a setup, a menu
+        // or a phone width is the integration map suite's (its setup is a pointer gesture,
+        // which unlocks audio before the link is followed).
+        const rows = [...MAP.rows, ...MAP.declared].filter((r) => r.from === from
+          && r.href === href && !r.walk && !r.setup && !r.opener && !r.viewport);
+        if (!rows.length) { bad.push(`${from} ${href}: no row of the integration map`); continue; }
+        for (const row of rows) {
+          const obs = await walk.walkRow(context, base, row, { modes: ['script'] })
+            .catch((e) => ({ modes: { script: { control: null } }, error: e.message }));
+          const judged = walk.judgeRow(row, obs, { reloadDebt: MAP.reloadDebt });
+          for (const k of judged.known) console.log(`  KNOWN [${leg}] ${k}`);
+          bad.push(...judged.failures, ...(obs.error ? [`${row.id}: ${obs.error}`] : []));
+          walked += 1;
+        }
+      }
+      // Keyboard: Enter on the first strip link of the Playground.
+      {
+        const page = await H.open(context, base, 'm=playground');
+        const first = page.locator('[data-osc="page.relatedLink"]').first();
+        const to = (await first.getAttribute('data-to'));
+        await first.focus();
+        await page.keyboard.press('Enter');
+        const r = await H.at(page, to, `census: Enter opens ${to}`).catch(() => null);
+        const after = await read(page);
+        if (!r || after.audit.gum || after.voice || after.playing) {
+          bad.push(`keyboard Enter on ${to}: ${JSON.stringify(after)}`);
+        }
+        await page.close();
+      }
+      check(leg, `related-census: ${CENSUS.length} related and panel routes (${walked} rows of `
+        + 'the integration map) open an initialized target, focused, with Back and Forward, as '
+        + 'deep links too, and start no sound or microphone',
+      !bad.length, bad.slice(0, 8).join(' | '));
+    }
+
+    if (want('journey-18')) {
+      const bad = [];
+      const page0 = await H.open(context, base, 'm=learn');
+      const links = await page0.evaluate(() => [...document.querySelectorAll(
+        '[data-osc="learn.tool"]')].filter((a) => a.getClientRects().length > 0)
+        .map((a) => ({ href: a.getAttribute('href'), text: a.textContent.trim() })));
+      await page0.close();
+      const want18 = Object.keys(JOURNEY.learnTools).length;
+      if (links.length !== want18) {
+        bad.push(`${links.length} tool links, LEARN_TOOLS has ${want18}`);
+      }
+      for (const [i, l] of links.entries()) {
+        const to = l.href.replace('#m=', '');
+        const page = await H.open(context, base, 'm=learn');
+        await page.evaluate((k) => document.querySelectorAll('[data-osc="learn.tool"]')[k]
+          .click(), i);
+        const r = await until(async () => {
+          const v = await page.evaluate(() => ({ ws: window.OSCILLA.app.workspace,
+            ready: document.documentElement.dataset.ready, audit: window.__oscAudit,
+            voice: !!window.OSCILLA.engine.voice, playing: !!window.OSCILLA.app.playing }));
+          return v.ws === to && v.ready === 'true' ? v : null;
+        }, { ms: NAV_MS, what: `journey-18: ${l.text}` }).catch(() => null);
+        if (!r) bad.push(`${l.text} (${l.href}) is dead`);
+        else if ((r.audit && (r.audit.ctx || r.audit.gum)) || r.voice || r.playing) {
+          bad.push(`${l.text}: sound or microphone ${JSON.stringify(r)}`);
+        }
+        await page.close();
+      }
+      check(leg, `journey-18: ${links.length} Learn tool links open their working workspace, `
+        + 'none dead, no sound or microphone', !bad.length, bad.slice(0, 6).join(' | '));
+    }
+
+    if (want('journey-19')) {
+      const page = await H.open(context, base, 'm=about');
+      const r = await until(() => page.evaluate(() => {
+        const v = document.querySelector('[data-osc="about.version"]');
+        const ms = [...document.querySelectorAll('[data-osc="about.next.milestone"]')]
+          .map((li) => [li.dataset.milestone, li.querySelector('b').textContent.trim()]);
+        const version = v && v.textContent.trim();
+        return version && ms.length ? { version, ms } : null;
+      }), { ms: NAV_MS, what: 'journey-19: About rendered' }).catch(() => null);
+      await page.close();
+      const ok = !!r && r.version.includes(JOURNEY.version)
+        && JSON.stringify(r.ms) === JSON.stringify(JOURNEY.roadmap);
+      check(leg, `journey-19: About shows version ${JOURNEY.version} (package.json) and the `
+        + `${JOURNEY.roadmap.length} milestones of src/data/roadmap.json`, ok, JSON.stringify(r));
+    }
+
+    if (want('journey-20')) {
+      const bad = [];
+      let seen = 0;
+      const audit = (page, where) => page.evaluate((w) => {
+        const shown = (el) => !!el && el.getClientRects().length > 0
+          && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[hidden]');
+        const ws = window.OSCILLA.app.workspace;
+        const inScope = (el) => !el.closest('main') || !!el.closest(
+          `[data-osc-modes~="${ws}"]:not(.osc-p-source):not(.osc-p-analysis)`);
+        const out = [];
+        for (const el of document.querySelectorAll('button, input, select, textarea, [role]')) {
+          if (!(el.disabled || el.getAttribute('aria-disabled') === 'true')) continue;
+          if (!shown(el) || !inScope(el)) continue;
+          const by = el.getAttribute('aria-describedby');
+          const desc = by && document.getElementById(by);
+          const reason = (shown(desc) && desc.textContent.trim().length >= 8)
+            || [...el.querySelectorAll('[data-osc-reason]')].some(shown);
+          const row = el.closest('li, [role="menu"], .osc-sb-actions, .osc-panel-header, form')
+            || el.parentElement;
+          const alt = [...row.querySelectorAll('a[href], button')].some((x) => x !== el
+            && shown(x) && !x.disabled && x.getAttribute('aria-disabled') !== 'true');
+          out.push({ where: w, osc: el.dataset.osc || el.id, reason, alt });
+        }
+        return out;
+      }, where);
+      for (const vp of [{ width: 1536, height: 1024 }, { width: 390, height: 844 }]) {
+        const page = await H.open(context, base, '');
+        await page.setViewportSize(vp);
+        const results = [];
+        for (const w of ['filter', 'synthesis', 'sequencer', 'presets', 'learn', 'about']) {
+          await H.setWorkspace(page, w);
+          results.push(...await audit(page, `${w}@${vp.width}`));
+          if (w === 'presets') {
+            for (const c of await page.evaluate(() => window.OSCILLA.app.PRESET_CATEGORIES
+              .map((x) => x.id))) {
+              await page.evaluate((id) => { window.OSCILLA.app.presetTab = id; }, c);
+              await H.frames(page);
+              results.push(...await audit(page, `presets/${c}@${vp.width}`));
+            }
+          }
+        }
+        // The shell's export actions while an export runs.
+        await page.evaluate(() => { window.OSCILLA.app.exportBusy = true; });
+        if (vp.width > 600) {
+          await page.click('[data-osc="header.export"]');
+          await H.frames(page);
+          results.push(...await audit(page, `export menu busy@${vp.width}`));
+          await page.keyboard.press('Escape');
+        }
+        results.push(...await audit(page, `status bar busy@${vp.width}`));
+        await page.evaluate(() => { window.OSCILLA.app.exportBusy = false; });
+        seen += results.length;
+        for (const x of results) if (!x.reason || !x.alt) bad.push(JSON.stringify(x));
+        await page.close();
+      }
+      check(leg, `journey-20: ${seen} disabled controls on lane A's pages and the shell state a `
+        + 'visible reason beside a way onward', seen > 0 && !bad.length,
+      bad.slice(0, 6).join(' | '));
     }
 
     if (want('actions')) {
