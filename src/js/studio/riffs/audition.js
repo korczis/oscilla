@@ -1,16 +1,18 @@
 // Audition a riff (Q032's ephemeral preview): the riff plays as ONE finite steps plan of the
-// AudioEngine's play(), the instrument's own path, so the engine's output guard decides (a
-// measurement owns the output: refused, and said). Nothing is written to the StudioModel, the
-// history or provenance. While a measurement runs, Listen is refused with a sentence before
-// anything is stopped (a capture is never aborted silently); otherwise it stops the ordinary
+// AudioEngine's play(), the instrument's own path under its own owner name ('audition', the
+// output-owner table's row), so the engine's output guard decides (a measurement or a microphone
+// level reference owns the output: refused, and said). Nothing is written to the StudioModel,
+// the history or provenance. While the output is refused (refused(), the table's refusal text,
+// or the older measuring() flag), Listen is refused with that sentence before anything is
+// stopped (a capture is never aborted silently); otherwise it stops the ordinary
 // owners first (Hold, the sequencer, the Studio transport), and Stop, a load from the library
 // or closing its dialog ends it. The riff is monophonic, so one voice plays it; each note keeps
 // a tenth of its length as a gap, so repeated pitches are heard as separate notes.
 //
 //   auditionPlan(riff, { tempo = riff.tempo, transpose = 0 }) -> the engine's steps plan
-//   createRiffAudition({ engine, stopOthers, measuring }) -> { start(id, opts, { onEnd }) ->
-//     { ok } | { ok: false, reason }, stop() -> bool, playing: the riff id while its engine
-//     voice sounds | null, dispose() }
+//   createRiffAudition({ engine, stopOthers, measuring, refused }) -> { start(id, opts,
+//     { onEnd }) -> { ok } | { ok: false, reason }, stop() -> bool, playing: the riff id while
+//     its engine voice sounds | null, dispose() }
 
 import { midiOf, noteHz } from '../templates/demo-song-score.js';
 import { BAR_STEPS, riffOf } from './library.js';
@@ -32,7 +34,7 @@ export function auditionPlan(riff, { tempo = riff.tempo, transpose = 0 } = {}) {
 }
 
 export function createRiffAudition({ engine = null, stopOthers = () => {},
-  measuring = () => false } = {}) {
+  measuring = () => false, refused = () => null } = {}) {
   let playing = null;
   let voice = null;
   let onEnd = null;
@@ -73,9 +75,9 @@ export function createRiffAudition({ engine = null, stopOthers = () => {},
       if (!engine || typeof engine.play !== 'function') {
         return { ok: false, reason: 'No audio output: the riff cannot play here.' };
       }
-      if (measuring()) {
-        return { ok: false, reason: 'A measurement is running: the riff plays after it.' };
-      }
+      const why = refused()
+        || (measuring() ? 'A measurement is running: the riff plays after it.' : null);
+      if (why) return { ok: false, reason: why };
       stopOthers();
       end();
       const plan = auditionPlan(riff, opts);
