@@ -586,7 +586,8 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       for (const x of lin) if (x.fit) { limited.add(x.id); scaled.set(x.id, kOf(x)); }
       up = lin.reduce((t, x) => t + x.up * kOf(x), 0);
     }
-    for (const x of lin) if (x.fit) fitted.set(x.id, { factor: kOf(x), key });
+    const by = fit.k > k ? 'nyquist' : 'range'; // the factor that won (performance-fit.js)
+    for (const x of lin) if (x.fit) fitted.set(x.id, { factor: kOf(x), key, by });
     for (const x of lin) gains.set(x.id, x.a * kOf(x) * x.scale);
     let kc = 1;
     let usedC = 0;

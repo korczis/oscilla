@@ -13,9 +13,12 @@
 //     base: the parameter's base with every cable's constant part; shift: what the scaled
 //     constant parts move the base by ((k - 1) x their sum)
 //   fitLimits(planNode, cb, { edges, nodes }) -> [Diagnostic]   one per fitted cable held
-//     below its depth (cb.fitted: Map<edge id, { factor, key }>)
+//     below its depth (cb.fitted: Map<edge id, { factor, key, by }>), worded by the factor that
+//     won (`by`): 'range' (fitFactor) or 'nyquist' (computeBases' 0.95 x Nyquist headroom, an
+//     Oscillator's detune near the top: its range had room, review of #428 NF1)
 
 import { studioDiagnostic } from './validate.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../core/constants.js';
 
 const sum = (xs, f) => xs.reduce((t, x) => t + x[f], 0);
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -37,20 +40,28 @@ export function fitFactor(lin, base, { min, max }) {
 export function fitLimits(planNode, cb, { edges, nodes } = {}) {
   const out = [];
   if (!planNode || !cb || !cb.fitted) return out;
-  for (const [id, { factor, key }] of cb.fitted) {
+  for (const [id, { factor, key, by = 'range' }] of cb.fitted) {
     if (factor >= 1) continue;
     const e = edges && edges.get(id);
     const p = planNode.def.params.find((x) => x.key === key);
     if (!e || !p) continue;
     const from = nodes && nodes.get(e.from.node);
     const src = `${from ? from.name : e.from.node} ${e.from.port.toUpperCase()}`;
-    const why = factor <= 0 ? 'has no room: the base and the other cables already reach the '
-      + `ends of its range (${p.min} to ${p.max})`
-      : `plays ${Math.round(factor * 100)} % of its depth: the base and the other cables `
-        + `leave only that much of its range (${p.min} to ${p.max})`;
+    const nyq = `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist`;
+    const range = `(${p.min} to ${p.max})`;
+    const pct = `plays ${Math.round(factor * 100)} % of its depth`;
+    let why;
+    if (by === 'nyquist') {
+      why = factor <= 0 ? `has no room: the frequency already reaches ${nyq}`
+        : `${pct}: held at or below ${nyq}, all the room the frequency leaves`;
+    } else {
+      why = factor <= 0 ? 'has no room: the base and the other cables already reach the ends '
+        + `of its range ${range}` : `${pct}: the base and the other cables leave only that much `
+        + `of its range ${range}`;
+    }
     out.push({ ...studioDiagnostic('runtime', 'performance-limited', `${src} into `
       + `${planNode.name} ${p.label} ${why}.`, { kind: 'edge', id }),
-    details: { node: planNode.id, param: key, edge: id, factor, min: p.min, max: p.max } });
+    details: { node: planNode.id, param: key, edge: id, factor, by, min: p.min, max: p.max } });
   }
   return out;
 }

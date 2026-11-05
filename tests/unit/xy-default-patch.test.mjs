@@ -750,3 +750,44 @@ test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; n
     assert.equal(s2.dispatch({ type: 'NODE_PARAM_SET', nodeId: PANEL.resolve(s2.getModel())
       .get('xy').id, params: { glide: 0.05 } }).ok, true);
   });
+
+// ---------------------------------------------------------------- review of #428 (98's P3s)
+
+/** The default document with Y cabled into the reference oscillator's Detune (depth cents),
+ *  the oscillator at `hz`, running at `sampleRate`: its runtime's diagnostics. */
+function detuneRig({ hz, detune = 0, depth = 1200, sampleRate = 48000 }) {
+  const st = defaultStore();
+  const m0 = st.getModel();
+  const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
+  assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: osc.id,
+    params: { frequency: hz, detune } }).ok, true);
+  assert.equal(st.dispatch({ type: 'EDGE_ADD', id: 'y-detune', from: { node: ids(m0)('xy'),
+    port: 'y' }, to: { node: osc.id, port: 'detune' }, props: { muted: false, depth,
+    polarity: 'unipolar', mapping: 'linear', offset: 0 } }).ok, true);
+  const fx = createFakeAudioEnv({ sampleRate });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const rt = createStudioRuntime({ engine });
+  assert.equal(rt.apply(st.getModel(), { revision: 1 }).ok, true);
+  assert.equal(rt.start().ok, true);
+  const perf = rt.debugInfo().diagnostics.filter((d) => d.code === 'performance-limited');
+  return { rt, perf };
+}
+
+test('NF1: a Y cable held by the Nyquist headroom is not blamed on its range', () => {
+  // Oscillator at 20 kHz, detune 0, Y -> Detune 1200 cents: the range (+-1200) has room for
+  // the whole depth; what holds Y is 0.95 x Nyquist, which the oscillator's frequency leaves.
+  const { perf } = detuneRig({ hz: 20000 });
+  assert.equal(perf.length, 1, perf.map((d) => d.message).join(' | '));
+  const [d] = perf;
+  assert.ok(d.details.factor > 0 && d.details.factor < 1, `${d.details.factor}`);
+  assert.equal(d.details.by, 'nyquist', 'the factor that won is the Nyquist headroom');
+  assert.doesNotMatch(d.message, /of its range/, d.message);
+  assert.match(d.message, /0\.95 × Nyquist/, d.message);
+  // The same cable with room in Nyquist but not in its range (detune 600, depth 1200 at 440 Hz):
+  // the range wins, and the message says so.
+  const r = detuneRig({ hz: 440, detune: 600 });
+  assert.equal(r.perf.length, 1);
+  assert.equal(r.perf[0].details.by, 'range');
+  assert.match(r.perf[0].message, /leave only that much of its range \(-1200 to 1200\)/);
+});
