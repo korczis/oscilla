@@ -49,9 +49,6 @@
 //   - measure-audio-session (C033): where navigator.audioSession exists (WebKit, required
 //     there) the session is play-and-record in READY after Check setup and playback once the
 //     engine is reset (the input closed)
-//   - measure-audio-session (C033): where navigator.audioSession exists (WebKit, required
-//     there) the session is play-and-record in READY after Check setup and playback once the
-//     engine is reset (the input closed)
 //   - measure-refusal-announced (C033): WebKit with the microphone refused announces the true
 //     reason (permission denied), never "no input signal"; Firefox, whose prompt nobody
 //     answers here, announces that the check waits for the permission, and Stop is announced

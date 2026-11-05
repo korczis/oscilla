@@ -265,6 +265,26 @@ test('C033 paths: two capture ios share one session; the last to close puts it b
     assert.deepEqual(s.sets, ONCE);
   });
 
+// Adopted from 98's G1 (rb4c-probe/new-gaps.test.mjs, N1): the last holder's restore forgets
+// the session's hold, so the next capture switches it again. Kept, the hold would make every
+// capture after the first open its input under `playback`, which WebKit refuses.
+test('C033 paths: a second capture after the first closed switches the session again (N1)',
+  async () => {
+    const s = audioSession();
+    const r = rig({ session: s });
+    const me = createMeasurementEngine({ io: r.io });
+    await r.drive(me.preflight(RECIPE));
+    assert.equal(r.seen.sessionAtOpen, PAR);
+    me.reset();
+    assert.equal(s.type, 'playback');
+    await r.drive(me.preflight(RECIPE));
+    assert.equal(r.seen.sessionAtOpen, PAR, 'the second getUserMedia runs under play-and-record');
+    me.reset();
+    assert.deepEqual(s.sets, [...ONCE, ...ONCE]);
+    me.dispose();
+    assert.deepEqual(s.sets, [...ONCE, ...ONCE]);
+  });
+
 // ------------------------------------------------------------------ the level of a window (F5)
 
 test('C033 paths: a check level is the mean over the frames received, not lost blocks (F5)',

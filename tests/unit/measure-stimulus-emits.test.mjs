@@ -133,6 +133,8 @@ test('C033: the heard judgement is the rise, whatever the levels are (98 F1)', a
   assert.equal(await heard(-40, -Infinity), false, 'silence during the probe');
   assert.equal(await heard(-Infinity, -40), true, 'a signal out of digital silence is heard');
   assert.equal(await heard(null, null), false, 'levels lost on the way (JSON null)');
+  assert.equal(await heard(-60, null), false,
+    'a probe level that is no number (no frames) over a finite background (98 N2)');
   assert.equal(await heard(-40, NaN), false, 'a level that is no number');
 });
 
