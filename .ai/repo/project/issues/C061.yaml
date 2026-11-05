@@ -10,7 +10,7 @@ objective: "Lands as fix(studio). The Envelope node's update rebuilds its ADSR f
 why: "Found by seat 98's coherence train B check (R8, P2, pre-existing on main 2026-11-05; repro in 98's scratchpad 7b-check), filed by af at b0's request. A live edit that silently reverts an earlier one breaks coherent-state#live-edits-reach-the-voice and project.no-fake-science (the Inspector shows 1.5 s, the voice plays the old attack)."
 scope:
   - "src/js/studio/adapters/modulation.js"
-  - "tests/unit/v31-studio-runtime.test.mjs"
+  - "tests/unit/c061-envelope-edits-accumulate.test.mjs"
   - "tests/README.md"
   - "dist"
 depends_on: []
@@ -19,7 +19,7 @@ acceptance_criteria:
   - "The same holds for sustain and release after two or more updates, and an update of one key leaves every other edited key as last set."
   - "The pull request carries a reviewer's verdict (src/js/studio is guarded); done only after each criterion is re-checked on a main commit."
 validation:
-  - "node --test tests/unit/v31-studio-runtime.test.mjs"
+  - "node --test tests/unit/c061-envelope-edits-accumulate.test.mjs"
   - "npm test"
 evidence_required:
   - "verified"
