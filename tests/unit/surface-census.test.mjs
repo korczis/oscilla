@@ -20,7 +20,8 @@
 // Each entry: id, kind, reachedFrom (workspace ids; for a panel or subview the data-osc-modes
 // of the element that holds it), purpose, state (a src/js file that exists), evidence (one of
 // EVIDENCE), deepLink (an address the router sends to one of reachedFrom, or null with
-// deepLinkWhyNot), tests (test files that exist and name the surface), plan (issues of
+// deepLinkWhyNot), tests (test files that exist and whose code, comments stripped, holds a
+// locator of the surface: namesOf says which), plan (issues of
 // .ai/repo/project/issues) and, for a panel, charts: the chart hosts inside it, which are K053's
 // census (tests/unit/chart-host-census.json) and are named here, never described again.
 //
@@ -29,9 +30,10 @@
 // like tests/unit/no-inert-surfaces.test.mjs, and failed under GitHub Actions when no commit
 // holds the file). The running page is tests/browser/surface-census.cjs.
 //
-// What this does not decide: that a test file which names a surface exercises it (it is read
-// as text: an id, a data-osc with its value, or the address of the surface), that a purpose
-// is true and that an evidence class is the right one. Those stay with the reviewer.
+// What this does not decide: that a test file which holds a locator of a surface exercises it
+// (the code is read as text, not run: a locator built by interpolation counts with each value
+// the file quotes, without proving the value reaches it), that a purpose is true and that an
+// evidence class is the right one. Those stay with the reviewer.
 //   node --test tests/unit/surface-census.test.mjs
 
 import test from 'node:test';
@@ -150,6 +152,9 @@ export function deriveShell(rawHtml) {
   const tabs = [];
   for (const t of tags.filter((x) => attrOf(x.tag, 'role') === 'tab')) {
     const osc = attrOf(t.tag, 'data-osc');
+    // The state the tab writes when its @click is an assignment (presetTab = c.id).
+    const wm = (attrOf(t.tag, '@click') || '').match(/^\s*([\w$.]+)\s*=(?!=)/);
+    const writes = wm ? wm[1] : null;
     const value = attrOf(t.tag, 'data-value');
     const bound = attrOf(t.tag, ':data-value');
     if (osc && value) {
@@ -157,7 +162,7 @@ export function deriveShell(rawHtml) {
       const prefix = id && id.toLowerCase().endsWith(value.toLowerCase())
         ? id.slice(0, id.length - value.length) : null;
       tabs.push({ key: `${osc}:${value}`, dataOsc: osc, value, id, prefix, modes: modesAt(t.at),
-        line: t.line });
+        line: t.line, writes });
       continue;
     }
     // A templated tab: the nearest open <template x-for="<v> in <REGISTRY>"> holds it.
@@ -171,7 +176,7 @@ export function deriveShell(rawHtml) {
       const pm = idExpr.match(/^'([^']*)'\s*\+\s*\w+\.id$/);
       for (const v of ids) {
         tabs.push({ key: `${osc}:${v}`, dataOsc: osc, value: v, id: pm ? `${pm[1]}${v}` : null,
-          prefix: pm ? pm[1] : null, modes: modesAt(t.at), line: t.line, registry: m[2] });
+          prefix: pm ? pm[1] : null, modes: modesAt(t.at), line: t.line, registry: m[2], writes });
       }
       continue;
     }
@@ -184,7 +189,7 @@ export function deriveShell(rawHtml) {
     const m = xs && xs.match(/^\s*([\w.]+)\s*===\s*'([\w-]+)'\s*$/);
     if (!m || !VIEW_SWITCHES.includes(m[1])) continue;
     switches.push({ key: `${m[1]}:${m[2]}`, dataOsc: m[1], value: m[2], id: attrOf(t.tag, 'id'),
-      prefix: null, modes: modesAt(t.at), line: t.line, isSwitch: true });
+      prefix: null, modes: modesAt(t.at), line: t.line, isSwitch: true, writes: m[1] });
   }
   const dialogs = [];
   for (const t of tags.filter((x) => x.name === 'dialog')) {
@@ -205,7 +210,8 @@ export const registeredBy = (text) => [...text.replace(/\/\*[\s\S]*?\*\//g, '')
 
 /**
  * The navigable surfaces of a tree: Map `${kind}:${id}` -> surface, and the problems.
- * `js`: { '<src/js path>': text } of the modules that may register a hash domain.
+ * `js`: { '<src/js path>': text } of the modules that may register a hash domain or write the
+ * state a tab shows.
  */
 export function deriveInventory({ html, js }) {
   const shell = deriveShell(html);
@@ -218,7 +224,14 @@ export function deriveInventory({ html, js }) {
   };
   for (const w of WORKSPACES) add('workspace', w, { modes: [w] });
   for (const p of shell.panels) add('panel', p.id, p);
-  for (const t of [...shell.tabs, ...shell.switches]) add('subview', t.key, t);
+  // A tab whose data-osc key is also the state the app writes (`this.studio.subview = v` in
+  // src/js) is addressed by that state too.
+  const written = (k) => Object.values(js).some((text) => new RegExp(
+    `\\bthis\\.${k.replace(/[.$]/g, '\\$&')}\\s*=(?!=)`).test(text));
+  for (const t of shell.tabs) {
+    add('subview', t.key, t.writes || !written(t.dataOsc) ? t : { ...t, writes: t.dataOsc });
+  }
+  for (const t of shell.switches) add('subview', t.key, t);
   for (const v of STUDIO_LINK_SUBVIEWS) {
     if (!out.has(`subview:studio.subview:${v}`)) {
       problems.push(`STUDIO_LINK_SUBVIEWS names "${v}", and the shell has no studio.subview tab `
@@ -254,34 +267,129 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const quoted = (v) => new RegExp(`['"\`]${esc(v)}['"\`]`);
 const word = (v) => new RegExp(`(^|[^\\w-])${esc(v)}(?![\\w-])`);
 
+// A '/' after one of these (or at the start) opens a regular expression literal, not a division
+// (the rule of tests/unit/units.test.mjs stripComments).
+const BEFORE_REGEX = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';',
+  '+', '-', '*', '%', '<', '>', '~', '^']);
+
+/** The end (index after the closing '/') of the regular expression literal opening at i. */
+function regexEnd(text, i) {
+  let inClass = false;
+  for (let j = i + 1; j < text.length; j++) {
+    const c = text[j];
+    if (c === '\\') j += 1;
+    else if (c === '\n') return j;
+    else if (c === '[') inClass = true;
+    else if (c === ']') inClass = false;
+    else if (c === '/' && !inClass) return j + 1;
+  }
+  return text.length;
+}
+
 /**
- * The spellings by which a test file names a surface. A file names it when one of the
- * returned predicates holds on its text.
+ * A test file's code: its line and block comments blanked (strings, template literals and
+ * regular expressions kept, and its lines), so a surface named only in a comment is not named.
+ */
+export function codeOf(text) {
+  let out = '';
+  let quote = null;
+  let i = 0;
+  const lastCode = () => {
+    let j = out.length - 1;
+    while (j >= 0 && /\s/.test(out[j])) j -= 1;
+    return j < 0 ? '' : out[j];
+  };
+  while (i < text.length) {
+    const c = text[i];
+    const n = text[i + 1];
+    if (quote) {
+      out += c;
+      if (c === '\\') { out += n || ''; i += 2; continue; }
+      if (c === quote) quote = null;
+      i += 1;
+      continue;
+    }
+    if (c === '/' && n !== '*' && n !== '/' && BEFORE_REGEX.has(lastCode())) {
+      const end = regexEnd(text, i);
+      out += text.slice(i, end);
+      i = end;
+      continue;
+    }
+    if (c === '/' && (n === '*' || n === '/')) {
+      const close = n === '*' ? text.indexOf('*/', i + 2) : text.indexOf('\n', i);
+      const end = close < 0 ? text.length : close + (n === '*' ? 2 : 0);
+      out += text.slice(i, end).replace(/[^\n]/g, ' ');
+      i = end;
+      continue;
+    }
+    if (c === '\'' || c === '"' || c === '`') quote = c;
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
+/** `<attr>="<v>"` as a selector in a string spells it (its quotes possibly escaped): a regex. */
+const attrSel = (attr, v) => `${attr}=\\\\?["']${v}\\\\?["']`;
+
+/**
+ * The locators by which a test file's code names a surface, the way the browser suites address
+ * one: its element id (`#osc-dlg-help`, getElementById('osc-dlg-help')); its data-osc key in a
+ * selector, a tab's with its value in the same selector (`[data-osc="mic.tab"][data-value=
+ * "compare"]`); its address (`#m=filter`, `sv=timeline`, a hash domain's key with the domain);
+ * a view switch's state written or compared in code (`exps.panel = 'detail'`); a workspace's
+ * navigation item (`nav.filter`) or the call that reaches it (`navTo(page, 'filter')`,
+ * `setWorkspace('filter')`). A locator built by interpolation (`#osc-atab-${tab}`,
+ * `data-value="${tab}"`, `#m=${ws}`) names each value the file holds as a quoted string. A file
+ * names the surface when one of the returned predicates holds on its code (codeOf).
  */
 export function namesOf(entry, surface) {
   const has = (s) => (t) => word(s).test(t);
   const both = (...ps) => (t) => ps.every((p) => p(t));
   const q = (v) => (t) => quoted(v).test(t);
   const re = (r) => (t) => r.test(t);
+  /** A template literal whose fixed part `head` (a regex) runs into an interpolation. */
+  const interp = (head) => re(new RegExp(`${head}\\$\\{`));
   const id = entry.id;
   switch (entry.kind) {
     case 'workspace':
       return [re(new RegExp(`\\bm=${esc(id)}(?![\\w-])`)), has(`nav.${id}`),
-        both(q(id), re(/workspace|WORKSPACES|nav\./i))];
+        re(new RegExp(`\\b(?:navTo|workspace|setWorkspace)\\(\\s*(?:[\\w.]+\\s*,\\s*)?`
+          + `['"\`]${esc(id)}['"\`]`)),
+        both(q(id), (t) => interp('\\bm=')(t) || interp('\\bnav\\.')(t))];
     case 'panel': {
       const m = id.match(/^(osc-[a-z]+-)(.+)$/);
-      return [has(id), ...(m ? [both((t) => t.includes(m[1]), q(m[2]))] : []),
-        ...(surface && surface.dataOsc ? [q(surface.dataOsc)] : [])];
+      return [has(id), ...(m ? [both(interp(esc(m[1])), q(m[2]))] : []),
+        ...(surface && surface.dataOsc
+          ? [re(new RegExp(attrSel('data-osc', esc(surface.dataOsc))))] : [])];
     }
     case 'subview': {
       const s = surface || {};
-      // A tab's data-osc is a quoted string in a test; a view switch is state read as code.
-      const out = [both(s.isSwitch ? has(s.dataOsc || '') : q(s.dataOsc || ''), q(s.value || ''))];
+      const k = esc(s.dataOsc || '');
+      const v = esc(s.value || '');
+      const out = [];
+      if (!s.isSwitch) {
+        const sel = `${attrSel('data-osc', k)}\\]\\s*\\[`;
+        out.push(re(new RegExp(`${sel}${attrSel('data-value', v)}`)),
+          both(interp(`${sel}data-value=\\\\?["']`), q(s.value || '')));
+      }
+      if (s.writes) {
+        // The state the surface shows, written or compared with its value in code, or read
+        // into a property of its own name that is compared (`st.subview === 'timeline'` after
+        // reading app.studio.subview).
+        const w = esc(s.writes);
+        const op = `\\s*(?:={1,3}|!==?)\\s*['"\`]${v}['"\`]`;
+        out.push(re(new RegExp(`(?<![\\w$])${w}${op}`)),
+          both(re(new RegExp(`(?<![\\w$])${w}(?![\\w$])`)),
+            re(new RegExp(`\\.${esc(s.writes.split('.').pop())}${op}`))));
+      }
       if (s.elementId) out.push(has(s.elementId));
-      if (s.prefix) out.push(both((t) => t.includes(s.prefix), (t) => quoted(s.value).test(t)
-        || quoted(s.value.toLowerCase()).test(t)));
+      if (s.prefix) {
+        out.push(both(interp(esc(s.prefix)), (t) => quoted(s.value).test(t)
+          || quoted(s.value.toLowerCase()).test(t)));
+      }
       if (s.dataOsc === 'studio.subview') {
-        out.push(re(new RegExp(`\\b${STUDIO_LINK_KEYS.subview}=${esc(s.value)}(?![\\w-])`)));
+        out.push(re(new RegExp(`\\b${STUDIO_LINK_KEYS.subview}=${v}(?![\\w-])`)));
       }
       return out;
     }
@@ -289,12 +397,18 @@ export function namesOf(entry, surface) {
       return [has(id)];
     case 'route':
       return [re(new RegExp(`navRegister\\(\\s*['"]${esc(id)}['"]`)),
-        both(q(id), (t) => (DOMAIN_KEYS[id] || []).some((k) => new RegExp(`[#&?]${esc(k)}=`)
+        both(q(id), (t) => (DOMAIN_KEYS[id] || []).some((key) => new RegExp(`[#&?]${esc(key)}=`)
           .test(t)))];
     default:
       return [];
   }
 }
+
+/** Whether a test file's text names the surface through a locator in its code. */
+export const fileNames = (entry, surface, text) => {
+  const code = codeOf(text);
+  return namesOf(entry, surface).some((p) => p(code));
+};
 
 // ------------------------------------------------------------------------------ judging
 const sameSet = (a, b) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -353,6 +467,11 @@ export function judge(census, inventory, { fileText, issueIds }) {
       + `${EVIDENCE.join(', ')} means`);
   }
   const seen = new Set();
+  const codes = new Map();
+  const codeOfFile = (t, text) => {
+    if (!codes.has(t)) codes.set(t, codeOf(text));
+    return codes.get(t);
+  };
   for (const e of entries) {
     const key = `${e && e.kind}:${e && e.id}`;
     const name = `${e && e.kind} "${e && e.id}"`;
@@ -394,9 +513,9 @@ export function judge(census, inventory, { fileText, issueIds }) {
       else if (!/^tests\/(unit\/[\w.-]+\.test\.mjs|browser\/[\w.-]+\.cjs)$/.test(t)) {
         bad(`tests names ${t}, which is not a unit test or a browser suite`);
       } else if (text === null) bad(`tests names ${t}, which does not exist`);
-      else if (!namesOf(e, s).some((p) => p(text))) {
-        bad(`tests names ${t}, which does not name the surface (its id, data-osc with its `
-          + 'value, or its address)');
+      else if (!namesOf(e, s).some((p) => p(codeOfFile(t, text)))) {
+        bad(`tests names ${t}, whose code (comments apart) holds no locator of the surface (its `
+          + 'id, data-osc with its value, address or navigation)');
       }
     }
     if (!Array.isArray(e.plan)) bad('plan is not a list');
@@ -554,7 +673,7 @@ test('mutation: an entry whose test does not name it, or whose file, issue, evid
   const studioSv = pick('subview', (e) => e.id.startsWith('studio.subview:'));
   const cases = [
     [`dialog:${dlg.id}`, { tests: ['tests/unit/about.test.mjs'] },
-      /tests names tests\/unit\/about\.test\.mjs, which does not name the surface/],
+      /tests names tests\/unit\/about\.test\.mjs, whose code .* holds no locator of the surface/],
     [`dialog:${dlg.id}`, { tests: ['tests/unit/no-such.test.mjs'] }, /does not exist/],
     [`dialog:${dlg.id}`, { tests: [CENSUS_REL] }, /names the census itself/],
     [`dialog:${dlg.id}`, { plan: ['Z999'] }, /plan names Z999, which is not an issue/],
@@ -579,6 +698,50 @@ test('mutation: an entry whose test does not name it, or whose file, issue, evid
   assert.ok(judge(dup, inventory, ctx).some((x) => /listed twice/.test(x)));
   const gone = { ...census, surfaces: census.surfaces.filter((e) => e !== dlg) };
   assert.ok(judge(gone, inventory, ctx).some((x) => x.includes(`dialog "${dlg.id}" exists`)));
+});
+
+test('mutation: a test file whose only locator of a surface is a coincidence or a comment is '
+  + 'refused', () => {
+  const inventory = deriveInventory(TREE());
+  const census = CENSUS();
+  const ctx = CTX();
+  const PROBE = 'tests/browser/u063-locator-probe.cjs';
+  const withTests = (key, tests) => ({ ...census, surfaces: census.surfaces.map((e) => (
+    `${e.kind}:${e.id}` === key ? { ...e, tests } : e)) });
+  const refused = (p, key, t) => p.some((x) => x.startsWith(P)
+    && x.includes(`"${key.split(':').slice(1).join(':')}": tests names ${t}, whose code`));
+  // control-census.cjs clicks '#osc-ptab-cat-custom' and '#osc-ptab-cat-history' (the id prefix
+  // of every preset category) and holds 'musical' (the Studio timeline mode) and 'high' (a
+  // level): it addresses neither of these tabs.
+  for (const key of ['subview:presets.tab:musical', 'subview:presets.tab:high']) {
+    const p = judge(withTests(key, ['tests/browser/control-census.cjs']), inventory, ctx);
+    assert.ok(refused(p, key, 'tests/browser/control-census.cjs'),
+      `${key} with control-census.cjs is refused by name; got:\n${p.join('\n')}`);
+  }
+  // The Custom tab it does address, by its id.
+  assert.deepEqual(judge(withTests('subview:presets.tab:custom',
+    ['tests/browser/control-census.cjs']), inventory, ctx), []);
+  const probe = (text) => ({ ...ctx,
+    fileText: (rel) => (rel === PROBE ? text : ctx.fileText(rel)) });
+  const help = 'dialog:osc-dlg-help';
+  for (const text of [
+    "// await page.click('#osc-dlg-help');\nconst x = 1;\n",
+    "/* document.getElementById('osc-dlg-help') */\nconst x = 1;\n",
+    "/**\n * Opens #osc-dlg-help.\n */\nconst x = 1; // and osc-dlg-help again\n",
+  ]) {
+    const p = judge(withTests(help, [PROBE]), inventory, probe(text));
+    assert.ok(refused(p, help, PROBE), `a comment is not a locator: ${JSON.stringify(text)}; `
+      + `got:\n${p.join('\n')}`);
+  }
+  // The same locator in code names it, beside a '//' inside a string, a template or a regex.
+  for (const text of [
+    "const u = 'http://localhost/'; await page.click('#osc-dlg-help');\n",
+    'await page.goto(`http://x/${q}`); await page.click("#osc-dlg-help");\n',
+    "const re = /[//]+/g; document.getElementById('osc-dlg-help');\n",
+  ]) {
+    assert.deepEqual(judge(withTests(help, [PROBE]), inventory, probe(text)), [],
+      `a locator in code: ${JSON.stringify(text)}`);
+  }
 });
 
 // ------------------------------------------------------------------------------ the debt
@@ -630,14 +793,37 @@ test('mutation: debt above an earlier commit is refused, debt paid off is not', 
   assert.deepEqual(debtRaised(debtOf(now).length, history), [['lowered', 1]]);
 });
 
-test('names: a file names a surface by its id, data-osc with value, or address only', () => {
+test('names: a file names a surface by a locator in its code: id, data-osc with value, address, '
+  + 'state or navigation', () => {
   const inv = deriveInventory(TREE());
   const names = (key, text) => {
     const s = inv.surfaces.get(key);
-    return namesOf({ kind: s.kind, id: s.id }, s).some((p) => p(text));
+    return fileNames({ kind: s.kind, id: s.id }, s, text);
   };
   assert.ok(names('workspace:filter', "await page.goto(`${base}#m=filter`)"));
   assert.ok(!names('workspace:filter', "type: 'filter'"), 'a quoted word alone is not a workspace');
+  assert.ok(!names('workspace:filter', "const workspace = 'filter';"), 'nor beside the word');
+  assert.ok(names('workspace:filter', "await H.navTo(page, 'filter')"));
+  assert.ok(names('workspace:filter', "for (const w of ['filter']) goto(`#m=${w}`)"));
+  assert.ok(!names('workspace:filter', "// goto('#m=filter')"), 'a comment is not a locator');
+  assert.ok(!names('panel:osc-panel-additive', "click('#osc-panel-filter'); a.source = 'additive'"),
+    'an id prefix and a quoted word apart are not the panel');
+  assert.ok(names('panel:osc-panel-studio', "querySelector('[data-osc=\"studio.compact\"]')"));
+  assert.ok(!names('subview:presets.tab:musical', "click('#osc-ptab-cat-custom'); m = 'musical'"));
+  assert.ok(names('subview:presets.tab:musical',
+    "for (const c of ['musical']) await page.click(`#osc-ptab-cat-${c}`)"));
+  assert.ok(names('subview:presets.tab:reference', "window.OSCILLA.app.presetTab = 'reference'"),
+    'the state its @click writes');
+  assert.ok(names('subview:studio.subview:timeline',
+    "({ subview: window.OSCILLA.app.studio.subview }); ok(st.subview === 'timeline')"),
+    'the state read back and compared');
+  assert.ok(!names('subview:studio.subview:timeline', "ok(st.subview === 'timeline')"),
+    'a comparison without the state read');
+  assert.ok(!names('subview:exps.panel:compare',
+    "a.exps.panel = 'detail'; setWorkspace('compare')"));
+  assert.ok(names('subview:exps.panel:compare', "a.exps.panel = 'compare'"));
+  assert.ok(names('subview:measure.tab:rta',
+    "for (const t of ['rta']) click(`[data-osc=\"measure.tab\"][data-value=\"${t}\"]`)"));
   assert.ok(names('panel:osc-panel-device', "['source', 'device'].map((p) => `#osc-panel-${p}`)"));
   assert.ok(names('subview:analysis.tab:signalPath', "page.click(`#osc-atab-${'signalPath'}`)"));
   assert.ok(names('subview:mic.tab:compare',
