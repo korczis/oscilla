@@ -52,6 +52,6 @@ evidence:
     type: test
     command: "node --test tests/unit/studio-graph-search.test.mjs tests/unit/ui-flowbite-pro.test.mjs; node scripts/ui-flowbite-pro-record.mjs --check"
     result: "studio-graph-search 8/0 and ui-flowbite-pro 31/0 at main e8d54f8c; record equals the tree (sweep a3, 2026-11-05). Landed by PR #368 (verdict .ai/repo/reviews/368.yaml merge) in train 4 #410 = main 447bb27b, shipped in v3.19.0; #410's V3.1 Studio UI gate ran the fuzzy-add check of tests/browser/v31-studio-graph.cjs green in chromium, firefox and webkit; docs/v31/user-guide.md:99, .ai/repo/features/studio-signal-graph.md:34, tests/README.md:329; +233 B gzip (#368 body)."
-    artifact: "tests/unit/studio-graph-search.test.mjs"
+    artifact: ".ai/repo/reviews/368.yaml"
     commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
     recorded_at: 2026-11-05T14:02:42Z

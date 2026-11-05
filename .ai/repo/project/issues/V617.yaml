@@ -53,6 +53,6 @@ evidence:
     type: test
     command: "node --test tests/unit/v31-studio-templates.test.mjs tests/unit/no-fake-science.test.mjs tests/unit/no-inert-surfaces.test.mjs"
     result: "v31-studio-templates 52/0 (five V617 tests: markers 1-5 in order, pinned hashes distinct, Learn link, offline render at or below the ceiling), no-fake-science and no-inert-surfaces 16/0 at main e8d54f8c (sweep a3, 2026-11-05). Landed by PR #369 (verdict .ai/repo/reviews/369.yaml merge) in train 4 #410 = main 447bb27b, shipped in v3.19.0; #410's V3.1 Studio UI gate ran the first-patch check of tests/browser/v31-studio-links.cjs green in chromium, firefox and webkit; docs/v31/user-guide.md 'First patch', .ai/repo/features/studio-patches.md:35, graph-editor.js:87 empty-graph note, README route st=<template id>; +801 B gzip (#369 body)."
-    artifact: "src/js/studio/templates/first-patch.js"
+    artifact: ".ai/repo/reviews/369.yaml"
     commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
     recorded_at: 2026-11-05T14:03:30Z
