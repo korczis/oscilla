@@ -25,4 +25,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:00:05Z
+started_at: 2026-11-04T23:59:50Z
+started_event: sha256:12a4ac330016cd99f1121aa0d5b60a17390a01cebfdccd6cea4fa874e42f9ab7
+completed_at: 2026-11-05T00:00:05Z
+completed_event: sha256:ced55032da535be556b9dd686685b2ec370bf53019800eb2de62caef6425bd7c
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/docs-derived.test.mjs"
+    result: "Run on a scratch git-archive copy of origin/main: 24 tests, 24 pass, 0 fail, including the H006 checks (no 'all proposed' ADR status, no shipped feature in 'Not yet built')."
+    artifact: "10db73d0938bce9d3c93df6acfd5ebe04759235d"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-04T23:59:42Z

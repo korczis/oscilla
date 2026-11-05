@@ -23,6 +23,7 @@ scope:
 depends_on:
   - "K038"
   - "K039"
+  - "E052"
 acceptance_criteria:
   - "tests/unit/v3-both-view.test.mjs, failing on the merge base: the Both layout splits the height 2:1 and the phase pane shares the sync key."
   - "tests/browser/v3-ui.cjs: the cursor is in sync between the two panes and a zoom on one applies to both. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
@@ -40,4 +41,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05

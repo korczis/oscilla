@@ -1,0 +1,40 @@
+id: U073
+milestone: M054
+serves:
+  - "ui-current#no-isolated-workspace"
+title: "Analyzer is the one analysis page: a source picker, a Play, and the safety limit reachable from every page"
+slug: analyzer-is-the-one-analysis-page-a-source-picker-a-play-and
+priority: p1
+profile: implementation
+objective: "Lands as feat(ui), amending U005 (shipped in 06e7d1fb, record open). Analyzer fills its workspace, has a visible Play (C030), feeds the spectrogram from the microphone or the output owner by a picker, and takes in Compare's panels (U072). Device & Limits, today shown only on Analyzer (src/index.html:698-699), is also reachable from a status-bar settings menu on every page. No loss before removal (Q090, b0's binding condition): the old page stays until everything it offers is live, reachable and sounding in its new home, proven by a browser check that walks each of the old page's controls to its new place in Chromium, Firefox and WebKit; only then is its #m= route redirected to the new home (the link keeps working, ADR 0045's one dispatcher) and its markup removed."
+why: "af nav-pages audit wf_ed1cc8d6-3e8 and Play audit wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0), after the owner's complaint in the af session 2026-11-04/05: views feel lost, Play does not work on most pages, nothing runs through one bus, engines are not wrapped, many top-nav pages are obsolete, unconnected, not realtime, poor. Decided by af and b0 on 2026-11-05 under the owner's order of that day 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090)."
+scope:
+  - "src/js/labs"
+  - "src/js/charts"
+  - "src/js/ui"
+  - "src/index.html"
+  - "src/styles"
+  - "tests/browser/page-folds.cjs"
+  - "tests/unit/page-folds.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C030"
+  - "U005"
+  - "Q090"
+acceptance_criteria:
+  - "The safety limit is reachable in one gesture from every workspace, by pointer and by keyboard (one registry binding through src/js/ui/keys), at 1536x1024 and 390x844, and its change reaches what sounds (C011)."
+  - "With only the microphone on, the spectrogram draws (the audit saw it black); with the output selected it follows the owner."
+  - "tests/browser/page-folds.cjs walks every control of the old page (derived from tests/unit/surface-census.json, never a hand list) to its new place in Chromium, Firefox and WebKit, and each sounds or draws there; only after that does the old #m= route redirect."
+  - "tests/unit/page-folds.test.mjs: the old route resolves to the new home through the one hash dispatcher, every Learn and counterpart link to the old page is retargeted, and About names the new home."
+  - "Fail-first: the unit test and the browser check named here fail on the merge base (project.fail-first)."
+  - "Browser checks run through tests/browser/lib/suite.cjs with lib/wait.cjs deadlines and assume no sample rate; tests/browser/timing-baseline.json and tests/unit/ui-flowbite-pro-baseline.json do not grow; the iphone.cjs census reach does not fall."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/page-folds.test.mjs"
+  - "node tests/browser/page-folds.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

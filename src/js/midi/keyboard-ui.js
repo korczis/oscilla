@@ -296,10 +296,13 @@ function mountKeys(win, doc, kb) {
   const box = canvas.parentElement;
   // The keyboard's place in the grid of the main area and the canvas size are set here until
   // the keyboard moves into its Pro card (plan F001 to F003, ADR 0061): it follows every panel
-  // of the Playground, full width, at every width.
-  if (box && box.style) {
-    box.style.order = '14';
-    box.style.gridColumn = '1 / -1';
+  // of the Playground, full width, at every width. The grid item is the keyboard group, not
+  // the canvas's parent: since the keys show only while armed in the Studio, the canvas sits
+  // in its own x-show wrapper, and placing that wrapper left the group first in the grid.
+  const item = (canvas.closest && canvas.closest('[data-osc="keyboard"]')) || box;
+  if (item && item.style) {
+    item.style.order = '14';
+    item.style.gridColumn = '1 / -1';
   }
   const ctx = canvas.getContext('2d');
   let width = 0;

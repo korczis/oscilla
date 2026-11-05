@@ -10,7 +10,7 @@
 //   auditionPlan(riff, { tempo = riff.tempo, transpose = 0 }) -> the engine's steps plan
 //   createRiffAudition({ engine, stopOthers, measuring }) -> { start(id, opts, { onEnd }) ->
 //     { ok } | { ok: false, reason }, stop() -> bool, playing: the riff id while its engine
-//     voice sounds | null }
+//     voice sounds | null, dispose() }
 
 import { midiOf, noteHz } from '../templates/demo-song-score.js';
 import { BAR_STEPS, riffOf } from './library.js';
@@ -35,25 +35,26 @@ export function createRiffAudition({ engine = null, stopOthers = () => {},
   measuring = () => false } = {}) {
   let playing = null;
   let voice = null;
-  let label = null;
   let onEnd = null;
+  let off = () => {};
   // The audition lasts as long as its engine voice, never by the clock: it ends when the engine
   // releases or ends that voice (its natural end, a stop from any owner, a hidden page) or starts
-  // a voice of another plan over it, or the context closes. A replacement of the same plan (the
-  // engine re-applying play options) carries the audition to the new voice.
-  const current = () => (engine && engine.voice && engine.voice.plan
-    && engine.voice.plan.label === label ? engine.voice.id : null);
+  // a voice of another plan over it, or the context closes. A replacement that carries this
+  // audition's own play options (the owner mark and the riff id) carries the audition to it.
+  const current = () => {
+    const o = engine && engine.voice && engine.voice.opts;
+    return o && o.owner === AUDITION_OPTIONS.owner && o.riff === playing ? engine.voice.id : null;
+  };
   const end = () => {
     if (!playing) return;
     playing = null;
     voice = null;
-    label = null;
     const fn = onEnd;
     onEnd = null;
     if (fn) fn();
   };
   if (engine && typeof engine.on === 'function') {
-    engine.on((type, d) => {
+    off = engine.on((type, d) => {
       if (!playing) return;
       if (type === 'play' && d && d.id !== voice) {
         if (current() === d.id) voice = d.id;
@@ -78,14 +79,13 @@ export function createRiffAudition({ engine = null, stopOthers = () => {},
       stopOthers();
       end();
       const plan = auditionPlan(riff, opts);
-      const info = engine.play(plan, { ...AUDITION_OPTIONS, durationS: plan.dur,
+      const info = engine.play(plan, { ...AUDITION_OPTIONS, riff: riff.id, durationS: plan.dur,
         limitS: plan.dur });
       if (!info) {
         return { ok: false, reason: 'The riff cannot play now: a measurement owns the output, '
           + 'or audio is off.' };
       }
       playing = riff.id;
-      label = plan.label;
       voice = current() || info.id;
       onEnd = typeof hooks.onEnd === 'function' ? hooks.onEnd : null;
       return { ok: true };
@@ -97,5 +97,11 @@ export function createRiffAudition({ engine = null, stopOthers = () => {},
       return true;
     },
     get playing() { return playing; },
+    /** Stop listening to the engine (a re-registered source replaces this one). */
+    dispose() {
+      if (playing) this.stop();
+      off();
+      off = () => {};
+    },
   };
 }

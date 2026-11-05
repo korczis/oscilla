@@ -146,3 +146,205 @@ findings:
       state: planned
       issue: "G011"
       because: "Open in Studio is a same-tab control with no href until V604's draft store is done, because a new tab would open a Studio without the cockpit's document; G011 states it and tests it, and G012's same-tab path stays the proof of keeping the selection (2026-11-01)."
+  # af's critique of the U068 draft (2026-11-03); resolutions by the plan builder (oscilla-21)
+  - id: css-order-is-not-focus-order
+    class: unproven_assumption
+    subject: "U068"
+    finding: "The draft said focus order follows the arranged order through the grid's order property. CSS order and grid placement change only the visual order; Tab order and the screen-reader reading order stay in DOM order (WCAG 1.3.2, 2.4.3)."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "U068 moves the panel roots in the DOM (insertBefore inside the workspace grid after the model commits; no x-for over panels, so Alpine keeps the moved roots' bindings) and never uses CSS order; a criterion tabs from the panel before the new position to the moved one and compares the accessibility tree's order with the visual order in every gate browser; the intent criterion adds that every Move keeps focus and reading order equal to the visual order (2026-11-03)."
+  - id: stop-visible-is-contradicted
+    class: missed_requirement
+    subject: "U068"
+    finding: "A panel collapsed before playback hides Stop the moment sound starts, and a panel moved to the end of a long page leaves the viewport, so 'Stop stays in the viewport' cannot hold with 'moves'. The owner's intent was that Stop is always reachable."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Option (a): the status bar's Play/Stop (status.play, in view at every width) and Escape (page.escape) stop whatever owns output, the instrument, the Studio transport and a Measure capture, and U068 adds what they do not yet stop; an ownsOutput panel collapsed while idle expands when sound or a capture starts and cannot collapse while it owns output; the criterion moves the panel last, scrolls to the top and finds status.play in view and effective at 390x844 and 1536x1024 (2026-11-03)."
+  - id: one-folding-owner
+    class: insufficient_work
+    subject: "U068"
+    finding: "K062 persists the Synth cards' expanded set and V622 folds Studio boxes as saved node state; U068's collapsed-per-panel would be a third folding store unless its level is stated."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "U068's collapse is the panel frame's own level; K062 and V622 stay the owners of theirs, and no Synth card is an arrangeable panel (params-controls.md 7.1) (2026-11-03)."
+  - id: phone-definition
+    class: insufficient_work
+    subject: "U068"
+    finding: "Coarse pointer or width < 640 puts a 1024 px touch tablet into one column; the owner said phone."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Phone is the content column narrower than 640 px, a container query on <main>, whatever the pointer (2026-11-03)."
+  - id: coverage-not-vacuous
+    class: unproven_assumption
+    subject: "U068"
+    finding: "'Every workspace's declared panels' passes with zero declarations."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Playground, Analyzer, Studio, Synth and Measure are named; a census test derived from the catalogue requires at least two arrangeable panels each and one ownsOutput panel where the workspace sounds or captures (2026-11-03)."
+  - id: default-layout-unchanged
+    class: regression_risk
+    subject: "U068"
+    finding: "The default layout must render exactly today's page."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "The default is today's DOM order and spans; npm run visual and the visual gate stay unchanged with no stored layout, and iphone.cjs census reach does not fall (2026-11-03)."
+  - id: storage-unavailable
+    class: regression_risk
+    subject: "U068"
+    finding: "localStorage can throw (private mode, blocked storage)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Reads and writes are inside try/catch with the default layout as fallback; a criterion runs the iphone.cjs journey with denyCapabilities and a unit fixture whose storage throws (2026-11-03)."
+  - id: touch-drag
+    class: unproven_assumption
+    subject: "U068"
+    finding: "Without touch-action: none and pointer capture on the handle a phone drag scrolls the page; synthetic pointer holds lose capture (#388)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "The handle has touch-action: none and pointer capture; the criterion uses trusted touch and mouse input (2026-11-03)."
+  - id: key-names
+    class: insufficient_work
+    subject: "U068"
+    finding: "The Move and Wider/Narrower keys were unnamed and not shown free in the K153 registry, including the Synth's armed keys."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "Alt+Shift+ArrowUp/ArrowDown move and Alt+Shift+ArrowLeft/ArrowRight narrow and widen, in the focus scope of a panel handle only; keys-registry.test.mjs shows one owner each and no clash with the Synth's armed keys (2026-11-03)."
+  - id: standard-criteria
+    class: missed_requirement
+    subject: "U068"
+    finding: "The Pro toast and dropdown with the ratchet not rising, the size report with base and head, wording, tests/README rows and fail-first were not criteria."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "U068"
+      because: "All five are acceptance criteria of U068 (2026-11-03)."
+  # af's critique of M123 and G021-G026 (chore/plan-unified-controls @835f3937, 2026-11-04);
+  # resolutions by the plan builder (oscilla-21)
+  - id: census-cannot-see-markup-controls
+    class: unproven_assumption
+    subject: "G021"
+    finding: "A module scan by marker or 'known signature' counts none of the sliders and switches written as markup in src/index.html or built inline by inspector.js and synth/view/face.js, and a marker scan is opt-in."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G021"
+      because: "G021's census has a rendered half (every element of a family's role signature on every workspace carries data-ui-family set only by its implementation, reusing the surface census, against the shrink-only baseline) and a source half whose signatures are written down per family; a module matching a signature without its marker fails, so the marker is not opt-in (2026-11-04)."
+  - id: native-controls-count-as-one
+    class: missed_requirement
+    subject: "G023"
+    finding: "Without saying so, a builder may hand-roll ARIA widgets to replace native range and checkbox inputs."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G023"
+      because: "G023 states that a native element with one wrapper (label, value text, unit, validation from the parameter declaration, its skin) is one implementation, and no ARIA widget replaces a native control that does the job (2026-11-04)."
+  - id: one-parameter-source
+    class: missed_requirement
+    subject: "G022"
+    finding: "Unification could keep five ways to format a value unless every family renders from the one parameter declaration."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G022"
+      because: "G022-G026 each require rendering from the one parameter declaration (G003, N002, N003), with no family keeping a formatter or a range of its own (2026-11-04)."
+  - id: per-slice-standard-criteria
+    class: missed_requirement
+    subject: "G022"
+    finding: "The size report, the Flowbite ratchet, the iPhone census reach, the visual re-accept and the phone's 44 px were not criteria of the slices."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G022"
+      because: "G022-G026 each carry them as one acceptance criterion (2026-11-04)."
+  # af's critique of the G027-G029 draft (2026-11-05), with 26's and dev-53's answers; resolutions by the plan builder (oscilla-21)
+  - id: binding-not-a-parameter-layer
+    class: unnecessary_work
+    subject: "G029"
+    finding: "read() and write(patch) would duplicate the parameter declaration (parameter-controls#one-declaration, K105) and program B's live-update rules."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "G029's binding carries only { id, kind, owner, label, paramIds[] } plus the owner's write path; units, ranges and the live-update rule come from the declaration, and a unit check fails a binding that declares its own (2026-11-05)."
+  - id: v1-voice-transitional
+    class: regression_risk
+    subject: "G029"
+    finding: "Registering the V1 Playground voice as a target would cement the lab state that U069, U071 and V605 retire."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "The V1 voice is the one transitional binding, listed in tests/unit/ui-families-baseline.json with its removal condition (the Playground voice a Studio node); a second legacy binding fails the census (2026-11-05)."
+  - id: computed-vs-live-label
+    class: unproven_assumption
+    subject: "G028"
+    finding: "A Studio filter node that is not running has no stage, so a curve drawn for it is computed, not live."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G028"
+      because: "G028 computes it from the same specification biquad in audio/filters.js, labels it computed, asserts the label in both states in three engines, and proves the computed and live curves agree within 0.1 dB (2026-11-05)."
+  - id: absorb-u069-u071
+    class: missed_requirement
+    subject: "G027"
+    finding: "Absorbing U071 and U069 must keep their no-loss walk."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G027"
+      because: "G027 absorbs U069's envelope-chart move and G028 absorbs U071, each keeping the three-engine walk of the old page's controls before its route redirects (2026-11-05)."
+  - id: fixed-params-locked
+    class: missed_requirement
+    subject: "G027"
+    finding: "A parameter a panel fixes (K187) must not be draggable in the modeler."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G027"
+      because: "G027 and G028 show a fixed parameter locked with its reason and refuse the drag, one test each (2026-11-05)."
+  - id: one-selection
+    class: missed_requirement
+    subject: "G029"
+    finding: "Binding needs the one selection, not a listener of its own; the Synth plate's focus must go through it."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "G029 binds through store.subscribe type 'selection' (26, 2026-11-05) and re-reads on 'model'; the key-listener ratchet does not rise (2026-11-05)."
+  - id: phone-and-keys
+    class: missed_requirement
+    subject: "G027"
+    finding: "Handles need 44 px, keyboard steps with fine adjust, typed entry and reduced motion, from the knob's interaction model."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G027"
+      because: "G027 and G028 take their keys from G022's knob model and assert 44 px handles and a trusted touch drag at 390x844 (2026-11-05)."
+  - id: sequencer-target-k189
+    class: unproven_assumption
+    subject: "G029"
+    finding: "K189 slice 1 alone does not make a sequencer track's voice an engine node (dev-53)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "The sequencer binding waits on K189 slice 3 (a durable track voice node id) and slice 1's declared engine ADSR and filter params (dev-53, 2026-11-05)."

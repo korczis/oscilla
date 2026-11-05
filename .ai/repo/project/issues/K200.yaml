@@ -1,0 +1,33 @@
+id: K200
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "A Synth edit while the pad is touched does not cut its note"
+slug: a-synth-edit-while-the-pad-is-touched-does-not-cut-its-note
+priority: p1
+profile: implementation
+objective: "Lands as fix(synth), built by 26. Any store change while the XY pad is held re-renders the Synth: refresh calls renderAll, which calls xy.mount, which destroys the pad and ends its gate with 'hide' (src/js/synth/ui.js:411-418,370; src/js/synth/view/xy-tab.js:72; src/js/ui/kinds/xy-pad.js:221), so editing a knob cuts the note. After: while the pad's gate is open the Synth updates the pad in place as it updates knobs, and the gate ends only on release, Stop, hide or Escape."
+why: "Owner, 2026-11-05, with screenshots of the live Synth XY tab (v3.20.0): 'no kaosspad (oscilla-pad)', and 'arturia like or ims20 like is the target, but modern, connected, oscila way'. af's OSCILLA-pad audit and plan (workflow wf_cad1e2da-025, verified, main 68ad36a5) and 26's acceptance on the mesh the same night."
+scope:
+  - "src/js/synth"
+  - "src/js/ui/kinds/xy-pad.js"
+  - "tests/unit/xy-pad.test.mjs"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K183"
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/xy-pad.test.mjs): a pure synthNeedsFullRender(state) is false while the pad is gated, and the pad's destroy is not called on a store change during a gate."
+  - "Browser (tests/browser/xy-pad.cjs, suite harness, wait.cjs deadlines) at 1536x1024 and 390x844 touch with the gesture rule on: hold the pad, change vco1 tune, and the output stays above -60 dBFS for 500 ms; release, and it ends."
+  - "The pad and its controls are consumers of the shared control families (M123 G021-G026); no parallel widget."
+  - "The pull request carries a reviewer's verdict (src/js/synth is guarded; project.review-verdict)."
+  - "Done only after each criterion is re-checked on a main commit."
+validation:
+  - "node --test tests/unit/xy-pad.test.mjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

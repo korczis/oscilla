@@ -29,4 +29,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:06:38Z
+started_at: 2026-11-05T00:06:17Z
+started_event: sha256:35ef8d835ba4c071838975931c2ae54c5263cc8fed2d5b882d2e5edfd24e3b48
+completed_at: 2026-11-05T00:06:38Z
+completed_event: sha256:0f3fa90408a3df9a61def69c1365c587472b9e6f3ac25d8686e7221d347e699c
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-graph-editor-headroom.test.mjs && node --test tests/unit/source-size-budget.test.mjs && node --test tests/unit/ui-flowbite-pro.test.mjs"
+    result: "Run on a scratch git-archive copy of origin/main: headroom 2/2 pass, source-size-budget 15 pass 0 fail (16 tests), ui-flowbite-pro 30 pass 0 fail (31 tests)."
+    artifact: "2f442e114dc752a36b68a98cd1db656b0eb2f8e1"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:06:03Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/404.yaml"
+    result: "Review verdict .ai/repo/reviews/404.yaml (verdict: merge) is on origin/main; landed as feb5c644 via #367; 502c1c9c via merge train 3 (#404, merge 2f442e11), main commit 2f442e114dc752a36b68a98cd1db656b0eb2f8e1."
+    artifact: ".ai/repo/reviews/404.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:06:10Z

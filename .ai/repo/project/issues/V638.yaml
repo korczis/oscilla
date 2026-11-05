@@ -1,0 +1,40 @@
+id: V638
+milestone: M080
+serves:
+  - "studio-box-system#find-and-layout"
+title: "Frame all starts at the top or left edge of a graph that does not fit even at the minimum zoom, instead of cutting both ends"
+slug: frame-all-starts-at-the-top-of-a-graph-that-does-not-fit
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio-ui). graph-geometry.js fitView centred the graph's bounds on both axes at any zoom. When a graph does not fit even at ZOOM_MIN (a short viewport under the docked keys, a long graph on a phone), centring cut both ends and the top row of node cards went out of view: merge train 4's demo-song journey could not select bass-filter (oscilla-26's bisect of a248dfe7; the dock padding that shrank the viewport is fixed by 6085964e, this removes the clipping that made it bite). On an axis where the bounds overflow at the chosen zoom, the view now starts at their top or left edge, FIT_PADDING_PX in; an axis that fits stays centred, and the zoom is unchanged."
+why: "Owner, 2026-11-02 on the Studio layout: 'layout zly, interaktivita muze byt lepsi'. Frame all is the command that is meant to show the graph; a fit that hides its first row reads as nodes missing."
+scope:
+  - "src/js/ui/studio/graph-geometry.js"
+  - "tests/unit/studio-fit-overflow.test.mjs"
+  - "tests/unit/v431-studio-open-findings.test.mjs"
+  - "tests/README.md"
+  - "dist/index.html"
+acceptance_criteria:
+  - "For bounds taller than the viewport at ZOOM_MIN, fitView puts the bounds' top edge FIT_PADDING_PX below the viewport top and keeps the fitting x axis centred; the same for the left edge of bounds wider than the viewport."
+  - "This supersedes, for an overflowing axis only, the centring that tests/unit/v431-studio-open-findings.test.mjs #21 U9 asserted for the coarse-pointer floor: the Subtractive Synth at COARSE_FIT_MIN_ZOOM on a 358 px phone canvas now starts at its left edge (its signal chain's start) and stays centred vertically; the floor itself is unchanged."
+  - "Bounds that fit stay centred on both axes, and empty bounds still centre the origin at zoom 1."
+  - "node --test tests/unit/studio-fit-overflow.test.mjs fails on c3045229 and passes after the change."
+validation:
+  - "node --test tests/unit/studio-fit-overflow.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-05T01:28:28Z
+started_at: 2026-11-05T01:28:02Z
+started_event: sha256:d6ae6ece16a95be14b1076c0ec1c2ac97844dd0200dcbb1280aa00c4b03b1052
+completed_at: 2026-11-05T01:28:28Z
+completed_event: sha256:61847e21a6399fcccdb3a940bde70da1969ab64ebd46576e4478eae702b8315b
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/studio-fit-overflow.test.mjs && node --test tests/unit/v431-studio-open-findings.test.mjs (CI run 41933352760 on tree e65a1e6b = main 68b117f3)"
+    result: "Every acceptance criterion (4) re-checked MET on main 68b117f3 by two independent judges that agreed (af workflow wf_518c6639-5cb, read-only). 68b117f3's tree equals 43e3e1ca's (e65a1e6b), so #413's CI run 41933352760 (success) tested it: unit job 126936184997 4510 pass, 0 fail; the browser gate passed in Chromium, Firefox and WebKit; fail-first and review-verdict jobs green against merge base 6d5efa89. Dependencies done. Named tests: tests/unit/studio-fit-overflow.test.mjs, tests/unit/v431-studio-open-findings.test.mjs."
+    artifact: ".ai/repo/reviews/413.yaml"
+    commit: 68b117f3474e97f4c348fc01c30ddc4519cc193e
+    recorded_at: 2026-11-05T01:28:20Z

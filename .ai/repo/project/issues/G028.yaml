@@ -1,0 +1,44 @@
+id: G028
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+  - "component-system#one-modeler-per-curve"
+title: "One filter modeler: the lab response chart is the filter editor of the Studio, the Synth and the labs, live or labelled computed"
+slug: one-filter-modeler-live-or-computed
+priority: p1
+profile: implementation
+objective: "Lands as feat(ui) after G029; absorbs U071. The filter-response family's model is src/js/audio/filters.js: the live curve is the running stage's getResponse (the browser's getFrequencyResponse), and when no stage runs (a Studio filter node that is not playing) the curve is computed from the same biquad of the Web Audio specification, held in audio/filters.js beside the live read (K152's biquadDb moves there), and the chart labels it computed, never live or measured (project.no-fake-science). Its one editor skin is the lab's chart (src/js/charts/filter-chart.js), bound through G029: cutoff by x, Q by y and wheel, gain where the type has one. Surfaces: the Filter Lab page becomes the full-size modeler with a target picker; the Studio Inspector and the Synth's LPF and HPF plates embed the same modeler bound to their node, with U071's live before/after spectrum (K082). U071's no-loss criterion stands: the old page stays until a three-engine walk of its controls sounds in its new home."
+why: "Owner order of 2026-11-05 (in session oscilla-21), verbatim: \"must be connected with pannels, asdr envelope modeler, filter modeler / integrated into studio, sequencer ... / one way - dry - everything bus connected + integrated + mj way / deduplicate functionality / components - modularize / generalize - infer / derive\". Settled among the LLM sessions without the owner (the owner's order of the same day): af's critique (binding, not a parameter layer; the V1 voice transitional; computed vs live labelled), 26's answers (the store as the only write path through a gesture; bind on the store's selection change) and dev-53's (the sequencer target after K189 slice 3)."
+depends_on:
+  - "G029"
+  - "U071"
+  - "K082"
+scope:
+  - "src/js/audio/filters.js"
+  - "src/js/charts/filter-chart.js"
+  - "src/js/labs/filter-lab.js"
+  - "src/js/ui/modelers"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/synth/view"
+  - "src/index.html"
+  - "tests/unit/filter-modeler.test.mjs"
+  - "tests/browser/modelers.cjs"
+  - "tests/README.md"
+  - "dist"
+current_state: "Not started. The chart is used by labs/filter-lab.js only; K152 (Train 7 prep) computes a second response in synth/view/scopes.js (biquadDb); G021's census flags it."
+acceptance_criteria:
+  - "Fail-first: tests/unit/filter-modeler.test.mjs fails on the merge base."
+  - "One response: the computed curve equals the live getFrequencyResponse of the same biquad within 0.1 dB from 20 Hz to 20 kHz (OfflineAudioContext, every filter type), and G021's filter-response family has no listed duplicate."
+  - "Labelled: with the stage running the chart reads live, with none it reads computed, asserted in both states in chromium, firefox and webkit."
+  - "Per target kind (Playground voice, Studio filter node, Synth LPF): a cutoff drag and a keyboard step change the target, read back from its owner, and the sounding note follows through the owner's live-update rule."
+  - "Locked: a K187-fixed parameter shows its reason and refuses the drag."
+  - "No loss (U071): the Filter Lab page stays until the walk of its controls passes in their new homes, then redirects."
+  - "Standard: Pro blocks with the ratchet not rising, tests/README rows, size report, fail-first."
+validation:
+  - "node --test tests/unit/filter-modeler.test.mjs"
+  - "node tests/browser/modelers.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

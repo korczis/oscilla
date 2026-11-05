@@ -1,0 +1,28 @@
+id: C035
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "Experiments Repeat and the experiment select box are clicked, with no fallback to an internal call"
+slug: experiments-repeat-and-select-are-clicked-with-no-internal-fallback
+priority: p1
+profile: implementation
+objective: "Lands as test(browser). tests/browser/v3-ui.cjs:1432-1433 clicks [data-osc=\"exp.repeat\"] and, when the click throws, calls window.OSCILLA.app.experimentsRepeat(id) instead, so a dead, hidden or disabled button passes; tests/browser/control-census.cjs:1605 counts exp.repeat as driven by delegation to that check. The exp.select checkbox is never clicked. Line numbers at origin/main a19f1ff6. Repeat creates no record: experimentsRepeat (src/js/ui/experiments.js:908-929) either refuses (an unmeasurable stimulus, or a recipe MEASURE cannot load, with 'Nothing was loaded') or loads the definition into MEASURE with repeatOf set and switches to Measure; the new record exists only after the user runs the measurement. exp.select is checkbox state (the comparison selection), not a store write. The surface is also opened through an internal call (v3-ui.cjs:1423, page.evaluate experimentsOpen) and waited for with a fixed sleep(150) (:1434). After: the row is opened, Repeat and select are clicked with no fallback; Repeat's effect is asserted as the loaded definition in MEASURE (meas values, repeatOf the original experimentId, workspace measure) and, for a fixture with an unmeasurable stimulus, as the refusal notice with nothing loaded; select's effect is the checkbox's checked state and the comparison selection count; the sleep becomes an until() on the notice; exp.select leaves tests/unit/control-drive-baseline.json (:31) in the same change; and a unit scan refuses any page.click(...).catch(() => page.evaluate(... OSCILLA.app.* ...)) pattern in tests/browser."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice E, skeptic-verified (journeys gap 1, severity high): the only click-then-app-call fallback in tests/browser. C022 (BLOCKED) owns the control-drive ratchet as a whole; this slice is filed separately because C022's blocker forbids partial evidence. af's critique of 96daa67b (AMEND 10): Repeat creates no record, exp.select is checkbox state, :1423 opens through page.evaluate, the baseline entry and the sleep must go."
+scope:
+  - "tests/browser/v3-ui.cjs"
+  - "tests/unit/control-drive-baseline.test.mjs"
+  - "tests/unit/control-drive-baseline.json"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/control-drive-baseline.test.mjs scans tests/browser/*.cjs for a click whose catch falls back to page.evaluate reaching window.OSCILLA.app; it fails on the merge base naming v3-ui.cjs:1433."
+  - "v3-ui.cjs opens the row by a click (not :1423's page.evaluate), clicks exp.repeat and exp.select with no catch fallback, and waits with until() (named deadlines, no sleep(150)) for the loaded definition in MEASURE with repeatOf the original experimentId, and for the checkbox checked with the comparison selection counting it; a fixture with an unmeasurable stimulus asserts the refusal notice and that nothing was loaded; a mutation that hides the Repeat button fails the browser check in Chromium, Firefox and WebKit."
+  - "exp.select is removed from tests/unit/control-drive-baseline.json (:31) in the same change, and the baseline's count falls by one."
+  - "Not a guarded path under v2; R033 guards the tests/browser files a rule's enforcement names. Lane: oscilla-21."
+validation:
+  - "node --test tests/unit/control-drive-baseline.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

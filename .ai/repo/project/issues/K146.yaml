@@ -1,0 +1,34 @@
+id: K146
+milestone: M065
+serves:
+  - "connected-instrument#piano-keyboard"
+title: "metadata.noteTarget is versioned, so an older build or a revert does not refuse a project that routes the keys"
+slug: metadata-notetarget-is-versioned-so-an-older-build-or-a-revert-does-not-refuse-it
+priority: p3
+profile: implementation
+objective: "Lands as fix(studio). #375 (K066) adds metadata.noteTarget to the Studio document without a STUDIO_SCHEMA_VERSION bump or a migration (src/js/studio/schema.js STUDIO_SCHEMA_VERSION = 1; src/js/studio/validate.js checks the key). Builds before it (v3.14.1) and a revert of #375 reject unknown metadata keys, so a saved project or Studio file that routes the keys does not open there, and K066's rollback claim ('revert the pull request; no saved state depends on it') does not hold. After, one of two, named in the pull request: (a) the schema version is bumped with a migration in src/js/studio/migrate.js, and an older document still opens; or (b) the reader tolerates the key first (a release whose validator ignores an unknown presentation key in metadata ships before noteTarget is written). Either way K066's rollback sentence is corrected to say what a revert does to a saved document, and a document with noteTarget opened by the previous reader is either opened (the key dropped and said) or refused with a sentence that names the version, never dropped silently. Rollback: as the chosen variant states."
+why: "Review of #375 (oscilla-21 reviewer, delta at 124f6ece, finding R6, P3): metadata.noteTarget is a new key with no schema bump and no migration; state that in K066, or make the old reader tolerant first. The reviewer asked for a plan issue after the train lands."
+scope:
+  - "src/js/studio/schema.js"
+  - "src/js/studio/validate.js"
+  - "src/js/studio/migrate.js"
+  - "tests/unit/studio-note-target-version.test.mjs"
+  - ".ai/repo/project/issues/K066.yaml"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K066"
+acceptance_criteria:
+  - "Fail-first: a unit test opens a Studio document carrying metadata.noteTarget with the previous reader's rules (variant a: a schemaVersion-1 document migrates; variant b: the tolerant validator accepts an unknown presentation key) and asserts it opens and says what it did; it fails on the merge base."
+  - "A document without noteTarget round-trips byte-identically through serialize and import."
+  - "K066's rollback sentence states what a revert does to a saved document that routes the keys."
+  - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
+  - "The pull request touches a guarded path (src/js/studio/*) and carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Lands after #375 (K066), which introduces metadata.noteTarget."
+validation:
+  - "node --test tests/unit/studio-note-target-version.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01

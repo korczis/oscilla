@@ -3,6 +3,13 @@
   "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
+      "id": "M011",
+      "title": "Release engineering, provenance and product graph",
+      "done": 20,
+      "required": 22,
+      "phase": "now"
+    },
+    {
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
       "done": 3,
@@ -13,7 +20,7 @@
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
       "done": 23,
-      "required": 35,
+      "required": 36,
       "phase": "now"
     },
     {
@@ -97,7 +104,7 @@
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
       "done": 2,
-      "required": 4,
+      "required": 5,
       "phase": "now"
     },
     {
@@ -111,14 +118,14 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 0,
-      "required": 10,
+      "required": 11,
       "phase": "next"
     },
     {
       "id": "M065",
       "title": "Instrument wave 1b: the piano keyboard, one note source and a proper step sequencer",
       "done": 0,
-      "required": 6,
+      "required": 8,
       "phase": "later"
     },
     {
@@ -146,7 +153,7 @@
       "id": "M069",
       "title": "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid",
       "done": 4,
-      "required": 11,
+      "required": 13,
       "phase": "now"
     },
     {
@@ -174,7 +181,7 @@
       "id": "M080",
       "title": "Studio boxes, wave 1: wiring, find, layout, probe, first patch, large graphs, one declaration per node",
       "done": 1,
-      "required": 13,
+      "required": 17,
       "phase": "now"
     },
     {
@@ -202,7 +209,7 @@
       "id": "M085",
       "title": "Component system, wave 0: one contract, one registry and the proven duplicates, before Pro",
       "done": 2,
-      "required": 7,
+      "required": 8,
       "phase": "now"
     },
     {
@@ -216,7 +223,7 @@
       "id": "M087",
       "title": "Component system, wave 2: generated catalogue, What is this, the link graph and traceability",
       "done": 0,
-      "required": 6,
+      "required": 7,
       "phase": "later"
     },
     {
@@ -237,7 +244,7 @@
       "id": "M090",
       "title": "One instrument, one coherent state",
       "done": 19,
-      "required": 22,
+      "required": 30,
       "phase": "now"
     },
     {
@@ -297,11 +304,18 @@
       "phase": "later"
     },
     {
+      "id": "M122",
+      "title": "The live landing: /oscilla/ opens a playable, derived first workspace on the one engine",
+      "done": 1,
+      "required": 3,
+      "phase": "now"
+    },
+    {
       "id": "M121",
       "title": "Owner decisions of the musical-practice proposal",
-      "done": 0,
+      "done": 3,
       "required": 4,
-      "phase": "next"
+      "phase": "now"
     },
     {
       "id": "M119",
@@ -325,17 +339,17 @@
       "phase": "now"
     },
     {
-      "id": "M070",
-      "title": "Owner decisions of the connected-instrument line",
-      "done": 6,
-      "required": 8,
-      "phase": "now"
-    },
-    {
       "id": "M084",
       "title": "Owner decisions of the Studio boxes and signal generator lines",
       "done": 2,
       "required": 4,
+      "phase": "now"
+    },
+    {
+      "id": "M070",
+      "title": "Owner decisions of the connected-instrument line",
+      "done": 6,
+      "required": 8,
       "phase": "now"
     },
     {

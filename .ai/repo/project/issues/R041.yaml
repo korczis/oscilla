@@ -1,0 +1,26 @@
+id: R041
+milestone: M011
+serves:
+  - "release-provenance#no-runtime-network"
+title: "Every browser suite fails on a request that is not file:, data:, blob: or the test origin"
+slug: every-browser-suite-fails-on-a-request-that-is-not-file-data
+priority: p1
+profile: implementation
+objective: "Lands as test(browser). Hardening S2, second half. At main 68b117f3 no browser suite listens for requests: app.cjs and tests/browser/lib/suite.cjs have no context.on('request'), page.route or offline mode (page.route appears only in dsp.cjs and sequencer.cjs), so a load from a reachable host raises no console error and passes the browser gate (inferred). After: tests/browser/lib/suite.cjs registers one request guard on every context it creates and fails the suite on any request whose URL is not file:, data:, blob: or the suite's own test origin, naming the URL."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S2. The guard sits in the harness so every suite gets it (project.suite-harness)."
+scope:
+  - "tests/browser/lib/suite.cjs"
+  - "tests/unit/browser-suite-contract.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a browser fixture page that loads https://example.invalid/x.gif makes a suite run through tests/browser/lib/suite.cjs fail with the URL named; on the merge base the same fixture passes. tests/unit/browser-suite-contract.test.mjs asserts the guard is registered on every context suite.cjs creates (a mutation that removes it fails)."
+  - "Every suite of npm run test:release passes with the guard on; a suite that needs another origin (live-smoke) names it in the harness's allow list with a reason."
+  - "Not a guarded path under v2 (tests/browser except live-smoke.cjs); R033 brings it under the guard. prismatic-majordomus-98 is asked for a critique."
+validation:
+  - "node --test tests/unit/browser-suite-contract.test.mjs"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

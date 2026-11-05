@@ -1,0 +1,32 @@
+id: R029
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "The review-verdict guard cannot be bypassed by the pull request it judges: the base copy names the jobs gate needs, member verdicts are validated, and the flake ledger is guarded"
+slug: the-review-verdict-guard-cannot-be-bypassed-by-the-pull-request
+priority: p1
+profile: implementation
+objective: "Lands as fix(ci). prismatic-majordomus-98's non-builder review of merge train 4 (#410, verdict at 00108c87, 2026-11-04) found four weaknesses in the rule that a guarded change needs a reviewer's verdict. R8 (pre-existing): the gate job's needs list and the step that judges it come from the pull request's own checkout, so a PR that edits .github/workflows/ci.yml can drop review-verdict from gate's needs and merge unreviewed. R2: memberVerdict reads only a member file's verdict field, so a member file naming pr 999, carrying the wrong schema or an open P1 passes. R7: scripts/flake-ledger.mjs and its test are not on the guarded list although the gate depends on them. R4: review-verdict v2's text says the Synth theme layer stays unguarded while visual-identity-lock v4 names src/js/synth/view/ as guarded. 98's design for R8: the base copy (taken from origin/main by .github/scripts/base-rule.sh) declares the jobs gate must need, and a base-rule step fails when the PR's ci.yml lacks any of them."
+why: "project.review-verdict exists so no guarded change merges without a reviewer who did not build it; a guard the judged change can switch off is no guard. The builder of this issue cannot review it; 98 offered the verdict and must therefore not build it."
+scope:
+  - ".github/workflows/ci.yml"
+  - ".github/scripts/base-rule.sh"
+  - "scripts/review-verdict.mjs"
+  - "scripts/flake-ledger.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - "tests/unit/ci-workflows.test.mjs"
+  - ".ai/repo/rules/project/"
+depends_on: []
+acceptance_criteria:
+  - "The base copy of the review-verdict program declares the jobs the gate job must need; a step run from origin/main's copy fails a pull request whose .github/workflows/ci.yml gate lacks any of them. A mutation test drops review-verdict from gate's needs in a PR copy and the base step refuses it."
+  - "A member verdict file counts as merge only if verdictProblems accepts it apart from the content comparison (its pr, schema, findings): a member file naming another pr, a wrong schema or an open P0/P1 refuses the train, each proven by a test."
+  - "scripts/flake-ledger.mjs and its test are on the guarded list."
+  - "The rule texts agree on src/js/synth/view/: one statement, and its enforcement names it."
+  - "The fix lands with a verdict from a reviewer who built none of it (prismatic-majordomus-98 offered)."
+validation:
+  - "node --test tests/unit/review-verdict.test.mjs tests/unit/ci-workflows.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04

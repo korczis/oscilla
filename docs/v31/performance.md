@@ -74,6 +74,7 @@ batch count and the load.
 | compact | 16.7 |
 | browser importMs | 3000.0 |
 | browser editMs | 50.0 |
+| browser tidyMs | 90.0 |
 <!-- budgets:end -->
 
 ## Measured (development machine)
@@ -128,7 +129,16 @@ event, so the sync, compile and render run once. Measured in the same check at a
 | Firefox | 19 ms | 34-63 ms | 495-1020 ms |
 | WebKit | 20 ms | 46 ms | 480 ms |
 
-L is held to `editMs`. M is not: it dispatches one EDGE_UPDATE per cable, and the store validates
+L, median of 9 since 2026-11-04, on the same machine at a load of 5-10 (five runs per
+browser): Chromium 8.1-8.7 ms, Firefox 12-14 ms, WebKit 13-18 ms. A slow CI runner measured
+WebKit's L at 51 ms (median of 5), about 2.8 times the local worst, and so missed `editMs`
+(50 ms), the budget of one gesture's edit, which L was held to until then. L lays out the whole
+graph, so it has its own budget, `tidyMs`: 90 ms, 5 times the local worst (18 ms) and 1.8 times
+that CI value; the 614 ms before `hold` (below) still fails it. A failed check prints every
+budgeted field (`importMs`, `editMs`, `moveMs`, `frameMs`, `tidyMs`) against its budget
+(`browserBudgetReport` in the fixture module), so a miss is diagnosable from the CI log.
+
+M is not budgeted: it dispatches one EDGE_UPDATE per cable, and the store validates
 the whole model on each (about 1.9 ms in Node and 4-6 ms in these browsers on this fixture), so
 its time grows with the selection. Before `hold`, one L took 614 ms and M on all 200 cables
 1,528 ms (Chromium, at a load of about 24). One store action for several cables would need a

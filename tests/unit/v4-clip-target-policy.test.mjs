@@ -51,12 +51,16 @@ import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 const policyModule = await import('../../src/js/studio/clip-targets.js').catch(() => ({}));
 
 const SR = 48000;
-/** Every clip use: kind × action (pattern clips have no action). */
+/**
+ * Every clip use: kind × action (pattern and notes clips have no action). Notes clips (K099
+ * part 1) are held on a node that plays notes and played nowhere yet.
+ */
 const CLIP_USES = [{ kind: 'pattern' }, { kind: 'event', action: 'gate' },
   { kind: 'event', action: 'trigger' },
-  ...MEASUREMENT_ACTIONS.map((action) => ({ kind: 'measurement', action }))];
+  ...MEASUREMENT_ACTIONS.map((action) => ({ kind: 'measurement', action })), { kind: 'notes' }];
 const DURATION = { pattern: 0.5, event: 0.5, 'noise-check': 1, 'pre-roll': 0.5, stimulus: 2,
-  capture: 2, tail: 0.5, analysis: 1 };
+  capture: 2, tail: 0.5, analysis: 1, notes: 0.5 };
+const PAYLOAD = { pattern: () => ({ blockType: 'tone' }), notes: () => ({ notes: [] }) };
 const policyOf = () => policyModule.clipTarget;
 
 const storeOf = (m) => createStudioStore(m, { idGenerator: createIdGenerator(m) });
@@ -85,7 +89,7 @@ function storeClip(model, id, use) {
   const track = store.dispatch({ type: 'TRACK_ADD',
     kind: use.kind === 'measurement' ? 'measurement' : 'event' });
   assert.ok(track.ok, track.reason);
-  const payload = use.kind === 'pattern' ? { blockType: 'tone' } : { action: use.action };
+  const payload = PAYLOAD[use.kind] ? PAYLOAD[use.kind]() : { action: use.action };
   const duration = DURATION[use.kind === 'measurement' ? use.action : use.kind];
   const r = store.dispatch({ type: 'CLIP_ADD', trackId: track.created.tracks[0], kind: use.kind,
     start: 0, duration, payload, target: id });

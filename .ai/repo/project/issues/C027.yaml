@@ -1,0 +1,41 @@
+id: C027
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "A Studio node or cable the running graph does not hold says why, by the divergence state"
+slug: a-studio-node-or-cable-the-running-graph-does-not-hold-says-why
+priority: p1
+profile: implementation
+objective: "Lands as fix(studio-ui). graph-view.js runtimeStatus gave every node and cable the running graph does not reflect one reason, notInRuntimeText(verdict.reason || runtime.lastError): 'Not in the running graph: the last update was refused. The last working graph keeps playing.' The owner saw it live in the Inspector for LFO 1 on a 26-node patch: it did not say why, and it was not true. runtime.js studioDivergence has distinct states: 'not-applied' (the Studio graph is not running), 'refused' (reason is runtime.lastError.errors[0], a Diagnostic { code, owner, entity, message }) and 'behind' (the desired revision is not applied yet and nothing refused it; transport.js applies it at the next sync while playing, at the next edit or wake-up, or PLAY applies it). The text said refused for all three, quoted an old unrelated runtime.lastError for 'behind', and for 'refused' dropped the diagnostic's node or edge and its code, and all of it without a message. The reason now follows the verdict: 'refused' names the runtime's diagnostic (its message, the node by name or the edge by its description, and its code) and the status carries cause { node | edge, code }, which the Inspector offers as a 'Select <entity>' link when it is another entity than the one shown; 'behind' says the edit is not applied yet, which revision plays and when it will be applied; 'not-applied' says the Studio graph is not running. Only 'refused' says refused. Armed (transport.js plays liveModel, K104), the in-sync plan is the live model, which leaves out on purpose every node no cable joins to a note source; such a node read 'not in runtime' as an error (oscilla-26's probe D, 2026-11-03). runtimeStatus infers an armed plan from the plan itself (its nodes are exactly liveModel(model)'s, fewer than the model's) and gives what it leaves out status 'outside-live' (label 'Not in the armed chain', no error flag) and its cables 'inactive', both with code 'outside-live' and a reason that says Play plays the whole graph."
+why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): views describe what actually sounds and never show a closed graph as live. A status line that names a refusal that did not happen, or quotes an unrelated old one, describes something other than what runs. Seen live by the owner on 2026-11-03 at int/train-3 180b02b6."
+scope:
+  - "src/js/ui/studio/graph-view.js"
+  - "src/js/ui/studio/inspector.js"
+  - "tests/unit/studio-runtime-status-reason.test.mjs"
+  - "dist/index.html"
+acceptance_criteria:
+  - "For a 'behind' verdict the not-in-runtime reason says 'not applied yet', names the revision that plays and when it is applied, and never says refused, with or without an older unrelated runtime.lastError, which it does not quote."
+  - "For a 'refused' verdict the reason names the diagnostic's message, its node or edge and its code, even without a message, and the status carries cause { node | edge, code }."
+  - "For a 'not-applied' verdict the reason says the Studio graph is not running and never says refused."
+  - "Armed and in sync, a node the live model leaves out is 'outside-live' with code 'outside-live', label 'Not in the armed chain' and no error flag, its cables 'inactive' with the same code; armed but behind it is still 'not applied yet', and an in-sync plan that is not the live model still gives 'not-in-runtime'."
+  - "The Inspector's node and connection views expose the cause as a selection and offer it as a link when it names another entity."
+  - "node --test tests/unit/studio-runtime-status-reason.test.mjs fails on 180b02b6 and passes after the change."
+validation:
+  - "node --test tests/unit/studio-runtime-status-reason.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-05T01:25:35Z
+started_at: 2026-11-05T01:25:12Z
+started_event: sha256:1b591e4dbbf34acbe2dce958c799fbe324358164c8f30369c27ab54e5bf9d45c
+completed_at: 2026-11-05T01:25:35Z
+completed_event: sha256:b09e0abe5e691788638b33a9627c2035e7f2df45709e4e75d5f62fff8ddc19fa
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/studio-runtime-status-reason.test.mjs (CI run 41933352760 on tree e65a1e6b = main 68b117f3)"
+    result: "Every acceptance criterion (6) re-checked MET on main 68b117f3 by two independent judges that agreed (af workflow wf_518c6639-5cb, read-only). 68b117f3's tree equals 43e3e1ca's (e65a1e6b), so #413's CI run 41933352760 (success) tested it: unit job 126936184997 4510 pass, 0 fail; the browser gate passed in Chromium, Firefox and WebKit; fail-first and review-verdict jobs green against merge base 6d5efa89. Dependencies done. Named tests: tests/unit/studio-runtime-status-reason.test.mjs."
+    artifact: ".ai/repo/reviews/413.yaml"
+    commit: 68b117f3474e97f4c348fc01c30ddc4519cc193e
+    recorded_at: 2026-11-05T01:25:29Z

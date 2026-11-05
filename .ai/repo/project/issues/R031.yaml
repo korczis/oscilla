@@ -1,0 +1,43 @@
+id: R031
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "project.review-verdict v3: every tracked src path is guarded fail-closed, the allowance is read from the base and only shrinks, and named seats judge screens"
+slug: review-verdict-v3-every-tracked-src-path-guarded-fail-closed
+priority: p0
+profile: implementation
+objective: "Lands as feat(review). Implements Q091 parts (1), (3) and (4). Line numbers at origin/main a19f1ff6 (v3.20.0 and its record; src/js and scripts are unchanged since 68b117f3). project.review-verdict v2 (scripts/review-verdict.mjs:76-112) guards a hand-written prefix list, so src/index.html, src/js/main.js, src/styles/ (13/13), 72 of the 84 src/js/ui files, src/js/core except storage and safety, and all of charts, labs, visualization, midi, sequencer and js/data merge with no independent verdict, and a new src path is unguarded the moment it is created (fails open). After: v3 guards every tracked path under src/ unless an allowance entry names it with a reason. The allowance lives at scripts/review-verdict.allowance.json, inside the tree .github/scripts/base-rule.sh:36 extracts from the base (git archive \"$sha\" -- scripts), so the base program reads the base's allowance and never the pull request's copy; a pull request cannot unguard its own file, and the allowance itself is guarded (scripts/review-verdict* is a v3 pattern). Its first content is the empty list []: no src path is exempt at landing. It only shrinks along the base branch's first-parent chain from the fork, judged by the helper tests/unit/ui-flowbite-pro.test.mjs:72-84 describes and scripts/ui-flowbite-pro-measure.mjs:1009-1040 implements (baselineHistory), which this change factors into scripts/ratchet-history.mjs and reuses, never against a commit of the branch itself; an entry can be added only through a raises entry {path, pr, reason} that a verdict of prismatic-majordomus-98 covers. Every v2 guarded path outside src/ stays guarded. The release exemption covers every output release:prepare writes under src/: scripts/release-prepare.mjs:71-76 (CI_PREPARE_COMMANDS) runs scripts/roadmap.mjs, which rewrites src/data/roadmap.json (ROADMAP_REL, scripts/roadmap.mjs:28) in every release pull request, and R032 adds the About station's derived fields; a chore(release) pull request is exempt for those files only when each equals what the base branch's copy of its generator writes from the same inputs. Seats (v3.md states them): prismatic-majordomus-98 judges CI, release, rules, review-verdict and the Studio (src/js/studio/*, src/js/audio/*); the second seat, oscilla-af, judges src/* screens and routes (src/index.html, src/styles/*, src/js/ui/*, src/js/main.js, charts, labs, visualization, midi, sequencer, data); oscilla-21 checks synth values. Fallback: a change a seat built goes to the other of the two (a seat never judges its own change), and a verdict not written within 4 hours of the request goes to the other seat; with both seats unavailable the pull request waits, it is never merged unjudged. Expected load: 25 of the last 40 first-parent commits of main at a19f1ff6 touch a path v3 guards, against 13 under v2 (af counted 26 at 68b117f3; measured with git diff --name-only <c>^1 <c> over git log --first-parent -40), about 4-6 verdicts a day split over two seats, release pull requests mostly exempt."
+why: "Q091 (af with b0, 2026-11-05), on the owner's words 'kazdy jeden screen / kazda jedna route musi byt reviewed'. oscilla-b0 Total Coherence audit (slice B, review-guard gap 1) and af's Hardening proof-chain synthesis (finding 1, smallest slice 2). af's critique of 96daa67b (BLOCKING 1, 2026-11-05) found the allowance readable from the pull request's own checkout (base-rule.sh:36 extracts only scripts/), the ratchet comparable with a branch commit, the release exemption blind to roadmap.json, and the seats, the test flip and the first content unnamed; this version answers each. E005 (M046) carries the earlier open question; this answers it. R029 hardens the bypasses of v2 and lands first."
+scope:
+  - "scripts/review-verdict.mjs"
+  - "scripts/review-verdict.allowance.json"
+  - "scripts/ratchet-history.mjs"
+  - "scripts/ui-flowbite-pro-measure.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - ".ai/repo/rules/project/review-verdict.v2.md"
+  - ".ai/repo/rules/project/review-verdict.v3.md"
+  - ".ai/repo/rules/project/README.md"
+  - ".github/workflows/ci.yml"
+  - "CLAUDE.md"
+  - "tests/README.md"
+depends_on:
+  - "Q091"
+  - "R029"
+  - "R032"
+acceptance_criteria:
+  - "Fail-first: tests/unit/review-verdict.test.mjs runs the guard over a fixture diff touching src/js/ui/studio/x.js, src/index.html and a new file src/js/newdir/y.js with no verdict and expects a refusal naming each; on the merge base all three pass."
+  - "The v2 assertion tests/unit/review-verdict.test.mjs:185-189 (src/js/main.js, src/index.html and src/js/ui/shell.js are not guarded) flips in the same change: the three are guarded, and the non-src negatives of that list (scripts/review-verdict.mjs.bak, docs/src/js/audio/x.md, docs/.github/workflows/ci.yml, .ai/repo/reviews/1.yaml) stay unguarded."
+  - "A test enumerates git ls-files src and asserts every path is guarded or named in the allowance with a non-empty reason; the allowance at landing is [] (asserted)."
+  - "Bypass: a fixture pull request that adds its own path to its checkout's scripts/review-verdict.allowance.json, with no verdict, is refused by the base program (which reads the base's copy), and the refusal also names the allowance file as a guarded change."
+  - "Ratchet: the allowance is judged against every committed version on the base's first-parent chain from the fork through scripts/ratchet-history.mjs; a fixture whose branch adds an entry in one commit and judges it against that branch commit is still refused, an added entry without a raises entry naming the pull request fails, and the ui-flowbite-pro history tests pass unchanged on the factored helper."
+  - "Every path v2 guards outside src/ is still guarded (the v2 list is a subset of v3's outside src/), asserted by a test."
+  - "Release exemption: a chore(release) fixture whose only src changes are src/data/roadmap.json and the About station data file passes only if each equals the output of the base copy's scripts/roadmap.mjs and station step (R032) on the same inputs; a hand edit of either fails naming it; a non-release pull request touching either needs a verdict."
+  - "review-verdict.v2.md is status deprecated; v3.md names its enforcement (project.rules-name-their-enforcement), the seats, the fallback and the expected load; .ai/repo/rules/project/README.md:65 and CLAUDE.md's rule line name v3."
+  - "Guarded (.github/*, scripts/review-verdict.mjs, tests/unit/review-verdict.test.mjs): judged by v2's list from the base branch, so it needs a verdict from prismatic-majordomus-98, who builds none of it. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/review-verdict.test.mjs tests/unit/ui-flowbite-pro.test.mjs tests/unit/knowledge-integrity.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

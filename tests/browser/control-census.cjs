@@ -877,10 +877,16 @@ row({ id: 'studio.tl.track-delete.pointer', ws: 'studio',
   control: '[data-key^="track-del:"]', how: 'pointer', act: async (page) => {
     await page.locator('[data-key^="track-del:"]').first().click(); },
   expect: (s, b) => s.studio.tracks === b.studio.tracks - 1 || s.dialogs.length > b.dialogs.length });
+// The editor's own zoom (applied to its world element) is the one to compare: on a fresh Studio
+// the model still holds the default 1 while the graph shows its fitted zoom, which it commits
+// only after a change, so a model-only comparison passed or failed by the viewport's height
+// (the docked keys, M086). The model must end at the editor's zoom.
 for (const [k, cmp] of [['zoomIn', (a, b) => a > b], ['zoomOut', (a, b) => a < b]]) {
   row({ id: `studio.graph.${k}.pointer`, ws: 'studio', control: `[data-osc="studio.graph.${k}"]`,
     how: 'pointer', act: D.click(`[data-osc="studio.graph.${k}"]`),
-    expect: (s, b) => cmp(s.studio.zoom, b.studio.zoom) });
+    expect: (s, b, x) => cmp(x.z, b.x.z) && s.studio.zoom === x.z,
+    read: () => ({ z: Number(document.querySelector('[data-osc="studio.graph.viewport"] '
+      + '.osc-sg-world').style.getPropertyValue('--osc-sg-z')) }) });
 }
 // The setup zooms in twice and ends when that zoom is the Studio model's: the editor commits
 // its view 250 ms after the last change (graph-editor.js VIEW_COMMIT_MS), and a "before" read
@@ -1505,11 +1511,28 @@ family({ id: 'links.workspace', control: WS_LINK,
             if (ws !== 'playground') await op.navTo(fresh.page, ws);
             const link = fresh.page.locator(WS_LINK).nth(l.i);
             if (how === 'pointer') await link.click();
-            else { await link.focus(); await fresh.page.keyboard.press('Enter'); }
+            else {
+              // focus() does not wait for the link to show, as click() does: a link under an
+              // x-show still settling (exp.toMeasure while the experiments load) took the Enter
+              // on the body under CI load (#410, firefox). Wait for it as the pointer does.
+              await link.waitFor({ state: 'visible', timeout: ROW_MS });
+              await link.focus();
+              await fresh.page.keyboard.press('Enter');
+            }
             const ok = await until(() => fresh.page.evaluate((w) =>
               window.OSCILLA.app.workspace === w, m), { ms: ROW_MS,
               what: `${l.osc} (${ws}, ${how}) opens ${m}` }).catch(() => false);
-            if (!ok) bad.push(`${ws} ${l.osc} ${how}: the workspace is not ${m}`);
+            if (!ok) {
+              // The last state, so a lost Enter (focus elsewhere, the hash unchanged) reads apart
+              // from a slow hand-off (the hash moved, the workspace not yet).
+              const last = await fresh.page.evaluate(() => {
+                const a = document.activeElement;
+                return { workspace: window.OSCILLA.app.workspace, hash: location.hash,
+                  focus: a ? (a.dataset && a.dataset.osc) || a.tagName : null };
+              }).catch(() => null);
+              bad.push(`${ws} ${l.osc} ${how}: the workspace is not ${m} `
+                + `(last ${JSON.stringify(last)})`);
+            }
           } finally {
             await fresh.context.close().catch(() => {});
           }
@@ -1594,7 +1617,10 @@ for (const [c, by] of [['[data-osc="def.new"]', 'v3-ui.cjs'],
   ['[data-osc="fnd.mine"]', 'app.cjs'], ['[data-osc="fnd.discard"]', 'app.cjs v3-ui.cjs'],
   ['[data-osc="fnd.save"]', 'app.cjs v3-ui.cjs'], ['[data-osc="fnd.deleteConfirm"]', 'app.cjs v3-ui.cjs'],
   ['[data-osc="studio.render.duration"]', 'v31-studio-workflows.cjs'],
-  ['[data-osc="studio.patch.name"]', 'v31-studio-graph.cjs']]) {
+  ['[data-osc="studio.patch.name"]', 'v31-studio-graph.cjs'],
+  // K168: the Inspector's linked graph summary, its section groups and node links
+  ['[data-osc="studio.inspector.summaryGroup"]', 'v31-studio-graph.cjs'],
+  ['[data-osc="studio.inspector.summaryNode"]', 'v31-studio-graph.cjs']]) {
   delegated(c, by, 'experiments, findings and the Studio render');
 }
 // Debt: needs a stored experiment, a finding, a calibration file or a long task; listed in

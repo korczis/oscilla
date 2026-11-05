@@ -7,11 +7,13 @@
 //   the commands    a gate's `runs` invokes the same npm scripts, repository programs,
 //                   `majordomus doctor` and aggregate verdict as its job's steps, and a leg's
 //                   gate sets OSC_BROWSERS to its own browser before every npm script
-//   the selection   ci.yml has no `paths` filter, and no job-level condition but the
-//                   aggregate's `always()` and (E026) the path-gated jobs' exact
-//                   RUNTIME_IF, which only skips them in CI for a change the base's
-//                   classifier judged non-runtime; a local task keeps every gate, so every
-//                   gate is `always: true` and no path class names a gate or escalates
+//   the selection   ci.yml has no `paths` filter, and no job-level condition but
+//                   JOB_CONDITIONS (the aggregate's `always()` and the flake ledger's exact
+//                   re-run condition, each on its own job alone) and (E026) the path-gated
+//                   jobs' exact RUNTIME_IF on `needs: changes`, which only skips them in CI
+//                   for a change the base's classifier judged non-runtime; a local task keeps
+//                   every gate, so every gate is `always: true` and no path class names a gate
+//                   or escalates
 //   the aggregate   the `gate` job needs exactly the jobs whose gates the model's `gate`
 //                   requires
 //
@@ -34,6 +36,16 @@ const PKG = JSON.parse(read('package.json'));
 
 /** The installer is setup, not a check: it runs before every suite and proves nothing. */
 const SETUP_PROGRAMS = new Set(['.github/scripts/ci-install.sh']);
+/**
+ * The only job-level conditions ci.yml carries besides RUNTIME_IF: the aggregate's `always()`,
+ * and the flake ledger's (E010), which runs after every job the aggregate judges, on a re-run
+ * only, and whose entry the aggregate's verdict drops first; on a first attempt it is skipped
+ * and reads nothing. A job named here carries exactly its condition, never RUNTIME_IF.
+ */
+const JOB_CONDITIONS = {
+  gate: 'always()',
+  'flake-ledger': '${{ always() && fromJSON(github.run_attempt) > 1 }}',
+};
 /** The aggregate's verdict over `needs`, as ci.yml's `gate` job applies it (env VERDICT). */
 const AGGREGATE = 'jq -e "$VERDICT"';
 /** E026: the one condition a path-gated job may carry (.github/scripts/ci-changes.mjs). */
@@ -112,8 +124,10 @@ export function compare(ciText, modelText) {
     }
   }
   for (const [key, job] of Object.entries(ci.jobs ?? {})) {
-    if (job.if === undefined || (key === 'gate' && job.if === 'always()')) continue;
-    if (job.if === RUNTIME_IF && job.needs === 'changes') continue;
+    if (job.if === undefined) continue;
+    if (Object.hasOwn(JOB_CONDITIONS, key)) {
+      if (job.if === JOB_CONDITIONS[key]) continue;
+    } else if (job.if === RUNTIME_IF && job.needs === 'changes') continue;
     found.push(`selection: ci.yml job ${key} runs only if ${job.if}; the model selects it always`);
   }
   for (const g of gates) {
@@ -221,13 +235,13 @@ test('the token reader sees suites, programs and the verdict, and skips setup', 
 });
 
 test('a job ci.yml gains or loses is a disagreement', () => {
-  const extra = mutate(CI, '  visual:\n', '  lint:\n    runs-on: ubuntu-latest\n    steps:\n'
+  const extra = mutate(CI, '  visual:\n', '  lint:\n    runs-on: ubuntu-24.04\n    steps:\n'
     + '      - run: npm run build:check\n\n  visual:\n');
   assert.ok(has(compare(extra, MODEL), 'ci.yml job lint has no gate lint'));
   const fewer = mutate(CI, `    name: V1 engine checks (\${{ matrix.browser }})
     needs: changes
     if: ${RUNTIME_IF}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -235,7 +249,7 @@ test('a job ci.yml gains or loses is a disagreement', () => {
         browser: [chromium, firefox, webkit]`, `    name: V1 engine checks (\${{ matrix.browser }})
     needs: changes
     if: ${RUNTIME_IF}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -285,6 +299,24 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
     const unchained = mutate(CI, `    name: Visual regression gate\n    needs: changes\n`,
       '    name: Visual regression gate\n    needs: [changes, unit]\n');
     assert.ok(has(compare(unchained, MODEL), 'job visual runs only if'));
+    // The ledger's condition is allowed to the ledger alone, and only as written.
+    const ledgerIf = '    if: ${{ always() && fromJSON(github.run_attempt) > 1 }}\n';
+    const borrowed = mutate(CI, `    name: Visual regression gate\n    needs: changes\n    if: ${RUNTIME_IF}\n`,
+      `    name: Visual regression gate\n    needs: changes\n${ledgerIf}`);
+    assert.ok(has(compare(borrowed, MODEL), 'job visual runs only if'));
+    const loosened = mutate(CI, ledgerIf, '    if: ${{ fromJSON(github.run_attempt) > 1 }}\n');
+    assert.ok(has(compare(loosened, MODEL), 'job flake-ledger runs only if'));
+    // The ledger is never path gated: RUNTIME_IF is refused on it, even on `needs: changes`,
+    // and so is the ledger's own condition with E026's appended.
+    const gatedLedger = mutate(CI, ledgerIf, `    if: ${RUNTIME_IF}\n`);
+    assert.ok(has(compare(gatedLedger, MODEL), 'job flake-ledger runs only if'));
+    const gatedOnChanges = mutate(gatedLedger, '    needs: [unit, knowledge, fail-first, '
+      + 'review-verdict, changes, engine, suites, measure, studio, browser, census, visual]\n',
+    '    needs: changes\n');
+    assert.ok(has(compare(gatedOnChanges, MODEL), 'job flake-ledger runs only if'));
+    const andGated = mutate(CI, ledgerIf,
+      `    if: \${{ always() && fromJSON(github.run_attempt) > 1 && ${RUNTIME_IF} }}\n`);
+    assert.ok(has(compare(andGated, MODEL), 'job flake-ledger runs only if'));
     const narrowed = mutate(MODEL, '  - id: visual\n    job: visual\n    always: true\n',
       '  - id: visual\n    job: visual\n');
     assert.ok(has(compare(CI, narrowed), 'gate visual is not always: true'));
@@ -295,7 +327,7 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
 
 test('the aggregate gate requires exactly what ci.yml gate needs', () => {
   const needs = 'needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, '
-    + 'measure, studio, browser, census, visual]';
+    + 'measure, studio, browser, census, visual, flake-ledger]';
   const fewer = mutate(CI, needs, needs.replace(', visual', ''));
   assert.ok(has(compare(fewer, MODEL), 'aggregate: gate requires'));
   const dropped = MODEL.replace(/\n {6}- visual(?=\n)/, '');
