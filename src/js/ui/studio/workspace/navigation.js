@@ -118,6 +118,10 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
 
     /** EXPAND STUDIO (§130): the full workspace on the identical state. */
     studioExpand(nodeId = null) {
+      // Focus where Expand was activated: the deferred focus below goes to the graph only while
+      // focus is still there (or lost to <body>). A control the user moved to before that frame
+      // (a fast Tab to Back, a screen reader's jump) keeps it (#417 webkit, P8).
+      const from = document.activeElement;
       this.setWorkspace('studio');
       if (nodeId) {
         ctx.handle.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [nodeId] } });
@@ -125,10 +129,11 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
       requestAnimationFrame(() => {
         if (!ctx.editor) return;
         ctx.editor.onShow();
-        if (nodeId) {
-          ctx.editor.frameSelection();
-          ctx.editor.focusNode(nodeId);
-        } else ctx.editor.focusViewport();
+        if (nodeId) ctx.editor.frameSelection();
+        const a = document.activeElement;
+        if (a && a !== document.body && a !== from && a.isConnected) return;
+        if (nodeId) ctx.editor.focusNode(nodeId);
+        else ctx.editor.focusViewport();
       });
     },
 
