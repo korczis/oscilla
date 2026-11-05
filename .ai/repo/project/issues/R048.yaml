@@ -1,0 +1,27 @@
+id: R048
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "The version-ahead scan honours the roadmap's release line on the candidate path, so a release candidate's own prepare does not fail its gate"
+slug: the-version-ahead-scan-honours-the-roadmap-release-line-on-the-candidate-path
+priority: p2
+profile: implementation
+objective: "Lands as fix(release). Review finding R6 (P2, seat a3, 2026-11-05) on #424 (fix/about-truth, in train #437). findVersionsAhead() in scripts/release-version-check.mjs applies LITERAL_ALLOW only, not LINE_ALLOW, and on a candidate counts its own X.Y.Z as ahead. release:prepare --prerelease (required before a major by project.release-flow-complete) writes \"release\": \"4.0.0-rc.1\" into src/data/roadmap.json through scripts/roadmap.mjs; tests/unit/version-authority.test.mjs 'no version-shaped literal ahead of the product' then reports 4.0.0 in src/data/roadmap.json, npm run verify fails inside CI_PREPARE_COMMANDS and prepare restores the tree. The next stable release is unaffected (reproduced at 3.21.0 with release 3.21.0: 0 hits; at 4.0.0-rc.1 with release 4.0.0-rc.1: 1 ahead hit)."
+why: "The first candidate of the next major is the one release the flow makes mandatory (project.release-flow-complete, step 2), and it would fail in its own gate on the day it is cut, for a literal the release itself writes. Found before it bit; fixing it changes a guarded file (scripts/release-version-check.mjs), so it is its own small pull request with a non-builder verdict."
+current_state: "Filed 2026-11-05 from #424's review (R6). #424 lands unchanged in #437 with 98's verdict (ce14db04); this issue carries the fix."
+scope:
+  - "scripts/release-version-check.mjs"
+  - "tests/unit/version-authority.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/version-authority.test.mjs gains a case where package.json is 40.0.0-rc.1 and src/data/roadmap.json's release line says 40.0.0-rc.1 (fixtures use major 40): the ahead scan reports no hit; on origin/main before the fix it reports one."
+  - "findVersionsAhead() skips the lines LINE_ALLOW names, exactly as findVersionLiterals() does, and nothing else changes: a milestone title carrying a version ahead of the product is still reported (the existing case keeps passing)."
+  - "The version:check PASS line still names both allow lists, and release:prepare --prerelease on a scratch repository at 40.0.0-rc.1 passes the ahead scan of its own gate (recorded in the pull request body with the command)."
+  - "Guarded (scripts/release-*, tests/unit/version-authority.test.mjs): a non-builder seat writes the verdict."
+validation:
+  - "node --test tests/unit/version-authority.test.mjs"
+  - "npm run version:check"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

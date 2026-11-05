@@ -41,4 +41,18 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-05T14:04:03Z
+started_at: 2026-11-05T14:03:36Z
+started_event: sha256:51f6c33cd70fb735da6d649758b6672723c7aecc831a16e474a6cd7c08126f55
+verified_at: 2026-11-05T14:03:50Z
+verified_event: sha256:1c0d3c05022b57b8992345a73a320113305992c792eb369e9242e47580ec7980
+completed_at: 2026-11-05T14:04:03Z
+completed_event: sha256:faa4a8a25fed326c628783b2db381f6c70aea7393f5fec3750c609dbfbc198cc
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/v31-studio-templates.test.mjs tests/unit/no-fake-science.test.mjs tests/unit/no-inert-surfaces.test.mjs"
+    result: "v31-studio-templates 52/0 (five V617 tests: markers 1-5 in order, pinned hashes distinct, Learn link, offline render at or below the ceiling), no-fake-science and no-inert-surfaces 16/0 at main e8d54f8c (sweep a3, 2026-11-05). Landed by PR #369 (verdict .ai/repo/reviews/369.yaml merge) in train 4 #410 = main 447bb27b, shipped in v3.19.0; #410's V3.1 Studio UI gate ran the first-patch check of tests/browser/v31-studio-links.cjs green in chromium, firefox and webkit; docs/v31/user-guide.md 'First patch', .ai/repo/features/studio-patches.md:35, graph-editor.js:87 empty-graph note, README route st=<template id>; +801 B gzip (#369 body)."
+    artifact: ".ai/repo/reviews/369.yaml"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:03:30Z
