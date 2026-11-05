@@ -2060,7 +2060,7 @@
          to F003). -->
     <div id="osc-keyboard" data-osc="keyboard" role="group" aria-labelledby="osc-kbd-title"
       x-show="kbdView" x-cloak
-      :class="kbdDocked ? 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow dark:border-gray-700 dark:bg-gray-800' : ''">
+      :class="kbdDockClass">
       <h2 id="osc-kbd-title" :class="kbdDocked && 'sr-only sm:not-sr-only'">Keyboard</h2>
       <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
            group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
