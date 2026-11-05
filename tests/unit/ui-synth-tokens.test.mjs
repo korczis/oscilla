@@ -441,7 +441,11 @@ test('slice A A1: one hover language: knob, dial, lever and slide brighten the p
       assert.equal(at(h, 'visibility'), undefined, `${what}: shown on hover`);
       assert.equal(tag(idle, flag), edge, `${what}: the edge itself is not swapped on hover`);
       for (const g of geometry) assert.equal(at(h, g), at(edge, g), `${what}: the edge's ${g}`);
-      assert.equal(at(h, 'stroke-width'), at(edge, 'stroke-width'), `${what}: the edge's width`);
+      // Review of AC round 2, finding 3: the overlay's corners are the edge's too (the nut's
+      // round joins: a miter would poke past the hex at its corners).
+      for (const a of ['stroke-width', 'stroke-linejoin', 'stroke-linecap']) {
+        assert.equal(at(h, a), at(edge, a), `${what}: the edge's ${a}`);
+      }
       assert.equal(at(h, 'fill'), 'none', what);
       rules.add(`${varOf(at(h, 'stroke'))} ${at(h, 'class') ?? ''}`);
       const hover = varOf(at(h, 'stroke'));

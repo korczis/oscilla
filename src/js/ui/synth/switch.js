@@ -78,13 +78,15 @@ const PAD = 6;
  *  ball of radius `ball` on that end, the legends `gap` past the ball, the lever's shadow
  *  shadowDy (shadowDragDy while dragging) below it. Focused (C4), a ring `focus` past the
  *  washer, `focusW` wide, and the legend ringed round its text, `focusPad` past its font-size
- *  box up and down and `focusPadX` past its width at weight 600 across (`bold` times the
- *  weight-400 estimate: review of AC, finding 1, where 2 round that estimate cut a focused
- *  "Off"; "Off" at 600 measured 1.155 times it in Chromium and Firefox, 1.152 in WebKit, so
- *  1.16 keeps the inner edge 2 clear of the text); the LED's bezel 1 clear of that ring
- *  (`ledGap` past the washer). */
+ *  box up and down (a descender overhangs that box by up to 1.12, in Firefox in DejaVu Sans,
+ *  Ubuntu 26.04's system-ui, so 3.5 leaves the ink 1.38+ clear: review of AC round 2, finding 1,
+ *  where 2 sat on a "g"; `gap` 4.5 keeps it clear of the lifted shadow) and `focusPadX` past its
+ *  width at weight 600 across (`bold` times the weight-400 estimate: review of AC, finding 1;
+ *  "Off" at 600 measured 1.155 times it on macOS, so 1.16 leaves the inner edge 2 clear there;
+ *  s-ringfit measures the ink in the panel's font in each engine); the LED's bezel 1 clear of
+ *  that ring (`ledGap` past the washer). */
 const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, washerW: 1, bushing: 3.5,
-  bushingW: 1, root: 4, tip: 7, length: 18, ball: 3.5, gap: 4, focus: 3, focusW: 2, focusPad: 2,
+  bushingW: 1, root: 4, tip: 7, length: 18, ball: 3.5, gap: 4.5, focus: 3, focusW: 2, focusPad: 3.5,
   focusPadX: 3, bold: 1.16, ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
 /** A slide (slice C, SW-06, SW-07), graph units: a slot slotW wide, a capW x capH cap with two
  *  ridges gripGap from its index line (gripX either side, the index line to indexOut), a detent

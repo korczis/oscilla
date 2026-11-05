@@ -1133,13 +1133,14 @@ test('a rotary\'s leader lines run from the dial and end before every legend\'s 
  *  (review of AC round 2, finding 2), so 1.15 left its ring 1.95 clear, not the 2 below. */
 const BOLD = 1.16;
 /** A focused toggle's legend ring, as [x, y, width, height] (its stroke's centre line): round
- *  the legend's text box at weight 600 (BOLD), centred, grown 3 a side across and 2 up and down
- *  (review of slice C, C4; review of AC, finding 1: grown 2 round the weight-400 estimate, the
- *  ring's inner edge cut the 'O' and the 'f' of a focused "Off"). */
+ *  the legend's text box at weight 600 (BOLD), centred, grown 3 a side across and 3.5 up and
+ *  down (review of slice C, C4; review of AC, finding 1: grown 2 round the weight-400 estimate,
+ *  the ring's inner edge cut the 'O' and the 'f' of a focused "Off"; review of AC round 2,
+ *  finding 1: grown 2 up and down, it sat on the descender of a "g"). */
 const toggleLegendRing = (o) => {
   const b = legendBox(o.legend);
   const half = (b.width * BOLD) / 2 + 3;
-  return [b.x + b.width / 2 - half, b.y - 2, 2 * half, b.height + 4]
+  return [b.x + b.width / 2 - half, b.y - 3.5, 2 * half, b.height + 7]
     .map((x) => Number(x.toFixed(2)));
 };
 /** A two-position enum with a long second legend (the Render output's channels). */
@@ -1180,14 +1181,18 @@ test('review C 4: a focused toggle is ringed round its washer and its legend, no
               height: n(box, 'height') + 2 };
             assert.ok(inside(outer, o.hit), `${where}: inside its hit box`);
             // Its inner edge (half the 2 wide stroke in): 2 clear of the weight-600 text box
-            // across, 1 clear of the font-size box up and down (the glyphs sit inside it).
+            // across, 2.5 clear of the font-size box up and down. The glyphs do not sit inside
+            // that box: a descender (g, p, y) overhangs it by up to 0.87 of the 12 units on
+            // macOS and 1.12 in Firefox in DejaVu Sans (Ubuntu 26.04's system-ui), rastered at
+            // 8x (review of AC round 2, finding 1), so 2.5 leaves the ink 1.38 clear or more.
+            // s-ringfit (tests/browser/synth.cjs) measures the ink itself in each engine.
             const t = legendBox(o.legend);
             const cx = t.x + t.width / 2;
             near(cx - (n(box, 'x') + 1), (t.width * BOLD) / 2 + 2, 0.02, `${where}: clear, left`);
             near(n(box, 'x') + n(box, 'width') - 1 - cx, (t.width * BOLD) / 2 + 2, 0.02,
               `${where}: clear, right`);
-            assert.ok(t.y - (n(box, 'y') + 1) >= 1 - 1e-9, `${where}: clear, above`);
-            assert.ok(n(box, 'y') + n(box, 'height') - 1 - (t.y + t.height) >= 1 - 1e-9,
+            assert.ok(t.y - (n(box, 'y') + 1) >= 2.5 - 1e-9, `${where}: clear, above`);
+            assert.ok(n(box, 'y') + n(box, 'height') - 1 - (t.y + t.height) >= 2.5 - 1e-9,
               `${where}: clear, below`);
             assert.ok(o.hit.width * zoom >= HIT_PX - 1e-9, `${where}: the hit stays 44`);
             assert.ok(Math.min(Math.abs(outer.y), Math.abs(outer.y + outer.height)) >= 21.5 + 2,
