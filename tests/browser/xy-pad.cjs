@@ -15,20 +15,26 @@
 // Checks (desktop; the phone leg runs x-first and x-touch, the phone-cold leg x-cold-touch):
 //   x-link     linked: #m=synth&yt=xy opens the XY tab; the XY lead preset chosen in the preset
 //              menu is one undo entry that sets the pad's scale on its face (C, minor
-//              pentatonic) and patches Pitch and Gate into the voice and Y into LPF Cutoff (its
-//              undo gives back the default document's one Y cable); Open in Studio draws the
-//              pad's node and each of its edges in the Studio graph
+//              pentatonic) and cables Y alone into LPF Cutoff, no Pitch or Gate cable (K183
+//              review F3), after which QWERTY A still sounds C4 (RMS above -45 dB); its undo
+//              gives back the default document's one Y cable; Open in Studio draws the pad's
+//              node and each of its edges in the Studio graph
 //   x-pointer  real-time, XY lead: a pointer held on the pad's first step sounds C3 (130.8 Hz)
 //              and the runtime pad pitch is -1.75 oct; moved to the seventh step it sounds Eb4
-//              (311.1 Hz); Y from the bottom to the top raises the 4-9 kHz band 6 dB+ against
-//              the fundamental (the LPF opens); the release is silent (below -70 dB rel)
+//              (311.1 Hz); Y from the bottom to the top raises the 10-16 kHz band against
+//              the fundamental by at least the least rise of the low-pass biquad's response
+//              over the band (less 2 dB), derived from the document: LPF Cutoff's log cables,
+//              EG 2 at its sustain (the preset keeps its amount), Y at 0.05 and 0.95, one
+//              factor for 0.95 x Nyquist as computeBases scales them; a derived rise under 6 dB
+//              fails the check; the release is silent (below -70 dB rel)
 //   x-first    (K183; desktop in every engine, 390 px touch in chromium (CDP touch) and webkit)
 //              a fresh Synth, no preset: the pad is enabled with no Patch button; QWERTY A
 //              sounds C4 and its release silences; one pointer-down (a touch on the phone) on
 //              the pad's first step raises the runtime's source count from 0 and sounds C3
 //              (VCO 2 at 8': 130.8 Hz) within SOUND_MS; moved to the seventh step it sounds Eb4
-//              (311.1 Hz); the lift silences; QWERTY A still sounds after; the Synth status
-//              names what the keys and the pad play
+//              (311.1 Hz); the lift silences; QWERTY A still sounds after (RMS above -45
+//              dB, review F6); with A held a touch takes the voice (Eb4) and its lift gives
+//              C4 back, audible; the Synth status names what the keys and the pad play
 //   x-keys     interactive: arrows move the cursor (aria-valuenow, aria-valuetext of both
 //              sliders), Enter held sounds and its release silences; a held Enter is released
 //              by Escape, by blur and by page hide; the surface is role=application described
@@ -135,6 +141,21 @@ function peakAt(p, hz) {
   const side = Math.max(...[b - 5, b - 4, b - 3, b + 3, b + 4, b + 5]
     .filter((i) => i > 0 && i < p.db.length).map((i) => p.db[i]));
   return levelAt(p, hz) > -90 && levelAt(p, hz) - side >= 6;
+}
+/**
+ * |H(f)| in dB of Web Audio's low-pass biquad (the Audio EQ Cookbook form the spec defines;
+ * Q in dB as the node takes it) at cutoff f0 and sample rate sr.
+ */
+function lowpassDb(f, f0, qDb, sr) {
+  const w0 = (2 * Math.PI * f0) / sr;
+  const alpha = Math.sin(w0) / (2 * 10 ** (qDb / 20));
+  const c = Math.cos(w0);
+  const [b0, b1, b2] = [(1 - c) / 2, 1 - c, (1 - c) / 2];
+  const [a0, a1, a2] = [1 + alpha, -2 * c, 1 - alpha];
+  const w = (2 * Math.PI * f) / sr;
+  const mag = (k0, k1, k2) => Math.hypot(k0 + k1 * Math.cos(w) + k2 * Math.cos(2 * w),
+    -(k1 * Math.sin(w) + k2 * Math.sin(2 * w)));
+  return 20 * Math.log10(mag(b0, b1, b2) / mag(a0, a1, a2));
 }
 function bandDb(p, lo, hi) {
   let s = 0;
@@ -248,13 +269,15 @@ function defineChecks() {
     const face = await page.evaluate(() => [...document.querySelectorAll(
       '[data-option^="xy."][aria-checked="true"]')].map((e) => e.dataset.option + ':' + e.dataset.v));
     const ports = s.edges.map((e) => `${e.port}>${e.to.port}`).sort();
-    const want = ['gate>gate', 'gate>gate', 'pitch>pitch', 'pitch>pitch', 'y>frequency'];
+    // K183 review F3: a preset patches Y alone; the keys keep their Pitch and Gate normals.
+    const want = ['y>frequency'];
     if (tab !== 'true' || JSON.stringify(ports) !== JSON.stringify(want)
       || s.params.mode !== 'minor-pentatonic' || s.params.key !== 'C'
       || !face.includes('xy.mode:minor-pentatonic') || !face.includes('xy.key:C')) {
       return { ok: false, detail: 'the preset did not set the scale and the cables', tab, ports,
         params: s.params, face };
     }
+    const keyDb = await keyA(page, 'after the XY lead preset: the keys still play');
     await page.evaluate(() => window.OSCILLA.studio.store.undo());
     const undone = await padState(page);
     // One undo gives the default document back: its one Y cable into LPF Cutoff (K183).
@@ -268,7 +291,7 @@ function defineChecks() {
         || document.querySelector(`[data-edge-id="${id}"]`)),
     [s.id, ...s.edges.map((e) => e.id)]), { ms: 10000,
       what: 'the Studio graph draws the pad node and its edges' });
-    return { ok: true, rev, ports, face };
+    return { ok: true, rev, ports, face, keyDb };
   });
 
   def('x-pointer', async ({ page }) => {
@@ -283,14 +306,57 @@ function defineChecks() {
     await page.mouse.move(p.x, p.y, { steps: 4 });
     await sound(page, (q) => peakAt(q, EB4), 'the seventh step sounds Eb4');
     const base = await sound(page, (q) => peakAt(q, EB4), 'Eb4 with Y at the bottom');
-    const rel = (q) => bandDb(q, 4000, 9000) - levelAt(q, EB4);
+    // What Y should do, derived from the document (K183 review F3: a preset keeps the LPF's
+    // amount knobs, so EG 2 holds the cutoff up at its sustain): the cutoff of LPF Cutoff's
+    // log cables, EG 2 at its sustain and Y at 0.05 or 0.95, all scaled by the one factor
+    // computeBases gives them to stay at or below 0.95 x Nyquist; the band's level relative to
+    // Eb4 rises at least by the least rise of the biquad's own response over the band.
+    const doc = await page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const m = st.model;
+      const lpf = m.graph.nodes.find((n) => n.metadata && n.metadata.panel
+        && n.metadata.panel.module === 'lpf');
+      const eg2 = m.graph.nodes.find((n) => n.metadata && n.metadata.panel
+        && n.metadata.panel.module === 'eg2');
+      const pad = m.graph.nodes.find((n) => n.type === 'xy-pad');
+      const into = m.graph.edges.filter((e) => e.to.node === lpf.id && e.to.port === 'frequency')
+        .map((e) => ({ from: e.from.node === pad.id ? 'y' : e.from.node === eg2.id ? 'eg2'
+          : 'other', ...e.props }));
+      return { f0: lpf.params.frequency, q: lpf.params.Q, sustain: eg2.params.sustain, into,
+        sr: window.OSCILLA.engine.ctx.sampleRate };
+    });
+    const cap = 0.95 * (doc.sr / 2);
+    const logs = doc.into.filter((e) => e.mapping === 'log' && !e.muted);
+    // Each log cable's upward excursion is its depth in octaves (computeBases: a range mapped
+    // onto [0, depth] or [-depth, depth]); with the cables' top above the room, one factor.
+    const upC = logs.reduce((t, e) => t + 1200 * e.depth, 0);
+    const room = 1200 * Math.log2(cap / Math.min(cap, doc.f0));
+    const kc = upC > room ? Math.max(0, room) / upC : 1;
+    const oct = (y) => logs.reduce((t, e) => t + (e.from === 'y' ? y * e.depth
+      : e.from === 'eg2' ? doc.sustain * e.depth : 0), 0) * kc;
+    const fc = (y) => Math.min(cap, doc.f0) * 2 ** oct(y);
+    const qDb = 20 * Math.log10(doc.q);
+    const BAND = [10000, 16000];
+    let want = Infinity; // the least rise of the response over the band, 100 Hz steps
+    for (let f = BAND[0]; f <= BAND[1]; f += 100) {
+      want = Math.min(want, lowpassDb(f, fc(0.95), qDb, doc.sr) - lowpassDb(f, fc(0.05), qDb,
+        doc.sr));
+    }
+    if (!(want >= 6)) {
+      return { ok: false, detail: 'the derivation leaves Y no 6 dB to show in the band', want,
+        doc, fc: [fc(0.05), fc(0.95)] };
+    }
+    const rel = (q) => bandDb(q, BAND[0], BAND[1]) - levelAt(q, EB4);
     p = await padPoint(page, 6, 0.95);
     await page.mouse.move(p.x, p.y, { steps: 4 });
-    const top = await sound(page, (q) => peakAt(q, EB4) && rel(q) - rel(base) >= 6,
-      'Y at the top opens the LPF: the 4-9 kHz band 6 dB up');
+    // 2 dB under the derived least rise: the analyser's smoothing and the MG's vibrato.
+    const top = await sound(page, (q) => peakAt(q, EB4) && rel(q) - rel(base) >= want - 2,
+      `Y at the top opens the LPF: the ${BAND.join('-')} Hz band ${want.toFixed(1)} dB up `
+      + '(derived)');
     await page.mouse.up();
     await silent(page, 'the release is silent');
-    return { ok: true, low: low.rmsDb, yLow: yLow.rmsDb,
+    return { ok: true, low: low.rmsDb, yLow: yLow.rmsDb, cutoffs: [Math.round(fc(0.05)),
+      Math.round(fc(0.95))], wantDb: Number(want.toFixed(1)),
       openedDb: Number((rel(top) - rel(base)).toFixed(1)) };
   });
 
@@ -461,7 +527,9 @@ function defineChecks() {
   /** QWERTY A (C4) sounds while held and its release silences. */
   async function keyA(page, what) {
     await page.keyboard.down('KeyA');
-    const q = await sound(page, (x) => peakAt(x, C4), `QWERTY A sounds C4 (${what})`);
+    // Audible (RMS above -45 dB), not only a peak over the analyser's floor (review F6).
+    const q = await sound(page, (x) => x.rmsDb > -45 && peakAt(x, C4),
+      `QWERTY A sounds C4 (${what})`);
     await page.keyboard.up('KeyA');
     await silent(page, `the key's release silences (${what})`);
     return Number(q.rmsDb.toFixed(1));
@@ -492,13 +560,25 @@ function defineChecks() {
     await hold.lift();
     const off = await silent(page, 'the lift silences');
     const keyAfter = await keyA(page, 'after the pad');
+    // Both at once (review F6): A held sounds C4, a touch on the pad takes the voice (the last
+    // note), and its lift gives C4 back, audible, while A is still held.
+    await page.keyboard.down('KeyA');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'A held sounds C4');
+    const both = await press(page, await padPoint(page, 6, 0.5), { touch });
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, EB4), 'the pad over the held key: Eb4');
+    await both.lift();
+    const back = await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4),
+      'the pad lifted, the held key sounds C4 again');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the key\'s release silences');
     const status = (await padView(page)).status;
     if (!/keys and the XY pad play/.test(status)) {
       return { ok: false, detail: 'the status does not say what the keys and the pad play',
         status };
     }
     return { ok: true, touch, sources: raised.sources, low: low.rmsDb, high: high.rmsDb,
-      off: Number(off.rmsDb.toFixed(1)), keyBefore, keyAfter, status };
+      off: Number(off.rmsDb.toFixed(1)), keyBefore, keyAfter,
+      keyBack: Number(back.rmsDb.toFixed(1)), status };
   });
 
   def('x-cold-touch', async ({ context, base, browserName }) => {

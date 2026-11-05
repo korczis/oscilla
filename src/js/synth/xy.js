@@ -7,12 +7,15 @@
 // exports and imports it like any other patch. The built-in ones are recipes over a panel
 // preset (presets.js) that xyPresetPatch turns into that patch on the document's own panel.
 // An XY preset is the voice the pad plays: the modules of the Panel and XY tabs (xyScope) and
-// the cables between them. Applying one writes those nodes and edges only, as a node preset
+// the cables between them. Under K183 (option B) the pad plays through the keys' one note
+// layer, so a built-in preset sets the scale, the target of Y and the values only: no Pitch or
+// Gate cable (which would replace the keyboard's normals and silence the computer keys, review
+// F3), and its Y cable adds to its target's normals, whose amount knobs keep the base preset's
+// depths. Applying one writes those nodes and edges only, as a node preset
 // writes its named nodes (K020): the Engines tab's modules and every cable into them keep their
 // values, built-in or saved, whatever the patch carries.
 //
 //   xyScope(panel) -> [module id]          the modules an XY preset holds and writes
-//   XY_VOICE                       the cables that let the pad play the voice
 //   xyTargets(panel) -> [{ id, label }]   the CONTROL inputs Y may drive (the timbre targets)
 //   xyTarget(model, panel) -> jack | null the input Y drives now
 //   xyPatched(model, panel) -> bool        the pad's Pitch and Gate reach the voice
@@ -32,8 +35,6 @@ import { panelCables, patchCable, unpatch } from './normals.js';
 import { XY_TAB } from './panels/xy.js';
 
 export const XY_CATEGORY = 'xy';
-export const XY_VOICE = Object.freeze([['xy.pitch', 'vco1.pitch'], ['xy.pitch', 'vco2.pitch'],
-  ['xy.gate', 'eg1.gate'], ['xy.gate', 'eg2.gate']]);
 const PITCH_PORTS = ['pitch', 'fm'];
 /** What Y drives in the default Synth document (K183): the low-pass cutoff. */
 export const XY_DEFAULT_Y = 'lpf.frequency';
@@ -128,14 +129,11 @@ function afterSteps(model, steps) {
 }
 
 export function xyPresetPatch(model, panel, recipe) {
-  // Y's cable adds to its target's normals (K183): a preset's Y moves its target alone, so the
-  // amount knobs into that target are at 0, as when the cable replaced those normals.
-  const alone = panel.amounts.filter((x) => x.to.includes(recipe.y))
-    .map((x) => [`${x.module}.${x.key}`, 0]);
+  // The scale, Y's target and the values: Y's cable adds to its target's normals (K183), so the
+  // keys keep their Pitch and Gate normals and the target keeps its amount knobs.
   const a = linkAction(model, panel, { preset: recipe.base,
-    values: [...recipe.values, ...alone, ['xy.mode', recipe.scale.mode],
-      ['xy.key', recipe.scale.key]],
-    cables: [...XY_VOICE, ['xy.y', recipe.y]] }, { modules: xyScope(panel) });
+    values: [...recipe.values, ['xy.mode', recipe.scale.mode], ['xy.key', recipe.scale.key]],
+    cables: [['xy.y', recipe.y]] }, { modules: xyScope(panel) });
   return xyPatchOf(afterSteps(model, a.steps), panel, { name: recipe.name });
 }
 

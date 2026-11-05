@@ -68,7 +68,8 @@
 //     the static value and is bounded on its own (V272 review R-1), and the headroom an owned
 //     detune spends is its lane's peak alone (#197 R-7).
 //     Other parameters may exceed their range through
-//     modulation; that is reported (`exceeds`), never hidden (§242).
+//     modulation; that is reported (`exceeds`), never hidden (§242), except a performance
+//     output's cables (`fit`), held inside the range (performance-fit.js; `limited`, `scaled`).
 //   - TRIGGER and ANALYSIS edges have no Web Audio connection: they are logical bindings for
 //     the timeline/scheduler and the measurement engine.
 //
@@ -77,6 +78,7 @@
 
 import { NODE_REGISTRY } from './registry.js';
 import { validateEdgeProps } from './ports.js';
+import { fitFactor } from './performance-fit.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
 import { studioHash } from './schema.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
@@ -441,6 +443,9 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv,
     scale,
     range: planEdge.kind === 'control'
       ? (fromHandle.outputRange[planEdge.from.port] || DEFAULT_RANGE) : null,
+    // A performance output (its handle's `fits`): held inside the range (computeBases).
+    fit: planEdge.kind === 'control' && Array.isArray(fromHandle.fits)
+      && fromHandle.fits.includes(planEdge.from.port),
     nodes: own.nodes,
     dispose() {
       try { out.disconnect(gain); } catch (e) { /* already disconnected */ }
@@ -516,7 +521,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     else base[key].value += b;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push({ id: edge.id, a, up: Math.max(a * lo, a * hi),
-      down: Math.min(a * lo, a * hi), log, scale: handle.scale });
+      down: Math.min(a * lo, a * hi), log, scale: handle.scale, fit: !!handle.fit });
   }
   const offsetOf = (key) => {
     const d = base[key].value + (lowered[key] || 0) - planNode.params[key];
@@ -573,7 +578,14 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     }
     if (k !== 1) for (const x of lin) if (limited.has(x.id)) scaled.set(x.id, k);
     up *= k;
-    for (const x of lin) gains.set(x.id, x.a * k * x.scale);
+    // A performance cable into a linear parameter sweeps inside its range (K183 review F7).
+    const kf = isFreq ? 1 : fitFactor(lin, b.value, p);
+    const kOf = (x) => (x.fit && kf !== 1 ? kf : k);
+    if (kf !== 1) {
+      for (const x of lin) if (x.fit) { limited.add(x.id); scaled.set(x.id, kf); }
+      up = lin.reduce((t, x) => t + x.up * kOf(x), 0);
+    }
+    for (const x of lin) gains.set(x.id, x.a * kOf(x) * x.scale);
     let kc = 1;
     let usedC = 0;
     if (logs.length) {
@@ -604,7 +616,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       }
     }
     if (!isFreq && list.length) {
-      const down = lin.reduce((s, x) => s + x.down, 0);
+      const down = lin.reduce((s, x) => s + x.down * (x.fit ? kf : 1), 0);
       if (b.value + up > p.max || b.value + down < p.min) exceeds.push(key);
     } else if (!isFreq && (b.value > p.max || b.value < p.min)) {
       exceeds.push(key);

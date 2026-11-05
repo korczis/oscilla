@@ -202,6 +202,9 @@ export const xyPad = {
       inputs: {},
       outputs: { x, y, pitch },
       outputRange: { x: UNIPOLAR, y: UNIPOLAR, pitch: KEYS_PITCH_RANGE },
+      // Performance outputs: a hand sweeps them, so their cables stay inside the target's
+      // range (compiler.js computeBases, K183).
+      fits: ['x', 'y'],
       modTarget: (key) => ({ reason: `${key} is not modulatable` }),
       applyBase() {},
       update(changed, owned, w) {
