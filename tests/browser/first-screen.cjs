@@ -126,8 +126,21 @@ const TEMPLATES = {
   'sweep-sequence': 'Sweep Sequence', 'stereo-beat': 'Stereo Beat',
   'filter-automation': 'Filter Automation', 'measurement-sweep': 'Measurement Sweep',
 };
-const WORKSPACES = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-  'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
+// Every workspace, read from the code (ui/app.js WORKSPACES) before a leg runs, never restated:
+// a list written here left Synth's entry path out (#399, M1). Each is an `m=<id>` row of
+// ENTRIES, after the bare address; Synth's is the last row. Opening Synth instantiates its
+// voice into the one Studio document (#329), which then holds unsaved changes, so a Studio
+// template link followed after it in the live page meets the unsaved-work question first (as
+// link-integrity.cjs walks it last).
+const WORKSPACES = [];
+async function loadWorkspaces() {
+  const app = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+    'app.js')).href);
+  WORKSPACES.push(...app.WORKSPACES);
+  const row = (w) => ({ id: `m=${w}`, hash: `m=${w}`, workspace: w });
+  ENTRIES.splice(1, 0, ...WORKSPACES.filter((w) => w !== 'synth').map(row));
+  ENTRIES.push(...WORKSPACES.filter((w) => w === 'synth').map(row));
+}
 const said = (s, re) => s.alerts.some((a) => re.test(a));
 
 // One row per entry path. `hash` without '#'; `search` with '?'. `address` is location.hash
@@ -136,7 +149,7 @@ const said = (s, re) => s.alerts.some((a) => re.test(a));
 const ENTRIES = [
   { id: 'bare', hash: '', workspace: 'playground',
     state: (s) => s.source === 'single' && s.waveform === 'sine' && s.frequency === 440 },
-  ...WORKSPACES.map((w) => ({ id: `m=${w}`, hash: `m=${w}`, workspace: w })),
+  // ... then one row per workspace (loadWorkspaces)
   // V1 mode ids in `m` (APP_MODES): playground and presets and learn are workspaces too.
   { id: 'v1 m=sweep', hash: 'm=sweep', workspace: 'playground' },
   { id: 'v1 m=dual', hash: 'm=dual', workspace: 'synthesis' },
@@ -982,6 +995,7 @@ async function runLeg(name, origin, server) {
 
 (async () => {
   await RUN.ready();
+  await loadWorkspaces();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);

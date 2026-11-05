@@ -1055,6 +1055,7 @@ function defineChecks() {
         cfg: a.serializeConfig() }];
     });
     // Compare shows the microphone analyzer's counterpart links (U005), as the Analyzer does.
+    // workspace-subset: the workspaces whose links this check collects after the Playground's
     for (const ws of ['synthesis', 'compare', 'learn', 'presets']) {
       await H.workspace(page, ws);
       await collect();
@@ -1068,6 +1069,7 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.customPresets = []; window.OSCILLA.app.presetTab = 'reference'; });
     // The cross-links shown in one workspace only (U010): the Sequencer's and Filter Lab's
     // Studio links, and Experiments before anything is saved (its empty list leads to Measure).
+    // workspace-subset: the three workspaces that hold a cross-link of their own
     for (const ws of ['sequencer', 'filter', 'experiments']) {
       await H.workspace(page, ws);
       if (ws === 'experiments') {
@@ -2256,11 +2258,12 @@ function defineChecks() {
   // (page) and its group (true), Escape and a click outside close a group, focus never drops,
   // and the dropdown stays inside the viewport at desktop and phone widths.
   def('nav-groups-keyboard', async ({ page, browserName }) => {
-    // The navigation's own order (ui/app.js navTopLevel; Synth after Studio, Q019).
-    const TOP = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
-        'app.js')).href)).navTopLevel();
-    const GROUPS = { analyze: ['analyzer', 'filter', 'compare'],
-      synthesis: ['synthesis', 'sequencer', 'presets'] };
+    // The navigation's own order (ui/app.js navTopLevel; Synth after Studio, Q019) and its
+    // groups (NAV_GROUPS), read from the code and not restated.
+    const nav = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+      'app.js')).href);
+    const TOP = nav.navTopLevel();
+    const GROUPS = nav.NAV_GROUPS;
     const state = () => page.evaluate(() => {
       const q = (s) => document.querySelector(s);
       return { mode: q('#osc-app').dataset.mode,

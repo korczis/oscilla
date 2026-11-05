@@ -94,7 +94,7 @@
       "evidence": "derived",
       "deepLink": "#m=filter",
       "tests": [
-        "tests/browser/navigation.cjs",
+        "tests/browser/control-census.cjs",
         "tests/browser/qa-regressions.cjs"
       ],
       "plan": [
@@ -113,7 +113,7 @@
       "evidence": "derived",
       "deepLink": "#m=compare",
       "tests": [
-        "tests/browser/navigation.cjs",
+        "tests/browser/control-census.cjs",
         "tests/browser/qa-regressions.cjs"
       ],
       "plan": [

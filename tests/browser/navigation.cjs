@@ -391,6 +391,7 @@ function defineChecks() {
     const start = await H.state(page);
     // A setting changed after the link: Back / Forward must not put the link's value back.
     await page.evaluate(() => window.OSCILLA.app.setFrequency(880));
+    // workspace-subset: three switches of workspace after the link, any three would do
     for (const ws of ['measure', 'analyzer', 'studio']) await H.navTo(page, ws);
     const switched = await H.state(page);
     await H.dirtyStudio(page);
@@ -434,9 +435,10 @@ function defineChecks() {
 
   def('open-every-workspace', async (ctx) => {
     // A reload or a shared address opens each workspace as a switch would: the heading shown,
-    // the title, and what entering it loads (the Experiments list).
-    const ids = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-      'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
+    // the title, and what entering it loads (the Experiments list). Every workspace, read from
+    // the code (ui/app.js WORKSPACES): the twelve written here left Synth out (#399, M1).
+    const ids = (await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+      'app.js')).href)).WORKSPACES;
     const rows = [];
     for (const ws of ids) {
       const page = await H.open(ctx, `${ctx.baseUrl}#m=${ws}`);
@@ -1100,6 +1102,7 @@ function defineChecks() {
     const page = await H.open(ctx, ctx.baseUrl);
     await page.evaluate(() => window.OSCILLA.app.setContinuous(true));
     const got = {};
+    // workspace-subset: the two workspaces that show the compact Studio transport
     for (const ws of ['playground', 'sequencer']) {
       await H.navTo(page, ws);
       const panel = '[data-osc="studio.compact"]';
@@ -1213,6 +1216,7 @@ function defineChecks() {
     'control-names: the logo opens the Playground');
     // B7: the skip link names the workspace shown and lands on the main region holding it.
     const skip = {};
+    // workspace-subset: the skip link is judged on three workspaces named below
     for (const ws of ['playground', 'measure', 'studio']) {
       if (ws !== 'playground') {
         await page.evaluate((w) => { window.location.hash = `#m=${w}`; }, ws);
@@ -1269,6 +1273,7 @@ function defineChecks() {
       skipNamed: skip.playground.name === 'Skip to main content: Playground'
         && skip.measure.name === 'Skip to main content: Measure'
         && skip.studio.name === 'Skip to main content: Studio',
+      // workspace-subset: the three workspaces the skip link was judged on above
       skipLands: ['playground', 'measure', 'studio'].every((w) => skip[w].landed === 'osc-main'),
       helpNamed: helpName === 'Keyboard shortcuts',
       helpOpensIt: !!help && help.id === 'osc-dlg-help' && help.title === helpName
