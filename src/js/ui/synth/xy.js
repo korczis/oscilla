@@ -91,9 +91,12 @@
 //   xySvg({ x, y, gate, source, params: { x, y }, tokens, zoom, size, state, label, format })
 //                                      '<g data-xy="" role="group" …>…</g>'
 //   PUCK, XY                           the geometry, graph units
+//
+// ui-family: pad skin hardware
 
 import { ariaAttrs, clampValue, controlBox, controlSvg, HIT_PX, toNorm } from './knob.js';
 import { ledBox, ledSvg } from './led.js';
+import { xyFromPoint } from '../../charts/drag-math.js';
 
 /** The puck, graph units: the cap's radius (Ø28), its face's (Ø20), its rim, the crosshair
  *  notch's half arm and width (the arm idle: it shortens with the face), how far the face sinks
@@ -228,12 +231,16 @@ function coordinate(v, who, name) {
   return v;
 }
 
-/** The positions (0..1, y up) at a point in graph units, clamped to the puck's travel. */
+/** The positions (0..1, y up) at a point in graph units, clamped to the puck's travel: the pad
+ *  model's own mapping (charts/drag-math.js xyFromPoint, G030) over the travel. A NaN coordinate
+ *  reads the travel's start (x its left, y its bottom) before the call, whose clamp keeps NaN. */
 export function xyValue({ px, py, layout } = {}) {
   const t = travelOf(layout, 'xyValue');
-  const along = (d, span) => (Number.isNaN(d) ? 0 : clean(Math.min(1, Math.max(0, d / span))));
-  return { x: along(coordinate(px, 'xyValue', 'px') - t.x, t.width),
-    y: along(t.y + t.height - coordinate(py, 'xyValue', 'py'), t.height) };
+  const x0 = coordinate(px, 'xyValue', 'px');
+  const y0 = coordinate(py, 'xyValue', 'py');
+  const f = xyFromPoint(Number.isNaN(x0) ? t.x : x0, Number.isNaN(y0) ? t.y + t.height : y0,
+    { x: t.x, y: t.y, w: t.width, h: t.height });
+  return { x: clean(f.x), y: clean(f.y) };
 }
 
 // ---------------------------------------------------------------- the drawing

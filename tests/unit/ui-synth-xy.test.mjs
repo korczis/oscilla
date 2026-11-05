@@ -92,9 +92,18 @@ test('the module exists and exports the layout, the mapping and the drawing', ()
   assert.ok(Object.isFrozen(xy.PUCK) && Object.isFrozen(xy.XY), 'frozen geometry');
 });
 
-test('pure: imports only knob.js and led.js, no DOM, no listener, no timer, no animation', () => {
+test('pure: imports only knob.js, led.js and the pad model\'s pointer maths, no DOM, no listener, '
+  + 'no timer, no animation', () => {
   const imports = [...SRC.matchAll(/^import .* from '([^']+)';$/gm)].map((m) => m[1]).sort();
-  assert.deepEqual(imports, ['./knob.js', './led.js']);
+  // G030: the pad's point-to-position mapping is the model's (charts/drag-math.js xyFromPoint),
+  // itself pure: it imports only charts/axes.js and touches no DOM, timer or listener
+  assert.deepEqual(imports, ['../../charts/drag-math.js', './knob.js', './led.js']);
+  for (const f of ['../../src/js/charts/drag-math.js', '../../src/js/charts/axes.js']) {
+    const dep = readFileSync(new URL(f, import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
+    const impure = /\b(?:document|window|addEventListener|setTimeout|setInterval)\b/;
+    assert.doesNotMatch(dep, impure, `${f} stays pure`);
+    assert.doesNotMatch(dep, /\brequestAnimationFrame\b/, `${f} has no animation frame`);
+  }
   assert.doesNotMatch(CODE, /\b(?:document|window|globalThis|getComputedStyle|addEventListener)\b/,
     'no DOM, no listener');
   assert.doesNotMatch(CODE, /\b(?:setTimeout|setInterval|requestAnimationFrame)\b/, 'no timer');
@@ -940,4 +949,25 @@ test('xy.js and this test keep to 100 columns', () => {
     const long = text.split('\n').map((l, i) => [i + 1, l.length]).filter(([, n]) => n > 100);
     assert.deepEqual(long, [], `${file}: lines over 100 columns`);
   }
+});
+
+test('G030: the hardware skin maps a point through the pad model\'s xyFromPoint', async () => {
+  const { xyFromPoint } = await import('../../src/js/charts/drag-math.js');
+  const L = xy.xyLayout();
+  const t = L.travel;
+  const rect = { x: t.x, y: t.y, w: t.width, h: t.height };
+  for (const [px, py] of [[t.x, t.y], [t.x + t.width, t.y + t.height], [t.x + t.width / 3,
+    t.y + t.height / 7], [t.x - 50, t.y + t.height + 50], [t.x + 1e6, t.y - 1e6]]) {
+    const want = xyFromPoint(px, py, rect);
+    const got = xy.xyValue({ px, py, layout: L });
+    assert.ok(Math.abs(got.x - want.x) < 1e-12 && Math.abs(got.y - want.y) < 1e-12,
+      `(${px}, ${py}): skin ${JSON.stringify(got)} vs model ${JSON.stringify(want)}`);
+  }
+  assert.deepEqual(xy.xyValue({ px: NaN, py: NaN, layout: L }), { x: 0, y: 0 },
+    'NaN reads the travel\'s start');
+  const body = SRC.slice(SRC.indexOf('export function xyValue'),
+    SRC.indexOf('\n}\n', SRC.indexOf('export function xyValue')));
+  assert.match(body, /xyFromPoint\(/, 'xyValue calls the model\'s mapping');
+  assert.doesNotMatch(body, /\/\s*(?:t\.width|t\.height|span)\b/,
+    'and divides by no travel itself');
 });
