@@ -7,7 +7,7 @@ slug: the-patch-bay-and-the-cable-inspector-render-only-from-the-port-contract
 priority: p1
 profile: implementation
 objective: "Owner program B (2026-11-03), slice B2. Every jack the patch bay draws (src/js/ui/patch/patch-bay.js, its Synth adapter src/js/synth/view/bay.js) and every cable the cable inspector shows takes its name, type, direction, cardinality, unconnected behaviour and refusal from the one port contract: describePort and canConnect of src/js/studio/ports.js and the port and cable kinds V619 declares (PORT_KINDS, CABLE_KINDS), never from per-module code. The Synth panel's own jack labels become the declared label the contract carries; a jack whose contract lacks a field shows the field's derived default and the matrix (K164) counts it. A refusal is canConnect's sentence, unchanged. The bay's drawing stays the synth-theme layer's (F013)."
-why: "The owner's program B of 2026-11-03 asks that the bay render only from the contract so a module needs no bay code of its own; agreed on the mesh with oscilla-26 (V619 declares, dev-53 renders)."
+why: "The owner's program B of 2026-11-03 asks that the bay render only from the contract so a module needs no bay code of its own; agreed on the mesh with oscilla-26 (V619 declares, dev-53 renders). Moved from M064 (connected-instrument#patch-cables) to M080 on 2026-11-05: the two studio-box-system resolutions planned into K165 need it to serve that intent, and intent validate refuses a second serves from a milestone the intent does not name (serves_outside_milestone). patch-cables loses K165 from its issues; its bay criterion is still decided by K165's tests/unit/patch-bay-contract.test.mjs (agreed b0 with af on the mesh)."
 depends_on:
 - "V619"
 - "K164"
