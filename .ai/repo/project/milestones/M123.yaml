@@ -8,6 +8,7 @@ outcome: "Each control family (knob, slider, switch, patch bay, keyboard, app sh
 acceptance_criteria:
   - "G021 to G026 are done with their evidence; the duplicate baseline of G021 is empty."
   - "G027 to G029 are done with their evidence: one envelope modeler and one filter modeler, each bound through G029 to every envelope and filter (owner order of 2026-11-05)."
+  - "G030 is done with its evidence: one pad, the oscilla-pad, its looks skins of one model (owner order of 2026-11-05)."
 validation:
   - "npm run release-gate"
 evidence_required:
