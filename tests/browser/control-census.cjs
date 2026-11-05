@@ -342,6 +342,12 @@ row({ id: 'device.safetyLimit.pointer', ws: 'playground', control: '#osc-safety-
   } });
 
 // ---- Analysis (the tabs, the scope and the spectrum options)
+// V605: Open in Studio (Signal Path tab only) opens the voice as a Studio document, and no sound.
+row({ id: 'analysis.openInStudio.pointer', ws: 'playground',
+  control: '[data-osc="analysis.openInStudio"]', how: 'pointer',
+  setup: D.click('#osc-atab-signalpath'), act: D.click('[data-osc="analysis.openInStudio"]'),
+  expect: (s) => s.workspace === 'studio' && !s.studio.playing
+    && s.studio.counts.runtimeNodes === 0 });
 row({ id: 'analysis.pause.pointer', ws: 'analyzer', control: '#osc-viz-pause', how: 'pointer',
   act: D.click('#osc-viz-pause'), expect: (s, b) => s.app.vizPaused !== b.app.vizPaused });
 row({ id: 'analysis.pause.keyboard', ws: 'analyzer', control: '#osc-viz-pause', how: 'keyboard',
