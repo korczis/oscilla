@@ -152,7 +152,7 @@ export function createKeyboardUi({ win = window } = {}) {
           if (typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
           return notes.noteOn(note, velocity, `kbd-${source}`);
         },
-        release: (note, source) => notes.noteOff(note, `kbd-${source}`),
+        release: (note, source, opt) => notes.noteOff(note, `kbd-${source}`, 0, opt),
         changed: () => sync(),
       });
       const sync = () => {

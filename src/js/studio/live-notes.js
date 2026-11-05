@@ -111,7 +111,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     }
   };
 
-  function polyEvent(id, h, { kind, note, velocity = 100, at, fast = false }) {
+  function polyEvent(id, h, { kind, note, velocity = 100, at, fast = false, forced = false }) {
     if (!poly.has(id)) poly.set(id, new Set());
     const held = poly.get(id);
     if (kind === 'all-off') {
@@ -132,16 +132,16 @@ export function createLiveNotes({ getModel, handleOf }) {
         stolen: !!(r && r.stolen), dropped: r ? r.dropped : 0 };
     }
     held.delete(note);
-    h.noteOff(closeAt(`${id}:${note}`, at), note);
+    h.noteOff(forced ? at : closeAt(`${id}:${note}`, at), note);
     opened.delete(`${id}:${note}`);
     return { ok: true, held: held.size, top: null };
   }
 
-  function padEvent(id, h, { kind, x, y, at }) {
+  function padEvent(id, h, { kind, x, y, at, forced = false }) {
     const down = pads.has(id);
     if (kind === 'off' || kind === 'all-off') {
       pads.delete(id);
-      if (down) gate(id, kind === 'off' ? closeAt(id, at) : at, false);
+      if (down) gate(id, kind === 'off' && !forced ? closeAt(id, at) : at, false);
       return { ok: true, held: 0, released: down ? 1 : 0 };
     }
     const r = h.move(at, x, y, { legato: down });
@@ -169,7 +169,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     }
     const prio = typeof h.priority === 'function' ? h.priority() : 'last';
     const c = kind === 'on' ? st.press(note, velocity, prio) : st.release(note, prio);
-    if (c.empty && !c.unchanged) gate(keysId, closeAt(keysId, at), false);
+    if (c.empty && !c.unchanged) gate(keysId, ev.forced ? at : closeAt(keysId, at), false);
     else if (c.top && (c.retrigger || c.legato)) {
       h.play(at, c.top.note, c.top.velocity, { legato: !!c.before });
       if (c.retrigger) gate(keysId, at, true);

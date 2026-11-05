@@ -11,6 +11,17 @@
 
 export const MIN_GATE_S = 0.03;
 
+/** Whether a note-off is a forced stop, never deferred (af's rule, 98's F5 on K183): an explicit
+ *  `forced`, or a held-notes release whose reason is not an ordinary note-off or re-press (blur,
+ *  hide, Escape, a switch, disarm, unplug, all-off, silence, bound). */
+const ORDINARY = Object.freeze(['note-off', 're-press', 'legato']);
+
+export function forcedOff(info) {
+  if (!info) return false;
+  if (info.forced === true) return true;
+  return typeof info.reason === 'string' && !ORDINARY.includes(info.reason);
+}
+
 /** When a gate opened at `onAt` (s, audio time) may close, asked to close at `offAt`. */
 export function gateCloseAt(onAt, offAt) {
   return Number.isFinite(onAt) ? Math.max(offAt, onAt + MIN_GATE_S) : offAt;

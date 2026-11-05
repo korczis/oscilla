@@ -1136,12 +1136,13 @@ export class AudioEngine {
   }
 
   /** Release note `key` with its own release time; false when it is not sounding. */
-  noteOff(key) {
+  noteOff(key, { forced = false } = {}) {
     const v = this.notes.get(key);
     this.notes.delete(key);
     // An ordinary note-off closes the gate no sooner than MIN_GATE_S after the note began
-    // (K184): a tap handled in one task still sounds. notesOff (Escape) is never deferred.
-    return !!v && this._releaseVoice(v, v.release, true, false, gateCloseAt(v.t0, 0));
+    // (K184): a tap handled in one task still sounds. A forced stop (blur, hide, Escape) and
+    // notesOff are never deferred.
+    return !!v && this._releaseVoice(v, v.release, true, false, forced ? 0 : gateCloseAt(v.t0, 0));
   }
 
   /** Release every note, within ESCAPE_RELEASE_S when `fast`; returns how many were held. */

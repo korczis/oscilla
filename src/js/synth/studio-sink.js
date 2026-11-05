@@ -11,6 +11,7 @@
 //   createStudioSink({ get, setupAudio, ensureAudio, say, registry }) -> { noteOn, noteOff,
 //     allOff, active() -> this sink | null }   get() -> { handle, transport }, as the Synth's
 
+import { forcedOff } from '../audio/gate.js';
 import { routedNode } from './picker.js';
 import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
 
@@ -59,11 +60,11 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     return t.live(n.id, { kind: 'on', note, velocity });
   }
 
-  function noteOff(note) {
+  function noteOff(note, info) {
     const { t, m } = parts();
     const id = held.has(note) ? held.get(note) : (t && m && (target(m) || {}).id);
     held.delete(note);
-    return t && id ? t.live(id, { kind: 'off', note }).ok : false;
+    return t && id ? t.live(id, { kind: 'off', note, forced: forcedOff(info) }).ok : false;
   }
 
   function allOff() {
