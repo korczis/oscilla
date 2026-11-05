@@ -461,6 +461,14 @@ export function measureLifecyclePart(ctx, svc, ops) {
       return !!ctx.me && isActiveState(ctx.me.state) && ctx.me.state !== S.READY;
     },
     /**
+     * True while a microphone level-reference capture runs (C024): it stopped the other owners
+     * when it started (calibration.js), and no claim may start one under the reading. The
+     * loopback TEST CONTEXT captures the instrument's own output, so it refuses nothing.
+     */
+    measureReferenceOwnsOutput() {
+      return !!ctx.refCapture && ctx.ioKind !== 'loopback';
+    },
+    /**
      * Abort from Escape, page hide or leaving the workspace (a measurement and the live RTA);
      * false when nothing ran.
      */
