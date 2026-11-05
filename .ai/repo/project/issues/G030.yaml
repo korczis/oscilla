@@ -1,0 +1,36 @@
+id: G030
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+title: "One pad, the oscilla-pad: one two-parameter surface model, its Pro and hardware looks as skins"
+slug: one-pad-the-oscilla-pad
+priority: p2
+profile: implementation
+objective: "Lands as refactor(ui). The pad family of G021's census has one model, src/js/ui/kinds/xy-pad.js (createXyModel: the two declared parameters, the preview and commit, keys and ARIA), whose pointer maths is its part src/js/charts/drag-math.js (xyFromPoint). Every look of the pad is a skin of that model: the Pro surface of mountXyPad, the synth layer's hardware drawing src/js/ui/synth/xy.js (F013 W1b), the pad view 26 builds for K183 (touch point, trail, scale lines) and the live landing's hero (P012). A skin keeps its own geometry (a layout and the puck's travel) but maps a point to the pad's positions through the model's part, so src/js/ui/synth/xy.js's xyValue, which re-implements xyFromPoint over the skin's travel, calls it instead or goes. The pad is OSCILLA's own: no hardware pad's name, layout or look is copied (the owner's order of 2026-11-05; tests/unit/synth-wording.test.mjs and the product-name check hold)."
+why: "Owner orders of 2026-11-05: \"no kaosspad (oscilla-pad)\" and \"vsechny komponenty abstrahuj, reuse, dry, parametrizuj\". On the tree merged with Train 6 the census of G021 finds two point-to-position mappings of the pad (charts/drag-math.js xyFromPoint, the kind's, and ui/synth/xy.js xyValue, the hardware skin's)."
+depends_on:
+  - "G021"
+scope:
+  - "src/js/ui/kinds/xy-pad.js"
+  - "src/js/charts/drag-math.js"
+  - "src/js/ui/synth/xy.js"
+  - "src/js/synth/view"
+  - "tests/unit/ui-families-baseline.json"
+  - "tests/unit/ui-synth-xy.test.mjs"
+  - "tests/README.md"
+  - "dist"
+current_state: "Not started. G021 (feat/g021-family-census 3dcf5483) declares the pad family (model ui/kinds/xy-pad.js, part charts/drag-math.js) and, merged with Train 6, flags ui/synth/xy.js."
+acceptance_criteria:
+  - "Fail-first: the census unit test fails while a pad skin maps a point to positions by its own formula (skin-logic) and passes once it calls the model's part."
+  - "One mapping: every pad surface (the Pro pad, the hardware skin, K183's view, the landing hero) maps a pointer to positions through charts/drag-math.js xyFromPoint, asserted by the census and by a unit check that a skin's positions equal the part's for the same point and travel."
+  - "No behaviour change: tests/browser/xy-pad.cjs and the SYN visual reference pass unchanged in chromium, firefox and webkit."
+  - "OSCILLA's own: the product-name and wording checks hold for every pad text and recipe."
+  - "Standard: tests/README rows, size report, fail-first."
+validation:
+  - "node --test tests/unit/ui-families.test.mjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
