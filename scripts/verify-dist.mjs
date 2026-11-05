@@ -9,7 +9,13 @@
 //   - contains a module, importmap or external script (type=module, src=),
 //   - in first-party script uses fetch, XMLHttpRequest, dynamic import(), import.meta, a service
 //     worker, importScripts, a worker or worklet loaded from a path, WebSocket/EventSource,
-//     sendBeacon or localhost,
+//     sendBeacon or localhost, assigns an absolute URL to .src/.href/.srcset/.poster (or by
+//     setAttribute), sets new Image().src or new Audio()/Video() from anything but a data:/blob:
+//     literal, writes an absolute URL into a resource attribute of an HTML string, or reaches
+//     fetch by a computed member (window["fe"+"tch"], x["fetch"]),
+//   - embeds a vendor whose network sites (fetch, XMLHttpRequest, ..., an i18n loadPath) are not
+//     each in VENDOR_NETWORK, or whose inventoried site is reachable: the vendor references its
+//     entry more often than the inventory proves, or first-party script calls its entry API,
 //   - carries a source map reference,
 //   - embeds a vendor script that is not byte-identical to the pinned package file,
 //   - lacks the third-party notice for every vendor and every build-time package
@@ -65,7 +71,112 @@ const FORBIDDEN_JS = [
   [/\bnew\s+(?:WebSocket|EventSource)\s*\(/, 'WebSocket/EventSource'],
   [/\bsendBeacon\b/, 'navigator.sendBeacon'],
   [/\blocalhost\b|\b127\.0\.0\.1\b/, 'localhost reference'],
+  // Runtime loads through the DOM (R040): each of these ran with rc=0 before. A static scan sees
+  // literals only; a URL built from parts and assigned through a variable stays outside it,
+  // which is why the constructors that load whatever they are given are refused unless the
+  // argument is a data:/blob: literal.
+  [/\.(?:src|href|srcset|poster)\s*=\s*(['"`])\s*(?:https?:)?\/\//i,
+    'an absolute URL assigned to .src/.href/.srcset/.poster'],
+  [/\bsetAttribute\s*\(\s*(['"`])(?:src|href|srcset|poster)\1\s*,\s*(['"`])\s*(?:https?:)?\/\//i,
+    'an absolute URL set by setAttribute(src/href/srcset/poster)'],
+  [/\bnew\s+Image\s*\([^()]*\)\s*\.src\s*=\s*(?!(['"`])(?:data|blob):)/,
+    'new Image().src from anything but a data:/blob: literal'],
+  [/\bnew\s+(?:Audio|Video)\s*\(\s*(?!\)|(['"`])(?:data|blob):)/,
+    'new Audio()/Video() from anything but a data:/blob: literal'],
+  // A resource attribute inside an HTML string (innerHTML, insertAdjacentHTML, a template).
+  // <a>/<area> href is a destination, not a load, as in markup; their ping is a load.
+  [new RegExp('<(?:(?!(?:a|area)[\\s/>])[a-z][\\w:-]*\\s[^<>]*?(?<![\\w:-])(?:src|srcset|href'
+    + '|poster|data|action|formaction|background|xlink:href|imagesrcset|lowsrc|longdesc|ping'
+    + '|manifest|codebase|archive)|(?:a|area)\\s[^<>]*?(?<![\\w:-])ping)\\s*=\\s*\\\\?["\'`]?'
+    + '\\s*(?:https?:)?\\/\\/', 'i'), 'an absolute URL in a resource attribute of an HTML string'],
+  // A literal ["fetch"] on anything, or a global's member whose key is built from strings.
+  [new RegExp('\\[\\s*([\'"`])fetch\\1\\s*\\]|\\b(?:window|self|globalThis|top|parent|frames)'
+    + '\\s*\\[\\s*(?:([\'"`])[^\'"`\\]]*\\2\\s*\\+|`[^`\\]]*\\$\\{)'),
+  'computed fetch (window["fe"+"tch"], x["fetch"])'],
 ];
+
+// The network sites of every pinned vendor (R040). Vendor code is verified by identity, not by
+// the FORBIDDEN_JS scan, so each place a vendor can reach the network is listed here with the
+// proof that the shipped page never reaches it:
+//   - `markers`: verbatim fragments of the site in the vendor bytes. Every NETWORK_PRIMITIVES
+//     occurrence in the vendor must fall inside a marker of this inventory, so a new site in a
+//     vendor upgrade (or a stale inventory) fails until it is listed and proven;
+//   - `refs` [pattern, n]: the site's entry is referenced exactly n times in the vendor (its
+//     definition and export), so no vendor code calls, aliases or exports it further;
+//   - `firstParty`: the vendor API names whose call reaches the site; first-party script may
+//     call none of them.
+// p5@1.11.3 carries the i18next HTTP backend with a loadPath on cdn.jsdelivr.net. Only the
+// translator's initialize() starts it; the unminified build calls it from init.js, the minified
+// build that ships here replaces that call by Promise.resolve() (`n=Promise.resolve()`), and
+// the module is private to the bundle (no global exposes it), so the count of 2 is the proof.
+const P5_FETCH_API = ['httpDo', 'httpGet', 'httpPost', 'loadJSON', 'loadStrings', 'loadXML',
+  'loadTable', 'loadBytes', 'loadShader', 'loadImage', 'loadModel'];
+export const NETWORK_PRIMITIVES = [
+  [/(?<![\w$])fetch\s*\(/g, 'fetch('],
+  [/\bXMLHttpRequest\b/g, 'XMLHttpRequest'],
+  [/\bsendBeacon\b/g, 'sendBeacon'],
+  [/\b(?:WebSocket|EventSource)\b/g, 'WebSocket/EventSource'],
+  [/\bimportScripts\s*\(/g, 'importScripts('],
+  [/\bloadPath\b/g, 'loadPath'],
+];
+export const VENDOR_NETWORK = new Map([['p5', [
+  {
+    site: 'the i18next HTTP backend (translations from cdn.jsdelivr.net)',
+    markers: ['loadPath:"https://cdn.jsdelivr.net/npm/p5/translations/',
+      'var o=this.options.loadPath', 'Promise.race([fetch(e,t)'],
+    refs: [/(?<![\w$])initialize(?![\w$])/g, 2, "the translator's initialize()"],
+  },
+  { site: 'loadImage', markers: ['mode:"cors"});return fetch(o,e)'], firstParty: ['loadImage'] },
+  { site: 'httpDo', markers: [':fetch(p))'], firstParty: P5_FETCH_API },
+  { site: 'loadModel (HEAD)', markers: ['fetch(t,{method:"HEAD"})'], firstParty: ['loadModel'] },
+  {
+    site: 'opentype.js load (loadFont)',
+    markers: ['kr(e,t){var r=new XMLHttpRequest'],
+    firstParty: ['loadFont'],
+  },
+  {
+    site: 'the whatwg-fetch polyfill behind every fetch site',
+    markers: ['n=new XMLHttpRequest;n.onload'],
+    firstParty: P5_FETCH_API,
+  },
+]]]);
+
+const callOf = (names) => new RegExp(`(?:^|[^\\w$])(?:${names.join('|')})\\s*\\(`);
+
+/**
+ * Problems of one vendor's network inventory against its verbatim code.
+ * @param {string} id  "pkg@version"
+ * @param {string} code
+ * @param {Map<string, object[]>} inventory
+ */
+export function vendorNetworkProblems(id, code, inventory = VENDOR_NETWORK) {
+  const sites = inventory.get(id.slice(0, id.lastIndexOf('@'))) || [];
+  const problems = [];
+  const spans = [];
+  for (const { site, markers, refs } of sites) {
+    for (const marker of markers) {
+      const at = code.indexOf(marker);
+      if (at < 0) problems.push(`vendor ${id}: ${site} marker not found (stale inventory)`);
+      else spans.push([at, at + marker.length]);
+    }
+    if (refs) {
+      const [re, n, entry] = refs;
+      const seen = (code.match(re) || []).length;
+      if (seen !== n) {
+        problems.push(`vendor ${id}: ${site} is reachable: ${entry} is referenced ${seen} `
+          + `times, the inventory proves ${n} (definition and export)`);
+      }
+    }
+  }
+  for (const [re, what] of NETWORK_PRIMITIVES) {
+    for (const m of code.matchAll(re)) {
+      if (spans.some(([a, b]) => m.index >= a && m.index < b)) continue;
+      problems.push(`vendor ${id}: ${what} at ${m.index} is in no VENDOR_NETWORK site: `
+        + `…${code.slice(Math.max(0, m.index - 40), m.index + 40)}…`);
+    }
+  }
+  return problems;
+}
 
 const TOKEN = new RegExp([
   '<!--[\\s\\S]*?-->',                                              // comment
@@ -188,10 +299,14 @@ function cssProblems(css, where) {
  * @param {Map<string, string>} [opts.vendors]  vendor id ("p5@1.11.3") -> expected verbatim code
  * @param {{rawBytes: number, gzipBytes: number}} [opts.budget]
  * @param {string[]} [opts.notices]  "pkg@version" of the build-time packages the notice must name
+ * @param {Map<string, object[]>} [opts.vendorNetwork]  package -> its network sites (R040)
  */
-export function verifyHtml(html, { vendors = new Map(), budget = BUDGET, notices = [] } = {}) {
+export function verifyHtml(html, {
+  vendors = new Map(), budget = BUDGET, notices = [], vendorNetwork = VENDOR_NETWORK,
+} = {}) {
   const problems = [];
   const seenVendors = new Set();
+  const appBodies = [];
   let appScripts = 0;
 
   if (!/^<!doctype html>/i.test(html)) problems.push('document does not start with a doctype');
@@ -227,9 +342,11 @@ export function verifyHtml(html, { vendors = new Map(), budget = BUDGET, notices
         else if (guardRawText(expected, 'script', vendorId) !== body) {
           problems.push(`vendor script ${vendorId} is not byte-identical to the pinned file`);
         }
-        continue; // vendor code is verified by identity, not by pattern scan
+        problems.push(...vendorNetworkProblems(vendorId, body, vendorNetwork));
+        continue; // vendor code is verified by identity and its network inventory, not by scan
       }
       appScripts += 1;
+      appBodies.push(body);
       for (const [re, what] of FORBIDDEN_JS) {
         const hit = body.match(re);
         if (hit) {
@@ -270,6 +387,18 @@ export function verifyHtml(html, { vendors = new Map(), budget = BUDGET, notices
     }
   }
   if (appScripts === 0) problems.push('no first-party script found');
+  for (const id of seenVendors) {
+    for (const { site, firstParty } of vendorNetwork.get(id.slice(0, id.lastIndexOf('@'))) || []) {
+      if (!firstParty) continue;
+      const re = callOf(firstParty);
+      for (const body of appBodies) {
+        const hit = body.match(re);
+        if (!hit) continue;
+        const context = body.slice(Math.max(0, hit.index - 40), hit.index + 40);
+        problems.push(`first-party script reaches vendor ${id} ${site}: …${context}…`);
+      }
+    }
+  }
 
   const htmlTag = html.search(/<html[\s>]/i);
   const head = htmlTag < 0 ? html.slice(0, html.indexOf('-->') + 3) : html.slice(0, htmlTag);
@@ -360,8 +489,8 @@ function main() {
     for (const p of problems) console.error(`  FAIL ${p}`);
     process.exit(1);
   }
-  console.log('  PASS no file/remote references, no module/fetch/import()/service worker; '
-    + 'budget ok');
+  console.log('  PASS no file/remote references, no module/fetch/import()/service worker/DOM '
+    + 'runtime load; every vendor network site inventoried and unreachable; budget ok');
   console.log(`  PASS provenance: banner and metadata region name v${version}, `
     + `source digest ${sourceDigest} (recomputed), channel "source"`);
 }

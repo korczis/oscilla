@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cssReferences, decodeCssEscapes, verifyHtml } from '../../scripts/verify-dist.mjs';
+import { readFileSync } from 'node:fs';
+import * as verifyDist from '../../scripts/verify-dist.mjs';
+
+// A namespace import, so that on a base without the R040 exports each case fails by itself.
+const {
+  cssReferences, decodeCssEscapes, pinnedVendors, VENDOR_NETWORK, vendorNetworkProblems,
+  verifyHtml,
+} = verifyDist;
 
 const VENDOR = 'window.lib=function(){return fetch("x")};';
 const vendors = new Map([['lib@1.0.0', VENDOR]]);
 const budget = { rawBytes: 100_000, gzipBytes: 50_000 };
+// The fixture vendor's one network site, inventoried as VENDOR_NETWORK inventories p5's.
+const vendorNetwork = new Map([['lib', [
+  { site: 'lib()', markers: ['return fetch("x")'], firstParty: ['lib'] },
+]]]);
 
 function doc({ head = '', body = '', app = 'console.log(1);', vendor = VENDOR } = {}) {
   return '<!doctype html>\n<!--\nnotice\n== lib@1.0.0 - MIT\n-->\n'
@@ -13,7 +24,9 @@ function doc({ head = '', body = '', app = 'console.log(1);', vendor = VENDOR } 
     + `<script data-vendor="lib@1.0.0">${vendor}</script>`
     + `<script data-app>${app}</script></body></html>`;
 }
-const check = (html, opts = {}) => verifyHtml(html, { vendors, budget, ...opts }).problems;
+const check = (html, opts = {}) => verifyHtml(html, {
+  vendors, budget, vendorNetwork, ...opts,
+}).problems;
 const fails = (html, re) => {
   const problems = check(html);
   assert.ok(problems.some((p) => re.test(p)), `expected ${re} in ${JSON.stringify(problems)}`);
@@ -136,4 +149,115 @@ test('size budget is enforced', () => {
   const tiny = { rawBytes: 1e6, gzipBytes: 10 };
   const { problems } = verifyHtml(doc(), { vendors, budget: tiny });
   assert.ok(problems.some((p) => /gzip size/.test(p)));
+});
+
+// R040: each of these five forms passed verify-dist (rc=0) at 68b117f3.
+test('a script element given an absolute src fails, and so does any absolute .src/.href (R040)',
+  () => {
+    fails(doc({ app: 'const s=document.createElement("script");'
+      + 's.src="https://cdn.example/x.js";document.head.append(s)' }), /\.src\/\.href/);
+    fails(doc({ app: "l.href = '//cdn.example/a.css'" }), /\.src\/\.href/);
+    fails(doc({ app: 'v.poster=`https://t.example/${id}.jpg`' }), /\.src\/\.href/);
+    fails(doc({ app: 'i.srcset="https://t.example/a.png 2x"' }), /\.src\/\.href/);
+    fails(doc({ app: 's.setAttribute("src","https://cdn.example/x.js")' }), /setAttribute/);
+    // A data: or #fragment target, and a link to a variable, stay clean.
+    const app = 'a.href=u;a.href="#top";i.src="data:image/png;base64,AA"';
+    assert.deepEqual(check(doc({ app })), []);
+  });
+
+test('new Image().src from anything but a data:/blob: literal fails (R040)', () => {
+  fails(doc({ app: 'new Image().src="https://t.example/p.gif?u="+id' }), /new Image\(\)\.src/);
+  fails(doc({ app: 'new Image(1, 1).src = u' }), /new Image\(\)\.src/);
+  assert.deepEqual(check(doc({ app: 'new Image().src="data:image/png;base64,AA"' })), []);
+});
+
+test('new Audio(url) and new Video(url) fail unless given a data:/blob: literal (R040)', () => {
+  fails(doc({ app: 'new Audio(url).play()' }), /new Audio\(\)\/Video\(\)/);
+  fails(doc({ app: 'new Audio("https://t.example/a.mp3")' }), /new Audio\(\)\/Video\(\)/);
+  fails(doc({ app: 'new Video(u)' }), /new Audio\(\)\/Video\(\)/);
+  // An empty Audio(), a data: one and an AudioWorkletNode or AudioContext stay clean.
+  const app = 'new Audio();new Audio("data:audio/wav;base64,AA");'
+    + 'new AudioWorkletNode(c,"x");new AudioContext()';
+  assert.deepEqual(check(doc({ app })), []);
+});
+
+test('an absolute URL in a resource attribute of an HTML string fails (R040)', () => {
+  const html = /resource attribute of an HTML string/;
+  fails(doc({ app: 'el.insertAdjacentHTML("beforeend","<img src=https://t.example/p.gif>")' }),
+    html);
+  fails(doc({ app: 'el.innerHTML=\'<img alt="" src="https://t.example/p.gif">\'' }), html);
+  fails(doc({ app: 'el.innerHTML=`<video poster=\'//t.example/a.jpg\'></video>`' }), html);
+  fails(doc({ app: 'el.innerHTML="<link rel=stylesheet href=\\"https://cdn.example/a.css\\">"' }),
+    html);
+  fails(doc({ app: 'el.innerHTML=\'<a href="#x" ping="https://t.example/p">x</a>\'' }), html);
+  // A link destination, an SVG namespace, a data- attribute and a data: image stay clean.
+  const app = 'el.innerHTML=\'<a href="https://doi.org/10.1/x" target="_blank">d</a>'
+    + '<svg xmlns="http://www.w3.org/2000/svg"></svg><b data-src="https://x.example/">b</b>'
+    + '<img src="data:image/png;base64,AA" alt="">\'';
+  assert.deepEqual(check(doc({ app })), []);
+});
+
+test('a computed fetch fails: window["fe"+"tch"], a template key and x["fetch"] (R040)', () => {
+  const computed = /computed fetch/;
+  fails(doc({ app: 'window["fe"+"tch"]("https://t.example/")' }), computed);
+  fails(doc({ app: 'globalThis[`fe${"tch"}`](u)' }), computed);
+  fails(doc({ app: "self['fetch'](u)" }), computed);
+  fails(doc({ app: 'const g=window;g["fetch"](u)' }), computed);
+  // A global's member under an identifier key (the storage probe, the analysis source) is clean.
+  assert.deepEqual(check(doc({ app: 'window[e];globalThis[gZ];o["fetchAll"]' })), []);
+});
+
+test('a vendor network site outside the inventory, or a stale marker, fails (R040)', () => {
+  // The default inventory does not know the fixture vendor: its fetch( is in no site.
+  assert.ok(verifyHtml(doc(), { vendors, budget }).problems
+    .some((p) => /vendor lib@1\.0\.0: fetch\( at \d+ is in no VENDOR_NETWORK site/.test(p)));
+  const stale = new Map([['lib', [{ site: 'lib()', markers: ['return fetch("y")'] }]]]);
+  assert.ok(verifyHtml(doc(), { vendors, budget, vendorNetwork: stale }).problems
+    .some((p) => /lib\(\) marker not found \(stale inventory\)/.test(p)));
+  // First-party script calling the entry API reaches the vendor's site.
+  fails(doc({ app: 'window.lib()' }), /first-party script reaches vendor lib@1\.0\.0 lib\(\)/);
+});
+
+const [[P5_ID, P5]] = [...pinnedVendors()];
+const p5Doc = (vendor, app = 'console.log(1);') => '<!doctype html>\n<!--\nnotice\n'
+  + `== ${P5_ID} - LGPL\n-->\n<html><head><meta charset="utf-8"></head><body>`
+  + `<script data-vendor="${P5_ID}">${vendor}</script><script data-app>${app}</script>`
+  + '</body></html>';
+const p5Check = (vendor, app) => verifyHtml(p5Doc(vendor, app), {
+  vendors: new Map([[P5_ID, vendor]]), budget: { rawBytes: 1e8, gzipBytes: 1e8 },
+}).problems;
+
+test('every network string in the pinned p5 is inventoried and unreachable (R040)', () => {
+  assert.match(P5_ID, /^p5@/);
+  assert.deepEqual(vendorNetworkProblems(P5_ID, P5), []);
+  assert.deepEqual(p5Check(P5), []);
+  // The i18next HTTP backend's loadPath is in the bytes, and nothing calls initialize().
+  assert.ok(P5.includes('loadPath:"https://cdn.jsdelivr.net/npm/p5/translations/'));
+  assert.ok(P5.includes('e("./internationalization");var n=Promise.resolve();'),
+    'the minified init.js waits on Promise.resolve(), not on the translator');
+  for (const { firstParty = [] } of VENDOR_NETWORK.get('p5')) {
+    for (const api of firstParty) {
+      assert.ok(p5Check(P5, `p.${api}("x.json")`).some((p) => p.includes('reaches vendor p5@')),
+        `a first-party ${api}() reaches the vendor`);
+    }
+  }
+});
+
+test('a p5 whose init calls the translator\'s initialize() is refused (R040)', () => {
+  // The unminified build's init.js: Promise.all([documentReady, initTranslator()]).
+  const calling = P5.replace('e("./internationalization");var n=Promise.resolve();',
+    'var I=e("./internationalization"),n=(0,I.initialize)();');
+  assert.notEqual(calling, P5);
+  const refused = /i18next HTTP backend .* is reachable: the translator's initialize\(\) is ref/;
+  const problems = p5Check(calling);
+  assert.ok(problems.some((p) => refused.test(p) && / 3 times/.test(p)), 'the call is refused');
+  // A new fetch site appended to the vendor is refused too.
+  assert.ok(p5Check(`${P5};fetch("https://cdn.example/x")`)
+    .some((p) => /fetch\( at \d+ is in no VENDOR_NETWORK site/.test(p)));
+});
+
+test('the committed dist passes with the R040 forms and the p5 inventory in force', () => {
+  const html = readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8');
+  const { problems } = verifyHtml(html, { vendors: pinnedVendors(), notices: [] });
+  assert.deepEqual(problems, []);
 });
