@@ -265,9 +265,12 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     + '<p class="mt-2 text-sm text-gray-700 dark:text-gray-300" data-xy-default=""></p>'
     + `<p id="${uid}-first" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white" `
     + 'data-xy-first="" hidden></p>'
-    // The readout above the pad, where the docked keyboard never covers it (S3).
-    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[1.25rem] font-mono text-sm '
-    + 'text-gray-700 dark:text-gray-300"></p><div class="mt-2" data-osc="synth.xy.pad"></div>';
+    // The readout above the pad, where the docked keyboard never covers it (S3), its lines
+    // reserved (3 on a phone, 2 from sm, 1 from lg) so that a longer reading never moves the
+    // pad under the finger.
+    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[3.75rem] font-mono text-sm '
+    + 'text-gray-700 sm:min-h-[2.5rem] lg:min-h-[1.25rem] dark:text-gray-300"></p>'
+    + '<div class="mt-2" data-osc="synth.xy.pad"></div>';
   const spec = target.wire(host.querySelector('[data-xy-controls]'), { phone: !!phone() });
   const box = host.querySelector('[data-osc="synth.xy.pad"]');
   if (spec && box) {
@@ -309,7 +312,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       const d = deg(v.x);
       const yv = yValue(v.y);
       out.textContent = `${d.name} · degree ${d.degree} of ${scale} · Y ${Math.round(v.y * 100)}`
-        + ` % → ${to}${yv ? ` ${yv}` : ''}${r && r.held ? ' · gate open' : ''}`;
+        + ` % → ${to}${yv ? ` ${yv}` : ''}`; // the gate: the pad's LED
       return r;
     };
     const was = CURSORS.get(store);

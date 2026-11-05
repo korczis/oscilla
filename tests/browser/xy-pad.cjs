@@ -42,7 +42,8 @@
 //              above the surface; moving draws a trail; the release clears it, hides the ring
 //              and unlights the LED
 //   x-view-phone     (S3; 390 px, touch) the same on a phone: a touch (CDP in chromium, the
-//              pointer in firefox and webkit) draws the ring, the note, the value and a trail;
+//              pointer in firefox and webkit) draws the ring, the note, the value and a trail,
+//              and the pad does not move under the finger (the readout keeps its lines);
 //              lifting clears it
 //   x-view-reduced   (S3; prefers-reduced-motion: reduce) the ring follows the pointer and no
 //              trail segment is ever drawn
@@ -672,6 +673,7 @@ function defineChecks() {
   def('x-view-phone', async ({ page, browserName }) => {
     const a = await padPoint(page, 3, 0.3);
     const b = await pointIn(page, 8, 0.7);
+    const idleTop = (await viewState(page)).surfaceTop;
     let move;
     let lift;
     if (browserName === 'chromium') {
@@ -689,6 +691,9 @@ function defineChecks() {
     }
     const held = await viewHeld(page, a, 'a touch');
     if (!held.ok) return { ok: false, detail: 'the touch point is not drawn as sent', ...held };
+    if (Math.abs(held.v.surfaceTop - idleTop) > 0.5) {
+      return { ok: false, detail: 'the pad moved under the finger', idleTop, held: held.v };
+    }
     for (let i = 1; i <= 6; i++) {
       await move({ x: a.x + ((b.x - a.x) * i) / 6, y: a.y + ((b.y - a.y) * i) / 6 });
     }
