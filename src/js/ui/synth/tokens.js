@@ -1,5 +1,6 @@
 // The shared synth-theme layer's colours (plan F013; dev-53's layer design; the token API agreed
-// on 2026-11-02): one deep-frozen set of five groups read from OSCILLA's --osc-* custom properties
+// on 2026-11-02; D-PAL of 2026-11-05 added three groups): one deep-frozen set of eight groups
+// read from OSCILLA's --osc-* custom properties
 // (src/styles/tokens.css) at run time, so the light and dark themes differ only by the tokens.
 // Nothing here is a colour literal (project.visual-identity-lock v3): a token the page lacks
 // reads currentColor. New tokens go through the layer's owner.
@@ -28,20 +29,36 @@
  * cap shadow, the XY pad's recess and puck shadow) and control.highlight (--osc-hw-highlight) at
  * hw-sheen (the XY puck's face), each visible, |ΔL*| >= 3, on the face it is drawn over in both
  * themes (ui-synth-tokens.test.mjs).
+ *
+ * D-PAL (project.visual-identity-lock v4, amendment of 2026-11-05): the closed list's roles, each
+ * derived in ui-synth-palette.test.mjs. control.knobCap and control.knobCapHi are the cap
+ * material (C6: knob caps, a dial's face, switch levers and slide caps, fader caps; one dark
+ * value in both themes) and control.capInk the ink printed on it (--osc-text-on-accent, white in
+ * both themes; the pointer and index lines, 3:1 on both tones). control.led is a plain lit LED's
+ * emission colour (LXK-10). surface.chassis (PF-14) and surface.lcd (LXK-11); plate.hi and
+ * plate.lo, the plate pair lit from above in both themes (PF-04), which the panel's plates move
+ * to: until they do (dev-53), surface.plateHi and surface.plateLo stay the plates drawn today,
+ * and they follow plate.* in the change that moves the plates; wood.hi and wood.lo (PF-02);
+ * key.white, key.black and key.gap (LXK-02, LXK-07). A token set without the cap material and the
+ * LED (the panel's adapter until dev-53 maps them) draws as before (knob.js capMaterial).
  */
 export const SYNTH_TOKEN_NAMES = deepFreeze({
   surface: { plateHi: '--osc-surface-3', plateLo: '--osc-surface-1', card: '--osc-surface-2',
-    edge: '--osc-bg' },
+    edge: '--osc-bg', chassis: '--osc-chassis', lcd: '--osc-hw-lcd' },
   text: { label: '--osc-text-muted', value: '--osc-text', dim: '--osc-text-dim' },
   control: { cap: '--osc-surface-1', capHi: '--osc-surface-4', ring: '--osc-cyan',
     track: '--osc-text-dim', pointer: '--osc-text', focus: '--osc-focus',
     disabled: '--osc-text-dim', edge: '--osc-text-dim', knurl: '--osc-border',
     applied: '--osc-purple', bezel: '--osc-border-strong', shade: '--osc-hw-shade',
-    highlight: '--osc-hw-highlight' },
+    highlight: '--osc-hw-highlight', knobCap: '--osc-knob-cap', knobCapHi: '--osc-knob-cap-hi',
+    capInk: '--osc-text-on-accent', led: '--osc-hw-led' },
   jack: { body: '--osc-surface-0', ring: '--osc-text-dim', normal: '--osc-text-dim',
     refuse: '--osc-red' },
   cable: { palette: ['--osc-cyan', '--osc-red-soft', '--osc-magenta', '--osc-green',
     '--osc-purple', '--osc-blue'], shadow: '--osc-bg', sheen: '--osc-text' },
+  plate: { hi: '--osc-plate-hi', lo: '--osc-plate-lo' },
+  wood: { hi: '--osc-wood-hi', lo: '--osc-wood-lo' },
+  key: { white: '--osc-hw-key-white', black: '--osc-hw-key-black', gap: '--osc-hw-key-gap' },
 });
 
 /** The paint every role falls back to when its token has no value. */

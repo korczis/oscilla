@@ -99,8 +99,18 @@ test('a knob is drawn at 64 px from its 44-unit box, the scale ticks shown', () 
 
 test('the controls take the panel\'s tokens in the layer\'s roles', () => {
   const ct = panelControlTokens(T);
+  // D-PAL's control roles (the cap material, its ink, the LED: v4 amendment of 2026-11-05) are
+  // dev-53's to map into PANEL_TOKENS and panelControlTokens; until then the core draws the
+  // panel as before (ui-synth-tokens.test.mjs, the f523746a golden). Once the adapter carries
+  // one, it leaves this list (a mapped role fails here until it does).
+  const DPAL_PENDING = ['knobCap', 'knobCapHi', 'capInk', 'led'];
   for (const [role, name] of Object.entries(SYNTH_TOKEN_NAMES.control)) {
     if (role === 'applied') continue; // face.js has no applied value to mark (no engine report)
+    if (DPAL_PENDING.includes(role)) {
+      assert.equal(ct.control[role], undefined, `control.${role}: mapped, so drop it from `
+        + 'DPAL_PENDING');
+      continue;
+    }
     assert.equal(ct.control[role], `var(${name})`, `control.${role}`);
   }
   assert.equal(ct.surface.edge, `var(${SYNTH_TOKEN_NAMES.surface.edge})`);

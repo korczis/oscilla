@@ -15,7 +15,11 @@ import { controlSvg } from '../../../src/js/ui/synth/knob.js';
 import { choiceLayout, choiceSvg, selectorSvg } from '../../../src/js/synth/view/knob.js';
 import { PANEL_TOKENS } from '../../../src/js/synth/view/tokens.js';
 import { NODE_REGISTRY } from '../../../src/js/studio/registry.js';
-import { TOKENS } from '../ui-synth-fixture.mjs';
+// The core's token set as it was at f523746a: D-PAL's roles (the cap material, its ink, the LED)
+// change the drawing on purpose (ui-synth-tokens.test.mjs), and a set without them draws as
+// before, byte for byte, which this golden holds (it is the Synth panel's case until dev-53 maps
+// the roles).
+import { PRE_DPAL_TOKENS as TOKENS } from '../ui-synth-fixture.mjs';
 
 const ZOOMS = [0.15, 0.25, 0.5, 1, 2, 3];
 const STATES = (values) => [{ hover: true }, { focus: true }, { dragging: true },

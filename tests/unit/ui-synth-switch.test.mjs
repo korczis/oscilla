@@ -432,9 +432,10 @@ test('review C 2: a slide\'s focus ring never crosses its cap', () => {
 // slice C: three equal bars in an outlined box read as a menu icon (finding 5), so the outer two
 // are quiet ridges (control.knurl, 1) inside the cap and the middle one is the index line
 // (control.pointer, 1.5) running past the cap's edge to its detent; and the top sheen strip in
-// capHi did not show in dark (ΔL* +1.26) and darkened the light cap (finding 6), while the
-// highlight is not visible on the cap in both themes (rule b), so the cap has no sheen until
-// D-PAL's cap roles (todo below).
+// capHi did not show in dark (ΔL* +1.26) and darkened the light cap (finding 6). D-PAL (C6): the
+// cap is the cap material, its index line the cap ink (over the cap) with control.pointer past
+// the cap's stroke (on the plate), and the highlight shows on it in both themes, so the cap
+// carries its top sheen strip at hw-sheen (rule b; ui-synth-tokens.test.mjs judges it).
 test('slice C 3 (SW-07): a slide cap is 14 x 18 with a ridged grip and an index line, no nub',
   () => {
     for (const p of [ENUM(3), WAVE]) {
@@ -453,7 +454,7 @@ test('slice C 3 (SW-07): a slide cap is 14 x 18 with a ridged grip and an index 
             const grips = parts(svg, 'data-grip');
             assert.equal(grips.length, 3, `${where}: three grip lines`);
             assert.deepEqual(grips.map((g) => n(g, 'stroke-width')), [1, 1.5, 1], where);
-            const ptr = state.disabled ? TOKENS.control.disabled : TOKENS.control.pointer;
+            const ptr = state.disabled ? TOKENS.control.disabled : TOKENS.control.capInk;
             // Review of slice C, C5: knurl ridges were 1.18:1 on the dark cap, gone at 2x; the
             // ridges are control.edge (3:1 on the cap: the next test), knurl only disabled.
             const ridge = state.disabled ? TOKENS.control.knurl : TOKENS.control.edge;
@@ -479,7 +480,16 @@ test('slice C 3 (SW-07): a slide cap is 14 x 18 with a ridged grip and an index 
             assert.ok(n(grips[1], 'x2') > n(detent, 'x1') && n(grips[1], 'x2') < n(detent, 'x2'),
               `${where}: ending on its detent`);
             assert.ok(svg.indexOf(grips[1]) > svg.indexOf(cap), `${where}: over the cap`);
-            assert.equal(parts(svg, 'data-sheen').length, 0, `${where}: no sheen (D-PAL)`);
+            assert.equal(attrOf(cap, 'fill'), TOKENS.control.knobCap, `${where}: C6`);
+            const sheens = parts(svg, 'data-sheen');
+            assert.equal(sheens.length, state.disabled ? 0 : 1, `${where}: the top sheen strip`);
+            for (const s of sheens) {
+              assert.equal(attrOf(s, 'class'), 'opacity-hw-sheen', where);
+              assert.ok(n(s, 'y') >= top && n(s, 'y') + n(s, 'height') <= yc - 4 - 0.5
+                && n(s, 'x') >= -7 && n(s, 'x') + n(s, 'width') <= 7, `${where}: on the cap's `
+                + 'top, above the upper ridge');
+              assert.ok(svg.indexOf(s) > svg.indexOf(cap), `${where}: over the cap`);
+            }
             // No nub: the slot (its stroke too) ends inside the cap at an end stop.
             const slot = part(svg, 'data-slot');
             const sw = n(slot, 'stroke-width') / 2;
@@ -527,8 +537,15 @@ test('review C 6: a disabled dial\'s selected detent dims to control.disabled', 
   }
 });
 
-test.todo('D-PAL (oscilla-21, Q071): the slide cap\'s top sheen, once --osc-knob-cap-hi '
-  + 'shows on the cap in both themes (rule b); also: a dark cap lighter than its plate');
+// D-PAL's todo, resolved: the slide cap is the cap material (C6) with its top sheen in the
+// highlight, which shows on it in both themes (rule b, ui-synth-tokens.test.mjs); the cap is
+// darker than every plate rather than lighter, by the cap material's derivation (its inks hold
+// 3:1 on it only below the dark plates; ui-synth-palette.test.mjs).
+test('D-PAL: the slide cap\'s sheen is the highlight at hw-sheen, on the cap material', () => {
+  const svg = draw(WAVE);
+  assert.equal(attrOf(part(svg, 'data-sheen'), 'fill'), TOKENS.control.highlight);
+  assert.equal(attrOf(part(svg, 'data-cap'), 'fill'), TOKENS.control.knobCap);
+});
 
 // ---------------------------------------------------------------- rotary
 
@@ -1032,7 +1049,7 @@ test('edges, lever, ticks and LED hold 3:1 on surface-2 and surface-3, legends 4
   const graphic = [['edge', N.control.edge], ['lever', N.control.edge],
     ['washer rim', N.control.edge], ['grip', N.control.pointer],
     ['detent', N.control.track], ['selected detent', N.control.ring],
-    ['focus', N.control.focus], ['LED lit', N.control.ring], ['LED ring', N.control.edge]];
+    ['focus', N.control.focus], ['LED lit', N.control.led], ['LED ring', N.control.edge]];
   const text = [['legend', N.text.label], ['selected legend', N.text.value]];
   const short = [];
   for (const [theme, t] of Object.entries(await tokenThemes())) {
@@ -1269,8 +1286,10 @@ test('dragging lifts the shadow; the shadow and the sheen are the hw-* classes',
     // Slice C: every switch shadow is the depth shade, as the knob's (21's amendment a-e).
     assert.equal(attrOf(sh(draw(p)), 'fill'), TOKENS.control.shade, p.key);
   }
-  // Review of slice A, A3: the knob draws no sheen until D-PAL, so neither does a dial.
-  assert.doesNotMatch(draw(ENUM(5)), /data-sheen=""/, 'the dial is the knob: no sheen');
+  // Review of slice A, A3: the knob drew no sheen until D-PAL; with the cap material (C6) it
+  // draws one, and so does a dial, the knob's face, at the hw-sheen class.
+  assert.equal([...draw(ENUM(5)).matchAll(/data-sheen=""/g)].length, 1, 'the dial is the knob');
+  assert.match(draw(ENUM(5)), /data-sheen="" class="opacity-hw-sheen"/);
 });
 
 // ---------------------------------------------------------------- v4: intensity, LED, motion
@@ -1298,7 +1317,7 @@ test('the LED: data-source and data-lit from the caller, the glow only its halo'
     assert.equal(attrOf(led, 'data-source'), 'filter.enabled &quot;x&quot;', 'escaped');
     assert.equal(attrOf(led, 'data-lit'), String(lit));
     const lens = part(svg, 'data-lens');
-    assert.equal(attrOf(lens, 'fill'), lit ? TOKENS.control.ring : TOKENS.surface.card);
+    assert.equal(attrOf(lens, 'fill'), lit ? TOKENS.control.led : TOKENS.surface.card);
     assert.equal(n(lens, 'r'), 3, 'Ø6');
     assert.equal(parts(svg, 'data-halo').length, lit ? 1 : 0, 'the glow only when lit');
     if (lit) assert.equal(attrOf(part(svg, 'data-halo'), 'class'), 'opacity-hw-sheen');
@@ -1358,7 +1377,7 @@ test('a setpoint: no animation, no listener, no document; it imports only the la
   const code = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   assert.doesNotMatch(code, /<animate|\.animate\(|requestAnimationFrame|transition|setTimeout/);
   assert.doesNotMatch(code, /addEventListener|(?<![\w.])(?:document|window)\.|getComputedStyle/);
-  const imports = [...SRC.matchAll(/^import .* from '([^']+)';$/gm)].map((m) => m[1]);
+  const imports = [...SRC.matchAll(/^import [^;]* from '([^']+)';$/gm)].map((m) => m[1]);
   assert.deepEqual(imports, ['./knob.js', './legend.js', './led.js']);
 });
 

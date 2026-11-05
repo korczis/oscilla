@@ -43,7 +43,7 @@
 // tokens passed in (synthTokens; project.visual-identity-lock) and no number sets an intensity
 // (v4): a shadow is class opacity-hw-shadow in the depth shade (control.shade), a highlight
 // opacity-hw-sheen (the depth highlight where it shows on its face in both themes, else capHi),
-// and a toggle's LED is led.js's (ledSvg: its bezel, its lens in control.ring lit or
+// and a toggle's LED is led.js's (ledSvg: its bezel, its lens in control.led lit or
 // surface.card with a control.edge ring off, both 3:1, and lit its SVG halo at the hw-sheen
 // intensity), so every LED of the layer looks alike; the caller's { source, lit } is passed
 // through, and ledSvg binds data-source and data-lit from it (the parameter's real state, never a
@@ -61,9 +61,10 @@
 //                                            the drawing, an SVG <g>
 //   SWITCH_STYLES, LEGEND_PX, NUMBERED_MIN, legendWidth
 
-import { CONTROL_BOX, clampValue, formatValue, HIT_PX, hoverEdge, KNOB, knobFace } from './knob.js';
+import { capMaterial, CONTROL_BOX, clampValue, formatValue, HIT_PX, hoverEdge, KNOB, knobFace }
+  from './knob.js';
 import { legendWidth, LEGEND_PX } from './legend.js';
-import { LED, ledBox, ledSvg } from './led.js';
+import { checkLed, LED, ledBox, ledSvg } from './led.js';
 
 /** legendWidth and LEGEND_PX are legend.js's, which led.js reads too. */
 export { legendWidth, LEGEND_PX };
@@ -490,7 +491,8 @@ function leverOutline(dir, dy) {
  * dark, ΔL* -0.83; its rim control.edge) the lever's root enters and the On lever's shadow falls
  * on, the lever's shadow (control.shade at hw-shadow),
  * the tapered lever and its ball in control.edge (a grey metal that keeps its tone in both
- * themes, 3:1 on the plates and on the nut; no outline, the shadow gives its depth), and their
+ * themes, 3:1 on the plates and on the nut; no outline, the shadow gives its depth; metal, not
+ * C6's cap material), and their
  * highlight (control.highlight at hw-sheen: it shows on control.edge in both themes, amendment
  * (b) and (c); ui-synth-tokens.test.mjs). Disabled (C1; review of slice C, finding 3): lever and
  * ball in control.bezel, quieter than control.edge; the nut flat in capHi, never lighter than
@@ -535,15 +537,16 @@ function toggleShapes(L, sel, t, st) {
  * scale the cap travels along), the cap's shadow (control.shade at hw-shadow), the capW x capH
  * cap (its edge brightened on hover by hoverEdge, C5), two ridges in control.edge (review of
  * slice C, C5: 3:1 on the cap, so it reads gripped at 2x; control.knurl was 1.18:1 in dark) and
- * the index line (control.pointer) running past the cap's edge onto its detent. Disabled (C1;
- * C6): the selected detent and the index line control.disabled, the ridges control.knurl. No
- * sheen: capHi does not show on the dark cap and darkens the light one, and the highlight does
- * not show on the cap in both themes (rule b), so it waits on D-PAL's cap roles (review of slice
- * C, findings 5 and 6).
+ * the index line running past the cap's edge onto its detent. Disabled (C1; C6): the selected
+ * detent and the index line control.disabled, the ridges control.knurl. D-PAL (C6): the cap
+ * material, the index in its ink and past the cap's stroke (on the plate) control.pointer, a top
+ * sheen strip in the highlight (it shows on the material, rule b; slice C findings 5, 6).
  */
 function slideShapes(L, sel, t, st) {
   const S = SLIDE;
   const c = t.control;
+  const m = capMaterial(t);
+  const live = m.dpal && !st.disabled;
   const ys = L.options.map((o) => o.legend.y);
   const end = Math.max(...ys.map(Math.abs)) + S.capH / 2 - 1;
   const yc = ys[sel];
@@ -563,11 +566,15 @@ function slideShapes(L, sel, t, st) {
       + `stroke-width="${i === sel ? DIAL.litW : DIAL.tickW}"/>`).join('')
     + `${cap(`data-shadow="" class="${SHADOW_CLASS}"`, yc + dy)} fill="${esc(c.shade)}" `
     + 'stroke="none"/>'
-    + `${cap('data-cap=""', yc)} fill="${esc(c.cap)}" stroke="${esc(c.edge)}" `
+    + `${cap('data-cap=""', yc)} fill="${esc(m.body)}" stroke="${esc(c.edge)}" `
     + 'stroke-width="1.5"/>'
+    + (live ? `<rect data-sheen="" class="${SHEEN_CLASS}" x="-4.5" y="${num(yc - 7.5)}" `
+      + `width="9" height="2" rx="1" fill="${esc(c.highlight)}" stroke="none"/>` : '')
     + hoverEdge(`rect ${capAt(yc)} stroke-width="1.5"`, t, st)
     + grip(yc - S.gripGap, ridge, S.gripEdgeW)
-    + grip(yc, st.disabled ? c.disabled : c.pointer, S.gripW, S.indexOut)
+    + grip(yc, st.disabled ? c.disabled : m.ink, S.gripW, S.indexOut)
+    + (live ? `<line data-index-tip="" x1="7.75" y1="${num(yc)}" x2="${S.indexOut}" `
+      + `y2="${num(yc)}" stroke="${esc(c.pointer)}" stroke-width="${S.gripW}"/>` : '')
     + grip(yc + S.gripGap, ridge, S.gripEdgeW);
 }
 
@@ -625,18 +632,6 @@ function stateIndex(x, sel, opts) {
 function ledShape(at, led, t, zoom) {
   return ledSvg({ source: led.source, lit: led.lit, at: { x: at.cx, y: at.cy }, tokens: t,
     zoom });
-}
-
-function checkLed(led, id) {
-  if (!led || typeof led !== 'object') {
-    throw new TypeError(`${id}: an LED is { source, lit }, bound to the parameter's state.`);
-  }
-  if (typeof led.source !== 'string' || !led.source.trim()) {
-    throw new TypeError(`${id}: an LED names its data-source (the state it shows).`);
-  }
-  if (typeof led.lit !== 'boolean') {
-    throw new TypeError(`${id}: an LED's lit is the state's boolean, not ${typeof led.lit}.`);
-  }
 }
 
 /**

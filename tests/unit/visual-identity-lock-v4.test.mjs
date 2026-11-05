@@ -759,7 +759,8 @@ test('the hardware look is drawn only in the synth-theme layer, and rivets nowhe
   assert.deepEqual(rivets(SRC), []);
 });
 
-test('D-PAL: the closed list is pinned, and equals the rule\'s and the ratchet\'s list', async () => {
+test('D-PAL: the closed list is pinned, and equals the rule\'s and the ratchet\'s list',
+  async () => {
   // The list grows only by a reviewed amendment: this literal, the rule's amendment section and
   // the Flowbite Pro measure's exemption must change together.
   assert.deepEqual(SYNTH_PALETTE_ROLES, ['--osc-wood-hi', '--osc-wood-lo', '--osc-plate-hi',

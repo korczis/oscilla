@@ -33,7 +33,10 @@ const hexOf = (rgb) => `#${rgb.map((c) => Math.round(c).toString(16).padStart(2,
 const linear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const lin = (hex) => channels(hex).map((c) => linear(c / 255));
 /** WCAG 2.2 relative luminance (sRGB Y, D65). */
-const luminance = (hex) => { const [r, g, b] = lin(hex); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const luminance = (hex) => {
+  const [r, g, b] = lin(hex);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
 const contrast = (a, b) => {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
@@ -124,7 +127,8 @@ function derive() {
   const out = {};
   // Plates (PF-04): per theme, the lighter of today's two plate surfaces at the top; the foot on
   // the sRGB line from the darker toward the top, the first step on which the depth shade shows,
-  // (a) 1.15:1 and (b) ΔL* <= -3 at hw-shadow, with the top still ΔL* >= 3 lighter (lit from above).
+  // (a) 1.15:1 and (b) ΔL* <= -3 at hw-shadow, with the top still ΔL* >= 3 lighter (lit from
+  // above).
   const shadow = Number(HW['hw-shadow']);
   for (const th of BOTH) {
     const [hi, low] = PLATES_NOW.map((n) => tok(th, n)).sort((x, y) => lstar(y) - lstar(x));
@@ -253,7 +257,8 @@ test('the plates (PF-04): lighter at the top in both themes, and the shade shows
   }
 });
 
-test('the cap material (C6, K11): its inks hold 3:1, its body shows on every plate, it is lit', () => {
+test('the cap material (C6, K11): its inks hold 3:1, its body shows on every plate, it is lit',
+  () => {
   const cap = valueIn('dark', '--osc-knob-cap');
   const hi = valueIn('dark', '--osc-knob-cap-hi');
   assert.ok(capInksHold(cap), 'every ink 3:1 on the cap');
@@ -274,7 +279,8 @@ test('the chassis (PF-14): a black seam shows off every plate and the card in bo
   assert.ok(offEveryPlate(valueIn('dark', '--osc-chassis'), ['--osc-surface-2']));
 });
 
-test('the keys (LXK-02, LXK-07): white and black 4.5:1, the gap 3:1 on white, both on plates', () => {
+test('the keys (LXK-02, LXK-07): white and black 4.5:1, the gap 3:1 on white, both on plates',
+  () => {
   const w = valueIn('dark', '--osc-hw-key-white');
   const b = valueIn('dark', '--osc-hw-key-black');
   const g = valueIn('dark', '--osc-hw-key-gap');
