@@ -145,7 +145,8 @@
 // then for an apply while running the transaction's own steps: `node` built | replaced |
 // retired, `route` (an edge gain ramped to `gain` from `at`, reached at `end`), `param` (scheduled:
 // the value given to the node's adapter, in the parameter's unit, at audio time `at`; owned: not
-// written, another owner drives it), `<step>` failed with its <step>-failed code; `stop`.
+// written, another owner drives it), `<step>` failed with its <step>-failed code; `stop`
+// (the transaction's param steps and the limit diagnostics: runtime-trace.js).
 // A param step is what the runtime handed the adapter, not a read-back of the AudioParam: an
 // adapter clamps where its builder does (an oscillator frequency below 0.95 × Nyquist).
 //
@@ -174,9 +175,12 @@ import { createEngineHooks } from './adapters/engine-hooks.js';
 import {
   CLEANUP_MARGIN_S, EMPTY_PLAN, ROUTE_FLOOR, SOURCE_STOP_PAD_S, STUDIO_STOP_S, STUDIO_XFADE_S,
   compileStudio,
-  computeBases, createEdgeHandle, diffPlans, disposeHandle, frequencyLimits, instantiateNode,
+  computeBases, createEdgeHandle, diffPlans, disposeHandle, instantiateNode,
   planHash, studioHashOf,
 } from './compiler.js';
+import {
+  limitDiagnostics, liveUpdate, noteBaseWrites, paramUnit, traceNote,
+} from './runtime-trace.js';
 import { sameExecutionState } from './schema.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
@@ -589,28 +593,6 @@ export function createStudioRuntime({
     return ownedParams();
   }
 
-  /**
-   * The `frequency-limited` diagnostics in effect (frequencyLimits), node by node; a base
-   * another owner drives (an automation lane) is left out: its static value does not play.
-   * Built when read, from the plan in effect, so a rename (compiled, but recomputing no base)
-   * names the node and the cable's source as they are now (T023 review R3).
-   */
-  function limitDiagnostics() {
-    const out = [];
-    for (const [id, cb] of bases) {
-      const pn = plan.nodes.get(id);
-      if (!pn || !cb.limits) continue;
-      // The values as computed (a node not ready keeps its last bases), the names as now.
-      const at = { ...pn, params: cb.limits.params };
-      for (const d of frequencyLimits(at, cb, { sampleRate: cb.limits.sampleRate,
-        safeMaximum: cb.limits.safeMaximum, edges: plan.edges, nodes: plan.nodes })) {
-        const own = d.entity.kind === 'node' && owned.get(d.details.node);
-        if (!own || !own.has(d.details.param)) out.push(d);
-      }
-    }
-    return out;
-  }
-
   function ownedParams() {
     const out = [];
     for (const [node, keys] of owned) for (const param of keys) out.push({ node, param });
@@ -760,9 +742,7 @@ export function createStudioRuntime({
     try {
       trace.record('runtime', 'apply', { revision: rev, outcome: 'applied',
         detail: { at: t, ops: ops.length, nodes: handles.size, edges: edges.size } });
-      note = (kind, id, outcome, detail = null, code = null) => (fresh && !code ? null
-        : trace.record('runtime', kind, { revision: rev, entity: { kind: kind === 'route'
-          ? 'edge' : 'node', id }, outcome, code, detail }));
+      note = traceNote(trace, rev, fresh);
       for (const o of ops) {
         if (o.op === 'node-add' || o.op === 'node-replace') {
           note('node', o.id, o.op === 'node-add' ? 'built' : 'replaced');
@@ -776,32 +756,13 @@ export function createStudioRuntime({
         if (!h || typeof h.engage !== 'function') unresolvedMap.delete(key);
         else if (!created.handles.has(id)) guard('engage', id, () => h.engage());
       }
-      const unit = (type, k) => (registry.param(type, k) || {}).unit || null;
+      const unit = paramUnit(registry);
       const affected = new Set(created.handles.keys());
       for (const o of ops) {
         if (o.op === 'node-params') {
-          const pn = next.nodes.get(o.id);
-          const h = handles.get(o.id);
-          const live = o.keys.filter((k) => !(registry.param(pn.type, k) || {}).modulatable);
-          if (live.length && h) {
-            const changed = {};
-            for (const k of live) changed[k] = pn.params[k];
-            const own = ownedKeys(h);
-            const w = tracing ? {} : null;
-            // What the adapter reports it did (w[key] = how): only 'set' and 'glide' act now; a
-            // key it did not act on, or keeps for the next gate or note, is only stored (the
-            // plan, a rebuild, a view, the next voice).
-            if (guard('update', o.id, () => h.update(changed, own, w)) && w) {
-              for (const k of live) {
-                const how = w[k] || null;
-                const later = how === 'next-gate' || how === 'next-note'; // kept, not written
-                note('param', o.id, how && !later ? 'scheduled' : own.has(k) ? 'owned'
-                  : 'stored', { param: k, value: pn.params[k], unit: unit(pn.type, k),
-                  at: how === 'set' || how === 'glide' ? now : null, via: how });
-              }
-            }
-          }
-          if (live.length < o.keys.length) affected.add(o.id);
+          // The live keys go to the adapter's update now; the rest recompute their bases.
+          if (liveUpdate(o, next.nodes.get(o.id), handles.get(o.id), { registry, ownedKeys,
+            tracing, guard, note, unit, now })) affected.add(o.id);
         } else if (o.op.startsWith('edge-')) {
           const pe = next.edges.get(o.id);
           if (pe && pe.kind === 'control') affected.add(pe.to.node);
@@ -829,22 +790,9 @@ export function createStudioRuntime({
           const own = heldKeys(h, now);
           const w = tracing ? {} : null;
           if (guard('parameters', id, () => h.applyBase(cb.base, false, own, w)) && w) {
-            // Each AudioParam value the adapter reports it wrote that differs from its last
-            // write (a glide from now), then each key whose base changed but was not written.
             const was = written.get(id) || {};
             written.set(id, w);
-            for (const [k, v] of Object.entries(w)) {
-              if (was[k] !== v) {
-                note('param', id, 'scheduled', { param: k, value: v, unit: unit(pn.type, k),
-                  at: now, via: 'glide' });
-              }
-            }
-            for (const [k, b] of Object.entries(cb.base)) {
-              const p = prev && prev.base[k];
-              if (k in w || (p && p.value === b.value && p.cents === b.cents)) continue;
-              note('param', id, own.has(k) ? 'owned' : 'stored', { param: k, value: b.value,
-                unit: unit(pn.type, k) });
-            }
+            noteBaseWrites(id, pn, cb.base, prev, was, w, own, { note, unit, now });
           }
         }
         for (const [eid, g] of cb.gains) {
@@ -895,7 +843,7 @@ export function createStudioRuntime({
     lastOps = ops;
     lastWarnings = warnings;
     // What the running graph plays below the model, as diagnostics in effect (T023).
-    return { ok: true, applied: true, ops, warnings: [...warnings, ...limitDiagnostics()],
+    return { ok: true, applied: true, ops, warnings: [...warnings, ...limitDiagnostics(bases, plan, owned)],
       at: t };
   }
 
@@ -1110,7 +1058,7 @@ export function createStudioRuntime({
     // Validation's warnings, the last transaction's, failures still in effect and the values
     // the running graph holds below what they ask (T023), once each.
     const warned = [...new Set([...plan.warnings, ...lastWarnings, ...unresolved(),
-      ...limitDiagnostics()])];
+      ...limitDiagnostics(bases, plan, owned)])];
     const limitedEdges = [];
     const limitedParams = []; // static bases lowered below 0.95 × Nyquist (V272 A7)
     const exceeds = [];
