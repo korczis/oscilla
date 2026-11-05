@@ -14,11 +14,20 @@
 //     held()                                       -> [{ key, note, velocity, input, sink }]
 //                                                  a copy, in the order the keys were held
 //     sinkOf(key)                                  -> sink | null
+//     legato(oldKey, newKey, { note, velocity })   -> sink | null: moves a held key's note to
+//                                                  newKey on the same sink and input without a
+//                                                  release (a slide: the caller sends the
+//                                                  sink's legato, or a note-off and a note-on);
+//                                                  null and nothing changed when oldKey is not
+//                                                  held. A newKey already held elsewhere is
+//                                                  first released on its own sink ('re-press')
 //     releaseAll(reason, { sink, input } = {})     -> count: releases every matching key
 //                                                  through its sink and removes it (sink: the
 //                                                  same object or noteOff; input: 'midi', ...)
 //     on(fn)                                       -> off: fn({ type: 'hold' | 'release', key,
-//                                                  reason }) after each change
+//                                                  reason }) after each change (a legato emits
+//                                                  release oldKey then hold newKey, reason
+//                                                  'legato')
 //   }
 //
 // key: `${source}:${channel}:${note}` (midi/notes.js keyOf). A sink is any object with a
@@ -36,8 +45,8 @@
 export const HELD_PER_INPUT = 128;
 
 /** The reasons a key is released, by the caller (releaseKey, releaseAll) or here. */
-export const RELEASE_REASONS = Object.freeze(['note-off', 're-press', 'bound', 'blur', 'hide',
-  'escape', 'switch', 'disarm', 'unplug', 'all-off', 'silence']);
+export const RELEASE_REASONS = Object.freeze(['note-off', 're-press', 'legato', 'bound', 'blur',
+  'hide', 'escape', 'switch', 'disarm', 'unplug', 'all-off', 'silence']);
 
 /**
  * Whether two sinks are the same player. A sink is its note-off: route() may hand out a fresh
@@ -110,6 +119,27 @@ export function createHeldNotes({ perInput = HELD_PER_INPUT, onError = reportLat
     return e.sink;
   }
 
+  function legato(oldKey, newKey, { note, velocity } = {}) {
+    if (typeof newKey !== 'string' || !newKey) {
+      throw new TypeError('legato: newKey must be a string');
+    }
+    const from = entries.get(oldKey);
+    if (!from) return null;
+    if (oldKey === newKey) return from.sink;
+    const steps = [];
+    entries.delete(oldKey);
+    const taken = entries.get(newKey);
+    if (taken) {
+      entries.delete(newKey);
+      steps.push(...releaseSteps(taken, 're-press'));
+    }
+    entries.set(newKey, { key: newKey, note, velocity: velocity === undefined ? from.velocity
+      : velocity, input: from.input, sink: from.sink });
+    steps.push(emit('release', oldKey, 'legato'), emit('hold', newKey, 'legato'));
+    settle(steps);
+    return from.sink;
+  }
+
   function releaseAll(reason, { sink, input } = {}) {
     if (typeof reason !== 'string' || !reason) {
       throw new TypeError('releaseAll: a reason is required');
@@ -124,6 +154,7 @@ export function createHeldNotes({ perInput = HELD_PER_INPUT, onError = reportLat
   return {
     hold,
     releaseKey,
+    legato,
     releaseAll,
     held: () => [...entries.values()].map(copy),
     sinkOf: (key) => (entries.has(key) ? entries.get(key).sink : null),
