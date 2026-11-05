@@ -23,7 +23,6 @@ export const OCTAVE_C_LABELS = ['C0', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 
 export const THIRD_OCTAVE_HALF_BAND = 2 ** (1 / 6);
 export const MIC_LEGENDS = ['● microphone (relative)', '● mic'];
 export const DIGITAL_LIMIT_LABEL = `digital limit ${SAFE_NYQUIST_PERCENT_TEXT}`;
-export const SPECTRUM_IDLE_NOTES = ['The measured spectrum appears once audio starts — press HOLD TO PLAY.', 'Spectrum appears once audio starts.', 'press HOLD TO PLAY'];
 
 export const SPECTRUM_TITLE = 'RELATIVE LEVEL (dB, uncalibrated)';
 export const SPECTRUM_DB_MIN = -140;

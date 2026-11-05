@@ -64,9 +64,15 @@
 //   space-after-preset-load  (review of #159) Load in Presets stays in Presets and says "Press
 //                     Play in the status bar (or Space)"; with focus off a control, Space plays
 //                     the preset
-//   play-visible-everywhere  (C030) at 1536x1024 Analyzer, Filter Lab, Compare and Presets show
-//                     the status-bar Play inside the viewport; a click starts an engine source
-//                     and a second click returns the engine's active source count to 0
+//   play-visible-everywhere  (C030) Analyzer, Filter Lab, Compare and Presets show a Play in
+//                     the viewport: the status-bar Play where Source & Pattern is hidden (from
+//                     1280 px, Presets always), else Hold to Play; a press starts an engine
+//                     source and the Stop returns the engine's active source count to 0
+//   one-play-per-workspace  (C030) from 768 px every workspace whose Space owner is not null
+//                     shows exactly one Play group (Source & Pattern, the status-bar Play or the
+//                     Studio transport), the one shortcuts.js playControl names at that width;
+//                     below 768 px the named one is among those shown (run with --viewport
+//                     1024x768 for the tablet layout)
 //   space-compact-studio-panel  (review of #159) in the Playground and the Sequencer the compact
 //                     Studio panel takes focus only on its buttons; after a click on its title,
 //                     Space is the instrument's, never the Studio transport's
@@ -1097,34 +1103,62 @@ function defineChecks() {
     }), loaded, controls, space };
   });
 
-  // C030: Analyzer, Filter Lab, Compare and Presets show no Hold to Play or Trigger at
-  // 1536x1024; the status-bar Play (the instrument's statusPlay, no new player) is shown there,
-  // a click starts engine sources and a second click stops them all. Continuous playback is
+  // C030: the Play controls a workspace shows, by group: 'source' (Hold to Play or Trigger of
+  // Source & Pattern), 'status' (the status-bar Play), 'studio' (the Studio transport's Play).
+  // Rendered (a layout box, not visibility: hidden) counts, wherever the page is scrolled.
+  const playsShown = (page) => page.evaluate(() => {
+    const groups = { source: ['source.hold', 'source.trigger'], status: ['status.play'],
+      studio: ['studio.play'] };
+    const rendered = (k) => [...document.querySelectorAll(`[data-osc="${k}"]`)].some((el) =>
+      el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden');
+    return Object.keys(groups).filter((g) => groups[g].some(rendered));
+  });
+  const reached = (pred, opts) => until(pred, opts).then(() => true,
+    (e) => (e && e.name === 'WaitTimeout' ? false : Promise.reject(e)));
+
+  // C030: Analyzer, Filter Lab, Compare and Presets each show a Play at this width: the
+  // status-bar Play where Source & Pattern is hidden (from 1280 px, and Presets always), else
+  // Hold to Play. It is brought into the viewport, a press starts an engine source and the
+  // Stop (a second click, or letting go of Hold) returns the active source count to 0. The
+  // status-bar Play is the instrument's statusPlay, no new player. Continuous playback is
   // allowed so the first click latches and the tone cannot end on its own before the Stop.
   def('play-visible-everywhere', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     await page.evaluate(() => window.OSCILLA.app.setContinuous(true));
     const sources = () => page.evaluate(() => window.OSCILLA.engine.activeSourceCount);
-    const reached = (pred, opts) => until(pred, opts).then(() => true,
-      (e) => (e && e.name === 'WaitTimeout' ? false : Promise.reject(e)));
     const view = page.viewportSize();
     const got = {};
     for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
       await H.navTo(page, ws);
-      const play = page.locator('[data-osc="status.play"]');
-      const box = await play.isVisible() ? await play.boundingBox() : null;
-      const shown = !!box && box.width > 0 && box.y >= 0 && box.y + box.height <= view.height
-        && box.x >= 0 && box.x + box.width <= view.width;
-      const r = { shown, started: false, stopped: false };
+      const groups = await playsShown(page);
+      const via = groups.includes('status') ? 'status' : groups.includes('source') ? 'source' : '';
+      const r = { groups, via, shown: false, started: false, stopped: false };
       got[ws] = r;
-      if (!shown) continue;
-      await play.click();
-      r.started = await reached(async () => (await sources()) > 0,
-        { ms: 8000, what: `${ws}: the status-bar Play starts an engine source` });
-      if (r.started) {
+      if (!via) continue;
+      const play = page.locator(via === 'status' ? '[data-osc="status.play"]'
+        : '[data-osc="source.hold"]').first();
+      await play.scrollIntoViewIfNeeded();
+      const box = await play.boundingBox();
+      r.shown = !!box && box.width > 0 && box.y >= 0 && box.y + box.height <= view.height
+        && box.x >= 0 && box.x + box.width <= view.width;
+      if (!r.shown) continue;
+      const startWhat = `${ws}: ${via === 'status' ? 'the status-bar Play' : 'Hold to Play'} `
+        + 'starts an engine source';
+      const stopWhat = `${ws}: ${via === 'status' ? 'a second click on Play'
+        : 'letting go of Hold to Play'} stops every engine source`;
+      if (via === 'status') {
         await play.click();
+        r.started = await reached(async () => (await sources()) > 0, { ms: 8000, what: startWhat });
+        if (r.started) await play.click();
+      } else {
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        r.started = await reached(async () => (await sources()) > 0, { ms: 8000, what: startWhat });
+        await page.mouse.up();
+      }
+      if (r.started) {
         r.stopped = await reached(async () => (await sources()) === 0,
-          { ms: 8000, what: `${ws}: a second click on Play stops every engine source` });
+          { ms: 8000, what: stopWhat });
       }
       r.label = await play.getAttribute('aria-label');
     }
@@ -1140,6 +1174,37 @@ function defineChecks() {
       playStarts: each((g) => g.started),
       playStops: each((g) => g.stopped),
     }), got };
+  });
+
+  // C030: from 768 px every workspace whose Space owner is not null (shortcuts.js SPACE_OWNER)
+  // shows exactly one Play control group, the one shortcuts.js playControl names at this width
+  // (FOCUS_LAYOUT_QUERY); the status-bar Play never stands beside Hold to Play and Trigger
+  // (Analyzer, Filter Lab and Compare at 768-1279 px). Below 768 px the status-bar Play is the
+  // phone's compact transport in every workspace, so there the named group must be among them.
+  def('one-play-per-workspace', async (ctx) => {
+    const sc = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js', 'ui',
+      'shortcuts.js')).href);
+    const sounding = Object.keys(sc.SPACE_OWNER).filter((w) => sc.SPACE_OWNER[w] !== null);
+    const page = await H.open(ctx, ctx.baseUrl);
+    const wide = await page.evaluate((q) => window.matchMedia(q).matches, sc.FOCUS_LAYOUT_QUERY);
+    const { PHONE_QUERY } = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src',
+      'js', 'ui', 'app.js')).href);
+    const phone = await page.evaluate((q) => window.matchMedia(q).matches, PHONE_QUERY);
+    const got = {};
+    const wrong = [];
+    for (const ws of sounding) {
+      await H.navTo(page, ws);
+      const want = sc.playControl(ws, wide);
+      const fits = (groups) => (phone ? groups.includes(want)
+        : groups.length === 1 && groups[0] === want);
+      let groups = [];
+      await reached(async () => fits(groups = await playsShown(page)), { ms: 8000,
+        what: `${ws}: ${phone ? 'the named Play is shown' : `only ${want}'s Play is shown`}` });
+      got[ws] = { want, groups };
+      if (!fits(groups)) wrong.push(`${ws}: want ${want}, shown ${groups.join('+') || 'none'}`);
+    }
+    await page.close();
+    return { ...H.verdict({ onePlayEach: wrong.length === 0 }), wide, phone, wrong, got };
   });
 
   // Review of #159: the compact Studio panel (Playground, Sequencer) has no Space of its own.

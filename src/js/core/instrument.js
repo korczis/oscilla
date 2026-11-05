@@ -438,7 +438,8 @@ export function createInstrument(deps = {}) {
         engine.resume().then((ok) => {
           this.audioState = engine.state;
           if (!ok && this.playing) {
-            this.notify('warning', 'Audio is suspended', 'The browser has not allowed audio to start. Press HOLD TO PLAY again.');
+            this.notify('warning', 'Audio is suspended',
+              `The browser has not allowed audio to start. ${this.suspendedPrompt()}`);
           }
         });
       }
@@ -945,6 +946,10 @@ export function createInstrument(deps = {}) {
       return this.isProgrammed ? `Press TRIGGER (or Space) to ${verb}.`
         : 'Press and hold HOLD TO PLAY.';
     },
+    /** The Audio is suspended notice's last words (V1); ui/workbench.js names the shown Play. */
+    suspendedPrompt() { return 'Press HOLD TO PLAY again.'; },
+    /** A link restore's last sentence (V1, url-state.js); ui/workbench.js names the shown Play. */
+    linkPlayPrompt() { return urlState.LINK_PLAY_PROMPT; },
 
     // V1: oscillaApp.loadCustomPresets, migratePreset, persistPresets -> storage.js
     loadCustomPresets() {
@@ -1048,7 +1053,8 @@ export function createInstrument(deps = {}) {
      * restored, unless a value waits for the real sample rate) or true (restored).
      */
     restoreFromHash() {
-      const r = urlState.restoreFromHashOn(this, location.hash, env(this));
+      const r = urlState.restoreFromHashOn(this, location.hash,
+        { ...env(this), playPrompt: this.linkPlayPrompt(location.hash) });
       if (!r.handled) return null;
       if (r.pendingHashConfig) this.pendingHashConfig = r.pendingHashConfig;
       if (r.mode) this.mode = r.mode;

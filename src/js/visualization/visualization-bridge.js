@@ -101,6 +101,9 @@ export class VisualizationBridge {
       provisional: true, spectrumScale: 'log', overlays: { regions: true, notes: false, thirds: false },
       // outputOwner: what sounds through the output analyser ('instrument' | 'sequencer' |
       // 'studio' | null), set by the composition root through setOutputOwner (C013).
+      // playControl: the Play the workspace in view shows ('source' Hold to Play, 'status' the
+      // status-bar Play, or null), set through setPlayControl; idle notes name it (C030).
+      playControl: 'source',
       plan: null, playing: false, outputOwner: null, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false, paused: false,
       dual: { fa: 440, fb: 442, la: 0.8, lb: 0.8, stereo: false, waveA: 'sine', waveB: 'sine' },
       // Engine scalars copied by viz.pull() once per frame without allocating: the sketch reads
@@ -295,6 +298,14 @@ export class VisualizationBridge {
    * loop keeps running under reduced motion while one sounds. Anything else throws a TypeError
    * and changes nothing.
    */
+  /** C030: which Play the idle notes name ('source' | 'status' | null); redraws on a change. */
+  setPlayControl(kind) {
+    const k = kind === 'source' || kind === 'status' ? kind : null;
+    if (k === this.state.playControl) return;
+    this.state.playControl = k;
+    this.updateLoop();
+  }
+
   setOutputOwner(owner) {
     const o = assertOutputOwner(owner);
     if (o === this.state.outputOwner) return;

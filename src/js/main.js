@@ -629,6 +629,9 @@ function integrationInit() {
   try {
     bridge.state.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   } catch (e) { /* matchMedia unavailable */ }
+  // C030: the Play prompts and the analysis idle notes follow the width (before the hash
+  // dispatcher, whose link notice names the Play of the workspace it opens).
+  cmp.watchLayout(window);
   if (!cmp.storage.local) {
     cmp.notify('warning', 'Storage unavailable', 'Custom presets cannot be saved in this browser '
       + 'mode; they last only for this page view.');
@@ -689,6 +692,8 @@ function integrationInit() {
   // C013: the views of the one output follow its owner (instrument, sequencer or Studio), handed
   // to the bridge as a plain string on every play, stop and Studio transport state change.
   Alpine.effect(() => bridge.setOutputOwner(cmp.outputOwner));
+  // ... and the Play the workspace in view shows at this width, which their idle notes name
+  Alpine.effect(() => bridge.setPlayControl(cmp.playControlKind));
   // ... and the release a held note will use when let go (C009), next to updateLive above
   Alpine.effect(() => syncNoteOffRelease(cmp));
   // Calm announcements (V1 a7b7a23): only PLAYING, SUSPENDED, STOPPED and ERROR, kept until the

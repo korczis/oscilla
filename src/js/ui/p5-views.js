@@ -236,8 +236,12 @@ export function createScopeView({ getWindowMs }) {
       }
       const state = L.hasCtx ? 'not playing' : 'audio not started';
       const what = `computed ${formatFrequency(f)} ${shape}`;
+      // C030: name the Play on screen (bridge state.playControl), or none.
+      const play = { source: 'Hold to Play', status: 'Play in the status bar' }[st.playControl];
       uiLabel(p, uiPickFit(p, [
-        `${state} · ${what} over ${msLabel(windowMs)} · press Hold to Play for the live trace`,
+        ...(play
+          ? [`${state} · ${what} over ${msLabel(windowMs)} · press ${play} for the live trace`]
+          : []),
         `${state} · ${what} over ${msLabel(windowMs)}`, `${state} · ${what}`, state],
       9, x1 - x0 - 4), x0 + 2, 11, pal.muted, 9);
     },

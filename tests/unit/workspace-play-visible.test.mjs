@@ -4,9 +4,13 @@
 // Pattern (Hold to Play, Trigger) lists only playground sequencer synthesis in data-osc-modes,
 // the desktop focus layouts hide every panel a workspace does not list, and the status-bar Play
 // was display: none above 767 px. Presets also said "Press TRIGGER" with no Trigger on screen.
-// After: every workspace whose Space owner is not null shows one Play control at every width
-// (shortcuts.js playControl), and the ready notices name the control that is there. No new
-// player: the status-bar Play is the instrument's existing statusPlay.
+// After: from 768 px every workspace whose Space owner is not null shows exactly one Play
+// control (shortcuts.js playControl): the status-bar Play only where Source & Pattern is
+// hidden (Presets at every width, Analyzer, Filter Lab and Compare from Tailwind's xl, the
+// width of the desktop focus layouts), and every prompt names the control on screen at that
+// width. No new player: the status-bar Play is the instrument's existing statusPlay.
+// Below 768 px the status-bar Play is the phone's compact transport in every workspace
+// (responsive.css, before C030), so there the claim is that the named control is shown.
 //
 //   node --test tests/unit/workspace-play-visible.test.mjs
 
@@ -14,18 +18,28 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import * as shortcuts from '../../src/js/ui/shortcuts.js';
 import { createInstrument } from '../../src/js/core/instrument.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
+import { createScopeView } from '../../src/js/ui/p5-views.js';
+import { VisualizationBridge } from '../../src/js/visualization/visualization-bridge.js';
+import { createP5Host } from '../../src/js/visualization/p5-host.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+const require = createRequire(import.meta.url);
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const HTML = read('src/index.html');
 const DIST = read('dist/index.html');
+const INTEGRATION_CSS = read('src/styles/integration.css');
+const RESPONSIVE_CSS = read('src/styles/responsive.css');
+const INSTRUMENT_CSS = read('src/styles/instrument.css');
 const { SPACE_OWNER } = shortcuts;
 const SOUNDING = Object.keys(SPACE_OWNER).filter((ws) => SPACE_OWNER[ws] !== null);
+const INSTRUMENT_WS = SOUNDING.filter((ws) => SPACE_OWNER[ws] === 'instrument');
+const PANELLESS = () => shortcuts.PANELLESS_WORKSPACES || ['learn', 'presets', 'about'];
 
 /** The opening tag of the element carrying `attr` (an attribute=value text), or ''. */
 function openTag(attr) {
@@ -44,12 +58,36 @@ const SOURCE_TAG = openTag('id="osc-panel-source"');
 const sourceModes = () => (SOURCE_TAG.match(/data-osc-modes="([^"]*)"/) || [, ''])[1]
   .split(/\s+/).filter(Boolean);
 const PLAY_TAG = openTag('id="osc-sb-play"');
+const pxOf = (query) => Number((String(query).match(/min-width:\s*(\d+)px/) || [])[1]);
+
+/** The query of the @media block of `css` that contains `needle`, and where it is. */
+function mediaBlockWith(css, needle) {
+  const at = css.indexOf(needle);
+  const open = css.lastIndexOf('@media', at);
+  return { query: css.slice(open, css.indexOf('{', open)), at };
+}
+
+/** The data-mode values of the focus-layout rule that hides the panels a workspace omits. */
+const FOCUS_MODES = [...INTEGRATION_CSS.matchAll(
+  /\.osc-app\[data-mode="(\w+)"\] \.osc-panel:not\(\[data-osc-modes~="\1"\]\)/g)].map((m) => m[1]);
+/** The data-mode values whose every panel responsive.css hides below 1280 px. */
+const PANELLESS_MODES = [...RESPONSIVE_CSS.matchAll(
+  /\.osc-app\[data-mode="(\w+)"\] \.osc-panel[,\s{]/g)].map((m) => m[1]);
+
+/** The width classes: the phone (< md), the two-column tablet (md..xl), the focus layout. */
+const WIDTHS = Object.freeze([
+  { name: 'phone', px: 390, wide: false },
+  { name: 'tablet', px: 1024, wide: false },
+  { name: 'desktop', px: 1536, wide: true },
+]);
+const TW_SCREENS = require('tailwindcss/resolveConfig')(require(path.join(ROOT,
+  'tailwind.config.cjs'))).theme.screens;
 
 /** The instrument and workbench composed as main.js composes them (descriptors, in order). */
-function component(workspace) {
+function component(workspace, { wide = true, hash = '' } = {}) {
   const target = {};
   const parts = [
-    createInstrument({ engine: null, location: { hash: '', href: '', search: '' },
+    createInstrument({ engine: null, location: { hash, href: '', search: '' },
       timers: { setTimeout: () => 0, clearTimeout() {}, setInterval: () => 0,
         clearInterval() {} } }),
     createWorkbench({ labSnapshot: () => null, applyLabSnapshot: () => null,
@@ -60,8 +98,48 @@ function component(workspace) {
   }
   target.sampleRate = 48000;
   target.workspace = workspace;
+  target.wideLayout = wide;
   return target;
 }
+
+/** The status-bar Play's class list in `ws`: statusPlayClass, or the head's statusPlayShown. */
+function statusClass(ws, wide) {
+  const app = component(ws, { wide });
+  if ('statusPlayClass' in app) return app.statusPlayClass;
+  const m = PLAY_TAG.match(/:class="statusPlayShown && '([^']*)'"/);
+  return m && app.statusPlayShown ? m[1] : '';
+}
+
+/** True when the class list `cls` shows the status-bar Play at `px` (Tailwind prefixes). */
+function utilityShows(cls, px) {
+  return String(cls).split(/\s+/).some((c) => {
+    const m = c.match(/^(?:(\w+):)?!inline-flex$/);
+    if (!m) return false;
+    return !m[1] || px >= parseInt(TW_SCREENS[m[1]], 10);
+  });
+}
+
+/**
+ * The Play controls `ws` shows at `w`, from the stylesheets' rules (each checked against the
+ * CSS below): 'source' (Hold to Play and Trigger), 'status', 'studio'.
+ */
+function shownAt(ws, w) {
+  const shown = [];
+  if (SPACE_OWNER[ws] === 'instrument' && !PANELLESS().includes(ws)) {
+    // The focus layout (from xl) hides the panels a focus workspace does not list; below it
+    // every panel of a workspace with panels is shown (responsive.css).
+    const hidden = w.wide && FOCUS_MODES.includes(ws) && !sourceModes().includes(ws);
+    if (!hidden) shown.push('source');
+  }
+  if (w.px < parseInt(TW_SCREENS.md, 10) || utilityShows(statusClass(ws, w.wide), w.px)) {
+    shown.push('status');
+  }
+  if (SPACE_OWNER[ws] === 'studio') shown.push('studio');
+  return shown;
+}
+
+/** playControl at a width (the head's took no width). */
+const kindAt = (ws, wide) => shortcuts.playControl(ws, wide);
 
 test('the source panel lists exactly SOURCE_PANEL_WORKSPACES and holds Hold and Trigger', () => {
   assert.deepEqual([...sourceModes()].sort(), [...(shortcuts.SOURCE_PANEL_WORKSPACES || [])]
@@ -71,65 +149,97 @@ test('the source panel lists exactly SOURCE_PANEL_WORKSPACES and holds Hold and 
   assert.match(panel, /data-osc="source\.trigger"/);
 });
 
-test('every workspace whose Space owner is not null has a Play shown at desktop width', () => {
-  assert.equal(typeof shortcuts.playControl, 'function', 'shortcuts.js exports playControl');
-  // The base rule hides the status-bar Play; only an !important utility the build compiles
-  // shows it above 767 px.
-  assert.match(read('src/styles/instrument.css'), /\.osc-sb-play \{\n {2}display: none;/);
-  assert.match(DIST, /\.\\!inline-flex\{display:inline-flex!important\}/,
-    'dist/index.html defines the utility that shows the status-bar Play');
-  const missing = [];
-  for (const ws of SOUNDING) {
-    const kind = shortcuts.playControl(ws);
-    const shown = component(ws).statusPlayShown === true;
-    if (kind === 'source') {
-      // A desktop focus layout hides only the panels a workspace does not list.
-      if (!sourceModes().includes(ws) || shown) missing.push(`${ws}: source panel, one Play`);
-    } else if (kind === 'status') {
-      if (!shown) missing.push(`${ws}: statusPlayShown is false`);
-    } else if (kind === 'studio') {
-      if (!/data-osc="studio\.play"/.test(elementText('data-osc-modes="studio"', 'section'))) {
-        missing.push(`${ws}: no Studio transport Play`);
-      }
-    } else {
-      missing.push(`${ws}: playControl is ${kind}`);
-    }
-  }
-  assert.deepEqual(missing, [], 'each sounding workspace shows exactly one Play');
-  assert.match(PLAY_TAG, /:class="statusPlayShown && '!inline-flex[^']*'"/,
-    'the status-bar Play binds the !inline-flex utility to statusPlayShown');
-  assert.match(PLAY_TAG, /@click="statusPlay\(\)"/, 'it plays through the existing statusPlay');
-  for (const ws of Object.keys(SPACE_OWNER).filter((w) => SPACE_OWNER[w] === null)) {
-    assert.equal(component(ws).statusPlayShown, false, `${ws} plays nothing: no Play shown`);
-  }
+test('the breakpoint is one: focus layout, FOCUS_LAYOUT_QUERY and Tailwind xl agree', () => {
+  const focus = mediaBlockWith(INTEGRATION_CSS,
+    '.osc-app[data-mode="analyzer"] .osc-panel:not([data-osc-modes~="analyzer"])');
+  assert.ok(focus.at > 0, 'integration.css hides the panels a focus workspace does not list');
+  const px = pxOf(focus.query);
+  assert.ok(px > 0, `the focus layout is a min-width block (${focus.query})`);
+  assert.equal(pxOf(shortcuts.FOCUS_LAYOUT_QUERY), px, 'shortcuts.js FOCUS_LAYOUT_QUERY');
+  assert.equal(parseInt(TW_SCREENS.xl, 10), px, 'Tailwind xl, the prefix of the status Play');
+  assert.match(RESPONSIVE_CSS, new RegExp(`@media \\(max-width: ${px - 1}\\.98px\\)`),
+    'responsive.css shows every panel below the same width');
+  assert.deepEqual([...new Set(PANELLESS_MODES)].sort(), [...PANELLESS()].sort(),
+    'responsive.css hides every panel there');
+  assert.ok(INSTRUMENT_CSS.includes('.osc-app:is([data-mode="learn"], [data-mode="presets"], '
+    + '[data-mode="about"]) :is(.osc-top,'), 'instrument.css hides the same panels from 1280 px');
 });
 
-test('analyzer, filter, compare and presets show the status-bar Play', () => {
-  for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
-    assert.equal(component(ws).statusPlayShown, true, ws);
+test('from 768 px each sounding workspace shows exactly one Play, per width class', () => {
+  assert.equal(typeof shortcuts.playControl, 'function', 'shortcuts.js exports playControl');
+  // The base rule hides the status-bar Play; only an !important utility shows it from 768 px,
+  // the phone's compact transport (responsive.css) below it.
+  assert.match(INSTRUMENT_CSS, /\.osc-sb-play \{\n {2}display: none;/);
+  const phoneBlock = mediaBlockWith(RESPONSIVE_CSS, '.osc-sb-play {\n    display: inline-flex;');
+  assert.ok(phoneBlock.at > 0 && /max-width: 767\.98px/.test(phoneBlock.query),
+    'below 768 px responsive.css shows the status-bar Play');
+  assert.equal(parseInt(TW_SCREENS.md, 10), 768, 'Tailwind md is the phone limit');
+  const wrong = [];
+  for (const w of WIDTHS) {
+    for (const ws of SOUNDING) {
+      const shown = shownAt(ws, w);
+      const kind = kindAt(ws, w.wide);
+      if (!shown.includes(kind)) wrong.push(`${w.name} ${ws}: ${kind} not shown (${shown})`);
+      if (w.name !== 'phone' && shown.length !== 1) {
+        wrong.push(`${w.name} ${ws}: ${shown.length} Plays (${shown.join(', ')})`);
+      }
+    }
+    for (const ws of Object.keys(SPACE_OWNER).filter((x) => SPACE_OWNER[x] === null)) {
+      if (w.name !== 'phone' && shownAt(ws, w).length) wrong.push(`${w.name} ${ws}: a Play`);
+    }
+  }
+  assert.deepEqual(wrong, [], 'exactly one Play from 768 px; the named one at every width');
+  assert.match(PLAY_TAG, /@click="statusPlay\(\)"/, 'it plays through the existing statusPlay');
+  assert.match(elementText('data-osc-modes="studio"', 'section'), /data-osc="studio\.play"/);
+});
+
+test('dist compiles the utilities that show the status-bar Play', () => {
+  assert.match(PLAY_TAG, /:class="statusPlayClass"/, 'the status-bar Play binds statusPlayClass');
+  // assert.ok, not match: a failed match would print the whole 3 MB page.
+  assert.ok(/\.\\!inline-flex\{display:inline-flex!important\}/.test(DIST),
+    'dist/index.html defines the utility that shows the status-bar Play in Presets');
+  assert.ok(new RegExp(`@media\\s?\\(min-width:\\s?${parseInt(TW_SCREENS.xl, 10)}px\\)\\{`
+    + '[^@]*\\.xl\\\\:\\\\!inline-flex\\{display:inline-flex!important\\}').test(DIST),
+  'dist/index.html defines xl:!inline-flex inside the xl media query');
+});
+
+test('the status-bar Play is shown where Source & Pattern is hidden, not beside it', () => {
+  const at = (ws, px) => utilityShows(statusClass(ws, px >= 1280), px);
+  for (const ws of ['analyzer', 'filter', 'compare']) {
+    assert.equal(at(ws, 1024), false, `${ws} at 1024 px: Source & Pattern is its Play`);
+    assert.equal(at(ws, 1280), true, `${ws} at 1280 px`);
+    assert.equal(at(ws, 1536), true, `${ws} at 1536 px`);
+  }
+  assert.equal(at('presets', 800), true, 'presets at 800 px');
+  assert.equal(at('presets', 1536), true, 'presets at 1536 px');
+  for (const ws of ['playground', 'sequencer', 'synthesis', 'studio', 'learn']) {
+    assert.equal(at(ws, 1536), false, ws);
   }
 });
 
 /** The control a prompt names, by the words it uses. */
-const named = (text) => (/Play in the status bar/.test(text) ? 'status'
-  : /TRIGGER|HOLD TO PLAY/.test(text) ? 'source' : null);
+const named = (text) => (/Play in the status bar/i.test(text) ? 'status'
+  : /TRIGGER|HOLD TO PLAY/i.test(text) ? 'source' : null);
 
-test('the preset notice names the Play control the workspace shows', () => {
+test('the preset notice names the Play control the workspace shows at that width', () => {
   const wrong = [];
-  for (const ws of SOUNDING.filter((w) => SPACE_OWNER[w] === 'instrument')) {
-    for (const programmed of [false, true]) {
-      const app = component(ws);
-      const cfg = programmed
-        ? { source: 'single', pattern: 'pulse', waveform: 'sine', frequency: 440 }
-        : { source: 'single', pattern: 'tone', waveform: 'sine', frequency: 440 };
-      app.applyPreset({ id: `t-${ws}`, name: 'T', cfg });
-      const notice = app.alerts.find((a) => /^Loaded/.test(a.title));
-      const says = notice ? named(notice.message) : null;
-      if (says !== shortcuts.playControl(ws)) {
-        wrong.push(`${ws} ${programmed ? 'programmed' : 'tone'}: ${notice && notice.message}`);
+  for (const w of WIDTHS) {
+    for (const ws of INSTRUMENT_WS) {
+      for (const programmed of [false, true]) {
+        const app = component(ws, { wide: w.wide });
+        const cfg = programmed
+          ? { source: 'single', pattern: 'pulse', waveform: 'sine', frequency: 440 }
+          : { source: 'single', pattern: 'tone', waveform: 'sine', frequency: 440 };
+        app.applyPreset({ id: `t-${ws}`, name: 'T', cfg });
+        const notice = app.alerts.find((a) => /^Loaded/.test(a.title));
+        const says = notice ? named(notice.message) : null;
+        if (!shownAt(ws, w).includes(says)) {
+          wrong.push(`${w.name} ${ws} ${programmed ? 'programmed' : 'tone'}: ${
+            notice && notice.message}`);
+        }
+        // Where no Hold to Play is shown, the notice says Space plays it too (Hold to Play).
+        if (says === 'status' && !/Space/.test(notice.message)) wrong.push(`${ws}: no Space`);
       }
-      // Where no Hold to Play is shown, the notice says Space plays it too (Hold to Play).
-      if (says === 'status' && !/Space/.test(notice.message)) wrong.push(`${ws}: no Space`);
     }
   }
   assert.deepEqual(wrong, []);
@@ -147,4 +257,104 @@ test('the Learn demo notice names the Play of the workspace it opens', () => {
   assert.ok(notice, 'the demo notice is raised');
   assert.equal(named(notice.message), 'source', notice.message);
   assert.equal(named(app.playPrompt('hear it', 'presets')), 'status');
+});
+
+test('the suspended, link and analyser prompts name a Play on screen at that width', () => {
+  const wrong = [];
+  const check = (where, ws, w, text) => {
+    const says = named(text);
+    if (says && !shownAt(ws, w).includes(says)) wrong.push(`${where} ${w.name} ${ws}: ${text}`);
+  };
+  for (const w of WIDTHS) {
+    for (const ws of INSTRUMENT_WS) {
+      const app = component(ws, { wide: w.wide });
+      check('suspended', ws, w, typeof app.suspendedPrompt === 'function'
+        ? app.suspendedPrompt() : 'Press HOLD TO PLAY again.');
+      // A link with instrument keys opens `ws`: its restore notice names the Play there.
+      const link = component('playground', { wide: w.wide, hash: `#f=440&m=${ws}` });
+      link.restoreFromHash();
+      const restored = link.alerts.find((a) => a.title === 'Configuration restored from link');
+      if (!restored) wrong.push(`link ${ws}: no restore notice`);
+      else check('link', ws, w, restored.message);
+      // The analysis panel's idle label (its aria-label) names the Play the trace starts with.
+      if (PANELLESS().includes(ws)) continue;
+      app.tabs = { ...(app.tabs || {}), analysis: 'scope' };
+      check('analyser label', ws, w, app.analysisCanvasLabel);
+    }
+  }
+  assert.deepEqual(wrong, []);
+  // The link notice keeps V1's words where V1's controls are shown (freeze.test.mjs).
+  const v1 = component('playground', { hash: '#f=440' });
+  v1.restoreFromHash();
+  assert.equal(v1.alerts.find((a) => /restored/.test(a.title)).message,
+    'Nothing plays until you press HOLD TO PLAY or TRIGGER.');
+});
+
+/** A p5 stand-in for the scope (as tests/unit/scope-follows-owner): the labels it draws. */
+function scopeLabels(playControl) {
+  const drawn = [];
+  const ctx = { font: '', fillStyle: '', textAlign: '', textBaseline: '', save() {}, restore() {},
+    fillText: (t) => { drawn.push(String(t)); }, measureText: () => ({ width: 1 }) };
+  const base = { LEFT: 'left', RIGHT: 'right', CENTER: 'center', CLOSE: 'close',
+    drawingContext: ctx, color: () => ({ setAlpha() {}, toString: () => 'rgb(0,0,0)' }) };
+  const p = new Proxy(base, { get: (t, k) => (k in t ? t[k] : () => {}) });
+  const W = 1200;
+  createScopeView({ getWindowMs: () => 5 }).draw({ p, W, H: 200, pal: { gridSoft: 'g', muted: 'm',
+    accent: 'a', dim: 'd', accentFaint: 'f', accentSoft: 's' },
+    bandMin: new Float32Array(W), bandMax: new Float32Array(W) }, {
+    live: { timeData: null, sampleRate: 48000, inst: NaN, refFreq: 250, hasCtx: true },
+    playing: false, outputOwner: null, gain: 0.08, frequency: 250, waveform: 'sine', plan: null,
+    playControl });
+  return drawn;
+}
+
+/** The labels the V1 wave view draws while idle with `playControl` in the bridge state. */
+function waveLabels(playControl) {
+  const log = [];
+  const env = { document: { hidden: false, documentElement: {}, addEventListener() {},
+    removeEventListener() {} }, devicePixelRatio: 1, requestAnimationFrame: () => 1,
+  matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+  ResizeObserver: class { observe() {} disconnect() {} }, setTimeout: () => 1,
+  setInterval: () => 1, clearInterval() {} };
+  const engine = { snapshot: (o = {}) => Object.assign(o, { hasCtx: true, state: 'running',
+    time: 0, sampleRate: 48000, voice: false, analyser: null, timeData: null, mic: false }) };
+  const bridge = new VisualizationBridge({ engine, env });
+  bridge.palette = new Proxy({}, { get: () => [0, 0, 0] });
+  const app = createInstrument({ engine: null, bridge });
+  app.sampleRate = 48000;
+  app.syncViz();
+  if (typeof bridge.setPlayControl === 'function') bridge.setPlayControl(playControl);
+  function P5(sketch) {
+    const p = new Proxy({ LEFT: 'left', RIGHT: 'right', CENTER: 'center', CLOSE: 'close',
+      BASELINE: 'alphabetic', canvas: {}, color: (...a) => a, frameRate: () => 30,
+      textWidth: (t) => String(t).length * 6, millis: () => 0, bezierPoint: () => 0,
+      createCanvas: () => ({ elt: { setAttribute() {}, style: {} } }) }, {
+      get: (t, k) => (k in t ? t[k] : (...a) => { if (k === 'text') log.push(String(a[0])); }),
+    });
+    sketch(p);
+    p.setup();
+    return p;
+  }
+  const container = { getBoundingClientRect: () => ({ width: 900, height: 300 }) };
+  const host = createP5Host({ P5, container, bridge, view: 'wave', env });
+  host.p5.draw();
+  host.destroy();
+  return log;
+}
+
+test('the analysis idle notes name the Play on screen, or none', () => {
+  const press = (labels) => labels.filter((t) => /press /i.test(t));
+  for (const kind of ['source', 'status', null]) {
+    for (const [view, said] of [['scope', press(scopeLabels(kind))],
+      ['wave', press(waveLabels(kind))]]) {
+      if (kind) {
+        assert.ok(said.length && said.every((t) => named(t) === kind),
+          `${view} with ${kind}: ${JSON.stringify(said)}`);
+      } else {
+        assert.deepEqual(said, [], `${view} names no Play where none is shown`);
+      }
+    }
+  }
+  assert.ok(!/press HOLD TO PLAY/.test(read('src/js/visualization/spectrum-data.js')),
+    'no unused idle note names Hold to Play');
 });

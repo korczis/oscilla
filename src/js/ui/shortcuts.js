@@ -140,34 +140,93 @@ export function instrumentTakesSpace(workspace) {
 /**
  * The workspaces whose Source & Pattern panel, with Hold to Play and Trigger, is on screen at
  * every width: the panel's data-osc-modes in src/index.html (tests/unit/workspace-play-visible
- * reads both). Analyzer, Filter Lab and Compare show that panel only below 1280 px, Presets
- * never, so there the status-bar Play is shown at every width (C030).
+ * reads both).
  */
 export const SOURCE_PANEL_WORKSPACES = Object.freeze(['playground', 'sequencer', 'synthesis']);
 
 /**
- * The Play control `workspace` shows, derived from its Space owner (C030): 'source' (Hold to
- * Play and Trigger of Source & Pattern), 'status' (the status-bar Play, the instrument's own
- * statusPlay), 'studio' (the Studio transport's Play) or null (nothing there plays the
- * instrument or Studio; the Synth plays from its keys).
+ * The workspaces that show no instrument panel at any width (instrument.css and responsive.css
+ * hide every instrument panel there); of them only Presets plays the instrument.
  */
-export function playControl(workspace) {
+export const PANELLESS_WORKSPACES = Object.freeze(['learn', 'presets', 'about']);
+
+/**
+ * The width from which the desktop focus layouts hide every panel a workspace does not list
+ * (src/styles/integration.css), so Analyzer, Filter Lab and Compare lose Source & Pattern. It
+ * is Tailwind's `xl` screen, the prefix the status-bar Play is shown with there (C030); the
+ * unit test holds the three equal.
+ */
+export const FOCUS_LAYOUT_QUERY = '(min-width: 1280px)';
+
+/**
+ * The Play control `workspace` shows (C030), from its Space owner and the layout: 'source'
+ * (Hold to Play and Trigger of Source & Pattern), 'status' (the status-bar Play, the
+ * instrument's own statusPlay), 'studio' (the Studio transport's Play) or null (nothing there
+ * plays the instrument or Studio; the Synth plays from its keys). `wide` is the focus layout
+ * (FOCUS_LAYOUT_QUERY matches); below 768 px responsive.css also shows the status-bar Play in
+ * every workspace, the phone's compact transport.
+ */
+export function playControl(workspace, wide = true) {
   const owner = spaceOwner(workspace);
   if (owner === 'studio') return 'studio';
   if (owner !== 'instrument') return null;
-  return SOURCE_PANEL_WORKSPACES.includes(workspace) ? 'source' : 'status';
+  if (SOURCE_PANEL_WORKSPACES.includes(workspace)) return 'source';
+  if (PANELLESS_WORKSPACES.includes(workspace)) return 'status';
+  return wide ? 'status' : 'source';
+}
+
+/**
+ * The utilities that show the status-bar Play where it is `workspace`'s Play: at every width
+ * in Presets, from Tailwind's `xl` (FOCUS_LAYOUT_QUERY) where Source & Pattern is shown only
+ * below it, and nowhere else from 768 px. Tailwind compiles these literals (content globs).
+ */
+export function statusPlayClass(workspace) {
+  if (playControl(workspace, false) === 'status') return '!inline-flex md:ml-3';
+  if (playControl(workspace, true) === 'status') return 'xl:!inline-flex xl:ml-3';
+  return '';
+}
+
+/** The words that name `kind`'s control in a sentence, or '' when there is none. */
+export function playControlName(kind) {
+  if (kind === 'status') return 'Play in the status bar';
+  if (kind === 'source') return 'Hold to Play';
+  return '';
 }
 
 /**
  * The words a ready notice ends with: how to play what was loaded, naming the control
- * `workspace` shows (playControl). `programmed` is a pattern that triggers once.
+ * `workspace` shows at that width (playControl). `programmed` is a pattern that triggers once.
+ * A workspace that shows no instrument Play keeps the Source & Pattern words: its notice is
+ * raised on the way to a workspace that does (Learn opens the Playground or Synthesis).
  */
-export function playPrompt(workspace, programmed, verb = 'play it') {
-  if (playControl(workspace) === 'status') {
+export function playPrompt(workspace, programmed, verb = 'play it', wide = true) {
+  if (playControl(workspace, wide) === 'status') {
     return programmed ? `Press Play in the status bar (or Space) to ${verb}.`
       : `Press Play in the status bar, or hold Space, to ${verb}.`;
   }
   return programmed ? `Press TRIGGER (or Space) to ${verb}.` : 'Press and hold HOLD TO PLAY.';
+}
+
+/**
+ * What the Audio is suspended notice says to press again, for `kind` (playControl). Where no
+ * instrument Play is shown, any tap or key retries (instrument.js arms those listeners).
+ */
+export function suspendedPlayPrompt(kind) {
+  if (kind === 'source') return 'Press HOLD TO PLAY again.';
+  if (kind === 'status') return 'Press Play in the status bar again.';
+  return 'Tap or press a key to start it.';
+}
+
+/**
+ * The sentence a link restore ends with (url-state.js): V1's words where Source & Pattern is
+ * shown, the status-bar Play where that is the Play, and no control named where the workspace
+ * the link opens plays no instrument.
+ */
+export function linkPlayPrompt(workspace, wide = true) {
+  const kind = playControl(workspace, wide);
+  if (kind === 'source') return 'Nothing plays until you press HOLD TO PLAY or TRIGGER.';
+  if (kind === 'status') return 'Nothing plays until you press Play in the status bar.';
+  return 'Nothing plays until you start it.';
 }
 
 /** A Space key event, by character or by physical key. */

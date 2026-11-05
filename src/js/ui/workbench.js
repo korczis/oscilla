@@ -28,7 +28,11 @@ import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
-import { playControl, playPrompt as playPromptFor } from './shortcuts.js';
+import {
+  FOCUS_LAYOUT_QUERY, linkPlayPrompt, playControl, playControlName, playPrompt as playPromptFor,
+  statusPlayClass as statusPlayClassFor, suspendedPlayPrompt,
+} from './shortcuts.js';
+import { routeOfHash } from './navigation.js';
 import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
 import {
   LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam,
@@ -302,8 +306,10 @@ export function createWorkbench(svc) {
       }
       if (owner !== 'instrument') {
         const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
-        return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
-          + 'Hold to Play shows the live output analyser trace.';
+        // C030: the Play named is the one on screen in this workspace at this width.
+        const play = playControlName(this.playControlKind);
+        return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}.${
+          play ? ` ${play} shows the live output analyser trace.` : ''}`;
       }
       const sparse = f > 0 && sr > 0 && sr / f < 4;
       const shown = this.scopeShownMs;
@@ -392,18 +398,43 @@ export function createWorkbench(svc) {
 
     // ------------------------------------------------------------------ transport extras
     /**
-     * C030: the status-bar Play is shown at every width where the workspace's instrument has
-     * no Hold to Play or Trigger on screen (shortcuts.js playControl 'status': Analyzer,
-     * Filter Lab, Compare, Presets); below 768 px responsive.css shows it everywhere.
+     * C030: true while the desktop focus layout applies (shortcuts.js FOCUS_LAYOUT_QUERY), where
+     * Analyzer, Filter Lab and Compare show no Source & Pattern. watchLayout keeps it current.
      */
-    get statusPlayShown() { return playControl(this.workspace) === 'status'; },
+    wideLayout: true,
+    /** Follow FOCUS_LAYOUT_QUERY (main.js calls it once); without matchMedia it stays wide. */
+    watchLayout(win = typeof window !== 'undefined' ? window : null) {
+      const mq = win && typeof win.matchMedia === 'function'
+        ? win.matchMedia(FOCUS_LAYOUT_QUERY) : null;
+      if (!mq) return;
+      const sync = () => { this.wideLayout = mq.matches; };
+      sync();
+      if (mq.addEventListener) mq.addEventListener('change', sync);
+    },
+    /** The Play the workspace in view shows at this width (shortcuts.js playControl). */
+    get playControlKind() { return playControl(this.workspace, this.wideLayout); },
     /**
-     * The ready notice's words name the Play control `workspace` (default: in view) shows. A
-     * workspace that plays nothing itself (Learn: its demo opens the Playground or Synthesis)
-     * keeps the Source & Pattern words.
+     * C030: the utilities that show the status-bar Play where it is the workspace's one Play:
+     * every width in Presets, from xl (1280 px) in Analyzer, Filter Lab and Compare, where
+     * Source & Pattern is hidden; below 768 px responsive.css shows it everywhere.
+     */
+    get statusPlayClass() { return statusPlayClassFor(this.workspace); },
+    /**
+     * The ready notice's words name the Play control `workspace` (default: in view) shows at
+     * this width. A workspace that plays nothing itself (Learn: its demo opens the Playground
+     * or Synthesis) keeps the Source & Pattern words.
      */
     playPrompt(verb = 'play it', workspace = this.workspace) {
-      return playPromptFor(workspace, this.isProgrammed, verb);
+      return playPromptFor(workspace, this.isProgrammed, verb, this.wideLayout);
+    },
+    /** What the Audio is suspended notice says to press again: a control on screen. */
+    suspendedPrompt() {
+      return suspendedPlayPrompt(this.playControlKind);
+    },
+    /** The link restore's last sentence names the Play of the workspace the link opens. */
+    linkPlayPrompt(hash) {
+      const r = routeOfHash(hash);
+      return linkPlayPrompt(r ? r.workspace : this.workspace, this.wideLayout);
     },
     /**
      * Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger.

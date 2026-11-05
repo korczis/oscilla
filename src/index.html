@@ -3074,7 +3074,7 @@
     </div>
 
     <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
-      :class="statusPlayShown && '!inline-flex md:ml-3'"
+      :class="statusPlayClass"
       aria-label="Play" aria-pressed="false" :aria-pressed="String(isSounding)"
       :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Trigger')"
       @click="statusPlay()" @keydown.enter="latchKey($event)">

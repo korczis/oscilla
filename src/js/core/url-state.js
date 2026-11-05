@@ -89,8 +89,11 @@ export function decodeHash(hash) {
   return { cfg, gainCapped, requestedGain, mode: q.get('m') };
 }
 
+/** V1's last sentence of a link restore; env.playPrompt replaces it with the Play shown (C030). */
+export const LINK_PLAY_PROMPT = 'Nothing plays until you press HOLD TO PLAY or TRIGGER.';
+
 /**
- * Restore a hash onto state s in place. env: { sampleRate, continuousAllowed }.
+ * Restore a hash onto state s in place. env: { sampleRate, continuousAllowed, playPrompt }.
  * Returns { handled, issues, notices, dropped, limited, pendingHashConfig, mode, malformed? }:
  *   handled            false when the hash carries no configuration (nothing happened)
  *   malformed          true when the configuration could not be read at all (defaults kept)
@@ -130,7 +133,7 @@ export function restoreFromHashOn(s, hash, env = {}) {
       // "Restored" never stands alone over a drop: the summary names it.
       const not = droppedSentence(out.dropped);
       notify('info', 'Configuration restored from link',
-        `${not ? `${not} ` : ''}Nothing plays until you press HOLD TO PLAY or TRIGGER.`);
+        `${not ? `${not} ` : ''}${env.playPrompt || LINK_PLAY_PROMPT}`);
     }
   } catch (e) {
     out.handled = true;
