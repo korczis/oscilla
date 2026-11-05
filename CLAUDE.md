@@ -109,8 +109,9 @@ enumerates neither, because ranges written here go stale.
 - `ui/` (Alpine shell, Measure and Experiments adapters, dialogs; `ui/keys/` is the key
   registry and dispatcher that the page Escape and the instrument Space bind through, while
   the Studio editors, the computer keyboard, the Synth, the nav and the Sequencer timeline
-  still have their own key listeners, counted by `tests/unit/key-listener-baseline.json`,
-  which only falls), `main.js` (composition).
+  still have their own key listeners; those of the Studio editors, the computer keyboard and
+  the Synth are counted by `tests/unit/key-listener-baseline.json`, which only falls),
+  `main.js` (composition).
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
