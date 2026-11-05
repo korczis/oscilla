@@ -8,7 +8,8 @@
 //     there; a burst is one undo entry, ended GESTURE_IDLE_MS after its last notch;
 //   - arrows, Home and End move a choice, and focus stays on the checked option;
 //   - a knob's ARIA value is its 0..1000 position (N003, ariaAttrs), never the raw value;
-//   - a choice whose group is disabled refuses a click with its reason.
+//   - a choice whose group is disabled refuses a click and its keys with its reason, and leaves
+//     the wheel to the page (21's T2 on Train 6).
 //
 //   createGestures({ controlOf, valueOf, setControl, handle, say, label }) ->
 //     { press(cid, control, event) -> knob, drag(knob, event), wheel(event),
@@ -60,6 +61,7 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     const cid = k ? k.dataset.knob : o && o.dataset.option;
     const x = cid && controlOf(cid);
     if (!x || !x.node || (k && k.getAttribute('aria-disabled') === 'true')) return;
+    if (o && offGroup(o)) return; // a disabled choice leaves the wheel to the page (21's T2)
     // A pinch (Ctrl or Cmd) and a horizontal swipe stay the page's (21's R8).
     if (e.ctrlKey || e.metaKey || Math.abs(e.deltaX || 0) > Math.abs(e.deltaY || 0)) return;
     e.preventDefault();
@@ -92,6 +94,7 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     const x = controlOf(o.dataset.option);
     if (!x) return false;
     e.preventDefault();
+    if (offGroup(o)) return refused(o, o.dataset.option); // its reason, no move (21's T2)
     const opts = x.c.param.options;
     // A toggle and a slide draw option 0 at the bottom and their radios run top to bottom
     // (view/face.js), so the keys move as drawn (review of W1c, finding 1): ArrowUp +1,
@@ -109,6 +112,12 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
       + '[aria-checked="true"]');
     if (again) again.focus({ preventScroll: true });
     return true;
+  }
+
+  /** Whether a choice's option sits in a disabled group (its reason is said on a click). */
+  function offGroup(el) {
+    const g = el.closest('[role="radiogroup"]');
+    return !!g && g.getAttribute('aria-disabled') === 'true';
   }
 
   function aria(el, value, param, text) {

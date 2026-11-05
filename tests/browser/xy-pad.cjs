@@ -415,9 +415,17 @@ function defineChecks() {
         const nav = document.querySelector('[aria-label="Workspace"]');
         const top = Math.round(nav.getBoundingClientRect().bottom);
         const stuck = Math.round(chips.getBoundingClientRect().top);
+        // Sample inside the chip bar, clear of the scroller's own scrollbar: webkit draws an
+        // overlay scrollbar (about 15 px, not counted in clientWidth) at the scroller's right
+        // edge after a scroll, and a hit there is the scroller itself, not page content.
+        const SCROLLBAR_PX = 20;
+        const mr = main.getBoundingClientRect();
+        const cr = chips.getBoundingClientRect();
+        const left = Math.ceil(Math.max(cr.left, mr.left)) + 4;
+        const right = Math.floor(Math.min(cr.right, mr.right - SCROLLBAR_PX));
         const hits = [];
         for (let y = top - 2; y <= stuck + 4; y += 1) {
-          for (const x of [12, 195, 378]) {
+          for (const x of [left, Math.round((left + right) / 2), right]) {
             const e = document.elementFromPoint(x, y);
             const who = !e ? 'none' : chips.contains(e) ? 'chips' : nav.contains(e)
               || e.closest('[role="banner"]') ? 'nav' : `${e.tagName}.${String(e.className
@@ -425,13 +433,13 @@ function defineChecks() {
             hits.push([x, y, who]);
           }
         }
-        return { top, stuck, scrolled: main.scrollTop > 0, hits };
+        return { top, stuck, scrolled: main.scrollTop > 0, xs: [left, right], hits };
       });
       return g.scrolled && g.stuck <= g.top + 12;
     }, { ms: 10000, what: 'the scrolled Synth sticks its chip bar under the app nav' });
     const bad = g.hits.filter(([, , who]) => who !== 'nav' && who !== 'chips');
-    return { ok: !bad.length && Math.abs(g.stuck - g.top) <= 1, top: g.top, stuck: g.stuck,
-      bad: bad.slice(0, 6) };
+    return { ok: !bad.length && Math.abs(g.stuck - g.top) <= 1 && g.xs[1] - g.xs[0] > 200,
+      top: g.top, stuck: g.stuck, xs: g.xs, bad: bad.slice(0, 6) };
   });
 
   def('x-phone-first', async ({ page, browserName }) => {
