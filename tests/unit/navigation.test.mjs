@@ -210,10 +210,13 @@ test('every nav item links to its workspace address (a new tab opens it)', () =>
   }
 });
 
-// The browser suite's own workspace lists: a check that visits every workspace reads them from
-// WORKSPACES, so a new workspace is visited without an edit here (a hand-written twelve left
-// Synth out of open-every-workspace). Comments are blanked by the browser scans' mask, so a
-// list quoted in a comment is not read as code.
+// The browser suites' own workspace lists: a check that visits every workspace reads them from
+// WORKSPACES, so a new workspace is visited without an edit there (a hand-written twelve left
+// Synth out of navigation.cjs open-every-workspace and first-screen.cjs ENTRIES). The browser
+// scans' mask blanks comments and string contents, so what a comment quotes is not read as code.
+const NAV_SUITE = new URL('../browser/navigation.cjs', import.meta.url);
+const FIRST_SCREEN_SUITE = new URL('../browser/first-screen.cjs', import.meta.url);
+
 function browserCheckBlock(source, code, id) {
   const head = `def('${id}'`;
   let at = source.indexOf(head);
@@ -224,43 +227,155 @@ function browserCheckBlock(source, code, id) {
   return { text: source.slice(at, end), code: code.slice(at, end) };
 }
 
-/** The array literals of string literals only in a block, as their string values. */
+/** The array literals of string literals only (either quote) in a block, as their values. */
 function stringArrays(block) {
+  const lit = String.raw`(?:'[^'\n]*'|"[^"\n]*")`;
+  const re = new RegExp(String.raw`\[\s*${lit}(?:\s*,\s*${lit})*\s*,?\s*\]`, 'g');
   const out = [];
-  for (const m of block.text.matchAll(/\[\s*'[^'\n]*'(?:\s*,\s*'[^'\n]*')*\s*,?\s*\]/g)) {
-    if (block.code[m.index] !== '[') continue; // inside a comment
-    out.push([...m[0].matchAll(/'([^'\n]*)'/g)].map((s) => s[1]));
+  for (const m of block.text.matchAll(re)) {
+    if (block.code[m.index] !== '[') continue; // inside a comment or a string
+    out.push([...m[0].matchAll(/'([^'\n]*)'|"([^"\n]*)"/g)].map((s) => s[1] ?? s[2]));
   }
   return out;
 }
 
-test('navigation.cjs visits every workspace WORKSPACES names, with no hand-written list', () => {
-  const source = readFileSync(new URL('../browser/navigation.cjs', import.meta.url), 'utf8');
-  const { code } = mask(source);
+/** The matches of a pattern that are code throughout: none of it in a comment or a string. */
+function codeMatches(block, re) {
+  return [...block.text.matchAll(re)]
+    .filter((m) => mask(m[0]).code === block.code.slice(m.index, m.index + m[0].length));
+}
+
+/** No list of workspace ids is written out: the suite reads WORKSPACES instead. */
+function assertNoHandList(label, block) {
   const known = new Set(WORKSPACES);
-  for (const id of ['open-every-workspace', 'nav-links']) {
-    const block = browserCheckBlock(source, code, id);
-    for (const list of stringArrays(block)) {
-      if (list.length < 2 || !list.every((w) => known.has(w))) continue;
-      const missing = WORKSPACES.filter((w) => !list.includes(w));
-      assert.fail(`${id} hard-codes ${list.length} workspace ids against ${WORKSPACES.length} `
-        + `in WORKSPACES (missing: ${missing.join(', ') || 'none'}); read WORKSPACES instead`);
-    }
-    assert.match(block.code, /\bWORKSPACES\b/, `${id} reads WORKSPACES`);
-    assert.match(block.text, /'ui',\s*'app\.js'/, `${id} imports WORKSPACES from ui/app.js`);
+  for (const list of stringArrays(block)) {
+    if (list.length < 2 || !list.every((w) => known.has(w))) continue;
+    const missing = WORKSPACES.filter((w) => !list.includes(w));
+    assert.fail(`${label} hard-codes ${list.length} workspace ids against ${WORKSPACES.length} `
+      + `in WORKSPACES (missing: ${missing.join(', ') || 'none'}); read WORKSPACES instead`);
   }
+}
+
+/**
+ * Every use of WORKSPACES in the code of a block is one of the whole-list forms named, and the
+ * required ones are there: a filtered, sliced or shortened copy is none of them, so it drops no
+ * workspace unnoticed.
+ */
+function assertWholeList(label, block, forms, required) {
+  const covered = [];
+  const found = {};
+  for (const [name, re] of Object.entries(forms)) {
+    found[name] = codeMatches(block, re);
+    for (const m of found[name]) covered.push([m.index, m.index + m[0].length]);
+  }
+  for (const name of required) {
+    assert.ok(found[name].length,
+      `${label} has no ${name} of the whole WORKSPACES (${forms[name]})`);
+  }
+  for (const m of block.code.matchAll(/\bWORKSPACES\b/g)) {
+    if (covered.some(([a, b]) => m.index >= a && m.index < b)) continue;
+    const line = block.text.slice(block.text.lastIndexOf('\n', m.index) + 1).split('\n')[0];
+    assert.fail(`${label} uses WORKSPACES other than as the whole list: ${line.trim()}`);
+  }
+}
+
+// ui/app.js WORKSPACES imported as the browser suites do (a file URL of src/js/ui/app.js).
+const APP_URL = String.raw`pathToFileURL\(path\.join\([^()]*'src',\s*'js',\s*'ui',\s*'app\.js'\)\)`
+  + String.raw`\s*\.href`;
+const NAV_FORMS = {
+  'import from ui/app.js': new RegExp(String.raw`const \{ WORKSPACES \} = await import\(`
+    + String.raw`${APP_URL}\);`, 'g'),
+  'loop over': /for \(const \w+ of WORKSPACES\) \{/g,
+  'sorted copy': /\[\.\.\.WORKSPACES\]\.sort\(\)\.join\(\)/g,
+};
+const FIRST_SCREEN_FORMS = {
+  declaration: /const WORKSPACES = \[\];/g,
+  'fill from ui/app.js': new RegExp(String.raw`WORKSPACES\.push\(\.\.\.\(await import\(`
+    + String.raw`${APP_URL}\)\)\.WORKSPACES\);`, 'g'),
+  'entry per workspace': new RegExp(String.raw`\.\.\.WORKSPACES\.map\(\((\w+)\) => \(\{ `
+    + String.raw`id: \`m=\$\{\1\}\`, hash: \`m=\$\{\1\}\`, workspace: \1 \}\)\),`, 'g'),
+};
+
+function navigationDerivesWorkspaces(source) {
+  const { code } = mask(source);
+  for (const [id, required] of [['open-every-workspace', ['import from ui/app.js', 'loop over']],
+    ['nav-links', ['import from ui/app.js', 'sorted copy']]]) {
+    const block = browserCheckBlock(source, code, id);
+    assertNoHandList(id, block);
+    assertWholeList(id, block, NAV_FORMS, required);
+  }
+}
+
+function firstScreenDerivesWorkspaces(source) {
+  const block = { text: source, code: mask(source).code };
+  assertNoHandList('first-screen.cjs', block);
+  assertWholeList('first-screen.cjs', block, FIRST_SCREEN_FORMS, Object.keys(FIRST_SCREEN_FORMS));
+}
+
+test('navigation.cjs visits every workspace WORKSPACES names, with no hand-written list', () => {
+  navigationDerivesWorkspaces(readFileSync(NAV_SUITE, 'utf8'));
 });
 
-test('mutation: a hand-written workspace list in open-every-workspace is refused', () => {
+test('first-screen.cjs has an entry per workspace WORKSPACES names, none hand-written', () => {
+  firstScreenDerivesWorkspaces(readFileSync(FIRST_SCREEN_SUITE, 'utf8'));
+});
+
+test('mutation: a list quoted in a comment is not code, one in code is (either quote)', () => {
   const source = [
     '  def(\'open-every-workspace\', async (ctx) => {',
     '    // [\'playground\', \'about\'] in a comment is not code',
     '    const ids = [\'playground\', \'measure\', \'about\'];',
+    '    const more = ["learn", "studio"];',
     '  });',
     '  def(\'next\', async () => ({}));',
   ].join('\n');
   const block = browserCheckBlock(source, mask(source).code, 'open-every-workspace');
-  assert.deepEqual(stringArrays(block), [['playground', 'measure', 'about']]);
+  assert.deepEqual(stringArrays(block), [['playground', 'measure', 'about'], ['learn', 'studio']]);
+});
+
+test('mutation: a workspace list that is hand-written, filtered or not imported is refused', () => {
+  const nav = readFileSync(NAV_SUITE, 'utf8');
+  const loop = 'for (const ws of WORKSPACES) {';
+  const sorted = '[...WORKSPACES].sort().join()';
+  const imp = '\'ui\', \'app.js\')).href);';
+  for (const [i, mutate, refusal] of [
+    [1, (s) => s.replace(loop, 'for (const ws of ["playground", "measure", "about"]) {'),
+      /hard-codes 3 workspace ids/],
+    [2, (s) => s.replace(loop, 'for (const ws of WORKSPACES.filter((w) => w !== \'synth\')) {'),
+      /no loop over|other than as the whole list/],
+    [3, (s) => s.replace(loop, 'for (const ws of WORKSPACES.slice(0, 12)) {'),
+      /no loop over|other than as the whole list/],
+    [4, (s) => s.replace(sorted, '[...WORKSPACES].slice(1).sort().join()'),
+      /no sorted copy|other than as the whole list/],
+    // The real import is elsewhere; a comment quoting the ui/app.js import does not stand in.
+    [5, (s) => s.replace(imp, '\'ui\', \'navigation.js\')).href);\n    // const { WORKSPACES } = '
+      + 'await import(pathToFileURL(path.join(__dirname, \'..\', \'..\', \'src\', \'js\', '
+      + '\'ui\', \'app.js\')).href);'), /no import from ui\/app\.js|other than as the whole list/],
+    // A loop over another list; a comment quoting the whole-list loop does not stand in.
+    [6, (s) => s.replace(loop, '// for (const ws of WORKSPACES) {\n    for (const ws of ids) {'),
+      /no loop over/],
+  ]) {
+    const mutated = mutate(nav);
+    assert.notEqual(mutated, nav, `navigation mutation ${i} applies`);
+    assert.throws(() => navigationDerivesWorkspaces(mutated), refusal, `navigation mutation ${i}`);
+  }
+  const fs = readFileSync(FIRST_SCREEN_SUITE, 'utf8');
+  const map = '...WORKSPACES.map((w) =>';
+  for (const [i, mutate, refusal] of [
+    [1, (s) => s.replace('const WORKSPACES = [];', 'const WORKSPACES = [\'playground\', '
+      + '\'measure\', \'experiments\', \'analyzer\', \'filter\', \'compare\',\n  \'synthesis\', '
+      + '\'sequencer\', \'presets\', \'learn\', \'studio\', \'about\'];'),
+      /hard-codes 12 workspace ids against 13 in WORKSPACES \(missing: synth\)/],
+    [2, (s) => s.replace(map, '...WORKSPACES.filter((w) => w !== \'synth\').map((w) =>'),
+      /no entry per workspace|other than as the whole list/],
+    [3, (s) => s.replace('  ENTRIES.push(...entriesOf());', '  WORKSPACES.pop();\n'
+      + '  ENTRIES.push(...entriesOf());'), /other than as the whole list: WORKSPACES\.pop/],
+  ]) {
+    const mutated = mutate(fs);
+    assert.notEqual(mutated, fs, `first-screen mutation ${i} applies`);
+    assert.throws(() => firstScreenDerivesWorkspaces(mutated), refusal,
+      `first-screen mutation ${i}`);
+  }
 });
 
 test('the memory store says what it holds, and an observer hears every write', async () => {

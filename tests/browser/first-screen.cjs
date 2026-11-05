@@ -21,7 +21,8 @@
 //                   is restored, and nothing sounds (instrument, engine and Studio at rest)
 //   link:<id>       the same hash set in a live Playground page (a link followed in the page)
 //                   opens the same workspace with the same state; when the workspace changes,
-//                   focus lands on a heading and Back returns to the Playground
+//                   focus lands on a heading and Back returns to the Playground (Synth's row
+//                   last: opening it leaves unsaved Studio changes a template link asks about)
 //   direct-path     the bare address (and /oscilla/index.html over http) opens the Playground
 //                   with HOLD TO PLAY and TRIGGER enabled in the first 1536x1024 viewport, the
 //                   compact Studio shown and nothing sounding; at 390x844 the same address
@@ -126,14 +127,17 @@ const TEMPLATES = {
   'sweep-sequence': 'Sweep Sequence', 'stereo-beat': 'Stereo Beat',
   'filter-automation': 'Filter Automation', 'measurement-sweep': 'Measurement Sweep',
 };
-const WORKSPACES = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-  'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
+// The workspaces are read from the code at start (loadModel: ui/app.js WORKSPACES) and not
+// restated here: a hand-written twelve left Synth out.
+const WORKSPACES = [];
 const said = (s, re) => s.alerts.some((a) => re.test(a));
 
 // One row per entry path. `hash` without '#'; `search` with '?'. `address` is location.hash
 // after the load (default: the hash as given). `state` judges the row's own restored state.
 // `link: false` keeps a row out of the in-page link pass (a query flag is not a link).
-const ENTRIES = [
+// Filled by loadModel once WORKSPACES is known.
+const ENTRIES = [];
+const entriesOf = () => [
   { id: 'bare', hash: '', workspace: 'playground',
     state: (s) => s.source === 'single' && s.waveform === 'sine' && s.frequency === 440 },
   ...WORKSPACES.map((w) => ({ id: `m=${w}`, hash: `m=${w}`, workspace: w })),
@@ -188,6 +192,12 @@ const ENTRIES = [
     workspace: 'measure', link: false,
     state: (s) => s.testContext && s.measState === 'IDLE' && recipeLoaded(s) },
 ];
+
+async function loadModel() {
+  WORKSPACES.push(...(await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'ui', 'app.js'))
+    .href)).WORKSPACES);
+  ENTRIES.push(...entriesOf());
+}
 
 let failures = 0;
 let passes = 0;
@@ -354,7 +364,11 @@ async function entryLoad(ctx) {
 }
 
 async function entryLink(ctx) {
-  const rows = ENTRIES.filter((r) => r.hash && r.link !== false);
+  // Opening Synth instantiates its voice into the one Studio document (#329), which then holds
+  // unsaved changes, so a later Studio template link would meet the unsaved-work question
+  // first: its row is followed last (a stable sort keeps the rest in table order).
+  const rows = ENTRIES.filter((r) => r.hash && r.link !== false)
+    .sort((a, b) => (a.workspace === 'synth') - (b.workspace === 'synth'));
   const page = await H.open(ctx.context, ctx.base);
   try {
     for (const row of rows) {
@@ -986,6 +1000,7 @@ async function runLeg(name, origin, server) {
     console.error(`missing ${DIST}: run npm run build`);
     process.exit(2);
   }
+  await loadModel();
   const server = RUN.origins.includes('http')
     ? await serveDist(DIST, { prefix: 'oscilla-first-screen-' }) : null;
   try {
