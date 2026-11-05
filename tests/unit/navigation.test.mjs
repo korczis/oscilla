@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   HASH_DOMAINS, configLinkHash, hashAfterRefusal, hashForWorkspace, isAnchorHash,
   navigationStateOf, routeOfHash, v1ModeFor, workspaceForV1Mode,
@@ -18,6 +19,8 @@ import { decodeHash, serializeHash } from '../../src/js/core/url-state.js';
 import { decodeStudioLink } from '../../src/js/core/url-state-studio.js';
 import { recipeParamOf } from '../../src/js/core/url-state-measure.js';
 import { defaultInstrumentState, defaultEditorFields } from '../../src/js/core/config.js';
+
+const { mask } = createRequire(import.meta.url)('../browser/lib/timing-scan.cjs');
 
 const RECIPE = Buffer.from(JSON.stringify({ v: 1, f1: 50, f2: 12000 })).toString('base64url');
 const q = (hash) => Object.fromEntries(new URLSearchParams(hash.replace(/^#/, '')));
@@ -205,6 +208,59 @@ test('every nav item links to its workspace address (a new tab opens it)', () =>
     assert.equal(l.href, `#m=${l.id}`);
     assert.equal(routeOfHash(l.href).workspace, l.id);
   }
+});
+
+// The browser suite's own workspace lists: a check that visits every workspace reads them from
+// WORKSPACES, so a new workspace is visited without an edit here (a hand-written twelve left
+// Synth out of open-every-workspace). Comments are blanked by the browser scans' mask, so a
+// list quoted in a comment is not read as code.
+function browserCheckBlock(source, code, id) {
+  const head = `def('${id}'`;
+  let at = source.indexOf(head);
+  while (at >= 0 && code.slice(at, at + 4) !== 'def(') at = source.indexOf(head, at + 1);
+  assert.ok(at >= 0, `tests/browser/navigation.cjs defines ${id}`);
+  const next = code.indexOf('\n  def(', at + head.length);
+  const end = next < 0 ? source.length : next;
+  return { text: source.slice(at, end), code: code.slice(at, end) };
+}
+
+/** The array literals of string literals only in a block, as their string values. */
+function stringArrays(block) {
+  const out = [];
+  for (const m of block.text.matchAll(/\[\s*'[^'\n]*'(?:\s*,\s*'[^'\n]*')*\s*,?\s*\]/g)) {
+    if (block.code[m.index] !== '[') continue; // inside a comment
+    out.push([...m[0].matchAll(/'([^'\n]*)'/g)].map((s) => s[1]));
+  }
+  return out;
+}
+
+test('navigation.cjs visits every workspace WORKSPACES names, with no hand-written list', () => {
+  const source = readFileSync(new URL('../browser/navigation.cjs', import.meta.url), 'utf8');
+  const { code } = mask(source);
+  const known = new Set(WORKSPACES);
+  for (const id of ['open-every-workspace', 'nav-links']) {
+    const block = browserCheckBlock(source, code, id);
+    for (const list of stringArrays(block)) {
+      if (list.length < 2 || !list.every((w) => known.has(w))) continue;
+      const missing = WORKSPACES.filter((w) => !list.includes(w));
+      assert.fail(`${id} hard-codes ${list.length} workspace ids against ${WORKSPACES.length} `
+        + `in WORKSPACES (missing: ${missing.join(', ') || 'none'}); read WORKSPACES instead`);
+    }
+    assert.match(block.code, /\bWORKSPACES\b/, `${id} reads WORKSPACES`);
+    assert.match(block.text, /'ui',\s*'app\.js'/, `${id} imports WORKSPACES from ui/app.js`);
+  }
+});
+
+test('mutation: a hand-written workspace list in open-every-workspace is refused', () => {
+  const source = [
+    '  def(\'open-every-workspace\', async (ctx) => {',
+    '    // [\'playground\', \'about\'] in a comment is not code',
+    '    const ids = [\'playground\', \'measure\', \'about\'];',
+    '  });',
+    '  def(\'next\', async () => ({}));',
+  ].join('\n');
+  const block = browserCheckBlock(source, mask(source).code, 'open-every-workspace');
+  assert.deepEqual(stringArrays(block), [['playground', 'measure', 'about']]);
 });
 
 test('the memory store says what it holds, and an observer hears every write', async () => {

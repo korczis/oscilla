@@ -21,8 +21,8 @@
 //                     no notification is raised, a changed instrument setting and unsaved Studio
 //                     changes survive Back / Forward, and the guard asks nothing for them; a
 //                     reload reopens the workspace the address names
-//   open-every-workspace  a fresh page at `#m=<id>` opens each of the thirteen workspaces; the
-//                     Experiments list loads, About sets its title
+//   open-every-workspace  a fresh page at `#m=<id>` opens each workspace ui/app.js WORKSPACES
+//                     names; the Experiments list loads, About sets its title
 //   hashchange-mode   a hash set after load moves the workspace AND the V1 mode together
 //                     (`m=learn` → Learn, `m=dual` → Synthesis/dual, `m=sweep` → Playground/sweep)
 //   precedence        `#m=studio&st=…&sv=…&mr=…` opens STUDIO with the template and view and
@@ -434,11 +434,12 @@ function defineChecks() {
 
   def('open-every-workspace', async (ctx) => {
     // A reload or a shared address opens each workspace as a switch would: the heading shown,
-    // the title, and what entering it loads (the Experiments list).
-    const ids = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-      'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
+    // the title, and what entering it loads (the Experiments list). The workspaces are read from
+    // the code (ui/app.js WORKSPACES) and not restated: a hand-written twelve left Synth out.
+    const { WORKSPACES } = await import(pathToFileURL(path.join(__dirname, '..', '..', 'src', 'js',
+      'ui', 'app.js')).href);
     const rows = [];
-    for (const ws of ids) {
+    for (const ws of WORKSPACES) {
       const page = await H.open(ctx, `${ctx.baseUrl}#m=${ws}`);
       const st = await H.state(page);
       const extra = await H.until(() => page.evaluate(() => ({
