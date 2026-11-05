@@ -25,7 +25,8 @@
 // graph with <name>"), the explicit insert-or-replace intent of §114; PATCH_REPLACE { patch,
 // onto, label? } replaces the parameters of the nodes `onto` maps (patches.js patchParams: a
 // preset, K020 and K066), keeping every node and edge; `route` names the patch node the keys
-// then play (metadata.noteTarget, K066), which METADATA_SET { noteTarget } also sets.
+// then play (metadata.noteTarget, K066), which METADATA_SET { noteTarget } also sets;
+// METADATA_SET { synthAmounts } merges the Synth's remembered amount depths (review S10).
 // Tempo-linked clips (§90-§91, `clip.musical`): CLIP_ADD with timeBase 'tempo' (or startBeats /
 // durationBeats) creates one; CLIP_MOVE / CLIP_RESIZE keep it linked and re-derive its beats from
 // the new seconds; TRANSPORT_SET with a new tempo rescales every tempo-linked clip (absolute
@@ -710,9 +711,13 @@ const REDUCERS = {
     const cur = model.metadata;
     const { noteTarget: was, ...rest } = cur;
     const target = a.noteTarget === undefined ? was : a.noteTarget || undefined;
+    // synthAmounts merges (the Synth's amount depths, schema.js; review S10 of src/js/synth)
+    const amounts = a.synthAmounts ? { ...cur.synthAmounts, ...a.synthAmounts }
+      : cur.synthAmounts;
     const metadata = { ...rest, title: a.title ?? cur.title, notes: a.notes ?? cur.notes,
-      ...(target ? { noteTarget: target } : {}) };
-    if (metadata.title === cur.title && metadata.notes === cur.notes && target === was) {
+      ...(target ? { noteTarget: target } : {}), ...(amounts ? { synthAmounts: amounts } : {}) };
+    if (metadata.title === cur.title && metadata.notes === cur.notes && target === was
+      && JSON.stringify(amounts) === JSON.stringify(cur.synthAmounts)) {
       return { model, label: '' };
     }
     if (target === was) return { model: { ...model, metadata }, label: 'Change Studio details' };

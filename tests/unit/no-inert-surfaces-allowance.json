@@ -41,18 +41,6 @@
   },
   "disabled-without-reason": {
     "src/index.html": {
-      "export.wav": {
-        "count": 1,
-        "reason": "W6: aria-disabled while an export runs (exportBusy); the menu item states no reason"
-      },
-      "export.seqWav": {
-        "count": 1,
-        "reason": "W6: aria-disabled while an export runs (exportBusy); the menu item states no reason"
-      },
-      "action.exportAudio": {
-        "count": 1,
-        "reason": "W6: aria-disabled while an export runs (exportBusy); aria-busy is set, but no title or description says why"
-      },
       "measure.expert": {
         "count": 1,
         "reason": "W6: disabled while a measurement runs (meas.busy); the switch states no reason"
@@ -120,10 +108,6 @@
       "exp.findingCompare": {
         "count": 1,
         "reason": "W6: disabled while no comparison is open; the button states no reason"
-      },
-      "presets.load": {
-        "count": 1,
-        "reason": "W6: disabled by presetDisabled(p); the card shows presetDisabledReason(p) beside it, but the button does not point at that text (no aria-describedby)"
       },
       "levelCal.hz": {
         "count": 1,

@@ -49,8 +49,11 @@ polarity and mapping of a normal of the jack whose source has the same range (EG
 VCA rests closed, like EG 2's normal); else props from its source's range (an envelope is
 unipolar, so it rests at the jack's base; a pitch source into an octave or cutoff input tracks
 1.00 oct per octave). An amount knob that covers a cable gives it the knob's depth, and a
-normal restored after a cable comes back at the knob's setting (within the session: the model
-keeps a depth only on an edge, so after a reload a restored normal takes its declared depth).
+normal restored after a cable comes back at the knob's setting: the cable that breaks a
+knob's last edge keeps its depth in the document (`metadata.synthAmounts`, in the same history
+entry; presentation state outside `studioHash`), so the result is the same after a reload, in
+another tab and through a link. An edge removed in the Studio graph is the Studio's edit: that
+normal comes back at its declared depth.
 
 The **patch bay** holds every jack, grouped by module: audio jacks are circles, control jacks
 diamonds, trigger jacks triangles (`PORT_VISUALS`). Drag from one jack to another, or tap two
@@ -141,7 +144,10 @@ the link takes the depth of the amount knob that covers it (`src/js/synth/link.j
 link reopens the same patch; opened over a panel that is already patched, it removes that
 panel's cables first (one history entry), so the result is the sender's patch. Every jack pair
 the panel patches round-trips through the link (a filter's or the VCA's `audio` names an
-input and an output, and each end is read with its direction).
+input and an output, and each end is read with its direction). A cable whose depth, polarity,
+mapping, offset or mute differs from what the panel gives it (an edit in the Studio Inspector,
+the XY pad's Y range) carries them as `from>to@key:value;...`, so the link and a saved XY
+preset reopen it as it was; a bad property refuses the whole link.
 
 ## Honest limits (`project.no-fake-science`)
 

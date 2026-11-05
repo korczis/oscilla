@@ -10,7 +10,6 @@
 
   /* Surfaces */
   --osc-bg: #020b15;               /* page, gaps between panels */
-  --osc-header-bg: #061220;        /* header strip */
   --osc-statusbar-bg: #05111e;     /* bottom status bar */
   --osc-surface-0: #020a16;        /* chart/canvas inset (waveform, mic plot) */
   --osc-surface-1: #06111d;        /* panel body */
@@ -36,7 +35,6 @@
   --osc-text-unit: #b8d4f0;        /* big readout unit ("Hz" at x=186, y=245) */
   --osc-text-on-accent: #ffffff;
   --osc-text-on-green: #04261a;    /* "Use microphone" label */
-  --osc-text-on-warm: #2a1600;     /* text on orange/green sequencer blocks */
 
   /* Blue primary */
   --osc-blue: #007afd;             /* primary buttons, Export, Oscillator segment, Log */
@@ -131,10 +129,14 @@
   --osc-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   /* Calibrated against text extents measured on reference.png (tools/textext.mjs). The sizes
      under 12 px are those values from a 1280 px viewport up, and 12 px from 480 px down, linear
-     between (V634): a phone reads no text under 12 px, and the reference stays as measured. */
+     between (V634): a phone reads no text under 12 px, and the reference stays as measured.
+     --osc-fs-floor (lane A, ui-current#phone-whole) is 12px below a 768 px viewport and 0px
+     from 768 px; a legacy size under 12 px elsewhere in src/styles is written
+     max(<size>, var(--osc-fs-floor)) (tests/unit/phone-font-floor.test.mjs). */
   --osc-fs-2xs: clamp(10px, calc(13.2px - 0.25vw), 12px);
   --osc-fs-xs: clamp(10.5px, calc(12.9px - 0.1875vw), 12px);
   --osc-fs-sm: clamp(11.5px, calc(12.3px - 0.0625vw), 12px);
+  --osc-fs-floor: clamp(0px, calc((768px - 100vw) * 1000), 12px);
   --osc-fs-md: 12.5px;
   --osc-fs-lg: 13px;
   --osc-fs-xl: 14.25px;
@@ -159,14 +161,12 @@
   --osc-touch: 44px;
 
   /* Layout (desktop reference geometry, px measured on reference.png) */
-  --osc-header-h: 62px;
   --osc-statusbar-h: 55px;
 }
 
 [data-theme="light"] {
   color-scheme: light;
   --osc-bg: #e9eef4;
-  --osc-header-bg: #f7f9fc;
   --osc-statusbar-bg: #f7f9fc;
   --osc-surface-0: #f3f6fa;
   --osc-surface-1: #ffffff;

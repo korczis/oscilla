@@ -143,12 +143,13 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
     studioBack() {
       this.setWorkspace(studioBackTarget(this.studio.backTo));
       // The button that had focus is now hidden: focus the compact Studio's Expand (the way
-      // back) where it is shown, else the workspace's tab, never <body> (WCAG 2.4.3; V431 U6).
+      // back) where it is shown, else the workspace's sidebar entry, never <body> (WCAG 2.4.3;
+      // V431 U6).
       requestAnimationFrame(() => {
         const a = document.activeElement;
         if (a && a !== document.body && a.getClientRects().length) return;
         const to = [document.querySelector('[data-osc="studio.compact.expand"]'),
-          document.querySelector('.osc-nav .osc-tab.is-active')]
+          document.querySelector('#osc-nav [aria-current="page"]')]
           .find((el) => el && el.getClientRects().length);
         if (to) to.focus({ preventScroll: true });
       });
@@ -175,6 +176,7 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
       const url = this.studioLinkUrl();
       if (!url) return null;
       try {
+        // data-osc-link: studio.copyLink
         window.history.replaceState(window.history.state, '', url);
       } catch (e) { /* file:// in some */ }
       this.studio.link = url;

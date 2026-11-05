@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3853,
+  "debt": 3607,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -72,17 +72,17 @@
       "modal#osc-dlg-studio-templates",
       "page#osc-view-about",
       "page#osc-view-experiments",
-      "page#osc-view-learn",
       "page#osc-view-measure",
-      "page#osc-view-presets",
       "page#osc-view-studio",
       "shell:footer",
-      "shell:main",
-      "shell:navbar",
-      "shell:sidebar"
+      "shell:main"
     ],
     "migrated": [
-      "page#osc-view-synth"
+      "page#osc-view-learn",
+      "page#osc-view-presets",
+      "page#osc-view-synth",
+      "shell:navbar",
+      "shell:sidebar"
     ]
   },
   "classes": {
@@ -134,14 +134,10 @@
     "osc-block--": 3,
     "osc-block-detail": 2,
     "osc-block-name": 2,
-    "osc-brand": 1,
-    "osc-brand-name": 1,
-    "osc-brand-sub": 1,
-    "osc-brand-text": 1,
-    "osc-btn": 127,
+    "osc-btn": 118,
     "osc-btn-lg": 2,
-    "osc-btn-primary": 34,
-    "osc-btn-secondary": 95,
+    "osc-btn-primary": 30,
+    "osc-btn-secondary": 90,
     "osc-btn-success": 1,
     "osc-cal-convention": 1,
     "osc-chart-host": 19,
@@ -230,26 +226,14 @@
     "osc-h-spectrogram": 1,
     "osc-h-spectrum": 1,
     "osc-h-waveform": 1,
-    "osc-header": 1,
-    "osc-header-actions": 1,
-    "osc-header-export": 1,
-    "osc-header-icon": 2,
-    "osc-header-theme": 1,
     "osc-hints": 1,
     "osc-hints-list": 1,
     "osc-hold": 1,
-    "osc-ico": 6,
-    "osc-icon-btn": 47,
-    "osc-icon-btn--ghost": 15,
-    "osc-icon-btn--sm": 19,
+    "osc-ico": 3,
+    "osc-icon-btn": 43,
+    "osc-icon-btn--ghost": 12,
+    "osc-icon-btn--sm": 18,
     "osc-label": 93,
-    "osc-learn": 1,
-    "osc-learn-actions": 1,
-    "osc-learn-body": 1,
-    "osc-learn-example": 1,
-    "osc-learn-item": 1,
-    "osc-learn-list": 1,
-    "osc-learn-title": 1,
     "osc-legend": 1,
     "osc-legend-dot": 2,
     "osc-legend-dot--blue": 1,
@@ -325,11 +309,11 @@
     "osc-main": 12,
     "osc-max-select": 1,
     "osc-measure": 1,
-    "osc-menu": 5,
+    "osc-menu": 1,
     "osc-menu--grid": 1,
-    "osc-menu--right": 3,
-    "osc-menu-anchor": 4,
-    "osc-menu-item": 28,
+    "osc-menu--right": 1,
+    "osc-menu-anchor": 2,
+    "osc-menu-item": 10,
     "osc-meter": 3,
     "osc-meter-fill": 3,
     "osc-metric": 12,
@@ -347,13 +331,7 @@
     "osc-mode-row": 1,
     "osc-mode-seg": 1,
     "osc-muted": 20,
-    "osc-nav": 6,
-    "osc-nav-caret": 2,
-    "osc-nav-group": 3,
-    "osc-nav-group-btn": 2,
-    "osc-nav-item": 6,
-    "osc-nav-menu": 2,
-    "osc-num": 57,
+    "osc-num": 54,
     "osc-number": 59,
     "osc-p-additive": 1,
     "osc-p-analysis": 3,
@@ -371,7 +349,7 @@
     "osc-panel": 35,
     "osc-panel-fs": 2,
     "osc-panel-header": 28,
-    "osc-panel-title": 31,
+    "osc-panel-title": 29,
     "osc-pattern-desc": 1,
     "osc-pattern-params": 1,
     "osc-pattern-row": 1,
@@ -387,18 +365,6 @@
     "osc-pp-field--wide": 1,
     "osc-pp-grid": 1,
     "osc-pp-warn": 1,
-    "osc-preset-actions": 2,
-    "osc-preset-desc": 1,
-    "osc-preset-disabled": 1,
-    "osc-preset-empty": 2,
-    "osc-preset-item": 2,
-    "osc-preset-list": 2,
-    "osc-preset-name": 2,
-    "osc-preset-params": 2,
-    "osc-preset-tabs": 1,
-    "osc-preset-text": 2,
-    "osc-preset-toolbar": 1,
-    "osc-presets": 1,
     "osc-q": 4,
     "osc-q--fail": 1,
     "osc-q--info": 1,
@@ -423,8 +389,7 @@
     "osc-safety": 1,
     "osc-safety-icon": 1,
     "osc-safety-more": 2,
-    "osc-safety-reopen": 2,
-    "osc-safety-reopen--phone": 1,
+    "osc-safety-reopen": 1,
     "osc-safety-text": 1,
     "osc-safety-toggle": 1,
     "osc-sb-action": 5,
@@ -751,12 +716,11 @@
     "osc-stl-zoom": 1,
     "osc-studio": 1,
     "osc-studio-timeline-host": 1,
-    "osc-tab": 34,
-    "osc-tabs": 9,
+    "osc-tab": 22,
+    "osc-tabs": 7,
     "osc-tabs--auto": 2,
     "osc-tabs--mid": 1,
-    "osc-tabs--primary": 2,
-    "osc-tabs--underline": 1,
+    "osc-tabs--primary": 1,
     "osc-tabular": 5,
     "osc-time-select": 1,
     "osc-timeline": 2,
@@ -776,14 +740,11 @@
     "osc-trigger": 1,
     "osc-unit": 8,
     "osc-unit-suffix": 8,
-    "osc-view": 7,
+    "osc-view": 5,
     "osc-view--about": 1,
     "osc-view--experiments": 1,
-    "osc-view--learn": 1,
     "osc-view--measure": 1,
-    "osc-view--presets": 1,
     "osc-view--studio": 1,
-    "osc-view-body": 2,
     "osc-viz-pause": 1,
     "osc-warning": 6,
     "osc-warning--info": 1,
@@ -839,13 +800,12 @@
   "vocabulary": {
     "execution": 2,
     "is-": 8,
-    "is-active": 27,
+    "is-active": 24,
     "is-band": 1,
     "is-bypassed": 1,
     "is-compatible": 2,
     "is-connected": 1,
     "is-connecting": 2,
-    "is-current": 1,
     "is-dragging": 3,
     "is-empty": 1,
     "is-error": 5,
@@ -886,16 +846,16 @@
       "declarations": 63
     },
     "src/styles/components.css": {
-      "selectors": 136,
-      "declarations": 508
+      "selectors": 131,
+      "declarations": 488
     },
     "src/styles/instrument.css": {
-      "selectors": 272,
-      "declarations": 741
+      "selectors": 244,
+      "declarations": 631
     },
     "src/styles/integration.css": {
-      "selectors": 199,
-      "declarations": 381
+      "selectors": 170,
+      "declarations": 336
     },
     "src/styles/main.css": {
       "selectors": 0,
@@ -906,8 +866,8 @@
       "declarations": 623
     },
     "src/styles/responsive.css": {
-      "selectors": 191,
-      "declarations": 234
+      "selectors": 156,
+      "declarations": 183
     }
   },
   "domainViews": {
@@ -925,7 +885,7 @@
     },
     "src/styles/tokens.css": {
       "selectors": 4,
-      "declarations": 193
+      "declarations": 190
     }
   },
   "inlineStyles": 89

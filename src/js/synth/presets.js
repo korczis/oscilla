@@ -6,6 +6,8 @@
 // knob and amount it covers in ONE history entry, no node or cable added, removed or moved.
 //   presetPatch(panel, id, { all, modules }) -> patch | null
 //   presetAction(model, panel, id, { all, modules }) -> { action } | { reason }
+//     an engine preset on keys routed elsewhere (picker.js, metadata.noteTarget) clears the
+//     route in the same BATCH, so the keys play the engine it set (review S4); undo gives both
 //
 // A preset belongs to one tab (`tab`, default 'panel') and sets only that tab's modules, so a
 // panel preset leaves the engines as they are; an engine preset (`engine`: the module the keys
@@ -126,5 +128,8 @@ export function presetAction(model, panel, id, { all = false, modules = null } =
   if (!Object.keys(onto).length) {
     return { reason: `The ${panel.title} is not in this Studio document: insert it first.` };
   }
-  return { action: { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` } };
+  const action = { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` };
+  if (!presetOf(id).engine || all || modules || !model.metadata.noteTarget) return { action };
+  return { action: { type: 'BATCH', label: action.label,
+    steps: [action, { type: 'METADATA_SET', noteTarget: null }] } };
 }
