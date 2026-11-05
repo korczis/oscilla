@@ -31,7 +31,8 @@
 //     ...model options }) -> view: view.model, view.update(), view.destroy(), view.trail;
 //     cells: [{ label, root }] drawn along X; describedBy: ids of the consumer's own lines that
 //     also describe the surface (K167: the first action), after the axes' description;
-//     readout { x(v), y(v) -> text | null, yEnds: [bottom, top] | null } for the drawing
+//     readout { x(v), y(v) -> text | null, yEnds: [bottom, top] | () -> [bottom, top] | null }
+//     for the drawing (a function's ends are read again on each drawn frame)
 
 import { xyFromPoint } from '../../charts/drag-math.js';
 import { knobModel } from '../../synth/view/knob.js';
@@ -198,7 +199,8 @@ export function mountXyPad(host, opts) {
   const slider = (axis, p) => `<div role="slider" tabindex="0" data-xy-axis="${axis}" `
     + `aria-label="${esc(`${axis.toUpperCase()}: ${p.label}`)}" class="${SLIDER}"><span>`
     + `${esc(p.label)}</span><span class="font-mono" data-xy-text="${axis}"></span></div>`;
-  const ends = !disabled && readout.yEnds ? readout.yEnds : null;
+  const endsOf = () => (typeof readout.yEnds === 'function' ? readout.yEnds() : readout.yEnds);
+  const ends = !disabled && readout.yEnds ? endsOf() : null;
   const led = ledBox({ at: { x: 0, y: 0 } });
   const cellsOn = opts.x.type === 'integer' && cells.length;
   host.innerHTML = `<div role="group" aria-label="${esc(label)}">`
@@ -253,6 +255,7 @@ export function mountXyPad(host, opts) {
   const ring = view && [q('[data-xy-ring]'), q('[data-xy-dot]')];
   const [note, value] = view ? [q('[data-xy-note]'), q('[data-xy-value]')] : [];
   const cursorG = view && q('[data-xy-cursor]');
+  const endEls = ends ? [q('[data-xy-yend="bottom"]'), q('[data-xy-yend="top"]')] : [];
   const segs = view ? [...q('[data-xy-trail]').children] : [];
   const cellEl = q('[data-xy-cell]');
   const trail = createTrail();
@@ -276,6 +279,9 @@ export function mountXyPad(host, opts) {
     frame = 0;
     if (!view) return;
     const on = shown();
+    if (endEls.length && typeof readout.yEnds === 'function') {
+      endsOf().forEach((t, i) => { endEls[i].textContent = t; });
+    }
     cursorG.classList.toggle('hidden', !on);
     if (cellEl) cellEl.classList.toggle('hidden', !on);
     if (on) {

@@ -268,3 +268,19 @@ test('the view is aria-hidden; the sliders carry the values', () => {
     'D#4, degree 2');
   v.destroy();
 });
+
+test('Y ends given as a function are read again on each drawn frame (a rate known later)', () => {
+  const pg = page();
+  const h = host();
+  let ends = ['2.4 kHz', '9.6 kHz'];
+  const v = mount(h, { readout: { x: (i) => NOTES[i], y: () => 'LPF', yEnds: () => ends } });
+  const top = h.querySelector('[data-xy-yend="top"]');
+  const bottom = h.querySelector('[data-xy-yend="bottom"]');
+  assert.match(h.innerHTML, /data-xy-yend="top"[^>]*>9\.6 kHz</, 'the ends at mount');
+  ends = ['2.4 kHz', '20.948 kHz'];
+  h.querySelector('[data-xy-surface]').fire('pointerdown', ptr(1, 148, 76));
+  pg.tick();
+  assert.equal(top.textContent, '20.948 kHz', 'the top end as the reading now gives it');
+  assert.equal(bottom.textContent, '2.4 kHz');
+  v.destroy();
+});

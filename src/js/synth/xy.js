@@ -15,10 +15,16 @@
 //   XY_VOICE                       the cables that let the pad play the voice
 //   xyTargets(panel) -> [{ id, label }]   the CONTROL inputs Y may drive (the timbre targets)
 //   xyTarget(model, panel) -> jack | null the input Y drives now
-//   xyYReading(model, panel) -> reading | null   what Y asks of that input (the XY view's value):
-//     { jack, param (the panel's), base, props, range, others, at(y) }; at(y) is the compiler's
-//     line for Y's one cable (studio/ports.js controlValue), before any cap; `others` counts the
-//     other unmuted edges into the same input, which add to it
+//   xyYReading(model, panel, { sampleRate }) -> reading | null   what the target plays at Y (the
+//     XY view's value): { jack, param (the panel's), props, others, at(y), limited, cap,
+//     sampleRate, provisional }. at(y) is sized by the compiler's own computeBases over every
+//     cable into the target's node, at 0.95 x Nyquist of `sampleRate` (the running context's):
+//     the base with every cable's constant part, Y's gain as scaled near Nyquist (`limited`: Y's
+//     excursion was scaled down, `cap` = caps[port] is what holds it), the other cables' moving
+//     part left out. Before a context exists (no sampleRate) it is sized at the provisional
+//     44.1 kHz (sequencer/model.js safeMaximum, the rate automation.js paramBounds declares),
+//     `provisional` true, and the view names that rate. `others` counts the other unmuted
+//     edges into the same input, whose moving part adds to it
 //   xyPatched(model, panel) -> bool        the pad's Pitch and Gate reach the voice
 //   xyCablesAction(model, panel, pairs, label) -> { action } | { reason }   cables, one BATCH
 //   xyTargetAction(model, panel, to) -> { action } | { reason }   Y moved to `to`, one BATCH
@@ -27,10 +33,12 @@
 //   xyPatchAction(model, panel, patch) -> { action } | { reason }   load it, one BATCH
 
 import { createPatch, patchParams } from '../studio/patches.js';
+import { compileStudio, computeBases } from '../studio/compiler.js';
+import { PROVISIONAL_SAMPLE_RATE, safeMaximum } from '../sequencer/model.js';
+import { CENTS_PER_OCTAVE } from '../core/music.js';
 import { linkAction, linkOf } from './link.js';
-import { controlValue } from '../studio/ports.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
-import { splitJack } from './panel.js';
+import { SOURCE_RANGES, splitJack } from './panel.js';
 import { XY_TAB } from './panels/xy.js';
 
 export const XY_CATEGORY = 'xy';
@@ -63,22 +71,45 @@ export function xyTargets(panel) {
 const cablesFrom = (model, panel, jack) => panelCables(model, panel).filter((c) => c.from === jack);
 export const xyTarget = (model, panel) => (cablesFrom(model, panel, 'xy.y')[0] || {}).to || null;
 
-export function xyYReading(model, panel) {
+// The plan is compiled for a context that runs (a realtime engine), as the runtime compiles it;
+// the sizing needs only the plan, never an AudioContext.
+const RUNNING = Object.freeze({ isSupported: () => true });
+const sourceRange = (plan, from) => {
+  const n = plan.nodes.get(from.node);
+  const s = n && SOURCE_RANGES[n.type] && SOURCE_RANGES[n.type][from.port];
+  return s ? s.range : [-1, 1]; // compiler.js DEFAULT_RANGE
+};
+
+export function xyYReading(model, panel, { sampleRate = null } = {}) {
   const c = cablesFrom(model, panel, 'xy.y')[0];
   if (!c) return null;
   const { module, port } = splitJack(c.to);
   const node = panel.resolve(model).get(module);
   const m = panel.module(module);
   const param = m && (m.params || []).find((p) => p.key === port);
-  const edge = model.graph.edges.find((e) => e.id === c.id);
-  if (!node || !param || !edge) return null;
-  const range = panel.sourceRange('xy.y');
-  const base = port in node.params ? node.params[port] : param.default;
-  const props = edge.props;
+  const plan = compileStudio(model, { engine: RUNNING });
+  const pn = node && plan.nodes.get(node.id);
+  const edge = plan.edges.get(c.id);
+  if (!pn || !param || !edge) return null;
+  const provisional = !(sampleRate > 0);
+  const rate = provisional ? PROVISIONAL_SAMPLE_RATE : sampleRate;
+  // Every CONTROL cable into the node, as the runtime passes them (gains in parameter units or
+  // octaves: scale 1), sized at this context's 0.95 x Nyquist.
+  const incoming = plan.edgeOrder.map((id) => plan.edges.get(id))
+    .filter((e) => e.to.node === pn.id && e.kind === 'control')
+    .map((e) => ({ edge: e, handle: { status: e.status, range: sourceRange(plan, e.from),
+      scale: 1 } }));
+  const cb = computeBases(pn, incoming, { safeMaximum: safeMaximum(rate) });
+  const b = cb.base[port];
+  if (!b) return null; // not a modulatable parameter: no cable sizes it
+  const g = cb.gains.get(edge.id) || 0;
+  const log = edge.props.mapping === 'log';
   const others = model.graph.edges.filter((e) => e.id !== edge.id && e.to.node === node.id
     && e.to.port === port && !(e.props && e.props.muted)).length;
-  return { jack: c.to, param, base, props, range, others,
-    at: (y) => (props.muted ? base : controlValue(base, props, range, y)) };
+  return { jack: c.to, param, props: edge.props, others, sampleRate: rate, provisional,
+    limited: cb.limited.has(edge.id), cap: cb.caps[port] || null,
+    at: (y) => (log ? b.value * 2 ** ((b.cents + CENTS_PER_OCTAVE * g * y) / CENTS_PER_OCTAVE)
+      : b.value + g * y) };
 }
 export const xyPatched = (model, panel) => ['xy.pitch', 'xy.gate']
   .every((j) => cablesFrom(model, panel, j).length);

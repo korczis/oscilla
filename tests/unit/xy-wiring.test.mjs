@@ -21,10 +21,11 @@ import {
 } from '../../src/js/synth/xy.js';
 import { createXyModel } from '../../src/js/ui/kinds/xy-pad.js';
 import { NOTE_NAMES, SCALE_MODES, midiToName } from '../../src/js/core/music.js';
-import { compileStudio, computeBases } from '../../src/js/studio/compiler.js';
+import { compileStudio, computeBases, limitBoundText } from '../../src/js/studio/compiler.js';
+import { safeMaximum } from '../../src/js/sequencer/model.js';
 import { knobModel } from '../../src/js/synth/view/knob.js';
 import { xyYReading } from '../../src/js/synth/xy.js';
-import { splitJack } from '../../src/js/synth/panel.js';
+import { SOURCE_RANGES, splitJack } from '../../src/js/synth/panel.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
@@ -93,10 +94,10 @@ function jackName(id) {
 }
 
 /** The panel's store, the real transport on the fake engine, live calls recorded. */
-function rig({ patch = true } = {}) {
+function rig({ patch = true, sampleRate = 48000 } = {}) {
   const st = panelStore();
   if (patch) assert.equal(st.dispatch(xyVoiceAction(st.getModel(), PANEL).action).ok, true);
-  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const fx = createFakeAudioEnv({ sampleRate });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init(), 'engine.init');
   const runtime = createStudioRuntime({ engine });
@@ -113,7 +114,7 @@ function rig({ patch = true } = {}) {
   const mount = (opts = {}) => mountSynthXy(host, { store: st, transport, panel: PANEL, app,
     say: (t) => said.push(t), jackName, phone: () => false, mountPad: pad.mountPad, ...opts });
   const padId = PANEL.resolve(st.getModel()).get('xy').id;
-  return { st, real, transport, calls, app, pad, said, host, mount, padId, runtime, fx };
+  return { st, real, transport, calls, app, pad, said, host, mount, padId, runtime, fx, engine };
 }
 
 /** Touch the pad: the gate opens, the transport arms, the router holds the pad's note. */
@@ -462,41 +463,131 @@ test('each cell is named by the note the runtime plays there, for every scale, k
     }
   });
 
-test('Y reads what Y asks of its target: the compiler\'s line, in the target knob\'s text', () => {
-  for (const recipe of XY_RECIPES) {
-    const r = rig({ patch: false });
-    assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, recipe.id).action).ok,
-      true);
-    const m = r.mount();
-    const { opts, model } = m.view;
-    const doc = r.st.getModel();
-    const rd = xyYReading(doc, PANEL);
-    assert.equal(rd.jack, recipe.y);
-    // The compiler's own sizing of the target's base and of Y's edge, at every y.
-    const node = PANEL.resolve(doc).get(rd.jack.split('.')[0]);
-    const plan = compileStudio(doc);
-    const port = rd.jack.split('.')[1];
-    const edge = [...plan.edges.values()].find((e) => e.to.node === node.id
-      && e.to.port === port && e.from.port === 'y');
-    const cb = computeBases(plan.nodes.get(node.id), [{ edge, handle: { status: 'active',
-      range: PANEL.sourceRange('xy.y'), scale: 1 } }], null);
-    const b = cb.base[port];
-    const g = cb.gains.get(edge.id);
-    const k = knobModel(rd.param);
-    const name = jackName(recipe.y);
-    for (const y of [0, 0.25, 0.5, 0.8, 1]) {
-      const want = rd.props.mapping === 'log'
-        ? b.value * 2 ** ((b.cents + 1200 * g * y) / 1200) : b.value + g * y;
-      assert.ok(Math.abs(rd.at(y) - want) <= 1e-9 * Math.max(1, Math.abs(want)),
-        `${recipe.id} y ${y}: ${rd.at(y)} vs the compiler's ${want}`);
-      assert.equal(opts.readout.y(y), `${name} ${k.text(want)}`, `${recipe.id}: the ring's value`);
-      model.key('Home', false, 'y'); // the slider text at this y
-      assert.ok(opts.text.y(y).endsWith(`% to ${name}: ${k.text(want)}`),
-        `${recipe.id}: Y's aria-valuetext ${opts.text.y(y)}`);
+test('Y reads what its target plays: the compiler\'s own sizing at the context\'s Nyquist', () => {
+  for (const sampleRate of [44100, 48000]) {
+    for (const recipe of XY_RECIPES) {
+      const r = rig({ patch: false, sampleRate });
+      assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, recipe.id).action).ok,
+        true);
+      const m = r.mount({ sampleRate: () => r.engine.sampleRate });
+      const { opts } = m.view;
+      const doc = r.st.getModel();
+      const rd = xyYReading(doc, PANEL, { sampleRate });
+      assert.equal(rd.jack, recipe.y);
+      assert.equal(rd.sampleRate, sampleRate);
+      // The compiler's sizing of the target's base and of Y's edge with every cable into the
+      // node and the real 0.95 x Nyquist of the context, at every y.
+      const node = PANEL.resolve(doc).get(rd.jack.split('.')[0]);
+      const plan = compileStudio(doc, { engine: r.engine });
+      const port = rd.jack.split('.')[1];
+      const incoming = plan.edgeOrder.map((id) => plan.edges.get(id))
+        .filter((e) => e.to.node === node.id && e.kind === 'control')
+        .map((e) => ({ edge: e, handle: { status: e.status, scale: 1,
+          range: (SOURCE_RANGES[plan.nodes.get(e.from.node).type] || {})[e.from.port]
+            ? SOURCE_RANGES[plan.nodes.get(e.from.node).type][e.from.port].range : [-1, 1] } }));
+      const edge = incoming.find((x) => x.edge.from.port === 'y').edge;
+      const cb = computeBases(plan.nodes.get(node.id), incoming,
+        { safeMaximum: safeMaximum(sampleRate) });
+      const b = cb.base[port];
+      const g = cb.gains.get(edge.id);
+      const k = knobModel(rd.param);
+      const name = jackName(recipe.y);
+      const held = cb.limited.has(edge.id);
+      assert.equal(rd.limited, held, `${recipe.id} at ${sampleRate}: limited`);
+      for (const y of [0, 0.25, 0.5, 0.8, 1]) {
+        const want = rd.props.mapping === 'log'
+          ? b.value * 2 ** ((b.cents + 1200 * g * y) / 1200) : b.value + g * y;
+        assert.ok(Math.abs(rd.at(y) - want) <= 1e-9 * Math.max(1, Math.abs(want)),
+          `${recipe.id} y ${y}: ${rd.at(y)} vs the compiler's ${want}`);
+        const past = want > rd.param.max || want < rd.param.min ? 'past its range' : '';
+        const notes = [past, held ? 'held' : ''].filter(Boolean).join(', ');
+        assert.equal(opts.readout.y(y), `${name} ${k.text(want)}${notes ? ` (${notes})` : ''}`,
+          `${recipe.id}: the ring's value`);
+        assert.ok(opts.text.y(y).includes(`% to ${name}: ${k.text(want)}`),
+          `${recipe.id}: Y's aria-valuetext ${opts.text.y(y)}`);
+      }
+      assert.deepEqual(opts.readout.yEnds(), [k.text(rd.at(0)), k.text(rd.at(1))], 'the Y ends');
+      m.destroy();
     }
-    assert.deepEqual(opts.readout.yEnds, [k.text(rd.at(0)), k.text(rd.at(1))], 'the Y ends');
-    m.destroy();
   }
+});
+
+test('the Y value equals what the running graph plays at 44.1 and 48 kHz, held near Nyquist',
+  () => {
+    const last = (p) => (p.events.length ? p.events[p.events.length - 1].value : p.value);
+    // A log target whose cable asks past 0.95 x Nyquist: LPF Cutoff at 6 kHz (XY lead, two
+    // octaves up), HPF Cutoff at 20 kHz (XY sweep).
+    const CASES = [['xy-lead', 6000], ['xy-sweep', 20000]];
+    const seen = {};
+    for (const sampleRate of [44100, 48000]) {
+      for (const [id, hz] of CASES) {
+        const r = rig({ patch: false, sampleRate });
+        const recipe = XY_RECIPES.find((x) => x.id === id);
+        assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, id).action).ok, true);
+        const [mod, port] = recipe.y.split('.');
+        const nodeId = PANEL.resolve(r.st.getModel()).get(mod).id;
+        assert.equal(r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId, key: port, value: hz }).ok,
+          true);
+        const m = r.mount({ sampleRate: () => r.engine.sampleRate });
+        hold(r, m); // the first touch arms: the runtime plays the document at `sampleRate`
+        const doc = r.st.getModel();
+        const yEdge = doc.graph.edges.find((e) => e.from.port === 'y' && e.to.node === nodeId);
+        const eh = r.runtime.edges.get(yEdge.id);
+        assert.equal(eh.status, 'active');
+        // Y's depth gain feeds the biquad's detune (cents per unit of Y): what plays at y.
+        const bq = r.fx.ctx.created.find((n) => n.kind === 'biquad'
+          && n.detune === eh.gain.outputs[0]);
+        assert.ok(bq, 'the target biquad');
+        const g = last(eh.gain.gain);
+        const played = (y) => last(bq.frequency) * 2 ** ((last(bq.detune) + g * y) / 1200);
+        const rd = xyYReading(doc, PANEL, { sampleRate });
+        const k = knobModel(rd.param);
+        const name = jackName(recipe.y);
+        const what = `${id} at ${hz} Hz, ${sampleRate} Hz`;
+        for (const y of [0, 0.25, 0.5, 0.8, 1]) { // first the number: shown = played
+          const want = played(y);
+          assert.ok(Math.abs(rd.at(y) - want) <= 1e-6 * want,
+            `${what} y ${y}: shown ${rd.at(y)}, played ${want}`);
+          assert.ok(want <= safeMaximum(sampleRate) * (1 + 1e-12), `${what}: at most 0.95 x Nyq`);
+        }
+        assert.equal(rd.limited, true, `${what}: Y's excursion is scaled to fit`);
+        for (const y of [0, 0.25, 0.5, 0.8, 1]) { // then the text that says so
+          const want = played(y);
+          const past = want > rd.param.max ? 'past its range, ' : '';
+          assert.equal(m.view.opts.readout.y(y), `${name} ${k.text(want)} (${past}held)`);
+          assert.ok(m.view.opts.text.y(y).endsWith(`: ${k.text(want)}${past
+            ? ' (past its range)' : ''}, held at or below `
+            + `${limitBoundText({ cap: safeMaximum(sampleRate), bound: 'nyquist', sampleRate })}`),
+          `${what}: Y's aria-valuetext ${m.view.opts.text.y(y)}`);
+        }
+        const end = (v) => `${k.text(v)}${v > rd.param.max ? ' (past its range)' : ''}`;
+        assert.deepEqual(m.view.opts.readout.yEnds(), [end(played(0)), end(played(1))]);
+        seen[`${id}@${sampleRate}`] = rd.at(0.5);
+        m.view.model.up(1);
+        m.destroy();
+        stopNow(r);
+      }
+    }
+    // The rate matters: the same document plays (and reads) higher at 48 kHz.
+    assert.ok(seen['xy-lead@48000'] > seen['xy-lead@44100']);
+    assert.ok(Math.abs(seen['xy-lead@44100'] - 11210.93) < 0.01, `${seen['xy-lead@44100']}`);
+  });
+
+test('before a context exists, Y is sized at the provisional 44.1 kHz and says so', () => {
+  const r = rig({ patch: false });
+  assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, 'xy-lead').action).ok, true);
+  const nodeId = PANEL.resolve(r.st.getModel()).get('lpf').id;
+  r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId, key: 'frequency', value: 6000 });
+  const m = r.mount(); // no sampleRate: the default host has no context
+  const rd = xyYReading(r.st.getModel(), PANEL);
+  assert.equal(rd.provisional, true);
+  assert.equal(rd.sampleRate, 44100);
+  const at44 = xyYReading(r.st.getModel(), PANEL, { sampleRate: 44100 });
+  assert.equal(at44.provisional, false);
+  for (const y of [0, 0.5, 1]) assert.equal(rd.at(y), at44.at(y), `y ${y}`);
+  assert.ok(m.view.opts.text.y(1).endsWith('0.95 × Nyquist at 44.1 kHz, until audio starts'),
+    m.view.opts.text.y(1));
+  m.destroy();
 });
 
 test('the readout line sits above the pad; Y driving nothing reads no value', () => {

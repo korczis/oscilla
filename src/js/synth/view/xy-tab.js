@@ -52,7 +52,8 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     if (!body || !nodes().get('xy')) return;
     const c = cmp();
     mounted = mountSynthXy(body, { store: get().handle, transport: () => get().transport, panel,
-      owner: 'synth', app: c, arm, say, jackName, dispatch, buttonClass: BTN });
+      owner: 'synth', app: c, arm, say, jackName, dispatch, buttonClass: BTN,
+      sampleRate: () => get().sampleRate || null });
   }
 
   function preset(id) {

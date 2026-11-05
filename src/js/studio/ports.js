@@ -81,16 +81,6 @@ export function controlLine(props, [lo, hi]) {
   return { a, b: t0 - a * lo + props.offset };
 }
 
-/**
- * What a parameter of base value `base` is asked for while one CONTROL edge's source reads `s`
- * (the compiler's sum for that one edge, before any cap): base + a·s + b, or base · 2^(a·s + b)
- * for a log mapping.
- */
-export function controlValue(base, props, range, s) {
-  const { a, b } = controlLine(props, range);
-  return props.mapping === 'log' ? base * 2 ** (a * s + b) : base + a * s + b;
-}
-
 // ---------------------------------------------------------------- port definitions
 
 /**
