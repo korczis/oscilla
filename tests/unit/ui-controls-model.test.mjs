@@ -460,3 +460,239 @@ test('size: every registry number draws at every size inside its hit, from token
   }
   assert.ok(n > 20, `${n} knobs drawn`);
 });
+
+// ---------------------------------------------------------------- review of S, round 4
+
+const BIPOLAR_P = Object.freeze({ ...LIN, id: 'pan', min: -100, max: 100, default: 0 });
+const SIZE_STATES = Object.freeze([{}, { hover: true }, { focus: true }, { dragging: true },
+  { disabled: true }, { disabled: true, hover: true }, { disabled: true, focus: true },
+  { hover: true, focus: true, dragging: true }]);
+/** The drawing group's content (inside `<g pointer-events="none" ...>`), its scale ticks cut. */
+const innerOf = (svg) => {
+  const g = /<g pointer-events="none"(?: transform="scale\([^)]+\)")?>/.exec(svg);
+  assert.ok(g, 'the drawing group is emitted');
+  return svg.slice(g.index + g[0].length).replace(/<path d="[^"]*" data-ticks=""[^>]*>/, '');
+};
+
+// Finding 1: lg and sm are md's drawing scaled, in every state (a disabled sm drawing a value
+// arc, a live pointer, or losing its hover cue was not caught), unipolar and bipolar, at zooms
+// on both sides of the scale's threshold. Only the ticks differ (their count is the tier's).
+test('size: lg and sm draw md\'s markup, scale ticks aside, in every state and at every zoom',
+  () => {
+    let n = 0;
+    for (const param of [LIN, BIPOLAR_P]) {
+      for (const state of SIZE_STATES) {
+        for (const zoom of [ZOOM_MIN, 1, PANEL_ZOOM, 2, ZOOM_MAX]) {
+          for (const [value, applied] of [[70, 30], [-40, 0], [0, undefined]]) {
+            const at = (size) => K.controlSvg({ kind: 'knob', value, applied, param, state, zoom,
+              size, tokens: TOKENS });
+            const md = innerOf(at('md'));
+            for (const size of ['lg', 'sm']) {
+              assert.equal(innerOf(at(size)), md, `${size} ${param.id} ${JSON.stringify(state)} `
+                + `${value}/${applied} at ${zoom}`);
+              n += 1;
+            }
+          }
+        }
+      }
+    }
+    assert.ok(n >= 400, `${n} drawings compared`);
+    // The comparison sees what it is meant to: the disabled drawing is the quiet one, and the
+    // hover overlay is shown on an enabled hover alone.
+    const svg = (state, size) => knob({ state, size, zoom: 2 });
+    for (const size of ['lg', 'md', 'sm']) {
+      assert.doesNotMatch(svg({ disabled: true }, size), /data-ring=""|data-applied=""/, size);
+      assert.match(svg({ hover: true }, size), /data-hover="" fill="none" stroke="[^"]+"\/>/);
+      assert.match(svg({ hover: true, disabled: true }, size), /data-hover=""[^>]*hidden/, size);
+    }
+  });
+
+// Finding 2: each tier's ticks run from -135° to 135° in equal steps (lg every 13.5°, md 27°,
+// sm 67.5°), read from the emitted segments, not only counted.
+test('size: each tier\'s scale ticks sit at -135 + i·270/(n-1) degrees', () => {
+  for (const size of ['lg', 'md', 'sm']) {
+    const { ticks: n } = K.KNOB_SIZES[size];
+    const d = /<path d="([^"]+)" data-ticks=""/.exec(knob({ size, zoom: ZOOM_MAX }))[1];
+    const segs = [...d.matchAll(/M (-?[\d.]+) (-?[\d.]+) L (-?[\d.]+) (-?[\d.]+)/g)]
+      .map((m) => m.slice(1).map(Number));
+    assert.equal(segs.length, n, `${size}: ${n} ticks`);
+    segs.forEach(([x0, y0, x1, y1], i) => {
+      const want = -135 + (i * 270) / (n - 1);
+      for (const [x, y, r] of [[x0, y0, K.KNOB.tickIn], [x1, y1, K.KNOB.tickOut]]) {
+        const deg = (Math.atan2(x, -y) * 180) / Math.PI;
+        assert.ok(Math.abs(deg - want) < 0.05, `${size} tick ${i}: ${deg}°, not ${want}°`);
+        assert.ok(Math.abs(Math.hypot(x, y) - r) < 0.02, `${size} tick ${i}: r ${r}`);
+      }
+    });
+  }
+});
+
+// Finding 6: the exported sizes cannot be changed, the table or any tier.
+test('size: KNOB_SIZES and each of its tiers are frozen', () => {
+  assert.ok(Object.isFrozen(K.KNOB_SIZES), 'the table');
+  for (const [size, s] of Object.entries(K.KNOB_SIZES)) assert.ok(Object.isFrozen(s), size);
+});
+
+// Finding 4: the least travel is the cap's own length, and it is accepted; under it, or not a
+// finite number, is refused.
+test('travel: FADER_CAP.h is the least travel, and under it or not finite is refused', () => {
+  assert.equal(S.travelOf('fader', S.FADER_CAP.h), 14, 'a 14-unit fader');
+  assert.equal(S.pixelsPerRangeFor('fader', 2, LIN, { travel: 14 }), 28);
+  assert.equal(K.controlBox('fader', 'vertical', { travel: 14 }).height, 34);
+  for (const t of [13.99, 0, -14, NaN, Infinity, -Infinity, '20', null]) {
+    assert.throws(() => S.travelOf('fader', t), (e) => e instanceof RangeError
+      && /travel: at least 14 graph units/.test(e.message), String(t));
+  }
+});
+
+// Finding 5: a knob and a switch have no travel, so a travel equal to a fader's default is
+// refused as any other is (it answered 200 and 12 where the knob model refused it).
+test('travel: a knob or a switch given any travel is refused, FADER_TRAVEL too', () => {
+  const ON = { key: 'on', type: 'boolean', default: false };
+  for (const travel of [S.FADER_TRAVEL, 10, 65]) {
+    assert.throws(() => S.pixelsPerRangeFor('knob', 1, LIN, { travel }),
+      /travel: a knob has none/, `knob ${travel}`);
+    assert.throws(() => M.pixelsPerRangeFor('knob', 1, LIN, { travel }),
+      /travel: a knob has none/, `the knob model, ${travel}`);
+    assert.throws(() => S.pixelsPerRangeFor('switch', 1, ON, { travel }),
+      /travel: a switch has none/, `switch ${travel}`);
+    assert.throws(() => K.controlBox('knob', 'vertical', { travel }), /travel: a knob has none/);
+    assert.throws(() => K.controlSvg({ kind: 'switch', value: false, param: ON, tokens: TOKENS,
+      travel }), /travel: a switch has none/);
+  }
+  assert.equal(S.travelOf('fader', S.FADER_TRAVEL), S.FADER_TRAVEL, 'a fader\'s own default');
+  assert.equal(S.travelOf('knob', undefined), S.FADER_TRAVEL, 'no travel given: the default');
+});
+
+/**
+ * The slider model and the skin loaded over a probed knob model (or slider model): a copy of
+ * the three modules in a temporary directory, the model's `name` wrapped by `wrap` (a function
+ * of the original, as source). What a probe changes in the model's answer must show in theirs:
+ * a rule they copied instead of asking the model would not follow it.
+ */
+async function probed(name, wrap, { into = MODEL } = {}) {
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'osc-probe-'));
+  const at = (p) => join(dir, p.replace('src/js/ui/', ''));
+  mkdirSync(join(dir, 'controls'));
+  mkdirSync(join(dir, 'synth'));
+  const abs = new URL('../../src/js/', import.meta.url).href;
+  for (const p of [MODEL, SLIDER, SKIN]) {
+    let src = read(p).replace(/'\.\.\/\.\.\/(core|studio)\//g, `'${abs}$1/`);
+    if (p === into) {
+      const fn = new RegExp(`export function ${name}\\(`);
+      const cn = new RegExp(`export const ${name} =`);
+      assert.ok(fn.test(src) || cn.test(src), `${p} exports ${name}`);
+      src = src.replace(fn, `function ${name}__model(`).replace(cn, `const ${name}__model =`)
+        + `\nexport const ${name} = (${wrap})(${name}__model);\n`;
+    }
+    writeFileSync(at(p), src);
+  }
+  const url = (p) => new URL(`file://${at(p)}`).href;
+  return { S: await import(url(SLIDER)), K: await import(url(SKIN)), dir };
+}
+const PROBE = Object.freeze({ ...LIN, id: 'probe', probe: true });
+/** A probe that prefixes the model's refusal with PROBE, so a refusal of a copy shows. */
+const tagged = () => `(f) => (...a) => { try { return f(...a); } catch (e) {
+  throw new Error('PROBE ' + e.message); } }`;
+
+// Finding 3, by behaviour: a copy of the model's rule that binds none of its names (an inlined
+// kind list, a clamp from param.min and param.max, a bipolar test of its own) passes a name
+// check, so each rule the slider model and the skin take from the knob model is probed there,
+// and their answers must follow it.
+test('the slider model and the skin answer through the knob model: a probed rule shows',
+  async () => {
+  const { rmSync } = await import('node:fs');
+  const ON = { key: 'on', type: 'boolean', default: false, probe: true };
+  const cases = [
+    ['kindOf', tagged(), ({ S: s }) => assert.throws(() => s.pixelsPerRangeFor('lever', 1),
+      /^Error: PROBE pixelsPerRangeFor: kind/)],
+    ['zoomOf', tagged(), ({ S: s, K: k }) => {
+      assert.throws(() => s.pixelsPerRangeFor('fader', 0), /PROBE/);
+      assert.throws(() => k.controlSvg({ kind: 'knob', value: 1, param: LIN, tokens: TOKENS,
+        zoom: 0 }), /PROBE/);
+    }],
+    ['orientationOf', tagged(), ({ S: s, K: k }) => {
+      assert.throws(() => s.faderPress({ value: 50, param: LIN, point: { x: 0, y: 0 },
+        orientation: 'diagonal' }), /PROBE/);
+      assert.throws(() => k.controlBox('fader', 'diagonal'), /PROBE/);
+    }],
+    ['pointOf', tagged(), ({ S: s }) => assert.throws(() => s.faderPress({ value: 50,
+      param: LIN, point: null }), /PROBE/)],
+    ['clampValue', '(f) => (v, p) => (p && p.probe && typeof v === "number" ? f(v, p) + 1 '
+      + ': f(v, p))', ({ S: s, K: k }) => {
+      assert.deepEqual(s.faderPress({ value: 50, param: PROBE, point: { x: 0, y: 0 } }),
+        { grab: true, value: 51 }, 'the press holds the model\'s value');
+      assert.equal(k.clampValue(50, PROBE), 51);
+    }],
+    ['toNorm', '(f) => (v, p) => (p && p.probe ? 0 : f(v, p))', ({ S: s, K: k }) => {
+      assert.equal(s.faderPress({ value: 50, param: PROBE, point: { x: 0, y: 32 } }).grab, true,
+        'the cap sits where the model\'s position puts it');
+      const ptr = /<line data-pointer="" x1="([^"]+)" y1="([^"]+)"/.exec(k.controlSvg({
+        kind: 'knob', value: 50, param: PROBE, tokens: TOKENS }));
+      assert.ok(Number(ptr[1]) < 0 && Number(ptr[2]) > 0, 'the pointer at the start, -135°');
+    }],
+    ['knobKey', '(f) => (e, o) => (o && o.param && o.param.probe ? 42 : f(e, o))',
+      ({ S: s }) => assert.deepEqual(s.faderPress({ value: 50, param: PROBE,
+        point: { x: 0, y: 30 } }), { grab: false, value: 42 }, 'a page is the model\'s key')],
+    ['choicesOf', '(f) => (p) => (p && p.probe ? [[0, "a"], [1, "b"], [2, "c"]] : f(p))',
+      ({ S: s }) => assert.equal(s.switchPositions(ON), 3)],
+    ['idOf', '(f) => (p) => (p && p.probe ? "PROBE-ID" : f(p))', ({ S: s }) => assert.throws(
+      () => s.switchPositions({ ...PROBE, type: 'number' }), /^Error: PROBE-ID: a switch/)],
+    ['pixelsPerRangeFor', '(f) => (k, z, p, o) => (p && p.probe ? 777 : f(k, z, p, o))',
+      ({ S: s }) => assert.equal(s.pixelsPerRangeFor('knob', 1, PROBE), 777)],
+    ['originOf', '(f) => (p) => (p && p.probe ? p.min : f(p))', ({ K: k }) => {
+      const pan = { ...BIPOLAR_P, probe: true };
+      assert.match(k.controlSvg({ kind: 'knob', value: 50, param: BIPOLAR_P, tokens: TOKENS }),
+        /data-detent=""/, 'unprobed: a range across zero has its detent');
+      for (const kind of ['knob', 'fader']) {
+        const svg = k.controlSvg({ kind, value: 50, param: pan, tokens: TOKENS });
+        assert.doesNotMatch(svg, /data-detent=""/, `${kind}: the model's origin, not its own`);
+      }
+      const FILL = new RegExp('<rect x="-2" y="([^"]+)" width="4" height="([^"]+)" rx="2" '
+        + 'fill="[^"]+" stroke="none"');
+      const fill = (p) => FILL.exec(k.controlSvg({ kind: 'fader', value: 50, param: p,
+        tokens: TOKENS })).slice(1);
+      assert.notDeepEqual(fill(pan), fill(BIPOLAR_P), 'the fader fills from the model\'s origin');
+    }],
+    ['travelOf', tagged(), ({ K: k }) => assert.throws(() => k.controlBox('fader', 'vertical',
+      { travel: 3 }), /PROBE travel/), { into: SLIDER }],
+    ['switchPositions', '(f) => (p) => (p && p.probe ? 3 : f(p))', ({ K: k }) => assert.equal(
+      [...k.controlSvg({ kind: 'switch', value: false, param: ON, tokens: TOKENS })
+        .matchAll(/data-detent=""/g)].length, 3, 'the lever\'s detents are the model\'s count'),
+    { into: SLIDER }],
+  ];
+  for (const [name, wrap, check, opts] of cases) {
+    const p = await probed(name, wrap, opts);
+    try {
+      check(p);
+    } catch (e) {
+      e.message = `${name} probed: ${e.message}`;
+      throw e;
+    } finally {
+      rmSync(p.dir, { recursive: true, force: true });
+    }
+  }
+});
+
+// The same rules by reading (finding 3): a module over a model reads no descriptor field of a
+// parameter (its range, step, scale, options or default are the model's to interpret) and
+// lists no kinds of its own.
+test('the slider model and the skin read no descriptor field and list no kinds', () => {
+  const FIELD = /\b(?:p|param|def|descriptor)\??\.(?:min|max|step|scale|options|default|type)\b/g;
+  const DESTRUCTURE = /\{[^}]*\b(?:min|max|step|scale|options)\b[^}]*\}\s*=\s*(?:p|param)\b/g;
+  const KIND_LIST = /\[\s*'(?:knob|fader|switch)'\s*,\s*'(?:knob|fader|switch)'/g;
+  for (const p of [SLIDER, SKIN]) {
+    const code = codeOf(p);
+    assert.deepEqual([...code.matchAll(FIELD)].map((m) => m[0]), [], `${p}: a field read`);
+    assert.deepEqual([...code.matchAll(DESTRUCTURE)].map((m) => m[0]), [], `${p}: destructured`);
+    assert.deepEqual([...code.matchAll(KIND_LIST)].map((m) => m[0]), [], `${p}: a kind list`);
+  }
+  assert.equal(typeof M.originOf, 'function', 'the model says where a value is measured from');
+  assert.equal(M.originOf(LIN), 0, 'a range from 0: its min');
+  assert.equal(M.originOf({ ...LIN, min: 20, max: 80 }), 20, 'from its min');
+  assert.equal(M.originOf(BIPOLAR_P), 0, 'across zero: zero');
+  assert.equal(M.originOf({ ...LIN, min: -100, max: 0 }), -100, 'up to zero: its min');
+  assert.equal(M.originOf({ key: 'on', type: 'boolean' }), null, 'a choice has none');
+});

@@ -5,8 +5,9 @@
 // fader and switch drawn as hardware, an SVG <g> from tokens, on the control family's one knob
 // model (src/js/ui/controls/knob-model.js) and one slider model (slider-model.js), which it
 // re-exports, so every importer of this module keeps its names: the same functions, not copies.
-// No value logic lives here. A setpoint (project.no-fake-science): nothing tweens. No listener,
-// no document. Colours are tokens (lock v3), intensity only the opacity-hw-* classes (v4).
+// No value logic lives here (where a value starts is the model's originOf). A setpoint
+// (project.no-fake-science): nothing tweens. No listener, no document. Colours are tokens
+// (lock v3), intensity only the opacity-hw-* classes (v4).
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping (model)
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures (model)
@@ -15,7 +16,8 @@
 //   KNOB_SIZES                                                         a knob's size: lg, md, sm
 
 import {
-  choicesOf, clampValue, HIT_PX, idOf, optionIndex, orientationOf, SWEEP_DEG, toNorm, zoomOf,
+  choicesOf, clampValue, HIT_PX, idOf, optionIndex, orientationOf, originOf, SWEEP_DEG, toNorm,
+  zoomOf,
 } from '../controls/knob-model.js';
 import { FADER_CAP, FADER_TRAVEL, leverOf, LEVER_SLOT, switchPositions, travelOf }
   from '../controls/slider-model.js';
@@ -197,9 +199,10 @@ function knobShapes(value, applied, p, t, st, zoom, uid, size = 'md') {
   const angle = (v) => -half + SWEEP_DEG * toNorm(v, p);
   const a = angle(value);
   // A range across zero starts its arcs at zero (12 o'clock when the range is symmetric), with
-  // a detent tick there; any other range starts at its minimum.
-  const bipolar = p.min < 0 && p.max > 0;
-  const origin = bipolar ? angle(0) : -half;
+  // a detent tick there; any other range starts at its minimum (the model's originOf).
+  const zero = toNorm(originOf(p), p);
+  const bipolar = zero > 0;
+  const origin = -half + SWEEP_DEG * zero;
   const { scale, ticks } = KNOB_SIZES[size];
   let out = '';
   // The scale shows once the knob is tickZoom × md's size on screen: its size and the zoom.
@@ -248,8 +251,8 @@ function faderShapes(value, applied, p, t, st, zoom, tr) {
   const tw = FADER.trackW;
   const ax = FADER.capW / 2 + 3;
   // The value fill runs from the bottom, or from zero on a range across zero (as the knob's arc).
-  const bipolar = p.min < 0 && p.max > 0;
-  const from = bipolar ? yOf(0) : half + 2;
+  const zero = originOf(p);
+  const from = toNorm(zero, p) > 0 ? yOf(zero) : half + 2;
   const [f0, f1] = y < from ? [y, from] : [from, y];
   const [cw, ch, g] = [FADER.capW, FADER.capH, FADER.grip];
   const grip = (dy, role, paint, w) => `<line data-grip="${role}" x1="${-cw / 2 + 4}" `

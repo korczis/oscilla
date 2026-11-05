@@ -8,6 +8,7 @@
 // no paint: a host calls knobKey and gestureOf from its own listeners (K153 counts them).
 //
 //   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
+//   originOf                                                           where a value starts
 //   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
 //   parseValue                                                         typed entry (Enter)
 //   formatValue, ariaAttrs                                             the value as text, ARIA
@@ -181,6 +182,14 @@ export function quantize(v, p, { fine = false } = {}) {
   if (r && !(q && q >= r)) x = clampValue(Math.round(clean(x / r)) * r, p);
   else if (q) x = clampValue(min + Math.round(clean((x - min) / q)) * q, p);
   return clean(x);
+}
+
+/** Where a number's value is measured from: zero on a range across zero (its arc or fill
+ *  starts there, with a detent), else min; null for a choice. Skins ask, never test the range. */
+export function originOf(p) {
+  if (choicesOf(p)) return null;
+  const { min, max } = rangeOf(p);
+  return min < 0 && max > 0 ? 0 : min;
 }
 
 /** The value a double-click returns to: the default, else min (a choice: its first option). */

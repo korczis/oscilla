@@ -29,9 +29,10 @@ export const LEVER_SLOT = Object.freeze({ h: 28, inset: 2 });
 /** A switch has at most this many positions; more options are a knob (a rotary selector). */
 const SWITCH_MAX_POSITIONS = 4;
 
-/** A fader's travel: FADER_TRAVEL unless given, at least FADER_CAP.h; any other kind has none. */
+/** A fader's travel: FADER_TRAVEL unless given, at least FADER_CAP.h; any other kind has none,
+ *  so a travel given to it is refused, FADER_TRAVEL's own value too (as the knob model does). */
 export function travelOf(kind, travel) {
-  if (travel === undefined || travel === FADER_TRAVEL) return FADER_TRAVEL;
+  if (travel === undefined) return FADER_TRAVEL;
   if (kind !== 'fader') throw new Error(`travel: a ${kind} has none.`);
   if (!(typeof travel === 'number' && travel >= FADER_CAP.h && travel < Infinity)) {
     throw new RangeError(`travel: at least ${FADER_CAP.h} graph units, not ${travel}.`);

@@ -312,16 +312,18 @@ test('slice A 8: the pointer on the cap and skirt, and the track on the plates, 
 test('slice S: a knob of every size paints its parts as md does, so each pair holds 3:1', () => {
   const param = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
   const flags = ['data-pointer', 'data-pointer-skirt', 'data-cap', 'data-skirt', 'data-track',
-    'data-ring', 'data-applied', 'data-ticks', 'data-focus'];
+    'data-ring', 'data-applied', 'data-ticks', 'data-focus', 'data-hover'];
+  // Review of S, round 4, finding 1: the hover overlay's paint and whether it shows are md's.
   const paintsOf = (svg) => flags.map((f) => {
     const tag = new RegExp(`<\\w+\\b[^>]*\\s${f}=""[^>]*>`).exec(svg);
     assert.ok(tag, `${f} drawn`);
     return [f, (/\sstroke="([^"]*)"/.exec(tag[0]) || [])[1],
-      (/\sfill="([^"]*)"/.exec(tag[0]) || [])[1]];
+      (/\sfill="([^"]*)"/.exec(tag[0]) || [])[1],
+      (/\svisibility="([^"]*)"/.exec(tag[0]) || [])[1]];
   });
   const short = [];
   for (const state of [{ focus: true }, { hover: true, focus: true }, { dragging: true,
-    focus: true }]) {
+    focus: true }, { hover: true, dragging: true, focus: true }]) {
     const at = (size) => controlSvg({ kind: 'knob', value: 70, applied: 30, param, size,
       tokens: TOKENS, state, zoom: 2 });
     const md = paintsOf(at('md'));
@@ -330,6 +332,7 @@ test('slice S: a knob of every size paints its parts as md does, so each pair ho
       assert.deepEqual(paintsOf(at(size)), md, `${size} ${JSON.stringify(state)}: md's paints`);
     }
     const p = Object.fromEntries(md.map(([f, s, fill]) => [f, { s: varOf(s), f: varOf(fill) }]));
+    assert.equal(md.find(([f]) => f === 'data-hover')[3], state.hover ? undefined : 'hidden');
     const want = [['pointer', p['data-pointer'].s, p['data-cap'].f],
       ['pointer-skirt', p['data-pointer-skirt'].s, p['data-skirt'].f],
       ['applied', p['data-applied'].s, p['data-skirt'].f],
