@@ -24,7 +24,13 @@ import { PRE_DPAL_TOKENS as TOKENS } from '../ui-synth-fixture.mjs';
 const ZOOMS = [0.15, 0.25, 0.5, 1, 2, 3];
 const STATES = (values) => [{ hover: true }, { focus: true }, { dragging: true },
   { disabled: true }, { focus: { option: values[0] }, hover: { option: values.at(-1) } }];
-const PANEL = Object.fromEntries(Object.entries(PANEL_TOKENS).map(([k, n]) => [k, `var(${n})`]));
+// The panel's set as it was at f523746a, before dev-53 mapped D-PAL (the cap material, its ink,
+// the LED and the plate's own material): this golden holds the short legends' byte identity, and
+// D-PAL's change of the drawing is ui-synth-tokens.test.mjs's.
+const DPAL_PANEL = ['knobCap', 'knobCapHi', 'capInk', 'led'];
+const PANEL = Object.fromEntries(Object.entries({ ...PANEL_TOKENS, plateHi: '--osc-surface-3',
+  plateLo: '--osc-surface-1' }).filter(([k]) => !DPAL_PANEL.includes(k))
+  .map(([k, n]) => [k, `var(${n})`]));
 /** A layout without the accessible name an option carries since the short legend (`name`), so
  *  the golden of f523746a, which had none, compares. */
 const layoutText = (L) => JSON.stringify(L, (k, v) => (k === 'name' ? undefined : v));

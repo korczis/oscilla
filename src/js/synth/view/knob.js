@@ -91,7 +91,8 @@ export function panelControlTokens(t) {
     surface: { plateHi: t.plateHi, plateLo: t.plateLo, card: t.plateHi, edge: t.edge },
     control: { cap: t.cap, capHi: t.capHi, ring: t.accent, track: t.dim, pointer: t.pointer,
       focus: t.focus, disabled: t.dim, edge: t.dim, knurl: t.track, bezel: t.bezel,
-      shade: t.shade, highlight: t.highlight },
+      shade: t.shade, highlight: t.highlight, knobCap: t.knobCap, knobCapHi: t.knobCapHi,
+      capInk: t.capInk, led: t.led },
     // A choice's legends: the plate's label (4.5:1 on both ends of the plate), the selected one
     // the plate's text, a disabled one dimmed as every disabled control is.
     text: { label: t.label, value: t.text, dim: t.dim },

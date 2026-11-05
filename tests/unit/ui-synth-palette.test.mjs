@@ -420,10 +420,7 @@ const KEYS_PENDING = [
   'dark onLit #ffffff on the lit fill: 4.04 < 4.5',
   'dark midi #34db7b on the white key: 1.68 < 3',
   'dark onLit #ffffff on the midi fill: 1.82 < 4.5',
-  'dark label #94a9bd on the white key: 2.24 < 4.5',
-  'dark edge #020b15 off the black key: ΔL* 1.12',
   'light onLit #ffffff on the midi fill: 3.28 < 4.5',
-  'light edge #e9eef4 on the white key: 1.08 < 3',
 ];
 test('the keys (LXK-02): what the keyboard draws on them, measured on the D-PAL keys', () => {
   assert.deepEqual(keyShortfalls(keyboardInks), KEYS_PENDING,

@@ -103,7 +103,7 @@ test('the controls take the panel\'s tokens in the layer\'s roles', () => {
   // dev-53's to map into PANEL_TOKENS and panelControlTokens; until then the core draws the
   // panel as before (ui-synth-tokens.test.mjs, the f523746a golden). Once the adapter carries
   // one, it leaves this list (a mapped role fails here until it does).
-  const DPAL_PENDING = ['knobCap', 'knobCapHi', 'capInk', 'led'];
+  const DPAL_PENDING = []; // all four mapped (PANEL_TOKENS, panelControlTokens)
   for (const [role, name] of Object.entries(SYNTH_TOKEN_NAMES.control)) {
     if (role === 'applied') continue; // face.js has no applied value to mark (no engine report)
     if (DPAL_PENDING.includes(role)) {
@@ -114,10 +114,10 @@ test('the controls take the panel\'s tokens in the layer\'s roles', () => {
     assert.equal(ct.control[role], `var(${name})`, `control.${role}`);
   }
   assert.equal(ct.surface.edge, `var(${SYNTH_TOKEN_NAMES.surface.edge})`);
-  assert.equal(ct.surface.plateHi, `var(${SYNTH_TOKEN_NAMES.surface.plateHi})`);
-  assert.equal(ct.surface.plateLo, `var(${SYNTH_TOKEN_NAMES.surface.plateLo})`);
-  // The skirt: the panel has no surface-2; it is the plate's top, outlined by the 3:1 edge.
-  assert.equal(ct.surface.card, 'var(--osc-surface-3)');
+  // The plate follows D-PAL's plate material (PF-04), and the skirt is the plate's top.
+  assert.equal(ct.surface.plateHi, `var(${SYNTH_TOKEN_NAMES.plate.hi})`);
+  assert.equal(ct.surface.plateLo, `var(${SYNTH_TOKEN_NAMES.plate.lo})`);
+  assert.equal(ct.surface.card, `var(${SYNTH_TOKEN_NAMES.plate.hi})`);
   // A choice's legends: the layer's text roles, read by the panel's own tokens.
   for (const [role, name] of Object.entries(SYNTH_TOKEN_NAMES.text)) {
     assert.equal(ct.text[role], `var(${name})`, `text.${role}`);
@@ -506,7 +506,9 @@ test('a rotary has the knob\'s toothed skirt and its detents (V10)', () => {
     }
     // The knob's skirt (review of slice A, finding 5): the cap's body, the silhouette edge.
     assert.ok(skirt, `${cid}: the toothed skirt`);
-    assert.equal(skirt[1], panelControlTokens(T).control.cap, `${cid}: the cap's body`);
+    // The cap's body: D-PAL's knob cap material where the panel maps it (C6), else the cap.
+    const ctl = panelControlTokens(T).control;
+    assert.equal(skirt[1], ctl.knobCap ?? ctl.cap, `${cid}: the cap's body`);
     assert.equal(skirt[2], panelControlTokens(T).control.edge, `${cid}: the silhouette edge`);
     assert.ok(b.indexOf('data-skirt=""') < b.indexOf('data-cap=""'), `${cid}: under the cap`);
     assert.equal(count(b, /data-detent=""/g), c.param.options.length, `${cid}: a detent each`);

@@ -3,6 +3,7 @@
 // theme's custom properties and holds no state of its own; src/js/midi/keyboard.js owns what is
 // held. The geometry and the hit test are pure; draw() touches only the canvas it is given.
 
+import { synthTokens } from '../ui/synth/tokens.js';
 import { isBlack, noteName } from './keyboard.js';
 
 const BLACK_W = 0.6;   // a black key's width, as a fraction of a white key
@@ -52,18 +53,21 @@ export function noteAt(layout, x, y) {
  * lighter than a black key in both themes: raised surface over the inset in the dark theme, the
  * panel surface over the body text colour in the light theme.
  */
-export function keyColours(el, doc = el && el.ownerDocument) {
+export function keyColours(el) {
   const cs = el && typeof getComputedStyle === 'function' ? getComputedStyle(el) : null;
   const v = (name, fallback) => (cs && cs.getPropertyValue(name).trim()) || fallback;
-  const light = !!doc && doc.documentElement && doc.documentElement.dataset.theme === 'light';
+  // The keys are the synth-theme layer's material (D-PAL key.white, key.black, key.gap; LXK-02,
+  // LXK-07), read through synthTokens: theme-invariant ivory and ebony, the gap between them, and
+  // each key's legend in the other key's colour.
+  const { key } = synthTokens(el);
   return {
-    white: light ? v('--osc-surface-1', '#ffffff') : v('--osc-surface-4', '#1b2e42'),
-    black: light ? v('--osc-text-2', '#2b3b50') : v('--osc-surface-0', '#020a16'),
-    edge: v('--osc-bg', '#020b15'),
+    white: key.white,
+    black: key.black,
+    edge: key.gap,
     lit: v('--osc-blue', '#007afd'),
     midi: v('--osc-green', '#34db7b'),
-    label: v('--osc-text-muted', '#94a9bd'),
-    blackLabel: light ? v('--osc-surface-4', '#d9e1ec') : v('--osc-text-muted', '#94a9bd'),
+    label: key.black,
+    blackLabel: key.white,
     onLit: v('--osc-text-on-accent', '#ffffff'),
     font: v('--osc-font', 'system-ui, sans-serif'),
   };

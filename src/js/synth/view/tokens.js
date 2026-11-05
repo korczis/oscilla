@@ -11,7 +11,10 @@
  * red-orange hue that holds 3:1 in both themes.
  */
 export const PANEL_TOKENS = Object.freeze({
-  plateHi: '--osc-surface-3', plateLo: '--osc-surface-1',
+  // D-PAL (v4 amendment of 2026-11-05): the plate's own material and the knob cap's, its ink and
+  // the LED, mapped from p2's roles (PF-04, K11, C6, LXK-10).
+  plateHi: '--osc-plate-hi', plateLo: '--osc-plate-lo', knobCap: '--osc-knob-cap',
+  knobCapHi: '--osc-knob-cap-hi', capInk: '--osc-text-on-accent', led: '--osc-hw-led',
   track: '--osc-border', accent: '--osc-cyan', dim: '--osc-text-dim', cap: '--osc-surface-1',
   capHi: '--osc-surface-4', edge: '--osc-bg', pointer: '--osc-text', label: '--osc-text-muted',
   text: '--osc-text', jack: '--osc-surface-0', jackRing: '--osc-text-dim',
