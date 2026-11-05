@@ -1113,9 +1113,17 @@ function defineChecks() {
   });
 
   def('x-dock-handle-hold', async ({ page, browserName }) => {
-    // Review of #425, R8: a pointer holds the pad and sounds; a second finger taps the dock's
-    // handle. The tap unfolds the keys and takes no focus, so the pad keeps its focus and the
-    // held note keeps sounding (the pad's focusout would end the gate); the lift silences.
+    // Review of #425, R8: a finger holds the pad and sounds; a second finger taps the dock's
+    // handle. The tap takes no focus, so the pad keeps its focus and the held note keeps
+    // sounding (the pad's focusout would end the gate); the lift silences.
+    // What each engine proves (a finding of this check, measured by CDP on 2026-11-05):
+    // - webkit makes the second finger's tap a click (and a mousedown): the keys unfold, and
+    //   the check proves the handle's prevented mousedown keeps the focus and the gate (on
+    //   f31d8906, before R8, it failed: the focus moved and aria-pressed went false);
+    // - chromium generates no click and no mousedown for a tap while another finger is down
+    //   (the handle sees pointerdown, touchstart, pointerup and touchend only): the dock stays
+    //   folded, and there the check proves that and that the note was never at risk;
+    // - firefox skips it (Playwright holds no touch there; SKIP_OF says why).
     let v = null;
     await until(async () => {
       v = await dockView(page);
