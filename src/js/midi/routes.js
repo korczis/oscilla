@@ -10,15 +10,23 @@
 //             owner's decision of 2026-11-05 on K178); Arm switches them off and on
 //   leave     the sink method run when the workspace is left (the Studio disarms an armed-only
 //             run, K176), or null
+//   editors   a selector of the workspace's editing surfaces whose letters are shortcuts (the
+//             Studio graph's C connect, the timeline's keys): an armed key pressed while the
+//             focus is inside one is the editor's, not a note (K178, census
+//             studio.connect.cancel.keyboard), or null
 //   yieldsTo  a surface that owns the notes there and collapses the dock (K171, 26's rule:
 //             null until its row lands)
 //
 //   routeOf(workspace) -> its row (the Playground's for a workspace not listed)
 
 export const KEY_ROUTES = Object.freeze({
-  playground: Object.freeze({ plays: null, armed: true, leave: null, yieldsTo: null }),
-  synth: Object.freeze({ plays: 'synthSink', armed: true, leave: null, yieldsTo: null }),
-  studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave', yieldsTo: null }),
+  playground: Object.freeze({ plays: null, armed: true, leave: null, editors: null,
+    yieldsTo: null }),
+  synth: Object.freeze({ plays: 'synthSink', armed: true, leave: null, editors: null,
+    yieldsTo: null }),
+  studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave',
+    editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
+    yieldsTo: null }),
 });
 
 export const routeOf = (workspace) => KEY_ROUTES[workspace] || KEY_ROUTES.playground;
