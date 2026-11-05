@@ -442,8 +442,7 @@
       "evidence": "derived",
       "deepLink": "#m=synthesis",
       "tests": [
-        "tests/browser/first-screen.cjs",
-        "tests/browser/qa-regressions.cjs"
+        "tests/browser/first-screen.cjs"
       ],
       "plan": [
         "F003",
@@ -509,8 +508,7 @@
       "evidence": "derived",
       "deepLink": "#m=synthesis",
       "tests": [
-        "tests/browser/app.cjs",
-        "tests/browser/qa-regressions.cjs"
+        "tests/browser/app.cjs"
       ],
       "plan": [
         "F003"
@@ -576,8 +574,7 @@
       "deepLink": "#m=experiments",
       "tests": [
         "tests/unit/v3-ui.test.mjs",
-        "tests/browser/v3-ui.cjs",
-        "tests/browser/app.cjs"
+        "tests/browser/v3-ui.cjs"
       ],
       "plan": [
         "F005",
@@ -824,9 +821,7 @@
       "evidence": "measured",
       "deepLink": null,
       "deepLinkWhyNot": "the microphone view is shell tab state (src/js/ui/app.js tabs.mic); no key of the address names it",
-      "tests": [
-        "tests/browser/app.cjs"
-      ],
+      "tests": [],
       "plan": [
         "K033"
       ]
@@ -1092,9 +1087,7 @@
       "evidence": "recorded",
       "deepLink": null,
       "deepLinkWhyNot": "the preset category is instrument UI state (presetTab); no key of the address names it",
-      "tests": [
-        "tests/browser/app.cjs"
-      ],
+      "tests": [],
       "plan": [
         "F003"
       ]
@@ -1275,9 +1268,7 @@
       "evidence": "recorded",
       "deepLink": null,
       "deepLinkWhyNot": "a comparison is of a selection of stored experiments; a record link names one record and opens its detail",
-      "tests": [
-        "tests/browser/app.cjs"
-      ],
+      "tests": [],
       "plan": [
         "K041"
       ]
