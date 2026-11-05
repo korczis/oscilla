@@ -1664,6 +1664,8 @@ test('S8: 600 cables with their rims, sheens and plugs still render under 50 ms'
 // cord has a weight, a shade and a sheen that read (JC-13); a vertical run hangs with a belly,
 // never as a straight elastic line (JC-14).
 
+/** The product decision (JC-6, the owner default of 2026-11-04 21:55Z): the band lengths
+ *  PORT_VISUALS[type].bands states, their one source; CABLE_BANDS reads them from there. */
 const BANDS = { AUDIO: [6], CONTROL: [2.5, 2, 2.5], TRIGGER: [1.25, 1.5, 1.25, 1.5, 1.25],
   ANALYSIS: [4, 1.5, 1.5] };
 /** The bands of a cable's parts, by end, each a subpath M p L q of the end's path:
@@ -1685,7 +1687,11 @@ const cordParts = (spec = {}) => cableParts({ id: 'j', from: A, to: B, type: 'AU
   colour: TOKENS.cable.palette[0], tokens: TOKENS, ...spec });
 
 test('JC-6: CABLE_BANDS, a band pattern per signal type, told apart by count and length', () => {
-  assert.deepEqual(CABLE.CABLE_BANDS, BANDS);
+  assert.deepEqual(Object.fromEntries(Object.entries(PORT_VISUALS).map(([t, v]) => [t, v.bands])),
+    BANDS, 'PORT_VISUALS states the decided band lengths');
+  for (const [type, visuals] of Object.entries(PORT_VISUALS)) {
+    assert.equal(CABLE.CABLE_BANDS[type], visuals.bands, `${type}: PORT_VISUALS, no copy`);
+  }
   assert.ok(Object.isFrozen(CABLE.CABLE_BANDS));
   assert.ok(Object.values(CABLE.CABLE_BANDS).every(Object.isFrozen));
   assert.deepEqual(Object.keys(CABLE.CABLE_BANDS), Object.keys(CABLE_DASH), 'every signal type');

@@ -44,17 +44,16 @@ import { PLUG, castInk, cordInk, plugState, plugSvg, sheenInk } from './plug.js'
 import { CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_SLACK, bottomOf, controls, hangingSag, sagRoom }
   from './hang.js';
 import { awayFrom, beside } from './along.js';
+import { PORT_TYPE_LIST, PORT_VISUALS } from '../../studio/ports.js';
 
 export { PLUG, plugState, plugSvg } from './plug.js';
 export { CABLE_BOW, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_SLACK } from './hang.js';
 
 /** The heat-shrink bands of each signal type near each plug, graph units, a band then a gap in
- *  turn (JC-6): AUDIO one long, CONTROL two, TRIGGER three short, ANALYSIS a long and a short.
- *  They differ by count or by their lengths, never by colour alone. */
-export const CABLE_BANDS = Object.freeze({
-  AUDIO: Object.freeze([6]), CONTROL: Object.freeze([2.5, 2, 2.5]),
-  TRIGGER: Object.freeze([1.25, 1.5, 1.25, 1.5, 1.25]), ANALYSIS: Object.freeze([4, 1.5, 1.5]),
-});
+ *  turn (JC-6), read from PORT_VISUALS[type].bands, their one source: they differ by count or by
+ *  their lengths, never by colour alone. */
+export const CABLE_BANDS = Object.freeze(
+  Object.fromEntries(PORT_TYPE_LIST.map((t) => [t, PORT_VISUALS[t].bands])));
 /** How far from a plug's centre its cord's first band starts: just past PLUG.room (19.875). */
 export const CABLE_BAND_AT = 20;
 /** The Signal Path dash of each type (PORT_VISUALS: solid, dashed, pulse, dash-dot): a Studio
