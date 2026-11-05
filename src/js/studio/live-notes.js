@@ -14,6 +14,10 @@
 //       on   the top note changes: the Keys pitch moves (glide only legato), its envelopes get
 //            gate(at, null) and its clocked Random clock(at, k), k counted from arm (0 first)
 //       off  the stack empties: release(at); the top note changes: legato return, no gate
+//       legato  { from, note }: a held note moves to `note` without a gate (K183, the XY pad's
+//            finger crossing into another scale cell): `from` leaves the stack and `note` joins
+//            it; when the top changes the Keys pitch moves (its glide), no envelope is gated.
+//            A `from` not held is a plain on. An engine takes it as off(from) and on(note)
 //     notes.allOff(at) -> how many keys were held; notes.reset(); notes.held() -> [note]
 //   A polyphonic engine (nodes/engines.js, capabilities.notes, a handle with noteOn) takes the
 //   same events on its own id: on -> noteOn(at, note, velocity), off -> noteOff(at, note),
@@ -105,7 +109,8 @@ export function createLiveNotes({ getModel, handleOf }) {
     }
   };
 
-  function polyEvent(id, h, { kind, note, velocity = 100, at, fast = false }) {
+  function polyEvent(id, h, ev) {
+    const { kind, note, velocity = 100, at, fast = false } = ev;
     if (!poly.has(id)) poly.set(id, new Set());
     const held = poly.get(id);
     if (kind === 'all-off') {
@@ -123,6 +128,10 @@ export function createLiveNotes({ getModel, handleOf }) {
       if (!silent) held.add(note);
       return { ok: true, held: held.size, top: silent ? null : note, silent,
         stolen: !!(r && r.stolen), dropped: r ? r.dropped : 0 };
+    }
+    if (kind === 'legato') {
+      polyEvent(id, h, { kind: 'off', note: ev.from, at });
+      return polyEvent(id, h, { kind: 'on', note, velocity, at });
     }
     held.delete(note);
     h.noteOff(at, note);
@@ -160,6 +169,14 @@ export function createLiveNotes({ getModel, handleOf }) {
       return { ok: false, reason: 'The Keys node is not running.' };
     }
     const prio = typeof h.priority === 'function' ? h.priority() : 'last';
+    if (kind === 'legato') {
+      const before = st.top(prio);
+      if (!before || !st.notes.includes(ev.from)) return event(keysId, { ...ev, kind: 'on' });
+      st.release(ev.from, prio);
+      const t = st.press(note, velocity, prio).top;
+      if (t.note !== before.note) h.play(at, t.note, t.velocity, { legato: true });
+      return { ok: true, held: st.size, top: t.note, retrigger: false };
+    }
     const c = kind === 'on' ? st.press(note, velocity, prio) : st.release(note, prio);
     if (c.empty && !c.unchanged) gate(keysId, at, false);
     else if (c.top && (c.retrigger || c.legato)) {

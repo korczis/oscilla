@@ -160,6 +160,40 @@ test('component: blur, hide, pagehide and Escape force-release every held note',
   }
 });
 
+// K183: the XY pad is one more input of the keys' note layer (kbdPad): its notes are 'kbd-xy'
+// and sound where the keys sound; every forced release of the keys closes the pad's gate (its
+// release callback) and releases whatever the xy input still holds; off() unregisters it.
+test('component: the XY pad as one more input of the keys, released with them', async () => {
+  const { r, cmp, fire, key, doc } = await componentRig();
+  assert.equal(typeof cmp.kbdPad, 'function', 'the keys offer the pad an input (K183)');
+  const closed = [];
+  const pad = cmp.kbdPad((why) => { closed.push(why); return 1; });
+  assert.equal(pad.velocity(), cmp.kbdVelocity, 'the pad plays at the keys\' velocity');
+  const releases = {
+    blur: () => fire('win:blur'),
+    hidden: () => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; },
+    pagehide: () => fire('win:pagehide'),
+    escape: () => key('keydown', 'Escape', { key: 'Escape' }),
+    switch: () => cmp.kbdReleaseAll(),
+  };
+  for (const [name, release] of Object.entries(releases)) {
+    const n = closed.length;
+    assert.equal(pad.noteOn(63, 100, 'kbd-xy').ok, true, `${name}: the pad's note sounds`);
+    key('keydown', 'KeyA');
+    assert.equal(r.engine.noteCount, 2, `${name}: the pad's note beside a key's`);
+    release();
+    r.fake.advance(1);
+    assert.ok(closed.length > n, `${name}: the pad's gate was closed`);
+    assert.deepEqual(census(r), ZERO, `${name}: the pad's note released with the keys'`);
+    key('keyup', 'KeyA');
+  }
+  pad.off();
+  const n = closed.length;
+  cmp.kbdReleaseAll();
+  assert.equal(closed.length, n, 'off() unregisters the pad');
+  assert.equal(cmp.kbdPad(null), null, 'a pad without a release is refused');
+});
+
 // K178 (the owner's decision of 2026-11-05): the keys are armed at once in every workspace that
 // plays them; Arm switches a workspace's keys off and on, each on its own.
 test('component: armed per view, never Space, never while typing', async () => {

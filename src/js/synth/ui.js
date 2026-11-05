@@ -37,6 +37,7 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { xyInsertAction } from './xy.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
@@ -122,7 +123,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const names = cuts.length ? feedNames(cuts) : '';
     const ys = m.graph.nodes.map((n) => n.position.y);
     const at = { x: 0, y: (ys.length ? Math.max(...ys) : 0) + 240 };
-    const r = dispatch(panel.instantiate(m, { at }));
+    const r = dispatch(xyInsertAction(m, panel, { at })); // K183: with the pad's Y cable
     if (r.ok) say(names ? SYNTH_TEXT.took(names) : SYNTH_TEXT.inserted);
     return r.ok;
   }
@@ -703,8 +704,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // ------------------------------------------------------------------ notes
 
-  const { noteOn, noteOff, allOff, disarm } = createSynthNotes({ get, transport, ensurePanel,
-    cmp: () => cmp, say, played, playedModule, present, nodes, panel, ENGINE_IDS, syncArmed });
+  const { noteOn, noteOff, legato, allOff, disarm, armedText } = createSynthNotes({ get,
+    transport, ensurePanel, cmp: () => cmp, say, played, playedModule, present, nodes, panel,
+    ENGINE_IDS, syncArmed });
 
   // ------------------------------------------------------------------ links
 
@@ -805,7 +807,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     /** The note sink of src/js/midi/notes.js in this workspace (one path for every player). */
     synthSink() {
-      return { noteOn, noteOff, allOff };
+      return { noteOn, noteOff, allOff, legato };
     },
     studioSink: () => studioSink.active(),
 
@@ -815,7 +817,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       if (typeof this.ensureAudio === 'function') this.ensureAudio();
       const r = t.arm();
       if (!r.ok) say(r.code === 'claim-refused' ? SYNTH_TEXT.refused : r.reason, true);
-      else say(SYNTH_TEXT.armed);
+      else say(armedText());
       this.synth.armed = !!t.armed;
       return r.ok;
     },
