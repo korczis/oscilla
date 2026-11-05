@@ -72,7 +72,7 @@ test('knob-model.js holds the model, the input and the gestures', () => {
 
 test('slider-model.js holds the fader\'s travel and press on top of the knob model', () => {
   assert.equal(S.FADER_TRAVEL, 96, 'slice B\'s travel (FS-06)');
-  assert.deepEqual({ ...S.FADER_TRAVELS }, { adsr: 96, mixer: 112, output: 112, vca: 112 },
+  assert.deepEqual({ ...S.FADER_TRAVELS }, { adsr: 96, mixer: 112, output: 112 },
     'the per-role travel a host asks for (FS-06)');
   assert.equal(S.faderTravel('mixer'), 112);
   assert.deepEqual(S.FADER_CAP, { w: 28, h: 14 });

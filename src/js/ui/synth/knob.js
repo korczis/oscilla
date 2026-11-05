@@ -106,15 +106,18 @@ function sizeOf(kind, size) {
 // the travel from ±tickIn to ±tickOut, the majors (0, 5 and 10, or an axis's ends and middle)
 // to ±majorOut, one mark per value on an integer or choice axis of up to perValue values, and a
 // detent at zero on a range across it (detentW, as the knob's); the cap moulded (FS-04): a cast
-// shadow in control.shade at hw-shadow (shadowDx, down by shadowDy, shadowDragDy while dragged:
-// the light is the knob's, from above and left), and on it the material's lit tone and sheen
-// along its top and a lower lip of `lip` along its foot, the material's lit tone too (the flange
-// catching the light; before D-PAL surface.edge, the plan's); the focus ring at ±focusX, outside
-// the minor marks, as the knob's ring crosses its scale's tips.
-export const FADER_TICKS = Object.freeze({ marks: 11, tickIn: 16, tickOut: 19, majorOut: 21,
+// shadow in control.shade at hw-shadow, the size of the cap's outer edge (its stroke's outside)
+// and offset by the knob's KNOB.shadowDx, shadowDy (shadowDragDy while dragged), so it shows
+// right and below as far as the knob's does: one light, from above and left, on screen in either
+// orientation (review B1, B2); on the cap the material's lit tone and sheen along its top and a
+// lower lip of `lip` along its foot, the material's lit tone too (the flange catching the light;
+// before D-PAL surface.edge, the plan's). The focus ring (stroke 2) at ±focusX, so its inner edge
+// at ±20 clears the long marks' ±19.5 and its outer edge stays in the 44 box: outside the scale,
+// never over it (C4, review B3; the plan's marks reached ±21, under the ring).
+export const FADER_TICKS = Object.freeze({ marks: 11, tickIn: 15.5, tickOut: 18, majorOut: 19.5,
   perValue: 25, detentW: 1.5 });
-const FADER = { capW: FADER_CAP.w, capH: FADER_CAP.h, trackW: 4, fillW: 2, grip: 3,
-  shadowDx: 0.5, shadowDy: 1, shadowDragDy: 2, lip: 1, focusX: 21 };
+const FADER = { capW: FADER_CAP.w, capH: FADER_CAP.h, trackW: 4, fillW: 2, grip: 3, lip: 1,
+  focusX: 21 };
 const SWITCH = { w: 14, h: LEVER_SLOT.h, inset: LEVER_SLOT.inset, leverW: 10 };
 /** The intensity classes: tailwind.config.cjs's hw-sheen and hw-shadow keys. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
@@ -299,7 +302,7 @@ const faderNorms = (p) => valuePositions(p, FADER_TICKS.perValue)
 const marksAt = (ys, x0, x1) => ys.map((y, i) => `M ${-x1(i)} ${y} L ${-x0} ${y} `
   + `M ${x0} ${y} L ${x1(i)} ${y}`).join(' ');
 
-function faderShapes(value, applied, p, t, st, zoom, tr) {
+function faderShapes(value, applied, p, t, st, zoom, tr, size, turned) {
   const c = t.control;
   const m = capMaterial(t);
   const F = FADER;
@@ -323,6 +326,14 @@ function faderShapes(value, applied, p, t, st, zoom, tr) {
     + `y1="${num(y + dy)}" x2="${cw / 2 - 4}" y2="${num(y + dy)}" stroke="${esc(paint)}" `
     + `stroke-width="${w}"/>`;
   const reach = half + ch / 2 + 2;
+  // The cap's light is laid out on screen (review B2): a rect (sx, sy, sw, sh) from the cap's
+  // centre with the screen's axes, W x H the cap as seen; a horizontal fader is drawn turned by
+  // rotate(90), (x, y) to (-y, x), so its rect is mapped back into the drawing.
+  const [W, H] = turned ? [ch, cw] : [cw, ch];
+  const at = (sx, sy, sw, sh) => (turned
+    ? `x="${num(sy)}" y="${num(y - sx - sw)}" width="${num(sh)}" height="${num(sw)}"`
+    : `x="${num(sx)}" y="${num(y + sy)}" width="${num(sw)}" height="${num(sh)}"`);
+  const k = KNOB;
   const norms = faderNorms(p);
   const last = norms.length - 1;
   const ticks = marksAt(norms.map((n) => num(half - tr * n)), T.tickIn,
@@ -338,23 +349,22 @@ function faderShapes(value, applied, p, t, st, zoom, tr) {
       + `fill="${esc(st.disabled ? c.disabled : c.ring)}" stroke="none"/>` : '')
     + (applied !== null ? `<line data-applied="" x1="${-ax}" y1="${yOf(applied)}" x2="${ax}" `
       + `y2="${yOf(applied)}" stroke="${esc(c.pointer)}" stroke-width="1"/>` : '')
-    // FS-04: the cap's cast shadow, the knob's light; lower while the cap is held.
-    + `<rect data-shadow="" class="${SHADOW_CLASS}" x="${num(-cw / 2 + F.shadowDx)}" `
-    + `y="${num(capY + (st.dragging ? F.shadowDragDy : F.shadowDy))}" width="${cw}" `
-    + `height="${ch}" rx="2" fill="${esc(c.shade)}" stroke="none"/>`
+    // FS-04: the cap's cast shadow, its outer edge offset as the knob's; lower while held.
+    + `<rect data-shadow="" class="${SHADOW_CLASS}" ${at(-W / 2 - 0.5 + k.shadowDx,
+      -H / 2 - 0.5 + (st.dragging ? k.shadowDragDy : k.shadowDy), W + 1, H + 1)} rx="2.5" `
+    + `fill="${esc(c.shade)}" stroke="none"/>`
     + `<rect data-cap="" x="${-cw / 2}" y="${capY}" width="${cw}" height="${ch}" `
     + `rx="2" fill="${esc(m.body)}" stroke="${esc(st.dragging ? c.pointer : c.edge)}" `
     + 'stroke-width="1"/>'
     // D-PAL: the material's lit tone along the top and a sheen strip on it, as the knob's and the
     // slide's (review of D-PAL, finding 7); a disabled cap is flat (C1).
-    + (live ? `<rect data-cap-hi="" x="${-cw / 2 + 1}" y="${num(capY + 1)}" `
-      + `width="${cw - 2}" height="2" rx="1" fill="${esc(m.hi)}" stroke="none"/>`
-      + `<rect data-sheen="" class="${SHEEN_CLASS}" x="${-cw / 2 + 4}" y="${num(capY + 1)}" `
-      + `width="${cw - 8}" height="1" rx="0.5" fill="${esc(c.highlight)}" stroke="none"/>` : '')
+    + (live ? `<rect data-cap-hi="" ${at(-W / 2 + 1, -H / 2 + 1, W - 2, 2)} rx="1" `
+      + `fill="${esc(m.hi)}" stroke="none"/>`
+      + `<rect data-sheen="" class="${SHEEN_CLASS}" ${at(-W / 2 + 4, -H / 2 + 1, W - 8, 1)} `
+      + `rx="0.5" fill="${esc(c.highlight)}" stroke="none"/>` : '')
     // FS-04: the lower lip along the cap's foot, inside its stroke (flat when disabled, C1).
-    + (st.disabled ? '' : `<rect data-lip="" x="${-cw / 2 + 1}" `
-      + `y="${num(capY + ch - 0.5 - F.lip)}" width="${cw - 2}" height="${F.lip}" `
-      + `fill="${esc(m.dpal ? m.hi : t.surface.edge)}" stroke="none"/>`)
+    + (st.disabled ? '' : `<rect data-lip="" ${at(-W / 2 + 1, H / 2 - 0.5 - F.lip, W - 2,
+      F.lip)} fill="${esc(m.dpal ? m.hi : t.surface.edge)}" stroke="none"/>`)
     + grip(-g, '', c.edge, 1) + grip(0, 'centre', st.disabled ? c.disabled : m.ink, 1.5)
     + grip(g, '', c.edge, 1)
     + (st.focus ? `<rect data-focus="" x="${-F.focusX}" y="${-reach}" width="${2 * F.focusX}" `
@@ -444,6 +454,7 @@ export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, stat
     + `<rect data-hit="" x="${num(-w / 2)}" y="${num(-h / 2)}" width="${w}" `
     + `height="${h}" fill="none" stroke="none" pointer-events="all"/>`
     + `<g pointer-events="none"${turn}${scaled}>${shapes(v, appliedAt(applied, v, param), param,
-      tokens, st, zoom, kind === 'knob' ? uid ?? idOf(param) : travelOf(kind, travel), sz)}</g>`
+      tokens, st, zoom, kind === 'knob' ? uid ?? idOf(param) : travelOf(kind, travel), sz,
+      turn !== '')}</g>`
     + '</g>';
 }

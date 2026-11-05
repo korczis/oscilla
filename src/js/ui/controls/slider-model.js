@@ -24,11 +24,11 @@ import {
 /** A fader's cap travel, graph units: a drag over it at zoom z is FADER_TRAVEL × z px. FS-06:
  *  96, so a pixel is about 1 % of the range at zoom 1 (64 was 1.56 %, only twice the cap). */
 export const FADER_TRAVEL = 96;
-/** The travel a host gives a fader by its role (FS-06; the owner's default, D-OWN-1: faders for
- *  an envelope's ADSR, a mixer's levels, the output and the VCA): an envelope's four stand side
- *  by side at FADER_TRAVEL, a level gets the longer 112 for its finer hand. */
-export const FADER_TRAVELS = Object.freeze({ adsr: FADER_TRAVEL, mixer: 112, output: 112,
-  vca: 112 });
+/** The travel a host gives a fader by its role, as plan row FS-06 sizes them: an envelope's
+ *  four (ADSR) stand side by side at FADER_TRAVEL, a mixer's or the output's level gets the
+ *  longer 112 for its finer hand. Which parameters become faders is the owner's open D-OWN-1
+ *  (the plan proposes these and the VCA); a role is added here when it is decided. */
+export const FADER_TRAVELS = Object.freeze({ adsr: FADER_TRAVEL, mixer: 112, output: 112 });
 /** A fader's cap, graph units: w across the travel, h along it. */
 export const FADER_CAP = Object.freeze({ w: 28, h: 14 });
 /** A lever switch's slot, graph units: its length and the inset at each end. */

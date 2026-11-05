@@ -321,8 +321,10 @@ export function pixelsPerRangeFor(kind, zoom = 1, param, { travel } = {}) {
  * WHEEL_LINE_PX, 2: WHEEL_NOTCH_PX, else 1) plus `rest`; each WHEEL_NOTCH_PX is a notch (up,
  * deltaY < 0, increases), so a 3-line detent is one. The rest drops on a turn back of
  * WHEEL_TURN_PX or more (less is jitter) and at an end stop, so the first notch back moves;
- * under a notch the value is only clamped. A notch is a key step, at least WHEEL_STEP of the
- * norm range (fine a tenth; the grid point past it if the nearest is short), one step on an
+ * under a notch the value is only clamped. A notch is a key step, WHEEL_STEP of the norm range
+ * (fine a tenth; the grid point past it if the nearest is short) measured from the start's own
+ * grid point (ERG-15: 0.511 up is 0.52), so from a value off the grid it can move less than
+ * WHEEL_STEP (0.5149 up is 0.52) and never lands a grid unit past the notch; one step on an
  * integer range of over 10 000 steps (a seed); a choice an option. Arrow keys are exempt.
  */
 export function wheelValue(value, deltaY, p, { fine = false, deltaMode = 0, rest = 0 } = {}) {

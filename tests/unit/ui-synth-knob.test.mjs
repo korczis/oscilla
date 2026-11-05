@@ -1972,7 +1972,11 @@ test('fader: a horizontal orientation is the same fader turned, more to the righ
     for (const state of [{}, { focus: true }, { dragging: true, focus: true }]) {
       const h = at(70, 'horizontal', { zoom, state, applied: 10 });
       assert.match(h, /<g pointer-events="none" transform="rotate\(90\)">/);
-      assert.equal(inner(h), inner(at(70, 'vertical', { zoom, state, applied: 10 })),
+      // The same parts, but the cap's light (its shadow, lit tone, sheen and lip), which is laid
+      // out on screen, from above and left (slice B review 2 holds where it falls).
+      const LIGHT = /<rect data-(shadow|cap-hi|sheen|lip)=""[^>]*>/g;
+      const unlit = (svg) => inner(svg).replace(LIGHT, '<$1>');
+      assert.equal(unlit(h), unlit(at(70, 'vertical', { zoom, state, applied: 10 })),
         'the same parts');
       const [x, y, w, hh] = hitOf(h);
       assert.deepEqual([w, hh], [Math.max(HIT_PX / zoom, box.width),
@@ -2229,8 +2233,23 @@ const tickSegs = (svg) => {
 };
 /** The marks' distinct positions along the travel, top to bottom. */
 const tickYs = (svg) => [...new Set(tickSegs(svg).map(([y]) => y))].sort((a, b) => a - b);
+/** A rect's [x0, y0, x1, y1], grown by `g` on every side. */
+const rectOf = (e, g = 0) => {
+  const [x, y, w, h] = ['x', 'y', 'width', 'height'].map((a) => numOf(e, a));
+  return [x - g, y - g, x + w + g, y + h + g];
+};
+/** How far a shadow rect shows past the cap's outer edge (its rect grown by half the 1-unit
+ *  stroke) on each side, on screen; `turn` true for a fader drawn with rotate(90). */
+const visibleShadow = (shadow, cap, turn = false) => {
+  const [s, o] = [toScreen(rectOf(shadow), turn), toScreen(rectOf(cap, 0.5), turn)];
+  return { left: o[0] - s[0], above: o[1] - s[1], right: s[2] - o[2], below: s[3] - o[3] };
+};
+/** The fader cap's outer edge across the travel: half its width plus half its 1-unit stroke. */
+const FADER_CAP_OUTER = KNOB_CORE.FADER_CAP.w / 2 + 0.5;
+/** A drawing-frame rect on screen: as drawn, or turned by rotate(90), (x, y) to (-y, x). */
+const toScreen = ([x0, y0, x1, y1], turn) => (turn ? [-y1, x0, -y0, x1] : [x0, y0, x1, y1]);
 
-test('slice B 1 (FS-03): a scale of 11 marks, majors at 0, 5 and 10 to ±21, inside the box',
+test('slice B 1 (FS-03): a scale of 11 marks, majors at 0, 5 and 10 to ±19.5, inside the box',
   () => {
     for (const travel of [undefined, 112, 64]) {
       const tr = travel ?? FADER_TRAVEL;
@@ -2247,9 +2266,10 @@ test('slice B 1 (FS-03): a scale of 11 marks, majors at 0, 5 and 10 to ±21, ins
         const box = CORE.controlBox('fader', 'vertical', { travel });
         for (const [y, x0, x1] of tickSegs(svg)) {
           const i = Math.round((y + tr / 2) / (tr / 10));
-          const reach = i % 5 === 0 ? 21 : 19;
-          assert.deepEqual([Math.abs(x0), Math.abs(x1)].sort((a, b) => a - b), [16, reach],
-            `travel ${tr} mark ${i}: from ±16 to ±${reach}`);
+          // Review B3 (C4): the marks end at ±19.5, so the focus ring at ±21 is outside them.
+          const reach = i % 5 === 0 ? 19.5 : 18;
+          assert.deepEqual([Math.abs(x0), Math.abs(x1)].sort((a, b) => a - b), [15.5, reach],
+            `travel ${tr} mark ${i}: from ±15.5 to ±${reach}`);
           assert.ok(Math.max(Math.abs(x0), Math.abs(x1)) <= -box.x, 'inside the 44 box');
         }
         assert.equal(tickSegs(svg).length, 22, 'each mark on both sides of the slot');
@@ -2277,7 +2297,7 @@ test('slice B 1 (FS-03): a scale of 11 marks, majors at 0, 5 and 10 to ±21, ins
       for (const [x0, ya, x1, yb] of segs) {
         near(ya, y0, 0.01);
         near(yb, y0, 0.01);
-        assert.deepEqual([Math.abs(x0), Math.abs(x1)].sort((a, b) => a - b), [16, 21]);
+        assert.deepEqual([Math.abs(x0), Math.abs(x1)].sort((a, b) => a - b), [15.5, 19.5]);
       }
     }
     assert.equal(part(fader(), 'data-detent'), null, 'a range from min has no detent');
@@ -2286,7 +2306,12 @@ test('slice B 1 (FS-03): a scale of 11 marks, majors at 0, 5 and 10 to ±21, ins
 test('slice B 2 (FS-04): a cast shadow under the cap, the sheen and a lower lip on it', () => {
   const c = TOKENS.control;
   const capRe = /<rect data-cap=""[^>]*>/;
-  for (const [state, dy] of [[{}, 1], [{ dragging: true }, 2], [{ focus: true }, 1]]) {
+  // Review B1: the knob's light and the knob's offsets (KNOB.shadowDx, shadowDy, shadowDragDy),
+  // measured from the cap's outer edge (its rect grown by half its 1-unit stroke), so the shadow
+  // shows right and below by that much, and nowhere left or above.
+  const K = KNOB_CORE.KNOB;
+  for (const [state, dy] of [[{}, K.shadowDy], [{ dragging: true }, K.shadowDragDy],
+    [{ focus: true }, K.shadowDy]]) {
     const svg = fader({ state });
     const cap = capRe.exec(svg)[0];
     const at = svg.indexOf(cap);
@@ -2298,9 +2323,11 @@ test('slice B 2 (FS-04): a cast shadow under the cap, the sheen and a lower lip 
     assert.equal(attrOf(shadow, 'fill'), c.shade, 'the depth shade');
     assert.equal(attrOf(shadow, 'stroke'), 'none');
     assert.deepEqual([numOf(shadow, 'width'), numOf(shadow, 'height')],
-      [numOf(cap, 'width'), numOf(cap, 'height')], 'the cap\'s own size');
-    near(numOf(shadow, 'y') - numOf(cap, 'y'), dy, 1e-9, `${JSON.stringify(state)}: dy ${dy}`);
-    assert.ok(numOf(shadow, 'x') - numOf(cap, 'x') >= 0, 'offset away from the light, or none');
+      [numOf(cap, 'width') + 1, numOf(cap, 'height') + 1], 'the cap\'s outer edge');
+    const shown = visibleShadow(shadow, cap);
+    near(shown.right, K.shadowDx, 1e-9, `${JSON.stringify(state)}: shows ${K.shadowDx} right`);
+    near(shown.below, dy, 1e-9, `${JSON.stringify(state)}: shows ${dy} below`);
+    assert.ok(shown.left <= 0 && shown.above <= 0, 'none toward the light');
     const sheen = part(svg, 'data-sheen');
     assert.ok(svg.indexOf(sheen) > at, 'the sheen follows the cap');
     assert.match(sheen, /\sclass="opacity-hw-sheen"/);
@@ -2361,9 +2388,9 @@ test('slice B 4 (FS-06): a 96 travel, a per-role travel for hosts, honoured by e
     near(capAt(fader({ value: LIN.max, travel: 112 })), -56, 0.005, 'travel 112 at max');
     near(capAt(fader({ value: LIN.min, travel: 112 })), 56, 0.005, 'travel 112 at min');
     assert.equal(hitOf(fader({ travel: 112 }))[3], 132, 'its hit as long as its box');
-    // The per-role travel (FS-06; the owner's default: faders for the EG's ADSR, the mixer, the
-    // output and the VCA): a host asks by role and passes the travel to every call.
-    assert.deepEqual({ ...CORE.FADER_TRAVELS }, { adsr: 96, mixer: 112, output: 112, vca: 112 });
+    // The per-role travel (FS-06's row: ADSR 96, mixer and output 112; which parameters become
+    // faders is D-OWN-1's, still open): a host asks by role and passes the travel to every call.
+    assert.deepEqual({ ...CORE.FADER_TRAVELS }, { adsr: 96, mixer: 112, output: 112 });
     assert.ok(Object.isFrozen(CORE.FADER_TRAVELS));
     for (const [role, tr] of Object.entries(CORE.FADER_TRAVELS)) {
       assert.equal(CORE.faderTravel(role), tr, role);
@@ -2449,4 +2476,135 @@ test('slice B 7 (ERG-15): a wheel notch steps from the value, then quantises', (
   assert.equal(wheelValue(50.4, -WHEEL_NOTCH_PX, LIN).value, 51);
   assert.equal(wheelValue(50.6, -WHEEL_NOTCH_PX, LIN).value, 52);
   assert.equal(wheelValue(0.511, -2 * WHEEL_NOTCH_PX, FLOAT).value, 0.53, 'two notches');
+  // The trade-off, as the doc says: from a value off the grid a notch lands one grid unit past
+  // the start's grid point, so it can move under WHEEL_STEP (0.5149 up is 0.52, 0.0051).
+  assert.equal(wheelValue(0.5149, -WHEEL_NOTCH_PX, FLOAT).value, 0.52);
+});
+
+// ---------------------------------------------------------------- slice B review (fader)
+// The adversarial review of slice B: the cap's light on a horizontal fader, the focus ring
+// outside the scale (C4), the long marks of a one-mark-per-value axis, choice axes, a stepped
+// integer axis, and a fine drag kept fine after an end stop.
+
+test('slice B review 2: a fader is lit from above and left on screen, vertical or horizontal',
+  () => {
+    const K = KNOB_CORE.KNOB;
+    for (const orientation of ['vertical', 'horizontal']) {
+      const turn = orientation === 'horizontal';
+      for (const [state, dy] of [[{}, K.shadowDy], [{ dragging: true }, K.shadowDragDy]]) {
+        const svg = fader({ orientation, state });
+        assert.equal(/transform="rotate\(90\)"/.test(svg), turn, `${orientation}: turned`);
+        const cap = part(svg, 'data-cap');
+        const shown = visibleShadow(part(svg, 'data-shadow'), cap, turn);
+        const where = `${orientation} ${JSON.stringify(state)}`;
+        near(shown.right, K.shadowDx, 1e-9, `${where}: the shadow falls right`);
+        near(shown.below, dy, 1e-9, `${where}: and down`);
+        assert.ok(shown.left <= 0 && shown.above <= 0, `${where}: never toward the light`);
+        // On screen: the lit tone and the sheen along the cap's top, the lip along its foot.
+        const [ox0, oy0, ox1, oy1] = toScreen(rectOf(cap), turn);
+        const on = (name) => toScreen(rectOf(part(svg, name)), turn);
+        const hi = on('data-cap-hi');
+        assert.deepEqual([hi[0] - ox0, hi[1] - oy0, ox1 - hi[2], hi[3] - hi[1]], [1, 1, 1, 2],
+          `${where}: the lit tone along the top`);
+        const sheen = on('data-sheen');
+        assert.deepEqual([sheen[1] - oy0, sheen[3] - sheen[1]], [1, 1], `${where}: sheen on top`);
+        assert.ok(sheen[0] > ox0 && sheen[2] < ox1, `${where}: the sheen inside the top`);
+        const lip = on('data-lip');
+        assert.deepEqual([lip[0] - ox0, ox1 - lip[2], oy1 - lip[3], lip[3] - lip[1]],
+          [1, 1, 0.5, 1], `${where}: the lip along the foot`);
+      }
+    }
+  });
+
+test('slice B review 3 (C4): the fader\'s focus ring is outside its scale, inside its box', () => {
+  const P = { key: 'b', label: 'B', min: -12, max: 36, step: 1, default: 0 };
+  for (const travel of [undefined, 112, 64]) {
+    for (const [param, value] of [[LIN, 70], [P, 0]]) {
+      const svg = fader({ travel, param, value, state: { focus: true } });
+      const ring = part(svg, 'data-focus');
+      const w = numOf(ring, 'stroke-width');
+      assert.equal(w, 2, 'stroke 2');
+      const inner = -numOf(ring, 'x') - w / 2;
+      const outer = -numOf(ring, 'x') + w / 2;
+      near(numOf(ring, 'x') + numOf(ring, 'width') / 2, 0, 1e-9, 'centred on the slot');
+      const marks = [...tickSegs(svg).map(([, x0, x1]) => Math.max(Math.abs(x0), Math.abs(x1)))];
+      const det = part(svg, 'data-detent');
+      if (det) {
+        for (const m of attrOf(det, 'd').matchAll(SEG)) {
+          marks.push(Math.max(Math.abs(Number(m[1])), Math.abs(Number(m[3]))));
+        }
+      }
+      assert.ok(inner >= Math.max(...marks) + 0.5,
+        `travel ${travel}: the ring's inner edge ${inner} clears the marks' ${Math.max(...marks)}`);
+      const box = CORE.controlBox('fader', 'vertical', { travel });
+      assert.ok(outer <= -box.x, `the ring's outer edge ${outer} inside the box`);
+      assert.ok(inner >= FADER_CAP_OUTER, 'and round the cap');
+    }
+  }
+});
+
+test('slice B review 7: a one-mark-per-value axis has long marks at its ends and middle', () => {
+  const longAt = (svg) => {
+    const ys = [...new Set(tickSegs(svg).filter(([, x0, x1]) => Math.max(Math.abs(x0),
+      Math.abs(x1)) === KNOB_CORE.FADER_TICKS.majorOut).map(([y]) => y))];
+    return ys.sort((a, b) => a - b);
+  };
+  const yAt = (v, P) => FADER_TRAVEL / 2 - FADER_TRAVEL * toNorm(v, P);
+  // [param, its marks' values, the long ones]
+  const I = (min, max, step = 1) => ({ key: 'n', label: 'N', type: 'integer', min, max, step,
+    default: min });
+  const E = (n) => ({ key: 'e', label: 'E', type: 'enum', default: 0,
+    options: Array.from({ length: n }, (_, i) => [i, `o${i}`]) });
+  const cases = [
+    [I(0, 24), 25, [0, 12, 24]],
+    [I(0, 4), 5, [0, 2, 4]],
+    [I(0, 3), 4, [0, 3]],
+    [I(0, 20, 5), 5, [0, 10, 20]],
+    [I(-12, 12, 3), 9, [-12, 0, 12]],
+    [E(4), 4, [0, 3]],
+    [E(5), 5, [0, 2, 4]],
+    [E(25), 25, [0, 12, 24]],
+    [ENUM, 4, ['sine', 'triangle']],
+    [BOOL, 2, [false, true]],
+  ];
+  for (const [P, count, longs] of cases) {
+    const value = P.type === 'enum' ? P.options[0][0] : (P.type === 'boolean' ? true : P.min);
+    const svg = fader({ param: P, value });
+    const name = `${P.key} ${P.type} ${P.options ? P.options.length : `${P.min}..${P.max}/${P.step}`}`;
+    const ys = tickYs(svg);
+    assert.equal(ys.length, count, `${name}: one mark per value`);
+    const values = P.type === 'boolean' ? [false, true]
+      : (P.options ? P.options.map((o) => o[0])
+        : Array.from({ length: count }, (_, i) => P.min + i * P.step));
+    const want = values.map((v) => yAt(v, P)).sort((a, b) => a - b);
+    ys.forEach((y, i) => near(y, want[i], 0.01, `${name}: mark ${i}`));
+    const lw = longs.map((v) => yAt(v, P)).sort((a, b) => a - b);
+    const got = longAt(svg);
+    assert.equal(got.length, lw.length, `${name}: long marks at ${longs.join(', ')}`);
+    got.forEach((y, i) => near(y, lw[i], 0.01, `${name}: long mark ${i}`));
+  }
+  // Past XY.gridMax (25) values the scale is the 11 equal marks again.
+  assert.equal(tickYs(fader({ param: E(26), value: 0 })).length, 11, '26 options: 11 marks');
+  assert.equal(tickYs(fader({ param: I(0, 25), value: 0 })).length, 11, '26 integers: 11');
+});
+
+test('slice B review 7: a fine drag past an end stays fine after the re-anchor (ERG-14)', () => {
+  for (const [kind, orientation, ppr] of [['knob', 'vertical', DRAG_PX_PER_RANGE],
+    ['fader', 'vertical', pixelsPerRangeFor('fader', 1)],
+    ['fader', 'horizontal', pixelsPerRangeFor('fader', 1)]]) {
+    const pt = (d) => (orientation === 'vertical' ? { x: 0, y: -d } : { x: d, y: 0 });
+    const a = CORE.dragAnchor(99, pt(0), { kind, orientation, fine: true });
+    const over = CORE.dragTo(a, pt(400), LIN, { pixelsPerRange: ppr });
+    assert.equal(over.value, 100, `${kind} ${orientation}: held at the max`);
+    assert.notEqual(over.anchor, a, 're-anchored');
+    assert.deepEqual([over.anchor.fine, over.anchor.kind, over.anchor.orientation],
+      [true, kind, orientation], `${kind} ${orientation}: still fine, same kind and orientation`);
+    const back = CORE.dragTo(over.anchor, pt(390), LIN, { pixelsPerRange: ppr });
+    const fine = CORE.dragAt(CORE.dragAnchor(100, pt(400), { kind, orientation, fine: true }),
+      pt(390), LIN, { pixelsPerRange: ppr });
+    const coarse = CORE.dragAt(CORE.dragAnchor(100, pt(400), { kind, orientation }), pt(390),
+      LIN, { pixelsPerRange: ppr });
+    assert.ok(fine > coarse, 'a fine move back is the shorter one');
+    assert.equal(back.value, fine, `${kind} ${orientation}: 10 px back moves it finely`);
+  }
 });
