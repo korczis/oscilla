@@ -985,11 +985,16 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       warnings.push(reason('STIMULUS_NOT_PLAYED', 'The setup check could not play the stimulus'
         + `${pr.reason ? ` (${String(pr.reason).replace(/\.$/, '')})` : ''}; the measurement `
         + 'plays it.'));
-    if (pr && pr.played === true && lvl && pr.inputLevel && isNum(pr.inputLevel.rmsDb)
-      && !(pr.inputLevel.rmsDb - lvl.rmsDb >= PREFLIGHT_THRESHOLDS.probeHeardRiseDb)) {
-      const rise = pr.inputLevel.rmsDb - lvl.rmsDb;
+    // Heard is a rise of at least probeHeardRiseDb; anything else is not heard (98 F1): exact
+    // zeros read -Infinity before and during (a rise of NaN), a level that is no number (a JSON
+    // null) has no rise. Only a signal out of digital silence (+Infinity) counts as heard.
+    const dbOf = (l) => (l && typeof l.rmsDb === 'number' ? l.rmsDb : NaN);
+    const rise = pr && pr.played === true ? dbOf(pr.inputLevel) - dbOf(lvl) : NaN;
+    if (pr && pr.played === true && !(rise >= PREFLIGHT_THRESHOLDS.probeHeardRiseDb)) {
+      const silent = dbOf(pr.inputLevel) === -Infinity;
       warnings.push(reason('STIMULUS_NOT_HEARD', 'The input level did not rise while the check '
         + `played the stimulus${Number.isFinite(rise) ? ` (${rise.toFixed(1)} dB)` : ''}`
+        + (silent ? ' (the input is digitally silent)' : '')
         + (ownOutput ? `, but ${OWN}, so the comparison is not conclusive: stop it and check `
           + 'again.' : ': check that the output reaches the input (output volume, speaker or '
           + 'cable, and the input device).'), { value: Number.isFinite(rise) ? rise : null,
