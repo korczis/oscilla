@@ -377,6 +377,18 @@ test('canConnect rejects wrong direction, unknown ports and self-connection', ()
     { sourceNodeId: 'f', targetNodeId: 'f' }).code, 'self-connection');
 });
 
+test('each type\'s cord bands differ by count or length, a band then a gap (JC-6)', () => {
+  const bands = PORT_TYPE_LIST.map((t) => PORT_VISUALS[t].bands);
+  for (const [i, b] of bands.entries()) {
+    assert.ok(Array.isArray(b) && Object.isFrozen(b), `${PORT_TYPE_LIST[i]}: a frozen list`);
+    assert.strictEqual(b.length % 2, 1, `${PORT_TYPE_LIST[i]}: starts and ends on a band`);
+    assert.ok(b.every((n) => Number.isFinite(n) && n > 0), `${PORT_TYPE_LIST[i]}: lengths`);
+  }
+  const looks = bands.map((b) => b.filter((_, i) => i % 2 === 0).join(' '));
+  assert.strictEqual(new Set(looks).size, PORT_TYPE_LIST.length, 'no two types alike');
+  assert.deepStrictEqual(bands.map((b) => (b.length + 1) / 2), [1, 2, 3, 2]);
+});
+
 test('port visuals are distinguishable without colour; labels are accessible (§32, §143)', () => {
   const shapes = PORT_TYPE_LIST.map((t) => PORT_VISUALS[t].shape);
   assert.deepStrictEqual(shapes, ['circle', 'diamond', 'triangle', 'square']);

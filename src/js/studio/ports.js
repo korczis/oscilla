@@ -50,13 +50,21 @@ export const ROLES_BY_TYPE = Object.freeze({
 
 /**
  * Visual semantics per type (§32, §69): distinguishable without colour. `shape` is the port
- * glyph, `cable` the stroke pattern of an edge of that type.
+ * glyph, `cable` the stroke pattern of a Studio edge of that type (the Signal Path grammar),
+ * `bands` the heat-shrink bands a patch cord of that type carries near each plug (JC-6): graph
+ * units, a band then a gap in turn, AUDIO one long, CONTROL two, TRIGGER three short, ANALYSIS
+ * a long and a short, so the types differ by count or by length, never by colour alone. The bay
+ * and the Studio read the type's look from here (ui/synth/cable.js draws the bands).
  */
 export const PORT_VISUALS = Object.freeze({
-  AUDIO: Object.freeze({ shape: 'circle', cable: 'solid', noun: 'audio' }),
-  CONTROL: Object.freeze({ shape: 'diamond', cable: 'dashed', noun: 'control' }),
-  TRIGGER: Object.freeze({ shape: 'triangle', cable: 'pulse', noun: 'trigger' }),
-  ANALYSIS: Object.freeze({ shape: 'square', cable: 'dash-dot', noun: 'analysis' }),
+  AUDIO: Object.freeze({ shape: 'circle', cable: 'solid', bands: Object.freeze([6]),
+    noun: 'audio' }),
+  CONTROL: Object.freeze({ shape: 'diamond', cable: 'dashed',
+    bands: Object.freeze([2.5, 2, 2.5]), noun: 'control' }),
+  TRIGGER: Object.freeze({ shape: 'triangle', cable: 'pulse',
+    bands: Object.freeze([1.25, 1.5, 1.25, 1.5, 1.25]), noun: 'trigger' }),
+  ANALYSIS: Object.freeze({ shape: 'square', cable: 'dash-dot',
+    bands: Object.freeze([4, 1.5, 1.5]), noun: 'analysis' }),
 });
 
 const ROLE_NOUNS = Object.freeze({
