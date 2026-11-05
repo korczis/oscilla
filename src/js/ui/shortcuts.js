@@ -176,13 +176,21 @@ export function playControl(workspace, wide = true) {
 }
 
 /**
+ * The status-bar Play's own grid track from 768 px: track 3 of the status bar templates
+ * (instrument.css, responsive.css), which no other item takes, so nothing paints over it.
+ */
+export const STATUS_PLAY_TRACK = 'md:col-start-3 md:row-start-1';
+
+/**
  * The utilities that show the status-bar Play where it is `workspace`'s Play: at every width
  * in Presets, from Tailwind's `xl` (FOCUS_LAYOUT_QUERY) where Source & Pattern is shown only
- * below it, and nowhere else from 768 px. Tailwind compiles these literals (content globs).
+ * below it, and nowhere else from 768 px; in its own track. Tailwind compiles these literals
+ * (content globs).
  */
 export function statusPlayClass(workspace) {
-  if (playControl(workspace, false) === 'status') return '!inline-flex md:mr-3';
-  if (playControl(workspace, true) === 'status') return 'xl:!inline-flex xl:mr-3';
+  const track = STATUS_PLAY_TRACK;
+  if (playControl(workspace, false) === 'status') return `!inline-flex md:mr-3 ${track}`;
+  if (playControl(workspace, true) === 'status') return `xl:!inline-flex xl:mr-3 ${track}`;
   return '';
 }
 

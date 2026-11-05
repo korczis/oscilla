@@ -229,8 +229,10 @@ function tracks(value) {
 // spacer track and the state (grid-column 3 / 5) painted over it. The Play now has its own
 // auto track (md:col-start-3 on the element) that no other item of the status bar spans.
 test('the status-bar Play has a grid track of its own from 768 px', () => {
-  const cls = (PLAY_TAG.match(/\sclass="([^"]*)"/) || [, ''])[1].split(/\s+/);
-  assert.ok(cls.includes('md:col-start-3') && cls.includes('md:row-start-1'), PLAY_TAG);
+  for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
+    const cls = String(statusClass(ws, true)).split(/\s+/);
+    assert.ok(cls.includes('md:col-start-3') && cls.includes('md:row-start-1'), `${ws}: ${cls}`);
+  }
   const tablet = RESPONSIVE_CSS.indexOf('.osc-statusbar {');
   assert.match(mediaBlockWith(RESPONSIVE_CSS, '.osc-statusbar {').query, /max-width: 1279/);
   const layouts = [
