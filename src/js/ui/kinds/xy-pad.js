@@ -266,6 +266,7 @@ export function mountXyPad(host, opts) {
   let raw = null; // the touch point (0..1, y up) while a pointer holds the pad
   let primary = null; // the pointer whose moves set X
   let focused = false; // keyboard focus on the surface
+  let pressing = false; // a pointer is focusing the surface: that focus is not the keyboard's
 
   /** The point drawn: the touch point under a pointer, else the value (its cell's centre). */
   const point = () => raw || model.fraction();
@@ -379,7 +380,9 @@ export function mountXyPad(host, opts) {
       if (disabled) return;
       e.preventDefault();
       try { surface.setPointerCapture(e.pointerId); } catch (err) { /* not a live pointer */ }
+      pressing = true;
       if (document.activeElement !== surface) surface.focus({ preventScroll: true });
+      pressing = false;
       const p = at(e);
       const was = raw;
       touchAt(e, p);
@@ -402,7 +405,7 @@ export function mountXyPad(host, opts) {
     }),
     on(surface, 'pointercancel', () => model.end('cancel')),
     on(surface, 'dblclick', () => { if (!disabled) model.reset(); }),
-    on(surface, 'focus', () => { focused = focusVisible(); schedule(); }),
+    on(surface, 'focus', () => { focused = !pressing && focusVisible(); schedule(); }),
     on(surface, 'blur', () => { focused = false; schedule(); }),
     on(group, 'keydown', (e) => {
       const axis = e.target.dataset && e.target.dataset.xyAxis;

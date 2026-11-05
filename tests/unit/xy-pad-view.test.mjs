@@ -61,8 +61,8 @@ function el(name = '') {
     fire(t, e = {}) { for (const fn of [...(on.get(t) || [])]) fn({ target: this, ...e }); },
     listeners: () => [...on.values()].reduce((n, s) => n + s.size, 0),
     contains: () => false,
-    focus() { globalThis.document.activeElement = this; },
-    matches: () => false,
+    focus() { globalThis.document.activeElement = this; this.fire('focus'); },
+    matches: (sel) => sel === ':focus-visible' && !!globalThis.focusVisible,
     setPointerCapture() {},
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 200 }),
   };
@@ -148,6 +148,30 @@ test('a touch draws the ring at the touch point with the note and the Y value be
   surface.fire('pointerup', ptr(1, 148, 76));
   pg.tick();
   assert.equal(cursor.classList.contains('hidden'), true, 'released: hidden again');
+  v.destroy();
+});
+
+test('the ring shows for keyboard focus, not for the focus a pointer press gives', () => {
+  const pg = page();
+  globalThis.focusVisible = true; // a browser that calls the pressed surface focus-visible
+  const h = host();
+  const v = mount(h);
+  const surface = h.querySelector('[data-xy-surface]');
+  const cursor = h.querySelector('[data-xy-cursor]');
+  surface.fire('pointerdown', ptr(1, 100, 100));
+  pg.tick();
+  assert.equal(cursor.classList.contains('hidden'), false);
+  surface.fire('pointerup', ptr(1, 100, 100));
+  pg.tick();
+  assert.equal(cursor.classList.contains('hidden'), true, 'released: hidden, focus or not');
+  h.firstElementChild.fire('keydown', { target: surface, key: 'ArrowRight', shiftKey: false,
+    preventDefault() {}, stopPropagation() {} });
+  pg.tick();
+  assert.equal(cursor.classList.contains('hidden'), false, 'a key on the surface: shown');
+  surface.fire('blur');
+  pg.tick();
+  assert.equal(cursor.classList.contains('hidden'), true, 'blurred: hidden');
+  globalThis.focusVisible = false;
   v.destroy();
 });
 

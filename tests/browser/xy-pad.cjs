@@ -39,7 +39,8 @@
 //              what the LPF Cutoff knob and Y's cable ask at the Y slider's value (base x
 //              2^(depth y), 4 digits), the same note and value in the X and Y aria-valuetext, the
 //              gate LED lit; the Y ends read the cutoff at Y 0 and 1; the readout line sits
-//              above the surface; moving draws a trail; the release clears it and unlights the LED
+//              above the surface; moving draws a trail; the release clears it, hides the ring
+//              and unlights the LED
 //   x-view-phone     (S3; 390 px, touch) the same on a phone: a touch (CDP in chromium, the
 //              pointer in firefox and webkit) draws the ring, the note, the value and a trail;
 //              lifting clears it
@@ -267,19 +268,29 @@ const cutoffAt = (page, y) => page.evaluate((yy) => {
   return { mapping: p.mapping, polarity: p.polarity,
     hz: lpf.params.frequency * 2 ** (p.depth * yy + p.offset) };
 }, y);
+/** A pad point where the pad is now (no scroll: a held touch keeps the page where it is). */
+async function pointIn(page, i, fy) {
+  const b = await page.locator('[data-xy-surface]').boundingBox();
+  return { x: b.x + ((i + 0.5) / STEPS) * b.width, y: b.y + (1 - fy) * b.height };
+}
 const near = (a, b, rel = 1e-3) => Math.abs(a - b) <= rel * Math.max(1, Math.abs(b));
 
 /** S3 on the touched pad: ring at the point, the note the runtime plays, the Y value. */
 async function viewHeld(page, at, what) {
   let v = null;
   let pad = null;
-  await until(async () => {
-    v = await viewState(page);
-    pad = await padState(page);
-    return v.shown && !!v.ring && Math.hypot(v.ring.x - at.x, v.ring.y - at.y) <= 2
-      && pad.pitch !== null && v.note === noteOf(pad.pitch) && v.lit === 'true';
-  }, { ms: SOUND_MS, what: `${what}: the ring at the touch point, the note the runtime plays, `
-    + 'the gate LED lit' });
+  try {
+    await until(async () => {
+      v = await viewState(page);
+      pad = await padState(page);
+      return v.shown && !!v.ring && Math.hypot(v.ring.x - at.x, v.ring.y - at.y) <= 2
+        && pad.pitch !== null && v.note === noteOf(pad.pitch) && v.lit === 'true';
+    }, { ms: SOUND_MS, what: `${what}: the ring at the touch point, the note the runtime `
+      + 'plays, the gate LED lit' });
+  } catch (e) {
+    return { ok: false, why: String(e.message).split('\n')[0], at, v,
+      pitch: pad && pad.pitch, runtimeNote: pad && pad.pitch !== null ? noteOf(pad.pitch) : null };
+  }
   const want = await cutoffAt(page, v.yNow);
   const shown = hzOf(v.value);
   const ok = want.mapping === 'log' && /^LPF Cutoff /.test(v.value) && near(shown, want.hz)
@@ -639,7 +650,7 @@ function defineChecks() {
     if (!(held.v.readoutBottom <= held.v.surfaceTop + 0.5)) {
       return { ok: false, detail: 'the readout line is not above the pad', v: held.v };
     }
-    const q = await padPoint(page, 2, 0.8);
+    const q = await pointIn(page, 2, 0.8);
     await page.mouse.move(q.x, q.y, { steps: 8 });
     let moved = null;
     await until(async () => (moved = await viewState(page)).trail >= 2,
@@ -650,8 +661,9 @@ function defineChecks() {
     let off = null;
     await until(async () => {
       off = await viewState(page);
-      return off.trail === 0 && off.lit === 'false';
-    }, { ms: SOUND_MS, what: 'the release clears the trail and unlights the gate LED' });
+      return off.trail === 0 && off.lit === 'false' && !off.shown;
+    }, { ms: SOUND_MS, what: 'the release clears the trail, hides the ring and unlights the '
+      + 'gate LED' });
     return { ok: true, note: held.v.note, value: held.v.value, ringOff: held.off,
       ends: held.v.ends, trail: moved.trail, moved: [after.v.note, after.v.value],
       released: { trail: off.trail, lit: off.lit, shown: off.shown } };
@@ -659,7 +671,7 @@ function defineChecks() {
 
   def('x-view-phone', async ({ page, browserName }) => {
     const a = await padPoint(page, 3, 0.3);
-    const b = await padPoint(page, 8, 0.7);
+    const b = await pointIn(page, 8, 0.7);
     let move;
     let lift;
     if (browserName === 'chromium') {
@@ -689,8 +701,8 @@ function defineChecks() {
     let off = null;
     await until(async () => {
       off = await viewState(page);
-      return off.trail === 0 && off.lit === 'false';
-    }, { ms: SOUND_MS, what: 'lifting clears the trail and unlights the gate LED' });
+      return off.trail === 0 && off.lit === 'false' && !off.shown;
+    }, { ms: SOUND_MS, what: 'lifting clears the trail, hides the ring and unlights the LED' });
     return { ok: true, note: held.v.note, value: held.v.value, ringOff: held.off,
       trail: moved.trail, moved: [after.v.note, after.v.value] };
   });
@@ -700,7 +712,7 @@ function defineChecks() {
       .matches);
     if (!reduced) return { ok: false, detail: 'the context does not prefer reduced motion' };
     const a = await padPoint(page, 2, 0.2);
-    const b = await padPoint(page, 8, 0.8);
+    const b = await pointIn(page, 8, 0.8);
     await page.mouse.move(a.x, a.y);
     await page.mouse.down();
     const held = await viewHeld(page, a, 'reduced motion: a held pointer');
