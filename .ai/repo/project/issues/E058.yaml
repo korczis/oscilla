@@ -1,0 +1,27 @@
+id: E058
+milestone: M046
+serves:
+  - "engineering-integrity#studio-perf-budget-cpu-time"
+title: "The synth cable timing budgets are relative to a calibration on the same runner, so a slow host does not fail them"
+slug: the-synth-cable-timing-budgets-are-relative-to-a-calibration
+priority: p1
+profile: implementation
+objective: "Lands as fix(test), built by 98 on fix/s8-budgets-relative-to-the-host. tests/unit/ui-synth-cable.test.mjs (S8) judges absolute wall-clock budgets (clearLabels 1 ms per cable, 600 cables with plugs under 50 ms, plain 600), which reddened #420: the hosted runners spread about 5x against 1.6x headroom, and the test went red at load about 20 on the shared Mac. After: each budget is relative to a calibration workload measured in the same process on the same runner (best of N, interleaved with the measured work), the bound is derived and documented next to it, and a 10x slowdown of the measured code still fails."
+why: "Train 6 (#420) went red on S8's absolute budgets on 2026-11-05 (b0, dev-53); the same principle as the Studio perf budgets on CPU time (engineering-integrity#studio-perf-budget-cpu-time) and project.bounded-test-timing's 'measure OSCILLA, not the host'."
+scope:
+  - "tests/unit/ui-synth-cable.test.mjs"
+  - "tests/unit"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a pin that slows the measured cable code 10x (a seeded busy loop) fails the budget at head and on the base."
+  - "Under a calibrated 5x slower host (the same busy loop applied to both the calibration and the measured work), the budget still passes."
+  - "The ratio, N and the derivation of each bound are documented beside the constant; no absolute millisecond budget remains in the file."
+  - "Done only after each criterion is re-checked on a main commit."
+validation:
+  - "node --test tests/unit/ui-synth-cable.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

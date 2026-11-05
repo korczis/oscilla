@@ -8,6 +8,7 @@ priority: p1
 profile: implementation
 objective: "Owner decision 2026-11-02 (AskUserQuestion in the session of oscilla-b0, ~22:35Z: 'Yes, implement it (Recommended)': accept ADR 0083; oscilla-26 implements the workflow and script changes in a pull request, oscilla-af reviews, then the owner switches the ruleset to require the queue). Before: strict protection plus armed auto-merge make every landing put the other armed pull requests BEHIND; #385 lost three of its seven CI rounds to that on 2026-11-02, one of them green. After: ci.yml also runs on merge_group; .github/scripts/queued-pr.sh names the pull request of a queue ref; fail-first and review-verdict judge it through .github/scripts/base-rule.sh, review-verdict measuring HEAD^1..HEAD; project.ci-bounded v2 admits merge_group beside pull_request and nothing else; the release CI receipt (project.release-receipt-binds-gate v3) also accepts the newest merge_group run on main's HEAD from that pull request's queue ref. The ruleset switch itself is the owner's act after this lands. Rollback: revert the merge commit; with the queue not yet required, nothing changes until the owner switches it."
 why: "The owner's landing-throughput order (2026-11-01: at least one landing per 30 minutes) is defeated by BEHIND races under strict protection; the merge queue keeps strictness (what lands is what was tested) without the races."
+current_state: "Done on main cfd87133 (#433) on fixture evidence, every criterion re-checked by af on 2026-11-05. Live proof pending the owner's O1 ruleset flip: the first merge-queue entry's run must show the merge_group trigger and the release receipt accepting it; if it does not, this issue reopens through a new record citing that run."
 scope:
   - ".github/workflows/ci.yml"
   - ".github/scripts/queued-pr.sh"
@@ -38,4 +39,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-02
-updated_at: 2026-11-05
+updated_at: 2026-11-05T08:48:32Z
+started_at: 2026-11-05T08:48:08Z
+started_event: sha256:367130cca7cf061b9645d4a8e7c800738c81c96429eed9db6dd15cf0450c1b73
+completed_at: 2026-11-05T08:48:32Z
+completed_event: sha256:f084cf13d93ac8ee9a0e58335364bf720b71268c0bcc8c5aaa537dd98b966e16
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/ci-workflows.test.mjs tests/unit/release-ci-receipt.test.mjs (main cfd87133); #433 CI run all green"
+    result: "Every acceptance criterion re-checked on main cfd87133 by af (2026-11-05): ci.yml starts on pull_request and merge_group only, queued-pr.sh present; ci-bounded v2 triggers and the release receipt's merge_group cases pass by fixture (63/63, 16 merge_group cases in release-ci-receipt.test.mjs); ADR 0083 status accepted with the owner's decision of 2026-11-02; fail-first and the reviewer's verdict (.ai/repo/reviews/433.yaml, seat 98, MERGE, content ad8293da) are on #433. Not yet live: no merge_group run exists until the owner's O1 ruleset flip; the first queue entry's run is the live proof of the receipt and trigger paths."
+    artifact: ".ai/repo/reviews/433.yaml"
+    commit: cfd8713343079d6eca243eb7b16e830deded6686
+    recorded_at: 2026-11-05T08:48:24Z
