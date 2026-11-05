@@ -249,7 +249,7 @@ test('against git: renames, deletions, spaces, tests/*.md and an empty diff', (t
  * queue's merge commit of it onto main plus `ahead` (a pull request already queued, merged
  * first). Checked out at the queue head, as CI checks out a merge_group run.
  */
-function queueFixture(t, { files, ahead = null }) {
+function queueFixture(t, { files, ahead = null, shape = 'merge' }) {
   const repo = gitRepo('oscilla-ci-changes-queue-');
   t.after(() => repo.dispose());
   repo.commit('base', { 'README.md': 'r\n', 'docs/a.md': 'a\n', 'src/x.js': 'x\n' });
@@ -262,7 +262,16 @@ function queueFixture(t, { files, ahead = null }) {
   repo.commit('change', files);
   repo.git('checkout', '-q', '-b', 'queue', 'main');
   if (ahead) repo.git('merge', '-q', '--no-ff', '-m', 'queue: ahead', 'ahead');
-  repo.git('merge', '-q', '--no-ff', '-m', 'queue: pr', 'pr');
+  // shape: the merge method MERGE (ADR 0083), or what REBASE or an octopus would build
+  if (shape === 'merge') repo.git('merge', '-q', '--no-ff', '-m', 'queue: pr', 'pr');
+  else if (shape === 'rebase') repo.git('cherry-pick', 'pr');
+  else {
+    repo.git('branch', 'third', 'main');
+    repo.git('checkout', '-q', 'third');
+    repo.commit('third', { 'docs/third.md': 't\n' });
+    repo.git('checkout', '-q', 'queue');
+    repo.git('merge', '-q', '--no-ff', '-m', 'queue: octopus', 'pr', 'third');
+  }
   return repo;
 }
 
@@ -328,6 +337,30 @@ test('merge_group: the program judges the queue head, fails closed, and needs a 
     assert.equal(r2.status, 0, r2.stderr);
     assert.equal(readFileSync(outMoved, 'utf8'), 'runtime=true\n');
     assert.match(r2.stdout, /not an ancestor of the queue head's first parent: everything runs/);
+
+    // review F1: under the rebase method A1 (runtime) then A2 (docs) lands as two linear
+    // commits, and HEAD^1..HEAD would be A2 alone; one parent, or three, runs everything
+    for (const shape of ['rebase', 'octopus']) {
+      const repo = queueFixture(t, { files: { 'src/x.js': 'runtime\n' }, shape });
+      if (shape === 'rebase') repo.commit('A2 docs', { 'docs/a.md': 'docs only\n' });
+      const out = path.join(dir, shape);
+      const r = run(repo, out);
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(readFileSync(out, 'utf8'), 'runtime=true\n', shape);
+      assert.match(r.stdout, /parent\(s\), not the merge commit of one pull request/, shape);
+      assert.equal(queueRecords(repo.dir, 'HEAD', 'main').parents, shape === 'rebase' ? 1 : 3);
+    }
+
+    // review F6: a base git cannot read gives no answer, never a skip (an ancestry check that
+    // answered "contained" on a git error would let a docs diff skip the browser legs)
+    const nobase = queueFixture(t, { files: { 'docs/a.md': 'b\n' } });
+    nobase.git('branch', '-D', 'main');
+    assert.throws(() => queueRecords(nobase.dir, 'HEAD', 'main'), /merge-base --is-ancestor/);
+    const outNobase = path.join(dir, 'nobase');
+    const r4 = run(nobase, outNobase);
+    assert.equal(r4.status, 1, r4.stdout);
+    assert.match(r4.stderr, /::error::git merge-base --is-ancestor main/);
+    assert.equal(existsSync(outNobase), false);
 
     // a root commit has no first parent: no answer, so `changes` fails and gate with it
     const root = gitRepo('oscilla-ci-changes-root-');

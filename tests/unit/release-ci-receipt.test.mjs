@@ -337,6 +337,51 @@ test('ADR 0083 mutation: a merge_group run on another sha, or from another pull 
     queueJobs: qjobs(newerRed) })).join(), /newest CI run 960/);
 });
 
+test('review F5 (r3, r6): the queue ref is anchored at both ends and names main', () => {
+  for (const branch of [`x/${QREF}`, `refs/heads/${QREF}`, `${QREF}/x`, `${QREF}-x`,
+    QREF.replace('/main/', '/other/'), QREF.replace('/main/', '/main/x/'),
+    QREF.replace('pr-382-', 'pr-3820-'), QREF.replace('pr-382-', 'pr-38-')]) {
+    const q = qrun({ head_branch: branch });
+    const problems = ciReceiptProblems(queued({ queueRuns: [q], queueJobs: qjobs(q) }));
+    const why = /merge_group: no CI merge_group run on aaaaaaa from gh-readonly-queue\/main\/pr-382-/;
+    assert.match(problems.join(), why, branch);
+  }
+});
+
+test('review F5 (r8): gatherCiReceipt reads the queue runs of HEAD itself, event merge_group',
+  () => {
+    const q = qrun();
+    const calls = [];
+    const sh = (cmd, args, opts) => {
+      calls.push([cmd, ...args]);
+      if (args[0] === 'rev-list') return { status: 0, stdout: `${HEAD} ${BASE} ${PR}` };
+      if (args[0] === 'rev-parse') return { status: 0, stdout: TREE };
+      if (args[0] === 'merge-base') return { status: 0, stdout: '' };
+      if (cmd === 'node') return { status: 0, stdout: '' };
+      if (args[0] !== 'api') return { status: 1, stdout: '' };
+      assert.equal(opts?.timeout, GH_TIMEOUT_MS, 'a bounded read');
+      const url = args[1];
+      if (/\/pulls\?/.test(url)) return { status: 0, stdout: JSON.stringify([pull()]) };
+      if (url === `repos/korczis/oscilla/actions/runs/${q.id}/jobs?filter=latest&per_page=100`) {
+        return { status: 0, stdout: JSON.stringify({ jobs: qjobs(q) }) };
+      }
+      if (url === `repos/korczis/oscilla/actions/runs?head_sha=${HEAD}&event=merge_group`
+        + '&per_page=100') {
+        return { status: 0, stdout: JSON.stringify({ workflow_runs: [q] }) };
+      }
+      // the pull request's own runs: none, so the queue's are read
+      if (/event=pull_request/.test(url)) return { status: 0, stdout: '{"workflow_runs":[]}' };
+      return { status: 0, stdout: '{"workflow_runs":[]}' };
+    };
+    const root = new URL('../..', import.meta.url).pathname;
+    const f = gatherCiReceipt({ sh, root, head: HEAD });
+    assert.deepEqual(ciReceiptProblems(f), []);
+    assert.equal(judgedRun(f).id, 950);
+    const queueReads = calls.filter((c) => c[1] === 'api' && /event=merge_group/.test(c[2]));
+    assert.deepEqual(queueReads.map((c) => c[2]),
+      [`repos/korczis/oscilla/actions/runs?head_sha=${HEAD}&event=merge_group&per_page=100`]);
+  });
+
 test('ADR 0083 mutation: a queue group of two refuses (HEAD^1 is another pull request\'s queue'
   + ' commit)', () => {
   // the release pull request queued behind another: its queue commit's first parent is that

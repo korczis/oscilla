@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { parseYaml as parse } from '../../scripts/yaml-subset.mjs';
 import {
   actionNeedsTimeout, browserSuites, checkAction, checkRepository, checkScript, checkWorkflow,
-  format, logicalLines, stepNeedsTimeout,
+  format, logicalLines, QUEUE_SAFE_CANCEL, stepNeedsTimeout,
 } from '../../scripts/ci-workflow-rules.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -397,6 +397,14 @@ test('mutation: ci.yml started by anything but a pull request and its merge queu
   const queueOnly = mutate(CI, '\non:\n  pull_request:\n  merge_group:\n',
     '\non:\n  merge_group:\n');
   assert.deepEqual(rules(ci(queueOnly)), ['triggers@-'], 'the queue alone judges no pull request');
+  // review F4 (w2): push beside both is refused too; the set is exactly these two
+  for (const extra of ['push', 'workflow_dispatch', 'pull_request_target', 'schedule']) {
+    const more = mutate(CI, '\non:\n  pull_request:\n  merge_group:\n',
+      `\non:\n  pull_request:\n  merge_group:\n  ${extra}:\n`);
+    assert.deepEqual(rules(ci(more)), ['triggers@-'], extra);
+  }
+  assert.deepEqual(rules(ci(mutate(CI, '\non:\n  pull_request:\n  merge_group:\n',
+    '\non: [pull_request, merge_group, push]\n'))), ['triggers@-'], 'flow list');
   const prOnly = mutate(CI, '\non:\n  pull_request:\n  merge_group:\n', '\non:\n  pull_request:\n');
   assert.deepEqual(rules(ci(prOnly)), [], 'without the queue (ADR 0083 not yet switched on)');
   // pages.yml has no gate: it deploys main and may be started by hand
@@ -455,6 +463,30 @@ test('the pull-request rules are judged by the base branch\'s programs, and need
   ]) {
     assert.deepEqual(problemsOfRuleJob(jobs[job], call), [], job);
   }
+  // fail-first judges the pull request's head: the event's on pull_request, else headRefOid,
+  // which --check-head has just held equal to the queue's HEAD^2 (review F1, mutant y5)
+  const ff = logicalLines(jobs['fail-first'].steps.at(-1).run).map((l) => l.replace(/\s+/g, ' '));
+  const fallback = '[ -n "$HEAD_SHA" ] || HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")"';
+  assert.equal(ff.at(-2), fallback, 'the head fallback just before the call');
+  assert.equal(ff.at(-3), CHECK_HEAD('"$RUNNER_TEMP/pr.json"'), 'checked against the queue');
+  assert.equal(jobs['fail-first'].steps.at(-1).env.HEAD_SHA,
+    '${{ github.event.pull_request.head.sha }}');
+});
+
+test('mutation: fail-first without its head fallback or its queue check (review F1, y5)', () => {
+  const lines = (text) => logicalLines(parse(text).jobs['fail-first'].steps.at(-1).run)
+    .map((l) => l.replace(/\s+/g, ' '));
+  const fallback = '          [ -n "$HEAD_SHA" ] || HEAD_SHA="$(jq -r .headRefOid'
+    + ' "$RUNNER_TEMP/pr.json")"\n';
+  const call = logicalLines(parse(CI).jobs['fail-first'].steps.at(-1).run).at(-1)
+    .replace(/\s+/g, ' ');
+  const without = parse(mutate(CI, fallback, '')).jobs['fail-first'];
+  assert.ok(!lines(mutate(CI, fallback, '')).some((l) => l.includes('headRefOid "$RUNNER')));
+  assert.notDeepEqual(problemsOfRuleJob(without, call, '"$RUNNER_TEMP/pr.json"', true), []);
+  const unchecked = parse(mutate(CI, '          .github/scripts/queued-pr.sh --check-head'
+    + ' "$QUEUED_HEAD" "$RUNNER_TEMP/pr.json"\n', '')).jobs['fail-first'];
+  assert.match(problemsOfRuleJob(unchecked, call, '"$RUNNER_TEMP/pr.json"', true).join(),
+    /does not check the queued head/);
 });
 
 // scripts/fail-first.mjs knows a train by its head branch (train/...) as well as its title, and
@@ -500,14 +532,25 @@ test('the review-verdict job hands the PR\'s title, body and head branch over in
     .jobs['review-verdict']);
   const env = '          PR_JSON: ${{ runner.temp }}/pr.json\n';
   assert.deepEqual(edited(env, ''), ['PR_JSON is not the file']);
-  assert.deepEqual(edited('--json title,body,headRefName > "$PR_JSON"',
-    '--json title,headRefName > "$PR_JSON"'), ['gh pr view does not ask for body']);
-  assert.deepEqual(edited('--json title,body,headRefName > "$PR_JSON"',
-    '--json title,body,headRefName > /dev/null'), ['gh pr view does not write $PR_JSON']);
+  assert.deepEqual(edited('--json title,body,headRefName,headRefOid > "$PR_JSON"',
+    '--json title,headRefName,headRefOid > "$PR_JSON"'), ['gh pr view does not ask for body']);
+  assert.deepEqual(edited('--json title,body,headRefName,headRefOid > "$PR_JSON"',
+    '--json title,body,headRefName,headRefOid > /dev/null'),
+  ['gh pr view does not write $PR_JSON']);
 });
 
-/** What stops a rule job from judging: [] when its last command is exactly `call`. */
-function problemsOfRuleJob(job, call) {
+/** The line that holds the queue's HEAD^2 to the pull request's headRefOid (review F1). */
+const CHECK_HEAD = (json) => `.github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" ${json}`;
+/** The one form of the queued-pr.sh call: assigned first, so its exit 2 fails the step (F2). */
+const QUEUED_PR = 'vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"';
+
+/**
+ * What stops a rule job from judging: [] when its last command is exactly `call`. `json` is
+ * the file its `gh pr view` writes, which --check-head reads; fail-first (`withFallback`) also
+ * keeps its headRefOid fallback just before the call.
+ */
+function problemsOfRuleJob(job, call, json = job?.name?.startsWith('fail-first')
+  ? '"$RUNNER_TEMP/pr.json"' : '"$PR_JSON"', withFallback = job?.name?.startsWith('fail-first')) {
   const out = [];
   if (job.if !== undefined) out.push('the job is conditional');
   const last = job.steps.at(-1);
@@ -526,8 +569,18 @@ function problemsOfRuleJob(job, call) {
   if (!run.some((l) => /^if \[ -z "\$PR" \]; then .*exit 1; fi$/.test(l))) {
     out.push('it does not fail when there is no pull request');
   }
-  if (!run.some((l) => l === 'eval "$(.github/scripts/queued-pr.sh)"')) {
-    out.push('it does not read the queued pull request');
+  if (!run.some((l) => l === QUEUED_PR)) out.push('it does not read the queued pull request');
+  // `eval "$(...)"` carries on after the script's exit 2 under bash -e (review F2)
+  if (run.some((l) => /\beval\s+"\$\(/.test(l))) out.push('an eval of a command substitution');
+  const at = run.indexOf(CHECK_HEAD(json));
+  const view = run.findIndex((l) => /^until gh pr view /.test(l));
+  if (at < 0 || view < 0 || at < view) out.push('it does not check the queued head');
+  if (withFallback && run.at(-2) !== '[ -n "$HEAD_SHA" ] || HEAD_SHA="$(jq -r .headRefOid'
+    + ' "$RUNNER_TEMP/pr.json")"') {
+    out.push('no head fallback before the call');
+  }
+  if (!/--json[ =][\w,]*\bheadRefOid\b/.test(run.find((l) => /gh pr view/.test(l)) || '')) {
+    out.push('gh pr view does not ask for headRefOid');
   }
   if (run.some((l) => /\bexit 0\b|\bset \+e\b/.test(l))) out.push('an early success');
   return out;
@@ -545,9 +598,22 @@ test('mutation: a rule job whose call can no longer refuse', () => {
       '--head "origin/$BASE" --base-branch')],
     ['another base', edited(tail, tail.replace('--base-branch "$DIFF_BASE"',
       '--base HEAD'))],
-    ['no queued pull request', edited('          eval "$(.github/scripts/queued-pr.sh)"\n'
-      + '          if [ -z "$PR" ]; then echo "::error::review-verdict',
+    ['no queued pull request', edited('          vars="$(.github/scripts/queued-pr.sh)"; eval'
+      + ' "$vars"\n          if [ -z "$PR" ]; then echo "::error::review-verdict',
       '          if [ -z "$PR" ]; then echo "::error::review-verdict')],
+    ['eval of a substitution (F2)', edited('          vars="$(.github/scripts/queued-pr.sh)";'
+      + ' eval "$vars"\n          if [ -z "$PR" ]; then echo "::error::review-verdict',
+      '          vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"\n'
+      + '          eval "$(.github/scripts/queued-pr.sh)"\n'
+      + '          if [ -z "$PR" ]; then echo "::error::review-verdict')],
+    ['eval alone (F2)', edited('          vars="$(.github/scripts/queued-pr.sh)"; eval'
+      + ' "$vars"\n          if [ -z "$PR" ]; then echo "::error::review-verdict',
+      '          eval "$(.github/scripts/queued-pr.sh)"\n'
+      + '          if [ -z "$PR" ]; then echo "::error::review-verdict')],
+    ['no queued-head check (F1)', edited('          .github/scripts/queued-pr.sh --check-head'
+      + ' "$QUEUED_HEAD" "$PR_JSON"\n', '')],
+    ['no headRefOid (F1)', edited('--json title,body,headRefName,headRefOid > "$PR_JSON"',
+      '--json title,body,headRefName > "$PR_JSON"')],
     ['a command after it', edited(tail, `${tail}          echo done\n`)],
     ['wrapped in if', edited('          .github/scripts/base-rule.sh "origin/$BASE"'
       + ' scripts/review-verdict.mjs', '          if true; then exit 0; fi\n'
@@ -639,4 +705,26 @@ test('lines that only name a program are not commands', (t) => {
   assert.deepEqual(rules(ci(pre)), []);
   assert.deepEqual(rules(ci(mutate(CI, 'actions/setup-node@v7', 'actions/setup-node@next'))),
     ['pinned@unit']);
+});
+
+test('mutation: a merge-queue run that can be cancelled (ADR 0083, review F4 y2)', () => {
+  // the real workflow: an older pull request run is cancelled, a queue run never is
+  assert.equal(parse(CI).concurrency['cancel-in-progress'], QUEUE_SAFE_CANCEL);
+  assert.equal(QUEUE_SAFE_CANCEL, "${{ github.event_name == 'pull_request' }}");
+  const real = `cancel-in-progress: ${QUEUE_SAFE_CANCEL}`;
+  for (const v of ['true', "${{ github.event_name != 'push' }}", "${{ always() }}", "'true'"]) {
+    const text = mutate(CI, real, `cancel-in-progress: ${v}`);
+    assert.deepEqual(rules(ci(text)), ['queue-cancel@-'], v);
+    assert.match(ci(text)[0].message, /never be cancelled/);
+  }
+  assert.deepEqual(rules(ci(mutate(CI, real, 'cancel-in-progress: false'))), [], 'off is fine');
+  // a job's own concurrency is read too
+  const job = mutate(CI, '    name: unit, build, artifact rules\n',
+    '    name: unit, build, artifact rules\n'
+    + '    concurrency:\n      group: g\n      cancel-in-progress: true\n');
+  assert.deepEqual(rules(ci(job)), ['queue-cancel@unit']);
+  // without merge_group (the queue not switched on) the rule has nothing to protect
+  const prOnly = mutate(mutate(CI, '\non:\n  pull_request:\n  merge_group:\n',
+    '\non:\n  pull_request:\n'), real, 'cancel-in-progress: true');
+  assert.deepEqual(rules(ci(prOnly)), []);
 });

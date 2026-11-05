@@ -56,7 +56,8 @@ order is at least one landing per 30 minutes ("landing throughput", 2026-11-01).
 ## Decision
 
 Land through GitHub's merge queue (repository ruleset "require merge queue"; merge method
-`merge`, as today). A pull request is approved by its own CI round as now, then queued; the queue
+`merge` (MERGE), as today, and grouping strategy ALLGREEN, both required: see "The ruleset of
+`main`" below). A pull request is approved by its own CI round as now, then queued; the queue
 builds a temporary `gh-readonly-queue/main/pr-N-<sha>` ref that is `main` plus every pull request
 ahead of it plus this one, runs the required check on that ref (event `merge_group`), and lands
 the pull requests in order when their group is green. Nobody updates a branch by hand, a
@@ -64,6 +65,29 @@ landing never makes the next pull request BEHIND, and a green group lands withou
 of its own.
 
 Strictness is kept, by construction: what lands is exactly the tree the queue tested.
+
+### The ruleset of `main` (the owner's act, after E045 lands)
+
+The rules jobs and the path-gating classifier read a queue run's change as `HEAD^1..HEAD`. That
+is one pull request's whole change only when the queue builds one merge commit per pull request
+(merge method MERGE) and every entry's own run must pass (grouping ALLGREEN). Under REBASE or
+SQUASH a pull request of a runtime commit followed by a docs commit becomes linear commits whose
+last is docs only; under HEADGREEN a docs pull request queued behind a runtime one can be the
+only run that gates both. The run refuses what it can see (a queue head without exactly two
+parents, a HEAD^2 that is not the queue ref's sha or the pull request's `headRefOid`:
+`.github/scripts/queued-pr.sh`; the classifier runs everything); the grouping is not visible
+inside a run, so it is held by the ruleset alone. The change, in the ruleset that protects
+`main` (its `merge_queue` rule; the values are the ruleset API's):
+
+- add the `merge_queue` rule ("Require merge queue");
+- `merge_method: MERGE` (a merge commit), never `SQUASH` or `REBASE`;
+- `grouping_strategy: ALLGREEN` (every entry's own run must pass), never `HEADGREEN` (only the
+  group's last entry);
+- the required status check stays `gate`; it reports on `merge_group` too;
+- keep "Require branches to be up to date before merging" as it is; the queue makes it moot.
+
+Until the owner makes this change nothing in how pull requests land changes; a different merge
+method or grouping later is a change of this decision, not a setting.
 
 ## What has to change (each in the pull request that adopts this)
 
@@ -86,7 +110,8 @@ Strictness is kept, by construction: what lands is exactly the tree the queue te
   queue commit main fast-forwarded to) from the queue ref of that same pull request (review of
   oscilla-af): a run on another sha, from another pull request's queue ref, a queue group of more
   than one pull request (HEAD^1 not in the pull request head) and a skipped or missing job each
-  refuse; both events run the same jobs, so none is excused.
+  refuse; both events run the same jobs under the same conditions, so the only skip excused is
+  the flake ledger's own first attempt (#417), on either event.
 - The release flow (`project.release-flow-complete`): "nothing else merges until the publish"
   becomes "the release pull request is alone in the queue": queue entry is paused (or the queue
   is emptied) while a receipt waits for its publish.
@@ -126,3 +151,17 @@ cancels a queue run; `.github/scripts/queued-pr.sh` names the queued pull reques
 v3 (`scripts/release-ci-receipt.mjs`, `tests/unit/release-ci-receipt.test.mjs`, with
 oscilla-af's five review points as its mutation cases). Requiring the queue in the ruleset of
 `main` is the owner's act after E045 lands; until then nothing in how pull requests land changes.
+
+### 2026-11-05: review of E045 (seat 98, findings F1-F9)
+
+The review of `ci/merge-queue` at 1c7a7529 found that nothing required the queue head to be a
+merge commit (F1). E045 now: requires merge method MERGE and grouping ALLGREEN in the ruleset
+section above; `.github/scripts/queued-pr.sh` refuses a queue head without exactly two parents
+or whose HEAD^2 is not the queue ref's sha, `--check-head` refuses one that is not the pull
+request's `headRefOid`, and `.github/scripts/ci-changes.mjs` runs everything for such a head;
+the jobs read the script as `vars="$(...)"; eval "$vars"`, so its exit 2 fails the step (F2);
+the base names are allowlisted and mutation-proven against injection (F3, F8: `base_ref`
+required and equal to the ref's base, `pr-N` with N of 1 or more); a cancellable queue run is
+refused by `project.ci-bounded` v2's `queue-cancel` (F4). Tests: `tests/unit/queued-pr.test.mjs`,
+`tests/unit/ci-changes.test.mjs`, `tests/unit/ci-workflows.test.mjs`,
+`tests/unit/release-ci-receipt.test.mjs`.

@@ -4,7 +4,7 @@ version: 2
 kind: rule
 title: Every CI job and network step is bounded, pinned and retried
 description: Every workflow job and every step that installs, downloads or runs a browser suite has its own time limit; installs go through one bounded wrapper, downloads retry, are digest-checked and are never executed, nothing is made non-fatal, gate needs every job, and ci.yml starts on a pull request and its merge-queue entry only.
-statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit, every container image to a tag and every job's runs-on to a versioned runner image (never a label ending in -latest); no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request and merge_group only (ADR 0083), and its fail-first and review-verdict jobs judge the pull request the merge-queue ref names on merge_group.
+statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit, every container image to a tag and every job's runs-on to a versioned runner image (never a label ending in -latest); no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request and merge_group only (ADR 0083), its fail-first and review-verdict jobs judge the pull request the merge-queue ref names on merge_group, refusing unless HEAD is the queue's merge commit of exactly that pull request's head (two parents, HEAD^2 the ref's sha and the pull request's headRefOid; the queue's merge method is MERGE and its grouping ALLGREEN), and no merge_group run is cancelled in progress.
 status: active
 class: blocking
 depends_on: []
@@ -101,8 +101,8 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   without the classifier answers `runtime=true`, and the pull request's own copy never
   decides). On `merge_group` (version 2) the same classifier judges the queued pull request:
   the base is the queue's `base_ref`, and the changed paths are `HEAD^1..HEAD`, the queue's
-  merge of that pull request onto main plus the pull requests ahead, provided the base is an
-  ancestor of `HEAD^1` (otherwise everything runs). A skip of any other job or for any other
+  merge of that pull request onto main plus the pull requests ahead, provided HEAD has exactly
+  two parents and the base is an ancestor of `HEAD^1` (otherwise everything runs). A skip of any other job or for any other
   reason, a cancelled or failed job, and a failed or silent `changes` fail it. The only other
   job condition in `ci.yml` is the flake ledger's (E010), which runs on a re-run only and
   which `gate` needs but does not judge.
@@ -113,6 +113,25 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   review-verdict measuring `HEAD^1..HEAD`, the queue's merge of that pull request. A manual
   run on a pull request's branch would have none to judge, and its `gate` would land on the
   same commit as the required check.
+- `HEAD^1..HEAD` is one pull request's whole change only when the queue merges each pull
+  request with a merge commit and every entry's own run must pass. So the queue in the
+  ruleset of `main` uses merge method **MERGE** and grouping strategy **ALLGREEN** (ADR 0083;
+  setting it is the owner's act). Under REBASE or SQUASH a pull request of a runtime commit
+  then a docs commit lands as linear commits whose last is docs only; under HEADGREEN a docs
+  pull request queued behind a runtime one could be the only run that gates both. Inside the
+  run: `.github/scripts/queued-pr.sh` refuses (exit 2) a HEAD without exactly two parents or
+  whose HEAD^2 is not the sha the queue ref names, `--check-head` refuses a HEAD^2 that is not
+  the pull request's `headRefOid`, and the `changes` classifier answers `runtime=true` for a
+  queue head without exactly two parents. Grouping is not visible inside a run: ALLGREEN is
+  held only by the ruleset.
+- The script's answer is read as `vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"`, never
+  `eval "$(...)"`, which under `bash -e` carries on after the script's exit 2. It prints only
+  a number, branch names that pass an allowlist (`^[A-Za-z0-9._/-]+$`, no `..`, no leading `-`
+  or `/`) and a sha, so the eval runs nothing else.
+- In a workflow started by `merge_group`, no `concurrency` (the workflow's or a job's) sets
+  `cancel-in-progress` to anything but `false` or exactly
+  `${{ github.event_name == 'pull_request' }}`: a cancelled queue run drops its group out of
+  the queue (rule id `queue-cancel`).
 
 By convention, not checked: a job's limit is the sum of its steps', rounded up.
 
@@ -162,8 +181,26 @@ it cannot read fails the test instead of passing unread.
 - "the pull-request rules are judged by the base branch's programs" fails unless the last
   command of the `fail-first` and of the `review-verdict` job is exactly its call of
   `.github/scripts/base-rule.sh` with its exact arguments, unconditional, and the step fails
-  when there is no pull request; "a rule job whose call can no longer refuse" applies eight
-  such edits and requires each to be reported.
+  when there is no pull request; both read the queued pull request with the assign-then-eval
+  form and no `eval "$(`, and check the queued head with `--check-head` after `gh pr view`
+  (which asks for `headRefOid`), and fail-first keeps its `headRefOid` fallback just before its
+  call; "a rule job whose call can no longer refuse" applies such edits (among them an
+  `eval "$(...)"`, a missing `--check-head`, a missing `headRefOid`) and requires each to be
+  reported.
+- "a merge-queue run that can be cancelled" sets `cancel-in-progress` to `true`, another
+  expression and a quoted string, in the workflow and in a job, and requires `queue-cancel`;
+  `false`, and any value in a workflow without `merge_group`, pass. The triggers mutations add
+  `push`, `workflow_dispatch`, `pull_request_target` and `schedule` beside the two.
+
+`tests/unit/queued-pr.test.mjs` holds `.github/scripts/queued-pr.sh` in fixture repositories:
+the pull request and base on both events; a ref not anchored at both ends, a base that
+disagrees with or lacks the event's `base_ref`, `pr-0` and a leading zero, a greedy base
+(`.../pr-1-<sha>/pr-N-<sha>`), `..`, a leading `-` or `/` and shell metacharacters in either
+base each exit 2 with nothing printed, and, run as the jobs run it under `bash -eo pipefail`,
+never reach the rest of the step or print injected output; a rebase (one parent) or octopus
+(three) queue head and a HEAD^2 other than the ref's sha refuse; `--check-head` passes only the
+pull request's `headRefOid` and is a no-op without a queued head; the old `eval "$(...)"` form
+is shown to carry on after exit 2 and the assignment form to stop.
 
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
 retry flags, the verdict program).
@@ -176,7 +213,9 @@ names with spaces, links and submodules, an empty diff, any event but a pull req
 merge-queue entry, any base but `main`), the merge-queue case against git (version 2: the
 queued pull request judged by `HEAD^1..HEAD`, so a runtime pull request ahead in the queue is
 not counted and a runtime one behind a docs one runs everything; a base that the queue head's
-first parent does not contain runs everything; a head with no parent gives no answer), and
+first parent does not contain runs everything; a rebase (one parent) or octopus (three)
+queue head runs everything; a head with no parent and a base git cannot read give no answer,
+never a skip), and
 the wiring: exactly the `GATED_JOBS` carry that condition, every browser leg is among them,
 the four judge and unit jobs none, no job condition reads the event (so both events gate
 alike), the `changes` step takes its base from `GITHUB_BASE_REF` or the queue's `base_ref`,

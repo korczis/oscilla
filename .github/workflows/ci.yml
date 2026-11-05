@@ -529,14 +529,18 @@ jobs:
           QUEUE_REF: ${{ github.event.merge_group.head_ref }}
           QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         run: |
-          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>).
-          eval "$(.github/scripts/queued-pr.sh)"
+          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>), and
+          # HEAD must be the queue's merge commit of exactly that head (ADR 0083: merge method
+          # MERGE); the assignment fails the step on the script's exit 2, which `eval "$(...)"`
+          # would throw away.
+          vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"
           if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
           n=0
           until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName,headRefOid > "$RUNNER_TEMP/pr.json"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
+          .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" "$RUNNER_TEMP/pr.json"
           [ -n "$HEAD_SHA" ] || HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")"
           .github/scripts/base-rule.sh "origin/$BASE" scripts/fail-first.mjs \
             --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
@@ -586,14 +590,18 @@ jobs:
         run: |
           # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>);
           # HEAD is the queue's merge of it onto HEAD^1 (main plus the pull requests ahead), so
-          # the content judged is HEAD^1..HEAD, as a pull_request run judges its merge commit.
-          eval "$(.github/scripts/queued-pr.sh)"
+          # the content judged is HEAD^1..HEAD, as a pull_request run judges its merge commit. That
+          # is the whole pull request only for the queue's merge commit of exactly its head (merge
+          # method MERGE, grouping ALLGREEN): queued-pr.sh refuses another HEAD, and --check-head
+          # another head than the pull request's. Assigned first, so its exit 2 fails the step.
+          vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
           n=0
-          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$PR_JSON"; do
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName,headRefOid > "$PR_JSON"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
+          .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" "$PR_JSON"
           .github/scripts/base-rule.sh "origin/$BASE" scripts/review-verdict.mjs \
             --pr "$PR" --head HEAD --base-branch "$DIFF_BASE"
 
