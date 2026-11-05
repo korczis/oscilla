@@ -1,0 +1,27 @@
+id: U090
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "About credits every library the page ships"
+slug: about-credits-every-library-the-page-ships
+priority: p1
+profile: implementation
+objective: "Lands as fix(about). The credits name Alpine.js, uPlot and p5.js (src/index.html:3048) but flowbite, lucide-static and tailwindcss also ship (scripts/build-config.mjs:52; dist header). After: the credit list is checked against the build's vendor and asset lists."
+why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
+scope:
+  - "src/index.html"
+  - "tests/unit/about-current.test.mjs"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "A test reads the build's VENDOR_SCRIPTS, BUILD_TIME_ASSETS and runtime dependencies and asserts each is credited; it fails today on flowbite, lucide-static and tailwindcss."
+  - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
+  - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/about-current.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
