@@ -8,10 +8,11 @@
 //     point to absolute http(s)/mailto/tel destinations because following a link loads nothing,
 //   - contains a module, importmap or external script (type=module, src=),
 //   - in first-party script (each <script> and each inline handler or Alpine directive
-//     attribute of any tag, <link> included) contains a refused form (FORBIDDEN_JS). Refused:
-//     exactly these forms, as written or escaped (read again with \uXXXX, \u{...} and \xXX
-//     decoded, decodeJsEscapes, except that an escape decoding to a quote ', " or `, a
-//     backslash or a line terminator (\n, \r, U+2028, U+2029) stays as written).
+//     attribute of any tag, <link>, <script> and <style> included) contains a refused form
+//     (FORBIDDEN_JS). Refused: exactly these forms, as written or escaped (read again with
+//     \uXXXX, \u{...} and \xXX decoded, decodeJsEscapes, except that an escape decoding to a
+//     quote ', " or `, a backslash or a line terminator (\n, \r, U+2028, U+2029) stays as
+//     written).
 //     Here `_` is optional whitespace, a space is one or more whitespace characters, a word is
 //     bounded as \b bounds it, a quote is ', " or `, and a URL literal is a quote, `_`, then
 //     //, http:// or https:// (any case); each form is pinned as failing by the "refused" test
@@ -613,6 +614,48 @@ function cssProblems(css, where) {
   return out;
 }
 
+// The attribute of a tag that has a rule of its own and is not read again below: a <link>'s
+// href and a <script>'s src.
+const OWN_RULE = { link: 'href', script: 'src' };
+
+/**
+ * Problems of one tag's attributes, read alike on every tag (<link>, <script> and <style>
+ * included): its style attribute as CSS, each inline handler or Alpine directive as
+ * first-party script (its readings are added to appBodies), and each URL attribute.
+ * @param {string} tag
+ * @param {Map<string, string>} attrs
+ * @param {string[][]} appBodies
+ */
+function attributeProblems(tag, attrs, appBodies) {
+  const problems = [];
+  for (const [name, value] of attrs) {
+    if (name === 'style') problems.push(...cssProblems(value, `<${tag} style>`));
+    if (CODE_ATTR.test(name)) {
+      const code = decodeEntities(value);
+      const scanned = scriptProblems(code, `first-party script in <${tag} ${name}>`);
+      problems.push(...scanned.problems);
+      appBodies.push(scanned.copies);
+      // A binding of a URL attribute (:src, x-bind:href) to an absolute URL literal.
+      const bound = name.replace(/^(?:x-bind)?:/, '');
+      if (bound !== name && URL_ATTRS.has(bound)
+        && scanned.copies.some((c) => /(['"`])\s*(?:https?:)?\/\//i.test(c))) {
+        problems.push(`<${tag} ${name}="${value.slice(0, 80)}"> binds an absolute URL`);
+      }
+      continue;
+    }
+    if (!URL_ATTRS.has(name) || OWN_RULE[tag] === name) continue;
+    const values = name.endsWith('srcset')
+      ? value.split(',').map((s) => s.trim().split(/\s+/)[0])
+      : [value];
+    for (const v of values) {
+      if (!isInert(v, { nav: NAV_TAGS.has(tag) && name === 'href' })) {
+        problems.push(`<${tag} ${name}="${v.slice(0, 80)}"> references a file`);
+      }
+    }
+  }
+  return problems;
+}
+
 /**
  * Pure check of an HTML document. Returns a list of problems (empty = pass).
  * @param {string} html
@@ -643,6 +686,8 @@ export function verifyHtml(html, {
       const tag = m[1].toLowerCase();
       const attrs = parseAttrs(m[2]);
       const body = m[3];
+      // Its attributes are read like every other tag's; its body and src have rules of their own.
+      problems.push(...attributeProblems(tag, attrs, appBodies));
       if (tag === 'style') {
         problems.push(...cssProblems(body, '<style>'));
         continue;
@@ -689,31 +734,7 @@ export function verifyHtml(html, {
     if (tag === 'meta' && /refresh/i.test(attrs.get('http-equiv') || '')) {
       problems.push('meta refresh');
     }
-    for (const [name, value] of attrs) {
-      if (name === 'style') problems.push(...cssProblems(value, `<${tag} style>`));
-      if (CODE_ATTR.test(name)) {
-        const code = decodeEntities(value);
-        const scanned = scriptProblems(code, `first-party script in <${tag} ${name}>`);
-        problems.push(...scanned.problems);
-        appBodies.push(scanned.copies);
-        // A binding of a URL attribute (:src, x-bind:href) to an absolute URL literal.
-        const bound = name.replace(/^(?:x-bind)?:/, '');
-        if (bound !== name && URL_ATTRS.has(bound)
-          && scanned.copies.some((c) => /(['"`])\s*(?:https?:)?\/\//i.test(c))) {
-          problems.push(`<${tag} ${name}="${value.slice(0, 80)}"> binds an absolute URL`);
-        }
-        continue;
-      }
-      if (!URL_ATTRS.has(name) || (tag === 'link' && name === 'href')) continue;
-      const values = name.endsWith('srcset')
-        ? value.split(',').map((s) => s.trim().split(/\s+/)[0])
-        : [value];
-      for (const v of values) {
-        if (!isInert(v, { nav: NAV_TAGS.has(tag) && name === 'href' })) {
-          problems.push(`<${tag} ${name}="${v.slice(0, 80)}"> references a file`);
-        }
-      }
-    }
+    problems.push(...attributeProblems(tag, attrs, appBodies));
   }
   if (appScripts === 0) problems.push('no first-party script found');
   for (const id of seenVendors) {

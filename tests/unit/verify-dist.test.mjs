@@ -451,6 +451,31 @@ test('inline handlers and Alpine directives are first-party script (R040 review 
   assert.deepEqual(check(doc({ body })), []);
 });
 
+test('<script> and <style> attributes are read like every other tag\'s (R040 review 6)', () => {
+  fails(doc({ head: '<style onload="fetch(\'https://t.example/\')">b{}</style>' }),
+    /first-party script in <style onload> uses fetch\(\)/);
+  fails(doc({ head: '<style x-init="eval(c)">b{}</style>' }), /<style x-init> uses eval/);
+  fails(doc({ head: '<style style="background:url(//t.example/x.png)">b{}</style>' }),
+    /<style style>: CSS url\(\/\/t\.example\/x\.png\) is not a data: URL/);
+  fails(doc({ body: '<script onerror="fetch(\'https://t.example/\')">1</script>' }),
+    /first-party script in <script onerror> uses fetch\(\)/);
+  fails(doc({ head: '<style onload="lib(\'https://t.example/p.png\')">b{}</style>' }),
+    /first-party script reaches vendor lib@1\.0\.0 lib\(\)/);
+  const style = '<style onload="p.loadImage(\'https://t.example/p.png\')">b{}</style>';
+  const html = p5Doc(P5).replace('<meta charset="utf-8">', `<meta charset="utf-8">${style}`);
+  assert.ok(verifyHtml(html, {
+    vendors: new Map([[P5_ID, P5]]), budget: { rawBytes: 1e8, gzipBytes: 1e8 },
+  }).problems.some((p) => p.includes(`reaches vendor ${P5_ID} loadImage`)), style);
+  // A script's src keeps its own rule and is reported once.
+  const src = check(doc({ body: '<script src="https://t.example/x.js"></script>' }));
+  assert.deepEqual(src.filter((p) => p.includes('t.example')),
+    ['external script src="https://t.example/x.js"']);
+  // The shipped forms: only data-*, type and id.
+  const shipped = '<script type="application/json" id="oscilla-build">{}</script>'
+    + '<style data-x="1" id="s">b{}</style><script data-analysis>console.log(2);</script>';
+  assert.deepEqual(check(doc({ body: shipped })), []);
+});
+
 // Every letter and digit spelt as \uXXXX: the escaped spelling of a refused form.
 const escapeAlnum = (s) => s.replace(/[A-Za-z0-9]/g,
   (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
