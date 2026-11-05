@@ -1,51 +1,92 @@
-# Review verdict for pull request #417 over its four guarded paths, judged at 2187a01a (#417's
-# head with main 68b117f3 merged in): (1) the control census path-gated (#404 R1),
-# .github/scripts/ci-changes.mjs and .github/workflows/ci.yml, byte-identical to b7d88bfc
-# (ci.yml 9b933bf8, ci-changes.mjs 48e334ad); (2) the release CI receipt accepts E010's flake
-# ledger's own first-attempt skip, scripts/release-ci-receipt.mjs and
-# tests/unit/release-ci-receipt.test.mjs, byte-identical to fix/receipt-ledger-first-attempt
-# 6be74fba. Reviewer: seat 98 (session prismatic-majordomus-98, p2), which built, merged and
-# edited none of this change and wrote only this file; each round had an independent first pass
-# that was adversarially re-verified.
+# Review verdict for pull request #417 over its nine guarded paths, judged at a92e253f (#417's
+# head; main 68b117f3 is its merge base, so nothing of main is unmerged). Three halves:
+# (1) the control census path-gated (#404 R1), .github/scripts/ci-changes.mjs and
+# .github/workflows/ci.yml; (2) the release CI receipt accepts E010's flake ledger's own
+# first-attempt skip, scripts/release-ci-receipt.mjs and tests/unit/release-ci-receipt.test.mjs
+# (both judged in rounds 1-3, unchanged since 2187a01a apart from ci.yml's runs-on lines);
+# (3) round 4, the delta e61ffc45..a92e253f "fix(ci): every job runs on a pinned runner image,
+# ubuntu-24.04, never ubuntu-latest": 22 runs-on lines ubuntu-latest -> ubuntu-24.04 and nothing
+# else in .github (ci.yml 14 of 14 jobs, pages.yml 2/2, main-checks.yml 4/4, cadence.yml 2/2;
+# these four are every workflow, no .yaml, no release.yml, no reusable workflow, no matrix or
+# expression runs-on, the one container image mcr.microsoft.com/playwright:v1.63.0-noble is
+# tagged); scripts/ci-workflow-rules.mjs refuses a runs-on label ending in -latest as `pinned`;
+# rule project.ci-bounded v1 amended in place; fixture strings in four unit tests; one new
+# mutation test. Reviewer: seat 98 (session prismatic-majordomus-98, p2), which built, merged
+# and edited none of this change and wrote only this file; each round had an independent first
+# pass that was adversarially re-verified.
 # Disclosure: reviewer has unmerged OSCILLA branches touching src/js/ui/synth and
-# src/js/ui/controls (Train 7 candidates), not part of this PR.
+# src/js/ui/controls (Train 7 candidates), not part of this PR. The reviewer is fixing LEG-1
+# (legendWidth cross-OS margin) in its own core branch; that motivates but is not part of this
+# change.
 #
 # The digest. CI judges with the BASE branch's copy (.github/scripts/base-rule.sh runs
 # origin/main's scripts/review-verdict.mjs). origin/main's scripts/ extracted with git archive,
-# as base-rule.sh does, run with --content --list --base-branch origin/main at 2187a01a:
-# 0f638b4b...a890 over exactly the four paths above. The rule file
-# .ai/repo/rules/project/release-receipt-binds-gate.v2.md is not a guarded path; its text was
-# judged anyway (R2, R7).
+# as base-rule.sh does, run with --content --list --base-branch origin/main at a92e253f:
+# 15cbf272...39f over exactly .github/scripts/ci-changes.mjs, .github/workflows/{cadence,ci,
+# main-checks,pages}.yml, scripts/ci-workflow-rules.mjs, scripts/release-ci-receipt.mjs,
+# tests/unit/ci-workflows.test.mjs, tests/unit/release-ci-receipt.test.mjs (equal to the
+# builder's). The rule files and the other three touched tests are not guarded paths; their
+# text was judged anyway (R2, R7, R9, R12).
 #
-# Inputs considered: af's verdict for the census half, .ai/repo/reviews/417.yaml at b7d88bfc
-# (oscilla-af, merge, findings [], content 49c30bf7...1a27; re-checked: b7d88bfc and 959c47b4
-# give that digest over the two census paths, and both paths are unchanged at 2187a01a); this
-# file replaces it as the one verdict over the whole digest. Commits 61b2b2bc, ec0ed657 and
-# 6be74fba of the receipt half; rule project.release-receipt-binds-gate v2 as amended
-# 2026-11-05; the gate and flake-ledger jobs of ci.yml; CI runs 41899802206 (v3.19.0's receipt:
-# attempt 1 skipped the ledger), 41700701066 and 41742553794 (a re-run re-stamps carried jobs
-# with the run's attempt; the ledger re-runs as a dependent of every non-gate job).
+# Round 4 evidence (scratchpad 417-check/r4). Incident behind the amendment: #420 run
+# 41944365732, job 126973551010 "Set up job" prints Image: ubuntu-26.04 (Version
+# 20261025.179.1), and s-choices fails with xy.mode "Minor pentatonic" at [37.1, ...] against the
+# plate's [38.5, ...], the 1.4 px the rule cites. Tests at a92e253f: ci-workflows, ci-changes,
+# ci-gates-model, main-checks, review-verdict, base-rule 96/96; ci-workflow-rules.mjs on the real
+# tree: no violation; npm test in the review worktree 4524 pass, 2 skipped, 1 fail (the
+# machine-only skills test: installed majordomus 1.0.0-alpha.10 has no `worktree create` or
+# `ensure`; no skill is touched), worktree unchanged after. Fail-first: head's ci-workflows test
+# with main's ci-workflow-rules.mjs 31/1, the one failure the new runner test. Mutants of the new
+# check, each under head's ci-workflows test: killed: string-only runs-on (list dropped), first
+# label only, skip pages.yml, ci.yml only, regex -Latest, rule renamed; survived: label ===
+# 'ubuntu-latest' and /^ubuntu-latest$/ (R11), skip jobs with a container (R11), /-latest$/i (a
+# strengthening, R10). Probe of the checker (417-check/r4/probe.mjs): refused: ubuntu-, macos-,
+# windows-latest, quoted, flow and block lists, container node:latest; passed with no violation:
+# runs-on ${{ matrix.os }} over [ubuntu-latest, macos-latest], an expression yielding
+# 'ubuntu-latest', {group, labels: [ubuntu-latest]}, a reusable workflow's inputs.runner default
+# ubuntu-latest (R9), Ubuntu-Latest and UBUNTU-LATEST (R10).
+# INFERRED, not observed: that ubuntu-24.04 hosts give the s-choices legend its 1.4 px back (the
+# delta is not pushed; no CI run exists at a92e253f; the rule's "passed in the pinned Playwright
+# container" was not re-checked); that GitHub matches runs-on labels case-insensitively (R10,
+# from GitHub's documentation, not run).
 #
 # Round 1 (61b2b2bc): changes-requested, no P0/P1; findings R1-R6 below, with mutants and two
 # own bypasses (scratchpad 417-check/p2). Round 2 (ec0ed657): R1, R3, R4, R5 closed, 17 of 23
-# mutants killed (the 6 survivors equivalent or failing closed), R6's premise shown false by the
-# runs above (filter=latest returns the re-stamped copy), new R7 and R8. Round 3 (6be74fba): R2,
-# R7, R8 closed. Tests: release-ci-receipt 20/20 at 6be74fba; on the trial merge with b7d88bfc
-# release-ci-receipt, ci-changes, flake-ledger and ci-workflows 82/82; npm test 4475 of 4480 at
-# ec0ed657 (the machine-only installed-majordomus skill test, and two version-authority
-# failures caused by a harness symlink that pass 12/12 without it); the builder reports 121/121
-# touched units at 2187a01a.
+# mutants killed (the 6 survivors equivalent or failing closed), R6's premise shown false by
+# runs 41899802206, 41700701066, 41742553794, new R7 and R8. Round 3 (6be74fba, merged as
+# 2187a01a, verdict merge at e61ffc45, content 0f638b4b...a890): R2, R7, R8 closed. Round 4
+# (a92e253f): R9-R12 below.
 #
-# Verdict: merge. The exemption is exact (job id flake-ledger, exactly one such job, its literal
-# job-level if:, skipped only on its own first attempt, success required from attempt 2) and
-# fails closed on every near miss, rename, twin, later attempt and missing attempt tried.
+# Verdict: changes-requested, no P0/P1. The pinning itself is complete and correct (22 of 22
+# jobs, every workflow, nothing else changed) and the check is a strict improvement that fails
+# on main's checker. What is not yet true is the amended rule: its statement says every job's
+# runs-on names a versioned runner image, and the check reads only literal labels, so a matrix
+# or expression runs-on, the group form and a case variant reintroduce a moving image with no
+# violation (R9, R10). Either close path closes R9/R10: (A) resolve ${{ matrix.<key> }} against
+# strategy.matrix (and include), refuse any other expression or non-string runs-on, read
+# labels of the group form, compare case-insensitively, each with a mutant; or (B) say so in
+# the rule: the check refuses a literal label ending in -latest, any case if (A)'s lowercase is
+# taken, and "Not covered" names matrix, expression, group-form and called-workflow-input
+# runs-on. R11 and R12 are one test line and one README cell each.
 # Out of scope, for its own issue: scripts/flake-ledger.mjs:24 and :76 rest on the same false
-# premise as R6 (carried jobs keep their earlier run_attempt); the filter is a no-op today.
+# premise as R6; and `services:` images are not checked for a tag at all (pre-existing, though
+# the rule says every container image is pinned).
+# Round 5 (3ea233af, on a92e253f): R9-R12 closed by enforcing (option A): runnerLabels() resolves
+# ${{ matrix.<key> }} through strategy.matrix and include, reads a runner group's labels, refuses
+# any other expression ('cannot resolve') and a matrix key with no values; /-latest$/i. The round-4
+# bypass probe (scratchpad 417-check/r5) re-run against 3ea233af refuses every case: literal, macos,
+# windows, case variants, quoted, flow and block lists, matrix values, an expression, group object and
+# flow forms, a called workflow's ${{ inputs.runner }}, container node:latest and untagged; still
+# outside the check: a caller's input value to a reusable workflow (stated under Not covered; the
+# called side refuses the expression) and services: images (pre-existing, not this change).
+# ci-workflows 33/33 at 3ea233af; builder reports ci-workflows, knowledge-integrity, ci-changes,
+# main-checks, ci-gates-model 99/0. Content recomputed with origin/main's checker at 3ea233af:
+# 019b227e...a067e over the same 9 guarded paths. Verdict: merge.
 schema: review-verdict/v1
 pr: 417
 verdict: merge
 reviewer: prismatic-majordomus-98 (p2, claude-code 07a5ffde)
-content: 0f638b4b68cf7d212dea38a50f3e96b7e995d067e862aa751934c2c3d8e3a890
+content: 019b227e52e4f8c8f9bfd8d8656d5e88633b0ca91ec48f3af81e7998adfa067e
 findings:
   - { id: R1, severity: P2, status: closed, title: "the skip guard of the exemption was not mutation-proven (replaced by true, all tests passed); closed at ec0ed657: attempt-1 ledger cancelled, failed, in_progress and timed_out each refuse, and the guard->true mutant is killed" }
   - { id: R2, severity: P2, status: closed, title: "rule v2 and the script header said every skipped job refuses; closed at 6be74fba: the statement, line 42, the Enforcement section and the header name the one exemption and its tests" }
@@ -55,3 +96,7 @@ findings:
   - { id: R6, severity: P3, status: closed, title: "withdrawn: the premise (a gate-only re-run leaves the ledger stamped attempt 1) is false on GitHub, which re-stamps carried jobs with the run's attempt; such a run refuses, failing closed" }
   - { id: R7, severity: P3, status: closed, title: "the rule and a fixture asserted a gate-only re-run verifies, a state GitHub cannot produce; closed at 6be74fba: the clause is dropped, the fixture is a carried skip stamped 2 that refuses, and the rule says a release run re-runs all jobs" }
   - { id: R8, severity: P3, status: closed, title: "the exactly-one rule and the missing-run_attempt fallback were unproven; closed at 6be74fba: two re-run-only jobs raise the exactly-one problem, a missing run_attempt falls back to the run's attempt" }
+  - { id: R9, severity: P2, status: closed, title: "the -latest check reads only literal runs-on labels (ci-workflow-rules.mjs:331, [].concat(job['runs-on']).map(String)): runs-on ${{ matrix.os }} over [ubuntu-latest, macos-latest], an expression yielding 'ubuntu-latest', the group form {group, labels: [ubuntu-latest]} (String gives [object Object]) and a called workflow's inputs.runner default each pass with no violation, while ci-bounded v1's statement says every job's runs-on names a versioned runner image and its Not covered section names none of these; a cross-OS matrix is the likely way a moving image returns" }
+  - { id: R10, severity: P3, status: closed, title: "case: /-latest$/ is case-sensitive, so Ubuntu-Latest and UBUNTU-LATEST pass, and GitHub matches runs-on labels case-insensitively (INFERRED from its documentation); the /i mutant survives, so no test pins case either way" }
+  - { id: R11, severity: P3, status: closed, title: "the new test proves only ubuntu-latest: mutants label === 'ubuntu-latest' and /^ubuntu-latest$/ survive, so the claim 'any label ending in -latest' (macos-latest, windows-latest, which the checker does refuse) is unproven; the mutant that skips jobs with a container: survives too" }
+  - { id: R12, severity: P3, status: closed, title: "tests/README.md's row for unit/ci-workflows.test.mjs still lists 'actions and images pinned' and does not name runner images, which the test now checks" }
