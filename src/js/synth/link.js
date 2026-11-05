@@ -4,7 +4,9 @@
 //   linkOf(model, panel, presetId) -> { preset, values, cables }
 //     values: [['module.param' | 'module.amount', value]] that differ from the preset;
 //     cables: [['module.port', 'module.port']] the user's cables (normals.js panelCables).
-//   linkAction(model, panel, link, { registry }) -> BATCH action   one history entry
+//   linkAction(model, panel, link, { registry, modules }) -> BATCH action   one history entry
+//     modules: the module ids the link may write (an XY preset, synth/xy.js xyScope); null,
+//     the default, is the whole panel. Outside them no value, preset or cable is touched.
 //
 // A link reopens the sender's patch whatever the receiver's panel holds: the receiver's cables
 // are removed and the normals they broke restored first (in the same BATCH), then the preset,
@@ -17,14 +19,22 @@ import { NODE_REGISTRY } from '../studio/registry.js';
 import { amountEdges, normalSteps, panelCables, panelEdges, patchCable } from './normals.js';
 import { presetAction, presetOf, presetValues } from './presets.js';
 
-/** `model` with the panel's cables removed and the normals they broke back (declared props). */
-function unpatched(model, panel) {
-  const { cables } = panelEdges(model, panel);
+/**
+ * `model` with the panel's cables removed and the normals they broke back (declared props);
+ * with `within` (a Set of module ids) only the cables whose both ends are those modules.
+ */
+function unpatched(model, panel, within = null) {
+  const moduleOf = new Map([...panel.resolve(model)].filter(([, n]) => n)
+    .map(([mid, n]) => [n.id, mid]));
+  const inside = (e) => !within || (within.has(moduleOf.get(e.from.node))
+    && within.has(moduleOf.get(e.to.node)));
+  const cables = panelEdges(model, panel).cables.filter(inside);
   if (!cables.length) return { model, steps: [] };
   const gone = new Set(cables.map((e) => e.id));
   const bare = { ...model, graph: { ...model.graph,
     edges: model.graph.edges.filter((e) => !gone.has(e.id)) } };
-  const jacks = [...new Set(panelCables(model, panel).map((c) => c.to))];
+  const jacks = [...new Set(panelCables(model, panel).filter((c) => gone.has(c.id))
+    .map((c) => c.to))];
   const adds = jacks.flatMap((j) => normalSteps(bare, panel, j));
   const edges = adds.map((s) => ({ id: s.id, from: s.from, to: s.to,
     props: { muted: false, ...s.props } }));
@@ -54,19 +64,23 @@ export function linkOf(model, panel, presetId) {
   return { preset: p.id, values, cables: panelCables(model, panel).map((c) => [c.from, c.to]) };
 }
 
-export function linkAction(model0, panel, link, { registry = NODE_REGISTRY } = {}) {
+export function linkAction(model0, panel, link, { registry = NODE_REGISTRY, modules = null }
+  = {}) {
   const p = presetOf(link.preset || 'init') || presetOf('init');
-  const clean = unpatched(model0, panel);
+  const within = modules ? new Set(modules) : null;
+  const ours = (jack) => !within || within.has(String(jack).split('.')[0]);
+  const clean = unpatched(model0, panel, within);
   const model = clean.model;
   const steps = [
     ...clean.steps,
-    presetAction(model, panel, p.id, { all: true }).action, // one PATCH_REPLACE step
+    // one PATCH_REPLACE step: the whole panel, or exactly the modules given
+    presetAction(model, panel, p.id, modules ? { modules } : { all: true }).action,
   ];
   const given = new Map(link.values);
   const nodes = panel.resolve(model);
   for (const [k, v] of link.values) {
     const [mid, key] = k.split('.');
-    const node = nodes.get(mid);
+    const node = ours(mid) ? nodes.get(mid) : null;
     const c = node && panel.faceOf(mid).find((x) => x.key === key);
     if (!c) continue;
     if (c.kind === 'amount') {
@@ -77,6 +91,7 @@ export function linkAction(model0, panel, link, { registry = NODE_REGISTRY } = {
   }
   const removed = new Set();
   for (const [from, to] of link.cables) {
+    if (!ours(from) || !ours(to)) continue;
     const r = patchCable(model, panel, from, to, { registry });
     if (!r.action) continue;
     for (const s of r.action.steps) {

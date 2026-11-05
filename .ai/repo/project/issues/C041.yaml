@@ -1,0 +1,31 @@
+id: C041
+milestone: M090
+serves:
+  - "coherent-state#lab-failure-shown"
+title: "A lab that fails to mount shows the failure in its own panel and disables its controls with the reason"
+slug: a-lab-that-fails-to-mount-shows-the-failure-in-its-own-panel
+priority: p2
+profile: implementation
+objective: "Lands as fix(labs). Panel Excellence criterion 2. At main 68b117f3 mountLabs (src/js/main.js:510-523) catches a throwing mount, writes labErrors[name] and logs to the console; labErrors is exposed (:978) but no UI reads it, so the panel looks live and its controls do nothing. After: the mount loop moves to src/js/labs/mount-labs.js, which returns { labs, errors } and, for each failed lab, renders an error state inside that lab's [data-osc-panel] naming the failure and sets every control of the panel disabled with that reason (the reason text the no-inert-surfaces rule asks for)."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 2, and the Truthfulness finding 'A lab that fails to mount only logs to labErrors'."
+scope:
+  - "src/js/labs/mount-labs.js"
+  - "src/js/main.js"
+  - "tests/unit/lab-mount-failure.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/lab-mount-failure.test.mjs imports src/js/labs/mount-labs.js through a dynamic import guarded by try/catch, so the merge base fails on an assertion (the module and its error state do not exist), not on a link error; on the head a fixture lab whose mount throws leaves an error element in its panel whose text names the thrown message, and every button, input and select of that panel is disabled with a non-empty reason."
+  - "A browser fixture in tests/browser/app.cjs forces one lab's mount to throw (an injected init script) and sees both the panel's error state and its disabled controls; the other labs mount and work. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "No lab that mounts on main shows the error state (asserted for every lab of the mountLabs list)."
+  - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml."
+validation:
+  - "node --test tests/unit/lab-mount-failure.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

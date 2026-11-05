@@ -1,0 +1,34 @@
+id: U080
+milestone: M054
+serves:
+  - "ui-current#destructive-actions-guarded"
+title: "Reset defaults, Clear history, the Learn Demo and every Delete confirm with a danger button or offer an undo"
+slug: reset-defaults-clear-history-the-learn-demo-and-every-delete
+priority: p1
+profile: implementation
+objective: "Lands as fix(ui). Panel Excellence criterion 7. At main 68b117f3 Reset and Clear history run with no confirmation (src/js/core/instrument.js:983-1028), the Learn Demo overwrites the current settings (:1107-1115), and the two Delete confirmations style the destructive button as primary (src/index.html:3498, :3589; src/styles/measure.css:1029-1031). After: each destructive action either opens a confirmation dialog whose destructive button carries the Flowbite Pro danger style and is not the initial focus, or acts at once and offers an undo that restores the previous state exactly; tests/unit/destructive-actions.json lists every such action with its guard."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 7 and the Presets, Learn and Measure/Experiments dialogs Inventory rows."
+scope:
+  - "src/js/core/instrument.js"
+  - "src/index.html"
+  - "src/js/ui/dialogs.js"
+  - "src/styles/measure.css"
+  - "tests/unit/destructive-actions.json"
+  - "tests/unit/destructive-actions.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/destructive-actions.test.mjs fails on the merge base on Reset defaults and Clear history (no confirmation and no undo) and on the two Delete dialogs (destructive button styled primary)."
+  - "Every entry of tests/unit/destructive-actions.json names its control and its guard (confirm or undo); a control whose handler clears stored or edited state and is not listed fails the test; an undo restores the exact previous state (deep-equal)."
+  - "tests/browser/app.cjs: Reset defaults opens the confirmation, Cancel leaves every field unchanged, and focus starts on Cancel. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "It adds no osc-* token (project.ui-uses-flowbite-pro). src/js/core/instrument.js is unguarded under v2; the Measure and Experiments dialogs are guarded through src/js/ui/measure/* and src/js/ui/experiments.js when they change: prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+validation:
+  - "node --test tests/unit/destructive-actions.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

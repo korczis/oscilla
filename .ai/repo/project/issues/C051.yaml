@@ -1,0 +1,39 @@
+id: C051
+milestone: M090
+serves:
+  - "coherent-state#stops-are-immediate"
+  - "coherent-state#views-describe-what-sounds"
+title: "The playback bus, slice 3: one observable 'playing' state, and every mirror of it becomes a read"
+slug: one-playing-state-mirrors-become-reads
+priority: p1
+profile: implementation
+objective: "Lands as fix(bus). Split from C037 by af's critique of 96daa67b (BLOCKING 5); C034's 'removing the duplicate state' slice. Line numbers at origin/main a19f1ff6. About 12 'is it playing' values coexist: cmp.playing; cmp.seqPlaying (src/js/ui/workbench.js:83) with three writers, the 150 ms poll (src/js/main.js:591-597), the output owner's stop (src/js/ui/output-owner.js:43-44) and its claim (:89-90); editor.playing; studio.playing and the studioPlaying getter (workbench.js:152); studioOwnsOutput() (src/js/ui/studio/workspace/runtime.js:277); cmp.synth.armed with four writers (src/js/synth/ui.js:416, :715, :750, :858); measureOwnsOutput() (src/js/ui/measure/session.js:460-462); isSounding (workbench.js:128); anySounding (:154); outputOwner (main.js:691); adapter.isPlaying (main.js:141). After: the bus holds one observable state {owner, since} that changes in the same event as claim and release; cmp.seqPlaying, studioPlaying, synth.armed's playing meaning, isSounding, anySounding and outputOwner are getters over it (never assigned), the 150 ms poll is deleted, and the Studio's $watch('seqPlaying') (workspace.js:490) becomes a bus subscription."
+why: "af's Play audit (about 12 playing values, seqPlaying polled); oscilla-b0 Total Coherence audit of main 68b117f3 (seqPlaying has 3 writers); af's critique of 96daa67b (BLOCKING 5: the mirrors need their own slice with its own fail-first)."
+scope:
+  - "src/js/core/output-bus.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/ui/output-owner.js"
+  - "src/js/main.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/studio/workspace/runtime.js"
+  - "src/js/synth/ui.js"
+  - "tests/unit/playing-state.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C037"
+acceptance_criteria:
+  - "Fail-first, on seams of the merge base: tests/unit/playing-state.test.mjs builds the workbench state and the output owner as main.js does, starts and then stops the sequencer editor directly (editor.stop(), no poll tick) and asserts cmp.seqPlaying is false in the same event; on the merge base it stays true until the 150 ms poll (main.js:591-597) runs."
+  - "A static scan finds no assignment to seqPlaying, studioPlaying, isSounding, anySounding or outputOwner outside the bus, and no setInterval that copies a playing state; a mutation that re-adds the poll or one assignment fails naming it."
+  - "Each mirror is a read: a unit test asserts that claim and release change every mirror in the same event (no timer, fake clock)."
+  - "tests/browser/app.cjs and tests/browser/v31-studio-transport.cjs show the status bar, the scope's owner and the Studio transport agreeing in the same frame after a hand-over, with until() deadlines, in Chromium, Firefox and WebKit."
+  - "Guarded paths marked: src/js/synth/* (v2, prismatic-majordomus-98); src/js/ui/measure/session.js is read, not changed; the rest is judged by the screens seat once R031 lands. Lane: dev-53."
+validation:
+  - "node --test tests/unit/playing-state.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/v31-studio-transport.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

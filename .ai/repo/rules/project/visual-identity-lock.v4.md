@@ -203,7 +203,8 @@ is a review rejection even when every functional test passes.
   "analog", "vintage", "warm" or "fat" claim in the Synth's code, markup or Learn copy.
 - `npm run test:visual`, in the release gate and CI's visual job (ADR 0029): a pixel
   regression, beyond the accepted tolerance, of a view with an accepted reference
-  (`scripts/visual-gate.mjs`, `scripts/visual-measure.mjs`, `scripts/visual-studio.mjs`;
+  (`scripts/visual-gate.mjs`, `scripts/visual-measure.mjs`, `scripts/visual-studio.mjs`,
+  `scripts/visual-synth.mjs` for the Synth panel and bay in both themes, desktop and phone;
   regions and values under `tests/visual/`). A re-skinned view gets a new reference, and
   accepting it, with its reason, is the review.
 - `tests/browser/synth.cjs` check `s-look` (in `npm run test:studio`: CI's studio job and the

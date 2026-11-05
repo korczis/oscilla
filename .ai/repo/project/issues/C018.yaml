@@ -37,4 +37,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:01:07Z
+started_at: 2026-11-05T00:00:43Z
+started_event: sha256:213d2a7283ab457f09c3ee080f083f695714824761a1af28aeb9382ac98e7ebd
+completed_at: 2026-11-05T00:01:07Z
+completed_event: sha256:ef3dd49fb80a33ff387b56e9690ee438331f04c0bfe8219ee480aa66d955e054
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/lab-state-round-trip.test.mjs tests/unit/phase-stereo-controls.test.mjs tests/unit/freeze.test.mjs tests/unit/freeze-guard.test.mjs"
+    result: "Run on a scratch export of origin/main 6d5efa89, together with flake-ledger/c011/output-owner tests: 1207 pass, 0 fail, 0 skipped. npm run build:check: dist/index.html is up to date (v3.19.0). PR #314 body: fail-first proven by 5 of 5 files; navigation.cjs lab-state-round-trip PASS in chromium/firefox/webkit, file and http."
+    artifact: "2f442e114dc752a36b68a98cd1db656b0eb2f8e1"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:00:31Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/314.yaml"
+    result: "Review verdict .ai/repo/reviews/314.yaml (verdict: merge) is on origin/main; landed as #314 carried into main by merge train 3 (#404, merge 2f442e11), main commit 2f442e114dc752a36b68a98cd1db656b0eb2f8e1."
+    artifact: ".ai/repo/reviews/314.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:00:38Z

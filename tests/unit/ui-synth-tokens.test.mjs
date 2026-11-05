@@ -10,13 +10,14 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { SYNTH_TOKEN_NAMES, synthTokens, tokensFrom } from '../../src/js/ui/synth/tokens.js';
-import { NAMED, intensityLiterals } from './ui-synth-fixture.mjs';
+import { controlSvg } from '../../src/js/ui/synth/knob.js';
+import { NAMED, TOKENS, intensityLiterals } from './ui-synth-fixture.mjs';
 
 const SHAPE = {
   surface: ['plateHi', 'plateLo', 'card', 'edge'],
   text: ['label', 'value', 'dim'],
   control: ['cap', 'capHi', 'ring', 'track', 'pointer', 'focus', 'disabled', 'edge', 'knurl',
-    'applied'],
+    'applied', 'bezel'],
   jack: ['body', 'ring', 'normal', 'refuse'],
   cable: ['palette', 'shadow', 'sheen'],
 };
@@ -64,6 +65,7 @@ test('the names follow the Synth panel roles the lane file recorded', () => {
   assert.equal(n.control.pointer, '--osc-text');
   assert.equal(n.control.knurl, '--osc-border', 'the knurl is decorative');
   assert.equal(n.control.applied, '--osc-purple');
+  assert.equal(n.control.bezel, '--osc-border-strong', 'an LED bezel\'s ring, decorative');
   assert.equal(n.jack.refuse, '--osc-red');
   assert.equal(n.cable.shadow, '--osc-bg');
   assert.equal(n.cable.sheen, '--osc-text', 'the sheen is its own token (dev-53, 2026-11-02)');
@@ -213,8 +215,10 @@ const contrast = (a, b) => {
 };
 
 // The control roles that only decorate (WCAG 1.4.11 asks nothing of them): the cap and its
-// highlight, and the knurl. Every other control role marks the control or its value.
-const DECORATIVE = ['cap', 'capHi', 'knurl'];
+// highlight, the knurl and an LED bezel's ring (the lens tells the state; ui-synth-led.test.mjs
+// holds the ring to the strongest neutral the palette has). Every other control role marks the
+// control or its value.
+const DECORATIVE = ['cap', 'capHi', 'knurl', 'bezel'];
 const PLATES = [SYNTH_TOKEN_NAMES.surface.plateHi, SYNTH_TOKEN_NAMES.surface.plateLo];
 
 test('every graphic role of the knob, fader and switch holds 3:1 on the plate, text 4.5:1', () => {
@@ -256,4 +260,27 @@ test('every knob part holds 3:1 on the part it is drawn over, in both themes', (
     }
   }
   assert.deepEqual(short, [], 'under 3:1 against the part beneath');
+});
+
+// S7 (W1b re-review): the unlit knob arc measured 1.10:1 (dark) and 1.40:1 (light) on the plate,
+// because a disabled knob drew it in the knurl's --osc-border. As drawn, in every state, it is
+// a token that holds 3:1 on both plates in both themes: --osc-text-dim, the strongest grey
+// short of the pointer's --osc-text (which the value arc's width must stay distinct from).
+test('the unlit knob arc, as controlSvg draws it in every state, holds 3:1 on both plates', () => {
+  const param = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+  const short = [];
+  for (const state of [{}, { focus: true }, { hover: true }, { dragging: true },
+    { disabled: true }, { disabled: true, focus: true, hover: true }]) {
+    const svg = controlSvg({ kind: 'knob', value: 70, param, tokens: TOKENS, state });
+    const track = /<path [^>]*data-track=""[^>]*>/.exec(svg)[0];
+    const name = /stroke="var\((--osc-[\w-]+)\)"/.exec(track)[1];
+    for (const [theme, t] of Object.entries(themes())) {
+      for (const plate of PLATES) {
+        const ratio = contrast(hexOf(t, name), hexOf(t, plate));
+        if (ratio < 3) short.push(`${JSON.stringify(state)} ${theme} ${name} on ${plate}: `
+          + `${ratio.toFixed(2)}`);
+      }
+    }
+  }
+  assert.deepEqual(short, [], 'the unlit arc under 3:1 on a plate');
 });

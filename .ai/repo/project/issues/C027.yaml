@@ -26,4 +26,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-03
-updated_at: 2026-11-03
+updated_at: 2026-11-05T01:25:35Z
+started_at: 2026-11-05T01:25:12Z
+started_event: sha256:1b591e4dbbf34acbe2dce958c799fbe324358164c8f30369c27ab54e5bf9d45c
+completed_at: 2026-11-05T01:25:35Z
+completed_event: sha256:b09e0abe5e691788638b33a9627c2035e7f2df45709e4e75d5f62fff8ddc19fa
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/studio-runtime-status-reason.test.mjs (CI run 41933352760 on tree e65a1e6b = main 68b117f3)"
+    result: "Every acceptance criterion (6) re-checked MET on main 68b117f3 by two independent judges that agreed (af workflow wf_518c6639-5cb, read-only). 68b117f3's tree equals 43e3e1ca's (e65a1e6b), so #413's CI run 41933352760 (success) tested it: unit job 126936184997 4510 pass, 0 fail; the browser gate passed in Chromium, Firefox and WebKit; fail-first and review-verdict jobs green against merge base 6d5efa89. Dependencies done. Named tests: tests/unit/studio-runtime-status-reason.test.mjs."
+    artifact: ".ai/repo/reviews/413.yaml"
+    commit: 68b117f3474e97f4c348fc01c30ddc4519cc193e
+    recorded_at: 2026-11-05T01:25:29Z

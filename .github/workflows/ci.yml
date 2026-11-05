@@ -28,20 +28,26 @@
 # .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (and at
 # least one path changed) in a pull request into main is the answer `runtime=false` (a train
 # or stacked base runs everything: the head's `gate` would satisfy main's required check too),
-# and then the engine, suites, measure, studio, browser and visual jobs are skipped;
+# and then the engine, suites, measure, studio, browser, census and visual jobs are skipped;
 # anything else, an empty diff, an error or a missing answer runs them (fail closed). unit, knowledge, fail-first and review-verdict always
 # run: the plan, knowledge and build:check tests guard what a non-runtime change can break.
-# `gate` accepts a skipped job only when it is one of those six and `changes` succeeded with
-# `runtime=false`. ci.yml is started by pull_request only (project.ci-bounded, `triggers`), so
-# nothing on main is path-gated here; the classifier answers runtime for any other event.
+# `gate` accepts a skipped job only when it is one of those seven and `changes` succeeded with
+# `runtime=false`. ci.yml is started by pull_request and merge_group only (project.ci-bounded
+# v2, `triggers`), so nothing on main is path-gated here; on merge_group the classifier judges
+# the queued pull request by HEAD^1..HEAD, the queue's merge of it (ADR 0083), and it answers
+# runtime for any other event.
 # Tested by tests/unit/ci-changes.test.mjs.
 name: CI
 
-# pull_request only (project.ci-bounded, `triggers`): the fail-first and review-verdict jobs
-# judge a pull request, and a manual run on a PR's branch would have none to judge while its
-# `gate` landed on the same commit as the required check.
+# pull_request and merge_group only (project.ci-bounded v2, `triggers`; ADR 0083): a pull
+# request is judged on its own branch, then again in the merge queue on main plus the pull
+# requests ahead of it, which is the tree that lands. The fail-first and review-verdict jobs
+# judge a pull request in both: on merge_group the one the queue ref names
+# (gh-readonly-queue/main/pr-<N>-<sha>). A manual run would have none to judge while its `gate`
+# landed on the same commit as the required check, so it stays excluded.
 on:
   pull_request:
+  merge_group:
 
 permissions:
   contents: read
@@ -51,9 +57,11 @@ defaults:
   run:
     shell: bash
 
+# A newer push to a pull request cancels its older run; a merge-queue run is never cancelled (a
+# cancelled group drops out of the queue), and every queue entry has its own ref.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   unit:
@@ -62,7 +70,7 @@ jobs:
     # skips under CI without them (a full checkout measured 4 s against 2 s shallow, in the
     # knowledge job).
     name: unit, build, artifact rules
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -88,9 +96,11 @@ jobs:
       # pull request over the budget, failing on verify-dist, still gets its size summary.
       - name: Size of dist/index.html against the budget and the merge base (step summary)
         if: ${{ !cancelled() }}
+        env:
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         timeout-minutes: 2
         run: |
-          node scripts/size-report.mjs --base-branch "origin/$GITHUB_BASE_REF" \
+          node scripts/size-report.mjs --base-branch "origin/${GITHUB_BASE_REF:-${QUEUE_BASE#refs/heads/}}" \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
   changes:
@@ -101,9 +111,11 @@ jobs:
     # classifier (the pull request that introduces it) answers runtime=true with a warning and
     # runs no copy at all, so no pull request is ever skipped by a program it carries. The base
     # is named by its full ref, so a tag called origin/<base> cannot stand in for it (#255, R2).
-    # Full history, so the merge base is in the clone.
+    # Full history, so the merge base is in the clone. On merge_group the base is the queue's
+    # base_ref and the classifier itself diffs HEAD^1..HEAD (ADR 0083): the command line is the
+    # same on both events, so a base copy that knows only pull_request answers runtime=true.
     name: changes (does the pull request touch a runtime path)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 4
     outputs:
       runtime: ${{ steps.classify.outputs.runtime }}
@@ -118,8 +130,13 @@ jobs:
       - name: Classify the changed paths with the base branch's classifier
         id: classify
         timeout-minutes: 2
+        env:
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         run: |
-          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          name="${GITHUB_BASE_REF:-${QUEUE_BASE#refs/heads/}}"
+          name_ok='^[A-Za-z0-9._/-]+$'
+          [[ "$name" =~ $name_ok ]] || { echo "::error::ci-changes: no base branch"; exit 1; }
+          base="refs/remotes/origin/$name"
           prog=.github/scripts/ci-changes.mjs
           judge="$RUNNER_TEMP/ci-changes.mjs"
           git show-ref --verify --quiet "$base"
@@ -137,7 +154,7 @@ jobs:
     name: V1 engine checks (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -180,7 +197,7 @@ jobs:
     name: DSP, labs, sequencer (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -232,7 +249,7 @@ jobs:
     name: V3 measurement and UI (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     strategy:
       fail-fast: false
@@ -275,7 +292,7 @@ jobs:
     name: V3.1 Studio UI (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -316,7 +333,7 @@ jobs:
     name: Browser gate (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 65
     strategy:
       fail-fast: false
@@ -359,7 +376,9 @@ jobs:
 
   census:
     name: Control census (${{ matrix.browser }})
-    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.runtime != 'false'
+    runs-on: ubuntu-24.04
     # the sum of the step limits (15 + 13 + 35), rounded up (project.ci-bounded)
     timeout-minutes: 65
     strategy:
@@ -401,7 +420,7 @@ jobs:
     name: Visual regression gate
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     # The accepted linux-x64 values in tests/visual/baseline.json were measured in this image
     # (system-ui renders differently on a bare runner). Its tag must equal the lockfile's
@@ -416,7 +435,7 @@ jobs:
         run: |
           want="$(node -p "require('./package-lock.json').packages['node_modules/playwright'].version")"
           test "$want" = "1.63.0" || { echo "lockfile playwright $want, image v1.63.0"; exit 1; }
-      - name: 1536x1024 --play scene, the MEASURE and STUDIO references against the accepted baselines
+      - name: 1536x1024 --play scene, the MEASURE, STUDIO and SYN references against the accepted baselines
         run: npm run test:visual
         timeout-minutes: 8
       - name: Upload current, reference, diff and report on failure
@@ -428,6 +447,7 @@ jobs:
             tests/visual/out-gate/
             tests/visual/out-measure/
             tests/visual/out-studio/
+            tests/visual/out-synth/
           retention-days: 14
 
   knowledge:
@@ -445,7 +465,7 @@ jobs:
     # The download retries, so one transient asset error does not stall every merge. Full
     # history, because curated knowledge cites V1 commits and the ADR check reads every ref.
     name: .ai layer (majordomus doctor 1.0.0-alpha.9)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       MJ_VERSION: 1.0.0-alpha.9
@@ -487,7 +507,7 @@ jobs:
     # judges is the base branch's copy (.github/scripts/base-rule.sh), not the one this pull
     # request carries.
     name: fail-first (feat/fix tests fail without the change)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
       contents: read
@@ -507,16 +527,26 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         run: |
+          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>, the
+          # <sha> being the entry's base, HEAD^1), HEAD must be the queue's merge commit onto that
+          # base, and HEAD^2 the pull request's head (--check-head, after gh pr view; ADR 0083:
+          # merge method MERGE); the assignment fails the step on the script's exit 2, which `eval "$(...)"`
+          # would throw away.
+          vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"
           if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
           n=0
-          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$RUNNER_TEMP/pr.json"; do
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName,headRefOid > "$RUNNER_TEMP/pr.json"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/fail-first.mjs \
+          .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" "$RUNNER_TEMP/pr.json"
+          [ -n "$HEAD_SHA" ] || HEAD_SHA="$(jq -r .headRefOid "$RUNNER_TEMP/pr.json")"
+          .github/scripts/base-rule.sh "origin/$BASE" scripts/fail-first.mjs \
             --pr-json "$RUNNER_TEMP/pr.json" --head "$HEAD_SHA" \
-            --base-branch "origin/$GITHUB_BASE_REF"
+            --base-branch "origin/$BASE"
 
   review-verdict:
     # project.review-verdict: a PR that changes a guarded path (the audio, analysis, experiments
@@ -539,7 +569,7 @@ jobs:
     # as it is now and handed over in PR_JSON, not as an argument, so the base branch's copy is
     # called with the same command line whichever arguments it knows.
     name: review-verdict (guarded paths need a recorded review)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -556,19 +586,30 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          QUEUE_REF: ${{ github.event.merge_group.head_ref }}
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
           PR_JSON: ${{ runner.temp }}/pr.json
         run: |
+          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>);
+          # HEAD is the queue's merge of it onto HEAD^1 (main plus the pull requests ahead), so
+          # the content judged is HEAD^1..HEAD, as a pull_request run judges its merge commit. That
+          # is the whole pull request only for the queue's merge commit of its head (merge method
+          # MERGE, grouping ALLGREEN): queued-pr.sh refuses a HEAD without two parents or whose
+          # HEAD^1 is not the base the ref's <sha> names (DIFF_BASE is that sha), and --check-head
+          # a HEAD^2 that is not the pull request's head. Assigned first, so exit 2 fails the step.
+          vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
           n=0
-          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName > "$PR_JSON"; do
+          until gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,headRefName,headRefOid > "$PR_JSON"; do
             n=$((n + 1)); [ "$n" -lt 3 ] || { echo "::error::could not read PR $PR"; exit 1; }
             sleep 10
           done
-          .github/scripts/base-rule.sh "origin/$GITHUB_BASE_REF" scripts/review-verdict.mjs \
-            --pr "$PR" --head HEAD --base-branch "origin/$GITHUB_BASE_REF"
+          .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" "$PR_JSON"
+          .github/scripts/base-rule.sh "origin/$BASE" scripts/review-verdict.mjs \
+            --pr "$PR" --head HEAD --base-branch "$DIFF_BASE"
 
   gate:
-    # The required check. Every job it judges succeeded, or (E026) is one of the six path-gated
+    # The required check. Every job it judges succeeded, or (E026) is one of the seven path-gated
     # jobs and was skipped while `changes` succeeded with runtime=false. A skip for any other
     # reason, a cancelled or failed job, and a failed or silent `changes` fail it. It needs
     # flake-ledger too (gate-needs: every job), and the verdict drops that job's entry before
@@ -580,7 +621,7 @@ jobs:
     name: gate
     if: always()
     needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual, flake-ledger]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every release-gate job passed, or was skipped for a non-runtime change
@@ -593,7 +634,7 @@ jobs:
             | all(.value.result == "success"
                 or ($nonruntime and .value.result == "skipped"
                     and (.key as $k
-                         | ["engine", "suites", "measure", "studio", "browser", "visual"]
+                         | ["engine", "suites", "measure", "studio", "browser", "census", "visual"]
                          | any(. == $k))))
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
@@ -611,7 +652,7 @@ jobs:
     name: flake ledger (checks that passed only on a re-run)
     if: ${{ always() && fromJSON(github.run_attempt) > 1 }}
     needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read

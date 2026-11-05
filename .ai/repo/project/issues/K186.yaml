@@ -1,0 +1,30 @@
+id: K186
+milestone: M069
+serves:
+  - "connected-instrument#session-and-midi"
+title: "An explicit Apply target wins over the panel module the patch came from, or the refusal names the panel"
+slug: an-explicit-apply-target-wins-over-the-panel-module
+priority: p2
+profile: implementation
+objective: "Lands as fix(patches). src/js/studio/patches.js:441-443 resolves a patch node onto the node of the same panel ref first, so an explicit target is ignored when a panel ref exists: applying an FM patch with target fm-1 lands on semi-mono-1-fm. After: an explicit target of a compatible type wins and the mapping is {fm: fm-1}; an incompatible one, a target of a different node type included, is refused with a reason that names the target and the panel module, and the model and history stay unchanged (project.typed-ports). The catalog's Apply resolves through the same patchTargets (src/js/studio/patch-catalog.js:126-169, applyReason and apply), so it follows the same rule, and the patchTargets header (src/js/studio/patches.js:32-35) states the new order: an explicit compatible target first, then the panel ref, then the only node of the type. Line numbers at origin/main a19f1ff6. The fixture is synth-fm-bell of tests/unit/patch-browser.test.mjs. K187 changes the same Apply path for fixed parameters and lands first."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice 06, probe reproduced by a skeptic. K102 (BLOCKED, the one patch browser) owns the browser; its blocker forbids this fix inside it, so it is filed here under the same criterion. af's critique of 96daa67b (AMEND 15): the catalog path, the wrong-type refusal, the fixture, the header and the order against K187."
+scope:
+  - "src/js/studio/patches.js"
+  - "src/js/studio/patch-catalog.js"
+  - "tests/unit/patch-browser.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K187"
+acceptance_criteria:
+  - "Fail-first: tests/unit/patch-browser.test.mjs applies an fm patch with target fm-1 on a document holding semi-mono-1-fm and fm-1 and expects onto {fm: fm-1}; on the merge base onto names semi-mono-1-fm."
+  - "With no target the panel-ref resolution is unchanged (the existing patch-browser cases pass); an incompatible target and a target of another node type are each refused naming the target and the panel module, with the model unchanged; the same three cases through the catalog's Apply (patch-catalog.js) give the same result."
+  - "The patchTargets header comment (patches.js:32-35) states the order and is the one place it is described."
+  - "Guarded path (src/js/studio/*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/patch-browser.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

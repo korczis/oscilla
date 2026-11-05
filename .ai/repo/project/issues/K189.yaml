@@ -1,0 +1,35 @@
+id: K189
+milestone: M068
+serves:
+  - "connected-instrument#engines"
+title: "The voice wrapper, slice 1 of 4: one engine declaration of params, ports and capabilities, and a structural test that keeps the four layers apart"
+slug: one-voice-wrapper-over-the-five-voice-systems
+priority: p0
+profile: implementation
+objective: "Lands as fix(engines), the first of four sequential slices that follow pack 06's split (K189 declaration, K190 wiring, K191 instantiation, K192 presets and runtime), each fail-first, followed by K193 (the shared primitives in src/js/audio/) and K194 (the templates and the duplicate oscillator builders). Line numbers at origin/main a19f1ff6. af's engines audit of main 6d5efa89 found sound coming from five separate voice systems with no shared voice abstraction, polyphony model or note interface: (A1) the V1 plan player (src/js/audio/audio-engine.js:503-629), (A2) the V1 note voices with their own 8-voice allocator and inline envelope (audio-engine.js:1071-1150), (A3) the sequencer compiler with its own createOscillator and LFO (src/js/sequencer/compiler.js:680, :933), (A4) the mono panel and XY pad (src/js/studio/adapters/instrument.js:48-230), (A5) the Synth engines on the voice host (src/js/studio/adapters/engines.js, voices.js:56-197). The seam is src/js/studio/nodes/engines.js:53-65 (the engine() declaration), and today the declaration imports an instantiation constant (MAX_VOICES from src/js/synth/voice-pool.js) so the layers are not separate. This slice, DECLARATION: one engine declaration carries ports (chain in, audio out, pitch/gate/velocity CV in) and capabilities {notes, hits, poly, offline}; the note interface noteOn/noteOff/allOff/hit is declared in src/js/studio/adapters/nodes.js; the parameters are K105's parameter contract (unit, range, default, mapping, automatable and modulatable or the reason not), consumed, not re-declared: K105 owns it. The declaration imports no wiring, instantiation, preset or runtime module."
+why: "The owner's complaint of 2026-11-04 (af session): the synthesis engines are not wrapped in a single wrapper, not everything is connected, there is a lot of duplication; the owner's words relayed by af on 2026-11-05: 'vsechny komponenty abstrahuj, reuse, dry, parametrizuj'. af's engines audit wbukwud0a and the oscilla-b0 Total Coherence pack 06 (declaration, wiring, instantiation, presets, runtime). af's critique of 96daa67b (BLOCKING 6): one p0 issue held four slices whose first fail-first could pass only after the third; the voice cap was re-decided beside K180; K188's binding test was in scope; the primitives sat in studio/adapters/; nothing proved the layers separate; K105 and K189 both owned the parameter contract. This slice keeps only the declaration and the structural test."
+scope:
+  - "src/js/studio/nodes/engines.js"
+  - "src/js/studio/nodes/common.js"
+  - "src/js/studio/adapters/nodes.js"
+  - "tests/unit/engine-declaration.test.mjs"
+  - "tests/unit/engine-layers.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K105"
+  - "K188"
+acceptance_criteria:
+  - "Fail-first (declaration): tests/unit/engine-declaration.test.mjs walks every registry type with notes or hits and fails on the merge base where a declaration lacks capabilities {notes, hits, poly, offline}, a pitch/gate/velocity input or a chain port, or where face keys differ from the declared keys; the offline-render, perc-envelope and full-polyphony checks of 96daa67b moved to K191, which can make them pass."
+  - "Fail-first (layers): tests/unit/engine-layers.test.mjs reads the import graph of the declaration, wiring, instantiation, preset and runtime modules and fails on the merge base naming src/js/studio/nodes/engines.js's import of src/js/synth/voice-pool.js (a declaration importing instantiation); this slice asserts the declaration layer, and K190-K192 each add their layer's case, so the four layers are proven separate when K192 lands."
+  - "Parameters come from K105's contract: the test asserts every engine parameter's unit, range, default, mapping and automatable/modulatable answer is read from K105's declaration, with no second parameter table in this slice."
+  - "Controls: the engine faces consume M123's one knob, switch and slider (G022, G023; component-system#one-implementation-per-family, origin/chore/plan-unified-controls) and add no parallel widget; Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock v4 holds (the Flowbite Pro interface themed by OSCILLA's tokens around its own domain views; ADR 0061, accepted) (owner, relayed by af 2026-11-05)."
+  - "The V1 freeze golden vectors (tests/unit/freeze.test.mjs) are unchanged with the labs off (ADR 0014)."
+  - "Guarded paths (src/js/studio/*): prismatic-majordomus-98 writes the verdict; oscilla-21 checks the synth values. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/engine-declaration.test.mjs tests/unit/engine-layers.test.mjs tests/unit/freeze.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
