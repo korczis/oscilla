@@ -19,7 +19,7 @@ scope:
   - "tests/unit/ui-synth-xy.test.mjs"
   - "tests/README.md"
   - "dist"
-current_state: "Built, not landed: refactor/g030-one-pad 69205cba (on Train 6; opens after #420). G021 (feat/g021-family-census 3dcf5483) declares the pad family (model ui/kinds/xy-pad.js, part charts/drag-math.js) and, merged with Train 6, flags ui/synth/xy.js. Builder: oscilla-21 after #420 lands; reviewer: 98 (owner of ui/synth/xy.js), 26 second (decided 2026-11-05)."
+current_state: "Built, not landed: refactor/g030-one-pad 69205cba (on Train 6; opens after #420). G021 (feat/g021-family-census 3dcf5483) declares the pad family (model ui/kinds/xy-pad.js, part charts/drag-math.js) and, merged with Train 6, flags ui/synth/xy.js. Builder: oscilla-21 after #420 lands; reviewer: 26 (b0, rule 5: src/js/ui/synth is 98's own lane, and 26 built none of G030)."
 acceptance_criteria:
   - "Fail-first: the census unit test fails while a pad skin maps a point to positions by its own formula (skin-logic) and passes once it calls the model's part."
   - "One mapping: every pad surface (the Pro pad, the hardware skin, K183's view, the landing hero) maps a pointer to positions through charts/drag-math.js xyFromPoint, asserted by the census and by a unit check that a skin's positions equal the part's for the same point and travel."
