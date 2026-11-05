@@ -406,7 +406,10 @@ async function runEngine(engine, base) {
     { ms: 5000, what: 'filter chart redrawn as the high-pass the radio selected' });
   check('filter type via shell radio (high-pass) and curve still exact',
     highpassOk(fc), `max |Δ| ${fc.maxErr.toExponential(2)}`);
-  // Drag on the graph: right and up → higher cutoff and higher Q.
+  // Drag on the graph: right and up → higher cutoff and higher Q. The graph is brought into
+  // view first: page.mouse never scrolls, and the Pro shell's page runs past one screen.
+  await page.evaluate(() => window.__labs.labs.filter.chart.uplot.over
+    .scrollIntoView({ block: 'center' }));
   const over = await page.evaluate(() => {
     const r = window.__labs.labs.filter.chart.uplot.over.getBoundingClientRect();
     return { x: r.left, y: r.top, w: r.width, h: r.height };
@@ -472,6 +475,10 @@ async function runEngine(engine, base) {
     add.maxErr < 1e-5 && add.compared === 5,
     `${add.compared} non-zero bars, max |Δ| ${add.maxErr}`);
   const addHost = await page.$('#osc-chart-additive canvas');
+  // A pointer meets the chart where it is shown: the Pro shell's page runs past one screen
+  // (the canvas sat at y 2740 of 1024), and page.mouse never scrolls, so the chart is brought
+  // into view before its box is read, as for the envelope and bioacoustics charts below.
+  await addHost.scrollIntoViewIfNeeded();
   const ab = await addHost.boundingBox();
   await page.mouse.click(ab.x + 31 + ((ab.width - 37) / 10) * 2.5, ab.y + ab.height / 2);
   const sel = await page.evaluate(() => ({
@@ -676,6 +683,7 @@ async function runEngine(engine, base) {
       hy: c.top + l.handles.attack.y, pxPerS: l.pxPerS,
       current: host.clientWidth > 10 && Math.abs(drawnW - Math.round(host.clientWidth)) < 1.5 };
   });
+  await (await page.$('#osc-chart-envelope')).scrollIntoViewIfNeeded();
   const env0 = await settled(readEnv, (r) => r.current,
     { ms: 5000, what: 'envelope graph laid out at its shown size' });
   await page.mouse.move(env0.hx, env0.hy);
@@ -695,7 +703,9 @@ async function runEngine(engine, base) {
   // Its chart lays out its rows once Compare shows it (#278): polled until every row is there.
   const bio = await settled(() => page.evaluate(() => window.__labs.labs.bio.chart.getRows()),
     (rows) => rows.length >= 5, { ms: 5000, what: 'bio chart rows once Compare shows it' });
-  const bioBox = await (await page.$('#osc-chart-bio canvas')).boundingBox();
+  const bioHost = await page.$('#osc-chart-bio canvas');
+  await bioHost.scrollIntoViewIfNeeded();
+  const bioBox = await bioHost.boundingBox();
   await page.mouse.click(bioBox.x + bioBox.width * 0.8, bioBox.y + 21 * 1.5);
   const range = await page.evaluate(() => window.__lastRange);
   check('bio bars from HEARING_RANGES; click selects the sourced range',
