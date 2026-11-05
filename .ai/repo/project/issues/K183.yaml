@@ -6,7 +6,7 @@ title: "The XY pad sounds on first touch: patched to the Synth voice by default"
 slug: the-xy-pad-sounds-on-first-touch-patched-to-the-synth-voice
 priority: p0
 profile: implementation
-objective: "Lands as fix(synth). The kaoss-like XY pad (K097) is silent until the user patches it. After: a fresh Synth has the XY pad routed to the current voice's pitch (in the chosen scale) and one timbre parameter, so the first touch or click sounds; the route is ordinary Studio model data, visible and removable like any cable."
+objective: "Lands as fix(synth). The kaoss-like XY pad (K097) is silent until the user patches it, and patching it cables vco pitch and eg gate, which breaks the keyboard's Keys normals (normals.js; review finding S8), so the obvious default would silence the keys. After (af and 26, 2026-11-05, option B): the pad is one more note input of K178's one Keys source, like the computer keys and MIDI. A touch presses the scale-quantised note, a move glides it legato, a release lets it go, through held-notes with last-note priority between pad, keys and MIDI, so the pad plays exactly what the keys play (panel, engine or Studio target). Y is an ordinary CONTROL cable in the default Synth document (xy.y to the panel filter's frequency), visible and removable; no pitch or gate cable is needed, so the keyboard keeps sounding. The first touch sounds; K184's minimum gate lives in the same path."
 why: "af nav-pages audit wf_ed1cc8d6-3e8 and Play audit wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0), after the owner's complaint in the af session 2026-11-04/05: views feel lost, Play does not work on most pages, nothing runs through one bus, engines are not wrapped, many top-nav pages are obsolete, unconnected, not realtime, poor. Decided by af and b0 on 2026-11-05 under the owner's order of that day 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090)."
 scope:
   - "src/js/synth"
@@ -18,8 +18,9 @@ scope:
   - "dist"
 depends_on:
   - "K097"
+  - "K178"
 acceptance_criteria:
-  - "tests/unit/xy-default-patch.test.mjs: the default Synth document holds the XY routes as model cables with typed ports (project.typed-ports), and removing them leaves the pad silent with a stated reason."
+  - "tests/unit/xy-default-patch.test.mjs: the default Synth document holds the Y route as a model cable with typed ports (project.typed-ports), the pad's notes reach the voice through the one Keys source (K178's KEY_ROUTES) with last-note priority, the Keys pitch and gate normals stay intact so a computer key and a pad touch both sound, and removing the Y cable leaves the pad playing pitch only."
   - "A browser check in all three engines and WebKit 390x844 touch: one pointer-down on the pad raises the active source count within a named deadline and moves the pitch with x; release silences it."
   - "The pull request carries a reviewer's verdict (src/js/synth and studio templates are guarded)."
   - "Fail-first: the unit test and the browser check named here fail on the merge base (project.fail-first)."
