@@ -17,12 +17,12 @@
 
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';
-import { routedNode } from './picker.js';
+import { playedEngine, routedNode } from './picker.js';
 import { createDock } from './dock.js';
-import { SYNTH_TEXT, insertDecision } from './insert.js';
+import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
-  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, createAmountMemory, jackReason,
-  jackState, panelCables, patchCable, restoreNormals, setAmount, unpatch,
+  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, jackReason, jackState, panelCables,
+  patchCable, restoreNormals, setAmount, unpatch,
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
@@ -34,10 +34,12 @@ import { NODE_REGISTRY } from '../studio/registry.js';
 import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
-import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
+import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
 import { createStudioSink } from './studio-sink.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
+import { createArmedFollow } from './armed-follow.js';
+import { createSynthNotes } from './notes-sink.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
 export { SYNTH_TEXT, insertDecision };
@@ -54,23 +56,24 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   let selected = null; // a selected cable id
   let layout = null;
   let face = 'panel'; // below xl: the module cards or the patch bay (view/faces.js)
-  const memory = createAmountMemory(panel); // amount depths of this session (normals.js)
   // The folded cards (K062): view state of this page, never in history, the hash or browser
   // storage (the README's privacy inventory lists no Synth key), so a reload expands them.
   let collapsed = new Set();
 
   const ENGINE_IDS = panel.modulesOf('engines').map((m) => m.id);
   const tab = () => (cmp ? cmp.synth.tab : 'panel');
-  const engineId = () => (cmp && ENGINE_IDS.includes(cmp.synth.engine) ? cmp.synth.engine
-    : ENGINE_IDS[0]);
+  const engineId = () => playedEngine(model(), panel, cmp && ENGINE_IDS.includes(cmp.synth
+    .engine) ? cmp.synth.engine : ENGINE_IDS[0], registry);
   /** The module the keys play now: Keys on the Panel tab, the chosen engine on Engines. */
   const playedModule = () => (tab() === 'engines' ? engineId() : 'keys');
   /** The node the keys play: the one routed by the picker (K066), else the tab's module. */
   const played = () => routedNode(model(), registry) || nodes().get(playedModule());
   const handle = () => get().handle;
+  // synth.armed follows the transport's own flag (armed-follow.js; review S1).
+  const { syncArmed, follow } = createArmedFollow(() => get().transport, () => cmp);
   const transport = () => {
     setupAudio();
-    return get().transport;
+    return follow(get().transport);
   };
   const model = () => handle().getModel();
   const nodes = () => panel.resolve(model());
@@ -85,7 +88,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const dispatch = (action) => {
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
-    else memory.note(model());
     return r;
   };
   /** A jack's friendly name ('VCO 1 Audio'), as its accessible name starts. */
@@ -95,30 +97,15 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const j = m && m.jacks.find((x) => x.port === port);
     return m && j ? `${m.label} ${j.label}` : String(id);
   };
-  const feedNames = (cuts) => {
-    const byId = new Map(model().graph.nodes.map((n) => [n.id, n]));
-    return [...new Set(cuts.map((e) => (byId.get(e.from.node) || { metadata: {} }).metadata.name
-      || e.from.node))].join(', ');
-  };
 
-  /**
-   * Insert the panel when the document has none: by itself when insertDecision allows it,
-   * else only from the Insert button (`explicit`); the notice names the Master feed it took.
-   */
-  function ensurePanel({ explicit = false } = {}) {
+  /** Insert the panel when the document has none (insert.js insertAction: by itself where
+   *  insertDecision allows it, else only `explicit`); the notice names the feed it took. */
+  function ensurePanel(opts) {
     if (present()) return true;
-    const m = model();
-    const { auto, cuts } = insertDecision(m, panel);
-    if (!auto && !explicit) {
-      say(`${SYNTH_TEXT.notInserted} ${SYNTH_TEXT.takes(feedNames(cuts))}`);
-      return false;
-    }
-    const names = cuts.length ? feedNames(cuts) : '';
-    const ys = m.graph.nodes.map((n) => n.position.y);
-    const at = { x: 0, y: (ys.length ? Math.max(...ys) : 0) + 240 };
-    const r = dispatch(panel.instantiate(m, { at }));
-    if (r.ok) say(names ? SYNTH_TEXT.took(names) : SYNTH_TEXT.inserted);
-    return r.ok;
+    const r = insertAction(model(), panel, opts);
+    const ok = !!r.action && dispatch(r.action).ok;
+    if (ok || !r.action) say(ok ? r.text : r.reason);
+    return ok;
   }
 
   // ------------------------------------------------------------------ controls
@@ -185,7 +172,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const jb = jackOf(b);
     if (!ja || !jb || ja.direction === jb.direction) return say(SYNTH_TEXT.direction, true);
     const [from, to] = ja.direction === 'out' ? [ja.id, jb.id] : [jb.id, ja.id];
-    const r = patchCable(model(), panel, from, to, { registry, memory });
+    const r = patchCable(model(), panel, from, to, { registry });
     if (r.reason) return say(r.reason, true);
     const done = dispatch(r.action);
     if (done.ok) say(`Patched ${jackName(from)} to ${jackName(to)}.`);
@@ -317,7 +304,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
         + 'text-gray-700 dark:text-gray-300"><p>This Studio document has no Synth panel.</p>'
         + (cuts.length ? `<p class="mt-2" data-osc="synth.insert-cuts">`
-          + `${esc(SYNTH_TEXT.takes(feedNames(cuts)))}</p>` : '')
+          + `${esc(SYNTH_TEXT.takes(feedNames(model(), cuts)))}</p>` : '')
         + '<button type="button" data-insert-panel="" class="mt-3 rounded-lg bg-primary-600 px-4 '
         + 'h-11 font-medium text-white focus:outline-none focus-visible:ring-2 '
         + `focus-visible:ring-primary-500">Insert the ${esc(panel.title)}</button></div>`;
@@ -349,7 +336,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
       + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
-      + (tab() === 'xy' ? xy.html() : '')
+      + xy.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
@@ -409,11 +396,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   function refresh() {
-    memory.note(model());
     dock.sync();
+    follow(get().transport);
     if (!cmp || cmp.workspace !== 'synth') return;
-    const t = get().transport;
-    cmp.synth.armed = !!(t && t.armed);
+    syncArmed();
     if (knob) updateKnob(knob.cid);
     else if (!cable) renderAll();
   }
@@ -497,6 +483,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!t) return;
     const d = t.dataset;
     if (d.engine) {
+      allOff();
       dock.unroute();
       showTab('engines', d.engine);
       say(`${panel.module(d.engine).label}: the keys play this engine.`);
@@ -527,12 +514,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       say(selected ? 'Cable selected: Delete removes it.' : 'Cable deselected.');
       renderBay();
     } else if (d.removeCable) {
-      const r = unpatch(model(), panel, d.removeCable, { memory });
+      const r = unpatch(model(), panel, d.removeCable);
       pending = null;
       if (r.reason) say(r.reason, true);
       else if (dispatch(r.action).ok) say('Cable removed; the normal is restored.');
     } else if (d.restoreNormal) {
-      const r = restoreNormals(model(), panel, d.restoreNormal, { memory });
+      const r = restoreNormals(model(), panel, d.restoreNormal);
       if (r.reason) say(r.reason);
       else dispatch(r.action);
     } else if (d.breakNormal) {
@@ -647,7 +634,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && selected) {
       e.preventDefault();
-      const r = unpatch(model(), panel, selected, { memory });
+      const r = unpatch(model(), panel, selected);
       selected = null;
       if (!r.reason) dispatch(r.action);
     }
@@ -701,56 +688,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // ------------------------------------------------------------------ notes
 
-  function noteOn(note, velocity) {
-    const t = transport();
-    if (!t || !ensurePanel()) return { ok: false, reason: 'no-audio' };
-    if (cmp && typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
-    if (!t.playing) {
-      const r = t.arm();
-      if (!r.ok) {
-        say(r.code === 'claim-refused' ? SYNTH_TEXT.refused : r.reason, true);
-        return { ok: false, reason: 'measurement' };
-      }
-      say(SYNTH_TEXT.armed);
-      if (cmp) cmp.synth.armed = !!t.armed;
-    }
-    const target = played();
-    if (!target) {
-      say(`${panel.module(playedModule()).label} was removed in Studio: Restore module first.`,
-        true);
-      return { ok: false, reason: 'removed' };
-    }
-    const r = t.live(target.id, { kind: 'on', note, velocity });
-    if (r && r.dropped) say(droppedText(target, r.dropped));
-    return r;
-  }
-
-  function noteOff(note) {
-    const t = get().transport;
-    const k = present() ? played() : null;
-    return t && k ? t.live(k.id, { kind: 'off', note }).ok : false;
-  }
-
-  /** Every note of every note source of the panel off (Escape, a tab change, MIDI all-off). */
-  function allOff() {
-    const t = get().transport;
-    if (!t || !present() || !t.playing) return 0;
-    let n = 0;
-    const all = ['keys', ...ENGINE_IDS, 'xy'].map((id) => nodes().get(id));
-    for (const x of new Set([...all, played()])) {
-      if (x) n += t.live(x.id, { kind: 'all-off' }).released || 0;
-    }
-    return n;
-  }
-
-  function disarm(reason) {
-    const t = get().transport;
-    if (!t || !t.armed) return Promise.resolve(null);
-    const p = t.disarm();
-    if (cmp) cmp.synth.armed = false;
-    if (reason) say(SYNTH_TEXT.disarmed);
-    return p;
-  }
+  const { noteOn, noteOff, allOff, disarm } = createSynthNotes({ get, transport, ensurePanel,
+    cmp: () => cmp, say, played, playedModule, present, nodes, panel, ENGINE_IDS, syncArmed });
 
   // ------------------------------------------------------------------ links
 
@@ -806,7 +745,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     synthInit() {
       cmp = this;
-      memory.note(model());
+      follow(get().transport);
       dock.sync();
       handle().subscribe(() => queueMicrotask(refresh));
       const el = document.querySelector('[data-osc="synth-view"]');
@@ -825,6 +764,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
           disarm(false);
         }
         if (ws === 'synth') {
+          syncArmed();
           ensurePanel();
           requestAnimationFrame(renderAll);
         }

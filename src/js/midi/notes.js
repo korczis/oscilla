@@ -8,8 +8,9 @@
 //
 // What a message does (any channel: omni; the key is input, channel and note):
 //   Note On (0x9n), velocity 1-127   a note at midiToFrequency(note, A4), level velocityLevel
-//   Note On, velocity 0; Note Off    releases that key with the Playground's release time;
-//     (0x8n)                         a key that is not sounding changes nothing
+//   Note On, velocity 0; Note Off    releases that key where its Note On sounded (the
+//     (0x8n)                         Playground's voices or the Synth panel), with that
+//                                    player's release; a key not sounding changes nothing
 //   CC 120 All Sound Off             every note fades within ESCAPE_RELEASE_S
 //   CC 123 All Notes Off             every note releases with its release time
 //   anything else (CC 64 sustain     ignored: not part of the first version (ADR 0058, V502 note)
@@ -70,18 +71,22 @@ export function parseMidiMessage(data) {
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,
   refused = () => {}, route = () => null } = {}) {
   let refusing = null;
-  // The sink each sounding note went to (21's R1): its off goes there even when the workspace,
-  // and with it route(), has changed since, so a Studio note never outlives a workspace switch.
-  const sunk = new Map();
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
+  // Where each held key sounds, fixed at its note-on: the Synth sink, or ENGINE (the
+  // Playground's note voices). Its note-off goes there, whatever route() answers by then, so a
+  // key held across a workspace switch is released where it sounds and never left sounding.
+  const ENGINE = 'engine';
+  const via = new Map();
 
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
+    const key = keyOf(source, channel, note);
     const sink = route(); // the Synth panel plays the note instead (K065), one path for all
     if (sink) {
-      sunk.set(keyOf(source, channel, note), sink);
+      via.set(key, sink);
       return sink.noteOn(note, velocity);
     }
+    via.set(key, ENGINE);
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = ownedBy();
     if (by) {
@@ -91,7 +96,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     }
     refusing = null;
     const s = settings() || {};
-    const result = engine.noteOn(keyOf(source, channel, note), {
+    const result = engine.noteOn(key, {
       freq: midiToFrequency(note, s.a4 > 0 ? s.a4 : 440),
       level: velocityLevel(velocity),
       wave: WAVEFORMS.includes(s.waveform) ? s.waveform : 'sine',
@@ -105,10 +110,11 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
   function noteOff(note, source = 0, channel = 0) {
     const key = keyOf(source, channel, note);
-    const sink = sunk.has(key) ? sunk.get(key) : route();
-    sunk.delete(key);
-    if (sink) return sink.noteOff(note);
-    return engine ? engine.noteOff(keyOf(source, channel, note)) : false;
+    const held = via.get(key);
+    via.delete(key);
+    const sink = held === undefined ? route() : held; // a key not held here: where it would be
+    if (sink && sink !== ENGINE) return sink.noteOff(note);
+    return engine ? engine.noteOff(key) : false;
   }
 
   return {
@@ -126,6 +132,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       } else if (e.kind === 'all-sound-off' || e.kind === 'all-notes-off') {
         const sink = route();
         if (sink) sink.allOff();
+        via.clear();
         engine.notesOff(e.kind === 'all-sound-off');
       }
       return e;
@@ -135,6 +142,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     silence() {
       const sink = route();
       const n = sink ? sink.allOff() : 0;
+      via.clear();
       return (engine ? engine.notesOff(true) : 0) + n;
     },
   };

@@ -120,6 +120,7 @@ const CONTRACT = [
   ['analysis.openInStudio', 'action', 'button'],
   ['studio.voice.lost', 'readout', 'ul'], ['studio.voice.replace', 'action', 'button'],
   ['studio.voice.keep', 'action', 'button'],
+  ['synth.keys-silent', 'readout', 'div'], ['synth.engine-elsewhere', 'readout', 'p'],
   ['studio.inspector.connect', 'open', 'button'], ['studio.inspector.savePatch', 'open', 'button'],
   ['studio.inspector.allowMic', 'action', 'button'],
   ['studio.inspector.limitNote', 'readout', 'p'],

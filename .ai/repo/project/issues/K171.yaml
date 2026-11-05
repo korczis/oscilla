@@ -1,0 +1,33 @@
+id: K171
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "The docked keyboard yields to the surface that owns the notes, so a pad is never under it on a phone"
+slug: the-docked-keyboard-yields-to-the-surface-that-owns-the-notes
+priority: p2
+profile: implementation
+objective: "Lands as feat(synth). Found in K167's screenshots at 390x844 (2026-11-03): on a phone the docked keyboard (src/js/midi/keyboard-ui.js, fixed at the bottom, its height in --osc-dock-h) takes about 40 % of the XY tab and hides the pad below the fold, so a pad that is the instrument is not playable at once. One rule in keyboard-ui.js decides the dock's state from which surface owns the notes, derived from the existing note owner (the Synth's noteTarget and the mounted pad's target, K167's mountSynthXy owner), never from a per-page flag: when a pad owns the notes on a coarse pointer under 768 px, the dock collapses to a one-line handle (its toggle in the K153 key registry, its state announced) that the user can expand; when the keys own the notes it docks as today. The rule lives in one place; the XY tab and the live landing's hero (oscilla-21's P012) both inherit it. Before: the dock covers the pad. After: the whole pad is in the first viewport with the keyboard handle below it."
+why: "Owner orders of 2026-11-03 (the OSCILLOPAD pack's phase 2 'pad and mobile UX: playable from the first open on a phone'; the live landing 'playable on a phone at once'); oscilla-21 asked for it as one rule in the dock rather than a fix in two surfaces and measures the result on the landing (P012)."
+scope:
+  - "src/js/midi/keyboard-ui.js"
+  - "src/js/synth/view/xy-wiring.js"
+  - "tests/unit/keyboard-dock-yield.test.mjs"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K167"
+acceptance_criteria:
+  - "tests/unit/keyboard-dock-yield.test.mjs, failing on the merge base: the dock state is a pure function of (note owner, pointer, width): a pad owning the notes on a coarse pointer under 768 px collapses it, the keys owning them dock it, a fine pointer or a wider screen docks it; changing the owner changes the state in one step."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a collapsed dock expanded by the user stays expanded until the owner changes; held notes are released when the dock collapses (through the note router's release path); no surface sets the dock state directly (a grep test)."
+  - "Browser: tests/browser/xy-pad.cjs at 390x844 in chromium and webkit (iPhone 13 and SE sizes): on the XY tab with the pad patched the whole pad is inside the first viewport, nothing covers it (elementFromPoint at its corners and centre is the pad), the keyboard handle is visible below it, the first tap on the pad sounds (engine analyser), and the handle expands the keys by tap and by keyboard; at 1536x1024 the dock is unchanged. Inside tests/browser/lib/suite.cjs with named until() deadlines (project.suite-harness, project.bounded-test-timing, project.a-phone-sounds)."
+  - "The pull request carries a reviewer's verdict (src/js/synth is guarded under review-verdict v2; project.review-verdict) and, as a feat change, a unit test that fails on the merge base (project.fail-first). Its chrome is Flowbite Pro utilities with no osc-* class token, legacy selector, inline style or stylesheet (project.ui-uses-flowbite-pro)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/keyboard-dock-yield.test.mjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03

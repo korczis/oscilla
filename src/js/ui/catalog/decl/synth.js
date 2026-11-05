@@ -229,4 +229,19 @@ export default [
     state: { none: 'it reports the live pad position only' },
     in: 'synth.xy',
   }),
+  defineComponent({
+    id: 'synth.keys-silent',
+    kind: 'readout',
+    label: 'The keys are silent',
+    docs: 'Says why the keys make no sound while the pad is patched, with Unpatch the pad.',
+    state: 'studio.model',
+    in: 'synth.xy',
+  }),
+  defineComponent({
+    id: 'synth.engine-elsewhere',
+    kind: 'readout',
+    label: 'The keys play another node',
+    docs: 'Says that the keys play a node chosen in Plays, not one of these engines.',
+    state: 'studio.model',
+  }),
 ];

@@ -59,9 +59,19 @@
 //                               the on-screen keys light a MIDI note while it sounds (K026);
 //                               starting the sequencer stops held notes, a Note On while it plays
 //                               is refused and said once, and after it stops a note sounds again
+//   midi-seam-sink              review of src/js/synth (S2): a stub Note On in the Playground,
+//                               then the Synth workspace, then its Note Off: the note-off frees
+//                               the Playground note (zero live oscillators, zero engine notes)
+//                               instead of reaching the Synth and leaving it sounding
 //   keyboard-everywhere         M086: the same A plays the Playground (a note voice), the Synth
 //                               panel and the Studio graph (its Keys node through the Studio
 //                               transport, no Playground voice), the keys docked in both
+//   keyboard-studio-held        K175, review S18 (af's criterion): A held on the Studio
+//                               keyboard (the Synth panel's Keys, the Studio transport), the
+//                               workspace switched to the Playground, then A up: the Studio
+//                               sink's held map is empty, the transport holds no live note
+//                               (its note census is idle) and the analyser falls below -70 dB
+//                               rel (peak). Fails on 447bb27b (the note keeps sounding)
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
@@ -877,6 +887,48 @@ async function seamNotes(browser, b, origin, url) {
   }
 }
 
+// midi-seam-sink (review of src/js/synth, S2): a note-off goes where its note-on sounded. A
+// Playground note held across a switch to the Synth workspace is released on the Playground
+// (before, the note-off was routed at release time to the Synth and the note kept sounding).
+async function seamSink(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-sink';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape'); // the dialog closes before any note sounds
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+    const ws = () => page.evaluate(() => window.OSCILLA.app.workspace);
+    const from = await ws();
+    await msg([0x90, 60, 100]);
+    const on = await heard(page, (m) => m.state === 'running' && m.live === 1 && m.notes === 1,
+      `${leg}: a Playground note sounds`);
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    await until(async () => (await ws()) === 'synth', { ms: STEP_MS,
+      what: `${leg}: the Synth workspace opens` });
+    const held = await heard(page, (m) => m.notes === 1 && m.live === 1,
+      `${leg}: the switch itself leaves the held note sounding`);
+    await msg([0x80, 60, 0]);
+    const off = await heard(page, (m) => m.notes === 0 && m.live === 0,
+      `${leg}: the note-off frees the Playground note`);
+    check(leg, id, 'a Playground note held across a switch to the Synth is released by its '
+      + 'Note Off on the Playground', from === 'playground' && !on.timedOut && !held.timedOut
+      && !off.timedOut && errors.length === 0,
+    JSON.stringify({ from, on: on.notes, held: held.notes, off, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
 // keyboard-everywhere (M086; the owner's report of 2026-11-03): the same computer key plays on
 // the Playground, the Synth and the Studio through the one keyboard component, and the Studio's
 // keys reach its graph (the Keys node, through the Studio transport), not the Playground voice.
@@ -973,6 +1025,61 @@ async function keyboardEverywhere(browser, b, origin, url) {
       + 'the dock, the status bar counted once)', fits(fitArmed) && fits(fitOff),
     JSON.stringify({ fitArmed, fitOff }));
     check(leg, id, 'no page error', errors.length === 0, JSON.stringify(errors));
+  } finally {
+    await context.close();
+  }
+}
+
+// keyboard-studio-held (K175, review S18; af's second-pass criterion): a key held on the
+// Studio keyboard across a workspace switch is released on the Studio node it played. The
+// run the Studio keys armed is not asserted here: leaving the Studio disarms it only with
+// S19's fix (K176), so the census read is the live notes', not the runtime's node count.
+const SILENT_PEAK = 10 ** (-70 / 20); // -70 dB rel
+async function keyboardStudioHeld(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keyboard-studio-held';
+  const { context, page, errors } = await openPage(browser, url, { also: { fn: audioProbe,
+    arg: {} } });
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w
+      && window.OSCILLA.app.kbdView === w, ws), { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+  };
+  // The Studio's keys play the Synth panel's Keys (its first notes node): the Synth inserts it.
+  const read = () => page.evaluate(() => {
+    const app = window.OSCILLA.app;
+    const sink = app.studioSink();
+    const tr = window.OSCILLA.studio.transport;
+    return { held: sink && typeof sink.heldNotes === 'function' ? sink.heldNotes() : null,
+      notes: tr ? tr.heldNotes() : null };
+  });
+  try {
+    await go('synth');
+    await until(() => page.evaluate(() => window.OSCILLA.app.synthDebug().present),
+      { ms: STEP_MS, what: `${leg}: the Synth panel is in the document` });
+    await go('studio');
+    const armed = await page.evaluate(() => window.OSCILLA.app.kbdArmedHere);
+    if (!armed) await page.locator('[data-osc="keyboard.arm"]').click();
+    await page.locator('[data-osc="keyboard.readout"]').click({ force: true });
+    await page.keyboard.down('KeyA');
+    const on = await heard(page, (x) => x.peak > 0.005, `${leg}: A held in the Studio sounds`);
+    const during = await read();
+    await go('playground');
+    await page.keyboard.up('KeyA');
+    const off = await heard(page, (x) => x.peak < SILENT_PEAK,
+      `${leg}: A up after the switch falls below -70 dB rel`);
+    const after = await until(async () => {
+      const r = await read();
+      return r.held && !r.held.length && r.notes && !r.notes.length && r;
+    }, { ms: STEP_MS, what: `${leg}: the Studio sink and the transport hold no note` })
+      .catch(read);
+    check(leg, id, 'a key held on the Studio keyboard across a switch to the Playground is '
+      + 'released on the Studio node: the sink and the transport hold no note, the analyser '
+      + 'below -70 dB rel', !on.timedOut && !off.timedOut
+      && JSON.stringify(during.held) === '[60]' && Array.isArray(after.held)
+      && !after.held.length && Array.isArray(after.notes) && !after.notes.length
+      && errors.length === 0,
+    JSON.stringify({ on: on.peak, off: off.peak, during, after, errors }));
   } finally {
     await context.close();
   }
@@ -1146,8 +1253,10 @@ async function main() {
             await measured(browser, b, origin, url, site);
             await seamChecks(browser, b, origin, url, site);
             await seamNotes(browser, b, origin, url);
+            await seamSink(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
+            await keyboardStudioHeld(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);
           }
