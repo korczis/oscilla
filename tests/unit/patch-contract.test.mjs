@@ -1,11 +1,18 @@
 // The patch contract coverage matrix (plan K164; the owner's program B of 2026-11-03): derived
 // from the registry, every port and parameter field declared, defaulted or missing; the table is
-// current; and the missing counts only fall (tests/unit/patch-contract-baseline.json).
+// current; and the missing counts only fall (tests/unit/patch-contract-baseline.json): against
+// the working tree's baseline, and against every committed version of it on the base branch's
+// first-parent chain (never a commit of the branch), so a change that raises a count in the
+// registry and in the baseline together is refused. Outside CI a missing history skips that
+// check; in CI (the unit job checks out with fetch-depth: 0) a git failure, a shallow clone, a
+// missing base or an empty history of a base that holds the baseline fails it.
 //
 //   node --test tests/unit/patch-contract.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -97,4 +104,120 @@ test('missing contract fields only fall (the ratchet)', () => {
   const stale = Object.entries(now).filter(([f, n]) => n < base[f]).map(([f, n]) =>
     `${f}: ${n} < ${base[f]} (lower the baseline)`);
   assert.deepEqual(stale, [], 'a count fell: lower its baseline entry in the same change');
+});
+
+test('missing contract fields only fall against every version of the baseline on the base', (t) => {
+  assert.equal(typeof pc.baselineHistory, 'function');
+  const history = pc.baselineHistory();
+  const gate = pc.historyGate(history, process.env.GITHUB_ACTIONS === 'true');
+  if (gate.verdict === 'fail') assert.fail(gate.reason);
+  if (gate.verdict === 'skip') { t.skip(gate.reason); return; }
+  if (gate.verdict === 'introduce') { t.diagnostic(gate.reason); return; }
+  const problems = pc.historyProblems(pc.missingCounts(pc.contractMatrix(NODE_REGISTRY)),
+    history.versions);
+  t.diagnostic(`${history.versions.length} committed version(s) of ${pc.BASELINE} on `
+    + `${history.base} from the fork ${history.fork} judged`);
+  assert.deepEqual(problems, [], 'a missing count rose above the base\'s history; declare the '
+    + `field instead:\n  ${problems.join('\n  ')}`);
+});
+
+test('mutation: a port without channels, its baseline raised too, is refused by history', () => {
+  assert.equal(typeof pc.historyProblems, 'function');
+  const defs = NODE_REGISTRY.list();
+  const [first, ...rest] = defs;
+  const raisedRegistry = fixture([{ ...first, outputs: [...first.outputs,
+    port({ id: 'extra', direction: 'out' })] }, ...rest]);
+  const now = pc.missingCounts(pc.contractMatrix(raisedRegistry));
+  const was = JSON.parse(readFileSync(`${ROOT}${pc.BASELINE}`, 'utf8')).counts;
+  assert.equal(now['port.channels'], was['port.channels'] + 1, 'the mutation raises the count');
+  const raisedBaseline = { ...now };
+  const grown = Object.entries(now).filter(([f, n]) => n > raisedBaseline[f]);
+  assert.deepEqual(grown, [], 'the working-tree ratchet alone lets it through');
+  assert.deepEqual(pc.historyProblems(now, [{ sha: 'main1', counts: was }]),
+    [`port.channels: ${now['port.channels']} missing, above ${was['port.channels']} at main1`,
+      ...['rate', 'monitor', 'compact', 'version'].map((f) =>
+        `port.${f}: ${now[`port.${f}`]} missing, above ${was[`port.${f}`]} at main1`)]);
+  assert.deepEqual(pc.historyProblems(was, [{ sha: 'main1', counts: was }]), [], 'equal passes');
+  const fewer = { ...was, 'port.channels': was['port.channels'] - 1 };
+  assert.deepEqual(pc.historyProblems(fewer, [{ sha: 'main1', counts: was }]), [], 'falls pass');
+  assert.deepEqual(pc.historyProblems(was, [{ sha: 'b2', counts: was },
+    { sha: 'a1', counts: fewer }]),
+  [`port.channels: ${was['port.channels']} missing, above ${fewer['port.channels']} at a1`],
+  'every earlier version binds, not only the newest');
+  const { 'port.channels': gone, ...dropped } = was;
+  assert.deepEqual(pc.historyProblems(dropped, [{ sha: 'a1', counts: was }]),
+    [`port.channels: ${gone} missing at a1, no longer counted`], 'debt never vanishes unfilled');
+  assert.deepEqual(pc.historyProblems({ ...was, 'port.new': 3 }, [{ sha: 'a1', counts: was }]),
+    [], 'a field no earlier version counted is new');
+});
+
+test('fixture: the history gate fails in CI without history, and skips only outside CI', () => {
+  assert.equal(typeof pc.historyGate, 'function');
+  assert.equal(pc.historyGate({ error: 'a shallow clone' }, true).verdict, 'fail');
+  assert.equal(pc.historyGate({ error: 'a shallow clone' }, false).verdict, 'skip');
+  assert.equal(pc.historyGate({ versions: [], baseHolds: true }, true).verdict, 'fail');
+  assert.equal(pc.historyGate({ versions: [], baseHolds: true }, false).verdict, 'skip');
+  assert.equal(pc.historyGate({ versions: [], baseHolds: false, base: 'main', fork: 'f' }, true)
+    .verdict, 'introduce');
+  assert.equal(pc.historyGate({ versions: [{ sha: 'a1', counts: {} }] }, true).verdict, 'judge');
+  assert.equal(pc.baseBranch({ GITHUB_BASE_REF: 'release' }), 'release');
+  assert.equal(pc.baseBranch({}), 'main');
+});
+
+test('fixture: only the base branch chain is judged, never the branch\'s own commits', (t) => {
+  assert.equal(typeof pc.baselineHistory, 'function');
+  const dir = mkdtempSync(path.join(tmpdir(), 'osc-patch-contract-history-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const git = (...args) => {
+    const r = spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid',
+      '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null', ...args],
+    { cwd: dir, encoding: 'utf8' });
+    assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  const commit = (files, message) => {
+    for (const [rel, text] of Object.entries(files)) {
+      spawnSync('mkdir', ['-p', path.dirname(path.join(dir, rel))]);
+      writeFileSync(path.join(dir, rel), text);
+    }
+    git('add', '-A');
+    git('commit', '-q', '-m', message);
+    return git('rev-parse', 'HEAD');
+  };
+  const at = (channels) => ({ [pc.BASELINE]: `${JSON.stringify({ note: 'n', counts: {
+    'port.channels': channels, 'param.live': 5 } }, null, 2)}\n` });
+  const judge = (counts) => {
+    const history = pc.baselineHistory({ root: dir, base: 'main' });
+    const gate = pc.historyGate(history, true);
+    return { gate: gate.verdict, history, problems: gate.verdict === 'judge'
+      ? pc.historyProblems(counts, history.versions) : [] };
+  };
+  git('init', '-q', '-b', 'main');
+  commit({ 'README.md': 'base\n' }, 'base without a baseline');
+  git('checkout', '-q', '-b', 'k164');
+  assert.equal(judge({ 'port.channels': 9 }).gate, 'introduce', 'the base holds none');
+  commit(at(9), 'the branch introduces the baseline');
+  git('checkout', '-q', 'main');
+  git('merge', '-q', '--no-ff', '--no-edit', 'k164');
+  git('checkout', '-q', '-b', 'raise');
+  const own = commit(at(10), 'a pull request raises the count in the registry and the baseline');
+  const raised = judge({ 'port.channels': 10, 'param.live': 5 });
+  assert.equal(raised.gate, 'judge');
+  assert.ok(!raised.history.versions.some((v) => own.startsWith(v.sha)), 'never its own commit');
+  assert.deepEqual(raised.problems,
+    [`port.channels: 10 missing, above 9 at ${raised.history.versions[0].sha}`]);
+  git('checkout', '-q', 'main');
+  commit({ 'README.md': 'the base moves on\n' }, 'base change');
+  git('checkout', '-q', 'raise');
+  git('merge', '-q', '--no-edit', 'main');
+  assert.equal(judge({ 'port.channels': 10, 'param.live': 5 }).problems.length, 1,
+    'merging the base does not make the branch\'s raise part of the base\'s history');
+  commit(at(8), 'it fills a field instead');
+  assert.deepEqual(judge({ 'port.channels': 8, 'param.live': 5 }).problems, []);
+  git('checkout', '-q', 'main');
+  git('merge', '-q', '--no-ff', '--no-edit', 'raise');
+  git('checkout', '-q', '-b', 'next');
+  assert.deepEqual(judge({ 'port.channels': 9, 'param.live': 5 }).problems.map((p) =>
+    p.replace(/ at \w+$/, '')), ['port.channels: 9 missing, above 8'],
+  'once landed, the lower count binds every later change');
 });
