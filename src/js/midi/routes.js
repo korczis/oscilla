@@ -15,11 +15,18 @@
 //             focus is inside one is the editor's, not a note (K178, census
 //             studio.connect.cancel.keyboard), or null
 //   yieldsTo  the surface that, while it owns the notes there, folds the docked keyboard to
-//             its handle on a phone (K171): the Synth's XY pad; null where the keys always dock
+//             its handle at every size (K171): the Synth's XY pad; null where the keys always
+//             dock
 //
 //   routeOf(workspace) -> its row (the Playground's for a workspace not listed)
-//   dockState({ route, owner, coarse, width, userExpanded }) -> 'docked' | 'collapsed'
+//   dockState({ route, owner, userExpanded }) -> 'docked' | 'collapsed'
 //             the one rule of the dock (K171), applied by midi/dock-yield.js alone
+//   keysShown({ workspace, tab }) -> whether the on-screen keys are drawn: not on the tab of
+//             the surface the dock yields to (the Synth's XY tab: the pad is the instrument
+//             there, the computer keys still play); the keyboard's kbdKeysShown reads it
+//   dockRoom({ pad, dockTop, ceil, gap }) -> { fits, by }
+//             where the owner's surface goes against the dock: whether it fits whole above
+//             the dock's top, and the scroll that puts it there (dock-yield.js reveal)
 
 export const KEY_ROUTES = Object.freeze({
   playground: Object.freeze({ plays: null, armed: true, leave: null, editors: null,
@@ -37,23 +44,51 @@ export const routeOf = (workspace) => KEY_ROUTES[workspace] || KEY_ROUTES.playgr
 export const armedDefaults = () => Object.fromEntries(Object.entries(KEY_ROUTES)
   .map(([ws, r]) => [ws, r.armed]));
 
-/** Below this width (CSS px) a coarse pointer is a phone: the dock may yield there. */
-export const DOCK_YIELD_BELOW = 768;
-
 /**
- * Whether the dock yields: the workspace's route names a surface that yields the dock, that
- * surface owns the notes (owner: the derived note owner, never a flag), and the pointer is
- * coarse on a viewport narrower than DOCK_YIELD_BELOW.
+ * Whether the dock yields: the workspace's route names a surface that yields the dock and that
+ * surface owns the notes (owner: the derived note owner, never a flag). At every size: the
+ * dock never covers the pad that plays the notes, at 1536 x 1024 as at 390 x 844 (the owner's
+ * screenshot of 2026-11-05), so neither the pointer nor the width enters the rule.
  */
-export function dockYields({ route, owner, coarse, width }) {
-  return !!(route && route.yieldsTo && owner === route.yieldsTo && coarse === true
-    && Number.isFinite(width) && width < DOCK_YIELD_BELOW);
+export function dockYields({ route, owner } = {}) {
+  return !!(route && route.yieldsTo && owner === route.yieldsTo);
 }
 
 /**
  * The dock's state, the one rule (K171): folded to its handle where it yields, unless the user
  * expanded it (the caller resets userExpanded when the owner changes); docked otherwise.
  */
-export function dockState({ route, owner, coarse, width, userExpanded = false }) {
-  return dockYields({ route, owner, coarse, width }) && !userExpanded ? 'collapsed' : 'docked';
+export function dockState({ route, owner, userExpanded = false } = {}) {
+  return dockYields({ route, owner }) && userExpanded !== true ? 'collapsed' : 'docked';
+}
+
+/** The tab each surface a route yields to is drawn on (the Synth's XY pad: its XY tab). */
+export const SURFACE_TAB = Object.freeze({ 'xy-pad': 'xy' });
+
+/**
+ * Whether the on-screen keys are drawn in a workspace's tab: not on the tab of the surface its
+ * route yields the dock to (the owner's OSCILLA-pad audit, S2: on the XY tab the pad is the
+ * instrument, so the dock holds no second one; the computer keys still play the notes).
+ */
+export function keysShown({ workspace, tab } = {}) {
+  const route = routeOf(workspace);
+  return !(route.yieldsTo && SURFACE_TAB[route.yieldsTo] === tab);
+}
+
+/**
+ * Where the owner's surface goes against the dock (viewport px, pure): pad { top, bottom } the
+ * surface's rect, dockTop the dock's top, ceil the top of the room (the scrolling ancestor's
+ * top, 0 for the page), gap the space kept above the dock. fits: the whole surface has room
+ * between ceil and the dock's top, so the pad and the keys are both shown; by: the least
+ * scroll that puts the surface's bottom above the dock's top (0 when it already is), or, where
+ * it does not fit, the scroll that puts its top at ceil. Unknown input: { fits: false, by: 0 }.
+ */
+export function dockRoom({ pad, dockTop, ceil = 0, gap = 8 } = {}) {
+  const n = [pad && pad.top, pad && pad.bottom, dockTop, ceil, gap];
+  if (!n.every(Number.isFinite) || pad.bottom < pad.top) return { fits: false, by: 0 };
+  const floor = dockTop - gap;
+  const fits = pad.bottom - pad.top <= floor - ceil;
+  let by = pad.bottom > floor ? pad.bottom - floor : 0;
+  if (pad.top - by < ceil) by = pad.top - ceil;
+  return { fits, by };
 }

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // OSCILLA Synth XY tab (plan K097, K167) on the built dist/index.html in chromium, firefox and
-// webkit, at 1536 x 1024 and 390 x 844 (touch). Every sound check reads the engine's analyser
-// after the safety chain or the runtime's own pad handle, never the DOM alone.
+// webkit, at 1536 x 1024, 1280 x 720 (x-dock-desktop) and 390 x 844 (touch). Every sound check
+// reads the engine's analyser after the safety chain or the runtime's own pad handle, never the
+// DOM alone.
 //
 //   node tests/browser/xy-pad.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
 //        [--only x-link,x-pointer]
@@ -57,11 +58,20 @@
 //              on the pad sounds (the engine's analyser, sampled every frame from before the
 //              tap, a tap of two input events: CDP touch in chromium, the pointer in webkit;
 //              its peak above -60 dB, a short note over the -70 dB silence line); the
-//              handle unfolds the keys and folds them again by tap, by Enter on the focused
-//              handle and by Alt+K (the key registry); a key held on the unfolded keys is
-//              released when they fold. Firefox: skipped (no coarse pointer)
-//   x-dock-desktop   (K171; 1536 px) on the patched XY tab the dock is unchanged: docked, its
-//              handle not shown, no part of it folded, the on-screen keys drawn
+//              handle unfolds the dock and folds it again by tap, by Enter on the focused
+//              handle and by Alt+K (the key registry), the pad whole above it each time and no
+//              on-screen keys shown on the XY tab (the Panel tab before shows them); a computer
+//              key held with the dock unfolded is released when it folds. Firefox: skipped (no
+//              coarse pointer)
+//   x-dock-desktop   (K171; 1536 x 1024 and 1280 x 720, the owner's screenshot of 2026-11-05: the
+//              dock covered the pad's lower part) on the XY tab with the pad patched into the
+//              voice (the pad owns the notes), with no scroll by the test, nothing covers the
+//              pad: elementFromPoint at its four corners, 2 px inside its rounded border, and its
+//              centre is the pad, never the dock; the dock is folded to its handle (aria-expanded false, the keys
+//              not drawn), the handle visible inside the viewport below the pad and the
+//              element at its centre; unfolded by Alt+K the pad stays whole above the dock (its
+//              height follows the room: 100dvh less the chrome and --osc-dock-h) and no on-screen
+//              keys show on the XY tab; Alt+K folds it again
 'use strict';
 
 const fs = require('node:fs');
@@ -92,11 +102,13 @@ const LAUNCH = {
 // engagement, stated; the other engines as they ship.
 const GESTURE_LAUNCH = { chromium: { args: ['--autoplay-policy=user-gesture-required'] },
   firefox: {}, webkit: {} };
-const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 },
+const SIZES = { desktop: { width: 1536, height: 1024 }, laptop: { width: 1280, height: 720 },
+  phone: { width: 390, height: 844 },
   'phone-first': { width: 390, height: 844 }, 'phone-first-se': { width: 375, height: 667 } };
-// A check's legs (one, or a list): K171 holds at the iPhone 13 and the iPhone SE sizes.
+// A check's legs (one, or a list): K171 holds at the iPhone 13 and the iPhone SE sizes, and at
+// 1536 x 1024 and 1280 x 720 with a mouse.
 const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-phone-first': 'phone-first',
-  'x-dock-yields': ['phone-first', 'phone-first-se'] };
+  'x-dock-yields': ['phone-first', 'phone-first-se'], 'x-dock-desktop': ['desktop', 'laptop'] };
 const PRESET_OF = { 'x-disabled-face': null }; // the tab as it opens, unpatched
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // an attack, a glide and the analyser's smoothing
@@ -555,7 +567,7 @@ function defineChecks() {
   // ---- K171: the docked keyboard yields to the pad that owns the notes
   const HANDLE = '[data-osc="keyboard.handle"]';
   /** The dock and the pad as the first viewport shows them, read without scrolling. */
-  const dockView = (page) => page.evaluate(() => {
+  const dockView = (page, IN = 8) => page.evaluate((IN) => {
     const dock = document.querySelector('[data-osc="keyboard"]');
     const handle = document.querySelector('[data-osc="keyboard.handle"]');
     const keys = document.querySelector('[data-osc="keyboard.keys"]');
@@ -564,9 +576,12 @@ function defineChecks() {
     const r = (el) => { const b = el.getBoundingClientRect(); return { top: b.top, bottom: b.bottom,
       left: b.left, right: b.right }; };
     const pad = s ? r(s) : null;
-    const IN = 8; // inside the pad's rounded border
-    const pts = pad ? [[pad.left + IN, pad.top + IN], [pad.right - IN, pad.top + IN],
-      [pad.left + IN, pad.bottom - IN], [pad.right - IN, pad.bottom - IN],
+    // IN px inside the pad's rounded border, on each corner's diagonal (a corner's own hit test
+    // follows its radius: 2 px in from the box's corner is outside an 8 px arc).
+    const rad = s ? parseFloat(getComputedStyle(s).borderTopLeftRadius) || 0 : 0;
+    const d = rad > IN ? rad - (rad - IN) / Math.SQRT2 : IN;
+    const pts = pad ? [[pad.left + d, pad.top + d], [pad.right - d, pad.top + d],
+      [pad.left + d, pad.bottom - d], [pad.right - d, pad.bottom - d],
       [(pad.left + pad.right) / 2, (pad.top + pad.bottom) / 2]] : [];
     const hits = pts.map(([x, y]) => {
       const e = document.elementFromPoint(x, y);
@@ -577,17 +592,30 @@ function defineChecks() {
       expanded: handle ? handle.getAttribute('aria-expanded') : null,
       keys: shown(keys), folded: [...dock.children]
         .filter((c) => c.hidden && !c.hasAttribute('data-dock-keep')).length,
-      held: window.OSCILLA.app.kbdHeld, disabled: s ? s.getAttribute('aria-disabled') : null };
-  });
+      held: window.OSCILLA.app.kbdHeld, disabled: s ? s.getAttribute('aria-disabled') : null,
+      handleHit: shown(handle) ? (() => {
+        const b = handle.getBoundingClientRect();
+        const e = document.elementFromPoint((b.left + b.right) / 2, (b.top + b.bottom) / 2);
+        return !!e && handle.contains(e);
+      })() : false, dockTop: dock.getBoundingClientRect().top };
+  }, IN);
   const inView = (v) => !!v.pad && v.pad.top >= 0 && v.pad.bottom <= v.vh && v.pad.left >= 0
     && v.pad.right <= v.vw && v.hits.length === 5 && v.hits.every(Boolean);
-  async function dockIs(page, want, what) {
+  // On the XY tab the pad is the instrument: no on-screen keys show, folded or unfolded (the
+  // computer keys still play); unfolded, the pad stays whole above the dock (its height
+  // follows the room).
+  // whole: false where the test itself moved the focus (and so the page) since the last unfold.
+  async function dockIs(page, want, what, { IN = 8, whole = true } = {}) {
     let v = null;
-    await until(async () => {
-      v = await dockView(page);
-      return v.state === want && v.expanded === String(want !== 'collapsed')
-        && v.keys === (want !== 'collapsed');
-    }, { ms: SOUND_MS, what });
+    try {
+      await until(async () => {
+        v = await dockView(page, IN);
+        return v.state === want && v.expanded === String(want !== 'collapsed') && !v.keys
+          && (!whole || (inView(v) && v.pad.bottom <= v.dockTop));
+      }, { ms: SOUND_MS, what });
+    } catch (e) {
+      throw new Error(`${e.message}; last ${JSON.stringify(v)}`);
+    }
     return v;
   }
 
@@ -662,13 +690,13 @@ function defineChecks() {
     await page.locator('[data-xy-surface]').focus();
     await page.keyboard.press('Alt+KeyK');
     const keyed = await dockIs(page, 'docked', 'Alt+K (the key registry) unfolds the keys');
-    // A key held on the unfolded keys is released when they fold.
+    // A computer key held while the dock is unfolded is released when it folds.
     await page.locator('#osc-synth-tab-xy').focus();
     await page.keyboard.down('KeyA');
     await until(async () => !!(await dockView(page)).held, { ms: SOUND_MS,
-      what: 'the computer key A holds a note on the unfolded keys' });
+      what: 'the computer key A holds a note with the dock unfolded' });
     await page.keyboard.press('Alt+KeyK');
-    const folded = await dockIs(page, 'collapsed', 'Alt+K folds the keys');
+    const folded = await dockIs(page, 'collapsed', 'Alt+K folds the dock', { whole: false });
     await until(async () => !(await dockView(page)).held, { ms: SOUND_MS,
       what: 'folding the keys released the held note' });
     await page.keyboard.up('KeyA');
@@ -676,13 +704,33 @@ function defineChecks() {
       tapped: tapped.state, keyed: keyed.state, folded: folded.folded };
   });
 
-  def('x-dock-desktop', async ({ page }) => {
+  def('x-dock-desktop', async ({ page, sizeName }) => {
+    // The pad patched by the XY lead preset owns the notes: the dock folds at this size too.
     let v = null;
-    await until(async () => {
-      v = await dockView(page);
-      return v.disabled === 'false' && v.state === 'docked';
-    }, { ms: SOUND_MS, what: 'the patched XY tab at 1536 px reads the dock state' });
-    return { ok: v.keys && !v.handle && v.folded === 0 && v.expanded === 'true', v };
+    try {
+      await until(async () => {
+        v = await dockView(page, 2);
+        return v.disabled === 'false' && v.state === 'collapsed' && inView(v) && !!v.handle;
+      }, { ms: SOUND_MS, what: `the patched pad is whole at ${sizeName}, the dock folded` });
+    } catch (e) {
+      return { ok: false, detail: e.message, v };
+    }
+    const ok = v.expanded === 'false' && !v.keys && v.folded > 0 && v.handleHit
+      && v.handle.top >= v.pad.bottom && v.handle.bottom <= v.vh;
+    if (!ok) {
+      return { ok, detail: 'the dock covers the pad or hides its handle', vw: v.vw, vh: v.vh,
+        pad: v.pad, handle: v.handle, hits: v.hits, keys: v.keys };
+    }
+    // Unfolded by the user (Alt+K, the key registry): the pad stays whole above the dock and no
+    // on-screen keys show on the XY tab; Alt+K folds it again.
+    await page.locator('[data-xy-surface]').focus();
+    await page.keyboard.press('Alt+KeyK');
+    const open = await dockIs(page, 'docked',
+      `Alt+K unfolds the dock at ${sizeName}, the pad whole`, { IN: 2 });
+    await page.keyboard.press('Alt+KeyK');
+    await dockIs(page, 'collapsed', `Alt+K folds it at ${sizeName}`, { IN: 2 });
+    return { ok, vw: v.vw, vh: v.vh, pad: v.pad, handle: v.handle, open: { pad: open.pad,
+      dockTop: open.dockTop } };
   });
   return checks;
 }
@@ -700,7 +748,7 @@ async function runLeg(browserName, sizeName, base) {
     for (const { name, fn } of defineChecks()) {
       if (!runsAt(name, sizeName)) continue;
       const context = await browser.newContext({ viewport: SIZES[sizeName],
-        hasTouch: sizeName !== 'desktop',
+        hasTouch: sizeName.startsWith('phone'),
         // Firefox has no mobile emulation (Playwright refuses isMobile there).
         ...(first && browserName !== 'firefox' ? { isMobile: true } : {}) });
       const errors = [];

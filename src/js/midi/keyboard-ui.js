@@ -20,7 +20,7 @@ import {
 } from './keyboard.js';
 import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
-import { armedDefaults, routeOf } from './routes.js';
+import { armedDefaults, keysShown, routeOf } from './routes.js';
 import { mountDockYield } from './dock-yield.js';
 
 export const KEYBOARD_REFUSED = Object.freeze({
@@ -120,9 +120,12 @@ export function createKeyboardUi({ win = window } = {}) {
       return this.kbdView === 'synth' || this.kbdView === 'studio';
     },
     /** The on-screen keys show wherever they play; in the Studio only while armed, so the
-     *  disarmed dock is one row and the graph keeps the height (the owner's report). */
+     *  disarmed dock is one row and the graph keeps the height (the owner's report); not on
+     *  the Synth's XY tab, where the pad is the instrument (routes.js keysShown, K171). */
     get kbdKeysShown() {
-      return this.kbdView !== 'studio' || this.kbdArmedHere;
+      const tab = this.synth && this.synth.tab;
+      return keysShown({ workspace: this.kbdView, tab })
+        && (this.kbdView !== 'studio' || this.kbdArmedHere);
     },
     get kbdArmedHere() {
       const v = this.kbdView;

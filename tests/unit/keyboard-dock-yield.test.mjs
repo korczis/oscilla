@@ -1,8 +1,10 @@
 // K171: the docked keyboard yields to the surface that owns the notes, so a pad is never under
-// it on a phone. One rule (src/js/midi/routes.js dockState) decides the dock's state from the
-// workspace's route (its yieldsTo), the note owner, the pointer and the width; the note owner is
-// derived from the claims of the mounted surfaces (the XY pad's mount claims the notes while it
-// is patched into the voice); src/js/midi/dock-yield.js alone applies the rule, and only
+// it, on a phone or at 1536 x 1024 (the owner's screenshot of 2026-11-05). One rule
+// (src/js/midi/routes.js dockState) decides the dock's state from the workspace's route (its
+// yieldsTo) and the note owner, at every size and pointer; routes.js dockRoom says where the
+// pad goes against the dock (whole above it where it fits, its top at the top else); the note
+// owner is derived from the claims of the mounted surfaces (the XY pad's mount claims the notes
+// while it is patched into the voice); src/js/midi/dock-yield.js alone applies the rule, and only
 // src/js/midi/keyboard-ui.js mounts it. The handle's key is bound through the one key registry.
 //
 //   node --test tests/unit/keyboard-dock-yield.test.mjs
@@ -22,50 +24,160 @@ const SYNTH = () => routes.KEY_ROUTES.synth;
 
 // ---------------------------------------------------------------- the rule, pure
 
-test('the rule: a pad owning the notes on a coarse pointer under 768 px folds the dock', () => {
+test('the rule: a pad owning the notes folds the dock at every size and pointer', () => {
   assert.equal(typeof routes.dockState, 'function', 'routes.js exports dockState');
   assert.equal(SYNTH().yieldsTo, 'xy-pad', "the Synth's route yields to its XY pad");
   const owners = ['xy-pad', null, 'keys', 'landing-pad'];
-  const widths = [0, 320, 375, 390, 767, 767.98, 768, 820, 1024, 1536];
+  const widths = [0, 320, 375, 390, 767, 767.98, 768, 820, 1024, 1280, 1536, 2560, NaN];
   let n = 0;
   for (const ws of ['synth', 'studio', 'playground', 'measure']) {
     const route = routes.routeOf(ws);
     for (const owner of owners) {
-      for (const coarse of [true, false]) {
+      for (const coarse of [true, false, undefined]) {
         for (const width of widths) {
           for (const userExpanded of [false, true]) {
-            const want = ws === 'synth' && owner === 'xy-pad' && coarse && width < 768
-              && !userExpanded ? 'collapsed' : 'docked';
-            assert.equal(routes.dockState({ route, owner, coarse, width, userExpanded }), want,
-              JSON.stringify({ ws, owner, coarse, width, userExpanded }));
+            // Neither the pointer nor the width enters the rule: the dock never covers the pad.
+            const want = ws === 'synth' && owner === 'xy-pad' && !userExpanded
+              ? 'collapsed' : 'docked';
+            const input = { route, owner, coarse, width, userExpanded };
+            assert.equal(routes.dockState(input), want, JSON.stringify(input));
+            assert.equal(routes.dockYields(input), ws === 'synth' && owner === 'xy-pad',
+              JSON.stringify(input));
             n += 1;
           }
         }
       }
     }
   }
-  assert.equal(n, 4 * 4 * 2 * 10 * 2);
+  assert.equal(n, 4 * 4 * 3 * 13 * 2);
 });
 
-test('the rule: the keys owning the notes, a fine pointer or a wider screen dock it', () => {
+test('the rule: the keys owning the notes dock it; the desktop and the phone fold alike', () => {
   const route = SYNTH();
-  const phone = { route, coarse: true, width: 390 };
-  assert.equal(routes.dockState({ ...phone, owner: 'xy-pad' }), 'collapsed');
-  assert.equal(routes.dockState({ ...phone, owner: null }), 'docked', 'the keys own the notes');
-  assert.equal(routes.dockState({ ...phone, owner: 'xy-pad', coarse: false }), 'docked');
-  assert.equal(routes.dockState({ ...phone, owner: 'xy-pad', width: 768 }), 'docked');
-  // Changing the owner changes the state in one step, both ways.
-  assert.equal(routes.dockState({ ...phone, owner: 'xy-pad' }), 'collapsed');
-  assert.equal(routes.dockState({ ...phone, owner: null }), 'docked');
-  // Unknown or missing inputs never fold the dock.
-  for (const bad of [{ ...phone, owner: 'xy-pad', width: NaN }, { ...phone, owner: 'xy-pad',
-    coarse: 'yes' }, { ...phone, owner: 'xy-pad', route: null }, { coarse: true, width: 390,
-    owner: 'xy-pad' }, { ...phone, owner: undefined, route: { yieldsTo: undefined } }]) {
+  for (const [width, coarse] of [[390, true], [375, true], [1280, false], [1536, false]]) {
+    const at = { route, coarse, width };
+    assert.equal(routes.dockState({ ...at, owner: 'xy-pad' }), 'collapsed', `${width} px`);
+    assert.equal(routes.dockState({ ...at, owner: null }), 'docked', 'the keys own the notes');
+    assert.equal(routes.dockState({ ...at, owner: 'xy-pad', userExpanded: true }), 'docked',
+      'the user unfolded it');
+    // Changing the owner changes the state in one step, both ways.
+    assert.equal(routes.dockState({ ...at, owner: 'xy-pad' }), 'collapsed');
+    assert.equal(routes.dockState({ ...at, owner: null }), 'docked');
+  }
+  // Unknown or missing routes and owners never fold the dock; only a true expansion unfolds it.
+  for (const bad of [{ route: null, owner: 'xy-pad' }, { owner: 'xy-pad' }, {},
+    { route, owner: undefined }, { route: { yieldsTo: undefined }, owner: undefined },
+    { route: { yieldsTo: null }, owner: null }]) {
     assert.equal(routes.dockState(bad), 'docked', JSON.stringify(bad));
   }
-  assert.equal(routes.dockYields({ ...phone, owner: 'xy-pad' }), true);
-  assert.equal(routes.dockYields({ ...phone, owner: 'xy-pad', userExpanded: true }), true,
+  assert.equal(routes.dockState(), 'docked');
+  assert.equal(routes.dockState({ route, owner: 'xy-pad', userExpanded: 'yes' }), 'collapsed');
+  assert.equal(routes.dockYields({ route, owner: 'xy-pad', userExpanded: true }), true,
     'the user expanding it does not end the yield: the handle stays');
+});
+
+test('dockRoom: the pad whole above the dock where it fits, its top at the top else', () => {
+  assert.equal(typeof routes.dockRoom, 'function', 'routes.js exports dockRoom');
+  let n = 0;
+  for (const ceil of [0, 56, 120]) {
+    for (const gap of [0, 8]) {
+      for (const dockTop of [380, 600, 680, 980]) {
+        for (const top of [-500, -40, 0, 56, 130, 300, 700, 1200]) {
+          for (const h of [0, 120, 300, 420, 560, 900]) {
+            const pad = { top, bottom: top + h };
+            const { fits, by } = routes.dockRoom({ pad, dockTop, ceil, gap });
+            const floor = dockTop - gap;
+            const at = JSON.stringify({ pad, dockTop, ceil, gap, fits, by });
+            assert.equal(fits, h <= floor - ceil, `fits iff the room holds the pad: ${at}`);
+            const t = top - by;
+            const b = top + h - by;
+            if (fits) {
+              assert.ok(t >= ceil && b <= floor, `after the scroll the pad is whole: ${at}`);
+              const inside = top >= ceil && top + h <= floor;
+              if (inside) assert.equal(by, 0, `a pad already whole does not move: ${at}`);
+              else assert.ok(t === ceil || b === floor, `the least scroll: ${at}`);
+            } else {
+              assert.equal(t, ceil, `a pad taller than the room shows its top: ${at}`);
+            }
+            n += 1;
+          }
+        }
+      }
+    }
+  }
+  assert.equal(n, 3 * 2 * 4 * 8 * 6);
+  // The sizes the browser check holds (a 420 px pad under a 56 px bar).
+  const desk = (vh) => routes.dockRoom({ pad: { top: 200, bottom: 620 }, dockTop: vh - 60,
+    ceil: 56 });
+  assert.deepEqual(desk(1024), { fits: true, by: 0 }, '1536 x 1024: folded, nothing moves');
+  assert.deepEqual(desk(720), { fits: true, by: 0 }, '1280 x 720: folded, nothing moves');
+  assert.deepEqual(routes.dockRoom({ pad: { top: 200, bottom: 620 }, dockTop: 500, ceil: 56 }),
+    { fits: true, by: 128 }, 'unfolded where both fit: the pad moves up above the keys');
+  assert.deepEqual(routes.dockRoom({ pad: { top: 200, bottom: 620 }, dockTop: 400, ceil: 56 }),
+    { fits: false, by: 144 }, 'unfolded where both do not fit: the pad top at the top');
+  for (const bad of [{}, { pad: null, dockTop: 500 }, { pad: { top: 0, bottom: NaN },
+    dockTop: 500 }, { pad: { top: 10, bottom: 0 }, dockTop: 500 }, { pad: { top: 0,
+    bottom: 10 } }]) {
+    assert.deepEqual(routes.dockRoom(bad), { fits: false, by: 0 }, JSON.stringify(bad));
+  }
+  assert.deepEqual(routes.dockRoom(), { fits: false, by: 0 });
+});
+
+test('keysShown: no on-screen keys on the tab of the surface the dock yields to', async () => {
+  assert.equal(typeof routes.keysShown, 'function', 'routes.js exports keysShown');
+  assert.equal(routes.SURFACE_TAB[SYNTH().yieldsTo], 'xy', 'the XY pad is drawn on its XY tab');
+  for (const workspace of ['synth', 'studio', 'playground', 'measure', undefined]) {
+    for (const tab of ['xy', 'panel', 'sound', undefined, null]) {
+      const want = !(workspace === 'synth' && tab === 'xy');
+      assert.equal(routes.keysShown({ workspace, tab }), want, JSON.stringify({ workspace, tab }));
+    }
+  }
+  assert.equal(routes.keysShown(), true);
+  // The keyboard's kbdKeysShown reads it (the Studio's armed-only rule kept); the computer keys
+  // stay armed: only the drawing goes.
+  const { createKeyboardUi } = await import('../../src/js/midi/keyboard-ui.js');
+  const ui = createKeyboardUi({ win: {} });
+  const at = (workspace, tab, armed = true) => {
+    const c = Object.defineProperties({}, Object.getOwnPropertyDescriptors(ui));
+    c.workspace = workspace;
+    c.synth = { tab };
+    c.kbdArmed = { ...c.kbdArmed, [workspace]: armed };
+    return c;
+  };
+  assert.equal(at('synth', 'xy').kbdKeysShown, false, "the Synth's XY tab draws no keys");
+  assert.equal(at('synth', 'xy').kbdArmedHere, true, 'the computer keys still play there');
+  assert.equal(at('synth', 'panel').kbdKeysShown, true);
+  assert.equal(at('playground', 'xy').kbdKeysShown, true);
+  assert.equal(at('studio', 'xy').kbdKeysShown, true);
+  assert.equal(at('studio', 'xy', false).kbdKeysShown, false, 'the disarmed Studio, as before');
+});
+
+test("the pad's height follows the room: 100dvh less the chrome and the dock's band", () => {
+  const src = readFileSync(path.join(ROOT, 'src/js/ui/kinds/xy-pad.js'), 'utf8');
+  assert.ok(src.includes(
+    "'max-h-[calc(100dvh_-_var(--osc-chrome-h,0px)_-_var(--osc-dock-h,0px)_-_0.5rem)]'"),
+  'one class string the build scans: the room above the dock caps the pad');
+  assert.match(src, /'h-56 min-h-32 sm:h-72 '/, 'its size where the room allows, 8rem at least');
+  const dy = readFileSync(path.join(ROOT, 'src/js/midi/dock-yield.js'), 'utf8');
+  assert.match(dy, /setProperty\('--osc-chrome-h'/, 'dock-yield.js measures the chrome');
+  // roomTop: the scroller's top, below a bar stuck there over the pad's column, where pinned.
+  const box = (top, bottom, left = 0, right = 390) => ({ top, bottom, left, right,
+    height: bottom - top });
+  const bar = { b: box(385, 445), cs: { position: 'sticky', top: '0px' } };
+  const side = { b: box(378, 1944, 1111, 1511), cs: { position: 'sticky', top: '16px' } };
+  const doc = { body: {}, scrollingElement: {}, documentElement: {} };
+  const main = { getBoundingClientRect: () => box(240, 787), scrollHeight: 2000,
+    clientHeight: 547, parentElement: doc.body,
+    querySelectorAll: () => [bar, side].map((x) => ({ getBoundingClientRect: () => x.b,
+      contains: () => false, cs: x.cs })) };
+  const el = { isConnected: true, ownerDocument: doc, parentElement: main,
+    getBoundingClientRect: () => box(493, 717, 36, 354) };
+  const win = { getComputedStyle: (e) => (e === main ? { overflowY: 'auto' }
+    : e.cs || { overflowY: 'visible' }) };
+  assert.equal(yieldMod.roomTop(win, el), 300, 'the main at 240 px, its 60 px chip bar pinned');
+  side.b = box(378, 1944, 0, 390); // a bar over the pad's column counts, a side bay does not
+  assert.equal(yieldMod.roomTop(win, el), 240 + 16 + 1566);
+  assert.equal(yieldMod.roomTop(win, null), 0);
 });
 
 // ---------------------------------------------------------------- the state machine
@@ -146,9 +258,18 @@ test('a dock the user expanded stays expanded until the owner changes', () => {
   assert.equal(r.ctl.state, 'docked');
 });
 
-test('a fine pointer, a wide screen, another workspace or another home keep the dock', () => {
-  for (const [view, why] of [[{ coarse: false }, 'a fine pointer'],
-    [{ width: 1024 }, 'a wide screen'], [{ workspace: 'studio' }, 'the Studio'],
+test('the pad folds the dock at every size; another workspace or home keeps it', () => {
+  for (const [view, why] of [[{ coarse: false, width: 1536 }, 'a fine pointer at 1536 px'],
+    [{ coarse: false, width: 1280 }, 'a fine pointer at 1280 px'],
+    [{ width: 1024 }, 'a coarse pointer at 1024 px'], [{ width: 375 }, 'the SE size']]) {
+    const r = rig(view);
+    r.ctl.claim(PAD);
+    r.flush();
+    assert.equal(r.ctl.state, 'collapsed', why);
+    assert.equal(r.ctl.yields, true, `${why}: the handle is shown`);
+    assert.equal(r.releases(), 1, why);
+  }
+  for (const [view, why] of [[{ workspace: 'studio' }, 'the Studio'],
     [{ workspace: 'playground' }, 'the Playground']]) {
     const r = rig(view);
     r.ctl.claim(PAD);
@@ -172,6 +293,63 @@ test('a fine pointer, a wide screen, another workspace or another home keep the 
   s.ctl.update('workspace');
   s.flush();
   assert.equal(s.ctl.state, 'collapsed');
+});
+
+/** A DOM just big enough for mountDockYield: the dock's top follows its state. */
+function fakeDom({ vh = 1024, folded = vh - 60, unfolded = vh - 400, pad = [200, 620] } = {}) {
+  const page = { scrollTop: 0 };
+  const listeners = {};
+  const win = { innerHeight: vh, CustomEvent: class {}, getComputedStyle: () => ({
+    overflowY: 'visible', position: 'fixed' }), addEventListener: (t, f) => {
+    (listeners[t] = listeners[t] || []).push(f); } };
+  const doc = { body: {}, scrollingElement: page, documentElement: page, activeElement: null };
+  const el = (tag) => {
+    const attrs = new Map();
+    const node = { tag, hidden: false, children: [], className: '', innerHTML: '',
+      textContent: '', classList: { toggle() {} }, ownerDocument: doc, isConnected: true,
+      setAttribute: (k, v) => attrs.set(k, String(v)), getAttribute: (k) => attrs.get(k) ?? null,
+      hasAttribute: (k) => attrs.has(k), addEventListener: (t, f) => { node[`on${t}`] = f; },
+      querySelector: () => null, focus() {}, contains: (x) => node.children.includes(x),
+      prepend: (...xs) => node.children.unshift(...xs), getBoundingClientRect: () => ({}) };
+    return node;
+  };
+  doc.createElement = el;
+  const dock = el('div');
+  dock.children.push(el('div')); // the keys
+  dock.getBoundingClientRect = () => ({ top: dock.getAttribute('data-dock-state') === 'collapsed'
+    ? folded : unfolded });
+  const surface = el('div');
+  surface.parentElement = doc.body;
+  surface.getBoundingClientRect = () => ({ top: pad[0] - page.scrollTop,
+    bottom: pad[1] - page.scrollTop });
+  return { win, doc, dock, surface, page, listeners };
+}
+
+test('unfolded by the user, the pad goes above the keys; folded, nothing moves', async () => {
+  for (const [vh, unfolded, want, why] of [
+    [1024, 1024 - 360, 0, '1536 x 1024: the pad and the keys both fit, the pad already above'],
+    [720, 720 - 260, 168, '1280 x 720: both fit once the pad moves up above the keys'],
+    [844, 844 - 480, 200, '390 x 844: they do not fit, the pad top goes to the top']]) {
+    const d = fakeDom({ vh, unfolded, pad: [200, 620] });
+    const cmp = { workspace: 'synth' };
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp, dock: d.dock,
+      release: () => 0 });
+    ctl.claim({ ...PAD, el: d.surface });
+    ctl.update('init');
+    await Promise.resolve(); // the claims settle
+    assert.equal(ctl.state, 'collapsed', why);
+    assert.equal(d.page.scrollTop, 0, `${why}: folded, the pad is whole above the handle`);
+    assert.equal(ctl.toggle(), true);
+    assert.equal(ctl.state, 'docked');
+    assert.equal(d.page.scrollTop, want, why);
+    const r = d.surface.getBoundingClientRect();
+    const room = routes.dockRoom({ pad: r, dockTop: unfolded, ceil: 0 });
+    if (room.fits) assert.ok(r.bottom <= unfolded - 8, `${why}: the keys do not cover it`);
+    else assert.equal(r.top, 0, why);
+    assert.equal(ctl.toggle(), true);
+    assert.equal(ctl.state, 'collapsed');
+    assert.equal(d.page.scrollTop, want, `${why}: a fold by the user moves nothing`);
+  }
 });
 
 test('what the status line says of each state', () => {

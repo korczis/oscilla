@@ -1,7 +1,8 @@
 // The docked keyboard yields to the surface that owns the notes (plan K171): on a phone the
-// Synth's dock took about 40 % of the XY tab and hid the pad below the fold. One rule decides the
-// dock's state, routes.js dockState, from the workspace's route (its yieldsTo), the note owner,
-// the pointer and the width; this module is the only place that applies it, and only
+// Synth's dock took about 40 % of the XY tab and hid the pad below the fold, and at 1536 x 1024
+// it covered the pad's lower part (the owner's screenshot of 2026-11-05). One rule decides the
+// dock's state at every size, routes.js dockState, from the workspace's route (its yieldsTo) and
+// the note owner; this module is the only place that applies it, and only
 // midi/keyboard-ui.js mounts it. No surface sets the dock's state: a surface's mount says only
 // whether it owns the notes (claimNotes), and the owner is derived from those claims.
 //
@@ -14,18 +15,18 @@
 //     made here so src/index.html carries nothing; folded, every other child of the dock is
 //     hidden, held notes are released through the keyboard's own release path, the band the
 //     dock covers is measured again (--osc-dock-h) and the owner's surface is brought into view
-//     above the handle (reveal).
+//     above the handle (reveal); unfolded by the user, the surface is brought above the dock
+//     where it fits there whole (routes.js dockRoom), else its top to the top of the room.
 //
 // The user's expansion stays until the owner changes (the owner, not a re-mount of the same
 // surface: claims made and dropped within one task settle before the rule is read).
 
-import { dockState, dockYields, routeOf } from './routes.js';
+import { dockRoom, dockState, dockYields, routeOf } from './routes.js';
 
 export const NOTES_EVENT = 'osc:notes';
 /** The handle's key (bound in ui/keys/clients.js through the one key registry). */
 export const DOCK_KEY = 'Alt+KeyK';
 const OWNER_NAMES = Object.freeze({ 'xy-pad': 'the XY pad' });
-const COARSE = '(pointer: coarse)';
 
 const LIVE = new WeakMap(); // window -> Map(mount id -> claim): a dock mounted later reads them
 
@@ -52,7 +53,7 @@ export function dockSentence(state, { yields, owner, why }) {
 }
 
 /**
- * read()  -> { workspace, coarse, width }
+ * read()  -> { workspace }
  * apply(state, { yields, why, owner, el, first })   draws a changed state
  * release()  lets go of every note the keys hold
  * defer(fn)  runs fn once the current task's claims settle (default queueMicrotask)
@@ -80,8 +81,7 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
       owner = now;
       expanded = false;
     }
-    const input = { route: routeOf(v.workspace), owner, coarse: v.coarse, width: v.width,
-      userExpanded: expanded };
+    const input = { route: routeOf(v.workspace), owner, userExpanded: expanded };
     const next = dockState(input);
     const y = dockYields(input);
     if (next === state && y === yields) return state;
@@ -94,7 +94,7 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
   }
 
   function schedule(why) {
-    // An owner change outranks a viewport or workspace change in what the state says.
+    // An owner change outranks a workspace change in what the state says.
     if (pending) {
       if (why === 'owner') pending = why;
       return;
@@ -131,23 +131,52 @@ const CHEVRON = '<svg class="h-3 w-3 shrink-0 transition-transform" aria-hidden=
   + 'xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 10 6"><path stroke="currentColor" '
   + 'stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 5 4-4 4 4"/></svg>';
 
-/**
- * Bring the owner's surface into view above the folded dock: its scrolling ancestor moves the
- * least that puts the surface's bottom just above the dock's top, or its top at the
- * ancestor's top when the surface is taller than the room left.
- */
-export function reveal(win, el, dock, gap = 8) {
-  if (!el || !el.isConnected || typeof el.getBoundingClientRect !== 'function') return 0;
+/** The scrolling ancestor of el (the page's scrolling element when none scrolls). */
+function scrollerOf(win, el) {
   const doc = el.ownerDocument;
   let sc = el.parentElement;
   while (sc && sc !== doc.body && !(/(auto|scroll)/.test(win.getComputedStyle(sc).overflowY)
     && sc.scrollHeight > sc.clientHeight)) sc = sc.parentElement;
-  if (!sc || sc === doc.body) sc = doc.scrollingElement || doc.documentElement;
+  return !sc || sc === doc.body ? doc.scrollingElement || doc.documentElement : sc;
+}
+
+/**
+ * The top of the room el can be scrolled to (viewport px): its scrolling ancestor's top, below
+ * every bar stuck to that top over el's column (the Synth's chip bar on a phone), where such a
+ * bar is pinned (its own top offset), not where it is now.
+ */
+export function roomTop(win, el) {
+  if (!el || !el.isConnected || typeof el.getBoundingClientRect !== 'function') return 0;
+  const doc = el.ownerDocument;
+  const sc = scrollerOf(win, el);
+  const ceil = sc === doc.scrollingElement || sc === doc.documentElement ? 0
+    : sc.getBoundingClientRect().top;
+  if (typeof sc.querySelectorAll !== 'function') return ceil;
   const r = el.getBoundingClientRect();
-  const floor = dock.getBoundingClientRect().top - gap;
-  const ceil = sc === doc.scrollingElement ? 0 : sc.getBoundingClientRect().top;
-  let by = r.bottom > floor ? r.bottom - floor : 0;
-  if (r.top - by < ceil) by = r.top - ceil;
+  let top = ceil;
+  for (const bar of sc.querySelectorAll('.sticky')) {
+    const cs = win.getComputedStyle(bar);
+    const b = bar.getBoundingClientRect();
+    const at = parseFloat(cs.top);
+    if (cs.position !== 'sticky' || !Number.isFinite(at) || bar.contains(el) || b.height <= 0
+      || b.right <= r.left || b.left >= r.right) continue;
+    top = Math.max(top, ceil + at + b.height);
+  }
+  return top;
+}
+
+/**
+ * Bring the owner's surface into view above the dock, folded or unfolded: its scrolling
+ * ancestor moves by routes.js dockRoom, the least that puts the surface's bottom just above the
+ * dock's top, or its top at the top of the room (roomTop) when it is taller than the room left.
+ */
+export function reveal(win, el, dock, gap = 8) {
+  if (!el || !el.isConnected || typeof el.getBoundingClientRect !== 'function') return 0;
+  const sc = scrollerOf(win, el);
+  const r = el.getBoundingClientRect();
+  const ceil = roomTop(win, el);
+  const { by } = dockRoom({ pad: { top: r.top, bottom: r.bottom },
+    dockTop: dock.getBoundingClientRect().top, ceil, gap });
   if (by) sc.scrollTop += by;
   return by;
 }
@@ -173,6 +202,15 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   status.className = 'sr-only';
   dock.prepend(handle, status);
   const folded = new Set();
+  let surface = null; // the owner's surface, while one owns the notes
+  // The app chrome above the owner's surface as --osc-chrome-h on the root (the pad kind sizes
+  // its height from it and --osc-dock-h); measured again on every state change and resize.
+  const chrome = (el = surface) => {
+    surface = el;
+    const root = doc.documentElement;
+    if (!el || !root || !root.style || typeof root.style.setProperty !== 'function') return;
+    root.style.setProperty('--osc-chrome-h', `${Math.max(0, Math.ceil(roomTop(win, el)))}px`);
+  };
 
   function apply(state, info) {
     const collapsed = state === 'collapsed';
@@ -195,20 +233,19 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     if (collapsed && focusIn) handle.focus();
     status.textContent = dockSentence(state, info);
     band(); // the band the dock covers, measured again before anything is scrolled to
-    if (collapsed && info.why !== 'user') reveal(win, info.el, dock);
+    chrome(info.el); // and the app chrome above the owner's surface: the pad's height follows
+    // Folded by the owner, or unfolded by the user: the pad above the dock (a fold by the
+    // user only uncovers more of the page, and moves nothing).
+    if (info.yields && (collapsed ? info.why !== 'user' : info.why === 'user')) {
+      reveal(win, info.el, dock);
+    }
   }
 
-  const mq = typeof win.matchMedia === 'function' ? win.matchMedia(COARSE) : null;
-  const ctl = createDockYield({ release, apply,
-    read: () => ({ workspace: cmp.workspace, coarse: !!(mq && mq.matches),
-      width: (doc.documentElement && doc.documentElement.clientWidth) || win.innerWidth }) });
+  const ctl = createDockYield({ release, apply, read: () => ({ workspace: cmp.workspace }) });
   handle.addEventListener('click', () => ctl.toggle());
   for (const d of (LIVE.get(win) || new Map()).values()) ctl.claim(d);
   win.addEventListener(NOTES_EVENT, (e) => ctl.claim(e.detail));
-  win.addEventListener('resize', () => ctl.update('viewport'));
-  if (mq && typeof mq.addEventListener === 'function') {
-    mq.addEventListener('change', () => ctl.update('viewport'));
-  }
+  win.addEventListener('resize', () => chrome());
   if (typeof cmp.$watch === 'function') cmp.$watch('workspace', () => ctl.update('workspace'));
   ctl.update('init');
   return ctl;
