@@ -7,7 +7,7 @@
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
       "done": 20,
-      "required": 39,
+      "required": 41,
       "phase": "now"
     },
     {
@@ -20,8 +20,8 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 28,
-      "required": 49,
+      "done": 29,
+      "required": 51,
       "phase": "now"
     },
     {
@@ -35,7 +35,7 @@
       "id": "M048",
       "title": "Studio completion: groups, minimap, pinch zoom, draft recovery, voice in Studio",
       "done": 2,
-      "required": 6,
+      "required": 8,
       "phase": "now"
     },
     {
@@ -62,8 +62,8 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 5,
-      "required": 59,
+      "done": 6,
+      "required": 60,
       "phase": "now"
     },
     {
@@ -76,7 +76,7 @@
     {
       "id": "M057",
       "title": "Box-system ergonomics: one-gesture patching with headroom in the editor modules",
-      "done": 2,
+      "done": 3,
       "required": 5,
       "phase": "now"
     },
@@ -118,9 +118,9 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 0,
+      "done": 2,
       "required": 15,
-      "phase": "next"
+      "phase": "now"
     },
     {
       "id": "M065",
@@ -181,7 +181,7 @@
     {
       "id": "M080",
       "title": "Studio boxes, wave 1: wiring, find, layout, probe, first patch, large graphs, one declaration per node",
-      "done": 4,
+      "done": 6,
       "required": 19,
       "phase": "now"
     },
@@ -251,7 +251,7 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 22,
+      "done": 23,
       "required": 57,
       "phase": "now"
     },
@@ -326,13 +326,6 @@
       "phase": "now"
     },
     {
-      "id": "M119",
-      "title": "Owner decisions of the song-reconstruction proposal",
-      "done": 7,
-      "required": 7,
-      "phase": "now"
-    },
-    {
       "id": "M104",
       "title": "Owner decisions of the component follow-up",
       "done": 1,
@@ -356,7 +349,7 @@
     {
       "id": "M084",
       "title": "Owner decisions of the Studio boxes and signal generator lines",
-      "done": 2,
+      "done": 4,
       "required": 4,
       "phase": "now"
     },
