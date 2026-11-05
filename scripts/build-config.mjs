@@ -15,10 +15,12 @@ export const TAILWIND_CONFIG = 'tailwind.config.cjs';
 export const DARK_THEME_SELECTOR = ':root:not([data-theme="light"])';
 // A .dark class in a selector: not the escaped dark: variant class (.dark\:bg-opacity-80).
 const DARK_CLASS = /\.dark(?![\w\\-])/g;
-// A .dark compounded on its element (.dark.x, .dark[a], .dark:hover): the rewrite would ask the
-// root element for the rest of the compound, a different rule. None is emitted today, so one is
-// refused at build time rather than rewritten (review #386 B3, af's R2).
-const DARK_COMPOUND = /\.dark(?=[.#[:])/;
+// A .dark compounded on its element, on either side (.dark.x, .dark[a], .dark:hover, .x.dark,
+// html.dark, [dir].dark): the rewrite would ask the root element for the rest of the compound,
+// a different rule. None is emitted today, so one is refused at build time rather than
+// rewritten (review #386 B3 and C1, af's R2). A .dark after a combinator, a comma or a "(" is
+// an ancestor and is rewritten.
+const DARK_COMPOUND = /\.dark(?=[.#[:])|(?<=[^\s>+~(,])\.dark(?![\w\\-])/;
 
 /**
  * PostCSS plugin run after Tailwind (build.mjs): rewrites every .dark class in a selector to

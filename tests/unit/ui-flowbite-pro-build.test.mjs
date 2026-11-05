@@ -372,7 +372,12 @@ test('the plugin\'s .dark ancestor is rewritten to OSCILLA\'s dark theme (not li
         .then((r) => r.css);
       assert.equal(await run('.dark .x{color:red}'),
         ':root:not([data-theme="light"]) .x{color:red}');
-      for (const sel of ['.dark.x .y', '.dark[dir] .y', '.dark:hover .y']) {
+      assert.equal(await run('.a,.dark .x{color:red}'),
+        '.a,:root:not([data-theme="light"]) .x{color:red}');
+      assert.equal(await run(':is(.dark) .x{color:red}'),
+        ':is(:root:not([data-theme="light"])) .x{color:red}');
+      for (const sel of ['.dark.x .y', '.dark[dir] .y', '.dark:hover .y', '.x.dark .y',
+        'html.dark .y', '[dir].dark .y']) {
         await assert.rejects(run(`${sel}{color:red}`), /compound \.dark/, sel);
       }
     });
