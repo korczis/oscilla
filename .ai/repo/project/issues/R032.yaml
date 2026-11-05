@@ -2,33 +2,37 @@ id: R032
 milestone: M011
 serves:
   - "release-provenance#one-version-authority"
-title: "release:prepare generates the About station from package.json and release:analyze into a data file; no release hand-edits src/index.html"
+title: "The About stations live in src/data/about-stations.json; release:prepare stamps only the derived fields of a reviewed pending station"
 slug: release-prepare-generates-the-about-station
 priority: p1
 profile: implementation
-objective: "Lands as feat(release). Implements Q091 part (3). Every release pull request hand-edits the About timeline in src/index.html (for v3.19.0: d9ee0944 'docs(about): the 3.19 station' and a size-cap raise, 3d1dfc04); no script writes it. After: the stations live in one data file (src/js/data/about-stations.json), the timeline markup is rendered from it at build time, and release:prepare appends the new station from package.json's version and release:analyze's level and its first-parent subjects, writing nothing else under src/. A check mode (release:prepare -- --check-station) recomputes the file from the same inputs so the base branch's copy can judge a release pull request (R031)."
-why: "It also serves ui-current#about-tells-the-project (M054), which a release-engineering issue cannot name from M011. Q091 part (3) (af with b0, 2026-11-05): with v3 guarding every src path, release pull requests would need a verdict for a hand edit; generating the station keeps them exempt only where the base copy reproduces the bytes. oscilla-b0 Total Coherence audit, slice B (uncovered: release PRs hand-edit the About timeline)."
+objective: "Lands as feat(release). Implements Q091 part (3). Line numbers at origin/main a19f1ff6. Every release pull request hand-edits the About timeline in src/index.html (for v3.20.0: 4c6c125d 'docs(about): the 3.20 station'; for v3.19.0 d9ee0944 and a size-cap raise, 3d1dfc04); no script writes it. A station is <li data-state data-osc-release=\"X.Y\"> holding <time data-osc-commit datetime>, an editorial <strong> title and a one-sentence summary (src/index.html:2870-2883, the 3.19 and 3.20 stations, inside the timeline <ol> at :2714-2884). The title and sentence cannot be derived from package.json, the analyze level or the commit subjects, so the prose is reviewed, never generated: it lands as a docs(about) pull request that adds a pending station {title, summary} to src/data/about-stations.json, judged by the screens seat under R031 (oscilla-af) before the release pull request. After: the stations live in src/data/about-stations.json (beside src/data/roadmap.json, never src/js/data/), the timeline markup is rendered from it at build time, and release:prepare's station step only stamps the pending station with release X.Y (from package.json; the file stores X.Y only, because scripts/release-version-check.mjs:24-27 LITERAL_ALLOW does not cover src/data/ and a full X.Y.Z there is a hard-coded version), data-osc-commit (the 7-character short id of the first parent of the release merge, i.e. origin/main at prepare, as 68b117f is for 3.20) and datetime (that commit's committer date with its offset), moves the current state to it, and writes nothing else under src/. A check mode (node scripts/release-prepare.mjs --check-station) recomputes those derived fields from the same inputs, so the base branch's copy can judge a release pull request (R031's exemption covers the derived fields only; a prose change in a release pull request needs a verdict). A release with no pending station is refused by release:prepare naming the missing docs(about) pull request."
+why: "It also serves ui-current#about-tells-the-project (M054), which a release-engineering issue cannot name from M011. Q091 part (3) (af with b0, 2026-11-05). af's critique of 96daa67b (BLOCKING 2): the generator could not reproduce the editorial title and sentence, so R031's exemption was either empty or a bypass; the commit and datetime need a named source; the data file belongs in src/data/; LITERAL_ALLOW does not cover it; the size cap must fall in the same change; the visual references do not cover About. Coordinated with af's U086 (origin/chore/plan-about-truth, 'The roadmap names the release it describes'), which edits scripts/roadmap.mjs, src/data/roadmap.json, src/js/ui/about.js and src/index.html: this issue lands after it."
 scope:
   - "scripts/release-prepare.mjs"
   - "scripts/release-analyze.mjs"
-  - "src/js/data/about-stations.json"
+  - "src/data/about-stations.json"
   - "src/index.html"
   - "src/js/ui/about.js"
   - "scripts/build.mjs"
   - "tests/unit/release-about-station.test.mjs"
   - "tests/unit/about-current.test.mjs"
+  - "tests/unit/source-size-baseline.json"
   - "tests/README.md"
   - "dist"
 depends_on:
   - "Q091"
 acceptance_criteria:
-  - "Fail-first: tests/unit/release-about-station.test.mjs runs release:prepare's station step on a fixture repository with version 9.9.0 and a feat commit and expects about-stations.json to gain the 9.9 station; on the merge base no such step exists."
-  - "The rendered About timeline in dist/index.html is byte-identical before and after the move for every existing station (tests/unit/about-current.test.mjs and the visual reference unchanged)."
-  - "--check-station exits non-zero when the file differs from the generator's output, and zero when equal; a hand-edited station fails it."
+  - "Precondition (U086, af, origin/chore/plan-about-truth): this issue starts only after U086 is DONE on main (majordomus plan show U086), and rebases onto its roadmap.mjs, about.js and index.html changes. plan validate refuses a depends_on edge to an id not on this branch, so the edge is added in the first plan change after U086 reaches main."
+  - "Fail-first: tests/unit/release-about-station.test.mjs runs release:prepare's station step on a fixture repository with version 9.9.0, a pending station {title, summary} and a feat commit, and expects about-stations.json's pending station to carry release '9.9', the fixture's first-parent short id and committer datetime, and state current; on the merge base no such step exists."
+  - "The same file refuses: a fixture with no pending station (release:prepare exits non-zero naming the missing docs(about) pull request), and a station that stores '9.9.0' (version:check names src/data/about-stations.json)."
+  - "The rendered About timeline is byte-identical: the <ol class=\"osc-about-timeline\"> element of dist/index.html (src/index.html:2714-2884 at a19f1ff6) is extracted before and after the move and compared byte for byte for every existing station, in tests/unit/about-current.test.mjs."
+  - "--check-station exits non-zero when a derived field (release, data-osc-commit, datetime, state) differs from the generator's output and zero when equal; a hand-edited derived field fails it, and a changed title or summary is reported as prose that needs a verdict, never accepted as generated."
+  - "tests/unit/source-size-baseline.json lowers the src/index.html cap in the same change to the new size's headroom ceiling (its note's rule), so the moved markup cannot grow back."
   - "project.about-names-current-release holds: the current station is the package.json version."
-  - "Guarded (scripts/release-*, scripts/build*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+  - "Guarded (scripts/release-*, scripts/build*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict; src/index.html, src/data/ and src/js/ui/about.js are judged by the screens seat once R031 lands. Lane: oscilla-b0."
 validation:
-  - "node --test tests/unit/release-about-station.test.mjs tests/unit/about-current.test.mjs tests/unit/about.test.mjs"
+  - "node --test tests/unit/release-about-station.test.mjs tests/unit/about-current.test.mjs tests/unit/about.test.mjs tests/unit/source-size-budget.test.mjs"
   - "npm run build:check"
   - "npm test"
 evidence_required:
