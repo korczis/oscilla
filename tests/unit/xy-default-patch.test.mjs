@@ -991,3 +991,50 @@ test('R-K: a pad cable\'s constant never lifts an Oscillator past 0.95 x Nyquist
     }
   }
 });
+
+test('RK-2: the Nyquist guard leaves a bipolar cable the static its range fit found', () => {
+  // Review of the keys+pad train, RK-2: 06140d80's guard held the fitted static at the pre-fit
+  // static clipped at 0, which for a bipolar cable is static - depth, so every raise the range
+  // fit made was cut to 0 at any frequency: an A4 at +1100 cents with Y bipolar 1200 into its
+  // Detune played 440..494 Hz (0..200 cents) where the fit had found 784..880 Hz (1000..1200).
+  // The ceiling is the Nyquist room left above the static after the cables' final sweep. Each
+  // row: what plays at Y's bottom and top in cents of detune (the base, the base plus Y's gain),
+  // the reviewer's measured values; the last row sits at the cap and keeps the bound.
+  const last = (prm) => (prm.events.length ? prm.events.at(-1).value : prm.value);
+  const rows = [
+    [48000, 440, 1100, 1200, 1000, 1200], // 784..880 Hz
+    [48000, 10000, 1100, 1200, 1000, 1200], // 17.8..20.0 kHz
+    [48000, 10000, 800, 1200, 400, 1200], // 12.6..20.0 kHz
+    [44100, 10000, 900, 600, 600, 1200], // 14.1..20.0 kHz
+    [48000, 20000, 1100, 1200, null, null], // at the cap: the room's top, 200 cents of sweep
+  ];
+  for (const [sampleRate, frequency, detune, depth, lo, hi] of rows) {
+    const st = defaultStore();
+    const m0 = st.getModel();
+    const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
+    assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: osc.id,
+      params: { frequency, detune } }).ok, true);
+    assert.equal(st.dispatch({ type: 'EDGE_ADD', id: 'y-detune', from: { node: ids(m0)('xy'),
+      port: 'y' }, to: { node: osc.id, port: 'detune' }, props: { muted: false, depth,
+      polarity: 'bipolar', mapping: 'linear', offset: 0 } }).ok, true);
+    const fx = createFakeAudioEnv({ sampleRate });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init());
+    const rt = createStudioRuntime({ engine });
+    assert.equal(rt.apply(st.getModel(), { revision: 1 }).ok, true);
+    assert.equal(rt.start().ok, true);
+    const h = rt.nodes.get(osc.id);
+    const f = last(h.modTarget('frequency', 'linear').param);
+    const d = last(h.modTarget('detune', 'linear').param);
+    const g = last(rt.edges.get('y-detune').gain.gain);
+    const cap = 0.95 * (sampleRate / 2);
+    const what = `${sampleRate} Hz, ${frequency} Hz, detune ${detune}, bipolar ${depth}`;
+    const room = 1200 * Math.log2(cap / frequency);
+    const [wantLo, wantHi] = lo === null ? [room - 200, room] : [lo, hi];
+    assert.ok(Math.abs(d - wantLo) < 0.05 && Math.abs(d + g - wantHi) < 0.05,
+      `${what}: plays ${d.toFixed(1)}..${(d + g).toFixed(1)} cents, not `
+      + `${wantLo.toFixed(1)}..${wantHi.toFixed(1)}`);
+    const top = f * 2 ** ((d + Math.max(0, g)) / 1200);
+    assert.ok(top <= cap * (1 + 1e-9), `${what}: plays up to ${top.toFixed(0)} Hz, over ${cap}`);
+  }
+});
