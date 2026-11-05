@@ -1967,12 +1967,45 @@ test('cords amendment: a band sits above the shade and the sheen, 3:1 on the she
     assert.deepEqual(short, []);
   });
 
-test('cords amendment: a band holds 3:1 where the shade crosses it', {
-  todo: 'measured 2.15-2.93 on 7 of 12 shaded pairs; the shade is the band\'s ink, a call for af',
-}, async () => {
-  const short = (await bandLanes()).filter((r) => r.lane === 'shaded' && r.ratio < 3)
-    .map((r) => `${r.where} ${r.ratio.toFixed(2)}`);
-  assert.deepEqual(short, []);
+// af's ruling of 2026-11-05 08:2xZ, option (A): the shaded lane is the cord's own shading, as the
+// knob's side wall is the knob's; a darker band within it is physically right. The boundary that
+// carries a band's identifiability is the band on the unshaded cord, so that one holds 3:1 (as
+// composited in (b): the cord over every plate, the band over the cord), and no band may fall
+// under 3:1 on both the shaded and the unshaded cord. The shaded measurement stays printed, so
+// a regression of it stays visible.
+test('cords amendment, af (A): a band holds 3:1 on the unshaded cord; the shaded lane is the '
+  + 'cord\'s own shading, like the knob\'s side wall', async (t) => {
+  const th = await tokenThemes();
+  const unshaded = [];
+  for (const [name, theme] of Object.entries(th)) {
+    const tokens = themed(theme);
+    tokens.cable.palette.forEach((colour, i) => {
+      const parts = cordParts({ tokens, colour, type: 'CONTROL' });
+      const cord = parts.find((p) => p.key === 'stroke').attrs;
+      const band = parts.find((p) => p.key === 'band-from').attrs;
+      const ratio = Math.min(...CORD_PLATES.map(([plate]) => {
+        const ground = overOf(cord.stroke, plateOf(tokens, plate), intensityOf(cord.class));
+        return contrastOf(overOf(band.stroke, ground, intensityOf(band.class)), ground);
+      }));
+      unshaded.push({ where: `${name} ${SYNTH_TOKEN_NAMES.cable.palette[i]}`, ratio });
+    });
+  }
+  const shaded = (await bandLanes()).filter((r) => r.lane === 'shaded');
+  assert.equal(unshaded.length, 12, 'six cord colours, two themes');
+  assert.equal(shaded.length, 12, 'the same twelve pairs, shaded');
+  const u = leastOf(unshaded);
+  const s = leastOf(shaded);
+  t.diagnostic(`unshaded: the least ${u.ratio.toFixed(2)} (${u.where})`);
+  t.diagnostic(`shaded (the cord's own shading, not bound): the least ${s.ratio.toFixed(2)} `
+    + `(${s.where}); ${shaded.filter((r) => r.ratio < 3).length} of 12 under 3:1`);
+  assert.deepEqual(unshaded.filter((r) => r.ratio < 3).map((r) => `${r.where} ${r.ratio
+    .toFixed(2)}`), [], 'bands under 3:1 on the unshaded cord');
+  const lost = unshaded.map((r, i) => {
+    assert.equal(shaded[i].where, `${r.where} shaded`, 'paired by colour and theme');
+    return [r, shaded[i]];
+  }).filter(([r, q]) => r.ratio < 3 && q.ratio < 3)
+    .map(([r, q]) => `${r.where} ${r.ratio.toFixed(2)} / shaded ${q.ratio.toFixed(2)}`);
+  assert.deepEqual(lost, [], 'bands under 3:1 on both the shaded and the unshaded cord');
 });
 
 test('JC-13: a cord 8.5 wide (9.5 hovered, 11 selected) in its rim', () => {
