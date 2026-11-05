@@ -33,15 +33,15 @@
 // (zoom >= 1: at a smaller zoom the boxes grow with the 44 px rule and the box with them).
 // Legends are LEGEND_PX screen px at any zoom, in text.label (4.5:1), the selected or hovered
 // one in text.value at weight 600, text.dim while disabled; their width is an estimate from the
-// glyphs (legendWidth), used only to lay the boxes out. Colours are tokens passed in
-// (synthTokens; project.visual-identity-lock) and no number sets an intensity (v4): a shadow is
-// class opacity-hw-shadow in the depth shade (control.shade), a highlight opacity-hw-sheen (the
-// depth highlight where it shows on its face in both themes, else capHi), and a toggle's LED is
-// led.js's (ledSvg: its bezel, its lens in control.ring lit or surface.card with a control.edge
-// ring off, both 3:1, and lit its SVG halo at the hw-sheen intensity), so every LED of the layer
-// looks alike; the caller's { source, lit } is passed through, and ledSvg binds data-source and
-// data-lit from it (the parameter's real state, never a literal). A setpoint: nothing moves, so
-// no reduced-motion check.
+// glyphs (legendWidth, measured at either weight), used only to lay the boxes out. Colours are
+// tokens passed in (synthTokens; project.visual-identity-lock) and no number sets an intensity
+// (v4): a shadow is class opacity-hw-shadow in the depth shade (control.shade), a highlight
+// opacity-hw-sheen (the depth highlight where it shows on its face in both themes, else capHi),
+// and a toggle's LED is led.js's (ledSvg: its bezel, its lens in control.ring lit or
+// surface.card with a control.edge ring off, both 3:1, and lit its SVG halo at the hw-sheen
+// intensity), so every LED of the layer looks alike; the caller's { source, lit } is passed
+// through, and ledSvg binds data-source and data-lit from it (the parameter's real state, never a
+// literal). A setpoint: nothing moves, so no reduced-motion check.
 //
 //   switchStyle(param)                       'toggle' | 'slide' | 'rotary' | 'window'
 //   switchLayout(param, { zoom, led, knob, numbers, numberLegends })   frozen { style, positions,
@@ -81,13 +81,13 @@ const PAD = 6;
  *  box up and down (a descender overhangs that box by up to 1.12, in Firefox in DejaVu Sans,
  *  Ubuntu 26.04's system-ui, so 3.5 leaves the ink 1.38+ clear: review of AC round 2, finding 1,
  *  where 2 sat on a "g"; `gap` 4.5 keeps it clear of the lifted shadow) and `focusPadX` past its
- *  width at weight 600 across (`bold` times the weight-400 estimate: review of AC, finding 1;
- *  "Off" at 600 measured 1.155 times it on macOS, so 1.16 leaves the inner edge 2 clear there;
- *  s-ringfit measures the ink in the panel's font in each engine); the LED's bezel 1 clear of
- *  that ring (`ledGap` past the washer). */
+ *  width across (legendWidth's, which holds a legend at weight 600 in every font measured,
+ *  LEG-1, so the inner edge is 2 clear of the ink: review of AC, finding 1, where the old
+ *  weight-400 estimate cut a focused "Off"; s-ringfit measures the ink in each engine); the
+ *  LED's bezel 1 clear of that ring (`ledGap` past the washer). */
 const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, washerW: 1, bushing: 3.5,
   bushingW: 1, root: 4, tip: 7, length: 18, ball: 3.5, gap: 4.5, focus: 3, focusW: 2, focusPad: 3.5,
-  focusPadX: 3, bold: 1.16, ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
+  focusPadX: 3, ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
 /** A slide (slice C, SW-06, SW-07), graph units: a slot slotW wide, a capW x capH cap with two
  *  ridges gripGap from its index line (gripX either side, the index line to indexOut), a detent
  *  from 1.5 past the slot to capW / 2 + 6, the legend 4 past it; each hit box's edge is `clear`
@@ -172,7 +172,7 @@ const LEVER_REACH = TOGGLE.length + TOGGLE.ball;
 /** A focused toggle's legend ring (its stroke's centre line) round the legend `lg`. */
 function legendRing(lg) {
   const tb = textBox(lg);
-  const half = (lg.width * TOGGLE.bold) / 2 + TOGGLE.focusPadX;
+  const half = lg.width / 2 + TOGGLE.focusPadX;
   return { x: tb.x + tb.width / 2 - half, y: tb.y - TOGGLE.focusPad, width: 2 * half,
     height: tb.height + 2 * TOGGLE.focusPad };
 }

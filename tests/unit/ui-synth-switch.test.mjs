@@ -1127,11 +1127,11 @@ test('a rotary\'s leader lines run from the dial and end before every legend\'s 
   }
 });
 
-/** A legend's estimated width at weight 600 (a selected legend's): legendWidth's estimate is a
- *  weight-400 one and ran 1.26 a side short of "Off" at 600 (review of AC, finding 1). 1.16:
- *  "Off" at 600 measured 1.155 times the estimate in Chromium and Firefox and 1.152 in WebKit
- *  (review of AC round 2, finding 2), so 1.15 left its ring 1.95 clear, not the 2 below. */
-const BOLD = 1.16;
+/** A legend's estimated width at weight 600 (a selected legend's) over legendWidth's: 1, since
+ *  LEG-1 measured the table at both weights. The glyph-class estimate before it was a weight-400
+ *  one and ran 1.26 a side short of "Off" at 600 (review of AC, finding 1), which a factor 1.16
+ *  covered on macOS alone: DejaVu Sans Bold, Ubuntu 26.04's, is 1.25 times it for "On". */
+const BOLD = 1;
 /** A focused toggle's legend ring, as [x, y, width, height] (its stroke's centre line): round
  *  the legend's text box at weight 600 (BOLD), centred, grown 3 a side across and 3.5 up and
  *  down (review of slice C, C4; review of AC, finding 1: grown 2 round the weight-400 estimate,
