@@ -1,0 +1,31 @@
+id: C043
+milestone: M090
+serves:
+  - "coherent-state#one-vocabulary-per-value"
+title: "Two controls that edit the same value at once speak one vocabulary, or the census names the pair"
+slug: two-controls-that-edit-the-same-value-at-once-speak-one
+priority: p2
+profile: implementation
+objective: "Lands as fix(labs). Panel Excellence criterion 4. At main 68b117f3 Phase & Stereo is a second editor of the dual A/B value and uses different words for it (src/js/main.js:552-555, :794-802), and the Spectrogram's Log/Linear is a select while the Signal analysis one is a radio group (src/index.html:612 against :567). After: each control declares the state key it edits (a data-osc-edits attribute, or the existing data-osc key mapped in a table); two controls visible together that edit one key show one label set for its values, or tests/unit/surface-census.json lists the pair with a reason."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 4 and the Inventory rows for Phase & Stereo and Spectrogram (G008 owns merging the Log/Linear control kinds; this issue owns that the words agree)."
+scope:
+  - "src/index.html"
+  - "src/js/main.js"
+  - "src/js/labs/phase-stereo.js"
+  - "tests/unit/surface-census.json"
+  - "tests/unit/one-vocabulary.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/one-vocabulary.test.mjs groups the controls of src/index.html by the state key they edit, and for each group that is visible in one workspace at once compares their option labels; it fails on the merge base on the dual A/B pair of Phase & Stereo and Dual Oscillator."
+  - "On the head every such group shares one label set or is listed in tests/unit/surface-census.json with a reason of five words or more; a mutation that renames one option label of a listed-free pair fails the test."
+  - "Merging the Log/Linear select and radio group into one control kind stays G008's; this issue changes labels only."
+  - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml."
+validation:
+  - "node --test tests/unit/one-vocabulary.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -1,0 +1,33 @@
+id: C040
+milestone: M090
+serves:
+  - "coherent-state#input-released-when-hidden"
+title: "The microphone is released when its panel leaves the screen, and the panel says why"
+slug: the-microphone-is-released-when-its-panel-leaves-the-screen
+priority: p1
+profile: implementation
+objective: "Lands as fix(labs). Panel Excellence criterion 1 (input owner) and af's smallest first slice. At main 68b117f3 the mic lab stops its stream only from its own controls or the engine (src/js/labs/mic-analyzer.js: stop() :227, the toggle :343, track onended :267, the engine detach :224), and a workspace change aborts only a measurement (the workspace watcher in src/js/main.js:739-742), while Measure tells the user the microphone opens only for its own steps and is released when they end (src/index.html:909). A microphone opened in Analyzer therefore stays open in Measure, Studio or Synth, where no surface shows it (af: inferred; the browser leg below decides it). After: mic-analyzer.js exports MIC_RELEASED_HIDDEN (the note text), and its mount return gains release(reason), built on the existing stop(): it stops every track, releases the nodes, leaves the toggle unpressed and sets the panel note to MIC_RELEASED_HIDDEN. The watcher at src/js/main.js:739, after $nextTick, calls labs.mic.release('workspace') when #osc-panel-mic has no client rects."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 1 of 'Criteria no existing intent covers' and the 'Smallest first slice'. An input no visible surface owns keeps recording where the user cannot see it, and it makes the privacy sentence at src/index.html:909 false. This is the first build of the Panel Excellence criteria."
+scope:
+  - "src/js/labs/mic-analyzer.js"
+  - "src/js/main.js"
+  - "tests/unit/mic-release-on-leave.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first (project.fail-first): tests/unit/mic-release-on-leave.test.mjs uses a fake adapter and a fake DOM and imports src/js/labs/mic-analyzer.js as a namespace (as tests/unit/mic-detach-on-close.test.mjs:23-27 does), so on the merge base it fails as an assertion, not a link error, on the missing release in the mount return and the missing MIC_RELEASED_HIDDEN export. On the head it asserts that release('workspace') leaves every fake track readyState 'ended', no node attached, the toggle text 'Use microphone' and the note equal to MIC_RELEASED_HIDDEN."
+  - "One leg of tests/browser/app.cjs with a fake getUserMedia stream: mic on in Analyzer, then switch to Measure; every track of the stream is 'ended', [data-osc=\"mic.toggle\"] reads aria-pressed=\"false\" and 'Use microphone', and the panel note shows MIC_RELEASED_HIDDEN. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The same leg, each asserted: Analyzer to Compare keeps the stream (the panel stays visible); Playground at 1536x1024 keeps it; Playground at 390x844, where the panel is not shown, releases it."
+  - "The sentence at src/index.html:909 is true on the head: no workspace in which #osc-panel-mic has no client rects keeps a lab microphone track live."
+  - "Non-goals, unchanged: a resize across a breakpoint within one workspace, the panel's Flowbite Pro migration, renaming the settings gear, Measure's own input, the output owner."
+  - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml. dist is rebuilt; npm run verify passes."
+validation:
+  - "node --test tests/unit/mic-release-on-leave.test.mjs tests/unit/mic-detach-on-close.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

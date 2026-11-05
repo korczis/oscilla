@@ -51,6 +51,33 @@ observations:
   - id: browser-census-unknown
     statement: "Unknown at 68b117f3: whether the browser census and the control census pass; they were not run on the shared machine, and control-census.cjs runs only through test:census (ci.yml:390), not in main-checks (E046)."
     source: "file:.github/workflows/main-checks.yml"
+  - id: mic-not-released-on-leave
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): the mic lab stops only from its own controls or the engine (labs/mic-analyzer.js:224, 267, 278, 343, 399), and a workspace change aborts only a measurement (main.js:739-742), while Measure says the microphone opens only for its own steps (index.html:909). That no release path exists is observed; that the stream stays live in a browser is inferred (C040's browser leg decides it)."
+    source: "file:src/js/labs/mic-analyzer.js"
+  - id: lab-errors-unread
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): a lab whose mount throws only writes labErrors and logs (main.js:510-523); labErrors is exposed (:978) and no UI reads it."
+    source: "file:src/js/main.js"
+  - id: hidden-panel-targets
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): at 1536 Compare hides Source and Dual (integration.css:591-597, instrument.css:343-351), yet the pan reason points to Dual (index.html:1678) and a Bioacoustics row rewrites the hidden Source range (main.js:483-485); the phone shows Source and Analysis on Filter Lab, Compare and Analyzer (responsive.css:259) with no declaration."
+    source: "file:src/styles/integration.css"
+  - id: dual-ab-two-vocabularies
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): Phase & Stereo is a second editor of the dual A/B value with different words (main.js:552-555, 794-802); Log/Linear is a select in the Spectrogram (index.html:612) and a radio group in Signal analysis (:567)."
+    source: "file:src/js/main.js"
+  - id: additive-silent-on-dual
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): Additive never applies to a dual plan (audio/lab-play-options.js:50) and its panel does not say so."
+    source: "file:src/js/audio/lab-play-options.js"
+  - id: shell-commands-unscoped
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): proposed criterion 6 (Screenshot, Export Audio, Save Preset and Export graph act on the workspace in view, or say what they act on); no per-workspace probe of what each command acts on was run."
+    source: "file:src/index.html"
+  - id: filter-types-five-of-eight
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): the Filter Lab offers 5 types and the engine exports 8 (FILTER_TYPES, audio/filters.js:30-31); a stale radio staying checked is inferred."
+    source: "file:src/js/audio/filters.js"
+  - id: compare-keeps-four-silently
+    statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): Compare keeps four records and drops the rest without a word (measurement/views/experiment-summary.js:208, ids.slice(0, 4))."
+    source: "file:src/js/measurement/views/experiment-summary.js"
+  - id: nyquist-backstops-weak
+    statement: "oscilla-b0's hardening audit of 68b117f3 (2026-11-05), S8: removing the noteOn guard freq < this.safeMaximum (audio/audio-engine.js:1075) fails no test, and _f with no upper clamp fails only one Studio adapter test, incidentally; C011's release clamp survives both of C026's mutants (1858 of 1858 pass)."
+    source: "file:src/js/audio/audio-engine.js"
 conditions:
   - criterion: stops-are-immediate
     state: conflicting
@@ -106,6 +133,51 @@ conditions:
     because: "The journeys suite was not run on the shared machine at 68b117f3."
     observations:
       - browser-census-unknown
+  - criterion: input-released-when-hidden
+    state: conflicting
+    because: "No path releases the lab microphone on a workspace change, while Measure promises it is released; the browser effect is inferred until C040's leg runs."
+    observations:
+      - mic-not-released-on-leave
+  - criterion: lab-failure-shown
+    state: conflicting
+    because: "A failed lab mount is logged and stored but never shown in its panel."
+    observations:
+      - lab-errors-unread
+  - criterion: composition-honest
+    state: conflicting
+    because: "A reason text and a handler aim at panels hidden in Compare at 1536, and the viewport panel sets are undeclared."
+    observations:
+      - hidden-panel-targets
+  - criterion: one-vocabulary-per-value
+    state: conflicting
+    because: "The dual A/B value is edited in two panels with two vocabularies."
+    observations:
+      - dual-ab-two-vocabularies
+  - criterion: labs-state-their-scope
+    state: conflicting
+    because: "Additive is silent on a dual plan and says nothing."
+    observations:
+      - additive-silent-on-dual
+  - criterion: shell-commands-act-on-view
+    state: unknown
+    because: "Proposed without a per-workspace probe; C045's test decides it."
+    observations:
+      - shell-commands-unscoped
+  - criterion: lab-lists-match-engine
+    state: conflicting
+    because: "The Filter Lab shows 5 of the engine's 8 types and states no gap."
+    observations:
+      - filter-types-five-of-eight
+  - criterion: limits-stated
+    state: conflicting
+    because: "Compare drops records past four without saying so."
+    observations:
+      - compare-keeps-four-silently
+  - criterion: engine-backstops-held
+    state: conflicting
+    because: "The noteOn Nyquist guard and C011's release clamp each survive a mutant."
+    observations:
+      - nyquist-backstops-weak
 risks:
   - "Plan stamps lag what has landed (#413, #331, #410 members) and plan drift reports merged_not_recorded 0; a reader of the plan sees open work that is done. af's evidence lane owns the re-check, which must check each criterion on main, never stamp from merge titles."
   - "The bus and the voice wrapper touch the same note path as K178 and K184 (both on unmerged branches); see M090's risks."

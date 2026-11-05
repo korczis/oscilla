@@ -1,0 +1,25 @@
+id: T034
+milestone: M073
+serves:
+  - "v3-measure#abort-releases-everything"
+title: "Unit tests decide device loss and track release: a lost microphone and a closed capture leave nothing open"
+slug: unit-tests-decide-device-loss-and-track-release-a-lost
+priority: p2
+profile: implementation
+objective: "Lands as test(measure). Hardening S7, first and third findings; tests only. At main 68b117f3, on device loss track.onended reports MIC_DISCONNECTED, which interrupts and releases (src/js/measurement/capture.js:1040-1042, :610); removing line 610 fails no test, and no test dispatches track-ended. Removing stopStreamTracks(stream) from the microphone close() (:1035) passes every unit test; the only deciding check is in the browser (v3-measure.cjs:772), and abort-stages runs on loopback, where openTrackCount is always 0. After: a unit test on the captureRig fixture (as tests/unit/preflight-own-output.test.mjs:66 builds it) opens the live tap, fires track.onended and asserts activeNodeCount 0, openTrackCount 0, liveTapOpen false and a pending capture rejected with MIC_DISCONNECTED; a second asserts every fake track is readyState 'ended' after cancel() and after an abort while a capture is pending."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S7. C033 ('MEASURE emits its stimulus') sits next to it and is not duplicated."
+scope:
+  - "tests/unit/capture-failure-paths.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Each mutation is rejected by the new tests, shown in the pull request: capture.js:610 commented out; stopStreamTracks removed from close()."
+  - "The tests pass on main unchanged; no src/ or dist/ change. fail-first: n/a, a test(measure) change whose behaviour is correct on main."
+  - "Not a guarded path while only tests/ change; if capture.js needs a fix it becomes its own fix under M073 and prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+validation:
+  - "node --test tests/unit/capture-failure-paths.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
