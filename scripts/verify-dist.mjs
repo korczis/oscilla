@@ -8,19 +8,27 @@
 //
 // Fails when the file
 //   - is not the only file in dist/ (a .nojekyll marker is tolerated),
-//   - has markup this scan does not read as the browser does. Refused, each by name: a duplicate
-//     attribute (names compared in lower case; the browser keeps the first copy); a quote, < or =
-//     in an attribute name or an unquoted value, or a backtick in an unquoted value; <!-->, <!--->
-//     or --!> (comment ends) anywhere outside <script>/<style> bodies; between tags, <?, a <! other
-//     than <!-- and the leading doctype, or a </ not followed by a tag name and optional whitespace
-//     then > (bogus comments, an end tag with attributes); <!-- inside a <script> or <style> body;
-//     a </script or </style (any case) other than </script> or </style> in lower case (whitespace
-//     allowed before the >); a comment, <script> or <style> that starts inside an open <title>,
-//     <textarea>, <xmp>, <iframe>, <noembed>, <noframes>, <noscript> or <plaintext>, or a <script>
-//     or <style> inside an open <svg> or <math> (where the browser reads its content as markup; a
-//     </svg> or </math> met inside an open integration point, foreignObject, desc, title, mi, mo,
-//     mn, ms, mtext or annotation-xml, does not close it here, nor does an end tag of the other
-//     name); and a character reference in an attribute value that the scan does not decode.
+//   - has one of these markup forms, each refused by name (fail closed: forms the token scan
+//     could read otherwise than the browser; whitespace in markup is HTML whitespace only, TAB,
+//     LF, FF, CR and space): a duplicate attribute (names compared in lower case; the browser
+//     keeps the first copy); a quote, < or = in an attribute name or an unquoted value, or a
+//     backtick in an unquoted value; any other character JS reads as whitespace (U+00A0, VT,
+//     U+2028, U+FEFF, ...) in a tag outside its quoted values; a start or end tag name with a
+//     character outside A-Z, a-z, 0-9, : and - (a name is read up to whitespace, / or >);
+//     <!-->, <!---> or --!> (comment ends) anywhere outside <script>/<style> bodies; between
+//     tags, <?, a <! other than <!-- and the leading doctype, or a </ not followed by a tag name
+//     and optional whitespace then > (bogus comments, an end tag with attributes); <!-- inside a
+//     <script> or <style> body; a </script or </style (any case) other than </script> or
+//     </style> in lower case (whitespace allowed before the >); inside an open <title>,
+//     <textarea>, <xmp>, <iframe>, <noembed>, <noframes>, <noscript> or <plaintext>, a comment,
+//     <script> or <style> that starts there, or a tag whose text holds </ and that element's name
+//     (any case; in a quoted value too); a <script> or <style> inside an open <svg> or <math>;
+//     inside an open integration point (foreignObject, desc, title, mi, mo, mn, ms, mtext,
+//     annotation-xml), a start tag other than <svg> or <math>; an end tag named svg, math or an
+//     integration point, met while one of those is open, that does not name the innermost open
+//     one (the scan keeps the open <svg>, <math> and integration points inside them as a stack,
+//     and such an end tag closes only the innermost, when it names it); and a character reference
+//     in an attribute value that the scan does not decode.
 //     Attribute values are read with character references decoded (decodeCharRefs): &#N and &#xN
 //     with or without the ;, the names in NAMED_REFS ending in ;, and quot, amp, lt, gt (also QUOT,
 //     AMP, LT, GT) and nbsp without the ; unless the next character is a letter, a digit or = (as
@@ -153,9 +161,11 @@ const ANIMATION_TAG = /^(?:set|animate[a-z]*)$/;
 const TEXT_ELEMENTS = new Set(['title', 'textarea', 'xmp', 'iframe', 'noembed', 'noframes',
   'noscript', 'plaintext']);
 const FOREIGN_ELEMENTS = new Set(['svg', 'math']);
-// HTML integration points of <svg>/<math>: inside one, an HTML element can make the browser
-// ignore a </svg> or </math>, so while one is open those end tags do not close the foreign
-// element here (it stays open, and a later <script> or <style> is refused).
+// Integration points of <svg>/<math>, whose content the browser reads as HTML. The scan keeps
+// the open <svg>, <math> and integration points inside them as a stack: an end tag of one of
+// these names closes only the innermost, when it names it, and is refused otherwise; a start tag
+// other than <svg> or <math> inside an open integration point is refused (an HTML element there
+// can make the browser ignore such an end tag, and the scan does not track HTML elements).
 const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'mi', 'mo', 'mn', 'ms',
   'mtext', 'annotation-xml']);
 const OK_SCRIPT_TYPES = new Set(['', 'text/javascript', 'application/javascript']);
@@ -495,12 +505,22 @@ export function vendorNetworkProblems(id, code, inventory = VENDOR_NETWORK) {
   return problems;
 }
 
-// A raw text element's name ends where the browser ends it (whitespace, / or >), so
-// <script-x> is an ordinary element, not a script.
+// HTML whitespace: TAB, LF, FF, CR and space. JS \s also matches U+00A0, VT, U+2028, U+FEFF
+// and more, which the browser reads as part of a name or a value; those are refused in a tag
+// outside its quoted values (NON_HTML_WS).
+const WS = '[\\t\\n\\f\\r ]';
+const NOT_NAME_END = '[^\\t\\n\\f\\r />]';
+const NON_HTML_WS = /[^\S\t\n\f\r ]/u;
+// The tag names the scan accepts; any other is refused (verifyHtml).
+const TAG_NAME = /^[A-Za-z][A-Za-z0-9:-]*$/;
+// A tag name is read up to HTML whitespace, / or > (the characters at which the browser's tag
+// name state ends it), so <script-x> is an ordinary element, not a script, and <title.x> or
+// <style + U+00A0> has a name outside TAG_NAME. <script> or <style> opens raw text only when
+// that name is followed by HTML whitespace, / or >.
 const TOKEN = new RegExp([
-  '<!--[\\s\\S]*?-->',                                              // comment
-  '<(script|style)(?=[\\s/>])((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>([\\s\\S]*?)</\\1\\s*>', // raw text
-  '<([a-zA-Z][\\w:-]*)\\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)/?>',     // start tag
+  '<!--[\\s\\S]*?-->',                                                       // comment
+  `<(script|style)(?=${WS}|[/>])((?:[^>"']|"[^"]*"|'[^']*')*)>([\\s\\S]*?)</\\1${WS}*>`, // raw
+  `<([a-zA-Z]${NOT_NAME_END}*)(?!${NOT_NAME_END})((?:[^>"']|"[^"]*"|'[^']*')*)/?>`, // start tag
 ].join('|'), 'g');
 
 // Character references the scan decodes when they end in ';' (ASCII punctuation, the quote
@@ -553,12 +573,13 @@ export function decodeCharRefs(value) {
   return { text, undecoded };
 }
 
-// The attribute syntax the scan reads as the browser does: a name has no quote, <, =, / or >,
-// an unquoted value no quote, <, =, ` or >; names and unquoted values are matched whole, so
-// the test is linear. Anything else (a quote the browser keeps inside a name or an unquoted
-// value, which TOKEN would read as opening a string) is refused.
-const ATTR_SYNTAX = new RegExp('^(?:\\s+(?!\\s)|/|[^\\s"\'<>/=]+(?![^\\s"\'<>/=])'
-  + '(?:\\s*=\\s*(?:"[^"]*"|\'[^\']*\'|[^\\s"\'<>=`]+(?![^\\s"\'<>=`])))?)*$');
+// The attribute syntax the scan reads (whitespace is HTML whitespace, WS): a name has no
+// quote, <, =, / or >, an unquoted value no quote, <, =, ` or >; names and unquoted values are
+// matched whole, so the test is linear. Anything else (a quote the browser keeps inside a name
+// or an unquoted value, which TOKEN would read as opening a string) is refused.
+const ATTR_SYNTAX = new RegExp(`^(?:${WS}+(?!${WS})|/|[^\\t\\n\\f\\r "'<>/=]+`
+  + `(?![^\\t\\n\\f\\r "'<>/=])(?:${WS}*=${WS}*(?:"[^"]*"|'[^']*'|[^\\t\\n\\f\\r "'<>=\`]+`
+  + `(?![^\\t\\n\\f\\r "'<>=\`])))?)*$`);
 
 /**
  * One tag's attributes as the browser reads them: names in lower case, the first copy of a
@@ -576,7 +597,8 @@ function parseAttrs(src, tag) {
       + '(a quote, < or = in a name or an unquoted value, or a backtick in one): '
       + `${src.slice(0, 80)}`);
   }
-  const re = /([^\s=/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
+  const re = new RegExp(`([^\\t\\n\\f\\r =/>"']+)(?:${WS}*=${WS}*`
+    + `(?:"([^"]*)"|'([^']*)'|([^\\t\\n\\f\\r "'>]+)))?`, 'g');
   let m;
   while ((m = re.exec(src))) {
     const name = m[1].toLowerCase();
@@ -825,15 +847,26 @@ export function verifyHtml(html, {
   if (/sourceMappingURL\s*=/.test(html)) problems.push('source map reference (sourceMappingURL)');
 
   // The markup between tokens holds text and end tags. textOpen is the open element whose
-  // content the browser reads as text, foreign the open <svg>/<math> elements by name and
-  // integration the open integration points inside them; outside is the document without its
+  // content the browser reads as text, foreign the stack of open <svg>/<math> elements and the
+  // integration points inside them (innermost last); outside is the document without its
   // <script>/<style> bodies.
   let textOpen = null;
-  const foreign = { svg: 0, math: 0 };
-  const inForeign = () => foreign.svg + foreign.math > 0;
-  let integration = 0;
+  const foreign = [];
+  const inForeign = () => foreign.length > 0;
+  const tracked = (name) => FOREIGN_ELEMENTS.has(name) || INTEGRATION_POINTS.has(name);
+  const nameProblem = (name, at) => (TAG_NAME.test(name) ? [] : [`markup the scan does not `
+    + `read as the browser does: the tag name ${JSON.stringify(name)} has a character outside `
+    + `[A-Za-z0-9:-] (${JSON.stringify(html.slice(at, at + 40))})`]);
+  const whitespaceProblem = (tagText, tag) => {
+    const ws = tagText.replace(/"[^"]*"|'[^']*'/g, '').match(NON_HTML_WS);
+    if (!ws) return [];
+    const cp = ws[0].codePointAt(0).toString(16).toUpperCase().padStart(4, '0');
+    return [`markup the scan does not read as the browser does: <${tag}> holds U+${cp} outside `
+      + 'a quoted value, which is not HTML whitespace (the browser reads it as part of a name '
+      + 'or a value)'];
+  };
   let outside = '';
-  const END_TAG = /<\/([a-zA-Z][^\s/>]*)\s*>/y;
+  const END_TAG = new RegExp(`</([a-zA-Z]${NOT_NAME_END}*)${WS}*>`, 'y');
   const readGap = (from, to) => {
     const gap = html.slice(from, to);
     outside += gap;
@@ -857,18 +890,21 @@ export function verifyHtml(html, {
           + `${JSON.stringify(html.slice(at, at + 40))} (a bogus comment, or attributes)`);
         continue;
       }
+      problems.push(...nameProblem(end[1], at));
       const name = end[1].toLowerCase();
       if (textOpen && name !== textOpen) continue;
       if (textOpen) textOpen = null;
-      if (INTEGRATION_POINTS.has(name) && integration > 0) integration -= 1;
-      else if (FOREIGN_ELEMENTS.has(name) && integration === 0 && foreign[name] > 0) {
-        foreign[name] -= 1;
+      if (!inForeign() || !tracked(name)) continue;
+      if (foreign.at(-1) === name) foreign.pop();
+      else {
+        problems.push(`markup the scan does not read as the browser does: the end tag `
+          + `</${name}> inside <${foreign.join('> <')}> does not name the innermost open one`);
       }
     }
   };
   // Every </script and </style ends its element where the browser does only in this form.
   for (const e of html.matchAll(/<\/(?:script|style)/gi)) {
-    if (!/^<\/(?:script|style)\s*>/.test(html.slice(e.index, e.index + 64))) {
+    if (!/^<\/(?:script|style)[\t\n\f\r ]*>/.test(html.slice(e.index, e.index + 64))) {
       problems.push(`markup the scan does not read as the browser does: `
         + `${JSON.stringify(html.slice(e.index, e.index + 20))} (an end tag in another form)`);
     }
@@ -893,7 +929,7 @@ export function verifyHtml(html, {
       const { attrs, problems: markup } = parseAttrs(m[2], tag);
       const body = m[3];
       outside += `<${m[1]}${m[2]}>`;
-      problems.push(...markup);
+      problems.push(...markup, ...whitespaceProblem(`<${m[1]}${m[2]}>`, tag));
       if (textOpen) {
         problems.push(`a <${tag}> inside <${textOpen}>, whose content the browser reads as text`);
       }
@@ -938,15 +974,27 @@ export function verifyHtml(html, {
     const tag = m[4].toLowerCase();
     const { attrs, problems: markup } = parseAttrs(m[5], tag);
     problems.push(...markup);
+    problems.push(...nameProblem(m[4], m.index), ...whitespaceProblem(m[0], tag));
+    // The browser ends a text element at the first </name, in a quoted value too.
+    if (textOpen && m[0].toLowerCase().includes(`</${textOpen}`)) {
+      problems.push(`markup the scan does not read as the browser does: a tag inside `
+        + `<${textOpen}> holds </${textOpen}, where the browser ends the element: `
+        + `${JSON.stringify(m[0].slice(0, 60))}`);
+    }
+    if (INTEGRATION_POINTS.has(foreign.at(-1)) && !FOREIGN_ELEMENTS.has(tag)) {
+      problems.push(`markup the scan does not read as the browser does: <${tag}> inside the `
+        + `integration point <${foreign.at(-1)}> (HTML elements there are not tracked)`);
+    }
     if (tag === 'script' || tag === 'style') {
       problems.push(`unterminated <${tag}>`);
       continue;
     }
     if (!textOpen) {
       const open = !m[0].endsWith('/>');
-      if (open && inForeign() && INTEGRATION_POINTS.has(tag)) integration += 1;
+      if (open && (FOREIGN_ELEMENTS.has(tag) || (inForeign() && INTEGRATION_POINTS.has(tag)))) {
+        foreign.push(tag);
+      }
       if (TEXT_ELEMENTS.has(tag)) textOpen = tag;
-      else if (open && FOREIGN_ELEMENTS.has(tag)) foreign[tag] += 1;
     }
     if (tag === 'base') problems.push('<base> element changes URL resolution');
     // A <link>'s href has its own rule; its other attributes (inline handlers, Alpine
@@ -1077,7 +1125,7 @@ function main() {
     for (const p of problems) console.error(`  FAIL ${p}`);
     process.exit(1);
   }
-  console.log('  PASS markup read as the browser does (the forms the header lists refused); '
+  console.log('  PASS the markup contains none of the markup forms the header lists as refused; '
     + 'no file/remote references; first-party script, as written and escaped, '
     + 'has none of the forms the header lists as refused (among them fetch( not after a dot, '
     + 'import(, serviceWorker, the identifier eval, Function(, setTimeout/setInterval( with a '

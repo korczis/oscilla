@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import * as verifyDist from '../../scripts/verify-dist.mjs';
 
 // A namespace import, so that on a base without the R040 exports each case fails by itself.
@@ -636,6 +638,92 @@ test('markup the browser reads otherwise than the token scan is refused (fail cl
   const body = '<textarea>a</textarea><!-- c --><svg><path d="M0 0"/></svg><svg/>'
     + '<style>b{}</style><math><mi>x</mi></math><script>1</script>';
   assert.deepEqual(check(doc({ head: '<title>t</title>', body })), []);
+});
+
+// R040 round 8: four bypasses of the markup forms, each passing at 6eec9601 and loading in
+// Chromium (seat reviewer af, round 8), and the wording that claimed them held.
+const R8_IMG = '<img src="https://t.example/p.gif">';
+const R8_REFRESH = '<meta http-equiv="refresh" content="0;url=https://t.example/">';
+const R8_FETCH = "fetch('https://t.example/')";
+
+test('a tag inside an open text element holding </ and its name is refused (R8 1)', () => {
+  const re = /a tag inside <(textarea|title|xmp|noscript)> holds <\/\1, where the browser ends/;
+  for (const body of [
+    `<textarea><b x="</textarea><script>${R8_FETCH}</script>"></b></textarea>`,
+    `<textarea><b x="</textarea><img src='https://t.example/p.gif'>"></b></textarea>`,
+    `<xmp><b x='</XMP>${R8_IMG}'></b></xmp>`,
+    `<noscript><b x="</noScript><script>${R8_FETCH}</script>"></b></noscript>`,
+  ]) fails(doc({ body }), re);
+  fails(doc({ head: `<title><a title='</title>${R8_REFRESH}'></a></title>` }), re);
+  // Another element's end tag in a quoted value, and the same value outside a text element.
+  assert.deepEqual(check(doc({
+    body: '<textarea><b x="</title>"></b></textarea><b x="</textarea>"></b>',
+  })), []);
+});
+
+test('only TAB, LF, FF, CR and space are whitespace in markup; any other is refused (R8 2)', () => {
+  const ws = /holds U\+(00A0|000B|2028|FEFF) outside a quoted value, which is not HTML whitespace/;
+  for (const c of [' ', '\u000b', ' ', '﻿']) {
+    fails(doc({ body: `<style${c}>${R8_IMG}</style>` }), ws);
+    fails(doc({ body: `<script${c}>${R8_REFRESH}</script>` }), ws);
+    // </script + U+00A0 does not end the script in the browser: the fetch is script.
+    const app = `1</script${c}>/;${R8_FETCH}//`;
+    fails(doc({ app }), /an end tag in another form/);
+    fails(doc({ app }), /first-party script uses fetch\(\)/);
+    fails(doc({ head: `<style>a{}</style${c}>${R8_IMG}</style>` }), /an end tag in another form/);
+    // An unquoted value runs on past it, as in the browser: onclick is "0,<c>fetch(location)".
+    const body = `<button onclick=0,${c}fetch(location)>x</button>`;
+    fails(doc({ body }), ws);
+    fails(doc({ body }), /first-party script in <button onclick> uses fetch\(\)/);
+  }
+  // HTML whitespace in tags, and U+00A0 inside a quoted value, pass.
+  const body = '<p\ftitle=x\r>a</p\t><b\ntitle="a b"></b><style\f>b{}</style\r>';
+  assert.deepEqual(check(doc({ body })), []);
+});
+
+test('svg/math and integration points are a stack; an unmatched end tag is refused (R8 3)', () => {
+  const desc = `<svg><foreignObject><div></desc></svg></div></foreignObject><style>${R8_IMG}`
+    + '</style></svg>';
+  fails(doc({ body: desc }), /the end tag <\/desc> inside <svg> <foreignobject> does not name/);
+  fails(doc({ body: desc }), /<div> inside the integration point <foreignobject>/);
+  for (const body of [
+    `<svg><foreignObject><div></foreignObject></svg></div></foreignObject><style>${R8_IMG}`
+      + '</style></svg>',
+    '<svg><foreignObject><div></foreignObject></svg></div></foreignObject><style>'
+      + `<script>${R8_FETCH}</script></style></svg>`,
+  ]) fails(doc({ body }), /<div> inside the integration point <foreignobject>/);
+  fails(doc({ body: `<svg><desc></svg></desc><style>${R8_IMG}</style></svg>` }),
+    /the end tag <\/svg> inside <svg> <desc> does not name/);
+  // Nested and matched: closed in order, then a <style> outside passes.
+  const body = '<svg><desc>d</desc><svg><title>t</title></svg><foreignObject><svg/>'
+    + '</foreignObject></svg><math><mi>x</mi><mtext>y</mtext></math><style>b{}</style>';
+  assert.deepEqual(check(doc({ body })), []);
+});
+
+test('a tag name with a character outside [A-Za-z0-9:-] is refused (R8 4)', () => {
+  for (const [body, name] of [
+    [`<title.x><svg></title><style>${R8_IMG}</style></svg>`, 'title.x'],
+    [`<textarea.x><svg></textarea><style>${R8_IMG}</style></svg>`, 'textarea.x'],
+    [`<xmpé><svg></xmp><style>${R8_IMG}</style></svg>`, 'xmpé'],
+    ['<b>x</b.x>', 'b.x'],
+  ]) fails(doc({ body }), new RegExp(`the tag name ${JSON.stringify(name)} has a character`));
+  assert.deepEqual(check(doc({ body: '<my-el x:y="1"><o:p>a</o:p></my-el><h2>b</h2>' })), []);
+});
+
+test('the PASS line and the header claim only the markup forms they list (R8 5)', () => {
+  const script = new URL('../../scripts/verify-dist.mjs', import.meta.url);
+  const out = execFileSync(process.execPath, [fileURLToPath(script)], { encoding: 'utf8' });
+  assert.ok(out.includes('\n  PASS the markup contains none of the markup forms the header '
+    + 'lists as refused; no file/remote references; '), out);
+  assert.doesNotMatch(out, /read as the browser does/);
+  const source = readFileSync(script, 'utf8');
+  for (const claim of ['has markup this scan does not read as the browser does',
+    'name ends where the browser ends it', 'does not close it here']) {
+    assert.ok(!source.includes(claim), `verify-dist.mjs still claims "${claim}"`);
+  }
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.ok(!readme.includes('markup the scan does not read as the browser does is refused'));
+  assert.ok(readme.includes('none of the markup forms the header lists as refused'));
 });
 
 // Every letter and digit spelt as \uXXXX: the escaped spelling of a refused form.
