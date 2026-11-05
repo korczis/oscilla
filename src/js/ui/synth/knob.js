@@ -45,17 +45,23 @@ function arcPath(r, a, b) {
 
 // Graph units, in the 44 box. The unlit arc is half the value arc's width (no token pair holds
 // 3:1 between them). Slice A: cast shadow (control.shade); skirt of 30 teeth 1.2 deep (1.75 px
-// at 64 px) in the cap's colour, its silhouette edge control.edge (3:1 on the plates); side wall
-// (lit top) and sheen gradients at hw-sheen; butt pointer on cap and skirt; hover a thin circle
-// (C5). C1 (S7, co-signed by p2 and dev-53): disabled draws no value arc, no applied mark, the
-// track only; cap and skirt plateLo (no side wall, no sheen), the pointer control.disabled, the
-// edge the quiet control.knurl. The absent value mark is a shape cue, not colour alone.
+// at 64 px) in the cap's colour, its silhouette edge control.edge (3:1 on the plates) under a
+// rim lit from above (text.label at the top to control.edge at the foot, both 3:1 on the
+// plates: A7); a side wall (lit top) at hw-sheen; no sheen, since no token shows on the cap in
+// both themes (rule b; A3: D-PAL); butt pointer on cap and skirt; hover (C5, one language for
+// knob, dial, lever and slide: A1) brightens the part's own edge, the toothed outline in
+// control.pointer. Depth shows on plateHi; on plateLo, the cap's own token, it waits on D-PAL's
+// --osc-knob-cap (A2). C1 (S7, co-signed by p2 and dev-53): disabled draws no value arc, no
+// applied mark, the track only; cap and skirt plateLo (no side wall, no rim), the pointer
+// control.disabled, the edge the quiet control.knurl. The absent value mark is a shape cue, not
+// colour alone; plateLo is control.cap's token until D-PAL, so the cue today is the missing value
+// arc, the dim pointer and the quiet edge (A4).
 export const KNOB = Object.freeze({ arc: 18.5, arcW: 2.5, trackW: 1.25, skirt: 16, toothIn: 14.8,
-  teeth: 30, edgeW: 1, hoverW: 1, cap: 12, pointerIn: 5, pointerOut: 12, pointerW: 2,
+  teeth: 30, edgeW: 1, cap: 12, pointerIn: 5, pointerOut: 12, pointerW: 2,
   skirtPtrIn: 12.5, skirtPtrW: 1.5, tickIn: 20.75, tickOut: 22, ticks: 11, tickZoom: 1.25,
   detentOut: 21.75,
   detentW: 1.5, applied: 13.5, appliedW: 1.5, appliedMinDeg: 5, focus: 21, focusW: 2,
-  shadowGrow: 0.5, shadowDx: 0.75, shadowDy: 1.5, shadowDragDy: 2.5, sheenFx: -4, sheenFy: -5 });
+  shadowGrow: 0.5, shadowDx: 0.75, shadowDy: 1.5, shadowDragDy: 2.5 });
 
 /**
  * A knob's sizes (G022): the same part scaled about its centre, outer diameters 80, 64 and 48 px
@@ -146,7 +152,15 @@ const line = (flag, r0, r1, deg, paint, w) => {
 const stops = (a, b) => `<stop offset="0" stop-color="${esc(a)}"/>`
   + `<stop offset="1" stop-color="${esc(b)}"/>`;
 
-/** The knob's face, pointer at `deg`: shadow, `under`, skirt, side wall, `mid`, cap, sheen,
+/** C5's one hover language (A1): an overlay of a part's edge, `shape` the edge element's own
+ *  geometry and width, in control.pointer; always emitted, so a host can reveal it with
+ *  group-hover, shown on hover and never while disabled. knob, dial, lever and slide draw it. */
+export function hoverEdge(shape, t, st = {}) {
+  return `<${shape} data-hover="" fill="none" stroke="${esc(t.control.pointer)}"`
+    + `${st.hover && !st.disabled ? '' : ' visibility="hidden"'}/>`;
+}
+
+/** The knob's face, pointer at `deg`: shadow, `under`, skirt, side wall, lit rim, `mid`, cap,
  *  hover, pointer (st: controlSvg's; ids knob-`uid`). switch.js's dial draws it too. */
 export function knobFace(deg, t, st = {}, uid = 'knob', under = '', mid = '') {
   const c = t.control;
@@ -161,19 +175,17 @@ export function knobFace(deg, t, st = {}, uid = 'knob', under = '', mid = '') {
     + `<path d="${TEETH}" data-skirt="" fill="${body}" `
     + `stroke="${esc(dim ? c.knurl : c.edge)}" stroke-width="${k.edgeW}"/>`
     + (dim ? '' : `<defs><linearGradient id="${id}-side" x1="0" y1="0" x2="0" y2="1">`
-      + `${stops(c.cap, t.surface.edge)}</linearGradient><radialGradient id="${id}-sheen" `
-      + `gradientUnits="userSpaceOnUse" cx="0" cy="0" r="${k.cap}" fx="${k.sheenFx}" `
-      + `fy="${k.sheenFy}">${stops(c.capHi, c.cap)}</radialGradient></defs>`
+      + `${stops(c.cap, t.surface.edge)}</linearGradient><linearGradient id="${id}-rim" `
+      + `x1="0" y1="0" x2="0" y2="1">${stops(t.text.label, c.edge)}</linearGradient></defs>`
       + `<path d="${TEETH}" data-side="" class="${SHEEN_CLASS}" fill="url(#${id}-side)" `
-      + 'stroke="none"/>')
+      + 'stroke="none"/>'
+      + `<path d="${TEETH}" data-rim="" fill="none" stroke="url(#${id}-rim)" `
+      + `stroke-width="${k.edgeW}"/>`)
     + mid
     + `<circle data-cap="" cx="0" cy="0" r="${k.cap}" fill="${body}" `
     + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
-    + (dim ? '' : `<circle data-sheen="" class="${SHEEN_CLASS}" cx="0" cy="0" r="${k.cap}" `
-      + `fill="url(#${id}-sheen)" stroke="none"/>`)
     // K6-core: always emitted, shown on hover (or a host's group-hover), never disabled.
-    + `<circle data-hover="" cx="0" cy="0" r="${k.toothIn}" fill="none" stroke="${esc(c.capHi)}" `
-    + `stroke-width="${k.hoverW}"${st.hover && !dim ? '' : ' visibility="hidden"'}/>`
+    + hoverEdge(`path d="${TEETH}" stroke-width="${k.edgeW}"`, t, st)
     + line('data-pointer', k.pointerIn, k.pointerOut, deg, ptr, k.pointerW)
     + line('data-pointer-skirt', k.skirtPtrIn, k.skirt, deg, ptr, k.skirtPtrW);
 }
@@ -318,6 +330,9 @@ export function controlSvg({ kind, value, applied, param, tokens, zoom = 1, stat
     throw new TypeError('controlSvg needs the synth tokens (synthTokens(el)).');
   }
   zoomOf(zoom, 'controlSvg');
+  if (kind === 'knob' && !tokens.text) {
+    throw new TypeError('controlSvg: a knob needs the synth tokens\' text (its lit rim).');
+  }
   const shapes = Object.hasOwn(SHAPES, kind) ? SHAPES[kind] : null;
   if (!shapes) throw new Error(`controlSvg: kind must be knob, fader or switch, not '${kind}'.`);
   if (kind === 'switch') switchPositions(param);

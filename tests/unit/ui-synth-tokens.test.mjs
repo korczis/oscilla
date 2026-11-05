@@ -386,6 +386,73 @@ test('slice A review 3: a disabled knob\'s edge is no louder than an enabled one
   assert.deepEqual(loud, []);
 });
 
+// Review of slice A, A1 (C5, one hover language): knob, dial, lever and slide each brighten
+// their part's own edge on hover, the same rule for all four: an overlay always emitted (hidden
+// unless hovered, never while disabled) tracing the edge element at its width, in
+// control.pointer, while the edge element keeps its idle paint. The floor, measured from
+// tokens.css in both themes: the hovered edge holds 3:1 on every face either side of it, and
+// on each of them more than every idle paint of that edge (the rim's stops included), so it
+// brightens, unlike the faint capHi circle (1.3:1 on the cap) it replaces.
+test('slice A A1: one hover language: knob, dial, lever and slide brighten the part\'s edge',
+  () => {
+    const N = SYNTH_TOKEN_NAMES;
+    const tag = (svg, flag) => new RegExp(`<\\w+\\b[^>]*\\s${flag}=""[^>]*>`).exec(svg)?.[0];
+    const at = (el, a) => (new RegExp(`\\s${a}="([^"]*)"`).exec(el) || [])[1];
+    const num = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+    const bool = { key: 'on', type: 'boolean', default: false };
+    const slide = { key: 'mode', type: 'enum', default: 'b', options: ['a', 'b', 'c']
+      .map((v) => [v, v.toUpperCase()]) };
+    const dial = { key: 'wave', type: 'enum', default: 'b', options: ['a', 'b', 'c', 'd', 'e']
+      .map((v) => [v, v.toUpperCase()]) };
+    const knob = (state) => controlSvg({ kind: 'knob', value: 70, param: num, tokens: TOKENS,
+      state });
+    const sw = (param) => (state) => switchSvg({ value: param.default, param, tokens: TOKENS,
+      state });
+    // Each part: how it is drawn, its edge element, the geometry the overlay traces and the faces
+    // either side of the edge (its own fill, and what it stands on).
+    const PARTS = [['knob', knob, 'data-skirt', ['d'], [N.surface.plateHi, N.surface.plateLo]],
+      ['dial', sw(dial), 'data-skirt', ['d'], [N.surface.plateHi, N.surface.plateLo]],
+      ['lever', sw(bool), 'data-nut', ['d'], [N.control.knurl]],
+      ['slide', sw(slide), 'data-cap', ['x', 'y', 'width', 'height', 'rx'],
+        [N.surface.plateHi, N.surface.plateLo, N.surface.edge]]];
+    const short = [];
+    const rules = new Set();
+    for (const [what, draw, flag, geometry, beside] of PARTS) {
+      const idle = draw({});
+      const lit = draw({ hover: true });
+      const edge = tag(lit, flag);
+      const h = tag(lit, 'data-hover');
+      assert.ok(edge && h, `${what}: the edge and its hover overlay`);
+      assert.equal(at(tag(idle, 'data-hover'), 'visibility'), 'hidden', `${what}: idle, hidden`);
+      assert.equal(at(tag(draw({ hover: true, disabled: true }), 'data-hover'), 'visibility'),
+        'hidden', `${what}: never while disabled`);
+      assert.equal(at(h, 'visibility'), undefined, `${what}: shown on hover`);
+      assert.equal(tag(idle, flag), edge, `${what}: the edge itself is not swapped on hover`);
+      for (const g of geometry) assert.equal(at(h, g), at(edge, g), `${what}: the edge's ${g}`);
+      assert.equal(at(h, 'stroke-width'), at(edge, 'stroke-width'), `${what}: the edge's width`);
+      assert.equal(at(h, 'fill'), 'none', what);
+      rules.add(`${varOf(at(h, 'stroke'))} ${at(h, 'class') ?? ''}`);
+      const hover = varOf(at(h, 'stroke'));
+      const idlePaints = [varOf(at(edge, 'stroke'))];
+      const rim = tag(lit, 'data-rim');
+      if (rim) idlePaints.push(...knobStops('rim'));
+      const faces = [varOf(at(edge, 'fill')), ...beside];
+      for (const [theme, t] of Object.entries(themes())) {
+        for (const f of faces) {
+          const r = contrast(hexOf(t, hover), hexOf(t, f));
+          if (r < 3) short.push(`${theme} ${what}: hover ${hover} on ${f} ${r.toFixed(2)}`);
+          for (const p of idlePaints) {
+            const was = contrast(hexOf(t, p), hexOf(t, f));
+            if (r <= was) short.push(`${theme} ${what}: hover ${r.toFixed(2)} no brighter than `
+              + `${p} ${was.toFixed(2)} on ${f}`);
+          }
+        }
+      }
+    }
+    assert.deepEqual([...rules], [`${N.control.pointer} `], 'one rule: control.pointer, opaque');
+    assert.deepEqual(short, []);
+  });
+
 /** The stops of the knob's gradient whose id ends in `-${which}`, as token names. */
 function knobStops(which) {
   const svg = controlSvg({ kind: 'knob', value: 70, tokens: TOKENS, param: { key: 'level',
@@ -408,15 +475,34 @@ test('slice A review 8: the side wall is lit from above in both themes', () => {
   }
 });
 
-// The sheen's lit stop is capHi by amendment (d) (oscilla-21) until the highlight shows on the
-// cap in both themes, and no token is lighter than the light theme's cap: the inversion there
-// waits for D-PAL's --osc-knob-cap/-cap-hi (C6), which this test then holds.
-test('slice A review 8: the sheen is lit at its focus in both themes (awaits D-PAL)', {
-  todo: 'D-PAL --osc-knob-cap-hi (oscilla-21, C6): the light capHi is darker than the cap',
+// Review of slice A, A7: the toothed rim is lit from above, a vertical gradient from text.label
+// (top) to control.edge (foot). Both stops are the rim's paint where they meet the plate, so
+// each holds the layer's 3:1 for a graphic on both plates in both themes, as drawn.
+test('slice A A7: both stops of the knob\'s lit rim hold 3:1 on both plates, both themes', () => {
+  const rim = knobStops('rim');
+  assert.deepEqual(rim, [SYNTH_TOKEN_NAMES.text.label, SYNTH_TOKEN_NAMES.control.edge]);
+  const short = [];
+  for (const [theme, t] of Object.entries(themes())) {
+    for (const stop of rim) {
+      for (const plate of PLATES) {
+        const ratio = contrast(hexOf(t, stop), hexOf(t, plate));
+        if (ratio < 3) short.push(`${theme} ${stop} on ${plate}: ${ratio.toFixed(2)}`);
+      }
+    }
+  }
+  assert.deepEqual(short, [], 'a rim stop under 3:1 on a plate');
+});
+
+// The rim reads lit from above by its lightness only where its top stop is the lighter: so in
+// dark (--osc-text-muted L* 68 over --osc-text-dim 50); in light the muted ink is the darker
+// (L* 43 over 51), and no token lighter than control.edge holds 3:1 on the light plates, so the
+// light rim is lit by contrast, crisper at the top, until D-PAL's cap roles.
+test('slice A A7: the rim\'s top stop is the lighter in both themes (awaits D-PAL)', {
+  todo: 'D-PAL (oscilla-21, Q071): no light token lighter than control.edge holds 3:1',
 }, () => {
-  const [lit, rest] = knobStops('sheen');
-  for (const t of Object.values(themes())) {
-    assert.ok(lstar(hexOf(t, lit)) >= lstar(hexOf(t, rest)));
+  const [top, foot] = knobStops('rim');
+  for (const [theme, t] of Object.entries(themes())) {
+    assert.ok(lstar(hexOf(t, top)) > lstar(hexOf(t, foot)), theme);
   }
 });
 
@@ -476,11 +562,38 @@ const MIN_DL = 3;
 const shapesOf = (svg) => [...svg.matchAll(/<(circle|rect|ellipse|path|line)\b([^>]*?)\/?>/g)]
   .map((m) => ({ tag: m[1], a: Object.fromEntries([...m[2].matchAll(/\s([\w:-]+)="([^"]*)"/g)]
     .map((x) => [x[1], x[2]])) }));
-/** Where a use shows: a circle's lowest point (a drop shadow's tip), a path's first point. */
-function sampleOf(s) {
-  if (s.tag === 'circle') return [Number(s.a.cx), Number(s.a.cy) + Number(s.a.r) - 0.01];
-  const m = /^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(s.a.d || '');
-  return m ? [Number(m[1]), Number(m[2])] : null;
+/** A polygon path's vertices ('M x y L x y ... Z', no curve), or null. */
+function polygonOf(s) {
+  const d = s.a.d || '';
+  if (s.tag !== 'path' || !/^M[\s\d.,LZ-]*$/.test(d)) return null;
+  const pts = [...d.matchAll(/(-?[\d.]+)[\s,]+(-?[\d.]+)/g)].map((m) => [Number(m[1]),
+    Number(m[2])]);
+  return pts.length >= 3 ? pts : null;
+}
+/** Where a use shows (review of slice C, C2): the light comes from above, so a shadow shows
+ *  along its lowest edge and a highlight along its own. Points along that edge, 0.01 inside:
+ *  a circle's lowest point, a rect's bottom edge, a polygon's lowest vertex or vertices; a
+ *  stroked line or curve (a recess, an arc), where it starts. */
+function samplesOf(s) {
+  // A slide cap's shadow edge crosses its slot: over the slot (surface.edge) the dark shade does
+  // not show, as no shadow shows on black, and the face is the plate under most of the edge.
+  const n = (k) => Number(s.a[k]);
+  // Nine points at the middles of nine equal spans, so each stands for a ninth of the edge.
+  const along = (x0, x1, y) => Array.from({ length: 9 }, (_, i) => [x0 + ((x1 - x0) * (i + 0.5))
+    / 9, y - 0.01]);
+  if (s.tag === 'circle') return [[n('cx'), n('cy') + n('r') - 0.01]];
+  if (s.tag === 'rect') {
+    const rx = Number(s.a.rx || 0);
+    return along(n('x') + rx, n('x') + n('width') - rx, n('y') + n('height'));
+  }
+  const pts = polygonOf(s);
+  if (!pts) {
+    const m = /^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/.exec(s.a.d || '');
+    return m ? [[Number(m[1]), Number(m[2])]] : [];
+  }
+  const low = Math.max(...pts.map(([, y]) => y));
+  const xs = pts.filter(([, y]) => Math.abs(y - low) < 1e-6).map(([x]) => x);
+  return xs.length > 1 ? along(Math.min(...xs), Math.max(...xs), low) : [[xs[0], low - 0.01]];
 }
 function covers(s, [x, y]) {
   const n = (k) => Number(s.a[k]);
@@ -488,15 +601,25 @@ function covers(s, [x, y]) {
   if (s.tag === 'rect') {
     return x >= n('x') && x <= n('x') + n('width') && y >= n('y') && y <= n('y') + n('height');
   }
-  return false;
+  const pts = polygonOf(s);
+  if (!pts) return false;
+  let inside = false;
+  for (let i = 0, k = pts.length - 1; i < pts.length; k = i++) {
+    const [xi, yi] = pts[i];
+    const [xk, yk] = pts[k];
+    if ((yi > y) !== (yk > y) && x < ((xk - xi) * (y - yi)) / (yk - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
 /** An opaque face: a filled shape with no intensity class, shown. */
 const isFace = (s) => s.a.fill && s.a.fill !== 'none' && !s.a.class
-  && s.a.visibility !== 'hidden' && (s.tag === 'circle' || s.tag === 'rect');
+  && s.a.visibility !== 'hidden' && (s.tag === 'circle' || s.tag === 'rect' || polygonOf(s));
 
-/** Every use of a depth role in `svg`: its role, class and the face drawn last under it; where
- *  the drawing has none there, `ground`, the face its host draws it on (a control on its plate,
- *  as its token set names it; slice A's cast shadow falls there), else none. */
+/** Every use of a depth role in `svg`: its role, class and the face it shows on. A use is judged
+ *  where it shows (samplesOf) and no later opaque face covers it; the face is the one drawn last
+ *  under it there, else `ground`, the face its host draws it on (a control on its plate, as its
+ *  token set names it; slice A's cast shadow falls there), and of several along its edge the one
+ *  under most of it. A use no later face leaves uncovered anywhere has no face (null). */
 function depthUses(svg, where, ground) {
   const list = shapesOf(svg);
   const out = [];
@@ -504,9 +627,16 @@ function depthUses(svg, where, ground) {
     for (const paint of ['fill', 'stroke']) {
       const role = varOf(s.a[paint]);
       if (!DEPTH[role]) continue;
-      const p = sampleOf(s);
-      const under = p && list.slice(0, i).reverse().find((u) => isFace(u) && covers(u, p));
-      out.push({ role, paint, cls: s.a.class, face: under ? varOf(under.a.fill) : varOf(ground),
+      const seen = samplesOf(s).filter((p) => !list.slice(i + 1).some((u) => isFace(u)
+        && covers(u, p)));
+      const faces = seen.map((p) => {
+        const under = list.slice(0, i).reverse().find((u) => isFace(u) && covers(u, p));
+        return under ? varOf(under.a.fill) : varOf(ground);
+      });
+      const count = new Map();
+      for (const f of faces) count.set(f, (count.get(f) || 0) + 1);
+      const face = [...count.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
+      out.push({ role, paint, cls: s.a.class, face,
         part: Object.keys(s.a).find((k) => k.startsWith('data-')) || s.tag, where });
     }
   });
@@ -646,6 +776,75 @@ test('every use of a depth role is visible: |ΔL*| >= 3 at its intensity, in bot
     assert.deepEqual(short, [], `under ΔL* ${MIN_DL}`);
   });
 
+// Review of slice A, A2: a knob or a dial stands on either plate (plateHi at a module's top,
+// plateLo at its foot), so its depth is judged on both, not only on the token set's card. On
+// plateHi its cast shadow holds (a) and (b) in both themes. On plateLo it cannot: the cap is
+// --osc-surface-1, plateLo itself, so the body has no tone of its own there and the dark shade
+// shows ΔL* -1.71 on it (K1 holds on plateHi only, until D-PAL's --osc-knob-cap).
+const ON_PLATE = (plate) => {
+  const num = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+  const dial = { key: 'wave', type: 'enum', default: 'a', options: ['a', 'b', 'c', 'd', 'e']
+    .map((v) => [v, v.toUpperCase()]) };
+  const uses = [];
+  for (const state of [{}, { dragging: true }, { hover: true }, { focus: true }]) {
+    uses.push(...depthUses(controlSvg({ kind: 'knob', value: 70, param: num, tokens: TOKENS,
+      state }), `knob ${JSON.stringify(state)}`, `var(${plate})`));
+    uses.push(...depthUses(switchSvg({ value: 'b', param: dial, tokens: TOKENS, state }),
+      `dial ${JSON.stringify(state)}`, `var(${plate})`));
+  }
+  return uses;
+};
+/** What fails (a) or (b) of `uses` in either theme, and the body's tone off `plate`. */
+function depthShort(uses, plate) {
+  const short = [];
+  const a = (role) => Number(HW[DEPTH[role]]);
+  for (const [theme, t] of Object.entries(themes())) {
+    for (const u of uses) {
+      const dl = deltaL(hexOf(t, u.role), hexOf(t, u.face), a(u.role));
+      const r = contrast(hexOf(t, u.role), hexOf(t, u.face));
+      const min = u.role === SYNTH_TOKEN_NAMES.control.shade ? 1.15 : 3;
+      if (Math.abs(dl) < MIN_DL || r < min) {
+        short.push(`${theme} ${u.where} ${u.part} on ${u.face}: ΔL* ${dl.toFixed(2)}, `
+          + `${r.toFixed(3)}:1`);
+      }
+    }
+    const body = Math.abs(lstar(hexOf(t, SYNTH_TOKEN_NAMES.control.cap)) - lstar(hexOf(t, plate)));
+    if (body < MIN_DL) short.push(`${theme} the cap's body on ${plate}: ΔL* ${body.toFixed(2)}`);
+  }
+  return short;
+}
+
+test('slice A A2: a knob\'s and a dial\'s depth shows on plateHi in both themes', () => {
+  const plate = SYNTH_TOKEN_NAMES.surface.plateHi;
+  const uses = ON_PLATE(plate);
+  assert.ok(uses.filter((u) => u.face === plate).length >= 8, 'the cast shadows on the plate');
+  assert.deepEqual(depthShort(uses, plate), []);
+});
+
+test('slice A A2: a knob\'s and a dial\'s depth shows on plateLo too (awaits D-PAL)', {
+  todo: 'D-PAL --osc-knob-cap (oscilla-21, Q071): the cap is plateLo, and the dark shade is '
+    + 'ΔL* -1.71 there',
+}, () => {
+  const plate = SYNTH_TOKEN_NAMES.surface.plateLo;
+  assert.deepEqual(depthShort(ON_PLATE(plate), plate), []);
+});
+
+// Review of slice A, A4: C1 flattens a disabled knob's body to plateLo, and plateLo is the cap's
+// own token until D-PAL, so the flattening draws nothing yet; the cue today is the missing value
+// arc, the control.disabled pointer and the quiet edge (ui-synth-knob.test.mjs). Once the cap has
+// a role of its own the disabled body differs from it, as C1 says.
+test('slice A A4: a disabled knob\'s body differs from the enabled cap (C1; awaits D-PAL)', {
+  todo: 'D-PAL --osc-knob-cap (oscilla-21): plateLo and control.cap are --osc-surface-1',
+}, () => {
+  const param = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+  const body = (state) => varOf(/\sfill="([^"]*)"/.exec(/<path\b[^>]*\sdata-skirt=""[^>]*>/
+    .exec(controlSvg({ kind: 'knob', value: 70, param, tokens: TOKENS, state }))[0])[1]);
+  for (const [theme, t] of Object.entries(themes())) {
+    const dl = lstar(hexOf(t, body({ disabled: true }))) - lstar(hexOf(t, body({})));
+    assert.ok(Math.abs(dl) >= MIN_DL, `${theme}: ΔL* ${dl.toFixed(2)}`);
+  }
+});
+
 test('the light shade is the lightest tint of the palette\'s navy ink that passes (a) and (b)',
   () => {
     // The tint of the light theme's --osc-text (the palette's own navy) toward white, k/255: the
@@ -674,26 +873,52 @@ test('the light shade is the lightest tint of the palette\'s navy ink that passe
     console.log(`light ${N.shade} ${pick}: the lightest tint of ${ink} passing on ${faces}`);
   });
 
-test('the knob keeps capHi as its sheen unless the highlight shows on the cap in both themes (d)',
+// Rule (d) (oscilla-21) kept the capHi sheen until the highlight shows on the cap in both
+// themes. Review of slice A, A3: capHi did not show either (ΔL* +1.26 dark, -1.41 light, the
+// wrong way), so the knob paints its sheen only where a token shows on the cap in both themes,
+// (b) |ΔL*| >= 3 and lighter: the highlight first, else capHi, else none. Computed from
+// tokens.css, so the test names the paint a palette change calls for. Today: none.
+test('the knob\'s sheen is the highlight, else capHi, where it shows on the cap, else none (d)',
   () => {
     const N = SYNTH_TOKEN_NAMES.control;
     const a = Number(HW['hw-sheen']);
-    const dl = Object.fromEntries(Object.entries(themes()).map(([theme, t]) => [theme,
-      deltaL(hexOf(t, N.highlight), hexOf(t, N.cap), a)]));
-    const both = Object.values(dl).every((v) => Math.abs(v) >= MIN_DL);
+    const shows = (role) => Object.values(themes()).every((t) => deltaL(hexOf(t, role),
+      hexOf(t, N.cap), a) >= MIN_DL);
+    const want = [N.highlight, N.capHi].find(shows) ?? null;
     const svg = controlSvg({ kind: 'knob', value: 70, tokens: TOKENS,
       param: { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 } });
-    // Slice A (K12): the sheen is a radial gradient on the cap; its lit stop is the paint.
-    const sheen = /<circle\b[^>]*data-sheen=""[^>]*class="opacity-hw-sheen"[^>]*>/.exec(svg)[0];
-    const id = /\sfill="url\(#([^)]+)\)"/.exec(sheen)[1];
-    const grad = new RegExp(`<radialGradient\\b[^>]*id="${id}"[^>]*>(.*?)</radialGradient>`)
-      .exec(svg)[1];
-    const want = both ? TOKENS.control.highlight : TOKENS.control.capHi;
-    assert.equal(/\sstop-color="([^"]*)"/.exec(grad)[1], want, `the highlight on the cap: ΔL* dark `
-      + `${dl.dark.toFixed(2)}, light ${dl.light.toFixed(2)}`);
-    console.log(`knob sheen: ${want} (highlight on ${N.cap}: dark ${dl.dark.toFixed(2)}, light `
-      + `${dl.light.toFixed(2)})`);
+    const sheen = /<\w+\b[^>]*\sdata-sheen=""[^>]*>/.exec(svg);
+    if (want === null) {
+      assert.equal(sheen, null, 'no token shows on the cap in both themes: no sheen');
+    } else {
+      assert.ok(sheen, `a sheen in ${want}`);
+      assert.match(sheen[0], /\sclass="opacity-hw-sheen"/);
+    }
+    console.log(`knob sheen: ${want ?? 'none'} (on ${N.cap})`);
   });
+
+// The knob's sheen once D-PAL gives the cap roles a highlight that shows on it in both themes.
+test('slice A A3: the knob carries a sheen visible on its cap in both themes (awaits D-PAL)', {
+  todo: 'D-PAL --osc-knob-cap/-cap-hi (oscilla-21, C6): no token shows on the light cap',
+}, () => {
+  const svg = controlSvg({ kind: 'knob', value: 70, tokens: TOKENS,
+    param: { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 } });
+  assert.match(svg, /\sdata-sheen=""[^>]*class="opacity-hw-sheen"/, 'a sheen at hw-sheen');
+});
+
+// Review of slice A, A3: the side wall (cap at the top to surface.edge at the foot, at hw-sheen
+// over the skirt) is judged as a depth use by rule (b): its shaded foot shows, |ΔL*| >= 3 on the
+// cap, in both themes. It cannot today (ΔL* -0.32 dark, -0.74 light): the todo names D-PAL.
+test('slice A A3: the side wall\'s shaded foot shows on the cap in both themes (awaits D-PAL)', {
+  todo: 'D-PAL --osc-knob-cap (oscilla-21): surface.edge at hw-sheen is invisible on the cap',
+}, () => {
+  const [, foot] = knobStops('side');
+  const a = Number(HW['hw-sheen']);
+  for (const [theme, t] of Object.entries(themes())) {
+    const dl = deltaL(hexOf(t, foot), hexOf(t, SYNTH_TOKEN_NAMES.control.cap), a);
+    assert.ok(Math.abs(dl) >= MIN_DL, `${theme}: ΔL* ${dl.toFixed(2)}`);
+  }
+});
 
 // Slice C (SW-02, SW-07): a switch's highlight follows the knob's rule (d). The toggle's lever
 // and ball (control.edge, a grey metal that does not flip with the theme) carry a sheen at

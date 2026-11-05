@@ -2,15 +2,16 @@
 // The synth-theme layer's switches drawn as hardware (plan F013 entry 5, slice S5; K058): pure
 // functions, no listener, no document. An enum or a boolean is drawn by its position count:
 //   2      toggle   a bat handle (slice C, SW-02): a hex nut r8, its lower facets shaded, on a
-//                   darker washer r9.5, a lever tapering from 4 to 7 over 18 with a ball r3.5,
-//                   pointing at the selected legend (the second option up, as controlSvg's
-//                   switch has it), its shadow and highlight; an optional LED beside it
+//                   darker washer r9.5, a bushing r3.5 the lever's root enters, a lever
+//                   tapering from 4 to 7 over 18 with a ball r3.5, pointing at the selected
+//                   legend (the second option up, as controlSvg's switch has it), its shadow
+//                   and highlight; an optional LED beside it
 //   3-4    slide    a slot 4 wide hidden under a 14 x 18 cap at either stop, two ridges and an
 //                   index line running past the cap to its detent, a detent per position from
 //                   the slot towards its legend, legends to the right (index 0 at the bottom;
 //                   SW-06, SW-07)
 //   5-8    rotary   a detented rotary selector: the knob's face itself (knob.js's knobFace:
-//                   cast shadow, toothed skirt, side wall, cap, sheen, hover overlay, pointer),
+//                   cast shadow, toothed skirt, side wall, lit rim, cap, hover, pointer),
 //                   scaled to the knob beside it (`knob`, graph units, CONTROL_BOX.knob.width by
 //                   default), pointing at the selected detent, a detent per position over
 //                   270° ending inside that knob's box, the selected one lit, and the legends
@@ -54,7 +55,7 @@
 //                                            the drawing, an SVG <g>
 //   SWITCH_STYLES, LEGEND_PX, NUMBERED_MIN, legendWidth
 
-import { CONTROL_BOX, clampValue, formatValue, HIT_PX, KNOB, knobFace } from './knob.js';
+import { CONTROL_BOX, clampValue, formatValue, HIT_PX, hoverEdge, KNOB, knobFace } from './knob.js';
 import { legendWidth, LEGEND_PX } from './legend.js';
 import { LED, ledBox, ledSvg } from './led.js';
 
@@ -72,11 +73,15 @@ const MAX_POSITIONS = 12;
 /** Around a legend inside its hit box, graph units. */
 const PAD = 6;
 /** A bat-handle toggle (slice C, SW-02), graph units: a hexagonal nut (vertex radius `nut`, a
- *  `nutW` edge) on a washer, a lever `length` long from the nut's centre, `root` wide there and
- *  `tip` wide at its end, a ball of radius `ball` on that end, the legends `gap` past the ball,
- *  the lever's shadow shadowDy (shadowDragDy while dragging) below it. */
-const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, washerW: 1, root: 4, tip: 7,
-  length: 18, ball: 3.5, gap: 4, ledGap: 3.5, shadowDy: 1, shadowDragDy: 2 });
+ *  `nutW` edge) on a washer, a bushing of radius `bushing` at the pivot (review of slice C, C3),
+ *  a lever `length` long from the nut's centre, `root` wide there and `tip` wide at its end, a
+ *  ball of radius `ball` on that end, the legends `gap` past the ball, the lever's shadow
+ *  shadowDy (shadowDragDy while dragging) below it. Focused (C4), a ring `focus` past the
+ *  washer, `focusW` wide, and the legend ringed `focusPad` round its text; the LED's bezel
+ *  1 clear of that ring (`ledGap` past the washer). */
+const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, washerW: 1, bushing: 3.5,
+  bushingW: 1, root: 4, tip: 7, length: 18, ball: 3.5, gap: 4, focus: 3, focusW: 2, focusPad: 2,
+  ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
 /** A slide (slice C, SW-06, SW-07), graph units: a slot slotW wide, a capW x capH cap with two
  *  ridges gripGap from its index line (gripX either side, the index line to indexOut), a detent
  *  from 1.5 past the slot to capW / 2 + 6, the legend 4 past it; each hit box's edge is `clear`
@@ -160,9 +165,9 @@ const LEVER_REACH = TOGGLE.length + TOGGLE.ball;
 
 function toggleLayout(opts, H, F) {
   const T = TOGGLE;
-  // The legend clears the ball and its lifted shadow.
+  // The legend clears the ball and its lifted shadow; the hit box holds its focus ring.
   const half = Math.max(LEVER_REACH, T.length + T.ball + T.shadowDragDy);
-  const reachY = Math.max(H, half + T.gap + F + 2);
+  const reachY = Math.max(H, half + T.gap + F + T.focusPad + T.focusW / 2);
   const options = opts.map((o, i) => {
     const dir = i === 1 ? -1 : 1;
     const w = legendWidth(o[2], F);
@@ -428,8 +433,11 @@ function leverOutline(dir, dy) {
 /**
  * The bat-handle toggle (SW-02): the washer (control.knurl, darker than the nut in both themes,
  * its rim control.edge, 3:1 on the plates), the hex nut (capHi, its edge control.edge, 3:1 on
- * nut and washer, control.pointer on hover) with its lower facets in control.bezel (no depth
- * role shows on capHi in both themes, rule b), the lever's shadow (control.shade at hw-shadow),
+ * nut and washer, brightened on hover by hoverEdge, C5) with its lower facets in control.bezel
+ * (no depth role shows on capHi in both themes, rule b), the bushing (review of slice C, C3:
+ * surface.card, where the depth shade shows in both themes, rule b, as surface.edge does not in
+ * dark, ΔL* -0.83; its rim control.edge) the lever's root enters and the On lever's shadow falls
+ * on, the lever's shadow (control.shade at hw-shadow),
  * the tapered lever and its ball in control.edge (a grey metal that keeps its tone in both
  * themes, 3:1 on the plates and on the nut; no outline, the shadow gives its depth), and their
  * highlight (control.highlight at hw-sheen: it shows on control.edge in both themes, amendment
@@ -454,10 +462,12 @@ function toggleShapes(L, sel, t, st) {
   const hi = esc(c.highlight);
   return `<circle data-washer="" cx="0" cy="0" r="${T.washer}" fill="${esc(c.knurl)}" `
     + `stroke="${rim}" stroke-width="${T.washerW}"/>`
-    + `<path data-nut="" d="${NUT}" fill="${esc(c.capHi)}" `
-    + `stroke="${dim ? rim : esc(st.hover ? c.pointer : c.edge)}" `
+    + `<path data-nut="" d="${NUT}" fill="${esc(c.capHi)}" stroke="${rim}" `
     + `stroke-width="${T.nutW}" stroke-linejoin="round"/>`
     + (dim ? '' : `<path data-facet="" d="${FACET}" fill="${esc(c.bezel)}" stroke="none"/>`)
+    + hoverEdge(`path d="${NUT}" stroke-width="${T.nutW}" stroke-linejoin="round"`, t, st)
+    + `<circle data-bushing="" cx="0" cy="0" r="${T.bushing}" fill="${esc(t.surface.card)}" `
+    + `stroke="${rim}" stroke-width="${T.bushingW}"/>`
     + `<path data-shadow="" class="${SHADOW_CLASS}" d="${leverOutline(dir, dy)}" `
     + `fill="${esc(c.shade)}" stroke="none"/>`
     + `<path data-lever="" d="${lever}" fill="${metal}" stroke="none"/>`
@@ -472,10 +482,13 @@ function toggleShapes(L, sel, t, st) {
  * The slide (SW-06, SW-07): a slot ending capH / 2 - 1 past the outermost position (so the cap
  * hides its end at either stop), a detent per position from the slot towards its legend (a
  * scale the cap travels along), the cap's shadow (control.shade at hw-shadow), the capW x capH
- * cap, two quiet ridges (control.knurl) and the index line (control.pointer) running past the
- * cap's edge onto its detent. No sheen: capHi does not show on the dark cap and darkens the
- * light one, and the highlight does not show on the cap in both themes (rule b), so it waits on
- * D-PAL's cap roles (review of slice C, findings 5 and 6).
+ * cap (its edge brightened on hover by hoverEdge, C5), two ridges in control.edge (review of
+ * slice C, C5: 3:1 on the cap, so it reads gripped at 2x; control.knurl was 1.18:1 in dark) and
+ * the index line (control.pointer) running past the cap's edge onto its detent. Disabled (C1;
+ * C6): the selected detent and the index line control.disabled, the ridges control.knurl. No
+ * sheen: capHi does not show on the dark cap and darkens the light one, and the highlight does
+ * not show on the cap in both themes (rule b), so it waits on D-PAL's cap roles (review of slice
+ * C, findings 5 and 6).
  */
 function slideShapes(L, sel, t, st) {
   const S = SLIDE;
@@ -484,23 +497,27 @@ function slideShapes(L, sel, t, st) {
   const end = Math.max(...ys.map(Math.abs)) + S.capH / 2 - 1;
   const yc = ys[sel];
   const dy = st.dragging ? S.shadowDragDy : S.shadowDy;
-  const cap = (attrs, y) => `<rect ${attrs} x="${-S.capW / 2}" y="${num(y - S.capH / 2)}" `
-    + `width="${S.capW}" height="${S.capH}" rx="2"`;
+  const capAt = (y) => `x="${-S.capW / 2}" y="${num(y - S.capH / 2)}" width="${S.capW}" `
+    + `height="${S.capH}" rx="2"`;
+  const cap = (attrs, y) => `<rect ${attrs} ${capAt(y)}`;
   const grip = (y, paint, w, x2 = S.gripX) => `<line data-grip="" x1="${-S.gripX}" `
     + `y1="${num(y)}" x2="${x2}" y2="${num(y)}" stroke="${esc(paint)}" stroke-width="${w}"/>`;
+  const lit = st.disabled ? c.disabled : c.ring;
+  const ridge = st.disabled ? c.knurl : c.edge;
   return `<rect data-slot="" x="${-S.slotW / 2}" y="${num(-end)}" width="${S.slotW}" `
     + `height="${num(2 * end)}" rx="${S.slotW / 2}" fill="${esc(t.surface.edge)}" `
-    + `stroke="${esc(st.hover ? c.pointer : c.edge)}" stroke-width="1"/>`
+    + `stroke="${esc(c.edge)}" stroke-width="1"/>`
     + ys.map((y, i) => `<line data-detent="" x1="${S.tickIn}" y1="${y}" x2="${S.tickOut}" `
-      + `y2="${y}" stroke="${esc(i === sel ? c.ring : c.track)}" `
+      + `y2="${y}" stroke="${esc(i === sel ? lit : c.track)}" `
       + `stroke-width="${i === sel ? DIAL.litW : DIAL.tickW}"/>`).join('')
     + `${cap(`data-shadow="" class="${SHADOW_CLASS}"`, yc + dy)} fill="${esc(c.shade)}" `
     + 'stroke="none"/>'
     + `${cap('data-cap=""', yc)} fill="${esc(c.cap)}" stroke="${esc(c.edge)}" `
     + 'stroke-width="1.5"/>'
-    + grip(yc - S.gripGap, c.knurl, S.gripEdgeW)
+    + hoverEdge(`rect ${capAt(yc)} stroke-width="1.5"`, t, st)
+    + grip(yc - S.gripGap, ridge, S.gripEdgeW)
     + grip(yc, st.disabled ? c.disabled : c.pointer, S.gripW, S.indexOut)
-    + grip(yc + S.gripGap, c.knurl, S.gripEdgeW);
+    + grip(yc + S.gripGap, ridge, S.gripEdgeW);
 }
 
 function dialShapes(L, sel, t, st, uid) {
@@ -515,7 +532,7 @@ function dialShapes(L, sel, t, st, uid) {
     const [x0, y0] = polar(D.tickIn * k, a);
     const [x1, y1] = polar(D.tickOut * k, a);
     out += `<line data-detent="" x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" `
-      + `stroke="${esc(i === sel ? c.ring : c.track)}" `
+      + `stroke="${esc(i === sel ? (st.disabled ? c.disabled : c.ring) : c.track)}" `
       + `stroke-width="${s(i === sel ? D.litW : D.tickW)}"/>`;
     if (L.radius) {
       const [lx0, ly0] = polar(L.dial.leaderIn, a);
@@ -574,11 +591,14 @@ function checkLed(led, id) {
 /**
  * A switch for `param` at `value` as an SVG '<g>' string (aria-hidden, pointer-events none),
  * laid out as switchLayout(param, { zoom, led }) and drawn only from `tokens` (synthTokens).
- * `state` is { hover, focus, dragging, disabled }: hover (true, or { option: v }) lights the
- * mechanism's edge in control.pointer and that option's legend; focus (true: the selected
- * option, or { option: v }) rings that option's hit box in control.focus, 2 wide, inside it, and
- * a dial too, 1 past its ticks, outside the scale (SW-13, C4); dragging lifts the shadow;
- * disabled dims the indicator (control.disabled; a toggle's lever control.bezel) and the legends (text.dim) and marks the group
+ * `state` is { hover, focus, dragging, disabled }: hover (true, or { option: v }) brightens the
+ * part's edge (C5, knob.js's hoverEdge: the dial's skirt, the lever's nut, the slide's cap) and
+ * lights that option's legend; focus (true: the selected option, or { option: v }) rings, in
+ * control.focus, 2 wide, that option's hit box inside it, a toggle's legend round its text
+ * instead (its hit box runs through the nut), and the mechanism concentric with it outside it,
+ * never over it (SW-13, C4): a dial 1 past its ticks, a toggle 3 past its washer; dragging
+ * lifts the shadow; disabled dims the indicator and the selected detent (control.disabled; a
+ * toggle's lever control.bezel) and the legends (text.dim) and marks the group
  * data-disabled (the caller's buttons carry aria-disabled and the reason). The selected option's
  * legend is text.value at weight 600, a window grid's as printed, with no underline (SW-08).
  * `led` ({ source, lit }, a toggle's alone) draws the LED;
@@ -603,10 +623,19 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
   const hover = stateIndex(st.hover, sel, opts);
   const focus = stateIndex(st.focus, sel, opts);
   const tx = tokens.text;
-  // SW-13 (C4): a focused dial is ringed too, concentric, outside its scale, never over it.
-  let out = L.dial && focus >= 0 ? `<circle data-dial-focus="" cx="0" cy="0" `
-    + `r="${num(L.dial.tickOut + DIAL_FOCUS.gap + DIAL_FOCUS.w / 2)}" fill="none" `
-    + `stroke="${esc(tokens.control.focus)}" stroke-width="${DIAL_FOCUS.w}"/>` : '';
+  // SW-13 (C4): a focused dial is ringed too, concentric, outside its scale, never over it;
+  // a focused toggle round its washer (review of slice C, C4), both under the mechanism.
+  const ring = (flag, r, w) => `<circle ${flag}="" cx="0" cy="0" r="${num(r)}" fill="none" `
+    + `stroke="${esc(tokens.control.focus)}" stroke-width="${w}"/>`;
+  const toggle = L.style === 'toggle';
+  let out = '';
+  if (focus >= 0 && L.dial) {
+    out += ring('data-dial-focus', L.dial.tickOut + DIAL_FOCUS.gap + DIAL_FOCUS.w / 2,
+      DIAL_FOCUS.w);
+  }
+  if (focus >= 0 && toggle) {
+    out += ring('data-lever-focus', TOGGLE.washer + TOGGLE.focus, TOGGLE.focusW);
+  }
   out += SHAPES[L.style](L, sel, tokens, st, uid ?? `${id}.dial`);
   if (legends) {
     for (const o of L.options) {
@@ -620,7 +649,11 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
     }
   }
   if (focus >= 0) {
-    const h = L.options[focus].hit;
+    const o = L.options[focus];
+    const d = TOGGLE.focusPad;
+    const tb = textBox(o.legend);
+    const h = toggle ? { x: tb.x - d - 1, y: tb.y - d - 1, width: tb.width + 2 * d + 2,
+      height: tb.height + 2 * d + 2 } : o.hit;
     out += `<rect data-focus="" x="${num(h.x + 1)}" y="${num(h.y + 1)}" `
       + `width="${num(h.width - 2)}" height="${num(h.height - 2)}" rx="4" fill="none" `
       + `stroke="${esc(tokens.control.focus)}" stroke-width="2"/>`;
