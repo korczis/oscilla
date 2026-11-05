@@ -23,6 +23,7 @@
 //   'off' | 'all-off', x, y } on its id (plan K097): on and move set X, Y and the scale step
 //   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them.
 
+import { gateCloseAt } from '../audio/gate.js';
 import { createNoteStack } from '../synth/note-stack.js';
 import { playsNotes } from './registry.js';
 
@@ -82,12 +83,17 @@ export function createLiveNotes({ getModel, handleOf }) {
   const counts = new Map(); // clocked node id -> triggers since arm
   const poly = new Map(); // engine id -> Set of held notes (its pool holds the voices)
   const pads = new Map(); // XY pad id -> the note sounding while it is touched
+  // When each gate opened, audio time: an ordinary off closes it no sooner than MIN_GATE_S
+  // after (K184: a tap handled in one task still sounds); a forced all-off is never deferred.
+  const opened = new Map(); // keys or pad id -> its gate's on; `${id}:${note}` -> a poly note's
+  const closeAt = (k, at) => gateCloseAt(opened.get(k), at);
 
   const stackOf = (id) => {
     if (!stacks.has(id)) stacks.set(id, createNoteStack());
     return stacks.get(id);
   };
   const gate = (id, at, on) => {
+    if (on) opened.set(id, at); else opened.delete(id);
     const { envelopes, clocks } = gateTargets(getModel(), id);
     for (const env of envelopes) {
       const h = handleOf(env);
@@ -115,6 +121,7 @@ export function createLiveNotes({ getModel, handleOf }) {
       return { ok: true, held: 0, released: n };
     }
     if (kind === 'on') {
+      opened.set(`${id}:${note}`, at);
       const r = h.noteOn(at, note, velocity);
       // A note that sounds nothing takes no voice (adapters/voices.js: slot null, every
       // operator above the limit, a ring with no modulator): it is not held either (review of
@@ -125,7 +132,8 @@ export function createLiveNotes({ getModel, handleOf }) {
         stolen: !!(r && r.stolen), dropped: r ? r.dropped : 0 };
     }
     held.delete(note);
-    h.noteOff(at, note);
+    h.noteOff(closeAt(`${id}:${note}`, at), note);
+    opened.delete(`${id}:${note}`);
     return { ok: true, held: held.size, top: null };
   }
 
@@ -133,7 +141,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     const down = pads.has(id);
     if (kind === 'off' || kind === 'all-off') {
       pads.delete(id);
-      if (down) gate(id, at, false);
+      if (down) gate(id, kind === 'off' ? closeAt(id, at) : at, false);
       return { ok: true, held: 0, released: down ? 1 : 0 };
     }
     const r = h.move(at, x, y, { legato: down });
@@ -161,7 +169,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     }
     const prio = typeof h.priority === 'function' ? h.priority() : 'last';
     const c = kind === 'on' ? st.press(note, velocity, prio) : st.release(note, prio);
-    if (c.empty && !c.unchanged) gate(keysId, at, false);
+    if (c.empty && !c.unchanged) gate(keysId, closeAt(keysId, at), false);
     else if (c.top && (c.retrigger || c.legato)) {
       h.play(at, c.top.note, c.top.velocity, { legato: !!c.before });
       if (c.retrigger) gate(keysId, at, true);
@@ -179,6 +187,7 @@ export function createLiveNotes({ getModel, handleOf }) {
       return n;
     },
     reset() {
+      opened.clear();
       stacks.clear();
       counts.clear();
       poly.clear();
