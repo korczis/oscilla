@@ -29,6 +29,7 @@ scope:
 depends_on:
   - "Q071"
 acceptance_criteria:
+  - "A disabled control of the synth-theme layer (knob, fader, switch, button) shows its reason visibly, not only to assistive tech: on hover and keyboard focus as a Flowbite tooltip or title, and on press as today (say(reason)); a unit test reads the visible reason for every disabled control the panels declare (RING DEPTH outside AM, VCO width, S&H clocked); project.no-inert-surfaces (af, 2026-11-05, from the Train 7 re-accept review; builder dev-53, face.js knobHtml and why)."
   - "FS-03-num: the fader scale numerals 0, 5 and 10 fit inside the 44 px box at 12 px without overlap or clipping at 390x844 and 1536x1024 (D-OWN-1 with dev-53's layout); a unit test reads their boxes."
   - "ERG-14-host: the fader and knob gestures are hosted by dev-53's gestures.js (one gesture host), with no second pointer handler per control; the keys-registry and control-family censuses do not rise."
   - "Every element is a pure function of its arguments and tokens returning a markup or class string: a unit test calls each with fixed inputs twice and gets the same string, and the module touches no DOM, store or engine at import or call (node --test on the layer's unit tests)."
