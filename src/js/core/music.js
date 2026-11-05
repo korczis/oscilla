@@ -56,6 +56,10 @@ export const SCALE_LABELS = Object.freeze({ major: 'Major', minor: 'Natural mino
   dorian: 'Dorian', phrygian: 'Phrygian', lydian: 'Lydian', mixolydian: 'Mixolydian',
   locrian: 'Locrian', 'major-pentatonic': 'Major pentatonic',
   'minor-pentatonic': 'Minor pentatonic', chromatic: 'Chromatic' });
+/** Short legends where a full name does not fit a choice's printed legend (a plate's packed
+ *  grid); the full name stays the accessible name and the status line's text. */
+export const SCALE_SHORT = Object.freeze({ minor: 'Minor', 'major-pentatonic': 'Major pent.',
+  'minor-pentatonic': 'Minor pent.' });
 
 /**
  * The MIDI note of scale step `i` (0 = the key in `octave`, counting degrees upwards across

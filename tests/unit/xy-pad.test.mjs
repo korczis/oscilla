@@ -386,3 +386,22 @@ test('a document with an xy-pad is refused by name by a registry without the typ
     .join(' | '));
   assert.equal(importStudio(doc).ok, true);
 });
+
+// p2's LEG-1 (the legends sized per character for the CI fonts) packs a long scale name into one
+// column; the XY pad's Scale options carry a short printed legend as their third element where
+// one exists (core/music.js SCALE_SHORT), and the full name stays the option's label.
+test('xy-pad Scale: long names carry a short legend; the label stays the full name', async () => {
+  const { SCALE_LABELS, SCALE_SHORT } = await import('../../src/js/core/music.js');
+  const { NODE_REGISTRY } = await import('../../src/js/studio/registry.js');
+  const mode = NODE_REGISTRY.get('xy-pad').params.find((p) => p.key === 'mode');
+  const byId = Object.fromEntries(mode.options.map((o) => [o[0], o]));
+  assert.deepEqual(byId['minor-pentatonic'],
+    ['minor-pentatonic', 'Minor pentatonic', 'Minor pent.']);
+  assert.deepEqual(byId['major-pentatonic'],
+    ['major-pentatonic', 'Major pentatonic', 'Major pent.']);
+  for (const [id, label] of Object.entries(SCALE_LABELS)) {
+    assert.equal(byId[id][1], label, `${id} keeps its full label`);
+    assert.equal(byId[id][2], SCALE_SHORT[id], `${id}'s short legend is SCALE_SHORT's`);
+    if (byId[id][2]) assert.ok(byId[id][2].length < label.length, `${id}'s legend is shorter`);
+  }
+});

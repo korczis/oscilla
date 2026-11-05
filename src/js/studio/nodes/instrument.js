@@ -10,7 +10,8 @@
 // frequency never exceeds 0.95 × Nyquist of the running context (adapters/instrument.js).
 
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
-import { NOTE_NAMES, SCALE_LABELS, SCALE_MODES, midiToName, scaleNote } from '../../core/music.js';
+import { NOTE_NAMES, SCALE_LABELS, SCALE_MODES, SCALE_SHORT, midiToName, scaleNote }
+  from '../../core/music.js';
 import { definePort } from '../ports.js';
 import {
   CATEGORIES, defineNode, enumParam, integerParam, numberParam, optionLabel, parts, secondsParam,
@@ -160,8 +161,9 @@ export const xyPad = defineNode({
     definePort({ id: 'gate', direction: 'out', type: 'TRIGGER', label: 'Gate' }),
   ],
   params: [
-    enumParam('mode', 'Scale', Object.keys(SCALE_MODES).map((m) => [m, SCALE_LABELS[m]]),
-      'minor-pentatonic'),
+    // An option's third element is its short printed legend (SCALE_SHORT), where it has one.
+    enumParam('mode', 'Scale', Object.keys(SCALE_MODES).map((m) => (SCALE_SHORT[m]
+      ? [m, SCALE_LABELS[m], SCALE_SHORT[m]] : [m, SCALE_LABELS[m]])), 'minor-pentatonic'),
     enumParam('key', 'Key', NOTE_NAMES.map((n) => [n, n]), 'C'),
     integerParam('octave', 'Octave', { min: 1, max: 5, default: 3 }),
     integerParam('span', 'Span', { min: 1, max: 4, unit: 'oct', default: 2 }),
