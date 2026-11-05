@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-04
-updated_at: 2026-11-04
+updated_at: 2026-11-05T14:02:29Z
+started_at: 2026-11-05T14:02:01Z
+started_event: sha256:4a89a5eb78e5e473d5c2d6a83445b3cd1960004fb05a211d4a545e9f6fe38ce7
+verified_at: 2026-11-05T14:02:15Z
+verified_event: sha256:1b384d1a6594c87e986277b5afe0270214891e526d2378e9979008c8c3e56804
+completed_at: 2026-11-05T14:02:29Z
+completed_event: sha256:eb428b06a4af037c24db301a050b7ef28ede784833270abdbf0c844fd8b35e89
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/studio-sink.test.mjs; tests/browser/midi.cjs keyboard-everywhere in Main checks run 42026989219 (main e8d54f8c) and #413's gate (68b117f3)"
+    result: "All 3 criteria re-checked on main e8d54f8c (sweep a3, 2026-11-05). Unit: studio-sink.test.mjs 'leaving the Studio disarms an armed-only run and leaves a PLAYed one' (2a5d69d0, #413 -> 68b117f3, fail-first SUCCESS) and 'leaving a PLAYed Studio keeps a held key released on its own node after a re-route' (1ef29135, #420 -> e8d54f8c): 10/10. Browser: midi.cjs keyboard-everywhere (a Studio key held across leaving is silenced, the transport neither armed nor playing, the Playground's A sounds again) green in chromium, firefox, webkit of run 42026989219; the proof lives in midi.cjs, not v31-studio-workflows.cjs as the validation names. Verdicts 413.yaml (98) and 420.yaml (21)."
+    artifact: ".ai/repo/reviews/413.yaml"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:01:54Z
