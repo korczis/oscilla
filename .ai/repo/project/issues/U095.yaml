@@ -1,0 +1,31 @@
+id: U095
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "On an iPhone the docked keyboard never covers a Synth control: WebKit honours the dock's room"
+slug: on-an-iphone-the-docked-keyboard-never-covers-a-synth-control
+priority: p0
+profile: implementation
+objective: "Lands as fix(ui), built by 26. 21's rebuilt tests/browser/iphone.cjs (test/iphone-suite 0f27696f) shows that in WebKit at the iPhone 13 and iPhone SE profiles, 81 Synth controls are covered at their centre by the docked keyboard after scrollIntoView, while Chromium and Firefox have 0. The likely cause is that WebKit ignores the dock's scroll-padding, which makes it a real iPhone Safari defect. After: every Synth control scrolled into view sits wholly above the docked keyboard in all three engines at both profiles, by a mechanism WebKit honours (for example scroll-margin on the controls or an explicit offset for the dock's measured height), not by WebKit-specific branching in the UI."
+why: "Owner order of 2026-11-02, 'no sound on phone must not happen' and the phone-whole criterion; found by 21's iPhone suite on 2026-11-05 and relayed by b0. A covered control is unreachable on the owner's phone."
+scope:
+  - "src/styles"
+  - "src/js/midi"
+  - "src/js/synth"
+  - "tests/browser/iphone.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/browser/iphone.cjs at the iPhone 13 and iPhone SE profiles in WebKit reports 81 covered Synth controls on the merge base and 0 with the change; Chromium and Firefox stay at 0."
+  - "The check scrolls each control into view the way a user does and tests elementFromPoint at the control's centre and corners against the dock, through tests/browser/lib/suite.cjs with lib/wait.cjs deadlines; tests/browser/timing-baseline.json does not grow."
+  - "No engine-specific branch in the UI code; the controls stay consumers of the shared control families (M123 G021-G026)."
+  - "The pull request carries a reviewer's verdict when it touches src/js/synth (guarded)."
+  - "Done only after each criterion is re-checked on a main commit; the iPhone suite's debt entry for these 81 names U095 until then."
+validation:
+  - "node tests/browser/iphone.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
