@@ -520,9 +520,10 @@ export function createInstrument(deps = {}) {
         engine.release();
       }
     },
+    /** True when it plays (C031: runDemo reads it). */
     trigger() {
       this.latched = false;
-      this.play('trigger');
+      return this.play('trigger');
     },
     /** Held Enter auto-repeats keydown; only the first press may toggle the latch. */
     latchKey(e) { if (e.repeat) e.preventDefault(); },
@@ -1103,7 +1104,11 @@ export function createInstrument(deps = {}) {
       if (m === 'dual') { this.source = 'dual'; if (this.vizMode !== 'spectrum') this.vizMode = 'interference'; }
     },
     // V1: oscillaApp: runDemo (index.html@a7b7a23)
-    /** opts.action: a link the demo's notice carries ({ href, text }, e.g. back to the lesson). */
+    /**
+     * opts.action: a link the demo's notice carries ({ href, text }, e.g. back to the lesson).
+     * C031: its press plays it by TRIGGER (the instrument's path), inside the gesture; V1 asked
+     * for a second press. A demo that cannot play says so.
+     */
     runDemo(topic, { action = null } = {}) {
       const d = topic.demo;
       // A demo that needs another mode's source sets it fully, so earlier settings cannot skew it.
@@ -1111,7 +1116,18 @@ export function createInstrument(deps = {}) {
       this.applyConfig(d.cfg, 'learn');
       if (d.viz) this.vizMode = d.viz;
       this.loadedLabel = d.label;
-      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.', { action });
+      const again = this.isProgrammed ? 'TRIGGER (or Space) plays it again.'
+        : 'Press and hold HOLD TO PLAY to hear it again.';
+      if (this.trigger()) {
+        this.notify('success', `Demo playing: ${d.label}`,
+          `Escape or the status bar's stop button ends it; ${again}`, { action });
+        return true;
+      }
+      const hint = this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.'
+        : 'Press and hold HOLD TO PLAY.';
+      this.notify('warning', `Demo ready: ${d.label}`,
+        `Audio did not start, so it is not playing. ${hint}`, { action });
+      return false;
     },
 
 

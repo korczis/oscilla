@@ -128,9 +128,20 @@ const DEVIATIONS = {
   // the 'hearing' demo sets pp.octave (V1's cfg has no pp); the 'samplerate' body names the
   // Filter Lab's model rate (V1 had no Filter Lab), appended after V1's sentence
   // the V3 topic's demo opens an address (runLearnDemo), so V1's demo runner has no case for it
+  // C031: the demo's press plays it (runDemo triggers); this load's engine starts no audio, so
+  // each notice is the warning that says the demo is not playing, around V1's hint
   'presets.apply/learn-demos@48000': (out) => {
     const q = { ...out };
     for (const t of LEARN_INSTRUMENT_TOPICS) delete q[t.id];
+    const refused = 'Audio did not start, so it is not playing. ';
+    for (const [id, r] of Object.entries(q)) {
+      q[id] = { ...r, alerts: r.alerts.map((a) => {
+        if (!a[1].startsWith('Demo ready: ')) return a;
+        assert.ok(a[0] === 'warning' && a[2].startsWith(refused),
+          `C031 fix: a demo that cannot play says so (${id}): ${JSON.stringify(a)}`);
+        return ['success', a[1], a[2].slice(refused.length)];
+      }) };
+    }
     return q;
   },
   // V3 adds topics after the V1 ones (data/learn.js LEARN_INSTRUMENT_TOPICS, K058): a demo with
