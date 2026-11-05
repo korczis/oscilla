@@ -632,3 +632,17 @@ test('a failure line cut short says how many failures it left out', () => {
   assert.doesNotMatch(src, /bad\.slice\(0, \d+\)\.join/, 'no failure line cuts silently');
   assert.match(src, /failures\.push\(`synth \$\{w\}x\$\{h\} \$\{tab\}: \$\{firstOf\(bad, 8\)\}`\)/);
 });
+
+// The capture rasters every tile whole. Chromium's partial raster made desktop-bay-light bimodal:
+// 7 of 48 captures sat exactly 202 px off, with the markup byte-identical. Removing the flag brings
+// that second state back, so it is pinned here and its reason is stated where it is declared.
+test('the SYN capture launches Chromium with partial raster off, and says why', async () => {
+  const { LAUNCH_ARGS } = await load();
+  assert.ok(Array.isArray(LAUNCH_ARGS) && Object.isFrozen(LAUNCH_ARGS), 'one frozen list');
+  assert.ok(LAUNCH_ARGS.includes('--disable-partial-raster'), 'partial raster is off');
+  const src = read('scripts/visual-synth.mjs');
+  assert.match(src, /chromium\.launch\(\{ args: \[\.\.\.LAUNCH_ARGS\] \}\)/,
+    'the launch uses the list');
+  assert.match(src, /partial raster/i, 'the declaration names the cause');
+  assert.match(src, /202 px/, 'and the measured second state');
+});
