@@ -424,22 +424,82 @@ test('inline handlers and Alpine directives are first-party script (R040 review 
   assert.deepEqual(check(doc({ body })), []);
 });
 
-test('documented limits: every "Not held" form passes', () => {
-  // tests/README.md names these under "Not held": a static scan reads literals, so each passes
-  // with rc=0. A fix that refuses one must move it out of this test and out of that line.
+// Every letter and digit spelt as \uXXXX: the escaped spelling of a refused form.
+const escapeAlnum = (s) => s.replace(/[A-Za-z0-9]/g,
+  (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+test('refused: exactly the forms the header and tests/README.md list, written or escaped', () => {
+  // One case (or more) per form of the "Refused" list in scripts/verify-dist.mjs and
+  // tests/README.md; each gives rc=1 (a problem naming it), as written and fully escaped.
+  const refused = [
+    [/uses fetch\(\)/, ['fetch("u")', 'fetch\n(u)', 'x=window.fetch', 'self.fetch(u)',
+      'globalThis.fetch(u)']],
+    [/uses XMLHttpRequest/, ['new XMLHttpRequest()']],
+    [/uses dynamic import\(\)/, ['import("./m.js")', 'import ("./m.js")']],
+    [/uses import\.meta/, ['x=import.meta.url']],
+    [/uses service worker/, ['navigator.serviceWorker.register(u)']],
+    [/uses importScripts\(\)/, ['importScripts("a.js")']],
+    [/uses worker loaded from a path/, ['new Worker("w.js")', "new SharedWorker( 'w.js')"]],
+    [/uses worklet loaded from a path/, ['ctx.audioWorklet.addModule("p.js")']],
+    [/uses WebSocket\/EventSource/, ['new WebSocket(u)', 'new EventSource(u)']],
+    [/uses navigator\.sendBeacon/, ['navigator.sendBeacon(u,d)']],
+    [/uses localhost reference/, ['x="http://localhost/"', 'x="http://127.0.0.1/"']],
+    [/uses eval:/, ['eval(c)', 'x="eval"', "x='eval'", 'x=`eval`']],
+    [/uses the Function constructor/, ['Function("x")', 'Function ("x")', 'new Function("x")',
+      'self["Function"]', "x='Function'", 'f.constructor("x")', "f.constructor ( 'x')",
+      'f.constructor(`x`)']],
+    [/uses a timer given a string/, ['setTimeout("f()",0)', "setInterval ( 'f()',9)",
+      'window.setTimeout("f()",0)', 'setInterval(`f()`,9)']],
+    [/uses an absolute URL assigned to \.src/, ['i.src="https://t.example/p.gif"',
+      "a.href='//t.example/'", 'i.srcset="http://t.example/p.gif"',
+      "v.poster = ' //t.example/p.png'", 'i.SRC="//t.example/p.gif"']],
+    [/uses an absolute URL set by setAttribute/, ['e.setAttribute("src","//t.example/x")',
+      'e.setAttributeNS(null,"href","https://t.example/x")',
+      "e.attribute('poster','//t.example/x')", 'e.setAttribute("data","//t.example/x")',
+      'e.setAttribute("xlink:href","//t.example/x")', 'e.setAttribute("srcset","//t.example/x")']],
+    [/uses an absolute URL in a CSS url\(\) of a script string/, [
+      'e.style.background="url(//t.example/p.png)"', 'x="url( \'https://t.example/p.png\')"',
+      "x='url(\\'//t.example/p.png\\')'"]],
+    [/uses new Image\(\)\.src from anything/, ['new Image().src=u',
+      'new Image(1,2).src="https://t.example/p.gif"']],
+    [/uses new Audio\(\)\/Video\(\) from anything/, ['new Audio(u)',
+      'new Video("https://t.example/v.webm")']],
+    [/uses an absolute URL in a resource attribute of an HTML string/, [
+      'x.innerHTML=\'<img src="//t.example/p.gif">\'', 'x=\'<link href=https://t.example/s.css>\'',
+      'x=\'<a ping="//t.example/">\'', 'x="<video poster=\\"//t.example/p.png\\">"']],
+    [/uses computed fetch/, ['x["fetch"](u)', "x[ 'fetch' ](u)", 'window["fe"+"tch"](u)',
+      "top['a'+b](u)", 'parent["x" +y](u)', 'frames[`a${b}`](u)', 'self[`fe${t}`](u)',
+      'globalThis ["a"+b](u)']],
+  ];
+  for (const [re, apps] of refused) {
+    for (const app of apps) {
+      fails(doc({ app }), re);
+      fails(doc({ app: escapeAlnum(app) }), re);
+    }
+  }
+});
+
+test('documented limits: examples of forms this scan does not refuse', () => {
+  // Examples (not exhaustive) of what the header and tests/README.md say is not held: a static
+  // scan reads literals, so each passes with rc=0. A fix that refuses one moves it from here to
+  // the refused set above and to the "Refused" lists that test pins.
   for (const app of ['var u="https://t.example/p.gif";i.src=u',
     'i.src="ht"+"tps://t.example/p.gif"', 'const k="fe"+"tch";window[k](u)',
     'const k="ev"+"al";window[k](c)', 'const c="f()";setTimeout(c,0)',
-    // The Function constructor reached otherwise than by Function( / 'Function' /
-    // .constructor('...') (R040 review 3).
+    // The Function constructor in other forms (R040 reviews 3 and 4).
     'Function.call(null,"fe"+"tch(u)")()', 'Function.apply(null,["x"])()',
     'Reflect.construct(Function,["x"])()', 'new (Function)("x")()', 'Function`x```',
     'const F=Function;F("x")()', '(()=>{})["constructor"]("x")()', '(()=>{}).constructor(c)()',
     'const AsyncFunction=Object.getPrototypeOf(async()=>{}).constructor;'
       + 'new AsyncFunction("x")()',
-    // A timer reached otherwise than called directly with a string literal first.
-    'setTimeout.call(window,"f()",0)', 'setInterval.apply(window,["f()",9])',
+    'Function/**/("x")()', 'Function?.("x")()', 'Function.bind(null,"x")()()',
+    // Timers in other forms.
+    'setTimeout.call(window,"f()",0)', 'setTimeout.apply(window,["f()",0])',
+    'setInterval.call(window,"f()",9)', 'setInterval.apply(window,["f()",9])',
     'setTimeout(("f()"),0)', 'setTimeout(/**/"f()",0)', 'window["setTimeout"]("f()",0)',
+    'const t=setTimeout;t("f()",0)', 'setTimeout?.("f()",0)',
+    // fetch in other forms.
+    'top.fetch(u)', 'fetch?.(u)', 'fetch/**/(u)', 'const w=window;w["fe"+"tch"](u)',
   ]) assert.deepEqual(check(doc({ app })), [], app);
   // Script inside an iframe srcdoc is not one of the first-party scripts the scan reads.
   const body = '<iframe srcdoc="<script>fetch(\'https://t.example/\')</script>"></iframe>';
