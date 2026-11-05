@@ -6,7 +6,7 @@
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
       "done": 20,
-      "required": 22,
+      "required": 39,
       "phase": "now"
     },
     {
@@ -19,8 +19,8 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 23,
-      "required": 36,
+      "done": 28,
+      "required": 49,
       "phase": "now"
     },
     {
@@ -62,27 +62,27 @@
       "id": "M054",
       "title": "The whole interface shows the current product",
       "done": 5,
-      "required": 30,
+      "required": 59,
       "phase": "now"
     },
     {
       "id": "M079",
       "title": "Coherence fixes that wait on no open plan: live Studio edits and honest restores",
-      "done": 0,
+      "done": 1,
       "required": 2,
-      "phase": "next"
+      "phase": "now"
     },
     {
       "id": "M057",
       "title": "Box-system ergonomics: one-gesture patching with headroom in the editor modules",
-      "done": 1,
+      "done": 2,
       "required": 5,
       "phase": "now"
     },
     {
       "id": "M058",
       "title": "Synth voice: audio-rate modulation, drive, macros, filters, templates, presets, mod matrix and one hash epoch",
-      "done": 5,
+      "done": 6,
       "required": 9,
       "phase": "now"
     },
@@ -104,7 +104,7 @@
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
       "done": 2,
-      "required": 5,
+      "required": 6,
       "phase": "now"
     },
     {
@@ -118,7 +118,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 0,
-      "required": 11,
+      "required": 15,
       "phase": "next"
     },
     {
@@ -139,21 +139,21 @@
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
       "done": 0,
-      "required": 16,
-      "phase": "later"
+      "required": 20,
+      "phase": "next"
     },
     {
       "id": "M068",
       "title": "Instrument wave 3: synthesis engines and the instrument DSP worklet",
       "done": 0,
-      "required": 8,
-      "phase": "later"
+      "required": 15,
+      "phase": "next"
     },
     {
       "id": "M069",
       "title": "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid",
-      "done": 4,
-      "required": 13,
+      "done": 5,
+      "required": 20,
       "phase": "now"
     },
     {
@@ -167,21 +167,21 @@
       "id": "M072",
       "title": "Instrument wave 4b: audio tracks, the arrangement, the tempo map, recording and files",
       "done": 0,
-      "required": 9,
-      "phase": "later"
+      "required": 10,
+      "phase": "next"
     },
     {
       "id": "M073",
       "title": "Measurement truth in the interface",
-      "done": 4,
-      "required": 30,
+      "done": 8,
+      "required": 38,
       "phase": "now"
     },
     {
       "id": "M080",
       "title": "Studio boxes, wave 1: wiring, find, layout, probe, first patch, large graphs, one declaration per node",
-      "done": 1,
-      "required": 17,
+      "done": 4,
+      "required": 19,
       "phase": "now"
     },
     {
@@ -196,7 +196,7 @@
       "title": "A lab-grade signal generator: pitch entry, noise, test signals, bursts, honest level, pulse, presets, hand-offs",
       "done": 0,
       "required": 12,
-      "phase": "later"
+      "phase": "next"
     },
     {
       "id": "M083",
@@ -234,6 +234,13 @@
       "phase": "later"
     },
     {
+      "id": "M123",
+      "title": "Unified controls: one parametrized implementation per control family, no parallel ones",
+      "done": 0,
+      "required": 10,
+      "phase": "later"
+    },
+    {
       "id": "M101",
       "title": "Instrument kinds, wave 1: the kind contract, the meter and the 88-key piano",
       "done": 0,
@@ -243,8 +250,8 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 19,
-      "required": 30,
+      "done": 22,
+      "required": 57,
       "phase": "now"
     },
     {
@@ -283,18 +290,18 @@
       "phase": "later"
     },
     {
-      "id": "M098",
-      "title": "The public face: README front page, GitHub shell and a measured library decision",
-      "done": 3,
-      "required": 4,
-      "phase": "now"
-    },
-    {
       "id": "M103",
       "title": "Instrument kinds, wave 3 and 4: the mini-scope, the DAW kinds under Q062, and the sweep",
       "done": 0,
       "required": 6,
       "phase": "later"
+    },
+    {
+      "id": "M098",
+      "title": "The public face: README front page, GitHub shell and a measured library decision",
+      "done": 3,
+      "required": 4,
+      "phase": "now"
     },
     {
       "id": "M099",
@@ -320,7 +327,7 @@
     {
       "id": "M119",
       "title": "Owner decisions of the song-reconstruction proposal",
-      "done": 4,
+      "done": 7,
       "required": 7,
       "phase": "now"
     },
@@ -339,17 +346,17 @@
       "phase": "now"
     },
     {
-      "id": "M084",
-      "title": "Owner decisions of the Studio boxes and signal generator lines",
-      "done": 2,
-      "required": 4,
-      "phase": "now"
-    },
-    {
       "id": "M070",
       "title": "Owner decisions of the connected-instrument line",
       "done": 6,
       "required": 8,
+      "phase": "now"
+    },
+    {
+      "id": "M084",
+      "title": "Owner decisions of the Studio boxes and signal generator lines",
+      "done": 2,
+      "required": 4,
       "phase": "now"
     },
     {
