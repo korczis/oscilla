@@ -10,7 +10,7 @@
 //   node --test tests/unit/patch-contract.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -26,6 +26,16 @@ const port = (o) => ({ id: 'audio', direction: 'in', type: 'AUDIO', role: 'SIGNA
 const param = (o) => ({ key: 'gain', type: 'number', unit: 'dB', default: 0, min: -60, max: 0,
   scale: 'linear', automatable: true, modulatable: false, ...o });
 const fixture = (defs) => ({ list: () => defs });
+// CI as the history test reads it: GITHUB_ACTIONS=true.
+const inCi = (env = process.env) => env.GITHUB_ACTIONS === 'true';
+// The working-tree ratchet: the counts now against a baseline's counts.
+const ratchet = (now, base) => ({
+  fields: [Object.keys(now).sort(), Object.keys(base).sort()],
+  grown: Object.entries(now).filter(([f, n]) => n > base[f]).map(([f, n]) =>
+    `${f}: ${n} > ${base[f]}`),
+  stale: Object.entries(now).filter(([f, n]) => n < base[f]).map(([f, n]) =>
+    `${f}: ${n} < ${base[f]} (lower the baseline)`),
+});
 
 test('the matrix counts every node type, port and parameter of the registry', () => {
   assert.equal(typeof pc.contractMatrix, 'function');
@@ -97,19 +107,16 @@ test('missing contract fields only fall (the ratchet)', () => {
   const base = JSON.parse(readFileSync(`${ROOT}tests/unit/patch-contract-baseline.json`, 'utf8'))
     .counts;
   const now = pc.missingCounts(pc.contractMatrix(NODE_REGISTRY));
-  assert.deepEqual(Object.keys(now).sort(), Object.keys(base).sort(), 'the same fields');
-  const grown = Object.entries(now).filter(([f, n]) => n > base[f]).map(([f, n]) =>
-    `${f}: ${n} > ${base[f]}`);
+  const { fields, grown, stale } = ratchet(now, base);
+  assert.deepEqual(fields[0], fields[1], 'the same fields');
   assert.deepEqual(grown, [], 'a port or parameter without its contract: declare the field');
-  const stale = Object.entries(now).filter(([f, n]) => n < base[f]).map(([f, n]) =>
-    `${f}: ${n} < ${base[f]} (lower the baseline)`);
   assert.deepEqual(stale, [], 'a count fell: lower its baseline entry in the same change');
 });
 
 test('missing contract fields only fall against every version of the baseline on the base', (t) => {
   assert.equal(typeof pc.baselineHistory, 'function');
   const history = pc.baselineHistory();
-  const gate = pc.historyGate(history, process.env.GITHUB_ACTIONS === 'true');
+  const gate = pc.historyGate(history, inCi());
   if (gate.verdict === 'fail') assert.fail(gate.reason);
   if (gate.verdict === 'skip') { t.skip(gate.reason); return; }
   if (gate.verdict === 'introduce') { t.diagnostic(gate.reason); return; }
@@ -130,9 +137,16 @@ test('mutation: a port without channels, its baseline raised too, is refused by 
   const now = pc.missingCounts(pc.contractMatrix(raisedRegistry));
   const was = JSON.parse(readFileSync(`${ROOT}${pc.BASELINE}`, 'utf8')).counts;
   assert.equal(now['port.channels'], was['port.channels'] + 1, 'the mutation raises the count');
-  const raisedBaseline = { ...now };
-  const grown = Object.entries(now).filter(([f, n]) => n > raisedBaseline[f]);
-  assert.deepEqual(grown, [], 'the working-tree ratchet alone lets it through');
+  const refused = ratchet(now, was);
+  assert.deepEqual(refused.grown, ['channels', 'rate', 'monitor', 'compact', 'version'].map((f) =>
+    `port.${f}: ${now[`port.${f}`]} > ${was[`port.${f}`]}`), 'the unraised baseline refuses it');
+  const raisedBaseline = { ...was };
+  for (const f of ['channels', 'rate', 'monitor', 'compact', 'version']) {
+    raisedBaseline[`port.${f}`] += 1;
+  }
+  const passed = ratchet(now, raisedBaseline);
+  assert.deepEqual([passed.fields[0], passed.grown, passed.stale],
+    [passed.fields[1], [], []], 'the working-tree ratchet alone lets the raised baseline through');
   assert.deepEqual(pc.historyProblems(now, [{ sha: 'main1', counts: was }]),
     [`port.channels: ${now['port.channels']} missing, above ${was['port.channels']} at main1`,
       ...['rate', 'monitor', 'compact', 'version'].map((f) =>
@@ -164,8 +178,8 @@ test('fixture: the history gate fails in CI without history, and skips only outs
   assert.equal(pc.baseBranch({}), 'main');
 });
 
-test('fixture: only the base branch chain is judged, never the branch\'s own commits', (t) => {
-  assert.equal(typeof pc.baselineHistory, 'function');
+// A scratch git repository removed after the test: { dir, git, commit, at }.
+const scratchRepo = (t) => {
   const dir = mkdtempSync(path.join(tmpdir(), 'osc-patch-contract-history-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const git = (...args) => {
@@ -177,7 +191,7 @@ test('fixture: only the base branch chain is judged, never the branch\'s own com
   };
   const commit = (files, message) => {
     for (const [rel, text] of Object.entries(files)) {
-      spawnSync('mkdir', ['-p', path.dirname(path.join(dir, rel))]);
+      mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
       writeFileSync(path.join(dir, rel), text);
     }
     git('add', '-A');
@@ -186,6 +200,12 @@ test('fixture: only the base branch chain is judged, never the branch\'s own com
   };
   const at = (channels) => ({ [pc.BASELINE]: `${JSON.stringify({ note: 'n', counts: {
     'port.channels': channels, 'param.live': 5 } }, null, 2)}\n` });
+  return { dir, git, commit, at };
+};
+
+test('fixture: only the base branch chain is judged, never the branch\'s own commits', (t) => {
+  assert.equal(typeof pc.baselineHistory, 'function');
+  const { dir, git, commit, at } = scratchRepo(t);
   const judge = (counts) => {
     const history = pc.baselineHistory({ root: dir, base: 'main' });
     const gate = pc.historyGate(history, true);
@@ -220,4 +240,31 @@ test('fixture: only the base branch chain is judged, never the branch\'s own com
   assert.deepEqual(judge({ 'port.channels': 9, 'param.live': 5 }).problems.map((p) =>
     p.replace(/ at \w+$/, '')), ['port.channels: 9 missing, above 8'],
   'once landed, the lower count binds every later change');
+});
+
+test('fixture: a depth-limited clone fails loudly in CI and never judges a cut history', (t) => {
+  assert.equal(typeof pc.baselineHistory, 'function');
+  const { dir, git, commit, at } = scratchRepo(t);
+  git('init', '-q', '-b', 'main');
+  for (const n of [12, 11, 10]) commit(at(n), `the baseline falls to ${n}`);
+  git('checkout', '-q', '-b', 'k164');
+  commit({ 'README.md': 'a change\n' }, 'a change on the branch');
+  const clone = (name, ...flags) => {
+    const into = path.join(dir, '..', `${path.basename(dir)}-${name}`);
+    t.after(() => rmSync(into, { recursive: true, force: true }));
+    const r = spawnSync('git', ['clone', '-q', '--no-local', ...flags, '--branch', 'k164',
+      `file://${dir}`, into], { encoding: 'utf8' });
+    assert.equal(r.status, 0, `git clone ${flags.join(' ')}: ${r.stderr}`);
+    return into;
+  };
+  const ci = inCi({ GITHUB_ACTIONS: 'true' });
+  const full = pc.baselineHistory({ root: clone('full'), base: 'main' });
+  assert.equal(pc.historyGate(full, ci).verdict, 'judge');
+  assert.equal(full.versions.length, 3, 'the full clone reads every version');
+  const cut = pc.baselineHistory({ root: clone('shallow', '--depth', '2', '--no-single-branch'),
+    base: 'main' });
+  assert.deepEqual(pc.historyGate(cut, ci), { verdict: 'fail', reason: 'git failed in CI: a '
+    + 'shallow clone: the base branch history is cut (fetch-depth: 0)' },
+  `a cut history was judged: ${JSON.stringify(cut)}`);
+  assert.equal(pc.historyGate(cut, false).verdict, 'skip', 'outside CI the same clone skips');
 });
