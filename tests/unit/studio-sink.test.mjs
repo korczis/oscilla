@@ -106,3 +106,24 @@ test('a note pressed again on another node releases it on the first one', () => 
   sink.noteOff(60);
   assert.deepEqual(log.at(-1), ['live', 'fm-1', 'off', 60]);
 });
+
+// 98's R2 on #413: on a PLAYed run, leaving keeps the held map, so a key still down is released
+// on the node it went to even after a re-route.
+test('leaving a PLAYed Studio keeps a held key released on its own node after a re-route', () => {
+  const nodes = [node('keys-1', 'keys')];
+  const { sink, log, transport } = fixture(nodes, { playing: true });
+  transport.armed = false;
+  sink.noteOn(60, 100);
+  assert.equal(sink.leave(), false);
+  nodes.unshift(node('fm-1', 'fm-voice'));
+  sink.noteOff(60);
+  assert.deepEqual(log.at(-1), ['live', 'keys-1', 'off', 60]);
+});
+
+// 98's R3: a refused arm with no reason says a sentence, never an empty announcement.
+test('a refused arm without a reason says why the keys did not start', () => {
+  const { sink, transport, said } = fixture([node('keys-1', 'keys')]);
+  transport.arm = () => ({ ok: false, code: 'x' });
+  sink.noteOn(60, 100);
+  assert.match(said.at(-1), /could not start/);
+});
