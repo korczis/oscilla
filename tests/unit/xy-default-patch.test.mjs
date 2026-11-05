@@ -100,8 +100,14 @@ test('the default Synth document holds the Y route as a typed model cable xy.y -
 
 test('the Synth inserts the panel through xyInsertAction, on every insert path', () => {
   const code = (p) => readFileSync(`${ROOT}${p}`, 'utf8').replace(/^\s*\/\/.*$/gm, '');
+  // The one insert path (insert.js insertAction, review S5) cables Y; ensurePanel and New Synth
+  // voice go through it, and none instantiates the panel bare.
+  assert.match(code('src/js/synth/insert.js'), /xyInsertAction\(/,
+    'insert.js inserts with the Y cable');
   for (const p of ['src/js/synth/ui.js', 'src/js/synth/picker.js']) {
-    assert.match(code(p), /xyInsertAction\(/, `${p} inserts with the Y cable`);
+    assert.match(code(p), /\binsertAction\(/, `${p} inserts through insert.js`);
+  }
+  for (const p of ['src/js/synth/insert.js', 'src/js/synth/ui.js', 'src/js/synth/picker.js']) {
     assert.doesNotMatch(code(p), /panel\.instantiate\(/, `${p}: no bare instantiate`);
   }
   // The pad already there (a reused panel): its cables are the user's, none is added.

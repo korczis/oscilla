@@ -38,7 +38,7 @@ export function createDock(ctx) {
       ctx.allOff();
       const done = ctx.dispatch(r.action);
       const on = done.ok ? ctx.played() : null;
-      if (done.ok) ctx.say(`The keys play ${on ? on.metadata.name : 'nothing'}.`);
+      if (done.ok) ctx.say(r.text || `The keys play ${on ? on.metadata.name : 'nothing'}.`);
       return done.ok;
     },
 

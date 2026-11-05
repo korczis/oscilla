@@ -18,8 +18,9 @@
 // microphone and the transport; measurement.js the measurement bridge and the task strip;
 // files.js the library, Save, export, import and Render WAV; graph.js the workspace keys and
 // the graph commands; timeline.js the timeline commands; navigation.js the subviews, Back, the
-// deep link and fullscreen. Every part shares `ctx` and `svc` and reaches the functions of the
-// others through `ops`, filled here before any of them runs.
+// deep link and fullscreen; voice.js the Playground voice opened from the Signal Path (V605).
+// Every part shares `ctx` and `svc` and reaches the functions of the others through `ops`,
+// filled here before any of them runs.
 //
 // Operation trace (ADR 0042): ONE core/trace.js trace per workspace, its port handed to the
 // store handle, the runtime and the transport here; the Inspector reads its steps (svc.trace)
@@ -57,6 +58,7 @@ import { IDLE_TASK, createWorkspaceMeasurement } from './workspace/measurement.j
 import { createWorkspaceFiles } from './workspace/files.js';
 import { createWorkspaceGraph } from './workspace/graph.js';
 import { createWorkspaceTimeline } from './workspace/timeline.js';
+import { createWorkspaceVoice } from './workspace/voice.js';
 import {
   FULLSCREEN_UNSUPPORTED, createWorkspaceNavigation, fullscreenElementOf, fullscreenSupport,
 } from './workspace/navigation.js';
@@ -76,7 +78,8 @@ export {
 
 /** The parts of the workspace (./workspace/*.js), in the order their functions join `ops`. */
 const PARTS = [createWorkspaceDocument, createWorkspaceRuntime, createWorkspaceMeasurement,
-  createWorkspaceFiles, createWorkspaceGraph, createWorkspaceTimeline, createWorkspaceNavigation];
+  createWorkspaceFiles, createWorkspaceGraph, createWorkspaceTimeline, createWorkspaceNavigation,
+  createWorkspaceVoice];
 
 /**
  * A stable handle over the current store (§9): the same object for every projection, the

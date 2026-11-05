@@ -16,4 +16,12 @@ risks:
   - "Nobody asks the owner the open three: the coordinator raises Q078 before the first issue of the intent is filed (it names the prefix), Q077 before the first view lands in dist, and Q076 only after the import and lineage milestones have evidence."
   - "An answer read as acceptance of the intent: Q072 keeps it proposed until an independent critique is recorded; no answer here marks it accepted."
 created_at: 2026-11-02
-updated_at: 2026-11-02
+updated_at: 2026-11-05T14:08:25Z
+evidence:
+  - covers: milestone_verified
+    type: manual
+    command: "majordomus plan list --milestone M119"
+    result: "7 of 7 issues done: every Q issue of the song-reconstruction proposal carries owner_decision evidence with its date and source (Q072-Q075 answered 2026-11-02 ~22:20Z in the oscilla-b0 session; the rest by delegation as each record states); none is cancelled; re-checked by a3 on 2026-11-05 at main a510dd75."
+    artifact: ".ai/repo/project/milestones/M119.yaml"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:08:25Z

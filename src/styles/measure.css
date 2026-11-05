@@ -1041,8 +1041,8 @@ ul.osc-x-ev-list {
   color: var(--osc-orange);
 }
 
-/* ---------- 768-1279: two columns, every MEASURE panel visible ---------- */
-@media (max-width: 1279.98px) {
+/* ---------- 768-1535 px of window: two columns, every MEASURE panel visible ---------- */
+@media (max-width: 1535.98px) {
   .osc-measure,
   .osc-experiments {
     grid-template-columns: repeat(2, minmax(0, 1fr));

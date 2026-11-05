@@ -11,8 +11,9 @@
 // --measure-noise), above a floor. The record at this acceptance (the W1b chain: the adoption
 // with the synth-theme core's S9/S10 and the knob's W1c, chromium 153.0.8010.12), the largest
 // count over every view, at threshold 0.05 / 0:
-//   STABILITY darwin-arm64 15 / 206 (10 runs), linux-x64 14 / 204 (10 runs)
-// (Train 6 re-accepted all 16 views: K167's flush chip bar moved each 7 px up, and every capture
+//   STABILITY darwin-arm64 2 / 113 (10 runs), linux-x64 9 / 184 (10 runs)
+// (lane A re-accepted all 16 views: the Pro shell's sidebar and page header, and the plates
+// filling their column at 264 px rather than four viewport columns; before it, Train 6 re-accepted all 16 views: K167's flush chip bar moved each 7 px up, and every capture
 // pins the status bar's version label; before it, W1b's hardware look, the rack bay with nuts
 // and plugs, re-accepted ten views; its noisiest
 // is desktop-bay-light, linux 50 / 1167 over 20 runs; before it, darwin 0 / 145 and linux

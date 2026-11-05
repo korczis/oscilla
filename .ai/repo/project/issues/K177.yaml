@@ -1,0 +1,38 @@
+id: K177
+milestone: M048
+serves:
+  - "studio-completion#voice-opens-in-studio"
+title: "Modulation edges start at full depth on the first PLAY, so a frequency-modulated Playground voice opens in the Studio and renders the same"
+slug: modulation-edges-start-at-full-depth-on-the-first-play
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio). Found by V605 (2026-11-04): the Studio fades every modulation edge in from zero over its 20 ms start crossfade; on a frequency parameter that leaves the carrier's phase shifted for the rest of the sound, so the siren, wobble and FM voices render +6, +5 and -2 to +2 dB against the Playground (V605 requires a residual 60 dB below) and V605 refuses to open them rather than open them approximately. On the first PLAY of a run the runtime builds each modulation edge at its full depth while the audio routes keep their fade-in (src/js/studio/runtime.js, guarded), so a modulated carrier starts with the phase the Playground voice has; a modulation edge added or changed while playing keeps today's click-free ramp. Then V605's covered list gains siren, siren with a triangle LFO, wobble and FM, each at a residual 60 dB below the Playground render in chromium, firefox and webkit."
+why: "V605's measurement (feat/v605-voice-in-studio e0a1668e): three voice families of the Playground cannot open in the Studio without an audible difference, and the cause is the Studio's start fade on modulation edges, not the schema."
+scope:
+  - "src/js/studio/runtime.js"
+  - "src/js/studio/playground-voice-open.js"
+  - "tests/unit/fixtures/playground-voice-configs.mjs"
+  - "tests/unit/playground-voice-in-studio.test.mjs"
+  - "tests/browser/v31-studio-offline.cjs"
+  - "tests/browser/fixtures/playground-voice-in-studio-entry.js"
+  - "docs/v31/signal-path.md"
+  - ".ai/repo/project/issues/V605.yaml"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "V605"
+acceptance_criteria:
+  - "A unit test, failing on the merge base, asserts on StudioFakeContext that a modulation edge present at the first PLAY is set at its full depth at the start time, while the audio routes ramp from zero over the start crossfade, and that an edge added while playing still ramps."
+  - "tests/browser/v31-studio-offline.cjs renders siren, siren with a triangle LFO, wobble and FM through the Studio and the Playground on an OfflineAudioContext in chromium, firefox and webkit at each context's own rate, with a residual at least 60 dB below the Playground render's RMS, and V605's refusal of them is removed (the fixture list moves them to covered)."
+  - "Once the start matches, V605's residual is judged from the first sample: tests/browser/fixtures/playground-voice-in-studio-entry.js compares from the voices' first sample instead of from the end of the Studio's 20 ms start crossfade (STUDIO_XFADE_S), every covered configuration stays at least 60 dB below the Playground render's RMS in chromium, firefox and webkit, and docs/v31/signal-path.md and V605 drop the excluded start window."
+  - "No click is introduced: the output's first 20 ms stays below the existing start-click bound of tests/browser/v31-studio-offline.cjs (or the transport suite's), and the engine census is 0 after stop (project.audio-engine-discipline)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and a unit test that fails on the merge base (project.fail-first)."
+  - "tests/README.md rows are updated; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/playground-voice-in-studio.test.mjs"
+  - "node tests/browser/v31-studio-offline.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04

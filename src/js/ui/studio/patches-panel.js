@@ -161,7 +161,7 @@ export function mountPatches(dialogs, svc) {
       'data-relation': c.relation }, [
       h('strong', { text: c.label }), ' ',
       c.href ? h('a', { class: 'osc-x-cn-link', href: c.href, text: c.target,
-        'data-osc': 'studio.saved.cnxLink', onClick: (e) => follow(c, e) })
+        'data-osc': 'studio.saved.cnxLink', 'data-osc-link': 'jump', onClick: (e) => follow(c, e) })
         : h('span', { text: c.target }),
       h('span', { class: 'osc-x-cn-state', text: ` — ${c.text}.` }), ' ',
       h('span', { class: 'osc-x-cn-field', text: `Field: ${c.field}, on ${c.fieldOf}.` }),

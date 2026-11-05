@@ -18,4 +18,18 @@ validation:
 evidence_required:
 - owner_decision
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-05T14:08:11Z
+started_at: 2026-11-05T14:07:41Z
+started_event: sha256:1d8070afd790067b37655bad8f0c7bf962d597ed83b3fe9ca7d7276639677570
+verified_at: 2026-11-05T14:07:56Z
+verified_event: sha256:1b0a684a37c799ef2d05ebaceb3fdcadfde873fcf89406a474b2d9743fcb318d
+completed_at: 2026-11-05T14:08:11Z
+completed_event: sha256:cee111dcb3a89910e6a5aa43b65f496cc4eb2cefa2b9bd8cf42f4be035e327c4
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q033"
+    result: "Answered by the owner on 2026-10-29 (~21:40 CET, AskUserQuestion in the oscilla-b0 session abd8bbe3, relayed by the coordinator): (b), the generator gets its own Generator workspace with its own route and navigation entry, the Playground keeps a link to it; the recommendation (a) is overridden; built by K138 and the slices that live in it (K137, K139-K143), as Q033.current_state records since c0a631b2."
+    artifact: ".ai/repo/project/issues/Q033.yaml"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:07:30Z

@@ -37,6 +37,11 @@ export const KEYBOARD_REFUSED = Object.freeze({
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
 
+// The docked keys' frame (kbdDockClass), a Pro bottom bar above the status bar.
+const KBD_DOCK = 'fixed inset-x-0 bottom-[var(--osc-statusbar-h)] z-30 max-h-[45vh] '
+  + 'overflow-y-auto border-t border-solid border-gray-200 bg-white px-4 py-2 shadow '
+  + 'dark:border-gray-700 dark:bg-gray-800';
+
 /** The dock's Pro buttons (one class list, bound as kbdBtn, so the markup carries it once): 44 px
  *  on a coarse pointer (V634). */
 export const KBD_BTN = [
@@ -136,6 +141,12 @@ export function createKeyboardUi({ win = window } = {}) {
      *  Studio (the owner's report of 2026-11-03); the Playground keeps them under its panels. */
     get kbdDocked() {
       return this.kbdView === 'synth' || this.kbdView === 'studio';
+    },
+    /** The docked keys' classes: over the page's bottom edge, beside the sidebar from lg up (it
+     *  sits above them, z-40, and would take their clicks), as the workspace column is. */
+    get kbdDockClass() {
+      if (!this.kbdDocked) return '';
+      return `${KBD_DOCK} ${this.sidebarCollapsed ? 'lg:left-16' : 'lg:left-64'}`;
     },
     /** The on-screen keys show wherever the dock is docked (routes.js keysShown, the dock's one
      *  rule, K171): folded where a pad owns the notes, they go with it; in the Studio only

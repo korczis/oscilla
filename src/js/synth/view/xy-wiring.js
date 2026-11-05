@@ -30,6 +30,11 @@
 //                44.1 kHz, and a value the compiler holds there says so with the rate it used
 //   view.destroy() releases and removes every subscription; a second destroy changes nothing.
 //   xyPresetAction(model, panel, id) -> { action } | { reason }   a built-in XY preset
+//   keysSilenceHtml(model, panel, buttonClass) -> markup | ''   the Panel tab's notice while the
+//     panel's keys sound nothing (xy.js keysSilence, review S8), with Unpatch the pad when the
+//     pad's cables are the cause (on the XY tab the pad plays, and a key says the same)
+//   wireKeysSilence(root, { model, panel, dispatch, say })   Unpatch the pad's click under
+//     `root`: xy.js xyUnpatchAction, one BATCH
 //
 // The pad is one more note input of the keys (K183, option B; K178's one Keys source): a touch
 // presses the note under X (xyDegree, the same quantisation as the pad node's pitch, one
@@ -89,8 +94,8 @@ import { xyDegree } from '../../studio/nodes/instrument.js';
 import { NOTE_NAMES, SCALE_LABELS, midiToName } from '../../core/music.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import {
-  XY_RECIPES, xyPatchAction, xyPresetPatch, xyRoom, xySounding, xyTarget, xyTargetAction,
-  xyTargets, xyYReading,
+  KEYS_SILENT, XY_RECIPES, keysSilence, xyPatchAction, xyPresetPatch, xyRoom, xySounding,
+  xyTarget, xyTargetAction, xyTargets, xyUnpatchAction, xyYReading,
 } from '../xy.js';
 import { limitBoundText } from '../../studio/compiler.js';
 import { esc } from './face.js';
@@ -132,6 +137,25 @@ export function xyPresetAction(model, panel, id) {
   } catch (e) {
     return { reason: e.message };
   }
+}
+
+export function keysSilenceHtml(model, panel, buttonClass) {
+  const q = keysSilence(model, panel);
+  const undo = q && q.pad ? `<button type="button" data-xy-unpatch="" class="${buttonClass}">`
+    + 'Unpatch the pad</button>' : '';
+  return q ? '<div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-yellow-50 p-3 '
+    + 'text-sm text-yellow-800 dark:bg-gray-800 dark:text-yellow-300" role="alert" '
+    + `data-osc="synth.keys-silent"><p>${esc(q.reason)}</p>${undo}</div>` : '';
+}
+
+export function wireKeysSilence(root, { model, panel, dispatch, say }) {
+  const button = root && root.querySelector('[data-xy-unpatch]');
+  if (!button) return;
+  button.addEventListener('click', () => {
+    const a = xyUnpatchAction(model(), panel);
+    if (a.reason) say(a.reason, true);
+    else if (dispatch(a.action).ok) say(KEYS_SILENT.unpatched);
+  });
 }
 
 /** fn(value) on each change of app[key]; -> off. */

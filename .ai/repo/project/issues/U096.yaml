@@ -1,0 +1,34 @@
+id: U096
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "In phone landscape the XY pad stays wholly visible with the keys unfolded"
+slug: in-phone-landscape-the-xy-pad-stays-wholly-visible
+priority: p1
+profile: implementation
+objective: "Lands as fix(ui), built by 26 in lane A next to U095, after K171. At 844x390 landscape on a touch phone with the keyboard dock unfolded, the app chrome above the pad is 319 px and the unfolded dock's top sits at 159.5 px, so the 96 px pad lies entirely under the keys and no scroll can reveal it (26's check, reverted from the keys+pad train as d5c8ba71; patch r9-landscape-check.patch in 26's scratchpad). After: the pad is wholly visible and playable with the dock unfolded in landscape, by one phone-shell rule, not a per-workspace patch."
+why: "af's K171 review finding R9 (2026-11-05); the owner's 'no kaosspad' and phone-first orders (ui-current#phone-whole)."
+scope:
+  - "src/styles"
+  - "src/js/ui"
+  - "src/js/midi"
+  - "src/index.html"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/browser/iphone.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K171"
+acceptance_criteria:
+  - "Fail-first: 26's landscape check (844x390, touch, dock unfolded) reports the pad covered on the merge base and wholly visible with the change, in Chromium, Firefox and WebKit, by elementFromPoint at the pad's corners and centre, through the suite harness with wait.cjs deadlines."
+  - "One shell rule decides it, chosen by a measured comparison in the pull request of (a) the app chrome yielding in landscape (navigation and page header collapse to a thin bar while an instrument surface owns the notes), (b) the unfolded dock not overlaying the pad (the pad shrinks to its 6rem minimum above the keys), and (c) keys beside the pad (a side-by-side split in landscape); af's preference is (a) first, because it frees room for every instrument surface and keeps one dock behaviour, then (c); the builder decides on the measurement."
+  - "Portrait 390x844 and 375x667 and desktop 1536x1024 keep their K171 behaviour (no regression in x-dock-yields and x-dock-desktop); iphone.cjs's census reach does not fall."
+  - "Done only after each criterion is re-checked on a main commit."
+validation:
+  - "node tests/browser/xy-pad.cjs"
+  - "node tests/browser/iphone.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

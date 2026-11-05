@@ -137,6 +137,11 @@
 //   light-theme          node titles, port labels and cables keep contrast on the light theme
 //   dark-theme           §272 C6: node category and control-input labels keep 4.5:1 on the
 //                        node surface in the dark theme
+//   view-zoom            K170 at 1536x1024 and 390x844 touch, on a fresh page: the model's
+//                        graph zoom equals --osc-sg-z on the world element on every frame from
+//                        load, keys docked (armed) and not; a fitted view fits again on Arm,
+//                        Disarm and a window resize (Frame All then changes nothing), and after
+//                        Zoom in neither Arm nor Disarm changes the zoom
 //   screenshots          tests/visual/out-studio/ (not committed): desktop, phone, light
 //   no-console-errors
 'use strict';
@@ -2431,8 +2436,13 @@ function defineChecks() {
     const n1 = (await H.model(page)).nodes.length;
     await page.evaluate(() => window.OSCILLA.app.studioUndo());
     const n2 = (await H.model(page)).nodes.length;
-    // Untrusted files are refused before anything changes.
-    const m0 = await page.evaluate(() => JSON.stringify(window.OSCILLA.studio.model));
+    // Untrusted files are refused before anything changes. The document is compared without
+    // its view: the refusal's alert shortens the graph viewport, and a view still in fit mode
+    // fits it again (K170; presentation only, outside studioHash and history).
+    // The view itself is asserted by v31-studio-graph view-zoom (K170).
+    const doc = () => page.evaluate(() => JSON.stringify({ ...window.OSCILLA.studio.model,
+      view: null }));
+    const m0 = await doc();
     const hostile = JSON.parse(text);
     hostile.graph.nodes[0].metadata.name = '<img src=x onerror=alert(1)>';
     hostile.graph.edges.push({ id: 'edge-99', from: { node: 'env-1', port: 'audio' },
@@ -2445,7 +2455,7 @@ function defineChecks() {
       bad.push(await page.evaluate((x) => window.OSCILLA.app.studioImportText(x).ok, t));
       await H.frames(page);
     }
-    const m1 = await page.evaluate(() => JSON.stringify(window.OSCILLA.studio.model));
+    const m1 = await doc();
     const live = await H.live(page);
     return { ...H.verdict({
       dirtyAfterEdit: dirty0 === true,
@@ -2682,6 +2692,138 @@ function defineChecks() {
     } finally {
       await ctx.close();
     }
+  });
+
+  def('view-zoom', async ({ browser, baseUrl }) => {
+    // K170 at 1536 x 1024 and 390 x 844 (touch), on a fresh page: the model's graph zoom is the
+    // zoom the editor applies (--osc-sg-z on its world element) on every frame from the Studio's
+    // first, with the keys not docked and docked (armed: the Studio shows the keys only then,
+    // M086); while the view is fitted, Arm, Disarm and a window resize fit it again (Frame All
+    // then changes nothing), and after a Zoom in neither changes the zoom.
+    const WHAT = 'view-zoom';
+    const results = {};
+    for (const [w, hh, touch] of [[1536, 1024, false], [390, 844, true]]) {
+      const key = `${w}x${hh}`;
+      const ctx = await browser.newContext({ viewport: { width: w, height: hh }, hasTouch: touch,
+        isMobile: false });
+      try {
+        const page = await ctx.newPage();
+        const errors = [];
+        page.on('pageerror', (e) => errors.push(e.message));
+        await page.goto(baseUrl);
+        await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+        // In the page: every animation frame compares the applied zoom with the model's, and
+        // an observer created after the editor's (so called after it) records the viewport's
+        // sizes as the editor saw them.
+        await page.evaluate(() => {
+          const a = window.OSCILLA.app;
+          a.alerts = [];
+          if (!a.safetyCollapsed) a.collapseSafety();
+          const rec = { frames: 0, bad: [], on: true, sizes: [] };
+          window.__k170 = rec;
+          const tick = () => {
+            const s = window.OSCILLA.studio;
+            const el = document.querySelector('[data-osc="studio.graph.viewport"] .osc-sg-world');
+            const z = el ? el.style.getPropertyValue('--osc-sg-z') : '';
+            if (rec.on && z !== '' && s && s.model) {
+              rec.frames++;
+              if (Number(z) !== s.model.view.graph.zoom && rec.bad.length < 5) {
+                rec.bad.push({ z: Number(z), model: s.model.view.graph.zoom });
+              }
+            }
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+          a.setWorkspace('studio');
+        });
+        const read = () => page.evaluate(() => {
+          const vp = document.querySelector('[data-osc="studio.graph.viewport"]');
+          const el = vp && vp.querySelector('.osc-sg-world');
+          const s = window.OSCILLA.studio;
+          const rec = window.__k170;
+          if (vp && !rec.ro) {
+            rec.ro = new ResizeObserver((es) => { for (const e of es) rec.sizes.push(e.target
+              .clientHeight); });
+            rec.ro.observe(vp);
+          }
+          return { z: el ? Number(el.style.getPropertyValue('--osc-sg-z')) : null,
+            model: s && s.model ? s.model.view.graph.zoom : null,
+            fitted: !!(s && s.editor && s.editor.fitted && s.editor.fitted()),
+            h: vp ? vp.clientHeight : 0, seen: rec.sizes[rec.sizes.length - 1],
+            dock: getComputedStyle(document.documentElement).getPropertyValue('--osc-dock-h')
+              .trim(),
+            armed: document.querySelector('[data-osc="keyboard.arm"]')
+              .getAttribute('aria-pressed') === 'true',
+            frames: rec.frames, bad: rec.bad.slice() };
+        });
+        const agree = (v) => v.z !== null && v.z === v.model;
+        // Settled: the editor has seen the viewport's current size and the two zooms agree.
+        const settled = async (label, extra = () => true) => until(async () => {
+          const v = await read();
+          return agree(v) && v.seen === v.h && extra(v) ? v : null;
+        }, { ms: 5000, what: `${WHAT} ${key}: ${label}` });
+        const frameAllKeeps = async (label) => {
+          const before = await read();
+          await page.evaluate(() => window.OSCILLA.studio.editor.frameAll());
+          const after = await settled(`${label}: after Frame All`);
+          return after.z === before.z;
+        };
+        const toggleArm = async (label) => {
+          const v0 = await read();
+          await page.click('[data-osc="keyboard.arm"]');
+          return settled(label, (v) => v.armed !== v0.armed && v.dock !== v0.dock);
+        };
+        const r = {};
+        const load = await settled('model zoom == applied zoom after load', (v) => v.z !== 1);
+        r.load = load;
+        const armed = await toggleArm('armed (keys docked), fitted');
+        r.armed = armed;
+        r.armedRefit = await frameAllKeeps('armed');
+        // A template opened while the keys are docked: fitted, the two zooms agree throughout.
+        await page.evaluate(() => window.OSCILLA.app.studioLoadTemplate('subtractive-synth'));
+        r.armedLoad = await settled('model zoom == applied zoom after a load with keys docked');
+        const disarmed = await toggleArm('disarmed, fitted');
+        r.disarmed = disarmed;
+        r.disarmedRefit = await frameAllKeeps('disarmed');
+        if (!touch) {
+          await page.setViewportSize({ width: 1280, height: 900 });
+          r.resized = await settled('resized, fitted', (v) => v.h !== disarmed.h);
+          r.resizedRefit = await frameAllKeeps('resized');
+          await page.setViewportSize({ width: w, height: hh });
+          await settled('resized back', (v) => v.h === disarmed.h);
+        }
+        const fit = await read();
+        r.recorder = { frames: fit.frames, bad: fit.bad };
+        await page.evaluate(() => { window.__k170.on = false; });
+        // A user's zoom: Zoom in, committed (VIEW_COMMIT_MS after the press).
+        await page.click('[data-osc="studio.graph.zoomIn"]');
+        const zoomed = await settled('Zoom in committed', (v) => v.z > fit.z && !v.fitted);
+        const armed2 = await toggleArm('armed after Zoom in');
+        const disarmed2 = await toggleArm('disarmed after Zoom in');
+        r.user = { zoomed: zoomed.z, armed: armed2.z, disarmed: disarmed2.z };
+        const vpChanged = armed.h !== load.h;
+        results[key] = { ...r, vpChanged, errors, ok: {
+          load: load.frames > 0 && load.fitted,
+          everyFrame: fit.bad.length === 0 && fit.frames > 0,
+          // The reference template's fit is limited by the viewport's height at 1536 x 1024,
+          // so docked keys fit it smaller; on the phone the graph keeps its height.
+          armedRefit: r.armedRefit && (touch || (vpChanged && armed.z < load.z)),
+          armedLoad: r.armedLoad.fitted,
+          disarmedRefit: r.disarmedRefit && (touch || disarmed.z > armed.z),
+          resizedRefit: touch || (r.resizedRefit && r.resized.z !== disarmed.z),
+          userKept: armed2.z === zoomed.z && disarmed2.z === zoomed.z && armed2.model === zoomed.z
+            && (touch || armed2.h !== zoomed.h),
+          noErrors: errors.length === 0,
+        } };
+      } finally {
+        await ctx.close();
+      }
+    }
+    const conds = {};
+    for (const [k, v] of Object.entries(results)) {
+      for (const [c, ok] of Object.entries(v.ok)) conds[`${k} ${c}`] = ok;
+    }
+    return { ...H.verdict(conds), results };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
