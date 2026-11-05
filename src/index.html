@@ -3080,10 +3080,10 @@
       <span class="osc-sb-sub">Interactive Sound &amp; Frequency Lab</span>
     </div>
 
-    <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
+    <button type="button" class="osc-icon-btn osc-sb-play md:col-start-3 md:row-start-1" id="osc-sb-play" data-osc="status.play"
       :class="statusPlayClass"
       aria-label="Play" aria-pressed="false" :aria-pressed="String(isSounding)"
-      :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Trigger')"
+      :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Play once')"
       @click="statusPlay()" @keydown.enter="latchKey($event)">
       <svg aria-hidden="true" x-show="!isSounding"><use href="#i-play"/></svg>
       <svg aria-hidden="true" x-show="isSounding" style="display: none"><use href="#i-stop"/></svg>

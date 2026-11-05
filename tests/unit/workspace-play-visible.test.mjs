@@ -203,6 +203,78 @@ test('dist compiles the utilities that show the status-bar Play', () => {
   'dist/index.html defines xl:!inline-flex inside the xl media query');
 });
 
+/** The value of `prop` in the first rule for `selector` of `css` (after `from`), or ''. */
+function declOf(css, selector, prop, from = 0) {
+  const at = css.indexOf(`${selector} {`, from);
+  if (at < 0) return '';
+  const body = css.slice(css.indexOf('{', at) + 1, css.indexOf('}', at));
+  return ((body.match(new RegExp(`(?:^|[;\\s])${prop}:\\s*([^;]+);`)) || [])[1] || '').trim();
+}
+
+/** The tracks of a grid-template-columns value, split at top-level spaces. */
+function tracks(value) {
+  const out = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of value) {
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (ch === ' ' && depth === 0) { if (cur) out.push(cur); cur = ''; } else cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+// Review of C030: from 1280 to 1358 px the status-bar Play was auto-placed into the flexible
+// spacer track and the state (grid-column 3 / 5) painted over it. The Play now has its own
+// auto track (md:col-start-3 on the element) that no other item of the status bar spans.
+test('the status-bar Play has a grid track of its own from 768 px', () => {
+  const cls = (PLAY_TAG.match(/\sclass="([^"]*)"/) || [, ''])[1].split(/\s+/);
+  assert.ok(cls.includes('md:col-start-3') && cls.includes('md:row-start-1'), PLAY_TAG);
+  const tablet = RESPONSIVE_CSS.indexOf('.osc-statusbar {');
+  assert.match(mediaBlockWith(RESPONSIVE_CSS, '.osc-statusbar {').query, /max-width: 1279/);
+  const layouts = [
+    { name: 'desktop', css: INSTRUMENT_CSS, from: 0 },
+    { name: 'tablet', css: RESPONSIVE_CSS, from: tablet },
+  ];
+  for (const { name, css, from } of layouts) {
+    const cols = tracks(declOf(css, '.osc-statusbar', 'grid-template-columns', from));
+    assert.equal(cols[2], 'auto', `${name}: track 3 is auto (${cols.join(' ')})`);
+    const start = (sel) => parseInt(declOf(css, sel, 'grid-column', from)
+      || declOf(INSTRUMENT_CSS, sel, 'grid-column'), 10);
+    const spans = (sel) => {
+      const v = declOf(css, sel, 'grid-column', from) || declOf(INSTRUMENT_CSS, sel, 'grid-column');
+      const [a, b] = v.split('/').map((x) => parseInt(x, 10));
+      return Number.isFinite(b) ? a <= 3 && b > 3 : a === 3;
+    };
+    for (const sel of ['.osc-sb-brand', '.osc-sb-state', '.osc-sb-actions-wrap']) {
+      assert.ok(Number.isFinite(start(sel)), `${name}: ${sel} is placed`);
+      assert.equal(spans(sel), false, `${name}: ${sel} does not take the Play's track`);
+    }
+    assert.equal(start('.osc-sb-actions-wrap'), cols.length, `${name}: actions in the last track`);
+  }
+  for (const u of ['col-start-3', 'row-start-1']) {
+    assert.ok(new RegExp(`@media\\s?\\(min-width:\\s?${parseInt(TW_SCREENS.md, 10)}px\\)\\{`
+      + `[^@]*\\.md\\\\:${u}\\{`).test(DIST), `dist defines md:${u} inside the md media query`);
+  }
+});
+
+// Review of C030: the prompts call the status-bar Play "Play in the status bar"; its idle
+// accessible name starts with that name ("Play continuously", "Play once"), never "Trigger".
+test('the prompts call the status-bar Play by its accessible name', () => {
+  assert.equal(shortcuts.playControlName('status'),
+    `${shortcuts.STATUS_PLAY_NAME} in the status bar`);
+  const dynamic = (PLAY_TAG.match(/:aria-label="([^"]*)"/) || [, ''])[1];
+  const names = [...dynamic.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+  const idle = names.filter((n) => n !== 'Stop playback');
+  assert.ok(names.includes('Stop playback') && idle.length === 2, dynamic);
+  for (const n of idle) {
+    assert.ok(n.startsWith(`${shortcuts.STATUS_PLAY_NAME} `), `idle name "${n}"`);
+  }
+  assert.match(PLAY_TAG, new RegExp(`\\saria-label="${shortcuts.STATUS_PLAY_NAME}"`));
+  assert.equal(named(`Press ${shortcuts.playControlName('status')} (or Space)`), 'status');
+});
+
 test('the status-bar Play is shown where Source & Pattern is hidden, not beside it', () => {
   const at = (ws, px) => utilityShows(statusClass(ws, px >= 1280), px);
   for (const ws of ['analyzer', 'filter', 'compare']) {

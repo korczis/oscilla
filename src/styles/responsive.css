@@ -137,13 +137,13 @@
 
   /* Status bar: drop the secondary readouts and the action labels. */
   .osc-statusbar {
-    grid-template-columns: auto minmax(12px, 1fr) auto minmax(12px, 1fr) auto;
+    grid-template-columns: auto minmax(12px, 1fr) auto auto minmax(12px, 1fr) auto;
     padding: 0 16px;
   }
 
   .osc-sb-brand { grid-column: 1; }
-  .osc-sb-state { grid-column: 3; }
-  .osc-sb-actions-wrap { grid-column: 5; }
+  .osc-sb-state { grid-column: 4; }
+  .osc-sb-actions-wrap { grid-column: 6; }
 
   .osc-sb-sub,
   .osc-sb-div,

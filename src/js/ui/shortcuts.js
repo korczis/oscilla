@@ -181,14 +181,20 @@ export function playControl(workspace, wide = true) {
  * below it, and nowhere else from 768 px. Tailwind compiles these literals (content globs).
  */
 export function statusPlayClass(workspace) {
-  if (playControl(workspace, false) === 'status') return '!inline-flex md:ml-3';
-  if (playControl(workspace, true) === 'status') return 'xl:!inline-flex xl:ml-3';
+  if (playControl(workspace, false) === 'status') return '!inline-flex md:mr-3';
+  if (playControl(workspace, true) === 'status') return 'xl:!inline-flex xl:mr-3';
   return '';
 }
 
+/**
+ * The first word of the status-bar Play's accessible name while it is idle ("Play continuously",
+ * "Play once"), the name prompts call it by: "Play in the status bar" (playControlName).
+ */
+export const STATUS_PLAY_NAME = 'Play';
+
 /** The words that name `kind`'s control in a sentence, or '' when there is none. */
 export function playControlName(kind) {
-  if (kind === 'status') return 'Play in the status bar';
+  if (kind === 'status') return `${STATUS_PLAY_NAME} in the status bar`;
   if (kind === 'source') return 'Hold to Play';
   return '';
 }

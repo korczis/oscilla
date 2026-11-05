@@ -298,19 +298,19 @@ export class VisualizationBridge {
    * loop keeps running under reduced motion while one sounds. Anything else throws a TypeError
    * and changes nothing.
    */
+  setOutputOwner(owner) {
+    const o = assertOutputOwner(owner);
+    if (o === this.state.outputOwner) return;
+    this.state.outputOwner = o;
+    this.updateLoop(); // redraws once when the loop stays stopped
+  }
+
   /** C030: which Play the idle notes name ('source' | 'status' | null); redraws on a change. */
   setPlayControl(kind) {
     const k = kind === 'source' || kind === 'status' ? kind : null;
     if (k === this.state.playControl) return;
     this.state.playControl = k;
     this.updateLoop();
-  }
-
-  setOutputOwner(owner) {
-    const o = assertOutputOwner(owner);
-    if (o === this.state.outputOwner) return;
-    this.state.outputOwner = o;
-    this.updateLoop(); // redraws once when the loop stays stopped
   }
 
   /** The wave view's layout for the current canvas size; notifies onWaveLayout on a change. */

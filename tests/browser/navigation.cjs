@@ -66,8 +66,10 @@
 //                     the preset
 //   play-visible-everywhere  (C030) Analyzer, Filter Lab, Compare and Presets show a Play in
 //                     the viewport: the status-bar Play where Source & Pattern is hidden (from
-//                     1280 px, Presets always), else Hold to Play; a press starts an engine
-//                     source and the Stop returns the engine's active source count to 0
+//                     1280 px, Presets always), else Hold to Play; nothing covers it (the
+//                     topmost element at its centre is the Play), a press starts an engine
+//                     source and the Stop returns the engine's active source count to 0 (run
+//                     it at 1280x800 and 1358x800 too, where the status bar is narrowest)
 //   one-play-per-workspace  (C030) from 768 px every workspace whose Space owner is not null
 //                     shows exactly one Play group (Source & Pattern, the status-bar Play or the
 //                     Studio transport), the one shortcuts.js playControl names at that width;
@@ -1142,6 +1144,19 @@ function defineChecks() {
       r.shown = !!box && box.width > 0 && box.y >= 0 && box.y + box.height <= view.height
         && box.x >= 0 && box.x + box.width <= view.width;
       if (!r.shown) continue;
+      // Nothing paints over it: the topmost element at its centre is the Play or inside it
+      // (the status-bar state covered the Play at 1280-1358 px, review of C030).
+      r.hit = await play.evaluate((el, at) => {
+        const top = document.elementFromPoint(at.x, at.y);
+        return !!top && (top === el || el.contains(top));
+      }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+      if (!r.hit) {
+        r.covered = await page.evaluate((at) => {
+          const top = document.elementFromPoint(at.x, at.y);
+          return top ? `${top.tagName.toLowerCase()}.${[...top.classList].join('.')}` : 'none';
+        }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+        continue;
+      }
       const startWhat = `${ws}: ${via === 'status' ? 'the status-bar Play' : 'Hold to Play'} `
         + 'starts an engine source';
       const stopWhat = `${ws}: ${via === 'status' ? 'a second click on Play'
@@ -1171,6 +1186,7 @@ function defineChecks() {
     const each = (f) => Object.values(got).every(f);
     return { ...H.verdict({
       playShown: each((g) => g.shown),
+      playUncovered: each((g) => g.hit),
       playStarts: each((g) => g.started),
       playStops: each((g) => g.stopped),
     }), got };

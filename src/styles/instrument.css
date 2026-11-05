@@ -1451,6 +1451,9 @@
 .osc-dual-legend--b { color: var(--osc-magenta); }
 
 /* ================= Status bar ================= */
+/* Track 3 (auto) is the status-bar Play's own (md:col-start-3 on #osc-sb-play), empty and zero
+   wide where the Play is hidden: the flexible spacers never hold it, so the state cannot paint
+   over it at any width (review of C030: covered at 1280-1358 px). */
 .osc-statusbar {
   --osc-sb-pad-top: 4px;
   position: sticky;
@@ -1506,7 +1509,7 @@
 .osc-sb-state {
   display: flex;
   align-items: center;
-  grid-column: 3 / 5;
+  grid-column: 4;
   gap: 12px;
   min-width: 0;
   white-space: nowrap;
