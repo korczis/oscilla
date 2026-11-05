@@ -1,0 +1,32 @@
+id: C045
+milestone: M090
+serves:
+  - "coherent-state#shell-commands-act-on-view"
+title: "Screenshot, Export Audio, Save Preset and Export graph act on the workspace in view or say what they act on"
+slug: screenshot-export-audio-save-preset-and-export-graph-act-on
+priority: p2
+profile: implementation
+objective: "Lands as fix(shell). Panel Excellence criterion 6. At main 68b117f3 the status-bar Screenshot, Export Audio and Save Preset (src/index.html:3124-3134) and the header's Export graph (PNG) (:211) act on the Playground's charts and instrument whatever workspace is in view. After: one table in src/js/ui/shell-commands.js says, for each workspace, what each command acts on; the command acts on that, or is disabled with a stated reason, and its accessible name names its target when the target is not the workspace in view."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 6 and the header Inventory row (duplicated commands; F010 owns the duplicates)."
+scope:
+  - "src/index.html"
+  - "src/js/ui/shell-commands.js"
+  - "src/js/ui/app.js"
+  - "tests/unit/shell-command-scope.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/shell-command-scope.test.mjs fails on the merge base: in Studio and in Measure, Screenshot's accessible name does not name what it captures and no table states its target."
+  - "For every workspace and each of the four commands the table names a target, or the command is disabled with a reason; a mutation that deletes one workspace's row fails the test."
+  - "tests/browser/app.cjs: in Studio, Export Audio either renders the Studio graph or is disabled with the table's reason; in Measure, Screenshot's accessible name names its target. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml."
+validation:
+  - "node --test tests/unit/shell-command-scope.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

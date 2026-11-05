@@ -1,0 +1,36 @@
+id: R046
+milestone: M011
+serves:
+  - "release-provenance#no-runtime-network"
+title: "The opt-in loopback bridge to Majordomus (ADR 0088): off by default, 127.0.0.1 only, one trace-step stream"
+slug: the-opt-in-loopback-bridge-to-majordomus
+priority: p2
+profile: implementation
+objective: "Lands as feat(bridge) after the bus slices emit trace steps (C050-C059) and Majordomus's external 'oscilla' source exists on top of I2944 (seat 44). Implements ADR 0088: a switch in the page, off by default, takes a pasted bridge address and token (printed by Majordomus on opt-in); a bridge module loaded only after the switch POSTs batches of oscilla-trace-step/v1 to 127.0.0.1 with cursor <epoch>.<seq>, gaps sent as gaps, an empty batch as heartbeat; the token stays in memory for the page session; status shows LIVE, STALE or OFF with its reason, and Safari's refusal as unavailable."
+why: "Q100 (owner, 2026-11-05): 'UberSynth' is OSCILLA's Synth and an opt-in localhost bridge is allowed. The Majordomus bus mission (seats 98, 1d, 44) needs OSCILLA's events in its monitors; ADR 0012 keeps the default offline."
+scope:
+  - "src/js/bridge"
+  - "src/index.html"
+  - "scripts/verify-dist.mjs"
+  - "tests/unit/bridge.test.mjs"
+  - "tests/browser/bridge.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q100"
+acceptance_criteria:
+  - "Default offline: a browser check loads the page in all three engines, plays, measures and opens every workspace with the bridge off, and records zero network requests (request listener); verify-dist fails a build that calls the network outside src/js/bridge or to any host but 127.0.0.1."
+  - "The CSP gains connect-src http://127.0.0.1:* and nothing else; a unit test reads the built meta tag."
+  - "Fail-first unit (tests/unit/bridge.test.mjs): batches carry oscilla-trace-step/v1 with trace.js's frozen fields unchanged, the cursor <epoch>.<seq>, a ring overwrite becomes a gap entry, an empty batch is the heartbeat, a 401 turns the status OFF with the server's reason, and the token is never written to storage or the URL."
+  - "A browser check against a local stub ingress on 127.0.0.1 (answering the Private Network Access preflight) shows LIVE, then STALE when the stub stops answering; on WebKit a refusal shows unavailable with its reason."
+  - "The switch's text says that switching it on sends this session's trace steps to a process on this machine; About's privacy line gains the clause and its claim test covers it."
+  - "The pull request carries a reviewer's verdict (scripts/verify-dist.mjs is guarded)."
+  - "Done only after each criterion is re-checked on a main commit."
+validation:
+  - "node --test tests/unit/bridge.test.mjs"
+  - "node tests/browser/bridge.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

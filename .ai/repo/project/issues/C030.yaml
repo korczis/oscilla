@@ -1,0 +1,36 @@
+id: C030
+milestone: M090
+serves:
+  - "coherent-state#user-journeys-hold"
+title: "A visible Play on every workspace that should sound, on desktop as on the phone"
+slug: a-visible-play-on-every-workspace-that-should-sound-on-deskt
+priority: p0
+profile: implementation
+objective: "Lands as fix(ui). Analyzer, Filter, Compare and Presets have no visible Play at 1536x1024: the source panel with Trigger and Hold carries data-osc-modes playground sequencer synthesis (src/index.html:289) and the status-bar Play is display:none on desktop (src/styles/instrument.css:1502, shown only in src/styles/responsive.css:369); SPACE_OWNER gives those workspaces an instrument whose controls are not on screen (src/js/ui/shortcuts.js:29-42); Presets and Learn prompt for a Trigger that is not there (src/js/core/instrument.js:934, :1114). After: every workspace whose SPACE_OWNER is non-null shows one Play control at every width, and every prompt names a control on screen."
+why: "The owner, in the af session on 2026-11-04 ~23:3xZ: 'play na vetsine stranek nefunguje / neni to centralne propojene pres bus / dupliukuje se to / nefunguje to jak ma, jak popsano v .ai/' (Play does not work on most pages; not centrally connected through a bus; duplicated; not working as .ai/ describes). Measured by af's audit workflow wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0) and the live site, in Chromium, Firefox and WebKit, desktop 1536x1024 and WebKit 390x844: the engine is sound (one AudioContext, no errors, every Stop silent within 0.2-1.2 s), but 8 of 13 workspaces have no working visible Play on desktop."
+scope:
+  - "src/index.html"
+  - "src/styles"
+  - "src/js/ui/shortcuts.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/core/instrument.js"
+  - "tests/unit/workspace-play-visible.test.mjs"
+  - "tests/browser/navigation.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "tests/unit/workspace-play-visible.test.mjs: every workspace with a non-null SPACE_OWNER has a Play control that no stylesheet hides at desktop width, and every prompt string naming a control names one present on that workspace."
+  - "tests/browser/navigation.cjs at 1536x1024 in Chromium, Firefox and WebKit: on analyzer, filter, compare and presets a visible Play is clicked and the engine's active source count is above 0 within a named deadline, then Stop returns it to 0."
+  - "Fail-first: the unit test and the browser check named below fail on the merge base (project.fail-first)."
+  - "Browser checks run through tests/browser/lib/suite.cjs with tests/browser/lib/wait.cjs until() deadlines, assume no sample rate, and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every string it adds passes the wording tests; its chrome is Flowbite Pro and tests/unit/ui-flowbite-pro-baseline.json only falls (project.ui-uses-flowbite-pro); the iphone.cjs census reach does not fall."
+  - "Done only when each criterion above is re-checked on a main commit, not by a merge verdict alone (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/workspace-play-visible.test.mjs"
+  - "node tests/browser/navigation.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

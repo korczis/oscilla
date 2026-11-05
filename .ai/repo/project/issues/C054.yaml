@@ -1,0 +1,33 @@
+id: C054
+milestone: M090
+serves:
+  - "coherent-state#saved-state-is-honest"
+title: "Only the navigation dispatcher writes the address: history.replaceState outside src/js/ui/navigation.js goes"
+slug: only-the-navigation-dispatcher-writes-the-address
+priority: p2
+profile: implementation
+objective: "Lands as fix(navigation). Moved out of C037 by af's critique of 96daa67b (BLOCKING 5: 'move the replaceState part to a URL-state issue'). Line numbers at origin/main a19f1ff6. Besides the dispatcher (src/js/ui/navigation.js:296, :415), four sites write the address themselves: src/js/core/instrument.js:1063, src/js/ui/measure/input.js:78, src/js/ui/measure/run.js:272 and src/js/ui/studio/workspace/navigation.js:178, so a link the user copies can name state the dispatcher never saw and Back/Forward can skip it (ADR 0045, one dispatcher). After: each of the four asks the dispatcher (its replace or push entry) with the key it owns; navigation.js is the only caller of history.replaceState and pushState."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3 (4 replaceState writers outside navigation.js); af's critique of 96daa67b moved it out of the bus."
+scope:
+  - "src/js/ui/navigation.js"
+  - "src/js/core/instrument.js"
+  - "src/js/ui/measure/input.js"
+  - "src/js/ui/measure/run.js"
+  - "src/js/ui/studio/workspace/navigation.js"
+  - "tests/unit/address-writer.test.mjs"
+  - "tests/browser/navigation.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/address-writer.test.mjs scans src/js for history.replaceState and history.pushState outside src/js/ui/navigation.js and fails on the merge base naming instrument.js:1063, measure/input.js:78, measure/run.js:272 and studio/workspace/navigation.js:178; a mutation that re-adds one fails."
+  - "Each former site's state survives a reload and Back/Forward through the dispatcher (one case each in tests/browser/navigation.cjs, until() deadlines, suite harness), and the guard asks nothing for these replace entries."
+  - "Guarded paths marked: src/js/ui/measure/* (v2): prismatic-majordomus-98 writes the verdict; the rest is judged by the screens seat once R031 lands. Lane: oscilla-21."
+validation:
+  - "node --test tests/unit/address-writer.test.mjs"
+  - "node tests/browser/navigation.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

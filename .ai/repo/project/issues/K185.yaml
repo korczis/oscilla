@@ -1,0 +1,28 @@
+id: K185
+milestone: M080
+serves:
+  - "studio-box-system#compile-and-playback"
+title: "The runtime trace records a next-note parameter update as stored, not scheduled"
+slug: the-runtime-trace-records-a-next-note-update-as-stored
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio). src/js/studio/runtime.js:796 notes every param update whose live rule is not 'next-gate' as 'scheduled', so NODE_PARAM_SET fm.algorithm while running is traced as ['scheduled', 'next-note', null] although nothing is scheduled on the audio clock: the value is stored and applies from the next note. Line numbers at origin/main a19f1ff6. The trace rule (runtime.js:796-798) is: how && how !== 'next-gate' gives 'scheduled', before owned and stored, so a 'next-note' or 'crossfade' answer is 'scheduled'; at is set only for 'set' and 'glide' (now), and no entry carries the ramp's end. The mono panel answers 'next-note' (src/js/studio/adapters/instrument.js:69). After: precedence is stated and applied in this order: owned (a modulated key), then scheduled for 'set', 'glide' and 'crossfade' (acts on the audio clock now, at now, with until: the ramp's end time, now plus the adapter's glide or crossfade time), then stored for 'next-note', 'next-gate' and an unreported key (applies from the next note or gate); the contract comment at src/js/studio/adapters/nodes.js:20-27 names the three verbs, the precedence and the until field. The vocabulary is the one K192 (the voice wrapper's runtime slice) and V619 (the port and cable kinds) consume; neither declares its own."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice 06 (uncovered: the runtime trace reports next-note updates as scheduled). af's critique N2 (mesh, 2026-11-05): a new issue under studio-box-system, not under K166 (BLOCKED by V619 and about the UI). af's critique of 96daa67b (AMEND 14): the trace has no ramp end, the precedence and 'crossfade' were unstated, the instrument case was missing, and K189's runtime slice and V619 must share one vocabulary."
+scope:
+  - "src/js/studio/runtime.js"
+  - "src/js/studio/adapters/nodes.js"
+  - "tests/unit/v31-studio-trace.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/v31-studio-trace.test.mjs dispatches NODE_PARAM_SET fm.algorithm on a running graph and expects ['stored', 'next-note', null]; on the merge base it gives ['scheduled', 'next-note', null]."
+  - "A 'glide' update traces ['scheduled', 'glide', now] with until the ramp's end, a 'crossfade' update the same with the crossfade's end, an owned key 'owned', and the mono panel's transpose (studio/adapters/instrument.js:69, 'next-note') ['stored', 'next-note', null]; one case each, and a key both owned and glided traces 'owned' (precedence)."
+  - "Guarded path (src/js/studio/*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/v31-studio-trace.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
