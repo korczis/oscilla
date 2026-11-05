@@ -44,9 +44,11 @@
 //            all 12 cable ends are hit-testable (nothing covers them).
 // Below xl the bay is a face of its own (V636): the cables are patched on it, through its chip,
 // and the tab views come back to the module cards through the PANEL chip.
-// Every capture fails closed unless the Synth reports the view's tab, exactly the six cables,
-// six drawn cables, no armed engine and no voice, the view's theme on <html>, and the parked
-// pointer lands on nothing interactive.
+// Every capture fails closed unless the Synth reports the view's tab, exactly the cables the
+// document held before the patch (the default Synth document's own: K183's Y cable) and the
+// six patched, a drawn cable for each cable the document has (counted from the document under
+// capture, never a literal), no armed engine and no voice, the view's theme on <html>, and the
+// parked pointer lands on nothing interactive.
 // target: 'dist' (default) -> dist/index.html; any other path or http(s) URL as is.
 // --view limits the run to the named views; with --update-reference it accepts only those views
 // and leaves every other reference file untouched, and it is refused when this environment's
@@ -382,19 +384,21 @@ export const FREE_JACK = 'mg.rate:in';
 
 /**
  * The bay redrawn for the view: theme on <html>, the free ring's stroke = --osc-text-dim, the
- * tab, 6 cables drawn. One check for the wait and its observation: whether it holds, or, with
- * `observe`, what was seen.
+ * tab, and a drawn cable for each cable the document now has, once it has the `cables` the
+ * capture expects (its own and the six patched). One check for the wait and its observation:
+ * whether it holds, or, with `observe`, what was seen. Runs in the page.
  */
-function redrawState(v) {
+export function redrawState(v) {
   const doc = document.documentElement;
   const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
   const ring = document.querySelector(`[data-jack="${v.free}"] [data-ring]`);
   const state = { theme: doc.dataset.theme, want: v.theme,
     ring: ring ? ring.getAttribute('stroke') : null, dim,
     tab: window.OSCILLA.app.synthDebug().tab, wantTab: v.tab,
+    cables: window.OSCILLA.app.synthDebug().cables.length, wantCables: v.cables,
     drawn: document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length };
   const ok = state.theme === v.theme && state.ring === dim && state.tab === v.tab
-    && state.drawn === 6;
+    && state.cables === v.cables && state.drawn === state.cables;
   return v.observe ? state : ok;
 }
 
@@ -562,6 +566,10 @@ async function captureOn(page, view, out, target) {
   // cards unless the view is the bay's.
   const faced = !(await ev('read whether the bay face is shown', faceShown, 'bay'));
   if (faced) await showFace(page, id, 'bay');
+  // The cables the document has before the patch (K183's default Y cable): expected beside it.
+  const own = await ev('read the cables the document already has',
+    () => window.OSCILLA.app.synthDebug().cables.map((c) => `${c.from} -> ${c.to}`));
+  const want = [...own, ...CABLES.map(([a, b]) => `${a} -> ${b}`)].sort();
   for (const [a, b] of CABLES) {
     await tapJack(page, id, `${a}:out`);
     await tapJack(page, id, `${b}:in`);
@@ -575,10 +583,10 @@ async function captureOn(page, view, out, target) {
   }, view.theme);
   // The bay is redrawn from the theme's tokens: a free jack's ring (its data-ring hook, the
   // stroke the 3:1 check reads) is --osc-text-dim; the tab is rendered on a frame. Wait for both,
-  // and for the six cables to be drawn.
-  const redraw = { theme: view.theme, tab: view.tab, free: FREE_JACK };
+  // and for every cable the document has to be drawn.
+  const redraw = { theme: view.theme, tab: view.tab, free: FREE_JACK, cables: want.length };
   const redrawn = () => namedWait(page, id,
-    'theme redraw (free ring = --osc-text-dim, tab, 6 cables drawn)',
+    `theme redraw (free ring = --osc-text-dim, tab, ${want.length} cables drawn)`,
     (timeout) => page.waitForFunction(redrawState, redraw, { timeout }),
     { observe: redrawState, arg: { ...redraw, observe: true } });
   await redrawn();
@@ -625,14 +633,18 @@ async function captureOn(page, view, out, target) {
   await frames(page, id);
   const s = await ev('inspect the view', inspect, { pairs: CABLES, bay: view.bay,
     park: [0, height - 1], content: view.content });
-  const want = CABLES.map(([a, b]) => `${a} -> ${b}`).sort();
   if (s.tab !== view.tab) problems.push(`the Synth shows the ${s.tab} tab, not ${view.tab}`);
   if (s.engine !== ENGINE) problems.push(`the Engines tab's engine is ${s.engine}, not ${ENGINE}`);
   if (JSON.stringify(s.cables) !== JSON.stringify(want)) {
-    problems.push(`the patch holds ${s.cables.length} cables (${s.cables.join(', ')}), not the six`);
+    problems.push(`the patch holds ${s.cables.length} cables (${s.cables.join(', ')}), not the `
+      + `${want.length} expected (${want.join(', ')})`);
   }
-  if (s.drawn !== 6) problems.push(`${s.drawn} cables drawn in the bay, not 6`);
-  if (s.armed || s.voices) problems.push(`the engine is armed (${s.armed}) or sounds (${s.voices})`);
+  if (s.drawn !== s.cables.length) {
+    problems.push(`${s.drawn} cables drawn in the bay for the document's ${s.cables.length}`);
+  }
+  if (s.armed || s.voices) {
+    problems.push(`the engine is armed (${s.armed}) or sounds (${s.voices})`);
+  }
   if (s.theme !== view.theme) problems.push(`the page is in the ${s.theme} theme`);
   if (s.hidden.length) problems.push(`cable ends not visible: ${s.hidden.join(', ')}`);
   if (s.plates.length) problems.push(`bay plates not seen whole above the docked keyboard: `
