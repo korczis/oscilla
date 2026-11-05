@@ -69,6 +69,7 @@ const LAUNCH = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const INERT_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
   'no-inert-surfaces-allowance.json'), 'utf8'));
+// workspace-subset: the workspaces the axe contrast pass was recorded on (R007)
 const WORKSPACES = ['playground', 'analyzer', 'sequencer', 'filter', 'synthesis', 'compare',
   'presets', 'learn'];
 
@@ -931,6 +932,7 @@ function defineChecks() {
     let bad = 0;
     for (const w of [1280, 1366, 1440, 1535, 1536]) {
       const { page, context } = await open(browser, { width: w, height: 1000 });
+      // workspace-subset: three panel workspaces at the widths around the xl break
       for (const ws of ['playground', 'analyzer', 'synthesis']) {
         await page.evaluate((m) => window.OSCILLA.app.setWorkspace(m), ws);
         await sleep(120);

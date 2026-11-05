@@ -44,12 +44,15 @@ const LAUNCH = {
   webkit: {},
 };
 const WIDTHS = [[320, 640], [375, 812], [768, 1024], [1024, 768], [1280, 800], [1536, 1024]];
+// workspace-subset: the panel workspaces the layout invariants were written for
 const WORKSPACES = ['playground', 'sequencer', 'analyzer', 'filter', 'synthesis', 'compare'];
 // Full-width views: their content must stay inside the view's box. MEASURE and EXPERIMENTS
 // are views that hold their own panels, so the panel checks (squashed, overlapping, covered
 // primary/STOP) run for them too.
 // STUDIO (V3.1) is a view of panels too: toolbar, node library, graph, Inspector, timeline.
+// workspace-subset: the full-width views this check holds to their box
 const VIEWS = ['measure', 'experiments', 'studio', 'about'];
+// workspace-subset: the views among them that hold panels of their own
 const PANEL_VIEWS = new Set(['measure', 'experiments', 'studio']);
 const TOUCH_WIDTHS = [[320, 812], [375, 812], [768, 1024]];
 const TOUCH_WORKSPACES = [...WORKSPACES, 'learn', 'presets', ...VIEWS];

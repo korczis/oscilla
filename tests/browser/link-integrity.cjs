@@ -144,6 +144,7 @@ const ACTIONS = [
 // Workspaces whose only way onward is the nav today (links.md, "dead ends"). Shrinks only.
 // The cross-links pull request (#294) and #273 gave Analyzer, Compare, Synthesis and
 // Experiments (B12, its empty lists now link to Measure) an in-content exit.
+// workspace-subset: the recorded dead ends, a list that only shrinks
 const NO_EXIT_OK = new Set(['presets', 'about']);
 // Rendered links that do not yet say they open a new tab (B10: the Bioacoustics citations,
 // src/js/labs/bioacoustics.js), owned by the cross-links pull request. Each is reported as

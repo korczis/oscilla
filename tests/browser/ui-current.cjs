@@ -42,11 +42,13 @@ const PHONE = { width: 390, height: 844 };
 // The share of a workspace that may be empty at 1536x1024 (acceptance of U005).
 const EMPTY_LIMIT = 0.25;
 // The workspaces held to the limit; a later issue adds the ones it lays out.
+// workspace-subset: the workspaces laid out so far, a later issue adds more
 const FILLED_WORKSPACES = ['analyzer', 'compare'];
 const COUNTERPART_LINKS = [
   { osc: 'counterpart.measure-rta', href: '#m=measure' },
   { osc: 'counterpart.experiments', href: '#m=experiments' },
 ];
+// workspace-subset: the workspaces that show the microphone counterpart links
 const COUNTERPART_WORKSPACES = ['analyzer', 'compare'];
 const SETTLE_MS = 10000;
 

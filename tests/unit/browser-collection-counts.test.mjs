@@ -36,6 +36,19 @@
 // `// count-allow: <reason of three words or more>` on its line or on a comment-only line
 // directly above; every marker is printed.
 //
+// A count is not the only way to restate a collection. #399 (M1) found the census's workspace
+// list written out in tests/browser/lib/oscilla-page.cjs as twelve ids without Synth, so the
+// census never entered the Synth workspace and none of its controls reached a row. A third
+// kind of finding is therefore
+//   - `workspace-list`: an array literal of two or more string literals that are all workspace
+//     ids (WORKSPACES of src/js/ui/app.js, read, not restated here), on one line or several,
+//     inside `Object.freeze(...)` or `new Set(...)` or bare.
+// The fix reads WORKSPACES (op.WORKSPACES of lib/oscilla-page.cjs, or an import of
+// src/js/ui/app.js). A deliberate selection of workspaces (the ones a layout check lays out, the
+// ones searched first) carries `// workspace-subset: <reason of three words or more>` on the
+// line of its `[` or on a comment-only line directly above; every marker is printed. An array
+// that mixes a workspace id with anything else (a hash, a template string) is not read.
+//
 // The occurrences that predate the scan are recorded in
 // tests/browser/collection-count-baseline.json as a file and a stable key: the check it belongs
 // to (the nearest `def('<id>'` before it, else the nearest `check('<message>'`, else the nearest
@@ -66,6 +79,8 @@ const COLLECTION = new Set(['template', 'templates', 'workspace', 'workspaces', 
   'links', 'tab', 'tabs', 'route', 'routes', 'registry']);
 const SELECTION = new Set(['sel', 'selected', 'selection']);
 const MARKER = /count-allow:[ \t]*(.*)/;
+const SUBSET = /workspace-subset:[ \t]*(.*)/;
+const { WORKSPACES } = await import('../../src/js/ui/app.js');
 const reasoned = (reason) => reason.split(/\s+/).filter((w) => /[A-Za-z]{2,}/.test(w)).length >= 3;
 
 /** The words of an identifier or a string: split at camelCase, digits and punctuation. */
@@ -206,16 +221,23 @@ const COUNT_PHRASE = new RegExp(`\\b(?:${COUNT_WORDS.join('|')})\\b(?:[\\s-]+[a-
   + '(?:templates?|workspaces?|nav|links?|tabs?|routes?|node[\\s-]types?)\\b', 'i');
 
 /** Every hard-coded collection count in `source`, as { file, line, kind, key, text }. */
-export function scan(source, { file = '<text>' } = {}) {
+export function scan(source, { file = '<text>', workspaces = WORKSPACES } = {}) {
   const { code, comments } = mask(source);
   const lines = source.split('\n');
-  const allowed = (line) => [line, line - 1].some((ln) => {
+  const marked = (marker) => (line) => [line, line - 1].some((ln) => {
     const note = comments.get(ln);
-    if (!note || !MARKER.test(note)) return false;
+    if (!note || !marker.test(note)) return false;
     if (ln === line - 1 && !/^\s*(?:\/\/|\/\*)/.test(lines[ln - 1] || '')) return false;
-    return reasoned(MARKER.exec(note)[1]);
+    return reasoned(marker.exec(note)[1]);
   });
+  const allowed = marked(MARKER);
   const out = [];
+  for (const f of workspaceLists(source, code, workspaces)) {
+    if (marked(SUBSET)(f.line)) continue;
+    const text = squash(f.text);
+    out.push({ file, line: f.line, kind: 'workspace-list',
+      key: `${context(source, code, f.start)} :: ${text}`, text });
+  }
   const op = /(?<![=!<>])(===|!==|==|!=)(?!=)/g;
   for (let m = op.exec(code); m; m = op.exec(code)) {
     const at = m.index;
@@ -260,11 +282,35 @@ export function scan(source, { file = '<text>' } = {}) {
   return out;
 }
 
-/** Every count-allow marker of `source`, with its reason. */
+// A string literal (its contents blanked by the mask), then the array of only such literals.
+const LITERAL = "(?:'[^'\\\\\\n]*'|\"[^\"\\\\\\n]*\"|`[^`\\\\$]*`)";
+const LITERAL_ARRAY = new RegExp(String.raw`\[\s*(${LITERAL}(?:\s*,\s*${LITERAL})*)\s*,?\s*\]`,
+  'y');
+
+/** The array literals of string literals that are all workspace ids: [{ line, start, text }]. */
+function workspaceLists(source, code, workspaces) {
+  const ids = new Set(workspaces);
+  const out = [];
+  for (let i = code.indexOf('['); i >= 0; i = code.indexOf('[', i + 1)) {
+    LITERAL_ARRAY.lastIndex = i;
+    const m = LITERAL_ARRAY.exec(code);
+    if (!m) continue;
+    // the mask blanks a string's contents: its quotes place it, the source gives its text
+    const items = [...m[0].matchAll(new RegExp(LITERAL, 'g'))]
+      .map((q) => source.slice(i + q.index + 1, i + q.index + q[0].length - 1));
+    if (items.length >= 2 && items.every((x) => ids.has(x))) {
+      out.push({ line: lineOf(source, i), start: i, text: source.slice(i, i + m[0].length) });
+    }
+  }
+  return out;
+}
+
+/** Every count-allow and workspace-subset marker of `source`, with its reason. */
 export function markers(source, { file = '<text>' } = {}) {
   const { comments } = mask(source);
-  return [...comments].filter(([, note]) => MARKER.test(note))
-    .map(([line, note]) => ({ file, line, reason: MARKER.exec(note)[1].trim() }));
+  return [...comments].flatMap(([line, note]) => [MARKER, SUBSET]
+    .filter((m) => m.test(note)).map((m) => ({ file, line,
+      kind: m === MARKER ? 'count-allow' : 'workspace-subset', reason: m.exec(note)[1].trim() })));
 }
 
 const format = (f) => `${f.file}:${f.line}: [${f.kind}] ${f.text}`;
@@ -400,6 +446,58 @@ test('the key names the check (def, else check, else function); a repeat gets it
     ['(file) :: routes.size === 4']);
 });
 
+test('a literal list of workspace ids is a finding: the twelve oscilla-page.cjs held (#399)',
+  () => {
+  // tests/browser/lib/oscilla-page.cjs:35-36 on origin/main at 2195a7a3, verbatim
+  const held = [
+    '/** The workspaces of the shell, in navigation order (ui/app.js MODES). */',
+    "const WORKSPACES = Object.freeze(['playground', 'measure', 'experiments', 'analyzer', "
+      + "'filter',",
+    "  'compare', 'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about']);",
+  ].join('\n');
+  const found = scan(held, { file: 'tests/browser/lib/oscilla-page.cjs' });
+  assert.deepEqual(found.map((f) => [f.line, f.kind]), [[2, 'workspace-list']]);
+  assert.match(found[0].key, /^\(file\) :: \['playground', 'measure', .* 'about'\]$/);
+  for (const list of ["['analyzer', 'compare']", 'new Set(["presets", "about"])',
+    "[\n  'measure',\n  'studio',\n]", "[`learn`, `synth`]"]) {
+    assert.deepEqual(kinds(`const w = ${list};\n`), ['1:workspace-list'], list);
+  }
+});
+
+test('a list that is not only workspace ids, or of one, stays quiet', () => {
+  for (const line of ["const r = ['m=sweep', 'playground'];", "const one = ['studio'];",
+    "const f = ['bay', 'panel'];", "const t = [`m=${w}`, 'studio'];",
+    "const m = ['playground', x];", "const s = \"['playground', 'measure']\";",
+    "// ['playground', 'measure']"]) {
+    assert.deepEqual(kinds(`${line}\n`), [], line);
+  }
+});
+
+test('a workspace-subset marker with a reason of three words silences one list', () => {
+  assert.deepEqual(kinds('// workspace-subset: the two laid out\nconst w = '
+    + "['analyzer', 'compare'];\n"), []);
+  assert.deepEqual(kinds("const w = ['analyzer', 'compare']; // workspace-subset: two laid out\n"),
+    []);
+  assert.deepEqual(kinds("const w = ['analyzer', 'compare']; // workspace-subset: why\n"),
+    ['1:workspace-list'], 'a reason of one word is no reason');
+  assert.deepEqual(kinds("// count-allow: the phone layout has two\nconst w = ['analyzer', "
+    + "'compare'];\n"), ['2:workspace-list'], 'count-allow is not a subset marker');
+  assert.deepEqual(markers('// workspace-subset: the two laid out\n').map((m) => m.kind),
+    ['workspace-subset']);
+});
+
+test('mutation: the list oscilla-page.cjs held, put back, fails the tree check', () => {
+  const file = 'tests/browser/lib/oscilla-page.cjs';
+  const text = readFileSync(path.join(ROOT, file), 'utf8');
+  assert.deepEqual(scan(text, { file }), [], `${file} reads WORKSPACES from the code`);
+  const mutated = `${text}\nconst WORKSPACES_AGAIN = Object.freeze(['playground', 'measure', `
+    + "'experiments', 'analyzer', 'filter', 'compare', 'synthesis', 'sequencer', 'presets', "
+    + "'learn', 'studio', 'about']);\n";
+  const { fresh } = compare(scan(mutated, { file }), readBaseline().entries);
+  assert.deepEqual(fresh.map((f) => [f.line, f.kind]),
+    [[mutated.split('\n').length - 1, 'workspace-list']]);
+});
+
 // ------------------------------------------------------------------------- the tree
 test('tests/browser holds no hard-coded collection count beyond its record', (t) => {
   const { entries } = readBaseline();
@@ -410,7 +508,9 @@ test('tests/browser holds no hard-coded collection count beyond its record', (t)
   assert.deepEqual(fresh.map(format), [], `${RULE}: a browser check compares a collection's size `
     + 'to a number. Read the collection from its source (import STUDIO_TEMPLATES, WORKSPACES, '
     + 'NODE_REGISTRY from src/js, or read it in the page), or mark a deliberate count with '
-    + `// count-allow: <reason>. ${BASELINE_REL} is not a place for a new one.`);
+    + '// count-allow: <reason>; a list of workspace ids is op.WORKSPACES (or WORKSPACES of '
+    + 'src/js/ui/app.js), or a deliberate selection marked // workspace-subset: <reason>. '
+    + `${BASELINE_REL} is not a place for a new one.`);
 });
 
 test('the record names .cjs files of tests/browser and keys that look like the scan\'s', () => {
@@ -423,11 +523,12 @@ test('the record names .cjs files of tests/browser and keys that look like the s
   assert.equal(new Set(entries.map(entryId)).size, entries.length, 'no entry twice');
 });
 
-test('every count-allow marker of tests/browser gives its reason, printed for review', (t) => {
+test('every count-allow and workspace-subset marker of tests/browser gives its reason, printed '
+  + 'for review', (t) => {
   for (const file of sources()) {
     for (const m of markers(readFileSync(path.join(ROOT, file), 'utf8'), { file })) {
       assert.ok(reasoned(m.reason), `${m.file}:${m.line}: a reason of three words`);
-      t.diagnostic(`count-allow ${m.file}:${m.line}: ${m.reason}`);
+      t.diagnostic(`${m.kind} ${m.file}:${m.line}: ${m.reason}`);
     }
   }
 });

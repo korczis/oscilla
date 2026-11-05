@@ -3357,6 +3357,7 @@ function defineChecks(fixtures) {
 
   def('no-spl', async ({ page }) => {
     const res = {};
+    // workspace-subset: the two workspaces that show measurement results
     for (const ws of ['measure', 'experiments']) {
       await H.workspace(page, ws);
       for (const tab of ws === 'measure' ? ['response', 'ir', 'rta'] : [null]) {
