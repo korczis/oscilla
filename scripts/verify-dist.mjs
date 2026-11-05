@@ -1,11 +1,45 @@
 #!/usr/bin/env node
 // Static release gate for dist/index.html (the file:// and GitHub Pages artifact).
 //
+// Design principle: FAIL CLOSED. A construct the shipped dist does not use, and that this scan
+// cannot classify with certainty, is refused rather than parsed cleverly. Each refusal of that
+// kind (the markup bullet below, the character references, srcdoc, data: documents) was
+// checked against the shipped dist before it was added: it has none of them.
+//
 // Fails when the file
 //   - is not the only file in dist/ (a .nojekyll marker is tolerated),
-//   - references any local or remote resource (src/href/srcset/poster/data/url()/@import,
-//     <link href>, <base>, meta refresh) other than data: URLs and #fragments; <a href> may
-//     point to absolute http(s)/mailto/tel destinations because following a link loads nothing,
+//   - has markup this scan does not read as the browser does. Refused, each by name: a duplicate
+//     attribute (names compared in lower case; the browser keeps the first copy); a quote, < or =
+//     in an attribute name or an unquoted value, or a backtick in an unquoted value; <!-->, <!--->
+//     or --!> (comment ends) anywhere outside <script>/<style> bodies; between tags, <?, a <! other
+//     than <!-- and the leading doctype, or a </ not followed by a tag name and optional whitespace
+//     then > (bogus comments, an end tag with attributes); <!-- inside a <script> or <style> body;
+//     a </script or </style (any case) other than </script> or </style> in lower case (whitespace
+//     allowed before the >); a comment, <script> or <style> that starts inside an open <title>,
+//     <textarea>, <xmp>, <iframe>, <noembed>, <noframes>, <noscript> or <plaintext>, or a <script>
+//     or <style> inside an open <svg> or <math> (where the browser reads its content as markup; a
+//     </svg> or </math> met inside an open integration point, foreignObject, desc, title, mi, mo,
+//     mn, ms, mtext or annotation-xml, does not close it here, nor does an end tag of the other
+//     name); and a character reference in an attribute value that the scan does not decode.
+//     Attribute values are read with character references decoded (decodeCharRefs): &#N and &#xN
+//     with or without the ;, the names in NAMED_REFS ending in ;, and quot, amp, lt, gt (also QUOT,
+//     AMP, LT, GT) and nbsp without the ; unless the next character is a letter, a digit or = (as
+//     the browser reads an attribute); any other &name; and any other legacy name the browser
+//     decodes without the ; is refused, while an & before anything else (open&&close()) stays as it
+//     is,
+//   - references a resource from markup: a URL attribute (URL_ATTRS) on any tag with a value other
+//     than a data: URL, a #fragment or empty (srcset read per candidate), except that an <a>/<area>
+//     href may be an absolute http(s)/mailto/tel destination (following a link loads nothing); a
+//     data: URL in a URL attribute of <iframe>, <frame>, <object>, <embed> or <use>, or as the href
+//     of a <link> whose rel is not one or more of icon, shortcut, apple-touch-icon and
+//     apple-touch-icon-precomposed: a document or stylesheet this scan does not read; a srcdoc
+//     attribute on any tag; an SVG <set> or <animate*> whose attributeName is a URL attribute;
+//     <base>; a meta refresh; and, read as CSS with its escapes decoded, in a <style> body, a style
+//     attribute or any other attribute value that is not a URL attribute or script (an SVG
+//     presentation attribute such as fill, stroke, filter, mask, clip-path, marker-start/mid/end or
+//     cursor takes url()), an @import or a url() or image-set() string other than a data: URL or a
+//     #fragment. Not held: what a data: URL holds is not read where it is allowed (an image, which
+//     loads nothing further; a CSS url(); an icon link; a link destination),
 //   - contains a module, importmap or external script (type=module, src=),
 //   - in first-party script (each <script> and each inline handler or Alpine directive
 //     attribute of any tag, <link>, <script> and <style> included) contains a refused form
@@ -61,8 +95,8 @@
 //     fetch?.(...), fetch/**/(...), const w=window; w['fe'+'tch'](...); a quote spelt as an
 //     escape where a refused form needs one (x="url(\x27//t.example/p.png\x27)",
 //     x="<img src=\x22//t.example/p.gif\x22>", \u0022 likewise); markup with a resource
-//     URL built at run time and handed to p5's createDiv/html(); script inside an iframe
-//     srcdoc (not a first-party script above). Runtime network loads are held by R041 (the
+//     URL built at run time and handed to p5's createDiv/html(). Runtime network loads are
+//     held by R041 (the
 //     browser request guard, planned on chore/plan-coherence-hardening), not by this scan,
 //   - embeds a vendor with a NETWORK_PRIMITIVES occurrence (fetch, XMLHttpRequest, a DOM URL
 //     sink, a CSS url(), open()/location, ..., an i18n loadPath) outside its VENDOR_NETWORK
@@ -106,6 +140,24 @@ const URL_ATTRS = new Set([
   'manifest', 'ping', 'imagesrcset', 'lowsrc', 'longdesc', 'codebase', 'archive',
 ]);
 const NAV_TAGS = new Set(['a', 'area']);
+// Tags whose URL attribute loads a document (or, for <use>, SVG markup): a data: URL there holds
+// markup this scan does not read, so it is refused (fail closed; the dist has none).
+const DATA_DOCUMENT_TAGS = new Set(['iframe', 'frame', 'object', 'embed', 'use']);
+// The rel values of a <link> whose data: href is an image (the dist's icons); any other data:
+// link (stylesheet, manifest, preload, ...) is refused.
+const ICON_RELS = new Set(['icon', 'shortcut', 'apple-touch-icon', 'apple-touch-icon-precomposed']);
+// SVG animation elements; one whose attributeName is a URL attribute sets that URL at run time.
+const ANIMATION_TAG = /^(?:set|animate[a-z]*)$/;
+// Elements whose content the browser reads as text (RCDATA, RAWTEXT, plaintext), and the
+// foreign elements in which <script> and <style> content is markup.
+const TEXT_ELEMENTS = new Set(['title', 'textarea', 'xmp', 'iframe', 'noembed', 'noframes',
+  'noscript', 'plaintext']);
+const FOREIGN_ELEMENTS = new Set(['svg', 'math']);
+// HTML integration points of <svg>/<math>: inside one, an HTML element can make the browser
+// ignore a </svg> or </math>, so while one is open those end tags do not close the foreign
+// element here (it stays open, and a later <script> or <style> is refused).
+const INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title', 'mi', 'mo', 'mn', 'ms',
+  'mtext', 'annotation-xml']);
 const OK_SCRIPT_TYPES = new Set(['', 'text/javascript', 'application/javascript']);
 const DATA_SCRIPT_TYPES = new Set(['application/json', 'application/ld+json', 'text/plain']);
 
@@ -443,18 +495,103 @@ export function vendorNetworkProblems(id, code, inventory = VENDOR_NETWORK) {
   return problems;
 }
 
+// A raw text element's name ends where the browser ends it (whitespace, / or >), so
+// <script-x> is an ordinary element, not a script.
 const TOKEN = new RegExp([
   '<!--[\\s\\S]*?-->',                                              // comment
-  '<(script|style)\\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>([\\s\\S]*?)</\\1\\s*>', // raw text element
+  '<(script|style)(?=[\\s/>])((?:[^>"\']|"[^"]*"|\'[^\']*\')*)>([\\s\\S]*?)</\\1\\s*>', // raw text
   '<([a-zA-Z][\\w:-]*)\\b((?:[^>"\']|"[^"]*"|\'[^\']*\')*)/?>',     // start tag
 ].join('|'), 'g');
 
-function parseAttrs(src) {
+// Character references the scan decodes when they end in ';' (ASCII punctuation, the quote
+// and bracket names, the whitespace names). Any other '&name;' is refused (decodeCharRefs).
+const NAMED_REFS = {
+  quot: '"', QUOT: '"', apos: "'", amp: '&', AMP: '&', lt: '<', LT: '<', gt: '>', GT: '>',
+  lpar: '(', rpar: ')', lsqb: '[', lbrack: '[', rsqb: ']', rbrack: ']', lcub: '{', lbrace: '{',
+  rcub: '}', rbrace: '}', colon: ':', semi: ';', comma: ',', period: '.', sol: '/', bsol: '\\',
+  excl: '!', quest: '?', num: '#', dollar: '$', percnt: '%', plus: '+', equals: '=', ast: '*',
+  midast: '*', commat: '@', Hat: '^', lowbar: '_', UnderBar: '_', grave: '`',
+  DiacriticalGrave: '`', verbar: '|', vert: '|', VerticalLine: '|', Tab: '\t', NewLine: '\n',
+  nbsp: '\u00a0', NonBreakingSpace: '\u00a0',
+};
+// The 106 legacy names the browser also decodes without the ';' (WHATWG named character
+// references). The scan decodes those of them in NAMED_REFS (quot, amp, lt, gt, their upper
+// case, nbsp) and refuses the rest; none is a prefix of another.
+const LEGACY_REFS = ('AElig AMP Aacute Acirc Agrave Aring Atilde Auml COPY Ccedil ETH Eacute '
+  + 'Ecirc Egrave Euml GT Iacute Icirc Igrave Iuml LT Ntilde Oacute Ocirc Ograve Oslash Otilde '
+  + 'Ouml QUOT REG THORN Uacute Ucirc Ugrave Uuml Yacute aacute acirc acute aelig agrave amp '
+  + 'aring atilde auml brvbar ccedil cedil cent copy curren deg divide eacute ecirc egrave eth '
+  + 'euml frac12 frac14 frac34 gt iacute icirc iexcl igrave iquest iuml laquo lt macr micro '
+  + 'middot nbsp not ntilde oacute ocirc ograve ordf ordm oslash otilde ouml para plusmn pound '
+  + 'quot raquo reg sect shy sup1 sup2 sup3 szlig thorn times uacute ucirc ugrave uml uuml '
+  + 'yacute yen yuml').split(' ');
+// In an attribute value the browser leaves a legacy name without ';' as written when the next
+// character is a letter, a digit or '=' (open&&close() stays; &quot( decodes).
+const CHAR_REF = new RegExp('&(?:#(\\d+);?|#[xX]([0-9a-fA-F]+);?|([A-Za-z][A-Za-z0-9]*);'
+  + `|(${LEGACY_REFS.join('|')})(?![A-Za-z0-9=]))`, 'g');
+
+/**
+ * An attribute value with its character references decoded as the browser decodes them, and
+ * the references the scan does not decode (refused by the caller): see the file header.
+ * A numeric reference to 0, a surrogate or a value past U+10FFFF is U+FFFD, as in the browser.
+ * @param {string} value
+ * @returns {{text: string, undecoded: string[]}}
+ */
+export function decodeCharRefs(value) {
+  const undecoded = [];
+  const text = value.replace(CHAR_REF, (all, dec, hex, named, legacy) => {
+    if (dec !== undefined || hex !== undefined) {
+      const cp = dec !== undefined ? Number(dec) : parseInt(hex, 16);
+      return cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)
+        ? '\ufffd' : String.fromCodePoint(cp);
+    }
+    const name = named ?? legacy;
+    if (Object.hasOwn(NAMED_REFS, name)) return NAMED_REFS[name];
+    undecoded.push(all);
+    return all;
+  });
+  return { text, undecoded };
+}
+
+// The attribute syntax the scan reads as the browser does: a name has no quote, <, =, / or >,
+// an unquoted value no quote, <, =, ` or >; names and unquoted values are matched whole, so
+// the test is linear. Anything else (a quote the browser keeps inside a name or an unquoted
+// value, which TOKEN would read as opening a string) is refused.
+const ATTR_SYNTAX = new RegExp('^(?:\\s+(?!\\s)|/|[^\\s"\'<>/=]+(?![^\\s"\'<>/=])'
+  + '(?:\\s*=\\s*(?:"[^"]*"|\'[^\']*\'|[^\\s"\'<>=`]+(?![^\\s"\'<>=`])))?)*$');
+
+/**
+ * One tag's attributes as the browser reads them: names in lower case, the first copy of a
+ * duplicate kept, values with character references decoded; and the problems of the tag's
+ * attribute markup (syntax, a duplicate, a reference the scan does not decode).
+ * @param {string} src
+ * @param {string} tag
+ * @returns {{attrs: Map<string, string>, problems: string[]}}
+ */
+function parseAttrs(src, tag) {
   const attrs = new Map();
+  const problems = [];
+  if (!ATTR_SYNTAX.test(src)) {
+    problems.push(`<${tag}> has attribute markup the scan does not read as the browser does `
+      + '(a quote, < or = in a name or an unquoted value, or a backtick in one): '
+      + `${src.slice(0, 80)}`);
+  }
   const re = /([^\s=/>"']+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
   let m;
-  while ((m = re.exec(src))) attrs.set(m[1].toLowerCase(), m[2] ?? m[3] ?? m[4] ?? '');
-  return attrs;
+  while ((m = re.exec(src))) {
+    const name = m[1].toLowerCase();
+    if (attrs.has(name)) {
+      problems.push(`<${tag}> has a duplicate ${name} attribute (the browser keeps the first)`);
+      continue;
+    }
+    const { text, undecoded } = decodeCharRefs(m[2] ?? m[3] ?? m[4] ?? '');
+    for (const ref of undecoded) {
+      problems.push(`<${tag} ${name}> holds the character reference ${ref}, `
+        + 'which the scan does not decode');
+    }
+    attrs.set(name, text);
+  }
+  return { attrs, problems };
 }
 
 function isInert(url, { nav = false } = {}) {
@@ -526,15 +663,8 @@ export function decodeJsEscapes(js) {
 
 // The script of an inline event handler (onclick, onerror, ...) or an Alpine directive (x-*,
 // @event, :binding): Alpine evaluates each with its Function constructor, so it is first-party
-// script like a <script>.
+// script like a <script>. Its value is read with character references decoded (parseAttrs).
 const CODE_ATTR = /^(?:on[a-z]+|x-[\w:.-]+|@[\w:.-]+|:[\w:.-]+)$/;
-const ENTITY = /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(quot|apos|amp|lt|gt));/g;
-const NAMED = { quot: '"', apos: "'", amp: '&', lt: '<', gt: '>' };
-const decodeEntities = (text) => text.replace(ENTITY, (all, dec, hex, name) => {
-  if (name) return NAMED[name];
-  const cp = parseInt(dec ?? hex, dec ? 10 : 16);
-  return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : all;
-});
 
 /**
  * Problems of one first-party script (FORBIDDEN_JS), read raw and with its escapes decoded.
@@ -598,8 +728,9 @@ export function cssReferences(source) {
 // CSS may reference data: URLs (and #fragments) only (isInert). The flowbite plugin emits data:
 // SVGs only (mini-svg-data-uri, forms: true included), so ADR 0061 adds no allowance; every
 // url() and image-set() string is examined, whichever quote it uses and whatever CSS escape
-// spells it (review #253, R-7). Entity-encoded style attributes, SVG presentation attributes
-// that take url() and data:text/css stylesheets are not scanned here (R-9, a follow-up).
+// spells it (review #253, R-7). An attribute's CSS (a style attribute, an SVG presentation
+// attribute) arrives with its character references decoded (parseAttrs), and a data: stylesheet
+// link is refused before it reaches here (verifyHtml), so neither hides a reference (R-9).
 function cssProblems(css, where) {
   const out = [];
   if (/@import\b/i.test(decodeCssEscapes(css))) out.push(`${where}: CSS @import (must be bundled)`);
@@ -619,9 +750,10 @@ function cssProblems(css, where) {
 const OWN_RULE = { link: 'href', script: 'src' };
 
 /**
- * Problems of one tag's attributes, read alike on every tag (<link>, <script> and <style>
- * included): its style attribute as CSS, each inline handler or Alpine directive as
- * first-party script (its readings are added to appBodies), and each URL attribute.
+ * Problems of one tag's attributes (decoded by parseAttrs), read alike on every tag (<link>,
+ * <script> and <style> included): srcdoc is refused, each inline handler or Alpine directive
+ * is first-party script (its readings are added to appBodies), each URL attribute is a
+ * reference, and every other value (style, an SVG presentation attribute) is read as CSS.
  * @param {string} tag
  * @param {Map<string, string>} attrs
  * @param {string[][]} appBodies
@@ -629,10 +761,12 @@ const OWN_RULE = { link: 'href', script: 'src' };
 function attributeProblems(tag, attrs, appBodies) {
   const problems = [];
   for (const [name, value] of attrs) {
-    if (name === 'style') problems.push(...cssProblems(value, `<${tag} style>`));
+    if (name === 'srcdoc') {
+      problems.push(`<${tag} srcdoc>: srcdoc markup is not read by this scan`);
+      continue;
+    }
     if (CODE_ATTR.test(name)) {
-      const code = decodeEntities(value);
-      const scanned = scriptProblems(code, `first-party script in <${tag} ${name}>`);
+      const scanned = scriptProblems(value, `first-party script in <${tag} ${name}>`);
       problems.push(...scanned.problems);
       appBodies.push(scanned.copies);
       // A binding of a URL attribute (:src, x-bind:href) to an absolute URL literal.
@@ -643,12 +777,25 @@ function attributeProblems(tag, attrs, appBodies) {
       }
       continue;
     }
-    if (!URL_ATTRS.has(name) || OWN_RULE[tag] === name) continue;
+    if (!URL_ATTRS.has(name)) {
+      // Every other value is read as CSS: an SVG presentation attribute (fill, stroke, filter,
+      // mask, clip-path, marker-*, cursor) takes url(), and nothing else here loads anything.
+      problems.push(...cssProblems(value, `<${tag} ${name}>`));
+      if (ANIMATION_TAG.test(tag) && name === 'attributename'
+        && URL_ATTRS.has(value.trim().toLowerCase())) {
+        problems.push(`<${tag} attributeName="${value.slice(0, 40)}"> animates a URL attribute`);
+      }
+      continue;
+    }
+    if (OWN_RULE[tag] === name) continue;
     const values = name.endsWith('srcset')
       ? value.split(',').map((s) => s.trim().split(/\s+/)[0])
       : [value];
     for (const v of values) {
-      if (!isInert(v, { nav: NAV_TAGS.has(tag) && name === 'href' })) {
+      if (DATA_DOCUMENT_TAGS.has(tag) && /^data:/i.test(v.trim())) {
+        problems.push(`<${tag} ${name}="${v.slice(0, 80)}"> loads a data: document this scan `
+          + 'does not read');
+      } else if (!isInert(v, { nav: NAV_TAGS.has(tag) && name === 'href' })) {
         problems.push(`<${tag} ${name}="${v.slice(0, 80)}"> references a file`);
       }
     }
@@ -677,15 +824,84 @@ export function verifyHtml(html, {
   if (!/<meta\s+charset=["']?utf-8/i.test(html)) problems.push('missing <meta charset="utf-8">');
   if (/sourceMappingURL\s*=/.test(html)) problems.push('source map reference (sourceMappingURL)');
 
+  // The markup between tokens holds text and end tags. textOpen is the open element whose
+  // content the browser reads as text, foreign the open <svg>/<math> elements by name and
+  // integration the open integration points inside them; outside is the document without its
+  // <script>/<style> bodies.
+  let textOpen = null;
+  const foreign = { svg: 0, math: 0 };
+  const inForeign = () => foreign.svg + foreign.math > 0;
+  let integration = 0;
+  let outside = '';
+  const END_TAG = /<\/([a-zA-Z][^\s/>]*)\s*>/y;
+  const readGap = (from, to) => {
+    const gap = html.slice(from, to);
+    outside += gap;
+    for (const g of gap.matchAll(/<[?!/]/g)) {
+      const at = from + g.index;
+      if (g[0] === '<!') {
+        if (html.startsWith('<!--', at) || (at === 0 && /^<!doctype html>/i.test(html))) continue;
+        problems.push(`markup the scan does not read as the browser does: a bogus comment `
+          + `${JSON.stringify(html.slice(at, at + 40))}`);
+        continue;
+      }
+      if (g[0] === '<?') {
+        problems.push(`markup the scan does not read as the browser does: a bogus comment `
+          + `${JSON.stringify(html.slice(at, at + 40))}`);
+        continue;
+      }
+      END_TAG.lastIndex = at;
+      const end = END_TAG.exec(html);
+      if (!end || end.index + end[0].length > to) {
+        problems.push(`markup the scan does not read as the browser does: an end tag `
+          + `${JSON.stringify(html.slice(at, at + 40))} (a bogus comment, or attributes)`);
+        continue;
+      }
+      const name = end[1].toLowerCase();
+      if (textOpen && name !== textOpen) continue;
+      if (textOpen) textOpen = null;
+      if (INTEGRATION_POINTS.has(name) && integration > 0) integration -= 1;
+      else if (FOREIGN_ELEMENTS.has(name) && integration === 0 && foreign[name] > 0) {
+        foreign[name] -= 1;
+      }
+    }
+  };
+  // Every </script and </style ends its element where the browser does only in this form.
+  for (const e of html.matchAll(/<\/(?:script|style)/gi)) {
+    if (!/^<\/(?:script|style)\s*>/.test(html.slice(e.index, e.index + 64))) {
+      problems.push(`markup the scan does not read as the browser does: `
+        + `${JSON.stringify(html.slice(e.index, e.index + 20))} (an end tag in another form)`);
+    }
+  }
+
   let m;
+  let last = 0;
   TOKEN.lastIndex = 0;
   while ((m = TOKEN.exec(html))) {
-    if (m[0].startsWith('<!--')) continue;
+    readGap(last, m.index);
+    last = m.index + m[0].length;
+    if (m[0].startsWith('<!--')) {
+      outside += m[0];
+      if (textOpen) {
+        problems.push(`a comment inside <${textOpen}>, whose content the browser reads as text`);
+      }
+      continue;
+    }
 
     if (m[1]) { // <script> / <style> with raw text
       const tag = m[1].toLowerCase();
-      const attrs = parseAttrs(m[2]);
+      const { attrs, problems: markup } = parseAttrs(m[2], tag);
       const body = m[3];
+      outside += `<${m[1]}${m[2]}>`;
+      problems.push(...markup);
+      if (textOpen) {
+        problems.push(`a <${tag}> inside <${textOpen}>, whose content the browser reads as text`);
+      }
+      if (inForeign()) {
+        problems.push(`a <${tag}> inside <svg>/<math>, where the browser reads its content as `
+          + 'markup');
+      }
+      if (body.includes('<!--')) problems.push(`a <${tag}> body holds "<!--" (script data states)`);
       // Its attributes are read like every other tag's; its body and src have rules of their own.
       problems.push(...attributeProblems(tag, attrs, appBodies));
       if (tag === 'style') {
@@ -718,23 +934,40 @@ export function verifyHtml(html, {
       continue;
     }
 
+    outside += m[0];
     const tag = m[4].toLowerCase();
-    const attrs = parseAttrs(m[5]);
+    const { attrs, problems: markup } = parseAttrs(m[5], tag);
+    problems.push(...markup);
     if (tag === 'script' || tag === 'style') {
       problems.push(`unterminated <${tag}>`);
       continue;
+    }
+    if (!textOpen) {
+      const open = !m[0].endsWith('/>');
+      if (open && inForeign() && INTEGRATION_POINTS.has(tag)) integration += 1;
+      if (TEXT_ELEMENTS.has(tag)) textOpen = tag;
+      else if (open && FOREIGN_ELEMENTS.has(tag)) foreign[tag] += 1;
     }
     if (tag === 'base') problems.push('<base> element changes URL resolution');
     // A <link>'s href has its own rule; its other attributes (inline handlers, Alpine
     // directives, style, the other resource attributes) are read like every other tag's.
     if (tag === 'link') {
       const href = attrs.get('href') || '';
+      const rel = (attrs.get('rel') || '').toLowerCase().split(/\s+/).filter(Boolean);
       if (!isInert(href)) problems.push(`<link rel="${attrs.get('rel')}" href="${href}">`);
+      else if (/^data:/i.test(href.trim()) && !(rel.length && rel.every((r) => ICON_RELS.has(r)))) {
+        problems.push(`<link rel="${attrs.get('rel')}" href="${href.slice(0, 60)}">: a data: link `
+          + 'other than an icon is a stylesheet or document this scan does not read');
+      }
     }
     if (tag === 'meta' && /refresh/i.test(attrs.get('http-equiv') || '')) {
       problems.push('meta refresh');
     }
     problems.push(...attributeProblems(tag, attrs, appBodies));
+  }
+  readGap(last, html.length);
+  for (const odd of outside.matchAll(/<!--->|<!-->|--!>/g)) {
+    problems.push(`markup the scan does not read as the browser does: the comment end ${odd[0]}`);
   }
   if (appScripts === 0) problems.push('no first-party script found');
   for (const id of seenVendors) {
@@ -844,7 +1077,8 @@ function main() {
     for (const p of problems) console.error(`  FAIL ${p}`);
     process.exit(1);
   }
-  console.log('  PASS no file/remote references; first-party script, as written and escaped, '
+  console.log('  PASS markup read as the browser does (the forms the header lists refused); '
+    + 'no file/remote references; first-party script, as written and escaped, '
     + 'has none of the forms the header lists as refused (among them fetch( not after a dot, '
     + 'import(, serviceWorker, the identifier eval, Function(, setTimeout/setInterval( with a '
     + 'string literal first, a URL literal handed to a DOM runtime load); everything else is '

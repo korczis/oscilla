@@ -476,6 +476,168 @@ test('<script> and <style> attributes are read like every other tag\'s (R040 rev
   assert.deepEqual(check(doc({ body: shipped })), []);
 });
 
+// R040 review 7 (fail closed): each case these five tests refuse in their lists passed with
+// rc=0 at 837f664e; the two refused there for another reason are named where they stand.
+test('character references in attribute values are decoded as the browser does, or refused',
+  () => {
+    // M1: numeric references without the ';', HTML5 named references, a legacy name without
+    // the ';' and nbsp each spell the same script to the browser as their characters.
+    const onclick = /<button onclick> uses fetch/;
+    for (const [body, re] of [
+      ['<button onclick="fetch&lpar;\'https://t.example/\')">x</button>', onclick],
+      ['<button onclick="fetch&#40\'https://t.example/\')">x</button>', onclick],
+      ['<button onclick="fetch&#x28\'https://t.example/\')">x</button>', onclick],
+      ['<div x-init="x=window&period;fetch"></div>', /<div x-init> uses fetch/],
+      ['<button @click="x&lbrack;\'fetch\'&rbrack;(u)">x</button>',
+        /<button @click> uses computed fetch/],
+      ['<img src="data:," onerror="this.src=\'https&colon;//t.example/p.gif\'">',
+        /<img onerror> uses an absolute URL assigned to \.src/],
+      ['<img src="data:," onerror="this.src=&quot//t.example/p.gif&quot">',
+        /<img onerror> uses an absolute URL assigned to \.src/],
+      ['<button onclick="fetch&nbsp(\'https://t.example/\')">x</button>', onclick],
+      ['<div style="background:u&#114;l(https://t.example/p.png)"></div>',
+        /<div style>: CSS url\(https:\/\/t\.example\/p\.png\)/],
+      ['<meta http-equiv="&#82;efresh" content="0;url=https://t.example/">', /meta refresh/],
+      // A reference the scan does not decode is refused, not guessed at.
+      ['<button onclick="fetch&ensp;(u)">x</button>',
+        /<button onclick> holds the character reference &ensp;, which the scan does not decode/],
+      ['<button onclick="a&not(b)">x</button>', /holds the character reference &not,/],
+      ['<img src="data:," alt="&hellip;">', /<img alt> holds the character reference &hellip;/],
+    ]) fails(doc({ body }), re);
+    // '&' before anything else stays as the browser keeps it: the dist's 84 open&&close() forms,
+    // a legacy name before '=' or a letter, and an encoded data: URL in a style attribute pass.
+    const body = '<button @click="open&&close()" x-show="a && !b">x</button>'
+      + '<a href="https://example.org/?a=1&amp;b=2&copy=3&ltx">l</a>'
+      + '<div style="background:url(&quot;data:image/png;base64,AA==&quot;)"></div>';
+    assert.deepEqual(check(doc({ body })), []);
+    const { decodeCharRefs } = verifyDist;
+    assert.deepEqual(decodeCharRefs('&#40&#x29;&lpar;&quot(&quotx&amp=&&&#0;'),
+      { text: '()("(&quotx&amp=&&�', undecoded: [] });
+    assert.deepEqual(decodeCharRefs('&ensp;&not &amp;lt;').undecoded, ['&ensp;', '&not']);
+    assert.equal(decodeCharRefs('&amp;lt;').text, '&lt;', 'decoded once');
+  });
+
+test('srcdoc, url() in SVG attributes and data: documents are refused (M2)', () => {
+  for (const [body, re] of [
+    ['<iframe srcdoc="<img src=&quot;https://t.example/p.gif&quot;>"></iframe>',
+      /<iframe srcdoc>: srcdoc markup is not read/],
+    ['<iframe srcdoc="<script>fetch(\'https://t.example/\')</script>"></iframe>', /srcdoc/],
+    ['<div srcdoc="x"></div>', /<div srcdoc>/],
+    ['<svg><rect fill="url(https://t.example/p.svg#g)"/></svg>',
+      /<rect fill>: CSS url\(https:\/\/t\.example\/p\.svg#g\) is not a data: URL/],
+    ['<svg><g filter="url(https://t.example/f.svg#f)"/></svg>', /<g filter>: CSS url/],
+    ['<svg><g mask="url(//t.example/m.svg#m)"/></svg>', /<g mask>: CSS url/],
+    ['<svg><path stroke="url(//t.example/s.svg#s)"/></svg>', /<path stroke>: CSS url/],
+    ['<svg><g clip-path="url(//t.example/c.svg#c)"/></svg>', /<g clip-path>: CSS url/],
+    ['<svg><path marker-start="url(//t.example/m.svg#m)"/></svg>', /<path marker-start>: CSS/],
+    ['<svg><g cursor="url(//t.example/c.cur), auto"/></svg>', /<g cursor>: CSS url/],
+    ['<svg><rect fill="\\75 rl(//t.example/p.svg#g)"/></svg>', /<rect fill>: CSS url/],
+    ['<svg><animate attributeName="fill" values="url(//t.example/p.svg#g)"/></svg>',
+      /<animate values>: CSS url/],
+    ['<svg><set attributeName="href" to="https://t.example/p.png"/></svg>',
+      /<set attributeName="href"> animates a URL attribute/],
+    ['<iframe src="data:text/html,<img src=https://t.example/p.gif>"></iframe>',
+      /<iframe src="data:text\/html.*loads a data: document this scan does not read/],
+    ['<object data="data:text/html,%3Cimg%20src%3Dhttps://t.example/p.gif%3E"></object>',
+      /<object data=.*loads a data: document/],
+    ['<embed src="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">', /<embed src=.*data: document/],
+    ['<svg><use href="data:image/svg+xml,%3Csvg%3E%3C/svg%3E#i"/></svg>', /<use href=.*data:/],
+  ]) fails(doc({ body }), re);
+  for (const head of [
+    '<link rel="stylesheet" href="data:text/css,@import url(https://t.example/s.css);">',
+    '<link rel="manifest" href="data:application/manifest+json,{}">',
+    '<link rel="preload" as="style" href="data:text/css,a{}">']) {
+    fails(doc({ head }), /a data: link other than an icon is a stylesheet or document/);
+  }
+  // The dist's forms: icons as data: links, an in-document gradient and symbol, an image.
+  const head = '<link rel="icon" type="image/svg+xml" '
+    + 'href="data:image/svg+xml,%3Csvg%3E%3C/svg%3E">'
+    + '<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,AA">';
+  const body = '<svg><path stroke="url(#osc-logo-grad)"/><use href="#i"/>'
+    + '<animate attributeName="opacity" values="0;1"/></svg>'
+    + '<img src="data:image/svg+xml,x" alt="">';
+  assert.deepEqual(check(doc({ head, body })), []);
+});
+
+test('a duplicate attribute is refused by name; the browser keeps the first copy (M3)', () => {
+  for (const [html, re] of [
+    [doc({ body: '<img src="https://t.example/p.gif" src="data:,">' }), /<img> has a duplicate/],
+    [doc({ body: '<img SRC="https://t.example/p.gif" src="data:,">' }), /<img> has a duplicate/],
+    [doc({ body: '<button onclick="fetch(\'https://t.example/\')" onclick="1">x</button>' }),
+      /<button> has a duplicate onclick attribute/],
+    [doc({ body: '<button @click="fetch(u)" @click="1">x</button>' }), /duplicate @click/],
+    [doc({ body: '<img :src="\'https://t.example/p.gif\'" :src="\'data:,\'">' }), /duplicate :src/],
+    [doc({ head: '<link rel="stylesheet" href="https://t.example/s.css" href="data:,">' }),
+      /<link> has a duplicate href/],
+    [doc({ body: '<div style="background:url(https://t.example/p.png)" style="color:red"></div>' }),
+      /<div> has a duplicate style/],
+    [doc({ head: '<meta http-equiv="refresh" http-equiv="x" content="0;url=https://t.example/">' }),
+      /<meta> has a duplicate http-equiv/],
+  ]) fails(html, re);
+  // A <script> with two src is named too (it was refused at 837f664e as an external script).
+  fails(doc({ body: '<script src="https://t.example/a.js" src=""></script>' }),
+    /<script> has a duplicate src/);
+  // The first copy is the one read.
+  fails(doc({ body: '<img src="https://t.example/p.gif" src="data:,">' }),
+    /<img src="https:\/\/t\.example\/p\.gif"> references a file/);
+});
+
+test('<!-->, <!---> and --!> end a comment in the browser and are refused (M4)', () => {
+  for (const body of ['<!--><img src="https://t.example/p.gif"> -->',
+    '<!---><img src="https://t.example/p.gif"> -->',
+    '<!-- a --!><img src="https://t.example/p.gif"> -->',
+    '<!--><script>fetch("https://t.example/")</script>-->', '<p>a --!> b</p>']) {
+    fails(doc({ body }), /the comment end (<!-->|<!--->|--!>)/);
+  }
+  // Ordinary and empty comments pass; the forms inside a script string are script, not markup.
+  const body = '<!-- a --><!----><!-- - -->';
+  assert.deepEqual(check(doc({ body, app: 'const s="--!>";' })), []);
+});
+
+test('markup the browser reads otherwise than the token scan is refused (fail closed)', () => {
+  const refresh = '<meta http-equiv="refresh" content="0;url=https://t.example/">';
+  const img = '<img src="https://t.example/p.gif">';
+  for (const [body, re] of [
+    // A quote inside an unquoted value: the scan would read a string across the next tags.
+    [`<b x=a">${refresh}<i y=">`, /<b> has attribute markup the scan does not read/],
+    [`<b x=a'>${refresh}<i y='>`, /<b> has attribute markup the scan does not read/],
+    // Bogus comments end at the first >, so a <!-- inside one opens nothing.
+    [`<?x <!-- ?>${img} -->`, /a bogus comment "<\?x/],
+    [`<!x <!-- >${img} -->`, /a bogus comment "<!x/],
+    [`</p x="<!--">${img}<b y="-->">`, /an end tag "<\/p x=/],
+    [`</ <!-- >${img} -->`, /an end tag "<\/ /],
+    // A <script> body with "<!--" (script data states), or ended by another spelling.
+    [`<script><!--<script></script>\nfetch("https://t.example/")\n</script>`,
+      /a <script> body holds "<!--"/],
+    [`<script>1</SCRIPT>${refresh}</script>`, /"<\/SCRIPT>.*an end tag in another form/],
+    [`<script>1</script x>${refresh}</script>`, /an end tag in another form/],
+    // Text elements: a comment or a <script> that starts inside one ends where the scan does
+    // not look.
+    [`<textarea><!--</textarea>${img}--></textarea>`, /a comment inside <textarea>/],
+    [`<title><!--</title>${img}--></title>`, /a comment inside <title>/],
+    [`<textarea><script></textarea>${refresh}</script>`, /a <script> inside <textarea>/],
+    // Inside <svg>/<math> a <style> or <script> holds markup, and references are decoded.
+    ['<svg><style><image href="https://t.example/p.png"/></style></svg>',
+      /a <style> inside <svg>\/<math>/],
+    ['<svg><script>fetch&#40;"https://t.example/")</script></svg>', /a <script> inside <svg>/],
+    ['<svg><foreignObject><textarea></svg></textarea></foreignObject>'
+      + '<style><image href="https://t.example/p.png"/></style></svg>', /a <style> inside <svg>/],
+    // An HTML element inside an integration point makes the browser ignore </svg>, and
+    // </math> does not close an <svg>.
+    ['<svg><desc><div></svg></div></desc><style><image href="https://t.example/p.png"/></style>'
+      + '</svg>', /a <style> inside <svg>/],
+    ['<svg></math><style><image href="https://t.example/p.png"/></style></svg>',
+      /a <style> inside <svg>/],
+  ]) fails(doc({ body }), re);
+  // <script-x> is an ordinary element, so its markup is read (at 837f664e it was read as script
+  // up to the next </script>, and refused for that script, not for the meta refresh).
+  fails(doc({ body: `<script-x>${refresh}</script-x>` }), /meta refresh/);
+  // The dist's forms: closed text elements, closed or self-closed SVG, then a style and a script.
+  const body = '<textarea>a</textarea><!-- c --><svg><path d="M0 0"/></svg><svg/>'
+    + '<style>b{}</style><math><mi>x</mi></math><script>1</script>';
+  assert.deepEqual(check(doc({ head: '<title>t</title>', body })), []);
+});
+
 // Every letter and digit spelt as \uXXXX: the escaped spelling of a refused form.
 const escapeAlnum = (s) => s.replace(/[A-Za-z0-9]/g,
   (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
@@ -556,9 +718,16 @@ test('documented limits: examples of forms this scan does not refuse', () => {
     'x="url(\\x27//t.example/p.png\\x27)"', 'x="<img src=\\x22//t.example/p.gif\\x22>"',
     'x="<img src=\\u0022//t.example/p.gif\\u0022>"',
   ]) assert.deepEqual(check(doc({ app })), [], app);
-  // Script inside an iframe srcdoc is not one of the first-party scripts the scan reads.
-  const body = '<iframe srcdoc="<script>fetch(\'https://t.example/\')</script>"></iframe>';
-  assert.deepEqual(check(doc({ body })), [], body);
+  // What a data: URL holds is not read where one is allowed: an image (which loads nothing
+  // further), a CSS url(), an icon link, a link destination.
+  const svg = 'data:image/svg+xml,%3Csvg%3E%3Cimage href=%27https://t.example/p.png%27/%3E'
+    + '%3C/svg%3E';
+  for (const [head, body] of [['', `<img src="${svg}" alt="">`],
+    [`<style>.a{background:url("${svg}")}</style>`, ''],
+    ['<link rel="icon" href="data:text/html,%3Cimg%20src=https://t.example/p.gif%3E">', ''],
+    ['', '<a href="data:text/html,%3Cimg%20src=https://t.example/p.gif%3E">d</a>']]) {
+    assert.deepEqual(check(doc({ head, body })), [], head + body);
+  }
   for (const app of ['p[["load","Image"].join("")](u)',
     'Object.keys(p5.prototype).filter((k)=>k.indexOf("loadIm")===0).forEach((k)=>p[k](u))',
     'p.createDiv(\'<img src="\'+u+\'">\')', 'p.createDiv("x").html(\'<img src="\'+u+\'">\')',
