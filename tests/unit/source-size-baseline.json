@@ -129,6 +129,12 @@
     },
     {
       "file": "src/index.html",
+      "cap": 286000,
+      "pr": 436,
+      "reason": "the 3.21 About station (project.about-names-current-release) takes src/index.html 553 bytes past 285 000; the release adds no other markup"
+    },
+    {
+      "file": "src/index.html",
       "cap": 299000,
       "pr": 386,
       "reason": "merging main's synth train (#385: K066/K102 presets and patch library, the XY tab, the docked keyboard) into lane A's shell, page header and registry-driven page parts (#386)"
