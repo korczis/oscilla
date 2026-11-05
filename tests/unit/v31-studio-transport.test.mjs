@@ -20,7 +20,7 @@ import {
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import { laneValueAt } from '../../src/js/studio/automation.js';
 import { ROUTE_FLOOR, STUDIO_XFADE_S } from '../../src/js/studio/compiler.js';
-import { createStudioRuntime } from '../../src/js/studio/runtime.js';
+import { createStudioRuntime, studioDivergence } from '../../src/js/studio/runtime.js';
 import {
   ESCAPE_PRIORITY, SAFE_HORIZON_S, frameCeil, stopTime,
 } from '../../src/js/studio/timeline-compiler.js';
@@ -29,6 +29,7 @@ import {
 } from '../../src/js/studio/templates/index.js';
 import { TRANSPORT_TEXT, createStudioTransport } from '../../src/js/studio/transport.js';
 import { FakeParam, createFakeAudioEnv } from './sequencer-fake-audio.mjs';
+import { panelStore } from './synth-fixture.mjs';
 
 const SR = 48000;
 const EPS = 1e-9;
@@ -1191,3 +1192,231 @@ for (const hold of [false, true]) {
     }
   });
 }
+
+// ---------------------------------------------------------------- K169: a PLAY refused while armed
+
+/**
+ * The reference template with the Synth panel, armed as the Synth keys arm it, on a store whose
+ * commit gate is transport.admit (the workspace's). `fault` makes the next PLAY fail after it left
+ * the armed run: 'apply' (the document's new oscillator cannot be built: a prepare refusal),
+ * 'claim' (onClaimOutput refuses), 'hook' (debugRefuseNextPlay), 'throw' (setOwnedParams throws).
+ */
+function armedSetup() {
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
+  const real = createStudioRuntime({ engine });
+  const faults = { claim: false, owned: false };
+  const runtime = Object.create(real, { setOwnedParams: { value: (...a) => {
+    if (faults.owned) {
+      faults.owned = false;
+      throw new Error('injected setOwnedParams');
+    }
+    return real.setOwnedParams(...a);
+  } } });
+  const model = panelStore().getModel();
+  let transport = null;
+  const store = createStudioStore(model, { idGenerator: createIdGenerator(model),
+    gate: (next, info) => transport.admit(next, info) });
+  const events = [];
+  transport = createStudioTransport({ runtime, engine, store, testContext: () => true,
+    onClaimOutput: () => {
+      if (!faults.claim) return undefined;
+      faults.claim = false; // refused once
+      return false;
+    } });
+  transport.on((type, detail) => events.push([type, detail]));
+  ok(transport.arm());
+  assert.equal(transport.armed, true);
+  assert.equal(real.state, 'running');
+  events.length = 0;
+  return { fx, engine, runtime: real, store, transport, ctx: fx.ctx, faults, events };
+}
+
+function injectPlayFault(s, fault) {
+  if (fault === 'claim') s.faults.claim = true;
+  else if (fault === 'hook') assert.equal(s.transport.debugRefuseNextPlay(), true);
+  else if (fault === 'throw') s.faults.owned = true;
+  else if (fault === 'apply') {
+    const orig = s.ctx.createOscillator;
+    s.ctx.createOscillator = function injected() {
+      s.ctx.createOscillator = orig;
+      throw new Error('injected oscillator');
+    };
+  }
+}
+
+const K169_FAULTS = {
+  apply: { phase: 'apply', code: 'play-refused' },
+  claim: { phase: 'claim', code: 'claim-refused', reason: TRANSPORT_TEXT.claimRefused },
+  hook: { phase: 'claim', code: 'claim-refused', reason: TRANSPORT_TEXT.claimRefused },
+  throw: { phase: 'apply', code: 'play-refused', reason: 'injected setOwnedParams' },
+};
+
+for (const [fault, want] of Object.entries(K169_FAULTS)) {
+  test(`K169: a PLAY refused while armed (${fault}) stops the runtime and says so; the next edit `
+    + 'is not stranded', async () => {
+    const s = armedSetup();
+    s.fx.advance(0.1);
+    injectPlayFault(s, fault);
+    const r = s.transport.start();
+    assert.equal(r.ok, false, 'PLAY is refused');
+    assert.deepEqual([r.phase, r.code], [want.phase, want.code]);
+    if (want.reason) assert.equal(r.reason, want.reason);
+    // The runtime no longer runs the armed graph under a stopped transport.
+    assert.equal(s.transport.playing, false);
+    assert.equal(s.transport.armed, false);
+    assert.equal(s.runtime.state, 'idle', 'the armed run is stopped');
+    assert.deepEqual(s.events.filter(([t]) => t === 'state').map(([, d]) => d),
+      [{ playing: false, reason: 'play-refused' }], 'one state event says why');
+    const e = s.transport.debugInfo().lastError;
+    assert.deepEqual([e.code, e.phase], [want.code, want.phase], 'lastError keeps the refusal');
+    // An edit after it: admitted as stopped, and the divergence says nothing is applied.
+    ok(s.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'frequency',
+      value: 900 }));
+    s.fx.advance(0.5);
+    const v = studioDivergence({ model: s.store.getModel(), revision: s.store.getRevision() },
+      s.runtime);
+    assert.equal(v.state, 'not-applied', 'not behind');
+    const c = await s.transport.stop();
+    assert.deepEqual([c.engineNodes, c.engineSources], [0, 0], 'census 0');
+    // PLAY works again from there, on the edited document.
+    ok(s.transport.start());
+    assert.equal(s.runtime.applied().revision, s.store.getRevision());
+    const stopped = s.transport.stop({ fast: true });
+    s.fx.advance(0.5);
+    await stopped;
+  });
+}
+
+test('K169: a PLAY refused while not armed is unchanged (no state event, the error thrown as '
+  + 'before)', () => {
+  for (const fault of ['claim', 'hook', 'apply', 'throw']) {
+    const s = armedSetup();
+    s.fx.advance(0.1);
+    s.transport.stop({ fast: true });
+    s.fx.advance(0.5);
+    assert.equal(s.runtime.state, 'idle');
+    s.events.length = 0;
+    injectPlayFault(s, fault);
+    if (fault === 'throw') {
+      assert.throws(() => s.transport.start(), /injected setOwnedParams/);
+    } else {
+      const r = s.transport.start();
+      assert.equal(r.ok, false, fault);
+      assert.equal(r.code, K169_FAULTS[fault].code);
+    }
+    assert.equal(s.transport.playing, false);
+    assert.equal(s.runtime.state, 'idle', `${fault}: nothing started`);
+    assert.deepEqual(s.events.filter(([t]) => t === 'state'), [], `${fault}: no state event`);
+  }
+});
+
+test('K169: debugRefuseNextPlay is an Inject hook: outside TEST CONTEXT it refuses and changes '
+  + 'nothing (ADR 0052)', async () => {
+  const outside = [undefined, () => false, () => 'yes', () => { throw new Error('x'); }];
+  for (const testContext of outside) {
+    const s = setup();
+    const transport = createStudioTransport({ runtime: s.runtime, engine: s.engine,
+      store: s.store, ...(testContext ? { testContext } : {}) });
+    assert.equal(transport.debugRefuseNextPlay(), false, 'refused outside TEST CONTEXT');
+    ok(transport.start()); // the next PLAY is not refused
+    const stopped = transport.stop({ fast: true });
+    s.fx.advance(0.5);
+    await stopped;
+  }
+  const s = setup();
+  const transport = createStudioTransport({ runtime: s.runtime, engine: s.engine,
+    store: s.store, testContext: () => true });
+  assert.equal(transport.debugRefuseNextPlay(), true, 'in TEST CONTEXT');
+  assert.equal(transport.start().code, 'claim-refused');
+  ok(transport.start()); // once
+  transport.stop({ fast: true });
+  s.fx.advance(0.5);
+});
+
+test('K169 review R2: a STOP whose release of the owned parameters throws still stops and says '
+  + 'so', async () => {
+  for (const held of [false, true]) {
+    const s = setup();
+    let throwNext = false;
+    const runtime = Object.create(s.runtime, { setOwnedParams: { value: (...a) => {
+      if (throwNext) {
+        throwNext = false;
+        throw new Error('injected release');
+      }
+      return s.runtime.setOwnedParams(...a);
+    } } });
+    const transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+    ok(transport.start());
+    s.fx.advance(0.1);
+    if (held) {
+      // A refusal already in lastError (a refused sync) is kept; the stop failure is still said.
+      const apply = runtime.apply;
+      Object.defineProperty(runtime, 'apply', { value: () => ({ ok: false, phase: 'prepare',
+        errors: [{ message: 'refused edit', entity: null }] }), configurable: true });
+      dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'frequency', value: 900 });
+      assert.equal(transport.sync().ok, false);
+      Object.defineProperty(runtime, 'apply', { value: apply, configurable: true });
+      assert.equal(transport.debugInfo().lastError.code, 'sync-refused');
+    }
+    throwNext = true;
+    const stopped = transport.stop({ fast: true });
+    assert.equal(transport.playing, false);
+    s.fx.advance(0.5);
+    const c = await stopped;
+    assert.deepEqual([c.engineNodes, c.engineSources], [0, 0], 'the runtime stopped anyway');
+    const info = transport.debugInfo();
+    assert.ok(info.diagnostics.some((d) => d.code === 'stop-failed'
+      && /injected release/.test(d.message)), 'a stop-failed diagnostic');
+    assert.equal(info.lastError.code, held ? 'sync-refused' : 'stop-failed',
+      held ? 'the earlier refusal is kept' : 'lastError says so');
+    if (!held) assert.equal(info.lastError.phase, 'stop');
+  }
+});
+
+test('K169: a successful PLAY after arm promotes the armed run without a gap', () => {
+  const s = armedSetup();
+  s.fx.advance(0.1);
+  const states = [];
+  const off = s.runtime.on((type, d) => { if (type === 'state') states.push(d); });
+  const keys = [...s.runtime.nodes.keys()];
+  const kept = keys.map((id) => s.runtime.nodes.get(id));
+  const r = ok(s.transport.start());
+  off();
+  assert.equal(s.transport.playing, true);
+  assert.equal(s.transport.armed, false);
+  assert.deepEqual(states, [], 'the runtime never stopped');
+  assert.deepEqual(s.events.filter(([t]) => t === 'state').map(([, d]) => d),
+    [{ playing: true }], 'no stop in between');
+  assert.deepEqual(keys.map((id) => s.runtime.nodes.get(id)), kept,
+    'the armed nodes keep sounding');
+  assert.equal(s.runtime.applied().revision, r.revision);
+  assert.equal(s.transport.debugInfo().lastError, null);
+});
+
+test('K169: an apply that throws in sync is retried at the next wake-up', () => {
+  const s = setup();
+  let throwNext = false;
+  const runtime = Object.create(s.runtime, { apply: { value: (...a) => {
+    if (throwNext) {
+      throwNext = false;
+      throw new Error('injected apply');
+    }
+    return s.runtime.apply(...a);
+  } } });
+  const transport = createStudioTransport({ runtime, engine: s.engine, store: s.store });
+  ok(transport.start());
+  s.fx.advance(0.1);
+  dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'frequency', value: 900 });
+  const rev = s.store.getRevision();
+  throwNext = true;
+  assert.throws(() => transport.sync(), /injected apply/);
+  assert.notEqual(s.runtime.applied().revision, rev, 'not applied yet');
+  s.fx.advance(0.5); // the wake-ups
+  assert.equal(s.runtime.applied().revision, rev, 'the wake-up applied it');
+  assert.equal(studioDivergence({ model: s.store.getModel(), revision: rev }, s.runtime).state,
+    'in-sync');
+  transport.stop({ fast: true });
+});

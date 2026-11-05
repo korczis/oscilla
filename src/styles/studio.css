@@ -745,16 +745,10 @@
 }
 
 .osc-si-sub,
-.osc-si-note,
-.osc-si-summary {
+.osc-si-note {
   margin: 0;
   color: var(--osc-text-muted);
   font-size: var(--osc-fs-xs);
-}
-
-.osc-si-summary {
-  color: var(--osc-text-2);
-  font-size: var(--osc-fs-sm);
 }
 
 .osc-si-status {

@@ -53,7 +53,7 @@ export function baseName(ref) {
 
 /** The jobs of ci.yml that run only for a runtime change. */
 export const GATED_JOBS = Object.freeze(['engine', 'suites', 'measure', 'studio', 'browser',
-  'visual']);
+  'census', 'visual']);
 
 const REGULAR = new Set(['100644', '100755']);
 const ABSENT = '000000';

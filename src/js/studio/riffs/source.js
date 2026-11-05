@@ -16,11 +16,17 @@ import { createRiffAudition } from './audition.js';
 
 export const RIFF_CATEGORY = 'riffs';
 
+/** The audition of the source registered last: a new registration disposes of it, so a
+ *  re-mounted Studio leaves no engine listener behind. */
+let audition = null;
+
 export function registerRiffSource(svc = {}, cmp = null) {
+  if (audition) audition.dispose();
   const ctl = createRiffAudition({ engine: svc.engine,
     measuring: () => !!(cmp && typeof cmp.measureOwnsOutput === 'function'
       && cmp.measureOwnsOutput()),
     stopOthers: () => { if (cmp && svc.stopPlayback) svc.stopPlayback(cmp); } });
+  audition = ctl;
   registerPatchSource({
     id: RIFF_CATEGORY,
     label: 'Riffs',

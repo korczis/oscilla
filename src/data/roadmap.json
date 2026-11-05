@@ -118,7 +118,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 0,
-      "required": 10,
+      "required": 11,
       "phase": "next"
     },
     {
@@ -181,7 +181,7 @@
       "id": "M080",
       "title": "Studio boxes, wave 1: wiring, find, layout, probe, first patch, large graphs, one declaration per node",
       "done": 1,
-      "required": 13,
+      "required": 17,
       "phase": "now"
     },
     {
@@ -244,7 +244,7 @@
       "id": "M090",
       "title": "One instrument, one coherent state",
       "done": 19,
-      "required": 27,
+      "required": 30,
       "phase": "now"
     },
     {

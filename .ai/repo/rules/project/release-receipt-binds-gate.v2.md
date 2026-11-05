@@ -4,7 +4,7 @@ version: 2
 kind: rule
 title: A release is published only on a tree a gate verdict binds, local or CI
 description: release:publish tags main's HEAD only when a gate verdict binds exactly its tree - the CI run of the release pull request (the CI receipt, ADR 0082) or the local release-gate receipt - so any change on main after the verdict makes the publish refuse.
-statement: release:publish refuses unless one of two gate verdicts binds the tree of main's HEAD. The CI receipt (scripts/release-ci-receipt.mjs) holds when HEAD is the merge commit of a pull request whose head H contains the merge's base and has HEAD's tree, the newest CI pull_request run on H has completed with success on its latest attempt, every job .github/workflows/ci.yml declares (a matrix job once per value) is among that run's latest jobs on H with success and no other job is, and the committed roadmap matches the plan (OSC_ROADMAP_CHECK=1). The local receipt (release:prepare --local-gate) holds when it binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/, all equal to the checkout's, and records browsers chromium,firefox,webkit, origins file,http and skips declared-only; release:prepare --local-gate refuses to start while OSC_BROWSERS or OSC_ORIGINS is set and runs the gate with OSC_STRICT_SKIPS=1. A fact that cannot be read is a refusal, never an empty answer.
+statement: release:publish refuses unless one of two gate verdicts binds the tree of main's HEAD. The CI receipt (scripts/release-ci-receipt.mjs) holds when HEAD is the merge commit of a pull request whose head H contains the merge's base and has HEAD's tree, the newest CI pull_request run on H has completed with success on its latest attempt, every job .github/workflows/ci.yml declares (a matrix job once per value) is among that run's latest jobs on H with success and no other job is (the one exemption: the job with id flake-ledger whose if: is exactly ${{ always() && fromJSON(github.run_attempt) > 1 }} may be skipped on its own first attempt and must succeed from attempt 2), and the committed roadmap matches the plan (OSC_ROADMAP_CHECK=1). The local receipt (release:prepare --local-gate) holds when it binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/, all equal to the checkout's, and records browsers chromium,firefox,webkit, origins file,http and skips declared-only; release:prepare --local-gate refuses to start while OSC_BROWSERS or OSC_ORIGINS is set and runs the gate with OSC_STRICT_SKIPS=1. A fact that cannot be read is a refusal, never an empty answer.
 status: active
 class: blocking
 depends_on: [project.single-file-deliverable@2]
@@ -39,7 +39,11 @@ release; the owner chose it over patch-only.
 - the run's latest jobs (`filter=latest`) contain every job name `ci.yml` declares, each on H,
   in that run and `completed`/`success`; a missing, skipped or cancelled job refuses, and so
   does a job `ci.yml` does not declare. The names are derived from `ci.yml`, never listed by
-  hand;
+  hand, and two jobs with one name refuse. One exemption (amended 2026-11-05, #417): the job
+  with id `flake-ledger` whose `if:` is exactly `${{ always() && fromJSON(github.run_attempt) > 1 }}`
+  (E010) may be `completed`/`skipped` when its own attempt is 1, since its condition skips it
+  there by design; from attempt 2 on it must succeed like every other job. `ci.yml` must
+  declare exactly one such job; any other skip still refuses;
 - `node --test tests/unit/about-current.test.mjs` with `OSC_ROADMAP_CHECK=1` passes: the one
   check of the local gate that CI does not run.
 
@@ -56,9 +60,15 @@ before the publish: any later merge changes HEAD's tree and both verdicts refuse
 `tests/unit/release-ci-receipt.test.mjs`, in `npm test`: the job list derived from the real
 `ci.yml` (every matrix value, the visual gate, the doctor, `gate`); a valid fixture verifies,
 and each of these refuses with its own problem: another tree, a head without its base, HEAD
-not a merge, a missing, skipped, cancelled or foreign job, an undeclared job, a run on another
+not a merge, a missing, skipped, cancelled or foreign job, an undeclared job, two jobs with one
+name, a re-run-only condition other than the exact one or on another job id, the flake ledger
+cancelled, failed or running on attempt 1 or skipped on attempt 2 or later, a run on another
 sha or event, a newer red or running run beside an older green one, a red latest attempt, the
-roadmap check failing, and unreadable runs or jobs. Each guard of `ciReceiptProblems()` is
+roadmap check failing, and unreadable runs or jobs; the flake ledger skipped on its own first
+attempt verifies, and a skipped ledger stamped with a later attempt refuses (GitHub re-stamps
+jobs it carries over with the run's attempt, so a release run re-runs all its jobs), and
+near-miss conditions (a bare expression, `> 0`, extra spaces, the condition on a step, a matrix
+ledger) are not exempt. Each guard of `ciReceiptProblems()` is
 mutation-proven (removing it fails a test). `gateVerdict()` takes a verified local receipt
 without asking GitHub and otherwise reports both sets of problems.
 

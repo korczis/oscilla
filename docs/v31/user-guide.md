@@ -189,6 +189,17 @@ beat unit, the loop switch with its start and end, and the timeline's length) an
 are document settings: each change is an undoable edit, and tempo changes move tempo-linked
 clips. The timeline's transport strip shows the same tempo.
 
+Below the notes, the **Graph summary** lists what the graph does, derived from its connections,
+in groups you open and close (Enter or a click on a group's heading): **Signal paths** (one line
+per path, from each source through every node to the Master Output, nothing elided), **Not
+connected to the output** (each sounding node no path reaches, marked *not heard*, with
+**Connect…**, which opens the list of inputs its audio output can take; nothing is patched until
+you choose one), **Modulation**, **Triggers**, **Analysis** and **Measurement**. Each node name
+is a button: it selects that node in the graph, frames it and moves focus to it, as **Find
+node** does. A group longer than eight lines shows its first eight and **Show all (N)** lists
+the rest in place. Signal paths and Not connected start open. Screen readers also get the
+same summary as one bounded sentence on the graph canvas.
+
 While the Studio plays, the status bar at the bottom of the page says **PLAYING**, names the
 **Studio** and shows the level actually in effect: **Master** and the Master Output level in dB.
 Clicking or typing anywhere on the page does not change that level. If you set the Playground

@@ -14,7 +14,10 @@
 //     with success: an older green run, or a run whose latest attempt is red, does not count;
 //   - every job ci.yml declares (a matrix job once per value) is in that run's latest jobs,
 //     on H, and succeeded: a missing, skipped or cancelled job, or a job no ci.yml declares,
-//     refuses;
+//     refuses. One exemption: the job with id flake-ledger whose `if:` is exactly
+//     RERUN_ONLY_IF (E010) may be `completed`/`skipped` on its own first attempt, and must
+//     succeed from attempt 2; ci.yml must declare exactly one such job and no two jobs may
+//     share a name;
 //   - the committed roadmap matches the plan (tests/unit/about-current.test.mjs with
 //     OSC_ROADMAP_CHECK=1, the one check the local gate ran that CI does not).
 // Each fact that cannot be read is a problem of its own, never an empty answer.
@@ -29,6 +32,14 @@ export const TRUNK = 'main';
 /** Each GitHub read is bounded and tried twice (review F3 of #389): a hang refuses, never waits. */
 export const GH_TIMEOUT_MS = 60_000;
 export const GH_ATTEMPTS = 2;
+/**
+ * The condition of a job that runs only on a re-run (E010's flake ledger). On a run's first
+ * attempt such a job is skipped by design, so the receipt accepts that skip there and only
+ * there; from the second attempt on it must succeed like every other job.
+ */
+export const RERUN_ONLY_IF = '${{ always() && fromJSON(github.run_attempt) > 1 }}';
+/** The id of the one job that may carry RERUN_ONLY_IF (E010's flake ledger). */
+export const RERUN_ONLY_JOB = 'flake-ledger';
 
 /** The job names a run of the workflow text shows, a matrix job once per value of its one key. */
 export function expectedJobs(ciText) {
@@ -39,12 +50,14 @@ export function expectedJobs(ciText) {
     return { name: null, jobs: [], problems: [`${CI_WORKFLOW} does not parse: ${e.message}`] };
   }
   const jobs = [];
+  const rerunOnly = [];
   const problems = [];
   for (const [id, job] of Object.entries(doc?.jobs || {})) {
     const name = typeof job.name === 'string' ? job.name : id;
     const matrix = job.strategy?.matrix;
     if (!matrix) {
       jobs.push(name);
+      if (job.if === RERUN_ONLY_IF) rerunOnly.push({ id, name });
       continue;
     }
     const keys = Object.keys(matrix);
@@ -58,7 +71,20 @@ export function expectedJobs(ciText) {
     for (const v of matrix[key]) jobs.push(name.replace(slot, String(v)));
   }
   if (!jobs.length) problems.push(`${CI_WORKFLOW} declares no jobs`);
-  return { name: typeof doc?.name === 'string' ? doc.name : null, jobs, problems };
+  const seen = new Set();
+  for (const n of jobs) {
+    if (seen.has(n)) problems.push(`${CI_WORKFLOW} declares two jobs named "${n}"`);
+    seen.add(n);
+  }
+  // The exemption is keyed by the job id, not its display name (review R4 of #417): exactly one
+  // re-run-only job, and it is E010's flake ledger.
+  if (jobs.length && (rerunOnly.length !== 1 || rerunOnly[0].id !== RERUN_ONLY_JOB)) {
+    problems.push(`${CI_WORKFLOW} must declare exactly one re-run-only job, id ${RERUN_ONLY_JOB} `
+      + `(found: ${rerunOnly.map((j) => j.id).join(', ') || 'none'})`);
+  }
+  return { name: typeof doc?.name === 'string' ? doc.name : null, jobs,
+    rerunOnly: rerunOnly.length === 1 && rerunOnly[0].id === RERUN_ONLY_JOB ? [rerunOnly[0].name] : [],
+    problems };
 }
 
 /**
@@ -134,6 +160,10 @@ export function ciReceiptProblems(f) {
     else if (j.run_id !== newest.id || j.head_sha !== pr) {
       problems.push(`job "${name}" ran on ${short(j.head_sha)} in run ${j.run_id}, not on `
         + `${short(pr)} in run ${newest.id}`);
+    } else if (j.status === 'completed' && j.conclusion === 'skipped'
+      && (f.workflow.rerunOnly || []).includes(name)
+      && Number(j.run_attempt ?? newest.run_attempt) === 1) {
+      // a re-run-only job is skipped on a first attempt by its own condition (E010)
     } else if (j.status !== 'completed' || j.conclusion !== 'success') {
       problems.push(`job "${name}" of run ${newest.id} is ${j.status}/${j.conclusion}`);
     }
