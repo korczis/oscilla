@@ -1,0 +1,25 @@
+id: R037
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "The CI receipt takes the gate's job set from the base branch, not from the tree it judges"
+slug: the-ci-receipt-takes-the-gate-job-set-from-the-base-branch
+priority: p2
+profile: implementation
+objective: "Lands as fix(release). Hardening D5 (P2, inferred): scripts/release-ci-receipt.mjs:185-188 reads the expected jobs from the ci.yml of the tree it judges, so a release tree that drops a job from the workflow also drops it from what the receipt requires. After: the expected job set comes from origin/main's copy of .github/workflows/ci.yml (the gate's needs minus the jobs its verdict drops), and a receipt whose run lacks one of them is refused naming it. D1 (the receipt refusing a first-attempt skipped flake-ledger job) is not re-filed: af reports it built as PR #417; this issue's test must keep D1's case green."
+why: "af's Hardening proof-chain synthesis, defect D5; D1 cross-referenced to PR #417 per af's critique B2 (mesh, 2026-11-05)."
+scope:
+  - "scripts/release-ci-receipt.mjs"
+  - "tests/unit/release-ci-receipt.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-ci-receipt.test.mjs judges a tree whose ci.yml lacks the visual job with a run that lacks it too, and expects a problem naming the base branch's job set; on the merge base it passes."
+  - "A first-attempt run whose flake-ledger job is skipped is accepted (the D1 case), asserted in the same test file."
+  - "Guarded (scripts/release-*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/release-ci-receipt.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

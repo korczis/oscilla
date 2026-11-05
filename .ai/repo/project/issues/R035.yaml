@@ -1,0 +1,27 @@
+id: R035
+milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
+title: "The release cadence counts a recorded, deployed release, not a tag alone"
+slug: the-release-cadence-counts-a-recorded-deployed-release
+priority: p1
+profile: implementation
+objective: "Lands as fix(release). Hardening D3 (P2, observed): any merged v* tag counts (scripts/release-analyze.mjs:167) and the tag push closes the overdue issue (.github/workflows/cadence.yml:29, scripts/release-cadence.mjs:132-137), so a publish that fails after pushing its tag (release-publish.mjs:614-617) clears the cadence with no deploy and no Release. After: the cadence counts a release only when its tag has a GitHub Release and a release record under .ai/repo/releases/; a tag without both leaves it overdue and says which is missing."
+why: "af's Hardening proof-chain synthesis, defect D3 and smallest slice 6 (project.deploy-often)."
+scope:
+  - "scripts/release-cadence.mjs"
+  - "scripts/release-analyze.mjs"
+  - ".github/workflows/cadence.yml"
+  - "tests/unit/release-cadence.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-cadence.test.mjs tags v9.9.9 at HEAD with no record and no Release and a 30-hour-old feat commit, and expects a non-zero exit naming the missing record and Release; on the merge base it exits zero."
+  - "A tag with its Release and record clears the cadence as today."
+  - "Guarded (scripts/release-*, .github/*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/release-cadence.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

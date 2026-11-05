@@ -1,0 +1,28 @@
+id: U076
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "A test names a census surface only through a real locator in executable code, with comments and strings in comments stripped"
+slug: a-test-names-a-census-surface-only-through-a-real-locator
+priority: p1
+profile: implementation
+objective: "Lands as test(census). At main 68b117f3 'has a test' is decided by a text match over the whole test file (tests/unit/surface-census.test.mjs:278-283, 391-401), so a comment that mentions a surface counts: assigning tests/browser/control-census.cjs to presets.tab:musical passes ([]). After: the census check strips line and block comments from the named test file first and then requires one of the counted locator forms for the surface, stated in the test and in tests/README.md: (a) a [data-osc=\"<key>\"] or #<id> CSS selector passed to page.click, page.locator, page.$, page.$$, page.waitForSelector, page.focus, page.hover, page.check or page.fill; (b) a getByRole/getByTestId/getByLabel call whose argument is the surface's accessible name or test id; (c) the surface's deep-link hash in page.goto or location.hash; (d) for a workspace, its id in a call that opens it through the shell's navigation. A string in a comment, a log message, an assertion message or a variable never passed to one of those forms does not count."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice A (uncovered: comments count as a test). af's critique N6 (mesh, 2026-11-05): the census locator issue must state which locator forms count."
+scope:
+  - "tests/unit/surface-census.test.mjs"
+  - "tests/unit/surface-census.json"
+  - "tests/README.md"
+depends_on:
+  - "U075"
+acceptance_criteria:
+  - "Fail-first: a unit mutation that assigns tests/browser/control-census.cjs to presets.tab:musical is refused (the file mentions it only outside a counted locator form); on the merge base the mutation passes with []."
+  - "A fixture test file that names a surface only in a // comment, a /* block */ comment and an assertion message is refused for each; the same surface reached through each of the four counted forms (a)-(d) is accepted, one case per form."
+  - "The counted forms are listed once, in the test, and tests/README.md's row quotes them; no surface on main loses its test unless the census entry is corrected in the same change and the test-debt ratchet of U075 records it."
+  - "Not a guarded path under v2; in scope of R031's v3 once it lands. Lane: oscilla-21, af as critic."
+validation:
+  - "node --test tests/unit/surface-census.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

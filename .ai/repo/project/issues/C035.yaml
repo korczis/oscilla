@@ -1,0 +1,26 @@
+id: C035
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "Experiments Repeat and the experiment select box are clicked, with no fallback to an internal call"
+slug: experiments-repeat-and-select-are-clicked-with-no-internal-fallback
+priority: p1
+profile: implementation
+objective: "Lands as test(browser). tests/browser/v3-ui.cjs:1432-1433 clicks [data-osc=\"exp.repeat\"] and, when the click throws, calls window.OSCILLA.app.experimentsRepeat(id) instead, so a dead, hidden or disabled button passes; tests/browser/control-census.cjs:1605 counts exp.repeat as driven by delegation to that check. The exp.select checkbox is never clicked. After: both are clicked, the effect is asserted at the experiments store and at the view, and a unit scan refuses any page.click(...).catch(() => page.evaluate(... OSCILLA.app.* ...)) pattern in tests/browser."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice E, skeptic-verified (journeys gap 1, severity high): the only click-then-app-call fallback in tests/browser. C022 (BLOCKED) owns the control-drive ratchet as a whole; this slice is filed separately because C022's blocker forbids partial evidence."
+scope:
+  - "tests/browser/v3-ui.cjs"
+  - "tests/unit/control-drive-baseline.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/control-drive-baseline.test.mjs scans tests/browser/*.cjs for a click whose catch falls back to page.evaluate reaching window.OSCILLA.app; it fails on the merge base naming v3-ui.cjs:1433."
+  - "v3-ui.cjs clicks exp.repeat and exp.select with no catch fallback and waits with until() (named deadlines) for the repeated record in the store and its row in the view; a mutation that hides the Repeat button fails the browser check in Chromium, Firefox and WebKit."
+  - "Not a guarded path under v2 (tests/browser/* comes into scope with R033). Lane: oscilla-21."
+validation:
+  - "node --test tests/unit/control-drive-baseline.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

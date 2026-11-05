@@ -1,0 +1,27 @@
+id: R039
+milestone: M011
+serves:
+  - "release-provenance#fatal-deploy-verification"
+title: "verify-deploy run on its own refuses an untagged page for a tagged commit in strict mode, as publish does"
+slug: verify-deploy-strict-refuses-an-untagged-page-for-a-tagged-commit
+priority: p3
+profile: implementation
+objective: "Lands as fix(release). Hardening D7 (P3, observed): scripts/verify-deploy.mjs:125 accepts an 'untagged' page for a tagged commit, and that is the verify-command of finish (release-publish.mjs:228-231); it also compares against checkout files (:259, 268, 270). After: a --strict mode (the one publish and finish use) refuses an untagged page for a commit that has a v* tag and reads the expected bytes from the commit."
+why: "af's Hardening proof-chain synthesis, defect D7."
+scope:
+  - "scripts/verify-deploy.mjs"
+  - "scripts/release-publish.mjs"
+  - "tests/unit/release-provenance.test.mjs"
+depends_on:
+  - "R034"
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-provenance.test.mjs calls checkLive with an untagged page while the commit is tagged, in strict mode, and expects a problem; on the merge base no strict mode exists and the page is accepted."
+  - "Without --strict the main-head deployment check behaves as today (a post-release build shows its distance label)."
+  - "Guarded (scripts/verify-deploy.mjs, scripts/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/release-provenance.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

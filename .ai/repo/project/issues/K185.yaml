@@ -1,0 +1,28 @@
+id: K185
+milestone: M080
+serves:
+  - "studio-box-system#compile-and-playback"
+title: "The runtime trace records a next-note parameter update as stored, not scheduled"
+slug: the-runtime-trace-records-a-next-note-update-as-stored
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio). src/js/studio/runtime.js:796 notes every param update whose live rule is not 'next-gate' as 'scheduled', so NODE_PARAM_SET fm.algorithm while running is traced as ['scheduled', 'next-note', null] although nothing is scheduled on the audio clock: the value is stored and applies from the next note. After: a next-note update is traced as ['stored', 'next-note', null]; the contract comment at src/js/studio/adapters/nodes.js:24-27 names the three trace verbs (scheduled, owned, stored) and when each applies."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice 06 (uncovered: the runtime trace reports next-note updates as scheduled). af's critique N2 (mesh, 2026-11-05): a new issue under studio-box-system, not under K166 (BLOCKED by V619 and about the UI)."
+scope:
+  - "src/js/studio/runtime.js"
+  - "src/js/studio/adapters/nodes.js"
+  - "tests/unit/v31-studio-trace.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/v31-studio-trace.test.mjs dispatches NODE_PARAM_SET fm.algorithm on a running graph and expects ['stored', 'next-note', null]; on the merge base it gives ['scheduled', 'next-note', null]."
+  - "An immediate update still traces 'scheduled' with its ramp end, and an owned one 'owned'; one case each."
+  - "Guarded path (src/js/studio/*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/v31-studio-trace.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -1,0 +1,31 @@
+id: R033
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "The rules' own tests, ratchet baselines and the flake ledger are guarded, the list derived from each rule's Enforcement section"
+slug: the-rules-own-enforcement-is-guarded-derived-from-each-rule
+priority: p1
+profile: implementation
+objective: "Lands as feat(review). Implements Q091 part (2), Hardening gap 2. At main 68b117f3 the tests and ratchets that enforce the project rules are outside GUARDED: knowledge-integrity, ui-flowbite-pro, visual-identity-lock-v4, no-inert-surfaces, browser-timing, browser-suite-contract, repo-hygiene, about, no-fake-science, v31-studio-* and v4-one-studio-store, the rules' ratchet JSON baselines, tests/browser/* except live-smoke.cjs, and scripts/flake-ledger.mjs (R029 adds the ledger); so a pull request can weaken a rule and the test that polices it together. After: the guard reads every active rule's Enforcement section under .ai/repo/rules/project/ and guards each test, baseline and script it names; nothing is hand-listed. In the same change the patch-contract history ratchet lands (af's critique N3, af's lane): tests/unit/patch-contract.test.mjs compares its baseline counts with the most recent earlier commit (the pattern of ui-flowbite-pro.test.mjs:65-90) so they never rise."
+why: "Q091 part (2) (af with b0, 2026-11-05); af's Hardening proof-chain synthesis, finding 2 and smallest slice 3; oscilla-b0 Total Coherence audit slice B (the census and patch-contract tests unguarded) and plan item 6 (the patch-contract ratchet compares only with the working tree)."
+scope:
+  - "scripts/review-verdict.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - "tests/unit/patch-contract.test.mjs"
+  - "tests/unit/patch-contract-baseline.json"
+  - ".ai/repo/rules/project/review-verdict.v3.md"
+  - "tests/README.md"
+depends_on:
+  - "R031"
+acceptance_criteria:
+  - "Fail-first: a fixture diff to tests/unit/knowledge-integrity.test.mjs with no verdict is refused; on the merge base it passes."
+  - "The guarded set is computed from the rules' Enforcement sections: a test asserts every file an active rule's Enforcement names is guarded, and a mutation that adds a test file to a fixture rule's Enforcement makes it guarded with no edit to scripts/review-verdict.mjs."
+  - "Patch-contract (N3): a mutation that raises port.channels in both the registry and the baseline is refused by the history ratchet; on the merge base it passes."
+  - "Guarded (scripts/review-verdict.mjs and its test): prismatic-majordomus-98 writes the verdict. Lanes: oscilla-b0 (guard), af (patch-contract ratchet)."
+validation:
+  - "node --test tests/unit/review-verdict.test.mjs tests/unit/patch-contract.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

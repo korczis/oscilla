@@ -1,0 +1,26 @@
+id: K188
+milestone: M068
+serves:
+  - "connected-instrument#engines"
+title: "Two instances of one engine are independent, and a whole-panel preset never touches the engine-tab nodes"
+slug: two-engine-instances-are-independent
+priority: p2
+profile: implementation
+objective: "Lands as test(studio). No test isolates two fm-voice instances (an edit, a note or a preset on one must not reach the other) or a whole-panel preset from the engine-tab nodes (pack 06 section C: 'never let a single-node preset secretly reset sibling modules'). After: tests/unit/engine-instances.test.mjs builds two fm-voice nodes and a panel with engine tabs and proves independence of parameters, voices and presets; it is the instantiation check the voice wrapper K189 must keep green."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice 06 (uncovered: no instance-isolation test)."
+scope:
+  - "tests/unit/engine-instances.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Two fm-voice instances: NODE_PARAM_SET, a note and a node preset on one leave the other's params, voice count and output unchanged (offline render compared)."
+  - "A whole-panel preset changes only the panel's modules; every engine-tab node's params are deep-equal before and after."
+  - "If a case fails on the merge base the slice lands as fix(...) with the fix and the failing case as its fail-first test; if all pass it lands as test(studio) with 'fail-first: n/a test-only, no defect found'. Each case is mutation-proven (a deliberate shared-state mutation in a fixture fails it)."
+  - "Not a guarded path (tests/unit only; in scope of R033 if its rule names it). Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/engine-instances.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

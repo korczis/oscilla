@@ -1,0 +1,149 @@
+intent: coherent-state
+observed_at: "68b117f3474e97f4c348fc01c30ddc4519cc193e"
+recorded_by: "claude-opus-5.5 (oscilla-b0 Total Coherence audit, each finding re-checked by an independent skeptic; af's Play, nav, engines and Hardening proof-chain audits folded in)"
+recorded_at: "2026-11-05"
+observations:
+  - id: census-link-debt-is-47-not-46
+    statement: "The Total Coherence pack says 46 census surfaces have no deep link; measured 47 (25 subviews, 22 dialogs) at all five census commits, each with a deepLinkWhyNot. The pack's figure is refuted. The census holds 94 surfaces (workspace 13, panel 20, subview 32, dialog 22, route 7); 8 have no test; the debt ratchet counts the union, 47 (U075)."
+    source: "file:tests/unit/surface-census.json"
+  - id: census-unreasoned-links-refuted
+    statement: "Refuted: that the 8 untested and 47 unlinked census entries have no issue that decides them or records why. Every unlinked entry carries a deepLinkWhyNot from 8 distinct reasons (22 dialogs share one, U078), the census refuses a null deepLink without a reason of five words or more (surface-census.test.mjs:308-313), and each untested entry names a plan issue that is not DONE."
+    source: "test:tests/unit/surface-census.test.mjs"
+  - id: census-keyboard-and-records-refuted
+    statement: "Refuted in part: '#osc-keyboard is a surface the derivation does not see' (it is route:keyboard, deepLink '#m=playground&kbd=1'; only the dock element has no panel entry) and 'the records route lists only exp' (DOMAIN_KEYS.records holds exp, def and finding; only the sample deepLink uses exp)."
+    source: "file:src/js/core/url-state-records.js"
+  - id: audition-mislabelled-not-missing
+    statement: "Refuted in part: 'the riff audition is in none of the view tables'. It plays through engine.play, the engine emits 'play' and cmp.playing follows, so the audition is counted as 'instrument' in SOURCES and in the workbench outputOwner: mislabelled, not missing (C036)."
+    source: "file:src/js/studio/riffs/audition.js"
+  - id: storage-claims-refuted
+    statement: "Refuted in part: 'STORAGE_KEYS.theme is dead' (vocabulary.test.mjs:84 pins it and storage-inventory.test.mjs:207 uses it as a mutation probe, so removing it is a test change) and 'browser storage only through core/storage.js' (the storage inventory declares ui/app.js as an owner). No issue is planned for either."
+    source: "test:tests/unit/storage-inventory.test.mjs"
+  - id: synth-insert-announced
+    statement: "Refuted: the Synth workspace does not insert its panel silently; it announces it (SYNTH_TEXT.inserted/took) as #329 intended. The finding is kept only for arming the unsaved guard on a plain visit, decided by Q093 and planned as C039."
+    source: "file:src/js/synth/ui.js"
+  - id: measure-repeat-chain-ui-driven
+    statement: "Refuted in scope: the Measure-side save, Repeat and provenance.repeatOf chain is UI-driven at tests/browser/v3-ui.cjs:485-505. The journey gap is narrowed to the Experiments-side Repeat and select (C035); K041 and K168 do not cover it (their titles are the compare chart presentation and the structured graph summary)."
+    source: "file:tests/browser/v3-ui.cjs"
+  - id: fm-edges-kept-tested
+    statement: "Refuted: 'no test shows an FM algorithm change leaves Studio edges unchanged'; tests/unit/studio-node-presets.test.mjs:46-78 proves it for node presets. Not shown: a whole-panel preset leaving the engine-tab nodes alone, and two fm-voice instances independent (K188)."
+    source: "test:tests/unit/studio-node-presets.test.mjs"
+  - id: f001-not-stamp-lag
+    statement: "Refuted: 'F001 is DONE while its PR #253 is open' as an instance of plan-stamp lag; F001 landed in merge train #367 with evidence citing .ai/repo/reviews/367.yaml, and #253 is a stale open PR. The stamp lag that holds (E003, C027, K164, K168, K169, V638 from #413; C021 from #331; E010 from #410) is af's evidence lane and is not planned here."
+    source: "file:.ai/repo/project/issues/F001.yaml"
+  - id: owner-tables-disagree
+    statement: "Who owns the output is decided in three tables that disagree (ui/output-owner.js SOURCES :55-63; visualization/output-owner.js outputOwnerOf on the polled seqPlaying :11, :24-29; midi/ui.js ownedBy :51-57) plus the audition's own refusal; af's Play audit counts five with ui/shortcuts.js SPACE_OWNER. During a level-reference capture MIDI and keys are refused (ui/measure/session.js:460-462) but claimOutput('instrument') returns true and the audition plays."
+    source: "file:src/js/ui/output-owner.js"
+  - id: no-bus
+    statement: "af's Play audit of main 6d5efa89: 8 players start and claim the output through 5 mechanisms, about 12 'is it playing' values exist (cmp.seqPlaying a 150 ms poll with 3 writers), 5 window-level Stop/Escape handlers and 4 history.replaceState writers outside navigation.js; on desktop 8 of 13 workspaces have no working visible Play."
+    source: "command:af Play audit wf_99782352-a93"
+  - id: repeat-click-fallback
+    statement: "tests/browser/v3-ui.cjs:1432-1433 falls back to window.OSCILLA.app.experimentsRepeat when the Repeat click throws, and control-census.cjs:1605 counts exp.repeat as driven by delegation to it; exp.select is never clicked."
+    source: "file:tests/browser/v3-ui.cjs"
+  - id: synth-visit-arms-guard
+    statement: "A plain visit to Synth arms the unsaved-work guard through the panel auto-insert (#329)."
+    source: "file:src/js/synth/ui.js"
+  - id: osc-range-unheard
+    statement: "No catalogue of the osc:ui and osc:range events exists, and osc:range is dispatched with no listener."
+    source: "command:git grep -n osc:range -- src/js"
+  - id: unplanned-observations
+    statement: "Observed and not planned in this change: the pattern link's href is '#m=studio', so the pattern does not travel; the Filter chart drag is tested only with a fake engine; double ownership of interactions by Flowbite and Alpine is not re-verified (inferred); no per-surface review record or impact fingerprint exists (R031 guards paths, not surfaces); use cases cannot map product file changes ('commands: [knowledge]' is a policy choice)."
+    source: "command:oscilla-b0 coherence audit, scratchpad coherence-verified.json"
+  - id: browser-census-unknown
+    statement: "Unknown at 68b117f3: whether the browser census and the control census pass; they were not run on the shared machine, and control-census.cjs runs only through test:census (ci.yml:390), not in main-checks (E046)."
+    source: "file:.github/workflows/main-checks.yml"
+conditions:
+  - criterion: stops-are-immediate
+    state: conflicting
+    because: "Five window-level Stop/Escape handlers and a 150 ms polled seqPlaying remain (af's Play audit); one stop path is not in place."
+    observations:
+      - no-bus
+  - criterion: one-output-owner
+    state: conflicting
+    because: "Three to five owner tables disagree, the audition is counted as the instrument, and a level-reference capture does not refuse the instrument or the audition."
+    observations:
+      - owner-tables-disagree
+      - audition-mislabelled-not-missing
+      - no-bus
+  - criterion: sequencer-through-engine
+    state: unknown
+    because: "Not re-checked in this audit; the browser suites were not run on the shared machine."
+    observations:
+      - browser-census-unknown
+  - criterion: sequence-state-one-owner
+    state: unknown
+    because: "Not re-checked in this audit beyond seqPlaying's three writers, which concern the playing state, not the sequence waveform."
+    observations:
+      - no-bus
+  - criterion: current-lab-state-wins
+    state: unknown
+    because: "Not re-checked in this audit."
+    observations:
+      - browser-census-unknown
+  - criterion: live-edits-reach-the-voice
+    state: unknown
+    because: "Not re-checked in this audit; the runtime trace mislabels next-note updates as scheduled (K185, studio-box-system), which concerns the trace, not the voice."
+    observations:
+      - fm-edges-kept-tested
+  - criterion: views-describe-what-sounds
+    state: conflicting
+    because: "The audition is described as the instrument, and osc:range is dispatched with no listener."
+    observations:
+      - audition-mislabelled-not-missing
+      - osc-range-unheard
+  - criterion: saved-state-is-honest
+    state: conflicting
+    because: "A plain Synth visit arms the unsaved-work guard, and a panel's fixed parameter can be overwritten and saved while its badge shows the declared value."
+    observations:
+      - synth-visit-arms-guard
+      - synth-insert-announced
+  - criterion: every-control-reaches-its-subsystem
+    state: conflicting
+    because: "A dead Repeat button passes its browser check through the internal-call fallback, and the control-drive ratchet counts it as driven."
+    observations:
+      - repeat-click-fallback
+  - criterion: user-journeys-hold
+    state: unknown
+    because: "The journeys suite was not run on the shared machine at 68b117f3."
+    observations:
+      - browser-census-unknown
+risks:
+  - "Plan stamps lag what has landed (#413, #331, #410 members) and plan drift reports merged_not_recorded 0; a reader of the plan sees open work that is done. af's evidence lane owns the re-check, which must check each criterion on main, never stamp from merge titles."
+  - "The bus and the voice wrapper touch the same note path as K178 and K184 (both on unmerged branches); see M090's risks."
+work:
+  - id: one-output-owner-table
+    title: "One output-owner table, every other table gone or derived"
+    serves:
+      - one-output-owner
+      - views-describe-what-sounds
+    why: "Three to five tables disagree."
+    evidence: "node --test tests/unit/output-owner-one-table.test.mjs"
+    issue: "C036"
+  - id: one-bus
+    title: "One bus: one claim API, one stop path, one playing state"
+    serves:
+      - one-output-owner
+      - stops-are-immediate
+    why: "Eight players, five claim mechanisms, five Escape handlers."
+    evidence: "node --test tests/unit/bus.test.mjs && node tests/browser/app.cjs"
+    issue: "C037"
+  - id: repeat-clicked
+    title: "Experiments Repeat and select clicked with no internal fallback"
+    serves:
+      - every-control-reaches-its-subsystem
+    why: "The only click-then-app-call fallback in tests/browser."
+    evidence: "node --test tests/unit/control-drive-baseline.test.mjs"
+    issue: "C035"
+  - id: events-catalogue
+    title: "Every osc:* event declared once and heard"
+    serves:
+      - views-describe-what-sounds
+    why: "osc:range has no listener."
+    evidence: "node --test tests/unit/osc-events.test.mjs"
+    issue: "C038"
+  - id: synth-visit-baseline
+    title: "The Synth auto-insert is part of the baseline (Q093)"
+    serves:
+      - saved-state-is-honest
+    why: "A visit arms the unsaved-work guard."
+    evidence: "node --test tests/unit/synth-visit-baseline.test.mjs"
+    issue: "C039"

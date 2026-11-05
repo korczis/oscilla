@@ -1,0 +1,47 @@
+id: K189
+milestone: M068
+serves:
+  - "connected-instrument#engines"
+title: "One voice wrapper over the five voice systems: declaration, wiring, instantiation, presets and runtime as separate contracts"
+slug: one-voice-wrapper-over-the-five-voice-systems
+priority: p0
+profile: implementation
+objective: "Lands as fix(engines) in four slices, each fail-first, following pack 06's split. af's engines audit of main 6d5efa89 found sound coming from five separate voice systems with no shared voice abstraction, polyphony model or note interface: (A1) the V1 plan player (audio-engine.js:503-629), (A2) the V1 note voices with their own 8-voice allocator and inline envelope (audio-engine.js:1071-1150), (A3) the sequencer compiler with its own createOscillator and LFO (sequencer/compiler.js:680, 933), (A4) the mono panel and XY pad (studio/adapters/instrument.js:48-230), (A5) the Synth engines on the voice host (studio/adapters/engines.js, voices.js:56-197); the riff audition and three templates rebuild engines from plain nodes. The seam is studio/nodes/engines.js:53-65 (the engine() declaration) and studio/adapters/voices.js (the host). Slice 1, DECLARATION: one engine declaration carries params (unit, range, default, mapping, automatable and modulatable or the reason not), ports (chain in, audio out, pitch/gate/velocity CV in) and capabilities {notes, hits, poly, offline}; the note interface noteOn/noteOff/allOff/hit is declared in studio/adapters/nodes.js. Slice 2, WIRING: every engine's ports are typed and validated by canConnect, and the panel's series chain gives way to declared jacks (the mixer stays K108). Slice 3, INSTANTIATION: the host provides allocation (synth/voice-pool.js, mono and legato through note-stack's mode), voicePeak, census through acct, Nyquist through safeMaxFor and the offline render through the ceiling chain; A2 notes and the riff audition move onto a default engine node; A3 and A1 import the shared primitives and keep their compilers; MEASURE stays outside by design. Slice 4, PRESETS AND RUNTIME: engine presets carry their type and scope (node, engine tab, panel), and the runtime reports per update whether it applies now or from the next note (K185's verbs)."
+why: "The owner's complaint of 2026-11-04 (af session, Czech): 'the synthesis engines aren't pimped and formalized; they aren't wrapped in a single wrapper; not everything is connected as it should be; there is a lot of duplication'. af's engines audit wbukwud0a (inventory, contract audit and synthesis on origin/main 6d5efa89), and the oscilla-b0 Total Coherence pack 06 (Declaration, wiring, instantiation, presets, runtime). af's critique B2 (mesh, 2026-11-05) names the voice wrapper one of the two unminted core items. Related and cross-referenced, not re-derived: K105 (BLOCKED, engine parameter declarations), K090-K092 (derived BLOCKED although shipped in 2126f83b, #332; af's evidence work), K180 (the Q021 voice cap, origin/chore/plan-nav-folds), K071/K072 (to be re-scoped as perc-voice presets and outputs), K093-K095 and K088 (later engines onto the same contract)."
+scope:
+  - "src/js/studio/nodes/engines.js"
+  - "src/js/studio/adapters/nodes.js"
+  - "src/js/studio/adapters/voices.js"
+  - "src/js/studio/adapters/engines.js"
+  - "src/js/studio/adapters/instrument.js"
+  - "src/js/synth/voice-pool.js"
+  - "src/js/synth/note-stack.js"
+  - "src/js/synth/panels/engines.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/studio/adapters/engine-hooks.js"
+  - "src/js/audio/envelope.js"
+  - "src/js/sequencer/compiler.js"
+  - "src/js/studio/riffs/audition.js"
+  - "src/js/midi/notes.js"
+  - "tests/unit/engine-contract.test.mjs"
+  - "tests/unit/engine-instances.test.mjs"
+  - "tests/browser/synth-engines.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K188"
+acceptance_criteria:
+  - "Slice 1 fail-first: tests/unit/engine-contract.test.mjs walks every registry type with notes or hits and fails on the merge base (capabilities.offline false, parameters without a unit or an automatable/modulatable answer, perc-voice's own envelopes); it checks census 0 after allOff, peak at or below the ceiling at full polyphony, no energy above Nyquist, a click-free largest sample step at on, off, steal and choke, and face keys equal to the declared keys."
+  - "Slice 2: canConnect refuses an engine connection whose port type or direction the declaration does not allow, leaving the model unchanged; one case per engine (project.typed-ports, project.no-silent-feedback)."
+  - "Slice 3: a static scan finds no createOscillator, voice allocator or inline ADSR outside studio/adapters/engine-hooks.js, audio/envelope.js and the voice host (sequencer/compiler.js and the V1 plan player import them); MIDI and Playground notes and the riff audition play through an engine node; the voice cap is one number with the Q021 law; K188's instance checks stay green; every offline render passes the engine ceiling chain."
+  - "Slice 4: every engine preset names its type and scope, and applying one of node scope leaves sibling modules deep-equal; the runtime trace reports applies-now or next-note per parameter."
+  - "The V1 freeze golden vectors (tests/unit/freeze.test.mjs) are unchanged with the labs off (ADR 0014)."
+  - "Guarded paths (src/js/audio/*, src/js/studio/*, src/js/synth/*): every slice carries a verdict by prismatic-majordomus-98; oscilla-21 checks the synth values. Lanes: oscilla-26 (declaration, wiring, presets) and dev-53 (instantiation of A1-A3)."
+validation:
+  - "node --test tests/unit/engine-contract.test.mjs tests/unit/engine-instances.test.mjs tests/unit/freeze.test.mjs"
+  - "node tests/browser/synth-engines.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

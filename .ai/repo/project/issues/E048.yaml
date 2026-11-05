@@ -1,0 +1,26 @@
+id: E048
+milestone: M046
+serves:
+  - "engineering-integrity#copied-facts-held"
+title: "CLAUDE.md's description of release:prepare is held to CI_PREPARE_COMMANDS: it runs verify, not the gate"
+slug: claude-md-release-prepare-wording-held-to-the-code
+priority: p3
+profile: implementation
+objective: "Lands as fix(docs). Hardening D8 (P3, observed): CLAUDE.md:62 says release:prepare does 'bump once, rebuild, gate', while scripts/release-prepare.mjs:71-76 runs npm run verify (CI_PREPARE_COMMANDS) and the full gate only with --local-gate; README.md:920-923 says so correctly. After: CLAUDE.md says 'bump once, rebuild, verify' and a check asserts that CLAUDE.md's and README's descriptions of prepare name the commands CI_PREPARE_COMMANDS holds."
+why: "af's Hardening proof-chain synthesis, defect D8."
+scope:
+  - "CLAUDE.md"
+  - "tests/unit/docs-derived.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: the new case in tests/unit/docs-derived.test.mjs fails on the merge base naming CLAUDE.md:62 ('gate')."
+  - "A mutation that changes CI_PREPARE_COMMANDS in a fixture without the docs fails the check."
+  - "Not a guarded path. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/docs-derived.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

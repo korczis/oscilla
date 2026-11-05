@@ -1,0 +1,35 @@
+id: C036
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "One output-owner table: a level-reference capture refuses the instrument and the audition, the audition is named, and every other table is gone or derived from it"
+slug: one-output-owner-table
+priority: p1
+profile: implementation
+objective: "Lands as fix(output-owner). The first step of the bus (C037). At main 68b117f3 who owns the output is decided in three tables that disagree, plus a fourth refusal: src/js/ui/output-owner.js SOURCES (:55-63, :80-94), src/js/visualization/output-owner.js outputOwnerOf on the polled seqPlaying (:11, :24-29), src/js/midi/ui.js ownedBy with 'reference' (:51-57), and the riff audition's own refusal text (src/js/studio/riffs/audition.js:75-81). af's Play audit counts five, adding the SPACE_OWNER map of src/js/ui/shortcuts.js:29. During a mic level-reference capture MIDI and keys are refused (src/js/ui/measure/session.js:460-462) but claimOutput('instrument') returns true and the audition plays; the audition is counted as 'instrument' (engine 'play' to cmp.playing). After: one table in src/js/ui/output-owner.js declares every owner (instrument, sequencer, studio, synth, notes, audition, measure, reference) with its refusal rule and its sentence; every other site imports it or derives from it."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice D (state-events gap 1, severity high), and af's Play audit wf_99782352-a93 (five output-owner tables, measurement refusal checked in nine places). af's critique N1 (mesh, 2026-11-05): the one-table test must assert that the other tables are gone or derived, not only that the new one answers. C024 (READY) makes held notes an owner of the same computation; this issue makes the computation one table."
+scope:
+  - "src/js/ui/output-owner.js"
+  - "src/js/visualization/output-owner.js"
+  - "src/js/midi/ui.js"
+  - "src/js/ui/shortcuts.js"
+  - "src/js/ui/measure/session.js"
+  - "src/js/studio/riffs/source.js"
+  - "src/js/studio/riffs/audition.js"
+  - "tests/unit/output-owner-one-table.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C024"
+acceptance_criteria:
+  - "Fail-first: tests/unit/output-owner-one-table.test.mjs fails on the merge base on two rows: during a level-reference capture claimOutput('instrument') is refused with the reference sentence (true today), and the audition is reported as 'audition' (reported as 'instrument' today)."
+  - "N1: the same test scans src/js for an owner table or refusal list outside src/js/ui/output-owner.js (a literal list of owner names, a second SOURCES, an ownedBy, a SPACE_OWNER owner column or a refusal sentence copy) and fails on each; visualization/output-owner.js, midi/ui.js ownedBy, shortcuts.js and the audition import or derive from the one table. A mutation that re-adds a local table fails."
+  - "The newest-action-wins rule of C002 and the measurement refusal hold for every owner; tests/unit/output-owner.test.mjs and keys-registry.test.mjs pass unchanged."
+  - "Guarded paths (src/js/ui/measure/*, src/js/studio/*): the pull request carries .ai/repo/reviews/<pr>.yaml written by prismatic-majordomus-98, who built none of it (project.review-verdict). Lane: dev-53; one lane owns src/js/midi/* while K178 is open."
+validation:
+  - "node --test tests/unit/output-owner-one-table.test.mjs tests/unit/output-owner.test.mjs tests/unit/keys-registry.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

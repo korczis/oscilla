@@ -1,0 +1,28 @@
+id: U079
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The browser census opens every dialog and every non-Studio tab it lists and asserts each is visible and named"
+slug: the-browser-census-opens-every-dialog-and-non-studio-tab
+priority: p2
+profile: implementation
+objective: "Lands as test(browser). At main 68b117f3 tests/browser/surface-census.cjs never opens a dialog or a tab outside the Studio, so the 22 dialogs and the Analyzer, mic, phase, bio and presets subviews are listed but never shown by the census. After: for every census entry of kind dialog and subview the suite opens it through its reachedFrom opener (a click, never an internal call), waits with until() for it to be visible with its accessible name, and closes it; an entry that cannot be opened fails naming it."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice A (uncovered: the browser census never opens dialogs or non-Studio tabs)."
+scope:
+  - "tests/browser/surface-census.cjs"
+  - "tests/unit/surface-census.test.mjs"
+  - "tests/README.md"
+depends_on:
+  - "U078"
+acceptance_criteria:
+  - "Fail-first: a unit check asserts every dialog and subview entry is opened by surface-census.cjs (by its locator); it fails on the merge base."
+  - "In Chromium, Firefox and WebKit every dialog and subview entry opens by a click, shows its accessible name and closes, through tests/browser/lib/suite.cjs with named until() deadlines and nothing added to tests/browser/timing-baseline.json."
+  - "No page.evaluate call reaches window.OSCILLA.app to open a surface (the C035 scan holds)."
+  - "Not a guarded path under v2; tests/browser/* comes into scope with R033. Lane: oscilla-21."
+validation:
+  - "node --test tests/unit/surface-census.test.mjs"
+  - "node tests/browser/surface-census.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
