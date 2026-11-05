@@ -3152,7 +3152,7 @@
             x-text="`${ROADMAP.phase.now.title} · ${ROADMAP.phase.now.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-now" data-osc="about.next.now">
             <template x-for="m in ROADMAP.phase.now.milestones" :key="m.id">
-              <li class="md:!grid-cols-[1fr_auto]" :data-milestone="m.id"
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
                 :data-phase="m.phase"><span x-text="m.title"></span><b
                 x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
@@ -3162,7 +3162,7 @@
             x-text="`${ROADMAP.phase.next.title} · ${ROADMAP.phase.next.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-next" data-osc="about.next.next">
             <template x-for="m in ROADMAP.phase.next.milestones" :key="m.id">
-              <li class="md:!grid-cols-[1fr_auto]" :data-milestone="m.id"
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
                 :data-phase="m.phase"><span x-text="m.title"></span><b
                 x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
@@ -3182,7 +3182,7 @@
           <ul role="list" aria-labelledby="osc-about-next-later" data-osc="about.next.later"
             id="osc-about-next-later-list" x-show="aboutLaterOpen" x-cloak>
             <template x-for="m in ROADMAP.phase.later.milestones" :key="m.id">
-              <li class="md:!grid-cols-[1fr_auto]" :data-milestone="m.id"
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
                 :data-phase="m.phase"><span x-text="m.title"></span><b
                 x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
