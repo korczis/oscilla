@@ -18,6 +18,8 @@
 //   xyScope(panel) -> [module id]          the modules an XY preset holds and writes
 //   xyTargets(panel) -> [{ id, label }]   the CONTROL inputs Y may drive (the timbre targets)
 //   xyTarget(model, panel) -> jack | null the input Y drives now
+//   xyRoom(model, panel) -> { factor, target, text } | null   Y held below its depth by its
+//                                          linear target's range (said by the readout)
 //   xyPatched(model, panel) -> bool        the pad's Pitch and Gate reach the voice
 //   xyCablesAction(model, panel, pairs, label) -> { action } | { reason }   cables, one BATCH
 //   xyTargetAction(model, panel, to) -> { action } | { reason }   Y moved to `to`, one BATCH
@@ -33,6 +35,8 @@ import { createPatch, patchParams } from '../studio/patches.js';
 import { linkAction, linkOf } from './link.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
 import { XY_TAB } from './panels/xy.js';
+import { NODE_REGISTRY } from '../studio/registry.js';
+import { fitFactor } from '../studio/performance-fit.js';
 
 export const XY_CATEGORY = 'xy';
 const PITCH_PORTS = ['pitch', 'fm'];
@@ -48,7 +52,7 @@ export const XY_RECIPES = Object.freeze([
   { id: 'xy-sweep', base: 'sweep', scale: { mode: 'minor', key: 'A' }, y: 'hpf.frequency',
     values: [], name: 'XY sweep: A natural minor, Y raises the high-pass' },
   { id: 'xy-bell', base: 'ring-bell', scale: { mode: 'major', key: 'E' }, y: 'vco2.tune',
-    values: [['xy.glide', 0.05]], name: 'XY bell: E major, Y detunes VCO 2 against the ring' },
+    values: [], name: 'XY bell: E major, Y detunes VCO 2 against the ring' },
 ].map((r) => Object.freeze(r)));
 
 export const xyScope = (panel) => [...panel.modulesOf(panel.tabs[0].id),
@@ -63,6 +67,45 @@ export function xyTargets(panel) {
 
 const cablesFrom = (model, panel, jack) => panelCables(model, panel).filter((c) => c.from === jack);
 export const xyTarget = (model, panel) => (cablesFrom(model, panel, 'xy.y')[0] || {}).to || null;
+/**
+ * Y held below its depth by its target's range (K183 review N4, project.no-silent-feedback):
+ * the factor computeBases gives the Y cable into a linear target (studio/performance-fit.js,
+ * from the model and the sources' ranges), with what the readout says; null where Y has its
+ * whole depth, drives nothing, or drives a frequency (capped at 0.95 x Nyquist and said by the
+ * runtime's frequency-limited diagnostics).
+ */
+export function xyRoom(model, panel) {
+  const to = xyTarget(model, panel);
+  if (!to) return null;
+  const [mid, port] = to.split('.');
+  const res = panel.resolve(model);
+  const node = res.get(mid);
+  const pd = node ? NODE_REGISTRY.param(node.type, port) : null;
+  if (!pd || pd.unit === 'Hz' || typeof node.params[port] !== 'number') return null;
+  const byId = new Map([...res].filter(([, n]) => n).map(([m, n]) => [n.id, m]));
+  let base = node.params[port];
+  const lin = [];
+  for (const e of model.graph.edges) {
+    const p = e.props || {};
+    if (e.to.node !== node.id || e.to.port !== port || p.muted || p.mapping === 'log') continue;
+    const from = `${byId.get(e.from.node)}.${e.from.port}`;
+    const [lo, hi] = panel.sourceRange(from);
+    const t0 = p.polarity === 'unipolar' ? 0 : -p.depth;
+    const a = (p.depth - t0) / (hi - lo);
+    const c = t0 - a * lo + (p.offset || 0);
+    base += c;
+    lin.push({ c, up: Math.max(a * lo, a * hi), down: Math.min(a * lo, a * hi),
+      fit: from === 'xy.x' || from === 'xy.y' });
+  }
+  const { k } = fitFactor(lin, base, pd);
+  if (k >= 1) return null;
+  const m = panel.module(mid);
+  const name = `${m.label} ${(m.labels && m.labels[port]) || pd.label}`;
+  return { factor: k, target: to, text: k <= 0 ? `Y has no room: ${name} and its other cables `
+    + 'already reach the end of its range' : `Y plays ${Math.round(k * 100)} % of its depth: `
+    + `${name} and its other cables leave only that much of its range` };
+}
+
 export const xyPatched = (model, panel) => ['xy.pitch', 'xy.gate']
   .every((j) => cablesFrom(model, panel, j).length);
 

@@ -407,3 +407,68 @@ test('a document with an xy-pad is refused by name by a registry without the typ
     .join(' | '));
   assert.equal(importStudio(doc).ok, true);
 });
+
+// ---------------------------------------------------------------- the pad kind's lost capture
+
+/** mountXyPad on a DOM just big enough: each selector one fake element, events recorded. */
+async function mountedPad() {
+  const { mountXyPad } = await import('../../src/js/ui/kinds/xy-pad.js');
+  const el = () => {
+    const on = new Map();
+    const attrs = new Map();
+    return { on, dataset: {}, textContent: '', setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k), addEventListener: (t, f) => on.set(t, f),
+      removeEventListener: (t) => on.delete(t), setPointerCapture() {}, focus() {},
+      contains: () => true, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100,
+        height: 100 }), fire(t, e = {}) {
+        const f = on.get(t);
+        if (f) f({ preventDefault() {}, stopPropagation() {}, target: this, ...e });
+      } };
+  };
+  const kids = new Map();
+  const group = el();
+  const host = { innerHTML: '', firstElementChild: group,
+    querySelector: (sel) => kids.get(sel) || kids.set(sel, el()).get(sel) };
+  const saved = { window: globalThis.window, document: globalThis.document };
+  globalThis.window = el();
+  globalThis.document = { ...el(), activeElement: null, hidden: false };
+  const gates = [];
+  const view = mountXyPad(host, { label: 'pad', description: 'd', cells: [{ label: '1' }],
+    x: { key: 'x', label: 'X', type: 'integer', min: 0, max: 3, step: 1, default: 1 },
+    y: { key: 'y', label: 'Y', type: 'number', min: 0, max: 1, default: 0 },
+    value: { x: 1, y: 0 }, onGate: (open, v, why) => gates.push([open, why]) });
+  const surface = host.querySelector('[data-xy-surface]');
+  const restore = () => {
+    view.destroy();
+    globalThis.window = saved.window;
+    globalThis.document = saved.document;
+  };
+  return { view, surface, gates, restore };
+}
+
+test('a lost pointer capture of a holding pointer cancels; after its pointerup it changes '
+  + 'nothing; another pointer\'s loss leaves the touch alone (review F8)', async () => {
+  const at = { clientX: 50, clientY: 50 };
+  const a = await mountedPad();
+  try {
+    a.surface.fire('pointerdown', { pointerId: 1, ...at });
+    assert.equal(a.view.model.gated, true, 'the touch opens the gate');
+    a.surface.fire('lostpointercapture', { pointerId: 1 });
+    assert.equal(a.view.model.gated, false, 'its capture lost while it holds: cancelled');
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'cancel']]);
+    // After a pointerup the browser always fires lostpointercapture: nothing more happens.
+    a.gates.length = 0;
+    a.surface.fire('pointerdown', { pointerId: 2, ...at });
+    a.surface.fire('pointerup', { pointerId: 2 });
+    a.surface.fire('lostpointercapture', { pointerId: 2 });
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'release']], 'one release, no cancel');
+    // A pointer that does not hold the pad (a stray capture) loses it: the touch goes on.
+    a.gates.length = 0;
+    a.surface.fire('pointerdown', { pointerId: 3, ...at });
+    a.surface.fire('lostpointercapture', { pointerId: 9 });
+    assert.equal(a.view.model.gated, true, 'a capture another pointer lost cancels nothing');
+    assert.deepEqual(a.gates, [[true, 'touch']]);
+  } finally {
+    a.restore();
+  }
+});

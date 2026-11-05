@@ -25,7 +25,8 @@
 //   A note-on that takes no voice (it sounds nothing) is not held: { silent: true }.
 //   An XY pad (nodes/instrument.js xy-pad, a handle with move) takes { kind: 'on' | 'move' |
 //   'off' | 'all-off', x, y } on its id (plan K097): on and move set X, Y and the scale step
-//   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them.
+//   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them
+//   and, as all-off does, puts Y back at its rest, 0 (handle.rest, K183).
 
 import { createNoteStack } from '../synth/note-stack.js';
 import { playsNotes } from './registry.js';
@@ -142,6 +143,9 @@ export function createLiveNotes({ getModel, handleOf }) {
     const down = pads.has(id);
     if (kind === 'off' || kind === 'all-off') {
       pads.delete(id);
+      // Every release, forced ones too, puts Y back at rest: nothing of the last touch stays on
+      // its cable (K183 review N2; a Hold that keeps it is Q099's, not this).
+      if (h && typeof h.rest === 'function') h.rest(at);
       if (down) gate(id, at, false);
       return { ok: true, held: 0, released: down ? 1 : 0 };
     }

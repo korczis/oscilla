@@ -39,7 +39,7 @@
 //                                                      target (an owner wires it, runtime.js)
 //   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, scaled,
 //                                                      clamped, lowered, loweredCents, caps,
-//                                                      exceeds }
+//                                                      exceeds, fitted }
 //   frequencyLimits(planNode, cb, ctx) -> [Diagnostic]   pure: the `frequency-limited`
 //                                                      diagnostics of one node's bases (T023)
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
@@ -69,7 +69,7 @@
 //     detune spends is its lane's peak alone (#197 R-7).
 //     Other parameters may exceed their range through
 //     modulation; that is reported (`exceeds`), never hidden (§242), except a performance
-//     output's cables (`fit`), held inside the range (performance-fit.js; `limited`, `scaled`).
+//     output's cables (`fit`), held inside the range (performance-fit.js; `fitted`).
 //   - TRIGGER and ANALYSIS edges have no Web Audio connection: they are logical bindings for
 //     the timeline/scheduler and the measurement engine.
 //
@@ -505,6 +505,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     base[key].value = to;
   };
   const exceeds = [];
+  const fitted = new Map(); // fit edge id -> { factor, key }
   const groups = new Map();
   for (const { edge, handle } of incoming) {
     if (!handle || handle.status !== 'active' || edge.kind !== 'control') continue;
@@ -520,7 +521,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     if (log) base[key].cents += CENTS_PER_OCTAVE * b;
     else base[key].value += b;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ id: edge.id, a, up: Math.max(a * lo, a * hi),
+    groups.get(key).push({ id: edge.id, a, c: b, up: Math.max(a * lo, a * hi),
       down: Math.min(a * lo, a * hi), log, scale: handle.scale, fit: !!handle.fit });
   }
   const offsetOf = (key) => {
@@ -578,13 +579,16 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     }
     if (k !== 1) for (const x of lin) if (limited.has(x.id)) scaled.set(x.id, k);
     up *= k;
-    // A performance cable into a linear parameter sweeps inside its range (K183 review F7).
-    const kf = isFreq ? 1 : fitFactor(lin, b.value, p);
-    const kOf = (x) => (x.fit && kf !== 1 ? kf : k);
-    if (kf !== 1) {
-      for (const x of lin) if (x.fit) { limited.add(x.id); scaled.set(x.id, kf); }
+    // Performance cables (fit) sweep inside the range, and never above k (performance-fit.js).
+    const fit = isFreq ? { k: 1, shift: 0 } : fitFactor(lin.map((x) => (x.fit ? x
+      : { ...x, up: x.up * k, down: x.down * k })), b.value, p);
+    const kOf = (x) => (x.fit ? Math.min(k, fit.k) : k);
+    if (fit.k < 1) {
+      b.value += fit.shift;
+      for (const x of lin) if (x.fit) { limited.add(x.id); scaled.set(x.id, kOf(x)); }
       up = lin.reduce((t, x) => t + x.up * kOf(x), 0);
     }
+    for (const x of lin) if (x.fit) fitted.set(x.id, { factor: kOf(x), key });
     for (const x of lin) gains.set(x.id, x.a * kOf(x) * x.scale);
     let kc = 1;
     let usedC = 0;
@@ -616,13 +620,13 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       }
     }
     if (!isFreq && list.length) {
-      const down = lin.reduce((s, x) => s + x.down * (x.fit ? kf : 1), 0);
+      const down = lin.reduce((s, x) => s + x.down * (x.fit ? kOf(x) : 1), 0);
       if (b.value + up > p.max || b.value + down < p.min) exceeds.push(key);
     } else if (!isFreq && (b.value > p.max || b.value < p.min)) {
       exceeds.push(key);
     }
   }
-  return { base, gains, limited, scaled, clamped, lowered, loweredCents, caps, exceeds };
+  return { base, gains, limited, scaled, clamped, lowered, loweredCents, caps, exceeds, fitted };
 }
 
 /**

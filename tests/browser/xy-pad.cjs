@@ -27,7 +27,9 @@
 //              EG 2 at its sustain (the preset keeps its amount), Y at 0.05 and 0.95, one
 //              factor for 0.95 x Nyquist as computeBases scales them; a derived rise under 6 dB
 //              fails the check; the release is silent (below -70 dB rel)
-//   x-first    (K183; desktop in every engine, 390 px touch in chromium (CDP touch) and webkit)
+//   x-first    (K183; desktop in every engine; 390 px touch in chromium by CDP touch and in webkit
+//              by PointerEvents of pointerType touch dispatched on the pad, since Playwright
+//              drives no held touch in webkit: page.touchscreen has tap only, no CDP touch)
 //              a fresh Synth, no preset: the pad is enabled with no Patch button; QWERTY A
 //              sounds C4 and its release silences; one pointer-down (a touch on the phone) on
 //              the pad's first step raises the runtime's source count from 0 and sounds C3
@@ -35,6 +37,10 @@
 //              (311.1 Hz); the lift silences; QWERTY A still sounds after (RMS above -45
 //              dB, review F6); with A held a touch takes the voice (Eb4) and its lift gives
 //              C4 back, audible; the Synth status names what the keys and the pad play
+//   x-y-rest   (K183 review N2; desktop, every engine) the keys' C4 with no touch sets the
+//              6-12 kHz band against C4; a touch at Y 0.9 raises it 6 dB or more; after the lift
+//              the pad's Y output reads 0, the readout says Y 0 %, and C4 from the keys has the
+//              band back within 1.5 dB of the no-touch reference (named until() deadlines)
 //   x-keys     interactive: arrows move the cursor (aria-valuenow, aria-valuetext of both
 //              sliders), Enter held sounds and its release silences; a held Enter is released
 //              by Escape, by blur and by page hide; the surface is role=application described
@@ -514,8 +520,25 @@ function defineChecks() {
       status: window.OSCILLA.app.synth.status,
       sources: window.OSCILLA.studio.counts().runtimeSources };
   });
-  /** Hold a point: CDP touch (chromium phone), the mouse elsewhere; -> lift(). */
+  /**
+   * Hold a point: CDP touch (chromium phone); in webkit on the phone leg ('dispatch')
+   * PointerEvents of pointerType touch dispatched on the pad, because Playwright drives no held
+   * touch in webkit (page.touchscreen has tap only, and webkit has no CDP touch); the mouse
+   * elsewhere; -> { move, lift }.
+   */
   async function press(page, p, { touch = false } = {}) {
+    if (touch === 'dispatch') {
+      const fire = (type, q) => page.evaluate(([t, x, y]) => {
+        const s = document.querySelector('[data-xy-surface]');
+        s.dispatchEvent(new PointerEvent(t, { pointerId: 71, pointerType: 'touch',
+          isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y,
+          pressure: t === 'pointerup' ? 0 : 0.5 }));
+      }, [type, q.x, q.y]);
+      await fire('pointerdown', p);
+      let at = p;
+      return { move: async (q) => { at = q; await fire('pointermove', q); },
+        lift: () => fire('pointerup', at) };
+    }
     if (touch) {
       const cdp = await page.context().newCDPSession(page);
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart',
@@ -552,7 +575,9 @@ function defineChecks() {
     await page.evaluate(() => window.OSCILLA.app.studioStop()); // back to no source
     await until(async () => (await padView(page)).sources === 0, { ms: SOUND_MS,
       what: 'the Stop leaves no runtime source' });
-    const touch = sizeName === 'phone' && browserName === 'chromium';
+    // The phone leg touches: CDP touch in chromium, dispatched touch PointerEvents in webkit
+    // (press); firefox skips this leg (no mobile emulation).
+    const touch = sizeName !== 'phone' ? false : browserName === 'chromium' ? true : 'dispatch';
     const p0 = await padPoint(page, 0, 0.5);
     const hold = await press(page, p0, { touch });
     let raised = null;
@@ -585,6 +610,59 @@ function defineChecks() {
     return { ok: true, touch, sources: raised.sources, low: low.rmsDb, high: high.rmsDb,
       off: Number(off.rmsDb.toFixed(1)), keyBefore, keyAfter,
       keyBack: Number(back.rmsDb.toFixed(1)), status };
+  });
+
+  def('x-y-rest', async ({ page }) => {
+    // K183 review N2: the touch's Y does not stay on the filter after its lift. The keys' C4
+    // with no touch sets the reference: the 6-12 kHz band against C4 (LPF Cutoff from its knob,
+    // EG 2 and MG). A touch at Y 0.9 opens the filter; after the lift the pad's Y output reads
+    // 0, the readout says Y 0 %, and the keys' C4 has that band back at the reference.
+    const BAND = [6000, 12000];
+    const rel = (q) => bandDb(q, BAND[0], BAND[1]) - levelAt(q, C4);
+    const padY = () => page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
+      const h = pad && st.runtime && st.runtime.nodes.get(pad.id);
+      return h && h.outputs && h.outputs.y ? h.outputs.y.offset.value : null;
+    });
+    const settled = async (what) => { // the band, once two successive polls agree to 1 dB
+      let prev = null;
+      let now = null;
+      await until(async () => {
+        now = rel(await read(page));
+        const same = prev !== null && Math.abs(now - prev) < 1;
+        prev = now;
+        return same;
+      }, { ms: SOUND_MS, what });
+      return now;
+    };
+    await page.keyboard.down('KeyA');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'A sounds C4, no touch yet');
+    const ref = await settled('the band with no touch settles');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'A released');
+    const hold = await press(page, await padPoint(page, 5, 0.9)); // C4 at Y 0.9
+    let opened = null;
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4) && (opened = rel(q)) - ref >= 6,
+      'a touch at Y 0.9 opens LPF Cutoff: the band 6 dB or more over the reference');
+    await hold.lift();
+    await silent(page, 'the lift silences');
+    await until(async () => Math.abs(await padY()) < 1e-3, { ms: SOUND_MS,
+      what: 'the pad\'s Y output is back at its rest, 0' });
+    const text = await page.locator('[data-osc="synth.xy.readout"]').textContent();
+    if (!/ Y 0 % → /.test(text)) {
+      return { ok: false, detail: 'the readout does not say Y 0 % after the lift', text };
+    }
+    await page.keyboard.down('KeyA');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'A sounds C4 after the lift');
+    let back = null;
+    await until(async () => Math.abs((back = await settled('the band settles after the lift'))
+      - ref) < 1.5, { ms: SOUND_MS, what: 'the keys\' filter is back at its knob value: the '
+      + 'band within 1.5 dB of the no-touch reference' });
+    await page.keyboard.up('KeyA');
+    await silent(page, 'A released again');
+    return { ok: true, refDb: Number(ref.toFixed(1)), openedDb: Number(opened.toFixed(1)),
+      backDb: Number(back.toFixed(1)), text };
   });
 
   def('x-cold-touch', async ({ context, base, browserName }) => {

@@ -168,6 +168,7 @@
 // `rebuildWhenOwned`, the filter bypass) rebuilds the node instead. No AudioParam method is ever
 // reassigned.
 
+import { fitLimits } from './performance-fit.js';
 import { NODE_REGISTRY } from './registry.js';
 import { NODE_ADAPTERS } from './adapters/nodes.js';
 import { createEngineHooks } from './adapters/engine-hooks.js';
@@ -590,10 +591,10 @@ export function createStudioRuntime({
   }
 
   /**
-   * The `frequency-limited` diagnostics in effect (frequencyLimits), node by node; a base
-   * another owner drives (an automation lane) is left out: its static value does not play.
-   * Built when read, from the plan in effect, so a rename (compiled, but recomputing no base)
-   * names the node and the cable's source as they are now (T023 review R3).
+   * The `frequency-limited` (frequencyLimits) and `performance-limited` (fitLimits)
+   * diagnostics in effect, node by node; a base an automation lane drives is left out: its
+   * static value does not play. Built when read, from the plan in effect, so a rename names
+   * the node and the cable's source as they are now (T023 review R3).
    */
   function limitDiagnostics() {
     const out = [];
@@ -607,6 +608,7 @@ export function createStudioRuntime({
         const own = d.entity.kind === 'node' && owned.get(d.details.node);
         if (!own || !own.has(d.details.param)) out.push(d);
       }
+      out.push(...fitLimits(at, cb, { edges: plan.edges, nodes: plan.nodes }));
     }
     return out;
   }

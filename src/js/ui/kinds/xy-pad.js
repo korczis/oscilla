@@ -100,6 +100,13 @@ export function createXyModel({ x, y, value = {}, text = {}, onPreview = () => {
       onPreview(copy());
       return true;
     },
+    /** Put the cursor at `value` ({ x?, y? }) without a preview or a commit: what the caller
+     *  already sounds (the XY mount puts Y back at its rest on a release, K183). */
+    place(value = {}) {
+      if (value.x != null) v.x = value.x;
+      if (value.y != null) v.y = value.y;
+      return true;
+    },
     reset() {
       v.x = x.default;
       v.y = y.default;
@@ -187,7 +194,9 @@ export function mountXyPad(host, opts) {
     surface.setAttribute('aria-pressed', String(model.gated));
   }
   const wrap = (fn) => (...a) => { const r = fn(...a); update(); return r; };
-  for (const k of ['down', 'move', 'up', 'end', 'gate', 'key', 'reset']) model[k] = wrap(model[k]);
+  for (const k of ['down', 'move', 'up', 'end', 'gate', 'key', 'reset', 'place']) {
+    model[k] = wrap(model[k]);
+  }
 
   const at = (e) => {
     const r = surface.getBoundingClientRect();

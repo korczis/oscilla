@@ -239,8 +239,7 @@ test('the bay draws and names the Y cable as summing into LPF Cutoff', () => {
   const mg = patchCable(st.getModel(), PANEL, 'mg.control', 'lpf.frequency');
   assert.equal(st.dispatch(mg.action).ok, true);
   assert.equal(jackState(st.getModel(), PANEL, 'lpf.frequency'), 'patched');
-  const ui = readFileSync(`${ROOT}src/js/synth/ui.js`, 'utf8');
-  assert.match(ui, /=== 'summing' \? ', adds to the normals'/, 'the cable list says it adds');
+  // The CABLES list's rows: N5 and F2 below render them.
 });
 
 test('Y is 0 until the first touch: the pad\'s Y output rests at 0 in the running document',
@@ -470,4 +469,283 @@ test('Y is 0 until the first touch: an armed Synth hears no X or Y from the moun
     mount.destroy();
     real.stop({ fast: true });
     fx.advance(1);
+  });
+
+// ---------------------------------------------------------------- review of a31ad98c (N1-N6)
+
+/** The armed default document, the pad mounted on the real kind model (no DOM): its readout,
+ *  the runtime's pad handle and the transport's live calls. */
+async function padRig(edit = null) {
+  const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
+  const { createXyModel } = await import('../../src/js/ui/kinds/xy-pad.js');
+  const st = defaultStore();
+  if (edit) edit(st);
+  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store: st });
+  const nodes = () => PANEL.resolve(st.getModel());
+  const sink = createSynthNotes({ get: () => ({ transport, handle: st }), transport: () => transport,
+    ensurePanel: () => true, cmp: () => null, say: () => {}, played: () => nodes().get('keys'),
+    playedModule: () => 'keys', present: () => true, nodes, panel: PANEL, ENGINE_IDS: [],
+    syncArmed: () => {} });
+  const layer = createMidiNotes({ engine: null, route: () => sink });
+  assert.equal(layer.noteOn(60, 100, 'kbd-key').ok, true, 'a computer key arms the Synth');
+  layer.noteOff(60, 'kbd-key');
+  const kids = new Map();
+  const fake = () => ({ setAttribute() {}, hasAttribute: () => false, removeAttribute() {},
+    innerHTML: '', textContent: '', hidden: false, value: '', selectedOptions: [{ text: '' }],
+    addEventListener() {}, removeEventListener() {},
+    querySelector(sel) {
+      if (!kids.has(sel)) kids.set(sel, fake());
+      return kids.get(sel);
+    } });
+  const host = fake();
+  const mount = mountSynthXy(host, { store: st, transport, panel: PANEL, app: null,
+    notes: { noteOn: (...a) => layer.noteOn(...a), noteOff: (...a) => layer.noteOff(...a),
+      legato: (...a) => layer.legato(...a), velocity: () => 100, off() {} },
+    arm: () => true, mountPad: (box, opts) => {
+      const model = createXyModel(opts);
+      return { model, update() {}, destroy() { model.end('hide'); } };
+    } });
+  const padId = nodes().get('xy').id;
+  return { st, fx, runtime, transport, mount, layer, model: mount.view.model,
+    readout: () => host.querySelector('[data-osc="synth.xy.readout"]').textContent,
+    y: () => runtime.nodes.get(padId).outputs.y.offset.events.at(-1).value,
+    done() {
+      mount.destroy();
+      transport.stop({ fast: true });
+      fx.advance(1);
+    } };
+}
+
+test('N2: every release puts Y back at rest: the node, the cursor and the readout say 0',
+  async () => {
+    for (const how of ['lift', 'forced']) {
+      const r = await padRig();
+      r.model.gate(true); // a touch (Enter held) at the cursor
+      for (let i = 0; i < 90; i += 1) r.model.key('ArrowUp'); // Y to 0.9 while it sounds
+      assert.ok(Math.abs(r.y() - 0.9) < 1e-9, `${how}: Y plays 0.9 while touched`);
+      assert.match(r.readout(), /Y 90 % → lpf\.frequency · gate open/);
+      if (how === 'lift') r.model.end('release');
+      else r.mount.release('owner'); // a forced release (the audio owner moved away)
+      assert.equal(r.y(), 0, `${how}: the node's Y is back at its rest`);
+      assert.equal(r.model.value.y, 0, `${how}: the cursor is drawn at Y 0`);
+      assert.match(r.readout(), /Y 0 % → lpf\.frequency/, `${how}: the readout says what sounds`);
+      assert.doesNotMatch(r.readout(), /gate open/);
+      // A computer key after it: nothing of the touch stays on the filter.
+      r.layer.noteOn(60, 100, 'kbd-key');
+      assert.equal(r.y(), 0, `${how}: the key plays with Y at rest`);
+      r.layer.noteOff(60, 'kbd-key');
+      // An arrow without a touch moves the cursor only, and the readout says so.
+      r.model.key('ArrowUp');
+      assert.equal(r.y(), 0);
+      assert.match(r.readout(), /Y 0 % → lpf\.frequency · the next touch from Y 1 %/);
+      r.done();
+    }
+  });
+
+test('N1: a performance cable into an Oscillator\'s detune keeps the Nyquist headroom',
+  async () => {
+    // xy.y into the reference template's oscillator's detune, depth 1200 cents (linear), the
+    // oscillator at 20 kHz with a detune of 100: the fit to detune's range (+-1200) must not
+    // replace the headroom k that 0.95 x Nyquist leaves (V272 A7).
+    for (const sampleRate of [44100, 48000]) {
+      const st = defaultStore();
+      const m0 = st.getModel();
+      const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
+      assert.ok(osc, 'the reference template has an oscillator');
+      assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: osc.id,
+        params: { frequency: 20000, detune: 100 } }).ok, true);
+      for (const [id, fit] of [['y-detune', true], ['mg-detune', false]]) {
+        const from = fit ? { node: ids(m0)('xy'), port: 'y' } : { node: ids(m0)('eg2'),
+          port: 'control' };
+        assert.equal(st.dispatch({ type: 'EDGE_ADD', id, from, to: { node: osc.id,
+          port: 'detune' }, props: { muted: false, depth: 1200, polarity: 'unipolar',
+          mapping: 'linear', offset: 0 } }).ok, true);
+        const fx = createFakeAudioEnv({ sampleRate });
+        const engine = new AudioEngine({ env: fx.env });
+        assert.ok(engine.init());
+        const rt = createStudioRuntime({ engine });
+        assert.equal(rt.apply(st.getModel(), { revision: 1 }).ok, true);
+        assert.equal(rt.start().ok, true);
+        assert.equal(rt.edges.get(id).fit, fit);
+        const plan = rt.plan;
+        const inc = plan.edgeOrder.map((e) => plan.edges.get(e))
+          .filter((e) => e.to.node === osc.id && e.kind === 'control')
+          .map((edge) => ({ edge, handle: rt.edges.get(edge.id) }));
+        const cap = 0.95 * (sampleRate / 2);
+        const cb = computeBases(plan.nodes.get(osc.id), inc, { safeMaximum: cap });
+        const cents = inc.filter(({ edge }) => edge.to.port === 'detune')
+          .reduce((s, { edge, handle }) => s + Math.max(0, (cb.gains.get(edge.id) || 0)
+            * handle.range[1]), cb.base.detune.value);
+        const top = cb.base.frequency.value * 2 ** (cents / 1200);
+        assert.ok(top <= cap * (1 + 1e-9), `${sampleRate}: ${id} tops out at ${top} Hz <= ${cap}`);
+        const a = 1200; // unipolar 0..1 onto [0, 1200 cents]
+        assert.ok(Math.abs(cb.scaled.get(id) - cb.gains.get(id) / a) < 1e-9,
+          `${sampleRate}: ${id}'s scaled entry is the factor its gain plays`);
+        assert.ok(cb.scaled.get(id) < 0.2, `${sampleRate}: the headroom, not detune's range`);
+        assert.equal(st.dispatch({ type: 'EDGE_REMOVE', edgeIds: [id] }).ok, true);
+        rt.stop?.();
+      }
+    }
+  });
+
+test('N3: a bipolar or offset performance cable stays inside its target, above and below',
+  async () => {
+    const { fitFactor } = await import('../../src/js/studio/performance-fit.js');
+    // Y (0..1) bipolar at depth 0.8 into a [0, 1] level at 0.5: a = 1.6, its constant -0.8.
+    const lin = [{ c: -0.8, up: 1.6, down: 0, fit: true }];
+    const base = 0.5 - 0.8;
+    const { k, shift } = fitFactor(lin, base, { min: 0, max: 1 });
+    const lo = base + shift + k * 0;
+    const hi = base + shift + k * 1.6;
+    assert.ok(lo >= -1e-12 && hi <= 1 + 1e-12, `the sweep ${lo}..${hi} stays inside 0..1`);
+    assert.ok(Math.abs(k - 0.625) < 1e-12, 'the most of its depth that fits both ends');
+    // A negative offset alone is held at the bottom too.
+    const off = fitFactor([{ c: -0.6, up: 1, down: 0, fit: true }], 0.3 - 0.6, { min: 0, max: 1 });
+    assert.ok(0.3 - 0.6 * off.k >= -1e-12, 'the lowest point stays at or above the minimum');
+    assert.ok(Math.abs(off.shift - (off.k - 1) * -0.6) < 1e-12, 'its constant scaled with it');
+    // Through the runtime: Y bipolar 0.8 into MIXER Level 1 at 0.5.
+    const st = defaultStore();
+    const a = xy.xyTargetAction(st.getModel(), PANEL, 'mix.level1');
+    assert.equal(st.dispatch(a.action).ok, true);
+    const m = st.getModel();
+    const e = m.graph.edges.find((x) => x.from.node === ids(m)('xy') && x.from.port === 'y');
+    assert.equal(st.dispatch({ type: 'EDGE_UPDATE', edgeId: e.id, props: { polarity: 'bipolar',
+      depth: 0.8 } }).ok, true);
+    assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: ids(m)('mix'),
+      params: { level1: 0.5 } }).ok, true);
+    const fx = createFakeAudioEnv({ sampleRate: 48000 });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init());
+    const rt = createStudioRuntime({ engine });
+    assert.equal(rt.apply(liveModel(st.getModel()), { revision: 1 }).ok, true);
+    assert.equal(rt.start().ok, true);
+    const plan = rt.plan;
+    const mixId = ids(m)('mix');
+    const inc = plan.edgeOrder.map((x) => plan.edges.get(x))
+      .filter((x) => x.to.node === mixId && x.kind === 'control' && x.to.port === 'level1')
+      .map((edge) => ({ edge, handle: rt.edges.get(edge.id) }));
+    const cb = computeBases(plan.nodes.get(mixId), inc, { safeMaximum: 22800 });
+    const g = cb.gains.get(e.id);
+    const [l, h] = rt.edges.get(e.id).range;
+    const ends = [cb.base.level1.value + g * l, cb.base.level1.value + g * h];
+    assert.ok(Math.min(...ends) >= -1e-9 && Math.max(...ends) <= 1 + 1e-9,
+      `MIXER Level 1 sweeps ${ends.join('..')} inside 0..1`);
+    assert.ok(cb.limited.has(e.id) && cb.fitted.get(e.id).factor < 1, 'and says it is held');
+  });
+
+test('N4: Y with no room says so: the readout, xyRoom and a performance-limited diagnostic',
+  async () => {
+    const toVca = (st) => {
+      assert.equal(st.dispatch(xy.xyTargetAction(st.getModel(), PANEL, 'vca.gain').action).ok,
+        true);
+      assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: ids(st.getModel())('vca'),
+        params: { gain: 1 } }).ok, true); // base 1 + EG 2's depth 1: the top of 0..2
+    };
+    const r = await padRig(toVca);
+    const room = xy.xyRoom(r.st.getModel(), PANEL);
+    assert.equal(room.factor, 0);
+    assert.match(room.text, /^Y has no room: VCA Initial gain and its other cables already/);
+    assert.match(r.readout(), /Y has no room/, 'the pad\'s readout says it');
+    const diag = r.runtime.debugInfo().diagnostics.filter((d) => d.code === 'performance-limited');
+    assert.equal(diag.length, 1, 'one diagnostic, on the Y cable');
+    assert.match(diag[0].message, /Y into .* has no room/);
+    r.done();
+    // Room for half: base 0.5 leaves 0.5 of Y's depth 1.
+    const half = await padRig((st) => {
+      toVca(st);
+      assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: ids(st.getModel())('vca'),
+        params: { gain: 0.5 } }).ok, true);
+    });
+    assert.match(half.readout(), /Y plays 50 % of its depth/);
+    half.done();
+    // The default document: LPF Cutoff (a frequency, capped at Nyquist) has its depth.
+    assert.equal(xy.xyRoom(defaultStore().getModel(), PANEL), null);
+  });
+
+test('N4: a non-performance cable is never fitted, and the pad\'s Pitch is no performance '
+  + 'output', () => {
+    // Fitting is for the pad's X and Y only (review mutants M24, M25): MG into MIXER Level 1 at
+    // its top keeps its depth (its excess is reported, §242), the pad's Pitch is not fitted.
+    const st = defaultStore();
+    const m = st.getModel();
+    const mg = patchCable(m, PANEL, 'mg.control', 'mix.level1');
+    assert.equal(st.dispatch(mg.action).ok, true);
+    const p = patchCable(st.getModel(), PANEL, 'xy.pitch', 'vco1.tune');
+    assert.ok(p.action, p.reason);
+    assert.equal(st.dispatch(p.action).ok, true);
+    assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: ids(m)('mix'),
+      params: { level1: 1 } }).ok, true);
+    const fx = createFakeAudioEnv({ sampleRate: 48000 });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init());
+    const rt = createStudioRuntime({ engine });
+    assert.equal(rt.apply(liveModel(st.getModel()), { revision: 1 }).ok, true);
+    assert.equal(rt.start().ok, true);
+    const into = (node, port) => [...rt.edges.values()].filter((h) => h.toNode === node
+      && h.toPort === port);
+    const mgEdge = into(ids(m)('mix'), 'level1')[0];
+    assert.equal(mgEdge.fit, false, 'an MG cable is no performance cable');
+    const pitch = into(ids(m)('vco1'), 'tune').find((h) => h.fromNode === ids(m)('xy'));
+    assert.equal(pitch.fit, false, 'the pad\'s Pitch is not fitted');
+    const plan = rt.plan;
+    const inc = plan.edgeOrder.map((x) => plan.edges.get(x))
+      .filter((x) => x.to.node === ids(m)('mix') && x.to.port === 'level1')
+      .map((edge) => ({ edge, handle: rt.edges.get(edge.id) }));
+    const cb = computeBases(plan.nodes.get(ids(m)('mix')), inc, { safeMaximum: 22800 });
+    assert.equal(cb.limited.has(mgEdge.id), false, 'MG keeps its depth');
+    assert.deepEqual(cb.exceeds, ['level1'], 'its excess is reported, never hidden');
+  });
+
+test('N5 and F2: the bay names every summing cable; only a summing cable says it adds', () => {
+  const st = defaultStore();
+  assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'xy.x', 'lpf.frequency').action)
+    .ok, true);
+  assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'mg.control', 'vco2.tune').action)
+    .ok, true);
+  const m = st.getModel();
+  const tokens = { ...Object.fromEntries(Object.entries(PANEL_TOKENS)
+    .map(([k, name]) => [k, `var(${name})`])), cables: CABLE_TOKENS.map((n) => `var(${n})`) };
+  const states = new Map(PANEL.modules.flatMap((mod) => PANEL.jacksOf(mod.id))
+    .filter((j) => j.direction === 'in').map((j) => [j.key, jackState(m, PANEL, j.id)]));
+  const cables = panelCables(m, PANEL).map((c) => ({ ...c, type: 'CONTROL' }));
+  const svg = bay.baySvg({ panel: PANEL, layout: bay.bayLayout(PANEL, 376), cables, states,
+    tokens });
+  assert.match(svg, /aria-label="LPF Cutoff input, control, normalled, plus XY PAD X and Y"/);
+  // The CABLES list as synth/ui.js renders it (bay.js cableItem).
+  const jackName = (j) => j;
+  const rows = cables.map((c) => bay.cableItem(c, states.get(`${c.to}:in`),
+    { jackName, item: 'i', btn: 'b' }));
+  const adds = rows.filter((r) => r.includes(', adds to the normals'));
+  assert.equal(rows.length, 3);
+  assert.equal(adds.length, 2, 'the two pad cables into LPF Cutoff say they add');
+  assert.ok(adds.every((r) => /^<li class="i"><span>xy\.[xy] → lpf\.frequency, adds/.test(r)));
+  assert.match(rows.find((r) => r.includes('mg.control')), /<span>mg\.control → vco2\.tune<\/span>/,
+    'a plain cable says nothing more');
+  const ui = readFileSync(`${ROOT}src/js/synth/ui.js`, 'utf8');
+  assert.match(ui, /cableItem\(c, states\.get\(`\$\{c\.to\}:in`\)/, 'the list renders each row so');
+});
+
+test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; no preset sets it',
+  async () => {
+    const { controlReason, XY_GLIDE_IDLE } = await import('../../src/js/synth/view/face.js');
+    const st = defaultStore();
+    const mod = { ...PANEL.module('xy'), def: NODE_REGISTRY.get('xy-pad') };
+    const glide = { kind: 'knob', key: 'glide' };
+    const node = () => PANEL.resolve(st.getModel()).get('xy');
+    assert.equal(controlReason(mod, node(), glide, st.getModel(), PANEL), XY_GLIDE_IDLE);
+    assert.match(XY_GLIDE_IDLE, /KEYS module's Glide/);
+    assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'xy.pitch', 'vco1.pitch').action)
+      .ok, true);
+    assert.equal(controlReason(mod, node(), glide, st.getModel(), PANEL), null,
+      'with its Pitch cabled the pad\'s Glide glides that cable');
+    assert.ok(xy.XY_RECIPES.every((r) => !r.values.some(([k]) => k === 'xy.glide')),
+      'no built-in preset sets the idle Glide');
+    // A document carrying a pad Glide (saved before) still loads and keeps it.
+    const s2 = defaultStore();
+    assert.equal(s2.dispatch({ type: 'NODE_PARAM_SET', nodeId: PANEL.resolve(s2.getModel())
+      .get('xy').id, params: { glide: 0.05 } }).ok, true);
   });

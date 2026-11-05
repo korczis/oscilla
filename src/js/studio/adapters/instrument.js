@@ -222,6 +222,10 @@ export const xyPad = {
         else pitch.offset.setValueAtTime(d.pitch, t);
         return { ...d, x: cx, y: cy };
       },
+      /** The pad let go from t: Y back to its rest, 0, gliding (τ 15 ms, no click), K183 N2. */
+      rest(t) {
+        y.offset.setTargetAtTime(0, t, PARAM_TAU_S);
+      },
       stop(t) {
         for (const n of [x, y, pitch]) { try { n.stop(t); } catch (e) { /* stopped */ } }
       },

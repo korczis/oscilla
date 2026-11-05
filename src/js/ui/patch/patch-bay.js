@@ -128,11 +128,18 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
   // A patched input shows its cable's colour, the source module's (as the cable does).
   const feeders = new Map(cables.map((c) => [`${c.to}:in`, c.fromModule]));
   const feederOf = (key) => feeders.get(key) || null;
-  // What a summing jack's cable comes from, by name: its source module and jack ("XY PAD Y").
+  // What a summing jack's cables come from, by name, each module once ("XY PAD X and Y").
   const outLabel = new Map(source.groups.flatMap((g) => g.jacks).map((x) => [x.key, x.label]));
   const plusOf = (key) => {
-    const c = cables.find((x) => `${x.to}:in` === key);
-    return c ? `${source.nameOf(c.fromModule)} ${outLabel.get(`${c.from}:out`) || c.from}` : null;
+    const by = new Map();
+    const at = (c) => [...outLabel.keys()].indexOf(`${c.from}:out`); // in panel order
+    for (const c of cables.filter((x) => `${x.to}:in` === key).sort((p, q) => at(p) - at(q))) {
+      if (!by.has(c.fromModule)) by.set(c.fromModule, []);
+      by.get(c.fromModule).push(outLabel.get(`${c.from}:out`) || c.from);
+    }
+    const and = (xs) => (xs.length > 1 ? `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`
+      : xs[0]);
+    return by.size ? and([...by].map(([m, js]) => `${source.nameOf(m)} ${and(js)}`)) : null;
   };
   // Each module is a plate, a tonal gradient between two OSCILLA tokens; its label is the group
   // text below. Layers, bottom up: plates, labels, nuts, cables, jacks (on top of the cables'

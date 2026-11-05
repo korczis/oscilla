@@ -37,7 +37,8 @@
 // between pad, keys and MIDI, and no Pitch or Gate cable is needed: the keyboard's normals stay
 // and a computer key still sounds. Y is an ordinary cable from the pad's node (the default
 // Synth document has xy.y into LPF Cutoff, synth/xy.js xyInsertAction); X and Y reach the node
-// through transport.live as before, so a preset's Pitch and Gate cables still play.
+// through transport.live from a touch on (F1), and Y goes back to its rest on every release
+// (N2); the pad's own Pitch and Gate outputs feed only the cables a user patches from them.
 //
 // The pad talks to what it plays through one small internal interface, the target:
 //   target = { owner, output, wire(slot) -> spec | null, unwire(), live(kind, x, y),
@@ -65,7 +66,7 @@ import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
 import { SCALE_LABELS } from '../../core/music.js';
 import {
-  XY_RECIPES, xyPatchAction, xyPresetPatch, xyTarget, xyTargetAction, xyTargets,
+  XY_RECIPES, xyPatchAction, xyPresetPatch, xyRoom, xyTarget, xyTargetAction, xyTargets,
 } from '../xy.js';
 import { esc } from './face.js';
 
@@ -174,6 +175,8 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
       return t && t.playing && n ? t.live(n.id, { kind, x: (x + 0.5) / steps, y }) : null;
     },
     arm,
+    /** Y held below its depth by its target's range (xy.js xyRoom), or null. */
+    room: () => xyRoom(model(), panel),
     /** The router's release (live-notes.js all-off): whatever the pad's node still holds. */
     release() {
       const t = transport();
@@ -279,11 +282,19 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       return true;
     };
     const out = host.querySelector('[data-osc="synth.xy.readout"]');
-    /** The readout under the pad: the cursor's note and Y, and whether the gate is open. */
+    /**
+     * The readout under the pad says what sounds (K183 review N2, N4): the cursor's note, Y as
+     * the node plays it (its rest, 0, without a touch; where the cursor is, the next touch
+     * starts), whether the gate is open, and a Y the target's range holds below its depth.
+     */
     const show = (v, r = null) => {
       const d = deg(v.x);
-      out.textContent = `${d.name} · degree ${d.degree} of ${scale} · Y ${Math.round(v.y * 100)}`
-        + ` % → ${to}${(r && r.held) || held !== null ? ' · gate open' : ''}`;
+      const on = (r && r.held) || gated();
+      const pct = (y) => Math.round(y * 100);
+      const room = typeof target.room === 'function' ? target.room() : null;
+      out.textContent = `${d.name} · degree ${d.degree} of ${scale} · Y ${on ? pct(v.y) : 0}`
+        + ` % → ${to}${on ? ' · gate open' : v.y > 0 ? ` · the next touch from Y ${pct(v.y)} %`
+          : ''}${room ? ` · ${room.text}` : ''}`;
     };
     // The pad's node hears X and Y only from a touch on (K183 review F1): until the first
     // onGate(true), and between touches, the cursor moves the readout alone, so Y stays at 0
@@ -334,7 +345,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       if (audio() !== 'running') line(XY_TEXT.cold, 'data-xy-cold');
     };
     const was = CURSORS.get(store);
-    let pos = was && was.x < steps ? was : { x: Math.floor(steps / 2), y: 0.5 };
+    // Y at its rest, 0, as the node is until a touch (F1, N2); X where the cursor was.
+    let pos = was && was.x < steps ? { ...was, y: 0 } : { x: Math.floor(steps / 2), y: 0 };
     const keep = (v) => {
       pos = v;
       CURSORS.set(store, v);
@@ -351,7 +363,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       disabled: null,
       x: { key: 'x', label: 'Note', type: 'integer', min: 0, max: steps - 1, step: 1,
         default: Math.floor(steps / 2) },
-      y: { key: 'y', label: `Y: ${to}`, type: 'number', min: 0, max: 1, default: 0.5 },
+      y: { key: 'y', label: `Y: ${to}`, type: 'number', min: 0, max: 1, default: 0 },
       value: pos,
       text: { x: (i) => `${deg(i).name}, degree ${deg(i).degree}`,
         y: (v) => `${Math.round(v * 100)} % to ${to}` },
@@ -374,6 +386,12 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
         lift();
         live('off', v);
         if (reason !== 'release') target.release(reason);
+        // Every release puts Y back at its rest (live-notes.js, K183 review N2): the cursor and
+        // the readout show what sounds, Y at 0; the next touch starts where it lands.
+        const rest = { ...v, y: 0 };
+        keep(rest);
+        if (view && typeof view.model.place === 'function') view.model.place(rest);
+        show(rest);
       },
     });
     show(pos); // the cursor shown; the node hears nothing before the first touch
