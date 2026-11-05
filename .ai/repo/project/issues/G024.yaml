@@ -1,0 +1,32 @@
+id: G024
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+title: "One patch bay: src/js/ui/patch/patch-bay.js renders every bay from the port contract"
+slug: one-patch-bay-the-port-contract-renderer
+priority: p2
+profile: implementation
+objective: "Lands as refactor(ui). The patch bay (src/js/ui/patch/patch-bay.js, rendered from the port contract by K165) is the one implementation of jacks, cables and their gestures; adapters such as src/js/synth/view/bay.js keep only parameters; the Studio graph's cables are the graph editor's edges, a different family, and are declared as such so the census does not count them twice."
+why: "Owner order of 2026-11-04 (M123): every control family unified, parametrized, reused, no parallel implementations."
+scope:
+  - "src/js/ui/patch"
+  - "src/js/synth/view"
+  - "src/js/ui/catalog"
+  - "tests"
+  - "dist"
+depends_on:
+  - "G021"
+acceptance_criteria:
+  - "The family has one implementing module, named in its catalogue declarations; its G021 baseline entries leave and the census passes with them gone (fail-first: the census fails on the merge base with the entries removed)."
+  - "Every place the family appears renders through that module with its parameters (skin, size, range, labels); no behaviour, key binding or ARIA of any place changes except where the PR lists it with its reason; the visual references change only where the PR re-accepts them with the reason."
+  - "Every place renders from the one parameter declaration (G003, N002, N003: type, unit, range, step, live rule); no family keeps a formatter or a range of its own."
+  - "Standard: the size report gives base and head figures; the Flowbite ratchet only falls; the iPhone census reach only shrinks; the family's visual references are re-accepted with the reason in review (visual-identity-lock v3); the phone holds 44 px targets under a coarse pointer."
+  - "Every gate browser, file:// and the /oscilla/ sub-path; the affected browser suites pass; a non-builder's verdict where a guarded path changes (project.review-verdict v2)."
+validation:
+  - "node --test tests/unit/ui-families.test.mjs"
+  - "npm test"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04
