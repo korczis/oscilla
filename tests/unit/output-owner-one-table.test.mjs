@@ -2,7 +2,8 @@
 // refuses every claim while a measurement or a microphone level-reference capture holds the
 // output, and the riff audition is refused by the same table and claims under its own name.
 // Before this, a reference capture refused the MIDI and keyboard notes (midi/ui.js 'reference')
-// but not claimOutput('instrument') nor the audition, whose voices were claimed as 'instrument'.
+// but not claimOutput('instrument') nor the audition, whose voices were claimed as 'instrument',
+// and Studio PLAY (ui/studio/workspace.js onClaimOutput) checked only the measurement.
 //   node --test tests/unit/output-owner-one-table.test.mjs
 
 import test from 'node:test';
@@ -13,6 +14,7 @@ import { AUDITION_OPTIONS } from '../../src/js/studio/riffs/audition.js';
 import { registerRiffSource } from '../../src/js/studio/riffs/source.js';
 import { catalogEntries } from '../../src/js/studio/patch-catalog.js';
 import { measureLifecyclePart } from '../../src/js/ui/measure/session.js';
+import { claimStudioOutput } from '../../src/js/ui/studio/workspace.js';
 
 /** A component whose measurement and reference probes the test sets. */
 function component({ measuring = false, reference = false, playing = false, seq = false } = {}) {
@@ -105,4 +107,30 @@ test('main.js wires the table: the play guard claims playOwnerOf, the Studio get
   assert.match(main, /claimOutput\(playOwnerOf\(o\)\) !== true/);
   assert.doesNotMatch(main, /claimOutput\('instrument'\)/);
   assert.match(main, /createStudioUi\(\{[^}]*\boutputRefusalOf\b/);
+});
+
+test('Studio PLAY is refused by the same table during a reference capture, before any stop', () => {
+  const said = [];
+  const stops = [];
+  const announce = (text, opts) => said.push([text, !!(opts && opts.assertive)]);
+  const svc = { outputRefusalOf: oo.outputRefusalOf, stopPlayback: (c) => stops.push(c) };
+  const reference = component({ reference: true }).cmp;
+  assert.equal(claimStudioOutput(reference, svc, announce), false,
+    'the Studio does not take the output while the reference is captured');
+  assert.deepEqual(said, [[oo.REFERENCE_REFUSAL, true]]);
+  assert.deepEqual(stops, [], 'a refused PLAY stops nothing');
+  said.length = 0;
+  assert.equal(claimStudioOutput(component({ measuring: true, reference: true }).cmp, svc,
+    announce), false);
+  assert.deepEqual(said, [[oo.OUTPUT_REFUSAL, true]], 'the measurement row comes first');
+  said.length = 0;
+  const free = component().cmp;
+  assert.equal(claimStudioOutput(free, svc, announce), true);
+  assert.deepEqual(said, []);
+  assert.deepEqual(stops, [free], 'a granted PLAY stops every other owner');
+  assert.equal(claimStudioOutput(null, svc, announce), true, 'no component, nothing to refuse');
+  // the workspace hands this claim to the transport, not a check of its own
+  const ws = readFileSync(new URL('../../src/js/ui/studio/workspace.js', import.meta.url),
+    'utf8');
+  assert.match(ws, /onClaimOutput: \(\) => claimStudioOutput\(ctx\.cmp, svc, announce\)/);
 });
