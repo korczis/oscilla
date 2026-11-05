@@ -693,6 +693,20 @@ test('the hit area is at least 44 screen px at any zoom, and never smaller than 
   for (const zoom of [0, -1, NaN, Infinity]) assert.throws(() => draw('knob', { zoom }), /zoom/);
 });
 
+// Review of AC, finding 2: a knob draws its lit rim in the token set's text, so a token set
+// without it is refused by name, enabled or disabled (a disabled knob draws no rim and rendered
+// silently; an enabled one failed on reading undefined's 'label'), and a fader, which draws no
+// rim, still takes the narrower set.
+test('review AC 2: a knob refuses a token set with no text, enabled or disabled', () => {
+  const tokens = { ...TOKENS, text: undefined };
+  for (const state of [{}, { disabled: true }, { focus: true, hover: true, dragging: true }]) {
+    assert.throws(() => controlSvg({ kind: 'knob', value: 70, param: LIN, tokens, state }),
+      /^TypeError: controlSvg: a knob needs the synth tokens' text \(its lit rim\)\.$/,
+      JSON.stringify(state));
+  }
+  assert.doesNotThrow(() => controlSvg({ kind: 'fader', value: 70, param: LIN, tokens }));
+});
+
 /** The drawn extent of every shape in the drawing group: [x0, y0, x1, y1], strokes included. */
 function drawingBox(svg) {
   const inner = /<g pointer-events="none">(.*)<\/g><\/g>$/.exec(svg)[1];

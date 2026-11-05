@@ -70,6 +70,13 @@
 //              order its radios run in (review of W1c, finding 1). It needs choiceKey
 //              (src/js/synth/gestures.js) to read the host svg's data-style: on toggle and
 //              slide, ArrowUp +1 option, ArrowDown -1, Home and End the first and last radio
+//   s-ringfit  (desktop) a focused toggle's legend ring clears its text by 1+ graph unit on
+//              both sides (review of AC, finding 1: round the estimate it cut a focused "Off"):
+//              Off/On and every lever's legends on the tabs, each drawn by the core focused on
+//              each option, selected and not (weights 600 and 400), at zoom 1 and 64/44, inside
+//              that lever's own svg (the panel's font), the text measured by
+//              getComputedTextLength (its advance; firefox's getBBox adds 2 a side). Only across:
+//              up and down the ring is 1 past the 12-unit font-size box the glyphs sit inside
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
@@ -1177,6 +1184,86 @@ function defineChecks() {
     }
     return { ok: bad.length === 0 && seen.size === 11, controls: seen.size, bad: bad.slice(0, 14),
       more: Math.max(0, bad.length - 14) };
+  });
+
+  def('s-ringfit', async ({ context, base }) => {
+    const core = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
+    const { switchLayout, switchSvg } = await core('src/js/ui/synth/switch.js');
+    const { TOKENS } = await core('tests/unit/ui-synth-fixture.mjs');
+    const tabs = ['panel', ...['additive', 'fm', 'am', 'wavetable', 'sync', 'perc']
+      .map((e) => `engines&ye=${e}`)];
+    const pairs = new Map([['Off|On', null]]);
+    const bad = [];
+    let rings = 0;
+    let least = Infinity;
+    for (const tab of tabs) {
+      const page = await openSynth(context, base, `#m=synth&yt=${tab}`);
+      await face(page, 'panel');
+      const found = await page.evaluate(() => [...document.querySelectorAll(
+        '[data-osc="synth.panel"] svg[role="radiogroup"][data-style="toggle"]')]
+        .filter((g) => g.getClientRects().length)
+        .map((g) => ({ cid: g.closest('[data-control]').getAttribute('data-control'),
+          legends: [...g.querySelectorAll('[data-legend]')]
+            .sort((a, b) => a.dataset.index - b.dataset.index).map((t) => t.textContent) })));
+      for (const f of found) {
+        const key = f.legends.join('|');
+        if (f.legends.length === 2 && !pairs.get(key)) pairs.set(key, { tab, cid: f.cid });
+      }
+      await page.close();
+    }
+    // Measure every pair inside a lever's own svg on the Panel tab, so its text takes the font
+    // the panel's legends are drawn in.
+    const page = await openSynth(context, base, '#m=synth&yt=panel');
+    await face(page, 'panel');
+    for (const key of pairs.keys()) {
+      const [a, b] = key.split('|');
+      const param = { key: 'ringfit', label: 'Ring fit', type: 'enum', default: 'a',
+        options: [['a', a], ['b', b]] };
+      for (const zoom of [1, 64 / 44]) {
+        for (const value of ['a', 'b']) {
+          for (const focused of ['a', 'b']) {
+            const markup = switchSvg({ value, param, tokens: TOKENS, zoom,
+              state: { focus: { option: focused } } });
+            const r = await page.evaluate(({ markup, i }) => {
+              const host = document.querySelector('[data-osc="synth.panel"] '
+                + 'svg[role="radiogroup"][data-style="toggle"]');
+              if (!host) return { missing: true };
+              const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+              g.innerHTML = markup;
+              host.appendChild(g);
+              try {
+                const t = [...g.querySelectorAll('[data-legend]')]
+                  .find((x) => x.getAttribute('data-index') === String(i));
+                const ring = g.querySelector('[data-focus]');
+                const n = (el, k) => Number(el.getAttribute(k));
+                const len = t.getComputedTextLength();
+                const x = n(t, 'x');
+                return { len, left: x - len / 2 - (n(ring, 'x') + 1),
+                  right: n(ring, 'x') + n(ring, 'width') - 1 - (x + len / 2),
+                  font: getComputedStyle(t).fontFamily.slice(0, 40) };
+              } finally {
+                g.remove();
+              }
+            }, { markup, i: focused === 'a' ? 0 : 1 });
+            if (r.missing) {
+              await page.close();
+              return { ok: false, detail: 'no lever on the Panel tab to measure in' };
+            }
+            rings += 1;
+            const gap = Math.min(r.left, r.right);
+            least = Math.min(least, gap);
+            if (!(gap >= 1)) {
+              const at = pairs.get(key);
+              bad.push(`${key} at ${zoom.toFixed(2)} (${value} selected, ${focused} focused`
+                + `${at ? `; ${at.cid}` : ''}): the ring clears the text by ${gap.toFixed(2)}`);
+            }
+          }
+        }
+      }
+    }
+    await page.close();
+    return { ok: bad.length === 0 && pairs.size > 1, pairs: [...pairs.keys()], rings,
+      least: Number(least.toFixed(2)), bad: bad.slice(0, 14), more: Math.max(0, bad.length - 14) };
   });
 
   def('s-look', async ({ page }) => {

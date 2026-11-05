@@ -77,11 +77,13 @@ const PAD = 6;
  *  a lever `length` long from the nut's centre, `root` wide there and `tip` wide at its end, a
  *  ball of radius `ball` on that end, the legends `gap` past the ball, the lever's shadow
  *  shadowDy (shadowDragDy while dragging) below it. Focused (C4), a ring `focus` past the
- *  washer, `focusW` wide, and the legend ringed `focusPad` round its text; the LED's bezel
- *  1 clear of that ring (`ledGap` past the washer). */
+ *  washer, `focusW` wide, and the legend ringed round its text, `focusPad` past its font-size
+ *  box up and down and `focusPadX` past its width at weight 600 across (`bold` times the
+ *  weight-400 estimate: review of AC, finding 1, where 2 round that estimate cut a focused
+ *  "Off"); the LED's bezel 1 clear of that ring (`ledGap` past the washer). */
 const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, washerW: 1, bushing: 3.5,
   bushingW: 1, root: 4, tip: 7, length: 18, ball: 3.5, gap: 4, focus: 3, focusW: 2, focusPad: 2,
-  ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
+  focusPadX: 3, bold: 1.15, ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
 /** A slide (slice C, SW-06, SW-07), graph units: a slot slotW wide, a capW x capH cap with two
  *  ridges gripGap from its index line (gripX either side, the index line to indexOut), a detent
  *  from 1.5 past the slot to capW / 2 + 6, the legend 4 past it; each hit box's edge is `clear`
@@ -163,6 +165,14 @@ function textBox(lg) {
 /** How far a toggle's lever reaches from the nut's centre, its ball's edge included. */
 const LEVER_REACH = TOGGLE.length + TOGGLE.ball;
 
+/** A focused toggle's legend ring (its stroke's centre line) round the legend `lg`. */
+function legendRing(lg) {
+  const tb = textBox(lg);
+  const half = (lg.width * TOGGLE.bold) / 2 + TOGGLE.focusPadX;
+  return { x: tb.x + tb.width / 2 - half, y: tb.y - TOGGLE.focusPad, width: 2 * half,
+    height: tb.height + 2 * TOGGLE.focusPad };
+}
+
 function toggleLayout(opts, H, F) {
   const T = TOGGLE;
   // The legend clears the ball and its lifted shadow; the hit box holds its focus ring.
@@ -173,7 +183,9 @@ function toggleLayout(opts, H, F) {
     const w = legendWidth(o[2], F);
     const legend = { x: 0, y: num(dir * (half + T.gap + F / 2)), anchor: 'middle', size: F,
       width: w };
-    const hw = up(Math.max(H, w + 2 * PAD, 2 * T.washer + 2 * PAD));
+    // The hit holds the legend's focus ring, its stroke included.
+    const hw = up(Math.max(H, w + 2 * PAD, 2 * T.washer + 2 * PAD,
+      legendRing(legend).width + T.focusW));
     return option(i, o, legend, rect(-hw / 2, dir < 0 ? -reachY : 0, hw, reachY));
   });
   const side = Math.max(T.washer + T.washerW / 2, T.nut + T.nutW / 2, T.ball);
@@ -650,12 +662,10 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
   }
   if (focus >= 0) {
     const o = L.options[focus];
-    const d = TOGGLE.focusPad;
-    const tb = textBox(o.legend);
-    const h = toggle ? { x: tb.x - d - 1, y: tb.y - d - 1, width: tb.width + 2 * d + 2,
-      height: tb.height + 2 * d + 2 } : o.hit;
-    out += `<rect data-focus="" x="${num(h.x + 1)}" y="${num(h.y + 1)}" `
-      + `width="${num(h.width - 2)}" height="${num(h.height - 2)}" rx="4" fill="none" `
+    const h = toggle ? legendRing(o.legend) : { x: o.hit.x + 1, y: o.hit.y + 1,
+      width: o.hit.width - 2, height: o.hit.height - 2 };
+    out += `<rect data-focus="" x="${num(h.x)}" y="${num(h.y)}" `
+      + `width="${num(h.width)}" height="${num(h.height)}" rx="4" fill="none" `
       + `stroke="${esc(tokens.control.focus)}" stroke-width="2"/>`;
   }
   if (L.led) out += ledShape(L.led, led, tokens, zoom);

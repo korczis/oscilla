@@ -1127,12 +1127,22 @@ test('a rotary\'s leader lines run from the dial and end before every legend\'s 
   }
 });
 
-/** A focused toggle's legend ring: the legend's text box grown by 2 a side (review of slice
- *  C, C4), as [x, y, width, height]. */
+/** A legend's estimated width at weight 600 (a selected legend's): legendWidth's estimate is a
+ *  weight-400 one and ran 1.26 a side short of "Off" at 600 (review of AC, finding 1). */
+const BOLD = 1.15;
+/** A focused toggle's legend ring, as [x, y, width, height] (its stroke's centre line): round
+ *  the legend's text box at weight 600 (BOLD), centred, grown 3 a side across and 2 up and down
+ *  (review of slice C, C4; review of AC, finding 1: grown 2 round the weight-400 estimate, the
+ *  ring's inner edge cut the 'O' and the 'f' of a focused "Off"). */
 const toggleLegendRing = (o) => {
   const b = legendBox(o.legend);
-  return [b.x - 2, b.y - 2, b.width + 4, b.height + 4].map((x) => Number(x.toFixed(2)));
+  const half = (b.width * BOLD) / 2 + 3;
+  return [b.x + b.width / 2 - half, b.y - 2, 2 * half, b.height + 4]
+    .map((x) => Number(x.toFixed(2)));
 };
+/** A two-position enum with a long second legend (the Render output's channels). */
+const STEREO = Object.freeze({ key: 'channels', label: 'Channels', type: 'enum',
+  default: 'mono', options: [['mono', 'Mono'], ['stereo', 'Stereo']] });
 
 // Review of slice C, C4 (C4's focus language): a focused toggle's ring was its option's hit box,
 // half the toggle tall (from y 0), so its edge ran through the nut's centre and the washer and
@@ -1142,8 +1152,8 @@ const toggleLegendRing = (o) => {
 // its hit box and clear of the lever, its ball and its lifted shadow.
 test('review C 4: a focused toggle is ringed round its washer and its legend, not its hit box',
   () => {
-    for (const p of [BOOL, TWO]) {
-      for (const zoom of [1, 2, 0.25]) {
+    for (const p of [BOOL, TWO, STEREO]) {
+      for (const zoom of [1, 2, 0.25, 2.5]) {
         const L = switchLayout(p, { zoom, led: true });
         for (const [v] of L.options.map((o) => [o.value])) {
           for (const o of L.options) {
@@ -1167,6 +1177,17 @@ test('review C 4: a focused toggle is ringed round its washer and its legend, no
             const outer = { x: n(box, 'x') - 1, y: n(box, 'y') - 1, width: n(box, 'width') + 2,
               height: n(box, 'height') + 2 };
             assert.ok(inside(outer, o.hit), `${where}: inside its hit box`);
+            // Its inner edge (half the 2 wide stroke in): 2 clear of the weight-600 text box
+            // across, 1 clear of the font-size box up and down (the glyphs sit inside it).
+            const t = legendBox(o.legend);
+            const cx = t.x + t.width / 2;
+            near(cx - (n(box, 'x') + 1), (t.width * BOLD) / 2 + 2, 0.02, `${where}: clear, left`);
+            near(n(box, 'x') + n(box, 'width') - 1 - cx, (t.width * BOLD) / 2 + 2, 0.02,
+              `${where}: clear, right`);
+            assert.ok(t.y - (n(box, 'y') + 1) >= 1 - 1e-9, `${where}: clear, above`);
+            assert.ok(n(box, 'y') + n(box, 'height') - 1 - (t.y + t.height) >= 1 - 1e-9,
+              `${where}: clear, below`);
+            assert.ok(o.hit.width * zoom >= HIT_PX - 1e-9, `${where}: the hit stays 44`);
             assert.ok(Math.min(Math.abs(outer.y), Math.abs(outer.y + outer.height)) >= 21.5 + 2,
               `${where}: clear of the ball and its lifted shadow`);
           }
@@ -1183,50 +1204,50 @@ test('review C 4: a focused toggle is ringed round its washer and its legend, no
 
 test('states: hover lights the edge and the hovered legend, focus rings the option, disabled',
   () => {
-  for (const p of SAMPLES) {
-    const L = switchLayout(p);
-    const plain = draw(p);
-    assert.doesNotMatch(plain, /data-focus/);
-    const edgeOf = (svg) => attrOf(part(svg, 'data-nut') || part(svg, 'data-skirt')
-      || part(svg, 'data-cap'), 'stroke');
-    assert.equal(edgeOf(plain), TOKENS.control.edge, p.key);
-    const hovered = draw(p, { state: { hover: true } });
-    // Review of slice A, A1 (C5): one hover language. Every style brightens its part's edge
-    // (the dial's toothed skirt, the lever's nut, the slide's cap) through an overlay in
-    // control.pointer, always emitted and hidden unless hovered; the edge keeps its paint.
-    assert.equal(attrOf(part(plain, 'data-hover'), 'visibility'), 'hidden', p.key);
-    assert.equal(attrOf(part(hovered, 'data-hover'), 'visibility'), undefined, p.key);
-    assert.equal(attrOf(part(hovered, 'data-hover'), 'stroke'), TOKENS.control.pointer, p.key);
-    assert.equal(edgeOf(hovered), TOKENS.control.edge, `${p.key}: the edge is not swapped`);
-    assert.equal(attrOf(part(hovered, 'data-slot'), 'stroke') ?? TOKENS.control.edge,
-      TOKENS.control.edge, `${p.key}: the slot is not the hovered part`);
-    const other = L.options.find((o) => o.value !== p.default);
-    const hov = draw(p, { state: { hover: { option: other.value } } });
-    const t = parts(hov, 'data-legend').find((x) => attrOf(x, 'data-index')
-      === String(other.index));
-    assert.equal(attrOf(t, 'fill'), TOKENS.text.value, `${p.key}: the hovered legend`);
-    // A toggle's half-height hit box runs through its nut, so a focused toggle rings its legend
-    // (review of slice C, C4: the next test); every other style rings the option's hit box.
-    const ringOf = (o) => (L.style === 'toggle' ? toggleLegendRing(o) : [o.hit.x + 1,
-      o.hit.y + 1, o.hit.width - 2, o.hit.height - 2].map((x) => Number(x.toFixed(2))));
-    const foc = part(draw(p, { state: { focus: { option: other.value } } }), 'data-focus');
-    assert.deepEqual(['x', 'y', 'width', 'height'].map((a) => n(foc, a)), ringOf(other),
-      `${p.key}: the focus ring around the focused option`);
-    assert.equal(attrOf(foc, 'stroke'), TOKENS.control.focus);
-    assert.equal(n(foc, 'stroke-width'), 2);
-    const sel = L.options.find((o) => o.value === p.default);
-    const own = part(draw(p, { state: { focus: true } }), 'data-focus');
-    assert.equal(n(own, 'x'), ringOf(sel)[0], 'focus true: the selected one');
-    const off = draw(p, { state: { disabled: true } });
-    assert.match(off, /^<g [^>]*data-disabled=""/);
-    const lever = part(off, 'data-lever');
-    // A toggle's lever is control.edge enabled, so it dims to a quieter role (review of slice
-    // C, finding 3); a slide's index line and a dial's pointer dim to control.disabled.
-    const ind = lever || parts(off, 'data-grip')[1] || part(off, 'data-pointer');
-    assert.equal(attrOf(ind, lever ? 'fill' : 'stroke'), lever ? TOKENS.control.bezel
-      : TOKENS.control.disabled, `${p.key}: the indicator dims`);
-  }
-});
+    for (const p of SAMPLES) {
+      const L = switchLayout(p);
+      const plain = draw(p);
+      assert.doesNotMatch(plain, /data-focus/);
+      const edgeOf = (svg) => attrOf(part(svg, 'data-nut') || part(svg, 'data-skirt')
+        || part(svg, 'data-cap'), 'stroke');
+      assert.equal(edgeOf(plain), TOKENS.control.edge, p.key);
+      const hovered = draw(p, { state: { hover: true } });
+      // Review of slice A, A1 (C5): one hover language. Every style brightens its part's edge
+      // (the dial's toothed skirt, the lever's nut, the slide's cap) through an overlay in
+      // control.pointer, always emitted and hidden unless hovered; the edge keeps its paint.
+      assert.equal(attrOf(part(plain, 'data-hover'), 'visibility'), 'hidden', p.key);
+      assert.equal(attrOf(part(hovered, 'data-hover'), 'visibility'), undefined, p.key);
+      assert.equal(attrOf(part(hovered, 'data-hover'), 'stroke'), TOKENS.control.pointer, p.key);
+      assert.equal(edgeOf(hovered), TOKENS.control.edge, `${p.key}: the edge is not swapped`);
+      assert.equal(attrOf(part(hovered, 'data-slot'), 'stroke') ?? TOKENS.control.edge,
+        TOKENS.control.edge, `${p.key}: the slot is not the hovered part`);
+      const other = L.options.find((o) => o.value !== p.default);
+      const hov = draw(p, { state: { hover: { option: other.value } } });
+      const t = parts(hov, 'data-legend').find((x) => attrOf(x, 'data-index')
+        === String(other.index));
+      assert.equal(attrOf(t, 'fill'), TOKENS.text.value, `${p.key}: the hovered legend`);
+      // A toggle's half-height hit box runs through its nut, so a focused toggle rings its legend
+      // (review of slice C, C4: the next test); every other style rings the option's hit box.
+      const ringOf = (o) => (L.style === 'toggle' ? toggleLegendRing(o) : [o.hit.x + 1,
+        o.hit.y + 1, o.hit.width - 2, o.hit.height - 2].map((x) => Number(x.toFixed(2))));
+      const foc = part(draw(p, { state: { focus: { option: other.value } } }), 'data-focus');
+      assert.deepEqual(['x', 'y', 'width', 'height'].map((a) => n(foc, a)), ringOf(other),
+        `${p.key}: the focus ring around the focused option`);
+      assert.equal(attrOf(foc, 'stroke'), TOKENS.control.focus);
+      assert.equal(n(foc, 'stroke-width'), 2);
+      const sel = L.options.find((o) => o.value === p.default);
+      const own = part(draw(p, { state: { focus: true } }), 'data-focus');
+      assert.equal(n(own, 'x'), ringOf(sel)[0], 'focus true: the selected one');
+      const off = draw(p, { state: { disabled: true } });
+      assert.match(off, /^<g [^>]*data-disabled=""/);
+      const lever = part(off, 'data-lever');
+      // A toggle's lever is control.edge enabled, so it dims to a quieter role (review of slice
+      // C, finding 3); a slide's index line and a dial's pointer dim to control.disabled.
+      const ind = lever || parts(off, 'data-grip')[1] || part(off, 'data-pointer');
+      assert.equal(attrOf(ind, lever ? 'fill' : 'stroke'), lever ? TOKENS.control.bezel
+        : TOKENS.control.disabled, `${p.key}: the indicator dims`);
+    }
+  });
 
 test('dragging lifts the shadow; the shadow and the sheen are the hw-* classes', () => {
   for (const p of [BOOL, WAVE, ENUM(5), ENUM(12)]) {
