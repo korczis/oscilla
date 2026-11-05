@@ -12,6 +12,7 @@ scope:
   - ".ai/repo/project/issues/Q099.yaml"
 depends_on: []
 acceptance_criteria:
+  - "The Hold build issue that implements this decision carries the case: with Hold on, a touch at y 0.9 then a lift keeps the Y cable at 0.9 and the filter opened; with Hold off, K183's case (Y returns to 0) holds; Stop, page hide and Escape release a held X and Y (af and 26, 2026-11-05, after 98's review N2 of K183)."
   - "The decision is recorded as evidence (covers decision) with the dates and senders of af's proposal and 26's acceptance."
   - "The Hold and assignable-X slices name Q099 in their why."
 validation:
