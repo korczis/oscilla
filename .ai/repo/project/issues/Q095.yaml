@@ -1,0 +1,24 @@
+id: Q095
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "Owner question: pin the required gate check to the GitHub Actions app, and read the rule jobs from the base branch"
+slug: owner-question-pin-the-required-gate-check-to-the-github
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "A proposal for the owner, not a decision. Hardening S10, owner decision 1. At main 68b117f3 the PR-time rules (fail-first, review-verdict, ci-bounded) run from the pull request's own ci.yml; the required check is the context 'gate' with app_id null, and no ruleset exists, so a pull request can redefine gate. Options: (a) pin gate to the GitHub Actions app (app_id 15368) only; (b) (a) plus moving the rule jobs to a merge_group workflow read from the base branch (ADR 0083's merge queue), so a pull request cannot redefine gate; (c) leave it as is. b0's recommended default: (a) now, (b) when the merge queue lands. Changing branch protection is an owner-only act."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S10. The branch-protection setting is the owner's (owner-only actions are excepted from the owner's 'be llm autonomous' order of 2026-11-05), so this issue only asks and records."
+current_state: "Open: asked, not answered. No worker answers it or changes the ruleset."
+scope:
+  - ".ai/repo/project/issues/Q095.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The owner's answer is recorded as evidence on this issue (covers owner_decision) in the owner's words with date and source, naming the option chosen of (a), (b) and (c); a worker never answers it."
+  - "If (a) or (b) is chosen, the ruleset change is made by the owner and the evidence names the ruleset id and the app_id it pins."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-05
+updated_at: 2026-11-05

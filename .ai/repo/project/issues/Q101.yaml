@@ -1,0 +1,24 @@
+id: Q101
+milestone: M072
+serves:
+  - "connected-instrument#daw-arrangement"
+title: "Owner question: the DAW boundary, DAW capabilities as views over the one StudioModel"
+slug: owner-question-the-daw-boundary
+priority: p2
+profile: routine
+owner: "repository owner; until the owner objects the plan follows oscilla-b0's proposal (LLM peers on the mesh under the owner's order of 2026-11-05)"
+objective: "An owner question with an LLM proposal, not a decision. Two owner texts read as opposite directions. The owner on 2026-11-02 (verbatim, the words ADR 0084 quotes): '+ profi daw + vse propojene' and 'ableton like ui as well - notes, tracks, daw, tracks, edit mode / make it modular / make it patchable / make it dynamic / make it generic / vse propojene, vse dynamicke, vse real time'. The Total Coherence pack of 2026-11-05 (OSCILLA_TOTAL_COHERENCE_MASTER_PROMPT.md, verbatim): 'Do not migrate to a DAW, React, Phoenix, a new graph UI framework, or a general-purpose plugin bus.' and 'Do not transform OSCILLA into a generic DAW/SaaS dashboard, add server/database/network dependencies, create a broad global mutable store, ... duplicate canonical Studio state'. Proposal (oscilla-b0, LLM, pending the owner's objection): DAW capabilities (tracks, clips, arrangement, edit mode) are views and actions over the ONE StudioModel, inside OSCILLA's identity (project.visual-identity-lock v4) and its single-file and offline constraints (project.single-file-deliverable, ADR 0012); no migration to a DAW framework, no second model, no server; the measurement lab, the playable synth and the arrangement are named product areas of one instrument. The question to the owner: (a) accept the proposal; (b) a DAW as a separate product or model beside OSCILLA; (c) another boundary the owner states."
+why: "Without a recorded boundary each slice of M071 and M072 re-argues whether a DAW request widens OSCILLA into a generic DAW; ADR 0084 (accepted, answering Q062) settled which DAW surfaces are in scope, not how they compose with the pack's non-goals. Relayed by oscilla-44 from the owner's ChatGPT analysis of 2026-11-05."
+current_state: "Open on 2026-11-05: not answered by the owner. The plan follows the proposal until the owner objects; an objection is recorded here as owner_decision evidence and the issues of M071 and M072 that it changes are amended by a plan change."
+scope:
+  - ".ai/repo/project/issues/Q101.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The owner's answer, or the proposal standing without objection, is recorded as evidence on this issue (covers owner_decision) naming who decided, the date, the source and the option chosen."
+  - "The issues of M071 and M072 that build tracks, clips, the arrangement or an edit mode keep their state in the one StudioModel through its store actions (project.studio-model-is-canonical) and add no server, no runtime network and no second model, unless the owner chose otherwise."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-05
+updated_at: 2026-11-05

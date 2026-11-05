@@ -1,0 +1,35 @@
+id: C032
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "The status-bar Play acts on the owner of the workspace on screen"
+slug: the-status-bar-play-acts-on-the-owner-of-the-workspace-on-sc
+priority: p0
+profile: implementation
+objective: "Lands as fix(ui). statusPlay always triggers or latches the instrument (src/js/ui/workbench.js:398-406), so on a phone it plays the Playground tone in the Studio, the Synth, MEASURE, Experiments and About, and isSounding = playing || seqPlaying (workbench.js:128) leaves out the Studio and the Synth. After: Studio means its transport, Synth means arm and play, MEASURE means its primary action, and Experiments and About hide it; its label follows the owner that sounds."
+why: "The owner, in the af session on 2026-11-04 ~23:3xZ: 'play na vetsine stranek nefunguje / neni to centralne propojene pres bus / dupliukuje se to / nefunguje to jak ma, jak popsano v .ai/' (Play does not work on most pages; not centrally connected through a bus; duplicated; not working as .ai/ describes). Measured by af's audit workflow wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0) and the live site, in Chromium, Firefox and WebKit, desktop 1536x1024 and WebKit 390x844: the engine is sound (one AudioContext, no errors, every Stop silent within 0.2-1.2 s), but 8 of 13 workspaces have no working visible Play on desktop."
+scope:
+  - "src/js/ui/workbench.js"
+  - "src/js/ui/shortcuts.js"
+  - "tests/unit/v4-shortcuts.test.mjs"
+  - "tests/browser/v31-studio-transport.cjs"
+  - "tests/browser/iphone.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "U012"
+acceptance_criteria:
+  - "tests/unit/v4-shortcuts.test.mjs: the status-bar target function returns the workspace's owner for every workspace (studio transport, synth arm, measure primary, none for experiments and about), and isSounding includes the Studio and the Synth."
+  - "A browser check at 390x844 touch in WebKit and Chromium: the status Play in the Studio starts the Studio transport and not the instrument, and in the Synth arms and sounds the Synth."
+  - "Fail-first: the unit test and the browser check named below fail on the merge base (project.fail-first)."
+  - "Browser checks run through tests/browser/lib/suite.cjs with tests/browser/lib/wait.cjs until() deadlines, assume no sample rate, and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every string it adds passes the wording tests; its chrome is Flowbite Pro and tests/unit/ui-flowbite-pro-baseline.json only falls (project.ui-uses-flowbite-pro); the iphone.cjs census reach does not fall."
+  - "Done only when each criterion above is re-checked on a main commit, not by a merge verdict alone (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/v4-shortcuts.test.mjs"
+  - "node tests/browser/v31-studio-transport.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

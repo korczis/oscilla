@@ -1,0 +1,26 @@
+id: T035
+milestone: M073
+serves:
+  - "v3-measure#abort-releases-everything"
+title: "Hiding the page aborts a measurement and stops the live RTA, decided by a visibilitychange case"
+slug: hiding-the-page-aborts-a-measurement-and-stops-the-live-rta
+priority: p2
+profile: implementation
+objective: "Lands as test(measure). Hardening S7, second finding. README:244-245 says hiding the page aborts the measurement; the abort-stages and live-rta cases of tests/browser/v3-ui.cjs (:548, :641) dispatch only pagehide, never visibilitychange, and the two handlers (src/js/measurement/capture.js:369-376, src/js/main.js:680) are untested. After: a ['MEASURING', 'visibility'] abort-stages case and a visibility stop in live-rta, shadowing document.hidden as tests/browser/app.cjs:3290-3296 does. The cases live in v3-ui.cjs, which is outside the suite harness, so this issue waits for E052's migration."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S7."
+scope:
+  - "tests/browser/v3-ui.cjs"
+  - "tests/README.md"
+depends_on:
+  - "E052"
+acceptance_criteria:
+  - "Both cases pass on main; with both visibilitychange handlers removed, both fail (shown in the pull request). fail-first: n/a, a test(measure) change whose behaviour is correct on main."
+  - "Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Not a guarded path under v2 (tests/browser except live-smoke.cjs)."
+validation:
+  - "node tests/browser/v3-ui.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

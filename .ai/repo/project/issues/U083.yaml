@@ -1,0 +1,34 @@
+id: U083
+milestone: M054
+serves:
+  - "ui-current#chrome-true-to-state"
+  - "ui-current#tabs-coherent"
+title: "Collapse and fullscreen chrome tells the true state, and no tab panel shows without its tab list"
+slug: collapse-and-fullscreen-chrome-tells-the-true-state-and-no-tab
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Panel Excellence criteria 12 and 13, in one issue because one test decides both: a DOM walk of every workspace at 1536x1024, 768 and 390x844 that reads each piece of chrome claiming a state (a collapse or fullscreen button's name, aria-expanded or aria-pressed and icon; a tab panel's tab list) and compares it with the region's real state. At main 68b117f3 collapseButton (src/js/ui/app.js:601-609) binds only aria-expanded, so the Device & Limits label and icon never change (src/index.html:708-713), the Envelope fullscreen label is static, and Studio tabpanels are shown without their tablist at 768 px and above (src/styles/studio.css:234-237). After: collapseButton and the fullscreen binder set the name and icon from the state, and a role=tabpanel is visible only with its role=tablist."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criteria 12 and 13 and the Device & Limits, Envelope and Studio Inventory rows."
+scope:
+  - "src/js/ui/app.js"
+  - "src/js/ui/workbench.js"
+  - "src/index.html"
+  - "src/styles/studio.css"
+  - "tests/browser/chrome-state.cjs"
+  - "package.json"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/browser/chrome-state.cjs fails on the merge base on the Device & Limits collapse (name and icon unchanged after a toggle) and on a Studio tabpanel visible with its tablist hidden at 768 px. It is wired into npm run test:release. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "After each toggle of every collapse and fullscreen button in every workspace, its accessible name, its aria-expanded or aria-pressed and its icon's href agree with the region's state; a mutation that drops the name binding from collapseButton fails."
+  - "At 1536x1024, 768x1024 and 390x844 no element with role=tabpanel has client rects while its tablist has none."
+  - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml. The Studio stylesheet is screen chrome, not src/js/studio/*."
+  - "Controls: the collapse and fullscreen chrome are consumers of M123's one app shell (G026) and switch (G023; component-system#one-implementation-per-family, M123 on origin/chore/plan-unified-controls); the true-state fix lands in that implementation, never in a parallel one. Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock v4 holds (the Flowbite Pro interface themed by OSCILLA's tokens around its own domain views; ADR 0061, accepted) (owner's words relayed by af, 2026-11-05: 'vsechny komponenty abstrahuj, reuse, dry, parametrizuj')."
+validation:
+  - "node tests/browser/chrome-state.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

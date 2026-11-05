@@ -1127,6 +1127,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0086', 'a proposed decision (programs B and C): one notes array edited by the step grid, the'
     + ' piano roll and the beat machine; nothing implements it yet, and K099\'s claim cites it'
     + ' when the notes clip kind ships, and this entry then fails as stale'],
+  ['0088', 'a proposed decision (Q100): an opt-in loopback bridge exports trace steps to a local'
+    + ' Majordomus and the default build stays offline; nothing implements it yet, and R046\'s'
+    + ' claim cites it when the bridge ships, and this entry then fails as stale'],
 ]);
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
