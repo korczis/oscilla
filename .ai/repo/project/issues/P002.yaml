@@ -23,6 +23,8 @@ depends_on:
   - "Q002"
   - "P003"
   - "F003"
+cancelled: true
+current_state: "Cancelled on 2026-11-03: Q004, whose layout this issue built, is superseded by Q089, and the first screen is now built by M122 (P012 and its later slices). Reopening it needs a new decision recorded here."
 acceptance_criteria:
   - "tests/browser/first-screen.cjs lands with the deep-link inventory passing on the current first screen before the layout changes, and passes unchanged after it in Chromium, Firefox and WebKit from file:// and from the sub-path; the criteria written from Q004 are checks in the same suite."
   - "tests/browser/live-smoke.cjs (which checks after every Pages deployment that the Playground's Studio widget loads and the compact Studio is visible; specification section 269) and the visual gate (scripts/visual-gate.mjs, tests/visual/regions.json) are updated in the same pull request where the layout moves what they check, with the reason; the claim compact-sync stays true or the pull request says why it changes."

@@ -60,12 +60,22 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0051: the "Why trust the method?" list and its hand-written claims mirror under
   `src/js/measurement/` are not built.
 - 0053: the user-visible "run" strings its consequences list are not changed yet.
-- 0058: a proposed direction; nothing implements it.
+- 0058: implemented, and it stays `proposed` pending the owner's acceptance: the MIDI layer
+  it decides is built (V500, V501, V502 and the keyboard K026; `src/js/midi/`, documented in
+  `docs/midi.md`), and accepting it is the owner's act. (Until 2026-11-03 this line said that
+  nothing implemented it.)
 - 0059: new on 2026-10-18 (pull request #197) and `extracted`; it amends 0028.
 - 0060: new on 2026-10-18 (issue P004); a decision taken under the owner's delegation
   (Q003), which the owner may override, so its acceptance is the owner's.
+- 0062: new on 2026-10-29 (plan issue K026, intent `playable-instrument`); implemented
+  (`src/js/midi/notes.js` passes `held: true`; `tests/unit/keyboard-held-notes.test.mjs`),
+  and its own consequences say that "the status stays `proposed` until the owner accepts it".
 - 0063: new on 2026-10-29 (the G1 coherence contract); proposed, with two open questions
   for the owner, and nothing implements it yet.
+- 0080: new on 2026-10-30 (the owner's answer to Q070, "Cytoscape only"); proposed, because
+  nothing implements it yet: P010, which its consequences say carries the integration and its
+  acceptance, is not done, and Cytoscape.js is not a dependency in `package.json`; accepting it
+  is the owner's act.
 - 0081: new on 2026-10-30 (plan issue J001, the component contract and its Majordomus
   projection); proposed, because accepting it is the owner's act, and nothing implements it
   yet (G001 builds the catalogue on it).
@@ -74,6 +84,18 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0083: new and accepted on 2026-11-02 (plan issue E045): the owner chose "Yes, implement it"
   in the session of oscilla-b0; E045 implements the workflow, rule and receipt changes, and the
   owner switches the ruleset to require the queue after it lands.
+- 0084: new and accepted on 2026-11-03 (plan issue Q062): the owner chose "(a) DAW in scope";
+  it amends only ADR 0058's decision 5 (notes clips, a piano roll, instrument tracks, a session
+  grid and later MIDI output on the Studio timeline).
+- 0085: new and accepted on 2026-11-03 (the blocking finding lineage-and-acceptance-have-no-home
+  of the song-reconstruction critique): the owner chose "Accept" in the coordinator session of
+  that day; nothing implements it yet.
+- 0086: new on 2026-11-03 (programs B and C): one notes array that the step grid, the piano roll
+  and the beat machine edit; proposed, because accepting it is the owner's act, and nothing
+  implements it yet (K099 builds the notes clip on it).
+- 0087: new on 2026-11-03 (plan issue V637, the owner's order of that day on the Studio graph
+  layout); proposed, because accepting it is the owner's act; V637 implements it (the Tidy, L,
+  in `src/js/ui/studio/graph-layout.js`).
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of
@@ -138,6 +160,8 @@ listed one is not accepted, or when a link, title, date or mark differs from the
 | [0061](0061-the-ui-is-built-on-flowbite-pro.md) | The UI is built on Flowbite Pro: Tailwind and Flowbite return at build time, inlined | 2026-10-28 | no |
 | [0082](0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md) | A release rests on the CI run of its own pull request: the CI receipt binds the merged tree, and the local gate becomes optional | 2026-11-02 | no |
 | [0083](0083-pull-requests-land-through-a-merge-queue-not-a-race-of-armed-auto-merges.md) | Pull requests land through a merge queue, not a race of armed auto-merges on a strict branch | 2026-11-02 | no |
+| [0084](0084-the-studio-timeline-carries-notes-clips-instrument-tracks-and-a-session-grid.md) | The Studio timeline carries notes clips with a piano roll, several instrument tracks, a session grid and later MIDI output (amends ADR 0058 decision 5) | 2026-11-03 | no |
+| [0085](0085-reconstruction-lineage-lives-in-an-immutable-artifact-referenced-by-hash.md) | Reconstruction lineage lives in an immutable artifact the Studio document references by hash; accepting a part is presentation state changed only through undoable actions | 2026-11-03 | no |
 
 ## An exemption from the release candidate
 

@@ -7,6 +7,11 @@
 //      Modulation: LFO 1 controls Filter 1 cutoff. Analysis: Spectrum 1 observes Filter 1
 //      output."
 //     opts: { maxItems = 6 (entries per section), maxPaths = 3, maxPathNodes = 8, registry }
+//     = boundedSummary(summarizeGraphModel(model), opts): the bounded sentence of the model
+//   summarizeGraphModel(model, { registry }) -> { counts, master, sections: [{ id, label, note,
+//     total, omitted, items }] }   the same summary whole (K168): every path with every node,
+//     every unheard source, every modulation, trigger, tap and measurement edge; the ONE
+//     derivation of the paths and groups, which the Inspector lists and the sentence bounds
 //   summarizeStudio(model, opts) -> text       the graph summary plus one timeline sentence
 //   describeNode(model, nodeId, { selected, status, summary }) -> "Oscillator 1, source node,
 //     selected"                                                              (§143)
@@ -105,7 +110,22 @@ function edgeInfo(model, edge, registry, byId) {
 
 // ---------------------------------------------------------------- §249 summary
 
-function signalPaths(model, registry, byId, master, opts) {
+/** Most signal paths the summary model lists: a guard against a combinatorial graph (mixers
+ * fed by mixers on every input multiply their paths); a patch a person builds stays far below
+ * it. Past it the section says how many it did not list (`omitted`), never silently. */
+export const SUMMARY_PATH_LIMIT = 1000;
+
+/** The groups of the summary model, in reading order, with their headings. */
+export const SUMMARY_SECTIONS = Object.freeze([
+  Object.freeze({ id: 'signal', label: 'Signal paths' }),
+  Object.freeze({ id: 'unconnected', label: 'Not connected to the output' }),
+  Object.freeze({ id: 'modulation', label: 'Modulation' }),
+  Object.freeze({ id: 'triggers', label: 'Triggers' }),
+  Object.freeze({ id: 'analysis', label: 'Analysis' }),
+  Object.freeze({ id: 'measurement', label: 'Measurement' }),
+]);
+
+function signalPaths(model, registry, byId, master, limit) {
   // AUDIO edges into SIGNAL inputs (taps observe, they are not on the path): the same reading
   // of the signal path as the Signal Path projection (signal-path-projection.js).
   const incoming = signalInputs(model, { registry });
@@ -120,27 +140,141 @@ function signalPaths(model, registry, byId, master, opts) {
     return c;
   };
   const total = countTo(master.id);
-  // The first maxPaths paths, depth first in input-port order.
+  // Every path (up to `limit`), depth first in input-port order, each from its source to the
+  // master: { ids, edges } (the edges in the same order, one fewer).
   const paths = [];
-  const walk = (id, suffix) => {
-    if (paths.length >= opts.maxPaths) return;
+  const ids = [];
+  const edges = [];
+  const walk = (id) => {
+    if (paths.length >= limit) return;
+    ids.push(id);
     const ins = incoming.get(id) || [];
-    if (!ins.length || suffix.length > byId.size) { paths.push([id, ...suffix]); return; }
-    for (const x of ins) walk(x.from, [id, ...suffix]);
+    if (!ins.length || ids.length > byId.size + 1) {
+      paths.push({ ids: ids.slice().reverse(), edges: edges.slice().reverse() });
+    } else {
+      for (const x of ins) {
+        edges.push(x.edge);
+        walk(x.from);
+        edges.pop();
+      }
+    }
+    ids.pop();
   };
-  walk(master.id, []);
+  walk(master.id);
   return { paths, total, reached: new Set(count.keys()) };
 }
 
-function formatPath(ids, byId, mentioned, maxNodes) {
-  // A later path stops at the first node an earlier path already named.
-  let cut = ids.length;
-  for (let i = 1; i < ids.length; i++) {
-    if (mentioned.has(ids[i])) { cut = i + 1; break; }
+const ref = (n) => ({ id: n.id, name: n.metadata.name });
+const partsText = (parts) => parts.map((p) => (typeof p === 'string' ? p : p.name)).join('');
+
+function item(key, parts, edges, muted, extra = {}) {
+  const nodes = parts.filter((p) => typeof p !== 'string');
+  return { key, nodes, edges, muted, parts, text: partsText(parts), ...extra };
+}
+
+/**
+ * The §249 summary as structured data, the ONE derivation of the graph's summary: the
+ * Inspector renders it whole (K168) and summarizeGraph reads it as a bounded sentence (§250).
+ * Nothing is cut here: every signal path with every node (up to SUMMARY_PATH_LIMIT paths),
+ * every sounding node no path reaches, every CONTROL, TRIGGER, TAP and ANALYSIS edge once.
+ *
+ *   summarizeGraphModel(model, { registry, pathLimit }) -> {
+ *     counts: { nodes, edges }, master: { id, name } | null,
+ *     sections: [{ id, label, note, total, omitted, items }]    ids of SUMMARY_SECTIONS, in order
+ *   }
+ *   item: { key, nodes: [{ id, name }] (in reading order), edges: [edge id], muted, parts:
+ *     [string | { id, name }] (the item's words with its nodes in place), text, port? }
+ *   signal: one item per path, its nodes from the source to the Master Output, muted when an
+ *     edge on it is; `note` says why there is none ("No Master Output.", "Nothing reaches
+ *     Master."); `total` is the exact path count, `omitted` how many past pathLimit are not
+ *     listed. unconnected: one item per sounding node no path reaches, with `port`, the output
+ *     a connection would start from. measurement: one item per receiving node.
+ */
+export function summarizeGraphModel(model, opts = {}) {
+  const registry = opts.registry || NODE_REGISTRY;
+  const limit = Math.max(1, opts.pathLimit || SUMMARY_PATH_LIMIT);
+  const byId = index(model);
+  const nodes = model.graph.nodes;
+  const edges = model.graph.edges;
+  const edgeById = new Map(edges.map((e) => [e.id, e]));
+  const isMuted = (e) => !!(e && e.props && e.props.muted);
+  const lists = Object.fromEntries(SUMMARY_SECTIONS.map((s) => [s.id, []]));
+  const master = nodes.find((n) => n.type === 'master') || null;
+  let signalNote = '';
+  let total = 0;
+  let reached = new Set();
+  if (!master) {
+    signalNote = nodes.length ? 'No Master Output.' : '';
+  } else {
+    const sp = signalPaths(model, registry, byId, master, limit);
+    reached = sp.reached;
+    for (const p of sp.paths) {
+      if (p.ids.length < 2) continue;
+      const parts = [];
+      p.ids.forEach((id, i) => {
+        if (i) parts.push(' to ');
+        parts.push(ref(byId.get(id)));
+      });
+      lists.signal.push(item(`path:${p.edges.join(',')}`, parts, p.edges,
+        p.edges.some((id) => isMuted(edgeById.get(id)))));
+    }
+    if (lists.signal.length) total = sp.total;
+    else signalNote = `Nothing reaches ${master.metadata.name}.`;
   }
-  const shown = ids.slice(0, cut);
-  for (const id of shown) mentioned.add(id);
-  const names = shown.map((id) => nameOf(byId, id));
+  for (const n of nodes) {
+    const def = registry.get(n.type);
+    if (!def || !def.sounding || reached.has(n.id)) continue;
+    const out = def.outputs.find((p) => p.type === 'AUDIO') || def.outputs[0] || null;
+    lists.unconnected.push(item(`node:${n.id}`, [ref(n)], [], false,
+      { port: out ? out.id : null }));
+  }
+  const meas = new Map();
+  for (const e of edges) {
+    const info = edgeInfo(model, e, registry, byId);
+    if (!info) continue;
+    const { a, b, from, to } = info;
+    const muted = isMuted(e);
+    if (from.type === 'CONTROL') {
+      lists.modulation.push(item(`edge:${e.id}`, [ref(a), ' controls ', ref(b),
+        ` ${lowerLabel(to.label)}`], [e.id], muted));
+    } else if (from.type === 'TRIGGER') {
+      lists.triggers.push(item(`edge:${e.id}`, [ref(a), ' triggers ', ref(b),
+        ` ${lowerLabel(to.label)}`], [e.id], muted));
+    } else if (from.type === 'AUDIO' && to.role === 'TAP') {
+      lists.analysis.push(item(`edge:${e.id}`, [ref(b), ` ${TAP_VERBS[b.type] || 'observes'} `,
+        ref(a), ' output'], [e.id], muted));
+    } else if (from.type === 'ANALYSIS') {
+      if (!meas.has(b.id)) meas.set(b.id, { b, ins: [] });
+      meas.get(b.id).ins.push({ e, a, to });
+    }
+  }
+  for (const { b, ins } of meas.values()) {
+    const parts = [ref(b), ' takes '];
+    ins.forEach((x, i) => parts.push(...(i ? [' and '] : []), `${lowerLabel(x.to.label)} from `,
+      ref(x.a)));
+    lists.measurement.push(item(`node:${b.id}`, parts, ins.map((x) => x.e.id),
+      ins.some((x) => isMuted(x.e))));
+  }
+  const sections = SUMMARY_SECTIONS.map((s) => {
+    const items = lists[s.id];
+    const signal = s.id === 'signal';
+    return { id: s.id, label: signal && total === 1 ? 'Signal path' : s.label,
+      note: signal ? signalNote : '', total: signal ? total : items.length,
+      omitted: signal ? Math.max(0, total - items.length) : 0, items };
+  });
+  return { counts: { nodes: nodes.length, edges: edges.length },
+    master: master ? ref(master) : null, sections };
+}
+
+function formatPath(pathNodes, mentioned, maxNodes) {
+  // A later path stops at the first node an earlier path already named.
+  let cut = pathNodes.length;
+  for (let i = 1; i < pathNodes.length; i++) {
+    if (mentioned.has(pathNodes[i].id)) { cut = i + 1; break; }
+  }
+  const shown = pathNodes.slice(0, cut);
+  for (const n of shown) mentioned.add(n.id);
+  const names = shown.map((n) => n.name);
   if (names.length <= maxNodes) return names.join(' to ');
   const head = names.slice(0, maxNodes - 2);
   const hidden = names.length - maxNodes + 1;
@@ -149,72 +283,62 @@ function formatPath(ids, byId, mentioned, maxNodes) {
 }
 
 /**
- * The §249 screen-reader summary: counts, the signal path(s) to the Master Output, sources that
- * are not heard, modulation, triggers, analysis taps and measurement routing — each section
- * bounded, so a large graph (§250) reads in a few sentences.
+ * The bounded sentence of a summarizeGraphModel result (§249-§250): counts, the first maxPaths
+ * signal paths (a later one stops at the first node an earlier one named; a long one elided in
+ * the middle), then each other group, maxItems entries and "and N more". opts as
+ * summarizeGraph's.
  */
-export function summarizeGraph(model, opts = {}) {
-  const o = { ...SUMMARY_DEFAULTS, registry: NODE_REGISTRY, ...opts };
-  const registry = o.registry;
-  const byId = index(model);
-  const nodes = model.graph.nodes;
-  const edges = model.graph.edges;
-  if (!nodes.length) return 'Empty Studio: no nodes.';
-  const out = [`${plural(nodes.length, 'node')}, ${plural(edges.length, 'connection')}.`];
-  const master = nodes.find((n) => n.type === 'master') || null;
-  let reached = new Set();
-  if (!master) {
+export function boundedSummary(summary, opts = {}) {
+  const o = { ...SUMMARY_DEFAULTS, ...opts };
+  const { counts } = summary;
+  if (!counts.nodes) return 'Empty Studio: no nodes.';
+  const sec = Object.fromEntries(summary.sections.map((s) => [s.id, s]));
+  const out = [`${plural(counts.nodes, 'node')}, ${plural(counts.edges, 'connection')}.`];
+  const signal = sec.signal;
+  if (!summary.master) {
     out.push('No Master Output.');
+  } else if (!signal.items.length) {
+    out.push(`Signal path: nothing reaches ${summary.master.name}.`);
   } else {
-    const sp = signalPaths(model, registry, byId, master, o);
-    reached = sp.reached;
-    const realPaths = sp.paths.filter((p) => p.length > 1);
-    if (!realPaths.length) {
-      out.push(`Signal path: nothing reaches ${master.metadata.name}.`);
-    } else {
-      const mentioned = new Set();
-      const texts = realPaths.map((p) => formatPath(p, byId, mentioned, o.maxPathNodes));
-      const more = sp.total - realPaths.length;
-      const label = sp.total === 1 ? 'Signal path' : 'Signal paths';
-      out.push(`${label}: ${texts.join('; ')}${more > 0 ? `; and ${more} more` : ''}.`);
-    }
+    const mentioned = new Set();
+    const shown = signal.items.slice(0, o.maxPaths);
+    const texts = shown.map((it) => formatPath(it.nodes, mentioned, o.maxPathNodes));
+    const more = signal.total - shown.length;
+    const label = signal.total === 1 ? 'Signal path' : 'Signal paths';
+    out.push(`${label}: ${texts.join('; ')}${more > 0 ? `; and ${more} more` : ''}.`);
   }
-  const silent = nodes.filter((n) => {
-    const def = registry.get(n.type);
-    return def && def.sounding && !reached.has(n.id);
-  }).map((n) => n.metadata.name);
+  const silent = sec.unconnected.items.map((it) => it.text);
   if (silent.length) {
     out.push(`Not connected to the output: ${bounded(silent, o.maxItems, ', ')}.`);
   }
-  const mod = [];
-  const trig = [];
-  const taps = [];
-  const meas = new Map();
-  for (const e of edges) {
-    const info = edgeInfo(model, e, registry, byId);
-    if (!info) continue;
-    const { a, b, from, to } = info;
-    const muted = e.props && e.props.muted ? ', muted' : '';
-    if (from.type === 'CONTROL') {
-      mod.push(`${a.metadata.name} controls ${b.metadata.name} ${lowerLabel(to.label)}${muted}`);
-    } else if (from.type === 'TRIGGER') {
-      trig.push(`${a.metadata.name} triggers ${b.metadata.name} ${lowerLabel(to.label)}${muted}`);
-    } else if (from.type === 'AUDIO' && to.role === 'TAP') {
-      const verb = TAP_VERBS[b.type] || 'observes';
-      taps.push(`${b.metadata.name} ${verb} ${a.metadata.name} output${muted}`);
-    } else if (from.type === 'ANALYSIS') {
-      if (!meas.has(b.id)) meas.set(b.id, []);
-      meas.get(b.id).push(`${lowerLabel(to.label)} from ${a.metadata.name}`);
-    }
+  const said = (it) => `${it.text}${it.muted ? ', muted' : ''}`;
+  if (sec.modulation.items.length) {
+    out.push(`Modulation: ${bounded(sec.modulation.items.map(said), o.maxItems)}.`);
   }
-  if (mod.length) out.push(`Modulation: ${bounded(mod, o.maxItems)}.`);
-  if (trig.length) out.push(`Triggers: ${bounded(trig, o.maxItems)}.`);
-  if (taps.length) out.push(`Analysis: ${bounded(taps, o.maxItems)}.`);
-  if (meas.size) {
-    const items = [...meas].map(([id, ins]) => `${nameOf(byId, id)} takes ${ins.join(' and ')}`);
+  if (sec.triggers.items.length) {
+    out.push(`Triggers: ${bounded(sec.triggers.items.map(said), o.maxItems)}.`);
+  }
+  if (sec.analysis.items.length) {
+    out.push(`Analysis: ${bounded(sec.analysis.items.map(said), o.maxItems)}.`);
+  }
+  if (sec.measurement.items.length) {
+    const items = sec.measurement.items.map((it) => it.text);
     out.push(`Measurement: ${bounded(items, o.maxItems)}.`);
   }
   return out.join(' ');
+}
+
+/**
+ * The §249 screen-reader summary: counts, the signal path(s) to the Master Output, sources that
+ * are not heard, modulation, triggers, analysis taps and measurement routing — each section
+ * bounded, so a large graph (§250) reads in a few sentences. The bounded projection of
+ * summarizeGraphModel (one derivation, two renderings).
+ */
+export function summarizeGraph(model, opts = {}) {
+  const o = { ...SUMMARY_DEFAULTS, registry: NODE_REGISTRY, ...opts };
+  const summary = summarizeGraphModel(model, { registry: o.registry,
+    pathLimit: o.maxPaths });
+  return boundedSummary(summary, o);
 }
 
 /** summarizeGraph plus one sentence about the timeline (omitted when it is empty). */

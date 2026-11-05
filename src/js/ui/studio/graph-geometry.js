@@ -98,7 +98,9 @@ export function boundsOf(rects) {
 /**
  * The view that fits `bounds` (logical) into a viewport of `size` { w, h } px with `padding`
  * px around it, centred (§59-§60). Never zooms past `maxZoom` nor below `minZoom`; an empty
- * bounds centres the origin at zoom 1.
+ * bounds centres the origin at zoom 1. On an axis where the bounds do not fit even at
+ * `minZoom`, the view starts at their top or left edge rather than centring them, so the first
+ * row and column of nodes stay in view instead of both ends being cut (V638).
  */
 export function fitView(bounds, size, { padding = FIT_PADDING_PX, maxZoom = FIT_MAX_ZOOM,
   minZoom = ZOOM_MIN } = {}) {
@@ -109,9 +111,10 @@ export function fitView(bounds, size, { padding = FIT_PADDING_PX, maxZoom = FIT_
   const availH = Math.max(1, h - 2 * padding);
   const zoom = clampZoom(Math.max(minZoom, Math.min(maxZoom, availW / Math.max(1, bounds.w),
     availH / Math.max(1, bounds.h))));
-  const cx = bounds.x + bounds.w / 2;
-  const cy = bounds.y + bounds.h / 2;
-  return { panX: w / 2 - cx * zoom, panY: h / 2 - cy * zoom, zoom };
+  const at = (start, len, avail, full) => (len * zoom > avail
+    ? padding - start * zoom : full / 2 - (start + len / 2) * zoom);
+  return { panX: at(bounds.x, bounds.w, availW, w), panY: at(bounds.y, bounds.h, availH, h),
+    zoom };
 }
 
 /** v rounded to the nearest multiple of `grid` (grid <= 0: unchanged). */

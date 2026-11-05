@@ -18,4 +18,16 @@ validation:
 evidence_required:
 - owner_decision
 created_at: '2026-10-29'
-updated_at: '2026-10-30'
+updated_at: 2026-11-02T23:37:42Z
+started_at: 2026-11-02T23:37:15Z
+started_event: sha256:eea9cceb299f5a184b10db9100d91742c66eb45a265d74b1d69d0f8f7204446a
+completed_at: 2026-11-02T23:37:42Z
+completed_event: sha256:ff0bf79996abbe074cee55eda99b7da89c012eab791342c982bbc427b4bcdf20
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-b0 (claude-code abd8bbe3), 2026-11-03 about 00:0xZ, relayed to oscilla-26"
+    result: "Owner chose '(a) DAW in scope (Recommended)': a short ADR amends ADR 0058's decision 5 only; notes clips with a piano-roll editor, several instrument tracks, a session grid and later MIDI output belong to the Studio timeline; decisions 1-4 stand, and the block sequencer stays a sound-pattern editor. Recorded by oscilla-26; ADR 0084 records the amendment."
+    artifact: ".ai/repo/adrs/0084-the-studio-timeline-carries-notes-clips-instrument-tracks-and-a-session-grid.md"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-02T23:37:34Z

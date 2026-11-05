@@ -150,7 +150,8 @@ test('the Sequencer offers its own pattern to Studio through importSequence (P4)
   const at = PAGE.indexOf(tag) + tag.length;
   assert.equal(PAGE.slice(at, PAGE.indexOf('</a>', at)).replace(/\s+/g, ' '),
     'Open this pattern in Studio');
-  const ws = readFileSync(new URL('../../src/js/ui/studio/workspace.js', import.meta.url), 'utf8');
+  const ws = readFileSync(new URL('../../src/js/ui/studio/workspace/files.js', import.meta.url),
+    'utf8');
   const body = ws.slice(ws.indexOf('    studioOpenSequence(e) {'));
   const fn = body.slice(0, body.indexOf('\n    },\n'));
   assert.ok(fn.indexOf('ctx.dirty.isDirty') >= 0

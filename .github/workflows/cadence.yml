@@ -45,7 +45,7 @@ defaults:
 jobs:
   cadence:
     name: releasable commits are not older than 24 h
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       # Full history and tags: the unreleased range is "last v* tag reachable from HEAD..HEAD".
@@ -62,7 +62,7 @@ jobs:
 
   records:
     name: every published release in this history has its record
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     timeout-minutes: 5

@@ -11,7 +11,7 @@ why: "A link to the repository shares GitHub's default card today (usesCustomOpe
 scope:
   - ".ai/repo/project/issues/P007.yaml"
 depends_on:
-  - "P002"
+  - "P012"
 acceptance_criteria:
   - "The intent's github-shell-consistent command exits 0, and its output with the topic list and the code each topic names is recorded as evidence."
   - "Any change made in the repository settings is named in the evidence with who made it; nothing is claimed from a local file."

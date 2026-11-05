@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Every browser suite runs through one harness that never passes vacuously
 description: A browser suite opens its run through tests/browser/lib/suite.cjs, which refuses a selection it cannot run, fails a leg that checked nothing, fails an undeclared skip under CI and holds a start on a loaded machine.
-statement: Every tests/browser entry suite goes through tests/browser/lib/suite.cjs (v3-ui.cjs is pending, by name, in the contract test). It refuses an empty or unknown browser or origin list with exit 2, never maps an unknown name to a default engine, refuses to launch an engine outside the selection and fails a selected browser whose own engine never started. It fails a leg that ran 0 checks, and under CI, or with OSC_STRICT_SKIPS set (release:prepare sets it for the release gate), it fails any skip not listed with a reason in tests/README.md. Outside CI (a no-op when CI is set) it waits, bounded, for the 1-minute loadavg to fall below OSC_LOAD_MAX (default 2 × cores) and prints the load at start and end.
+statement: Every tests/browser entry suite goes through tests/browser/lib/suite.cjs (v3-ui.cjs is pending, by name, in the contract test). It refuses an empty or unknown browser or origin list with exit 2, never maps an unknown name to a default engine, refuses to launch an engine outside the selection and fails a selected browser whose own engine never started. It fails a leg that ran 0 checks, and under CI, or with OSC_STRICT_SKIPS set (release:prepare sets it for the release gate), it fails any skip not listed with a reason in tests/README.md. Outside CI (a no-op when CI is set) it waits, bounded, for the 1-minute loadavg to fall below OSC_LOAD_MAX (default 2 × cores) and prints the load at start and end. A check reads the size of an application collection (templates, the node registry, workspaces, nav items and links, tabs, routes) from its source and never compares it with a number written into the check; the occurrences that predate this are recorded in tests/browser/collection-count-baseline.json, which only loses entries.
 status: active
 class: blocking
 depends_on: [project.bounded-test-timing@2]
@@ -21,6 +21,10 @@ A suite that runs nothing reports no failure, and "no failure" was printed as a 
 - 2026-10-03: the v3.2.0 gate failed three times at a load average of 23-48 and passed at
   about 4, with no change to the code. 2026-10-04: an analysis took 10.4 s against a 1.0 s
   budget at load 93-101. The suites measured the machine.
+- #367: two checks that were right when written failed when the application grew, not when
+  it broke: `six: ids.length === 6` in `v31-studio-graph.cjs` when a seventh Studio template
+  landed, and `twelve: links.length === 12` in `navigation.cjs` when Synth became a workspace.
+  Each restated the size of a collection the code defines.
 - Each suite parsed `OSC_BROWSERS` itself. Some exited 2 on an unknown name, each in its own
   words; seven split the variable without looking at the result, and none guarded a leg that
   ran no check or a skip nobody declared.
@@ -52,6 +56,13 @@ A suite that runs nothing reports no failure, and "no failure" was printed as a 
   1-minute load average to fall below `OSC_LOAD_MAX` (default 2 × cores) for at most
   `OSC_LOAD_WAIT_MS` (default 10 minutes) and then fails by name without running; under CI it
   returns at once. The load is printed at start and at end.
+
+- A check that judges an application collection (the Studio templates, the node registry,
+  the workspaces, the nav items and links, the tabs, the routes) reads it from its source,
+  by importing it from `src/js` (`STUDIO_TEMPLATES`, `NODE_REGISTRY`, `WORKSPACES`,
+  `STUDIO_SUBVIEWS`) or from the page, and compares the page with that, never with a size
+  written into the check as a literal or a count word. A deliberate fixed count carries
+  `// count-allow: <reason>` (three words or more) on its line or the line above.
 
 # Enforcement
 
@@ -93,6 +104,19 @@ with `project.suite-harness:`.
   held in the test: five spellings of reading `OSC_BROWSERS` / `OSC_ORIGINS`, nine of a
   default or outright engine, a raw `require('playwright')`, a missing tally, a missing
   `ready()` and a `ready()` that is called and not awaited are each out of the contract.
+
+- Collection counts: `tests/unit/browser-collection-counts.test.mjs`, run by `npm test`,
+  scans every `.cjs` file under `tests/browser` for an equality comparison of a size
+  (`.length`, `.size`, `.count()`, a name ending in `Count`) with an integer literal of 2 or
+  more, where the operand names one of the collections above or the comparison is the value
+  of a count-word key (`six:`) or sits beside a count-word phrase ("twelve nav links"). Its
+  heuristics, and what they leave to a reviewer (graph and template contents, relational
+  bounds, a size held in a variable), are written in the test's header. A finding absent
+  from `tests/browser/collection-count-baseline.json` (file and key: the check and the
+  comparison, no line number) fails with `project.suite-harness:`; an entry no longer found
+  is printed; an entry absent from any earlier commit of the record fails, so it only loses
+  entries. Mutation cases: each collection spelling, a count-word key and phrase, an
+  unreasoned marker, and four new counts appended to `tests/browser/navigation.cjs`.
 
 What the mechanism does not decide:
 

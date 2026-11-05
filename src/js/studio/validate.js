@@ -43,7 +43,9 @@
 // MIN_CLIP_S long), transport and view values. Tempo-linked clips (`musical`, §90-§91):
 // musical-measurement (a measurement clip is never musical), invalid-musical (beats out of range,
 // or seconds that disagree with the beats at the transport tempo by more than
-// MUSICAL_TOLERANCE_S).
+// MUSICAL_TOLERANCE_S). Notes clips (notes.js, through clipRules): tempo-linked, payload
+// { notes } only, every note { at, note, len, vel } in range and within the clip, one note per
+// (at, note); the import limits notesPerClip and notesPerDocument bound them.
 
 import { utf8Length, scanUntrusted } from '../experiments/validate.js';
 import { ID_PATTERN, createChecker } from '../experiments/schema.js';
@@ -83,6 +85,8 @@ export const STUDIO_IMPORT_LIMITS = Object.freeze({
   automationLanes: 512,
   automationPoints: 20000,
   pointsPerLane: 4096,
+  notesPerClip: 4096,
+  notesPerDocument: 65536,
   markers: 512,
   stringChars: 256,
   notesChars: NOTES_MAX_CHARS,
@@ -704,6 +708,15 @@ function structure(c, doc, lim, registry) {
       + 'limit)', 'limit-exceeded');
     return false;
   }
+  const notesOf = (x) => (x && x.kind === 'notes' && x.payload && Array.isArray(x.payload.notes)
+    ? x.payload.notes : null);
+  let notes = 0;
+  for (const x of clips) notes += (notesOf(x) || []).length;
+  if (notes > lim.notesPerDocument) {
+    c.add('timeline.clips', `more than ${lim.notesPerDocument} notes in one Studio (import `
+      + 'limit)', 'limit-exceeded');
+    return false;
+  }
   nodes.forEach((n, i) => {
     const p = `graph.nodes[${i}]`;
     if (!c.keys(n, p, ['id', 'type', 'position', 'params'], ['metadata'])) return;
@@ -771,9 +784,13 @@ function structure(c, doc, lim, registry) {
     c.num(x.start, `${p}.start`, 0, TIMELINE_MAX_S);
     c.num(x.duration, `${p}.duration`, MIN_CLIP_S, TIMELINE_MAX_S);
     if (x.target !== undefined && x.target !== null) id(x.target, `${p}.target`);
-    if (x.payload !== undefined) {
-      const payload = c.json(x.payload, `${p}.payload`, { depth: 3, keys: 32, array: 64,
-        string: lim.stringChars });
+    if ((notesOf(x) || []).length > lim.notesPerClip) {
+      c.add(`${p}.payload.notes`, `more than ${lim.notesPerClip} notes in one clip (import `
+        + 'limit)', 'limit-exceeded');
+    } else if (x.payload !== undefined) {
+      // A notes clip's list is bounded by notesPerClip, every other payload list by 64.
+      const payload = c.json(x.payload, `${p}.payload`, { depth: 3, keys: 32,
+        array: notesOf(x) ? lim.notesPerClip : 64, string: lim.stringChars });
       if (payload !== undefined && (payload === null || typeof payload !== 'object'
         || Array.isArray(payload))) c.add(`${p}.payload`, 'must be an object');
     }

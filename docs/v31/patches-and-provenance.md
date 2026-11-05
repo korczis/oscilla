@@ -45,6 +45,13 @@ A template is a frozen record:
 | `stereo-beat` | 200 Hz and 204 Hz → Stereo Split (A left, B right) → Master; Meter tap | — | stereo routing; what is physical and what arises in hearing (no-fake-science wording) |
 | `filter-automation` | white Noise → Filter (band-pass, Q 4) → Master; Spectrum tap | centre frequency 200 Hz → 4 kHz → 200 Hz | automation lanes |
 | `measurement-sweep` | Sweep (log 20 Hz-20 kHz, 5 s) → Master; Sweep reference → Transfer Analyzer; Microphone → Calibration → Transfer Analyzer → Measurement Result | noise check, pre-roll, stimulus, tail, analysis; capture window on a second track | transfer measurement routing; the §258 fixture |
+| `first-patch` | Oscillator (saw 220 Hz, level 0.5) → Master | five step markers (0, 2, 4, 6, 8 s): play, add a Filter, move its cutoff, add a Spectrum, save as a patch; the notes say each step | a first patch, step by step (V617); linked from Learn's Signal path card |
+| `filter-envelope-synth` | Oscillator (saw, pattern-played) → Envelope → Filter (LP 150 Hz, Q 4) → Master; Envelope control → Filter cutoff (5 octaves, log, unipolar) | 16 notes (0.25 s each) on the Oscillator, a gate per note on the Envelope | one Envelope shaping the level and sweeping the cutoff (K014) |
+| `fm-chime` | Oscillator (sine 440 Hz) → Envelope (no sustain, 1.6 s decay) → Master; LFO 616 Hz → Oscillator frequency (±616 Hz, linear) | four gate strikes on the Envelope | an inharmonic FM tone: audio-rate frequency modulation at a 1.4 ratio, index 1 (K010, K014) |
+| `ring-mod` | Oscillator (triangle, pattern-played) → Gain (0) → Master; LFO 470 Hz → Gain gain (depth 1, linear, bipolar) | seven notes (0.5 s grid) on the Oscillator | multiplication by a sine: sum and difference lines (K010, K014) |
+| `drive-lead` | Oscillator (saw, pattern-played) → Drive (60 %, trim 0.7) → Filter (LP 3.2 kHz) → Master | eleven notes (0.25 s grid) on the Oscillator | tanh soft saturation and its bounded output (K012, K014) |
+| `macro-pad` | three Oscillators (saw 220, 261.6, 329.6 Hz) → Mixer → Filter (LP 300 Hz) → Envelope (slow) → Master; Macro → Filter cutoff (3.5 octaves, log) and → Mixer level 3 (0.3, linear) | one 5.5 s gate on the Envelope; Macro value lane 0 → 1 → 0.2 | one Macro on two parameters, automated (K013, K014) |
+| `step-bass` | Oscillator (saw, pattern-played) → Filter (LP 400 Hz, Q 3) → Master; Step Modulator (8 steps, 8 Hz, loop) → Filter cutoff (1.5 octaves, log, bipolar) | 30 notes (0.125 s grid) on the Oscillator | stepped modulation of a cutoff (K014) |
 | `demo-song` | Bass voice (saw) → Filter (LP); Lead voice (square) → Filter (LP, Q 4) with an LFO on its cutoff; Kick (sine Oscillator), Noise → band-pass and high-pass Filters → Envelopes (snare, hats) → Drum mix; Main mix → Master; Scope, Spectrum, Spectrogram and Meter tap the mix | an original song (K144), 44 bars at 96 BPM in musical time: 744 tempo-linked pattern and gate clips on five tracks, seven section markers, lanes for the bass cutoff, the lead LFO rate and the outro fade; velocity, the bass Q lane and drive are in the score (`demo-song-score.js`) and not played | a whole song through every Studio part that exists; the vertical slice of README "Demo song: a vertical slice" |
 
 Provenance (§196): `validateTemplate` normalizes the model, runs `validateStudioModel`, checks the
@@ -292,9 +299,10 @@ the browser has no offline `suspend`, Firefox), then `encode`. `opts.signal` (an
 resolves the call at once with `{ ok: false, aborted: true }`; the context finishes in the
 background and its buffer is dropped. Neither changes a sample.
 
-The UI is the Studio toolbar's **Render WAV** (`src/js/ui/studio/workspace.js`
-`studioOpenRender` / `studioRenderWav`): a dialog with the duration (`defaultRenderDuration`, or
-`RENDER_DEFAULT_S` = 2 s for a graph without a timeline), the plan's format (48 kHz stereo or a
+The UI is the Studio toolbar's **Render WAV** (`src/js/ui/studio/workspace/files.js`
+`studioOpenRender` / `studioRenderWav`, composed by `workspace.js`): a dialog with the duration
+(`defaultRenderDuration`, or `RENDER_DEFAULT_S` = 2 s for a graph without a timeline), the plan's
+format (48 kHz stereo or a
 Recorder's) and limitations; Render is disabled when the plan refuses. The render runs at the
 plan's rate, never the device's, so the same Studio gives the same bytes on every machine; the
 16-bit WAV is downloaded with the exporters' `downloadBlob`, progress and Abort in the toolbar's
@@ -316,6 +324,15 @@ controls Filter 1 cutoff. Analysis: Spectrum 1 observes Filter 1 output."
   without a path), "Modulation:", "Triggers:", "Analysis:" (taps: observes / records /
   captures), "Measurement:" ("Transfer Analyzer 1 takes reference from Sweep 1 and observed
   from Calibration 1"). `summarizeStudio` adds one timeline sentence.
+- One derivation, two renderings (K168): `summarizeGraphModel(model)` computes the same summary
+  as data, untruncated: `{ counts, master, sections }`, one section per group (`signal`,
+  `unconnected`, `modulation`, `triggers`, `analysis`, `measurement`), each item with its nodes
+  `{ id, name }` in reading order, its edge ids, a muted flag and its words; every path whole
+  (up to `SUMMARY_PATH_LIMIT` 1000 paths, past which `omitted` counts the rest), and each
+  unheard source with the output a connection would start from. `summarizeGraph` is
+  `boundedSummary` of that model, so the sentence above is unchanged; the Inspector's Studio
+  card lists the model in full (`ui/studio/graph-summary-view.js`), each node a button that
+  selects, frames and focuses it in the graph.
 - `describeNode` → "Oscillator 1, source node, selected" (optional card summary and compiled
   status: unavailable, offline only); `describeEdge` → "Connection from Oscillator 1 audio to
   Filter 1 input" (modulation adds depth and polarity, muted edges say so);

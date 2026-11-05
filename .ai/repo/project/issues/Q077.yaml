@@ -1,0 +1,32 @@
+id: Q077
+milestone: M119
+title: "Owner decision: the share of the gzip budget song-reconstruction's views may take (Q-F)"
+slug: owner-decision-the-share-of-the-gzip-budget-song-reconstruct
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "The reconstruction views (import, provenance inspector, waveform beside notes, acceptance, the source-versus-replacement A/B) enter dist under the 1.2 MB gzip cap (Q023, raised by E027). What share of it may they take? No measurement exists yet; the views' first issue measures its cost before it lands."
+why: "The owner handed over the OSCILLA RECONSTRUCT pack (OSCILLA_RECONSTRUCT_MASTER_PROMPT.md, the owner's local copy, 2026-11-02, marked 'Status: PROPOSAL'), recorded as the proposed intent song-reconstruction; the research that mapped it onto the plan (P00 gap map and P01 alignment, measured on origin/main b938129) drafted this question; .ai/repo/project/README.md: only the owner, or a session the owner delegated to, answers a Q issue."
+current_state: "Open on 2026-11-02. The draft's recommendation is not an answer; the slices of song-reconstruction that wait on it name this issue in depends_on once the intent is planned."
+scope:
+  - ".ai/repo/project/issues/Q077.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), either in the owner's words with date and source, or as a decision of a coordinating session under an owner delegation it quotes with its date, stating its reasoning and that the owner may override it; a worker without such a delegation never answers it."
+  - "The answer names a byte share, or that the views take whatever the cap leaves and are measured per pull request."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+updated_at: 2026-11-04T20:48:23Z
+started_at: 2026-11-04T20:00:28Z
+started_event: sha256:34c3cd0d68f924f3e775e6b92c7a6ad2fe69485f5ed0eb7cef759aa9edd7988f
+completed_at: 2026-11-04T20:00:41Z
+completed_event: sha256:8b3c90abfb48b1ab0b81a88ead4cd6e34c82cb6c9ec11d0f5f3a9b135fb461b8
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "Decided by the coordinating session oscilla-b0 on 2026-11-04 under the owner's delegation of the same day ('mas muj max clearance / continue autonomously / no need for human / fill gaps', sent with the RECONSTRUCT pack paths); the owner may override it"
+    result: "The reconstruction views take whatever the 1.2 MB gzip cap (Q023, E027) leaves, with no reserved share: each pull request that adds a view reports its gzip delta (scripts/size-report.mjs), and the first views issue measures and records its cost before it lands. Reason: no measurement exists, and a byte share fixed without one would be invented (project.no-fake-science); the cap itself already bounds the views."
+    commit: 76bfc300653e2bdc09e5dc6e07b22d805c729449
+    recorded_at: 2026-11-04T19:59:51Z

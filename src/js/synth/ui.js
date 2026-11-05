@@ -1,18 +1,16 @@
-// The SYNTH workspace (plan K058-K066, K103 part, K104, K106 part): the DOM/Alpine adapter of the
-// Synth panel, composed into the Studio part (ui/studio/workspace.js), which owns the ONE store
-// and the ONE transport. The panel is a projection of the StudioModel (rule
-// project.studio-model-is-canonical): knobs dispatch NODE_PARAM_SET, amounts and cables one
-// BATCH each, and it re-reads the model after every change, so an edit made in Studio shows
-// here and nothing is ever repaired behind the user's back.
+// The SYNTH workspace (plan K058-K066, K103-K106 parts): the Synth panel's DOM/Alpine adapter,
+// composed into the Studio part (ui/studio/workspace.js), which owns the ONE store and ONE
+// transport. The panel projects the StudioModel (project.studio-model-is-canonical): knobs
+// dispatch NODE_PARAM_SET, amounts and cables one BATCH each, and it re-reads the model after
+// every change, so a Studio edit shows here and nothing is repaired behind the user's back.
 //
-// Audio: the keyboard, the on-screen keys and MIDI play the panel through ONE path, synthSink()
-// (src/js/midi/notes.js `route`): the first note arms the transport (transport.arm: the Synth's
-// nodes only, no timeline), then transport.live drives the Keys node. Leaving the workspace,
-// Escape, page hide and STOP disarm; a measurement owning the output refuses the arm.
+// Audio: keyboard, on-screen keys and MIDI play the panel through synthSink() (midi/notes.js
+// route): the first note arms the transport, transport.live drives the Keys node; the Studio's
+// keys take studioSink() (studio-sink.js), one path on any document. Leaving, Escape,
+// page hide and STOP disarm; a measurement owning the output refuses the arm.
 //
-// Tabs (Q019; PR B): Panel holds the semi-modular voice, Engines the polyphonic engines
-// (panels/engines.js); the keys play the Keys node on Panel and the chosen engine on Engines,
-// through the same sink. Switching tab releases every held note first.
+// Tabs (Q019): Panel holds the mono voice, Engines the polyphonic engines; the keys play the
+// Keys node or the chosen engine through the same sink; a tab change releases held notes.
 //
 //   createSynthUi({ get, setupAudio, announce }) -> the component part
 //     get() -> { handle, transport }   the workspace's store handle and transport (late-bound)
@@ -38,6 +36,8 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, droppedText, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { createStudioSink } from './studio-sink.js';
+import { applyFace, faceChips, faceClass } from './view/faces.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
 export { SYNTH_TEXT, insertDecision };
@@ -53,6 +53,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   let pending = null; // tap-tap connect: the first jack
   let selected = null; // a selected cable id
   let layout = null;
+  let face = 'panel'; // below xl: the module cards or the patch bay (view/faces.js)
   const memory = createAmountMemory(panel); // amount depths of this session (normals.js)
   // The folded cards (K062): view state of this page, never in history, the hash or browser
   // storage (the README's privacy inventory lists no Synth key), so a reload expands them.
@@ -79,6 +80,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (cmp) cmp.synth.status = text;
     announce(text, { assertive });
   };
+  const studioSink = createStudioSink({ get, setupAudio, say, registry,
+    ensureAudio: () => cmp && cmp.ensureAudio && cmp.ensureAudio() });
   const dispatch = (action) => {
     const r = handle().dispatch(action);
     if (!r.ok) say(r.reason, true);
@@ -340,18 +343,18 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     el.innerHTML = `<nav aria-label="${engines ? 'Synth engines' : 'Synth sections'}" `
       + 'class="sticky top-0 z-20 -mx-4 mb-3 flex snap-x snap-mandatory gap-2 overflow-x-auto '
       + `bg-gray-50 px-4 py-2 dark:bg-gray-900 ${engines ? 'lg:flex-wrap' : 'xl:hidden'}" `
-      + `>${chips}<button type="button" data-goto="bay" `
-      + `class="${CHIP} border-primary-600 text-primary-700 dark:text-primary-400">PATCH BAY`
-      + '</button></nav>'
+      + `>${faceChips(face)}${chips}</nav>`
       + '<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">'
-      + '<div><div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
+      + `<div data-face-of="panel" class="${faceClass(face, 'panel')}">`
+      + '<div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
       + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
       + (tab() === 'xy' ? xy.html() : '')
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
-      + 'xl:sticky xl:top-4" aria-labelledby="synth-bay-title" data-osc="synth.bay" '
+      + `xl:sticky xl:top-4 ${faceClass(face, 'bay')}" data-face-of="bay" `
+      + 'aria-labelledby="synth-bay-title" data-osc="synth.bay" '
       + 'data-module="bay"><h3 id="synth-bay-title" class="text-sm font-bold tracking-widest '
       + 'text-gray-900 dark:text-white">PATCH BAY</h3><p class="mt-1 text-xs text-gray-500 '
       + 'dark:text-gray-400">Every input is normalled: it plays with no cable. A cable into a '
@@ -373,6 +376,16 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const again = el.querySelector(sel);
       if (again) again.focus({ preventScroll: true });
     }
+  }
+
+  /** Show one face below xl without rebuilding the view; the bay is laid out again at the
+   *  width it now has. */
+  function showFace(f) {
+    const el = host();
+    if (!el) return;
+    face = f;
+    applyFace(el, f);
+    if (f === 'bay') renderBay();
   }
 
   const shapeOf = () => {
@@ -480,7 +493,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const t = e.target.closest('[data-option],[data-toggle],[data-goto],[data-cable],'
       + '[data-remove-cable],[data-restore-normal],[data-restore-module],[data-insert-panel],'
       + '[data-engine],[data-blocked],[data-break-normal],[data-connect-to],[data-connect-cancel],'
-      + '[data-collapse],[data-fold-all]');
+      + '[data-collapse],[data-fold-all],[data-face]');
     if (!t) return;
     const d = t.dataset;
     if (d.engine) {
@@ -500,7 +513,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const why = document.getElementById(`${d.toggle}-why`);
         say(why ? why.textContent : 'This control is disabled.');
       } else if (x) setControl(d.toggle, !valueOf(x));
+    } else if (d.face) {
+      showFace(d.face);
+      const first = host().querySelector('[data-osc="synth.modules"] [data-module]');
+      gotoSection(d.face === 'bay' ? 'bay' : first && first.dataset.module);
+      const again = host().querySelector(`[data-face="${d.face}"]`);
+      if (again) again.focus({ preventScroll: true });
     } else if (d.goto) {
+      if (face !== 'panel') showFace('panel');
       gotoSection(d.goto);
     } else if (d.cable) {
       selected = selected === d.cable ? null : d.cable;
@@ -826,6 +846,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synthSink() {
       return { noteOn, noteOff, allOff };
     },
+    studioSink: () => studioSink.active(),
 
     synthArm() {
       const t = transport();

@@ -1,0 +1,33 @@
+id: K170
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "The Studio model's graph zoom is the zoom the editor shows, from load"
+slug: the-studio-models-graph-zoom-is-the-zoom-the-editor-shows-from-load
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio). Found by oscilla-26's bisect of the control census on Train 4 (2026-11-03): on a fresh Studio, OSCILLA.studio.model.view.graph.zoom reads 1 while the graph editor shows its fitted zoom (74 % at 1536x1024 with the keys docked; src/js/ui/studio/graph-editor.js about line 167 commits its view only after a change, VIEW_COMMIT_MS), so the view state does not describe what is shown and any reader of the model (links, the Inspector, saved view state, tests) sees a zoom the screen does not have. The model and the editor's applied zoom (--osc-sg-z) agree from load: either the model states the zoom as fitted (a 'fit' value whose number the editor derives and reports) or the editor's first fit commits as a presentation-only change that is outside studioHash, adds no undo entry and does not make the document dirty. Before: model 1, editor 0.735. After: one zoom, from the first frame."
+why: "Owner's coherence program (M090, coherent-state#views-describe-what-sounds: views describe what is shown and sounds); oscilla-b0 asked for the issue after the census row studio.graph.zoomIn.pointer passed only by luck (model 1 vs fitted 0.914) and failed once the docked keys moved the fit below 1 (c4042d7c on int/train-4)."
+scope:
+  - "src/js/ui/studio/graph-editor.js"
+  - "src/js/studio/schema.js"
+  - "tests/unit/studio-view-zoom.test.mjs"
+  - "tests/browser/v31-studio-graph.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/studio-view-zoom.test.mjs, failing on the merge base: after a fresh Studio's first fit the model's graph zoom equals the editor's applied zoom, studioHash and the undo depth are unchanged and the document is not dirty; a later zoom gesture still commits as today."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a saved document with an explicit zoom opens at that zoom (not refitted); a document saved before the change loads with its hash unchanged."
+  - "A dock or viewport resize re-fits a view that is still in fit mode and leaves a user's own zoom alone: toggling Arm (the keys show only while armed in the Studio, M086) or resizing the window re-fits a fitted graph within a named until() deadline, and after a zoom gesture neither changes the zoom (a test that fails on the merge base; oscilla-b0, 2026-11-03, after Frame All landed at 110 % or 116 % run to run on darwin once the dock height began to change with Arm)."
+  - "A browser check in tests/browser/v31-studio-graph.cjs, failing on the merge base: at 1536x1024 and 390x844, with and without the keys docked, the model's zoom equals --osc-sg-z on the graph's world element within a named until() deadline of tests/browser/lib/wait.cjs after load, inside tests/browser/lib/suite.cjs (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, class token or stylesheet (project.ui-uses-flowbite-pro)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-view-zoom.test.mjs"
+  - "node tests/browser/v31-studio-graph.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03

@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Every CI job and network step is bounded, pinned and retried
 description: Every workflow job and every step that installs, downloads or runs a browser suite has its own time limit; installs go through one bounded wrapper, downloads retry, are digest-checked and are never executed, nothing is made non-fatal, gate needs every job, and ci.yml starts on a pull request only.
-statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit and every container image to a tag; no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request only.
+statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit, every container image to a tag and every job's runs-on to a versioned runner image (never a label ending in -latest); no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request only.
 status: deprecated
 class: blocking
 depends_on: []
@@ -13,7 +13,9 @@ tags: [ci, process, reliability]
 
 > Deprecated on 2026-11-02: superseded by `ci-bounded.v2.md` (ADR 0083, owner decision of
 > 2026-11-02: pull requests land through a merge queue, so ci.yml also starts on merge_group).
-> Kept unchanged below as the record of version 1.
+> Kept below as the record of version 1, with its amendment of 2026-11-05 (#417: every job's
+> runs-on pinned to a versioned runner image, and the path-gating exception), which version 2
+> carries forward.
 
 # Rationale
 
@@ -26,6 +28,10 @@ Each clause is a failure that happened.
 - #145: an install hang held a docs-only pull request.
 - #120: the Majordomus release download had no retry, so one transient asset error stalled
   every merge, and `install.sh` was fetched unpinned, so what CI ran could change under it.
+- #420 (2026-11-05): `ubuntu-latest` moved to `ubuntu-26.04` between two runs. The same tree's
+  Synth legend check (synth.cjs s-choices) overran its plate by 1.4 px in three engines on the
+  26.04 host fonts and passed in the pinned Playwright container. A moving runner label changes
+  the fonts and packages under a browser suite without a commit.
 
 `ci.yml` was fixed job by job after each of these, and `pages.yml` was not: on the commit this
 rule was written against, the Pages smoke still installed its browser with a bare
@@ -70,7 +76,11 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   `<(curl ...)`, backticks), and not fetched in a step that uses `eval`. A digest check
   elsewhere in the step does not excuse it.
 - `uses:` names a version tag (`@v7`) or a full commit; a container image names a tag other
-  than `latest`, or a digest.
+  than `latest`, or a digest; `runs-on` names a versioned runner image (`ubuntu-24.04`), and no
+  label of it ends in `-latest`, in any letter case. A label list, a runner group's `labels` and
+  `${{ matrix.<key> }}` (its values in `strategy.matrix` and its `include` rows) are each read;
+  any other expression in `runs-on` is refused, since what it yields is decided at run time.
+  Moving to a newer image is a commit of its own, judged by the suites like any other change.
 - Nothing is made non-fatal: no job and no step sets `continue-on-error` (GitHub reports such
   a job as succeeded, so `gate` would pass over its failure); no line that installs,
   downloads, checks a digest or runs a browser suite throws its failure away with
@@ -79,7 +89,18 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   below as not seen.
 - `gate` runs with `if: always()`, its `needs` list every other job of its workflow, and it
   fails unless every one of them succeeded. A job that `gate` does not need is not required
-  by branch protection, whatever it checks.
+  by branch protection, whatever it checks. The one exception is path gating (E026): the
+  engine, suites, measure, studio, browser and visual jobs of `ci.yml` carry
+  `needs: changes` and `if: needs.changes.outputs.runtime != 'false'`, and `gate` accepts
+  their skip only when the `changes` job succeeded with `runtime=false`, the answer of the
+  base branch's `.github/scripts/ci-changes.mjs` (every changed path a regular file under
+  `.ai/repo/project/`, `.ai/repo/reviews/`, `.ai/repo/releases/`, `docs/` or a top-level
+  `*.md`, in a pull request into `main`; a pull request into any other base runs everything,
+  because its `gate` lands on the head commit that main's required check reads too; a base
+  without the classifier answers `runtime=true`, and the pull request's own copy never
+  decides). A skip of any other job or for any other reason, a cancelled or
+  failed job, and a failed or silent `changes` fail it. No other job of `ci.yml` carries a
+  condition.
 - A workflow with a `gate` job is started by `pull_request` and nothing else. Its
   `fail-first` and `review-verdict` jobs judge a pull request; a manual run on a pull
   request's branch would have none to judge, and its `gate` would land on the same commit as
@@ -89,7 +110,8 @@ By convention, not checked: a job's limit is the sum of its steps', rounded up.
 
 Not covered, and bounded only by their job's limit: `npm ci` (npm retries its own fetches)
 and the `uses:` actions themselves (checkout, setup-node, upload-artifact, the Pages
-actions). The rule does not pin `runs-on` images.
+actions). Whether a pinned runner image is still offered by GitHub is not checked: a retired
+label fails the job at queue time, which is loud.
 
 # Enforcement
 
@@ -116,7 +138,10 @@ it cannot read fails the test instead of passing unread.
   script under `scripts/` and behind a local action used without a limit, each job in turn
   removed from `gate.needs`, a new job nobody added to it, `gate` without `if: always()`,
   `workflow_dispatch` or `push` added to `ci.yml`'s triggers, an action on a branch, an image
-  without a tag, a reusable workflow on a branch, an install in a script of `package.json`
+  without a tag, `runs-on: ubuntu-latest` in `ci.yml` (alone and in a label list) and in
+  `pages.yml`, a `-latest` runner in a matrix value, a matrix `include` row, a runner group's
+  labels, another OS (`macos-latest`, `windows-latest`), another letter case and a container
+  job, an unresolvable `runs-on` expression and a matrix key with no values, a reusable workflow on a branch, an install in a script of `package.json`
   including `postinstall`, apt and dpkg by their path, a suite behind `npm run -s`,
   `npm --silent run`, `node --run`, `yarn` and `pnpm`, a failure thrown away with
   `|| exit 0`, `|| echo`, `; true` or `set +e`, a digest check followed by `|| true`, a
@@ -135,6 +160,17 @@ it cannot read fails the test instead of passing unread.
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
 retry flags, the verdict program).
 
+`tests/unit/ci-changes.test.mjs` holds the path-gating exception: it runs the `gate` job's
+own `VERDICT` with `jq` on every combination of results (a skip passes only for the six jobs
+and only on `runtime=false` from a successful `changes`), the classifier's fail-closed table
+(a `.md` under `tests/`, renames into or out of the allowlist, deletions, names with spaces,
+links and submodules, an empty diff, any event but a pull request, any base but `main`), and
+the wiring: exactly
+the six jobs carry that condition, the four judge and unit jobs none, and the `changes` step
+runs only the base branch's blob of the classifier, or answers `runtime=true` when the base
+has none.
+`tests/unit/ci-gates-model.test.mjs` refuses any other job condition in `ci.yml`.
+
 What the test cannot see:
 
 - Whether a limit is long enough or short enough, and whether a pinned tag still points at
@@ -149,6 +185,14 @@ What the test cannot see:
   step, not per file); a sums file that was itself downloaded; `gh release download`,
   `git clone`, `npx <remote package>`, `aria2c` and `docker run`, which are not read as
   downloads (a `gh` command still needs its step limit).
+- Whether the path-gating allowlist is right. A file under it that a browser or visual
+  suite read directly would go untested on a pull request that changes only it; on
+  2026-10-29 none did (`tests/browser/lib/suite.cjs` reads `tests/README.md`, which is not
+  in the allowlist), and a file the build reads changes `dist/index.html` too, which the
+  always-running `npm run build:check` holds to the tree.
+- The runner of a called reusable workflow: a caller's `with:` input that a called workflow
+  feeds to its own `runs-on` is read where that workflow's jobs are checked, which is only for
+  a local one (an expression there is refused).
 - YAML the strict reader does not implement (anchors, a multi-line flow sequence): the file
   is refused as unreadable, which is a refusal of a legal workflow, not a pass.
 - A pull request that rewrites the workflow. On a pull request GitHub runs the workflow file

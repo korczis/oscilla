@@ -68,3 +68,10 @@ from both to source and tests is `docs/CLAIMS.yaml` (claim -> implementation -> 
   routes, `release version` reads the Cargo manifest, and `served observe` probes
   `<url>/build.json`. None fits a single-file GitHub Pages deployment, so no canonical object
   records the public version and commit yet (peer issues R002, R003, R005).
+
+## Note of 2026-11-03: whose path `test/run.sh` is
+
+`test/run.sh` in the evidence bullet above (line 59) is the Majordomus repository's test
+runner, not a path of OSCILLA: OSCILLA tracks no `test/run.sh`. Its only file under `test/` is
+the fixture setup script `test/fixtures/commands/setup/oscilla-tree.sh` that the use-case
+bullet above names.

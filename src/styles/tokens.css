@@ -129,16 +129,18 @@
   /* Typography */
   --osc-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --osc-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  /* Calibrated against text extents measured on reference.png (tools/textext.mjs). */
-  --osc-fs-2xs: 10px;
-  --osc-fs-xs: 10.5px;
-  --osc-fs-sm: 11.5px;
+  /* Calibrated against text extents measured on reference.png (tools/textext.mjs). The sizes
+     under 12 px are those values from a 1280 px viewport up, and 12 px from 480 px down, linear
+     between (V634): a phone reads no text under 12 px, and the reference stays as measured. */
+  --osc-fs-2xs: clamp(10px, calc(13.2px - 0.25vw), 12px);
+  --osc-fs-xs: clamp(10.5px, calc(12.9px - 0.1875vw), 12px);
+  --osc-fs-sm: clamp(11.5px, calc(12.3px - 0.0625vw), 12px);
   --osc-fs-md: 12.5px;
   --osc-fs-lg: 13px;
   --osc-fs-xl: 14.25px;
   --osc-fs-nav: 13px;
-  --osc-fs-tab: 10.6px;
-  --osc-fs-control: 11px;
+  --osc-fs-tab: clamp(10.6px, calc(12.84px - 0.175vw), 12px);
+  --osc-fs-control: clamp(11px, calc(12.6px - 0.125vw), 12px);
   --osc-fs-readout: 40px;
   --osc-fs-readout-unit: 22px;
   --osc-fw-regular: 400;
