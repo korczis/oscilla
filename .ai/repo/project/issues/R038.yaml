@@ -6,8 +6,8 @@ title: "The cadence measures a change's age by when it reached main under merge-
 slug: the-cadence-measures-age-under-merge-commit-landing
 priority: p3
 profile: implementation
-objective: "Lands as fix(release). Hardening D6 (P3, observed): scripts/release-cadence.mjs:61 uses each commit's committer date, assuming squash merges (:7-8), and merge subjects count as patch (release-analyze.mjs:53-54, 59). Since merge-commit landing (2026-10-29) a feature commit authored 30 hours before its merge makes the cadence overdue the moment it lands. After: the age of a releasable change is the committer date of the first-parent merge that brought it to main, and a merge commit's level is the highest level of the commits it brings."
-why: "af's Hardening proof-chain synthesis, defect D6."
+objective: "Lands as fix(release). Hardening D6 (P3, observed): scripts/release-cadence.mjs:61 uses each commit's committer date, assuming squash merges (:7-8), and merge subjects count as patch (release-analyze.mjs:53-54, 59). Since merge-commit landing (2026-10-29) a feature commit authored 30 hours before its merge makes the cadence overdue the moment it lands. After: the age of a releasable change is the committer date of the first-parent merge that brought it to main, and a merge commit's level is the highest level of the commits it brings, counted once: the commits a two-parent merge brings are levelled through the merge, and the merge's own subject is level none, so neither is counted twice. A non-merge commit on the first-parent chain (a direct push) is aged by its own committer date. Line numbers at origin/main a19f1ff6."
+why: "af's Hardening proof-chain synthesis, defect D6. af's critique of 96daa67b (AMEND 8): two-parent merges at level none, and the age of a non-merge commit."
 scope:
   - "scripts/release-cadence.mjs"
   - "scripts/release-analyze.mjs"
@@ -16,7 +16,8 @@ depends_on:
   - "R035"
 acceptance_criteria:
   - "Fail-first: tests/unit/release-cadence.test.mjs lands a merge 1 hour ago that carries a 30-hour-old feat commit and expects overdue false; on the merge base it is overdue."
-  - "release:analyze gives the merge the level of the feat it carries (minor), asserted in the same file."
+  - "release:analyze gives the merge the level of the feat it carries (minor) and its own subject level none, so a merge carrying one feat counts one minor, not two, asserted in the same file."
+  - "A non-merge first-parent commit 30 hours old makes the cadence overdue, and one 1 hour old does not."
   - "Guarded (scripts/release-*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
 validation:
   - "node --test tests/unit/release-cadence.test.mjs"

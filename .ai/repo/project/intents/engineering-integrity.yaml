@@ -49,7 +49,7 @@ satisfaction:
     evidence: "command"
     ref: "node --test tests/unit/size-report.test.mjs"
   - id: "main-red-shows"
-    criterion: "A push to main runs the unit, knowledge and browser-gate jobs of the pull request gate on the merge commit, from a workflow without a gate job, and a failure fails a check on that commit with a summary naming the failed jobs"
+    criterion: "A push to main runs every job of the pull request gate that is not PR-only (all but fail-first, review-verdict, changes and flake-ledger) on the merge commit, from a workflow without a gate job, a failure fails a check on that commit with a summary naming the failed jobs, and release:prepare refuses a commit whose main checks are not green (E046; until it lands, the unit, knowledge and browser-gate jobs)"
     evidence: "command"
     ref: "node --test tests/unit/main-checks.test.mjs"
   - id: "flake-ledger"

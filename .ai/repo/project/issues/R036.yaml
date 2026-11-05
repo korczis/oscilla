@@ -6,17 +6,19 @@ title: "A release record binds the gate's CI run and the Pages deployment that v
 slug: a-release-record-binds-the-gate-run-and-the-deployment
 priority: p2
 profile: implementation
-objective: "Lands as fix(release). Hardening D4 (P2, observed): gatherRecord reads only git and gh release (scripts/release-record.mjs:487-573); the CI run id appears only in a log line (release-publish.mjs:324-325, 452) and .ai/repo/deployments/ holds only its README. After: release:record writes the gate verdict's CI run id and conclusion for the tag commit and the Pages run id that verified the release, and refuses when no green receipt exists for the tag commit. If the release/v1 schema has no field for them, the fields go in a sidecar the record names, and a Majordomus schema change is filed as a Majordomus issue rather than worked around."
-why: "af's Hardening proof-chain synthesis, defect D4 and smallest slice 6."
+objective: "Lands as fix(release). Hardening D4 (P2, observed): gatherRecord reads only git and gh release (scripts/release-record.mjs:487-573); the CI run id appears only in a log line (release-publish.mjs:324-325, 452) and .ai/repo/deployments/ holds only its README. After: release:record writes the gate verdict's CI run id and conclusion for the tag commit and the Pages run id that verified the release, and refuses when no green receipt exists for the tag commit. The release/v1 key set is closed (.ai/repo/releases/v3.20.0.yaml: schema, version, tag, channel, commit, published_at, notes_url, required_targets, artifacts), so the fields go in a sidecar: .ai/repo/releases/vX.Y.Z.gate.yaml, schema oscilla-release-gate/v1, keys version, tag, commit, gate {kind: ci or local, pr, run_id, conclusion, head (the release merge's parents[1], whose CI run is the gate verdict), tree}, pages {run_id, conclusion}; for a --local-gate release gate.kind is local with receipt_sha256 (the sha256 of oscilla-release-gate.json) and no run_id. A Majordomus schema change for release/v1 is filed as a Majordomus issue rather than worked around. Records v3.4.0 to v3.20.0 are exempt and not backfilled: the sidecar is required from the first release after this lands, by a floor constant like RECORD_FLOOR. Line numbers at origin/main a19f1ff6."
+why: "af's Hardening proof-chain synthesis, defect D4 and smallest slice 6. af's critique of 96daa67b (AMEND 7): the release/v1 key set is closed, so the sidecar is required and needs a path and schema; the --local-gate and parents[1] receipts and the existing records' status were undefined."
 scope:
   - "scripts/release-record.mjs"
   - "scripts/release-publish.mjs"
   - "tests/unit/release-record.test.mjs"
+  - ".ai/repo/releases/README.md"
 depends_on:
   - "R034"
 acceptance_criteria:
   - "Fail-first: tests/unit/release-record.test.mjs records a release whose Release and asset match but with no green receipt for the tag commit and expects a throw; on the merge base it records."
-  - "A recorded release names its gate run id and conclusion and its Pages run id; release:record --check compares them with what GitHub serves."
+  - "A recorded release has its sidecar naming its gate (ci: the run id and conclusion of parents[1]'s CI run; local: the receipt sha256) and its Pages run id; release:record --check compares them with what GitHub serves."
+  - "The completeness check requires no sidecar for v3.4.0 to v3.20.0 and requires one for a fixture release above the floor."
   - "Guarded (scripts/release-*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
 validation:
   - "node --test tests/unit/release-record.test.mjs"
