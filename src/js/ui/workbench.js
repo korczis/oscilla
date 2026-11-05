@@ -39,6 +39,12 @@ import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
+import { registerEmptyPredicate } from './empty-states.js';
+
+// Presets' empty state (registry field `empty`, ui/shell.js): the Custom category is in view
+// and holds no saved preset.
+registerEmptyPredicate('presets.noCustom', (c) => c.presetTab === 'custom'
+  && Array.isArray(c.customPresets) && c.customPresets.length === 0);
 
 const GROUP = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const GROUP2 = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -439,8 +445,8 @@ export function createWorkbench(svc) {
     dismissSafety() {
       this.collapseSafety();
       this.$nextTick(() => {
-        // One reopen control per layout (Device & Limits header; Source header on phones):
-        // hand focus to whichever is visible.
+        // One reopen control per layout (Device & Limits header from 1536 px; the page header
+        // below, on every workspace): hand focus to whichever is visible.
         const reopen = [...document.querySelectorAll('[data-osc="safety.reopen"]')]
           .find((el) => isFocusable(el));
         focusSafely(reopen || document.getElementById('osc-overflow'));
@@ -706,7 +712,8 @@ export function createWorkbench(svc) {
 
     // ------------------------------------------------------------------ learn / presets
     runLearnDemo(topic) {
-      if (topic.demo.href) { window.location.hash = topic.demo.href; return; } // V3 topics
+      // V3 topics. data-osc-link: learn.demo
+      if (topic.demo.href) { window.location.hash = topic.demo.href; return; }
       const fromKeyboard = document.activeElement && document.activeElement.closest('#osc-view-learn');
       // The notice carries the way back to the lesson (links.md, one-way link 2).
       this.runDemo(topic, { action: learnReturnAction(topic) });

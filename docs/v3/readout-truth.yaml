@@ -685,6 +685,28 @@ readouts:
     limitations: Shown after Copy link only; it does not follow later edits until copied again
     tests: [tests/browser/synth.cjs, tests/unit/synth-link.test.mjs]
     label: VERIFIED
+  - key: page.title
+    readout: Page header breadcrumb's current entry (the workspace in view, F002)
+    quantity: The name of the workspace in view
+    unit: text
+    source: [src/js/ui/shell.js, src/js/ui/app.js]
+    algorithm: workspaceLabel() reads WORKSPACE_LABELS[workspace] from the one registry
+    resolution: one workspace name
+    calibration: none
+    limitations: Names the workspace only; the subview or record shown inside it is not named
+    tests: [tests/unit/ui-flowbite-pro-shell.test.mjs]
+    label: VERIFIED
+  - key: page.summary
+    readout: Page header summary (the workspace in view, lane A wave 3)
+    quantity: What the workspace in view is for, in one sentence
+    unit: text
+    source: [src/js/ui/shell.js, src/js/ui/app.js]
+    algorithm: workspaceSummary() reads the registry row's summary of the workspace in view
+    resolution: one sentence
+    calibration: none
+    limitations: Describes the workspace, not its current state; hidden below 1280 px
+    tests: [tests/unit/workspace-registry.test.mjs]
+    label: VERIFIED
   - key: copy.note
     readout: Config link dialog note beside the manual-copy link
     quantity: >-

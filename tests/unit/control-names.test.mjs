@@ -148,7 +148,7 @@ test('B7: the label follows the workspace (syncSkipLink, watched by the shell)',
 });
 
 test('B6: the logo opens the Playground, and says so', () => {
-  const brand = TAGS.find((t) => t.attrs.class === 'osc-brand');
+  const brand = TAGS.find((t) => t.attrs['data-osc'] === 'header.brand'); // the Pro navbar's (F002)
   assert.ok(brand && brand.tag === 'a', 'the logo is a link');
   assert.equal(brand.attrs.href, '#m=playground', 'its address is the Playground');
   const name = textOf(brand.attrs['aria-label']);

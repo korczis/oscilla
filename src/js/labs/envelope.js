@@ -23,7 +23,9 @@ import {
 } from '../charts/axes.js';
 import { on, onUi, bindSwitch, setSlider, setField } from './dom.js';
 
-export const ADSR_DEFAULTS = Object.freeze({ a: 0.01, d: 0.1, s: 0.6, r: 0.3 });
+import { ADSR_DEFAULTS } from './lab-defaults.js';
+
+export { ADSR_DEFAULTS } from './lab-defaults.js';
 
 /** How long after the last keyup on a slider its keyboard steps commit (#296 R-9). */
 export const KEY_COMMIT_MS = 250;

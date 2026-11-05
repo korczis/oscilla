@@ -22,7 +22,7 @@ import {
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 
-// Presets is the instrument's: Load readies it and says "Press TRIGGER (or Space)" (review of
+// Presets is the instrument's: Load readies it and says "Press Space to play it here" (review of
 // #159), and the workspace does not change.
 const INSTRUMENT = ['playground', 'analyzer', 'filter', 'compare', 'synthesis', 'sequencer',
   'presets'];

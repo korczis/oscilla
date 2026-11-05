@@ -70,6 +70,12 @@
 //                               disarms the keys' run, and the Studio sink's held map
 //                               (synthDebug().sinkHeld) reads empty after leaving, the key still
 //                               down and after its release (K175, S18)
+//   keyboard-studio-held        K175, review S18 (af's criterion): A held on the Studio
+//                               keyboard (the Synth panel's Keys, the Studio transport), the
+//                               workspace switched to the Playground, then A up: the Studio
+//                               sink's held map is empty, the transport holds no live note
+//                               (its note census is idle) and the analyser falls below -70 dB
+//                               rel (peak). Fails on 447bb27b (the note keeps sounding)
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
@@ -1056,6 +1062,63 @@ async function keyboardEverywhere(browser, b, origin, url) {
   }
 }
 
+// keyboard-studio-held (K175, review S18; af's second-pass criterion): a key held on the
+// Studio keyboard across a workspace switch is released on the Studio node it played. The
+// run the Studio keys armed is not asserted here: leaving the Studio disarms it only with
+// S19's fix (K176), so the census read is the live notes', not the runtime's node count.
+const SILENT_PEAK = 10 ** (-70 / 20); // -70 dB rel
+async function keyboardStudioHeld(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keyboard-studio-held';
+  const { context, page, errors } = await openPage(browser, url, { also: { fn: audioProbe,
+    arg: {} } });
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w
+      && window.OSCILLA.app.kbdView === w, ws), { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+  };
+  // The Studio's keys play the Synth panel's Keys (its first notes node): the Synth inserts it.
+  const read = () => page.evaluate(() => {
+    const app = window.OSCILLA.app;
+    const sink = app.studioSink();
+    const tr = window.OSCILLA.studio.transport;
+    // held: the sink's [{ note, node }] (studio-sink.js heldNotes, the train C merge of K175)
+    return { held: sink && typeof sink.heldNotes === 'function' ? sink.heldNotes() : null,
+      notes: tr ? tr.heldNotes() : null };
+  });
+  try {
+    await go('synth');
+    await until(() => page.evaluate(() => window.OSCILLA.app.synthDebug().present),
+      { ms: STEP_MS, what: `${leg}: the Synth panel is in the document` });
+    await go('studio');
+    const armed = await page.evaluate(() => window.OSCILLA.app.kbdArmedHere);
+    if (!armed) await page.locator('[data-osc="keyboard.arm"]').click();
+    await page.locator('[data-osc="keyboard.readout"]').click({ force: true });
+    await page.keyboard.down('KeyA');
+    const on = await heard(page, (x) => x.peak > 0.005, `${leg}: A held in the Studio sounds`);
+    const during = await read();
+    await go('playground');
+    await page.keyboard.up('KeyA');
+    const off = await heard(page, (x) => x.peak < SILENT_PEAK,
+      `${leg}: A up after the switch falls below -70 dB rel`);
+    const after = await until(async () => {
+      const r = await read();
+      return r.held && !r.held.length && r.notes && !r.notes.length && r;
+    }, { ms: STEP_MS, what: `${leg}: the Studio sink and the transport hold no note` })
+      .catch(read);
+    check(leg, id, 'a key held on the Studio keyboard across a switch to the Playground is '
+      + 'released on the Studio node: the sink and the transport hold no note, the analyser '
+      + 'below -70 dB rel', !on.timedOut && !off.timedOut
+      && Array.isArray(during.held) && during.held.length === 1 && during.held[0].note === 60
+      && Array.isArray(after.held)
+      && !after.held.length && Array.isArray(after.notes) && !after.notes.length
+      && errors.length === 0,
+    JSON.stringify({ on: on.peak, off: off.peak, during, after, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
 // keyboard-qwerty (K026): the computer and on-screen keyboard play the same note voices.
 async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
@@ -1227,6 +1290,7 @@ async function main() {
             await seamSink(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
+            await keyboardStudioHeld(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);
           }

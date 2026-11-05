@@ -294,7 +294,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # the sum of its step bounds (15 + 13 + 15 + 20 = 63), so a slow runner fails a named step
+    timeout-minutes: 65
     strategy:
       fail-fast: false
       matrix:
@@ -322,6 +323,12 @@ jobs:
       - name: STUDIO workspace, graph and timeline editors, file:// and /oscilla/
         run: mkdir -p logs && npm run test:studio 2>&1 | tee logs/studio-${{ matrix.browser }}.log
         timeout-minutes: 15
+      # K075: the synth line's suites (Synth, engines, XY pad, MIDI) moved here from test:studio
+      # and test:browser, after the integration map that walks every link; every suite runs,
+      # whatever the one before returned (tests/browser/lib/run-suites.cjs).
+      - name: Integration map and the synth line, file:// and /oscilla/
+        run: mkdir -p logs && npm run test:synth 2>&1 | tee logs/synth-${{ matrix.browser }}.log
+        timeout-minutes: 20
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -360,6 +367,8 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
+      # Every suite of test:browser runs, whatever the one before returned (review #330 F5,
+      # tests/browser/lib/run-suites.cjs); an && chain stopped at the first failure.
       - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop, journeys
         # The train's browser suites (cross-links, first-screen, surface-census) take the chain
         # past 15 min on a hosted runner (~20 min measured, run 41333897971). WebKit's chain with

@@ -13,12 +13,16 @@
 //   Whether the committed roadmap still matches the plan is judged when OSC_ROADMAP_CHECK=1,
 //   which release:prepare sets for its gate: a pull request that completes a milestone does
 //   not fail here, the next release refreshes the list.
-// The workspace list, the story order and the headline are read from src/index.html.
+// The story order and the headline are read from src/index.html. The workspace list is an
+// x-for over the registry (lane A wave 3: ui/app.js aboutWorkspaces(), shell.js
+// WORKSPACE_REGISTRY): renderAboutList() renders its one template from the registry's rows as
+// Alpine would, and the checks judge the rendered entries.
 //   node --test tests/unit/about-current.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { WORKSPACES } from '../../src/js/ui/app.js';
+import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 
 const root = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -42,11 +46,13 @@ function text(markup) {
     .trim();
 }
 
-/** The navigation's workspaces, in order: { id, label } of each data-osc="nav.<id>" link. */
-export function navWorkspaces(markup) {
-  const nav = markup.slice(markup.indexOf('id="osc-nav"'), markup.indexOf('</nav>'));
-  return [...nav.matchAll(/<a\b[^>]*\bdata-osc="nav\.([a-z]+)"[^>]*>([^<]+)<\/a>/g)]
-    .map(([, id, label]) => ({ id, label: label.trim() }));
+/**
+ * The navigation's workspaces, in order: { id, label } of each sidebar entry. Since F002 the
+ * sidebar renders its entries from shell.js WORKSPACE_REGISTRY (an x-for, held by
+ * ui-flowbite-pro-shell.test.mjs), so the registry is what the navigation shows.
+ */
+export function navWorkspaces() {
+  return WORKSPACE_REGISTRY.map(({ id, label }) => ({ id, label }));
 }
 
 /** The first night, in any of the words the old headline used. */
@@ -108,24 +114,65 @@ export function headlineProblems(view) {
   return problems;
 }
 
+/** An entry of the workspace list: its id, the link's attributes, the name, the purpose. */
+const WORKSPACE_ITEM = new RegExp('<li\\b[^>]*\\bdata-osc="about\\.workspace\\.([a-z]+)"[^>]*>'
+  + '\\s*(?:<a\\s([^>]*)>\\s*)?<b>([^<]*)<\\/b>\\s*(<\\/a>)?([\\s\\S]*?)<\\/li>', 'g');
+
+/** The one templated entry of About's workspace list: its <template x-for> and its body. */
+export function aboutListTemplate(markup) {
+  const view = aboutView(markup);
+  const at = view.indexOf('data-osc="about.workspaces"');
+  if (at < 0) return null;
+  const list = view.slice(at, view.indexOf('</ul>', at));
+  const m = /<template x-for="w in aboutWorkspaces\(\)" :key="w\.id">([\s\S]*)<\/template>\s*$/
+    .exec(list);
+  return m ? { list, body: m[1] } : { list, body: null };
+}
+
+/**
+ * The workspace list as the page renders it from `rows` (the registry's, or a mutated copy):
+ * each row instantiates the template (the bound attributes `:x="'prefix' + w.field"`, the
+ * x-text elements, the x-if alternatives on w.id). The markup returned is src/index.html with
+ * the list rendered in place, or with the list untouched when it is no such template.
+ */
+export function renderAboutList(markup, rows = WORKSPACE_REGISTRY) {
+  const t = aboutListTemplate(markup);
+  if (!t || !t.body) return markup;
+  const one = (w) => t.body
+    .replace(/<template\s+x-if="w\.id (===|!==) '([a-z]+)'">([\s\S]*?)<\/template>/g,
+      (_, op, id, inner) => (((w.id === id) === (op === '===')) ? inner : ''))
+    .replace(/:([\w-]+)="'([^']*)' \+ w\.(\w+)"/g, (_, k, pre, f) => `${k}="${pre}${w[f]}"`)
+    .replace(/<(\w+)([^>]*?) x-text="w\.(\w+)"([^>]*)><\/\1>/g,
+      (_, tag, a, f, b) => `<${tag}${a}${b}>${w[f]}</${tag}>`);
+  const rendered = rows.map(one).join('\n');
+  return markup.replace(t.list, t.list.replace(/<template x-for[\s\S]*$/, rendered));
+}
+
 /**
  * The problems of About's workspace list against the navigation, one string each: a workspace
- * of the navigation missing or out of order, a name that is not its navigation label, an entry
- * that says nothing of what it is for, or an entry that is no workspace.
+ * of the navigation missing or out of order, a name that is not its navigation label, a name
+ * that is not a link to its workspace (A1 connect; About's own entry is this page and links
+ * nowhere), an entry that says nothing of what it is for, or an entry that is no workspace.
  */
-export function workspaceProblems(markup) {
-  const view = aboutView(markup);
+export function workspaceProblems(markup, rows = WORKSPACE_REGISTRY) {
+  const t = aboutListTemplate(markup);
+  if (t && !t.body) {
+    return ['About\'s workspace list is not one <template x-for="w in aboutWorkspaces()"> '
+      + 'over the registry'];
+  }
+  const view = aboutView(renderAboutList(markup, rows));
   const at = view.indexOf('data-osc="about.workspaces"');
   if (at < 0) return ['About has no workspace list (data-osc="about.workspaces")'];
   const list = view.slice(at, view.indexOf('</ul>', at));
-  const items = [...list.matchAll(
-    /<li\b[^>]*\bdata-osc="about\.workspace\.([a-z]+)"[^>]*>\s*<b>([^<]*)<\/b>([\s\S]*?)<\/li>/g)]
-    .map(([, id, name, rest]) => ({ id, name: name.trim(), purpose: text(rest) }));
+  const items = [...list.matchAll(WORKSPACE_ITEM)].map(([, id, link, name, close, rest]) => ({
+    id, name: name.trim(), purpose: text(rest),
+    link: link && close ? Object.fromEntries([...link.matchAll(/([\w.:@-]+)="([^"]*)"/g)]
+      .map(([, k, v]) => [k, v])) : null }));
   const nav = navWorkspaces(markup);
   const problems = [];
   if (list.split('<li').length - 1 !== items.length) {
     problems.push('an entry of the workspace list is not '
-      + '<li data-osc="about.workspace.<id>"><b>name</b> purpose');
+      + '<li data-osc="about.workspace.<id>"><a href="#m=<id>"><b>name</b></a> purpose');
   }
   for (const ws of nav) {
     const item = items.find((i) => i.id === ws.id);
@@ -137,6 +184,13 @@ export function workspaceProblems(markup) {
       problems.push(`workspace ${ws.id} is named "${item.name}", `
         + `the navigation says "${ws.label}"`);
     }
+    const self = ws.id === 'about';
+    if (!self && (!item.link || item.link.href !== `#m=${ws.id}`
+      || item.link['data-osc'] !== `about.open.${ws.id}`)) {
+      problems.push(`workspace ${ws.id} is not a link to #m=${ws.id} `
+        + `(data-osc="about.open.${ws.id}"): ${JSON.stringify(item.link)}`);
+    }
+    if (self && item.link) problems.push('About\'s own entry links to the page it is on');
     if (item.purpose.split(' ').length < 4) {
       problems.push(`workspace ${ws.id} does not say what it is for: "${item.purpose}"`);
     }
@@ -192,26 +246,68 @@ test('A16: About lists every workspace of the navigation with what it is for', (
 });
 
 test('mutation: a missing, renamed, unexplained or foreign workspace entry is named', () => {
+  const rows = (fn) => workspaceProblems(html, fn(WORKSPACE_REGISTRY.map((w) => ({ ...w }))));
+  const at = (list, id) => list.findIndex((w) => w.id === id);
+  assert.deepEqual(rows((l) => l.filter((w) => w.id !== 'filter')),
+    ['workspace filter of the navigation is missing from About\'s workspace list']);
+  assert.deepEqual(rows((l) => { l[at(l, 'filter')].label = 'Filters'; return l; }),
+    ['workspace filter is named "Filters", the navigation says "Filter Lab"']);
+  assert.deepEqual(rows((l) => { l[at(l, 'filter')].summary = 'Filters.'; return l; }),
+    ['workspace filter does not say what it is for: "Filters."']);
+  assert.deepEqual(rows((l) => [...l, { id: 'mixer', label: 'Mixer',
+    summary: 'A mixer for every channel.' }]),
+  ['About lists mixer, which is not a workspace of the navigation']);
+  const moved = rows((l) => { const s = l.splice(at(l, 'studio'), 1); l.splice(0, 0, ...s);
+    return l; });
+  assert.ok(moved.some((p) => p.startsWith('the workspace list is not in')), moved.join('; '));
+  // A hand-written list is no list of the registry.
+  const t = aboutListTemplate(html);
+  assert.deepEqual(workspaceProblems(html.replace(t.list,
+    t.list.replace('x-for="w in aboutWorkspaces()"', 'x-for="w in mine"'))),
+  ['About\'s workspace list is not one <template x-for="w in aboutWorkspaces()"> over the '
+    + 'registry']);
+});
+
+test('A1: each workspace of About\'s list is a link to its workspace, About\'s own is not', () => {
+  const t = aboutListTemplate(html);
   const swap = (from, to) => {
-    const v = html.replace(from, to);
-    assert.notEqual(v, html, `${from} is in the shell`);
+    const v = html.replace(t.list, t.list.replace(from, to));
+    assert.notEqual(v, html, `${from} is in the template`);
     return workspaceProblems(v);
   };
-  const filter = html.match(/<li data-osc="about\.workspace\.filter">[\s\S]*?<\/li>\s*/);
-  assert.ok(filter, 'Filter Lab is listed');
-  assert.deepEqual(swap(filter[0], ''),
-    ['workspace filter of the navigation is missing from About\'s workspace list']);
-  assert.deepEqual(swap('<b>Filter Lab</b>', '<b>Filters</b>'),
-    ['workspace filter is named "Filters", the navigation says "Filter Lab"']);
-  assert.deepEqual(swap(filter[0], '<li data-osc="about.workspace.filter"><b>Filter Lab</b> '
-    + 'Filters.</li>\n'), ['workspace filter does not say what it is for: "Filters."']);
-  assert.deepEqual(swap(filter[0], `${filter[0]}<li data-osc="about.workspace.mixer"><b>Mixer`
-    + '</b> A mixer for every channel.</li>\n'),
-  ['About lists mixer, which is not a workspace of the navigation']);
-  const studio = html.match(/<li data-osc="about\.workspace\.studio">[\s\S]*?<\/li>\s*/);
-  assert.deepEqual(swap(studio[0], '').length, 1);
-  const moved = html.replace(studio[0], '').replace(filter[0], `${studio[0]}${filter[0]}`);
-  assert.ok(workspaceProblems(moved).some((p) => p.startsWith('the workspace list is not in')));
+  const unlinked = swap(':href="\'#m=\' + w.id"', ':href="\'#m=compare\' + w.id"');
+  assert.ok(unlinked.length >= 12 && unlinked.every((p) => /is not a link to #m=/.test(p)),
+    unlinked.join('; '));
+  assert.deepEqual(swap('x-if="w.id === \'about\'"><b x-text="w.label"></b>',
+    'x-if="w.id === \'about\'"><a href="#m=about" data-osc="about.open.about"><b '
+    + 'x-text="w.label"></b></a>'),
+  ['About\'s own entry links to the page it is on']);
+});
+
+/** The workspaces the compact Studio panel is shown in (its data-osc-modes). */
+function compactStudioModes(markup) {
+  const tag = /<section\b[^>]*\bdata-osc="studio\.compact"[^>]*>/.exec(markup);
+  assert.ok(tag, 'the shell has the compact Studio panel');
+  return /data-osc-modes="([^"]*)"/.exec(tag[0])[1].split(/\s+/);
+}
+
+/** About's workspace entries that say the compact Studio is beside them but is not shown. */
+function compactStudioClaims(markup, rows = WORKSPACE_REGISTRY) {
+  const modes = compactStudioModes(markup);
+  const view = aboutView(renderAboutList(markup, rows));
+  const at = view.indexOf('data-osc="about.workspaces"');
+  const list = view.slice(at, view.indexOf('</ul>', at));
+  return [...list.matchAll(WORKSPACE_ITEM)]
+    .filter(([, id, , , , rest]) => /compact Studio/.test(text(rest)) && !modes.includes(id))
+    .map(([, id]) => id);
+}
+
+test('A1: About says a workspace has the compact Studio only where the panel is shown', () => {
+  assert.deepEqual(compactStudioClaims(html), [],
+    'an About entry names the compact Studio in a workspace that does not show it');
+  const claimed = WORKSPACE_REGISTRY.map((w) => (w.id === 'synthesis'
+    ? { ...w, summary: `${w.summary} With the compact Studio.` } : w));
+  assert.deepEqual(compactStudioClaims(html, claimed), ['synthesis']);
 });
 
 // ------------------------------------------------------------------------- A15: what comes next

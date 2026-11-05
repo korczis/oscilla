@@ -5,14 +5,18 @@
 //   ye  the engine module the keys play on the Engines tab (panels/engines.js)
 //   yp  a preset id (synth/presets.js)
 //   yv  values that differ from the preset, 'module.param:value' joined by ','
-//   yc  user cables, 'module.port>module.port' joined by ','
+//   yc  user cables, 'module.port>module.port' joined by ','; a cable whose props differ from
+//       the ones the panel gives it carries them after '@' as 'key:value' joined by ';'
+//       (depth, polarity, mapping, offset, muted; synth/link.js, review S7)
 // Strict, like the Studio and recipe links: one unknown preset, module, parameter, value or jack
 // refuses the whole link with a sentence, and nothing of it is applied.
 //
 //   decodeSynthLink(hash, panel, presets) -> { ok: true, link } | { ok: false, reason } | null
 //   encodeSynthLink(link) -> 'm=synth&...'   withoutSynthParams(hash) -> hash
 
-import { validateParamValue } from '../studio/registry.js';
+import { NODE_REGISTRY, validateParamValue } from '../studio/registry.js';
+import { EDGE_PROPERTY_FIELDS, MOD_MAPPINGS, MOD_POLARITIES, validateEdgeProps }
+  from '../studio/ports.js';
 
 export const SYNTH_LINK_MODE = 'synth';
 export const SYNTH_LINK_KEYS = Object.freeze({ tab: 'yt', engine: 'ye', preset: 'yp',
@@ -22,6 +26,35 @@ const MAX_ITEMS = 128;
 
 const strip = (h) => String(h || '').replace(/^#/, '');
 const fmt = (v) => (typeof v === 'number' ? String(Number(v.toPrecision(6))) : String(v));
+const CABLE_PROPS = Object.freeze(['depth', 'polarity', 'mapping', 'offset', 'muted']);
+const cableItem = ([a, b, props]) => `${a}>${b}${props && Object.keys(props).length
+  ? `@${Object.entries(props).map(([k, v]) => `${k}:${fmt(v)}`).join(';')}` : ''}`;
+
+/** A cable's '@' props for input jack `inp` of the panel: { props } | { reason }. */
+function cablePropsOf(text, inp, panel) {
+  const node = panel.module(inp.module).node;
+  const port = NODE_REGISTRY.port(node, inp.port, 'in');
+  const out = {};
+  for (const pair of text.split(';')) {
+    const m = /^([a-z]+):(.+)$/.exec(pair);
+    if (!m || !CABLE_PROPS.includes(m[1]) || m[1] in out) {
+      return { reason: `"${pair.slice(0, 32)}" is no cable property, or it appears twice.` };
+    }
+    if (!port || !EDGE_PROPERTY_FIELDS[port.type].includes(m[1])) {
+      return { reason: `a ${port ? port.type.toLowerCase() : ''} cable into ${inp.id} has no `
+        + `${m[1]}.` };
+    }
+    const v = m[1] === 'muted' ? { true: true, false: false }[m[2]]
+      : ['depth', 'offset'].includes(m[1]) ? Number(m[2]) : m[2];
+    const ok = m[1] === 'polarity' ? MOD_POLARITIES.includes(v) : m[1] === 'mapping'
+      ? MOD_MAPPINGS.includes(v) : m[1] === 'muted' ? typeof v === 'boolean' : Number.isFinite(v);
+    if (!ok) return { reason: `${inp.id} ${m[1]} "${m[2].slice(0, 16)}" is not a valid value.` };
+    out[m[1]] = v;
+  }
+  const pd = port.param ? NODE_REGISTRY.param(node, port.param.key) : null;
+  const r = validateEdgeProps(out, port.type, port, pd);
+  return r.ok ? { props: out } : { reason: `${inp.id} ${r.errors[0].field} ${r.errors[0].text}.` };
+}
 
 export function encodeSynthLink({ tab = 'panel', engine = null, preset = null, values = [],
   cables = [] } = {}) {
@@ -33,7 +66,7 @@ export function encodeSynthLink({ tab = 'panel', engine = null, preset = null, v
   if (values.length) {
     q.set(SYNTH_LINK_KEYS.values, values.map(([k, v]) => `${k}:${fmt(v)}`).join(','));
   }
-  if (cables.length) q.set(SYNTH_LINK_KEYS.cables, cables.map(([a, b]) => `${a}>${b}`).join(','));
+  if (cables.length) q.set(SYNTH_LINK_KEYS.cables, cables.map(cableItem).join(','));
   return q.toString();
 }
 
@@ -92,7 +125,8 @@ export function decodeSynthLink(hash, panel, presets) {
   const cables = [];
   const rawCables = q.get(K.cables);
   for (const item of rawCables ? rawCables.split(',') : []) {
-    const [a, b] = item.split('>');
+    const [ends, extra, more] = item.split('@');
+    const [a, b] = ends.split('>');
     // A port id may name an input and an output of one module (a filter's or a gain's
     // 'audio'), so each end is looked up by its id AND its direction.
     const jack = (id, direction) => id && panel.jacksOf(id.split('.')[0])
@@ -102,7 +136,11 @@ export function decodeSynthLink(hash, panel, presets) {
     if (!out || !inp) {
       return no(`"${item.slice(0, 48)}" is not a cable from an output to an input jack.`);
     }
-    cables.push([a, b]);
+    if (extra === undefined) { cables.push([a, b]); continue; }
+    const r = more === undefined && extra ? cablePropsOf(extra, inp, panel)
+      : { reason: `"${item.slice(0, 48)}" holds no cable properties after one '@'.` };
+    if (r.reason) return no(r.reason);
+    cables.push([a, b, r.props]);
   }
   if (values.length + cables.length > MAX_ITEMS) return no(`more than ${MAX_ITEMS} items.`);
   return { ok: true, link: { tab: engine && tab === 'panel' ? 'engines' : tab, engine, preset,
