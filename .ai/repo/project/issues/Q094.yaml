@@ -1,0 +1,25 @@
+id: Q094
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "LLM decision: hash keys for the 21 local-state subviews are deferred; they stay under the link-debt ratchet (af with b0, 2026-11-05)"
+slug: llm-decision-subview-deep-links-deferred
+priority: p3
+profile: routine
+owner: "af with b0, mesh 2026-11-05, owner order 'be llm autonomous'"
+objective: "Record decision Q-D, DEFERRED by af with b0 on the mesh (thread b0<->af, 2026-11-05 ~02:15Z): the 21 subviews whose state is local (the 5 analysis tabs restored from localStorage, src/js/ui/app.js:245-250 at origin/main a19f1ff6, and 16 shell tab or adapter state: mic 3, phase 3, bio 2, presets 8) get no hash key now. They stay in the census as deepLink null with their deepLinkWhyNot and held: 'Q094', under the link-debt ratchet U075 splits out, which holds a count that cannot grow, not 21 pinned ids: af's U070 and U072 (origin/chore/plan-nav-folds) move or retire the presets, mic, phase and bio subviews; a later U-scope slice that names the key scheme decides them. No issue is opened for the keys by this decision."
+why: "oscilla-b0 coherence audit at main 68b117f3: 47 census surfaces have no deep link (25 subviews, 22 dialogs); hash keys for the 21 local subviews would cut link debt from 47 to 26, but the key names are a URL contract that outlives the release. Deferring keeps the debt bounded without inventing the scheme. Serves ui-current#ui-audited as the nearest criterion of M054 (af noted the fit is weak: the decision is about addresses, not the audit); no address criterion exists under M054. Decided under the owner's order of 2026-11-05 'be llm autonomous'; the owner may override it."
+current_state: "Decided (DEFERRED) by af with b0 on 2026-11-05. The owner_decision evidence is recorded on main after this plan change lands."
+scope:
+  - ".ai/repo/project/issues/Q094.yaml"
+depends_on:
+  - "U075"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision) with the mesh thread, date, the deferral, the 21 subviews it covers and the ratchet that holds them, attributed to af with b0."
+  - "On main, the census link-debt ratchet U075 adds (surface-census.test.mjs) holds the held subviews as deepLink null with a deepLinkWhyNot and held: 'Q094', and refuses a rise in link debt; none is counted as resolved, and the count may fall when U070 or U072 retires a subview."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-05
+updated_at: 2026-11-05

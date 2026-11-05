@@ -7,6 +7,7 @@ slug: deterministic-build-provenance
 priority: p0
 profile: implementation
 objective: "One release-metadata helper projects version and a source digest into the build via esbuild define; the committed dist stays byte-reproducible; a delimited metadata region carries commit and channel stamped at deploy; UI shows the version, About/debug show commit, digest and channel."
+current_state: "Cross-reference added 2026-11-05, re-checked on main 2195a7a3: lockfile reproducibility is already covered, so no R issue is added for it (R044 and R045 stay free). The CI job 'unit, build, artifact rules' (.github/workflows/ci.yml) installs with npm ci from package-lock.json on a fresh checkout (:75) and then runs npm run build:check (:81), which is scripts/build.mjs --check: it rebuilds dist/index.html in memory and fails when the committed file differs from it (:236-240); .github/workflows/main-checks.yml (:54, :60) and .github/workflows/pages.yml (:51, :53) run the same pair on main and before every deploy, and npm run verify holds build:check locally."
 scope:
   - "scripts"
   - "src"

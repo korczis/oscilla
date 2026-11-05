@@ -1,0 +1,31 @@
+id: T033
+milestone: M073
+serves:
+  - "v3-measure#experiment-import-validated"
+title: "An imported raw device id is hashed before it is stored, and the Privacy text names the stored calibration"
+slug: an-imported-raw-device-id-is-hashed-before-it-is-stored-and
+priority: p2
+profile: implementation
+objective: "Lands as fix(experiments). Hardening S4, third and fourth findings (both about what a saved record holds of the user's setup). At main 68b117f3 validate.js accepts any string as input.device.id (src/js/experiments/validate.js:515); a raw id is hashed only on creation and removed only on export, so an imported record can keep a raw id in IndexedDB (inferred; the import path was not run). README's Privacy section says level calibrations stay in page memory only (README.md:1079), while every saved or exported experiment holds the applied calibration: profile id and name and the full LevelCalibration with its free-text conditions and hashed input binding. After: the import path hashes a raw device id (or runs sanitizeForExport) before the record is stored, and the Privacy paragraph names the stored calibration."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S4. Contract: ADR 0049, README Privacy."
+scope:
+  - "src/js/experiments/validate.js"
+  - "src/js/experiments/store.js"
+  - "src/js/ui/experiments.js"
+  - "README.md"
+  - "tests/unit/experiment-import-device-id.test.mjs"
+  - "tests/unit/raw-retention.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/experiment-import-device-id.test.mjs imports a file whose input.device.id is raw and reads the stored record back; it fails on the merge base and on the head isHashedDeviceId(id) is true. A mutation that skips the sanitizing step on import fails it."
+  - "tests/unit/raw-retention.test.mjs (near :357) requires the Privacy section to contain the sentence naming the stored calibration (profile id and name, the LevelCalibration and its conditions); it fails on the merge base, and reverting the sentence fails it."
+  - "Guarded (src/js/experiments/*, src/js/ui/experiments.js): prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+validation:
+  - "node --test tests/unit/experiment-import-device-id.test.mjs tests/unit/raw-retention.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

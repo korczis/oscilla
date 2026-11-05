@@ -31,4 +31,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-30
+updated_at: 2026-11-05T00:10:43Z
+started_at: 2026-11-05T00:10:22Z
+started_event: sha256:a5da65f55bb5793d275d9c9bd426f3b123eae1562e99f903d28afc86d3db0144
+completed_at: 2026-11-05T00:10:43Z
+completed_event: sha256:3805c684b00be2fd302faba1b904f97df932c4a8e421cc3818644fc4cf411395
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/readout-labels-ir-tail.test.mjs"
+    result: "On a git archive of origin/main 6d5efa89: every test passes (F4 wording and window '450.1 ms to 500.0 ms after the peak', rounding up, capped IR, R1 estimate wording, R3 silent/clipped/min window, the three negative cases). The test file at 1a29282b fails on its parent 1a29282b^."
+    artifact: "10db73d0938bce9d3c93df6acfd5ebe04759235d"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:10:10Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/343.yaml"
+    result: "Review verdict .ai/repo/reviews/343.yaml (verdict: merge) is on origin/main; landed as #343 member of train #380 (merge 10db73d0); 380.yaml also on main, main commit 10db73d0938bce9d3c93df6acfd5ebe04759235d."
+    artifact: ".ai/repo/reviews/343.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:10:16Z

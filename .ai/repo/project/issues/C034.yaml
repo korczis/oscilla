@@ -1,0 +1,25 @@
+id: C034
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "Re-check C001, C002, C012, C013, C016 and K153 on main: stamped done, criteria contradicted"
+slug: re-check-c001-c002-c012-c013-c016-k153-on-main
+priority: p0
+profile: implementation
+objective: "Lands as chore(plan) then fix slices. C001, C002, C012, C013 and C016 (stamped done 2026-11-03 by plan-done-385, #400) and K153 (stamped 2026-11-02) were recorded done 18-28 s after start, on a merge verdict, without their criteria being re-checked on main; b0 owns the stamp (2026-11-05). On origin/main 6d5efa89 their criteria fail: C002/one-output-owner: 5 claim mechanisms and 5 output-owner tables (src/js/ui/output-owner.js:16-22,55-62; src/js/visualization/output-owner.js:12,24-29; src/js/midi/ui.js:51-57; src/js/ui/shortcuts.js:29; src/js/core/instrument.js:1191), Playground keys refused while another plays so the first player wins, and notes own nothing (C024 open). C001/stops-are-immediate: seqPlaying is still a 150 ms poll (src/js/main.js:591-597). C012: 4 master-level writers (src/js/main.js:717-721, src/js/core/instrument.js:410,482-485, src/js/studio/runtime.js:363-389). C013/views-describe-what-sounds: outputOwnerOf ignores notes and the keyboard overrides the scope input (src/js/midi/keyboard-ui.js:220-223). C016: MEASURE's own run is silent and Firefox announces nothing (see C033). K153: only 2 bindings are on the registry; 24 keydown or keyup listeners sit outside src/js/ui/keys plus 18 @keydown in src/index.html. This issue holds that evidence and the re-check: each of the six is re-judged criterion by criterion on a main commit after the bus slices (the playback bus, one Stop/Escape/hide path, removing the duplicate state) land, and only then is its done record trusted."
+why: "The owner, in the af session on 2026-11-04 ~23:3xZ: 'play na vetsine stranek nefunguje / neni to centralne propojene pres bus / dupliukuje se to / nefunguje to jak ma, jak popsano v .ai/' (Play does not work on most pages; not centrally connected through a bus; duplicated; not working as .ai/ describes). Measured by af's audit workflow wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0) and the live site, in Chromium, Firefox and WebKit, desktop 1536x1024 and WebKit 390x844: the engine is sound (one AudioContext, no errors, every Stop silent within 0.2-1.2 s), but 8 of 13 workspaces have no working visible Play on desktop."
+scope:
+  - ".ai/repo/project/issues"
+depends_on:
+  - "C030"
+  - "C032"
+acceptance_criteria:
+  - "Each of C001, C002, C012, C013, C016 and K153 is re-checked criterion by criterion on a main commit, with the command and result recorded as evidence on this issue; any criterion still failing names the slice that fixes it."
+  - "The six issues each carry a current_state line pointing at this issue until the re-check passes."
+  - "No plan-done stamp is recorded on the basis of a merge verdict alone (b0, 2026-11-05)."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

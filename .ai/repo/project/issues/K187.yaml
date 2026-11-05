@@ -1,0 +1,39 @@
+id: K187
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "A panel's fixed parameter is refused by the model, skipped by presets and Apply with a reason, and reset on import"
+slug: a-panels-fixed-parameter-is-refused-by-the-model
+priority: p1
+profile: implementation
+objective: "Lands as fix(synth). Implements Q092. A Synth panel module's 'fixed' is declared and validated (src/js/synth/panel.js:90-99) and shown as a 'Fixed by the panel' badge (panel.js:181-185, synth/view/face.js:164-170), but NODE_PARAM_SET, a node preset (filter/dark, src/js/studio/node-presets.js:31, sets HPF type lowpass; the user-preset case is pinned at tests/unit/studio-node-presets.test.mjs:117) and an engine preset (engine-formant-pad comes from enginePresets, node-presets.js:79-83, built from the Synth's formant-pad preset, src/js/synth/presets.js:57; it is not a catalog Apply) overwrite it on HARD SYNC (bank formant; sync/default gives bank basic) while the badge keeps the declared value. Line numbers at origin/main a19f1ff6. After: the StudioModel refuses NODE_PARAM_SET on a fixed parameter with a reason naming the panel, the module and the parameter, leaving model and history unchanged; a node preset and a catalog Apply apply every other parameter and report each skipped fixed one with its reason; a saved document whose fixed value differs imports with it reset to the declared value and the reset named in the import report (src/js/studio/migrate.js, migrateStudio at :38, is where an import is normalised); the Inspector shows a fixed parameter as a read-only control naming the panel, never an editable one. The registry seam is Q092's fixedParamsOf(node) resolver, passed at store creation and recorded in the StudioModel's contract comment; src/js/studio/ does not import src/js/synth/ for it. K061 (BLOCKED) keeps the rest of the panel contract."
+why: "Q092 (af with b0, 2026-11-05); oscilla-b0 Total Coherence audit of main 68b117f3, slice 06 (audio-ontology gap 1, severity high), probes set-fixed.mjs and probe-fixed.mjs reproduced. af's critique of 96daa67b (AMEND 16): formant-pad comes from enginePresets; patch-catalog.js, migrate.js and presets.js belong in scope; the import needs its own fail-first; the Inspector shows the fixed control read-only; the registry seam is recorded."
+scope:
+  - "src/js/studio/actions.js"
+  - "src/js/studio/node-presets.js"
+  - "src/js/studio/patches.js"
+  - "src/js/studio/patch-catalog.js"
+  - "src/js/studio/migrate.js"
+  - "src/js/synth/presets.js"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/studio/validate.js"
+  - "src/js/synth/panel.js"
+  - "tests/unit/studio-node-presets.test.mjs"
+  - "tests/unit/synth-panel.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q092"
+acceptance_criteria:
+  - "Fail-first: tests/unit/studio-node-presets.test.mjs:117, which asserts the HPF type becomes 'lowpass', flips to assert the preset leaves 'type' at the declared value and reports it skipped; it fails on the merge base."
+  - "NODE_PARAM_SET hpf.type, the filter/dark preset on the HPF module, the engine-formant-pad engine preset on HARD SYNC, a catalog Apply, PATCH_REPLACE, paste and history replay are each refused or skipped on the fixed key with a reason naming panel, module and parameter; the model and history are unchanged by the refused dispatch (one case each in tests/unit/synth-panel.test.mjs)."
+  - "Fail-first (import): tests/unit/synth-panel.test.mjs imports a saved document whose HPF type is overridden and expects it reset to the declared value with the reset named in the import report; on the merge base the override survives import (coherent-state#saved-state-is-honest)."
+  - "The Inspector shows a fixed parameter as a read-only control with the panel's reason; the face's 'Fixed by the panel' badge and the Inspector consume M123's one switch and knob (G022, G023; component-system#one-implementation-per-family, origin/chore/plan-unified-controls) and add no parallel read-only widget; project.visual-identity-lock v4 holds (the Flowbite Pro interface themed by OSCILLA's tokens around its own domain views; ADR 0061, accepted)."
+  - "Guarded paths (src/js/studio/*, src/js/synth/*): prismatic-majordomus-98 writes the verdict; oscilla-21 checks the synth values. Lane: oscilla-26 with dev-53."
+validation:
+  - "node --test tests/unit/studio-node-presets.test.mjs tests/unit/synth-panel.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
