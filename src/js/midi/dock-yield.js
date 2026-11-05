@@ -19,8 +19,8 @@
 //     dock covers is measured again (--osc-dock-h) and the owner's surface is brought into view
 //     above the handle (reveal); unfolded by the user, the surface is brought above the dock
 //     where it fits there whole (routes.js dockRoom), else its top to the top of the room. A
-//     resize or a rotation measures the chrome again and, while the dock yields, re-places the
-//     surface the same way.
+//     resize or a rotation, and the dock's own size settling, measure again and, while the dock
+//     yields, re-place the surface the same way.
 //
 // The user's expansion stays until the owner changes (the owner, not a re-mount of the same
 // surface: claims made and dropped within one task settle before the rule is read).
@@ -242,13 +242,19 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
       cmp.kbdNoteOwner = info.owner || null;
       cmp.kbdDockExpanded = !!info.expanded;
     }
-    band(); // the band the dock covers, measured again before anything is scrolled to
-    chrome(info.el); // and the app chrome above the owner's surface: the pad's height follows
-    // Folded by the owner, or unfolded by the user: the pad above the dock (a fold by the
-    // user only uncovers more of the page, and moves nothing).
-    if (info.yields && (collapsed ? info.why !== 'user' : info.why === 'user')) {
-      reveal(win, info.el, dock);
-    }
+    // Once the component has drawn what the state shows (the keys come back through
+    // kbdKeysShown, an Alpine effect after this call): the band the dock covers, measured
+    // again before anything is scrolled to, and the app chrome above the owner's surface (the
+    // pad's height follows it). Folded by the owner, or unfolded by the user: the pad above the
+    // dock (a fold by the user only uncovers more of the page, and moves nothing).
+    const place = () => {
+      band();
+      chrome(info.el);
+      if (info.yields && (collapsed ? info.why !== 'user' : info.why === 'user')) {
+        reveal(win, info.el, dock);
+      }
+    };
+    if (cmp && typeof cmp.$nextTick === 'function') cmp.$nextTick(place); else place();
   }
 
   const ctl = createDockYield({ release, apply, read: () => ({ workspace: cmp.workspace }) });
@@ -262,6 +268,14 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     chrome();
     if (ctl.yields && surface) reveal(win, surface, dock);
   });
+  // The dock's own size settles after a state change (the keys' canvas is laid out after the
+  // component draws it, later in WebKit): while it yields, the pad is placed against the dock
+  // as it now stands (reveal moves nothing where the pad is already whole above it).
+  if (typeof win.ResizeObserver === 'function') {
+    new win.ResizeObserver(() => {
+      if (ctl.yields && surface) reveal(win, surface, dock);
+    }).observe(dock);
+  }
   if (typeof cmp.$watch === 'function') cmp.$watch('workspace', () => ctl.update('workspace'));
   ctl.update('init');
   return ctl;

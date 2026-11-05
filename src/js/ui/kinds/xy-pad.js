@@ -131,10 +131,11 @@ const WHY = 'pointer-events-none absolute inset-x-3 top-1/2 -translate-y-1/2 rou
 // The pad's height follows the room that is really there (K171, the OSCILLA-pad audit S2): at
 // most the dynamic viewport less the app chrome above the pad (--osc-chrome-h) and the band the
 // docked keyboard covers (--osc-dock-h), both measured by midi/dock-yield.js, and a gap; 14rem
-// on a phone and 18rem from sm up where the room allows, never less than 8rem, so the whole pad
-// fits above the dock at 1536 x 1024, 1280 x 720, 390 x 844 and 375 x 667. Each class is one
-// string, as the build's class scan reads it.
-const ROOM = 'h-56 min-h-32 sm:h-72 '
+// on a phone and 18rem from sm up where the room allows, never less than 6rem, so the whole pad
+// fits above the dock at 1536 x 1024, 1280 x 720, 390 x 844 and 375 x 667, folded and unfolded
+// with its keys (at 375 x 667 the unfolded keys leave about 7.5rem). Each class is one string,
+// as the build's class scan reads it.
+const ROOM = 'h-56 min-h-24 sm:h-72 '
   + 'max-h-[calc(100dvh_-_var(--osc-chrome-h,0px)_-_var(--osc-dock-h,0px)_-_0.5rem)]';
 
 let mounted = 0;

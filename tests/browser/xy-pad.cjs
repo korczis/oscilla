@@ -879,8 +879,10 @@ function defineChecks() {
     const open = await dockIs(page, 'docked',
       `Alt+K unfolds the dock at ${sizeName}, the pad whole`, { IN: 2 });
     await page.keyboard.press('Alt+KeyK');
-    await dockIs(page, 'collapsed', `Alt+K folds it at ${sizeName}`, { IN: 2 });
-    const p = { x: (v.pad.left + v.pad.right) / 2, y: (v.pad.top + v.pad.bottom) / 2 };
+    // A fold by the user moves nothing: the pad is where the unfold put it.
+    const folded = await dockIs(page, 'collapsed', `Alt+K folds it at ${sizeName}`, { IN: 2 });
+    const p = { x: (folded.pad.left + folded.pad.right) / 2,
+      y: (folded.pad.top + folded.pad.bottom) / 2 };
     const hold = await press(page, p);
     await loud(page, 'a pointer held on the pad sounds');
     await page.keyboard.press('Alt+KeyK');

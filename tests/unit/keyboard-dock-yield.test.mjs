@@ -175,7 +175,7 @@ test("the pad's height follows the room: 100dvh less the chrome and the dock's b
   assert.ok(src.includes(
     "'max-h-[calc(100dvh_-_var(--osc-chrome-h,0px)_-_var(--osc-dock-h,0px)_-_0.5rem)]'"),
   'one class string the build scans: the room above the dock caps the pad');
-  assert.match(src, /'h-56 min-h-32 sm:h-72 '/, 'its size where the room allows, 8rem at least');
+  assert.match(src, /'h-56 min-h-24 sm:h-72 '/, 'its size where the room allows, 6rem at least');
   const dy = readFileSync(path.join(ROOT, 'src/js/midi/dock-yield.js'), 'utf8');
   assert.match(dy, /setProperty\('--osc-chrome-h'/, 'dock-yield.js measures the chrome');
   // roomTop: the scroller's top, below a bar stuck there over the pad's column, where pinned.
@@ -432,6 +432,8 @@ test('the XY mount claims the notes while the pad is mounted, then drops it', as
 test('the dock tells the keyboard its owner and expansion; a resize re-places the pad',
   async () => {
     const d = fakeDom({ vh: 720, unfolded: 720 - 260, pad: [200, 620] });
+    const seen = []; // the dock's ResizeObserver callbacks
+    d.win.ResizeObserver = class { constructor(fn) { seen.push(fn); } observe() {} };
     const cmp = { workspace: 'synth', kbdNoteOwner: null, kbdDockExpanded: false };
     const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp, dock: d.dock,
       release: () => 0 });
@@ -447,12 +449,19 @@ test('the dock tells the keyboard its owner and expansion; a resize re-places th
     d.page.scrollTop = 0;
     for (const f of d.listeners.resize || []) f();
     assert.equal(d.page.scrollTop, placed, 'a resize re-places the pad while the dock yields');
+    // The dock's own size settling later (the keys laid out after the redraw) re-places it too.
+    d.page.scrollTop = 0;
+    assert.equal(seen.length, 1, 'the dock is observed');
+    seen[0]();
+    assert.equal(d.page.scrollTop, placed, 'the dock settling re-places the pad');
     ctl.claim({ id: PAD.id, owner: null });
     await Promise.resolve();
     assert.deepEqual([cmp.kbdNoteOwner, cmp.kbdDockExpanded], [null, false]);
     d.page.scrollTop = 0;
     for (const f of d.listeners.resize || []) f();
     assert.equal(d.page.scrollTop, 0, 'where it does not yield, a resize moves nothing');
+    seen[0]();
+    assert.equal(d.page.scrollTop, 0, 'nor does the dock settling');
   });
 
 // ---------------------------------------------------------------- the handle's key
