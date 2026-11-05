@@ -7,7 +7,9 @@
 // --help / -h prints the usage and exits 0; an unknown flag, a flag missing its value or a
 // --pages-timeout that is not a positive number exits 2, before any git, gh or npm call.
 // Preconditions (all checked, all reported, in both modes):
-//   on branch main, clean tree, HEAD == origin/main (Pages deploys main), tag v<version>
+//   on branch main (a linked worktree on a detached HEAD is refused with the way out: run it
+//   from a checkout on branch main at origin/main, normally the primary checkout; FROM_MAIN),
+//   clean tree, HEAD == origin/main (Pages deploys main), tag v<version>
 //   absent locally and on origin (or, to resume, present on origin at HEAD; below), a gate
 //   verdict for exactly this tree (rule project.release-receipt-binds-gate v2): either the CI
 //   receipt (ADR 0082, release-ci-receipt.mjs: HEAD is the merge of the release pull request,
@@ -51,14 +53,20 @@
 // verifies and creates the Release. The notes run from the newest v* tag merged into HEAD other
 // than the one published. A tag at another commit, or a Release that already exists, refuses;
 // a tag at HEAD that is local only (its push failed) refuses with the push and the undo.
-import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+// Every git, gh and npm call runs through scripts/release-bounded.mjs (defaultSh): a named
+// bound per call (60 s for a gh call or a git ls-remote/push, --pages-timeout for gh run
+// watch), a network call retried at most twice on a transient failure (a timeout,
+// ECONNRESET, "can't assign requested address", an HTTP 5xx), and a call out of attempts
+// named in the refusal or failure with its reason. The publish of 2026-10-31: one gh run list sat
+// for 2 h 20 min, and local port exhaustion ended the wait for the dispatched Pages run.
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   analyzeCommits, lastReleaseTag, parseCommit, parseFlags, readCommits,
 } from './release-analyze.mjs';
+import { boundedFetch, boundedRunner, failure } from './release-bounded.mjs';
 import { PUBLIC_URL, REPO_URL, ROOT, findRegion, gitRunner } from './release-metadata.mjs';
 import { currentFingerprint, readReceipt, receiptProblems } from './release-prepare.mjs';
 import { ciReceiptProblems, gatherCiReceipt, judgedRun } from './release-ci-receipt.mjs';
@@ -107,6 +115,15 @@ export function releaseNotes({ version, previousTag, commits, commit, sourceDige
 // ------------------------------------------------------------------------------- pages runs
 export const PAGES_RUN_FIELDS = 'databaseId,status,conclusion,headSha,createdAt';
 export const RULE_FLOW = 'project.release-flow-complete';
+/**
+ * How to satisfy the branch precondition. A linked worktree is usually on a detached HEAD or
+ * a feature branch, and git refuses a second worktree on main, so the checkout that can
+ * publish is the one on main: normally the primary checkout. A publish interrupted after its
+ * tag was pushed is finished by re-running it there (R021).
+ */
+export const FROM_MAIN = 'run npm run release:publish from a checkout on branch main at '
+  + 'origin/main, for example the primary checkout (git switch main && git merge --ff-only '
+  + 'origin/main there); a re-run there after the tag was pushed resumes after the tag (R021)';
 /**
  * Run statuses that do not say whether the run has started: awaiting approval, a runner or
  * its turn. They do not say it has NOT started either: GitHub reports `queued` for a run whose
@@ -202,10 +219,9 @@ export function taggedPageProblem(html, commit) {
 }
 
 async function defaultFetchPage(url) {
-  const res = await fetch(url, { cache: 'no-store', redirect: 'follow',
-    signal: AbortSignal.timeout(30_000) });
+  const res = await boundedFetch(url, { init: { cache: 'no-store', redirect: 'follow' } });
   if (res.status !== 200) throw new Error(`GET ${url}: HTTP ${res.status}`);
-  return res.text();
+  return res.body.toString('utf8');
 }
 
 /** The line that closes the release task against the published commit. */
@@ -243,13 +259,18 @@ export function preconditionProblems(f) {
   const problems = [];
   const short = (sha) => String(sha || 'an unreadable commit').slice(0, 7);
   const resume = resumable(f);
-  if (f.branch !== 'main') problems.push(`on branch ${f.branch}, releases are cut from main`);
+  if (f.branch !== 'main') {
+    const detached = f.branch === 'HEAD' ? ' (a detached HEAD)' : '';
+    problems.push(`on branch ${f.branch}${detached}, releases are cut from main: ${FROM_MAIN}`);
+  }
   if (f.dirty) problems.push('working tree is not clean');
   if (f.originMain && f.head !== f.originMain) {
     problems.push(`HEAD ${f.head.slice(0, 7)} != origin/main ${f.originMain.slice(0, 7)} `
       + '(push/merge first: Pages deploys main)');
   }
-  if (!f.originMain) problems.push('could not read origin/main');
+  if (!f.originMain) {
+    problems.push(`could not read origin/main${f.originMainWhy ? ` (${f.originMainWhy})` : ''}`);
+  }
   const localAtHead = f.tagLocal && f.tagLocalCommit === f.head;
   if (localAtHead && !f.tagRemote) {
     // An earlier publish tagged HEAD and its push failed: nothing reached origin.
@@ -269,19 +290,20 @@ export function preconditionProblems(f) {
   }
   problems.push(...f.receiptProblems);
   if (!f.buildCheck) problems.push('npm run build:check failed: dist/index.html is stale');
-  if (!f.ghAuth) problems.push('gh is not authenticated (gh auth status)');
+  if (!f.ghAuth) {
+    problems.push(`gh is not authenticated (${f.ghAuthWhy || 'gh auth status'})`);
+  }
   problems.push(...(f.stuckRuns || []));
   return problems;
 }
 
-function defaultSh(root) {
-  return (cmd, args, { inherit = false, env, timeout } = {}) => {
-    const r = spawnSync(cmd, args, { cwd: root, encoding: 'utf8', timeout,
-      env: env ? { ...process.env, ...env } : process.env,
-      stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
-    return { status: r.error ? 127 : r.status, stdout: (r.stdout || '').trim(),
-      stderr: (r.stderr || (r.error ? r.error.message : '')).trim() };
-  };
+/**
+ * The runner of every git, gh and npm call: bounded per call, a network call retried on a
+ * transient failure (scripts/release-bounded.mjs). `o` reaches boundedRunner (tests inject
+ * spawn and sleepMs there).
+ */
+export function defaultSh(root, o = {}) {
+  return boundedRunner({ cwd: root, ...o });
 }
 
 export const USAGE = 'usage: node scripts/release-publish.mjs [--yes] '
@@ -345,18 +367,25 @@ export async function publish({
   const remoteTag = sh('git', ['ls-remote', '--tags', 'origin', `refs/tags/${tag}`,
     `refs/tags/${tag}^{}`]);
   const localTag = sh('git', ['rev-parse', '-q', '--verify', `refs/tags/${tag}^{commit}`]);
-  // null when the list cannot be read: an unreadable list is not an empty one.
+  // null when the list cannot be read: an unreadable list is not an empty one. listFailure
+  // keeps the failing call and its reason, so a refusal names them.
+  let listFailure = null;
   const listRuns = (extra) => {
-    const r = sh('gh', ['run', 'list', '--workflow', 'pages.yml', ...extra, '--json',
-      PAGES_RUN_FIELDS]);
-    if (r.status !== 0) return null;
-    try {
-      const runs = JSON.parse(r.stdout || '[]');
-      return Array.isArray(runs) ? runs : null;
-    } catch {
+    const args = ['run', 'list', '--workflow', 'pages.yml', ...extra, '--json',
+      PAGES_RUN_FIELDS];
+    const r = sh('gh', args);
+    if (r.status !== 0) {
+      listFailure = failure('gh', args, r);
       return null;
     }
+    try {
+      const runs = JSON.parse(r.stdout || '[]');
+      if (Array.isArray(runs)) return runs;
+    } catch { /* below */ }
+    listFailure = `gh ${args.join(' ')}: the output is not a JSON list`;
+    return null;
   };
+  const lastListFailure = () => (listFailure ? `; last failed read: ${listFailure}` : '');
   // The jobs of every run whose status alone does not say whether it started (null: unread).
   const withJobs = (runs) => runs.map((r) => {
     if (!WAITING_STATUSES.includes(r.status)) return r;
@@ -375,25 +404,29 @@ export async function publish({
   const diagnose = (afterMin) => {
     const runs = listRuns(['--limit', '20']);
     if (!runs) {
-      return ['could not list the pages.yml runs (gh run list --workflow pages.yml): whether a '
-        + `deploy is stuck cannot be checked (rule ${RULE_FLOW})`];
+      return [`could not list the pages.yml runs (${listFailure}): whether a deploy is stuck `
+        + `cannot be checked (rule ${RULE_FLOW})`];
     }
     const aged = runs.filter((r) => clock() - Date.parse(r.createdAt) >= afterMin * 60_000);
     return diagnoseStuckRuns({ head, now: clock(), ancestry,
       stuck: stuckPagesRuns(withJobs(aged), clock(), afterMin) });
   };
+  const ghAuth = sh('gh', ['auth', 'status']);
   const facts = {
     tag, head,
     branch: run(['rev-parse', '--abbrev-ref', 'HEAD']),
     dirty: run(['status', '--porcelain', '--untracked-files=normal']) !== '',
     originMain: remoteMain.status === 0 ? (remoteMain.stdout.split(/\s/)[0] || null) : null,
+    originMainWhy: remoteMain.status === 0 ? null
+      : failure('git', ['ls-remote', 'origin', 'refs/heads/main'], remoteMain),
     tagLocal: localTag.status === 0,
     tagLocalCommit: localTag.status === 0 ? localTag.stdout || null : null,
     tagRemote: remoteTag.status === 0 && remoteTag.stdout !== '',
     tagRemoteCommit: remoteTag.status === 0 ? remoteTagCommit(remoteTag.stdout, tag) : null,
     receiptProblems: [],
     buildCheck: sh('npm', ['run', '--silent', 'build:check']).status === 0,
-    ghAuth: sh('gh', ['auth', 'status']).status === 0,
+    ghAuth: ghAuth.status === 0,
+    ghAuthWhy: ghAuth.status === 0 ? null : failure('gh', ['auth', 'status'], ghAuth),
     stuckRuns: diagnose(STUCK_AFTER_MIN),
   };
   const local = receiptProblems(receipt === undefined ? readReceipt(run, root) : receipt, now);
@@ -455,9 +488,10 @@ export async function publish({
     return 1;
   }
 
-  const must = (cmd, args, what) => {
-    const r = sh(cmd, args, { inherit: true });
-    if (r.status !== 0) throw new Error(`${what} failed (${cmd} ${args.join(' ')})`);
+  // Every step names the failing call and why (timed out, its last stderr line, its exit).
+  const must = (cmd, args, what, opts = {}) => {
+    const r = sh(cmd, args, { inherit: true, ...opts });
+    if (r.status !== 0) throw new Error(`${what} failed (${failure(cmd, args, r)})`);
     return r;
   };
   let pushed = resume;
@@ -485,9 +519,14 @@ export async function publish({
         throw new Error(seen
           ? `Pages run ${seen.databaseId} for ${head} is still '${seen.status}' with no job `
             + `started after ${pagesTimeoutMin} min`
-          : `no Pages run for ${head} within ${pagesTimeoutMin} min`);
+          : `no Pages run for ${head} within ${pagesTimeoutMin} min${lastListFailure()}`);
       }
-      must('gh', ['run', 'watch', runId, '--exit-status'], `Pages run ${runId}`);
+      // gh run watch has no timeout of its own: it is bounded by --pages-timeout in all, a
+      // retry after a transient error gets only what is left, and a watch stopped at the
+      // bound is not started again.
+      must('gh', ['run', 'watch', runId, '--exit-status'], `Pages run ${runId}`,
+        { timeoutMs: pagesTimeoutMin * 60_000, budgetMs: pagesTimeoutMin * 60_000,
+          retryTimedOut: false });
     }
     // A resumed publish whose live page already says tagged for HEAD needs no redeploy.
     let redeployed = false;
@@ -508,8 +547,8 @@ export async function publish({
       const dispatchList = dispatchedListArgs(head);
       const before = listRuns(dispatchList);
       if (!before) {
-        throw new Error('could not list the dispatched pages.yml runs (gh run list --workflow '
-          + `pages.yml ${dispatchList.join(' ')}), so the redeploy could not be told apart`);
+        throw new Error(`could not list the dispatched pages.yml runs (${listFailure}), so the `
+          + 'redeploy could not be told apart');
       }
       // R021: a dispatched run of HEAD that an interrupted publish left waiting is adopted, not
       // dispatched a second time behind it.
@@ -531,7 +570,7 @@ export async function publish({
       }
       if (!redeploy) {
         throw new Error(`no dispatched Pages run for ${head} appeared within ${pagesTimeoutMin} `
-          + `min (gh ${DISPATCH_ARGS.join(' ')})`);
+          + `min (gh ${DISPATCH_ARGS.join(' ')})${lastListFailure()}`);
       }
       if (redeploy.status !== 'completed') {
         throw new Error(`dispatched Pages run ${redeploy.databaseId} for ${head} is still `
@@ -556,14 +595,20 @@ export async function publish({
       if (n < TAGGED_ATTEMPTS) await sleep(10);
     }
     if (tagged !== null) throw new Error(`after the redeploy of ${tag}, ${tagged}`);
+    // The notes and the asset copy are temporary: removed whatever the create answers (a
+    // dist copy per publish, and per test run of it, filled the machine's TMPDIR).
     const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-release-'));
-    const notesFile = path.join(dir, 'notes.md');
-    writeFileSync(notesFile, notes);
-    // The clean tree and build:check above make the working-tree dist the committed one.
-    const assetFile = path.join(dir, asset);
-    writeFileSync(assetFile, readFileSync(path.join(root, DIST_PATH)));
-    must('gh', ['release', 'create', tag, assetFile, ...releaseCreateFlags(version, notesFile)],
-      'creating the GitHub Release');
+    try {
+      const notesFile = path.join(dir, 'notes.md');
+      writeFileSync(notesFile, notes);
+      // The clean tree and build:check above make the working-tree dist the committed one.
+      const assetFile = path.join(dir, asset);
+      writeFileSync(assetFile, readFileSync(path.join(root, DIST_PATH)));
+      must('gh', ['release', 'create', tag, assetFile, ...releaseCreateFlags(version, notesFile)],
+        'creating the GitHub Release');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   } catch (e) {
     log(`\nRELEASE:PUBLISH FAILED: ${e.message}`);
     if (pushed) {

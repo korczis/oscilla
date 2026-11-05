@@ -1,300 +1,370 @@
 {
-  "schema": "oscilla-roadmap/v1",
-  "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done, as `majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
+  "schema": "oscilla-roadmap/v2",
+  "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 19,
-      "required": 20
+      "done": 20,
+      "required": 22,
+      "phase": "now"
     },
     {
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
-      "done": 2,
-      "required": 6
+      "done": 3,
+      "required": 6,
+      "phase": "now"
     },
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 21,
-      "required": 34
+      "done": 23,
+      "required": 36,
+      "phase": "now"
     },
     {
       "id": "M047",
       "title": "Measurement extensions: room decay, clarity, distortion, chain delay, phase, run consistency",
       "done": 0,
-      "required": 9
+      "required": 9,
+      "phase": "next"
     },
     {
       "id": "M048",
       "title": "Studio completion: groups, minimap, pinch zoom, draft recovery, voice in Studio",
       "done": 2,
-      "required": 6
+      "required": 6,
+      "phase": "now"
     },
     {
       "id": "M049",
       "title": "Learn: three perception lessons of the adopted V1 specification",
       "done": 0,
-      "required": 4
+      "required": 4,
+      "phase": "later"
     },
     {
       "id": "M050",
       "title": "First-run experience chosen by the owner and built",
       "done": 2,
-      "required": 3
+      "required": 3,
+      "phase": "now"
     },
     {
       "id": "M055",
       "title": "The whole interface on Flowbite Pro",
-      "done": 0,
-      "required": 12
+      "done": 1,
+      "required": 13,
+      "phase": "now"
     },
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 1,
-      "required": 27
+      "done": 5,
+      "required": 30,
+      "phase": "now"
     },
     {
       "id": "M079",
       "title": "Coherence fixes that wait on no open plan: live Studio edits and honest restores",
       "done": 0,
-      "required": 2
+      "required": 2,
+      "phase": "next"
     },
     {
       "id": "M057",
       "title": "Box-system ergonomics: one-gesture patching with headroom in the editor modules",
-      "done": 0,
-      "required": 5
+      "done": 1,
+      "required": 5,
+      "phase": "now"
     },
     {
       "id": "M058",
       "title": "Synth voice: audio-rate modulation, drive, macros, filters, templates, presets, mod matrix and one hash epoch",
-      "done": 0,
-      "required": 9
+      "done": 5,
+      "required": 9,
+      "phase": "now"
     },
     {
       "id": "M059",
       "title": "Sequencer: audible tempo, real editing and a Studio clock",
-      "done": 0,
-      "required": 6
+      "done": 3,
+      "required": 6,
+      "phase": "now"
     },
     {
       "id": "M060",
       "title": "Audio-band signal lab: readable spectrogram, linked scrolling spectrogram, analytic signal",
-      "done": 0,
-      "required": 3
+      "done": 2,
+      "required": 3,
+      "phase": "now"
     },
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
-      "done": 0,
-      "required": 4
+      "done": 2,
+      "required": 5,
+      "phase": "now"
     },
     {
       "id": "M062",
       "title": "Charts: modern, interactive, honest",
       "done": 1,
-      "required": 31
+      "required": 31,
+      "phase": "now"
     },
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 0,
-      "required": 10
+      "required": 11,
+      "phase": "next"
     },
     {
       "id": "M065",
       "title": "Instrument wave 1b: the piano keyboard, one note source and a proper step sequencer",
       "done": 0,
-      "required": 6
+      "required": 8,
+      "phase": "later"
     },
     {
       "id": "M066",
       "title": "Instrument wave 1c: the drum machine on the same transport",
       "done": 0,
-      "required": 3
+      "required": 3,
+      "phase": "later"
     },
     {
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
       "done": 0,
-      "required": 14
+      "required": 16,
+      "phase": "later"
     },
     {
       "id": "M068",
       "title": "Instrument wave 3: synthesis engines and the instrument DSP worklet",
       "done": 0,
-      "required": 8
+      "required": 8,
+      "phase": "later"
     },
     {
       "id": "M069",
       "title": "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid",
-      "done": 0,
-      "required": 6
+      "done": 4,
+      "required": 13,
+      "phase": "now"
     },
     {
       "id": "M071",
       "title": "Instrument wave 4a: the parameter contract, deep links, the mixer and the full piano",
       "done": 0,
-      "required": 7
+      "required": 7,
+      "phase": "later"
     },
     {
       "id": "M072",
       "title": "Instrument wave 4b: audio tracks, the arrangement, the tempo map, recording and files",
       "done": 0,
-      "required": 9
+      "required": 9,
+      "phase": "later"
     },
     {
       "id": "M073",
       "title": "Measurement truth in the interface",
-      "done": 1,
-      "required": 30
+      "done": 4,
+      "required": 30,
+      "phase": "now"
     },
     {
       "id": "M080",
       "title": "Studio boxes, wave 1: wiring, find, layout, probe, first patch, large graphs, one declaration per node",
-      "done": 0,
-      "required": 12
+      "done": 1,
+      "required": 17,
+      "phase": "now"
     },
     {
       "id": "M081",
       "title": "Studio boxes, wave 2 and 3: knobs and live views on faces, box menu, cable activity, listen, previews, comments, reroutes, group faces",
       "done": 0,
-      "required": 11
+      "required": 11,
+      "phase": "later"
     },
     {
       "id": "M082",
       "title": "A lab-grade signal generator: pitch entry, noise, test signals, bursts, honest level, pulse, presets, hand-offs",
       "done": 0,
-      "required": 12
+      "required": 12,
+      "phase": "later"
     },
     {
       "id": "M083",
       "title": "The owner's definition of done is judged on every pull request",
       "done": 0,
-      "required": 1
+      "required": 1,
+      "phase": "next"
     },
     {
       "id": "M085",
       "title": "Component system, wave 0: one contract, one registry and the proven duplicates, before Pro",
-      "done": 0,
-      "required": 7
+      "done": 2,
+      "required": 8,
+      "phase": "now"
     },
     {
       "id": "M086",
       "title": "Component system, wave 1: rendered from declarations on Pro, and the embedded Studio as a compact cockpit",
-      "done": 0,
-      "required": 7
+      "done": 1,
+      "required": 7,
+      "phase": "now"
     },
     {
       "id": "M087",
       "title": "Component system, wave 2: generated catalogue, What is this, the link graph and traceability",
       "done": 0,
-      "required": 6
+      "required": 7,
+      "phase": "later"
     },
     {
       "id": "M111",
       "title": "Parameters and controls, wave 1: one declaration, one interaction model, one control interface (the slider) and the panel",
       "done": 0,
-      "required": 4
+      "required": 4,
+      "phase": "later"
     },
     {
       "id": "M101",
       "title": "Instrument kinds, wave 1: the kind contract, the meter and the 88-key piano",
       "done": 0,
-      "required": 6
+      "required": 6,
+      "phase": "later"
     },
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 0,
-      "required": 22
+      "done": 19,
+      "required": 30,
+      "phase": "now"
     },
     {
       "id": "M118",
       "title": "Component system: Majordomus serves every component",
       "done": 0,
-      "required": 8
+      "required": 8,
+      "phase": "next"
     },
     {
       "id": "M112",
       "title": "Parameters and controls, wave 2: the menu, the band, the automation hook and the reference, on the Pro shell",
       "done": 0,
-      "required": 4
+      "required": 4,
+      "phase": "later"
     },
     {
       "id": "M102",
       "title": "Instrument kinds, wave 2: readouts, jacks and cables, the transport, the step grid and locks, the XY pad, the channel strip and the track header",
       "done": 0,
-      "required": 4
+      "required": 4,
+      "phase": "later"
     },
     {
       "id": "M096",
       "title": "Live views on WebGL where it pays, Canvas 2D everywhere",
-      "done": 0,
-      "required": 9
+      "done": 1,
+      "required": 9,
+      "phase": "now"
     },
     {
       "id": "M113",
       "title": "Parameters and controls, wave 2: the measured modulation dot and the parameter census",
       "done": 0,
-      "required": 2
+      "required": 2,
+      "phase": "later"
     },
     {
       "id": "M098",
       "title": "The public face: README front page, GitHub shell and a measured library decision",
       "done": 3,
-      "required": 4
+      "required": 4,
+      "phase": "now"
     },
     {
       "id": "M103",
       "title": "Instrument kinds, wave 3 and 4: the mini-scope, the DAW kinds under Q062, and the sweep",
       "done": 0,
-      "required": 6
+      "required": 6,
+      "phase": "later"
     },
     {
       "id": "M099",
       "title": "The first screen's parts lead to their workspaces, and a read-only explorer shows how they relate",
       "done": 0,
-      "required": 2
+      "required": 2,
+      "phase": "later"
+    },
+    {
+      "id": "M122",
+      "title": "The live landing: /oscilla/ opens a playable, derived first workspace on the one engine",
+      "done": 1,
+      "required": 3,
+      "phase": "now"
+    },
+    {
+      "id": "M121",
+      "title": "Owner decisions of the musical-practice proposal",
+      "done": 3,
+      "required": 4,
+      "phase": "now"
+    },
+    {
+      "id": "M119",
+      "title": "Owner decisions of the song-reconstruction proposal",
+      "done": 4,
+      "required": 7,
+      "phase": "now"
     },
     {
       "id": "M104",
       "title": "Owner decisions of the component follow-up",
-      "done": 0,
-      "required": 5
+      "done": 1,
+      "required": 5,
+      "phase": "now"
     },
     {
       "id": "M088",
       "title": "Owner decisions of the component-system line",
-      "done": 1,
-      "required": 4
-    },
-    {
-      "id": "M070",
-      "title": "Owner decisions of the connected-instrument line",
-      "done": 4,
-      "required": 7
+      "done": 2,
+      "required": 4,
+      "phase": "now"
     },
     {
       "id": "M084",
       "title": "Owner decisions of the Studio boxes and signal generator lines",
-      "done": 0,
-      "required": 4
+      "done": 2,
+      "required": 4,
+      "phase": "now"
+    },
+    {
+      "id": "M070",
+      "title": "Owner decisions of the connected-instrument line",
+      "done": 6,
+      "required": 8,
+      "phase": "now"
     },
     {
       "id": "M063",
       "title": "Owner decisions of the charts line",
       "done": 0,
-      "required": 10
+      "required": 10,
+      "phase": "next"
     },
     {
       "id": "M005",
       "title": "Specification tail",
       "done": 7,
-      "required": 13
+      "required": 13,
+      "phase": "now"
     }
   ]
 }

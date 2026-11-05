@@ -554,3 +554,22 @@ test('src/js/midi builds no audio node and no context: the AudioEngine is the on
       assert.doesNotMatch(src, AUDIO_API, `${f}: no Web Audio node, context or automation`);
     }
   });
+
+// 21's R1: a routed note's off goes to the sink that took its on, even when route() has moved
+// on (the workspace changed while the key was held), so no routed note outlives the switch.
+test('a routed note is released through the sink that took it, whatever route() says now', () => {
+  const log = [];
+  const sink = (name) => ({ noteOn: (n) => { log.push([name, 'on', n]); return { ok: true }; },
+    noteOff: (n) => { log.push([name, 'off', n]); return true; } });
+  const studio = sink('studio');
+  const synth = sink('synth');
+  let current = studio;
+  const notes = createMidiNotes({ engine: null, route: () => current });
+  notes.noteOn(60, 100, 'kbd');
+  current = synth;
+  assert.equal(notes.noteOff(60, 'kbd'), true);
+  notes.noteOn(62, 100, 'kbd');
+  notes.noteOff(62, 'kbd');
+  assert.deepEqual(log, [['studio', 'on', 60], ['studio', 'off', 60], ['synth', 'on', 62],
+    ['synth', 'off', 62]]);
+});

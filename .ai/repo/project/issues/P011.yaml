@@ -1,0 +1,34 @@
+id: P011
+milestone: M050
+serves:
+  - "first-run-experience#first-screen-built"
+title: "The compact Studio path fits its 1280 px column again on every runner's fonts, and the layout check asks it whole"
+slug: the-compact-studio-path-fits-its-1280-px-column-again-on-every-runners-fonts
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui). Since the feature train #367 the compact Studio's signal path on the Playground at 1280x800 is 438 px against a 429 px column on CI's chromium runner (run 41338367151, job 124942947776) while macOS and the Playwright image fit it to the pixel; ce543ef4 relaxed tests/browser/first-screen.cjs (`layout widths`) to accept an overflowing path that scrolls with every node chip reached with Tab inside it. Before: on the runner's fonts the path scrolls by 9 px and the last chips start behind the edge. After: the default document's path fits its 1280 px column with at least 16 px to spare on the runner's fonts, without a new legacy selector or declaration (the Flowbite Pro ratchet, tests/unit/ui-flowbite-pro-baseline.json, refuses a container query in src/styles/studio.css), and the check asks the path whole again at 1280x800 while keeping the scroller-and-reachable judgement for documents wider than the default. Rollback: revert; nothing stored depends on the layout."
+why: "Review of the feature train #367 (oscilla-af): ce543ef4 relaxes a layout contract of P002 ('the compact Studio path whole') at one width; the relaxation is stated in tests/README.md and is to be paid back, not kept silently."
+scope:
+  - "src/js/ui/studio/compact.js"
+  - "src/js/ui/studio/graph-layout.js"
+  - "src/styles"
+  - "src/index.html"
+  - "tests/browser/first-screen.cjs"
+  - "tests/README.md"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "dist"
+depends_on:
+  - "P002"
+acceptance_criteria:
+  - "Fail-first: the restored `layout widths` assertion (the path's scrollWidth within its clientWidth at 1280x800 with a 16 px margin) fails on the merge base on CI's chromium runner or in a run that pads the chips by the runner's measured 9 px, and passes on the head."
+  - "The Flowbite Pro record does not rise (tests/unit/ui-flowbite-pro.test.mjs); a fit reached by moving the chips to Pro classes lowers it."
+  - "The 1536x1024 visual reference is unchanged, or re-accepted through the visual gate with the reason in the pull request."
+  - "tests/README.md's first-screen row no longer names the 438 > 429 px relaxation."
+validation:
+  - "node tests/browser/first-screen.cjs --only layout,compact-studio"
+  - "npm test"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-01
+updated_at: 2026-11-01

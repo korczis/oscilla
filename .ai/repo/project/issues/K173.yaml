@@ -1,0 +1,23 @@
+id: K173
+milestone: M061
+serves:
+  - "playable-instrument#held-notes-safe"
+title: "A note pressed twice across a re-route releases on both nodes it reached"
+slug: a-note-pressed-twice-across-a-re-route-releases-on-both-nodes
+priority: p2
+profile: implementation
+objective: "Lands as fix(keys). src/js/synth/studio-sink.js keeps held notes as a Map from note to the node id it went to (held.set(note, n.id), line 52 at 15d1bc67). When the same note is pressed again after the route changed (a second key source, MIDI and the on-screen keys, or a re-route between the presses), the second press overwrites the first node's id, and the first node never receives its note-off: the note hangs (prismatic-majordomus-98, review of #410 at 00108c87, R6). Hold a set of nodes per note, or count presses per node, so every note-on is matched by a note-off on the node that took it."
+why: "project.no-silent-feedback and the held-notes-safe criterion: a note that cannot be released is the failure the instrument must never have."
+scope:
+  - "src/js/synth/studio-sink.js"
+  - "tests/unit/"
+depends_on: []
+acceptance_criteria:
+  - "A unit test presses note N routed to node A, re-routes, presses N again (node B), releases N twice: A and B each receive one note-off; it fails on 15d1bc67."
+  - "A browser check in midi.cjs proves no voice is left sounding after the same sequence in chromium, firefox and webkit."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04

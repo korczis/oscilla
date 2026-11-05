@@ -1,0 +1,19 @@
+id: M121
+title: "Owner decisions of the musical-practice proposal"
+slug: owner-decisions-of-the-musical-practice-proposal
+order: 991
+priority: p2
+problem: "The owner's proposal 'Interactive learning and musical practice' (2026-11-03, marked 'Status: PROPOSAL') is recorded as the proposed intent musical-practice, which names no milestone and no criterion. Mapping it onto the plan raised questions only the owner can answer: the grading tolerances, a timing window in milliseconds and a pitch tolerance in cents (Q085); whether practice progress is stored, locally only or not at all (Q086); whether any game element is wanted at all, which the proposal admits only under 'an accepted product decision' (Q087); and which content is exercised first, the riffs, the patches or the scales (Q088)."
+current_state: "Opened on 2026-11-03 with Q085-Q088 open; the plan offers no answer to any of them. Like M063, M084, M088 and M104 it is named by no intent, so the proposal stays unplanned; once the owner decides the intent's standing, the slices planned from it name these questions in depends_on."
+outcome: "Every question of the musical-practice proposal is answered by the owner, or under a delegation the owner gave, and recorded, and the intent is planned from the answers, or cancelled."
+acceptance_criteria:
+  - "Every Q issue of this milestone carries owner_decision evidence with its date and source, or is cancelled with the reason."
+validation:
+  - "manual"
+evidence_required:
+  - "milestone_verified"
+risks:
+  - "Nobody asks the owner: the coordinator raises Q088 and Q085 before the first exercise type is filed (they fix its content and its grading), and Q086 and Q087 before any surface stores or shows a result."
+  - "An answer read as acceptance of the intent: answering these questions does not mark musical-practice accepted; its standing stays proposed until the owner decides it."
+created_at: 2026-11-03
+updated_at: 2026-11-03

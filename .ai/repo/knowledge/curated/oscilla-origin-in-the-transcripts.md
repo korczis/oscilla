@@ -98,3 +98,14 @@ Until the follow-up copy change lands, About is unchanged. Any origin text:
 - uses the 15.5 kHz figure only for the physics point (a tone around 15.5 kHz is audible to
   many people and is not ultrasound), not as a statement about the vendor's product;
 - invents no personal motive.
+
+## Note of 2026-11-03: the copy landed
+
+The text above is as of 2026-10-18. The follow-up copy change is P005 (done; f1f7ca09,
+2026-10-19, merged in #219). About's Origin block now tells the documented start
+(`src/index.html` lines 2900-2903): "OSCILLA began with an anti-bark ad promising “ultrasound
+through any phone's speaker” that only dogs would hear. A phone tone around 15–16 kHz is
+audible to many people, and it is not ultrasound. Its author's reply was “this can be knocked
+together in one HTML5”, and that night it grew into a lab." The browser question follows as
+the framing it grew into (lines 2904-2905), and the copy names no company and no personal
+motive.

@@ -33,4 +33,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-03T00:16:19Z
+started_at: 2026-11-03T00:15:54Z
+started_event: sha256:a55d3debe251aa5c8ad83294f55f1f3b56957ec1932289d15e7fc368202ea206
+completed_at: 2026-11-03T00:16:19Z
+completed_event: sha256:cb0406ba7f58b77732ff69d78f2108c3abb9debda1d5b2924885dbb68bc1de53
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/output-owner.test.mjs tests/unit/scope-follows-owner.test.mjs; node tests/browser/app.cjs"
+    result: "landed in #367 (main merge commit 11cc9fbc, member #298); owner derivation and scope live/idle unit tests; scope-follows-owner and spectrum-marker-follows-sequence in tests/browser/app.cjs; CI run 41357644373 green on the train head c2a6f6c5; Main checks run 41372186924 green on 11cc9fbc; review verdict .ai/repo/reviews/367.yaml (merge)"
+    artifact: ".ai/repo/reviews/367.yaml"
+    commit: 2931af343905d0a432bd8711f18face5d703dd3a
+    recorded_at: 2026-11-03T00:16:11Z

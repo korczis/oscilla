@@ -348,7 +348,7 @@ visualizations and MEASURE.
   the canonical StudioModel, typed ports, one file offline, the cockpit identity, measurement
   provenance travelling with patches) and never as a copy of any product's name, branding,
   artwork, panel layout or trade dress, with no analog-modelling claim
-  (`tests/unit/instrument-wording.test.mjs`, K059).
+  (`tests/unit/synth-wording.test.mjs`, K059).
 
 **Consequences.** Intent `playable-instrument` records D5 as superseded by D11 and hands its
 unissued Wave 3 instrument items to `connected-instrument`; issues K016-K021, K025 and K026

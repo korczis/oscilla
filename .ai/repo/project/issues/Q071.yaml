@@ -1,0 +1,32 @@
+id: Q071
+milestone: M070
+title: "Owner decision: the whole app as an old-school modular, and the hardware elements it may draw"
+slug: owner-decision-the-whole-app-as-an-old-school-modular
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Rule project.visual-identity-lock v3 narrowed the skeuomorphism ban on one surface only, the Synth panel surface (src/js/synth/view), on the owner's order of 2026-10-30 ('musi to vypadat jako arturia'), and banned wood, texture, screws and rivets there. The shared synth-theme layer designed on 2026-11-02 (src/js/ui/synth, src/js/ui/cable; design by dev-53, approved by b0) held its LED, plugs, jack nuts, sheen, wood, screws and texture until the owner answered two questions. (1) Scope, asked as 'the \"real synth, cables as cables, Arturia inspiration\" look: how should it apply?', with the options 'Jen Synth + kabely' (the Synth and its cables only), 'Celá appka jako synth' (the whole app as a synth) and 'Synth + Studio uzly' (the Synth and the Studio nodes). (2) Hardware elements, a multiple choice of 'Jacky a konektory' (jacks and plugs/connectors), 'Kabely s prověsem a leskem' (cables with sag and sheen), 'Šroubky a dřevěné bočnice' (screws and wooden cheeks) and 'Kov, textura, LED záře' (brushed or anodised metal, surface texture, LED glow)."
+why: "The rule bump to project.visual-identity-lock v4 and the synth-theme layer (dev-53 and others) are built from this answer; .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
+current_state: "Answered by the owner on 2026-11-02 (AskUserQuestion, session oscilla-21; see evidence). Scope: 'Celá appka jako synth', so the hardware look applies app-wide (the shell, Studio's graph, nodes, cables and timeline, the labs, MEASURE, Experiments, Analyzer and Compare), no longer only on the Synth panel surface. Elements: all four options. The owner's free-text note, verbatim: 'keep it decent, but real (no gen z fancy frills), old school modulars like \"\"' (the comparison after 'like' was left empty). project.visual-identity-lock v4 encodes it (ADR 0061's resolution note of 2026-11-02); tests/unit/visual-identity-lock-v4.test.mjs holds it."
+scope:
+  - ".ai/repo/project/issues/Q071.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+  - "The answer names the scope of the hardware look and the hardware elements it may draw, with the options that were offered."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+updated_at: 2026-11-02T16:10:31Z
+started_at: 2026-11-02T16:10:03Z
+started_event: sha256:b9758a789c05d411d886c7a3363c93c9fb77a63a80c51a2f1585b66185294caa
+completed_at: 2026-11-02T16:10:31Z
+completed_event: sha256:43d3d75c7c056dd0c3eab5c00872c5f8dcec7e2fa02fec1d876889fd8c7adc95
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-21, 2026-11-02 (two questions, one exchange)"
+    result: "Owner answered on 2026-11-02 (oscilla-21 session, AskUserQuestion). (1) Scope, asked as 'the \"real synth, cables as cables, Arturia inspiration\" look: how should it apply?', options 'Jen Synth + kabely' / 'Celá appka jako synth' / 'Synth + Studio uzly': the owner chose 'Celá appka jako synth' (the whole app as a synth), so the hardware look applies app-wide (shell, Studio graph, nodes, cables and timeline, the labs, MEASURE, Experiments, Analyzer and Compare), no longer only the Synth panel surface. (2) Hardware elements, a multiple choice: the owner chose all of 'Jacky a konektory' (jacks and plugs/connectors), 'Kabely s prověsem a leskem' (cables with sag and sheen), 'Šroubky a dřevěné bočnice' (screws and wooden cheeks) and 'Kov, textura, LED záře' (brushed or anodised metal, surface texture, LED glow), and added, verbatim: 'keep it decent, but real (no gen z fancy frills), old school modulars like \"\"' (the comparison after 'like' was left empty). Encoded by project.visual-identity-lock v4."
+    commit: 32b439e620c7ffc23a8fdc5b3dc55024cbc0c534
+    recorded_at: 2026-11-02T16:10:22Z

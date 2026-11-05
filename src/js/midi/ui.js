@@ -56,9 +56,12 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           return sequencerPlaying() ? 'sequencer' : null;
         },
         refused,
-        // In the Synth workspace the notes play its panel (src/js/synth/ui.js synthSink).
-        route: () => (cmp.workspace === 'synth' && typeof cmp.synthSink === 'function'
-          ? cmp.synthSink() : null),
+        // The Synth's notes play its panel (synth/ui.js synthSink), the Studio's the document
+        // through the same transport (synth/studio-sink.js); elsewhere the Playground voice.
+        route: () => {
+          const sink = { synth: 'synthSink', studio: 'studioSink' }[cmp.workspace];
+          return sink && typeof cmp[sink] === 'function' ? cmp[sink]() : null;
+        },
       });
       notes = notesFor((by) => {
         if (typeof cmp.notify === 'function') cmp.notify('info', 'MIDI', MIDI_REFUSED[by]);
@@ -71,6 +74,14 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         return n;
       };
       if (typeof cmp.kbdInit === 'function') cmp.kbdInit({ notesFor });
+      // Leaving the Studio releases its keys and disarms an armed-only run (studio-sink.js).
+      if (typeof cmp.$watch === 'function') {
+        cmp.$watch('workspace', (ws, old) => {
+          const s = old === 'studio' && ws !== 'studio' && typeof cmp.studioSink === 'function'
+            && cmp.studioSink();
+          if (s && typeof s.leave === 'function') s.leave();
+        });
+      }
       const ids = new WeakMap(); // input -> a number for the note keys, never shown or stored
       let inputs = 0;
       support = createMidiSupport({

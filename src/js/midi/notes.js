@@ -70,12 +70,18 @@ export function parseMidiMessage(data) {
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,
   refused = () => {}, route = () => null } = {}) {
   let refusing = null;
+  // The sink each sounding note went to (21's R1): its off goes there even when the workspace,
+  // and with it route(), has changed since, so a Studio note never outlives a workspace switch.
+  const sunk = new Map();
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
 
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
     const sink = route(); // the Synth panel plays the note instead (K065), one path for all
-    if (sink) return sink.noteOn(note, velocity);
+    if (sink) {
+      sunk.set(keyOf(source, channel, note), sink);
+      return sink.noteOn(note, velocity);
+    }
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = ownedBy();
     if (by) {
@@ -98,7 +104,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
 
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
   function noteOff(note, source = 0, channel = 0) {
-    const sink = route();
+    const key = keyOf(source, channel, note);
+    const sink = sunk.has(key) ? sunk.get(key) : route();
+    sunk.delete(key);
     if (sink) return sink.noteOff(note);
     return engine ? engine.noteOff(keyOf(source, channel, note)) : false;
   }

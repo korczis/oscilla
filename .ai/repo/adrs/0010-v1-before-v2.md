@@ -75,3 +75,12 @@ override it: M005 adopts the text as its source, every section triaged against
 `project.single-file-deliverable`, S001-S063 and the ADRs from 0011 on, so that the superseded
 and the already delivered sections are cancelled with their reason and only the rest is work.
 The first Decision bullet is unchanged by that: V1 itself stays sections 1-63.
+
+### 2026-11-03: where the V1 tests of the Decision live now
+
+The Decision's `tests/*.cjs` were V1's `tests/engine.cjs`, `tests/smoke.cjs` and
+`tests/spec.cjs`, which left with V1's single file in the V2 change (9fe0a15, #3) and stay
+readable at tag `v1.0.0`. Their checks run now as `tests/browser/engine-v1port.cjs` (`npm run
+test:engine`) and, restated in V2 terms, `tests/browser/app.cjs` (the first suite of `npm run
+test:browser`); V1's schedules are replayed as golden vectors by `tests/unit/freeze.test.mjs`.
+Every browser suite of the release gate is under `tests/browser/`, listed in `tests/README.md`.

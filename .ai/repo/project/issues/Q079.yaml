@@ -1,0 +1,34 @@
+id: Q079
+milestone: M069
+serves:
+  - "connected-instrument#riff-library"
+title: "Owner decision: the music library is original-only"
+slug: owner-decision-the-music-library-is-original-only
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Asked in Claude Code session oscilla-af on 2026-11-02 through AskUserQuestion, after the R01 rights audit of the music library pack: 'Music library content in the public MIT repo: R01 (the rights audit) found that SampleRadar and Looperman forbid redistributing samples. FMA's terms forbid scraping and deep links, Mutopia licenses each edition separately, and the Groove MIDI Dataset is CC BY 4.0. What may the library ship?' Options: Original-only (Recommended) / Original + CC0 items / Original + CC0 + CC BY / Original in dist, rest as links."
+why: "The owner's music library pack of 2026-11-02 (OSCILLA_MUSIC_LIBRARY_MASTER_PROMPT) leaves this to the owner; the riff library (K149) and its scale-up are built from the answer."
+current_state: "Answered by the owner on 2026-11-02: 'Original-only (Recommended)'. Only OSCILLA-authored entries ship; well-known commercial songs appear only as reference links that load nothing."
+scope:
+  - ".ai/repo/project/issues/Q079.yaml"
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision), in the owner's words with date and source; a worker never answers it."
+  - "The answer names one of the options offered."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-02
+started_at: 2026-11-02T22:46:33Z
+started_event: sha256:286164757aa4a519677f320780a67ca65a3c18d147ff13c43b20dfa866bb0d95
+updated_at: 2026-11-02T22:46:54Z
+completed_at: 2026-11-02T22:46:54Z
+completed_event: sha256:fe5e5828fd71509d7cf0f31b9490978e214ad8e2483594499a7a296effd2c3bb
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion in Claude Code session oscilla-af (claude-code 901211e2), 2026-11-02, after the R01 rights audit of the music library pack"
+    result: "The owner answered: 'Original-only (Recommended)' (verbatim option label)."
+    commit: 743f8566e9724d0f5dd58a6fadb633b51deb0b86
+    recorded_at: 2026-11-02T22:46:48Z
