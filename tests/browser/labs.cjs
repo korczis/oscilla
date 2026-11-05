@@ -703,9 +703,8 @@ async function runEngine(engine, base) {
   // Its chart lays out its rows once Compare shows it (#278): polled until every row is there.
   const bio = await settled(() => page.evaluate(() => window.__labs.labs.bio.chart.getRows()),
     (rows) => rows.length >= 5, { ms: 5000, what: 'bio chart rows once Compare shows it' });
-  const bioHost = await page.$('#osc-chart-bio canvas');
-  await bioHost.scrollIntoViewIfNeeded();
-  const bioBox = await bioHost.boundingBox();
+  await (await page.$('#osc-chart-bio canvas')).scrollIntoViewIfNeeded();
+  const bioBox = await (await page.$('#osc-chart-bio canvas')).boundingBox();
   await page.mouse.click(bioBox.x + bioBox.width * 0.8, bioBox.y + 21 * 1.5);
   const range = await page.evaluate(() => window.__lastRange);
   check('bio bars from HEARING_RANGES; click selects the sourced range',
