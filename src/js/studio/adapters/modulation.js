@@ -59,7 +59,10 @@ export const envelope = {
     // gates (`gated`, runtime setOwnedParams) is built closed: gate off at `at`, before the
     // attack, so nothing opens it until its owner's first gate, however late that owner runs
     // (review of #332, V4: a stalled first Arm sounded the attack and a full release).
-    let adsr = adsrOf(params);
+    // The parameters as edited so far: the runtime hands update() only the keys that changed,
+    // so each change merges into them and every later gate keeps all the edits (C061).
+    let current = { ...params };
+    let adsr = adsrOf(current);
     const vca = acct.track(ctx.createGain());
     let contour = null;
     if (typeof ctx.createConstantSource === 'function') {
@@ -78,7 +81,8 @@ export const envelope = {
       modTarget: (key) => ({ reason: `${key} is not modulatable` }),
       applyBase() {},
       update(changed, owned, w) { // the next gate
-        adsr = adsrOf({ ...params, ...changed });
+        current = { ...current, ...changed };
+        adsr = adsrOf(current);
         did(w, changed, Object.keys(changed), 'next-gate');
       },
       /** Gate on at t (retriggered from the current value), off after durS (timeline hook). */
