@@ -1738,12 +1738,19 @@ const VIEWS = {
     const tabs = await page.$$eval('[data-osc="synth.tab"]', (t) => t.map((e) => e.dataset.value));
     for (const tab of tabs) {
       await page.locator(`[data-osc="synth.tab"][data-value="${tab}"]`).click();
-      await until(() => page.evaluate((t) => window.OSCILLA.app.synth.tab === t
-        && document.querySelector(`[data-osc="synth.tab"][data-value="${t}"]`)
-          .getAttribute('aria-selected') === 'true'
-        && !!document.querySelector('[data-osc="synth.modules"]')
-        && (t !== 'xy' || !!document.querySelector('[data-osc="synth.xy"]')), tab),
-      { ms: ROW_MS, what: `the Synth's ${tab} tab shows` });
+      // The tab's own face is drawn (the panel renders on the next frame, so the state alone
+      // would let the last tab's controls stand in for this one's): the engine chips are
+      // Engines', the XY card is XY's, and the Panel has neither.
+      await until(() => page.evaluate((t) => {
+        const engines = !!document.querySelector('[data-osc="synth.modules"]')
+          && !!document.querySelector('[data-engine]');
+        const xy = !!document.querySelector('[data-osc="synth.xy"]');
+        const drawn = t === 'engines' ? engines && !xy : t === 'xy' ? xy && !engines
+          : !engines && !xy && !!document.querySelector('[data-osc="synth.modules"]');
+        return window.OSCILLA.app.synth.tab === t && drawn
+          && document.querySelector(`[data-osc="synth.tab"][data-value="${t}"]`)
+            .getAttribute('aria-selected') === 'true';
+      }, tab), { ms: ROW_MS, what: `the Synth's ${tab} tab shows its own face` });
       await visit(tab);
       if (tab !== 'engines') continue;
       const engines = await page.$$eval('[data-engine]', (e) => e.map((x) => x.dataset.engine));
@@ -1804,11 +1811,34 @@ async function driveKnob(page, cid, how) {
   const b0 = await page.evaluate(KNOB_READ, cid);
   const up = b0.now < b0.max;
   if (how === 'pointer') {
-    const l = page.locator(sel);
-    await l.scrollIntoViewIfNeeded();
-    const b = await l.boundingBox();
-    const cx = b.x + b.width / 2;
-    const cy = b.y + b.height / 2;
+    // The knob's centre, read in one evaluate: a render of the panel between a locator's
+    // scroll and its box (the last edit's, on the next frame) detached the element (#399
+    // census run, chromium); the knob drawn again sits where it was. It must also hold still
+    // for two polls in a row: WebKit can still be scrolling the last focused knob into view,
+    // and a press at the first reading then landed on the choice above it.
+    let prev = null;
+    const { cx, cy } = await until(async () => {
+      const now = await page.evaluate((q) => {
+        const el = document.querySelector(q);
+        if (!el) return null;
+        const centre = () => {
+          const r = el.getBoundingClientRect();
+          const x = r.left + r.width / 2;
+          const y = r.top + r.height / 2;
+          const top = r.width && r.top >= 0 && r.bottom <= innerHeight
+            ? document.elementFromPoint(x, y) : null;
+          return top && top.closest('[data-knob]') === el ? { cx: x, cy: y } : null;
+        };
+        // scrolled to the middle only when it is out of view or under the docked keys
+        if (centre()) return centre();
+        el.scrollIntoView({ block: 'center', behavior: 'instant' });
+        return centre();
+      }, sel);
+      const still = now && prev && Math.abs(now.cx - prev.cx) < 0.5
+        && Math.abs(now.cy - prev.cy) < 0.5;
+      prev = now;
+      return still ? now : null;
+    }, { ms: ROW_MS, what: `${cid}: the knob is drawn and still, its centre on top` });
     await page.mouse.move(cx, cy);
     await page.mouse.down();
     await page.mouse.move(cx, cy + (up ? -60 : 60), { steps: 6 });
@@ -1821,9 +1851,10 @@ async function driveKnob(page, cid, how) {
     if (!b0.why) return 'disabled without a stated reason';
     const now = await page.evaluate(KNOB_READ, cid);
     if (now.doc !== b0.doc || now.now !== b0.now) return 'a disabled knob moved';
-    return how === 'pointer' ? holds(() => page.evaluate((w) =>
-      window.OSCILLA.app.synth.status === w, b0.why), `${cid}: the drag is refused with its reason`)
-      : null;
+    if (how !== 'pointer') return null;
+    const e = await holds(() => page.evaluate((w) => window.OSCILLA.app.synth.status === w,
+      b0.why), `${cid}: the drag is refused with its reason`);
+    return e && `${e} (said ${JSON.stringify((await page.evaluate(KNOB_READ, cid)).status)})`;
   }
   return holds(async () => {
     const a = await page.evaluate(KNOB_READ, cid);
@@ -2147,7 +2178,9 @@ const CABLES_READ = () => ({ edges: JSON.stringify(window.OSCILLA.studio.model.g
   cables: window.OSCILLA.app.synthDebug().cables.length });
 both({ id: 'synth.connect', ws: 'synth', control: '[data-connect-to]', read: CABLES_READ,
   pointer: async (page) => {
-    await page.locator('[data-jack="mg.control:out"]').click();
+    const at = await until(() => page.evaluate(JACK_AT, 'mg.control:out').then((a) => a.hit && a),
+      { ms: ROW_MS, what: 'the LFO output jack is on top at its centre' });
+    await page.mouse.click(at.x, at.y);
     await page.locator('[data-connect-to]').first().click();
   },
   keyboard: async (page) => {
