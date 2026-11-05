@@ -1,0 +1,55 @@
+id: K183
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "The XY pad sounds on first touch: patched to the Synth voice by default"
+slug: the-xy-pad-sounds-on-first-touch-patched-to-the-synth-voice
+priority: p0
+profile: implementation
+objective: "Lands as fix(synth). The kaoss-like XY pad (K097) is silent until the user patches it, and patching it cables vco pitch and eg gate, which breaks the keyboard's Keys normals (normals.js; review finding S8), so the obvious default would silence the keys. After (af and 26, 2026-11-05, option B): the pad is one more note input of K178's one Keys source, like the computer keys and MIDI. A touch presses the scale-quantised note, a move glides it legato, a release lets it go, through held-notes with last-note priority between pad, keys and MIDI, so the pad plays exactly what the keys play (panel, engine or Studio target). Y is an ordinary CONTROL cable in the default Synth document (xy.y to the panel filter's frequency), visible and removable; no pitch or gate cable is needed, so the keyboard keeps sounding. The first touch sounds; K184's minimum gate lives in the same path."
+why: "af nav-pages audit wf_ed1cc8d6-3e8 and Play audit wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0), after the owner's complaint in the af session 2026-11-04/05: views feel lost, Play does not work on most pages, nothing runs through one bus, engines are not wrapped, many top-nav pages are obsolete, unconnected, not realtime, poor. Decided by af and b0 on 2026-11-05 under the owner's order of that day 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090)."
+scope:
+  - "src/js/synth"
+  - "src/js/studio/templates"
+  - "src/js/ui/synth"
+  - "tests/unit/xy-default-patch.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+  - "src/js/studio/live-notes.js"
+  - "src/js/synth/panels/xy.js"
+  - "src/js/synth/normals.js"
+  - "src/js/studio/compiler.js"
+  - "src/js/studio/performance-fit.js"
+  - "src/js/studio/adapters/instrument.js"
+  - "src/js/ui/patch/patch-bay.js"
+  - "src/js/ui/kinds/xy-pad.js"
+  - "src/js/midi/keyboard-ui.js"
+  - "tests/unit/xy-pad.test.mjs"
+  - "tests/unit/keyboard-held-notes.test.mjs"
+  - "tests/browser/xy-pad.cjs"
+  - "src/js/studio/runtime.js"
+  - "src/js/synth/view/face.js"
+  - "src/js/midi/notes.js"
+  - "tests/unit/xy-wiring.test.mjs"
+depends_on:
+  - "K097"
+  - "K178"
+acceptance_criteria:
+  - "src/js/studio/runtime.js stays within its source-size cap (tests/unit/source-size-baseline.json, 58000 B) without raising it: the keys+pad train lands after coherence train B, so it first splits a module out of runtime.js (the live-update and trace classification) as a pure move with no behaviour change and its own reviewer verdict line, then K183's edits go on top (b0's order, 2026-11-05)."
+  - "The X and Y routes are declared performance outputs that sum into their target and break no normal (af and 26, 2026-11-05: a plain xy.y to lpf.frequency cable would break normals n21 MG and n22 EG 2, losing the keys' filter envelope): the cable is a visible, typed, removable model edge drawn as summing in the bay, every performance output of the pad that sums into a CONTROL target (Y, and X when X is assigned to a control rather than pitch) is 0 until the first touch and returns to 0 when the finger lifts, unless Hold (Q099) keeps it; X as the pitch input ends with its note (af, after 98's review N2 of a31ad98c: a lifted pad must not leave the filter opened under the keys), the sum stays within the target's declared range, and a unit test shows n21 and n22 still active with the cable in place."
+  - "K183 supersedes K167's phone first action (the explicit Patch button, #420): under option B no patch is needed, so this slice removes the button and K167's first-action criterion is recorded as superseded on its record once #420 is on main (26 and dev-53 agreed, 2026-11-05)."
+  - "tests/unit/xy-default-patch.test.mjs: the default Synth document holds the Y route as a model cable with typed ports (project.typed-ports), the pad's notes reach the voice through the one Keys source (K178's KEY_ROUTES) with last-note priority, the Keys pitch and gate normals stay intact so a computer key and a pad touch both sound, and removing the Y cable leaves the pad playing pitch only."
+  - "A browser check in all three engines and WebKit 390x844 touch: one pointer-down on the pad raises the active source count within a named deadline and moves the pitch with x; release silences it."
+  - "The pull request carries a reviewer's verdict (src/js/synth and studio templates are guarded)."
+  - "Fail-first: the unit test and the browser check named here fail on the merge base (project.fail-first)."
+  - "Browser checks run through tests/browser/lib/suite.cjs with lib/wait.cjs deadlines and assume no sample rate; tests/browser/timing-baseline.json and tests/unit/ui-flowbite-pro-baseline.json do not grow; the iphone.cjs census reach does not fall."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/xy-default-patch.test.mjs"
+  - "node tests/browser/synth.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

@@ -51,11 +51,11 @@
       "why": "renders its own switches and radio groups of node parameters"
     },
     {
-      "family": "knob",
-      "file": "src/js/ui/synth/knob.js",
-      "kind": "unmarked",
-      "slice": "G022",
-      "why": "the synth-theme control core, a second knob value mapping beside synth/view/knob.js; F013 W1b (#420) makes it the one knob core and view/knob.js its adapter, and G022 moves the model marker to it"
+      "family": "pad",
+      "file": "src/js/ui/synth/xy.js",
+      "kind": "skin-logic",
+      "slice": "G030",
+      "why": "the Synth's hardware XY unit (F013 W1b, #420) keeps its own xyValue beside the pad model's xyFromPoint (ui/kinds/xy-pad.js); G030 makes it the model's skin"
     }
   ],
   "renderedNote": "The rendered half (tests/browser/surface-census.cjs families, every workspace at 1536x1024 and 390x844 in chromium, firefox and webkit): each shown element of a family role outside a data-ui-family of its family, keyed \"<family> <data-osc, id, or tag[role] in host>\". Seeded once from the three engines (identical); it only shrinks: the suite fails on a key not listed and on a listed key no page shows.",

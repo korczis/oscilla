@@ -1,0 +1,26 @@
+id: E057
+milestone: M046
+serves:
+  - "engineering-integrity#test-helpers-one-owner"
+title: "Every visual capture launches Chromium from one exported list of launch arguments"
+slug: every-visual-capture-launches-chromium-from-one-list
+priority: p2
+profile: implementation
+objective: "Lands as chore(test), after exp/knob-edge-a (98) lands in Train 7. scripts/visual-synth.mjs declares LAUNCH_ARGS (the autoplay policy plus --disable-partial-raster, which removed a frame-timing-dependent second raster state of the knobs: 7 of 48 captures 202 px off, 0 of 48 with the flag). The other visual captures (the Studio, the gate and MEASURE scripts) launch Chromium with their own literal argument lists, so the same raster nondeterminism can return there. After: one exported constant, in one module, is the launch argument list of every visual capture; a unit test fails when a capture script calls chromium.launch with any other list."
+why: "98's knob-edge fix of 2026-11-05 (bb1de65d) and b0's request for the follow-up; af's review of exp/knob-edge-a asked for the shared constant. One owner per test helper (engineering-integrity#test-helpers-one-owner)."
+scope:
+  - "scripts"
+  - "tests/unit"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit: every scripts/visual-*.mjs (and any capture script that launches Chromium) imports the one launch-argument constant and passes it to chromium.launch; a fixture script with its own literal list is refused."
+  - "Each view's recorded noise is re-measured with the shared arguments on the hosted runner image and darwin, and no accepted reference changes (or the change is accepted with its reason)."
+  - "Done only after each criterion is re-checked on a main commit."
+validation:
+  - "node --test tests/unit/visual-synth.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

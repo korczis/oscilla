@@ -62,6 +62,8 @@ const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const UNROWED = argv.includes('--unrowed');
 
 const ROW_MS = 10000;  // deadline of one row's expectation (a glide is 15-50 ms of audio)
+// A family's deadline unless it declares its own (ms).
+const FAMILY_MS = 300000;
 const RUN_MS = 60000;  // one loopback measurement on a loaded machine
 const BASELINE = path.join(ROOT, 'tests', 'unit', 'control-drive-baseline.json');
 
@@ -1504,7 +1506,12 @@ family({ id: 'links.internal', control: 'a[href="#osc-main"], a[href^="mailto:"]
 // href names; tests/browser/cross-links.cjs judges the template each opens and the way back,
 // and the members shown only with a stored experiment or finding.
 const WS_LINK = 'a[data-osc][href^="#m="]:not([data-osc^="nav."])';
-family({ id: 'links.workspace', control: WS_LINK,
+// Its deadline is its own: every member opens a fresh app twice (pointer, Enter), about 2 s each
+// on a CI webkit runner. #437 measured 18 members in 72 s; lane A's Related strip and menu
+// (#386) bring 79, about 316 s, past the shared FAMILY_MS. 900 s keeps about 2.8x headroom
+// and the census within its 35-minute CI step (11 minutes on main).
+const WS_LINK_MS = 900000;
+family({ id: 'links.workspace', control: WS_LINK, ms: WS_LINK_MS,
   why: 'each link to another workspace opens the workspace its href names',
   run: async (page, browser) => {
     const bad = [];
@@ -1932,7 +1939,8 @@ if (require.main === module) {
         }
         for (const f of FAMILIES) {
           if (ONLY && !ONLY.has(f.id)) continue;
-          const r = await bounded(runFamily(browser, f), { ms: 300000, what: `family ${f.id}` });
+          const r = await bounded(runFamily(browser, f), { ms: f.ms || FAMILY_MS,
+            what: `family ${f.id}` });
           report(r.ok ? 'PASS' : 'FAIL', `family:${f.id}`, r.ok ? JSON.stringify(r.detail)
             : r.error);
         }

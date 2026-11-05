@@ -1,0 +1,34 @@
+id: T029
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "'Safe max' reads 'Digital limit', and the no-fake-science copy scan covers README, docs and a bare 'dB SPL'"
+slug: safe-max-reads-digital-limit-and-the-copy-scan-covers-docs
+priority: p2
+profile: implementation
+objective: "Lands as fix(copy). af's Hardening synthesis: the Device & Limits readout at src/index.html:719 is labelled 'Safe max' although it shows the digital frequency limit (safeMaxFor below Nyquist), and reads as a hearing-safety claim no frequency-safety pattern catches (no-fake-science.test.mjs:55-56); shippedCopy() (no-fake-science.test.mjs:214-221) leaves out README.md and docs/**/*.md (measured below; not a free ratchet); a bare 'dB SPL' is not banned (:61); Learn's 'Nominally 20 Hz - 20 kHz' (src/js/data/learn.js:78) is uncited. After: the label reads 'Digital limit' (the data-osc key device.safeMax stays, so links and tests hold); shippedCopy reads README.md and docs/**/*.md with fenced code stripped; BANNED gains the pattern safe max(?:imum)? (case-insensitive, word-bounded) and a bare 'dB SPL': a 'dB SPL' whose sentence holds none of the qualifiers calibrat-, never, only, not, until, uncalibrated, reference or '94 dB' (the rule stated in the test). Measured at origin/main a19f1ff6 over README.md and docs/**/*.md with fenced code stripped: 46 'dB SPL' hits, 1 bare (docs/v3/architecture.md), fixed or qualified in the same change; 'safe max(imum)' hits docs/v31/timeline.md:368 once and src/index.html:719 once in shipped copy (the src/js/data/presets.js hits are comments, outside shippedCopy). The docs glob is README.md plus docs/**/*.md (git ls-files), not only docs/*.md (3 hits at the top level). The Learn line cites its source or is narrowed to what the source says, and the cited-style check of tests/unit/bioacoustics.test.mjs is extended to learn.js."
+why: "af's Hardening proof-chain synthesis (copy scope, smallest slice 8), folded in by af's critique B2 (mesh, 2026-11-05): \"src/index.html:719 'safe max' -> 'Digital limit'\"."
+scope:
+  - "src/index.html"
+  - "src/js/data/learn.js"
+  - "tests/unit/no-fake-science.test.mjs"
+  - "tests/unit/bioacoustics.test.mjs"
+  - "docs/v3/architecture.md"
+  - "docs/v31/timeline.md"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: the new BANNED pattern safe max(?:imum)? hits src/index.html:719 on the merge base, and the docs scan hits docs/v31/timeline.md:368 and the bare 'dB SPL' of docs/v3/architecture.md."
+  - "shippedCopy includes README.md and docs/**/*.md (code fences stripped) and the scan passes on them; a fixture that adds 'safe max' or a bare 'dB SPL' to docs fails."
+  - "The Device & Limits readout shows 'Digital limit'; data-osc device.safeMax and its browser checks are unchanged."
+  - "learn.js:78 names its source, and the cited-style check of tests/unit/bioacoustics.test.mjs covers learn.js."
+  - "The qualifier rule is in the test with a case per qualifier and one bare case; the measured counts (46 hits, 1 bare) are in the pull request body."
+  - "Not a guarded path under v2 (src/index.html is guarded once R031 lands; then the second seat of Q091 judges it). Lane: dev-53."
+validation:
+  - "node --test tests/unit/no-fake-science.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -36,10 +36,15 @@ test('every text of the bay is 12 px or more', () => {
 test('a jack label fits its pitch and its accessible name keeps the whole label', () => {
   assert.equal(typeof bay.shortLabel, 'function');
   assert.equal(bay.shortLabel('Cutoff'), 'Cutoff');
-  assert.equal(bay.shortLabel('Resonance').length, bay.LABEL_MAX);
-  assert.match(bay.shortLabel('Resonance'), /…$/);
-  assert.equal(bay.shortLabel('Velocity', 'out').length, bay.LABEL_MAX);
-  assert.match(bay.shortLabel('Velocity', 'out'), /… ▸$/);
+  assert.equal(bay.shortLabel('Cross-fade').length, bay.LABEL_MAX);
+  assert.match(bay.shortLabel('Cross-fade'), /…$/);
+  assert.equal(bay.shortLabel('Sustained', 'out').length, bay.LABEL_MAX);
+  assert.match(bay.shortLabel('Sustained', 'out'), /… ▸$/);
+  // A word a panel abbreviates is printed so, as hardware does, never cut (p2's review, V3).
+  assert.equal(bay.shortLabel('Velocity', 'out'), 'Vel ▸');
+  assert.equal(bay.shortLabel('Modulator'), 'Mod');
+  assert.equal(bay.shortLabel('Control', 'out'), 'CV ▸');
+  assert.equal(bay.shortLabel('Resonance'), 'Res');
   assert.equal(bay.shortLabel('Gate', 'out'), 'Gate ▸');
   const { svg } = svgAt(358);
   const jackText = /<text [^>]*text-anchor="middle"[^>]*>([^<]*)<\/text>/g;
@@ -53,7 +58,7 @@ test('a jack label fits its pitch and its accessible name keeps the whole label'
     .map((m) => ({ n: m[2].replace(/&[a-z]+;/g, '_').length,
       len: +(m[1].match(/textLength="([\d.]+)"/) || [])[1] || 0,
       adjust: /lengthAdjust="spacingAndGlyphs"/.test(m[1]) }));
-  assert.ok(fit.some((f) => f.n === bay.LABEL_MAX), 'some label is full length');
+  // The panel's own labels now fit by abbreviation; any full-length one is still held.
   for (const f of fit) {
     if (f.n === bay.LABEL_MAX) {
       assert.ok(f.adjust && f.len > 0 && f.len <= bay.JACK_PITCH - 6, JSON.stringify(f));

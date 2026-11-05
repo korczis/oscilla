@@ -29,4 +29,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:03:06Z
+started_at: 2026-11-05T00:02:47Z
+started_event: sha256:041e0c754cc37fdf951193911902cfea13c1ba8a43fb7371f7c3a4c40050c122
+completed_at: 2026-11-05T00:03:06Z
+completed_event: sha256:133aecbd334c2cb4e54a7fadeca07000bb3391301df3161887635cf6967e28aa
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/ci-changes.test.mjs tests/unit/ci-gates-model.test.mjs tests/unit/ci-workflows.test.mjs"
+    result: "52 pass, 0 fail, on a git archive of origin/main 6d5efa89. Covers the allowlist near misses, the fail-closed classify table, every event but pull_request, only base main gated, real-git renames/deletions/spaces/tests/*.md/empty diff, the gate verdict over result combinations, the ci.yml wiring and imports limited to built-ins."
+    artifact: "2f442e114dc752a36b68a98cd1db656b0eb2f8e1"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:02:37Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/277.yaml"
+    result: "Review verdict .ai/repo/reviews/277.yaml (verdict: merge) is on origin/main; landed as #277 carried by merge train 3 (#404, merge 2f442e11), main commit 2f442e114dc752a36b68a98cd1db656b0eb2f8e1."
+    artifact: ".ai/repo/reviews/277.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:02:42Z

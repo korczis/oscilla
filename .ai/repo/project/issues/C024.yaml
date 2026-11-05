@@ -4,10 +4,10 @@ serves:
   - "coherent-state#views-describe-what-sounds"
 title: "Keyboard and MIDI notes register with outputOwner, so the scope and its description match what sounds"
 slug: keyboard-and-midi-notes-register-with-outputowner
-priority: p2
+priority: p0
 profile: implementation
 objective: "Lands as fix(visualization). After C013 the scope and Spectrum follow outputOwner (src/js/ui/workbench.js outputOwnerOf({ instrument, sequencer, studio })), but keyboard and MIDI notes are not an owner: they reach the scope only through a vizInputs override (src/js/midi/keyboard-ui.js:159-162, vizInputsWithNotes) that outputOwner does not know. Before: while a key is held and nothing else plays, the scope draws the live note while the canvas description and the status bar name no owner (or the instrument at its set frequency). After: held notes (MIDI, computer keys, on-screen keys, in every route) register with the one output-owner computation, the visualization bridge reads outputOwner alone, the vizInputs override is removed, and the drawing, the canvas description and the status bar name the same owner. The newest-action-wins and refusal rules of C002 hold for notes too. Rollback: revert; no saved state changes."
-why: "Review of the feature train #367 (oscilla-af, verdict at 5cad3dcf, finding F5 'D4', P2): keyboard and MIDI notes reach the scope through a vizInputs override that outputOwner does not know, so the canvas description contradicts the drawing. F7 (P3) is the same root: T001's ceiling indicator reads playing || seqPlaying, not the output owner."
+why: "Review of the feature train #367 (oscilla-af, verdict at 5cad3dcf, finding F5 'D4', P2): keyboard and MIDI notes reach the scope through a vizInputs override that outputOwner does not know, so the canvas description contradicts the drawing. F7 (P3) is the same root: T001's ceiling indicator reads playing || seqPlaying, not the output owner. Raised from p2 to p0 on 2026-11-05 (af's critique of 96daa67b): the p0 bus chain C036 then C037 depends on it."
 scope:
   - "src/js/visualization/output-owner.js"
   - "src/js/visualization/visualization-bridge.js"
@@ -36,4 +36,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-01
-updated_at: 2026-11-01
+updated_at: 2026-11-05

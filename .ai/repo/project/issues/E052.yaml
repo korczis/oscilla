@@ -1,0 +1,28 @@
+id: E052
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "tests/browser/v3-ui.cjs runs through the suite harness and its PENDING entry and timing debt are gone"
+slug: testsbrowserv3-uicjs-runs-through-the-suite-harness-and-its
+priority: p1
+profile: implementation
+objective: "Lands as test(browser). Hardening S9, second finding. At main 68b117f3 v3-ui.cjs is the only browser suite outside tests/browser/lib/suite.cjs (PENDING in tests/unit/browser-suite-contract.test.mjs:33, for #149 and #151); its timing debt is recorded (raw-playwright 1, unbounded-wait 4, timer-sleep 14, fixed-frame 1) and it has no load gate. K038, K042, K055, U018 and K087 require their checks in v3-ui.cjs to run inside suite.cjs, which is false until this lands, so they depend on it. After: v3-ui.cjs runs through suite.cjs and waits through wait.cjs; its PENDING entry and its rows in tests/browser/timing-baseline.json are deleted."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S9. Contract: project.suite-harness v1, project.bounded-test-timing v2."
+scope:
+  - "tests/browser/v3-ui.cjs"
+  - "tests/unit/browser-suite-contract.test.mjs"
+  - "tests/browser/timing-baseline.json"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "PENDING in tests/unit/browser-suite-contract.test.mjs is empty and the test asserts it stays empty; a suite file that does not go through suite.cjs fails it."
+  - "tests/browser/timing-baseline.json has no v3-ui.cjs row; the browser-timing scan passes; every v3-ui.cjs case passes in chromium, firefox and webkit from file:// and /oscilla/ under the load gate."
+  - "fail-first: n/a, a test(browser) change; the debt numbers before and after are in the pull request body."
+  - "Not guarded under v2; R033 brings browser tests under the guard. prismatic-majordomus-98 is asked for a critique (measurement suites)."
+validation:
+  - "node --test tests/unit/browser-suite-contract.test.mjs tests/unit/browser-timing.test.mjs"
+  - "node tests/browser/v3-ui.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

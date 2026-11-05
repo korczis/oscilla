@@ -26,6 +26,7 @@ depends_on:
   - "K037"
   - "K052"
   - "F004"
+  - "E052"
 acceptance_criteria:
   - "tests/unit/measure-zoom.test.mjs, failing on the merge base: the clamp to the view range, the 3-point and 20-sample minimum spans, and the IR range rebuild request."
   - "tests/browser/v3-ui.cjs: a drag zooms within the view range and Reset restores it; + and the Zoom in button zoom; after a click on the chart a plain wheel leaves the scale alone and the page scrolls; zoom survives a theme toggle; IR zoom to a short span rebuilds with decimation.factor === 1; under emulated reduced motion the scale reaches its target in one setScale; a tap on a touch pointer pins the readout. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline and assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac); tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
@@ -42,4 +43,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05

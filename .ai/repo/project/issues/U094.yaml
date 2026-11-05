@@ -1,0 +1,21 @@
+id: U094
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "U002's record matches what shipped"
+slug: u002-s-record-matches-what-shipped
+priority: p1
+profile: routine
+objective: "Lands as chore(plan). U002 is BLOCKED by F009 with no evidence although its deliverable shipped in #274 on the legacy markup (reviews/274.yaml). After: U002 records #274's partial evidence and splits the Pro-dependent remainder onto F009, or is amended so its criteria match what remains."
+why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
+scope:
+  - ".ai/repo/project/issues/U002.yaml"
+depends_on: []
+acceptance_criteria:
+  - "U002 either carries verified evidence for its met criteria with the remainder moved to F009, or its criteria name only what is unmet; plan validate passes."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

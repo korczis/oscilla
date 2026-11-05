@@ -7,6 +7,7 @@ problem: "Studio wiring is node-level and exact-hit (findings S2, S6, S13), the 
 outcome: "Wiring captures, explains refusals, inserts, duplicates and fans out in one undo step each; search is fuzzy; selections align and boxes mute; a cable shows its signal; a first patch teaches the gestures; 300-node graphs stay within budget; a node is one declaration with a generated reference. Nothing grows the Flowbite Pro ratchet."
 acceptance_criteria:
 - "V631, V632, V610, V611, V612, V613, V614, V616, V617, V618, V619 and V633 are done with their evidence, in P04 order A (V631, V619), B (V632), C (V611-V613, V616), D (V614), E (V633), F (V610, V617, V618); npm run release-gate passes at the last one."
+- "K164, K165, K166 and K185 (planned into this milestone 2026-11-03 to 2026-11-05) are done with their evidence; added on resolving af's critique of 96daa67b, which found M080 gating none of them."
 validation:
 - npm run release-gate
 evidence_required:

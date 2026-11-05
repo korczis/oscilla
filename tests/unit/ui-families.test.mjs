@@ -83,8 +83,11 @@ test('the baseline: each entry names its family slice and why, and no file twice
     }
     assert.equal(new Set(baseline.rendered.map((r) => r.key)).size, baseline.rendered.length,
       'a rendered key listed twice');
-    assert.ok(baseline.duplicates.some((d) => d.family === 'knob'
-      && d.file === 'src/js/ui/synth/knob.js'), 'the second knob core is a listed duplicate');
+    // Train 6 (#420) made the synth-theme control core the one knob: it is the model, the
+    // Synth panel's view its skin, and neither is a listed duplicate any more.
+    assert.equal(FAMILIES.knob.model, 'src/js/ui/synth/knob.js', 'the knob model is the core');
+    assert.ok(!baseline.duplicates.some((d) => d.family === 'knob'
+      && /synth\/(view\/)?knob\.js$/.test(d.file)), 'no knob core or skin is a listed duplicate');
   });
 
 // ------------------------------------------------------------------------------ mutations

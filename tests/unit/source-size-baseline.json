@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 306000,
+    "src/index.html": 307100,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 63000,
     "src/js/experiments/validate.js": 64000,
@@ -129,6 +129,12 @@
     },
     {
       "file": "src/index.html",
+      "cap": 286000,
+      "pr": 436,
+      "reason": "the 3.21 About station (project.about-names-current-release) takes src/index.html 553 bytes past 285 000; the release adds no other markup"
+    },
+    {
+      "file": "src/index.html",
       "cap": 299000,
       "pr": 386,
       "reason": "merging main's synth train (#385: K066/K102 presets and patch library, the XY tab, the docked keyboard) into lane A's shell, page header and registry-driven page parts (#386)"
@@ -174,6 +180,18 @@
       "cap": 306000,
       "pr": 386,
       "reason": "lane A's train carries K075's data-osc-link markers onto the Pro shell and Learn and Presets on Pro, 269 bytes past the 305 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 307000,
+      "pr": 386,
+      "reason": "merging main's next About station (the release line after the last one, with its Contracts entry) into lane A's Pro shell, 300 bytes past the 306 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 307100,
+      "pr": 386,
+      "reason": "the phone HOLD margin bound to the Playground (#386 Browser gate on linux: the page header's and the safety strip's phone classes under workspace === 'playground', the sentence's max-sm:-mt-1), 29 bytes past the 307 000 cap"
     }
   ]
 }

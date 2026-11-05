@@ -19,7 +19,7 @@
 // slice that removes it (the baseline only shrinks).
 
 export const FAMILIES = Object.freeze({
-  knob: Object.freeze({ slice: 'G022', model: 'src/js/synth/view/knob.js',
+  knob: Object.freeze({ slice: 'G022', model: 'src/js/ui/synth/knob.js',
     what: 'a rotary value control: value to angle, drag, keys, typed entry, valuetext' }),
   slider: Object.freeze({ slice: 'G023', model: null,
     what: 'a linear value control: value to track position and fill' }),

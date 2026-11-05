@@ -19,6 +19,7 @@ import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
 export const STUDIO_SINK_TEXT = Object.freeze({
   none: 'Nothing in this Studio plays notes: add a Keys node or an engine to play from the keys.',
   refused: 'A measurement owns the output: the keys play after it.',
+  unarmed: 'The Studio could not start for the keys: press Play or try again.',
 });
 
 export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () => {},
@@ -47,7 +48,8 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
       const r = t.arm();
       if (!r || !r.ok) {
         const refusedByOwner = r && r.code === 'claim-refused';
-        say(refusedByOwner ? STUDIO_SINK_TEXT.refused : (r && r.reason) || '', true);
+        say(refusedByOwner ? STUDIO_SINK_TEXT.refused : (r && r.reason)
+          || STUDIO_SINK_TEXT.unarmed, true);
         return { ok: false, reason: refusedByOwner ? 'measurement' : (r && r.code) || 'arm' };
       }
     }
@@ -81,7 +83,8 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
    *  transport no longer owns the output; a run the user started with PLAY is left alone. */
   function leave() {
     const { t } = parts();
-    held.clear();
+    // A PLAYed run keeps the held map (98's R2 on #413): a key still down is released on the node
+    // it went to, even after a re-route; only an armed run is ended here (allOff clears it).
     if (!t || !t.armed) return false;
     allOff();
     t.disarm();
