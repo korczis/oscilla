@@ -2926,16 +2926,16 @@
         <section class="osc-about-block" aria-labelledby="osc-about-next" data-osc="about.next">
           <h3 class="osc-about-h" id="osc-about-next"><span class="osc-num">B</span> What comes
             next<span x-text="` · as of v${ROADMAP.release}`"></span></h3>
-          <p>The open milestones of OSCILLA's plan and how many of each one's required issues are
-            done: now under way, next ready to start, later waiting on work above.</p>
+          <p>The open milestones of OSCILLA's plan: now under way, next ready to start, later
+            waiting on work above.</p>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
             id="osc-about-next-now"
             x-text="`${ROADMAP.phase.now.title} · ${ROADMAP.phase.now.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-now" data-osc="about.next.now">
             <template x-for="m in ROADMAP.phase.now.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
@@ -2943,9 +2943,9 @@
             x-text="`${ROADMAP.phase.next.title} · ${ROADMAP.phase.next.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-next" data-osc="about.next.next">
             <template x-for="m in ROADMAP.phase.next.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
@@ -2963,9 +2963,9 @@
           <ul role="list" aria-labelledby="osc-about-next-later" data-osc="about.next.later"
             id="osc-about-next-later-list" x-show="aboutLaterOpen" x-cloak>
             <template x-for="m in ROADMAP.phase.later.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
         </section>

@@ -520,3 +520,43 @@ test('U086: the roadmap names the release it describes, and the heading renders 
   assert.doesNotMatch(text(view.slice(at, view.indexOf('<h4', at))), /\bthis release\b/,
     'the section names the release, not "this release"');
 });
+
+// ------------------------------------------- U092: a roadmap item reads title, then its count
+// Each item of the three lists names its milestone first and then "N of M issues done", the
+// count's unit stated. From 768 px its grid gives the title the wide column and the count the
+// rest (the About list rows are a 112 px label column otherwise, src/styles/about.css); below
+// it the row is one column, the title above its count.
+/** The problems of one phase list's item template, one string each. */
+export function roadmapItemProblems(section, phase) {
+  const from = section.indexOf(`data-osc="about.next.${phase}"`);
+  if (from < 0) return [`What comes next has no ${phase} list`];
+  const item = section.slice(from, section.indexOf('</ul>', from)).match(/<li\b[\s\S]*?<\/li>/);
+  if (!item) return [`the ${phase} list has no item template`];
+  const li = item[0];
+  const problems = [];
+  const title = li.search(/x-text="m\.title"/);
+  const count = li.search(/x-text="`\$\{m\.done\} of \$\{m\.required\}[^`]*`"/);
+  if (title < 0 || count < 0) return [`the ${phase} item has no title or no count`];
+  if (count < title) problems.push(`the ${phase} item reads its count before its title`);
+  if (!/x-text="`\$\{m\.done\} of \$\{m\.required\} issues done`"/.test(li)) {
+    problems.push(`the ${phase} item's count does not say "N of M issues done"`);
+  }
+  const cols = li.match(/^<li\b[^>]*\bclass="[^"]*\bmd:!grid-cols-\[([^\]]+)\]/)?.[1];
+  if (!cols || !/^(?:minmax\(0,1fr\)|1fr)_auto$/.test(cols)) {
+    problems.push(`the ${phase} item does not give its title the wide column`);
+  }
+  return problems;
+}
+
+test('U092: each roadmap item reads its title first, then "N of M issues done"', () => {
+  const at = view.indexOf('data-osc="about.next"');
+  const section = view.slice(at, view.indexOf('</section>', at));
+  for (const phase of ['now', 'next', 'later']) {
+    assert.deepEqual(roadmapItemProblems(section, phase), [], phase);
+  }
+  // mutation: the count moved before the title, or without its unit, is named
+  const old = '<ul data-osc="about.next.now"><li class="md:!grid-cols-[1fr_auto]"><b '
+    + 'x-text="`${m.done} of ${m.required} done`"></b><span x-text="m.title"></span></li></ul>';
+  assert.deepEqual(roadmapItemProblems(old, 'now'), ['the now item reads its count before its '
+    + 'title', 'the now item\'s count does not say "N of M issues done"']);
+});
