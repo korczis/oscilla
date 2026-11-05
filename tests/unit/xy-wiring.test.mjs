@@ -20,8 +20,14 @@ import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import * as wiring from '../../src/js/synth/view/xy-wiring.js';
 import * as xy from '../../src/js/synth/xy.js';
 import { createXyModel } from '../../src/js/ui/kinds/xy-pad.js';
-import { splitJack } from '../../src/js/synth/panel.js';
 import { xyDegree } from '../../src/js/studio/nodes/instrument.js';
+import { NOTE_NAMES, SCALE_MODES, midiToName } from '../../src/js/core/music.js';
+import { DB_SCALE_FLOOR } from '../../src/js/studio/automation.js';
+import { compileStudio, computeBases, limitBoundText } from '../../src/js/studio/compiler.js';
+import { safeMaximum } from '../../src/js/sequencer/model.js';
+import { knobModel } from '../../src/js/synth/view/knob.js';
+import { xyYReading } from '../../src/js/synth/xy.js';
+import { SOURCE_RANGES, splitJack } from '../../src/js/synth/panel.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
@@ -118,9 +124,9 @@ function jackName(id) {
  * the keys' real note layer (midi/notes.js routed to synth/notes-sink.js) as the pad's input,
  * its calls recorded: [kind, ...args].
  */
-function rig({ audioState = 'running', store = defaultStore } = {}) {
+function rig({ audioState = 'running', store = defaultStore, sampleRate = 48000 } = {}) {
   const st = store();
-  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const fx = createFakeAudioEnv({ sampleRate });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init(), 'engine.init');
   const runtime = createStudioRuntime({ engine });
@@ -155,7 +161,7 @@ function rig({ audioState = 'running', store = defaultStore } = {}) {
   const padId = nodes().get('xy').id;
   const keysId = nodes().get('keys').id;
   return { st, real, transport, calls, app, pad, said, host, mount, padId, keysId, runtime, fx,
-    layer, noted, input, forced: (why) => releases(why), registered: () => !!releases };
+    layer, noted, input, forced: (why) => releases(why), registered: () => !!releases, engine };
 }
 
 /** Touch the pad: the gate opens, the transport arms, the Keys node holds the pad's note. */
@@ -438,7 +444,9 @@ test('first open edits nothing and plays at once: enabled, no Patch button, its 
   assert.doesNotMatch(controls.innerHTML, /data-xy-voice|Patch the pad/, 'no Patch button');
   assert.doesNotMatch(r.host.innerHTML, /data-xy-first="" [^>]*hidden/, 'the line is shown');
   const stated = r.host.querySelector('[data-xy-default]').textContent;
-  assert.match(stated, /^Default: C Minor pentatonic over 2 oct from C3; the pad plays what the /i);
+  // The panel's VCOs sit at 16' and 8', both in the mix: the range starts at the 16' note heard
+  // (S3), reached through the keys' pitch normals the pad plays (K183).
+  assert.match(stated, /^Default: C Minor pentatonic over 2 oct from C2; the pad plays what the /i);
   assert.match(stated, /Y drives LPF Cutoff \(the XY lead's scale and target\)/);
   const first = r.host.querySelector('[data-xy-first]');
   assert.equal(first.textContent, XY_TEXT.first);
@@ -563,4 +571,322 @@ test('one wiring: no file but xy-wiring.js builds the pad\'s cables; the XY tab 
   assert.doesNotMatch(tab, /addEventListener|\.live\(|xyDegree/, 'the XY tab wires nothing');
   assert.doesNotMatch(code(WIRING), /window\.addEventListener|keys\.bind/,
     'no window listener and no key binding of its own');
+});
+
+// ---------------------------------------------------------------- the view's data (S3)
+
+/** The pad's node with its scale set to `scale` (one NODE_PARAM_SET), then mounted. */
+function scaled(r, scale) {
+  const id = PANEL.resolve(r.st.getModel()).get('xy').id;
+  assert.equal(r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId: id, params: scale }).ok, true);
+  return r.mount();
+}
+
+test('each cell is named by the note the runtime plays there, for every scale, key and span',
+  () => {
+    const SCALES = [
+      { mode: 'minor-pentatonic', key: 'C', octave: 3, span: 2 },
+      { mode: 'dorian', key: 'D', octave: 2, span: 1 },
+      { mode: 'major', key: 'F#', octave: 4, span: 3 },
+      { mode: 'chromatic', key: 'A#', octave: 1, span: 1 },
+      { mode: 'locrian', key: 'B', octave: 5, span: 4 },
+    ];
+    for (const sc of SCALES) {
+      const r = rig();
+      const m = scaled(r, sc);
+      const { opts, model } = m.view;
+      const steps = sc.span * SCALE_MODES[sc.mode].length + 1;
+      assert.equal(opts.cells.length, steps, `${sc.mode}: one cell per step`);
+      const h = r.runtime.nodes;
+      for (let i = 0; i < steps; i++) {
+        const fx = (i + 0.5) / steps;
+        if (i === 0) assert.equal(model.down(1, fx, 0.5), true);
+        else assert.equal(model.move(1, fx, 0.5), true);
+        assert.equal(model.value.x, i);
+        // What the runtime's pad handle plays for the x the mount sent.
+        const ev = h.get(r.padId).outputs.pitch.offset.events;
+        const pitch = ev[ev.length - 1].value; // the last step set on the pitch AudioParam
+        const played = midiToName(69 + 12 * pitch);
+        const what = `${sc.key} ${sc.mode} span ${sc.span} cell ${i}`;
+        // The panel's VCOs at 16' and 8', both in the mix: the note heard is VCO 1's, the lower.
+        const heard = vcoNote(r, 'vco1', pitch);
+        assert.equal(heard, midiToName(69 + 12 * pitch - 12), `${what}: 16' is an octave down`);
+        assert.equal(opts.readout.x(i), heard, `${what}: the ring's note`);
+        assert.ok(model.text('x').startsWith(`${heard}, degree `), `${what}: X's aria-valuetext`);
+        const c = opts.cells[i];
+        assert.equal(c.label, steps <= 15 || c.root ? heard
+          : NOTE_NAMES[NOTE_NAMES.indexOf(played.replace(/-?\d+$/, ''))], `${what}: its label`);
+        assert.equal(c.root, played.replace(/-?\d+$/, '') === sc.key, `${what}: root`);
+      }
+      model.up(1);
+      m.destroy();
+      stopNow(r);
+    }
+  });
+
+const lastOf = (prm) => (prm.events.length ? prm.events[prm.events.length - 1].value
+  : prm.value);
+/** The note panel VCO `mid` sounds on the running graph for the pad's Pitch `pitch` (octaves):
+ *  its oscillator's frequency x 2^(its pitch cable's gain x pitch), named. The cable is the
+ *  pad's own Pitch where patched, else the keys' pitch normal the pad plays through (K183). */
+function vcoNote(r, mid, pitch) {
+  const id = PANEL.resolve(r.st.getModel()).get(mid).id;
+  const edges = r.st.getModel().graph.edges.filter((x) => x.from.port === 'pitch'
+    && x.to.node === id);
+  const e = edges.find((x) => x.from.node === r.padId)
+    || edges.find((x) => x.from.node === r.keysId);
+  const osc = r.runtime.nodes.get(id).outputs.audio;
+  const g = lastOf(r.runtime.edges.get(e.id).gain.gain);
+  return midiToName(69 + 12 * Math.log2((lastOf(osc.frequency) * 2 ** (g * pitch)) / 440));
+}
+
+/**
+ * A preset (panel values, then `edit` on the store) touched at a cell: the note each panel VCO
+ * sounds on the running graph (vcoNote) and the mount's texts for that cell.
+ */
+function heardAt(id, values = {}, edit = null) {
+  const r = rig({ patch: false });
+  assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, id).action).ok, true);
+  const res = PANEL.resolve(r.st.getModel());
+  for (const [jack, value] of Object.entries(values)) {
+    const [mod, key] = jack.split('.');
+    assert.equal(r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId: res.get(mod).id, key, value })
+      .ok, true);
+  }
+  if (edit) edit(r, res);
+  const m = r.mount();
+  hold(r, m);
+  const i = m.view.model.value.x;
+  const pitch = lastOf(r.runtime.nodes.get(r.padId).outputs.pitch.offset); // the pad's Pitch
+  const out = { sent: midiToName(69 + 12 * pitch), vco1: vcoNote(r, 'vco1', pitch),
+    vco2: vcoNote(r, 'vco2', pitch), ring: m.view.opts.readout.x(i),
+    aria: m.view.model.text('x'), stated: r.host.querySelector('[data-xy-default]').textContent };
+  m.view.model.up(1);
+  m.destroy();
+  stopNow(r);
+  return out;
+}
+/** Whether note name `b` is one octave under `a` ("C3", "C2"). */
+const octaveUnder = (a, b) => {
+  const [, na, oa] = /^([A-G]#?)(-?\d+)$/.exec(a);
+  const [, nb, ob] = /^([A-G]#?)(-?\d+)$/.exec(b);
+  return na === nb && Number(ob) === Number(oa) - 1;
+};
+/** The ring and X's aria-valuetext name `note`. */
+function names(v, note, what) {
+  assert.equal(v.ring, note, `${what}: the ring`);
+  assert.ok(v.aria.startsWith(`${note}, degree `), `${what}: ${v.aria}`);
+}
+
+test('XY bass names the note heard: both VCOs at 16\', an octave under the pad\'s Pitch', () => {
+  const v = heardAt('xy-bass');
+  assert.equal(v.vco1, v.vco2, 'both VCOs sound one note');
+  assert.ok(octaveUnder(v.sent, v.vco1), "16' sounds an octave under the pad's Pitch");
+  names(v, v.vco1, 'XY bass');
+  assert.match(v.stated, /over 1 oct from D1;/, 'the range from the note heard (pad D2)');
+});
+
+test('XY lead names the note heard: both VCOs at 8\', the pad\'s own note (as before)', () => {
+  const v = heardAt('xy-lead');
+  assert.deepEqual([v.vco1, v.vco2], [v.sent, v.sent]);
+  names(v, v.sent, 'XY lead');
+  assert.match(v.stated, /over 2 oct from C3;/);
+});
+
+test('XY sweep as built (16\' and 8\', both in the mix) names the 16\' note, the lower', () => {
+  const v = heardAt('xy-sweep');
+  assert.ok(octaveUnder(v.vco2, v.vco1), "VCO 1 at 16' an octave under VCO 2 at 8'");
+  names(v, v.vco1, 'XY sweep');
+});
+
+test('XY bell as built (4\' and 8\', VCO 2 heard through the Ring) names the 8\' note', () => {
+  const v = heardAt('xy-bell');
+  assert.ok(octaveUnder(v.vco1, v.vco2), "VCO 2 at 8' an octave under VCO 1 at 4'");
+  names(v, v.vco2, 'XY bell');
+});
+
+test('XY bell with VCO 2 out of the mix (its Mixer and Ring levels 0) names the 4\' note', () => {
+  // As built VCO 2's own Mixer level is 0 already; it is heard through the Ring (level 4).
+  const v = heardAt('xy-bell', { 'mix.level2': 0, 'mix.level4': 0 });
+  assert.ok(octaveUnder(v.vco1, v.vco2));
+  names(v, v.vco1, "XY bell, VCO 2 silent: VCO 1's 4'");
+});
+
+test('XY bell with both VCOs at 4\' names the note heard: an octave above the pad\'s Pitch', () => {
+  const v = heardAt('xy-bell', { 'vco2.scale': '4' });
+  assert.equal(v.vco1, v.vco2);
+  assert.ok(octaveUnder(v.vco1, v.sent), "4' sounds an octave above the pad's Pitch");
+  names(v, v.vco1, "XY bell at 4'");
+});
+
+test('a 16\' VCO below the level floor beside an 8\' VCO: the 8\' note decides', () => {
+  // VCO 1 at 16' with its Mixer level at -66 dB, under DB_SCALE_FLOOR (-60 dB); VCO 2 at 8'.
+  assert.ok(20 * Math.log10(0.0005) < DB_SCALE_FLOOR);
+  const v = heardAt('xy-sweep', { 'mix.level1': 0.0005 });
+  assert.ok(octaveUnder(v.vco2, v.vco1));
+  names(v, v.vco2, "VCO 1 all but off: VCO 2's 8'");
+});
+
+test('audible VCOs a fifth apart (an FM offset): the pad names the note it sends, no guess', () => {
+  // XY lead (both 8'), VCO 2's FM input offset by 7/12 oct by its MG cable's constant part.
+  const v = heardAt('xy-lead', {}, (r, res) => {
+    const vco2 = res.get('vco2').id;
+    const e = r.st.getModel().graph.edges.find((x) => x.to.node === vco2 && x.to.port === 'fm'
+      && x.from.node === res.get('mg').id);
+    assert.equal(r.st.dispatch({ type: 'EDGE_UPDATE', edgeId: e.id,
+      props: { offset: 7 / 12 } }).ok, true);
+  });
+  names(v, `sends ${v.sent}`, 'a fifth apart');
+  assert.match(v.stated, /\(the note the pad sends\);/, v.stated);
+});
+
+test('Y reads what its target plays: the compiler\'s own sizing at the context\'s Nyquist', () => {
+  for (const sampleRate of [44100, 48000]) {
+    for (const recipe of XY_RECIPES) {
+      const r = rig({ patch: false, sampleRate });
+      assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, recipe.id).action).ok,
+        true);
+      const m = r.mount({ sampleRate: () => r.engine.sampleRate });
+      const { opts } = m.view;
+      const doc = r.st.getModel();
+      const rd = xyYReading(doc, PANEL, { sampleRate });
+      assert.equal(rd.jack, recipe.y);
+      assert.equal(rd.sampleRate, sampleRate);
+      // The compiler's sizing of the target's base and of Y's edge with every cable into the
+      // node and the real 0.95 x Nyquist of the context, at every y.
+      const node = PANEL.resolve(doc).get(rd.jack.split('.')[0]);
+      const plan = compileStudio(doc, { engine: r.engine });
+      const port = rd.jack.split('.')[1];
+      const incoming = plan.edgeOrder.map((id) => plan.edges.get(id))
+        .filter((e) => e.to.node === node.id && e.kind === 'control')
+        .map((e) => ({ edge: e, handle: { status: e.status, scale: 1,
+          range: (SOURCE_RANGES[plan.nodes.get(e.from.node).type] || {})[e.from.port]
+            ? SOURCE_RANGES[plan.nodes.get(e.from.node).type][e.from.port].range : [-1, 1] } }));
+      const edge = incoming.find((x) => x.edge.from.port === 'y').edge;
+      const cb = computeBases(plan.nodes.get(node.id), incoming,
+        { safeMaximum: safeMaximum(sampleRate) });
+      const b = cb.base[port];
+      const g = cb.gains.get(edge.id);
+      const k = knobModel(rd.param);
+      const name = jackName(recipe.y);
+      const held = cb.limited.has(edge.id);
+      assert.equal(rd.limited, held, `${recipe.id} at ${sampleRate}: limited`);
+      for (const y of [0, 0.25, 0.5, 0.8, 1]) {
+        const want = rd.props.mapping === 'log'
+          ? b.value * 2 ** ((b.cents + 1200 * g * y) / 1200) : b.value + g * y;
+        assert.ok(Math.abs(rd.at(y) - want) <= 1e-9 * Math.max(1, Math.abs(want)),
+          `${recipe.id} y ${y}: ${rd.at(y)} vs the compiler's ${want}`);
+        const past = want > rd.param.max || want < rd.param.min ? 'past its range' : '';
+        const notes = [past, held ? 'held' : ''].filter(Boolean).join(', ');
+        assert.equal(opts.readout.y(y), `${name} ${k.text(want)}${notes ? ` (${notes})` : ''}`,
+          `${recipe.id}: the ring's value`);
+        assert.ok(opts.text.y(y).includes(`% to ${name}: ${k.text(want)}`),
+          `${recipe.id}: Y's aria-valuetext ${opts.text.y(y)}`);
+      }
+      assert.deepEqual(opts.readout.yEnds(), [k.text(rd.at(0)), k.text(rd.at(1))], 'the Y ends');
+      m.destroy();
+    }
+  }
+});
+
+/** Y's aria-valuetext without its closing count of the other cables into the target. */
+const noOthers = (t) => t.replace(/, and \d+ more cables? into it$/, '');
+
+test('the Y value equals what the running graph plays at 44.1 and 48 kHz, held near Nyquist',
+  () => {
+    const last = (p) => (p.events.length ? p.events[p.events.length - 1].value : p.value);
+    // A log target whose cable asks past 0.95 x Nyquist: LPF Cutoff at 6 kHz (XY lead, two
+    // octaves up), HPF Cutoff at 20 kHz (XY sweep).
+    const CASES = [['xy-lead', 6000], ['xy-sweep', 20000]];
+    const seen = {};
+    for (const sampleRate of [44100, 48000]) {
+      for (const [id, hz] of CASES) {
+        const r = rig({ patch: false, sampleRate });
+        const recipe = XY_RECIPES.find((x) => x.id === id);
+        assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, id).action).ok, true);
+        const [mod, port] = recipe.y.split('.');
+        const nodeId = PANEL.resolve(r.st.getModel()).get(mod).id;
+        assert.equal(r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId, key: port, value: hz }).ok,
+          true);
+        const m = r.mount({ sampleRate: () => r.engine.sampleRate });
+        hold(r, m); // the first touch arms: the runtime plays the document at `sampleRate`
+        const doc = r.st.getModel();
+        const yEdge = doc.graph.edges.find((e) => e.from.port === 'y' && e.to.node === nodeId);
+        const eh = r.runtime.edges.get(yEdge.id);
+        assert.equal(eh.status, 'active');
+        // Y's depth gain feeds the biquad's detune (cents per unit of Y): what plays at y.
+        const bq = r.fx.ctx.created.find((n) => n.kind === 'biquad'
+          && n.detune === eh.gain.outputs[0]);
+        assert.ok(bq, 'the target biquad');
+        const g = last(eh.gain.gain);
+        const played = (y) => last(bq.frequency) * 2 ** ((last(bq.detune) + g * y) / 1200);
+        const rd = xyYReading(doc, PANEL, { sampleRate });
+        const k = knobModel(rd.param);
+        const name = jackName(recipe.y);
+        const what = `${id} at ${hz} Hz, ${sampleRate} Hz`;
+        for (const y of [0, 0.25, 0.5, 0.8, 1]) { // first the number: shown = played
+          const want = played(y);
+          assert.ok(Math.abs(rd.at(y) - want) <= 1e-6 * want,
+            `${what} y ${y}: shown ${rd.at(y)}, played ${want}`);
+          assert.ok(want <= safeMaximum(sampleRate) * (1 + 1e-12), `${what}: at most 0.95 x Nyq`);
+        }
+        assert.equal(rd.limited, true, `${what}: Y's excursion is scaled to fit`);
+        for (const y of [0, 0.25, 0.5, 0.8, 1]) { // then the text that says so
+          const want = played(y);
+          const past = want > rd.param.max ? 'past its range, ' : '';
+          assert.equal(m.view.opts.readout.y(y), `${name} ${k.text(want)} (${past}held)`);
+          // The default document's LPF normals (MG, EG 2) are the other cables it names (K183).
+          assert.ok(noOthers(m.view.opts.text.y(y)).endsWith(`: ${k.text(want)}${past
+            ? ' (past its range)' : ''}, held at or below `
+            + `${limitBoundText({ cap: safeMaximum(sampleRate), bound: 'nyquist', sampleRate })}`),
+          `${what}: Y's aria-valuetext ${m.view.opts.text.y(y)}`);
+        }
+        const end = (v) => `${k.text(v)}${v > rd.param.max ? ' (past its range)' : ''}`;
+        assert.deepEqual(m.view.opts.readout.yEnds(), [end(played(0)), end(played(1))]);
+        seen[`${id}@${sampleRate}`] = rd.at(0.5);
+        m.view.model.up(1);
+        m.destroy();
+        stopNow(r);
+      }
+    }
+    // The rate matters: the same document plays (and reads) higher at 48 kHz.
+    assert.ok(seen['xy-lead@48000'] > seen['xy-lead@44100']);
+    // On the default Synth document (K183) LPF Cutoff also takes the MG and EG 2 normals, whose
+    // excursion shares the Nyquist headroom: Y at 50 % plays 8.58 kHz there (11.21 kHz on the
+    // pad view's rig before K183, panelStore with the Pitch and Gate patched); shown = played
+    // is asserted above at every y.
+    assert.ok(Math.abs(seen['xy-lead@44100'] - 8576.08) < 0.01, `${seen['xy-lead@44100']}`);
+  });
+
+test('before a context exists, Y is sized at the provisional 44.1 kHz and says so', () => {
+  const r = rig({ patch: false });
+  assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, 'xy-lead').action).ok, true);
+  const nodeId = PANEL.resolve(r.st.getModel()).get('lpf').id;
+  r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId, key: 'frequency', value: 6000 });
+  const m = r.mount(); // no sampleRate: the default host has no context
+  const rd = xyYReading(r.st.getModel(), PANEL);
+  assert.equal(rd.provisional, true);
+  assert.equal(rd.sampleRate, 44100);
+  const at44 = xyYReading(r.st.getModel(), PANEL, { sampleRate: 44100 });
+  assert.equal(at44.provisional, false);
+  for (const y of [0, 0.5, 1]) assert.equal(rd.at(y), at44.at(y), `y ${y}`);
+  assert.ok(noOthers(m.view.opts.text.y(1))
+    .endsWith('0.95 × Nyquist at 44.1 kHz, until audio starts'),
+    m.view.opts.text.y(1));
+  m.destroy();
+});
+
+test('the readout line sits above the pad; Y driving nothing reads no value', () => {
+  const r = rig();
+  const m = r.mount();
+  const html = r.host.innerHTML;
+  assert.ok(html.indexOf('data-osc="synth.xy.readout"') < html.indexOf('data-osc="synth.xy.pad"'),
+    'the readout above the pad, clear of the docked keyboard');
+  m.destroy();
+  assert.equal(r.st.dispatch(xyTargetAction(r.st.getModel(), PANEL, null).action).ok, true);
+  const n = r.mount();
+  assert.equal(n.view.opts.readout.y(0.5), null);
+  assert.equal(n.view.opts.readout.yEnds, null);
+  assert.equal(n.view.opts.text.y(0.5), '50 % to nothing');
+  n.destroy();
 });

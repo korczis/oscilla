@@ -8,13 +8,14 @@
 //        [--only x-link,x-pointer]
 //
 // Every check opens the Synth's XY tab as the owner meets it (no preset: the default Synth
-// document, K183) unless it is about the XY lead preset (x-link, x-pointer); the gesture rule
-// is off except on the phone-cold leg. A check that cannot run on an engine is skipped before it
+// document, K183) unless it is about the XY lead preset (x-link, x-pointer, x-view*); the
+// gesture rule is off except on the phone-cold leg. A check that cannot run on an engine is skipped before it
 // opens a page and is reported as skipped, never counted as a check (K148): a leg whose every
 // check was skipped prints a SKIP line and reports nothing.
 //
-// Checks (desktop; the phone leg runs x-first and x-touch, the phone-cold leg x-cold-touch, the
-// phone-dock and phone-dock-se legs x-dock-yields, the laptop leg x-dock-desktop):
+// Checks (desktop; the phone leg runs x-first, x-touch, x-chip-gap and x-view-phone, the
+// phone-cold leg x-cold-touch, the phone-dock and phone-dock-se legs x-dock-yields, the laptop
+// leg x-dock-desktop):
 //   x-link     linked: #m=synth&yt=xy opens the XY tab; the XY lead preset chosen in the preset
 //              menu is one undo entry that sets the pad's scale on its face (C, minor
 //              pentatonic) and cables Y alone into LPF Cutoff, no Pitch or Gate cable (K183
@@ -57,6 +58,19 @@
 //   x-release-owner  (K167) a held pad is released when another workspace's player (the
 //              Pattern Sequencer) takes the audio owner: gate closed, no held note, the
 //              transport stopped; once that player stops, silent and census 0
+//   x-view     (S3) a held pointer draws the ring at the touch point (its centre within 2 px),
+//              the note beside it equal to the runtime pad pitch's note, the Y value equal to
+//              what the LPF Cutoff knob and Y's cable ask at the Y slider's value (base x
+//              2^(depth y), 4 digits), the same note and value in the X and Y aria-valuetext, the
+//              gate LED lit; the Y ends read the cutoff at Y 0 and 1; the readout line sits
+//              above the surface; moving draws a trail; the release clears it, hides the ring
+//              and unlights the LED
+//   x-view-phone     (S3; 390 px, touch) the same on a phone: a touch (CDP in chromium, the
+//              pointer in firefox and webkit) draws the ring, the note, the value and a trail,
+//              and the pad does not move under the finger (the readout keeps its lines);
+//              lifting clears it
+//   x-view-reduced   (S3; prefers-reduced-motion: reduce) the ring follows the pointer and no
+//              trail segment is ever drawn
 //   x-chip-gap (K167; 390 px, touch) the Synth's sticky chip bar sticks flush under the app
 //              nav: scrolled, every point of the band between them hits the nav or the chip
 //              bar, never page content
@@ -132,15 +146,19 @@ const GESTURE_LAUNCH = { chromium: { args: ['--autoplay-policy=user-gesture-requ
 const SIZES = { desktop: { width: 1536, height: 1024 }, laptop: { width: 1280, height: 720 },
   phone: { width: 390, height: 844 }, 'phone-cold': { width: 390, height: 844 },
   'phone-dock': { width: 390, height: 844 }, 'phone-dock-se': { width: 375, height: 667 } };
-const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-cold-touch': 'phone-cold' };
+const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-cold-touch': 'phone-cold',
+  'x-view-phone': 'phone' };
+const CONTEXT_OF = { 'x-view-reduced': { reducedMotion: 'reduce' } };
 // x-first runs on the desktop and the phone legs; K171 holds at the iPhone 13 and SE sizes,
 // and at 1536 x 1024 and 1280 x 720 with a mouse.
 const LEGS_OF = { 'x-first': ['desktop', 'phone'],
   'x-dock-yields': ['phone-dock', 'phone-dock-se'], 'x-dock-desktop': ['desktop', 'laptop'] };
 // The legs with the browser's gesture rule on and mobile emulation where the engine has it.
 const GESTURE_LEGS = new Set(['phone-cold', 'phone-dock', 'phone-dock-se']);
-// The checks about the XY lead preset; every other one opens the tab as the owner meets it.
-const PRESET_OF = { 'x-link': 'xy-lead', 'x-pointer': 'xy-lead' };
+// The checks about the XY lead preset (the pad's view, S3, is measured on it); every other one
+// opens the tab as the owner meets it.
+const PRESET_OF = { 'x-link': 'xy-lead', 'x-pointer': 'xy-lead', 'x-view': 'xy-lead',
+  'x-view-phone': 'xy-lead', 'x-view-reduced': 'xy-lead' };
 // The tab a check opens the Synth on (default the XY tab): x-dock-yields starts on its Panel.
 const TAB_OF = { 'x-dock-yields': 'panel' };
 // Checks that open their own page (x-cold-touch: with no user activation before its touch).
@@ -297,6 +315,82 @@ async function padPoint(page, i, fy) {
     .closest('[data-xy-surface]'), p);
   if (!hit) throw new Error(`the pad point ${i}, ${fy} is covered`);
   return p;
+}
+
+/** The pad's view (S3): the ring's centre, its readouts, the trail, the LED, the Y ends, the
+ *  sliders' texts and where the readout line and the surface sit. */
+const viewState = (page) => page.evaluate(() => {
+  const q = (sel) => document.querySelector(sel);
+  const ring = q('[data-xy-ring]');
+  const cursor = q('[data-xy-cursor]');
+  const r = ring ? ring.getBoundingClientRect() : null;
+  const s = q('[data-xy-surface]').getBoundingClientRect();
+  const out = q('[data-osc="synth.xy.readout"]').getBoundingClientRect();
+  const led = q('[data-xy-gate] [data-led]');
+  const text = (sel) => (q(sel) ? q(sel).textContent : null);
+  return { shown: !!cursor && !cursor.classList.contains('hidden'),
+    ring: r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null,
+    note: text('[data-xy-note]'), value: text('[data-xy-value]'),
+    trail: [...document.querySelectorAll('[data-xy-trail] line')]
+      .filter((l) => !l.classList.contains('hidden')).length,
+    lit: led ? led.getAttribute('data-lit') : null,
+    ends: [text('[data-xy-yend="bottom"]'), text('[data-xy-yend="top"]')],
+    xText: q('[data-xy-axis="x"]').getAttribute('aria-valuetext'),
+    yText: q('[data-xy-axis="y"]').getAttribute('aria-valuetext'),
+    yNow: Number(q('[data-xy-axis="y"]').getAttribute('aria-valuenow')),
+    readoutBottom: out.bottom, surfaceTop: s.top };
+});
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+/** The note of a pitch in octaves from A4 (the pad's Pitch output). */
+const noteOf = (oct) => {
+  const n = Math.round(69 + 12 * oct);
+  return NOTE_NAMES[((n % 12) + 12) % 12] + (Math.floor(n / 12) - 1);
+};
+/** Hz from a knob text ("5.1445 kHz", "800 Hz"). */
+const hzOf = (t) => {
+  const m = /(-?[\d.]+)\s*(kHz|Hz)/.exec(t || '');
+  return m ? Number(m[1]) * (m[2] === 'kHz' ? 1000 : 1) : NaN;
+};
+/** What LPF Cutoff is asked at Y = y: its knob's value and Y's cable (log, unipolar). */
+const cutoffAt = (page, y) => page.evaluate((yy) => {
+  const st = window.OSCILLA.studio;
+  const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
+  const e = st.model.graph.edges.find((x) => x.from.node === pad.id && x.from.port === 'y');
+  const lpf = st.model.graph.nodes.find((n) => n.id === e.to.node);
+  const p = e.props;
+  return { mapping: p.mapping, polarity: p.polarity,
+    hz: lpf.params.frequency * 2 ** (p.depth * yy + p.offset) };
+}, y);
+/** A pad point where the pad is now (no scroll: a held touch keeps the page where it is). */
+async function pointIn(page, i, fy) {
+  const b = await page.locator('[data-xy-surface]').boundingBox();
+  return { x: b.x + ((i + 0.5) / STEPS) * b.width, y: b.y + (1 - fy) * b.height };
+}
+const near = (a, b, rel = 1e-3) => Math.abs(a - b) <= rel * Math.max(1, Math.abs(b));
+
+/** S3 on the touched pad: ring at the point, the note the runtime plays, the Y value. */
+async function viewHeld(page, at, what) {
+  let v = null;
+  let pad = null;
+  try {
+    await until(async () => {
+      v = await viewState(page);
+      pad = await padState(page);
+      return v.shown && !!v.ring && Math.hypot(v.ring.x - at.x, v.ring.y - at.y) <= 2
+        && pad.pitch !== null && v.note === noteOf(pad.pitch) && v.lit === 'true';
+    }, { ms: SOUND_MS, what: `${what}: the ring at the touch point, the note the runtime `
+      + 'plays, the gate LED lit' });
+  } catch (e) {
+    return { ok: false, why: String(e.message).split('\n')[0], at, v,
+      pitch: pad && pad.pitch, runtimeNote: pad && pad.pitch !== null ? noteOf(pad.pitch) : null };
+  }
+  const want = await cutoffAt(page, v.yNow);
+  const shown = hzOf(v.value);
+  const ok = want.mapping === 'log' && /^LPF Cutoff /.test(v.value) && near(shown, want.hz)
+    && v.xText.startsWith(`${v.note}, degree `) && v.yText.includes(`LPF Cutoff: `)
+    && near(hzOf(v.yText), want.hz);
+  return { ok, v, pad: pad.pitch, want: Number(want.hz.toFixed(1)), shown,
+    off: Number(Math.hypot(v.ring.x - at.x, v.ring.y - at.y).toFixed(2)) };
 }
 
 // ------------------------------------------------------------------------------ checks
@@ -526,9 +620,17 @@ function defineChecks() {
         const nav = document.querySelector('[aria-label="Workspace"]');
         const top = Math.round(nav.getBoundingClientRect().bottom);
         const stuck = Math.round(chips.getBoundingClientRect().top);
+        // Sample inside the chip bar, clear of the scroller's own scrollbar: webkit draws an
+        // overlay scrollbar (about 15 px, not counted in clientWidth) at the scroller's right
+        // edge after a scroll, and a hit there is the scroller itself, not page content.
+        const SCROLLBAR_PX = 20;
+        const mr = main.getBoundingClientRect();
+        const cr = chips.getBoundingClientRect();
+        const left = Math.ceil(Math.max(cr.left, mr.left)) + 4;
+        const right = Math.floor(Math.min(cr.right, mr.right - SCROLLBAR_PX));
         const hits = [];
         for (let y = top - 2; y <= stuck + 4; y += 1) {
-          for (const x of [12, 195, 378]) {
+          for (const x of [left, Math.round((left + right) / 2), right]) {
             const e = document.elementFromPoint(x, y);
             const who = !e ? 'none' : chips.contains(e) ? 'chips' : nav.contains(e)
               || e.closest('[role="banner"]') ? 'nav' : `${e.tagName}.${String(e.className
@@ -536,13 +638,13 @@ function defineChecks() {
             hits.push([x, y, who]);
           }
         }
-        return { top, stuck, scrolled: main.scrollTop > 0, hits };
+        return { top, stuck, scrolled: main.scrollTop > 0, xs: [left, right], hits };
       });
       return g.scrolled && g.stuck <= g.top + 12;
     }, { ms: 10000, what: 'the scrolled Synth sticks its chip bar under the app nav' });
     const bad = g.hits.filter(([, , who]) => who !== 'nav' && who !== 'chips');
-    return { ok: !bad.length && Math.abs(g.stuck - g.top) <= 1, top: g.top, stuck: g.stuck,
-      bad: bad.slice(0, 6) };
+    return { ok: !bad.length && Math.abs(g.stuck - g.top) <= 1 && g.xs[1] - g.xs[0] > 200,
+      top: g.top, stuck: g.stuck, xs: g.xs, bad: bad.slice(0, 6) };
   });
 
   // ---- K183: the pad sounds on first touch, as the owner meets it
@@ -976,6 +1078,105 @@ function defineChecks() {
       dockTop: open.dockTop }, held: Number(held.rmsDb.toFixed(1)),
       off: Number(off.rmsDb.toFixed(1)) };
   });
+  def('x-view', async ({ page }) => {
+    const p = await padPoint(page, 6, 0.4);
+    const at = { x: p.x + 7, y: p.y - 11 }; // off the cell's centre: the ring is the touch's
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    const held = await viewHeld(page, at, 'a held pointer');
+    if (!held.ok) return { ok: false, detail: 'the touch point is not drawn as sent', ...held };
+    const lo = await cutoffAt(page, 0);
+    const hi = await cutoffAt(page, 1);
+    const ends = held.v.ends.map(hzOf);
+    if (!near(ends[0], lo.hz) || !near(ends[1], hi.hz)) {
+      return { ok: false, detail: 'the Y ends do not read the cutoff at Y 0 and 1', ends,
+        want: [lo.hz, hi.hz] };
+    }
+    if (!(held.v.readoutBottom <= held.v.surfaceTop + 0.5)) {
+      return { ok: false, detail: 'the readout line is not above the pad', v: held.v };
+    }
+    const q = await pointIn(page, 2, 0.8);
+    await page.mouse.move(q.x, q.y, { steps: 8 });
+    let moved = null;
+    await until(async () => (moved = await viewState(page)).trail >= 2,
+      { ms: SOUND_MS, what: 'moving draws a trail' });
+    const after = await viewHeld(page, q, 'moved');
+    if (!after.ok) return { ok: false, detail: 'the moved point is not drawn as sent', ...after };
+    await page.mouse.up();
+    let off = null;
+    await until(async () => {
+      off = await viewState(page);
+      return off.trail === 0 && off.lit === 'false' && !off.shown;
+    }, { ms: SOUND_MS, what: 'the release clears the trail, hides the ring and unlights the '
+      + 'gate LED' });
+    return { ok: true, note: held.v.note, value: held.v.value, ringOff: held.off,
+      ends: held.v.ends, trail: moved.trail, moved: [after.v.note, after.v.value],
+      released: { trail: off.trail, lit: off.lit, shown: off.shown } };
+  });
+
+  def('x-view-phone', async ({ page, browserName }) => {
+    const a = await padPoint(page, 3, 0.3);
+    const b = await pointIn(page, 8, 0.7);
+    const idleTop = (await viewState(page)).surfaceTop;
+    let move;
+    let lift;
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page);
+      const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type,
+        touchPoints: pts.map((t) => ({ x: t.x, y: t.y, id: 1 })) });
+      await touch('touchStart', [a]);
+      move = async (t) => touch('touchMove', [t]);
+      lift = async () => touch('touchEnd', []);
+    } else {
+      await page.mouse.move(a.x, a.y);
+      await page.mouse.down();
+      move = (t) => page.mouse.move(t.x, t.y);
+      lift = () => page.mouse.up();
+    }
+    const held = await viewHeld(page, a, 'a touch');
+    if (!held.ok) return { ok: false, detail: 'the touch point is not drawn as sent', ...held };
+    if (Math.abs(held.v.surfaceTop - idleTop) > 0.5) {
+      return { ok: false, detail: 'the pad moved under the finger', idleTop, held: held.v };
+    }
+    for (let i = 1; i <= 6; i++) {
+      await move({ x: a.x + ((b.x - a.x) * i) / 6, y: a.y + ((b.y - a.y) * i) / 6 });
+    }
+    let moved = null;
+    await until(async () => (moved = await viewState(page)).trail >= 2,
+      { ms: SOUND_MS, what: 'a moving touch draws a trail' });
+    const after = await viewHeld(page, b, 'a moved touch');
+    if (!after.ok) return { ok: false, detail: 'the moved touch is not drawn as sent', ...after };
+    await lift();
+    let off = null;
+    await until(async () => {
+      off = await viewState(page);
+      return off.trail === 0 && off.lit === 'false' && !off.shown;
+    }, { ms: SOUND_MS, what: 'lifting clears the trail, hides the ring and unlights the LED' });
+    return { ok: true, note: held.v.note, value: held.v.value, ringOff: held.off,
+      trail: moved.trail, moved: [after.v.note, after.v.value] };
+  });
+
+  def('x-view-reduced', async ({ page }) => {
+    const reduced = await page.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)')
+      .matches);
+    if (!reduced) return { ok: false, detail: 'the context does not prefer reduced motion' };
+    const a = await padPoint(page, 2, 0.2);
+    const b = await pointIn(page, 8, 0.8);
+    await page.mouse.move(a.x, a.y);
+    await page.mouse.down();
+    const held = await viewHeld(page, a, 'reduced motion: a held pointer');
+    if (!held.ok) return { ok: false, detail: 'the touch point is not drawn as sent', ...held };
+    let most = 0;
+    for (let i = 1; i <= 8; i++) {
+      await page.mouse.move(a.x + ((b.x - a.x) * i) / 8, a.y + ((b.y - a.y) * i) / 8);
+      most = Math.max(most, (await viewState(page)).trail);
+    }
+    const after = await viewHeld(page, b, 'reduced motion: the last point');
+    most = Math.max(most, after.v.trail);
+    await page.mouse.up();
+    return { ok: after.ok && most === 0, trailMost: most, last: [after.v.note, after.v.value],
+      ringOff: after.off };
+  });
   return checks;
 }
 
@@ -1005,7 +1206,7 @@ async function runLeg(browserName, sizeName, base, leg) {
   try {
     for (const { name, fn } of run) {
       const context = await browser.newContext({ viewport: SIZES[sizeName],
-        hasTouch: sizeName.startsWith('phone'),
+        hasTouch: sizeName.startsWith('phone'), ...(CONTEXT_OF[name] || {}),
         // Firefox has no mobile emulation (Playwright refuses isMobile there).
         ...(cold && browserName !== 'firefox' ? { isMobile: true } : {}) });
       const errors = [];

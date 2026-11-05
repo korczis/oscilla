@@ -13,7 +13,8 @@
 // or the chosen engine via one sink; a tab change releases held notes.
 //
 //   createSynthUi({ get, setupAudio, announce }) -> the component part
-//     get() -> { handle, transport }   the workspace's store and transport (late-bound)
+//     get() -> { handle, transport, sampleRate }   the workspace's store, transport and context
+//                                      rate (late-bound; the rate null before audio)
 
 import SEMI_MONO from './panels/semi-mono.js';
 import { PRESETS, presetAction, presetOf, presetValues } from './presets.js';

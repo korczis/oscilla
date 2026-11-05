@@ -619,3 +619,33 @@ test('legato on the Playground voice restarts the engine note at the new pitch',
   assert.deepEqual(calls, [['on', 'kbd-xy:0:69', 440], ['off', 'kbd-xy:0:69'],
     ['on', 'kbd-xy:0:81', 880], ['off', 'kbd-xy:0:81']]);
 });
+
+// 21's T1 on Train 6, on K178's one note path: All Sound Off, All Notes Off and silence()
+// release a note held in the Studio across a workspace switch through the sink that took it
+// (held-notes.js releaseAll), once, and tell the route's own sink allOff (a fresh sink object
+// per call is one sink, by its noteOff).
+test('all-off and silence release a note held on the sink a switch left behind', () => {
+  for (const off of [(n) => n.handle([0xb0, 120, 0], 1), (n) => n.handle([0xb0, 123, 0], 1),
+    (n) => n.silence()]) {
+    const log = [];
+    const studioOff = (n) => { log.push(`studio off ${n}`); return true; };
+    const studio = () => ({ noteOn: () => ({ ok: true }), noteOff: studioOff,
+      allOff: () => { log.push('studio all-off'); return 1; } });
+    const synth = { noteOn: () => ({ ok: true }),
+      noteOff: (n) => { log.push(`synth off ${n}`); return true; },
+      allOff: () => { log.push('synth all-off'); return 0; } };
+    const engine = { noteOn: () => ({ ok: true }), noteOff: () => true, notesOff: () => 0,
+      resume() {} };
+    let current = studio;
+    const notes = createMidiNotes({ engine, route: () => current() });
+    notes.handle([0x90, 60, 100], 1); // held in the Studio
+    current = () => synth; // the workspace switched to the Synth; the key is still down
+    off(notes);
+    assert.deepEqual(log.filter((l) => l.startsWith('studio')), ['studio off 60'],
+      'the Studio note is released where it sounds, once');
+    assert.ok(log.includes('synth all-off'), 'the route\'s own sink is told allOff');
+    log.length = 0;
+    notes.handle([0x80, 60, 0], 1); // its note-off afterwards never reaches the Studio again
+    assert.deepEqual(log.filter((l) => l.startsWith('studio')), []);
+  }
+});

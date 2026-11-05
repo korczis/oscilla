@@ -20,6 +20,32 @@
 //   xyTarget(model, panel) -> jack | null the input Y drives now
 //   xyRoom(model, panel) -> { factor, target, text } | null   Y held below its depth by its
 //                                          linear target's range (said by the readout)
+//   xyYReading(model, panel, { sampleRate }) -> reading | null   what the target plays at Y (the
+//     XY view's value): { jack, param (the panel's), props, others, at(y), limited, cap,
+//     sampleRate, provisional }. at(y) is sized by the compiler's own computeBases over every
+//     cable into the target's node, at 0.95 x Nyquist of `sampleRate` (the running context's):
+//     the base with every cable's constant part, Y's gain as scaled near Nyquist (`limited`: Y's
+//     excursion was scaled down, `cap` = caps[port] is what holds it), the other cables' moving
+//     part left out. Before a context exists (no sampleRate) it is sized at the provisional
+//     44.1 kHz (sequencer/model.js safeMaximum, the rate automation.js paramBounds declares),
+//     `provisional` true, and the view names that rate. `others` counts the other unmuted
+//     edges into the same input, whose moving part adds to it
+//   xySounding(model, panel) -> { octaves } | null   how far the note the voice sounds lies from
+//     the pad's own note (xyDegree's, which it plays). Its path to the VCOs is its own Pitch
+//     cables where patched, else the keys' pitch, normals included (K183: the pad is one more
+//     input of the keys and plays what they play). Each VCO that path reaches
+//     shifts it by VCO_SCALES of its footage (8' = 0, 16' = -1, 4' = +1) plus the constant part
+//     of its Pitch and FM inputs (the node's params and every cable's offset, the compiler's
+//     computeBases). Only the audible VCOs count: those with an audio path to the Output whose
+//     mixer levels (the product of the Mixer `levelN` of each input on the way, as compiled; a
+//     level that is not a number counts as 1) stay above DB_SCALE_FLOOR (studio/automation.js,
+//     -60 dB, the floor of the level scale), so a VCO turned all but off, or heard only through
+//     a muted Ring, decides nothing. The note named is the lowest audible VCO's: octave
+//     doubling (16' with 8') is heard at its lowest. Null, and the view names the pad's own
+//     note ("sends D3") rather than guess, when the Pitch reaches a target that is not a VCO's
+//     Pitch or no audible VCO, or an audible VCO's cable does not pass 1.00 oct per octave or
+//     its shift is no whole number of octaves (a fifth from FM or Pitch offsets). Tune (cents)
+//     is left out: a detune (the XY lead's VCO 2 a fifth up by Tune still names VCO 1's note)
 //   xyPatched(model, panel) -> bool        the pad's Pitch and Gate reach the voice
 //   xyCablesAction(model, panel, pairs, label) -> { action } | { reason }   cables, one BATCH
 //   xyTargetAction(model, panel, to) -> { action } | { reason }   Y moved to `to`, one BATCH
@@ -32,8 +58,14 @@
 //                                  removable cable; one BATCH, one undo entry
 
 import { createPatch, patchParams } from '../studio/patches.js';
+import { compileStudio, computeBases } from '../studio/compiler.js';
+import { PROVISIONAL_SAMPLE_RATE, safeMaximum } from '../sequencer/model.js';
+import { CENTS_PER_OCTAVE } from '../core/music.js';
+import { VCO_SCALES } from '../studio/nodes/instrument.js';
+import { DB_SCALE_FLOOR } from '../studio/automation.js';
 import { linkAction, linkOf } from './link.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
+import { SOURCE_RANGES, splitJack } from './panel.js';
 import { XY_TAB } from './panels/xy.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
 import { fitFactor } from '../studio/performance-fit.js';
@@ -106,6 +138,89 @@ export function xyRoom(model, panel) {
     + `${name} and its other cables leave only that much of its range` };
 }
 
+
+// The plan is compiled for a context that runs (a realtime engine), as the runtime compiles it;
+// the sizing needs only the plan, never an AudioContext.
+const RUNNING = Object.freeze({ isSupported: () => true });
+const sourceRange = (plan, from) => {
+  const n = plan.nodes.get(from.node);
+  const s = n && SOURCE_RANGES[n.type] && SOURCE_RANGES[n.type][from.port];
+  return s ? s.range : [-1, 1]; // compiler.js DEFAULT_RANGE
+};
+
+/** computeBases of plan node `pn` over every CONTROL cable into it, as the runtime passes them
+ * (gains in parameter units or octaves: scale 1), at 0.95 x Nyquist of `rate`. */
+const basesOf = (plan, pn, rate) => computeBases(pn, plan.edgeOrder.map((id) => plan.edges.get(id))
+  .filter((e) => e.to.node === pn.id && e.kind === 'control')
+  .map((e) => ({ edge: e, handle: { status: e.status, range: sourceRange(plan, e.from),
+    scale: 1 } })), { safeMaximum: safeMaximum(rate) });
+
+const LEVEL_FLOOR = 10 ** (DB_SCALE_FLOOR / 20);
+/** The loudest mixer-level product of an audio path from node `id` to the Output (0: none). */
+function pathLevel(plan, id, seen = new Set()) {
+  if (seen.has(id)) return 0;
+  const n = plan.nodes.get(id);
+  if (!n) return 0;
+  if (n.type === 'master') return 1;
+  let best = 0;
+  for (const e of plan.edges.values()) {
+    if (e.kind !== 'audio' || e.from.node !== id || e.props.muted) continue;
+    const to = plan.nodes.get(e.to.node);
+    const m = to && to.type === 'mixer' && /^in(\d+)$/.exec(e.to.port);
+    const lv = m ? Number(to.params[`level${m[1]}`]) : 1;
+    const g = Number.isFinite(lv) ? Math.abs(lv) : 1;
+    if (g > 0) best = Math.max(best, g * pathLevel(plan, e.to.node, new Set([...seen, id])));
+  }
+  return best;
+}
+
+export function xySounding(model, panel) {
+  const keys = panel.resolve(model).get('keys');
+  const own = cablesFrom(model, panel, 'xy.pitch');
+  const cables = own.length || !keys ? own : model.graph.edges
+    .filter((e) => e.from.node === keys.id && e.from.port === 'pitch');
+  const plan = cables.length ? compileStudio(model, { engine: RUNNING }) : null;
+  const shifts = [];
+  for (const c of cables) {
+    const edge = plan.edges.get(c.id);
+    if (edge && edge.props.muted) continue;
+    const pn = edge && plan.nodes.get(edge.to.node);
+    if (!pn || pn.type !== 'vco' || edge.to.port !== 'pitch') return null;
+    if (pathLevel(plan, pn.id) <= LEVEL_FLOOR) continue; // not heard: it decides nothing
+    const cb = basesOf(plan, pn, PROVISIONAL_SAMPLE_RATE);
+    if (edge.props.mapping === 'log' || Math.abs(cb.gains.get(edge.id) - 1) > 1e-9) return null;
+    const oct = (VCO_SCALES[pn.params.scale] ?? 0) + cb.base.pitch.value + cb.base.fm.value;
+    if (Math.abs(oct - Math.round(oct)) > 1e-9) return null;
+    shifts.push(Math.round(oct));
+  }
+  return shifts.length ? { octaves: Math.min(...shifts) } : null;
+}
+
+export function xyYReading(model, panel, { sampleRate = null } = {}) {
+  const c = cablesFrom(model, panel, 'xy.y')[0];
+  if (!c) return null;
+  const { module, port } = splitJack(c.to);
+  const node = panel.resolve(model).get(module);
+  const m = panel.module(module);
+  const param = m && (m.params || []).find((p) => p.key === port);
+  const plan = compileStudio(model, { engine: RUNNING });
+  const pn = node && plan.nodes.get(node.id);
+  const edge = plan.edges.get(c.id);
+  if (!pn || !param || !edge) return null;
+  const provisional = !(sampleRate > 0);
+  const rate = provisional ? PROVISIONAL_SAMPLE_RATE : sampleRate;
+  const cb = basesOf(plan, pn, rate); // sized at this context's 0.95 x Nyquist
+  const b = cb.base[port];
+  if (!b) return null; // not a modulatable parameter: no cable sizes it
+  const g = cb.gains.get(edge.id) || 0;
+  const log = edge.props.mapping === 'log';
+  const others = model.graph.edges.filter((e) => e.id !== edge.id && e.to.node === node.id
+    && e.to.port === port && !(e.props && e.props.muted)).length;
+  return { jack: c.to, param, props: edge.props, others, sampleRate: rate, provisional,
+    limited: cb.limited.has(edge.id), cap: cb.caps[port] || null,
+    at: (y) => (log ? b.value * 2 ** ((b.cents + CENTS_PER_OCTAVE * g * y) / CENTS_PER_OCTAVE)
+      : b.value + g * y) };
+}
 export const xyPatched = (model, panel) => ['xy.pitch', 'xy.gate']
   .every((j) => cablesFrom(model, panel, j).length);
 

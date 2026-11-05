@@ -527,7 +527,8 @@ test('N2: every release puts Y back at rest: the node, the cursor and the readou
       r.model.gate(true); // a touch (Enter held) at the cursor
       for (let i = 0; i < 90; i += 1) r.model.key('ArrowUp'); // Y to 0.9 while it sounds
       assert.ok(Math.abs(r.y() - 0.9) < 1e-9, `${how}: Y plays 0.9 while touched`);
-      assert.match(r.readout(), /Y 90 % → lpf\.frequency · gate open/);
+      // The target's value follows its name (S3, xyYReading): `lpf.frequency 7.21 kHz`.
+      assert.match(r.readout(), /Y 90 % → lpf\.frequency [^·]+ · gate open/);
       if (how === 'lift') r.model.end('release');
       else r.mount.release('owner'); // a forced release (the audio owner moved away)
       assert.equal(r.y(), 0, `${how}: the node's Y is back at its rest`);
@@ -541,7 +542,7 @@ test('N2: every release puts Y back at rest: the node, the cursor and the readou
       // An arrow without a touch moves the cursor only, and the readout says so.
       r.model.key('ArrowUp');
       assert.equal(r.y(), 0);
-      assert.match(r.readout(), /Y 0 % → lpf\.frequency · the next touch from Y 1 %/);
+      assert.match(r.readout(), /Y 0 % → lpf\.frequency [^·]+ · the next touch from Y 1 %/);
       r.done();
     }
   });

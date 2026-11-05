@@ -6,7 +6,7 @@
 // the one patch catalog, and synth/xy.js xyInsertAction cables Y at the panel's insertion.
 //
 //   mountSynthXy(host, { store, transport, panel, owner, app, arm, say, jackName, dispatch,
-//     notes, mountPad }) -> { view, owner, notes, release(reason), destroy() }
+//     notes, mountPad, sampleRate }) -> { view, owner, notes, release(reason), destroy() }
 //     store      the Studio store handle (getModel, dispatch): the one writer of the document
 //     transport  the Studio transport, or a function returning it (late-bound: null before
 //                audio); the pad's X and Y reach its node through transport.live, never the
@@ -25,6 +25,9 @@
 //                { noteOn, noteOff, legato, velocity, off }); without one the pad plays only its
 //                own node
 //     mountPad   the pad kind's mount (ui/kinds/xy-pad.js mountXyPad; a seam for unit tests)
+//     sampleRate()  the running AudioContext's rate, null before one exists (default: none);
+//                Y's value is sized at its 0.95 x Nyquist (xyYReading), else at the provisional
+//                44.1 kHz, and a value the compiler holds there says so with the rate it used
 //   view.destroy() releases and removes every subscription; a second destroy changes nothing.
 //   xyPresetAction(model, panel, id) -> { action } | { reason }   a built-in XY preset
 //
@@ -43,7 +46,8 @@
 // The pad talks to what it plays through one small internal interface, the target:
 //   target = { owner, output, wire(slot) -> spec | null, unwire(), live(kind, x, y),
 //              arm() -> true | refusal, release(reason) -> released }
-//   spec   = { params, steps, deg(i), scale, target, lead, stated }
+//   spec   = { params, steps, deg(i) (its note heard, or `sends`), sent(i) (the note it plays),
+//              from, scale, target, lead, stated, reading }
 // The document's Synth panel (documentTarget) is the only implementation: its controls edit
 // the StudioModel, one BATCH and one undo entry each, and it plays the panel's xy-pad node
 // through transport.live. The release paths are the mount's, never a target's: transport
@@ -67,15 +71,31 @@
 // (midi/dock-yield.js claimNotes) and drops the claim when it is destroyed; mount.notes says
 // which. The docked keyboard derives its state from that claim and its route (midi/routes.js
 // dockState); nothing here touches the dock.
+//
+// The pad's view (S3) is what the pad sends, drawn: each X cell is labelled by the note of
+// xyDegree, the function the runtime adapter quantises X with, at the x the mount sends for
+// that cell (xyCellX), moved by the octaves the lowest audible VCO adds (xySounding: the note
+// heard, so XY bass at 16' names D1 for the pad's D2), or, when no note is known, the pad's own
+// note said as "sends D3" (the ring, X's aria-valuetext, the readout line and the range text alike);
+// Y's readout is what its target plays at y, xyYReading's at(y) (the
+// compiler's own computeBases at the context's Nyquist limit, every cable's constant part in
+// it) in the target knob's own text (knob.js), "held" when the compiler scaled Y's excursion
+// down to stay at or below 0.95 x Nyquist; the Y ends are at(0) and at(1), read again on each
+// drawn frame. The readout line sits above the pad, clear of the docked keyboard.
+//   xyCellX(i, steps) -> the x (0..1) the mount sends for cell i: its centre
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
-import { SCALE_LABELS } from '../../core/music.js';
+import { NOTE_NAMES, SCALE_LABELS, midiToName } from '../../core/music.js';
+import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import {
-  XY_RECIPES, xyPatchAction, xyPresetPatch, xyRoom, xyTarget, xyTargetAction, xyTargets,
+  XY_RECIPES, xyPatchAction, xyPresetPatch, xyRoom, xySounding, xyTarget, xyTargetAction,
+  xyTargets, xyYReading,
 } from '../xy.js';
+import { limitBoundText } from '../../studio/compiler.js';
 import { esc } from './face.js';
 import { claimNotes } from '../../midi/dock-yield.js';
+import { knobModel } from './knob.js';
 
 export const XY_TEXT = Object.freeze({
   missing: 'The XY pad is not in this Studio document: press Add the XY pad first.',
@@ -94,6 +114,9 @@ export const XY_VELOCITY = 100; // without a keys velocity to follow
 const HOME = Object.freeze({ synth: 'synth', landing: 'landing' });
 const SELECT = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 text-sm '
   + 'text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
+
+/** The x the mount sends for cell i of `steps`: the cell's centre (what xyDegree quantises). */
+export const xyCellX = (i, steps) => (i + 0.5) / steps;
 
 const CURSORS = new WeakMap(); // store -> the pad's cursor: performance state, never the model
 const APP_HUBS = new WeakMap(); // app -> key -> listeners: one $watch per app and key
@@ -131,7 +154,8 @@ function onApp(app, key, fn) {
 }
 
 /** The document's Synth panel as the pad's target (the only target today). */
-function documentTarget({ store, panel, transport, owner, arm, say, jackName, dispatch }) {
+function documentTarget({ store, panel, transport, owner, arm, say, jackName, dispatch,
+  sampleRate }) {
   const model = () => store.getModel();
   const pad = () => panel.resolve(model()).get('xy');
   const offs = [];
@@ -166,9 +190,32 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
       const scale = `${p.key} ${SCALE_LABELS[p.mode]}`;
       const lead = p.mode === XY_LEAD.scale.mode && p.key === XY_LEAD.scale.key
         && to === XY_LEAD.y;
-      const range = `${scale} over ${p.span} oct from ${p.key}${p.octave}`;
+      // The note the voice sounds (xySounding: the VCOs' footage on the pad's note path, the
+      // keys' pitch since K183); when that is not one known note, the pad's own note, said as
+      // what it sends ("sends D3"). `sent` is the note the pad plays into the keys' note layer.
+      const heard = xySounding(m, panel);
+      const sent = (i) => xyDegree(xyCellX(i, steps), p);
+      const deg = (i) => {
+        const d = sent(i);
+        if (!heard) return { ...d, sends: true };
+        const note = d.note + 12 * heard.octaves;
+        return { ...d, note, name: midiToName(note), sends: false };
+      };
+      const low = deg(0);
+      const from = `${low.name}${low.sends ? ' (the note the pad sends)' : ''}`;
+      const range = `${scale} over ${p.span} oct from ${from}`;
       const tag = lead ? " (the XY lead's scale and target)" : '';
-      return { params: p, steps, deg: (i) => xyDegree((i + 0.5) / steps, p), scale,
+      // What Y's target plays, read from the document and the context's rate at each reading.
+      let seen = { m: null, sr: null, r: null };
+      const reading = () => {
+        const now = model();
+        const sr = sampleRate() || null;
+        if (now !== seen.m || sr !== seen.sr) {
+          seen = { m: now, sr, r: xyYReading(now, panel, { sampleRate: sr }) };
+        }
+        return seen.r;
+      };
+      return { params: p, steps, deg, sent, from, scale, reading,
         target: to ? jackName(to) : 'nothing', lead,
         stated: `${lead ? 'Default: ' : ''}${range}; the pad plays what the keys play; `
           + (to ? `Y drives ${jackName(to)}${tag}.` : XY_TEXT.free) };
@@ -179,7 +226,7 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
     live(kind, x, y) {
       const t = transport();
       const n = pad();
-      return t && t.playing && n ? t.live(n.id, { kind, x: (x + 0.5) / steps, y }) : null;
+      return t && t.playing && n ? t.live(n.id, { kind, x: xyCellX(x, steps), y }) : null;
     },
     arm,
     /** Y held below its depth by its target's range (xy.js xyRoom), or null. */
@@ -195,10 +242,10 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
 
 export function mountSynthXy(host, { store, transport = null, panel, owner = XY_OWNER, app = null,
   arm = null, say = () => {}, jackName = (id) => String(id), dispatch = null, notes = null,
-  mountPad = mountXyPad } = {}) {
+  mountPad = mountXyPad, sampleRate = () => null } = {}) {
   const tp = () => (typeof transport === 'function' ? transport() : transport);
   const target = documentTarget({ store, panel, transport: tp, owner, say, jackName,
-    dispatch: dispatch || ((a) => store.dispatch(a)),
+    sampleRate, dispatch: dispatch || ((a) => store.dispatch(a)),
     arm: arm || (() => {
       const t = tp();
       return !!t && (t.playing || t.arm().ok);
@@ -268,13 +315,51 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   host.innerHTML = '<div class="flex flex-wrap items-center gap-2" data-xy-controls=""></div>'
     + '<p class="mt-2 text-sm text-gray-700 dark:text-gray-300" data-xy-default=""></p>'
     + `<p id="${uid}-first" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white" `
-    + 'data-xy-first="" aria-live="polite"></p><div class="mt-3" data-osc="synth.xy.pad"></div>'
-    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[1.25rem] font-mono text-sm '
-    + 'text-gray-700 dark:text-gray-300"></p>';
+    + 'data-xy-first="" aria-live="polite"></p>'
+    // The readout above the pad, where the docked keyboard never covers it (S3), its lines
+    // reserved (3 on a phone, 2 from sm, 1 from lg) so that a longer reading never moves the
+    // pad under the finger.
+    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[3.75rem] font-mono text-sm '
+    + 'text-gray-700 sm:min-h-[2.5rem] lg:min-h-[1.25rem] dark:text-gray-300"></p>'
+    + '<div class="mt-2" data-osc="synth.xy.pad"></div>';
   const spec = target.wire(host.querySelector('[data-xy-controls]'));
   const box = host.querySelector('[data-osc="synth.xy.pad"]');
   if (spec && box) {
-    const { steps, deg, scale, target: to, params: p } = spec;
+    const { steps, deg, sent, from, scale, target: to, params: p, reading } = spec;
+    /** A cell's note as the pad names it: the note heard, else "sends D3" (xySounding). */
+    const noteText = (d) => (d.sends ? `sends ${d.name}` : d.name);
+    /**
+     * What Y's target plays at y, in the target knob's text; '' when Y drives nothing. `why`:
+     * 'line' names the bound a held value stays under and its rate, 'aria' as the Inspector
+     * writes it (limitBoundText), 'ring' only "held", 'end' the value alone.
+     */
+    const yValue = (y, why = 'ring') => {
+      const r = reading();
+      if (!r) return '';
+      const v = r.at(y);
+      const text = knobModel(r.param).text(v);
+      const past = v > r.param.max || v < r.param.min ? 'past its range' : '';
+      const held = r.limited && r.cap && why !== 'end';
+      const nyq = held && r.cap.bound === 'nyquist';
+      const before = nyq && r.provisional ? ' until audio starts' : '';
+      if (why === 'aria') {
+        return `${text}${past ? ` (${past})` : ''}${held ? `, held at or below ${limitBoundText({
+          cap: r.cap.value, bound: r.cap.bound, sampleRate: r.sampleRate })}${before
+          ? `,${before}` : ''}` : ''}`;
+      }
+      const rate = `${Number((r.sampleRate / 1000).toFixed(3))} kHz`;
+      const how = !held ? '' : why === 'ring' ? 'held' : nyq
+        ? `held ≤ ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist at ${rate}${before}`
+        : 'held ≤ the top of its range';
+      const notes = [past, how].filter(Boolean).join(', ');
+      return notes ? `${text} (${notes})` : text;
+    };
+    const others = () => {
+      const r = reading();
+      return r && r.others ? `, and ${r.others} more cable${r.others > 1 ? 's' : ''} into it`
+        : '';
+    };
+    const ends = reading() ? () => [yValue(0, 'end'), yValue(1, 'end')] : null;
     host.querySelector('[data-xy-default]').textContent = spec.stated;
     const first = host.querySelector('[data-xy-first]');
     first.textContent = XY_TEXT.first;
@@ -291,18 +376,20 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     };
     const out = host.querySelector('[data-osc="synth.xy.readout"]');
     /**
-     * The readout under the pad says what sounds (K183 review N2, N4): the cursor's note, Y as
-     * the node plays it (its rest, 0, without a touch; where the cursor is, the next touch
-     * starts), whether the gate is open, and a Y the target's range holds below its depth.
+     * The readout above the pad says what sounds (K183 review N2, N4; S3): the cursor's note (the
+     * note heard, or "sends D3"), Y as the node plays it (its rest, 0, without a touch; where the
+     * cursor is, the next touch starts) with what its target plays there (yValue), whether the
+     * gate is open, and a Y the target's range holds below its depth.
      */
     const show = (v, r = null) => {
       const d = deg(v.x);
       const on = (r && r.held) || gated();
       const pct = (y) => Math.round(y * 100);
       const room = typeof target.room === 'function' ? target.room() : null;
-      out.textContent = `${d.name} · degree ${d.degree} of ${scale} · Y ${on ? pct(v.y) : 0}`
-        + ` % → ${to}${on ? ' · gate open' : v.y > 0 ? ` · the next touch from Y ${pct(v.y)} %`
-          : ''}${room ? ` · ${room.text}` : ''}`;
+      const yv = yValue(on ? v.y : 0, 'line');
+      out.textContent = `${noteText(d)} · degree ${d.degree} of ${scale} · Y ${on ? pct(v.y) : 0}`
+        + ` % → ${to}${yv ? ` ${yv}` : ''}${on ? ' · gate open' : v.y > 0
+          ? ` · the next touch from Y ${pct(v.y)} %` : ''}${room ? ` · ${room.text}` : ''}`;
     };
     // The pad's node hears X and Y only from a touch on (K183 review F1): until the first
     // onGate(true), and between touches, the cursor moves the readout alone, so Y stays at 0
@@ -315,7 +402,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     const gated = () => held !== null || !!(view && view.model && view.model.gated);
     const press = (v) => { // the note under X, through the keys' note layer
       if (!input) return;
-      held = deg(v.x).note;
+      held = sent(v.x).note;
       input.noteOn(held, velocity(), XY_SOURCE);
     };
     const lift = () => {
@@ -362,22 +449,33 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     view = mountPad(box, {
       label: `XY pad: notes in ${scale}, Y to ${to}`,
       description: `X is the note: ${steps} steps of ${scale} over ${p.span} oct from `
-        + `${p.key}${p.octave}, low at the left, played as the keys play. Y drives ${to}, low at `
+        + `${from}, low at the left, played as the keys play. Y drives ${to}, low at `
         + 'the bottom. Arrows move the cursor; hold Enter, or touch, to sound it; Escape '
         + 'releases.',
       describedBy: [`${uid}-first`],
-      cells: Array.from({ length: steps }, (_, i) => ({ label: String(deg(i).degree),
-        root: deg(i).degree === 1 })),
+      // Each cell's note, as the runtime quantises its x: the full name where the row has room,
+      // else on the roots (the key at each octave) and the note letter between them.
+      cells: Array.from({ length: steps }, (_, i) => {
+        const d = deg(i);
+        const root = d.degree === 1;
+        return { label: steps <= 15 || root ? d.name : NOTE_NAMES[((d.note % 12) + 12) % 12],
+          root };
+      }),
       disabled: null,
       x: { key: 'x', label: 'Note', type: 'integer', min: 0, max: steps - 1, step: 1,
         default: Math.floor(steps / 2) },
       y: { key: 'y', label: `Y: ${to}`, type: 'number', min: 0, max: 1, default: 0 },
       value: pos,
-      text: { x: (i) => `${deg(i).name}, degree ${deg(i).degree}`,
-        y: (v) => `${Math.round(v * 100)} % to ${to}` },
+      text: { x: (i) => `${noteText(deg(i))}, degree ${deg(i).degree}`,
+        y: (v) => {
+          const yv = yValue(v, 'aria');
+          return `${Math.round(v * 100)} % to ${to}${yv ? `: ${yv}${others()}` : ''}`;
+        } },
+      readout: { x: (i) => noteText(deg(i)), y: (v) => (yValue(v) ? `${to} ${yValue(v)}` : null),
+        yEnds: ends },
       onPreview(v) {
         keep(v);
-        const n = deg(v.x).note;
+        const n = sent(v.x).note;
         if (held !== null && n !== held && input) { // another scale cell: legato, no new gate
           input.legato(held, n, XY_SOURCE);
           held = n;

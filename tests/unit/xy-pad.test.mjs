@@ -416,7 +416,9 @@ async function mountedPad() {
   const el = () => {
     const on = new Map();
     const attrs = new Map();
-    return { on, dataset: {}, textContent: '', setAttribute: (k, v) => attrs.set(k, String(v)),
+    // children: the view's trail segments (S3), none here.
+    return { on, dataset: {}, textContent: '', children: [],
+      setAttribute: (k, v) => attrs.set(k, String(v)),
       getAttribute: (k) => attrs.get(k), addEventListener: (t, f) => on.set(t, f),
       removeEventListener: (t) => on.delete(t), setPointerCapture() {}, focus() {},
       contains: () => true, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100,

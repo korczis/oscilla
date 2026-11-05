@@ -443,7 +443,9 @@ export function createStudioUi(svc = {}) {
   }
 
   // The Synth workspace (K058-K066) shares this part's ONE store and transport.
-  const synth = createSynthUi({ get: () => ({ handle: ctx.handle, transport: ctx.transport }),
+  // sampleRate: the running context's (null before one), which sizes the XY pad's Y value.
+  const synth = createSynthUi({ get: () => ({ handle: ctx.handle, transport: ctx.transport,
+    sampleRate: svc.engine ? svc.engine.sampleRate : null }),
     setupAudio: () => setupAudio(), announce, registry });
 
   // ---------------------------------------------------------------- the Alpine part
