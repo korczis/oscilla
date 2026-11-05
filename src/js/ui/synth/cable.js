@@ -390,15 +390,15 @@ const str = (x) => String(x);
  * One cable as attribute records for a keyed setAttribute editor (no markup): a frozen list of
  * { key, tag, attrs, parent } in document and paint order, parents first, values raw strings.
  * `key` names the part whatever the ends, zoom or state ('cable', 'shadow', 'main', 'hit',
- * 'edge', 'stroke', 'shade'; then, unless `dash` is passed, 'bands' and its paths 'band-from'
- * and 'band-to', each the bands of CABLE_BANDS[type] at one end; then 'cross', 'cross-under-0',
- * 'cross-under-1', 'cross-0', 'cross-1' when refused, unless cross is false or the target plug
- * is refused; then 'sheen' unless sheen is false), so an editor keyed by (cable id, key) only
+ * 'edge', 'stroke', 'shade'; then 'sheen' unless sheen is false; then, unless `dash` is passed,
+ * 'bands' and its paths 'band-from' and 'band-to', each the bands of CABLE_BANDS[type] at one
+ * end; then 'cross', 'cross-under-0', 'cross-under-1', 'cross-0', 'cross-1' when refused, unless
+ * cross is false or the target plug is refused), so an editor keyed by (cable id, key) only
  * adds or removes the cross and the sheen.
  * It does setAttribute for each attribute a record carries, removeAttribute for each one it no
  * longer carries (un-refusing a solid AUDIO cable drops data-refused and stroke-dasharray; one
  * that only sets leaves it dashed and refused), and parent.insertBefore(new part, the next drawn
- * part of its parent; appended when none), so a cross goes under a drawn sheen, as painted.
+ * part of its parent; appended when none), so a sheen goes under drawn bands, as painted.
  * cableSvg serialises exactly this list.
  *
  * The parts: a soft shadow (castInk at hw-shadow, SHADOW_SPREAD wider,
@@ -406,11 +406,12 @@ const str = (x) => String(x);
  * the pointer (a hit path CABLE_HIT_PX screen px wide at every zoom by vector-effect=
  * "non-scaling-stroke", visibility="hidden", hit through pointer-events="stroke"; the opaque rim
  * (cordInk), CABLE_EDGE wider each side, dashed and capped as the stroke; the stroke in the
- * caller's colour, solid); the shade (cordInk at hw-shadow, LIGHT, beside the cord); the bands
- * (JC-6): from CABLE_BAND_AT out from each plug's centre, each band of CABLE_BANDS[type] a
- * straight piece of the cord between its two distances (a subpath of the end's path), in the
- * rim's ink, BAND_CORE of the stroke across, every palette colour 3:1 on it; then the sheen
- * (sheenInk at hw-sheen, LIGHT, beside the cord). Hover and selection thicken stroke and rim
+ * caller's colour, solid); the shade (cordInk at hw-shadow, LIGHT, beside the cord); the sheen
+ * (sheenInk at hw-sheen, LIGHT, beside the cord); then the bands (JC-6), heat-shrink on the
+ * cord's surface, above the shade and the sheen: from CABLE_BAND_AT out from each plug's centre,
+ * each band of CABLE_BANDS[type] a straight piece of the cord between its two distances (a
+ * subpath of the end's path), in the rim's ink, BAND_CORE of the stroke across, 3:1 on every
+ * palette colour, shaded or sheened. Hover and selection thicken stroke and rim
  * (JC-13: 8.5, 9.5, 11); a dashed stroke has butt caps so its gaps stay open at any width, a
  * solid one round. Refused paints the stroke tokens.jack.refuse, dashed (REFUSED_DASH unless a
  * dash is passed), marks data-refused and draws a cross on the curve CROSS_BACK from the target,
@@ -473,6 +474,12 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
       'stroke-width': str(num(w * LIGHT.shadeWidth)), 'stroke-linecap': cap, ...dashed,
       'pointer-events': 'none' }),
   ];
+  if (sheen) {
+    parts.push(part('sheen', 'path', 'cable', { 'data-sheen': '', class: SHEEN_CLASS,
+      d: lit, fill: 'none', stroke: sheenInk(tokens),
+      'stroke-width': str(num(w * LIGHT.sheenWidth)), 'stroke-linecap': cap, ...dashed,
+      'pointer-events': 'none' }));
+  }
   if (dash === undefined) {
     parts.push(part('bands', 'g', 'cable', { 'data-bands': str(type), 'pointer-events': 'none' }));
     const band = str(num(w * BAND_CORE));
@@ -503,12 +510,6 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     parts.push(part('cross', 'g', 'cable', { 'data-cross': '', 'pointer-events': 'none' }),
       ...arms.map((l, i) => line(`cross-under-${i}`, l, tokens.cable.shadow, CROSS.under)),
       ...arms.map((l, i) => line(`cross-${i}`, l, tokens.jack.refuse, CROSS.width)));
-  }
-  if (sheen) {
-    parts.push(part('sheen', 'path', 'cable', { 'data-sheen': '', class: SHEEN_CLASS,
-      d: lit, fill: 'none', stroke: sheenInk(tokens),
-      'stroke-width': str(num(w * LIGHT.sheenWidth)), 'stroke-linecap': cap, ...dashed,
-      'pointer-events': 'none' }));
   }
   return Object.freeze(parts);
 }

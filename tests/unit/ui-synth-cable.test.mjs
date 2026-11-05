@@ -602,8 +602,8 @@ test('cableParts: an ordered, frozen list of { key, tag, attrs, parent }, parent
   assert.equal(parts[0].parent, null);
   assert.equal(parts.filter((p) => p.parent === null).length, 1, 'one root');
   assert.deepEqual(parts.map((p) => p.key), ['cable', 'shadow', 'main', 'hit', 'edge', 'stroke',
-    'shade', 'bands', 'band-from', 'band-to', 'cross',
-    'cross-under-0', 'cross-under-1', 'cross-0', 'cross-1', 'sheen']);
+    'shade', 'sheen', 'bands', 'band-from', 'band-to', 'cross',
+    'cross-under-0', 'cross-under-1', 'cross-0', 'cross-1']);
 });
 
 test('cableParts: the keys are stable as the cable moves and changes state', () => {
@@ -618,7 +618,9 @@ test('cableParts: the keys are stable as the cable moves and changes state', () 
   }
   const refused = keys({ state: { refused: true } });
   assert.deepEqual(refused.slice(0, base.length), base, 'the cross adds parts, after the rest');
-  assert.deepEqual(keys({ sheen: true }), [...base, 'sheen']);
+  const sheened = [...base];
+  sheened.splice(base.indexOf('shade') + 1, 0, 'sheen');
+  assert.deepEqual(keys({ sheen: true }), sheened, 'the sheen under the bands');
 });
 
 /** Markup with each element's attributes in one order, so two drawings that set the same
@@ -766,7 +768,8 @@ test('cableSvg draws the JC cord it drew when its look was set (pinned)', () => 
   // (dragged); the shade 0.25 of the width away from the light, beside the cord in two cubics a
   // cubic; a refused cord dashed REFUSED_DASH; CONTROL's two bands 20 to 22.5 and 24.5 to 27
   // from each plug's centre, 5.1 wide inside the cord; the cross CROSS_BACK (30.2) from the
-  // target; the sheen 0.3 of the width in the light depth role, 0.22 of it toward the light.
+  // target; the sheen 0.3 of the width in the light depth role, 0.22 of it toward the light,
+  // under the bands (heat-shrink on the cord's surface, 11-05).
   const svg = cableSvg({ id: 'g1', from: { x: 10, y: 20 }, to: { x: 210, y: 60 },
     type: 'CONTROL', colour: TOKENS.cable.palette[1], tokens: TOKENS,
     state: { refused: true, dragging: true }, zoom: 2, sheen: true });
@@ -795,15 +798,15 @@ test('cableSvg draws the JC cord it drew when its look was set (pinned)', () => 
     + `<path data-shade="" class="opacity-hw-shadow" d="${shade}" fill="none" `
     + 'stroke="var(--osc-bg)" stroke-width="2.125" stroke-linecap="butt" '
     + 'stroke-dasharray="4 4" pointer-events="none"/>'
+    + `<path data-sheen="" class="opacity-hw-sheen" d="${sheen}" fill="none" `
+    + 'stroke="var(--osc-hw-highlight)" stroke-width="2.55" stroke-linecap="butt" '
+    + 'stroke-dasharray="4 4" pointer-events="none"/>'
     + '<g data-bands="CONTROL" pointer-events="none">'
     + band('from', '21.899109 36.075174 L 23.44734 38.039375',
       '24.696427 39.602679 L 26.271213 41.546406')
     + band('to', '195.386278 73.654271 L 193.462798 75.256833',
       '191.907239 76.519745 L 189.941326 78.073451') + '</g>'
-    + `<g data-cross="" pointer-events="none">${arms('bg', '4.5')}${arms('red', '2')}</g>`
-    + `<path data-sheen="" class="opacity-hw-sheen" d="${sheen}" fill="none" `
-    + 'stroke="var(--osc-hw-highlight)" stroke-width="2.55" stroke-linecap="butt" '
-    + 'stroke-dasharray="4 4" pointer-events="none"/></g>');
+    + `<g data-cross="" pointer-events="none">${arms('bg', '4.5')}${arms('red', '2')}</g></g>`);
 });
 
 test('cable.js writes markup in one place only: the serialiser of the parts', () => {
@@ -1783,7 +1786,7 @@ test('JC-6: with the colours taken away, every signal type still draws different
   }
 });
 
-test('JC-6: the bands are part of the cord: same keys as it moves, under the cross and sheen',
+test('JC-6: the bands are part of the cord: same keys as it moves, over the sheen, under the cross',
   () => {
     const keys = (s) => cordParts({ type: 'TRIGGER', ...s }).map((p) => p.key);
     const base = keys({});
@@ -1793,7 +1796,7 @@ test('JC-6: the bands are part of the cord: same keys as it moves, under the cro
     }
     const refused = keys({ state: { refused: true } });
     assert.ok(refused.indexOf('band-to') < refused.indexOf('cross'), 'the cross is drawn over');
-    assert.ok(base.indexOf('band-to') < base.indexOf('sheen'), 'the sheen runs over the bands');
+    assert.ok(base.indexOf('sheen') < base.indexOf('bands'), 'the bands lie over the sheen');
     assert.ok(base.indexOf('stroke') < base.indexOf('bands'), 'over the cord');
     const svg = draw({ type: 'TRIGGER' });
     assert.match(svg, /<g data-bands="TRIGGER" pointer-events="none">(?:<path [^>]*\/>){2}<\/g>/);
@@ -1916,31 +1919,59 @@ test('cords amendment (b): the bands hold 3:1 on every cord colour, on every pla
     assert.deepEqual(short, [], 'bands under 3:1 on their cord');
   });
 
-// Beyond af's (b), measured while proving it (11-05): the shade (cordInk at hw-shadow, under the
-// bands) and the sheen (over them) cross a band's lower and upper side, so a band also meets
-// the shaded cord and, under the sheen, the sheened cord. There the ratio falls under 3:1:
-// shaded 2.15 (light --osc-purple) to 5.71, sheened 2.82 (light --osc-purple) to 8.68. The
-// remedy (the shade's or sheen's lane, or BAND_CORE) is a design call for the rule's owner.
-test('cords amendment: a band holds 3:1 where the shade and the sheen cross it', {
-  todo: 'measured under 3:1 on 7 of 12 cord colours shaded and 3 of 12 sheened; a call for af',
-}, async () => {
+// Beyond af's (b), measured while proving it (11-05): the shade (cordInk at hw-shadow) and the
+// sheen run along the cord's lower and upper side, so a band's ends also meet the shaded cord
+// and the sheened cord: 6 cord colours x 2 themes x shaded and sheened, 24 pairs. A band is
+// heat-shrink on the cord's surface, drawn above the shade and the sheen; there each sheened
+// pair holds 3:1 (under the sheen they fell to 2.82). The shaded pairs do not move with the
+// order: the shade is the band's own ink at hw-shadow, so a band's edge on the shaded cord
+// measures 2.15 (light --osc-purple) to 2.93 either way. Their remedy (the shade's lane,
+// BAND_CORE or the band's ink) is a design call for the rule's owner.
+const bandLanes = async () => {
   const th = await tokenThemes();
-  const short = [];
+  const out = [];
   for (const [name, theme] of Object.entries(th)) {
     const tokens = themed(theme);
     tokens.cable.palette.forEach((colour, i) => {
       const parts = cordParts({ tokens, colour, type: 'CONTROL' });
       const a = (key) => parts.find((p) => p.key === key).attrs;
       const [band, shade, sheen] = [a('band-from'), a('shade'), a('sheen')];
-      const lit = (x) => overOf(sheen.stroke, x, intensityOf(sheen.class));
-      const banded = overOf(band.stroke, colour, intensityOf(band.class));
-      const where = `${name} ${SYNTH_TOKEN_NAMES.cable.palette[i]}`;
-      const shaded = contrastOf(banded, overOf(shade.stroke, colour, intensityOf(shade.class)));
-      const sheened = contrastOf(lit(banded), lit(colour));
-      if (shaded < 3) short.push(`${where} shaded ${shaded.toFixed(2)}`);
-      if (sheened < 3) short.push(`${where} sheened ${sheened.toFixed(2)}`);
+      for (const [lane, ground] of [
+        ['shaded', overOf(shade.stroke, colour, intensityOf(shade.class))],
+        ['sheened', overOf(sheen.stroke, colour, intensityOf(sheen.class))]]) {
+        out.push({ lane, where: `${name} ${SYNTH_TOKEN_NAMES.cable.palette[i]} ${lane}`,
+          keys: parts.map((p) => p.key),
+          ratio: contrastOf(overOf(band.stroke, ground, intensityOf(band.class)), ground) });
+      }
     });
   }
+  return out;
+};
+const leastOf = (rows) => rows.reduce((m, r) => (r.ratio < m.ratio ? r : m));
+
+test('cords amendment: a band sits above the shade and the sheen, 3:1 on the sheened cord',
+  async (t) => {
+    const rows = await bandLanes();
+    assert.equal(rows.length, 24, 'six cord colours, two themes, shaded and sheened');
+    for (const { keys, where } of rows) {
+      for (const under of ['shade', 'sheen']) {
+        assert.ok(keys.indexOf(under) < keys.indexOf('bands'), `${where}: over the ${under}`);
+      }
+    }
+    for (const lane of ['sheened', 'shaded']) {
+      const m = leastOf(rows.filter((r) => r.lane === lane));
+      t.diagnostic(`${lane}: the least ${m.ratio.toFixed(2)} (${m.where})`);
+    }
+    const short = rows.filter((r) => r.lane === 'sheened' && r.ratio < 3)
+      .map((r) => `${r.where} ${r.ratio.toFixed(2)}`);
+    assert.deepEqual(short, []);
+  });
+
+test('cords amendment: a band holds 3:1 where the shade crosses it', {
+  todo: 'measured 2.15-2.93 on 7 of 12 shaded pairs; the shade is the band\'s ink, a call for af',
+}, async () => {
+  const short = (await bandLanes()).filter((r) => r.lane === 'shaded' && r.ratio < 3)
+    .map((r) => `${r.where} ${r.ratio.toFixed(2)}`);
   assert.deepEqual(short, []);
 });
 
