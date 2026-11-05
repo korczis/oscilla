@@ -9,7 +9,8 @@
 // falls back when route() gives no sink). midi/ui.js routes the Studio workspace to it.
 //
 //   createStudioSink({ get, setupAudio, ensureAudio, say, registry }) -> { noteOn, noteOff,
-//     allOff, active() -> this sink | null }   get() -> { handle, transport }, as the Synth's
+//     allOff, leave, heldNotes() -> [{ note, node }] (a debug read: synth/ui.js synthDebug),
+//     active() -> this sink | null }   get() -> { handle, transport }, as the Synth's
 
 import { routedNode } from './picker.js';
 import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
@@ -89,7 +90,11 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     return true;
   }
 
-  const sink = { noteOn, noteOff, allOff, leave };
+  /** A test and debug read (synthDebug().sinkHeld; not a contract): each note still held, on
+   *  the node it went to, in the order pressed. Empty after leaving the Studio (K175, S18). */
+  const heldNotes = () => [...held].map(([note, node]) => ({ note, node }));
+
+  const sink = { noteOn, noteOff, allOff, leave, heldNotes };
   sink.active = () => {
     const { handle } = get();
     return handle && target(handle.getModel()) ? sink : null;
