@@ -146,7 +146,10 @@ export function referenceNumbers(count = 45000) {
 // steadiness limit is the margin times the largest measured, 2.54. A reference ten times
 // slower or faster moves the quotient ten times, out of the band from any quotient measured,
 // since the measured range spans 1.87 times and the band 7.5, under ten (8.6 > 3.22 and
-// 0.161 < 0.43, by 2.7 times either way); a test checks that.
+// 0.161 < 0.43, by 2.7 times either way); a test checks that. The known limit (af): both
+// references starved alike while the work is not leaves the quotient where it was and drops the
+// multiple, which no relative check can detect; with the three units interleaved it is
+// implausible.
 export const CALIBRATION_MARGIN = 2;
 /** referenceStrings() over referenceNumbers(), [smallest, largest], as measured (see above). */
 export const QUOTIENT_MEASURED = Object.freeze([0.86, 1.61]);
@@ -230,23 +233,24 @@ export function measureRelative(work, { reference = () => referenceStrings(),
 
 /**
  * The work's cost as a multiple of the reference's (measureRelative), on a calibration that
- * checked itself: a measurement with calibrationFaults is taken again, up to
- * CALIBRATION_ATTEMPTS in all, and when none holds the call throws, naming the calibration as
- * unreliable, with the last measurement as `measurement` and its faults as `faults`. It never
- * returns a multiple measured against an untrusted reference.
+ * checked itself: a measurement with calibrationFaults is taken again, up to `attempts` in all
+ * (CALIBRATION_ATTEMPTS unless a pin that expects the refusal asks for fewer), and when none
+ * holds the call throws, naming the calibration as unreliable, with the last measurement as
+ * `measurement` and its faults as `faults`. It never returns a multiple measured against an
+ * untrusted reference.
  */
-export function relativeCost(work, options = {}) {
+export function relativeCost(work, { attempts = CALIBRATION_ATTEMPTS, ...options } = {}) {
   let m;
   let faults = [];
-  for (let attempt = 1; attempt <= CALIBRATION_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     m = measureRelative(work, options);
     faults = calibrationFaults(m.calibration);
     if (faults.length === 0) return { ...m, attempts: attempt };
   }
-  const error = new Error(`the calibration is unreliable after ${CALIBRATION_ATTEMPTS} attempts:`
+  const error = new Error(`the calibration is unreliable after ${attempts} attempts:`
     + ` ${faults.join('; ')} (the reference ${m.referenceMs.toFixed(2)} ms CPU, the control`
     + ` ${m.controlMs.toFixed(2)} ms CPU); no multiple is judged against it`);
-  error.measurement = { ...m, attempts: CALIBRATION_ATTEMPTS };
+  error.measurement = { ...m, attempts };
   error.faults = faults;
   throw error;
 }

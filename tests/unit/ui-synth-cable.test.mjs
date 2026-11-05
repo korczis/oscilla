@@ -7,7 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { CALIBRATION_ATTEMPTS, QUOTIENT_BAND, QUOTIENT_MEASURED, STEADINESS_LIMIT,
+import { QUOTIENT_BAND, QUOTIENT_MEASURED, STEADINESS_LIMIT,
   STEADINESS_MEASURED, calibrationFaults, referenceNumbers, referenceStrings, relativeCost,
   relativeReport, slowed } from './fixtures/host-relative-budget.mjs';
 import {
@@ -622,8 +622,13 @@ test('E058 pin: each budget passes on a host five times slower', (t) => {
   }
 });
 
-/** The refusal `measure` throws: a calibration named unreliable, after every attempt. */
-function refusal(measure) {
+/** A pin that expects the refusal measures twice, not CALIBRATION_ATTEMPTS times: one retry
+ *  proves the retry, and every further attempt of a refusal costs the same again. */
+const REFUSING_ATTEMPTS = 2;
+
+/** The refusal `measure` throws: a calibration named unreliable, after the `attempts` it was
+ *  given. */
+function refusal(measure, attempts) {
   let error;
   assert.throws(() => {
     try {
@@ -632,8 +637,8 @@ function refusal(measure) {
       error = e;
       throw e;
     }
-  }, /the calibration is unreliable after \d+ attempts/);
-  assert.equal(error.measurement.attempts, CALIBRATION_ATTEMPTS);
+  }, new RegExp(`the calibration is unreliable after ${attempts} attempts`));
+  assert.equal(error.measurement.attempts, attempts);
   assert.ok(error.faults.length > 0);
   return error;
 }
@@ -646,7 +651,8 @@ test('E058 pin: a starved reference fails closed, though the bare multiple would
   const { name, work, bound } = BUDGETS[0];
   const starved = slowed(() => referenceStrings(), 10);
   for (const [what, fn] of [['as it is', work], ['ten times slower', slowed(work, 10)]]) {
-    const e = refusal(() => relativeCost(fn, { reference: starved, runs: 3 }));
+    const e = refusal(() => relativeCost(fn, { reference: starved, runs: 3,
+      attempts: REFUSING_ATTEMPTS }), REFUSING_ATTEMPTS);
     t.diagnostic(`${name} ${what}, the reference starved: ${e.message}`);
     assert.ok(e.measurement.ratio <= bound, `the bare multiple ${e.measurement.ratio} passes`);
     assert.match(e.faults.join('; '), /quotient/);
@@ -658,7 +664,7 @@ test('E058 pin: the control alone made ten times slower fails closed', (t) => {
   // above, the work as it is): either one slowed alone moves the quotient ten times.
   const { name, work } = BUDGETS[0];
   const e = refusal(() => relativeCost(work, { control: slowed(() => referenceNumbers(), 10),
-    runs: 3 }));
+    runs: 3, attempts: REFUSING_ATTEMPTS }), REFUSING_ATTEMPTS);
   t.diagnostic(`${name}, the control 10x slower: ${e.message}`);
   assert.match(e.faults.join('; '), /quotient/);
 });
@@ -669,7 +675,8 @@ test('E058 pin: a reference whose units disagree fails closed', (t) => {
   let n = 0;
   const slow = slowed(() => referenceStrings(), 10);
   const jitter = () => (n++ % 2 ? slow() : referenceStrings());
-  const e = refusal(() => relativeCost(BUDGETS[0].work, { reference: jitter, runs: 5 }));
+  const e = refusal(() => relativeCost(BUDGETS[0].work, { reference: jitter, runs: 5,
+    attempts: REFUSING_ATTEMPTS }), REFUSING_ATTEMPTS);
   t.diagnostic(`600 cables, the reference unsteady: ${e.message}`);
 });
 
