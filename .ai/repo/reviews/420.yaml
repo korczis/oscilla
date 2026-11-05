@@ -40,6 +40,14 @@
 # e79deeab1bf1. The digest moved only because main (#417, #421, #422, #430) moved the base; it is
 # recomputed with origin/main 6c7b227f's review-verdict.mjs.
 #
+# Delta reviewed (2026-11-05, head e569abc5): e18477f7 fixes #420's s-choices red on ubuntu-24.04
+# (DejaVu Sans as system-ui). A window's legend grid prints at weight 400, because bold overran its
+# cell by up to 1.21x. The selection stays marked without weight: the frame's data-window-text at
+# 600 (synth/view/knob.js), the data-selected bar, and the value colour. ui-synth-switch's new test
+# (400, one bar, a 1.05x fit) fails on 8da2dc8b. No label text changed. switch.js is unguarded, so
+# the content digest is unchanged. e569abc5 merges main ed9ff3aa (#432); its only resolution is
+# K171.yaml, taken from main. The SYN references are unchanged (dev-53: darwin 0/0, linux noise only).
+#
 # Verdict: merge. No P0 or P1, and no P2 open. T3-T10 are P3 follow-ups, listed below.
 schema: review-verdict/v1
 pr: 420
