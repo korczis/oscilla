@@ -1,0 +1,30 @@
+id: R047
+milestone: M011
+serves:
+  - "release-provenance#no-runtime-network"
+title: "verify-dist names what it does not hold, and defers to the browser request guard"
+slug: verify-dist-names-what-it-does-not-hold
+priority: p2
+profile: implementation
+objective: "Lands as chore(ci) after R040 (round 9) and R041. R040 made scripts/verify-dist.mjs a fail-closed static pre-check, reviewed in nine rounds; the rounds kept finding edges of its hand-written HTML tokenizer, so af and b0 bounded them (2026-11-05): later findings of the same kind go here, not into another round. After: the header and tests/README name every class the scan does not hold, with a pinned example each, and say the scan is subordinate to R041's browser request guard (zero network requests from the dist in a real browser), which is the decisive check."
+why: "af's R040 reviews (rounds 7 and 8, workflows wf_17dad463-6aa and wf_1d25d013-05b) left P3 and INFO findings and the bounding agreement with b0."
+scope:
+  - "scripts/verify-dist.mjs"
+  - "tests/unit/verify-dist.test.mjs"
+  - "tests/README.md"
+depends_on:
+  - "R041"
+acceptance_criteria:
+  - "Named as not held, each with a pinned passing example in the documented-limits test: JS forms Reflect.apply(fetch), fetch.call/apply/bind, an aliased fetch, setAttribute with a variable name, Alpine object-form x-bind, window.open and location.assign, Object.assign(new Image(),{src}), a computed non-global key, sendBeacon by concatenation, a blob worker with importScripts by concatenation, and `<img/src=…>` inside an HTML string (or fixed by accepting [\\s/] after the tag name in the HTML-string pattern)."
+  - "False refusals fixed or named: srcset with a data: candidate, an SVG <a xlink:href> navigation, url( inside a JS comment."
+  - "Messages after an unterminated <script src=…/> name the real cause, not 'first-party fetch' and 'vendor missing'."
+  - "decodeCharRefs' docstring states the C1 (&#128;-&#159;) and &#x; differences from the browser; any later tokenizer edge of the round-8 kind is either fixed with a pin or named here as not held."
+  - "The header and tests/README say verify-dist is the fast static pre-check and R041's browser request guard is the decisive one."
+  - "The pull request carries a reviewer's verdict (scripts/verify-dist.mjs is guarded)."
+validation:
+  - "node --test tests/unit/verify-dist.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
