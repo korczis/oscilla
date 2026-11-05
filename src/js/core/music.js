@@ -58,7 +58,7 @@ export const SCALE_LABELS = Object.freeze({ major: 'Major', minor: 'Natural mino
   'minor-pentatonic': 'Minor pentatonic', chromatic: 'Chromatic' });
 /** Short legends where a full name does not fit a choice's printed legend (a plate's packed
  *  grid); the full name stays the accessible name and the status line's text. */
-export const SCALE_SHORT = Object.freeze({ minor: 'Minor', 'major-pentatonic': 'Major pent.',
+export const SCALE_SHORT = Object.freeze({ minor: 'Nat. minor', 'major-pentatonic': 'Major pent.',
   'minor-pentatonic': 'Minor pent.' });
 
 /**
