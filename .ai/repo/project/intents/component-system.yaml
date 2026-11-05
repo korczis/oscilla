@@ -64,6 +64,10 @@ satisfaction:
   criterion: "Each control family (knob, slider, switch, patch bay, keyboard, app shell) has one implementation, parametrized for its places and named in the catalogue; a census refuses a second one, and its baseline of duplicates is empty (owner order of 2026-11-04)"
   evidence: command
   ref: "node --test tests/unit/ui-families.test.mjs"
+- id: one-modeler-per-curve
+  criterion: "Every envelope and filter of the app (the labs, every Studio envelope and filter node, the Synth's EG and filter plates, a sequencer track's voice) is edited by one modeler per curve, bound to its target through the owner's own write path chosen by the one selection, and the curve it draws is the law that plays, labelled live or computed (owner order of 2026-11-05: one way, DRY, bus connected)"
+  evidence: command
+  ref: "node --test tests/unit/modeler-binding.test.mjs && node tests/browser/modelers.cjs"
 governance:
 - "rule:project.rules-name-their-enforcement"
 - "rule:project.majordomus-layer-current"

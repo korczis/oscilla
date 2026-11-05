@@ -29,4 +29,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:11:24Z
+started_at: 2026-11-05T00:11:13Z
+started_event: sha256:0af0aafe0b0ba962e785c672e1cfb685e6dda74b26b6ffebacd8d4df60b4970a
+completed_at: 2026-11-05T00:11:24Z
+completed_event: sha256:f862b244d30dbeee9e11e3c4aa1c6db97c71b2042194dc4c5c6443650c91c4b7
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/readout-in-effect-studio-limits.test.mjs && node --test tests/unit/v31-studio-compiler.test.mjs (scratch archive of origin/main)"
+    result: "readout-in-effect-studio-limits: 11/11 pass. v31-studio-compiler: 24/24 pass, so audio values are unchanged. The same test copied onto the merge base 10db73d0^1 fails 11/11 (fail-first)."
+    artifact: "10db73d0938bce9d3c93df6acfd5ebe04759235d"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:11:02Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/342.yaml"
+    result: "Review verdict .ai/repo/reviews/342.yaml (verdict: merge) is on origin/main; landed as #342 carried by train #380 (merge 10db73d0); 380.yaml also on main, main commit 10db73d0938bce9d3c93df6acfd5ebe04759235d."
+    artifact: ".ai/repo/reviews/342.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:11:08Z

@@ -1,0 +1,25 @@
+id: R042
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "The suite wiring check requires each entry suite in test:release or a named allowlist, not in any npm script"
+slug: the-suite-wiring-check-requires-each-entry-suite-in
+priority: p2
+profile: implementation
+objective: "Lands as test(release). Hardening S9, first finding. At main 68b117f3 tests/unit/browser-suite-contract.test.mjs:106-112 accepts a suite reached by any npm script: moving tests/browser/journeys.cjs into a new test:journeys script fails no wiring test (only dist-digest tests fail, and they clear on rebuild, inferred). After: the test resolves the suites test:release runs (as docs-derived.test.mjs resolves filesRun) and requires each entry suite to be among them or in an explicit allowlist with a reason ({ live-smoke.cjs: pages.yml, perf-budgets.cjs: diagnostic })."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S9. Contract: project.suite-harness v1, release-provenance#gate-runs-every-suite."
+scope:
+  - "tests/unit/browser-suite-contract.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a contract-test case that moves journeys.cjs into a script outside test:release is refused naming the suite; on the merge base the same case passes."
+  - "The allowlist names live-smoke.cjs and perf-budgets.cjs with their reasons and only shrinks; every other entry suite is reached by test:release."
+  - "Not a guarded path under v2; R033 brings the rule's tests under the guard. prismatic-majordomus-98 is asked for a critique (CI and release)."
+validation:
+  - "node --test tests/unit/browser-suite-contract.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -7,6 +7,8 @@ problem: "The owner ordered on 2026-11-04 (in session oscilla-af, routed to the 
 outcome: "Each control family (knob, slider, switch, patch bay, keyboard, app shell) has one implementation, parametrized for its places (the Pro skin of the app and the hardware skin of the synth layer are parameters of one model, never two models), declared in the UI catalogue; a census test refuses a second implementation of a family, and its baseline of today's duplicates only shrinks to empty."
 acceptance_criteria:
   - "G021 to G026 are done with their evidence; the duplicate baseline of G021 is empty."
+  - "G027 to G029 are done with their evidence: one envelope modeler and one filter modeler, each bound through G029 to every envelope and filter (owner order of 2026-11-05)."
+  - "G030 is done with its evidence: one pad, the oscilla-pad, its looks skins of one model (owner order of 2026-11-05)."
 validation:
   - "npm run release-gate"
 evidence_required:
@@ -15,4 +17,4 @@ risks:
   - "The knob's one implementation is the synth-theme core 98 builds (src/js/ui/synth/knob.js, adopted by F013 W1b); G022 migrates the rest onto it and builds no third (b0, 2026-11-04)."
   - "A skin is a parameter, not a fork: a family's hardware look (visual-identity-lock v4, synth layer only) and its Pro look share one model, its keys and ARIA."
 created_at: 2026-11-04
-updated_at: 2026-11-04
+updated_at: 2026-11-05

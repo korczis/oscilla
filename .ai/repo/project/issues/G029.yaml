@@ -1,0 +1,40 @@
+id: G029
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+  - "component-system#one-modeler-per-curve"
+title: "One modeler binding: an envelope or filter modeler edits its target through the owner's own write path, chosen by the one selection"
+slug: one-modeler-binding-through-the-owners-write-path
+priority: p1
+profile: implementation
+objective: "Lands as feat(ui), the first slice of G027 and G028. src/js/ui/modelers/binding.js defines the binding, not a parameter layer: { id, kind: 'envelope' | 'filter', owner, label, paramIds[] } plus the owner's existing write path. Units, ranges, steps, scale, defaults and the live-update rule come from the parameter declaration (component-system parameter-controls#one-declaration, K105's parameter contract), never from the binding, and the binding has no names of its own for them. Owners register bindings: every Studio node of type envelope or filter, written through the Studio store as one gesture (store.beginGesture on pointer-down, NODE_PARAM_SET or one BATCH while the edit settles, endGesture on release, cancelGesture on Escape or pointercancel; one undo step; project.studio-model-is-canonical); the Synth's EG and filter plates are the same Studio nodes, so the same binding with another owner label, never a second write path; the V1 Playground voice (labs/envelope.js lab.adsr, labs/filter-lab.js) as a transitional binding listed in tests/unit/ui-families-baseline.json with its removal condition (gone when the Playground voice is a Studio node: U069, U071, V605), so it only shrinks; a sequencer track's voice after K189 slice 3 (a durable track voice node id). Selection is the binding: the modeler binds through store.subscribe events of type 'selection' (one selected node of a modeler's kind; several selected bind nothing) and re-reads on 'model' (an undo that deletes the node drops the binding); no listener of its own. Binding plays nothing and changes nothing (project.no-silent-feedback)."
+why: "Owner order of 2026-11-05 (in session oscilla-21), verbatim: \"must be connected with pannels, asdr envelope modeler, filter modeler / integrated into studio, sequencer ... / one way - dry - everything bus connected + integrated + mj way / deduplicate functionality / components - modularize / generalize - infer / derive\". Settled among the LLM sessions without the owner (the owner's order of the same day): af's critique (binding, not a parameter layer; the V1 voice transitional; computed vs live labelled), 26's answers (the store as the only write path through a gesture; bind on the store's selection change) and dev-53's (the sequencer target after K189 slice 3)."
+depends_on:
+  - "G021"
+  - "K105"
+scope:
+  - "src/js/ui/modelers"
+  - "src/js/labs/envelope.js"
+  - "src/js/labs/filter-lab.js"
+  - "tests/unit/modeler-binding.test.mjs"
+  - "tests/unit/ui-families-baseline.json"
+  - "tests/README.md"
+  - "docs/components.md"
+current_state: "Not started. Decided 2026-11-05 among af, 26 and dev-53; G021 (feat/g021-family-census c3b2bc99) already declares the envelope and filter-response families whose models are audio/envelope.js and audio/filters.js."
+acceptance_criteria:
+  - "Fail-first: tests/unit/modeler-binding.test.mjs fails on the merge base (no src/js/ui/modelers/binding.js)."
+  - "A binding carries only { id, kind, owner, label, paramIds[] }: a unit check fails a binding that declares a unit, range, step, scale, default or live-update rule of its own (mutation)."
+  - "A drag through a Studio binding is one undo step: the store's history grows by exactly one entry from pointer-down to release, Escape and pointercancel leave it unchanged (cancelGesture), and the model's other parameters are byte-equal."
+  - "The Synth plate's binding for EG 1 and the Studio Inspector's binding for that node write the same node: an edit through one reads back in the other with no second state."
+  - "Selection binds: SELECTION_CHANGE to one envelope node binds it, to two nodes binds nothing, and an undo that removes the bound node unbinds it (store event types 'selection' and 'model'); the binding adds no DOM listener (the key-listener ratchet of tests/unit/keys-registry.test.mjs does not rise)."
+  - "The V1 Playground voice is the one transitional binding and is listed in tests/unit/ui-families-baseline.json with its removal condition; a second legacy binding fails the census."
+  - "Binding plays nothing: AudioNode census and the URL state before and after a bind are equal."
+  - "Standard: tests/README rows, size report with base and head figures, fail-first."
+validation:
+  - "node --test tests/unit/modeler-binding.test.mjs"
+  - "node --test tests/unit/ui-families.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

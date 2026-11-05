@@ -1,0 +1,26 @@
+id: E051
+milestone: M046
+serves:
+  - "engineering-integrity#flake-ledger"
+title: "The flake ledger counts a carried-over job once, keyed by how GitHub really reports a re-run"
+slug: the-flake-ledger-counts-a-carried-over-job-once-keyed-by-how
+priority: p3
+profile: implementation
+objective: "Lands as fix(ci). Hardening S1, P3 finding (the receipt half of S1 is on origin/fix/receipt-ledger-first-attempt and R037 and is not re-filed). scripts/flake-ledger.mjs:76 filters each attempt's jobs with (j.run_attempt ?? n) === n, and its comment (:22-25) assumes a carried-over job keeps its earlier run_attempt. GitHub reports otherwise: in run 41899802206, 23 of 26 jobs carried into attempt 2 got run_attempt 2 and new job ids, and tests/unit/flake-ledger.test.mjs uses fixtures GitHub never produces (:48, :92, :124). After a 're-run this job' attempt a carried-over failed job is counted again, inflating failedAttempts and pointing earlier.url at the carried copy (inferred). After: a carried-over job is identified by a started_at equal to its earlier-attempt copy (or the filter is dropped), the comment says what GitHub returns, and the fixtures are the real attempt-1/attempt-2 shape of run 41899802206."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S1 (P3 part). Contract: engineering-integrity#flake-ledger, E010."
+scope:
+  - "scripts/flake-ledger.mjs"
+  - "tests/unit/flake-ledger.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/flake-ledger.test.mjs with the real-shape fixture (carried-over jobs have run_attempt equal to the current attempt and new ids) expects one entry per job with failedAttempts equal to the real count; it fails on the merge base (the carried copy is counted again)."
+  - "Restoring the run_attempt filter fails the real-shape fixture; the two impossible fixtures are replaced."
+  - "Not guarded under v2; R033 guards scripts/flake-ledger.mjs once it lands, so prismatic-majordomus-98 reviews it then."
+validation:
+  - "node --test tests/unit/flake-ledger.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

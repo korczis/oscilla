@@ -6,11 +6,13 @@ title: "Visiting the Synth workspace does not by itself make the Studio document
 slug: visiting-the-synth-workspace-does-not-by-itself-make-the-studio-document-unsaved-work
 priority: p2
 profile: implementation
-objective: "Lands as fix(synth). Opening the Synth workspace inserts its semi-modular voice (19 nodes, src/js/synth/ui.js ensurePanel -> panel.instantiate) into the one Studio document and marks it dirty, so a reload asks about unsaved changes after the user only visited Synth. Before: open the app, open Synth, reload: the unsaved-work guard asks. After: either the voice is created without marking the document dirty until the user edits it (a knob, a cable, a note recorded, a preset), or an untouched default voice is recognised as the default and does not count as unsaved work; any edit to it, or to anything else, still arms the guard, and an explicit Insert from the cuts notice counts as an edit. The pull request names which of the two it takes and why. The unsaved-work guard keeps its other triggers (C019's unsaved sequence, Studio edits). Rollback: revert; no saved state changes shape."
-why: "Found by oscilla-26, the builder of the #367 train, while fixing link-integrity on #367 at dcee5cec: the combination of #329 (Synth workspace) with the unsaved-work guard means opening Synth inserts its 19-node voice and marks the Studio document dirty, so a later template link meets the unsaved-work question. A guard that fires after a visit teaches the user to dismiss it, which defeats it when there is real work to lose."
+objective: "Lands as fix(synth). Opening the Synth workspace inserts its semi-modular voice (19 nodes, src/js/synth/ui.js ensurePanel -> panel.instantiate) into the one Studio document and marks it dirty, so a reload asks about unsaved changes after the user only visited Synth. Before: open the app, open Synth, reload: the unsaved-work guard asks. After: either the voice is created without marking the document dirty until the user edits it (a knob, a cable, a note recorded, a preset), or an untouched default voice is recognised as the default and does not count as unsaved work; any edit to it, or to anything else, still arms the guard, and an explicit Insert from the cuts notice counts as an edit. Q093 (af with b0, 2026-11-05) decides the first: the insert is part of the document's baseline. Line numbers at origin/main a19f1ff6: the insert dispatches through the StudioModel, which records a history entry for every accepted action (src/js/studio/actions.js:1002-1003, history.record); the dirty tracker compares the model's digest with the saved one (src/js/studio/library.js:239-262, createDirtyTracker; markSaved at :251-254 also sets the lastSave info) and is created at src/js/ui/studio/workspace/document.js:149. After: the auto-insert adds no undo entry, and the baseline advances by the insert only, and only on a clean document: the tracker gains a baseline step that re-digests the model without touching lastSave (markSaved is not reused, because it would record a save that did not happen). A document that was already dirty before the visit stays dirty and its lastSave is unchanged; an explicit Insert from the cuts notice counts as an edit. The unsaved-work guard keeps its other triggers (C019's unsaved sequence, Studio edits). Rollback: revert; no saved state changes shape. C039 (96daa67b) duplicated this issue and was removed in its favour on resolving af's critique."
+why: "Q093 decides it. Found by oscilla-26, the builder of the #367 train, while fixing link-integrity on #367 at dcee5cec: the combination of #329 (Synth workspace) with the unsaved-work guard means opening Synth inserts its 19-node voice and marks the Studio document dirty, so a later template link meets the unsaved-work question. A guard that fires after a visit teaches the user to dismiss it, which defeats it when there is real work to lose."
 scope:
   - "src/js/synth/ui.js"
   - "src/js/studio/history.js"
+  - "src/js/studio/actions.js"
+  - "src/js/studio/library.js"
   - "src/js/ui/studio"
   - "src/js/main.js"
   - "tests/unit/synth-visit-clean.test.mjs"
@@ -20,10 +22,13 @@ scope:
 depends_on:
   - "K062"
   - "C019"
+  - "Q093"
 acceptance_criteria:
   - "Fail-first: tests/unit/synth-visit-clean.test.mjs opens the Synth workspace on a clean document and asserts the document is not dirty; it then turns one knob and asserts it is; it fails on the merge base."
   - "tests/browser/navigation.cjs opens Synth, navigates away and reloads, and asserts no unsaved-work prompt; after a knob turn it asserts the prompt; waits through tests/browser/lib/wait.cjs until() with named deadlines, through tests/browser/lib/suite.cjs, nothing added to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
   - "Undo after the first edit returns the document to clean, and a saved project that contains the default voice reopens clean."
+  - "Negative cases, in tests/unit/synth-visit-clean.test.mjs: a document dirty before the Synth visit is still dirty after it with lastSave deep-equal; the explicit Insert from the cuts notice arms the guard and adds one undo entry; the baseline step leaves lastSave unchanged (status().lastSave deep-equal before and after)."
+  - "The visit adds no history entry (history length unchanged), asserted in the same file."
   - "Fail-first (project.fail-first): the named unit test fails on the merge base and passes on the head."
   - "If the change reaches a guarded path (src/js/studio/*) the pull request carries a reviewer-written .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
   - "Lands after the feature train #367 (Synth workspace K062)."
@@ -34,4 +39,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-01
-updated_at: 2026-11-01
+updated_at: 2026-11-05

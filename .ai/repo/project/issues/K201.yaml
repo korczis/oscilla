@@ -1,0 +1,36 @@
+id: K201
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "The XY pad's readouts follow everything that sets their target"
+slug: the-xy-pads-readouts-follow-everything-that-sets-their-target
+priority: p2
+profile: implementation
+objective: "Lands as fix(synth), built by 26 after the pad view (#426). af's review of #426 left five P3 findings as follow-ups (F2 remainder, F4, F5, F6, F7); after this the pad's readouts are true whatever sets their target, keep their width, fit narrow phones, and their tests have no dead lines."
+why: "af's independent review of OSCILLA #426 (2026-11-05, workflow wf_bd31b32f-824) and 26's proposal of this record; the owner's 'no kaosspad' and 'arturia like or ims20 like is the target' orders."
+scope:
+  - "src/js/synth/xy.js"
+  - "src/js/synth/view/xy-wiring.js"
+  - "src/js/ui/kinds/xy-pad.js"
+  - "tests/unit/xy-wiring.test.mjs"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "One rule for every pitch offset when naming the shown note (Tune cents, the FM offset, footage): a non-octave offset on a VCO that is not the lowest audible one keeps the lowest note's name, and a non-octave offset on the lowest audible VCO gives 'sends'; unit cases for XY lead's VCO 2 at +702 cents and for the same fifth through VCO 2's FM offset agree (af and 26, 2026-11-05, after #426 F3)."
+  - "F2 remainder: an automation lane that owns the Y target is reflected in the Y readout, or the readout says the lane owns it; a unit test fails first."
+  - "F4: the Y ends refresh during a knob drag on the target, not only on a rate change, with no layout read while drawing; a unit test fails first."
+  - "F5: the phone readout does not clamp or clip at 320 and 375 px with the longest target and the held label, checked in tests/browser/xy-pad.cjs through the suite harness with wait.cjs deadlines."
+  - "F6: the ring and readout numbers use tabular-nums through the existing Tailwind or Flowbite class, so they keep their width as values move; the Flowbite Pro baseline does not grow."
+  - "F7: the dead model.key('Home') call in tests/unit/xy-wiring.test.mjs is removed, with a test that would catch a no-op key line."
+  - "The pad stays a consumer of the shared control families (M123 G021-G026); no parallel widget."
+  - "The pull request carries a reviewer's verdict (src/js/synth is guarded); done only after each criterion is re-checked on a main commit."
+validation:
+  - "node --test tests/unit/xy-wiring.test.mjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
