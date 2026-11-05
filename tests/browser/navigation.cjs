@@ -84,6 +84,10 @@
 //                     shown) and the key leaves the address with the first workspace change;
 //                     `#m=studio&kbd=1` arms the Studio only, and a link set in the page arms
 //                     the Playground beside it; `#m=measure&kbd=1` arms nothing and shows no keys
+//   learn-demo-plays  (C031) a click on a Learn demo makes the engine's active source count
+//                     rise above 0 (the instrument's TRIGGER, its notice "Demo playing") and
+//                     Escape ends it; in WebKit also at 390x844 touch, where the tap is the
+//                     page's first gesture and the status bar's stop button ends it
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -1351,6 +1355,61 @@ function defineChecks() {
       measureNone: m1.workspace === 'measure' && !m1.here && !m1.armed.playground
         && !m1.armed.studio && !m1.shown,
     }), p1, away, s1, s2, m1 };
+  });
+
+  def('learn-demo-plays', async (ctx) => {
+    // C031: the press on a Learn demo plays it through the instrument (TRIGGER) and the stop
+    // ends it; before, the demo only applied its settings and asked for a second press.
+    const DEMO = { hasText: 'Log sweep 20 Hz' }; // programmed, 10 s: still sounding at the stop
+    const sound = (page) => page.evaluate(() => {
+      const O = window.OSCILLA;
+      return { sources: O.engine.activeSourceCount, playing: O.app.playing,
+        workspace: O.app.workspace,
+        notice: (O.app.alerts.find((a) => /^Demo /.test(a.title)) || {}).title || null };
+    });
+    const leg = async (page, where, press, stop) => {
+      const before = await sound(page);
+      await press();
+      const heard = await until(async () => {
+        const s = await sound(page);
+        return s.sources > 0 && s.playing ? s : null;
+      }, { ms: 8000, what: `learn-demo-plays (${where}): the demo sounds after its press` })
+        .catch(async () => sound(page));
+      await stop();
+      const ended = await until(async () => {
+        const s = await sound(page);
+        return s.sources === 0 && !s.playing ? s : null;
+      }, { ms: 8000, what: `learn-demo-plays (${where}): the stop ends the demo` })
+        .catch(async () => sound(page));
+      return { before, heard, ended, ok: before.sources === 0 && heard.sources > 0
+        && heard.playing && /^Demo playing: /.test(heard.notice || '')
+        && heard.workspace === 'playground' && ended.sources === 0 && !ended.playing };
+    };
+    const page = await H.open(ctx, `${ctx.baseUrl}#m=learn`);
+    const demo = page.locator('[data-osc="learn.demo"]', DEMO);
+    const desk = await leg(page, 'click', () => demo.click(), () => page.keyboard.press('Escape'));
+    await page.close();
+    const out = { desk };
+    if (ctx.browserName === 'webkit') {
+      // A phone: the tap on the demo is the page's first gesture (project.a-phone-sounds); the
+      // status bar's stop button ends it.
+      const phoneCtx = await ctx.browser.newContext({ viewport: { width: 390, height: 844 },
+        hasTouch: true, isMobile: true, reducedMotion: 'reduce' });
+      try {
+        const phone = await phoneCtx.newPage();
+        phone.setDefaultTimeout(15000);
+        phone.on('pageerror', (e) => ctx.errors.push(`pageerror (390x844): ${e.message}`));
+        await phone.goto(`${ctx.baseUrl}#m=learn`, { waitUntil: 'load' });
+        await H.ready(phone);
+        await phone.evaluate(() => { window.OSCILLA.app.alerts = []; });
+        out.phone = await leg(phone, 'tap at 390x844',
+          () => phone.locator('[data-osc="learn.demo"]', DEMO).tap(),
+          () => phone.locator('#osc-sb-play').tap());
+      } finally {
+        await phoneCtx.close();
+      }
+    }
+    return { ok: Object.values(out).every((r) => r.ok), ...out };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,
