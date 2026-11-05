@@ -20,7 +20,7 @@ import {
 } from './keyboard.js';
 import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
-import { armedDefaults } from './routes.js';
+import { armedDefaults, routeOf } from './routes.js';
 import { mountDockYield } from './dock-yield.js';
 
 export const KEYBOARD_REFUSED = Object.freeze({
@@ -178,6 +178,9 @@ export function createKeyboardUi({ win = window } = {}) {
         if (e.key === 'Escape') { kbdRelease(); return; }
         if (!cmp.kbdArmedHere || !playableEvent(e)) return;
         if (takesText(e.target) || takesText(doc && doc.activeElement) || modalOpen()) return;
+        // An editor that owns its letters keeps them while it has the focus (KEY_ROUTES).
+        const { editors } = routeOf(cmp.workspace);
+        if (editors && e.target && e.target.closest && e.target.closest(editors)) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         kb.keyDown(e.code, e.repeat);
