@@ -15,6 +15,10 @@
 //   XY_VOICE                       the cables that let the pad play the voice
 //   xyTargets(panel) -> [{ id, label }]   the CONTROL inputs Y may drive (the timbre targets)
 //   xyTarget(model, panel) -> jack | null the input Y drives now
+//   xyYReading(model, panel) -> reading | null   what Y asks of that input (the XY view's value):
+//     { jack, param (the panel's), base, props, range, others, at(y) }; at(y) is the compiler's
+//     line for Y's one cable (studio/ports.js controlValue), before any cap; `others` counts the
+//     other unmuted edges into the same input, which add to it
 //   xyPatched(model, panel) -> bool        the pad's Pitch and Gate reach the voice
 //   xyCablesAction(model, panel, pairs, label) -> { action } | { reason }   cables, one BATCH
 //   xyTargetAction(model, panel, to) -> { action } | { reason }   Y moved to `to`, one BATCH
@@ -24,7 +28,9 @@
 
 import { createPatch, patchParams } from '../studio/patches.js';
 import { linkAction, linkOf } from './link.js';
+import { controlValue } from '../studio/ports.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
+import { splitJack } from './panel.js';
 import { XY_TAB } from './panels/xy.js';
 
 export const XY_CATEGORY = 'xy';
@@ -56,6 +62,24 @@ export function xyTargets(panel) {
 
 const cablesFrom = (model, panel, jack) => panelCables(model, panel).filter((c) => c.from === jack);
 export const xyTarget = (model, panel) => (cablesFrom(model, panel, 'xy.y')[0] || {}).to || null;
+
+export function xyYReading(model, panel) {
+  const c = cablesFrom(model, panel, 'xy.y')[0];
+  if (!c) return null;
+  const { module, port } = splitJack(c.to);
+  const node = panel.resolve(model).get(module);
+  const m = panel.module(module);
+  const param = m && (m.params || []).find((p) => p.key === port);
+  const edge = model.graph.edges.find((e) => e.id === c.id);
+  if (!node || !param || !edge) return null;
+  const range = panel.sourceRange('xy.y');
+  const base = port in node.params ? node.params[port] : param.default;
+  const props = edge.props;
+  const others = model.graph.edges.filter((e) => e.id !== edge.id && e.to.node === node.id
+    && e.to.port === port && !(e.props && e.props.muted)).length;
+  return { jack: c.to, param, base, props, range, others,
+    at: (y) => (props.muted ? base : controlValue(base, props, range, y)) };
+}
 export const xyPatched = (model, panel) => ['xy.pitch', 'xy.gate']
   .every((j) => cablesFrom(model, panel, j).length);
 
