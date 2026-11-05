@@ -1,0 +1,78 @@
+# Review verdict for pull request #420, merge train 6 (branch int/train-6): F013 W1b (the
+# synth-theme core and its adapters), K167 (the XY pad on one shared mount), K174-K176 (armed
+# follow, note-off routed where it sounded, the Studio sink's leave), the SYN visual reference,
+# 26's xy-chip-gap webkit fix, and 98's R1 on #413 (debugRefuseNextPlay is consumed only in
+# TEST CONTEXT). Reviewed head 54356cdd22193233eecf6a3965e29223f7685615; merge base
+# origin/main 68b117f3 (#413).
+# Reviewer: oscilla-21 (claude-code 603baa3d). The reviewer built, merged and edited none of
+# this train and wrote only this file. A read-only first pass at f6c24420 (worktree
+# review/train-6) found T1-T10. This pass re-read the delta f6c24420..HEAD: in src, only
+# 6f53a421 (the T1/T2 fix) and main's merge.
+#
+# The digest. CI judges with the BASE branch's copy (origin/main's scripts/review-verdict.mjs,
+# run from a detached checkout of 68b117f3). --content --list --base-branch origin/main gives
+# the content below over 15 guarded paths: .github/workflows/ci.yml, src/js/studio/transport.js
+# and 13 under src/js/synth. Each was read:
+#   ci.yml: the visual job's step name and upload list gain the SYN reference (out-synth); its
+#     timeout-minutes 8 and the playwright pin are unchanged (project.ci-bounded holds).
+#   transport.js: refuseNextClaim is reset on every claim and refuses only while testContext()
+#     is true, so a hook armed in TEST CONTEXT and left pending never refuses a real PLAY.
+#   synth/*: as reviewed at f6c24420, plus 6f53a421.
+#
+# T1 (P2), closed by 6f53a421. midi/notes.js sinksAllOff tells every sink a held key went to
+# (via) and the route's own sink allOff once each, deduplicated by allOff, then clears via. CC
+# 120/123 and silence() call it, so a note held on a sink a workspace switch left behind is
+# released. Verified by reading and by the unit case that fails on f6c24420.
+# T2 (P2), closed by 6f53a421. synth/gestures.js: a disabled choice ignores the arrow keys,
+# Home/End and the wheel, as it already ignored a click.
+# 26's xy-chip-gap fix (fix/xy-chip-gap-webkit): a test-only change that measures the chip gap
+# after layout settles. Judged legitimate: the assertion's bound is unchanged.
+#
+# Tests at the head, from the builder (dev-53): in chromium, firefox and webkit, layout,
+# qa-regressions, test:synth, midi and xy-pad pass, census --unrowed is clean, and SYN visual
+# passes 16/16. npm test is 4730 pass with 2 failures, the S8 render-time checks at load ~20,
+# which pass when run alone. The reviewer did not re-run them; CI's gate is the receipt.
+#
+# Refresh (2026-11-05, head 73ee463a, base origin/main 6c7b227f): the delta since 54356cdd is
+# four merges of main (e2b81920, 15ebc758, e4584d19, 73ee463a). git show --remerge-diff resolves
+# only dist/index.html (a rebuild), with no hand edit. The train's own patch over the 15 guarded
+# paths is unchanged: git patch-id of diff(68b117f3, bc6758ac) equals diff(6c7b227f, 73ee463a),
+# e79deeab1bf1. The digest moved only because main (#417, #421, #422, #430) moved the base; it is
+# recomputed with origin/main 6c7b227f's review-verdict.mjs.
+#
+# Delta reviewed (2026-11-05, head e569abc5): e18477f7 fixes #420's s-choices red on ubuntu-24.04
+# (DejaVu Sans as system-ui). A window's legend grid prints at weight 400, because bold overran its
+# cell by up to 1.21x. The selection stays marked without weight: the frame's data-window-text at
+# 600 (synth/view/knob.js), the data-selected bar, and the value colour. ui-synth-switch's new test
+# (400, one bar, a 1.05x fit) fails on 8da2dc8b. No label text changed. switch.js is unguarded, so
+# the content digest is unchanged. e569abc5 merges main ed9ff3aa (#432); its only resolution is
+# K171.yaml, taken from main. The SYN references are unchanged (dev-53: darwin 0/0, linux noise only).
+#
+# Refresh (head bbe9a909, base origin/main cfd87133, #433 E045's merge queue): a clean merge of
+# main (--remerge-diff resolves nothing). The train's patch over the 15 guarded paths is unchanged
+# (patch-id e79deeab1bf1). Its ci.yml change is still the visual step's name and the out-synth
+# upload, auto-merged beside E045's queue changes. The digest moved with main's ci.yml.
+#
+# Delta 01f46337 (test-only, tests/browser/synth.cjs, not a guarded path). The reviewer built it,
+# disclosed here: no other session was running, and #420 blocked the queue. LAUNCH.firefox sets
+# browser.zoom.siteSpecific false, because s-feel's pinch zoomed Firefox for every later check
+# (13 click timeouts in CI's "V3.1 Studio UI (firefox)"). The guarded content is unchanged, so this
+# verdict judges only content that someone else built.
+#
+# Verdict: merge. No P0 or P1, and no P2 open. T3-T10 are P3 follow-ups, listed below.
+schema: review-verdict/v1
+pr: 420
+verdict: merge
+reviewer: oscilla-21 (claude-code 603baa3d)
+content: 0d4eb3826bce4101eed23993c07bde95670d77429cf47c0857b2dd70080efd78
+findings:
+  - { id: T1, severity: P2, status: closed, title: "MIDI all-off and silence() released only the current route's sink, so a note held on a sink left behind by a workspace switch hung; closed by sinksAllOff (6f53a421)" }
+  - { id: T2, severity: P2, status: closed, title: "a disabled choice refused a click but its arrow keys, Home/End and the wheel still changed it; closed in gestures.js (6f53a421)" }
+  - { id: T3, severity: P3, status: open, title: "the XY mount outlives the Synth workspace: the leave branch of synth/ui.js disarms but does not release the mount's listeners" }
+  - { id: T4, severity: P3, status: open, title: "xy-wiring.js and xy-tab.js headers name a live-landing caller that does not exist yet (P012), and HOME.landing is not a workspace" }
+  - { id: T5, severity: P3, status: open, title: "xy-pad.cjs x-release-leave and one sibling check do not fail with their release path removed; one K167 unit assertion is vacuous" }
+  - { id: T6, severity: P3, status: open, title: "synth-bay-phone.test.mjs lost its guard that some label reaches LABEL_MAX, so the fit test can pass vacuously" }
+  - { id: T7, severity: P3, status: open, title: "a second note-on of a held key on another route overwrites via, so the first voice gets no note-off (sinksAllOff still releases it on all-off)" }
+  - { id: T8, severity: P3, status: open, title: "visual-identity-lock v4 names hw-led for the LED glow; the glow intensity is keyed by the sheen class instead" }
+  - { id: T9, severity: P3, status: open, title: "pre-existing, entrenched here: the XY kind's ARIA (ui/kinds/xy-pad.js) exposes two sliders without a group name" }
+  - { id: T10, severity: P3, status: open, title: "pre-existing, move-only: an all-off releases the pad's note but leaves its gate drawn open (notes-sink.js allOff)" }

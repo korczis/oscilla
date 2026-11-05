@@ -73,13 +73,16 @@ export function dragAt(anchor, point, p, { pixelsPerRange = DRAG_PX_PER_RANGE } 
  * A press on a fader at `point` (graph units from its centre, page axes): on the cap's span
  * along the travel (FADER_CAP.h) { grab: true } with the value as it is, so the drag anchors
  * there and the cap never jumps to the pointer; elsewhere one page step toward the press, as
- * PageUp or PageDown (knobKey) would, held at the ends.
+ * PageUp or PageDown (knobKey) would, held at the ends. `travel` is the fader's (controlSvg's;
+ * FADER_TRAVEL unless given).
  */
-export function faderPress({ value, param, point, orientation = 'vertical' } = {}) {
+export function faderPress({ value, param, point, orientation = 'vertical',
+  travel = FADER_TRAVEL } = {}) {
   const { x, y } = pointOf(point, 'faderPress');
   const along = orientationOf(orientation) === 'vertical' ? -y : x;
+  controlBox('fader', orientation, { travel });
   const v = clampValue(value, param);
-  const cap = FADER_TRAVEL * toNorm(v, param) - FADER_TRAVEL / 2;
+  const cap = travel * toNorm(v, param) - travel / 2;
   if (Math.abs(along - cap) <= FADER_CAP.h / 2) return { grab: true, value: v };
   const key = along > cap ? 'PageUp' : 'PageDown';
   return { grab: false, value: knobKey({ key }, { value: v, param }) };
