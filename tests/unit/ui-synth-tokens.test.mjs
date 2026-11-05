@@ -408,21 +408,30 @@ test('slice A A1: one hover language: knob, dial, lever and slide brighten the p
       state });
     const sw = (param) => (state) => switchSvg({ value: param.default, param, tokens: TOKENS,
       state });
-    // Each part: how it is drawn, its edge element, the geometry the overlay traces and the faces
-    // either side of the edge (its own fill, and what it stands on).
+    // Each part: how it is drawn, its edge element, the geometry the overlay traces, the faces
+    // either side of the edge (its own fill, and what it stands on) and what else is drawn on
+    // the edge's geometry (the lever's facets), which the overlay must also be drawn over.
     const PARTS = [['knob', knob, 'data-skirt', ['d'], [N.surface.plateHi, N.surface.plateLo]],
       ['dial', sw(dial), 'data-skirt', ['d'], [N.surface.plateHi, N.surface.plateLo]],
-      ['lever', sw(bool), 'data-nut', ['d'], [N.control.knurl]],
+      ['lever', sw(bool), 'data-nut', ['d'], [N.control.knurl], ['data-facet']],
       ['slide', sw(slide), 'data-cap', ['x', 'y', 'width', 'height', 'rx'],
         [N.surface.plateHi, N.surface.plateLo, N.surface.edge]]];
     const short = [];
     const rules = new Set();
-    for (const [what, draw, flag, geometry, beside] of PARTS) {
+    for (const [what, draw, flag, geometry, beside, also = []] of PARTS) {
       const idle = draw({});
       const lit = draw({ hover: true });
       const edge = tag(lit, flag);
       const h = tag(lit, 'data-hover');
       assert.ok(edge && h, `${what}: the edge and its hover overlay`);
+      // Review of AC, finding 1: the edge is an opaque stroke on the same geometry, so an
+      // overlay drawn before it (or before the lever's facets) is covered and hover shows
+      // nothing; the overlay comes after every one of them.
+      for (const under of [flag, ...also]) {
+        assert.ok(lit.indexOf(`${under}=""`) >= 0, `${what}: its ${under}`);
+        assert.ok(lit.indexOf('data-hover=""') > lit.indexOf(`${under}=""`),
+          `${what}: the hover overlay is drawn over its ${under}`);
+      }
       assert.equal(at(tag(idle, 'data-hover'), 'visibility'), 'hidden', `${what}: idle, hidden`);
       assert.equal(at(tag(draw({ hover: true, disabled: true }), 'data-hover'), 'visibility'),
         'hidden', `${what}: never while disabled`);

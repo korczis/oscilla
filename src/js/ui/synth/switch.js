@@ -80,10 +80,12 @@ const PAD = 6;
  *  washer, `focusW` wide, and the legend ringed round its text, `focusPad` past its font-size
  *  box up and down and `focusPadX` past its width at weight 600 across (`bold` times the
  *  weight-400 estimate: review of AC, finding 1, where 2 round that estimate cut a focused
- *  "Off"); the LED's bezel 1 clear of that ring (`ledGap` past the washer). */
+ *  "Off"; "Off" at 600 measured 1.155 times it in Chromium and Firefox, 1.152 in WebKit, so
+ *  1.16 keeps the inner edge 2 clear of the text); the LED's bezel 1 clear of that ring
+ *  (`ledGap` past the washer). */
 const TOGGLE = Object.freeze({ nut: 8, nutW: 1.5, washer: 9.5, washerW: 1, bushing: 3.5,
   bushingW: 1, root: 4, tip: 7, length: 18, ball: 3.5, gap: 4, focus: 3, focusW: 2, focusPad: 2,
-  focusPadX: 3, bold: 1.15, ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
+  focusPadX: 3, bold: 1.16, ledGap: 5, shadowDy: 1, shadowDragDy: 2 });
 /** A slide (slice C, SW-06, SW-07), graph units: a slot slotW wide, a capW x capH cap with two
  *  ridges gripGap from its index line (gripX either side, the index line to indexOut), a detent
  *  from 1.5 past the slot to capW / 2 + 6, the legend 4 past it; each hit box's edge is `clear`
