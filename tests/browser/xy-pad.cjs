@@ -412,7 +412,9 @@ function defineChecks() {
         const main = document.getElementById('osc-main');
         main.scrollTop = main.scrollHeight; // far enough that the chip bar is stuck
         const chips = document.querySelector('[data-osc="synth.panel"] nav');
-        const nav = document.querySelector('[aria-label="Workspace"]');
+        // The chrome above the scroller is the Pro shell's page header (F002, U006), under the
+        // navbar (role banner): the chip bar sticks flush under it.
+        const nav = document.querySelector('[data-osc="page.header"]');
         const top = Math.round(nav.getBoundingClientRect().bottom);
         const stuck = Math.round(chips.getBoundingClientRect().top);
         const hits = [];
