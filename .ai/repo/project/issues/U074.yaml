@@ -1,0 +1,39 @@
+id: U074
+milestone: M054
+serves:
+  - "ui-current#no-isolated-workspace"
+title: "The V2 Sequencer page folds into the Synth step sequencer and a Studio lane, after they play the same patterns"
+slug: the-v2-sequencer-page-folds-into-the-synth-step-sequencer-an
+priority: p1
+profile: implementation
+objective: "Lands as feat(sequencer) last of the folds. The V2 Sequencer is the third sequencer and one of the few pages whose Play works today, so it stays until the M065 step sequencer in Synth Arrange (K067, K069) plays the same patterns with an import of every V2 sequence proven; its block sequence becomes a Studio timeline lane (G013). Its own oscillators (src/js/sequencer/compiler.js:681) move to the output owner earlier, in the bus work, independent of this fold. No loss before removal (Q090, b0's binding condition): the old page stays until everything it offers is live, reachable and sounding in its new home, proven by a browser check that walks each of the old page's controls to its new place in Chromium, Firefox and WebKit; only then is its #m= route redirected to the new home (the link keeps working, ADR 0045's one dispatcher) and its markup removed."
+why: "af nav-pages audit wf_ed1cc8d6-3e8 and Play audit wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0), after the owner's complaint in the af session 2026-11-04/05: views feel lost, Play does not work on most pages, nothing runs through one bus, engines are not wrapped, many top-nav pages are obsolete, unconnected, not realtime, poor. Decided by af and b0 on 2026-11-05 under the owner's order of that day 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090)."
+scope:
+  - "src/js/sequencer"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/studio"
+  - "src/index.html"
+  - "tests/browser/page-folds.cjs"
+  - "tests/unit/page-folds.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K067"
+  - "K069"
+  - "Q090"
+acceptance_criteria:
+  - "Every V2 sequence in the fixtures and the shipped examples imports into the step sequencer and renders offline with the same onsets (within one frame at the context's own rate) in all three engines."
+  - "The pull request carries a reviewer's verdict (src/js/studio and the sequencer paths are guarded)."
+  - "tests/browser/page-folds.cjs walks every control of the old page (derived from tests/unit/surface-census.json, never a hand list) to its new place in Chromium, Firefox and WebKit, and each sounds or draws there; only after that does the old #m= route redirect."
+  - "tests/unit/page-folds.test.mjs: the old route resolves to the new home through the one hash dispatcher, every Learn and counterpart link to the old page is retargeted, and About names the new home."
+  - "Fail-first: the unit test and the browser check named here fail on the merge base (project.fail-first)."
+  - "Browser checks run through tests/browser/lib/suite.cjs with lib/wait.cjs deadlines and assume no sample rate; tests/browser/timing-baseline.json and tests/unit/ui-flowbite-pro-baseline.json do not grow; the iphone.cjs census reach does not fall."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/page-folds.test.mjs"
+  - "node tests/browser/page-folds.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
