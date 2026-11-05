@@ -45,7 +45,7 @@ test('the allowlist is exactly the five non-runtime path classes', () => {
   assert.deepEqual([...NON_RUNTIME], ['.ai/repo/project/', '.ai/repo/reviews/',
     '.ai/repo/releases/', 'docs/', '*.md']);
   assert.deepEqual([...GATED_JOBS], ['engine', 'suites', 'measure', 'studio', 'browser',
-    'visual']);
+    'census', 'visual']);
 });
 
 test('isNonRuntimePath: the allowlist, and every near miss is runtime', () => {
@@ -314,8 +314,8 @@ test('the gate verdict: a path-gated skip passes only on the classifier\'s runti
     const rows = [
       ['every job succeeded on a runtime change', needs(), true],
       ['every job succeeded on a non-runtime change', needs({ runtime: 'false' }), true],
-      ['the six skipped on runtime=false', needs({ runtime: 'false', gated: 'skipped' }), true],
-      ['one of the six skipped on runtime=false', needs({ runtime: 'false',
+      ['the gated jobs skipped on runtime=false', needs({ runtime: 'false', gated: 'skipped' }), true],
+      ['one of the gated jobs skipped on runtime=false', needs({ runtime: 'false',
         gated: { visual: 'skipped' } }), true],
       ['skipped on runtime=true', needs({ gated: 'skipped' }), false],
       ['one skipped on runtime=true', needs({ gated: { engine: 'skipped' } }), false],
@@ -346,16 +346,16 @@ test('the gate verdict: a path-gated skip passes only on the classifier\'s runti
       ...['success', 'failure', 'cancelled', 'skipped'].flatMap((r) => [
         [`ledger ${r} on a runtime change`, { ...needs(),
           'flake-ledger': { result: r, outputs: {} } }, true],
-        [`ledger ${r}, the six skipped on runtime=false`, { ...needs({ runtime: 'false',
+        [`ledger ${r}, the gated jobs skipped on runtime=false`, { ...needs({ runtime: 'false',
           gated: 'skipped' }), 'flake-ledger': { result: r, outputs: {} } }, true],
-        [`ledger ${r}, the six skipped on runtime=true`, { ...needs({ gated: 'skipped' }),
+        [`ledger ${r}, the gated jobs skipped on runtime=true`, { ...needs({ gated: 'skipped' }),
           'flake-ledger': { result: r, outputs: {} } }, false],
       ]),
     ];
     for (const [what, input, pass] of rows) assert.equal(gatePasses(input), pass, what);
   });
 
-test('ci.yml wiring: the six jobs wait for changes, the rest always run, gate needs both', () => {
+test('ci.yml wiring: the path-gated jobs wait for changes, the rest always run, gate needs both', () => {
   const jobs = CI.jobs;
   // gate's always() and the flake ledger's re-run condition (E010) are the only other ones;
   // the ledger is never path gated (tests/unit/flake-ledger.test.mjs)
@@ -378,6 +378,25 @@ test('ci.yml wiring: the six jobs wait for changes, the rest always run, gate ne
   assert.ok(listed, 'the verdict lists the path-gated jobs');
   assert.deepEqual(JSON.parse(`[${listed[1]}]`), [...GATED_JOBS]);
   assert.equal(CI.on && Object.keys(CI.on).join(), 'pull_request');
+});
+
+/** ci.yml's jobs that run a browser engine: a matrix over `browser` (#404 R1). */
+const browserLegs = (doc) => Object.entries(doc.jobs)
+  .filter(([, j]) => j.strategy && j.strategy.matrix && j.strategy.matrix.browser)
+  .map(([k]) => k);
+
+test('every browser leg of ci.yml is path-gated, so a plan or record change runs none (#404 R1)', () => {
+  const legs = browserLegs(CI);
+  assert.ok(legs.includes('browser') && legs.includes('census'), `browser legs found: ${legs}`);
+  for (const k of legs) assert.ok(GATED_JOBS.includes(k), `${k} runs a browser and is path-gated`);
+});
+
+test('mutation: a browser leg without the runtime gate is refused', () => {
+  const doc = JSON.parse(JSON.stringify(CI));
+  doc.jobs['probe-leg'] = { 'runs-on': 'ubuntu-24.04', strategy: { matrix: { browser: ['webkit'] } },
+    steps: [] };
+  const ungated = browserLegs(doc).filter((k) => !GATED_JOBS.includes(k));
+  assert.deepEqual(ungated, ['probe-leg'], 'the rule names the ungated browser leg');
 });
 
 test('ci.yml wiring: changes runs the base branch\'s classifier and publishes its answer', () => {
