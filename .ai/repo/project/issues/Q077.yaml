@@ -30,9 +30,3 @@ evidence:
     result: "The reconstruction views take whatever the 1.2 MB gzip cap (Q023, E027) leaves, with no reserved share: each pull request that adds a view reports its gzip delta (scripts/size-report.mjs), and the first views issue measures and records its cost before it lands. Reason: no measurement exists, and a byte share fixed without one would be invented (project.no-fake-science); the cap itself already bounds the views."
     commit: 76bfc300653e2bdc09e5dc6e07b22d805c729449
     recorded_at: 2026-11-04T19:59:51Z
-  - covers: owner_decision
-    type: manual
-    command: "AskUserQuestion in Claude Code session oscilla-af, 2026-11-04 ~20:0xZ, confirming the coordinating session's delegated decision"
-    result: "The owner answered: 'Keep b0's decision' (verbatim option label): no reserved share; the reconstruction views take what the 1.2 MB gzip cap leaves and are measured per pull request."
-    commit: ab2f4fa2d041d8973118b3ba316a57a01e5e8424
-    recorded_at: 2026-11-04T20:48:23Z
