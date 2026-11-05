@@ -29,6 +29,15 @@ export const FULLSCREEN_BLOCKED = 'Fullscreen is turned off here (an embedding p
   + 'setting). Studio already fills the window.';
 
 /**
+ * Whether a deferred focus (Expand's, the frame after its switch) must leave focus alone: the
+ * user moved it to `active`, a connected element that is neither `body` nor `from`, the element
+ * focused when the deferral began (#417 webkit, P8). Pure: elements in, a boolean out.
+ */
+export function focusMovedSince(active, from, body) {
+  return !!(active && active !== body && active !== from && active.isConnected);
+}
+
+/**
  * Whether `el` can go fullscreen in `doc` (standard or WebKit-prefixed API): { available,
  * reason } — reason is '' when available.
  */
@@ -130,8 +139,7 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
         if (!ctx.editor) return;
         ctx.editor.onShow();
         if (nodeId) ctx.editor.frameSelection();
-        const a = document.activeElement;
-        if (a && a !== document.body && a !== from && a.isConnected) return;
+        if (focusMovedSince(document.activeElement, from, document.body)) return;
         if (nodeId) ctx.editor.focusNode(nodeId);
         else ctx.editor.focusViewport();
       });
