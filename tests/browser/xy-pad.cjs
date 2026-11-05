@@ -55,7 +55,8 @@
 //              border, and its centre is the pad), the docked keyboard is
 //              folded to its handle (aria-expanded false), visible below the pad; the first tap
 //              on the pad sounds (the engine's analyser, sampled every frame from before the
-//              tap: its peak above -60 dB, a short note over the -70 dB silence line); the
+//              tap, a tap of two input events: CDP touch in chromium, the pointer in webkit;
+//              its peak above -60 dB, a short note over the -70 dB silence line); the
 //              handle unfolds the keys and folds them again by tap, by Enter on the focused
 //              handle and by Alt+K (the key registry); a key held on the unfolded keys is
 //              released when they fold. Firefox: skipped (no coarse pointer)
@@ -628,7 +629,19 @@ function defineChecks() {
       requestAnimationFrame(tick);
     });
     const c = { x: (v.pad.left + v.pad.right) / 2, y: (v.pad.top + v.pad.bottom) / 2 };
-    await page.touchscreen.tap(c.x, c.y);
+    // A finger's tap: its start and its end are two input events, never one task (Playwright's
+    // touchscreen.tap delivers both at once, a press no finger makes). Chromium taps by CDP
+    // touch; webkit, without CDP touch, presses with the pointer, as x-phone-first does.
+    if (browserName === 'chromium') {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart',
+        touchPoints: [{ x: c.x, y: c.y, id: 1 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } else {
+      await page.mouse.move(c.x, c.y);
+      await page.mouse.down();
+      await page.mouse.up();
+    }
     let peak = null;
     await until(async () => {
       peak = await page.evaluate(() => window.__k171Peak);
