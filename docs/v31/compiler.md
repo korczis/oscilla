@@ -461,9 +461,9 @@ A `param` step is what the node's adapter reports it did (the optional report ar
   cents as `detune`. A write that differs from the node's previous write is a `scheduled` glide
   from `at`.
 - **`update`** reports how it acted on each live key: `set`, `glide`, `crossfade`,
-  `next-gate` or `next-note`. The last two write nothing now and are `stored`, as is a key the
-  adapter did not act on, with no audio time. A Spectrum's
-  scale, for example, is read by the view from the plan.
+  `next-gate` or `next-note`. The last two write nothing now. Such a key, and a key the adapter
+  did not act on, has no audio time: it is `owned` when another owner drives it, else `stored`.
+  A Spectrum's scale, for example, is read by the view from the plan.
 
 It is not a read-back of what the AudioParam renders. A PLAY records `apply` with its counts, not every node and route it builds, so a large
 Studio does not flush the ring. The timeline's wake-ups (clips, lanes) run outside any operation

@@ -361,6 +361,38 @@ test('an engine parameter kept for the next note is stored, not scheduled', () =
   s.transport.stop();
 });
 
+test('a parameter kept for the next gate that another owner drives is owned, not stored', () => {
+  // No shipped adapter gives a deferred key an AudioParam today, so this envelope does: its
+  // attack has one (the VCA gain stands in) for the runtime's owned check (ownedKeys). The
+  // runtime alone, without a transport, so the claim below is the only one in effect.
+  const real = NODE_ADAPTERS.envelope;
+  const envelope = { ...real, create(args) {
+    const h = real.create(args);
+    return { ...h, modTarget: (key, mapping) => (key === 'attack'
+      ? { param: h.outputs.audio.gain, scale: 1 } : h.modTarget(key, mapping)) };
+  } };
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  const trace = newTrace();
+  const runtime = createStudioRuntime({ engine, trace,
+    adapters: { ...NODE_ADAPTERS, envelope } });
+  const model = templateModel(REFERENCE_TEMPLATE_ID);
+  const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+  ok(runtime.apply(store.getModel()));
+  ok(runtime.start());
+  fx.advance(0.1);
+  runtime.setOwnedParams([{ node: 'env-1', param: 'attack' }]);
+  ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'env-1', key: 'attack', value: 0.05 }));
+  const before = trace.steps().length ? trace.steps().at(-1).seq : 0;
+  ok(runtime.apply(store.getModel()));
+  const step = find(trace.steps().filter((x) => x.seq > before), 'runtime', 'param');
+  assert.ok(step, 'the live edit is traced to its parameter');
+  assert.deepEqual([step.outcome, step.detail.param, step.detail.via, step.detail.at],
+    ['owned', 'attack', 'next-gate', null]);
+  runtime.stop();
+});
+
 test('a base step names the AudioParam values the adapter wrote, not keys it skipped', () => {
   const run = (ownDetune) => {
     const fx = createFakeAudioEnv({ sampleRate: SR });
