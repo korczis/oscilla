@@ -495,3 +495,28 @@ test('mutation U085: a reverted phrase is named', () => {
   assert.ok(swap('synth', 'A semi-modular mono voice, and an Engines tab.')
     .includes('synth does not name its XY tab'));
 });
+
+// ------------------------------------------------- U086: the roadmap names its release
+// scripts/roadmap.mjs writes package.json's version into the roadmap as `release` when
+// release:prepare refreshes it (after the bump), and What comes next's heading reads
+// "as of v<release>" from it. version:check allows the copy in this generated file; this test
+// is what holds it to package.json.
+test('U086: the roadmap names the release it describes, and the heading renders it', async () => {
+  const { version } = JSON.parse(read('package.json'));
+  const roadmap = JSON.parse(read(ROADMAP_REL));
+  assert.equal(roadmap.release, version, 'the roadmap was written at this release: refresh it');
+  assert.match(roadmap.release, /^\d+\.\d+\.\d+$/, 'the release is X.Y.Z');
+  const { roadmapFromPlan, roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
+  assert.equal(roadmapFromPlan(planFixture()).release, version, 'roadmap.mjs writes the version');
+  assert.equal(roadmapFromPlan(planFixture(), '9.8.7').release, '9.8.7');
+  assert.deepEqual(roadmapShapeProblems({ ...roadmap, release: undefined }),
+    ['release undefined is not a version X.Y.Z']);
+  const { ROADMAP } = await import('../../src/js/ui/about.js');
+  assert.equal(ROADMAP.release, version);
+  const at = view.indexOf('id="osc-about-next"');
+  const heading = view.slice(at, view.indexOf('</h3>', at));
+  assert.match(heading, /x-text="` · as of v\$\{ROADMAP\.release\}`"/,
+    'the heading says "as of vX.Y.Z" from the roadmap');
+  assert.doesNotMatch(text(view.slice(at, view.indexOf('<h4', at))), /\bthis release\b/,
+    'the section names the release, not "this release"');
+});

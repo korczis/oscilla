@@ -2925,10 +2925,9 @@
 
         <section class="osc-about-block" aria-labelledby="osc-about-next" data-osc="about.next">
           <h3 class="osc-about-h" id="osc-about-next"><span class="osc-num">B</span> What comes
-            next</h3>
-          <p>The open milestones of OSCILLA's plan as of this release and how many of each one's
-            required issues are done: now under way, next ready to start, later waiting on
-            work above.</p>
+            next<span x-text="` · as of v${ROADMAP.release}`"></span></h3>
+          <p>The open milestones of OSCILLA's plan and how many of each one's required issues are
+            done: now under way, next ready to start, later waiting on work above.</p>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
             id="osc-about-next-now"
             x-text="`${ROADMAP.phase.now.title} · ${ROADMAP.phase.now.milestones.length}`"></h4>
