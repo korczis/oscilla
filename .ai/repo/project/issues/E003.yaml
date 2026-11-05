@@ -27,4 +27,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-11-05T01:27:02Z
+started_at: 2026-11-05T01:26:37Z
+started_event: sha256:0268378d83c47cefc3f97dde61b633be2f7a073ae34e74eca012c9e764a2f97a
+completed_at: 2026-11-05T01:27:02Z
+completed_event: sha256:18bbf4e5f440eeae0414a6da29a0b2e3425be783959930eb135cc2bf981d25ce
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/studio-workspace-headroom.test.mjs (CI run 41933352760 on tree e65a1e6b = main 68b117f3)"
+    result: "Every acceptance criterion (4) re-checked MET on main 68b117f3 by two independent judges that agreed (af workflow wf_518c6639-5cb, read-only). 68b117f3's tree equals 43e3e1ca's (e65a1e6b), so #413's CI run 41933352760 (success) tested it: unit job 126936184997 4510 pass, 0 fail; the browser gate passed in Chromium, Firefox and WebKit; fail-first and review-verdict jobs green against merge base 6d5efa89. Dependencies done. Named tests: tests/unit/studio-workspace-headroom.test.mjs."
+    artifact: ".ai/repo/reviews/413.yaml"
+    commit: 68b117f3474e97f4c348fc01c30ddc4519cc193e
+    recorded_at: 2026-11-05T01:26:54Z
