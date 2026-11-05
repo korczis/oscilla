@@ -113,6 +113,9 @@
 //              room: 100dvh less the chrome and --osc-dock-h, the keys shown) and folding it
 //              again by Alt+K leave the pad's note sounding (the fold releases only the keys'
 //              notes); the lift silences
+//   x-dock-landscape (review of #425, R9; 844 x 390, touch, mobile, the gesture rule on) the
+//              dock unfolded by its handle on a phone on its side, where the room above the keys
+//              is below the pad's 6rem minimum: no part of the pad is under the dock
 //   x-dock-handle-hold (review of #425, R8; 390 x 844, touch, the gesture rule on; chromium by
 //              CDP touch, webkit by a touch pointer dispatched on the pad and a real tap; firefox
 //              skips it) a finger held on the pad sounds, a second finger taps the dock's handle:
@@ -152,7 +155,8 @@ const GESTURE_LAUNCH = { chromium: { args: ['--autoplay-policy=user-gesture-requ
   firefox: {}, webkit: {} };
 const SIZES = { desktop: { width: 1536, height: 1024 }, laptop: { width: 1280, height: 720 },
   phone: { width: 390, height: 844 }, 'phone-cold': { width: 390, height: 844 },
-  'phone-dock': { width: 390, height: 844 }, 'phone-dock-se': { width: 375, height: 667 } };
+  'phone-dock': { width: 390, height: 844 }, 'phone-dock-se': { width: 375, height: 667 },
+  'phone-landscape': { width: 844, height: 390 } };
 const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-cold-touch': 'phone-cold',
   'x-view-phone': 'phone' };
 const CONTEXT_OF = { 'x-view-reduced': { reducedMotion: 'reduce' } };
@@ -160,9 +164,9 @@ const CONTEXT_OF = { 'x-view-reduced': { reducedMotion: 'reduce' } };
 // and at 1536 x 1024 and 1280 x 720 with a mouse.
 const LEGS_OF = { 'x-first': ['desktop', 'phone'],
   'x-dock-yields': ['phone-dock', 'phone-dock-se'], 'x-dock-desktop': ['desktop', 'laptop'],
-  'x-dock-handle-hold': ['phone-dock'] };
+  'x-dock-handle-hold': ['phone-dock'], 'x-dock-landscape': ['phone-landscape'] };
 // The legs with the browser's gesture rule on and mobile emulation where the engine has it.
-const GESTURE_LEGS = new Set(['phone-cold', 'phone-dock', 'phone-dock-se']);
+const GESTURE_LEGS = new Set(['phone-cold', 'phone-dock', 'phone-dock-se', 'phone-landscape']);
 // The checks about the XY lead preset (the pad's view, S3, is measured on it); every other one
 // opens the tab as the owner meets it.
 const PRESET_OF = { 'x-link': 'xy-lead', 'x-pointer': 'xy-lead', 'x-view': 'xy-lead',
@@ -1129,6 +1133,25 @@ function defineChecks() {
     const off = await silent(page, 'the lift silences');
     return { ok: true, before, after, state: open.state, held: Number(held.rmsDb.toFixed(1)),
       off: Number(off.rmsDb.toFixed(1)) };
+  });
+
+  def('x-dock-landscape', async ({ page }) => {
+    // Review of #425, R9: a phone on its side (844 x 390), the dock unfolded by its handle:
+    // the room above the unfolded keys is below the pad's 6rem minimum, and still no part of
+    // the pad is under the dock (the pad is above it, or the keys are below the pad).
+    let v = null;
+    await until(async () => {
+      v = await dockView(page);
+      return v.disabled === 'false' && v.state === 'collapsed' && !!v.handle;
+    }, { ms: SOUND_MS, what: 'the playable pad, the dock folded to its handle' });
+    await page.tap(HANDLE);
+    const open = await dockIs(page, 'docked', 'the handle unfolds the keys', { whole: false });
+    const chrome = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement)
+      .getPropertyValue('--osc-chrome-h')) || 0); // the app chrome above the pad, in px
+    const under = !!open.pad && open.pad.bottom > open.dockTop + 0.5 && open.pad.top < open.vh;
+    return { ok: !under, detail: under ? 'part of the pad is under the unfolded dock' : undefined,
+      room: Number((open.dockTop - chrome).toFixed(1)), minPx: 96, chrome, pad: open.pad,
+      dockTop: open.dockTop, vh: open.vh, hits: open.hits };
   });
 
   def('x-dock-desktop', async ({ page, sizeName }) => {
