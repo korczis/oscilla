@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-04
-updated_at: 2026-11-04
+updated_at: 2026-11-05T14:01:38Z
+started_at: 2026-11-05T14:01:10Z
+started_event: sha256:f700c446aaa7d8aa1f194034031c7fd6853f1ef46a9c86fb9db068fc87e264b3
+verified_at: 2026-11-05T14:01:24Z
+verified_event: sha256:77d0bbfc788f9e25135f59be31a874636694d9d2219a4d75afba8c7068b9d6f0
+completed_at: 2026-11-05T14:01:38Z
+completed_event: sha256:ae08588a9dc5e05a0f48f9c2b893cdb3b1ded70deffa1dd7f824931831fb64b8
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/synth-review-armed-sink-preset.test.mjs; tests/browser/synth.cjs s-armstop in CI run 42010577728 (87cd8e5e, the tree of main e8d54f8c)"
+    result: "All 3 criteria re-checked on main e8d54f8c (sweep a3, 2026-11-05). Unit: synth-review-armed-sink-preset.test.mjs S1 tests 7/7 (npm test 4769 pass, 0 fail), landed f118edc0 via #420; #420 fail-first SUCCESS. Browser: synth.cjs s-armstop (pagehide Stop and Studio Stop both read Arm; Arm arms and sounds) green in V3.1 Studio UI chromium, firefox, webkit of run 42010577728; git diff 87cd8e5e e8d54f8c is empty. Verdict .ai/repo/reviews/420.yaml by oscilla-21, builder 26."
+    artifact: ".ai/repo/reviews/420.yaml"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:00:33Z

@@ -46,4 +46,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T14:06:22Z
+started_at: 2026-11-05T14:05:54Z
+started_event: sha256:292fc779bcf2e635dcf96832a8373dc22a3c8348a4764b6e27d1c9a613ce6de4
+verified_at: 2026-11-05T14:06:08Z
+verified_event: sha256:b22265403f82e419485794af32aff17adf50b9aff51de2dab8205c771f4edac0
+completed_at: 2026-11-05T14:06:22Z
+completed_event: sha256:b5fcbceca087066b7defe5a8a8bfe328fa1e1948573c309f2b8800b5179fa9c7
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run test:browser (ends with node tests/browser/journeys.cjs); gh pr checks 404"
+    result: "tests/browser/journeys.cjs holds 38 journey-1-start to journey-6 checks through lib/suite.cjs and lib/wait.cjs, no entry in tests/browser/timing-baseline.json, tests/README.md:86 row; green in chromium, firefox and webkit in the Browser gate of #404 and every later train (sweep a3, 2026-11-05). Landed by PR #331 (verdict .ai/repo/reviews/331.yaml merge, reviewer oscilla-af) in train 3 #404 = main 2f442e11, shipped in v3.18.0; each check's fail-when-reverted is the expected-failure table of #331's body (XFAIL per fix issue, XPASS fails the suite), not a separate mutation log."
+    artifact: "tests/browser/journeys.cjs"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:05:48Z
