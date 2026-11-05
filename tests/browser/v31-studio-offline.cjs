@@ -29,6 +29,17 @@
 //     within 0.5 dB on the shelf and 0 dB off it, the same shelves rendered through the Studio
 //     graph move a 40 Hz or 16 kHz tone by their gain within 0.5 dB, and an all-pass is flat
 //     within 0.1 dB from 20 Hz to 20 kHz.
+//   V605, the Playground voice opened in the Studio (fixtures/playground-voice-in-studio-entry.js,
+//     configurations tests/unit/fixtures/playground-voice-configs.mjs): at this browser's own
+//     rate (a realtime AudioContext's), each covered configuration renders through the
+//     AudioEngine (the Playground voice) and, opened by playgroundVoiceDocument, through the
+//     Studio runtime, from the same start time, for as long as the Playground plays it (an open
+//     voice and a finite tone over the limit for the safety limit); the residual RMS of the
+//     Studio render is at least 60 dB (VOICE_RESIDUAL_DB) below the Playground render's RMS,
+//     judged from the end of the Studio's 20 ms start crossfade (the start is K177's; the
+//     residual from the first sample is printed beside it, not judged), and both voices stop
+//     sounding (-40 dB re peak) within VOICE_END_TOL_S of each other, at most the played length
+//     after the start; each refused configuration is refused with its reason.
 //   no console error or page error.
 'use strict';
 
@@ -58,6 +69,11 @@ const DRIVE_SOURCES = (sr) => [
 ];
 const BROWSERS = RUN.browsers;
 const ENTRY = path.join(__dirname, 'fixtures', 'v31-studio-offline-entry.js');
+const VOICE_ENTRY = path.join(__dirname, 'fixtures', 'playground-voice-in-studio-entry.js');
+// V605: an opened voice's render matches the Playground's at least this far below its RMS (dB).
+const VOICE_RESIDUAL_DB = -60;
+// V605: an opened voice ends where the Playground voice ends, within this (s): 2 ms.
+const VOICE_END_TOL_S = 0.002;
 // Goertzel with a Hann window over 0.6 s (264 periods of 440 Hz) reads a steady sine's amplitude
 // to < 0.01 %; 1 % covers the engines' oscillator wavetables.
 const TONE_TOL = 0.01;
@@ -194,6 +210,30 @@ async function runOne(name, url) {
       Q: 1 }, [20, 63, 200, 632, 1000, 2000, 6325, 20000]));
     check(name, 'K011 all-pass magnitude is flat within 0.1 dB, 20 Hz to 20 kHz',
       ap.every((x) => Math.abs(x) <= 0.1), JSON.stringify(ap));
+    // V605: every listed configuration, opened or refused (the list is the unit test's).
+    const configs = await page.evaluate(() => window.PV.configs());
+    for (const c of configs) {
+      const v = await page.evaluate((id) => window.PV.render(id), c.id);
+      if (!c.opens) {
+        check(name, `V605 ${c.id} refused with its reason (${c.label})`,
+          v.opened === false && v.code === c.code && v.reason.length > 40,
+          `${v.code}: ${v.reason}`);
+        continue;
+      }
+      check(name, `V605 ${c.id} opens and its Studio render matches the Playground voice's `
+        + `at ${v.sampleRate} Hz, residual <= ${VOICE_RESIDUAL_DB} dB from the end of the `
+        + `Studio's start crossfade, both ending together (${c.label})`,
+        v.opened && v.rendered && v.sameStart && v.limitations.length === 0
+          && v.refRms > 1e-3 && v.residualDb <= VOICE_RESIDUAL_DB
+          && Math.abs(v.pgEnd - v.stEnd) <= VOICE_END_TOL_S && v.pgEnd <= v.played + 0.001,
+        v.rendered ? `residual ${v.residualDb.toFixed(1)} dB re ${v.refRms.toExponential(2)} RMS `
+          + `over ${v.from.toFixed(3)}-${v.to.toFixed(3)} s (judged, from the end of the `
+          + `start crossfade); from the first sample ${v.wholeDb.toFixed(1)} dB (not judged, `
+          + `K177); played ${v.played.toFixed(3)} s, ends at ${v.endDb} dB: Playground `
+          + `${v.pgEnd.toFixed(4)} s, Studio ${v.stEnd.toFixed(4)} s; ${v.clips} gate clip(s), `
+          + `${v.lanes} lane(s)`
+          : JSON.stringify(v));
+    }
     check(name, 'no console errors', errors.length === 0, errors.join(' | '));
   } catch (err) {
     check(name, 'run completed', false, err && err.stack);
@@ -204,11 +244,11 @@ async function runOne(name, url) {
 
 (async () => {
   await RUN.ready();
-  const r = await esbuild.build({ entryPoints: [ENTRY], bundle: true, format: 'iife',
-    write: false, target: 'es2020', logLevel: 'silent' });
+  const r = await esbuild.build({ entryPoints: [ENTRY, VOICE_ENTRY], bundle: true,
+    format: 'iife', write: false, target: 'es2020', logLevel: 'silent', outdir: 'out' });
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oscilla-v31-offline-'));
   const file = path.join(dir, 'index.html');
-  fs.writeFileSync(file, HTML(r.outputFiles[0].text));
+  fs.writeFileSync(file, HTML(r.outputFiles.map((f) => f.text).join('\n')));
   try {
     for (const b of BROWSERS) await runOne(b, pathToFileURL(file).href);
   } finally {

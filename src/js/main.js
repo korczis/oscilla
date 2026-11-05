@@ -76,6 +76,7 @@ import { createExperimentsUi } from './ui/experiments.js';
 import { createFindingsUi } from './ui/findings.js';
 import { createConnectionsUi } from './ui/connections.js';
 import { createStudioUi } from './ui/studio/workspace.js';
+import { voiceInputFrom } from './studio/playground-voice-open.js';
 import { startFlowbiteAfterAlpine } from './ui/flowbite.js';
 import { createMidiUi } from './midi/ui.js';
 import { createScopeView, createHarmonicBarsView } from './ui/p5-views.js';
@@ -258,6 +259,14 @@ function labVizInputs(plan) {
   };
 }
 bridge.labInputs = labVizInputs;
+
+/**
+ * The input "Open in Studio" builds the Playground voice from (V605): the Signal Path's, with
+ * the safety limit and the continuous permission the Playground plays it under.
+ */
+function playgroundVoiceInput() {
+  return voiceInputFrom(app, labVizInputs);
+}
 
 // One output owner at a time (C002, C016): instrument, sequencer, Studio, a measurement.
 // stopPlayback also frees the MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
@@ -872,6 +881,7 @@ function createOscillaComponent(ui) {
   const studio = createStudioUi({ engine, stopPlayback,
     // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
+    playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)
   });
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.

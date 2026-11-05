@@ -695,6 +695,9 @@
                   data-value="signalPath" x-bind="tab('analysis', 'signalPath')">Signal Path</button>
               </div>
               <div class="osc-analysis-tools">
+              <button type="button" data-osc="analysis.openInStudio" hidden
+                :hidden="tabs.analysis !== 'signalPath'" @click="studioOpenVoice()"
+                class="me-2 h-8 rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11">Open in Studio</button>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-viz-pause"
                 id="osc-viz-pause" data-osc="analysis.pause" aria-label="Pause animation"
                 title="Pause animation (the view still redraws when something changes)"
@@ -932,7 +935,7 @@
       </div>
     </div>
 
-    <!-- ================= MEASURE (V3): structured stimulus, capture, analysis =================
+    <!-- MEASURE (V3): structured stimulus, capture, analysis
          Thin bindings over src/js/ui/measure.js, which renders the pure view models of
          src/js/measurement/views. Panels: guided flow, Stimulus, Live input, Quality,
          Measurement result, Measurement setup, Experiment (docs/v3/ui-integration.md).
@@ -1433,7 +1436,7 @@
       </div>
     </section>
 
-    <!-- ================= Row 3 =================
+    <!-- Row 3
          The Playground's last row is the Pattern Sequencer with the compact Studio beside it;
          the panels after them belong to their own workspaces (Filter Lab, Synthesis, Compare),
          which the Playground leaves to them at 1280 px and wider (instrument.css). -->
@@ -1917,7 +1920,7 @@
       </section>
     </div>
 
-    <!-- ================= Workspace-only panels (shown by nav focus) ================= -->
+    <!-- Workspace-only panels (shown by nav focus) -->
     <div class="osc-workspace" :class="workspace === 'synth' && 'hidden'">
 
       <!-- ---------- Dual oscillator (Synthesis workspace) ---------- -->
@@ -2141,8 +2144,8 @@
     <p class="osc-sr-only" aria-live="assertive" aria-atomic="true" data-osc="studio.alert"
       x-text="studio.alert"></p>
 
-    <!-- ================= Full-width workspace views ================= -->
-    <!-- ================= EXPERIMENTS (V3): local experiment management ================= -->
+    <!-- Full-width workspace views -->
+    <!-- EXPERIMENTS (V3): local experiment management -->
     <section class="osc-view osc-view--experiments" id="osc-view-experiments" data-osc="experiments-view"
       data-osc-modes="experiments" hidden :hidden="workspace !== 'experiments'"
       aria-labelledby="osc-exp-title" tabindex="-1">
@@ -2673,7 +2676,7 @@
         </div>
       </div>
     </section>
-    <!-- ================= SYNTH (K058-K066): the semi-modular mono voice =================
+    <!-- SYNTH (K058-K066): the semi-modular mono voice
          A projection of the ONE Studio store (src/js/synth/ui.js, composed by
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
@@ -2731,7 +2734,7 @@
       <div data-osc="synth.panel" role="tabpanel" :aria-labelledby="'osc-synth-tab-' + synth.tab"></div>
     </section>
 
-    <!-- ================= STUDIO (V3.1): visual signal programming =================
+    <!-- STUDIO (V3.1): visual signal programming
          Thin bindings over src/js/ui/studio/workspace.js: toolbar and transport here; the graph
          editor, node library, Inspector and compact widget are rendered by their modules from
          the ONE Studio store; the timeline region belongs to src/js/ui/studio/timeline-editor.js
@@ -3260,7 +3263,7 @@
     </section>
   </main>
 
-  <!-- ================= Debug (?debug=1): provenance and live engine state ================= -->
+  <!-- Debug (?debug=1): provenance and live engine state -->
   <aside class="osc-debug-panel" data-osc="debug.panel" x-show="debug" x-cloak
     aria-label="Debug information">
     <h2 class="osc-debug-title">Debug</h2>
@@ -3271,7 +3274,7 @@
     </dl>
   </aside>
 
-  <!-- ================= Status bar ================= -->
+  <!-- Status bar -->
   <footer class="osc-statusbar" aria-label="Status and actions">
     <div class="osc-sb-brand">
       <span class="osc-sb-name">OSCILLA</span>
@@ -3373,7 +3376,7 @@
   <input type="file" id="osc-fnd-import-file" class="osc-sr-only" accept=".json,application/json"
     tabindex="-1" aria-hidden="true" @change="findingsImportFile($event)">
 
-  <!-- ================= Dialogs (native <dialog>) ================= -->
+  <!-- Dialogs (native <dialog>) -->
   <dialog class="osc-dialog" id="osc-dlg-save" data-oscilla-modal aria-labelledby="osc-dlg-save-title">
     <form method="dialog" class="osc-dialog-body" @submit.prevent="savePreset()">
       <h2 class="osc-dialog-title" id="osc-dlg-save-title">Save preset</h2>
@@ -3809,7 +3812,7 @@
       </div>
     </div>
   </dialog>
-  <!-- ================= Studio dialogs (V3.1; content rendered by src/js/ui/studio/*) ======= -->
+  <!-- Studio dialogs (V3.1; content rendered by src/js/ui/studio/*) -->
   <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-studio-templates" data-oscilla-modal
     data-osc-studio-dialog aria-labelledby="osc-dlg-st-tpl-title">
     <div class="osc-dialog-body">

@@ -30,12 +30,13 @@ import studioInspector from './decl/studio-inspector.js';
 import studioPatches from './decl/studio-patches.js';
 import studioTimeline from './decl/studio-timeline.js';
 import studioTransport from './decl/studio-transport.js';
+import studioVoice from './decl/studio-voice.js';
 import synth from './decl/synth.js';
 
 export const DECLARATIONS = Object.freeze([...studioTransport, ...studioTimeline,
   ...studioCompact, ...filterLab, ...mic, ...navigation, ...records, ...studioGraph,
   ...studioPatches, ...studioInspector, ...synth, ...keyboard, ...crossLinks, ...status,
-  ...about, ...patternParams, ...shell, ...patchBrowser]);
+  ...about, ...patternParams, ...shell, ...patchBrowser, ...studioVoice]);
 
 /** The node face of a node definition: its name, its help sentence, the model as its state. */
 export function nodeFaceOf(def) {
