@@ -85,6 +85,10 @@ satisfaction:
     criterion: "A selection that reaches a cap says so where the selection is made (Compare's limit of four records), and no path drops a selected item without naming it (Panel Excellence, af 2026-11-05)"
     evidence: "command"
     ref: "node --test tests/unit/compare-limit-stated.test.mjs"
+  - id: "engine-backstops-held"
+    criterion: "Each backstop of the AudioEngine (C011's release clamp, the noteOn frequency guard and the per-voice frequency clamps below Nyquist) is held by a unit test with literal expected values that a mutant removing it fails, at 44.1 and 48 kHz (Hardening, oscilla-b0 2026-11-05)"
+    evidence: "command"
+    ref: "node --test tests/unit/c011-safety-limits.test.mjs tests/unit/engine-nyquist-backstops.test.mjs"
 governance:
   - "rule:project.audio-engine-discipline"
   - "rule:project.studio-model-is-canonical"

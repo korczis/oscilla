@@ -75,6 +75,9 @@ observations:
   - id: compare-keeps-four-silently
     statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): Compare keeps four records and drops the rest without a word (measurement/views/experiment-summary.js:208, ids.slice(0, 4))."
     source: "file:src/js/measurement/views/experiment-summary.js"
+  - id: nyquist-backstops-weak
+    statement: "oscilla-b0's hardening audit of 68b117f3 (2026-11-05), S8: removing the noteOn guard freq < this.safeMaximum (audio/audio-engine.js:1075) fails no test, and _f with no upper clamp fails only one Studio adapter test, incidentally; C011's release clamp survives both of C026's mutants (1858 of 1858 pass)."
+    source: "file:src/js/audio/audio-engine.js"
 conditions:
   - criterion: stops-are-immediate
     state: conflicting
@@ -170,6 +173,11 @@ conditions:
     because: "Compare drops records past four without saying so."
     observations:
       - compare-keeps-four-silently
+  - criterion: engine-backstops-held
+    state: conflicting
+    because: "The noteOn Nyquist guard and C011's release clamp each survive a mutant."
+    observations:
+      - nyquist-backstops-weak
 risks:
   - "Plan stamps lag what has landed (#413, #331, #410 members) and plan drift reports merged_not_recorded 0; a reader of the plan sees open work that is done. af's evidence lane owns the re-check, which must check each criterion on main, never stamp from merge titles."
   - "The bus and the voice wrapper touch the same note path as K178 and K184 (both on unmerged branches); see M090's risks."

@@ -1,0 +1,24 @@
+id: Q096
+milestone: M073
+serves:
+  - "v3-measure#measurement-comparison"
+title: "Question: how a TEST CONTEXT run compared with a physical run is classed"
+slug: question-how-a-test-context-run-compared-with-a-physical-run
+priority: p2
+profile: routine
+owner: "repository owner, or LLM peers on the mesh under the owner's order of 2026-11-05"
+objective: "A question with options, not a decision. Hardening S4, owner decision. At main 68b117f3 a TEST CONTEXT record and a physical record compare as compatible: true with no warnings; testContext appears nowhere in compare.js, semantic-diff.js, findings.js, store.js summaryRecord or compare-view.js. Options: (a) warn: incompatible, shown as 'Not equivalent', and a finding that cites a TEST CONTEXT run as support shows the label; (b) info only, with a chip on the list row and the compare entries; (c) refuse the comparison. b0's recommended default: (a), which matches the README promise that TEST CONTEXT 'is never presented as a measurement of a physical system' and keeps comparison usable."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S4. T032 builds the answer and depends on this issue."
+current_state: "Open: not answered. The answer is recorded as Q091's was (the deciding sessions and the mesh thread named, the owner free to override)."
+scope:
+  - ".ai/repo/project/issues/Q096.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The answer is recorded as evidence on this issue (covers owner_decision) naming who decided, the date, the source and the option chosen of (a), (b) and (c); a session that builds T032 does not answer it."
+  - "T032 names Q096 in depends_on and follows the chosen option without widening it."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-05
+updated_at: 2026-11-05

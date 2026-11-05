@@ -66,6 +66,9 @@ observations:
   - id: update-2026-10-18-adrs
     statement: "Update 2026-10-18, appended by the coordinating Claude session (not the critic), observed at main 044f98a after observed_at 62cccb3; the observations above are kept as they were made. majordomus adr list lists 58 ADRs, all proposed."
     source: "command:majordomus adr list"
+  - id: update-2026-11-05-hardening-s2
+    statement: "Recorded after this gap's observed_at, at 68b117f3: oscilla-b0's hardening audit of 68b117f3 (2026-11-05), S2. FORBIDDEN_JS in scripts/verify-dist.mjs misses five runtime-load forms, each surviving with rc=0 (createElement('script').src, new Image().src, new Audio(url), insertAdjacentHTML with an absolute img src, computed window['fe'+'tch']); no browser suite listens for requests; the p5@1.11.3 vendor bytes carry a dead i18next loadPath on cdn.jsdelivr.net. Today's dist is clean."
+    source: "file:scripts/verify-dist.mjs"
 conditions:
   - criterion: one-version-authority
     state: conflicting
@@ -110,6 +113,11 @@ conditions:
       - release-tag-vs-page
       - cadence-overdue
       - tags
+  - criterion: no-runtime-network
+    state: missing
+    because: "No check refuses the five runtime-load forms or a request made by a browser suite (R040, R041); the dist is clean only because nothing writes one."
+    observations:
+      - update-2026-11-05-hardening-s2
 risks:
   - "The version on the public page stops identifying an artifact: while releases are overdue, every main merge is public under the last release's version, and a user reporting version 3.10.3 can be on any of more than 155 commits."
   - "No criterion of this intent can ever be met under Majordomus 0.29: its satisfaction is decided by CI runs nobody records, until the post-alpha request for node --test and Playwright evidence lands."

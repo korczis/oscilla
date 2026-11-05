@@ -132,6 +132,10 @@ satisfaction:
     criterion: "Every file path named by an intent criterion ref, a surface-census tests entry or a docs/CLAIMS.yaml test exists in the tree or is listed in a pending list that only shrinks, and one module decides it for all three (Panel Excellence, af 2026-11-05)"
     evidence: "command"
     ref: "node --test tests/unit/evidence-paths.test.mjs"
+  - id: "browser-suites-harnessed"
+    criterion: "Every suite under tests/browser runs through tests/browser/lib/suite.cjs with an empty PENDING list, the timing-allow markers are counted by a baseline that only shrinks, and no declared browser check is skipped in CI without a reason recorded in its suite (Hardening, oscilla-b0 2026-11-05)"
+    evidence: "command"
+    ref: "node --test tests/unit/browser-suite-contract.test.mjs tests/unit/browser-timing.test.mjs"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"
