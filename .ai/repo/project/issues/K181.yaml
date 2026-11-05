@@ -6,7 +6,7 @@ title: "One live strip of the output owner's scope, spectrum and meter on Synth,
 slug: one-live-strip-of-the-output-owner-s-scope-spectrum-and-mete
 priority: p0
 profile: implementation
-objective: "Lands as feat(ui). The views the owner misses exist only in the Playground analysis panel (src/js/ui/p5-views.js) and the labs; the Synth's displays are computed from settings (src/js/ui/synth/display.js:1-24) and the Studio's analysis nodes never draw (K016). After: one framed live strip, one component declared once in the UI catalogue (G001), mounted on Synth, Studio, Sequencer and Analyzer, draws the scope, the spectrum and the level meter of whatever owns the output (src/js/ui/output-owner.js), in Canvas 2D, from the existing view code of ui/p5-views.js and charts (no second view implementation), with axes from the analysis' axesOf(), and shows the owner's name. It writes nothing for an interval it did not observe."
+objective: "Lands as feat(ui). The views the owner misses exist only in the Playground analysis panel (src/js/ui/p5-views.js) and the labs; the Synth's displays are computed from settings (src/js/ui/synth/display.js:1-24) and the Studio's analysis nodes never draw (K016). After: one framed live strip, one component declared once in the UI catalogue (G001), mounted on Synth, Studio, Sequencer and Analyzer, draws the scope, the spectrum and the level meter of whatever owns the output (src/js/ui/output-owner.js), in Canvas 2D, from the existing view code of ui/p5-views.js and charts (no second view implementation), with axes from the analysis' axesOf(), and shows the owner's name. It writes nothing for an interval it did not observe. It depends on G001 (the catalogue the strip is declared in, landing with lane A #386) and on C036 (the one owner table and claim API, which carries the current-owner query the strip's owner name reads); output-owner.js offers only claim and stop today (dev-53, 2026-11-05)."
 why: "af nav-pages audit wf_ed1cc8d6-3e8 and Play audit wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0), after the owner's complaint in the af session 2026-11-04/05: views feel lost, Play does not work on most pages, nothing runs through one bus, engines are not wrapped, many top-nav pages are obsolete, unconnected, not realtime, poor. Decided by af and b0 on 2026-11-05 under the owner's order of that day 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090)."
 scope:
   - "src/js/ui"
@@ -19,7 +19,9 @@ scope:
   - "tests/README.md"
   - "docs/components.md"
   - "dist"
-depends_on: []
+depends_on:
+  - "G001"
+  - "C036"
 acceptance_criteria:
   - "tests/unit/live-strip.test.mjs: the strip is one catalogue declaration mounted on the four workspaces; it imports its drawing from ui/p5-views.js or charts and defines no FFT, scope or meter of its own (an import census)."
   - "tests/browser/live-strip.cjs in all three engines at 1536x1024 and WebKit 390x844 touch: with the Synth armed and a key held, the Studio playing, and the Sequencer playing, the strip's scope and spectrum change from silence within a named deadline and name that owner; after Stop they show silence, not the last frame."

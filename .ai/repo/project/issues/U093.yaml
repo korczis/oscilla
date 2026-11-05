@@ -1,12 +1,12 @@
 id: U093
 milestone: M054
 serves:
-  - "product-direction#public-story-sourced"
+  - "ui-current#about-tells-the-project"
 title: "Origin says what OSCILLA grew into: measurement, the Studio and the Synth"
 slug: origin-says-what-oscilla-grew-into-measurement-the-studio-an
 priority: p1
 profile: implementation
-objective: "Lands as fix(about). Origin's 'grew into ... microphone comparison' lists only the V2 set, and 'deliberately direct: Generate/Hear/See/Inspect' has no source. After: the paragraph names Measure, the Studio and the Synth, and each sentence carries a source checked by about-origin.test.mjs's storyProblems (Q005 lineage, product-direction#public-story-sourced)."
+objective: "Lands as fix(about). Origin's 'grew into ... microphone comparison' lists only the V2 set, and 'deliberately direct: Generate/Hear/See/Inspect' has no source. After: the paragraph names Measure, the Studio and the Synth, and each sentence carries a source checked by about-origin.test.mjs's storyProblems (Q005 lineage; product-direction#public-story-sourced judges the sourcing, this issue serves About telling the project)."
 why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
 scope:
   - "src/index.html"
