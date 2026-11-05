@@ -99,8 +99,10 @@ import {
 } from '../audio/microphone.js';
 import { MeasurementError, mapError } from './engine.js';
 import { captureAudioSession } from './audio-session.js';
+import { levelOf } from './input-level.js';
 
 export { captureAudioSession, CAPTURE_AUDIO_SESSION } from './audio-session.js';
+export { levelOf } from './input-level.js';
 
 export const CAPTURE_PROCESSOR_NAME = 'oscilla-capture-v1';
 /** Frames per posted chunk (≈ 43 ms at 48 kHz): progress cadence and message overhead. */
@@ -289,19 +291,6 @@ function makeYield(env) {
   return () => new Promise((resolve) => env.setTimeout(resolve, 0));
 }
 
-/** { peak, rmsDb } of a capture (dB re digital full scale; -Infinity for digital silence). */
-export function levelOf(samples) {
-  let s = 0;
-  let peak = 0;
-  for (let i = 0; i < samples.length; i++) {
-    const v = samples[i];
-    s += v * v;
-    if (Math.abs(v) > peak) peak = Math.abs(v);
-  }
-  const rms = samples.length ? Math.sqrt(s / samples.length) : 0;
-  return { peak, rmsDb: rms > 0 ? 20 * Math.log10(rms) : -Infinity };
-}
-
 // ------------------------------------------------------------------------------- core
 
 /**
@@ -356,7 +345,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   function interrupt(info) {
-    if (!busy() && !input) return;
+    // An input still opening (a permission prompt) is released too (98 F4): the epoch bump
+    // makes ensureInput close it when getUserMedia answers, so it never stays open.
+    if (!busy() && !input && !inputPending) return;
     const was = busy();
     if (typeof io.onInterrupt === 'function' && was) {
       try { io.onInterrupt(info); } catch (e) { /* engine handles it */ }
@@ -769,7 +760,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   // ---- the setup check's probe (C033, see the header): render(sampleRate) → Float32Array.
-  // Resolves { played: true, seconds, startAt, inputLevel } or { played: false, reason }.
+  // Resolves { played: true, seconds, startAt, inputLevel, frames } or { played: false, reason }.
   async function playProbe(ctx, since, render) {
     let samples = null;
     let why = 'the stimulus could not be rendered';
@@ -793,7 +784,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       st.src.start(csF / sr);
       const w = await p;
       return { played: true, seconds: samples.length / sr, startAt: csF / sr,
-        inputLevel: levelOf(w.samples) };
+        inputLevel: levelOf(w.samples, w.received),
+        frames: { expected: w.frames, received: w.received, discontinuities: w.discontinuities } };
     } catch (e) {
       const me = mapError(e);
       if (me.code === 'ABORTED') throw me;
@@ -945,7 +937,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
           sample(start / sr); // what still sounds when the window opens
           const w = await p;
           sample(); // and what sounds after it (started during the reading)
-          facts.inputLevel = levelOf(w.samples);
+          facts.inputLevel = levelOf(w.samples, w.received);
         } catch (e) {
           const me = mapError(e);
           if (me.code === 'ABORTED') throw me;

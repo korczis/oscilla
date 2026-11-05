@@ -39,7 +39,8 @@
 //     'granted'|'denied'|'prompt'|'unknown'|'not-required', input: { ok, device, constraints,
 //     error? }, inputLevel: { peak, rmsDb }|null, output: { gain, maxGain, audibleVoices,
 //     otherAudio? }, worklet: { supported, mode, error? }, testContext?, chainNotes?,
-//     probe?: { played: true, seconds, startAt, inputLevel } | { played: false, reason } }
+//     probe?: { played: true, seconds, startAt, inputLevel, frames: { expected, received,
+//     discontinuities } } | { played: false, reason } }
 //   chainNotes (optional): pure data about the playback chain that the platform layer has
 //     MEASURED or knows from a measured probe, e.g. { limiterDeviationAboveHz: 18000 } when the
 //     master limiter of this browser is not transparent above 18 kHz (the spike's Firefox 155

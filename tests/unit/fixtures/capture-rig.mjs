@@ -61,7 +61,8 @@ export function audioSession(initial = 'playback', { refuse = null } = {}) {
 export function rig({ background = 0.001, heard = 0.1, session = null, refuse = null,
   gum = null, abortOnHidden = false, timeout = (ms) => ms } = {}) {
   const listeners = { engine: [], win: {}, doc: {} };
-  const ctl = { stall: false, gumCalls: 0 };
+  // stall: the input renders nothing; drop(n): block n is lost (ScriptProcessor on WebKit).
+  const ctl = { stall: false, drop: null, gumCalls: 0, blocks: 0 };
   let sp = null;
   const started = [];
   const node = (kind, extra = {}) => {
@@ -128,7 +129,8 @@ export function rig({ background = 0.001, heard = 0.1, session = null, refuse = 
     && t < s.when + s.buffer.duration && s.stopped === null);
   /**
    * Runs `p` while the audio clock advances one block per macrotask and the input renders
-   * (none while ctl.stall). `poke` is called once, the first time `at()` holds.
+   * (none while ctl.stall, nor a block ctl.drop loses). `poke` is called once, the first time
+   * `at()` holds.
    */
   async function drive(p, { at = null, poke = null } = {}) {
     let settled = false;
@@ -141,7 +143,9 @@ export function rig({ background = 0.001, heard = 0.1, session = null, refuse = 
       if (!poked && at()) { poked = true; poke(); }
       frame += BLOCK;
       ctx.currentTime = frame / SR;
-      if (sp && sp.onaudioprocess && !ctl.stall) {
+      const lost = ctl.drop ? ctl.drop(ctl.blocks) : false;
+      ctl.blocks += 1;
+      if (sp && sp.onaudioprocess && !ctl.stall && !lost) {
         const t0 = (frame - BLOCK) / SR;
         const level = heard !== null && sounding(t0) ? heard : background;
         const data = new Float32Array(BLOCK).fill(level);

@@ -176,7 +176,8 @@ test('C033: the capture holds play-and-record while its input is open, then puts
 
 test('C033: a refused input puts the session back and is reported as refused', async () => {
   const session = { type: 'playback' };
-  const denied = Object.assign(new Error('The request is not allowed'), { name: 'NotAllowedError' });
+  const denied = Object.assign(new Error('The request is not allowed'),
+    { name: 'NotAllowedError' });
   const r = rig({ session, refuse: denied });
   const me = createMeasurementEngine({ io: r.io });
   const rep = await r.drive(me.preflight(RECIPE));
