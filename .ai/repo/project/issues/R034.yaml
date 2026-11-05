@@ -1,0 +1,26 @@
+id: R034
+milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
+title: "release:publish uploads and verifies the committed bytes, not the working tree read up to 90 minutes after the clean check"
+slug: release-publish-uploads-and-verifies-the-committed-bytes
+priority: p1
+profile: implementation
+objective: "Lands as fix(release). Hardening D2 (P2, observed): the tree is checked clean only at the start (scripts/release-publish.mjs:418, 427); verify-deploy runs at :585 and the asset is uploaded at :606, with three waits of up to 30 minutes each between them (:146, :510-570). A tree modified mid-publish reaches the Release. After: publish reads dist/index.html with git show <commit>:dist/index.html for the upload and for verify-deploy, or refuses when the working tree's bytes differ from the commit's at the upload."
+why: "af's Hardening proof-chain synthesis, defect D2 and smallest slice 5. The same synthesis refuted and dropped four release-chain findings of the Hardening pack, so none is planned: the receipt does bind the dist bytes (tree equality, release-ci-receipt.mjs:79-84, and distSha256 at release-prepare.mjs:136); verify-deploy compares bytes, hash, commit and digest, not only the version; the scripted flow writes the record after verification; and path-gated skips on a release pull request fail closed. D1 is cross-referenced to PR #417 in R037."
+scope:
+  - "scripts/release-publish.mjs"
+  - "scripts/verify-deploy.mjs"
+  - "tests/unit/release-publish.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-publish.test.mjs runs publish with a fake 'gh run watch' that rewrites dist/index.html and asserts that publish refuses or that the uploaded bytes equal git show HEAD:dist/index.html; it fails on the merge base."
+  - "verify-deploy, called by publish, compares the live page with the commit's bytes, not the checkout's."
+  - "Guarded (scripts/release-*, scripts/verify-deploy.mjs, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/release-publish.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

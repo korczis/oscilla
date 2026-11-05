@@ -1,0 +1,24 @@
+id: Q093
+milestone: M090
+serves:
+  - "coherent-state#saved-state-is-honest"
+title: "LLM decision: the panel the Synth visit inserts is part of the document's baseline and arms no unsaved-work guard (af with b0, 2026-11-05)"
+slug: llm-decision-the-synth-auto-insert-is-part-of-the-baseline
+priority: p2
+profile: routine
+owner: "af with b0, mesh 2026-11-05, owner order 'be llm autonomous'"
+objective: "Record decision Q-C, AGREED by af with b0 on the mesh (thread b0<->af, 2026-11-05 ~02:15Z): when navigating to Synth auto-inserts the panel (#329, src/js/synth/ui.js ensurePanel), the insertion is part of the document's baseline. It records the saved fingerprint, adds no undo entry, and the unsaved-work guard is armed only by the user's first edit after it. C039 implements it."
+why: "oscilla-b0 coherence audit at main 68b117f3, slice E (journeys): a plain visit to Synth arms the unsaved guard, so leaving a page the user never edited asks to save work they did not do. Decided under the owner's order of 2026-11-05 'be llm autonomous'; the owner may override it."
+current_state: "Decided (AGREED) by af with b0 on 2026-11-05. The owner_decision evidence is recorded on main after this plan change lands; until then C039 waits on it."
+scope:
+  - ".ai/repo/project/issues/Q093.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision) with the mesh thread, date, the three behaviours (baseline fingerprint, no undo entry, first user edit arms the guard) and the attribution to af with b0."
+  - "C039 names Q093 in depends_on."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-05
+updated_at: 2026-11-05

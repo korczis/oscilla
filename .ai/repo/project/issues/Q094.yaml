@@ -1,0 +1,24 @@
+id: Q094
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "LLM decision: hash keys for the 21 localStorage subviews are deferred; they stay under the link-debt ratchet (af with b0, 2026-11-05)"
+slug: llm-decision-subview-deep-links-deferred
+priority: p3
+profile: routine
+owner: "af with b0, mesh 2026-11-05, owner order 'be llm autonomous'"
+objective: "Record decision Q-D, DEFERRED by af with b0 on the mesh (thread b0<->af, 2026-11-05 ~02:15Z): the 21 subviews whose state is kept in localStorage (the analysis, mic, phase, bio and presets tabs) get no hash key now. They stay in the census as deepLink null with their deepLinkWhyNot, under the link-debt ratchet U075 splits out, which cannot grow; a later U-scope slice that names the key scheme decides them. No issue is opened for the keys by this decision."
+why: "oscilla-b0 coherence audit at main 68b117f3: 47 census surfaces have no deep link (25 subviews, 22 dialogs); hash keys for the 21 local subviews would cut link debt from 47 to 26, but the key names are a URL contract that outlives the release. Deferring keeps the debt bounded without inventing the scheme. Decided under the owner's order of 2026-11-05 'be llm autonomous'; the owner may override it."
+current_state: "Decided (DEFERRED) by af with b0 on 2026-11-05. The owner_decision evidence is recorded on main after this plan change lands."
+scope:
+  - ".ai/repo/project/issues/Q094.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision) with the mesh thread, date, the deferral, the 21 subviews it covers and the ratchet that holds them, attributed to af with b0."
+  - "On main, the census link-debt ratchet (surface-census.test.mjs) holds the 21 subviews as deepLink null with a deepLinkWhyNot and refuses a rise in that debt; none of them is counted as resolved."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-05
+updated_at: 2026-11-05

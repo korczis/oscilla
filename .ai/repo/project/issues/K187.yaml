@@ -1,0 +1,34 @@
+id: K187
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "A panel's fixed parameter is refused by the model, skipped by presets and Apply with a reason, and reset on import"
+slug: a-panels-fixed-parameter-is-refused-by-the-model
+priority: p1
+profile: implementation
+objective: "Lands as fix(synth). Implements Q092. A Synth panel module's 'fixed' is declared and validated (src/js/synth/panel.js:90-99) and shown as a 'Fixed by the panel' badge (panel.js:181-185, synth/view/face.js:164-170), but NODE_PARAM_SET, a node preset (hpf/dark sets HPF type lowpass) and a catalog Apply (sync/engine-formant-pad sets HARD SYNC bank formant, sync/default bank basic) overwrite it while the badge keeps the declared value. After: the StudioModel refuses NODE_PARAM_SET on a fixed parameter with a reason naming the panel, the module and the parameter, leaving model and history unchanged; a node preset and a catalog Apply apply every other parameter and report each skipped fixed one with its reason; a saved document whose fixed value differs imports with it reset to the declared value and the reset named in the import report. K061 (BLOCKED) keeps the rest of the panel contract."
+why: "Q092 (af with b0, 2026-11-05); oscilla-b0 Total Coherence audit of main 68b117f3, slice 06 (audio-ontology gap 1, severity high), probes set-fixed.mjs and probe-fixed.mjs reproduced."
+scope:
+  - "src/js/studio/actions.js"
+  - "src/js/studio/node-presets.js"
+  - "src/js/studio/patches.js"
+  - "src/js/studio/validate.js"
+  - "src/js/synth/panel.js"
+  - "tests/unit/studio-node-presets.test.mjs"
+  - "tests/unit/synth-panel.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q092"
+acceptance_criteria:
+  - "Fail-first: tests/unit/studio-node-presets.test.mjs:117, which asserts the HPF type becomes 'lowpass', flips to assert the preset leaves 'type' at the declared value and reports it skipped; it fails on the merge base."
+  - "NODE_PARAM_SET hpf.type, the hpf/dark preset and the sync/engine-formant-pad Apply are each refused or skipped on the fixed key with a reason naming panel, module and parameter; the model and history are unchanged by the refused dispatch (one case each in tests/unit/synth-panel.test.mjs)."
+  - "Import of a document with an overridden fixed value resets it and the import report names the reset (coherent-state#saved-state-is-honest)."
+  - "Guarded paths (src/js/studio/*, src/js/synth/*): prismatic-majordomus-98 writes the verdict; oscilla-21 checks the synth values. Lane: oscilla-26 with dev-53."
+validation:
+  - "node --test tests/unit/studio-node-presets.test.mjs tests/unit/synth-panel.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

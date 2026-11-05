@@ -1,0 +1,32 @@
+id: C039
+milestone: M090
+serves:
+  - "coherent-state#saved-state-is-honest"
+title: "The panel the Synth visit inserts is part of the document's baseline: no undo entry and no unsaved-work guard until the first edit"
+slug: the-synth-auto-insert-is-part-of-the-document-baseline
+priority: p2
+profile: implementation
+objective: "Lands as fix(synth). Implements Q093. At main 68b117f3 navigating to Synth auto-inserts the panel (#329, src/js/synth/ui.js ensurePanel) as an ordinary edit, so a visit with no user action arms the unsaved-work guard. After: the auto-insert records the document's saved fingerprint after it, adds no undo entry, and the guard is armed only by the user's first edit."
+why: "Q093 (af with b0, 2026-11-05); oscilla-b0 Total Coherence audit of main 68b117f3, slice E."
+scope:
+  - "src/js/synth/ui.js"
+  - "src/js/studio/history.js"
+  - "tests/unit/synth-visit-baseline.test.mjs"
+  - "tests/browser/navigation.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q093"
+acceptance_criteria:
+  - "Fail-first: tests/unit/synth-visit-baseline.test.mjs fails on the merge base: after a Synth visit with no edit the document is not dirty and the history has no entry."
+  - "After the visit, one knob edit arms the unsaved-work guard and adds one undo entry; undo returns to the baseline and disarms it."
+  - "tests/browser/navigation.cjs visits Synth and leaves with no unsaved-work prompt, then edits and is prompted, with until() deadlines through the suite harness."
+  - "Guarded paths (src/js/synth/*, src/js/studio/*): prismatic-majordomus-98 writes the verdict (oscilla-21 for the synth values if a default changes). Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/synth-visit-baseline.test.mjs"
+  - "node tests/browser/navigation.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

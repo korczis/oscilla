@@ -1,0 +1,27 @@
+id: U075
+milestone: M054
+serves:
+  - "ui-current#ui-audited"
+title: "The surface census ratchets test debt separately from link debt, so a test cannot be removed behind a missing link"
+slug: the-surface-census-ratchets-test-debt-separately-from-link-debt
+priority: p1
+profile: implementation
+objective: "Lands as test(census). U063 (DONE) defined the census debt as the union 'no deep link OR no test' (tests/unit/surface-census.test.mjs:429-434, 601-616), so at main 68b117f3 the debt is 47 (25 subviews, 22 dialogs, all with a deepLinkWhyNot) while only 8 surfaces lack a test (phase.tab:lissajous, bio.tab:ranges, presets.tab:musical, presets.tab:sweeps, presets.tab:high, osc-dlg-headphones, osc-dlg-copy, osc-dlg-exp-delete). The tests of any of the 39 no-link surfaces that have one can be deleted with no failure (probe: problems 0, debt 47, noTest 47). After: two history ratchets in the same test, link debt and test debt, each compared with its value in the most recent earlier commit of tests/unit/surface-census.json, each only falling. In the same change tests/browser/control-census.cjs is listed for osc-dlg-headphones and osc-dlg-copy, which it drives (test debt 8 to 6), after the latest census-* CI job logs on main confirm it runs. The 21 localStorage subviews held by Q094 are named in the link-debt ratchet as held, not resolved."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice A, skeptic-verified (coherence-verified.json surfaces gap 1, severity high). The pack's figure of 46 surfaces without a deep link is refuted: 47 at all five census commits. U063 is DONE and is not reopened."
+scope:
+  - "tests/unit/surface-census.test.mjs"
+  - "tests/unit/surface-census.json"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a unit mutation that sets tests:[] on subview:analysis.tab:waveform is refused by the new test-debt ratchet with a message naming the surface; on the merge base the same mutation gives 0 problems."
+  - "Link debt and test debt are two numbers printed by the test, each compared with its value in the most recent earlier commit of surface-census.json; a rise in either fails unless the baseline's raises ledger names the surface, the pull request and the reason."
+  - "Test debt is 6 at landing (osc-dlg-headphones and osc-dlg-copy list tests/browser/control-census.cjs), and link debt is 47 with the 21 Q094 subviews marked held."
+  - "Not a guarded path under project.review-verdict v2; when R031 (v3) lands this file is in scope of the guard, so a later edit needs a verdict. A critique from prismatic-majordomus-98 is asked for anyway. Lane: oscilla-21."
+validation:
+  - "node --test tests/unit/surface-census.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

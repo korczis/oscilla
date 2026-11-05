@@ -1,0 +1,47 @@
+id: C037
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+  - "coherent-state#stops-are-immediate"
+title: "One bus: one playback owner, one claim API, one Stop/Escape/page-hide path and one 'playing' state for every player"
+slug: one-bus-one-playback-owner-one-claim-api-one-stop-path
+priority: p0
+profile: implementation
+objective: "Lands as fix(bus) in slices behind C036. af's Play audit of main 6d5efa89 (v3.19.0) found no central bus: 8 players start and claim the output through 5 mechanisms (engine.play patched in place, lab-play-options.js:71-78 and main.js:269-274; the sequencer's _claimOutput, onStart claimMasterLevel and an editor.play wrapper; the Studio's onClaimOutput and studioPlay, ui/studio/workspace.js:822-830, 1265-1285; the Synth arm in four copies, synth/ui.js:704-726 and 851-860, synth/studio-sink.js:35-54, synth/view/xy-tab.js:125; engine.noteOn with no claim; the audition claiming three times; MEASURE capture), about 12 'is it playing' values (cmp.playing, the 150 ms polled cmp.seqPlaying with 3 writers, editor.playing, studio.playing, studioPlaying, studioOwnsOutput(), synth.armed, measureOwnsOutput(), isSounding, anySounding, outputOwner, adapter.isPlaying) and 5 window-level Stop/Escape handlers. After: one bus module owns the output: claim(owner, reason) and release(owner) are the only way to start or stop sounding, every player calls them, Stop, Escape, the status-bar stop and page hide call one stopAll path, and one observable 'playing' state (owner plus since) replaces the mirrors, which become reads of it. The output-owner table of C036 is its first step."
+why: "The owner's complaint of 2026-11-04 (af session): 'nothing runs through one bus', 'Play does not work on most pages'. af's Play audit wf_99782352-a93 (root causes C, D and E, the duplication map) and the oscilla-b0 Total Coherence audit of main 68b117f3 (seqPlaying has 3 writers; 4 replaceState writers outside navigation.js). af's critique B2 (mesh, 2026-11-05) names the bus one of the two unminted core items. Already filed on origin/chore/plan-nav-folds and cross-referenced here, not re-derived: C030 (a visible Play on every workspace), C032 (the status-bar Play acts on the owner on screen), C034 (re-check of contradicted done stamps), K181, K182 and K184."
+scope:
+  - "src/js/ui/output-owner.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/ui/keys/clients.js"
+  - "src/js/main.js"
+  - "src/js/sequencer/editor.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/synth/ui.js"
+  - "src/js/synth/studio-sink.js"
+  - "src/js/synth/view/xy-tab.js"
+  - "src/js/studio/riffs/audition.js"
+  - "src/js/studio/transport.js"
+  - "src/js/audio/lab-play-options.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/ui/navigation.js"
+  - "tests/unit/bus.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C036"
+acceptance_criteria:
+  - "Fail-first: tests/unit/bus.test.mjs fails on the merge base: it starts each of the 8 players and asserts that each claims through the bus (the notes path and the audition claim nothing or claim three times today)."
+  - "A static scan over src/js finds no start of sound outside the bus's claim (engine.play, noteOn, studioPlay, editor.play and the Synth arm call claim first), no window-level keydown handler for Escape outside the key registry, no pagehide/visibilitychange stop outside the bus, and no history.replaceState outside src/js/ui/navigation.js; a mutation re-adding one of each fails."
+  - "cmp.seqPlaying, studioPlaying, synth.armed, isSounding and anySounding are reads of the bus's one 'playing' state; a unit test asserts the state changes in the same event as claim and release (no 150 ms poll)."
+  - "tests/browser/app.cjs plays each player, presses Escape, the status-bar stop and hides the page, and waits with until() (named deadlines) for the bus to report nothing playing and the engine census 0, in Chromium, Firefox and WebKit through the suite harness."
+  - "Risk named: K184 (a minimum gate on the shared note path, origin/chore/plan-nav-folds) and K178 (one Keys node, origin/feat/k178-*) change the same note path; whichever lands second rebases onto the bus's claim, and one lane owns src/js/midi/* meanwhile."
+  - "Guarded paths (src/js/audio/*, src/js/studio/*, src/js/synth/*): prismatic-majordomus-98 writes the verdict; the src/js/ui/* and main.js part is judged by the second reviewer seat of Q091 once R031 lands. Lane: dev-53 with oscilla-26 for the Studio part."
+validation:
+  - "node --test tests/unit/bus.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -1,0 +1,29 @@
+id: C038
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "Every osc:ui and osc:range event is declared once and has a listener"
+slug: every-osc-ui-and-osc-range-event-is-declared-and-heard
+priority: p2
+profile: implementation
+objective: "Lands as fix(events). At main 68b117f3 there is no catalogue of the osc:ui and osc:range custom events, and osc:range is dispatched with no listener (oscilla-b0 coherence audit, slice D). After: one new module, src/js/ui/events.js, declares every osc:* event with its detail shape and its listeners; a unit scan finds every dispatchEvent(new CustomEvent('osc:...')) and addEventListener('osc:...') in src/js and fails on an event dispatched without a declared listener or listened to without a dispatcher."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice D (uncovered): an event nobody hears is a view that cannot describe what sounds."
+scope:
+  - "src/js/ui/events.js"
+  - "src/js/ui/workbench.js"
+  - "tests/unit/osc-events.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/osc-events.test.mjs fails on the merge base naming osc:range (dispatched, no listener)."
+  - "Every osc:* event is declared once with its detail shape; a mutation that dispatches an undeclared event, or removes the only listener of one, fails."
+  - "osc:range either gains the listener its dispatcher assumes (asserted by its effect) or its dispatch is removed with the reason in the pull request."
+  - "Not a guarded path unless the scope widens to src/js/studio/* or src/js/audio/*; then prismatic-majordomus-98 writes the verdict. Lane: dev-53."
+validation:
+  - "node --test tests/unit/osc-events.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

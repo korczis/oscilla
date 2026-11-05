@@ -1,0 +1,30 @@
+id: E047
+milestone: M046
+serves:
+  - "engineering-integrity#copied-facts-held"
+title: "The claims ledger says what ships: midi-support-state is promoted, the safety limits and Nyquist get claim ids, and notes quote real test titles"
+slug: the-claims-ledger-says-what-ships
+priority: p2
+profile: implementation
+objective: "Lands as fix(claims). af's Hardening synthesis, claims without a deciding test: midi-support-state (docs/CLAIMS.yaml:804) is status planned with test '-' although it ships (src/js/midi/support.js, tests/unit/midi/support.test.mjs, tests/browser/midi.cjs in test:browser); the output ceiling and limiter, the hard time limit, the 30 s loop cap and the continuous-permission persistence rule (README.md:676-700) and the Nyquist statement (README.md:711-716) are tested (readout-states-ceiling.test.mjs:172-183, c011-safety-limits.test.mjs:72-514, app.cjs:1992, readout-states-sweep.test.mjs:30-41) but have no claim id; no-fake-science.v2.md:70-72 still calls persistence 'Not machine-checked'; and D8 (knowledge-integrity.test.mjs:1000-1062) resolves browser check ids only, so the 12 Studio claims sharing v31-studio-model.test.mjs (45 tests) quote titles nobody checks. After: midi-support-state is guaranteed with its implementation and tests; five claims name the ceiling, the time limit, the loop cap, persistence and Nyquist with their tests; the stale rule sentence is corrected; knowledge-integrity resolves a unit test title a claim's note quotes and flags a planned claim whose issue (V501 here) is done. This touches docs/CLAIMS.yaml outside the per-milestone closing issues because the claims belong to closed milestones (M045, M090); it changes no intent file."
+why: "af's Hardening proof-chain synthesis (claims hygiene, smallest slice 7), folded in by af's critique B2 (mesh, 2026-11-05). Related: V501 (MIDI support state), C011 (safety limits)."
+scope:
+  - "docs/CLAIMS.yaml"
+  - "tests/unit/knowledge-integrity.test.mjs"
+  - ".ai/repo/rules/project/no-fake-science.v2.md"
+  - "tests/README.md"
+depends_on:
+  - "E049"
+acceptance_criteria:
+  - "Fail-first: a fixture claim whose note quotes a unit test title that does not exist is refused by knowledge-integrity; on the merge base it passes."
+  - "midi-support-state is status guaranteed with implementation and test; a planned claim whose named issue is DONE fails a check."
+  - "Claims for the output ceiling, the hard time limit, the loop cap, continuous persistence and Nyquist exist, each naming its test file and quoted test title, and each resolves."
+  - "no-fake-science.v2.md no longer says persistence is not machine-checked."
+  - "Not a guarded path under v2; in scope of R033 once it lands. Lane: af."
+validation:
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

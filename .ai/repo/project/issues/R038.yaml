@@ -1,0 +1,27 @@
+id: R038
+milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
+title: "The cadence measures a change's age by when it reached main under merge-commit landing, and a merge subject is not a patch"
+slug: the-cadence-measures-age-under-merge-commit-landing
+priority: p3
+profile: implementation
+objective: "Lands as fix(release). Hardening D6 (P3, observed): scripts/release-cadence.mjs:61 uses each commit's committer date, assuming squash merges (:7-8), and merge subjects count as patch (release-analyze.mjs:53-54, 59). Since merge-commit landing (2026-10-29) a feature commit authored 30 hours before its merge makes the cadence overdue the moment it lands. After: the age of a releasable change is the committer date of the first-parent merge that brought it to main, and a merge commit's level is the highest level of the commits it brings."
+why: "af's Hardening proof-chain synthesis, defect D6."
+scope:
+  - "scripts/release-cadence.mjs"
+  - "scripts/release-analyze.mjs"
+  - "tests/unit/release-cadence.test.mjs"
+depends_on:
+  - "R035"
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-cadence.test.mjs lands a merge 1 hour ago that carries a 30-hour-old feat commit and expects overdue false; on the merge base it is overdue."
+  - "release:analyze gives the merge the level of the feat it carries (minor), asserted in the same file."
+  - "Guarded (scripts/release-*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/release-cadence.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

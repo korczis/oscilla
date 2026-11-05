@@ -1,0 +1,29 @@
+id: E046
+milestone: M046
+serves:
+  - "engineering-integrity#main-red-shows"
+title: "Main checks run every gate job on main's merged tree and gate the release on it"
+slug: main-checks-run-every-gate-job-on-mains-merged-tree
+priority: p1
+profile: implementation
+objective: "Lands as fix(ci). Hardening gap 5: branch protection is strict false (release-flow-complete.v1.md:217), and .github/workflows/main-checks.yml:9-18 runs only the unit, knowledge and browser jobs and does not gate: engine, suites (DSP, labs, sequencer), measure, studio, visual and census never run on main's combined tree. Two pull requests green alone can merge into a red main that nothing reports until a release. After: main-checks runs every job of the pull request gate's needs that is not PR-only (fail-first, review-verdict and changes are PR-only), with the same bounds and pins (project.ci-bounded); its summary names each failed job; and release:prepare refuses while the latest main-checks run of the commit it prepares is not green."
+why: "af's Hardening proof-chain synthesis, findings 5-6 and smallest slice 9; af's critique B2 (mesh, 2026-11-05): 'main-checks never runs engine/suites/measure/studio/visual/census on main and does not gate'."
+scope:
+  - ".github/workflows/main-checks.yml"
+  - "tests/unit/main-checks.test.mjs"
+  - "scripts/release-prepare.mjs"
+  - "tests/unit/release-prepare.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/main-checks.test.mjs asserts main-checks covers every job in ci.yml's gate needs that is not PR-only; it fails on the merge base naming engine, suites, measure, studio, visual and census."
+  - "Every added job is bounded, pinned and retried as tests/unit/ci-workflows.test.mjs requires."
+  - "release:prepare exits non-zero with a message naming the run when the latest main-checks run for its commit is not success; a fixture test proves it."
+  - "Guarded (.github/*, scripts/release-*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/main-checks.test.mjs tests/unit/ci-workflows.test.mjs tests/unit/release-prepare.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

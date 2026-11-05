@@ -1,0 +1,27 @@
+id: K186
+milestone: M069
+serves:
+  - "connected-instrument#session-and-midi"
+title: "An explicit Apply target wins over the panel module the patch came from, or the refusal names the panel"
+slug: an-explicit-apply-target-wins-over-the-panel-module
+priority: p2
+profile: implementation
+objective: "Lands as fix(patches). src/js/studio/patches.js:441-443 resolves a patch node onto the node of the same panel ref first, so an explicit target is ignored when a panel ref exists: applying an FM patch with target fm-1 lands on semi-mono-1-fm. After: an explicit target of a compatible type wins and the mapping is {fm: fm-1}; an incompatible one is refused with a reason that names the target and the panel module, and the model and history stay unchanged (project.typed-ports)."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice 06, probe reproduced by a skeptic. K102 (BLOCKED, the one patch browser) owns the browser; its blocker forbids this fix inside it, so it is filed here under the same criterion."
+scope:
+  - "src/js/studio/patches.js"
+  - "tests/unit/patch-browser.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/patch-browser.test.mjs applies an fm patch with target fm-1 on a document holding semi-mono-1-fm and fm-1 and expects onto {fm: fm-1}; on the merge base onto names semi-mono-1-fm."
+  - "With no target the panel-ref resolution is unchanged (the existing patch-browser cases pass); an incompatible target is refused naming the target and the panel module, with the model unchanged."
+  - "Guarded path (src/js/studio/*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/patch-browser.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

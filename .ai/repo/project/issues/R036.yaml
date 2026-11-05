@@ -1,0 +1,27 @@
+id: R036
+milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
+title: "A release record binds the gate's CI run and the Pages deployment that verified it"
+slug: a-release-record-binds-the-gate-run-and-the-deployment
+priority: p2
+profile: implementation
+objective: "Lands as fix(release). Hardening D4 (P2, observed): gatherRecord reads only git and gh release (scripts/release-record.mjs:487-573); the CI run id appears only in a log line (release-publish.mjs:324-325, 452) and .ai/repo/deployments/ holds only its README. After: release:record writes the gate verdict's CI run id and conclusion for the tag commit and the Pages run id that verified the release, and refuses when no green receipt exists for the tag commit. If the release/v1 schema has no field for them, the fields go in a sidecar the record names, and a Majordomus schema change is filed as a Majordomus issue rather than worked around."
+why: "af's Hardening proof-chain synthesis, defect D4 and smallest slice 6."
+scope:
+  - "scripts/release-record.mjs"
+  - "scripts/release-publish.mjs"
+  - "tests/unit/release-record.test.mjs"
+depends_on:
+  - "R034"
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-record.test.mjs records a release whose Release and asset match but with no green receipt for the tag commit and expects a throw; on the merge base it records."
+  - "A recorded release names its gate run id and conclusion and its Pages run id; release:record --check compares them with what GitHub serves."
+  - "Guarded (scripts/release-*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/release-record.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

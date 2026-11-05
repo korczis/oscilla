@@ -1,0 +1,37 @@
+id: R032
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "release:prepare generates the About station from package.json and release:analyze into a data file; no release hand-edits src/index.html"
+slug: release-prepare-generates-the-about-station
+priority: p1
+profile: implementation
+objective: "Lands as feat(release). Implements Q091 part (3). Every release pull request hand-edits the About timeline in src/index.html (for v3.19.0: d9ee0944 'docs(about): the 3.19 station' and a size-cap raise, 3d1dfc04); no script writes it. After: the stations live in one data file (src/js/data/about-stations.json), the timeline markup is rendered from it at build time, and release:prepare appends the new station from package.json's version and release:analyze's level and its first-parent subjects, writing nothing else under src/. A check mode (release:prepare -- --check-station) recomputes the file from the same inputs so the base branch's copy can judge a release pull request (R031)."
+why: "It also serves ui-current#about-tells-the-project (M054), which a release-engineering issue cannot name from M011. Q091 part (3) (af with b0, 2026-11-05): with v3 guarding every src path, release pull requests would need a verdict for a hand edit; generating the station keeps them exempt only where the base copy reproduces the bytes. oscilla-b0 Total Coherence audit, slice B (uncovered: release PRs hand-edit the About timeline)."
+scope:
+  - "scripts/release-prepare.mjs"
+  - "scripts/release-analyze.mjs"
+  - "src/js/data/about-stations.json"
+  - "src/index.html"
+  - "src/js/ui/about.js"
+  - "scripts/build.mjs"
+  - "tests/unit/release-about-station.test.mjs"
+  - "tests/unit/about-current.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "Q091"
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-about-station.test.mjs runs release:prepare's station step on a fixture repository with version 9.9.0 and a feat commit and expects about-stations.json to gain the 9.9 station; on the merge base no such step exists."
+  - "The rendered About timeline in dist/index.html is byte-identical before and after the move for every existing station (tests/unit/about-current.test.mjs and the visual reference unchanged)."
+  - "--check-station exits non-zero when the file differs from the generator's output, and zero when equal; a hand-edited station fails it."
+  - "project.about-names-current-release holds: the current station is the package.json version."
+  - "Guarded (scripts/release-*, scripts/build*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/release-about-station.test.mjs tests/unit/about-current.test.mjs tests/unit/about.test.mjs"
+  - "npm run build:check"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

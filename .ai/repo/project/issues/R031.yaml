@@ -1,0 +1,37 @@
+id: R031
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "project.review-verdict v3: every tracked src path is guarded fail-closed, an allowance needs a reason and only shrinks, and a second seat judges screens"
+slug: review-verdict-v3-every-tracked-src-path-guarded-fail-closed
+priority: p0
+profile: implementation
+objective: "Lands as feat(review). Implements Q091 parts (1), (3) and (4). project.review-verdict v2 (scripts/review-verdict.mjs:76-112) guards a hand-written prefix list, so at main 68b117f3 src/index.html, src/js/main.js, src/styles/ (13/13), 72 of the 84 src/js/ui files, src/js/core except storage and safety, and all of charts, labs, visualization, midi, sequencer and js/data merge with no independent verdict, and a new src path is unguarded the moment it is created (fails open). After: v3 guards every tracked path under src/ unless an allowance entry in the rule's data file names it with a reason; the allowance only shrinks, by its git history (as tests/unit/source-size-budget.test.mjs judges caps); every v2 guarded path outside src/ stays guarded; a chore(release) pull request is exempt for the About station file only when its diff there equals the generator's output (R032) re-run by the base branch's copy; review-verdict.v2.md is deprecated and v3.md states the scope, the seats (prismatic-majordomus-98: CI, release, rules, review-verdict and Studio; the second seat: src/* screens and routes; oscilla-21: synth values) and the expected load (4-6 verdicts a day)."
+why: "Q091 (af with b0, 2026-11-05), on the owner's words 'kazdy jeden screen / kazda jedna route musi byt reviewed'. oscilla-b0 Total Coherence audit (slice B, review-guard gap 1) and af's Hardening proof-chain synthesis (finding 1, smallest slice 2). E005 (M046) carries the earlier open question; this answers it. R029 hardens the bypasses of v2 and lands first."
+scope:
+  - "scripts/review-verdict.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - ".ai/repo/rules/project/review-verdict.v2.md"
+  - ".ai/repo/rules/project/review-verdict.v3.md"
+  - ".ai/repo/rules/project/review-verdict.allowance.json"
+  - ".github/workflows/ci.yml"
+  - "CLAUDE.md"
+  - "AGENTS.md"
+depends_on:
+  - "Q091"
+  - "R029"
+  - "R032"
+acceptance_criteria:
+  - "Fail-first: tests/unit/review-verdict.test.mjs runs the guard over a fixture diff touching src/js/ui/studio/x.js, src/index.html and a new file src/js/newdir/y.js with no verdict and expects a refusal naming each; on the merge base all three pass."
+  - "A test enumerates git ls-files src and asserts every path is guarded or named in the allowance with a non-empty reason; a mutation that adds an allowance entry without a reason, or adds one in a later commit (the allowance rising against its previous commit), fails."
+  - "Every path v2 guards outside src/ is still guarded (the v2 list is a subset of v3's outside src/), asserted by a test."
+  - "A chore(release) pull request whose only change under src/ is the About station file passes only if that file equals the generator's output from the base branch's copy; a hand edit of the station fails."
+  - "review-verdict.v2.md is status deprecated; v3.md names its enforcement (project.rules-name-their-enforcement) and the reviewer seats; CLAUDE.md's rule line names v3."
+  - "Guarded (.github/*, scripts/review-verdict.mjs, tests/unit/review-verdict.test.mjs): judged by v2's list from the base branch, so it needs a verdict from prismatic-majordomus-98, who builds none of it. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/review-verdict.test.mjs tests/unit/knowledge-integrity.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -1,0 +1,28 @@
+id: E049
+milestone: M046
+serves:
+  - "engineering-integrity#no-inert-surfaces"
+title: "Every blocking rule names a mutation or fixture test that proves its check, or sits in an allowance that only shrinks"
+slug: every-blocking-rule-names-a-mutation-proof
+priority: p1
+profile: implementation
+objective: "Lands as test(rules). Hardening gap 3: ruleEnforcementProblems (tests/unit/knowledge-integrity.test.mjs:338-395) checks only that a rule's enforcement exists and that CI runs it, never that a mutation proves it. af's rule-to-mutation table at main 6d5efa89 finds five blocking rules not mutation-proven: a-phone-sounds (a regex on live files, rule-a-phone-sounds.test.mjs:9-22), typed-ports and no-silent-feedback (negative input only, v31-studio-model.test.mjs), audio-engine-discipline (a one-off freeze run; no static scan keeps node creation inside the engine) and about-names-current-release (core checks on the live tree only, about.test.mjs:124, 204). After: each blocking rule's front matter or Enforcement section names at least one mutation or fixture test, and knowledge-integrity fails a blocking rule that names none unless it is in a ratchet allowance whose entries only fall by their git history; the allowance starts with exactly those five. The model is this criterion's own: each decidable check has a mutation test and its allowance only shrinks, extended from no-inert-surfaces to every blocking rule."
+why: "af's Hardening proof-chain synthesis, finding 3 and smallest slice 4; the Rule -> enforcement -> mutation table. af's critique B2 (mesh, 2026-11-05) folds it into this plan."
+scope:
+  - "tests/unit/knowledge-integrity.test.mjs"
+  - "tests/unit/rule-mutation-allowance.json"
+  - ".ai/repo/rules/project/"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a fixture blocking rule whose only test asserts on the live tree is refused by knowledge-integrity; on the merge base it passes."
+  - "The allowance holds exactly a-phone-sounds, typed-ports, no-silent-feedback, audio-engine-discipline and about-names-current-release at landing, each with a reason; a mutation that adds an entry, or that removes a rule's mutation test while it is outside the allowance, fails."
+  - "Every other blocking rule names its mutation or fixture test, and the named test file and test title exist."
+  - "Not a guarded path under v2 (knowledge-integrity comes into scope with R033); prismatic-majordomus-98 critiques it as owner of the rules seat. Lane: af."
+validation:
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
