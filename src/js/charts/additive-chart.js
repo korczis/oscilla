@@ -3,6 +3,8 @@
 // Height = gain in dB on a 0 … -80 dB axis; a harmonic at or above the running context's
 // Nyquist frequency (audible === false) is drawn hatched because the browser drops it.
 // Click a bar (or use the arrow keys on the focused host) to select a harmonic.
+// Bypassed (the additive switch off, U013): the same bars, what enabling would play, at reduced
+// opacity and labelled BYPASSED, as the Filter chart does; the host's name says so too.
 
 import { formatDbTick, linearTicks } from './axes.js';
 import { chartTheme, withAlpha, canvasFont, fitCanvas, observeSize } from './chart-theme.js';
@@ -18,9 +20,21 @@ export function barSlotAt(x, x0, w, count) {
 }
 
 /**
+ * The host's accessible name for the chart state: on, the harmonics it shows; off, that they do
+ * not sound (the instrument plays its plain oscillator waveform).
+ */
+export function additiveChartLabel(enabled, count = DEFAULTS.count) {
+  const base = `Harmonic amplitudes 1 to ${count}`;
+  return enabled ? base
+    : `${base}; additive synthesis is bypassed, the oscillator plays its plain waveform`;
+}
+
+/**
  * createAdditiveChart(host, { onSelect(n), onAdjust(n, deltaDb), minDb, maxDb, count })
  *   chart.setBars(bars, selectedN)   bars: visualCoefficients() output
  *   chart.getBars() → [{ n, gainDb, audible }] as drawn (tests)
+ *   chart.setEnabled(on)             off: drawn bypassed, the host's aria-label names it
+ *   chart.isEnabled() → boolean      (tests)
  *   chart.refreshTheme(), dispose()
  */
 export function createAdditiveChart(host, options = {}) {
@@ -31,6 +45,7 @@ export function createAdditiveChart(host, options = {}) {
   let theme = chartTheme();
   let bars = [];
   let selected = 1;
+  let enabled = true;
   let size = { w: 0, h: 0 };
 
   function plot() {
@@ -69,6 +84,8 @@ export function createAdditiveChart(host, options = {}) {
     }
     const slot = p.w / o.count;
     const bw = Math.max(2, Math.min(10, Math.round(slot * 0.44)));
+    // Bypassed: the bars keep their values (what enabling would play) at reduced opacity.
+    ctx.globalAlpha = enabled ? 1 : 0.4;
     ctx.textAlign = 'center';
     for (let i = 0; i < o.count; i++) {
       const n = i + 1;
@@ -103,6 +120,13 @@ export function createAdditiveChart(host, options = {}) {
       ctx.fillStyle = isSel ? theme.text : theme.textMuted;
       ctx.fillText(String(n), cx, p.y + p.h + LABEL_DY);
     }
+    ctx.globalAlpha = 1;
+    if (!enabled) {
+      ctx.fillStyle = theme.textMuted;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillText('BYPASSED', p.x + p.w - 2, p.y + 2);
+    }
   }
 
   canvas.addEventListener('click', (e) => {
@@ -134,6 +158,16 @@ export function createAdditiveChart(host, options = {}) {
     },
     getBars() {
       return bars.map((b) => ({ ...b }));
+    },
+    setEnabled(on) {
+      const next = !!on;
+      host.setAttribute('aria-label', additiveChartLabel(next, o.count));
+      if (next === enabled) return;
+      enabled = next;
+      draw();
+    },
+    isEnabled() {
+      return enabled;
     },
     refreshTheme() {
       theme = chartTheme();

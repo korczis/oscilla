@@ -130,7 +130,11 @@ export function mount(rootEl, adapter) {
 
   function render() {
     const bars = coefficients();
-    if (chart) chart.setBars(bars, selected);
+    if (chart) {
+      // U013: the switch off draws the bars bypassed (they do not play), on or restored alike.
+      chart.setEnabled(q('#osc-add-enable') ? enable.value : true);
+      chart.setBars(bars, selected);
+    }
     const p = partials[selected - 1];
     setField(el.harmonic, String(selected));
     // The fields show the level that plays (after the peak normalisation), like the bars.

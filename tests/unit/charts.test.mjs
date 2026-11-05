@@ -375,6 +375,21 @@ test('additive: bar slots, default table, presets', () => {
   assert.deepEqual(keep, custom);
 });
 
+// U013: the Additive chart names its state. Imported dynamically so that, on a tree without the
+// export, this test fails alone and the rest of the file still runs.
+test('additive: the chart label says when additive synthesis is bypassed (U013)', async () => {
+  const m = await import('../../src/js/charts/additive-chart.js');
+  assert.equal(typeof m.additiveChartLabel, 'function',
+    'additive-chart.js exports additiveChartLabel');
+  assert.equal(m.additiveChartLabel(true), 'Harmonic amplitudes 1 to 10');
+  const off = m.additiveChartLabel(false);
+  assert.notEqual(off, m.additiveChartLabel(true));
+  assert.match(off, /^Harmonic amplitudes 1 to 10/);
+  assert.match(off, /additive synthesis (is )?bypassed/i);
+  assert.match(off, /plain waveform/);
+  assert.equal(m.additiveChartLabel(true, 8), 'Harmonic amplitudes 1 to 8');
+});
+
 test('bio labels use the sourced values', () => {
   const human = HEARING_RANGES.find((r) => r.id === 'human');
   assert.equal(rangeLabel(human), '31 Hz – 17.6 kHz');
