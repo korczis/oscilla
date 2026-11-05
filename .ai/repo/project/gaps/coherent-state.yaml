@@ -7,7 +7,7 @@ observations:
     statement: "The Total Coherence pack says 46 census surfaces have no deep link; measured 47 (25 subviews, 22 dialogs) at all five census commits, each with a deepLinkWhyNot. The pack's figure is refuted. The census holds 94 surfaces (workspace 13, panel 20, subview 32, dialog 22, route 7); 8 have no test; the debt ratchet counts the union, 47 (U075)."
     source: "file:tests/unit/surface-census.json"
   - id: census-unreasoned-links-refuted
-    statement: "Refuted: that the 8 untested and 47 unlinked census entries have no issue that decides them or records why. Every unlinked entry carries a deepLinkWhyNot from 8 distinct reasons (22 dialogs share one, U078), the census refuses a null deepLink without a reason of five words or more (surface-census.test.mjs:308-313), and each untested entry names a plan issue that is not DONE."
+    statement: "Refuted: that the 8 untested and 47 unlinked census entries have no issue that decides them or records why. Every unlinked entry carries a deepLinkWhyNot from 8 distinct reasons (22 dialogs share one; U075 makes each state its own), the census refuses a null deepLink without a reason of five words or more (surface-census.test.mjs:308-313), and each untested entry names a plan issue that is not DONE."
     source: "test:tests/unit/surface-census.test.mjs"
   - id: census-keyboard-and-records-refuted
     statement: "Refuted in part: '#osc-keyboard is a surface the derivation does not see' (it is route:keyboard, deepLink '#m=playground&kbd=1'; only the dock element has no panel entry) and 'the records route lists only exp' (DOMAIN_KEYS.records holds exp, def and finding; only the sample deepLink uses exp)."
@@ -19,7 +19,7 @@ observations:
     statement: "Refuted in part: 'STORAGE_KEYS.theme is dead' (vocabulary.test.mjs:84 pins it and storage-inventory.test.mjs:207 uses it as a mutation probe, so removing it is a test change) and 'browser storage only through core/storage.js' (the storage inventory declares ui/app.js as an owner). No issue is planned for either."
     source: "test:tests/unit/storage-inventory.test.mjs"
   - id: synth-insert-announced
-    statement: "Refuted: the Synth workspace does not insert its panel silently; it announces it (SYNTH_TEXT.inserted/took) as #329 intended. The finding is kept only for arming the unsaved guard on a plain visit, decided by Q093 and planned as C039."
+    statement: "Refuted: the Synth workspace does not insert its panel silently; it announces it (SYNTH_TEXT.inserted/took) as #329 intended. The finding is kept only for arming the unsaved guard on a plain visit, decided by Q093 and planned as C025 (on main; 96daa67b's C039 duplicated it and was removed)."
     source: "file:src/js/synth/ui.js"
   - id: measure-repeat-chain-ui-driven
     statement: "Refuted in scope: the Measure-side save, Repeat and provenance.repeatOf chain is UI-driven at tests/browser/v3-ui.cjs:485-505. The journey gap is narrowed to the Experiments-side Repeat and select (C035); K041 and K168 do not cover it (their titles are the compare chart presentation and the structured graph summary)."
@@ -260,5 +260,5 @@ work:
     serves:
       - saved-state-is-honest
     why: "A visit arms the unsaved-work guard."
-    evidence: "node --test tests/unit/synth-visit-baseline.test.mjs"
-    issue: "C039"
+    evidence: "node --test tests/unit/synth-visit-clean.test.mjs"
+    issue: "C025"

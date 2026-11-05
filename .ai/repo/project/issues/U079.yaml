@@ -2,23 +2,24 @@ id: U079
 milestone: M054
 serves:
   - "ui-current#ui-audited"
-title: "The browser census opens every dialog and every non-Studio tab it lists and asserts each is visible and named"
+title: "The browser census opens every dialog and non-Studio tab through a declared opener, and reachedFrom is checked against those openers"
 slug: the-browser-census-opens-every-dialog-and-non-studio-tab
 priority: p2
 profile: implementation
-objective: "Lands as test(browser). At main 68b117f3 tests/browser/surface-census.cjs never opens a dialog or a tab outside the Studio, so the 22 dialogs and the Analyzer, mic, phase, bio and presets subviews are listed but never shown by the census. After: for every census entry of kind dialog and subview the suite opens it through its reachedFrom opener (a click, never an internal call), waits with until() for it to be visible with its accessible name, and closes it; an entry that cannot be opened fails naming it."
-why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice A (uncovered: the browser census never opens dialogs or non-Studio tabs)."
+objective: "Lands as test(browser). Line numbers at origin/main a19f1ff6. tests/browser/surface-census.cjs never opens a dialog or a tab outside the Studio, so the 22 dialogs and the Analyzer, mic, phase, bio and presets subviews are listed but never shown; the census has no opener field, and reachedFrom on dialogs and routes is never checked (osc-dlg-help omits synth; af counts 4-5 dialogs whose reachedFrom disagrees with the markup, not one). After: every dialog and subview entry of tests/unit/surface-census.json gains an opener (a [data-osc] or #id selector of the control that opens it, per reachedFrom workspace where it differs); the unit test checks each opener exists in src/index.html and that reachedFrom equals the workspaces whose shown markup holds an opener (a workspace the entry omits fails, one it names with no opener fails); the suite opens each entry by clicking its opener, waits with until() for it to be visible with its accessible name, and closes it. Surfaces that need data are seeded through the UI: osc-dlg-exp-delete and the experiment dialogs through the Experiments import control with the existing fixture (tests/browser/v3-ui.cjs's fixtures.white.json), never through page.evaluate on window.OSCILLA. From U078 (removed in favour of af's U073 for the status-bar menu; #osc-sb-actions is a role=group, src/index.html:3124, not a menu): the reachedFrom check."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice A (the browser census never opens dialogs or non-Studio tabs; reachedFrom never checked). af's critique of 96daa67b (AMEND 21-22): the census has no opener field, the fixture seeding and the CI bound were unnamed, the suite needs its own page.evaluate scan, and 4-5 dialogs fail reachedFrom."
 scope:
   - "tests/browser/surface-census.cjs"
   - "tests/unit/surface-census.test.mjs"
+  - "tests/unit/surface-census.json"
   - "tests/README.md"
 depends_on:
-  - "U078"
+  - "U076"
 acceptance_criteria:
-  - "Fail-first: a unit check asserts every dialog and subview entry is opened by surface-census.cjs (by its locator); it fails on the merge base."
-  - "In Chromium, Firefox and WebKit every dialog and subview entry opens by a click, shows its accessible name and closes, through tests/browser/lib/suite.cjs with named until() deadlines and nothing added to tests/browser/timing-baseline.json."
-  - "No page.evaluate call reaches window.OSCILLA.app to open a surface (the C035 scan holds)."
-  - "Not a guarded path under v2; tests/browser/* comes into scope with R033. Lane: oscilla-21."
+  - "Fail-first: the unit check fails on the merge base because no dialog or subview entry has an opener, and its reachedFrom case names every dialog whose reachedFrom disagrees with the openers in the markup (osc-dlg-help and synth among them; the pull request lists all it finds)."
+  - "In Chromium, Firefox and WebKit every dialog and subview entry opens by a click on its opener, shows its accessible name and closes, through tests/browser/lib/suite.cjs with named until() deadlines and nothing added to tests/browser/timing-baseline.json; the added time keeps the browser gate's 'npm run test:browser' step within its 45-minute bound (.github/workflows/ci.yml:345-351, job bound 65), with the measured WebKit time in the pull request body."
+  - "Its own scan: tests/unit/surface-census.test.mjs reads tests/browser/surface-census.cjs and fails on any page.evaluate that reaches window.OSCILLA.app or window.OSCILLA.experiments to open or seed a surface (the C035 pattern); a mutation that adds one fails."
+  - "Not a guarded path under v2; R033 guards tests/browser files a rule's enforcement names (project.suite-harness, project.bounded-test-timing), and a critique from prismatic-majordomus-98 is asked for. Lane: oscilla-21."
 validation:
   - "node --test tests/unit/surface-census.test.mjs"
   - "node tests/browser/surface-census.cjs"
