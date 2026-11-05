@@ -24,6 +24,7 @@ acceptance_criteria:
   - "After each toggle of every collapse and fullscreen button in every workspace, its accessible name, its aria-expanded or aria-pressed and its icon's href agree with the region's state; a mutation that drops the name binding from collapseButton fails."
   - "At 1536x1024, 768x1024 and 390x844 no element with role=tabpanel has client rects while its tablist has none."
   - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml. The Studio stylesheet is screen chrome, not src/js/studio/*."
+  - "Controls: the collapse and fullscreen chrome are consumers of M123's one app shell (G026) and switch (G023; component-system#one-implementation-per-family, M123 on origin/chore/plan-unified-controls); the true-state fix lands in that implementation, never in a parallel one. Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock holds (owner's words relayed by af, 2026-11-05: 'vsechny komponenty abstrahuj, reuse, dry, parametrizuj')."
 validation:
   - "node tests/browser/chrome-state.cjs"
   - "npm test"

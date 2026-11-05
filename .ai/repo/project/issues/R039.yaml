@@ -12,11 +12,13 @@ scope:
   - "scripts/verify-deploy.mjs"
   - "scripts/release-publish.mjs"
   - "tests/unit/release-provenance.test.mjs"
+  - "tests/unit/release-publish.test.mjs"
 depends_on:
   - "R034"
 acceptance_criteria:
   - "Fail-first: tests/unit/release-provenance.test.mjs calls checkLive with an untagged page while the commit is tagged, in strict mode, and expects a problem; on the merge base no strict mode exists and the page is accepted."
   - "Without --strict the main-head deployment check behaves as today (a post-release build shows its distance label)."
+  - "finishLine (scripts/release-publish.mjs:228-231) emits the verify-command with --strict, asserted by the exact-string case at tests/unit/release-publish.test.mjs:729, which changes in the same pull request (af's critique of 96daa67b, AMEND 9)."
   - "Guarded (scripts/verify-deploy.mjs, scripts/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
 validation:
   - "node --test tests/unit/release-provenance.test.mjs"

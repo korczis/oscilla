@@ -1,0 +1,43 @@
+id: C050
+milestone: M090
+serves:
+  - "coherent-state#stops-are-immediate"
+title: "The playback bus, slice 2: Stop, Escape, the status-bar stop and page hide take one stopAll path"
+slug: one-stop-escape-and-page-hide-path
+priority: p0
+profile: implementation
+objective: "Lands as fix(bus). Split from C037 by af's critique of 96daa67b (BLOCKING 5). Line numbers at origin/main a19f1ff6. Stop handlers live in many places: src/js/main.js:672 (blur releases Hold), :674-681 (hide: measureAbort('pagehide') then cmp.stop(), on visibilitychange and pagehide); src/js/ui/studio/workspace.js:487 (a window keydown) and :531-532 (visibilitychange and pagehide hide); src/js/midi/ui.js:111-116 (visibilitychange, blur, pagehide and an Escape keydown silence MIDI notes); src/js/midi/keyboard-ui.js:174-192 (keydown, blur, pagehide and visibilitychange release the on-screen keys); src/js/synth/ui.js:834-835 (a window Escape while on Synth); src/js/ui/keys/dispatcher.js:96-99 and src/js/ui/keys/clients.js:20-24 (page.escape calls measureAbort('escape')); src/js/ui/measure/run.js:143-164 (the user's Stop); src/js/measurement/capture.js:368-376 (the capture's own pagehide and visibility abort). Listeners that are not stops stay and are allow-listed with their reason: src/js/ui/experiments.js:514 (a visibility refresh of the list), src/js/ui/app.js:293-298 (Escape closes the nav and menus), src/js/charts/frame-loop.js:21 and src/js/visualization/p5-host.js:156 (render pauses). After: the bus exposes stopAll(reason); Escape is one key-registry binding, page hide one listener pair, and the status-bar stop one action, each calling stopAll, which stops every owner from its live state in the same event; the capture still aborts on pagehide by itself (spec §169, capture.js:368-376 stays), and the MIDI and on-screen-key releases become owners' release callbacks the bus calls."
+why: "af's critique of 96daa67b (BLOCKING 5): the stop scan of 96daa67b would fail on handlers outside its scope; its list is completed here with the non-stop listeners named. coherent-state#stops-are-immediate; C034 expects 'one Stop/Escape/hide path' as its own slice."
+scope:
+  - "src/js/core/output-bus.js"
+  - "src/js/main.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/midi/ui.js"
+  - "src/js/midi/keyboard-ui.js"
+  - "src/js/synth/ui.js"
+  - "src/js/ui/keys/dispatcher.js"
+  - "src/js/ui/keys/clients.js"
+  - "src/js/ui/measure/run.js"
+  - "src/js/measurement/capture.js"
+  - "tests/unit/stop-path.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C037"
+acceptance_criteria:
+  - "Fail-first, on seams of the merge base: tests/unit/stop-path.test.mjs scans src/js for window- or document-level keydown (Escape), pagehide and visibilitychange listeners and fails on every one that stops sound outside the key registry and the bus, naming main.js:680-681, workspace.js:487 and :531-532, midi/ui.js:111-116, midi/keyboard-ui.js:174-192 and synth/ui.js:834; the allow-list (experiments.js:514, app.js:293-298, frame-loop.js:21, p5-host.js:156, capture.js:368-376) is in the test with a reason per entry, and a mutation that re-adds a stop listener fails."
+  - "With the instrument, the sequencer, the Studio, the Synth and held MIDI notes sounding, Escape, the status-bar stop and a page hide each leave the bus with no owner and the engine census 0 in the same event (unit, fake clock, no 150 ms window)."
+  - "The capture still aborts on pagehide when the bus is bypassed (capture.js's own listener), asserted in tests/unit/stop-path.test.mjs."
+  - "tests/browser/app.cjs plays each player, presses Escape, the status-bar stop and hides the page, and waits with until() (named deadlines) for nothing playing and census 0, in Chromium, Firefox and WebKit through the suite harness; tests/browser/touch-audio.cjs passes with the gesture rule on."
+  - "The status-bar stop is the app shell's control: this issue consumes M123's one app shell (G026, component-system#one-implementation-per-family, origin/chore/plan-unified-controls) and adds no second stop widget; project.visual-identity-lock holds. Arturia and iMS-20 are a quality bar, not a look (owner, relayed by af 2026-11-05)."
+  - "Guarded paths marked: src/js/measurement/* and src/js/ui/measure/* (v2, prismatic-majordomus-98 writes the verdict; 'capture still aborts on pagehide' is the reviewer's check), src/js/synth/*; the rest is judged by the screens seat once R031 lands. Lane: dev-53."
+validation:
+  - "node --test tests/unit/stop-path.test.mjs tests/unit/keys-registry.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/touch-audio.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

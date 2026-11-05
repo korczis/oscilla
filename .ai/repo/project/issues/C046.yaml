@@ -20,6 +20,7 @@ acceptance_criteria:
   - "On the head the lists are equal, or the gap is stated in the panel and listed in the test with that statement's text; a mutation that adds a type to FILTER_TYPES without the UI or a stated gap fails."
   - "Setting a type that the lab does not show (through the link state) checks no radio and the panel names the type in effect (asserted in the same unit test)."
   - "src/js/audio is guarded only if filters.js changes; then prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+  - "Controls: the Filter Lab's type list is a consumer of M123's one switch family (G023; component-system#one-implementation-per-family, M123 on origin/chore/plan-unified-controls); growing it to the engine's list adds no parallel radio widget. Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock holds (owner's words relayed by af, 2026-11-05: 'vsechny komponenty abstrahuj, reuse, dry, parametrizuj')."
 validation:
   - "node --test tests/unit/lab-enumerations.test.mjs"
   - "npm test"

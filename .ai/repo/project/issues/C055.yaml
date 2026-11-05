@@ -1,0 +1,36 @@
+id: C055
+milestone: M090
+serves:
+  - "coherent-state#sequence-state-one-owner"
+title: "One transport clock and one tempo: the sequencer's loop pump and the Studio transport schedule from one clock"
+slug: one-transport-clock-and-one-tempo
+priority: p2
+profile: implementation
+objective: "Lands as fix(sequencer). Coverage gap of af's critique of 96daa67b ('nothing places the second scheduler, editor._pump against the Studio transport, the second tempo'). Line numbers at origin/main a19f1ff6. The sequencer runs its own lookahead pump (src/js/sequencer/editor.js:620-652, LOOKAHEAD_S at :105, re-armed at :431 and :453) beside the Studio transport's scheduler (src/js/studio/transport.js, TIMELINE_LOOKAHEAD_S), and two tempo values exist: the sequence's tempoBpm (src/js/sequencer/model.js:44-46, :357, :425) and the Studio transport's tempo, converted on import and export (src/js/studio/sequence-import.js:96, :215). Both read the shared stop anchor of src/js/audio/clock.js but not one schedule. After: the sequencer's loop passes are scheduled by the one transport clock the Studio uses (one lookahead, one timer), the sequence's tempo is the transport's tempo when the sequence plays in the Studio and is converted at one named seam otherwise, and both claim and stop through the bus (C037, C050)."
+why: "af's critique of 96daa67b, coverage gap 'one bus' (second scheduler and second tempo); af's Play audit (two schedulers)."
+scope:
+  - "src/js/sequencer/editor.js"
+  - "src/js/sequencer/model.js"
+  - "src/js/studio/transport.js"
+  - "src/js/studio/sequence-import.js"
+  - "src/js/audio/clock.js"
+  - "tests/unit/one-transport-clock.test.mjs"
+  - "tests/browser/sequencer.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C037"
+acceptance_criteria:
+  - "Fail-first: tests/unit/one-transport-clock.test.mjs plays a looping sequence and a Studio timeline on one fake context and counts the timers and lookahead windows that schedule audio; it fails on the merge base naming two (editor._pump and the transport)."
+  - "A tempo change in the Studio transport changes the sequence's playing tempo in the same event; an imported and re-exported sequence keeps its tempoBpm (sequence-import round trip), one case each."
+  - "tests/browser/sequencer.cjs loops a sequence for three passes with no gap or overlap at the seams, with until() deadlines, in Chromium, Firefox and WebKit; the CI runner's 44.1 kHz and the Mac's 48 kHz both pass (no assumed sample rate, project.bounded-test-timing)."
+  - "The V1 freeze golden vectors are unchanged with the labs off."
+  - "Guarded paths marked: src/js/studio/* and src/js/audio/* (v2, prismatic-majordomus-98); src/js/sequencer/* is judged by the screens seat once R031 lands. Lane: dev-53 with oscilla-26."
+validation:
+  - "node --test tests/unit/one-transport-clock.test.mjs tests/unit/sequencer-editor.test.mjs tests/unit/freeze.test.mjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

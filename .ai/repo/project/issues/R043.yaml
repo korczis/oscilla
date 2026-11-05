@@ -1,0 +1,28 @@
+id: R043
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "The patch-contract baseline only falls along the base branch's first-parent chain, not only against the working tree"
+slug: the-patch-contract-baseline-only-falls-along-the-base-chain
+priority: p2
+profile: implementation
+objective: "Lands as test(studio). af's critique N3 of the Hardening plan, split out of R033 by af's critique of 96daa67b (BLOCKING 3). At origin/main a19f1ff6 tests/unit/patch-contract.test.mjs:90-99 compares the missing-field counts of the port contract with tests/unit/patch-contract-baseline.json in the working tree only, so a pull request that raises a count and its baseline together passes. After: the test judges the baseline against every committed version on the base branch's first-parent chain from the fork with scripts/ratchet-history.mjs (the helper R031 factors out of scripts/ui-flowbite-pro-measure.mjs:1009-1040), never against a commit of the branch itself; a rise needs a raises entry {field, count, pr, reason} like tests/unit/source-size-baseline.json's ledger. A tree with no history (the fail-first job's extracts, tests/unit/source-size-budget.test.mjs:159) skips the history check outside CI and fails it in CI, as ui-flowbite-pro does, so the fail-first case is a fixture repository, not this repository's history."
+why: "af's critique N3 (mesh, 2026-11-05) and af's critique of 96daa67b (BLOCKING 3: the ratchet is af's lane and needs history a fail-first extract lacks); oscilla-b0 Total Coherence audit plan item 6 (the patch-contract ratchet compares only with the working tree)."
+scope:
+  - "tests/unit/patch-contract.test.mjs"
+  - "tests/unit/patch-contract-baseline.json"
+  - "tests/README.md"
+depends_on:
+  - "R031"
+acceptance_criteria:
+  - "Fail-first: tests/unit/patch-contract.test.mjs builds a fixture repository (tests/unit/fixtures/git-repo.mjs) whose main commits a baseline and whose branch raises port.channels in both the registry fixture and the baseline, and expects a refusal naming the field and the base commit; on the merge base the same fixture passes."
+  - "A branch commit that raises the count and a later branch commit that judges against it is still refused (the chain is the base's, never the branch's); a raise with a raises entry naming the pull request passes."
+  - "In CI a shallow or missing history fails the check with a message naming fetch-depth; outside CI it skips with that message."
+  - "Not a guarded path under v2; once R033 lands it is guarded if a rule's enforcement names it (project.typed-ports), and prismatic-majordomus-98 writes the verdict. Lane: af."
+validation:
+  - "node --test tests/unit/patch-contract.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

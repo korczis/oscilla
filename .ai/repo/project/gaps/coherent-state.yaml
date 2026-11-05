@@ -7,7 +7,7 @@ observations:
     statement: "The Total Coherence pack says 46 census surfaces have no deep link; measured 47 (25 subviews, 22 dialogs) at all five census commits, each with a deepLinkWhyNot. The pack's figure is refuted. The census holds 94 surfaces (workspace 13, panel 20, subview 32, dialog 22, route 7); 8 have no test; the debt ratchet counts the union, 47 (U075)."
     source: "file:tests/unit/surface-census.json"
   - id: census-unreasoned-links-refuted
-    statement: "Refuted: that the 8 untested and 47 unlinked census entries have no issue that decides them or records why. Every unlinked entry carries a deepLinkWhyNot from 8 distinct reasons (22 dialogs share one, U078), the census refuses a null deepLink without a reason of five words or more (surface-census.test.mjs:308-313), and each untested entry names a plan issue that is not DONE."
+    statement: "Refuted: that the 8 untested and 47 unlinked census entries have no issue that decides them or records why. Every unlinked entry carries a deepLinkWhyNot from 8 distinct reasons (22 dialogs share one; U075 makes each state its own), the census refuses a null deepLink without a reason of five words or more (surface-census.test.mjs:308-313), and each untested entry names a plan issue that is not DONE."
     source: "test:tests/unit/surface-census.test.mjs"
   - id: census-keyboard-and-records-refuted
     statement: "Refuted in part: '#osc-keyboard is a surface the derivation does not see' (it is route:keyboard, deepLink '#m=playground&kbd=1'; only the dock element has no panel entry) and 'the records route lists only exp' (DOMAIN_KEYS.records holds exp, def and finding; only the sample deepLink uses exp)."
@@ -19,7 +19,7 @@ observations:
     statement: "Refuted in part: 'STORAGE_KEYS.theme is dead' (vocabulary.test.mjs:84 pins it and storage-inventory.test.mjs:207 uses it as a mutation probe, so removing it is a test change) and 'browser storage only through core/storage.js' (the storage inventory declares ui/app.js as an owner). No issue is planned for either."
     source: "test:tests/unit/storage-inventory.test.mjs"
   - id: synth-insert-announced
-    statement: "Refuted: the Synth workspace does not insert its panel silently; it announces it (SYNTH_TEXT.inserted/took) as #329 intended. The finding is kept only for arming the unsaved guard on a plain visit, decided by Q093 and planned as C039."
+    statement: "Refuted: the Synth workspace does not insert its panel silently; it announces it (SYNTH_TEXT.inserted/took) as #329 intended. The finding is kept only for arming the unsaved guard on a plain visit, decided by Q093 and planned as C025 (on main; 96daa67b's C039 duplicated it and was removed)."
     source: "file:src/js/synth/ui.js"
   - id: measure-repeat-chain-ui-driven
     statement: "Refuted in scope: the Measure-side save, Repeat and provenance.repeatOf chain is UI-driven at tests/browser/v3-ui.cjs:485-505. The journey gap is narrowed to the Experiments-side Repeat and select (C035); K041 and K168 do not cover it (their titles are the compare chart presentation and the structured graph summary)."
@@ -48,9 +48,9 @@ observations:
   - id: unplanned-observations
     statement: "Observed and not planned in this change: the pattern link's href is '#m=studio', so the pattern does not travel; the Filter chart drag is tested only with a fake engine; double ownership of interactions by Flowbite and Alpine is not re-verified (inferred); no per-surface review record or impact fingerprint exists (R031 guards paths, not surfaces; af's census `review: {pr}` field is its proposed data model); no per-surface audit record (a11y, history, phone, lifecycle, errors) is tied to surface ids, and ui-current#ui-audited is decided by `test -s docs/ui-audit.md` alone; the saved-state-is-honest case of an overridden fixed parameter (reset and named on import, Q092) is held in K187's criteria, which serves connected-instrument#synth-panel because a gap work entry must name an issue serving this intent; use cases cannot map product file changes ('commands: [knowledge]' is a policy choice)."
     source: "command:oscilla-b0 coherence audit, scratchpad coherence-verified.json"
-  - id: browser-census-unknown
-    statement: "Unknown at 68b117f3: whether the browser census and the control census pass; they were not run on the shared machine, and control-census.cjs runs only through test:census (ci.yml:390), not in main-checks (E046)."
-    source: "file:.github/workflows/main-checks.yml"
+  - id: browser-suites-green
+    statement: "Refuted (af's critique of 96daa67b): that the browser census and the control census at 68b117f3 are unknown. Main checks run 41940747829 on 68b117f3 is green, its browser gate in Chromium, Firefox and WebKit running npm run test:browser, which holds surface-census.cjs and journeys.cjs (package.json:25); the pull request run 41933352760 of #413's head 43e3e1ca, whose tree e65a1e6b is 68b117f3's, is green in every job, the control census (test:census, the census job of ci.yml:360-399, its run line :390 at a19f1ff6) and DSP, labs, sequencer (sequencer.cjs) in all three browsers included. The control census runs only in the pull request gate, not in main-checks (E046)."
+    source: "command:gh run view 41940747829 && gh run view 41933352760"
   - id: mic-not-released-on-leave
     statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): the mic lab stops only from its own controls or the engine (labs/mic-analyzer.js:224, 267, 278, 343, 399), and a workspace change aborts only a measurement (main.js:739-742), while Measure says the microphone opens only for its own steps (index.html:909). That no release path exists is observed; that the stream stays live in a browser is inferred (C040's browser leg decides it)."
     source: "file:src/js/labs/mic-analyzer.js"
@@ -92,20 +92,20 @@ conditions:
       - audition-mislabelled-not-missing
       - no-bus
   - criterion: sequencer-through-engine
-    state: unknown
-    because: "Not re-checked in this audit; the browser suites were not run on the shared machine."
+    state: satisfied
+    because: "Its ref (tests/browser/sequencer.cjs) passed in Chromium, Firefox and WebKit on 68b117f3's tree (run 41933352760, DSP, labs, sequencer); not re-probed beyond the ref."
     observations:
-      - browser-census-unknown
+      - browser-suites-green
   - criterion: sequence-state-one-owner
     state: unknown
     because: "Not re-checked in this audit beyond seqPlaying's three writers, which concern the playing state, not the sequence waveform."
     observations:
       - no-bus
   - criterion: current-lab-state-wins
-    state: unknown
-    because: "Not re-checked in this audit."
+    state: satisfied
+    because: "Its ref (engine.test.mjs and freeze.test.mjs) passed in the unit job on 68b117f3 (main checks run 41940747829); not re-probed beyond the ref."
     observations:
-      - browser-census-unknown
+      - browser-suites-green
   - criterion: live-edits-reach-the-voice
     state: unknown
     because: "Not re-checked in this audit; the runtime trace mislabels next-note updates as scheduled (K185, studio-box-system), which concerns the trace, not the voice."
@@ -129,10 +129,10 @@ conditions:
     observations:
       - repeat-click-fallback
   - criterion: user-journeys-hold
-    state: unknown
-    because: "The journeys suite was not run on the shared machine at 68b117f3."
+    state: satisfied
+    because: "tests/browser/journeys.cjs, its ref, is part of npm run test:browser and passed in Chromium, Firefox and WebKit in main checks run 41940747829 on 68b117f3."
     observations:
-      - browser-census-unknown
+      - browser-suites-green
   - criterion: input-released-when-hidden
     state: conflicting
     because: "No path releases the lab microphone on a workspace change, while Measure promises it is released; the browser effect is inferred until C040's leg runs."
@@ -191,13 +191,56 @@ work:
     evidence: "node --test tests/unit/output-owner-one-table.test.mjs"
     issue: "C036"
   - id: one-bus
-    title: "One bus: one claim API, one stop path, one playing state"
+    title: "The playback bus, slice 1: one claim API every player starts through"
+    serves:
+      - one-output-owner
+    why: "Eight players, five claim mechanisms."
+    evidence: "node --test tests/unit/output-claims.test.mjs && node tests/browser/app.cjs"
+    issue: "C037"
+  - id: one-stop-path
+    title: "The playback bus, slice 2: one stopAll path for Stop, Escape, the status-bar stop and page hide"
+    serves:
+      - stops-are-immediate
+    why: "Stop handlers in main.js, the Studio workspace, MIDI, the on-screen keys, the Synth and the key registry."
+    evidence: "node --test tests/unit/stop-path.test.mjs && node tests/browser/app.cjs"
+    issue: "C050"
+  - id: one-playing-state
+    title: "The playback bus, slice 3: one playing state, the mirrors are reads"
+    serves:
+      - stops-are-immediate
+      - views-describe-what-sounds
+    why: "About 12 playing values; seqPlaying has three writers and a 150 ms poll."
+    evidence: "node --test tests/unit/playing-state.test.mjs"
+    issue: "C051"
+  - id: one-master-writer
+    title: "The playback bus, slice 4: one writer of the master level"
+    serves:
+      - one-output-owner
+    why: "Five call sites write the engine's master level; C012 is stamped done."
+    evidence: "node --test tests/unit/master-level-writer.test.mjs"
+    issue: "C052"
+  - id: refusals-and-leave-policy
+    title: "The playback bus, slice 5: refusal sentences from the table, one leave-workspace policy"
     serves:
       - one-output-owner
       - stops-are-immediate
-    why: "Eight players, five claim mechanisms, five Escape handlers."
-    evidence: "node --test tests/unit/bus.test.mjs && node tests/browser/app.cjs"
-    issue: "C037"
+    why: "Refusal sentences are copied at raise sites, and what keeps sounding on a workspace change is decided per site."
+    evidence: "node --test tests/unit/leave-policy.test.mjs"
+    issue: "C053"
+  - id: one-address-writer
+    title: "Only the navigation dispatcher writes the address"
+    serves:
+      - saved-state-is-honest
+    why: "Four replaceState writers outside navigation.js."
+    evidence: "node --test tests/unit/address-writer.test.mjs"
+    issue: "C054"
+  - id: one-transport-clock
+    title: "One transport clock and one tempo"
+    serves:
+      - sequence-state-one-owner
+    why: "The sequencer's loop pump and the Studio transport schedule separately, with two tempo values."
+    evidence: "node --test tests/unit/one-transport-clock.test.mjs"
+    issue: "C055"
   - id: repeat-clicked
     title: "Experiments Repeat and select clicked with no internal fallback"
     serves:
@@ -217,5 +260,5 @@ work:
     serves:
       - saved-state-is-honest
     why: "A visit arms the unsaved-work guard."
-    evidence: "node --test tests/unit/synth-visit-baseline.test.mjs"
-    issue: "C039"
+    evidence: "node --test tests/unit/synth-visit-clean.test.mjs"
+    issue: "C025"

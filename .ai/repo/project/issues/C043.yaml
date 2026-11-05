@@ -22,6 +22,7 @@ acceptance_criteria:
   - "On the head every such group shares one label set or is listed in tests/unit/surface-census.json with a reason of five words or more; a mutation that renames one option label of a listed-free pair fails the test."
   - "Merging the Log/Linear select and radio group into one control kind stays G008's; this issue changes labels only."
   - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml."
+  - "Controls: the select and the radio group that edit one value are consumers of M123's one switch and slider family (G023; component-system#one-implementation-per-family, M123 on origin/chore/plan-unified-controls); where one vocabulary needs one control, the change picks the family's implementation and adds no parallel widget. Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock holds (owner's words relayed by af, 2026-11-05: 'vsechny komponenty abstrahuj, reuse, dry, parametrizuj')."
 validation:
   - "node --test tests/unit/one-vocabulary.test.mjs"
   - "npm test"

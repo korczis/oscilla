@@ -2,19 +2,20 @@ id: R037
 milestone: M011
 serves:
   - "release-provenance#gate-runs-every-suite"
-title: "The CI receipt takes the gate's job set from the base branch, not from the tree it judges"
+title: "The CI receipt takes the gate's job set from the release merge's first parent, and accepts only a superset of it"
 slug: the-ci-receipt-takes-the-gate-job-set-from-the-base-branch
 priority: p2
 profile: implementation
-objective: "Lands as fix(release). Hardening D5 (P2, inferred): scripts/release-ci-receipt.mjs:185-188 reads the expected jobs from the ci.yml of the tree it judges, so a release tree that drops a job from the workflow also drops it from what the receipt requires. After: the expected job set comes from origin/main's copy of .github/workflows/ci.yml (the gate's needs minus the jobs its verdict drops), and a receipt whose run lacks one of them is refused naming it. D1 (the receipt refusing a first-attempt skipped flake-ledger job) is not re-filed: af reports it built as PR #417; this issue's test must keep D1's case green."
-why: "af's Hardening proof-chain synthesis, defect D5; D1 cross-referenced to PR #417 per af's critique B2 (mesh, 2026-11-05)."
+objective: "Lands as fix(release). Hardening D5 (P2, inferred). Line numbers at origin/main a19f1ff6. release:publish judges HEAD, which is the merge of the release pull request (scripts/release-publish.mjs:15, :434-435 gatherCiReceipt({ sh, root, head })), and gatherCiReceipt reads the expected jobs from the checkout's .github/workflows/ci.yml (scripts/release-ci-receipt.mjs:185-188, expectedJobs at :34), which on main after the merge is the release tree's own copy: 'origin/main's copy' is the tree being judged, so naming it changes nothing. After: the expected job set is read with git show <parents[0]>:.github/workflows/ci.yml, parents[0] being the first parent of the release merge (the main the release branched from, already parsed at :180), as the gate's needs minus the jobs its verdict drops. Superset rule: the run must carry every job of that base set with success; a job the release tree's ci.yml adds beyond the base set is accepted when it succeeded; a job in the run that neither the base's nor the release tree's ci.yml declares is refused as today (:141-145, which then compares with the union of the two sets, not the tree's alone). A receipt whose run lacks a base job is refused naming it and the base commit. D1 (the receipt refusing a first-attempt skipped flake-ledger job) is not re-filed here: PR #417 (open, branch ci/census-path-gated, commits 61b2b2bc, ec0ed657 and 6be74fba) carries it and changes scripts/release-ci-receipt.mjs and tests/unit/release-ci-receipt.test.mjs; this issue lands after PR #417 merges and rebases onto it."
+why: "af's Hardening proof-chain synthesis, defect D5. af's critique of 96daa67b (BLOCKING 4): release:publish judges the release merge, so origin/main's ci.yml is the judged tree's; without a superset rule the undeclared-job refusal (:142-145) rejects a job the release tree legitimately adds; criterion 2 duplicated open PR #417, which is a pull request, not a plan id."
 scope:
   - "scripts/release-ci-receipt.mjs"
   - "tests/unit/release-ci-receipt.test.mjs"
 depends_on: []
 acceptance_criteria:
-  - "Fail-first: tests/unit/release-ci-receipt.test.mjs judges a tree whose ci.yml lacks the visual job with a run that lacks it too, and expects a problem naming the base branch's job set; on the merge base it passes."
-  - "A first-attempt run whose flake-ledger job is skipped is accepted (the D1 case), asserted in the same test file."
+  - "Fail-first: tests/unit/release-ci-receipt.test.mjs judges a release merge whose first parent's ci.yml declares the visual job while the merge's own ci.yml and its run both lack it, and expects a problem naming visual and the first parent; on the merge base it passes (the tree's ci.yml and run agree)."
+  - "Superset: a release tree whose ci.yml adds a job the base lacks is accepted when the run's job succeeded and refused when it failed; a run job that neither ci.yml declares is refused; one case each in the same file."
+  - "Hold, not a criterion of this issue: PR #417 is merged before this starts, and its first-attempt flake-ledger case stays green in tests/unit/release-ci-receipt.test.mjs after the rebase; plan validate cannot depend on a pull request, so the hold is stated here and checked at start (gh pr view 417 --json state)."
   - "Guarded (scripts/release-*, tests/unit/release-*): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
 validation:
   - "node --test tests/unit/release-ci-receipt.test.mjs"
