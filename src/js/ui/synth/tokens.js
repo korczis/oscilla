@@ -16,11 +16,13 @@
  * role is an intensity: an opacity, a texture or a glow is a hw-* Tailwind key the drawing
  * reads as a class (project.visual-identity-lock v4), and the cable shadow is an opaque token
  * drawn at the hw-shadow intensity (class opacity-hw-shadow), never with an alpha of its own.
- * Every control role but the decorative cap, cap highlight and knurl marks the control or its
- * value, so it holds 3:1 on both plate surfaces (surface-3 and surface-1) in both themes, and
- * the label and value text 4.5:1 (WCAG 1.4.11 and 1.4.3; ui-synth-tokens.test.mjs computes them
- * from tokens.css): the unlit arc or slot (track) and the skirt edge are --osc-text-dim, the
- * pointer --osc-text, the applied value --osc-purple; the knurl stays the faint --osc-border.
+ * Every control role but the decorative cap, cap highlight, knurl and LED bezel ring marks the
+ * control or its value, so it holds 3:1 on both plate surfaces (surface-3 and surface-1) in both
+ * themes, and the label and value text 4.5:1 (WCAG 1.4.11 and 1.4.3; ui-synth-tokens.test.mjs
+ * computes them from tokens.css): the unlit arc or slot (track) and the skirt edge are
+ * --osc-text-dim, the pointer --osc-text, the applied value --osc-purple; the knurl stays the
+ * faint --osc-border, and an LED bezel's ring is --osc-border-strong, the strongest neutral on
+ * the plates (led.js).
  */
 export const SYNTH_TOKEN_NAMES = deepFreeze({
   surface: { plateHi: '--osc-surface-3', plateLo: '--osc-surface-1', card: '--osc-surface-2',
@@ -29,7 +31,7 @@ export const SYNTH_TOKEN_NAMES = deepFreeze({
   control: { cap: '--osc-surface-1', capHi: '--osc-surface-4', ring: '--osc-cyan',
     track: '--osc-text-dim', pointer: '--osc-text', focus: '--osc-focus',
     disabled: '--osc-text-dim', edge: '--osc-text-dim', knurl: '--osc-border',
-    applied: '--osc-purple' },
+    applied: '--osc-purple', bezel: '--osc-border-strong' },
   jack: { body: '--osc-surface-0', ring: '--osc-text-dim', normal: '--osc-text-dim',
     refuse: '--osc-red' },
   cable: { palette: ['--osc-cyan', '--osc-red-soft', '--osc-magenta', '--osc-green',

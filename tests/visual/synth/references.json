@@ -1,0 +1,786 @@
+{
+  "schema": 1,
+  "environments": {
+    "darwin-arm64": {
+      "browser": "153.0.8010.12",
+      "engine": "additive",
+      "cables": [
+        "keys.velocity -> vco2.tune",
+        "vco1.audio -> ring.modulator",
+        "vco2.audio -> mix.in4",
+        "ring.audio -> mix.in3",
+        "noise.audio -> mix.in1",
+        "mix.audio -> vca.audio"
+      ],
+      "views": [
+        "desktop-panel-dark 1536x1024",
+        "desktop-panel-light 1536x1024",
+        "desktop-engines-dark 1536x1024",
+        "desktop-engines-light 1536x1024",
+        "desktop-xy-dark 1536x1024",
+        "desktop-xy-light 1536x1024",
+        "phone-panel-dark 390x844",
+        "phone-panel-light 390x844",
+        "phone-engines-dark 390x844",
+        "phone-engines-light 390x844",
+        "phone-xy-dark 390x844",
+        "phone-xy-light 390x844",
+        "desktop-bay-dark 1536x2090",
+        "desktop-bay-light 1536x2090",
+        "phone-bay-dark 390x2165",
+        "phone-bay-light 390x2165"
+      ],
+      "noise": {
+        "desktop-panel-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-panel-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-engines-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-engines-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-xy-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-xy-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "phone-panel-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 1
+        },
+        "phone-panel-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 1
+        },
+        "phone-engines-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "phone-engines-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 1
+        },
+        "phone-xy-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 1
+        },
+        "phone-xy-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-bay-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-bay-light": {
+          "runs": 10,
+          "px": 15,
+          "faint": 206
+        },
+        "phone-bay-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 1
+        },
+        "phone-bay-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 1
+        }
+      },
+      "seeds": {
+        "knob-pointer-wider": {
+          "change": "src/js/ui/synth/knob.js: KNOB.pointerW 2.5 -> 3.5 (the pointer 1 px wider)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 378,
+              "faint": 475
+            },
+            "desktop-panel-light": {
+              "px": 430,
+              "faint": 474
+            },
+            "desktop-engines-dark": {
+              "px": 622,
+              "faint": 638
+            },
+            "desktop-engines-light": {
+              "px": 616,
+              "faint": 638
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-panel-dark": {
+              "px": 172,
+              "faint": 202
+            },
+            "phone-panel-light": {
+              "px": 192,
+              "faint": 202
+            },
+            "phone-engines-dark": {
+              "px": 302,
+              "faint": 331
+            },
+            "phone-engines-light": {
+              "px": 300,
+              "faint": 333
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-bay-dark": {
+              "px": 2110,
+              "faint": 2322
+            },
+            "desktop-bay-light": {
+              "px": 2159,
+              "faint": 2321
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 1
+            }
+          }
+        },
+        "screw-lower": {
+          "change": "src/js/ui/synth/plate.js: screwSvg bottom-0.5 -> bottom-px (each screw 1 px lower)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-panel-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-engines-light": {
+              "px": 0,
+              "faint": 145
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-panel-dark": {
+              "px": 95,
+              "faint": 155
+            },
+            "phone-panel-light": {
+              "px": 120,
+              "faint": 155
+            },
+            "phone-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-engines-light": {
+              "px": 0,
+              "faint": 1
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-bay-dark": {
+              "px": 1330,
+              "faint": 2170
+            },
+            "desktop-bay-light": {
+              "px": 1680,
+              "faint": 2170
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 1
+            }
+          }
+        },
+        "no-brushed-finish": {
+          "change": "src/js/ui/synth/plate.js: plateSvg brushed rect fill url(#pb-id) -> none (the finish removed)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 0,
+              "faint": 75788
+            },
+            "desktop-panel-light": {
+              "px": 0,
+              "faint": 4
+            },
+            "desktop-engines-dark": {
+              "px": 0,
+              "faint": 52497
+            },
+            "desktop-engines-light": {
+              "px": 0,
+              "faint": 1
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-panel-dark": {
+              "px": 0,
+              "faint": 28735
+            },
+            "phone-panel-light": {
+              "px": 0,
+              "faint": 493
+            },
+            "phone-engines-dark": {
+              "px": 0,
+              "faint": 41123
+            },
+            "phone-engines-light": {
+              "px": 0,
+              "faint": 1
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 0,
+              "faint": 1
+            },
+            "desktop-bay-dark": {
+              "px": 0,
+              "faint": 174763
+            },
+            "desktop-bay-light": {
+              "px": 15,
+              "faint": 9115
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 1
+            }
+          }
+        },
+        "screw-cap-narrower": {
+          "change": "src/js/ui/synth/plate.js: screwSvg cap circle r 4.2 -> 3.7 (0.5 px narrower)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-panel-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-engines-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-panel-dark": {
+              "px": 56,
+              "faint": 104
+            },
+            "phone-panel-light": {
+              "px": 88,
+              "faint": 104
+            },
+            "phone-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-engines-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-bay-dark": {
+              "px": 784,
+              "faint": 1456
+            },
+            "desktop-bay-light": {
+              "px": 1232,
+              "faint": 1474
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 1
+            }
+          }
+        }
+      }
+    },
+    "linux-x64": {
+      "browser": "153.0.8010.12",
+      "engine": "additive",
+      "cables": [
+        "keys.velocity -> vco2.tune",
+        "vco1.audio -> ring.modulator",
+        "vco2.audio -> mix.in4",
+        "ring.audio -> mix.in3",
+        "noise.audio -> mix.in1",
+        "mix.audio -> vca.audio"
+      ],
+      "views": [
+        "desktop-panel-dark 1536x1024",
+        "desktop-panel-light 1536x1024",
+        "desktop-engines-dark 1536x1024",
+        "desktop-engines-light 1536x1024",
+        "desktop-xy-dark 1536x1024",
+        "desktop-xy-light 1536x1024",
+        "phone-panel-dark 390x844",
+        "phone-panel-light 390x844",
+        "phone-engines-dark 390x844",
+        "phone-engines-light 390x844",
+        "phone-xy-dark 390x844",
+        "phone-xy-light 390x844",
+        "desktop-bay-dark 1536x2075",
+        "desktop-bay-light 1536x2075",
+        "phone-bay-dark 390x2149",
+        "phone-bay-light 390x2149"
+      ],
+      "noise": {
+        "desktop-panel-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 11
+        },
+        "desktop-panel-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 27
+        },
+        "desktop-engines-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-engines-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 58
+        },
+        "desktop-xy-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "desktop-xy-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 25
+        },
+        "phone-panel-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "phone-panel-light": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "phone-engines-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "phone-engines-light": {
+          "runs": 10,
+          "px": 2,
+          "faint": 33
+        },
+        "phone-xy-dark": {
+          "runs": 10,
+          "px": 0,
+          "faint": 0
+        },
+        "phone-xy-light": {
+          "runs": 10,
+          "px": 2,
+          "faint": 67
+        },
+        "desktop-bay-dark": {
+          "runs": 10,
+          "px": 1,
+          "faint": 105
+        },
+        "desktop-bay-light": {
+          "runs": 10,
+          "px": 14,
+          "faint": 204
+        },
+        "phone-bay-dark": {
+          "runs": 10,
+          "px": 1,
+          "faint": 37
+        },
+        "phone-bay-light": {
+          "runs": 10,
+          "px": 2,
+          "faint": 34
+        }
+      },
+      "seeds": {
+        "knob-pointer-wider": {
+          "change": "src/js/ui/synth/knob.js: KNOB.pointerW 2.5 -> 3.5 (the pointer 1 px wider)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 378,
+              "faint": 475
+            },
+            "desktop-panel-light": {
+              "px": 422,
+              "faint": 474
+            },
+            "desktop-engines-dark": {
+              "px": 629,
+              "faint": 646
+            },
+            "desktop-engines-light": {
+              "px": 623,
+              "faint": 650
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 11
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-panel-dark": {
+              "px": 171,
+              "faint": 205
+            },
+            "phone-panel-light": {
+              "px": 186,
+              "faint": 206
+            },
+            "phone-engines-dark": {
+              "px": 302,
+              "faint": 330
+            },
+            "phone-engines-light": {
+              "px": 300,
+              "faint": 335
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 2,
+              "faint": 67
+            },
+            "desktop-bay-dark": {
+              "px": 2110,
+              "faint": 2324
+            },
+            "desktop-bay-light": {
+              "px": 2168,
+              "faint": 2611
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 34
+            }
+          }
+        },
+        "screw-lower": {
+          "change": "src/js/ui/synth/plate.js: screwSvg bottom-0.5 -> bottom-px (each screw 1 px lower)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-panel-light": {
+              "px": 0,
+              "faint": 27
+            },
+            "desktop-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-engines-light": {
+              "px": 0,
+              "faint": 3
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-panel-dark": {
+              "px": 95,
+              "faint": 155
+            },
+            "phone-panel-light": {
+              "px": 120,
+              "faint": 155
+            },
+            "phone-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-engines-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-bay-dark": {
+              "px": 1331,
+              "faint": 2275
+            },
+            "desktop-bay-light": {
+              "px": 1680,
+              "faint": 2173
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 34
+            }
+          }
+        },
+        "no-brushed-finish": {
+          "change": "src/js/ui/synth/plate.js: plateSvg brushed rect fill url(#pb-id) -> none (the finish removed)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 0,
+              "faint": 74388
+            },
+            "desktop-panel-light": {
+              "px": 0,
+              "faint": 27
+            },
+            "desktop-engines-dark": {
+              "px": 0,
+              "faint": 52474
+            },
+            "desktop-engines-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 25
+            },
+            "phone-panel-dark": {
+              "px": 0,
+              "faint": 29097
+            },
+            "phone-panel-light": {
+              "px": 0,
+              "faint": 651
+            },
+            "phone-engines-dark": {
+              "px": 0,
+              "faint": 40752
+            },
+            "phone-engines-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-bay-dark": {
+              "px": 0,
+              "faint": 173604
+            },
+            "desktop-bay-light": {
+              "px": 14,
+              "faint": 8683
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 34
+            }
+          }
+        },
+        "screw-cap-narrower": {
+          "change": "src/js/ui/synth/plate.js: screwSvg cap circle r 4.2 -> 3.7 (0.5 px narrower)",
+          "views": {
+            "desktop-panel-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-panel-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-engines-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-xy-light": {
+              "px": 0,
+              "faint": 25
+            },
+            "phone-panel-dark": {
+              "px": 56,
+              "faint": 104
+            },
+            "phone-panel-light": {
+              "px": 88,
+              "faint": 104
+            },
+            "phone-engines-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-engines-light": {
+              "px": 0,
+              "faint": 33
+            },
+            "phone-xy-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-xy-light": {
+              "px": 0,
+              "faint": 0
+            },
+            "desktop-bay-dark": {
+              "px": 785,
+              "faint": 1479
+            },
+            "desktop-bay-light": {
+              "px": 1246,
+              "faint": 1660
+            },
+            "phone-bay-dark": {
+              "px": 0,
+              "faint": 0
+            },
+            "phone-bay-light": {
+              "px": 0,
+              "faint": 34
+            }
+          }
+        }
+      }
+    }
+  },
+  "note": "Accepted SYN references per environment, written only by node scripts/visual-synth.mjs --update-reference; per view, the noise its bounds are derived from (--measure-noise) and the seeded mutations they are held against (--record-seed)."
+}

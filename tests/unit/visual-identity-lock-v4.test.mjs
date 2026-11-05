@@ -240,6 +240,56 @@ export function glows(files, debt = null) {
   return out;
 }
 
+/** The [start, end) span of each data-led element of `svg`: its open tag to the close tag that
+ *  matches it, nested elements of its name counted. */
+function ledSpans(svg) {
+  const spans = [];
+  for (const m of svg.matchAll(/<(\w+)\b[^>]*\sdata-led(?:="[^"]*")?[^>]*>/g)) {
+    if (m[0].endsWith('/>')) { spans.push([m.index, m.index + m[0].length]); continue; }
+    const tag = new RegExp(`<(/?)${m[1]}\\b[^>]*?(/?)>`, 'g');
+    tag.lastIndex = m.index + m[0].length;
+    let depth = 1;
+    for (let t = tag.exec(svg); t; t = tag.exec(svg)) {
+      if (t[1]) depth -= 1;
+      else if (!t[2]) depth += 1;
+      if (depth === 0) { spans.push([m.index, t.index + t[0].length]); break; }
+    }
+  }
+  return spans;
+}
+const svgAttr = (el, a) => (new RegExp(`\\s${a}="([^"]*)"`).exec(el) || [])[1];
+
+/** A box-shadow paints no SVG element, so an SVG LED glows by a halo: a [data-halo] circle round
+ *  its lens. Each one in `svg`, drawn at `zoom`, lies inside a data-led element, reaches at most
+ *  GLOW_MAX_PX screen px past that LED's [data-lens] circle, and carries only the hw-sheen
+ *  intensity class (opacity-hw-sheen), never a literal opacity. */
+export function svgHalos(svg, zoom, where = 'svg') {
+  const out = [];
+  const spans = ledSpans(svg);
+  for (const m of svg.matchAll(/<(\w+)\b[^>]*\sdata-halo(?:="[^"]*")?[^>]*>/g)) {
+    const el = m[0];
+    const at = `${where} zoom ${zoom}`;
+    const span = spans.find(([a, b]) => m.index > a && m.index + el.length <= b);
+    if (!span) { out.push(`${at}: a halo off an LED (${el})`); continue; }
+    if (m[1] !== 'circle') out.push(`${at}: a halo that is not a circle (${m[1]})`);
+    const cls = svgAttr(el, 'class');
+    if (cls !== 'opacity-hw-sheen') {
+      out.push(`${at}: a halo's class is ${JSON.stringify(cls)}, not opacity-hw-sheen alone`);
+    }
+    if (/\s(?:fill-|stroke-|flood-|stop-)?opacity=|\sstyle=/.test(el)) {
+      out.push(`${at}: a halo with a literal opacity or style`);
+    }
+    const lens = /<circle\b[^>]*\sdata-lens(?:="[^"]*")?[^>]*>/.exec(svg.slice(...span));
+    if (!lens) { out.push(`${at}: a halo with no lens in its LED`); continue; }
+    const reach = (Number(svgAttr(el, 'r')) - Number(svgAttr(lens[0], 'r'))) * zoom;
+    if (!(Number.isFinite(reach) && reach > 0 && reach <= GLOW_MAX_PX + 1e-9)) {
+      out.push(`${at}: an LED halo of ${reach} screen px past its lens, not in (0, `
+        + `${GLOW_MAX_PX}]`);
+    }
+  }
+  return out;
+}
+
 const BOUND = (attr) => new RegExp(`(?:^|\\s)(?:${attr}="\\$\\{|:${attr}="|x-bind:${attr}=")`);
 /** Every data-led / data-needle element binds data-source and its state, never a literal. */
 export function unboundIndicators(files) {
@@ -556,6 +606,50 @@ test('a glow is drawn only on an LED, within 6 px, and text never glows', () => 
   assert.deepEqual(glows(SRC, GLOW_DEBT), []);
 });
 
+test('an SVG LED\'s halo glows within 6 screen px of its lens at every zoom, at hw-sheen',
+  async (t) => {
+    const url = new URL('../../src/js/ui/synth/led.js', import.meta.url);
+    if (!existsSync(url)) {
+      t.diagnostic('VACUOUS: src/js/ui/synth/led.js does not exist; no SVG LED to measure.');
+      return;
+    }
+    const { ledSvg, LED_COLOURS } = await import(url.href);
+    const { TOKENS } = await import('./ui-synth-fixture.mjs');
+    const { ZOOM_MIN, ZOOM_MAX } = await import('../../src/js/ui/studio/graph-geometry.js');
+    const zooms = [ZOOM_MIN, 0.5, 0.75, 1, 1.25, 1.5, 2, ZOOM_MAX];
+    let halos = 0;
+    for (const zoom of zooms) {
+      for (const colour of LED_COLOURS) {
+        for (const extra of [{}, { label: 'Arm' }, { interactive: true }]) {
+          const svg = ledSvg({ lit: true, source: 'transport.armed', tokens: TOKENS, colour,
+            zoom, ...extra });
+          halos += (svg.match(/\sdata-halo=/g) || []).length;
+          assert.deepEqual(svgHalos(svg, zoom, `${colour} ${JSON.stringify(extra)}`), []);
+        }
+      }
+    }
+    // A toggle's LED is drawn through ledSvg too, and must hand it the graph's zoom.
+    const { switchSvg } = await import('../../src/js/ui/synth/switch.js');
+    const param = { key: 'enabled', label: 'Enabled', type: 'boolean', default: true };
+    for (const zoom of zooms) {
+      const svg = switchSvg({ value: true, param, tokens: TOKENS, zoom,
+        led: { source: 'node.enabled', lit: true } });
+      halos += (svg.match(/\sdata-halo=/g) || []).length;
+      assert.deepEqual(svgHalos(svg, zoom, 'toggle'), []);
+    }
+    // So is the XY pad's gate LED (xy.js, S10), lit while the pad is touched.
+    const { xySvg } = await import('../../src/js/ui/synth/xy.js');
+    const axis = (key) => ({ key, label: key, type: 'number', min: 0, max: 1, default: 0.5 });
+    for (const zoom of zooms) {
+      const svg = xySvg({ x: 0.5, y: 0.5, gate: true, source: 'node.xy.gate', tokens: TOKENS,
+        params: { x: axis('x'), y: axis('y') }, zoom, state: { touched: true } });
+      halos += (svg.match(/\sdata-halo=/g) || []).length;
+      assert.deepEqual(svgHalos(svg, zoom, 'xy gate'), []);
+    }
+    assert.equal(halos, zooms.length * (LED_COLOURS.length * 3 + 2),
+      'every lit LED drew its halo, a toggle\'s and the XY gate\'s included');
+  });
+
 test('every LED and needle names its state source and binds its state', () => {
   assert.deepEqual(unboundIndicators(SRC), []);
 });
@@ -689,6 +783,22 @@ test('mutation: a glow off an LED, an over-glow and glowing text are caught', ()
   caught(glows, f('src/js/ui/synth/cable.js',
     '`<feDropShadow dx="0" dy="0" stdDeviation="3"/>`'),
   f('src/js/ui/synth/cable.js', '`<feDropShadow dx="0" dy="2" stdDeviation="1.5"/>`'));
+});
+
+test('mutation: an SVG halo too wide on screen, off an LED or with another class is caught', () => {
+  const led = (halo) => `<g data-led="" data-source="s" data-lit="true"><circle data-bezel="" `
+    + `r="4.5"/>${halo}<circle data-lens="" cx="0" cy="0" r="3"/></g>`;
+  const halo = (r, cls = 'opacity-hw-sheen') => `<circle data-halo="" class="${cls}" r="${r}"/>`;
+  const zoomed = (zoom) => (svg) => svgHalos(svg, zoom);
+  caught(zoomed(2.5), led(halo(7)), led(halo(4.6)));
+  caught(zoomed(1), led(halo(10)), led(halo(9)));
+  caught(zoomed(1), led(halo(7, 'opacity-50')), led(halo(7)));
+  caught(zoomed(1), led(halo(7, 'opacity-hw-sheen shadow-hw-led')), led(halo(7)));
+  caught(zoomed(1), led(halo(7).replace('/>', ' opacity="0.3"/>')), led(halo(7)));
+  caught(zoomed(1), `${led('')}${halo(7)}`, led(halo(7)));
+  caught(zoomed(1), `<g data-led=""><g></g></g>${halo(7)}<circle data-lens="" r="3"/>`,
+    led(halo(7)));
+  caught(zoomed(1), led(halo(3)), led(halo(4)));
 });
 
 test('mutation: an LED or a needle with a literal or no state source is caught', () => {
