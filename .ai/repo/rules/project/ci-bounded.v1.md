@@ -4,7 +4,7 @@ version: 1
 kind: rule
 title: Every CI job and network step is bounded, pinned and retried
 description: Every workflow job and every step that installs, downloads or runs a browser suite has its own time limit; installs go through one bounded wrapper, downloads retry, are digest-checked and are never executed, nothing is made non-fatal, gate needs every job, and ci.yml starts on a pull request only.
-statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit and every container image to a tag; no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request only.
+statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit, every container image to a tag and every job's runs-on to a versioned runner image (never a label ending in -latest); no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request only.
 status: active
 class: blocking
 depends_on: []
@@ -22,6 +22,10 @@ Each clause is a failure that happened.
 - #145: an install hang held a docs-only pull request.
 - #120: the Majordomus release download had no retry, so one transient asset error stalled
   every merge, and `install.sh` was fetched unpinned, so what CI ran could change under it.
+- #420 (2026-11-05): `ubuntu-latest` moved to `ubuntu-26.04` between two runs. The same tree's
+  Synth legend check (synth.cjs s-choices) overran its plate by 1.4 px in three engines on the
+  26.04 host fonts and passed in the pinned Playwright container. A moving runner label changes
+  the fonts and packages under a browser suite without a commit.
 
 `ci.yml` was fixed job by job after each of these, and `pages.yml` was not: on the commit this
 rule was written against, the Pages smoke still installed its browser with a bare
@@ -66,7 +70,9 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   `<(curl ...)`, backticks), and not fetched in a step that uses `eval`. A digest check
   elsewhere in the step does not excuse it.
 - `uses:` names a version tag (`@v7`) or a full commit; a container image names a tag other
-  than `latest`, or a digest.
+  than `latest`, or a digest; `runs-on` names a versioned runner image (`ubuntu-24.04`), and no
+  label of it ends in `-latest`. Moving to a newer image is a commit of its own, judged by the
+  suites like any other change.
 - Nothing is made non-fatal: no job and no step sets `continue-on-error` (GitHub reports such
   a job as succeeded, so `gate` would pass over its failure); no line that installs,
   downloads, checks a digest or runs a browser suite throws its failure away with
@@ -96,7 +102,8 @@ By convention, not checked: a job's limit is the sum of its steps', rounded up.
 
 Not covered, and bounded only by their job's limit: `npm ci` (npm retries its own fetches)
 and the `uses:` actions themselves (checkout, setup-node, upload-artifact, the Pages
-actions). The rule does not pin `runs-on` images.
+actions). Whether a pinned runner image is still offered by GitHub is not checked: a retired
+label fails the job at queue time, which is loud.
 
 # Enforcement
 
@@ -123,7 +130,8 @@ it cannot read fails the test instead of passing unread.
   script under `scripts/` and behind a local action used without a limit, each job in turn
   removed from `gate.needs`, a new job nobody added to it, `gate` without `if: always()`,
   `workflow_dispatch` or `push` added to `ci.yml`'s triggers, an action on a branch, an image
-  without a tag, a reusable workflow on a branch, an install in a script of `package.json`
+  without a tag, `runs-on: ubuntu-latest` in `ci.yml` (alone and in a label list) and in
+  `pages.yml`, a reusable workflow on a branch, an install in a script of `package.json`
   including `postinstall`, apt and dpkg by their path, a suite behind `npm run -s`,
   `npm --silent run`, `node --run`, `yarn` and `pnpm`, a failure thrown away with
   `|| exit 0`, `|| echo`, `; true` or `set +e`, a digest check followed by `|| true`, a

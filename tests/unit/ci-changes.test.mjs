@@ -393,7 +393,7 @@ test('every browser leg of ci.yml is path-gated, so a plan or record change runs
 
 test('mutation: a browser leg without the runtime gate is refused', () => {
   const doc = JSON.parse(JSON.stringify(CI));
-  doc.jobs['probe-leg'] = { 'runs-on': 'ubuntu-latest', strategy: { matrix: { browser: ['webkit'] } },
+  doc.jobs['probe-leg'] = { 'runs-on': 'ubuntu-24.04', strategy: { matrix: { browser: ['webkit'] } },
     steps: [] };
   const ungated = browserLegs(doc).filter((k) => !GATED_JOBS.includes(k));
   assert.deepEqual(ungated, ['probe-leg'], 'the rule names the ungated browser leg');

@@ -13,7 +13,8 @@
 //   download-digest  a download not checked with `sha256sum -c` against a pinned digest
 //   pipe-to-shell    a download that is executed: piped into an interpreter, substituted into
 //                    a command ($(curl), <(curl), backticks) or in a step that uses eval
-//   pinned           an action not pinned to a version tag or commit, an image without a tag
+//   pinned           an action not pinned to a version tag or commit, an image without a tag,
+//                    a runs-on runner label ending in -latest
 //   gate-needs       a `gate` job whose needs is not every other job of its workflow
 //   non-fatal        continue-on-error on a job or a step; `|| true`, `|| :`, `|| exit 0`,
 //                    a trailing `|| echo` or `; true` on a line that installs, downloads,
@@ -324,6 +325,13 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
       || (/:[^:/@]+$/.test(String(image)) && !/:latest$/.test(String(image)));
     if (image !== undefined && !tagged) {
       add('pinned', name, null, `container image without a version tag or digest: ${image}`);
+    }
+    // A hosted runner label that moves (ubuntu-latest) changes the fonts and packages under a
+    // browser suite between two runs of one tree (#420: ubuntu-26.04 fonts, a 1.4 px overflow).
+    for (const label of [].concat(job['runs-on'] ?? []).map(String)) {
+      if (/-latest$/.test(label)) {
+        add('pinned', name, null, `runner image not pinned to a version: runs-on ${label}`);
+      }
     }
     const jobEnv = JSON.stringify([doc.env || {}, job.env || {}]);
     (job.steps || []).forEach((step, i) => {
