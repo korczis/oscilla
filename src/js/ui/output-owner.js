@@ -112,7 +112,8 @@ export function createOutputOwner({ app, sequencer, changed = () => {} }) {
     // (measureReferenceOwnsOutput, as calibration.js stops playback only for the microphone; the
     // loopback TEST CONTEXT reference is the instrument's own output). The MIDI and keyboard
     // notes (midi/ui.js ownedBy 'reference') refuse every capture, loopback included, so in a
-    // loopback capture a MIDI note is refused while a Playground voice plays. Not decided here.
+    // loopback capture a MIDI note is refused while a Playground voice, the sequencer, the
+    // audition and Studio PLAY are allowed. Not decided here.
     const refusal = outputRefusalOf(cmp);
     if (refusal) {
       cmp.notify('info', refusal.title, refusal.text);

@@ -526,6 +526,11 @@ test('the component part: Playground settings per note, a refusal said, every st
   refusedBy(() => { cmp.meas.levelForm.capturing = true; },
     () => { cmp.meas.levelForm.capturing = false; }, 'reference');
   refusedBy(() => { studio = true; }, () => { studio = false; }, 'studio');
+  // The documented divergence (output-owner.js claimOutput): a loopback TEST CONTEXT capture
+  // refuses the MIDI and keyboard notes too, while the output table's reference row does not.
+  // After the studio run, so the refusal is a new run and is said again.
+  refusedBy(() => { cmp.meas.loopback = true; cmp.meas.levelForm.capturing = true; },
+    () => { cmp.meas.levelForm.capturing = false; cmp.meas.loopback = false; }, 'reference');
   refusedBy(() => { sequencing = true; }, () => { sequencing = false; }, 'sequencer');
   notices.length = 0;
   port.send([0x90, 60, 100]);
