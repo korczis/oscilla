@@ -13,7 +13,8 @@
 //   download-digest  a download not checked with `sha256sum -c` against a pinned digest
 //   pipe-to-shell    a download that is executed: piped into an interpreter, substituted into
 //                    a command ($(curl), <(curl), backticks) or in a step that uses eval
-//   pinned           an action not pinned to a version tag or commit, an image without a tag
+//   pinned           an action not pinned to a version tag or commit, an image without a tag,
+//                    a runs-on runner label ending in -latest
 //   gate-needs       a `gate` job whose needs is not every other job of its workflow
 //   non-fatal        continue-on-error on a job or a step; `|| true`, `|| :`, `|| exit 0`,
 //                    a trailing `|| echo` or `; true` on a line that installs, downloads,
@@ -188,6 +189,36 @@ function positive(n) {
   return typeof n === 'number' && Number.isFinite(n) && n > 0;
 }
 
+/**
+ * The runner labels a job can land on, as [label, why] pairs; `why` is set when the label
+ * cannot be judged. A literal, a list, a runner group's `labels` and `${{ matrix.<key> }}`
+ * (resolved through strategy.matrix and its include rows) are read; any other expression is
+ * refused, since what it yields is decided at run time.
+ */
+export function runnerLabels(job) {
+  const out = [];
+  const each = (v) => {
+    if (v === undefined || v === null) return;
+    if (Array.isArray(v)) return v.forEach(each);
+    if (typeof v === 'object') return each(v.labels);
+    const label = String(v);
+    const m = /^\$\{\{\s*matrix\.([\w-]+)\s*\}\}$/.exec(label.trim());
+    if (m) {
+      const matrix = job.strategy?.matrix ?? {};
+      const values = [].concat(matrix[m[1]] ?? [],
+        [].concat(matrix.include ?? []).map((row) => row?.[m[1]]).filter((x) => x !== undefined));
+      if (!values.length) out.push([label, `runs-on ${label} names a matrix key with no values`]);
+      return values.forEach(each);
+    }
+    if (label.includes('${{')) {
+      return out.push([label, `runs-on ${label} is an expression the checker cannot resolve`]);
+    }
+    out.push([label, null]);
+  };
+  each(job['runs-on']);
+  return out;
+}
+
 /** A number, or a variable that holds one (`--retry "$RETRIES"`). */
 const COUNT = '(?:\\d+|"?\\$\\{?\\w+\\}?"?)';
 
@@ -324,6 +355,14 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
       || (/:[^:/@]+$/.test(String(image)) && !/:latest$/.test(String(image)));
     if (image !== undefined && !tagged) {
       add('pinned', name, null, `container image without a version tag or digest: ${image}`);
+    }
+    // A hosted runner label that moves (ubuntu-latest) changes the fonts and packages under a
+    // browser suite between two runs of one tree (#420: ubuntu-26.04 fonts, a 1.4 px overflow).
+    for (const [label, why] of runnerLabels(job)) {
+      if (why) add('pinned', name, null, why);
+      else if (/-latest$/i.test(label)) {
+        add('pinned', name, null, `runner image not pinned to a version: runs-on ${label}`);
+      }
     }
     const jobEnv = JSON.stringify([doc.env || {}, job.env || {}]);
     (job.steps || []).forEach((step, i) => {

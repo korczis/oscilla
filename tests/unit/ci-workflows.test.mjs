@@ -98,11 +98,11 @@ test('the browser suites are derived from package.json', () => {
 });
 
 test('mutation: a job without timeout-minutes', () => {
-  const head = '    name: unit, build, artifact rules\n    runs-on: ubuntu-latest\n';
+  const head = '    name: unit, build, artifact rules\n    runs-on: ubuntu-24.04\n';
   const text = mutate(CI, `${head}    timeout-minutes: 10\n`, head);
   assert.deepEqual(rules(ci(text)), ['job-timeout@unit']);
-  const zero = mutate(CI, '    runs-on: ubuntu-latest\n    timeout-minutes: 5\n',
-    '    runs-on: ubuntu-latest\n    timeout-minutes: 0\n');
+  const zero = mutate(CI, '    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n',
+    '    runs-on: ubuntu-24.04\n    timeout-minutes: 0\n');
   assert.deepEqual(rules(ci(zero)), ['job-timeout@gate']);
 });
 
@@ -177,7 +177,7 @@ test('mutation: a job that gate does not need', () => {
     assert.deepEqual(rules(found), ['gate-needs@gate'], job);
     assert.ok(found[0].message.endsWith(`: ${job}`), found[0].message);
   }
-  const added = `${CI}\n  extra:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n`
+  const added = `${CI}\n  extra:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n`
     + '    steps:\n      - run: echo extra\n';
   assert.deepEqual(rules(ci(added)), ['gate-needs@gate'], 'a new job nobody added to needs');
   const conditional = mutate(CI, '    name: gate\n    if: always()\n', '    name: gate\n');
@@ -191,6 +191,41 @@ test('mutation: an action on a branch, an image without a tag', () => {
   assert.deepEqual(rules(ci(latest)), ['pinned@visual']);
   const untagged = mutate(CI, 'playwright:v1.63.0-noble', 'playwright');
   assert.deepEqual(rules(ci(untagged)), ['pinned@visual']);
+});
+
+test('mutation: a runner image that moves (runs-on ubuntu-latest) is refused', () => {
+  const head = '    name: unit, build, artifact rules\n    runs-on: ubuntu-24.04\n';
+  const latest = mutate(CI, head, head.replace('ubuntu-24.04', 'ubuntu-latest'));
+  assert.deepEqual(rules(ci(latest)), ['pinned@unit']);
+  const listed = mutate(CI, head, head.replace('ubuntu-24.04', '[self-hosted, ubuntu-latest]'));
+  assert.deepEqual(rules(ci(listed)), ['pinned@unit']);
+  const pages = mutate(PAGES, '    runs-on: ubuntu-24.04\n', '    runs-on: ubuntu-latest\n');
+  const found = checkWorkflow('.github/workflows/pages.yml', pages, SUITES);
+  assert.deepEqual(found.map((v) => v.rule), ['pinned'], 'pages.yml on ubuntu-latest');
+});
+
+test('mutation: a moving runner hidden in a matrix, a group, an expression or another OS', () => {
+  // One job, every other rule satisfied, so only `pinned` can fire.
+  const job = (runsOn, extra = '') => 'on: pull_request\njobs:\n  probe:\n'
+    + `    runs-on: ${runsOn}\n    timeout-minutes: 5\n${extra}    steps:\n      - run: echo ok\n`;
+  const pinned = (text) => checkWorkflow('.github/workflows/probe.yml', text, SUITES)
+    .filter((v) => v.rule === 'pinned').map((v) => v.message);
+  const matrix = (os) => `    strategy:\n      matrix:\n        os: [${os}]\n`;
+  assert.deepEqual(pinned(job('ubuntu-24.04')), [], 'a pinned literal passes');
+  assert.deepEqual(pinned(job('${{ matrix.os }}', matrix('ubuntu-24.04, macos-15'))), [],
+    'a matrix of pinned images passes');
+  for (const [what, text] of [
+    ['matrix value', job('${{ matrix.os }}', matrix('ubuntu-24.04, macos-latest'))],
+    ['matrix include row', job('${{ matrix.os }}', '    strategy:\n      matrix:\n'
+      + '        browser: [chromium]\n        include:\n          - os: windows-latest\n')],
+    ['runner group labels', job('{ group: hosted, labels: [ubuntu-latest] }')],
+    ['macos-latest', job('macos-latest')],
+    ['windows-latest', job('windows-latest')],
+    ['another case', job('Ubuntu-Latest')],
+    ['a container job', job('ubuntu-latest', '    container:\n      image: node:22.11.0\n')],
+  ]) assert.equal(pinned(text).length, 1, what);
+  assert.match(pinned(job('${{ inputs.os }}'))[0], /cannot resolve/, 'an unresolvable expression');
+  assert.match(pinned(job('${{ matrix.os }}'))[0], /no values/, 'a matrix key with no values');
 });
 
 test('the gate fails on any job that did not succeed, but a skip E026 path gating made', () => {

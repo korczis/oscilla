@@ -235,13 +235,13 @@ test('the token reader sees suites, programs and the verdict, and skips setup', 
 });
 
 test('a job ci.yml gains or loses is a disagreement', () => {
-  const extra = mutate(CI, '  visual:\n', '  lint:\n    runs-on: ubuntu-latest\n    steps:\n'
+  const extra = mutate(CI, '  visual:\n', '  lint:\n    runs-on: ubuntu-24.04\n    steps:\n'
     + '      - run: npm run build:check\n\n  visual:\n');
   assert.ok(has(compare(extra, MODEL), 'ci.yml job lint has no gate lint'));
   const fewer = mutate(CI, `    name: V1 engine checks (\${{ matrix.browser }})
     needs: changes
     if: ${RUNTIME_IF}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -249,7 +249,7 @@ test('a job ci.yml gains or loses is a disagreement', () => {
         browser: [chromium, firefox, webkit]`, `    name: V1 engine checks (\${{ matrix.browser }})
     needs: changes
     if: ${RUNTIME_IF}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
