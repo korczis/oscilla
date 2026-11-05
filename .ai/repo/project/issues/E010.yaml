@@ -26,4 +26,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-11-05T00:02:21Z
+started_at: 2026-11-05T00:02:07Z
+started_event: sha256:1293ff0e4a9e35fbd63e4b789b4d4f4412870d3eac1de17cc7ee28d70fced551
+completed_at: 2026-11-05T00:02:21Z
+completed_event: sha256:ebc01a52c09316c8007ae1d8b6349df5e21dc8145245198f25124d5c5eb0f64e
+evidence:
+  - covers: verified
+    type: test
+    command: "npm test (tests/unit/flake-ledger.test.mjs)"
+    result: "node --test tests/unit/flake-ledger.test.mjs passes on a scratch export of origin/main 6d5efa89 (in a combined run: 1207 pass, 0 fail). The file asserts one entry for fail-then-pass, no ledger on a first attempt, retry on a failed request, and a gate verdict independent of the ledger job, with a mutation case."
+    artifact: "447bb27b2747c444cc518f9b9fa57da1f54028bb"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:01:50Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/239.yaml"
+    result: "Review verdict .ai/repo/reviews/239.yaml (verdict: merge) is on origin/main; landed as #239 merged into int/train-4, landed on main by merge train 4 (#410, merge 447bb27b), main commit 447bb27b2747c444cc518f9b9fa57da1f54028bb."
+    artifact: ".ai/repo/reviews/239.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:02:00Z

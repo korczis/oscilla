@@ -1,0 +1,25 @@
+id: C048
+milestone: M090
+serves:
+  - "coherent-state#engine-backstops-held"
+title: "The engine's Nyquist backstops are held by tests at 44.1 and 48 kHz"
+slug: the-engines-nyquist-backstops-are-held-by-tests-at-441-and-48
+priority: p2
+profile: implementation
+objective: "Lands as test(audio). Hardening S8, second finding (C026, READY, holds C011's release clamp and is not re-filed). At main 68b117f3 the Nyquist backstops are weakly held: _f with no upper clamp fails only one Studio adapter test, incidentally, and removing the noteOn guard freq < this.safeMaximum (src/js/audio/audio-engine.js:1075) fails nothing; the upstream clamps (buildPlan, the compiler cap, SAFE_NYQUIST_FACTOR) are well decided. After: tests/unit/engine-nyquist-backstops.test.mjs asserts that noteOn with freq >= safeMaximum returns { ok: false, reason: 'frequency' } and that _osc and _carrier at 0.99 x Nyquist schedule safeMaximum, at 44.1 and 48 kHz, with literal expected values."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S8. C026 is cross-referenced: it carries the release-clamp half of the same backstop criterion."
+scope:
+  - "tests/unit/engine-nyquist-backstops.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Mutations rejected, shown in the pull request: _f clamped to Infinity; the noteOn frequency guard removed. Each fails the new test at both sample rates."
+  - "Expected values are literal constants derived in a comment, not recomputed through the code under test."
+  - "No src/ or dist/ change; fail-first: n/a (test(audio), behaviour correct on main). Not guarded while only tests/ change; a defect found becomes its own fix and src/js/audio/* needs prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+validation:
+  - "node --test tests/unit/engine-nyquist-backstops.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -1,0 +1,41 @@
+id: C036
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "One output-owner table: a level-reference capture refuses the instrument and the audition, the audition is named, and every other table is gone or derived from it"
+slug: one-output-owner-table
+priority: p0
+profile: implementation
+objective: "Lands as fix(output-owner). The first step of the bus (C037). At main 68b117f3 who owns the output is decided in three tables that disagree, plus a fourth refusal: src/js/ui/output-owner.js SOURCES (:55-63, :80-94), src/js/visualization/output-owner.js outputOwnerOf on the polled seqPlaying (:11, :24-29), src/js/midi/ui.js ownedBy with 'reference' (:51-57), and the riff audition's own refusal text (src/js/studio/riffs/audition.js:75-81). af's Play audit counts five, adding the SPACE_OWNER map of src/js/ui/shortcuts.js:29. During a mic level-reference capture MIDI and keys are refused (src/js/midi/ui.js:53-54, the ownedBy 'reference' row read from cmp.meas.levelForm.capturing; session.js:460-462 is measureOwnsOutput, the measurement row) but claimOutput('instrument') returns true and the audition plays; the audition is counted as 'instrument' (engine 'play' to cmp.playing). After: one table in src/js/ui/output-owner.js declares every owner (instrument, sequencer, studio, synth, notes, audition, measure, reference) with its refusal rule and its sentence; every other site imports it or derives from it. A loopback capture (the capture records the output itself) allows the instrument: the reference refusal applies only to a microphone level-reference capture (src/js/ui/measure/calibration.js:219, measureAbortLevelReference, and the levelForm it runs), where a second source would corrupt the reference. Line numbers at origin/main a19f1ff6. Order: C036 lands before C030 and C032 (af, origin/chore/plan-nav-folds: a visible Play on every workspace; the status-bar Play acts on the owner on screen, both reading SPACE_OWNER at src/js/ui/shortcuts.js:29-42) and before K182 (an armed keyboard plays the output owner on every page, src/js/ui/output-owner.js and src/js/midi/*), which then read the one table; whichever lands second rebases."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice D (state-events gap 1, severity high), and af's Play audit wf_99782352-a93 (five output-owner tables, measurement refusal checked in nine places). af's critique N1 (mesh, 2026-11-05): the one-table test must assert that the other tables are gone or derived, not only that the new one answers. af's critique of 96daa67b (AMEND 11): the MIDI refusal's line, the loopback case, the changed output-owner.test.mjs, the missing sites (core/instrument.js:1191, ui/workbench.js, ui/measure/calibration.js), the order against C030, C032 and K182, and the priority inversion (C024 at p2 blocked this p0 chain; C024 is raised to p0 in the same plan change). C024 (READY) makes held notes an owner of the same computation; this issue makes the computation one table."
+scope:
+  - "src/js/ui/output-owner.js"
+  - "src/js/visualization/output-owner.js"
+  - "src/js/midi/ui.js"
+  - "src/js/ui/shortcuts.js"
+  - "src/js/ui/workbench.js"
+  - "src/js/ui/measure/calibration.js"
+  - "src/js/core/instrument.js"
+  - "tests/unit/output-owner.test.mjs"
+  - "src/js/ui/measure/session.js"
+  - "src/js/studio/riffs/source.js"
+  - "src/js/studio/riffs/audition.js"
+  - "tests/unit/output-owner-one-table.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C024"
+acceptance_criteria:
+  - "Fail-first: tests/unit/output-owner-one-table.test.mjs fails on the merge base on two rows: during a level-reference capture claimOutput('instrument') is refused with the reference sentence (true today), and the audition is reported as 'audition' (reported as 'instrument' today)."
+  - "N1: the same test scans src/js for an owner table or refusal list outside src/js/ui/output-owner.js (a literal list of owner names, a second SOURCES, an ownedBy, a SPACE_OWNER owner column or a refusal sentence copy) and fails on each; visualization/output-owner.js, midi/ui.js ownedBy, shortcuts.js and the audition import or derive from the one table. A mutation that re-adds a local table fails."
+  - "After it lands exactly one owner table and one claim API exist: the test imports every former table site (ui/output-owner.js:16-22,55-62; visualization/output-owner.js:12,24-29; midi/ui.js:51-57; ui/shortcuts.js:29; core/instrument.js:1191, line numbers at main 68b117f3) and asserts each is gone or derived from the one table, so C024's notes owner is a row of it and not a sixth claim path (af N1 condition, mesh 2026-11-05)."
+  - "The newest-action-wins rule of C002 and the measurement refusal hold for every owner. tests/unit/output-owner.test.mjs changes, by design: its outputOwnerOf case (:14, the instrument first, then the sequencer, then the Studio) is rewritten against the one table, the audition and notes rows are added, and its C002 cases (:67, :77) pass unchanged; keys-registry.test.mjs passes unchanged."
+  - "A loopback capture leaves claimOutput('instrument') true and a microphone level-reference capture refuses it with the reference sentence, one case each."
+  - "Guarded paths (src/js/ui/measure/*, src/js/studio/*): the pull request carries .ai/repo/reviews/<pr>.yaml written by prismatic-majordomus-98, who built none of it (project.review-verdict). Lane: dev-53; one lane owns src/js/midi/* while K178 is open."
+validation:
+  - "node --test tests/unit/output-owner-one-table.test.mjs tests/unit/output-owner.test.mjs tests/unit/keys-registry.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

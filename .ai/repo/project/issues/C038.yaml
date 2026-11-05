@@ -1,0 +1,33 @@
+id: C038
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "Every osc:* event and every osc:ui (kind, key) pair is declared once and has a listener; the unheard osc:range goes"
+slug: every-osc-ui-and-osc-range-event-is-declared-and-heard
+priority: p2
+profile: implementation
+objective: "Lands as fix(events). At main 68b117f3 there is no catalogue of the osc:ui and osc:range custom events, and osc:range is dispatched with no listener (oscilla-b0 coherence audit, slice D). Line numbers at origin/main a19f1ff6: osc:range is dispatched at src/js/labs/bioacoustics.js:92 and heard nowhere; it is redundant, because the same selection already reaches the integration through options.onSelectRange (:90), so it is removed with its header sentence (:3-5). osc:ui is dispatched by the shell's emit(kind, key, value) (src/js/ui/app.js:307-311) and heard at src/js/main.js:754 and through onUi in src/js/labs/dom.js:12-14. After: one new module, src/js/ui/events.js, declares every osc:* event with its detail shape and, for osc:ui, every (kind, key) pair the shell emits with the listener that handles it; a unit scan finds every dispatchEvent(new CustomEvent('osc:...')), every addEventListener('osc:...'), every emit(kind, key) call (in src/js and the @click/x-on expressions of src/index.html) and every kind/key branch of the listeners, and fails on an event or pair emitted without a declared listener or listened to without an emitter."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice D (uncovered): an event nobody hears is a view that cannot describe what sounds. af's critique of 96daa67b (AMEND 12): the events' sites were out of scope, osc:range is redundant, and the scan must cover the emit(kind, key) pairs."
+scope:
+  - "src/js/ui/events.js"
+  - "src/js/ui/app.js"
+  - "src/js/labs/bioacoustics.js"
+  - "src/js/labs/dom.js"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "tests/unit/osc-events.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/osc-events.test.mjs fails on the merge base naming osc:range (dispatched, no listener)."
+  - "Every osc:* event and every osc:ui (kind, key) pair is declared once with its detail shape and listener; a mutation that emits an undeclared pair, dispatches an undeclared event, or removes the only listener branch of one, fails."
+  - "osc:range's dispatch and its header sentence are removed; choosing a Bioacoustics row still sets the explorer range through onSelectRange, asserted by its effect in tests/unit/bioacoustics.test.mjs."
+  - "Not a guarded path unless the scope widens to src/js/studio/* or src/js/audio/*; then prismatic-majordomus-98 writes the verdict. Lane: dev-53."
+validation:
+  - "node --test tests/unit/osc-events.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

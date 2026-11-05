@@ -1,0 +1,46 @@
+id: K193
+milestone: M068
+serves:
+  - "connected-instrument#engines"
+title: "One LFO, one Nyquist bound and one voice headroom law, in src/js/audio/, imported by every voice system"
+slug: shared-voice-primitives-in-audio
+priority: p1
+profile: implementation
+objective: "Lands as fix(audio). Coverage gap of af's critique of 96daa67b ('nothing places the LFO copied three times, the Nyquist bound at about 11 sites, safeMaxFor has no caller, or the three headroom laws') and its BLOCKING 6 point that the shared primitives belong in src/js/audio/, not studio/adapters/ (or audio/ and sequencer/ would import studio/). Line numbers at origin/main a19f1ff6. The LFO is built three times: src/js/audio/modulation.js:14-34 (V1), src/js/sequencer/compiler.js:933 and src/js/studio/adapters/modulation.js:15. The generation bound (Nyquist x SAFE_NYQUIST_FACTOR) is recomputed at audio-engine.js:223, audio/additive.js:313, audio/filters.js:74, audio/offline-renderer.js:49, sequencer/model.js:81, studio/adapters/engine-hooks.js:60 and :65, studio/adapters/engines.js:21 and :65, studio/adapters/instrument.js:25 and studio/offline.js:213, while core/frequency.js:173 safeMaxFor, the one function meant for it, has no caller (measurement/stimulus.js:81 keeps its own name for MEASURE by design, rta.js:73 NYQUIST_FRACTION is an analysis bound). The per-voice headroom has three laws: the V1 note voices' level / NOTE_POLYPHONY (audio-engine.js:1089), the voice host's VOICE_LEVEL_SCALE = 1 / (VOICE_LEVEL_MAX x MAX_VOICES) (studio/adapters/voices.js:49-52) and the additive table's own headroom normalisation (audio/additive.js:212-223). After: src/js/audio/ holds one LFO builder, one voice headroom law (consuming K180's cap) and the generation bound is safeMaxFor; the eleven sites call it, and the voice systems import these primitives, so no import edge from audio/ or sequencer/ to studio/ appears."
+why: "af's critique of 96daa67b (coverage gaps under 'one bus', and BLOCKING 6 on where the primitives live); the owner's 'reuse, dry, parametrizuj' (relayed by af, 2026-11-05)."
+scope:
+  - "src/js/audio/modulation.js"
+  - "src/js/audio/voice-law.js"
+  - "src/js/core/frequency.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/audio/additive.js"
+  - "src/js/audio/filters.js"
+  - "src/js/audio/offline-renderer.js"
+  - "src/js/sequencer/compiler.js"
+  - "src/js/sequencer/model.js"
+  - "src/js/studio/adapters/modulation.js"
+  - "src/js/studio/adapters/engine-hooks.js"
+  - "src/js/studio/adapters/engines.js"
+  - "src/js/studio/adapters/instrument.js"
+  - "src/js/studio/adapters/voices.js"
+  - "src/js/studio/offline.js"
+  - "tests/unit/voice-primitives.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K191"
+acceptance_criteria:
+  - "Fail-first: tests/unit/voice-primitives.test.mjs scans src/js and fails on the merge base naming each LFO build outside src/js/audio/modulation.js (compiler.js:933, adapters/modulation.js:15), each recomputation of sampleRate / 2 x SAFE_NYQUIST_FACTOR outside safeMaxFor (the eleven sites above; stimulus.js and rta.js allow-listed with their reason), and each per-voice level law outside src/js/audio/voice-law.js (audio-engine.js:1089, voices.js:52); a mutation that re-adds one fails."
+  - "safeMaxFor has callers (it is the bound of every generation site), and the engine backstop tests (coherent-state#engine-backstops-held: c011-safety-limits and the noteOn Nyquist guard) pass at 44.1 and 48 kHz with literal expected values."
+  - "No import edge from src/js/audio/ or src/js/sequencer/ to src/js/studio/ exists (asserted by the scan)."
+  - "The V1 freeze golden vectors (tests/unit/freeze.test.mjs) are unchanged with the labs off (ADR 0014); tests/browser/engine-v1port.cjs and tests/browser/sequencer.cjs pass."
+  - "Guarded paths (src/js/audio/*, src/js/studio/*): prismatic-majordomus-98 writes the verdict; src/js/sequencer/* and src/js/core/frequency.js are judged by the screens seat once R031 lands. Lane: dev-53."
+validation:
+  - "node --test tests/unit/voice-primitives.test.mjs tests/unit/c011-safety-limits.test.mjs tests/unit/freeze.test.mjs"
+  - "node tests/browser/engine-v1port.cjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

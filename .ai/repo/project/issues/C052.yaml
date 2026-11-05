@@ -1,0 +1,37 @@
+id: C052
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "The playback bus, slice 4: one writer of the engine's master level, proven by a scan with a mutation"
+slug: one-writer-of-the-master-level
+priority: p1
+profile: implementation
+objective: "Lands as fix(bus). Split from C037 by af's critique of 96daa67b (BLOCKING 5): no criterion of 96daa67b covered the master-level writers, and C012 is stamped done (C034 re-checks it). Line numbers at origin/main a19f1ff6. engine.setMasterGain and engine.holdMasterGain (src/js/audio/audio-engine.js:397, :415) are called from: src/js/main.js:718 (the status-bar gainLevel watcher); src/js/core/instrument.js:410 (the first voice) and :482-483 (claimMasterLevel, reached from main.js:151's claimOutput); src/js/studio/adapters/engine-hooks.js:75-82 (setMasterLevel) and :89-95 (holdMasterGain), called by src/js/studio/runtime.js:359-368 (setMasterLevel) and :384-386 (restoreMaster) and by the Output node (src/js/studio/adapters/output.js:22-33); the offline engine's own setMasterGain (src/js/studio/offline.js:214) is a separate context and stays. The mirrors of who wrote it are reset in three places: main.js:720, instrument.js:484 and src/js/ui/studio/workspace.js:252 (cmp.studio.masterLevel). After: the bus is the one writer of the live engine's master level: it applies the level of the current owner (the status-bar level for the instrument and the sequencer, the Studio's Output level while the Studio owns the output) at claim and on that owner's change; every other site asks the bus; cmp.studio.masterLevel is a read of the bus."
+why: "af's critique of 96daa67b (BLOCKING 5): add a single-writer scan of engine.setMasterGain with a mutation; C034 (origin/chore/plan-nav-folds) found 4 master-level writers contradicting C012's done stamp."
+scope:
+  - "src/js/core/output-bus.js"
+  - "src/js/main.js"
+  - "src/js/core/instrument.js"
+  - "src/js/studio/adapters/engine-hooks.js"
+  - "src/js/studio/adapters/output.js"
+  - "src/js/studio/runtime.js"
+  - "src/js/ui/studio/workspace.js"
+  - "tests/unit/master-level-writer.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C037"
+acceptance_criteria:
+  - "Fail-first, a scan that needs no new module: tests/unit/master-level-writer.test.mjs scans src/js (excluding src/js/studio/offline.js, named with its reason) for calls of setMasterGain and holdMasterGain and fails on every caller outside the bus, naming main.js:718, instrument.js:410 and :483 and engine-hooks.js:82 and :95 on the merge base; a mutation that adds one call elsewhere fails it."
+  - "The level that sounds is the owner's: with the Studio owning the output its Output level is applied, and a status-bar level change while the Studio owns it changes nothing until the instrument claims again (C012's rule), asserted in the same file on a fake engine."
+  - "No status-bar level is lost at a hand-over: instrument -> Studio -> instrument returns to the status-bar level, and the Studio's saved level is restored when it releases (runtime.js:384-386's behaviour kept), one case each."
+  - "The V1 freeze golden vectors (tests/unit/freeze.test.mjs) are unchanged with the labs off (ADR 0014)."
+  - "Guarded paths marked: src/js/audio/* and src/js/studio/* (v2): prismatic-majordomus-98 writes the verdict; the rest is judged by the screens seat once R031 lands. Lane: dev-53 with oscilla-26 for the Studio part."
+validation:
+  - "node --test tests/unit/master-level-writer.test.mjs tests/unit/freeze.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

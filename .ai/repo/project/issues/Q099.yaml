@@ -1,0 +1,22 @@
+id: Q099
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "LLM decision: the XY pad gets Hold, an assignable X within existing targets, and no effects until their own record"
+slug: llm-decision-xy-pad-hold-and-assignable-x
+priority: p1
+profile: routine
+objective: "Record the decision af proposed and 26 accepted on 2026-11-05 under the owner's order 'discuss answers with other llms, do not wait for human, be llm autonomous': (1) Hold/latch is in scope for the XY pad: it keeps the gate and the last X/Y after release, the next touch moves it, Hold off releases it, and Stop, page hide and Escape always release it (project.no-silent-feedback, the owner's Stop-always-works order). (2) X may be assigned to pitch (default) or one CONTROL target from the list xyTargets already declares (src/js/synth/xy.js:41-46); no new param on an existing node type (K097). (3) Delay, reverb or any new effect node is a later record of its own under project.no-silent-feedback. This settles the OSCILLOPAD pack's 02:9 'no latch or alternate mapping without accepted scope'."
+why: "Owner, 2026-11-05, with screenshots of the live Synth XY tab (v3.20.0): 'no kaosspad (oscilla-pad)', and 'arturia like or ims20 like is the target, but modern, connected, oscila way'. af's OSCILLA-pad audit and plan (workflow wf_cad1e2da-025, verified, main 68ad36a5) and 26's acceptance on the mesh the same night."
+scope:
+  - ".ai/repo/project/issues/Q099.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence (covers decision) with the dates and senders of af's proposal and 26's acceptance."
+  - "The Hold and assignable-X slices name Q099 in their why."
+validation:
+  - "manual"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

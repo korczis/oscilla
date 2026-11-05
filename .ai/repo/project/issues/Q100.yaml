@@ -1,0 +1,24 @@
+id: Q100
+milestone: M011
+serves:
+  - "release-provenance#no-runtime-network"
+title: "Owner decision: OSCILLA may get an opt-in localhost transport to Majordomus, and UberSynth means OSCILLA's Synth"
+slug: owner-decision-opt-in-localhost-transport-and-ubersynth
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's two answers of 2026-11-05 (AskUserQuestion in Claude Code session oscilla-af), asked for the Majordomus generic bus mission (seat 98, discovery by 1d): (1) 'UberSynth' in the owner's question 'uber synth? + monitors?' means OSCILLA's Synth: its events (notes, arm, output owner, measurement) are to reach Majordomus monitors through the bus. (2) 'Ano, opt-in localhost': OSCILLA may get an opt-in local transport. The default stays offline (ADR 0012, verify-dist unchanged for the default build); the user switches it on explicitly; only 127.0.0.1; when on, OSCILLA exports trace.js steps (ADR 0042). It needs an ADR amending 0012 with tests, and an export contract over trace.js steps, built after Majordomus declares its open monitor-source registry (44)."
+why: "Discovery (1d, report bus-discovery-report.md, 2026-11-05) verified: OSCILLA publishes nothing; ADR 0012 and scripts/verify-dist.mjs:65,67 refuse WebSocket, EventSource and localhost; the in-page canonical event model is src/js/core/trace.js; output owner, notes, measurement and both Arms emit outside it; 'UberSynth' names nothing in any repository. The meaning of a name and a change to a no-network constraint are the owner's to answer."
+current_state: "Decided by the owner on 2026-11-05 in session oscilla-af (AskUserQuestion; answers quoted in the objective). The owner_decision evidence is recorded on main after this plan change lands."
+scope:
+  - ".ai/repo/project/issues/Q100.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence (covers owner_decision) quoting both answers with date and session."
+  - "The ADR amending 0012 and the export-contract issue name Q100; the default build still passes verify-dist with no network."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

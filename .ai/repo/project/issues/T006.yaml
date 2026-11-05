@@ -29,4 +29,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:09:46Z
+started_at: 2026-11-05T00:09:19Z
+started_event: sha256:0f7f1e097333412c04ca651ec66cef6a3d3f247d365800502b8396a083f9dfaf
+completed_at: 2026-11-05T00:09:46Z
+completed_event: sha256:805d6a62254ec71d26e104222122a499a168f5e46037664e98fd138dac1b0b72
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/readout-in-effect-nyquist-axis.test.mjs tests/unit/charts.test.mjs"
+    result: "On a git archive of origin/main 6d5efa89: all pass (47/47 together with the T019 file). The tests assert a rate change from null to 48000 sets maxHz 24000, 44.1 kHz gives 22050, 20k/2k selections unchanged, and the pending label. The same test file on 652f4c4a^ fails 8 of 9."
+    artifact: "10db73d0938bce9d3c93df6acfd5ebe04759235d"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:09:03Z

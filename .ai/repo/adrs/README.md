@@ -93,6 +93,10 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
 - 0087: new on 2026-11-03 (plan issue V637, the owner's order of that day on the Studio graph
   layout); proposed, because accepting it is the owner's act; V637 implements it (the Tidy, L,
   in `src/js/ui/studio/graph-layout.js`).
+- 0088: new on 2026-11-05 (the owner's answers recorded as Q100: "UberSynth" means OSCILLA's
+  Synth, and an opt-in localhost bridge is allowed): an opt-in loopback bridge exports trace steps
+  to a local Majordomus, and the default build stays offline; proposed, because accepting it is
+  the owner's act; R046 implements it.
 
 On 2026-10-28 the owner ordered Flowbite Pro for the UI of every project; ADR 0061 records
 that order as an accepted decision (its acceptance note quotes it) and supersedes the bullet of
