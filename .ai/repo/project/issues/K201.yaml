@@ -18,6 +18,7 @@ scope:
   - "dist"
 depends_on: []
 acceptance_criteria:
+  - "One rule for every pitch offset when naming the shown note (Tune cents, the FM offset, footage): a non-octave offset on a VCO that is not the lowest audible one keeps the lowest note's name, and a non-octave offset on the lowest audible VCO gives 'sends'; unit cases for XY lead's VCO 2 at +702 cents and for the same fifth through VCO 2's FM offset agree (af and 26, 2026-11-05, after #426 F3)."
   - "F2 remainder: an automation lane that owns the Y target is reflected in the Y readout, or the readout says the lane owns it; a unit test fails first."
   - "F4: the Y ends refresh during a knob drag on the target, not only on a rate change, with no layout read while drawing; a unit test fails first."
   - "F5: the phone readout does not clamp or clip at 320 and 375 px with the longest target and the held label, checked in tests/browser/xy-pad.cjs through the suite harness with wait.cjs deadlines."
