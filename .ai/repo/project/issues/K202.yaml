@@ -1,0 +1,42 @@
+id: K202
+milestone: M061
+serves:
+  - "playable-instrument#workspaces-exchange"
+title: "One key path: every page key reaches one dispatcher, and Escape and Space mean the same in every workspace"
+slug: one-key-path-every-page-key-reaches-one-dispatcher
+priority: p1
+profile: implementation
+objective: "Lands as feat(keys), after K178. K178 makes one owner of the keys' state and one declared route table (src/js/midi/routes.js KEY_ROUTES). The keys themselves still arrive through independent global listeners on int/keys-pad-train 81b31110: src/js/midi/keyboard-ui.js:197/208 (window keydown/keyup, capture), src/js/synth/ui.js:796 (Escape disarms the keys in the Synth only), src/js/ui/studio/workspace.js:501-502 (the Studio's own keydown/keyup, registered first so that its Space and Escape win, §125) and src/js/ui/app.js:293 (Escape closes the shell's menus). That makes 24 keydown/keyup listeners outside src/js/ui/keys/, as on main. What a key does is still decided per surface by listener order and stopImmediatePropagation, not by one table. Here every page key reaches K153's one dispatcher (src/js/ui/keys/), and every binding is declared there with one owner and its scope. Escape means one ordered thing everywhere: close the open menu or dialog, else release held notes, else stop what owns output. Space means one thing everywhere: Play/Stop of the output owner. Neither disarms the keys in one workspace and not in another."
+why: "The owner asked again on 2026-11-05, relayed by prismatic-majordomus-44 through b0: 'jaktoze neni vse propojene, jaktoze se keyboard chova vzdy jinde, jaktoze to neni interconnected'. af's criteria check of K178 at int/keys-pad-train 81b31110 (2026-11-05, asked by b0) found that K178's criteria cover the state and the route table but not the key path. K178's journey (tests/browser/midi.cjs keys-one-keyboard) re-arms the keys after Escape ('Escape may have disarmed the keys'), so it passes while Escape behaves differently per workspace. The journey also plays no pointer note and asserts neither velocity nor the release on blur and hide, all of which K178's third criterion names. Those are K178's own open criteria, not this issue's. This issue is the dispatcher K178 does not ask for."
+depends_on:
+  - "K178"
+  - "K153"
+scope:
+  - "src/js/ui/keys/"
+  - "src/js/midi/keyboard-ui.js"
+  - "src/js/midi/routes.js"
+  - "src/js/synth/ui.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/app.js"
+  - "tests/unit/keys-registry.test.mjs"
+  - "tests/unit/key-listener-baseline.json"
+  - "tests/unit/keys-routes.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
+acceptance_criteria:
+  - "No keydown or keyup listener outside src/js/ui/keys/ in the four files named in the objective. The keys-registry test lowers tests/unit/key-listener-baseline.json for each of them to 0. The baseline's total falls, and the census derives from the source (no hand-typed file list)."
+  - "Escape and Space are each one declared binding in the registry, with one ordered meaning in every workspace (Escape: the open menu or dialog, else held notes, else the output owner; Space: Play/Stop of the output owner). A unit test fails if a second module handles either key."
+  - "Escape does the same to the keys' arm state in the Playground, the Synth and the Studio. Whatever the declared rule is, the same rule holds in all three, and a unit test pins it against KEY_ROUTES."
+  - "tests/browser/midi.cjs keys-one-keyboard no longer re-arms after Escape. It asserts the arm state Escape leaves in each workspace and finds it equal, in chromium, firefox and webkit. It fails on the merge base."
+  - "The Studio's own letters (A, C, F, T) and the graph and timeline editors keep their keys only through KEY_ROUTES' editors and the registry's scopes, never through listener order. The §125 ordering comment in src/js/ui/studio/workspace.js goes with its listener."
+  - "No audible change outside the declared bindings: the census of AudioNodes and the URL state before and after each workspace's key journey are equal. The release on blur, pagehide and hidden (ADR 0062) still holds."
+  - "A guarded change carries a non-builder verdict (project.review-verdict); the feat carries a fail-first unit test. Done only after each criterion is re-checked on a main commit."
+validation:
+  - "node --test tests/unit/keys-registry.test.mjs tests/unit/keys-routes.test.mjs"
+  - "node tests/browser/midi.cjs --browsers chromium,firefox,webkit"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

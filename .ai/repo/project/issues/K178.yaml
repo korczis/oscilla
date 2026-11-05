@@ -25,6 +25,7 @@ acceptance_criteria:
   - "A declared table maps each workspace to what the keys play and when they are armed; changing workspace changes only the route, never the octave, velocity or lights."
   - "A browser check in midi.cjs plays the same key sequence by pointer, QWERTY and MIDI in the Playground, the Synth and the Studio in chromium, firefox and webkit and asserts the same octave, velocity, lit keys, release on blur, hide, Escape and workspace switch, and no note left sounding; it fails on the merge base."
   - "A guarded change carries a non-builder verdict (project.review-verdict); feat changes carry a fail-first unit test."
+current_state: "In the keys+pad train (int/keys-pad-train). af's criteria check at 81b31110 (2026-11-05, asked by b0) found it not yet done. Criterion 1 holds for the routes only: keys-routes.test.mjs refuses a second workspace -> sink or arm map, but no test refuses a second owner of octave, velocity, held notes or lights. Criterion 3: keys-one-keyboard plays QWERTY and MIDI but no pointer note, and asserts neither velocity nor the release on blur and hide. It re-arms after Escape ('Escape may have disarmed the keys'), so a per-workspace Escape passes. These are K178's own criteria and stay open until met on main; the key path itself (24 listeners outside src/js/ui/keys/, Escape disarming in the Synth only) is K202."
 validation:
   - "node tests/browser/midi.cjs --browsers chromium,firefox,webkit"
   - "npm test"
