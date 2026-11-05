@@ -53,6 +53,12 @@
 # (patch-id e79deeab1bf1). Its ci.yml change is still the visual step's name and the out-synth
 # upload, auto-merged beside E045's queue changes. The digest moved with main's ci.yml.
 #
+# Delta 01f46337 (test-only, tests/browser/synth.cjs, not a guarded path). The reviewer built it,
+# disclosed here: no other session was running, and #420 blocked the queue. LAUNCH.firefox sets
+# browser.zoom.siteSpecific false, because s-feel's pinch zoomed Firefox for every later check
+# (13 click timeouts in CI's "V3.1 Studio UI (firefox)"). The guarded content is unchanged, so this
+# verdict judges only content that someone else built.
+#
 # Verdict: merge. No P0 or P1, and no P2 open. T3-T10 are P3 follow-ups, listed below.
 schema: review-verdict/v1
 pr: 420
