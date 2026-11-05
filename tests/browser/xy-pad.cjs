@@ -42,7 +42,8 @@
 //              C4 back, audible; the Synth status names what the keys and the pad play
 //   x-y-rest   (K183 review N2; desktop, every engine) the keys' C4 with no touch sets the
 //              6-12 kHz band against C4; a touch at Y 0.9 raises it 6 dB or more; after the lift
-//              the pad's Y output reads 0, the readout says Y 0 %, and C4 from the keys has the
+//              the pad's Y output reads 0 (X's too, cabled into LPF Cutoff and lifted from the
+//              last cell, review of #428 NF3), the readout says Y 0 %, and C4 from the keys has the
 //              band back within 1.5 dB of the no-touch reference (named until() deadlines)
 //   x-keys     interactive: arrows move the cursor (aria-valuenow, aria-valuetext of both
 //              sliders), Enter held sounds and its release silences; a held Enter is released
@@ -804,12 +805,13 @@ function defineChecks() {
     // 0, the readout says Y 0 %, and the keys' C4 has that band back at the reference.
     const BAND = [6000, 12000];
     const rel = (q) => bandDb(q, BAND[0], BAND[1]) - levelAt(q, C4);
-    const padY = () => page.evaluate(() => {
+    const padOut = (port) => page.evaluate((pt) => {
       const st = window.OSCILLA.studio;
       const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
       const h = pad && st.runtime && st.runtime.nodes.get(pad.id);
-      return h && h.outputs && h.outputs.y ? h.outputs.y.offset.value : null;
-    });
+      return h && h.outputs && h.outputs[pt] ? h.outputs[pt].offset.value : null;
+    }, port);
+    const padY = () => padOut('y');
     const settled = async (what) => { // the band, once two successive polls agree to 1 dB
       let prev = null;
       let now = null;
@@ -846,8 +848,41 @@ function defineChecks() {
       + 'band within 1.5 dB of the no-touch reference' });
     await page.keyboard.up('KeyA');
     await silent(page, 'A released again');
+    // Review of #428 NF3 (af's ruling): X rests too. X cabled into LPF Cutoff as Y is; a touch
+    // on the last cell (X 0.955) at Y 0.05, then the lift: X's output reads 0 and the keys' C4
+    // has the band at the reference again (X's cable adds nothing once the pad is let go).
+    const cabled = await page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const g = st.model.graph;
+      const pad = g.nodes.find((n) => n.type === 'xy-pad');
+      const ye = g.edges.find((e) => e.from.node === pad.id && e.from.port === 'y');
+      return st.store.dispatch({ type: 'EDGE_ADD', id: 'x-rest-probe', from: { node: pad.id,
+        port: 'x' }, to: { ...ye.to }, props: { ...ye.props } }).ok;
+    });
+    if (!cabled) return { ok: false, detail: 'X could not be cabled into LPF Cutoff' };
+    await page.keyboard.down('KeyA');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'A sounds C4 with X cabled');
+    const refX = await settled('the band with X cabled and no touch settles');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'A released, X cabled');
+    const xHold = await press(page, await padPoint(page, STEPS - 1, 0.05));
+    await until(async () => (await padOut('x')) > 0.9, { ms: SOUND_MS,
+      what: 'a touch on the last cell plays X at 0.955' });
+    await xHold.lift();
+    await silent(page, 'the lift silences, X cabled');
+    await until(async () => Math.abs(await padOut('x')) < 1e-3, { ms: SOUND_MS,
+      what: 'the pad\'s X output is back at its rest, 0 (X\'s cable into LPF Cutoff reads 0)' });
+    await page.keyboard.down('KeyA');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'A sounds C4 after the X lift');
+    let backX = null;
+    await until(async () => Math.abs((backX = await settled('the band settles after the X lift'))
+      - refX) < 1.5, { ms: SOUND_MS, what: 'X adds nothing to LPF Cutoff after its lift: the '
+      + 'band within 1.5 dB of the reference with X cabled' });
+    await page.keyboard.up('KeyA');
+    await silent(page, 'A released after the X lift');
     return { ok: true, refDb: Number(ref.toFixed(1)), openedDb: Number(opened.toFixed(1)),
-      backDb: Number(back.toFixed(1)), text };
+      backDb: Number(back.toFixed(1)), text, xRefDb: Number(refX.toFixed(1)),
+      xBackDb: Number(backX.toFixed(1)) };
   });
 
   def('x-cold-touch', async ({ context, base, browserName }) => {

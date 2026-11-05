@@ -798,3 +798,27 @@ test('NF1: a Y cable held by the Nyquist headroom is not blamed on its range', (
   assert.equal(r.perf[0].details.by, 'range');
   assert.match(r.perf[0].message, /leave only that much of its range \(-1200 to 1200\)/);
 });
+
+test('NF3: every pad output summing into a control target rests at 0 on lift; Pitch does not',
+  async () => {
+    // Ruling by af on the plan: X and Y sum into their targets (the pad's `fits`) and rest at 0
+    // on every release unless a Hold keeps them (none yet, Q099); X as pitch ends with its note.
+    for (const how of ['lift', 'forced']) {
+      const r = await padRig((st) => {
+        const a = patchCable(st.getModel(), PANEL, 'xy.x', 'lpf.frequency');
+        assert.equal(st.dispatch(a.action).ok, true, 'X cabled into LPF Cutoff');
+      });
+      const padId = PANEL.resolve(r.st.getModel()).get('xy').id;
+      const out = (port) => r.runtime.nodes.get(padId).outputs[port].offset.events.at(-1).value;
+      r.model.key('End'); // the last cell: x = (steps - 0.5) / steps, 0.955 for 11 steps
+      r.model.gate(true);
+      assert.ok(out('x') > 0.95, `${how}: X plays ${out('x')} while touched`);
+      const pitch = out('pitch');
+      if (how === 'lift') r.model.end('release');
+      else r.mount.release('owner');
+      assert.equal(out('x'), 0, `${how}: X's cable into LPF Cutoff reads 0 after the release`);
+      assert.equal(out('y'), 0, `${how}: and Y's`);
+      assert.equal(out('pitch'), pitch, `${how}: the Pitch output keeps its note`);
+      r.done();
+    }
+  });
