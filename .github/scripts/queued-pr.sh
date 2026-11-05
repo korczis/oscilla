@@ -2,11 +2,13 @@
 # The pull request a CI run judges, as shell assignments for `eval` (ADR 0083):
 #   PR           the pull request number (1 or more): the event's own on pull_request, or the N
 #                the merge queue names its ref by on merge_group
-#                (refs/heads/gh-readonly-queue/<base>/pr-N-<sha>)
+#                (refs/heads/gh-readonly-queue/<base>/pr-N-<sha>, where GitHub's <sha> is the
+#                entry's base, the queue commit's first parent HEAD^1, not the pull request's head)
 #   BASE         the base branch, whose copy of a rule judges (.github/scripts/base-rule.sh)
 #   DIFF_BASE    what the pull request's changes are measured against: origin/<base> on
-#                pull_request (HEAD is its merge with the base), HEAD^1 on merge_group (HEAD is the
-#                queue's merge of it onto main plus the pull requests ahead of it)
+#                pull_request (HEAD is its merge with the base), on merge_group the full sha of
+#                HEAD^1, checked to be the base the queue ref names (HEAD is the queue's merge of
+#                the pull request onto main plus the pull requests ahead of it)
 #   QUEUED_HEAD  on merge_group the full sha of HEAD^2, the queued pull request's head; empty on
 #                pull_request
 # Reads PR, GITHUB_BASE_REF, QUEUE_REF and QUEUE_BASE from the environment; prints only a number,
@@ -16,9 +18,10 @@
 #
 # HEAD^1..HEAD is one pull request's whole change only when the queue merges each pull request
 # with a merge commit (merge method MERGE) and every entry's own run must pass (grouping
-# ALLGREEN, ADR 0083). So on merge_group HEAD must have exactly two parents and HEAD^2 must be
-# the head the queue ref names; `--check-head <QUEUED_HEAD> <pr.json>` then requires that head
-# to be the pull request's headRefOid (exit 2 otherwise; a no-op when QUEUED_HEAD is empty).
+# ALLGREEN, ADR 0083). So on merge_group HEAD must have exactly two parents, HEAD^1 must be the
+# base the queue ref names (its <sha>; verified against GitHub's queue commits, review N1), and
+# `--check-head <QUEUED_HEAD> <pr.json>` then requires HEAD^2 to be the pull request's
+# headRefOid (exit 2 otherwise; a no-op when QUEUED_HEAD is empty, as on pull_request).
 set -euo pipefail
 
 if [ "${1:-}" = '--check-head' ]; then
@@ -48,7 +51,6 @@ if [ -z "$pr" ] && [ -n "${QUEUE_REF:-}" ]; then
     base="${BASH_REMATCH[1]}"
     pr="${BASH_REMATCH[2]}"
     sha="${QUEUE_REF##*-}"
-    diff='HEAD^1'
   else
     echo "queued-pr: not a merge-queue ref: $QUEUE_REF" >&2
     exit 2
@@ -63,7 +65,8 @@ if [ -z "$pr" ] && [ -n "${QUEUE_REF:-}" ]; then
     echo "queued-pr: queue ref base $base differs from the event's $queue_base" >&2
     exit 2
   fi
-  # HEAD is the queue's merge commit of exactly that head: two parents, HEAD^2 the ref's sha.
+  # HEAD is the queue's merge commit onto exactly the base the ref names: two parents, HEAD^1
+  # the ref's sha; HEAD^2, the pull request's head, is held to headRefOid by --check-head.
   parents="$(git rev-list --parents -n 1 HEAD)" \
     || { echo "queued-pr: cannot read HEAD's parents" >&2; exit 2; }
   read -r -a words <<< "$parents"
@@ -72,11 +75,12 @@ if [ -z "$pr" ] && [ -n "${QUEUE_REF:-}" ]; then
       "(merge method MERGE, ADR 0083)" >&2
     exit 2
   fi
-  queued="${words[2]}"
-  if [[ "$queued" != "$sha"* ]]; then
-    echo "queued-pr: HEAD^2 is $queued, not the queue ref's head $sha" >&2
+  if [[ "${words[1]}" != "$sha"* ]]; then
+    echo "queued-pr: HEAD^1 is ${words[1]}, not the base the queue ref names, $sha" >&2
     exit 2
   fi
+  diff="${words[1]}"
+  queued="${words[2]}"
 fi
 [[ -z "$pr" || "$pr" =~ ^[1-9][0-9]*$ ]] \
   || { echo "queued-pr: PR is not a number: $pr" >&2; exit 2; }

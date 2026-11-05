@@ -529,9 +529,10 @@ jobs:
           QUEUE_REF: ${{ github.event.merge_group.head_ref }}
           QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         run: |
-          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>), and
-          # HEAD must be the queue's merge commit of exactly that head (ADR 0083: merge method
-          # MERGE); the assignment fails the step on the script's exit 2, which `eval "$(...)"`
+          # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>, the
+          # <sha> being the entry's base, HEAD^1), HEAD must be the queue's merge commit onto that
+          # base, and HEAD^2 the pull request's head (--check-head, after gh pr view; ADR 0083:
+          # merge method MERGE); the assignment fails the step on the script's exit 2, which `eval "$(...)"`
           # would throw away.
           vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"
           if [ -z "$PR" ]; then echo "::error::fail-first: no pull request to judge"; exit 1; fi
@@ -591,9 +592,10 @@ jobs:
           # In the merge queue the pull request is the one the queue ref names (pr-<N>-<sha>);
           # HEAD is the queue's merge of it onto HEAD^1 (main plus the pull requests ahead), so
           # the content judged is HEAD^1..HEAD, as a pull_request run judges its merge commit. That
-          # is the whole pull request only for the queue's merge commit of exactly its head (merge
-          # method MERGE, grouping ALLGREEN): queued-pr.sh refuses another HEAD, and --check-head
-          # another head than the pull request's. Assigned first, so its exit 2 fails the step.
+          # is the whole pull request only for the queue's merge commit of its head (merge method
+          # MERGE, grouping ALLGREEN): queued-pr.sh refuses a HEAD without two parents or whose
+          # HEAD^1 is not the base the ref's <sha> names (DIFF_BASE is that sha), and --check-head
+          # a HEAD^2 that is not the pull request's head. Assigned first, so exit 2 fails the step.
           vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"
           if [ -z "$PR" ]; then echo "::error::review-verdict: no pull request to judge"; exit 1; fi
           n=0

@@ -74,8 +74,13 @@ is one pull request's whole change only when the queue builds one merge commit p
 SQUASH a pull request of a runtime commit followed by a docs commit becomes linear commits whose
 last is docs only; under HEADGREEN a docs pull request queued behind a runtime one can be the
 only run that gates both. The run refuses what it can see (a queue head without exactly two
-parents, a HEAD^2 that is not the queue ref's sha or the pull request's `headRefOid`:
-`.github/scripts/queued-pr.sh`; the classifier runs everything); the grouping is not visible
+parents, a HEAD^1 that is not the base the queue ref names, a HEAD^2 that is not the pull
+request's `headRefOid`: `.github/scripts/queued-pr.sh`; the classifier runs everything). The
+queue ref is `gh-readonly-queue/<base>/pr-<N>-<sha>`, and GitHub's `<sha>` is the entry's
+base, the queue commit's first parent HEAD^1, not the pull request's head (review N1: read on
+rust-lang/rust-analyzer, merge method MERGE and ALLGREEN, entry pr-23616 whose merge commit has
+parents [the ref's sha, the pull request head], and four more entries; on primer/react a squash
+queue commit's single parent is the ref's sha). The grouping is not visible
 inside a run, so it is held by the ruleset alone. The change, in the ruleset that protects
 `main` (its `merge_queue` rule; the values are the ruleset API's):
 
@@ -157,11 +162,17 @@ oscilla-af's five review points as its mutation cases). Requiring the queue in t
 The review of `ci/merge-queue` at 1c7a7529 found that nothing required the queue head to be a
 merge commit (F1). E045 now: requires merge method MERGE and grouping ALLGREEN in the ruleset
 section above; `.github/scripts/queued-pr.sh` refuses a queue head without exactly two parents
-or whose HEAD^2 is not the queue ref's sha, `--check-head` refuses one that is not the pull
-request's `headRefOid`, and `.github/scripts/ci-changes.mjs` runs everything for such a head;
+or whose HEAD^1 is not the base the queue ref names (DIFF_BASE is bound to that sha), and
+`--check-head` refuses a HEAD^2 that is not the pull request's `headRefOid`, and `.github/scripts/ci-changes.mjs` runs everything for such a head;
 the jobs read the script as `vars="$(...)"; eval "$vars"`, so its exit 2 fails the step (F2);
 the base names are allowlisted and mutation-proven against injection (F3, F8: `base_ref`
 required and equal to the ref's base, `pr-N` with N of 1 or more); a cancellable queue run is
 refused by `project.ci-bounded` v2's `queue-cancel` (F4). Tests: `tests/unit/queued-pr.test.mjs`,
 `tests/unit/ci-changes.test.mjs`, `tests/unit/ci-workflows.test.mjs`,
 `tests/unit/release-ci-receipt.test.mjs`.
+
+The re-review of d1873663 (N1, P0) found that the first fix compared HEAD^2 with the ref's sha,
+on the reviewer's own wrong reading of the ref: GitHub's `<sha>` is HEAD^1, so every real
+`merge_group` run would have exited 2 and the queue would never land. The comparison is now
+HEAD^1 against the ref's sha, HEAD^2 against `headRefOid`; the test fixtures name the ref by
+HEAD^1, as GitHub does, and the earlier shape (the ref naming HEAD^2) is a refusal case.

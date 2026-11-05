@@ -187,18 +187,21 @@ gates:
 
   # The two process rules judge a pull request, and the program that judges is the base
   # branch's copy (.github/scripts/base-rule.sh); <base>, <pr.json>, <head> and <pr> are the
-  # pull request's, and <diff-base> is origin/<base> on pull_request and HEAD^1 on merge_group.
+  # pull request's, and <diff-base> is origin/<base> on pull_request and on merge_group the sha
+  # of HEAD^1, which queued-pr.sh checks is the base the queue ref names. Both read the pull
+  # request with gh pr view (headRefOid included), and --check-head holds the queue's HEAD^2 to
+  # it (a no-op on pull_request, where QUEUED_HEAD is empty).
   # The assignment before the eval fails on queued-pr.sh's exit 2, which eval "$(...)" would not.
   - id: fail-first
     job: fail-first
     always: true
-    runs: vars="$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && eval "$vars" && .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
+    runs: vars="$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && eval "$vars" && gh pr view "$PR" --json title,body,headRefName,headRefOid > <pr.json> && .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" <pr.json> && .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
     summary: a feat or fix pull request's added or changed unit tests fail on the merge base and pass on the head, or its body says fail-first n/a with a reason (project.fail-first)
 
   - id: review-verdict
     job: review-verdict
     always: true
-    runs: vars="$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && eval "$vars" && .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch <diff-base>
+    runs: vars="$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && eval "$vars" && gh pr view "$PR" --json title,body,headRefName,headRefOid > <pr.json> && .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" <pr.json> && PR_JSON=<pr.json> .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch <diff-base>
     summary: a pull request that changes a guarded path carries a reviewer's verdict for the content it changes (project.review-verdict)
 
   - id: gate

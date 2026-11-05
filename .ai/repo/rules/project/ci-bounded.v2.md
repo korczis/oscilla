@@ -4,7 +4,7 @@ version: 2
 kind: rule
 title: Every CI job and network step is bounded, pinned and retried
 description: Every workflow job and every step that installs, downloads or runs a browser suite has its own time limit; installs go through one bounded wrapper, downloads retry, are digest-checked and are never executed, nothing is made non-fatal, gate needs every job, and ci.yml starts on a pull request and its merge-queue entry only.
-statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit, every container image to a tag and every job's runs-on to a versioned runner image (never a label ending in -latest); no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request and merge_group only (ADR 0083), its fail-first and review-verdict jobs judge the pull request the merge-queue ref names on merge_group, refusing unless HEAD is the queue's merge commit of exactly that pull request's head (two parents, HEAD^2 the ref's sha and the pull request's headRefOid; the queue's merge method is MERGE and its grouping ALLGREEN), and no merge_group run is cancelled in progress.
+statement: Every job in .github/workflows/*.yml declares timeout-minutes, and so does every step that installs through .github/scripts/ci-install.sh, runs curl, wget or gh, or runs a browser suite; browser and apt installs go only through .github/scripts/ci-install.sh; every curl carries --retry and --connect-timeout (wget --tries and --connect-timeout); every download whose output is not discarded to /dev/null is checked with sha256sum -c against a digest pinned in the workflow, and none is piped into an interpreter, substituted into a command or fetched in a step that uses eval; every action is pinned to a version tag or commit, every container image to a tag and every job's runs-on to a versioned runner image (never a label ending in -latest); no job or step sets continue-on-error and no install, download or browser suite is followed by `|| true`; the gate job's needs list every other job of ci.yml; and a workflow with a gate job is started by pull_request and merge_group only (ADR 0083), its fail-first and review-verdict jobs judge the pull request the merge-queue ref names on merge_group, refusing unless HEAD is the queue's merge commit of that pull request's head (two parents, HEAD^1 the base whose sha the merge-queue ref names, HEAD^2 the pull request's headRefOid; the queue's merge method is MERGE and its grouping ALLGREEN), and no merge_group run is cancelled in progress.
 status: active
 class: blocking
 depends_on: []
@@ -120,8 +120,10 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   then a docs commit lands as linear commits whose last is docs only; under HEADGREEN a docs
   pull request queued behind a runtime one could be the only run that gates both. Inside the
   run: `.github/scripts/queued-pr.sh` refuses (exit 2) a HEAD without exactly two parents or
-  whose HEAD^2 is not the sha the queue ref names, `--check-head` refuses a HEAD^2 that is not
-  the pull request's `headRefOid`, and the `changes` classifier answers `runtime=true` for a
+  whose HEAD^1 is not the sha the queue ref names (`gh-readonly-queue/<base>/pr-<N>-<sha>`:
+  GitHub's `<sha>` is the entry's base, HEAD^1, not the pull request's head) and binds
+  `DIFF_BASE` to it, `--check-head` refuses a HEAD^2 that is not the pull request's
+  `headRefOid`, and the `changes` classifier answers `runtime=true` for a
   queue head without exactly two parents. Grouping is not visible inside a run: ALLGREEN is
   held only by the ruleset.
 - The script's answer is read as `vars="$(.github/scripts/queued-pr.sh)"; eval "$vars"`, never
@@ -198,8 +200,10 @@ disagrees with or lacks the event's `base_ref`, `pr-0` and a leading zero, a gre
 (`.../pr-1-<sha>/pr-N-<sha>`), `..`, a leading `-` or `/` and shell metacharacters in either
 base each exit 2 with nothing printed, and, run as the jobs run it under `bash -eo pipefail`,
 never reach the rest of the step or print injected output; a rebase (one parent) or octopus
-(three) queue head and a HEAD^2 other than the ref's sha refuse; `--check-head` passes only the
-pull request's `headRefOid` and is a no-op without a queued head; the old `eval "$(...)"` form
+(three) queue head and a HEAD^1 other than the ref's sha refuse, GitHub's shape (the ref's sha
+is HEAD^1) passes with `DIFF_BASE` that sha and the earlier model (the ref naming HEAD^2)
+refuses; `--check-head` passes only the pull request's `headRefOid`, end to end after the eval
+too, and is a no-op without a queued head whatever `headRefOid` is; the old `eval "$(...)"` form
 is shown to carry on after exit 2 and the assignment form to stop.
 
 `tests/unit/ci-knowledge-job.test.mjs` keeps the `knowledge` job's own assertions (the exact
