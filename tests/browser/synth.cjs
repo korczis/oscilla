@@ -49,6 +49,7 @@
 //              and the MG sweeps the cutoff on both pages (the 1-3 kHz band swings 10 dB+)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-tap      K184: 20 QWERTY taps whose key-down and key-up share one task each sound
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
 //              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
@@ -543,6 +544,45 @@ function defineChecks() {
     await page.keyboard.up('KeyD');
     const after = await dbg(page);
     return { ok: model.includes(d.cables[0].id) && after.cables.length === 0, size, fixed, peaks };
+  });
+
+  // K184 (project.a-phone-sounds): a tap whose key-down and key-up are handled in the same task
+  // opened and closed the voice's gate at the same audio time, so it was silent. Each of 20 such
+  // taps on KEYS (QWERTY A, dispatched together in one task) is heard above -60 dB rel within the
+  // deadline, and the voice is silent again before the next.
+  def('s-tap', async ({ page }) => {
+    await page.locator('#osc-synth-title').click();
+    // A tap lasts tens of ms, shorter than a probe round trip: the page holds the loudest RMS
+    // of the analyser's time-domain buffer (about 43 ms wide) every frame, so none is missed.
+    await page.evaluate(() => {
+      const a = window.OSCILLA.engine.analyser;
+      const t = new Float32Array(a.fftSize);
+      window.__tapMax = -Infinity;
+      const tick = () => {
+        a.getFloatTimeDomainData(t);
+        let s = 0;
+        for (const x of t) s += x * x;
+        window.__tapMax = Math.max(window.__tapMax, 10 * Math.log10(s / t.length + 1e-24));
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    const heardTaps = [];
+    for (let i = 0; i < 20; i += 1) {
+      await page.evaluate(() => {
+        window.__tapMax = -Infinity;
+        const o = { code: 'KeyA', key: 'a', bubbles: true, cancelable: true };
+        window.dispatchEvent(new KeyboardEvent('keydown', o));
+        window.dispatchEvent(new KeyboardEvent('keyup', o));
+      });
+      const peak = await until(async () => {
+        const m = await page.evaluate(() => window.__tapMax);
+        return m > -60 ? m : null;
+      }, { ms: 3000, what: `same-task tap ${i + 1} sounds` }).catch(() => null);
+      heardTaps.push(peak === null ? null : Number(peak.toFixed(1)));
+      await silent(page, `tap ${i + 1} ends`);
+    }
+    return { ok: heardTaps.every((x) => x !== null), taps: heardTaps };
   });
 
   def('s-refuse', async ({ page }) => {
