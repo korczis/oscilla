@@ -4772,6 +4772,94 @@ function defineChecks() {
     return { ok, v, ...out, errors: errors.slice(errorsBefore, errorsBefore + 5) };
   });
 
+  // C040: the lab microphone is released when its panel leaves the screen (Measure's sentence
+  // "the microphone opens only for the setup check, the measurement and the live RTA" holds).
+  // The workspace watcher calls labs.mic.release('workspace') once the new workspace is laid
+  // out and #osc-panel-mic has no client rects. Compare and the desktop Playground show the
+  // panel and keep the stream; Measure, and the phone Playground, do not and release it.
+  def('mic-released-when-hidden', async ({ page, errors }) => {
+    const errorsBefore = errors.length;
+    const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'js', 'labs',
+      'mic-analyzer.js'), 'utf8');
+    const RELEASED = (src.match(/MIC_RELEASED_HIDDEN =\s*'([^']+)'/) || [])[1] || null;
+    const state = () => page.evaluate(() => {
+      const m = window.OSCILLA.labs.mic;
+      const b = document.querySelector('[data-osc="mic.toggle"]');
+      const s = window.__oscLabStream;
+      return { active: m.active, hasAnalyser: !!m.analyser, releasedFor: m.releasedFor,
+        tracks: s ? s.getTracks().map((t) => t.readyState) : [],
+        pressed: b.getAttribute('aria-pressed'), label: b.textContent.trim(),
+        note: document.querySelector('#osc-panel-mic .osc-mic-note').textContent.trim(),
+        panelRects: document.getElementById('osc-panel-mic').getClientRects().length };
+    });
+    // The watcher's $nextTick was queued when the workspace changed; one queued after it
+    // resolves later, so the state read then is the watcher's verdict.
+    const settled = async (ws) => {
+      await page.evaluate(() => new Promise((r) => window.OSCILLA.app.$nextTick(r)));
+      return { ws, ...(await state()) };
+    };
+    const micOn = async (what) => {
+      await page.click('[data-osc="mic.toggle"]');
+      await until(() => page.evaluate(() => window.OSCILLA.labs.mic.active),
+        { ms: 10000, what: `mic-released-when-hidden: ${what}` });
+      await page.evaluate(() => { window.__oscLabStream = window.OSCILLA.labs.mic.stream; });
+    };
+    const out = {};
+    try {
+      await page.evaluate(installSynthMic);
+      await page.setViewportSize({ width: 1536, height: 1024 });
+      await H.navTo(page, 'analyzer');
+      await micOn('the mic goes live in Analyzer');
+      out.analyzer = await settled('analyzer');
+      await H.navTo(page, 'compare');
+      out.compare = await settled('compare');
+      await H.navTo(page, 'playground');
+      out.playgroundDesktop = await settled('playground');
+      await H.navTo(page, 'measure');
+      out.measure = await until(async () => {
+        const s = await settled('measure');
+        return !s.active && s;
+      }, { ms: 10000, what: 'mic-released-when-hidden: Measure releases the mic' });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await H.navTo(page, 'analyzer');
+      await micOn('the mic goes live in Analyzer on a phone');
+      out.analyzerPhone = await settled('analyzer');
+      await H.navTo(page, 'playground');
+      out.playgroundPhone = await until(async () => {
+        const s = await settled('playground');
+        return !s.active && s;
+      }, { ms: 10000, what: 'mic-released-when-hidden: the phone Playground releases the mic' });
+    } finally {
+      await page.evaluate(() => {
+        const m = window.OSCILLA.labs.mic;
+        if (m.active) m.stop();
+        if (window.__oscSynthMic) window.__oscSynthMic.restore();
+        delete window.__oscLabStream;
+        window.OSCILLA.app.alerts = [];
+      });
+      await page.setViewportSize({ width: 1536, height: 1024 });
+      await H.navTo(page, 'playground');
+    }
+    const live = (s) => s.active && s.hasAnalyser && s.tracks.length > 0
+      && s.tracks.every((t) => t === 'live') && s.pressed === 'true' && s.panelRects > 0;
+    const released = (s) => !s.active && !s.hasAnalyser && s.tracks.length > 0
+      && s.tracks.every((t) => t === 'ended') && s.pressed === 'false'
+      && s.label === 'Use microphone' && s.note === RELEASED && s.releasedFor === 'workspace'
+      && s.panelRects === 0;
+    const v = {
+      noteRead: typeof RELEASED === 'string' && RELEASED.length > 0,
+      liveInAnalyzer: live(out.analyzer),
+      compareKeeps: live(out.compare),
+      desktopPlaygroundKeeps: live(out.playgroundDesktop),
+      measureReleases: released(out.measure),
+      liveInPhoneAnalyzer: live(out.analyzerPhone),
+      phonePlaygroundReleases: released(out.playgroundPhone),
+      noPageErrors: errors.length === errorsBefore,
+    };
+    const ok = Object.values(v).every(Boolean);
+    return { ok, v, ...out, errors: errors.slice(errorsBefore, errorsBefore + 5) };
+  });
+
   // §49 (c): dismissing a notification whose Dismiss button has focus moves focus to the next
   // notification's Dismiss (the previous one after the last), and to the main region after the
   // only one — also when the info/success auto-dismiss timer removes it (dismissAlert(id)).

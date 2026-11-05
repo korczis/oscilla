@@ -741,6 +741,14 @@ function integrationInit() {
     if (ws !== 'measure') cmp.measureAbort('workspace');
     loadExperiments(ws);
     repairCharts();
+    // C040: nor does the lab microphone record where no surface shows it. Once the new
+    // workspace is laid out, a mic panel with no client rects releases its stream.
+    cmp.$nextTick(() => {
+      const panel = document.getElementById('osc-panel-mic');
+      if (labs.mic && !(panel && panel.getClientRects().length > 0)) {
+        labs.mic.release('workspace');
+      }
+    });
   });
   loadExperiments(cmp.workspace); // the address opened Experiments (a reload, a shared link)
   const baseTitle = document.title;

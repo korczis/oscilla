@@ -25,6 +25,11 @@
 // (MIC_CONTEXT_CLOSED, or MIC_ENGINE_DETACHED when another caller replaced its graph), so no
 // reading of a dead graph is presented as live. Its own Stop lets the analyser go before it
 // calls detachMicrophone(), whose 'user' event therefore names no analyser of the lab's.
+//
+// An input no visible surface owns does not keep recording (C040): the shell calls
+// release(reason) when the panel leaves the screen (a workspace without it). It stops every
+// track and releases the nodes as Stop does, leaves the toggle unpressed and sets the panel note
+// to MIC_RELEASED_HIDDEN; a start still waiting for permission then lets its stream go unused.
 
 import { createSpectrumChart } from '../charts/spectrum-chart.js';
 import { createSpectrogramView } from '../charts/spectrogram-view.js';
@@ -74,6 +79,9 @@ export const MIC_NOTE = 'Not a calibrated measurement. Microphone frequency resp
 export const MIC_CONTEXT_CLOSED = 'The audio context was closed; the microphone was stopped.';
 /** Readout when the engine detached the lab's microphone for any other reason. */
 export const MIC_ENGINE_DETACHED = 'The audio engine disconnected the microphone; it was stopped.';
+/** Panel note after release(): the panel left the screen, so the microphone was released. */
+export const MIC_RELEASED_HIDDEN =
+  'Microphone released: its panel left the screen. Press Use microphone to open it again.';
 const READOUT_INTERVAL_MS = 100;
 const MIC_FFT_SIZE = 8192;
 
@@ -138,16 +146,19 @@ export function mount(rootEl, adapter) {
   const host = q('#osc-chart-mic');
   const reqEl = q('#osc-mic-requested');
   const detEl = q('#osc-mic-detected');
-  setText(q('.osc-mic-note'), MIC_NOTE);
+  const noteEl = q('.osc-mic-note');
+  setText(noteEl, MIC_NOTE);
   let tab = activeValue(rootEl, '[data-osc="mic.tab"]') || 'live';
   let stream = null;
   let attached = null;
   let starting = false;
+  let startToken = 0; // release() during a pending start bumps it: that start opens nothing
   let error = '';
   let lastReadout = -Infinity;
   let pitch = null;
   let estimate = null;
   let comparison = null;
+  let releasedFor = null; // the reason of the last release(), until the next start
   const opts = { freeze: false, average: false, peakHold: false };
 
   const micAnalyser = () => (stream ? attached : null);
@@ -241,9 +252,27 @@ export function mount(rootEl, adapter) {
     renderReadout(true);
   }
 
+  /**
+   * The panel left the screen (reason: 'workspace'): stop as Stop does and say why in the note.
+   * Returns whether the lab held (or was opening) a microphone; with none it changes nothing.
+   */
+  function release(reason = 'hidden') {
+    const held = !!(stream || attached || starting);
+    if (!held) return false;
+    startToken += 1;
+    stop();
+    releasedFor = reason;
+    setText(noteEl, MIC_RELEASED_HIDDEN);
+    return true;
+  }
+
   async function start() {
     if (starting || stream) return;
     starting = true;
+    const token = ++startToken;
+    const cancelled = () => token !== startToken;
+    releasedFor = null;
+    setText(noteEl, MIC_NOTE);
     // Pending: aria-disabled, never disabled, so a keyboard user keeps focus on the button.
     setAttr(toggle, 'aria-disabled', 'true');
     error = '';
@@ -260,9 +289,14 @@ export function mount(rootEl, adapter) {
       let ctx = adapter.getContext ? adapter.getContext() : null;
       if (!ctx && adapter.ensureContext) ctx = await adapter.ensureContext();
       if (!ctx) throw new Error('no AudioContext');
+      if (cancelled()) return; // released while the context was being made: open nothing
       const s = await md.getUserMedia({
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
+      if (cancelled()) { // released while permission was pending: the stream is not used
+        for (const t of s.getTracks()) t.stop();
+        return;
+      }
       stream = s;
       for (const t of s.getAudioTracks()) t.onended = () => stop();
       // The engine builds and accounts the nodes (MediaStreamSource → Analyser, no output).
@@ -276,7 +310,7 @@ export function mount(rootEl, adapter) {
       setButton(true);
     } catch (e) {
       if (stream) stop();
-      error = micUnavailableText(e, env);
+      if (!cancelled()) error = micUnavailableText(e, env); // a released start reports nothing
       setButton(false);
     } finally {
       starting = false;
@@ -387,8 +421,13 @@ export function mount(rootEl, adapter) {
     get analyser() {
       return micAnalyser();
     },
+    /** The reason of the last release() ('workspace'), or null after a start. */
+    get releasedFor() {
+      return releasedFor;
+    },
     start,
     stop,
+    release,
     update(state = {}) {
       if (state.compare) Object.assign(opts, state.compare);
       applyView();
