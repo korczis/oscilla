@@ -1,0 +1,32 @@
+id: E056
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "Path gating in the merge queue reads main's ruleset, and runs everything unless the queue is MERGE + ALLGREEN"
+slug: path-gating-in-the-merge-queue-reads-mains-ruleset
+priority: p2
+profile: implementation
+objective: "Agreed by prismatic-majordomus-98 and oscilla-26 in E045's review (2026-11-05; id from oscilla-af). Under the merge queue, path gating an entry behind another one is sound only with merge method MERGE and grouping ALLGREEN (each entry's tree is the previous entry's plus its own diff, already tested by that entry's run), and a run cannot see those settings: E045 only documents them. After: the `changes` job reads them in one bounded, retried step (GET /repos/{owner}/{repo}/rules/branches/main, metadata read only, merge_queue.parameters.{merge_method, grouping_strategy}) and passes them to .github/scripts/ci-changes.mjs, which path-gates a merge_group entry only for MERGE + ALLGREEN and answers runtime=true otherwise (unreadable, a timeout, a 403, another value, no ruleset). main has no ruleset today (classic protection), so until the owner's switch (ADR 0083) it fails toward running everything."
+why: "E045 rests path gating in the queue on a ruleset setting nothing checks; a change of grouping to HEADGREEN would let a docs entry behind a runtime one skip the browser jobs without anyone noticing."
+scope:
+  - ".github/workflows/ci.yml"
+  - ".github/scripts/ci-changes.mjs"
+  - "tests/unit/ci-changes.test.mjs"
+  - "tests/unit/ci-workflows.test.mjs"
+  - ".ai/repo/adrs/0083-pull-requests-land-through-a-merge-queue-not-a-race-of-armed-auto-merges.md"
+  - ".ai/repo/rules/project/ci-bounded.v2.md"
+  - "tests/README.md"
+depends_on:
+  - "E045"
+acceptance_criteria:
+  - "Unit tests, failing on the merge base: ci-changes answers runtime=true on merge_group for every ruleset answer that is not merge_method MERGE with grouping_strategy ALLGREEN (another method, another grouping, no merge_queue rule, an empty or unparsable answer) and path-gates only for MERGE + ALLGREEN; pull_request runs are unchanged."
+  - "The ruleset step is bounded, pinned and retried (project.ci-bounded v2), and its failure yields runtime=true, never a red or green gate by itself: a test shows that a read that times out or returns 403 gives runtime=true."
+  - "ADR 0083 and project.ci-bounded v2 name the read and what each answer does."
+  - "The pull request carries a reviewer's verdict (.github is guarded; project.review-verdict) and a unit test that fails on the merge base (project.fail-first)."
+validation:
+  - "node --test tests/unit/ci-changes.test.mjs tests/unit/ci-workflows.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

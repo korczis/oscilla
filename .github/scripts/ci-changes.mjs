@@ -8,6 +8,8 @@
 //
 //   node .github/scripts/ci-changes.mjs --repo <dir> --event <name> --head <rev>
 //        --base-branch <ref> [--output <file>]
+// The command line is the same on both events: the event alone says what is diffed, so the
+// workflow calls every base copy alike, and one that knows only pull_request answers runtime.
 //
 // Fail closed: a change is non-runtime only when it has at least one changed path and EVERY
 // changed path, on both sides of a rename and including a deleted one, is a regular file (mode
@@ -15,7 +17,12 @@
 // dist/, tests/ (a .md there too: tests/browser/lib/suite.cjs reads tests/README.md), scripts/,
 // package*.json, .github/ (this file included), .ai/repo/rules/, any other path, a symbolic
 // link or submodule anywhere, a name with a control character, an empty diff, any event
-// that is not a pull request, and a pull request into any base but main (GATED_BASES). A
+// but a pull request and its merge-queue entry (GATED_EVENTS), and a pull request into any
+// base but main (GATED_BASES). On merge_group (ADR 0083) the change is HEAD^1..HEAD, the
+// queue's merge of the queued pull request onto main plus the pull requests ahead of it, and
+// it is path-gated only when HEAD has exactly two parents (the merge method MERGE; a rebase or
+// squash queue commit is only the last commit of the pull request) and the base branch is an
+// ancestor of HEAD^1. A
 // path that changes the build changes dist/index.html too, which the always-running `unit`
 // job holds to a clean rebuild (npm run build:check), so the allowlist does not need to know
 // the build's inputs.
@@ -35,6 +42,12 @@ export const NON_RUNTIME = Object.freeze([
   'docs/',
   '*.md',
 ]);
+
+/**
+ * The events that may be path-gated: a pull request, and its entry in the merge queue
+ * (ADR 0083), judged by the queue's merge of it (HEAD^1..HEAD). Any other runs everything.
+ */
+export const GATED_EVENTS = Object.freeze(['pull_request', 'merge_group']);
 
 /**
  * The base branches a pull request may be path-gated into. A pull request into any other
@@ -120,7 +133,7 @@ function recordReason(r) {
  */
 export function classify(records, { event = 'pull_request', base } = {}) {
   const paths = records.flatMap((r) => r.paths);
-  if (event !== 'pull_request') {
+  if (!GATED_EVENTS.includes(event)) {
     return { runtime: true, reason: `event ${event || '(none)'}: everything runs`, runtimePaths: [],
       paths };
   }
@@ -168,6 +181,36 @@ export function changedRecords(repo, head, baseBranch) {
   return { headSha, baseSha, records: parseRawZ(raw) };
 }
 
+/** Whether `a` is an ancestor of `b` (git merge-base --is-ancestor); throws if git cannot say. */
+function isAncestor(repo, a, b) {
+  const r = spawnSync('git', ['-C', repo, 'merge-base', '--is-ancestor', a, b],
+    { encoding: 'utf8' });
+  if (r.status === 0) return true;
+  if (r.status === 1) return false;
+  throw new Error(`git merge-base --is-ancestor ${a} ${b}: `
+    + `${(r.stderr || '').trim() || `exit ${r.status}`}`);
+}
+
+/**
+ * The records a merge-queue commit <head> changes against its first parent (ADR 0083): the
+ * queue merges the queued pull request onto main plus the pull requests ahead of it, so
+ * HEAD^1..HEAD is that pull request's change, provided HEAD is a merge commit (merge method
+ * MERGE, ADR 0083). `parents` is HEAD's parent count and `contained` says whether <baseBranch>
+ * is an ancestor of HEAD^1; unless there are exactly two parents and the base is contained, the
+ * caller runs everything. A head with no parent, a base git cannot read and any other git
+ * failure throw, so no answer is given.
+ */
+export function queueRecords(repo, head, baseBranch) {
+  const headSha = git(repo, ['rev-parse', '--verify', `${head}^{commit}`]).trim();
+  const baseSha = git(repo, ['rev-parse', '--verify', `${headSha}^1^{commit}`]).trim();
+  const parents = git(repo, ['rev-list', '--parents', '-n', '1', headSha]).trim().split(/\s+/)
+    .length - 1;
+  const contained = isAncestor(repo, baseBranch, baseSha);
+  const raw = git(repo, ['diff', '--raw', '-z', '--no-renames', '--no-abbrev', '--no-ext-diff',
+    '--no-textconv', baseSha, headSha]);
+  return { headSha, baseSha, parents, contained, records: parseRawZ(raw) };
+}
+
 function parseArgs(argv) {
   const opts = { repo: '.', event: '', head: 'HEAD', baseBranch: 'origin/main', output: null };
   const keys = { '--repo': 'repo', '--event': 'event', '--head': 'head',
@@ -183,8 +226,23 @@ function parseArgs(argv) {
 export function main(argv, { log = console.log } = {}) {
   const opts = parseArgs(argv);
   let result;
-  if (opts.event !== 'pull_request') {
+  if (!GATED_EVENTS.includes(opts.event)) {
     result = classify([], { event: opts.event });
+  } else if (opts.event === 'merge_group') {
+    const q = queueRecords(opts.repo, opts.head, opts.baseBranch);
+    log(`ci-changes: merge-queue head ${q.headSha.slice(0, 12)}, first parent `
+      + `${q.baseSha.slice(0, 12)}, ${q.records.length} changed path record(s)`);
+    const paths = q.records.flatMap((r) => r.paths);
+    if (q.parents !== 2) {
+      result = { runtime: true, reason: `the queue head has ${q.parents} parent(s), not the `
+        + 'merge commit of one pull request (merge method MERGE, ADR 0083): everything runs',
+      runtimePaths: [], paths };
+    } else {
+      result = q.contained
+        ? classify(q.records, { event: opts.event, base: baseName(opts.baseBranch) })
+        : { runtime: true, reason: `${opts.baseBranch} is not an ancestor of the queue head's `
+          + 'first parent: everything runs', runtimePaths: [], paths };
+    }
   } else {
     const { headSha, baseSha, records } = changedRecords(opts.repo, opts.head, opts.baseBranch);
     log(`ci-changes: head ${headSha.slice(0, 12)}, merge base ${baseSha.slice(0, 12)}, `

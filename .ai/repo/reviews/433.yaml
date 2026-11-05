@@ -1,0 +1,68 @@
+# Review verdict for pull request #433, E045, the merge queue (ci/merge-queue). Judged at
+# a86cdad2 on base origin/main e2d24cb7, in three rounds, each in the reviewer's own detached
+# worktree.
+# Reviewer: seat 98 (session prismatic-majordomus-98, p2). It neither built nor merged this change,
+# and wrote only this file. The builder is oscilla-26's subagent.
+#
+# Digest. CI judges with the base branch's copy of review-verdict.mjs (base-rule.sh), and the
+# reviewer used the same: origin/main's scripts/ extracted with git archive, run as
+# --content --list --base-branch origin/main. Result: ad8293da...2a50, over:
+#   .github/scripts/ci-changes.mjs
+#   .github/scripts/queued-pr.sh
+#   .github/workflows/ci.yml
+#   scripts/ci-workflow-rules.mjs
+#   scripts/release-ci-receipt.mjs
+#   tests/unit/ci-workflows.test.mjs
+#   tests/unit/release-ci-receipt.test.mjs
+# review-verdict.mjs on main did not change between e2d24cb7 and 6c7b227f.
+#
+# Round 1 (1c7a7529): changes requested.
+# - P2: F1 a two-parent merge was never required; F2 `eval "$(...)"` dropped exit 2; F3 the
+#   injection guard was not proven.
+# - P3: F4-F9.
+# - Fail-closed held everywhere: 9 git fixtures, and gate is RED on every malformed input.
+#
+# Round 2 (d1873663): F1-F9 closed. New P0 N1, the reviewer's own error: round 1 required
+# "HEAD^2 = the queue ref's sha". In GitHub's gh-readonly-queue/<base>/pr-N-<sha>, <sha> is
+# HEAD^1, the entry's base. Read-only API checks:
+# - rust-lang/rust-analyzer: pr-23616-d385d3dc points at a commit with parents
+#   [d385d3dc, d08e9359]; the PR head is d08e9359.
+# - Four more rust-analyzer entries and primer/react show the same.
+# As built, every real merge_group run would have gone red.
+#
+# Round 3 (a86cdad2): N1-N3 closed.
+# - The suffix is compared with HEAD^1, and DIFF_BASE is that checked sha.
+# - HEAD^2 must equal headRefOid (--check-head). The two-parent rule is unchanged.
+# - The reviewer's own fixture in GitHub's real shape (base B, PR P, --no-ff merge, ref
+#   pr-7-<B>) gave DIFF_BASE=B, QUEUED_HEAD=P, rc 0.
+# - Targeted units 88/88.
+# Builder's evidence: mutants mut 30/30, mut-new 9 (n4 equivalent), mut-own 23/23; npm test 4547/0;
+# actionlint, build:check, doctor and plan validate all exit 0.
+#
+# Since a86cdad2: 42799381 (E056.yaml, plan only) and b9b1bcc5 (merge(main) of ed9ff3aa,
+# plan trains 5 and 6, clean). No guarded path changed: git diff a86cdad2 b9b1bcc5 over
+# .github, scripts and the two guarded tests is empty, and the digest recomputed at b9b1bcc5
+# with main's checker is unchanged.
+#
+# Verdict: merge. The ruleset flip is the owner's (O1): after merge, main becomes a repository
+# ruleset with merge method MERGE and grouping ALLGREEN. Today main has classic protection and
+# rules/branches/main returns []. Gating stays sound only under that setting; until then a
+# follow-up issue reads the ruleset and fails toward running.
+schema: review-verdict/v1
+pr: 433
+verdict: merge
+reviewer: prismatic-majordomus-98 (p2, claude-code 07a5ffde)
+content: ad8293da296649bc7d0562fcfb59ab3cac90c0a4454cb105f8b200e6d6db2a50
+findings:
+  - { id: F1, severity: P2, status: closed, title: "the queue head must be a 2-parent merge; ci-changes runs everything otherwise; MERGE+ALLGREEN documented" }
+  - { id: F2, severity: P2, status: closed, title: "vars=\"$(queued-pr.sh)\"; eval \"$vars\" stops on exit 2 (ci.yml both jobs, gates.yaml)" }
+  - { id: F3, severity: P2, status: closed, title: "base allowlist + injection cases (11 bad bases, nothing injected)" }
+  - { id: F4, severity: P3, status: closed, title: "queue-cancel rule; trigger set exactly pull_request+merge_group; headRefOid fallback asserted" }
+  - { id: F5, severity: P3, status: closed, title: "receipt head_branch anchors and the single merge_group runs query asserted" }
+  - { id: F6, severity: P3, status: closed, title: "an unreadable base throws, never a skip" }
+  - { id: F7, severity: P3, status: closed, title: "gates.yaml changes entry names --event <event>, merge_group, 2 parents, 7 gated jobs" }
+  - { id: F8, severity: P3, status: closed, title: "QUEUE_BASE required and exact; pr-N N>=1 without a leading zero; nested ref refused unless base_ref agrees" }
+  - { id: F9, severity: P3, status: closed, title: "E045.yaml scope names every changed path" }
+  - { id: N1, severity: P0, status: closed, title: "the reviewer's own F1 wording was wrong: the ref's sha is HEAD^1, not HEAD^2; fixed and fixtured in GitHub's real shape" }
+  - { id: N2, severity: P3, status: closed, title: "the --check-head no-op is tested against a pr.json that carries headRefOid" }
+  - { id: N3, severity: P3, status: closed, title: "gates.yaml runs show gh pr view -> --check-head -> base-rule" }
