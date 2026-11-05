@@ -338,6 +338,29 @@ test('a live parameter step says only what the adapter did: set, glide, stored f
   s.transport.stop();
 });
 
+test('an engine parameter kept for the next note is stored, not scheduled', () => {
+  const s = gated();
+  const master = s.store.getModel().graph.nodes.find((n) => n.type === 'master');
+  ok(s.store.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', position: { x: 40, y: 40 } }));
+  const fm = s.store.getModel().graph.nodes.find((n) => n.type === 'fm-voice');
+  // Master takes one audio connection: the engine replaces the template's feed.
+  const feed = s.store.getModel().graph.edges.find((e) => e.to.node === master.id);
+  ok(s.store.dispatch({ type: 'EDGE_REMOVE', edgeId: feed.id }));
+  ok(s.store.dispatch({ type: 'EDGE_ADD', from: { node: fm.id, port: 'audio' },
+    to: { node: master.id, port: 'audio' } }));
+  ok(s.transport.start());
+  s.fx.advance(0.1);
+  // The FM engine re-reads its algorithm when a voice starts (adapters/engines.js update):
+  // nothing is written to audio now, so the step has no audio time and says what it waits for.
+  const { steps } = stepsOf(s, () => ok(s.store.dispatch({ type: 'NODE_PARAM_SET',
+    nodeId: fm.id, key: 'algorithm', value: '4-pairs' })));
+  const step = find(steps, 'runtime', 'param');
+  assert.ok(step, 'the live edit is traced to its parameter');
+  assert.deepEqual([step.outcome, step.detail.via, step.detail.at],
+    ['stored', 'next-note', null]);
+  s.transport.stop();
+});
+
 test('a base step names the AudioParam values the adapter wrote, not keys it skipped', () => {
   const run = (ownDetune) => {
     const fx = createFakeAudioEnv({ sampleRate: SR });
