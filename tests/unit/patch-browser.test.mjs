@@ -152,6 +152,21 @@ test('Apply sets the selected engine, not the panel\'s module its patch names', 
   assert.deepEqual(entryAction(m, keys, 'apply', { target: lpf }).action.onto, { fm: panelFm });
 });
 
+test('negative: a panel preset (several nodes) ignores the selected node, module by module',
+  () => {
+    const m = panelStore().getModel();
+    const bass = catalogEntries().find((e) => e.id === 'synth-bass');
+    assert.ok(bass.patch.graph.nodes.length > 1, 'a panel preset has several nodes');
+    const res = PANEL.resolve(m);
+    const plain = entryAction(m, bass, 'apply').action.onto;
+    assert.equal(plain.hpf, res.get('hpf').id);
+    // The LPF is selected: the preset's HPF still sets the panel's HPF, not the selection.
+    for (const sel of ['lpf', 'vco2']) {
+      const r = entryAction(m, bass, 'apply', { target: res.get(sel).id });
+      assert.deepEqual(r.action.onto, plain, sel);
+    }
+  });
+
 test('the saved patches and a registered source (the XY pad hook) join the same library', () => {
   const st = panelStore();
   const m = st.getModel();

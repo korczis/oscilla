@@ -57,9 +57,7 @@ function factoryEntries() {
     const node = m ? m.node : null;
     const name = p.title.split(':')[0];
     let patch = presetPatch(SEMI_MONO, p.id);
-    // An inserted engine is named by its sound; Apply with no node selected still finds the
-    // panel's module, and a selected engine of the type is the one it sets (patchTargets).
-    if (m) {
+    if (m) { // an inserted engine is named by its sound; Apply still finds the panel's module
       const [n] = patch.graph.nodes;
       patch = { ...patch, graph: { ...patch.graph, nodes: [{ ...n, metadata: { ...n.metadata,
         name } }] } };
