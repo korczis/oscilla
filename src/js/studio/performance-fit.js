@@ -12,12 +12,15 @@
 //       its constant part c (in the parameter's unit; the caller scales the others' already);
 //     base: the parameter's base with every cable's constant part; shift: what the scaled
 //     constant parts move the base by ((k - 1) x their sum)
-//   fitCables(lin, k, b, p, key, isFreq, top, lower, cb) -> { kOf(x), up }   computeBases' fit
-//     of one parameter: fitFactor over its linear cables (the others at the Nyquist k), the
-//     constants moving the base `b` by the range factor, a raise never past `top`, the static a
-//     detune's Nyquist room was sized for (the shift raised a bipolar cable's detune above
-//     0.95 x Nyquist: review of PR 428, R-K; `lower` records the cut); each fitted cable marked
-//     in cb.limited, cb.scaled and cb.fitted with the factor that won
+//   fitCables(lin, k, b, p, key, isFreq, { top, room }, lower, cb) -> { kOf(x), up }
+//     computeBases' fit of one parameter: fitFactor over its linear cables (the others at the
+//     Nyquist k), the constants moving the base `b` by the range factor, a raise never past
+//     `top` (the static a detune's Nyquist room was sized for) plus what is left of `room`
+//     (that room in cents) after the cables' final sweep (the shift raised a bipolar cable's
+//     detune above 0.95 x Nyquist: review of PR 428, R-K; the pre-fit static alone as the
+//     ceiling cut a fitted static to 0 at any frequency: train review RK-2; `lower` records
+//     the cut); each fitted cable marked in cb.limited, cb.scaled and cb.fitted with the
+//     factor that won
 //   fitLimits(planNode, cb, { edges, nodes }) -> [Diagnostic]   one per fitted cable held
 //     below its depth (cb.fitted: Map<edge id, { factor, key, by }>), worded by the factor that
 //     won (`by`): 'range' (fitFactor) or 'nyquist' (computeBases' 0.95 x Nyquist headroom, an
@@ -43,17 +46,22 @@ export function fitFactor(lin, base, { min, max }) {
   return { k, shift: (k - 1) * c };
 }
 
-export function fitCables(lin, k, b, p, key, isFreq, top, lower, { limited, scaled, fitted }) {
+export function fitCables(lin, k, b, p, key, isFreq, { top, room }, lower,
+  { limited, scaled, fitted }) {
   // The constant part is scaled by the range factor, not by min(k, fit.k) (review of PR 428,
   // R-K): the Nyquist k sizes the sweep above the static (constants included); scaling a
   // negative constant by the smaller k raised the static past that room (played above
-  // 0.95 x Nyquist), and a positive one lost the room it was given. `top` holds any raise.
+  // 0.95 x Nyquist), and a positive one lost the room it was given. The raise is held at `top`
+  // plus the Nyquist room the cables' final sweep leaves (RK-2: `top` alone, the pre-fit static
+  // clipped at 0, cut a bipolar cable's fitted static to 0 at 440 Hz as at 20 kHz).
   const fit = isFreq ? { k: 1, shift: 0 } : fitFactor(lin.map((x) => (x.fit ? x
     : { ...x, up: x.up * k, down: x.down * k })), b.value, p);
   const kOf = (x) => (x.fit ? Math.min(k, fit.k) : k);
   if (fit.k < 1) {
     b.value += fit.shift;
-    if (b.value + b.cents > top) lower(key, top - b.cents);
+    const upFinal = lin.reduce((t, x) => t + x.up * kOf(x), 0);
+    const ceiling = top + Math.max(0, room - upFinal);
+    if (b.value + b.cents > ceiling) lower(key, ceiling - b.cents);
     for (const x of lin) if (x.fit) { limited.add(x.id); scaled.set(x.id, kOf(x)); }
   }
   const by = fit.k > k ? 'nyquist' : 'range'; // the factor that won (fitLimits words it)

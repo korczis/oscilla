@@ -538,6 +538,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
   const detuneOwned = detunePeak > -Infinity;
   let detuneK = 1;
   let detTop = Infinity; // the static detune the frequency's room was sized for (a lane's: none)
+  let detRoom = 0; // the cents the detune's cables may sweep above detTop (review RK-2)
   // Frequencies first: a detune's room is decided while its frequency is sized.
   const keys = Object.keys(base).sort((x, y) => (defs.get(y).unit === 'Hz')
     - (defs.get(x).unit === 'Hz'));
@@ -581,8 +582,9 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     if (k !== 1) for (const x of lin) if (limited.has(x.id)) scaled.set(x.id, k);
     up *= k;
     // Performance cables (fit): inside the range, never above k (performance-fit.js fitCables).
-    const { kOf, up: upF } = fitCables(lin, k, b, p, key, isFreq, key === 'detune' ? detTop
-      : Infinity, lower, { limited, scaled, fitted });
+    const ceil = key === 'detune' ? { top: detTop, room: detRoom } : { top: Infinity, room: 0 };
+    const { kOf, up: upF } = fitCables(lin, k, b, p, key, isFreq, ceil, lower,
+      { limited, scaled, fitted });
     up = upF;
     for (const x of lin) gains.set(x.id, x.a * kOf(x) * x.scale);
     let kc = 1;
@@ -609,6 +611,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       const dl = (groups.get('detune') || []).filter((x) => !x.log);
       const upD = dl.reduce((s, x) => s + x.up, 0);
       const roomD = CENTS_PER_OCTAVE * Math.log2(capF / Math.max(ref + up, 1e-9)) - usedC;
+      detRoom = Math.max(0, roomD);
       if (upD > 0 && upD > roomD) {
         detuneK = Math.max(0, roomD) / upD;
         for (const x of dl) limited.add(x.id);
