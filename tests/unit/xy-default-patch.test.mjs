@@ -953,3 +953,41 @@ test('NF6: Y\'s room is read once per document, not on every move, and again on 
     assert.equal(reads, after, 'once per document');
     m.destroy();
   });
+
+test('R-K: a pad cable\'s constant never lifts an Oscillator past 0.95 x Nyquist', () => {
+  // Review of PR 428, R-K: the fit scaled a cable's constant part (bipolar, or an offset) by
+  // the range factor after the frequency's headroom was spent on its sweep, so a bipolar Y into
+  // the Detune of an Oscillator at 20 kHz with a static detune played above 0.95 x Nyquist
+  // (detune 800, depth 1200: 28.7 kHz at 48 kHz). What plays, read off the fake engine: the
+  // frequency x 2^((the detune's base + Y's gain) / 1200) at Y's top and bottom.
+  const last = (prm) => (prm.events.length ? prm.events.at(-1).value : prm.value);
+  for (const sampleRate of [44100, 48000]) {
+    for (const [detune, depth, polarity, offset] of [[800, 1200, 'bipolar', 0],
+      [600, 1200, 'bipolar', 0], [900, 600, 'bipolar', 0], [0, 1200, 'unipolar', 600],
+      [500, 1200, 'unipolar', 400]]) {
+      const st = defaultStore();
+      const m0 = st.getModel();
+      const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
+      assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: osc.id,
+        params: { frequency: 20000, detune } }).ok, true);
+      assert.equal(st.dispatch({ type: 'EDGE_ADD', id: 'y-detune', from: { node: ids(m0)('xy'),
+        port: 'y' }, to: { node: osc.id, port: 'detune' }, props: { muted: false, depth,
+        polarity, mapping: 'linear', offset } }).ok, true);
+      const fx = createFakeAudioEnv({ sampleRate });
+      const engine = new AudioEngine({ env: fx.env });
+      assert.ok(engine.init());
+      const rt = createStudioRuntime({ engine });
+      assert.equal(rt.apply(st.getModel(), { revision: 1 }).ok, true);
+      assert.equal(rt.start().ok, true);
+      const h = rt.nodes.get(osc.id);
+      const f = last(h.modTarget('frequency', 'linear').param);
+      const d = last(h.modTarget('detune', 'linear').param);
+      const g = last(rt.edges.get('y-detune').gain.gain);
+      const top = Math.max(f * 2 ** (d / 1200), f * 2 ** ((d + g) / 1200));
+      const cap = 0.95 * (sampleRate / 2);
+      const what = `${sampleRate} Hz, detune ${detune}, ${polarity} ${depth} offset ${offset}`;
+      assert.ok(top <= cap * (1 + 1e-9), `${what}: plays up to ${top.toFixed(0)} Hz, `
+        + `over ${cap} Hz`);
+    }
+  }
+});

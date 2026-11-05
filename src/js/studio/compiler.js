@@ -78,7 +78,7 @@
 
 import { NODE_REGISTRY } from './registry.js';
 import { controlLine, validateEdgeProps } from './ports.js';
-import { fitFactor } from './performance-fit.js';
+import { fitCables } from './performance-fit.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
 import { studioHash } from './schema.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
@@ -537,6 +537,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
   // frequency's headroom (#197 R-7); a static detune without a lane is sized from itself.
   const detuneOwned = detunePeak > -Infinity;
   let detuneK = 1;
+  let detTop = Infinity; // the static detune the frequency's room was sized for (a lane's: none)
   // Frequencies first: a detune's room is decided while its frequency is sized.
   const keys = Object.keys(base).sort((x, y) => (defs.get(y).unit === 'Hz')
     - (defs.get(x).unit === 'Hz'));
@@ -565,7 +566,9 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
         clamped.add('detune');
       }
       const stat = (detuneOwned ? detunePeak : detune.value) + detune.cents;
-      capF = cap / 2 ** (Math.max(0, Math.min(room0, stat)) / CENTS_PER_OCTAVE);
+      const top = Math.max(0, Math.min(room0, stat));
+      if (!detuneOwned) detTop = top;
+      capF = cap / 2 ** (top / CENTS_PER_OCTAVE);
     }
     const lin = list.filter((x) => !x.log);
     const logs = list.filter((x) => x.log);
@@ -577,17 +580,10 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     }
     if (k !== 1) for (const x of lin) if (limited.has(x.id)) scaled.set(x.id, k);
     up *= k;
-    // Performance cables (fit) sweep inside the range, and never above k (performance-fit.js).
-    const fit = isFreq ? { k: 1, shift: 0 } : fitFactor(lin.map((x) => (x.fit ? x
-      : { ...x, up: x.up * k, down: x.down * k })), b.value, p);
-    const kOf = (x) => (x.fit ? Math.min(k, fit.k) : k);
-    if (fit.k < 1) {
-      b.value += fit.shift;
-      for (const x of lin) if (x.fit) { limited.add(x.id); scaled.set(x.id, kOf(x)); }
-      up = lin.reduce((t, x) => t + x.up * kOf(x), 0);
-    }
-    const by = fit.k > k ? 'nyquist' : 'range'; // the factor that won (performance-fit.js)
-    for (const x of lin) if (x.fit) fitted.set(x.id, { factor: kOf(x), key, by });
+    // Performance cables (fit): inside the range, never above k (performance-fit.js fitCables).
+    const { kOf, up: upF } = fitCables(lin, k, b, p, key, isFreq, key === 'detune' ? detTop
+      : Infinity, lower, { limited, scaled, fitted });
+    up = upF;
     for (const x of lin) gains.set(x.id, x.a * kOf(x) * x.scale);
     let kc = 1;
     let usedC = 0;

@@ -12,6 +12,12 @@
 //       its constant part c (in the parameter's unit; the caller scales the others' already);
 //     base: the parameter's base with every cable's constant part; shift: what the scaled
 //     constant parts move the base by ((k - 1) x their sum)
+//   fitCables(lin, k, b, p, key, isFreq, top, lower, cb) -> { kOf(x), up }   computeBases' fit
+//     of one parameter: fitFactor over its linear cables (the others at the Nyquist k), the
+//     constants moving the base `b` by the range factor, a raise never past `top`, the static a
+//     detune's Nyquist room was sized for (the shift raised a bipolar cable's detune above
+//     0.95 x Nyquist: review of PR 428, R-K; `lower` records the cut); each fitted cable marked
+//     in cb.limited, cb.scaled and cb.fitted with the factor that won
 //   fitLimits(planNode, cb, { edges, nodes }) -> [Diagnostic]   one per fitted cable held
 //     below its depth (cb.fitted: Map<edge id, { factor, key, by }>), worded by the factor that
 //     won (`by`): 'range' (fitFactor) or 'nyquist' (computeBases' 0.95 x Nyquist headroom, an
@@ -35,6 +41,24 @@ export function fitFactor(lin, base, { min, max }) {
   const below = bare + sum(rest, 'down') - min;
   const k = Math.min(top > 0 ? clamp01(above / top) : 1, low < 0 ? clamp01(below / -low) : 1);
   return { k, shift: (k - 1) * c };
+}
+
+export function fitCables(lin, k, b, p, key, isFreq, top, lower, { limited, scaled, fitted }) {
+  // The constant part is scaled by the range factor, not by min(k, fit.k) (review of PR 428,
+  // R-K): the Nyquist k sizes the sweep above the static (constants included); scaling a
+  // negative constant by the smaller k raised the static past that room (played above
+  // 0.95 x Nyquist), and a positive one lost the room it was given. `top` holds any raise.
+  const fit = isFreq ? { k: 1, shift: 0 } : fitFactor(lin.map((x) => (x.fit ? x
+    : { ...x, up: x.up * k, down: x.down * k })), b.value, p);
+  const kOf = (x) => (x.fit ? Math.min(k, fit.k) : k);
+  if (fit.k < 1) {
+    b.value += fit.shift;
+    if (b.value + b.cents > top) lower(key, top - b.cents);
+    for (const x of lin) if (x.fit) { limited.add(x.id); scaled.set(x.id, kOf(x)); }
+  }
+  const by = fit.k > k ? 'nyquist' : 'range'; // the factor that won (fitLimits words it)
+  for (const x of lin) if (x.fit) fitted.set(x.id, { factor: kOf(x), key, by });
+  return { kOf, up: lin.reduce((t, x) => t + x.up * kOf(x), 0) };
 }
 
 export function fitLimits(planNode, cb, { edges, nodes } = {}) {
