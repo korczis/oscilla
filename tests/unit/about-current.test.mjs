@@ -19,6 +19,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { WORKSPACES } from '../../src/js/ui/app.js';
+import { LEARN_CARDS } from '../../src/js/data/learn.js';
+import SEMI_MONO from '../../src/js/synth/panels/semi-mono.js';
 
 const root = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
@@ -345,4 +347,151 @@ test('A15: under release:prepare, the roadmap is the plan\'s open milestones', a
   const { planRoadmap, roadmapProblems } = await import('../../scripts/roadmap.mjs');
   assert.deepEqual(roadmapProblems(JSON.parse(read(ROADMAP_REL)), planRoadmap()), [],
     'refresh it: node scripts/roadmap.mjs');
+});
+
+// ------------------------------------------------- U085: a workspace says only what it shows
+// Each panel a workspace description names, by one of the phrases below, must be on that
+// workspace's screen at 1536x1024. A focus workspace (Analyzer, Synthesis, ...) shows the panels
+// whose data-osc-modes lists it, and a full-width view (Measure, Learn, Synth, ...) is the
+// section whose data-osc-modes lists it (src/styles/integration.css hides every other panel from
+// 1280 px). The Playground is the integrated grid: from 1280 px it hides the Spectrogram panel
+// and every row-3 panel but the sequencer and the compact Studio (src/styles/instrument.css),
+// and keeps the workspace-only panels (.osc-workspace) out. "the labs" names those row-3 labs.
+// Learn names its first and last card and Synth each of its tabs, from their data modules.
+
+/** [what the description says, the ids of the panels it names]. */
+export const PANEL_PHRASES = [
+  [/\bgenerator\b/i, ['osc-panel-source']],
+  [/\bsignal analysis\b/i, ['osc-panel-analysis']],
+  [/\bspectrogram of the output\b|\bmicrophone's live spectrum and spectrogram\b/i,
+    ['osc-panel-spectrogram']],
+  [/\bmicrophone analy[sz]er\b/i, ['osc-panel-mic']],
+  [/\bDevice & Limits\b/, ['osc-panel-device']],
+  [/\bguided measurement\b/i, ['osc-measure-flow']],
+  [/\bpattern sequencer\b|\bblock sequences\b/i, ['osc-panel-sequencer']],
+  [/\bcompact Studio\b/, ['osc-panel-studio']],
+  [/\bbiquad filter\b/i, ['osc-panel-filter']],
+  [/\bADSR envelope\b/i, ['osc-panel-envelope']],
+  [/\badditive harmonics\b/i, ['osc-panel-additive']],
+  [/\bphase and stereo\b/i, ['osc-panel-phase']],
+  [/\bbioacoustics\b/i, ['osc-panel-bio']],
+  [/\bdual oscillator\b/i, ['osc-panel-dual']],
+  [/\bthe labs\b/i, ['osc-panel-filter', 'osc-panel-envelope', 'osc-panel-additive',
+    'osc-panel-phase', 'osc-panel-bio']],
+];
+
+/** What a phrase claims about where a panel's signal comes from, checked in its source. */
+export const SOURCE_CLAIMS = [
+  [/\bspectrogram of the output\b/i, 'src/js/charts/spectrogram-panel.js', /main output analyser/],
+  [/\bmicrophone's live spectrum and spectrogram\b/i, 'src/js/charts/spectrogram-panel.js',
+    /\bmicrophone\b/],
+];
+
+/** The opening tag of the element with `id`, and where it starts ('' and -1 when absent). */
+function tagOf(markup, id) {
+  const at = markup.indexOf(`id="${id}"`);
+  if (at < 0) return { tag: '', at: -1 };
+  const from = markup.lastIndexOf('<', at);
+  return { tag: markup.slice(from, markup.indexOf('>', at) + 1), at: from };
+}
+
+const modesOf = (tag) => (tag.match(/\bdata-osc-modes="([^"]*)"/)?.[1] ?? '').split(/\s+/);
+
+/** Whether the panel `id` is on `workspace`'s screen at 1536x1024 (see the note above). */
+export function shownAt1536(markup, id, workspace) {
+  const { tag, at } = tagOf(markup, id);
+  if (at < 0) return false;
+  if (workspace === 'playground') {
+    const row3 = markup.indexOf('<div class="osc-row3"');
+    const only = markup.indexOf('<div class="osc-workspace"');
+    const views = markup.indexOf('id="osc-view-experiments"');
+    if (at > only && at < views) return false;
+    if (/\bosc-p-spectrogram\b/.test(tag)) return false;
+    if (at > row3 && at < only) return /\bosc-p-(?:sequencer|studio)\b/.test(tag);
+    if (modesOf(tag).includes('playground') || at < row3) return true;
+    const view = markup.lastIndexOf('<section class="osc-view', at);
+    return view >= 0 && /workspace !== 'playground'/.test(markup.slice(view, at));
+  }
+  if (tag.includes('data-osc-modes=')) return modesOf(tag).includes(workspace);
+  const view = markup.lastIndexOf('<section class="osc-view', at);
+  return view >= 0 && modesOf(markup.slice(view, markup.indexOf('>', view))).includes(workspace);
+}
+
+/** About's workspace descriptions: { id: purpose text }. */
+function descriptions(markup) {
+  const view = aboutView(markup);
+  return Object.fromEntries([...view.matchAll(
+    /<li\b[^>]*\bdata-osc="about\.workspace\.([a-z]+)"[^>]*>\s*<b>[^<]*<\/b>([\s\S]*?)<\/li>/g)]
+    .map(([, id, rest]) => [id, text(rest)]));
+}
+
+/**
+ * What About's workspace descriptions claim that the workspace does not show, one string each:
+ * a named panel off that workspace's screen, a source claim its code does not make, Learn's
+ * range not its first and last card, a Synth tab left out.
+ */
+export function workspaceTruthProblems(markup) {
+  const problems = [];
+  for (const [id, purpose] of Object.entries(descriptions(markup))) {
+    for (const [phrase, panels] of PANEL_PHRASES) {
+      const said = purpose.match(phrase)?.[0];
+      if (!said) continue;
+      for (const panel of panels) {
+        if (!shownAt1536(markup, panel, id)) {
+          problems.push(`${id} names "${said}", but #${panel} is not on its screen at 1536 px`);
+        }
+      }
+    }
+    for (const [phrase, file, claim] of SOURCE_CLAIMS) {
+      const said = purpose.match(phrase)?.[0];
+      if (said && !claim.test(read(file).split('\n').slice(0, 4).join('\n'))) {
+        problems.push(`${id} says "${said}", which ${file} does not`);
+      }
+    }
+  }
+  const all = descriptions(markup);
+  const [first, last] = [LEARN_CARDS[0].title, LEARN_CARDS.at(-1).title];
+  if (!new RegExp(`\\bfrom ${first} to ${last}\\b`, 'i').test(all.learn ?? '')) {
+    problems.push(`learn does not run from its first card to its last: "${first}" to "${last}"`);
+  }
+  const [voice, ...tabs] = SEMI_MONO.tabs;
+  if (!new RegExp(`\\b${voice.title}\\b`, 'i').test(all.synth ?? '')) {
+    problems.push(`synth does not name its ${voice.label} tab's voice: "${voice.title}"`);
+  }
+  for (const tab of tabs) {
+    if (!(all.synth ?? '').includes(`${tab.label} tab`)) {
+      problems.push(`synth does not name its ${tab.label} tab`);
+    }
+  }
+  return problems;
+}
+
+test('U085: each workspace description names only what that workspace shows at 1536 px', () => {
+  // the Playground model is the CSS's: pin the rule it reads
+  const css = read('src/styles/instrument.css');
+  assert.match(css, new RegExp('\\.osc-app\\[data-mode="playground"\\] :is\\(\\.osc-p-spectrogram,'
+    + '\\s*\\.osc-row3 > \\.osc-panel:not\\(\\.osc-p-sequencer, \\.osc-p-studio\\)\\)'));
+  assert.match(css, /\.osc-workspace \{\s*display: none;/);
+  assert.deepEqual(workspaceTruthProblems(html), []);
+});
+
+test('mutation U085: a reverted phrase is named', () => {
+  const ws = (id) => html.match(new RegExp(
+    `<li data-osc="about\\.workspace\\.${id}">[\\s\\S]*?</li>`))[0];
+  const swap = (id, to) => {
+    const v = html.replace(ws(id), `<li data-osc="about.workspace.${id}"><b>X</b> ${to}</li>`);
+    return workspaceTruthProblems(v);
+  };
+  assert.ok(swap('synthesis', 'Additive harmonics, with the compact Studio.')
+    .includes('synthesis names "compact Studio", but #osc-panel-studio is not on its screen '
+      + 'at 1536 px'));
+  assert.ok(swap('playground', 'The instrument and the labs.').some((p) =>
+    p.startsWith('playground names "the labs", but #osc-panel-filter')));
+  assert.ok(swap('analyzer', 'The microphone\'s live spectrum and spectrogram.').includes(
+    'analyzer says "microphone\'s live spectrum and spectrogram", which '
+    + 'src/js/charts/spectrogram-panel.js does not'));
+  assert.ok(swap('learn', 'Concept cards from frequency to speaker limitations.').some((p) =>
+    p.startsWith('learn does not run from its first card to its last')));
+  assert.ok(swap('synth', 'A semi-modular mono voice, and an Engines tab.')
+    .includes('synth does not name its XY tab'));
 });
