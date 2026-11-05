@@ -3,7 +3,8 @@
 // visual jobs are skipped), and ci.yml's `gate` accepts those skips only on the classifier's
 // `runtime=false`. Fail closed throughout: these tables hold every case that must run
 // everything (renamed, deleted, spaced and control-character names, a .md under tests/, an
-// empty diff, links and submodules, any event but a pull request, a malformed record), the
+// empty diff, links and submodules, any event but a pull request and its merge-queue entry, a
+// malformed record, a queue head whose first parent does not contain the base), the
 // gate verdict on every combination of results, and the workflow wiring that makes the
 // classifier the base branch's copy.
 //   node --test tests/unit/ci-changes.test.mjs
@@ -18,8 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import { gitRepo } from './fixtures/git-repo.mjs';
 import {
-  GATED_BASES, GATED_JOBS, NON_RUNTIME, baseName, changedRecords, classify, isNonRuntimePath,
-  main, parseRawZ,
+  GATED_BASES, GATED_EVENTS, GATED_JOBS, NON_RUNTIME, baseName, changedRecords, classify,
+  isNonRuntimePath, main, parseRawZ, queueRecords,
 } from '../../.github/scripts/ci-changes.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -161,10 +162,17 @@ test('classify: a table of changes, fail closed', () => {
   }
 });
 
-test('classify: every event but a pull request runs everything', () => {
+test('classify: every event but a pull request and its merge-queue entry runs everything', () => {
+  assert.deepEqual([...GATED_EVENTS], ['pull_request', 'merge_group']);
   const docs = rec('M', ['docs/a.md']);
   assert.equal(classify(docs, INTO_MAIN).runtime, false);
-  for (const event of ['push', 'workflow_dispatch', 'merge_group', 'pull_request_target', '']) {
+  // ADR 0083: the queue's merge of the pull request is judged like the pull request
+  assert.equal(classify(docs, { event: 'merge_group', base: 'main' }).runtime, false);
+  assert.equal(classify(docs, { event: 'merge_group', base: 'train/x' }).runtime, true);
+  assert.equal(classify(rec('M', ['src/x.js']), { event: 'merge_group', base: 'main' }).runtime,
+    true);
+  for (const event of ['push', 'workflow_dispatch', 'pull_request_target', 'Merge_Group',
+    'merge_group ', '']) {
     const r = classify(docs, { event, base: 'main' });
     assert.equal(r.runtime, true, event);
     assert.match(r.reason, /everything runs/);
@@ -235,6 +243,102 @@ test('against git: renames, deletions, spaces, tests/*.md and an empty diff', (t
   const docs = judge(fixture(t, { files: { 'docs/a.md': 'b\n' } }));
   assert.deepEqual(docs.paths, ['docs/a.md']);
 });
+
+/**
+ * A merge-queue fixture (ADR 0083): main, a pull request `pr` changing `files`, and the
+ * queue's merge commit of it onto main plus `ahead` (a pull request already queued, merged
+ * first). Checked out at the queue head, as CI checks out a merge_group run.
+ */
+function queueFixture(t, { files, ahead = null }) {
+  const repo = gitRepo('oscilla-ci-changes-queue-');
+  t.after(() => repo.dispose());
+  repo.commit('base', { 'README.md': 'r\n', 'docs/a.md': 'a\n', 'src/x.js': 'x\n' });
+  if (ahead) {
+    repo.branch('ahead');
+    repo.commit('ahead', ahead);
+    repo.git('checkout', '-q', 'main');
+  }
+  repo.branch('pr');
+  repo.commit('change', files);
+  repo.git('checkout', '-q', '-b', 'queue', 'main');
+  if (ahead) repo.git('merge', '-q', '--no-ff', '-m', 'queue: ahead', 'ahead');
+  repo.git('merge', '-q', '--no-ff', '-m', 'queue: pr', 'pr');
+  return repo;
+}
+
+test('merge_group against git: the queued pull request is HEAD^1..HEAD', (t) => {
+  const judgeQueue = (repo) => {
+    const q = queueRecords(repo.dir, 'HEAD', 'main');
+    return { ...q, ...classify(q.records, { event: 'merge_group', base: 'main' }) };
+  };
+  const docs = judgeQueue(queueFixture(t, { files: { 'docs/a.md': 'b\n' } }));
+  assert.equal(docs.contained, true);
+  assert.equal(docs.runtime, false, docs.reason);
+  assert.deepEqual(docs.paths, ['docs/a.md']);
+  // a runtime pull request ahead in the queue is its own entry's change, not this one's
+  const behind = judgeQueue(queueFixture(t, { files: { 'docs/a.md': 'b\n' },
+    ahead: { 'src/x.js': 'ahead\n' } }));
+  assert.equal(behind.runtime, false, behind.reason);
+  assert.deepEqual(behind.paths, ['docs/a.md']);
+  // and a runtime queued pull request runs everything behind a docs one
+  const src = judgeQueue(queueFixture(t, { files: { 'src/x.js': 'y\n' },
+    ahead: { 'docs/a.md': 'ahead\n' } }));
+  assert.equal(src.runtime, true);
+  assert.deepEqual(src.runtimePaths, ['src/x.js']);
+  // main moved past the queue head's first parent: the base is not contained
+  const moved = queueFixture(t, { files: { 'docs/a.md': 'b\n' } });
+  moved.git('checkout', '-q', 'main');
+  moved.commit('main moves', { 'src/y.js': 'y\n' });
+  moved.git('checkout', '-q', 'queue');
+  assert.equal(queueRecords(moved.dir, 'HEAD', 'main').contained, false);
+});
+
+test('merge_group: the program judges the queue head, fails closed, and needs a first parent',
+  (t) => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-ci-changes-queue-out-'));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const run = (repo, out, base = 'main') => spawnSync(process.execPath, [PROGRAM, '--repo',
+      repo.dir, '--event', 'merge_group', '--head', 'HEAD', '--base-branch', base,
+      '--output', out], { encoding: 'utf8' });
+
+    const docs = queueFixture(t, { files: { 'docs/a.md': 'b\n' } });
+    const outDocs = path.join(dir, 'docs');
+    const r1 = run(docs, outDocs);
+    assert.equal(r1.status, 0, r1.stderr);
+    assert.equal(readFileSync(outDocs, 'utf8'), 'runtime=false\n');
+    assert.match(r1.stdout, /merge-queue head [0-9a-f]{12}, first parent [0-9a-f]{12}/);
+
+    // the full remote ref the job passes; a train base runs everything
+    docs.git('update-ref', 'refs/remotes/origin/main', 'main');
+    docs.git('update-ref', 'refs/remotes/origin/train/x', 'main');
+    const outRef = path.join(dir, 'ref');
+    assert.equal(run(docs, outRef, 'refs/remotes/origin/main').status, 0);
+    assert.equal(readFileSync(outRef, 'utf8'), 'runtime=false\n');
+    const outTrain = path.join(dir, 'train');
+    assert.equal(run(docs, outTrain, 'refs/remotes/origin/train/x').status, 0);
+    assert.equal(readFileSync(outTrain, 'utf8'), 'runtime=true\n');
+
+    // a base the queue head's first parent does not contain runs everything
+    const moved = queueFixture(t, { files: { 'docs/a.md': 'b\n' } });
+    moved.git('checkout', '-q', 'main');
+    moved.commit('main moves', { 'src/y.js': 'y\n' });
+    moved.git('checkout', '-q', 'queue');
+    const outMoved = path.join(dir, 'moved');
+    const r2 = run(moved, outMoved);
+    assert.equal(r2.status, 0, r2.stderr);
+    assert.equal(readFileSync(outMoved, 'utf8'), 'runtime=true\n');
+    assert.match(r2.stdout, /not an ancestor of the queue head's first parent: everything runs/);
+
+    // a root commit has no first parent: no answer, so `changes` fails and gate with it
+    const root = gitRepo('oscilla-ci-changes-root-');
+    t.after(() => root.dispose());
+    root.commit('root', { 'docs/a.md': 'a\n' });
+    const outRoot = path.join(dir, 'root');
+    const r3 = run(root, outRoot);
+    assert.equal(r3.status, 1);
+    assert.match(r3.stderr, /::error::/);
+    assert.equal(existsSync(outRoot), false);
+  });
 
 test('the program writes runtime=<bool> for the job, and exits 1 without an answer', (t) => {
   const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-ci-changes-out-'));
@@ -377,7 +481,12 @@ test('ci.yml wiring: the path-gated jobs wait for changes, the rest always run, 
   const listed = /\[([^\]]*)\]\s*\|\s*any\(\. == \$k\)/.exec(VERDICT);
   assert.ok(listed, 'the verdict lists the path-gated jobs');
   assert.deepEqual(JSON.parse(`[${listed[1]}]`), [...GATED_JOBS]);
-  assert.equal(CI.on && Object.keys(CI.on).join(), 'pull_request');
+  // ADR 0083: the same conditions on both events, so the census gating and the ledger's
+  // re-run rule apply on merge_group as on pull_request; no job condition reads the event
+  assert.equal(CI.on && Object.keys(CI.on).join(), 'pull_request,merge_group');
+  for (const [k, j] of Object.entries(jobs)) {
+    assert.ok(!/event_name|github\.event\b/.test(String(j.if ?? '')), `${k}: no event condition`);
+  }
 });
 
 /** ci.yml's jobs that run a browser engine: a matrix over `browser` (#404 R1). */
@@ -412,14 +521,21 @@ test('ci.yml wiring: changes runs the base branch\'s classifier and publishes it
   assert.equal(step.id, 'classify');
   assert.equal(step.if, undefined);
   const lines = step.run.trim().split('\n').map((l) => l.trim());
+  // the base branch: the pull request's, or on merge_group the queue's base_ref (ADR 0083),
+  // checked to be a branch name before it is used
+  assert.equal(step.env.QUEUE_BASE, '${{ github.event.merge_group.base_ref }}');
+  assert.equal(lines[0], 'name="${GITHUB_BASE_REF:-${QUEUE_BASE#refs/heads/}}"');
+  assert.equal(lines[1], 'name_ok=\'^[A-Za-z0-9._/-]+$\'');
+  assert.equal(lines[2],
+    '[[ "$name" =~ $name_ok ]] || { echo "::error::ci-changes: no base branch"; exit 1; }');
   // the base by its full ref (a tag named origin/main cannot shadow it), checked to exist
-  assert.equal(lines[0], 'base="refs/remotes/origin/$GITHUB_BASE_REF"');
-  assert.equal(lines[1], 'prog=.github/scripts/ci-changes.mjs');
-  assert.equal(lines[2], 'judge="$RUNNER_TEMP/ci-changes.mjs"');
-  assert.equal(lines[3], 'git show-ref --verify --quiet "$base"');
+  assert.equal(lines[3], 'base="refs/remotes/origin/$name"');
+  assert.equal(lines[4], 'prog=.github/scripts/ci-changes.mjs');
+  assert.equal(lines[5], 'judge="$RUNNER_TEMP/ci-changes.mjs"');
+  assert.equal(lines[6], 'git show-ref --verify --quiet "$base"');
   // the base's blob is the only program that runs; a base without one answers runtime=true
   // and runs nothing of the pull request
-  assert.deepEqual(lines.slice(4), [
+  assert.deepEqual(lines.slice(7), [
     'if git cat-file -e "$base:$prog" 2> /dev/null; then',
     'git cat-file blob "$base:$prog" > "$judge"',
     'echo "ci-changes: $prog of $base ($(git rev-parse --short=12 "$base")) classifies"',

@@ -21,8 +21,9 @@
 #     `needs.changes.outputs.runtime != 'false'`: in CI, the base branch's
 #     .github/scripts/ci-changes.mjs skips the engine, suites, measure, studio, browser, census
 #     and visual jobs for a pull request into main whose every changed path is under
-#     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md. A
-#     local task keeps them: the model does not encode that allowlist (a path class cannot say "every
+#     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (on
+#     merge_group the paths of HEAD^1..HEAD, the queued pull request's merge). A local task
+#     keeps them: the model does not encode that allowlist (a path class cannot say "every
 #     path outside these"), so it over-selects rather than skip a gate the classifier would
 #     run. Every gate is `always: true`: every plan selects it, and any changed file can make a
 #     recorded run of it stale. The one path class covers the whole tree and names no gate, so

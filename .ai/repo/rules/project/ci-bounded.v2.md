@@ -99,7 +99,10 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   `*.md`, in a pull request into `main`; a pull request into any other base runs everything,
   because its `gate` lands on the head commit that main's required check reads too; a base
   without the classifier answers `runtime=true`, and the pull request's own copy never
-  decides). A skip of any other job or for any other
+  decides). On `merge_group` (version 2) the same classifier judges the queued pull request:
+  the base is the queue's `base_ref`, and the changed paths are `HEAD^1..HEAD`, the queue's
+  merge of that pull request onto main plus the pull requests ahead, provided the base is an
+  ancestor of `HEAD^1` (otherwise everything runs). A skip of any other job or for any other
   reason, a cancelled or failed job, and a failed or silent `changes` fail it. The only other
   job condition in `ci.yml` is the flake ledger's (E010), which runs on a re-run only and
   which `gate` needs but does not judge.
@@ -166,14 +169,19 @@ it cannot read fails the test instead of passing unread.
 retry flags, the verdict program).
 
 `tests/unit/ci-changes.test.mjs` holds the path-gating exception: it runs the `gate` job's
-own `VERDICT` with `jq` on every combination of results (a skip passes only for the six jobs
-and only on `runtime=false` from a successful `changes`), the classifier's fail-closed table
-(a `.md` under `tests/`, renames into or out of the allowlist, deletions, names with spaces,
-links and submodules, an empty diff, any event but a pull request, any base but `main`), and
-the wiring: exactly
-the six jobs carry that condition, the four judge and unit jobs none, and the `changes` step
-runs only the base branch's blob of the classifier, or answers `runtime=true` when the base
-has none.
+own `VERDICT` with `jq` on every combination of results (a skip passes only for the
+`GATED_JOBS` and only on `runtime=false` from a successful `changes`), the classifier's
+fail-closed table (a `.md` under `tests/`, renames into or out of the allowlist, deletions,
+names with spaces, links and submodules, an empty diff, any event but a pull request and its
+merge-queue entry, any base but `main`), the merge-queue case against git (version 2: the
+queued pull request judged by `HEAD^1..HEAD`, so a runtime pull request ahead in the queue is
+not counted and a runtime one behind a docs one runs everything; a base that the queue head's
+first parent does not contain runs everything; a head with no parent gives no answer), and
+the wiring: exactly the `GATED_JOBS` carry that condition, every browser leg is among them,
+the four judge and unit jobs none, no job condition reads the event (so both events gate
+alike), the `changes` step takes its base from `GITHUB_BASE_REF` or the queue's `base_ref`,
+and it runs only the base branch's blob of the classifier, or answers `runtime=true` when the
+base has none.
 `tests/unit/ci-gates-model.test.mjs` refuses any other job condition in `ci.yml`.
 
 What the test cannot see:

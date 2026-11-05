@@ -1,4 +1,4 @@
-// ADR 0082, rule project.release-receipt-binds-gate v2: the CI receipt. The CI run of the
+// ADR 0082, rule project.release-receipt-binds-gate v3: the CI receipt. The CI run of the
 // release pull request is the gate verdict only for main's HEAD whose tree that run tested,
 // on its newest run and latest attempt, with every job ci.yml declares green.
 //   node --test tests/unit/release-ci-receipt.test.mjs
@@ -346,7 +346,7 @@ test('ADR 0083 mutation: a queue group of two refuses (HEAD^1 is another pull re
   assert.ok(problems.some((p) => /main holds more than CI tested/.test(p)), problems.join('\n'));
 });
 
-test('ADR 0083 mutation: a skipped or missing job of the queue run refuses; none is excused', () => {
+test('ADR 0083 mutation: a skipped or missing job of the queue run refuses', () => {
   const q = qrun();
   const skipped = qjobs(q).map((j) => (j.name === 'review-verdict (guarded paths need a recorded'
     + ' review)' ? { ...j, conclusion: 'skipped' } : j));
@@ -355,6 +355,30 @@ test('ADR 0083 mutation: a skipped or missing job of the queue run refuses; none
   const missing = qjobs(q).filter((j) => !j.name.startsWith('fail-first'));
   assert.match(ciReceiptProblems(queued({ queueJobs: missing })).join(),
     /run 950 has no job "fail-first/);
+});
+
+test('ADR 0083 with #417: on merge_group too only the flake ledger\'s own first attempt is'
+  + ' excused', () => {
+  const ledger = WORKFLOW.rerunOnly[0];
+  const skipLedger = (r, over = {}) => qjobs(r).map((j) => (j.name === ledger
+    ? { ...j, conclusion: 'skipped', ...over } : j));
+  // attempt 1: the ledger skipped by its own condition verifies the queue run
+  const q1 = qrun({ run_attempt: 1 });
+  assert.deepEqual(ciReceiptProblems(queued({ queueRuns: [q1], queueJobs: skipLedger(q1) })), []);
+  assert.equal(judgedRun(queued({ queueRuns: [q1], queueJobs: skipLedger(q1) })).id, 950);
+  // attempt 2: it must succeed; skipped, or a carried skip stamped with attempt 2, refuses
+  const q2 = qrun({ run_attempt: 2 });
+  assert.match(ciReceiptProblems(queued({ queueRuns: [q2], queueJobs: skipLedger(q2) })).join(),
+    /merge_group: job "flake ledger.*" of run 950 is completed\/skipped/i);
+  assert.match(ciReceiptProblems(queued({ queueRuns: [q1],
+    queueJobs: skipLedger(q1, { run_attempt: 2 }) })).join(), /flake ledger.*completed\/skipped/i);
+  // a path-gated job (E026) skipped in the queue run is not excused: the census, say
+  const census = WORKFLOW.jobs.find((n) => /census/i.test(n));
+  assert.ok(census, 'ci.yml declares a census leg');
+  const skipCensus = qjobs(q1).map((j) => (j.name === census ? { ...j, conclusion: 'skipped' }
+    : j));
+  assert.match(ciReceiptProblems(queued({ queueRuns: [q1], queueJobs: skipCensus })).join(),
+    /merge_group: job ".*census.*" of run 950 is completed\/skipped/i);
 });
 
 test('ADR 0083 mutation: a pull_request run does not stand in when the queue commit\'s tree'

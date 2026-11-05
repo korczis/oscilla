@@ -32,8 +32,10 @@
 # anything else, an empty diff, an error or a missing answer runs them (fail closed). unit, knowledge, fail-first and review-verdict always
 # run: the plan, knowledge and build:check tests guard what a non-runtime change can break.
 # `gate` accepts a skipped job only when it is one of those seven and `changes` succeeded with
-# `runtime=false`. ci.yml is started by pull_request only (project.ci-bounded, `triggers`), so
-# nothing on main is path-gated here; the classifier answers runtime for any other event.
+# `runtime=false`. ci.yml is started by pull_request and merge_group only (project.ci-bounded
+# v2, `triggers`), so nothing on main is path-gated here; on merge_group the classifier judges
+# the queued pull request by HEAD^1..HEAD, the queue's merge of it (ADR 0083), and it answers
+# runtime for any other event.
 # Tested by tests/unit/ci-changes.test.mjs.
 name: CI
 
@@ -109,7 +111,9 @@ jobs:
     # classifier (the pull request that introduces it) answers runtime=true with a warning and
     # runs no copy at all, so no pull request is ever skipped by a program it carries. The base
     # is named by its full ref, so a tag called origin/<base> cannot stand in for it (#255, R2).
-    # Full history, so the merge base is in the clone.
+    # Full history, so the merge base is in the clone. On merge_group the base is the queue's
+    # base_ref and the classifier itself diffs HEAD^1..HEAD (ADR 0083): the command line is the
+    # same on both events, so a base copy that knows only pull_request answers runtime=true.
     name: changes (does the pull request touch a runtime path)
     runs-on: ubuntu-24.04
     timeout-minutes: 4
@@ -126,8 +130,13 @@ jobs:
       - name: Classify the changed paths with the base branch's classifier
         id: classify
         timeout-minutes: 2
+        env:
+          QUEUE_BASE: ${{ github.event.merge_group.base_ref }}
         run: |
-          base="refs/remotes/origin/$GITHUB_BASE_REF"
+          name="${GITHUB_BASE_REF:-${QUEUE_BASE#refs/heads/}}"
+          name_ok='^[A-Za-z0-9._/-]+$'
+          [[ "$name" =~ $name_ok ]] || { echo "::error::ci-changes: no base branch"; exit 1; }
+          base="refs/remotes/origin/$name"
           prog=.github/scripts/ci-changes.mjs
           judge="$RUNNER_TEMP/ci-changes.mjs"
           git show-ref --verify --quiet "$base"
