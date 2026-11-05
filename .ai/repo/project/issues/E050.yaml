@@ -1,0 +1,30 @@
+id: E050
+milestone: M046
+serves:
+  - "engineering-integrity#intent-refs-exist"
+title: "Every path an intent, a census entry or a claim names exists or is pending, decided by one module"
+slug: every-path-an-intent-a-census-entry-or-a-claim-names-exists-or
+priority: p1
+profile: implementation
+objective: "Lands as test(plan). Panel Excellence criterion 15 (intent ref integrity), merged with the census finding 'a test is a text match' as one integrity mechanism. At main 68b117f3 af's read-only scan found 194 distinct missing file paths among 401 path occurrences in intent ref: entries; the two tests that read intents (tests/unit/release-validation-pins.test.mjs:19, tests/unit/plan-yaml-strict.test.mjs:31) check YAML and pins, not that a ref's file exists. After: tests/unit/lib/evidence-paths.mjs is the one module that extracts the file paths a record names (an intent criterion ref, a surface-census tests entry, a docs/CLAIMS.yaml test) and decides 'exists or pending'; tests/unit/evidence-paths.test.mjs runs it over all three with tests/unit/pending-evidence.json, a list of the missing paths with the issue that builds each, that only shrinks by its git history. U076 keeps the locator half of the census check (which locator forms count); its path half calls this module, so the existence rule is written once."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 15, the 'Intent evidence is often unbuilt' findings and ranked follow-up 3. Merging with U076 rather than duplicating it: U076 decides whether a named test really reaches a surface; this issue decides whether a named path exists at all."
+scope:
+  - "tests/unit/lib/evidence-paths.mjs"
+  - "tests/unit/evidence-paths.test.mjs"
+  - "tests/unit/pending-evidence.json"
+  - "tests/unit/surface-census.test.mjs"
+  - "tests/README.md"
+depends_on:
+  - "U076"
+acceptance_criteria:
+  - "Fail-first: tests/unit/evidence-paths.test.mjs fails on the merge base with the pending list empty (194 intent ref paths missing at 68b117f3, the number measured again at landing and printed)."
+  - "At landing every missing path is in tests/unit/pending-evidence.json with the plan issue that builds it; a new missing path in an intent ref, a census tests entry or a claim fails; a pending entry whose file now exists fails until it is removed; the list's length is compared with its value in the most recent earlier commit and never rises (the history-ratchet pattern of tests/unit/ui-flowbite-pro.test.mjs:65-90)."
+  - "tests/unit/surface-census.test.mjs calls the module for the existence of each tests entry and keeps U076's locator forms; no second path-existence rule remains in tests/unit (asserted by a scan of tests/unit for existsSync over a record's ref or tests field outside the module)."
+  - "Not a guarded path under v2; R033 brings the rules' ratchet baselines under the guard. prismatic-majordomus-98 is asked for a critique (it reads the plan layer)."
+validation:
+  - "node --test tests/unit/evidence-paths.test.mjs tests/unit/surface-census.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

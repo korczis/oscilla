@@ -128,6 +128,10 @@ satisfaction:
     criterion: "A dialog's deferred initial focus never takes focus back from a control the user moved to after it opened, and a dialog closed before it fires takes none, so a keyboard confirmation presses the button chosen on any host load"
     evidence: "command"
     ref: "node --test tests/unit/dialog-initial-focus.test.mjs"
+  - id: "intent-refs-exist"
+    criterion: "Every file path named by an intent criterion ref, a surface-census tests entry or a docs/CLAIMS.yaml test exists in the tree or is listed in a pending list that only shrinks, and one module decides it for all three (Panel Excellence, af 2026-11-05)"
+    evidence: "command"
+    ref: "node --test tests/unit/evidence-paths.test.mjs"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"
@@ -146,4 +150,4 @@ non_goals:
   - "Splitting src/js/studio/transport.js (72 327 bytes on main at d4bd97f), src/js/measurement/engine.js (70 955) or src/js/measurement/quality.js (66 213) in this milestone: they stay under their falling cap with its headroom, and a split of any of them is a candidate criterion for the owner, not planned work"
   - "Bounding the total size of src/js: the per-file budget measures distribution; the total is bounded by the dist budget"
 created_at: 2026-10-18
-updated_at: 2026-10-19
+updated_at: 2026-11-05

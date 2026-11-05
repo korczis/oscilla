@@ -1,0 +1,34 @@
+id: U081
+milestone: M054
+serves:
+  - "ui-current#names-unambiguous"
+title: "Accessible names are unique within each panel, each glossary label names one concept, and a settings control opens settings"
+slug: accessible-names-are-unique-within-each-panel-each-glossary
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Panel Excellence criterion 8. At main 68b117f3 'Compare' means four things (src/index.html:148, :666, :2021, :2274), Synth has two 'Arm' controls, the transport (src/js/synth/ui.js:851) and the computer keys (src/js/midi/keyboard-ui.js:236), 'Library' names two things (:2475, :2636), and the 'Microphone settings' gear (:651-653) opens a dialog with only text and Close (:3247-3262). After: each of these is renamed (not merged: the two Arms have different owners, af's 'Must not unify'); docs/GLOSSARY.md lists Compare, Arm, Library and graph with one concept each; the gear is renamed to what it opens or the dialog gains its settings; auditControls (tests/browser/app.cjs:294) checks unique names per panel."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 8, the Naming findings and ranked follow-up 8."
+scope:
+  - "src/index.html"
+  - "src/js/synth/ui.js"
+  - "src/js/midi/keyboard-ui.js"
+  - "docs/GLOSSARY.md"
+  - "tests/unit/glossary-labels.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/unit/no-inert-surfaces-allowance.json"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/glossary-labels.test.mjs reads docs/GLOSSARY.md and the visible labels of src/index.html and the Synth view modules and fails on the merge base on 'Compare' (four concepts), 'Arm' (two) and 'Library' (two)."
+  - "auditControls in tests/browser/app.cjs fails when two controls of one panel share an accessible name, with an allowance that only shrinks; an in-page fixture with a duplicate name proves it fails. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "A control whose accessible name contains 'settings' opens a surface that holds at least one input, select or switch (asserted in the browser leg)."
+  - "src/js/synth/* is guarded: oscilla-21 reviews the synth labels and writes the verdict for that path (project.review-verdict); the other paths are unguarded under v2."
+validation:
+  - "node --test tests/unit/glossary-labels.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05
