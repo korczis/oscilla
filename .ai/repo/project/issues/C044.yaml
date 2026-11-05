@@ -1,0 +1,35 @@
+id: C044
+milestone: M090
+serves:
+  - "coherent-state#labs-state-their-scope"
+title: "A lab says in its panel when its settings do not reach the sound that plays"
+slug: a-lab-says-in-its-panel-when-its-settings-do-not-reach-the
+priority: p2
+profile: implementation
+objective: "Lands as fix(labs). Panel Excellence criterion 5. At main 68b117f3 Additive never applies to a dual plan (src/js/audio/lab-play-options.js:50, periodicWave only when !dual) and the panel does not say so; the labs state their scope only when the sequencer plays (coherent-state#sequencer-through-engine). After: each lab (Filter, Envelope, Additive, Phase & Stereo) reads one scope table that says, for the current source (single oscillator, dual plan, sequencer, Studio), whether the lab reaches it; while it does not, the panel shows a statement naming the source, and the statement is gone once the lab applies again."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 5 and the Inventory row for Additive ('silent when dual plays')."
+scope:
+  - "src/js/audio/lab-play-options.js"
+  - "src/js/labs/scope.js"
+  - "src/js/labs/additive.js"
+  - "src/js/labs/filter-lab.js"
+  - "src/js/labs/envelope.js"
+  - "src/js/labs/phase-stereo.js"
+  - "tests/unit/lab-scope.test.mjs"
+  - "tests/browser/labs.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/lab-scope.test.mjs fails on the merge base: with a dual plan selected and Additive on, the Additive panel shows no statement that it does not apply."
+  - "The scope table is the only place that decides which source a lab reaches; lab-play-options.js reads it (a mutation that lets Additive reach a dual plan while the table says it does not fails the test, and so does the reverse)."
+  - "tests/browser/labs.cjs: Additive on, Dual selected: the statement is visible and names the dual plan; Dual off: it is gone. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "src/js/audio is guarded: prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+validation:
+  - "node --test tests/unit/lab-scope.test.mjs"
+  - "node tests/browser/labs.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

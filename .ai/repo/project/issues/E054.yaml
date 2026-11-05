@@ -1,0 +1,28 @@
+id: E054
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "contrast-axe runs in CI or is gone, and contrast's engines are stated"
+slug: contrast-axe-runs-in-ci-or-is-gone-and-contrasts-engines-are
+priority: p3
+profile: implementation
+objective: "Lands as test(browser), built to Q097 question 2. At main 68b117f3 the contrast check of tests/browser/qa-regressions.cjs (:1086) runs in Chromium only with no recorded reason, and its axe-core colour-contrast pass never runs because axe-core is not a dependency (:75-78). After, per Q097: axe-core is a pinned devDependency and the axe pass fails the suite on a violation (a), or the axe pass is deleted (b), or it stays declared with its reason in the suite (c); contrast runs in all three engines or the suite records why not."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S9."
+scope:
+  - "tests/browser/qa-regressions.cjs"
+  - "package.json"
+  - "package-lock.json"
+  - "tests/README.md"
+depends_on:
+  - "Q097"
+acceptance_criteria:
+  - "Under (a): a fixture with a 2:1 text contrast fails the axe pass in CI; the CI log of the qa-regressions job shows the axe pass ran (not skipped)."
+  - "No declared check of qa-regressions.cjs is skipped in CI without a reason string in the suite; contrast runs in chromium, firefox and webkit or names the engine it skips and why."
+  - "package.json is a build input of dist (plan-yaml-strict.test.mjs notes it): the devDependency changes no dist byte (npm run build:check passes). fail-first: n/a, a test(browser) change. Not guarded under v2; prismatic-majordomus-98 is asked for a critique (CI)."
+validation:
+  - "node tests/browser/qa-regressions.cjs"
+  - "npm run build:check"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

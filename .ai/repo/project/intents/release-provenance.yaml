@@ -35,6 +35,10 @@ satisfaction:
     criterion: "A release's own Pages run proved its public page carried the release version and commit, matched the artifact, booted and played in three browsers (release:publish verifies it before the GitHub Release); the live page boots, plays and shows the label its release state gives, so a post-release build never presents itself as the release"
     evidence: command
     ref: "npm run test:live -- --expect-commit origin/main"
+  - id: "no-runtime-network"
+    criterion: "verify-dist refuses every first-party runtime-load form (an absolute URL assigned to src, href or srcset, passed to new Image, Audio or Video or written in an HTML string, and computed access to fetch), the vendor bytes' known network strings are asserted unreachable, and every browser suite fails on a request whose URL is not file:, data:, blob: or its test origin (Hardening, oscilla-b0 2026-11-05)"
+    evidence: "command"
+    ref: "node --test tests/unit/verify-dist.test.mjs tests/unit/browser-suite-contract.test.mjs"
 governance:
   - "rule:project.release-receipt-binds-gate"
   - "rule:project.release-flow-complete"
@@ -54,4 +58,4 @@ non_goals:
   - "A deployment record: .ai/repo/deployments holds only its README, and deployment/v1 has no shape for a static Pages site"
   - "Telling a release's changes from inside the released page: release notes are written after publish (ADR 0051)"
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-11-05

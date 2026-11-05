@@ -229,6 +229,27 @@ test('window: the dial, a display-window frame for the caller\'s text, a legend 
   }
 });
 
+// #420 s-choices on ubuntu-24.04: system-ui there is DejaVu Sans, which draws the 49 Synth
+// legends at up to 1.04x legendWidth regular and 1.21x bold ("Minor pentatonic": 99.84
+// estimated, 101.6 regular, 115.8 bold, in a 111.84 cell). A window's grid cell is the estimate
+// plus its pads, so its legends print at 400 (the frame names the selection, the bar marks it)
+// and each fits its cell at 1.05x the estimate.
+test('window: every grid legend prints at 400 and fits its cell at 1.05x the estimate', () => {
+  for (const p of [ENUM(9), ENUM(10, true), ENUM(12)]) {
+    const L = switchLayout(p);
+    for (const [i, [v]] of p.options.entries()) {
+      const svg = draw(p, { value: v });
+      for (const t of parts(svg, 'data-legend')) {
+        assert.equal(attrOf(t, 'font-weight'), '400', `${p.key} at ${v}: ${t}`);
+      }
+      assert.equal(parts(svg, 'data-selected').length, 1, `${p.key} at ${v}: the bar marks it`);
+      const o = L.options[i];
+      assert.ok(o.legend.width * 1.05 <= o.hit.width, `${p.key} ${v}: ${o.legend.width} x 1.05 `
+        + `in its ${o.hit.width} cell`);
+    }
+  }
+});
+
 // ---------------------------------------------------------------- a dial is a knob (W1c review)
 
 const DIALS = [ENUM(5), ENUM(6), ENUM(7, true), ENUM(8), ENUM(9), ENUM(10, true), ENUM(12)];

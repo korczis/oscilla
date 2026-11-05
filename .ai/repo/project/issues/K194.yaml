@@ -1,0 +1,37 @@
+id: K194
+milestone: M068
+serves:
+  - "connected-instrument#engines"
+title: "The templates use engine nodes, and the two duplicate oscillator builders are deleted"
+slug: templates-use-engine-nodes-duplicate-builders-deleted
+priority: p2
+profile: implementation
+objective: "Lands as fix(engines). Coverage gap of af's critique of 96daa67b ('K189 carries no criterion that the three templates stop rebuilding engines, and none that offline-renderer.js:130 and additive.js:280 are deleted'). Line numbers at origin/main a19f1ff6. The demo-song, fm-chime and ring-mod templates (src/js/studio/templates/demo-song.js, fm-chime.js, ring-mod.js) rebuild their voices from plain oscillator, LFO, filter and envelope nodes (demo-song's bass-osc, lead-osc, lead-lfo, kick-osc; fm-chime's audio-rate LFO into an Oscillator) where an engine node (fm-voice and the other K090-K092 engines) exists; src/js/audio/offline-renderer.js:129-130 (connectVoice's own createOscillator) and src/js/audio/additive.js:277-280 (createAdditiveOscillator) are oscillator builders beside the voice host. After: each template uses the engine node that makes its sound, or states in the template file why a plain-node graph is the point of the template (a teaching graph), and the two builders are deleted with their callers moved onto the voice host or the shared primitives of K193."
+why: "af's critique of 96daa67b, coverage gap 'components reused' and 'tested and deployed' (K189 needs midi.cjs, engine-v1port.cjs, sequencer.cjs, demo-song.cjs and the size-report delta)."
+scope:
+  - "src/js/studio/templates/demo-song.js"
+  - "src/js/studio/templates/demo-song-score.js"
+  - "src/js/studio/templates/fm-chime.js"
+  - "src/js/studio/templates/ring-mod.js"
+  - "src/js/audio/offline-renderer.js"
+  - "src/js/audio/additive.js"
+  - "tests/unit/templates-engine-nodes.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K193"
+acceptance_criteria:
+  - "Fail-first: tests/unit/templates-engine-nodes.test.mjs asserts every template voice is an engine node or carries a stated teaching reason, and that src/js/audio/ exports no oscillator builder beside the voice host and K193's primitives; it fails on the merge base naming demo-song, fm-chime and ring-mod and offline-renderer.js:129-130 and additive.js:277-280."
+  - "Each changed template still renders its documented sound: its offline render's spectral lines (fm-chime: 440 +/- n x 616 Hz) and level are within the template test's stated tolerance before and after."
+  - "tests/browser/demo-song.cjs, tests/browser/sequencer.cjs, tests/browser/midi.cjs and tests/browser/engine-v1port.cjs pass in Chromium, Firefox and WebKit; scripts/size-report.mjs's gzip delta is in the pull request body and is not positive."
+  - "The V1 freeze golden vectors (tests/unit/freeze.test.mjs) are unchanged with the labs off (ADR 0014)."
+  - "Guarded paths (src/js/audio/*, src/js/studio/*): prismatic-majordomus-98 writes the verdict; oscilla-21 checks the template sounds. Lane: oscilla-26."
+validation:
+  - "node --test tests/unit/templates-engine-nodes.test.mjs tests/unit/freeze.test.mjs"
+  - "node tests/browser/demo-song.cjs"
+  - "node tests/browser/sequencer.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

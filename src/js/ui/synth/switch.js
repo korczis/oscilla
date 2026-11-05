@@ -28,10 +28,12 @@
 // the mechanism centred on the origin; layout.box holds everything drawn and every hit box
 // (zoom >= 1: at a smaller zoom the boxes grow with the 44 px rule and the box with them).
 // Legends are LEGEND_PX screen px at any zoom, in text.label (4.5:1), the selected or hovered
-// one in text.value at weight 600, text.dim while disabled; their width is an estimate from the
-// glyphs (legendWidth), used only to lay the boxes out. Colours are tokens passed in
-// (synthTokens; project.visual-identity-lock) and no number sets an intensity (v4): a shadow is
-// class opacity-hw-shadow, the cap highlight opacity-hw-sheen, and a toggle's LED is led.js's
+// one in text.value, the selected at weight 600 (a window's grid at 400: its frame names the
+// selection at 600 and the bar marks it, and a cell is the regular width plus its pads, which
+// bold DejaVu Sans, Linux's system-ui, overruns by up to 1.21x), text.dim while disabled; their
+// width is an estimate from the glyphs (legendWidth), used only to lay the boxes out. Colours
+// are tokens passed in (synthTokens; project.visual-identity-lock) and no number sets an
+// intensity (v4): a shadow is class opacity-hw-shadow, the cap highlight opacity-hw-sheen, and a toggle's LED is led.js's
 // (ledSvg: its bezel, its lens in control.ring lit or surface.card with a control.edge ring off,
 // both 3:1, and lit its SVG halo at the hw-sheen intensity), so every LED of the layer looks
 // alike; the caller's { source, lit } is passed through, and ledSvg binds data-source and
@@ -555,7 +557,7 @@ export function switchSvg({ value, param, tokens, zoom = 1, state = {}, led = nu
       const lg = o.legend;
       out += `<text data-legend="" data-index="${o.index}" x="${lg.x}" y="${lg.y}" `
         + `font-size="${num(lg.size)}" text-anchor="${lg.anchor}" dominant-baseline="central" `
-        + `font-weight="${o.index === sel ? 600 : 400}" `
+        + `font-weight="${o.index === sel && L.style !== 'window' ? 600 : 400}" `
         + `fill="${esc(st.disabled ? tx.dim : (lit ? tx.value : tx.label))}" stroke="none">`
         + `${esc(lg.text)}</text>`;
       if (L.style === 'window' && o.index === sel) {

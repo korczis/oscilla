@@ -1,0 +1,26 @@
+id: E053
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "Timing-allow markers are counted by a baseline that only shrinks"
+slug: timing-allow-markers-are-counted-by-a-baseline-that-only
+priority: p3
+profile: implementation
+objective: "Lands as test(browser), built to Q097 question 1. At main 68b117f3 the timing-allow markers that excuse a wait from the timing scan have no count ratchet (27 counted by the audit), so a new one shows up in review only if a reviewer notices it. After, under answer (a): the browser-timing test counts the markers per file and compares the counts with tests/browser/timing-allow-baseline.json, which only shrinks by its git history; under (b) this issue records why it is not built and closes."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S9."
+scope:
+  - "tests/unit/browser-timing.test.mjs"
+  - "tests/browser/timing-allow-baseline.json"
+  - "tests/README.md"
+depends_on:
+  - "Q097"
+acceptance_criteria:
+  - "Under (a): a mutation that adds one timing-allow marker to any suite fails tests/unit/browser-timing.test.mjs with the file named; on the merge base it passes."
+  - "The baseline's counts at landing equal the measured counts (printed); a raise needs a ledger entry with the pull request and the reason."
+  - "fail-first: n/a, a test(browser) change. Not guarded under v2; R033 guards the rules' baselines once it lands."
+validation:
+  - "node --test tests/unit/browser-timing.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

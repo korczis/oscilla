@@ -45,4 +45,23 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-03'
-updated_at: '2026-11-03'
+updated_at: 2026-11-05T00:13:27Z
+started_at: 2026-11-05T00:12:54Z
+started_event: sha256:a4957c5c913a654ff195615febc15dea76a50e836b2e208ba9da92b1a8169bd1
+completed_at: 2026-11-05T00:13:27Z
+completed_event: sha256:958f42f6d2985576d76cca932352013839c1ad6269a38ec4e578556e4e602c54
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-graph-layout.test.mjs tests/unit/studio-graph-commands.test.mjs tests/unit/studio-graph-keys.test.mjs tests/unit/v31-studio-docs.test.mjs"
+    result: "29/29 pass on a scratch copy of origin/main. The V637 tests cover the After crossing and overlap bounds, the wrap gate, the invariants (one NODE_MOVE entry, exact undo, unchanged studioHash, the L command as the only caller) and the negative cases."
+    artifact: "2f442e114dc752a36b68a98cd1db656b0eb2f8e1"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:12:35Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/404.yaml"
+    result: "Review verdict .ai/repo/reviews/404.yaml (verdict: merge) is on origin/main; landed as feat/studio-layered-tidy, member of merge train 3 (#404, merge 2f442e11); its own paths are not guarded, the landing train carries the verdict, main commit 2f442e114dc752a36b68a98cd1db656b0eb2f8e1."
+    artifact: ".ai/repo/reviews/404.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:12:40Z

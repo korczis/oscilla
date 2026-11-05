@@ -49,9 +49,13 @@ satisfaction:
     evidence: "command"
     ref: "node --test tests/unit/size-report.test.mjs"
   - id: "main-red-shows"
-    criterion: "A push to main runs the unit, knowledge and browser-gate jobs of the pull request gate on the merge commit, from a workflow without a gate job, and a failure fails a check on that commit with a summary naming the failed jobs"
+    criterion: "A push to main runs every job of the pull request gate that is not PR-only (all but fail-first, review-verdict, changes and flake-ledger) on the merge commit, from a workflow without a gate job, a failure fails a check on that commit with a summary naming the failed jobs, and release:prepare refuses a commit whose main checks are not green (E046; until it lands, the unit, knowledge and browser-gate jobs)"
     evidence: "command"
     ref: "node --test tests/unit/main-checks.test.mjs"
+  - id: "queue-lands-tested-tree"
+    criterion: "Pull requests land through a merge queue: ci.yml runs on merge_group as well as pull_request, its fail-first and review-verdict jobs judge the pull request the queue ref names through the base branch's programs, and the release CI receipt accepts the queue's run on the queue commit main fast-forwarded to, refusing another sha, a group of more than one pull request and a skipped job (ADR 0083)"
+    evidence: "command"
+    ref: "node --test tests/unit/ci-workflows.test.mjs tests/unit/release-ci-receipt.test.mjs tests/unit/ci-gates-model.test.mjs"
   - id: "flake-ledger"
     criterion: "A CI check that failed on one run attempt and passed on a re-run of the same commit is recorded with the check, the browser, both attempts and the cause class, so a re-run never erases a failure"
     evidence: "command"
@@ -128,6 +132,14 @@ satisfaction:
     criterion: "A dialog's deferred initial focus never takes focus back from a control the user moved to after it opened, and a dialog closed before it fires takes none, so a keyboard confirmation presses the button chosen on any host load"
     evidence: "command"
     ref: "node --test tests/unit/dialog-initial-focus.test.mjs"
+  - id: "intent-refs-exist"
+    criterion: "Every file path named by an intent criterion ref, a surface-census tests entry or a docs/CLAIMS.yaml test exists in the tree or is listed in a pending list that only shrinks, and one module decides it for all three (Panel Excellence, af 2026-11-05)"
+    evidence: "command"
+    ref: "node --test tests/unit/evidence-paths.test.mjs"
+  - id: "browser-suites-harnessed"
+    criterion: "Every suite under tests/browser runs through tests/browser/lib/suite.cjs with an empty PENDING list, the timing-allow markers are counted by a baseline that only shrinks, and no declared browser check is skipped in CI without a reason recorded in its suite (Hardening, oscilla-b0 2026-11-05)"
+    evidence: "command"
+    ref: "node --test tests/unit/browser-suite-contract.test.mjs tests/unit/browser-timing.test.mjs"
 governance:
   - "rule:project.single-file-deliverable"
   - "rule:project.rules-name-their-enforcement"
@@ -146,4 +158,4 @@ non_goals:
   - "Splitting src/js/studio/transport.js (72 327 bytes on main at d4bd97f), src/js/measurement/engine.js (70 955) or src/js/measurement/quality.js (66 213) in this milestone: they stay under their falling cap with its headroom, and a split of any of them is a candidate criterion for the owner, not planned work"
   - "Bounding the total size of src/js: the per-file budget measures distribution; the total is bounded by the dist budget"
 created_at: 2026-10-18
-updated_at: 2026-10-19
+updated_at: 2026-11-05

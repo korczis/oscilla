@@ -5,13 +5,18 @@ kind: rule
 title: A release is published only on a tree a gate verdict binds, local or CI
 description: release:publish tags main's HEAD only when a gate verdict binds exactly its tree - the CI run of the release pull request (the CI receipt, ADR 0082) or the local release-gate receipt - so any change on main after the verdict makes the publish refuse.
 statement: release:publish refuses unless one of two gate verdicts binds the tree of main's HEAD. The CI receipt (scripts/release-ci-receipt.mjs) holds when HEAD is the merge commit of a pull request whose head H contains the merge's base and has HEAD's tree, the newest CI pull_request run on H has completed with success on its latest attempt, every job .github/workflows/ci.yml declares (a matrix job once per value) is among that run's latest jobs on H with success and no other job is (the one exemption: the job with id flake-ledger whose if: is exactly ${{ always() && fromJSON(github.run_attempt) > 1 }} may be skipped on its own first attempt and must succeed from attempt 2), and the committed roadmap matches the plan (OSC_ROADMAP_CHECK=1). The local receipt (release:prepare --local-gate) holds when it binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/, all equal to the checkout's, and records browsers chromium,firefox,webkit, origins file,http and skips declared-only; release:prepare --local-gate refuses to start while OSC_BROWSERS or OSC_ORIGINS is set and runs the gate with OSC_STRICT_SKIPS=1. A fact that cannot be read is a refusal, never an empty answer.
-status: active
+status: deprecated
 class: blocking
 depends_on: [project.single-file-deliverable@2]
 tags: [release, gate, provenance]
 x-majordomus:
   tests: [tests/unit/release-ci-receipt.test.mjs, tests/unit/release-publish.test.mjs, tests/unit/release-gate-env.test.mjs]
 ---
+
+> Deprecated on 2026-11-02: superseded by `release-receipt-binds-gate.v3.md` (ADR 0083: the
+> merge queue's run on the queue commit is a CI receipt too). Kept below as the record of
+> version 2, with its amendment of 2026-11-05 (#417: the flake ledger's own first-attempt
+> skip is accepted), which version 3 carries forward.
 
 # Version 2 (ADR 0082, owner decision 2026-11-02)
 

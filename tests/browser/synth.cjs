@@ -143,7 +143,10 @@ const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const LAUNCH = {
   chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
   firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.blocking_policy': 0,
-    'media.autoplay.block-webaudio': false } },
+    'media.autoplay.block-webaudio': false,
+    // s-feel's pinch (Ctrl+wheel, R8) zooms the browser; Firefox would keep that zoom for the
+    // site in every later context of this browser and every later click would miss
+    'browser.zoom.siteSpecific': false } },
   webkit: {},
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
