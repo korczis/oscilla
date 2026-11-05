@@ -191,6 +191,15 @@ export function mount(rootEl, adapter) {
     sampleRate: adapter.getSampleRate ? adapter.getSampleRate() || undefined : undefined,
     engine: sequencerEngine(adapter),
   });
+  // The panel's transport says what the editor does, whoever stops it: Escape, a page the
+  // phone hides and an output owner taking over all stop the editor from outside this panel
+  // (ui/output-owner.js stopSequence), and Play must not stay pressed after them.
+  const stopEditor = editor.stop;
+  editor.stop = function stopAndSay(...args) {
+    const was = stopEditor.apply(this, args);
+    renderTransport();
+    return was;
+  };
   /** The Loop control's title: the cap while it applies, and why a loop ended at it. */
   function loopTitle() {
     if (editor.loopNotice) return editor.loopNotice;
