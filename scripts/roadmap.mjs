@@ -26,7 +26,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { ROOT, readVersion } from './release-metadata.mjs';
+import { ROOT, parseSemver, readVersion } from './release-metadata.mjs';
 
 export const ROADMAP_REL = 'src/data/roadmap.json';
 export const SCHEMA = 'oscilla-roadmap/v2';
@@ -81,8 +81,8 @@ export function roadmapShapeProblems(roadmap) {
   if (!roadmap || typeof roadmap !== 'object') return ['the roadmap is not an object'];
   const problems = [];
   if (roadmap.schema !== SCHEMA) problems.push(`schema is ${roadmap.schema}, not ${SCHEMA}`);
-  if (!/^\d+\.\d+\.\d+$/.test(roadmap.release ?? '')) {
-    problems.push(`release ${roadmap.release} is not a version X.Y.Z`);
+  if (!parseSemver(roadmap.release)) {
+    problems.push(`release ${roadmap.release} is not a version X.Y.Z or X.Y.Z-rc.N`);
   }
   if (!Array.isArray(roadmap.milestones)) return [...problems, 'milestones is not a list'];
   roadmap.milestones.forEach((m, i) => {

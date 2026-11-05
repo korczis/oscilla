@@ -505,12 +505,13 @@ test('U086: the roadmap names the release it describes, and the heading renders 
   const { version } = JSON.parse(read('package.json'));
   const roadmap = JSON.parse(read(ROADMAP_REL));
   assert.equal(roadmap.release, version, 'the roadmap was written at this release: refresh it');
-  assert.match(roadmap.release, /^\d+\.\d+\.\d+$/, 'the release is X.Y.Z');
+  const { parseSemver } = await import('../../scripts/release-metadata.mjs');
+  assert.ok(parseSemver(roadmap.release), 'the release is a version, X.Y.Z or a candidate X.Y.Z-rc.N');
   const { roadmapFromPlan, roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
   assert.equal(roadmapFromPlan(planFixture()).release, version, 'roadmap.mjs writes the version');
   assert.equal(roadmapFromPlan(planFixture(), '9.8.7').release, '9.8.7');
   assert.deepEqual(roadmapShapeProblems({ ...roadmap, release: undefined }),
-    ['release undefined is not a version X.Y.Z']);
+    ['release undefined is not a version X.Y.Z or X.Y.Z-rc.N']);
   const { ROADMAP } = await import('../../src/js/ui/about.js');
   assert.equal(ROADMAP.release, version);
   const at = view.indexOf('id="osc-about-next"');
@@ -619,3 +620,17 @@ test('U090: the credits name every library the page ships, with its licence', as
   assert.deepEqual(creditProblems(html, ['left-pad'], licenceOf),
     ['left-pad ships but has no credit name (CREDIT_NAMES)']);
 });
+
+test('U086: a release candidate\'s roadmap passes its own shape check (ADR 0047, release:prepare --prerelease)',
+  async () => {
+    const { roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
+    const base = { schema: ROADMAP_SCHEMA_FOR_RC(), note: 'n', milestones: [] };
+    assert.deepEqual(roadmapShapeProblems({ ...base, release: '40.0.0-rc.1' }), []);
+    assert.deepEqual(roadmapShapeProblems({ ...base, release: '40.1.0' }), []);
+    assert.equal(roadmapShapeProblems({ ...base, release: 'v4' }).length, 1);
+    assert.equal(roadmapShapeProblems({ ...base }).length, 1);
+  });
+
+function ROADMAP_SCHEMA_FOR_RC() {
+  return JSON.parse(readFileSync(new URL('src/data/roadmap.json', root), 'utf8')).schema;
+}
