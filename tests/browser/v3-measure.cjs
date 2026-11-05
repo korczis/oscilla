@@ -46,6 +46,12 @@
 //     (engine.analyser, the end of the master chain) rises above -60 dBFS while the check runs,
 //     and the result or the refusal is announced in the live regions; the RTA tab holds no
 //     "not available here" sentence for the granted microphone
+//   - measure-audio-session (C033): where navigator.audioSession exists (WebKit, required
+//     there) the session is play-and-record in READY after Check setup and playback once the
+//     engine is reset (the input closed)
+//   - measure-audio-session (C033): where navigator.audioSession exists (WebKit, required
+//     there) the session is play-and-record in READY after Check setup and playback once the
+//     engine is reset (the input closed)
 //   - measure-refusal-announced (C033): WebKit with the microphone refused announces the true
 //     reason (permission denied), never "no input signal"; Firefox, whose prompt nobody
 //     answers here, announces that the check waits for the permission, and Stop is announced
@@ -998,6 +1004,23 @@ async function runMicApp(browserName, { grant }) {
         && !/not available here/.test(hidden),
       `tap ${loud === null ? 'silent' : `${f(loud, 1)} dBFS`}, said ${JSON.stringify(end)}, `
         + `RTA alert text ${JSON.stringify(hidden.trim())}`);
+      // The capture's audio session (C033, the exception in project.a-phone-sounds): read
+      // where the browser has navigator.audioSession (WebKit; required there), never elsewhere.
+      const sessionType = () => page.evaluate(() => (navigator.audioSession
+        ? navigator.audioSession.type : null));
+      const held = await sessionType();
+      if (held !== null || browserName === 'webkit') {
+        const state = await page.evaluate(() => window.OSCILLA.measure.state);
+        await page.evaluate(() => window.OSCILLA.measure.engine.reset()); // closes the input
+        const back = await until(() => sessionType().then((t) => (t === 'playback' ? t : null)),
+          { ms: 5000, what: `${key} the page's playback session is back after the reset` })
+          .catch(() => sessionType());
+        check(key, 'measure-audio-session: in READY after Check setup the audio session is '
+          + 'play-and-record (the checked input is open), and playback once the check is reset',
+        state === 'READY' && held === 'play-and-record' && back === 'playback',
+        `state ${state}, session in READY ${JSON.stringify(held)}, after the reset `
+          + `${JSON.stringify(back)}`);
+      }
     } else if (browserName === 'firefox') {
       const wait = await until(() => said().then((x) => (/microphone/.test(x.polite) ? x : null)),
         { ms: 20000, what: `${key} the check announces that it waits for the permission` })

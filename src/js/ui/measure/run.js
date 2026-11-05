@@ -95,7 +95,9 @@ export function createRun(ctx, svc, ops) {
     let result = null;
     try {
       // A level calibration is checked against the input before it is applied: without a
-      // known current input, the setup check opens it first (M3, C1).
+      // known current input, the setup check opens it first (M3, C1). That check is
+      // preflight(), so it also plays its shortened stimulus (C033): such a run sounds the
+      // probe once before its sweep, while measure()'s own preflight plays none.
       if (levelNeedsInputCheck(cmp) && me.state !== S.READY) {
         ctx.pending = me.preflight(recipe, { calibration: ops.calibrationInput() });
         await ctx.pending;

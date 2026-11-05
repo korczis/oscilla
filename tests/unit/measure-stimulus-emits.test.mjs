@@ -23,8 +23,8 @@ import { REASON_STEP } from '../../src/js/measurement/views/measure-flow.js';
 import { MIC_UNAVAILABLE_TEXT } from '../../src/js/audio/microphone.js';
 import * as measureConstants from '../../src/js/ui/measure/constants.js';
 import { createMeasureUi } from '../../src/js/ui/measure.js';
+import { rig, RECIPE, SR } from './fixtures/capture-rig.mjs';
 
-const { createCaptureIo } = capture;
 const { createMeasurementEngine, MEASUREMENT_ERRORS } = engineModule;
 const CAPTURE_AUDIO_SESSION = capture.CAPTURE_AUDIO_SESSION ?? 'play-and-record';
 const PREFLIGHT_PROBE_S = engineModule.PREFLIGHT_PROBE_S ?? 1;
@@ -37,122 +37,6 @@ const rtaLiveAvailability = (available) => {
     'ui/measure/constants.js rtaLiveAvailability');
   return measureConstants.rtaLiveAvailability(available);
 };
-
-const SR = 48000;
-const BLOCK = 2048;
-const RECIPE = { stimulus: { kind: 'log-sweep', duration: 2, level: 0.25, f1: 20, f2: 20000,
-  fade: 0.01 }, repeats: 1, analysis: { noiseCheckS: 0, preRollS: 0.1, postRollS: 0.2,
-  gapS: 0.2 } };
-
-/**
- * A microphone io on a stub context that records its graph: every node's connections and every
- * buffer source started. engine.master → engine.analyser → ctx.destination, as the
- * AudioEngine's chain ends. The input renders `background` while no started source sounds and
- * `heard` while one does (heard: null = the input never hears the output).
- */
-function rig({ background = 0.001, heard = 0.1, session = null, refuse = null } = {}) {
-  let sp = null;
-  const started = [];
-  const node = (kind, extra = {}) => {
-    // `out`: every connection the node was ever given (cleanup disconnects them later).
-    const n = { kind, out: new Set(), live: new Set(),
-      connect(to) { n.out.add(to); n.live.add(to); return to; },
-      disconnect(to) { if (to) n.live.delete(to); else n.live.clear(); }, ...extra };
-    return n;
-  };
-  const ctx = {
-    state: 'running', sampleRate: SR, currentTime: 1, destination: node('destination'),
-    createGain: () => node('gain', { gain: { value: 1, setValueAtTime() {},
-      linearRampToValueAtTime() {} } }),
-    createScriptProcessor: () => { sp = node('scriptprocessor', { onaudioprocess: null });
-      return sp; },
-    createMediaStreamSource: () => node('mic'),
-    createBuffer: (ch, length, rate) => {
-      const data = new Float32Array(length);
-      return { length, sampleRate: rate, duration: length / rate,
-        copyToChannel: (x) => data.set(x), getChannelData: () => data };
-    },
-    createBufferSource: () => {
-      const src = node('buffersource', { buffer: null, onended: null, when: null, stopped: null,
-        start(when = 0) { src.when = when; started.push(src); },
-        stop(when = 0) { src.stopped = when; } });
-      return src;
-    },
-  };
-  const analyser = node('analyser');
-  analyser.connect(ctx.destination);
-  const master = node('master', { gain: { value: 0.08 } });
-  master.connect(analyser);
-  const engine = { ctx, master, analyser, voices: new Set(), nodes: new Set(),
-    sources: new Set(), gainLevel: 0.08, init: () => true, isSupported: () => true,
-    resume: async () => {}, stops: 0, stopAll() { engine.stops += 1; }, on: () => () => {},
-    audibleVoiceCountAt: () => 0, audibleVoiceCount: 0 };
-  const track = { label: 'Stub mic', readyState: 'live', onended: null, stop() {
-    track.readyState = 'ended'; }, getSettings: () => ({ echoCancellation: false,
-    noiseSuppression: false, autoGainControl: false, sampleRate: SR, channelCount: 1 }) };
-  const stream = { getAudioTracks: () => [track], getTracks: () => [track] };
-  const seen = { sessionAtOpen: null };
-  const env = {
-    navigator: {
-      audioSession: session,
-      mediaDevices: { getUserMedia: async () => {
-        seen.sessionAtOpen = session ? session.type : null;
-        if (refuse) throw refuse;
-        return stream;
-      } },
-      permissions: { query: async () => ({ state: 'granted' }) },
-    },
-    setTimeout: (fn, ms) => setTimeout(fn, ms),
-    clearTimeout: (id) => clearTimeout(id),
-  };
-  const io = createCaptureIo({ engine, env, mode: 'scriptprocessor', abortOnHidden: false });
-  const sounding = (t) => started.some((s) => s.buffer && t >= s.when
-    && t < s.when + s.buffer.duration && s.stopped === null);
-  /** Runs `p` while the audio clock advances one block per macrotask and the input renders. */
-  async function drive(p) {
-    let settled = false;
-    p.then(() => { settled = true; }, () => { settled = true; });
-    let frame = Math.round(ctx.currentTime * SR);
-    const deadline = Date.now() + 20000; // wall clock: a stalled io fails by name below
-    while (!settled && Date.now() < deadline) {
-      await new Promise((r) => { setImmediate(r); });
-      frame += BLOCK;
-      ctx.currentTime = frame / SR;
-      if (sp && sp.onaudioprocess) {
-        const t0 = (frame - BLOCK) / SR;
-        const level = heard !== null && sounding(t0) ? heard : background;
-        const data = new Float32Array(BLOCK).fill(level);
-        sp.onaudioprocess({ inputBuffer: { getChannelData: () => data },
-          playbackTime: frame / SR });
-      }
-    }
-    assert.ok(settled, 'the io settled within 20 s of wall clock');
-    return p;
-  }
-  /** Did `from` reach the context's destination through the connections it was given? */
-  function reachesDestination(from) {
-    const seenNodes = new Set();
-    const stack = [from];
-    while (stack.length) {
-      const n = stack.pop();
-      if (n === ctx.destination) return true;
-      if (!n || seenNodes.has(n)) continue;
-      seenNodes.add(n);
-      for (const m of n.out || []) stack.push(m);
-    }
-    return false;
-  }
-  const path = (from) => {
-    const names = [];
-    let n = from;
-    while (n && names.length < 8) {
-      names.push(n.kind);
-      n = [...(n.out || [])][0];
-    }
-    return names.join(' -> ');
-  };
-  return { io, engine, ctx, drive, started, reachesDestination, path, seen };
-}
 
 // ------------------------------------------------------------------ the stimulus reaches out
 
@@ -209,6 +93,49 @@ test('C033: an input that does not hear the check\'s stimulus is said, not passe
     me.dispose();
   });
 
+test('C033: a digitally silent input during the check is said, not passed as READY (98 F1)',
+  async () => {
+    // Exact zeros read -Infinity dB both before and during the probe: no rise is a rise of NaN,
+    // and NaN is not heard.
+    const r = rig({ background: 0, heard: 0 });
+    const me = createMeasurementEngine({ io: r.io });
+    const rep = await r.drive(me.preflight(RECIPE));
+    assert.equal(rep.facts.inputLevel.rmsDb, -Infinity);
+    assert.equal(rep.facts.probe.played, true);
+    assert.equal(rep.facts.probe.inputLevel.rmsDb, -Infinity);
+    const w = rep.warnings.find((x) => x.code === 'STIMULUS_NOT_HEARD');
+    assert.ok(w, JSON.stringify(rep.warnings.map((x) => x.code)));
+    assert.match(w.text, /digitally silent/);
+    assert.equal(w.value, null, 'no number is invented for a rise that has none');
+    me.dispose();
+  });
+
+test('C033: the heard judgement is the rise, whatever the levels are (98 F1)', async () => {
+  const facts = (bg, probe) => ({ audioContext: { available: true, state: 'running' },
+    sampleRate: SR, permission: 'granted', input: { ok: true, device: { label: null, id: null },
+      constraints: { requested: null, applied: null } },
+    inputLevel: { peak: 0.01, rmsDb: bg },
+    output: { gain: 0.08, maxGain: 0.25, audibleVoices: 0, otherAudio: false },
+    worklet: { supported: true, mode: 'audioworklet' },
+    probe: { played: true, seconds: 1, startAt: 1, inputLevel: { peak: 0.1, rmsDb: probe } } });
+  const heard = async (bg, probe) => {
+    const f = facts(bg, probe);
+    const io = { sampleRate: SR, now: () => 0, preflight: async () => f,
+      captureNoise: async () => null, runStimulus: async () => null, cancel() {}, dispose() {} };
+    const me = createMeasurementEngine({ io });
+    const rep = await me.preflight(RECIPE);
+    me.dispose();
+    return !rep.warnings.some((x) => x.code === 'STIMULUS_NOT_HEARD');
+  };
+  assert.equal(await heard(-60, -20), true, 'a 40 dB rise is heard');
+  assert.equal(await heard(-60, -59), false, 'a 1 dB rise is not');
+  assert.equal(await heard(-Infinity, -Infinity), false, 'silence before and during');
+  assert.equal(await heard(-40, -Infinity), false, 'silence during the probe');
+  assert.equal(await heard(-Infinity, -40), true, 'a signal out of digital silence is heard');
+  assert.equal(await heard(null, null), false, 'levels lost on the way (JSON null)');
+  assert.equal(await heard(-40, NaN), false, 'a level that is no number');
+});
+
 test('C033: a probe that cannot play says why', async () => {
   const facts = { audioContext: { available: true, state: 'running' }, sampleRate: SR,
     permission: 'granted', input: { ok: true, device: { label: null, id: null },
@@ -249,7 +176,8 @@ test('C033: the capture holds play-and-record while its input is open, then puts
 
 test('C033: a refused input puts the session back and is reported as refused', async () => {
   const session = { type: 'playback' };
-  const denied = Object.assign(new Error('The request is not allowed'), { name: 'NotAllowedError' });
+  const denied = Object.assign(new Error('The request is not allowed'),
+    { name: 'NotAllowedError' });
   const r = rig({ session, refuse: denied });
   const me = createMeasurementEngine({ io: r.io });
   const rep = await r.drive(me.preflight(RECIPE));
