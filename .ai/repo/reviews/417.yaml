@@ -1,6 +1,57 @@
+# Review verdict for pull request #417 over its four guarded paths, judged at 2187a01a (#417's
+# head with main 68b117f3 merged in): (1) the control census path-gated (#404 R1),
+# .github/scripts/ci-changes.mjs and .github/workflows/ci.yml, byte-identical to b7d88bfc
+# (ci.yml 9b933bf8, ci-changes.mjs 48e334ad); (2) the release CI receipt accepts E010's flake
+# ledger's own first-attempt skip, scripts/release-ci-receipt.mjs and
+# tests/unit/release-ci-receipt.test.mjs, byte-identical to fix/receipt-ledger-first-attempt
+# 6be74fba. Reviewer: seat 98 (session prismatic-majordomus-98, p2), which built, merged and
+# edited none of this change and wrote only this file; each round had an independent first pass
+# that was adversarially re-verified.
+# Disclosure: reviewer has unmerged OSCILLA branches touching src/js/ui/synth and
+# src/js/ui/controls (Train 7 candidates), not part of this PR.
+#
+# The digest. CI judges with the BASE branch's copy (.github/scripts/base-rule.sh runs
+# origin/main's scripts/review-verdict.mjs). origin/main's scripts/ extracted with git archive,
+# as base-rule.sh does, run with --content --list --base-branch origin/main at 2187a01a:
+# 0f638b4b...a890 over exactly the four paths above. The rule file
+# .ai/repo/rules/project/release-receipt-binds-gate.v2.md is not a guarded path; its text was
+# judged anyway (R2, R7).
+#
+# Inputs considered: af's verdict for the census half, .ai/repo/reviews/417.yaml at b7d88bfc
+# (oscilla-af, merge, findings [], content 49c30bf7...1a27; re-checked: b7d88bfc and 959c47b4
+# give that digest over the two census paths, and both paths are unchanged at 2187a01a); this
+# file replaces it as the one verdict over the whole digest. Commits 61b2b2bc, ec0ed657 and
+# 6be74fba of the receipt half; rule project.release-receipt-binds-gate v2 as amended
+# 2026-11-05; the gate and flake-ledger jobs of ci.yml; CI runs 41899802206 (v3.19.0's receipt:
+# attempt 1 skipped the ledger), 41700701066 and 41742553794 (a re-run re-stamps carried jobs
+# with the run's attempt; the ledger re-runs as a dependent of every non-gate job).
+#
+# Round 1 (61b2b2bc): changes-requested, no P0/P1; findings R1-R6 below, with mutants and two
+# own bypasses (scratchpad 417-check/p2). Round 2 (ec0ed657): R1, R3, R4, R5 closed, 17 of 23
+# mutants killed (the 6 survivors equivalent or failing closed), R6's premise shown false by the
+# runs above (filter=latest returns the re-stamped copy), new R7 and R8. Round 3 (6be74fba): R2,
+# R7, R8 closed. Tests: release-ci-receipt 20/20 at 6be74fba; on the trial merge with b7d88bfc
+# release-ci-receipt, ci-changes, flake-ledger and ci-workflows 82/82; npm test 4475 of 4480 at
+# ec0ed657 (the machine-only installed-majordomus skill test, and two version-authority
+# failures caused by a harness symlink that pass 12/12 without it); the builder reports 121/121
+# touched units at 2187a01a.
+#
+# Verdict: merge. The exemption is exact (job id flake-ledger, exactly one such job, its literal
+# job-level if:, skipped only on its own first attempt, success required from attempt 2) and
+# fails closed on every near miss, rename, twin, later attempt and missing attempt tried.
+# Out of scope, for its own issue: scripts/flake-ledger.mjs:24 and :76 rest on the same false
+# premise as R6 (carried jobs keep their earlier run_attempt); the filter is a no-op today.
 schema: review-verdict/v1
 pr: 417
 verdict: merge
-reviewer: oscilla-af
-content: 49c30bf71bdff6bb039233307738384f9b95d42836eb61f62f826f03955a1d27
-findings: []
+reviewer: prismatic-majordomus-98 (p2, claude-code 07a5ffde)
+content: 0f638b4b68cf7d212dea38a50f3e96b7e995d067e862aa751934c2c3d8e3a890
+findings:
+  - { id: R1, severity: P2, status: closed, title: "the skip guard of the exemption was not mutation-proven (replaced by true, all tests passed); closed at ec0ed657: attempt-1 ledger cancelled, failed, in_progress and timed_out each refuse, and the guard->true mutant is killed" }
+  - { id: R2, severity: P2, status: closed, title: "rule v2 and the script header said every skipped job refuses; closed at 6be74fba: the statement, line 42, the Enforcement section and the header name the one exemption and its tests" }
+  - { id: R3, severity: P3, status: closed, title: "'exactly that condition' was tested only on the real ci.yml; closed at ec0ed657: bare expression, > 0, extra spaces, step-level and matrix near misses get no exemption; the includes and whitespace-insensitive mutants are killed" }
+  - { id: R4, severity: P3, status: closed, title: "the exemption was keyed by display name (a renamed ledger hid a path-gated skip); closed at ec0ed657: keyed by job id flake-ledger, exactly one such job, duplicate declared names refuse; the rename and twin bypasses now refuse" }
+  - { id: R5, severity: P3, status: closed, title: "only attempt 2 was tested; closed at ec0ed657: attempt 3 refuses, the !== 2 mutant is killed" }
+  - { id: R6, severity: P3, status: closed, title: "withdrawn: the premise (a gate-only re-run leaves the ledger stamped attempt 1) is false on GitHub, which re-stamps carried jobs with the run's attempt; such a run refuses, failing closed" }
+  - { id: R7, severity: P3, status: closed, title: "the rule and a fixture asserted a gate-only re-run verifies, a state GitHub cannot produce; closed at 6be74fba: the clause is dropped, the fixture is a carried skip stamped 2 that refuses, and the rule says a release run re-runs all jobs" }
+  - { id: R8, severity: P3, status: closed, title: "the exactly-one rule and the missing-run_attempt fallback were unproven; closed at 6be74fba: two re-run-only jobs raise the exactly-one problem, a missing run_attempt falls back to the run's attempt" }
