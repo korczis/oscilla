@@ -21,6 +21,10 @@
 //   xyPatchOf(model, panel, { name, description }) -> patch        the panel as an XY preset
 //   xyPresetPatch(model, panel, recipe) -> patch                    a built-in preset's patch
 //   xyPatchAction(model, panel, patch) -> { action } | { reason }   load it, one BATCH
+//   xyInsertAction(model, panel, { at }) -> BATCH   the panel's insertion (panel.instantiate)
+//                                  with Y cabled into XY_DEFAULT_Y when this insertion adds the
+//                                  pad (K183): the default Synth document's Y route, a visible,
+//                                  removable cable; one BATCH, one undo entry
 
 import { createPatch, patchParams } from '../studio/patches.js';
 import { linkAction, linkOf } from './link.js';
@@ -31,6 +35,8 @@ export const XY_CATEGORY = 'xy';
 export const XY_VOICE = Object.freeze([['xy.pitch', 'vco1.pitch'], ['xy.pitch', 'vco2.pitch'],
   ['xy.gate', 'eg1.gate'], ['xy.gate', 'eg2.gate']]);
 const PITCH_PORTS = ['pitch', 'fm'];
+/** What Y drives in the default Synth document (K183): the low-pass cutoff. */
+export const XY_DEFAULT_Y = 'lpf.frequency';
 
 /** Built-in XY presets: a panel preset, the scale, the pad's values and the target of Y. */
 export const XY_RECIPES = Object.freeze([
@@ -96,6 +102,10 @@ function afterSteps(model, steps) {
   let { nodes, edges } = model.graph;
   let k = 0;
   for (const s of steps) {
+    if (s.type === 'NODE_ADD') {
+      nodes = [...nodes, { id: s.id, type: s.nodeType, params: { ...s.params },
+        position: s.position, metadata: { name: s.name, ...(s.panel ? { panel: s.panel } : {}) } }];
+    }
     if (s.type === 'EDGE_REMOVE') edges = edges.filter((e) => !s.edgeIds.includes(e.id));
     if (s.type === 'EDGE_ADD') {
       edges = [...edges, { id: s.id || `xycable-${(k += 1)}`, from: s.from, to: s.to,
@@ -118,8 +128,13 @@ function afterSteps(model, steps) {
 }
 
 export function xyPresetPatch(model, panel, recipe) {
+  // Y's cable adds to its target's normals (K183): a preset's Y moves its target alone, so the
+  // amount knobs into that target are at 0, as when the cable replaced those normals.
+  const alone = panel.amounts.filter((x) => x.to.includes(recipe.y))
+    .map((x) => [`${x.module}.${x.key}`, 0]);
   const a = linkAction(model, panel, { preset: recipe.base,
-    values: [...recipe.values, ['xy.mode', recipe.scale.mode], ['xy.key', recipe.scale.key]],
+    values: [...recipe.values, ...alone, ['xy.mode', recipe.scale.mode],
+      ['xy.key', recipe.scale.key]],
     cables: [...XY_VOICE, ['xy.y', recipe.y]] }, { modules: xyScope(panel) });
   return xyPatchOf(afterSteps(model, a.steps), panel, { name: recipe.name });
 }
@@ -140,4 +155,13 @@ export function xyPatchAction(model, panel, patch) {
     steps.push({ type: 'NODE_PARAM_SET', nodeId: pad.id, params: { ...patch.scale } });
   }
   return { action: { type: 'BATCH', label: `XY preset ${patch.name.split(':')[0]}`, steps } };
+}
+
+export function xyInsertAction(model, panel, { at } = {}) {
+  const a = panel.instantiate(model, { at });
+  if (panel.resolve(model).get('xy')) return a; // the pad was there: its cables are the user's
+  const after = afterSteps(model, a.steps);
+  if (!panel.resolve(after).get('xy') || xyTarget(after, panel)) return a;
+  const r = patchCable(after, panel, 'xy.y', XY_DEFAULT_Y);
+  return r.action ? { ...a, steps: [...a.steps, ...r.action.steps] } : a;
 }

@@ -6,15 +6,29 @@
 //   node tests/browser/xy-pad.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
 //        [--only x-link,x-pointer]
 //
-// Checks (desktop; the phone leg runs x-touch, the phone-first leg x-phone-first):
+// Every check opens the Synth's XY tab as the owner meets it (no preset: the default Synth
+// document, K183) unless it is about the XY lead preset (x-link, x-pointer); the gesture rule
+// is off except on the phone-cold leg. A check that cannot run on an engine is skipped before it
+// opens a page and is reported as skipped, never counted as a check (K148): a leg whose every
+// check was skipped prints a SKIP line and reports nothing.
+//
+// Checks (desktop; the phone leg runs x-first and x-touch, the phone-cold leg x-cold-touch):
 //   x-link     linked: #m=synth&yt=xy opens the XY tab; the XY lead preset chosen in the preset
 //              menu is one undo entry that sets the pad's scale on its face (C, minor
-//              pentatonic) and patches Pitch and Gate into the voice and Y into LPF Cutoff;
-//              Open in Studio draws the pad's node and each of its edges in the Studio graph
-//   x-pointer  real-time: a pointer held on the pad's first step sounds C3 (130.8 Hz) and the
-//              runtime pad pitch is -1.75 oct; moved to the seventh step it sounds Eb4
+//              pentatonic) and patches Pitch and Gate into the voice and Y into LPF Cutoff (its
+//              undo gives back the default document's one Y cable); Open in Studio draws the
+//              pad's node and each of its edges in the Studio graph
+//   x-pointer  real-time, XY lead: a pointer held on the pad's first step sounds C3 (130.8 Hz)
+//              and the runtime pad pitch is -1.75 oct; moved to the seventh step it sounds Eb4
 //              (311.1 Hz); Y from the bottom to the top raises the 4-9 kHz band 6 dB+ against
 //              the fundamental (the LPF opens); the release is silent (below -70 dB rel)
+//   x-first    (K183; desktop in every engine, 390 px touch in chromium (CDP touch) and webkit)
+//              a fresh Synth, no preset: the pad is enabled with no Patch button; QWERTY A
+//              sounds C4 and its release silences; one pointer-down (a touch on the phone) on
+//              the pad's first step raises the runtime's source count from 0 and sounds C3
+//              (VCO 2 at 8': 130.8 Hz) within SOUND_MS; moved to the seventh step it sounds Eb4
+//              (311.1 Hz); the lift silences; QWERTY A still sounds after; the Synth status
+//              names what the keys and the pad play
 //   x-keys     interactive: arrows move the cursor (aria-valuenow, aria-valuetext of both
 //              sliders), Enter held sounds and its release silences; a held Enter is released
 //              by Escape, by blur and by page hide; the surface is role=application described
@@ -29,23 +43,21 @@
 //   x-release-owner  (K167) a held pad is released when another workspace's player (the
 //              Pattern Sequencer) takes the audio owner: gate closed, no held note, the
 //              transport stopped; once that player stops, silent and census 0
-//   x-disabled-face  (K167) the XY tab opened with no preset, light theme: the disabled pad
-//              keeps a visible frame (a border, the face not faded) and states its reason on
-//              its face, in its accessible description (aria-describedby)
 //   x-chip-gap (K167; 390 px, touch) the Synth's sticky chip bar sticks flush under the app
 //              nav: scrolled, every point of the band between them hits the nav or the chip
 //              bar, never page content
-//   x-phone-first    (K167; 390 px, touch, mobile, the browser's gesture rule ON: Chromium
-//              --autoplay-policy=user-gesture-required, the other engines as they ship) from
-//              the Synth's own entry (#m=synth, no preset), tapping the XY tab edits nothing
-//              (revision, undo depth, dirty and the unsaved guard as at the entry) and offers
-//              one first action, Patch the pad into the voice (the primary button), stating
-//              what it does (the XY lead's scale and target); nothing sounds and nothing is
-//              armed; tapping it is one undo entry, after which the pad states its default and
-//              "Touch the pad to play", described by aria-describedby; after a tap on the pad
-//              a held touch sounds and its release silences. Firefox has no mobile
-//              emulation (no coarse pointer): skipped there, as tests/browser/touch-audio.cjs
-//              notes; webkit holds with the pointer after the tap (no CDP touch)
+//   x-cold-touch  (K183 S4; 390 px, touch, mobile where the engine has it, the browser's
+//              gesture rule ON: Chromium --autoplay-policy=user-gesture-required, the others as
+//              they ship) the XY tab opened by its link, so the page has no user activation
+//              (chromium reads only through CDP evaluations with userGesture false) and no
+//              running context; the pad is playable at once (enabled, no Patch button). A first
+//              touch held on the pad (chromium: CDP touch; webkit and firefox: the pointer)
+//              starts the audio and the held note sounds once it runs (the note replayed on the
+//              unlock); while the context was still suspended the pad's line said "Tap once to
+//              start audio" (webkit and firefox start it suspended; Chromium's headless shell
+//              starts it running even under the gesture rule, so there the line must never say
+//              it); the lift silences, the line says the pad plays, a second held touch sounds
+//              and its release silences; no touch edits the document
 'use strict';
 
 const fs = require('node:fs');
@@ -77,13 +89,25 @@ const LAUNCH = {
 const GESTURE_LAUNCH = { chromium: { args: ['--autoplay-policy=user-gesture-required'] },
   firefox: {}, webkit: {} };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 },
-  'phone-first': { width: 390, height: 844 } };
-const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-phone-first': 'phone-first' };
-const PRESET_OF = { 'x-disabled-face': null }; // the tab as it opens, unpatched
+  'phone-cold': { width: 390, height: 844 } };
+const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-cold-touch': 'phone-cold' };
+// x-first runs on the desktop and the phone legs.
+const LEGS_OF = { 'x-first': ['desktop', 'phone'] };
+// The checks about the XY lead preset; every other one opens the tab as the owner meets it.
+const PRESET_OF = { 'x-link': 'xy-lead', 'x-pointer': 'xy-lead' };
+// Checks that open their own page (x-cold-touch: with no user activation before its touch).
+const SELF_OPEN = new Set(['x-cold-touch']);
+// Engines a check cannot run on, with the reason (reported as a skip, never as a check).
+const SKIP_OF = {
+  'x-touch': { firefox: 'two touch points need the CDP touch input',
+    webkit: 'two touch points need the CDP touch input' },
+  'x-first/phone': { firefox: 'Firefox has no mobile emulation: no coarse pointer' },
+};
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // an attack, a glide and the analyser's smoothing
 const CHECK_MS = 120000;
 const C3 = 130.8128;
+const C4 = 261.6256;
 const EB4 = 311.127;
 const STEPS = 11; // C minor pentatonic over two octaves, the top C closing
 
@@ -169,7 +193,7 @@ const padState = (page) => page.evaluate(() => {
 });
 const aria = (page, sel, name) => page.locator(sel).getAttribute(name);
 
-async function openXy(context, base, { preset = 'xy-lead', tab = 'xy' } = {}) {
+async function openXy(context, base, { preset = null, tab = 'xy' } = {}) {
   // preset null: the tab as a first open shows it; tab 'panel': the Synth opened on its Panel
   const page = await context.newPage();
   await page.goto(`${base}#m=synth${tab === 'xy' ? '&yt=xy' : ''}`);
@@ -178,6 +202,10 @@ async function openXy(context, base, { preset = 'xy-lead', tab = 'xy' } = {}) {
     && window.OSCILLA.app.synthDebug().tab === want
     && (want !== 'xy' || document.querySelector('[data-osc="synth.xy"]'))), tab),
   { ms: LOAD_MS, what: `the Synth's ${tab} tab is rendered` });
+  if (tab === 'xy') {
+    await until(() => page.evaluate(() => !!document.querySelector('[data-xy-surface]')),
+      { ms: 10000, what: 'the XY pad is mounted' });
+  }
   if (preset) {
     await page.locator('#osc-synth-preset').selectOption(preset);
     await until(() => page.evaluate(() => {
@@ -229,7 +257,10 @@ function defineChecks() {
     }
     await page.evaluate(() => window.OSCILLA.studio.store.undo());
     const undone = await padState(page);
-    if (undone.edges.length) return { ok: false, detail: 'one undo leaves pad cables', undone };
+    // One undo gives the default document back: its one Y cable into LPF Cutoff (K183).
+    if (JSON.stringify(undone.edges.map((e) => `${e.port}>${e.to.port}`)) !== '["y>frequency"]') {
+      return { ok: false, detail: 'one undo does not give the default cables back', undone };
+    }
     await page.evaluate(() => window.OSCILLA.studio.store.redo());
     await page.locator('[data-osc="synth.studio"]').click();
     await until(() => page.evaluate((ids) => window.OSCILLA.app.workspace === 'studio'
@@ -274,7 +305,7 @@ function defineChecks() {
           x.getAttribute('aria-valuenow'), x.getAttribute('aria-valuetext')]) };
     });
     if (role !== 'application' || desc.group !== 'group' || desc.sliders.length !== 2
-      || !/X is the pitch/.test(desc.text) || !/Y drives/.test(desc.text)) {
+      || !/X is the note/.test(desc.text) || !/Y drives/.test(desc.text)) {
       return { ok: false, detail: 'the surface is not described by its axes', role, desc };
     }
     await surface.focus();
@@ -309,11 +340,7 @@ function defineChecks() {
     return { ok: true, x0, x1, y1 };
   });
 
-  def('x-touch', async ({ page, browserName }) => {
-    if (browserName !== 'chromium') {
-      RUN.skip(`${browserName}/phone`, 'x-touch', 'two touch points need the CDP touch input');
-      return { ok: true, skipped: true };
-    }
+  def('x-touch', async ({ page }) => {
     const cdp = await page.context().newCDPSession(page);
     const a = await padPoint(page, 3, 0.2);
     const b = await padPoint(page, 9, 0.8);
@@ -370,36 +397,6 @@ function defineChecks() {
     return { ok: true, taken: c, after };
   });
 
-  def('x-disabled-face', async ({ page }) => {
-    await page.evaluate(() => {
-      if (window.OSCILLA.app.theme !== 'light') window.OSCILLA.app.toggleTheme();
-    });
-    let face = null;
-    await until(async () => {
-      face = await page.evaluate(() => {
-        const s = document.querySelector('[data-xy-surface]');
-        const cs = getComputedStyle(s);
-        const ids = s.getAttribute('aria-describedby').split(' ');
-        const why = document.querySelector('[data-xy-why]');
-        const r = why ? why.getBoundingClientRect() : null;
-        const box = s.getBoundingClientRect();
-        return { theme: document.documentElement.dataset.theme,
-          disabled: s.getAttribute('aria-disabled'), border: parseFloat(cs.borderTopWidth),
-          borderStyle: cs.borderTopStyle, borderColor: cs.borderTopColor, opacity: cs.opacity,
-          background: cs.backgroundColor,
-          description: ids.map((id) => (document.getElementById(id) || {}).textContent || '')
-            .join(' '),
-          why: why ? why.textContent : null,
-          onFace: !!r && r.width > 0 && r.top >= box.top && r.bottom <= box.bottom };
-      });
-      return face.theme === 'light' && face.disabled === 'true';
-    }, { ms: 10000, what: 'the light theme shows the XY tab with no preset: a disabled pad' });
-    const ok = face.border >= 1 && face.borderStyle !== 'none' && face.opacity === '1'
-      && face.borderColor !== face.background && !!face.why && face.onFace
-      && face.description.includes(face.why) && /not patched into the voice/.test(face.why);
-    return { ok, face };
-  });
-
   def('x-chip-gap', async ({ page }) => {
     await page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -434,131 +431,210 @@ function defineChecks() {
       bad: bad.slice(0, 6) };
   });
 
-  def('x-phone-first', async ({ page, browserName }) => {
-    if (browserName === 'firefox') {
-      RUN.skip(`${browserName}/phone-first`, 'x-phone-first',
-        'Firefox has no mobile emulation: no coarse pointer');
-      return { ok: true, skipped: true };
+  // ---- K183: the pad sounds on first touch, as the owner meets it
+  /** What the pad and the keys see now: enabled, a Patch button, the line, the status. */
+  const padView = (page) => page.evaluate(() => {
+    const s = document.querySelector('[data-xy-surface]');
+    const first = document.querySelector('[data-xy-first]');
+    return { disabled: s ? s.getAttribute('aria-disabled') : null,
+      button: !!document.querySelector('[data-xy-voice]'),
+      first: first && !first.hidden ? first.textContent : null,
+      status: window.OSCILLA.app.synth.status,
+      sources: window.OSCILLA.studio.counts().runtimeSources };
+  });
+  /** Hold a point: CDP touch (chromium phone), the mouse elsewhere; -> lift(). */
+  async function press(page, p, { touch = false } = {}) {
+    if (touch) {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart',
+        touchPoints: [{ x: p.x, y: p.y, id: 1 }] });
+      return {
+        move: (q) => cdp.send('Input.dispatchTouchEvent', { type: 'touchMove',
+          touchPoints: [{ x: q.x, y: q.y, id: 1 }] }),
+        lift: () => cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }),
+      };
     }
-    const doc = () => page.evaluate(() => {
-      const st = window.OSCILLA.studio;
-      return { rev: st.store.getRevision(), depth: st.store.debugInfo().undoDepth,
-        dirty: st.dirty, unsaved: window.OSCILLA.unsaved.armed };
-    });
-    const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-    // The Synth's own entry (its Panel tab) is the reference: opening the XY tab adds nothing.
-    const entry = await doc();
-    await page.tap('#osc-synth-tab-xy');
-    const read = () => page.evaluate(() => {
+    await page.mouse.move(p.x, p.y);
+    await page.mouse.down();
+    return { move: (q) => page.mouse.move(q.x, q.y, { steps: 4 }), lift: () => page.mouse.up() };
+  }
+  /** QWERTY A (C4) sounds while held and its release silences. */
+  async function keyA(page, what) {
+    await page.keyboard.down('KeyA');
+    const q = await sound(page, (x) => peakAt(x, C4), `QWERTY A sounds C4 (${what})`);
+    await page.keyboard.up('KeyA');
+    await silent(page, `the key's release silences (${what})`);
+    return Number(q.rmsDb.toFixed(1));
+  }
+
+  def('x-first', async ({ page, browserName, sizeName }) => {
+    const before = await padView(page);
+    if (before.disabled !== 'false' || before.button) {
+      return { ok: false, detail: 'the fresh pad is not enabled, or offers a Patch button',
+        before };
+    }
+    if (before.sources !== 0) return { ok: false, detail: 'sources run before a touch', before };
+    const keyBefore = await keyA(page, 'before the pad');
+    await page.evaluate(() => window.OSCILLA.app.studioStop()); // back to no source
+    await until(async () => (await padView(page)).sources === 0, { ms: SOUND_MS,
+      what: 'the Stop leaves no runtime source' });
+    const touch = sizeName === 'phone' && browserName === 'chromium';
+    const p0 = await padPoint(page, 0, 0.5);
+    const hold = await press(page, p0, { touch });
+    let raised = null;
+    await until(async () => (raised = await padView(page)).sources > 0, { ms: SOUND_MS,
+      what: 'one pointer-down on the pad raises the runtime source count' });
+    const low = await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C3),
+      'the pad\'s first step sounds C3');
+    await hold.move(await padPoint(page, 6, 0.5));
+    const high = await sound(page, (q) => q.rmsDb > -45 && peakAt(q, EB4) && !peakAt(q, C3),
+      'moved to the seventh step it sounds Eb4');
+    await hold.lift();
+    const off = await silent(page, 'the lift silences');
+    const keyAfter = await keyA(page, 'after the pad');
+    const status = (await padView(page)).status;
+    if (!/keys and the XY pad play/.test(status)) {
+      return { ok: false, detail: 'the status does not say what the keys and the pad play',
+        status };
+    }
+    return { ok: true, touch, sources: raised.sources, low: low.rmsDb, high: high.rmsDb,
+      off: Number(off.rmsDb.toFixed(1)), keyBefore, keyAfter, status };
+  });
+
+  def('x-cold-touch', async ({ context, base, browserName }) => {
+    // The page opens with no user activation: in chromium every read is a CDP evaluation with
+    // userGesture false (Playwright's own waits and evaluations grant one).
+    const chromium = browserName === 'chromium';
+    const page = chromium ? await context.newPage() : await openXy(context, base);
+    const cdp = chromium ? await context.newCDPSession(page) : null;
+    const quiet = async (fn, arg) => {
+      if (!cdp) return page.evaluate(fn, arg);
+      const r = await cdp.send('Runtime.evaluate', { expression: `(${fn})(${JSON.stringify(arg)
+        === undefined ? '' : JSON.stringify(arg)})`, returnByValue: true, userGesture: false });
+      if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
+      return r.result.value;
+    };
+    const look = () => quiet(() => {
+      const e = window.OSCILLA && window.OSCILLA.engine;
       const s = document.querySelector('[data-xy-surface]');
       const first = document.querySelector('[data-xy-first]');
-      const stated = document.querySelector('[data-xy-default]');
-      const button = document.querySelector('[data-xy-voice]');
-      const seen = (el) => !!el && !el.hidden && el.getClientRects().length > 0;
-      return { first: seen(first) ? first.textContent : null,
-        stated: seen(stated) ? stated.textContent : null,
-        button: seen(button) ? { text: button.textContent,
-          primary: button.classList.contains('bg-primary-600') } : null,
-        describes: !!(s && first && s.getAttribute('aria-describedby').split(' ')
-          .includes(first.id)),
-        disabled: s ? s.getAttribute('aria-disabled') : null };
+      return { active: !!(navigator.userActivation && navigator.userActivation.hasBeenActive),
+        ctx: e && e.ctx ? e.ctx.state : null, pad: !!s,
+        disabled: s ? s.getAttribute('aria-disabled') : null,
+        button: !!document.querySelector('[data-xy-voice]'),
+        first: first ? first.textContent : null, lines: window.__xyLines || null,
+        rev: window.OSCILLA && window.OSCILLA.studio ? window.OSCILLA.studio.store.getRevision()
+          : null };
     });
-    let offer = null;
-    await until(async () => {
-      offer = await read();
-      return !!(offer.stated && offer.button);
-    }, { ms: SOUND_MS, what: 'the phone first open offers its one first action' });
-    const opened = await doc();
-    if (!same(opened, entry)) {
-      return { ok: false, detail: 'opening the XY tab edited the document', entry, opened };
+    if (chromium) {
+      await page.goto(`${base}#m=synth&yt=xy`);
+      await until(async () => (await look()).pad, { ms: LOAD_MS,
+        what: 'the XY pad is mounted (read without a user activation)' });
     }
-    const OFFER = new RegExp('^Patch the pad into the voice to play it: C minor pentatonic .*'
-      + "Y driving LPF Cutoff \\(the XY lead's scale and target\\)", 'i');
-    if (!offer.button.primary || offer.disabled !== 'true' || offer.first
-      || !OFFER.test(offer.stated)) {
-      return { ok: false, detail: 'the first action and what it does are not stated', offer };
-    }
-    const quiet = await page.evaluate(() => {
-      const e = window.OSCILLA.engine;
-      const t = window.OSCILLA.studio.transport;
-      let rms = null; // no running context: nothing can sound
-      if (e.ctx && e.analyser && e.ctx.state === 'running') {
-        const d = new Float32Array(e.analyser.fftSize);
-        e.analyser.getFloatTimeDomainData(d);
-        let s = 0;
-        for (const x of d) s += x * x;
-        rms = 10 * Math.log10(s / d.length + 1e-24);
-      }
-      return { rms, armed: !!(t && t.playing), ctx: e.ctx ? e.ctx.state : null };
+    // Every text the pad's line shows, with the context's state at that moment.
+    await quiet(() => {
+      window.__xyLines = [];
+      const f = document.querySelector('[data-xy-first]');
+      new MutationObserver(() => {
+        const e = window.OSCILLA.engine;
+        window.__xyLines.push([f.textContent, e.ctx ? e.ctx.state : null]);
+      }).observe(f, { childList: true, characterData: true, subtree: true });
     });
-    if ((quiet.rms !== null && quiet.rms >= -70) || quiet.armed) {
-      return { ok: false, detail: 'something sounds or is armed before a touch', quiet };
+    const entry = await look();
+    if (entry.disabled !== 'false' || entry.button || entry.ctx === 'running'
+      || (chromium && entry.active)) {
+      return { ok: false, detail: 'the pad is not playable at once, or the page had audio or '
+        + 'an activation before a touch', entry };
     }
-    const untapped = await doc();
-    if (!same(untapped, entry)) {
-      return { ok: false, detail: 'the document changed before the tap', entry, untapped };
+    // A pad point, scrolled clear of the dock.
+    const at = (i, fy) => quiet(([k, y, n]) => {
+      const el = document.querySelector('[data-xy-surface]');
+      el.scrollIntoView({ block: 'start' });
+      let sc = el.parentElement;
+      while (sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc)
+        .overflowY)) sc = sc.parentElement;
+      (sc && sc !== document.body ? sc : window).scrollBy(0, -80);
+      const b = el.getBoundingClientRect();
+      const q = { x: b.left + ((k + 0.5) / n) * b.width, y: b.top + (1 - y) * b.height };
+      const hit = document.elementFromPoint(q.x, q.y);
+      return { ...q, hit: !!hit && !!hit.closest('[data-xy-surface]') };
+    }, [i, fy, STEPS]);
+    const p = await at(3, 0.3);
+    if (!p.hit) return { ok: false, detail: 'the pad point is covered', p };
+    const heard = (pred, what) => until(async () => pred(await quiet(probe)),
+      { ms: SOUND_MS, what });
+    // The first touch, held: chromium by CDP touch, the others by the pointer (no CDP touch).
+    const hold = await press(page, p, { touch: chromium });
+    await until(async () => (await look()).ctx === 'running', { ms: SOUND_MS,
+      what: 'the first touch\'s gesture starts the audio' });
+    await heard((q) => q.rmsDb > -45, 'the note held through the unlock sounds');
+    await hold.lift();
+    await heard((q) => q.rmsDb < -70, 'its lift silences');
+    let after = null;
+    await until(async () => (after = await look()).first
+      === 'Touch the pad to play. Nothing sounds until you do.', { ms: SOUND_MS,
+      what: 'once audio runs the line says the pad plays' });
+    // A suspended context at the touch said "Tap once to start audio" until it ran. Chromium's
+    // headless shell starts the context running under the gesture rule too: no suspended
+    // moment to state there, and none may be stated; webkit and firefox start it suspended.
+    const coldSeen = after.lines.some(([t, st]) => t === 'Tap once to start audio.'
+      && st !== 'running');
+    const wrong = after.lines.some(([t, st]) => t === 'Tap once to start audio.'
+      && st === 'running' && !coldSeen);
+    if ((!chromium && !coldSeen) || wrong) {
+      return { ok: false, detail: 'the cold first touch did not say Tap once to start audio '
+        + 'while the context was suspended', lines: after.lines };
     }
-    await page.tap('[data-xy-voice]'); // the first action: one undo entry
-    let shown = null;
-    await until(async () => {
-      shown = await read();
-      return !!(shown.first && shown.describes && shown.disabled === 'false');
-    }, { ms: SOUND_MS, what: 'the patched pad shows its default and Touch the pad to play' });
-    const patched = await doc();
-    if (patched.depth !== entry.depth + 1 || !/^Touch the pad to play/.test(shown.first)
-      || !/^Default: C minor pentatonic .*Y drives LPF Cutoff \(the XY lead's scale and target\)/i
-        .test(shown.stated)) {
-      return { ok: false, detail: 'the tap did not patch the pad as stated', patched, shown };
+    const again = await press(page, p, { touch: chromium });
+    await loud(page, 'after the unlock a held touch sounds');
+    await again.lift();
+    const off = await silent(page, 'its release silences');
+    if (after.rev !== entry.rev) {
+      return { ok: false, detail: 'a touch edited the document', entry, after };
     }
-    const p = await padPoint(page, 3, 0.3);
-    await page.touchscreen.tap(p.x, p.y); // a gesture on the pad: the page's audio unlocks
-    await until(() => page.evaluate(() => {
-      const e = window.OSCILLA.engine;
-      return !!(e.ctx && e.ctx.state === 'running');
-    }), { ms: SOUND_MS, what: 'a tap on the pad unlocks the audio' });
-    if (browserName === 'chromium') {
-      const cdp = await page.context().newCDPSession(page);
-      const touch = (type, points) => cdp.send('Input.dispatchTouchEvent', { type,
-        touchPoints: points.map((q, i) => ({ x: q.x, y: q.y, id: i + 1 })) });
-      await touch('touchStart', [p]);
-      await loud(page, 'a held touch sounds');
-      await touch('touchEnd', []);
-    } else {
-      await page.mouse.move(p.x, p.y);
-      await page.mouse.down();
-      await loud(page, 'a held press sounds');
-      await page.mouse.up();
-    }
-    const q = await silent(page, 'lifting the touch silences');
-    return { ok: true, entry, offer: offer.stated, shown: shown.stated, quiet,
-      depth: [entry.depth, patched.depth], off: Number(q.rmsDb.toFixed(1)) };
+    return { ok: true, coldSeen, lines: after.lines.slice(0, 4),
+      off: Number(off.rmsDb.toFixed(1)) };
   });
   return checks;
 }
 
 // ------------------------------------------------------------------------------ runner
 const runsAt = (name, sizeName) => (!ONLY || ONLY.has(name))
-  && (LEG_OF[name] || 'desktop') === sizeName;
+  && (LEGS_OF[name] || [LEG_OF[name] || 'desktop']).includes(sizeName);
+/** Why `name` cannot run on this engine and leg, or null (SKIP_OF). */
+const skipOf = (name, sizeName, browserName) => ((SKIP_OF[`${name}/${sizeName}`]
+  || SKIP_OF[name]) || {})[browserName] || null;
 
-async function runLeg(browserName, sizeName, base) {
-  const first = sizeName === 'phone-first';
-  const browser = await playwright[browserName].launch((first ? GESTURE_LAUNCH
-    : LAUNCH)[browserName]);
+async function runLeg(browserName, sizeName, base, leg) {
+  const cold = sizeName === 'phone-cold';
   const results = {};
+  const todo = defineChecks().filter(({ name }) => runsAt(name, sizeName));
+  // K148: a skip is recorded under this leg's own key and never counted as a check.
+  for (const { name } of todo) {
+    const why = skipOf(name, sizeName, browserName);
+    if (why) {
+      RUN.skip(leg, name, why);
+      results[name] = { skipped: true, reason: why };
+    }
+  }
+  const run = todo.filter(({ name }) => !results[name]);
+  if (!run.length) return results; // nothing to run: no engine is launched for this leg
+  const browser = await playwright[browserName].launch((cold ? GESTURE_LAUNCH
+    : LAUNCH)[browserName]);
   try {
-    for (const { name, fn } of defineChecks()) {
-      if (!runsAt(name, sizeName)) continue;
+    for (const { name, fn } of run) {
       const context = await browser.newContext({ viewport: SIZES[sizeName],
         hasTouch: sizeName !== 'desktop',
         // Firefox has no mobile emulation (Playwright refuses isMobile there).
-        ...(first && browserName !== 'firefox' ? { isMobile: true } : {}) });
+        ...(cold && browserName !== 'firefox' ? { isMobile: true } : {}) });
       const errors = [];
       context.on('page', (pg) => pg.on('pageerror', (e) => errors.push(String(e))));
       const t0 = Date.now();
       try {
-        const page = await openXy(context, base, first ? { preset: null, tab: 'panel' }
-          : { preset: name in PRESET_OF ? PRESET_OF[name] : 'xy-lead' });
-        const v = await bounded(fn({ page, context, base, browserName }),
+        // x-cold-touch opens its own page: no wait of the harness may grant an activation.
+        const page = SELF_OPEN.has(name) ? null
+          : await openXy(context, base, { preset: PRESET_OF[name] || null });
+        const v = await bounded(fn({ page, context, base, browserName, sizeName }),
           { ms: CHECK_MS, what: `${name} finishes` });
         results[name] = { ...v, ok: v.ok && errors.length === 0, errors: errors.slice(0, 4),
           ms: Date.now() - t0 };
@@ -597,15 +673,24 @@ async function runLeg(browserName, sizeName, base) {
           const base = o === 'file' ? pathToFileURL(DIST).href : server.url;
           const key = `${b}/${o}/${size}`;
           const t0 = Date.now();
-          const res = await runLeg(b, size, base);
+          const res = await runLeg(b, size, base, key);
           const names = Object.keys(res);
-          RUN.reportLeg({ leg: key, checks: names.length });
-          const bad = names.filter((n) => !res[n].ok);
+          const ran = names.filter((n) => !res[n].skipped);
+          const skipped = names.length - ran.length;
+          if (!ran.length) { // every check of this leg skipped: no PASS line, nothing counted
+            console.log(`SKIP ${key}/xy-pad: every check skipped (${names.join(', ')})`);
+            continue;
+          }
+          RUN.reportLeg({ leg: key, checks: ran.length });
+          const bad = ran.filter((n) => !res[n].ok);
           failed += bad.length;
-          console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/xy-pad: ${names.length
-            - bad.length}/${names.length} checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+          console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/xy-pad: ${ran.length
+            - bad.length}/${ran.length} checks${skipped ? `, ${skipped} skipped` : ''} (${(
+            (Date.now() - t0) / 1000).toFixed(1)} s)`);
           for (const n of names) {
-            console.log(`   ${res[n].ok ? 'ok' : 'x '} ${n}: ${JSON.stringify(res[n]).slice(0, 700)}`);
+            const r = res[n];
+            console.log(`   ${r.skipped ? 'skip' : r.ok ? 'ok' : 'x '} ${n}: `
+              + `${JSON.stringify(r).slice(0, 700)}`);
           }
         }
       }

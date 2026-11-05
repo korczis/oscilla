@@ -7,6 +7,9 @@
 //   node tests/browser/synth.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
 //        [--only s-sound,s-filter]
 //
+// The default Synth document has one cable, the XY pad's Y into LPF Cutoff (K183): every count
+// of cables, wires, plugs and cable ends below is the check's own cables beside it.
+//
 // Checks (desktop leg; the phone leg runs s-sound, s-cable and s-mobile):
 //   s-sound    no cable: QWERTY A plays C4, VCO 1 at 16' and VCO 2 at 8' (peaks at 130.8 and
 //              261.6 Hz within one bin, RMS above -40 dB rel); key up: below -70 dB rel
@@ -187,6 +190,11 @@ function bandDb(p, lo, hi) {
 const read = (page) => page.evaluate(probe);
 const counts = (page) => page.evaluate(() => window.OSCILLA.studio.counts());
 const dbg = (page) => page.evaluate(() => window.OSCILLA.app.synthDebug());
+// The default Synth document's one cable (K183): the XY pad's Y into LPF Cutoff, which the
+// panel's insertion patches. The checks below count the cables they patch beside it.
+const DEFAULT_CABLES = 1;
+const isDefault = (c) => c.from === 'xy.y' && c.to === 'lpf.frequency';
+const own = (d) => d.cables.filter((c) => !isDefault(c));
 /** Poll the analyser until `pred(probe)` holds, within `ms`; returns the probe that held. */
 async function sound(page, pred, what, ms = SOUND_MS) {
   let last = null;
@@ -518,9 +526,11 @@ function defineChecks() {
     await keyKnob(page, 'lpf.frequency', 'End');
     await tapJack(page, 'keys.velocity:out');
     await tapJack(page, 'vco2.pitch:in');
-    const d = await dbg(page);
-    if (d.cables.length !== 1 || d.cables[0].to !== 'vco2.pitch') {
-      return { ok: false, detail: 'the cable is not patched', cables: d.cables };
+    const d0 = await dbg(page);
+    const d = { ...d0, cables: own(d0) };
+    if (d.cables.length !== 1 || d.cables[0].to !== 'vco2.pitch'
+      || d0.cables.length !== 1 + DEFAULT_CABLES) {
+      return { ok: false, detail: 'the cable is not patched', cables: d0.cables };
     }
     const model = await page.evaluate(() => window.OSCILLA.studio.model.graph.edges
       .map((e) => e.id));
@@ -542,7 +552,8 @@ function defineChecks() {
       'VCO 2 tracks E4 again');
     await page.keyboard.up('KeyD');
     const after = await dbg(page);
-    return { ok: model.includes(d.cables[0].id) && after.cables.length === 0, size, fixed, peaks };
+    return { ok: model.includes(d.cables[0].id) && own(after).length === 0
+      && after.cables.length === DEFAULT_CABLES, size, fixed, peaks };
   });
 
   def('s-refuse', async ({ page }) => {
@@ -639,14 +650,16 @@ function defineChecks() {
     // playwright container: 4 Hz passed 1 of 3, 1 Hz 10 of 10, no-modulation noise 2-4.5 dB.
     await typeKnob(page, 'mg.rate', '1');
     await typeKnob(page, 'lpf.frequency', '300');
-    const d = await dbg(page);
+    const d0 = await dbg(page);
+    const d = { ...d0, cables: own(d0) };
     if (d.cables.length !== 1 || d.cables[0].to !== 'lpf.frequency') {
-      return { ok: false, detail: 'MG into LPF cutoff is not listed as a cable', cables: d.cables };
+      return { ok: false, detail: 'MG into LPF cutoff is not listed as a cable',
+        cables: d0.cables };
     }
-    const depth = (pg) => pg.evaluate(() => {
+    const depth = (pg) => pg.evaluate(() => { // the MG cable's (the pad's Y cable adds beside it)
       const ids = window.OSCILLA.app.synthDebug().nodes;
       return window.OSCILLA.studio.model.graph.edges.filter((e) => e.to.node === ids.lpf
-        && e.to.port === 'frequency').map((e) => e.props.depth);
+        && e.to.port === 'frequency' && e.from.node === ids.mg).map((e) => e.props.depth);
     });
     const here = await swings(page, 10, 'the MG sweeps the cutoff through the cable');
     // Copy link, the button: it writes the link it copies below the actions (synth.link),
@@ -660,7 +673,7 @@ function defineChecks() {
     const there = await swings(again, 10, 'the reopened link sweeps the cutoff the same way');
     const [a, b] = [await depth(page), await depth(again)];
     await again.close();
-    return { ok: /yc=/.test(hash) && JSON.stringify(d2.cables.map((c) => [c.from, c.to]))
+    return { ok: /yc=/.test(hash) && JSON.stringify(own(d2).map((c) => [c.from, c.to]))
       === JSON.stringify([['mg.control', 'lpf.frequency']]) && JSON.stringify(a) === '[3]'
       && JSON.stringify(b) === '[3]', hash, here, there, depths: [a, b] };
   });
@@ -1369,8 +1382,9 @@ function defineChecks() {
       summary: !!document.querySelector('[data-summary="lpf"]') }));
     await page.locator('[data-fold-all="open"]').click();
     const ok = Object.values(themes).every((t) => t.leaks === 0 && t.ring >= 3 && t.wire >= 3
-      && t.label >= 4.5 && t.wires === 6 && t.hw.nuts === t.hw.jacks && t.hw.jacks > 0
-      && t.hw.plugs === 12 && t.hw.plates > 0 && t.hw.screws === 2 * t.hw.plates)
+      && t.label >= 4.5 && t.wires === 6 + DEFAULT_CABLES && t.hw.nuts === t.hw.jacks
+      && t.hw.jacks > 0 && t.hw.plugs === 2 * (6 + DEFAULT_CABLES) && t.hw.plates > 0
+      && t.hw.screws === 2 * t.hw.plates)
       && focus.on === '1' && focus.off === '0'
       && fold.expanded === 'false' && fold.knobs === 0 && fold.summary;
     return { ok, themes, focus, fold };
@@ -1481,7 +1495,7 @@ function defineChecks() {
       }
       return { ends: ends.length, covered, dock: Math.round(dock.height) };
     });
-    if (reach.ends !== 62 + 12 || reach.covered.length) {
+    if (reach.ends !== 62 + 2 * (6 + DEFAULT_CABLES) || reach.covered.length) {
       return { ok: false, detail: 'a jack or a cable end stays under the dock', reach };
     }
     await page.locator('[data-goto="lpf"]').tap();

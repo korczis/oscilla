@@ -12,6 +12,9 @@
 //   hide, Escape and when the view is left (ADR 0062).
 // - The keys light up whoever plays them: the computer keyboard, a pointer, a MIDI input.
 // - While a note sounds, the analysis views show the live output (vizInputs: playing).
+// - The XY pad is one more input of this note layer (K183, kbdPad): its notes are 'kbd-xy', and
+//   every forced release of the keys (blur, page hide, Escape, a workspace switch, a disarm)
+//   closes the pad's gate too and then releases whatever the 'xy' input still holds.
 // The controllers stay out of reactive state; the component holds plain values only.
 
 import {
@@ -94,7 +97,12 @@ export function createKeyboardUi({ win = window } = {}) {
   let kb = null;
   let notes = null;
   let view = null; // { canvas, layout, octaves, draw() }
-  const kbdRelease = () => (kb ? kb.releaseAll() : 0);
+  const pads = new Set(); // the XY pads' gate releases (kbdPad, K183)
+  const kbdRelease = () => {
+    let n = kb ? kb.releaseAll() : 0;
+    for (const release of [...pads]) n += release('keys') || 0;
+    return n + (notes ? notes.releaseInput('xy', 'all-off') : 0);
+  };
 
   return {
     kbdArmed: armedDefaults(), // per workspace, from the one route table (midi/routes.js)
@@ -234,6 +242,28 @@ export function createKeyboardUi({ win = window } = {}) {
         const mount = () => { view = mountKeys(win, doc, kb) || view; trackDockHeight(win, doc); };
         if (typeof cmp.$nextTick === 'function') cmp.$nextTick(mount); else mount();
       }
+    },
+
+    /**
+     * The XY pad as one more input of the keys (K183): -> { noteOn(note, velocity, source),
+     * noteOff(note, source), legato(from, to, source), velocity(), off() } on this note layer,
+     * or null before kbdInit. `release(reason)` closes the pad's gate; the keys' forced
+     * releases call it until off().
+     */
+    kbdPad(release) {
+      if (!notes || typeof release !== 'function') return null;
+      const cmp = this;
+      pads.add(release);
+      return {
+        noteOn(note, velocity, source) {
+          if (typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
+          return notes.noteOn(note, velocity, source);
+        },
+        noteOff: (note, source) => notes.noteOff(note, source),
+        legato: (from, to, source) => notes.legato(from, to, source),
+        velocity: () => (kb ? kb.velocity : 100),
+        off: () => { pads.delete(release); },
+      };
     },
 
     /** Arm or disarm the computer keyboard in the view in sight. */
