@@ -886,6 +886,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const t = get().transport;
       const on = present() ? played() : null;
       return { present: present(), armed: !!(t && t.armed), held: t ? t.heldNotes() : [],
+        sinkHeld: studioSink.heldNotes(), // the Studio sink's held map (K175, S18)
         tab: tab(), engine: engineId(), played: on ? on.id : null,
         voices: t && on && typeof t.liveVoices === 'function' ? t.liveVoices(on.id) : 0,
         nodes: Object.fromEntries([...nodes()].map(([k, n]) => [k, n ? n.id : null])),
