@@ -479,7 +479,7 @@ async function runOne(name) {
         } catch (e) {
           if (!(e instanceof WaitTimeout)) throw e;
         }
-        if (m.bad.length) failures.push(`${label}: ${m.bad.slice(0, 6).join('; ')}`);
+        if (m.bad.length) failures.push(`${label}: ${firstOf(m.bad, 6)}`);
         if (w <= 390 && !m.bad.length) {
           const bad = await tapSilenceBlock(page);
           if (bad) failures.push(`${label}: ${bad}`);
