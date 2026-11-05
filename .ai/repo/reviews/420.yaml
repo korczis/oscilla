@@ -33,12 +33,19 @@
 # passes 16/16. npm test is 4730 pass with 2 failures, the S8 render-time checks at load ~20,
 # which pass when run alone. The reviewer did not re-run them; CI's gate is the receipt.
 #
+# Refresh (2026-11-05, head 73ee463a, base origin/main 6c7b227f): the delta since 54356cdd is
+# four merges of main (e2b81920, 15ebc758, e4584d19, 73ee463a). git show --remerge-diff resolves
+# only dist/index.html (a rebuild), with no hand edit. The train's own patch over the 15 guarded
+# paths is unchanged: git patch-id of diff(68b117f3, bc6758ac) equals diff(6c7b227f, 73ee463a),
+# e79deeab1bf1. The digest moved only because main (#417, #421, #422, #430) moved the base; it is
+# recomputed with origin/main 6c7b227f's review-verdict.mjs.
+#
 # Verdict: merge. No P0 or P1, and no P2 open. T3-T10 are P3 follow-ups, listed below.
 schema: review-verdict/v1
 pr: 420
 verdict: merge
 reviewer: oscilla-21 (claude-code 603baa3d)
-content: 3bd0cd680e6b9c6b31b65a81c92d262023df6088b2dc224407b1252aabc75cbc
+content: c027c804258473e86d628faa41bc1454fa19447c086baec5fc7dc320a3cd9104
 findings:
   - { id: T1, severity: P2, status: closed, title: "MIDI all-off and silence() released only the current route's sink, so a note held on a sink left behind by a workspace switch hung; closed by sinksAllOff (6f53a421)" }
   - { id: T2, severity: P2, status: closed, title: "a disabled choice refused a click but its arrow keys, Home/End and the wheel still changed it; closed in gestures.js (6f53a421)" }
