@@ -277,7 +277,7 @@ findings:
       because: "G022-G026 each carry them as one acceptance criterion (2026-11-04)."
   # af's critique of the G027-G029 draft (2026-11-05), with 26's and dev-53's answers; resolutions by the plan builder (oscilla-21)
   - id: binding-not-a-parameter-layer
-    class: design_gap
+    class: unnecessary_work
     subject: "G029"
     finding: "read() and write(patch) would duplicate the parameter declaration (parameter-controls#one-declaration, K105) and program B's live-update rules."
     blocking: true
@@ -322,7 +322,7 @@ findings:
       issue: "G027"
       because: "G027 and G028 show a fixed parameter locked with its reason and refuse the drag, one test each (2026-11-05)."
   - id: one-selection
-    class: design_gap
+    class: missed_requirement
     subject: "G029"
     finding: "Binding needs the one selection, not a listener of its own; the Synth plate's focus must go through it."
     blocking: false
