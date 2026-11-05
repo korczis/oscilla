@@ -1,0 +1,31 @@
+id: K169
+milestone: M090
+serves:
+  - "coherent-state#live-edits-reach-the-voice"
+title: "A PLAY refused while armed stops the runtime and says so, so the Studio never stays 'behind' with its edits unapplied"
+slug: a-play-refused-while-armed-stops-the-runtime-and-says-so
+priority: p1
+profile: implementation
+objective: "Lands as fix(studio). Owner defect of 2026-11-03 (relayed by prismatic-majordomus-1d and oscilla-b0): on a 26-node patch the Inspector showed LFO 1 'not in runtime' in the state 'behind' with no refusal of that revision, and it never caught up. Reproduced on main c3045229 (oscilla-26's investigation, probe C): with the Studio armed (transport.arm(), as the Synth keys or MIDI do), a PLAY that is refused after startNow's armed branch has set playing = false and left armed mode (src/js/studio/transport.js about lines 1589-1611: the output claim, the apply refusal, or a throw from applyStop or setOwnedParams) returns while the runtime keeps running the armed graph and emits no 'state' event; from then on admitNow treats every edit as stopped (not-applied), sync() returns early, the wake-up does not run, and studioDivergence sees a running runtime, so the state stays 'behind' and the UI still shows the Studio playing until Stop. The fix routes every failure after the armed branch, and a throw (try/finally), through one helper that stops the runtime fast when it still runs and emits 'state' { playing: false, reason: 'play-refused' } with the refusal kept in debugInfo, restoring the invariant that a running runtime means a playing or armed transport. Also, syncNow records lastRevision only after runtime.apply returns, so an apply that throws is retried at the next wake-up rather than lost. Before: an armed PLAY refusal leaves a running runtime under a stopped transport. After: the runtime stops, the UI and the Inspector say why, and the next edit is not stranded."
+why: "Owner defect of 2026-11-03 on https://korczis.github.io/oscilla/#m=studio, the Inspector's 'Not in the running graph: the last update was refused' on LFO 1 with no refusal of that revision; oscilla-b0's C027 made the text state-aware and found the state was 'behind' with no refusal; oscilla-26's investigation reproduced it through an armed PLAY refusal (scratchpad sync-stall/probe2.cjs, probe C) and ruled out a sync stall on large patches (300- and 400-operation random edit runs on two 26-node patches converged every time)."
+scope:
+  - "src/js/studio/transport.js"
+  - "tests/unit/v31-studio-transport.test.mjs"
+  - "tests/browser/v31-studio-workflows.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/v31-studio-transport.test.mjs, failing on the merge base, on its fake engine: arm, make the full-document apply refuse, call start(), then dispatch an edit; after the fix the runtime is idle, a 'state' event with playing false and reason 'play-refused' has fired, debugInfo().lastError names the refusal, and the divergence verdict is 'not-applied' (today: runtime running, transport stopped, verdict 'behind'). The same holds for a refused output claim and for a throw from the armed branch's later steps."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a PLAY refused while NOT armed is unchanged; a successful PLAY after arm still promotes the armed run without a gap; an apply that throws inside syncNow is retried at the next wake-up (lastRevision is not advanced past an unapplied revision)."
+  - "Browser: a check in tests/browser/v31-studio-workflows.cjs arms the Studio, forces a PLAY refusal through a documented test hook (no fault injection into page internals beyond that hook), edits a node, and asserts within a named until() deadline of tests/browser/lib/wait.cjs that the Play control is not pressed, the reason is announced in the live region, the runtime census is 0, and the Inspector does not show 'behind'. Inside tests/browser/lib/suite.cjs, assuming no sample rate (project.suite-harness, project.bounded-test-timing)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a fix change, a unit test that fails on the merge base (project.fail-first). It adds no markup, class token or stylesheet (project.ui-uses-flowbite-pro)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/v31-studio-transport.test.mjs"
+  - "node tests/browser/v31-studio-workflows.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03

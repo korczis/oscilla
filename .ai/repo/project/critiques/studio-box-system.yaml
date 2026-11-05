@@ -124,3 +124,83 @@ findings:
     resolution:
       state: open
       because: "Reconcile the per-issue allowances with the 35 KB ceiling (deferring the issues in plan-sprawl-against-the-audit would do it), and restate the headroom from a current measurement or drop the stale figure."
+  - id: v619-does-not-declare-what-k165-k166-read
+    class: unproven_assumption
+    subject: "K165"
+    finding: "(oscilla-af's critique of K164-K166 at 3944784e, 2026-11-03, transcribed by their author dev-53, who wrote the resolution.) V619 on main declares face sections only; no copy of it names PORT_KINDS, CABLE_KINDS, a port label field or a parameter live rule, and the src tree has neither PORT_KINDS nor CABLE_KINDS, so K165 and K166 depend on a provider that promises none of what they render, and K166's negative case 'refused by the registry (V619)' has no owner."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "V619"
+      because: "Answered by oscilla-26 on 2026-11-03 in #400 (chore/plan-done-385, 2f85d6c3, 'chore(plan): V619 declares the patch bay contract'): V619 now declares PORT_KINDS, CABLE_KINDS, a declared label on every port and the parameter live rule derived from runtime.js and listed as defaulted, with named refusals in validateNodeDefinition and a mutation test that flips a derived live rule; K165 and K166 depend on V619. Earlier text of this resolution: asked of oscilla-26 on 2026-11-03: amend V619's objective and acceptance criteria to declare PORT_KINDS (channels, rate, unconnected, cardinality default, monitor and compact eligibility, version), CABLE_KINDS (shape, dash, noun, configurable fields), the port's declared label and the parameter live rule (immediate | note | step | block | apply, derived per adapter), each with a refusal of the unknown, or name a new declaration issue that K165 and K166 then depend on. It stays open until that record lands; K164 does not depend on it."
+  - id: k166-label-must-be-true
+    class: missed_requirement
+    subject: "K166"
+    finding: "(oscilla-af, 2026-11-03.) 'Applies at the next note' is a claim; no criterion proves the runtime honours it, and the program asks for timing semantics and graph/runtime agreement (project.no-fake-science)."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K166"
+      because: "K166 gains a criterion, failing first: for each live rule present, an edit during playback becomes audible exactly at that boundary on the audio clock (immediate within one render quantum, at the next note at the next onset and not before, at the next step on the next step), proved by a browser check s-live (2026-11-03)."
+  - id: k165-before-cites-unlanded-file
+    class: delivery_verification
+    subject: "K165"
+    finding: "(oscilla-af, 2026-11-03.) src/js/ui/patch/patch-bay.js is not on main (only on the phone-bay train), and PORT_VISUALS already lives in src/js/studio/ports.js:55; the Before line must say which lookup is per-module."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K165"
+      because: "K165 depends on K150 (which lands patch-bay.js) and its Before line is re-verified on main after it lands; it names the per-module part: the Synth adapter's labels (synth/view/bay.js panelSource) and patch-bay.js's own STATE_LABEL, with PORT_VISUALS read from ports.js (2026-11-03)."
+  - id: k164-check-never-runs
+    class: delivery_verification
+    subject: "K164"
+    finding: "(oscilla-af, 2026-11-03.) --check must run in npm test or verify, or the table can go stale unnoticed; the tests/README row needs a criterion."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K164"
+      because: "tests/unit/patch-contract.test.mjs (in npm test) compares the committed table with the derived one and runs --check; both are criteria of K164, with its tests/README row (built at b8926608)."
+  - id: k164-compatibility-matrix
+    class: missed_requirement
+    subject: "K164"
+    finding: "(oscilla-af, 2026-11-03.) Program B's compatibility and cardinality is a type x type table; per-port fields alone do not show it. Derive it from canConnect over every port-type pair, with fan-out, into the same JSON and markdown."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K164"
+      because: "K164's matrix includes compatibilityMatrix: canConnect over every (type, role) pair, each refusal with its sentence, fan-out and the fan-in counts, in the JSON and docs/v31/patch-contract.md (built at b8926608)."
+  - id: k165-k166-standard-criteria
+    class: missed_requirement
+    subject: "K166"
+    finding: "(oscilla-af, 2026-11-03.) K165 and K166 lack the Flowbite Pro ratchet, the size-report figure, the instrument wording check of new sentences and a phone criterion; K166's text must be visible on a coarse pointer, where a tooltip never shows and aria-describedby alone is not visible."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K166"
+      because: "K165 and K166 name the ui-flowbite-pro record check, the size-report delta, synth-wording.test.mjs and the iphone.cjs census; K166's sentence is visible text beside the control at 390x844 with touch (2026-11-03)."
+  - id: per-family-contract-tests-unplanned
+    class: insufficient_work
+    subject: "studio-box-system#node-declaration"
+    finding: "(oscilla-af, 2026-11-03.) Program B asks for tests per node family and port type (valid and invalid connections, parameter limits, persistence, serialization round-trip, automation eligibility); K164-K166 do not plan them."
+    blocking: false
+    resolution:
+      state: open
+      because: "A test generated from the registry follows the declaration: it is drafted as its own issue once V619's amended contract fields exist to generate from (the matrix of K164 then names what each family must prove); recorded here so it is not lost."
+  - id: guarded-paths-in-k165-k166
+    class: missed_requirement
+    subject: "K165"
+    finding: "(oscilla-af, 2026-11-03.) Neither src/js/synth nor src/js/ui/studio is guarded; if either slice touches src/js/studio/ports.js or registry.js it needs a verdict criterion, or those files must be out of scope explicitly."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K165"
+      because: "K165 and K166 each state that they change no file under src/js/studio: the contract is read there and declared by 26's V619 (2026-11-03)."
+  - id: k164-inventory-not-reproduced
+    class: delivery_verification
+    subject: "K164"
+    finding: "(oscilla-af, 2026-11-03.) The inventory 36/94/145 was not reproducible; the script should print the counts and the Before line quote that output."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K164"
+      because: "node scripts/patch-contract.mjs prints 'patch-contract: 36 node types, 94 ports, 145 parameters, 64 type pairs' on stderr, and K164's Before line quotes it with the missing counts per field (2026-11-03)."

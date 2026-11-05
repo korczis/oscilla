@@ -224,12 +224,14 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   let refuse = false;
   let listener = null;
   let seq = 0;
-  const engine = { on: (fn) => { listener = fn; return () => {}; },
+  let unsubscribed = 0;
+  const engine = { on: (fn) => { listener = fn; return () => { unsubscribed++; }; },
     play: (p, o) => {
       log.push(['play', p.type]);
       // the engine derives each step's envelope from these: absent, it computes NaN and throws
       assert.ok(o.attackS > 0 && o.releaseS > 0 && o.limitS >= p.dur && o.mode === 'trigger');
     assert.equal(o.owner, 'audition', 'marked, so the instrument does not rebuild it');
+    assert.equal(o.riff, 'mirrorball-octaves', 'and names its riff');
       if (refuse) return null;
       seq += 1;
       return { id: seq };
@@ -243,10 +245,11 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   // It lasts as long as its voice, never by the clock: another owner's stop ends it at once.
   listener('release', { id: 99, natural: false });
   assert.equal(a.playing, 'mirrorball-octaves', 'another voice released: still playing');
-  // The engine replaces the voice with the same plan (re-applied options): it follows it.
-  engine.voice = { id: seq + 10, plan: { label: 'Riff Mirrorball Octaves' } };
+  // A replacement carrying this audition's options (owner and riff) carries it; a voice with
+  // only the same label does not.
+  engine.voice = { id: seq + 10, opts: { owner: 'audition', riff: 'mirrorball-octaves' } };
   listener('play', { id: seq + 10 });
-  assert.equal(a.playing, 'mirrorball-octaves', 'a replacement of the same plan carries it');
+  assert.equal(a.playing, 'mirrorball-octaves', 'a replacement of the same audition carries it');
   listener('release', { id: seq, natural: false });
   assert.equal(a.playing, 'mirrorball-octaves', 'the replaced voice no longer counts');
   listener('release', { id: seq + 10, natural: false });
@@ -273,6 +276,14 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   assert.match(r.reason, /measurement/);
   assert.equal(a.playing, null);
   assert.match(a.start('no-such-riff').reason, /No riff/);
+  refuse = false;
+  a.start('mirrorball-octaves');
+  engine.voice = { id: 777, plan: { label: 'Riff Mirrorball Octaves' }, opts: {} };
+  listener('play', { id: 777 });
+  assert.equal(a.playing, null, 'the same label without the audition options is another voice');
+  engine.voice = null;
+  a.dispose();
+  assert.equal(unsubscribed, 1, 'dispose unsubscribes from the engine');
   // While a measurement owns the output, Listen is refused with a sentence BEFORE anything is
   // stopped or played: a running capture is never aborted silently (Q032, rule C002).
   refuse = false;
