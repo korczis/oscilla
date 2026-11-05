@@ -573,3 +573,44 @@ test('a routed note is released through the sink that took it, whatever route() 
   assert.deepEqual(log, [['studio', 'on', 60], ['studio', 'off', 60], ['synth', 'on', 62],
     ['synth', 'off', 62]]);
 });
+
+// K183 on K178's one note path: the XY pad's finger crossing into another scale cell moves its
+// held note without a new gate. A sink with legato() gets one retarget; a sink without it gets
+// an off and an on; the Playground voice restarts at the new pitch; a note not held is a press.
+test('legato moves a held note to another without a new gate, on any player', () => {
+  const log = [];
+  const glide = { noteOn: (n, v) => { log.push(['glide', 'on', n, v]); return { ok: true }; },
+    noteOff: (n) => { log.push(['glide', 'off', n]); return true; },
+    legato: (n, info) => { log.push(['glide', 'legato', n, info.from]); return { ok: true }; } };
+  const plain = { noteOn: (n, v) => { log.push(['plain', 'on', n, v]); return { ok: true }; },
+    noteOff: (n) => { log.push(['plain', 'off', n]); return true; } };
+  let current = glide;
+  const notes = createMidiNotes({ engine: null, route: () => current });
+  notes.noteOn(60, 90, 'kbd-xy');
+  notes.legato(60, 64, 'kbd-xy');
+  notes.noteOff(64, 'kbd-xy');
+  assert.deepEqual(log, [['glide', 'on', 60, 90], ['glide', 'legato', 64, 60],
+    ['glide', 'off', 64]], 'one retarget, and the off reaches the moved note');
+  log.length = 0;
+  current = plain;
+  notes.noteOn(62, 80, 'kbd-xy');
+  notes.legato(62, 65, 'kbd-xy');
+  assert.deepEqual(log, [['plain', 'on', 62, 80], ['plain', 'off', 62], ['plain', 'on', 65, 80]],
+    'a sink without legato: its off and on, at the held velocity');
+  log.length = 0;
+  notes.legato(70, 72, 'kbd-xy'); // 70 is not held: a plain press of 72
+  assert.deepEqual(log, [['plain', 'on', 72, 100]]);
+});
+
+test('legato on the Playground voice restarts the engine note at the new pitch', () => {
+  const calls = [];
+  const engine = { noteOn: (key, o) => { calls.push(['on', key, Math.round(o.freq)]);
+    return { ok: true }; }, noteOff: (key) => { calls.push(['off', key]); return true; },
+  notesOff: () => 0, resume() {} };
+  const notes = createMidiNotes({ engine, settings: () => ({ a4: 440 }) });
+  notes.noteOn(69, 100, 'kbd-xy');
+  notes.legato(69, 81, 'kbd-xy');
+  notes.noteOff(81, 'kbd-xy');
+  assert.deepEqual(calls, [['on', 'kbd-xy:0:69', 440], ['off', 'kbd-xy:0:69'],
+    ['on', 'kbd-xy:0:81', 880], ['off', 'kbd-xy:0:81']]);
+});

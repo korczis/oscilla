@@ -82,7 +82,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   const held = createHeldNotes();
   // The input a source belongs to: the keyboard's `kbd-<source>`, else a MIDI input's number.
   const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
-    ? source.slice(4) : 'midi');
+    ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy' : 'midi');
 
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
@@ -102,6 +102,11 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       return { ok: false, reason: by };
     }
     refusing = null;
+    return startOnEngine(key, note, velocity);
+  }
+
+  /** The Playground voice of `key` at `note` (the engine's own held note). */
+  function startOnEngine(key, note, velocity) {
     const s = settings() || {};
     const result = engine.noteOn(key, {
       freq: midiToFrequency(note, s.a4 > 0 ? s.a4 : 440),
@@ -112,6 +117,28 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     });
     if (result && result.ok && typeof engine.resume === 'function') engine.resume();
     return result;
+  }
+
+  /**
+   * Move a held note of `source` from `from` to `to` without a new gate (K183: the XY pad's
+   * finger crossing into another scale cell): the sink's legato(to, info) when it has one (a mono
+   * voice glides by its Keys node's glide), else its off and on; the Playground voice restarts at
+   * the new pitch. A `from` not held here is a plain press of `to`.
+   */
+  function legato(from, to, source = 0, channel = 0) {
+    const oldKey = keyOf(source, channel, from);
+    const newKey = keyOf(source, channel, to);
+    const was = held.held().find((h) => h.key === oldKey);
+    if (!was) return noteOn(to, 100, source, channel);
+    const { velocity } = was;
+    const sink = held.legato(oldKey, newKey, { note: to, velocity });
+    if (sink === ENGINE) {
+      if (engine) engine.noteOff(oldKey);
+      return engine ? startOnEngine(newKey, to, velocity) : { ok: false, reason: 'no-audio' };
+    }
+    if (typeof sink.legato === 'function') return sink.legato(to, { from, velocity, key: newKey });
+    sink.noteOff(from);
+    return sink.noteOn(to, velocity);
   }
 
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
@@ -125,6 +152,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   return {
     noteOn,
     noteOff,
+    legato,
 
     /** A message from input `source` (any stable id of the input). Returns the event. */
     handle(data, source = 0) {
