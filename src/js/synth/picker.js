@@ -7,8 +7,9 @@
 //     name, kind, selected, disabled, reason }
 //   routeAction(model, panel, id) -> { action } | { reason }   one history entry: METADATA_SET
 //     { noteTarget } (the panel's own Keys clears it: the tab then chooses, Keys on Panel, the
-//     chosen engine on Engines); New Synth voice inserts the panel (its BATCH), whose Keys the
-//     keys then play; with the panel there it is disabled and says why
+//     chosen engine on Engines); New Synth voice inserts the panel (its BATCH, xy.js
+//     xyInsertAction: the pad's Y cable with it), whose Keys the keys then play; with the
+//     panel there it is disabled and says why
 //   routedNode(model) -> node | null   the node metadata.noteTarget names, when it plays notes
 //   WAVES, waveOf(model, panel, osc) -> wave id, waveAction(model, panel, osc, wave) -> action
 //     sine, triangle, saw, square, pulse (the VCO's Wave; its width is the VCO's Pulse width
@@ -16,6 +17,7 @@
 //     NODE_PARAM_SET, or ONE BATCH when a wave brings the oscillator's level back
 
 import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
+import { xyInsertAction } from './xy.js';
 
 export const NEW_VOICE = 'new-voice';
 export const NEW_VOICE_TAKEN = 'This Studio already holds the Synth panel, and Master Output '
@@ -46,7 +48,7 @@ export function instrumentChoices(model, panel, { registry = NODE_REGISTRY, curr
 export function routeAction(model, panel, id, { registry = NODE_REGISTRY } = {}) {
   if (id === NEW_VOICE) {
     if (panel.resolve(model).get('keys')) return { reason: NEW_VOICE_TAKEN };
-    return { action: panel.instantiate(model) };
+    return { action: xyInsertAction(model, panel) }; // K183: with the pad's Y cable
   }
   const n = model.graph.nodes.find((x) => x.id === id);
   if (!n) return { reason: `There is no node "${String(id)}".` };

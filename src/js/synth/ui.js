@@ -29,7 +29,7 @@ import { splitJack } from './panel.js';
 import { esc, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
 import { createGestures } from './gestures.js';
-import { bayLayout, baySvg, cablePath } from './view/bay.js';
+import { bayLayout, baySvg, cableItem, cablePath } from './view/bay.js';
 import { panelTokens } from './view/tokens.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
 import { canConnect } from '../studio/ports.js';
@@ -37,6 +37,7 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { xyInsertAction } from './xy.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
@@ -122,7 +123,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const names = cuts.length ? feedNames(cuts) : '';
     const ys = m.graph.nodes.map((n) => n.position.y);
     const at = { x: 0, y: (ys.length ? Math.max(...ys) : 0) + 240 };
-    const r = dispatch(panel.instantiate(m, { at }));
+    const r = dispatch(xyInsertAction(m, panel, { at })); // K183: with the pad's Y cable
     if (r.ok) say(names ? SYNTH_TEXT.took(names) : SYNTH_TEXT.inserted);
     return r.ok;
   }
@@ -290,10 +291,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const open = jacksIn('open');
     const mixed = jacksIn('mixed');
     if (list) {
-      list.innerHTML = cables.map((c) => `<li class="${ITEM}"><span>${esc(jackName(c.from))} → `
-        + `${esc(jackName(c.to))}</span><button type="button" class="${BTN}" data-remove-cable=`
-        + `"${esc(c.id)}" aria-label="Remove cable ${esc(jackName(c.from))} to `
-        + `${esc(jackName(c.to))}">Remove</button></li>`).join('')
+      list.innerHTML = cables.map((c) => cableItem(c, states.get(`${c.to}:in`),
+        { jackName, item: ITEM, btn: BTN })).join('')
         + gone.map((r) => `<li class="${ITEM}" data-gone="${r.module}"><span>${esc(r.label)} `
         + `removed in Studio: ${esc(r.jacks.join(', '))} open</span><button type="button" `
         + `class="${BTN}" data-restore-module="${r.module}">Restore module</button></li>`).join('')
@@ -703,8 +702,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // ------------------------------------------------------------------ notes
 
-  const { noteOn, noteOff, allOff, disarm } = createSynthNotes({ get, transport, ensurePanel,
-    cmp: () => cmp, say, played, playedModule, present, nodes, panel, ENGINE_IDS, syncArmed });
+  const { noteOn, noteOff, legato, allOff, disarm, armedText } = createSynthNotes({ get,
+    transport, ensurePanel, cmp: () => cmp, say, played, playedModule, present, nodes, panel,
+    ENGINE_IDS, syncArmed });
 
   // ------------------------------------------------------------------ links
 
@@ -805,7 +805,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     /** The note sink of src/js/midi/notes.js in this workspace (one path for every player). */
     synthSink() {
-      return { noteOn, noteOff, allOff };
+      return { noteOn, noteOff, allOff, legato };
     },
     studioSink: () => studioSink.active(),
 
@@ -815,7 +815,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       if (typeof this.ensureAudio === 'function') this.ensureAudio();
       const r = t.arm();
       if (!r.ok) say(r.code === 'claim-refused' ? SYNTH_TEXT.refused : r.reason, true);
-      else say(SYNTH_TEXT.armed);
+      else say(armedText());
       this.synth.armed = !!t.armed;
       return r.ok;
     },

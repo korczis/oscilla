@@ -12,6 +12,10 @@
 //   hide, Escape and when the view is left (ADR 0062).
 // - The keys light up whoever plays them: the computer keyboard, a pointer, a MIDI input.
 // - While a note sounds, the analysis views show the live output (vizInputs: playing).
+// - The XY pad is one more input of this note layer (K183, kbdPad): its notes are 'kbd-xy', and
+//   every forced release of the keys (blur, page hide, Escape, a workspace switch, All Notes
+//   Off) closes the pad's gate too and then releases whatever the 'xy' input still holds; a
+//   Disarm releases only the keys' own notes (kbdReleaseKeys): the pad is not the keys.
 // The controllers stay out of reactive state; the component holds plain values only.
 
 import {
@@ -94,7 +98,17 @@ export function createKeyboardUi({ win = window } = {}) {
   let kb = null;
   let notes = null;
   let view = null; // { canvas, layout, octaves, draw() }
-  const kbdRelease = () => (kb ? kb.releaseAll() : 0);
+  const pads = new Set(); // the XY pads' gate releases (kbdPad, K183)
+  // Two releases (K183 review F4): the keys' own notes (the computer keys' and the on-screen
+  // keys', inputs 'keys' and 'pointer') for a Disarm and the dock's fold, which never cut the
+  // XY pad's note; and the panic (blur, page hide, Escape, a workspace switch, All Notes Off),
+  // which also closes every pad's gate and releases what the xy input still holds.
+  const kbdReleaseKeys = () => (kb ? kb.releaseAll() : 0);
+  const kbdRelease = () => {
+    let n = kbdReleaseKeys();
+    for (const release of [...pads]) n += release('keys') || 0;
+    return n + (notes ? notes.releaseInput('xy', 'all-off') : 0);
+  };
 
   return {
     kbdArmed: armedDefaults(), // per workspace, from the one route table (midi/routes.js)
@@ -236,12 +250,34 @@ export function createKeyboardUi({ win = window } = {}) {
       }
     },
 
+    /**
+     * The XY pad as one more input of the keys (K183): -> { noteOn(note, velocity, source),
+     * noteOff(note, source), legato(from, to, source), velocity(), off() } on this note layer,
+     * or null before kbdInit. `release(reason)` closes the pad's gate; the keys' forced
+     * releases call it until off().
+     */
+    kbdPad(release) {
+      if (!notes || typeof release !== 'function') return null;
+      const cmp = this;
+      pads.add(release);
+      return {
+        noteOn(note, velocity, source) {
+          if (typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
+          return notes.noteOn(note, velocity, source);
+        },
+        noteOff: (note, source) => notes.noteOff(note, source),
+        legato: (from, to, source) => notes.legato(from, to, source),
+        velocity: () => (kb ? kb.velocity : 100),
+        off: () => { pads.delete(release); },
+      };
+    },
+
     /** Arm or disarm the computer keyboard in the view in sight. */
     kbdToggle() {
       const v = this.kbdView;
       if (!v) return;
       this.kbdArmed[v] = !this.kbdArmed[v];
-      if (!this.kbdArmed[v]) kbdRelease();
+      if (!this.kbdArmed[v]) kbdReleaseKeys(); // the keys' notes, never a pad's
     },
 
     /** An on-screen control: 'octave-down' | 'octave-up' | 'velocity-down' | 'velocity-up'. */
@@ -259,7 +295,12 @@ export function createKeyboardUi({ win = window } = {}) {
       if (kb) kb.clear('midi');
     },
 
-    /** Let go of every note the keyboard plays; returns how many keys or pointers held one. */
+    /** Let go of the keys' own notes (Disarm, the dock's fold), never an XY pad's; returns how
+     *  many keys or pointers held one. */
+    kbdReleaseKeys() {
+      return kbdReleaseKeys();
+    },
+    /** The panic: every note the keyboard plays, the XY pads' with them; returns the count. */
     kbdReleaseAll() {
       return kbdRelease();
     },

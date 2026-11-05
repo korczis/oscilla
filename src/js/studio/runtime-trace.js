@@ -13,7 +13,9 @@
 //                                when the op also names a modulatable key (its bases recompute)
 //   noteBaseWrites(id, planNode, base, prev, was, w, own, ctx)   the param steps of applyBase
 //   limitDiagnostics(bases, plan, owned) -> [Diagnostic]   the limits in effect, node by node
+//                                (frequency-limited, and performance-limited for a fit cable)
 
+import { fitLimits } from './performance-fit.js';
 import { frequencyLimits } from './compiler.js';
 
 export const traceNote = (trace, rev, fresh) => (kind, id, outcome, detail = null,
@@ -70,10 +72,10 @@ export function noteBaseWrites(id, pn, base, prev, was, w, own, { note, unit, no
 }
 
 /**
- * The `frequency-limited` diagnostics in effect (frequencyLimits), node by node; a base
- * another owner drives (an automation lane) is left out: its static value does not play.
- * Built when read, from the plan in effect, so a rename (compiled, but recomputing no base)
- * names the node and the cable's source as they are now (T023 review R3).
+ * The `frequency-limited` (frequencyLimits) and `performance-limited` (fitLimits)
+ * diagnostics in effect, node by node; a base an automation lane drives is left out: its
+ * static value does not play. Built when read, from the plan in effect, so a rename names
+ * the node and the cable's source as they are now (T023 review R3).
  */
 export function limitDiagnostics(bases, plan, owned) {
   const out = [];
@@ -87,6 +89,7 @@ export function limitDiagnostics(bases, plan, owned) {
       const own = d.entity.kind === 'node' && owned.get(d.details.node);
       if (!own || !own.has(d.details.param)) out.push(d);
     }
+    out.push(...fitLimits(at, cb, { edges: plan.edges, nodes: plan.nodes }));
   }
   return out;
 }

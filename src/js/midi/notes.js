@@ -177,6 +177,14 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       return e;
     },
 
+    /**
+     * Every held key of one input released where it sounds (held-notes.js releaseAll with the
+     * input filter): 'xy' for the XY pad's 'kbd-xy' notes (K183), 'midi', 'key', ... -> count.
+     */
+    releaseInput(input, reason = 'all-off') {
+      return held.releaseAll(reason, { input });
+    },
+
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
     silence() {
       const sink = route();
