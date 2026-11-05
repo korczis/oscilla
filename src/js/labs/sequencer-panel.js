@@ -43,16 +43,31 @@ import { on, setText, setAttr } from './dom.js';
 export const TIMELINE_OPTIONS = Object.freeze({ minSpanS: 3.75, headroomRatio: 0.1, blockY: 5,
   blockH: 40, gapPx: 4, minPxPerS: 66 });
 
+/** The shortest block the lane draws: 24 px, 44 px under a coarse pointer (U022). */
+export const MIN_BLOCK_PX = 24;
+export const TOUCH_BLOCK_PX = 44;
+
 /**
  * Horizontal window of the lane: { spanS, contentPx, maxScrollPx }. The whole sequence (plus
  * headroom) fits the lane until it would need fewer than minPxPerS; then the content is wider
- * than the lane by the factor the extra duration needs.
+ * than the lane by the factor the extra duration needs. blocks ([{ durationS, minPx }]) bound
+ * it as well (U022): the pixels per second grow until every block is at least its minPx wide
+ * after the gap, and the lane scrolls. The scale stays linear: one pixels-per-second for every
+ * block, so a width never misstates a duration.
  */
 export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.minSpanS,
-  headroomRatio = TIMELINE_OPTIONS.headroomRatio, minPxPerS = TIMELINE_OPTIONS.minPxPerS }) {
+  headroomRatio = TIMELINE_OPTIONS.headroomRatio, minPxPerS = TIMELINE_OPTIONS.minPxPerS,
+  blocks = [], gapPx = TIMELINE_OPTIONS.gapPx }) {
   const w = Math.max(1, laneW || 1);
   const spanS = Math.max(minSpanS, (durationS > 0 ? durationS : 0) * (1 + headroomRatio));
-  const visibleS = Math.min(spanS, Math.max(minSpanS, w / minPxPerS));
+  let visibleS = Math.min(spanS, Math.max(minSpanS, w / minPxPerS));
+  let needPxPerS = 0;
+  for (const b of blocks) {
+    if (b && b.durationS > 0 && b.minPx > 0) {
+      needPxPerS = Math.max(needPxPerS, (b.minPx + Math.max(0, gapPx)) / b.durationS);
+    }
+  }
+  if (needPxPerS > 0) visibleS = Math.min(visibleS, w / needPxPerS);
   const contentPx = (w * spanS) / visibleS;
   return { spanS, contentPx, maxScrollPx: Math.max(0, contentPx - w) };
 }
@@ -239,44 +254,86 @@ export function mount(rootEl, adapter) {
     return editor.sampleRate() * 0.475;
   }
 
+  // U022: the width a block needs for its name to read in full, from the rendered font and the
+  // block's own padding and border (measured once per font and text, never from the block's
+  // current width, which would only ever keep it as wide as it is).
+  const nameWidths = new Map();
+  let measureCtx = null;
+  function nameNeedPx(b, text) {
+    if (!text || typeof getComputedStyle !== 'function') return 0;
+    const name = b.children[0];
+    const cs = getComputedStyle(name);
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const key = `${font}|${text}`;
+    if (!nameWidths.has(key)) {
+      if (!measureCtx) {
+        const c = document.createElement('canvas');
+        measureCtx = (c.getContext && c.getContext('2d')) || false;
+      }
+      if (!measureCtx) return 0;
+      measureCtx.font = font;
+      nameWidths.set(key, Math.ceil(measureCtx.measureText(text).width));
+    }
+    const bs = getComputedStyle(b);
+    const chrome = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth']
+      .reduce((sum, k) => sum + (parseFloat(bs[k]) || 0), 0);
+    return nameWidths.get(key) + chrome + 2; // 2 px for rounding the block's width
+  }
+
+  function coarsePointer() {
+    return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  }
+
+  function blockEl(r) {
+    let b = blockEls.get(r.id);
+    if (!b) {
+      b = document.createElement('div');
+      b.setAttribute('role', 'option');
+      b.id = `osc-seq-block-${r.id}`;
+      b.dataset.blockId = r.id;
+      b.style.position = 'absolute';
+      b.style.cursor = 'grab';
+      b.style.touchAction = 'none';
+      const name = document.createElement('span');
+      name.className = 'osc-block-name';
+      const detail = document.createElement('span');
+      detail.className = 'osc-block-detail';
+      b.append(name, detail);
+      timeline.insertBefore(b, marker);
+      blockEls.set(r.id, b);
+    }
+    const cls = `osc-block osc-block--${r.type}`;
+    if (b.className !== cls) b.className = cls;
+    setText(b.children[0], r.label);
+    setText(b.children[1], r.detail);
+    return b;
+  }
+
   function renderBlocks() {
     if (!timeline) return;
     const w = timeline.clientWidth || 400;
     const durationS = totalDuration(editor.model);
-    win = timelineWindow({ durationS, laneW: w });
+    const layout = (originPx, widthPx) => {
+      scale = createTimeScale({ durationS, widthPx, originPx,
+        minSpanS: TIMELINE_OPTIONS.minSpanS, headroomRatio: TIMELINE_OPTIONS.headroomRatio });
+      return layoutBlocks(editor.model, scale, { y: TIMELINE_OPTIONS.blockY,
+        height: TIMELINE_OPTIONS.blockH, gapPx: TIMELINE_OPTIONS.gapPx });
+    };
+    // The blocks' floors: the touch or pointer minimum, or more where the name needs it.
+    const floor = coarsePointer() ? TOUCH_BLOCK_PX : MIN_BLOCK_PX;
+    const blocks = layout(0, w).map((r) => ({ durationS: r.endS - r.startS,
+      minPx: Math.max(floor, nameNeedPx(blockEl(r), r.label)) }));
+    win = timelineWindow({ durationS, laneW: w, blocks, gapPx: TIMELINE_OPTIONS.gapPx });
     scrollPx = Math.min(win.maxScrollPx, Math.max(0, scrollPx));
-    scale = createTimeScale({ durationS, widthPx: win.contentPx, originPx: -scrollPx,
-      minSpanS: TIMELINE_OPTIONS.minSpanS, headroomRatio: TIMELINE_OPTIONS.headroomRatio });
-    rects = layoutBlocks(editor.model, scale, { y: TIMELINE_OPTIONS.blockY,
-      height: TIMELINE_OPTIONS.blockH, gapPx: TIMELINE_OPTIONS.gapPx });
+    rects = layout(-scrollPx, win.contentPx);
     const seen = new Set();
     let prev = null;
     for (const r of rects) {
       seen.add(r.id);
-      let b = blockEls.get(r.id);
-      if (!b) {
-        b = document.createElement('div');
-        b.setAttribute('role', 'option');
-        b.id = `osc-seq-block-${r.id}`;
-        b.dataset.blockId = r.id;
-        b.style.position = 'absolute';
-        b.style.cursor = 'grab';
-        b.style.touchAction = 'none';
-        const name = document.createElement('span');
-        name.className = 'osc-block-name';
-        const detail = document.createElement('span');
-        detail.className = 'osc-block-detail';
-        b.append(name, detail);
-        timeline.insertBefore(b, marker);
-        blockEls.set(r.id, b);
-      }
-      const cls = `osc-block osc-block--${r.type}`;
-      if (b.className !== cls) b.className = cls;
+      const b = blockEl(r);
       b.style.left = `${Math.round(r.x)}px`;
       b.style.top = `${r.y}px`;
       b.style.width = `${Math.max(4, Math.round(r.w))}px`;
-      setText(b.children[0], r.label);
-      setText(b.children[1], r.detail);
       setAttr(b, 'aria-selected', r.id === editor.selectedId ? 'true' : 'false');
       paintSounding(b, r.id);
       setAttr(b, 'aria-label', `${r.label} ${r.detail}, ${(r.endS - r.startS).toFixed(2)} s`);

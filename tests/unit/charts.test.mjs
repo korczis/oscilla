@@ -437,3 +437,37 @@ test('sequencer timeline window: fits until minPxPerS, then scrolls', () => {
   assert.ok(Math.abs(long.maxScrollPx - (long.contentPx - 500)) < 1e-9);
   assert.equal(timelineWindow({ durationS: 0, laneW: 0 }).maxScrollPx, 0);
 });
+
+// U022: the default five blocks (Tone, Sweep, Silence, Pulse, Chirp: 0.5, 0.5, 0.25, 0.5 and
+// 0.5 s; 2.25 s in all) at phone width. A block is drawn (px/s * duration - gap) wide, gap 4 px.
+const U022_BLOCKS_S = [0.5, 0.5, 0.25, 0.5, 0.5];
+const U022_GAP_PX = 4;
+const u022Blocks = (minPx) => U022_BLOCKS_S.map((durationS) => ({ durationS, minPx }));
+
+test('sequencer timeline window: the shortest block keeps 24 px (44 px coarse) at phone width '
+  + 'and the lane scrolls; the time scale stays linear (U022)', () => {
+  for (const minPx of [24, 44]) {
+    const win = timelineWindow({ durationS: 2.25, laneW: 350, blocks: u022Blocks(minPx),
+      gapPx: U022_GAP_PX });
+    const pxPerS = win.contentPx / win.spanS;
+    const shortest = pxPerS * 0.25 - U022_GAP_PX;
+    assert.ok(shortest >= minPx - 1e-9, `${minPx} px: the Silence block is ${shortest} px wide`);
+    assert.ok(win.maxScrollPx > 0, `${minPx} px: the lane scrolls (${win.maxScrollPx} px)`);
+    assert.equal(win.spanS, 3.75, 'the span is the duration window, not padded');
+  }
+  // A block needing more than the floor (its name) is honoured too: 60 px for the Silence.
+  const named = timelineWindow({ durationS: 2.25, laneW: 350, gapPx: U022_GAP_PX,
+    blocks: U022_BLOCKS_S.map((durationS, i) => ({ durationS, minPx: i === 2 ? 60 : 24 })) });
+  assert.ok((named.contentPx / named.spanS) * 0.25 - U022_GAP_PX >= 60 - 1e-9);
+  // Desktop: the default sequence already fits, the window is the merge base's (no scroll).
+  const wide = timelineWindow({ durationS: 2.25, laneW: 1536, blocks: u022Blocks(44),
+    gapPx: U022_GAP_PX });
+  assert.deepEqual(wide, { spanS: 3.75, contentPx: 1536, maxScrollPx: 0 });
+  // An empty sequence still shows minSpanS; a 10 ms block is reachable by scrolling.
+  assert.deepEqual(timelineWindow({ durationS: 0, laneW: 350, blocks: [], gapPx: 4 }),
+    { spanS: 3.75, contentPx: 350, maxScrollPx: 0 });
+  const tiny = timelineWindow({ durationS: 0.01, laneW: 350, gapPx: U022_GAP_PX,
+    blocks: [{ durationS: 0.01, minPx: 44 }] });
+  assert.ok((tiny.contentPx / tiny.spanS) * 0.01 - U022_GAP_PX >= 44 - 1e-9);
+  assert.ok(Number.isFinite(tiny.contentPx) && tiny.maxScrollPx > 0);
+});
