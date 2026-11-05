@@ -26,13 +26,19 @@
 //     `provisional` true, and the view names that rate. `others` counts the other unmuted
 //     edges into the same input, whose moving part adds to it
 //   xySounding(model, panel) -> { octaves } | null   how far the note the voice sounds lies from
-//     the pad's own note (xyDegree's, which its Pitch sends): the octaves every VCO the pad's
-//     Pitch reaches adds, VCO_SCALES of its footage (8' = 0, 16' = -1, 4' = +1) plus the constant
-//     part of its Pitch and FM inputs (the node's params and every cable's offset, the
-//     compiler's computeBases). Null, and the view names the pad's own note ("sends D3") rather
-//     than guess, when the Pitch reaches no cable, a target that is not a VCO's Pitch, a cable
-//     that does not pass 1.00 oct per octave, a shift of no whole octaves, or VCOs that disagree
-//     (VCO 1 at 16', VCO 2 at 8'). Tune (cents) is left out: a detune, never the note's octave
+//     the pad's own note (xyDegree's, which its Pitch sends). Each VCO the pad's Pitch reaches
+//     shifts it by VCO_SCALES of its footage (8' = 0, 16' = -1, 4' = +1) plus the constant part
+//     of its Pitch and FM inputs (the node's params and every cable's offset, the compiler's
+//     computeBases). Only the audible VCOs count: those with an audio path to the Output whose
+//     mixer levels (the product of the Mixer `levelN` of each input on the way, as compiled; a
+//     level that is not a number counts as 1) stay above DB_SCALE_FLOOR (studio/automation.js,
+//     -60 dB, the floor of the level scale), so a VCO turned all but off, or heard only through
+//     a muted Ring, decides nothing. The note named is the lowest audible VCO's: octave
+//     doubling (16' with 8') is heard at its lowest. Null, and the view names the pad's own
+//     note ("sends D3") rather than guess, when the Pitch reaches a target that is not a VCO's
+//     Pitch or no audible VCO, or an audible VCO's cable does not pass 1.00 oct per octave or
+//     its shift is no whole number of octaves (a fifth from FM or Pitch offsets). Tune (cents)
+//     is left out: a detune (the XY lead's VCO 2 a fifth up by Tune still names VCO 1's note)
 //   xyPatched(model, panel) -> bool        the pad's Pitch and Gate reach the voice
 //   xyCablesAction(model, panel, pairs, label) -> { action } | { reason }   cables, one BATCH
 //   xyTargetAction(model, panel, to) -> { action } | { reason }   Y moved to `to`, one BATCH
@@ -45,6 +51,7 @@ import { compileStudio, computeBases } from '../studio/compiler.js';
 import { PROVISIONAL_SAMPLE_RATE, safeMaximum } from '../sequencer/model.js';
 import { CENTS_PER_OCTAVE } from '../core/music.js';
 import { VCO_SCALES } from '../studio/nodes/instrument.js';
+import { DB_SCALE_FLOOR } from '../studio/automation.js';
 import { linkAction, linkOf } from './link.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
 import { SOURCE_RANGES, splitJack } from './panel.js';
@@ -96,24 +103,42 @@ const basesOf = (plan, pn, rate) => computeBases(pn, plan.edgeOrder.map((id) => 
   .map((e) => ({ edge: e, handle: { status: e.status, range: sourceRange(plan, e.from),
     scale: 1 } })), { safeMaximum: safeMaximum(rate) });
 
+const LEVEL_FLOOR = 10 ** (DB_SCALE_FLOOR / 20);
+/** The loudest mixer-level product of an audio path from node `id` to the Output (0: none). */
+function pathLevel(plan, id, seen = new Set()) {
+  if (seen.has(id)) return 0;
+  const n = plan.nodes.get(id);
+  if (!n) return 0;
+  if (n.type === 'master') return 1;
+  let best = 0;
+  for (const e of plan.edges.values()) {
+    if (e.kind !== 'audio' || e.from.node !== id || e.props.muted) continue;
+    const to = plan.nodes.get(e.to.node);
+    const m = to && to.type === 'mixer' && /^in(\d+)$/.exec(e.to.port);
+    const lv = m ? Number(to.params[`level${m[1]}`]) : 1;
+    const g = Number.isFinite(lv) ? Math.abs(lv) : 1;
+    if (g > 0) best = Math.max(best, g * pathLevel(plan, e.to.node, new Set([...seen, id])));
+  }
+  return best;
+}
+
 export function xySounding(model, panel) {
   const cables = cablesFrom(model, panel, 'xy.pitch');
   const plan = cables.length ? compileStudio(model, { engine: RUNNING }) : null;
-  const shifts = new Set();
+  const shifts = [];
   for (const c of cables) {
     const edge = plan.edges.get(c.id);
     if (edge && edge.props.muted) continue;
     const pn = edge && plan.nodes.get(edge.to.node);
-    if (!pn || pn.type !== 'vco' || edge.to.port !== 'pitch' || edge.props.mapping === 'log') {
-      return null;
-    }
+    if (!pn || pn.type !== 'vco' || edge.to.port !== 'pitch') return null;
+    if (pathLevel(plan, pn.id) <= LEVEL_FLOOR) continue; // not heard: it decides nothing
     const cb = basesOf(plan, pn, PROVISIONAL_SAMPLE_RATE);
-    if (Math.abs(cb.gains.get(edge.id) - 1) > 1e-9) return null; // not 1.00 oct per octave
+    if (edge.props.mapping === 'log' || Math.abs(cb.gains.get(edge.id) - 1) > 1e-9) return null;
     const oct = (VCO_SCALES[pn.params.scale] ?? 0) + cb.base.pitch.value + cb.base.fm.value;
     if (Math.abs(oct - Math.round(oct)) > 1e-9) return null;
-    shifts.add(Math.round(oct));
+    shifts.push(Math.round(oct));
   }
-  return shifts.size === 1 ? { octaves: [...shifts][0] } : null;
+  return shifts.length ? { octaves: Math.min(...shifts) } : null;
 }
 
 export function xyYReading(model, panel, { sampleRate = null } = {}) {

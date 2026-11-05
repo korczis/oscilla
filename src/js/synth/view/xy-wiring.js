@@ -44,9 +44,9 @@
 //
 // The pad's view (S3) is what the pad sends, drawn: each X cell is labelled by the note of
 // xyDegree, the function the runtime adapter quantises X with, at the x the mount sends for
-// that cell (xyCellX), moved by the octaves the patched VCOs add (xySounding: the note heard,
-// so XY bass at 16' names D2), or, when that is not one known note, the pad's own note said
-// as "sends D3" (the ring, X's aria-valuetext, the readout line and the range text alike);
+// that cell (xyCellX), moved by the octaves the lowest audible VCO adds (xySounding: the note
+// heard, so XY bass at 16' names D1 for the pad's D2), or, when no note is known, the pad's own
+// note said as "sends D3" (the ring, X's aria-valuetext, the readout line and the range text alike);
 // Y's readout is what its target plays at y, xyYReading's at(y) (the
 // compiler's own computeBases at the context's Nyquist limit, every cable's constant part in
 // it) in the target knob's own text (knob.js), "held" when the compiler scaled Y's excursion
