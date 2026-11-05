@@ -101,6 +101,17 @@ export const NOISE_FACTOR = 3;
 export const DIFF_FLOOR_PX = 24;
 export const FAINT_FLOOR_PX = 96;
 export const SEED_MARGIN = 1.5;
+/**
+ * Chromium's launch arguments. --disable-partial-raster: with partial raster on, a tile that
+ * was rastered before a later invalidation is re-rastered only inside the invalidated rect, and
+ * the knobs drawn that way antialias their arcs and curves differently from a full raster of the
+ * same tile. Which tiles take which path depends on frame timing, so desktop-bay-light came out
+ * bimodal (2 of 8 captures exactly 202 px / ~6,200 faint off, the rest 0-10 px) with the panel's
+ * markup byte-identical. With it off every tile is rastered whole: 64 of 64 local captures
+ * (darwin-arm64) were identical, against 7 of 48 in the second state with it on.
+ */
+export const LAUNCH_ARGS = Object.freeze(['--autoplay-policy=no-user-gesture-required',
+  '--disable-partial-raster']);
 
 /** A view's bounds from its recorded noise ({ runs, px, faint }), or null without enough runs. */
 export function bounds(noise) {
@@ -889,7 +900,7 @@ async function main(argv) {
   if (opts.refused.length) throw new Error(opts.refused.join('; '));
   const { chromium } = requireHere('playwright');
   mkdirSync(opts.out, { recursive: true });
-  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  const browser = await chromium.launch({ args: [...LAUNCH_ARGS] });
   const version = browser.version();
   let result;
   try {
