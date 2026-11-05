@@ -1269,10 +1269,12 @@
 
 /* The signal path and the clips side by side where both fit, the clips under the path where
    they do not (the 548 px column of the Playground's third row, P002), so the path is never
-   clipped: 424 px holds the default document's path (412 px) and its border. */
+   clipped: 448 px holds the default document's path with its padding and border in the widest
+   face measured (438 px of scroll width in DejaVu Sans on the linux CI runners, 412 px of path
+   on macOS; #386 with the Pro sidebar narrowed the row past the old 424). */
 .osc-sc-body {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 424px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 448px), 1fr));
   gap: 12px;
   min-width: 0;
 }

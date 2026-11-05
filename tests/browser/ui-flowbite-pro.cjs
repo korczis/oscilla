@@ -816,6 +816,10 @@ function defineChecks() {
           proCards: cards.filter((li) => ['bg-white', 'rounded-lg', 'border']
             .every((c) => li.classList.contains(c))).length,
           demos: view.querySelectorAll('[data-osc="learn.demo"].bg-primary-700').length,
+          demoButtons: view.querySelectorAll('[data-osc="learn.demo"]').length,
+          // A concept card (V617's Signal path) has no demo; it opens its patch by its link.
+          bare: cards.filter((li) => !li.querySelector('[data-osc="learn.demo"]')
+            && !li.querySelector('[data-osc="learn.link"]')).length,
           tools: [...view.querySelectorAll('[data-osc="learn.tool"]')]
             .map((a) => a.getAttribute('href')),
           legacy, small, coarse: matchMedia('(pointer: coarse)').matches };
@@ -824,7 +828,10 @@ function defineChecks() {
       res[w] = r;
       if (!r.pageSet) res.bad.push(`${w}: the page root lacks the Pro page set`);
       if (r.proCards !== r.cards) res.bad.push(`${w}: ${r.cards - r.proCards} topics not Pro cards`);
-      if (r.demos !== r.cards) res.bad.push(`${w}: ${r.cards - r.demos} demos not Pro primary`);
+      if (!r.demoButtons || r.demos !== r.demoButtons) {
+        res.bad.push(`${w}: ${r.demoButtons - r.demos} of ${r.demoButtons} demos not Pro primary`);
+      }
+      if (r.bare) res.bad.push(`${w}: ${r.bare} cards with neither a demo nor a link`);
       if (r.legacy.length) res.bad.push(`${w}: legacy classes ${r.legacy.join(' ')}`);
       if (!r.tools.length || !r.tools.every((t) => /^#m=[a-z]+$/.test(t))) {
         res.bad.push(`${w}: tool links ${r.tools.join(' ')}`);

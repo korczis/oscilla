@@ -9,7 +9,7 @@ const entry = (e) => ({ plan: ['G001', 'F002'],
 export default {
   'nav.groups': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/unit/v3-ui.test.mjs',
-      'tests/browser/app.cjs', 'tests/browser/demo-song.cjs'] }),
+      'tests/browser/app.cjs'] }),
   'nav.workspaces': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/unit/v3-ui.test.mjs',
       'tests/browser/app.cjs', 'tests/browser/qa-regressions.cjs',
