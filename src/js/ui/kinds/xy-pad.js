@@ -49,6 +49,8 @@ export function createXyModel({ x, y, value = {}, text = {}, onPreview = () => {
   const model = {
     get value() { return copy(); },
     get gated() { return gated; },
+    /** Whether pointer `id` holds the pad now. */
+    holds: (id) => touch.includes(id),
     /** Where the cursor is drawn, 0..1 per axis (an integer axis: its cell's centre). */
     fraction: () => ({ x: frac('x'), y: frac('y') }),
     text: (axis) => (text[axis] || axes[axis].text)(v[axis]),
@@ -220,6 +222,11 @@ export function mountXyPad(host, opts) {
     }),
     on(surface, 'pointerup', (e) => model.up(e.pointerId)),
     on(surface, 'pointercancel', () => model.end('cancel')),
+    // A capture lost while its pointer still holds the pad (the element re-rendered, another
+    // capture, the browser's own gesture) is a cancel; after a pointerup it changes nothing.
+    on(surface, 'lostpointercapture', (e) => {
+      if (model.holds(e.pointerId)) model.end('cancel');
+    }),
     on(surface, 'dblclick', () => { if (!disabled) model.reset(); }),
     on(group, 'keydown', (e) => {
       const axis = e.target.dataset && e.target.dataset.xyAxis;

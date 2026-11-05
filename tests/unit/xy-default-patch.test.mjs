@@ -9,7 +9,7 @@
 //
 // The reviewer's conditions on that design (K183, af 2026-11-05): the Y cable is drawn and named
 // as summing in the bay (jackState 'summing': the normal's inner glyph, the cable's colour on the
-// ring, "adds to the normals" in the jack's name and the cable list), Y is 0 until the first
+// ring, "normalled, plus XY PAD Y" in the jack's name, "adds to the normals" in the cable list), Y is 0 until the first
 // touch, the sum stays within LPF Cutoff's declared range (compiler.js computeBases holds the
 // upward excursion of every log edge at min(max, 0.95 x Nyquist); Y is unipolar with offset 0,
 // so it adds nothing downward), and n21 and n22 stay active edges of the running plan beside it.
@@ -225,8 +225,9 @@ test('the bay draws and names the Y cable as summing into LPF Cutoff', () => {
   const colour = tokens.cables[order.indexOf('xy') % tokens.cables.length];
   const sum = jack('lpf.frequency:in');
   const plain = jack('hpf.frequency:in');
-  assert.match(sum, /aria-label="[^"]*normalled, a performance cable adds to the normals"/);
-  assert.equal(STATE_TEXT.summing, 'normalled, a performance cable adds to the normals');
+  assert.match(sum, /aria-label="LPF Cutoff input, control, normalled, plus XY PAD Y"/,
+    'the jack names its normals and the cable that adds to them');
+  assert.equal(STATE_TEXT.summing, 'normalled, plus a performance cable');
   assert.equal(inner(sum), tokens.normal, 'the normals still sound: the normal\'s inner glyph');
   assert.equal(ring(sum), colour, 'the cable joins it: the ring takes the cable\'s colour');
   assert.equal(ring(plain), tokens.jackRing);
@@ -323,3 +324,150 @@ test('n21 and n22 stay active edges of the running plan with the Y cable in plac
   }
   assert.deepEqual(live(m, LPF_NORMALS), LPF_NORMALS, 'and they are the panel\'s normals');
 });
+
+test('Y never takes any target past its declared range: Hz targets capped, linear ones fitted',
+  () => {
+    // Every target Y may drive (xyTargets), its base at the bottom, the middle and the top of
+    // its range: what Y adds at its top (unipolar 0..1) stays inside the range the base and the
+    // other cables leave; a frequency stays at or below min(max, 0.95 x Nyquist) (review F7).
+    const sampleRate = 48000;
+    const safeMaximum = 0.95 * (sampleRate / 2);
+    let fitted = 0;
+    let checked = 0;
+    for (const t of xy.xyTargets(PANEL)) {
+      // A target the panel refuses Y (S&H Rate while its Clock is normalled) has no cable.
+      if (!xy.xyTargetAction(defaultStore().getModel(), PANEL, t.id).action) continue;
+      checked += 1;
+      const [mid, port] = t.id.split('.');
+      const def = NODE_REGISTRY.param(PANEL.module(mid).node, port);
+      for (const at of [def.min, (def.min + def.max) / 2, def.max]) {
+        const { st, rt } = runningDefault(sampleRate, (s) => {
+          const a = xy.xyTargetAction(s.getModel(), PANEL, t.id);
+          assert.ok(a.action, a.reason);
+          if (a.action.steps.length) assert.equal(s.dispatch(a.action).ok, true, t.id);
+          const node = PANEL.resolve(s.getModel()).get(mid);
+          assert.equal(s.dispatch({ type: 'NODE_PARAM_SET', nodeId: node.id,
+            params: { [port]: at } }).ok, true, `${t.id} = ${at}`);
+        });
+        const m = st.getModel();
+        const id = ids(m)(mid);
+        const plan = rt.plan;
+        const incoming = plan.edgeOrder.map((e) => plan.edges.get(e))
+          .filter((e) => e.to.node === id && e.kind === 'control' && e.to.port === port)
+          .map((edge) => ({ edge, handle: rt.edges.get(edge.id) }));
+        const y = incoming.find(({ edge }) => edge.from.node === ids(m)('xy'));
+        assert.ok(y && y.handle.status === 'active', `${t.id}: the Y cable is routed`);
+        const cb = computeBases(plan.nodes.get(id), incoming, { safeMaximum });
+        const b = cb.base[port];
+        const ext = (list, pick) => list.reduce((s, { edge, handle }) => {
+          const g = cb.gains.get(edge.id) || 0;
+          return s + pick(g * handle.range[0], g * handle.range[1]);
+        }, 0);
+        const others = incoming.filter((x) => x !== y);
+        const at1 = `${t.id} at ${at}`;
+        if (def.unit === 'Hz') {
+          const top = b.value * 2 ** ((b.cents + ext(incoming, Math.max)) / CENTS_PER_OCTAVE);
+          assert.ok(top <= Math.min(def.max, safeMaximum) * (1 + 1e-9), `${at1}: ${top} Hz`);
+          continue;
+        }
+        assert.equal(y.handle.fit, true, `${t.id}: Y is a performance output (its cable fits)`);
+        const rest = b.value + ext(others, Math.max);
+        const yUp = ext([y], Math.max);
+        assert.ok(yUp >= 0 && yUp <= Math.max(0, def.max - rest) + 1e-9,
+          `${at1}: Y adds ${yUp}, the range leaves ${def.max - rest}`);
+        assert.ok(b.value + ext(incoming, Math.max) <= Math.max(def.max, rest) + 1e-9, at1);
+        assert.ok(ext([y], Math.min) >= 0, `${at1}: Y adds nothing downward`);
+        if (cb.limited.has(y.edge.id)) fitted += 1;
+      }
+    }
+    assert.ok(checked >= 10, `every target Y may take is checked (${checked})`);
+    assert.ok(fitted > 0, 'some base leaves Y less than its depth: the fit is exercised');
+  });
+
+test('a legato opens no new gate: the Keys envelopes are gated once for the held note', async () => {
+  // Observed on the envelopes, not on the returned retrigger flag (review F8): the pad's move
+  // into another scale cell glides the Keys pitch and leaves EG 1 and EG 2 where they are.
+  const { createLiveNotes } = await import('../../src/js/studio/live-notes.js');
+  const m = defaultStore().getModel();
+  const id = ids(m);
+  const calls = [];
+  const keys = { play: (at, note, v, o) => calls.push(['play', note, !!(o && o.legato)]),
+    priority: () => 'last' };
+  const env = (name) => ({ gate: () => calls.push(['gate', name]),
+    release: () => calls.push(['release', name]) });
+  const handles = new Map([[id('keys'), keys], [id('eg1'), env('eg1')], [id('eg2'), env('eg2')]]);
+  const ln = createLiveNotes({ getModel: () => m, handleOf: (n) => handles.get(n) || null });
+  ln.event(id('keys'), { kind: 'on', note: 60, velocity: 100, at: 0 });
+  const gates = () => calls.filter((c) => c[0] === 'gate').length;
+  assert.equal(gates(), 2, 'the first note gates EG 1 and EG 2 once');
+  const r = ln.event(id('keys'), { kind: 'legato', from: 60, note: 64, velocity: 100, at: 0.1 });
+  assert.equal(r.top, 64);
+  assert.equal(gates(), 2, 'the legato opened no gate');
+  assert.deepEqual(calls.at(-1), ['play', 64, true], 'it moved the pitch as a legato');
+  assert.equal(calls.filter((c) => c[0] === 'release').length, 0, 'and released nothing');
+  ln.event(id('keys'), { kind: 'off', note: 64, at: 0.2 });
+  assert.equal(calls.filter((c) => c[0] === 'release').length, 2, 'the lift releases both');
+});
+
+test('Y is 0 until the first touch: an armed Synth hears no X or Y from the mount or an arrow',
+  async () => {
+    // Review F1: the keys arm the Synth first (the transport plays), then the XY tab mounts and
+    // nobody touches the pad; an arrow on the focused pad without a gate moves only the cursor.
+    const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
+    const { createXyModel } = await import('../../src/js/ui/kinds/xy-pad.js');
+    const st = defaultStore();
+    const fx = createFakeAudioEnv({ sampleRate: 48000 });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init());
+    const runtime = createStudioRuntime({ engine });
+    const real = createStudioTransport({ runtime, engine, store: st });
+    const evs = [];
+    const transport = Object.create(real, { live: { value: (nid, ev) => {
+      evs.push([nid, { ...ev }]);
+      return real.live(nid, ev);
+    } } });
+    const nodes = () => PANEL.resolve(st.getModel());
+    const sink = createSynthNotes({ get: () => ({ transport, handle: st }),
+      transport: () => transport, ensurePanel: () => true, cmp: () => null, say: () => {},
+      played: () => nodes().get('keys'), playedModule: () => 'keys', present: () => true, nodes,
+      panel: PANEL, ENGINE_IDS: [], syncArmed: () => {} });
+    const layer = createMidiNotes({ engine: null, route: () => sink });
+    assert.equal(layer.noteOn(60, 100, 'kbd-key').ok, true, 'a computer key arms the Synth');
+    layer.noteOff(60, 'kbd-key');
+    assert.equal(real.playing, true);
+    const fake = () => {
+      const kids = new Map();
+      return { setAttribute() {}, hasAttribute: () => false, removeAttribute() {},
+        innerHTML: '', textContent: '', hidden: false, value: '', selectedOptions: [{ text: '' }],
+        addEventListener() {}, removeEventListener() {},
+        querySelector(sel) {
+          if (!kids.has(sel)) kids.set(sel, fake());
+          return kids.get(sel);
+        } };
+    };
+    const mountPad = (box, opts) => {
+      const model = createXyModel(opts);
+      return { model, update() {}, destroy() { model.end('hide'); } };
+    };
+    const padId = nodes().get('xy').id;
+    const padEvs = () => evs.filter(([nid]) => nid === padId).map(([, e]) => e);
+    const mount = mountSynthXy(fake(), { store: st, transport, panel: PANEL, app: null,
+      notes: { noteOn: (...a) => layer.noteOn(...a), noteOff: (...a) => layer.noteOff(...a),
+        legato: (...a) => layer.legato(...a), velocity: () => 100, off() {} },
+      arm: () => true, mountPad });
+    const yOf = () => runtime.nodes.get(padId).outputs.y.offset.events.map((e) => e.value);
+    assert.deepEqual(padEvs(), [], 'the mount sends the pad\'s node nothing');
+    assert.ok(yOf().length > 0, 'the running pad node\'s Y is set');
+    assert.deepEqual([...new Set(yOf())], [0], 'Y rests at 0');
+    mount.view.model.key('ArrowUp');
+    assert.deepEqual(padEvs(), [], 'an arrow without a gate moves only the cursor');
+    assert.deepEqual([...new Set(yOf())], [0], 'Y still at 0');
+    mount.view.model.gate(true); // Enter held, or a touch: the gate opens
+    assert.equal(padEvs()[0].kind, 'on', 'the first touch is the first event the node hears');
+    mount.view.model.key('ArrowUp');
+    assert.equal(padEvs().at(-1).kind, 'move', 'with the gate open an arrow moves the node');
+    mount.view.model.end('release');
+    mount.destroy();
+    real.stop({ fast: true });
+    fx.advance(1);
+  });

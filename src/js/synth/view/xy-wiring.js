@@ -287,13 +287,21 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       return true;
     };
     const out = host.querySelector('[data-osc="synth.xy.readout"]');
-    const live = (kind, v) => {
-      const r = target.live(kind, v.x, v.y);
+    /** The readout under the pad: the cursor's note and Y, and whether the gate is open. */
+    const show = (v, r = null) => {
       const d = deg(v.x);
       out.textContent = `${d.name} · degree ${d.degree} of ${scale} · Y ${Math.round(v.y * 100)}`
         + ` % → ${to}${(r && r.held) || held !== null ? ' · gate open' : ''}`;
+    };
+    // The pad's node hears X and Y only from a touch on (K183 review F1): until the first
+    // onGate(true), and between touches, the cursor moves the readout alone, so Y stays at 0
+    // (the node's rest) and the Y cable adds nothing to its target before a touch.
+    const live = (kind, v) => {
+      const r = target.live(kind, v.x, v.y);
+      show(v, r);
       return r;
     };
+    const gated = () => held !== null || !!(view && view.model && view.model.gated);
     const press = (v) => { // the note under X, through the keys' note layer
       if (!input) return;
       held = deg(v.x).note;
@@ -362,7 +370,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
           input.legato(held, n, XY_SOURCE);
           held = n;
         }
-        live('move', v);
+        if (gated()) live('move', v); else show(v); // no gate: the cursor alone moves
       },
       onGate(open, v, reason) {
         keep(v);
@@ -376,7 +384,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
         if (reason !== 'release') target.release(reason);
       },
     });
-    live('move', pos);
+    show(pos); // the cursor shown; the node hears nothing before the first touch
     owns = 'xy-pad'; // mounted and playable: enabled from the first touch (K183)
   }
   const win = host.ownerDocument && host.ownerDocument.defaultView;

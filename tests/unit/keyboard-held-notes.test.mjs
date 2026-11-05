@@ -194,28 +194,36 @@ test('component: the XY pad as one more input of the keys, released with them', 
   assert.equal(cmp.kbdPad(null), null, 'a pad without a release is refused');
 });
 
-// K171 (review of #425, F4): the dock's fold hides the on-screen keys, so it lets go of the keys'
-// own notes (the computer keys' and the on-screen keys'), never the note of the XY pad that owns
-// the notes and made the dock fold: the pad's gate stays open and its note sounds on.
-test('component: the dock\'s fold releases the keys\' notes, never the XY pad\'s', async () => {
-  const { r, cmp, key } = await componentRig();
-  assert.equal(typeof cmp.kbdFoldRelease, 'function', 'the keyboard offers the fold release');
-  const closed = [];
-  const pad = cmp.kbdPad((why) => { closed.push(why); return 1; });
-  assert.equal(pad.noteOn(63, 100, 'kbd-xy').ok, true, 'the pad\'s note sounds');
-  key('keydown', 'KeyA');
-  assert.equal(r.engine.noteCount, 2, 'the pad\'s note beside a computer key\'s');
-  assert.equal(cmp.kbdFoldRelease(), 1, 'the fold lets go of the one held key');
-  r.fake.advance(1);
-  assert.equal(r.engine.noteCount, 1, 'the pad\'s note sounds on');
-  assert.deepEqual(closed, [], 'the pad\'s gate is not closed by the fold');
-  assert.equal(cmp.kbdHeld, '', 'nothing of the keys stays lit');
-  key('keyup', 'KeyA');
-  pad.noteOff(63, 'kbd-xy');
-  r.fake.advance(1);
-  assert.deepEqual(census(r), ZERO, 'the pad\'s own release frees it');
-  pad.off();
-});
+// K183 review F4, K171: a Disarm and the dock's fold let go of the keys' own notes
+// (kbdReleaseKeys, the fold's release in midi/dock-yield.js), never the XY pad's: the pad is not the keys; the panic (blur, hide, Escape, a
+// workspace switch, All Notes Off) still cuts the pad's note with the keys'.
+test('component: Disarm releases the keys\' notes and keeps the pad\'s; the panic cuts both',
+  async () => {
+    const { r, cmp, key } = await componentRig();
+    assert.equal(typeof cmp.kbdReleaseKeys, 'function', 'the keys-only release is offered');
+    const closed = [];
+    const pad = cmp.kbdPad((why) => { closed.push(why); return 1; });
+    assert.equal(pad.noteOn(63, 100, 'kbd-xy').ok, true, 'the pad\'s note sounds');
+    key('keydown', 'KeyA');
+    assert.equal(r.engine.noteCount, 2, 'the pad\'s note beside a computer key\'s');
+    cmp.kbdToggle(); // Disarm
+    r.fake.advance(1);
+    assert.equal(cmp.kbdArmedHere, false);
+    assert.equal(r.engine.noteCount, 1, 'Disarm let go of the key; the pad\'s note sounds on');
+    assert.deepEqual(closed, [], 'the pad\'s gate stays open');
+    key('keyup', 'KeyA');
+    cmp.kbdToggle(); // armed again
+    key('keydown', 'KeyD');
+    assert.equal(cmp.kbdReleaseKeys(), 1, 'the keys-only release: the one held key');
+    r.fake.advance(1);
+    assert.equal(r.engine.noteCount, 1, 'the pad\'s note sounds on');
+    key('keyup', 'KeyD');
+    cmp.kbdReleaseAll(); // the panic
+    r.fake.advance(1);
+    assert.ok(closed.length > 0, 'the panic closes the pad\'s gate');
+    assert.deepEqual(census(r), ZERO, 'and releases its note');
+    pad.off();
+  });
 
 // K178 (the owner's decision of 2026-11-05): the keys are armed at once in every workspace that
 // plays them; Arm switches a workspace's keys off and on, each on its own.

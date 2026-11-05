@@ -147,7 +147,7 @@ export function brokenByRemoval(model, panel) {
 
 export const STATE_TEXT = Object.freeze({
   normalled: 'normalled', patched: 'patched', free: 'free',
-  summing: 'normalled, a performance cable adds to the normals',
+  summing: 'normalled, plus a performance cable',
   open: 'open: normal removed in Studio',
   mixed: 'patched in Studio while its normal still sounds',
 });

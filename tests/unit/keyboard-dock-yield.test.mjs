@@ -506,11 +506,11 @@ test('no surface sets the dock state: dock-yield.js alone applies the rule', () 
   assert.deepEqual(having(/\bmountDockYield\b/), [own, 'src/js/midi/keyboard-ui.js'],
     'keyboard-ui.js is the one call site');
   assert.match(src['src/js/midi/keyboard-ui.js'],
-    /mountDockYield\(\{[^}]*release: kbdFoldRelease \}/,
-    'the fold releases through the keyboard\'s fold release (its own inputs, not the pad\'s)');
+    /mountDockYield\(\{[^}]*release: kbdReleaseKeys \}/,
+    'the fold releases the keys\' own notes (kbdReleaseKeys), never the pad\'s');
   assert.match(src['src/js/midi/keyboard-ui.js'],
-    /const kbdFoldRelease = \(\) => \(kb \? kb\.releaseAll\(\) : 0\);/,
-    'the fold release lets go of the keys\' own notes only');
+    /const kbdReleaseKeys = \(\) => \(kb \? kb\.releaseAll\(\) : 0\);/,
+    'the keys-only release lets go of the keys\' own inputs only');
   assert.deepEqual(having(/\bclaimNotes\s*\(/), [own, 'src/js/synth/view/xy-wiring.js'],
     'the XY mount is the one surface that claims the notes');
   assert.deepEqual(having(/keyboard\.handle/), [own], 'the handle is made in dock-yield.js');

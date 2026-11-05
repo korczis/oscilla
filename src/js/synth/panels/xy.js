@@ -7,7 +7,7 @@
 // normalled at the jack it feeds rather than replacing it (synth/normals.js), so the default Y
 // cable into LPF Cutoff (synth/xy.js xyInsertAction) leaves the filter's EG 2 and MG normals and
 // their amount knobs as they were. A cable from its Pitch or Gate replaces the keyboard's, as
-// any cable does (an XY preset patches them, synth/xy.js).
+// any cable does (no built-in XY preset patches them, K183 review F3).
 
 export const XY_TAB = Object.freeze({ id: 'xy', label: 'XY', title: 'XY performance pad',
   description: 'Touch the pad to play the voice the keys play: X picks a note of the scale, Y '

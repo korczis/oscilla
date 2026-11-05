@@ -95,15 +95,17 @@ export function patchLayout(source, width) {
 
 const STATE_LABEL = { open: 'open: normal removed in Studio',
   mixed: 'patched in Studio while its normal still sounds',
-  summing: 'normalled, a performance cable adds to the normals' };
+  summing: 'normalled, plus a performance cable' };
 
 /**
  * The accessible name of a jack: module, label, direction, signal type, its state and, while a
- * connection is pending, whether it can take the cable (with the refusal's sentence).
+ * connection is pending, whether it can take the cable (with the refusal's sentence). `plus`
+ * names what a summing jack's performance cable comes from ("normalled, plus XY PAD Y").
  */
-export function portLabel(source, j, st, verdict = null) {
+export function portLabel(source, j, st, verdict = null, plus = null) {
+  const state = st === 'summing' && plus ? `normalled, plus ${plus}` : STATE_LABEL[st] || st;
   const base = `${source.nameOf(j.module)} ${j.label} ${j.direction === 'in' ? 'input'
-    : 'output'}, ${PORT_VISUALS[j.type].noun}${st === 'free' ? '' : `, ${STATE_LABEL[st] || st}`}`;
+    : 'output'}, ${PORT_VISUALS[j.type].noun}${st === 'free' ? '' : `, ${state}`}`;
   if (!verdict) return base;
   return verdict.ok ? `${base}, can take the cable` : `${base}, refused: ${verdict.reason}`;
 }
@@ -126,6 +128,12 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
   // A patched input shows its cable's colour, the source module's (as the cable does).
   const feeders = new Map(cables.map((c) => [`${c.to}:in`, c.fromModule]));
   const feederOf = (key) => feeders.get(key) || null;
+  // What a summing jack's cable comes from, by name: its source module and jack ("XY PAD Y").
+  const outLabel = new Map(source.groups.flatMap((g) => g.jacks).map((x) => [x.key, x.label]));
+  const plusOf = (key) => {
+    const c = cables.find((x) => `${x.to}:in` === key);
+    return c ? `${source.nameOf(c.fromModule)} ${outLabel.get(`${c.from}:out`) || c.from}` : null;
+  };
   // Each module is a plate, a tonal gradient between two OSCILLA tokens; its label is the group
   // text below. Layers, bottom up: plates, labels, nuts, cables, jacks (on top of the cables'
   // hit paths, so a tap on a jack is the jack's), plugs (no pointer).
@@ -152,7 +160,8 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
         : st === 'summing' ? colourOf(src || j.module) : t.jackRing;
     const text = shortLabel(j.label, j.direction);
     return jackSvg({ key: j.key, x, y, shape: PORT_VISUALS[j.type].shape, tokens: t,
-      label: portLabel(source, j, st, pending && pending !== j.key ? verdicts.get(j.key) : null),
+      label: portLabel(source, j, st, pending && pending !== j.key ? verdicts.get(j.key) : null,
+        st === 'summing' ? plusOf(j.key) : null),
       pressed: pending === j.key, ring, dashed: st === 'open' || st === 'mixed',
       ringWidth: pending === j.key || compatible.has(j.key) ? 3.5 : 2,
       inner: st === 'patched' || st === 'mixed' ? colourOf(src || j.module)
