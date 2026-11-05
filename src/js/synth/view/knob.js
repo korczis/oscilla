@@ -6,6 +6,8 @@
 //   knobModel(param) -> { norm(v), value(t), angle(v), drag(v, dyPx, fine), key(v, key, shift),
 //                         parse(text) -> { ok, value } | { ok: false, reason }, format(v), text(v) }
 //   knobSvg({ id, value, param, model, tokens, bipolar }) -> SVG markup string
+//
+// ui-family: knob model
 
 import { validateParamValue } from '../../studio/registry.js';
 

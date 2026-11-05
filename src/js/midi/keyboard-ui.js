@@ -13,6 +13,8 @@
 // - The keys light up whoever plays them: the computer keyboard, a pointer, a MIDI input.
 // - While a note sounds, the analysis views show the live output (vizInputs: playing).
 // The controllers stay out of reactive state; the component holds plain values only.
+//
+// ui-family: keyboard skin dock
 
 import {
   createKeyboard, codeForNote, KEY_LABELS, noteName, playableEvent, visibleRange,
@@ -304,6 +306,7 @@ function trackDockHeight(win, doc) {
 function mountKeys(win, doc, kb) {
   const canvas = doc.querySelector('[data-osc="keyboard.keys"]');
   if (!canvas || typeof canvas.getContext !== 'function') return null;
+  canvas.dataset.uiFamily = 'keyboard'; // the keys the model holds, drawn by its canvas skin
   const box = canvas.parentElement;
   // The keyboard's place in the grid of the main area and the canvas size are set here until
   // the keyboard moves into its Pro card (plan F001 to F003, ADR 0061): it follows every panel

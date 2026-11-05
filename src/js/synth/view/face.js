@@ -7,6 +7,8 @@
 //   platesShown({ panel, tab, engine, resolved, model }) -> [module]   the plates of a tab: its
 //     modules (on Engines, the chosen one), after any module of another tab that is removed and
 //     breaks a normal (an engine gone from the shared chain silences what is before it)
+//
+// ui-family: knob skin hardware
 
 import { knobModel, knobSvg } from './knob.js';
 import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
@@ -70,7 +72,7 @@ function knobHtml(cid, c, value, reason, tokens) {
   const dis = reason ? ` aria-disabled="true" aria-describedby="${cid}-why"` : '';
   return `<div class="flex w-20 flex-col items-center gap-1" data-control="${cid}">`
     + `<span class="${LABEL} text-center leading-tight" id="${cid}-label">${esc(c.label)}</span>`
-    + `<div role="slider" tabindex="0" data-knob="${cid}" ${named(cid)} `
+    + `<div role="slider" tabindex="0" data-knob="${cid}" ${named(cid)} data-ui-family="knob" `
     + `aria-valuemin="${c.param.min}" aria-valuemax="${c.param.max}" aria-valuenow="${value}" `
     + `aria-valuetext="${esc(m.text(value))}" aria-orientation="vertical"${dis} `
     + 'class="h-16 w-16 cursor-ns-resize touch-none select-none rounded-full outline-none '
