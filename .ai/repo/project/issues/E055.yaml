@@ -1,0 +1,26 @@
+id: E055
+milestone: M046
+serves:
+  - "engineering-integrity#ci-path-gated"
+title: "Knowledge-integrity exemptions live in a data file under .ai/, so a plan PR stays path-gated"
+slug: knowledge-integrity-exemptions-live-in-a-data-file-under-ai
+priority: p2
+profile: implementation
+objective: "Lands as chore(ci). Proposing an ADR today means adding an entry to ADR_NOT_A_CAPABILITY inside tests/unit/knowledge-integrity.test.mjs, and a change under tests/ counts as runtime under E026's path gating, so plan train 5 (#430) ran the full suite (census and browser legs, about 40 min) for one exemption line. After: the exemptions (and any other plan-shaped allowance the knowledge tests read) live in a data file under .ai/repo/ (for example .ai/repo/knowledge/adr-exemptions.yaml), the test reads it, and a plan-only PR that proposes an ADR stays path-gated."
+why: "Measured on 2026-11-05 by b0 and af: #430 ran the full suite because of tests/unit/knowledge-integrity.test.mjs; proposal #2's rule 'plan records reach main within one landing slot' needs plan PRs to stay fast."
+scope:
+  - "tests/unit/knowledge-integrity.test.mjs"
+  - ".ai/repo/knowledge"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit: the exemption map is read from the data file; a fixture data file with an exemption for a cited ADR reports it stale, and one for an uncited ADR silences it; moving the current entries out of the test leaves V272 D8 green."
+  - "A plan-only change that adds an ADR and its exemption touches no path under tests/, so the changes job classifies it as plan-only (shown on a branch run of ci.yml's changes job)."
+  - "The data file is listed where the rule enforcement sections name the knowledge tests' inputs, so R033's guard sees it."
+validation:
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
