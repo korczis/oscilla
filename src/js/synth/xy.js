@@ -25,6 +25,14 @@
 //     44.1 kHz (sequencer/model.js safeMaximum, the rate automation.js paramBounds declares),
 //     `provisional` true, and the view names that rate. `others` counts the other unmuted
 //     edges into the same input, whose moving part adds to it
+//   xySounding(model, panel) -> { octaves } | null   how far the note the voice sounds lies from
+//     the pad's own note (xyDegree's, which its Pitch sends): the octaves every VCO the pad's
+//     Pitch reaches adds, VCO_SCALES of its footage (8' = 0, 16' = -1, 4' = +1) plus the constant
+//     part of its Pitch and FM inputs (the node's params and every cable's offset, the
+//     compiler's computeBases). Null, and the view names the pad's own note ("sends D3") rather
+//     than guess, when the Pitch reaches no cable, a target that is not a VCO's Pitch, a cable
+//     that does not pass 1.00 oct per octave, a shift of no whole octaves, or VCOs that disagree
+//     (VCO 1 at 16', VCO 2 at 8'). Tune (cents) is left out: a detune, never the note's octave
 //   xyPatched(model, panel) -> bool        the pad's Pitch and Gate reach the voice
 //   xyCablesAction(model, panel, pairs, label) -> { action } | { reason }   cables, one BATCH
 //   xyTargetAction(model, panel, to) -> { action } | { reason }   Y moved to `to`, one BATCH
@@ -36,6 +44,7 @@ import { createPatch, patchParams } from '../studio/patches.js';
 import { compileStudio, computeBases } from '../studio/compiler.js';
 import { PROVISIONAL_SAMPLE_RATE, safeMaximum } from '../sequencer/model.js';
 import { CENTS_PER_OCTAVE } from '../core/music.js';
+import { VCO_SCALES } from '../studio/nodes/instrument.js';
 import { linkAction, linkOf } from './link.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
 import { SOURCE_RANGES, splitJack } from './panel.js';
@@ -80,6 +89,33 @@ const sourceRange = (plan, from) => {
   return s ? s.range : [-1, 1]; // compiler.js DEFAULT_RANGE
 };
 
+/** computeBases of plan node `pn` over every CONTROL cable into it, as the runtime passes them
+ * (gains in parameter units or octaves: scale 1), at 0.95 x Nyquist of `rate`. */
+const basesOf = (plan, pn, rate) => computeBases(pn, plan.edgeOrder.map((id) => plan.edges.get(id))
+  .filter((e) => e.to.node === pn.id && e.kind === 'control')
+  .map((e) => ({ edge: e, handle: { status: e.status, range: sourceRange(plan, e.from),
+    scale: 1 } })), { safeMaximum: safeMaximum(rate) });
+
+export function xySounding(model, panel) {
+  const cables = cablesFrom(model, panel, 'xy.pitch');
+  const plan = cables.length ? compileStudio(model, { engine: RUNNING }) : null;
+  const shifts = new Set();
+  for (const c of cables) {
+    const edge = plan.edges.get(c.id);
+    if (edge && edge.props.muted) continue;
+    const pn = edge && plan.nodes.get(edge.to.node);
+    if (!pn || pn.type !== 'vco' || edge.to.port !== 'pitch' || edge.props.mapping === 'log') {
+      return null;
+    }
+    const cb = basesOf(plan, pn, PROVISIONAL_SAMPLE_RATE);
+    if (Math.abs(cb.gains.get(edge.id) - 1) > 1e-9) return null; // not 1.00 oct per octave
+    const oct = (VCO_SCALES[pn.params.scale] ?? 0) + cb.base.pitch.value + cb.base.fm.value;
+    if (Math.abs(oct - Math.round(oct)) > 1e-9) return null;
+    shifts.add(Math.round(oct));
+  }
+  return shifts.size === 1 ? { octaves: [...shifts][0] } : null;
+}
+
 export function xyYReading(model, panel, { sampleRate = null } = {}) {
   const c = cablesFrom(model, panel, 'xy.y')[0];
   if (!c) return null;
@@ -93,13 +129,7 @@ export function xyYReading(model, panel, { sampleRate = null } = {}) {
   if (!pn || !param || !edge) return null;
   const provisional = !(sampleRate > 0);
   const rate = provisional ? PROVISIONAL_SAMPLE_RATE : sampleRate;
-  // Every CONTROL cable into the node, as the runtime passes them (gains in parameter units or
-  // octaves: scale 1), sized at this context's 0.95 x Nyquist.
-  const incoming = plan.edgeOrder.map((id) => plan.edges.get(id))
-    .filter((e) => e.to.node === pn.id && e.kind === 'control')
-    .map((e) => ({ edge: e, handle: { status: e.status, range: sourceRange(plan, e.from),
-      scale: 1 } }));
-  const cb = computeBases(pn, incoming, { safeMaximum: safeMaximum(rate) });
+  const cb = basesOf(plan, pn, rate); // sized at this context's 0.95 x Nyquist
   const b = cb.base[port];
   if (!b) return null; // not a modulatable parameter: no cable sizes it
   const g = cb.gains.get(edge.id) || 0;

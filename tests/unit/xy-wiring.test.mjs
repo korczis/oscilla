@@ -331,7 +331,9 @@ test('phone first open edits nothing: the button states what it does, one undo e
   const after = r.mount({ phone: () => true }); // synth/ui.js re-mounts after the edit
   assert.equal(after.view.opts.disabled, null);
   const stated = r.host.querySelector('[data-xy-default]').textContent;
-  assert.match(stated, /^Default: C Minor pentatonic over 2 oct from C3; Y drives LPF Cutoff/i);
+  // The panel's VCOs sit at 16' and 8': no one note heard, so the range names what the pad sends.
+  assert.match(stated, new RegExp('^Default: C Minor pentatonic over 2 oct from C3 '
+    + "\\(the note the pad sends\\); Y drives LPF Cutoff", 'i'));
   assert.match(stated, /the XY lead's scale and target/);
   const first = r.host.querySelector('[data-xy-first]');
   assert.equal(first.textContent, XY_TEXT.first);
@@ -450,8 +452,10 @@ test('each cell is named by the note the runtime plays there, for every scale, k
         const pitch = ev[ev.length - 1].value; // the last step set on the pitch AudioParam
         const played = midiToName(69 + 12 * pitch);
         const what = `${sc.key} ${sc.mode} span ${sc.span} cell ${i}`;
-        assert.equal(opts.readout.x(i), played, `${what}: the ring's note`);
-        assert.ok(model.text('x').startsWith(`${played}, degree `), `${what}: X's aria-valuetext`);
+        // The panel's VCOs at 16' and 8' agree on no octave: the pad names what it sends.
+        assert.equal(opts.readout.x(i), `sends ${played}`, `${what}: the ring's note`);
+        assert.ok(model.text('x').startsWith(`sends ${played}, degree `),
+          `${what}: X's aria-valuetext`);
         const c = opts.cells[i];
         assert.equal(c.label, steps <= 15 || c.root ? played
           : NOTE_NAMES[NOTE_NAMES.indexOf(played.replace(/-?\d+$/, ''))], `${what}: its label`);
@@ -462,6 +466,75 @@ test('each cell is named by the note the runtime plays there, for every scale, k
       stopNow(r);
     }
   });
+
+/**
+ * A preset (and panel values) touched at a cell: the note each VCO the pad drives sounds on
+ * the running graph (its oscillator's frequency x 2^(the edge gain x the pad's Pitch), named),
+ * and the mount's texts for that cell.
+ */
+function heardAt(id, values = {}) {
+  const r = rig({ patch: false });
+  assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, id).action).ok, true);
+  const res = PANEL.resolve(r.st.getModel());
+  for (const [jack, value] of Object.entries(values)) {
+    const [mod, key] = jack.split('.');
+    assert.equal(r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId: res.get(mod).id, key, value })
+      .ok, true);
+  }
+  const m = r.mount();
+  hold(r, m);
+  const i = m.view.model.value.x;
+  const last = (prm) => prm.events.length ? prm.events[prm.events.length - 1].value : prm.value;
+  const pitch = last(r.runtime.nodes.get(r.padId).outputs.pitch.offset); // the pad's Pitch
+  const doc = r.st.getModel();
+  const heard = doc.graph.edges.filter((e) => e.from.node === r.padId && e.from.port === 'pitch')
+    .map((e) => {
+      const osc = r.runtime.nodes.get(e.to.node).outputs.audio;
+      const g = last(r.runtime.edges.get(e.id).gain.gain);
+      return midiToName(69 + 12 * Math.log2((last(osc.frequency) * 2 ** (g * pitch)) / 440));
+    });
+  const out = { sent: midiToName(69 + 12 * pitch), heard, ring: m.view.opts.readout.x(i),
+    aria: m.view.model.text('x'), stated: r.host.querySelector('[data-xy-default]').textContent };
+  m.view.model.up(1);
+  m.destroy();
+  stopNow(r);
+  return out;
+}
+
+test('XY bass names the note heard: both VCOs at 16\', an octave under the pad\'s Pitch', () => {
+  const bass = heardAt('xy-bass');
+  assert.deepEqual(new Set(bass.heard).size, 1, 'both VCOs sound one note');
+  assert.notEqual(bass.heard[0], bass.sent, "16' sounds an octave under the pad's Pitch");
+  assert.equal(bass.ring, bass.heard[0], 'XY bass: the ring names the note heard');
+  assert.ok(bass.aria.startsWith(`${bass.heard[0]}, degree `), bass.aria);
+  assert.match(bass.stated, /over 1 oct from D1;/, 'the range from the note heard (pad D2)');
+});
+
+test('XY lead names the note heard: both VCOs at 8\', the pad\'s own note (as before)', () => {
+  const lead = heardAt('xy-lead');
+  assert.deepEqual(lead.heard, [lead.sent, lead.sent]);
+  assert.equal(lead.ring, lead.sent);
+  assert.match(lead.stated, /over 2 oct from C3;/);
+});
+
+test('XY bell with both VCOs at 4\' names the note heard: an octave above the pad\'s Pitch', () => {
+  const bell4 = heardAt('xy-bell', { 'vco2.scale': '4' });
+  assert.equal(new Set(bell4.heard).size, 1);
+  assert.notEqual(bell4.heard[0], bell4.sent);
+  assert.equal(bell4.ring, bell4.heard[0], "4': the ring names the note heard");
+  assert.ok(bell4.aria.startsWith(`${bell4.heard[0]}, degree `), bell4.aria);
+});
+
+test('VCOs that disagree on the octave: the pad names the note it sends, never a guess', () => {
+  // XY bell as built: VCO 1 at 4', VCO 2 at 8'; XY bass with VCO 2 moved to 8'.
+  for (const [id, values] of [['xy-bell', {}], ['xy-bass', { 'vco2.scale': '8' }]]) {
+    const v = heardAt(id, values);
+    assert.equal(new Set(v.heard).size, 2, `${id}: the two VCOs sound different octaves`);
+    assert.equal(v.ring, `sends ${v.sent}`, `${id}: the ring`);
+    assert.ok(v.aria.startsWith(`sends ${v.sent}, degree `), `${id}: ${v.aria}`);
+    assert.match(v.stated, /\(the note the pad sends\);/, `${id}: ${v.stated}`);
+  }
+});
 
 test('Y reads what its target plays: the compiler\'s own sizing at the context\'s Nyquist', () => {
   for (const sampleRate of [44100, 48000]) {
