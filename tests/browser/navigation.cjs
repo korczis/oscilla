@@ -62,7 +62,11 @@
 //                     not claimed: read from the keydown, not from a window of time); a focused
 //                     link in Studio keeps Space (nothing starts)
 //   space-after-preset-load  (review of #159) Load in Presets stays in Presets and says "Press
-//                     TRIGGER (or Space)"; with focus off a control, Space plays the preset
+//                     Play in the status bar (or Space)"; with focus off a control, Space plays
+//                     the preset
+//   play-visible-everywhere  (C030) at 1536x1024 Analyzer, Filter Lab, Compare and Presets show
+//                     the status-bar Play inside the viewport; a click starts an engine source
+//                     and a second click returns the engine's active source count to 0
 //   space-compact-studio-panel  (review of #159) in the Playground and the Sequencer the compact
 //                     Studio panel takes focus only on its buttons; after a click on its title,
 //                     Space is the instrument's, never the Studio transport's
@@ -1067,8 +1071,8 @@ function defineChecks() {
       focusedLinkKeepsSpace: onLink.heard === 'none' && !onLink.claimed }), wrong, got, onLink };
   });
 
-  // Review of #159: Presets says "Press TRIGGER (or Space) to play it" after Load and stays in
-  // Presets, where no Play control is shown at this width. Space must do what the notice says.
+  // Review of #159: Presets says "Press Play in the status bar (or Space) to play it" after
+  // Load (C030) and stays in Presets. Space must do what the notice says.
   def('space-after-preset-load', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     await H.navTo(page, 'presets');
@@ -1091,6 +1095,51 @@ function defineChecks() {
       noticeNamesSpace: /Space/.test(loaded.said),
       spacePlaysIt: space.heard === 'instrument',
     }), loaded, controls, space };
+  });
+
+  // C030: Analyzer, Filter Lab, Compare and Presets show no Hold to Play or Trigger at
+  // 1536x1024; the status-bar Play (the instrument's statusPlay, no new player) is shown there,
+  // a click starts engine sources and a second click stops them all. Continuous playback is
+  // allowed so the first click latches and the tone cannot end on its own before the Stop.
+  def('play-visible-everywhere', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    await page.evaluate(() => window.OSCILLA.app.setContinuous(true));
+    const sources = () => page.evaluate(() => window.OSCILLA.engine.activeSourceCount);
+    const reached = (pred, opts) => until(pred, opts).then(() => true,
+      (e) => (e && e.name === 'WaitTimeout' ? false : Promise.reject(e)));
+    const view = page.viewportSize();
+    const got = {};
+    for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
+      await H.navTo(page, ws);
+      const play = page.locator('[data-osc="status.play"]');
+      const box = await play.isVisible() ? await play.boundingBox() : null;
+      const shown = !!box && box.width > 0 && box.y >= 0 && box.y + box.height <= view.height
+        && box.x >= 0 && box.x + box.width <= view.width;
+      const r = { shown, started: false, stopped: false };
+      got[ws] = r;
+      if (!shown) continue;
+      await play.click();
+      r.started = await reached(async () => (await sources()) > 0,
+        { ms: 8000, what: `${ws}: the status-bar Play starts an engine source` });
+      if (r.started) {
+        await play.click();
+        r.stopped = await reached(async () => (await sources()) === 0,
+          { ms: 8000, what: `${ws}: a second click on Play stops every engine source` });
+      }
+      r.label = await play.getAttribute('aria-label');
+    }
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.stopNow();
+      a.setContinuous(false);
+    });
+    await page.close();
+    const each = (f) => Object.values(got).every(f);
+    return { ...H.verdict({
+      playShown: each((g) => g.shown),
+      playStarts: each((g) => g.started),
+      playStops: each((g) => g.stopped),
+    }), got };
   });
 
   // Review of #159: the compact Studio panel (Playground, Sequencer) has no Space of its own.

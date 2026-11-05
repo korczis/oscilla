@@ -28,6 +28,7 @@ import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
+import { playControl, playPrompt as playPromptFor } from './shortcuts.js';
 import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
 import {
   LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam,
@@ -390,6 +391,20 @@ export function createWorkbench(svc) {
     ppErrorId(d) { return `${this.ppId(d)}-error`; },
 
     // ------------------------------------------------------------------ transport extras
+    /**
+     * C030: the status-bar Play is shown at every width where the workspace's instrument has
+     * no Hold to Play or Trigger on screen (shortcuts.js playControl 'status': Analyzer,
+     * Filter Lab, Compare, Presets); below 768 px responsive.css shows it everywhere.
+     */
+    get statusPlayShown() { return playControl(this.workspace) === 'status'; },
+    /**
+     * The ready notice's words name the Play control `workspace` (default: in view) shows. A
+     * workspace that plays nothing itself (Learn: its demo opens the Playground or Synthesis)
+     * keeps the Source & Pattern words.
+     */
+    playPrompt(verb = 'play it', workspace = this.workspace) {
+      return playPromptFor(workspace, this.isProgrammed, verb);
+    },
     /**
      * Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger.
      * Sounding is what the key shows (isSounding) or the sequencer's live state (C001: the

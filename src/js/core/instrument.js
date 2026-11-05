@@ -931,13 +931,20 @@ export function createInstrument(deps = {}) {
       if (headphonesConfirmed && p.cfg.dual?.binaural) this.dual.binaural = true;
       const { issues, also } = restoreRecordLabs(this, p, 'preset', cfgIssues); // V2, C018
       this.loadedLabel = p.name;
-      const play = this.isProgrammed ? 'Press TRIGGER (or Space) to play it.' : 'Press and hold HOLD TO PLAY.';
+      const play = this.playPrompt('play it');
       if (issues) {
         this.notify('warning', 'Preset partly applied',
           `${issues} value(s) were invalid and kept at their previous setting.${also ? ` ${also}` : ''}`);
       } else this.notify('success', `Loaded “${p.name}”`, also ? `${also} ${play}` : play);
     },
 
+
+    // How a ready notice says to play what was loaded: V1 names Source & Pattern's Trigger and
+    // Hold to Play; ui/workbench.js names the Play the workspace in view shows (C030).
+    playPrompt(verb = 'play it') {
+      return this.isProgrammed ? `Press TRIGGER (or Space) to ${verb}.`
+        : 'Press and hold HOLD TO PLAY.';
+    },
 
     // V1: oscillaApp.loadCustomPresets, migratePreset, persistPresets -> storage.js
     loadCustomPresets() {
@@ -1111,7 +1118,8 @@ export function createInstrument(deps = {}) {
       this.applyConfig(d.cfg, 'learn');
       if (d.viz) this.vizMode = d.viz;
       this.loadedLabel = d.label;
-      this.notify('success', `Demo ready: ${d.label}`, this.isProgrammed ? 'Press TRIGGER (or Space) to hear it.' : 'Press and hold HOLD TO PLAY.', { action });
+      // Learn opens the Playground or Synthesis next, where Hold to Play and Trigger are shown.
+      this.notify('success', `Demo ready: ${d.label}`, this.playPrompt('hear it'), { action });
     },
 
 

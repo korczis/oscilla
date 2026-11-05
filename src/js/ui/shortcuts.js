@@ -4,7 +4,8 @@
 // Space has one owner in each workspace, the same at every width:
 //   'instrument'  the workspaces that play, load or analyse the instrument's signal:
 //                 Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer and Presets
-//                 (Load readies the instrument and says "Press TRIGGER (or Space)"). Space is
+//                 (Load readies the instrument and its notice names the Play shown there,
+//                 playPrompt: the status-bar Play in Presets). Space is
 //                 Hold to Play (V1, frozen): held, it plays; released, it stops; a programmed
 //                 pattern triggers once. It is so whether or not a Play control is on screen:
 //                 Hold and Trigger are laid out by width, the owner is not.
@@ -134,6 +135,39 @@ export function spaceOwner(workspace) {
 /** True when the instrument's Hold to Play may answer Space in `workspace`. */
 export function instrumentTakesSpace(workspace) {
   return spaceOwner(workspace) === 'instrument';
+}
+
+/**
+ * The workspaces whose Source & Pattern panel, with Hold to Play and Trigger, is on screen at
+ * every width: the panel's data-osc-modes in src/index.html (tests/unit/workspace-play-visible
+ * reads both). Analyzer, Filter Lab and Compare show that panel only below 1280 px, Presets
+ * never, so there the status-bar Play is shown at every width (C030).
+ */
+export const SOURCE_PANEL_WORKSPACES = Object.freeze(['playground', 'sequencer', 'synthesis']);
+
+/**
+ * The Play control `workspace` shows, derived from its Space owner (C030): 'source' (Hold to
+ * Play and Trigger of Source & Pattern), 'status' (the status-bar Play, the instrument's own
+ * statusPlay), 'studio' (the Studio transport's Play) or null (nothing there plays the
+ * instrument or Studio; the Synth plays from its keys).
+ */
+export function playControl(workspace) {
+  const owner = spaceOwner(workspace);
+  if (owner === 'studio') return 'studio';
+  if (owner !== 'instrument') return null;
+  return SOURCE_PANEL_WORKSPACES.includes(workspace) ? 'source' : 'status';
+}
+
+/**
+ * The words a ready notice ends with: how to play what was loaded, naming the control
+ * `workspace` shows (playControl). `programmed` is a pattern that triggers once.
+ */
+export function playPrompt(workspace, programmed, verb = 'play it') {
+  if (playControl(workspace) === 'status') {
+    return programmed ? `Press Play in the status bar (or Space) to ${verb}.`
+      : `Press Play in the status bar, or hold Space, to ${verb}.`;
+  }
+  return programmed ? `Press TRIGGER (or Space) to ${verb}.` : 'Press and hold HOLD TO PLAY.';
 }
 
 /** A Space key event, by character or by physical key. */
