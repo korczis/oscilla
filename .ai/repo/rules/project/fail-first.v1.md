@@ -139,9 +139,10 @@ What it cannot see:
   into `main` as `main` stood when the run started, with the program `origin/main` held then,
   and the pull request merged on that run however old it was: a change to this rule or to
   `scripts/fail-first.mjs` that landed on `main` after the run did not judge it, and nothing
-  judged it later, because this job runs only for a pull
-  request and `ci.yml` does not run on a push to `main`. Merging `main` into the branch
-  started a run that did, and while the relaxation held nothing required it.
+  judged it later, because this job runs only for a pull request (and, since ADR 0083, for
+  its merge-queue entry on `merge_group`, once the owner's ruleset requires the queue) and
+  `ci.yml` does not run on a push to `main`. Merging `main` into the branch started a run
+  that did, and while the relaxation held nothing required it.
 - A merge that bypasses branch protection. An administrator's merge past protection is the
   owner's and is not checked here (`project.review-verdict` says the same of itself).
 

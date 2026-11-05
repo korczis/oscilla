@@ -112,8 +112,8 @@ disarmed by hand, because nothing would have noticed them landing.
   between prepare and publish does not invalidate a receipt. Anything else does, a
   documentation change included, and so does any other file under `.ai/repo/releases/` (its
   README, a subdirectory): the rule does not guess which files the gate reads.
-- A `chore(release)` pull request landed by merge commit whose tree equals the prepared tree
-  verifies: the digest is over content, not over commits.
+- A squash-merged `chore(release)` pull request whose tree equals the prepared tree verifies:
+  the digest is over content, not over commits.
 - After any other merge to main, run `npm run release:prepare` again on main. `package.json`
   already carries the untagged version, so it confirms it without a second bump, re-runs the
   full gate and writes a new receipt; unless the merge raised the required level (a `feat`
