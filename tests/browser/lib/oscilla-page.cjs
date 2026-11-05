@@ -15,6 +15,7 @@
 // so neither the analyser's smoothing nor the host's frame rate decides a result.
 'use strict';
 
+const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { until } = require('./wait.cjs');
 
@@ -31,9 +32,28 @@ const LAUNCH = Object.freeze({
   webkit: {},
 });
 
-/** The workspaces of the shell, in navigation order (ui/app.js MODES). */
-const WORKSPACES = Object.freeze(['playground', 'measure', 'experiments', 'analyzer', 'filter',
-  'compare', 'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about']);
+/**
+ * The workspaces of the shell, in navigation order, read from the code (ui/app.js WORKSPACES)
+ * and not restated: a hard-coded twelve left Synth out of the census's discovery, so no Synth
+ * control reached its every-control-has-a-row check (#399, M1). `loadWorkspaces()` fills it
+ * (openApp awaits it); reading `WORKSPACES` before then throws instead of walking nothing.
+ */
+const workspaces = [];
+async function loadWorkspaces() {
+  if (!Object.isFrozen(workspaces)) {
+    const app = await import(pathToFileURL(path.join(__dirname, '..', '..', '..', 'src', 'js',
+      'ui', 'app.js')).href);
+    workspaces.push(...app.WORKSPACES);
+    Object.freeze(workspaces);
+  }
+  return workspaces;
+}
+function loadedWorkspaces() {
+  if (!Object.isFrozen(workspaces)) {
+    throw new Error('oscilla-page: WORKSPACES read before loadWorkspaces() (or openApp) ran');
+  }
+  return workspaces;
+}
 
 /**
  * A fresh context and page on dist, ready, with the safety notice collapsed and a running
@@ -43,6 +63,7 @@ const WORKSPACES = Object.freeze(['playground', 'measure', 'experiments', 'analy
 async function openApp(browser, { dist, query = '', hash = '', audio = true, init = null,
   keepAlerts = false, keepSafety = false,
   viewport = { width: 1536, height: 1024 }, timeout = 10000 } = {}) {
+  await loadWorkspaces();
   const context = await browser.newContext({ viewport, acceptDownloads: true });
   for (const fn of [].concat(init || [])) await context.addInitScript(fn);
   const page = await context.newPage();
@@ -86,10 +107,12 @@ async function navTo(page, ws) {
     { ms: NAV_MS, what: `workspace ${ws} shown after its navigation item` });
 }
 
-/** Workspaces searched by reveal(), the instrument's own first. */
-const REVEAL_ORDER = Object.freeze(['playground', 'synthesis', 'filter', 'sequencer',
-  'analyzer', 'compare', ...WORKSPACES.filter((w) => !['playground', 'synthesis', 'filter',
-    'sequencer', 'analyzer', 'compare'].includes(w))]);
+/** Workspaces searched by reveal(), the instrument's own first, then every other one. */
+// workspace-subset: the instrument's own panels are searched first
+const REVEAL_FIRST = Object.freeze(['playground', 'synthesis', 'filter', 'sequencer', 'analyzer',
+  'compare']);
+const revealOrder = () => [...REVEAL_FIRST,
+  ...loadedWorkspaces().filter((w) => !REVEAL_FIRST.includes(w))];
 
 /**
  * Show the control `sel` the way a user reaches it: nothing when it is shown already or sits
@@ -108,7 +131,7 @@ async function reveal(page, sel) {
   const now = await shown();
   if (now !== 'hidden') return null;
   const here = await page.evaluate(() => window.OSCILLA.app.workspace);
-  for (const ws of REVEAL_ORDER) {
+  for (const ws of revealOrder()) {
     if (ws === here) continue;
     await navTo(page, ws);
     if (await shown() === 'shown') return ws;
@@ -347,5 +370,6 @@ function matchInPage(selectors) {
   return res;
 }
 
-module.exports = { LAUNCH, WORKSPACES, OPEN_MS, openApp, startAudio, navTo, reveal, snapshot,
-  toneDbInPage, outputInPage, clip, toneDb, output, steadyDb, discoverInPage, matchInPage, until };
+module.exports = { LAUNCH, get WORKSPACES() { return loadedWorkspaces(); }, loadWorkspaces,
+  OPEN_MS, openApp, startAudio, navTo, reveal, snapshot, toneDbInPage, outputInPage, clip, toneDb,
+  output, steadyDb, discoverInPage, matchInPage, until };

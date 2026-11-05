@@ -30,9 +30,10 @@
 //             whose control is no longer listed fails, so the row becomes a drive or a
 //             delegated row in the change that pays it.
 //
-// Discovery. On a page of its own each leg visits every workspace and lists every element that
-// is a control (a form field, a button, a link, an element with an interactive role or a tab
-// stop), shown or not. A control that no row's selector matches fails the leg ("no row"); so
+// Discovery. On a page of its own each leg visits every workspace (op.WORKSPACES, read from
+// src/js/ui/app.js) and the views a workspace renders only while shown (VIEWS: the Synth's
+// tabs and engines), and lists every element that is a control (a form field, a button, a
+// link, an element with an interactive role or a tab stop), shown or not. A control that no row's selector matches fails the leg ("no row"); so
 // does a delegated or debt row whose selector matches nothing ("stale row"). `--unrowed` prints
 // the controls without a row and exits 1.
 //
@@ -1317,6 +1318,7 @@ row({ id: 'measure.calImport.pointer', ws: 'measure', control: '[data-osc="measu
 // ------------------------------------------------------------------------------ families
 // A family row drives every member it finds, by pointer and by keyboard, in one page per
 // workspace; `each(page, member)` returns null when the member round-trips, else the reason.
+// `viewport` opens that page at another size (a phone's, for what shows only below xl).
 const FAMILIES = [];
 const family = (f) => FAMILIES.push({ kind: 'family', ...f });
 
@@ -1385,6 +1387,7 @@ family({ id: 'disclosure', control: '[data-osc$=".collapse"]',
   run: async (page) => {
     const bad = [];
     let members = 0;
+    // workspace-subset: the workspaces whose panels carry a collapse button
     for (const ws of ['playground', 'analyzer', 'compare']) {
       await op.navTo(page, ws);
       const ids = await page.$$eval('[data-osc$=".collapse"]', (b) => b.filter((e) =>
@@ -1426,6 +1429,7 @@ family({ id: 'fullscreen', control: FS,
   run: async (page) => {
     const bad = [];
     let members = 0;
+    // workspace-subset: the workspaces whose panels carry a fullscreen button
     for (const ws of ['analyzer', 'synthesis', 'studio']) {
       await op.navTo(page, ws);
       if (ws === 'analyzer') await page.click('#osc-atab-spectrogram');
@@ -1717,6 +1721,560 @@ row({ id: 'library.tag.pointer', ws: 'synth', control: '[data-osc="library.tag"]
   act: D.select('[data-osc="library.tag"]', 'xy'),
   expect: (s, b, x) => x.length > 0 && x.length < b.x.length });
 
+// ---- The Synth workspace's own face (synth/ui.js; #399 M1): its knobs, choices, toggles,
+// module cards, section and face chips, engines, the patch bay's jacks and the XY pad. The
+// census reached none of them while its workspace list was written out without Synth. Each
+// family visits every Synth view the discovery visits (VIEWS.synth) and drives each member it
+// finds there once; the effect is read where it lives: the Studio document (a node's params,
+// an edge and its props), the control's own ARIA state, the region it shows, and the sentence
+// the Synth says (app.synth.status) when it refuses a disabled control.
+const PHONE = { width: 390, height: 844 };
+// The views of a workspace that render their controls only while shown: the Synth's tabs
+// (Panel, Engines, XY) and, on Engines, each engine (synth/ui.js renders the shown tab's plates
+// alone). Read from the page, never listed here; each is reached the way a user reaches it (a
+// click on its tab or engine chip), and `visit(name)` runs while it shows.
+const VIEWS = {
+  synth: async (page, visit) => {
+    const tabs = await page.$$eval('[data-osc="synth.tab"]', (t) => t.map((e) => e.dataset.value));
+    for (const tab of tabs) {
+      await page.locator(`[data-osc="synth.tab"][data-value="${tab}"]`).click();
+      await until(() => page.evaluate((t) => window.OSCILLA.app.synth.tab === t
+        && document.querySelector(`[data-osc="synth.tab"][data-value="${t}"]`)
+          .getAttribute('aria-selected') === 'true'
+        && !!document.querySelector('[data-osc="synth.modules"]')
+        && (t !== 'xy' || !!document.querySelector('[data-osc="synth.xy"]')), tab),
+      { ms: ROW_MS, what: `the Synth's ${tab} tab shows` });
+      await visit(tab);
+      if (tab !== 'engines') continue;
+      const engines = await page.$$eval('[data-engine]', (e) => e.map((x) => x.dataset.engine));
+      for (const id of engines) {
+        await page.locator(`[data-engine="${id}"]`).click();
+        await until(() => page.evaluate((e) => {
+          const chip = document.querySelector(`[data-engine="${e}"]`);
+          return !!chip && chip.getAttribute('aria-checked') === 'true'
+            && !!document.querySelector(`[data-osc="synth.modules"] [data-module="${e}"]`);
+        }, id), { ms: ROW_MS, what: `the ${id} engine's plate shows` });
+        await visit(`engines/${id}`);
+      }
+    }
+  },
+};
+
+/** Clear what the Synth said, so the next refusal is read as its own. */
+const hush = (page) => page.evaluate(() => { window.OSCILLA.app.synth.status = ''; });
+/** Every member of `sel` in every Synth view, once each (keyed by `keyOf`): run(view, key). */
+async function synthMembers(page, sel, keyOf, run) {
+  await op.navTo(page, 'synth');
+  const done = new Set();
+  await VIEWS.synth(page, async (view) => {
+    const keys = await page.$$eval(sel, (els, k) => els.map((e) => e.getAttribute(k)), keyOf);
+    for (const k of keys) {
+      if (done.has(k)) continue;
+      done.add(k);
+      await run(view, k);
+    }
+  });
+  return done.size;
+}
+/** `until` that answers with the reason instead of throwing: null when it held. */
+const holds = (fn, what) => until(fn, { ms: ROW_MS, what }).then(() => null)
+  .catch((e) => e.message.split('\n')[0]);
+
+// Knobs: a drag of 60 px (up, or down from the top of the travel) and one arrow key each move
+// the knob that way (its 0..1000 position, or for a step finer than one position its value
+// text) and change the Studio document; a disabled knob names
+// its reason (aria-describedby), refuses the drag with that sentence and the key with no change.
+const KNOB_READ = (cid) => {
+  const k = document.querySelector(`[data-knob="${cid}"]`);
+  const why = document.getElementById(`${cid}-why`);
+  const g = window.OSCILLA.studio.model.graph;
+  return { now: k ? Number(k.getAttribute('aria-valuenow')) : null,
+    text: k ? k.getAttribute('aria-valuetext') : null,
+    max: k ? Number(k.getAttribute('aria-valuemax')) : null,
+    disabled: !!k && k.getAttribute('aria-disabled') === 'true',
+    why: why && (k.getAttribute('aria-describedby') || '').split(/\s+/).includes(why.id)
+      ? why.textContent.trim() : '',
+    doc: JSON.stringify([g.nodes.map((n) => [n.id, n.params]),
+      g.edges.map((e) => [e.id, e.props || null])]),
+    status: window.OSCILLA.app.synth.status };
+};
+async function driveKnob(page, cid, how) {
+  const sel = `[data-knob="${cid}"]`;
+  await hush(page);
+  const b0 = await page.evaluate(KNOB_READ, cid);
+  const up = b0.now < b0.max;
+  if (how === 'pointer') {
+    const l = page.locator(sel);
+    await l.scrollIntoViewIfNeeded();
+    const b = await l.boundingBox();
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx, cy + (up ? -60 : 60), { steps: 6 });
+    await page.mouse.up();
+  } else {
+    await page.locator(sel).focus();
+    await page.keyboard.press(up ? 'ArrowUp' : 'ArrowDown');
+  }
+  if (b0.disabled) {
+    if (!b0.why) return 'disabled without a stated reason';
+    const now = await page.evaluate(KNOB_READ, cid);
+    if (now.doc !== b0.doc || now.now !== b0.now) return 'a disabled knob moved';
+    return how === 'pointer' ? holds(() => page.evaluate((w) =>
+      window.OSCILLA.app.synth.status === w, b0.why), `${cid}: the drag is refused with its reason`)
+      : null;
+  }
+  return holds(async () => {
+    const a = await page.evaluate(KNOB_READ, cid);
+    // a fine step (1 ct of a ±1200 ct tune) can stay on the same 0..1000 position: then
+    // its value text says the move
+    return a.doc !== b0.doc && (up ? a.now >= b0.now : a.now <= b0.now)
+      && (a.now !== b0.now || a.text !== b0.text);
+  }, `${cid} (${how}) moves ${up ? 'up' : 'down'} and changes the document`);
+}
+family({ id: 'synth.knobs', control: '[data-knob]',
+  why: 'each Synth knob, in every view, moves by a drag and by an arrow key and changes the '
+    + 'Studio document; a disabled one says why and refuses both',
+  run: async (page) => {
+    const bad = [];
+    const members = await synthMembers(page, '[data-knob]', 'data-knob', async (view, cid) => {
+      for (const how of ['pointer', 'keyboard']) {
+        const e = await driveKnob(page, cid, how);
+        if (e) bad.push(`${view} ${cid} ${how}: ${e}`);
+      }
+    });
+    return { members, bad };
+  } });
+
+// Choices: a click on each option checks it and changes the document; the arrows from the
+// checked option step through every option of the group (ArrowRight to one end, ArrowLeft to
+// the other), each step a document change. A disabled group refuses with its reason.
+const CHOICE_READ = (cid) => {
+  const opts = [...document.querySelectorAll(`[data-option="${cid}"]`)];
+  const g = window.OSCILLA.studio.model.graph;
+  const group = opts[0] && opts[0].closest('[role="radiogroup"]');
+  const why = document.getElementById(`${cid}-why`);
+  return { values: opts.map((o) => o.dataset.v),
+    checked: (opts.find((o) => o.getAttribute('aria-checked') === 'true') || { dataset: {} })
+      .dataset.v || null,
+    disabled: !!group && group.getAttribute('aria-disabled') === 'true',
+    why: why ? why.textContent.trim() : '',
+    doc: JSON.stringify([g.nodes.map((n) => [n.id, n.params]),
+      g.edges.map((e) => [e.id, e.props || null])]),
+    status: window.OSCILLA.app.synth.status };
+};
+async function driveChoice(page, cid, how) {
+  const r0 = await page.evaluate(CHOICE_READ, cid);
+  if (r0.disabled) {
+    await hush(page);
+    const first = page.locator(`[data-option="${cid}"]`).first();
+    if (how === 'pointer') await first.click({ force: true }); // aria-disabled group
+    else { await first.focus(); await page.keyboard.press('ArrowRight'); }
+    return holds(async () => {
+      const a = await page.evaluate(CHOICE_READ, cid);
+      return a.why && a.status === a.why && a.doc === r0.doc && a.checked === r0.checked;
+    }, `${cid} (${how}) is refused with its reason`);
+  }
+  const bad = [];
+  if (how === 'pointer') {
+    const order = [...r0.values.filter((v) => v !== r0.checked), r0.checked].filter(Boolean);
+    for (const v of order) {
+      const before = await page.evaluate(CHOICE_READ, cid);
+      await page.locator(`[data-option="${cid}"][data-v="${v}"]`).click();
+      const e = await holds(async () => {
+        const a = await page.evaluate(CHOICE_READ, cid);
+        return a.checked === v && a.doc !== before.doc;
+      }, `${cid}=${v} is checked by a click and changes the document`);
+      if (e) bad.push(`${v}: ${e}`);
+    }
+    return bad.length ? bad.join('; ') : null;
+  }
+  const visited = new Set([r0.checked]);
+  for (const key of ['ArrowRight', 'ArrowLeft']) {
+    for (let i = 0; i < r0.values.length; i++) {
+      const before = await page.evaluate(CHOICE_READ, cid);
+      await page.locator(`[data-option="${cid}"][aria-checked="true"]`).focus();
+      await page.keyboard.press(key);
+      // the key's change is dispatched in its own handler: an unchanged document is the end
+      const now = await page.evaluate(CHOICE_READ, cid);
+      if (now.doc === before.doc) break;
+      const e = await holds(async () => {
+        const a = await page.evaluate(CHOICE_READ, cid);
+        return a.checked && a.checked !== before.checked ? a.checked : false;
+      }, `${cid}: ${key} checks the next option`);
+      if (e) { bad.push(`${key}: ${e}`); break; }
+      visited.add((await page.evaluate(CHOICE_READ, cid)).checked);
+    }
+  }
+  const missed = r0.values.filter((v) => !visited.has(v));
+  if (missed.length) bad.push(`the arrows never reach ${missed.join(', ')}`);
+  return bad.length ? bad.join('; ') : null;
+}
+family({ id: 'synth.choices', control: '[data-option]',
+  why: 'each option of each Synth choice, in every view, is checked by a click and reached by '
+    + 'the arrow keys, each a change of the Studio document; a disabled group says why',
+  run: async (page) => {
+    const bad = [];
+    let members = 0;
+    await synthMembers(page, '[data-option]', 'data-option', async (view, cid) => {
+      members += (await page.evaluate(CHOICE_READ, cid)).values.length;
+      for (const how of ['pointer', 'keyboard']) {
+        const e = await driveChoice(page, cid, how);
+        if (e) bad.push(`${view} ${cid} ${how}: ${e}`);
+      }
+    });
+    return { members, bad };
+  } });
+
+// Toggles: a click and Enter each flip it and change the document; a disabled one refuses both
+// with its reason.
+const TOGGLE_READ = (cid) => {
+  const t = document.querySelector(`[data-toggle="${cid}"]`);
+  const why = document.getElementById(`${cid}-why`);
+  const g = window.OSCILLA.studio.model.graph;
+  return { pressed: t ? t.getAttribute('aria-pressed') : null,
+    disabled: !!t && t.getAttribute('aria-disabled') === 'true',
+    why: why && (t.getAttribute('aria-describedby') || '').split(/\s+/).includes(why.id)
+      ? why.textContent.trim() : '',
+    doc: JSON.stringify([g.nodes.map((n) => [n.id, n.params]),
+      g.edges.map((e) => [e.id, e.props || null])]),
+    status: window.OSCILLA.app.synth.status };
+};
+family({ id: 'synth.toggles', control: '[data-toggle]',
+  why: 'each Synth toggle flips by a click and by Enter and changes the Studio document; a '
+    + 'disabled one says why and refuses both',
+  run: async (page) => {
+    const bad = [];
+    const members = await synthMembers(page, '[data-toggle]', 'data-toggle', async (view, cid) => {
+      for (const how of ['pointer', 'keyboard']) {
+        await hush(page);
+        const b0 = await page.evaluate(TOGGLE_READ, cid);
+        const t = page.locator(`[data-toggle="${cid}"]`);
+        // aria-disabled is not disabled: a user can press it and hears why (force: Playwright
+        // would wait for an aria-disabled button to become enabled)
+        if (how === 'pointer') await t.click({ force: b0.disabled });
+        else { await t.focus(); await page.keyboard.press('Enter'); }
+        const e = await holds(async () => {
+          const a = await page.evaluate(TOGGLE_READ, cid);
+          return b0.disabled ? !!b0.why && a.status === b0.why && a.doc === b0.doc
+            && a.pressed === b0.pressed : a.pressed !== b0.pressed && a.doc !== b0.doc;
+        }, `${cid} (${how}) ${b0.disabled ? 'is refused with its reason' : 'flips'}`);
+        if (e) bad.push(`${view} ${cid} ${how}: ${e}`);
+      }
+    });
+    return { members, bad };
+  } });
+
+// Module cards: each card's disclosure folds its body and opens it again (a view state, not
+// the document); Expand all and Collapse all set every card.
+// A folded card's region is its one-line summary (data-summary), an open one its controls.
+const CARD_READ = (mid) => {
+  const b = document.querySelector(`[data-collapse="${mid}"]`);
+  const body = b && document.getElementById(b.getAttribute('aria-controls') || '');
+  return { expanded: b ? b.getAttribute('aria-expanded') : null,
+    shown: !!body && body.getClientRects().length > 0 && !body.hasAttribute('data-summary'),
+    summary: !!body && body.hasAttribute('data-summary') };
+};
+family({ id: 'synth.cards', control: '[data-collapse]',
+  why: 'each Synth module card folds its body to its summary by a click and opens it by Enter',
+  run: async (page) => {
+    const bad = [];
+    const members = await synthMembers(page, '[data-collapse]', 'data-collapse',
+      async (view, mid) => {
+        for (const [how, want] of [['pointer', 'false'], ['keyboard', 'true']]) {
+          const b = page.locator(`[data-collapse="${mid}"]`);
+          if (how === 'pointer') await b.click();
+          else { await b.focus(); await page.keyboard.press('Enter'); }
+          const e = await holds(async () => {
+            const a = await page.evaluate(CARD_READ, mid);
+            return a.expanded === want && (want === 'true' ? a.shown : a.summary);
+          }, `${mid} (${how}) ${want === 'true' ? 'opens' : 'folds'} its body`);
+          if (e) bad.push(`${view} ${mid} ${how}: ${e}`);
+        }
+      });
+    return { members, bad };
+  } });
+const cardsAll = () => [...document.querySelectorAll('[data-collapse]')]
+  .map((b) => b.getAttribute('aria-expanded'));
+both({ id: 'synth.fold-all.closed', ws: 'synth', control: '[data-fold-all="closed"]',
+  read: cardsAll, pointer: D.click('[data-fold-all="closed"]'),
+  keyboard: D.keys('[data-fold-all="closed"]', 'Enter'),
+  expect: (s, b, x) => x.length > 1 && x.every((v) => v === 'false') });
+both({ id: 'synth.fold-all.open', ws: 'synth', control: '[data-fold-all="open"]',
+  read: cardsAll,
+  setup: async (page) => {
+    await page.locator('[data-fold-all="closed"]').click();
+    await until(() => page.evaluate(() => [...document.querySelectorAll('[data-collapse]')]
+      .every((b) => b.getAttribute('aria-expanded') === 'false')),
+    { ms: ROW_MS, what: 'setup: every Synth card is folded' });
+  },
+  pointer: D.click('[data-fold-all="open"]'), keyboard: D.keys('[data-fold-all="open"]', 'Enter'),
+  expect: (s, b, x) => x.length > 1 && x.every((v) => v === 'true') });
+
+// Engines: each engine chip of the Engines tab makes its engine the one the keys play and
+// shows its plate; a blocked engine is refused with its reason and changes nothing.
+const ENGINE_READ = () => ({ engine: window.OSCILLA.app.synth.engine,
+  tab: window.OSCILLA.app.synth.tab, status: window.OSCILLA.app.synth.status,
+  checked: [...document.querySelectorAll('[data-engine][aria-checked="true"]')]
+    .map((e) => e.dataset.engine),
+  plates: [...document.querySelectorAll('[data-osc="synth.modules"] [data-module]')]
+    .map((e) => e.dataset.module) });
+const toEngines = async (page) => {
+  await op.navTo(page, 'synth');
+  await page.locator('[data-osc="synth.tab"][data-value="engines"]').click();
+  await until(() => page.evaluate(() => window.OSCILLA.app.synth.tab === 'engines'
+    && !!document.querySelector('[data-engine]')), { ms: ROW_MS, what: 'the Engines tab shows' });
+};
+family({ id: 'synth.engines', control: '[data-engine]',
+  why: 'each engine chip, by a click and by Enter, is the engine the keys play and shows its '
+    + 'plate',
+  run: async (page) => {
+    const bad = [];
+    await toEngines(page);
+    const r0 = await page.evaluate(ENGINE_READ);
+    const ids = await page.$$eval('[data-engine]', (e) => e.map((x) => x.dataset.engine));
+    const order = [...ids.filter((id) => id !== r0.engine), r0.engine];
+    for (const how of ['pointer', 'keyboard']) {
+      for (const id of order) {
+        const chip = page.locator(`[data-engine="${id}"]`);
+        if (how === 'pointer') await chip.click();
+        else { await chip.focus(); await page.keyboard.press('Enter'); }
+        const e = await holds(async () => {
+          const a = await page.evaluate(ENGINE_READ);
+          return a.engine === id && a.checked.join() === id && a.plates.includes(id);
+        }, `engine ${id} (${how}) is played and shown`);
+        if (e) bad.push(`${id} ${how}: ${e}`);
+      }
+    }
+    return { members: ids.length, bad };
+  } });
+family({ id: 'synth.engines.blocked', control: '[data-blocked]',
+  why: 'each blocked engine, by a click and by Enter, says why it is not offered and changes '
+    + 'nothing',
+  run: async (page) => {
+    const bad = [];
+    await toEngines(page);
+    const ids = await page.$$eval('[data-blocked]', (e) => e.map((x) => x.dataset.blocked));
+    for (const id of ids) {
+      for (const how of ['pointer', 'keyboard']) {
+        await hush(page);
+        const b0 = await page.evaluate(ENGINE_READ);
+        const chip = page.locator(`[data-blocked="${id}"]`);
+        if (how === 'pointer') await chip.click({ force: true }); // aria-disabled, see toggles
+        else { await chip.focus(); await page.keyboard.press('Enter'); }
+        const e = await holds(() => page.evaluate(([b, before]) => {
+          const el = document.querySelector(`[data-blocked="${b}"]`);
+          const why = document.getElementById(`synth-blocked-${b}`);
+          const s = window.OSCILLA.app.synth;
+          return el.getAttribute('aria-disabled') === 'true' && !!why
+            && why.textContent.trim().length > 0 && s.status === why.textContent
+            && s.engine === before.engine;
+        }, [id, b0]), `blocked ${id} (${how}) says why`);
+        if (e) bad.push(`${id} ${how}: ${e}`);
+      }
+    }
+    return { members: ids.length, bad };
+  } });
+
+// The patch bay (at a phone's width, where the bay is a face of its own and scrolls in the
+// page): a tap on a jack, by pointer or by Enter, starts a connection from it (the jack is
+// pressed, the Synth says how many jacks can take the cable) and a second one cancels it.
+const JACK_READ = (id) => {
+  const j = document.querySelector(`[data-jack="${id}"]`);
+  return { pressed: j ? j.getAttribute('aria-pressed') : null,
+    status: window.OSCILLA.app.synth.status };
+};
+// A jack scrolled to the middle of the region that scrolls it, as a hand scrolls there (Firefox
+// does not scroll an SVG group into view inside a scrolling region, so Playwright's click finds
+// it outside the viewport), and the point a pointer presses: its centre, if the jack is on top.
+const JACK_AT = (id) => {
+  const el = document.querySelector(`[data-jack="${id}"]`);
+  let s = el.parentElement;
+  while (s && s !== document.body && !/(auto|scroll)/.test(getComputedStyle(s).overflowY)) {
+    s = s.parentElement;
+  }
+  const r0 = el.getBoundingClientRect();
+  (s && s !== document.body ? s : document.scrollingElement)
+    .scrollBy(0, r0.top + r0.height / 2 - innerHeight / 2);
+  const r = el.getBoundingClientRect();
+  const x = r.left + r.width / 2;
+  const y = r.top + r.height / 2;
+  const top = document.elementFromPoint(x, y);
+  return { x, y, hit: !!top && top.closest('[data-jack]') === el };
+};
+const toFace = async (page, f) => {
+  const chip = page.locator(`[data-face="${f}"]`);
+  if (await chip.getAttribute('aria-pressed') !== 'true') await chip.click();
+  await until(() => page.evaluate((x) => {
+    const el = document.querySelector(`[data-face-of="${x}"]`);
+    return !!el && el.getClientRects().length > 0;
+  }, f), { ms: ROW_MS, what: `the Synth's ${f} face shows` });
+};
+family({ id: 'synth.jacks', control: '[data-jack]', viewport: PHONE,
+  why: 'each jack of the patch bay starts a connection by a tap or Enter and cancels it by a '
+    + 'second one',
+  run: async (page) => {
+    const bad = [];
+    await op.navTo(page, 'synth');
+    await toFace(page, 'bay');
+    const ids = await page.$$eval('[data-jack]', (e) => e.map((x) => x.dataset.jack));
+    for (const id of ids) {
+      for (const how of ['pointer', 'keyboard']) {
+        for (const [want, said] of [['true', /^Connecting from /],
+          ['false', /^Connection cancelled/]]) {
+          if (how === 'pointer') {
+            const at = await page.evaluate(JACK_AT, id);
+            if (!at.hit) { bad.push(`${id} pointer: its centre is covered`); break; }
+            await page.mouse.click(at.x, at.y);
+          } else {
+            await page.locator(`[data-jack="${id}"]`).focus();
+            await page.keyboard.press('Enter');
+          }
+          const e = await holds(async () => {
+            const a = await page.evaluate(JACK_READ, id);
+            return a.pressed === want && said.test(a.status);
+          }, `${id} (${how}) ${want === 'true' ? 'starts' : 'cancels'} a connection`);
+          if (e) { bad.push(`${id} ${how}: ${e}`); break; }
+        }
+      }
+    }
+    return { members: ids.length, bad };
+  } });
+// A connection made: from the LFO's output, its first offered jack takes the cable (a new edge
+// of the document and a cable in the bay's list).
+const CABLES_READ = () => ({ edges: JSON.stringify(window.OSCILLA.studio.model.graph.edges),
+  cables: window.OSCILLA.app.synthDebug().cables.length });
+both({ id: 'synth.connect', ws: 'synth', control: '[data-connect-to]', read: CABLES_READ,
+  pointer: async (page) => {
+    await page.locator('[data-jack="mg.control:out"]').click();
+    await page.locator('[data-connect-to]').first().click();
+  },
+  keyboard: async (page) => {
+    await page.locator('[data-jack="mg.control:out"]').focus();
+    await page.keyboard.press('Enter');
+    await page.locator('[data-connect-to]').first().focus();
+    await page.keyboard.press('Enter');
+  },
+  expect: (s, b, x) => x.cables === b.x.cables + 1 && x.edges !== b.x.edges });
+
+// Below xl the Synth shows one face at a time and a chip bar of its sections.
+const FACE_READ = () => Object.fromEntries(['panel', 'bay'].map((f) => {
+  const el = document.querySelector(`[data-face-of="${f}"]`);
+  return [f, { shown: !!el && el.getClientRects().length > 0,
+    pressed: document.querySelector(`[data-face="${f}"]`).getAttribute('aria-pressed') }];
+}));
+family({ id: 'synth.faces', control: '[data-face]', viewport: PHONE,
+  why: 'each face chip, by a click and by Enter, shows its face alone and marks itself pressed',
+  run: async (page) => {
+    const bad = [];
+    await op.navTo(page, 'synth');
+    for (const how of ['pointer', 'keyboard']) {
+      for (const f of ['bay', 'panel']) {
+        const chip = page.locator(`[data-face="${f}"]`);
+        if (how === 'pointer') await chip.click();
+        else { await chip.focus(); await page.keyboard.press('Enter'); }
+        const other = f === 'bay' ? 'panel' : 'bay';
+        const e = await holds(async () => {
+          const a = await page.evaluate(FACE_READ);
+          return a[f].shown && a[f].pressed === 'true' && !a[other].shown
+            && a[other].pressed === 'false';
+        }, `the ${f} face (${how}) shows alone`);
+        if (e) bad.push(`${f} ${how}: ${e}`);
+      }
+    }
+    return { members: await page.locator('[data-face]').count(), bad };
+  } });
+family({ id: 'synth.sections', control: '[data-goto]', viewport: PHONE,
+  why: 'each section chip, by a click and by Enter, scrolls its module card into view and '
+    + 'moves the focus to it',
+  run: async (page) => {
+    const bad = [];
+    const members = await synthMembers(page, '[data-goto]', 'data-goto', async (view, mid) => {
+      for (const how of ['pointer', 'keyboard']) {
+        await page.evaluate(() => { document.activeElement && document.activeElement.blur(); });
+        const chip = page.locator(`[data-goto="${mid}"]`);
+        if (how === 'pointer') await chip.click();
+        else { await chip.focus(); await page.keyboard.press('Enter'); }
+        const e = await holds(() => page.evaluate((m) => {
+          const card = document.querySelector(`[data-osc="synth.modules"] [data-module="${m}"]`);
+          if (!card || document.activeElement !== card) return false;
+          const r = card.getBoundingClientRect();
+          return r.top >= 0 && r.top < innerHeight;
+        }, mid), `${mid} (${how}): its card is in view with the focus`);
+        if (e) bad.push(`${view} ${mid} ${how}: ${e}`);
+      }
+    });
+    return { members, bad };
+  } });
+
+// The XY tab: Patch the pad into the voice, the "Y drives" target, the pad surface and its
+// two axis sliders (the pad's sound and gate are xy-pad.cjs's to judge).
+const XY_READ = () => {
+  const s = document.querySelector('[data-xy-surface]');
+  const ax = (a) => {
+    const el = document.querySelector(`[data-xy-axis="${a}"]`);
+    return el ? Number(el.getAttribute('aria-valuenow')) : null;
+  };
+  const why = document.querySelector('[data-xy-why]');
+  return { disabled: !!s && s.getAttribute('aria-disabled') === 'true',
+    describedWhy: !!s && !!why && why.textContent.trim().length > 0
+      && (s.getAttribute('aria-describedby') || '').split(/\s+/).includes(why.id),
+    voice: !!document.querySelector('[data-xy-voice]'), x: ax('x'), y: ax('y'),
+    target: (document.getElementById('synth-xy-y') || {}).value,
+    edges: JSON.stringify(window.OSCILLA.studio.model.graph.edges),
+    status: window.OSCILLA.app.synth.status };
+};
+const toXy = (patched) => async (page) => {
+  await page.locator('[data-osc="synth.tab"][data-value="xy"]').click();
+  await until(() => page.evaluate(() => !!document.querySelector('[data-xy-surface]')),
+    { ms: ROW_MS, what: 'setup: the XY tab shows its pad' });
+  if (!patched) return;
+  await page.locator('[data-xy-voice]').click();
+  await until(() => page.evaluate(() => {
+    const s = document.querySelector('[data-xy-surface]');
+    return !!s && s.getAttribute('aria-disabled') !== 'true';
+  }), { ms: ROW_MS, what: 'setup: the pad is patched into the voice' });
+};
+both({ id: 'synth.xy.voice', ws: 'synth', control: '[data-xy-voice]', read: XY_READ,
+  setup: toXy(false), pointer: D.click('[data-xy-voice]'),
+  keyboard: D.keys('[data-xy-voice]', 'Enter'),
+  expect: (s, b, x) => b.x.disabled && !x.disabled && !x.voice && x.edges !== b.x.edges });
+row({ id: 'synth.xy.target.pointer', ws: 'synth', control: '#synth-xy-y', how: 'pointer',
+  read: XY_READ, setup: toXy(true),
+  act: async (page) => {
+    const v = await page.$eval('#synth-xy-y', (s) => [...s.options].map((o) => o.value)
+      .find((o) => o && o !== s.value));
+    await page.selectOption('#synth-xy-y', v);
+  },
+  expect: (s, b, x) => x.target !== b.x.target && /^Y drives /.test(x.status) });
+row({ id: 'synth.xy.pad.keyboard', ws: 'synth', control: '[data-xy-surface]', how: 'keyboard',
+  read: XY_READ, setup: toXy(true), act: D.keys('[data-xy-surface]', 'ArrowRight'),
+  expect: (s, b, x) => x.x === b.x.x + 1 && x.y === b.x.y });
+row({ id: 'synth.xy.pad.pointer', ws: 'synth', control: '[data-xy-surface]', how: 'pointer',
+  read: XY_READ, setup: toXy(true),
+  act: async (page) => {
+    const b = await page.locator('[data-xy-surface]').boundingBox();
+    await page.mouse.click(b.x + b.width * 0.95, b.y + b.height * 0.5);
+  },
+  expect: (s, b, x) => x.x > b.x.x });
+// unpatched, the pad says why on its face and takes no key
+row({ id: 'synth.xy.pad.refused.keyboard', ws: 'synth', control: '[data-xy-surface]',
+  how: 'keyboard', read: XY_READ, setup: toXy(false),
+  act: D.keys('[data-xy-surface]', 'ArrowRight'),
+  expect: (s, b, x) => x.disabled && x.describedWhy && x.x === b.x.x });
+for (const [axis, key] of [['x', 'ArrowRight'], ['y', 'ArrowUp']]) {
+  row({ id: `synth.xy.axis.${axis}.keyboard`, ws: 'synth', control: '[data-xy-axis]',
+    how: 'keyboard', read: XY_READ, setup: toXy(true),
+    act: D.keys(`[data-xy-axis="${axis}"]`, key),
+    expect: (s, b, x) => x[axis] > b.x[axis] && x[axis === 'x' ? 'y' : 'x']
+      === b.x[axis === 'x' ? 'y' : 'x'] });
+}
+// The Studio Inspector's graph summary offers a fix for each of the Synth panel's nodes it
+// lists (K168; shown in the Synth's Studio document)
+delegated('[data-osc="studio.inspector.summaryFix"]', 'v31-studio-graph.cjs',
+  'the Inspector graph summary');
+
 module.exports = { ROWS, FAMILIES, LEDGER };
 
 // ------------------------------------------------------------------------------ runner side
@@ -1784,16 +2342,25 @@ async function census(browser) {
     }));
     const seen = new Map();
     const hits = new Set();
-    for (const ws of op.WORKSPACES) {
-      await op.navTo(page, ws);
-      const found = await page.evaluate(op.discoverInPage, false);
-      const match = await page.evaluate(op.matchInPage, sels);
+    const look = async (where) => {
+      // A view that renders again between the listing and the matching (a Synth tab or engine
+      // drawn on the next frame) leaves listed elements the matching cannot find: list again.
+      const { found, match } = await until(async () => {
+        const f = await page.evaluate(op.discoverInPage, false);
+        const m = await page.evaluate(op.matchInPage, sels);
+        return f.every((c) => c.index in m) ? { found: f, match: m } : false;
+      }, { ms: ROW_MS, what: `discovery: ${where} holds still while its controls are matched` });
       for (const c of found) {
         const m = match[c.index];
         if (m === null || m === undefined) {
-          if (!seen.has(c.key)) seen.set(c.key, ws);
+          if (!seen.has(c.key)) seen.set(c.key, where);
         } else hits.add(owner[m]);
       }
+    };
+    for (const ws of op.WORKSPACES) {
+      await op.navTo(page, ws);
+      await look(ws);
+      if (VIEWS[ws]) await VIEWS[ws](page, (view) => look(`${ws}/${view}`));
     }
     const ledgerStart = ROWS.length + FAMILIES.length;
     const stale = LEDGER.filter((r, i) => !hits.has(ledgerStart + i)).map((r) => r.control);
@@ -1847,7 +2414,8 @@ async function runRow(browser, r) {
 }
 
 async function runFamily(browser, f) {
-  const { context, page, errors } = await op.openApp(browser, { dist: DIST, init: f.init });
+  const { context, page, errors } = await op.openApp(browser, { dist: DIST, init: f.init,
+    viewport: f.viewport });
   try {
     const r = await f.run(page, browser);
     if (errors.length) r.bad.push(`page errors: ${errors.join(' | ')}`);
