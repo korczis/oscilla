@@ -232,7 +232,7 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
     arm,
     /**
      * Y held below its depth by its target's range (xy.js xyRoom), or null; computed once per
-     * document (review of #428 NF6: it ran on every show and pointermove), again on any change.
+     * document (review of PR 428 NF6: it ran on every show and pointermove), again on any change.
      */
     room() {
       const m = model();

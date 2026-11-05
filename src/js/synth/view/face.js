@@ -35,7 +35,7 @@ const SH_CLOCKED = Object.freeze({
 
 /**
  * The XY pad's Glide while its Pitch output feeds no cable (K183 review N6), naming the panel's
- * keyboard module by the label the panel draws on it (review of #428 NF2: KEYBOARD, not KEYS).
+ * keyboard module by the label the panel draws on it (review of PR 428 NF2: KEYBOARD, not KEYS).
  */
 export const xyGlideIdle = (keys) => "Glide shapes the XY pad's own Pitch output, which feeds "
   + `no cable: the pad's notes glide with the ${keys} module's Glide, as the computer keys' do.`;
