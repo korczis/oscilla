@@ -67,6 +67,10 @@ test('a readout window says it is computed and refuses anything else', () => {
   assert.match(html, /data-display="vco1"/);
   assert.match(html, /Computed from the settings/);
   assert.match(html, /f = 261\.6 Hz &lt;A&gt;/);
+  // LXK-11: one dark display in both themes, on D-PAL's LCD surface and in the cap ink.
+  assert.match(html, /bg-\[var\(--osc-hw-lcd\)\]/);
+  assert.match(html, /text-\[var\(--osc-text-on-accent\)\]/);
+  assert.doesNotMatch(html, /bg-gray-100|dark:bg-gray-900/, 'never a light code block');
   assert.throws(() => display.displayHtml({ id: 'x', text: '1', source: 'measured' }),
     /computed values only/);
 });
