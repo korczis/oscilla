@@ -60,13 +60,15 @@ function arcPath(r, a, b) {
 // themes (rule d, A3); a butt pointer on cap and skirt in the cap ink (control.capInk, 3:1 on both
 // tones); hover (C5, one language for knob, dial, lever and slide: A1) brightens the part's own
 // edge, the toothed outline in control.pointer. Depth shows on both plates (A2: the body's own
-// tone, and D-PAL's plate foot where the shade shows). C1 (S7, co-signed by p2 and dev-53):
-// disabled draws no value arc, no applied mark, the track only; cap and skirt plateLo (no side
-// wall, no rim, no sheen), the pointer control.disabled, the edge the quiet control.knurl. The
-// absent value mark is a shape cue, not colour alone, and since D-PAL the flat plateLo body
-// differs from the knobCap material by ΔL* >= 3 in both themes (A4), a second cue. A token set
-// without the cap material (the panel's adapter until dev-53 maps it) draws as before D-PAL:
-// capMaterial.
+// tone, and D-PAL's plate foot where the shade shows). C1 (S7, co-signed by p2 and dev-53), with
+// D-PAL by af + 21's decision of 2026-11-05 08:4xZ (a plateLo cap read as a missing part): a
+// disabled knob is the same part at rest. It draws no value arc, no applied mark, the track only;
+// cap and skirt keep the cap material (control.knobCap), flat: no lit tone (no side wall, no
+// knobCapHi chamfer, the cap's edge its own body), no rim, no sheen; the pointer control.disabled
+// (3:1 on knobCap in both themes), the edge the quiet control.knurl. The absent value mark is a
+// shape cue, not colour alone, and the absent light (no lit tone, no sheen) a second. A token set
+// without D-PAL (no cap material: the panel's adapter until dev-53 maps it) draws as before:
+// cap and skirt plateLo, capMaterial. The fader's cap speaks the same language (FS-09).
 export const KNOB = Object.freeze({ arc: 18.5, arcW: 2.5, trackW: 1.25, skirt: 16, toothIn: 14.8,
   teeth: 30, edgeW: 1, cap: 12, pointerIn: 5, pointerOut: 12, pointerW: 2,
   skirtPtrIn: 12.5, skirtPtrW: 1.5, tickIn: 20.75, tickOut: 22, ticks: 11, tickZoom: 1.25,
@@ -208,7 +210,8 @@ export function knobFace(deg, t, st = {}, uid = 'knob', under = '', mid = '') {
   const k = KNOB;
   const m = capMaterial(t);
   const dim = st.disabled;
-  const body = esc(dim ? t.surface.plateLo : m.body);
+  // C1 with D-PAL: a disabled cap keeps the material, flat; without D-PAL, plateLo as before.
+  const body = esc(dim && !m.dpal ? t.surface.plateLo : m.body);
   const id = `knob-${String(uid).replace(/[^\w.:-]/g, '_')}`;
   const ptr = dim ? c.disabled : m.ink;
   // D-PAL: the side wall is the material's opaque lit gradient; before it, cap to edge at sheen.
@@ -235,7 +238,7 @@ export function knobFace(deg, t, st = {}, uid = 'knob', under = '', mid = '') {
       + `stroke-width="${k.edgeW}"/>`)
     + mid
     + `<circle data-cap="" cx="0" cy="0" r="${k.cap}" fill="${body}" `
-    + `stroke="${esc(m.dpal && !dim ? m.hi : t.surface.edge)}" stroke-width="1"/>`
+    + `stroke="${esc(m.dpal ? (dim ? m.body : m.hi) : t.surface.edge)}" stroke-width="1"/>`
     + sheen
     // K6-core: always emitted, shown on hover (or a host's group-hover), never disabled.
     + hoverEdge(`path d="${TEETH}" stroke-width="${k.edgeW}"`, t, st)
@@ -308,6 +311,7 @@ function faderShapes(value, applied, p, t, st, zoom, tr, size, turned) {
   const F = FADER;
   const T = FADER_TICKS;
   const live = m.dpal && !st.disabled;
+  const side = m.dpal && st.disabled ? c.disabled : c.edge;
   const half = tr / 2;
   const yOf = (v) => num(half - tr * toNorm(v, p));
   const y = yOf(value);
@@ -357,7 +361,8 @@ function faderShapes(value, applied, p, t, st, zoom, tr, size, turned) {
     + `rx="2" fill="${esc(m.body)}" stroke="${esc(st.dragging ? c.pointer : c.edge)}" `
     + 'stroke-width="1"/>'
     // D-PAL: the material's lit tone along the top and a sheen strip on it, as the knob's and the
-    // slide's (review of D-PAL, finding 7); a disabled cap is flat (C1).
+    // slide's (review of D-PAL, finding 7); a disabled cap is the material flat, as the knob's
+    // (C1 with D-PAL, FS-09: af + 21, 2026-11-05 08:4xZ).
     + (live ? `<rect data-cap-hi="" ${at(-W / 2 + 1, -H / 2 + 1, W - 2, 2)} rx="1" `
       + `fill="${esc(m.hi)}" stroke="none"/>`
       + `<rect data-sheen="" class="${SHEEN_CLASS}" ${at(-W / 2 + 4, -H / 2 + 1, W - 8, 1)} `
@@ -365,8 +370,10 @@ function faderShapes(value, applied, p, t, st, zoom, tr, size, turned) {
     // FS-04: the lower lip along the cap's foot, inside its stroke (flat when disabled, C1).
     + (st.disabled ? '' : `<rect data-lip="" ${at(-W / 2 + 1, H / 2 - 0.5 - F.lip, W - 2,
       F.lip)} fill="${esc(m.dpal ? m.hi : t.surface.edge)}" stroke="none"/>`)
-    + grip(-g, '', c.edge, 1) + grip(0, 'centre', st.disabled ? c.disabled : m.ink, 1.5)
-    + grip(g, '', c.edge, 1)
+    // FS-09 (C1 with D-PAL): a disabled cap's every grip in control.disabled, as the knob's
+    // pointer; before D-PAL the centre grip alone.
+    + grip(-g, '', side, 1) + grip(0, 'centre', st.disabled ? c.disabled : m.ink, 1.5)
+    + grip(g, '', side, 1)
     + (st.focus ? `<rect data-focus="" x="${-F.focusX}" y="${-reach}" width="${2 * F.focusX}" `
       + `height="${2 * reach}" rx="3" fill="none" stroke="${esc(c.focus)}" stroke-width="2"/>`
       : '');

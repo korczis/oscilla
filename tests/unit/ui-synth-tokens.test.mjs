@@ -288,12 +288,15 @@ test('every graphic role of the knob, fader and switch holds 3:1 on the plate, t
 // unlit arc is told apart by width, not colour
 // (ui-synth-knob.test.mjs), because no existing token pair holds 3:1 there in both themes.
 // D-PAL (C6): the skirt and cap are the cap material, its lit tone on the side wall's top; the
-// pointer and the index lines are the cap ink on both; a disabled knob's body is plateLo (C1).
+// pointer and the index lines are the cap ink on both; a disabled knob's body is the cap material
+// at rest (C1 with D-PAL, af + 21 2026-11-05 08:4xZ), its pointer control.disabled on it, and
+// plateLo only for a token set without D-PAL.
 test('every knob part holds 3:1 on the part it is drawn over, in both themes', () => {
   const N = SYNTH_TOKEN_NAMES;
   const pairs = [...CAP_MATERIAL.flatMap((m) => [[`control.applied on ${m}`, N.control.applied, m],
     [`control.capInk on ${m}`, N.control.capInk, m], [`control.edge on ${m}`, N.control.edge, m]]),
     ['control.disabled on surface.plateLo', N.control.disabled, N.surface.plateLo],
+    ['control.disabled on control.knobCap', N.control.disabled, N.control.knobCap],
     ['control.focus on surface.plateLo', N.control.focus, N.surface.plateLo]];
   const short = [];
   for (const [theme, t] of Object.entries(themes())) {
@@ -306,7 +309,7 @@ test('every knob part holds 3:1 on the part it is drawn over, in both themes', (
 });
 
 // Slice A 8: the pointer and its skirt segment on what they are drawn over (the cap and the
-// skirt, cap-coloured since slice A; a disabled knob's flattened to plateLo), the applied arc on
+// skirt, cap-coloured since slice A; a disabled knob's the cap material, flat), the applied arc on
 // the skirt, and the track on both plates, all read from what controlSvg draws, 3:1 in both
 // themes. Pointer contrast was the slice's risk once the skirt took the cap's colour.
 test('slice A 8: the pointer on the cap and skirt, and the track on the plates, hold 3:1', () => {
@@ -337,6 +340,39 @@ test('slice A 8: the pointer on the cap and skirt, and the track on the plates, 
   assert.ok(pairs >= 38, `${pairs} pairs`);
   assert.deepEqual(short, [], 'under 3:1 on the part beneath');
 });
+
+// C1 with D-PAL (af + 21, 2026-11-05 08:4xZ; 21 measured 4.52 dark, 4.61 light): a disabled knob
+// and fader keep the cap material, so their pointer and grips in control.disabled are seen on
+// control.knobCap, as controlSvg draws them, at least 3:1 in both themes.
+test('C1 with D-PAL: the disabled pointer and grips hold 3:1 on the cap material, both themes',
+  (t) => {
+    const param = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
+    const tag = (svg, re) => re.exec(svg)[0];
+    const paint = (el, a) => varOf(new RegExp(`\\s${a}="([^"]*)"`).exec(el)[1]);
+    const knob = controlSvg({ kind: 'knob', value: 70, param, tokens: TOKENS,
+      state: { disabled: true } });
+    const fader = controlSvg({ kind: 'fader', value: 70, param, tokens: TOKENS,
+      state: { disabled: true } });
+    const pairs = [
+      ['knob pointer', paint(tag(knob, /<line\b[^>]*\sdata-pointer=""[^>]*>/), 'stroke'),
+        paint(tag(knob, /<circle\b[^>]*\sdata-cap=""[^>]*>/), 'fill')],
+      ['knob skirt pointer', paint(tag(knob, /<line\b[^>]*\sdata-pointer-skirt=""[^>]*>/),
+        'stroke'), paint(tag(knob, /<path\b[^>]*\sdata-skirt=""[^>]*>/), 'fill')],
+      ...[...fader.matchAll(/<line data-grip="[^"]*"[^>]*>/g)].map((m) => ['fader grip',
+        paint(m[0], 'stroke'), paint(tag(fader, /<rect\b[^>]*\sdata-cap=""[^>]*>/), 'fill')])];
+    for (const [, fg, bg] of pairs) {
+      assert.equal(fg, SYNTH_TOKEN_NAMES.control.disabled);
+      assert.equal(bg, SYNTH_TOKEN_NAMES.control.knobCap);
+    }
+    const short = [];
+    for (const [theme, th] of Object.entries(themes())) {
+      const ratio = contrast(hexOf(th, SYNTH_TOKEN_NAMES.control.disabled),
+        hexOf(th, SYNTH_TOKEN_NAMES.control.knobCap));
+      t.diagnostic(`${theme}: control.disabled on control.knobCap ${ratio.toFixed(2)}:1`);
+      if (ratio < 3) short.push(`${theme}: ${ratio.toFixed(2)}`);
+    }
+    assert.deepEqual(short, [], 'under 3:1 on the cap material');
+  });
 
 // Slice S: a knob of every size (lg, md, sm) is the same part scaled, so each part keeps the
 // paint it has at md, and the same pairs hold 3:1 in both themes at every size.
@@ -917,18 +953,30 @@ test('slice A A2: on today\'s dark foot (surface-1) no shade can show; the body\
   }
 });
 
-// Review of slice A, A4: C1 flattens a disabled knob's body to plateLo, and plateLo is the cap's
-// own token until D-PAL, so the flattening draws nothing yet; the cue today is the missing value
-// arc, the control.disabled pointer and the quiet edge (ui-synth-knob.test.mjs). Once the cap has
-// a role of its own the disabled body differs from it, as C1 says.
-test('slice A A4: a disabled knob\'s body differs from the enabled cap (C1, D-PAL)', () => {
+// Review of slice A, A4: C1 flattened a disabled knob's body to plateLo, so that with D-PAL it
+// differed from the cap. af + 21's decision of 2026-11-05 08:4xZ (C1 with D-PAL) superseded that:
+// a plateLo cap read as a missing part, so a disabled knob is the same part at rest, its body the
+// enabled cap's own material, and the second cue (after the absent value arc) is the light it
+// lacks: the enabled knob's lit tone (knobCapHi: side wall, chamfer) is visible on the body,
+// |ΔL*| >= 3 in both themes, and the disabled knob draws none of it. A token set without D-PAL
+// keeps the plateLo body.
+test('slice A A4: a disabled knob is the cap material without its light (C1 with D-PAL)', () => {
   const param = { key: 'level', unit: '%', min: 0, max: 100, step: 1, default: 50 };
-  const body = (state) => varOf(/\sfill="([^"]*)"/.exec(/<path\b[^>]*\sdata-skirt=""[^>]*>/
-    .exec(controlSvg({ kind: 'knob', value: 70, param, tokens: TOKENS, state }))[0])[1]);
+  const svg = (state, tokens = TOKENS) => controlSvg({ kind: 'knob', value: 70, param, tokens,
+    state });
+  const body = (state, tokens) => varOf(/\sfill="([^"]*)"/.exec(/<path\b[^>]*\sdata-skirt=""[^>]*>/
+    .exec(svg(state, tokens))[0])[1]);
+  const N = SYNTH_TOKEN_NAMES.control;
+  assert.equal(body({ disabled: true }), body({}), 'the same body as the enabled cap');
+  assert.equal(body({}), N.knobCap);
+  assert.ok(svg({}).includes(`var(${N.knobCapHi})`), 'enabled: the lit tone');
+  assert.ok(!svg({ disabled: true }).includes(`var(${N.knobCapHi})`), 'disabled: none of it');
   for (const [theme, t] of Object.entries(themes())) {
-    const dl = lstar(hexOf(t, body({ disabled: true }))) - lstar(hexOf(t, body({})));
-    assert.ok(Math.abs(dl) >= MIN_DL, `${theme}: ΔL* ${dl.toFixed(2)}`);
+    const dl = lstar(hexOf(t, N.knobCapHi)) - lstar(hexOf(t, N.knobCap));
+    assert.ok(Math.abs(dl) >= MIN_DL, `${theme}: the lit tone on the body ΔL* ${dl.toFixed(2)}`);
   }
+  assert.equal(body({ disabled: true }, PRE_DPAL_TOKENS), SYNTH_TOKEN_NAMES.surface.plateLo,
+    'without D-PAL: plateLo, as before');
 });
 
 test('the light shade is the lightest tint of the palette\'s navy ink that passes (a) and (b)',

@@ -1343,22 +1343,29 @@ test('knob: the applied arc lies on the skirt face, clear of the cap, the teeth 
   });
 
 // C1 (one disabled language, co-signed by p2 and dev-53): a disabled knob draws no value mark,
-// the track only (review of slice A, finding 9: no applied arc either); its cap and skirt
-// flattened to plateLo (no side wall, no sheen); its pointer in control.disabled. Review of
-// slice A, finding 3: an edge in control.disabled made the disabled knob louder than an enabled
-// one, so its edge is the quiet control.knurl. The absent value mark is a shape cue, so S7 holds
-// without colour alone.
-test('knob: disabled (C1) is the track only, a flat plateLo body, pointer disabled, edge quiet',
+// the track only (review of slice A, finding 9: no applied arc either); its pointer in
+// control.disabled. Review of slice A, finding 3: an edge in control.disabled made the disabled
+// knob louder than an enabled one, so its edge is the quiet control.knurl. The absent value mark
+// is a shape cue, so S7 holds without colour alone. af + 21's decision of 2026-11-05 08:4xZ (C1
+// with D-PAL): a disabled knob is the same part at rest, so with the cap material its cap and
+// skirt stay control.knobCap (plateLo read as a missing part), flat: no lit tone
+// (control.knobCapHi: no side wall, no lit chamfer on the cap's edge), no sheen, no lit rim. A
+// token set without D-PAL draws as before: a flat plateLo body. The drawing names tokens only,
+// so the one structure holds in both themes (the ratios are ui-synth-tokens.test.mjs's).
+/** TOKENS with control.disabled its own value, so a part in another role cannot pass as it. */
+const DIS_TOKENS = Object.freeze({ ...TOKENS, control: Object.freeze({ ...TOKENS.control,
+  disabled: 'var(--osc-test-disabled)' }) });
+test('knob: disabled (C1 with D-PAL) is the track only, the cap material flat, pointer disabled',
   () => {
-    const t = TOKENS.control;
+    const t = DIS_TOKENS.control;
     const BIP = { ...LIN, min: -50, max: 50, default: 0 };
     for (const p of [LIN, BIP, LOG]) {
       for (let i = 0; i <= 20; i++) {
         const value = fromNorm(i / 20, p);
+        const applied = fromNorm(1 - i / 20, p);
         for (const state of [{ disabled: true }, { disabled: true, focus: true, hover: true,
           dragging: true }]) {
-          const applied = fromNorm(1 - i / 20, p);
-          const off = controlSvg({ kind: 'knob', value, applied, param: p, tokens: TOKENS,
+          const off = controlSvg({ kind: 'knob', value, applied, param: p, tokens: DIS_TOKENS,
             state });
           const where = `${p.id} n ${i / 20} ${JSON.stringify(state)}`;
           assert.equal(part(off, 'data-ring'), null, `${where}: no value arc`);
@@ -1368,22 +1375,46 @@ test('knob: disabled (C1) is the track only, a flat plateLo body, pointer disabl
           assert.doesNotMatch(off, /stroke-dasharray/, `${where}: no dashes`);
           assert.ok(!off.includes(`stroke="${t.ring}"`), where);
           for (const flag of ['data-skirt', 'data-cap']) {
-            assert.equal(attrOf(part(off, flag), 'fill'), TOKENS.surface.plateLo,
-              `${where} ${flag}`);
+            assert.equal(attrOf(part(off, flag), 'fill'), t.knobCap, `${where} ${flag}: knob-cap`);
           }
+          assert.ok(!off.includes(t.knobCapHi), `${where}: no cap-hi anywhere (no lit tone)`);
+          assert.equal(attrOf(part(off, 'data-cap'), 'stroke'), t.knobCap,
+            `${where}: no lip, the cap's edge flat`);
           assert.equal(part(off, 'data-side'), null, `${where}: flat, no side wall`);
           assert.equal(part(off, 'data-sheen'), null, `${where}: flat, no sheen`);
+          assert.doesNotMatch(off, /opacity-hw-sheen|-sheen"/, `${where}: no sheen gradient`);
           assert.equal(part(off, 'data-rim'), null, `${where}: no lit rim`);
           assert.equal(attrOf(part(off, 'data-skirt'), 'stroke'), t.knurl, `${where}: quiet edge`);
           for (const flag of ['data-pointer', 'data-pointer-skirt']) {
             assert.equal(attrOf(part(off, flag), 'stroke'), t.disabled, `${where} ${flag}`);
           }
         }
+        // The same knob enabled has every one of them.
+        const on = controlSvg({ kind: 'knob', value, applied, param: p, tokens: DIS_TOKENS });
+        const where = `${p.id} n ${i / 20} enabled`;
+        if (Math.abs(i / 20 - (p === BIP ? 0.5 : 0)) > 1e-9) {
+          assert.ok(part(on, 'data-ring'), `${where}: the value arc`);
+        }
+        if (Math.abs(i / 20 - 0.5) > 1e-9) assert.ok(part(on, 'data-applied'), `${where}: applied`);
+        for (const flag of ['data-side', 'data-sheen', 'data-rim']) {
+          assert.ok(part(on, flag), `${where}: ${flag}`);
+        }
+        assert.equal(attrOf(part(on, 'data-cap'), 'stroke'), t.knobCapHi, `${where}: the lit lip`);
+        assert.equal(attrOf(part(on, 'data-cap'), 'fill'), t.knobCap, `${where}: knob-cap`);
+        for (const flag of ['data-pointer', 'data-pointer-skirt']) {
+          assert.equal(attrOf(part(on, flag), 'stroke'), t.capInk, `${where} ${flag}`);
+        }
       }
     }
-    assert.ok(part(draw('knob'), 'data-ring'), 'an enabled knob keeps its value arc');
-    assert.ok(part(controlSvg({ kind: 'knob', value: 70, applied: 30, param: LIN, tokens: TOKENS }),
-      'data-applied'), 'and its applied mark');
+    // A token set from before D-PAL (the panel's adapter) keeps the flat plateLo body.
+    const old = controlSvg({ kind: 'knob', value: 70, applied: 30, param: LIN,
+      tokens: PRE_DPAL_TOKENS, state: { disabled: true } });
+    for (const flag of ['data-skirt', 'data-cap']) {
+      assert.equal(attrOf(part(old, flag), 'fill'), PRE_DPAL_TOKENS.surface.plateLo,
+        `before D-PAL ${flag}: plateLo`);
+    }
+    assert.equal(attrOf(part(old, 'data-cap'), 'stroke'), PRE_DPAL_TOKENS.surface.edge,
+      'before D-PAL: the cap edged as it was');
   });
 
 // C1 rewrote S7's comment in knob.js: no dashed disabled arc remains, and the comment says the
@@ -1396,8 +1427,10 @@ test('knob.js: no disabledDash; the S7 comment states the one disabled language 
   // Review of slice A, A4: plateLo is the cap's own token until D-PAL, so the comment says what
   // the cue is today (no value arc, the dim pointer, the quiet edge) and what waits on D-PAL.
   // D-PAL resolved A4: the cap material differs from plateLo, so the flat body is the cue too.
+  // af + 21's decision (2026-11-05 08:4xZ): the disabled cap keeps the material, flat; plateLo
+  // is only a token set without D-PAL's.
   for (const words of ['no value arc', 'track only', 'plateLo', 'control.disabled', 'S7',
-    'D-PAL', 'knobCap']) {
+    'D-PAL', 'knobCap', 'af + 21', '08:4xZ', 'no lit tone', 'no sheen', 'without D-PAL']) {
     assert.ok(c1[0].replace(/\s*\/\/\s*/g, ' ').includes(words), `the C1 comment says ${words}`);
   }
 });
@@ -2351,6 +2384,48 @@ test('slice B 2 (FS-04): a cast shadow under the cap, the sheen and a lower lip 
     'before D-PAL: the lip in surface.edge, as the plan drew it');
   assert.equal(part(fader({ state: { disabled: true } }), 'data-lip'), null,
     'disabled: a flat cap (C1)');
+});
+
+// FS-09 (af + 21, 2026-11-05 08:4xZ, C1 with D-PAL): one disabled language for knob and fader.
+// A disabled fader's cap is the knob's cap at rest: the cap material (control.knobCap), flat (no
+// lit strip in control.knobCapHi, no sheen, no lip), every grip in control.disabled; enabled it
+// has each of them, its centre grip the cap ink. Both orientations, every state.
+test('fader: disabled (FS-09, C1 with D-PAL) is the cap material flat, its grips disabled', () => {
+  const T = Object.freeze({ ...TOKENS, control: Object.freeze({ ...TOKENS.control,
+    disabled: 'var(--osc-test-disabled)' }) });
+  const c = T.control;
+  const grips = (svg) => [...svg.matchAll(/<line data-grip="[^"]*"[^>]*>/g)].map((m) => m[0]);
+  for (const orientation of ['vertical', 'horizontal']) {
+    for (const value of [0, 30, 70, 100]) {
+      for (const extra of [{}, { focus: true }, { dragging: true }, { hover: true }]) {
+        const where = `${orientation} v ${value} ${JSON.stringify(extra)}`;
+        const off = fader({ tokens: T, value, applied: 50, orientation,
+          state: { ...extra, disabled: true } });
+        assert.equal(attrOf(part(off, 'data-cap'), 'fill'), c.knobCap, `${where}: knob-cap`);
+        for (const flag of ['data-cap-hi', 'data-sheen', 'data-lip']) {
+          assert.equal(part(off, flag), null, `${where}: no ${flag}`);
+        }
+        assert.ok(!off.includes(c.knobCapHi), `${where}: no cap-hi anywhere (no lit tone)`);
+        assert.doesNotMatch(off, /opacity-hw-sheen/, `${where}: no sheen`);
+        assert.equal(grips(off).length, 3, `${where}: three grips`);
+        for (const g of grips(off)) assert.equal(attrOf(g, 'stroke'), c.disabled, `${where} ${g}`);
+        const on = fader({ tokens: T, value, applied: 50, orientation, state: extra });
+        assert.equal(attrOf(part(on, 'data-cap'), 'fill'), c.knobCap, `${where} on: knob-cap`);
+        for (const flag of ['data-cap-hi', 'data-sheen', 'data-lip']) {
+          assert.ok(part(on, flag), `${where} on: ${flag}`);
+        }
+        assert.equal(attrOf(part(on, 'data-cap-hi'), 'fill'), c.knobCapHi, `${where} on: lit`);
+        assert.equal(attrOf(on.match(/<line data-grip="centre"[^>]*>/)[0], 'stroke'), c.capInk,
+          `${where} on: the cap ink`);
+        assert.ok(grips(on).every((g) => attrOf(g, 'stroke') !== c.disabled), `${where} on`);
+      }
+    }
+  }
+  // A token set from before D-PAL keeps its drawing: the side grips control.edge.
+  const old = fader({ tokens: { ...PRE_DPAL_TOKENS, control: { ...PRE_DPAL_TOKENS.control,
+    disabled: 'var(--osc-test-disabled)' } }, state: { disabled: true } });
+  assert.deepEqual(grips(old).map((g) => attrOf(g, 'stroke')), [PRE_DPAL_TOKENS.control.edge,
+    'var(--osc-test-disabled)', PRE_DPAL_TOKENS.control.edge]);
 });
 
 test('slice B 3 (FS-05): a press within half a finger (HIT_PX / 2) of the cap grabs it', () => {
