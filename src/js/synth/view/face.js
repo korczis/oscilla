@@ -33,9 +33,12 @@ const SH_CLOCKED = Object.freeze({
     + 'next gate.',
 });
 
-/** The XY pad's Glide while its Pitch output feeds no cable (K183 review N6). */
-export const XY_GLIDE_IDLE = "Glide shapes the XY pad's own Pitch output, which feeds no "
-  + "cable: the pad's notes glide with the KEYS module's Glide, as the computer keys' do.";
+/**
+ * The XY pad's Glide while its Pitch output feeds no cable (K183 review N6), naming the panel's
+ * keyboard module by the label the panel draws on it (review of #428 NF2: KEYBOARD, not KEYS).
+ */
+export const xyGlideIdle = (keys) => "Glide shapes the XY pad's own Pitch output, which feeds "
+  + `no cable: the pad's notes glide with the ${keys} module's Glide, as the computer keys' do.`;
 
 /** Why a control on this face does nothing now, or null (project.no-inert-surfaces (b)). */
 export function controlReason(module, node, control, model, panel) {
@@ -54,7 +57,8 @@ export function controlReason(module, node, control, model, panel) {
   // pad's own Glide shapes only its Pitch output, live only where a cable leaves it.
   if (module.node === 'xy-pad' && control.key === 'glide'
     && !model.graph.edges.some((e) => e.from.node === node.id && e.from.port === 'pitch')) {
-    return XY_GLIDE_IDLE;
+    const keys = panel && typeof panel.module === 'function' ? panel.module('keys') : null;
+    return xyGlideIdle(keys && keys.label ? keys.label : 'keyboard');
   }
   if (module.node === 'random' && SH_CLOCKED[control.key]
     && model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'trigger')) {

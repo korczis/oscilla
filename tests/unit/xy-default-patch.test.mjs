@@ -732,13 +732,20 @@ test('N5 and F2: the bay names every summing cable; only a summing cable says it
 
 test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; no preset sets it',
   async () => {
-    const { controlReason, XY_GLIDE_IDLE } = await import('../../src/js/synth/view/face.js');
+    const { controlReason, xyGlideIdle } = await import('../../src/js/synth/view/face.js');
     const st = defaultStore();
     const mod = { ...PANEL.module('xy'), def: NODE_REGISTRY.get('xy-pad') };
     const glide = { kind: 'knob', key: 'glide' };
     const node = () => PANEL.resolve(st.getModel()).get('xy');
-    assert.equal(controlReason(mod, node(), glide, st.getModel(), PANEL), XY_GLIDE_IDLE);
-    assert.match(XY_GLIDE_IDLE, /KEYS module's Glide/);
+    const idle = controlReason(mod, node(), glide, st.getModel(), PANEL);
+    assert.equal(idle, xyGlideIdle(PANEL.module('keys').label));
+    // NF2 (review of #428): the module is named as the panel labels it, never a literal.
+    assert.equal(PANEL.module('keys').label, 'KEYBOARD');
+    assert.match(idle, /with the KEYBOARD module's Glide/);
+    const renamed = { ...PANEL, module: (id) => (id === 'keys' ? { ...PANEL.module(id),
+      label: 'KEYS 2' } : PANEL.module(id)) };
+    assert.match(controlReason(mod, node(), glide, st.getModel(), renamed),
+      /with the KEYS 2 module's Glide/, 'a panel that labels its keyboard otherwise is named so');
     assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'xy.pitch', 'vco1.pitch').action)
       .ok, true);
     assert.equal(controlReason(mod, node(), glide, st.getModel(), PANEL), null,
