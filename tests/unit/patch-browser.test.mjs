@@ -147,10 +147,54 @@ test('Apply sets the selected engine, not the panel\'s module its patch names', 
   const want = keys.patch.graph.nodes[0].params;
   for (const k of Object.keys(want)) assert.deepEqual(params(added)[k], want[k], k);
   assert.deepEqual(params(panelFm), before, 'the panel\'s FM module is untouched');
-  // A selected node of another type is no choice for this patch: the panel's module again.
-  const lpf = PANEL.resolve(m).get('lpf').id;
-  assert.deepEqual(entryAction(m, keys, 'apply', { target: lpf }).action.onto, { fm: panelFm });
 });
+
+test('negative: Apply refuses a selected node of another type, naming it and the panel module',
+  () => {
+    // K186 criterion 2: before, the LPF selected sent FM keys to the panel's FM module unsaid.
+    const st = panelStore();
+    const keys = catalogEntries().find((e) => e.id === 'synth-fm-keys');
+    const m = st.getModel();
+    const lpf = PANEL.resolve(m).get('lpf');
+    const fm = PANEL.resolve(m).get('fm');
+    const r = entryAction(m, keys, 'apply', { target: lpf.id });
+    assert.equal(r.action, undefined);
+    assert.match(r.reason, new RegExp(`selected ${lpf.metadata.name} is of type .*; FM keys is `
+      + `for the Synth panel's ${fm.metadata.name} module`));
+    const v = browseView([keys], m, { target: lpf.id }).items[0];
+    assert.deepEqual([v.applicable, v.reason], [false, r.reason]);
+    assert.equal(st.getModel(), m, 'the model is unchanged');
+  });
+
+test('negative: Apply refuses another module of the patch\'s own panel (HARD SYNC, WAVETABLE)',
+  () => {
+    const st = panelStore();
+    const all = catalogEntries();
+    const m = st.getModel();
+    const res = PANEL.resolve(m);
+    const wt = res.get('wavetable');
+    const sync = res.get('sync');
+    assert.equal(wt.type, sync.type, 'two modules of one type');
+    const params = (id) => st.getModel().graph.nodes.find((n) => n.id === id).params;
+    const before = { [wt.id]: params(wt.id), [sync.id]: params(sync.id) };
+    const cases = [['synth-formant-pad', sync, wt], ['synth-sync-lead', wt, sync]];
+    for (const [id, sel, home] of cases) {
+      const e = all.find((x) => x.id === id);
+      assert.deepEqual(entryAction(m, e, 'apply').action.onto, { [e.patch.graph.nodes[0].id]:
+        home.id }, `${id}: nothing selected sets its own module`);
+      assert.deepEqual(entryAction(m, e, 'apply', { target: home.id }).action.onto,
+        { [e.patch.graph.nodes[0].id]: home.id }, `${id}: its own module selected`);
+      const r = entryAction(m, e, 'apply', { target: sel.id });
+      assert.equal(r.action, undefined, id);
+      assert.match(r.reason, new RegExp(`selected ${sel.metadata.name} is another module of `
+        + `the Synth panel; .* is for the Synth panel's ${home.metadata.name} module`), id);
+      assert.equal(browseView([e], m, { target: sel.id }).items[0].reason, r.reason, id);
+    }
+    assert.equal(st.getModel(), m, 'the model is unchanged');
+    assert.equal(params(sync.id).bank, 'sync', 'HARD SYNC keeps its bank');
+    assert.deepEqual(params(wt.id), before[wt.id], 'WAVETABLE is untouched');
+    assert.deepEqual(params(sync.id), before[sync.id], 'HARD SYNC is untouched');
+  });
 
 test('negative: a panel preset (several nodes) ignores the selected node, module by module',
   () => {
