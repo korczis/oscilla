@@ -524,23 +524,42 @@ test('cable.js is pure: no import from the Synth view, no DOM, no layout', () =>
 // apart (#420), and lundra, a slower host, failed it in every one of 10 runs. The calibration
 // checks itself against a second reference of another character, referenceNumbers(), timed
 // interleaved with both: their quotient is a constant of the two programs on any healthy host
-// and must hold its band, and each reference's units must agree (its steadiness), or the
-// measurement is taken again and at last refused (fail closed), since a starved reference
-// would make every work look cheap; the fixture derives the band and the limit.
+// and must hold its band, and each reference's lower median unit must stay near its fastest
+// (its steadiness: a minority of slow units reads as load, a majority as a reference not to
+// be trusted), or the measurement is taken again and at last refused (fail closed), since a
+// starved reference would make every work look cheap; the fixture derives the band and the
+// limit.
 //
-// Derivation (E058's commit holds the runs): each budget's work measured in 10 runs of this
+// Derivation (E058's commits hold the runs): each budget's work measured in 10 runs of this
 // file under each of the Apple M5 Pro of 18 cores on node 22 at its own load (9-11), under 8,
 // 20 and 40 spinning processes (load 19-53), and lundra, x86_64 of 8 cores on node 24 (load
-// 3-8); plus the whole unit suite in parallel on the Mac. MEASURED is the smallest and the
-// largest multiple of all of them, rounded outward; lundra gave every largest one. The bound is
-// MARGIN times the largest: room for a host not measured, whose multiples may be up to twice
-// those seen. MARGIN is far enough under 10 that the work made ten times slower fails on every
-// host measured, since ten times the smallest multiple is over the bound, with room to spare
-// (by 3.0 times for the plain cables, 3.8 for clearLabels, 3.5 for the plugs); a test below
-// checks that, and the pins run it.
+// 3-8); plus the whole unit suite in parallel on the Mac; plus the hosted runner, GitHub's
+// ubuntu-24.04 on node 22, one run (CI run 42042495829 at a371a6e4, the review of #438, F2:
+// plain 0.836, clearLabels 1.659, plugs 1.454), and 8 rounds of the reviewer's own script on
+// the Mac at load 8-15 (plain 0.508-0.551). MEASURED is the smallest and the largest multiple
+// of all of them, rounded outward: the Mac gave each smallest, lundra the largest plain (0.839)
+// and plug (1.667) multiples, the hosted runner the largest clearLabels one (1.659) and a plain
+// one at the top (0.836). The bound is MARGIN times the largest: room for a host not measured,
+// whose multiples may be up to twice those seen. MARGIN is far enough under 10 that the work
+// made ten times slower fails on every host measured, since ten times the smallest multiple is
+// over the bound, with room to spare (by 3.0 times for the plain cables, 3.4 for clearLabels,
+// 3.5 for the plugs); a test below checks that, and the pins run it.
+//
+// What the bound catches (the review of #438, F3: the reviewer's mutants of
+// src/js/ui/synth/cable.js on the Mac, 2026-11-05, the three budgets against the bounds 1.68,
+// 2.96 and 3.34 of that day): cableSvg's work done twice passed every budget (plain 1.053,
+// clearLabels 1.213, plugs 1.767), done three times too (1.485, 1.206, 2.303); done four
+// times it failed the plain cables (1.938) and still passed the plugs (2.804). crossings()
+// done twice passed clearLabels (2.377), done three times failed it (3.549), four times too
+// (4.577); against 3.32, clearLabels' bound now, those verdicts stand. So on the fastest host
+// measured a regression is caught from between three and four times the cableSvg work for the
+// plain cables, between two and three times the crossings work for clearLabels, and only past
+// four times the cableSvg work for the plugs (whose own markup dilutes it); on the host that
+// gave the largest multiple, from MARGIN times the whole work. The ten-times pin below is the
+// floor every host holds, not the threshold.
 const MARGIN = 2;
 /** The multiples measured, [smallest, largest], of each budget's work (see above). */
-const MEASURED = Object.freeze({ plain: [0.51, 0.84], clear: [1.12, 1.48], plugs: [1.18, 1.67] });
+const MEASURED = Object.freeze({ plain: [0.50, 0.84], clear: [1.12, 1.66], plugs: [1.18, 1.67] });
 const boundOf = (key) => MARGIN * MEASURED[key][1];
 
 const BUDGET_EDGES = Array.from({ length: 600 }, (_, i) => ({ id: `e${i}`,
@@ -670,11 +689,19 @@ test('E058 pin: the control alone made ten times slower fails closed', (t) => {
 });
 
 test('E058 pin: a reference whose units disagree fails closed', (t) => {
-  // Every other call of the reference ten times slower: where a unit is one call, the units
-  // disagree (the steadiness fails); where it is more, each is slower (the quotient fails).
+  // Two of every three calls of the reference ten times slower, a majority, since the
+  // steadiness is a lower median and a minority of slow units reads as load: where a unit is
+  // one call, the lower median of any five consecutive units is a slow one (the steadiness
+  // fails); where it is two calls or more, every unit carries a slow call, at least 5.5 times
+  // a fast one, and the quotient leaves its band (at least 4.7 against 3.22 on every host
+  // measured, 5.5 times the smallest quotient seen, 0.86). Every other call slow was not
+  // enough (#438, F1): on the hosted runner's whole-millisecond clock the first attempt sized
+  // the unit at two calls (each one slow and one fast, the quotient 6.0, faulted) and the
+  // second, warmed up by a slow call, at one, whose five units fell fast, slow, fast, slow,
+  // fast: a lower median as fast as the fastest, and a multiple was returned.
   let n = 0;
   const slow = slowed(() => referenceStrings(), 10);
-  const jitter = () => (n++ % 2 ? slow() : referenceStrings());
+  const jitter = () => (n++ % 3 !== 0 ? slow() : referenceStrings());
   const e = refusal(() => relativeCost(BUDGETS[0].work, { reference: jitter, runs: 5,
     attempts: REFUSING_ATTEMPTS }), REFUSING_ATTEMPTS);
   t.diagnostic(`600 cables, the reference unsteady: ${e.message}`);
@@ -709,7 +736,8 @@ test('E058: the band holds every quotient measured and refuses a reference ten t
   assert.ok(10 * least > QUOTIENT_BAND[1], `ten times ${least} over ${QUOTIENT_BAND[1]}`);
   assert.ok(most / 10 < QUOTIENT_BAND[0], `a tenth of ${most} under ${QUOTIENT_BAND[0]}`);
   assert.ok(Number.isFinite(STEADINESS_MEASURED) && STEADINESS_MEASURED < STEADINESS_LIMIT);
-  assert.ok(STEADINESS_LIMIT < 10, 'a reference ten times off in half its units is unsteady');
+  assert.ok(STEADINESS_LIMIT < 10,
+    'a reference ten times off in a majority of its units is unsteady');
 });
 
 test('E058: each bound passes what was measured and fails it made ten times slower', () => {

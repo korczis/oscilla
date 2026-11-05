@@ -130,8 +130,10 @@ export function referenceNumbers(count = 45000) {
 // the check is relative too: two references of different character, referenceStrings() and
 // referenceNumbers(), are timed interleaved with the work, and on a healthy host their quotient
 // (the fastest unit of each) is a constant of the two programs, whatever the host's speed;
-// one slowed and not the other moves it. And each reference's units must agree with each
-// other: its median unit over its fastest is its steadiness.
+// one slowed and not the other moves it. And each reference's units must mostly agree with
+// each other: its lower median unit over its fastest is its steadiness, so a minority of slow
+// units (2 of 5, 4 of 9) reads as load on a sound reference and a majority as a reference not
+// to be trusted (the review of #438, F1 and F4; a pin slows two calls of every three).
 //
 // Derivation: the calibration of each of the three cable budgets of ui-synth-cable.test.mjs (9
 // units of each), in 10 runs of that file on the Apple M5 Pro of 18 cores, node 22, at its own
@@ -139,11 +141,14 @@ export function referenceNumbers(count = 45000) {
 // under 8 spinning processes besides: 0.921-1.063, at most 1.135; 10 runs of the whole file and
 // the whole unit suite in parallel (load to 34): 0.861-1.118, at most 1.192; lundra, x86_64 of
 // 8 cores, node 24, load 2-3, three short runs (3 of the budgets, 2 of the file): 1.276-1.608,
-// at most 1.264. QUOTIENT_MEASURED is [0.861, 1.608] rounded outward, STEADINESS_MEASURED 1.264
-// rounded up. The band is that range widened by CALIBRATION_MARGIN on each side,
+// at most 1.264; the hosted runner, GitHub's ubuntu-24.04, node 22, one run (CI run
+// 42042495829 at a371a6e4, the review of #438, F2; units of 1 and 2 calls on its
+// whole-millisecond clock): 0.986-1.299, at most 1.418 (the plain cables' reference).
+// QUOTIENT_MEASURED is [0.861, 1.608] rounded outward, STEADINESS_MEASURED 1.418 rounded up.
+// The band is that range widened by CALIBRATION_MARGIN on each side,
 // [0.86 / 2, 1.61 x 2] = [0.43, 3.22]: room for a host whose engine weighs strings against
 // arithmetic otherwise (lundra's already does by half again), never an absolute time. The
-// steadiness limit is the margin times the largest measured, 2.54. A reference ten times
+// steadiness limit is the margin times the largest measured, 2.84. A reference ten times
 // slower or faster moves the quotient ten times, out of the band from any quotient measured,
 // since the measured range spans 1.87 times and the band 7.5, under ten (8.6 > 3.22 and
 // 0.161 < 0.43, by 2.7 times either way); a test checks that. The known limit (af): both
@@ -156,14 +161,15 @@ export const QUOTIENT_MEASURED = Object.freeze([0.86, 1.61]);
 /** The quotient a trusted calibration holds. */
 export const QUOTIENT_BAND = Object.freeze([QUOTIENT_MEASURED[0] / CALIBRATION_MARGIN,
   QUOTIENT_MEASURED[1] * CALIBRATION_MARGIN]);
-/** The largest median unit over fastest unit measured of either reference (see above). */
-export const STEADINESS_MEASURED = 1.27;
+/** The largest lower median unit over fastest unit measured of either reference (see above). */
+export const STEADINESS_MEASURED = 1.42;
 /** The steadiness a trusted reference holds. */
 export const STEADINESS_LIMIT = STEADINESS_MEASURED * CALIBRATION_MARGIN;
 /** An untrusted measurement is taken again up to three times, then the test fails. */
 export const CALIBRATION_ATTEMPTS = 4;
 
-/** The lower median over the smallest: how far a typical unit is from the fastest. */
+/** The lower median over the smallest: how far a typical unit is from the fastest. A minority
+ *  of slow units (2 of 5, 4 of 9) leaves it where the rest are; a majority moves it. */
 function steadinessOf(units) {
   const sorted = [...units].sort((p, q) => p - q);
   return sorted[(sorted.length - 1) >> 1] / sorted[0];
