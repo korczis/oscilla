@@ -67,6 +67,7 @@ const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until } = require('./lib/wait.cjs');
+const { untilState, describeState } = require('./lib/last-state.cjs');
 const { openWorkspace } = require('./lib/navigate.cjs');
 
 const argv = process.argv.slice(2);
@@ -123,6 +124,9 @@ function check(leg, name, ok, detail = '') {
 }
 
 // ------------------------------------------------------------------------------ page helpers
+// The last H.until of each page: the state that held, or the last one read at the deadline.
+const LAST = new WeakMap();
+
 const H = {
   async ready(page) {
     await page.waitForSelector('html[data-ready="true"]', { timeout: READY_MS });
@@ -153,13 +157,17 @@ const H = {
       focusOsc: el && el.dataset ? el.dataset.osc || null : null, headingOf,
       studioTitle: a.studio ? a.studio.title : null, learnTopic: a.learnTopic };
   }, w),
-  /** Poll until `pred(state)` holds; the state, or null at the deadline. */
+  /**
+   * Poll until `pred(state)` holds; the state, or null at the deadline. The last state read is
+   * kept for H.seen(page), so a failure says what the page showed (C028).
+   */
   async until(page, w, pred, what) {
-    return until(async () => {
-      const s = await H.state(page, w);
-      return pred(s) ? s : null;
-    }, { ms: NAV_MS, what }).catch(() => null);
+    const r = await untilState(() => H.state(page, w), pred, { ms: NAV_MS, what });
+    LAST.set(page, r);
+    return r.state;
   },
+  /** The last state the page's latest H.until read: workspace, hash and where focus is. */
+  seen: (page) => describeState(LAST.get(page)),
   /** Arrive in `w` with focus on its heading (a link, Back / Forward). */
   arrived(page, w, what) {
     return H.until(page, w, (s) => s.workspace === w && s.headingOf, what);
@@ -204,7 +212,10 @@ const H = {
   async roundTrip(page, { label, from, to, selector, input, ok = () => true, backTo = from },
     wrong) {
     const at = await H.setWorkspace(page, from);
-    if (!at) { wrong.push(`${label} (${input}): could not open ${from}`); return null; }
+    if (!at) {
+      wrong.push(`${label} (${input}): could not open ${from}; ${H.seen(page)}`);
+      return null;
+    }
     await H.activate(page, selector, input);
     const s = await H.until(page, to, (x) => x.workspace === to && x.headingOf && ok(x),
       `${label} (${input}) opens ${to}`);
@@ -214,9 +225,13 @@ const H = {
       return null;
     }
     const back = await H.traverse(page, 'back', backTo);
-    if (!back) wrong.push(`${label} (${input}): Back did not return to ${backTo}`);
+    if (!back) {
+      wrong.push(`${label} (${input}): Back did not return to ${backTo}; ${H.seen(page)}`);
+    }
     const fwd = await H.traverse(page, 'forward', to);
-    if (!fwd || !ok(fwd)) wrong.push(`${label} (${input}): Forward did not reopen ${to}`);
+    if (!fwd || !ok(fwd)) {
+      wrong.push(`${label} (${input}): Forward did not reopen ${to}; ${H.seen(page)}`);
+    }
     return s;
   },
 };
@@ -298,13 +313,14 @@ async function runLeg(name, origin) {
         const home = await H.until(page, 'playground', (s) => s.workspace === 'playground',
           `⤢ (${input}) in Filter Lab returns to the Playground`);
         if (!home) {
-          wrong.push(`${input}: ⤢ in Filter Lab did not return to the Playground`);
+          wrong.push(`${input}: ⤢ in Filter Lab did not return to the Playground; `
+            + H.seen(page));
           continue;
         }
         const back = await H.traverse(page, 'back', 'filter');
-        if (!back) wrong.push(`${input}: Back did not return to Filter Lab`);
+        if (!back) wrong.push(`${input}: Back did not return to Filter Lab; ${H.seen(page)}`);
         const fwd = await H.traverse(page, 'forward', 'playground');
-        if (!fwd) wrong.push(`${input}: Forward did not reopen the Playground`);
+        if (!fwd) wrong.push(`${input}: Forward did not reopen the Playground; ${H.seen(page)}`);
       }
       check(leg, 'the Filter Lab ⤢ button names where it goes and goes there (B1)',
         !wrong.length, wrong.join(' | '));
@@ -406,7 +422,9 @@ async function runLeg(name, origin) {
             await H.activate(page, '[data-osc="studio.back"]', input);
             const home = await H.until(page, from, (x) => x.workspace === from && !x.focusBody,
               `Studio Back (${input}) returns to ${from}`);
-            if (!home) wrong.push(`${osc}: Studio Back did not return to ${from}`);
+            if (!home) {
+              wrong.push(`${osc}: Studio Back did not return to ${from}; ${H.seen(page)}`);
+            }
           }
         }
         await page.close();
@@ -476,7 +494,7 @@ async function runLeg(name, origin) {
         await H.activate(page, '[data-osc="studio.compact.expand"]', input);
         const s = await H.until(page, 'studio', (x) => x.workspace === 'studio',
           `Expand (${input}) in the Sequencer opens Studio`);
-        if (!s) { wrong.push(`${input}: Expand did not open Studio`); continue; }
+        if (!s) { wrong.push(`${input}: Expand did not open Studio; ${H.seen(page)}`); continue; }
         const n = await until(async () => {
           const x = await H.name(page, '[data-osc="studio.back"]');
           return x && x.label === 'Back to the Sequencer' && x.text === 'Sequencer' ? x : null;
@@ -488,11 +506,13 @@ async function runLeg(name, origin) {
         const home = await H.until(page, 'sequencer',
           (x) => x.workspace === 'sequencer' && !x.focusBody,
           `Studio Back (${input}) returns to the Sequencer with focus on a control`);
-        if (!home) wrong.push(`${input}: Back did not return to the Sequencer`);
+        if (!home) wrong.push(`${input}: Back did not return to the Sequencer; ${H.seen(page)}`);
         const back = await H.traverse(page, 'back', 'studio');
-        if (!back) wrong.push(`${input}: history Back did not reopen Studio`);
+        if (!back) wrong.push(`${input}: history Back did not reopen Studio; ${H.seen(page)}`);
         const fwd = await H.traverse(page, 'forward', 'sequencer');
-        if (!fwd) wrong.push(`${input}: Forward did not return to the Sequencer`);
+        if (!fwd) {
+          wrong.push(`${input}: Forward did not return to the Sequencer; ${H.seen(page)}`);
+        }
       }
       check(leg, 'Studio opened from the Sequencer goes back to the Sequencer (P8)',
         !wrong.length, wrong.join(' | '));
@@ -527,7 +547,10 @@ async function runLeg(name, origin) {
           + '[data-osc="learn.tool"]';
         await H.activate(page, sel, input);
         const s = await H.arrived(page, ws, `${topic} (${input}) opens ${ws}`);
-        if (!s) { wrong.push(`${topic} (${input}): did not open ${ws}`); continue; }
+        if (!s) {
+          wrong.push(`${topic} (${input}): did not open ${ws}; ${H.seen(page)}`);
+          continue;
+        }
         const action = await until(() => page.evaluate(() => {
           const a = document.querySelector('[data-osc="alert.action"]');
           return a && a.getClientRects().length ? a.textContent.trim() : null;
@@ -539,7 +562,10 @@ async function runLeg(name, origin) {
         await H.activate(page, '[data-osc="alert.action"]', input);
         const back = await H.until(page, 'learn', (x) => x.workspace === 'learn' && x.headingOf,
           `${topic} (${input}): the notice returns to Learn`);
-        if (!back) { wrong.push(`${topic} (${input}): the notice did not return to Learn`); continue; }
+        if (!back) {
+          wrong.push(`${topic} (${input}): the notice did not return to Learn; ${H.seen(page)}`);
+          continue;
+        }
         const topicId = await page.evaluate((tt) => {
           const li = [...document.querySelectorAll('#osc-view-learn li[data-topic]')]
             .find((x) => x.querySelector('h3').textContent.trim() === tt);
@@ -551,7 +577,9 @@ async function runLeg(name, origin) {
         { ms: NAV_MS, what: 'the followed notice is dismissed' }).catch(() => null);
         if (!gone) wrong.push(`${topic}: the followed notice stayed`);
         const hb = await H.traverse(page, 'back', ws);
-        if (!hb) wrong.push(`${topic}: Back from the lesson did not return to ${ws}`);
+        if (!hb) {
+          wrong.push(`${topic}: Back from the lesson did not return to ${ws}; ${H.seen(page)}`);
+        }
       }
       check(leg, 'Learn topics open their tool and the notice leads back to the lesson (P5)',
         !wrong.length, wrong.join(' | '));
@@ -567,7 +595,10 @@ async function runLeg(name, origin) {
           + '[data-osc="learn.demo"]', input);
         const s = await H.until(page, 'playground', (x) => x.workspace === 'playground',
           `Demo (${input}) opens the Playground`);
-        if (!s) { wrong.push(`${input}: the demo did not open the Playground`); continue; }
+        if (!s) {
+          wrong.push(`${input}: the demo did not open the Playground; ${H.seen(page)}`);
+          continue;
+        }
         const action = await until(() => page.evaluate(() => {
           const a = document.querySelector('[data-osc="alert.action"]');
           return a && a.getClientRects().length ? a.textContent.trim() : null;
@@ -578,9 +609,9 @@ async function runLeg(name, origin) {
         }
         await H.activate(page, '[data-osc="alert.action"]', input);
         const back = await H.arrived(page, 'learn', `demo notice (${input}) returns to Learn`);
-        if (!back) wrong.push(`${input}: the demo notice did not return to Learn`);
+        if (!back) wrong.push(`${input}: the demo notice did not return to Learn; ${H.seen(page)}`);
         const hb = await H.traverse(page, 'back', 'playground');
-        if (!hb) wrong.push(`${input}: Back did not return to the demo`);
+        if (!hb) wrong.push(`${input}: Back did not return to the demo; ${H.seen(page)}`);
       }
       // The notices are in flow: one that never closed would push the page down until
       // dismissed. Untouched (focus on Hold to Play, the pointer away), it closes on its own.

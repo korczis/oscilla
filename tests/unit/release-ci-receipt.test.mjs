@@ -6,8 +6,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  CI_WORKFLOW, GH_ATTEMPTS, GH_TIMEOUT_MS, ciReceiptProblems, expectedJobs, gatherCiReceipt,
-  judgedRun,
+  CI_WORKFLOW, GH_ATTEMPTS, GH_TIMEOUT_MS, RERUN_ONLY_IF, ciReceiptProblems, expectedJobs,
+  gatherCiReceipt, judgedRun,
 } from '../../scripts/release-ci-receipt.mjs';
 import { gateVerdict } from '../../scripts/release-publish.mjs';
 import * as prep from '../../scripts/release-prepare.mjs';
@@ -94,6 +94,89 @@ test('a job missing, skipped, cancelled or from another run or sha refuses', () 
   only(facts({ jobs: [...jobsOf(r), { ...jobsOf(r)[0], name: 'extra' }] }),
     /a job "extra" that .* does not declare/);
   only(facts({ jobs: null }), /jobs of run 900 could not be read/);
+});
+
+test('the flake ledger is the one re-run-only job, by its ci.yml condition (E010)', () => {
+  assert.equal(WORKFLOW.rerunOnly.length, 1, WORKFLOW.rerunOnly.join());
+  assert.match(WORKFLOW.rerunOnly[0], /flake ledger/i);
+  assert.ok(CI_TEXT.includes(`if: ${RERUN_ONLY_IF}`), 'ci.yml carries the condition verbatim');
+});
+
+test('a first attempt with the flake ledger skipped by its own condition verifies', () => {
+  const r = run({ run_attempt: 1 });
+  const ledger = WORKFLOW.rerunOnly[0];
+  const jobs = jobsOf(r).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
+  assert.deepEqual(ciReceiptProblems(facts({ runs: [r], jobs })), []);
+});
+
+test('from the second attempt the flake ledger must succeed; any other skip still refuses', () => {
+  const ledger = WORKFLOW.rerunOnly[0];
+  const r2 = run({ run_attempt: 2 });
+  const skipLedger = jobsOf(r2).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
+  only(facts({ runs: [r2], jobs: skipLedger }), /flake ledger.*completed\/skipped/i);
+  const r1 = run({ run_attempt: 1 });
+  const other = WORKFLOW.jobs.find((n) => n !== ledger && /Browser gate/.test(n));
+  const skipOther = jobsOf(r1).map((j) => (j.name === other ? { ...j, conclusion: 'skipped' } : j));
+  only(facts({ runs: [r1], jobs: skipOther }), /Browser gate.*completed\/skipped/);
+});
+
+test('mutation-proven guard: on attempt 1 a cancelled, failed or running ledger refuses (#417 R1)',
+  () => {
+  const ledger = WORKFLOW.rerunOnly[0];
+  const r1 = run({ run_attempt: 1 });
+  for (const [status, conclusion] of [['completed', 'cancelled'], ['completed', 'failure'],
+    ['in_progress', null], ['completed', 'timed_out']]) {
+    const jobs = jobsOf(r1).map((j) => (j.name === ledger ? { ...j, status, conclusion } : j));
+    only(facts({ runs: [r1], jobs }), new RegExp(`flake ledger.*${status}/${conclusion}`, 'i'));
+  }
+});
+
+test('from attempt 3 too the ledger must succeed; a carried skip stamped later refuses (#417 R5, R7)',
+  () => {
+  const ledger = WORKFLOW.rerunOnly[0];
+  const r3 = run({ run_attempt: 3 });
+  const skip3 = jobsOf(r3).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
+  only(facts({ runs: [r3], jobs: skip3 }), /flake ledger.*completed\/skipped/i);
+  // GitHub re-stamps a job it carries over with the run's attempt (#417 review R7): a ledger
+  // skipped on attempt 1 and carried into attempt 2 arrives stamped 2, and refuses; a release
+  // run re-runs all its jobs, so this fails closed rather than verifying a partial re-run
+  const r2 = run({ run_attempt: 2 });
+  const carried = jobsOf(r2).map((j) => (j.name === ledger
+    ? { ...j, conclusion: 'skipped', run_attempt: 2 } : j));
+  only(facts({ runs: [r2], jobs: carried }), /flake ledger.*completed\/skipped/i);
+  // a job object with no run_attempt falls back to the run's attempt (#417 R8)
+  const noAttempt = jobsOf(run({ run_attempt: 1 })).map((j) => (j.name === ledger
+    ? { ...j, conclusion: 'skipped', run_attempt: undefined } : j));
+  assert.deepEqual(ciReceiptProblems(facts({ runs: [run({ run_attempt: 1 })], jobs: noAttempt })),
+    []);
+});
+
+const wf = (ledgerJob) => `name: CI\njobs:\n  unit:\n    runs-on: x\n${ledgerJob}`;
+test('only exactly that condition, on the job id flake-ledger, is re-run-only (#417 R3, R4)', () => {
+  const exact = `  flake-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
+  assert.deepEqual(expectedJobs(wf(exact)).problems, []);
+  assert.deepEqual(expectedJobs(wf(exact)).rerunOnly, ['flake-ledger']);
+  const nearMisses = [
+    '  flake-ledger:\n    if: always() && fromJSON(github.run_attempt) > 1\n    runs-on: x\n',
+    '  flake-ledger:\n    if: ${{ always() && fromJSON(github.run_attempt) > 0 }}\n    runs-on: x\n',
+    '  flake-ledger:\n    if: ${{ always() &&  fromJSON(github.run_attempt) > 1 }}\n    runs-on: x\n',
+    `  flake-ledger:\n    runs-on: x\n    steps:\n      - if: ${RERUN_ONLY_IF}\n        run: x\n`,
+    `  flake-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n    strategy:\n      matrix:\n`
+      + '        browser: [webkit]\n',
+  ];
+  for (const job of nearMisses) {
+    const w = expectedJobs(wf(job));
+    assert.deepEqual(w.rerunOnly, [], job);
+    assert.ok(w.problems.some((p) => /exactly one re-run-only job/.test(p)), job);
+  }
+  const renamed = `  other-job:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
+  assert.ok(expectedJobs(wf(renamed)).problems.some((p) => /id flake-ledger \(found: other-job/
+    .test(p)));
+  const two = `${exact}  second-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
+  assert.ok(expectedJobs(wf(two)).problems.some((p) => /exactly one re-run-only job/.test(p)));
+  assert.deepEqual(expectedJobs(wf(two)).rerunOnly, []);
+  const twin = `  flake-ledger:\n    name: unit\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
+  assert.ok(expectedJobs(wf(twin)).problems.some((p) => /two jobs named "unit"/.test(p)));
 });
 
 test('the run is on another sha, or none: refuses', () => {
