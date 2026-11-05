@@ -7,7 +7,9 @@
 //     cables: non-normal edges between panel modules; foreign: edges into a panel jack from a
 //     node outside the panel (a Studio edit)
 //   panelCables(model, panel) -> [{ id, from, to, fromModule }]   the cables as jack ids
-//   jackState(model, panel, jackId) -> 'normalled' | 'patched' | 'mixed' | 'open' | 'free'
+//   jackState(model, panel, jackId)
+//     -> 'normalled' | 'summing' | 'patched' | 'mixed' | 'open' | 'free'
+//     summing: a performance cable (`adds`) feeds the jack and adds to its sounding normals
 //     mixed: something the panel did not patch (a Studio edge) feeds the jack while its normals
 //     still sound; breakNormals(model, panel, jackId) is the panel's way to make it 'patched'
 //   jackReason(model, panel, jackId) -> why a cable into the jack would do nothing, or null
@@ -22,7 +24,8 @@
 //
 // A cable from a performance output (a module's `adds`, panels/xy.js: the XY pad's X and Y,
 // K183) adds to what is normalled at its jack instead of replacing it: patchCable breaks no
-// normal for it, jackState reads the jack as its normals while one sounds, and removing the last
+// normal for it, jackState reads the jack as 'summing' (its normals sound, the cable adds to
+// them; the bay draws and names it so, ui/patch/patch-bay.js), and removing the last
 // replacing cable restores the normals whatever performance cable stays.
 //
 // A new cable's props (review of #329): the props of the normal it replaces when it has the
@@ -111,12 +114,13 @@ export function jackState(model, panel, jack) {
   const rows = panel.normals.filter((n) => n.to === jack);
   const { normals } = panelEdges(model, panel);
   const live = rows.some((n) => normals.has(n.id));
-  // A performance cable beside a sounding normal adds to it: the jack still reads as normalled.
-  const fed = cablesInto(model, panel, jack, { foreign: true })
-    .filter((e) => !live || !addsEdge(model, panel, e));
+  // A performance cable beside a sounding normal adds to it: the jack sums (K183).
+  const all = cablesInto(model, panel, jack, { foreign: true });
+  const fed = all.filter((e) => !live || !addsEdge(model, panel, e));
   if (fed.length) return live ? 'mixed' : 'patched';
   if (!rows.length) return 'free';
-  return live ? 'normalled' : 'open';
+  if (!live) return 'open';
+  return all.length ? 'summing' : 'normalled';
 }
 
 /**
@@ -143,6 +147,7 @@ export function brokenByRemoval(model, panel) {
 
 export const STATE_TEXT = Object.freeze({
   normalled: 'normalled', patched: 'patched', free: 'free',
+  summing: 'normalled, a performance cable adds to the normals',
   open: 'open: normal removed in Studio',
   mixed: 'patched in Studio while its normal still sounds',
 });

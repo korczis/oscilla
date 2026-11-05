@@ -7,6 +7,13 @@
 // adds to LPF Cutoff's EG 2 and MG normals rather than replacing them (synth/normals.js), and
 // removing it leaves the pad playing pitch only.
 //
+// The reviewer's conditions on that design (K183, af 2026-11-05): the Y cable is drawn and named
+// as summing in the bay (jackState 'summing': the normal's inner glyph, the cable's colour on the
+// ring, "adds to the normals" in the jack's name and the cable list), Y is 0 until the first
+// touch, the sum stays within LPF Cutoff's declared range (compiler.js computeBases holds the
+// upward excursion of every log edge at min(max, 0.95 x Nyquist); Y is unipolar with offset 0,
+// so it adds nothing downward), and n21 and n22 stay active edges of the running plan beside it.
+//
 //   node --test tests/unit/xy-default-patch.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -27,6 +34,12 @@ import { SYNTH_TEXT } from '../../src/js/synth/insert.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
+import { computeBases } from '../../src/js/studio/compiler.js';
+import { liveModel } from '../../src/js/studio/live-notes.js';
+import { CENTS_PER_OCTAVE } from '../../src/js/core/music.js';
+import * as bay from '../../src/js/synth/view/bay.js';
+import { CABLE_TOKENS, PANEL_TOKENS } from '../../src/js/synth/view/tokens.js';
+import { setAmount, STATE_TEXT } from '../../src/js/synth/normals.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
@@ -81,7 +94,8 @@ test('the default Synth document holds the Y route as a typed model cable xy.y -
     assert.deepEqual(live(m, KEYS_NORMALS), KEYS_NORMALS);
     // A performance output adds: LPF Cutoff keeps its MG and EG 2 normals (and amount knobs).
     assert.deepEqual(live(m, LPF_NORMALS), LPF_NORMALS);
-    assert.equal(jackState(m, PANEL, 'lpf.frequency'), 'normalled');
+    assert.equal(jackState(m, PANEL, 'lpf.frequency'), 'summing',
+      'the jack sums: its normals sound and the Y cable adds to them');
   });
 
 test('the Synth inserts the panel through xyInsertAction, on every insert path', () => {
@@ -175,4 +189,137 @@ test('a performance cable adds; any other cable still replaces the normals, and 
   const pitch = patchCable(st.getModel(), PANEL, 'xy.pitch', 'vco1.pitch');
   assert.equal(pitch.action.steps[0].type, 'EDGE_REMOVE');
   assert.deepEqual(PANEL.module('xy').adds, ['x', 'y']);
+});
+
+/** The default document running on the fake engine at `sampleRate`: { st, rt, fx }. */
+function runningDefault(sampleRate, edit = null) {
+  const st = defaultStore();
+  if (edit) edit(st);
+  const fx = createFakeAudioEnv({ sampleRate });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const rt = createStudioRuntime({ engine });
+  const r = rt.apply(liveModel(st.getModel()), { revision: 1 });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(rt.start().ok, true);
+  return { st, rt, fx };
+}
+
+test('the bay draws and names the Y cable as summing into LPF Cutoff', () => {
+  const m = defaultStore().getModel();
+  // Each role as its token's name, so the roles can be told apart (no page to resolve them).
+  const tokens = { ...Object.fromEntries(Object.entries(PANEL_TOKENS)
+    .map(([k, name]) => [k, `var(${name})`])), cables: CABLE_TOKENS.map((n) => `var(${n})`) };
+  const layout = bay.bayLayout(PANEL, 376);
+  const states = new Map(PANEL.modules.flatMap((mod) => PANEL.jacksOf(mod.id))
+    .filter((j) => j.direction === 'in').map((j) => [j.key, jackState(m, PANEL, j.id)]));
+  assert.equal(states.get('lpf.frequency:in'), 'summing');
+  assert.equal(states.get('hpf.frequency:in'), 'normalled', 'a jack no cable feeds');
+  const cables = panelCables(m, PANEL).map((c) => ({ ...c, type: 'CONTROL' }));
+  const svg = bay.baySvg({ panel: PANEL, layout, cables, states, tokens });
+  const jack = (key) => svg.match(new RegExp(`<g role="button"[^>]*data-jack="${key}"[^>]*>`
+    + '.*?</g>'))[0];
+  const ring = (g) => g.match(/data-ring="" fill="[^"]+" stroke="([^"]+)"/)[1];
+  const inner = (g) => g.match(/data-ring="[^>]*\/>[^>]*fill="([^"]+)"/)[1];
+  const order = PANEL.modules.map((x) => x.id);
+  const colour = tokens.cables[order.indexOf('xy') % tokens.cables.length];
+  const sum = jack('lpf.frequency:in');
+  const plain = jack('hpf.frequency:in');
+  assert.match(sum, /aria-label="[^"]*normalled, a performance cable adds to the normals"/);
+  assert.equal(STATE_TEXT.summing, 'normalled, a performance cable adds to the normals');
+  assert.equal(inner(sum), tokens.normal, 'the normals still sound: the normal\'s inner glyph');
+  assert.equal(ring(sum), colour, 'the cable joins it: the ring takes the cable\'s colour');
+  assert.equal(ring(plain), tokens.jackRing);
+  assert.notEqual(ring(sum), ring(plain), 'summing is drawn apart from a plain normal');
+  assert.doesNotMatch(sum, /stroke-dasharray/, 'not the dashed warning of open or mixed');
+  assert.match(svg, new RegExp(`data-cable="${cables[0].id}"`), 'the cable itself is drawn');
+  // A replacing cable is drawn as patched, not summing: the inner glyph takes its colour.
+  const st = defaultStore();
+  const mg = patchCable(st.getModel(), PANEL, 'mg.control', 'lpf.frequency');
+  assert.equal(st.dispatch(mg.action).ok, true);
+  assert.equal(jackState(st.getModel(), PANEL, 'lpf.frequency'), 'patched');
+  const ui = readFileSync(`${ROOT}src/js/synth/ui.js`, 'utf8');
+  assert.match(ui, /=== 'summing' \? ', adds to the normals'/, 'the cable list says it adds');
+});
+
+test('Y is 0 until the first touch: the pad\'s Y output rests at 0 in the running document',
+  () => {
+    const { st, rt } = runningDefault(48000);
+    const h = rt.nodes.get(ids(st.getModel())('xy'));
+    assert.ok(h && h.outputs && h.outputs.y, 'the pad\'s handle has its Y output');
+    const ev = h.outputs.y.offset.events;
+    assert.ok(ev.length > 0, 'its offset is set');
+    assert.deepEqual([...new Set(ev.map((e) => e.value))], [0], 'every value before a touch: 0');
+    h.move(0.01, 0.5, 1);
+    assert.equal(h.outputs.y.offset.events.at(-1).value, 1, 'a touch at the top: Y 1');
+    rt.stop?.();
+  });
+
+test('the sum stays within LPF Cutoff\'s declared range: normals at their amounts, Y at 1', () => {
+  const p = NODE_REGISTRY.param('filter', 'frequency');
+  const lpfAt = (st) => ids(st.getModel())('lpf');
+  // The default amounts, and the worst case: Cutoff at its top, both amounts at their top.
+  const worst = (st) => {
+    const m = st.getModel();
+    const knob = PANEL.resolve(m).get('lpf');
+    assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: knob.id,
+      params: { frequency: p.max } }).ok, true);
+    for (const id of ['lpf-mg', 'lpf-eg2']) {
+      const a = PANEL.amounts.find((x) => x.id === id);
+      assert.equal(st.dispatch(setAmount(st.getModel(), PANEL, a, a.range[1])).ok, true);
+    }
+  };
+  for (const sampleRate of [44100, 48000]) {
+    for (const edit of [null, worst]) {
+      const { st, rt } = runningDefault(sampleRate, edit);
+      const id = lpfAt(st);
+      const plan = rt.plan;
+      const incoming = plan.edgeOrder.map((e) => plan.edges.get(e))
+        .filter((e) => e.to.node === id && e.kind === 'control')
+        .map((edge) => ({ edge, handle: rt.edges.get(edge.id) }));
+      assert.equal(incoming.length, 3, 'n21, n22 and the Y cable');
+      const safeMaximum = 0.95 * (sampleRate / 2);
+      const cb = computeBases(plan.nodes.get(id), incoming, { safeMaximum });
+      // The played cutoff: base Hz x 2^(cents / 1200), every edge's source at the extreme that
+      // moves it farthest (Y at 1 is its top: unipolar 0..1).
+      const extreme = (pick) => incoming.reduce((c, { edge, handle }) => {
+        const g = cb.gains.get(edge.id);
+        const [lo, hi] = handle.range;
+        return c + pick(g * lo, g * hi);
+      }, cb.base.frequency.cents);
+      const top = cb.base.frequency.value * 2 ** (extreme(Math.max) / CENTS_PER_OCTAVE);
+      const cap = Math.min(p.max, safeMaximum);
+      assert.equal(cb.caps.frequency.value, cap);
+      assert.ok(top <= cap * (1 + 1e-9), `${sampleRate} Hz ${edit ? 'worst' : 'default'}: `
+        + `${top} Hz <= ${cap} Hz`);
+      assert.ok(top <= p.max, 'inside the parameter\'s declared maximum');
+      // Y adds nothing downward (unipolar, offset 0): the lowest cutoff is the normals' own.
+      const y = incoming.find(({ edge }) => edge.from.node === ids(st.getModel())('xy'));
+      assert.deepEqual([y.edge.props.polarity, y.edge.props.offset], ['unipolar', 0]);
+      assert.equal(Math.min(0, cb.gains.get(y.edge.id) * y.handle.range[0]), 0);
+      if (!edit) {
+        const low = cb.base.frequency.value * 2 ** (extreme(Math.min) / CENTS_PER_OCTAVE);
+        assert.ok(low >= p.min, `the default lowest cutoff ${low} Hz >= ${p.min} Hz`);
+        assert.equal(cb.limited.size, 0, 'at the default amounts nothing needs scaling');
+      } else {
+        assert.ok(cb.limited.has(y.edge.id), 'in the worst case the Y excursion is scaled');
+      }
+    }
+  }
+});
+
+test('n21 and n22 stay active edges of the running plan with the Y cable in place', () => {
+  const { st, rt } = runningDefault(48000);
+  const m = st.getModel();
+  const want = LPF_NORMALS.map((n) => `${PANEL.instance}-${n}`);
+  const y = m.graph.edges.find((e) => e.from.node === ids(m)('xy'));
+  for (const eid of [...want, y.id]) {
+    const pe = rt.plan.edges.get(eid);
+    assert.ok(pe, `${eid} is compiled`);
+    assert.equal(pe.status, 'active', `${eid} is an active plan edge`);
+    assert.equal(pe.to.node, ids(m)('lpf'));
+    assert.equal(pe.to.port, 'frequency');
+    assert.equal(rt.edges.get(eid).status, 'active', `${eid} is routed in the runtime`);
+  }
+  assert.deepEqual(live(m, LPF_NORMALS), LPF_NORMALS, 'and they are the panel\'s normals');
 });

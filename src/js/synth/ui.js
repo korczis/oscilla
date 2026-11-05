@@ -292,7 +292,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const mixed = jacksIn('mixed');
     if (list) {
       list.innerHTML = cables.map((c) => `<li class="${ITEM}"><span>${esc(jackName(c.from))} → `
-        + `${esc(jackName(c.to))}</span><button type="button" class="${BTN}" data-remove-cable=`
+        + `${esc(jackName(c.to))}${states.get(`${c.to}:in`) === 'summing' ? ', adds to the normals'
+          : ''}</span><button type="button" class="${BTN}" data-remove-cable=`
         + `"${esc(c.id)}" aria-label="Remove cable ${esc(jackName(c.from))} to `
         + `${esc(jackName(c.to))}">Remove</button></li>`).join('')
         + gone.map((r) => `<li class="${ITEM}" data-gone="${r.module}"><span>${esc(r.label)} `
