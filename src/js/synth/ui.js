@@ -292,7 +292,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     }
   }
 
-  const PLATE_GRID = 'grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4';
+  // The plates fill the column they are given, not the viewport: as many as fit at 264 px (a
+  // choice's widest dial, CHOICE_MAX_PX 234, plus the plate's 12 px pads), so the Pro shell's
+  // sidebar and the patch bay beside them never squeeze a plate under its widest control.
+  const PLATE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,16.5rem),1fr))] gap-3';
   function renderAll() {
     const el = host();
     if (!el || !cmp) return;
