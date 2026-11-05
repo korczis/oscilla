@@ -59,7 +59,8 @@ npm run build                      # src/ -> dist/index.html; commit dist/ with 
 npm run release-gate               # full gate (what it runs: package.json, tests/README.md)
 npm run visual                     # compare against the visual reference at 1536x1024
 npm run release:analyze            # SemVer level needed by the commits since the last v* tag
-npm run release:prepare            # clean tree -> bump once, rebuild, gate; restores on failure
+npm run release:prepare            # clean tree -> bump once, rebuild, verify (--local-gate:
+                                   # the full gate); restores on failure
 npm run release:publish            # dry run; `-- --yes` tags, waits for Pages, verifies, releases
 npm run release:record -- --version X.Y.Z   # .ai/repo/releases/vX.Y.Z.yaml from the Release
 npm run release:prepare -- --help  # also publish/analyze/record/stamp/verify-deploy, cadence;
@@ -67,9 +68,11 @@ npm run release:prepare -- --help  # also publish/analyze/record/stamp/verify-de
 majordomus plan status             # milestone progress
 ```
 
-Ship through small PRs with `gh pr merge --auto --squash`; the required `gate` check
-aggregates the CI jobs, whose `npm test` includes `tests/unit/knowledge-integrity.test.mjs`
-(the paths the claims, rules and bootstraps name exist; claim and rule tests run in CI).
+Ship through small PRs with `gh pr merge --auto --merge` (merge commits only; squash merging
+is disabled); branch protection is `strict: true`, so a PR merges only up to date with main,
+and its required `gate` check aggregates the CI jobs, whose `npm test` includes
+`tests/unit/knowledge-integrity.test.mjs` (the paths the claims, rules and bootstraps name
+exist; claim and rule tests run in CI).
 `majordomus doctor` runs in the pre-commit hook, `npm run verify` and CI; `majordomus finish
 --check` before a push.
 
@@ -85,10 +88,10 @@ then `-- --yes`;
 
 ## Plan
 
-`.ai/repo/project/` holds the milestones, the issues (the prefix names the line: `S` and `D`
-V1, `V2xx` V2, `R` release engineering, `V3xx` V3 MEASURE, `V4xx` the V3.1 Studio), the
-intents above them and their critiques and gaps. Status is derived from evidence (`majordomus
-plan evidence <id> ...`, `majordomus plan done <id>`). `majordomus plan status` lists every
+`.ai/repo/project/` holds the milestones, the issues (the prefix names the line; the list is
+"Issue identifiers" in `.ai/repo/project/README.md`), the intents above them and their
+critiques and gaps. Status is derived from evidence (`majordomus plan evidence <id> ...`,
+`majordomus plan done <id>`). `majordomus plan status` lists every
 milestone with its progress and `majordomus plan roadmap` their order; this paragraph
 enumerates neither, because ranges written here go stale.
 
@@ -97,11 +100,14 @@ enumerates neither, because ranges written here go stale.
 - `core/` (constants, maths, safety, storage, URL state, `build-info.js`, the V1 `instrument.js`,
   the Studio `trace.js`); `audio/` (`audio-engine.js` and its graph builders, scheduler, `wav`);
   `analysis/`, `sequencer/`, `visualization/`, `charts/`, `labs/`, `data/`.
+- `midi/` (Web MIDI input, note voices, the computer and on-screen keyboard), `synth/` (the
+  Synth panel declaration, engines, XY pad, picker and its patch library).
 - `measurement/` (V3 engine: state machine, capture, transfer, IR, RTA, quality, algorithm IDs,
   Worker, `views/`), `calibration/` (profiles, level), `experiments/` (schema, validate, store).
 - `studio/` (StudioModel, actions, history, ports, compiler, runtime, transport, patches,
   provenance, templates); `ui/studio/` (workspace, graph and timeline editors, Inspector).
-- `ui/` (Alpine shell, Measure and Experiments adapters, dialogs), `main.js` (composition).
+- `ui/` (Alpine shell, Measure and Experiments adapters, dialogs; `ui/keys/` is the one key
+  registry and dispatcher every key and Space binds through), `main.js` (composition).
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 

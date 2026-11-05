@@ -75,10 +75,11 @@ Majordomus
 
 Shipping
 
-12. Ship through small pull requests with `gh pr merge --auto --squash`, gated on `gate`;
+12. Ship through small pull requests with `gh pr merge --auto --merge` (merge commits only;
+    squash merging is disabled), gated on `gate`;
     open long work as an early draft. Record plan evidence at a commit of main, in a
     follow-up `chore(plan)` pull request, never at a branch commit: a branch commit is lost
-    to every clone once the branch is squashed or deleted (#238), and the `V272 D4` test
+    to every clone once the branch is deleted (#238), and the `V272 D4` test
     refuses it on the pull request whatever the merge method. `plan evidence` records HEAD,
     so record every entry on a fresh branch from `origin/main` before its first commit
     (`.ai/repo/workflows/plan.md`, "Evidence names a commit of main", has the commands).
@@ -86,8 +87,8 @@ Shipping
     merge commit (skill `merge-train`). Read release and deploy state from GitHub
     (`gh release list`, `npm run release:verify-deploy`), never from memory.
 13. Land dist-changing pull requests one at a time, each merged up to date with main and
-    rebuilt; branch protection no longer asks for that (`strict: false` since 2026-10-30),
-    so it is this item and the `dist/index.html` conflict that hold it. Before arming
+    rebuilt; branch protection asks for that (`strict: true`, again after the relaxation of
+    2026-10-30), and this item and the `dist/index.html` conflict hold it as well. Before arming
     auto-merge on a pull request whose last run predates a change on `main` to a rule, to
     `scripts/fail-first.mjs`, `scripts/review-verdict.mjs` or a guarded file it builds on,
     merge `main` into it so the gate runs once more on the combination. Do not arm

@@ -24,7 +24,7 @@ them". Until this rule the expectation lived in one worker's memory and nothing 
 # Required behaviour
 
 - A commit that needs a release is released within 24 hours of landing on main. The clock is
-  the oldest such commit since the last `v*` tag, by committer date (for a squash merge, the
+  the oldest such commit since the last `v*` tag, by committer date (for a merge commit, the
   time of the merge); a later fix does not restart it.
 - What needs a release is decided by `scripts/release-analyze.mjs` and by nothing else: any
   commit it gives a level other than none. Commits that are only `build`, `chore`, `ci`,
@@ -68,7 +68,8 @@ so the same change titled `chore` instead of `feat` or `fix` never becomes overd
 an empty commit 48 hours old is `OVERDUE`, exit 1, as `feat(x): probe` and `release cadence:
 ok`, exit 0, as `chore(x): probe`). "Not by retitling commits" above is therefore a statement
 of intent that no script holds: whether a pull request's title names what it changes is the
-reviewer's, at the squash merge, where the title becomes the subject.
+reviewer's, at the merge, where the pull request's title becomes the merge commit's subject
+(merge commits only; squash merging is disabled).
 
 What this is not: a required check. The `gate` check that blocks a merge does not include the
 cadence, because the pull request that clears an overdue release is the release itself and a

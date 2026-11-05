@@ -131,13 +131,15 @@ What it cannot see:
   that a row's title is its member's and that every merged member is listed is for the
   reviewer of the train (`gh pr view <n> --json title` answers it).
 - A pull request whose last green run is older than `main`. Protection on `main` requires
-  the `gate` check and, by the owner's decision of 2026-10-30, no longer an up-to-date branch
-  (`contexts: [gate]`, `strict: false`; read it with
-  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`). A run
-  judges GitHub's merge of the head into `main` as `main` stood when the run started, with
-  the program `origin/main` held then. The pull request then merges on that run however old
-  it is: a change to this rule or to `scripts/fail-first.mjs` that lands on `main` after the
-  run does not judge it, and nothing judges it later, because this job runs only for a pull
+  the `gate` check and an up-to-date branch (`contexts: [gate]`, `strict: true`; it was
+  relaxed on 2026-10-30 and is strict again; read it with
+  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`), so a
+  pull request merges only on a run of a head that contains `main` as it stands. While the
+  relaxation held (2026-10-30 until strict returned), a run judged GitHub's merge of the head
+  into `main` as `main` stood when the run started, with the program `origin/main` held then,
+  and the pull request merged on that run however old it was: a change to this rule or to
+  `scripts/fail-first.mjs` that landed on `main` after the run did not judge it, and nothing
+  judged it later, because this job runs only for a pull
   request and `ci.yml` does not run on a push to `main`. Merging `main` into the branch
   starts a run that does; nothing requires it.
 - A merge that bypasses branch protection. An administrator's merge past protection is the
