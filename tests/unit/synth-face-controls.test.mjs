@@ -177,7 +177,8 @@ test('a choice is ONE control: the core\'s switch at its value, by its position 
     assert.equal(count(b, /<g data-control="/g), 1, `${cid}: one control`);
     assert.equal(count(b, new RegExp(`<g data-control="switch" data-style="${L.style}" `
       + 'aria-hidden="true" pointer-events="none"', 'g')), 1, `${cid}: the core's ${L.style}`);
-    assert.ok(b.includes(choiceSvg({ value, param: c.param, tokens: T, disabled: !!reason })),
+    assert.ok(b.includes(choiceSvg({ uid: cid, value, param: c.param, tokens: T,
+      disabled: !!reason })),
       `${cid}: the drawing is choiceSvg's, the lever, cap or pointer at the value`);
     // Drawn at zoom 1: one graph unit is one CSS px, so the legends are 12 px on screen.
     const box = L.box;
@@ -420,9 +421,7 @@ test('a rotary selector is knob-sized: the knob\'s own face on screen', () => {
 // x8, knob-decay x8 ...): invalid markup whose url(#) paints bind to the first copy. dev-53's
 // knobSvg (src/js/synth/view/knob.js) forwards uid to controlSvg, and the dials' host passes
 // switchSvg its uid; then every gradient id on the panel is unique.
-test('every gradient id across the panel\'s plates is unique', {
-  todo: 'dev-53: knobSvg forwards uid to controlSvg, the dial host passes switchSvg its uid' },
-() => {
+test('every gradient id across the panel\'s plates is unique', () => {
   const ids = [...plates.values()].flatMap((h) => [...h.matchAll(
     /<(?:linear|radial)Gradient\b[^>]*\sid="([^"]+)"/g)].map((m) => m[1]));
   assert.ok(ids.length > 0, 'the plates draw gradients');

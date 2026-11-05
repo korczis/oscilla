@@ -11,7 +11,7 @@
 //     format is the readout (a short physical unit only), text the aria-valuetext (every unit)
 //   readoutText(v, param) -> the readout: formatValue's text less a unit not short and physical
 //   knobSvg({ uid, value, param, tokens, disabled }) -> '<svg>' of the core's knob at 64 px
-//   selectorSvg({ value, param, tokens, disabled }) -> '<svg>' of a switch (an enum of up to
+//   selectorSvg({ uid, value, param, tokens, disabled }) -> '<svg>' of a switch (an enum of up to
 //     four options, or a boolean) or a rotary selector (the core's knob on a longer enum); the
 //     panel draws only a toggle's lever with it since W1c
 //   choiceLayout(param) -> the core's switchLayout at zoom 1 (graph units are CSS px) beside the
@@ -19,8 +19,9 @@
 //     CHOICE_MAX_PX, the same dial with its legends packed into a grid below it (packed: true),
 //     a numbered dial's (7+ detents) legends "n · label", so no choice is wider than the
 //     narrowest plate
-//   choiceSvg({ value, param, tokens, disabled }) -> the inner markup of a choice's one drawing:
-//     the core's switch (lever, slide, detented rotary, rotary with a window) with its legends
+//   choiceSvg({ uid, value, param, tokens, disabled }) -> the inner markup of a choice's one
+//     drawing (uid names its gradients, unique on the panel): the core's switch (lever, slide,
+//     detented rotary, rotary with a window) with its legends
 //     silk-screened at 12 px, a dial knob-sized and knurled by the core, its detents numbered
 //     from 7, a window's selected name
 //   CHOICE_MAX_PX -> the widest a choice is drawn, px
@@ -106,8 +107,8 @@ const svgOf = (b, w, h, extra, inner) => `<svg viewBox="${box(b)}" width="${w}" 
 const FOCUS_CLASS = ' class="invisible group-focus-visible:visible"';
 
 /** One knob as the panel shows it: the core's knob, 64 px. */
-export function knobSvg({ value, param, tokens, disabled = false }) {
-  const g = controlSvg({ kind: 'knob', value, param, tokens: panelControlTokens(tokens),
+export function knobSvg({ uid, value, param, tokens, disabled = false }) {
+  const g = controlSvg({ kind: 'knob', uid, value, param, tokens: panelControlTokens(tokens),
     zoom: KNOB_PX / CONTROL_BOX.knob.width, state: { focus: true, disabled } });
   return svgOf(CONTROL_BOX.knob, KNOB_PX, KNOB_PX, '',
     g.replace('<circle data-focus=""', `<circle data-focus=""${FOCUS_CLASS}`));
@@ -116,13 +117,13 @@ export function knobSvg({ value, param, tokens, disabled = false }) {
 /** A choice's drawing beside its legends: a switch, or the core's knob on a longer enum. It is
  *  decoration (the legends are the radios): the core's hit rect sets its own pointer-events="all",
  *  which would win over the svg's, so it is neutralised and a press reaches nothing. */
-export function selectorSvg({ value, param, tokens, disabled = false }) {
+export function selectorSvg({ uid, value, param, tokens, disabled = false }) {
   const rotary = param.type === 'enum' && param.options.length > SWITCH_MAX;
   const b = CONTROL_BOX[rotary ? 'knob' : 'switch'];
   const h = rotary ? SELECTOR_PX : SWITCH_PX;
   const w = Math.round((b.width * h) / b.height);
   return svgOf(b, w, h, ' class="pointer-events-none shrink-0"', controlSvg({
-    kind: rotary ? 'knob' : 'switch', value, param, tokens: panelControlTokens(tokens),
+    kind: rotary ? 'knob' : 'switch', uid, value, param, tokens: panelControlTokens(tokens),
     zoom: h / b.height, state: { disabled } }).replace('pointer-events="all"',
     'pointer-events="none"'));
 }
@@ -250,11 +251,11 @@ function packedLegends(L, value, ct, disabled) {
  * name. A packed layout's legends are drawn here, in the core's group, and its dial keeps no
  * leader. The options' radio buttons are the caller's, at the layout's hit boxes.
  */
-export function choiceSvg({ value, param, tokens, disabled = false }) {
+export function choiceSvg({ uid, value, param, tokens, disabled = false }) {
   const ct = panelControlTokens(tokens);
   const L = choiceLayout(param);
   const v = (param.options.find((o) => o[0] === value) || param.options[0])[0];
-  let g = switchSvg({ value, param, tokens: ct, state: { disabled }, legends: !L.packed,
+  let g = switchSvg({ uid, value, param, tokens: ct, state: { disabled }, legends: !L.packed,
     ...drawOpts(L) });
   if (L.packed) {
     g = `${g.replace(/<line data-leader=""[^>]*\/>/g, '').slice(0, -'</g>'.length)}`
