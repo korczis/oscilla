@@ -286,7 +286,7 @@ const usesOf = (api, form) => {
   return uses;
 };
 
-test('each p5 API family is refused in every first-party form (R040 review)', () => {
+test('each p5 API family is refused in these first-party forms (R040 review)', () => {
   // The p5@1.11.3 APIs whose use reaches a network site, enumerated from its bytes; a name
   // dropped from the inventory (or a form weakened) fails here.
   const refused = new Map(families.flatMap(entries));
@@ -305,6 +305,22 @@ test('each p5 API family is refused in every first-party form (R040 review)', ()
       }
     }
   }
+});
+
+test('a <link> handler and a backtick + chain reach no p5 API (R040 review 5)', () => {
+  const link = '<link rel="preload" href="data:," '
+    + 'onerror="p.loadImage(\'https://t.example/p.png\')">';
+  const html = p5Doc(P5).replace('<meta charset="utf-8">', `<meta charset="utf-8">${link}`);
+  const problems = verifyHtml(html, {
+    vendors: new Map([[P5_ID, P5]]), budget: { rawBytes: 1e8, gzipBytes: 1e8 },
+  }).problems;
+  assert.ok(problems.some((p) => p.includes(`reaches vendor ${P5_ID} loadImage`)), link);
+  for (const app of ['p[`load`+`Image`](u)', 'p[`load`+"Image"](u)', "p['lo'+`ad`+\"Image\"](u)",
+    'p[`cur` + `sor`](x)', 'p[`load${k}`+"Image"](u)']) {
+    assert.ok(p5Check(P5, app).some((p) => p.includes(`reaches vendor ${P5_ID} `)), app);
+  }
+  assert.ok(firstPartyUse('p[`load`+`Image`](u)', 'loadImage'));
+  assert.equal(firstPartyUse('p[`lo`+`go`](u)', 'loadImage'), null);
 });
 
 test('the call-only and URL-only forms leave the app\'s own words alone (R040 review)', () => {
@@ -419,6 +435,17 @@ test('inline handlers and Alpine directives are first-party script (R040 review 
   fails(doc({ body: '<a x-bind:ping="`//t.example/`"></a>' }), /binds an absolute URL/);
   fails(doc({ body: '<button x-on:click="lib()"></button>' }),
     /first-party script reaches vendor lib@1\.0\.0 lib\(\)/);
+  // A <link> is read like every other tag (R040 review 5): its href keeps its own rule.
+  fails(doc({ head: '<link rel="stylesheet" href="data:text/css," '
+    + 'onload="fetch(\'https://t.example/\')">' }), /<link onload> uses fetch\(\)/);
+  fails(doc({ head: '<link x-init="eval(c)">' }), /<link x-init> uses eval/);
+  fails(doc({ head: '<link :href="\'//t.example/s.css\'">' }),
+    /<link :href=.*binds an absolute URL/);
+  fails(doc({ head: '<link rel="preload" href="data:," '
+    + 'onerror="lib(\'https://t.example/p.png\')">' }),
+  /first-party script reaches vendor lib@1\.0\.0 lib\(\)/);
+  fails(doc({ head: '<link rel="stylesheet" href="./s.css">' }), /<link rel="stylesheet"/);
+  assert.deepEqual(check(doc({ head: '<link rel="icon" href="data:," onload="x=1">' })), []);
   const body = '<div x-data="{open:false}" @click="open=!open" :class="open &amp;&amp; \'a\'"'
     + ' x-transition:enter="ease-out duration-300"><img :src="icon" alt=""></div>';
   assert.deepEqual(check(doc({ body })), []);
@@ -500,13 +527,18 @@ test('documented limits: examples of forms this scan does not refuse', () => {
     'const t=setTimeout;t("f()",0)', 'setTimeout?.("f()",0)',
     // fetch in other forms.
     'top.fetch(u)', 'fetch?.(u)', 'fetch/**/(u)', 'const w=window;w["fe"+"tch"](u)',
+    // A quote spelt as an escape stays as written (decodeJsEscapes; R040 review 5).
+    'x="url(\\x27//t.example/p.png\\x27)"', 'x="<img src=\\x22//t.example/p.gif\\x22>"',
+    'x="<img src=\\u0022//t.example/p.gif\\u0022>"',
   ]) assert.deepEqual(check(doc({ app })), [], app);
   // Script inside an iframe srcdoc is not one of the first-party scripts the scan reads.
   const body = '<iframe srcdoc="<script>fetch(\'https://t.example/\')</script>"></iframe>';
   assert.deepEqual(check(doc({ body })), [], body);
   for (const app of ['p[["load","Image"].join("")](u)',
     'Object.keys(p5.prototype).filter((k)=>k.indexOf("loadIm")===0).forEach((k)=>p[k](u))',
-    'p.createDiv(\'<img src="\'+u+\'">\')', 'p.createDiv("x").html(\'<img src="\'+u+\'">\')']) {
+    'p.createDiv(\'<img src="\'+u+\'">\')', 'p.createDiv("x").html(\'<img src="\'+u+\'">\')',
+    // cursor is a 'call' entry: taken without a call by its name, it passes (R040 review 5).
+    'const c=p.cursor;c(x)', 'p.cursor?.call(p,x)']) {
     assert.deepEqual(p5Check(P5, app), [], app);
   }
 });

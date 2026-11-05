@@ -8,8 +8,10 @@
 //     point to absolute http(s)/mailto/tel destinations because following a link loads nothing,
 //   - contains a module, importmap or external script (type=module, src=),
 //   - in first-party script (each <script> and each inline handler or Alpine directive
-//     attribute) contains a refused form (FORBIDDEN_JS). Refused: exactly these forms, as
-//     written or escaped (read again with \uXXXX, \u{...} and \xXX decoded, decodeJsEscapes).
+//     attribute of any tag, <link> included) contains a refused form (FORBIDDEN_JS). Refused:
+//     exactly these forms, as written or escaped (read again with \uXXXX, \u{...} and \xXX
+//     decoded, decodeJsEscapes, except that an escape decoding to a quote ', " or `, a
+//     backslash or a line terminator (\n, \r, U+2028, U+2029) stays as written).
 //     Here `_` is optional whitespace, a space is one or more whitespace characters, a word is
 //     bounded as \b bounds it, a quote is ', " or `, and a URL literal is a quote, `_`, then
 //     //, http:// or https:// (any case); each form is pinned as failing by the "refused" test
@@ -55,7 +57,9 @@
 //     AsyncFunction taken from a prototype; a timer as setTimeout/setInterval.call/apply,
 //     window['setTimeout'], setTimeout(('f()')), setTimeout(/**/'f()'), setTimeout?.('f()'),
 //     const t=setTimeout; t('f()'), a timer given a variable string; fetch as top.fetch(...),
-//     fetch?.(...), fetch/**/(...), const w=window; w['fe'+'tch'](...); markup with a resource
+//     fetch?.(...), fetch/**/(...), const w=window; w['fe'+'tch'](...); a quote spelt as an
+//     escape where a refused form needs one (x="url(\x27//t.example/p.png\x27)",
+//     x="<img src=\x22//t.example/p.gif\x22>", \u0022 likewise); markup with a resource
 //     URL built at run time and handed to p5's createDiv/html(); script inside an iframe
 //     srcdoc (not a first-party script above). Runtime network loads are held by R041 (the
 //     browser request guard, planned on chore/plan-coherence-hardening), not by this scan,
@@ -67,10 +71,11 @@
 //     a word character or $ (for a 'call' entry, then `_`, an optional ?._, and ( or ._call,
 //     ._apply or ._bind; for a 'url' entry, then `_`, an optional ?._, (_ and a quote not
 //     followed by data: or blob:); the name as a string literal (any quote); a + chain of
-//     string literals and names, or a template literal with ${, whose literal pieces are all
-//     parts of the name, three or more characters in all.
-//     Everything else is not held by this scan. Examples (not exhaustive):
-//     p[['load','Image'].join('')], a prefix search of Object.keys,
+//     string literals (any quote) and names, or a template literal with ${, whose literal
+//     pieces are all parts of the name, three or more characters in all.
+//     Everything else is not held by this scan. Examples (not exhaustive; pinned as passing
+//     in the "documented limits" test): p[['load','Image'].join('')], a prefix search of
+//     Object.keys, const c=p.cursor;c(x) and p.cursor?.call(p,x) (cursor is a 'call' entry),
 //   - carries a source map reference,
 //   - embeds a vendor script that is not byte-identical to the pinned package file,
 //   - lacks the third-party notice for every vendor and every build-time package
@@ -185,10 +190,13 @@ const FORBIDDEN_JS = [
 //     inventory) fails until it is listed and proven;
 //   - `refs` [pattern, n, entry]: the site's entry is referenced exactly n times in the vendor
 //     (its definition and export), so no vendor code calls, aliases or exports it further;
-//   - `firstParty`: the vendor API whose use reaches the site; first-party script may not use
-//     it (firstPartyUse: a name alone refuses every reference, [name, 'call'] every call,
-//     [name, 'url'] every call given a string other than a data:/blob: literal; each also
-//     refuses a computed key that names it, literally or assembled from its fragments);
+//   - `firstParty`: the vendor API whose use reaches the site; firstPartyUse refuses these
+//     forms of its use in first-party script (listed exactly in the file header): for a name
+//     alone a reference by that name, for [name, 'call'] a call by that name, for
+//     [name, 'url'] such a call given a string other than a data:/blob: literal, and for each
+//     a string-literal key naming it or a key assembled from its fragments by a + chain or a
+//     template literal. Other uses are not held (examples: p[['load','Image'].join('')],
+//     const c=p.cursor;c(x), p.cursor?.call(p,x));
 //   - `why`: for a site no first-party API is refused for, why the shipped page cannot reach the
 //     network through it (it runs only on a first-party value FORBIDDEN_JS scans, or it loads
 //     nothing from the network).
@@ -341,16 +349,18 @@ export const VENDOR_NETWORK = new Map([['p5', [
 
 const nameRe = (name) => name.replace(/[$]/g, '\\$');
 
-// A key assembled from literal fragments of `name`: a + chain or a template literal whose every
-// literal piece is part of the name, three or more characters in all ("load"+"Image",
-// `load${x}`, "lo"+k+"Image"). A name built otherwise at run time is outside a static scan.
-const CONCAT = new RegExp('(?:([\'"])(?:(?!\\1)[^\\\\\\n]|\\\\.)*\\1|[\\w$.]+)'
-  + '(?:\\s*\\+\\s*(?:([\'"])(?:(?!\\2)[^\\\\\\n]|\\\\.)*\\2|[\\w$.]+))+|`[^`]*\\$\\{[^`]*`', 'g');
+// A key assembled from literal fragments of `name`: a + chain of string literals (any quote)
+// and names, or a template literal with ${, whose every literal piece is part of the name,
+// three or more characters in all ("load"+"Image", `load`+"Image", `load${x}`,
+// "lo"+k+"Image"). A name built otherwise at run time is outside a static scan.
+const CONCAT = new RegExp('(?:([\'"`])(?:(?!\\1)[^\\\\\\n]|\\\\.)*\\1|[\\w$.]+)'
+  + '(?:\\s*\\+\\s*(?:([\'"`])(?:(?!\\2)[^\\\\\\n]|\\\\.)*\\2|[\\w$.]+))+|`[^`]*\\$\\{[^`]*`', 'g');
 function assembledName(body, names) {
   for (const m of body.matchAll(CONCAT)) {
-    const pieces = m[0].startsWith('`')
+    const pieces = m[0].startsWith('`') && !/^`(?:[^`\\]|\\.)*`\s*\+/.test(m[0])
       ? m[0].slice(1, -1).split(/\$\{[^}]*\}/)
-      : [...m[0].matchAll(/(['"])((?:(?!\1)[^\\\n]|\\.)*)\1/g)].map((s) => s[2]);
+      : [...m[0].matchAll(/(['"`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)]
+        .flatMap((s) => (s[1] === '`' ? s[2].split(/\$\{[^}]*\}/) : [s[2]]));
     const lit = pieces.filter(Boolean);
     if (lit.join('').length < 3) continue;
     const name = names.find((n) => lit.every((p) => n.includes(p)));
@@ -670,10 +680,11 @@ export function verifyHtml(html, {
       continue;
     }
     if (tag === 'base') problems.push('<base> element changes URL resolution');
+    // A <link>'s href has its own rule; its other attributes (inline handlers, Alpine
+    // directives, style, the other resource attributes) are read like every other tag's.
     if (tag === 'link') {
       const href = attrs.get('href') || '';
       if (!isInert(href)) problems.push(`<link rel="${attrs.get('rel')}" href="${href}">`);
-      continue;
     }
     if (tag === 'meta' && /refresh/i.test(attrs.get('http-equiv') || '')) {
       problems.push('meta refresh');
@@ -693,7 +704,7 @@ export function verifyHtml(html, {
         }
         continue;
       }
-      if (!URL_ATTRS.has(name)) continue;
+      if (!URL_ATTRS.has(name) || (tag === 'link' && name === 'href')) continue;
       const values = name.endsWith('srcset')
         ? value.split(',').map((s) => s.trim().split(/\s+/)[0])
         : [value];
