@@ -22,7 +22,7 @@
 //              gives back the default document's one Y cable; Open in Studio draws the pad's
 //              node and each of its edges in the Studio graph
 //   x-pointer  real-time, XY lead: a pointer held on the pad's first step sounds C3 (130.8 Hz)
-//              and the runtime pad pitch is -1.75 oct; moved to the seventh step it sounds Eb4
+//              and the transport holds MIDI 48 (the keys' one note path); moved to the seventh step it sounds Eb4
 //              (311.1 Hz); Y from the bottom to the top raises the 10-16 kHz band against
 //              the fundamental by at least the least rise of the low-pass biquad's response
 //              over the band (less 2 dB), derived from the document: LPF Cutoff's log cables,
@@ -335,8 +335,14 @@ function defineChecks() {
     await page.mouse.move(p.x, p.y);
     await page.mouse.down();
     const low = await sound(page, (q) => peakAt(q, C3), 'the first step sounds C3');
-    await until(async () => Math.abs((await padState(page)).pitch - (48 - 69) / 12) < 1e-3,
-      { ms: SOUND_MS, what: 'the runtime pad pitch is C3, -1.75 oct from A4' });
+    // The note goes through the keys (K183): the transport holds C3 (MIDI 48). The pad node's
+    // own Pitch output feeds no cable since the review's F3, and Chromium does not render a
+    // ConstantSource nothing reads, so its offset is no reading of what plays.
+    await until(() => page.evaluate(() => {
+      const t = window.OSCILLA.studio.transport;
+      const h = t ? t.heldNotes() : []; // the Keys node's note and the pad node's gate
+      return h.length > 0 && h.every((n) => n === 48);
+    }), { ms: SOUND_MS, what: 'the pad holds C3 (MIDI 48) on the keys\' one note path' });
     const yLow = await sound(page, (q) => peakAt(q, C3), 'C3 with Y at the bottom');
     p = await padPoint(page, 6, 0.05);
     await page.mouse.move(p.x, p.y, { steps: 4 });
