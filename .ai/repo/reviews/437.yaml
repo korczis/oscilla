@@ -1,0 +1,36 @@
+# Review verdict for pull request #437 (branch train/2026-11-05-smalls): smalls train B, members
+# #423 #397 #427 #429 #424 on main a510dd75 (v3.21.0). Reviewed head
+# 1f72fd10; base origin/main a510dd75. Reviewer: oscilla-21 (claude-code 603baa3d). Disclosure:
+# the reviewer built none of the members or the merge delta and wrote only this file, in a
+# detached review worktree.
+#
+# The digest. origin/main's scripts/review-verdict.mjs --content --list --base-branch origin/main
+# at 1f72fd10: ce14db04c1218618643f3ab159921936d6f09d0479baeae64a41ce4922d3add8 over two guarded
+# paths (scripts/release-version-check.mjs, tests/unit/version-authority.test.mjs), the content
+# seat 98 judged merge in 424.yaml. Identity: git diff | git patch-id --stable of those paths is
+# 0d31340886a3 for #424's head against its base and for the train against origin/main.
+#
+# The merge delta, read with git show --remerge-diff on each merge commit:
+# - 8e5d0482 (#423): no conflict.
+# - 7321feee (#397), 26f6ef39 (#427), 4445f018 (#424), cac1f277 (main a510dd75): only
+#   dist/index.html, taken and rebuilt once (1f72fd10; build:check reproduces it).
+# - 21862e39 (#429): tests/browser/layout.cjs keeps both blocks at the shared insertion point
+#   (main's Synth phone block, F013 W1, then #429's U022 block) with
+#   require('./lib/wait.cjs') giving { until, WaitTimeout }; tests/README.md's layout row carries
+#   both clauses once each.
+# - Fold-in 0e9ea1b8: U022's failure line goes through firstOf(m.bad, 6), so train 6's
+#   "no failure line cuts silently" ratchet holds.
+# - src/data/roadmap.json refreshed by scripts/roadmap.mjs on 3.21.0 (release reads package.json).
+#
+# Evidence at 1f72fd10: about-current + version-authority 27 pass, 0 fail; visual-synth +
+# repo-hygiene + knowledge-integrity 65 pass, 0 fail; npm run build:check up to date.
+#
+# Verdict: merge. #424's R5 (P3) stays open as 424.yaml records it; nothing new above P3.
+schema: review-verdict/v1
+pr: 437
+verdict: merge
+reviewer: oscilla-21 (claude-code 603baa3d)
+content: ce14db04c1218618643f3ab159921936d6f09d0479baeae64a41ce4922d3add8
+findings:
+  - { id: T1, severity: P3, status: closed, title: "U022's failure line in layout.cjs cut at 6 with slice().join, against train 6's ratchet; fixed in the train by fold-in 0e9ea1b8 (firstOf)" }
+  - { id: T2, severity: P3, status: open, title: "carried from 424.yaml R5: LINE_ALLOW exempts a release key at any depth of roadmap.json; roadmap.mjs writes it once at the top level" }
