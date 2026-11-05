@@ -56,8 +56,10 @@ export const TOUCH_BLOCK_PX = 44;
  * further, and the lane scrolls: with minBlockPx (a phone) the shortest block (shortestS) is
  * drawn at least that wide, so its label reads instead of "T...", up to maxPxPerS; and blocks
  * ([{ durationS, minPx }]) bound it block by block (U022): every block is at least its minPx
- * wide after the gap. The scale stays linear: one pixels-per-second for every block, so a
- * width never misstates a duration.
+ * wide after the gap, up to the same maxPxPerS (a 10 ms block beside a 30 s one would
+ * otherwise ask for a lane past the browsers' canvas limit; past the cap a block shows its
+ * name by its title and aria-label). The scale stays linear: one pixels-per-second for every
+ * block, so a width never misstates a duration.
  */
 export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.minSpanS,
   headroomRatio = TIMELINE_OPTIONS.headroomRatio,
@@ -77,7 +79,7 @@ export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.m
       needPxPerS = Math.max(needPxPerS, (b.minPx + Math.max(0, gapPx)) / b.durationS);
     }
   }
-  if (needPxPerS > 0) visibleS = Math.min(visibleS, w / needPxPerS);
+  if (needPxPerS > 0) visibleS = Math.min(visibleS, w / Math.min(maxPxPerS, needPxPerS));
   const contentPx = (w * spanS) / visibleS;
   return { spanS, contentPx, maxScrollPx: Math.max(0, contentPx - w) };
 }
