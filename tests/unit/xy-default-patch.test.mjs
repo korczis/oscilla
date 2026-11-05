@@ -912,3 +912,44 @@ test('NF5: a fitted cable whose downward sweep the fit holds in range is not an 
     assert.ok(fitted && Math.abs(fitted.details.factor - 0.625) < 1e-9,
       'the fit is what holds it: 0.5 of the 0.8 the cable asks downward');
   });
+
+test('NF6: Y\'s room is read once per document, not on every move, and again on a change',
+  async () => {
+    // xyRoom reads each linear cable's source range (panel.sourceRange): counted on a panel
+    // that delegates to the real one, with Y into MIXER level 1 (a linear, fitted target).
+    let reads = 0;
+    const counted = Object.create(PANEL, { sourceRange: { value: (j) => {
+      reads += 1;
+      return PANEL.sourceRange(j);
+    } } });
+    const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
+    const { createXyModel } = await import('../../src/js/ui/kinds/xy-pad.js');
+    const st = defaultStore();
+    assert.equal(st.dispatch(xy.xyTargetAction(st.getModel(), PANEL, 'mix.level1').action).ok,
+      true);
+    const kids = new Map();
+    const fake = () => ({ setAttribute() {}, hasAttribute: () => false, removeAttribute() {},
+      innerHTML: '', textContent: '', hidden: false, value: '', selectedOptions: [{ text: '' }],
+      addEventListener() {}, removeEventListener() {},
+      querySelector(sel) { if (!kids.has(sel)) kids.set(sel, fake()); return kids.get(sel); } });
+    const host = fake();
+    const m = mountSynthXy(host, { store: st, panel: counted, app: null, arm: () => true,
+      mountPad: (box, opts) => { const model = createXyModel(opts);
+        return { model, update() {}, destroy() { model.end('hide'); } }; } });
+    const readout = () => host.querySelector('[data-osc="synth.xy.readout"]').textContent;
+    const first = reads;
+    assert.ok(first > 0, 'the first show read the room');
+    for (let i = 0; i < 20; i += 1) m.view.model.key(i % 2 ? 'ArrowLeft' : 'ArrowRight');
+    assert.equal(reads, first, '20 cursor moves read nothing again');
+    assert.doesNotMatch(readout(), /of its depth/, 'level 1 at 0.7 leaves Y its whole depth');
+    const mix = PANEL.resolve(st.getModel()).get('mix').id;
+    assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: mix, params: { level1: 0.9 } })
+      .ok, true);
+    m.view.model.key('ArrowRight');
+    assert.ok(reads > first, 'a change to the document reads the room again');
+    assert.match(readout(), /Y plays 40 % of its depth/, 'and the readout says the new room');
+    const after = reads;
+    m.view.model.key('ArrowLeft');
+    assert.equal(reads, after, 'once per document');
+    m.destroy();
+  });

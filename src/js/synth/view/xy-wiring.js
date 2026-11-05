@@ -169,6 +169,7 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
     offs.push(() => el.removeEventListener(type, fn));
   };
   let steps = 1;
+  let roomOf = { m: null, r: null }; // the document xyRoom last read, and what it said
   return {
     owner,
     output: 'studio', // the panel sounds through the Studio transport
@@ -229,8 +230,15 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
       return t && t.playing && n ? t.live(n.id, { kind, x: xyCellX(x, steps), y }) : null;
     },
     arm,
-    /** Y held below its depth by its target's range (xy.js xyRoom), or null. */
-    room: () => xyRoom(model(), panel),
+    /**
+     * Y held below its depth by its target's range (xy.js xyRoom), or null; computed once per
+     * document (review of #428 NF6: it ran on every show and pointermove), again on any change.
+     */
+    room() {
+      const m = model();
+      if (m !== roomOf.m) roomOf = { m, r: xyRoom(m, panel) };
+      return roomOf.r;
+    },
     /** The router's release (live-notes.js all-off): whatever the pad's node still holds. */
     release() {
       const t = transport();
