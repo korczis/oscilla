@@ -1267,6 +1267,13 @@ function defineChecks() {
       a.exps.panel = 'detail';
       a.alerts = [];
     });
+    // V605: the Signal Path's Open in Studio shows on that tab only.
+    await H.workspace(page, 'playground');
+    await page.click('#osc-atab-signalpath');
+    await page.waitForSelector('[data-osc="analysis.openInStudio"]', { state: 'visible',
+      timeout: 5000 }).catch(() => {});
+    await collect();
+    await page.click('#osc-atab-waveform');
     // Presets' empty state (lane A wave 3): the Custom tab with no saved preset.
     await H.workspace(page, 'presets');
     await page.evaluate(() => { window.OSCILLA.app.customPresets = []; });
