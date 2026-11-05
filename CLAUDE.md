@@ -106,8 +106,11 @@ enumerates neither, because ranges written here go stale.
   Worker, `views/`), `calibration/` (profiles, level), `experiments/` (schema, validate, store).
 - `studio/` (StudioModel, actions, history, ports, compiler, runtime, transport, patches,
   provenance, templates); `ui/studio/` (workspace, graph and timeline editors, Inspector).
-- `ui/` (Alpine shell, Measure and Experiments adapters, dialogs; `ui/keys/` is the one key
-  registry and dispatcher every key and Space binds through), `main.js` (composition).
+- `ui/` (Alpine shell, Measure and Experiments adapters, dialogs; `ui/keys/` is the key
+  registry and dispatcher that the page Escape and the instrument Space bind through, while
+  the Studio editors, the computer keyboard, the Synth, the nav and the Sequencer timeline
+  still have their own key listeners, counted by `tests/unit/key-listener-baseline.json`,
+  which only falls), `main.js` (composition).
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 

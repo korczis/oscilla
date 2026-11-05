@@ -141,7 +141,7 @@ What it cannot see:
   `scripts/fail-first.mjs` that landed on `main` after the run did not judge it, and nothing
   judged it later, because this job runs only for a pull
   request and `ci.yml` does not run on a push to `main`. Merging `main` into the branch
-  starts a run that does; nothing requires it.
+  started a run that did, and while the relaxation held nothing required it.
 - A merge that bypasses branch protection. An administrator's merge past protection is the
   owner's and is not checked here (`project.review-verdict` says the same of itself).
 

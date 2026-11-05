@@ -94,8 +94,11 @@ from C to the next C, black keys on W E T Y U, Z / X for the octave and C / V fo
 by physical key, so a QWERTZ or AZERTY keyboard works too. Space stays the play key. The
 on-screen keys under them play with a pointer and light up whatever plays them, a MIDI keyboard
 included. The Studio has its own switch (`#m=studio&kbd=1`). The details are in
-[docs/midi.md](docs/midi.md) and in the Keyboard shortcuts dialog (**?**), which lists every key
-the one key registry binds (`src/js/ui/keys/`), so no key has two owners.
+[docs/midi.md](docs/midi.md) and in the Keyboard shortcuts dialog (**?**). The dialog lists,
+for the workspace it opens in, the rows of the key tables `src/js/ui/shortcuts.js` holds (the
+global keys, the instrument, Sequencer timeline and armed-keyboard rows, Measure's Esc and the
+Studio's own tables); it does not read the key registry of `src/js/ui/keys/`. Armed, the
+keyboard takes A, C, F and T ahead of the Studio's own letters.
 
 The words OSCILLA uses for its objects (project, Studio, runtime, measurement, run, experiment,
 definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
@@ -570,8 +573,8 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
   refused edit shows its code, an edit made while stopped says it was not applied, and a
   parameter an automation lane drives is shown as owned. A selected node's Inspector lists only
   the operations that touched it. The trace is kept in memory for the session and is never saved
-  or hashed
-  ([ADR 0042](.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md)).
+  or hashed ([ADR
+  0042](.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md)).
 - **Keyboard and touch.** Every editor has a keyboard path: a "Connect…" dialog instead of
   dragging a cable, a details panel instead of dragging a clip, and arrow-key nudges. Changes
   are announced to screen readers. On coarse pointers the targets are 44 px. Below 768 px the

@@ -169,8 +169,8 @@ What it cannot see:
   under the reviewed one (the reviewer never saw the two together, and no suite ran them
   together either). Nothing judges the pull request later: this job runs only for a pull
   request, `ci.yml` does not run on a push to `main`, and a later pull request's run judges
-  only the guarded paths that pull request changes. Merging `main` into the branch starts a
-  run that does; nothing requires it.
+  only the guarded paths that pull request changes. Merging `main` into the branch started a
+  run that did, and while the relaxation held nothing required it.
 - A merge that bypasses branch protection. An administrator's merge past protection is the
   owner's and is not checked here; the protection setting itself is the owner's too, and
   this paragraph is re-read against it when it changes.

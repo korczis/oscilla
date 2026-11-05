@@ -78,8 +78,9 @@ Shipping
 12. Ship through small pull requests with `gh pr merge --auto --merge` (merge commits only;
     squash merging is disabled), gated on `gate`;
     open long work as an early draft. Record plan evidence at a commit of main, in a
-    follow-up `chore(plan)` pull request, never at a branch commit: a branch commit is lost
-    to every clone once the branch is deleted (#238), and the `V272 D4` test
+    follow-up `chore(plan)` pull request, never at a branch commit: a commit of a branch
+    that never lands, or is rewritten before it lands, is lost to every clone once the
+    branch is deleted (#238), and the `V272 D4` test
     refuses it on the pull request whatever the merge method. `plan evidence` records HEAD,
     so record every entry on a fresh branch from `origin/main` before its first commit
     (`.ai/repo/workflows/plan.md`, "Evidence names a commit of main", has the commands).
