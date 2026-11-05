@@ -1118,6 +1118,9 @@ const ADR_NOT_A_CAPABILITY = new Map([
   ['0081', 'a proposed decision (J001): the component contract and its Majordomus projection;'
     + ' nothing implements it yet, and G001\'s claim cites it when the catalogue ships, and this'
     + ' entry then fails as stale'],
+  ['0083', 'landing engineering (E045): pull requests land through a merge queue instead of'
+    + ' racing armed auto-merges on a strict branch (rule project.ci-bounded v2, release receipt'
+    + ' v3); it adds no capability of the page'],
   ['0084', 'a scope decision (Q062): notes clips, instrument tracks and a session grid on the'
     + ' Studio timeline; nothing implements it yet, and K099\'s claim cites it when the notes clip'
     + ' kind ships, and this entry then fails as stale'],
