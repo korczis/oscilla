@@ -191,13 +191,56 @@ work:
     evidence: "node --test tests/unit/output-owner-one-table.test.mjs"
     issue: "C036"
   - id: one-bus
-    title: "One bus: one claim API, one stop path, one playing state"
+    title: "The playback bus, slice 1: one claim API every player starts through"
+    serves:
+      - one-output-owner
+    why: "Eight players, five claim mechanisms."
+    evidence: "node --test tests/unit/output-claims.test.mjs && node tests/browser/app.cjs"
+    issue: "C037"
+  - id: one-stop-path
+    title: "The playback bus, slice 2: one stopAll path for Stop, Escape, the status-bar stop and page hide"
+    serves:
+      - stops-are-immediate
+    why: "Stop handlers in main.js, the Studio workspace, MIDI, the on-screen keys, the Synth and the key registry."
+    evidence: "node --test tests/unit/stop-path.test.mjs && node tests/browser/app.cjs"
+    issue: "C050"
+  - id: one-playing-state
+    title: "The playback bus, slice 3: one playing state, the mirrors are reads"
+    serves:
+      - stops-are-immediate
+      - views-describe-what-sounds
+    why: "About 12 playing values; seqPlaying has three writers and a 150 ms poll."
+    evidence: "node --test tests/unit/playing-state.test.mjs"
+    issue: "C051"
+  - id: one-master-writer
+    title: "The playback bus, slice 4: one writer of the master level"
+    serves:
+      - one-output-owner
+    why: "Five call sites write the engine's master level; C012 is stamped done."
+    evidence: "node --test tests/unit/master-level-writer.test.mjs"
+    issue: "C052"
+  - id: refusals-and-leave-policy
+    title: "The playback bus, slice 5: refusal sentences from the table, one leave-workspace policy"
     serves:
       - one-output-owner
       - stops-are-immediate
-    why: "Eight players, five claim mechanisms, five Escape handlers."
-    evidence: "node --test tests/unit/bus.test.mjs && node tests/browser/app.cjs"
-    issue: "C037"
+    why: "Refusal sentences are copied at raise sites, and what keeps sounding on a workspace change is decided per site."
+    evidence: "node --test tests/unit/leave-policy.test.mjs"
+    issue: "C053"
+  - id: one-address-writer
+    title: "Only the navigation dispatcher writes the address"
+    serves:
+      - saved-state-is-honest
+    why: "Four replaceState writers outside navigation.js."
+    evidence: "node --test tests/unit/address-writer.test.mjs"
+    issue: "C054"
+  - id: one-transport-clock
+    title: "One transport clock and one tempo"
+    serves:
+      - sequence-state-one-owner
+    why: "The sequencer's loop pump and the Studio transport schedule separately, with two tempo values."
+    evidence: "node --test tests/unit/one-transport-clock.test.mjs"
+    issue: "C055"
   - id: repeat-clicked
     title: "Experiments Repeat and select clicked with no internal fallback"
     serves:
