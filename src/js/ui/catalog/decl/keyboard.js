@@ -1,7 +1,8 @@
 // Declarations: the on-screen keyboard (the panel in src/index.html, its controller
 // midi/keyboard-ui.js), docked in the Playground, the Studio and the Synth. The arm switch and
 // the octave and velocity steps write the component's page-only keys (ui.kbdArmed, ui.kbdBase,
-// ui.kbdVelocity of sources.js), the docked keys' More switch ui.kbdMore.
+// ui.kbdVelocity of sources.js), the docked keys' More switch ui.kbdMore, the dock's handle
+// ui.kbdDockExpanded (midi/dock-yield.js builds the handle and the status line, K171).
 // Trace: scripts/ui-catalog/trace/keyboard.mjs.
 
 import { defineComponent } from '../define.js';
@@ -85,6 +86,24 @@ export default [
     label: 'More, Fewer',
     docs: 'Shows the docked keyboard controls a phone folds away, or folds them again.',
     state: 'ui.kbdMore',
+    in: 'keyboard',
+  }),
+  defineComponent({
+    id: 'keyboard.handle',
+    kind: 'switch',
+    label: 'Keyboard handle',
+    docs: 'Folds the docked keyboard to one line while a pad owns the notes, or unfolds it '
+      + '(shortcut Alt+K).',
+    state: 'ui.kbdDockExpanded',
+    in: 'keyboard',
+  }),
+  defineComponent({
+    id: 'keyboard.dock-status',
+    kind: 'readout',
+    label: 'Dock status',
+    docs: 'Tells assistive technology whether the docked keyboard is folded and which surface '
+      + 'plays the notes.',
+    state: { none: 'it reports the fold state and edits nothing' },
     in: 'keyboard',
   }),
 ];

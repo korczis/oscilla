@@ -522,7 +522,9 @@ test('no surface sets the dock state: dock-yield.js alone applies the rule', () 
     'the keys-only release lets go of the keys\' own inputs only');
   assert.deepEqual(having(/\bclaimNotes\s*\(/), [own, 'src/js/synth/view/xy-wiring.js'],
     'the XY mount is the one surface that claims the notes');
-  assert.deepEqual(having(/keyboard\.handle/), [own], 'the handle is made in dock-yield.js');
+  // The catalogue declares the hook (src/js/ui/catalog/decl/keyboard.js, G001) and makes none.
+  assert.deepEqual(having(/keyboard\.handle/).filter((f) => !f.startsWith('src/js/ui/catalog/')),
+    [own], 'the handle is made in dock-yield.js');
   // The dock's folded children are hidden only there; the markup carries no dock state.
   assert.doesNotMatch(src['src/index.html'], /kbdDockYields|kbdDockToggle|data-dock-keep/);
 });
@@ -619,6 +621,10 @@ test("a press on the dock's handle takes no focus, so a held pad keeps its gate 
     release: () => 0 });
   const handle = d.dock.children.find((c) => c.getAttribute('data-osc') === 'keyboard.handle');
   assert.ok(handle, 'the handle is made');
+  const status = d.dock.children.find((c) => c.getAttribute('data-osc')
+    === 'keyboard.dock-status');
+  assert.ok(status, 'the status line is made beside it');
+  assert.equal(status.getAttribute('role'), 'status', 'it is a live status line');
   assert.equal(typeof handle.onmousedown, 'function', 'the handle listens to its mousedown');
   let prevented = false;
   handle.onmousedown({ preventDefault: () => { prevented = true; } });
