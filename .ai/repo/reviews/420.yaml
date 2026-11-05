@@ -48,12 +48,17 @@
 # the content digest is unchanged. e569abc5 merges main ed9ff3aa (#432); its only resolution is
 # K171.yaml, taken from main. The SYN references are unchanged (dev-53: darwin 0/0, linux noise only).
 #
+# Refresh (head bbe9a909, base origin/main cfd87133, #433 E045's merge queue): a clean merge of
+# main (--remerge-diff resolves nothing). The train's patch over the 15 guarded paths is unchanged
+# (patch-id e79deeab1bf1). Its ci.yml change is still the visual step's name and the out-synth
+# upload, auto-merged beside E045's queue changes. The digest moved with main's ci.yml.
+#
 # Verdict: merge. No P0 or P1, and no P2 open. T3-T10 are P3 follow-ups, listed below.
 schema: review-verdict/v1
 pr: 420
 verdict: merge
 reviewer: oscilla-21 (claude-code 603baa3d)
-content: c027c804258473e86d628faa41bc1454fa19447c086baec5fc7dc320a3cd9104
+content: 0d4eb3826bce4101eed23993c07bde95670d77429cf47c0857b2dd70080efd78
 findings:
   - { id: T1, severity: P2, status: closed, title: "MIDI all-off and silence() released only the current route's sink, so a note held on a sink left behind by a workspace switch hung; closed by sinksAllOff (6f53a421)" }
   - { id: T2, severity: P2, status: closed, title: "a disabled choice refused a click but its arrow keys, Home/End and the wheel still changed it; closed in gestures.js (6f53a421)" }
