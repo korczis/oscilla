@@ -7,17 +7,22 @@
 //     <link href>, <base>, meta refresh) other than data: URLs and #fragments; <a href> may
 //     point to absolute http(s)/mailto/tel destinations because following a link loads nothing,
 //   - contains a module, importmap or external script (type=module, src=),
-//   - in first-party script uses fetch, XMLHttpRequest, dynamic import(), import.meta, a service
-//     worker, importScripts, a worker or worklet loaded from a path, WebSocket/EventSource,
-//     sendBeacon or localhost, assigns an absolute URL to .src/.href/.srcset/.poster (or by
+//   - in first-party script (each <script> and each inline handler or Alpine directive
+//     attribute, read with its JS escapes decoded) uses fetch, XMLHttpRequest, dynamic import(),
+//     import.meta, a service worker, importScripts, a worker or worklet loaded from a path,
+//     WebSocket/EventSource, sendBeacon, localhost, eval, the Function constructor or a timer
+//     given a string, assigns an absolute URL literal to .src/.href/.srcset/.poster (or by
 //     setAttribute/attribute; location.href is navigation, not a load), sets new Image().src or
-//     new Audio()/Video() from anything but a data:/blob: literal, writes an absolute URL into a
-//     resource attribute of an HTML string or into a CSS url() of a script string, or reaches
-//     fetch by a computed member (window["fe"+"tch"], x["fetch"]),
+//     new Audio()/Video() from anything but a data:/blob: literal, writes an absolute URL literal
+//     into a resource attribute of an HTML string or into a CSS url() of a script string, or
+//     reaches fetch by a computed member (window["fe"+"tch"], x["fetch"]); a URL held in or
+//     loaded through a variable, or assembled at run time, is outside this literal scan,
 //   - embeds a vendor with a NETWORK_PRIMITIVES occurrence (fetch, XMLHttpRequest, a DOM URL
 //     sink, a CSS url(), open()/location, ..., an i18n loadPath) outside its VENDOR_NETWORK
 //     sites, or whose inventoried site is reachable: the vendor references its entry more often
-//     than the inventory proves, or first-party script uses the vendor API that reaches it,
+//     than the inventory proves, or first-party script names the vendor API that reaches it
+//     (directly, escaped, by a literal key or by a key built from fragments of the name; a name
+//     assembled otherwise at run time is outside the scan),
 //   - carries a source map reference,
 //   - embeds a vendor script that is not byte-identical to the pinned package file,
 //   - lacks the third-party notice for every vendor and every build-time package
@@ -73,10 +78,19 @@ const FORBIDDEN_JS = [
   [/\bnew\s+(?:WebSocket|EventSource)\s*\(/, 'WebSocket/EventSource'],
   [/\bsendBeacon\b/, 'navigator.sendBeacon'],
   [/\blocalhost\b|\b127\.0\.0\.1\b/, 'localhost reference'],
+  // Code made from a string at run time defeats any static scan (R040 review 2), so eval, the
+  // Function constructor (also as a function's .constructor given a string) and a timer given a
+  // string literal are refused outright; a string held in a variable and handed to a timer is
+  // not seen.
+  [/(?<![\w$])eval(?![\w$])|(['"`])eval\1/, 'eval'],
+  [/(?<![\w$])Function\s*\(|(['"`])Function\1|\.constructor\s*\(\s*['"`]/,
+    'the Function constructor'],
+  [/\b(?:setTimeout|setInterval)\s*\(\s*['"`]/, 'a timer given a string (setTimeout/setInterval)'],
   // Runtime loads through the DOM (R040): each of these ran with rc=0 before. A static scan sees
-  // literals only; a URL built from parts and assigned through a variable stays outside it,
-  // which is why the constructors that load whatever they are given are refused unless the
-  // argument is a data:/blob: literal.
+  // literals only (read with their escapes decoded, decodeJsEscapes); a URL held in or loaded
+  // through a variable, or assembled at run time, stays outside it, which is why the
+  // constructors that load whatever they are given are refused unless the argument is a
+  // data:/blob: literal.
   // location.href is a navigation (as an <a href> is a destination), not a resource load.
   [/(?<!\blocation)\.(?:src|href|srcset|poster)\s*=\s*(['"`])\s*(?:https?:)?\/\//i,
     'an absolute URL assigned to .src/.href/.srcset/.poster'],
@@ -416,6 +430,63 @@ export function decodeCssEscapes(css) {
     });
 }
 
+// Characters the JS scan reads as the structure of a string: decoded, they would end or open
+// one where the browser sees only a character inside it, so their escapes are kept.
+const JS_SYNTAX = /["'`\\\n\r\u2028\u2029]/u;
+
+/**
+ * A copy of script text with its JS escapes decoded: `\uXXXX`, `\u{X...}` and `\xXX`, which
+ * spell the same identifier (`p.loadImage`) or string (`p['load\x49mage']`) as the
+ * plain characters. Any other `\` pair (`\\`, `\n`, `\'`) is kept as it is, so `\\u0049` stays
+ * a backslash and text, and an escape that decodes to a quote, a backslash or a line terminator
+ * is kept, so the scan's view of where strings start and end stays the browser's. The copy is
+ * only scanned, never emitted.
+ * @param {string} js
+ */
+export function decodeJsEscapes(js) {
+  return js.replace(/\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|[\s\S])/g,
+    (all, braced, u4, x2) => {
+      const hex = braced ?? u4 ?? x2;
+      if (hex === undefined) return all;
+      const cp = parseInt(hex, 16);
+      if (cp > 0x10ffff) return all;
+      const ch = String.fromCodePoint(cp);
+      return JS_SYNTAX.test(ch) ? all : ch;
+    });
+}
+
+// The script of an inline event handler (onclick, onerror, ...) or an Alpine directive (x-*,
+// @event, :binding): Alpine evaluates each with its Function constructor, so it is first-party
+// script like a <script>.
+const CODE_ATTR = /^(?:on[a-z]+|x-[\w:.-]+|@[\w:.-]+|:[\w:.-]+)$/;
+const ENTITY = /&(?:#(\d+)|#[xX]([0-9a-fA-F]+)|(quot|apos|amp|lt|gt));/g;
+const NAMED = { quot: '"', apos: "'", amp: '&', lt: '<', gt: '>' };
+const decodeEntities = (text) => text.replace(ENTITY, (all, dec, hex, name) => {
+  if (name) return NAMED[name];
+  const cp = parseInt(dec ?? hex, dec ? 10 : 16);
+  return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : all;
+});
+
+/**
+ * Problems of one first-party script (FORBIDDEN_JS), read raw and with its escapes decoded.
+ * @param {string} body
+ * @param {string} where
+ */
+function scriptProblems(body, where) {
+  const copies = [...new Set([decodeJsEscapes(body), body])];
+  const problems = [];
+  for (const [re, what] of FORBIDDEN_JS) {
+    for (const copy of copies) {
+      const hit = copy.match(re);
+      if (!hit) continue;
+      const context = copy.slice(Math.max(0, hit.index - 40), hit.index + 40);
+      problems.push(`${where} uses ${what}: …${context}…`);
+      break;
+    }
+  }
+  return { problems, copies };
+}
+
 /**
  * Every reference a stylesheet makes: the target of each url(), the bare strings inside each
  * image-set() / -webkit-image-set() (which takes them as well as url()), and the number of
@@ -528,15 +599,9 @@ export function verifyHtml(html, {
         continue; // vendor code is verified by identity and its network inventory, not by scan
       }
       appScripts += 1;
-      appBodies.push(body);
-      for (const [re, what] of FORBIDDEN_JS) {
-        const hit = body.match(re);
-        if (hit) {
-          const at = body.indexOf(hit[0]);
-          const context = body.slice(Math.max(0, at - 40), at + 40);
-          problems.push(`first-party script uses ${what}: …${context}…`);
-        }
-      }
+      const scanned = scriptProblems(body, 'first-party script');
+      problems.push(...scanned.problems);
+      appBodies.push(scanned.copies);
       continue;
     }
 
@@ -557,6 +622,19 @@ export function verifyHtml(html, {
     }
     for (const [name, value] of attrs) {
       if (name === 'style') problems.push(...cssProblems(value, `<${tag} style>`));
+      if (CODE_ATTR.test(name)) {
+        const code = decodeEntities(value);
+        const scanned = scriptProblems(code, `first-party script in <${tag} ${name}>`);
+        problems.push(...scanned.problems);
+        appBodies.push(scanned.copies);
+        // A binding of a URL attribute (:src, x-bind:href) to an absolute URL literal.
+        const bound = name.replace(/^(?:x-bind)?:/, '');
+        if (bound !== name && URL_ATTRS.has(bound)
+          && scanned.copies.some((c) => /(['"`])\s*(?:https?:)?\/\//i.test(c))) {
+          problems.push(`<${tag} ${name}="${value.slice(0, 80)}"> binds an absolute URL`);
+        }
+        continue;
+      }
       if (!URL_ATTRS.has(name)) continue;
       const values = name.endsWith('srcset')
         ? value.split(',').map((s) => s.trim().split(/\s+/)[0])
@@ -573,12 +651,15 @@ export function verifyHtml(html, {
     for (const { site, firstParty = [] } of vendorNetwork.get(id.slice(0, id.lastIndexOf('@')))
       || []) {
       for (const entry of firstParty) {
-        for (const body of appBodies) {
-          const hit = firstPartyUse(body, entry);
-          if (!hit) continue;
-          const context = body.slice(Math.max(0, hit.index - 40), hit.index + 40);
-          problems.push(`first-party script reaches vendor ${id} ${site} by ${hit.form}: `
-            + `…${context}…`);
+        for (const copies of appBodies) {
+          for (const body of copies) {
+            const hit = firstPartyUse(body, entry);
+            if (!hit) continue;
+            const context = body.slice(Math.max(0, hit.index - 40), hit.index + 40);
+            problems.push(`first-party script reaches vendor ${id} ${site} by ${hit.form}: `
+              + `…${context}…`);
+            break;
+          }
         }
       }
     }
@@ -673,8 +754,9 @@ function main() {
     for (const p of problems) console.error(`  FAIL ${p}`);
     process.exit(1);
   }
-  console.log('  PASS no file/remote references, no module/fetch/import()/service worker/DOM '
-    + 'runtime load; every vendor network site inventoried (its API refused, unreachable, or '
+  console.log('  PASS no file/remote references, no module/fetch/import()/service worker/eval, '
+    + 'no literal URL handed to a DOM runtime load in first-party script (a URL in a variable '
+    + 'is not read); every vendor network site inventoried (its API refused, unreachable, or '
     + 'listed with its reason); budget ok');
   console.log(`  PASS provenance: banner and metadata region name v${version}, `
     + `source digest ${sourceDigest} (recomputed), channel "source"`);

@@ -370,6 +370,72 @@ test('a marker count other than the inventory\'s, or a site without proof, fails
     .some((p) => /lib\(\) has no proof/.test(p)));
 });
 
+const reachesP5 = (app) => p5Check(P5, app).some((p) => p.includes(`reaches vendor ${P5_ID} `));
+
+test('a JS escape does not hide a p5 API name or a forbidden form (R040 review 2)', () => {
+  // Each spells loadImage/createImg as the browser reads it, and each passed with rc=0 before.
+  for (const app of ['p.load\\u0049mage("https://t.example/p.png")',
+    'p.load\\u{49}mage("https://t.example/p.png")', 'p["load\\x49mage"]("https://t.example/p.png")',
+    'p["create\\u0049mg"]("https://t.example/p.gif","")', 'p["lo"+"ad\\x49mage"](u)']) {
+    assert.ok(reachesP5(app), `${app} is refused`);
+  }
+  fails(doc({ app: 'fe\\u0074ch("x")' }), /uses fetch\(\)/);
+  fails(doc({ app: 's.src="https:\\x2f\\x2ft.example/x.js"' }), /\.src\/\.href/);
+  fails(doc({ app: 'window["fe\\x74ch"](u)' }), /computed fetch/);
+  // An escaped backslash is not an escape, and an escaped quote stays inside its string.
+  const { decodeJsEscapes } = verifyDist;
+  assert.equal(decodeJsEscapes('a\\u0049\\x49\\u{49}'), 'aIII');
+  assert.equal(decodeJsEscapes('"\\\\u0049"'), '"\\\\u0049"');
+  assert.equal(decodeJsEscapes('"\\x22\\u0027\\x5c\\u000a"'), '"\\x22\\u0027\\x5c\\u000a"');
+  assert.deepEqual(check(doc({ app: 'const s="\\\\u0066etch(";x.title="\\x22"' })), []);
+});
+
+test('eval, the Function constructor and a timer given a string fail (R040 review 2)', () => {
+  const evals = /uses eval:/;
+  for (const app of ['eval("p.load"+"Image(u)")', 'window.eval(c)', '(0,eval)(c)',
+    'globalThis["eval"](c)', 'ev\\u0061l(c)']) fails(doc({ app }), evals);
+  const ctor = /uses the Function constructor/;
+  for (const app of ['new Function("return 1")', 'Function("x")()', 'self["Function"]("x")',
+    '(()=>{}).constructor("return fetch")()']) fails(doc({ app }), ctor);
+  const timer = /uses a timer given a string/;
+  for (const app of ['setTimeout("f()",0)', 'window.setInterval(`f()`,9)']) {
+    fails(doc({ app }), timer);
+  }
+  // A timer given a function, a constructor given no string and words containing eval pass.
+  const app = 'setTimeout(()=>f(),0);setInterval(g,9);new l.constructor(l.type,l);'
+    + 'evaluate(x);const retrieval=1,AsyncFunction=Object.getPrototypeOf(async()=>{});';
+  assert.deepEqual(check(doc({ app })), []);
+});
+
+test('inline handlers and Alpine directives are first-party script (R040 review 2)', () => {
+  fails(doc({ body: '<div x-init="fetch(\'https://t.example/\')"></div>' }),
+    /first-party script in <div x-init> uses fetch\(\)/);
+  fails(doc({ body: '<div x-init="fetch(&quot;https://t.example/&quot;)"></div>' }),
+    /<div x-init> uses fetch\(\)/);
+  fails(doc({ body: '<img src="data:," onerror="this.src=\'https://t.example/p.gif\'">' }),
+    /<img onerror> uses an absolute URL assigned to \.src/);
+  fails(doc({ body: '<button @click="eval(c)"></button>' }), /<button @click> uses eval/);
+  fails(doc({ body: '<img :src="\'https://t.example/p.gif\'">' }), /binds an absolute URL/);
+  fails(doc({ body: '<a x-bind:ping="`//t.example/`"></a>' }), /binds an absolute URL/);
+  fails(doc({ body: '<button x-on:click="lib()"></button>' }),
+    /first-party script reaches vendor lib@1\.0\.0 lib\(\)/);
+  const body = '<div x-data="{open:false}" @click="open=!open" :class="open &amp;&amp; \'a\'"'
+    + ' x-transition:enter="ease-out duration-300"><img :src="icon" alt=""></div>';
+  assert.deepEqual(check(doc({ body })), []);
+});
+
+test('documented limits: a value held in a variable or built at run time passes', () => {
+  // tests/README.md names these under "Not held": a static scan reads literals, so each passes
+  // with rc=0. A fix that refuses one must move it out of this test and out of that line.
+  for (const app of ['var u="https://t.example/p.gif";i.src=u',
+    'i.src="ht"+"tps://t.example/p.gif"', 'const k="fe"+"tch";window[k](u)',
+    'const c="f()";setTimeout(c,0)']) assert.deepEqual(check(doc({ app })), [], app);
+  for (const app of ['p[["load","Image"].join("")](u)',
+    'Object.keys(p5.prototype).filter((k)=>k.indexOf("loadIm")===0).forEach((k)=>p[k](u))']) {
+    assert.deepEqual(p5Check(P5, app), [], app);
+  }
+});
+
 test('the committed dist passes with the R040 forms and the p5 inventory in force', () => {
   const html = readFileSync(new URL('../../dist/index.html', import.meta.url), 'utf8');
   const { problems } = verifyHtml(html, { vendors: pinnedVendors(), notices: [] });
