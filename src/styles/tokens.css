@@ -162,6 +162,36 @@
   --osc-hw-shade: #000000;
   --osc-hw-highlight: #ffffff;
 
+  /* Synth-layer palette roles (project.visual-identity-lock v4, amendment of 2026-11-05, D-PAL;
+     oscilla-21's approval of 11-04): a closed list with the two depth roles above, named only by
+     the synth-theme layer, outside the declaration ratchet. Every value is the one its rules pick
+     in tests/unit/ui-synth-palette.test.mjs (contrast (a), visibility |dL*| >= 3 (b)); all but
+     the plate pair are theme-invariant (C6) and so declared here only.
+     The plate pair: the lighter of surface-3 and surface-1 at the top, the foot the first step
+     from the darker toward it on which the depth shade shows (PF-04). */
+  --osc-plate-hi: #142233;
+  --osc-plate-lo: #0b1826;
+  /* The cap material (knob caps, switch levers, fader caps; K11, C6): the lightest grey whose
+     inks (the pointer, the applied arc, the grips) hold 3:1 and whose body shows on every plate,
+     with a lit tone 3 L* above it for the side wall. */
+  --osc-knob-cap: #060606;
+  --osc-knob-cap-hi: #1b1b1b;
+  /* Seams and rails (PF-14): unlit, black. */
+  --osc-chassis: #000000;
+  /* Keys (LXK-02, LXK-07): white shows on every plate, black is the cap material (4.5:1 on
+     white), the gap the lightest grey 3:1 on white. */
+  --osc-hw-key-white: #f6f6f6;
+  --osc-hw-key-black: #060606;
+  --osc-hw-key-gap: #8e8e8e;
+  /* LED (LXK-10): the brightest shade of --osc-red holding 3:1 on the bezel, its seat, the card
+     and every plate. Display glass (LXK-11): the lightest shade of the chart inset recessed
+     below every plate, its reading 7:1. */
+  --osc-hw-led: #f42e34;
+  --osc-hw-lcd: #010710;
+  /* Wood (PF-02): --osc-orange darkened; the foot 3:1 on the chassis, the top 3 L* above it. */
+  --osc-wood-hi: #81591d;
+  --osc-wood-lo: #78521b;
+
   /* Layout (desktop reference geometry, px measured on reference.png) */
   --osc-header-h: 62px;
   --osc-statusbar-h: 55px;
@@ -224,6 +254,9 @@
      on every face the shade is drawn over; the highlight is white, as in dark. */
   --osc-hw-shade: #cacdd0;
   --osc-hw-highlight: #ffffff;
+  /* D-PAL plate pair: the white top, the surface-3 foot (lit from above in light too). */
+  --osc-plate-hi: #ffffff;
+  --osc-plate-lo: #e4eaf2;
 
   /* Spectrogram LUT on a light surface: floor = page white, rising through lavender, purple,
      magenta and orange to a dark amber top, so loud cells stay the most contrasted. */

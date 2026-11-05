@@ -60,7 +60,10 @@
 //     domainViews  the same counts for DOMAIN_VIEW_STYLESHEETS: the domain views' own
 //               stylesheets (charts.css, studio.css, studio-timeline.css) and tokens.css, the
 //               custom properties they read (ADR 0061 decision 3). They are ratcheted like the
-//               stylesheets (no count rises, none is added) but are not debt.
+//               stylesheets (no count rises, none is added) but are not debt. A declaration of a
+//               property TOKENS_UNRECORDED lists for its file (tokens.css: the closed list of
+//               synth-layer palette roles, rule project.visual-identity-lock v4's amendment of
+//               2026-11-05) is not counted.
 //     inlineStyles  the style, :style and x-bind:style attributes of src/index.html.
 //     debt      pending surfaces + every counted osc-* class token + every use of a legacy
 //               vocabulary token + every selector of the stylesheets (not of the domain views).

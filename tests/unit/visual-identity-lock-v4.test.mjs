@@ -13,12 +13,18 @@
 //     - the hardware vocabulary (wood, brushed, anodis, screw, jack-nut, sheen, cheek, data-led,
 //       data-needle, data-hw) appears only in THEME_DIRS, so no surface is skinned outside the
 //       judged layer (af's review of 2026-11-02, P2-A); rivets appear nowhere, the layer included;
-//     - the depth roles --osc-hw-shade and --osc-hw-highlight (oscilla-21's amendment (a)-(e),
-//       11-04) are declared by tokens.css and named nowhere else but THEME_DIRS, so they are
-//       drawn only by the layer, which reads them only at the hw-shadow and hw-sheen classes
-//       (ui-synth-tokens.test.mjs proves the drawn markup); a token name is not a hw-* class;
-//     - tokens.css gains no declaration: its count equals the Flowbite Pro record
-//       (ui-flowbite-pro-baseline.json), which holds 193 and only falls;
+//     - the synth-layer palette roles, a CLOSED list (SYNTH_PALETTE_ROLES: v4's amendment of
+//       2026-11-05, D-PAL, oscilla-21's approval of 11-04, which keeps the two depth roles
+//       --osc-hw-shade and --osc-hw-highlight of the amendment (a)-(e) of 11-04), are declared
+//       by tokens.css (the per-theme ones on :root and light, the rest on :root only) and named
+//       nowhere else but THEME_DIRS, so they are drawn only by the layer (the depth roles only at
+//       the hw-shadow and hw-sheen classes: ui-synth-tokens.test.mjs proves the drawn markup;
+//       every value is derived in ui-synth-palette.test.mjs); a token name is not a hw-* class;
+//       the list equals the one the rule's amendment states and the one the Flowbite Pro measure
+//       exempts, so it grows only by an amendment of the rule a reviewer judges;
+//     - tokens.css gains no declaration outside that list: its count, the list's declarations
+//       not counted, equals the Flowbite Pro record (ui-flowbite-pro-baseline.json), which holds
+//       189 and only falls;
 //     - the palette of tokens.css equals its reviewed snapshot (visual-identity-palette.json);
 //     - the hardware intensity keys of tailwind.config.cjs stay within their bounds;
 //   the theme layer (THEME_DIRS: src/js/synth/view now; src/js/ui/synth, the shared
@@ -465,7 +471,9 @@ export function hardwareOutsideLayer(files, allow = HW_ALLOW) {
   const seen = new Set();
   for (const [p, raw] of files) {
     if (!HW_SCANNED.test(p) || inDirs(p, THEME_DIRS)) continue;
-    const text = stripComments(raw);
+    // A closed-list role's name (--osc-wood-hi) is a token, confined by paletteRolesOutsideLayer.
+    const text = stripComments(raw).replace(roleName(SYNTH_PALETTE_ROLES), (m) => ' '
+      .repeat(m.length));
     const words = allow.get(p)?.words || [];
     for (const m of text.matchAll(new RegExp(HW_VOCAB.source, 'gi'))) {
       if (words.includes(m[0].toLowerCase())) { seen.add(p); continue; }
@@ -478,31 +486,56 @@ export function hardwareOutsideLayer(files, allow = HW_ALLOW) {
   return out;
 }
 
-// The depth roles of oscilla-21's amendment (a)-(e), 11-04: declared by tokens.css, named only
-// by the theme layer (its token maps and drawings), never by a surface of its own.
+// The synth-layer palette roles: a CLOSED list (rule v4, amendment of 2026-11-05, D-PAL;
+// oscilla-21's approval of 11-04), each measured and derived in ui-synth-palette.test.mjs. They
+// are declared by tokens.css and named only by the theme layer (its token maps and drawings),
+// never by a surface of its own; their declarations are outside the tokens.css ratchet. The
+// list grows only by an amendment of the rule (the test below reads the rule's own list).
 export const DEPTH_ROLES = ['--osc-hw-shade', '--osc-hw-highlight'];
+export const SYNTH_PALETTE_ROLES = ['--osc-wood-hi', '--osc-wood-lo', '--osc-plate-hi',
+  '--osc-plate-lo', '--osc-chassis', '--osc-hw-key-white', '--osc-hw-key-black',
+  '--osc-hw-key-gap', '--osc-hw-led', '--osc-hw-lcd', '--osc-knob-cap', '--osc-knob-cap-hi',
+  ...DEPTH_ROLES];
+/** The roles with a value per theme (on :root and light); every other role is theme-invariant,
+ *  declared on :root only (C6). */
+export const PER_THEME_ROLES = ['--osc-plate-hi', '--osc-plate-lo', ...DEPTH_ROLES];
 export const DEPTH_DECLARED_IN = 'src/styles/tokens.css';
+/** A role's name as a whole word: --osc-knob-cap is not the start of --osc-knob-cap-hi. */
+const roleName = (roles) => new RegExp(`(?:${roles.join('|')})(?![\\w-])`, 'g');
 
-/** A depth role named outside tokens.css and THEME_DIRS (comments excepted). */
-export function depthRolesOutsideLayer(files) {
+/** A palette role named outside tokens.css and THEME_DIRS (comments excepted). */
+export function paletteRolesOutsideLayer(files, roles = SYNTH_PALETTE_ROLES) {
   const out = [];
   for (const [p, raw] of files) {
     if (p === DEPTH_DECLARED_IN || inDirs(p, THEME_DIRS)) continue;
     const text = stripComments(raw);
-    const m = new RegExp(DEPTH_ROLES.join('|')).exec(text);
+    const m = roleName(roles).exec(text);
     if (m) out.push(`${p}:${lineOf(text, m.index)}: ${m[0]} outside the synth-theme layer`);
   }
   return out;
 }
+/** The depth roles' guard of 11-04, now the closed list's (the same rule over more names). */
+export const depthRolesOutsideLayer = (files) => paletteRolesOutsideLayer(files, DEPTH_ROLES);
 
 /** The declarations of a stylesheet as the Flowbite Pro record counts them: property: value
- *  inside a block, comments removed. */
-export function declarationCount(css) {
+ *  inside a block, comments removed, a property of `except` not counted. */
+export function declarationCount(css, except = []) {
   let n = 0;
   for (const b of cssBlocks(css.replace(/\/\*[\s\S]*?\*\//g, ''))) {
-    n += b.body.split(';').filter((d) => /^\s*[-\w]+\s*:/.test(d)).length;
+    n += b.body.split(';').filter((d) => /^\s*[-\w]+\s*:/.test(d)
+      && !except.includes(d.split(':')[0].trim())).length;
   }
   return n;
+}
+
+/** The roles the rule's D-PAL amendment lists: its section's `--osc-*` names, in order. */
+export function amendmentRoles(ruleText) {
+  const at = ruleText.indexOf('# Amendment of 2026-11-05 (D-PAL)');
+  if (at < 0) return [];
+  const end = ruleText.indexOf('\n# ', at + 1);
+  const section = ruleText.slice(at, end < 0 ? undefined : end);
+  const list = /The closed list:([\s\S]*?)\n\n/.exec(section);
+  return list ? [...new Set(list[1].match(/--osc-[\w-]+/g) || [])] : [];
 }
 
 /** Rivets are not among Q071's options and v3 banned them: nowhere, the layer included. */
@@ -726,23 +759,46 @@ test('the hardware look is drawn only in the synth-theme layer, and rivets nowhe
   assert.deepEqual(rivets(SRC), []);
 });
 
-test('the depth roles are declared in both themes and named only by the layer', () => {
+test('D-PAL: the closed list is pinned, and equals the rule\'s and the ratchet\'s list', async () => {
+  // The list grows only by a reviewed amendment: this literal, the rule's amendment section and
+  // the Flowbite Pro measure's exemption must change together.
+  assert.deepEqual(SYNTH_PALETTE_ROLES, ['--osc-wood-hi', '--osc-wood-lo', '--osc-plate-hi',
+    '--osc-plate-lo', '--osc-chassis', '--osc-hw-key-white', '--osc-hw-key-black',
+    '--osc-hw-key-gap', '--osc-hw-led', '--osc-hw-lcd', '--osc-knob-cap', '--osc-knob-cap-hi',
+    '--osc-hw-shade', '--osc-hw-highlight']);
+  assert.deepEqual(amendmentRoles(read('.ai/repo/rules/project/visual-identity-lock.v4.md')),
+    SYNTH_PALETTE_ROLES, 'the rule\'s D-PAL amendment lists exactly the closed list');
+  const { TOKENS_UNRECORDED } = await import('../../scripts/ui-flowbite-pro-measure.mjs');
+  assert.deepEqual([...TOKENS_UNRECORDED['src/styles/tokens.css']], SYNTH_PALETTE_ROLES,
+    'the Flowbite Pro measure exempts exactly the closed list');
+});
+
+test('the palette roles are declared (per theme, or once: C6) and named only by the layer', () => {
   const p = palette(TOKENS_CSS);
-  for (const role of DEPTH_ROLES) {
-    for (const sel of [':root', '[data-theme="light"]']) {
-      assert.match(p[sel]?.[role] || '', /^#[0-9a-f]{6}$/i, `${role} in ${sel}, opaque`);
+  for (const role of SYNTH_PALETTE_ROLES) {
+    assert.match(p[':root']?.[role] || '', /^#[0-9a-f]{6}$/i, `${role} on :root, opaque`);
+    const light = p['[data-theme="light"]']?.[role];
+    if (PER_THEME_ROLES.includes(role)) {
+      assert.match(light || '', /^#[0-9a-f]{6}$/i, `${role} on light, opaque`);
+    } else {
+      assert.equal(light, undefined, `${role} is theme-invariant (C6): never on light`);
     }
   }
-  assert.deepEqual(depthRolesOutsideLayer(SRC), []);
+  assert.deepEqual(paletteRolesOutsideLayer(SRC), []);
   assert.deepEqual(hardwareOutsideLayer(SRC), [], 'a --osc-hw-* token is not a hw-* class');
 });
 
-test('tokens.css gains no declaration: the depth roles are net zero (193, the record)', () => {
+test('tokens.css gains no declaration outside the closed list (189, the record)', () => {
   const record = JSON.parse(read('tests/unit/ui-flowbite-pro-baseline.json'));
   const recorded = record.domainViews?.['src/styles/tokens.css']?.declarations
     ?? record.stylesheets?.['src/styles/tokens.css']?.declarations;
-  assert.ok(recorded <= 193, `the record holds ${recorded}, never above 193`);
-  assert.equal(declarationCount(TOKENS_CSS), recorded, 'tokens.css declarations = the record');
+  assert.ok(recorded <= 189, `the record holds ${recorded}, never above 189`);
+  assert.equal(declarationCount(TOKENS_CSS, SYNTH_PALETTE_ROLES), recorded,
+    'tokens.css declarations, the closed list apart, = the record');
+  // The list's own declarations: one per theme for a per-theme role, one for the rest.
+  assert.equal(declarationCount(TOKENS_CSS) - recorded, PER_THEME_ROLES.length * 2
+    + SYNTH_PALETTE_ROLES.length - PER_THEME_ROLES.length, 'the closed list is declared once a '
+    + 'theme (per-theme roles) or once (the rest), and nothing else is exempt');
 });
 
 test('the palette of tokens.css equals its reviewed snapshot', (t) => {
@@ -966,7 +1022,31 @@ test('mutation: a depth role outside the layer is caught; a token is not a hw-* 
     f('src/styles/tokens.css', ':root { --osc-hw-shade: #000000; }'));
   assert.equal(declarationCount(':root {\n  --a: #000; /* b: c; */\n  --d: 1px;\n}\n'
     + '[data-theme="light"] { --a: #fff; }'), 3);
+  assert.equal(declarationCount(':root { --a: #000; --d: 1px; }\n'
+    + '[data-theme="light"] { --a: #fff; }', ['--a']), 1, 'the exempt property is not counted');
 });
+
+test('mutation: D-PAL: a closed-list role outside the layer, or an unlisted wood token, is caught',
+  () => {
+    caught(paletteRolesOutsideLayer, f('src/js/midi/keyboard-view.js',
+      "v('--osc-hw-key-white', '#fff')"), f('src/js/midi/keyboard-view.js',
+      "v('--osc-surface-1', '#fff')"));
+    caught(paletteRolesOutsideLayer, f('src/styles/studio.css', '.r { fill: var(--osc-chassis); }'),
+      f('src/styles/tokens.css', ':root { --osc-chassis: #000000; }'));
+    assert.deepEqual(paletteRolesOutsideLayer(f('src/js/synth/view/tokens.js',
+      "knobCap: '--osc-knob-cap'")), [], 'inside the layer');
+    // A whole name: --osc-knob-capital is not the role --osc-knob-cap.
+    assert.deepEqual(paletteRolesOutsideLayer(f('src/styles/studio.css',
+      '.r { fill: var(--osc-knob-capital); }')), []);
+    const hw = (files) => hardwareOutsideLayer(files, new Map());
+    assert.deepEqual(hw(f('src/styles/tokens.css', ':root { --osc-wood-hi: #81591d; }')), [],
+      'a closed-list role in tokens.css is a token, not the vocabulary');
+    caught(hw, f('src/styles/tokens.css', ':root { --osc-wood-grain: #81591d; }'),
+      f('src/styles/tokens.css', ':root { --osc-wood-lo: #78521b; }'));
+    assert.deepEqual(amendmentRoles('# Amendment of 2026-11-05 (D-PAL)\n\nThe closed list: '
+      + '`--osc-a`, `--osc-b`.\n\nMore `--osc-c`.\n# Next'), ['--osc-a', '--osc-b']);
+    assert.deepEqual(amendmentRoles('# Rationale\n'), []);
+  });
 
 test('mutation: a palette change and an intensity beyond its bound are caught', () => {
   const css = ':root {\n  --osc-bg: #0b1220;\n  --osc-touch: 44px;\n}\n'

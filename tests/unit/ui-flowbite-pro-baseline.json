@@ -926,7 +926,7 @@
     },
     "src/styles/tokens.css": {
       "selectors": 4,
-      "declarations": 193
+      "declarations": 189
     }
   },
   "inlineStyles": 89

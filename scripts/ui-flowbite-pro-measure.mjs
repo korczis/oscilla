@@ -30,6 +30,21 @@ export const MEASURE = 4;
 export const DOMAIN_VIEW_STYLESHEETS = ['src/styles/charts.css', 'src/styles/studio-timeline.css',
   'src/styles/studio.css', 'src/styles/tokens.css'];
 
+/**
+ * Declarations a domain view's stylesheet holds outside the record, by property: the closed list
+ * of synth-layer palette roles of project.visual-identity-lock v4's amendment of 2026-11-05
+ * (D-PAL; oscilla-21's approval of 11-04), each measured and derived in
+ * tests/unit/ui-synth-palette.test.mjs and named only by the synth-theme layer. Every other
+ * declaration of tokens.css is counted. The list equals the rule's and the v4 test's (it grows
+ * only by an amendment of the rule a reviewer judges); excluding it only lowers the count.
+ */
+export const TOKENS_UNRECORDED = Object.freeze({
+  'src/styles/tokens.css': Object.freeze(['--osc-wood-hi', '--osc-wood-lo', '--osc-plate-hi',
+    '--osc-plate-lo', '--osc-chassis', '--osc-hw-key-white', '--osc-hw-key-black',
+    '--osc-hw-key-gap', '--osc-hw-led', '--osc-hw-lcd', '--osc-knob-cap', '--osc-knob-cap-hi',
+    '--osc-hw-shade', '--osc-hw-highlight']),
+});
+
 /** The Flowbite Pro structure of each surface kind: alternatives, each a set of classes. */
 export const PRO_STRUCTURE = {
   navbar: [['bg-white', 'border-b', 'border-gray-200', 'dark:bg-gray-800', 'dark:border-gray-700']],
@@ -303,9 +318,9 @@ function splitSelectors(prelude) {
 /**
  * { selectors, declarations, classes, names, utilities } of a stylesheet, comments removed (see
  * the header): classes are the osc-* class names of its selectors, names every class name of
- * them, utilities its @utility rules.
+ * them, utilities its @utility rules; a declaration of a property in `except` is not counted.
  */
-export function cssShape(text) {
+export function cssShape(text, except = []) {
   const t = text.replace(/\/\*[\s\S]*?\*\//g, '');
   let selectors = 0;
   let declarations = 0;
@@ -338,7 +353,9 @@ export function cssShape(text) {
       buf = '';
     } else if (paren === 0 && (c === ';' || c === '}')) {
       const d = buf.trim();
-      if (depth > 0 && /^[\w-]+\s*:/.test(d)) declarations += 1;
+      if (depth > 0 && /^[\w-]+\s*:/.test(d) && !except.includes(d.split(':')[0].trim())) {
+        declarations += 1;
+      }
       if (c === '}') depth = Math.max(0, depth - 1);
       buf = '';
     } else buf += c;
@@ -544,7 +561,7 @@ export function measure({ html, js, css = {}, build = NO_BUILD, tailwind = {} })
   const legacyNames = new Set();
   const tailwindAdHoc = {};
   for (const [file, text] of Object.entries(css).sort(([a], [b]) => a.localeCompare(b))) {
-    const shape = cssShape(text);
+    const shape = cssShape(text, TOKENS_UNRECORDED[file]);
     for (const c of shape.classes) classPositions.add(c);
     if (file === TAILWIND_ENTRY) {
       if (shape.selectors + shape.utilities) {
