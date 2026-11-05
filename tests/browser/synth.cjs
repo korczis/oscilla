@@ -84,6 +84,14 @@
 //              order its radios run in (review of W1c, finding 1). It needs choiceKey
 //              (src/js/synth/gestures.js) to read the host svg's data-style: on toggle and
 //              slide, ArrowUp +1 option, ArrowDown -1, Home and End the first and last radio
+//   s-ringfit  (desktop) a focused toggle's legend ring clears the ink of its text by 2+ graph
+//              units across and 1+ up and down (review of AC, finding 1: round the estimate it
+//              cut a focused "Off"; round 2, finding 1: 2 past the font-size box, it sat on a
+//              "g", whose descender overhangs that box): Off/On and every lever's legends on the
+//              tabs, each drawn by the core focused on each option, selected and not (weights
+//              600 and 400), at zoom 1 and 64/44, inside that lever's own svg, the ink rastered
+//              at 8x on a canvas in the legend's computed font (family, weight, size), centred
+//              and middle as the legend's text-anchor and dominant-baseline place it
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-scope    K152: a drag across the LPF plate's scope sets its cutoff on the drawing's log
@@ -133,6 +141,7 @@ const suite = require('./lib/suite.cjs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until, bounded, WaitTimeout } = require('./lib/wait.cjs');
 const midiStub = require('./lib/midi-stub.cjs');
+const { PNG } = require('pngjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -1475,6 +1484,147 @@ function defineChecks() {
       await page.close();
     }
     return { ok: bad.length === 0 && seen.size === 11, controls: seen.size, bad: bad.slice(0, 14),
+      more: Math.max(0, bad.length - 14) };
+  });
+
+  def('s-ringfit', async ({ context, base }) => {
+    const core = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
+    const { switchLayout, switchSvg } = await core('src/js/ui/synth/switch.js');
+    const { TOKENS } = await core('tests/unit/ui-synth-fixture.mjs');
+    const tabs = ['panel', ...['additive', 'fm', 'am', 'wavetable', 'sync', 'perc']
+      .map((e) => `engines&ye=${e}`)];
+    const pairs = new Map([['Off|On', null]]);
+    const bad = [];
+    let rings = 0;
+    let least = Infinity;
+    let leastY = Infinity;
+    let font = '';
+    for (const tab of tabs) {
+      const page = await openSynth(context, base, `#m=synth&yt=${tab}`);
+      await face(page, 'panel');
+      const found = await page.evaluate(() => [...document.querySelectorAll(
+        '[data-osc="synth.panel"] svg[role="radiogroup"][data-style="toggle"]')]
+        .filter((g) => g.getClientRects().length)
+        .map((g) => ({ cid: g.closest('[data-control]').getAttribute('data-control'),
+          legends: [...g.querySelectorAll('[data-legend]')]
+            .sort((a, b) => a.dataset.index - b.dataset.index).map((t) => t.textContent) })));
+      for (const f of found) {
+        const key = f.legends.join('|');
+        if (f.legends.length === 2 && !pairs.get(key)) pairs.set(key, { tab, cid: f.cid });
+      }
+      await page.close();
+    }
+    // The ink of a legend, graph units from its anchor (centred, 'central'): the text alone in
+    // the legend's computed font in an svg at the lever's zoom, screenshot at 8x device pixels,
+    // every pixel not the white page counted (its antialiasing too).
+    const inkContext = await context.browser().newContext({ viewport: { width: 400, height: 80 },
+      deviceScaleFactor: 8 });
+    const inkPage = await inkContext.newPage();
+    const inks = new Map();
+    const inkOf = async (text, font, zoom) => {
+      const key = `${font}|${zoom}|${text}`;
+      if (!inks.has(key)) {
+        const [W, H] = [400 / zoom, 80 / zoom];
+        await inkPage.setContent('<body style="margin:0;background:#fff"><svg width="400" '
+          + `height="80" viewBox="${-W / 2} ${-H / 2} ${W} ${H}" style="display:block">`
+          + '<text x="0" y="0" text-anchor="middle" dominant-baseline="central" fill="#000">'
+          + '</text></svg></body>');
+        await inkPage.evaluate(({ text, font }) => {
+          const t = document.querySelector('text');
+          t.style.font = font;
+          t.textContent = text;
+          return document.fonts.ready.then(() => true);
+        }, { text, font });
+        const png = PNG.sync.read(await inkPage.screenshot({ type: 'png' }));
+        let [x0, y0, x1, y1] = [Infinity, Infinity, -1, -1];
+        for (let y = 0; y < png.height; y++) {
+          for (let x = 0; x < png.width; x++) {
+            const i = (y * png.width + x) * 4;
+            if (png.data[i] < 255 || png.data[i + 1] < 255 || png.data[i + 2] < 255) {
+              x0 = Math.min(x0, x);
+              x1 = Math.max(x1, x);
+              y0 = Math.min(y0, y);
+              y1 = Math.max(y1, y);
+            }
+          }
+        }
+        const k = png.width / W; // device px per graph unit
+        inks.set(key, x1 < 0 ? null : { l: W / 2 - x0 / k, r: (x1 + 1) / k - W / 2,
+          up: H / 2 - y0 / k, down: (y1 + 1) / k - H / 2 });
+      }
+      return inks.get(key);
+    };
+    // Measure every pair inside a lever's own svg on the Panel tab, so its text takes the font
+    // the panel's legends are drawn in.
+    const page = await openSynth(context, base, '#m=synth&yt=panel');
+    await face(page, 'panel');
+    for (const key of pairs.keys()) {
+      const [a, b] = key.split('|');
+      const param = { key: 'ringfit', label: 'Ring fit', type: 'enum', default: 'a',
+        options: [['a', a], ['b', b]] };
+      for (const zoom of [1, 64 / 44]) {
+        for (const value of ['a', 'b']) {
+          for (const focused of ['a', 'b']) {
+            const markup = switchSvg({ value, param, tokens: TOKENS, zoom,
+              state: { focus: { option: focused } } });
+            const r = await page.evaluate(({ markup, i }) => {
+              const host = document.querySelector('[data-osc="synth.panel"] '
+                + 'svg[role="radiogroup"][data-style="toggle"]');
+              if (!host) return { missing: true };
+              const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+              g.innerHTML = markup;
+              host.appendChild(g);
+              try {
+                const t = [...g.querySelectorAll('[data-legend]')]
+                  .find((x) => x.getAttribute('data-index') === String(i));
+                if (t.getAttribute('text-anchor') !== 'middle'
+                  || t.getAttribute('dominant-baseline') !== 'central') {
+                  return { placed: false };
+                }
+                const ring = g.querySelector('[data-focus]');
+                const n = (el, k) => Number(el.getAttribute(k));
+                const cs = getComputedStyle(t);
+                return { placed: true, text: t.textContent, x: n(t, 'x'), y: n(t, 'y'),
+                  ring: ['x', 'y', 'width', 'height'].map((k) => n(ring, k)),
+                  font: `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}` };
+              } finally {
+                g.remove();
+              }
+            }, { markup, i: focused === 'a' ? 0 : 1 });
+            if (r.missing) {
+              await page.close();
+              return { ok: false, detail: 'no lever on the Panel tab to measure in' };
+            }
+            rings += 1;
+            const at = pairs.get(key);
+            const where = `${key} at ${zoom.toFixed(2)} (${value} selected, ${focused} focused`
+              + `${at ? `; ${at.cid}` : ''})`;
+            if (!r.placed) {
+              bad.push(`${where}: the legend is not centred and middle, so the ink is not read`);
+              continue;
+            }
+            const ink = await inkOf(r.text, r.font, zoom);
+            const [rx, ry, rw, rh] = r.ring;
+            const gap = Math.min(r.x - ink.l - (rx + 1), rx + rw - 1 - (r.x + ink.r));
+            const gapY = Math.min(r.y - ink.up - (ry + 1), ry + rh - 1 - (r.y + ink.down));
+            least = Math.min(least, gap);
+            leastY = Math.min(leastY, gapY);
+            if (!(gap >= 2)) {
+              bad.push(`${where}: the ring clears the ink across by ${gap.toFixed(2)}`);
+            }
+            if (!(gapY >= 1)) {
+              bad.push(`${where}: the ring clears the ink up and down by ${gapY.toFixed(2)}`);
+            }
+            font = r.font.slice(0, 48);
+          }
+        }
+      }
+    }
+    await page.close();
+    await inkContext.close();
+    return { ok: bad.length === 0 && pairs.size > 1 && inks.size > 0
+      && [...inks.values()].every(Boolean), pairs: [...pairs.keys()], rings, font,
+      least: Number(least.toFixed(2)), leastY: Number(leastY.toFixed(2)), bad: bad.slice(0, 14),
       more: Math.max(0, bad.length - 14) };
   });
 

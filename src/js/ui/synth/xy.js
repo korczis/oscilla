@@ -6,7 +6,7 @@
 // Graph units: 1 is 1 CSS px at zoom 1, the layout's box from (0, 0). The surface is
 // surface.card (--osc-surface-2, never bg-gray-900) in a control.edge frame (--osc-text-dim,
 // 3:1 on the surface and on both plates in both themes) with a recess along its top and left in
-// surface.edge at the hw-shadow intensity, and a grid in text.dim at the hw-texture intensity
+// control.shade at the hw-shadow intensity, and a grid in text.dim at the hw-texture intensity
 // (class opacity-hw-texture: a line per value of an integer axis of up to XY.gridMax values,
 // else XY.gridDivs divisions), with two guides in control.track through the puck.
 //
@@ -14,23 +14,25 @@
 // (--osc-text, 3:1 or more on the surface and the skirt in both themes) around a Ø20 face
 // (PUCK.face) in control.edge (--osc-text-dim: of the control roles the only neutral but the
 // pointer's --osc-text that is 1.3:1 or more on the surface in both themes, 3.91:1 in each, and
-// 4.2:1 / 4.4:1 on the skirt), a crosshair notch in control.pointer, and a shadow in
-// surface.edge at hw-shadow, PUCK.shadow (1.25 down, r 14) below the cap in every state. The
-// puck has no sheen: no neutral role is lighter than the face in both themes, and
-// the palette is locked, so a sheen would read convex in one theme and dished in the other. The
-// relief differs by theme: the skirt is control.cap (--osc-surface-1), darker than the surface
-// in dark and lighter in light, so in dark the collar reads recessed and the rim carries the
-// edge, and in light the skirt reads raised. The pressed cue (the face Ø20 to Ø17 at zoom 1) is
-// the same in both. The route to symmetric relief is an open palette proposal, sent to the
-// palette owner: theme-aware --osc-hw-shade and --osc-hw-highlight roles. Until they land no
-// tint is drawn: surface.edge (--osc-bg), the one role darker than the surface in both themes,
-// composites to 1.04:1 dark and 1.01:1 light at hw-shadow, so the shadow is decoration and
-// never moves. Touched, the cap is pressed by geometry, alike in both themes: the face sinks by
-// PUCK.sink graph units and by at least PUCK.sink screen px from zoom 0.3 up (rounded up to
-// 0.02, never past half the face; Ø20 to Ø17 at zoom 1), so more skirt shows, and the notch
-// shortens with it. The rim stays text.value (cyan is the gate LED's and a selection's colour):
-// the gate shows on its LED. The centre travels over the surface inset by XY.inset, so neither
-// the cap, its rim nor its shadow crosses the frame.
+// 4.2:1 / 4.4:1 on the skirt), a crosshair notch in control.pointer, a highlight arc on the
+// face's top-left in control.highlight at hw-sheen (PUCK.highlight: 195° to 255°, at 0.8 of
+// the face's radius) and a drop shadow in control.shade at hw-shadow (PUCK.shadow: the cap with
+// its rim, r 14.75, 2 down), so the rim casts a crescent below it. The relief is symmetric: it
+// comes from the two depth roles the palette owner approved (oscilla-21's amendment (a)-(e),
+// 11-04), --osc-hw-shade and --osc-hw-highlight, which darken and lighten what they lie on alike
+// in both themes (each use |ΔL*| >= 3 on its face, ui-synth-tokens.test.mjs), so the cap reads
+// raised in dark and light. The skirt alone still differs by theme: control.cap
+// (--osc-surface-1) is darker than the surface in dark and lighter in light, so in dark the
+// collar reads recessed and the rim carries the edge, and in light the skirt reads raised; the
+// shadow and the highlight now say raised in both. Touched, the cap is pressed, alike in both
+// themes: the face sinks by PUCK.sink graph units and by at least PUCK.sink screen px from zoom
+// 0.3 up (rounded up to 0.02, never past half the face; Ø20 to Ø17 at zoom 1), so more skirt
+// shows, the notch shortens and the highlight shrinks with it (both in proportion), and the
+// shadow drops PUCK.shadow.pressed (1) instead of dy, as a cap pushed toward its surface casts
+// less. The pressed cue (the face Ø20 to Ø17 at zoom 1) is the same in both. Disabled, the face
+// is blank and carries no highlight. The rim stays text.value (cyan is the gate LED's and a
+// selection's colour): the gate shows on its LED. The centre travels over the surface inset by
+// XY.inset (18), so neither the cap, its rim nor its shadow crosses the frame.
 //
 // The axis faders are knob.js's controlSvg (kind 'fader', orientation 'horizontal' for X,
 // 'vertical' for Y) at controlBox, with the puck's travel (the layout's travel), so they look,
@@ -40,8 +42,8 @@
 // caller's `source` (the state it shows, never a constant), labelled XY.ledLabel at the 12 px
 // font floor (LEGEND_PX screen px at any zoom). Every colour is a token passed in (synthTokens;
 // project.visual-identity-lock) and no number sets an opacity, an alpha or a shadow (v4): the
-// intensities are the classes opacity-hw-texture and opacity-hw-shadow (and the LED's halo,
-// led.js's, at opacity-hw-sheen).
+// intensities are the classes opacity-hw-texture, opacity-hw-shadow and opacity-hw-sheen (the
+// puck's highlight, and the LED's halo, led.js's).
 //
 // Mapping: xyPosition and xyValue work in positions 0..1 along each axis, y up (0 at the
 // bottom, as hardware), clamped to the puck's travel. A position is held to 12 significant
@@ -97,15 +99,18 @@ import { ledBox, ledSvg } from './led.js';
 
 /** The puck, graph units: the cap's radius (Ø28), its face's (Ø20), its rim, the crosshair
  *  notch's half arm and width (the arm idle: it shortens with the face), how far the face sinks
- *  when touched (graph units, and screen px at least) and the shadow (a drop and a radius). */
+ *  when touched (graph units, and screen px at least), the shadow (the cap with its rim, dropped
+ *  dy idle and pressed when touched) and the face's highlight arc (degrees, y down, its radius
+ *  as a share of the face's and its width). */
 export const PUCK = Object.freeze({ r: 14, face: 10, edgeW: 1.5, notch: 6, notchW: 1.5,
-  sink: 1.5, shadow: Object.freeze({ dy: 1.25, r: 14 }) });
+  sink: 1.5, shadow: Object.freeze({ dy: 2, pressed: 1, r: 14.75 }),
+  highlight: Object.freeze({ from: 195, to: 255, at: 0.8, w: 1.5 }) });
 /** The pad, graph units: the default and least side of the surface, the puck travel's inset
  *  (the cap, its ring and its shadow inside the frame), the margin that holds the focus ring,
  *  the gap to the faders, the frame's corner, width and disabled dash, the focus ring's offset
  *  and width, the recess's width, the grid (a line per value up to gridMax values, else gridDivs
  *  divisions), the guides' width and the gate LED's label. */
-export const XY = Object.freeze({ size: 160, min: 96, inset: 16, margin: 4, gap: 6, rx: 3,
+export const XY = Object.freeze({ size: 160, min: 96, inset: 18, margin: 4, gap: 6, rx: 3,
   frameW: 1.5, dash: '3 1.5', focusOut: 3, focusW: 2, recessW: 2, gridMax: 25, gridDivs: 8,
   guideW: 1, ledLabel: 'Gate' });
 
@@ -311,24 +316,32 @@ function padShapes(L, nx, ny, params, t, st) {
   const sh = P.shadow;
   const face = st.touched ? sunkFace(L.zoom) : P.face;
   const arm = num((P.notch * face) / P.face);
+  const H = P.highlight;
+  const hr = num(face * H.at);
+  const on = (deg) => `${num(cx + hr * Math.cos((deg * Math.PI) / 180))} `
+    + `${num(cy + hr * Math.sin((deg * Math.PI) / 180))}`;
   return `<rect data-surface="" x="${pad.x}" y="${pad.y}" width="${pad.width}" `
     + `height="${pad.height}" rx="${XY.rx}" fill="${esc(t.surface.card)}" `
     + `stroke="${esc(st.disabled ? c.disabled : c.edge)}" stroke-width="${XY.frameW}"`
     + `${st.disabled ? ` stroke-dasharray="${XY.dash}"` : ''}/>`
     + `<path data-recess="" class="opacity-hw-shadow" d="M ${num(pad.x + r0)} `
     + `${num(pad.y + pad.height - XY.rx)} V ${num(pad.y + r0)} H `
-    + `${num(pad.x + pad.width - XY.rx)}" fill="none" stroke="${esc(t.surface.edge)}" `
+    + `${num(pad.x + pad.width - XY.rx)}" fill="none" stroke="${esc(c.shade)}" `
     + `stroke-width="${XY.recessW}"/>`
     + `<path data-grid="" class="opacity-hw-texture" d="${grid}" fill="none" `
     + `stroke="${esc(t.text.dim)}" stroke-width="1"/>`
     + `<path data-guide="" d="M ${cx} ${top} V ${bottom} M ${left} ${cy} H ${right}" `
     + `fill="none" stroke="${esc(t.control.track)}" stroke-width="${XY.guideW}"/>`
     + `<circle data-puck-shadow="" class="opacity-hw-shadow" cx="${cx}" `
-    + `cy="${num(cy + sh.dy)}" r="${sh.r}" fill="${esc(t.surface.edge)}" stroke="none"/>`
+    + `cy="${num(cy + (st.touched ? sh.pressed : sh.dy))}" r="${sh.r}" fill="${esc(c.shade)}" `
+    + 'stroke="none"/>'
     + `<circle data-puck-cap="" cx="${cx}" cy="${cy}" r="${P.r}" fill="${esc(c.cap)}" `
     + `stroke="${esc(rim)}" stroke-width="${P.edgeW}"/>`
     + `<circle data-puck-face="" cx="${cx}" cy="${cy}" r="${face}" `
     + `fill="${esc(st.disabled ? c.cap : c.edge)}" stroke="none"/>`
+    + (st.disabled ? '' : `<path data-puck-highlight="" class="opacity-hw-sheen" `
+      + `d="M ${on(H.from)} A ${hr} ${hr} 0 0 1 ${on(H.to)}" fill="none" `
+      + `stroke="${esc(c.highlight)}" stroke-width="${H.w}" stroke-linecap="round"/>`)
     + `<path data-notch="" d="M ${num(cx - arm)} ${cy} L ${num(cx + arm)} ${cy} `
     + `M ${cx} ${num(cy - arm)} L ${cx} ${num(cy + arm)}" fill="none" `
     + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" `

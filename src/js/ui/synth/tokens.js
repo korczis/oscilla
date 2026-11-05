@@ -19,10 +19,15 @@
  * Every control role but the decorative cap, cap highlight, knurl and LED bezel ring marks the
  * control or its value, so it holds 3:1 on both plate surfaces (surface-3 and surface-1) in both
  * themes, and the label and value text 4.5:1 (WCAG 1.4.11 and 1.4.3; ui-synth-tokens.test.mjs
- * computes them from tokens.css): the unlit arc or slot (track) and the skirt edge are
- * --osc-text-dim, the pointer --osc-text, the applied value --osc-purple; the knurl stays the
- * faint --osc-border, and an LED bezel's ring is --osc-border-strong, the strongest neutral on
- * the plates (led.js).
+ * computes them from tokens.css): the unlit arc or slot (track) and the knob's silhouette edge
+ * (control.edge) are --osc-text-dim, the pointer --osc-text, the applied value --osc-purple; the
+ * knurl is the faint --osc-border (a disabled knob's quiet edge, never louder than an enabled
+ * one), and an LED bezel's ring is --osc-border-strong, the strongest neutral on the plates
+ * (led.js). The two depth roles (oscilla-21's amendment (a)-(e), 11-04) are drawn only
+ * at an intensity class, never opaque: control.shade (--osc-hw-shade) at hw-shadow (the knob's
+ * cap shadow, the XY pad's recess and puck shadow) and control.highlight (--osc-hw-highlight) at
+ * hw-sheen (the XY puck's face), each visible, |ΔL*| >= 3, on the face it is drawn over in both
+ * themes (ui-synth-tokens.test.mjs).
  */
 export const SYNTH_TOKEN_NAMES = deepFreeze({
   surface: { plateHi: '--osc-surface-3', plateLo: '--osc-surface-1', card: '--osc-surface-2',
@@ -31,7 +36,8 @@ export const SYNTH_TOKEN_NAMES = deepFreeze({
   control: { cap: '--osc-surface-1', capHi: '--osc-surface-4', ring: '--osc-cyan',
     track: '--osc-text-dim', pointer: '--osc-text', focus: '--osc-focus',
     disabled: '--osc-text-dim', edge: '--osc-text-dim', knurl: '--osc-border',
-    applied: '--osc-purple', bezel: '--osc-border-strong' },
+    applied: '--osc-purple', bezel: '--osc-border-strong', shade: '--osc-hw-shade',
+    highlight: '--osc-hw-highlight' },
   jack: { body: '--osc-surface-0', ring: '--osc-text-dim', normal: '--osc-text-dim',
     refuse: '--osc-red' },
   cable: { palette: ['--osc-cyan', '--osc-red-soft', '--osc-magenta', '--osc-green',

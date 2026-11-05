@@ -113,12 +113,15 @@ test('the controls take the panel\'s tokens in the layer\'s roles', () => {
     assert.equal(ct.text[role], `var(${name})`, `text.${role}`);
   }
   for (const { cid } of controls) {
-    const bad = paints(block(cid)).filter((p) => !/^var\(--osc-[\w-]+\)$|^none$/.test(p));
+    // A url(#id) paint is a gradient of token stops the same block defines (the knob, slice A).
+    const b = block(cid);
+    const bad = paints(b).filter((p) => !/^var\(--osc-[\w-]+\)$|^none$/.test(p)
+      && !(/^url\(#([^)]+)\)$/.test(p) && b.includes(` id="${/^url\(#([^)]+)\)$/.exec(p)[1]}"`)));
     assert.deepEqual(bad, [], `${cid}: tokens only`);
   }
 });
 
-test('a disabled knob stays focusable, says why and draws the core\'s dashed arc', () => {
+test('a disabled knob stays focusable, says why and draws the core\'s track only (C1)', () => {
   const off = knobs.filter((x) => x.reason);
   assert.ok(off.some((x) => x.cid === 'am.depth'), 'AM depth is inactive in ring mode');
   for (const { cid } of off) {
@@ -127,18 +130,15 @@ test('a disabled knob stays focusable, says why and draws the core\'s dashed arc
     assert.match(b, /role="slider" tabindex="0"/);
     assert.ok(b.includes(`<span class="sr-only" id="${cid}-why">`), cid);
   }
-  // The core's disabled arc (S7): butt dashes of two widths and gaps of one, or a solid butt arc
-  // under two dashes; never the enabled arc's round cap.
+  // The core's one disabled language (C1, co-signed by p2 and dev-53): no value arc, the track
+  // only, a flat body; an enabled knob keeps its value arc.
   for (const { cid } of off) {
-    for (const [ring] of block(cid).matchAll(/<path d="[^"]*" data-ring=""[^>]*>/g)) {
-      assert.match(ring, /stroke-dasharray="\d+(?:\.\d+)? \d+(?:\.\d+)?"|stroke-linecap="butt"/,
-        `${cid}: ${ring}`);
-      assert.doesNotMatch(ring, /stroke-linecap="round"/, cid);
-    }
+    const knob = /<g data-control="knob">.*?<\/g><\/g>/.exec(block(cid))[0];
+    assert.doesNotMatch(knob, /data-ring=""/, `${cid}: no value arc`);
+    assert.match(knob, /data-track=""/, `${cid}: the track`);
+    assert.doesNotMatch(knob, /stroke-dasharray|data-sheen=""/, cid);
   }
-  const [, on, gap] = /data-ring="" [^>]*stroke-dasharray="([\d.]+) ([\d.]+)"/
-    .exec(block('am.depth'));
-  assert.ok(Math.abs(Number(on) - 2 * Number(gap)) < 0.02, `am.depth dashes ${on} ${gap}`);
+  assert.match(block('lpf.frequency'), /data-ring=""/);
   assert.doesNotMatch(block('lpf.frequency'), /stroke-dasharray/);
 });
 
@@ -391,37 +391,44 @@ test('an unpacked dial carries no numerals: nothing on the plate would print the
 });
 
 // Review of W1c, finding 4: the WAVE dial's skirt was r 17 (34 px) beside the 64 px knobs, and
-// its knurl a dashed ring the panel drew on it. A dial is the core's knob face at the panel's
-// knob size: its skirt the knob's skirt on screen (16 x 64/44), the core's own 24-ridge knurl
-// (data-knurl), no overlay of the panel's.
-test('a rotary selector is knob-sized: the knob\'s skirt and knurl on screen', () => {
+// its knurl a dashed ring the panel drew on it. Review of slice A, finding 5: the dial then kept
+// the old face beside the redrawn knob. A dial is the core's knob face itself at the panel's
+// knob size: the knob's toothed skirt, scaled by 64/44, no knurl and no overlay of the panel's.
+test('a rotary selector is knob-sized: the knob\'s own face on screen', () => {
   const knob = knobSvg({ value: 0.5, param: { key: 'k', type: 'number', min: 0, max: 1,
     default: 0.5 }, tokens: T });
   const z = 64 / 44;
-  const skirtOf = (s) => Number(/<circle data-skirt="" cx="0" cy="0" r="([\d.]+)"/.exec(s)[1]);
-  const knobSkirt = skirtOf(knob) * z;
+  const skirt = (s) => /<path d="([^"]+)" data-skirt=""/.exec(s)[1];
   let dials = 0;
   for (const { cid, c } of switches) {
     const style = switchStyle(c.param);
     if (style !== 'rotary' && style !== 'window') continue;
     dials += 1;
     const b = block(cid);
-    // The choice is drawn at 1:1, so its skirt's r is its on-screen radius.
-    const r = skirtOf(b);
-    assert.ok(Math.abs(r - knobSkirt) < 0.02, `${cid}: skirt r ${r} px, a knob's ${knobSkirt}`);
-    const knurl = new RegExp('<path d="([^"]*)" data-knurl="" fill="none" stroke="([^"]*)" '
-      + String.raw`stroke-width="([\d.]+)"/>`).exec(b);
-    assert.ok(knurl, `${cid}: the core's knurl`);
-    assert.equal(knurl[2], 'var(--osc-border)', `${cid}: the knob's knurl role`);
-    assert.equal(Number(knurl[3]), num(z), `${cid}: a knob ridge's width on screen`);
-    assert.equal(count(knurl[1], /M /g), 24, `${cid}: 24 ridges`);
-    for (const [, x0, y0, x1, y1] of knurl[1].matchAll(SEG_RE)) {
-      assert.ok(Math.abs(Math.hypot(x0, y0) - 14.5 * z) < 0.03
-        && Math.abs(Math.hypot(x1, y1) - 16 * z) < 0.03, `${cid}: a knob's ridge on screen`);
-    }
-    assert.doesNotMatch(b, /data-ridges=""/, `${cid}: no knurl drawn over the core's`);
+    // The choice is drawn at 1:1: its face group's scale is the knob's on-screen size.
+    const face = /<g data-face="" transform="scale\(([\d.]+)\)">/.exec(b);
+    assert.ok(face, `${cid}: the knob's face`);
+    assert.ok(Math.abs(Number(face[1]) - z) < 1e-3, `${cid}: scale ${face[1]}, a knob's ${z}`);
+    assert.equal(skirt(b), skirt(knob), `${cid}: the knob's toothed skirt`);
+    assert.doesNotMatch(b, /data-knurl=""|data-ridges=""/, `${cid}: no knurl of its own`);
   }
   assert.ok(dials >= 4, `${dials} dials`);
+});
+
+// Review of slice A, finding 6: knobSvg drops the uid face.js and ui.js pass, so the core names
+// each knob's gradients after its parameter and the semi-mono plates repeat them (knob-level-side
+// x8, knob-decay x8 ...): invalid markup whose url(#) paints bind to the first copy. dev-53's
+// knobSvg (src/js/synth/view/knob.js) forwards uid to controlSvg, and the dials' host passes
+// switchSvg its uid; then every gradient id on the panel is unique.
+test('every gradient id across the panel\'s plates is unique', {
+  todo: 'dev-53: knobSvg forwards uid to controlSvg, the dial host passes switchSvg its uid' },
+() => {
+  const ids = [...plates.values()].flatMap((h) => [...h.matchAll(
+    /<(?:linear|radial)Gradient\b[^>]*\sid="([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(ids.length > 0, 'the plates draw gradients');
+  const seen = new Map();
+  for (const id of ids) seen.set(id, (seen.get(id) || 0) + 1);
+  assert.deepEqual([...seen].filter(([, k]) => k > 1), [], 'duplicated gradient ids');
 });
 
 test('no legend group wraps: the legends sit round the control (V9)', () => {
@@ -476,20 +483,20 @@ test('every choice fits the narrowest plate: a wide dial packs its legends below
     'the two wider than a column: FM\'s algorithm and the XY key');
 });
 
-test('a rotary has the knobs\' knurled skirt and its detents (V10)', () => {
+test('a rotary has the knob\'s toothed skirt and its detents (V10)', () => {
   for (const { cid, c } of switches) {
     const { b } = choiceParts(cid);
     const style = switchStyle(c.param);
-    const knurl = /<path d="[^"]*" data-knurl="" fill="none" stroke="([^"]*)"/.exec(b);
+    const skirt = /<path d="[^"]*" data-skirt="" fill="([^"]*)" stroke="([^"]*)"/.exec(b);
     if (style !== 'rotary' && style !== 'window') {
-      assert.equal(knurl, null, `${cid}: a ${style} has no skirt`);
+      assert.equal(skirt, null, `${cid}: a ${style} has no skirt`);
       continue;
     }
-    assert.ok(knurl, `${cid}: the knurled skirt`);
-    assert.equal(knurl[1], panelControlTokens(T).control.knurl, `${cid}: the knob's knurl role`);
-    // Over the skirt, under the cap: drawn after the skirt circle and before the cap.
-    assert.ok(b.indexOf('data-skirt=""') < b.indexOf('data-knurl=""')
-      && b.indexOf('data-knurl=""') < b.indexOf('data-cap=""'), cid);
+    // The knob's skirt (review of slice A, finding 5): the cap's body, the silhouette edge.
+    assert.ok(skirt, `${cid}: the toothed skirt`);
+    assert.equal(skirt[1], panelControlTokens(T).control.cap, `${cid}: the cap's body`);
+    assert.equal(skirt[2], panelControlTokens(T).control.edge, `${cid}: the silhouette edge`);
+    assert.ok(b.indexOf('data-skirt=""') < b.indexOf('data-cap=""'), `${cid}: under the cap`);
     assert.equal(count(b, /data-detent=""/g), c.param.options.length, `${cid}: a detent each`);
   }
 });

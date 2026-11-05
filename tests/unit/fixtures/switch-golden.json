@@ -1,0 +1,853 @@
+{
+ "recordedAt": "f523746a",
+ "note": "tests/unit/fixtures/switch-golden.mjs goldenOf, per enum and boolean of NODE_REGISTRY.list(), before an option could carry a short legend",
+ "all": "2bd0a486d4b6ba85ae6dccf5a778a4f789d71d143fa7f711dbce905559554ce2",
+ "params": [
+  {
+   "node": "oscillator",
+   "key": "waveform",
+   "label": "Waveform",
+   "type": "enum",
+   "default": "sine",
+   "options": [
+    [
+     "sine",
+     "Sine"
+    ],
+    [
+     "triangle",
+     "Triangle"
+    ],
+    [
+     "sawtooth",
+     "Saw"
+    ],
+    [
+     "square",
+     "Square"
+    ]
+   ],
+   "sha256": "0e4f66d43f5f16fd678f43bd31d8565659a6d6e8c1328aadc4583b846ec5747c"
+  },
+  {
+   "node": "noise",
+   "key": "color",
+   "label": "Colour",
+   "type": "enum",
+   "default": "white",
+   "options": [
+    [
+     "white",
+     "White"
+    ],
+    [
+     "pink",
+     "Pink"
+    ],
+    [
+     "brown",
+     "Brown"
+    ]
+   ],
+   "sha256": "be299180ddd46c5b1210824261a1f038d3a97b655cc51876a894b91620a634e2"
+  },
+  {
+   "node": "sweep",
+   "key": "curve",
+   "label": "Curve",
+   "type": "enum",
+   "default": "log",
+   "options": [
+    [
+     "log",
+     "Logarithmic"
+    ],
+    [
+     "linear",
+     "Linear"
+    ]
+   ],
+   "sha256": "6627da7089eede1b8c8daa6a4045ce27b952d7e0957408bfeb54bbc1b2f7a038"
+  },
+  {
+   "node": "sequence",
+   "key": "waveform",
+   "label": "Waveform",
+   "type": "enum",
+   "default": "sine",
+   "options": [
+    [
+     "sine",
+     "Sine"
+    ],
+    [
+     "triangle",
+     "Triangle"
+    ],
+    [
+     "sawtooth",
+     "Saw"
+    ],
+    [
+     "square",
+     "Square"
+    ]
+   ],
+   "sha256": "0e4f66d43f5f16fd678f43bd31d8565659a6d6e8c1328aadc4583b846ec5747c"
+  },
+  {
+   "node": "vco",
+   "key": "waveform",
+   "label": "Wave",
+   "type": "enum",
+   "default": "sawtooth",
+   "options": [
+    [
+     "triangle",
+     "Triangle"
+    ],
+    [
+     "sawtooth",
+     "Saw"
+    ],
+    [
+     "square",
+     "Square"
+    ],
+    [
+     "pulse",
+     "Pulse"
+    ],
+    [
+     "sine",
+     "Sine"
+    ]
+   ],
+   "sha256": "bc3c39dcc8e86c53bd907c8af269bd65d2ce356348334a8d69df5241971d1f49"
+  },
+  {
+   "node": "vco",
+   "key": "scale",
+   "label": "Scale",
+   "type": "enum",
+   "default": "8",
+   "options": [
+    [
+     "32",
+     "32'"
+    ],
+    [
+     "16",
+     "16'"
+    ],
+    [
+     "8",
+     "8'"
+    ],
+    [
+     "4",
+     "4'"
+    ]
+   ],
+   "sha256": "54fc0b6fb443af2b625f25bd6a51c3c701c96bbe063de12478125c060670f85c"
+  },
+  {
+   "node": "additive-voice",
+   "key": "shape",
+   "label": "Shape",
+   "type": "enum",
+   "default": "custom",
+   "options": [
+    [
+     "custom",
+     "Drawbars"
+    ],
+    [
+     "sawtooth",
+     "Saw"
+    ],
+    [
+     "square",
+     "Square"
+    ],
+    [
+     "triangle",
+     "Triangle"
+    ]
+   ],
+   "sha256": "e0a21e46d0bd9aa28f40f225dc2b3371e331fddde6c12f4782653a3e71d14139"
+  },
+  {
+   "node": "fm-voice",
+   "key": "algorithm",
+   "label": "Algorithm",
+   "type": "enum",
+   "default": "2-op",
+   "options": [
+    [
+     "2-op",
+     "2 → 1"
+    ],
+    [
+     "3-stack",
+     "3 → 2 → 1"
+    ],
+    [
+     "3-y",
+     "2 + 3 → 1"
+    ],
+    [
+     "4-stack",
+     "4 → 3 → 2 → 1"
+    ],
+    [
+     "4-pairs",
+     "2 → 1, 4 → 3"
+    ],
+    [
+     "4-three",
+     "2 + 3 + 4 → 1"
+    ],
+    [
+     "4-parallel",
+     "1 + 2 + 3 + 4"
+    ]
+   ],
+   "sha256": "6550329c8c7c4a4a625647376bb64a81e55c39422fe991711fa75218f64aa407"
+  },
+  {
+   "node": "am-voice",
+   "key": "mode",
+   "label": "Mode",
+   "type": "enum",
+   "default": "ring",
+   "options": [
+    [
+     "ring",
+     "Ring"
+    ],
+    [
+     "am",
+     "AM"
+    ]
+   ],
+   "sha256": "c7c58581874d496bce4fe606ae1a52054d3c0e437a72a73b9535ac6b27a6651b"
+  },
+  {
+   "node": "am-voice",
+   "key": "carrier",
+   "label": "Carrier",
+   "type": "enum",
+   "default": "sine",
+   "options": [
+    [
+     "sine",
+     "Sine"
+    ],
+    [
+     "triangle",
+     "Triangle"
+    ],
+    [
+     "sawtooth",
+     "Saw"
+    ],
+    [
+     "square",
+     "Square"
+    ]
+   ],
+   "sha256": "5e3e555c24e41a74ed342d2bba9cc81a4e939a3f18e6d474ef8038cad74ada2f"
+  },
+  {
+   "node": "am-voice",
+   "key": "modulator",
+   "label": "Modulator",
+   "type": "enum",
+   "default": "sine",
+   "options": [
+    [
+     "sine",
+     "Sine"
+    ],
+    [
+     "triangle",
+     "Triangle"
+    ],
+    [
+     "sawtooth",
+     "Saw"
+    ],
+    [
+     "square",
+     "Square"
+    ]
+   ],
+   "sha256": "fb51b1d98c5e9303026f855b6cb836d311788c3f85cc6fb813b756d2afb172b9"
+  },
+  {
+   "node": "wavetable-voice",
+   "key": "bank",
+   "label": "Bank",
+   "type": "enum",
+   "default": "basic",
+   "options": [
+    [
+     "basic",
+     "Basic"
+    ],
+    [
+     "formant",
+     "Formant"
+    ],
+    [
+     "pulse",
+     "Pulse"
+    ],
+    [
+     "sync",
+     "Hard sync"
+    ]
+   ],
+   "sha256": "a9ee50988f768d528cf6952ca1e4e24bf2b8deaf6e88fc383fe45692d4c39148"
+  },
+  {
+   "node": "perc-voice",
+   "key": "choke",
+   "label": "Hat choke",
+   "type": "boolean",
+   "default": true,
+   "sha256": "5002191df0fd87e7c2c47e1a1200f632b4efc1af7f925b7f5de72e0ed3739b36"
+  },
+  {
+   "node": "lfo",
+   "key": "shape",
+   "label": "Shape",
+   "type": "enum",
+   "default": "sine",
+   "options": [
+    [
+     "sine",
+     "Sine"
+    ],
+    [
+     "triangle",
+     "Triangle"
+    ],
+    [
+     "sawtooth",
+     "Saw"
+    ],
+    [
+     "square",
+     "Square"
+    ]
+   ],
+   "sha256": "eb49fc3ea0cb958a7f68199e49afda09678239a15e21473034fa3394237b2105"
+  },
+  {
+   "node": "random",
+   "key": "smooth",
+   "label": "Smooth",
+   "type": "boolean",
+   "default": false,
+   "sha256": "f79d4529cdee3b4aa695a38e3274e064ac8b5ca5f577eadc997a16d4ad4358c4"
+  },
+  {
+   "node": "step-modulator",
+   "key": "playback",
+   "label": "Playback",
+   "type": "enum",
+   "default": "loop",
+   "options": [
+    [
+     "loop",
+     "Loop"
+    ],
+    [
+     "once",
+     "Once"
+    ]
+   ],
+   "sha256": "978c1dd06b2386d599cd4842a813759098eb560d46169bd4bd5ce29736608b6e"
+  },
+  {
+   "node": "keys",
+   "key": "priority",
+   "label": "Priority",
+   "type": "enum",
+   "default": "last",
+   "options": [
+    [
+     "last",
+     "Last"
+    ],
+    [
+     "low",
+     "Low"
+    ],
+    [
+     "high",
+     "High"
+    ]
+   ],
+   "sha256": "f94bf2718922583b8e81d01b7b8d0618741b005b3afe1418b8db67a2cb6f6f98"
+  },
+  {
+   "node": "xy-pad",
+   "key": "mode",
+   "label": "Scale",
+   "type": "enum",
+   "default": "minor-pentatonic",
+   "options": [
+    [
+     "major",
+     "Major"
+    ],
+    [
+     "minor",
+     "Natural minor"
+    ],
+    [
+     "dorian",
+     "Dorian"
+    ],
+    [
+     "phrygian",
+     "Phrygian"
+    ],
+    [
+     "lydian",
+     "Lydian"
+    ],
+    [
+     "mixolydian",
+     "Mixolydian"
+    ],
+    [
+     "locrian",
+     "Locrian"
+    ],
+    [
+     "major-pentatonic",
+     "Major pentatonic"
+    ],
+    [
+     "minor-pentatonic",
+     "Minor pentatonic"
+    ],
+    [
+     "chromatic",
+     "Chromatic"
+    ]
+   ],
+   "sha256": "51034a33a3552ed18a84eeb415aa0f2373cd4c8925652262c39e005205bd51fe"
+  },
+  {
+   "node": "xy-pad",
+   "key": "key",
+   "label": "Key",
+   "type": "enum",
+   "default": "C",
+   "options": [
+    [
+     "C",
+     "C"
+    ],
+    [
+     "C#",
+     "C#"
+    ],
+    [
+     "D",
+     "D"
+    ],
+    [
+     "D#",
+     "D#"
+    ],
+    [
+     "E",
+     "E"
+    ],
+    [
+     "F",
+     "F"
+    ],
+    [
+     "F#",
+     "F#"
+    ],
+    [
+     "G",
+     "G"
+    ],
+    [
+     "G#",
+     "G#"
+    ],
+    [
+     "A",
+     "A"
+    ],
+    [
+     "A#",
+     "A#"
+    ],
+    [
+     "B",
+     "B"
+    ]
+   ],
+   "sha256": "cd88e773e865f3806abfafa5e29c05eb3582ec9b2e06283a3f6f06064345a220"
+  },
+  {
+   "node": "filter",
+   "key": "type",
+   "label": "Type",
+   "type": "enum",
+   "default": "lowpass",
+   "options": [
+    [
+     "lowpass",
+     "Low-pass"
+    ],
+    [
+     "highpass",
+     "High-pass"
+    ],
+    [
+     "bandpass",
+     "Band-pass"
+    ],
+    [
+     "notch",
+     "Notch"
+    ],
+    [
+     "peaking",
+     "Peaking"
+    ],
+    [
+     "lowshelf",
+     "Low-shelf"
+    ],
+    [
+     "highshelf",
+     "High-shelf"
+    ],
+    [
+     "allpass",
+     "All-pass"
+    ]
+   ],
+   "sha256": "eda68654dec5bda70cc64e9f36af5b4ba251cb9dda7241a32b6af0a7c23cd269"
+  },
+  {
+   "node": "filter",
+   "key": "enabled",
+   "label": "Enabled",
+   "type": "boolean",
+   "default": true,
+   "sha256": "d7b6fdf1bc2910474aae920b1cca657b1669f8bf2d1f205d4f215b53571ca7cb"
+  },
+  {
+   "node": "stereo-split",
+   "key": "mode",
+   "label": "Mode",
+   "type": "enum",
+   "default": "split",
+   "options": [
+    [
+     "split",
+     "A left · B right"
+    ],
+    [
+     "pan",
+     "Panned"
+    ],
+    [
+     "mono",
+     "Mono"
+    ]
+   ],
+   "sha256": "507afa1b4fe872afce2dbb2c6bb3d52335b316550711afa5e29f1f33d58a2bb6"
+  },
+  {
+   "node": "ring",
+   "key": "mode",
+   "label": "Mode",
+   "type": "enum",
+   "default": "ring",
+   "options": [
+    [
+     "ring",
+     "Ring"
+    ],
+    [
+     "am",
+     "AM"
+    ]
+   ],
+   "sha256": "c7c58581874d496bce4fe606ae1a52054d3c0e437a72a73b9535ac6b27a6651b"
+  },
+  {
+   "node": "scope",
+   "key": "fftSize",
+   "label": "Window",
+   "type": "enum",
+   "default": 8192,
+   "options": [
+    [
+     2048,
+     "2048"
+    ],
+    [
+     4096,
+     "4096"
+    ],
+    [
+     8192,
+     "8192"
+    ],
+    [
+     16384,
+     "16384"
+    ],
+    [
+     32768,
+     "32768"
+    ]
+   ],
+   "sha256": "ae7c2b229d850616fa8fd240b3d1a05b620e2a5119dbaabb60e1e65460e236a9"
+  },
+  {
+   "node": "spectrum",
+   "key": "fftSize",
+   "label": "FFT size",
+   "type": "enum",
+   "default": 8192,
+   "options": [
+    [
+     2048,
+     "2048"
+    ],
+    [
+     4096,
+     "4096"
+    ],
+    [
+     8192,
+     "8192"
+    ],
+    [
+     16384,
+     "16384"
+    ],
+    [
+     32768,
+     "32768"
+    ]
+   ],
+   "sha256": "ae7c2b229d850616fa8fd240b3d1a05b620e2a5119dbaabb60e1e65460e236a9"
+  },
+  {
+   "node": "spectrum",
+   "key": "scale",
+   "label": "Frequency scale",
+   "type": "enum",
+   "default": "log",
+   "options": [
+    [
+     "log",
+     "Logarithmic"
+    ],
+    [
+     "linear",
+     "Linear"
+    ]
+   ],
+   "sha256": "86829217f1be75189b811eefe759292cd6c94a6ab0e91361200757c11a9f2aec"
+  },
+  {
+   "node": "spectrogram",
+   "key": "scale",
+   "label": "Frequency scale",
+   "type": "enum",
+   "default": "log",
+   "options": [
+    [
+     "log",
+     "Logarithmic"
+    ],
+    [
+     "linear",
+     "Linear"
+    ]
+   ],
+   "sha256": "86829217f1be75189b811eefe759292cd6c94a6ab0e91361200757c11a9f2aec"
+  },
+  {
+   "node": "meter",
+   "key": "mode",
+   "label": "Mode",
+   "type": "enum",
+   "default": "rms",
+   "options": [
+    [
+     "rms",
+     "RMS"
+    ],
+    [
+     "peak",
+     "Peak"
+    ]
+   ],
+   "sha256": "dc9645b306be1bc7975716ff55ab1a53f39c901a156ad055208d3f0196f2cf28"
+  },
+  {
+   "node": "rta",
+   "key": "resolution",
+   "label": "Bands",
+   "type": "enum",
+   "default": "third",
+   "options": [
+    [
+     "third",
+     "1/3 octave"
+    ],
+    [
+     "octave",
+     "Octave"
+    ]
+   ],
+   "sha256": "059bb590d1b8533fdef50db89afa0c4ddb0ab62bafd991603d8a37b609da8c0f"
+  },
+  {
+   "node": "rta",
+   "key": "averaging",
+   "label": "Averaging",
+   "type": "enum",
+   "default": "fast",
+   "options": [
+    [
+     "instant",
+     "Instant"
+    ],
+    [
+     "fast",
+     "Fast"
+    ],
+    [
+     "slow",
+     "Slow"
+    ]
+   ],
+   "sha256": "f3bff30121de3b71e5e90faa95e76ee638c9a5381a63a55a96d2c99296555bc9"
+  },
+  {
+   "node": "rta",
+   "key": "peakHold",
+   "label": "Peak hold",
+   "type": "boolean",
+   "default": false,
+   "sha256": "d73476dbdcfcc32033115a98e31cf338085cc77e53ef741e80bf150e17b31f11"
+  },
+  {
+   "node": "recorder",
+   "key": "sampleRate",
+   "label": "Sample rate",
+   "type": "enum",
+   "default": 48000,
+   "options": [
+    [
+     44100,
+     "44.1 kHz"
+    ],
+    [
+     48000,
+     "48 kHz"
+    ],
+    [
+     96000,
+     "96 kHz"
+    ]
+   ],
+   "sha256": "f54a1e3bd551a98248c0c46bdf78c24293d7e0218cf4f1b8d4f1549b1513df26"
+  },
+  {
+   "node": "recorder",
+   "key": "channels",
+   "label": "Channels",
+   "type": "enum",
+   "default": 2,
+   "options": [
+    [
+     1,
+     "Mono"
+    ],
+    [
+     2,
+     "Stereo"
+    ]
+   ],
+   "sha256": "4b103666dd0f5fce8332a3cf6648c97d2b87d4a0ecbad1af8103d904a019ffe5"
+  },
+  {
+   "node": "calibration",
+   "key": "extrapolate",
+   "label": "Outside the profile",
+   "type": "enum",
+   "default": "none",
+   "options": [
+    [
+     "none",
+     "Leave uncorrected"
+    ],
+    [
+     "hold",
+     "Hold edge"
+    ]
+   ],
+   "sha256": "34d7cfe875b137f21b5fb5ab956d8c37ed325d98c9c7ad0a46a997811e2ae931"
+  },
+  {
+   "node": "transfer-analyzer",
+   "key": "phase",
+   "label": "Phase",
+   "type": "boolean",
+   "default": false,
+   "sha256": "33aeeaf801f1f06b77c8ad7bd3d05cd4447ef0a00518a0fa1f7dc76403968425"
+  },
+  {
+   "node": "measurement-result",
+   "key": "smoothing",
+   "label": "Display smoothing",
+   "type": "enum",
+   "default": 0,
+   "options": [
+    [
+     0,
+     "None"
+    ],
+    [
+     24,
+     "1/24 oct"
+    ],
+    [
+     12,
+     "1/12 oct"
+    ],
+    [
+     6,
+     "1/6 oct"
+    ],
+    [
+     3,
+     "1/3 oct"
+    ]
+   ],
+   "sha256": "e954015057d040a5f66bd976e1f418699343dc71df1374b33cf8accace04005f"
+  }
+ ]
+}
