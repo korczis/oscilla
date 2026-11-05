@@ -17,6 +17,9 @@ scope:
   - "dist"
 depends_on: []
 acceptance_criteria:
+  - "26's criteria (2026-11-05): the fix sits in one place in the shell, not per control; 26 first measures whether WebKit honours scroll-padding on that scroller, then picks between scroll-margin-bottom (the dock height plus the chip bar) and one shell focusin reveal that keeps the focused control above the dock and below the sticky chip bar."
+  - "A case focuses each control by Tab as well as scrollIntoView (VoiceOver and hardware keyboards), with the same zero-covered result."
+  - "The other workspaces are counted the same way; if the Studio or MEASURE show it on WebKit, it is fixed here as one fix, and the iPhone suite's baseline entry for these 81 is deleted (the baseline only shrinks)."
   - "Fail-first: tests/browser/iphone.cjs at the iPhone 13 and iPhone SE profiles in WebKit reports 81 covered Synth controls on the merge base and 0 with the change; Chromium and Firefox stay at 0."
   - "The check scrolls each control into view the way a user does and tests elementFromPoint at the control's centre and corners against the dock, through tests/browser/lib/suite.cjs with lib/wait.cjs deadlines; tests/browser/timing-baseline.json does not grow."
   - "No engine-specific branch in the UI code; the controls stay consumers of the shared control families (M123 G021-G026)."
