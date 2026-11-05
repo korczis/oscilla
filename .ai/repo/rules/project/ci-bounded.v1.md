@@ -71,8 +71,10 @@ that is repaired where it last hurt regresses in the next job somebody adds.
   elsewhere in the step does not excuse it.
 - `uses:` names a version tag (`@v7`) or a full commit; a container image names a tag other
   than `latest`, or a digest; `runs-on` names a versioned runner image (`ubuntu-24.04`), and no
-  label of it ends in `-latest`. Moving to a newer image is a commit of its own, judged by the
-  suites like any other change.
+  label of it ends in `-latest`, in any letter case. A label list, a runner group's `labels` and
+  `${{ matrix.<key> }}` (its values in `strategy.matrix` and its `include` rows) are each read;
+  any other expression in `runs-on` is refused, since what it yields is decided at run time.
+  Moving to a newer image is a commit of its own, judged by the suites like any other change.
 - Nothing is made non-fatal: no job and no step sets `continue-on-error` (GitHub reports such
   a job as succeeded, so `gate` would pass over its failure); no line that installs,
   downloads, checks a digest or runs a browser suite throws its failure away with
@@ -131,7 +133,9 @@ it cannot read fails the test instead of passing unread.
   removed from `gate.needs`, a new job nobody added to it, `gate` without `if: always()`,
   `workflow_dispatch` or `push` added to `ci.yml`'s triggers, an action on a branch, an image
   without a tag, `runs-on: ubuntu-latest` in `ci.yml` (alone and in a label list) and in
-  `pages.yml`, a reusable workflow on a branch, an install in a script of `package.json`
+  `pages.yml`, a `-latest` runner in a matrix value, a matrix `include` row, a runner group's
+  labels, another OS (`macos-latest`, `windows-latest`), another letter case and a container
+  job, an unresolvable `runs-on` expression and a matrix key with no values, a reusable workflow on a branch, an install in a script of `package.json`
   including `postinstall`, apt and dpkg by their path, a suite behind `npm run -s`,
   `npm --silent run`, `node --run`, `yarn` and `pnpm`, a failure thrown away with
   `|| exit 0`, `|| echo`, `; true` or `set +e`, a digest check followed by `|| true`, a
@@ -180,6 +184,9 @@ What the test cannot see:
   2026-10-29 none did (`tests/browser/lib/suite.cjs` reads `tests/README.md`, which is not
   in the allowlist), and a file the build reads changes `dist/index.html` too, which the
   always-running `npm run build:check` holds to the tree.
+- The runner of a called reusable workflow: a caller's `with:` input that a called workflow
+  feeds to its own `runs-on` is read where that workflow's jobs are checked, which is only for
+  a local one (an expression there is refused).
 - YAML the strict reader does not implement (anchors, a multi-line flow sequence): the file
   is refused as unreadable, which is a refusal of a legal workflow, not a pass.
 - A pull request that rewrites the workflow. On a pull request GitHub runs the workflow file

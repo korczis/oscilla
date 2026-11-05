@@ -204,6 +204,30 @@ test('mutation: a runner image that moves (runs-on ubuntu-latest) is refused', (
   assert.deepEqual(found.map((v) => v.rule), ['pinned'], 'pages.yml on ubuntu-latest');
 });
 
+test('mutation: a moving runner hidden in a matrix, a group, an expression or another OS', () => {
+  // One job, every other rule satisfied, so only `pinned` can fire.
+  const job = (runsOn, extra = '') => 'on: pull_request\njobs:\n  probe:\n'
+    + `    runs-on: ${runsOn}\n    timeout-minutes: 5\n${extra}    steps:\n      - run: echo ok\n`;
+  const pinned = (text) => checkWorkflow('.github/workflows/probe.yml', text, SUITES)
+    .filter((v) => v.rule === 'pinned').map((v) => v.message);
+  const matrix = (os) => `    strategy:\n      matrix:\n        os: [${os}]\n`;
+  assert.deepEqual(pinned(job('ubuntu-24.04')), [], 'a pinned literal passes');
+  assert.deepEqual(pinned(job('${{ matrix.os }}', matrix('ubuntu-24.04, macos-15'))), [],
+    'a matrix of pinned images passes');
+  for (const [what, text] of [
+    ['matrix value', job('${{ matrix.os }}', matrix('ubuntu-24.04, macos-latest'))],
+    ['matrix include row', job('${{ matrix.os }}', '    strategy:\n      matrix:\n'
+      + '        browser: [chromium]\n        include:\n          - os: windows-latest\n')],
+    ['runner group labels', job('{ group: hosted, labels: [ubuntu-latest] }')],
+    ['macos-latest', job('macos-latest')],
+    ['windows-latest', job('windows-latest')],
+    ['another case', job('Ubuntu-Latest')],
+    ['a container job', job('ubuntu-latest', '    container:\n      image: node:22.11.0\n')],
+  ]) assert.equal(pinned(text).length, 1, what);
+  assert.match(pinned(job('${{ inputs.os }}'))[0], /cannot resolve/, 'an unresolvable expression');
+  assert.match(pinned(job('${{ matrix.os }}'))[0], /no values/, 'a matrix key with no values');
+});
+
 test('the gate fails on any job that did not succeed, but a skip E026 path gating made', () => {
   // The verdict itself is run with jq on every combination of results in
   // tests/unit/ci-changes.test.mjs; here, that the gate's step applies it and fails on it.

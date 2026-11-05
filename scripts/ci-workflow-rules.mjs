@@ -189,6 +189,36 @@ function positive(n) {
   return typeof n === 'number' && Number.isFinite(n) && n > 0;
 }
 
+/**
+ * The runner labels a job can land on, as [label, why] pairs; `why` is set when the label
+ * cannot be judged. A literal, a list, a runner group's `labels` and `${{ matrix.<key> }}`
+ * (resolved through strategy.matrix and its include rows) are read; any other expression is
+ * refused, since what it yields is decided at run time.
+ */
+export function runnerLabels(job) {
+  const out = [];
+  const each = (v) => {
+    if (v === undefined || v === null) return;
+    if (Array.isArray(v)) return v.forEach(each);
+    if (typeof v === 'object') return each(v.labels);
+    const label = String(v);
+    const m = /^\$\{\{\s*matrix\.([\w-]+)\s*\}\}$/.exec(label.trim());
+    if (m) {
+      const matrix = job.strategy?.matrix ?? {};
+      const values = [].concat(matrix[m[1]] ?? [],
+        [].concat(matrix.include ?? []).map((row) => row?.[m[1]]).filter((x) => x !== undefined));
+      if (!values.length) out.push([label, `runs-on ${label} names a matrix key with no values`]);
+      return values.forEach(each);
+    }
+    if (label.includes('${{')) {
+      return out.push([label, `runs-on ${label} is an expression the checker cannot resolve`]);
+    }
+    out.push([label, null]);
+  };
+  each(job['runs-on']);
+  return out;
+}
+
 /** A number, or a variable that holds one (`--retry "$RETRIES"`). */
 const COUNT = '(?:\\d+|"?\\$\\{?\\w+\\}?"?)';
 
@@ -328,8 +358,9 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     }
     // A hosted runner label that moves (ubuntu-latest) changes the fonts and packages under a
     // browser suite between two runs of one tree (#420: ubuntu-26.04 fonts, a 1.4 px overflow).
-    for (const label of [].concat(job['runs-on'] ?? []).map(String)) {
-      if (/-latest$/.test(label)) {
+    for (const [label, why] of runnerLabels(job)) {
+      if (why) add('pinned', name, null, why);
+      else if (/-latest$/i.test(label)) {
         add('pinned', name, null, `runner image not pinned to a version: runs-on ${label}`);
       }
     }
