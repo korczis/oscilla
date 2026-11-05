@@ -21,7 +21,7 @@
 // of the element that holds it), purpose, state (a src/js file that exists), evidence (one of
 // EVIDENCE), deepLink (an address the router sends to one of reachedFrom, or null with
 // deepLinkWhyNot), tests (test files that exist and whose code, comments stripped, holds a
-// locator of the surface: namesOf says which), plan (issues of
+// locator of the surface: see Locators below), plan (issues of
 // .ai/repo/project/issues) and, for a panel, charts: the chart hosts inside it, which are K053's
 // census (tests/unit/chart-host-census.json) and are named here, never described again.
 //
@@ -29,6 +29,30 @@
 // any earlier commit of the census file (git log / git show; skipped without that history,
 // like tests/unit/no-inert-surfaces.test.mjs, and failed under GitHub Actions when no commit
 // holds the file). The running page is tests/browser/surface-census.cjs.
+//
+// Locators (namesOf, matched on codeOf: the file with its // and /* */ comments blanked). A
+// test file names a surface only through one of these forms. "Quoted" is '...', "..." or `...`;
+// a selector's quotes may be single, double or backslash-escaped:
+//   workspace <ws>  `m=<ws>` not followed by a word character or '-'; `nav.<ws>` as a word;
+//                   navTo( / workspace( / setWorkspace( with <ws> quoted as the first argument
+//                   or as the second after one identifier; or `m=${` or `nav.${` in a template
+//                   with <ws> quoted in the file
+//   panel <id>      <id> as a word; for an id osc-<x>-<rest>, a template `osc-<x>-${` with
+//                   <rest> quoted in the file; for a panel element carrying data-osc="<k>", the
+//                   attribute selector `data-osc="<k>"` (never <k> merely quoted)
+//   subview <k>:<v> for a tab: `data-osc="<k>"][data-value="<v>"`, both attribute selectors in
+//                   ONE selector, or that selector with `data-value="${` and <v> quoted in the
+//                   file; for a surface with a state (a view switch's expression, the target of
+//                   the tab's @click assignment, or a data-osc key src/js writes as this.<k> =):
+//                   the state written or compared (=, ==, ===, !=, !==) with <v> quoted, or the
+//                   state read and `.<its last segment>` compared so; the surface's element id
+//                   as a word; its id prefix in a template `<prefix>${` with <v> (or <v> in
+//                   lower case) quoted in the file; for studio.subview, `sv=<v>`
+//   dialog <id>     <id> as a word
+//   route <d>       `navRegister('<d>'`; or <d> quoted with one of the domain's hash keys as
+//                   `#<key>=`, `&<key>=` or `?<key>=`
+// Nothing else counts: not a value quoted alone, not a tab's data-osc and data-value in two
+// selectors or apart, not an id prefix in a plain string beside a quoted word, not a comment.
 //
 // What this does not decide: that a test file which holds a locator of a surface exercises it
 // (the code is read as text, not run: a locator built by interpolation counts with each value
@@ -721,6 +745,14 @@ test('mutation: a test file whose only locator of a surface is a coincidence or 
   // The Custom tab it does address, by its id.
   assert.deepEqual(judge(withTests('subview:presets.tab:custom',
     ['tests/browser/control-census.cjs']), inventory, ctx), []);
+  // app.cjs quotes '[data-osc="mic.tab"]' selectors and 'spectrogram' (the Analyzer tab loop),
+  // and 'dual' (the oscillator source) beside presetTab writes of other values: a tab's data-osc
+  // and its value apart are not that tab.
+  for (const key of ['subview:mic.tab:spectrogram', 'subview:presets.tab:dual']) {
+    const p = judge(withTests(key, ['tests/browser/app.cjs']), inventory, ctx);
+    assert.ok(refused(p, key, 'tests/browser/app.cjs'),
+      `${key} with app.cjs is refused by name; got:\n${p.join('\n')}`);
+  }
   const probe = (text) => ({ ...ctx,
     fileText: (rel) => (rel === PROBE ? text : ctx.fileText(rel)) });
   const help = 'dialog:osc-dlg-help';
@@ -809,6 +841,10 @@ test('names: a file names a surface by a locator in its code: id, data-osc with 
   assert.ok(!names('panel:osc-panel-additive', "click('#osc-panel-filter'); a.source = 'additive'"),
     'an id prefix and a quoted word apart are not the panel');
   assert.ok(names('panel:osc-panel-studio', "querySelector('[data-osc=\"studio.compact\"]')"));
+  assert.ok(!names('panel:osc-panel-studio', "const mode = 'studio.compact';"),
+    'a panel data-osc key quoted alone is not its attribute selector');
+  assert.ok(!names('panel:osc-panel-studio', "click('[data-value=\"studio.compact\"]')"),
+    'nor the key under another attribute');
   assert.ok(!names('subview:presets.tab:musical', "click('#osc-ptab-cat-custom'); m = 'musical'"));
   assert.ok(names('subview:presets.tab:musical',
     "for (const c of ['musical']) await page.click(`#osc-ptab-cat-${c}`)"));
@@ -829,6 +865,12 @@ test('names: a file names a surface by a locator in its code: id, data-osc with 
   assert.ok(names('subview:mic.tab:compare',
     "click('[data-osc=\"mic.tab\"][data-value=\"compare\"]')"));
   assert.ok(!names('subview:mic.tab:compare', "'mic.tab' and 'spectrogram'"));
+  assert.ok(!names('subview:mic.tab:spectrogram',
+    "click('[data-osc=\"mic.tab\"][data-value=\"compare\"]'); x = 'spectrogram'"),
+    'a selector of another value of the tab and the value quoted apart are not the tab');
+  assert.ok(!names('subview:mic.tab:compare',
+    "click('[data-osc=\"mic.tab\"]'); click('[data-value=\"compare\"]')"),
+    'data-osc and data-value in two selectors are not one tab');
   assert.ok(names('subview:studio.subview:timeline', "goto('#m=studio&sv=timeline')"));
   assert.ok(names('dialog:osc-dlg-help', "document.getElementById('osc-dlg-help')"));
   assert.ok(!names('dialog:osc-dlg-help', "'#osc-dlg-help-renamed'"));
