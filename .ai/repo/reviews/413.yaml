@@ -1,0 +1,59 @@
+# Review verdict for pull request #413, merge train 5 (branch int/train-5b): E003 workspace
+# split, C027, K168 graph summary, K169 armed PLAY refused, the M086 keys follow-ups (21's R1
+# and R2, 98's R6), K149 audition notes, K164 patch contract, census links, V638.
+# Reviewed head cd0799701007a0da77bbc6da936d5b5fe031e9d8; merge base origin/main
+# 447bb27b2747c444cc518f9b9fa57da1f54028bb. Reviewer: seat 98 (session
+# prismatic-majordomus-98, p2), which built, merged and edited none of this train and wrote
+# only this file; an independent first pass was adversarially re-verified here.
+# Disclosure: reviewer has an unmerged branch feat/synth-w1b-chain touching src/js/synth (Train 6 candidate), not part of this PR.
+# This verdict also judges R6 of #410 (.ai/repo/reviews/410.yaml), which 2124f226 claims to
+# close: its hanging-note half is closed (R4 below), its empty-announcement half is not (R3).
+#
+# The digest. CI judges with the BASE branch's copy (.github/scripts/base-rule.sh runs
+# origin/main's scripts/review-verdict.mjs, review-verdict v2, which guards src/js/synth/*):
+# main's scripts/ extracted with git archive, as base-rule.sh does, and run with --content
+# --list --base-branch origin/main gives c73b816f...6729 over 5 guarded paths:
+# src/js/studio/a11y.js, src/js/studio/riffs/audition.js, src/js/studio/riffs/source.js,
+# src/js/studio/transport.js, src/js/synth/studio-sink.js. The head carries the same copy of
+# the rule (it does not change scripts/review-verdict.mjs). src/js/midi/notes.js and
+# src/js/midi/ui.js (21's R1, R2) are unguarded and were read with studio-sink.js.
+#
+# Inputs considered: the body of #413 (its member table names branches, not pull requests, so
+# no member verdict is owed); the guarded diffs against 447bb27b; commits 2124f226 (R6),
+# 2a5d69d0 (R1, R2), 6e7d5ea5 (K149), 2677979f and 07fe4f72 (K169), 8e9a500d, d524aefa and
+# 0a7bf20f (K168); 410.yaml on main.
+#
+# Re-verified by reproduction, outside the worktree (scratchpad 413-check):
+# - R6 of #410: a stub transport over studio-sink.js, main against the head. Main: note 60 on
+#   A, re-route to B, note 60 on B, two offs leaves A:60 sounding; ping-pong A,B,A leaves B:64.
+#   Head: A gets its off when 60 goes to B, nothing hangs in either case, nor through
+#   midi/notes.js with two sources (keys then MIDI) on the same note.
+# - K168: main's summarizeGraph against the head's (now boundedSummary of
+#   summarizeGraphModel) over the 8 templates with 60 edge mutations each and 3 option sets:
+#   1440 sentences, 0 differ.
+# - K169: the hook set in TEST CONTEXT is still consumed after TEST CONTEXT is left, by PLAY
+#   and by arm() (R1). The rest of startNow (try/catch/finally into leaveArmedRun, the rethrow
+#   once the document plays, release's guarded setOwnedParams, syncNow's lastRevision after
+#   apply) was read and is correct; a double STOP after a refused armed PLAY is clean.
+# - K149: audition.js follows its voice by opts.owner and opts.riff (the engine keeps the play
+#   options on the voice record); dispose() detaches the engine listener, and
+#   registerRiffSource disposes the previous audition.
+#
+# Tests at the head: studio-sink, v31-studio-transport, riff-library, studio-graph-summary,
+# midi/notes and v272-transport-lifecycle 99/99 here; first pass (spot-checked): unit 4509 of
+# 4512 pass, 1 machine-only failure (the installed majordomus skill-command test), 2 skipped;
+# build:check up to date; midi.cjs 238/238, v31-studio-transport.cjs 131/131,
+# v31-studio-graph.cjs, app.cjs seam-surface-pinned and v31-studio-workflows
+# armed-play-refused pass in chromium, firefox and webkit (file://).
+#
+# Verdict: merge. No P0, P1 or P2 open.
+schema: review-verdict/v1
+pr: 413
+verdict: merge
+reviewer: prismatic-majordomus-98 (p2, claude-code 07a5ffde)
+content: c73b816fd3dd6979777b103a1a062c8cafdf181b75dd510280f3ce0dd1e76729
+findings:
+  - { id: R1, severity: P3, status: open, title: "transport.js debugRefuseNextPlay sets refuseNextClaim only in TEST CONTEXT, but playNow consumes it without asking again: set, then leave TEST CONTEXT (choose a microphone), and the next PLAY or the first note's arm() is refused claim-refused, 'in use by another program' (reproduced); consume it only while testContext() is true, or clear it on leaving, and test that case" }
+  - { id: R2, severity: P3, status: open, title: "studio-sink.js leave() clears held before its armed check: on a run started with PLAY, which leave keeps, a key held across a workspace switch and then a re-route sends its off to the new target and the first node's note sounds until STOP (reproduced); clear held only on the armed branch (allOff clears it)" }
+  - { id: R3, severity: P3, status: open, title: "remainder of #410's R6: studio-sink.js line 48 announces an empty string, assertively, for a refused arm with no code and no reason (reproduced; the real transport always gives one); fall back to a fixed text" }
+  - { id: R4, severity: P3, status: closed, title: "#410's R6 hanging note is closed by 2124f226: the same note pressed again after a re-route first releases it on the node it went to; reproduced on main (A:60 hangs) and clean at the head, ping-pong and two sources included" }

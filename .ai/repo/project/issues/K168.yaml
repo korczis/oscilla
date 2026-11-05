@@ -1,0 +1,35 @@
+id: K168
+milestone: M080
+serves:
+  - "studio-box-system#model-and-views"
+title: "The graph summary is structured: one path per line, collapsible groups, every node a link that selects it, the unconnected flagged with a fix"
+slug: the-graph-summary-is-structured-one-path-per-line-collapsible-groups
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio). Owner defect of 2026-11-03 (relayed by prismatic-majordomus-1d and oscilla-b0): on a 26-node patch the Studio Inspector's graph summary is one prose line that truncates ('through 5 more nodes', 'and 2 more', 'and 6 more'). src/js/studio/a11y.js gains summarizeGraphModel(model, { registry }) -> { counts, sections: [{ id: 'signal' | 'unconnected' | 'modulation' | 'triggers' | 'analysis' | 'measurement', items }] }, every item listing its nodes as { id, name } and its edges by id, with no truncation; summarizeGraph becomes the bounded sentence projection of that same model (the screen-reader summary of spec section 249 keeps its bounds, section 250), so there is one derivation and two renderings. The Inspector's Studio card (src/js/ui/studio/inspector.js) renders the model as collapsible groups (the Flowbite Pro accordion), one path per line, each node a button that selects the node in the graph and frames and focuses it (the one selection of the store, as Find node does), long groups shown in full on demand rather than cut; a sounding node that reaches no output is flagged in the Not connected group with a fix action that opens the connection list for its output port (the existing patch-to target list), never patching on its own. Before: one truncated line. After: a structured, navigable summary derived from the graph."
+why: "Owner defect of 2026-11-03 on https://korczis.github.io/oscilla/#m=studio (the summary of a 26-node patch read as one line with 'through N more' and 'and N more'), relayed by prismatic-majordomus-1d and assigned to oscilla-26's Studio lane by oscilla-b0; the owner's standing orders of the day ask for every view ergonomic, connected, derived and responsive."
+scope:
+  - "src/js/studio/a11y.js"
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/ui/studio/graph-editor.js"
+  - "tests/unit/studio-graph-summary.test.mjs"
+  - "tests/browser/v31-studio-graph.cjs"
+  - "tests/README.md"
+  - "docs/v31"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/studio-graph-summary.test.mjs, failing on the merge base (summarizeGraphModel does not exist): on the reference templates and on a 26-node fixture shaped like the owner's patch, every signal path to the Master Output is one item with all its nodes in order (no 'more'), every sounding node that reaches no output is in the unconnected group, every CONTROL, TRIGGER, TAP and ANALYSIS edge is in its group once, and summarizeGraph's text equals its bounded projection of the same model (the existing a11y tests unchanged)."
+  - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: an empty graph, a graph with no Master Output, a cycle-free graph whose only path is muted, and a node named with markup (rendered as text, never HTML)."
+  - "A browser check 'graph-summary' in tests/browser/v31-studio-graph.cjs, failing on the merge base: on a 26-node patch the Inspector shows the groups as an accordion with one line per path; Enter on a node's button selects that node in the graph and moves focus to it (the graph's selection and the Inspector agree); the unconnected node's fix action opens the connection list of its output port and patches nothing until a target is chosen; at 390 px the groups stay readable with no horizontal scroll. Waits through tests/browser/lib/wait.cjs until() with a named deadline, inside tests/browser/lib/suite.cjs, assuming no sample rate (project.suite-harness, project.bounded-test-timing)."
+  - "One derivation: no file but a11y.js computes the paths or groups; the Inspector and the screen-reader sentence read summarizeGraphModel (a unit test greps the sources)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat change, a unit test that fails on the merge base (project.fail-first). Its chrome is the Flowbite Pro accordion and buttons, with no osc-* class token, legacy selector, inline style or stylesheet (project.ui-uses-flowbite-pro; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "tests/README.md has a row for each new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/studio-graph-summary.test.mjs"
+  - "node tests/browser/v31-studio-graph.cjs --only graph-summary"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-03
+updated_at: 2026-11-03

@@ -923,6 +923,23 @@ async function keyboardEverywhere(browser, b, origin, url) {
     check(leg, id, 'the same A plays the Studio graph (its Keys node, the transport armed), not '
       + 'the Playground voice, the keys docked as in the Synth',
     !st.timedOut && st.armed && st.notes === 0 && st.docked === 'fixed', JSON.stringify(st));
+    // 21's R1 and R2: a key held in the Studio and released after leaving it stops the Studio
+    // note, and leaving disarms the keys' run, so the Playground's keys are not refused after.
+    await page.keyboard.down('KeyA');
+    await heard(page, (x) => x.peak > 0.005, `${leg}: A held in the Studio sounds`);
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
+    await page.keyboard.up('KeyA');
+    const left = await heard(page, (x) => x.peak < 0.001, `${leg}: leaving the Studio silences A`);
+    const tr = await page.evaluate(() => ({ armed: window.OSCILLA.studio.transport.armed,
+      playing: window.OSCILLA.studio.transport.playing }));
+    check(leg, id, 'a key held in the Studio is released after leaving it, and leaving disarms '
+      + 'the keys\' run (the transport no longer owns the output)',
+    !left.timedOut && !tr.armed && !tr.playing, JSON.stringify({ peak: left.peak, ...tr }));
+    await go('playground');
+    const pg2 = await press('playground', (x) => x.notes === 1);
+    check(leg, id, 'after the Studio, the Playground\'s A sounds again (not refused)',
+      !pg2.timedOut && pg2.held === 'C4', JSON.stringify(pg2));
+    await go('studio');
     // Disarmed in the Studio, the dock is one row and the keys hide, so the graph keeps its
     // height (the owner's 'a third of the height'; demo-song's node selection in Train 4).
     const dock = () => page.evaluate(() => ({

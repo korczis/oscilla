@@ -41,8 +41,10 @@ test('#21 U9 a fit on a coarse pointer never zooms below the 24 px port target f
   assert.ok(geometry.fitView(bounds, size).zoom < 0.4, 'fine pointer: everything framed');
   const v = geometry.fitView(bounds, size, { minZoom: floor });
   assert.equal(v.zoom, floor);
-  // Still centred on the bounds.
-  assert.equal(v.panX + 460 * floor, size.w / 2);
+  // At the floor the 920-unit graph is wider than the canvas: since V638 that axis starts at
+  // the graph's left edge (where its signal chain begins) instead of centring and cutting both
+  // ends; the height fits and stays centred.
+  assert.equal(v.panX, geometry.FIT_PADDING_PX);
   assert.equal(v.panY + 180 * floor, size.h / 2);
 });
 
