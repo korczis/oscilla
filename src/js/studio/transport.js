@@ -278,6 +278,9 @@ export function createStudioTransport({
   let disposed = false;
   let step = null; // the PLAY step in progress: a throw while armed is refused in it (K169)
   let refuseNextClaim = false; // debugRefuseNextPlay (test hook, header)
+  const inTest = () => {
+    try { return testContext() === true; } catch (e) { return false; /* not in TEST CONTEXT */ }
+  };
 
   const emit = (type, detail) => {
     for (const fn of listeners) {
@@ -1646,8 +1649,11 @@ export function createStudioTransport({
     const pos = clampPosition(position);
     step = 'claim';
     let claimed;
-    if (refuseNextClaim) {
-      refuseNextClaim = false;
+    // The hook is consumed only while TEST CONTEXT holds (98's R1 on #413): one armed in it and
+    // left pending when TEST CONTEXT ended is dropped, so it never refuses a real PLAY.
+    const injected = refuseNextClaim && inTest();
+    refuseNextClaim = false;
+    if (injected) {
       claimed = false;
     } else if (typeof onClaimOutput === 'function') {
       try {
@@ -1912,9 +1918,7 @@ export function createStudioTransport({
     playhead,
     debugInfo,
     debugRefuseNextPlay() {
-      let inTest = false;
-      try { inTest = testContext() === true; } catch (e) { /* not in TEST CONTEXT */ }
-      if (!inTest) return false;
+      if (!inTest()) return false;
       refuseNextClaim = true;
       return true;
     },

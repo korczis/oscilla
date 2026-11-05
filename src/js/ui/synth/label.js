@@ -8,6 +8,8 @@
 //   VALUE   a control's value, tabular numerals
 //   NOTE    a plate's note and the module's display name
 //   CHIP    a value the panel fixes, as a quiet chip
+//   BTN     a panel's outline button (Remove a cable, Patch the pad): Pro's outline style on its
+//           own surface, so the browser's default grey never shows (2.10:1 in dark before)
 
 export const LABEL = 'text-xs font-semibold uppercase tracking-wide text-gray-600 '
   + 'dark:text-gray-400';
@@ -15,3 +17,7 @@ export const VALUE = 'font-mono text-xs tabular-nums text-gray-900 dark:text-whi
 export const NOTE = 'text-xs text-gray-600 dark:text-gray-400';
 export const CHIP = 'rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-700 '
   + 'dark:text-gray-300';
+export const BTN = 'rounded-lg px-3 h-11 text-xs font-medium text-primary-700 bg-white '
+  + 'border border-solid border-primary-600 hover:bg-primary-50 focus:outline-none '
+  + 'focus-visible:ring-2 focus-visible:ring-primary-500 dark:bg-gray-800 dark:text-primary-400 '
+  + 'dark:hover:bg-gray-700';
