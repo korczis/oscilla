@@ -16,12 +16,19 @@
 //              "Measurement stopped"                      ABORTED
 //              "Measurement error: <message>"             ERROR (assertive)
 //   setup      "Setup check complete: ready" | "Setup check failed: <reason>"
-//              for a preflight() that ends READY or INVALID before anything was measured
+//              for a preflight() that ends READY or INVALID before anything was measured;
+//              the reason of a refused input or audio context is the blocker's own sentence
+//              when it says more than the generic one (C033: "no input signal" was announced
+//              for a microphone the browser would not open, a closed context was "Web Audio
+//              is not available")
+//   waiting    "Setup check: allow the microphone if the browser asks" while it asks (the
+//              engine's 'waiting' event); once per check
 // A new PREFLIGHT after a terminal state (or a reset to IDLE) starts a new measurement and
 // re-arms every stage. Engine events are { type: 'state', from, to, info } and the typed
 // events listed in engine.js; unknown events produce no message.
 
 import { MEASUREMENT_STATES as S } from '../state-machine.js';
+import { MEASUREMENT_ERRORS } from '../engine.js';
 
 export const ANNOUNCEMENTS = Object.freeze({
   started: 'Measurement started',
@@ -34,7 +41,15 @@ export const ANNOUNCEMENTS = Object.freeze({
   error: 'Measurement error',
   ready: 'Setup check complete: ready',
   setupFailed: 'Setup check failed',
+  permission: 'Setup check: allow the microphone if the browser asks',
 });
+
+/**
+ * Refusals whose blocker sentence names the true reason when it is not the generic one: the
+ * input that could not be opened (no microphone API, the audio session, a device the browser
+ * would not open) and the audio context (closed, unavailable).
+ */
+const OWN_SENTENCE_CODES = new Set(['NO_INPUT', 'UNSUPPORTED', 'UNSUPPORTED_WORKLET']);
 
 const CLIP_CODES = new Set(['CLIPPING', 'CLIPPING_SEVERE', 'NOISE_CLIPPING', 'INPUT_CLIPPING']);
 
@@ -63,9 +78,11 @@ export function initialAnnouncements() {
 function words(codes, blockers) {
   const c = codes.find((x) => REASON_WORDS[x]) || codes[0];
   if (!c) return null;
-  if (REASON_WORDS[c]) return REASON_WORDS[c];
   const b = Array.isArray(blockers) ? blockers.find((x) => x && x.code === c) : null;
-  return b && b.text ? b.text.replace(/\.$/, '') : c;
+  const own = b && typeof b.text === 'string' && b.text ? b.text.replace(/\.$/, '') : null;
+  if (own && OWN_SENTENCE_CODES.has(c) && b.text !== MEASUREMENT_ERRORS[c]) return own;
+  if (REASON_WORDS[c]) return REASON_WORDS[c];
+  return own || c;
 }
 
 const msg = (stage, text, politeness = 'polite') => Object.freeze({ stage, text, politeness });
@@ -85,6 +102,9 @@ export function reduceAnnouncements(state, event) {
   }
   if (event.type === 'noise') {
     return once('noise', ANNOUNCEMENTS.noise, 'polite', { measuring: true });
+  }
+  if (event.type === 'waiting' && event.what === 'permission') {
+    return once('waiting', ANNOUNCEMENTS.permission, 'polite');
   }
   if (event.type !== 'state') return none;
   const to = event.to;
