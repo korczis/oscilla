@@ -299,10 +299,21 @@ export function createInstrument(deps = {}) {
     get dualFb() { return detunedFrequency(this.dual.b); },
     // V1: oscillaApp: get dualDelta, get beatText (index.html@a7b7a23)
     get dualDelta() { return Math.abs(this.dualFa - this.dualFb); },
+    // T004: only the mono mix beats in the signal (claim dual-oscillator-beats)
     get beatText() {
       const d = this.dualDelta;
       if (d < 0.005) return 'No difference: no beating (the sum depends only on phase).';
-      return `Δf ${sig(d, 3)} Hz → amplitude beats at about ${sig(d, 3)} Hz (one every ${formatPeriod(d)}).`;
+      const f = sig(d, 3), p = `(one every ${formatPeriod(d)})`;
+      if (this.dual.binaural) {
+        return `Δf ${f} Hz, one tone per ear: heard, if at all, as a perceptual binaural beat `
+          + `at about ${f} Hz ${p}; the signal itself does not beat.`;
+      }
+      if (this.dual.stereo) {
+        return `Δf ${f} Hz, one steady tone per channel: no beat in the signal. Over speakers `
+          + `they may beat acoustically at about ${f} Hz ${p}, depending on where you listen; `
+          + 'over headphones any beat is perceptual.';
+      }
+      return `Δf ${f} Hz → amplitude beats at about ${f} Hz ${p}.`;
     },
     // V1: oscillaApp getters sweepSpanOct, sweepHzPerSec, sweepOctPerSec -> patterns.js
     get sweepSpanOct() { return sweepSpanOct(this.sweep); },
