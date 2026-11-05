@@ -29,4 +29,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:12:23Z
+started_at: 2026-11-05T00:12:04Z
+started_event: sha256:1a663180c522523c8a18069c59ec55a658ee8c7a00436684da56dfa2d8f6e7c8
+completed_at: 2026-11-05T00:12:23Z
+completed_event: sha256:b1afb07a3970b6106a9e14686b78e9f1f791409e042d05e202f51f9ce16c6fe1
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/readout-provenance.test.mjs && node scripts/readout-truth.mjs --check (scratch archive of origin/main)"
+    result: "15 pass, 0 fail, 1 skipped. The skip is the baseline-history check, which needs git history and the archive has none. readout-truth --check exits 0 (40 described, 73 listed). The test copied onto merge base 10db73d0^1 fails (no table), which confirms fail-first."
+    artifact: "10db73d0938bce9d3c93df6acfd5ebe04759235d"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:11:49Z

@@ -34,4 +34,23 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-02'
-updated_at: '2026-11-02'
+updated_at: 2026-11-05T00:08:23Z
+started_at: 2026-11-05T00:08:01Z
+started_event: sha256:deb839eddaf232b9580ce8b1de68b12bef5774c8d0f65835e2058b610bce0afb
+completed_at: 2026-11-05T00:08:23Z
+completed_event: sha256:c737bed904e7117cf0b6527c3e662cc27c6d69215b46704dbac2ef83f4ac8e77
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/riff-library.test.mjs"
+    result: "9/9 pass on a scratch git-archive copy of origin/main 6d5efa89; RIFFS.length 16, 16 genres"
+    artifact: "2f442e114dc752a36b68a98cd1db656b0eb2f8e1"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:07:39Z
+  - covers: verified
+    type: test
+    command: "node tests/browser/synth.cjs --only s-riffs,s-library,s-libxy"
+    result: "Not run here. s-riffs on main asserts the Riffs category, style text, Insert only, Listen > -40 dB rel, Stop < -70 dB rel without an undo entry, and Enter inserting a track on an Oscillator that reaches the Master in one undo entry (browser leg; recorded under verified because 'verified (browser)' is not an evidence_required token)"
+    artifact: "2f442e114dc752a36b68a98cd1db656b0eb2f8e1"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:07:54Z
