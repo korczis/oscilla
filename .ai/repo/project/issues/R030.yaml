@@ -1,0 +1,22 @@
+id: R030
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "Editing a pull request's body re-runs the checks that read it"
+slug: editing-a-pull-requests-body-re-runs-the-checks-that-read-it
+priority: p3
+profile: implementation
+objective: "Lands as fix(ci). ci.yml's on.pull_request lists no 'edited' type, so a body edit (a fail-first waiver, a plan id, a train's member list that review-verdict and fail-first read through PR_JSON) leaves the last verdict standing on the old body (prismatic-majordomus-98, review of #410 at 00108c87, R3). Add 'edited', bounded so that only body or title edits run the jobs that read them, not the whole browser matrix."
+why: "A check that reads the body must judge the body that is merged."
+scope:
+  - ".github/workflows/ci.yml"
+  - "tests/unit/ci-workflows.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "An edited event re-runs fail-first and review-verdict (the jobs that read PR_JSON) and the gate, and runs no browser or visual job; a unit test over ci.yml proves both."
+validation:
+  - "node --test tests/unit/ci-workflows.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04
