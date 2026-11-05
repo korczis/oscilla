@@ -351,15 +351,30 @@ const hzOf = (t) => {
   const m = /(-?[\d.]+)\s*(kHz|Hz)/.exec(t || '');
   return m ? Number(m[1]) * (m[2] === 'kHz' ? 1000 : 1) : NaN;
 };
-/** What LPF Cutoff is asked at Y = y: its knob's value and Y's cable (log, unipolar). */
+/**
+ * What LPF Cutoff plays at Y = y on the running graph, read as the unit test reads it on the
+ * fake engine: the biquad's base frequency x 2^((its detune's base cents + Y's edge gain x y)
+ * / 1200), Y's gain read as the runtime scheduled it (its ramp's target: an AudioParam's
+ * value is the ramp's start in firefox and webkit). Y's gain is the one computeBases sized: on
+ * the default document (K183) LPF Cutoff's MG and EG 2 normals share its 0.95 x Nyquist
+ * headroom, so Y's depth is scaled ("held") and the knob's value x 2^(depth y) is no longer
+ * what plays. NaN while nothing runs.
+ */
 const cutoffAt = (page, y) => page.evaluate((yy) => {
   const st = window.OSCILLA.studio;
   const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
   const e = st.model.graph.edges.find((x) => x.from.node === pad.id && x.from.port === 'y');
-  const lpf = st.model.graph.nodes.find((n) => n.id === e.to.node);
+  const h = st.runtime && st.runtime.nodes.get(e.to.node);
+  const eh = st.runtime && st.runtime.edges.get(e.id);
+  const lin = h && h.modTarget('frequency', 'linear');
+  const log = h && h.modTarget('frequency', 'log');
   const p = e.props;
+  const g = eh && eh.ramp && Number.isFinite(eh.ramp.target) ? eh.ramp.target : NaN;
+  if (!lin || !lin.param || !log || !log.param || !Number.isFinite(g)) {
+    return { mapping: p.mapping, polarity: p.polarity, hz: NaN };
+  }
   return { mapping: p.mapping, polarity: p.polarity,
-    hz: lpf.params.frequency * 2 ** (p.depth * yy + p.offset) };
+    hz: lin.param.value * 2 ** ((log.param.value + g * yy) / 1200) };
 }, y);
 /** A pad point where the pad is now (no scroll: a held touch keeps the page where it is). */
 async function pointIn(page, i, fy) {
@@ -368,14 +383,24 @@ async function pointIn(page, i, fy) {
 }
 const near = (a, b, rel = 1e-3) => Math.abs(a - b) <= rel * Math.max(1, Math.abs(b));
 
-/** S3 on the touched pad: ring at the point, the note the runtime plays, the Y value. */
+/** The note the transport holds on the keys' one note path (K183: the pad plays through the
+ *  keys; its own Pitch output feeds no cable, and Chromium does not render a ConstantSource
+ *  nothing reads), in octaves from A4, or null while nothing is held. */
+const heldPitch = (page) => page.evaluate(() => {
+  const t = window.OSCILLA.studio.transport;
+  const h = t ? t.heldNotes() : [];
+  return h.length ? (h[0] - 69) / 12 : null;
+});
+
+/** S3 on the touched pad: ring at the point, the note the runtime plays, the Y value. The
+ *  checks run on the XY lead (both VCOs at 8'): the note heard is the note held. */
 async function viewHeld(page, at, what) {
   let v = null;
   let pad = null;
   try {
     await until(async () => {
       v = await viewState(page);
-      pad = await padState(page);
+      pad = { pitch: await heldPitch(page) };
       return v.shown && !!v.ring && Math.hypot(v.ring.x - at.x, v.ring.y - at.y) <= 2
         && pad.pitch !== null && v.note === noteOf(pad.pitch) && v.lit === 'true';
     }, { ms: SOUND_MS, what: `${what}: the ring at the touch point, the note the runtime `
@@ -384,8 +409,16 @@ async function viewHeld(page, at, what) {
     return { ok: false, why: String(e.message).split('\n')[0], at, v,
       pitch: pad && pad.pitch, runtimeNote: pad && pad.pitch !== null ? noteOf(pad.pitch) : null };
   }
-  const want = await cutoffAt(page, v.yNow);
   const shown = hzOf(v.value);
+  // What plays is read from AudioParams that may still be gliding to their bases: polled until
+  // it is the value shown, within the named deadline (a miss is reported below, never thrown).
+  let want = await cutoffAt(page, v.yNow);
+  try {
+    await until(async () => {
+      want = await cutoffAt(page, v.yNow);
+      return near(shown, want.hz) && near(hzOf(v.yText), want.hz);
+    }, { ms: SOUND_MS, what: `${what}: the Y value shown is what LPF Cutoff plays` });
+  } catch (e) { /* the comparison below says what differs */ }
   const ok = want.mapping === 'log' && /^LPF Cutoff /.test(v.value) && near(shown, want.hz)
     && v.xText.startsWith(`${v.note}, degree `) && v.yText.includes(`LPF Cutoff: `)
     && near(hzOf(v.yText), want.hz);
