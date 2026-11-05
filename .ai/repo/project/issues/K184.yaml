@@ -19,6 +19,7 @@ scope:
   - "dist"
 depends_on: []
 acceptance_criteria:
+  - "Forced stops are never deferred: Stop, Escape, page hide and a panic release end every gate at once, the minimum gate applies only to an ordinary note-off (98's review of #428, F5, 2026-11-05); a unit case holds a note shorter than the minimum, sends Stop, and sees the gate end at the stop time."
   - "tests/unit/min-gate.test.mjs, failing on the merge base: on StudioFakeContext an on and an off at the same time (and an off before the on) schedule the gate's close at on + the minimum; an off later than the minimum is unchanged; the constant is imported from one module and no surface defines its own (an import census over src/js)."
   - "A browser check in Chromium, Firefox and WebKit, and WebKit 390x844 touch with the gesture rule on (project.a-phone-sounds): a tap whose touchstart and touchend are dispatched in the same task on the XY pad, a Synth key and an on-screen piano key raises the destination tap above -60 dBFS within a named deadline, 20 of 20 times; the node census is 0 after release."
   - "The pull request carries a reviewer's verdict (src/js/audio and src/js/synth are guarded; project.review-verdict)."
