@@ -41,7 +41,7 @@ export const STORAGE_MODULES = Object.freeze({
   'src/js/ui/shell.js': 'sidebar collapsed to icons and its groups (localStorage)',
   'src/js/ui/workbench.js': 'the safety notice through the wrappers',
   'src/js/ui/experiments.js': 'opens the experiments database (pageIndexedDb)',
-  'src/js/ui/studio/workspace.js': 'opens the experiments database for the Studio library',
+  'src/js/ui/studio/workspace/files.js': 'opens the experiments database for the Studio library',
   'src/js/experiments/store.js': 'the IndexedDB experiments database and its object stores',
 });
 

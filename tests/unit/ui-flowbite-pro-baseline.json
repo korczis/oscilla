@@ -15,7 +15,7 @@
     "selectors": 1189,
     "domainViewSelectors": 438
   },
-  "debt": 3608,
+  "debt": 3607,
   "surfaces": {
     "pending": [
       "card#osc-exp-compare",
@@ -540,7 +540,6 @@
     "osc-si-studio-notes": 1,
     "osc-si-studio-title": 1,
     "osc-si-sub": 2,
-    "osc-si-summary": 1,
     "osc-si-textarea": 1,
     "osc-si-title": 1,
     "osc-si-toggle": 3,
@@ -881,8 +880,8 @@
       "declarations": 490
     },
     "src/styles/studio.css": {
-      "selectors": 275,
-      "declarations": 777
+      "selectors": 273,
+      "declarations": 775
     },
     "src/styles/tokens.css": {
       "selectors": 4,

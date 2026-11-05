@@ -1809,10 +1809,6 @@
       "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
     },
     {
-      "id": "studio.inspector.summary",
-      "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
       "id": "studio.inspector.title",
       "reason": "The studio.inspector hooks are not declared yet; a later catalogue slice declares them."
     },

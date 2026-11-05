@@ -54,8 +54,9 @@ import { searchNodes } from '../../src/js/ui/studio/graph-search.js';
 import { inspectorView } from '../../src/js/ui/studio/inspector.js';
 import { compactView } from '../../src/js/ui/studio/compact.js';
 import {
-  BUILD_REFERENCE_RATIO, CPU_CLOCK, LARGE_EDGES, LARGE_NODES, PERF_BUDGETS, buildLargeStudio,
-  cpuMs, largeStudioActions, referenceWork,
+  BROWSER_BUDGETS, BROWSER_BUDGET_FIELDS, BUILD_REFERENCE_RATIO, CPU_CLOCK, LARGE_EDGES,
+  LARGE_NODES, PERF_BUDGETS, browserBudgetReport, buildLargeStudio, cpuMs, largeStudioActions,
+  referenceWork,
 } from './fixtures/v31-large-studio.mjs';
 
 const REPEATS = 15;
@@ -367,4 +368,36 @@ test('§145-§147 the reference workload is fixed and product-free', () => {
   assert.ok(sum > 0);
   const src = referenceWork.toString();
   assert.ok(!/store|dispatch|validate|Studio/i.test(src), 'no product code in the yardstick');
+});
+
+test('§145 the browser budgets: Tidy has its own, and every budgeted field is reported', () => {
+  // Tidy (L) is whole-graph work with its own measured budget; editMs stays one gesture's.
+  assert.equal(BROWSER_BUDGETS.editMs, 50);
+  assert.ok(BROWSER_BUDGETS.tidyMs > BROWSER_BUDGETS.editMs, 'tidyMs is its own, above editMs');
+  assert.ok(BROWSER_BUDGETS.tidyMs < 614, 'the 614 ms Tidy before hold (K009) still fails');
+  assert.deepEqual(Object.keys(BROWSER_BUDGET_FIELDS).sort(),
+    ['editMs', 'frameMs', 'importMs', 'moveMs', 'tidyMs']);
+  for (const key of Object.values(BROWSER_BUDGET_FIELDS)) {
+    assert.ok(Number.isFinite(BROWSER_BUDGETS[key]), `${key} is a budget`);
+  }
+  // The CI WebKit value that missed editMs: within tidyMs, every field printed vs its budget.
+  const measured = { importMs: 400, editMs: 9, moveMs: 7, frameMs: 1, tidyMs: 51 };
+  const report = browserBudgetReport(measured);
+  assert.deepEqual(report.map((x) => x.field), Object.keys(BROWSER_BUDGET_FIELDS));
+  assert.ok(report.every((x) => x.within), JSON.stringify(report));
+  const tidy = report.find((x) => x.field === 'tidyMs');
+  assert.equal(tidy.text, `tidyMs 51.00 ms vs tidyMs budget ${BROWSER_BUDGETS.tidyMs} ms: within`);
+  // A miss names the measured value and the budget it missed.
+  const slow = browserBudgetReport({ ...measured, tidyMs: 120.5, moveMs: 60 });
+  const missed = slow.filter((x) => !x.within).map((x) => x.text);
+  assert.deepEqual(missed, ['moveMs 60.00 ms vs editMs budget 50 ms: MISS',
+    `tidyMs 120.50 ms vs tidyMs budget ${BROWSER_BUDGETS.tidyMs} ms: MISS`]);
+  // A tiny budget fails the same measurement; a field not measured is never within.
+  assert.equal(browserBudgetReport(measured, { ...BROWSER_BUDGETS, tidyMs: 1 })
+    .find((x) => x.field === 'tidyMs').within, false);
+  const none = browserBudgetReport({ ...measured, frameMs: undefined })
+    .find((x) => x.field === 'frameMs');
+  assert.equal(none.within, false);
+  assert.equal(none.text, 'frameMs undefined vs editMs budget 50 ms: MISS');
+  assert.ok(browserBudgetReport(null).every((x) => !x.within));
 });

@@ -566,6 +566,13 @@ function defineChecks() {
       'liveRtaSnapshot', 'experimentFromResult', 'levelCalibration', 'inputNow', 'reference',
       'referenceCapturing', 'setInputNow', 'showResult', 'responseView', 'deviceId',
       'ioDeviceId', 'refreshInputs', 'irView'];
+    // OSCILLA.studio and its live transport (K169 review R1): the transport's one Inject hook,
+    // debugRefuseNextPlay, refuses outside TEST CONTEXT.
+    const STUDIO_KEYS = ['store', 'model', 'selection', 'runtime', 'transport', 'editor', 'dirty',
+      'projectId', 'templateId', 'measurementRun', 'rendering', 'trace', 'library', 'counts'];
+    const TRANSPORT_KEYS = ['start', 'stop', 'arm', 'disarm', 'live', 'armed', 'liveVoices',
+      'heldNotes', 'locate', 'returnToStart', 'setLoop', 'sync', 'admit', 'escape', 'playhead',
+      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing'];
     const got = await page.evaluate(() => {
       const O = window.OSCILLA;
       const m = O.measure;
@@ -580,7 +587,10 @@ function defineChecks() {
       const title = O.app.meas.shownTitle;
       return {
         oscilla: Object.keys(O), measure: Object.keys(m), fixed,
+        studio: Object.keys(O.studio),
+        transport: O.studio.transport ? Object.keys(O.studio.transport) : null,
         testContext: !!O.app.meas.loopback,
+        refuseNextPlay: O.studio.transport ? O.studio.transport.debugRefuseNextPlay() : null,
         // Inject hooks refuse outside TEST CONTEXT; the drive hook validates like a recipe link.
         setInputNow: m.setInputNow({ device: { label: 'Unchecked', id: 'x' }, constraints: null,
           sampleRate: 48000 }),
@@ -595,13 +605,18 @@ function defineChecks() {
       removed: want.filter((k) => !have.includes(k)) });
     const o = diff(got.oscilla, OSCILLA_KEYS);
     const m = diff(got.measure, MEASURE_KEYS);
+    const st = diff(got.studio, STUDIO_KEYS);
+    const tr = diff(got.transport || [], TRANSPORT_KEYS);
     const refusedValues = (r) => !!r && r.ok === false && Array.isArray(r.errors);
     const ok = o.added.length + o.removed.length + m.added.length + m.removed.length === 0
+      && st.added.length + st.removed.length + tr.added.length + tr.removed.length === 0
+      && got.refuseNextPlay === false
       && Object.values(got.fixed).every(Boolean)
       && !got.testContext && got.setInputNow === false && got.inputNow === null
       && got.showResult === false && got.result === null && got.titleKept
       && refusedValues(got.setValues) && refusedValues(got.setRange) && got.valuesKept;
-    return { ok, oscilla: o, measure: m, fixed: got.fixed, testContext: got.testContext,
+    return { ok, oscilla: o, measure: m, studio: st, transport: tr,
+      refuseNextPlay: got.refuseNextPlay, fixed: got.fixed, testContext: got.testContext,
       setInputNow: got.setInputNow, showResult: got.showResult, titleKept: got.titleKept,
       setValues: got.setValues, setRange: got.setRange, valuesKept: got.valuesKept };
   });

@@ -1623,7 +1623,10 @@ for (const [c, by] of [['[data-osc="def.new"]', 'v3-ui.cjs'],
   ['[data-osc="fnd.mine"]', 'app.cjs'], ['[data-osc="fnd.discard"]', 'app.cjs v3-ui.cjs'],
   ['[data-osc="fnd.save"]', 'app.cjs v3-ui.cjs'], ['[data-osc="fnd.deleteConfirm"]', 'app.cjs v3-ui.cjs'],
   ['[data-osc="studio.render.duration"]', 'v31-studio-workflows.cjs'],
-  ['[data-osc="studio.patch.name"]', 'v31-studio-graph.cjs']]) {
+  ['[data-osc="studio.patch.name"]', 'v31-studio-graph.cjs'],
+  // K168: the Inspector's linked graph summary, its section groups and node links
+  ['[data-osc="studio.inspector.summaryGroup"]', 'v31-studio-graph.cjs'],
+  ['[data-osc="studio.inspector.summaryNode"]', 'v31-studio-graph.cjs']]) {
   delegated(c, by, 'experiments, findings and the Studio render');
 }
 // Debt: needs a stored experiment, a finding, a calibration file or a long task; listed in

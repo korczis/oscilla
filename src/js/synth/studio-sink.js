@@ -49,6 +49,10 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
         return { ok: false, reason: refusedByOwner ? 'measurement' : (r && r.code) || 'arm' };
       }
     }
+    // The same note pressed again after a re-route (98's R6): release it on the node it went
+    // to first, so that node's note never hangs when the map moves on.
+    const was = held.get(note);
+    if (was && was !== n.id) t.live(was, { kind: 'off', note });
     held.set(note, n.id);
     return t.live(n.id, { kind: 'on', note, velocity });
   }
@@ -71,7 +75,18 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     return count;
   }
 
-  const sink = { noteOn, noteOff, allOff };
+  /** Leaving the Studio (21's R2): every live note off and an armed-only run disarmed, so the
+   *  transport no longer owns the output; a run the user started with PLAY is left alone. */
+  function leave() {
+    const { t } = parts();
+    held.clear();
+    if (!t || !t.armed) return false;
+    allOff();
+    t.disarm();
+    return true;
+  }
+
+  const sink = { noteOn, noteOff, allOff, leave };
   sink.active = () => {
     const { handle } = get();
     return handle && target(handle.getModel()) ? sink : null;

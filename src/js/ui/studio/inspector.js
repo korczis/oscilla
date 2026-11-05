@@ -6,7 +6,10 @@
 // touches an AudioParam. A slider drag is one history entry (store gesture, §50).
 //
 //   inspectorView(model, selection, opts) -> view           pure (unit-tested)
-//     kind 'studio' (nothing selected) | 'node' | 'multi' | 'edge' | 'clip' | 'point'
+//     kind 'studio' (nothing selected) | 'node' | 'multi' | 'edge' | 'clip' | 'point'; a node
+//     or edge view's `cause` is the entity its status's cause names (graph-view.js
+//     divergenceCause: what the runtime refused), { kind, id, label, selection } | null, when
+//     it is another one than the shown entity: the status line offers to select it
 //   runtimeView(model, truth, opts) -> runtime              pure: the 'studio' view's Runtime
 //     section (ADR 0039): truth = { verdict: runtime.js studioDivergence, runtime: runtime
 //     debugInfo(), transport: transport debugInfo() }; opts: { registry, status, edgeStatus }.
@@ -39,7 +42,9 @@
 //                                  renderTrace refreshes only the Trace section
 //     svc: { store, registry, announce(text, { assertive }), status() -> Map, warnings() -> Map,
 //            edgeStatus() -> Map edge id -> plan { status, reason }, truth() -> truth (above;
-//            a changed runtime state is announced politely), trace() -> [step], onConnect(nodeId),
+//            a changed runtime state is announced politely), trace() -> [step], onConnect(nodeId,
+//            portId?) (the connection list, of that output when given), onReveal(nodeId) (select,
+//            frame and focus it in the graph: the graph summary's node buttons, K168),
 //            onSavePatch(nodeIds), onDelete(), onDuplicate(), onShowLane(laneId, label),
 //            onAllowMicrophone(nodeId) (asks for permission, then enables Microphone nodes),
 //            micError(nodeId) -> text | '' (why that node's input is not open),
@@ -56,7 +61,10 @@ import {
 } from '../../studio/schema.js';
 import { secondsPerBar, timelineEnd } from '../../studio/timeline.js';
 import { PORT_VISUALS } from '../../studio/ports.js';
-import { describeEdge, summarizeGraph, announceAction } from '../../studio/a11y.js';
+import {
+  announceAction, boundedSummary, describeEdge, summarizeGraphModel,
+} from '../../studio/a11y.js';
+import { mountGraphSummary } from './graph-summary-view.js';
 import { presetMenu } from './node-preset-menu.js';
 import { formatFrequency, parseFrequency } from '../../core/frequency.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
@@ -325,6 +333,18 @@ function entityRef(model, ent, registry) {
   return { kind, id, label: label || id, selection };
 }
 
+/**
+ * The entity a status's `cause` names (graph-view.js divergenceCause) as entityRef links it, or
+ * null when there is none to select or it is `self`, the entity shown.
+ */
+function causeRef(model, cause, self, registry) {
+  if (!cause) return null;
+  const kind = ['node', 'edge', 'clip', 'lane'].find((k) => cause[k]);
+  if (!kind || (kind === self.kind && cause[kind] === self.id)) return null;
+  const ref = entityRef(model, { kind, id: cause[kind] }, registry);
+  return ref && ref.selection ? ref : null;
+}
+
 /** "Filter Cutoff": a { node, param } target by name. */
 function paramText(model, t, registry) {
   const n = nodeOf(model, t.node);
@@ -571,6 +591,7 @@ export function inspectorView(model, selection, opts = {}) {
       statusLabel: label,
       code: st ? st.code || null : null,
       reason,
+      cause: causeRef(model, st && st.cause, { kind: 'node', id: node.id }, registry),
       warnings: warn,
       // The status line: label (code), the structured reason, validator warnings, then the
       // runtime and transport diagnostics naming this node, each with its code.
@@ -608,6 +629,7 @@ export function inspectorView(model, selection, opts = {}) {
         routeText: route.text,
         routeCode: code,
         statusText,
+        cause: causeRef(model, est && est.cause, { kind: 'edge', id: e.id }, registry),
         id: e.id,
         title: 'Connection',
         text: describeEdge(model, e.id, { registry }),
@@ -672,11 +694,15 @@ export function inspectorView(model, selection, opts = {}) {
       };
     }
   }
+  // One derivation, two renderings (K168): the structured summary the card lists in full, and
+  // its bounded sentence.
+  const graph = summarizeGraphModel(model, { registry });
   return {
     kind: 'studio',
     key: 'studio',
     title: model.metadata.title,
-    summary: summarizeGraph(model, { registry }),
+    summary: boundedSummary(graph),
+    graph,
     counts: { nodes: model.graph.nodes.length, edges: model.graph.edges.length,
       clips: model.timeline.clips.length, lanes: model.timeline.automation.length },
     settings: studioSettingsView(model),
@@ -697,7 +723,7 @@ export function inspectorRebuildKey(view) {
   // An edge's units and Mapping labels follow its mapping (octaves or the parameter's unit).
   if (view.kind === 'edge') return view.control ? `${view.props.mapping}|${view.unit}` : '';
   if (view.kind !== 'node') return '';
-  return [!!view.statusText, view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
+  return [!!view.statusText, view.cause ? `${view.cause.kind}:${view.cause.id}` : '', view.mic ? `${view.mic.action}|${view.mic.error}|${view.mic.busy}`
     : '',
     ...view.connections.map((c) => c.text), ...view.fields.map((f) =>
       // Whether Automate is offered can change with another parameter (a filter type, R7);
@@ -714,6 +740,14 @@ export function mountInspector(host, svc) {
   let builtSig = ''; // inspectorRebuildKey of the rendered node view
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
+  // The graph summary of the Studio card (K168): one instance, so its open groups survive a
+  // rebuild; a node selects, frames and focuses in the graph (Find node's path), Connect…
+  // opens the connection list of the output port.
+  const graphSummary = mountGraphSummary({
+    onReveal: (id) => (svc.onReveal ? svc.onReveal(id) : svc.store.dispatch({
+      type: 'SELECTION_CHANGE', selection: { nodes: [id] } })),
+    onFix: (id, port) => svc.onConnect(id, port),
+  });
 
   const dispatch = (action) => {
     const r = svc.store.dispatch(action);
@@ -995,11 +1029,21 @@ export function mountInspector(host, svc) {
     ]);
   }
 
+  /** "Select LFO 1": the entity a status's cause names (causeRef), selected on activation. */
+  function causeLink(c) {
+    return h('p', { class: 'text-sm' }, [h('button', { type: 'button',
+      class: 'font-medium text-primary-600 underline dark:text-primary-400',
+      'data-osc': 'studio.inspector.statusCause', 'data-key': `cause:${c.kind}:${c.id}`,
+      text: `Select ${c.label}`,
+      onClick: () => svc.store.dispatch({ type: 'SELECTION_CHANGE', selection: c.selection }) })]);
+  }
+
   function buildNode(view) {
     const parts = [header(view.name, `${view.typeLabel} · ${view.categoryLabel}`)];
     if (view.statusText) {
       parts.push(h('p', { class: `osc-si-status${view.statusError ? ' is-error' : ''}`,
         role: 'note', 'data-osc': 'studio.inspector.status', text: view.statusText }));
+      if (view.cause) parts.push(causeLink(view.cause));
     }
     if (view.mic) {
       parts.push(h('div', { class: 'osc-si-section', 'data-osc': 'studio.inspector.mic' }, [
@@ -1072,6 +1116,7 @@ export function mountInspector(host, svc) {
       parts.push(h('p', { class: 'osc-si-status is-inactive', role: 'note',
         'data-osc': 'studio.inspector.edgeStatus', 'data-route': view.route,
         text: view.statusText }));
+      if (view.cause) parts.push(causeLink(view.cause));
     }
     parts.push(h('dl', { class: 'osc-si-dl', 'data-osc': 'studio.inspector.edge' }, [
       h('div', {}, [h('dt', { text: 'From' }), h('dd', { text: view.fromText })]),
@@ -1281,8 +1326,7 @@ export function mountInspector(host, svc) {
     ]),
     h('div', { class: 'osc-si-field' }, [
       h('label', { class: 'osc-label osc-si-label', for: notesId, text: 'Notes' }), notes]),
-    h('p', { class: 'osc-si-summary', 'data-osc': 'studio.inspector.summary',
-      text: view.summary }),
+    graphSummary.update(view.graph),
     h('p', { class: 'osc-si-note', text: 'Select a node or a connection to edit it. Press N '
       + 'to add a node, C to connect the selected node, / to find a node.' })];
   }
@@ -1508,8 +1552,7 @@ export function mountInspector(host, svc) {
     }
     if (current === view.key && view.kind === 'studio') {
       updateStudio(view);
-      const sum = host.querySelector('[data-osc="studio.inspector.summary"]');
-      if (sum) setText(sum, view.summary);
+      graphSummary.update(view.graph);
       const t = refs.get('studio.inspector.studioTitle');
       if (t) t.field.input = view.title;
       if (t && t.input !== document.activeElement) t.input.value = view.title;

@@ -63,10 +63,12 @@ export const FAMILIES = Object.freeze([
   // sidebarCollapsed), ui/workbench.js (labFlags, seqPlaying), labs/mic-analyzer.js
   // (micCompare), ui/studio/timeline-editor.js (timelineSnap), midi/keyboard-ui.js (kbdArmed,
   // kbdBase, kbdVelocity, kbdMore), synth/ui.js (synthTab), synth/dock.js (synthDock: the
-  // picker's open menu and the dock's oscillator), ui/about.js (aboutLaterOpen).
+  // picker's open menu and the dock's oscillator), ui/about.js (aboutLaterOpen),
+  // ui/studio/graph-summary-view.js (summaryOpen, summaryFull: the open and fully listed groups).
   family('ui', ['workspace', 'theme', 'menus', 'navExpanded', 'navQuery', 'drawerOpen',
     'sidebarCollapsed', 'labFlags', 'seqPlaying', 'micCompare', 'timelineSnap', 'kbdArmed',
-    'kbdBase', 'kbdVelocity', 'kbdMore', 'synthTab', 'synthDock', 'aboutLaterOpen'],
+    'kbdBase', 'kbdVelocity', 'kbdMore', 'synthTab', 'synthDock', 'aboutLaterOpen',
+    'summaryOpen', 'summaryFull'],
   'The theme (oscilla.theme), the sidebar collapse (oscilla.v2.sidebar) and the expanded '
     + 'navigation groups (oscilla.v2.navGroups) in local storage and the workspace in the URL '
     + 'key m; every other key lasts for the page only.',

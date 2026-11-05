@@ -74,6 +74,14 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         return n;
       };
       if (typeof cmp.kbdInit === 'function') cmp.kbdInit({ notesFor });
+      // Leaving the Studio releases its keys and disarms an armed-only run (studio-sink.js).
+      if (typeof cmp.$watch === 'function') {
+        cmp.$watch('workspace', (ws, old) => {
+          const s = old === 'studio' && ws !== 'studio' && typeof cmp.studioSink === 'function'
+            && cmp.studioSink();
+          if (s && typeof s.leave === 'function') s.leave();
+        });
+      }
       const ids = new WeakMap(); // input -> a number for the note keys, never shown or stored
       let inputs = 0;
       support = createMidiSupport({
