@@ -21,9 +21,20 @@
 // named in PACK 03 (filters, envelope, sequencer with Tempo and Loop, additive, dual, phase
 // and stereo, source, device, settings, analysis) may never be listed.
 //
+// A drive must be able to fail: no tests/browser file chains an action to a `.catch(...)`
+// whose handler reaches the app instead, as `page.click(sel).catch(() =>
+// page.evaluate(() => window.OSCILLA.app.x()))` did for Experiments Repeat (v3-ui.cjs), where
+// a hidden, disabled or unwired button still produced the result and still counted as driven;
+// nor wraps an action in a `try { ... }` whose `catch { ... }` reaches the app (a catch that
+// rethrows counts too: cleanup through the app belongs in `finally`). Reaching the app is
+// any spelling of the app object on the handler's text: `OSCILLA.app`, `OSCILLA?.app`,
+// `OSCILLA['app']`, `OSCILLA?.["app"]`, with or without `window.`, `window['OSCILLA']`.
+//
 // What it does not decide: that the action asserts the control's effect (the suites do,
-// and the reviewer reads them), a selector built at run time, or a control Alpine creates
-// with a bound id only.
+// and the reviewer reads them), a selector built at run time, a control Alpine creates
+// with a bound id only, or a handler that reaches the app indirectly: a named function
+// (`.catch(fallback)`, `catch { await fallback(); }`) or an alias of the app (`const { app }
+// = window.OSCILLA`) whose name the handler's text does not spell.
 //   node --test tests/unit/control-drive-baseline.test.mjs
 
 import test from 'node:test';
@@ -139,6 +150,84 @@ export function grown(listed, history) {
   return out;
 }
 
+// ------------------------------------------------------------------------ app fallbacks
+const ACTION = new RegExp('\\.(click|dblclick|fill|selectOption|press|check|uncheck|tap|'
+  + 'dispatchEvent|focus|hover|setInputFiles|dragTo|type)\\(', 'g');
+// The app object, as its handler's text spells it: OSCILLA or ['OSCILLA'] (window. or not),
+// then .app, ?.app, ['app'] or ?.['app'], any quote, any spacing.
+const APP_OBJ = /(?:\bOSCILLA|\[\s*(?<q1>['"`])OSCILLA\k<q1>\s*\])/.source;
+const APP_KEY = /(?:\??\.\s*app\b|(?:\?\.\s*)?\[\s*(?<q2>['"`])app\k<q2>\s*\])/.source;
+const REACHES_APP = new RegExp(`${APP_OBJ}\\s*${APP_KEY}`);
+const TRY = /\btry\s*\{/g;
+
+/**
+ * Past the bracket that closes the one at `open` (`(` or `{`; strings and comments
+ * skipped), or -1.
+ */
+function closeOf(text, open) {
+  const [o, c] = text[open] === '{' ? ['{', '}'] : ['(', ')'];
+  let depth = 0;
+  for (let i = open; i < text.length; i += 1) {
+    const ch = text[i];
+    if (ch === "'" || ch === '"' || ch === '`') {
+      for (i += 1; i < text.length && text[i] !== ch; i += 1) if (text[i] === '\\') i += 1;
+    } else if (ch === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') i += 1;
+    } else if (ch === '/' && text[i + 1] === '*') {
+      const end = text.indexOf('*/', i + 2);
+      if (end < 0) return -1;
+      i = end + 1;
+    } else if (ch === o) {
+      depth += 1;
+    } else if (ch === c && (depth -= 1) === 0) {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Each action of a test file's text whose promise chain (through any `.then(...)`) ends in a
+ * `.catch(...)` that reaches the app (via '.catch'), or that stands in a `try { ... }` whose
+ * `catch { ... }` reaches it (via 'try/catch'): [{ line, action, via }], line of the action,
+ * comments apart, sorted by line.
+ */
+export function appFallbacksOf(source) {
+  const text = source.split('\n').map((l) => (isComment(l) ? '' : l)).join('\n');
+  const out = [];
+  for (const m of text.matchAll(ACTION)) {
+    let at = closeOf(text, m.index + m[0].length - 1);
+    while (at > 0) {
+      const link = /^\s*\.(then|catch)\(/.exec(text.slice(at));
+      if (!link) break;
+      const open = at + link[0].length - 1;
+      const end = closeOf(text, open);
+      if (end < 0) break;
+      if (link[1] === 'catch' && REACHES_APP.test(text.slice(open, end))) {
+        out.push({ line: lineOf(m.index), action: m[1], via: '.catch' });
+        break;
+      }
+      at = end;
+    }
+  }
+  for (const m of text.matchAll(TRY)) {
+    const open = m.index + m[0].length - 1;
+    const end = closeOf(text, open);
+    if (end < 0) continue;
+    const handler = /^\s*catch\s*(?:\([^)]*\)\s*)?\{/.exec(text.slice(end));
+    if (!handler) continue;
+    const hOpen = end + handler[0].length - 1;
+    const hEnd = closeOf(text, hOpen);
+    if (hEnd < 0 || !REACHES_APP.test(text.slice(hOpen, hEnd))) continue;
+    for (const a of text.slice(open, end).matchAll(ACTION)) {
+      out.push({ line: lineOf(open + a.index), action: a[1], via: 'try/catch' });
+    }
+  }
+  return out.sort((a, b) => a.line - b.line);
+
+  function lineOf(index) { return text.slice(0, index).split('\n').length; }
+}
+
 function walk(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
@@ -185,6 +274,15 @@ test('the tree holds exactly the undriven controls the baseline lists', () => {
     + unlisted.join('\n  '));
   assert.deepEqual(stale, [], `${NAME}: listed but driven now or gone; remove from `
     + `${BASELINE_REL}:\n  ${stale.join('\n  ')}`);
+});
+
+test('no browser suite falls back from a control action to an internal app call', () => {
+  const hits = browserFiles().flatMap(({ f, lines }) => appFallbacksOf(lines.join('\n'))
+    .map(({ line, action, via }) => `${f}:${line} .${action}(...) falls back to OSCILLA.app `
+      + `through ${via}`));
+  assert.deepEqual(hits, [], `${NAME}: an action that falls back to the app passes while the `
+    + 'control is hidden, disabled or unwired; let the action fail instead:\n  '
+    + hits.join('\n  '));
 });
 
 /** The baseline of every commit that changed it, newest first; null without history. */
@@ -270,6 +368,72 @@ test('mutation: a key added, or listed again after it was removed, is refused', 
   assert.deepEqual(grown(['#a', '#b'], history), [['#b', 'lowered']], 'listed again');
   assert.deepEqual(grown(['#a', '#c'], history), [['#c', 'lowered'], ['#c', 'original']],
     'a new key');
+});
+
+test('mutation: an action whose .catch reaches the app is found; other catches are not', () => {
+  const lines = (...ls) => ls.join('\n');
+  assert.deepEqual(appFallbacksOf(lines(
+    "await page.click('[data-osc=\"exp.repeat\"]', { timeout: 5000 })",
+    '  .catch(() => page.evaluate((id) => window.OSCILLA.app.experimentsRepeat(id), id));')),
+  [{ line: 1, action: 'click', via: '.catch' }],
+  'the shape v3-ui.cjs carried for Experiments Repeat');
+  assert.deepEqual(appFallbacksOf(lines(
+    '',
+    "await page.locator('#a-btn').click().then(() => null)",
+    '  .catch(async () => {',
+    "    await page.evaluate(() => { window.OSCILLA . app.run('a)'); });",
+    '  });')), [{ line: 2, action: 'click', via: '.catch' }],
+  'through .then, a block body, a quoted paren');
+  assert.deepEqual(appFallbacksOf(
+    "await page.fill('#b', '3').catch(() => page.evaluate(() => window.OSCILLA.app.set(3)));"),
+  [{ line: 1, action: 'fill', via: '.catch' }], 'any action, on one line');
+  assert.deepEqual(appFallbacksOf(lines(
+    "await page.click('#a-btn');",
+    'await page.evaluate(() => window.OSCILLA.app.experimentsRepeat(1));',
+    "await page.click('#c', { timeout: 500 }).catch(() => {});",
+    'await H.poll(page, () => 1, { ms: 50, what: "x" }).catch(() => page.evaluate(layoutFacts));',
+    "await page.click('#d').catch(() => null); // OSCILLA.app is never called here",
+    "// await page.click('#e').catch(() => page.evaluate(() => window.OSCILLA.app.x()));")),
+  [], 'a plain action, an app call of its own, a swallowed or non-action catch, comments');
+});
+
+test('mutation: every spelling of the app object in a .catch is found', () => {
+  const spellings = ['window.OSCILLA?.app.go()', 'OSCILLA?.app.go()', "OSCILLA['app'].go()",
+    'window.OSCILLA["app"].go()', "OSCILLA?.['app'].go()", "window['OSCILLA'].app.go()",
+    'window?.["OSCILLA"]?.app.go()', 'window.OSCILLA\n      .app.go()'];
+  for (const call of spellings) {
+    assert.deepEqual(appFallbacksOf(
+      `await page.click('#q').catch(() => page.evaluate(() => ${call}));`),
+    [{ line: 1, action: 'click', via: '.catch' }], call);
+  }
+  for (const call of ['window.OSCILLA.apply()', 'window.OSCILLA.appState', 'XOSCILLA.app.go()',
+    "OSCILLA['app\"].go()", 'window.OSCILLA.state.go()']) {
+    assert.deepEqual(appFallbacksOf(
+      `await page.click('#q').catch(() => page.evaluate(() => ${call}));`), [], call);
+  }
+});
+
+test('mutation: an action in a try whose catch reaches the app is found', () => {
+  const lines = (...ls) => ls.join('\n');
+  assert.deepEqual(appFallbacksOf(lines(
+    'try {',
+    "  await page.click('[data-osc=\"exp.repeat\"]', { timeout: 5000 });",
+    '} catch (e) {',
+    '  await page.evaluate((id) => window.OSCILLA.app.experimentsRepeat(id), id);',
+    '}')), [{ line: 2, action: 'click', via: 'try/catch' }], 'the try/catch form of the fallback');
+  assert.deepEqual(appFallbacksOf(lines(
+    "await page.fill('#a', '1');",
+    'try { const s = "}"; await page.locator(\'#b\').click(); await page.keyboard.press(\'x\'); }',
+    'catch { await page.evaluate(() => window.OSCILLA?.app.run()); throw new Error("no"); }')),
+  [{ line: 2, action: 'click', via: 'try/catch' }, { line: 2, action: 'press', via: 'try/catch' }],
+  'optional catch binding, a quoted brace, each action of the try, a rethrowing catch');
+  assert.deepEqual(appFallbacksOf(lines(
+    "try { await page.click('#a'); } catch (e) { console.log(e); }",
+    "try { await page.click('#b'); } finally { await page.evaluate(() => OSCILLA.app.x()); }",
+    "try { await page.evaluate(() => window.OSCILLA.app.x()); } catch { await page.click('#c'); }",
+    "try { await H.poll(page, () => 1); } catch { await page.evaluate(() => OSCILLA.app.x()); }",
+    "// try { await page.click('#d'); } catch { window.OSCILLA.app.x(); }")),
+  [], 'a catch without the app, a finally, the app in the try, no action in the try, comments');
 });
 
 test('mutation: cutting the drive of an owner-named control is caught on the tree', () => {
