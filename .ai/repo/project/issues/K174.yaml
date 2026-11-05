@@ -1,0 +1,30 @@
+id: K174
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "The Synth's Arm button reads the transport, never a stale copy (retroactive review S1)"
+slug: the-synths-arm-button-reads-the-transport
+priority: p1
+profile: implementation
+objective: "Lands as fix(synth). The Arm/Disarm button binds `synth.armed`, a copy that `refresh()` (src/js/synth/ui.js) sets only on store changes, so a transport stop or disarm made outside the Synth (Studio Stop, a measurement run, a page hide) leaves it true; `disarm()` then returns early without resetting it and the button reads Disarm and does nothing. `armed` is derived from the transport (a transport state subscription, or the template reads it), and the early-return path of `disarm()` resets the copy. Found by the retroactive review of src/js/synth at 447bb27b (docs/reviews/synth-retroactive-447bb27b.md, S1; K060)."
+why: "Owner decision K060 ('Retroactive review', 2026-11-03): an independent review of the shipped Synth code; S1 breaks project.studio-model-is-canonical (a second copy of state) and project.no-inert-surfaces (a control that does nothing)."
+scope:
+  - "src/js/synth/ui.js"
+  - "src/index.html"
+  - "tests/unit"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+current_state: "Built by 26 in 3c22d01a (fix/synth-review-armed-sink-preset, 'Arm follows the transport'), riding train 6; this issue is closed by that change, not a new build. Done with evidence once it is on main and the criteria below hold there."
+acceptance_criteria:
+  - "Fail-first: a unit test on the fake transport arms the Synth, stops the transport from outside it and asserts the Synth reads armed false and that Disarm (or Arm) acts on the first press; it fails on the merge base (project.fail-first)."
+  - "Browser (tests/browser/synth.cjs, every gate browser): Arm in the Synth, Studio Stop, back to the Synth: the button reads Arm and pressing it arms."
+  - "src/js/synth is guarded (project.review-verdict v2): a non-builder's verdict."
+validation:
+  - "npm test"
+  - "node tests/browser/synth.cjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04
