@@ -166,7 +166,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
         const sink = route();
         if (sink) sink.allOff();
         engine.notesOff(e.kind === 'all-sound-off');
-        // A key still held on another player (routed before a switch) is released there.
+        // A key still held on another player (routed before a switch) is released there. A key
+        // on the route's own sink gets a second, redundant off here after its allOff (21's K2):
+        // harmless, an off for a note already released.
         held.releaseAll('all-off');
       }
       return e;

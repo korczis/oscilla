@@ -51,3 +51,33 @@ test('no other module keeps its own workspace -> sink or arm map', () => {
   assert.match(readFileSync(path.join(ROOT, 'src/js/midi/keyboard-ui.js'), 'utf8'),
     /kbdArmed: armedDefaults\(\)/, 'the arm switch starts from the table');
 });
+
+// 21's K3 on K178: with the keys armed in every workspace (stopImmediatePropagation on a played
+// key), a page shortcut bound to a bare key the keyboard plays (a note key or Z X C V) would be
+// swallowed unless its surface is a declared editor. No K153 binding may use one: a shortcut
+// takes a modifier, or its surface goes in KEY_ROUTES' editors.
+test('no page key binding uses a bare key the armed keyboard plays', async () => {
+  const { NOTE_KEYS, CONTROL_KEYS } = await import('../../src/js/midi/keyboard.js');
+  const played = new Set([...Object.keys(NOTE_KEYS), ...Object.keys(CONTROL_KEYS)]);
+  const files = [];
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.js')) files.push(p);
+    }
+  };
+  walk(path.join(ROOT, 'src/js'));
+  const bad = [];
+  let bindings = 0;
+  for (const f of files) {
+    for (const m of readFileSync(f, 'utf8').matchAll(/\bkeys:\s*\[([^\]]*)\]/g)) {
+      bindings += 1;
+      for (const c of m[1].matchAll(/'([^']+)'/g)) {
+        if (played.has(c[1])) bad.push(`${path.relative(ROOT, f)}: ${c[1]}`);
+      }
+    }
+  }
+  assert.ok(bindings > 0, 'the scan finds the bindings');
+  assert.deepEqual(bad, [], 'a bare played key bound as a shortcut');
+});
