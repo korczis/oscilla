@@ -16,12 +16,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { PLUG, cordInk, plugState, plugSvg } from '../../src/js/ui/synth/plug.js';
+import { PLUG, castInk, cordInk, plugState, plugSvg, sheenInk }
+  from '../../src/js/ui/synth/plug.js';
 import { cableDirections, cableParts, cableSvg, plugSvg as plugFromCable }
   from '../../src/js/ui/synth/cable.js';
-import { tokensFrom } from '../../src/js/ui/synth/tokens.js';
-import { LAYER_TOKENS, TOKENS, colourLiterals, contrastOf, intensityLiterals, paints,
-  shapesWithoutStroke, tokenHex, tokenThemes, tokenValues } from './ui-synth-fixture.mjs';
+import { SYNTH_TOKEN_NAMES, tokensFrom } from '../../src/js/ui/synth/tokens.js';
+import { LAYER_TOKENS, TOKENS, colourLiterals, contrastOf, deltaLOf, intensityLiterals,
+  intensityOf, paints, shapesWithoutStroke, tokenHex, tokenThemes, tokenValues }
+  from './ui-synth-fixture.mjs';
 
 const AT = { x: 40.5, y: -12.25 };
 const COLOUR = TOKENS.cable.palette[2];
@@ -214,7 +216,7 @@ test('JC-3: the boot in the cord colour, its outline the cord\'s rim ink; no tip
     const shadow = one(svg, 'data-shadow').attrs;
     assert.equal(shadow.d, boot.d, 'the shadow is the boot\'s shape');
     assert.equal(shadow.class, 'opacity-hw-shadow');
-    assert.equal(shadow.fill, TOKENS.cable.shadow);
+    assert.equal(shadow.fill, TOKENS.control.shade, 'the dark depth role (review 1)');
     assert.equal(shadow.stroke, 'none');
     assert.ok(svg.indexOf('data-shadow') < svg.indexOf('data-boot'), 'under the boot');
     assert.ok(draw({ colour: undefined }).includes('fill="currentColor"'), 'no colour: current');
@@ -230,7 +232,7 @@ test('JC-3: one strain-relief band on the neck at hw-shadow, one sheen band on t
     assert.equal(reliefs.length, 1, `${where}: one strain-relief band`);
     const relief = reliefs[0].attrs;
     assert.equal(relief.class, 'opacity-hw-shadow', 'at the hw-shadow intensity');
-    assert.equal(relief.stroke, TOKENS.cable.shadow);
+    assert.equal(relief.stroke, cordInk(TOKENS), 'the rim ink, dark in both themes (review 1)');
     assert.equal(relief.fill, 'none');
     const [arc] = pieces(relief.d);
     assert.ok(dist(arc.arc.c, neckC) < 1e-5, `${where}: about the neck`);
@@ -242,7 +244,7 @@ test('JC-3: one strain-relief band on the neck at hw-shadow, one sheen band on t
     assert.equal(sheens.length, 1, `${where}: one sheen band`);
     const sheen = sheens[0].attrs;
     assert.equal(sheen.class, 'opacity-hw-sheen');
-    assert.equal(sheen.stroke, TOKENS.cable.sheen);
+    assert.equal(sheen.stroke, TOKENS.control.highlight, 'the light depth role (review 1)');
     const [s] = pieces(sheen.d);
     assert.ok(dist(s.arc.c) < 1e-4, `${where}: about the cap`);
     assert.ok(s.arc.r + n(sheen['stroke-width']) / 2 <= PLUG.boot - PLUG.edge / 2 + 1e-9,
@@ -270,6 +272,26 @@ test('cordInk: the darker of the cable shadow and sheen, else the shadow, else c
       }
     }
     assert.equal(cordInk({ cable: { sheen: '#000000' } }), 'currentColor', 'no shadow: current');
+  });
+
+test('sheenInk and castInk: the depth roles, else the lighter and the darker cable ink',
+  async () => {
+    assert.equal(sheenInk(TOKENS), TOKENS.control.highlight);
+    assert.equal(castInk(TOKENS), TOKENS.control.shade);
+    const bare = { jack: TOKENS.jack, cable: TOKENS.cable, surface: TOKENS.surface };
+    assert.equal(sheenInk(bare), TOKENS.cable.sheen, 'var() values cannot be read: the sheen');
+    assert.equal(castInk(bare), cordInk(bare));
+    const th = await tokenThemes();
+    for (const [name, theme] of Object.entries(th)) {
+      const t = tokensFrom((x) => tokenHex(theme, x));
+      const b = { jack: t.jack, cable: t.cable, surface: t.surface };
+      const lighter = contrastOf(t.cable.shadow, '#000000') > contrastOf(t.cable.sheen, '#000000')
+        ? t.cable.shadow : t.cable.sheen;
+      assert.equal(sheenInk(b), lighter, `${name}: the lighter ink`);
+      assert.equal(castInk(b), cordInk(b), `${name}: the darker ink`);
+    }
+    assert.equal(sheenInk({ cable: {} }), 'currentColor');
+    assert.equal(castInk({}), 'currentColor');
   });
 
 test('the boot turns to the way the cable leaves; down by default', () => {
@@ -603,3 +625,99 @@ test('cross: false leaves the cable\'s cross out, so one cross shows', () => {
   assert.equal(marks.length, 1, 'one cross for one refusal');
   assert.throws(() => cableSvg({ ...spec, cross: 'no' }), TypeError);
 });
+
+// ---------------------------------------------------------------- review of cords and plugs
+// The adversarial review of 7c5d567f (11-05): the plug's relief and sheen were lit upside down
+// in the light theme (1), a plug hid its jack's pending and compatible ring (4), and the
+// geometry its mutants changed unseen (8).
+
+test('review 1: the relief darkens and the sheen lightens the boot, both themes (b)', async () => {
+  const th = await tokenThemes();
+  const short = [];
+  for (const [name, theme] of Object.entries(th)) {
+    const tokens = tokensFrom((x) => tokenHex(theme, x));
+    tokens.cable.palette.forEach((colour, i) => {
+      const svg = plugSvg({ at: AT, colour, tokens });
+      const relief = one(svg, 'data-relief').attrs;
+      const sheen = one(svg, 'data-sheen').attrs;
+      const where = `${name} ${SYNTH_TOKEN_NAMES.cable.palette[i]}`;
+      const dark = deltaLOf(relief.stroke, colour, intensityOf(relief.class));
+      assert.ok(dark <= -3, `${where}: the relief ${relief.stroke} ΔL* ${dark.toFixed(2)}`);
+      const light = deltaLOf(sheen.stroke, colour, intensityOf(sheen.class));
+      assert.ok(light > 0, `${where}: the sheen lightens, ΔL* ${light.toFixed(2)}`);
+      if (light < 3) short.push(`${where} ${light.toFixed(2)}`);
+      const sh = one(svg, 'data-shadow').attrs;
+      for (const face of ['card', 'plateHi']) {
+        const dl = deltaLOf(sh.fill, tokens.surface[face], intensityOf(sh.class));
+        assert.ok(dl <= -3, `${where}: the shadow on ${face} ΔL* ${dl.toFixed(2)}`);
+      }
+      assert.equal(one(svg, 'data-boot').attrs.stroke, cordInk(tokens), `${where}: the outline`);
+    });
+  }
+  // The cord's measured shortfall (ui-synth-cable): oscilla-21's hw-sheen.
+  assert.deepEqual(short, ['dark --osc-green 1.94'], 'the sheens under ΔL* 3');
+});
+
+test('review 4: a plug carries its jack\'s state ring round its boot, inside its room', () => {
+  const RING = 'var(--osc-focus)';
+  for (const state of STATES) {
+    for (const dir of DIRS) {
+      const where = JSON.stringify([state, dir]);
+      const svg = draw({ state, direction: dir, ring: RING });
+      const halo = one(svg, 'data-halo');
+      assert.ok(halo, `${where}: a halo`);
+      const boot = one(svg, 'data-boot').attrs;
+      assert.equal(halo.attrs.d, boot.d, `${where}: round the boot's own outline`);
+      assert.equal(halo.attrs.stroke, RING);
+      assert.equal(halo.attrs.fill, 'none');
+      assert.equal(halo.attrs.class, undefined, `${where}: opaque, as the jack's ring`);
+      const shows = (n(halo.attrs['stroke-width']) - PLUG.edge) / 2;
+      assert.ok(shows >= 2, `${where}: ${shows} of it shows outside the outline, all round`);
+      const order = ['data-shadow', 'data-halo', 'data-boot'].map((k) => svg.indexOf(k));
+      assert.deepEqual([...order].sort((x, y) => x - y), order, `${where}: under the boot`);
+      assert.ok(reach(svg, { shadow: true }) <= PLUG.room + 1e-6, `${where}: within the room`);
+      assert.equal(draw({ state, direction: dir }).includes('data-halo'), false, 'none untold');
+    }
+  }
+  for (const bad of ['', 3, {}]) {
+    assert.throws(() => draw({ ring: bad }), TypeError, JSON.stringify(bad));
+  }
+});
+
+test('review 8: the relief, the sheen and the cross are where the plug says', () => {
+  for (const dir of DIRS) {
+    const where = JSON.stringify(dir);
+    const d = unit(dir || { x: 0, y: 1 });
+    const svg = draw({ direction: dir, state: 'refused' });
+    const relief = one(svg, 'data-relief').attrs;
+    const [r] = pieces(relief.d);
+    assert.ok(Math.abs(r.arc.r - 8.5) < 1e-6, `${where}: the relief's radius ${r.arc.r}`);
+    assert.ok(Math.abs(Math.abs(r.arc.span) - 1.8) < 1e-4, `${where}: ±0.9 rad`);
+    assert.equal(n(relief['stroke-width']), 2);
+    const lead = Math.atan2(d.y, d.x);
+    const mid = r.arc.a0 + r.arc.span / 2;
+    assert.ok(Math.cos(mid - lead) > 1 - 1e-9, `${where}: centred on the cord`);
+    const sheen = one(svg, 'data-sheen').attrs;
+    const [s] = pieces(sheen.d);
+    assert.ok(Math.abs(s.arc.r - 10.5) < 1e-6, `${where}: the sheen's radius ${s.arc.r}`);
+    const deg = (a) => ((a * 180) / Math.PI + 360) % 360;
+    assert.ok(Math.abs(deg(s.arc.a0) - 200) < 1e-3, `${where}: from 200° (${deg(s.arc.a0)})`);
+    assert.ok(Math.abs(deg(s.arc.a0 + s.arc.span) - 260) < 1e-3, `${where}: to 260°`);
+    assert.equal(n(sheen['stroke-width']), 1.5);
+    const lines = elements(svg).filter((e) => e.tag === 'line');
+    for (const l of lines) {
+      const len = Math.hypot(n(l.attrs.x2) - n(l.attrs.x1), n(l.attrs.y2) - n(l.attrs.y1));
+      assert.ok(Math.abs(len - 8 * Math.SQRT2) < 1e-4, `${where}: an arm of 4 each way (${len})`);
+    }
+    assert.deepEqual(lines.map((l) => n(l.attrs['stroke-width'])), [3, 3, 2, 2]);
+  }
+});
+
+test('review 8: the boot\'s outline is the cord\'s rim ink, which is not the shadow in light',
+  async () => {
+    const th = await tokenThemes();
+    const tokens = tokensFrom((x) => tokenHex(th.light, x));
+    assert.notEqual(cordInk(tokens), tokens.cable.shadow, 'light: the rim ink is the text');
+    const svg = plugSvg({ at: AT, colour: tokens.cable.palette[0], tokens });
+    assert.equal(one(svg, 'data-boot').attrs.stroke, cordInk(tokens));
+  });

@@ -16,9 +16,9 @@ import {
 } from '../../src/js/ui/synth/cable.js';
 // S8's exports through the namespace, so the tests before them still run on a tree without them.
 import * as CABLE from '../../src/js/ui/synth/cable.js';
-import { tokensFrom } from '../../src/js/ui/synth/tokens.js';
+import { SYNTH_TOKEN_NAMES, tokensFrom } from '../../src/js/ui/synth/tokens.js';
 import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals,
-  contrastOf, tokenHex, tokenThemes } from './ui-synth-fixture.mjs';
+  contrastOf, deltaLOf, intensityOf, tokenHex, tokenThemes } from './ui-synth-fixture.mjs';
 
 const NUM = '(-?\\d+(?:\\.\\d+)?(?:e[-+]?\\d+)?)';
 const CURVE = new RegExp(`^M ${NUM} ${NUM} C ${NUM} ${NUM} ${NUM} ${NUM} ${NUM} ${NUM}$`);
@@ -211,10 +211,10 @@ test('cableSvg is one <g data-cable> with a shadow, the main stroke and its hit 
   assert.match(svg, /^<g data-cable="c1" pointer-events="none">/);
   assert.ok(svg.endsWith('</g>'));
   const d = cableCurve(A, B);
-  assert.equal(svg.split(`d="${d}"`).length - 1, 6,
-    'shadow, hit, rim, main, shade and sheen (S8: on by default) share the curve');
+  assert.equal(svg.split(`d="${d}"`).length - 1, 4,
+    'shadow, hit, rim and main share the curve; the shade and the sheen run beside it (review 7)');
   assert.match(svg, new RegExp(`<path data-shadow=""[^>]*stroke="${
-    TOKENS.cable.shadow.replace(/[()]/g, '\\$&')}"`));
+    TOKENS.control.shade.replace(/[()]/g, '\\$&')}"`), 'the dark depth role (review 1)');
   assert.ok(mainStroke(svg).includes(`stroke="${TOKENS.cable.palette[2]}"`), 'caller colour');
   assert.ok(!draw({ sheen: false }).includes('data-sheen'), 'no sheen when told sheen: false');
 });
@@ -259,13 +259,13 @@ const dropOf = (el) => {
   return m ? [Number(m[1]), Number(m[2])] : [0, 0];
 };
 
-test('the soft shadow is the shadow token at hw-shadow: wider, 3 screen px down, 6 lifted', () => {
+test('the soft shadow: the dark depth role at hw-shadow, wider, 3 screen px down, 6 lifted', () => {
   for (const state of STATES) {
     for (const zoom of [0.5, 1, 2, 3]) {
       const svg = draw({ state, zoom });
       const shadow = shadowOf(svg);
       const where = `${JSON.stringify(state)} at ${zoom}`;
-      assert.ok(shadow.includes(`stroke="${TOKENS.cable.shadow}"`), `${where}: the shadow token`);
+      assert.ok(shadow.includes(`stroke="${TOKENS.control.shade}"`), `${where}: the depth role`);
       assert.match(shadow, /\sclass="opacity-hw-shadow"/, `${where}: the hw-shadow intensity`);
       assert.doesNotMatch(shadow, /opacity="|filter|style=/, `${where}: no literal intensity`);
       assert.ok(width(shadow) > width(mainStroke(svg)), `${where}: wider than the stroke`);
@@ -428,12 +428,12 @@ test('the sheen stripe is drawn unless told not to (S8), and takes no pointer', 
   const sheen = /<path data-sheen=""[^>]*>/.exec(svg)[0];
   assert.match(sheen, /pointer-events="none"/);
   assert.ok(width(sheen) < width(mainStroke(svg)));
-  assert.ok(sheen.includes(`stroke="${TOKENS.cable.sheen}"`), 'the cable.sheen token');
+  assert.ok(sheen.includes(`stroke="${TOKENS.control.highlight}"`), 'the light depth role');
   assert.match(sheen, /\sclass="opacity-hw-sheen"/, 'the intensity is the hw-sheen key');
-  assert.doesNotMatch(sheen, /opacity="/, 'no opacity attribute');
-  assert.match(sheen, /transform="translate\(-1.87 -1.87\)"/, 'JC-13: -0.22 of the width');
+  assert.doesNotMatch(sheen, /opacity="|transform=/, 'no opacity attribute, no shift');
   const at2 = /<path data-sheen=""[^>]*>/.exec(draw({ sheen: true, zoom: 2 }))[0];
-  assert.match(at2, /transform="translate\(-1.87 -1.87\)"/, 'graph units: it scales with the cord');
+  assert.equal(/ d="([^"]+)"/.exec(at2)[1], / d="([^"]+)"/.exec(sheen)[1],
+    'graph units: it scales with the cord, not the zoom');
   const dashed = /<path data-sheen=""[^>]*>/.exec(draw({ sheen: true, type: 'CONTROL',
     dash: CABLE_DASH.CONTROL }))[0];
   assert.equal(linecap(dashed), 'butt', 'a dashed sheen keeps the gaps too');
@@ -760,10 +760,12 @@ test('cableParts: the port shape is an input, recorded on the cable for the port
 
 test('cableSvg draws the JC cord it drew when its look was set (pinned)', () => {
   // Pinned before cableParts existed, again by S8 (cables like cables) and again by the look
-  // audit's cords (JC-6, JC-13): the sag of slack 0.3; the 8.5-wide stroke in its 10 rim, the
-  // 10.5-wide shadow 6 screen px down at zoom 2 (dragged); the shade; a refused cord dashed
-  // REFUSED_DASH; CONTROL's two bands 20 to 22.5 and 24.5 to 27 from each plug's centre, 11 wide;
-  // the cross CROSS_BACK (30.2) from the target; the sheen 0.3 of the width, 0.22 of it up-left.
+  // audit's cords (JC-6, JC-13) and by their review (11-05): the sag of slack 0.3; the 8.5-wide
+  // stroke in its 10 rim, the 10.5-wide shadow in the dark depth role 6 screen px down at zoom 2
+  // (dragged); the shade 0.25 of the width away from the light, beside the cord in two cubics a
+  // cubic; a refused cord dashed REFUSED_DASH; CONTROL's two bands 20 to 22.5 and 24.5 to 27
+  // from each plug's centre, 5.1 wide inside the cord; the cross CROSS_BACK (30.2) from the
+  // target; the sheen 0.3 of the width in the light depth role, 0.22 of it toward the light.
   const svg = cableSvg({ id: 'g1', from: { x: 10, y: 20 }, to: { x: 210, y: 60 },
     type: 'CONTROL', colour: TOKENS.cable.palette[1], tokens: TOKENS,
     state: { refused: true, dragging: true }, zoom: 2, sheen: true });
@@ -773,10 +775,14 @@ test('cableSvg draws the JC cord it drew when its look was set (pinned)', () => 
   const arms = (s, w) => ln('182.392424', '75.017492', '192.392424', '85.017492', s, w)
     + ln('182.392424', '85.017492', '192.392424', '75.017492', s, w);
   const band = (end, d1, d2) => `<path data-band="${end}" d="M ${d1} M ${d2}" fill="none" `
-    + 'stroke="var(--osc-bg)" stroke-width="11" stroke-linecap="butt"/>';
+    + 'stroke="var(--osc-bg)" stroke-width="5.1" stroke-linecap="butt"/>';
+  const shade = 'M 8.261 21.221 C 41.764 68.922 75.735 96.502 109.583 103.272 C 143.548 110.065 '
+    + '177.881 95.924 211.52 61.485';
+  const sheen = 'M 11.53 18.925 C 44.714 66.171 77.487 92.779 110.367 99.355 C 143.145 105.91 '
+    + '175.598 92.543 208.662 58.693';
   assert.equal(svg, '<g data-cable="g1" data-refused="" pointer-events="none">'
     + `<path data-shadow="" class="opacity-hw-shadow" d="${d}" fill="none" `
-    + 'stroke="var(--osc-bg)" stroke-width="10.5" stroke-linecap="round" '
+    + 'stroke="var(--osc-hw-shade)" stroke-width="10.5" stroke-linecap="round" '
     + 'transform="translate(0 3)"/>'
     + `<g data-main="" pointer-events="stroke"><path data-hit="" d="${d}" fill="none" `
     + 'stroke="currentColor" visibility="hidden" stroke-width="44" '
@@ -785,18 +791,18 @@ test('cableSvg draws the JC cord it drew when its look was set (pinned)', () => 
     + 'stroke-linecap="butt" stroke-dasharray="4 4"/>'
     + `<path data-stroke="" d="${d}" fill="none" stroke="var(--osc-red)" stroke-width="8.5" `
     + 'stroke-linecap="butt" stroke-dasharray="4 4"/></g>'
-    + `<path data-shade="" class="opacity-hw-shadow" d="${d}" fill="none" `
+    + `<path data-shade="" class="opacity-hw-shadow" d="${shade}" fill="none" `
     + 'stroke="var(--osc-bg)" stroke-width="2.125" stroke-linecap="butt" '
-    + 'stroke-dasharray="4 4" transform="translate(2.125 2.125)" pointer-events="none"/>'
+    + 'stroke-dasharray="4 4" pointer-events="none"/>'
     + '<g data-bands="CONTROL" pointer-events="none">'
     + band('from', '21.899109 36.075174 L 23.44734 38.039375',
       '24.696427 39.602679 L 26.271213 41.546406')
     + band('to', '195.386278 73.654271 L 193.462798 75.256833',
       '191.907239 76.519745 L 189.941326 78.073451') + '</g>'
     + `<g data-cross="" pointer-events="none">${arms('bg', '4.5')}${arms('red', '2')}</g>`
-    + `<path data-sheen="" class="opacity-hw-sheen" d="${d}" fill="none" `
-    + 'stroke="var(--osc-text)" stroke-width="2.55" stroke-linecap="butt" '
-    + 'stroke-dasharray="4 4" transform="translate(-1.87 -1.87)" pointer-events="none"/></g>');
+    + `<path data-sheen="" class="opacity-hw-sheen" d="${sheen}" fill="none" `
+    + 'stroke="var(--osc-hw-highlight)" stroke-width="2.55" stroke-linecap="butt" '
+    + 'stroke-dasharray="4 4" pointer-events="none"/></g>');
 });
 
 test('cable.js writes markup in one place only: the serialiser of the parts', () => {
@@ -1641,12 +1647,13 @@ test('S8: 600 cables with their rims, sheens and plugs still render under 50 ms'
   const run1 = () => edges.reduce((n, e) => n + cableSvg({ ...e, tokens: TOKENS, plugs: true })
     .length, 0);
   run1();
-  const best = Math.min(...Array.from({ length: 5 }, () => {
+  // Best of 9: the least a run takes is the code's cost; a busier host only lengthens the rest.
+  const best = Math.min(...Array.from({ length: 9 }, () => {
     const t0 = performance.now();
     run1();
     return performance.now() - t0;
   }));
-  t.diagnostic(`600 cables with plugs: best of 5 runs ${best.toFixed(2)} ms (bound 50 ms)`);
+  t.diagnostic(`600 cables with plugs: best of 9 runs ${best.toFixed(2)} ms (bound 50 ms)`);
   assert.ok(best < 50, `${best.toFixed(2)} ms`);
 });
 
@@ -1735,8 +1742,8 @@ test('JC-6: the bands sit on the cord near each plug, at their pattern\'s distan
             assert.ok(Math.abs(r[0] - offsets[i][0]) < 1e-3 && Math.abs(r[1] - offsets[i][1])
               < 1e-3, `${where} ${end} ${i}: ${r} from the plug, not ${offsets[i]}`);
             assert.equal(a.stroke, edge.stroke, `${where}: the rim's ink`);
-            assert.equal(Number(a['stroke-width']), Number(edge['stroke-width']) + 1,
-              `${where}: heat-shrink stands half a unit proud of the rim each side`);
+            assert.ok(Math.abs(Number(a['stroke-width']) - 0.6 * Number(stroke['stroke-width']))
+              < 1e-6, `${where}: 0.6 of the stroke, inside the cord (review 2)`);
             assert.equal(a['stroke-linecap'], 'butt');
             assert.equal(a.class, undefined, 'opaque');
           });
@@ -1808,39 +1815,39 @@ test('JC-13: a cord 8.5 wide (9.5 hovered, 11 selected) in its rim', () => {
   assert.equal(w({ selected: true, hover: true }), 11);
 });
 
-test('JC-13: a shade at +0.25 of the width and a sheen at -0.22, both inside the cord', () => {
-  for (const state of [{}, { hover: true }, { selected: true }, { refused: true }]) {
-    for (const zoom of [1, 2]) {
-      const parts = cordParts({ state, zoom });
-      const stroke = parts.find((p) => p.key === 'stroke').attrs;
-      const w = Number(stroke['stroke-width']);
-      const shade = parts.find((p) => p.key === 'shade');
-      const sheen = parts.find((p) => p.key === 'sheen').attrs;
-      const where = `${JSON.stringify(state)} at ${zoom}`;
-      assert.equal(shade.parent, 'cable', `${where}: outside the pointer's group`);
-      const keys = parts.map((p) => p.key);
-      assert.equal(keys.indexOf('shade'), keys.indexOf('stroke') + 1, `${where}: on the stroke`);
-      const s = shade.attrs;
-      assert.equal(s.class, 'opacity-hw-shadow', `${where}: the hw-shadow intensity`);
-      assert.equal(s.stroke, TOKENS.cable.shadow);
-      assert.equal(s.d, stroke.d);
-      assert.equal(s['pointer-events'], 'none');
-      assert.equal(s['stroke-dasharray'], stroke['stroke-dasharray'], `${where}: as dashed`);
-      const off = (a) => dropOf(` transform="${a.transform}"`);
-      const [sx, sy] = off(s);
-      assert.ok(Math.abs(sx - 0.25 * w) < 1e-6 && Math.abs(sy - 0.25 * w) < 1e-6,
-        `${where}: shade at +0.25 w (${sx}, ${sy})`);
-      const [hx, hy] = off(sheen);
-      assert.ok(Math.abs(hx + 0.22 * w) < 1e-6 && Math.abs(hy + 0.22 * w) < 1e-6,
-        `${where}: sheen at -0.22 w (${hx}, ${hy})`);
-      // A diagonal offset moves a stripe at most √2 times as far across the cord.
-      for (const [o, a] of [[sx, s], [hx, sheen]]) {
-        assert.ok(Math.abs(o) * Math.SQRT2 + Number(a['stroke-width']) / 2 <= w / 2 + 1e-9,
-          `${where}: inside the cord`);
+test('JC-13: a shade 0.25 of the width from the light and a sheen 0.22 toward it, in the cord',
+  () => {
+    for (const state of [{}, { hover: true }, { selected: true }, { refused: true }]) {
+      for (const zoom of [1, 2]) {
+        const parts = cordParts({ state, zoom });
+        const stroke = parts.find((p) => p.key === 'stroke').attrs;
+        const w = Number(stroke['stroke-width']);
+        const shade = parts.find((p) => p.key === 'shade');
+        const sheen = parts.find((p) => p.key === 'sheen').attrs;
+        const where = `${JSON.stringify(state)} at ${zoom}`;
+        assert.equal(shade.parent, 'cable', `${where}: outside the pointer's group`);
+        const keys = parts.map((p) => p.key);
+        assert.equal(keys.indexOf('shade'), keys.indexOf('stroke') + 1, `${where}: on the stroke`);
+        const s = shade.attrs;
+        assert.equal(s.class, 'opacity-hw-shadow', `${where}: the hw-shadow intensity`);
+        assert.equal(s.stroke, parts.find((p) => p.key === 'edge').attrs.stroke, 'the rim ink');
+        assert.equal(sheen.stroke, TOKENS.control.highlight, 'the light depth role');
+        assert.equal(s['pointer-events'], 'none');
+        assert.equal(s['stroke-dasharray'], stroke['stroke-dasharray'], `${where}: as dashed`);
+        assert.ok(Math.abs(Number(s['stroke-width']) - 0.25 * w) < 1e-6, `${where}: 0.25 w wide`);
+        assert.ok(Math.abs(Number(sheen['stroke-width']) - 0.3 * w) < 1e-6, `${where}: 0.3 w`);
+        // Mid-cord, each lies its offset from the stroke (beside it, review 7).
+        const cord = cubicSamples(stroke.d, 400);
+        const midOff = (d) => {
+          const ps = cubicSamples(d, 64);
+          return nearest(ps[ps.length >> 1], cord);
+        };
+        assert.ok(Math.abs(midOff(s.d) - 0.25 * w) < 0.02, `${where}: shade ${midOff(s.d)}`);
+        assert.ok(Math.abs(midOff(sheen.d) - 0.22 * w) < 0.02,
+          `${where}: sheen ${midOff(sheen.d)}`);
       }
     }
-  }
-});
+  });
 
 test('JC-13: the soft shadow drops 3 screen px at rest, 6 lifted, 2 wider than the stroke', () => {
   for (const zoom of [1, 2]) {
@@ -1879,4 +1886,228 @@ test('JC-14: CABLE_BOW 0.5; a vertical run bellies sideways at least CABLE_MIN_S
   assert.equal(bow(o, o), 0, 'coincident ends: a droop, no belly');
   assert.ok(Math.abs(bow(o, { x: 200, y: 0 })) < 1e-6, 'a level cord: none');
   assert.ok(bow(o, { x: 10, y: 300 }) < bow(o, { x: 0, y: 300 }), 'less as it leans');
+});
+
+// ---------------------------------------------------------------- review of cords and plugs
+// The adversarial review of 7c5d567f (11-05): the light theme's lighting was upside down and the
+// cues did not show (1), the bands read as cuts in the dark theme (2), a long vertical cord in
+// the rightmost column left the bay (3), the shade and sheen collapsed on 45° stretches (7), and
+// the gaps its mutants found (8). Each cue is measured by rule (b) of oscilla-21's amendment,
+// |ΔL*| >= 3 at the intensity its class reads.
+
+const CORD_FACES = ['card', 'plateHi'];
+/** The points of a path of M and C commands, `per` samples a cubic. */
+function cubicSamples(d, per = 64) {
+  const nums = d.replace(/[MC]/g, ' ').trim().split(/\s+/).map(Number);
+  assert.match(d, /^M \S+ \S+(?: C(?: \S+){6})+$/, `M then cubics: ${d}`);
+  const out = [];
+  let p0 = { x: nums[0], y: nums[1] };
+  for (let i = 2; i + 5 < nums.length; i += 6) {
+    const [c1, c2, p3] = [0, 2, 4].map((k) => ({ x: nums[i + k], y: nums[i + k + 1] }));
+    for (let k = out.length ? 1 : 0; k <= per; k++) {
+      const t = k / per;
+      const u = 1 - t;
+      const f = (key) => u * u * u * p0[key] + 3 * u * u * t * c1[key] + 3 * u * t * t * c2[key]
+        + t * t * t * p3[key];
+      out.push({ x: f('x'), y: f('y') });
+    }
+    p0 = p3;
+  }
+  return out;
+}
+const nearest = (p, qs) => Math.min(...qs.map((q) => Math.hypot(p.x - q.x, p.y - q.y)));
+
+test('review 1: the shade darkens and the sheen lightens every cord colour, both themes (b)',
+  async () => {
+    const th = await tokenThemes();
+    const short = [];
+    for (const [name, theme] of Object.entries(th)) {
+      const tokens = themed(theme);
+      tokens.cable.palette.forEach((colour, i) => {
+        const parts = cordParts({ tokens, colour });
+        const shade = parts.find((p) => p.key === 'shade').attrs;
+        const sheen = parts.find((p) => p.key === 'sheen').attrs;
+        const where = `${name} ${SYNTH_TOKEN_NAMES.cable.palette[i]}`;
+        const dark = deltaLOf(shade.stroke, colour, intensityOf(shade.class));
+        assert.ok(dark <= -3, `${where}: the shade ${shade.stroke} ΔL* ${dark.toFixed(2)}`);
+        const light = deltaLOf(sheen.stroke, colour, intensityOf(sheen.class));
+        assert.ok(light > 0, `${where}: the sheen ${sheen.stroke} lightens, ΔL* `
+          + `${light.toFixed(2)}`);
+        if (light < 3) short.push(`${where} ${light.toFixed(2)}`);
+      });
+    }
+    // Measured: white at hw-sheen (0.12) lifts the dark theme's green (L* 77.8) by 1.94 only;
+    // no token is lighter. Raising hw-sheen (a key of every sheen) is oscilla-21's call.
+    assert.deepEqual(short, ['dark --osc-green 1.94'], 'the sheens under ΔL* 3');
+  });
+
+test('review 1: the soft shadow darkens the bay card and the plate under it, both themes (b)',
+  async () => {
+    const th = await tokenThemes();
+    for (const [name, theme] of Object.entries(th)) {
+      const tokens = themed(theme);
+      const sh = cordParts({ tokens, colour: tokens.cable.palette[0] })
+        .find((p) => p.key === 'shadow').attrs;
+      for (const face of CORD_FACES) {
+        const dl = deltaLOf(sh.stroke, tokens.surface[face], intensityOf(sh.class));
+        assert.ok(dl <= -3, `${name} on ${face} ${tokens.surface[face]}: ΔL* ${dl.toFixed(2)}`);
+      }
+      for (const face of ['hi', 'lo']) {
+        const dl = deltaLOf(sh.stroke, tokens.plate[face], intensityOf(sh.class));
+        assert.ok(dl <= -3, `${name} on plate.${face}: ΔL* ${dl.toFixed(2)}`);
+      }
+    }
+  });
+
+test('review 1: the bay\'s token set (layerTokens of the panel\'s) lights the cord the same way',
+  async () => {
+    const { PANEL_TOKENS, CABLE_TOKENS } = await import('../../src/js/synth/view/tokens.js');
+    const { layerTokens } = await import('../../src/js/ui/synth/jack.js');
+    const th = await tokenThemes();
+    for (const [name, theme] of Object.entries(th)) {
+      const panel = Object.fromEntries(Object.entries(PANEL_TOKENS)
+        .map(([k, v]) => [k, tokenHex(theme, v)]));
+      panel.cables = CABLE_TOKENS.map((v) => tokenHex(theme, v));
+      const full = themed(theme);
+      const of = (tokens) => Object.fromEntries(cordParts({ tokens, colour: panel.cables[1] })
+        .filter((p) => ['shadow', 'shade', 'sheen'].includes(p.key))
+        .map((p) => [p.key, p.attrs.stroke]));
+      assert.deepEqual(of(layerTokens(panel)), of(full), `${name}: the bay draws as the layer`);
+    }
+  });
+
+test('review 1: a token set without the depth roles still lights the cord the right way',
+  async () => {
+    const th = await tokenThemes();
+    for (const [name, theme] of Object.entries(th)) {
+      const full = themed(theme);
+      const tokens = { jack: full.jack, cable: full.cable, surface: { edge: full.surface.edge } };
+      tokens.cable.palette.forEach((colour) => {
+        const parts = cordParts({ tokens, colour });
+        const paint = (k) => parts.find((p) => p.key === k).attrs;
+        const shade = paint('shade');
+        const sheen = paint('sheen');
+        assert.ok(deltaLOf(shade.stroke, colour, intensityOf(shade.class)) < 0, `${name} shade`);
+        assert.ok(deltaLOf(sheen.stroke, colour, intensityOf(sheen.class)) > 0, `${name} sheen`);
+        const sh = paint('shadow');
+        assert.ok(deltaLOf(sh.stroke, full.surface.card, intensityOf(sh.class)) < 0,
+          `${name} shadow`);
+      });
+    }
+  });
+
+test('review 2: a band lies inside the cord, its colour on both sides, so it never reads as a cut',
+  () => {
+    for (const type of TYPES) {
+      for (const state of [{}, { hover: true }, { selected: true }, { refused: true }]) {
+        const parts = cordParts({ type, state });
+        const w = Number(parts.find((p) => p.key === 'stroke').attrs['stroke-width']);
+        for (const end of ['from', 'to']) {
+          const band = Number(parts.find((p) => p.key === `band-${end}`).attrs['stroke-width']);
+          const where = `${type} ${JSON.stringify(state)} ${end}`;
+          assert.ok((w - band) / 2 >= 1.5, `${where}: the cord's colour shows ${(w - band) / 2} `
+            + 'beside the band');
+          assert.ok(band >= w / 2, `${where}: the band ${band} still reads across the cord ${w}`);
+        }
+      }
+    }
+  });
+
+test('review 3: a long vertical cord in the rightmost column stays inside its box', () => {
+  const box = { x: 0, y: 0, width: 390, height: 900 };
+  const right = box.x + box.width;
+  for (const x of [356, 350, 383 - 34, 370]) {
+    for (const rise of [44, 120, 248, 310, 500, 800]) {
+      for (const lean of [0, -6, 6]) {
+        const ends = [{ x, y: 40 }, { x: x + lean, y: 40 + rise }];
+        for (const [from, to] of [ends, [...ends].reverse()]) {
+          for (const state of [{}, { selected: true }, { dragging: true }]) {
+            const parts = cordParts({ from, to, box, state });
+            const half = Math.max(...['edge', 'shadow'].map((k) => Number(parts
+              .find((p) => p.key === k).attrs['stroke-width']) / 2));
+            const d = parts.find((p) => p.key === 'stroke').attrs.d;
+            const far = Math.max(...cubicSamples(d, 400).map((p) => p.x)) + half;
+            assert.ok(far <= right + 1e-6, `${JSON.stringify([from, to, state])}: reaches ${far}`);
+          }
+        }
+      }
+    }
+  }
+  // It still bellies where the box leaves it room, and the bound moves it smoothly.
+  const reachAt = (x) => Math.max(...cubicSamples(cableCurve({ x, y: 40 }, { x, y: 350 },
+    { box }), 400).map((p) => p.x)) - x;
+  assert.ok(reachAt(200) >= CABLE_MIN_SAG, 'room on the right: the full belly');
+  let last = reachAt(300);
+  for (let x = 300.5; x <= 383; x += 0.5) {
+    const r = reachAt(x);
+    assert.ok(Math.abs(r - last) < 1.5, `no jump at ${x}: ${last} to ${r}`);
+    last = r;
+  }
+});
+
+test('review 7: the shade and the sheen run beside the cord on every stretch, 45° ones included',
+  () => {
+    const CASES = [{ from: A, to: B }, { from: { x: 0, y: 0 }, to: { x: 300, y: 300 } },
+      { from: { x: 300, y: 300 }, to: { x: 0, y: 0 } },
+      { from: { x: 0, y: 0 }, to: { x: 0, y: 300 } },
+      { from: { x: 0, y: 0 }, to: { x: 300, y: 0 } },
+      { from: { x: 0, y: 300 }, to: { x: 300, y: 0 } },
+      { from: { x: 0, y: 0 }, to: { x: 300, y: 100 }, tangents: { from: { x: 1, y: 0 },
+        to: { x: -1, y: 0 } } },
+      { from: { x: 300, y: 0 }, to: { x: 0, y: 100 }, tangents: { from: { x: 1, y: 0 },
+        to: { x: -1, y: 0 } } }];
+    for (const c of CASES) {
+      for (const state of [{}, { selected: true }]) {
+        const parts = cordParts({ ...c, state });
+        const where = `${JSON.stringify(c)} ${JSON.stringify(state)}`;
+        const a = (k) => parts.find((p) => p.key === k).attrs;
+        const w = Number(a('stroke')['stroke-width']);
+        const cord = cubicSamples(a('stroke').d, 256);
+        // As drawn: a stripe's translate, if any, moves its points.
+        const drawn = (k) => {
+          const [dx, dy] = dropOf(` transform="${a(k).transform}"`);
+          return cubicSamples(a(k).d, 64).map((p) => ({ x: p.x + dx, y: p.y + dy }));
+        };
+        const shade = drawn('shade');
+        const sheen = drawn('sheen');
+        const apart = Math.min(...sheen.map((p) => nearest(p, shade)));
+        assert.ok(apart >= 0.3 * w, `${where}: shade and sheen ${apart.toFixed(2)} apart`);
+        for (const k of ['shade', 'sheen']) {
+          const half = Number(a(k)['stroke-width']) / 2;
+          for (const p of k === 'shade' ? shade : sheen) {
+            assert.ok(nearest(p, cord) + half <= w / 2 + 1e-6, `${where}: the ${k} inside`);
+          }
+        }
+      }
+    }
+    // Lit from above and the left: the sheen on the upper side of a level cord, on the left of a
+    // vertical one; the shade on the other.
+    const mid = (k, from, to) => {
+      const ps = cubicSamples(cordParts({ from, to }).find((p) => p.key === k).attrs.d, 64);
+      return ps[Math.floor(ps.length / 2)];
+    };
+    const level = [{ x: 0, y: 0 }, { x: 300, y: 0 }];
+    assert.ok(mid('sheen', ...level).y < mid('stroke', ...level).y, 'level: the sheen above');
+    assert.ok(mid('shade', ...level).y > mid('stroke', ...level).y, 'level: the shade below');
+    const plumb = [{ x: 0, y: 0 }, { x: 0, y: 300 }];
+    assert.ok(mid('sheen', ...plumb).x < mid('stroke', ...plumb).x, 'vertical: the sheen left');
+    assert.ok(mid('shade', ...plumb).x > mid('stroke', ...plumb).x, 'vertical: the shade right');
+  });
+
+test('review 8: the belly fades to nothing at |dx| = sag, with no jump', () => {
+  const bow = (a, b) => at(cableCurve(a, b), 0.5).x - (a.x + b.x) / 2;
+  for (const rise of [60, 100, 300, 600]) {
+    // The lean at which |dx| equals the sag it hangs at (bisection: the sag grows with dx).
+    let lo = 0;
+    let hi = 400;
+    for (let i = 0; i < 80; i++) {
+      const m = (lo + hi) / 2;
+      if (m < cableSag({ x: 0, y: 0 }, { x: m, y: rise })) lo = m;
+      else hi = m;
+    }
+    const before = bow({ x: 0, y: 0 }, { x: lo - 1e-3, y: rise });
+    const after = bow({ x: 0, y: 0 }, { x: hi + 1e-3, y: rise });
+    assert.ok(Math.abs(before) < 0.01, `${rise}: ${before} just before |dx| = sag`);
+    assert.ok(Math.abs(after) < 1e-5, `${rise}: none past it (${after})`);
+  }
 });

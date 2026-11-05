@@ -5,6 +5,7 @@
 // cable and is never a straight elastic line. Draws nothing and imports nothing.
 //
 //   CABLE_MIN_SAG, CABLE_MAX_SAG, CABLE_SLACK, CABLE_BOW   the hang's bounds and shape
+//   CABLE_SIDE_ROOM                    how far a belly keeps from the box's right edge
 //   sagRoom(a, b, bottom)              the most sag that keeps the cord above `bottom`
 //   bottomOf(box)                      a viewBox's bottom edge, Infinity without one
 //   hangingSag(a, b, slack, box, sag)  the sag a cord hangs at
@@ -20,6 +21,10 @@ export const CABLE_SLACK = 0.3;
 /** A near-vertical cable's sideways belly (to +x) at its middle, as a part of min(sag, rise)
  *  (JC-14; S8: 0.3). */
 export const CABLE_BOW = 0.5;
+/** How far a belly keeps the curve from a viewBox's right edge, graph units (review of 11-05):
+ *  the most a drawn cord reaches beyond its curve, the selected one's soft shadow (11 + 2) / 2,
+ *  so a cord in a bay's rightmost column never leaves the bay. */
+export const CABLE_SIDE_ROOM = 6.5;
 
 const finite = (p) => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
 const num = (x) => {
@@ -53,6 +58,9 @@ export function bottomOf(box) {
   return box.y + box.height;
 }
 
+/** The right edge of a viewBox, or Infinity without one (bottomOf checks the box). */
+const rightOf = (box) => (box === undefined || box === null ? Infinity : box.x + box.width);
+
 /** The sag of the hanging cable from a to b: `told` if given, else slack × the distance in
  *  [CABLE_MIN_SAG, CABLE_MAX_SAG]; either way at most the room above the box's bottom. */
 export function hangingSag(a, b, slack, box, told) {
@@ -75,9 +83,12 @@ export function hangingSag(a, b, slack, box, told) {
  * than its sag bellies sideways, always to the right (+x), by CABLE_BOW of min(sag, rise) at its
  * middle, and never by less than CABLE_MIN_SAG, or half the rise when that is less (JC-14): a long
  * vertical run hangs as a cable does and coincident ends only droop. The belly fades to nothing
- * as the cord leans to |dx| = sag. One fixed side keeps the curve continuous as an end is dragged
- * across the vertical (a side taken from the sign of dx would jump there, where the belly is
- * largest), and it does not depend on the order of a and b, so reversed ends draw the same curve.
+ * as the cord leans to |dx| = sag, and it keeps the curve CABLE_SIDE_ROOM inside a box's right
+ * edge (the curve lies within 3/4 of the bow right of its ends' larger x), so a cord in a bay's
+ * rightmost column stays in the bay. One fixed side keeps the curve continuous as an end is
+ * dragged across the vertical (a side taken from the sign of dx would jump there, where the belly
+ * is largest), and it does not depend on the order of a and b, so reversed ends draw the same
+ * curve; the bound is continuous in the ends too.
  */
 export function controls(a, b, slack, box, told) {
   const sag = hangingSag(a, b, slack, box, told);
@@ -87,7 +98,8 @@ export function controls(a, b, slack, box, told) {
   const lean = Math.abs(dx);
   const rise = Math.abs(dy);
   const belly = Math.max(CABLE_BOW * Math.min(sag, rise), Math.min(CABLE_MIN_SAG, rise / 2));
-  const bow = lean < sag && sag > 0 ? belly * (1 - lean / sag) * (4 / 3) : 0;
+  const fit = Math.max(0, rightOf(box) - CABLE_SIDE_ROOM - Math.max(a.x, b.x)) * (4 / 3);
+  const bow = lean < sag && sag > 0 ? Math.min(belly * (1 - lean / sag) * (4 / 3), fit) : 0;
   return [
     { x: num((2 * a.x + b.x) / 3 + bow), y: num((2 * a.y + b.y) / 3 + h) },
     { x: num((a.x + 2 * b.x) / 3 + bow), y: num((a.y + 2 * b.y) / 3 + h) },

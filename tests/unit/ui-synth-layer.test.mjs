@@ -76,3 +76,29 @@ test('a readout window says it is computed and refuses anything else', () => {
   assert.throws(() => display.displayHtml({ id: 'x', text: '1', source: 'measured' }),
     /computed values only/);
 });
+
+// The review of 7c5d567f (11-05): patchCord turns each plug along the cord as the bay's box
+// hangs it (8, C28), and carries a jack's state ring onto the plug that covers it (4).
+test('patchCord: the plugs turn along the cord the box hangs, and carry the jacks\' rings', () => {
+  const lt = jack.layerTokens(T);
+  const from = { x: 0, y: 4 };
+  const to = { x: 200, y: 4 };
+  const box = { x: -40, y: -40, width: 300, height: 50 };
+  const free = cable.cableDirections(from, to);
+  const held = cable.cableDirections(from, to, { box });
+  assert.notDeepEqual(held, free, 'the box changes the way the cord leaves');
+  const cord = jack.patchCord({ id: 'c', from, to, type: 'AUDIO', colour: '#c2', tokens: lt, box });
+  assert.equal(cord.plugs, cable.plugSvg({ at: from, colour: '#c2', tokens: lt,
+    direction: held.from }) + cable.plugSvg({ at: to, colour: '#c2', tokens: lt,
+    direction: held.to }), 'the plugs turned as the box hangs it');
+  const ringed = jack.patchCord({ id: 'c', from, to, type: 'AUDIO', colour: '#c2', tokens: lt,
+    box, rings: { from: '#t8', to: undefined } });
+  assert.equal(ringed.plugs, cable.plugSvg({ at: from, colour: '#c2', tokens: lt,
+    direction: held.from, ring: '#t8' }) + cable.plugSvg({ at: to, colour: '#c2', tokens: lt,
+    direction: held.to }), 'the pending jack\'s ring on its plug, none on the other');
+  assert.equal((ringed.plugs.match(/data-halo=""/g) || []).length, 1);
+  const lit = jack.layerTokens({ ...T, shade: '#s1', highlight: '#s2' });
+  assert.deepEqual({ ...lit.control }, { shade: '#s1', highlight: '#s2' },
+    'the panel\'s depth roles reach the cord');
+  assert.equal(lt.control, undefined, 'none when the panel has none');
+});

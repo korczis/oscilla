@@ -15,9 +15,11 @@
 //   nutSvg({ x, y, tokens }) -> one nut
 //   jackSvg({ key, x, y, shape, label, pressed, ring, ringWidth, dashed, inner, text, fit,
 //     tokens }) -> '<g role="button" data-jack="key">…</g>'
-//   layerTokens(t) -> the token set of ui/synth/cable.js from the panel's (synth/view/tokens.js)
-//   patchCord({ id, from, to, type, colour, selected, tokens, box }) -> { cable, plugs }: a
-//     patch cord as the layer draws it (cable.js cableSvg with its sheen, a plug on each end)
+//   layerTokens(t) -> the token set of ui/synth/cable.js from the panel's (synth/view/tokens.js),
+//     its depth roles (shade, highlight) included, so the bay's cords are lit as the layer's
+//   patchCord({ id, from, to, type, colour, selected, tokens, box, rings }) -> { cable, plugs }:
+//     a patch cord as the layer draws it (cable.js cableSvg with its sheen, a plug on each end,
+//     each carrying its jack's state ring when `rings` names one: a plug covers the jack's own)
 
 /** The hit square's side, px: the touch target (WCAG 2.5.5). */
 export const JACK_HIT = 44;
@@ -76,15 +78,24 @@ export function jackSvg({ key, x, y, shape, label, pressed = false, ring, ringWi
 
 /** The cable and plug token set (ui/synth/tokens.js shape) from the panel's token values. */
 export function layerTokens(t) {
-  return { jack: { body: t.jack, ring: t.jackRing, normal: t.normal, refuse: t.refuse },
+  const out = { jack: { body: t.jack, ring: t.jackRing, normal: t.normal, refuse: t.refuse },
     cable: { palette: t.cables, shadow: t.edge, sheen: t.text }, surface: { edge: t.edge } };
+  const control = {};
+  if (t.shade) control.shade = t.shade;
+  if (t.highlight) control.highlight = t.highlight;
+  return Object.keys(control).length ? { ...out, control } : out;
 }
 
-export function patchCord({ id, from, to, type, colour, selected = false, tokens, box }) {
-  // Each plug's boot leaves the way its cord does (JC-3): the plug covers the socket.
+export function patchCord({ id, from, to, type, colour, selected = false, tokens, box,
+  rings = {} }) {
+  if (rings === null || typeof rings !== 'object') {
+    throw new TypeError('patchCord: rings must be { from, to }, each jack\'s ring or none.');
+  }
+  // Each plug's boot leaves the way its cord does (JC-3): the plug covers the socket, so it
+  // carries the socket's state ring (a pending or a compatible jack) round its boot.
   const dirs = cableDirections(from, to, { box });
   return { cable: cableSvg({ id, from, to, type, colour, state: { selected }, tokens, box,
     sheen: true }),
-  plugs: plugSvg({ at: from, colour, tokens, direction: dirs.from })
-    + plugSvg({ at: to, colour, tokens, direction: dirs.to }) };
+  plugs: plugSvg({ at: from, colour, tokens, direction: dirs.from, ring: rings.from })
+    + plugSvg({ at: to, colour, tokens, direction: dirs.to, ring: rings.to }) };
 }

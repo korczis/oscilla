@@ -9,11 +9,12 @@
 // (project.visual-identity-lock v3), and every shape sets its own stroke. No number here sets an
 // opacity, an alpha or a shadow (v4): the sheen's, the shade's and the shadow's intensities are
 // the classes opacity-hw-sheen and opacity-hw-shadow, and the hit path is hidden rather than
-// transparent. Imports the plug (plug.js: plugSvg and plugState re-exported, cordInk for the rim
-// and bands), so its cross and bands keep clear of a plug's room, or the cross is left to a
-// refused plug the caller names (`plug`); and the hang (hang.js, its constants re-exported). S8
-// (the SYN review of W1): a cord's rim, sheen and hang, its plugs (`plugs`), and clearLabels;
-// JC-13: its weight, shade and sheen; JC-14: a vertical run's belly (hang.js).
+// transparent. Imports the plug (plug.js: plugSvg and plugState re-exported; cordInk, sheenInk
+// and castInk, so a cord is lit from above and the left in both themes), so its cross and bands
+// keep clear of a plug's room, or the cross is left to a refused plug the caller names (`plug`);
+// the hang (hang.js, its constants re-exported); and the walk along it (along.js). S8 (the SYN
+// review of W1): a cord's rim, sheen and hang, its plugs (`plugs`), and clearLabels; JC-13: its
+// weight, shade and sheen; JC-14: a vertical run's belly (hang.js).
 //
 //   CABLE_BANDS, CABLE_BAND_AT              the band pattern of each signal type, and where
 //   CABLE_DASH                              the Signal Path dash a caller may pass as `dash`
@@ -39,9 +40,10 @@
 //                                           (plug.js)
 //   plugState(state)                        { held, refused } of a plug state (plug.js)
 
-import { PLUG, cordInk, plugState, plugSvg } from './plug.js';
+import { PLUG, castInk, cordInk, plugState, plugSvg, sheenInk } from './plug.js';
 import { CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_SLACK, bottomOf, controls, hangingSag, sagRoom }
   from './hang.js';
+import { awayFrom, beside } from './along.js';
 
 export { PLUG, plugState, plugSvg } from './plug.js';
 export { CABLE_BOW, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_SLACK } from './hang.js';
@@ -82,11 +84,14 @@ const CROSS = Object.freeze({ arm: 5, width: 2, under: 4.5 });
  *  seated or held (PLUG.room, 19.875) plus the cross's reach (arm × √2 and half its underlay)
  *  and 1, so the cross never covers the target plug nor its own refused cross (30.2). */
 const CROSS_BACK = PLUG.room + CROSS.arm * Math.SQRT2 + CROSS.under / 2 + 1;
-/** The sheen's and the shade's offsets as parts of the stroke's width (JC-13): the sheen up and
- *  left, the shade down and right, each inside the cord at its width (sheen 0.3, shade 0.25). */
-const LIGHT = Object.freeze({ sheen: -0.22, shade: 0.25, sheenWidth: 0.3, shadeWidth: 0.25 });
-/** How far a band stands proud of the rim on each side, graph units (heat-shrink is thicker). */
-const BAND_PROUD = 0.5;
+/** The sheen's and the shade's offsets across the cord as parts of the stroke's width (JC-13):
+ *  the sheen toward the light, the shade away, each inside the cord at its width (sheen 0.3,
+ *  shade 0.25; along.js beside). */
+const LIGHT = Object.freeze({ sheen: 0.22, shade: -0.25, sheenWidth: 0.3, shadeWidth: 0.25 });
+/** A band's width as a part of the stroke's (review of 11-05): inside the cord, its colour 0.2
+ *  of the width on each side, so the cord's outline runs on unbroken and a band never reads as
+ *  a cut on a card as dark as its ink. */
+const BAND_CORE = 0.6;
 /** The shadow underlay's drop, screen px: at rest, and lifted while the cable is dragged. */
 const SHADOW_PX = Object.freeze({ rest: 3, lifted: 6 });
 /** How much wider than the stroke the shadow underlay is, graph units. */
@@ -103,8 +108,11 @@ const num = (x) => {
   const r = Number(x.toFixed(6));
   return r === 0 ? 0 : r;
 };
-const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-  .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const esc = (x) => {
+  const v = String(x);
+  return /[&"<>]/.test(v) ? v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;').replace(/>/g, '&gt;') : v;
+};
 
 const lerp = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
 const along = (p, v, k) => ({ x: p.x + v.x * k, y: p.y + v.y * k });
@@ -226,77 +234,6 @@ export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {
 /** The path data of cubics from their first point. */
 const pathOf = (segs) => `M ${segs[0][0].x} ${segs[0][0].y}`
   + segs.map(([, c1, c2, e]) => ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${e.x} ${e.y}`).join('');
-
-/**
- * The point of the cubics `segs` that lies `far` from an end (`fromEnd`: the first, else the
- * last), walking in from that end: the first sample (1/64 steps of each cubic) that far away,
- * refined by regula falsi (Illinois) to 1e-9 of the distance, else to its bracket. A cable too
- * short to reach that far takes its point farthest from that end.
- */
-function awayFrom(segs, far, fromEnd = false) {
-  const end = segs.length;
-  // t counts in from the end judged (t = end is that end), so one walk serves both ends.
-  const p = (t) => {
-    const v = fromEnd ? end - t : t;
-    const i = Math.max(0, Math.min(end - 1, Math.floor(v)));
-    const [p0, c1, c2, p3] = segs[i];
-    const s = v - i;
-    const u = 1 - s;
-    const k0 = u * u * u;
-    const k1 = 3 * u * u * s;
-    const k2 = 3 * u * s * s;
-    const k3 = s * s * s;
-    return { x: k0 * p0.x + k1 * c1.x + k2 * c2.x + k3 * p3.x,
-      y: k0 * p0.y + k1 * c1.y + k2 * c2.y + k3 * p3.y };
-  };
-  const b = p(end);
-  const away = (t) => {
-    const q = p(t);
-    return Math.hypot(q.x - b.x, q.y - b.y);
-  };
-  const STEPS = 64 * end;
-  const done = (t) => {
-    const q = p(t);
-    return { x: num(q.x), y: num(q.y) };
-  };
-  let best = end;
-  let bestAway = 0;
-  let hi = end;
-  let ghi = -far;
-  for (let i = STEPS - 1; i >= 0; i--) {
-    const t = (i * end) / STEPS;
-    const at = away(t);
-    if (at >= far) {
-      let lo = t;
-      let glo = at - far;
-      let side = 0;
-      for (let k = 0; k < 60; k++) {
-        const m = (lo * ghi - hi * glo) / (ghi - glo);
-        const g = away(m) - far;
-        if (Math.abs(g) < 1e-9 || !(m > lo && m < hi)) return done(Math.abs(g) < 1e-9 ? m : lo);
-        if (g > 0) {
-          lo = m;
-          glo = g;
-          if (side === 1) ghi /= 2;
-          side = 1;
-        } else {
-          hi = m;
-          ghi = g;
-          if (side === -1) glo /= 2;
-          side = -1;
-        }
-      }
-      return done(lo);
-    }
-    if (at > bestAway) {
-      best = t;
-      bestAway = at;
-    }
-    hi = t;
-    ghi = at - far;
-  }
-  return done(best);
-}
 
 /** The unit vector from p toward q, or null when they coincide. */
 function toward(p, q) {
@@ -465,21 +402,21 @@ const str = (x) => String(x);
  * part of its parent; appended when none), so a cross goes under a drawn sheen, as painted.
  * cableSvg serialises exactly this list.
  *
- * The parts: a soft shadow (tokens.cable.shadow at hw-shadow, SHADOW_SPREAD wider,
+ * The parts: a soft shadow (castInk at hw-shadow, SHADOW_SPREAD wider,
  * SHADOW_PX.rest screen px down, .lifted while dragging); the main group, the only part taking
  * the pointer (a hit path CABLE_HIT_PX screen px wide at every zoom by vector-effect=
  * "non-scaling-stroke", visibility="hidden", hit through pointer-events="stroke"; the opaque rim
  * (cordInk), CABLE_EDGE wider each side, dashed and capped as the stroke; the stroke in the
- * caller's colour, solid); the shade (tokens.cable.shadow at hw-shadow, LIGHT); the bands
+ * caller's colour, solid); the shade (cordInk at hw-shadow, LIGHT, beside the cord); the bands
  * (JC-6): from CABLE_BAND_AT out from each plug's centre, each band of CABLE_BANDS[type] a
  * straight piece of the cord between its two distances (a subpath of the end's path), in the
- * rim's ink, BAND_PROUD beyond the rim each side, every palette colour 3:1 on it; then the sheen
- * (tokens.cable.sheen at hw-sheen, LIGHT). Hover and selection thicken stroke and rim (JC-13:
- * 8.5, 9.5, 11); a dashed stroke has butt caps so its gaps stay open at any width, a solid one
- * round. Refused paints the stroke tokens.jack.refuse, dashed (REFUSED_DASH unless a dash is
- * passed), marks data-refused and draws a cross on the curve CROSS_BACK from the target, over
- * the bands, clear of the target plug's room, and of both plugs' for ends 2 × CROSS_BACK or more
- * apart (nearer, it may meet the source plug, which a bay draws over it; a cable that never
+ * rim's ink, BAND_CORE of the stroke across, every palette colour 3:1 on it; then the sheen
+ * (sheenInk at hw-sheen, LIGHT, beside the cord). Hover and selection thicken stroke and rim
+ * (JC-13: 8.5, 9.5, 11); a dashed stroke has butt caps so its gaps stay open at any width, a
+ * solid one round. Refused paints the stroke tokens.jack.refuse, dashed (REFUSED_DASH unless a
+ * dash is passed), marks data-refused and draws a cross on the curve CROSS_BACK from the target,
+ * over the bands, clear of the target plug's room, and of both plugs' for ends 2 × CROSS_BACK or
+ * more apart (nearer, it may meet the source plug, which a bay draws over it; a cable that never
  * reaches CROSS_BACK takes its point farthest from the target): a shape, not a colour alone.
  * `plug` is the target plug's state (plugState; a misspelt one refused): a refused plug draws
  * its own cross, so the cable leaves its out (dash and data-refused stay) and `cross: true`
@@ -516,13 +453,13 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
   const dashed = pattern ? { 'stroke-dasharray': pattern } : {};
   const cap = pattern ? 'butt' : 'round';
   const drop = num((st.dragging ? SHADOW_PX.lifted : SHADOW_PX.rest) / zoom);
-  const shift = (k) => `translate(${num(k * w)} ${num(k * w)})`;
   const ink = cordInk(tokens);
+  const [lit, shaded] = beside(segs, [LIGHT.sheen * w, LIGHT.shade * w]);
   const parts = [
     part('cable', 'g', null, { 'data-cable': str(id), ...(st.refused ? { 'data-refused': '' }
       : {}), ...ports, 'pointer-events': 'none' }),
     part('shadow', 'path', 'cable', { 'data-shadow': '', class: SHADOW_CLASS, d, fill: 'none',
-      stroke: tokens.cable.shadow, 'stroke-width': str(num(w + SHADOW_SPREAD)),
+      stroke: castInk(tokens), 'stroke-width': str(num(w + SHADOW_SPREAD)),
       'stroke-linecap': 'round', transform: `translate(0 ${drop})` }),
     part('main', 'g', 'cable', { 'data-main': '', 'pointer-events': 'stroke' }),
     part('hit', 'path', 'main', { 'data-hit': '', d, fill: 'none', stroke: 'currentColor',
@@ -532,29 +469,32 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
       'stroke-width': str(num(w + 2 * CABLE_EDGE)), 'stroke-linecap': cap, ...dashed }),
     part('stroke', 'path', 'main', { 'data-stroke': '', d, fill: 'none', stroke: paint,
       'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
-    part('shade', 'path', 'cable', { 'data-shade': '', class: SHADOW_CLASS, d, fill: 'none',
-      stroke: tokens.cable.shadow, 'stroke-width': str(num(w * LIGHT.shadeWidth)),
-      'stroke-linecap': cap, ...dashed, transform: shift(LIGHT.shade), 'pointer-events': 'none' }),
+    part('shade', 'path', 'cable', { 'data-shade': '', class: SHADOW_CLASS,
+      d: shaded, fill: 'none', stroke: ink,
+      'stroke-width': str(num(w * LIGHT.shadeWidth)), 'stroke-linecap': cap, ...dashed,
+      'pointer-events': 'none' }),
   ];
   if (dash === undefined) {
     parts.push(part('bands', 'g', 'cable', { 'data-bands': str(type), 'pointer-events': 'none' }));
-    const band = str(num(w + 2 * CABLE_EDGE + 2 * BAND_PROUD));
+    const band = str(num(w * BAND_CORE));
+    // Each band's two distances from the plug's centre, in order, found in one walk per end.
+    const fars = [];
+    CABLE_BANDS[type].reduce((at, len, i) => {
+      if (i % 2 === 0) fars.push(at, at + len);
+      return at + len;
+    }, CABLE_BAND_AT);
     for (const [end, first] of [['from', true], ['to', false]]) {
-      let at = CABLE_BAND_AT;
+      const ps = awayFrom(segs, fars, first);
       let bd = '';
-      CABLE_BANDS[type].forEach((len, i) => {
-        if (i % 2 === 0) {
-          const [p, q] = [at, at + len].map((r) => awayFrom(segs, r, first));
-          bd += `${bd ? ' ' : ''}M ${p.x} ${p.y} L ${q.x} ${q.y}`;
-        }
-        at += len;
-      });
+      for (let i = 0; i < ps.length; i += 2) {
+        bd += `${bd ? ' ' : ''}M ${ps[i].x} ${ps[i].y} L ${ps[i + 1].x} ${ps[i + 1].y}`;
+      }
       parts.push(part(`band-${end}`, 'path', 'bands', { 'data-band': end, d: bd, fill: 'none',
         stroke: ink, 'stroke-width': band, 'stroke-linecap': 'butt' }));
     }
   }
   if (st.refused && crossed) {
-    const m = awayFrom(segs, CROSS_BACK);
+    const [m] = awayFrom(segs, [CROSS_BACK]);
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]
       .map((l) => l.map(num));
@@ -566,10 +506,10 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
       ...arms.map((l, i) => line(`cross-${i}`, l, tokens.jack.refuse, CROSS.width)));
   }
   if (sheen) {
-    parts.push(part('sheen', 'path', 'cable', { 'data-sheen': '', class: SHEEN_CLASS, d,
-      fill: 'none', stroke: tokens.cable.sheen || 'currentColor',
+    parts.push(part('sheen', 'path', 'cable', { 'data-sheen': '', class: SHEEN_CLASS,
+      d: lit, fill: 'none', stroke: sheenInk(tokens),
       'stroke-width': str(num(w * LIGHT.sheenWidth)), 'stroke-linecap': cap, ...dashed,
-      transform: shift(LIGHT.sheen), 'pointer-events': 'none' }));
+      'pointer-events': 'none' }));
   }
   return Object.freeze(parts);
 }
@@ -585,12 +525,17 @@ export function partsSvg(parts) {
     kids.get(p.parent).push(p);
   }
   const one = (p) => {
-    const attrs = Object.entries(p.attrs).map(([k, v]) => ` ${k}="${esc(v)}"`).join('');
-    const inner = kids.get(p.key) || [];
-    return inner.length ? `<${p.tag}${attrs}>${inner.map(one).join('')}</${p.tag}>`
-      : `<${p.tag}${attrs}/>`;
+    let out = `<${p.tag}`;
+    for (const k in p.attrs) out += ` ${k}="${esc(p.attrs[k])}"`;
+    const inner = kids.get(p.key);
+    if (!inner) return `${out}/>`;
+    out += '>';
+    for (const q of inner) out += one(q);
+    return `${out}</${p.tag}>`;
   };
-  return (kids.get(null) || []).map(one).join('');
+  let out = '';
+  for (const p of kids.get(null) || []) out += one(p);
+  return out;
 }
 
 /**

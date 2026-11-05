@@ -32,11 +32,12 @@ export const PRE_DPAL_TOKENS = Object.freeze({ ...TOKENS, control: Object.freeze
   .fromEntries(Object.entries(TOKENS.control).filter(([k]) => !['knobCap', 'knobCapHi', 'capInk',
     'led'].includes(k)))) });
 
-/** The narrower token set a panel's adapter passes (the shape of dev-53's layerTokens: the jack,
- *  the cable and the surface edge, no plateHi and no control group), so a test can show the
+/** The narrower token set a panel's adapter passes (the shape of jack.js layerTokens: the jack,
+ *  the cable, the surface edge and the two depth roles, no plateHi), so a test can show the
  *  layer draws from it without falling to currentColor. */
 export const LAYER_TOKENS = Object.freeze({ jack: TOKENS.jack, cable: TOKENS.cable,
-  surface: Object.freeze({ edge: TOKENS.surface.edge }) });
+  surface: Object.freeze({ edge: TOKENS.surface.edge }), control: Object.freeze({
+    shade: TOKENS.control.shade, highlight: TOKENS.control.highlight }) });
 
 /** Every leaf of a token set, palette entries included. */
 export function tokenValues(t = TOKENS) {
@@ -161,3 +162,29 @@ export function contrastOf(a, b) {
   const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
+
+// Rule (b) of oscilla-21's amendment (11-04; ui-synth-tokens.test.mjs): a depth cue is visible
+// when |ΔL*| >= 3 (CIELAB, D65) between a face and the cue composited over it, 8 bits, at the
+// intensity its class reads from tailwind.config.cjs.
+const { createRequire } = await import('node:module');
+/** The hw-* intensities of tailwind.config.cjs: { 'hw-sheen': 0.12, 'hw-shadow': 0.3, ... }. */
+export const HW_INTENSITY = Object.freeze(Object.fromEntries(Object.entries(createRequire(
+  import.meta.url)('../../tailwind.config.cjs').theme.extend.opacity)
+  .filter(([k]) => k.startsWith('hw-')).map(([k, x]) => [k, Number(x)])));
+/** The intensity an opacity-hw-* class reads, or 1 for none (opaque). */
+export const intensityOf = (cls) => {
+  const m = /\bopacity-(hw-[\w-]+)\b/.exec(cls || '');
+  return m ? HW_INTENSITY[m[1]] : 1;
+};
+/** CIELAB L* of a #rrggbb colour. */
+export function lstarOf(hex) {
+  const y = luminance(hex);
+  const d = 6 / 29;
+  return 116 * (y > d ** 3 ? Math.cbrt(y) : y / (3 * d * d) + 4 / 29) - 16;
+}
+/** `fg` at intensity `a` over `bg`, both #rrggbb, as the browser composites it (8 bits). */
+export const overOf = (fg, bg, a) => `#${[1, 3, 5].map((i) => Math.round(parseInt(fg.slice(i,
+  i + 2), 16) * a + parseInt(bg.slice(i, i + 2), 16) * (1 - a)).toString(16).padStart(2, '0'))
+  .join('')}`;
+/** The L* step `fg` at intensity `a` makes over `bg` (negative darkens). */
+export const deltaLOf = (fg, bg, a) => lstarOf(overOf(fg, bg, a)) - lstarOf(bg);
