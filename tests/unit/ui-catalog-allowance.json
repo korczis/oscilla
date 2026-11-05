@@ -797,6 +797,14 @@
       "reason": "The hints hooks are not declared yet; a later catalogue slice declares them."
     },
     {
+      "id": "keyboard.dock-status",
+      "reason": "The keyboard hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
+      "id": "keyboard.handle",
+      "reason": "The keyboard hooks are not declared yet; a later catalogue slice declares them."
+    },
+    {
       "id": "learn-content",
       "reason": "The learn hooks are not declared yet; a later catalogue slice declares them."
     },
