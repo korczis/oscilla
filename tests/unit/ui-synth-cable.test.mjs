@@ -7,7 +7,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { performance } from 'node:perf_hooks';
+import { QUOTIENT_BAND, QUOTIENT_MEASURED, STEADINESS_LIMIT,
+  STEADINESS_MEASURED, calibrationFaults, referenceNumbers, referenceStrings, relativeCost,
+  relativeReport, slowed } from './fixtures/host-relative-budget.mjs';
 import {
   CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_REACH, REFUSED_DASH, SETTLE_MS,
   cableCurve, cableDirections, cableParts, cableSag, cableSvg, plugSvg, settle,
@@ -513,27 +515,237 @@ test('cable.js is pure: no import from the Synth view, no DOM, no layout', () =>
   assert.doesNotMatch(src, /document\.|window\.|addEventListener|getBoundingClientRect/);
 });
 
-test('600 cables: cableCurve plus cableSvg stay under 50 ms', (t) => {
-  const edges = Array.from({ length: 600 }, (_, i) => ({ id: `e${i}`,
-    from: { x: (i * 37) % 1900, y: (i * 53) % 1100 }, to: { x: (i * 71) % 1900 + 5,
-      y: (i * 29) % 1100 }, type: TYPES[i % 4], colour: TOKENS.cable.palette[i % 6] }));
-  const run = () => {
-    let bytes = 0;
-    for (const e of edges) {
-      bytes += cableCurve(e.from, e.to).length;
-      bytes += cableSvg({ ...e, state: { hover: i0(e) }, tokens: TOKENS }).length;
+// ------------------------------------------------- the render budgets, relative to the host (E058)
+// Each budget is the work's cost as a multiple of a fixed product-free reference workload,
+// referenceStrings() of tests/unit/fixtures/host-relative-budget.mjs, both timed on E029's clock
+// (the main thread's CPU time) in this process, interleaved, the fastest of RELATIVE_RUNS (9)
+// units each: a slower or busier host slows both, so the multiple stays the code's. A budget of
+// a fixed time measured the host instead: hosted runners timed the same work up to five times
+// apart (#420), and lundra, a slower host, failed it in every one of 10 runs. The calibration
+// checks itself against a second reference of another character, referenceNumbers(), timed
+// interleaved with both: their quotient is a constant of the two programs on any healthy host
+// and must hold its band, and each reference's lower median unit must stay near its fastest
+// (its steadiness: a minority of slow units reads as load, a majority as a reference not to
+// be trusted), or the measurement is taken again and at last refused (fail closed), since a
+// starved reference would make every work look cheap; the fixture derives the band and the
+// limit.
+//
+// Derivation (E058's commits hold the runs): each budget's work measured in 10 runs of this
+// file under each of the Apple M5 Pro of 18 cores on node 22 at its own load (9-11), under 8,
+// 20 and 40 spinning processes (load 19-53), and lundra, x86_64 of 8 cores on node 24 (load
+// 3-8); plus the whole unit suite in parallel on the Mac; plus the hosted runner, GitHub's
+// ubuntu-24.04 on node 22, one run (CI run 42042495829 at a371a6e4, the review of #438, F2:
+// plain 0.836, clearLabels 1.659, plugs 1.454), and 8 rounds of the reviewer's own script on
+// the Mac at load 8-15 (plain 0.508-0.551). MEASURED is the smallest and the largest multiple
+// of all of them, rounded outward: the Mac gave each smallest, lundra the largest plain (0.839)
+// and plug (1.667) multiples, the hosted runner the largest clearLabels one (1.659) and a plain
+// one at the top (0.836). The bound is MARGIN times the largest: room for a host not measured,
+// whose multiples may be up to twice those seen. MARGIN is far enough under 10 that the work
+// made ten times slower fails on every host measured, since ten times the smallest multiple is
+// over the bound, with room to spare (by 3.0 times for the plain cables, 3.4 for clearLabels,
+// 3.5 for the plugs); a test below checks that, and the pins run it.
+//
+// What the bound catches (the review of #438, F3: the reviewer's mutants of
+// src/js/ui/synth/cable.js on the Mac, 2026-11-05, the three budgets against the bounds 1.68,
+// 2.96 and 3.34 of that day): cableSvg's work done twice passed every budget (plain 1.053,
+// clearLabels 1.213, plugs 1.767), done three times too (1.485, 1.206, 2.303); done four
+// times it failed the plain cables (1.938) and still passed the plugs (2.804). crossings()
+// done twice passed clearLabels (2.377), done three times failed it (3.549), four times too
+// (4.577); against 3.32, clearLabels' bound now, those verdicts stand. So on the fastest host
+// measured a regression is caught from between three and four times the cableSvg work for the
+// plain cables, between two and three times the crossings work for clearLabels, and only past
+// four times the cableSvg work for the plugs (whose own markup dilutes it); on the host that
+// gave the largest multiple, from MARGIN times the whole work. The ten-times pin below is the
+// floor every host holds, not the threshold.
+const MARGIN = 2;
+/** The multiples measured, [smallest, largest], of each budget's work (see above). */
+const MEASURED = Object.freeze({ plain: [0.50, 0.84], clear: [1.12, 1.66], plugs: [1.18, 1.67] });
+const boundOf = (key) => MARGIN * MEASURED[key][1];
+
+const BUDGET_EDGES = Array.from({ length: 600 }, (_, i) => ({ id: `e${i}`,
+  from: { x: (i * 37) % 1900, y: (i * 53) % 1100 }, to: { x: (i * 71) % 1900 + 5,
+    y: (i * 29) % 1100 }, type: TYPES[i % 4], colour: TOKENS.cable.palette[i % 6] }));
+/** 600 cables, cableCurve plus cableSvg, the first hovered. */
+function plainCables() {
+  let bytes = 0;
+  for (const e of BUDGET_EDGES) {
+    bytes += cableCurve(e.from, e.to).length;
+    bytes += cableSvg({ ...e, state: { hover: e.id === 'e0' }, tokens: TOKENS }).length;
+  }
+  return bytes;
+}
+/** A bay-like panel: 20 columns of 10 jacks, each with its label printed under it; 50 cables
+ *  between them and one across the top, each raised clear of the labels by clearLabels. */
+const BAY = (() => {
+  const labels = [];
+  const jacks = [];
+  for (let c = 0; c < 20; c++) {
+    for (let r = 0; r < 10; r++) {
+      const j = { x: 30 + c * 60, y: 30 + r * 70 };
+      jacks.push(j);
+      labels.push({ x: j.x - 23, y: j.y + 25, width: 46, height: 12 });
     }
-    return bytes;
-  };
-  const i0 = (e) => e.id === 'e0';
-  run(); // warm
-  const best = Math.min(...Array.from({ length: 5 }, () => {
-    const t0 = performance.now();
-    run();
-    return performance.now() - t0;
-  }));
-  t.diagnostic(`600 cables: best of 5 runs ${best.toFixed(2)} ms (bound 50 ms)`);
-  assert.ok(best < 50, `${best.toFixed(2)} ms`);
+  }
+  const pairs = Array.from({ length: 50 }, (_, i) => [jacks[(i * 37) % 200],
+    jacks[(i * 71 + 13) % 200]]).filter(([p, q]) => p !== q);
+  pairs.push([{ x: 0, y: 0 }, { x: 600, y: 0 }]);
+  return { labels, pairs, box: { x: 0, y: 0, width: 1260, height: 760 } };
+})();
+function clearBay() {
+  let sag = 0;
+  for (const [p, q] of BAY.pairs) sag += CABLE.clearLabels(p, q, BAY.labels, { box: BAY.box }).sag;
+  return sag;
+}
+/** 600 cables with their rims, sheens and plugs. */
+function pluggedCables() {
+  return BUDGET_EDGES.reduce((n, e) => n + cableSvg({ ...e, tokens: TOKENS, plugs: true })
+    .length, 0);
+}
+/** cableCurve plus cableSvg of 600 cables; clearLabels of 51 cables over a bay of 200
+ *  labels; cableSvg of 600 cables with rims, sheens and plugs. */
+const BUDGETS = [
+  { key: 'plain', name: '600 cables', work: plainCables, bound: boundOf('plain') },
+  { key: 'clear', name: 'clearLabels of 51 cables on a bay of 200 labels', work: clearBay,
+    bound: boundOf('clear') },
+  { key: 'plugs', name: '600 cables with plugs', work: pluggedCables, bound: boundOf('plugs') },
+];
+
+for (const { name, work, bound } of BUDGETS) {
+  test(`E058: ${name} stays within ${bound} times the reference workload`, (t) => {
+    const m = relativeCost(work);
+    t.diagnostic(relativeReport(name, m, bound));
+    assert.ok(m.ratio <= bound, relativeReport(name, m, bound));
+  });
+}
+
+test('E058 pin: each budget fails its work made ten times slower', (t) => {
+  // Fail-first: the seeded regression is the same work spinning until it has cost ten times
+  // its own CPU time. Two runs are enough: a reference run that the host slows lowers the
+  // multiple, and ten times the work stays over the bound by the room stated above.
+  for (const { name, work, bound } of BUDGETS) {
+    const m = relativeCost(slowed(work, 10), { runs: 2 });
+    t.diagnostic(relativeReport(`${name}, 10x slower`, m, bound));
+    assert.ok(m.ratio > bound, `${name} 10x slower passed: ${relativeReport(name, m, bound)}`);
+  }
+});
+
+test('E058 pin: each budget passes on a host five times slower', (t) => {
+  // The property the budgets rest on: the same busy loop applied to the work and to both
+  // references alike (a host five times slower) leaves the multiple, the calibration's quotient
+  // and so the verdict alone.
+  for (const { name, work, bound } of BUDGETS) {
+    const m = relativeCost(slowed(work, 5), { reference: slowed(() => referenceStrings(), 5),
+      control: slowed(() => referenceNumbers(), 5), runs: 3 });
+    t.diagnostic(relativeReport(`${name}, host 5x slower`, m, bound));
+    assert.ok(m.ratio <= bound, `${name} on a 5x slower host: ${relativeReport(name, m, bound)}`);
+  }
+});
+
+/** A pin that expects the refusal measures twice, not CALIBRATION_ATTEMPTS times: one retry
+ *  proves the retry, and every further attempt of a refusal costs the same again. */
+const REFUSING_ATTEMPTS = 2;
+
+/** The refusal `measure` throws: a calibration named unreliable, after the `attempts` it was
+ *  given. */
+function refusal(measure, attempts) {
+  let error;
+  assert.throws(() => {
+    try {
+      measure();
+    } catch (e) {
+      error = e;
+      throw e;
+    }
+  }, new RegExp(`the calibration is unreliable after ${attempts} attempts`));
+  assert.equal(error.measurement.attempts, attempts);
+  assert.ok(error.faults.length > 0);
+  return error;
+}
+
+test('E058 pin: a starved reference fails closed, though the bare multiple would pass', (t) => {
+  // The case the self-check exists for (fail-first: before it, both measurements returned a
+  // multiple within the bound): the reference alone made ten times slower makes every work look
+  // ten times cheaper, the work as it is and the work made ten times slower alike. The quotient
+  // of the references moves ten times, out of its band, and nothing is judged.
+  const { name, work, bound } = BUDGETS[0];
+  const starved = slowed(() => referenceStrings(), 10);
+  for (const [what, fn] of [['as it is', work], ['ten times slower', slowed(work, 10)]]) {
+    const e = refusal(() => relativeCost(fn, { reference: starved, runs: 3,
+      attempts: REFUSING_ATTEMPTS }), REFUSING_ATTEMPTS);
+    t.diagnostic(`${name} ${what}, the reference starved: ${e.message}`);
+    assert.ok(e.measurement.ratio <= bound, `the bare multiple ${e.measurement.ratio} passes`);
+    assert.match(e.faults.join('; '), /quotient/);
+  }
+});
+
+test('E058 pin: the control alone made ten times slower fails closed', (t) => {
+  // The other reference's half of the same check (the reference alone is the starved case
+  // above, the work as it is): either one slowed alone moves the quotient ten times.
+  const { name, work } = BUDGETS[0];
+  const e = refusal(() => relativeCost(work, { control: slowed(() => referenceNumbers(), 10),
+    runs: 3, attempts: REFUSING_ATTEMPTS }), REFUSING_ATTEMPTS);
+  t.diagnostic(`${name}, the control 10x slower: ${e.message}`);
+  assert.match(e.faults.join('; '), /quotient/);
+});
+
+test('E058 pin: a reference whose units disagree fails closed', (t) => {
+  // Two of every three calls of the reference ten times slower, a majority, since the
+  // steadiness is a lower median and a minority of slow units reads as load: where a unit is
+  // one call, the lower median of any five consecutive units is a slow one (the steadiness
+  // fails); where it is two calls or more, every unit carries a slow call, at least 5.5 times
+  // a fast one, and the quotient leaves its band (at least 4.7 against 3.22 on every host
+  // measured, 5.5 times the smallest quotient seen, 0.86). Every other call slow was not
+  // enough (#438, F1): on the hosted runner's whole-millisecond clock the first attempt sized
+  // the unit at two calls (each one slow and one fast, the quotient 6.0, faulted) and the
+  // second, warmed up by a slow call, at one, whose five units fell fast, slow, fast, slow,
+  // fast: a lower median as fast as the fastest, and a multiple was returned.
+  let n = 0;
+  const slow = slowed(() => referenceStrings(), 10);
+  const jitter = () => (n++ % 3 !== 0 ? slow() : referenceStrings());
+  const e = refusal(() => relativeCost(BUDGETS[0].work, { reference: jitter, runs: 5,
+    attempts: REFUSING_ATTEMPTS }), REFUSING_ATTEMPTS);
+  t.diagnostic(`600 cables, the reference unsteady: ${e.message}`);
+});
+
+test('E058: the calibration\'s faults name the quotient and each unsteady reference', () => {
+  const mid = Math.sqrt(QUOTIENT_BAND[0] * QUOTIENT_BAND[1]);
+  const steady = { reference: 1, control: 1 };
+  assert.deepEqual(calibrationFaults({ quotient: mid, steadiness: steady }), []);
+  for (const q of QUOTIENT_BAND) {
+    assert.deepEqual(calibrationFaults({ quotient: q, steadiness: steady }), [], String(q));
+  }
+  for (const q of [QUOTIENT_BAND[0] * 0.99, QUOTIENT_BAND[1] * 1.01, NaN, Infinity]) {
+    const faults = calibrationFaults({ quotient: q, steadiness: steady });
+    assert.equal(faults.length, 1, String(q));
+    assert.match(faults[0], /quotient/);
+  }
+  assert.deepEqual(calibrationFaults({ quotient: mid,
+    steadiness: { reference: STEADINESS_LIMIT, control: STEADINESS_LIMIT } }), []);
+  for (const which of ['reference', 'control']) {
+    const faults = calibrationFaults({ quotient: mid,
+      steadiness: { ...steady, [which]: STEADINESS_LIMIT * 1.01 } });
+    assert.equal(faults.length, 1, which);
+    assert.match(faults[0], new RegExp(`the ${which}'s median unit`));
+  }
+});
+
+test('E058: the band holds every quotient measured and refuses a reference ten times off', () => {
+  const [least, most] = QUOTIENT_MEASURED;
+  assert.ok(Number.isFinite(least) && Number.isFinite(most) && least > 0, 'measured');
+  assert.ok(QUOTIENT_BAND[0] < least && most < QUOTIENT_BAND[1], 'the band holds what was seen');
+  assert.ok(10 * least > QUOTIENT_BAND[1], `ten times ${least} over ${QUOTIENT_BAND[1]}`);
+  assert.ok(most / 10 < QUOTIENT_BAND[0], `a tenth of ${most} under ${QUOTIENT_BAND[0]}`);
+  assert.ok(Number.isFinite(STEADINESS_MEASURED) && STEADINESS_MEASURED < STEADINESS_LIMIT);
+  assert.ok(STEADINESS_LIMIT < 10,
+    'a reference ten times off in a majority of its units is unsteady');
+});
+
+test('E058: each bound passes what was measured and fails it made ten times slower', () => {
+  for (const { key, bound } of BUDGETS) {
+    const [least, most] = MEASURED[key];
+    assert.ok(most < bound, `${key}: the largest multiple measured, ${most}, within ${bound}`);
+    assert.ok(10 * least > bound, `${key}: ten times the smallest, ${10 * least}, over ${bound}`);
+  }
 });
 
 // ---------------------------------------------------------------- cableParts (plan S4 a)
@@ -1524,32 +1736,6 @@ test('S8 fix: an error from clearLabels or cableSvg names the function called', 
     /^TypeError: cableSvg: a and b need/);
 });
 
-test('S8 fix: clearLabels on a bay of 200 labels stays under a millisecond a cable', (t) => {
-  // A bay-like panel: 20 columns of 10 jacks, each with its label printed under it.
-  const labels = [];
-  const jacks = [];
-  for (let c = 0; c < 20; c++) {
-    for (let r = 0; r < 10; r++) {
-      const j = { x: 30 + c * 60, y: 30 + r * 70 };
-      jacks.push(j);
-      labels.push({ x: j.x - 23, y: j.y + 25, width: 46, height: 12 });
-    }
-  }
-  const pairs = Array.from({ length: 200 }, (_, i) => [jacks[(i * 37) % 200],
-    jacks[(i * 71 + 13) % 200]]).filter(([p, q]) => p !== q);
-  pairs.push([{ x: 0, y: 0 }, { x: 600, y: 0 }]);
-  const box = { x: 0, y: 0, width: 1260, height: 760 };
-  const run = () => {
-    const t0 = performance.now();
-    for (const [p, q] of pairs) CABLE.clearLabels(p, q, labels, { box });
-    return (performance.now() - t0) / pairs.length;
-  };
-  run();
-  const best = Math.min(...Array.from({ length: 5 }, run));
-  t.diagnostic(`clearLabels: best of 5 runs ${best.toFixed(3)} ms a cable (bound 1 ms)`);
-  assert.ok(best < 1, `${best.toFixed(3)} ms a cable`);
-});
-
 test('S8 labels: clearLabels is pure and refuses what it cannot judge', () => {
   const a = { x: 0, y: 0 };
   const b = { x: 200, y: 0 };
@@ -1594,19 +1780,3 @@ test('S8: no literal opacity, alpha, shadow or colour in a cable with its rim an
     assert.deepEqual(intensityLiterals(src), [], 'cable.js source');
     assert.deepEqual(colourLiterals(src.replace(/="[^"]*"/g, '')), [], 'no colour in cable.js');
   });
-
-test('S8: 600 cables with their rims, sheens and plugs still render under 50 ms', (t) => {
-  const edges = Array.from({ length: 600 }, (_, i) => ({ id: `e${i}`,
-    from: { x: (i * 37) % 1900, y: (i * 53) % 1100 }, to: { x: (i * 71) % 1900 + 5,
-      y: (i * 29) % 1100 }, type: TYPES[i % 4], colour: TOKENS.cable.palette[i % 6] }));
-  const run1 = () => edges.reduce((n, e) => n + cableSvg({ ...e, tokens: TOKENS, plugs: true })
-    .length, 0);
-  run1();
-  const best = Math.min(...Array.from({ length: 5 }, () => {
-    const t0 = performance.now();
-    run1();
-    return performance.now() - t0;
-  }));
-  t.diagnostic(`600 cables with plugs: best of 5 runs ${best.toFixed(2)} ms (bound 50 ms)`);
-  assert.ok(best < 50, `${best.toFixed(2)} ms`);
-});

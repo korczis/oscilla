@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 307000,
+    "src/index.html": 307100,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 63000,
     "src/js/experiments/validate.js": 64000,
@@ -186,6 +186,12 @@
       "cap": 307000,
       "pr": 386,
       "reason": "merging main's next About station (the release line after the last one, with its Contracts entry) into lane A's Pro shell, 300 bytes past the 306 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 307100,
+      "pr": 386,
+      "reason": "the phone HOLD margin bound to the Playground (#386 Browser gate on linux: the page header's and the safety strip's phone classes under workspace === 'playground', the sentence's max-sm:-mt-1), 29 bytes past the 307 000 cap"
     }
   ]
 }
