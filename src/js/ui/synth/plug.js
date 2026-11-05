@@ -1,62 +1,61 @@
-// The shared synth-theme layer's patch plug (plan F013 entry 3, slices S6 and S6c; p2's core
+// The shared synth-theme layer's patch plug (plan F013 entry 3; the look audit's JC-3, p2's core
 // file): a pure string renderer for the plug at one end of a cable, seen from the front of the
-// panel, seated in a jack or held at the pointer. Every mark of it reaches at most 5.25 from its
-// centre, seated and held (dev-53's bound, 5.3: S6c), so it sits inside the inner edge of all four
-// of dev-53's port glyphs' rings (jack.js portGlyph at JACK_R 13, stroke 2: circle 12, square
-// 9.4, diamond 8.19, the trigger triangle 5.34, its inradius 6.34 less half the stroke), its soft
-// shadow too, and every port shape stays readable round it; far inside the nut (NUT_R 17), it
-// never covers the jack's label. It takes no pointer, so the jack's hit still wins: the
-// caller draws plugs in a layer above the jacks. Every paint is a token (project.visual-identity-
-// lock v3) and every shape sets its own stroke; no number here sets an opacity, an alpha or a
-// shadow (v4): the highlight's and the shadow's intensities are the classes opacity-hw-sheen and
-// opacity-hw-shadow. Nothing moves: a held plug is drawn again where the pointer is, its seated
-// size with its shadow lifted (it does not scale, so it keeps the footprint over a jack). Imports
-// nothing; cable.js re-exports plugSvg and plugState and keeps its refused cross clear of
+// panel, seated in a jack or held at the pointer. The plug COVERS the socket, as a real one does
+// (the announced owner default of 2026-11-04 21:55Z, not objected; it replaces dev-53's S6c bound
+// of 5.3, the 10.5 "eye" that floated inside the ring): a moulded boot, a cap of radius 13.5 on
+// the jack joined by its two tangents to a neck of radius 11 six units along the way the cable
+// leaves, in the cable's colour inside an outline of the cord's rim ink, with one strain-relief
+// band on the neck and one sheen band on the cap. Every mark, its lifted shadow included, stays
+// within PLUG.room (19.875): inside the jack's 44 px hit square, clear of a neighbour's plug a
+// jack pitch (44) away and above the jack's label. It takes no pointer, so the jack's hit still
+// wins: the caller draws plugs in a layer above the jacks. Every paint is a token (project.
+// visual-identity-lock v3) and every shape sets its own stroke; no number here sets an opacity,
+// an alpha or a shadow (v4): the bands' and the shadow's intensities are the classes
+// opacity-hw-sheen and opacity-hw-shadow. Nothing moves: a held plug is drawn again where the
+// pointer is, its seated size with its shadow lifted. Imports nothing; cable.js re-exports
+// plugSvg and plugState, takes the cord's ink from cordInk and keeps its refused cross clear of
 // PLUG.room, or leaves it out when told the target plug is refused (cableParts' `plug`).
 //
 //   PLUG                                          the plug's geometry, graph units
 //   plugSvg({ at, colour, tokens, state, direction })
 //                                                 '<g data-plug="" pointer-events="none">…</g>'
 //   plugState(state)                              { held, refused }, a misspelt state refused
+//   cordInk(tokens)                               the ink of a cord's rim and a plug's outline
 
 /** The plug's geometry, graph units (1 = 1 CSS px at zoom 1). */
 export const PLUG = Object.freeze({
-  /** The sleeve's radius, the farthest any mark but the soft shadow reaches: diameter 10.5, under
-   *  dev-53's 5.3 and the trigger triangle's inner stroke edge (5.34). */
-  sleeve: 5.25,
-  /** The boot ring's width: as wide as the jack's own ring stroke. */
-  ring: 2,
-  /** The rim of the sleeve outside the boot ring, so the ring borders only the sleeve and never
-   *  the plate or the jack body under the plug. */
-  rim: 0.75,
+  /** The cap's radius, on the jack: over the socket ring (JACK_R 13) and JC-4's bushing (9.5). */
+  boot: 13.5,
+  /** The neck's radius, where the cord leaves the boot. */
+  neck: 11,
+  /** How far along the cord the neck's centre sits from the jack's. */
+  reach: 6,
+  /** The outline's width: the cord's rim (cable.js CABLE_EDGE). */
+  edge: 0.75,
   /** A held plug's scale about its centre: 1, so a plug held over a jack keeps the seated
-   *  footprint (S6c); the lifted shadow tells held from seated. */
+   *  footprint; the lifted shadow tells held from seated. */
   held: 1,
-  /** The soft shadow's drop: seated, and lifted while held; at 2.5 the shadow still clears the
-   *  triangle's base (inner edge 8.1 below the centre: 5.25 + 2.5 = 7.75). */
+  /** The soft shadow's drop: seated, and lifted while held. */
   lift: Object.freeze({ seated: 1, held: 2.5 }),
   /** The most any mark of a plug reaches from its centre, seated or held, the soft shadow
-   *  included (5.25 + 2.5): the room the cable's refused cross keeps clear. */
-  room: 7.75,
+   *  included (the neck's far edge 6 + 11 + 0.375, and the lift 2.5): the room the cable's
+   *  refused cross and its type bands keep clear. */
+  room: 19.875,
 });
 
-/** The three grip ribs: angles off the leaving direction (radians), their radial span inside the
- *  boot ring (2.5 to 4.5) and their width. */
-const RIBS = Object.freeze({ angles: [-0.6, 0, 0.6], inner: 2.85, outer: 4.15, width: 0.75 });
-/** The tip's outline and the centre's dot, the sleeve showing between them and the ring. */
-const TIP = Object.freeze({ r: 1.4, width: 0.75, centre: 0.6 });
-/** The highlight: an arc on the boot ring, lit from the upper left (degrees, y down). */
-const SHEEN = Object.freeze({ r: 3.5, from: 200, to: 260, width: 0.75 });
-/** The refused cross: its half arm, its underlay and its stroke, inside the sleeve (2.5 × √2 +
- *  1.25 = 4.79). */
-const CROSS = Object.freeze({ arm: 2.5, under: 2.5, width: 1.75 });
+/** The strain-relief band: an arc about the neck's centre, facing the cord (radians each side). */
+const RELIEF = Object.freeze({ r: 8.5, half: 0.9, width: 2 });
+/** The sheen band: an arc on the cap, lit from the upper left (degrees, y down). */
+const SHEEN = Object.freeze({ r: 10.5, from: 200, to: 260, width: 1.5 });
+/** The refused cross: its half arm, its underlay and its stroke, on the cap (4 × √2 + 1.5). */
+const CROSS = Object.freeze({ arm: 4, under: 3, width: 2 });
 const DOWN = Object.freeze({ x: 0, y: 1 });
 const SEATED = Object.freeze({ held: false, refused: false });
 const HELD = Object.freeze({ held: true, refused: false });
 const REFUSED = Object.freeze({ held: false, refused: true });
-/** The intensity class of the highlight: the hw-sheen key of tailwind.config.cjs. */
+/** The intensity class of the sheen band: the hw-sheen key of tailwind.config.cjs. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
-/** The intensity class of the soft shadow: the hw-shadow key of tailwind.config.cjs. */
+/** The intensity class of the soft shadow and the relief: the hw-shadow key. */
 const SHADOW_CLASS = 'opacity-hw-shadow';
 
 const finite = (p) => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
@@ -110,6 +109,27 @@ export function plugState(state, who = 'plugSvg', option = 'state') {
   return Object.freeze({ held: Boolean(state.held), refused: Boolean(state.refused) });
 }
 
+/** The WCAG luminance of a token value written in hex (tokens.css), else NaN (var(), …). */
+function luminanceOf(value) {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(value).trim());
+  if (!m) return NaN;
+  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** The ink of a cord's rim, its type bands and a plug's outline (S8): the darker of
+ *  tokens.cable.shadow and tokens.cable.sheen (dark --osc-bg, light --osc-text; each palette
+ *  colour 3:1 on it), else cable.shadow, else currentColor. A choice of token only. */
+export function cordInk(tokens) {
+  const { shadow, sheen } = (tokens && tokens.cable) || {};
+  const ls = luminanceOf(shadow);
+  const lt = luminanceOf(sheen);
+  if (shadow && sheen && Number.isFinite(ls) && Number.isFinite(lt) && lt < ls) return sheen;
+  return shadow || 'currentColor';
+}
+
 /** The leaving direction as a unit vector; down when none is given. */
 function unitOf(direction) {
   if (direction === undefined) return DOWN;
@@ -124,32 +144,25 @@ function unitOf(direction) {
 
 /**
  * A plug at `at` (the jack's centre, or the pointer while held), from the front: a soft shadow
- * (tokens.cable.shadow at the hw-shadow intensity, PLUG.lift down); the sleeve, diameter 10.5 in
- * surface-1 (tokens.surface.plateLo; tokens.jack.body, surface-0, in a set without it); the boot
- * ring, 2 wide in the cable's `colour` (the caller's palette token; none reads currentColor),
- * inside a rim of the sleeve PLUG.rim (0.75) wide, so the ring borders only the sleeve and every
- * palette colour holds 3:1 on what it borders in both themes, over the jack body or any plate
- * (on the light plate --osc-green is 2.71:1 on surface-3 but 3.28:1 on the surface-1 sleeve);
- * a grip collar of three ribs across the ring, grooves cut to the sleeve (its token), turned to
- * `direction`, the way the cable leaves the plug (cableDirections(from, to) gives both ends',
- * along the ports in the port-tangent mode; down when none is given); the tip's outline and the
- * centre in tokens.control.edge, --osc-text-dim (tokens.jack.ring in a set without it), 3:1 on
- * the sleeve; and a highlight arc on the face in tokens.cable.sheen at the hw-sheen intensity,
- * lit from the upper left whatever the direction. A panel's narrower set (jack, cable,
- * surface.edge: dev-53's layerTokens) thus draws every part from a token.
+ * of the boot's shape (tokens.cable.shadow at the hw-shadow intensity, PLUG.lift down); the boot,
+ * the cap (PLUG.boot) about `at` and the neck (PLUG.neck) PLUG.reach along `direction`, the way
+ * the cable leaves (cableDirections(from, to) gives both ends'; down when none is given), joined
+ * by their outer tangents, filled with the cable's `colour` (the caller's palette token; none
+ * reads currentColor) inside a PLUG.edge outline of cordInk(tokens), on which every palette
+ * colour holds 3:1 in both themes; a strain-relief band, an arc about the neck facing the cord,
+ * in tokens.cable.shadow at the hw-shadow intensity; and a sheen band, an arc on the cap lit
+ * from the upper left whatever the direction, in tokens.cable.sheen at the hw-sheen intensity.
+ * No tip, dot or rib: from the front a plug shows its boot.
  *
  * `state` is 'seated' (the default), 'held', 'refused' or { held, refused } (plugState; any
- * other shape refused). Held draws the plug PLUG.held (1: its seated size, so it keeps the
- * footprint) times as large about `at` with the shadow lifted to PLUG.lift.held (2.5) and marks
- * the group data-held. Refused marks it data-refused
- * and draws a cross on the sleeve in tokens.jack.refuse over a tokens.cable.shadow underlay; the
- * cross stays inside the sleeve. One refusal shows one cross: a caller drawing a plug at a
- * cable's target end passes the plug's state to the cable too (cableParts' `plug`), and the
- * cable leaves its own cross out when that plug is refused (two separate calls cannot see each
- * other: told nothing, the cable draws its cross). Otherwise the cable's cross sits CROSS_BACK
- * from the target end, clear of PLUG.room at both ends of a cable between two jacks (ends a
- * pitch of 44 or more apart). The group takes no pointer and nothing in it can be hit or
- * focused: the jack under it keeps its hit and its keys.
+ * other shape refused). Held keeps the seated size (PLUG.held 1) with the shadow lifted to
+ * PLUG.lift.held (2.5) and marks the group data-held. Refused marks it data-refused and draws a
+ * cross on the cap in tokens.jack.refuse over a tokens.cable.shadow underlay. One refusal shows
+ * one cross: a caller drawing a plug at a cable's target end passes the plug's state to the
+ * cable too (cableParts' `plug`), and the cable leaves its own cross out when that plug is
+ * refused (told nothing, the cable draws its cross, CROSS_BACK from the target, clear of
+ * PLUG.room at both ends of a cable whose ends are 2 × CROSS_BACK or more apart). The group takes
+ * no pointer and nothing in it can be hit or focused: the jack under it keeps its hit and keys.
  */
 export function plugSvg({ at, colour, tokens, state, direction } = {}) {
   if (!finite(at)) throw new TypeError('plugSvg: at needs finite x and y.');
@@ -160,48 +173,48 @@ export function plugSvg({ at, colour, tokens, state, direction } = {}) {
   const d = unitOf(direction);
   const k = st.held ? PLUG.held : 1;
   const s = (x) => num(x * k);
-  const pt = (angle, r) => ({ x: num(at.x + r * k * Math.cos(angle)),
-    y: num(at.y + r * k * Math.sin(angle)) });
-  const c = `cx="${num(at.x)}" cy="${num(at.y)}"`;
-  const paint = (x) => esc(x || 'currentColor');
-  // A panel's adapter may pass the narrower set (jack, cable, surface.edge; dev-53's
-  // layerTokens): the sleeve and the tip then take the jack's roles, as the plug did before S6.
-  const sleeve = paint(tokens.surface.plateLo || tokens.jack.body);
-  const edge = paint((tokens.control && tokens.control.edge) || tokens.jack.ring);
-  const line = (p, q, stroke, width, extra = '') => `<line${extra} x1="${p.x}" y1="${p.y}" `
-    + `x2="${q.x}" y2="${q.y}" stroke="${stroke}" stroke-width="${s(width)}" `;
+  // A point at radius r and angle a (radians) about c, in the frame of d (a = 0 along d, rising
+  // the way SVG's sweep flag 1 turns).
   const lead = Math.atan2(d.y, d.x);
-  const ribs = RIBS.angles.map((off) => line(pt(lead + off, RIBS.inner),
-    pt(lead + off, RIBS.outer), sleeve, RIBS.width, ' data-rib=""')
-    + 'stroke-linecap="butt"/>').join('');
-  const rad = (deg) => (deg * Math.PI) / 180;
-  const a0 = pt(rad(SHEEN.from), SHEEN.r);
-  const a1 = pt(rad(SHEEN.to), SHEEN.r);
+  const on = (c, r, a) => ({ x: num(c.x + r * k * Math.cos(a + lead)),
+    y: num(c.y + r * k * Math.sin(a + lead)) });
+  const xy = (p) => `${p.x} ${p.y}`;
+  const paint = (x) => esc(x || 'currentColor');
+  const neck = { x: at.x + PLUG.reach * k * d.x, y: at.y + PLUG.reach * k * d.y };
+  // The outer tangents touch both circles at ±t off the axis: cos t = (boot - neck) / reach.
+  const t = Math.acos((PLUG.boot - PLUG.neck) / PLUG.reach);
+  const bootD = `M ${xy(on(at, PLUG.boot, t))} A ${s(PLUG.boot)} ${s(PLUG.boot)} 0 1 1 `
+    + `${xy(on(at, PLUG.boot, -t))} L ${xy(on(neck, PLUG.neck, -t))} A ${s(PLUG.neck)} `
+    + `${s(PLUG.neck)} 0 0 1 ${xy(on(neck, PLUG.neck, t))} Z`;
+  const arc = (c, r, a0, a1) => `M ${xy(on(c, r, a0))} A ${s(r)} ${s(r)} 0 0 1 `
+    + `${xy(on(c, r, a1))}`;
+  // The sheen is fixed to the screen, not to the cord: its angles taken back into d's frame.
+  const rad = (deg) => (deg * Math.PI) / 180 - lead;
+  const line = (p, q, stroke, width) => `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" `
+    + `stroke="${stroke}" stroke-width="${s(width)}" stroke-linecap="round"/>`;
   let cross = '';
   if (st.refused) {
     const r = CROSS.arm;
     const arms = [[[-r, -r], [r, r]], [[-r, r], [r, -r]]].map((l) => l.map(([x, y]) => ({
       x: num(at.x + x * k), y: num(at.y + y * k) })));
-    const draw = (stroke, width) => arms.map(([p, q]) => line(p, q, stroke, width)
-      + 'stroke-linecap="round"/>').join('');
+    const draw = (stroke, width) => arms.map(([p, q]) => line(p, q, stroke, width)).join('');
     cross = `<g data-cross="">${draw(paint(tokens.cable.shadow), CROSS.under)}`
       + `${draw(paint(tokens.jack.refuse), CROSS.width)}</g>`;
   }
   const flags = (st.held ? ' data-held=""' : '') + (st.refused ? ' data-refused=""' : '');
+  const relief = arc(neck, RELIEF.r, -RELIEF.half, RELIEF.half);
+  const sheen = arc(at, SHEEN.r, rad(SHEEN.from), rad(SHEEN.to));
   return `<g data-plug="" pointer-events="none"${flags}>`
-    + `<circle data-shadow="" class="${SHADOW_CLASS}" ${c} r="${s(PLUG.sleeve)}" `
+    + `<path data-shadow="" class="${SHADOW_CLASS}" d="${bootD}" `
     + `fill="${paint(tokens.cable.shadow)}" stroke="none" `
     + `transform="translate(0 ${st.held ? PLUG.lift.held : PLUG.lift.seated})"/>`
-    + `<circle data-sleeve="" ${c} r="${s(PLUG.sleeve)}" fill="${sleeve}" `
-    + 'stroke="none"/>'
-    + `<circle data-ring="" ${c} r="${s(PLUG.sleeve - PLUG.rim - PLUG.ring / 2)}" fill="none" `
-    + `stroke="${paint(colour)}" stroke-width="${s(PLUG.ring)}"/>`
-    + `<g data-grip="">${ribs}</g>`
-    + `<circle data-tip="" ${c} r="${s(TIP.r)}" fill="none" stroke="${edge}" `
-    + `stroke-width="${s(TIP.width)}"/>`
-    + `<circle data-centre="" ${c} r="${s(TIP.centre)}" fill="${edge}" stroke="none"/>`
-    + `<path data-sheen="" class="${SHEEN_CLASS}" d="M ${a0.x} ${a0.y} A ${s(SHEEN.r)} `
-    + `${s(SHEEN.r)} 0 0 1 ${a1.x} ${a1.y}" fill="none" stroke="${paint(tokens.cable.sheen)}" `
-    + `stroke-width="${s(SHEEN.width)}" stroke-linecap="round"/>`
+    + `<path data-boot="" d="${bootD}" fill="${paint(colour)}" stroke="${paint(cordInk(tokens))}" `
+    + `stroke-width="${s(PLUG.edge)}" stroke-linejoin="round"/>`
+    + `<path data-relief="" class="${SHADOW_CLASS}" d="${relief}" fill="none" `
+    + `stroke="${paint(tokens.cable.shadow)}" stroke-width="${s(RELIEF.width)}" `
+    + 'stroke-linecap="butt"/>'
+    + `<path data-sheen="" class="${SHEEN_CLASS}" d="${sheen}" fill="none" `
+    + `stroke="${paint(tokens.cable.sheen)}" stroke-width="${s(SHEEN.width)}" `
+    + 'stroke-linecap="round"/>'
     + `${cross}</g>`;
 }

@@ -72,8 +72,13 @@ test('a cable: shadow, visible stroke, hidden hit path and sheen, each intensity
     assert.match(g[0], /<path data-stroke=""/);
     assert.match(g[0], /<path data-sheen="" class="opacity-hw-sheen"/);
   }
+  // JC-6: a cord is solid, its signal type a band pattern near each plug (CONTROL: two bands).
   const control = svg.match(/<g data-cable="k1".*?<path data-stroke=""[^>]*>/s)[0];
-  assert.match(control, /stroke-dasharray="9 6"/, 'a control cable is dashed');
+  assert.doesNotMatch(control, /stroke-dasharray/, 'a control cord is solid');
+  const bands = svg.match(/<g data-cable="k1".*?<g data-bands="CONTROL"[^>]*>(.*?)<\/g>/s);
+  assert.ok(bands, 'with its type\'s bands');
+  assert.equal((bands[1].match(/<path /g) || []).length, 2, 'a path at each end');
+  assert.equal((bands[1].match(/M /g) || []).length, 4, 'two bands near each plug');
 });
 
 test('every shape of the bay sets its own stroke', () => {

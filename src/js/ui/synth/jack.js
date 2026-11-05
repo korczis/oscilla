@@ -27,7 +27,7 @@ const INNER_R = 5;
 /** The nut's circumradius: a hexagon just outside the socket ring. */
 const NUT_R = 17;
 
-import { cableSvg, plugSvg } from './cable.js';
+import { cableDirections, cableSvg, plugSvg } from './cable.js';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -81,7 +81,10 @@ export function layerTokens(t) {
 }
 
 export function patchCord({ id, from, to, type, colour, selected = false, tokens, box }) {
+  // Each plug's boot leaves the way its cord does (JC-3): the plug covers the socket.
+  const dirs = cableDirections(from, to, { box });
   return { cable: cableSvg({ id, from, to, type, colour, state: { selected }, tokens, box,
     sheen: true }),
-  plugs: plugSvg({ at: from, colour, tokens }) + plugSvg({ at: to, colour, tokens }) };
+  plugs: plugSvg({ at: from, colour, tokens, direction: dirs.from })
+    + plugSvg({ at: to, colour, tokens, direction: dirs.to }) };
 }

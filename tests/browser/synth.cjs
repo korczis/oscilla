@@ -1512,7 +1512,7 @@ function defineChecks() {
         .getBoundingClientRect();
       const svg = document.querySelector('[data-osc="synth.bay.svg"]');
       const ends = [...svg.querySelectorAll('[data-jack]')].map((el) => [el, el])
-        .concat([...svg.querySelectorAll('[data-plug] circle:first-child')]
+        .concat([...svg.querySelectorAll('[data-plug] > :first-child')]
           .map((el) => [el, null]));
       // The scroller: the nearest ancestor that scrolls, else the page. An explicit scroll, as
       // Firefox does not scroll an SVG <g> by scrollIntoView.

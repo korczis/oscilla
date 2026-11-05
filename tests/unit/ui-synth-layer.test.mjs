@@ -11,6 +11,7 @@ const plate = await import('../../src/js/ui/synth/plate.js').catch(() => ({}));
 const label = await import('../../src/js/ui/synth/label.js').catch(() => ({}));
 const jack = await import('../../src/js/ui/synth/jack.js').catch(() => ({}));
 const display = await import('../../src/js/ui/synth/display.js').catch(() => ({}));
+const cable = await import('../../src/js/ui/synth/cable.js').catch(() => ({}));
 
 const T = { plateHi: '#t1', plateLo: '#t2', edge: '#t3', cap: '#t4', capHi: '#t5', dim: '#t6',
   track: '#t7', focus: '#t8', jack: '#t9', label: '#ta', jackRing: '#tb', normal: '#tc',
@@ -60,6 +61,11 @@ test('a jack: typed ring, inner glyph, hidden 44 px hit square, focus ring; a nu
     type: 'CONTROL', colour: '#c1', tokens: lt });
   assert.match(cord.cable, /data-sheen="" class="opacity-hw-sheen"/);
   assert.equal((cord.plugs.match(/data-plug=""/g) || []).length, 2);
+  // JC-3: each plug's boot leaves the way its cord does, as cableSvg({ plugs: true }) draws it.
+  const ends = cable.cableSvg({ id: 'c1', from: { x: 0, y: 0 }, to: { x: 100, y: 0 },
+    type: 'CONTROL', colour: '#c1', tokens: lt, plugs: true });
+  assert.equal(cord.plugs, ends.slice(ends.indexOf('<g data-plug=""'), -'</g>'.length),
+    'the bay\'s plugs are the cord\'s own, turned along it');
 });
 
 test('a readout window says it is computed and refuses anything else', () => {

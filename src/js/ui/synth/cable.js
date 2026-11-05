@@ -1,18 +1,22 @@
 // The shared synth-theme layer's patch cable (plan F013; the seam agreed on 2026-11-02): pure
-// string renderers for one cable and one plug, from two points in the caller's coordinates (the
-// bay's or a graph's), so a node drag recomputes only its own edges and nothing reads a layout. The
-// signal type is the dash pattern, never colour alone, and a dash keeps its gaps at every width
-// (butt caps); a refused cable is marked by a shape as well as the refuse colour. The colour is
-// the caller's palette token (tokens.cable.palette[sourceModule % 6]); every other paint is a
-// token too (project.visual-identity-lock v3), and every shape sets its own stroke. No number
-// here sets an opacity, an alpha or a shadow (v4): the sheen's and the shadow's intensities are
-// the hw-sheen and hw-shadow Tailwind keys (classes opacity-hw-sheen and opacity-hw-shadow), and
-// the hit path is hidden rather than transparent. Imports only the plug (plug.js, whose
-// plugSvg and plugState it re-exports), so its refused cross keeps clear of the room a plug
-// takes, or is left to a refused plug the caller names (`plug`). S8 (the SYN review of W1, V1
-// and V2): a cord's weight, rim, sheen and hang, its plugs (`plugs`), and clearLabels.
+// string renderers for one cable, from two points in the caller's coordinates (the bay's or a
+// graph's), so a node drag recomputes only its own edges and nothing reads a layout. A cord is
+// solid and its signal type a pattern of heat-shrink bands near each plug (CABLE_BANDS, JC-6:
+// the announced owner default of 2026-11-04 21:55Z, not objected), never colour alone; a
+// caller's own dash (a graph edge's Signal Path grammar) keeps its gaps at every width (butt
+// caps); a refused cable is marked by a shape as well as the refuse colour. The colour is the
+// caller's palette token (tokens.cable.palette[sourceModule % 6]); every other paint is a token
+// (project.visual-identity-lock v3), and every shape sets its own stroke. No number here sets an
+// opacity, an alpha or a shadow (v4): the sheen's, the shade's and the shadow's intensities are
+// the classes opacity-hw-sheen and opacity-hw-shadow, and the hit path is hidden rather than
+// transparent. Imports the plug (plug.js: plugSvg and plugState re-exported, cordInk for the rim
+// and bands), so its cross and bands keep clear of a plug's room, or the cross is left to a
+// refused plug the caller names (`plug`); and the hang (hang.js, its constants re-exported). S8
+// (the SYN review of W1): a cord's rim, sheen and hang, its plugs (`plugs`), and clearLabels;
+// JC-13: its weight, shade and sheen; JC-14: a vertical run's belly (hang.js).
 //
-//   CABLE_DASH                              the pattern of each signal type
+//   CABLE_BANDS, CABLE_BAND_AT              the band pattern of each signal type, and where
+//   CABLE_DASH                              the Signal Path dash a caller may pass as `dash`
 //   cableCurve(a, b, { slack, box, tangents, sag })
 //                                           'M … C …', a hanging cable from a to b, or with
 //                                           tangents a graph edge along its two ports
@@ -35,31 +39,36 @@
 //                                           (plug.js)
 //   plugState(state)                        { held, refused } of a plug state (plug.js)
 
-import { PLUG, plugState, plugSvg } from './plug.js';
+import { PLUG, cordInk, plugState, plugSvg } from './plug.js';
+import { CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_SLACK, bottomOf, controls, hangingSag, sagRoom }
+  from './hang.js';
 
 export { PLUG, plugState, plugSvg } from './plug.js';
+export { CABLE_BOW, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_SLACK } from './hang.js';
 
-/** The dash pattern per signal type (PORT_VISUALS: solid, dashed, pulse, dash-dot). */
+/** The heat-shrink bands of each signal type near each plug, graph units, a band then a gap in
+ *  turn (JC-6): AUDIO one long, CONTROL two, TRIGGER three short, ANALYSIS a long and a short.
+ *  They differ by count or by their lengths, never by colour alone. */
+export const CABLE_BANDS = Object.freeze({
+  AUDIO: Object.freeze([6]), CONTROL: Object.freeze([2.5, 2, 2.5]),
+  TRIGGER: Object.freeze([1.25, 1.5, 1.25, 1.5, 1.25]), ANALYSIS: Object.freeze([4, 1.5, 1.5]),
+});
+/** How far from a plug's centre its cord's first band starts: just past PLUG.room (19.875). */
+export const CABLE_BAND_AT = 20;
+/** The Signal Path dash of each type (PORT_VISUALS: solid, dashed, pulse, dash-dot): a Studio
+ *  edge's grammar, which a caller passes as `dash`; a cord draws solid with its bands. */
 export const CABLE_DASH = Object.freeze({
   AUDIO: null, CONTROL: '9 6', TRIGGER: '2 6', ANALYSIS: '6 3 2 3',
 });
-/** A refused connection of a solid type still shows by pattern, not by colour alone. */
+/** A refused connection still shows by pattern, not by colour alone. */
 export const REFUSED_DASH = '4 4';
-/** The least a cable hangs below its chord's midpoint, graph units, however short (S8: 12). */
-export const CABLE_MIN_SAG = 20;
-/** The most a cable hangs below its chord's midpoint, graph units, however long (S8: 60). */
-export const CABLE_MAX_SAG = 90;
-/** The default slack, the sag as a part of the distance: a level 300 hangs 90 (S8: 0.25). */
-export const CABLE_SLACK = 0.3;
-/** The stroke at rest (S8): in its rim 7.5, 0.29 of the jack ring (JACK_R 13) across, and in
- *  every state narrower than its plug's 10.5, as a real cord is. */
-export const CABLE_WIDTH = 6;
+/** The stroke at rest (JC-13; S8: 6): in its rim 10, 0.38 of the jack ring (JACK_R 13) across,
+ *  and in every state narrower than its plug's neck (22), as a real cord is. */
+export const CABLE_WIDTH = 8.5;
 /** The darker rim on each side of the stroke (S8). */
 export const CABLE_EDGE = 0.75;
 /** The hit path's width in screen px at every zoom (vector-effect="non-scaling-stroke"). */
 export const CABLE_HIT_PX = 44;
-/** A near-vertical cable's sideways bow (to +x) at its middle, as a part of min(sag, rise). */
-export const CABLE_BOW = 0.3;
 /** The port-tangent mode's reach, graph units: the least a cable runs straight out of a port
  *  before it turns, and the shortest blend from the forward curve into the full loop. */
 export const CABLE_REACH = 40;
@@ -70,21 +79,24 @@ const REACH_PART = 0.4;
 /** Half the arm of the refused cross, graph units, and its stroke width. */
 const CROSS = Object.freeze({ arm: 5, width: 2, under: 4.5 });
 /** How far back from the target end the refused cross sits, graph units: the room a plug takes
- *  seated or held (PLUG.room, 7.75) plus the cross's reach (arm × √2 and half its underlay) and
- *  1, so the cross never covers the plug nor the plug's own refused cross. */
+ *  seated or held (PLUG.room, 19.875) plus the cross's reach (arm × √2 and half its underlay)
+ *  and 1, so the cross never covers the target plug nor its own refused cross (30.2). */
 const CROSS_BACK = PLUG.room + CROSS.arm * Math.SQRT2 + CROSS.under / 2 + 1;
-/** The sheen's offset up and left, screen px. */
-const SHEEN_PX = 0.7;
+/** The sheen's and the shade's offsets as parts of the stroke's width (JC-13): the sheen up and
+ *  left, the shade down and right, each inside the cord at its width (sheen 0.3, shade 0.25). */
+const LIGHT = Object.freeze({ sheen: -0.22, shade: 0.25, sheenWidth: 0.3, shadeWidth: 0.25 });
+/** How far a band stands proud of the rim on each side, graph units (heat-shrink is thicker). */
+const BAND_PROUD = 0.5;
 /** The shadow underlay's drop, screen px: at rest, and lifted while the cable is dragged. */
-const SHADOW_PX = Object.freeze({ rest: 1, lifted: 3 });
+const SHADOW_PX = Object.freeze({ rest: 3, lifted: 6 });
 /** How much wider than the stroke the shadow underlay is, graph units. */
-const SHADOW_SPREAD = 3;
+const SHADOW_SPREAD = 2;
 /** The intensity class of the sheen: the hw-sheen key of tailwind.config.cjs. */
 const SHEEN_CLASS = 'opacity-hw-sheen';
 /** The intensity class of the soft shadow: the hw-shadow key of tailwind.config.cjs. */
 const SHADOW_CLASS = 'opacity-hw-shadow';
-/** The stroke at rest, hovered and selected: in the rim 7.5, 8.75 and 10. */
-const WIDTH = Object.freeze({ base: CABLE_WIDTH, hover: 7.25, selected: 8.5 });
+/** The stroke at rest, hovered and selected (JC-13): in the rim 10, 11 and 12.5. */
+const WIDTH = Object.freeze({ base: CABLE_WIDTH, hover: 9.5, selected: 11 });
 
 const finite = (p) => Boolean(p) && Number.isFinite(p.x) && Number.isFinite(p.y);
 const num = (x) => {
@@ -93,68 +105,6 @@ const num = (x) => {
 };
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
   .replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-/**
- * The most sag that keeps the curve above `bottom`. Below the chord the cubic is
- * y(t) = a.y + dy t + 4 sag t (1 - t); while |dy| <= 4 sag its lowest point is
- * mid + sag + dy² / (16 sag), so the largest sag with that at most bottom is
- * (R + √(R² - dy²/4)) / 2, R = bottom - mid. With an end at or below the bottom, the sag that
- * puts the lowest point on the lower end, |dy| / 4, so the cable never hangs below its end.
- */
-function sagRoom(a, b, bottom) {
-  const dy = b.y - a.y;
-  const r = bottom - (a.y + b.y) / 2;
-  const half = Math.abs(dy) / 2;
-  if (r <= half) return half / 2;
-  return (r + Math.sqrt(r * r - half * half)) / 2;
-}
-
-/** The bottom edge of a viewBox { x, y, width, height }, or Infinity without one. */
-function bottomOf(box) {
-  if (box === undefined || box === null) return Infinity;
-  const ok = ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(box[k]));
-  if (!ok || box.height < 0) {
-    throw new RangeError('cableCurve: box must be a viewBox { x, y, width, height } of finite '
-      + 'numbers with a height of 0 or more.');
-  }
-  return box.y + box.height;
-}
-
-/** The sag of the hanging cable from a to b: `told` if given, else slack × the distance in
- *  [CABLE_MIN_SAG, CABLE_MAX_SAG]; either way at most the room above the box's bottom. */
-function hangingSag(a, b, slack, box, told) {
-  if (!finite(a) || !finite(b)) throw new TypeError('cableCurve: a and b need finite x and y.');
-  if (!(Number.isFinite(slack) && slack >= 0)) {
-    throw new RangeError(`cableCurve: slack must be a finite number of 0 or more, not ${slack}.`);
-  }
-  if (told !== undefined && !(typeof told === 'number' && Number.isFinite(told) && told >= 0)) {
-    throw new RangeError(`cableCurve: sag must be a finite number of 0 or more, not ${told}.`);
-  }
-  const room = sagRoom(a, b, bottomOf(box));
-  const want = told !== undefined ? told
-    : Math.min(CABLE_MAX_SAG, Math.max(CABLE_MIN_SAG, slack * Math.hypot(b.x - a.x, b.y - a.y)));
-  return Math.max(0, Math.min(want, room));
-}
-
-/** The two control points of the hanging cubic from a to b (see cableCurve). */
-function controls(a, b, slack, box, told) {
-  const sag = hangingSag(a, b, slack, box, told);
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const h = (sag * 4) / 3;
-  // A near-vertical cable bows sideways, always to the right (+x), so it still reads as
-  // hanging; the bow fades to nothing as the cable leans to |dx| = sag. One fixed side keeps the
-  // curve continuous as an end is dragged across the vertical (a side taken from the sign of dx
-  // would jump from one side to the other there, where the bow is largest), and it does not
-  // depend on the order of a and b, so reversed ends draw the same curve.
-  const lean = Math.abs(dx);
-  const bow = lean < sag && sag > 0
-    ? CABLE_BOW * Math.min(sag, Math.abs(dy)) * (1 - lean / sag) * (4 / 3) : 0;
-  return [
-    { x: num((2 * a.x + b.x) / 3 + bow), y: num((2 * a.y + b.y) / 3 + h) },
-    { x: num((a.x + 2 * b.x) / 3 + bow), y: num((a.y + 2 * b.y) / 3 + h) },
-  ];
-}
 
 const lerp = (p, q, k) => ({ x: p.x + (q.x - p.x) * k, y: p.y + (q.y - p.y) * k });
 const along = (p, v, k) => ({ x: p.x + v.x * k, y: p.y + v.y * k });
@@ -258,9 +208,9 @@ function cubics(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
  * curve's middle hangs `sag` below the chord's midpoint, down the screen. The sag is slack ×
  * the distance in [CABLE_MIN_SAG, CABLE_MAX_SAG], lessened so the curve never hangs below the
  * bottom of a viewBox `box` (the box wins over the minimum, down to straight). A cable steeper
- * than its sag bows sideways (CABLE_BOW), so a vertical one still hangs. Reversed ends draw the
- * same curve; a == b is a finite droop. A given `sag` (finite, 0 or more; a frame of settle) is
- * drawn instead of the slack's, the box still winning.
+ * than its sag bellies sideways (hang.js controls, JC-14), so a vertical run hangs as a cable
+ * does. Reversed ends draw the same curve; a == b is a finite droop. A given `sag` (finite, 0
+ * or more; a frame of settle) is drawn instead of the slack's, the box still winning.
  *
  * With `tangents: { from, to }`, each the way its port faces out of its node (an output on a
  * right edge to an input on a left edge: { from: { x: 1, y: 0 }, to: { x: -1, y: 0 } }; any
@@ -270,50 +220,82 @@ function cubics(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
  * and `sag` are refused beside `tangents` (a TypeError); `slack` is ignored there.
  */
 export function cableCurve(a, b, { slack = CABLE_SLACK, box, tangents, sag } = {}) {
-  const segs = cubics(a, b, { slack, box, tangents, sag });
-  return `M ${a.x} ${a.y}`
-    + segs.map(([, c1, c2, e]) => ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${e.x} ${e.y}`).join('');
+  return pathOf(cubics(a, b, { slack, box, tangents, sag }));
 }
 
+/** The path data of cubics from their first point. */
+const pathOf = (segs) => `M ${segs[0][0].x} ${segs[0][0].y}`
+  + segs.map(([, c1, c2, e]) => ` C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${e.x} ${e.y}`).join('');
+
 /**
- * The point of a cable that lies CROSS_BACK from its end b, walking back from b: the first
- * sample (1/64 steps of each cubic) that far away, refined by bisection. A cable too short to
- * reach that far takes its point farthest from b.
+ * The point of the cubics `segs` that lies `far` from an end (`fromEnd`: the first, else the
+ * last), walking in from that end: the first sample (1/64 steps of each cubic) that far away,
+ * refined by regula falsi (Illinois) to 1e-9 of the distance, else to its bracket. A cable too
+ * short to reach that far takes its point farthest from that end.
  */
-function nearTarget(a, b, how) {
-  const segs = cubics(a, b, how);
+function awayFrom(segs, far, fromEnd = false) {
+  const end = segs.length;
+  // t counts in from the end judged (t = end is that end), so one walk serves both ends.
   const p = (t) => {
-    const i = Math.min(segs.length - 1, Math.floor(t));
+    const v = fromEnd ? end - t : t;
+    const i = Math.max(0, Math.min(end - 1, Math.floor(v)));
     const [p0, c1, c2, p3] = segs[i];
-    const s = t - i;
+    const s = v - i;
     const u = 1 - s;
-    const f = (k) => u * u * u * p0[k] + 3 * u * u * s * c1[k] + 3 * u * s * s * c2[k]
-      + s * s * s * p3[k];
-    return { x: f('x'), y: f('y') };
+    const k0 = u * u * u;
+    const k1 = 3 * u * u * s;
+    const k2 = 3 * u * s * s;
+    const k3 = s * s * s;
+    return { x: k0 * p0.x + k1 * c1.x + k2 * c2.x + k3 * p3.x,
+      y: k0 * p0.y + k1 * c1.y + k2 * c2.y + k3 * p3.y };
   };
+  const b = p(end);
   const away = (t) => {
     const q = p(t);
     return Math.hypot(q.x - b.x, q.y - b.y);
   };
-  const STEPS = 64 * segs.length;
-  const end = segs.length;
+  const STEPS = 64 * end;
+  const done = (t) => {
+    const q = p(t);
+    return { x: num(q.x), y: num(q.y) };
+  };
   let best = end;
+  let bestAway = 0;
+  let hi = end;
+  let ghi = -far;
   for (let i = STEPS - 1; i >= 0; i--) {
     const t = (i * end) / STEPS;
-    if (away(t) >= CROSS_BACK) {
+    const at = away(t);
+    if (at >= far) {
       let lo = t;
-      let hi = ((i + 1) * end) / STEPS;
-      for (let k = 0; k < 30; k++) {
-        const m = (lo + hi) / 2;
-        if (away(m) >= CROSS_BACK) lo = m; else hi = m;
+      let glo = at - far;
+      let side = 0;
+      for (let k = 0; k < 60; k++) {
+        const m = (lo * ghi - hi * glo) / (ghi - glo);
+        const g = away(m) - far;
+        if (Math.abs(g) < 1e-9 || !(m > lo && m < hi)) return done(Math.abs(g) < 1e-9 ? m : lo);
+        if (g > 0) {
+          lo = m;
+          glo = g;
+          if (side === 1) ghi /= 2;
+          side = 1;
+        } else {
+          hi = m;
+          ghi = g;
+          if (side === -1) glo /= 2;
+          side = -1;
+        }
       }
-      const q = p(lo);
-      return { x: num(q.x), y: num(q.y) };
+      return done(lo);
     }
-    if (away(t) > away(best)) best = t;
+    if (at > bestAway) {
+      best = t;
+      bestAway = at;
+    }
+    hi = t;
+    ghi = at - far;
   }
-  const q = p(best);
-  return { x: num(q.x), y: num(q.y) };
+  return done(best);
 }
 
 /** The unit vector from p toward q, or null when they coincide. */
@@ -417,26 +399,6 @@ export function settle(previous, ends, dt, { slack = CABLE_SLACK, box,
   return done(sag, velocity, false);
 }
 
-/** The WCAG luminance of a token value written in hex (tokens.css), else NaN (var(), …). */
-function luminanceOf(value) {
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(String(value).trim());
-  if (!m) return NaN;
-  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
-    .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** The rim's ink (S8): the darker of cable.shadow and cable.sheen (dark --osc-bg, light
- *  --osc-text; each palette colour 3:1 on it), else cable.shadow. A choice of token only. */
-function edgeInk(tokens) {
-  const { shadow, sheen } = tokens.cable;
-  const ls = luminanceOf(shadow);
-  const lt = luminanceOf(sheen);
-  if (sheen && Number.isFinite(ls) && Number.isFinite(lt) && lt < ls) return sheen;
-  return shadow || 'currentColor';
-}
-
 function needTokens(tokens, who) {
   if (!tokens || !tokens.cable || !tokens.jack || !tokens.surface) {
     throw new TypeError(`${who} needs the synth tokens (synthTokens(el)).`);
@@ -448,14 +410,14 @@ const DASH_RX = /^\d*\.?\d+(?:(?:\s*,\s*|\s+)\d*\.?\d+)*$/;
 /** A port shape's name (PORT_KINDS): a lowercase word, as the port glyph names it. */
 const PORT_RX = /^[a-z][a-z0-9-]{0,31}$/;
 
-/** The dash of a cable: the caller's (a CABLE_KINDS declaration), else CABLE_DASH[type]. */
+/** The dash of a cable: the caller's (a CABLE_KINDS declaration), else none (a solid cord). */
 function dashOf(type, dash, who) {
   if (dash === undefined) {
-    if (!Object.hasOwn(CABLE_DASH, type)) {
+    if (!Object.hasOwn(CABLE_BANDS, type)) {
       throw new Error(`${who}: type must be AUDIO, CONTROL, TRIGGER or ANALYSIS, not '${type}', `
         + 'unless its dash is passed.');
     }
-    return CABLE_DASH[type];
+    return null;
   }
   if (typeof type !== 'string' || type === '') {
     throw new TypeError(`${who}: type must be the signal's kind name, not '${type}'.`);
@@ -492,33 +454,40 @@ const str = (x) => String(x);
  * One cable as attribute records for a keyed setAttribute editor (no markup): a frozen list of
  * { key, tag, attrs, parent } in document and paint order, parents first, values raw strings.
  * `key` names the part whatever the ends, zoom or state ('cable', 'shadow', 'main', 'hit',
- * 'edge', 'stroke'; then 'cross', 'cross-under-0', 'cross-under-1', 'cross-0', 'cross-1' when
- * refused, unless cross is false or the target plug is refused; then 'sheen' unless sheen is
- * false), so an editor keyed by (cable id, key) only adds or removes the cross and the sheen.
+ * 'edge', 'stroke', 'shade'; then, unless `dash` is passed, 'bands' and its paths 'band-from'
+ * and 'band-to', each the bands of CABLE_BANDS[type] at one end; then 'cross', 'cross-under-0',
+ * 'cross-under-1', 'cross-0', 'cross-1' when refused, unless cross is false or the target plug
+ * is refused; then 'sheen' unless sheen is false), so an editor keyed by (cable id, key) only
+ * adds or removes the cross and the sheen.
  * It does setAttribute for each attribute a record carries, removeAttribute for each one it no
  * longer carries (un-refusing a solid AUDIO cable drops data-refused and stroke-dasharray; one
  * that only sets leaves it dashed and refused), and parent.insertBefore(new part, the next drawn
  * part of its parent; appended when none), so a cross goes under a drawn sheen, as painted.
  * cableSvg serialises exactly this list.
  *
- * The parts: a soft shadow (tokens.cable.shadow at hw-shadow, SHADOW_CLASS, SHADOW_SPREAD wider,
+ * The parts: a soft shadow (tokens.cable.shadow at hw-shadow, SHADOW_SPREAD wider,
  * SHADOW_PX.rest screen px down, .lifted while dragging); the main group, the only part taking
  * the pointer (a hit path CABLE_HIT_PX screen px wide at every zoom by vector-effect=
  * "non-scaling-stroke", visibility="hidden", hit through pointer-events="stroke"; the opaque rim
- * (edgeInk), CABLE_EDGE wider each side, dashed and capped as the stroke; the stroke in the
- * caller's colour, dashed by kind); then the sheen (tokens.cable.sheen at hw-sheen). Hover and
- * selection thicken stroke and rim; a dashed stroke has butt caps so its gaps stay open at any
- * width, a solid one round. Refused paints the stroke tokens.jack.refuse, dashed (a solid kind
- * REFUSED_DASH), marks data-refused and draws a cross on the curve CROSS_BACK from the target,
- * clear of the plug's room at both ends of a cable 44 or more long (a shorter one takes its point
- * farthest from the target): a shape, not a colour alone. `plug` is the target plug's state
- * (plugState; a misspelt one refused): a refused plug draws its own cross, so the cable leaves
- * its out (dash and data-refused stay) and `cross: true` beside it is a RangeError; `cross:
- * false` leaves it out too. `zoom` turns the screen-px offsets into graph units; `slack`, `box`,
- * `tangents` and `sag` are cableCurve's. `dash` (a CABLE_KINDS pattern, null for solid) wins
- * over CABLE_DASH[type], and with it `type` may name any kind; `port` (a PORT_KINDS shape name,
- * or { from, to }) is recorded as data-port-from and data-port-to. Neither passed, the parts are
- * as before them.
+ * (cordInk), CABLE_EDGE wider each side, dashed and capped as the stroke; the stroke in the
+ * caller's colour, solid); the shade (tokens.cable.shadow at hw-shadow, LIGHT); the bands
+ * (JC-6): from CABLE_BAND_AT out from each plug's centre, each band of CABLE_BANDS[type] a
+ * straight piece of the cord between its two distances (a subpath of the end's path), in the
+ * rim's ink, BAND_PROUD beyond the rim each side, every palette colour 3:1 on it; then the sheen
+ * (tokens.cable.sheen at hw-sheen, LIGHT). Hover and selection thicken stroke and rim (JC-13:
+ * 8.5, 9.5, 11); a dashed stroke has butt caps so its gaps stay open at any width, a solid one
+ * round. Refused paints the stroke tokens.jack.refuse, dashed (REFUSED_DASH unless a dash is
+ * passed), marks data-refused and draws a cross on the curve CROSS_BACK from the target, over
+ * the bands, clear of the target plug's room, and of both plugs' for ends 2 × CROSS_BACK or more
+ * apart (nearer, it may meet the source plug, which a bay draws over it; a cable that never
+ * reaches CROSS_BACK takes its point farthest from the target): a shape, not a colour alone.
+ * `plug` is the target plug's state (plugState; a misspelt one refused): a refused plug draws
+ * its own cross, so the cable leaves its out (dash and data-refused stay) and `cross: true`
+ * beside it is a RangeError; `cross: false` leaves it out too. `zoom` turns the shadow's
+ * screen-px drop into graph units; `slack`, `box`, `tangents` and `sag` are cableCurve's. `dash`
+ * (a CABLE_KINDS pattern or CABLE_DASH[type], null for solid) is the caller's own grammar: it
+ * dashes the cord and draws no bands, and with it `type` may name any kind; `port` (a PORT_KINDS
+ * shape name, or { from, to }) is recorded as data-port-from and data-port-to.
  */
 export function cableParts({ id, from, to, type, colour, state = {}, tokens, slack = CABLE_SLACK,
   box, tangents, sag, zoom = 1, sheen = true, dash, port, cross, plug } = {}) {
@@ -539,14 +508,16 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     throw new RangeError(`${who}: zoom must be a finite number above 0, not ${zoom}.`);
   }
   const st = state || {};
-  const d = cableCurve(from, to, { slack, box, tangents, sag });
+  const segs = cubics(from, to, { slack, box, tangents, sag });
+  const d = pathOf(segs);
   const w = st.selected ? WIDTH.selected : (st.hover ? WIDTH.hover : WIDTH.base);
   const paint = st.refused ? tokens.jack.refuse : (colour || 'currentColor');
   const pattern = st.refused ? (pattern0 || REFUSED_DASH) : pattern0;
   const dashed = pattern ? { 'stroke-dasharray': pattern } : {};
   const cap = pattern ? 'butt' : 'round';
   const drop = num((st.dragging ? SHADOW_PX.lifted : SHADOW_PX.rest) / zoom);
-  const off = num(-SHEEN_PX / zoom);
+  const shift = (k) => `translate(${num(k * w)} ${num(k * w)})`;
+  const ink = cordInk(tokens);
   const parts = [
     part('cable', 'g', null, { 'data-cable': str(id), ...(st.refused ? { 'data-refused': '' }
       : {}), ...ports, 'pointer-events': 'none' }),
@@ -557,13 +528,33 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
     part('hit', 'path', 'main', { 'data-hit': '', d, fill: 'none', stroke: 'currentColor',
       visibility: 'hidden', 'stroke-width': str(CABLE_HIT_PX),
       'vector-effect': 'non-scaling-stroke', 'stroke-linecap': 'round' }),
-    part('edge', 'path', 'main', { 'data-edge': '', d, fill: 'none', stroke: edgeInk(tokens),
+    part('edge', 'path', 'main', { 'data-edge': '', d, fill: 'none', stroke: ink,
       'stroke-width': str(num(w + 2 * CABLE_EDGE)), 'stroke-linecap': cap, ...dashed }),
     part('stroke', 'path', 'main', { 'data-stroke': '', d, fill: 'none', stroke: paint,
       'stroke-width': str(w), 'stroke-linecap': cap, ...dashed }),
+    part('shade', 'path', 'cable', { 'data-shade': '', class: SHADOW_CLASS, d, fill: 'none',
+      stroke: tokens.cable.shadow, 'stroke-width': str(num(w * LIGHT.shadeWidth)),
+      'stroke-linecap': cap, ...dashed, transform: shift(LIGHT.shade), 'pointer-events': 'none' }),
   ];
+  if (dash === undefined) {
+    parts.push(part('bands', 'g', 'cable', { 'data-bands': str(type), 'pointer-events': 'none' }));
+    const band = str(num(w + 2 * CABLE_EDGE + 2 * BAND_PROUD));
+    for (const [end, first] of [['from', true], ['to', false]]) {
+      let at = CABLE_BAND_AT;
+      let bd = '';
+      CABLE_BANDS[type].forEach((len, i) => {
+        if (i % 2 === 0) {
+          const [p, q] = [at, at + len].map((r) => awayFrom(segs, r, first));
+          bd += `${bd ? ' ' : ''}M ${p.x} ${p.y} L ${q.x} ${q.y}`;
+        }
+        at += len;
+      });
+      parts.push(part(`band-${end}`, 'path', 'bands', { 'data-band': end, d: bd, fill: 'none',
+        stroke: ink, 'stroke-width': band, 'stroke-linecap': 'butt' }));
+    }
+  }
   if (st.refused && crossed) {
-    const m = nearTarget(from, to, { slack, box, tangents, sag });
+    const m = awayFrom(segs, CROSS_BACK);
     const r = CROSS.arm;
     const arms = [[m.x - r, m.y - r, m.x + r, m.y + r], [m.x - r, m.y + r, m.x + r, m.y - r]]
       .map((l) => l.map(num));
@@ -577,8 +568,8 @@ export function cableParts({ id, from, to, type, colour, state = {}, tokens, sla
   if (sheen) {
     parts.push(part('sheen', 'path', 'cable', { 'data-sheen': '', class: SHEEN_CLASS, d,
       fill: 'none', stroke: tokens.cable.sheen || 'currentColor',
-      'stroke-width': str(num(w * 0.3)), 'stroke-linecap': cap, ...dashed,
-      transform: `translate(${off} ${off})`, 'pointer-events': 'none' }));
+      'stroke-width': str(num(w * LIGHT.sheenWidth)), 'stroke-linecap': cap, ...dashed,
+      transform: shift(LIGHT.sheen), 'pointer-events': 'none' }));
   }
   return Object.freeze(parts);
 }
