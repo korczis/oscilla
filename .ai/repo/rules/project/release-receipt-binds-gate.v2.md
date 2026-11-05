@@ -39,7 +39,11 @@ release; the owner chose it over patch-only.
 - the run's latest jobs (`filter=latest`) contain every job name `ci.yml` declares, each on H,
   in that run and `completed`/`success`; a missing, skipped or cancelled job refuses, and so
   does a job `ci.yml` does not declare. The names are derived from `ci.yml`, never listed by
-  hand;
+  hand, and two jobs with one name refuse. One exemption (amended 2026-11-05, #417): the job
+  with id `flake-ledger` whose `if:` is exactly `${{ always() && fromJSON(github.run_attempt) > 1 }}`
+  (E010) may be `completed`/`skipped` when its own attempt is 1, since its condition skips it
+  there by design; from attempt 2 on it must succeed like every other job. `ci.yml` must
+  declare exactly one such job; any other skip still refuses;
 - `node --test tests/unit/about-current.test.mjs` with `OSC_ROADMAP_CHECK=1` passes: the one
   check of the local gate that CI does not run.
 
@@ -56,9 +60,14 @@ before the publish: any later merge changes HEAD's tree and both verdicts refuse
 `tests/unit/release-ci-receipt.test.mjs`, in `npm test`: the job list derived from the real
 `ci.yml` (every matrix value, the visual gate, the doctor, `gate`); a valid fixture verifies,
 and each of these refuses with its own problem: another tree, a head without its base, HEAD
-not a merge, a missing, skipped, cancelled or foreign job, an undeclared job, a run on another
+not a merge, a missing, skipped, cancelled or foreign job, an undeclared job, two jobs with one
+name, a re-run-only condition other than the exact one or on another job id, the flake ledger
+cancelled, failed or running on attempt 1 or skipped on attempt 2 or later, a run on another
 sha or event, a newer red or running run beside an older green one, a red latest attempt, the
-roadmap check failing, and unreadable runs or jobs. Each guard of `ciReceiptProblems()` is
+roadmap check failing, and unreadable runs or jobs; the flake ledger skipped on its own first
+attempt verifies (including a re-run of the gate alone, keyed on the job's own attempt), and
+near-miss conditions (a bare expression, `> 0`, extra spaces, the condition on a step, a matrix
+ledger) are not exempt. Each guard of `ciReceiptProblems()` is
 mutation-proven (removing it fails a test). `gateVerdict()` takes a verified local receipt
 without asking GitHub and otherwise reports both sets of problems.
 
