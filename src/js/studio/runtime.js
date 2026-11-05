@@ -192,13 +192,6 @@ function withInitials(base, init) {
   return out;
 }
 
-/**
- * The `update` reports (adapters/nodes.js) that write nothing now: the adapter keeps the value
- * for the next gate (an Envelope) or the next note (an engine, Keys, the XY pad), so its trace
- * step is `stored`, never `scheduled` (ADR 0042).
- */
-const DEFERRED_UPDATES = Object.freeze(new Set(['next-gate', 'next-note']));
-
 /** The owned keys of a node no other owner drives (shared, never mutated). */
 const NONE_OWNED = Object.freeze(new Set());
 
@@ -801,8 +794,8 @@ export function createStudioRuntime({
             if (guard('update', o.id, () => h.update(changed, own, w)) && w) {
               for (const k of live) {
                 const how = w[k] || null;
-                note('param', o.id, how && !DEFERRED_UPDATES.has(how) ? 'scheduled'
-                  : own.has(k) ? 'owned'
+                const later = how === 'next-gate' || how === 'next-note'; // kept, not written
+                note('param', o.id, how && !later ? 'scheduled' : own.has(k) ? 'owned'
                   : 'stored', { param: k, value: pn.params[k], unit: unit(pn.type, k),
                   at: how === 'set' || how === 'glide' ? now : null, via: how });
               }
