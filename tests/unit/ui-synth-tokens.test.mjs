@@ -485,8 +485,8 @@ test('slice A A1: one hover language: knob, dial, lever and slide brighten the p
       if (rim) idlePaints.push(...knobStops('rim'));
       // C6: against its own body, the cap material, no single opaque paint can brighten a
       // mid-grey edge both against a black body and against a white plate (in light the edge
-      // is 4.63:1 on the cap and 4.39:1 on the plate: a hover paint must be lighter for the one
-      // and darker for the other), so a cap-material part is judged against what it stands on,
+      // is 4.61:1 on the cap and 4.40:1 on the white plate: a hover paint must be lighter for the
+      // one and darker for the other), so a cap-material part is judged against what it stands on,
       // where its silhouette is read; every other edge on both faces, as before.
       const body = varOf(at(edge, 'fill'));
       const faces = [...(CAP_MATERIAL.includes(body) ? [] : [body]), ...beside];
