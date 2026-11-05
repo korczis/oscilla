@@ -8,7 +8,7 @@ outcome: "Every workspace is audited, About tells the project as it stands and w
 acceptance_criteria:
   - "U001 to U008 are done with their evidence."
   - "U011 to U025, the section 74 quality-bar findings of S074 (2026-10-30), are done with their evidence."
-  - "U075 to U077 and U079 to U084, the census and panel findings of the Total Coherence and Panel Excellence packs (2026-11-05), are done with their evidence (U078 was folded into U073, U075 and U079); added on resolving af's critique of 96daa67b, which found no criterion reaching them."
+  - "U075 to U077 and U079 to U084, the census and panel findings of the Total Coherence and Panel Excellence packs (2026-11-05), are done with their evidence (U078 was folded into U075 and U079, its four role=menu menus into U079; corrected 2026-11-05, as U073 is the Analyzer page and holds no menu census); added on resolving af's critique of 96daa67b, which found no criterion reaching them."
 validation:
   - "npm run release-gate"
 evidence_required:
@@ -17,7 +17,7 @@ risks:
   - "Built on Flowbite Pro (owner, 2026-10-28; intent ui-flowbite-pro, M055): U002 to U008 build their interface on the Pro shell and components, so each depends on F002 or on the F issue of its workspace (U002 on F009, U003 on F005 and F010, U004 and U005 on F006, U006 on F002, U007 on F003 to F010, U008 on F011) and the new content is built once; U001's audit stays as recorded."
   - "Layout work colliding with the first screen: no issue here changes the default workspace, and P002 builds the layout Q004 chooses."
   - "src/index.html is shared with E005 (partials), P002, S083 and MIDI V504: every U issue that edits it lands in its own train round with one rebuild."
-  - "Slot for the Panel Excellence pack (2026-11-05): af's panel inventory (workflow wc2d98lis) was still running when U075-U079 and Q094 were planned. Its findings are filed as issues in this milestone, numbered from the next free U id after checking main and every origin/* branch, and cross-referenced to the census (U075-U077, U079; U078 was folded into U073, U075 and U079 on resolving af's critique of 96daa67b) rather than re-derived; until then no U issue claims a panel finding the inventory has not reported."
+  - "Slot for the Panel Excellence pack (2026-11-05): af's panel inventory (workflow wc2d98lis) was still running when U075-U079 and Q094 were planned. Its findings are filed as issues in this milestone, numbered from the next free U id after checking main and every origin/* branch, and cross-referenced to the census (U075-U077, U079; U078 was folded into U075 and U079 on resolving af's critique of 96daa67b, its menus into U079 as corrected on 2026-11-05) rather than re-derived; until then no U issue claims a panel finding the inventory has not reported."
   - "The census tests (tests/unit/surface-census.*) and tests/browser/* are unguarded under project.review-verdict v2; R031 (v3) guards src/ only, and R033 guards the tests/ files a rule's enforcement names, so U075-U077 and U079 ask prismatic-majordomus-98 for a critique."
   - "About's pace statement was kept by Q005's delegated decision; the owner's 2026-10-28 statement that About is outdated overrides it, so U002 changes about-origin.test.mjs with that reason."
 created_at: 2026-10-28

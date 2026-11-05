@@ -21,7 +21,7 @@ depends_on: []
 acceptance_criteria:
   - "Fail-first: tests/browser/v31-studio-text-floor.cjs walks every visible text node of #m=studio at 1536x1024 and fails on the merge base on the 9.5 px and 10 px texts, naming each selector. It is wired into npm run test:studio. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
   - "On the head the walk finds no computed font-size under 12 px; a mutation that sets one Studio selector to 11 px fails it."
-  - "The Studio visual reference is re-accepted through the visual gate with the reason 'Studio desktop text floor 12 px' (project.visual-identity-lock)."
+  - "The Studio visual reference is re-accepted through the visual gate with the reason 'Studio desktop text floor 12 px' (project.visual-identity-lock v4; ADR 0061, accepted)."
   - "Styles are unguarded under v2; the screens seat (pending: oscilla-44) reviews it once R031 lands, and prismatic-majordomus-98 is asked for a Studio critique."
 validation:
   - "node tests/browser/v31-studio-text-floor.cjs"

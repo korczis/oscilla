@@ -24,7 +24,7 @@ acceptance_criteria:
   - "Fail-first: tests/unit/engine-presets-scope.test.mjs asserts every engine preset names its type and scope and fails on the merge base naming the presets without one; applying a node-scope preset leaves every sibling module deep-equal (a fixture that resets a sibling fails)."
   - "The runtime trace reports applies-now (scheduled or owned) or next-note (stored) per parameter, using K185's verbs; one case per engine with a next-note parameter."
   - "tests/unit/engine-layers.test.mjs gains the preset and runtime cases: presets import the declaration only, the runtime imports no preset module; with K189-K191 the four layers are proven separate, and a mutation that crosses any boundary fails."
-  - "Controls: a preset applied on the face moves M123's one knob and switch (G022, G023) and no second preset widget is added; project.visual-identity-lock holds. Arturia and iMS-20 are a quality bar, not a look (owner, relayed by af 2026-11-05)."
+  - "Controls: a preset applied on the face moves M123's one knob and switch (G022, G023) and no second preset widget is added; project.visual-identity-lock v4 holds (the Flowbite Pro interface themed by OSCILLA's tokens around its own domain views; ADR 0061, accepted). Arturia and iMS-20 are a quality bar, not a look (owner, relayed by af 2026-11-05)."
   - "Guarded paths (src/js/studio/*, src/js/synth/*): prismatic-majordomus-98 writes the verdict; oscilla-21 checks the synth values. Lane: oscilla-26."
 validation:
   - "node --test tests/unit/engine-presets-scope.test.mjs tests/unit/engine-layers.test.mjs tests/unit/studio-node-presets.test.mjs"
