@@ -3074,11 +3074,12 @@
     </div>
 
     <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
-      aria-label="Play" aria-pressed="false" :aria-pressed="String(isSounding)"
-      :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Trigger')"
+      aria-label="Play" aria-pressed="false" :aria-pressed="String(statusKey.pressed)"
+      x-show="statusKey.target !== null" :aria-label="statusKey.label"
+      :disabled="statusKey.disabled" :title="statusKey.reason"
       @click="statusPlay()" @keydown.enter="latchKey($event)">
-      <svg aria-hidden="true" x-show="!isSounding"><use href="#i-play"/></svg>
-      <svg aria-hidden="true" x-show="isSounding" style="display: none"><use href="#i-stop"/></svg>
+      <svg aria-hidden="true" x-show="!statusKey.pressed"><use href="#i-play"/></svg>
+      <svg aria-hidden="true" x-show="statusKey.pressed" style="display: none"><use href="#i-stop"/></svg>
     </button>
 
     <p class="osc-sr-only" role="status" aria-live="polite" aria-atomic="true"

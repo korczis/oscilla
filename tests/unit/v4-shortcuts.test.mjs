@@ -201,3 +201,105 @@ test('index.html: one shortcut dialog, opened by Help, the overflow menu and Stu
     assert.equal(m[1], "openDialog('help')", osc);
   }
 });
+
+// C032: the status bar's Play key acts on what the workspace on screen plays, read from
+// SPACE_OWNER through one function of shortcuts.js (no table of its own), not always the
+// Playground tone. The Studio keeps the instrument's meaning (ADR 0050, C001, C012) until U012.
+// Namespace imports, so that on a base without these members only these tests fail.
+import * as SC from '../../src/js/ui/shortcuts.js';
+import * as WB from '../../src/js/ui/workbench.js';
+
+const STATUS_TARGET = { measure: 'measure', synth: 'synth', experiments: null, about: null,
+  learn: 'instrument', studio: 'instrument' };
+
+test('C032: the status Play target of every workspace', () => {
+  assert.equal(typeof SC.statusPlayTarget, 'function', 'shortcuts.js exports statusPlayTarget');
+  for (const ws of WORKSPACES) {
+    const want = Object.hasOwn(STATUS_TARGET, ws) ? STATUS_TARGET[ws] : 'instrument';
+    if (!Object.hasOwn(STATUS_TARGET, ws)) assert.equal(spaceOwner(ws), 'instrument', ws);
+    assert.equal(SC.statusPlayTarget(ws), want, ws);
+  }
+  assert.equal(SC.statusPlayTarget('bogus'), null);
+  assert.equal(SC.statusPlayTarget('__proto__'), null);
+  const code = read('src/js/ui/shortcuts.js');
+  assert.ok(!/STATUS_PLAY_TARGET|STATUS_OWNER/.test(code), 'no second owner table');
+});
+
+/** The workbench over fakes of the Synth part, MEASURE's flow and the instrument. */
+function statusRig(workspace, state = {}) {
+  const calls = [];
+  const svc = { sequencerPlaying: () => false,
+    stopPlayback(cmp) { calls.push('stopPlayback'); cmp.playing = false; } };
+  const wb = WB.createWorkbench(svc);
+  Object.assign(wb, { workspace, playing: false, seqPlaying: false, continuousAllowed: false,
+    isProgrammed: false, synth: { armed: false },
+    meas: { active: false, flow: { primaryAction: { id: 'preflight', label: 'Check setup',
+      enabled: true, reason: '' } } },
+    trigger() { calls.push('trigger'); this.playing = true; },
+    toggleLatch() { calls.push('toggleLatch'); this.playing = true; },
+    synthArm() { calls.push('synthArm'); this.synth.armed = true; return true; },
+    synthDisarm() { calls.push('synthDisarm'); this.synth.armed = false; },
+    measureRunPrimary() { calls.push('measureRunPrimary'); } }, state);
+  return { wb, calls };
+}
+
+test('C032: isSounding includes the armed Synth (the Studio stays out until U012)', () => {
+  const { wb } = statusRig('synth');
+  assert.equal(wb.isSounding, false);
+  wb.synth.armed = true;
+  assert.equal(wb.isSounding, true, 'the armed Synth sounds through the one output');
+});
+
+test('C032: in the Synth the status Play arms, then disarms, the Synth', () => {
+  const { wb, calls } = statusRig('synth');
+  assert.equal(wb.statusKey.label, 'Arm Synth');
+  assert.equal(wb.statusKey.pressed, false);
+  wb.statusPlay();
+  assert.deepEqual(calls, ['synthArm'], 'the Synth\'s own arm path, never the instrument');
+  assert.equal(wb.playing, false, 'the Playground tone does not start');
+  assert.equal(wb.statusKey.label, 'Disarm Synth');
+  assert.equal(wb.statusKey.pressed, true);
+  wb.statusPlay();
+  assert.deepEqual(calls, ['synthArm', 'synthDisarm']);
+});
+
+test('C032: in MEASURE the status Play is the primary flow action, with its label', () => {
+  const { wb, calls } = statusRig('measure');
+  assert.equal(wb.statusKey.label, 'Check setup');
+  assert.equal(wb.statusKey.disabled, false);
+  wb.statusPlay();
+  assert.deepEqual(calls, ['measureRunPrimary'], 'MEASURE\'s own action, not the instrument');
+  wb.meas.flow.primaryAction = { id: 'measure', label: 'Measure', enabled: false,
+    reason: 'Check setup first.' };
+  assert.equal(wb.statusKey.disabled, true);
+  assert.equal(wb.statusKey.reason, 'Check setup first.');
+});
+
+test('C032: Experiments and About show no status Play, and a press starts nothing', () => {
+  for (const ws of ['experiments', 'about']) {
+    const { wb, calls } = statusRig(ws);
+    assert.equal(wb.statusKey.target, null, ws);
+    wb.statusPlay();
+    assert.deepEqual(calls, [], ws);
+  }
+  const html = read('src/index.html');
+  const key = html.match(/<button[^>]*data-osc="status\.play"[\s\S]*?>/);
+  assert.ok(key, 'the status Play key');
+  assert.match(key[0], /x-show="statusKey\.target !== null"/, 'hidden where it plays nothing');
+  assert.match(key[0], /:aria-label="statusKey\.label"/, 'its name follows the owner');
+  assert.match(key[0], /:aria-pressed="String\(statusKey\.pressed\)"/);
+});
+
+test('C032: the instrument workspaces keep latch or trigger, and Stop starts nothing', () => {
+  for (const ws of ['playground', 'analyzer', 'learn', 'studio']) {
+    const { wb, calls } = statusRig(ws, { continuousAllowed: true });
+    assert.equal(wb.statusKey.label, 'Play continuously', ws);
+    wb.statusPlay();
+    assert.deepEqual(calls, ['toggleLatch'], ws);
+    assert.equal(wb.statusKey.label, 'Stop playback', ws);
+    wb.statusPlay();
+    assert.deepEqual(calls, ['toggleLatch', 'stopPlayback'], ws);
+  }
+  const src = read('src/js/ui/workbench.js');
+  assert.match(src, /statusPlayTarget\(this\.workspace\)/, 'statusPlay reads the one function');
+});

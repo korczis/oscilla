@@ -47,6 +47,16 @@
 //        gain set while the Studio plays is shown as "Gain <dB>" and is the engine's level; after
 //        STOP the state is not PLAYING and the readout is the Playground gain (dup-stale-4);
 //   app: no console error or page error.
+// Then the same page at 390 x 844 with touch (C032), where the status bar's Play is shown:
+//   status-play-synth  in the Synth a tap arms the Synth panel (its live model runs into the
+//        engine on the Studio transport, active sources > 0), starts no Playground voice and
+//        reads "Disarm Synth" (pressed); a second tap disarms it (0 sources), "Arm Synth";
+//   status-play-measure  in MEASURE the key carries the primary action's label and a tap runs
+//        that action (the measurement leaves IDLE), no Playground voice;
+//   status-play-hidden  Experiments and About show no status Play;
+//   status-play-playground  in the Playground a tap still starts the instrument;
+//   phone: no console error or page error. (The Studio keeps the instrument's meaning, ADR
+//   0050, until U012.)
 // --app-only (diagnostic) runs only the dist checks.
 // Runs in `npm run test:studio` (release-gate and the CI studio job).
 'use strict';
@@ -471,6 +481,144 @@ async function resetOverStudio(key, page) {
     JSON.stringify(b));
 }
 
+// C032 on the built page at 390 x 844 with touch (every engine: Firefox has no isMobile
+// emulation, so none of them is given it): the status bar's Play, the phone's one transport
+// key, acts on what the workspace on screen plays, through that workspace's own path.
+const PHONE = { width: 390, height: 844 };
+const SB_PLAY = '#osc-sb-play';
+
+/** The status Play key and what it could have started, read in one task. */
+function statusKeyState(page) {
+  return page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    const a = window.OSCILLA.app;
+    const t = window.OSCILLA.studio && window.OSCILLA.studio.transport;
+    const primary = document.querySelector('[data-osc="measure.primary"]');
+    return { shown: !!el && el.getClientRects().length > 0,
+      label: el ? el.getAttribute('aria-label') : null,
+      pressed: el ? el.getAttribute('aria-pressed') : null,
+      instrument: !!a.playing, armed: !!(a.synth && a.synth.armed),
+      transport: !!(t && t.playing), sources: window.OSCILLA.engine.activeSourceCount,
+      measure: a.meas.state, primary: primary ? primary.textContent.trim() : null };
+  }, SB_PLAY);
+}
+
+async function showPhoneWorkspace(page, ws) {
+  await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+  await until(() => page.evaluate((w) => document.querySelector('#osc-app').dataset.mode === w,
+    ws), { ms: 15000, what: `status-play: the ${ws} workspace is shown` });
+}
+
+/** Wait for `pred` over the key's state; the last state when it never holds. */
+async function keyUntil(page, pred, ms, what) {
+  const got = await until(() => statusKeyState(page).then((v) => (pred(v) ? v : null)),
+    { ms, what }).catch(() => null);
+  return { ok: !!got, v: got || await statusKeyState(page) };
+}
+
+async function quietInstrument(page) {
+  await page.evaluate(() => window.OSCILLA.app.stopNow());
+  await until(() => page.evaluate(() => !window.OSCILLA.app.playing),
+    { ms: 10000, what: 'status-play: the instrument is quiet again' });
+}
+
+async function statusPlaySynth(key, page) {
+  await showPhoneWorkspace(page, 'synth');
+  const idle = await keyUntil(page, (v) => v.shown && v.label === 'Arm Synth', 5000,
+    'status-play-synth: the key reads Arm Synth');
+  check(key, 'status-play-synth: shown in the Synth, it reads "Arm Synth", not pressed',
+    idle.ok && idle.v.pressed === 'false', JSON.stringify(idle.v));
+  await page.locator(SB_PLAY).tap();
+  const first = await statusKeyState(page);
+  const on = await keyUntil(page, (v) => v.armed && v.transport && v.sources > 0, 10000,
+    'status-play-synth: a tap arms the Synth');
+  check(key, 'status-play-synth: a tap arms the Synth: its live model runs into the engine '
+    + '(active sources > 0) on the Studio transport', on.ok, JSON.stringify(on.v));
+  check(key, 'status-play-synth: it starts no Playground voice', !first.instrument
+    && !on.v.instrument, JSON.stringify({ first, then: on.v }));
+  check(key, 'status-play-synth: armed, it reads "Disarm Synth" and is pressed',
+    on.v.label === 'Disarm Synth' && on.v.pressed === 'true', JSON.stringify(on.v));
+  await page.locator(SB_PLAY).tap();
+  const off = await keyUntil(page, (v) => !v.armed && !v.transport && v.sources === 0
+    && v.label === 'Arm Synth', 10000, 'status-play-synth: a second tap disarms the Synth');
+  check(key, 'status-play-synth: a second tap disarms it (0 sources) and it reads "Arm Synth"',
+    off.ok && off.v.pressed === 'false' && !off.v.instrument, JSON.stringify(off.v));
+  if (first.instrument || off.v.instrument) await quietInstrument(page);
+}
+
+async function statusPlayMeasure(key, page) {
+  await showPhoneWorkspace(page, 'measure');
+  const idle = await keyUntil(page, (v) => v.shown && !!v.primary && v.label === v.primary,
+    5000, 'status-play-measure: the key carries the primary action\'s label');
+  check(key, `status-play-measure: shown in MEASURE with the primary action's label `
+    + `("${idle.v.primary}")`, idle.ok, JSON.stringify(idle.v));
+  await page.locator(SB_PLAY).tap();
+  const first = await statusKeyState(page);
+  const ran = await keyUntil(page, (v) => v.measure !== 'IDLE', 10000,
+    'status-play-measure: a tap runs the primary action');
+  check(key, 'status-play-measure: a tap runs MEASURE\'s primary action (the measurement '
+    + 'leaves IDLE) and starts no Playground voice', ran.ok && !first.instrument
+    && !ran.v.instrument, JSON.stringify({ first, then: ran.v }));
+  await page.evaluate(() => {
+    const a = window.OSCILLA.app;
+    if (a.meas.active) a.measureAbort('user');
+  });
+  await until(() => page.evaluate(() => !window.OSCILLA.app.meas.active),
+    { ms: 10000, what: 'status-play-measure: the measurement is stopped' });
+  if (first.instrument || ran.v.instrument) await quietInstrument(page);
+}
+
+async function statusPlayHidden(key, page) {
+  for (const ws of ['experiments', 'about']) {
+    await showPhoneWorkspace(page, ws);
+    const gone = await keyUntil(page, (v) => !v.shown, 5000,
+      `status-play-hidden: no key in ${ws}`);
+    check(key, `status-play-hidden: ${ws} plays nothing and shows no status Play`, gone.ok,
+      JSON.stringify(gone.v));
+  }
+}
+
+async function statusPlayPlayground(key, page) {
+  await showPhoneWorkspace(page, 'playground');
+  const idle = await keyUntil(page, (v) => v.shown && !v.instrument, 5000,
+    'status-play-playground: the key is shown');
+  await page.locator(SB_PLAY).tap();
+  const on = await keyUntil(page, (v) => v.instrument, 5000,
+    'status-play-playground: a tap starts the instrument');
+  check(key, 'status-play-playground: the key still starts the instrument (negative case)',
+    idle.ok && on.ok && !on.v.armed, JSON.stringify(on.v));
+  await quietInstrument(page);
+}
+
+async function runPhone(browserName) {
+  const key = `${browserName} phone`;
+  const browser = await playwright[browserName].launch(LAUNCH[browserName]);
+  const context = await browser.newContext({ viewport: PHONE, hasTouch: true });
+  const page = await context.newPage();
+  page.setDefaultTimeout(15000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
+  console.log(`\n${key} (dist/index.html, ${PHONE.width} x ${PHONE.height}, touch)`);
+  try {
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+    await page.evaluate(() => { const a = window.OSCILLA.app; a.alerts = [];
+      if (!a.safetyCollapsed) a.collapseSafety(); });
+    for (const fn of [statusPlaySynth, statusPlayMeasure, statusPlayHidden,
+      statusPlayPlayground]) {
+      try {
+        await fn(key, page);
+      } catch (err) {
+        check(key, `${fn.name} completed`, false, err && err.message);
+      }
+    }
+    check(key, 'phone: no console errors', errors.length === 0, errors.join(' | '));
+  } finally {
+    await browser.close();
+  }
+}
+
 async function runApp(browserName) {
   const key = browserName;
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
@@ -521,6 +669,7 @@ async function runApp(browserName) {
     for (const b of BROWSERS) {
       if (!APP_ONLY) await runOne(b, pathToFileURL(file).href);
       await runApp(b);
+      await runPhone(b);
     }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

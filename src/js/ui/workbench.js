@@ -28,6 +28,7 @@ import { OUTPUT_OWNER_NAMES, outputOwnerOf } from '../visualization/output-owner
 import { OSCILLA_VERSION } from './version.js';
 import { formatHz } from '../charts/axes.js';
 import { rovingKeydown } from './app.js';
+import { statusPlayTarget } from './shortcuts.js';
 import { LABS_INCLUDED_TEXT, SEQUENCE_NOT_INCLUDED_TEXT, labSectionsText } from './lab-state.js';
 import {
   LAB_HASH_KEY, LAB_PARAM_MAX, decodeLabParam, encodeLabParam,
@@ -123,9 +124,31 @@ export function createWorkbench(svc) {
       return Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB';
     },
     get gainFill() { return `${this.gainPct}%`; },
-    // The instrument's own Play (ADR 0050): the status Play button triggers, latches or stops the
-    // instrument and the Pattern Sequencer, never the Studio, so it reflects only them.
-    get isSounding() { return this.playing || this.seqPlaying; },
+    // What the status Play button stops (ADR 0050, C032): the instrument, the Pattern Sequencer
+    // and the armed Synth (synth/ui.js keeps synth.armed, and disarms on leaving the Synth).
+    // The Studio transport stays out until U012 gives that key the Studio's meaning.
+    get isSounding() {
+      return this.playing || this.seqPlaying || !!(this.synth && this.synth.armed);
+    },
+    /**
+     * The status Play key of the workspace on screen (C032): { target, label, pressed,
+     * disabled, reason }. target is statusPlayTarget's; the label names what it will do there.
+     */
+    get statusKey() {
+      const target = statusPlayTarget(this.workspace);
+      if (target === 'measure') {
+        const a = (this.meas && this.meas.flow && this.meas.flow.primaryAction) || null;
+        return { target, label: a ? a.label : 'Measure', pressed: !!(this.meas && this.meas.active),
+          disabled: !(a && a.enabled), reason: (a && a.reason) || '' };
+      }
+      const on = this.isSounding;
+      let label = on ? 'Stop playback'
+        : (this.continuousAllowed && !this.isProgrammed ? 'Play continuously' : 'Trigger');
+      if (target === 'synth' && (this.synth.armed || !on)) {
+        label = this.synth.armed ? 'Disarm Synth' : 'Arm Synth';
+      }
+      return { target, label, pressed: on, disabled: false, reason: '' };
+    },
     /**
      * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
      * that describe it (C013). The Studio is read through its transport (studioOwnsOutput);
@@ -391,17 +414,32 @@ export function createWorkbench(svc) {
 
     // ------------------------------------------------------------------ transport extras
     /**
-     * Status-bar play key: stop when sounding, else latch (continuous allowed) or trigger.
+     * Status-bar play key, on what the workspace on screen plays (C032, statusPlayTarget):
+     * MEASURE runs its primary flow action; the Synth arms or disarms through its own path;
+     * elsewhere stop when sounding, else latch (continuous allowed) or trigger the instrument.
      * Sounding is what the key shows (isSounding) or the sequencer's live state (C001: the
      * `seqPlaying` copy lags by one poll); a stop goes through stopPlayback and starts nothing.
+     * Where the target is null (Experiments, About) the key is not shown and does nothing.
      */
     statusPlay() {
+      const target = statusPlayTarget(this.workspace);
+      if (target === 'measure') {
+        this.measureRunPrimary();
+        return;
+      }
+      if (target === 'synth' && this.synth.armed) {
+        this.synthDisarm();
+        return;
+      }
       if (this.isSounding || svc.sequencerPlaying()) {
         svc.stopPlayback(this);
         return;
       }
-      if (this.continuousAllowed && !this.isProgrammed) this.toggleLatch();
-      else this.trigger();
+      if (target === 'synth') this.synthArm();
+      else if (target === 'instrument') {
+        if (this.continuousAllowed && !this.isProgrammed) this.toggleLatch();
+        else this.trigger();
+      }
     },
     onContinuousToggle() {
       // C011: setContinuous tells the sequencer (main.js onContinuousChange): its loop follows

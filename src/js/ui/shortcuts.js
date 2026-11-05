@@ -131,6 +131,21 @@ export function spaceOwner(workspace) {
   return has(SPACE_OWNER, workspace) ? SPACE_OWNER[workspace] : null;
 }
 
+/**
+ * What the status bar's Play key acts on in `workspace` (C032), read from SPACE_OWNER rather
+ * than a table of its own: 'instrument' (latch or trigger it), 'synth' (arm or disarm the
+ * Synth panel, synth/ui.js synthArm), 'measure' (MEASURE's primary flow action) or null (the
+ * key is not shown: Experiments and About play nothing). Learn keeps the instrument, which its
+ * demo plays. The Studio keeps the instrument's meaning ADR 0050, C001 and C012 recorded
+ * until U012 gives it the Studio transport with its resolution note.
+ */
+export function statusPlayTarget(workspace) {
+  const owner = spaceOwner(workspace);
+  if (owner === 'instrument' || owner === 'studio') return 'instrument';
+  if (workspace === 'synth' || workspace === 'measure') return workspace;
+  return workspace === 'learn' ? 'instrument' : null;
+}
+
 /** True when the instrument's Hold to Play may answer Space in `workspace`. */
 export function instrumentTakesSpace(workspace) {
   return spaceOwner(workspace) === 'instrument';

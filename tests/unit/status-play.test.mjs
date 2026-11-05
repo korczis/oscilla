@@ -31,7 +31,8 @@ function rig({ editorPlaying = false, seqPlaying = false, playing = false,
   };
   wb = createWorkbench(svc);
   Object.assign(wb, {
-    seqPlaying, playing, continuousAllowed, isProgrammed,
+    // The Playground: the key's target there is the instrument (C032, statusPlayTarget).
+    workspace: 'playground', seqPlaying, playing, continuousAllowed, isProgrammed,
     stopNow() { calls.stopNow += 1; this.playing = false; },
     trigger() { calls.trigger += 1; this.playing = true; },
     toggleLatch() { calls.toggleLatch += 1; this.playing = true; },
