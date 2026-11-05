@@ -76,7 +76,7 @@
 // handle's dispose leaves zero of its nodes in engine.nodes.
 
 import { NODE_REGISTRY } from './registry.js';
-import { validateEdgeProps } from './ports.js';
+import { controlLine, validateEdgeProps } from './ports.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
 import { studioHash } from './schema.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
@@ -508,9 +508,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     const pr = edge.props;
     if (pr.muted) { gains.set(edge.id, 0); continue; }
     const [lo, hi] = handle.range || DEFAULT_RANGE;
-    const t0 = pr.polarity === 'unipolar' ? 0 : -pr.depth;
-    const a = (pr.depth - t0) / (hi - lo);
-    const b = t0 - a * lo + pr.offset;
+    const { a, b } = controlLine(pr, [lo, hi]);
     const log = pr.mapping === 'log';
     if (log) base[key].cents += CENTS_PER_OCTAVE * b;
     else base[key].value += b;

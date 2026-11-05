@@ -20,6 +20,10 @@ import {
   xyTargetAction,
 } from '../../src/js/synth/xy.js';
 import { createXyModel } from '../../src/js/ui/kinds/xy-pad.js';
+import { NOTE_NAMES, SCALE_MODES, midiToName } from '../../src/js/core/music.js';
+import { compileStudio, computeBases } from '../../src/js/studio/compiler.js';
+import { knobModel } from '../../src/js/synth/view/knob.js';
+import { xyYReading } from '../../src/js/synth/xy.js';
 import { splitJack } from '../../src/js/synth/panel.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
@@ -408,4 +412,104 @@ test('one wiring: no file but xy-wiring.js builds the pad\'s cables; the XY tab 
   assert.doesNotMatch(tab, /addEventListener|\.live\(|xyDegree/, 'the XY tab wires nothing');
   assert.doesNotMatch(code(WIRING), /window\.addEventListener|keys\.bind/,
     'no window listener and no key binding of its own');
+});
+
+// ---------------------------------------------------------------- the view's data (S3)
+
+/** The pad's node with its scale set to `scale` (one NODE_PARAM_SET), then mounted. */
+function scaled(r, scale) {
+  const id = PANEL.resolve(r.st.getModel()).get('xy').id;
+  assert.equal(r.st.dispatch({ type: 'NODE_PARAM_SET', nodeId: id, params: scale }).ok, true);
+  return r.mount();
+}
+
+test('each cell is named by the note the runtime plays there, for every scale, key and span',
+  () => {
+    const SCALES = [
+      { mode: 'minor-pentatonic', key: 'C', octave: 3, span: 2 },
+      { mode: 'dorian', key: 'D', octave: 2, span: 1 },
+      { mode: 'major', key: 'F#', octave: 4, span: 3 },
+      { mode: 'chromatic', key: 'A#', octave: 1, span: 1 },
+      { mode: 'locrian', key: 'B', octave: 5, span: 4 },
+    ];
+    for (const sc of SCALES) {
+      const r = rig();
+      const m = scaled(r, sc);
+      const { opts, model } = m.view;
+      const steps = sc.span * SCALE_MODES[sc.mode].length + 1;
+      assert.equal(opts.cells.length, steps, `${sc.mode}: one cell per step`);
+      const h = r.runtime.nodes;
+      for (let i = 0; i < steps; i++) {
+        const fx = (i + 0.5) / steps;
+        if (i === 0) assert.equal(model.down(1, fx, 0.5), true);
+        else assert.equal(model.move(1, fx, 0.5), true);
+        assert.equal(model.value.x, i);
+        // What the runtime's pad handle plays for the x the mount sent.
+        const ev = h.get(r.padId).outputs.pitch.offset.events;
+        const pitch = ev[ev.length - 1].value; // the last step set on the pitch AudioParam
+        const played = midiToName(69 + 12 * pitch);
+        const what = `${sc.key} ${sc.mode} span ${sc.span} cell ${i}`;
+        assert.equal(opts.readout.x(i), played, `${what}: the ring's note`);
+        assert.ok(model.text('x').startsWith(`${played}, degree `), `${what}: X's aria-valuetext`);
+        const c = opts.cells[i];
+        assert.equal(c.label, steps <= 15 || c.root ? played
+          : NOTE_NAMES[NOTE_NAMES.indexOf(played.replace(/-?\d+$/, ''))], `${what}: its label`);
+        assert.equal(c.root, played.replace(/-?\d+$/, '') === sc.key, `${what}: root`);
+      }
+      model.up(1);
+      m.destroy();
+      stopNow(r);
+    }
+  });
+
+test('Y reads what Y asks of its target: the compiler\'s line, in the target knob\'s text', () => {
+  for (const recipe of XY_RECIPES) {
+    const r = rig({ patch: false });
+    assert.equal(r.st.dispatch(xyPresetAction(r.st.getModel(), PANEL, recipe.id).action).ok,
+      true);
+    const m = r.mount();
+    const { opts, model } = m.view;
+    const doc = r.st.getModel();
+    const rd = xyYReading(doc, PANEL);
+    assert.equal(rd.jack, recipe.y);
+    // The compiler's own sizing of the target's base and of Y's edge, at every y.
+    const node = PANEL.resolve(doc).get(rd.jack.split('.')[0]);
+    const plan = compileStudio(doc);
+    const port = rd.jack.split('.')[1];
+    const edge = [...plan.edges.values()].find((e) => e.to.node === node.id
+      && e.to.port === port && e.from.port === 'y');
+    const cb = computeBases(plan.nodes.get(node.id), [{ edge, handle: { status: 'active',
+      range: PANEL.sourceRange('xy.y'), scale: 1 } }], null);
+    const b = cb.base[port];
+    const g = cb.gains.get(edge.id);
+    const k = knobModel(rd.param);
+    const name = jackName(recipe.y);
+    for (const y of [0, 0.25, 0.5, 0.8, 1]) {
+      const want = rd.props.mapping === 'log'
+        ? b.value * 2 ** ((b.cents + 1200 * g * y) / 1200) : b.value + g * y;
+      assert.ok(Math.abs(rd.at(y) - want) <= 1e-9 * Math.max(1, Math.abs(want)),
+        `${recipe.id} y ${y}: ${rd.at(y)} vs the compiler's ${want}`);
+      assert.equal(opts.readout.y(y), `${name} ${k.text(want)}`, `${recipe.id}: the ring's value`);
+      model.key('Home', false, 'y'); // the slider text at this y
+      assert.ok(opts.text.y(y).endsWith(`% to ${name}: ${k.text(want)}`),
+        `${recipe.id}: Y's aria-valuetext ${opts.text.y(y)}`);
+    }
+    assert.deepEqual(opts.readout.yEnds, [k.text(rd.at(0)), k.text(rd.at(1))], 'the Y ends');
+    m.destroy();
+  }
+});
+
+test('the readout line sits above the pad; Y driving nothing reads no value', () => {
+  const r = rig();
+  const m = r.mount();
+  const html = r.host.innerHTML;
+  assert.ok(html.indexOf('data-osc="synth.xy.readout"') < html.indexOf('data-osc="synth.xy.pad"'),
+    'the readout above the pad, clear of the docked keyboard');
+  m.destroy();
+  assert.equal(r.st.dispatch(xyTargetAction(r.st.getModel(), PANEL, null).action).ok, true);
+  const n = r.mount();
+  assert.equal(n.view.opts.readout.y(0.5), null);
+  assert.equal(n.view.opts.readout.yEnds, null);
+  assert.equal(n.view.opts.text.y(0.5), '50 % to nothing');
+  n.destroy();
 });

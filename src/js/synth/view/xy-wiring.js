@@ -38,6 +38,13 @@
 // then sends the router's all-off (studio/live-notes.js through transport.live), so a lost
 // note-off never leaves a voice held. No window listener and no key binding is added here.
 //
+// The pad's view (S3) is what the pad sends, drawn: each X cell is labelled by the note of
+// xyDegree, the function the runtime adapter quantises X with, at the x the mount sends for
+// that cell (xyCellX); Y's readout is what Y asks of its target, xyYReading's at(y) (the
+// compiler's CONTROL line, studio/ports.js) in the target knob's own text (knob.js), and the Y
+// ends are at(0) and at(1). The readout line sits above the pad, clear of the docked keyboard.
+//   xyCellX(i, steps) -> the x (0..1) the mount sends for cell i: its centre
+//
 // Phone first open (a coarse pointer, a narrow viewport): opening the tab edits nothing (no
 // BATCH, no history entry, no dirty document). An unpatched pad states what its one first
 // action does, Patch the pad into the voice (the primary button there: the XY lead's scale and
@@ -46,12 +53,13 @@
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
-import { SCALE_LABELS } from '../../core/music.js';
+import { NOTE_NAMES, SCALE_LABELS } from '../../core/music.js';
 import {
   XY_RECIPES, XY_VOICE, xyCablesAction, xyPatchAction, xyPatched, xyPresetPatch, xyTarget,
-  xyTargetAction, xyTargets,
+  xyTargetAction, xyTargets, xyYReading,
 } from '../xy.js';
 import { esc } from './face.js';
+import { knobModel } from './knob.js';
 
 export const XY_TEXT = Object.freeze({
   unpatched: 'The pad is not patched into the voice: choose an XY preset, or Patch the pad into '
@@ -73,6 +81,9 @@ const PRIMARY = 'h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-wh
 const BUTTON = 'rounded-lg px-3 h-11 text-xs font-medium text-primary-700 border border-solid '
   + 'border-primary-600 hover:bg-primary-50 focus:outline-none focus-visible:ring-2 '
   + 'focus-visible:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700';
+
+/** The x the mount sends for cell i of `steps`: the cell's centre (what xyDegree quantises). */
+export const xyCellX = (i, steps) => (i + 0.5) / steps;
 
 const CURSORS = new WeakMap(); // store -> the pad's cursor: performance state, never the model
 const OWNER_HUBS = new WeakMap(); // app -> listeners of outputOwner: one $watch per app
@@ -155,7 +166,14 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
         && next === XY_LEAD.y;
       const range = `${scale} over ${p.span} oct from ${p.key}${p.octave}`;
       const tag = lead ? " (the XY lead's scale and target)" : '';
-      return { params: p, steps, deg: (i) => xyDegree((i + 0.5) / steps, p), scale,
+      // What Y asks of its target, read from the document as it is at each reading.
+      let seen = { m: null, r: null };
+      const reading = () => {
+        const now = model();
+        if (now !== seen.m) seen = { m: now, r: xyYReading(now, panel) };
+        return seen.r;
+      };
+      return { params: p, steps, deg: (i) => xyDegree(xyCellX(i, steps), p), scale, reading,
         target: to ? jackName(to) : 'nothing', lead,
         disabled: patched ? null : XY_TEXT.unpatched,
         stated: patched ? `${lead ? 'Default: ' : ''}${range}; Y drives ${jackName(to)}${tag}.`
@@ -168,7 +186,7 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
     live(kind, x, y) {
       const t = transport();
       const n = pad();
-      return t && t.playing && n ? t.live(n.id, { kind, x: (x + 0.5) / steps, y }) : null;
+      return t && t.playing && n ? t.live(n.id, { kind, x: xyCellX(x, steps), y }) : null;
     },
     arm,
     /** The router's release (live-notes.js all-off): whatever the pad's node still holds. */
@@ -246,13 +264,31 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   host.innerHTML = '<div class="flex flex-wrap items-center gap-2" data-xy-controls=""></div>'
     + '<p class="mt-2 text-sm text-gray-700 dark:text-gray-300" data-xy-default=""></p>'
     + `<p id="${uid}-first" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white" `
-    + 'data-xy-first="" hidden></p><div class="mt-3" data-osc="synth.xy.pad"></div>'
-    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[1.25rem] font-mono text-sm '
-    + 'text-gray-700 dark:text-gray-300"></p>';
+    + 'data-xy-first="" hidden></p>'
+    // The readout above the pad, where the docked keyboard never covers it (S3), its lines
+    // reserved (3 on a phone, 2 from sm, 1 from lg) so that a longer reading never moves the
+    // pad under the finger.
+    + '<p data-osc="synth.xy.readout" class="mt-2 min-h-[3.75rem] font-mono text-sm '
+    + 'text-gray-700 sm:min-h-[2.5rem] lg:min-h-[1.25rem] dark:text-gray-300"></p>'
+    + '<div class="mt-2" data-osc="synth.xy.pad"></div>';
   const spec = target.wire(host.querySelector('[data-xy-controls]'), { phone: !!phone() });
   const box = host.querySelector('[data-osc="synth.xy.pad"]');
   if (spec && box) {
-    const { steps, deg, scale, target: to, params: p } = spec;
+    const { steps, deg, scale, target: to, params: p, reading } = spec;
+    /** Y's value on its target at y, in the target knob's text; '' when Y drives nothing. */
+    const yValue = (y) => {
+      const r = reading();
+      if (!r) return '';
+      const v = r.at(y);
+      const k = knobModel(r.param);
+      return `${k.text(v)}${v > r.param.max || v < r.param.min ? ' (past its range)' : ''}`;
+    };
+    const others = () => {
+      const r = reading();
+      return r && r.others ? `, and ${r.others} more cable${r.others > 1 ? 's' : ''} into it`
+        : '';
+    };
+    const ends = reading() ? [yValue(0), yValue(1)] : null;
     host.querySelector('[data-xy-default]').textContent = spec.stated;
     const first = host.querySelector('[data-xy-first]');
     if (!spec.disabled) {
@@ -274,8 +310,9 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     const live = (kind, v) => {
       const r = target.live(kind, v.x, v.y);
       const d = deg(v.x);
+      const yv = yValue(v.y);
       out.textContent = `${d.name} · degree ${d.degree} of ${scale} · Y ${Math.round(v.y * 100)}`
-        + ` % → ${to}${r && r.held ? ' · gate open' : ''}`;
+        + ` % → ${to}${yv ? ` ${yv}` : ''}`; // the gate: the pad's LED
       return r;
     };
     const was = CURSORS.get(store);
@@ -290,15 +327,26 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
         + `${p.key}${p.octave}, low at the left. Y drives ${to}, low at the bottom. Arrows `
         + 'move the cursor; hold Enter, or touch, to sound it; Escape releases.',
       describedBy: spec.disabled ? [] : [`${uid}-first`],
-      cells: Array.from({ length: steps }, (_, i) => ({ label: String(deg(i).degree),
-        root: deg(i).degree === 1 })),
+      // Each cell's note, as the runtime quantises its x: the full name where the row has room,
+      // else on the roots (the key at each octave) and the note letter between them.
+      cells: Array.from({ length: steps }, (_, i) => {
+        const d = deg(i);
+        const root = d.degree === 1;
+        return { label: steps <= 15 || root ? d.name : NOTE_NAMES[((d.note % 12) + 12) % 12],
+          root };
+      }),
       disabled: spec.disabled,
       x: { key: 'x', label: 'Pitch', type: 'integer', min: 0, max: steps - 1, step: 1,
         default: Math.floor(steps / 2) },
       y: { key: 'y', label: `Y: ${to}`, type: 'number', min: 0, max: 1, default: 0.5 },
       value: pos,
       text: { x: (i) => `${deg(i).name}, degree ${deg(i).degree}`,
-        y: (v) => `${Math.round(v * 100)} % to ${to}` },
+        y: (v) => {
+          const yv = yValue(v);
+          return `${Math.round(v * 100)} % to ${to}${yv ? `: ${yv}${others()}` : ''}`;
+        } },
+      readout: { x: (i) => deg(i).name, y: (v) => (yValue(v) ? `${to} ${yValue(v)}` : null),
+        yEnds: ends },
       onPreview(v) {
         keep(v);
         live('move', v);
