@@ -7,8 +7,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { referenceStrings, relativeCost, relativeReport, slowed }
-  from './fixtures/host-relative-budget.mjs';
+import { CALIBRATION_ATTEMPTS, QUOTIENT_BAND, QUOTIENT_MEASURED, STEADINESS_LIMIT,
+  STEADINESS_MEASURED, calibrationFaults, referenceNumbers, referenceStrings, relativeCost,
+  relativeReport, slowed } from './fixtures/host-relative-budget.mjs';
 import {
   CABLE_DASH, CABLE_HIT_PX, CABLE_MAX_SAG, CABLE_MIN_SAG, CABLE_REACH, REFUSED_DASH, SETTLE_MS,
   cableCurve, cableDirections, cableParts, cableSag, cableSvg, plugSvg, settle,
@@ -520,7 +521,12 @@ test('cable.js is pure: no import from the Synth view, no DOM, no layout', () =>
 // (the main thread's CPU time) in this process, interleaved, the fastest of RELATIVE_RUNS (9)
 // units each: a slower or busier host slows both, so the multiple stays the code's. A budget of
 // a fixed time measured the host instead: hosted runners timed the same work up to five times
-// apart (#420), and lundra, a slower host, failed it in every one of 10 runs.
+// apart (#420), and lundra, a slower host, failed it in every one of 10 runs. The calibration
+// checks itself against a second reference of another character, referenceNumbers(), timed
+// interleaved with both: their quotient is a constant of the two programs on any healthy host
+// and must hold its band, and each reference's units must agree (its steadiness), or the
+// measurement is taken again and at last refused (fail closed), since a starved reference
+// would make every work look cheap; the fixture derives the band and the limit.
 //
 // Derivation (E058's commit holds the runs): each budget's work measured in 10 runs of this
 // file under each of the Apple M5 Pro of 18 cores on node 22 at its own load (9-11), under 8,
@@ -605,14 +611,98 @@ test('E058 pin: each budget fails its work made ten times slower', (t) => {
 });
 
 test('E058 pin: each budget passes on a host five times slower', (t) => {
-  // The property the budgets rest on: the same busy loop applied to the work and to the
-  // reference alike (a host five times slower) leaves the multiple, and so the verdict, alone.
+  // The property the budgets rest on: the same busy loop applied to the work and to both
+  // references alike (a host five times slower) leaves the multiple, the calibration's quotient
+  // and so the verdict alone.
   for (const { name, work, bound } of BUDGETS) {
     const m = relativeCost(slowed(work, 5), { reference: slowed(() => referenceStrings(), 5),
-      runs: 3 });
+      control: slowed(() => referenceNumbers(), 5), runs: 3 });
     t.diagnostic(relativeReport(`${name}, host 5x slower`, m, bound));
     assert.ok(m.ratio <= bound, `${name} on a 5x slower host: ${relativeReport(name, m, bound)}`);
   }
+});
+
+/** The refusal `measure` throws: a calibration named unreliable, after every attempt. */
+function refusal(measure) {
+  let error;
+  assert.throws(() => {
+    try {
+      measure();
+    } catch (e) {
+      error = e;
+      throw e;
+    }
+  }, /the calibration is unreliable after \d+ attempts/);
+  assert.equal(error.measurement.attempts, CALIBRATION_ATTEMPTS);
+  assert.ok(error.faults.length > 0);
+  return error;
+}
+
+test('E058 pin: a starved reference fails closed, though the bare multiple would pass', (t) => {
+  // The case the self-check exists for (fail-first: before it, both measurements returned a
+  // multiple within the bound): the reference alone made ten times slower makes every work look
+  // ten times cheaper, the work as it is and the work made ten times slower alike. The quotient
+  // of the references moves ten times, out of its band, and nothing is judged.
+  const { name, work, bound } = BUDGETS[0];
+  const starved = slowed(() => referenceStrings(), 10);
+  for (const [what, fn] of [['as it is', work], ['ten times slower', slowed(work, 10)]]) {
+    const e = refusal(() => relativeCost(fn, { reference: starved, runs: 3 }));
+    t.diagnostic(`${name} ${what}, the reference starved: ${e.message}`);
+    assert.ok(e.measurement.ratio <= bound, `the bare multiple ${e.measurement.ratio} passes`);
+    assert.match(e.faults.join('; '), /quotient/);
+  }
+});
+
+test('E058 pin: the control alone made ten times slower fails closed', (t) => {
+  // The other reference's half of the same check (the reference alone is the starved case
+  // above, the work as it is): either one slowed alone moves the quotient ten times.
+  const { name, work } = BUDGETS[0];
+  const e = refusal(() => relativeCost(work, { control: slowed(() => referenceNumbers(), 10),
+    runs: 3 }));
+  t.diagnostic(`${name}, the control 10x slower: ${e.message}`);
+  assert.match(e.faults.join('; '), /quotient/);
+});
+
+test('E058 pin: a reference whose units disagree fails closed', (t) => {
+  // Every other call of the reference ten times slower: where a unit is one call, the units
+  // disagree (the steadiness fails); where it is more, each is slower (the quotient fails).
+  let n = 0;
+  const slow = slowed(() => referenceStrings(), 10);
+  const jitter = () => (n++ % 2 ? slow() : referenceStrings());
+  const e = refusal(() => relativeCost(BUDGETS[0].work, { reference: jitter, runs: 5 }));
+  t.diagnostic(`600 cables, the reference unsteady: ${e.message}`);
+});
+
+test('E058: the calibration\'s faults name the quotient and each unsteady reference', () => {
+  const mid = Math.sqrt(QUOTIENT_BAND[0] * QUOTIENT_BAND[1]);
+  const steady = { reference: 1, control: 1 };
+  assert.deepEqual(calibrationFaults({ quotient: mid, steadiness: steady }), []);
+  for (const q of QUOTIENT_BAND) {
+    assert.deepEqual(calibrationFaults({ quotient: q, steadiness: steady }), [], String(q));
+  }
+  for (const q of [QUOTIENT_BAND[0] * 0.99, QUOTIENT_BAND[1] * 1.01, NaN, Infinity]) {
+    const faults = calibrationFaults({ quotient: q, steadiness: steady });
+    assert.equal(faults.length, 1, String(q));
+    assert.match(faults[0], /quotient/);
+  }
+  assert.deepEqual(calibrationFaults({ quotient: mid,
+    steadiness: { reference: STEADINESS_LIMIT, control: STEADINESS_LIMIT } }), []);
+  for (const which of ['reference', 'control']) {
+    const faults = calibrationFaults({ quotient: mid,
+      steadiness: { ...steady, [which]: STEADINESS_LIMIT * 1.01 } });
+    assert.equal(faults.length, 1, which);
+    assert.match(faults[0], new RegExp(`the ${which}'s median unit`));
+  }
+});
+
+test('E058: the band holds every quotient measured and refuses a reference ten times off', () => {
+  const [least, most] = QUOTIENT_MEASURED;
+  assert.ok(Number.isFinite(least) && Number.isFinite(most) && least > 0, 'measured');
+  assert.ok(QUOTIENT_BAND[0] < least && most < QUOTIENT_BAND[1], 'the band holds what was seen');
+  assert.ok(10 * least > QUOTIENT_BAND[1], `ten times ${least} over ${QUOTIENT_BAND[1]}`);
+  assert.ok(most / 10 < QUOTIENT_BAND[0], `a tenth of ${most} under ${QUOTIENT_BAND[0]}`);
+  assert.ok(Number.isFinite(STEADINESS_MEASURED) && STEADINESS_MEASURED < STEADINESS_LIMIT);
+  assert.ok(STEADINESS_LIMIT < 10, 'a reference ten times off in half its units is unsteady');
 });
 
 test('E058: each bound passes what was measured and fails it made ten times slower', () => {
