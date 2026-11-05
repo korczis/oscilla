@@ -242,11 +242,12 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
       cmp.kbdNoteOwner = info.owner || null;
       cmp.kbdDockExpanded = !!info.expanded;
     }
-    // Once the component has drawn what the state shows (the keys come back through
-    // kbdKeysShown, an Alpine effect after this call): the band the dock covers, measured
-    // again before anything is scrolled to, and the app chrome above the owner's surface (the
-    // pad's height follows it). Folded by the owner, or unfolded by the user: the pad above the
-    // dock (a fold by the user only uncovers more of the page, and moves nothing).
+    // As the dock stands now and once the component has drawn what the state shows (the keys
+    // come back through kbdKeysShown, an Alpine effect after this call): the band the dock
+    // covers, measured again before anything is scrolled to, and the app chrome above the
+    // owner's surface (the pad's height follows it). Folded by the owner, or unfolded by the
+    // user: the pad above the dock (a fold by the user only uncovers more of the page, and
+    // moves nothing).
     const place = () => {
       band();
       chrome(info.el);
@@ -254,7 +255,9 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
         reveal(win, info.el, dock);
       }
     };
-    if (cmp && typeof cmp.$nextTick === 'function') cmp.$nextTick(place); else place();
+    place(); // now, as the dock's own children stand
+    // and again once the component has drawn (an Alpine nextTick can be held while it starts).
+    if (cmp && typeof cmp.$nextTick === 'function') cmp.$nextTick(place);
   }
 
   const ctl = createDockYield({ release, apply, read: () => ({ workspace: cmp.workspace }) });
