@@ -5,6 +5,7 @@
 //
 //   createSynthNotes(deps) -> { noteOn(note, velocity), noteOff(note), allOff(), disarm(reason) }
 
+import { forcedOff } from '../audio/gate.js';
 import { SYNTH_TEXT } from './insert.js';
 import { droppedText } from './view/engines.js';
 
@@ -35,10 +36,10 @@ export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played
     return r;
   }
 
-  function noteOff(note) {
+  function noteOff(note, info) {
     const t = get().transport;
     const k = present() ? played() : null;
-    return t && k ? t.live(k.id, { kind: 'off', note }).ok : false;
+    return t && k ? t.live(k.id, { kind: 'off', note, forced: forcedOff(info) }).ok : false;
   }
 
   /** Every note of every note source of the panel off (Escape, a tab change, MIDI all-off). */

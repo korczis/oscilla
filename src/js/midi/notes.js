@@ -25,6 +25,7 @@
 // the output (ownedBy, src/js/midi/ui.js MIDI_REFUSED).
 // The Labs stages that play() adds (filter, ADSR, additive) do not apply to notes.
 
+import { forcedOff } from '../audio/gate.js';
 import { clamp } from '../core/math.js';
 import { midiToFrequency } from '../core/music.js';
 import { WAVEFORMS } from '../core/constants.js';
@@ -77,8 +78,8 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   // routed sink, or ENGINE (the Playground's note voices). Its note-off goes there, whatever
   // route() answers by then, so a key held across a workspace switch is released where it
   // sounds and never left sounding.
-  const ENGINE = Object.freeze({ noteOff: (note, info) => (engine ? engine.noteOff(info.key)
-    : false) });
+  const ENGINE = Object.freeze({ noteOff: (note, info) => (engine
+    ? engine.noteOff(info.key, { forced: forcedOff(info) }) : false) });
   const held = createHeldNotes();
   // The input a source belongs to: the keyboard's `kbd-<source>`, else a MIDI input's number.
   const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
@@ -142,11 +143,13 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   }
 
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
-  function noteOff(note, source = 0, channel = 0) {
+  /** `forced` (blur, hide, Escape): a stop never deferred by the minimum gate (K184). */
+  function noteOff(note, source = 0, channel = 0, { forced = false } = {}) {
     const key = keyOf(source, channel, note);
     // A key not held here: where it would sound now.
     const sink = held.releaseKey(key) || route() || ENGINE;
-    return sink === ENGINE ? ENGINE.noteOff(note, { key }) : sink.noteOff(note);
+    return sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
+      : sink.noteOff(note, { key, forced });
   }
 
   return {
