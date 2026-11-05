@@ -283,6 +283,12 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   }
 
   const ctl = createDockYield({ release, apply, read: () => ({ workspace: cmp.workspace }) });
+  // A press on the handle never takes the focus (review of #425, R8): a second finger tapping it
+  // while the pad holds a note would blur the pad's group, whose focusout ends the gate
+  // (ui/kinds/xy-pad.js). The focus moves on the press's mousedown (a tap's compatibility
+  // mousedown too), so that is what is prevented: preventing the pointerdown would also cancel
+  // a tap's click in WebKit. The click still toggles, and Tab still reaches the handle.
+  handle.addEventListener('mousedown', (e) => e.preventDefault());
   handle.addEventListener('click', () => ctl.toggle());
   for (const d of (LIVE.get(win) || new Map()).values()) ctl.claim(d);
   win.addEventListener(NOTES_EVENT, (e) => ctl.claim(e.detail));

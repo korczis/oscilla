@@ -612,3 +612,18 @@ test('nothing is placed from a surface with no box, and a hidden pad claims noth
     assert.deepEqual(claims(), ['xy-pad', null], 'destroy drops nothing more');
     assert.equal(observed, null, 'the observer is disconnected');
   });
+
+test("a press on the dock's handle takes no focus, so a held pad keeps its gate (R8)", () => {
+  const d = fakeDom();
+  yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp: { workspace: 'synth' }, dock: d.dock,
+    release: () => 0 });
+  const handle = d.dock.children.find((c) => c.getAttribute('data-osc') === 'keyboard.handle');
+  assert.ok(handle, 'the handle is made');
+  assert.equal(typeof handle.onmousedown, 'function', 'the handle listens to its mousedown');
+  let prevented = false;
+  handle.onmousedown({ preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, true, 'its mousedown moves no focus off the pad');
+  assert.equal(handle.onpointerdown, undefined,
+    "the pointerdown is left alone: preventing it would cancel WebKit's tap click");
+  assert.equal(typeof handle.onclick, 'function', 'the click still toggles the dock');
+});

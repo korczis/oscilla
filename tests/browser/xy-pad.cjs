@@ -113,6 +113,13 @@
 //              room: 100dvh less the chrome and --osc-dock-h, the keys shown) and folding it
 //              again by Alt+K leave the pad's note sounding (the fold releases only the keys'
 //              notes); the lift silences
+//   x-dock-handle-hold (review of #425, R8; 390 x 844, touch, the gesture rule on; chromium by
+//              CDP touch, webkit by a touch pointer dispatched on the pad and a real tap; firefox
+//              skips it) a finger held on the pad sounds, a second finger taps the dock's handle:
+//              the keys unfold where the tap is a click (webkit; chromium makes no click of a
+//              tap while another finger is down, and the dock stays folded),
+//              the focus stays in the pad's group, its gate stays open (aria-pressed) and the
+//              note sounds on; the lift silences
 'use strict';
 
 const fs = require('node:fs');
@@ -152,7 +159,8 @@ const CONTEXT_OF = { 'x-view-reduced': { reducedMotion: 'reduce' } };
 // x-first runs on the desktop and the phone legs; K171 holds at the iPhone 13 and SE sizes,
 // and at 1536 x 1024 and 1280 x 720 with a mouse.
 const LEGS_OF = { 'x-first': ['desktop', 'phone'],
-  'x-dock-yields': ['phone-dock', 'phone-dock-se'], 'x-dock-desktop': ['desktop', 'laptop'] };
+  'x-dock-yields': ['phone-dock', 'phone-dock-se'], 'x-dock-desktop': ['desktop', 'laptop'],
+  'x-dock-handle-hold': ['phone-dock'] };
 // The legs with the browser's gesture rule on and mobile emulation where the engine has it.
 const GESTURE_LEGS = new Set(['phone-cold', 'phone-dock', 'phone-dock-se']);
 // The checks about the XY lead preset (the pad's view, S3, is measured on it); every other one
@@ -168,6 +176,8 @@ const SKIP_OF = {
   'x-touch': { firefox: 'two touch points need the CDP touch input',
     webkit: 'two touch points need the CDP touch input' },
   'x-first/phone': { firefox: 'Firefox has no mobile emulation: no coarse pointer' },
+  'x-dock-handle-hold': { firefox: 'two fingers need a held touch: Playwright holds none in '
+    + 'firefox, and a held mouse ends at a touch tap there (its compatibility mouse events)' },
 };
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // an attack, a glide and the analyser's smoothing
@@ -1065,6 +1075,60 @@ function defineChecks() {
     await page.keyboard.up('KeyA');
     return { ok: true, pad: v.pad, handle: v.handle, peak: Number(peak.toFixed(1)), keyDb,
       tapped: tapped.state, keyed: keyed.state, folded: folded.folded };
+  });
+
+  def('x-dock-handle-hold', async ({ page, browserName }) => {
+    // Review of #425, R8: a pointer holds the pad and sounds; a second finger taps the dock's
+    // handle. The tap unfolds the keys and takes no focus, so the pad keeps its focus and the
+    // held note keeps sounding (the pad's focusout would end the gate); the lift silences.
+    let v = null;
+    await until(async () => {
+      v = await dockView(page);
+      return v.disabled === 'false' && v.state === 'collapsed' && inView(v) && !!v.handle;
+    }, { ms: SOUND_MS, what: 'the playable pad is whole in the first viewport, the dock folded' });
+    const c = { x: (v.pad.left + v.pad.right) / 2, y: (v.pad.top + v.pad.bottom) / 2 };
+    // Two fingers: chromium holds the pad by CDP touch, webkit by a touch pointer dispatched on
+    // the pad (Playwright holds no touch there); the second finger is a real tap on the handle.
+    const cdp = browserName === 'chromium' ? await page.context().newCDPSession(page) : null;
+    const hold = cdp ? null : await press(page, c, { touch: 'dispatch' });
+    if (cdp) {
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart',
+        touchPoints: [{ x: c.x, y: c.y, id: 1 }] });
+    }
+    await loud(page, 'a finger held on the pad sounds');
+    const focusOf = () => page.evaluate(() => {
+      const s = document.querySelector('[data-xy-surface]');
+      return { pressed: s.getAttribute('aria-pressed'),
+        inPad: !!s.closest('[role="group"]') && s.closest('[role="group"]')
+          .contains(document.activeElement) };
+    });
+    const before = await focusOf();
+    const h = await page.locator(HANDLE).boundingBox();
+    const t = { x: h.x + h.width / 2, y: h.y + h.height / 2, id: 2 };
+    if (cdp) { // the second finger down and up while the first stays
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart',
+        touchPoints: [{ x: c.x, y: c.y, id: 1 }, t] });
+      // touchEnd names the finger that lifts: the second, while the first stays on the pad.
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [t] });
+    } else {
+      await page.touchscreen.tap(t.x, t.y);
+    }
+    // WebKit makes the second finger's tap a click: it unfolds the keys. Chromium makes no
+    // click of a tap while another finger is down (nor a mousedown): the dock stays folded.
+    const want = browserName === 'chromium' ? 'collapsed' : 'docked';
+    const open = await dockIs(page, want, `the second finger's tap leaves the dock ${want}`,
+      { whole: false });
+    const after = await focusOf();
+    const held = await loud(page, 'the pad\'s note sounds on after the tap on the handle');
+    if (before.pressed !== 'true' || after.pressed !== 'true' || !after.inPad) {
+      return { ok: false, detail: 'the tap on the handle took the focus or ended the gate',
+        before, after };
+    }
+    if (cdp) await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    else await hold.lift();
+    const off = await silent(page, 'the lift silences');
+    return { ok: true, before, after, state: open.state, held: Number(held.rmsDb.toFixed(1)),
+      off: Number(off.rmsDb.toFixed(1)) };
   });
 
   def('x-dock-desktop', async ({ page, sizeName }) => {
