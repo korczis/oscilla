@@ -125,6 +125,33 @@ test('negative: a patch for an instrument the model lacks says so; Insert still 
   assert.deepEqual(entryAction(p, dark, 'apply', { target: lpf }).action.onto, { n: lpf });
 });
 
+test('Apply sets the selected engine, not the panel\'s module its patch names', () => {
+  const st = panelStore();
+  const all = catalogEntries();
+  const bell = all.find((e) => e.id === 'synth-fm-bell');
+  const keys = all.find((e) => e.id === 'synth-fm-keys');
+  const added = st.dispatch(entryAction(st.getModel(), bell, 'insert').action).created.nodes[0];
+  const panelFm = PANEL.resolve(st.getModel()).get('fm').id;
+  assert.notEqual(added, panelFm);
+  const m = st.getModel();
+  // Nothing selected: the engine preset still finds the Synth panel's FM module.
+  assert.deepEqual(entryAction(m, keys, 'apply').action.onto, { fm: panelFm });
+  // The person selected the inserted FM engine: that node is the one it sets.
+  const v = browseView([keys], m, { target: added }).items[0];
+  assert.deepEqual([v.applicable, v.reason], [true, null]);
+  const r = entryAction(m, keys, 'apply', { target: added });
+  assert.deepEqual(r.action.onto, { fm: added });
+  const before = m.graph.nodes.find((n) => n.id === panelFm).params;
+  assert.equal(st.dispatch(r.action).ok, true);
+  const params = (id) => st.getModel().graph.nodes.find((n) => n.id === id).params;
+  const want = keys.patch.graph.nodes[0].params;
+  for (const k of Object.keys(want)) assert.deepEqual(params(added)[k], want[k], k);
+  assert.deepEqual(params(panelFm), before, 'the panel\'s FM module is untouched');
+  // A selected node of another type is no choice for this patch: the panel's module again.
+  const lpf = PANEL.resolve(m).get('lpf').id;
+  assert.deepEqual(entryAction(m, keys, 'apply', { target: lpf }).action.onto, { fm: panelFm });
+});
+
 test('the saved patches and a registered source (the XY pad hook) join the same library', () => {
   const st = panelStore();
   const m = st.getModel();
