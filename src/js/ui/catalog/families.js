@@ -38,7 +38,7 @@ export const FAMILIES = Object.freeze({
     what: 'the ADSR curve law the voice schedules, and every drawing or editor of it' }),
   'filter-response': Object.freeze({ slice: 'G028', model: 'src/js/audio/filters.js',
     what: 'the filter stage and its magnitude response, live or computed' }),
-  // The oscilla-pad (the owner's order of 2026-11-05: "no kaosspad (oscilla-pad)"): one
+  // The oscilla-pad (the owner's order of 2026-11-05: no copy of a hardware pad): one
   // two-parameter surface, OSCILLA's own, whose looks are skins of one model.
   pad: Object.freeze({ slice: 'G030', model: 'src/js/ui/kinds/xy-pad.js',
     what: 'the oscilla-pad: two declared parameters on one surface, its pointer and keys' }),
