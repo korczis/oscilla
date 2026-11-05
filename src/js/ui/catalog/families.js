@@ -30,6 +30,13 @@ export const FAMILIES = Object.freeze({
     what: 'the piano keys: key layout, held notes, octave and velocity' }),
   'app-shell': Object.freeze({ slice: 'G026', model: 'src/js/ui/shell.js',
     what: 'the navbar, the sidebar navigation and the page header' }),
+  // The modelers (the owner's order of 2026-11-05: one ADSR envelope modeler and one filter
+  // modeler, bus-connected into the Studio, the Synth, the sequencer and the labs). The model is
+  // the law the sound follows, so every curve drawn of it is the curve that plays.
+  envelope: Object.freeze({ slice: 'G027', model: 'src/js/audio/envelope.js',
+    what: 'the ADSR curve law the voice schedules, and every drawing or editor of it' }),
+  'filter-response': Object.freeze({ slice: 'G028', model: 'src/js/audio/filters.js',
+    what: 'the filter stage and its magnitude response, live or computed' }),
 });
 
 export const FAMILY_IDS = Object.freeze(Object.keys(FAMILIES));

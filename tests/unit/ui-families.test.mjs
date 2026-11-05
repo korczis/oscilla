@@ -49,13 +49,14 @@ test('the tree: every family problem is a listed duplicate and every listed one 
       'a duplicate that is gone: remove its baseline entry (the baseline only shrinks)');
   });
 
-test('the table: six families, each model named exists with its marker, each with its slice',
+test('the table: eight families, each model named exists with its marker, each with its slice',
   async () => {
     const { FAMILIES } = await load();
     assert.deepEqual(Object.keys(FAMILIES).sort(),
-      ['app-shell', 'keyboard', 'knob', 'patch-bay', 'slider', 'switch']);
+      ['app-shell', 'envelope', 'filter-response', 'keyboard', 'knob', 'patch-bay', 'slider',
+        'switch']);
     for (const [id, f] of Object.entries(FAMILIES)) {
-      assert.match(f.slice, /^G02[2-6]$/, `${id}: the slice that unifies it`);
+      assert.match(f.slice, /^G02[2-8]$/, `${id}: the slice that unifies it`);
       if (!f.model) continue;
       const text = readFileSync(at(f.model), 'utf8');
       assert.match(text, new RegExp(`^// ui-family: ${id} model$`, 'm'), `${id}: model marker`);
@@ -145,6 +146,23 @@ test('mutation: only the model or a skin of a family may write its data-ui-famil
   assert.deepEqual(kinds({ ...base(), 'src/js/k/s.js': '// ui-family: knob skin pro\n'
     + "export const h = '<div data-ui-family=\"knob\"></div>';\n" }), []);
 });
+
+test('mutation: a second ADSR curve law or a computed biquad response is an implementer',
+  async () => {
+    const { census } = await load();
+    const fam = { envelope: Object.freeze({ slice: 'G027', model: null, what: 'x' }),
+      'filter-response': Object.freeze({ slice: 'G028', model: null, what: 'x' }) };
+    const files = {
+      'src/js/a.js': 'function envelope(p) {\n  const v = [p.attack, p.decay];\n  return v;\n}\n',
+      'src/js/b.js': 'export function biquadDb(t, f0, q, g, f) { return 0; }\n',
+      // the amplitude envelope of a signal is not an ADSR law
+      'src/js/c.js': 'export function envelope(x) {\n  return x.map(Math.abs);\n}\n',
+      // driving an envelope node is not computing its curve
+      'src/js/d.js': 'function rebuildEnvelope(h, t) {\n  h.release(t);\n}\n',
+      'src/js/e.js': 'function ownEnvelope(h) {\n  return typeof h.release === "function";\n}\n' };
+    assert.deepEqual(census.familyCensus(files, fam).problems.map((p) => `${p.family} ${p.file}`),
+      ['envelope src/js/a.js', 'filter-response src/js/b.js']);
+  });
 
 test('mutation: a baseline entry whose duplicate is gone fails (the baseline only shrinks)',
   async () => {

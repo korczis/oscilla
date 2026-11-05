@@ -4,6 +4,8 @@
 // The cutoff handle is a circle on the curve. Drag it (or anywhere on the plot): x sets the
 // cutoff, vertical movement sets Q (up = higher); the wheel also changes Q. The shell's cutoff
 // and Q fields/sliders are the keyboard alternative.
+//
+// ui-family: filter-response skin uplot
 
 import uPlot from 'uplot';
 import { logFrequencies } from '../audio/filters.js';

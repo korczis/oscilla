@@ -48,6 +48,14 @@ export const SIGNATURES = Object.freeze({
   'patch-bay': [/\bfunction\s+cablePath\s*\(/, /\bconst\s+cablePath\s*=/],
   // a renderer or the registry of the navbar and the sidebar navigation
   'app-shell': [/\bexport\s+function\s+navTree\b/, /\bexport\s+const\s+WORKSPACE_REGISTRY\b/],
+  // an ADSR curve law: the events or points of attack, decay, sustain and release
+  // (a law reads attack and decay; an amplitude envelope of a signal, analysis/analytic.js,
+  // reads neither, and h.release(t) or typeof h.release drives an envelope, it computes none)
+  envelope: [/\bfunction\s+adsrEvents\s*\(/, /\bfunction\s+envelopePoints\s*\(/,
+    /\bfunction\s+\w*[Ee]nvelope\w*\s*\([^)]*\)\s*\{[^}]*\.attack\b[^}]*\.decay\b/],
+  // a filter's magnitude response: the live stage, or a biquad formula computing it
+  'filter-response': [/\bfunction\s+createFilterStage\s*\(/,
+    /\bfunction\s+biquad(Db|Magnitude|Response)\s*\(/],
 });
 
 // The value logic a skin must not hold (it is the model's): the first signatures of the families
@@ -56,6 +64,8 @@ const VALUE_LOGIC = Object.freeze({
   knob: [SIGNATURES.knob[0]],
   slider: SIGNATURES.slider,
   keyboard: SIGNATURES.keyboard,
+  envelope: SIGNATURES.envelope,
+  'filter-response': SIGNATURES['filter-response'],
 });
 
 /** The markers of a module's first lines: [{ family, role, rest }] or a bad marker. */
