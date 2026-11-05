@@ -13,19 +13,22 @@
 #     and repository programs as the job's steps, a leg narrowed with OSC_BROWSERS as the
 #     job's env narrows it. Setup (npm ci, browser and PulseAudio installs, artifact upload)
 #     is not part of a gate;
-#   - ci.yml starts on every pull request and filters no path. Its only job conditions are the
-#     aggregate's `if: always()`, the flake ledger's (E010: it runs after every job the
-#     aggregate judges, on a re-run only, and is skipped on a first attempt; it is never path
-#     gated) and (E026) the path-gated jobs' `needs.changes.outputs.runtime != 'false'`: in CI,
-#     the base branch's .github/scripts/ci-changes.mjs skips the engine, suites, measure,
-#     studio, browser and visual jobs for a pull request whose every changed path is under
-#     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md. A
-#     local task keeps them: the model does not encode that allowlist (a path class cannot say
-#     "every path outside these"), so it over-selects rather than skip a gate the classifier
-#     would run. Every gate is `always: true`: every plan selects it, and any changed file can
-#     make a recorded run of it stale. The one path class covers the whole tree and names no
-#     gate, so a plan reads "affected" with every gate selected as always, never "a changed
-#     path is in no class";
+#   - ci.yml starts on every pull request, and again on its merge-queue entry (merge_group,
+#     ADR 0083: the same jobs on main plus the queued pull requests ahead), and filters no
+#     path. Its only job conditions are the aggregate's `if: always()`, the flake ledger's
+#     (E010: it runs after every job the aggregate judges, on a re-run only, and is skipped on
+#     a first attempt; it is never path gated) and (E026) the path-gated jobs'
+#     `needs.changes.outputs.runtime != 'false'`: in CI, the base branch's
+#     .github/scripts/ci-changes.mjs skips the engine, suites, measure, studio, browser, census
+#     and visual jobs for a pull request into main whose every changed path is under
+#     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (on
+#     merge_group the paths of HEAD^1..HEAD, the queued pull request's merge). A local task
+#     keeps them: the model does not encode that allowlist (a path class cannot say "every
+#     path outside these"), so it over-selects rather than skip a gate the classifier would
+#     run. Every gate is `always: true`: every plan selects it, and any changed file can make a
+#     recorded run of it stale. The one path class covers the whole tree and names no gate, so
+#     a plan reads "affected" with every gate selected as always, never "a changed path is in
+#     no class";
 #   - `gate` is the aggregate that branch protection requires; it `requires` every gate of
 #     the jobs it `needs`, so a failing one leaves it blocked rather than queued. It needs
 #     flake-ledger as it needs every job, and its verdict (ci.yml's env VERDICT) drops that
@@ -51,12 +54,13 @@ gates:
     runs: npm test && npm run version:check && npm run build:check && npm run verify-dist && node scripts/size-report.mjs --base-branch origin/main
     summary: the unit and freeze suites, one product version everywhere, the committed dist equal to a clean rebuild, the artifact rules (single file, no runtime fetch, licence notices, budget), and the size report of dist against the budget and the merge base (a report, never a failure on a size)
 
-  # E026: the classifier is the base branch's copy, extracted with `git cat-file blob`.
+  # E026: the classifier is the base branch's copy, extracted with `git cat-file blob`; <event>
+  # is pull_request or merge_group, the one command line both events use.
   - id: changes
     job: changes
     always: true
-    runs: node .github/scripts/ci-changes.mjs --repo . --event pull_request --head HEAD --base-branch origin/<base>
-    summary: whether the pull request changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the six browser and visual jobs, anything else runs them
+    runs: node .github/scripts/ci-changes.mjs --repo . --event <event> --head HEAD --base-branch origin/<base>
+    summary: whether the pull request (on pull_request) or the queued pull request (on merge_group, ADR 0083; its queue merge commit's HEAD^1..HEAD, and only when HEAD has two parents) changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the seven path-gated jobs (engine, suites, measure, studio, browser, census, visual), anything else runs them
 
   - id: engine-chromium
     job: engine
@@ -183,17 +187,21 @@ gates:
 
   # The two process rules judge a pull request, and the program that judges is the base
   # branch's copy (.github/scripts/base-rule.sh); <base>, <pr.json>, <head> and <pr> are the
-  # pull request's.
+  # pull request's, and <diff-base> is origin/<base> on pull_request and on merge_group the sha
+  # of HEAD^1, which queued-pr.sh checks is the base the queue ref names. Both read the pull
+  # request with gh pr view (headRefOid included), and --check-head holds the queue's HEAD^2 to
+  # it (a no-op on pull_request, where QUEUED_HEAD is empty).
+  # The assignment before the eval fails on queued-pr.sh's exit 2, which eval "$(...)" would not.
   - id: fail-first
     job: fail-first
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
+    runs: vars="$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && eval "$vars" && gh pr view "$PR" --json title,body,headRefName,headRefOid > <pr.json> && .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" <pr.json> && .github/scripts/base-rule.sh origin/<base> scripts/fail-first.mjs --pr-json <pr.json> --head <head> --base-branch origin/<base>
     summary: a feat or fix pull request's added or changed unit tests fail on the merge base and pass on the head, or its body says fail-first n/a with a reason (project.fail-first)
 
   - id: review-verdict
     job: review-verdict
     always: true
-    runs: .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch origin/<base>
+    runs: vars="$(PR=<pr> GITHUB_BASE_REF=<base> .github/scripts/queued-pr.sh)" && eval "$vars" && gh pr view "$PR" --json title,body,headRefName,headRefOid > <pr.json> && .github/scripts/queued-pr.sh --check-head "$QUEUED_HEAD" <pr.json> && PR_JSON=<pr.json> .github/scripts/base-rule.sh origin/<base> scripts/review-verdict.mjs --pr <pr> --head HEAD --base-branch <diff-base>
     summary: a pull request that changes a guarded path carries a reviewer's verdict for the content it changes (project.review-verdict)
 
   - id: gate

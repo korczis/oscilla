@@ -81,6 +81,9 @@ accepted` lists them. The rest stay `proposed`, each for a stated reason:
   yet (G001 builds the catalogue on it).
 - 0082: new and accepted on 2026-11-02 (plan issue R028): the owner chose "CI receipt for all
   releases" in the session of that day; its resolution note names the code and tests.
+- 0083: new and accepted on 2026-11-02 (plan issue E045): the owner chose "Yes, implement it"
+  in the session of oscilla-b0; E045 implements the workflow, rule and receipt changes, and the
+  owner switches the ruleset to require the queue after it lands.
 - 0084: new and accepted on 2026-11-03 (plan issue Q062): the owner chose "(a) DAW in scope";
   it amends only ADR 0058's decision 5 (notes clips, a piano roll, instrument tracks, a session
   grid and later MIDI output on the Studio timeline).
@@ -160,6 +163,7 @@ listed one is not accepted, or when a link, title, date or mark differs from the
 | [0049](0049-raw-capture-retention.md) | The raw capture lives only for its analysis; a run stores derived results | 2026-10-18 | yes |
 | [0061](0061-the-ui-is-built-on-flowbite-pro.md) | The UI is built on Flowbite Pro: Tailwind and Flowbite return at build time, inlined | 2026-10-28 | no |
 | [0082](0082-a-release-rests-on-the-ci-run-of-its-own-pull-request.md) | A release rests on the CI run of its own pull request: the CI receipt binds the merged tree, and the local gate becomes optional | 2026-11-02 | no |
+| [0083](0083-pull-requests-land-through-a-merge-queue-not-a-race-of-armed-auto-merges.md) | Pull requests land through a merge queue, not a race of armed auto-merges on a strict branch | 2026-11-02 | no |
 | [0084](0084-the-studio-timeline-carries-notes-clips-instrument-tracks-and-a-session-grid.md) | The Studio timeline carries notes clips with a piano roll, several instrument tracks, a session grid and later MIDI output (amends ADR 0058 decision 5) | 2026-11-03 | no |
 | [0085](0085-reconstruction-lineage-lives-in-an-immutable-artifact-referenced-by-hash.md) | Reconstruction lineage lives in an immutable artifact the Studio document references by hash; accepting a part is presentation state changed only through undoable actions | 2026-11-03 | no |
 
