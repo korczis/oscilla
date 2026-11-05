@@ -284,3 +284,17 @@ test('Y ends given as a function are read again on each drawn frame (a rate know
   assert.equal(bottom.textContent, '2.4 kHz');
   v.destroy();
 });
+
+test('NF5: the cursor placed by place() is drawn: its slider values and its lines move', () => {
+  // K183 N2 puts Y back at rest with model.place on every release: the view must show it.
+  const p = page();
+  const h = host();
+  const v = mount(h);
+  p.tick();
+  v.model.place({ x: 2, y: 0 });
+  assert.equal(h.querySelector('[data-xy-axis="y"]').getAttribute('aria-valuenow'), '0');
+  assert.equal(h.querySelector('[data-xy-axis="x"]').getAttribute('aria-valuenow'), '2');
+  assert.equal(h.querySelector('[data-xy-cy]').getAttribute('y1'), '100.00',
+    'the horizontal cursor line at the bottom: Y 0');
+  v.destroy();
+});

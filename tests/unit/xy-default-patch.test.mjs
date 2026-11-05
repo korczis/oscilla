@@ -822,3 +822,93 @@ test('NF3: every pad output summing into a control target rests at 0 on lift; Pi
       r.done();
     }
   });
+
+// NF5 (review of #428): the cases the reviewer's surviving mutants (probe428b/mut-r3.sh) named.
+
+test('NF5: after a lift the readout says what sounds, no stale next touch from the old Y',
+  async () => {
+    const r = await padRig();
+    for (let i = 0; i < 90; i += 1) r.model.key('ArrowUp');
+    r.model.gate(true);
+    assert.match(r.readout(), /Y 90 % → lpf\.frequency [^·]+ · gate open/);
+    r.model.end('release');
+    assert.match(r.readout(), / Y 0 % → lpf\.frequency/);
+    assert.doesNotMatch(r.readout(), /the next touch from Y/,
+      'Y was put back at rest: the next touch starts from 0, and the readout does not say 90 %');
+    assert.equal(r.model.value.y, 0);
+    r.done();
+  });
+
+test('NF5: a router all-off while the pad is touched rests its outputs too', async () => {
+  const r = await padRig();
+  const padId = PANEL.resolve(r.st.getModel()).get('xy').id;
+  const out = (port) => r.runtime.nodes.get(padId).outputs[port].offset.events.at(-1).value;
+  for (let i = 0; i < 90; i += 1) r.model.key('ArrowUp');
+  r.model.gate(true);
+  assert.ok(Math.abs(out('y') - 0.9) < 1e-9);
+  r.transport.live(padId, { kind: 'all-off' }); // the router's forced release (live-notes.js)
+  assert.equal(out('y'), 0, 'an all-off rests Y as an off does');
+  r.done();
+});
+
+test('NF5: a cable with its whole room makes no performance-limited diagnostic', () => {
+  // Y -> Detune 600 cents at 440 Hz: inside the range (+-1200) and far from Nyquist: factor 1.
+  const { rt, perf } = detuneRig({ hz: 440, detune: 0, depth: 600 });
+  assert.deepEqual(perf.map((d) => d.message), [], 'nothing is said of a cable at full depth');
+  assert.equal(rt.debugInfo().limitedEdges.includes('y-detune'), false);
+});
+
+/** The default document with X and Y both cabled into MIXER level 1 (0.7, depth 0.25 each). */
+function levelRig(edit = null) {
+  const st = defaultStore();
+  assert.equal(st.dispatch(xy.xyTargetAction(st.getModel(), PANEL, 'mix.level1').action).ok,
+    true);
+  assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'xy.x', 'mix.level1').action).ok,
+    true);
+  if (edit) edit(st);
+  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const rt = createStudioRuntime({ engine });
+  assert.equal(rt.apply(st.getModel(), { revision: 1 }).ok, true);
+  assert.equal(rt.start().ok, true);
+  const m = st.getModel();
+  const res = PANEL.resolve(m);
+  const yEdge = m.graph.edges.find((e) => e.from.node === res.get('xy').id && e.from.port === 'y');
+  return { st, rt, m, res, yEdge };
+}
+
+test('NF5: xyRoom counts the X cables into the same target as the compiler does', () => {
+  const { rt, m, yEdge } = levelRig();
+  const room = xy.xyRoom(m, PANEL);
+  const perf = rt.debugInfo().diagnostics.filter((d) => d.code === 'performance-limited');
+  const fitted = perf.find((d) => d.details.edge === yEdge.id);
+  assert.ok(fitted, 'the compiler holds Y below its depth');
+  // 0.7 + 0.25 (X) + 0.25 (Y) in 0..1: both performance cables share the 0.3 left, 0.6 each.
+  assert.ok(Math.abs(fitted.details.factor - 0.6) < 1e-9, `${fitted.details.factor}`);
+  assert.ok(Math.abs(room.factor - fitted.details.factor) < 1e-9,
+    `the readout's factor ${room.factor} is the compiler's ${fitted.details.factor}`);
+});
+
+test('NF5: a fitted cable whose downward sweep the fit holds in range is not an exceeds',
+  () => {
+    // Y at depth -0.8 into MIXER level 1 at 0.5, X off it: Y would sweep it down to -0.3; the
+    // fit scales that sweep to stay at or above 0, so level1 does not exceed its range.
+    const { rt, res, yEdge } = levelRig((st) => {
+      const m = st.getModel();
+      const r2 = PANEL.resolve(m);
+      const x = m.graph.edges.find((e) => e.from.node === r2.get('xy').id && e.from.port === 'x');
+      const y = m.graph.edges.find((e) => e.from.node === r2.get('xy').id && e.from.port === 'y');
+      assert.equal(st.dispatch({ type: 'EDGE_REMOVE', edgeId: x.id }).ok, true);
+      const up = st.dispatch({ type: 'EDGE_UPDATE', edgeId: y.id, props: { depth: -0.8 } });
+      assert.equal(up.ok, true, up.reason);
+      assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: r2.get('mix').id,
+        params: { level1: 0.5 } }).ok, true);
+    });
+    const exceeds = rt.debugInfo().exceeds.filter((e) => e.node === res.get('mix').id);
+    assert.deepEqual(exceeds, [], 'the fitted downward sweep stays inside 0..1');
+    const fitted = rt.debugInfo().diagnostics.find((d) => d.code === 'performance-limited'
+      && d.details.edge === yEdge.id);
+    assert.ok(fitted && Math.abs(fitted.details.factor - 0.625) < 1e-9,
+      'the fit is what holds it: 0.5 of the 0.8 the cable asks downward');
+  });

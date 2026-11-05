@@ -890,3 +890,20 @@ test('the readout line sits above the pad; Y driving nothing reads no value', ()
   assert.equal(n.view.opts.text.y(0.5), '50 % to nothing');
   n.destroy();
 });
+
+test('NF5: a re-mount starts the cursor at Y 0, the rest the node is at, wherever X was', () => {
+  // The cursor (CURSORS, per store) keeps where the arrows moved it; the node hears nothing
+  // until a touch, so a re-mount (a panel re-render) shows Y at the node's rest, 0.
+  const r = rig();
+  const m1 = r.mount();
+  for (let i = 0; i < 70; i += 1) m1.view.model.key('ArrowUp'); // no touch: the cursor alone
+  m1.view.model.key('ArrowRight');
+  const x = m1.view.model.value.x;
+  assert.ok(m1.view.model.value.y > 0.6);
+  m1.destroy();
+  const m2 = r.mount();
+  assert.equal(m2.view.model.value.y, 0, 'the re-mounted cursor is at Y 0');
+  assert.equal(m2.view.model.value.x, x, 'X stays where it was');
+  m2.destroy();
+  stopNow(r);
+});
