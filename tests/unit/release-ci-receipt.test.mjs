@@ -131,17 +131,24 @@ test('mutation-proven guard: on attempt 1 a cancelled, failed or running ledger 
   }
 });
 
-test('from attempt 3 too the ledger must succeed, keyed on the job\'s own attempt (#417 R5, R6)',
+test('from attempt 3 too the ledger must succeed; a carried skip stamped later refuses (#417 R5, R7)',
   () => {
   const ledger = WORKFLOW.rerunOnly[0];
   const r3 = run({ run_attempt: 3 });
   const skip3 = jobsOf(r3).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
   only(facts({ runs: [r3], jobs: skip3 }), /flake ledger.*completed\/skipped/i);
-  // a re-run of the gate alone: the run is attempt 2, the ledger's own job ran on attempt 1
+  // GitHub re-stamps a job it carries over with the run's attempt (#417 review R7): a ledger
+  // skipped on attempt 1 and carried into attempt 2 arrives stamped 2, and refuses; a release
+  // run re-runs all its jobs, so this fails closed rather than verifying a partial re-run
   const r2 = run({ run_attempt: 2 });
-  const gateOnly = jobsOf(r2).map((j) => (j.name === ledger
-    ? { ...j, conclusion: 'skipped', run_attempt: 1 } : j));
-  assert.deepEqual(ciReceiptProblems(facts({ runs: [r2], jobs: gateOnly })), []);
+  const carried = jobsOf(r2).map((j) => (j.name === ledger
+    ? { ...j, conclusion: 'skipped', run_attempt: 2 } : j));
+  only(facts({ runs: [r2], jobs: carried }), /flake ledger.*completed\/skipped/i);
+  // a job object with no run_attempt falls back to the run's attempt (#417 R8)
+  const noAttempt = jobsOf(run({ run_attempt: 1 })).map((j) => (j.name === ledger
+    ? { ...j, conclusion: 'skipped', run_attempt: undefined } : j));
+  assert.deepEqual(ciReceiptProblems(facts({ runs: [run({ run_attempt: 1 })], jobs: noAttempt })),
+    []);
 });
 
 const wf = (ledgerJob) => `name: CI\njobs:\n  unit:\n    runs-on: x\n${ledgerJob}`;
@@ -165,6 +172,9 @@ test('only exactly that condition, on the job id flake-ledger, is re-run-only (#
   const renamed = `  other-job:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
   assert.ok(expectedJobs(wf(renamed)).problems.some((p) => /id flake-ledger \(found: other-job/
     .test(p)));
+  const two = `${exact}  second-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
+  assert.ok(expectedJobs(wf(two)).problems.some((p) => /exactly one re-run-only job/.test(p)));
+  assert.deepEqual(expectedJobs(wf(two)).rerunOnly, []);
   const twin = `  flake-ledger:\n    name: unit\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
   assert.ok(expectedJobs(wf(twin)).problems.some((p) => /two jobs named "unit"/.test(p)));
 });
