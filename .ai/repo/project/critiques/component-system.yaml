@@ -275,3 +275,76 @@ findings:
       state: planned
       issue: "G022"
       because: "G022-G026 each carry them as one acceptance criterion (2026-11-04)."
+  # af's critique of the G027-G029 draft (2026-11-05), with 26's and dev-53's answers; resolutions by the plan builder (oscilla-21)
+  - id: binding-not-a-parameter-layer
+    class: design_gap
+    subject: "G029"
+    finding: "read() and write(patch) would duplicate the parameter declaration (parameter-controls#one-declaration, K105) and program B's live-update rules."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "G029's binding carries only { id, kind, owner, label, paramIds[] } plus the owner's write path; units, ranges and the live-update rule come from the declaration, and a unit check fails a binding that declares its own (2026-11-05)."
+  - id: v1-voice-transitional
+    class: regression_risk
+    subject: "G029"
+    finding: "Registering the V1 Playground voice as a target would cement the lab state that U069, U071 and V605 retire."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "The V1 voice is the one transitional binding, listed in tests/unit/ui-families-baseline.json with its removal condition (the Playground voice a Studio node); a second legacy binding fails the census (2026-11-05)."
+  - id: computed-vs-live-label
+    class: unproven_assumption
+    subject: "G028"
+    finding: "A Studio filter node that is not running has no stage, so a curve drawn for it is computed, not live."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "G028"
+      because: "G028 computes it from the same specification biquad in audio/filters.js, labels it computed, asserts the label in both states in three engines, and proves the computed and live curves agree within 0.1 dB (2026-11-05)."
+  - id: absorb-u069-u071
+    class: missed_requirement
+    subject: "G027"
+    finding: "Absorbing U071 and U069 must keep their no-loss walk."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G027"
+      because: "G027 absorbs U069's envelope-chart move and G028 absorbs U071, each keeping the three-engine walk of the old page's controls before its route redirects (2026-11-05)."
+  - id: fixed-params-locked
+    class: missed_requirement
+    subject: "G027"
+    finding: "A parameter a panel fixes (K187) must not be draggable in the modeler."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G027"
+      because: "G027 and G028 show a fixed parameter locked with its reason and refuse the drag, one test each (2026-11-05)."
+  - id: one-selection
+    class: design_gap
+    subject: "G029"
+    finding: "Binding needs the one selection, not a listener of its own; the Synth plate's focus must go through it."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "G029 binds through store.subscribe type 'selection' (26, 2026-11-05) and re-reads on 'model'; the key-listener ratchet does not rise (2026-11-05)."
+  - id: phone-and-keys
+    class: missed_requirement
+    subject: "G027"
+    finding: "Handles need 44 px, keyboard steps with fine adjust, typed entry and reduced motion, from the knob's interaction model."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G027"
+      because: "G027 and G028 take their keys from G022's knob model and assert 44 px handles and a trusted touch drag at 390x844 (2026-11-05)."
+  - id: sequencer-target-k189
+    class: unproven_assumption
+    subject: "G029"
+    finding: "K189 slice 1 alone does not make a sequencer track's voice an engine node (dev-53)."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "G029"
+      because: "The sequencer binding waits on K189 slice 3 (a durable track voice node id) and slice 1's declared engine ADSR and filter params (dev-53, 2026-11-05)."
