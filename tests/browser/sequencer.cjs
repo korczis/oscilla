@@ -503,6 +503,22 @@ async function panelChecks(engine, browser) {
   await page.click(`#osc-seq-block-${added.selected}`);
   await page.click('#osc-seq-delete');
   await step('Delete both added blocks', (s) => s.ids.join() === 'b1,b2,b3,b4,b5' && sameOrder(s));
+  // U016: Play from the start draws the Studio's Return to start glyph (skip-back), and it
+  // renders a path; the click below still plays from the first block.
+  const glyph = await page.evaluate(() => {
+    const href = (hook) => {
+      const u = document.querySelector(`[data-osc="${hook}"] use`);
+      return u ? u.getAttribute('href') : null;
+    };
+    const start = href('seq.start');
+    const ret = href('studio.return');
+    const sym = start ? document.querySelector(start) : null;
+    const drawn = !!sym && [...sym.querySelectorAll('path')]
+      .some((p) => (p.getAttribute('d') || '').trim().length > 0);
+    return { start, ret, drawn };
+  });
+  check(engine, '(e) panel: Play from the start draws the Return to start glyph (U016)',
+    glyph.start !== null && glyph.start === glyph.ret && glyph.drawn, JSON.stringify(glyph));
   // transport: start, stop, play; the sound and the status follow
   await page.click('#osc-seq-start');
   await step('Play from the start sounds', (s) => s.playing && s.appPlaying

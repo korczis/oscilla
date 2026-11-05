@@ -482,6 +482,54 @@ async function runEngine(engine, base) {
   check('click a bar selects that harmonic', sel.selected === 3 && sel.field === '3',
     JSON.stringify(sel));
 
+  // (3b) U013: the chart shows the switch. Off, the same bars (what enabling would play) are
+  // drawn bypassed and the host's name says so; on, as before; a restored enabled:false state
+  // shows the off state without a click.
+  const addState = () => page.evaluate(() => {
+    const { labs } = window.__labs;
+    const host = document.querySelector('#osc-chart-additive');
+    return {
+      enabled: labs.additive.enabled,
+      chartOn: labs.additive.chart.isEnabled(),
+      label: host.getAttribute('aria-label'),
+      pixels: host.querySelector('canvas').toDataURL(),
+      bars: JSON.stringify(labs.additive.chart.getBars()),
+    };
+  });
+  const flip = () => page.click('#osc-add-enable');
+  const addBefore = await addState();
+  if (!addBefore.enabled) {
+    await flip();
+  }
+  const onState = await settled(addState, (s) => s.enabled && s.chartOn,
+    { ms: 5000, what: 'additive: the chart follows the switch on' });
+  await flip();
+  const offState = await settled(addState, (s) => !s.enabled && !s.chartOn,
+    { ms: 5000, what: 'additive: the chart follows the switch off' });
+  check('additive off: the chart is drawn bypassed, its name says so, the bars are unchanged',
+    onState.chartOn && !offState.chartOn && offState.pixels !== onState.pixels
+      && /bypassed/i.test(offState.label) && !/bypassed/i.test(onState.label)
+      && offState.bars === onState.bars,
+    JSON.stringify({ on: onState.label, off: offState.label,
+      samePixels: offState.pixels === onState.pixels, sameBars: offState.bars === onState.bars }));
+  await flip();
+  const back = await settled(addState, (s) => s.enabled && s.chartOn,
+    { ms: 5000, what: 'additive: the chart follows the switch on again' });
+  check('additive on again: the chart draws what it drew before the switch went off',
+    back.pixels === onState.pixels && back.label === onState.label, back.label);
+  await page.evaluate(() => window.__labs.labs.additive.update({ enabled: false }));
+  const restored = await settled(addState, (s) => !s.enabled && !s.chartOn,
+    { ms: 5000, what: 'additive: a restored enabled:false state shows bypassed' });
+  check('additive: a restored enabled:false state shows the off chart without a click',
+    !restored.chartOn && /bypassed/i.test(restored.label) && restored.pixels === offState.pixels,
+    restored.label);
+  add = await additive(null);
+  check('additive bars still equal the PeriodicWave coefficients while bypassed',
+    add.maxErr < 1e-5, `${add.compared} bars, max |Δ| ${add.maxErr}`);
+  if (addBefore.enabled) {
+    await flip();
+  }
+
   await openWorkspace(page, 'analyzer');
   // (4) Spectrogram: non-floor pixels on the tone row, floor elsewhere.
   // The panel was hidden until its workspace opened (#278), and a hidden view writes no column
