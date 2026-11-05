@@ -7,6 +7,7 @@ problem: "At v3.13.0 (main b67d1e58) a PACK 03 audit of the integration between 
 outcome: "Every control reaches its subsystem and every view that reflects it, in the same event; one output owner sounds at a time and every stop is immediate; the sequencer plays through the engine's stages and census; every save path restores what it claims or says what it does not; the six user journeys and a control-drive ratchet at zero hold it in every gate browser."
 acceptance_criteria:
   - "C001 to C026 are done with their evidence; npm run release-gate passes at the last one."
+  - "C027, C028, C035 to C038, C040 to C048 and C050 to C055 are done with their evidence, the bus slices C037, C050, C051, C052 and C053 among them, so the milestone cannot close without the bus; added on resolving af's critique of 96daa67b, which found no criterion reaching C027-C039."
   - "tests/browser/journeys.cjs (J1 to J6) and the control-drive ratchet run in CI and are green in Chromium, Firefox and WebKit."
 validation:
   - "npm run release-gate"

@@ -48,9 +48,9 @@ observations:
   - id: unplanned-observations
     statement: "Observed and not planned in this change: the pattern link's href is '#m=studio', so the pattern does not travel; the Filter chart drag is tested only with a fake engine; double ownership of interactions by Flowbite and Alpine is not re-verified (inferred); no per-surface review record or impact fingerprint exists (R031 guards paths, not surfaces; af's census `review: {pr}` field is its proposed data model); no per-surface audit record (a11y, history, phone, lifecycle, errors) is tied to surface ids, and ui-current#ui-audited is decided by `test -s docs/ui-audit.md` alone; the saved-state-is-honest case of an overridden fixed parameter (reset and named on import, Q092) is held in K187's criteria, which serves connected-instrument#synth-panel because a gap work entry must name an issue serving this intent; use cases cannot map product file changes ('commands: [knowledge]' is a policy choice)."
     source: "command:oscilla-b0 coherence audit, scratchpad coherence-verified.json"
-  - id: browser-census-unknown
-    statement: "Unknown at 68b117f3: whether the browser census and the control census pass; they were not run on the shared machine, and control-census.cjs runs only through test:census (ci.yml:390), not in main-checks (E046)."
-    source: "file:.github/workflows/main-checks.yml"
+  - id: browser-suites-green
+    statement: "Refuted (af's critique of 96daa67b): that the browser census and the control census at 68b117f3 are unknown. Main checks run 41940747829 on 68b117f3 is green, its browser gate in Chromium, Firefox and WebKit running npm run test:browser, which holds surface-census.cjs and journeys.cjs (package.json:25); the pull request run 41933352760 of #413's head 43e3e1ca, whose tree e65a1e6b is 68b117f3's, is green in every job, the control census (test:census, the census job of ci.yml:360-399, its run line :390 at a19f1ff6) and DSP, labs, sequencer (sequencer.cjs) in all three browsers included. The control census runs only in the pull request gate, not in main-checks (E046)."
+    source: "command:gh run view 41940747829 && gh run view 41933352760"
   - id: mic-not-released-on-leave
     statement: "af's Panel Excellence synthesis of 68b117f3 (2026-11-05): the mic lab stops only from its own controls or the engine (labs/mic-analyzer.js:224, 267, 278, 343, 399), and a workspace change aborts only a measurement (main.js:739-742), while Measure says the microphone opens only for its own steps (index.html:909). That no release path exists is observed; that the stream stays live in a browser is inferred (C040's browser leg decides it)."
     source: "file:src/js/labs/mic-analyzer.js"
@@ -92,20 +92,20 @@ conditions:
       - audition-mislabelled-not-missing
       - no-bus
   - criterion: sequencer-through-engine
-    state: unknown
-    because: "Not re-checked in this audit; the browser suites were not run on the shared machine."
+    state: satisfied
+    because: "Its ref (tests/browser/sequencer.cjs) passed in Chromium, Firefox and WebKit on 68b117f3's tree (run 41933352760, DSP, labs, sequencer); not re-probed beyond the ref."
     observations:
-      - browser-census-unknown
+      - browser-suites-green
   - criterion: sequence-state-one-owner
     state: unknown
     because: "Not re-checked in this audit beyond seqPlaying's three writers, which concern the playing state, not the sequence waveform."
     observations:
       - no-bus
   - criterion: current-lab-state-wins
-    state: unknown
-    because: "Not re-checked in this audit."
+    state: satisfied
+    because: "Its ref (engine.test.mjs and freeze.test.mjs) passed in the unit job on 68b117f3 (main checks run 41940747829); not re-probed beyond the ref."
     observations:
-      - browser-census-unknown
+      - browser-suites-green
   - criterion: live-edits-reach-the-voice
     state: unknown
     because: "Not re-checked in this audit; the runtime trace mislabels next-note updates as scheduled (K185, studio-box-system), which concerns the trace, not the voice."
@@ -129,10 +129,10 @@ conditions:
     observations:
       - repeat-click-fallback
   - criterion: user-journeys-hold
-    state: unknown
-    because: "The journeys suite was not run on the shared machine at 68b117f3."
+    state: satisfied
+    because: "tests/browser/journeys.cjs, its ref, is part of npm run test:browser and passed in Chromium, Firefox and WebKit in main checks run 41940747829 on 68b117f3."
     observations:
-      - browser-census-unknown
+      - browser-suites-green
   - criterion: input-released-when-hidden
     state: conflicting
     because: "No path releases the lab microphone on a workspace change, while Measure promises it is released; the browser effect is inferred until C040's leg runs."

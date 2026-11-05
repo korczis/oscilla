@@ -2,21 +2,22 @@ id: U077
 milestone: M054
 serves:
   - "ui-current#ui-audited"
-title: "Open-every-workspace derives its ids from WORKSPACES, so Synth and every new workspace are opened"
+title: "Navigation and the first screen derive their workspace ids from WORKSPACES, so Synth and every new workspace are opened"
 slug: open-every-workspace-derives-its-ids-from-workspaces
 priority: p2
 profile: implementation
-objective: "Lands as test(browser). tests/browser/navigation.cjs hard-codes 12 workspace ids (:24, :438-439) while the registry has 13; synth is never opened by the navigation suite. After: the suite imports the ids from the one workspace registry (WORKSPACES) and a unit check asserts the list it opens equals that registry."
-why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice E (journeys), skeptic-verified: navigation.cjs opens 12 of 13 workspaces, synth missing."
+objective: "Lands as test(browser). Line numbers at origin/main a19f1ff6. tests/browser/navigation.cjs hard-codes 12 workspace ids (:438-439, in open-every-workspace, whose header at :24 says thirteen) while the registry has 13; synth is never opened by the navigation suite. tests/browser/first-screen.cjs:129-130 holds the same 12-id list (const WORKSPACES). After: both suites import the ids from the one workspace registry (WORKSPACES of src/js/ui/app.js) and a unit check asserts each list it opens equals that registry."
+why: "oscilla-b0 Total Coherence audit of main 68b117f3, slice E (journeys), skeptic-verified: navigation.cjs opens 12 of 13 workspaces, synth missing. af's critique of 96daa67b (AMEND 20): first-screen.cjs:129 has the same list, and criterion 2 already holds on main (navigation.cjs runs through suite.cjs, :94-105, and waits with until), so it is kept as a hold, not claimed as new work."
 scope:
   - "tests/browser/navigation.cjs"
+  - "tests/browser/first-screen.cjs"
   - "tests/unit/navigation.test.mjs"
   - "tests/README.md"
 depends_on: []
 acceptance_criteria:
-  - "Fail-first: tests/unit/navigation.test.mjs asserts the ids navigation.cjs opens equal WORKSPACES; it fails on the merge base (12 against 13, synth missing)."
-  - "navigation.cjs runs through tests/browser/lib/suite.cjs and waits with until() and a named deadline per workspace; nothing is added to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
-  - "Not a guarded path under v2; tests/browser/* comes into scope with R033. Lane: oscilla-21."
+  - "Fail-first: tests/unit/navigation.test.mjs asserts the ids navigation.cjs and first-screen.cjs open equal WORKSPACES; it fails on the merge base naming both (12 against 13, synth missing)."
+  - "Hold (true on main already, kept): navigation.cjs runs through tests/browser/lib/suite.cjs and waits with until() and a named deadline per workspace, the Synth workspace included; nothing is added to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
+  - "Not a guarded path under v2; R033 guards the tests/browser files a rule's enforcement names. Lane: oscilla-21."
 validation:
   - "node --test tests/unit/navigation.test.mjs"
   - "node tests/browser/navigation.cjs"
