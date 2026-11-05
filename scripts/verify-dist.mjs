@@ -8,15 +8,35 @@
 //     point to absolute http(s)/mailto/tel destinations because following a link loads nothing,
 //   - contains a module, importmap or external script (type=module, src=),
 //   - in first-party script (each <script> and each inline handler or Alpine directive
-//     attribute, read with its JS escapes decoded) uses fetch, XMLHttpRequest, dynamic import(),
-//     import.meta, a service worker, importScripts, a worker or worklet loaded from a path,
-//     WebSocket/EventSource, sendBeacon, localhost, eval, the Function constructor or a timer
-//     given a string, assigns an absolute URL literal to .src/.href/.srcset/.poster (or by
-//     setAttribute/attribute; location.href is navigation, not a load), sets new Image().src or
-//     new Audio()/Video() from anything but a data:/blob: literal, writes an absolute URL literal
-//     into a resource attribute of an HTML string or into a CSS url() of a script string, or
-//     reaches fetch by a computed member (window["fe"+"tch"], x["fetch"]); a URL held in or
-//     loaded through a variable, or assembled at run time, is outside this literal scan,
+//     attribute, read raw and with its JS escapes decoded) uses fetch, XMLHttpRequest, dynamic
+//     import(), import.meta, a service worker, importScripts, a worker or worklet loaded from a
+//     path, WebSocket/EventSource, sendBeacon or localhost; contains the identifier eval or the
+//     string literal 'eval'; contains a direct call Function(...) or new Function(...) (the
+//     identifier Function followed by its opening parenthesis), the string literal 'Function'
+//     (self['Function']) or .constructor( followed by a string literal; calls setTimeout or
+//     setInterval, directly or as a member (window.setTimeout), with a string literal as the
+//     first argument (only whitespace before it); assigns an absolute URL literal to
+//     .src/.href/.srcset/.poster (or by setAttribute/attribute; location.href is navigation,
+//     not a load), sets new Image().src or new Audio()/Video() from anything but a data:/blob:
+//     literal, writes an absolute URL literal into a resource attribute of an HTML string or
+//     into a CSS url() of a script string, or reaches fetch by a literal ["fetch"] key or by a
+//     global's member whose key is a + chain of string literals or a template literal
+//     (window["fe"+"tch"]). Each form is matched as written or in its escaped spelling.
+//     Not held (a static scan reads literals; each is pinned as a passing case in the
+//     "documented limits" test of tests/unit/verify-dist.test.mjs): a URL held in or loaded
+//     through a variable, or assembled at run time; an API name (fetch, eval, a p5 API)
+//     assembled at run time other than as such a key (const k='fe'+'tch'; window[k]); the
+//     Function constructor reached otherwise than as above: Function.call/Function.apply,
+//     Reflect.construct(Function, ...), a parenthesised (new (Function)(...)) or aliased
+//     (const F=Function) Function, a tagged template (Function`...`), a computed
+//     ['constructor'] key, .constructor( given a variable, and an AsyncFunction (or other
+//     constructor alias) taken from a prototype; a timer reached otherwise than as above:
+//     setTimeout/setInterval.call/apply, window['setTimeout'], a parenthesised or commented
+//     string literal (setTimeout(('f()')), setTimeout(/**/'f()')), and a timer given a
+//     variable string; markup with a resource URL built at run time and handed to p5's
+//     createDiv/html(); script inside an iframe srcdoc (not a first-party script above).
+//     Runtime network loads are held by R041 (the browser request guard, planned on
+//     chore/plan-coherence-hardening), not by this scan,
 //   - embeds a vendor with a NETWORK_PRIMITIVES occurrence (fetch, XMLHttpRequest, a DOM URL
 //     sink, a CSS url(), open()/location, ..., an i18n loadPath) outside its VENDOR_NETWORK
 //     sites, or whose inventoried site is reachable: the vendor references its entry more often
@@ -78,10 +98,18 @@ const FORBIDDEN_JS = [
   [/\bnew\s+(?:WebSocket|EventSource)\s*\(/, 'WebSocket/EventSource'],
   [/\bsendBeacon\b/, 'navigator.sendBeacon'],
   [/\blocalhost\b|\b127\.0\.0\.1\b/, 'localhost reference'],
-  // Code made from a string at run time defeats any static scan (R040 review 2), so eval, the
-  // Function constructor (also as a function's .constructor given a string) and a timer given a
-  // string literal are refused outright; a string held in a variable and handed to a timer is
-  // not seen.
+  // Code made from a string at run time defeats any static scan (R040 review 2). Exactly these
+  // forms are refused (each also in its escaped spelling): the identifier eval or the string
+  // literal 'eval'; a direct call Function(...) or new Function(...) (the identifier Function
+  // followed by its opening parenthesis), the string literal 'Function', and .constructor(
+  // followed by a string literal; setTimeout/setInterval called directly or as a member with a
+  // string literal as the first argument (only whitespace before it).
+  // Not held (pinned as passing in the "documented limits" test): Function.call/apply,
+  // Reflect.construct(Function, ...), new (Function)(...), const F=Function, Function`...`, a
+  // computed ['constructor'] key, .constructor(variable), an AsyncFunction taken from a
+  // prototype; setTimeout/setInterval.call/apply, window['setTimeout'], setTimeout(('f()')),
+  // setTimeout(/**/'f()') and a timer given a variable string. R041 (the browser request guard)
+  // holds the runtime loads such code could make, not this scan.
   [/(?<![\w$])eval(?![\w$])|(['"`])eval\1/, 'eval'],
   [/(?<![\w$])Function\s*\(|(['"`])Function\1|\.constructor\s*\(\s*['"`]/,
     'the Function constructor'],
@@ -754,10 +782,13 @@ function main() {
     for (const p of problems) console.error(`  FAIL ${p}`);
     process.exit(1);
   }
-  console.log('  PASS no file/remote references, no module/fetch/import()/service worker/eval, '
-    + 'no literal URL handed to a DOM runtime load in first-party script (a URL in a variable '
-    + 'is not read); every vendor network site inventoried (its API refused, unreachable, or '
-    + 'listed with its reason); budget ok');
+  console.log('  PASS no file/remote references; first-party script has none of the literal '
+    + 'forms the header lists, as written or escaped (among them fetch(, import(, a service '
+    + 'worker, the identifier eval, a direct Function(...)/new Function(...), setTimeout/'
+    + 'setInterval called directly with a string literal first, a literal URL handed to a DOM '
+    + 'runtime load); the header\'s "Not held" forms, and names and URLs held in variables or '
+    + 'built at run time, are not refused (R041 holds runtime loads); every vendor network '
+    + 'site inventoried (its API refused, unreachable, or listed with its reason); budget ok');
   console.log(`  PASS provenance: banner and metadata region name v${version}, `
     + `source digest ${sourceDigest} (recomputed), channel "source"`);
 }

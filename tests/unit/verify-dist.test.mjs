@@ -424,14 +424,29 @@ test('inline handlers and Alpine directives are first-party script (R040 review 
   assert.deepEqual(check(doc({ body })), []);
 });
 
-test('documented limits: a value held in a variable or built at run time passes', () => {
+test('documented limits: every "Not held" form passes', () => {
   // tests/README.md names these under "Not held": a static scan reads literals, so each passes
   // with rc=0. A fix that refuses one must move it out of this test and out of that line.
   for (const app of ['var u="https://t.example/p.gif";i.src=u',
     'i.src="ht"+"tps://t.example/p.gif"', 'const k="fe"+"tch";window[k](u)',
-    'const c="f()";setTimeout(c,0)']) assert.deepEqual(check(doc({ app })), [], app);
+    'const k="ev"+"al";window[k](c)', 'const c="f()";setTimeout(c,0)',
+    // The Function constructor reached otherwise than by Function( / 'Function' /
+    // .constructor('...') (R040 review 3).
+    'Function.call(null,"fe"+"tch(u)")()', 'Function.apply(null,["x"])()',
+    'Reflect.construct(Function,["x"])()', 'new (Function)("x")()', 'Function`x```',
+    'const F=Function;F("x")()', '(()=>{})["constructor"]("x")()', '(()=>{}).constructor(c)()',
+    'const AsyncFunction=Object.getPrototypeOf(async()=>{}).constructor;'
+      + 'new AsyncFunction("x")()',
+    // A timer reached otherwise than called directly with a string literal first.
+    'setTimeout.call(window,"f()",0)', 'setInterval.apply(window,["f()",9])',
+    'setTimeout(("f()"),0)', 'setTimeout(/**/"f()",0)', 'window["setTimeout"]("f()",0)',
+  ]) assert.deepEqual(check(doc({ app })), [], app);
+  // Script inside an iframe srcdoc is not one of the first-party scripts the scan reads.
+  const body = '<iframe srcdoc="<script>fetch(\'https://t.example/\')</script>"></iframe>';
+  assert.deepEqual(check(doc({ body })), [], body);
   for (const app of ['p[["load","Image"].join("")](u)',
-    'Object.keys(p5.prototype).filter((k)=>k.indexOf("loadIm")===0).forEach((k)=>p[k](u))']) {
+    'Object.keys(p5.prototype).filter((k)=>k.indexOf("loadIm")===0).forEach((k)=>p[k](u))',
+    'p.createDiv(\'<img src="\'+u+\'">\')', 'p.createDiv("x").html(\'<img src="\'+u+\'">\')']) {
     assert.deepEqual(p5Check(P5, app), [], app);
   }
 });
