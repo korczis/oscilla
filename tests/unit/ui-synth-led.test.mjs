@@ -63,7 +63,10 @@ test('the module exists and exports ledSvg, meterSvg and their geometry', () => 
   assert.equal(typeof led.ledSvg, 'function', 'ledSvg');
   assert.equal(typeof led.meterSvg, 'function', 'meterSvg');
   assert.equal(led.LED.lens * 2, 6, 'the lens is 6 graph units across');
-  assert.ok(Array.isArray(led.LED_COLOURS) && led.LED_COLOURS.includes('control.ring'));
+  // LXK-10 (D-PAL): a plain lit LED is the emission colour, --osc-hw-led; the ring is no LED
+  // colour (dark blue in light, it read as off); applied and refuse keep the state they encode.
+  assert.ok(Array.isArray(led.LED_COLOURS));
+  assert.deepEqual([...led.LED_COLOURS], ['control.led', 'control.applied', 'jack.refuse']);
 });
 
 // ---------------------------------------------------------------- the LED binds to state
@@ -106,7 +109,7 @@ test('lit: the chosen state token on the lens, under its halo; unlit: surface-2,
     const on = LED();
     const lens = part(on, 'data-lens');
     assert.ok(lens, 'a lens');
-    assert.equal(attrOf(lens, 'fill'), TOKENS.control.ring, 'control.ring by default');
+    assert.equal(attrOf(lens, 'fill'), TOKENS.control.led, 'control.led by default (LXK-10)');
     assert.equal(attrOf(lens, 'class'), undefined, 'a box-shadow class paints no SVG element');
     assert.equal(Number(attrOf(lens, 'r')), 3, 'Ø6');
     for (const colour of led.LED_COLOURS) {
@@ -264,7 +267,8 @@ test('the unlit ring and every lit colour hold 3:1 on the bezel, surface-2 and s
   // A lit lens sits in its seat (a surface.edge ring), so its colour meets the seat, not the
   // bezel's body: light --osc-red is 2.94:1 on the surface-4 body and 3.33:1 on the seat.
   const grounds = [['bezel', N.control.capHi], ['plate low', N.surface.plateLo],
-    ['card', N.surface.card], ['plate high', N.surface.plateHi]];
+    ['card', N.surface.card], ['plate high', N.surface.plateHi],
+    ['D-PAL plate high', N.plate.hi], ['D-PAL plate low', N.plate.lo]];
   const seat = ['seat', N.surface.edge];
   assert.equal(N.control.capHi, '--osc-surface-4');
   assert.equal(N.surface.plateLo, '--osc-surface-1');

@@ -10,7 +10,7 @@ class: blocking
 depends_on: [project.no-fake-science@2]
 tags: [design, visual, studio, synth, v4, flowbite]
 x-majordomus:
-  tests: [tests/unit/visual-identity-lock-v4.test.mjs, tests/unit/ui-flowbite-pro.test.mjs, tests/unit/synth-panel-tokens.test.mjs, tests/unit/synth-wording.test.mjs]
+  tests: [tests/unit/visual-identity-lock-v4.test.mjs, tests/unit/ui-synth-palette.test.mjs, tests/unit/ui-flowbite-pro.test.mjs, tests/unit/synth-panel-tokens.test.mjs, tests/unit/synth-wording.test.mjs]
 ---
 
 # Rationale
@@ -110,7 +110,8 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
     token-coloured glow of at most 6 px), and the layer reads them by class, never a literal
     opacity, alpha or shadow, in CSS or as an SVG `opacity`, `stroke-opacity`, `fill-opacity`,
     `flood-opacity` or `stop-opacity` attribute (`src/styles/tokens.css` cannot gain a
-    declaration under the ratchet of `project.ui-uses-flowbite-pro`). The palette of
+    declaration under the ratchet of `project.ui-uses-flowbite-pro`, but the closed list of the
+    amendment of 2026-11-05 below). The palette of
     `tokens.css` changes only in a reviewed commit that rewrites its snapshot, so no product's
     colourway slips in as a token. Motion is restrained: the global `prefers-reduced-motion`
     guard of `src/styles/base.css` stays, a Tailwind `animate-*` in the theme layer is
@@ -154,6 +155,69 @@ can hold, and keeps every other clause of version 3 unchanged. ADR 0061's resolu
   focus. The flat-knob decision D11 (Q018) stays superseded on the Synth panel as ADR 0061's
   note of 2026-10-30 says, and K058's own component is unchanged by this version.
 
+# Amendment of 2026-11-05 (D-PAL)
+
+Approved in principle by oscilla-21 (11-04, the palette and visual-identity-lock v4 owner; these
+are the elements of Q071) as an amendment of version 4 and not a version 5, because the guard's
+semantics do not change: a palette role is still a name confined to the synth-theme layer, the
+same rule now over a closed list of names. The owner's default C6 (announced, not objected): a
+cap is a material and does not flip with the theme.
+
+The closed list: `--osc-wood-hi`, `--osc-wood-lo`, `--osc-plate-hi`, `--osc-plate-lo`,
+`--osc-chassis`, `--osc-hw-key-white`, `--osc-hw-key-black`, `--osc-hw-key-gap`, `--osc-hw-led`,
+`--osc-hw-lcd`, `--osc-knob-cap`, `--osc-knob-cap-hi`, and the two depth roles of the amendment
+(a)-(e) of 11-04, `--osc-hw-shade` and `--osc-hw-highlight`.
+
+- **Measured and derived.** Each role's value is the one its rules pick in
+  `tests/unit/ui-synth-palette.test.mjs`, searched along a stated line of colours (a neutral grey,
+  a palette token's channels scaled toward black, or the sRGB line between two palette tokens),
+  never a taste written in; tokens.css must hold exactly the pick. The rules are oscilla-21's:
+  (a) contrast, 3:1 for a graphic against every face it is drawn over, 4.5:1 for text, 1.15:1 for
+  the depth shade; (b) visibility of a depth cue, |ΔL*| >= 3 (CIELAB, D65) between a face and the
+  cue composited over it at its intensity class. In short: the plate pair puts the lighter of
+  today's two plate surfaces at the top in both themes (PF-04) and the foot where the depth shade
+  shows; the cap material is the lightest grey whose inks (the pointer, the applied arc, the
+  grips) hold 3:1 and whose body shows on every plate, and its lit tone the lightest grey at
+  least 3 L* above it on which every ink still holds 3:1 (the light purple stops it: measured,
+  ΔL* +8.12); the LED is
+  the brightest shade of `--osc-red` holding 3:1 on the bezel, its seat, the card and both plates
+  in both themes; the keys, the display glass and the wood follow the same pattern (the test
+  states each). The chassis is the one role no search pins: a seam is unlit, so black, and the
+  test measures that it shows on every plate and the card.
+- **What is drawn on them, measured too** (review of D-PAL, 11-05). The keys are judged with
+  the colours the keyboard draws on them (a held key's fill 3:1 on the key it replaces, a legend
+  4.5:1 on its key, the outline the gap's rule): no white key carries today's dark MIDI fill, so
+  LXK-02 brings the fills and legends with it, and the palette test records what falls short
+  until it does. The plates are judged with the parts that stand on them: on the D-PAL foot the
+  LED bezel's body (`control.capHi`) falls under its 1.3:1, and no foot on the derivation's line
+  both shows the shade and holds it, so the plate move (PF-04) brings a bezel decision with it;
+  the palette test records that too.
+- **C6, theme-invariant.** Every role but the plate pair and the two depth roles has one value
+  in both themes, declared on `:root` only and never on `[data-theme="light"]`, and the chassis
+  is dark in both. The layer's core controls (`src/js/ui/synth/`) draw the knob caps and a
+  dial's face, the lever of a two-position `controlSvg` switch, the slide caps and the fader caps
+  in `--osc-knob-cap`, with its lit tone `--osc-knob-cap-hi`, when the token set they are given
+  carries the cap material; the toggle's bat-handle lever stays `control.edge`, because it is
+  metal and not a cap. The Synth panel draws them so once dev-53 maps the roles into its token
+  set; until that change its controls draw as they did before this amendment.
+- **The guard.** A role of the list is named only in `src/styles/tokens.css`, under
+  `src/js/ui/synth` and under `src/js/synth/view` (`paletteRolesOutsideLayer` in
+  `tests/unit/visual-identity-lock-v4.test.mjs`, which replaces the depth roles' guard and keeps
+  it as the same rule over two names); a surface that wants a hardware colour takes it from the
+  layer's token set, never by the role's name. A role's name in tokens.css is a token, not the
+  hardware vocabulary. The guard matches a role's literal name, so a name built at run time
+  (`'--osc-knob-' + 'cap'`) passes it: a static guard's limit, which the review catches.
+- **The ratchet exception.** The clause above that tokens.css "cannot gain a declaration under
+  the ratchet of `project.ui-uses-flowbite-pro`" now reads: it gains none outside the closed list.
+  The Flowbite Pro measure (`TOKENS_UNRECORDED` in `scripts/ui-flowbite-pro-measure.mjs`) counts
+  every declaration of tokens.css but the list's, so the record fell from 193 to 189 (the depth
+  roles' four declarations left the count) and still only falls.
+- **The list grows only by an amendment.** The v4 test pins the list as a literal and requires
+  it to equal this section's list and the measure's exemption, so a new role is a change of this
+  rule that a reviewer judges, with its derivation in the palette test and its snapshot diff.
+- **The snapshot.** `tests/unit/visual-identity-palette.json` was rewritten with
+  `OSC_PALETTE_WRITE=1` in the same change; its diff is the reviewer's evidence of the values.
+
 # Failure behaviour
 
 A failing check fails CI or the release gate; a surface that fails the hidden-logo question
@@ -175,7 +239,10 @@ is a review rejection even when every functional test passes.
     `tailwind.config.cjs` but `primary` maps to a `var(--osc-*)` token; the hardware
     vocabulary appears only in the theme layer (an allow-list that only shrinks excuses the
     word "metal" in three sound sources, the percussion engine's `metal` layer and the "Ring
-    metal" preset, and nothing else) and "rivet" nowhere; the colour values of
+    metal" preset, and nothing else) and "rivet" nowhere; the closed list of synth-layer palette
+    roles (the amendment of 2026-11-05) is the rule's own list, declared per theme or once (C6),
+    named only by tokens.css and the layer, and outside the tokens.css ratchet, whose record it
+    equals otherwise; the colour values of
     `src/styles/tokens.css` equal the reviewed snapshot `tests/unit/visual-identity-palette.json`;
     the intensity keys `hw-sheen`, `hw-texture`, `hw-shadow`, `hw-wood` and `hw-led` exist
     within their bounds;
@@ -191,6 +258,9 @@ is a review rejection even when every functional test passes.
   `src/js/synth/view/`, and the test prints that the layer's directory, and the
   intensity-literal guard, pass vacuously; once it exists it must hold a `.js` module and
   every guard is strict on it. `tests/unit/synth-wording.test.mjs` reads it too.
+- `tests/unit/ui-synth-palette.test.mjs` (in `npm test`): each role of the closed list derived
+  from tokens.css by its rules and equal to the pick, theme-invariant where C6 says so, and the
+  measured table printed for the review.
 - `tests/unit/ui-flowbite-pro.test.mjs`, in `npm test` (CI `unit` job): the interface half.
   Growth of the recorded legacy interface (a surface not migrated, an osc-* class token, a
   class name outside the frozen vocabulary, a legacy selector or declaration, an inline

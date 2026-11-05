@@ -68,7 +68,9 @@ apart, are not debt).
   (`charts.css`, `studio.css`, `studio-timeline.css` under `src/styles`) and `tokens.css`, the
   custom properties they read, are therefore not debt: the record lists them apart
   (`domainViews`), and they never gain a selector or a declaration, but the interface reaches
-  debt 0 without removing them.
+  debt 0 without removing them. The one exception is the closed list of synth-layer palette roles
+  in `tokens.css` (`project.visual-identity-lock` v4, amendment of 2026-11-05): their declarations
+  are not counted, and the list grows only by an amendment of that rule.
 - **No other kit.** No dependency, JavaScript import or CSS `@import` of another UI kit
   (Bootstrap, Bulma, Material, MUI, Ant Design, Chakra, daisyUI, Headless UI, Radix and the
   others the test lists); no CSS `@import` of a package but uPlot's stylesheet, Tailwind and
@@ -141,7 +143,9 @@ a rise: the test judges the written record against the base branch's versions.
     used legacy class into a new one;
   - the selectors and declarations of each stylesheet input but the entry; those of the
     domain views' stylesheets and `tokens.css` (`DOMAIN_VIEW_STYLESHEETS`) apart, as
-    `domainViews`, ratcheted the same way and not debt;
+    `domainViews`, ratcheted the same way and not debt; a declaration of a property in
+    `TOKENS_UNRECORDED` (the closed list of `project.visual-identity-lock` v4's amendment of
+    2026-11-05, in `tokens.css`) is not counted;
   - the inline `style` attributes of `src/index.html`;
   - debt: pending surfaces + osc-* class tokens + uses of legacy vocabulary names + legacy
     selectors (the domain views' not among them).

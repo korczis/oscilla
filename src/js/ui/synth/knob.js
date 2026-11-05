@@ -14,6 +14,7 @@
 //   parseValue, formatValue, ariaAttrs                                 typed entry, text, ARIA
 //   controlSvg, controlBox, CONTROL_BOX, FADER_CAP, KNOB, knobFace     the drawing, an SVG <g>
 //   KNOB_SIZES                                                         a knob's size: lg, md, sm
+//   capMaterial                                                        C6's cap material
 
 import {
   choicesOf, clampValue, HIT_PX, idOf, optionIndex, orientationOf, originOf, SWEEP_DEG, toNorm,
@@ -47,23 +48,28 @@ function arcPath(r, a, b) {
 
 // Graph units, in the 44 box. The unlit arc is half the value arc's width (no token pair holds
 // 3:1 between them). Slice A: cast shadow (control.shade); skirt of 30 teeth 1.2 deep (1.75 px
-// at 64 px) in the cap's colour, its silhouette edge control.edge (3:1 on the plates) under a
-// rim lit from above (text.label at the top to control.edge at the foot, both 3:1 on the
-// plates: A7); a side wall (lit top) at hw-sheen; no sheen, since no token shows on the cap in
-// both themes (rule b; A3: D-PAL); butt pointer on cap and skirt; hover (C5, one language for
-// knob, dial, lever and slide: A1) brightens the part's own edge, the toothed outline in
-// control.pointer. Depth shows on plateHi; on plateLo, the cap's own token, it waits on D-PAL's
-// --osc-knob-cap (A2). C1 (S7, co-signed by p2 and dev-53): disabled draws no value arc, no
-// applied mark, the track only; cap and skirt plateLo (no side wall, no rim), the pointer
-// control.disabled, the edge the quiet control.knurl. The absent value mark is a shape cue, not
-// colour alone; plateLo is control.cap's token until D-PAL, so the cue today is the missing value
-// arc, the dim pointer and the quiet edge (A4).
+// at 64 px) in the cap material (C6, D-PAL: control.knobCap, one dark value in both themes), its
+// silhouette edge control.edge (3:1 on the plates) under a rim lit from above (text.label at the
+// top to control.edge at the foot, both 3:1 on the plates: A7); a side wall, the material's own
+// opaque gradient from its lit tone (knobCapHi) at the top to the cap at the foot (b: ΔL* >= 3,
+// A3); the cap's lit chamfer in knobCapHi; a sheen (K12: a radial gradient, the highlight at its
+// focus up and left to the cap, at hw-sheen), now that the highlight shows on the cap in both
+// themes (rule d, A3); a butt pointer on cap and skirt in the cap ink (control.capInk, 3:1 on both
+// tones); hover (C5, one language for knob, dial, lever and slide: A1) brightens the part's own
+// edge, the toothed outline in control.pointer. Depth shows on both plates (A2: the body's own
+// tone, and D-PAL's plate foot where the shade shows). C1 (S7, co-signed by p2 and dev-53):
+// disabled draws no value arc, no applied mark, the track only; cap and skirt plateLo (no side
+// wall, no rim, no sheen), the pointer control.disabled, the edge the quiet control.knurl. The
+// absent value mark is a shape cue, not colour alone, and since D-PAL the flat plateLo body
+// differs from the knobCap material by ΔL* >= 3 in both themes (A4), a second cue. A token set
+// without the cap material (the panel's adapter until dev-53 maps it) draws as before D-PAL:
+// capMaterial.
 export const KNOB = Object.freeze({ arc: 18.5, arcW: 2.5, trackW: 1.25, skirt: 16, toothIn: 14.8,
   teeth: 30, edgeW: 1, cap: 12, pointerIn: 5, pointerOut: 12, pointerW: 2,
   skirtPtrIn: 12.5, skirtPtrW: 1.5, tickIn: 20.75, tickOut: 22, ticks: 11, tickZoom: 1.25,
   detentOut: 21.75,
   detentW: 1.5, applied: 13.5, appliedW: 1.5, appliedMinDeg: 5, focus: 21, focusW: 2,
-  shadowGrow: 0.5, shadowDx: 0.75, shadowDy: 1.5, shadowDragDy: 2.5 });
+  shadowGrow: 0.5, shadowDx: 0.75, shadowDy: 1.5, shadowDragDy: 2.5, sheenFx: -4, sheenFy: -5 });
 
 /**
  * A knob's sizes (G022): the same part scaled about its centre, outer diameters 80, 64 and 48 px
@@ -154,6 +160,20 @@ const line = (flag, r0, r1, deg, paint, w) => {
 const stops = (a, b) => `<stop offset="0" stop-color="${esc(a)}"/>`
   + `<stop offset="1" stop-color="${esc(b)}"/>`;
 
+/**
+ * C6's cap material (D-PAL, oscilla-21; the owner's default): { body, hi, ink, dpal } from a token
+ * set, the knob caps, a dial's face, the switch lever, the slide and fader caps all draw it.
+ * `dpal` is false for a set without control.knobCap (the Synth panel's adapter, panelControlTokens,
+ * until dev-53 maps the roles), which keeps the drawing it had before D-PAL: the cap in
+ * control.cap and control.capHi, the ink in control.pointer.
+ */
+export function capMaterial(t) {
+  const c = t.control;
+  const dpal = typeof c.knobCap === 'string' && c.knobCap !== '';
+  return Object.freeze({ dpal, body: dpal ? c.knobCap : c.cap, hi: dpal ? c.knobCapHi : c.capHi,
+    ink: dpal ? c.capInk : c.pointer });
+}
+
 /** C5's one hover language (A1): an overlay of a part's edge, `shape` the edge element's own
  *  geometry and width, in control.pointer; always emitted, so a host can reveal it with
  *  group-hover, shown on hover and never while disabled. knob, dial, lever and slide draw it. */
@@ -167,25 +187,37 @@ export function hoverEdge(shape, t, st = {}) {
 export function knobFace(deg, t, st = {}, uid = 'knob', under = '', mid = '') {
   const c = t.control;
   const k = KNOB;
+  const m = capMaterial(t);
   const dim = st.disabled;
-  const body = esc(dim ? t.surface.plateLo : c.cap);
+  const body = esc(dim ? t.surface.plateLo : m.body);
   const id = `knob-${String(uid).replace(/[^\w.:-]/g, '_')}`;
-  const ptr = dim ? c.disabled : c.pointer;
+  const ptr = dim ? c.disabled : m.ink;
+  // D-PAL: the side wall is the material's opaque lit gradient; before it, cap to edge at sheen.
+  const side = m.dpal ? `<path d="${TEETH}" data-side="" fill="url(#${id}-side)" stroke="none"/>`
+    : `<path d="${TEETH}" data-side="" class="${SHEEN_CLASS}" fill="url(#${id}-side)" `
+      + 'stroke="none"/>';
+  // K12: the sheen's focus up and left (-4, -5 on the r 12 cap), in the box's fractions.
+  const sheen = m.dpal && !dim ? `<defs><radialGradient id="${id}-sheen" cx="0.5" cy="0.5" `
+    + `r="0.5" fx="${num((k.sheenFx + k.cap) / (2 * k.cap))}" `
+    + `fy="${num((k.sheenFy + k.cap) / (2 * k.cap))}">${stops(c.highlight, m.body)}`
+    + `</radialGradient></defs><circle data-sheen="" class="${SHEEN_CLASS}" cx="0" cy="0" `
+    + `r="${k.cap}" fill="url(#${id}-sheen)" stroke="none"/>` : '';
   return `<circle data-cast-shadow="" class="${SHADOW_CLASS}" cx="${k.shadowDx}" `
     + `cy="${st.dragging ? k.shadowDragDy : k.shadowDy}" r="${k.skirt + k.shadowGrow}" `
     + `fill="${esc(c.shade)}" stroke="none"/>${under}`
     + `<path d="${TEETH}" data-skirt="" fill="${body}" `
     + `stroke="${esc(dim ? c.knurl : c.edge)}" stroke-width="${k.edgeW}"/>`
     + (dim ? '' : `<defs><linearGradient id="${id}-side" x1="0" y1="0" x2="0" y2="1">`
-      + `${stops(c.cap, t.surface.edge)}</linearGradient><linearGradient id="${id}-rim" `
+      + `${m.dpal ? stops(m.hi, m.body) : stops(m.body, t.surface.edge)}</linearGradient>`
+      + `<linearGradient id="${id}-rim" `
       + `x1="0" y1="0" x2="0" y2="1">${stops(t.text.label, c.edge)}</linearGradient></defs>`
-      + `<path d="${TEETH}" data-side="" class="${SHEEN_CLASS}" fill="url(#${id}-side)" `
-      + 'stroke="none"/>'
+      + side
       + `<path d="${TEETH}" data-rim="" fill="none" stroke="url(#${id}-rim)" `
       + `stroke-width="${k.edgeW}"/>`)
     + mid
     + `<circle data-cap="" cx="0" cy="0" r="${k.cap}" fill="${body}" `
-    + `stroke="${esc(t.surface.edge)}" stroke-width="1"/>`
+    + `stroke="${esc(m.dpal && !dim ? m.hi : t.surface.edge)}" stroke-width="1"/>`
+    + sheen
     // K6-core: always emitted, shown on hover (or a host's group-hover), never disabled.
     + hoverEdge(`path d="${TEETH}" stroke-width="${k.edgeW}"`, t, st)
     + line('data-pointer', k.pointerIn, k.pointerOut, deg, ptr, k.pointerW)
@@ -243,6 +275,8 @@ function knobShapes(value, applied, p, t, st, zoom, uid, size = 'md') {
 
 function faderShapes(value, applied, p, t, st, zoom, tr) {
   const c = t.control;
+  const m = capMaterial(t);
+  const live = m.dpal && !st.disabled;
   const half = tr / 2;
   const yOf = (v) => num(half - tr * toNorm(v, p));
   const y = yOf(value);
@@ -266,9 +300,15 @@ function faderShapes(value, applied, p, t, st, zoom, tr) {
     + (applied !== null ? `<line data-applied="" x1="${-ax}" y1="${yOf(applied)}" x2="${ax}" `
       + `y2="${yOf(applied)}" stroke="${esc(c.pointer)}" stroke-width="1"/>` : '')
     + `<rect data-cap="" x="${-cw / 2}" y="${num(y - ch / 2)}" width="${cw}" height="${ch}" `
-    + `rx="2" fill="${esc(c.cap)}" stroke="${esc(st.dragging ? c.pointer : c.edge)}" `
+    + `rx="2" fill="${esc(m.body)}" stroke="${esc(st.dragging ? c.pointer : c.edge)}" `
     + 'stroke-width="1"/>'
-    + grip(-g, '', c.edge, 1) + grip(0, 'centre', st.disabled ? c.disabled : c.pointer, 1.5)
+    // D-PAL: the material's lit tone along the top and a sheen strip on it, as the knob's and the
+    // slide's (review of D-PAL, finding 7); a disabled cap is flat (C1).
+    + (live ? `<rect data-cap-hi="" x="${-cw / 2 + 1}" y="${num(y - ch / 2 + 1)}" `
+      + `width="${cw - 2}" height="2" rx="1" fill="${esc(m.hi)}" stroke="none"/>`
+      + `<rect data-sheen="" class="${SHEEN_CLASS}" x="${-cw / 2 + 4}" y="${num(y - ch / 2 + 1)}" `
+      + `width="${cw - 8}" height="1" rx="0.5" fill="${esc(c.highlight)}" stroke="none"/>` : '')
+    + grip(-g, '', c.edge, 1) + grip(0, 'centre', st.disabled ? c.disabled : m.ink, 1.5)
     + grip(g, '', c.edge, 1)
     + (st.focus ? `<rect data-focus="" x="${-cw / 2 - 3}" y="${-reach}" width="${cw + 6}" `
       + `height="${2 * reach}" rx="3" fill="none" stroke="${esc(c.focus)}" stroke-width="2"/>`
@@ -277,6 +317,7 @@ function faderShapes(value, applied, p, t, st, zoom, tr) {
 
 function switchShapes(value, applied, p, t, st) {
   const c = t.control;
+  const m = capMaterial(t);
   const n = switchPositions(p);
   const opts = choicesOf(p);
   const lever = leverOf(n);
@@ -300,10 +341,12 @@ function switchShapes(value, applied, p, t, st) {
     + (ay !== null && ay !== yc ? `<line data-applied="" x1="${-x - 5}" y1="${ay}" `
       + `x2="${-x - 2}" y2="${ay}" stroke="${esc(c.pointer)}" stroke-width="1"/>` : '')
     + `<rect data-cap="" x="${-SWITCH.leverW / 2}" y="${num(yc - lever.h / 2)}" `
-    + `width="${SWITCH.leverW}" height="${num(lever.h)}" rx="2" fill="${esc(c.cap)}" `
-    + `stroke="${esc(st.dragging ? c.capHi : t.surface.edge)}" stroke-width="1"/>`
-    + `<line x1="-3" y1="${yc}" x2="3" y2="${yc}" `
-    + `stroke="${esc(st.disabled ? c.disabled : c.pointer)}" stroke-width="1.5"/>`
+    + `width="${SWITCH.leverW}" height="${num(lever.h)}" rx="2" fill="${esc(m.body)}" `
+    // D-PAL: the lever edged as the fader's cap is (control.edge, the pointer while dragged).
+    + `stroke="${esc(m.dpal ? (st.dragging ? c.pointer : c.edge)
+      : (st.dragging ? c.capHi : t.surface.edge))}" stroke-width="1"/>`
+    + `<line${m.dpal ? ' data-index=""' : ''} x1="-3" y1="${yc}" x2="3" y2="${yc}" `
+    + `stroke="${esc(st.disabled ? c.disabled : m.ink)}" stroke-width="1.5"/>`
     + (st.focus ? `<rect x="${-x - 3}" y="${-SWITCH.h / 2 - 3}" `
       + `width="${SWITCH.w + 6}" height="${SWITCH.h + 6}" rx="5" fill="none" `
       + `stroke="${esc(c.focus)}" stroke-width="2"/>` : '');
@@ -318,7 +361,8 @@ const SHAPES = Object.freeze({ knob: knobShapes, fader: faderShapes, switch: swi
  * focus ring; `uid` names its gradients (else the parameter's id); `size` (KNOB_SIZES: lg, md, sm;
  * md unless given, and any kind's; lg and sm a knob's alone) scales it about its centre, its box
  * with it; fader = slot in control.track, value fill (from zero across zero), a FADER_CAP cap edged
- * in control.edge (control.pointer dragged), three grip lines, the centre one on the value;
+ * in control.edge (control.pointer dragged), three grip lines, the centre one on the value, and
+ * with the cap material its lit tone along the top and a sheen strip (flat when disabled);
  * 'horizontal' turns it (rotate(90): more to the right), `travel` (default FADER_TRAVEL) its
  * length; switch = a lever position per option of an enum of up to four or a boolean, detents past
  * two. `applied`, elsewhere than `value`, marks the engine's value (a knob's arc at r 13.5 in

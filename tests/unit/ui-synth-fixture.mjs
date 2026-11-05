@@ -9,17 +9,28 @@ const v = (name) => `var(--osc-${name})`;
 
 export const TOKENS = Object.freeze({
   surface: Object.freeze({ plateHi: v('surface-3'), plateLo: v('surface-1'),
-    card: v('surface-2'), edge: v('bg') }),
+    card: v('surface-2'), edge: v('bg'), chassis: v('chassis'), lcd: v('hw-lcd') }),
   text: Object.freeze({ label: v('text-muted'), value: v('text'), dim: v('text-dim') }),
   control: Object.freeze({ cap: v('surface-1'), capHi: v('surface-4'), ring: v('cyan'),
     track: v('text-dim'), pointer: v('text'), focus: v('focus'), disabled: v('text-dim'),
     edge: v('text-dim'), knurl: v('border'), applied: v('purple'), bezel: v('border-strong'),
-    shade: v('hw-shade'), highlight: v('hw-highlight') }),
+    shade: v('hw-shade'), highlight: v('hw-highlight'), knobCap: v('knob-cap'),
+    knobCapHi: v('knob-cap-hi'), capInk: v('text-on-accent'), led: v('hw-led') }),
   jack: Object.freeze({ body: v('surface-0'), ring: v('text-dim'), normal: v('text-dim'),
     refuse: v('red') }),
   cable: Object.freeze({ palette: Object.freeze([v('cyan'), v('red-soft'), v('magenta'),
     v('green'), v('purple'), v('blue')]), shadow: v('bg'), sheen: v('text') }),
+  plate: Object.freeze({ hi: v('plate-hi'), lo: v('plate-lo') }),
+  wood: Object.freeze({ hi: v('wood-hi'), lo: v('wood-lo') }),
+  key: Object.freeze({ white: v('hw-key-white'), black: v('hw-key-black'), gap: v('hw-key-gap') }),
 });
+
+/** TOKENS as a token set from before D-PAL (the Synth panel's adapter until dev-53 maps the
+ *  cap material and the LED): no knobCap, knobCapHi, capInk or led, so the layer draws as it
+ *  did. */
+export const PRE_DPAL_TOKENS = Object.freeze({ ...TOKENS, control: Object.freeze(Object
+  .fromEntries(Object.entries(TOKENS.control).filter(([k]) => !['knobCap', 'knobCapHi', 'capInk',
+    'led'].includes(k)))) });
 
 /** The narrower token set a panel's adapter passes (the shape of dev-53's layerTokens: the jack,
  *  the cable and the surface edge, no plateHi and no control group), so a test can show the

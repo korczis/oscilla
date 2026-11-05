@@ -14,7 +14,7 @@
 // the strongest neutral the palette has against the plates (dark 1.30, 1.20 and 1.10:1 on
 // surface-1, -2 and -3; light 1.61, 1.43 and 1.33; the lens tells the state, so the bezel only
 // decorates). Lit, the lens is the state token the caller chose by role (LED_COLOURS,
-// control.ring by default), seated in a surface.edge ring (every lit colour 3:1 on it in both
+// control.led by default), seated in a surface.edge ring (every lit colour 3:1 on it in both
 // themes; light --osc-red is 2.94:1 on the bezel's body), and glows: a box-shadow paints no SVG
 // element, so the glow is an SVG halo, one circle in the lens's colour past the lens by LED.halo
 // graph units but never past HALO_PX screen px (min(LED.halo, HALO_PX / zoom), as a label keeps
@@ -24,7 +24,14 @@
 // measured by visual-identity-lock-v4.test.mjs at every zoom) because box-shadow does not paint
 // in SVG. Unlit, there is no halo and the lens is surface.card (--osc-surface-2) with
 // a control.edge (--osc-text-dim) ring, 3:1 on the bezel and on either plate surface in both
-// themes (ui-synth-led.test.mjs computes it from tokens.css). switch.js draws a toggle's LED
+// themes (ui-synth-led.test.mjs computes it from tokens.css). LXK-10 (D-PAL): a plain lit LED
+// is the emission colour control.led (--osc-hw-led, one value in both themes, derived in
+// ui-synth-palette.test.mjs to hold 3:1 on the bezel, its seat, the card and every plate), the
+// default; the ring colour is no longer an LED colour (dark blue in light, a lit lens read as
+// off), while control.applied and jack.refuse stay, because their colour encodes which state
+// the LED shows (the engine's applied value, a refusal; never by colour alone: the label and
+// data-source name it). A token set without control.led (the panel's adapter until dev-53 maps
+// it) lights the default in control.ring, as before. switch.js draws a toggle's LED
 // through ledSvg. An optional label is 12 screen px at any zoom, in text.label, and names the
 // LED to assistive technology ("Arm: on"); an unnamed LED is aria-hidden.
 //
@@ -49,6 +56,7 @@
 //   meterSvg({ at, value, source, scale, unit, calibrated, tokens, zoom, interactive })
 //                                                                         '<g data-needle …>…</g>'
 //   meterBox({ at, zoom, unit })                                          the meter's extent
+//   checkLed(led, id)                  a host's { source, lit }, checked
 //   LED, LED_COLOURS, METER, METER_BOX, LABEL_PX, HALO_PX
 
 import { HIT_PX } from './knob.js';
@@ -61,7 +69,7 @@ export const LED = Object.freeze({ lens: 3, bezel: 4.5, ringW: 1, bezelW: 1, hal
   labelGap: 3 });
 /** The token roles an LED may light in: each holds 3:1 on the bezel and both plate surfaces in
  *  both themes (the test computes it); a role elsewhere, a literal or a raw var() is refused. */
-export const LED_COLOURS = Object.freeze(['control.ring', 'control.applied', 'jack.refuse']);
+export const LED_COLOURS = Object.freeze(['control.led', 'control.applied', 'jack.refuse']);
 /** A label's and a unit's size in screen px at any zoom (the 12 px font floor, legend.js's). */
 export const LABEL_PX = LEGEND_PX;
 /** The lit halo's greatest reach past the lens in screen px at any zoom, within the v4 glow
@@ -154,6 +162,20 @@ export function ledBox({ at, zoom = 1, label } = {}) {
     height: num(2 * half + LED.labelGap + size * 1.2) });
 }
 
+/** A host's LED state ({ source, lit }, `id` naming the host in the error): the source a
+ *  non-empty string, lit a boolean, else a TypeError (switch.js's toggle). */
+export function checkLed(led, id) {
+  if (!led || typeof led !== 'object') {
+    throw new TypeError(`${id}: an LED is { source, lit }, bound to the parameter's state.`);
+  }
+  if (typeof led.source !== 'string' || !led.source.trim()) {
+    throw new TypeError(`${id}: an LED names its data-source (the state it shows).`);
+  }
+  if (typeof led.lit !== 'boolean') {
+    throw new TypeError(`${id}: an LED's lit is the state's boolean, not ${typeof led.lit}.`);
+  }
+}
+
 function colourOf(tokens, colour) {
   if (!LED_COLOURS.includes(colour)) {
     throw new TypeError(`ledSvg: colour is a state token role (${LED_COLOURS.join(', ')}), `
@@ -167,7 +189,7 @@ function colourOf(tokens, colour) {
   return value;
 }
 
-export function ledSvg({ at, lit, source, tokens, colour = 'control.ring', zoom = 1, label,
+export function ledSvg({ at, lit, source, tokens, colour, zoom = 1, label,
   interactive = false } = {}) {
   checkSource(source, 'ledSvg');
   if (typeof lit !== 'boolean') {
@@ -180,7 +202,9 @@ export function ledSvg({ at, lit, source, tokens, colour = 'control.ring', zoom 
   checkZoom(zoom, 'ledSvg');
   const { x, y } = pointOf(at, 'ledSvg');
   const t = tokens;
-  const paint = lit ? colourOf(t, colour) : t.surface.card;
+  // The default before D-PAL's control.led reaches a token set: the ring, as it was.
+  const paint = !lit ? t.surface.card : colour === undefined && !t.control.led ? t.control.ring
+    : colourOf(t, colour ?? 'control.led');
   const ring = lit ? t.surface.edge : t.control.edge;
   const halo = lit ? `<circle data-halo="" class="opacity-hw-sheen" aria-hidden="true" `
     + `pointer-events="none" cx="${num(x)}" cy="${num(y)}" r="${num(LED.lens + haloReach(zoom))}" `
