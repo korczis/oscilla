@@ -781,11 +781,6 @@ function integrationInit() {
       harmonicBars: createHarmonicBarsView(),
     };
     host = el ? startVisualizer(bridge, el, { P5: p5, views, view: 'scope' }) : false;
-    // K152: the Synth's live monitor, a second host of the same bridge and scope view.
-    const mon = document.getElementById('osc-synth-monitor');
-    if (mon && host) {
-      startVisualizer(bridge, mon, { P5: p5, views, view: 'scope', trackEnvelope: false });
-    }
     if (!host) {
       cmp.vizFailed = true;
       cmp.notify('warning', 'Visualization unavailable', 'The waveform display could not start; '

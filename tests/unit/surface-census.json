@@ -665,12 +665,9 @@
         "tests/unit/synth-wording.test.mjs"
       ],
       "plan": [
-        "K062",
-        "K152"
+        "K062"
       ],
-      "charts": [
-        "osc-synth-monitor"
-      ]
+      "charts": []
     },
     {
       "id": "osc-view-about",

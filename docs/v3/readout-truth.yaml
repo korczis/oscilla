@@ -199,24 +199,6 @@ readouts:
         summary: >-
           The scope draws flat tops on a clean +6 dB peaking sine and a plateau for a 3.1×
           peak; a split 440/440 Δφ 180 stereo route draws a flat line
-  - key: chart:synth-monitor
-    audit: []
-    readout: Synth live monitor scope trace and its +1/0/-1 axis (#osc-synth-monitor)
-    quantity: >-
-      Output analyser samples while the Synth (the Studio) owns the output, the same trace as
-      chart:waveform in a second p5 host of the one visualization bridge
-    unit: ratio to set gain
-    source: [src/js/ui/p5-views.js, src/js/main.js, src/js/audio/audio-engine.js]
-    algorithm: >-
-      chart:waveform's scope view over the same bridge.pull() of the analyser after the ceiling;
-      no second analyser and no second state
-    resolution: 1/fs; window up to 8192 samples
-    calibration: none, relative digital
-    limitations: >-
-      chart:waveform's limitations hold; the window follows the Playground's time-window
-      setting, and a quiet patch draws a small trace (relative digital level, never acoustic)
-    tests: [tests/browser/synth.cjs]
-    label: VERIFIED
   - key: dual.beat
     audit: [GEN-05]
     readout: "Dual Oscillator difference #osc-dual-beat"
