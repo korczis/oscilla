@@ -1184,6 +1184,39 @@ test('slice B: the fader\'s lip shows on its cap, its scale and fill hold 3:1, b
     }
   });
 
+// af's condition (c) on the cords amendment (07:5xZ 2026-11-05): the fader cap's lit lower lip,
+// as drawn (data-lip, the material's lit tone knobCapHi), at 3:1 or more on every plate the fader
+// stands on, today's and D-PAL's, measured from tokens.css as C5's hover is. Light holds it
+// (14.23 on --osc-surface-3 and --osc-plate-lo, 17.22 on --osc-surface-1 and --osc-plate-hi). Dark
+// does not: knob-cap-hi #1b1b1b measures 1.07 on --osc-surface-3, 1.10 on --osc-surface-1, 1.07
+// on --osc-plate-hi and 1.04 on --osc-plate-lo, a C6 material near-black on near-black plates.
+// The fallback is an amendment for a darker cap (af's), not a colour change here; until then the
+// dark half is a todo that still measures.
+const lipOnPlates = (theme) => {
+  const t = themes()[theme];
+  const lips = [{}, { hover: true }, { focus: true }, { dragging: true }].map((state) => varOf(
+    attr(tagOf(controlSvg({ kind: 'fader', value: 70, param: NUM, tokens: TOKENS, state }),
+      'data-lip'), 'fill')));
+  assert.deepEqual([...new Set(lips)], [SYNTH_TOKEN_NAMES.control.knobCapHi],
+    'the lip is the lit tone in every enabled state');
+  return ALL_PLATES.map((plate) => [plate, contrast(hexOf(t, lips[0]), hexOf(t, plate))]);
+};
+
+test('cords amendment (c): the fader cap\'s lit lip holds 3:1 on every plate, light theme', () => {
+  const short = lipOnPlates('light').filter(([, r]) => r < 3)
+    .map(([plate, r]) => `light lip on ${plate}: ${r.toFixed(2)}`);
+  assert.deepEqual(short, [], 'the lip under 3:1 on a plate');
+});
+
+test('cords amendment (c): the fader cap\'s lit lip holds 3:1 on every plate, dark theme', {
+  todo: 'measured 1.04-1.10 (knob-cap-hi #1b1b1b on the dark plates); af\'s fallback is an '
+    + 'amendment for a darker cap',
+}, () => {
+  const short = lipOnPlates('dark').filter(([, r]) => r < 3)
+    .map(([plate, r]) => `dark lip on ${plate}: ${r.toFixed(2)}`);
+  assert.deepEqual(short, [], 'the lip under 3:1 on a plate');
+});
+
 test('D-PAL look: the slide\'s index reads in two paints, the cap ink and the lit detent', () => {
   const c = TOKENS.control;
   for (const value of ['a', 'b', 'c']) {

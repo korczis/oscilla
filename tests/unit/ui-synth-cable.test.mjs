@@ -18,7 +18,8 @@ import {
 import * as CABLE from '../../src/js/ui/synth/cable.js';
 import { SYNTH_TOKEN_NAMES, tokensFrom } from '../../src/js/ui/synth/tokens.js';
 import { TOKENS, colourLiterals, shapesWithoutStroke, paints, tokenValues, intensityLiterals,
-  contrastOf, deltaLOf, intensityOf, tokenHex, tokenThemes } from './ui-synth-fixture.mjs';
+  contrastOf, deltaLOf, intensityOf, overOf, tokenHex, tokenThemes } from './ui-synth-fixture.mjs';
+import { PORT_VISUALS } from '../../src/js/studio/ports.js';
 
 const NUM = '(-?\\d+(?:\\.\\d+)?(?:e[-+]?\\d+)?)';
 const CURVE = new RegExp(`^M ${NUM} ${NUM} C ${NUM} ${NUM} ${NUM} ${NUM} ${NUM} ${NUM}$`);
@@ -1803,6 +1804,138 @@ test('JC-6: a short or coincident cord keeps finite bands', () => {
       assert.ok([p.x, p.y, q.x, q.y].every(Number.isFinite), JSON.stringify([from, to]));
     }
   }
+});
+
+// ---------------------------------------------------------------- the cords amendment (11-05)
+// Rule v4's amendment of 2026-11-05 (cords), af's YES and conditions of 07:5xZ: a cord is solid
+// and its type the band pattern CABLE_BANDS near each plug; a Studio edge may keep CABLE_DASH;
+// both are notations of PORT_VISUALS' one type. (a) the drawn bands are checked against the
+// exported table, not a copy of it or a markup string; (b) the bands' ink is measured on every
+// cord colour, as composited on every plate a cord crosses, in both themes.
+
+/** The plates a cord is drawn over: the card, today's two plates and D-PAL's two (PF-04). */
+const CORD_PLATES = Object.freeze([['card', '--osc-surface-2'], ['plateHi', '--osc-surface-3'],
+  ['plateLo', '--osc-surface-1'], ['plate.hi', '--osc-plate-hi'], ['plate.lo', '--osc-plate-lo']]);
+const plateOf = (tokens, key) => (key.startsWith('plate.') ? tokens.plate[key.slice(6)]
+  : tokens.surface[key]);
+
+test('cords amendment: one type, two notations, both keyed by PORT_VISUALS, and the rule says so',
+  () => {
+    const types = Object.keys(PORT_VISUALS);
+    assert.deepEqual(Object.keys(CABLE.CABLE_BANDS), types, 'CABLE_BANDS: every type, no other');
+    assert.deepEqual(Object.keys(CABLE_DASH), types, 'CABLE_DASH: every type, no other');
+    for (const type of types) {
+      assert.equal(CABLE_DASH[type] === null, PORT_VISUALS[type].cable === 'solid',
+        `${type}: the Signal Path dash is solid exactly where PORT_VISUALS says so`);
+    }
+    const rule = readFileSync(new URL('../../.ai/repo/rules/project/visual-identity-lock.v4.md',
+      import.meta.url), 'utf8');
+    const at = rule.indexOf('# Amendment of 2026-11-05 (cords)');
+    assert.ok(at >= 0, 'the rule carries the cords amendment');
+    const end = rule.indexOf('\n# ', at + 1);
+    const section = rule.slice(at, end < 0 ? undefined : end).replace(/\s+/g, ' ');
+    for (const phrase of ['a patch cord is solid', 'the band pattern CABLE_BANDS near each plug',
+      'AUDIO one, CONTROL two, TRIGGER three short, ANALYSIS a long and a short',
+      'never colour alone', 'the Signal Path dash (CABLE_DASH)',
+      'both are notations of PORT_VISUALS\' one type']) {
+      assert.ok(section.includes(phrase), `the amendment states: ${phrase}`);
+    }
+    assert.doesNotMatch(rule.replace(/\s+/g, ' '), /cords? (?:are|is) dashed by (?:its )?type/i,
+      'no statement left that cords are dashed by type');
+  });
+
+test('cords amendment (a): every type draws the pattern the exported CABLE_BANDS states', () => {
+  const table = CABLE.CABLE_BANDS;
+  for (const [type, pattern] of Object.entries(table)) {
+    const count = Math.ceil(pattern.length / 2);
+    for (const state of STATES) {
+      for (const [from, to] of [[A, B], [B, A], [{ x: 0, y: 0 }, { x: 0, y: 200 }]]) {
+        const parts = cordParts({ type, state, from, to });
+        const where = `${type} ${JSON.stringify(state)} ${JSON.stringify([from, to])}`;
+        assert.equal(parts.find((p) => p.key === 'bands').attrs['data-bands'], type, where);
+        const bands = bandsOf(parts);
+        for (const [end, centre] of [['from', from], ['to', to]]) {
+          const spans = bands[end].map(([p, q]) => [p, q].map((x) => Math.hypot(x.x - centre.x,
+            x.y - centre.y)));
+          assert.equal(spans.length, count, `${where} ${end}: ${count} band(s), as the table says`);
+          let s = CABLE.CABLE_BAND_AT;
+          spans.forEach(([r0, r1], i) => {
+            if (i > 0) s += pattern[2 * i - 1];
+            assert.ok(Math.abs(r0 - s) < 1e-3, `${where} ${end} band ${i}: starts ${r0}, not ${s}`);
+            assert.ok(Math.abs(r1 - r0 - pattern[2 * i]) < 1e-3,
+              `${where} ${end} band ${i}: ${r1 - r0} long, the table says ${pattern[2 * i]}`);
+            s += pattern[2 * i];
+          });
+        }
+      }
+    }
+  }
+});
+
+test('cords amendment (b): the bands hold 3:1 on every cord colour, on every plate, both themes',
+  async (t) => {
+    const th = await tokenThemes();
+    for (const [key, name] of CORD_PLATES) {
+      const k = key.startsWith('plate.') ? SYNTH_TOKEN_NAMES.plate[key.slice(6)]
+        : SYNTH_TOKEN_NAMES.surface[key];
+      assert.equal(k, name, `${key} is ${name}`);
+    }
+    const short = [];
+    let min = { ratio: Infinity, where: '' };
+    for (const [name, theme] of Object.entries(th)) {
+      const tokens = themed(theme);
+      tokens.cable.palette.forEach((colour, i) => {
+        for (const type of Object.keys(CABLE.CABLE_BANDS)) {
+          const parts = cordParts({ tokens, colour, type });
+          const cord = parts.find((p) => p.key === 'stroke').attrs;
+          const bands = parts.filter((p) => /^band-/.test(p.key)).map((p) => p.attrs);
+          assert.equal(cord.stroke, colour, 'the cord is drawn in its colour');
+          assert.equal(bands.length, 2, 'a band path at each end');
+          for (const [plate, plateName] of CORD_PLATES) {
+            // As the browser paints them: the cord over the plate, the band over the cord, each
+            // at the intensity its class reads (none: opaque).
+            const ground = overOf(cord.stroke, plateOf(tokens, plate), intensityOf(cord.class));
+            for (const band of bands) {
+              const ratio = contrastOf(overOf(band.stroke, ground, intensityOf(band.class)),
+                ground);
+              const where = `${name} ${SYNTH_TOKEN_NAMES.cable.palette[i]} ${type} on ${plateName}`;
+              if (ratio < min.ratio) min = { ratio, where };
+              if (ratio < 3) short.push(`${where}: ${ratio.toFixed(2)}`);
+            }
+          }
+        }
+      });
+    }
+    t.diagnostic(`the least band contrast: ${min.ratio.toFixed(2)} (${min.where})`);
+    assert.deepEqual(short, [], 'bands under 3:1 on their cord');
+  });
+
+// Beyond af's (b), measured while proving it (11-05): the shade (cordInk at hw-shadow, under the
+// bands) and the sheen (over them) cross a band's lower and upper side, so a band also meets
+// the shaded cord and, under the sheen, the sheened cord. There the ratio falls under 3:1:
+// shaded 2.15 (light --osc-purple) to 5.71, sheened 2.82 (light --osc-purple) to 8.68. The
+// remedy (the shade's or sheen's lane, or BAND_CORE) is a design call for the rule's owner.
+test('cords amendment: a band holds 3:1 where the shade and the sheen cross it', {
+  todo: 'measured under 3:1 on 7 of 12 cord colours shaded and 3 of 12 sheened; a call for af',
+}, async () => {
+  const th = await tokenThemes();
+  const short = [];
+  for (const [name, theme] of Object.entries(th)) {
+    const tokens = themed(theme);
+    tokens.cable.palette.forEach((colour, i) => {
+      const parts = cordParts({ tokens, colour, type: 'CONTROL' });
+      const a = (key) => parts.find((p) => p.key === key).attrs;
+      const [band, shade, sheen] = [a('band-from'), a('shade'), a('sheen')];
+      const lit = (x) => overOf(sheen.stroke, x, intensityOf(sheen.class));
+      const banded = overOf(band.stroke, colour, intensityOf(band.class));
+      const where = `${name} ${SYNTH_TOKEN_NAMES.cable.palette[i]}`;
+      const shaded = contrastOf(banded, overOf(shade.stroke, colour, intensityOf(shade.class)));
+      const sheened = contrastOf(lit(banded), lit(colour));
+      if (shaded < 3) short.push(`${where} shaded ${shaded.toFixed(2)}`);
+      if (sheened < 3) short.push(`${where} sheened ${sheened.toFixed(2)}`);
+    });
+  }
+  assert.deepEqual(short, []);
 });
 
 test('JC-13: a cord 8.5 wide (9.5 hovered, 11 selected) in its rim', () => {

@@ -218,6 +218,25 @@ The closed list: `--osc-wood-hi`, `--osc-wood-lo`, `--osc-plate-hi`, `--osc-plat
 - **The snapshot.** `tests/unit/visual-identity-palette.json` was rewritten with
   `OSC_PALETTE_WRITE=1` in the same change; its diff is the reviewer's evidence of the values.
 
+# Amendment of 2026-11-05 (cords)
+
+Approved by af, the rule's owner (11-05, 07:5xZ), in this text, as an amendment of version 4
+and not a version 5: what a cord means does not change (a port keeps its typed shape and a
+cable its type, never colour alone), only the notation the layer draws a cord's type in.
+
+Amendment of 2026-11-05 (cords): in the synth-theme layer a patch cord is solid; its signal type
+is the band pattern CABLE_BANDS near each plug (AUDIO one, CONTROL two, TRIGGER three short,
+ANALYSIS a long and a short), never colour alone. A Studio edge may keep the Signal Path dash
+(CABLE_DASH); both are notations of PORT_VISUALS' one type, and the layer draws either from it.
+
+- **Where it is drawn and proved.** `src/js/ui/synth/cable.js` exports both tables, each keyed
+  by exactly `PORT_VISUALS`' types; a cord passed no `dash` draws solid with its type's bands,
+  and a caller's `dash` draws that grammar and no bands. `tests/unit/ui-synth-cable.test.mjs`
+  checks every type's drawn bands (their count, lengths and gaps) against the exported
+  `CABLE_BANDS`, not a copy of it, and measures the bands' ink at 3:1 or more on every cord
+  colour as composited on the card, today's two plates and D-PAL's two, in both themes (af's
+  conditions of 11-05).
+
 # Failure behaviour
 
 A failing check fails CI or the release gate; a surface that fails the hidden-logo question
@@ -261,6 +280,9 @@ is a review rejection even when every functional test passes.
 - `tests/unit/ui-synth-palette.test.mjs` (in `npm test`): each role of the closed list derived
   from tokens.css by its rules and equal to the pick, theme-invariant where C6 says so, and the
   measured table printed for the review.
+- `tests/unit/ui-synth-cable.test.mjs` (in `npm test`): the cords amendment of 2026-11-05, each
+  signal type's bands drawn as `CABLE_BANDS` states them and their ink measured on every cord
+  colour, plate and theme.
 - `tests/unit/ui-flowbite-pro.test.mjs`, in `npm test` (CI `unit` job): the interface half.
   Growth of the recorded legacy interface (a surface not migrated, an osc-* class token, a
   class name outside the frozen vocabulary, a legacy selector or declaration, an inline
