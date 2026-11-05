@@ -1,5 +1,5 @@
 {
-  "note": "U063 navigable-surface census. One contract per navigable surface the code holds; tests/unit/surface-census.test.mjs derives the surfaces (WORKSPACES of src/js/ui/app.js, the data-osc-modes elements, role=tab and exps.panel views and dialogs of src/index.html, HASH_DOMAINS of src/js/ui/navigation.js) and refuses a surface without an entry and an entry without a surface; tests/browser/surface-census.cjs holds it to the running page. reachedFrom of a panel or subview is the data-osc-modes of the element that holds it (what the phone layout shows; at 1280 px and wider the Playground lays every instrument panel out as an overview). charts names the chart hosts of a panel, which are K053's census (tests/unit/chart-host-census.json) and are not described here. The debt is the entries whose deepLink is null or whose tests are empty; its count only shrinks against this file's git history. A <placeholder> in a deep link stands for a stored record's id.",
+  "note": "U063 navigable-surface census. One contract per navigable surface the code holds; tests/unit/surface-census.test.mjs derives the surfaces (WORKSPACES of src/js/ui/app.js, the data-osc-modes elements, role=tab and exps.panel views and dialogs of src/index.html, HASH_DOMAINS of src/js/ui/navigation.js) and refuses a surface without an entry and an entry without a surface; tests/browser/surface-census.cjs holds it to the running page. reachedFrom of a panel or subview is the data-osc-modes of the element that holds it (what the phone layout shows; at 1280 px and wider the Playground lays every instrument panel out as an overview). charts names the chart hosts of a panel, which are K053's census (tests/unit/chart-host-census.json) and are not described here. The debt is the entries whose deepLink is null or whose tests are empty; its count only shrinks against this file's git history. The entries whose tests are empty are also a debt of their own: noTestDebt lists them by kind:id, exactly, and their count only shrinks against the same history. A <placeholder> in a deep link stands for a stored record's id.",
   "evidenceClasses": {
     "measured": "values captured from a real input of this device (the microphone, MEASURE), relative unless a level calibration applies",
     "derived": "values computed from the instrument's own signal, the running audio context or a model (analyser views, computed responses)",
@@ -9,6 +9,14 @@
     "test-context": "values of the TEST CONTEXT digital loopback, never of a physical input",
     "none": "controls, text or a form with no data shown as a result"
   },
+  "noTestDebt": [
+    "subview:phase.tab:lissajous",
+    "subview:bio.tab:ranges",
+    "subview:presets.tab:musical",
+    "subview:presets.tab:sweeps",
+    "subview:presets.tab:high",
+    "dialog:osc-dlg-exp-delete"
+  ],
   "surfaces": [
     {
       "id": "playground",
@@ -1323,7 +1331,9 @@
       "evidence": "none",
       "deepLink": null,
       "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
-      "tests": [],
+      "tests": [
+        "tests/browser/control-census.cjs"
+      ],
       "plan": [
         "F010"
       ]
@@ -1350,7 +1360,9 @@
       "evidence": "none",
       "deepLink": null,
       "deepLinkWhyNot": "a dialog opens from a control in the page; no key of the address opens a dialog",
-      "tests": [],
+      "tests": [
+        "tests/browser/control-census.cjs"
+      ],
       "plan": [
         "F010"
       ]

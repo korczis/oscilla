@@ -27,7 +27,11 @@
 // The debt is the entries with no deep link or no test. Its count may not exceed its value in
 // any earlier commit of the census file (git log / git show; skipped without that history,
 // like tests/unit/no-inert-surfaces.test.mjs, and failed under GitHub Actions when no commit
-// holds the file). The running page is tests/browser/surface-census.cjs.
+// holds the file). The entries with no test are a debt of their own, ratcheted apart, because
+// in the combined count a test removed from an entry that also has no deep link changes
+// nothing: the census records them by key in noTestDebt, which must be exactly the entries
+// whose tests are empty, and their count may not exceed the count of any earlier commit. The
+// running page is tests/browser/surface-census.cjs.
 //
 // What this does not decide: that a test file which names a surface exercises it (it is read
 // as text: an id, a data-osc with its value, or the address of the surface), that a purpose
@@ -429,9 +433,46 @@ export function judge(census, inventory, { fileText, issueIds }) {
 export const debtOf = (census) => (census.surfaces || [])
   .filter((e) => e.deepLink === null || !(Array.isArray(e.tests) && e.tests.length));
 
+/** The commits whose census held fewer entries of `of` than `count`: [[sha, was]]. */
+const raisedAbove = (count, history, of) => history
+  .map(({ sha, census }) => [sha, of(census).length]).filter(([, was]) => count > was);
+
 /** The commits whose census held less debt than `count`: [[sha, was]]. */
-export const debtRaised = (count, history) => history
-  .map(({ sha, census }) => [sha, debtOf(census).length]).filter(([, was]) => count > was);
+export const debtRaised = (count, history) => raisedAbove(count, history, debtOf);
+
+/** The entries with no test, whatever their deep link. */
+export const noTestOf = (census) => (census.surfaces || [])
+  .filter((e) => !(Array.isArray(e.tests) && e.tests.length));
+const keyOf = (e) => `${e.kind}:${e.id}`;
+
+/**
+ * The problems of the no-test debt: the record `noTestDebt` (entry keys) is not exactly the
+ * entries with no test, or their count is above the count of a commit of `history`.
+ */
+export function noTestProblems(census, history) {
+  const out = [];
+  const record = census && census.noTestDebt;
+  if (!Array.isArray(record)) {
+    out.push(`${P} ${CENSUS_REL} records no noTestDebt list (the keys of the entries with no `
+      + 'test)');
+  }
+  const listed = new Set(Array.isArray(record) ? record : []);
+  const now = noTestOf(census);
+  const keys = new Set(now.map(keyOf));
+  for (const k of now.map(keyOf).filter((x) => !listed.has(x))) {
+    out.push(`${P} ${k.replace(/:/, ' "')}" has no test and noTestDebt does not list it; `
+      + 'name the test that exercises it');
+  }
+  for (const k of [...listed].filter((x) => !keys.has(x))) {
+    out.push(`${P} noTestDebt lists ${k}, which is not an entry with no test; remove it`);
+  }
+  const raised = raisedAbove(now.length, history, noTestOf);
+  if (raised.length) {
+    out.push(`${P} the no-test debt grew to ${now.length}; it may only shrink:\n  `
+      + raised.map(([sha, was]) => `${was} at ${sha}`).join('\n  '));
+  }
+  return out;
+}
 
 // ------------------------------------------------------------------------------ the tree
 const fileText = (rel) => (isFile(rel) ? read(rel) : null);
@@ -466,6 +507,7 @@ test('the census prints its debt: the entries with no deep link or no test', (t)
   t.diagnostic(`debt ${debt.length}: ${debt.map((e) => `${e.kind}:${e.id}`
     + `${e.deepLink === null ? ' (no deep link)' : ''}${e.tests.length ? '' : ' (no test)'}`)
     .join(', ')}`);
+  t.diagnostic(`no test ${noTestOf(CENSUS()).length}: ${noTestOf(CENSUS()).map(keyOf).join(', ')}`);
   assert.ok(Array.isArray(debt));
 });
 
@@ -628,6 +670,64 @@ test('mutation: debt above an earlier commit is refused, debt paid off is not', 
   const now = { surfaces: [e(null, ['x']), e('#m=c', [])] };
   assert.equal(debtOf(now).length, 2, 'a null deep link and an empty test list each count');
   assert.deepEqual(debtRaised(debtOf(now).length, history), [['lowered', 1]]);
+});
+
+test('the no-test debt is recorded and only shrinks: noTestDebt lists exactly the entries '
+  + 'with no test, and no more of them than in any earlier commit', (t) => {
+  const history = censusHistory();
+  if (!history || !history.length) {
+    if (history && process.env.GITHUB_ACTIONS === 'true') {
+      assert.fail(`${P} no commit holds ${CENSUS_REL}: the CI unit job checks out with `
+        + 'fetch-depth: 0');
+    }
+    // Without history the record is still judged against the tree.
+    const p = noTestProblems(CENSUS(), []);
+    assert.deepEqual(p, [], p.join('\n'));
+    t.skip(`no git history of ${CENSUS_REL} here; the record alone was judged`);
+    return;
+  }
+  const p = noTestProblems(CENSUS(), history);
+  assert.deepEqual(p, [], p.join('\n'));
+});
+
+test('mutation: a test taken from an entry that also has no deep link is refused by the '
+  + 'no-test ratchet, though the combined debt does not move', () => {
+  const tree = TREE();
+  const census = CENSUS();
+  const head = [{ sha: 'head', census }];
+  assert.deepEqual(noTestProblems(census, head), [], 'the census as it stands is not refused');
+  const key = 'subview:analysis.tab:waveform';
+  const entry = census.surfaces.find((e) => keyOf(e) === key);
+  assert.ok(entry && entry.deepLink === null && entry.tests.length, `${key} has a test and no `
+    + 'deep link (the case the combined count cannot see)');
+  const withEntry = (c, patch) => ({ ...c, surfaces: c.surfaces.map((e) => (
+    keyOf(e) === key ? { ...e, ...patch } : e)) });
+  const untested = withEntry(census, { tests: [] });
+  // What U063 alone sees: the census is valid and the combined debt is unchanged.
+  assert.deepEqual(judge(untested, deriveInventory(tree), CTX()), []);
+  assert.deepEqual(debtRaised(debtOf(untested).length, head), []);
+  // The record no longer matches the tree.
+  let p = noTestProblems(untested, head);
+  assert.ok(p.some((x) => /subview "analysis\.tab:waveform" has no test and noTestDebt does not/
+    .test(x)), p.join('\n'));
+  // Listing it as well is a rise above the newest record.
+  const listed = { ...untested, noTestDebt: [...census.noTestDebt, key] };
+  p = noTestProblems(listed, head);
+  assert.ok(p.some((x) => new RegExp(`no-test debt grew to ${census.noTestDebt.length + 1}; `
+    + `it may only shrink:\\n  ${census.noTestDebt.length} at head`).test(x)), p.join('\n'));
+  // An entry given a test leaves the record stale until it is removed from it.
+  const [first] = census.noTestDebt;
+  const paid = { ...census, surfaces: census.surfaces.map((e) => (keyOf(e) === first
+    ? { ...e, tests: ['tests/browser/app.cjs'] } : e)) };
+  p = noTestProblems(paid, head);
+  assert.ok(p.some((x) => x.includes(`noTestDebt lists ${first}, which is not an entry with no `
+    + 'test')), p.join('\n'));
+  const settled = { ...paid, noTestDebt: census.noTestDebt.slice(1) };
+  assert.deepEqual(noTestProblems(settled, head), [], 'debt paid off and recorded');
+  // No record at all is refused.
+  const { noTestDebt, ...unrecorded } = census;
+  assert.ok(Array.isArray(noTestDebt));
+  assert.ok(noTestProblems(unrecorded, head).some((x) => /records no noTestDebt list/.test(x)));
 });
 
 test('names: a file names a surface by its id, data-osc with value, or address only', () => {
