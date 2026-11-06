@@ -601,19 +601,21 @@ test('mutation U085: a reverted summary is named', () => {
 // release:prepare refreshes it (after the bump), and What comes next's heading reads
 // "as of v<release>" from it. version:check allows the copy in this generated file; this test
 // is what holds it to package.json.
+// Since roadmap v3 (2026-11-06, owner: "nothing typed twice") the file holds no copy of the
+// version: release:prepare writes the roadmap with each bump, so the release it describes is the
+// build's own, and About reads BUILD.version. The copy it held went stale in the first merge of
+// main after a bump (the previous version against package.json's, 2026-11-06).
 test('U086: the roadmap names the release it describes, and the heading renders it', async () => {
-  const { version } = JSON.parse(read('package.json'));
   const roadmap = JSON.parse(read(ROADMAP_REL));
-  assert.equal(roadmap.release, version, 'the roadmap was written at this release: refresh it');
-  const { parseSemver } = await import('../../scripts/release-metadata.mjs');
-  assert.ok(parseSemver(roadmap.release), 'the release is a version, X.Y.Z or a candidate X.Y.Z-rc.N');
+  assert.equal('release' in roadmap, false, 'the roadmap holds no copy of the version');
   const { roadmapFromPlan, roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
-  assert.equal(roadmapFromPlan(planFixture()).release, version, 'roadmap.mjs writes the version');
-  assert.equal(roadmapFromPlan(planFixture(), '9.8.7').release, '9.8.7');
-  assert.deepEqual(roadmapShapeProblems({ ...roadmap, release: undefined }),
-    ['release undefined is not a version X.Y.Z or X.Y.Z-rc.N']);
+  assert.equal('release' in roadmapFromPlan(planFixture()), false, 'roadmap.mjs writes none');
+  assert.deepEqual(roadmapShapeProblems({ ...roadmap, release: '40.1.0' }),
+    ['the roadmap holds release, a copy of package.json\'s version: the page reads BUILD.version']);
   const { ROADMAP } = await import('../../src/js/ui/about.js');
-  assert.equal(ROADMAP.release, version);
+  const { BUILD } = await import('../../src/js/core/build-info.js');
+  assert.equal(ROADMAP.release, BUILD.version, 'About names the build\'s own version');
+  assert.match(read('src/js/ui/about.js'), /\brelease: BUILD\.version,/);
   const at = view.indexOf('id="osc-about-next"');
   const heading = view.slice(at, view.indexOf('</h3>', at));
   assert.match(heading, /x-text="` · as of v\$\{ROADMAP\.release\}`"/,
@@ -725,10 +727,10 @@ test('U086: a release candidate\'s roadmap passes its own shape check (ADR 0047,
   async () => {
     const { roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
     const base = { schema: ROADMAP_SCHEMA_FOR_RC(), note: 'n', milestones: [] };
-    assert.deepEqual(roadmapShapeProblems({ ...base, release: '40.0.0-rc.1' }), []);
-    assert.deepEqual(roadmapShapeProblems({ ...base, release: '40.1.0' }), []);
-    assert.equal(roadmapShapeProblems({ ...base, release: 'v4' }).length, 1);
-    assert.equal(roadmapShapeProblems({ ...base }).length, 1);
+    // v3: a candidate's roadmap is the same shape as any other, with no version in it, so the
+    // version-ahead scan has nothing to find there (R048's case cannot arise).
+    assert.deepEqual(roadmapShapeProblems({ ...base }), []);
+    assert.equal(roadmapShapeProblems({ ...base, release: '40.0.0-rc.1' }).length, 1);
   });
 
 function ROADMAP_SCHEMA_FOR_RC() {

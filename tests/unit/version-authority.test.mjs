@@ -180,10 +180,11 @@ test('config import accepts other 2.x (and later) product versions', () => {
   assert.equal(wrongSchema.ok, false); // the schema version, not the product version, gates
 });
 
-test('U086: only the release line of src/data/roadmap.json is exempt from the literal scan', async () => {
-  const { findVersionLiterals } = await import('../../scripts/release-version-check.mjs');
+test('U086: no line of src/data/roadmap.json is exempt from the literal scan (roadmap v3)', async () => {
+  const { LINE_ALLOW, findVersionLiterals } = await import('../../scripts/release-version-check.mjs');
+  assert.deepEqual(LINE_ALLOW, []);
   const roadmap = '{\n  "schema": "x",\n  "release": "40.1.0",\n'
     + '  "milestones": [{ "title": "Ship v40.1.0 now" }]\n}\n';
   const hits = findVersionLiterals([{ path: 'src/data/roadmap.json', content: roadmap }], '40.1.0');
-  assert.deepEqual(hits.map((h) => h.line), [4], 'the milestone title is a hit, the release line is not');
+  assert.deepEqual(hits.map((h) => h.line), [3, 4], 'a release line is a copy like any other');
 });
