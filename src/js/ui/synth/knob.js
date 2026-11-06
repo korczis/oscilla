@@ -1,4 +1,4 @@
-// The synth-theme layer's control core (plan K058; API agreed 2026-11-02): a knob, fader and
+// The synth-theme layer's control core (K058; API of 2026-11-02): a knob, fader and
 // switch as pure functions. Values come only from the registry's parameter descriptor ({ key or
 // id, label, unit, min, max, step, scale: 'lin' | 'linear' | 'log', default, type: 'number' |
 // 'integer' | 'enum' | 'boolean', options }); an enum or boolean is a row of positions (a switch
@@ -8,12 +8,11 @@
 // and no number sets an opacity, alpha or shadow (v4): the cap highlight is class
 // opacity-hw-sheen, its shadow opacity-hw-shadow. The feel (plan S3) is feel.js.
 //
-//   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption   value mapping
-//   dragValue, pixelsPerRangeFor, wheelValue, knobKey                  gestures -> the next value
-//   parseValue                                                         typed entry (Enter)
-//   formatValue, ariaAttrs                                             the value as text, ARIA
-//   controlSvg, controlBox, CONTROL_BOX, FADER_CAP                     the drawing, an SVG <g>
-//
+//   clampValue, toNorm, fromNorm, quantize, defaultValue, stepOption value mapping
+//   dragValue, pixelsPerRangeFor, wheelValue, knobKey                gestures -> the next value
+//   parseValue                                                       typed entry (Enter)
+//   formatValue, ariaAttrs                                           the value as text, ARIA
+//   controlSvg, controlBox, CONTROL_BOX, FADER_CAP                   the drawing, an SVG <g>
 // ui-family: knob model
 
 import { formatFrequencyCompact, formatMs } from '../../core/frequency.js';
