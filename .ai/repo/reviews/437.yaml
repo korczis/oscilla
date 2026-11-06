@@ -26,6 +26,31 @@
 # repo-hygiene + knowledge-integrity 65 pass, 0 fail; npm run build:check up to date.
 #
 # Verdict: merge. #424's R5 (P3) stays open as 424.yaml records it; nothing new above P3.
+#
+# Round 2 (head 20a6c385 on main bc4b1545, lane A #386 landed). Integrated by oscilla-a3's agent;
+# read by this reviewer: a372dcd8 merges main d8ee8925 (#438, #439); 39070850 merges main bc4b1545
+# with these decisions:
+# (A) U013 twice: lane A's implementation and tests kept (additive-chart.js, additive.js,
+#     labs.cjs (3b), charts.test.mjs); #429's U013 hunks dropped (its additiveChartLabel text,
+#     setEnabled/isEnabled, globalAlpha 0.4 with a trailing BYPASSED, its dynamic-import test,
+#     its toDataURL block).
+# (B) sequencer lane widths: U022's per-block floors composed with lane A's phone floor in one
+#     timelineWindow, the larger floor winning on one linear px/s; this reviewer's T3 below.
+# (C) About: lane A's registry-driven list kept; #424's U085 wording moved into ui/shell.js
+#     workspace summaries (playground, analyzer, learn, synth), each true of main's workspace.
+# (D) 61257888: #424's U092 template had dropped data-osc="about.next.milestone" (G001's hook):
+#     restored; instrument.js 63 040 B past 63 000 (T004): cap 64 000 with its raises entry.
+# (E) 584b94c8: the U022 per-block px/s is capped at phoneMaxPxPerS like the phone floor (T3);
+#     tests/unit/charts.test.mjs checks 29 and 30 fail at 61257888 and pass at the head.
+# ef7a9d56 rebuilds dist; 20a6c385 accepts the gate's pageHeader (2.22 -> 5.15, U085 wording) and
+# sequencer (0.06 -> 6.09, U022's name-width floor binds in the first screen's ~776 px lane under
+# the Pro sidebar) rises on darwin-arm64, geometry deltas 0; e876ef61 (built by this reviewer, no
+# guarded path) accepts linux-x64 in the bare playwright image (sequencer +3.95 pp with its
+# reason) and pins SYN's page summary as it pins status.version: the shell's copy is the gate's
+# pageHeader region's to judge, and U085 moved 8 desktop SYN views by its truncation alone.
+# Bare image at e876ef61: gate, MEASURE, STUDIO, SYN PASS; darwin SYN PASS 16 views.
+# The guarded content is unchanged: ce14db04... over the same two paths (main bc4b1545's checker).
+# npm test at 20a6c385: 4977 pass, 0 fail, 2 skipped. Verdict: merge.
 schema: review-verdict/v1
 pr: 437
 verdict: merge
@@ -34,3 +59,4 @@ content: ce14db04c1218618643f3ab159921936d6f09d0479baeae64a41ce4922d3add8
 findings:
   - { id: T1, severity: P3, status: closed, title: "U022's failure line in layout.cjs cut at 6 with slice().join, against train 6's ratchet; fixed in the train by fold-in 0e9ea1b8 (firstOf)" }
   - { id: T2, severity: P3, status: open, title: "carried from 424.yaml R5: LINE_ALLOW exempts a release key at any depth of roadmap.json; roadmap.mjs writes it once at the top level" }
+  - { id: T3, severity: P3, status: closed, title: "U022's per-block floor (minPx + gap) / durationS had no cap: a 10 ms block beside a 30 s one made the lane about 160-210k px; 584b94c8 caps it at phoneMaxPxPerS like the phone floor, with its test" }
