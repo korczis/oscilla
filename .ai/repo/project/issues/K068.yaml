@@ -23,10 +23,9 @@ scope:
   - "tests/browser/steps.cjs"
   - "tests/README.md"
   - "dist"
+current_state: "Dependencies re-cut on 2026-11-06 (oscilla-21, recorded as a decision with oscilla-a3, reversible by refusing ADR 0086): K099 dropped because its part 1, the notes clip kind and payload (src/js/studio/notes.js), is on main and the playback core needs no piano-roll editor; W006 dropped because the shared transport labels are not needed to play notes on the audio clock; tap tempo goes to W006 or lands as a plain TRANSPORT_SET dispatch without the shared label. K067 (steps clip) is superseded by this issue under ADR 0086."
 depends_on:
-  - "K099"
   - "K060"
-  - "W006"
 acceptance_criteria:
   - "tests/unit/studio-steps-playback.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: every step onset is within one frame of its computed time at 120 and 97 BPM, with swing 0 and 0.33 of stepBeats, and an off-grid note unmoved by swing; a note with r 3 gives three onsets; a slide note has no gate onset and reaches its pitch within the glide time; two renders of a clip whose notes have p 0.5 are identical and change when the seed changes; a tempo change rescales the onsets; the node census is 0 after stop; tap tempo of four taps 500 ms apart sets 120 BPM."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: probability 0 and 1; ratchet 4 at 1/32 at the tempo maximum; a tempo change while playing; stop with a ratchet pending."
