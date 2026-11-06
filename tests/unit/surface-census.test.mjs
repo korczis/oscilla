@@ -266,8 +266,9 @@ export function namesOf(entry, surface) {
   const id = entry.id;
   switch (entry.kind) {
     case 'workspace':
+      // A suite that reads the registry (ui/shell.js WORKSPACE_IDS) visits every workspace.
       return [re(new RegExp(`\\bm=${esc(id)}(?![\\w-])`)), has(`nav.${id}`),
-        both(q(id), re(/workspace|WORKSPACES|nav\./i))];
+        both(q(id), re(/workspace|WORKSPACES|nav\./i)), re(/\bWORKSPACE_IDS\b/)];
     case 'panel': {
       const m = id.match(/^(osc-[a-z]+-)(.+)$/);
       return [has(id), ...(m ? [both((t) => t.includes(m[1]), q(m[2]))] : []),

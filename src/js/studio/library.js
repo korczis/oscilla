@@ -29,6 +29,7 @@
 //     exportSequenceFile(model, { trackId, sampleRate }) -> { name, type, text, issues,
 //     trackId }: one event track as a V2 sequence file (`.sequence.json`), plan K004.
 //   Dirty state (§156, §254): createDirtyTracker(baseline) -> { markSaved(model, info),
+//     rebaseFresh(before, after) (an automatic change to a fresh, unsaved, unchanged document),
 //     markUnsaved(), isDirty(model), status(model) }. Dirty = execution or presentation state
 //     differs from the last explicit save (schema.js semanticState); pan, zoom, timeline scale
 //     and selection never make a document dirty. markUnsaved: the saved copy is gone (its
@@ -251,6 +252,14 @@ export function createDirtyTracker(baseline) {
     markSaved(model, { id = null, savedAt = null, target = 'local' } = {}) {
       saved = digest(model);
       info = { id, savedAt, target };
+    },
+    /** The app (never the user) changed a document nothing of the user's is in, e.g. the
+     *  Synth's automatic panel on a fresh document: the new model is the baseline, still with
+     *  no save. Refused (false) once the document was saved or changed. */
+    rebaseFresh(before, after) {
+      if (info || digest(before) !== saved) return false;
+      saved = digest(after);
+      return true;
     },
     /** The saved copy no longer exists (deleted): nothing is saved until the next save. */
     markUnsaved() {
