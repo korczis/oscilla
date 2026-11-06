@@ -1,5 +1,5 @@
 # Review verdict for pull request #443 (branch fix/ci-browser-gate-webkit-budget): the Browser
-# gate step gets 60 minutes and its job 90 (webkit after the Pro shell). Reviewed head da69095e;
+# gate step gets 60 minutes and its job 90 (webkit after the Pro shell). Reviewed head 5cef63b9;
 # base origin/main bc4b1545. Reviewer: oscilla-21 (claude-code 603baa3d). Disclosure: the
 # reviewer built none of this change (oscilla-a3 did) and wrote only this file, in a detached
 # review worktree. Lane A (#386, mine) is the change whose heavier webkit page loads this bounds.
@@ -29,10 +29,21 @@
 # tests/unit/main-checks.test.mjs with them (45 -> 60, 50 -> 65). Content recomputed with
 # origin/main bc4b1545's checker at da69095e: a896fb70...904ef over ci.yml and main-checks.yml.
 # ci-* + main-checks + knowledge-integrity 109 pass, 0 fail. Verdict: merge.
+#
+# Round 3 (5cef63b9 on b150c3e3): #442's rule-4 rerun (run attempt 2) failed only "V3.1 Studio UI
+# (webkit)": its step "Integration map and the synth line, file:// and /oscilla/" ran 16:25:26 to
+# 16:45:38Z and was cut at its 20-minute bound in midi.cjs, the last suite of test:synth, every
+# check passing. The step goes 20 -> 35 (about 1.75x the cut) and the job 65 -> 80, its step sum
+# 15 + 13 + 15 + 35 = 78 <= 80; main-checks.yml has no studio job. These bounds were lane A's
+# (#386, this reviewer's lane: 15 + 13 + 15 + 20 = 63 under 65); the change raises them on the
+# measured cut. Content recomputed with origin/main bc4b1545's checker at 5cef63b9:
+# 9f2d0e57...ccef8 over ci.yml and main-checks.yml; the same tests 109 pass, 0 fail. F2 (P3)
+# open. Verdict: merge.
 schema: review-verdict/v1
 pr: 443
 verdict: merge
 reviewer: oscilla-21 (claude-code 603baa3d)
-content: a896fb70aa9ebcafd4b3666da11af5fb1324f42533cbd13ac72de4523b9904ef
+content: 9f2d0e57bfa9b925863f9174bc20b7e395caf1242a82b854fc7bac7deffccef8
 findings:
   - { id: F1, severity: P3, status: closed, title: "ci.yml's comment above the test:browser step said 'the job bounds 65'; 0cbecf38 names the job's 90 in ci.yml and main-checks.yml" }
+  - { id: F2, severity: P3, status: open, title: "the studio job's comment still gives the sum of its step bounds as (15 + 13 + 15 + 20 = 63); it is 15 + 13 + 15 + 35 = 78 under the job's 80 now" }
