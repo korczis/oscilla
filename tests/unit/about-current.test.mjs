@@ -25,10 +25,12 @@ import { WORKSPACES } from '../../src/js/ui/app.js';
 import { LEARN_CARDS } from '../../src/js/data/learn.js';
 import SEMI_MONO from '../../src/js/synth/panels/semi-mono.js';
 import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
+import { expandStations } from '../../scripts/about-stations.mjs';
 
 const root = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
-const html = read('src/index.html');
+// The About stations are data the build renders (R032): read what it renders.
+const html = expandStations(read('src/index.html'));
 
 /** The About view's markup, from its root to the end of <main>. */
 export function aboutView(markup) {
