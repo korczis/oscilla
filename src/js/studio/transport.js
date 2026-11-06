@@ -96,6 +96,8 @@
 //                                voices, not the silenced carrier
 //   gate event clip on an Envelope  handle.gate(startTime, duration); an Envelope the timeline
 //                                gates is closed at PLAY (the timeline owns its gate)
+//   gate event clip on a Keys node  the same gate on every Envelope its unmuted Gate edges
+//                                reach (K060), one gate record per Envelope
 //   automation lane              applyAutomation on handle.modTarget(key, 'linear').param, the
 //                                lane's parameter owned by the transport (runtime.setOwnedParams:
 //                                the runtime does not glide it; a lane removed while playing is
@@ -143,7 +145,7 @@ import { effectiveTarget } from './timeline.js';
 import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
-import { createLiveNotes, keysGatedEnvelopes, liveModel } from './live-notes.js';
+import { createLiveNotes, gateTargets, keysGatedEnvelopes, liveModel } from './live-notes.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -852,8 +854,16 @@ export function createStudioTransport({
     const n = nodeOf(model, it.target);
     if (!n) return skip(it, 'no-target', TRANSPORT_TEXT.noTarget);
     const v = clipTarget(n, { kind: 'event', action: it.action }, registry);
-    if (v.how !== 'gate') return skip(it, 'event-target', v.reason);
+    if (!v.plays) return skip(it, 'event-target', v.reason);
     unplayed.delete(it.clipId);
+    if (v.how === 'keys-gate') {
+      // K060: a gate on a Keys node is a gate on each Envelope its unmuted Gate edges reach,
+      // one gate record each (live-notes.js gateTargets), as a key held for the clip would be.
+      for (const env of gateTargets(model, it.target).envelopes) {
+        addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime, deferred);
+      }
+      return null;
+    }
     return addGate(it.key, it, it.target, it.startTime, it.endTime, deferred);
   }
 

@@ -1120,6 +1120,8 @@ export function createStudioRuntime({
     return {
       state,
       compiledRevision,
+      notes: [...handles].filter(([, h]) => h && h.noteState) // K060: Keys
+        .map(([id, h]) => ({ id, ...h.noteState() })),
       modelNodeCount: plan.nodes.size,
       modelEdgeCount: plan.edges.size,
       runtimeNodeCount: totals.nodes.size,

@@ -2,8 +2,9 @@
 // (the note source the keyboard, MIDI and the panel's gate fan-out drive), VCO (an oscillator
 // whose pitch is a linear octave input, so a keyboard tracks it exactly) and Ring (ring and
 // amplitude modulation of two audio signals), and the XY Pad (plan K097: X, Y and a pitch
-// quantised to a scale of core/music.js, gated while touched). New types only: no existing definition changes,
-// so every pinned template hash and saved studioHash stays as it is (design D2).
+// quantised to a scale of core/music.js, gated while touched). K060 added Key low and Key high
+// to Keys: a saved document holding a Keys node takes their defaults on load, so its
+// studioHash changes once (a hash epoch for documents with Keys; no pinned template holds one).
 //
 // Pitch is "requested digital frequency" (project.no-fake-science): a VCO's pitch and FM inputs
 // add in octaves (1.00 oct per unit, exact in the digital domain) and the sum is clipped so the
@@ -46,24 +47,35 @@ export const keys = defineNode({
     integerParam('transpose', 'Transpose', { min: -24, max: 24, unit: 'st', default: 0 }),
     enumParam('priority', 'Priority', [['last', 'Last'], ['low', 'Low'], ['high', 'High']],
       'last'),
+    // live: an edit applies from the next note (the adapter's update reports 'next-note').
+    integerParam('keyLow', 'Key low', { min: 0, max: 127, default: 0, live: 'next-note' }),
+    integerParam('keyHigh', 'Key high', { min: 0, max: 127, default: 127, live: 'next-note' }),
   ],
+  clipKinds: ['event'],
   summary(p) {
+    const full = p.keyLow === 0 && p.keyHigh === 127;
     return parts(optionLabel(keys, 'priority', p.priority),
       p.glide > 0 ? `glide ${secs(p.glide)}` : null,
-      p.transpose ? `${p.transpose > 0 ? '+' : ''}${p.transpose} st` : null);
+      p.transpose ? `${p.transpose > 0 ? '+' : ''}${p.transpose} st` : null,
+      full ? null : `keys ${midiToName(p.keyLow)}-${midiToName(p.keyHigh)}`,
+      `clamp ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist`);
   },
   capabilities: { realtime: true, offline: true, notes: true },
   compiler: 'audio/audio-engine.js#AudioEngine',
   help: {
     what: 'The note source of a monophonic voice: the on-screen and computer keyboard and MIDI '
-      + 'notes play it while the Synth is armed.',
+      + 'notes play it while the Synth is armed, and an event clip on it gates the envelopes '
+      + 'its Gate reaches.',
     inputs: 'None: notes arrive from the keyboard, MIDI or the Synth workspace.',
     outputs: 'Pitch, in octaves from A4 (−6 to 6, 1.00 oct per octave of the note, exact in '
       + 'the digital domain); Gate, a trigger at every new top note and a release when the '
       + 'last key lifts; Velocity, 0 to 1.',
-    constraints: 'One note at a time (last, lowest or highest held key). Glide moves the pitch '
-      + 'with a time constant of Glide / 3, so after Glide less than a twentieth of the step '
-      + 'remains. A released top note returns to the note still held without a new gate.',
+    constraints: 'One note at a time (last, lowest or highest held key). Glide is linear in '
+      + 'exact time: the pitch arrives at the new note in exactly Glide. A released top note '
+      + 'returns to the note still held without a new gate. Notes outside 0 to 127, or '
+      + 'outside Key low to Key high, are refused with the reason. A pitch played from it is '
+      + `clamped at ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist of the running audio context, and `
+      + 'every note below the clamp tracks exactly.',
   },
 });
 

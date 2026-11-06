@@ -23,8 +23,20 @@
 //   'off' | 'all-off', x, y } on its id (plan K097): on and move set X, Y and the scale step
 //   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them.
 
+//   A note outside 0-127 is refused on every node that plays notes, and on a Keys node a note
+//   on outside its Key low to Key high: { ok: false, code: 'note-range' | 'key-range', reason },
+//   never clamped to a neighbour silently (K060).
+
 import { createNoteStack } from '../synth/note-stack.js';
 import { playsNotes } from './registry.js';
+
+/** The router's refusals, as the user reads them. */
+export const LIVE_NOTES_TEXT = Object.freeze({
+  noteRange: (n) => `Note ${n} is outside the note range 0 to 127; it is not played.`,
+  keyRange: (n, lo, hi) => `Note ${n} is outside this Keys node's key range ${lo} to ${hi}; `
+    + 'it is not played.',
+});
+const inNoteRange = (n) => Number.isInteger(n) && n >= 0 && n <= 127;
 
 const unmuted = (e) => !(e.props && e.props.muted);
 
@@ -88,6 +100,8 @@ export function createLiveNotes({ getModel, handleOf }) {
     return stacks.get(id);
   };
   const gate = (id, at, on) => {
+    const kh = handleOf(id);
+    if (kh && typeof kh.gateAt === 'function') kh.gateAt(at, on);
     const { envelopes, clocks } = gateTargets(getModel(), id);
     for (const env of envelopes) {
       const h = handleOf(env);
@@ -148,6 +162,9 @@ export function createLiveNotes({ getModel, handleOf }) {
     if ((ph && typeof ph.move === 'function') || (pads.has(keysId) && /off/.test(kind))) {
       return padEvent(keysId, ph, ev);
     }
+    if ((kind === 'on' || kind === 'off') && !inNoteRange(note)) {
+      return { ok: false, code: 'note-range', reason: LIVE_NOTES_TEXT.noteRange(note) };
+    }
     if (ph && typeof ph.noteOn === 'function') return polyEvent(keysId, ph, ev);
     const st = stackOf(keysId);
     if (kind === 'all-off') {
@@ -158,6 +175,10 @@ export function createLiveNotes({ getModel, handleOf }) {
     const h = handleOf(keysId);
     if (!h || typeof h.play !== 'function') {
       return { ok: false, reason: 'The Keys node is not running.' };
+    }
+    const [lo, hi] = typeof h.keyRange === 'function' ? h.keyRange() : [0, 127];
+    if (kind === 'on' && (note < lo || note > hi)) {
+      return { ok: false, code: 'key-range', reason: LIVE_NOTES_TEXT.keyRange(note, lo, hi) };
     }
     const prio = typeof h.priority === 'function' ? h.priority() : 'last';
     const c = kind === 'on' ? st.press(note, velocity, prio) : st.release(note, prio);
