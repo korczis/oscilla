@@ -372,7 +372,7 @@ jobs:
         # The train's browser suites (cross-links, first-screen, surface-census) take the chain
         # past 15 min on a hosted runner (~20 min measured, run 41333897971). WebKit's chain with
         # merge train 3's journeys and suites: cross-links ends at 25.7 min (run 41582489422) and
-        # the 30-minute bound ran out in first-screen; the job bounds 65.
+        # the 30-minute bound ran out in first-screen; the job bounds 90 (webkit after the Pro shell ran test:browser to the 45-minute cut, #443).
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
         timeout-minutes: 60
       - name: Upload the log on failure
