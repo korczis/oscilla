@@ -18,4 +18,18 @@ validation:
 evidence_required:
 - owner_decision
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-05T14:07:10Z
+started_at: 2026-11-05T14:06:43Z
+started_event: sha256:999d517af552184058602ef6603d1d34b6ace61aa167243ab4fdb476455b577d
+verified_at: 2026-11-05T14:06:56Z
+verified_event: sha256:58d2fdfdaf9272518d655ef4ae3fd41f130f64f2a317ab4dcb3bea8a1934f395
+completed_at: 2026-11-05T14:07:10Z
+completed_event: sha256:715f56d388dba2dc4af7b5803552b97e11c8c4479f15f25eda52df6a43eddbf0
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "majordomus plan show Q030"
+    result: "Superseded by the owner's decision of 2026-10-29 (~21:40 CET, AskUserQuestion in the oscilla-b0 session abd8bbe3, relayed by the coordinator): the gzip budget rises from 1 MB to 1.2 MB (1 200 000 B), landed as the budget-raise change (chore/gzip-budget-1200k); the question of a cap for the two lines inside 1 000 000 B no longer arises, the per-line ceilings (Studio boxes 35 KB, signal generator 25 KB gzip) stand in M081 and M082, as Q030.current_state records since c0a631b2."
+    artifact: ".ai/repo/project/issues/Q030.yaml"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:06:36Z

@@ -93,6 +93,12 @@ export const STUDIO_IMPORT_LIMITS = Object.freeze({
   maxErrors: 50,
 });
 
+/** metadata.synthAmounts (schema.js): { amountId: finite depth }, at most AMOUNTS_MAX. */
+const AMOUNTS_MAX = 64;
+const amountMapOk = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+  && Object.keys(v).length <= AMOUNTS_MAX && Object.entries(v)
+  .every(([k, x]) => /^[a-z][a-z0-9-]{0,31}$/.test(k) && Number.isFinite(x));
+
 const CTRL = /[\u0000-\u001f\u007f]/;
 
 // ---------------------------------------------------------------- the Studio diagnostic
@@ -630,6 +636,11 @@ function validateRest(model, sink, registry = NODE_REGISTRY) {
         String(meta.noteTarget)}", which is not in this Studio.`, { path: 'metadata.noteTarget' });
     }
   }
+  // Review S10 of src/js/synth: the depth each Synth amount knob comes back at (schema.js).
+  if (meta.synthAmounts !== undefined && !amountMapOk(meta.synthAmounts)) {
+    sink.error('invalid-metadata', `Synth amount depths must map at most ${AMOUNTS_MAX} amount `
+      + 'ids to finite numbers.', { path: 'metadata.synthAmounts' });
+  }
   if (typeof meta.notes !== 'string' || meta.notes.length > NOTES_MAX_CHARS) {
     sink.error('invalid-name', `Notes must be at most ${NOTES_MAX_CHARS} characters.`,
       { path: 'metadata.notes' });
@@ -859,7 +870,10 @@ function structure(c, doc, lim, registry) {
     }
   }
   if (doc.metadata !== undefined
-    && c.keys(doc.metadata, 'metadata', [], ['title', 'notes', 'noteTarget'])) {
+    && c.keys(doc.metadata, 'metadata', [], ['title', 'notes', 'noteTarget', 'synthAmounts'])) {
+    if (doc.metadata.synthAmounts !== undefined && !amountMapOk(doc.metadata.synthAmounts)) {
+      c.add('metadata.synthAmounts', `must map at most ${AMOUNTS_MAX} amount ids to numbers`);
+    }
     if (doc.metadata.title !== undefined) s(doc.metadata.title, 'metadata.title', TITLE_MAX_CHARS);
     if (doc.metadata.noteTarget !== undefined) {
       const t = doc.metadata.noteTarget;

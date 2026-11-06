@@ -23,6 +23,11 @@
 //   view.destroy() releases and removes every subscription; a second destroy changes nothing.
 //   xyVoiceAction(model, panel) -> { action } | { reason }   Patch the pad into the voice
 //   xyPresetAction(model, panel, id) -> { action } | { reason }   a built-in XY preset
+//   keysSilenceHtml(model, panel, buttonClass) -> markup | ''   the Panel tab's notice while the
+//     panel's keys sound nothing (xy.js keysSilence, review S8), with Unpatch the pad when the
+//     pad's cables are the cause (on the XY tab the pad plays, and a key says the same)
+//   wireKeysSilence(root, { model, panel, dispatch, say })   Unpatch the pad's click under
+//     `root`: xy.js xyUnpatchAction, one BATCH
 //
 // The pad talks to what it plays through one small internal interface, the target:
 //   target = { owner, output, wire(slot, ctx) -> spec | null, unwire(), live(kind, x, y),
@@ -48,8 +53,8 @@ import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
 import { SCALE_LABELS } from '../../core/music.js';
 import {
-  XY_RECIPES, XY_VOICE, xyCablesAction, xyPatchAction, xyPatched, xyPresetPatch, xyTarget,
-  xyTargetAction, xyTargets,
+  KEYS_SILENT, XY_RECIPES, XY_VOICE, keysSilence, xyCablesAction, xyPatchAction, xyPatched,
+  xyPresetPatch, xyTarget, xyTargetAction, xyTargets, xyUnpatchAction,
 } from '../xy.js';
 import { esc } from './face.js';
 
@@ -94,6 +99,25 @@ export function xyPresetAction(model, panel, id) {
   } catch (e) {
     return { reason: e.message };
   }
+}
+
+export function keysSilenceHtml(model, panel, buttonClass) {
+  const q = keysSilence(model, panel);
+  const undo = q && q.pad ? `<button type="button" data-xy-unpatch="" class="${buttonClass}">`
+    + 'Unpatch the pad</button>' : '';
+  return q ? '<div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-yellow-50 p-3 '
+    + 'text-sm text-yellow-800 dark:bg-gray-800 dark:text-yellow-300" role="alert" '
+    + `data-osc="synth.keys-silent"><p>${esc(q.reason)}</p>${undo}</div>` : '';
+}
+
+export function wireKeysSilence(root, { model, panel, dispatch, say }) {
+  const button = root && root.querySelector('[data-xy-unpatch]');
+  if (!button) return;
+  button.addEventListener('click', () => {
+    const a = xyUnpatchAction(model(), panel);
+    if (a.reason) say(a.reason, true);
+    else if (dispatch(a.action).ok) say(KEYS_SILENT.unpatched);
+  });
 }
 
 function onOwner(app, fn) {

@@ -19,13 +19,30 @@ const EXTRA_TOKENS = {
   fs2xs: '--osc-fs-2xs',
 };
 
-/** readChartTheme() plus EXTRA_TOKENS; px sizes parsed to numbers (fsXs, fs2xs). */
+/**
+ * A font-size token in px as this viewport resolves it. The small text tokens are
+ * max(<size>, var(--osc-fs-floor)) (tokens.css: 12 px below a 768 px viewport), which no
+ * string parse resolves, so a hidden probe takes the size and its computed style says it.
+ */
+function resolvedPx(el, prop, fallback) {
+  const host = el && el !== document.documentElement && el.isConnected ? el : document.body;
+  if (!host) return fallback;
+  const probe = document.createElement('span');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText = `position:absolute;visibility:hidden;font-size:var(${prop})`;
+  host.appendChild(probe);
+  const px = parseFloat(getComputedStyle(probe).fontSize);
+  probe.remove();
+  return px || fallback;
+}
+
+/** readChartTheme() plus EXTRA_TOKENS; px sizes resolved to numbers (fsXs, fs2xs). */
 export function chartTheme(el = document.documentElement) {
   const theme = readChartTheme(el);
   const cs = getComputedStyle(el);
   for (const [k, prop] of Object.entries(EXTRA_TOKENS)) theme[k] = cs.getPropertyValue(prop).trim();
-  theme.fsXs = parseFloat(theme.fsXs) || 10.5;
-  theme.fs2xs = parseFloat(theme.fs2xs) || 10;
+  theme.fsXs = resolvedPx(el, EXTRA_TOKENS.fsXs, 10.5);
+  theme.fs2xs = resolvedPx(el, EXTRA_TOKENS.fs2xs, 10);
   theme.font = theme.font || 'system-ui, sans-serif';
   return theme;
 }

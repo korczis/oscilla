@@ -25,6 +25,22 @@
 //   signal-path-stages [17]       filter, ADSR, additive and stereo router in the path, each
 //                                 drawn stage projected from the Playground voice's
 //                                 StudioModel (filter node, envelope, stereo split; V421)
+//   signal-path-open-in-studio [V605]  the Signal Path's Open in Studio (shown on that tab
+//                                 only): by pointer on a clean Studio it opens the drawn
+//                                 Playground voice as one unsaved document (every drawn node),
+//                                 focus on the Studio heading, the Playground and its drawn
+//                                 voice unchanged, nothing playing, and Back returns; by
+//                                 keyboard with that copy unsaved the guard dialog names it and
+//                                 Keep (focused) changes nothing, Replace opens the voice again;
+//                                 by touch (a touch context) it opens; a siren is refused with
+//                                 its reason in a warning notice, nothing changed; the dialog's
+//                                 description includes the list of what would be lost
+//   signal-path-open-in-studio-plays [V605]  the opened held tone and AM voice are one gate
+//                                 longer than 1 s; Studio Play still sounds (engine analyser
+//                                 peak above 0.005) 1 audio second after it starts, Stop leaves
+//                                 an engine census of 0; opened while the Playground holds a
+//                                 voice, the notice says it keeps sounding until Studio Play,
+//                                 which takes the output
 //   additive-gain-field [17]      the gain field shows the played (normalised) level; the
 //                                 Nyquist hatching follows the fundamental
 //   stereo-max-from-rate [17]     #osc-stereo-fa/fb max = floor(safe maximum of the context)
@@ -36,7 +52,11 @@
 //                                 action) and library node type has a handler registered for
 //                                 it, or is listed in
 //                                 tests/unit/no-inert-surfaces-allowance.json; a fixture
-//                                 control without one is found
+//                                 control without one is found. The hook census (G001): every
+//                                 data-osc value those states show is declared in the UI
+//                                 catalogue (src/js/ui/catalog/registry.js) or listed in the
+//                                 undeclared section of tests/unit/ui-catalog-allowance.json;
+//                                 an injected fixture hook is flagged
 // Exit code 1 when any check fails.
 'use strict';
 
@@ -44,6 +64,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const shell = require('./lib/shell.cjs');
 const { until } = require('./lib/wait.cjs');
 
 const argv = process.argv.slice(2);
@@ -69,6 +90,8 @@ const LAUNCH = {
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const INERT_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
   'no-inert-surfaces-allowance.json'), 'utf8'));
+const CATALOG_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
+  'ui-catalog-allowance.json'), 'utf8'));
 const WORKSPACES = ['playground', 'analyzer', 'sequencer', 'filter', 'synthesis', 'compare',
   'presets', 'learn'];
 
@@ -78,17 +101,8 @@ try {
 } catch (e) { /* optional: npm i --no-save axe-core */ }
 
 // ------------------------------------------------------------------------------ page helpers
-/** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
-async function navTo(page, ws) {
-  const item = `[data-osc="nav.${ws}"]`;
-  const group = await page.evaluate((s) => {
-    const el = document.querySelector(s);
-    const g = el && el.closest('[data-osc-nav-group]');
-    return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-  }, item);
-  if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-  await page.click(item);
-}
+/** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
+const navTo = (page, ws) => shell.navTo(page, ws);
 
 async function open(browser, { width = 1536, height = 1024 } = {}) {
   const context = await browser.newContext({ viewport: { width, height }, acceptDownloads: true });
@@ -382,7 +396,24 @@ function unhandledControls() {
   return out;
 }
 
-const INERT_INIT = `(${listenerRegistry})();\nwindow.__oscUnhandled = ${unhandledControls};\n`;
+/**
+ * In the page: every distinct data-osc value of the document, once the main region shows at
+ * least one rendered data-osc element (the workspace's controls are built); null before.
+ */
+function pageHooks() {
+  const main = document.querySelector('#osc-main');
+  const shown = !!main && [...main.querySelectorAll('[data-osc]')]
+    .some((el) => el.getClientRects().length > 0);
+  return shown ? [...new Set([...document.querySelectorAll('[data-osc]')]
+    .map((el) => el.getAttribute('data-osc')))] : null;
+}
+
+const INERT_INIT = `(${listenerRegistry})();\nwindow.__oscUnhandled = ${unhandledControls};\n`
+  + `window.__oscHooks = ${pageHooks};\n`;
+
+/** The hooks the page shows now, read once its main region has built its controls. */
+const censusHooks = (page, where) => until(() => page.evaluate(() => window.__oscHooks()),
+  { ms: 5000, what: `no-inert-controls: hook census collected (${where})` });
 
 /**
  * The page in the states that build its controls: every workspace of the navigation, every
@@ -393,10 +424,15 @@ const INERT_INIT = `(${listenerRegistry})();\nwindow.__oscUnhandled = ${unhandle
  */
 async function walkControls(page) {
   const found = new Map();
+  const hooks = new Map(); // data-osc value -> the first state that showed it
   const take = (list, where) => {
     for (const { osc, tag } of list) if (!found.has(osc)) found.set(osc, `${where} <${tag}>`);
   };
+  const census = (list, where) => {
+    for (const osc of list || []) if (!hooks.has(osc)) hooks.set(osc, where);
+  };
   take(await page.evaluate(() => window.__oscUnhandled()), 'load');
+  census(await censusHooks(page, 'load'), 'load');
   const workspaces = await page.evaluate(() => [...new Set([...document.querySelectorAll(
     '[data-osc^="nav."]')].map((el) => el.dataset.osc.slice(4)))]);
   for (const ws of workspaces) {
@@ -404,6 +440,7 @@ async function walkControls(page) {
     await until(() => page.evaluate((w) => document.querySelector('#osc-app').dataset.mode === w,
       ws), { ms: 10000, what: `no-inert-controls: workspace ${ws} is shown` });
     take(await page.evaluate(() => window.__oscUnhandled()), ws);
+    census(await censusHooks(page, ws), ws);
   }
   const templates = await page.evaluate(() => window.OSCILLA.app.studio.templates.map((t) => t.id));
   const selections = [];
@@ -430,12 +467,16 @@ async function walkControls(page) {
       const out = [];
       for (const sel of sels) {
         s.store.dispatch({ type: 'SELECTION_CHANGE', selection: sel });
-        out.push({ where: JSON.stringify(sel), list: window.__oscUnhandled() });
+        out.push({ where: JSON.stringify(sel), list: window.__oscUnhandled(),
+          hooks: window.__oscHooks() });
       }
       return { n: sels.length, out };
     });
     selections.push(`${id}:${r.n}`);
-    for (const { where, list } of r.out) take(list, `${id} ${where}`);
+    for (const { where, list, hooks: shown } of r.out) {
+      take(list, `${id} ${where}`);
+      census(shown, `${id} ${where}`);
+    }
   }
   const added = await page.evaluate(() => {
     const s = window.OSCILLA.studio;
@@ -446,12 +487,16 @@ async function walkControls(page) {
       s.store.dispatch({ type: 'NODE_ADD', nodeType, position: { x: 80, y: 80 } });
       const node = s.model.graph.nodes.at(-1);
       s.store.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [node.id] } });
-      out.push({ where: `added ${nodeType}`, list: window.__oscUnhandled() });
+      out.push({ where: `added ${nodeType}`, list: window.__oscUnhandled(),
+        hooks: window.__oscHooks() });
     }
     return { types, out };
   });
-  for (const { where, list } of added.out) take(list, where);
-  return { found, workspaces, templates: selections, types: added.types };
+  for (const { where, list, hooks: shown } of added.out) {
+    take(list, where);
+    census(shown, where);
+  }
+  return { found, hooks, workspaces, templates: selections, types: added.types };
 }
 
 /** The found controls against the allowance: unexpected ones, and allowed ones not found. */
@@ -838,6 +883,199 @@ function defineChecks() {
     return { ok, ...r };
   });
 
+  def('signal-path-open-in-studio', async ({ browser, browserName }) => {
+    const BTN = '[data-osc="analysis.openInStudio"]';
+    const read = (page) => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      const st = O.studio;
+      const el = document.querySelector('[data-osc="analysis.openInStudio"]');
+      const drawn = O.viz.state.signalPath.model.graph.nodes.map((n) => n.id);
+      const c = st.counts();
+      const dlg = document.getElementById('studio-voice-guard');
+      return { ws: a.workspace, shown: !!el && el.getClientRects().length > 0,
+        title: st.model.metadata.title, dirty: st.dirty,
+        nodes: st.model.graph.nodes.map((n) => n.id), drawn,
+        drawnKey: JSON.stringify(O.viz.state.signalPath.model),
+        playground: JSON.stringify([a.source, a.pattern, a.frequency, a.waveform, a.gainLevel]),
+        focus: document.activeElement ? document.activeElement.id
+          || document.activeElement.dataset.osc || document.activeElement.tagName : '',
+        silent: !c.playing && !a.playing && c.engineSources === 0 && c.runtimeNodes === 0,
+        dialog: dlg ? { open: dlg.open, lost: [...dlg.querySelectorAll('li')]
+          .map((li) => li.textContent), describedBy: (dlg.getAttribute('aria-describedby') || '')
+          .split(/\s+/).map((id) => { const n = document.getElementById(id);
+            return n ? n.dataset.osc || n.tagName : null; }) } : null,
+        alerts: a.alerts.map((x) => `${x.level}: ${x.title}: ${x.message}`),
+        notices: [...document.querySelectorAll('[data-osc="alert"]')]
+          .filter((n) => n.getClientRects().length).map((n) => `${n.getAttribute('role')}: ${
+            n.textContent.replace(/\s+/g, ' ').trim()}`) };
+    });
+    const showTab = async (page) => {
+      await page.click('#osc-atab-signalpath');
+      await until(() => read(page).then((v) => v.shown), { ms: 5000,
+        what: 'open-in-studio: the button shows on the Signal Path tab' });
+    };
+    const inStudio = (page, what) => until(async () => {
+      const v = await read(page);
+      return v.ws === 'studio' && v.focus === 'osc-studio-title' ? v : null;
+    }, { ms: 5000, what });
+    const res = {};
+    // Pointer, on a clean Studio.
+    const { page, context } = await open(browser);
+    const first = await read(page);
+    await showTab(page);
+    await page.click('[data-osc="analysis.openInStudio"]'); // by pointer
+    const opened = await inStudio(page, 'open-in-studio: the pointer opens Studio');
+    await page.click('[data-osc="studio.back"]');
+    const back = await until(() => read(page).then((v) => (v.ws === 'playground' ? v : null)),
+      { ms: 5000, what: 'open-in-studio: Back returns to the Playground' });
+    res.pointer = { tabHidden: !first.shown, studioWasClean: !first.dirty,
+      title: opened.title, dirty: opened.dirty, silent: opened.silent,
+      allDrawn: opened.drawn.every((id) => opened.nodes.includes(id)),
+      playgroundKept: opened.playground === first.playground
+        && opened.drawnKey === first.drawnKey, back: back.ws };
+    // Keyboard, with the opened copy still unsaved: the guard asks.
+    await page.focus(BTN);
+    await page.keyboard.press('Enter');
+    const asked = await until(() => read(page).then((v) => (v.dialog && v.dialog.open
+      && v.focus === 'studio.voice.keep' ? v : null)), { ms: 5000,
+      what: 'open-in-studio: the guard dialog asks, Keep focused' });
+    await page.keyboard.press('Enter'); // Keep
+    const kept = await until(() => read(page).then((v) => (!v.dialog.open ? v : null)),
+      { ms: 5000, what: 'open-in-studio: Keep closes the dialog' });
+    await page.focus(BTN);
+    await page.keyboard.press('Enter');
+    await until(() => read(page).then((v) => v.dialog.open), { ms: 5000,
+      what: 'open-in-studio: the guard asks again' });
+    await page.focus('[data-osc="studio.voice.replace"]');
+    await page.keyboard.press('Enter');
+    const replaced = await inStudio(page, 'open-in-studio: Replace opens the voice');
+    res.keyboard = { lost: asked.dialog.lost, describedBy: asked.dialog.describedBy,
+      keptWs: kept.ws, keptDirty: kept.dirty,
+      replacedDirty: replaced.dirty, title: replaced.title };
+    // A configuration the Studio cannot sound the same: refused, shown and announced.
+    await page.click('[data-osc="studio.back"]');
+    await until(() => read(page).then((v) => v.ws === 'playground'), { ms: 5000,
+      what: 'open-in-studio: back in the Playground' });
+    await page.evaluate(() => { window.OSCILLA.app.pattern = 'siren'; });
+    await page.click(BTN);
+    const refused = await until(() => read(page).then((v) => (v.notices.some((n) =>
+      /^alert: Voice not opened in Studio/.test(n)) ? v : null)), { ms: 5000,
+    what: 'open-in-studio: the siren is refused with a notice' });
+    res.refused = { ws: refused.ws, dialog: refused.dialog.open,
+      notice: refused.notices.find((n) => /Voice not opened/.test(n)) };
+    await context.close();
+    // Touch.
+    const touch = await browser.newContext({ viewport: { width: 390, height: 844 },
+      hasTouch: true, isMobile: browserName !== 'firefox' });
+    const tp = await touch.newPage();
+    tp.setDefaultTimeout(10000);
+    await tp.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await tp.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+    await tp.tap('#osc-atab-signalpath');
+    await until(() => read(tp).then((v) => v.shown), { ms: 5000,
+      what: 'open-in-studio: the button shows on a phone' });
+    await tp.tap('[data-osc="analysis.openInStudio"]'); // by touch
+    const tapped = await inStudio(tp, 'open-in-studio: a tap opens Studio');
+    res.touch = { title: tapped.title, dirty: tapped.dirty, silent: tapped.silent };
+    await touch.close();
+    const p = res.pointer;
+    const k = res.keyboard;
+    const ok = p.tabHidden && p.studioWasClean && p.title === 'Playground voice' && p.dirty
+      && p.silent && p.allDrawn && p.playgroundKept && p.back === 'playground'
+      && JSON.stringify(k.lost) === '["Unsaved changes to Playground voice"]'
+      && JSON.stringify(k.describedBy) === '["P","studio.voice.lost"]'
+      && k.keptWs === 'playground' && k.keptDirty && k.replacedDirty
+      && k.title === 'Playground voice'
+      && res.refused.ws === 'playground' && !res.refused.dialog
+      && /would not sound the same\. Nothing was changed\./.test(res.refused.notice || '')
+      && res.touch.title === 'Playground voice' && res.touch.dirty;
+    return { ok, ...res };
+  });
+
+  def('signal-path-open-in-studio-plays', async ({ browser }) => {
+    // V605 review F1 and F4: the opened copy of a held voice plays in the Studio for the
+    // Playground's safety limit (one gate, limit minus the release), not a 0 s timeline that
+    // Studio Play ends at once; Stop silences it to an engine census of 0. Opening while the
+    // Playground holds a voice says that voice keeps sounding until Studio Play takes the output.
+    const sound = (page) => page.evaluate(() => {
+      const O = window.OSCILLA;
+      const e = O.engine;
+      let pk = 0;
+      if (e.analyser) {
+        const d = new Float32Array(e.analyser.fftSize);
+        e.analyser.getFloatTimeDomainData(d);
+        for (let i = 0; i < d.length; i += 1) pk = Math.max(pk, Math.abs(d[i]));
+      }
+      const c = O.studio.counts();
+      return { peak: pk, now: e.ctx ? e.ctx.currentTime : null, ws: O.app.workspace,
+        playing: !!O.app.playing, studioPlaying: !!c.playing, nodes: e.activeNodeCount,
+        engineNodes: c.engineNodes, engineSources: c.engineSources,
+        runtimeNodes: c.runtimeNodes, clips: O.studio.model.timeline.clips
+          .map((x) => [x.start, x.duration]),
+        notice: O.app.alerts.filter((a) => a.title === 'Playground voice opened in Studio')
+          .map((a) => a.message).join(' | ') };
+    });
+    const quiet = (v) => v.nodes === 0 && !v.playing && !v.studioPlaying && v.engineNodes === 0
+      && v.engineSources === 0 && v.runtimeNodes === 0;
+    const FLOOR = 0.005; // the analyser's peak: -46 dBFS, far below the voices played here
+    const HELD_S = 1; // audio seconds after Studio Play at which the voice still sounds
+    const res = {};
+    for (const [leg, set] of [['tone', null], ['am', { pattern: 'am' }]]) {
+      const { page, context } = await open(browser);
+      if (set) await page.evaluate((x) => Object.assign(window.OSCILLA.app, x), set);
+      await page.click('#osc-atab-signalpath');
+      await page.click('[data-osc="analysis.openInStudio"]');
+      const opened = await until(() => sound(page).then((v) => (v.ws === 'studio' ? v : null)),
+        { ms: 5000, what: `open-in-studio-plays ${leg}: the voice opens in Studio` });
+      await page.click('[data-osc="studio.play"]');
+      const t0 = await until(() => sound(page).then((v) => (v.studioPlaying ? v.now : null)),
+        { ms: 5000, what: `open-in-studio-plays ${leg}: Studio Play starts` });
+      const on = await until(() => sound(page).then((v) => (v.now - t0 >= HELD_S
+        && v.studioPlaying && v.runtimeNodes > 0 && v.peak > FLOOR ? v : null)),
+      { ms: 8000, what: `open-in-studio-plays ${leg}: still sounding ${HELD_S} s after Play` })
+        .catch(() => sound(page).then((v) => ({ ...v, timedOut: true })));
+      await page.click('[data-osc="studio.stop"]');
+      const off = await until(() => sound(page).then((v) => (quiet(v) ? v : null)),
+        { ms: 5000, what: `open-in-studio-plays ${leg}: Stop leaves an engine census of 0` })
+        .catch(() => sound(page).then((v) => ({ ...v, timedOut: true })));
+      res[leg] = { clips: opened.clips, heldS: on.now - t0, peak: on.peak,
+        studioPlaying: on.studioPlaying, timedOut: !!on.timedOut, off: quiet(off),
+        census: [off.nodes, off.engineNodes, off.engineSources, off.runtimeNodes] };
+      await context.close();
+    }
+    // F4: the Playground holds a voice while it is opened.
+    {
+      const { page, context } = await open(browser);
+      await page.click('#osc-atab-signalpath');
+      await page.evaluate(() => window.OSCILLA.app.play('hold'));
+      await until(() => sound(page).then((v) => v.playing && v.peak > FLOOR), { ms: 5000,
+        what: 'open-in-studio-plays: the Playground holds a voice' });
+      await page.click('[data-osc="analysis.openInStudio"]');
+      const said = await until(() => sound(page).then((v) => (v.ws === 'studio' && v.notice
+        ? v : null)), { ms: 5000, what: 'open-in-studio-plays: the opened notice shows' });
+      await page.click('[data-osc="studio.play"]');
+      const taken = await until(() => sound(page).then((v) => (v.studioPlaying && !v.playing
+        ? v : null)), { ms: 5000, what: 'open-in-studio-plays: Studio Play takes the output' })
+        .catch(() => sound(page));
+      await page.click('[data-osc="studio.stop"]');
+      const off = await until(() => sound(page).then((v) => (quiet(v) ? v : null)),
+        { ms: 5000, what: 'open-in-studio-plays: Stop after the takeover leaves 0' })
+        .catch(() => sound(page));
+      res.held = { playingAtOpen: said.playing, notice: said.notice,
+        taken: taken.studioPlaying && !taken.playing, off: quiet(off) };
+      await context.close();
+    }
+    const ok = ['tone', 'am'].every((leg) => {
+      const r = res[leg];
+      return r.clips.length === 1 && r.clips[0][0] === 0 && r.clips[0][1] > HELD_S
+        && !r.timedOut && r.heldS >= HELD_S && r.studioPlaying && r.peak > FLOOR && r.off;
+    }) && res.held.playingAtOpen
+      && /keeps sounding until you press Play here/.test(res.held.notice)
+      && !/Nothing plays/.test(res.held.notice) && res.held.taken && res.held.off;
+    return { ok, ...res };
+  });
+
   def('additive-gain-field', async ({ browser }) => {
     const { page, context } = await open(browser);
     // Before any context the Nyquist frequency is unknown: nothing may be hatched yet.
@@ -1073,12 +1311,34 @@ function defineChecks() {
     });
     const withFixture = new Map([...walk.found, ...fixture.map((osc) => [osc, 'fixture'])]);
     const judged = judgeInert(withFixture, allowed).unexpected;
+    // The hook census (G001): every value shown is declared or allowed; the catalogue is the
+    // ESM registry of src/js, the same modules the build bundles.
+    const { CATALOG } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'ui', 'catalog',
+      'registry.js')).href);
+    const { unknownHooks } = await import(pathToFileURL(path.join(ROOT, 'scripts', 'ui-catalog',
+      'check.mjs')).href);
+    const undeclared = unknownHooks([...walk.hooks.keys()], CATALOG, CATALOG_ALLOWANCE);
+    // The mutation: a hook only the running page shows is flagged.
+    const injected = await page.evaluate(() => {
+      const el = document.createElement('span');
+      el.setAttribute('data-osc', 'qa.fixture.undeclared');
+      document.querySelector('#osc-main').append(el);
+      const shown = window.__oscHooks();
+      el.remove();
+      return shown;
+    });
+    const flagged = unknownHooks([...walk.hooks.keys(), ...(injected || [])], CATALOG,
+      CATALOG_ALLOWANCE);
     await context.close();
     const ok = unexpected.length === 0 && stale.length === 0
       && JSON.stringify(fixture) === '["fixture.inert"]'
       && JSON.stringify(judged) === '["fixture.inert"]'
-      && walk.workspaces.includes('studio') && walk.templates.length > 0 && walk.types.length > 0;
+      && walk.workspaces.includes('studio') && walk.templates.length > 0 && walk.types.length > 0
+      && undeclared.length === 0 && walk.hooks.size > 0
+      && JSON.stringify(flagged) === '["qa.fixture.undeclared"]';
     return { ok, unexpected: unexpected.map((osc) => `${osc} @${walk.found.get(osc)}`), stale,
+      undeclared: undeclared.map((osc) => `${osc} @${walk.hooks.get(osc)}`),
+      hooks: walk.hooks.size, flagged,
       allowed: Object.keys(allowed).length, fixture, judged, workspaces: walk.workspaces.length,
       templates: walk.templates, types: walk.types.length };
   });
@@ -1102,8 +1362,8 @@ function defineChecks() {
       add(`${theme} correlation value`, await contrastOf(page, '#osc-corr-value'));
       await page.evaluate(() => window.OSCILLA.app.setWorkspace('learn'));
       await sleep(150);
-      add(`${theme} learn example`, await contrastOf(page, '.is-current .osc-learn-example'));
-      add(`${theme} learn demo`, await contrastOf(page, '.is-current [data-osc="learn.demo"]'));
+      add(`${theme} learn example`, await contrastOf(page, '#osc-view-learn [aria-current="true"] [data-learn-example]'));
+      add(`${theme} learn demo`, await contrastOf(page, '#osc-view-learn [aria-current="true"] [data-osc="learn.demo"]'));
       await context.close();
     }
     const low = Object.entries(res).filter(([, v]) => v == null || v < 4.5);

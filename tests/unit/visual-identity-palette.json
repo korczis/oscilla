@@ -1,7 +1,6 @@
 {
   ":root": {
     "--osc-bg": "#020b15",
-    "--osc-header-bg": "#061220",
     "--osc-statusbar-bg": "#05111e",
     "--osc-surface-0": "#020a16",
     "--osc-surface-1": "#06111d",
@@ -23,7 +22,6 @@
     "--osc-text-unit": "#b8d4f0",
     "--osc-text-on-accent": "#ffffff",
     "--osc-text-on-green": "#04261a",
-    "--osc-text-on-warm": "#2a1600",
     "--osc-blue": "#007afd",
     "--osc-blue-hover": "#1a88ff",
     "--osc-blue-press": "#0067d6",
@@ -96,7 +94,6 @@
   },
   "[data-theme=\"light\"]": {
     "--osc-bg": "#e9eef4",
-    "--osc-header-bg": "#f7f9fc",
     "--osc-statusbar-bg": "#f7f9fc",
     "--osc-surface-0": "#f3f6fa",
     "--osc-surface-1": "#ffffff",

@@ -29,13 +29,9 @@ import { parseNumber, clamp } from '../charts/axes.js';
 import { onFrame } from '../charts/frame-loop.js';
 import { on, onUi, setText, setAttr, setSlider, setField, activeValue } from './dom.js';
 
-export const PHASE_DEFAULTS = Object.freeze({
-  freqA: 440,
-  freqB: 442,
-  phaseDeg: 45,
-  pan: 0,
-  route: 'mono',
-});
+import { PHASE_DEFAULTS } from './lab-defaults.js';
+
+export { PHASE_DEFAULTS } from './lab-defaults.js';
 
 /** What the pan slider announces: 'Centre', or '<n>% left' / '<n>% right'. */
 export function panText(pan) {

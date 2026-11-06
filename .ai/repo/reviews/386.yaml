@@ -1,0 +1,84 @@
+# Review verdict for pull request #386 (branch feat/a-connect-phone, the lane-A train: the Pro
+# shell and workspace registry F002 U006 F007 F003-part, U013, K075, G001, K170, V605, the synth
+# review p2 + K167, with the builder's merge delta). Reviewed head c5282245 (base origin/main
+# a510dd75; main moved to d82b1a66 by plan records only, so the judged content is unchanged).
+# Reviewer: seat a3 (session oscilla-a3, claude-code 12f1e384). Disclosure: the reviewer built
+# none of this change; the review ran in detached scratch worktrees of c5282245, the builder's
+# worktree was read only, and this file is the reviewer's only write.
+#
+# The digest: origin/main's scripts/review-verdict.mjs (git archive, as base-rule.sh does) with
+# --repo <scratch> --content --list --base-branch origin/main: 23a8f4cb32cc1b8a6e073fac276a9b7b
+# 5f8b304666dd7c18f50b477a863c4d1b over 23 guarded paths, equal to the builder's figure:
+# .github/workflows/ci.yml, scripts/build-config.mjs, scripts/build.mjs,
+# src/js/experiments/connections.js, src/js/ui/measure/{input,run}.js,
+# src/js/studio/{actions,playground-voice-open,schema,validate}.js,
+# src/js/synth/{dock,insert,link,normals,notes-sink,picker,presets,studio-sink,ui,xy}.js,
+# src/js/synth/view/{engines,xy-tab,xy-wiring}.js.
+#
+# Inputs considered: the builder's body (/Users/korczis/.claude/jobs/603baa3d/tmp/386-body-new.md:
+# member table, merge delta, decided, watch, prior findings); the member verdicts named there (98's
+# V605 merge through fecedfb7 with the f75518f5 note fixes; 21's merge over 26's synth-review-p2 +
+# K167 as the findings author); the decided items (owner 2026-11-03 Q089 + the Pro shell everywhere,
+# ADR 0061; af's playback map: V605 adds no player; palette v4) were not re-litigated.
+#
+# Evidence at c5282245 (scratch worktrees, npm ci):
+# - Unit: 48 files of the audio/studio/synth half 611/611; 27 files of the shell/CI half 328/0
+#   (1 skipped, A15); full npm test 4943: 4940 pass, 1 fail twice = ui-synth-cable S8 at load 27-28
+#   (unchanged base..head, passes alone 73/73; E058 #438 is the fix). build:check: dist up to date
+#   (3 390 280 B, v3.21.0, source 0502e8a73fbe). ui-flowbite-pro-record --check: record equals
+#   the tree (measure 4, debt 3607, from 3853). no-inert-surfaces allowance shrank by 16 lines;
+#   G001 undeclared allowance 514 -> 513.
+# - Fail-first on the parents or the base, the head's tests copied in: playground-voice-studio-play
+#   12/12 fail (assertion), playground-voice-in-studio 1/1 (module absent), studio-view-zoom 1/1
+#   (graph-fit.js absent), synth-review-p2 14/14 (assertion), keyboard-dock-sidebar on 0ce5290e
+#   0/3, synth-plate-grid on f7ba6fca 0/1; origin/main's fail-first.mjs over the PR: proven by 28
+#   of 35 files.
+# - WATCH 1 (V605, af's conditions): 1a MET, the AudioNode census is equal before and after Open
+#   (control-census.cjs:346-350, qa-regressions.cjs:886-961 silent after pointer and touch opens;
+#   playground-voice-open.js is pure); 1b MET, no claim mechanism or owner table (grep over both
+#   files: none; Play goes through the Studio transport and main.js's single output owner);
+#   1c MET, K177's residual judge renders through studio/offline.js, the same compiler, runtime,
+#   adapters and transport (v31-studio-offline.cjs:213-236, -60 dB from STUDIO_XFADE_S);
+#   1d MET, voice.js:128 reads the instrument's existing playing flag, none declared. "Adds no
+#   player": openCopy = ops.openDocument + markUnsaved + refreshState + setWorkspace('studio').
+# - WATCH 2 MET: keyboard-ui.js:121-129 kbdDockClass = KBD_DOCK + lg:left-16 (collapsed) or
+#   lg:left-64; the sidebar is fixed z-40 w-64 / lg:w-16 while sidebarIcons (shell.js:443), the
+#   content column uses the same lg:ml-16/lg:ml-64 (shell.js:466), the keyboard part is in the one
+#   Alpine object (midi/ui.js:140; app.js:665); the four utilities are in dist's CSS.
+# - WATCH 3 MET: each of the 13 added CONTRACT rows has a carrier of its tag and a resolving state
+#   source (ui-catalog.test.mjs:113-123; graph-summary-view.js, inspector.js:1036, index.html:698,
+#   workspace/voice.js:65-77, xy-wiring.js:110, engines.js:35); every hook is named by a test
+#   outside the catalogue test.
+# - WATCH 4 MET: the raised job is `studio`: 15+13+15+20 = 63 <= 65 on ubuntu-24.04, the new step
+#   bounded (20) and piped through tee under bash -eo pipefail; ci-workflows/ci-changes/
+#   ci-gates-model/ci-knowledge-job tests pass. (Outside the train: the `browser` job's steps sum
+#   73 over its 65 on main already; the rule calls the sum a convention it does not check.)
+# - Rules read without a finding: audio-engine-discipline, typed-ports, no-silent-feedback,
+#   no-fake-science, studio-model-is-canonical; a-phone-sounds not weakened (audio-unlock.js and
+#   its test unchanged; touch-audio.cjs keeps --autoplay-policy=user-gesture-required and both
+#   checks; the tap target moved to [data-osc="page.title"]); visual-identity-lock v4 (every
+#   re-accepted region in baseline.json carries a reason; the SYN references' reasons live in
+#   c9dc339d and 04e36f33); source-size 307000 raise has its entry (B4 on its figure).
+# - Mechanics: the tree's previous .ai/repo/reviews/386.yaml (d792ba14, af: 88752a6f over 3 paths
+#   for head 90fe2d0b) is stale and replaced by this file; the body's member table header is
+#   "| Member | Plan | Head merged |", so main's judge treats the PR as one feat PR under this
+#   verdict and its own fail-first; the title stays feat (a train title without a
+#   "| member | what |" table is refused by fail-first).
+#
+# Prior findings: 98's V605 F1-F9 fixed in fecedfb7 (F1, F2, F5-F7, F9 re-read at the head);
+# af's 2026-11-04 lane-A review folded in (R1 resolved: the a-phone-sounds rule test accepts the
+# suite as a run-suites.cjs argument; R2 carried as B3); the synth review's open P2/P3 (K174-K176
+# landed in #413/#420 and are done; S6) tracked in M064.
+schema: review-verdict/v1
+pr: 386
+verdict: merge
+reviewer: oscilla-a3 (session 12f1e384, claude-code)
+content: 23a8f4cb32cc1b8a6e073fac276a9b7b5f8b304666dd7c18f50b477a863c4d1b
+findings:
+  - { id: A1, severity: P3, status: open, title: "voice.js:10-12 and docs/v31/signal-path.md say Open starts and stops nothing; openDocument (workspace/document.js:152) stops a playing Studio first, so a Studio played from the Playground's compact view stops on Open: one clause in the sentence and the doc" }
+  - { id: A2, severity: P3, status: closed, title: "live Studio playback cuts a release over ~25 ms (300 ms measured ~22 ms); stated in the doc, the 60 dB residual is judged on the offline render (K179 tracks it)" }
+  - { id: A3, severity: P3, status: open, title: "synth/xy.js:873-878 xyUnpatchAction composes each pad cable's unpatch against the pre-removal model, and normals.js:417-421 restores a jack's normals only when no other cable into it remains; two pad cables into one jack would restore nothing (no product data does this today: XY_VOICE has 4 cables with distinct targets); fold the steps over a working model or state the one-cable-per-jack assumption" }
+  - { id: B1, severity: P3, status: open, title: "the active rule visual-identity-lock.v4.md:210 still says s-look runs in npm run test:studio; the train moved synth.cjs to test:synth and edited only the deprecated v3: one word in v4" }
+  - { id: B2, severity: P3, status: open, title: "scripts/ui-catalog/trace/synth.mjs:70-71 lists only ui-catalog.test.mjs for synth.engine-elsewhere; the hook is named by tests/unit/synth-review-p2.test.mjs too: list it" }
+  - { id: B3, severity: P3, status: open, title: "build-config.mjs:17-31 replaces every .dark with :root:not([data-theme=\"light\"]); a compound .dark.x would become :root:not(...).x (none exists): one comment or an assertion (af's R2, carried)" }
+  - { id: B4, severity: P3, status: open, title: "source-size-baseline.json's 307000 raise says 300 bytes past the 306 000 cap; src/index.html is 306 894 B at the head: restate or drop the figure" }
