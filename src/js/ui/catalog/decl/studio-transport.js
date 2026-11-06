@@ -29,6 +29,14 @@ export default [
     related: ['studio.compact.loop', 'studio.tl.loop-band'],
   }),
   defineComponent({
+    id: 'studio.tl.tap',
+    kind: 'action',
+    label: 'Tap tempo',
+    docs: 'Sets the tempo from four taps: their mean interval, one tempo edit per series (K068).',
+    state: 'studio.transport',
+    in: 'studio.tl.transport',
+  }),
+  defineComponent({
     id: 'studio.tl.transport',
     kind: 'panel',
     label: 'Studio transport',

@@ -74,10 +74,9 @@ export function mountTransportBar(host, ctx,
     el('span', { class: 'osc-label' }, ['Tempo']), tempo,
     el('span', { class: 'osc-stl-unit' }, ['BPM'])]);
   // Tap tempo: pointer, touch and Enter (a native button) all click it; the click's own time
-  // stamp is the tap, so a slow frame does not move it. data-taps: the series so far. (Its
-  // catalogue hook, studio.tl.tap, lands with its declaration in src/js/ui/catalog.)
+  // stamp is the tap, so a slow frame does not move it. data-taps: the series so far.
   const tapBtn = el('button', { type: 'button', class: PRO.btnSecondary,
-    'data-taps': '0', 'aria-label': 'Tap tempo',
+    'data-osc': 'studio.tl.tap', 'data-taps': '0', 'aria-label': 'Tap tempo',
     title: 'Tap tempo: four taps set the tempo', on: { click: (e) => {
       const now = e && e.timeStamp > 0 ? e.timeStamp : performance.now();
       cmd.tap(now);

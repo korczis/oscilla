@@ -61,7 +61,7 @@ const LOAD_MS = 60000;
 const UI_MS = 8000; // a store commit, its render, a workspace switch
 const SOUND_MS = 15000; // the transport starting, the audio clock reaching the next onsets
 const CHECK_MS = 180000;
-const TAP = 'button[aria-label="Tap tempo"]';
+const TAP = '[data-osc="studio.tl.tap"]';
 /** The timeline's strip of the time mode, the tempo and Tap (transport-bar.js, keys: false). */
 const strip = (page) => page.getByRole('group', { name: 'Timeline time mode and tempo' });
 
