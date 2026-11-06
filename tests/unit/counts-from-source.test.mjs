@@ -87,3 +87,28 @@ test('mutation: a stated count that differs from its source is named', () => {
     ['V', 16, /\bup to (\d+) voices\b/g], ['A', 6, /\b(\d+) algorithms\b/g]]),
   ['a.md:1 says 8, V is 16', 'a.md:2 says 7, A is 6']);
 });
+
+/** The major of package.json engines.node (">=22" -> 22), the one Node floor. */
+export function nodeFloor(pkg) {
+  const m = /^>=\s*(\d+)/.exec(pkg.engines && pkg.engines.node || '');
+  assert.ok(m, `package.json engines.node is ">=N": ${pkg.engines && pkg.engines.node}`);
+  return Number(m[1]);
+}
+
+test('every workflow and README run the Node major package.json engines names', () => {
+  const floor = nodeFloor(JSON.parse(read('package.json')));
+  const bad = [];
+  const dir = path.join(ROOT, '.github', 'workflows');
+  for (const f of readdirSync(dir).filter((n) => /\.ya?ml$/.test(n))) {
+    const t = read(`.github/workflows/${f}`);
+    for (const m of t.matchAll(/node-version:\s*['"]?(\d+)/g)) {
+      if (Number(m[1]) !== floor) bad.push(`.github/workflows/${f}: node-version ${m[1]}`);
+    }
+  }
+  for (const m of read('README.md').matchAll(/\bNode\.js (\d+) or later\b/g)) {
+    if (Number(m[1]) !== floor) bad.push(`README.md: Node.js ${m[1]} or later`);
+  }
+  assert.deepEqual(bad, [], `engines.node is >=${floor}`);
+  assert.equal(nodeFloor({ engines: { node: '>=24' } }), 24);
+});
+
