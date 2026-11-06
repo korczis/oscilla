@@ -7,7 +7,8 @@
 //        own record (no cancelAndHoldAtTime, which Firefox lacks), with no jump; a non-legato
 //        note and Glide 0 step with setValueAtTime. On e51b169d the glide was setTargetAtTime
 //        with a time constant of Glide / 3, which leaves a twentieth of the step at t + g.
-//   AC3  the registry declares Key low, Key high and Chord with their defaults, and the note
+//   AC3  the registry declares Key low and Key high with their defaults (Chord waits for K116,
+//        which plays it: a declared chord that plays nothing would be an inert control), and the note
 //        clamp (0.95 x Nyquist) is stated on the card (summary) and in the runtime debugInfo
 //   AC8  a note outside 0-127 is refused with a sentence, never clamped; a note outside the
 //        node's key range too; a second note under last-note priority wins, and its release
@@ -156,14 +157,13 @@ test('AC1: glide 0, and a note after every key is up, step with setValueAtTime',
 
 // ---------------------------------------------------------------- AC3: declared, stated
 
-test('AC3: Keys declares Key low, Key high and Chord with their defaults; the clamp is stated',
+test('AC3: Keys declares Key low and Key high with their defaults; the clamp is stated',
   () => {
     const def = NODE_REGISTRY.get('keys');
     const p = (k) => def.params.find((x) => x.key === k);
     assert.deepEqual([p('keyLow').default, p('keyLow').min, p('keyLow').max], [0, 0, 127]);
     assert.deepEqual([p('keyHigh').default, p('keyHigh').min, p('keyHigh').max], [127, 0, 127]);
-    assert.equal(p('chord').default, 'off');
-    assert.ok(p('chord').options.length >= 2, 'off and a chord shape');
+    assert.equal(p('chord'), undefined, 'no Chord until K116 plays it (project.no-inert-surfaces)');
     const defaults = Object.fromEntries(def.params.map((x) => [x.key, x.default]));
     assert.match(def.summary(defaults), /clamp 0\.95 × Nyquist/, 'the card states the clamp');
     assert.match(def.help.constraints, /clamped at 0\.95 × Nyquist/, 'and the help');

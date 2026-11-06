@@ -18,7 +18,7 @@ test('every module names a registry type; the face is its params less fixed and 
     const def = NODE_REGISTRY.get(m.node);
     assert.ok(def, m.id);
     const face = PANEL.faceOf(m.id);
-    // K060: a module's `studio` params (Keys' key range and chord) are the Inspector's only.
+    // K060: a module's `studio` params (Keys' key range) are the Inspector's only.
     const fixed = [...Object.keys(m.fixed || {}), ...(m.studio || [])];
     for (const k of m.studio || []) assert.ok(!face.some((c) => c.key === k), `${m.id}.${k}`);
     const amounts = PANEL.amounts.filter((a) => a.module === m.id);

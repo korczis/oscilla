@@ -85,9 +85,9 @@ presentation and is what a dirty indicator should use.
 
 Normalization gives a node every parameter its type declares, at its default where the file has
 none, so a parameter added to an existing node type changes the studioHash of every document
-holding that type once (a hash epoch). K060 is one: Keys gained Key low (0), Key high (127) and
-Chord (off), so a document saved before it with a Keys node (the Synth panel's) hashes anew on
-load; no pinned template holds a Keys node, so every template hash is unchanged.
+holding that type once (a hash epoch). K060 is one: Keys gained Key low (0) and Key high (127), so
+a document saved before it with a Keys node (the Synth panel's) hashes anew on load (K116's
+Chord, declared with the piano zones that play it, will be another); no pinned template holds a Keys node, so every template hash is unchanged.
 
 ## Ports
 

@@ -4,8 +4,8 @@
 // a panel may only fix, relabel, narrow (a range or the options) or set initial values, each
 // validated against the registry, so adding a module is one declaration entry. A module's
 // `studio` lists the parameters it leaves to the Studio Inspector (shown there, not on the
-// face, with the reason the module states: Keys' key range and chord, which the piano's zones
-// edit, K060 and K116); each must be a parameter of its node type.
+// face, with the reason the module states: Keys' key range, which the piano's zones edit, K060
+// and K116); each must be a parameter of its node type.
 //
 //   definePanel(decl, registry?) -> panel   frozen; throws TypeError on an authoring error
 //   panel.faceOf(moduleId)  -> [control]    control = { key, kind: 'knob' | 'switch' |
