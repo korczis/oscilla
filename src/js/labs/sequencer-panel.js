@@ -37,6 +37,7 @@ import {
   insertionMarkerX,
 } from '../sequencer/timeline.js';
 import { onFrame } from '../charts/frame-loop.js';
+import { parseFrequencyEntry } from '../sequencer/entry.js';
 import { observeSize } from '../charts/chart-theme.js';
 import { on, setText, setAttr } from './dom.js';
 
@@ -135,7 +136,8 @@ function buildField(d, value, safeMax) {
   if (d.unit) box.dataset.unit = d.unit;
   const input = document.createElement('input');
   input.className = 'osc-number';
-  input.type = 'number';
+  // K017: a frequency field is text, so a note name (A4, C#3) or a MIDI number (m69) parses too.
+  input.type = d.kind === 'freq' ? 'text' : 'number';
   input.id = fieldId(d.key);
   input.dataset.osc = 'seq.field';
   input.dataset.field = d.key;
@@ -443,7 +445,22 @@ export function mount(rootEl, adapter) {
     if (!tempoSel) return;
     const v = String(editor.model.tempoBpm);
     if (tempoSel.value === v) return;
-    const i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
+    const dyn = tempoSel.querySelector('option[data-osc-dynamic]');
+    let i = Array.from(tempoSel.options).findIndex((o) => o.value === v && o !== dyn);
+    if (i < 0) {
+      // K017: a loaded tempo outside the offered steps gets its own option, so the control
+      // shows model.tempoBpm (G1 coherence 2.4, persist-5); it goes when the model leaves it.
+      if (dyn) dyn.remove();
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = `${v} BPM`;
+      opt.dataset.oscDynamic = '1';
+      tempoSel.appendChild(opt);
+      i = tempoSel.options.length - 1;
+    } else if (dyn) {
+      dyn.remove();
+      i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
+    }
     tempoSel.selectedIndex = i;
   }
 
@@ -539,8 +556,26 @@ export function mount(rootEl, adapter) {
     const t = e.target;
     if (!t.matches || !t.matches('[data-osc="seq.field"]')) return;
     const key = t.dataset.field;
-    const v = t.tagName === 'SELECT' ? t.value : Number(t.value);
-    if (t.tagName !== 'SELECT' && !Number.isFinite(v)) {
+    if (t.tagName === 'SELECT') {
+      editor.updateParam(key, t.value);
+      render();
+      return;
+    }
+    if (t.closest('[data-unit="Hz"]')) {
+      // K017: note names, MIDI numbers and every frequency form; a refusal is said, not swallowed.
+      const r = parseFrequencyEntry(t.value);
+      if (!r.ok) {
+        editor.error = r.error;
+        render();
+        return;
+      }
+      editor.error = '';
+      editor.updateParam(key, r.hz);
+      render();
+      return;
+    }
+    const v = Number(t.value);
+    if (!Number.isFinite(v)) {
       render();
       return;
     }
