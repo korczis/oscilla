@@ -30,7 +30,8 @@ export default definePanel({
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.',
   modules: [
-    { id: 'keys', label: 'KEYBOARD', node: 'keys' },
+    // Key range and chord stay in the Studio Inspector: the piano's zones edit them (K116).
+    { id: 'keys', label: 'KEYBOARD', node: 'keys', studio: ['keyLow', 'keyHigh', 'chord'] },
     { id: 'vco1', label: 'VCO 1', node: 'vco', fixed: { pitch: 0, fm: 0 },
       init: { waveform: 'sawtooth', scale: '16' } },
     { id: 'vco2', label: 'VCO 2', node: 'vco', fixed: { pitch: 0, fm: 0 },

@@ -58,7 +58,9 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     const was = held.get(note);
     if (was && was !== n.id) t.live(was, { kind: 'off', note });
     held.set(note, n.id);
-    return t.live(n.id, { kind: 'on', note, velocity });
+    const r = t.live(n.id, { kind: 'on', note, velocity });
+    if (r && r.ok === false && /range$/.test(r.code || '')) say(r.reason, true); // K060
+    return r;
   }
 
   function noteOff(note) {

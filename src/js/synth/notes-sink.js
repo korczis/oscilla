@@ -42,6 +42,7 @@ export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played
     held.set(note, target.id);
     const r = t.live(target.id, { kind: 'on', note, velocity });
     if (r && r.dropped) say(droppedText(target, r.dropped));
+    if (r && r.ok === false && /range$/.test(r.code || '')) say(r.reason, true); // K060
     const quiet = target === nodes().get('keys') && keysSilence(get().handle.getModel(), panel);
     if (quiet) say(quiet.reason); // the pad's cables took the gate (review S8)
     return r;

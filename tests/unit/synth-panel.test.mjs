@@ -11,13 +11,16 @@ import { compileStudio } from '../../src/js/studio/compiler.js';
 import { liveModel } from '../../src/js/studio/live-notes.js';
 import { panelStore } from './synth-fixture.mjs';
 
-test('every module names a registry type; the face is its params less fixed, plus amounts', () => {
+test('every module names a registry type; the face is its params less fixed and Studio-only, '
+  + 'plus amounts', () => {
   assert.equal(PANEL.title, 'Semi-modular mono voice');
   for (const m of PANEL.modules) {
     const def = NODE_REGISTRY.get(m.node);
     assert.ok(def, m.id);
     const face = PANEL.faceOf(m.id);
-    const fixed = Object.keys(m.fixed || {});
+    // K060: a module's `studio` params (Keys' key range and chord) are the Inspector's only.
+    const fixed = [...Object.keys(m.fixed || {}), ...(m.studio || [])];
+    for (const k of m.studio || []) assert.ok(!face.some((c) => c.key === k), `${m.id}.${k}`);
     const amounts = PANEL.amounts.filter((a) => a.module === m.id);
     assert.equal(face.length, def.params.length - fixed.length + amounts.length, m.id);
     for (const c of face.filter((x) => x.kind !== 'amount')) {

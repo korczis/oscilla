@@ -2,8 +2,9 @@
 // (the note source the keyboard, MIDI and the panel's gate fan-out drive), VCO (an oscillator
 // whose pitch is a linear octave input, so a keyboard tracks it exactly) and Ring (ring and
 // amplitude modulation of two audio signals), and the XY Pad (plan K097: X, Y and a pitch
-// quantised to a scale of core/music.js, gated while touched). New types only: no existing definition changes,
-// so every pinned template hash and saved studioHash stays as it is (design D2).
+// quantised to a scale of core/music.js, gated while touched). K060 added Key low, Key high and
+// Chord to Keys: a saved document holding a Keys node takes their defaults on load, so its
+// studioHash changes once (a hash epoch for documents with Keys; no pinned template holds one).
 //
 // Pitch is "requested digital frequency" (project.no-fake-science): a VCO's pitch and FM inputs
 // add in octaves (1.00 oct per unit, exact in the digital domain) and the sum is clipped so the
@@ -19,6 +20,9 @@ import {
 
 /** The Keys pitch output: octaves from A4, the range its edges are sized from. */
 export const KEYS_PITCH_RANGE = Object.freeze([-6, 6]);
+/** Chord shapes a Keys node keeps (K060; the piano's zones play them, K116). */
+export const KEYS_CHORDS = Object.freeze(['off', 'triad']);
+const CHORD_LABELS = { off: 'Off', triad: 'Triad in the scale' };
 /** VCO scale options: footage → octaves against A4 at 8'. */
 export const VCO_SCALES = Object.freeze({ 32: -2, 16: -1, 8: 0, 4: 1 });
 export const VCO_WAVES = Object.freeze(['triangle', 'sawtooth', 'square', 'pulse', 'sine']);
@@ -46,11 +50,20 @@ export const keys = defineNode({
     integerParam('transpose', 'Transpose', { min: -24, max: 24, unit: 'st', default: 0 }),
     enumParam('priority', 'Priority', [['last', 'Last'], ['low', 'Low'], ['high', 'High']],
       'last'),
+    // live: an edit applies from the next note (the adapter's update reports 'next-note').
+    integerParam('keyLow', 'Key low', { min: 0, max: 127, default: 0, live: 'next-note' }),
+    integerParam('keyHigh', 'Key high', { min: 0, max: 127, default: 127, live: 'next-note' }),
+    enumParam('chord', 'Chord', KEYS_CHORDS.map((c) => [c, CHORD_LABELS[c]]), 'off',
+      { live: 'next-note' }),
   ],
   summary(p) {
+    const full = p.keyLow === 0 && p.keyHigh === 127;
     return parts(optionLabel(keys, 'priority', p.priority),
       p.glide > 0 ? `glide ${secs(p.glide)}` : null,
-      p.transpose ? `${p.transpose > 0 ? '+' : ''}${p.transpose} st` : null);
+      p.transpose ? `${p.transpose > 0 ? '+' : ''}${p.transpose} st` : null,
+      full ? null : `keys ${midiToName(p.keyLow)}-${midiToName(p.keyHigh)}`,
+      p.chord && p.chord !== 'off' ? optionLabel(keys, 'chord', p.chord) : null,
+      `clamp ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist`);
   },
   capabilities: { realtime: true, offline: true, notes: true },
   compiler: 'audio/audio-engine.js#AudioEngine',
@@ -61,9 +74,13 @@ export const keys = defineNode({
     outputs: 'Pitch, in octaves from A4 (−6 to 6, 1.00 oct per octave of the note, exact in '
       + 'the digital domain); Gate, a trigger at every new top note and a release when the '
       + 'last key lifts; Velocity, 0 to 1.',
-    constraints: 'One note at a time (last, lowest or highest held key). Glide moves the pitch '
-      + 'with a time constant of Glide / 3, so after Glide less than a twentieth of the step '
-      + 'remains. A released top note returns to the note still held without a new gate.',
+    constraints: 'One note at a time (last, lowest or highest held key). Glide is linear in '
+      + 'exact time: the pitch arrives at the new note in exactly Glide. A released top note '
+      + 'returns to the note still held without a new gate. Notes outside 0 to 127, or '
+      + 'outside Key low to Key high, are refused with the reason. A pitch played from it is '
+      + `clamped at ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist of the running audio context, and `
+      + 'every note below the clamp tracks exactly. Chord is kept with the node for the '
+      + "piano's chords on its targets; this node plays one note at a time.",
   },
 });
 
