@@ -203,6 +203,18 @@ test('AC8: a note outside the node\'s key range is refused with the range in the
   assert.deepEqual(rig.transport.heldNotes(), [48]);
 });
 
+test('#447 F1: an inverted key range is the same interval, so it never refuses every note', () => {
+  const rig = armed({ keyLow: 72, keyHigh: 48 });
+  const t0 = rig.fx.ctx.currentTime + 0.05;
+  assert.equal(on(rig, 60, t0).ok, true, 'a note between 48 and 72 plays');
+  const r = on(rig, 40, t0);
+  assert.deepEqual([r.ok, r.code], [false, 'key-range'], 'one outside it is still refused');
+  const def = NODE_REGISTRY.get('keys');
+  const defaults = Object.fromEntries(def.params.map((x) => [x.key, x.default]));
+  assert.match(def.summary({ ...defaults, keyLow: 72, keyHigh: 48 }), /keys C3-C5/,
+    'the card names the interval low to high');
+});
+
 test('AC8: under last-note priority a second note wins and its release returns to the held one',
   () => {
     const rig = armed();

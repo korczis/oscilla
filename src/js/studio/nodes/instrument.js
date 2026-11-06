@@ -53,11 +53,13 @@ export const keys = defineNode({
   ],
   clipKinds: ['event'],
   summary(p) {
-    const full = p.keyLow === 0 && p.keyHigh === 127;
+    const lo = Math.min(p.keyLow, p.keyHigh);
+    const hi = Math.max(p.keyLow, p.keyHigh);
+    const full = lo === 0 && hi === 127;
     return parts(optionLabel(keys, 'priority', p.priority),
       p.glide > 0 ? `glide ${secs(p.glide)}` : null,
       p.transpose ? `${p.transpose > 0 ? '+' : ''}${p.transpose} st` : null,
-      full ? null : `keys ${midiToName(p.keyLow)}-${midiToName(p.keyHigh)}`,
+      full ? null : `keys ${midiToName(lo)}-${midiToName(hi)}`,
       `clamp ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist`);
   },
   capabilities: { realtime: true, offline: true, notes: true },

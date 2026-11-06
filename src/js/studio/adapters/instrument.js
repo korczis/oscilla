@@ -140,7 +140,13 @@ export const keys = {
         gate = { open: !!open, at: t };
       },
       priority: () => p.priority,
-      keyRange: () => [p.keyLow ?? 0, p.keyHigh ?? 127],
+      // The range is the interval between Key low and Key high in either order (#447 F1: an
+      // inverted pair refused every note), the same interval the card names.
+      keyRange: () => {
+        const a = p.keyLow ?? 0;
+        const b = p.keyHigh ?? 127;
+        return a <= b ? [a, b] : [b, a];
+      },
       /** debugInfo: the note, the pitch now and its target, the gate and the clamp. */
       noteState() {
         const s = sched.last();
