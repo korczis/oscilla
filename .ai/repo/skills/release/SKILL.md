@@ -59,6 +59,13 @@ record is on main.
 
    `tests/unit/about.test.mjs` fails until the bump of step 4 names the same line.
 
+   The station may take `src/index.html` past its byte cap (`tests/unit/source-size-baseline.json`):
+   raise the cap in the same commit with a `raises` entry that names the release pull request's
+   number and the reason. Read the next number right before committing (the newest issue or pull
+   request number of the repository plus one); the ledger is append-only (an edited entry is
+   refused by `tests/unit/source-size-budget.test.mjs`), so a number taken by another pull request
+   in the meantime means redoing the station commit, not editing the entry (v3.22.0, 2026-11-06).
+
 4. Prepare on the clean tree. It bumps once, rebuilds and runs `npm run verify` with the
    roadmap check (ADR 0082: the gate verdict is the CI run of the release pull request, the
    CI receipt); on a failure it restores what it changed. `--local-gate` runs the full gate
