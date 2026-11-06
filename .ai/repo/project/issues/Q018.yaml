@@ -18,4 +18,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-06T23:27:32Z
+started_at: 2026-11-06T23:26:49Z
+started_event: sha256:c46480f9ff91bb5a91609dba30b38eabc1cfde6a6dc36762451432c81083918e
+verified_at: 2026-11-06T23:27:03Z
+verified_event: sha256:b6131eceaca25de1899daee7af98906bf74328f0617514592d1836cb3e9fc58f
+completed_at: 2026-11-06T23:27:32Z
+completed_event: sha256:f0acaebcadb8a3446c9fb9b37db599485b1dfe6d359f8f7a6d0946d9aabb04dc
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion result in session abd8bbe3-ef71-4a3b-bdeb-cec67001e88e (~/.claude/projects/-Users-korczis-dev-oscilla/abd8bbe3-ef71-4a3b-bdeb-cec67001e88e.jsonl), 2026-10-29T18:52:52.421Z"
+    result: "The owner's answers, verbatim (Czech): to 'Syntezátor ve stylu MS-20: dřív jsi rozhodl (D1/D5, ADR 0058), že ovládání budou Pro range slidery s čísly a žádné otočné knoby. Platí to i pro semimodulární panel, nebo chceš knoby?' the owner answered 'Knoby s číslem (Recommended)'; to 'Kde má semimodulární syntezátor s kabely žít?' the owner answered 'Nový workspace Synth (Recommended)'. In English: rotary knobs with a number shown, and a new Synth workspace. The knob behaviour details of D11 (vertical drag with Shift fine, arrows and PageUp/PageDown, double-click reset, typed value) are the coordinating session's elaboration of that answer, not the owner's words; criterion 2 is re-scoped accordingly (chore/plan-m064-rescope, 2026-11-07, recovered from the session JSONL by oscilla-21 under /evolve principle 13)."
+    artifact: "abd8bbe3-ef71-4a3b-bdeb-cec67001e88e.jsonl"
+    commit: 37c52bee3eac80f4d87458ddf539624412fa4275
+    recorded_at: 2026-11-06T23:27:18Z
