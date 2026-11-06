@@ -41,4 +41,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-06T19:28:16Z
+started_at: 2026-11-06T19:26:51Z
+started_event: sha256:a56758a74510e218736fe0a548d67e23c24cd0e971a5f8241ddb1aa054980d42
+verified_at: 2026-11-06T19:27:15Z
+verified_event: sha256:d5a386e50a637b4317cc749186ef7be514227a5f520a7b56dd7f125531780f22
+completed_at: 2026-11-06T19:28:16Z
+completed_event: sha256:7d5be0d619c54c3d9b61360f76d16119fa08f4236fa21ec9171f658557da1ebd
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/integration-map.test.mjs tests/unit/ci-bounded.test.mjs; node tests/browser/integration-map.cjs (re-run by oscilla-21 on main e51b169d, 2026-11-06, darwin; in CI as the first suite of test:synth in the V3.1 Studio UI jobs)"
+    result: "Landed in the lane-A train #386 (merge bc4b1545f92347ea5178e0d817f54236baf5daf8, member 'K075 integration map' head e5129364, built by oscilla-21, judged by oscilla-a3 in .ai/repo/reviews/386.yaml: merge). On main e51b169d: the units 16 pass, 0 fail; tests/browser/integration-map.cjs ALL PASS, 606 checks in chromium, firefox and webkit from file:// and /oscilla/; wired into npm run test:synth with its tests/README.md row. Size: the train's figure is not split per member (#386's body); K075's own markup is the data-osc-link markers."
+    artifact: ".ai/repo/reviews/386.yaml"
+    commit: 69053c24d92a176e2ed5cdfd0e9cbb74d18a9a4e
+    recorded_at: 2026-11-06T19:28:02Z
