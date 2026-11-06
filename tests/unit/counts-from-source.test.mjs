@@ -37,7 +37,7 @@ export const COUNTS = [
   ['DEMO_SONG_SECONDS (src/js/studio/templates/demo-song.js)', DEMO_SONG_SECONDS,
     /\bA minor at \d+ BPM, \d+ bars \((\d+) s\)/g],
   ['the instrument owners of SPACE_OWNER (src/js/ui/shortcuts.js)', playing,
-    /\b(\w+) workspaces that play\b/gi],
+    new RegExp(`\\b(\\d+|${WORDS.join('|')}) workspaces that play\\b`, 'gi')],
 ];
 
 function prose() {
