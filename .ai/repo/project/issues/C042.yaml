@@ -1,0 +1,35 @@
+id: C042
+milestone: M090
+serves:
+  - "coherent-state#composition-honest"
+title: "No visible control, reason or handler aims at a panel hidden in that workspace and viewport"
+slug: no-visible-control-reason-or-handler-aims-at-a-panel-hidden-in
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Panel Excellence criterion 3 (composition honesty). At main 68b117f3, at 1536x1024 Compare hides Source and Dual (src/styles/integration.css:591-597, src/styles/instrument.css:343-351), yet the pan reason points to Dual (src/index.html:1678) and a Bioacoustics row rewrites the hidden Source range (src/js/main.js:483-485); on the phone, Source and Analysis are shown on Filter Lab, Compare and Analyzer (src/styles/responsive.css:259), so the panel sets differ by viewport with no declaration. After: each workspace's panel set at 1536x1024 and 390x844 is declared in tests/unit/surface-census.json; a reason text names only a panel visible in that workspace (or the workspace that holds it, as a link); a handler that writes another panel's state does so only when that panel is visible or names the change where the user acted."
+why: "af's Panel Excellence synthesis (2026-11-05, snapshot 68b117f3): criterion 3 and the Composition findings (Compare at 1536, the phone panel set)."
+scope:
+  - "src/index.html"
+  - "src/js/main.js"
+  - "src/styles/integration.css"
+  - "src/styles/instrument.css"
+  - "src/styles/responsive.css"
+  - "tests/unit/surface-census.json"
+  - "tests/unit/composition-honest.test.mjs"
+  - "tests/browser/app.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/composition-honest.test.mjs reads the declared panel sets from tests/unit/surface-census.json and the reason texts and cross-panel writers it lists, and fails on the merge base on the Compare pan reason (it names Dual, hidden in Compare at 1536x1024) and on the Bioacoustics row writing the hidden Source range."
+  - "A leg of tests/browser/app.cjs visits every workspace at 1536x1024 and 390x844 and asserts that the visible panel set equals the census declaration and that no visible reason text names a panel that has no client rects in that view. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "A mutation that adds a panel to a workspace at one viewport without declaring it in the census fails the browser leg."
+  - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml. The census file is in the scope of R031 once it lands."
+validation:
+  - "node --test tests/unit/composition-honest.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

@@ -92,6 +92,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
+const shell = require('./lib/shell.cjs');
 const seam = require('./lib/measure-seam.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
 
@@ -223,16 +224,9 @@ const H = {
     if (!stayed) await H.ready(page);
     return { dialog, stayed };
   },
-  /** Reach a workspace through the nav; a grouped one (ANALYZE, SYNTHESIS) opens its group. */
+  /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
   navTo: async (page, ws) => {
-    const item = `[data-osc="nav.${ws}"]`;
-    const group = await page.evaluate((s) => {
-      const el = document.querySelector(s);
-      const g = el && el.closest('[data-osc-nav-group]');
-      return g && el.offsetParent === null ? g.dataset.oscNavGroup : null;
-    }, item);
-    if (group) await page.click(`[data-osc="nav-group.${group}"]`);
-    await page.click(item);
+    await shell.navTo(page, ws);
     await page.waitForFunction((w) => window.OSCILLA.app.workspace === w, ws,
       { timeout: 15000 });
     await H.frames(page);
@@ -1067,7 +1061,8 @@ function defineChecks() {
       focusedLinkKeepsSpace: onLink.heard === 'none' && !onLink.claimed }), wrong, got, onLink };
   });
 
-  // Review of #159: Presets says "Press TRIGGER (or Space) to play it" after Load and stays in
+  // Review of #159: Presets says "Press Space to play it here" after Load (A1: and links to the
+  // workspace whose TRIGGER plays it, never "Press TRIGGER" on a page without one) and stays in
   // Presets, where no Play control is shown at this width. Space must do what the notice says.
   def('space-after-preset-load', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
@@ -1077,7 +1072,8 @@ function defineChecks() {
       const a = window.OSCILLA.app;
       const alert = a.alerts.find((x) => /^Loaded/.test(x.title));
       const said = alert ? `${alert.title} ${alert.message}` : '';
-      return said ? { workspace: a.workspace, said } : null;
+      return said ? { workspace: a.workspace, said,
+        coarse: matchMedia('(pointer: coarse)').matches } : null;
     }), { ms: 8000, what: 'Load in Presets announces the loaded preset' });
     const controls = await page.evaluate(() => ['source.hold', 'source.trigger', 'status.play']
       .filter((k) => {
@@ -1088,7 +1084,9 @@ function defineChecks() {
     await page.close();
     return { ...H.verdict({
       staysInPresets: loaded.workspace === 'presets',
-      noticeNamesSpace: /Space/.test(loaded.said),
+      // A coarse pointer has no Space: the notice sends the tap to the Playground (A1).
+      noticeNamesSpace: loaded.coarse ? /Open the Playground to play it/.test(loaded.said)
+        : /Space/.test(loaded.said),
       spacePlaysIt: space.heard === 'instrument',
     }), loaded, controls, space };
   });
@@ -1205,9 +1203,10 @@ function defineChecks() {
         : null;
     }, sel);
     // B6: the logo goes home.
-    const logo = { name: await nameOf('.osc-brand'),
-      title: await page.getAttribute('.osc-brand', 'title') };
-    await page.click('.osc-brand');
+    const BRAND = '[data-osc="header.brand"]'; // the Pro navbar's logo (F002)
+    const logo = { name: await nameOf(BRAND),
+      title: await page.getAttribute(BRAND, 'title') };
+    await page.click(BRAND);
     logo.reached = await reach(() => page.evaluate(() => (window.OSCILLA.app.workspace
       === 'playground' ? new URLSearchParams(window.location.hash.slice(1)).get('m') : null)),
     'control-names: the logo opens the Playground');

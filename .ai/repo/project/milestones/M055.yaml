@@ -3,7 +3,7 @@ title: "The whole interface on Flowbite Pro"
 slug: the-whole-interface-on-flowbite-pro
 order: 54
 priority: p1
-problem: "The owner ordered on 2026-10-28 that every one of their projects is built on their licensed Flowbite Pro, enforced and always used. OSCILLA's interface is plain token-based CSS (ADR 0012 dropped the V1 Tailwind and Flowbite CDN scripts), with its own header, tab bar, panels and dialogs."
+problem: "The owner ordered on 2026-10-28 that every one of their projects is built on their licensed Flowbite Pro, enforced and always used. OSCILLA's interface is plain token-based CSS (ADR 0012 dropped the V1 Tailwind and Flowbite CDN scripts), with its own header, tab bar, panels and dialogs (the state of 2026-10-28; the composition since is ADR 0061, accepted, and project.visual-identity-lock v4: the interface is Flowbite Pro on Tailwind themed by OSCILLA's tokens, and the domain views keep OSCILLA's own visual language inside Pro cards; noted 2026-11-05)."
 outcome: "Tailwind 3 and the MIT flowbite package are compiled at build time into the single file within the budget; the Pro admin shell replaces the header and tab bar with every deep link kept; every workspace group, the dialogs and the settings are rebuilt from Pro components with the domain visuals inside Pro cards; the legacy chrome ratchet holds only the domain views' own residual (ADR 0061 decision 3); the visual references and the live smoke are regenerated from the Pro shell; the claims are registered and the intent's criteria point at them."
 acceptance_criteria:
   - "F001 to F013 are done with their evidence."

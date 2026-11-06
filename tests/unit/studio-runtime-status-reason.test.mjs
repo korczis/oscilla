@@ -15,6 +15,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
@@ -242,4 +243,15 @@ test('in sync, a plan that is not the live model: a missing node is still not-in
     .nodes.get('lfo-1');
   assert.equal(lfo.status, 'degraded');
   assert.equal(lfo.code, 'not-in-runtime');
+});
+
+test('the cause link is the catalogued studio.inspector.statusCause and selects the cause', () => {
+  // The rendered link (inspector.js causeLink) carries the hook the UI catalogue declares and
+  // dispatches the view's cause selection, so the census and the catalogue name one control.
+  const src = readFileSync(new URL('../../src/js/ui/studio/inspector.js', import.meta.url),
+    'utf8');
+  const at = src.indexOf("'data-osc': 'studio.inspector.statusCause'");
+  assert.ok(at > 0, 'the cause link carries data-osc studio.inspector.statusCause');
+  const body = src.slice(src.lastIndexOf('function causeLink', at), src.indexOf('\n  }\n', at));
+  assert.match(body, /SELECTION_CHANGE', selection: c\.selection/);
 });

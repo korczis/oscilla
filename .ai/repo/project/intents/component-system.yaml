@@ -14,6 +14,7 @@ milestones:
 - M086
 - M087
 - M118
+- M123
 satisfaction:
 - id: contract-and-registry
   criterion: "Every data-osc hook is covered by one declaration with docs, either a state path from the closed table of state owners or a stated no state with its declared effect (actions, links, readouts, panels, workspaces), resolvable links and a test that names it, and the allowance of undeclared hooks is empty"
@@ -59,6 +60,14 @@ satisfaction:
   criterion: "Every workspace's declared panels move, resize and reorder per device, stack and reorder on a phone, reset per page with one undo, never store layout in the document, hash or history, never hide a panel that owns sound or a capture, and every Move keeps focus and reading order equal to the visual order"
   evidence: command
   ref: "node --test tests/unit/panels-layout.test.mjs && node tests/browser/panels.cjs"
+- id: one-implementation-per-family
+  criterion: "Each control family (knob, slider, switch, patch bay, keyboard, app shell) has one implementation, parametrized for its places and named in the catalogue; a census refuses a second one, and its baseline of duplicates is empty (owner order of 2026-11-04)"
+  evidence: command
+  ref: "node --test tests/unit/ui-families.test.mjs"
+- id: one-modeler-per-curve
+  criterion: "Every envelope and filter of the app (the labs, every Studio envelope and filter node, the Synth's EG and filter plates, a sequencer track's voice) is edited by one modeler per curve, bound to its target through the owner's own write path chosen by the one selection, and the curve it draws is the law that plays, labelled live or computed (owner order of 2026-11-05: one way, DRY, bus connected)"
+  evidence: command
+  ref: "node --test tests/unit/modeler-binding.test.mjs && node tests/browser/modelers.cjs"
 governance:
 - "rule:project.rules-name-their-enforcement"
 - "rule:project.majordomus-layer-current"

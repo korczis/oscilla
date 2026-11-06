@@ -13,7 +13,8 @@
 //   download-digest  a download not checked with `sha256sum -c` against a pinned digest
 //   pipe-to-shell    a download that is executed: piped into an interpreter, substituted into
 //                    a command ($(curl), <(curl), backticks) or in a step that uses eval
-//   pinned           an action not pinned to a version tag or commit, an image without a tag
+//   pinned           an action not pinned to a version tag or commit, an image without a tag,
+//                    a runs-on runner label ending in -latest
 //   gate-needs       a `gate` job whose needs is not every other job of its workflow
 //   non-fatal        continue-on-error on a job or a step; `|| true`, `|| :`, `|| exit 0`,
 //                    a trailing `|| echo` or `; true` on a line that installs, downloads,
@@ -188,6 +189,36 @@ function positive(n) {
   return typeof n === 'number' && Number.isFinite(n) && n > 0;
 }
 
+/**
+ * The runner labels a job can land on, as [label, why] pairs; `why` is set when the label
+ * cannot be judged. A literal, a list, a runner group's `labels` and `${{ matrix.<key> }}`
+ * (resolved through strategy.matrix and its include rows) are read; any other expression is
+ * refused, since what it yields is decided at run time.
+ */
+export function runnerLabels(job) {
+  const out = [];
+  const each = (v) => {
+    if (v === undefined || v === null) return;
+    if (Array.isArray(v)) return v.forEach(each);
+    if (typeof v === 'object') return each(v.labels);
+    const label = String(v);
+    const m = /^\$\{\{\s*matrix\.([\w-]+)\s*\}\}$/.exec(label.trim());
+    if (m) {
+      const matrix = job.strategy?.matrix ?? {};
+      const values = [].concat(matrix[m[1]] ?? [],
+        [].concat(matrix.include ?? []).map((row) => row?.[m[1]]).filter((x) => x !== undefined));
+      if (!values.length) out.push([label, `runs-on ${label} names a matrix key with no values`]);
+      return values.forEach(each);
+    }
+    if (label.includes('${{')) {
+      return out.push([label, `runs-on ${label} is an expression the checker cannot resolve`]);
+    }
+    out.push([label, null]);
+  };
+  each(job['runs-on']);
+  return out;
+}
+
 /** A number, or a variable that holds one (`--retry "$RETRIES"`). */
 const COUNT = '(?:\\d+|"?\\$\\{?\\w+\\}?"?)';
 
@@ -325,6 +356,14 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (image !== undefined && !tagged) {
       add('pinned', name, null, `container image without a version tag or digest: ${image}`);
     }
+    // A hosted runner label that moves (ubuntu-latest) changes the fonts and packages under a
+    // browser suite between two runs of one tree (#420: ubuntu-26.04 fonts, a 1.4 px overflow).
+    for (const [label, why] of runnerLabels(job)) {
+      if (why) add('pinned', name, null, why);
+      else if (/-latest$/i.test(label)) {
+        add('pinned', name, null, `runner image not pinned to a version: runs-on ${label}`);
+      }
+    }
     const jobEnv = JSON.stringify([doc.env || {}, job.env || {}]);
     (job.steps || []).forEach((step, i) => {
       const label = stepLabel(step, i);
@@ -349,19 +388,38 @@ export function checkWorkflow(file, text, suites, actions = new Map()) {
     if (String(gate.if || '').replace(/\s/g, '') !== 'always()') {
       add('gate-needs', 'gate', null, 'gate must run with `if: always()` to report a failed job');
     }
-    // The gate is the required check, and two of its jobs judge the pull request itself. A run
-    // without a pull request (a manual dispatch on the PR's branch) would give them nothing to
-    // judge and still put a green `gate` on the same commit.
+    // The gate is the required check, and two of its jobs judge the pull request itself: on a
+    // pull_request run the event's, on a merge_group run the one the queue ref names (ADR 0083).
+    // A run without a pull request (a manual dispatch or a push on the PR's branch) would give
+    // them nothing to judge and still put a green `gate` on the same commit.
     const { on } = doc;
     const triggers = typeof on === 'string' ? [on]
       : Array.isArray(on) ? on.map(String) : Object.keys(on || {});
-    if (triggers.length !== 1 || triggers[0] !== 'pull_request') {
-      add('triggers', null, null, 'a workflow with a gate job is started by pull_request only,'
-        + ` not by: ${triggers.join(', ') || '(nothing)'}`);
+    const allowed = ['pull_request', 'merge_group'];
+    if (!triggers.includes('pull_request') || triggers.some((t) => !allowed.includes(t))) {
+      add('triggers', null, null, 'a workflow with a gate job is started by pull_request and'
+        + ` merge_group only, not by: ${triggers.join(', ') || '(nothing)'}`);
+    }
+    // ADR 0083: a cancelled merge-queue run drops its group out of the queue, so wherever a
+    // workflow that the queue starts sets concurrency, cancel-in-progress is off or exactly
+    // QUEUE_SAFE_CANCEL (on for a pull request's older run, never for a queue run).
+    if (triggers.includes('merge_group')) {
+      const scopes = [[null, doc.concurrency],
+        ...Object.entries(doc.jobs || {}).map(([id, j]) => [id, j && j.concurrency])];
+      for (const [id, c] of scopes) {
+        if (!c || typeof c !== 'object' || !('cancel-in-progress' in c)) continue;
+        const v = c['cancel-in-progress'];
+        if (v === false || v === 'false' || v === QUEUE_SAFE_CANCEL) continue;
+        add('queue-cancel', id, null, `cancel-in-progress is ${JSON.stringify(v)}: a merge-queue `
+          + `run must never be cancelled (ADR 0083); use false or ${QUEUE_SAFE_CANCEL}`);
+      }
     }
   }
   return out;
 }
+
+/** The one cancel-in-progress a workflow started by merge_group may set besides false. */
+export const QUEUE_SAFE_CANCEL = "${{ github.event_name == 'pull_request' }}";
 
 /** The steps of a composite action's YAML ([] for any other kind of action). */
 function actionSteps(text) {

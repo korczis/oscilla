@@ -1,0 +1,28 @@
+id: T030
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The microphone spectrum carries its relative-level caption until K030 lands"
+slug: the-microphone-spectrum-carries-its-relative-level-caption
+priority: p2
+profile: implementation
+objective: "Lands as fix(labs). Hardening S3, second finding. At main 68b117f3 src/js/labs/mic-analyzer.js:162 sets yLabel: null, so the Playground/Compare microphone chart draws level ticks with no reference caption. K030 (BLOCKED on K027, K053, K036 and F006) gives the mic plot the relative caption as part of a larger chart slice; this issue is the stopgap only: pass SPECTRUM_Y_LABEL (RELATIVE LEVEL, dBFS-like, uncalibrated) to the mic chart. K030 keeps the caption when it lands. The clipped-state half of S3 is T020's (READY) and is not re-filed."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S3 (T020 READY and K030 BLOCKED cover the rest). Contract: claim spl-only-with-level-calibration, ADR 0017, readout chart:mic."
+scope:
+  - "src/js/labs/mic-analyzer.js"
+  - "tests/unit/readout-labels-mic-chart.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/readout-labels-mic-chart.test.mjs asserts that the mic chart configuration's yLabel equals SPECTRUM_Y_LABEL; it fails on the merge base (null)."
+  - "A mutation that sets yLabel back to null fails it."
+  - "K030's scope and criteria are unchanged; when K030 lands it keeps this caption."
+  - "Not a guarded path under project.review-verdict v2 (outside GUARDED in scripts/review-verdict.mjs); if R031 (v3, every src path guarded) has landed first, the screens reviewer seat (pending: oscilla-44) writes .ai/repo/reviews/<pr>.yaml."
+validation:
+  - "node --test tests/unit/readout-labels-mic-chart.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

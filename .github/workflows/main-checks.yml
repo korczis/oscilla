@@ -41,7 +41,7 @@ jobs:
     # skips under CI without them (a full checkout measured 4 s against 2 s shallow, in the
     # knowledge job).
     name: unit, build, artifact rules
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
@@ -64,7 +64,7 @@ jobs:
   knowledge:
     # ci.yml's knowledge job: the pinned `majordomus doctor`, same version and digest.
     name: .ai layer (majordomus doctor 1.0.0-alpha.9)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
       MJ_VERSION: 1.0.0-alpha.9
@@ -97,8 +97,8 @@ jobs:
 
   browser:
     name: Browser gate (${{ matrix.browser }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 65
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -127,9 +127,9 @@ jobs:
         # The train's browser suites (cross-links, first-screen, surface-census) take the chain
         # past 15 min on a hosted runner (~20 min measured, run 41333897971). WebKit's chain with
         # merge train 3's journeys and suites: cross-links ends at 25.7 min (run 41582489422) and
-        # the 30-minute bound ran out in first-screen; the job bounds 65.
+        # the 30-minute bound ran out in first-screen; the job bounds 90 (webkit after the Pro shell ran test:browser to the 45-minute cut, #443).
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
-        timeout-minutes: 45
+        timeout-minutes: 60
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -145,7 +145,7 @@ jobs:
     name: main is green (unit, knowledge, browser gate)
     if: always()
     needs: [unit, knowledge, browser]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Every main check passed

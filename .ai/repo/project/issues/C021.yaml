@@ -8,6 +8,7 @@ priority: p1
 profile: implementation
 objective: "Lands as test(journeys). The owner's six journeys as one suite, tests/browser/journeys.cjs, run through tests/browser/lib/suite.cjs with wait.cjs deadlines and no fixed sleep, added to npm run test:browser so that CI and the release gate run it in Chromium, Firefox and WebKit. Each journey drives the real controls, never the lab update functions, and covers filters, the sequencer, BPM and every other control family. J1 set parameters and start: waveform, frequency, gain, Filter type, cutoff and Q, Envelope, Additive, dual and pan, and a sequence with Tempo and Loop, set through the UI, then started: the output peak, level and filter attenuation match the settings. J2 change while active: cutoff, Q, sustain, release, pan, Additive, waveform, gain, Tempo, Loop and the hard limit changed while sounding each reach the output within a named deadline, or the control states that it applies from the next note. J3 synchronized views: after each J2 change the status bar (state, gain, frequency, duration), the scope label, the Spectrum requested marker, the Signal Path stages, the sequencer playhead and the controls' own values agree with the engine, for the instrument, the sequencer and the Studio as owner. J4 stop and restart: ten cycles each of the instrument, the sequencer and the Studio, and the hand-overs between them by Escape, page hide, the status key and a MEASURE claim: exactly one owner at a time, a node census of 0 after each stop, no page error. J5 save, restore and compare: config file export and import, preset, History and link, compared field by field (instrument, labs, phase and stereo, sequence), the sequence WAV compared with the live waveform, and the unsaved guard armed and disarmed. J6 invalid input and transitions: an out-of-range custom range, an import with Q 50, sequencer Play during a measurement, a loop past the cap without permission, pan in Stereo output and Additive on a dual voice are each refused or limited with a message that names the field or the reason, and leave the model unchanged."
 why: "Owner brief OSCILLA PACK 03, 'One Instrument, One Coherent State' (2026-10-29): every control must provably reach its subsystem and every view that reflects it, and be covered by a test (owner: 'filters, sequencer, bpm and many other interactive knobs / sliders / control elements are not reflected / working / tested'). The findings named here were reproduced by an independent skeptic on a fresh export of origin/main b67d1e58 (v3.13.0)."
+current_state: "Re-checked on main 68b117f3 on 2026-11-05 by two agreeing judges (af workflow wf_518c6639-5cb): BLOCKED. Not done until: Dependency C018 is not done (no completed_at in the snapshot), so the issue is BLOCKED. Criterion 1: no recorded mutation run per journey shows each journey failing when its fix is reverted. The evidence that exists is per finding (13 XFAIL rows in #331, and 2 J6 merge-base dist FAILs) and does not cover J1 or J3; the critique expected-failure-marks-let-journeys-pass-vacuously is still open."
 scope:
   - "tests/browser/journeys.cjs"
   - "tests/browser/lib"
@@ -45,4 +46,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T14:06:22Z
+started_at: 2026-11-05T14:05:54Z
+started_event: sha256:292fc779bcf2e635dcf96832a8373dc22a3c8348a4764b6e27d1c9a613ce6de4
+verified_at: 2026-11-05T14:06:08Z
+verified_event: sha256:b22265403f82e419485794af32aff17adf50b9aff51de2dab8205c771f4edac0
+completed_at: 2026-11-05T14:06:22Z
+completed_event: sha256:b5fcbceca087066b7defe5a8a8bfe328fa1e1948573c309f2b8800b5179fa9c7
+evidence:
+  - covers: verified
+    type: ci
+    command: "npm run test:browser (ends with node tests/browser/journeys.cjs); gh pr checks 404"
+    result: "tests/browser/journeys.cjs holds 38 journey-1-start to journey-6 checks through lib/suite.cjs and lib/wait.cjs, no entry in tests/browser/timing-baseline.json, tests/README.md:86 row; green in chromium, firefox and webkit in the Browser gate of #404 and every later train (sweep a3, 2026-11-05). Landed by PR #331 (verdict .ai/repo/reviews/331.yaml merge, reviewer oscilla-af) in train 3 #404 = main 2f442e11, shipped in v3.18.0; each check's fail-when-reverted is the expected-failure table of #331's body (XFAIL per fix issue, XPASS fails the suite), not a separate mutation log."
+    artifact: "tests/browser/journeys.cjs"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:05:48Z

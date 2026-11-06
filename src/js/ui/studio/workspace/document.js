@@ -8,6 +8,12 @@ import { announceRedo, announceUndo } from '../../../studio/a11y.js';
 import { templateModel } from '../../../studio/templates/index.js';
 import { openModal, closeModal } from '../../dialogs.js';
 
+/** The key of studioWhatWouldBeLost's unsaved-changes entry (the voice guard selects it). */
+export const UNSAVED_CHANGES_KEY = 'unsaved-changes';
+/** That entry's label for a document titled `title`. */
+export const unsavedChangesLabel = (title) => `Unsaved changes to ${
+  title || 'the Studio document'}`;
+
 /** First keyboard-reachable control inside a pane. */
 const TABBABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), '
   + '[tabindex="0"]';
@@ -150,7 +156,8 @@ export function createWorkspaceDocument(ctx, svc, ops) {
     ctx.projectId = projectId;
     ctx.templateId = templateId;
     ctx.templateBaseline = templateId ? createDirtyTracker(ctx.handle.getModel()) : null;
-    if (ctx.editor) requestAnimationFrame(() => ctx.editor.frameAll());
+    // A document with the default view opens fitted, one with a saved view at it (K170).
+    if (ctx.editor) ctx.editor.openView();
     refreshState();
   }
 
@@ -238,13 +245,14 @@ export function createWorkspaceDocument(ctx, svc, ops) {
     studioWhatWouldBeLost() {
       const lost = [];
       if (this.studio.dirty) {
-        lost.push({ domain: 'studio',
-          label: `Unsaved changes to ${this.studio.title || 'the Studio document'}` });
+        lost.push({ domain: 'studio', key: UNSAVED_CHANGES_KEY,
+          label: unsavedChangesLabel(this.studio.title) });
       }
       const n = this.studio.memoryHeld;
       if (!this.studio.persistent && n > 0) {
-        lost.push({ domain: 'studio', label: `${n} Studio project${n === 1 ? '' : 's'} or `
-          + `patch${n === 1 ? '' : 'es'} kept in page memory only` });
+        lost.push({ domain: 'studio', key: 'memory-only',
+          label: `${n} Studio project${n === 1 ? '' : 's'} or `
+            + `patch${n === 1 ? '' : 'es'} kept in page memory only` });
       }
       return lost;
     },

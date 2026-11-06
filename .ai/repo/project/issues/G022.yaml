@@ -1,0 +1,34 @@
+id: G022
+milestone: M123
+serves:
+  - "component-system#one-implementation-per-family"
+title: "One knob: the synth-theme core is the knob everywhere, the shipped view knob becomes its parameters"
+slug: one-knob-the-synth-theme-core-everywhere
+priority: p2
+profile: implementation
+objective: "Lands as refactor(ui). The knob's one model is src/js/ui/controls/knob-model.js (98's split of the synth-theme core, 2026-11-04: the parameter shape, the value model, the input functions and feel.js's gestures, with no hardware vocabulary), and src/js/ui/synth/knob.js is its hardware skin (controlSvg, knobFace, the fader shapes), re-exporting the model so existing imports hold; a Pro skin lives in its own module outside the synth layer. The core as built was (src/js/ui/synth/knob.js with feel.js: a pure model, drawing, ARIA and feel, no DOM listeners; its public API as 98 proposed on 2026-11-04: controlSvg({ kind, param, value, tokens, zoom, state, orientation, travel, uid, size }), the value model clampValue/toNorm/fromNorm/quantize/stepOption/parseValue/formatValue/ariaAttrs, the input functions dragValue/wheelValue/knobKey and feel.js's gestures). At main 76bfc300 the second implementation is src/js/synth/view/knob.js's own model (S11); F013 W1b (train 6) makes it an adapter on the core, which closes S11 when it lands. This issue then holds the rest: the adapter keeps only the Synth face's parameters, src/js/ui/kinds/xy-pad.js reads its axes through the core, and every later knob (the Studio node faces of M081, the Inspector, the live landing) renders through the core with its skin as a parameter, the Pro skin drawing no hardware vocabulary (visual-identity-lock v4), so no third knob is built (b0, 2026-11-04). The census of G021 lists the core as the family's impl."
+why: "Owner order of 2026-11-04 (M123): every control family unified, parametrized, reused, no parallel implementations."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/synth/view"
+  - "src/js/ui/studio"
+  - "src/js/ui/catalog"
+  - "tests"
+  - "dist"
+depends_on:
+  - "G021"
+  - "F013"
+acceptance_criteria:
+  - "The family has one implementing module, named in its catalogue declarations; its G021 baseline entries leave and the census passes with them gone (fail-first: the census fails on the merge base with the entries removed)."
+  - "Every place the family appears renders through that module with its parameters (skin, size, range, labels); no behaviour, key binding or ARIA of any place changes except where the PR lists it with its reason; the visual references change only where the PR re-accepts them with the reason."
+  - "Every place renders from the one parameter declaration (G003, N002, N003: type, unit, range, step, live rule); no family keeps a formatter or a range of its own."
+  - "Standard: the size report gives base and head figures; the Flowbite ratchet only falls; the iPhone census reach only shrinks; the family's visual references are re-accepted with the reason in review (visual-identity-lock v3); the phone holds 44 px targets under a coarse pointer."
+  - "Every gate browser, file:// and the /oscilla/ sub-path; the affected browser suites pass; a non-builder's verdict where a guarded path changes (project.review-verdict v2)."
+validation:
+  - "node --test tests/unit/ui-families.test.mjs"
+  - "npm test"
+  - "npm run test:browser"
+evidence_required:
+  - "verified"
+created_at: 2026-11-04
+updated_at: 2026-11-04

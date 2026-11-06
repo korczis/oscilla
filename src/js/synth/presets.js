@@ -4,14 +4,17 @@
 // (presetPatch: a node per module, tagged with its metadata.panel, and an edge per amount with
 // its depth), applied by PATCH_REPLACE onto the panel's nodes (patches.js patchParams): every
 // knob and amount it covers in ONE history entry, no node or cable added, removed or moved.
-//   presetPatch(panel, id, { all }) -> patch | null
-//   presetAction(model, panel, id, { all }) -> { action } | { reason }
+//   presetPatch(panel, id, { all, modules }) -> patch | null
+//   presetAction(model, panel, id, { all, modules }) -> { action } | { reason }
+//     an engine preset on keys routed elsewhere (picker.js, metadata.noteTarget) clears the
+//     route in the same BATCH, so the keys play the engine it set (review S4); undo gives both
 //
 // A preset belongs to one tab (`tab`, default 'panel') and sets only that tab's modules, so a
 // panel preset leaves the engines as they are; an engine preset (`engine`: the module the keys
 // then play) sets that engine's module only, leaving the panel and the other engines;
 // { all: true } resets every module (a link reopens the whole instrument from its preset,
-// synth/link.js).
+// synth/link.js); { modules: [id] } sets exactly the modules named (an XY preset writes the
+// Panel and XY tabs it plays and never the engines, synth/xy.js xyScope).
 
 import { PATCH_KIND, PATCH_SCHEMA_VERSION, patchTargets } from '../studio/patches.js';
 import { STUDIO_SCHEMA_VERSION } from '../studio/schema.js';
@@ -82,18 +85,19 @@ export function presetValues(panel, p) {
   return out;
 }
 
-const inScope = (p, m, all) => m.def.maxInstances !== 1 // Master keeps the Studio's level
-  && (all || (m.tab === p.tab && (!p.engine || m.id === p.engine)));
+const inScope = (p, m, all, modules) => m.def.maxInstances !== 1 // Master keeps its level
+  && (modules ? modules.includes(m.id)
+    : all || (m.tab === p.tab && (!p.engine || m.id === p.engine)));
 const cache = new Map();
 
 /** The factory panel patch of preset `id` (cached per panel, preset and scope). */
-export function presetPatch(panel, id, { all = false } = {}) {
+export function presetPatch(panel, id, { all = false, modules = null } = {}) {
   const p = presetOf(id);
   if (!p) return null;
-  const key = `${panel.instance}/${id}/${all}`;
+  const key = `${panel.instance}/${id}/${modules ? `[${modules.join()}]` : all}`;
   if (cache.has(key)) return cache.get(key);
   const values = presetValues(panel, p);
-  const mods = panel.modules.filter((m) => inScope(p, m, all));
+  const mods = panel.modules.filter((m) => inScope(p, m, all, modules));
   const ids = new Set(mods.map((m) => m.id));
   const edges = [];
   for (const a of panel.amounts) {
@@ -117,12 +121,15 @@ export function presetPatch(panel, id, { all = false } = {}) {
   return patch;
 }
 
-export function presetAction(model, panel, id, { all = false } = {}) {
-  const patch = presetPatch(panel, id, { all });
+export function presetAction(model, panel, id, { all = false, modules = null } = {}) {
+  const patch = presetPatch(panel, id, { all, modules });
   if (!patch) return { reason: `There is no preset "${id}".` };
   const { onto } = patchTargets(model, patch);
   if (!Object.keys(onto).length) {
     return { reason: `The ${panel.title} is not in this Studio document: insert it first.` };
   }
-  return { action: { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` } };
+  const action = { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` };
+  if (!presetOf(id).engine || all || modules || !model.metadata.noteTarget) return { action };
+  return { action: { type: 'BATCH', label: action.label,
+    steps: [action, { type: 'METADATA_SET', noteTarget: null }] } };
 }

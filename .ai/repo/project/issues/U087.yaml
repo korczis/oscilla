@@ -1,0 +1,31 @@
+id: U087
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "Now means work has started, and its length is bounded"
+slug: now-means-work-has-started-and-its-length-is-bounded
+priority: p1
+profile: implementation
+objective: "Lands as fix(about). scripts/roadmap.mjs:33 maps every milestone with one DONE issue to 'now', so Now lists 29 milestones 'under way' while no issue plan-wide is ACTIVE and six have no READY issue. After: Now holds milestones with an ACTIVE or VERIFY issue or a DONE issue within the last release window, the copy states the rule, and Now beyond a declared cap folds like Later."
+why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
+scope:
+  - "scripts/roadmap.mjs"
+  - "src/js/ui/about.js"
+  - "src/index.html"
+  - "tests/unit/about-current.test.mjs"
+  - "dist"
+depends_on:
+  - "U086"
+acceptance_criteria:
+  - "A fixture milestone {DONE:2, ACTIVE:0, READY:0} with no recent DONE is not 'now' (fails today)."
+  - "The copy under Now states the rule in words a visitor reads; Now has a cap and a fold, checked by test."
+  - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
+  - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/about-current.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

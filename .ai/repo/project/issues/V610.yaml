@@ -40,4 +40,18 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-05T14:03:17Z
+started_at: 2026-11-05T14:02:49Z
+started_event: sha256:9ee2e5066105a13694251ebf26707659cfa57318ee1b3bc33c51625bf42a5379
+verified_at: 2026-11-05T14:03:02Z
+verified_event: sha256:46c74047f782ff55ea2a8294526e2331cdb8e3dc1591632cff1a04841fa7cf45
+completed_at: 2026-11-05T14:03:17Z
+completed_event: sha256:97b8f6d169227e5e6f3779ad7cf7c65cdb4edf5a8a1204998597bbfbb9ea1ae3
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-graph-search.test.mjs tests/unit/ui-flowbite-pro.test.mjs; node scripts/ui-flowbite-pro-record.mjs --check"
+    result: "studio-graph-search 8/0 and ui-flowbite-pro 31/0 at main e8d54f8c; record equals the tree (sweep a3, 2026-11-05). Landed by PR #368 (verdict .ai/repo/reviews/368.yaml merge) in train 4 #410 = main 447bb27b, shipped in v3.19.0; #410's V3.1 Studio UI gate ran the fuzzy-add check of tests/browser/v31-studio-graph.cjs green in chromium, firefox and webkit; docs/v31/user-guide.md:99, .ai/repo/features/studio-signal-graph.md:34, tests/README.md:329; +233 B gzip (#368 body)."
+    artifact: ".ai/repo/reviews/368.yaml"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:02:42Z

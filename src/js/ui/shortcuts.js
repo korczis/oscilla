@@ -4,7 +4,7 @@
 // Space has one owner in each workspace, the same at every width:
 //   'instrument'  the workspaces that play, load or analyse the instrument's signal:
 //                 Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer and Presets
-//                 (Load readies the instrument and says "Press TRIGGER (or Space)"). Space is
+//                 (Load readies the instrument and says "Press Space to play it here"). Space is
 //                 Hold to Play (V1, frozen): held, it plays; released, it stops; a programmed
 //                 pattern triggers once. It is so whether or not a Play control is on screen:
 //                 Hold and Trigger are laid out by width, the owner is not.
@@ -23,6 +23,7 @@
 
 import { STUDIO_SHORTCUTS } from './studio/graph-keys.js';
 import { KEY_HELP } from './studio/transport-view.js';
+import { WORKSPACE_LABELS } from './shell.js';
 import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
 
 /** Who owns Space in each workspace (the keys are exactly app.js WORKSPACES). */
@@ -42,22 +43,8 @@ export const SPACE_OWNER = Object.freeze({
   about: null,
 });
 
-/** The names the navigation shows. */
-export const WORKSPACE_LABELS = Object.freeze({
-  playground: 'Playground',
-  measure: 'Measure',
-  experiments: 'Experiments',
-  analyzer: 'Analyzer',
-  filter: 'Filter Lab',
-  compare: 'Compare',
-  synthesis: 'Synthesis',
-  sequencer: 'Sequencer',
-  presets: 'Presets',
-  learn: 'Learn',
-  studio: 'Studio',
-  synth: 'Synth',
-  about: 'About',
-});
+/** The names the navigation shows: the one registry's (shell.js WORKSPACE_REGISTRY). */
+export { WORKSPACE_LABELS };
 
 /**
  * What Space does, by owner ('none' for a workspace that neither is Studio nor plays, loads or

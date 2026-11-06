@@ -31,11 +31,14 @@ const LABEL_H = 18;
  *  smallest text a phone shows (V634, criterion ui-current#phone-whole). */
 export const BAY_TEXT = 12;
 /** The widest jack label that fits its 52 px pitch at BAY_TEXT, counted with an output's " ▸":
+ *  a word a panel abbreviates is printed so (LABEL_ABBREV, as hardware prints VEL, MOD, CV);
  *  longer labels keep their head and end in an ellipsis; the jack's accessible name carries the
  *  whole label. */
 export const LABEL_MAX = 8;
+export const LABEL_ABBREV = Object.freeze({ Velocity: 'Vel', Modulator: 'Mod', Control: 'CV',
+  Frequency: 'Freq', Resonance: 'Res', Envelope: 'Env', Modulation: 'Mod' });
 export function shortLabel(label, direction = 'in') {
-  const s = String(label);
+  const s = String(label).replace(/[A-Z][a-z]+/g, (w) => LABEL_ABBREV[w] || w);
   const room = direction === 'out' ? LABEL_MAX - 2 : LABEL_MAX;
   const text = s.length > room ? `${s.slice(0, room - 1)}…` : s;
   return direction === 'out' ? `${text} ▸` : text;
@@ -52,32 +55,41 @@ export const cablePath = (a, b) => cableCurve(a, b);
 export function patchLayout(source, width) {
   const w = Math.max(4 * JACK_PITCH + 2 * PAD, width);
   const cols = Math.max(4, Math.floor((w - 2 * PAD) / JACK_PITCH));
+  // Rows of plates as a hardware rack (p2's W1b review, V6): modules pack into rows in panel
+  // order, then each row spreads its plates to the bay's full width (the slack shared equally,
+  // the jacks centred on their plate) and every plate of a row takes the row's height.
+  const rows = [];
+  let row = null;
+  for (const m of source.groups) {
+    if (!m.jacks.length) continue;
+    const n = Math.min(cols, m.jacks.length);
+    const spec = { m, n, gw: n * JACK_PITCH,
+      gh: LABEL_H + Math.ceil(m.jacks.length / cols) * ROW_PITCH };
+    const used = row ? row.reduce((a, r) => a + r.gw + GAP, 0) : 0;
+    if (!row || used + spec.gw > w - 2 * PAD) rows.push(row = []);
+    row.push(spec);
+  }
   const jacks = new Map();
   const groups = [];
-  let x = PAD;
   let y = PAD;
-  let rowH = 0;
-  for (const m of source.groups) {
-    const list = m.jacks;
-    if (!list.length) continue;
-    const n = Math.min(cols, list.length);
-    const rows = Math.ceil(list.length / cols);
-    const gw = n * JACK_PITCH;
-    const gh = LABEL_H + rows * ROW_PITCH;
-    if (x > PAD && x + gw > w - PAD) {
-      x = PAD;
-      y += rowH + GAP;
-      rowH = 0;
+  for (const r of rows) {
+    const slack = (w - 2 * PAD) - r.reduce((a, g) => a + g.gw, 0) - GAP * (r.length - 1);
+    const extra = Math.max(0, slack) / r.length;
+    const rowH = Math.max(...r.map((g) => g.gh));
+    let x = PAD;
+    for (const { m, gw } of r) {
+      const pw = gw + extra;
+      groups.push({ module: m.id, label: m.label, x, y, w: pw, h: rowH });
+      const inset = x + (pw - gw) / 2;
+      m.jacks.forEach((jk, i) => {
+        jacks.set(jk.key, { x: inset + (i % cols) * JACK_PITCH + JACK_PITCH / 2,
+          y: y + LABEL_H + Math.floor(i / cols) * ROW_PITCH + JACK_HIT / 2 + 2, jack: jk });
+      });
+      x += pw + GAP;
     }
-    groups.push({ module: m.id, label: m.label, x, y, w: gw, h: gh });
-    list.forEach((j, i) => {
-      jacks.set(j.key, { x: x + (i % cols) * JACK_PITCH + JACK_PITCH / 2,
-        y: y + LABEL_H + Math.floor(i / cols) * ROW_PITCH + JACK_HIT / 2 + 2, jack: j });
-    });
-    x += gw + GAP;
-    rowH = Math.max(rowH, gh);
+    y += rowH + GAP;
   }
-  return { jacks, groups, width: w, height: y + rowH + PAD };
+  return { jacks, groups, width: w, height: (rows.length ? y - GAP : y) + PAD };
 }
 
 
@@ -120,9 +132,12 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
   const plateFill = '<defs><linearGradient id="bay-plate" x1="0" y1="0" x2="0" y2="1">'
     + `<stop offset="0" stop-color="${t.plateHi}"/><stop offset="1" stop-color="${t.plateLo}"/>`
     + '</linearGradient></defs>';
+  // A module's title stays on its plate: one too wide for a narrow plate (OUTPUT over one jack)
+  // is held to the plate's width (p2's W1b review, V4).
   const groups = layout.groups.map((g) => `<text x="${g.x + 2}" y="${g.y + 12}" `
     + `font-size="${BAY_TEXT}" font-weight="700" letter-spacing="1" stroke="none" `
-    + `fill="${t.label}">${esc(g.label)}`
+    + `fill="${t.label}"${String(g.label).length * 9.5 > g.w ? ` textLength="${g.w}" `
+      + 'lengthAdjust="spacingAndGlyphs"' : ''}>${esc(g.label)}`
     + '</text>').join('');
   const nuts = [...layout.jacks.values()].map(({ x, y }) => nutSvg({ x, y, tokens: t }))
     .join('');

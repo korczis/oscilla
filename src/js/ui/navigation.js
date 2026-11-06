@@ -293,13 +293,14 @@ export function createNavigation(svc = {}) {
   function write(hash, how) {
     const url = hash ? `${base()}#${hash}` : base();
     try {
+      // data-osc-link: dispatcher
       win().history[how === 'push' ? 'pushState' : 'replaceState'](HISTORY_STAMP, '', url);
     } catch (e) {
       // A browser refusing history state here (file:// in old engines): a plain fragment
       // navigation still makes the entry; the dispatcher knows it as its own write.
       if (how !== 'push') return;
       nav.selfWrite = hash;
-      loc().hash = hash;
+      loc().hash = hash; // data-osc-link: dispatcher
     }
     nav.routed = { href: loc().href, workspace: nav.cmp.workspace };
     nav.lastStateHash = hash;
@@ -337,8 +338,15 @@ export function createNavigation(svc = {}) {
     const cmp = nav.cmp;
     const st = routeOfHash(hash);
     if (st && !(st.owner && results[st.owner] === false) && st.workspace !== cmp.workspace) {
-      if (origin === 'load') cmp.workspace = st.workspace;
-      else cmp.setWorkspace(st.workspace, { focusHeading: true });
+      if (origin === 'load') {
+        // A load opens the workspace in place (no focus move, no scroll), but marks its panels
+        // in this same synchronous step: below 1536 px the mark decides which panels show, so
+        // a deep link paints its own panels first and never the Playground's.
+        cmp.workspace = st.workspace;
+        if (typeof cmp.markWorkspace === 'function') cmp.markWorkspace(st.workspace);
+        // Its `enter` (ui/shell.js) applies once Alpine has bound the controls.
+        if (typeof cmp.enterWorkspaceSoon === 'function') cmp.enterWorkspaceSoon(st.workspace);
+      } else cmp.setWorkspace(st.workspace, { focusHeading: true });
     }
     cmp.mode = v1ModeFor(cmp.workspace, cmp.source);
     nav.routed = { href: loc().href, workspace: cmp.workspace };
@@ -412,6 +420,7 @@ export function createNavigation(svc = {}) {
         if (keep !== strip(hash)) write(keep, 'replace');
         else {
           try {
+            // data-osc-link: dispatcher
             w.history.replaceState(HISTORY_STAMP, '', loc().href);
           } catch (e) { /* the entry stays unstamped: Back to it re-applies its link */ }
         }
