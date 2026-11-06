@@ -53,7 +53,7 @@ const policyModule = await import('../../src/js/studio/clip-targets.js').catch((
 const SR = 48000;
 /**
  * Every clip use: kind × action (pattern and notes clips have no action). Notes clips (K099
- * part 1) are held on a node that plays notes and played nowhere yet.
+ * part 1) are held on a node that plays notes and played on a Keys node (K068).
  */
 const CLIP_USES = [{ kind: 'pattern' }, { kind: 'event', action: 'gate' },
   { kind: 'event', action: 'trigger' },

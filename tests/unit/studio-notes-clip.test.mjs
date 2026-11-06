@@ -4,11 +4,12 @@
 // number in (0, 1] (the form K149's riff toNotes() emits). A notes clip is tempo-linked, sits
 // on an event track and targets only a node that plays notes (registry.js playsNotes: Keys, the
 // XY pad, the voice engines). Its notes are sorted by (at, note) on normalise and a clip holds one
-// note per (at, note). A note has exactly these four fields: ADR 0086's p, r, slide and the
-// clip's grid are still proposed and are refused until a change adds them.
-// STUDIO_IMPORT_LIMITS gains notesPerClip and notesPerDocument. The transport and the offline
-// render do not play a notes clip yet; they report it unplayed (code notes-unplayed) with the
-// clip-target policy's sentence, so nothing pretends to play.
+// note per (at, note). A note has these four fields; K068 adds ADR 0086's optional p, r and slide
+// and the clip's optional grid (tests/unit/studio-steps-playback.test.mjs), any other is refused.
+// STUDIO_IMPORT_LIMITS gains notesPerClip and notesPerDocument. Since K068 the transport and the
+// offline render play a notes clip on a Keys node; on the XY pad or a voice engine they report it
+// unplayed (code notes-unplayed) with the clip-target policy's sentence, so nothing pretends to
+// play.
 //
 // Fails on the merge base 117c755c: CLIP_KINDS there is pattern, event and measurement, so the
 // store refuses CLIP_ADD of kind notes ('Unknown clip kind "notes".'), clipRules refuses the
@@ -141,14 +142,15 @@ test('K099 bad notes are refused with their reason, model and history unchanged'
     ['at -1', [note(-1, 60)], /at must be a number of beats from the clip start, 0 or more/],
     ['past the clip end', [note(3.5, 60, 1)],
       /ends at beat 4\.5, after the end of the clip at beat 4/],
-    ['unknown field p', [{ ...note(0, 60), p: 0.5 }], /unknown field "p"/],
+    ['unknown field q', [{ ...note(0, 60), q: 0.5 }], /unknown field "q"; a note is .* with an /],
     ['duplicate (at, note)', [note(0, 60), note(0, 60, 2)], /repeats note 60 at beat 0/],
   ];
   for (const [label, notes, pattern] of cases) {
     refused(store, addNotes(track, notes), pattern, label);
   }
   refused(store, { ...addNotes(track, [note(0, 60)]), payload: { notes: [note(0, 60)],
-    grid: { steps: 16 } } }, /payload holds only its notes; "grid"/, 'unknown payload field');
+    steps: 16 } }, /payload holds its notes and an optional grid; "steps"/,
+  'unknown payload field');
   refused(store, addNotes(track, [note(0, 60)], { timeBase: 'absolute', start: 0, duration: 2,
     startBeats: undefined, durationBeats: undefined }), /must be tempo-linked/, 'absolute clip');
   // The same rules hold for an edit of an existing clip.
@@ -231,13 +233,20 @@ test('K099 a Studio over notesPerDocument is refused by the store and the import
   assert.match(over.errors[0].message, /more than 65536 notes in one Studio/);
 });
 
-test('K099 the transport and the offline render report a notes clip as not played yet', () => {
+test('K099 a notes clip plays on a Keys node; on an XY pad it is reported kept, not played', () => {
   const { store, track } = setup();
-  const id = ok(store.dispatch(addNotes(track, [note(0, 60)]))).created.clips[0];
+  const onKeys = ok(store.dispatch(addNotes(track, [note(0, 60)]))).created.clips[0];
+  const keysClip = store.getModel().timeline.clips.find((c) => c.id === onKeys);
+  assert.equal(transportModule.clipPlayReason(store.getModel(), keysClip), null, 'Keys plays it');
+  const pad = ok(store.dispatch({ type: 'NODE_ADD', nodeType: 'xy-pad', position: { x: 0, y: 0 } }))
+    .created.nodes[0];
+  const padTrack = ok(store.dispatch({ type: 'TRACK_ADD', kind: 'event', target: pad }))
+    .created.tracks[0];
+  const id = ok(store.dispatch(addNotes(padTrack, [note(0, 60)]))).created.clips[0];
   const m = store.getModel();
   const clip = m.timeline.clips.find((c) => c.id === id);
   const why = transportModule.clipPlayReason(m, clip);
-  assert.match(why, /^Notes clips are kept but not played yet; this clip on .+ is not played\.$/);
+  assert.match(why, /^Notes clips play on a Keys node; this clip on .+ is kept but not played\.$/);
   const plan = offline.planOfflineRender(m);
   const row = plan.clips.find((c) => c.id === id);
   assert.deepEqual([row.kind, row.rendered, row.reason], ['notes', false, why]);
@@ -254,17 +263,17 @@ test('K099 the transport and the offline render report a notes clip as not playe
 });
 
 test('K099 the clip form shows a notes clip read-only, with no Action list', () => {
-  const { store, track } = setup();
+  const { store, track, keys } = setup();
   const id = ok(store.dispatch(addNotes(track, [note(0, 60), note(1, 62)]))).created.clips[0];
   const m = store.getModel();
   const clip = m.timeline.clips.find((c) => c.id === id);
   const o = timelineView.clipFormOptions(m, clip);
   assert.deepEqual(o.actions, [], 'no Action choices for a notes clip');
-  assert.equal(o.notes, 'Notes clip · 2 notes. The notes are kept; editing and playback arrive '
-    + 'with the piano roll.');
+  assert.equal(o.notes, 'Notes clip · 2 notes. The notes play on a Keys node; editing them '
+    + 'arrives with the piano roll.');
   assert.equal(o.notes, timelineView.NOTES_CLIP_TEXT.line(2));
   assert.deepEqual(o.tracks.map((t) => t.id), [track], 'its own track; it plays on no other');
-  assert.deepEqual(o.targets, [{ id: '', label: 'Track target' }], 'no target where it plays');
+  assert.deepEqual(o.targets.map((t) => t.id), ['', keys], 'the Keys node, where it plays (K068)');
   assert.deepEqual(timelineView.clipText(clip), { label: 'Notes', detail: '2 notes' });
   // Every other kind keeps its choices and has no notes line.
   const pattern = m.timeline.clips.find((c) => c.kind === 'pattern');

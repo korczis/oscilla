@@ -1,5 +1,6 @@
 // Studio transport strip (spec §93-§96, §127, §132; plan V418): RETURN, PLAY, STOP, LOOP, the
-// current time, the time mode and the tempo. Built from the existing OSCILLA transport keys
+// current time, the time mode, the tempo and Tap (tap tempo, K068: a Pro button; its fourth
+// tap in a series sets the tempo through transport-commands.js tap). Built from the existing OSCILLA transport keys
 // (.osc-transport-btn, the sequencer's), segmented control and number field. Every command goes
 // through transport-commands.js; nothing here touches audio or holds reactive state.
 //
@@ -8,11 +9,12 @@
 // The timeline editor calls update() after a model change and tick() on its frame; a shell that
 // mounts the strip on its own passes ownFrame: true. keys: false leaves out RETURN, PLAY, STOP,
 // LOOP and the clock, for a host whose own header already carries them (the STUDIO workspace):
-// one transport on screen, the time mode and tempo kept.
+// one transport on screen, the time mode, tempo and Tap kept.
 
 import { onFrame } from '../../charts/frame-loop.js';
 import { TEMPO_RANGE } from '../../studio/schema.js';
 import { announceAction } from '../../studio/a11y.js';
+import { PRO } from '../pro-classes.js';
 import { createTransportCommands } from './transport-commands.js';
 import { READOUT_INTERVAL_MS, transportStrip } from './transport-view.js';
 import { el, pathIcon, setAttr, setText, spriteIcon } from './timeline-dom.js';
@@ -71,6 +73,16 @@ export function mountTransportBar(host, ctx,
   const tempoBox = el('label', { class: 'osc-stl-tempo-box', for: tempoId }, [
     el('span', { class: 'osc-label' }, ['Tempo']), tempo,
     el('span', { class: 'osc-stl-unit' }, ['BPM'])]);
+  // Tap tempo: pointer, touch and Enter (a native button) all click it; the click's own time
+  // stamp is the tap, so a slow frame does not move it. data-taps: the series so far. (Its
+  // catalogue hook, studio.tl.tap, lands with its declaration in src/js/ui/catalog.)
+  const tapBtn = el('button', { type: 'button', class: PRO.btnSecondary,
+    'data-taps': '0', 'aria-label': 'Tap tempo',
+    title: 'Tap tempo: four taps set the tempo', on: { click: (e) => {
+      const now = e && e.timeStamp > 0 ? e.timeStamp : performance.now();
+      cmd.tap(now);
+      tapBtn.dataset.taps = String(cmd.tapCount());
+    } } }, ['Tap']);
 
   const element = el('div', { class: 'osc-stl-transport', role: 'group',
     'aria-label': keys ? 'Studio transport' : 'Timeline time mode and tempo',
@@ -79,7 +91,7 @@ export function mountTransportBar(host, ctx,
       el('div', { class: 'osc-transport osc-stl-keys' }, [returnBtn, playBtn, stopBtn, loopBtn]),
       el('div', { class: 'osc-stl-clock' }, [time, state]),
     ] : []),
-    modeSeg, tempoBox,
+    modeSeg, tempoBox, tapBtn,
   ]);
   host.append(element);
 

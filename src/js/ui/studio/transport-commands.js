@@ -4,10 +4,12 @@
 // announced once through ctx.announce (§144).
 //
 //   createTransportCommands(ctx) -> { playStop, play, stop, returnToStart, locate, toggleLoop,
-//                                     setLoop, escape, position, playing }
+//                                     setLoop, escape, tap, tapCount, position, playing }
 //   ctx = { store, transport, announce? }
+// tap(now) is tap tempo (K068): the commands hold the tap series (transport-view.js tapTempo),
+// and the series' fourth tap sets the tempo with ONE TRANSPORT_SET and ends the series.
 
-import { transportAnnouncement } from './transport-view.js';
+import { TAP_COUNT, tapTempo, transportAnnouncement } from './transport-view.js';
 
 export function createTransportCommands(ctx) {
   const { store, transport } = ctx;
@@ -79,6 +81,31 @@ export function createTransportCommands(ctx) {
     return action;
   }
 
+  let taps = [];
+  /**
+   * One tap at `now` (ms): the series grows until its TAP_COUNT-th tap, which dispatches one
+   * TRANSPORT_SET with the series' tempo (clamped to the tempo range) and ends the series.
+   * -> { ok, taps, bpm, clamped?, changed? }
+   */
+  function tap(now) {
+    const t = tapTempo(taps, now);
+    if (t.bpm === null) {
+      taps = t.taps;
+      say(`Tap ${t.taps.length} of ${TAP_COUNT}`);
+      return { ok: true, taps: t.taps.length, bpm: null };
+    }
+    taps = [];
+    const r = store.dispatch({ type: 'TRANSPORT_SET', tempo: t.bpm });
+    if (!r.ok) {
+      say(`Not done: ${r.reason}`);
+      return { ...r, taps: TAP_COUNT, bpm: t.bpm, clamped: t.clamped };
+    }
+    if (r.changed && transport.playing) transport.sync();
+    say(`Tempo ${t.bpm} BPM from ${TAP_COUNT} taps${t.clamped ? ', held at the tempo range' : ''}`);
+    return { ok: true, changed: !!r.changed, taps: TAP_COUNT, bpm: t.bpm, clamped: t.clamped };
+  }
+
   return Object.freeze({ play, stop, playStop, locate, returnToStart, setLoop, toggleLoop,
-    escape, position, get playing() { return transport.playing; } });
+    escape, tap, tapCount: () => taps.length, position,
+    get playing() { return transport.playing; } });
 }
