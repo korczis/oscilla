@@ -37,6 +37,20 @@ test('the automatic panel on a fresh document leaves the Studio clean', () => {
   assert.equal(dirty.isDirty(store.getModel()), true, 'a user edit after it is unsaved');
 });
 
+test('Undo of the automatic panel back to the untouched document is clean (21 F2)', () => {
+  const store = fresh();
+  const dirty = createDirtyTracker(store.getModel());
+  const { before, after } = insert(store);
+  dirty.rebaseFresh(before, after);
+  store.undo();
+  assert.equal(dirty.isDirty(store.getModel()), false, 'back to the fresh document: clean');
+  store.redo();
+  assert.equal(dirty.isDirty(store.getModel()), false, 'the panel again: clean');
+  dirty.markSaved(store.getModel(), { id: 'p-1', savedAt: '2026-11-07T00:00:00.000Z' });
+  store.undo();
+  assert.equal(dirty.isDirty(store.getModel()), true, 'once saved, only the saved state is clean');
+});
+
 test('a document the user changed or saved is never rebased', () => {
   const edited = fresh();
   const d1 = createDirtyTracker(edited.getModel());
