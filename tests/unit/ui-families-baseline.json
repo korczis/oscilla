@@ -205,40 +205,40 @@
       "why": "a switch or radio group drawn outside a switch model (none is chosen yet)"
     },
     {
-      "key": "switch div[radiogroup] in synth-b-keys",
+      "key": "switch svg[radiogroup] in synth-b-keys",
       "family": "switch",
       "slice": "G023",
-      "why": "a switch or radio group drawn outside a switch model (none is chosen yet)"
+      "why": "a switch or radio group drawn outside a switch model (none is chosen yet) (drawn as an svg radiogroup since F013 W1b, #420)"
     },
     {
-      "key": "switch div[radiogroup] in synth-b-mg",
+      "key": "switch svg[radiogroup] in synth-b-mg",
       "family": "switch",
       "slice": "G023",
-      "why": "a switch or radio group drawn outside a switch model (none is chosen yet)"
+      "why": "a switch or radio group drawn outside a switch model (none is chosen yet) (drawn as an svg radiogroup since F013 W1b, #420)"
     },
     {
-      "key": "switch div[radiogroup] in synth-b-noise",
+      "key": "switch svg[radiogroup] in synth-b-noise",
       "family": "switch",
       "slice": "G023",
-      "why": "a switch or radio group drawn outside a switch model (none is chosen yet)"
+      "why": "a switch or radio group drawn outside a switch model (none is chosen yet) (drawn as an svg radiogroup since F013 W1b, #420)"
     },
     {
-      "key": "switch div[radiogroup] in synth-b-ring",
+      "key": "switch svg[radiogroup] in synth-b-ring",
       "family": "switch",
       "slice": "G023",
-      "why": "a switch or radio group drawn outside a switch model (none is chosen yet)"
+      "why": "a switch or radio group drawn outside a switch model (none is chosen yet) (drawn as an svg radiogroup since F013 W1b, #420)"
     },
     {
-      "key": "switch div[radiogroup] in synth-b-vco1",
+      "key": "switch svg[radiogroup] in synth-b-vco1",
       "family": "switch",
       "slice": "G023",
-      "why": "a switch or radio group drawn outside a switch model (none is chosen yet)"
+      "why": "a switch or radio group drawn outside a switch model (none is chosen yet) (drawn as an svg radiogroup since F013 W1b, #420)"
     },
     {
-      "key": "switch div[radiogroup] in synth-b-vco2",
+      "key": "switch svg[radiogroup] in synth-b-vco2",
       "family": "switch",
       "slice": "G023",
-      "why": "a switch or radio group drawn outside a switch model (none is chosen yet)"
+      "why": "a switch or radio group drawn outside a switch model (none is chosen yet) (drawn as an svg radiogroup since F013 W1b, #420)"
     },
     {
       "key": "switch dual.binaural",
