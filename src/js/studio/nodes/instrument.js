@@ -56,6 +56,7 @@ export const keys = defineNode({
     enumParam('chord', 'Chord', KEYS_CHORDS.map((c) => [c, CHORD_LABELS[c]]), 'off',
       { live: 'next-note' }),
   ],
+  clipKinds: ['event'],
   summary(p) {
     const full = p.keyLow === 0 && p.keyHigh === 127;
     return parts(optionLabel(keys, 'priority', p.priority),
@@ -69,7 +70,8 @@ export const keys = defineNode({
   compiler: 'audio/audio-engine.js#AudioEngine',
   help: {
     what: 'The note source of a monophonic voice: the on-screen and computer keyboard and MIDI '
-      + 'notes play it while the Synth is armed.',
+      + 'notes play it while the Synth is armed, and an event clip on it gates the envelopes '
+      + 'its Gate reaches.',
     inputs: 'None: notes arrive from the keyboard, MIDI or the Synth workspace.',
     outputs: 'Pitch, in octaves from A4 (−6 to 6, 1.00 oct per octave of the note, exact in '
       + 'the digital domain); Gate, a trigger at every new top note and a release when the '
