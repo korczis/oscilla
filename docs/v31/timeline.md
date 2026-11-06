@@ -26,7 +26,7 @@ Track kinds exist only where semantics differ (§82):
 
 | Row | Model | Holds |
 | --- | --- | --- |
-| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; held, not played yet) |
+| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; played on a Keys node, K068) |
 | measurement track | `timeline.tracks` kind `measurement` | measurement clips (noise-check, pre-roll, stimulus, capture, tail, analysis) |
 | automation lane | `timeline.automation` | one lane per node parameter (points, not clips) |
 | markers | `timeline.markers` | annotations and anchors; never executed (§96) |
@@ -38,17 +38,32 @@ model (an earlier V404 decision the tests depend on); they then play as separate
 editor warns (`clip-overlap`). `patternRuns` groups contiguous pattern clips, which is what a V2
 sequence is.
 
-Notes clip payload (K099 part 1, ADR 0084; `src/js/studio/notes.js`):
-`{ notes: [{ at, note, len, vel }] }`, `at` and `len` in beats from the clip start, `note` an
-integer MIDI number 0-127 and `vel` a number in (0, 1], the form the riff library's `toNotes()`
-emits. A notes clip is always tempo-linked (`notes-absolute` otherwise; `CLIP_ADD` links it by
+Notes clip payload (K099 part 1, ADR 0084; the execution fields of ADR 0086, K068;
+`src/js/studio/notes.js`): `{ notes: [{ at, note, len, vel, p?, r?, slide? }], grid? }`, `at`
+and `len` in beats from the clip start, `note` an integer MIDI number 0-127 and `vel` a number in
+(0, 1], the form the riff library's `toNotes()` emits; accent is velocity (ADR 0086 decision 3).
+A notes clip is always tempo-linked (`notes-absolute` otherwise; `CLIP_ADD` links it by
 default), every note ends within the clip's `musical.durationBeats`, the notes are kept sorted by
-(at, note) and a clip holds one note per (at, note). A note has exactly these four fields and the
-payload only `notes`: the proposed fields of ADR 0086 (`p`, `r`, `slide`, `grid`) are refused
-until a change adds them. The import limits `notesPerClip` (4096) and `notesPerDocument` (65536)
-bound them (`limit-exceeded`). The transport and the offline render do not play a notes clip
-yet; they list it unplayed with code `notes-unplayed` and the policy's sentence. Its notes are
-execution state: `studioHash` covers them.
+(at, note) and a clip holds one note per (at, note). The optional fields, each refused outside
+its range with a sentence of its own:
+
+| Field | Range | Absent |
+| --- | --- | --- |
+| `p` | the note's chance in (0, 1] | 1 |
+| `r` | the ratchet, an integer 1-8 | 1 |
+| `slide` | `true` (never `false`, so a note sounds the same one way only) | no slide |
+| `grid` | `{ stepBeats, swing, seed }`, all three: `stepBeats > 0`, `swing` 0-0.75 of `stepBeats`, `seed` a uint32 | seed 0, no swing |
+
+A slide on a target whose type has no glide parameter (the voice engines) is refused with that
+reason (`clipRules`, `slideRule`); Keys and the XY pad have one. The grid's `steps` (ADR 0086
+decision 2, presentation for the step editor) is not part of this slice and is refused as an
+unknown grid field until the step editor adds it outside the hash. Absent fields are never
+written, so a document without them serializes and hashes as before (every pinned template and
+a K099 document keep their `studioHash`); each field present is execution state and changes it.
+The import limits `notesPerClip` (4096) and `notesPerDocument` (65536) bound the notes
+(`limit-exceeded`). A notes clip plays on a Keys node, live and offline (see "Notes clips on
+the audio clock" below); on the XY pad or a voice engine the transport and the offline render
+list it unplayed with code `notes-unplayed` and the policy's sentence.
 
 ### Clip validation (§87)
 
@@ -89,7 +104,7 @@ levels:
 | Level | Who reads it | What it is |
 | --- | --- | --- |
 | `holds` | the store (`clipRules`, the current track in `clipTrackReason`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds` (for a notes clip, a type that plays notes: `registry.js playsNotes`), `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
-| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`) or on a Keys node (`keys-gate`, K060: the same gate on every Envelope its unmuted Gate edges reach), a measurement clip always (`measurement`, as data), a notes clip nowhere yet (K099 part 1: `notes-unplayed`), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
+| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`) or on a Keys node (`keys-gate`, K060: the same gate on every Envelope its unmuted Gate edges reach), a measurement clip always (`measurement`, as data), a notes clip on a Keys node (`keys-notes`, K068; held on the XY pad and the voice engines: `notes-unplayed`), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
 
 A lane does not play on a Stereo Split pan or level (a pan law over several gains: no single
 AudioParam carries it), on a low-/high-pass Q (its AudioParam is in dB, so a linear lane would be
@@ -201,10 +216,53 @@ Loop boundary rules:
 
 `compilePass(model, anchor, k)` and `compileTimeline(model, { sampleRate, baseTime,
 startPosition, passes })` return items sorted by start: `pattern` items (`sequence`, `events` =
-the sequencer plan with absolute `time`, `level`), `event` items (`action` gate / trigger) and
-`measurement` items (`action`), each with `key`, `clipId`, `target`, `pass`, `startTime`,
-`endTime`, `truncated`, and a snapshot of the clip used by the edit policy; plus automation
-entries `{ laneId, target, events }`.
+the sequencer plan with absolute `time`, `level`), `event` items (`action` gate / trigger),
+`measurement` items (`action`) and `note` items (one onset of a notes clip on a Keys node, K068:
+`note`, `velocity` 1-127, `gate`, `slide`, `index`, `onset`, `beat`; key `<clip key>:index.onset`;
+`endTime` the end of the gate it opens), each with `key`, `clipId`, `target`, `pass`,
+`startTime`, `endTime`, `truncated`, and a snapshot of the clip used by the edit policy; plus
+automation entries `{ laneId, target, events }`. A notes clip on a target that does not play it
+stays one `notes` item, which the transport lists unplayed.
+
+### Notes clips on the audio clock (K068, ADR 0086)
+
+The ONE compile path expands a notes clip: `compilePass` calls `notes.js noteItems`, which
+places every onset of `notePlan(payload, { pass, cutBeats })` at the clip's position + beats x 60
+/ `transport.tempo` and converts it with the pass's frame arithmetic (`audioTimeOf`), so each
+onset is a whole frame of its pass, at baseTime + beats x 60 / tempo in pass 0. The live
+transport and the offline render (`offline.js` runs the same transport with the render length
+as its look-ahead) schedule the same items; there is no second scheduler, and the one timer
+stays the bookkeeping wake-up: every onset time comes from the compiler. Per pass:
+
+| Field | What plays |
+| --- | --- |
+| `p` | the note plays iff `mulberry32(grid.seed ^ pass ^ index) < p` (`core/math.js`; `index` in the sorted notes, `pass` the loop pass, seed 0 without a grid): a render repeats exactly, live and offline play the same hits, and each loop pass draws anew. `Math.random` is never used |
+| `grid.swing` | a note whose `at` is exactly an odd grid position, (2k + 1) x `stepBeats`, starts `swing x stepBeats` later, its ratchet onsets with it; a note off the grid is unmoved |
+| `r` | `r` equal onsets inside the note, onset j at `at + j x len / r`, each `len / r` long, each opening its own gate |
+| `slide` | when a gate sounds at the slide's start (an earlier onset's gate reaches it, touching included), the slide opens no gate, that gate lasts to the slide's end, and the Keys pitch glides to the note linearly over the node's Glide, arriving at exactly onset + Glide (K060). With no sounding note before it the slide plays as an ordinary note; its later ratchet onsets, if any, gate as ordinary onsets |
+| cut | an onset at or after the clip's end (or the loop end cutting the clip) is dropped, one crossing it ends there |
+
+Each `note` item plays through the Keys node's note path (`note-player.js`): `handle.play(t,
+note, velocity, { legato: slide, onset: gate })`, the velocity delivered as `round(vel x 127)`,
+at least 1, and a gate onset opens a gate record on each Envelope the Keys Gate reaches and a
+trigger on each clocked node it reaches, as a key does (`live-notes.js gateTargets`). Gates that
+overlap are one gate (a note that starts inside another's gate neither retriggers nor closes
+it); one that only touches the previous gate's end retriggers. A note outside the Keys node's
+key range is not played and warned once per clip (`key-range`), as the live keys refuse it. The
+pitch records are re-played in time order from any earlier one (`handle.holdPitch(t)` holds the
+pitch and the velocity there), so an edit, an onset scheduled before a later one, or STOP leaves
+exactly the notes still due. Because each onset is an item of its own, an edit while playing,
+a tempo change included, re-plans the onsets after the edit's horizon (`EDIT_POLICY`
+`futureItem`); a sounding onset plays as scheduled (`keep-until-end`). STOP cancels every onset
+not started (a ratchet's later onsets with it), releases the sounding gate at the stop time and
+holds the Keys pitch there; the census is 0 once the stop resolves. Tempo is
+`transport.tempo`; Tap tempo (the timeline strip's Tap button, pointer, Enter or touch) is
+`transport-view.js tapTempo(taps, now)`, the transport kind's pure model W006 adopts: the mean
+interval of the last four taps, each within 2 s of the previous one, clamped to the tempo range,
+to 0.1 BPM; the series' fourth tap sets it with ONE `TRANSPORT_SET` (one undo entry) and ends
+the series (`transport-commands.js tap`). `transport.debugInfo().steps` gives the step under the
+playhead of each playing notes clip with a grid, and the Keys node's `runtime.debugInfo().notes`
+entry its last onsets as scheduled and the interval between the last two.
 
 §212 (Tone 0.0-1.0, Sweep 1.0-3.0, Silence 3.0-3.5, Pulse 3.5-4.5, base 10 s, 48 kHz) compiles
 to pattern items starting at exactly 10, 11, 13 and 13.5 s and ending at 11, 13, 13.5 and
@@ -430,7 +488,8 @@ What plays where:
 | gate event clip on an Envelope | `handle.gate(startTime, duration)`; an envelope the timeline gates is closed at PLAY (`release`) and opened again when no gate clip targets it any more. Gates that overlap on one envelope (gate clips, or the clips of a Sequence whose TRIGGER edge gates it) are one gate, their union: opened by the earliest, released at the latest end; a gate starting inside another neither retriggers nor closes it (one that only touches the previous gate's end retriggers) |
 | automation lane | `applyAutomation(handle.modTarget(param, 'linear').param, events)`; the parameter is owned (`runtime.setOwnedParams`), so the runtime's base glide and live updates skip it (the adapters' explicit `owned` argument, `docs/v31/compiler.md` "Owned parameters"). The modulation edges' constant offset (`runtime.baseOffset`, none in the templates) is part of the base (§103): on a strictly positive parameter, where exponential ramps are legal (frequency, Q, LFO rate), the lane schedules its authored values and an offset source (a `ConstantSourceNode` on the node's accounting, summed into the same AudioParam, disposed with the node) carries the offset, because a geometric ramp between shifted ends is not the shifted ramp; on any other parameter (step and linear segments only, which an added constant keeps exact) the offset is added to the scheduled values. Lane plus offset stays inside the parameter's bounds. Values, offsets and bounds are in the parameter's unit and reach the AudioParam at the adapter's `modTarget` scale, the one the static value and the edges use: a Random or Step Modulator `rate` lane in Hz drives the `AudioBufferSourceNode`'s `playbackRate` at Hz × 480 / sampleRate (one control value lasts 480 samples at playbackRate 1), every other lane's scale is 1. A changed offset reaches the lane from the edit's horizon: the offset source glides (τ `PARAM_TAU_S`), an added offset glides onto the lane over `LANE_GLIDE_S` |
 | measurement clip | data: `onMeasurement({ type: 'schedule', model, key, clipId, action, target, trackId, pass, position, startTime, endTime, duration, truncated })`, then `cancel` / `release` / `retime` / `edit` (`{ type: 'edit', model }` after every applied edit while one is scheduled) / `stop` events. The Studio workspace supplies the hook (`studio/measurement-run.js`, see "Measurement clips" below) |
-| anything else | not played; listed in `debugInfo().unplayed` with its code and reason (`TRANSPORT_TEXT`): an event clip on a source (`event-target`), a `trigger` event clip (`event-target`), a target that is not ready (`target-unavailable`) |
+| notes clip on a Keys node | each onset (a `note` item) through the Keys note path and its gate as gate records on the Envelopes the Keys Gate reaches (`note-player.js`; "Notes clips on the audio clock" above) |
+| anything else | not played; listed in `debugInfo().unplayed` with its code and reason (`TRANSPORT_TEXT`): an event clip on a source (`event-target`), a `trigger` event clip (`event-target`), a notes clip on the XY pad or a voice engine (`notes-unplayed`), a target that is not ready (`target-unavailable`) |
 
 Edits during playback apply `scheduler.edit`'s plan as `EDIT_POLICY` says: `cancel` disposes the
 not-yet-started voice, `schedule` plays the rebuilt item, `release` / `retime-end` call
