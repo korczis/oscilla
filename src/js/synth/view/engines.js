@@ -3,7 +3,10 @@
 //
 //   CHIP                                          the chip classes of the section and engine bars
 //   enginePickerHtml({ panel, ids, on, resolved }) -> markup   the engine radio group, then the
-//                                                  blocked engines, each with its reason
+//                                                  blocked engines, each with its reason; `on`
+//                                                  null (the keys play a node outside the
+//                                                  engines, picker.js playedEngine): none
+//                                                  checked, and a sentence says so
 //   droppedText(node, dropped) -> sentence         what a note left out above 0.95 × Nyquist
 
 import { esc } from './face.js';
@@ -27,8 +30,15 @@ export function enginePickerHtml({ panel, ids, on, resolved }) {
     + `aria-describedby="synth-blocked-${b.id}" data-blocked="${b.id}" class="${CHIP} `
     + 'cursor-not-allowed border-dashed border-gray-300 bg-gray-100 text-gray-500 '
     + `dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">${esc(b.label)}<span `
-    + `class="sr-only" id="synth-blocked-${b.id}">${esc(b.reason)}</span></button>`).join('');
+    + `class="sr-only" id="synth-blocked-${b.id}">${esc(b.reason)}</span></button>`).join('')
+    + (on ? '' : `<p class="${CHIP} flex items-center border-transparent font-normal `
+      + 'text-gray-700 dark:text-gray-300" data-osc="synth.engine-elsewhere">'
+      + `${ELSEWHERE}</p>`);
 }
+
+/** The Engines tab while the keys play a node outside its engines (review S4). */
+export const ELSEWHERE = 'The keys play a node chosen in Plays, beside the piano: choose an '
+  + 'engine here to play it.';
 
 /** The status sentence for a note that left `dropped` items out (FM operators, AM's modulator). */
 export function droppedText(node, dropped) {

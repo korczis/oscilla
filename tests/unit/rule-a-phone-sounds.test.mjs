@@ -8,7 +8,12 @@ const read = (p) => readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8')
 
 test('touch-audio.cjs is a suite of test:browser, so the release and CI gates run it', () => {
   const pkg = JSON.parse(read('package.json'));
-  assert.match(pkg.scripts['test:browser'], /node tests\/browser\/touch-audio\.cjs/);
+  // a suite of test:browser: run by node itself, or an argument of the runner (run-suites.cjs)
+  const runs = pkg.scripts['test:browser'].split('&&').map((c) => c.trim().split(/\s+/));
+  assert.ok(runs.some((c) => c[0] === 'node' && (c[1] === 'tests/browser/touch-audio.cjs'
+    || (c[1] === 'tests/browser/lib/run-suites.cjs'
+      && c.slice(2).includes('tests/browser/touch-audio.cjs')))),
+  'touch-audio.cjs runs in test:browser');
 });
 
 test('touch-audio.cjs keeps Chromium\'s user-gesture rule on and both of its checks', () => {

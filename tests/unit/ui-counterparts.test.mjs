@@ -4,6 +4,9 @@
 // result tab, and the shell carries each link, with that address, in the microphone analyzer
 // panel that both workspaces show. The layout half (empty area, overflow, the click) is
 // tests/browser/ui-current.cjs.
+// A1 connect (page audit 2026-11-02): Filter Lab, Synthesis, the Sequencer and Presets link to
+// the Synth through the same table, one link in each workspace's own panel, shown there only;
+// the round trips (focus on the Synth heading, Back) are tests/browser/cross-links.cjs.
 //
 // The module is imported inside each test, so that the markup checks still judge (and fail on
 // an assertion) where the module does not exist.
@@ -19,6 +22,16 @@ const HTML = readFileSync(path.join(ROOT, 'src', 'index.html'), 'utf8');
 const EXPECTED = [
   { id: 'measure-rta', href: '#m=measure', workspace: 'measure', measureTab: 'rta' },
   { id: 'experiments', href: '#m=experiments', workspace: 'experiments', measureTab: null },
+  { id: 'synth', href: '#m=synth', workspace: 'synth', measureTab: null },
+];
+// The microphone analyzer's line: one link each, shown in Analyzer and Compare.
+const MIC = EXPECTED.filter((c) => c.id !== 'synth');
+// The Synth link of each workspace: [workspace, data-osc, the panel or view holding it].
+const SYNTH_LINKS = [
+  ['filter', 'filter.toSynth', 'osc-panel-filter'],
+  ['synthesis', 'dual.toSynth', 'osc-panel-dual'],
+  ['sequencer', 'seq.toSynth', 'osc-panel-sequencer'],
+  ['presets', 'presets.toSynth', 'osc-view-presets'],
 ];
 
 /** The start tag of the section with this id, and its markup up to the closing tag. */
@@ -46,14 +59,14 @@ test('the microphone analyzer panel carries a link to each counterpart, with its
     assert.ok(modes.includes(ws), `the microphone analyzer panel is not shown in ${ws}`);
   }
   const links = anchors(mic.body);
-  for (const c of EXPECTED) {
+  for (const c of MIC) {
     const found = links.filter((a) => a['data-osc'] === `counterpart.${c.id}`);
     assert.equal(found.length, 1, `one link counterpart.${c.id} in the microphone analyzer panel`);
     assert.equal(found[0].href, c.href, `counterpart.${c.id} points at ${c.href}`);
     assert.equal(found[0]['x-bind'], `counterpartLink('${c.id}')`,
       `counterpart.${c.id} is handled by counterpartLink, which selects the tab`);
   }
-  assert.equal(HTML.match(/data-osc="counterpart\./g).length, EXPECTED.length,
+  assert.equal(HTML.match(/data-osc="counterpart\./g).length, MIC.length,
     'no counterpart link outside the microphone analyzer panel');
 });
 
@@ -97,11 +110,37 @@ test('each counterpart routes to a workspace and, for MEASURE, to a result tab t
   });
 
 test('the link text in the shell is the counterpart label', async () => {
-  const { COUNTERPARTS } = await import('../../src/js/ui/counterparts.js');
+  const { COUNTERPARTS, counterpartOsc } = await import('../../src/js/ui/counterparts.js');
   for (const c of COUNTERPARTS) {
-    const re = new RegExp(`data-osc="counterpart\\.${c.id}"[^>]*>([^<]*)</a>`);
-    const m = re.exec(HTML);
-    assert.ok(m, `counterpart.${c.id} is a link with text`);
-    assert.equal(m[1].trim(), c.label);
+    for (const ws of c.from) {
+      const osc = counterpartOsc(c.id, ws);
+      const re = new RegExp(`data-osc="${osc.replace(/\./g, '\\.')}"[^>]*>([^<]*)</a>`);
+      const m = re.exec(HTML);
+      assert.ok(m, `${osc} is a link with text`);
+      assert.equal(m[1].trim(), c.label);
+    }
   }
+});
+
+test('A1: Filter Lab, Synthesis, the Sequencer and Presets each link to the Synth', async () => {
+  const { counterpartOf, counterpartOsc } = await import('../../src/js/ui/counterparts.js');
+  const synth = counterpartOf('synth');
+  assert.ok(synth, 'the counterpart table has the Synth');
+  assert.deepEqual([...synth.from], SYNTH_LINKS.map(([ws]) => ws));
+  assert.match(synth.label, /\bSynth\b/, 'the link names the workspace it opens');
+  for (const [ws, osc, holder] of SYNTH_LINKS) {
+    assert.equal(counterpartOsc('synth', ws), osc, `${ws} names its link ${osc}`);
+    const found = anchors(sectionById(holder).body).filter((a) => a['data-osc'] === osc);
+    assert.equal(found.length, 1, `one ${osc} in #${holder}`);
+    assert.equal(HTML.split(`data-osc="${osc}"`).length - 1, 1, `${osc} is written once`);
+    const a = found[0];
+    assert.equal(a.href, '#m=synth', `${osc} points at #m=synth`);
+    assert.equal(a['x-bind'], "counterpartLink('synth')",
+      `${osc} is handled by counterpartLink, which focuses the Synth heading`);
+    assert.equal(a[':hidden'], `workspace !== '${ws}'`, `${osc} is shown in ${ws} only`);
+    assert.match(sectionById(holder).body, new RegExp(`data-osc="${osc.replace('.', '\\.')}"`
+      + '[^>]*\\shidden\\s'), `${osc} is hidden until the component decides`);
+  }
+  assert.equal(counterpartOsc('synth', 'playground'), null);
+  assert.equal(counterpartOsc('measure-rta', 'analyzer'), 'counterpart.measure-rta');
 });

@@ -247,6 +247,7 @@ function studioUp(e, v, me, notes) {
   }
   const out = [];
   const pName = (p) => `Studio project "${p.name || p.id}"`;
+  // data-osc-link: cnx.link
   const at = (p) => ({ href: '#m=studio', open: { kind: 'studio', id: p.id } });
   const whole = projects.filter((p) => p.studioHash === s.hash);
   for (const p of whole) {
@@ -294,6 +295,7 @@ function profileUp(e, v, me) {
     return connection(...args, ['present', `the profile loaded in Measure now has this id (the `
       + `hash of its points); a profile is kept only while it is loaded, never stored${also}`],
     target,
+    // data-osc-link: cnx.link
     { href: '#m=measure' });
   }
   return connection(...args, ['missing', `OSCILLA keeps a frequency profile only while it is `
@@ -312,7 +314,7 @@ function buildUp(e, v, me, notes) {
   const args = ['upstream', 'build', 'Made by', me, { kind: 'build', id: b.version },
     'provenance.build', 'this experiment'];
   const target = `OSCILLA ${b.version}`;
-  const about = { href: '#m=about' };
+  const about = { href: '#m=about' }; // data-osc-link: cnx.link
   if (b.version !== cur.version) {
     return connection(...args, ['missing', `this page runs OSCILLA ${cur.version}; a build is `
       + 'not a stored record'], target);

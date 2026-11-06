@@ -15,7 +15,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import {
-  breakNormals, createAmountMemory, jackState, panelCables, panelEdges, patchCable, setAmount,
+  breakNormals, jackState, panelCables, panelEdges, patchCable, setAmount,
   unpatch,
 } from '../../src/js/synth/normals.js';
 import { linkAction, linkOf } from '../../src/js/synth/link.js';
@@ -125,26 +125,25 @@ test('re-patching a normal\'s own jacks gives the normal\'s props', () => {
 
 test('a cable an amount knob covers takes the knob depth; unpatching keeps the knob', () => {
   const st = panelStore();
-  const memory = createAmountMemory(PANEL);
+  // The knobs' depths are the model's (metadata.synthAmounts, review S10): no page memory.
   const step = (action) => {
     const r = st.dispatch(action);
     assert.equal(r.ok, true, r.reason);
-    memory.note(st.getModel());
   };
   step(setAmount(st.getModel(), PANEL, amount('lpf-eg2'), 3.5));
   step(setAmount(st.getModel(), PANEL, amount('lpf-mg'), 1));
   // A cable from the knob's own source keeps its depth (the knob does not jump).
-  step(patchCable(st.getModel(), PANEL, 'eg2.control', 'lpf.frequency', { memory }).action);
+  step(patchCable(st.getModel(), PANEL, 'eg2.control', 'lpf.frequency').action);
   assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5']);
-  step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id, { memory }).action);
+  step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id).action);
   assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5', 'mg.control@1']);
   // A cable from another source: both knobs come back as they were.
-  step(patchCable(st.getModel(), PANEL, 'eg1.control', 'lpf.frequency', { memory }).action);
-  step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id, { memory }).action);
+  step(patchCable(st.getModel(), PANEL, 'eg1.control', 'lpf.frequency').action);
+  step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id).action);
   assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5', 'mg.control@1']);
   // One knob, equal depths: MG into VCO 1 FM next to the VCO 2 FM normal.
   step(setAmount(st.getModel(), PANEL, amount('vco-mg'), 0.5));
-  step(patchCable(st.getModel(), PANEL, 'mg.control', 'vco1.fm', { memory }).action);
+  step(patchCable(st.getModel(), PANEL, 'mg.control', 'vco1.fm').action);
   assert.deepEqual(new Set([...into(st.getModel(), 'vco1.fm'), ...into(st.getModel(), 'vco2.fm')]
     .values().filter((x) => x.startsWith('mg.'))), new Set(['mg.control@0.5']));
 });

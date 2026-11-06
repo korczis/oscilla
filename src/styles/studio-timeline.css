@@ -825,7 +825,7 @@
   right: 4px;
   bottom: 0;
   color: var(--osc-text-dim);
-  font-size: 9px;
+  font-size: max(9px, var(--osc-fs-floor));
   line-height: 11px;
 }
 

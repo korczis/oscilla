@@ -68,6 +68,7 @@ const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { until, bounded, WaitTimeout } = require('./lib/wait.cjs');
 const midiStub = require('./lib/midi-stub.cjs');
+const shell = require('./lib/shell.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -197,17 +198,17 @@ async function ready(page, what) {
 
 async function studio(page, leg) {
   if (await page.evaluate(() => document.querySelector('#osc-app').dataset.mode) !== 'studio') {
-    await page.locator('[data-osc="nav.studio"]').first().click();
+    await shell.navTo(page, 'studio');
   }
   await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
     === 'studio' && !!window.OSCILLA.studio && !!window.OSCILLA.studio.store),
   { ms: STEP_MS, what: `${leg}: the Studio workspace opens` });
 }
 
-/** The Analyzer workspace, from its Analyze menu in the header. */
+/** The Analyzer workspace, from its sidebar group as a user reaches it (shell.navTo opens the
+ *  group only when it is closed: a blind toggle closed an open group and hid the item). */
 async function analyzer(page, leg) {
-  await page.locator('[data-osc="nav-group.analyze"]').first().click();
-  await page.locator('[data-osc="nav.analyzer"]').first().click();
+  await shell.navTo(page, 'analyzer');
   await until(() => page.evaluate(() => document.querySelector('#osc-app').dataset.mode
     === 'analyzer'), { ms: STEP_MS, what: `${leg}: the Analyzer workspace opens` });
 }

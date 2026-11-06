@@ -8,6 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+import * as crossLinks from '../../src/js/ui/cross-links.js';
 import {
   LEARN_TOOLS, STUDIO_TEMPLATE_LINKS, filterLabToggle, learnReturnAction, learnToolOf,
   studioBackTarget, studioTemplateHref, studioTemplateText, workspacePhrase,
@@ -74,6 +75,39 @@ test('each Learn tool names a topic and a workspace, and Learn renders the link 
   assert.match(PAGE, /<template x-if="learnToolOf\(t\.id\)">\s*<a :href="learnToolOf\(t\.id\)\.href" data-osc="learn\.tool"/);
 });
 
+// A1 connect (page audit 2026-11-02, Learn): every topic that teaches a tool links to it, and a
+// topic without a link says why. The browser half (each link opens its tool, the notice leads
+// back) is tests/browser/cross-links.cjs learn-tool.
+test('A1: every Learn topic has a tool link or a stated reason for none, never both', () => {
+  const noTool = crossLinks.LEARN_NO_TOOL;
+  assert.ok(noTool && typeof noTool === 'object', 'cross-links.js exports LEARN_NO_TOOL');
+  for (const t of LEARN_TOPICS) {
+    const tool = Object.hasOwn(LEARN_TOOLS, t.id);
+    const reason = Object.hasOwn(noTool, t.id);
+    assert.ok(tool !== reason, `${t.id}: a tool (${tool}) or a reason for none (${reason})`);
+    if (reason) {
+      assert.ok(noTool[t.id].split(' ').length >= 4, `${t.id}: the reason says something`);
+      assert.equal(learnToolOf(t.id), null, `${t.id}: no tool link`);
+    }
+  }
+  for (const id of Object.keys(noTool)) {
+    assert.ok(LEARN_TOPICS.some((t) => t.id === id), `${id} is a Learn topic`);
+  }
+  // The tools the page audit found missing: the Analyzer shows the spectrum Nyquist and
+  // aliasing are about; the Synth's engines are AM, FM and modulation; Measure sweeps on the
+  // log scale; Compare holds the hearing ranges that place ultrasound.
+  for (const [topic, ws] of [['waveform', 'analyzer'], ['nyquist', 'analyzer'],
+    ['aliasing', 'analyzer'], ['modulation', 'synth'], ['am', 'synth'], ['fm', 'synth'],
+    ['logscale', 'measure'], ['ultrasound', 'compare']]) {
+    assert.equal(LEARN_TOOLS[topic], ws, `${topic} links to ${ws}`);
+    assert.equal(learnToolOf(topic).href, `#m=${ws}`);
+  }
+  // A topic whose demo already opens the Synth needs no second link to it.
+  for (const t of LEARN_TOPICS.filter((x) => x.demo.href)) {
+    assert.ok(Object.hasOwn(noTool, t.id), `${t.id}: its demo is the tool`);
+  }
+});
+
 test('a Learn demo and a Learn tool link carry the way back to the lesson (one-way link 2)', () => {
   const topic = LEARN_TOPICS.find((t) => t.id === 'harmonic');
   const back = learnReturnAction(topic);
@@ -113,7 +147,7 @@ test('the header and Measure name what their links and buttons do (B2, B6, B7, B
   // The skip link's label names the workspace shown (H004 B7, ui/app.js syncSkipLink).
   assert.match(PAGE, /<a class="osc-skip" href="#osc-main">Skip to main content: Playground<\/a>/);
   // The logo keeps the product's name (positioning-consistency) and says where it goes (H004 B6).
-  assert.match(PAGE, /<a class="osc-brand" href="#m=playground" x-bind="homeLink\(\)"\s+aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab" title="Open the Playground">/);
+  assert.match(PAGE, /<a href="#m=playground" x-bind="homeLink\(\)" data-osc="header\.brand" data-osc-link="jump" title="Open the Playground"\s+aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"/);
   assert.ok(tagOf('header.help').includes('aria-label="Keyboard shortcuts"'));
   const toExp = tagOf('measure.toExperiments');
   assert.ok(toExp.includes(`@click="setWorkspace('experiments', { focusHeading: true })"`),
@@ -126,8 +160,9 @@ test('the empty states lead to the next step (B12, P1)', () => {
     ['fnd.toExperiments', '#osc-exp-list'], ['presets.toPlayground', '#m=playground']]) {
     const tag = tagOf(name);
     assert.ok(tag.startsWith(`<a href="${href}"`), `${name} links ${href}`);
-    const at = PAGE.lastIndexOf('<li class="osc-', PAGE.indexOf(tag));
-    assert.match(PAGE.slice(at, PAGE.indexOf(tag)), /class="osc-(x|preset)-empty"/,
+    // a legacy empty row, or a Pro row (F003, Presets) that marks itself data-empty-row
+    const at = PAGE.lastIndexOf('<li ', PAGE.indexOf(tag));
+    assert.match(PAGE.slice(at, PAGE.indexOf(tag)), /class="osc-x-empty"|\bdata-empty-row\b/,
       `${name} is in an empty-state row`);
   }
   assert.match(PAGE, /<section class="osc-panel osc-x-list" id="osc-exp-list"/);
@@ -195,4 +230,73 @@ test('a notice with a link closes on its own, later, and never under the pointer
     } finally {
       delete globalThis.document;
     }
+  });
+
+// A1 connect (page audit 2026-11-02, Presets): Load never says "Press TRIGGER" on the Presets
+// page, which shows no TRIGGER. It stays in Presets (presets are tried one after another; Space
+// plays them there, ui/shortcuts.js SPACE_OWNER), says so, and links to the workspace whose
+// transport plays the preset: Synthesis for a dual-oscillator preset, else the Playground.
+test('A1: a preset loaded in Presets says what plays it there and links to its transport',
+  async () => {
+    const { presetLoadedNotice } = await import('../../src/js/core/preset-notice.js');
+    const { createInstrument } = await import('../../src/js/core/instrument.js');
+    for (const [programmed, source, href, words] of [
+      [true, 'single', '#m=playground', /^Press Space to play it here, or TRIGGER in the Pl/],
+      [false, 'single', '#m=playground', /^Hold Space .*HOLD TO PLAY in the Playground/],
+      [false, 'sweep', '#m=playground', /^Hold Space .*HOLD TO PLAY in the Playground/],
+      [true, 'dual', '#m=synthesis', /^Press Space .*TRIGGER in Synthesis/],
+    ]) {
+      const n = presetLoadedNotice('presets', programmed, source);
+      assert.match(n.message, words);
+      assert.equal(n.action.href, href);
+      assert.equal(routeOfHash(n.action.href).workspace, href.slice(3));
+      assert.match(n.action.text, /^Open (the Playground|Synthesis)$/);
+    }
+    // Under a coarse pointer (a phone: no Space key) the notice offers the tap: the link to
+    // the workspace whose own control starts the sound, worded to match; no Space.
+    for (const [programmed, source, href, words] of [
+      [true, 'single', '#m=playground', 'Open the Playground to play it with TRIGGER.'],
+      [false, 'single', '#m=playground', 'Open the Playground to play it with HOLD TO PLAY.'],
+      [true, 'dual', '#m=synthesis', 'Open Synthesis to play it with TRIGGER.'],
+    ]) {
+      const n = presetLoadedNotice('presets', programmed, source, true);
+      assert.equal(n.message, words);
+      assert.doesNotMatch(n.message, /Space/);
+      assert.equal(n.action.href, href);
+      assert.equal(presetLoadedNotice('presets', programmed, source, false).action.href, href);
+    }
+    assert.deepEqual(presetLoadedNotice('playground', true, 'single', true),
+      presetLoadedNotice('playground', true, 'single', false), 'the V1 text stands on a phone');
+    // Where the transport is on screen, the V1 text stands and nothing is linked.
+    for (const mode of ['playground', 'dual', 'sweep']) {
+      assert.deepEqual(presetLoadedNotice(mode, true, 'single'),
+        { message: 'Press TRIGGER (or Space) to play it.', action: null });
+      assert.deepEqual(presetLoadedNotice(mode, false, 'single'),
+        { message: 'Press and hold HOLD TO PLAY.', action: null });
+    }
+    // Through the instrument: Load in Presets carries the link; nowhere does it say TRIGGER
+    // without the workspace that has it.
+    const { BUILTIN_PRESETS } = await import('../../src/js/data/presets.js');
+    const app = createInstrument({ engine: null });
+    app.sampleRate = 48000;
+    app.mode = 'presets';
+    for (const p of BUILTIN_PRESETS.filter((x) => !x.requiresHeadphones)) {
+      app.alerts = [];
+      app.applyPreset(p);
+      const loaded = app.alerts.find((x) => x.title.startsWith('Loaded'));
+      if (!loaded) continue; // partly applied: a warning, no "Loaded"
+      assert.doesNotMatch(loaded.message, /^Press TRIGGER/, `${p.id}: ${loaded.message}`);
+      assert.match(loaded.message, /Space/, p.id);
+      assert.ok(loaded.action && /^#m=(playground|synthesis)$/.test(loaded.action.href), p.id);
+    }
+    // The instrument asks the host for a coarse pointer: on a phone the notice names no Space.
+    const phone = createInstrument({ engine: null,
+      env: { matchMedia: (q) => ({ matches: q === '(pointer: coarse)' }), innerWidth: 390 } });
+    phone.sampleRate = 48000;
+    phone.mode = 'presets';
+    phone.applyPreset(BUILTIN_PRESETS.find((x) => x.id === 'ref-440'));
+    const said = phone.alerts.find((x) => x.title.startsWith('Loaded'));
+    assert.ok(said, 'Load on a phone announces the preset');
+    assert.match(said.message, /^Open the Playground to play it with /);
+    assert.equal(said.action.href, '#m=playground');
   });
