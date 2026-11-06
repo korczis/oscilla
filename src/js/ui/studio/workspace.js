@@ -434,7 +434,8 @@ export function createStudioUi(svc = {}) {
   }
 
   // The Synth workspace (K058-K066) shares this part's ONE store and transport.
-  const synth = createSynthUi({ get: () => ({ handle: ctx.handle, transport: ctx.transport }),
+  const synth = createSynthUi({
+    get: () => ({ handle: ctx.handle, transport: ctx.transport, dirty: ctx.dirty }),
     setupAudio: () => setupAudio(), announce, registry });
 
   // ---------------------------------------------------------------- the Alpine part
