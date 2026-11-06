@@ -19,6 +19,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { MAX_MISMATCH_PCT } from './visual-limits.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requireHere = createRequire(import.meta.url);
@@ -31,7 +32,6 @@ const REF_DIR = path.join(ROOT, 'tests/visual/measure');
 const META_FILE = path.join(REF_DIR, 'references.json');
 const ENV = `${process.platform}-${process.arch}`;
 // Pixels that may differ from the accepted reference (anti-aliasing of text and curves).
-const MAX_MISMATCH_PCT = 0.5;
 const VIEWS = [
   { id: 'desktop', width: 1536, height: 1024 },
   { id: 'phone', width: 390, height: 844 },
