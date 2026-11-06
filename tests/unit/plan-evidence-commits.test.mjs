@@ -129,8 +129,9 @@ export function offBase(entries, { reachableFromBase, offHistory, base = 'main' 
     if (!SHA.test(e.commit || '') || /^0+$/.test(e.commit)) continue;
     if (offHistory.has(e.commit) || reachableFromBase(e.commit)) continue;
     problems.push(`${e.file} evidence ${e.index}: commit ${e.commit} is not on ${base}, and a`
-      + ' branch commit is lost to every clone once the branch is squashed or deleted, whatever'
-      + ' the merge method. Remove the entry from this pull request; after it lands, record it'
+      + ' commit of a branch that never lands, or is rewritten before it lands, is lost to every'
+      + ' clone once the branch is deleted, whatever the merge method. Remove the entry from'
+      + ' this pull request; after it lands, record it'
       + ` in a follow-up chore(plan) pull request: \`majordomus worktree create chore/plan-<id>\`,`
       + ` then in that worktree, before its first commit (HEAD still on origin/${base}),`
       + ' `majordomus plan evidence <id> ...` and `majordomus plan done <id>`, commit, push and'
