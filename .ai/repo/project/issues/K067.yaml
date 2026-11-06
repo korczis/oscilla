@@ -48,5 +48,5 @@ evidence:
     command: "majordomus plan show K067; majordomus plan show K068"
     result: "Superseded by K068 under ADR 0086 (proposed): one notes array, the step grid is a projection of the notes clip, there is no steps clip; K068 was re-scoped onto it on 2026-11-03. Decided on the mesh by oscilla-21 and oscilla-a3 on 2026-11-06; a build of K067 as written (feat/k067-steps-clip, not landed) would have created a second store of note data (project.studio-model-is-canonical). Reversible by refusing ADR 0086."
     artifact: ".ai/repo/adrs/0086-one-notes-array-the-step-grid-is-a-projection-of-the-notes-clip.md"
-    commit: 8bd0ca2dca4bb7a273c8324aca7514c7179d1c94
+    commit: 26399239649a2ba12b6c71eabe7dd7f3d7ff8d0a
     recorded_at: 2026-11-06T21:56:45Z
