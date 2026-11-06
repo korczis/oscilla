@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 307100,
+    "src/index.html": 308000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -198,6 +198,12 @@
       "cap": 64000,
       "pr": 437,
       "reason": "smalls train B's T004 dual-beat readout text (#427, 598 bytes) on lane A's instrument.js (#386, the Pro shell's hooks): 40 bytes past the 63 000 cap after the merge of main bc4b1545"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 308000,
+      "pr": 442,
+      "reason": "the 3.22 About station (project.about-names-current-release) takes src/index.html 474 bytes past 307 100; the release adds no other markup"
     }
   ]
 }
