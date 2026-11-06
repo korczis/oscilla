@@ -175,6 +175,13 @@
       "summary": "The Synth's panel takes a hardware look from one synth-theme layer with its own visual reference, the XY pad lives on one shared mount and lets go on Stop and on leaving, the Arm button reads the transport and every keyboard disarms what it armed, and pull requests land through a merge queue",
       "commit": "e8d54f8",
       "datetime": "2026-11-05T13:25:18+01:00"
+    },
+    {
+      "release": "3.22",
+      "title": "Shell",
+      "summary": "The Pro admin shell with its sidebar and page header on every workspace, Related links, About and empty states driven by one workspace registry, one declaration per UI component, and the Synth's render budgets measured against the host it runs on",
+      "commit": "bc4b154",
+      "datetime": "2026-11-05T21:31:23+01:00"
     }
   ]
 }
