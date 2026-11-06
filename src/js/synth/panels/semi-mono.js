@@ -4,7 +4,7 @@
 // source and the output. The whole panel is this one declaration (synth/panel.js): every knob,
 // switch and jack comes from the registry's node descriptors. The Engines tab's modules join it
 // (panels/engines.js): the panel's amplifier feeds their chain into the one Output. The XY tab's
-// pad (panels/xy.js, plan K097) joins it with no normals: its cables replace the keyboard's.
+// pad (panels/xy.js, plan K097, K183) joins it with no normals: its notes play the keys' voice.
 
 import { definePanel } from '../panel.js';
 import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';

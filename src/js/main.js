@@ -67,7 +67,7 @@ import { createKeyRegistry } from './ui/keys/registry.js';
 import { createKeyDispatcher } from './ui/keys/dispatcher.js';
 import { bindPageKeys, pageKeyContext } from './ui/keys/clients.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
-import { createOutputOwner } from './ui/output-owner.js';
+import { createOutputOwner, outputRefusalOf, playOwnerOf } from './ui/output-owner.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { sequenceDigest } from './sequencer/editor.js';
@@ -276,11 +276,12 @@ const {
   app: () => app,
   sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
 
-withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), () => {
+withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), (plan, o) => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
-  // owns it (capture.js schedules its own source). claimOutput raises the notice and refuses
-  // then (C002); otherwise it takes the output from the sequencer (and Studio).
-  return claimOutput('instrument') !== true;
+  // or a microphone level reference owns it (capture.js schedules its own source). claimOutput
+  // raises the notice and refuses then (C002, C024); otherwise it takes the output from the
+  // sequencer (and Studio). The riff audition claims under its own name (playOwnerOf).
+  return claimOutput(playOwnerOf(o)) !== true;
 });
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
@@ -878,7 +879,7 @@ function createOscillaComponent(ui) {
   const experiments = createExperimentsUi();
   const findings = createFindingsUi();
   const connections = createConnectionsUi();
-  const studio = createStudioUi({ engine, stopPlayback,
+  const studio = createStudioUi({ engine, stopPlayback, outputRefusalOf,
     // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
     playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)

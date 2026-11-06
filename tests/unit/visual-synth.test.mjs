@@ -664,3 +664,34 @@ test('a failure line cut short says how many failures it left out', () => {
   assert.doesNotMatch(src, /bad\.slice\(0, \d+\)\.join/, 'no failure line cuts silently');
   assert.match(src, /failures\.push\(`synth \$\{w\}x\$\{h\} \$\{tab\}: \$\{firstOf\(bad, 8\)\}`\)/);
 });
+
+test('the redraw waits for a drawn cable per cable the document has, never a literal six',
+  async () => {
+    const { redrawState } = await load();
+    assert.equal(typeof redrawState, 'function', 'scripts/visual-synth.mjs exports redrawState');
+    // K183's default Synth document holds its own Y cable: six patched make seven.
+    const page = ({ cables, drawn }) => {
+      const saved = { document: globalThis.document, window: globalThis.window,
+        getComputedStyle: globalThis.getComputedStyle };
+      globalThis.document = { documentElement: { dataset: { theme: 'dark' } },
+        querySelector: () => ({ getAttribute: () => '#66798d' }),
+        querySelectorAll: () => ({ length: drawn }) };
+      globalThis.getComputedStyle = () => ({ getPropertyValue: () => ' #66798d ' });
+      globalThis.window = { OSCILLA: { app: { synthDebug: () => ({ tab: 'panel',
+        cables: Array.from({ length: cables }, (_, i) => ({ from: `a${i}`, to: `b${i}` })) }) } } };
+      return () => Object.assign(globalThis, saved);
+    };
+    const v = { theme: 'dark', tab: 'panel', free: 'mg.rate:in', cables: 7 };
+    for (const [cables, drawn, ok, why] of [[7, 7, true, 'seven cables, seven drawn'],
+      [7, 6, false, 'one not drawn yet'], [6, 6, false, 'the patch is not complete'],
+      [8, 8, false, 'a cable the capture does not expect']]) {
+      const restore = page({ cables, drawn });
+      try {
+        assert.equal(redrawState(v), ok, why);
+        assert.deepEqual([redrawState({ ...v, observe: true }).drawn,
+          redrawState({ ...v, observe: true }).cables], [drawn, cables]);
+      } finally { restore(); }
+    }
+    const src = read('scripts/visual-synth.mjs');
+    assert.doesNotMatch(src, /drawn (?:===|!==) 6\b/, 'no literal count of drawn cables');
+  });

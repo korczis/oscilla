@@ -15,12 +15,16 @@
 //   io = {
 //     sampleRate,                     the running context's rate (null before it exists)
 //     now(),                          the AUDIO clock in seconds (AudioContext.currentTime)
-//     preflight({ otherAudio }) → PreflightFacts, opens/validates the context, permission,
-//                                     input, worklet; otherAudio: the caller's fact that the
-//                                     app's own output sounds, a boolean or a probe
-//                                     () => boolean (reported back as output.otherAudio,
-//                                     OR-ed with the engine voices, both read at the input
-//                                     level reading)
+//     preflight({ otherAudio, probe, onWaiting }) → PreflightFacts, opens/validates the
+//                                     context, permission, input, worklet; otherAudio: the
+//                                     caller's fact that the app's own output sounds, a boolean
+//                                     or a probe () => boolean (reported back as
+//                                     output.otherAudio, OR-ed with the engine voices, both
+//                                     read at the input level reading); probe: optional
+//                                     (sampleRate) => Float32Array, the stimulus the setup
+//                                     check plays after the level reading (facts.probe, C033);
+//                                     onWaiting: optional ({ what: 'permission' }) => void,
+//                                     called while the browser asks for the microphone
 //     captureNoise(seconds, { notBefore, onScheduled, onChunk }) → Capture
 //     runStimulus(stimulus, { preRollS, postRollS, notBefore, onScheduled, onChunk }) → Capture
 //     cancel(reason),                 stop everything in flight and release session resources
@@ -34,7 +38,9 @@
 //   PreflightFacts = { audioContext: { available, state }, sampleRate, permission:
 //     'granted'|'denied'|'prompt'|'unknown'|'not-required', input: { ok, device, constraints,
 //     error? }, inputLevel: { peak, rmsDb }|null, output: { gain, maxGain, audibleVoices,
-//     otherAudio? }, worklet: { supported, mode, error? }, testContext?, chainNotes? }
+//     otherAudio? }, worklet: { supported, mode, error? }, testContext?, chainNotes?,
+//     probe?: { played: true, seconds, startAt, inputLevel, frames: { expected, received,
+//     discontinuities } } | { played: false, reason } }
 //   chainNotes (optional): pure data about the playback chain that the platform layer has
 //     MEASURED or knows from a measured probe, e.g. { limiterDeviationAboveHz: 18000 } when the
 //     master limiter of this browser is not transparent above 18 kHz (the spike's Firefox 155
@@ -204,7 +210,13 @@ export const PREFLIGHT_THRESHOLDS = Object.freeze({
   // at 48 kHz (2^22 points, about 0.73 GiB estimated) warns, a 10 s sweep (2^21) does not.
   analysisMemoryWarnBytes: 512 * 1024 * 1024,
   clipPeak: CLIP_THRESHOLD,
+  // The setup check's probe is heard when the input RMS with it is at least this much above
+  // the background RMS read just before (C033): 3 dB is twice the power.
+  probeHeardRiseDb: 3,
 });
+
+/** Longest stimulus the setup check plays (C033): within every kind's duration limits. */
+export const PREFLIGHT_PROBE_S = 1;
 
 /** Share of the overall progress bar given to the offline analysis (display weight only). */
 export const ANALYSIS_PROGRESS_WEIGHT = 0.1;
@@ -653,7 +665,9 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
  *             { wall(): ms since epoch, mono(): monotonic ms } (defaults: Date.now,
  *             performance.now). Never used for audio timing.
  *   onEvent   (event) => void; events: { type: 'state', from, to, info } | 'preflight' |
- *             'scheduled' | 'progress' | 'noise' | 'run' | 'analysis' | 'result' | 'error'
+ *             'scheduled' | 'progress' | 'noise' | 'run' | 'analysis' | 'result' | 'error' |
+ *             'waiting' ({ what: 'permission' }: the setup check waits for the browser's
+ *             microphone prompt)
  *             ('run': { run, invalid, reasons, peak }: peak is the run's linear |x| peak,
  *             null when not known)
  *   limits    tightens CONTRACT_LIMITS (maxSweepS, maxRepeats, maxCaptureS, maxNoiseS,
@@ -856,14 +870,30 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
   const samePrepared = (recipe, calibration) => !!prepared && prepared.key !== null
     && prepared.key === recipeKey(recipe) && prepared.calibration === (calibration ?? null);
 
+  /**
+   * The setup check's probe (C033): the recipe's stimulus at the context's rate, shortened to
+   * PREFLIGHT_PROBE_S (its fade kept within a quarter of that). Throws when the recipe is
+   * invalid; preflight reports that as a blocker of its own.
+   */
+  function probeStimulus(recipe, sampleRate) {
+    const spec = validateRecipe(recipe, { sampleRate, limits: lim }).stimulusSpec;
+    const duration = Math.min(spec.duration, PREFLIGHT_PROBE_S);
+    const fade = isNum(spec.fade) ? Math.min(spec.fade, duration / 4) : spec.fade;
+    return renderStimulus({ ...spec, duration, fade }).samples;
+  }
+
   // otherAudio: false on the measure() path, whose caller stops every output owner first.
-  async function runPreflight(s, recipe, calibration, otherAudio = false) {
+  // withProbe: the setup check (preflight()) plays the stimulus; measure()'s own does not, its
+  // runs play it.
+  async function runPreflight(s, recipe, calibration, otherAudio = false, withProbe = false) {
     const warnings = [];
     const blockers = [];
     const facts = await guard(s, (async () => {
       try {
         return await io.preflight({ otherAudio: typeof otherAudio === 'function' ? otherAudio
-          : otherAudio === true });
+          : otherAudio === true,
+        probe: withProbe ? (sr) => probeStimulus(recipe, sr) : null,
+        onWaiting: (w) => emit(s, { type: 'waiting', what: w && w.what }) });
       } catch (e) {
         if (s.dead) throw e;
         const me = mapError(e);
@@ -949,6 +979,28 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
         : `Background level ${lvl.rmsDb.toFixed(1)} dB relative `
           + '(dBFS-like) is high; expect a low signal-to-noise ratio.',
       { value: lvl.rmsDb, unit: 'dB relative' }));
+
+    // The setup check's probe (C033): it played, or why not; and whether the input heard it.
+    const pr = facts.probe || null;
+    if (pr && pr.played === false)
+      warnings.push(reason('STIMULUS_NOT_PLAYED', 'The setup check could not play the stimulus'
+        + `${pr.reason ? ` (${String(pr.reason).replace(/\.$/, '')})` : ''}; the measurement `
+        + 'plays it.'));
+    // Heard is a rise of at least probeHeardRiseDb; anything else is not heard (98 F1): exact
+    // zeros read -Infinity before and during (a rise of NaN), a level that is no number (a JSON
+    // null) has no rise. Only a signal out of digital silence (+Infinity) counts as heard.
+    const dbOf = (l) => (l && typeof l.rmsDb === 'number' ? l.rmsDb : NaN);
+    const rise = pr && pr.played === true ? dbOf(pr.inputLevel) - dbOf(lvl) : NaN;
+    if (pr && pr.played === true && !(rise >= PREFLIGHT_THRESHOLDS.probeHeardRiseDb)) {
+      const silent = dbOf(pr.inputLevel) === -Infinity;
+      warnings.push(reason('STIMULUS_NOT_HEARD', 'The input level did not rise while the check '
+        + `played the stimulus${Number.isFinite(rise) ? ` (${rise.toFixed(1)} dB)` : ''}`
+        + (silent ? ' (the input is digitally silent)' : '')
+        + (ownOutput ? `, but ${OWN}, so the comparison is not conclusive: stop it and check `
+          + 'again.' : ': check that the output reaches the input (output volume, speaker or '
+          + 'cable, and the input device).'), { value: Number.isFinite(rise) ? rise : null,
+        unit: 'dB' }));
+    }
 
     let chainNotes = null;
     try {
@@ -1453,7 +1505,7 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
       s.startedAtMs = clk.wall();
       try {
         go(s, S.PREFLIGHT, { recipe: true });
-        const report = await runPreflight(s, recipe, opts.calibration, opts.otherAudio);
+        const report = await runPreflight(s, recipe, opts.calibration, opts.otherAudio, true);
         emit(s, { type: 'preflight', ...publicReport(report) });
         if (report.ready) {
           go(s, S.READY, null);

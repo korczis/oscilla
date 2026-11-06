@@ -30,4 +30,9 @@ export default {
   'keyboard.more': entry({ source: 'src/index.html', plan: ['G001', 'V635'],
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs',
       'tests/browser/control-census.cjs'] }),
+  'keyboard.handle': entry({ source: 'src/js/midi/dock-yield.js', plan: ['G001', 'K171'],
+    tests: ['tests/unit/keyboard-dock-yield.test.mjs', 'tests/browser/xy-pad.cjs',
+      'tests/browser/control-census.cjs'] }),
+  'keyboard.dock-status': entry({ source: 'src/js/midi/dock-yield.js', plan: ['G001', 'K171'],
+    tests: ['tests/unit/keyboard-dock-yield.test.mjs'] }),
 };
