@@ -170,9 +170,10 @@ export async function versionCheck(root = ROOT) {
   for (const h of hits) {
     problems.push(`hard-coded product version ${version} in ${h.path}:${h.line}: ${h.text}`);
   }
+  const lines = LINE_ALLOW.length
+    ? ` and the release line of ${LINE_ALLOW.map((r) => r.path.source).join(', ')}` : '';
   notes.push(`literal scan: no hard-coded ${version} outside `
-    + `${LITERAL_ALLOW.map((r) => r.source).join(', ')} and the release line of `
-    + `${LINE_ALLOW.map((r) => r.path.source).join(', ')}`);
+    + `${LITERAL_ALLOW.map((r) => r.source).join(', ')}${lines}`);
   return { version, problems, notes };
 }
 
