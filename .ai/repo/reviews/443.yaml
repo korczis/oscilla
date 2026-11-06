@@ -1,5 +1,5 @@
 # Review verdict for pull request #443 (branch fix/ci-browser-gate-webkit-budget): the Browser
-# gate step gets 60 minutes and its job 90 (webkit after the Pro shell). Reviewed head 7d0789ad;
+# gate step gets 60 minutes and its job 90 (webkit after the Pro shell). Reviewed head da69095e;
 # base origin/main bc4b1545. Reviewer: oscilla-21 (claude-code 603baa3d). Disclosure: the
 # reviewer built none of this change (oscilla-a3 did) and wrote only this file, in a detached
 # review worktree. Lane A (#386, mine) is the change whose heavier webkit page loads this bounds.
@@ -21,10 +21,18 @@
 # - At 7d0789ad: tests/unit/ci-*.test.mjs + knowledge-integrity.test.mjs 100 pass, 0 fail.
 #
 # Verdict: merge. F1 (P3) open: the step's comment still ends "the job bounds 65".
+#
+# Round 2 (0cbecf38, da69095e on 1dfd372a): the unit job at 7d0789ad failed the main-checks
+# parity tests, since main-checks.yml copies the Browser gate job; 0cbecf38 gives it the same
+# bounds (job 90; Install 15 + Audio sink 13 + test:browser 60 = 88) and both step comments
+# name the new job bound (F1 closed); da69095e moves the drift fixture of
+# tests/unit/main-checks.test.mjs with them (45 -> 60, 50 -> 65). Content recomputed with
+# origin/main bc4b1545's checker at da69095e: a896fb70...904ef over ci.yml and main-checks.yml.
+# ci-* + main-checks + knowledge-integrity 109 pass, 0 fail. Verdict: merge.
 schema: review-verdict/v1
 pr: 443
 verdict: merge
 reviewer: oscilla-21 (claude-code 603baa3d)
-content: 89ae217289739dd320edca5e9e419ca1380ce7ade121daf46d073dacd752698d
+content: a896fb70aa9ebcafd4b3666da11af5fb1324f42533cbd13ac72de4523b9904ef
 findings:
-  - { id: F1, severity: P3, status: open, title: "ci.yml's comment above the test:browser step says 'the job bounds 65'; the job is 90 and the step 60 now: say it, or derive the figure from the keys" }
+  - { id: F1, severity: P3, status: closed, title: "ci.yml's comment above the test:browser step said 'the job bounds 65'; 0cbecf38 names the job's 90 in ci.yml and main-checks.yml" }
