@@ -293,7 +293,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
-    # the sum of its step bounds (15 + 13 + 15 + 20 = 63), so a slow runner fails a named step
+    # the sum of its step bounds (15 + 13 + 15 + 35 = 78), so a slow runner fails a named step
     timeout-minutes: 80
     strategy:
       fail-fast: false
