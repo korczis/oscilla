@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // K060: the Keys node's pitch CV, measured from real renders (Chromium, Firefox and WebKit).
+// K068: notes clips played by the Studio transport on the audio clock, measured the same way.
 //
 //   node tests/browser/instrument-dsp.cjs [--browsers chromium,firefox,webkit] [--json out.json]
 //   OSC_BROWSERS=webkit node tests/browser/instrument-dsp.cjs     # the same, from the environment
@@ -21,6 +22,25 @@
 //              100 ms +- one render quantum (128 frames at the rate) and not before, is halfway
 //              at 50 ms (linear), and the VCO plays A4 within 1 cent from 100 ms + one quantum.
 //              Fails on e51b169d, whose glide was an exponential approach (time constant 33 ms)
+//
+// K068, per browser and per rate: a notes clip on the Keys node of Keys -> VCO -> Envelope ->
+// Master Output played by the Studio transport offline (the render length as its look-ahead, as
+// offline.js plays it); onsets measured from the Envelope's contour (fixture renderNotes):
+//   n-onsets   eight sixteenths and one off-grid note at 120 and 97 BPM with swing 0 and 0.33 of
+//              stepBeats: every onset within one frame of baseTime + beats x 60 / tempo, swung
+//              only on odd grid positions, and no clip left unplayed
+//   n-offgrid  the note at beat 2.1 unmoved by swing 0.33
+//   n-tempo    the measured half-beat interval at 97 BPM is the one at 120 BPM x 120 / 97
+//   n-ratchet  r 3: three onsets, each within one frame
+//   n-slide    a slide into a held note opens no gate (one onset), and the Keys CV reaches its
+//              pitch within one cent by Glide + one frame, halfway at half the Glide (linear)
+//   n-chance   two renders with p 0.5 and one seed are identical, a second seed changes them,
+//              and the hits are the steps where mulberry32(seed ^ 0 ^ index) < 0.5
+//   n-census   on a running AudioContext, STOP with a ratchet pending resolves with the engine
+//              and runtime node census 0 and no note record left
+// Tap tempo (four taps 500 ms apart: 120 BPM) is asserted at unit level
+// (tests/unit/studio-steps-playback.test.mjs). On b7a5c9f7 every K068 check fails: the store
+// refuses the grid, r, slide and p fields, and the transport plays no notes clip.
 'use strict';
 
 const fs = require('node:fs');
@@ -39,6 +59,7 @@ const playwright = RUN.playwright;
 const JSON_OUT = arg('json', '');
 const LOAD_MS = 60000;
 const CHECK_MS = 240000; // the 4' sweep renders some 22 s of audio at each rate
+const CENSUS_MS = 15000; // a running context reaching the ratchet, and the STOP released
 const LAUNCH = {
   chromium: { args: ['--autoplay-policy=no-user-gesture-required'] },
   firefox: { firefoxUserPrefs: { 'media.autoplay.default': 0,
@@ -126,7 +147,65 @@ async function runBrowser(name) {
       check(at, 'k-glide the VCO plays A4 within 1 cent after the glide',
         within(g.centsAfter, 1) && within(g.centsBefore, 1),
         `${f(g.hzAfter, 4)} Hz (${f(g.centsAfter, 4)} ct); A3 before ${f(g.centsBefore, 4)} ct`);
+      // K068: notes clips on the audio clock.
+      const half = {};
+      for (const tempo of [120, 97]) {
+        for (const swing of [0, 0.33]) {
+          const sg = await call('swingGrid', { sampleRate: rate, tempo, swing },
+            `n-onsets renders at ${rate} Hz, ${tempo} BPM, swing ${swing}`);
+          const worst = sg.rows.reduce((w, x) => Math.max(w, x.diff === null ? Infinity
+            : Math.abs(x.diff)), 0);
+          check(at, `n-onsets ${tempo} BPM swing ${swing}: every onset within one frame`,
+            sg.count === sg.expected && worst <= 1 && sg.unplayed === 0,
+            `${sg.count} of ${sg.expected} onsets, worst ${worst} frame(s); diffs `
+              + sg.rows.map((x) => x.diff).join(' '));
+          if (swing === 0.33) {
+            check(at, `n-offgrid ${tempo} BPM: the off-grid note is unmoved by swing`,
+              sg.offGrid.diff !== null && Math.abs(sg.offGrid.diff) <= 1,
+              `beat 2.1 at frame ${sg.offGrid.got}, computed ${sg.offGrid.want}`);
+          } else half[tempo] = sg.interval;
+        }
+      }
+      const ratio = half[97] / half[120];
+      check(at, 'n-tempo the onsets rescale with the tempo (97 BPM: x 120 / 97)',
+        Math.abs(half[97] - half[120] * (120 / 97)) <= 1,
+        `half a beat: ${f(half[120], 1)} frames at 120, ${f(half[97], 1)} at 97 (ratio `
+          + `${f(ratio, 5)}, ${f(120 / 97, 5)} computed)`);
+      const rt = await call('ratchet', { sampleRate: rate }, `n-ratchet renders at ${rate} Hz`);
+      check(at, 'n-ratchet r 3 gives three onsets, each within one frame',
+        rt.count === 3 && rt.rows.every((x) => x.diff !== null && Math.abs(x.diff) <= 1),
+        `${rt.count} onsets, diffs ${rt.rows.map((x) => x.diff).join(' ')}`);
+      const sl = await call('slide', { sampleRate: rate }, `n-slide renders at ${rate} Hz`);
+      check(at, 'n-slide no gate onset at the slide',
+        sl.count === 1 && sl.slideOnsets === 0 && Math.abs(sl.rows[0].diff) <= 1,
+        `${sl.count} onset(s), ${sl.slideOnsets} at the slide`);
+      check(at, 'n-slide the Keys CV reaches the pitch within the glide time (linear)',
+        sl.arriveFrames !== null && sl.arriveFrames <= sl.glideFrames + 1
+          && sl.arriveFrames >= sl.glideFrames - Math.ceil(sl.glideFrames / 100)
+          && within(sl.centsHalf, 1),
+        `arrives ${sl.arriveFrames} frames after the slide (Glide ${sl.glideFrames}); `
+          + `${f(sl.centsHalf, 3)} ct from the midpoint at half the Glide`);
+      const ch = await call('chance', { sampleRate: rate }, `n-chance renders at ${rate} Hz`);
+      check(at, 'n-chance p 0.5: two renders identical, another seed differs',
+        ch.same && ch.differs, `identical ${ch.same}, differs with seed 2 ${ch.differs}`);
+      check(at, 'n-chance the hits are mulberry32(seed ^ pass ^ index) < p',
+        JSON.stringify(ch.hits) === JSON.stringify(ch.want)
+          && JSON.stringify(ch.otherHits) === JSON.stringify(ch.otherWant),
+        `seed 1 steps ${ch.hits.join(',')}; seed 2 steps ${ch.otherHits.join(',')}`);
     }
+    // n-census: a running AudioContext, STOP with the ratchet pending.
+    const cs = await bounded(page.evaluate(() => window.K.censusStart()), { ms: CENSUS_MS,
+      what: 'n-census the running context starts' });
+    await until(() => page.evaluate((t) => window.K.censusNow() > t, cs.ratchetAt + 0.2),
+      { ms: CENSUS_MS, what: 'n-census the clock passes the ratchet\'s first onsets' });
+    await page.evaluate(() => window.K.censusStop());
+    const done = await until(() => page.evaluate(() => window.K.censusDone()),
+      { ms: CENSUS_MS, what: 'n-census the STOP resolves' });
+    check(leg, 'n-census STOP with a ratchet pending: node census 0, no note left',
+      done.engineNodes === 0 && done.engineSources === 0 && done.runtimeNodes === 0
+        && done.noteRecords === 0,
+      `engine ${done.engineNodes} nodes / ${done.engineSources} sources, runtime `
+        + `${done.runtimeNodes}, note records ${done.noteRecords} (context ${cs.state})`);
     check(leg, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   } finally {
     await browser.close();
