@@ -39,8 +39,8 @@
 //   n-census   on a running AudioContext, STOP with a ratchet pending resolves with the engine
 //              and runtime node census 0 and no note record left
 // Tap tempo (four taps 500 ms apart: 120 BPM) is asserted at unit level
-// (tests/unit/studio-steps-playback.test.mjs). On b7a5c9f7 every K068 check fails: the store
-// refuses the grid, r, slide and p fields, and the transport plays no notes clip.
+// (tests/unit/studio-steps-playback.test.mjs). On b7a5c9f7 (chromium) the K060 checks pass and
+// the leg fails at its first K068 render ('the suite runs': the store refuses the grid).
 'use strict';
 
 const fs = require('node:fs');

@@ -28,8 +28,8 @@
 //   st-a11y      the transport group's buttons (Play, Stop, Return to start, Loop), the tempo
 //                spinbutton and Tap tempo are in the accessibility tree with their names
 //   no-console-errors
-// On b7a5c9f7 st-linked and st-realtime fail (a notes clip with a grid is refused, nothing plays
-// it) and st-keys fails at its first Tap (the strip has no Tap tempo button).
+// On b7a5c9f7 (chromium) st-linked, st-realtime and st-keys fail (the store refuses a notes clip
+// with a grid) and st-a11y finds no Tap tempo button.
 'use strict';
 
 const fs = require('node:fs');
