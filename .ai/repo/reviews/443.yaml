@@ -1,0 +1,30 @@
+# Review verdict for pull request #443 (branch fix/ci-browser-gate-webkit-budget): the Browser
+# gate step gets 60 minutes and its job 90 (webkit after the Pro shell). Reviewed head 7d0789ad;
+# base origin/main bc4b1545. Reviewer: oscilla-21 (claude-code 603baa3d). Disclosure: the
+# reviewer built none of this change (oscilla-a3 did) and wrote only this file, in a detached
+# review worktree. Lane A (#386, mine) is the change whose heavier webkit page loads this bounds.
+#
+# The digest. origin/main bc4b1545's scripts/review-verdict.mjs --content --list --base-branch
+# origin/main at 7d0789ad: 89ae217289739dd320edca5e9e419ca1380ce7ade121daf46d073dacd752698d over
+# one guarded path, .github/workflows/ci.yml: job "Browser gate" timeout-minutes 65 -> 90, its
+# test:browser step 45 -> 60. Nothing else changes; no suite is skipped or weakened.
+#
+# Evidence:
+# - The cut is measured, not assumed: Main checks run 42104174282, "Browser gate (webkit)",
+#   step "dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop, journeys"
+#   ran 2026-11-05T20:31:32Z to 21:17:27Z and failed at its 45-minute bound with every finished
+#   suite passing (a3: journeys.cjs in journey 6 of 6 at the cut). The release run 42105740020
+#   (#442) was in the same step when read. chromium and firefox fit the old bound.
+# - The bound sum: Install 15 + Audio sink 13 + test:browser 60 = 88 <= the job's 90
+#   (project.ci-bounded v2: every job and network step bounded); about 1.3x the measured
+#   webkit step.
+# - At 7d0789ad: tests/unit/ci-*.test.mjs + knowledge-integrity.test.mjs 100 pass, 0 fail.
+#
+# Verdict: merge. F1 (P3) open: the step's comment still ends "the job bounds 65".
+schema: review-verdict/v1
+pr: 443
+verdict: merge
+reviewer: oscilla-21 (claude-code 603baa3d)
+content: 89ae217289739dd320edca5e9e419ca1380ce7ade121daf46d073dacd752698d
+findings:
+  - { id: F1, severity: P3, status: open, title: "ci.yml's comment above the test:browser step says 'the job bounds 65'; the job is 90 and the step 60 now: say it, or derive the figure from the keys" }
