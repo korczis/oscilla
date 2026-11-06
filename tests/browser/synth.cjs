@@ -84,10 +84,12 @@
 //              user's; A sounds and its release falls below -70 dB rel. Fails on 3c22d01a
 //              ("The keys play KEYBOARD.", the panel at the top)
 //   s-keysilent a keyboard the pad's cables silenced says why (review S8): XY lead from the
-//              Preset menu, then the Panel tab's Init: the tab shows why the keys sound nothing
-//              with Unpatch the pad; QWERTY A stays below -70 dB rel and the status says why;
-//              Unpatch the pad removes the pad's cables and the notice, and A sounds again
-//              (RMS above -40 dB rel). Fails on 3c22d01a (no notice, a silent key says nothing)
+//              Preset menu cables Y alone (K183 review F3) and QWERTY A still sounds (RMS above
+//              -40 dB rel); the check then taps the pad's Gate into EG 1 and EG 2 itself, and
+//              after the Panel tab's Init the tab shows why the keys sound nothing with Unpatch
+//              the pad; A stays below -70 dB rel and the status says why; Unpatch the pad
+//              removes the pad's cables and the notice, and A sounds again (RMS above -40 dB
+//              rel). Fails on 3c22d01a (no notice, a silent key says nothing)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -1193,13 +1195,36 @@ function defineChecks() {
       lowest: Math.min(...placed), on: on.rmsDb, off: off.rmsDb };
   });
 
-  // Review of src/js/synth (oscilla-21, S8): a keyboard the pad's cables silenced says why.
+  // Review of src/js/synth (oscilla-21, S8): a keyboard the pad's cables silenced says why. Under
+  // K183 no built-in XY preset patches the pad's Gate (review F3: XY lead cables Y alone and the
+  // keys keep sounding), so the check takes both EG gates itself, by jack taps in the bay.
   def('s-keysilent', async ({ page }) => {
     const status = () => page.locator('[data-osc="synth.status"]').textContent();
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
     await tabTo(page, 'xy');
+    const before = await depth();
     await page.locator('#osc-synth-preset').selectOption('xy-lead');
-    await until(async () => (await dbg(page)).cables.some((c) => c.from === 'xy.gate'),
-      { ms: 10000, what: 'XY lead patches the pad into the voice' });
+    await until(async () => (await depth()) === before + 1,
+      { ms: 10000, what: 'XY lead is applied, one undo entry' });
+    const lead = await dbg(page);
+    if (lead.cables.some((c) => c.from === 'xy.gate' || c.from === 'xy.pitch')) {
+      return { ok: false, detail: 'XY lead patched the pad\'s Pitch or Gate (K183 review F3)',
+        cables: lead.cables };
+    }
+    await hold(page, 'KeyA');
+    const still = await sound(page, (q) => q.rmsDb > -40,
+      'under XY lead (Y alone) the keys still sound');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the key up releases the voice under XY lead');
+    for (const eg of ['eg1', 'eg2']) { // the gates taken explicitly: what silences the keys
+      await tapJack(page, 'xy.gate:out');
+      await tapJack(page, `${eg}.gate:in`);
+    }
+    await until(async () => {
+      const c = (await dbg(page)).cables;
+      return ['eg1.gate', 'eg2.gate'].every((to) => c.some((x) => x.from === 'xy.gate'
+        && x.to === to));
+    }, { ms: 10000, what: 'the pad\'s Gate is patched into EG 1 and EG 2' });
     await tabTo(page, 'panel');
     await page.locator('#osc-synth-preset').selectOption('init');
     const notice = page.locator('[data-osc="synth.keys-silent"]');
@@ -1221,8 +1246,8 @@ function defineChecks() {
     const on = await sound(page, (q) => q.rmsDb > -40, 'the keys play the voice again');
     await page.keyboard.up('KeyA');
     const off = await silent(page, 'the key up releases the voice');
-    return { ok: /Unpatch the pad/.test(text), text, said, quiet: quiet.rmsDb, on: on.rmsDb,
-      off: off.rmsDb };
+    return { ok: /Unpatch the pad/.test(text), text, said, still: still.rmsDb,
+      quiet: quiet.rmsDb, on: on.rmsDb, off: off.rmsDb };
   });
 
   def('s-riffs', async ({ page }) => {
