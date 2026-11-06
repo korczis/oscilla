@@ -462,10 +462,11 @@ jobs:
   knowledge:
     # The .ai/ layer, checked by the same `majordomus doctor` the pre-commit hook and
     # `npm run verify` run locally, at a pinned release: the archive is downloaded from the
-    # release and checked against its SHA-256 here (the digest of v1.0.0-alpha.9's x86_64 Linux
-    # glibc archive in the release's SHA256SUMS and its record .ai/repo/releases/v1.0.0-alpha.9.yaml
-    # in korczis/prismatic-majordomus), so neither the installer script nor the latest release
-    # can change what CI runs. Bump the version and the digest together.
+    # release and checked against its SHA-256 here (the digest of the MJ_VERSION release's x86_64
+    # Linux glibc archive in its SHA256SUMS and its record .ai/repo/releases/v<MJ_VERSION>.yaml in
+    # korczis/prismatic-majordomus), so neither the installer script nor the latest release can
+    # change what CI runs. Bump the version and the digest together, here only: the version is
+    # written nowhere else in .github/ (tests/unit/majordomus-pin-one-source.test.mjs, R049).
     # The verdict is .github/doctor-verdict.jq (tested by tests/unit/ci-knowledge-job.test.mjs):
     # every doctor FAIL fails the job except the git-hook wiring entries of policy
     # `enforcement`, which describe a developer checkout's hooks that a CI runner does not
@@ -473,7 +474,7 @@ jobs:
     # output without an OK layout line.
     # The download retries, so one transient asset error does not stall every merge. Full
     # history, because curated knowledge cites V1 commits and the ADR check reads every ref.
-    name: .ai layer (majordomus doctor 1.0.0-alpha.9)
+    name: .ai layer (majordomus doctor, the pinned release)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
