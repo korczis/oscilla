@@ -13,15 +13,31 @@ import { MAX_VOICES } from '../../src/js/synth/voice-pool.js';
 import { FM_ALGORITHMS } from '../../src/js/synth/fm-algorithms.js';
 import { ENGINE_TAB } from '../../src/js/synth/panels/engines.js';
 import { LEARN_CARDS } from '../../src/js/data/learn.js';
+import { BARS, TEMPO_BPM } from '../../src/js/studio/templates/demo-song-score.js';
+import { DEMO_SONG_SECONDS } from '../../src/js/studio/templates/demo-song.js';
+import { SPACE_OWNER } from '../../src/js/ui/shortcuts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
+
+const WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  'ten', 'eleven', 'twelve', 'thirteen'];
+/** A stated count as a number: digits, or a number word up to thirteen. */
+const num = (s) => (/^\d+$/.test(s) ? Number(s) : WORDS.indexOf(String(s).toLowerCase()));
+const playing = Object.values(SPACE_OWNER).filter((o) => o === 'instrument').length;
 
 /** The counts and the phrases that state them: [name, value, regex with the number as $1]. */
 export const COUNTS = [
   ['MAX_VOICES (src/js/synth/voice-pool.js)', MAX_VOICES, /\bup to (\d+) voices\b/g],
   ['FM_ALGORITHMS.length (src/js/synth/fm-algorithms.js)', FM_ALGORITHMS.length,
     /\b(\d+) algorithms\b/g],
+  ['TEMPO_BPM (src/js/studio/templates/demo-song-score.js)', TEMPO_BPM,
+    /\bA minor at (\d+) BPM\b/g],
+  ['BARS (demo-song-score.js)', BARS, /\bA minor at \d+ BPM, (\d+) bars\b/g],
+  ['DEMO_SONG_SECONDS (src/js/studio/templates/demo-song.js)', DEMO_SONG_SECONDS,
+    /\bA minor at \d+ BPM, \d+ bars \((\d+) s\)/g],
+  ['the instrument owners of SPACE_OWNER (src/js/ui/shortcuts.js)', playing,
+    /\b(\w+) workspaces that play\b/gi],
 ];
 
 function prose() {
@@ -30,7 +46,7 @@ function prose() {
     if (statSync(path.join(ROOT, rel)).isDirectory()) return n === 'reviews' ? [] : docs(rel);
     return n.endsWith('.md') ? [rel] : [];
   });
-  return ['README.md', ...docs('docs')];
+  return ['README.md', 'tests/README.md', 'docs/CLAIMS.yaml', ...docs('docs')];
 }
 
 /** Each stated number that differs from its source: 'file:line says N, <name> is M'. */
@@ -40,7 +56,7 @@ export function countProblems(files, text = read, counts = COUNTS) {
     const t = text(f);
     for (const [name, value, re] of counts) {
       for (const m of t.matchAll(re)) {
-        if (Number(m[1]) !== value) {
+        if (num(m[1]) !== value) {
           const line = t.slice(0, m.index).split('\n').length;
           out.push(`${f}:${line} says ${m[1]}, ${name} is ${value}`);
         }
