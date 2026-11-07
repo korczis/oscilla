@@ -20,28 +20,29 @@
 
 export const FAMILIES = Object.freeze({
   knob: Object.freeze({ slice: 'G022', model: 'src/js/ui/synth/knob.js',
-    what: 'a rotary value control: value to angle, drag, keys, typed entry, valuetext' }),
+    what: 'otočný ovladač hodnoty: hodnota na úhel, tažení, klávesy, zadání číslem, '
+      + 'valuetext' }),
   slider: Object.freeze({ slice: 'G023', model: null,
-    what: 'a linear value control: value to track position and fill' }),
+    what: 'lineární ovladač hodnoty: hodnota na polohu a výplň dráhy' }),
   switch: Object.freeze({ slice: 'G023', model: null,
-    what: 'an on/off switch or a radio group of options' }),
+    what: 'vypínač nebo skupina přepínačů s volbami' }),
   'patch-bay': Object.freeze({ slice: 'G024', model: 'src/js/ui/patch/patch-bay.js',
-    what: 'jacks and the cables between them' }),
+    what: 'konektory a kabely mezi nimi' }),
   keyboard: Object.freeze({ slice: 'G025', model: 'src/js/midi/keyboard.js',
-    what: 'the piano keys: key layout, held notes, octave and velocity' }),
+    what: 'klávesy piana: rozložení kláves, držené noty, oktáva a dynamika' }),
   'app-shell': Object.freeze({ slice: 'G026', model: 'src/js/ui/shell.js',
-    what: 'the navbar, the sidebar navigation and the page header' }),
+    what: 'horní lišta, boční navigace a záhlaví stránky' }),
   // The modelers (the owner's order of 2026-11-05: one ADSR envelope modeler and one filter
   // modeler, bus-connected into the Studio, the Synth, the sequencer and the labs). The model is
   // the law the sound follows, so every curve drawn of it is the curve that plays.
   envelope: Object.freeze({ slice: 'G027', model: 'src/js/audio/envelope.js',
-    what: 'the ADSR curve law the voice schedules, and every drawing or editor of it' }),
+    what: 'zákon křivky ADSR, který hlas plánuje, a každé její vykreslení či editor' }),
   'filter-response': Object.freeze({ slice: 'G028', model: 'src/js/audio/filters.js',
-    what: 'the filter stage and its magnitude response, live or computed' }),
+    what: 'filtrový stupeň a jeho amplitudová odezva, živá nebo vypočtená' }),
   // The oscilla-pad (the owner's order of 2026-11-05: no copy of a hardware pad): one
   // two-parameter surface, OSCILLA's own, whose looks are skins of one model.
   pad: Object.freeze({ slice: 'G030', model: 'src/js/ui/kinds/xy-pad.js',
-    what: 'the oscilla-pad: two declared parameters on one surface, its pointer and keys' }),
+    what: 'oscilla-pad: dva deklarované parametry na jedné ploše, jeho ukazatel a klávesy' }),
 });
 
 export const FAMILY_IDS = Object.freeze(Object.keys(FAMILIES));
