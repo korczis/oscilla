@@ -1,12 +1,12 @@
 {
-  "schema": "oscilla-roadmap/v2",
-  "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
+  "schema": "oscilla-roadmap/v3",
+  "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them when release:prepare last ran (the release the page names is BUILD.version: this file holds no copy of it). Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 20,
-      "required": 41,
+      "done": 22,
+      "required": 44,
       "phase": "now"
     },
     {
@@ -19,7 +19,7 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 29,
+      "done": 30,
       "required": 51,
       "phase": "now"
     },
@@ -61,8 +61,8 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 6,
-      "required": 60,
+      "done": 7,
+      "required": 61,
       "phase": "now"
     },
     {
@@ -117,7 +117,7 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 2,
+      "done": 3,
       "required": 15,
       "phase": "now"
     },
@@ -250,8 +250,8 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 23,
-      "required": 57,
+      "done": 24,
+      "required": 59,
       "phase": "now"
     },
     {
@@ -343,13 +343,6 @@
       "title": "Owner decisions of the connected-instrument line",
       "done": 6,
       "required": 8,
-      "phase": "now"
-    },
-    {
-      "id": "M084",
-      "title": "Owner decisions of the Studio boxes and signal generator lines",
-      "done": 4,
-      "required": 4,
       "phase": "now"
     },
     {

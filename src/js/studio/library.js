@@ -29,6 +29,7 @@
 //     exportSequenceFile(model, { trackId, sampleRate }) -> { name, type, text, issues,
 //     trackId }: one event track as a V2 sequence file (`.sequence.json`), plan K004.
 //   Dirty state (§156, §254): createDirtyTracker(baseline) -> { markSaved(model, info),
+//     rebaseFresh(before, after) (an automatic change to a fresh, unsaved, unchanged document),
 //     markUnsaved(), isDirty(model), status(model) }. Dirty = execution or presentation state
 //     differs from the last explicit save (schema.js semanticState); pan, zoom, timeline scale
 //     and selection never make a document dirty. markUnsaved: the saved copy is gone (its
@@ -246,18 +247,37 @@ export function createDirtyTracker(baseline) {
   };
   let saved = digest(baseline);
   let info = null;
+  // States the app reached on a fresh document by itself (rebaseFresh): each is clean, so an
+  // Undo of the Synth's automatic panel back to the untouched document is clean too (#21 F2).
+  let fresh = new Set();
+  const clean = (model) => {
+    const d = digest(model);
+    return d === saved || (!info && fresh.has(d));
+  };
   return Object.freeze({
     /** The model was explicitly saved (or exported) now. */
     markSaved(model, { id = null, savedAt = null, target = 'local' } = {}) {
       saved = digest(model);
       info = { id, savedAt, target };
+      fresh = new Set();
+    },
+    /** The app (never the user) changed a document nothing of the user's is in, e.g. the
+     *  Synth's automatic panel on a fresh document: the new model is the baseline, still with
+     *  no save, and the state before it stays clean. Refused (false) once the document was
+     *  saved or changed. */
+    rebaseFresh(before, after) {
+      if (info || digest(before) !== saved) return false;
+      fresh.add(saved);
+      saved = digest(after);
+      return true;
     },
     /** The saved copy no longer exists (deleted): nothing is saved until the next save. */
     markUnsaved() {
       saved = null;
       info = null;
+      fresh = new Set();
     },
-    isDirty: (model) => digest(model) !== saved,
-    status: (model) => ({ dirty: digest(model) !== saved, lastSave: info }),
+    isDirty: (model) => !clean(model),
+    status: (model) => ({ dirty: !clean(model), lastSave: info }),
   });
 }

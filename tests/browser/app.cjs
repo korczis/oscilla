@@ -5022,8 +5022,8 @@ function defineChecks() {
     }), { ms: 5000, what: 'About: Later unfolds' });
     await page.click('[data-osc="about.next.later-toggle"]');
     const same = (list, want) => list.length === want.length
-      && want.every((m, i) => list[i].id === m.id && list[i].text.includes(m.title)
-        && list[i].text.includes(`${m.done} of ${m.required} done`));
+      && want.every((m, i) => list[i].id === m.id && list[i].text.startsWith(m.title)
+        && list[i].text.endsWith(`${m.done} of ${m.required} issues done`));
     res.roadmapOk = roadmap.length > 0 && same(v.next, folded)
       && v.laterToggle.expanded === 'false'
       && v.laterToggle.text === `Show the ${later.length} later milestones`

@@ -114,7 +114,7 @@ test('S4: keys routed outside the engines: no engine is checked, and the tab say
   const html = enginePickerHtml({ panel: PANEL, ids, on: null,
     resolved: PANEL.resolve(st.getModel()) });
   assert.equal(/aria-checked="true"/.test(html), false);
-  assert.match(html, /data-osc="synth.engine-elsewhere"/);
+  assert.ok(html.includes('data-osc="synth.engine-elsewhere"'), 'the notice carries its hook');
 });
 
 test('S4: an engine preset clears the route in its own BATCH; undo gives the route back', () => {

@@ -24,4 +24,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-05T19:38:55Z
+started_at: 2026-11-05T19:38:20Z
+started_event: sha256:419cab50c02f8c3f27a41df827d1e581a12559578f708e87c16854ffa44fa67c
+verified_at: 2026-11-05T19:38:33Z
+verified_event: sha256:6f0384a7384c24fbde4f5cff84034c6b00e95873e3f4c940dd492c0282999295
+completed_at: 2026-11-05T19:38:55Z
+completed_event: sha256:b612a1103e0f061e567bc3c23cec0683acdef43f5b668057ea235e2e178bf3c1
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/ui-synth-cable.test.mjs (CI unit job of #438 at 1515dd9b, run 42080892196, ubuntu-24.04 node 22; a3's review and 10 local runs)"
+    result: "Landed as #438, merged d8ee8925 (seat 98 built it on fix/s8-budgets-relative-to-the-host; a3 reviewed, no guarded path, digest e3b0c442). The S8 render budgets are multiples of a product-free reference measured on the same host (tests/unit/fixtures/host-relative-budget.mjs): 10x pins fail, the 5x-host pins pass, the derivation sits beside the constants, no absolute ms bound remains. The hosted runner's first run failed the unsteady pin at a 1 ms clock tick (reviewer F1); e06f9fa6 slows a majority of the jittering reference's calls and the pin refuses at 1 ms and at 3 us; MEASURED folds the runner in (clear [1.12, 1.66], plain [0.50, 0.84], plugs [1.18, 1.67]); the 3-4x detection threshold is stated beside MARGIN. CI unit job green at 1515dd9b; 10 local runs 81/81 each."
+    artifact: "tests/unit/fixtures/host-relative-budget.mjs"
+    commit: d8ee8925c0d81b45255a39557f596df62632f3d9
+    recorded_at: 2026-11-05T19:38:49Z

@@ -62,8 +62,9 @@ jobs:
         run: npm run verify-dist
 
   knowledge:
-    # ci.yml's knowledge job: the pinned `majordomus doctor`, same version and digest.
-    name: .ai layer (majordomus doctor 1.0.0-alpha.9)
+    # ci.yml's knowledge job: the pinned `majordomus doctor`, same version and digest (held equal
+    # to ci.yml's by tests/unit/majordomus-pin-one-source.test.mjs).
+    name: .ai layer (majordomus doctor, the pinned release)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

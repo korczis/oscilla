@@ -35,8 +35,8 @@ import { roving } from './keys/roving.js';
 /** The workspaces, in navigation order. group: the sidebar group holding it, or none. */
 export const WORKSPACE_REGISTRY = Object.freeze([
   { id: 'playground', label: 'Playground', words: 'instrument tone oscillator play hold',
-    summary: 'The instrument on one screen: generator, waveform, spectrum, spectrogram, '
-      + 'microphone analyzer, pattern sequencer and the labs.',
+    summary: 'The instrument on one screen: generator, signal analysis, microphone analyzer, '
+      + 'guided measurement, pattern sequencer and compact Studio.',
     related: [
       { id: 'measure', why: 'Measure the speaker, room and microphone the tone plays through' },
       { id: 'synth', why: 'A voice with filters, envelopes and keys' },
@@ -59,8 +59,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'analyzer', why: 'A live microphone spectrum, before a calibrated run' },
     ] },
   { id: 'analyzer', label: 'Analyzer', group: 'analyze', words: 'spectrum microphone fft rta',
-    summary: 'The microphone\'s live spectrum and spectrogram: a live view, not a calibrated '
-      + 'measurement.',
+    summary: 'A spectrogram of the output and the microphone analyzer: live views, not a '
+      + 'calibrated measurement.',
     related: [
       { id: 'measure', why: 'A calibrated RTA and frequency response' },
       { id: 'experiments', why: 'Compare saved experiments' },
@@ -117,7 +117,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
         + 'Preset in the status bar.',
       action: { label: 'Open the Playground', to: 'playground' } } },
   { id: 'learn', label: 'Learn', words: 'lessons guide acoustics',
-    summary: 'Concept cards from frequency to speaker limitations, most with a demo to play.',
+    summary: 'Concept cards from frequency to signal path, most with a demo to play.',
     related: [
       { id: 'analyzer', why: 'Waveforms, harmonics and aliasing in a live spectrum' },
       { id: 'synth', why: 'Modulation, AM and FM on the Synth\'s engines' },
@@ -134,8 +134,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
   // Synth (K058) is top level after Studio by the owner's decision Q019.
   { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch',
     summary: 'A semi-modular mono voice on the Studio model with a patch bay and docked keys, '
-      + 'and an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion '
-      + 'voices.',
+      + 'an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion '
+      + 'voices, and an XY tab.',
     related: [
       { id: 'studio', why: 'The same document as a graph and a timeline' },
       { id: 'sequencer', why: 'Block sequences of tones and sweeps' },
