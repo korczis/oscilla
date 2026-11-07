@@ -80,10 +80,8 @@ const CHECK_MS = 180000;
 const ROW_MS = 30000;
 const READY_MS = 20000;
 
-// The thirteen workspaces, in the navigation's order (src/js/ui/app.js; Synth after Studio,
-// Q019).
-const WORKSPACES = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-  'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'synth', 'about'];
+// The workspaces in the navigation's order: the registry's (ui/shell.js WORKSPACE_IDS).
+const { WORKSPACE_IDS: WORKSPACES } = require('../../src/js/ui/shell.js');
 // A valid recipe link (url-state-measure.js wire keys): 50 Hz-12 kHz.
 const RECIPE = Buffer.from(JSON.stringify({ v: 1, f1: 50, f2: 12000 })).toString('base64url');
 

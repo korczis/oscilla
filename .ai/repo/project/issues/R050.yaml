@@ -1,0 +1,28 @@
+id: R050
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "Numbers the code holds are not retyped: prose and fixtures read MAX_VOICES, FM_ALGORITHMS, the workflow bounds and the credits list"
+slug: numbers-the-code-holds-are-not-retyped
+priority: p2
+profile: implementation
+objective: "Lands as fix(docs) in small slices. The audit of 2026-11-06 found values with one source typed elsewhere: 'up to 16 voices' (src/js/synth/panels/engines.js:18, src/js/data/learn.js:34, README, docs/synth.md; source MAX_VOICES in src/js/synth/voice-pool.js), '7 algorithms' (README, docs/synth.md, a test literal; source FM_ALGORITHMS), the About 'Built with' copy (src/index.html, omits flowbite, lucide-static and tailwindcss; source VENDOR_SCRIPTS and BUILD_TIME_ASSETS), the mutation fixtures of tests/unit/main-checks.test.mjs and ci-workflows.test.mjs that type the workflow's timeout-minutes and Playwright image (da69095e was such a second edit), DEFAULT_CAP = 40_000 in two headroom tests (source UNCAPPED), and the 'oscilla-build' region id in three modules. Each slice makes the copy read its source (an import, a template, or a test that holds the copy equal) and adds that test."
+why: "Same owner complaint; each of these has drifted or bitten once (see the audit table in the R032/C063 pull requests)."
+scope:
+  - "src/js/synth/panels/engines.js"
+  - "src/js/data/learn.js"
+  - "src/index.html"
+  - "README.md"
+  - "docs/synth.md"
+  - "tests/unit/main-checks.test.mjs"
+  - "tests/unit/ci-workflows.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Each slice is fail-first: the test that holds the copy to its source fails on the merge base."
+  - "No user-facing count in src/ is a literal where a module exports the value."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-06'
+updated_at: '2026-11-06'

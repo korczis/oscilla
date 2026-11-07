@@ -65,6 +65,7 @@ npm run release:record -- --version X.Y.Z   # .ai/repo/releases/vX.Y.Z.yaml from
 npm run release:prepare -- --help  # also publish/analyze/record/stamp/verify-deploy, cadence;
                                    # bad flag: exit 2
 majordomus plan status             # milestone progress
+node scripts/pack-sources.mjs      # HEAD as an index + Markdown bundles + zip for an LLM project
 ```
 
 Ship through small PRs with `gh pr merge --auto --squash`; the required `gate` check

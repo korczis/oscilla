@@ -105,8 +105,13 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
    *  insertDecision allows it, else only `explicit`); the notice names the feed it took. */
   function ensurePanel(opts) {
     if (present()) return true;
-    const r = insertAction(model(), panel, opts);
+    const before = model();
+    const r = insertAction(before, panel, opts);
     const ok = !!r.action && dispatch(r.action).ok;
+    // Opening the Synth on a fresh document is not the user's edit: the Studio stays clean, so
+    // a template link afterwards is not refused for unsaved changes (first-screen link:studio).
+    const tracker = get().dirty;
+    if (ok && !(opts && opts.explicit) && tracker) tracker.rebaseFresh(before, model());
     if (ok || !r.action) say(ok ? r.text : r.reason);
     return ok;
   }

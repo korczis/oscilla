@@ -59,6 +59,7 @@
 // Exit code 1 when any check fails in any browser.
 'use strict';
 const suite = require('./lib/suite.cjs');
+const { BUILD_REGION_ID } = require('../../src/js/core/build-info.js');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -254,11 +255,11 @@ async function runOne(name) {
     check('boot', loaded && ready && boot.osc && !boot.labErrors.length,
       `http ${res && res.status()}, ready ${ready}, lab errors ${boot.labErrors.join(',') || 'none'}`);
 
-    const prov = await page.evaluate(() => {
-      const el = document.getElementById('oscilla-build');
+    const prov = await page.evaluate((id) => {
+      const el = document.getElementById(id);
       let region = null;
       let error = null;
-      if (!el) error = 'no #oscilla-build region';
+      if (!el) error = `no #${id} region`;
       else if (el.type !== 'application/json') error = `region type ${el.type}`;
       else {
         try { region = JSON.parse(el.textContent); } catch (e) { error = `invalid JSON: ${e.message}`; }
@@ -267,7 +268,7 @@ async function runOne(name) {
       return { region, error, version: window.OSCILLA && window.OSCILLA.version,
         build: b ? { version: b.version, commit: b.commit, channel: b.channel, label: b.label,
           release: b.release } : null };
-    });
+    }, BUILD_REGION_ID);
     const r = prov.region || {};
     check('provenance region parses', !prov.error && typeof r.version === 'string',
       prov.error || `version ${r.version}, channel ${r.channel}, commit ${r.commit}`);

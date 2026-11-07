@@ -49,7 +49,6 @@
     <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="1.5" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3.5 6v12l8-6zM12.5 6v12l8-6z" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.08 10.24L21.5 10.65V13.35L19.08 13.76L18.25 15.77L19.68 17.76L17.76 19.68L15.77 18.25L13.76 19.08L13.35 21.5H10.65L10.24 19.08L8.23 18.25L6.24 19.68L4.32 17.76L5.75 15.77L4.92 13.76L2.5 13.35V10.65L4.92 10.24L5.75 8.23L4.32 6.24L6.24 4.32L8.23 5.75L10.24 4.92L10.65 2.5H13.35L13.76 4.92L15.77 5.75L17.76 4.32L19.68 6.24L18.25 8.23Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2"/></symbol>
     <symbol id="i-headphones" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h3v6H4a1 1 0 0 1-1-1zM21 14h-3v6h2a1 1 0 0 0 1-1z"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M12 11v6M12 7.5v.5" stroke="var(--osc-info-bg)" stroke-width="2.2"/></symbol>
@@ -1499,7 +1498,7 @@
           <div class="osc-seq-lane">
             <button type="button" class="osc-icon-btn osc-seq-start" id="osc-seq-start"
               data-osc="seq.start" aria-label="Play from the start">
-              <svg aria-hidden="true"><use href="#i-skip"/></svg>
+              <svg aria-hidden="true"><use href="#s-return"/></svg>
             </button>
             <div class="osc-timeline osc-chart-host" id="osc-seq-timeline" data-osc="seq.timeline"
               data-osc-chart="seq-timeline" role="listbox" aria-label="Pattern blocks"
@@ -2947,182 +2946,7 @@
           patch. <span>Every release line that brought OSCILLA here, up to the current
           one.</span></h3>
         <ol class="osc-about-timeline" aria-label="OSCILLA evolution">
-          <li data-state="done">
-            <span>01 · <time data-osc-commit="1655002"
-              datetime="2026-10-01T22:58:26+02:00">22:58</time></span>
-            <strong>Plan</strong>
-            <span>First tracked commit: rules and a 95-section plan</span>
-            <em>Recorded</em>
-          </li>
-          <li data-state="done" data-osc-release="1.0">
-            <span>02 · <time data-osc-commit="a7b7a23"
-              datetime="2026-10-02T03:19:42+02:00">03:19</time></span>
-            <strong>V1</strong>
-            <span>Single-file instrument, tagged v1.0.0</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="2.0">
-            <span>03 · <time data-osc-commit="9fe0a15"
-              datetime="2026-10-02T04:49:03+02:00">04:49</time></span>
-            <strong>V2</strong>
-            <span>Modular acoustic laboratory at the end of the first night:
-              5 h 51 min of wall-clock time, with several AI workers in parallel</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.0">
-            <span>04 · <time data-osc-commit="14c7d5f"
-              datetime="2026-10-03T05:38:55+02:00">05:38</time></span>
-            <strong>Measure</strong>
-            <span>Measurement architecture (V3)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.1">
-            <span>05 · <time data-osc-commit="320130f"
-              datetime="2026-10-03T07:49:26+02:00">07:49</time></span>
-            <strong>Studio</strong>
-            <span>Composition and signal flow (V3.1)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.2">
-            <span>06 · <time data-osc-commit="e494605"
-              datetime="2026-10-03T23:37:56+02:00">23:37</time></span>
-            <strong>Review</strong>
-            <span>Independent DSP review; Studio links and a derived Signal Path (V3.2)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.3">
-            <span>07 · <time data-osc-commit="1c129bd"
-              datetime="2026-10-04T04:30:20+02:00">04:30</time></span>
-            <strong>Navigate</strong>
-            <span>Eight workspaces; every Studio review finding fixed (V3.3)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.4">
-            <span>08 · <time data-osc-commit="092b562"
-              datetime="2026-10-04T14:17:15+02:00">14:17</time></span>
-            <strong>Records</strong>
-            <span>Release records; an About page the release gate keeps current (V3.4)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.5">
-            <span>09 · <time data-osc-commit="f9c2220"
-              datetime="2026-10-04T16:29:18+02:00">16:29</time></span>
-            <strong>Runtime</strong>
-            <span>The Studio says what is running and why; plan identity and divergence (V3.5)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.6">
-            <span>10 · <time data-osc-commit="3801b05"
-              datetime="2026-10-04T19:06:11+02:00">19:06</time></span>
-            <strong>Evidence</strong>
-            <span>A completed experiment is immutable, each experiment has an identity, provenance names the exact build (V3.6)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.7">
-            <span>11 · <time data-osc-commit="ac5fdf9"
-              datetime="2026-10-04T23:00:59+02:00">23:00</time></span>
-            <strong>Comparison</strong>
-            <span>Two experiments are compared by what changed between them, against a chosen baseline (V3.7)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.8">
-            <span>12 · <time data-osc-commit="ffb9765"
-              datetime="2026-10-05T18:25:41+02:00">18:25</time></span>
-            <strong>Trace</strong>
-            <span>One edit followed from intent to the running graph: applied, stored or refused (V3.8)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.9">
-            <span>13 · <time data-osc-commit="8c22376"
-              datetime="2026-10-06T00:02:15+02:00">00:02</time></span>
-            <strong>Definitions</strong>
-            <span>An experiment is executed from a versioned definition and records which version it used (V3.9)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.10">
-            <span>14 · <time data-osc-commit="7fc5001"
-              datetime="2026-10-06T06:11:53+02:00">06:11</time></span>
-            <strong>Lineage</strong>
-            <span>An experiment states what produced each value and what repeating it would need, from what it stored (V3.10)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.11">
-            <span>15 · <time data-osc-commit="b032ddb"
-              datetime="2026-10-06T20:06:09+02:00">20:06</time></span>
-            <strong>Findings</strong>
-            <span>A finding cites the stored experiments it rests on, and a stored record links to the records connected to it (V3.11)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.12">
-            <span>16 · <time data-osc-commit="5297150"
-              datetime="2026-10-18T11:11:38+02:00">11:11</time></span>
-            <strong>Audit</strong>
-            <span>The Studio passes its final review, and a deployed page names its release state: the release itself, or how far after it (V3.12)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.13">
-            <span>17 · <time data-osc-commit="925b5fc"
-              datetime="2026-10-21T02:29:23+02:00">02:29</time></span>
-            <strong>Minimap</strong>
-            <span>The Studio graph shows a minimap of the whole patch, and the release scripts, size report and plan records hold what their checks claim (V3.13)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.14">
-            <span>18 · <time data-osc-commit="b67d1e5"
-              datetime="2026-10-29T19:41:19+01:00">19:41</time></span>
-            <strong>Import</strong>
-            <span>The Studio opens a V2 sequence or configuration file and refuses what it cannot read, the timeline zooms by pinch, and MIDI input states whether this browser supports it (V3.14)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.15">
-            <span>19 · <time data-osc-commit="11cc9fb"
-              datetime="2026-11-02T02:22:41+01:00">02:22</time></span>
-            <strong>Synth</strong>
-            <span>A Synth workspace plays its own engines from knobs, MIDI and the computer keys play the instrument, the Studio and the Synth, and the sequencer plays through the engine's counted Filter stage (V3.15)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.16">
-            <span>20 · <time data-osc-commit="09d5890"
-              datetime="2026-11-02T22:04:31+01:00">22:04</time></span>
-            <strong>Phone</strong>
-            <span>The instrument sounds on a phone and the gate proves it with the browser's gesture rule on, every key and Space go through one registry, and a release rests on the CI run of its own pull request (V3.16)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.17">
-            <span>21 · <time data-osc-commit="c73d27b"
-              datetime="2026-11-03T01:37:37+01:00">01:37</time></span>
-            <strong>Patches</strong>
-            <span>The Synth plays from an XY pad, one patch library of presets serves the Synth and the Studio, and the page's Escape and Space go through the one key registry (V3.17)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.18">
-            <span>22 · <time data-osc-commit="2f442e1"
-              datetime="2026-11-03T20:54:42+01:00">20:54</time></span>
-            <strong>Riffs</strong>
-            <span>The library offers original riffs to listen to and insert, the Synth gets its own look and a patch bay on the phone, presets and links restore the lab settings they name, and every control of every workspace is checked to round-trip (V3.18)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.19">
-            <span>23 · <time data-osc-commit="76bfc30"
-              datetime="2026-11-04T20:08:51+01:00">20:08</time></span>
-            <strong>Templates</strong>
-            <span>Six synthesis templates join the Studio, a notes clip holds a melody as data, a fuzzy search finds a node by its meaning, the Studio keys work wherever the Studio is shown, and the Synth's code is reviewed like the Studio it drives (V3.19)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="done" data-osc-release="3.20">
-            <span>24 · <time data-osc-commit="68b117f"
-              datetime="2026-11-05T01:21:38+01:00">01:21</time></span>
-            <strong>Contracts</strong>
-            <span>Every patch-bay port has a contract table derived from the registry, the Studio graph summary links each node, a node the running graph does not hold says why, and a refused Play stops the runtime and says so (V3.20)</span>
-            <em>Released</em>
-          </li>
-          <li data-state="current" data-osc-release="3.21">
-            <span>25 · <time data-osc-commit="e8d54f8"
-              datetime="2026-11-05T13:25:18+01:00">13:25</time></span>
-            <strong>Hardware</strong>
-            <span>The Synth's panel takes a hardware look from one synth-theme layer with its own visual reference, the XY pad lives on one shared mount and lets go on Stop and on leaving, the Arm button reads the transport and every keyboard disarms what it armed, and pull requests land through a merge queue (V3.21)</span>
-            <em>Current</em>
-          </li>
+          <!-- @about-stations -->
         </ol>
       </section>
 
@@ -3145,18 +2969,17 @@
 
         <section class="osc-about-block" aria-labelledby="osc-about-next" data-osc="about.next">
           <h3 class="osc-about-h" id="osc-about-next"><span class="osc-num">B</span> What comes
-            next</h3>
-          <p>The open milestones of OSCILLA's plan as of this release and how many of each one's
-            required issues are done: now under way, next ready to start, later waiting on
-            work above.</p>
+            next<span x-text="` · as of v${ROADMAP.release}`"></span></h3>
+          <p>The open milestones of OSCILLA's plan: now under way, next ready to start, later
+            waiting on work above.</p>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
             id="osc-about-next-now"
             x-text="`${ROADMAP.phase.now.title} · ${ROADMAP.phase.now.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-now" data-osc="about.next.now">
             <template x-for="m in ROADMAP.phase.now.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
@@ -3164,9 +2987,9 @@
             x-text="`${ROADMAP.phase.next.title} · ${ROADMAP.phase.next.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-next" data-osc="about.next.next">
             <template x-for="m in ROADMAP.phase.next.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
@@ -3184,9 +3007,9 @@
           <ul role="list" aria-labelledby="osc-about-next-later" data-osc="about.next.later"
             id="osc-about-next-later-list" x-show="aboutLaterOpen" x-cloak>
             <template x-for="m in ROADMAP.phase.later.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
         </section>
@@ -3272,8 +3095,9 @@
           href="#i-external"/></svg></a></dd></div>
         <div><dt>Licence</dt><dd>MIT; the full text is in the comment at the top of this
           file.</dd></div>
-        <div><dt>Built with</dt><dd>Alpine.js and uPlot (MIT), p5.js (LGPL-2.1, embedded
-          unmodified); licence texts are in the comment at the top of this file.</dd></div>
+        <div><dt>Built with</dt><dd>Alpine.js, uPlot, Flowbite and Tailwind CSS (MIT), Lucide
+          (ISC), p5.js (LGPL-2.1, embedded unmodified); licence texts are at the top of this
+          file.</dd></div>
       </dl>
     </section>
   </main>
