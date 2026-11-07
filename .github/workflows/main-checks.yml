@@ -68,9 +68,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      MJ_VERSION: 1.0.0-alpha.9
+      MJ_VERSION: 1.0.0
       MJ_TARGET: x86_64-unknown-linux-gnu
-      MJ_SHA256: a73710f2e52b3712017c850739d8bebc95764ba51333fddfb369df49eeeb8063
+      MJ_SHA256: 0fc3f6ad9ef2c4f1b5ff8454f6d6373d1b9d1c4732822ca5d06c4ce6c65cdd6e
     steps:
       - uses: actions/checkout@v7
         with:
