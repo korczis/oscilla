@@ -1,0 +1,44 @@
+# Review verdict for pull request #471 (branch chore/majordomus-1.0.0): the .ai layer migrated to
+# Majordomus 1.0.0, and CI pins 1.0.0 and its digest. Reviewed head bbac9ff9; base origin/main
+# 78e84ae5 (v3.25.0). Reviewer: oscilla-a3 (claude-code 12f1e384). Disclosure: the reviewer built
+# none of this change (oscilla-2b did) and wrote only this file, in a detached review worktree.
+#
+# The digest. origin/main's scripts/review-verdict.mjs --content --list --base-branch origin/main at
+# bbac9ff9 (the branch's copy is identical to main's): deaee518f399e0d9f8e6a88c2e766374ade43887c62a
+# a7323b42aed1d60e90ba over three guarded paths: .github/workflows/ci.yml,
+# .github/workflows/main-checks.yml, tests/unit/ci-knowledge-job.test.mjs.
+#
+# Why it goes first. The installed majordomus is 1.0.0; its doctor on main's layer (run in a
+# worktree at main) prints 4 FAILs, profile-limits debugging, deep-work, implementation and routine
+# ("does not set context.knowledge_max_items"), so every pre-commit hook refuses. At bbac9ff9 the
+# same doctor prints 0 failures.
+#
+# The guarded content. ci.yml and main-checks.yml: MJ_VERSION 1.0.0-alpha.9 -> 1.0.0 and MJ_SHA256
+# -> 0fc3f6ad9ef2c4f1b5ff8454f6d6373d1b9d1c4732822ca5d06c4ce6c65cdd6e in both, nothing else; the step
+# still checks the archive with sha256sum -c before unpacking. The digest was checked three ways
+# for MJ_TARGET x86_64-unknown-linux-gnu: the v1.0.0 release's SHA256SUMS, prismatic-majordomus
+# origin/master .ai/repo/releases/v1.0.0.yaml (target linux-x86_64-gnu, size 20880041), and
+# shasum -a 256 of the archive downloaded from the release; all three are 0fc3f6ad...cdd6e.
+# ci-knowledge-job.test.mjs: CAPTURED_WITH '1.0.0' and its comment; the captured lines are
+# unchanged (2b recaptured on a hookless copy without the knowledge block), and the test passes
+# against the installed 1.0.0.
+#
+# Unguarded, read anyway: the four profiles take knowledge_max_items 8 / 12 / 8 / 0 (debugging,
+# deep-work, implementation, routine), exactly the values of 1.0.0's share/skeleton/profiles;
+# AGENTS.md, CLAUDE.md, GEMINI.md change only the policy hash in their generated markers; the fleet
+# pack (rules/vendor/fleet/MANIFEST, fleet.ui-uses-flowbite-pro v1 blocking, skill
+# fleet-flowbite-pro) is what majordomus update installs, and both files hash to their MANIFEST
+# lines.
+#
+# Evidence at bbac9ff9: majordomus doctor 0 failures; npm test 5012 pass, 0 fail, 1 skipped
+# (GITHUB_BASE_REF=main GITHUB_EVENT_NAME=pull_request); main-checks.test.mjs and
+# ci-knowledge-job.test.mjs 15/0 (ci.yml and main-checks.yml in parity). fail-first: n/a, a chore.
+#
+# Verdict: merge. F1 is a follow-up, not a defect of this change.
+schema: review-verdict/v1
+pr: 471
+verdict: merge
+reviewer: oscilla-a3 (claude-code 12f1e384)
+content: deaee518f399e0d9f8e6a88c2e766374ade43887c62aa7323b42aed1d60e90ba
+findings:
+  - { id: F1, severity: P3, status: open, title: "two blocking Flowbite Pro rules now apply, project.ui-uses-flowbite-pro (ADR 0061, its ratchet) and the vendored fleet.ui-uses-flowbite-pro; say in the project rule which one owns enforcement, so the two cannot drift" }
