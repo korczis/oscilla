@@ -207,10 +207,16 @@ export function formatStations(doc) {
 
 const git = (root, ...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 
+/** The zone every station's time is written in, whatever the releasing host's zone: the
+ *  owner's (all 27 stations up to 3.23 are +01:00 or +02:00). A UTC runner would otherwise
+ *  stamp Z and a CET Mac +01:00 on the same timeline (#460 review F3). */
+export const STATION_ZONE = 'Europe/Prague';
+
 /** HEAD as a station names it: its 7-character id and its committer date with offset. */
-export function headStamp(root = ROOT) {
-  return { commit: git(root, 'rev-parse', '--short=7', 'HEAD'),
-    datetime: git(root, 'show', '-s', '--format=%cI', 'HEAD') };
+export function headStamp(root = ROOT, zone = STATION_ZONE) {
+  const datetime = execFileSync('git', ['show', '-s', '--format=%cd', '--date=iso-strict-local',
+    'HEAD'], { cwd: root, encoding: 'utf8', env: { ...process.env, TZ: zone } }).trim();
+  return { commit: git(root, 'rev-parse', '--short=7', 'HEAD'), datetime };
 }
 
 /** The derived fields judged against git (empty = they hold). */

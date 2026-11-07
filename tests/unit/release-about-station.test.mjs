@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   MARKER, STATIONS_REL, deriveStations, expandStations, formatStations, lineLabel, lineOf,
-  main, readStations, renderStations, stampStations, stationsGitProblems, stationsShapeProblems,
+  headStamp, main, readStations, renderStations, stampStations, stationsGitProblems,
+  stationsShapeProblems,
 } from '../../scripts/about-stations.mjs';
 import {
   CI_PREPARE_COMMANDS, GATE_COMMANDS, RESTORE_PATHS,
@@ -165,5 +166,23 @@ test('--stamp on a scratch repository stamps HEAD and is idempotent', (t) => {
   const last = readStations(dir).stations.at(-1);
   assert.equal(last.release, '9.9');
   assert.equal(last.commit, git('rev-parse', '--short=7', 'HEAD'));
-  assert.equal(last.datetime, git('show', '-s', '--format=%cI', 'HEAD'));
+  assert.equal(Date.parse(last.datetime), Date.parse(git('show', '-s', '--format=%cI', 'HEAD')));
+  assert.match(last.datetime, /\+0[12]:00$/, 'stamped in Europe/Prague, whatever the host zone');
+});
+
+test('the stamp writes the station zone on a UTC host too (#460 review F3)', (t) => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'osc-stations-tz-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const env = { ...process.env, TZ: 'UTC', GIT_COMMITTER_DATE: '2026-07-01T12:00:00Z',
+    GIT_AUTHOR_DATE: '2026-07-01T12:00:00Z' };
+  const git = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8', env }).trim();
+  git('init', '-q');
+  git('config', 'user.email', 't@example.invalid');
+  git('config', 'user.name', 'T');
+  writeFileSync(path.join(dir, 'x'), 'x\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'x');
+  assert.equal(git('show', '-s', '--format=%cI', 'HEAD'), '2026-07-01T12:00:00Z', 'a UTC host');
+  assert.equal(headStamp(dir).datetime, '2026-07-01T14:00:00+02:00', 'summer time in Prague');
+  assert.equal(headStamp(dir, 'UTC').datetime, '2026-07-01T12:00:00Z', 'git writes Z for UTC');
 });
