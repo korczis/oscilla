@@ -102,59 +102,65 @@ const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
 
 /** The problems of one chord: its grammar, Space and the reserved keys, rule 1. */
 export function chordProblems(chord) {
-  if (typeof chord !== 'string' || !chord) return ['a chord must be a string'];
+  if (typeof chord !== 'string' || !chord) return ['zkratka musí být neprázdný řetězec'];
   const parts = chord === '+' ? ['+'] : chord.split('+');
   const key = parts.pop() || '+';
   const mods = parts;
   const out = [];
   const order = mods.map((m) => MODIFIERS.indexOf(m));
   if (order.some((i) => i < 0) || order.some((i, k) => k && i <= order[k - 1])) {
-    out.push(`chord ${chord}: modifiers are ${MODIFIERS.join(', ')}, in that order, once each`);
+    out.push(`zkratka ${chord}: modifikátory jsou ${MODIFIERS.join(', ')}, v tomto pořadí, `
+      + 'každý nejvýš jednou');
   }
   if (!NAMED_KEYS.includes(key) && !(key.length === 1 && key !== ' ')) {
-    out.push(`chord ${chord}: ${JSON.stringify(key)} is not a key name`);
+    out.push(`zkratka ${chord}: ${JSON.stringify(key)} není název klávesy`);
   }
   if (RESERVED.includes(key)) {
-    out.push(`chord ${chord}: ${key === ' ' ? 'Space' : key} is never a kind's key (${
-      key === 'Space' || key === ' ' ? 'Space belongs to the transport or the instrument'
-        : 'Escape and Tab are the global keys'})`);
+    out.push(`zkratka ${chord}: ${key === ' ' ? 'Space' : key} nesmí být klávesou žádného druhu (${
+      key === 'Space' || key === ' ' ? 'Space patří transportu nebo nástroji'
+        : 'Escape a Tab jsou globální klávesy'})`);
   }
   if (/^[A-Za-z0-9]$/.test(key) && !mods.some((m) => m !== 'Shift')) {
-    out.push(`chord ${chord}: a bare letter or digit belongs to the armed keyboard and the `
-      + 'workspace shortcuts (rule 1); make it a visible button or a menu item');
+    out.push(`zkratka ${chord}: samotné písmeno nebo číslice patří zapnuté klávesnici a `
+      + 'zkratkám pracovních ploch (pravidlo 1); udělejte z ní viditelné tlačítko nebo položku '
+      + 'nabídky');
   }
-  if (/^[a-z]$/.test(key)) out.push(`chord ${chord}: a letter is written in upper case`);
+  if (/^[a-z]$/.test(key)) out.push(`zkratka ${chord}: písmeno se píše velké`);
   return out;
 }
 
 function paramProblems(p, where) {
   if (!isObj(p) || !Object.isFrozen(p) || PARAM_FIELDS.some((f) => !(f in p))) {
-    return [`${where} must be a descriptor built by prop.* (studio/nodes/common.js)`];
+    return [`${where} musí být deskriptor vytvořený pomocí prop.* (studio/nodes/common.js)`];
   }
   const why = validateParamValue(p, p.default);
-  return why ? [`${where} default ${JSON.stringify(p.default)} ${why}`] : [];
+  return why ? [`${where}: výchozí hodnota ${JSON.stringify(p.default)} ${why}`] : [];
 }
 
 function eventsProblems(decl) {
   const out = [];
-  if (!Array.isArray(decl.events) || !decl.events.length) return ['events must list the events'];
+  if (!Array.isArray(decl.events) || !decl.events.length) {
+    return ['events musí vyjmenovat události'];
+  }
   const names = new Set();
   for (const e of decl.events) {
     const n = isObj(e) && typeof e.name === 'string' ? e.name : '?';
-    if (!isObj(e) || !NAME.test(n)) { out.push('an event needs a name'); continue; }
-    if (names.has(n)) out.push(`event ${n} is declared twice`);
+    if (!isObj(e) || !NAME.test(n)) { out.push('událost potřebuje název'); continue; }
+    if (names.has(n)) out.push(`událost ${n} je deklarována dvakrát`);
     names.add(n);
     for (const k of Object.keys(e)) {
-      if (!['name', 'does', 'emits', 'keyPath'].includes(k)) out.push(`event ${n}: unknown ${k}`);
+      if (!['name', 'does', 'emits', 'keyPath'].includes(k)) {
+        out.push(`událost ${n}: neznámé pole ${k}`);
+      }
     }
-    if (words(e.does) < 5) out.push(`event ${n}: does needs a sentence of at least five words`);
+    if (words(e.does) < 5) out.push(`událost ${n}: does potřebuje větu o nejméně pěti slovech`);
     if (e.emits !== null && (!isList(e.emits) || !e.emits.length
       || e.emits.some((t) => !EMIT.test(t)))) {
-      out.push(`event ${n}: emits is null or a list of action types, transport.<command>, `
-        + 'notes.<call> or view');
+      out.push(`událost ${n}: emits je null, nebo seznam typů akcí, transport.<command>, `
+        + 'notes.<call> či view');
     }
     if (e.keyPath !== undefined && (!isList(e.keyPath) || !e.keyPath.length)) {
-      out.push(`event ${n}: keyPath lists the chords that reach it`);
+      out.push(`událost ${n}: keyPath vyjmenovává zkratky, které k ní vedou`);
     }
   }
   return out;
@@ -162,19 +168,19 @@ function eventsProblems(decl) {
 
 function keysProblems(decl) {
   const out = [];
-  if (!Array.isArray(decl.keys)) return ['keys must be a list of { chord, event, row }'];
+  if (!Array.isArray(decl.keys)) return ['keys musí být seznam { chord, event, row }'];
   const events = new Set((decl.events || []).map((e) => e && e.name));
   const seen = new Set();
   for (const k of decl.keys) {
     if (!isObj(k) || Object.keys(k).sort().join() !== 'chord,event,row') {
-      out.push('a key is exactly { chord, event, row }');
+      out.push('klávesa je přesně { chord, event, row }');
       continue;
     }
     out.push(...chordProblems(k.chord));
-    if (seen.has(k.chord)) out.push(`chord ${k.chord} is used twice`);
+    if (seen.has(k.chord)) out.push(`zkratka ${k.chord} je použita dvakrát`);
     seen.add(k.chord);
-    if (!events.has(k.event)) out.push(`chord ${k.chord}: event ${k.event} is not declared`);
-    if (!NAME.test(k.row)) out.push(`chord ${k.chord}: row must be a shortcut row id`);
+    if (!events.has(k.event)) out.push(`zkratka ${k.chord}: událost ${k.event} není deklarována`);
+    if (!NAME.test(k.row)) out.push(`zkratka ${k.chord}: row musí být id řádku tabulky zkratek`);
   }
   return out;
 }
@@ -190,23 +196,25 @@ function reachProblems(decl) {
     const v = decl[input];
     if (!isObj(v) || !isList(v.events) || words(v.rule) < 5
       || Object.keys(v).sort().join() !== 'events,rule') {
-      out.push(`${input} must be { events: [name], rule: <sentence of five words or more> }`);
+      out.push(`${input} musí být { events: [name], rule: <věta o pěti a více slovech> }`);
       continue;
     }
     for (const n of v.events) {
       const e = byName.get(n);
-      if (!e) { out.push(`${input} event ${n} is not declared`); continue; }
+      if (!e) { out.push(`${input}: událost ${n} není deklarována`); continue; }
       const path = Array.isArray(e.keyPath) ? e.keyPath : [];
       const missing = path.filter((c) => !chords.has(c));
-      if (missing.length) out.push(`event ${n}: keyPath ${missing.join(', ')} is not a key`);
+      if (missing.length) {
+        out.push(`událost ${n}: keyPath ${missing.join(', ')} není klávesou druhu`);
+      }
       if (!bound.has(n) && !path.length) {
-        out.push(`${input} event ${n} has no key: bind it or give it a keyPath`);
+        out.push(`${input}: událost ${n} nemá klávesu; navažte ji nebo jí dejte keyPath`);
       }
     }
   }
   for (const e of byName.values()) {
     if (Array.isArray(e.keyPath) && bound.has(e.name)) {
-      out.push(`event ${e.name}: a bound event needs no keyPath`);
+      out.push(`událost ${e.name}: navázaná událost nepotřebuje keyPath`);
     }
   }
   return out;
@@ -216,118 +224,120 @@ function sentence(v, n) { return words(v) >= n; }
 
 /** Every problem of a kind declaration's shape; empty when it is valid. */
 export function kindProblems(decl) {
-  if (!isObj(decl)) return ['a kind declaration must be an object'];
+  if (!isObj(decl)) return ['deklarace druhu musí být objekt'];
   const out = [];
-  for (const k of Object.keys(decl)) if (!FIELDS.includes(k)) out.push(`unknown field ${k}`);
-  if (!KINDS.includes(decl.kind)) out.push(`unknown kind ${JSON.stringify(decl.kind)} (kinds.js)`);
-  else if (decl.kind === 'node-face') out.push('a node face is derived, never a kind declaration');
-  if (!Number.isInteger(decl.version) || decl.version < 1) out.push('version must be 1 or more');
-  if (typeof decl.label !== 'string' || !decl.label.trim()) out.push('label must not be empty');
-  if (!sentence(decl.docs, 5)) out.push('docs needs a sentence of at least five words');
+  for (const k of Object.keys(decl)) if (!FIELDS.includes(k)) out.push(`neznámé pole ${k}`);
+  if (!KINDS.includes(decl.kind)) out.push(`neznámý druh ${JSON.stringify(decl.kind)} (kinds.js)`);
+  else if (decl.kind === 'node-face') out.push('tvář uzlu se odvozuje, nikdy není deklarací druhu');
+  if (!Number.isInteger(decl.version) || decl.version < 1) out.push('version musí být 1 nebo víc');
+  if (typeof decl.label !== 'string' || !decl.label.trim()) out.push('label nesmí být prázdný');
+  if (!sentence(decl.docs, 5)) out.push('docs potřebuje větu o nejméně pěti slovech');
 
-  if (!Array.isArray(decl.props)) out.push('props must be a list of prop descriptors');
+  if (!Array.isArray(decl.props)) out.push('props musí být seznam deskriptorů vlastností');
   else {
     const keys = new Set();
     for (const p of decl.props) {
       const key = isObj(p) ? p.key : '?';
-      out.push(...paramProblems(p, `prop ${key}`));
-      if (keys.has(key)) out.push(`prop ${key} is declared twice`);
+      out.push(...paramProblems(p, `vlastnost ${key}`));
+      if (keys.has(key)) out.push(`vlastnost ${key} je deklarována dvakrát`);
       keys.add(key);
     }
   }
-  if (!isList(decl.io) || !decl.io.length) out.push('io must list what the kind reads');
+  if (!isList(decl.io) || !decl.io.length) out.push('io musí vyjmenovat, co druh čte');
   else {
     for (const v of decl.io) {
-      if (!IO.includes(v)) out.push(`io ${v} is not one of ${IO.join(', ')}`);
+      if (!IO.includes(v)) out.push(`io ${v} není jedním z ${IO.join(', ')}`);
     }
-    if (new Set(decl.io).size !== decl.io.length) out.push('io lists an entry twice');
+    if (new Set(decl.io).size !== decl.io.length) out.push('io uvádí položku dvakrát');
   }
   out.push(...eventsProblems(decl), ...keysProblems(decl), ...reachProblems(decl));
 
-  if (!isList(decl.state) || !decl.state.length) out.push('state must list its state paths');
-  else {
+  if (!isList(decl.state) || !decl.state.length) {
+    out.push('state musí vyjmenovat své stavové cesty');
+  } else {
     for (const s of decl.state) {
-      if (!STATE_PATH.test(s)) out.push(`state ${s} is outside the state path grammar`);
+      if (!STATE_PATH.test(s)) out.push(`stav ${s} je mimo gramatiku stavových cest`);
     }
   }
   const l = decl.links;
   if (!isObj(l) || Object.keys(l).sort().join() !== 'openedBy,opens'
     || !Array.isArray(l.opens) || !Array.isArray(l.openedBy)) {
-    out.push('links must be { opens: [link], openedBy: [link] }');
+    out.push('links musí být { opens: [link], openedBy: [link] }');
   } else {
     for (const t of [...l.opens, ...l.openedBy]) {
       if (typeof t !== 'string' || !LINK.test(t)) {
-        out.push(`link ${t} is neither route:<workspace> nor a catalogue id`);
+        out.push(`odkaz ${t} není route:<workspace> ani id katalogu`);
       }
     }
   }
   const a = decl.aria;
   if (!isObj(a) || !ARIA_ROLES.includes(a.role)) {
-    out.push(`aria.role must be one of ${ARIA_ROLES.join(', ')}`);
+    out.push(`aria.role musí být jedna z rolí ${ARIA_ROLES.join(', ')}`);
   } else {
-    if (!sentence(a.name, 5)) out.push('aria.name says how the accessible name is built');
+    if (!sentence(a.name, 5)) out.push('aria.name říká, jak se skládá přístupný název');
     for (const [part, role] of Object.entries(isObj(a.parts) ? a.parts : {})) {
       if (!ARIA_ROLES.includes(role)) {
-        out.push(`aria.parts.${part}: ${role} is not an allowed role`);
+        out.push(`aria.parts.${part}: ${role} není povolená role`);
       }
     }
   }
   const t = decl.target;
-  if (!isObj(t) || typeof t.min !== 'number' || !(t.min > 0)) out.push('target.min must be px');
+  if (!isObj(t) || typeof t.min !== 'number' || !(t.min > 0)) out.push('target.min musí být v px');
   else if (t.min < MIN_TARGET_PX && !sentence(t.exemption, 5)) {
-    out.push(`target.min ${t.min} is under ${MIN_TARGET_PX} px without an exemption of at least `
-      + 'five words');
+    out.push(`target.min ${t.min} je pod ${MIN_TARGET_PX} px bez výjimky o nejméně pěti `
+      + 'slovech');
   }
   if (!isObj(decl.layout) || !sentence(decl.layout['390x844'], 3)
     || Object.keys(decl.layout).some((k) => !['390x844', '1536x1024'].includes(k))) {
-    out.push('layout must state its 390x844 rule');
+    out.push('layout musí uvést pravidlo pro 390x844');
   }
-  if (typeof decl.live !== 'boolean') out.push('live must be true or false');
+  if (typeof decl.live !== 'boolean') out.push('live musí být true nebo false');
   if (decl.live && !sentence(decl.reducedMotion, 5)) {
-    out.push('a live kind states its reduced-motion rule (five words or more)');
+    out.push('živý druh uvádí pravidlo pro omezený pohyb (pět a více slov)');
   }
   const tr = decl.truth;
   if (!(isList(tr) && tr.length) && !(isObj(tr) && Object.keys(tr).join() === 'none'
     && sentence(tr.none, 5))) {
-    out.push('truth must list readout-truth rows or be { none: <reason of five words or more> }');
+    out.push('truth musí vyjmenovat řádky readout-truth, nebo být { none: <důvod o pěti a více '
+      + 'slovech> }');
   }
   const impl = decl.impl;
   if (!isObj(impl) || !isList(impl.modules) || !impl.modules.length
     || impl.modules.some((m) => !MODULE.test(m))
     || (impl.issue !== undefined && !ISSUE.test(impl.issue))) {
-    out.push('impl must be { modules: [src/js/...js], issue?: <plan issue id> }');
+    out.push('impl musí být { modules: [src/js/...js], issue?: <id úkolu plánu> }');
   }
   if (!isList(decl.workspaces) || !decl.workspaces.length) {
-    out.push('workspaces must name where the kind is mounted');
+    out.push('workspaces musí jmenovat, kde je druh připojen');
   }
   if (!isList(decl.transient) || decl.transient.some((s) => !TRANSIENT_STATE.includes(s))) {
     const kept = isList(decl.transient)
       ? decl.transient.filter((s) => !TRANSIENT_STATE.includes(s)) : [];
-    out.push(`transient is what the view keeps, only ${TRANSIENT_STATE.join(', ')} (rule 2)${
-      kept.length ? `; ${kept.join(', ')} is passed in by the owner` : ''}`);
+    out.push(`transient je to, co si pohled drží, jen ${TRANSIENT_STATE.join(', ')} (pravidlo 2)${
+      kept.length ? `; ${kept.join(', ')} předává vlastník` : ''}`);
   }
   const m = decl.mount;
   if (!isObj(m) || !Array.isArray(m.extras) || m.extras.some((x) => !IDENT.test(x)
     || MOUNT_BASE.includes(x)) || Object.keys(m).join() !== 'extras') {
-    out.push(`mount must be { extras: [name] } beyond ${MOUNT_BASE.join(', ')} (rule 4)`);
+    out.push(`mount musí být { extras: [name] } nad rámec ${MOUNT_BASE.join(', ')} (pravidlo 4)`);
   }
   if (decl.constants !== undefined && (!isObj(decl.constants)
     || Object.values(decl.constants).some((v) => typeof v !== 'number' || !Number.isFinite(v)))) {
-    out.push('constants must map names to finite numbers');
+    out.push('constants musí přiřazovat názvům konečná čísla');
   }
   return out;
 }
 
 /** The problems of an instance's props against its kind (unknown keys, values out of range). */
 export function instanceProblems(decl, props) {
-  if (!isObj(props)) return ['props must be an object'];
+  if (!isObj(props)) return ['props musí být objekt'];
   const byKey = new Map(decl.props.map((p) => [p.key, p]));
   const out = [];
   for (const [k, v] of Object.entries(props)) {
     const p = byKey.get(k);
-    if (!p) { out.push(`prop ${k} is not a prop of the ${decl.kind} kind`); continue; }
+    if (!p) { out.push(`vlastnost ${k} není vlastností druhu ${decl.kind}`); continue; }
     const why = validateParamValue(p, v);
-    if (why) out.push(`prop ${k} ${JSON.stringify(v)} ${why}`);
+    if (why) out.push(`vlastnost ${k}: ${JSON.stringify(v)} ${why}`);
   }
   return out;
 }

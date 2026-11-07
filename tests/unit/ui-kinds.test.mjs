@@ -158,25 +158,25 @@ test('the facts are read from the source: transport commands, note router, issue
 // ------------------------------------------------------------------------------ the eight
 test('negative 1: a kind without keys for a pointer event', () => {
   const d = variant((v) => { delete v.events.find((e) => e.name === 'paint').keyPath; });
-  refused(kindProblems(d), /pointer event paint has no key/);
+  refused(kindProblems(d), /pointer: událost paint nemá klávesu/);
   const t = variant((v) => { v.touch.events.push('nowhere'); });
-  refused(kindProblems(t), /touch event nowhere is not declared/);
+  refused(kindProblems(t), /touch: událost nowhere není deklarována/);
   const path = variant((v) => { v.events.find((e) => e.name === 'value').keyPath = ['Home']; });
-  refused(kindProblems(path), /keyPath Home is not a key/);
-  throwsKind(d, /has no key/);
+  refused(kindProblems(path), /keyPath Home není klávesou druhu/);
+  throwsKind(d, /nemá klávesu/);
 });
 
 test('negative 2: a key map holding Space, or a bare key used twice', () => {
   for (const chord of ['Space', ' ', 'Shift+Space', 'Mod+Space']) {
     const d = variant((v) => { v.keys.push({ chord, event: 'toggle', row: 'step-grid-toggle' }); });
-    refused(kindProblems(d), /Space belongs to the transport/);
+    refused(kindProblems(d), /Space patří transportu nebo nástroji/);
   }
   const twice = variant((v) => { v.keys.push({ chord: 'Enter', event: 'clear', row: 'x' }); });
-  refused(kindProblems(twice), /chord Enter is used twice/);
-  for (const chord of ['Tab', 'Escape']) refused(chordProblems(chord), /global keys/);
-  refused(chordProblems('Shift+Mod+C'), /in that order/);
-  refused(chordProblems('Hyper+C'), /in that order/);
-  refused(chordProblems('Spacebar'), /not a key name/);
+  refused(kindProblems(twice), /zkratka Enter je použita dvakrát/);
+  for (const chord of ['Tab', 'Escape']) refused(chordProblems(chord), /globální klávesy/);
+  refused(chordProblems('Shift+Mod+C'), /v tomto pořadí/);
+  refused(chordProblems('Hyper+C'), /v tomto pořadí/);
+  refused(chordProblems('Spacebar'), /není název klávesy/);
   assert.deepEqual(chordProblems('Mod+Shift+ArrowLeft'), []);
 });
 
@@ -190,14 +190,14 @@ test('negative 3: an event emitting an action type the Studio does not export', 
     assert.equal(check([v]).problems.length === 0, ok, t);
   }
   const lower = variant((v) => { v.events[0].emits = ['clip_update']; });
-  refused(kindProblems(lower), /emits is null or a list of action types/);
+  refused(kindProblems(lower), /emits je null, nebo seznam typů akcí/);
   assert.deepEqual(check([variant((v) => { v.events[0].emits = null; })]).problems, []);
 });
 
 test('negative 4: a state path outside the grammar', () => {
   for (const s of ['Studio.clip', 'studio..clip', 'studio/clip', 'notes[0]', '']) {
     refused(kindProblems(variant((v) => { v.state = [s]; })),
-      s ? /outside the state path grammar/ : /state must list/);
+      s ? /je mimo gramatiku stavových cest/ : /state musí vyjmenovat/);
   }
   const unknown = variant((v) => { v.state = ['studio.steps']; });
   assert.deepEqual(kindProblems(unknown), []);
@@ -206,9 +206,9 @@ test('negative 4: a state path outside the grammar', () => {
 
 test('negative 5: a target under 44 px without an exemption of five words', () => {
   const small = variant((v) => { v.target = { min: 32, exemption: 'too small here' }; });
-  refused(kindProblems(small), /under 44 px without an exemption/);
+  refused(kindProblems(small), /je pod 44 px bez výjimky/);
   const none = variant((v) => { v.target = { min: 40 }; });
-  refused(kindProblems(none), /under 44 px/);
+  refused(kindProblems(none), /pod 44 px/);
   const ok = variant((v) => { v.target = { min: 32,
     exemption: 'a dense lane keeps its 44 px row height' }; });
   assert.deepEqual(kindProblems(ok), []);
@@ -220,18 +220,19 @@ test('negative 6: a missing truth row', () => {
   refused(check([d]).problems, /truth row step-grid\.playhead is not in docs\/v3\/readout-truth/);
   const real = variant((v) => { v.truth = ['keyboard.held']; });
   assert.deepEqual(check([real]).problems, []);
-  refused(kindProblems(variant((v) => { v.truth = { none: 'no' }; })), /truth must list/);
-  refused(kindProblems(variant((v) => { v.truth = []; })), /truth must list/);
+  refused(kindProblems(variant((v) => { v.truth = { none: 'no' }; })), /truth musí vyjmenovat/);
+  refused(kindProblems(variant((v) => { v.truth = []; })), /truth musí vyjmenovat/);
 });
 
 test('negative 7: an instance whose props fail its kind', () => {
   assert.deepEqual(instanceProblems(stepGrid, { steps: 16, lanes: [36, 38, 42],
     mode: 'notes', clipId: 'clip-1', page: 1, selection: [2, 5] }), []);
-  refused(instanceProblems(stepGrid, { steps: 65 }), /prop steps 65 must be between 1 and 64/);
-  refused(instanceProblems(stepGrid, { lanes: [128] }), /prop lanes .* between 0 and 127/);
-  refused(instanceProblems(stepGrid, { mode: 'steps' }), /prop mode "steps" must be one of/);
-  refused(instanceProblems(stepGrid, { clipId: '1 2' }), /prop clipId .* invalid format/);
-  refused(instanceProblems(stepGrid, { swing: 0.5 }), /swing is not a prop of the step-grid/);
+  refused(instanceProblems(stepGrid, { steps: 65 }),
+    /vlastnost steps: 65 must be between 1 and 64/);
+  refused(instanceProblems(stepGrid, { lanes: [128] }), /vlastnost lanes: .* between 0 and 127/);
+  refused(instanceProblems(stepGrid, { mode: 'steps' }), /vlastnost mode: "steps" must be one of/);
+  refused(instanceProblems(stepGrid, { clipId: '1 2' }), /vlastnost clipId: .* invalid format/);
+  refused(instanceProblems(stepGrid, { swing: 0.5 }), /swing není vlastností druhu step-grid/);
 });
 
 test('negative 8: a declared shape changed without a version bump', () => {
@@ -260,21 +261,21 @@ test('negative 8: a declared shape changed without a version bump', () => {
 // ------------------------------------------------------------------------------ the five rules
 test('rule 1: no kind binds a bare letter or digit key', () => {
   for (const chord of ['A', 'Shift+A', '5', 'Shift+7']) {
-    refused(chordProblems(chord), /bare letter or digit belongs to the armed keyboard/);
+    refused(chordProblems(chord), /samotné písmeno nebo číslice patří zapnuté klávesnici/);
   }
-  refused(chordProblems('Mod+c'), /upper case/);
+  refused(chordProblems('Mod+c'), /písmeno se píše velké/);
   for (const chord of ['Mod+A', 'Alt+5', 'Ctrl+Shift+Z', '[', 'F2']) {
     assert.deepEqual(chordProblems(chord), [], chord);
   }
   throwsKind(variant((v) => { v.keys.push({ chord: 'R', event: 'ratchet', row: 'x' }); }),
-    /bare letter/);
+    /samotné písmeno/);
 });
 
 test('rule 2: a view keeps only transient state; the owner passes the rest', () => {
   assert.deepEqual([...TRANSIENT_STATE], ['focus', 'drag-preview', 'open-entry']);
   for (const s of OWNER_STATE) {
     refused(kindProblems(variant((v) => { v.transient = ['focus', s]; })),
-      new RegExp(`${s} is passed in by the owner`));
+      new RegExp(`${s} předává vlastník`));
   }
 });
 
@@ -312,7 +313,7 @@ test('rule 4: every mount returns element, set, setDisabled, destroy and its ext
   const extra = variant((v) => { v.mount = { extras: ['focusStep'] }; });
   refused(scanKindModules({ [view]: good }, { [view]: extra }), /returns no focusStep/);
   refused(kindProblems(variant((v) => { v.mount = { extras: ['destroy'] }; })),
-    /mount must be \{ extras/);
+    /mount musí být \{ extras/);
 });
 
 test('rule 5: no runtime module imports a kind declaration', () => {
@@ -355,31 +356,31 @@ test('the static scan: no store, sources, lab, dispatch, audio node or timer in 
 
 // ------------------------------------------------------------------------------ the rest
 test('a kind outside KINDS, a node face, a duplicate kind and a bad version are refused', () => {
-  refused(kindProblems(variant((v) => { v.kind = 'drum-grid'; })), /unknown kind "drum-grid"/);
-  refused(kindProblems(variant((v) => { v.kind = 'node-face'; })), /node face is derived/);
-  refused(kindProblems(variant((v) => { v.version = 0; })), /version must be 1 or more/);
-  refused(kindProblems(variant((v) => { v.bogus = 1; })), /unknown field bogus/);
+  refused(kindProblems(variant((v) => { v.kind = 'drum-grid'; })), /neznámý druh "drum-grid"/);
+  refused(kindProblems(variant((v) => { v.kind = 'node-face'; })), /tvář uzlu se odvozuje/);
+  refused(kindProblems(variant((v) => { v.version = 0; })), /version musí být 1 nebo víc/);
+  refused(kindProblems(variant((v) => { v.bogus = 1; })), /neznámé pole bogus/);
   refused(check([stepGrid, raw(stepGrid)]).problems, /the kind is declared twice/);
 });
 
 test('io, ARIA, layout, reduced motion, props and docs are held to their lists', () => {
   assert.ok(IO.includes('transport.playhead') && ARIA_ROLES.includes('grid'));
-  refused(kindProblems(variant((v) => { v.io = ['dom']; })), /io dom is not one of/);
-  refused(kindProblems(variant((v) => { v.io = []; })), /io must list/);
+  refused(kindProblems(variant((v) => { v.io = ['dom']; })), /io dom není jedním z/);
+  refused(kindProblems(variant((v) => { v.io = []; })), /io musí vyjmenovat/);
   refused(kindProblems(variant((v) => { v.aria.role = 'application'; })), /aria\.role/);
-  refused(kindProblems(variant((v) => { v.aria.parts.step = 'cell'; })), /cell is not an allowed/);
+  refused(kindProblems(variant((v) => { v.aria.parts.step = 'cell'; })), /cell není povolená role/);
   refused(kindProblems(variant((v) => { v.layout = { '1536x1024': 'Sixteen steps per page.' }; })),
-    /390x844 rule/);
-  refused(kindProblems(variant((v) => { delete v.reducedMotion; })), /reduced-motion rule/);
+    /pravidlo pro 390x844/);
+  refused(kindProblems(variant((v) => { delete v.reducedMotion; })), /pravidlo pro omezený pohyb/);
   assert.deepEqual(kindProblems(variant((v) => { v.live = false; delete v.reducedMotion; })), []);
   refused(kindProblems(variant((v) => { v.props.push({ key: 'x', default: 1 }); })),
-    /prop x must be a descriptor built by prop/);
+    /vlastnost x musí být deskriptor vytvořený pomocí prop/);
   refused(kindProblems(variant((v) => { v.props.push(prop.integer('steps', 'Again', { min: 1,
-    max: 2, default: 1 })); })), /prop steps is declared twice/);
+    max: 2, default: 1 })); })), /vlastnost steps je deklarována dvakrát/);
   refused(kindProblems(variant((v) => { v.props.push(prop.integer('n', 'N', { min: 1, max: 2,
-    default: 3 })); })), /prop n default 3 must be between 1 and 2/);
-  refused(kindProblems(variant((v) => { v.docs = 'A grid.'; })), /docs needs a sentence/);
-  refused(kindProblems(variant((v) => { v.events[0].does = 'Moves.'; })), /does needs a sentence/);
+    default: 3 })); })), /vlastnost n: výchozí hodnota 3 must be between 1 and 2/);
+  refused(kindProblems(variant((v) => { v.docs = 'A grid.'; })), /docs potřebuje větu/);
+  refused(kindProblems(variant((v) => { v.events[0].does = 'Moves.'; })), /does potřebuje větu/);
 });
 
 test('links resolve to a workspace route or a catalogue id; G007 is not built', () => {
@@ -390,7 +391,7 @@ test('links resolve to a workspace route or a catalogue id; G007 is not built', 
   refused(check([variant((v) => { v.links.openedBy = ['studio.tl.nowhere']; })]).problems,
     /link studio\.tl\.nowhere resolves to no/);
   refused(kindProblems(variant((v) => { v.links.opens = ['g007://synth/drums']; })),
-    /neither route:<workspace> nor a catalogue id/);
+    /není route:<workspace> ani id katalogu/);
   refused(check([variant((v) => { v.workspaces = ['drums']; })]).problems,
     /workspace drums is not a workspace/);
 });
