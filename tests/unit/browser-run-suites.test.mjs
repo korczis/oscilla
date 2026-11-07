@@ -30,7 +30,7 @@ const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 
 const SUITES = ['app', 'layout', 'qa-regressions', 'navigation', 'link-integrity',
   'ui-flowbite-pro', 'ui-current', 'touch-audio', 'demo-song', 'cross-links',
-  'first-screen', 'surface-census', 'journeys'].map((s) => `tests/browser/${s}.cjs`);
+  'first-screen', 'surface-census', 'journeys', 'iphone'].map((s) => `tests/browser/${s}.cjs`);
 // K075: the synth line's group, the integration map first (midi moved here from test:browser).
 const SYNTH = ['integration-map', 'synth', 'synth-engines', 'xy-pad', 'midi', 'steps']
   .map((s) => `tests/browser/${s}.cjs`);

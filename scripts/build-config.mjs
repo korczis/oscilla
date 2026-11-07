@@ -15,10 +15,17 @@ export const TAILWIND_CONFIG = 'tailwind.config.cjs';
 export const DARK_THEME_SELECTOR = ':root:not([data-theme="light"])';
 // A .dark class in a selector: not the escaped dark: variant class (.dark\:bg-opacity-80).
 const DARK_CLASS = /\.dark(?![\w\\-])/g;
+// A .dark compounded on its element, on either side (.dark.x, .dark[a], .dark:hover, .x.dark,
+// html.dark, [dir].dark): the rewrite would ask the root element for the rest of the compound,
+// a different rule. None is emitted today, so one is refused at build time rather than
+// rewritten (review #386 B3 and C1, af's R2). A .dark after a combinator, a comma or a "(" is
+// an ancestor and is rewritten.
+const DARK_COMPOUND = /\.dark(?=[.#[:])|(?<=[^\s>+~(,])\.dark(?![\w\\-])/;
 
 /**
  * PostCSS plugin run after Tailwind (build.mjs): rewrites every .dark class in a selector to
- * DARK_THEME_SELECTOR, so the plugin's dark rules follow OSCILLA's theme.
+ * DARK_THEME_SELECTOR, so the plugin's dark rules follow OSCILLA's theme. A compound .dark
+ * throws, naming the selector.
  */
 export function darkThemeSelector() {
   return {
@@ -26,6 +33,11 @@ export function darkThemeSelector() {
     Rule(rule) {
       DARK_CLASS.lastIndex = 0;
       if (!DARK_CLASS.test(rule.selector)) return;
+      const compound = rule.selectors.find((sel) => DARK_COMPOUND.test(sel));
+      if (compound) {
+        throw rule.error(`darkThemeSelector: a compound .dark (${compound}) would become a`
+          + ` selector on the root element; write it as a .dark ancestor`);
+      }
       rule.selectors = rule.selectors.map((sel) => sel.replace(DARK_CLASS, DARK_THEME_SELECTOR));
     },
   };

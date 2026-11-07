@@ -31,9 +31,10 @@ const LAUNCH = Object.freeze({
   webkit: {},
 });
 
-/** The workspaces of the shell, in navigation order (ui/app.js MODES). */
-const WORKSPACES = Object.freeze(['playground', 'measure', 'experiments', 'analyzer', 'filter',
-  'compare', 'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about']);
+/** The workspaces of the shell, in navigation order: the product's own registry
+ *  (ui/shell.js WORKSPACE_IDS), never a copy. A hand-typed twelve here left Synth, the
+ *  thirteenth, out of every suite that loops over it (the control census included). */
+const { WORKSPACE_IDS: WORKSPACES } = require('../../../src/js/ui/shell.js');
 
 /**
  * A fresh context and page on dist, ready, with the safety notice collapsed and a running

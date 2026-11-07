@@ -1,0 +1,29 @@
+id: U097
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "At 320 x 568 the docked keyboard's arm and octave buttons never cover the Studio header's actions"
+slug: at-320-x-568-the-docked-keyboard-never-covers-the-studio-header-actions
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Lane A's new check ui-current phone-whole-overlap-studio-320 (feat/a-connect-phone, #386) finds the docked keyboard's arm and octave buttons covering the Studio page header's actions at 320 x 568, on darwin as on linux. #386 records it as PHONE_WHOLE_DEBT '@320:studio:overlap' with the Studio lane as owner, so the train lands with the finding visible; this issue is the fix. The fix sits in the shell's dock placement or the Studio header's phone layout, in one place, not per control: at 320 x 568 either the dock yields the header row (the dock starts below the header's actions, or the actions move above the dock's reach) or the header's actions fold into the Studio's overflow menu on phones below 360 px; the check's debt entry is removed in the same change and the ledger shrinks by one."
+why: "Owner order of 2026-11-02 (the whole interface mobile-first, the phone-whole criterion) and 2026-11-04 (no control hidden under another). Filed by a3 on 2026-11-05 at 21's request so the debt entry cannot vanish into the ledger; 320 x 568 is the smallest profile the phone-whole check covers (iPhone SE, first generation)."
+current_state: "Filed 2026-11-05 from #386's phone-whole check; not started. The debt entry lands with #386."
+scope:
+  - "src/js/midi/keyboard-ui.js"
+  - "src/js/ui/studio"
+  - "src/styles"
+  - "tests/browser/ui-current.cjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: the PHONE_WHOLE_DEBT entry '@320:studio:overlap' is removed from tests/browser/ui-current.cjs and the phone-whole-overlap-studio-320 check passes in chromium, firefox and webkit at 320 x 568 with the Studio open and the keyboard docked; on the merge base the check fails without the entry."
+  - "The fix is one place in the shell or the Studio header (no per-control exception), and no Synth or Playground control is newly covered at 320 x 568 or 375 x 667 (the phone-whole checks of those workspaces stay green)."
+  - "The Flowbite Pro baseline (tests/unit/ui-flowbite-pro-baseline.json) and the legacy class ledger only shrink; no inline style is added."
+  - "Guarded (src/js/midi, src/js/ui/studio): a non-builder seat writes the verdict."
+validation:
+  - "node tests/browser/ui-current.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
