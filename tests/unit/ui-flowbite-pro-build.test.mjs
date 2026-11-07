@@ -365,6 +365,23 @@ test('the plugin\'s .dark ancestor is rewritten to OSCILLA\'s dark theme (not li
     assert.ok(/\.dark\\:bg-gray-900\\\/80/.test(tailwind), 'the dark: variant class is untouched');
   });
 
+  test('darkThemeSelector refuses a compound .dark and rewrites a .dark ancestor (#386 B3)',
+    async () => {
+      const postcss = require('postcss');
+      const run = (css) => postcss([darkThemeSelector()]).process(css, { from: undefined })
+        .then((r) => r.css);
+      assert.equal(await run('.dark .x{color:red}'),
+        ':root:not([data-theme="light"]) .x{color:red}');
+      assert.equal(await run('.a,.dark .x{color:red}'),
+        '.a,:root:not([data-theme="light"]) .x{color:red}');
+      assert.equal(await run(':is(.dark) .x{color:red}'),
+        ':is(:root:not([data-theme="light"])) .x{color:red}');
+      for (const sel of ['.dark.x .y', '.dark[dir] .y', '.dark:hover .y', '.x.dark .y',
+        'html.dark .y', '[dir].dark .y']) {
+        await assert.rejects(run(`${sel}{color:red}`), /compound \.dark/, sel);
+      }
+    });
+
 test('no class the legacy CSS styles is a class the compiled Tailwind defines', () => {
   const { legacy, tailwind } = distStyle();
   const utilities = classesOf(tailwind);

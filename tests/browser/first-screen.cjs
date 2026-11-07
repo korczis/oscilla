@@ -126,8 +126,8 @@ const TEMPLATES = {
   'sweep-sequence': 'Sweep Sequence', 'stereo-beat': 'Stereo Beat',
   'filter-automation': 'Filter Automation', 'measurement-sweep': 'Measurement Sweep',
 };
-const WORKSPACES = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-  'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
+// The registry's workspaces (ui/shell.js WORKSPACE_IDS), never a copy.
+const { WORKSPACE_IDS: WORKSPACES } = require('../../src/js/ui/shell.js');
 const said = (s, re) => s.alerts.some((a) => re.test(a));
 
 // One row per entry path. `hash` without '#'; `search` with '?'. `address` is location.hash

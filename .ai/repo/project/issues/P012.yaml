@@ -57,6 +57,7 @@ validation:
   - "npm run test:visual"
   - "npm run test:browser"
   - "npm test"
+  - "node tests/browser/iphone.cjs"
 evidence_required:
   - "verified"
 created_at: 2026-11-03

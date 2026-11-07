@@ -1,0 +1,25 @@
+id: R051
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "release:analyze counts a merge commit as nothing: its members are already in the walk"
+slug: release-analyze-counts-a-merge-as-nothing
+priority: p2
+profile: implementation
+objective: "Lands as fix(release). scripts/release-analyze.mjs classifies every commit since the last v* tag; one that is not a conventional commit, or whose type it does not know, is counted as patch (lines 54 and 59). Merge commits fall there: 'merge(main): ...' (unknown type merge) and git's 'Merge branch ...' (not conventional). On 2026-11-07 the release after #458 (test-only: the iPhone suite) came out as a patch from five merges alone (0294430, 15c6aea, 2c24e99, b5bc28d, 743f7a7). A merge's members are commits of the same walk and are each classified, so a merge adds nothing but can raise the level. After: a commit with two or more parents is level none, why 'a merge: its members are counted', unless its message is itself a conventional feat/fix/breaking (a squash-like merge commit of a PR titled fix(...) keeps its type)."
+why: "Owner, 2026-11-06: versions are to be derived, not inflated. Found by oscilla-2b while cutting v3.24.2 (#466): the level was right only by accident (the roadmap refresh is a visible change)."
+scope:
+  - "scripts/release-analyze.mjs"
+  - "tests/unit/release-analyze.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-analyze.test.mjs gains a fixture whose only commits since the tag are a test(...) commit and two merges ('merge(main): ...', 'Merge branch x'): the proposal is no release; on the merge base it is a patch."
+  - "A merge commit whose subject is a conventional fix(...) or feat(...) (a PR merge commit) is still counted by its type; a feat inside a merged branch still makes the release minor."
+  - "Guarded (scripts/release-*, tests/unit/release-*): a non-builder verdict."
+validation:
+  - "node --test tests/unit/release-analyze.test.mjs"
+  - "npm run release:analyze"
+evidence_required:
+  - "verified"
+created_at: '2026-11-07'
+updated_at: '2026-11-07'

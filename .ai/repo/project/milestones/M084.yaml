@@ -15,4 +15,12 @@ evidence_required:
 risks:
 - "Nobody asks the owner: the coordinator raises Q030-Q033."
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-05T14:54:53Z
+evidence:
+  - covers: milestone_verified
+    type: manual
+    command: "majordomus plan list --milestone M084"
+    result: "4 of 4 issues done: Q030 and Q033 (the owner's answers of 2026-10-29, recorded as owner_decision evidence in #439 at d82b1a66), Q031 and Q032 (done since 32b439e6 and 85281ad5); every Q issue of the Studio boxes and signal generator lines carries owner_decision evidence with its date and source; none is cancelled; re-checked by a3 on 2026-11-05 at main d82b1a66."
+    artifact: ".ai/repo/project/milestones/M084.yaml"
+    commit: d82b1a663b4220859830d2947cebaa03de1dd280
+    recorded_at: 2026-11-05T14:54:53Z

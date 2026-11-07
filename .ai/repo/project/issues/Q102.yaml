@@ -1,0 +1,32 @@
+id: Q102
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "Owner decision: the account's CI job cap reserves 6 jobs for OSCILLA; Majordomus keeps at most 14 in flight"
+slug: owner-decision-ci-cap-reserves-six-for-oscilla
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's answer of 2026-11-06 (AskUserQuestion in Claude Code session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f, oscilla-2b, about 22:58Z). Question, verbatim: 'Measured tonight: OSCILLA and prismatic-majordomus share one account-wide cap of 20 GitHub-hosted CI jobs. It sat at 20/20 from 18:30Z, mostly Majordomus jobs, so each OSCILLA release waits about 1.5-3 h for runners. How should CI capacity be split?' Options offered: 'Reserve 6 for OSCILLA (Recommended)', 'Paid plan / more runners', 'Priority to releases only', 'Keep as is'. Answer, verbatim: 'Reserve 6 for OSCILLA (Recommended)'. Its stated meaning: Majordomus workflows get max-parallel or a concurrency bound so at most 14 jobs are in flight and OSCILLA always has 6; done on branches in both repositories with verdicts. The Majordomus side is the prismatic-majordomus landing seat's (7b), which was told the answer in the same session."
+why: "Measured from job started/completed times across korczis/oscilla, prismatic-majordomus and kuzu on 2026-11-06: 20 of 20 hosted jobs in flight from 18:30Z, 18 of them Majordomus at 20:20Z, 17 at 22:30Z, 20 at 22:54Z; OSCILLA's release #442 waited ~75 min with 2 running and 9 queued, its Pages deploy job 25 min, the record #448 behind it. One OSCILLA landing needs ~24 jobs over ~45-60 min."
+current_state: "Decided by the owner on 2026-11-06 in session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f (AskUserQuestion; question and answer quoted in the objective). The owner_decision evidence is recorded on main after this plan change lands; the bound itself lands in prismatic-majordomus as its issue I4532 (allocated by the landing seat 7b, 2026-11-06; its PR follows that repository's release work)."
+scope:
+  - ".ai/repo/project/issues/Q102.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence (covers owner_decision) quoting the question and the answer with date and session."
+  - "prismatic-majordomus's workflows bound their in-flight jobs to 14 (max-parallel or concurrency), landed through that repository's flow; OSCILLA's queued jobs start within minutes while Majordomus trains validate (measured once and cited)."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-06'
+updated_at: 2026-11-07T09:33:42Z
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion, Claude Code session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f (oscilla-2b), 2026-11-06 ~22:58Z"
+    result: "Question (verbatim): 'Measured tonight: OSCILLA and prismatic-majordomus share one account-wide cap of 20 GitHub-hosted CI jobs. It sat at 20/20 from 18:30Z, mostly Majordomus jobs, so each OSCILLA release waits about 1.5-3 h for runners. How should CI capacity be split?' Answer (verbatim): 'Reserve 6 for OSCILLA (Recommended)'. The Majordomus-side bound is prismatic-majordomus I4532 (seat 7b); Q102 is done when it lands and is measured once (criterion 2)."
+    artifact: ".ai/repo/project/issues/Q102.yaml"
+    commit: f76538a05cff83681d02223696150a8edf59b8d7
+    recorded_at: 2026-11-07T09:33:42Z

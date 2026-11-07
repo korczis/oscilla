@@ -12,8 +12,8 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 1.75,
-      "totalExclData": 2.08,
+      "total": 2.71,
+      "totalExclData": 2.21,
       "regions": {
         "header": {
           "mismatch": 14.39,
@@ -28,8 +28,8 @@
           "dataPp": 0.5
         },
         "pageHeader": {
-          "mismatch": 2.22,
-          "mismatchExclData": 2.22,
+          "mismatch": 5.15,
+          "mismatchExclData": 5.15,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -70,8 +70,8 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 0.06,
-          "mismatchExclData": 0.09,
+          "mismatch": 6.09,
+          "mismatchExclData": 0.12,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -328,6 +328,18 @@
           "rise": 2.22,
           "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
           "date": "2026-11-04"
+        },
+        {
+          "region": "pageHeader",
+          "rise": 2.93,
+          "reason": "train B #437: the Playground page-header summary takes #424's U085 wording from the workspace registry; U022's name-width floor fits the Silence block's name in the first screen's lane under the Pro sidebar (0.0-2.8 s window), and the lane's transport glyph follows transport-glyphs",
+          "date": "2026-11-05"
+        },
+        {
+          "region": "sequencer",
+          "rise": 6.03,
+          "reason": "train B #437: the Playground page-header summary takes #424's U085 wording from the workspace registry; U022's name-width floor fits the Silence block's name in the first screen's lane under the Pro sidebar (0.0-2.8 s window), and the lane's transport glyph follows transport-glyphs",
+          "date": "2026-11-05"
         }
       ]
     },
@@ -342,8 +354,8 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 5.28,
-      "totalExclData": 5.8,
+      "total": 5.84,
+      "totalExclData": 5.81,
       "regions": {
         "header": {
           "mismatch": 15.74,
@@ -358,8 +370,8 @@
           "dataPp": 0.5
         },
         "pageHeader": {
-          "mismatch": 9.01,
-          "mismatchExclData": 9.01,
+          "mismatch": 9.03,
+          "mismatchExclData": 9.03,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -400,20 +412,20 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 2.35,
-          "mismatchExclData": 2.23,
+          "mismatch": 6.3,
+          "mismatchExclData": 2.26,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "studio": {
-          "mismatch": 4.16,
-          "mismatchExclData": 4.6,
+          "mismatch": 4.13,
+          "mismatchExclData": 4.57,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 4.55,
-          "mismatchExclData": 4.55,
+          "mismatch": 4.56,
+          "mismatchExclData": 4.56,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -718,6 +730,12 @@
           "rise": 2.19,
           "reason": "lane A's Pro shell (F002/#386: sidebar, page header with Related, phone hamburger header) and v4's Tailwind gray palette, merged with main's train 3",
           "date": "2026-11-04"
+        },
+        {
+          "region": "sequencer",
+          "rise": 3.95,
+          "reason": "train B on lane A (#437): pageHeader carries U085 summary wording (ui/shell.js); sequencer: U022 name-width floor binds in the ~776 px first-screen lane beside the Pro sidebar, the lane scrolls; geometry unchanged",
+          "date": "2026-11-06"
         }
       ]
     }
