@@ -1,13 +1,12 @@
 {
-  "schema": "oscilla-roadmap/v2",
-  "release": "3.22.1",
-  "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them, as of release (package.json's version). Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
+  "schema": "oscilla-roadmap/v3",
+  "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them when release:prepare last ran (the release the page names is BUILD.version: this file holds no copy of it). Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
       "done": 20,
-      "required": 41,
+      "required": 44,
       "phase": "now"
     },
     {
@@ -252,7 +251,7 @@
       "id": "M090",
       "title": "One instrument, one coherent state",
       "done": 23,
-      "required": 57,
+      "required": 59,
       "phase": "now"
     },
     {

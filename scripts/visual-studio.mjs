@@ -32,6 +32,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { MAX_MISMATCH_PCT } from './visual-limits.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const requireHere = createRequire(import.meta.url);
@@ -44,7 +45,6 @@ const pixelmatch = pixelmatchMod.default || pixelmatchMod;
 const REF_DIR = path.join(ROOT, 'tests/visual/studio');
 const META_FILE = path.join(REF_DIR, 'references.json');
 const ENV = `${process.platform}-${process.arch}`;
-const MAX_MISMATCH_PCT = 0.5;
 const TEMPLATE = 'subtractive-synth';
 const VIEWS = [
   { id: 'desktop', width: 1536, height: 1024 },

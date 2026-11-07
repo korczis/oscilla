@@ -1,0 +1,27 @@
+id: R049
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "The Majordomus pin has one source: job names, comments, the vendor manifest and test constants read MJ_VERSION"
+slug: the-majordomus-pin-has-one-source
+priority: p2
+profile: implementation
+objective: "Lands as fix(ci). The pin 1.0.0-alpha.9 is typed in 11 places: .github/workflows/ci.yml (MJ_VERSION, MJ_SHA256, a comment and the job name), .github/workflows/main-checks.yml (the job name, MJ_VERSION, MJ_SHA256), tests/unit/ci-knowledge-job.test.mjs (a comment, CAPTURED_WITH), .ai/repo/rules/vendor/majordomus/manifest.yaml source_revision and M118's prose; the bump e880703e edited eight files by hand and every bump renames a check. After: MJ_VERSION/MJ_SHA256 in ci.yml are the one source (scripts/majordomus-pin-check.mjs reads them); main-checks.yml either reuses them or is held equal by a test; job names carry no version; CAPTURED_WITH and the manifest are read or checked against it."
+why: "Audit of 2026-11-06 (oscilla-2b, owner: 'something is hard-coded, numbers duplicated, not everything derived')."
+scope:
+  - ".github/workflows/ci.yml"
+  - ".github/workflows/main-checks.yml"
+  - "scripts/majordomus-pin-check.mjs"
+  - "tests/unit/ci-knowledge-job.test.mjs"
+  - "tests/unit/main-checks.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a unit test lists every tracked occurrence of the pinned version outside ci.yml's MJ_VERSION and the release records, and fails on the merge base."
+  - "No job name or check name carries the version; the branch-protection required check names are unchanged or the owner is told which change (owner-only O-action)."
+  - "Guarded (.github/): a non-builder verdict."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-06'
+updated_at: '2026-11-06'

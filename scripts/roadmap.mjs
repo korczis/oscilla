@@ -26,10 +26,13 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { ROOT, parseSemver, readVersion } from './release-metadata.mjs';
+import { ROOT } from './release-metadata.mjs';
 
 export const ROADMAP_REL = 'src/data/roadmap.json';
-export const SCHEMA = 'oscilla-roadmap/v2';
+// v3 drops `release` (the 2026-11-06 owner order, nothing typed twice): the release a roadmap
+// describes is package.json's version, which only release:prepare changes and which prepare
+// writes this file with, so the page reads it from BUILD.version (src/js/ui/about.js).
+export const SCHEMA = 'oscilla-roadmap/v3';
 export const CLOSED = ['DONE', 'CANCELLED'];
 export const FIELDS = ['id', 'title', 'done', 'required', 'phase'];
 /** The phase of an open milestone by its derived status; a status not named here is next. */
@@ -37,7 +40,8 @@ export const PHASE_OF = { ACTIVE: 'now', VERIFY: 'now', PLANNED: 'next', BLOCKED
 export const PHASES = ['now', 'next', 'later'];
 export const NOTE = 'The open milestones of the plan (.ai/repo/project) in its derived order, '
   + 'each with how many of its required issues are done and its phase (now, next, later), as '
-  + '`majordomus plan roadmap --json` gave them, as of release (package.json\'s version). '
+  + '`majordomus plan roadmap --json` gave them when release:prepare last ran (the release the '
+  + 'page names is BUILD.version: this file holds no copy of it). '
   + 'Written by scripts/roadmap.mjs, which release:prepare runs before its build; About '
   + 'renders it from the bundle. Do not edit by hand.';
 
@@ -63,12 +67,11 @@ const requiredOf = (m) => Number(m.issues?.required ?? 0);
 const phaseOf = (m) => PHASE_OF[m.status] ?? 'next';
 
 /**
- * The roadmap of `plan` at `release`: its open milestones, in its order, with their progress.
+ * The roadmap of `plan`: its open milestones, in its order, with their progress.
  */
-export function roadmapFromPlan(plan, release = readVersion()) {
+export function roadmapFromPlan(plan) {
   return {
     schema: SCHEMA,
-    release,
     note: NOTE,
     milestones: plan.milestones.filter(isOpen).map((m) => ({
       id: m.id, title: m.title, done: doneOf(m), required: requiredOf(m), phase: phaseOf(m),
@@ -81,8 +84,9 @@ export function roadmapShapeProblems(roadmap) {
   if (!roadmap || typeof roadmap !== 'object') return ['the roadmap is not an object'];
   const problems = [];
   if (roadmap.schema !== SCHEMA) problems.push(`schema is ${roadmap.schema}, not ${SCHEMA}`);
-  if (!parseSemver(roadmap.release)) {
-    problems.push(`release ${roadmap.release} is not a version X.Y.Z or X.Y.Z-rc.N`);
+  if ('release' in roadmap) {
+    problems.push('the roadmap holds release, a copy of package.json\'s version: the page reads '
+      + 'BUILD.version');
   }
   if (!Array.isArray(roadmap.milestones)) return [...problems, 'milestones is not a list'];
   roadmap.milestones.forEach((m, i) => {
@@ -166,10 +170,9 @@ export function main(argv = process.argv.slice(2), root = ROOT) {
     else console.log(`roadmap: ${ROADMAP_REL} lists the plan's open milestones`);
     return problems.length ? 1 : 0;
   }
-  const roadmap = roadmapFromPlan(plan, readVersion(root));
+  const roadmap = roadmapFromPlan(plan);
   writeFileSync(file, serialize(roadmap));
-  console.log(`roadmap: wrote ${ROADMAP_REL} (${roadmap.milestones.length} open milestones, `
-    + `v${roadmap.release})`);
+  console.log(`roadmap: wrote ${ROADMAP_REL} (${roadmap.milestones.length} open milestones)`);
   return 0;
 }
 

@@ -17,11 +17,12 @@ scope:
   - "dist"
 depends_on: []
 acceptance_criteria:
-  - "A unit test asserts roadmap.release equals package.json's version and the heading renders it; it fails today (no field)."
-  - "The field passes the :323 no-time, no-SHA check."
+  - "A unit test asserts the heading names the release the roadmap describes: the build's own version (About's ROADMAP.release is BUILD.version) and the roadmap holds no copy of it (roadmap v3, re-scoped 2026-11-06; the first form, roadmap.release equal to package.json's version, shipped in #424 and went stale on its first merge of main after a bump)."
+  - "The roadmap holds no time, SHA or version (the :323 check, and version:check with LINE_ALLOW empty)."
   - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
   - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
   - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+current_state: "Delivered first by #424 (in train B #437): roadmap.mjs wrote release and About read it. Re-scoped 2026-11-06 by oscilla-2b with oscilla-21's review of the derived-versioning train (finding F1): roadmap v3 drops the copy (scripts/roadmap.mjs refuses a release key), About reads BUILD.version, release-version-check LINE_ALLOW is empty. Reason: the owner's order of 2026-11-06 (nothing typed twice) and the measured drift: train B's merge of main 26399239 showed release 3.21.0 against package.json's next version. The heading still names the release; done is stamped on main after both #437 and the derived-versioning train land, each criterion re-checked there."
 validation:
   - "node --test tests/unit/about-current.test.mjs"
   - "npm test"
