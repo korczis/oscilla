@@ -109,7 +109,7 @@ enumerates neither, because ranges written here go stale.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 891aae631b23 f2d9a1017395dba3 -->
+<!-- majordomus:begin 5622ac57fb78 f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under
