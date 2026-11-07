@@ -95,6 +95,15 @@ export const EXACT = Object.freeze([
   family('studio.view', [],
     'Inside the StudioModel view, neither undoable, dirtying nor hashed.',
     'store.dispatch of studio/actions.js'),
+  // W001: what the step-grid kind shows (ADR 0086): one clip of the timeline, and the notes
+  // array of a notes clip (studio/notes.js), of which the grid is a projection.
+  family('studio.clip', [],
+    'Inside the StudioModel timeline: the IndexedDB library, project and sequence files.',
+    'store.dispatch CLIP_UPDATE of studio/actions.js'),
+  family('notes', [],
+    'Inside the StudioModel, in the payload of its notes clip: the IndexedDB library, project '
+      + 'and sequence files.',
+    'store.dispatch CLIP_UPDATE of studio/actions.js'),
 ]);
 
 const TABLE = new Map();

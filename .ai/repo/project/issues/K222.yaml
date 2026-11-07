@@ -1,0 +1,49 @@
+id: K222
+milestone: M066
+serves:
+  - "connected-instrument#drum-machine"
+  - "connected-instrument#one-transport"
+title: "Drums view: the perc engine's kit as rows of one notes clip on the step-grid kind, with six trigger pads, on the one transport"
+slug: drums-view-the-perc-engines-kit-as-rows-of-one-notes-clip-on
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth), in the same pull request as W008 (the step-grid kind's first mounted consumer). The Drums view of the Synth workspace (sv=drums, the place Q019 decided): one perc-engine node (src/js/studio/nodes/engines.js, the voices of src/js/synth/perc-recipes.js) and one notes clip on its track; six rows, each a note number of PERC_KEYMAP whose name comes from the target's key map (ADR 0086 decision 5: a lane is a note number, never a drum engine or a steps clip of its own), the default rows kick, snare, clap, hat closed, hat open and tom mid as one exported constant, each row's voice a picker over PERC_VOICES that rewrites that lane's note numbers in one CLIP_UPDATE; sixteen numbered steps (the clip grid's steps: 16, stepBeats: 0.25, ADR 0086 decision 2), each step a key with an on-light, 8 per page at 390 px with the row's name above its steps (8 x 44 px fill the 358 px inside the gutters, so no name column fits beside them) and 16 at 1536 px with the name beside them; the rows' shown names are Czech (Q104), carried in the label field and never in the voice ids of perc-recipes.js: Kopák, Virbl, Tlesk, Hi-hat zavřený, Hi-hat otevřený, Tom střední (and Tom nízký, Tom vysoký for the picker); the first pad tap on a phone sounds (project.a-phone-sounds); the playing step from transport.playhead() through W008's one frame-loop subscriber; six trigger pads below the grid, one per row, that play the row's note live through the note router (src/js/studio/live-notes.js) on the same store and transport, by pointer, touch and keys; Play and Stop are the one transport's. Open in Studio selects the clip in the timeline at the same revision. Before: the perc engine plays only from the piano keys and the Studio timeline; there is no drum grid. After: a drum grid and pads in the Synth workspace on the one notes clip, the one transport and the one store. Negative cases: a voice picked for a row that another row already holds (refused with its sentence, model unchanged); an off-grid note in the clip (shown as off-grid, never moved); Space (the transport's). Rollback: revert the pull request; a saved notes clip stays valid model data that the timeline plays."
+why: "Owner direction of 2026-11-07 recorded by Q103 (oscilla-2b's session): the groovebox views (a drum machine of 6 voice rows x 16 numbered steps with 6 trigger pads and a record button; the semi-modular Synth face with a step-sequencer strip; two XY pads), in OSCILLA's own look, with the binding constraint 'no one-offs: componentised, reused, DRY, all connectable, one living system over shared state'. Carved from K073 on 2026-11-07 by oscilla-21 (the sequencer line), agreed with oscilla-2b: the drum rows are notes of one notes clip on a voice node (ADR 0086), the grid is W008's one step-grid kind, and K073 keeps the patch-bay outs, flam, choke and the kit's mixer."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/ui/kinds"
+  - "src/js/ui/catalog"
+  - "src/js/studio/live-notes.js"
+  - "tests/unit/drum-view.test.mjs"
+  - "tests/browser/drums.cjs"
+  - "tests/browser/integration-map.json"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/unit/source-size-baseline.json"
+  - "package.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K068"
+  - "W008"
+  - "Q019"
+acceptance_criteria:
+  - "tests/unit/drum-view.test.mjs, failing on the merge base: the six default rows map to PERC_KEYMAP note numbers whose names are the key map's; toggling step i of a row builds one CLIP_UPDATE whose notes array gains or loses exactly the note at at = i x stepBeats with that row's note number and leaves every other note unchanged; a voice picker change rewrites only that lane's note numbers in one CLIP_UPDATE; the three negative cases of the objective, each refused or shown as stated."
+  - "A browser check in tests/browser/drums.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the grid's clip is the clip the Studio timeline shows at the same revision, and Open in Studio selects it; reload keeps sv=drums. Real-time: while playing, aria-current follows the transport and a step toggled sounds on its next pass (a gate onset in the runtime's debugInfo); a pad press sounds its row's voice; each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: steps by pointer, keyboard (W008's keys) and touch, pads by pointer, touch and keys; the grid is role=grid with gridcells named ('Kick, step 5, on'). It runs through tests/browser/lib/suite.cjs at 1536x1024 and 390x844, assumes no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The phone proof: tests/browser/iphone.cjs gains the Drums view (a step toggled and a pad pressed with the browser's gesture rule on sound within its deadline) (project.a-phone-sounds)."
+  - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); a refusal shows the store's sentence once in the polite live region and leaves model, history and runtime unchanged (project.typed-ports)."
+  - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
+  - "Every link it adds (Open in Studio, the sub-view tab) is a row of tests/browser/integration-map.json, and tests/browser/integration-map.cjs walks it by pointer and keyboard with Back, Forward and reload."
+  - "Its chrome (tabs, buttons, button groups, the voice picker's dropdown) is markup adapted from the matching Flowbite Pro block; the step keys and pads are a domain view under the ADR 0061 instrument-visuals note (inline SVG or literal Tailwind utilities inside a Pro card, no stylesheet, no osc-* token, no inline style); the ratchet does not rise (project.ui-uses-flowbite-pro, project.visual-identity-lock, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs)."
+  - "Every string it adds passes tests/unit/synth-wording.test.mjs: no product, brand or model name and no claim of a device it imitates (project.no-fake-science); the look is OSCILLA's own, no third-party trade dress (Q103)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 4 KB gzip added with W008, compiled CSS included, with the base and head figures in the pull request body, under the gzip budget of scripts/build-config.mjs (project.single-file-deliverable)."
+  - "Definition of done: tests/README.md has a row for each new test, the Keyboard shortcuts dialog lists the pads' keys, dist is rebuilt and npm run build:check passes; it lands by merge commit and ships in the next release (project.deploy-often); the verified evidence names the main commit."
+validation:
+  - "node --test tests/unit/drum-view.test.mjs"
+  - "node tests/browser/drums.cjs"
+  - "node tests/browser/iphone.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07
