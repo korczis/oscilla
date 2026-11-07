@@ -1,0 +1,44 @@
+# Review verdict for pull request #449 (branch feat/g021-family-census): G021, one census of the UI
+# control families (M123, intent component-system), so a second knob, slider, switch, patch bay,
+# keyboard, app shell, envelope law, filter response or pad is found by a test, not by a reader.
+# Reviewed head 1f7664dd (21's merge of main 709e4e61, v3.24.2); base origin/main 709e4e61.
+# Reviewer: oscilla-a3 (claude-code 12f1e384). Disclosure: the reviewer built none of this change
+# (oscilla-21 did) and wrote only this file, in a detached review worktree at the reviewed head.
+#
+# The digest. origin/main's scripts/review-verdict.mjs --content --list --base-branch origin/main at
+# 1f7664dd (the branch's copy is identical to main's): 3f4207c0c002da4c30e5cd1820c7ef0d04408a1196221644
+# 63554165ab52ae24 over five guarded paths: .github/workflows/ci.yml, src/js/audio/envelope.js,
+# src/js/audio/filters.js, src/js/synth/view/face.js, src/js/synth/view/knob.js.
+#
+# What the guarded content changes. ci.yml: one comment, the studio job's step-bound sum 63 -> 78
+# (15 + 13 + 15 + 35, the #443 raise), under its 80-minute bound; no bound, step or pin changes.
+# envelope.js, filters.js, synth/view/knob.js: a "// ui-family: <id> model|skin" marker comment
+# only. face.js: the marker and data-ui-family="knob" on the knob's role element, an attribute no
+# code path reads for behaviour (the census and surface-census.cjs read it). No value, ARIA, audio
+# or scheduling line changes. Unguarded, read anyway: src/js/ui/catalog/families.js (the table,
+# pure constants), scripts/ui-catalog/families.mjs (the census: markers in the first 40 lines,
+# signatures on comment-stripped code, seven problem kinds), the markers and attributes in midi/,
+# charts/, ui/ and src/index.html, ui/synth/knob.js (header comment re-aligned plus its marker),
+# tests/unit/ui-families.test.mjs (the tree check, the table, the baseline's shape, eight mutation
+# tests), the 8 + 42 entry baseline, and the families check of tests/browser/surface-census.cjs.
+# tests/README.md, the merge's one hand resolution: the diff to main is exactly G021's two rows
+# (the surface-census row's families clause, the new ui-families row); main's U022 clause kept.
+#
+# Evidence at 1f7664dd: npm test (node --test tests/unit, GITHUB_BASE_REF=main
+# GITHUB_EVENT_NAME=pull_request) 5019 pass, 0 fail, 1 skipped; fail-first (origin/main's
+# scripts/fail-first.mjs on the PR's title and body) proven by 1 of 1 file, every test of
+# ui-families.test.mjs fails on the base (assertion); node scripts/build.mjs reproduces the committed
+# dist/index.html byte for byte (no diff after the build). The browser half is 21's run
+# (surface-census.cjs 10/10 in chromium, firefox and webkit under file:// and http); the PR's CI
+# run is its gate.
+#
+# Verdict: merge. F1 and F2 are follow-ups for G022-G030, not defects of this slice.
+schema: review-verdict/v1
+pr: 449
+verdict: merge
+reviewer: oscilla-a3 (claude-code 12f1e384)
+content: 3f4207c0c002da4c30e5cd1820c7ef0d04408a119622164463554165ab52ae24
+findings:
+  - { id: F1, severity: P3, status: open, title: "the baseline refuses a stale entry but not a new one: a PR can add a duplicate and its baseline entry together; compare against the base branch's copy (as source-size-baseline's raises ledger does) in a G022-G030 slice" }
+  - { id: F2, severity: P3, status: open, title: "the signatures are name-based (SWEEP_DEG, isBlack, cablePath, adsrEvents ...): a re-implementation under other names escapes the source census and is caught only by the rendered data-ui-family half; widen per family as its slice chooses the model" }
+  - { id: F3, severity: P3, status: closed, title: "the merge's tests/README.md resolution keeps main's U022 clause and adds only G021's two rows (checked against origin/main)" }
