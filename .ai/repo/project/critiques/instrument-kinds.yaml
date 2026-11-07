@@ -27,8 +27,8 @@ findings:
     blocking: true
     resolution:
       state: planned
-      issue: "K222"
-      because: "K222's 390 px layout puts each row's name and voice picker above its steps (8 steps of 44 px in 352 px), W008's step-grid declaration carries that 390x844 rule, and drums.cjs measures the cell boxes at 390x844 (>= 44 px) on chromium, firefox and webkit."
+      issue: "W008"
+      because: "W008's step-grid declaration carries the 390x844 rule (each lane's name above its row of 8 steps of 44 px in 352 px, beside it at 1536 px; oscilla-21, b90dfd6a), and its browser proof, K222's drums.cjs in the same pull request, measures the cell boxes at 390x844 (>= 44 px) on chromium, firefox and webkit."
   - id: first-pad-tap-must-sound-on-a-phone
     class: missed_requirement
     subject: "K222"
@@ -36,8 +36,8 @@ findings:
     blocking: false
     resolution:
       state: planned
-      issue: "K222"
-      because: "K222's pads go through the shared note path (live-notes.js via the Synth's notes sink) whose first gesture resumes the AudioContext, and its iphone.cjs leg asserts a sounding level on the first pad tap with the gesture rule on."
+      issue: "W008"
+      because: "W008 lands with its first consumer K222 in one pull request (oscilla-21's chain): K222's pads go through the shared note path (live-notes.js via the Synth's notes sink) whose first gesture resumes the AudioContext, and the iphone.cjs Drums leg of that pull request asserts a sounding level on the first pad tap with the gesture rule on (project.a-phone-sounds)."
   - id: probability-draw-is-symmetric-in-pass-and-index
     class: regression_risk
     subject: "W008"
@@ -45,8 +45,8 @@ findings:
     blocking: false
     resolution:
       state: planned
-      issue: "K068"
-      because: "Raised as a finding of K068's review (oscilla-2b, the K068 reviewer): the draw's formula is amended in ADR 0086 and K068 with a test that the draws over passes 0-15 x indices 0-15 are pairwise distinct; W008 only displays p and inherits the fix."
+      issue: "W008"
+      because: "W008 displays and edits p and depends on K068; the draw's formula is fixed in K068 before its pull request opens (oscilla-21, 2026-11-07: pass and index mixed through mulberry32 with a multiplier) with a test that the draws over passes 0-15 x indices 0-15 are pairwise distinct, and W008's step-grid shows the p the fixed draw plays."
   - id: further-kinds-carry-their-declarations-to-their-consumers
     class: unnecessary_work
     subject: "instrument-kinds#kind-contract"
