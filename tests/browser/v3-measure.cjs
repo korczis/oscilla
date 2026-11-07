@@ -1019,15 +1019,16 @@ async function runMicApp(browserName, { grant }) {
           + `${JSON.stringify(back)}`);
       }
     } else if (browserName === 'firefox') {
-      const wait = await until(() => said().then((x) => (/microphone/.test(x.polite) ? x : null)),
+      const wait = await until(() => said().then((x) => (/mikrofon/.test(x.polite) ? x : null)),
         { ms: 20000, what: `${key} the check announces that it waits for the permission` })
         .catch(() => said());
       await page.click('#osc-measure-stop');
       const stop = await until(() => said().then((x) => (/^Measurement stopped$/.test(x.polite)
         ? x : null)), { ms: 10000, what: `${key} Stop is announced` }).catch(() => said());
       check(key, 'measure-refusal-announced: a check waiting for the microphone prompt says so, '
-        + 'and Stop is announced', /^Setup check: allow the microphone if the browser asks$/
-        .test(wait.polite) && /^Measurement stopped$/.test(stop.polite),
+        + 'and Stop is announced',
+      /^Kontrola nastavení: povolte mikrofon, pokud se prohlížeč zeptá$/.test(wait.polite)
+        && /^Measurement stopped$/.test(stop.polite),
       `waiting ${JSON.stringify(wait)}, after Stop ${JSON.stringify(stop)}`);
     } else {
       const end = await until(() => said().then((x) => (/^Setup check failed: .+/

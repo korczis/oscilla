@@ -371,9 +371,9 @@ test('unfolded by the user, the pad goes above the keys; folded, nothing moves',
 
 test('what the status line says of each state', () => {
   assert.match(yieldMod.dockSentence('collapsed', { yields: true, owner: 'xy-pad' }),
-    /folds to its handle while the XY pad plays the notes: Alt\+K or the handle shows it/);
+    /složí do úchytu, zatímco noty hraje XY pad: Alt\+K nebo úchyt ji zobrazí/);
   assert.match(yieldMod.dockSentence('docked', { yields: true, owner: 'xy-pad' }),
-    /shown under the pad/);
+    /zobrazená pod padem/);
   assert.equal(yieldMod.dockSentence('docked', { yields: false, why: 'viewport' }), '');
 });
 

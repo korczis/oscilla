@@ -108,7 +108,7 @@ export const XY_TEXT = Object.freeze({
   refused: 'The instrument did not start, so the pad plays nothing.',
   cold: 'Tap once to start audio.',
   /** Y with no cable: the reason it drives nothing, and how to give it a target. */
-  free: 'Y drives nothing: no cable leaves the pad\'s Y jack. Choose a target in Y drives.',
+  free: 'Y neřídí nic: z jacku Y padu nevede žádný kabel. Vyberte cíl v poli Y drives.',
 });
 export const XY_LEAD = XY_RECIPES.find((r) => r.id === 'xy-lead');
 export const XY_OWNER = 'synth';
@@ -227,8 +227,8 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
         return { ...d, note, name: midiToName(note), sends: false };
       };
       const low = deg(0);
-      const from = `${low.name}${low.sends ? ' (the note the pad sends)' : ''}`;
-      const range = `${scale} over ${p.span} oct from ${from}`;
+      const from = `${low.name}${low.sends ? ' (nota, kterou pad posílá)' : ''}`;
+      const range = `${scale}, ${p.span} oct od ${from}`;
       const tag = lead ? " (the XY lead's scale and target)" : '';
       // What Y's target plays, read from the document and the context's rate at each reading.
       let seen = { m: null, sr: null, r: null };
@@ -242,8 +242,8 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
       };
       return { params: p, steps, deg, sent, from, scale, reading,
         target: to ? jackName(to) : 'nothing', lead,
-        stated: `${lead ? 'Default: ' : ''}${range}; the pad plays what the keys play; `
-          + (to ? `Y drives ${jackName(to)}${tag}.` : XY_TEXT.free) };
+        stated: `${lead ? 'Výchozí: ' : ''}${range}; pad hraje to, co hrají klávesy; `
+          + (to ? `Y řídí ${jackName(to)}${tag}.` : XY_TEXT.free) };
     },
     unwire() {
       while (offs.length) offs.pop()();
@@ -370,26 +370,27 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       if (!r) return '';
       const v = r.at(y);
       const text = knobModel(r.param).text(v);
-      const past = v > r.param.max || v < r.param.min ? 'past its range' : '';
+      const past = v > r.param.max || v < r.param.min ? 'mimo rozsah' : '';
       const held = r.limited && r.cap && why !== 'end';
       const nyq = held && r.cap.bound === 'nyquist';
-      const before = nyq && r.provisional ? ' until audio starts' : '';
+      const before = nyq && r.provisional ? ' do spuštění zvuku' : '';
       if (why === 'aria') {
-        return `${text}${past ? ` (${past})` : ''}${held ? `, held at or below ${limitBoundText({
+        return `${text}${past ? ` (${past})` : ''}${held ? `, drženo nejvýš na ${limitBoundText({
           cap: r.cap.value, bound: r.cap.bound, sampleRate: r.sampleRate })}${before
           ? `,${before}` : ''}` : ''}`;
       }
       const rate = `${Number((r.sampleRate / 1000).toFixed(3))} kHz`;
-      const how = !held ? '' : why === 'ring' ? 'held' : nyq
-        ? `held ≤ ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist at ${rate}${before}`
-        : 'held ≤ the top of its range';
+      const how = !held ? '' : why === 'ring' ? 'drženo' : nyq
+        ? `drženo ≤ ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist při ${rate}${before}`
+        : 'drženo ≤ horní mez rozsahu';
       const notes = [past, how].filter(Boolean).join(', ');
       return notes ? `${text} (${notes})` : text;
     };
     const others = () => {
       const r = reading();
-      return r && r.others ? `, and ${r.others} more cable${r.others > 1 ? 's' : ''} into it`
-        : '';
+      if (!r || !r.others) return '';
+      const n = r.others;
+      return `, a do něj vede ještě ${n} ${n === 1 ? 'kabel' : n < 5 ? 'kabely' : 'kabelů'}`;
     };
     const ends = reading() ? () => [yValue(0, 'end'), yValue(1, 'end')] : null;
     host.querySelector('[data-xy-default]').textContent = spec.stated;
@@ -421,7 +422,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       const yv = yValue(on ? v.y : 0, 'line');
       out.textContent = `${noteText(d)} · degree ${d.degree} of ${scale} · Y ${on ? pct(v.y) : 0}`
         + ` % → ${to}${yv ? ` ${yv}` : ''}${on ? ' · gate open' : v.y > 0
-          ? ` · the next touch from Y ${pct(v.y)} %` : ''}${room ? ` · ${room.text}` : ''}`;
+          ? ` · další dotek začne z Y ${pct(v.y)} %` : ''}${room ? ` · ${room.text}` : ''}`;
     };
     // The pad's node hears X and Y only from a touch on (K183 review F1): until the first
     // onGate(true), and between touches, the cursor moves the readout alone, so Y stays at 0
@@ -479,11 +480,11 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       CURSORS.set(store, v);
     };
     view = mountPad(box, {
-      label: `XY pad: notes in ${scale}, Y to ${to}`,
-      description: `X is the note: ${steps} steps of ${scale} over ${p.span} oct from `
-        + `${from}, low at the left, played as the keys play. Y drives ${to}, low at `
-        + 'the bottom. Arrows move the cursor; hold Enter, or touch, to sound it; Escape '
-        + 'releases.',
+      label: `XY pad: noty ve stupnici ${scale}, Y řídí ${to}`,
+      description: `X je nota: ${steps} kroků stupnice ${scale}, ${p.span} oct od `
+        + `${from}, nízké vlevo, hraje se jako klávesy. Y řídí ${to}, nízké dole. `
+        + 'Šipky posouvají kurzor; podržte Enter nebo se dotkněte a nota zazní; Escape '
+        + 'ji uvolní.',
       describedBy: [`${uid}-first`],
       // Each cell's note, as the runtime quantises its x: the full name where the row has room,
       // else on the roots (the key at each octave) and the note letter between them.

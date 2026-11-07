@@ -179,7 +179,7 @@ test('S8: after an XY preset and Panel Init, a key says why the keys sound nothi
   assert.equal(keysEnvelopes(st.getModel()), 2, 'XY lead leaves both EG gates to the keyboard');
   assert.equal(sink.noteOn(60, 100).ok, true, 'a key sounds on the default preset');
   assert.deepEqual(transport.heldNotes(), [60], 'the keys hold their note');
-  assert.equal(cmp.synth.status, SYNTH_TEXT.plays(`the ${PANEL.title}`),
+  assert.equal(cmp.synth.status, SYNTH_TEXT.plays(PANEL.title),
     'the status says what plays, not why nothing sounds');
   sink.noteOff(60);
   assert.equal(takeGates(st).ok, true, 'the pad\'s Gate taken into EG 1 and EG 2 explicitly');

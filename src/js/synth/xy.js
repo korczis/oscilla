@@ -139,9 +139,9 @@ export function xyRoom(model, panel) {
   if (k >= 1) return null;
   const m = panel.module(mid);
   const name = `${m.label} ${(m.labels && m.labels[port]) || pd.label}`;
-  return { factor: k, target: to, text: k <= 0 ? `Y has no room: ${name} and its other cables `
-    + 'already reach the end of its range' : `Y plays ${Math.round(k * 100)} % of its depth: `
-    + `${name} and its other cables leave only that much of its range` };
+  return { factor: k, target: to, text: k <= 0 ? `Y nemá místo: ${name} a ostatní kabely do něj `
+    + 'už dosahují konce rozsahu' : `Y hraje ${Math.round(k * 100)} % své hloubky: `
+    + `${name} a ostatní kabely do něj nechávají jen tolik z rozsahu` };
 }
 
 

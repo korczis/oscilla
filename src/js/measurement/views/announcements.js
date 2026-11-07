@@ -21,7 +21,7 @@
 //              when it says more than the generic one (C033: "no input signal" was announced
 //              for a microphone the browser would not open, a closed context was "Web Audio
 //              is not available")
-//   waiting    "Setup check: allow the microphone if the browser asks" while it asks (the
+//   waiting    "Kontrola nastavení: povolte mikrofon, pokud se prohlížeč zeptá" while it asks (the
 //              engine's 'waiting' event); once per check
 // A new PREFLIGHT after a terminal state (or a reset to IDLE) starts a new measurement and
 // re-arms every stage. Engine events are { type: 'state', from, to, info } and the typed
@@ -41,7 +41,7 @@ export const ANNOUNCEMENTS = Object.freeze({
   error: 'Measurement error',
   ready: 'Setup check complete: ready',
   setupFailed: 'Setup check failed',
-  permission: 'Setup check: allow the microphone if the browser asks',
+  permission: 'Kontrola nastavení: povolte mikrofon, pokud se prohlížeč zeptá',
 });
 
 /**

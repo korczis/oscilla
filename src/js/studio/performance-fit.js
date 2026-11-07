@@ -80,18 +80,18 @@ export function fitLimits(planNode, cb, { edges, nodes } = {}) {
     const from = nodes && nodes.get(e.from.node);
     const src = `${from ? from.name : e.from.node} ${e.from.port.toUpperCase()}`;
     const nyq = `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist`;
-    const range = `(${p.min} to ${p.max})`;
-    const pct = `plays ${Math.round(factor * 100)} % of its depth`;
+    const range = `(${p.min} až ${p.max})`;
+    const pct = `hraje ${Math.round(factor * 100)} % své hloubky`;
     let why;
     if (by === 'nyquist') {
-      why = factor <= 0 ? `has no room: the frequency already reaches ${nyq}`
-        : `${pct}: held at or below ${nyq}, all the room the frequency leaves`;
+      why = factor <= 0 ? `nemá místo: frekvence už dosahuje ${nyq}`
+        : `${pct}: drží se na ${nyq} nebo pod ním, víc místa frekvence nenechává`;
     } else {
-      why = factor <= 0 ? 'has no room: the base and the other cables already reach the ends '
-        + `of its range ${range}` : `${pct}: the base and the other cables leave only that much `
-        + `of its range ${range}`;
+      why = factor <= 0 ? 'nemá místo: základ a ostatní kabely už dosahují obou konců '
+        + `rozsahu ${range}` : `${pct}: základ a ostatní kabely nechávají jen tolik `
+        + `z rozsahu ${range}`;
     }
-    out.push({ ...studioDiagnostic('runtime', 'performance-limited', `${src} into `
+    out.push({ ...studioDiagnostic('runtime', 'performance-limited', `Kabel ${src} → `
       + `${planNode.name} ${p.label} ${why}.`, { kind: 'edge', id }),
     details: { node: planNode.id, param: key, edge: id, factor, by, min: p.min, max: p.max } });
   }

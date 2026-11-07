@@ -13,8 +13,8 @@
 
 export const OUTPUT_REFUSAL = 'The output belongs to the measurement: stop it (Esc) before '
   + 'playing.';
-export const REFERENCE_REFUSAL = 'The output stays silent while the level reference is captured '
-  + 'from the microphone: stop the capture before playing.';
+export const REFERENCE_REFUSAL = 'Výstup zůstává tichý, dokud se z mikrofonu snímá referenční '
+  + 'úroveň: před přehráváním snímání zastavte.';
 
 /**
  * Who refuses every claim, in order (C024): a measurement, then a microphone level-reference

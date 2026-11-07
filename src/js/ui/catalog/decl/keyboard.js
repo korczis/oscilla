@@ -92,8 +92,8 @@ export default [
     id: 'keyboard.handle',
     kind: 'switch',
     label: 'Keyboard handle',
-    docs: 'Folds the docked keyboard to one line while a pad owns the notes, or unfolds it '
-      + '(shortcut Alt+K).',
+    docs: 'Složí ukotvenou klávesnici do jednoho řádku, zatímco noty patří padu, nebo ji '
+      + 'rozloží (zkratka Alt+K).',
     state: 'ui.kbdDockExpanded',
     in: 'keyboard',
   }),
@@ -101,9 +101,9 @@ export default [
     id: 'keyboard.dock-status',
     kind: 'readout',
     label: 'Dock status',
-    docs: 'Tells assistive technology whether the docked keyboard is folded and which surface '
-      + 'plays the notes.',
-    state: { none: 'it reports the fold state and edits nothing' },
+    docs: 'Sděluje asistenčním technologiím, zda je ukotvená klávesnice složená a která plocha '
+      + 'hraje noty.',
+    state: { none: 'hlásí, zda je klávesnice složená, a nic neupravuje' },
     in: 'keyboard',
   }),
 ];

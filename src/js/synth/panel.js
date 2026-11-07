@@ -103,7 +103,7 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     // `adds`: CONTROL outputs whose cables add to a jack's normals (synth/normals.js, K183).
     for (const port of m.adds || []) {
       if (!def.outputs.some((p) => p.id === port && p.type === 'CONTROL')) {
-        fail(pid, `${m.id}.adds ${port} is no CONTROL output`);
+        fail(pid, `${m.id}.adds ${port} není výstup CONTROL`);
       }
     }
     const hide = new Set((m.jacks && m.jacks.hide) || []);

@@ -57,7 +57,7 @@ export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played
   function armedText() {
     const n = played();
     if (!n) return SYNTH_TEXT.armed;
-    return SYNTH_TEXT.plays(n === nodes().get('keys') ? `the ${panel.title}`
+    return SYNTH_TEXT.plays(n === nodes().get('keys') ? panel.title
       : n.metadata && n.metadata.name ? n.metadata.name : n.type);
   }
 

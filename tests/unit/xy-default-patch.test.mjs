@@ -9,7 +9,7 @@
 //
 // The reviewer's conditions on that design (K183, af 2026-11-05): the Y cable is drawn and named
 // as summing in the bay (jackState 'summing': the normal's inner glyph, the cable's colour on the
-// ring, "normalled, plus XY PAD Y" in the jack's name, "adds to the normals" in the cable list), Y is 0 until the first
+// ring, "normalled, plus XY PAD Y" in the jack's name, "přičítá se k normálům" in the cable list), Y is 0 until the first
 // touch, the sum stays within LPF Cutoff's declared range (compiler.js computeBases holds the
 // upward excursion of every log edge at min(max, 0.95 x Nyquist); Y is unipolar with offset 0,
 // so it adds nothing downward), and n21 and n22 stay active edges of the running plan beside it.
@@ -135,7 +135,7 @@ test('the pad\'s notes reach the voice through the one Keys source, last-note pr
   const notes = createMidiNotes({ engine: null, route: () => sink });
   const key = notes.noteOn(60, 100, 'kbd-key'); // the computer key arms the Synth
   assert.equal(key.ok, true, 'a computer key sounds: its normals are intact');
-  assert.equal(said.at(-1), SYNTH_TEXT.plays(`the ${PANEL.title}`),
+  assert.equal(said.at(-1), SYNTH_TEXT.plays(PANEL.title),
     'the status says what the keys and the pad play, named from the routed node (S6)');
   const pad = notes.noteOn(63, 100, 'kbd-xy'); // the pad's touch
   assert.equal(pad.ok, true);
@@ -548,7 +548,7 @@ test('N2: every release puts Y back at rest: the node, the cursor and the readou
       // An arrow without a touch moves the cursor only, and the readout says so.
       r.model.key('ArrowUp');
       assert.equal(r.y(), 0);
-      assert.match(r.readout(), /Y 0 % → lpf\.frequency [^·]+ · the next touch from Y 1 %/);
+      assert.match(r.readout(), /Y 0 % → lpf\.frequency [^·]+ · další dotek začne z Y 1 %/);
       r.done();
     }
   });
@@ -655,11 +655,11 @@ test('N4: Y with no room says so: the readout, xyRoom and a performance-limited 
     const r = await padRig(toVca);
     const room = xy.xyRoom(r.st.getModel(), PANEL);
     assert.equal(room.factor, 0);
-    assert.match(room.text, /^Y has no room: VCA Initial gain and its other cables already/);
-    assert.match(r.readout(), /Y has no room/, 'the pad\'s readout says it');
+    assert.match(room.text, /^Y nemá místo: VCA Initial gain a ostatní kabely do něj už/);
+    assert.match(r.readout(), /Y nemá místo/, 'the pad\'s readout says it');
     const diag = r.runtime.debugInfo().diagnostics.filter((d) => d.code === 'performance-limited');
     assert.equal(diag.length, 1, 'one diagnostic, on the Y cable');
-    assert.match(diag[0].message, /Y into .* has no room/);
+    assert.match(diag[0].message, /Y → .* nemá místo/);
     r.done();
     // Room for half: base 0.5 leaves 0.5 of Y's depth 1.
     const half = await padRig((st) => {
@@ -667,7 +667,7 @@ test('N4: Y with no room says so: the readout, xyRoom and a performance-limited 
       assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: ids(st.getModel())('vca'),
         params: { gain: 0.5 } }).ok, true);
     });
-    assert.match(half.readout(), /Y plays 50 % of its depth/);
+    assert.match(half.readout(), /Y hraje 50 % své hloubky/);
     half.done();
     // The default document: LPF Cutoff (a frequency, capped at Nyquist) has its depth.
     assert.equal(xy.xyRoom(defaultStore().getModel(), PANEL), null);
@@ -726,10 +726,10 @@ test('N5 and F2: the bay names every summing cable; only a summing cable says it
   const jackName = (j) => j;
   const rows = cables.map((c) => bay.cableItem(c, states.get(`${c.to}:in`),
     { jackName, item: 'i', btn: 'b' }));
-  const adds = rows.filter((r) => r.includes(', adds to the normals'));
+  const adds = rows.filter((r) => r.includes(', přičítá se k normálům'));
   assert.equal(rows.length, 3);
   assert.equal(adds.length, 2, 'the two pad cables into LPF Cutoff say they add');
-  assert.ok(adds.every((r) => /^<li class="i"><span>xy\.[xy] → lpf\.frequency, adds/.test(r)));
+  assert.ok(adds.every((r) => /^<li class="i"><span>xy\.[xy] → lpf\.frequency, přičítá/.test(r)));
   assert.match(rows.find((r) => r.includes('mg.control')), /<span>mg\.control → vco2\.tune<\/span>/,
     'a plain cable says nothing more');
   const ui = readFileSync(`${ROOT}src/js/synth/ui.js`, 'utf8');
@@ -747,11 +747,11 @@ test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; n
     assert.equal(idle, xyGlideIdle(PANEL.module('keys').label));
     // NF2 (review of #428): the module is named as the panel labels it, never a literal.
     assert.equal(PANEL.module('keys').label, 'KEYBOARD');
-    assert.match(idle, /with the KEYBOARD module's Glide/);
+    assert.match(idle, /podle Glide modulu KEYBOARD/);
     const renamed = { ...PANEL, module: (id) => (id === 'keys' ? { ...PANEL.module(id),
       label: 'KEYS 2' } : PANEL.module(id)) };
     assert.match(controlReason(mod, node(), glide, st.getModel(), renamed),
-      /with the KEYS 2 module's Glide/, 'a panel that labels its keyboard otherwise is named so');
+      /podle Glide modulu KEYS 2/, 'a panel that labels its keyboard otherwise is named so');
     assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'xy.pitch', 'vco1.pitch').action)
       .ok, true);
     assert.equal(controlReason(mod, node(), glide, st.getModel(), PANEL), null,
@@ -795,14 +795,14 @@ test('NF1: a Y cable held by the Nyquist headroom is not blamed on its range', (
   const [d] = perf;
   assert.ok(d.details.factor > 0 && d.details.factor < 1, `${d.details.factor}`);
   assert.equal(d.details.by, 'nyquist', 'the factor that won is the Nyquist headroom');
-  assert.doesNotMatch(d.message, /of its range/, d.message);
+  assert.doesNotMatch(d.message, /z rozsahu/, d.message);
   assert.match(d.message, /0\.95 × Nyquist/, d.message);
   // The same cable with room in Nyquist but not in its range (detune 600, depth 1200 at 440 Hz):
   // the range wins, and the message says so.
   const r = detuneRig({ hz: 440, detune: 600 });
   assert.equal(r.perf.length, 1);
   assert.equal(r.perf[0].details.by, 'range');
-  assert.match(r.perf[0].message, /leave only that much of its range \(-1200 to 1200\)/);
+  assert.match(r.perf[0].message, /nechávají jen tolik z rozsahu \(-1200 až 1200\)/);
 });
 
 test('NF3: every pad output summing into a control target rests at 0 on lift; Pitch does not',
@@ -839,7 +839,7 @@ test('NF5: after a lift the readout says what sounds, no stale next touch from t
     assert.match(r.readout(), /Y 90 % → lpf\.frequency [^·]+ · gate open/);
     r.model.end('release');
     assert.match(r.readout(), / Y 0 % → lpf\.frequency/);
-    assert.doesNotMatch(r.readout(), /the next touch from Y/,
+    assert.doesNotMatch(r.readout(), /další dotek začne z Y/,
       'Y was put back at rest: the next touch starts from 0, and the readout does not say 90 %');
     assert.equal(r.model.value.y, 0);
     r.done();
@@ -947,13 +947,13 @@ test('NF6: Y\'s room is read once per document, not on every move, and again on 
     assert.ok(first > 0, 'the first show read the room');
     for (let i = 0; i < 20; i += 1) m.view.model.key(i % 2 ? 'ArrowLeft' : 'ArrowRight');
     assert.equal(reads, first, '20 cursor moves read nothing again');
-    assert.doesNotMatch(readout(), /of its depth/, 'level 1 at 0.7 leaves Y its whole depth');
+    assert.doesNotMatch(readout(), /své hloubky/, 'level 1 at 0.7 leaves Y its whole depth');
     const mix = PANEL.resolve(st.getModel()).get('mix').id;
     assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: mix, params: { level1: 0.9 } })
       .ok, true);
     m.view.model.key('ArrowRight');
     assert.ok(reads > first, 'a change to the document reads the room again');
-    assert.match(readout(), /Y plays 40 % of its depth/, 'and the readout says the new room');
+    assert.match(readout(), /Y hraje 40 % své hloubky/, 'and the readout says the new room');
     const after = reads;
     m.view.model.key('ArrowLeft');
     assert.equal(reads, after, 'once per document');

@@ -37,8 +37,9 @@ const SH_CLOCKED = Object.freeze({
  * The XY pad's Glide while its Pitch output feeds no cable (K183 review N6), naming the panel's
  * keyboard module by the label the panel draws on it (review of PR 428 NF2: KEYBOARD, not KEYS).
  */
-export const xyGlideIdle = (keys) => "Glide shapes the XY pad's own Pitch output, which feeds "
-  + `no cable: the pad's notes glide with the ${keys} module's Glide, as the computer keys' do.`;
+export const xyGlideIdle = (keys) => 'Glide tvaruje vlastní výstup Pitch XY padu, z něhož '
+  + `nevede žádný kabel: noty padu kloužou podle Glide modulu ${keys}, jako noty z klávesnice `
+  + 'počítače.';
 
 /** Why a control on this face does nothing now, or null (project.no-inert-surfaces (b)). */
 export function controlReason(module, node, control, model, panel) {

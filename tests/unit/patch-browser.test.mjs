@@ -159,8 +159,8 @@ test('negative: Apply refuses a selected node of another type, naming it and the
     const fm = PANEL.resolve(m).get('fm');
     const r = entryAction(m, keys, 'apply', { target: lpf.id });
     assert.equal(r.action, undefined);
-    assert.match(r.reason, new RegExp(`selected ${lpf.metadata.name} is of type .*; FM keys is `
-      + `for the Synth panel's ${fm.metadata.name} module`));
+    assert.match(r.reason, new RegExp(`Vybraný uzel ${lpf.metadata.name} je typu .*; patch FM keys `
+      + `je určen pro modul ${fm.metadata.name} panelu Synth`));
     const v = browseView([keys], m, { target: lpf.id }).items[0];
     assert.deepEqual([v.applicable, v.reason], [false, r.reason]);
     assert.equal(st.getModel(), m, 'the model is unchanged');
@@ -186,8 +186,8 @@ test('negative: Apply refuses another module of the patch\'s own panel (HARD SYN
         { [e.patch.graph.nodes[0].id]: home.id }, `${id}: its own module selected`);
       const r = entryAction(m, e, 'apply', { target: sel.id });
       assert.equal(r.action, undefined, id);
-      assert.match(r.reason, new RegExp(`selected ${sel.metadata.name} is another module of `
-        + `the Synth panel; .* is for the Synth panel's ${home.metadata.name} module`), id);
+      assert.match(r.reason, new RegExp(`Vybraný uzel ${sel.metadata.name} je jiný modul `
+        + `panelu Synth; .* je určen pro modul ${home.metadata.name} panelu Synth`), id);
       assert.equal(browseView([e], m, { target: sel.id }).items[0].reason, r.reason, id);
     }
     assert.equal(st.getModel(), m, 'the model is unchanged');

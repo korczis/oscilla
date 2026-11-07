@@ -983,9 +983,9 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     // The setup check's probe (C033): it played, or why not; and whether the input heard it.
     const pr = facts.probe || null;
     if (pr && pr.played === false)
-      warnings.push(reason('STIMULUS_NOT_PLAYED', 'The setup check could not play the stimulus'
-        + `${pr.reason ? ` (${String(pr.reason).replace(/\.$/, '')})` : ''}; the measurement `
-        + 'plays it.'));
+      warnings.push(reason('STIMULUS_NOT_PLAYED', 'Kontrola nastavení nemohla přehrát stimulus'
+        + `${pr.reason ? ` (${String(pr.reason).replace(/\.$/, '')})` : ''}; měření ho `
+        + 'přehraje.'));
     // Heard is a rise of at least probeHeardRiseDb; anything else is not heard (98 F1): exact
     // zeros read -Infinity before and during (a rise of NaN), a level that is no number (a JSON
     // null) has no rise. Only a signal out of digital silence (+Infinity) counts as heard.
@@ -993,12 +993,13 @@ export function createMeasurementEngine({ io, clock, onEvent, limits, assess, an
     const rise = pr && pr.played === true ? dbOf(pr.inputLevel) - dbOf(lvl) : NaN;
     if (pr && pr.played === true && !(rise >= PREFLIGHT_THRESHOLDS.probeHeardRiseDb)) {
       const silent = dbOf(pr.inputLevel) === -Infinity;
-      warnings.push(reason('STIMULUS_NOT_HEARD', 'The input level did not rise while the check '
-        + `played the stimulus${Number.isFinite(rise) ? ` (${rise.toFixed(1)} dB)` : ''}`
-        + (silent ? ' (the input is digitally silent)' : '')
-        + (ownOutput ? `, but ${OWN}, so the comparison is not conclusive: stop it and check `
-          + 'again.' : ': check that the output reaches the input (output volume, speaker or '
-          + 'cable, and the input device).'), { value: Number.isFinite(rise) ? rise : null,
+      warnings.push(reason('STIMULUS_NOT_HEARD', 'Úroveň vstupu se nezvýšila, když kontrola '
+        + `přehrála stimulus${Number.isFinite(rise) ? ` (${rise.toFixed(1)} dB)` : ''}`
+        + (silent ? ' (vstup je digitálně tichý)' : '')
+        + (ownOutput ? ', ale měření zahrnuje vlastní výstup aplikace, který hraje, takže '
+          + 'srovnání není průkazné: zastavte ho a zkontrolujte znovu.'
+          : ': ověřte, že výstup dorazí na vstup (hlasitost výstupu, reproduktor nebo '
+          + 'kabel a vstupní zařízení).'), { value: Number.isFinite(rise) ? rise : null,
         unit: 'dB' }));
     }
 

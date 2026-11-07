@@ -33,7 +33,7 @@ export function bindPageKeys({ keys, cmp, stopSequencer }) {
       run: (e) => cmp.onKeyDown(e), up: (e) => cmp.onKeyUp(e) }),
     keys.bind({ id: 'keys.dock', keys: [DOCK_KEY], scope: { workspace: '*' },
       when: () => !!cmp.kbdDockYields, group: 'Keyboard',
-      label: 'Unfold or fold the keyboard where a pad plays the notes (its handle)',
+      label: 'Rozložit nebo složit klávesnici tam, kde noty hraje pad (její úchyt)',
       run: () => cmp.kbdDockToggle() }),
   ];
   return () => offs.forEach((off) => off());

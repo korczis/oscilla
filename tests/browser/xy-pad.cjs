@@ -557,7 +557,7 @@ function defineChecks() {
           x.getAttribute('aria-valuenow'), x.getAttribute('aria-valuetext')]) };
     });
     if (role !== 'application' || desc.group !== 'group' || desc.sliders.length !== 2
-      || !/X is the note/.test(desc.text) || !/Y drives/.test(desc.text)) {
+      || !/X je nota/.test(desc.text) || !/Y řídí/.test(desc.text)) {
       return { ok: false, detail: 'the surface is not described by its axes', role, desc };
     }
     await surface.focus();
@@ -787,7 +787,7 @@ function defineChecks() {
     await page.keyboard.up('KeyA');
     await silent(page, 'the key\'s release silences');
     const status = (await padView(page)).status;
-    if (!/keys and the XY pad play/.test(status)) {
+    if (!/klávesy a XY pad hrají/.test(status)) {
       return { ok: false, detail: 'the status does not say what the keys and the pad play',
         status };
     }

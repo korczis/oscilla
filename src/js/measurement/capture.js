@@ -768,7 +768,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   // Resolves { played: true, seconds, startAt, inputLevel, frames } or { played: false, reason }.
   async function playProbe(ctx, since, render) {
     let samples = null;
-    let why = 'the stimulus could not be rendered';
+    let why = 'stimulus se nepodařilo vytvořit';
     try {
       samples = render(ctx.sampleRate);
     } catch (e) {
@@ -780,7 +780,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     try {
       await freshClock(since);
       if (windows.size || stims.size)
-        throw new MeasurementError('INTERNAL', 'A capture is already running (no overlap).');
+        throw new MeasurementError('INTERNAL', 'Záznam už běží (bez překryvu).');
       const sr = ctx.sampleRate;
       const csF = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
       const endF = csF + samples.length + ceilFrame(PROBE_TAIL_S, sr);

@@ -443,11 +443,12 @@ function refusalOf(model, p, src, t, registry) {
   if (t.type === src.type && !(ref && tRef && !samePanel(tRef, ref))) return null;
   const home = ref && model.graph.nodes.find((n) => samePanel(n.metadata.panel, ref));
   const module = ref && (home ? nodeName(home) : ref.module);
-  const what = t.type === src.type ? 'another module of the Synth panel'
-    : `of type ${typeName(registry, t.type)}, not ${typeName(registry, src.type)}`;
-  const wants = module ? `the Synth panel's ${module} module: select it`
-    : `the ${typeName(registry, src.type)} nodes: select one`;
-  return `The selected ${nodeName(t)} is ${what}; ${p.name} is for ${wants}, or nothing.`;
+  const what = t.type === src.type ? 'je jiný modul panelu Synth'
+    : `je typu ${typeName(registry, t.type)}, ne ${typeName(registry, src.type)}`;
+  const wants = module ? `modul ${module} panelu Synth: vyberte ho`
+    : `uzly typu ${typeName(registry, src.type)}: vyberte jeden`;
+  return `Vybraný uzel ${nodeName(t)} ${what}; patch ${p.name} je určen pro ${wants}, `
+    + 'nebo nevybírejte nic.';
 }
 
 /** Which model node each node of `patch` sets: { onto: { patchId: nodeId }, missing, refused }. */

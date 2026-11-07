@@ -35,7 +35,7 @@ import { dockRoom, dockState, dockYields, routeOf } from './routes.js';
 export const NOTES_EVENT = 'osc:notes';
 /** The handle's key (bound in ui/keys/clients.js through the one key registry). */
 export const DOCK_KEY = 'Alt+KeyK';
-const OWNER_NAMES = Object.freeze({ 'xy-pad': 'the XY pad' });
+const OWNER_NAMES = Object.freeze({ 'xy-pad': 'XY pad' });
 
 const LIVE = new WeakMap(); // window -> Map(mount id -> claim): a dock mounted later reads them
 
@@ -54,11 +54,11 @@ export function claimNotes(win, { id, owner = null, home = null, el = null } = {
 export function dockSentence(state, { yields, owner, why }) {
   const who = OWNER_NAMES[owner] || owner;
   if (state === 'collapsed') {
-    return `The keyboard folds to its handle while ${who} plays the notes: Alt+K or the `
-      + 'handle shows it.';
+    return `Klávesnice se složí do úchytu, zatímco noty hraje ${who}: Alt+K nebo úchyt ji `
+      + 'zobrazí.';
   }
-  if (yields) return 'The keyboard is shown under the pad: Alt+K or the handle folds it.';
-  return why === 'owner' ? 'The keyboard is docked: the keys play the notes.' : '';
+  if (yields) return 'Klávesnice je zobrazená pod padem: Alt+K nebo úchyt ji složí.';
+  return why === 'owner' ? 'Klávesnice je ukotvená: noty hrají klávesy.' : '';
 }
 
 /**

@@ -446,8 +446,9 @@ test('first open edits nothing and plays at once: enabled, no Patch button, its 
   const stated = r.host.querySelector('[data-xy-default]').textContent;
   // The panel's VCOs sit at 16' and 8', both in the mix: the range starts at the 16' note heard
   // (S3), reached through the keys' pitch normals the pad plays (K183).
-  assert.match(stated, /^Default: C Minor pentatonic over 2 oct from C2; the pad plays what the /i);
-  assert.match(stated, /Y drives LPF Cutoff \(the XY lead's scale and target\)/);
+  assert.match(stated,
+    /^Výchozí: C Minor pentatonic, 2 oct od C2; pad hraje to, co hrají klávesy; /i);
+  assert.match(stated, /Y řídí LPF Cutoff \(the XY lead's scale and target\)/);
   const first = r.host.querySelector('[data-xy-first]');
   assert.equal(first.textContent, XY_TEXT.first);
   assert.equal(m.view.opts.describedBy.length, 1, 'the line describes the pad');
@@ -683,14 +684,14 @@ test('XY bass names the note heard: both VCOs at 16\', an octave under the pad\'
   assert.equal(v.vco1, v.vco2, 'both VCOs sound one note');
   assert.ok(octaveUnder(v.sent, v.vco1), "16' sounds an octave under the pad's Pitch");
   names(v, v.vco1, 'XY bass');
-  assert.match(v.stated, /over 1 oct from D1;/, 'the range from the note heard (pad D2)');
+  assert.match(v.stated, /, 1 oct od D1;/, 'the range from the note heard (pad D2)');
 });
 
 test('XY lead names the note heard: both VCOs at 8\', the pad\'s own note (as before)', () => {
   const v = heardAt('xy-lead');
   assert.deepEqual([v.vco1, v.vco2], [v.sent, v.sent]);
   names(v, v.sent, 'XY lead');
-  assert.match(v.stated, /over 2 oct from C3;/);
+  assert.match(v.stated, /, 2 oct od C3;/);
 });
 
 test('XY sweep as built (16\' and 8\', both in the mix) names the 16\' note, the lower', () => {
@@ -737,7 +738,7 @@ test('audible VCOs a fifth apart (an FM offset): the pad names the note it sends
       props: { offset: 7 / 12 } }).ok, true);
   });
   names(v, `sends ${v.sent}`, 'a fifth apart');
-  assert.match(v.stated, /\(the note the pad sends\);/, v.stated);
+  assert.match(v.stated, /\(nota, kterou pad posílá\);/, v.stated);
 });
 
 test('Y reads what its target plays: the compiler\'s own sizing at the context\'s Nyquist', () => {
@@ -776,8 +777,8 @@ test('Y reads what its target plays: the compiler\'s own sizing at the context\'
           ? b.value * 2 ** ((b.cents + 1200 * g * y) / 1200) : b.value + g * y;
         assert.ok(Math.abs(rd.at(y) - want) <= 1e-9 * Math.max(1, Math.abs(want)),
           `${recipe.id} y ${y}: ${rd.at(y)} vs the compiler's ${want}`);
-        const past = want > rd.param.max || want < rd.param.min ? 'past its range' : '';
-        const notes = [past, held ? 'held' : ''].filter(Boolean).join(', ');
+        const past = want > rd.param.max || want < rd.param.min ? 'mimo rozsah' : '';
+        const notes = [past, held ? 'drženo' : ''].filter(Boolean).join(', ');
         assert.equal(opts.readout.y(y), `${name} ${k.text(want)}${notes ? ` (${notes})` : ''}`,
           `${recipe.id}: the ring's value`);
         assert.ok(opts.text.y(y).includes(`% to ${name}: ${k.text(want)}`),
@@ -790,7 +791,7 @@ test('Y reads what its target plays: the compiler\'s own sizing at the context\'
 });
 
 /** Y's aria-valuetext without its closing count of the other cables into the target. */
-const noOthers = (t) => t.replace(/, and \d+ more cables? into it$/, '');
+const noOthers = (t) => t.replace(/, a do něj vede ještě \d+ kabel(?:y|ů)?$/, '');
 
 test('the Y value equals what the running graph plays at 44.1 and 48 kHz, held near Nyquist',
   () => {
@@ -833,15 +834,15 @@ test('the Y value equals what the running graph plays at 44.1 and 48 kHz, held n
         assert.equal(rd.limited, true, `${what}: Y's excursion is scaled to fit`);
         for (const y of [0, 0.25, 0.5, 0.8, 1]) { // then the text that says so
           const want = played(y);
-          const past = want > rd.param.max ? 'past its range, ' : '';
-          assert.equal(m.view.opts.readout.y(y), `${name} ${k.text(want)} (${past}held)`);
+          const past = want > rd.param.max ? 'mimo rozsah, ' : '';
+          assert.equal(m.view.opts.readout.y(y), `${name} ${k.text(want)} (${past}drženo)`);
           // The default document's LPF normals (MG, EG 2) are the other cables it names (K183).
           assert.ok(noOthers(m.view.opts.text.y(y)).endsWith(`: ${k.text(want)}${past
-            ? ' (past its range)' : ''}, held at or below `
+            ? ' (mimo rozsah)' : ''}, drženo nejvýš na `
             + `${limitBoundText({ cap: safeMaximum(sampleRate), bound: 'nyquist', sampleRate })}`),
           `${what}: Y's aria-valuetext ${m.view.opts.text.y(y)}`);
         }
-        const end = (v) => `${k.text(v)}${v > rd.param.max ? ' (past its range)' : ''}`;
+        const end = (v) => `${k.text(v)}${v > rd.param.max ? ' (mimo rozsah)' : ''}`;
         assert.deepEqual(m.view.opts.readout.yEnds(), [end(played(0)), end(played(1))]);
         seen[`${id}@${sampleRate}`] = rd.at(0.5);
         m.view.model.up(1);
@@ -871,7 +872,7 @@ test('before a context exists, Y is sized at the provisional 44.1 kHz and says s
   assert.equal(at44.provisional, false);
   for (const y of [0, 0.5, 1]) assert.equal(rd.at(y), at44.at(y), `y ${y}`);
   assert.ok(noOthers(m.view.opts.text.y(1))
-    .endsWith('0.95 × Nyquist at 44.1 kHz, until audio starts'),
+    .endsWith('0.95 × Nyquist at 44.1 kHz, do spuštění zvuku'),
     m.view.opts.text.y(1));
   m.destroy();
 });

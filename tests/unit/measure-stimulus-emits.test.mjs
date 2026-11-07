@@ -85,8 +85,8 @@ test('C033: an input that does not hear the check\'s stimulus is said, not passe
     const rep = await r.drive(me.preflight(RECIPE));
     const w = rep.warnings.find((x) => x.code === 'STIMULUS_NOT_HEARD');
     assert.ok(w, JSON.stringify(rep.warnings.map((x) => x.code)));
-    assert.match(w.text, /^The input level did not rise while the check played the stimulus/);
-    assert.match(w.text, /output reaches the input/);
+    assert.match(w.text, /^Úroveň vstupu se nezvýšila, když kontrola přehrála stimulus/);
+    assert.match(w.text, /výstup dorazí na vstup/);
     assert.equal(REASON_STEP.STIMULUS_NOT_HEARD, 'stimulus');
     assert.equal(REASON_STEP.STIMULUS_NOT_PLAYED, 'stimulus');
     assert.equal(rep.ready, true, 'a warning never blocks (§30)');
@@ -105,7 +105,7 @@ test('C033: a digitally silent input during the check is said, not passed as REA
     assert.equal(rep.facts.probe.inputLevel.rmsDb, -Infinity);
     const w = rep.warnings.find((x) => x.code === 'STIMULUS_NOT_HEARD');
     assert.ok(w, JSON.stringify(rep.warnings.map((x) => x.code)));
-    assert.match(w.text, /digitally silent/);
+    assert.match(w.text, /digitálně tichý/);
     assert.equal(w.value, null, 'no number is invented for a rise that has none');
     me.dispose();
   });
@@ -155,8 +155,8 @@ test('C033: a probe that cannot play says why', async () => {
   assert.ok(samples instanceof Float32Array && samples.length === PREFLIGHT_PROBE_S * SR);
   const w = rep.warnings.find((x) => x.code === 'STIMULUS_NOT_PLAYED');
   assert.ok(w, JSON.stringify(rep.warnings.map((x) => x.code)));
-  assert.equal(w.text, 'The setup check could not play the stimulus (The audio context is '
-    + 'closed); the measurement plays it.');
+  assert.equal(w.text, 'Kontrola nastavení nemohla přehrát stimulus (The audio context is '
+    + 'closed); měření ho přehraje.');
   me.dispose();
 });
 
@@ -227,7 +227,7 @@ test('C033: a check that waits for the microphone prompt says so, once', () => {
   const msgs = announce([{ type: 'state', from: 'IDLE', to: 'PREFLIGHT' },
     { type: 'waiting', what: 'permission' }, { type: 'waiting', what: 'permission' }]);
   assert.deepEqual(msgs.map((m) => [m.text, m.politeness]),
-    [['Setup check: allow the microphone if the browser asks', 'polite']]);
+    [['Kontrola nastavení: povolte mikrofon, pokud se prohlížeč zeptá', 'polite']]);
 });
 
 test('C033: the engine tells the caller while the browser asks for the microphone', async () => {

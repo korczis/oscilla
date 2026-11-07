@@ -61,7 +61,7 @@ const reportLater = (e) => { queueMicrotask(() => { throw e; }); };
 
 export function createHeldNotes({ perInput = HELD_PER_INPUT, onError = reportLater } = {}) {
   if (!(Number.isInteger(perInput) && perInput > 0)) {
-    throw new TypeError(`createHeldNotes: perInput must be a positive integer, not ${perInput}`);
+    throw new TypeError(`createHeldNotes: perInput musí být kladné celé číslo, ne ${perInput}`);
   }
   const entries = new Map(); // key -> { key, note, velocity, input, sink }, in hold order
   const listeners = new Set();
@@ -89,9 +89,9 @@ export function createHeldNotes({ perInput = HELD_PER_INPUT, onError = reportLat
     sink: e.sink });
 
   function hold(key, { sink, note, velocity = 0, input } = {}) {
-    if (typeof key !== 'string' || !key) throw new TypeError('hold: key must be a string');
+    if (typeof key !== 'string' || !key) throw new TypeError('hold: key musí být řetězec');
     if (!sink || typeof sink.noteOff !== 'function') {
-      throw new TypeError(`hold: the sink of ${key} has no noteOff(note, info)`);
+      throw new TypeError(`hold: sink pro ${key} nemá noteOff(note, info)`);
     }
     const entry = { key, note, velocity, input: input === undefined ? key.split(':')[0] : input,
       sink };
@@ -121,7 +121,7 @@ export function createHeldNotes({ perInput = HELD_PER_INPUT, onError = reportLat
 
   function legato(oldKey, newKey, { note, velocity } = {}) {
     if (typeof newKey !== 'string' || !newKey) {
-      throw new TypeError('legato: newKey must be a string');
+      throw new TypeError('legato: newKey musí být řetězec');
     }
     const from = entries.get(oldKey);
     if (!from) return null;
@@ -142,7 +142,7 @@ export function createHeldNotes({ perInput = HELD_PER_INPUT, onError = reportLat
 
   function releaseAll(reason, { sink, input } = {}) {
     if (typeof reason !== 'string' || !reason) {
-      throw new TypeError('releaseAll: a reason is required');
+      throw new TypeError('releaseAll: chybí důvod (reason)');
     }
     const gone = [...entries.values()].filter((e) => (sink === undefined
       || sameSink(e.sink, sink)) && (input === undefined || e.input === input));
@@ -160,7 +160,7 @@ export function createHeldNotes({ perInput = HELD_PER_INPUT, onError = reportLat
     sinkOf: (key) => (entries.has(key) ? entries.get(key).sink : null),
     get size() { return entries.size; },
     on(fn) {
-      if (typeof fn !== 'function') throw new TypeError('on: a function is required');
+      if (typeof fn !== 'function') throw new TypeError('on: je třeba předat funkci');
       listeners.add(fn);
       return () => { listeners.delete(fn); };
     },
