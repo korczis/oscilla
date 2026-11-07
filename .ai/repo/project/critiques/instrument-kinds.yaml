@@ -1,0 +1,58 @@
+intent: instrument-kinds
+reviewed_at: "709e4e61a6871b6e338809e2144209b9d8708e7b"
+reviewed_by: "claude-opus-5.5 (critic, oscilla-2b session 6f686fcc, 2026-11-07); scoped to W001 as narrowed on chore/plan-drum-chain 7b7a0419 (Q103), W008 and its first consumer K222. The critic built none of W001, W008 or K222 and wrote none of their objectives (oscilla-21's plan narrowing; the critic's plan edits are K220 and K221). The other kinds of the intent carry planned resolutions to the slice of their first consumer, as W001 now states."
+findings:
+  - id: w001-objective-head-contradicts-its-amendment
+    class: insufficient_work
+    subject: "W001"
+    finding: "W001's objective still opens with 'src/js/ui/catalog/kinds/ declares the twelve kinds of the design (readout, meter, scope, jack, edge, transport, piano, step-grid, xy-pad, piano-roll, clip-slot, scene, channel-strip, track-header)' and its first acceptance criterion checks 'for every declared kind'; only the 'Amended 2026-11-07' sentence at the end says one declaration (step-grid) lands now. A builder reading the head builds twelve inert declarations (project.no-inert-surfaces), the very thing the narrowing removed. The head sentence and the criterion should state the one declaration, the amendment kept as history."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "W001"
+      because: "W001's amendment governs and its builder (oscilla-21, PR #467) declares step-grid alone; the head sentence and criterion 1 are rewritten to 'defineKind, the contract test and the step-grid declaration' in the next plan change, before W001 is stamped done."
+  - id: step-grid-emits-an-action-the-studio-does-not-export
+    class: unproven_assumption
+    subject: "W008"
+    finding: "W001's contract refuses a kind whose event emits a Studio action type not exported under src/js/studio. W008's step-grid emits NOTES_GRID_SET for a grid change (ADR 0086 decision 2), and neither main 709e4e61 nor K068 (origin/feat/k068-notes-playback 5436ff8a) exports it (oscilla-21, #467 body). Declared in W001 with that event, the declaration fails its own contract; declared without it, W008 changes the shape and needs a version bump against the digest pin."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "W008"
+      because: "W001 declares step-grid v1 with CLIP_UPDATE and NODE_PARAM_SET only; W008 adds NOTES_GRID_SET to the Studio's actions (with its validate and history entry) and bumps step-grid to v2 in the same pull request, so the digest pin records the change (oscilla-21's stated plan for W008)."
+  - id: drums-grid-cannot-fit-44px-cells-at-390
+    class: regression_risk
+    subject: "K222"
+    finding: "K222 shows 8 steps per page at 390 px beside a row name column. At 390 px wide with the 16 px gutters (358 px) a row label of 64 px leaves 294 px, 36.7 px per step for 8 steps: under the intent's 44 px coarse-pointer target, which W001's contract refuses without a five-word exemption. The phone layout needs the row's name above its steps (a full-width row of 8 x 44 px = 352 px) or 6 steps per page, stated in the 390x844 rule of the step-grid declaration and proved in drums.cjs and the iphone.cjs Drums leg."
+    blocking: true
+    resolution:
+      state: planned
+      issue: "K222"
+      because: "K222's 390 px layout puts each row's name and voice picker above its steps (8 steps of 44 px in 352 px), W008's step-grid declaration carries that 390x844 rule, and drums.cjs measures the cell boxes at 390x844 (>= 44 px) on chromium, firefox and webkit."
+  - id: first-pad-tap-must-sound-on-a-phone
+    class: missed_requirement
+    subject: "K222"
+    finding: "K222's trigger pads play through the note router; on a phone the first tap must unlock audio and sound (project.a-phone-sounds, K184 'a tap always sounds' holds a gate open for a stated minimum). K222 names an iphone.cjs Drums leg but not the shared first-gesture path, so a pad could be the one surface that stays silent on its first touch."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K222"
+      because: "K222's pads go through the shared note path (live-notes.js via the Synth's notes sink) whose first gesture resumes the AudioContext, and its iphone.cjs leg asserts a sounding level on the first pad tap with the gesture rule on."
+  - id: probability-draw-is-symmetric-in-pass-and-index
+    class: regression_risk
+    subject: "W008"
+    finding: "W008 shows and edits a step's probability p, which K068 plays with noteDraw(seed, pass, index) = mulberry32((seed ^ pass ^ index) >>> 0) (src/js/studio/notes.js on 5436ff8a). XOR is symmetric, so note i on pass k draws exactly what note k draws on pass i (and (0,3), (1,2), (2,1), (3,0) all collide): a 16-step pattern with p < 1 repeats a mirrored structure, which the grid then presents as random. ADR 0086's seed formula needs a mix of the pass before the XOR (e.g. Math.imul(pass + 1, 0x9E3779B1))."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "K068"
+      because: "Raised as a finding of K068's review (oscilla-2b, the K068 reviewer): the draw's formula is amended in ADR 0086 and K068 with a test that the draws over passes 0-15 x indices 0-15 are pairwise distinct; W008 only displays p and inherits the fix."
+  - id: further-kinds-carry-their-declarations-to-their-consumers
+    class: unnecessary_work
+    subject: "instrument-kinds#kind-contract"
+    finding: "The intent's kind-contract criterion names every instrument kind; after Q103's narrowing only step-grid is declared now. The other twelve kinds (readout, meter, scope, jack, edge, transport, piano, xy-pad, piano-roll, clip-slot, scene, channel-strip, track-header) are planned with no consumer yet; declaring them ahead would be inert."
+    blocking: false
+    resolution:
+      state: planned
+      issue: "W001"
+      because: "Each kind adds its declaration and state-path rows to W001's contract test in the slice of its first consumer (W001's amendment); the xy-pad kind's first consumer is K220 (the two performance pads, Q103), the transport's the next transport view slice."
