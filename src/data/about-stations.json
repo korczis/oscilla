@@ -189,6 +189,10 @@
       "summary": "About names only what each workspace shows, the release its roadmap describes and every library the page ships, the Sequencer's blocks stay readable at phone width, Play stops saying pressed when the sequence stops elsewhere, and a source pack feeds an LLM project",
       "commit": "d51f9b2",
       "datetime": "2026-11-07T05:37:23+01:00"
+    },
+    {
+      "title": "Derived",
+      "summary": "Nothing is typed twice: the About timeline is data whose numbers the build derives, the roadmap names the build's own version, the Majordomus pin is written once, the counts in the docs follow the code, and opening the Synth leaves a fresh Studio clean"
     }
   ]
 }
