@@ -179,21 +179,21 @@ test('K068 p, r, slide and grid validate, each refused with its own sentence', (
   ok(st.dispatch(add([n(0, 60, 1, 1, { p: 0.01, r: 1 })], { stepBeats: 1, swing: 0.75,
     seed: 4294967295 })), 'the other edges');
   const cases = [
-    ['p 0', [n(0, 60, 1, 1, { p: 0 })], g, /Note 1: p is the chance it plays, a number above 0/],
-    ['p 1.5', [n(0, 60, 1, 1, { p: 1.5 })], g, /p is the chance it plays/],
-    ['r 0', [n(0, 60, 1, 1, { r: 0 })], g, /Note 1: r is the number of onsets it plays, an integer from 1 to 8/],
-    ['r 9', [n(0, 60, 1, 1, { r: 9 })], g, /r is the number of onsets/],
-    ['r 2.5', [n(0, 60, 1, 1, { r: 2.5 })], g, /r is the number of onsets/],
-    ['slide false', [n(0, 60, 1, 1, { slide: false })], g, /Note 1: slide is either true or left out/],
-    ['grid not an object', [n(0, 60)], 4, /grid must be an object \{ stepBeats, swing, seed \}/],
-    ['grid steps', [n(0, 60)], { ...g, steps: 16 }, /grid is \{ stepBeats, swing, seed \}; "steps"/],
-    ['stepBeats 0', [n(0, 60)], { ...g, stepBeats: 0 }, /stepBeats must be a number of beats above 0/],
-    ['swing 0.8', [n(0, 60)], { ...g, swing: 0.8 }, /swing must be a fraction of stepBeats from 0 to 0\.75/],
-    ['swing -0.1', [n(0, 60)], { ...g, swing: -0.1 }, /swing must be a fraction/],
-    ['seed -1', [n(0, 60)], { ...g, seed: -1 }, /seed must be an integer from 0 to 4294967295/],
-    ['seed 2^32', [n(0, 60)], { ...g, seed: 2 ** 32 }, /seed must be an integer/],
-    ['seed 1.5', [n(0, 60)], { ...g, seed: 1.5 }, /seed must be an integer/],
-    ['grid without seed', [n(0, 60)], { stepBeats: 0.25, swing: 0 }, /seed must be an integer/],
+    ['p 0', [n(0, 60, 1, 1, { p: 0 })], g, /Nota 1: p je pravděpodobnost, že zazní, číslo větší než 0/],
+    ['p 1.5', [n(0, 60, 1, 1, { p: 1.5 })], g, /p je pravděpodobnost, že zazní/],
+    ['r 0', [n(0, 60, 1, 1, { r: 0 })], g, /Nota 1: r je počet nástupů, které zahraje, celé číslo od 1 do 8/],
+    ['r 9', [n(0, 60, 1, 1, { r: 9 })], g, /r je počet nástupů/],
+    ['r 2.5', [n(0, 60, 1, 1, { r: 2.5 })], g, /r je počet nástupů/],
+    ['slide false', [n(0, 60, 1, 1, { slide: false })], g, /Nota 1: slide je buď true, nebo se vynechá/],
+    ['grid not an object', [n(0, 60)], 4, /Mřížka notového klipu musí být objekt \{ stepBeats, swing, seed \}/],
+    ['grid steps', [n(0, 60)], { ...g, steps: 16 }, /Mřížka notového klipu je \{ stepBeats, swing, seed \}; „steps“/],
+    ['stepBeats 0', [n(0, 60)], { ...g, stepBeats: 0 }, /stepBeats mřížky musí být počet dob větší než 0/],
+    ['swing 0.8', [n(0, 60)], { ...g, swing: 0.8 }, /swing mřížky musí být zlomek stepBeats od 0 do 0\.75/],
+    ['swing -0.1', [n(0, 60)], { ...g, swing: -0.1 }, /swing mřížky musí být zlomek/],
+    ['seed -1', [n(0, 60)], { ...g, seed: -1 }, /seed mřížky musí být celé číslo od 0 do 4294967295/],
+    ['seed 2^32', [n(0, 60)], { ...g, seed: 2 ** 32 }, /seed mřížky musí být celé číslo/],
+    ['seed 1.5', [n(0, 60)], { ...g, seed: 1.5 }, /seed mřížky musí být celé číslo/],
+    ['grid without seed', [n(0, 60)], { stepBeats: 0.25, swing: 0 }, /seed mřížky musí být celé číslo/],
   ];
   for (const [label, notes, grid, pattern] of cases) {
     const model = st.getModel();
@@ -215,7 +215,7 @@ test('K068 a slide on a target without a glide parameter is refused with that re
   const r = st.dispatch({ type: 'CLIP_ADD', trackId: track, kind: 'notes', startBeats: 0,
     durationBeats: 4, payload: { notes: [n(0, 60), n(1, 62, 0.25, 0.8, { slide: true })] } });
   assert.equal(r.ok, false);
-  assert.equal(r.reason, 'Note 2 slides, but an Additive engine node has no glide to slide with.');
+  assert.equal(r.reason, 'Nota 2 klouže, ale uzel Additive engine nemá glide, kterým by klouzal.');
 });
 
 test('K068 notes without the new fields serialize and hash as before; the fields are hashed', () => {
@@ -354,7 +354,7 @@ test('K068 the Tap command: one TRANSPORT_SET per tap series, one undo entry', (
   assert.equal(cmd.tapCount(), 0, 'the fourth tap ends the series');
   st.undo();
   assert.equal(st.getModel().transport.tempo, 90, 'undo restores the tempo before the series');
-  assert.deepEqual(said.slice(-1), ['Tempo 240 BPM from 4 taps']);
+  assert.deepEqual(said.slice(-1), ['Tempo 240 BPM z 4 ťuknutí']);
   assert.ok(said.includes('Tap 2 of 4'));
 });
 
@@ -424,7 +424,7 @@ test('K068 AC2 p 0 is refused; p 1 plays every note', async () => {
   const r = st.dispatch({ type: 'CLIP_ADD', trackId, kind: 'notes', startBeats: 0,
     durationBeats: 4, payload: { notes: [n(0, 60, 0.25, 0.8, { p: 0 })] } });
   assert.equal(r.ok, false);
-  assert.equal(r.reason, 'Note 1: p is the chance it plays, a number above 0 and at most 1.');
+  assert.equal(r.reason, 'Nota 1: p je pravděpodobnost, že zazní, číslo větší než 0 a nejvýš 1.');
   const notes = Array.from({ length: 8 }, (_, i) => n(i * 0.25, 60 + i, 0.25, 0.8, { p: 1 }));
   const rig = playing({ notes, grid: { stepBeats: 0.25, swing: 0, seed: 1 } });
   rig.fx.advance(1.5);

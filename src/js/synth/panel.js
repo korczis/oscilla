@@ -91,11 +91,11 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     if (!def) fail(pid, `module ${m.id} names unknown node type ${m.node}`);
     if (!/^[a-z][a-z0-9-]{0,31}$/.test(m.id)) fail(pid, `module id ${m.id}`);
     for (const k of m.studio || []) {
-      if (!def.params.some((p) => p.key === k)) fail(pid, `${m.id}.studio.${k} is no param`);
+      if (!def.params.some((p) => p.key === k)) fail(pid, `${m.id}.studio.${k} není parametr`);
     }
     for (const group of ['fixed', 'init', 'labels', 'ranges', 'options']) {
       for (const k of Object.keys(m[group] || {})) {
-        if (!def.params.some((p) => p.key === k)) fail(pid, `${m.id}.${group}.${k} is no param`);
+        if (!def.params.some((p) => p.key === k)) fail(pid, `${m.id}.${group}.${k} není parametr`);
       }
     }
     const params = def.params.map((p) => narrow(pid, m, p));

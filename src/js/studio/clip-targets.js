@@ -93,12 +93,12 @@ export const CLIP_TARGET_TEXT = Object.freeze({
   noTarget: 'The clip has no target node.',
   patternTarget: (name) => `Pattern clips play on a Sequence or an Oscillator; this clip on `
     + `${name} is not played.`,
-  eventTarget: (name) => `Only gate events on an Envelope or a Keys node are played; this clip `
-    + `on ${name} is not.`,
+  eventTarget: (name) => `Hrají se jen události brány na Envelope nebo na uzlu Keys; tento klip `
+    + `na ${name} se nehraje.`,
   notesTarget: (type) => 'A notes clip needs a target that plays notes (Keys, the XY pad or a '
     + `voice engine); ${/^[AEIOU]/.test(type) ? 'an' : 'a'} ${type} node does not play notes.`,
-  notesUnplayed: (name) => `Notes clips play on a Keys node; this clip on ${name} is kept but `
-    + 'not played.',
+  notesUnplayed: (name) => `Notové klipy hrají na uzlu Keys; tento klip na ${name} zůstává, ale `
+    + 'nehraje se.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
     + 'mis-scaled, so it is not applied.',
   filterQUnused: 'Web Audio ignores Q for the low-shelf and high-shelf types; a Q lane or '

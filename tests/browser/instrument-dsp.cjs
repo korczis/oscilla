@@ -135,7 +135,7 @@ async function runBrowser(name) {
         c.refused.slice(0, 2).join(' | '));
       check(at, 'k-clamp the runtime debugInfo states the clamp at this rate',
         typeof c.stated === 'string' && c.stated.includes('0.95 × Nyquist')
-          && c.stated.includes(`(${Math.round(c.nyquist95)} Hz here)`), c.stated);
+          && c.stated.includes(`(zde ${Math.round(c.nyquist95)} Hz)`), c.stated);
       // k-glide: linear in exact time.
       const g = await call('glide', { sampleRate: rate }, `k-glide renders at ${rate} Hz`);
       check(at, 'k-glide the CV arrives within 1 cent at 100 ms +- one quantum',

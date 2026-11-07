@@ -32,9 +32,9 @@ import { playsNotes } from './registry.js';
 
 /** The router's refusals, as the user reads them. */
 export const LIVE_NOTES_TEXT = Object.freeze({
-  noteRange: (n) => `Note ${n} is outside the note range 0 to 127; it is not played.`,
-  keyRange: (n, lo, hi) => `Note ${n} is outside this Keys node's key range ${lo} to ${hi}; `
-    + 'it is not played.',
+  noteRange: (n) => `Nota ${n} je mimo rozsah not 0 až 127; nehraje se.`,
+  keyRange: (n, lo, hi) => `Nota ${n} je mimo rozsah kláves tohoto uzlu Keys ${lo} až ${hi}; `
+    + 'nehraje se.',
 });
 const inNoteRange = (n) => Number.isInteger(n) && n >= 0 && n <= 127;
 

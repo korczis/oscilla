@@ -132,35 +132,35 @@ test('K099 every pinned template studioHash is unchanged', () => {
 test('K099 bad notes are refused with their reason, model and history unchanged', () => {
   const { store, track } = setup();
   const cases = [
-    ['note 128', [note(0, 128)], /note must be an integer MIDI note number from 0 to 127/],
-    ['note -1', [note(0, -1)], /note must be an integer MIDI note number from 0 to 127/],
-    ['note 1.5', [note(0, 1.5)], /note must be an integer MIDI note number/],
-    ['note 60.5', [note(0, 60.5)], /note must be an integer MIDI note number/],
-    ['vel 0', [note(0, 60, 1, 0)], /vel must be a number above 0 and at most 1/],
-    ['vel 1.2', [note(0, 60, 1, 1.2)], /vel must be a number above 0 and at most 1/],
-    ['len 0', [note(0, 60, 0)], /len must be a number of beats above 0/],
-    ['at -1', [note(-1, 60)], /at must be a number of beats from the clip start, 0 or more/],
+    ['note 128', [note(0, 128)], /note musí být celé číslo noty MIDI od 0 do 127/],
+    ['note -1', [note(0, -1)], /note musí být celé číslo noty MIDI od 0 do 127/],
+    ['note 1.5', [note(0, 1.5)], /note musí být celé číslo noty MIDI/],
+    ['note 60.5', [note(0, 60.5)], /note musí být celé číslo noty MIDI/],
+    ['vel 0', [note(0, 60, 1, 0)], /vel musí být číslo větší než 0 a nejvýš 1/],
+    ['vel 1.2', [note(0, 60, 1, 1.2)], /vel musí být číslo větší než 0 a nejvýš 1/],
+    ['len 0', [note(0, 60, 0)], /len musí být počet dob větší než 0/],
+    ['at -1', [note(-1, 60)], /at musí být počet dob od začátku klipu, 0 nebo víc/],
     ['past the clip end', [note(3.5, 60, 1)],
-      /ends at beat 4\.5, after the end of the clip at beat 4/],
-    ['unknown field q', [{ ...note(0, 60), q: 0.5 }], /unknown field "q"; a note is .* with an /],
-    ['duplicate (at, note)', [note(0, 60), note(0, 60, 2)], /repeats note 60 at beat 0/],
+      /končí v době 4\.5, až po konci klipu v době 4/],
+    ['unknown field q', [{ ...note(0, 60), q: 0.5 }], /neznámé pole „q“; nota je .* s volitelnými /],
+    ['duplicate (at, note)', [note(0, 60), note(0, 60, 2)], /opakuje notu 60 v době 0/],
   ];
   for (const [label, notes, pattern] of cases) {
     refused(store, addNotes(track, notes), pattern, label);
   }
   refused(store, { ...addNotes(track, [note(0, 60)]), payload: { notes: [note(0, 60)],
-    steps: 16 } }, /payload holds its notes and an optional grid; "steps"/,
+    steps: 16 } }, /tvoří jeho noty a volitelná mřížka; „steps“/,
   'unknown payload field');
   refused(store, addNotes(track, [note(0, 60)], { timeBase: 'absolute', start: 0, duration: 2,
-    startBeats: undefined, durationBeats: undefined }), /must be tempo-linked/, 'absolute clip');
+    startBeats: undefined, durationBeats: undefined }), /musí být klip svázaný s tempem/, 'absolute clip');
   // The same rules hold for an edit of an existing clip.
   const id = ok(store.dispatch(addNotes(track, [note(0, 60)]))).created.clips[0];
   refused(store, { type: 'CLIP_UPDATE', clipId: id, payload: { notes: [note(0, 128)] } },
-    /note must be an integer/, 'CLIP_UPDATE note 128');
-  refused(store, { type: 'CLIP_RESIZE', clipId: id, duration: 0.25 }, /after the end of the clip/,
+    /note musí být celé číslo/, 'CLIP_UPDATE note 128');
+  refused(store, { type: 'CLIP_RESIZE', clipId: id, duration: 0.25 }, /až po konci klipu/,
     'a resize that cuts a note');
   refused(store, { type: 'CLIP_SET_TIME_BASE', clipId: id, timeBase: 'absolute' },
-    /must be tempo-linked/, 'unlink from tempo');
+    /musí být klip svázaný s tempem/, 'unlink from tempo');
 });
 
 test('K099 a notes clip targets only a node that plays notes, on an event track', () => {
@@ -246,7 +246,7 @@ test('K099 a notes clip plays on a Keys node; on an XY pad it is reported kept, 
   const m = store.getModel();
   const clip = m.timeline.clips.find((c) => c.id === id);
   const why = transportModule.clipPlayReason(m, clip);
-  assert.match(why, /^Notes clips play on a Keys node; this clip on .+ is kept but not played\.$/);
+  assert.match(why, /^Notové klipy hrají na uzlu Keys; tento klip na .+ zůstává, ale nehraje se\.$/);
   const plan = offline.planOfflineRender(m);
   const row = plan.clips.find((c) => c.id === id);
   assert.deepEqual([row.kind, row.rendered, row.reason], ['notes', false, why]);

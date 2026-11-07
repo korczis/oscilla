@@ -101,7 +101,7 @@ export function createTransportCommands(ctx) {
       return { ...r, taps: TAP_COUNT, bpm: t.bpm, clamped: t.clamped };
     }
     if (r.changed && transport.playing) transport.sync();
-    say(`Tempo ${t.bpm} BPM from ${TAP_COUNT} taps${t.clamped ? ', held at the tempo range' : ''}`);
+    say(`Tempo ${t.bpm} BPM z ${TAP_COUNT} ťuknutí${t.clamped ? ', drženo v rozsahu tempa' : ''}`);
     return { ok: true, changed: !!r.changed, taps: TAP_COUNT, bpm: t.bpm, clamped: t.clamped };
   }
 

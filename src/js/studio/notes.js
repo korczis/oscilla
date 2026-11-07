@@ -73,39 +73,38 @@ const MAX_NOTE_ERRORS = 8;
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const num = (v) => Math.round(v * 1e6) / 1e6;
-const article = (type) => (/^[AEIOU]/.test(type) ? 'an' : 'a');
 
 /** The sentences of the notes rules. `i` is the note's index in the sorted list. */
 export const NOTES_TEXT = Object.freeze({
-  absolute: 'A notes clip is placed in beats: its notes are beats from the clip start, so the '
-    + 'clip must be tempo-linked.',
-  payloadField: (k) => `A notes clip payload holds its notes and an optional grid; "${k}" is `
-    + 'not one of its fields.',
-  list: 'A notes clip needs its notes as a list.',
-  shape: (i) => `Note ${i + 1} must be an object { at, note, len, vel }.`,
-  field: (i, k) => `Note ${i + 1} has the unknown field "${k}"; a note is { at, note, len, vel } `
-    + 'with an optional p, r and slide.',
-  at: (i) => `Note ${i + 1}: at must be a number of beats from the clip start, 0 or more.`,
-  len: (i) => `Note ${i + 1}: len must be a number of beats above 0.`,
-  note: (i) => `Note ${i + 1}: note must be an integer MIDI note number from ${NOTE_RANGE[0]} to `
+  absolute: 'Notový klip se umisťuje v dobách: jeho noty jsou doby od začátku klipu, proto musí '
+    + 'být klip svázaný s tempem.',
+  payloadField: (k) => `Obsah notového klipu tvoří jeho noty a volitelná mřížka; „${k}“ mezi `
+    + 'jeho pole nepatří.',
+  list: 'Notový klip potřebuje své noty jako seznam.',
+  shape: (i) => `Nota ${i + 1} musí být objekt { at, note, len, vel }.`,
+  field: (i, k) => `Nota ${i + 1} má neznámé pole „${k}“; nota je { at, note, len, vel } `
+    + 's volitelnými p, r a slide.',
+  at: (i) => `Nota ${i + 1}: at musí být počet dob od začátku klipu, 0 nebo víc.`,
+  len: (i) => `Nota ${i + 1}: len musí být počet dob větší než 0.`,
+  note: (i) => `Nota ${i + 1}: note musí být celé číslo noty MIDI od ${NOTE_RANGE[0]} do `
     + `${NOTE_RANGE[1]}.`,
-  vel: (i) => `Note ${i + 1}: vel must be a number above 0 and at most 1.`,
-  end: (i, end, beats) => `Note ${i + 1} ends at beat ${num(end)}, after the end of the clip at `
-    + `beat ${num(beats)}.`,
-  duplicate: (i, note, at) => `Note ${i + 1} repeats note ${note} at beat ${num(at)}; a clip `
-    + 'holds one note per pitch and onset.',
-  p: (i) => `Note ${i + 1}: p is the chance it plays, a number above 0 and at most 1.`,
-  r: (i) => `Note ${i + 1}: r is the number of onsets it plays, an integer from `
-    + `${RATCHET_RANGE[0]} to ${RATCHET_RANGE[1]}.`,
-  slide: (i) => `Note ${i + 1}: slide is either true or left out.`,
-  slideTarget: (i, type) => `Note ${i + 1} slides, but ${article(type)} ${type} node has no `
-    + 'glide to slide with.',
-  grid: 'A notes clip grid must be an object { stepBeats, swing, seed }.',
-  gridField: (k) => `A notes clip grid is { stepBeats, swing, seed }; "${k}" is not one of its `
-    + 'fields.',
-  stepBeats: 'The grid stepBeats must be a number of beats above 0.',
-  swing: `The grid swing must be a fraction of stepBeats from 0 to ${SWING_MAX}.`,
-  seed: `The grid seed must be an integer from 0 to ${SEED_MAX}.`,
+  vel: (i) => `Nota ${i + 1}: vel musí být číslo větší než 0 a nejvýš 1.`,
+  end: (i, end, beats) => `Nota ${i + 1} končí v době ${num(end)}, až po konci klipu v době `
+    + `${num(beats)}.`,
+  duplicate: (i, note, at) => `Nota ${i + 1} opakuje notu ${note} v době ${num(at)}; klip `
+    + 'drží jednu notu na každou výšku a nástup.',
+  p: (i) => `Nota ${i + 1}: p je pravděpodobnost, že zazní, číslo větší než 0 a nejvýš 1.`,
+  r: (i) => `Nota ${i + 1}: r je počet nástupů, které zahraje, celé číslo od `
+    + `${RATCHET_RANGE[0]} do ${RATCHET_RANGE[1]}.`,
+  slide: (i) => `Nota ${i + 1}: slide je buď true, nebo se vynechá.`,
+  slideTarget: (i, type) => `Nota ${i + 1} klouže, ale uzel ${type} nemá glide, kterým by `
+    + 'klouzal.',
+  grid: 'Mřížka notového klipu musí být objekt { stepBeats, swing, seed }.',
+  gridField: (k) => `Mřížka notového klipu je { stepBeats, swing, seed }; „${k}“ mezi její pole `
+    + 'nepatří.',
+  stepBeats: 'stepBeats mřížky musí být počet dob větší než 0.',
+  swing: `swing mřížky musí být zlomek stepBeats od 0 do ${SWING_MAX}.`,
+  seed: `seed mřížky musí být celé číslo od 0 do ${SEED_MAX}.`,
 });
 
 const sortKey = (n, f) => (isObj(n) && finite(n[f]) ? n[f] : Infinity);

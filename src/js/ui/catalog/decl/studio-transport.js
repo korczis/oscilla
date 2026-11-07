@@ -32,7 +32,8 @@ export default [
     id: 'studio.tl.tap',
     kind: 'action',
     label: 'Tap tempo',
-    docs: 'Sets the tempo from four taps: their mean interval, one tempo edit per series (K068).',
+    docs: 'Nastaví tempo ze čtyř ťuknutí: jejich průměrný interval, jedna úprava tempa za sérii '
+      + '(K068).',
     state: 'studio.transport',
     in: 'studio.tl.transport',
   }),

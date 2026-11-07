@@ -95,10 +95,10 @@ export function createPitchSchedule(param, v0 = 0) {
 export const ONSET_LOG = 16;
 
 /** The note clamp, as the card, the Inspector help and debugInfo state it. */
-export const KEYS_CLAMP_TEXT = (hz) => `A pitch played from Keys is clamped at `
-  + `${SAFE_NYQUIST_FACTOR} × Nyquist${hz ? ` (${Math.round(hz)} Hz here)` : ''}: a VCO holds `
-  + 'it at its pitch grid point at or below that, less than 5 cents under, and every note '
-  + 'below the clamp tracks exactly.';
+export const KEYS_CLAMP_TEXT = (hz) => `Výška hraná z Keys se omezí na `
+  + `${SAFE_NYQUIST_FACTOR} × Nyquist${hz ? ` (zde ${Math.round(hz)} Hz)` : ''}: VCO ji drží `
+  + 'na bodu své mřížky výšek na této hranici nebo pod ní, méně než 5 centů níž, a každá nota '
+  + 'pod hranicí ladí přesně.';
 
 export const keys = {
   compiler: 'audio/audio-engine.js#AudioEngine',
