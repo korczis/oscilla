@@ -44,7 +44,8 @@ export const NOTE = 'The About timeline, one entry per step. Write only title an
 const FIELDS = ['release', 'title', 'summary', 'commit', 'datetime'];
 const LINE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const SHORT = /^[0-9a-f]{7}$/;
-const DATETIME = /^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}):\d{2}[+-]\d{2}:\d{2}$/;
+// git's %cI writes the offset as +HH:MM, or Z on a host whose zone is UTC (CI runners).
+const DATETIME = /^\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}):\d{2}(?:[+-]\d{2}:\d{2}|Z)$/;
 const INDENT = '          ';
 
 /** MAJOR.MINOR of a version X.Y.Z or X.Y.Z-pre. */

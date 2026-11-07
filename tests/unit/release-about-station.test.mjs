@@ -88,6 +88,11 @@ test('stamp: a patch release changes nothing; a new line without a pending stati
   assert.deepEqual(same, fixture());
   assert.throws(() => stampStations(fixture(), '9.9.0', HEAD),
     /release line 9\.9 has no station: add \{ "title", "summary" \}.*docs\(about\)/);
+  const utc = fixture();
+  utc.stations.push({ title: 'Nine', summary: 'The ninth line' });
+  const z = stampStations(utc, '9.9.0', { commit: 'abcdef0', datetime: '2026-11-07T05:58:12Z' });
+  assert.equal(z.doc.stations.at(-1).datetime, '2026-11-07T05:58:12Z', 'a UTC host writes Z');
+  assert.equal(deriveStations(z.doc, '9.9.0').at(-1).time, '05:58');
   const rc = fixture();
   rc.stations.push({ title: 'Ten', summary: 'The tenth line' });
   assert.equal(stampStations(rc, '10.0.0-rc.1', HEAD).doc.stations.at(-1).release, '10.0');
