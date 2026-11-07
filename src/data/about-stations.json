@@ -198,8 +198,11 @@
       "datetime": "2026-11-07T07:44:21+01:00"
     },
     {
+      "release": "3.25",
       "title": "Čeština",
-      "summary": "Nové texty aplikace jsou česky a anglických vět, které ještě ukazuje, po souborech jen ubývá: hlídá to pravidlo a test"
+      "summary": "Nové texty aplikace jsou česky a anglických vět, které ještě ukazuje, po souborech jen ubývá: hlídá to pravidlo a test",
+      "commit": "4ff09c1",
+      "datetime": "2026-11-07T16:10:32+01:00"
     }
   ]
 }
