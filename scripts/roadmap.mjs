@@ -7,9 +7,12 @@
 // status and its issue counts) and keeps every milestone whose status is neither DONE nor
 // CANCELLED, as { id, title, done, required, phase }: its title, how many of its required
 // issues are done (the progress `majordomus plan status` prints) and its phase from its
-// derived status (ACTIVE and VERIFY now, PLANNED next, BLOCKED later). About shows now and next and folds later behind its count, because a list of
-// every open milestone on the first screen shows nothing (Majordomus curated knowledge
-// a-generator-that-can-list-everything-shows-everything, 2026-10-18).
+// derived status (ACTIVE and VERIFY now, PLANNED next, BLOCKED later), and names its release:
+// package.json's version, which release:prepare has bumped before it runs this (U086), so the
+// page says which release the list describes. About shows now and next and folds later behind
+// its count, because a list of every open milestone on the first screen shows nothing
+// (Majordomus curated knowledge a-generator-that-can-list-everything-shows-everything,
+// 2026-10-18).
 //
 // The build reads src/ and never .ai/, so the page carries the roadmap as of the last time it
 // was written, and a plan-only commit changes neither this file nor dist. release:prepare runs
@@ -26,7 +29,10 @@ import { pathToFileURL } from 'node:url';
 import { ROOT } from './release-metadata.mjs';
 
 export const ROADMAP_REL = 'src/data/roadmap.json';
-export const SCHEMA = 'oscilla-roadmap/v2';
+// v3 drops `release` (the 2026-11-06 owner order, nothing typed twice): the release a roadmap
+// describes is package.json's version, which only release:prepare changes and which prepare
+// writes this file with, so the page reads it from BUILD.version (src/js/ui/about.js).
+export const SCHEMA = 'oscilla-roadmap/v3';
 export const CLOSED = ['DONE', 'CANCELLED'];
 export const FIELDS = ['id', 'title', 'done', 'required', 'phase'];
 /** The phase of an open milestone by its derived status; a status not named here is next. */
@@ -34,9 +40,10 @@ export const PHASE_OF = { ACTIVE: 'now', VERIFY: 'now', PLANNED: 'next', BLOCKED
 export const PHASES = ['now', 'next', 'later'];
 export const NOTE = 'The open milestones of the plan (.ai/repo/project) in its derived order, '
   + 'each with how many of its required issues are done and its phase (now, next, later), as '
-  + '`majordomus plan roadmap --json` gave them. Written by scripts/roadmap.mjs, which '
-  + 'release:prepare runs before its build; About renders it from the bundle. Do not edit by '
-  + 'hand.';
+  + '`majordomus plan roadmap --json` gave them when release:prepare last ran (the release the '
+  + 'page names is BUILD.version: this file holds no copy of it). '
+  + 'Written by scripts/roadmap.mjs, which release:prepare runs before its build; About '
+  + 'renders it from the bundle. Do not edit by hand.';
 
 /** The plan as Majordomus derives it: `majordomus plan roadmap --json` run in `root`. */
 export function planRoadmap(root = ROOT) {
@@ -59,7 +66,9 @@ const doneOf = (m) => Number(m.issues?.by_status?.DONE ?? 0);
 const requiredOf = (m) => Number(m.issues?.required ?? 0);
 const phaseOf = (m) => PHASE_OF[m.status] ?? 'next';
 
-/** The roadmap of `plan`: its open milestones, in its order, with their progress. */
+/**
+ * The roadmap of `plan`: its open milestones, in its order, with their progress.
+ */
 export function roadmapFromPlan(plan) {
   return {
     schema: SCHEMA,
@@ -75,6 +84,10 @@ export function roadmapShapeProblems(roadmap) {
   if (!roadmap || typeof roadmap !== 'object') return ['the roadmap is not an object'];
   const problems = [];
   if (roadmap.schema !== SCHEMA) problems.push(`schema is ${roadmap.schema}, not ${SCHEMA}`);
+  if ('release' in roadmap) {
+    problems.push('the roadmap holds release, a copy of package.json\'s version: the page reads '
+      + 'BUILD.version');
+  }
   if (!Array.isArray(roadmap.milestones)) return [...problems, 'milestones is not a list'];
   roadmap.milestones.forEach((m, i) => {
     const at = `milestone ${i + 1}`;

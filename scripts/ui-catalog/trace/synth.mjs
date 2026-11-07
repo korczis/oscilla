@@ -68,5 +68,6 @@ export default {
     plan: ['G001', 'K060'], tests: ['tests/unit/ui-catalog.test.mjs',
       'tests/browser/synth.cjs'] }),
   'synth.engine-elsewhere': entry({ source: 'src/js/synth/view/engines.js',
-    plan: ['G001', 'K060'], tests: ['tests/unit/ui-catalog.test.mjs'] }),
+    plan: ['G001', 'K060'], tests: ['tests/unit/ui-catalog.test.mjs',
+      'tests/unit/synth-review-p2.test.mjs'] }),
 };

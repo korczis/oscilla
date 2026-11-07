@@ -35,6 +35,10 @@
 //                   is replaced, the Sequencer stays and the notice says why
 //   studio-back     (P8, one-way link 1) Expand in the Sequencer's compact Studio, then the
 //                   Studio's Back, returns to the Sequencer, named so, focus not on <body>
+//   expand-focus    (P8 on #417 webkit) Expand's deferred focus does not take focus back
+//                   from a control the user moved to before the next frame: Expand, then Back
+//                   focused in the same task; two frames later Back still has focus (on the
+//                   code before the fix the graph viewport took it and Enter went there)
 //   learn-tool      (P5, one-way link 2) a Learn topic's "Open <tool>" opens the tool; its
 //                   notice carries "Back to the lesson: <topic>", which returns to Learn with
 //                   the topic current; a topic without a tool has no link; A1: the topics the
@@ -516,6 +520,36 @@ async function runLeg(name, origin) {
       }
       check(leg, 'Studio opened from the Sequencer goes back to the Sequencer (P8)',
         !wrong.length, wrong.join(' | '));
+      await page.close();
+    }
+
+    if (want('expand-focus')) {
+      const page = await H.open(context, base);
+      await H.setWorkspace(page, 'sequencer');
+      // Expand and a move to Back in one task, as a fast keyboard user or a screen reader can
+      // between Expand's switch and its deferred focus (the frame after the switch).
+      const r = await page.evaluate(async () => {
+        const a = window.OSCILLA.app;
+        a.studioExpand();
+        // Alpine shows the Studio's Back in a microtask: poll microtask turns (bounded), which
+        // all run before the next frame, so Expand's deferred focus has not run yet.
+        const back = document.querySelector('[data-osc="studio.back"]');
+        for (let i = 0; i < 200 && back && !back.getClientRects().length; i += 1) {
+          await Promise.resolve();
+        }
+        if (back) back.focus();
+        // timing-allow: Expand defers its focus by one frame (navigation.js studioExpand); the
+        // check waits for that frame and one more, the contract under test, not the host's speed
+        const frame = () => new Promise((res) => requestAnimationFrame(() => res()));
+        await frame();
+        await frame();
+        const f = document.activeElement;
+        return { workspace: a.workspace, backShown: !!(back && back.getClientRects().length),
+          focusOsc: f ? f.getAttribute('data-osc') : null };
+      });
+      check(leg, "Expand's deferred focus keeps a control the user moved to (P8)",
+        r.workspace === 'studio' && r.backShown && r.focusOsc === 'studio.back',
+        JSON.stringify(r));
       await page.close();
     }
 

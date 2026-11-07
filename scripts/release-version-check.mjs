@@ -12,7 +12,8 @@
 // checked above; other entries are dependency versions), dist/** (generated), .ai/** and
 // CHANGELOG.md (append-only history that legitimately names released versions), docs/specs/**
 // (the requesters' specifications recorded verbatim; they name target versions as plans and are
-// never a version source), binary files.
+// never a version source) and binary files. No line is allowed (LINE_ALLOW is empty): the
+// roadmap's release copy is gone (roadmap v3; About reads BUILD.version).
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -25,6 +26,11 @@ export const LITERAL_ALLOW = [
   /^package\.json$/, /^package-lock\.json$/, /^dist\//, /^\.ai\//, /(^|\/)CHANGELOG\.md$/,
   /^docs\/specs\//,
 ];
+
+// Lines allowed inside a scanned file: none. roadmap.json's release field was the one allowed
+// copy (U086); roadmap v3 holds none (the page reads BUILD.version), so a version line there is
+// a hit like any other.
+export const LINE_ALLOW = [];
 
 const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -40,7 +46,7 @@ export function versionLiteralPattern(version) {
  * @param {RegExp[]} [allow]
  * @returns {{ path: string, line: number, text: string }[]}
  */
-export function findVersionLiterals(files, version, allow = LITERAL_ALLOW) {
+export function findVersionLiterals(files, version, allow = LITERAL_ALLOW, lineAllow = LINE_ALLOW) {
   const hits = [];
   const re = versionLiteralPattern(version);
   for (const f of files) {
@@ -48,7 +54,9 @@ export function findVersionLiterals(files, version, allow = LITERAL_ALLOW) {
     const buf = Buffer.isBuffer(f.content) ? f.content : Buffer.from(f.content);
     if (buf.includes(0)) continue; // binary
     const lines = buf.toString('utf8').split('\n');
+    const lineRules = lineAllow.filter((r) => r.path.test(f.path)).map((r) => r.line);
     lines.forEach((text, i) => {
+      if (lineRules.some((l) => l.test(text))) return;
       re.lastIndex = 0;
       if (re.test(text)) hits.push({ path: f.path, line: i + 1, text: text.trim().slice(0, 120) });
     });
@@ -162,8 +170,10 @@ export async function versionCheck(root = ROOT) {
   for (const h of hits) {
     problems.push(`hard-coded product version ${version} in ${h.path}:${h.line}: ${h.text}`);
   }
-  notes.push(`literal scan: no hard-coded ${version} outside package.json, the lock root, `
-    + 'dist/, .ai/ and CHANGELOG.md');
+  const lines = LINE_ALLOW.length
+    ? ` and the release line of ${LINE_ALLOW.map((r) => r.path.source).join(', ')}` : '';
+  notes.push(`literal scan: no hard-coded ${version} outside `
+    + `${LITERAL_ALLOW.map((r) => r.source).join(', ')}${lines}`);
   return { version, problems, notes };
 }
 

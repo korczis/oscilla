@@ -4,11 +4,11 @@ serves:
   - "connected-instrument#drum-machine"
   - "connected-instrument#one-transport"
   - "connected-instrument#patch-cables"
-title: "Drum kit panel and step grid on the same transport, with accents, flam, choke and per-voice outs"
+title: "Drum kit: per-voice outs in the patch bay, accent and velocity lanes, flam, choke and New drum kit with its mixer"
 slug: drum-kit-panel-and-step-grid-on-the-same-transport-with-acce
 priority: p1
 profile: implementation
-objective: "Lands as feat(synth). The Drums sub-view (sv=drums, its place decided by Q019): New drum kit inserts the six voices and a mixer normalled to Output (K061's normalling); each voice's AUDIO out is a jack of the patch bay, so a drum out can be patched into the synth's Mixer, the Follower or any audio input; a grid row per voice is a steps clip on that voice (gate, velocity, accent, ratchet, probability, and flam as a second hit 10-40 ms early at reduced velocity), the same grid component as K069; the kit plays on the one Studio transport with the synth's patterns; the piano maps keys to voices when the kit is picked (K066). Before: drum voices are separate nodes. After: a kit with a grid on the same transport, per-voice outs in the patch bay. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it."
+objective: "Lands as feat(synth). The Drums sub-view (sv=drums, its place decided by Q019): New drum kit inserts the six voices and a mixer normalled to Output (K061's normalling); each voice's AUDIO out is a jack of the patch bay, so a drum out can be patched into the synth's Mixer, the Follower or any audio input; a grid row per voice is a steps clip on that voice (gate, velocity, accent, ratchet, probability, and flam as a second hit 10-40 ms early at reduced velocity), the same grid component as K069; the kit plays on the one Studio transport with the synth's patterns; the piano maps keys to voices when the kit is picked (K066). Before: drum voices are separate nodes. After: a kit with a grid on the same transport, per-voice outs in the patch bay. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; no saved state depends on it. Amended 2026-11-07 (Q103, the drum-view chain): was the whole Drums sub-view. K222 now lands the Drums view (the perc engine's kit as rows of one notes clip on W008's step-grid kind, six trigger pads, Open in Studio) and K223 the record button; this issue keeps what they do not carry: New drum kit with its mixer normalled to Output, each voice's AUDIO out as a patch-bay jack, accent and velocity lanes (accent is vel, ADR 0086 decision 3), flam as a second note (data, ADR 0086 decision 3), choke groups, and the piano mapping keys to voices when the kit is picked. Its rows stay notes of the one notes clip (ADR 0086 decision 5), never a steps clip and never a drum engine of their own. Depends on K222 in place of K069: the grid it extends is K222's."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
   - "src/js/ui/synth"
@@ -25,7 +25,7 @@ depends_on:
   - "K071"
   - "K072"
   - "K068"
-  - "K069"
+  - "K222"
   - "K063"
   - "K103"
   - "Q019"
@@ -49,4 +49,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-07

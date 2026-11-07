@@ -62,13 +62,15 @@ import {
 } from './release-record.mjs';
 import { parseYaml } from './yaml-subset.mjs';
 import { ROADMAP_REL } from './roadmap.mjs';
+import { STATIONS_REL } from './about-stations.mjs';
 
 export const RECEIPT_NAME = 'oscilla-release-gate.json';
 export const RESTORE_PATHS = [
-  'package.json', 'package-lock.json', ROADMAP_REL, 'dist/index.html',
+  'package.json', 'package-lock.json', ROADMAP_REL, STATIONS_REL, 'dist/index.html',
 ];
 /** The default (ADR 0082): the candidate and the checks CI does not run; CI is the gate. */
 export const CI_PREPARE_COMMANDS = [
+  ['node', ['scripts/about-stations.mjs', '--stamp']],
   ['node', ['scripts/roadmap.mjs']],
   ['npm', ['run', 'build']],
   ['npm', ['run', 'version:check']],
@@ -76,6 +78,7 @@ export const CI_PREPARE_COMMANDS = [
 ];
 /** --local-gate: the full gate on this machine, with the local receipt. */
 export const GATE_COMMANDS = [
+  ['node', ['scripts/about-stations.mjs', '--stamp']],
   ['node', ['scripts/roadmap.mjs']],
   ['npm', ['run', 'build']],
   ['npm', ['run', 'version:check']],

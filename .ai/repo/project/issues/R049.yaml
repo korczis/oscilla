@@ -1,0 +1,41 @@
+id: R049
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "The Majordomus pin has one source: job names, comments, the vendor manifest and test constants read MJ_VERSION"
+slug: the-majordomus-pin-has-one-source
+priority: p2
+profile: implementation
+objective: "Lands as fix(ci). The pin 1.0.0-alpha.9 is typed in 11 places: .github/workflows/ci.yml (MJ_VERSION, MJ_SHA256, a comment and the job name), .github/workflows/main-checks.yml (the job name, MJ_VERSION, MJ_SHA256), tests/unit/ci-knowledge-job.test.mjs (a comment, CAPTURED_WITH), .ai/repo/rules/vendor/majordomus/manifest.yaml source_revision and M118's prose; the bump e880703e edited eight files by hand and every bump renames a check. After: MJ_VERSION/MJ_SHA256 in ci.yml are the one source (scripts/majordomus-pin-check.mjs reads them); main-checks.yml either reuses them or is held equal by a test; job names carry no version; CAPTURED_WITH and the manifest are read or checked against it."
+why: "Audit of 2026-11-06 (oscilla-2b, owner: 'something is hard-coded, numbers duplicated, not everything derived')."
+scope:
+  - ".github/workflows/ci.yml"
+  - ".github/workflows/main-checks.yml"
+  - "scripts/majordomus-pin-check.mjs"
+  - "tests/unit/ci-knowledge-job.test.mjs"
+  - "tests/unit/main-checks.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a unit test lists every tracked occurrence of the pinned version outside ci.yml's MJ_VERSION and the release records, and fails on the merge base."
+  - "No job name or check name carries the version; the branch-protection required check names are unchanged or the owner is told which change (owner-only O-action)."
+  - "Guarded (.github/): a non-builder verdict."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-06'
+updated_at: 2026-11-07T09:30:56Z
+started_at: 2026-11-07T09:29:05Z
+started_event: sha256:f225bff88c27fc5be54ebedc79a5eb270aa8cf5b3b4b93278f09f72c65ba4f32
+verified_at: 2026-11-07T09:29:18Z
+verified_event: sha256:577756a5cafc78f9d22e726a4ab45432773f8f1e7ecced22afa67f5ccf67aca1
+completed_at: 2026-11-07T09:30:56Z
+completed_event: sha256:d72e9575018e094323fcc35d2b3b9e2832504fded8021e708bfd414cfc9adf47
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/majordomus-pin-one-source.test.mjs tests/unit/main-checks.test.mjs"
+    result: "On main f76538a0: 12 pass 0 fail; no line under .github/ names the pin outside MJ_VERSION (grep count 0); job names say 'the pinned release'; the required check is the aggregate gate. Landed by #460 (7e964c0d), verdict 460.yaml (oscilla-21)."
+    artifact: ".ai/repo/reviews/460.yaml"
+    commit: f76538a05cff83681d02223696150a8edf59b8d7
+    recorded_at: 2026-11-07T09:30:01Z

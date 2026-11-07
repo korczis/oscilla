@@ -34,6 +34,7 @@ acceptance_criteria:
 validation:
 - node --test tests/unit/patch-bay-contract.test.mjs
 - node tests/browser/synth.cjs --only s-connect,s-look,s-mobile
+- node tests/browser/iphone.cjs
 evidence_required:
 - verified
 created_at: '2026-11-03'

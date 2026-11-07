@@ -30,4 +30,18 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-10-29'
-updated_at: '2026-11-01'
+updated_at: 2026-11-07T11:28:22Z
+started_at: 2026-11-07T11:27:22Z
+started_event: sha256:19e51fe52ca0c61d6e7f83ee630d55d762273a75c33e6df98f0fa9bf4d5a48ca
+verified_at: 2026-11-07T11:27:59Z
+verified_event: sha256:c7bf97fe7085a61fdbf10ed711619b79f3ab63e785fab7aabc19c277c848fe89
+completed_at: 2026-11-07T11:28:22Z
+completed_event: sha256:c7972f8943142081af26f3bed29a380e1295e98704f4dada4b483073139095d3
+evidence:
+  - covers: verified
+    type: ci
+    command: "majordomus adr check; majordomus knowledge validate; git log -S'### 2026-10-30: the instrument visuals' -- .ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md; CI run 42361006961 (#458, merged as 6149e9e2)"
+    result: "On main 6149e9e2: adr check 'every identity unique, every status known, every reference resolves'. ADR 0081 (filed by J001, 4368b592 via 08795f1f) carries the component contract and the ADR 0058 knob note. ADR 0061 carries the resolution note '2026-10-30: the instrument visuals', landed on main by the feature train 11cc9fbc (36cae18a, #329 round 2), the case AC3 allows. knowledge validate: 8 failures, all present on main before this record (duplicate rule ids), none new. npm test is green in CI run 42361006961, whose head is main 6149e9e2. J001's own changes are .ai/repo/adrs and tests/unit/knowledge-integrity.test.mjs, none on a guarded path of scripts/review-verdict.mjs: no verdict needed for them (landed through https://github.com/korczis/oscilla/pull/354 and https://github.com/korczis/oscilla/pull/367). Stamped by oscilla-21, 2026-11-07, while unblocking W001 (Q103 drum-view chain)."
+    artifact: ".ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md"
+    commit: 6149e9e260f09e4a400699956748d5fdfc86d13d
+    recorded_at: 2026-11-07T11:28:15Z

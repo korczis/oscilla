@@ -1,0 +1,24 @@
+id: Q104
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "Owner decision: the app, the claude.ai artifacts, the release notes and the GitHub descriptions are in Czech prose, always and everywhere, enforced"
+slug: owner-decision-czech-prose-everywhere
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's order and answer of 2026-11-07 (Claude Code session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f, oscilla-2b, ~12:00Z). The order, verbatim (a /loop prompt): 'dokoncuj veskere issues, ktera jdou, vse zrobustnuj, at je vse hotove asap; odted ten artifakt musi mit ceskou prozu, vzdy a vsude, musi byt enforced, vse propojene, github cisty'. The AskUserQuestion that followed, verbatim: 'Ktery „artefakt“ ma mit od ted vzdy a vsude ceskou prozu (vynucene pravidlem a testem)?' with the options 'OSCILLA aplikace', 'claude.ai artefakty', 'Release notes a GitHub', 'Vsechno uvedene'. Answer, verbatim: 'Vsechno uvedene'. Meaning: (1) every visible text of dist/index.html (the UI, help, About, notices) is Czech; (2) every claude.ai Artifact the agents publish for this project is Czech; (3) the GitHub Release notes and the pull request and issue descriptions are Czech. Code, identifiers, commit subjects (Conventional Commits, parsed by release:analyze) and the repository's developer docs stay English (the global agent instruction, which the owner's directive overrides only where it names prose). Enforced: a project rule with a test; the app's existing English prose is a ratchet baseline that only shrinks, so no new English prose can land."
+why: "The owner's direct order; recorded the same session (owner answers live in the repository)."
+current_state: "Decided 2026-11-07. Implementation program: rule project.czech-prose and its enforcement (L-series issues filed with it); new UI copy is Czech from the next slice on; PR and issue bodies by the agents are Czech from now on."
+scope:
+  - ".ai/repo/project/issues/Q104.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence (covers owner_decision) quoting the order, the question and the answer with date and session."
+  - "A project rule project.czech-prose exists with a blocking test: no new English prose in the app (ratchet baseline), Czech release notes, Czech pull request and issue bodies."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-07'
+updated_at: '2026-11-07'

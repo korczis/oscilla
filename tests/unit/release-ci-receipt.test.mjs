@@ -434,8 +434,8 @@ test('ADR 0083 mutation: a pull_request run does not stand in when the queue com
 
 test('release:prepare defaults to the CI path and keeps the full gate behind --local-gate', () => {
   const ci = prep.CI_PREPARE_COMMANDS.map(([c, a]) => `${c} ${a.join(' ')}`);
-  assert.deepEqual(ci, ['node scripts/roadmap.mjs', 'npm run build', 'npm run version:check',
-    'npm run verify']);
+  assert.deepEqual(ci, ['node scripts/about-stations.mjs --stamp', 'node scripts/roadmap.mjs',
+    'npm run build', 'npm run version:check', 'npm run verify']);
   const local = prep.GATE_COMMANDS.map(([c, a]) => `${c} ${a.join(' ')}`);
   assert.ok(local.includes('npm run release-gate'));
   assert.match(prep.USAGE, /--local-gate/);

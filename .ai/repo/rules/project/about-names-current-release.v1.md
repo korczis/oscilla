@@ -5,7 +5,7 @@ kind: rule
 title: The About page names the current release line
 description: The About view's evolution timeline names every published release line and marks the line of the running build as current; a release whose line is missing is refused by the gate.
 statement: For every MAJOR.MINOR line OSCILLA has published, the About timeline in src/index.html has one station with data-osc-release="MAJOR.MINOR" that names a commit in that line's vMAJOR.MINOR.0 tag; the last station is the only one with data-state="current" and its line is package.json's MAJOR.MINOR; every earlier station is done.
-status: active
+status: deprecated
 class: blocking
 depends_on: [project.single-file-deliverable@2]
 tags: [about, release, provenance]

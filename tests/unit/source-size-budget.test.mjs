@@ -22,10 +22,11 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { UNCAPPED } from './fixtures/source-size.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const BASELINE_REL = 'tests/unit/source-size-baseline.json';
-export const UNCAPPED = 40_000;
+export { UNCAPPED };
 const REASON_MIN = 31;
 const KEYS = ['caps', 'measured', 'note', 'raises'];
 

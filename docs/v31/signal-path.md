@@ -190,8 +190,9 @@ limit opens at the limit, as the Playground plays it. Live, the Studio's transpo
 after the last gate and fades, so a release longer than about 25 ms is cut short when played
 live (a 300 ms release measured about 22 ms); the offline render plays the full release, and
 K179 lets the live release finish. With continuous playback allowed a held voice has
-no end, so it is refused. Opening starts and stops nothing: a sounding Playground voice keeps
-sounding until Studio Play takes the output.
+no end, so it is refused. Opening starts nothing. A playing Studio stops first, as for any
+document it opens, and a sounding Playground voice keeps sounding until Studio Play takes the
+output.
 
 A configuration is opened only when the Studio renders it the same: the covered list
 (`tests/unit/fixtures/playground-voice-configs.mjs`) is rendered by both on an
