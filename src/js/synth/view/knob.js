@@ -27,6 +27,8 @@
 //   panelControlTokens(t) -> the core's token set from the panel's
 //   stepOption(param, v, dir) -> the core's
 //   SWITCH_MAX -> the most options a switch draws; a longer enum is a rotary
+//
+// ui-family: knob skin panel (the Synth panel's 64 px face of ui/synth/knob.js)
 
 import {
   CONTROL_BOX, DRAG_PX_PER_RANGE, HIT_PX, SWEEP_DEG, controlSvg, dragValue, formatValue, fromNorm,

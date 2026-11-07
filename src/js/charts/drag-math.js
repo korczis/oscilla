@@ -1,5 +1,7 @@
 // Pure pointer maths for the editable charts (filter handle, ADSR handles, the XY pad kind of
 // ui/kinds/xy-pad.js). No DOM.
+//
+// ui-family: pad part pointer-maths
 
 import { axisValue, axisFraction, clamp } from './axes.js';
 

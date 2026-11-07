@@ -4,6 +4,8 @@
 // (magenta, release end). Dragging a handle emits onChange(adsr); the time scale is frozen for
 // the duration of a drag so the axis does not move under the pointer. The shell's sliders and
 // fields are the keyboard alternative.
+//
+// ui-family: envelope skin canvas
 
 import { envelopePoints } from '../audio/envelope.js';
 import { adsrLayout, hitAdsrHandle, dragAdsr, clampAdsr } from './drag-math.js';

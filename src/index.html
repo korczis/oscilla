@@ -130,7 +130,7 @@
   <!-- ================= Navbar (the Flowbite Pro admin shell's, adapted; issue F002) ========
        The sidebar toggle (desktop: collapse to icons; phone: the drawer), the brand, the
        workspace search and the actions. Shell state and behaviour: src/js/ui/shell.js. -->
-  <header role="banner" data-osc="header"
+  <header role="banner" data-osc="header" data-ui-family="app-shell"
     class="relative z-50 flex-none w-full bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700">
     <div class="flex items-center justify-between h-16 px-3 lg:px-5 lg:pl-3">
       <div class="flex items-center justify-start min-w-0">
@@ -249,7 +249,7 @@
        Phones and tablets: a drawer behind the hamburger, over a backdrop. The entries are
        rendered from the one registry, src/js/ui/shell.js WORKSPACE_REGISTRY. -->
   <div class="relative flex flex-1 min-h-0" data-osc="shell">
-    <aside id="osc-sidebar" aria-label="Sidebar" data-osc="sidebar" x-bind="sidebar()"
+    <aside id="osc-sidebar" aria-label="Sidebar" data-osc="sidebar" data-ui-family="app-shell" x-bind="sidebar()"
       class="fixed top-0 left-0 z-40 flex-col flex-shrink-0 hidden w-64 h-full pt-16 duration-75 transition-width lg:absolute lg:flex lg:pt-0">
       <div class="relative flex flex-col flex-1 min-h-0 bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700">
         <div class="flex flex-col flex-1 pt-4 pb-4 overflow-x-hidden overflow-y-auto">
@@ -378,7 +378,7 @@
 
     <!-- ===== Page header, from the registry (src/js/ui/shell.js): breadcrumb, summary,
          Related strip (a menu on a phone), actions (U006). The h1 leads <main>. ===== -->
-    <div data-osc="page.header"
+    <div data-osc="page.header" data-ui-family="app-shell"
       class="flex items-center flex-none min-w-0 gap-3 px-4 py-1.5 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700"
       :class="workspace === 'playground' && 'max-sm:py-0.5'">
       <nav class="flex min-w-0" aria-label="Breadcrumb">

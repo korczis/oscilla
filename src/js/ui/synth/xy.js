@@ -3,6 +3,8 @@
 // on it, a horizontal fader under the pad for X, a vertical one beside it for Y, and the gate
 // LED in the corner between the two faders, as a hardware XY unit lays them out.
 //
+// ui-family: pad skin hardware (the Synth's drawn XY unit over ui/kinds/xy-pad.js)
+//
 // Graph units: 1 is 1 CSS px at zoom 1, the layout's box from (0, 0). The surface is
 // surface.card (--osc-surface-2, never bg-gray-900) in a control.edge frame (--osc-text-dim,
 // 3:1 on the surface and on both plates in both themes) with a recess along its top and left in

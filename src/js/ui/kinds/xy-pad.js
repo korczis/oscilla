@@ -18,6 +18,8 @@
 //     -> view: view.model, view.update(), view.destroy();  cells: [{ label, root }] drawn along
 //     X; describedBy: ids of the consumer's own lines that also describe the surface (K167: the
 //     first action), after the axes' description
+//
+// ui-family: pad model
 
 import { xyFromPoint } from '../../charts/drag-math.js';
 import { knobModel } from '../../synth/view/knob.js';

@@ -28,6 +28,11 @@
 //   routes            each route kind's deep link (a <placeholder> filled with an id that is not
 //                     stored) opens the workspace the router names, and the domain answers with
 //                     a notice that is not a refusal ("... link not applied")
+//   families          G021 (M123): on every workspace at 1536x1024 and 390x844, every shown
+//                     element of a control family's role (slider, switch, knob, patch-bay,
+//                     keyboard, app-shell) sits inside a data-ui-family of its family, or is a
+//                     listed duplicate of tests/unit/ui-families-baseline.json `rendered`
+//                     (shrink-only: a listed one that no page shows fails too)
 //   no-audio          no page constructed an AudioContext and none plays (engine, Studio
 //                     transport): opening surfaces starts no sound. The Studio subview tabs are
 //                     selected by a dispatched click, an activation without a pointer or key
@@ -61,6 +66,9 @@ const VIEW_SWITCHES = ['exps.panel'];
 const NOT_STORED = 'u063-not-stored';
 const DESKTOP = { width: 1536, height: 1024 };
 const PHONE = { width: 375, height: 800 };
+const PHONE_390 = { width: 390, height: 844 };
+const FAMILY_BASELINE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'unit',
+  'ui-families-baseline.json'), 'utf8')).rendered || [];
 const PAGE_MS = 20000;
 const SETTLE_MS = 10000;
 const CHECK_MS = 180000;
@@ -112,6 +120,38 @@ function snapshotInPage(switches) {
 }
 
 const minus = (a, b) => [...new Set(a)].filter((x) => !b.includes(x));
+
+/** In the page (G021): every shown element of a control family's role that is not inside a
+ *  data-ui-family of its family, keyed `<family> <descriptor>` (stable across workspaces). */
+function familiesInPage() {
+  const shown = (el) => el.getClientRects().length > 0;
+  const ROLES = [
+    ['knob', '[data-knob]'],
+    ['slider', '[role="slider"], input[type="range"]'],
+    ['switch', '[role="switch"], [role="radiogroup"]'],
+    ['patch-bay', '[data-jack]'],
+    ['keyboard', '[data-osc="keyboard.keys"]'],
+    ['app-shell', '[role="banner"], [data-osc="sidebar"], [data-osc="page.header"]'],
+  ];
+  const describe = (el) => {
+    const own = el.getAttribute('data-osc') || el.id;
+    if (own) return own;
+    const host = el.parentElement && el.parentElement.closest('[data-osc], [id]');
+    const where = host ? host.getAttribute('data-osc') || host.id : 'page';
+    const role = el.getAttribute('role') || el.getAttribute('type') || '';
+    return `${el.tagName.toLowerCase()}[${role}] in ${where}`;
+  };
+  const out = new Set();
+  for (const [family, sel] of ROLES) {
+    for (const el of document.querySelectorAll(sel)) {
+      if (!shown(el)) continue;
+      if (family === 'slider' && el.closest('[data-knob]')) continue; // a knob's own slider role
+      if (el.closest(`[data-ui-family="${family}"]`)) continue;
+      out.add(`${family} ${describe(el)}`);
+    }
+  }
+  return [...out].sort();
+}
 
 // ------------------------------------------------------------------------------ page helpers
 async function openPage(ctx, hash, viewport = DESKTOP) {
@@ -303,6 +343,27 @@ function defineChecks() {
       await closeAll(ctx);
     }
     return { ok: OF('route').length > 0 && !bad.length, bad, answered };
+  });
+
+  def('families', async (ctx) => {
+    const found = new Set();
+    const bad = [];
+    for (const size of [DESKTOP, PHONE_390]) {
+      for (const ws of OF('workspace')) {
+        const page = await openPage(ctx, ws.deepLink, size);
+        const r = await settle(page, (s) => s.workspace === ws.id, `${ws.deepLink} opens`);
+        if (!r.ok) bad.push(`${ws.deepLink} at ${size.width}: ${r.error}`);
+        for (const k of await page.evaluate(familiesInPage)) found.add(k);
+        await closeAll(ctx);
+      }
+    }
+    const listed = FAMILY_BASELINE.map((d) => d.key);
+    const unlisted = [...found].filter((k) => !listed.includes(k));
+    const stale = listed.filter((k) => !found.has(k));
+    return { ok: !bad.length && !unlisted.length && !stale.length, bad,
+      unlisted: unlisted.slice(0, 40), unlistedCount: unlisted.length, stale,
+      // OSC_FAMILIES_SEED=1 with --json: every key found, to seed the baseline once (G021)
+      ...(process.env.OSC_FAMILIES_SEED ? { found: [...found].sort() } : {}) };
   });
 
   def('no-audio', async (ctx) => ({ ok: ctx.audio.length === 0, audioContexts: ctx.audio }));

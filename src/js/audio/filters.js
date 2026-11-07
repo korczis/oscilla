@@ -24,6 +24,8 @@
 // getResponse() calls getFrequencyResponse() on an unconnected probe biquad that holds the
 // configured values directly (no glide), so the chart shows the browser's own response for the
 // current settings immediately; the audible node reaches the same values within ~50 ms.
+//
+// ui-family: filter-response model
 
 import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 

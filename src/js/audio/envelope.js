@@ -36,6 +36,8 @@
 // Removing the old future events needs a cancel: the param's own cancelScheduledValues, or the
 // caller's (the engine's tracked envelope wrapper has none, so the engine passes one that also
 // keeps its own log exact). The level never exceeds 1.
+//
+// ui-family: envelope model
 
 export const ENVELOPE_FLOOR = 1e-4;
 export const MIN_SEGMENT_S = 0.001;

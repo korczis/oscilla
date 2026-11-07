@@ -12,6 +12,8 @@
 //   - pointer-drag threshold 4 px (DRAG_THRESHOLD_PX): below it a press is a click / tap
 //   - connection hit width 12 px fine pointer, 24 px coarse pointer (CABLE_HIT_PX)
 //   - nudge: one grid step, Shift x4 (§125, §140)
+//
+// ui-family: patch-bay not: the Studio graph's edge curve is a domain view (ADR 0061 d3)
 
 export const ZOOM_MIN = 0.25;
 export const ZOOM_MAX = 2.5;

@@ -15,6 +15,8 @@
 //   cablePath(a, b) -> the layer's hanging cable (cableCurve), the live cable while dragging
 //   patchSvg({ source, layout, cables, states, pending, compatible, verdicts, tokens, selected })
 //   portLabel(source, jack, state, verdict) -> the jack's accessible name
+//
+// ui-family: patch-bay model
 
 import { PORT_VISUALS } from '../../studio/ports.js';
 import { esc } from '../../synth/view/face.js';
@@ -170,7 +172,7 @@ export function patchSvg({ source, layout, cables = [], states = new Map(), pend
     return cord.cable;
   }).join('');
   return `<svg viewBox="0 0 ${layout.width} ${layout.height}" width="100%" `
-    + `height="${layout.height}" data-osc="synth.bay.svg" role="group" `
+    + `height="${layout.height}" data-osc="synth.bay.svg" data-ui-family="patch-bay" role="group" `
     + `aria-label="Patch bay: ${layout.jacks.size} jacks, ${cables.length} cables">`
     + `${plateFill}<g data-layer="plates" pointer-events="none">${plates}</g>`
     + `${groups}<g data-layer="nuts" pointer-events="none">${nuts}</g>`
