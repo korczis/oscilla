@@ -10,6 +10,7 @@ objective: "Lands as feat(synth). Q103 (2): a strip of 8 or 16 steps above the S
 why: "Owner direction Q103 (the analog sequencer above the semi-modular face)."
 scope:
   - "src/js/synth/ui.js"
+  - "src/js/ui/studio/inspector.js"
   - "src/index.html"
   - "tests/unit/synth-step-strip.test.mjs"
   - "tests/README.md"
@@ -19,7 +20,8 @@ depends_on:
   - "W008"
 acceptance_criteria:
   - "Fail-first unit: toggling step 5 adds or removes the grid note of the strip's notes clip and the transport plays it at step 5's onset on the audio clock."
-  - "The strip and the drum machine (K073) mount the same step-grid kind (W008)."
+  - "The strip and the drum machine (K222) mount the same step-grid kind (W008)."
+  - "The Step Modulator's steps in the Studio Inspector are edited through the same kind, replacing the comma-separated text field (src/js/ui/studio/inspector.js:182 at main 6149e9e2, W008's former first consumer): a browser check on a Step Modulator node (in the manner of ui-kinds.cjs) drives a step by pointer and by keyboard and reads the node's steps parameter back (one NODE_PARAM_SET per gesture)."
 validation:
   - "node --test tests/unit/synth-step-strip.test.mjs"
 evidence_required:
