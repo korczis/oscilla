@@ -2,132 +2,107 @@
 # pad sounds (#428), K171 the dock yields (#425), the XY pad view (#426), on K178 (one Keys
 # source) and K184 (the minimum gate), with coherence train B's four members (m1-m4), the
 # runtime.js split 73e8c728, K183's P3 follow-ups, R-K 06140d80 and its RK-2 correction
-# b6ca876d, the merges of main 2f39f07f (a510dd75) and 4cf35c4b (bc4b1545), the rebuilds and
-# the K171 catalogue declarations 2ec7e6b0. Judged at 6f6673f5 on base origin/main bc4b1545
-# (the merge base), 2026-11-06, in the reviewer's own worktree (branch review/444-7b at
-# 6f6673f5), after the per-part round at ccf917a9 on e8d54f8c (2026-11-05, detached worktrees:
-# the split, the porting merges, the P3s, R-K, af's lane and the members, one verdict each).
-# Reviewer: seat 7b (session prismatic-majordomus-7b, claude-code f9c3d552), the landing seat
-# continuing p2's (prismatic-majordomus-98) handover. It built, merged and edited none of this
-# train's product code; its one commit on the branch besides this file is 6f6673f5, the S8
-# fixtures (tests/README.md, tests/browser/synth.cjs, tests/unit/synth-review-p2.test.mjs:
-# test-only, no guarded path, disclosed in the PR body). The builders: 26 (the train), 21 (K178,
-# K184), p2's builder (K183, its P3s, R-K), af's builders (K171, the pad view), a3 (RK-2
-# b6ca876d with acb350a5, the merges of main, the rebuilds, 2ec7e6b0). af judged #425 and #426
-# (425.yaml, 426.yaml at the head, both merge); p2 judged #428 (never committed: TR-1).
+# b6ca876d, the merges of main and the rebuilds. Re-judged at 1a97186f on base origin/main
+# 54423b1b (the merge base), 2026-11-07, in the reviewer's own detached worktree at 1a97186f,
+# over the previous verdict 1fa78697 (at 6f6673f5 on bc4b1545, content 5711c0ac, 38 paths).
+# Reviewer: seat 7b (session prismatic-majordomus-7b, claude-code f9c3d552). It built, merged and
+# edited none of the four commits judged here (29016d0f, b8e130f6, 434ade5b, 1a97186f: the
+# train's builder); its own commits on the branch are 6f6673f5 (test-only) and the verdicts.
 #
-# Digest. CI judges with the base branch's copy of review-verdict.mjs; origin/main bc4b1545's
-# scripts/ (review-verdict.mjs, fail-first.mjs and yaml-subset.mjs byte-identical to the head's)
-# extracted with git archive, run as --content --list --base-branch origin/main at 6f6673f5:
-# the content below, over 38 guarded paths: audio/{audio-engine,gate}.js; 6 under measurement/
-# (audio-session, capture, engine, input-level, views/announcements, views/measure-flow); 12
-# under studio/ (adapters/instrument, adapters/nodes, compiler, live-notes, patch-catalog,
-# patches, performance-fit, ports, riffs/audition, riffs/source, runtime-trace, runtime); 14
-# under synth/ (insert, normals, notes-sink, panel, panels/semi-mono, panels/xy, picker,
-# studio-sink, ui, view/bay, view/face, view/xy-tab, view/xy-wiring, xy); 4 under ui/measure/
-# (constants, input, run, session). It equals a3's digest at caabeb44 (6f6673f5 changes no
-# guarded path) and supersedes 884bc3a5 (1c94aab6, on main a510dd75) and d6bf9644 (ccf917a9,
-# 46 paths on e8d54f8c: ci.yml and the rest of that difference are main's now).
+# Digest. origin/main 54423b1b's scripts/review-verdict.mjs, fail-first.mjs and yaml-subset.mjs
+# (the primary checkout at 54423b1b, git diff against origin/main empty for the three), run from
+# there as --content --list --repo <this worktree> --head HEAD --base-branch origin/main at
+# 1a97186f: the content below, over the same 38 guarded paths as at 6f6673f5. It equals the
+# peer's 4f989489 (measured with origin/main at 54423b1b) and supersedes 5711c0ac.
 #
-# Delta since ccf917a9 over the guarded paths, the train's own commits: b6ca876d compiler.js and
-# performance-fit.js (RK-2); 4cf35c4b insert.js, normals.js, notes-sink.js, picker.js, ui.js,
-# view/xy-wiring.js, xy.js (the merge of main; studio-sink.js, view/xy-tab.js, ui/measure/
-# input.js and run.js auto-merged). Everything else that moved under the guarded globs between
-# ccf917a9 and 6f6673f5 is main's (#386, #433, #438 and the rest), brought by the two merges.
+# Delta since 6f6673f5 over the guarded paths: 12 files by b8e130f6 alone (measurement/capture,
+# engine, views/announcements; studio/patches, performance-fit; synth/insert, notes-sink, panel,
+# view/bay, view/face, view/xy-wiring, xy) and synth/ui.js by the merge 29016d0f alone, whose
+# change there has the patch-id (c64430e2) of main's own bc4b1545..f46a0e2c (C063's rebaseFresh
+# on the Studio's dirty tracker). 434ade5b and 1a97186f change no guarded path.
 #
-# RK-2 (P1 at ccf917a9), closed at b6ca876d, confirmed at 6f6673f5. fitCables takes { top, room }
-# and the raise's ceiling is top + max(0, room - the cables' final sweep), the shape the reviewer
-# proved (rk2-candidate-fix.patch). The reviewer's probes on this tree: computeBases on an
-# Oscillator with one fitted Y cable into Detune, 10 cases x 2 frequencies (20 and 10 kHz) x 2
-# rates: 0 of 40 over 0.95 x Nyquist, the 40-row output byte-identical to the candidate-fix run;
-# p2's runtime probe (the real store and runtime on the fake engine, 20 kHz, the commit's 5 cases
-# x 2 rates): 0 of 10 over the cap. The restored rows: 48 kHz, 440 Hz, detune 1100, Y bipolar
-# 1200 plays 1000..1200 cents (784..880 Hz), as d5c8ba71 did and where ccf917a9 played 440..494
-# Hz; 10 kHz, detune 800, bipolar 1200: 400..1200 cents (12.6..20.0 kHz); 10 kHz, detune 1100:
-# 1000..1200; 44.1 kHz, 10 kHz, detune 900, bipolar 600: 600..1200; 20 kHz, detune 1100:
-# 26.8..226.8, at the cap. Fail-first: tests/unit/xy-default-patch.test.mjs "RK-2" (acb350a5, the
-# five rows on the real runtime) passes at the head (29/29 in its file) and, with b6ca876d
-# reverted in the reviewer's worktree (git revert --no-commit, the test, then reset --hard),
-# fails on its first row: "48000 Hz, 440 Hz, detune 1100, bipolar 1200: plays 0.0..200.0 cents,
-# not 1000.0..1200.0". RK-1 stays closed by the same numbers (d5c8ba71: 4 of 10 and 6 of 40 over
-# the cap). RK-3 (P3) at the head: 48 kHz, 20 kHz, detune 0, Y unipolar 1200 offset 600 plays
-# 151.2 of 226.8 cents (21.83 kHz under 22.80), unchanged. NF7 (P3) at the head: the 440 Hz case
-# above still emits "frequency-limited: The cable XY PAD -> Oscillator 1 Detune plays 8% of its
-# depth (100 cents of 1200 cents): the Studio keeps Oscillator 1's detuned frequency at or below
-# 22.80 kHz, 0.95 x Nyquist at 48 kHz" (compiler.js:753) beside the correct performance-limited
-# line; the PR body says why it is not fixed here (compiler.js has 138 B of its 40 000 B cap).
+# 1. The merge of main f46a0e2c, 29016d0f (1fa78697 x f46a0e2c, base bc4b1545), read with
+# --remerge-diff. src/js/ui/studio/workspace.js (conflict): createSynthUi's get() returns
+# { handle, transport, dirty: ctx.dirty, sampleRate: svc.engine ? svc.engine.sampleRate : null }:
+# C063's dirty (main) and #444's sampleRate with its comment, both present; nothing else of the
+# hunk was dropped. synth-open-leaves-studio-clean.test.mjs (edited in the merge): the source
+# check now ends at `dirty: ctx\.dirty\b`, so it still pins handle, transport, dirty in that order
+# and accepts fields after dirty; it passes at the head. tests/README.md (conflict): main's
+# sequencer.cjs row (U016) and the train's v3-measure.cjs row (C033's microphone legs), each the
+# side that changed it. dist rebuilt. ui.js auto-merged as main's change (patch-id above).
 #
-# The merge of main 4cf35c4b (1c94aab6 x bc4b1545), replayed with git merge-tree: ten conflicted
-# paths (dist/index.html, midi/keyboard-ui.js, synth/normals.js, notes-sink.js, picker.js, ui.js,
-# view/xy-wiring.js, xy.js, tests/README.md, tests/browser/midi.cjs) and two auto-merged paths
-# edited in the merge (synth/insert.js, tests/unit/xy-default-patch.test.mjs). Each resolution
-# read with --remerge-diff against both parents:
-# - keyboard-ui.js: main's kbdDockClass getter with the train's kbdKeysShown (keysShown, K171).
-# - normals.js unpatch: the train's addsEdge filter (a performance cable keeps the normals, K183)
-#   with main's normalSteps without a page memory and rememberAmounts (S10). Both kept.
-# - notes-sink.js: main's held note -> node map and keysSilence (S3, S8) with the train's legato,
-#   armedText and forcedOff; legato takes the node `from` sounds on (held.get(from), else the
-#   played node), deletes `from` and sets `note`; noteOff releases held.get(note) with K184's
-#   `forced`. Probed by the reviewer on the head (synth-review-p2's rig): a note on FM, the route
-#   undone while held, legato(62, from 60) goes to FM and noteOff(62) leaves heldNotes [] (at
-#   ccf917a9 the legato went to the keys' node and note 60 stayed held). The S3 cases pass
-#   (synth-review-p2 14/14); no case pins the legato move itself: TR-3.
-# - picker.js, ui.js, insert.js: one insert path. Main's insertAction (S5) builds on the train's
-#   xyInsertAction (K183); ensurePanel and New Synth voice call insertAction; the train's direct
-#   xyInsertAction imports in ui.js and picker.js are dropped. A grep of src/js: xyInsertAction is
-#   defined in xy.js and called from insert.js only; insertAction from ui.js and picker.js only;
-#   no bare panel.instantiate (the xy-default-patch case asserts it); node --check on the eight
-#   resolved files and tests/unit/src-imports-acyclic 4/4: no cycle (xy.js imports none of
-#   insert.js, ui.js or picker.js).
-# - xy-wiring.js: main's KEYS_SILENT, keysSilence, xyUnpatchAction, keysSilenceHtml and
-#   wireKeysSilence beside the train's xyRoom, xySounding, xyYReading and onApp; main's XY_VOICE,
-#   xyCablesAction and xyPatched imports dropped: no reference to them remains in the file.
-# - xy.js: both sides' additions; the keysSilence doc line still names main's cause: TR-2.
-# - midi.cjs: both checks run; README.md: both sides' rows; dist: rebuilt (2148c265, caabeb44).
+# 2. The translation b8e130f6 (project.czech-prose, Q104), read for meaning sentence by sentence
+# against the English it replaces. Behaviour: the code of every changed file compared with its
+# string and template contents and comments removed (the repository's lexJs,
+# scripts/ui-catalog/scan.mjs): only two non-string differences, both output-only:
+# notes-sink.js armedText passes panel.title for `the ${panel.title}` (Czech has no article);
+# xy-wiring.js others() turns `r && r.others ? X : ''` into `if (!r || !r.others) return ''`
+# plus a Czech plural choice (1 kabel, 2-4 kabely, 5+ kabelů, correct Czech), the same truthiness.
+# By eye: engine.js STIMULUS_NOT_HEARD inlines the English constant OWN as a Czech clause (OWN
+# stays for the two English warnings beside it); face.js swaps quote style; patches.js splits a
+# return over two lines; announcements.js and bay.js comments quote the new strings. No key,
+# identifier, reason code, data- attribute or control flow beyond the two above changed. The
+# tests change only their expected strings and regexes (v3-measure.cjs, xy-pad.cjs,
+# keyboard-dock-yield, measure-stimulus-emits, patch-browser, synth-review-p2, xy-default-patch,
+# xy-wiring; the plural regex `kabel(?:y|ů)?` takes all three forms).
+# Meaning: every Czech sentence says what its English said; none drifted. Nuances, not drift:
+# the stimulus "could not be rendered" -> "nepodařilo vytvořit" (created; render here is
+# synthesising the samples); OWN's "the reading includes the app's own output" -> "měření
+# zahrnuje" (the measurement includes); "Synth armed" -> "Synth připraven" while main's sibling
+# SYNTH_TEXT.armed stays "Synth armed: ..."; "over N oct from" -> ", N oct od"; patches.js's
+# "or nothing" -> "nebo nevybírejte nic" (or select nothing), the same instruction;
+# performance-fit's line gains the subject "Kabel" (the diagnostic is the edge's). TR-4 below:
+# main's own English fragments now sit inside the new Czech sentences.
 #
-# Members at 6f6673f5. Their digests recompute exactly with main's checker at their heads: m1
-# 1632296a 55e81ee3 (3 paths), m2 d288ad5f e4e4cd7b (2), m3 fff6ec73 a14d9a76 (2), m4 1dcc8c13
-# and 4122eeb0 e07d07db (10), all with --base-branch origin/main (merge bases 68b117f3 and
-# e2d24cb7, unchanged); #425 at 2a3a3e6f 1e95a3e2 with 425.yaml's --base a31ad98c; #426 at
-# 915779d8 494c51f1 with --base-branch origin/main (merge base bc6758ac, train 6's head then, as
-# 426.yaml says); #428 at 780ab5c0 479d74b7 with --base 6d5efa89 (v3.19.0's record: main's head
-# when p2 judged, before #420 landed; against today's main the K183 delta is cc68419a over 18
-# paths because #420's paths are main's now). Their guarded files at the head: m1, m2, m3 as at
-# ccf917a9 (m2's runtime.js moved by the split alone; ui/measure/session.js the union of m1's
-# and m4's disjoint hunks, blob caa06eba as at 75ab88ec); m4's ui/measure/input.js and run.js
-# moved with main (f05a8629, e5129364, f8f2f03b, e6d7d959, auto-merged): the train's delta on
-# bc4b1545 over each has the patch-id of m4's own delta on e2d24cb7 (2322e254, f58366d0). The
-# guarded files of #425, #426 and #428 moved after their heads by the train's own commits judged
-# at ccf917a9 (the P3s, R-K, the porting merges) and since by b6ca876d and 4cf35c4b, read above.
+# 3. 434ade5b, tests/browser/synth.cjs s-knobmemory: the reopened link holds K183's default
+# xy.y -> lpf.frequency cable listed before the check's MG cable, so .first() removed the pad's
+# cable and EG 2's normal into the cutoff never returned. The check now waits (10 s, named) for
+# synthDebug().cables' entry from 'mg.control' to 'lpf.frequency' and clicks that id's
+# data-remove-cable (synth/ui.js userCables, bay.js renders the same c.id). Correct: it removes
+# exactly the cable the check patched and fails by name if the link lost it. TR-5 below: the
+# patch's earlier wait still reads any cable into lpf.frequency.
 #
-# Whole head: npm run build:check up to date (3 422 594 B, v3.21.0, source 4d4ba02d: the train's
-# rebuild caabeb44; 6f6673f5 is test-only). npm test: 5115 tests, 5112 pass, 1 fail, 2 skipped;
-# the failure is tests/unit/skills.test.mjs "every majordomus command a skill names is one the
-# installed tool has" against the installed majordomus 1.0.0-alpha.10 (CI pins alpha.9; a3's run
-# at 1c94aab6 passes it); git diff origin/main..6f6673f5 over .ai/repo/skills and that test is
-# empty. The S8 fixtures: synth-review-p2 14/14; tests/browser/synth.cjs --only s-keysilent in
-# chromium PASS 1/1 (the notice "The keys sound nothing: the XY pad's cables into EG 1 Gate and
-# EG 2 Gate replace the keyboard's gate normals. Unpatch the pad (Panel tab) to play the keys.",
-# a held A at -35.9 dB before, -71.6 dB off). review-verdict.test.mjs 26/26 at the head. TR-1:
-# #428's verdict was never committed (no 428.yaml on any ref); the PR body carries the members:
-# lines below and this file records them, so the checker's "no verdict of its own" for #428 is
-# answered here. Not run by the reviewer: the http origin legs, firefox and webkit for
-# s-keysilent (run at b40cb61e, the patch's own head, in three engines), test:synth and
-# test:studio in full: CI's gate on this head is the receipt.
+# 4. The merge of main 54423b1b, 1a97186f (434ade5b x 54423b1b): no conflict; dist rebuilt and
+# tests/unit/czech-prose-baseline.json lowered: synth/view/xy-wiring.js 14 -> 5, ui/studio/
+# workspace.js 1 -> 0 (removed: the train's claimStudioOutput reads OUTPUT_REFUSALS, so main's
+# one English sentence there is gone), total 3236 -> 3226; no count raised, no file added.
+# node scripts/czech-prose.mjs at the head: 3226 sentences in 262 files, exit 0, exactly the
+# baseline.
 #
-# Verdict: merge. RK-1 and RK-2 closed on the measurements above, TR-1 closed by this record; no
-# P0 or P1 and no P2 open. Open P3s ride as follow-ups: RK-3, NF7, TR-2, TR-3; #425's R9 (the
-# landscape dock, deferred by d5c8ba71) stays open in 425.yaml, R1 closes with CI on this head;
-# #426's R3-R8 are K201's.
+# Members: unchanged since 1fa78697. No member's guarded file moved except by b8e130f6's
+# strings and main's C063 ui.js hunk, read above; the member lines below are 1fa78697's, whose
+# digests were recomputed at the member heads then and do not depend on the train's head.
+#
+# Whole head, measured by the reviewer in its worktree at 1a97186f (npm ci, Node's own
+# test runner): GITHUB_BASE_REF=main npm test: 5177 tests, 5176 pass, 0 fail, 1 skipped (the
+# skills.test.mjs failure of 6f6673f5 is gone); tests/unit/czech-prose.test.mjs 4/4 and node
+# scripts/czech-prose.mjs exit 0 (3226 in 262 files = the baseline); npm run build:check: dist
+# up to date (3 426 111 B, v3.24.2, source 95f768df); tests/browser/synth.cjs --browsers chromium
+# (file origin): desktop 35/35, phone 7/7, s-knobmemory ok (kept 3.5, depth 3.5, "+3.50 oct");
+# tests/browser/xy-pad.cjs --browsers chromium (file origin): 20/20 (desktop 11, laptop 1, phone
+# 4, phone-cold 1, phone-dock 2, phone-dock-se 1). Fail-first for 434ade5b: 434ade5b^'s
+# synth.cjs run on this head's dist, --only s-knobmemory in chromium: FAIL 0/1, "removing the
+# cable restores the EG 2 normal: not reached within 10000 ms (last value null)". Not run by the
+# reviewer: firefox and webkit, the http origin, test:measure (v3-measure.cjs's changed
+# regexes), test:studio and test:release in full: CI's gate on this head is the receipt.
+#
+# Verdict: merge. The four commits since 1fa78697 hold: both sides of the workspace.js conflict
+# are present and the C063 check accepts trailing fields; the translation changes strings and
+# their tests only, with two output-only reshapes, and no sentence's meaning drifted; the
+# s-knobmemory fix removes the cable it patched and is fail-first; the baselines only fall. No
+# P0, P1 or P2 open. Open P3s ride as follow-ups: RK-3, NF7, TR-2, TR-3 (all unchanged at
+# 1a97186f), TR-4, TR-5 (new).
 schema: review-verdict/v1
 pr: 444
 verdict: merge
-reviewer: prismatic-majordomus-7b (claude-code f9c3d552; the S8 fixtures patch 6f6673f5 is the reviewer's own and changes no guarded path)
-content: 5711c0ac0769e01a265e350f1350a34bd38e9cd3839158dfb9c6766ef46df901
+reviewer: prismatic-majordomus-7b (claude-code f9c3d552; re-judged at 1a97186f over 1fa78697; built none of 29016d0f, b8e130f6, 434ade5b, 1a97186f)
+content: 4f9894914156febbac0eddb88a80766dbc3dd3c36b9e64421b3d11bc8403d93d
 findings:
   - { id: TR-1, severity: P2, status: closed, title: "K183's member verdict (p2, merge at 780ab5c0, digest 479d74b7) was never committed: no .ai/repo/reviews/428.yaml on any ref, so the checker reads #428 as a member that changed no guarded path; closed by the members: line for #428 below (p2's judgement, its digest reproduced with --base 6d5efa89) and the PR body's members table" }
   - { id: TR-2, severity: P3, status: open, title: "src/js/synth/xy.js:61: keysSilence's doc names its `pad` cause as 'review S8: an XY preset, Patch the pad into the voice', main's wording; K183 removed the Patch button and no built-in XY preset cables the pad's Pitch or Gate (the S8 fixtures take the gates by xyCablesAction): name the user's cable from xy.gate into the EG gates" }
   - { id: TR-3, severity: P3, status: open, title: "notes-sink.js legato's held-entry move (4cf35c4b: the note stays on the node its note-on played) is pinned by no case; the S3 cases cover a note-on and note-off across an undone route, not a legato; the reviewer's probe reads it right at the head (legato after the undone route goes to FM, heldNotes [] after the note-off; at ccf917a9 note 60 stayed held)" }
+  - { id: TR-4, severity: P3, status: open, title: "b8e130f6's Czech sentences splice main's English fragments still under the baseline: xy-wiring.js:244 target 'nothing' gives the pad's aria label and description 'Y řídí nothing' when no cable leaves Y; the readout keeps 'degree N of', 'gate open'; the stated line keeps ' (the XY lead's scale and target)'; limitBoundText keeps '0.95 × Nyquist at 44.1 kHz'; and SYNTH_TEXT.armed stays 'Synth armed: ...' beside the new 'Synth připraven: ...'. No meaning drift; translate them in xy-wiring.js's own pass (5 left)" }
+  - { id: TR-5, severity: P3, status: open, title: "tests/browser/synth.cjs:794 s-knobmemory's first wait ('MG is patched into LPF cutoff') reads any cable into lpf.frequency, which K183's default xy.y cable already satisfies, so it can pass before the MG cable lands; 434ade5b's later wait fails by name if the link lost it (no false pass), but match from 'mg.control' there too" }
   - { id: NF1, severity: P3, status: closed, title: "computeBases recorded a fitted cable's factor without which bound won, so fitLimits blamed the range for a Nyquist hold (20 kHz, detune 0, Y bipolar 1200); fitted.by nyquist/range, worded by it (028d5119; test fails on b1c25f66's source)" }
   - { id: NF2, severity: P3, status: closed, title: "the pad's idle Glide reason said KEYS, a literal; xyGlideIdle takes the panel's own module label, KEYBOARD (18da221d; test fails on 028d5119's face.js)" }
   - { id: NF3, severity: P3, status: closed, title: "the adapter's rest() reset Y only, so X cabled into a control kept the touch's value after the lift (0.955); rest() glides X and Y to 0, Pitch alone (9e8879c9; unit fails with the hunk reversed, x-y-rest passes in three engines at ccf917a9)" }
