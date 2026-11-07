@@ -6,7 +6,7 @@ title: "A step-sequencer strip above the Synth face plays the panel's Keys from 
 slug: a-step-sequencer-strip-above-the-synth-face
 priority: p2
 profile: implementation
-objective: "Lands as feat(synth). Q103 (2): a strip of 8 or 16 steps above the Synth panel, each with a pitch, a gate and an on-light, playing the panel's Keys on the transport. It is a view of a notes clip with a grid (ADR 0086, K068: the step grid is a projection of the notes clip), mounted through the step-grid kind (W008) when that exists, never a second grid model; until then it waits."
+objective: "Lands as feat(synth). Q103 (2): a strip of 8 or 16 steps above the Synth panel, each with a pitch, a gate and an on-light, playing the panel's Keys on the transport. It is the Step Modulator node's face with three lanes (pitch and two control voltages, as the reference's 16 steps by three channels), its outputs typed control ports a cable patches to the Keys or any parameter, and its steps a grid projection (ADR 0086), mounted through the one step-grid kind (W008) that the drum machine (K073) mounts too, never a second grid model; until W008 exists it waits."
 why: "Owner direction Q103 (the analog sequencer above the semi-modular face)."
 scope:
   - "src/js/synth/ui.js"
