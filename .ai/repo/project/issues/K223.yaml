@@ -1,0 +1,37 @@
+id: K223
+milestone: M066
+serves:
+  - "connected-instrument#drum-machine"
+  - "connected-instrument#one-transport"
+title: "Record: live pad and key hits written into the notes clip at the playhead, quantised to its grid, one undo per take"
+slug: record-live-pad-and-key-hits-written-into-the-notes-clip-at-t
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). A Record button beside the one transport's Play, shown in the Drums view (K222) and, through the same component, wherever a notes clip is edited by the step-grid kind: while the transport plays and Record is armed, every live note the note router delivers to the clip's target (K222's pads, the piano keys, MIDI) is written into that notes clip at the audio-clock playhead, quantised to the clip grid's stepBeats (an exported quantise function, nearest step, a hit exactly between two steps goes to the later one), vel from the hit, len one step; a take (arm to disarm, or Stop) is one undoable CLIP_UPDATE built once at the take's end, so the history holds one entry per take and undo removes the whole take; a hit that lands on a step that is already on replaces its vel and keeps one note. The button is role=switch with aria-checked and the R key listed in the Keyboard shortcuts dialog. Before: live hits sound and are not kept. After: a pass played on the pads is a pattern in the clip. Negative cases: Record while stopped (armed, nothing written until Play); a hit after the clip's end on a loop pass (wrapped into the clip by the loop, never written past its length); a take with no hit (no history entry). Rollback: revert; notes written stay valid model data."
+why: "Owner direction of 2026-11-07 recorded by Q103: the drum machine view has a record button. Carved from K073 on 2026-11-07 by oscilla-21 with oscilla-2b, after K222, so the first drum grid is not held by recording."
+scope:
+  - "src/js/ui/synth"
+  - "src/js/ui/kinds"
+  - "src/js/studio/live-notes.js"
+  - "src/js/studio/transport.js"
+  - "tests/unit/notes-record.test.mjs"
+  - "tests/browser/drums.cjs"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K222"
+acceptance_criteria:
+  - "tests/unit/notes-record.test.mjs, failing on the merge base: the quantise function on exact, early, late and halfway hits; a take of n hits builds one CLIP_UPDATE with the n quantised notes and nothing else changed; a repeat hit on an on step keeps one note with the later vel; the three negative cases of the objective."
+  - "tests/browser/drums.cjs gains the record check, failing on the merge base: armed and playing, three pad presses within a pass appear as three notes in the clip after Stop (deadline 'take in model', 2 s), and one Undo removes all three; it runs through tests/browser/lib/suite.cjs and tests/browser/lib/wait.cjs until() with named deadlines, assumes no sample rate and adds nothing to tests/browser/timing-baseline.json (project.suite-harness, project.bounded-test-timing)."
+  - "All timing comes from the audio clock (the playhead), never a timer or rAF (project.audio-engine-discipline v2); every write is one undoable dispatch through the one Studio store (project.studio-model-is-canonical)."
+  - "The pull request carries a reviewer's verdict (src/js/studio is guarded; project.review-verdict) and, as a feat change, a unit test that fails on the merge base (project.fail-first)."
+  - "scripts/size-report.mjs shows at most 1.5 KB gzip added, under the gzip budget of scripts/build-config.mjs (project.single-file-deliverable); tests/README.md has its rows; dist is rebuilt and npm run build:check passes; it ships in the next release and its evidence names the main commit."
+validation:
+  - "node --test tests/unit/notes-record.test.mjs"
+  - "node tests/browser/drums.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07
