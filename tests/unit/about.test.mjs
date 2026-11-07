@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { WORKSPACES, workspaceTitle } from '../../src/js/ui/app.js';
+import { NAV_TREE } from '../../src/js/ui/shell.js';
 
 const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
 const aboutView = html.slice(html.indexOf('id="osc-view-about"'), html.indexOf('</main>'));
@@ -38,11 +39,11 @@ function git(...args) {
 
 test('About is the last workspace and the last primary navigation item', () => {
   assert.equal(WORKSPACES.at(-1), 'about');
-  const nav = html.slice(html.indexOf('id="osc-nav"'), html.indexOf('</nav>'));
-  const items = [...nav.matchAll(/data-osc="(nav\.[a-z]+)"/g)].map((m) => m[1]);
-  assert.equal(items.at(-1), 'nav.about');
-  assert.equal(new Set(items).size, items.length);
-  assert.match(nav, /x-bind="navItem\('about'\)">About<\/a><\/li>\s*<\/ul>/);
+  // The sidebar is rendered from the registry (shell.js NAV_TREE, issue F002).
+  assert.equal(NAV_TREE.at(-1).id, 'about');
+  assert.equal(NAV_TREE.at(-1).label, 'About');
+  assert.equal(new Set(WORKSPACES).size, WORKSPACES.length);
+  assert.match(html, /<template x-for="entry in navTree" :key="entry\.id">/);
 });
 
 test('the About view is a full-width view keyed on the workspace, not the V1 mode', () => {
@@ -50,7 +51,7 @@ test('the About view is a full-width view keyed on the workspace, not the V1 mod
   assert.match(aboutView, /aria-labelledby="osc-about-title"/);
   assert.equal((aboutView.match(/<h2\b/g) || []).length, 1, 'one primary heading');
   assert.ok(!html.includes('osc-dlg-about'), 'the modal About dialog is retired');
-  assert.match(html, /data-osc="header\.about" @click="setWorkspace\('about'\)"/);
+  assert.match(html, /data-osc="header\.about" data-osc-link="jump" @click="setWorkspace\('about'\)"/);
 });
 
 test('external and contact links point exactly where they say', () => {

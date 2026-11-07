@@ -28,4 +28,16 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-03
-updated_at: 2026-11-03
+updated_at: 2026-11-05T01:27:44Z
+started_at: 2026-11-05T01:27:19Z
+started_event: sha256:624e2cbf4027d8a8ba4f2f22d863564c9b2863544631b4baf3c884e4d33c437c
+completed_at: 2026-11-05T01:27:44Z
+completed_event: sha256:582ca8d37c93648b687984abfedf455b6a9025c338d053672c118b0831a2f760
+evidence:
+  - covers: verified
+    type: ci
+    command: "node tests/browser/v31-studio-workflows.cjs && node --test tests/unit/v31-studio-transport.test.mjs (CI run 41933352760 on tree e65a1e6b = main 68b117f3)"
+    result: "Every acceptance criterion (5) re-checked MET on main 68b117f3 by two independent judges that agreed (af workflow wf_518c6639-5cb, read-only). 68b117f3's tree equals 43e3e1ca's (e65a1e6b), so #413's CI run 41933352760 (success) tested it: unit job 126936184997 4510 pass, 0 fail; the browser gate passed in Chromium, Firefox and WebKit; fail-first and review-verdict jobs green against merge base 6d5efa89. Dependencies done. Named tests: tests/browser/v31-studio-workflows.cjs, tests/unit/v31-studio-transport.test.mjs."
+    artifact: ".ai/repo/reviews/413.yaml"
+    commit: 68b117f3474e97f4c348fc01c30ddc4519cc193e
+    recorded_at: 2026-11-05T01:27:36Z

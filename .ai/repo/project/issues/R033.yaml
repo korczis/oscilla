@@ -1,0 +1,35 @@
+id: R033
+milestone: M011
+serves:
+  - "release-provenance#gate-runs-every-suite"
+title: "The rules' own tests and ratchet baselines are guarded, the list derived from the base's copy of each rule's enforcement"
+slug: the-rules-own-enforcement-is-guarded-derived-from-each-rule
+priority: p1
+profile: implementation
+objective: "Lands as feat(review). Implements Q091 part (2), Hardening gap 2. Line numbers at origin/main a19f1ff6. The tests and ratchets that enforce the project rules are outside v2's GUARDED (scripts/review-verdict.mjs:76-112): knowledge-integrity, ui-flowbite-pro, visual-identity-lock-v4, no-inert-surfaces, browser-timing, browser-suite-contract, repo-hygiene, about, no-fake-science, v31-studio-* and v4-one-studio-store, the rules' ratchet JSON baselines, tests/browser/* except live-smoke.cjs, and the rule files themselves, so a pull request can weaken a rule and the test that polices it together. After: the guard reads every active rule under .ai/repo/rules/project/ from the base with git show <base>:<rule> (base-rule.sh:36 extracts only scripts/, so the rule files must be read by revision, never from the pull request's checkout), resolves each rule's enforcement exactly as ruleEnforcementProblems does (tests/unit/knowledge-integrity.test.mjs:338-362: a '# Enforcement' or '# Verification' section, :344, or an x-majordomus tests block, :355-362; typed-ports.v1.md:43 uses '# Verification'), and guards each test, baseline and script named there; the resolver moves into scripts/rule-enforcement.mjs, which knowledge-integrity and the guard both import, so the two cannot drift. .ai/repo/rules/project/*.md is guarded itself (pattern), so dropping a test from a rule's enforcement is a guarded change the base judges. What stays hand-listed, by design: v2's entries outside src/ (scripts/release-*, scripts/build*, pack-single-file, stamp-build, verify-deploy, verify-dist, tests/unit/release-*, version-authority, tests/browser/live-smoke.cjs, .github/*, the three process programs, yaml-subset, their tests and tests/unit/fixtures/git-repo.mjs) and R029's scripts/flake-ledger.mjs with tests/unit/flake-ledger.test.mjs, which no rule's enforcement names; R031 adds src/ as a pattern. The patch-contract history ratchet that 96daa67b planned here is split into R043 (af's lane)."
+why: "Q091 part (2) (af with b0, 2026-11-05); af's Hardening proof-chain synthesis, finding 2 and smallest slice 3; oscilla-b0 Total Coherence audit slice B (the census and patch-contract tests unguarded). af's critique of 96daa67b (BLOCKING 3): reading only 'Enforcement' sections misses '# Verification' and x-majordomus rules; reading rules from the pull request's checkout lets a pull request drop a test from its rule and weaken the test in one change; Q091's criterion 2 requires the depends_on edge; the patch-contract ratchet has no history in a fail-first extract (tests/unit/source-size-budget.test.mjs:159) and is af's lane, so it is R043."
+current_state: "Not started. Inputs kept for whoever builds this (closure of 2026-11-05, oscilla-a3 with oscilla-21, the owner's permission recorded in the Majordomus decision log of session 12f1e384): PR #255 (R022, the PR-metadata judge) closed unmerged, its branch feat/r022-pr-metadata-judge stays at 9c4a6eed with the PR-body and label fixtures and mutation cases; PR #351 (E030, the definition-of-done judge) closed unmerged, its branch feat/e030-definition-of-done stays at f45b6e5c with the definition-of-done fixtures. Start from those two heads; do not rewrite them."
+scope:
+  - "scripts/review-verdict.mjs"
+  - "scripts/rule-enforcement.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - "tests/unit/knowledge-integrity.test.mjs"
+  - ".ai/repo/rules/project/review-verdict.v3.md"
+  - "tests/README.md"
+depends_on:
+  - "Q091"
+  - "R031"
+acceptance_criteria:
+  - "Fail-first: a fixture diff to tests/unit/knowledge-integrity.test.mjs with no verdict is refused; on the merge base it passes."
+  - "The guarded set is computed from the base's rules: a test asserts every file an active rule's '# Enforcement', '# Verification' or x-majordomus tests block names is guarded (typed-ports.v1.md's '# Verification' tests among them), and a mutation that adds a test file to a fixture rule's enforcement makes it guarded with no edit to scripts/review-verdict.mjs."
+  - "Bypass: a fixture pull request that removes tests/unit/ui-flowbite-pro.test.mjs from ui-uses-flowbite-pro.v1.md's enforcement in its checkout and edits that test, with no verdict, is refused for both files (the rule is read from the base, and the rule file is guarded)."
+  - "One resolver: knowledge-integrity's ruleEnforcementProblems and the guard import scripts/rule-enforcement.mjs; the existing knowledge-integrity cases pass unchanged."
+  - "The hand-listed remainder is the list above, asserted by a test that names each entry and the reason no rule derives it."
+  - "Guarded (scripts/review-verdict.mjs and its test): prismatic-majordomus-98 writes the verdict. Lane: oscilla-b0."
+validation:
+  - "node --test tests/unit/review-verdict.test.mjs tests/unit/knowledge-integrity.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

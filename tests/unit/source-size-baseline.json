@@ -25,9 +25,9 @@
     }
   },
   "caps": {
-    "src/index.html": 285000,
+    "src/index.html": 308000,
     "src/js/audio/audio-engine.js": 73000,
-    "src/js/core/instrument.js": 63000,
+    "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
     "src/js/main.js": 52000,
     "src/js/measurement/capture.js": 55000,
@@ -74,6 +74,24 @@
       "reason": "merging C-line train B (#380) into the feature train 2026-10-31 (#367) adds main's restoreConfig and its whole restore report (#345 H002) to the instrument beside the train's superseded-sweep-error handling"
     },
     {
+      "file": "src/index.html",
+      "cap": 292000,
+      "pr": 330,
+      "reason": "the Flowbite Pro admin shell (F002) adds the navbar, the registry-rendered sidebar with its drawer, search and backdrop, the page header and 16 lucide symbols beside the markup the feature train 2026-10-31 (#367) added to main"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 293000,
+      "pr": 386,
+      "reason": "merging the Pro admin shell (F002, #330) into lane A (#386) keeps both sides: the shell's navbar, sidebar and page header beside A1's links and A2's page-header safety reopen"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 295000,
+      "pr": 386,
+      "reason": "lane A's page fields and iPhone fixes: the Related strip and menu, the empty state, the folds' display rule, the safety More target and journey 20's visible reasons and alternative for the disabled export and preset controls"
+    },
+    {
       "file": "src/js/synth/ui.js",
       "cap": 45000,
       "pr": 372,
@@ -108,6 +126,84 @@
       "cap": 285000,
       "pr": 414,
       "reason": "the 3.19 About station (project.about-names-current-release) takes src/index.html 442 bytes past 284 000; the release adds no other markup"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 286000,
+      "pr": 436,
+      "reason": "the 3.21 About station (project.about-names-current-release) takes src/index.html 553 bytes past 285 000; the release adds no other markup"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 299000,
+      "pr": 386,
+      "reason": "merging main's synth train (#385: K066/K102 presets and patch library, the XY tab, the docked keyboard) into lane A's shell, page header and registry-driven page parts (#386)"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 301000,
+      "pr": 386,
+      "reason": "F007 puts Learn on Flowbite Pro inside lane A's shell: the Pro card, button and link class lists are longer than the legacy osc-learn-* names they replace, while the legacy debt falls by 28"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 305000,
+      "pr": 386,
+      "reason": "Presets (part of F003) on Flowbite Pro inside lane A's shell: Pro tabs, cards and buttons replace the osc-preset-* names with longer Tailwind class lists, while the legacy debt falls by 57"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 304000,
+      "pr": 386,
+      "reason": "merging main's train 3 (#404: the synth look W1, phone bay, riffs, C018 and C021 shell markup, About's phased roadmap) and its release into lane A's Pro shell with Learn and Presets on Pro"
+    },
+    {
+      "file": "src/js/ui/studio/workspace.js",
+      "cap": 87000,
+      "pr": 386,
+      "reason": "merging main's train 3 (#404) Studio changes into lane A's workspace registry and page-header wiring of the Studio workspace, 18 bytes past the 86 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 305000,
+      "pr": 386,
+      "reason": "merging main's train 4 (#410: the Learn cards with their own links, the Studio's dock padding, K099 and K014 markup) into lane A's Pro shell, 245 bytes past the 304 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 301000,
+      "pr": 386,
+      "reason": "K075's data-osc-link marker on the 47 controls that open or send to another workspace (the integration map's producers), which the scan and the browser suite read"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 306000,
+      "pr": 386,
+      "reason": "lane A's train carries K075's data-osc-link markers onto the Pro shell and Learn and Presets on Pro, 269 bytes past the 305 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 307000,
+      "pr": 386,
+      "reason": "merging main's next About station (the release line after the last one, with its Contracts entry) into lane A's Pro shell, 300 bytes past the 306 000 cap"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 307100,
+      "pr": 386,
+      "reason": "the phone HOLD margin bound to the Playground (#386 Browser gate on linux: the page header's and the safety strip's phone classes under workspace === 'playground', the sentence's max-sm:-mt-1), 29 bytes past the 307 000 cap"
+    },
+    {
+      "file": "src/js/core/instrument.js",
+      "cap": 64000,
+      "pr": 437,
+      "reason": "smalls train B's T004 dual-beat readout text (#427, 598 bytes) on lane A's instrument.js (#386, the Pro shell's hooks): 40 bytes past the 63 000 cap after the merge of main bc4b1545"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 308000,
+      "pr": 442,
+      "reason": "the 3.22 About station (project.about-names-current-release) takes src/index.html 474 bytes past 307 100; the release adds no other markup"
     }
   ]
 }

@@ -573,3 +573,29 @@ test('a routed note is released through the sink that took it, whatever route() 
   assert.deepEqual(log, [['studio', 'on', 60], ['studio', 'off', 60], ['synth', 'on', 62],
     ['synth', 'off', 62]]);
 });
+
+// 21's T1 on Train 6: All Sound Off, All Notes Off and silence() reach every sink a held key went
+// to, not only the current route's, so a note held in the Studio across a workspace switch is
+// released by them (a fresh sink object per call counts as one sink, by its allOff).
+test('all-off and silence release a note held on the sink a switch left behind', () => {
+  for (const off of [(n) => n.handle([0xb0, 120, 0], 1), (n) => n.handle([0xb0, 123, 0], 1),
+    (n) => n.silence()]) {
+    const log = [];
+    const allOff = () => { log.push('studio all-off'); return 1; };
+    const studio = () => ({ noteOn: () => ({ ok: true }), noteOff: () => true, allOff });
+    const synth = { noteOn: () => ({ ok: true }), noteOff: () => true,
+      allOff: () => { log.push('synth all-off'); return 0; } };
+    const engine = { noteOn: () => ({ ok: true }), noteOff: () => true, notesOff: () => 0,
+      resume() {} };
+    let current = studio;
+    const notes = createMidiNotes({ engine, route: () => current() });
+    notes.handle([0x90, 60, 100], 1); // held in the Studio
+    current = () => synth; // the workspace switched to the Synth; the key is still down
+    off(notes);
+    assert.deepEqual(log.sort(), ['studio all-off', 'synth all-off'],
+      'the Studio note is released, and the route\'s own sink too, once each');
+    log.length = 0;
+    notes.handle([0x80, 60, 0], 1); // its note-off afterwards changes nothing more
+    assert.deepEqual(log, []);
+  }
+});

@@ -166,7 +166,8 @@ async function buildCss() {
 }
 
 // Tailwind's PostCSS API (then darkThemeSelector: the plugin's .dark ancestor becomes
-// [data-theme="dark"]), then the esbuild CSS pass (lowering for TARGETS, minify unless DEBUG).
+// DARK_THEME_SELECTOR, every theme but light), then the esbuild CSS pass (lowering for TARGETS,
+// minify unless DEBUG).
 async function buildTailwind() {
   const from = path.join(ROOT, TAILWIND_ENTRY);
   const result = await postcss([

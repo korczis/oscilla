@@ -62,6 +62,7 @@ import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
 import { LEARN_TOPICS } from '../data/learn.js';
+import { presetLoadedNotice } from './preset-notice.js';
 import { V1_LAB_HOOKS, restoreRecordLabs } from './instrument-labs.js';
 
 let alertSeq = 0;
@@ -299,10 +300,21 @@ export function createInstrument(deps = {}) {
     get dualFb() { return detunedFrequency(this.dual.b); },
     // V1: oscillaApp: get dualDelta, get beatText (index.html@a7b7a23)
     get dualDelta() { return Math.abs(this.dualFa - this.dualFb); },
+    // T004: only the mono mix beats in the signal (claim dual-oscillator-beats)
     get beatText() {
       const d = this.dualDelta;
       if (d < 0.005) return 'No difference: no beating (the sum depends only on phase).';
-      return `Δf ${sig(d, 3)} Hz → amplitude beats at about ${sig(d, 3)} Hz (one every ${formatPeriod(d)}).`;
+      const f = sig(d, 3), p = `(one every ${formatPeriod(d)})`;
+      if (this.dual.binaural) {
+        return `Δf ${f} Hz, one tone per ear: heard, if at all, as a perceptual binaural beat `
+          + `at about ${f} Hz ${p}; the signal itself does not beat.`;
+      }
+      if (this.dual.stereo) {
+        return `Δf ${f} Hz, one steady tone per channel: no beat in the signal. Over speakers `
+          + `they may beat acoustically at about ${f} Hz ${p}, depending on where you listen; `
+          + 'over headphones any beat is perceptual.';
+      }
+      return `Δf ${f} Hz → amplitude beats at about ${f} Hz ${p}.`;
     },
     // V1: oscillaApp getters sweepSpanOct, sweepHzPerSec, sweepOctPerSec -> patterns.js
     get sweepSpanOct() { return sweepSpanOct(this.sweep); },
@@ -931,11 +943,15 @@ export function createInstrument(deps = {}) {
       if (headphonesConfirmed && p.cfg.dual?.binaural) this.dual.binaural = true;
       const { issues, also } = restoreRecordLabs(this, p, 'preset', cfgIssues); // V2, C018
       this.loadedLabel = p.name;
-      const play = this.isProgrammed ? 'Press TRIGGER (or Space) to play it.' : 'Press and hold HOLD TO PLAY.';
+      const play = presetLoadedNotice(this.mode, this.isProgrammed, this.source,
+        !!host.matchMedia && host.matchMedia('(pointer: coarse)').matches);
       if (issues) {
         this.notify('warning', 'Preset partly applied',
           `${issues} value(s) were invalid and kept at their previous setting.${also ? ` ${also}` : ''}`);
-      } else this.notify('success', `Loaded “${p.name}”`, also ? `${also} ${play}` : play);
+      } else {
+        this.notify('success', `Loaded “${p.name}”`, also ? `${also} ${play.message}` : play.message,
+          { action: play.action });
+      }
     },
 
 
@@ -1060,6 +1076,7 @@ export function createInstrument(deps = {}) {
     async copyConfigLink() {
       const url = `${location.href.split('#')[0]}#${this.configLinkHash()}`;
       try {
+        // data-osc-link: action.copyUrl
         host.history.replaceState(host.history.state ?? null, '', url);
       } catch (e) { /* file:// in some browsers */ }
       this.copyUrl = url;

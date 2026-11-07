@@ -6,7 +6,12 @@
 // `category: 'xy'` with its `scale` beside the graph, so the one patch library saves, lists,
 // exports and imports it like any other patch. The built-in ones are recipes over a panel
 // preset (presets.js) that xyPresetPatch turns into that patch on the document's own panel.
+// An XY preset is the voice the pad plays: the modules of the Panel and XY tabs (xyScope) and
+// the cables between them. Applying one writes those nodes and edges only, as a node preset
+// writes its named nodes (K020): the Engines tab's modules and every cable into them keep their
+// values, built-in or saved, whatever the patch carries.
 //
+//   xyScope(panel) -> [module id]          the modules an XY preset holds and writes
 //   XY_VOICE                       the cables that let the pad play the voice
 //   xyTargets(panel) -> [{ id, label }]   the CONTROL inputs Y may drive (the timbre targets)
 //   xyTarget(model, panel) -> jack | null the input Y drives now
@@ -16,10 +21,18 @@
 //   xyPatchOf(model, panel, { name, description }) -> patch        the panel as an XY preset
 //   xyPresetPatch(model, panel, recipe) -> patch                    a built-in preset's patch
 //   xyPatchAction(model, panel, patch) -> { action } | { reason }   load it, one BATCH
+//   keysSilence(model, panel) -> { reason, pad } | null   why the panel's Keys sound nothing:
+//     their Gate reaches no envelope (studio/live-notes.js gateTargets), `pad` when the XY
+//     pad's cables broke those normals (review S8: an XY preset, Patch the pad into the voice)
+//   xyUnpatchAction(model, panel) -> { action } | { reason }   every cable of the pad removed
+//     and the normals they broke restored, one BATCH: the keyboard plays the voice again
 
 import { createPatch, patchParams } from '../studio/patches.js';
 import { linkAction, linkOf } from './link.js';
 import { panelCables, patchCable, unpatch } from './normals.js';
+import { splitJack } from './panel.js';
+import { XY_TAB } from './panels/xy.js';
+import { gateTargets } from '../studio/live-notes.js';
 
 export const XY_CATEGORY = 'xy';
 export const XY_VOICE = Object.freeze([['xy.pitch', 'vco1.pitch'], ['xy.pitch', 'vco2.pitch'],
@@ -37,6 +50,9 @@ export const XY_RECIPES = Object.freeze([
   { id: 'xy-bell', base: 'ring-bell', scale: { mode: 'major', key: 'E' }, y: 'vco2.tune',
     values: [['xy.glide', 0.05]], name: 'XY bell: E major, Y detunes VCO 2 against the ring' },
 ].map((r) => Object.freeze(r)));
+
+export const xyScope = (panel) => [...panel.modulesOf(panel.tabs[0].id),
+  ...panel.modulesOf(XY_TAB.id)].map((m) => m.id);
 
 export function xyTargets(panel) {
   return panel.modulesOf('panel').flatMap((m) => panel.jacksOf(m.id)
@@ -74,7 +90,8 @@ export function xyPatchOf(model, panel, { name, description = '' }) {
   const res = panel.resolve(model);
   const pad = res.get('xy');
   if (!pad) throw new RangeError('The Synth panel has no XY pad: Restore module first.');
-  return createPatch(model, [...res.values()].filter(Boolean).map((n) => n.id), { name,
+  const ids = xyScope(panel).map((mid) => res.get(mid)).filter(Boolean).map((n) => n.id);
+  return createPatch(model, ids, { name,
     description, category: XY_CATEGORY, scale: { mode: pad.params.mode, key: pad.params.key } });
 }
 
@@ -110,7 +127,7 @@ function afterSteps(model, steps) {
 export function xyPresetPatch(model, panel, recipe) {
   const a = linkAction(model, panel, { preset: recipe.base,
     values: [...recipe.values, ['xy.mode', recipe.scale.mode], ['xy.key', recipe.scale.key]],
-    cables: [...XY_VOICE, ['xy.y', recipe.y]] });
+    cables: [...XY_VOICE, ['xy.y', recipe.y]] }, { modules: xyScope(panel) });
   return xyPatchOf(afterSteps(model, a.steps), panel, { name: recipe.name });
 }
 
@@ -123,10 +140,41 @@ export function xyPatchAction(model, panel, patch) {
   if (!panel.resolve(doc).get('xy')) {
     return { reason: `"${patch.name}" holds no XY pad of the ${panel.title}.` };
   }
-  const steps = linkAction(model, panel, linkOf(doc, panel, 'init')).steps;
+  const steps = linkAction(model, panel, linkOf(doc, panel, 'init'),
+    { modules: xyScope(panel) }).steps;
   const pad = panel.resolve(model).get('xy');
   if (patch.scale && pad) {
     steps.push({ type: 'NODE_PARAM_SET', nodeId: pad.id, params: { ...patch.scale } });
   }
   return { action: { type: 'BATCH', label: `XY preset ${patch.name.split(':')[0]}`, steps } };
+}
+
+export const KEYS_SILENT = Object.freeze({
+  pad: (names) => `The keys sound nothing: the XY pad's cables into ${names} replace the `
+    + "keyboard's gate normals. Unpatch the pad (Panel tab) to play the keys.",
+  open: (names) => `The keys sound nothing: their Gate reaches no envelope (${names} take no `
+    + 'keyboard gate). Restore those normals in the patch bay.',
+  unpatched: 'The XY pad is unpatched: the keys play the voice again.',
+});
+
+export function keysSilence(model, panel) {
+  const keys = panel.resolve(model).get('keys');
+  if (!keys || gateTargets(model, keys.id).envelopes.length) return null;
+  const gates = panel.normals.filter((n) => n.from === 'keys.gate'
+    && panel.module(splitJack(n.to).module).node === 'envelope').map((n) => n.to);
+  const name = (jack) => {
+    const { module, port } = splitJack(jack);
+    const j = panel.jacksOf(module).find((x) => x.port === port && x.direction === 'in');
+    return `${panel.module(module).label} ${j ? j.label : port}`;
+  };
+  const names = gates.map(name).join(' and ');
+  const pad = panelCables(model, panel).some((c) => c.fromModule === 'xy' && gates.includes(c.to));
+  return { pad, reason: pad ? KEYS_SILENT.pad(names) : KEYS_SILENT.open(names) };
+}
+
+export function xyUnpatchAction(model, panel) {
+  const cables = panelCables(model, panel).filter((c) => c.fromModule === 'xy');
+  if (!cables.length) return { reason: 'The XY pad has no cables to remove.' };
+  return { action: { type: 'BATCH', label: 'Unpatch the XY pad',
+    steps: cables.flatMap((c) => unpatch(model, panel, c.id).action.steps) } };
 }

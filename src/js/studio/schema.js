@@ -27,7 +27,8 @@
 //                 parameters, edges and their properties, tracks (id, kind, target), clips,
 //                 automation, loop, transport. studioHash covers exactly this.
 //   PRESENTATION  authored but not executed: node positions and names, track names, markers,
-//                 metadata. Undoable and part of the saved document, excluded from the hash.
+//                 metadata (title, notes, the keys' noteTarget, the Synth's synthAmounts).
+//                 Undoable and part of the saved document, excluded from the hash.
 //   VIEW          pan, zoom, timeline scale and scroll (in the model, so they can persist
 //                 locally), plus selection and hover (store-only, never serialized). Neither
 //                 undoable nor dirtying nor hashed.
@@ -389,9 +390,19 @@ export function normalizeStudio(json, { registry = NODE_REGISTRY } = {}) {
       },
     },
     metadata: { title: str(meta.title) || DEFAULT_TITLE, notes: str(meta.notes),
-      ...(str(meta.noteTarget) ? { noteTarget: meta.noteTarget } : {}) },
+      ...(str(meta.noteTarget) ? { noteTarget: meta.noteTarget } : {}),
+      ...(isAmountMap(meta.synthAmounts) ? { synthAmounts: { ...meta.synthAmounts } } : {}) },
   };
 }
+
+/**
+ * metadata.synthAmounts (review S10 of src/js/synth): the depth each amount knob of the Synth
+ * panel comes back at once a cable broke its every edge, { amountId: depth }. Presentation
+ * state, as noteTarget is: undoable and saved, never compiled and outside studioHash (no edge
+ * carries it), so a document without it keeps its hash. validate.js checks its entries.
+ */
+const isAmountMap = (v) => !!v && typeof v === 'object' && !Array.isArray(v)
+  && Object.keys(v).length > 0;
 
 /** A new, empty, normalized model; `init` may carry any part of the shape. */
 export function createStudioModel(init = {}, opts = {}) {

@@ -1,0 +1,24 @@
+id: Q092
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "LLM decision: a panel's fixed parameter is declaration, refused by the model and skipped by presets with a reason (af with b0, 2026-11-05)"
+slug: llm-decision-a-panels-fixed-parameter-is-declaration
+priority: p1
+profile: routine
+owner: "af with b0, mesh 2026-11-05, owner order 'be llm autonomous'"
+objective: "Record decision Q-B, AGREED by af with b0 on the mesh (thread b0<->af, 2026-11-05 ~02:15Z): a Synth panel module's 'fixed' parameter is part of the declaration, not a default. The StudioModel refuses NODE_PARAM_SET on it with a stated reason and leaves model and history unchanged (project.typed-ports); a node preset and a catalog Apply skip it with a per-parameter reason they report; a saved document carrying an overridden fixed value imports with that value reset to the declared one and the reset named (coherent-state#saved-state-is-honest). tests/unit/studio-node-presets.test.mjs:117, which pins the override today with a user preset (mine[0], applied onto the HPF module at :114), flips and fails first; the factory preset that does the same is filter/dark (src/js/studio/node-presets.js:31, type lowpass). The invariant covers every action that writes a node's params, not only NODE_PARAM_SET: a node preset, a catalog Apply, PATCH_REPLACE (a whole-panel preset, src/js/synth/link.js:63), paste, import and history replay. Root cause: engine presets are keyed by node type (enginePresets, node-presets.js:79-83), so a preset written for a type reaches every node of it, the panel's fixed module included. Seam: the StudioModel learns a node's fixed parameters through a fixedParamsOf(node) resolver passed at store creation, as the registry is, which reads node.metadata.panel against the panel declaration (src/js/synth/panel.js:90-99); src/js/studio/ does not import src/js/synth/ for it. Line numbers at origin/main a19f1ff6. K187 implements it."
+why: "oscilla-b0 coherence audit at main 68b117f3, slice 06 (Declaration, wiring, instantiation, presets), reproduced by a skeptic: panel.js:90-99 validates 'fixed' and the face shows a 'Fixed by the panel' badge from it (panel.js:181-185, synth/view/face.js:164-170), yet NODE_PARAM_SET, a node preset (hpf/dark gives HPF type lowpass) and a catalog Apply (sync/engine-formant-pad gives HARD SYNC bank formant) all overwrite it while the badge keeps showing the declared value. The view lies about what sounds. Decided under the owner's order of 2026-11-05 'be llm autonomous'; the owner may override it."
+current_state: "Decided (AGREED) by af with b0 on 2026-11-05. The owner_decision evidence is recorded on main after this plan change lands; until then K187 waits on it."
+scope:
+  - ".ai/repo/project/issues/Q092.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence on this issue (covers owner_decision) naming the mesh thread b0<->af and its date, the four behaviours above (model refusal, preset and Apply skip with a reason, import reset named, the flipped test) and the attribution to af with b0 under the owner's order 'be llm autonomous'."
+  - "K187 names Q092 in depends_on."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: 2026-11-05
+updated_at: 2026-11-05

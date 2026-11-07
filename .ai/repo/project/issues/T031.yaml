@@ -1,0 +1,27 @@
+id: T031
+milestone: M073
+serves:
+  - "v3-measure#measurement-quality"
+title: "An experiment CSV states TEST CONTEXT, its quality status and its chain scope in the header"
+slug: an-experiment-csv-states-test-context-its-quality-status-and
+priority: p2
+profile: implementation
+objective: "Lands as fix(experiments). Hardening S4, first finding. At main 68b117f3 csvMeta() (src/js/experiments/csv.js:89-98) and header() (:126-145) write no TEST CONTEXT mark, no quality status and no chain scope, so a loopback run exported as CSV reads like a physical measurement. After: the header carries '# context: TEST CONTEXT ...' when any run has testContext, '# quality: <status> (oscilla.confidence.vN)' and '# scope: observed playback/capture chain response'."
+why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S4 (no existing plan coverage). Contract: README TEST CONTEXT, claim measurement-quality, V3 spec 161/163."
+scope:
+  - "src/js/experiments/csv.js"
+  - "tests/unit/v3-experiments.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: in tests/unit/v3-experiments.test.mjs a loopback record exported through transferCsv(r, csvMeta(e)) has a header with a TEST CONTEXT line, a quality line and a scope line; it fails on the merge base."
+  - "A physical record's header has the quality and scope lines and no TEST CONTEXT line; a mutation that drops the context line from csvMeta fails."
+  - "Guarded (src/js/experiments/*): prismatic-majordomus-98, who built none of it, writes .ai/repo/reviews/<pr>.yaml (project.review-verdict)."
+validation:
+  - "node --test tests/unit/v3-experiments.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

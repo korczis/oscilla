@@ -62,6 +62,8 @@ const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const UNROWED = argv.includes('--unrowed');
 
 const ROW_MS = 10000;  // deadline of one row's expectation (a glide is 15-50 ms of audio)
+// A family's deadline unless it declares its own (ms).
+const FAMILY_MS = 300000;
 const RUN_MS = 60000;  // one loopback measurement on a loaded machine
 const BASELINE = path.join(ROOT, 'tests', 'unit', 'control-drive-baseline.json');
 
@@ -262,6 +264,7 @@ row({ id: 'source.hold.keyboard', ws: 'playground', control: '#osc-hold-play', h
   expect: (s) => !!s.engine.voice && s.app.playing && /PLAY/i.test(s.text.sbState || '') });
 row({ id: 'source.hold.pointer', ws: 'playground', control: '#osc-hold-play', how: 'pointer',
   act: async (page) => {
+    await page.locator('#osc-hold-play').scrollIntoViewIfNeeded();
     const b = await page.locator('#osc-hold-play').boundingBox();
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
     await page.mouse.down();
@@ -341,6 +344,12 @@ row({ id: 'device.safetyLimit.pointer', ws: 'playground', control: '#osc-safety-
   } });
 
 // ---- Analysis (the tabs, the scope and the spectrum options)
+// V605: Open in Studio (Signal Path tab only) opens the voice as a Studio document, and no sound.
+row({ id: 'analysis.openInStudio.pointer', ws: 'playground',
+  control: '[data-osc="analysis.openInStudio"]', how: 'pointer',
+  setup: D.click('#osc-atab-signalpath'), act: D.click('[data-osc="analysis.openInStudio"]'),
+  expect: (s) => s.workspace === 'studio' && !s.studio.playing
+    && s.studio.counts.runtimeNodes === 0 });
 row({ id: 'analysis.pause.pointer', ws: 'analyzer', control: '#osc-viz-pause', how: 'pointer',
   act: D.click('#osc-viz-pause'), expect: (s, b) => s.app.vizPaused !== b.app.vizPaused });
 row({ id: 'analysis.pause.keyboard', ws: 'analyzer', control: '#osc-viz-pause', how: 'keyboard',
@@ -877,10 +886,10 @@ row({ id: 'studio.tl.track-delete.pointer', ws: 'studio',
   control: '[data-key^="track-del:"]', how: 'pointer', act: async (page) => {
     await page.locator('[data-key^="track-del:"]').first().click(); },
   expect: (s, b) => s.studio.tracks === b.studio.tracks - 1 || s.dialogs.length > b.dialogs.length });
-// The editor's own zoom (applied to its world element) is the one to compare: on a fresh Studio
-// the model still holds the default 1 while the graph shows its fitted zoom, which it commits
-// only after a change, so a model-only comparison passed or failed by the viewport's height
-// (the docked keys, M086). The model must end at the editor's zoom.
+// The editor's own zoom (applied to its world element) is the one to compare, and the model must
+// end at it. Until K170 a fresh model held the default 1 while the graph showed its fitted zoom,
+// so a model-only comparison passed or failed by the viewport's height (the docked keys, M086);
+// K170 commits the fit at once, and the row keeps judging what is shown.
 for (const [k, cmp] of [['zoomIn', (a, b) => a > b], ['zoomOut', (a, b) => a < b]]) {
   row({ id: `studio.graph.${k}.pointer`, ws: 'studio', control: `[data-osc="studio.graph.${k}"]`,
     how: 'pointer', act: D.click(`[data-osc="studio.graph.${k}"]`),
@@ -1338,17 +1347,21 @@ family({ id: 'nav.items', control: '[data-osc^="nav."]:not([data-osc^="nav-group
     return { members: op.WORKSPACES.length, bad };
   } });
 family({ id: 'nav.groups', control: '[id^="osc-nav-group-"], [data-osc^="nav-group."]',
-  why: 'each navigation group opens by pointer and closes on Escape',
+  why: 'each navigation group of the Pro sidebar (F002, a disclosure) toggles by pointer and '
+    + 'toggles back',
   run: async (page) => {
     const ids = await page.$$eval('[id^="osc-nav-group-"]', (e) => e.map((x) => x.id));
     const bad = [];
+    const expanded = (id) => page.evaluate((i) => document.getElementById(i)
+      .getAttribute('aria-expanded') === 'true', id);
     for (const id of ids) {
+      const was = await expanded(id);
       await page.click(`#${id}`);
-      await until(() => page.evaluate((i) => document.getElementById(i)
-        .getAttribute('aria-expanded') === 'true', id), { ms: ROW_MS, what: `${id} opens` });
-      await page.keyboard.press('Escape');
-      await until(() => page.evaluate((i) => document.getElementById(i)
-        .getAttribute('aria-expanded') !== 'true', id), { ms: ROW_MS, what: `${id} closes` });
+      await until(async () => (await expanded(id)) !== was, { ms: ROW_MS,
+        what: `${id} ${was ? 'collapses' : 'expands'}` });
+      await page.click(`#${id}`);
+      await until(async () => (await expanded(id)) === was, { ms: ROW_MS,
+        what: `${id} toggles back` });
     }
     return { members: ids.length, bad };
   } });
@@ -1458,8 +1471,9 @@ family({ id: 'links.external', control: 'a[href^="http"]',
     return { members: links.length, bad };
   } });
 // the logo goes home (H004 B6): from another workspace it opens the Playground
-both({ id: 'header.brand', ws: 'filter', control: 'a.osc-brand',
-  pointer: D.click('a.osc-brand'), keyboard: D.keys('a.osc-brand', 'Enter'),
+both({ id: 'header.brand', ws: 'filter', control: '[data-osc="header.brand"]',
+  pointer: D.click('[data-osc="header.brand"]'),
+  keyboard: D.keys('[data-osc="header.brand"]', 'Enter'),
   expect: (s) => s.workspace === 'playground' });
 family({ id: 'links.internal', control: 'a[href="#osc-main"], a[href^="mailto:"]',
   why: 'the skip link, by Enter, takes the page to the instrument; '
@@ -1492,7 +1506,12 @@ family({ id: 'links.internal', control: 'a[href="#osc-main"], a[href^="mailto:"]
 // href names; tests/browser/cross-links.cjs judges the template each opens and the way back,
 // and the members shown only with a stored experiment or finding.
 const WS_LINK = 'a[data-osc][href^="#m="]:not([data-osc^="nav."])';
-family({ id: 'links.workspace', control: WS_LINK,
+// Its deadline is its own: every member opens a fresh app twice (pointer, Enter), about 2 s each
+// on a CI webkit runner. #437 measured 18 members in 72 s; lane A's Related strip and menu
+// (#386) bring 79, about 316 s, past the shared FAMILY_MS. 900 s keeps about 2.8x headroom
+// and the census within its 35-minute CI step (11 minutes on main).
+const WS_LINK_MS = 900000;
+family({ id: 'links.workspace', control: WS_LINK, ms: WS_LINK_MS,
   why: 'each link to another workspace opens the workspace its href names',
   run: async (page, browser) => {
     const bad = [];
@@ -1658,6 +1677,18 @@ for (const [c, by] of [['#osc-synth-pick', 'synth.cjs'],
 }
 // About's "What comes next": its Later list folds open and shut (app.cjs drives and judges it)
 delegated('[data-osc="about.next.later-toggle"]', 'app.cjs', 'About, what comes next');
+// Lane A's Pro shell (F002, #386): each control's effect is proven by the suite named.
+delegated('#osc-sidebar-toggle', 'ui-flowbite-pro.cjs shell-desktop',
+  'the Pro shell: the sidebar collapses to icons and back');
+delegated('#osc-drawer-toggle', 'ui-flowbite-pro.cjs shell-phone', 'the Pro shell: the phone drawer');
+delegated('[data-osc="sidebar.backdrop"]', 'ui-flowbite-pro.cjs shell-phone app.cjs',
+  'the Pro shell: the drawer backdrop closes the drawer');
+delegated('#osc-nav-search', 'ui-flowbite-pro.cjs shell-search',
+  'the Pro shell: the workspace search filters and Enter opens');
+delegated('#osc-nav-search-drawer', 'ui-flowbite-pro.cjs shell-search',
+  'the Pro shell: the drawer\'s workspace search');
+delegated('#osc-related-menu', 'ui-current.cjs app.cjs link-integrity.cjs related-census',
+  'the page header\'s Related menu (lane A wave 3)');
 
 // The dock's oscillator group: which VCO the waveform group edits (synth/dock.js). Its effect
 // is read from the Studio store: the waveform group then shows that oscillator's waveform.
@@ -1908,7 +1939,8 @@ if (require.main === module) {
         }
         for (const f of FAMILIES) {
           if (ONLY && !ONLY.has(f.id)) continue;
-          const r = await bounded(runFamily(browser, f), { ms: 300000, what: `family ${f.id}` });
+          const r = await bounded(runFamily(browser, f), { ms: f.ms || FAMILY_MS,
+            what: `family ${f.id}` });
           report(r.ok ? 'PASS' : 'FAIL', `family:${f.id}`, r.ok ? JSON.stringify(r.detail)
             : r.error);
         }

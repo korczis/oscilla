@@ -29,4 +29,18 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-02'
-updated_at: '2026-11-02'
+updated_at: 2026-11-05T14:04:53Z
+started_at: 2026-11-05T14:04:23Z
+started_event: sha256:41470f54e4293d71187e7fd0baf4bc539bd048a28f00f441cbdb3c73ac498464
+verified_at: 2026-11-05T14:04:37Z
+verified_event: sha256:94d51f86bd7af7c681aa5ed3d743c770fa4cc6bdb976420dcac929aa83b39363
+completed_at: 2026-11-05T14:04:53Z
+completed_event: sha256:b5ae09fede69e8d6e3e3d0e600671e262ce3e0bd72f5c1d8fd2718bbab29d634
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/phone-whole.test.mjs; node scripts/ui-flowbite-pro-record.mjs --check"
+    result: "phone-whole 5/0 at main e8d54f8c (coarse pointer: whole octaves, 44 px white keys, no letters; fine pointer: 2 octaves below 560 px, 3 above, lettered; no type token under 12 px on a phone, 1280+ values unchanged); record equals the tree (sweep a3, 2026-11-05). Landed in train 3 #404 = main 2f442e11, shipped in v3.18.0; #404's Browser gate (layout.cjs) and Visual regression gate green in chromium, firefox and webkit; src/js/midi/keyboard-ui.js KBD_BTN 44 px on coarse pointers; tests/README.md:72."
+    artifact: "tests/unit/phone-whole.test.mjs"
+    commit: a510dd75a71418204ed6ed01f44ac8d5135ddc89
+    recorded_at: 2026-11-05T14:04:16Z

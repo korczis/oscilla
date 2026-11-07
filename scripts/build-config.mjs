@@ -7,16 +7,25 @@ export const CSS_ENTRY = 'src/styles/main.css';
 export const TAILWIND_ENTRY = 'src/styles/tailwind.css';
 export const TAILWIND_CONFIG = 'tailwind.config.cjs';
 
-// OSCILLA's dark theme is data-theme="dark" on <html> (never class="dark"). tailwind.config.cjs
-// points the dark: variant at it, but the flowbite plugin hard-codes a .dark ancestor whatever
-// darkMode says (its tooltip arrows; with forms: true, F002, its form controls too).
-export const DARK_THEME_SELECTOR = '[data-theme="dark"]';
+// OSCILLA's dark theme is every theme but data-theme="light" on <html> (never class="dark"):
+// tokens.css is dark on :root and ui/theme.js reads an absent attribute as dark (review #330
+// F3). tailwind.config.cjs points the dark: variant at it, but the flowbite plugin hard-codes a
+// .dark ancestor whatever darkMode says (its tooltip arrows; with forms: true, F002, its form
+// controls too).
+export const DARK_THEME_SELECTOR = ':root:not([data-theme="light"])';
 // A .dark class in a selector: not the escaped dark: variant class (.dark\:bg-opacity-80).
 const DARK_CLASS = /\.dark(?![\w\\-])/g;
+// A .dark compounded on its element, on either side (.dark.x, .dark[a], .dark:hover, .x.dark,
+// html.dark, [dir].dark): the rewrite would ask the root element for the rest of the compound,
+// a different rule. None is emitted today, so one is refused at build time rather than
+// rewritten (review #386 B3 and C1, af's R2). A .dark after a combinator, a comma or a "(" is
+// an ancestor and is rewritten.
+const DARK_COMPOUND = /\.dark(?=[.#[:])|(?<=[^\s>+~(,])\.dark(?![\w\\-])/;
 
 /**
  * PostCSS plugin run after Tailwind (build.mjs): rewrites every .dark class in a selector to
- * DARK_THEME_SELECTOR, so the plugin's dark rules follow OSCILLA's theme.
+ * DARK_THEME_SELECTOR, so the plugin's dark rules follow OSCILLA's theme. A compound .dark
+ * throws, naming the selector.
  */
 export function darkThemeSelector() {
   return {
@@ -24,6 +33,11 @@ export function darkThemeSelector() {
     Rule(rule) {
       DARK_CLASS.lastIndex = 0;
       if (!DARK_CLASS.test(rule.selector)) return;
+      const compound = rule.selectors.find((sel) => DARK_COMPOUND.test(sel));
+      if (compound) {
+        throw rule.error(`darkThemeSelector: a compound .dark (${compound}) would become a`
+          + ` selector on the root element; write it as a .dark ancestor`);
+      }
       rule.selectors = rule.selectors.map((sel) => sel.replace(DARK_CLASS, DARK_THEME_SELECTOR));
     },
   };
@@ -83,6 +97,11 @@ export const BUILD_TIME_ASSETS = ['flowbite', 'lucide-static', 'tailwindcss'];
 // notice. The gzip figure is "about" because this file is an
 // input of the source digest that dist carries: writing a figure here changes the digest and so
 // moves gzip by a few bytes (raw does not move: the digest has a fixed length).
+// F002 (the Pro admin shell) turns on preflight and the flowbite form base inside the cascade
+// layer tailwind-base, and adds the navbar, the sidebar rendered from the workspace registry and
+// 16 inlined lucide symbols, while it removes the legacy header's CSS: before (F001 cb5f5f7)
+// 2 902 810 B raw / 837 741 B gzip, after about 2 935 000 B raw / about 844 200 B gzip
+// (+32 KB raw, +6.4 KB gzip), within the budget.
 export const BUDGET = {
   rawBytes: 4_200_000,
   gzipBytes: 1_200_000,

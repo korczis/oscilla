@@ -29,6 +29,15 @@ export const FULLSCREEN_BLOCKED = 'Fullscreen is turned off here (an embedding p
   + 'setting). Studio already fills the window.';
 
 /**
+ * Whether a deferred focus (Expand's, the frame after its switch) must leave focus alone: the
+ * user moved it to `active`, a connected element that is neither `body` nor `from`, the element
+ * focused when the deferral began (#417 webkit, P8). Pure: elements in, a boolean out.
+ */
+export function focusMovedSince(active, from, body) {
+  return !!(active && active !== body && active !== from && active.isConnected);
+}
+
+/**
  * Whether `el` can go fullscreen in `doc` (standard or WebKit-prefixed API): { available,
  * reason } — reason is '' when available.
  */
@@ -118,6 +127,10 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
 
     /** EXPAND STUDIO (§130): the full workspace on the identical state. */
     studioExpand(nodeId = null) {
+      // Focus where Expand was activated: the deferred focus below goes to the graph only while
+      // focus is still there (or lost to <body>). A control the user moved to before that frame
+      // (a fast Tab to Back, a screen reader's jump) keeps it (#417 webkit, P8).
+      const from = document.activeElement;
       this.setWorkspace('studio');
       if (nodeId) {
         ctx.handle.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [nodeId] } });
@@ -125,10 +138,10 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
       requestAnimationFrame(() => {
         if (!ctx.editor) return;
         ctx.editor.onShow();
-        if (nodeId) {
-          ctx.editor.frameSelection();
-          ctx.editor.focusNode(nodeId);
-        } else ctx.editor.focusViewport();
+        if (nodeId) ctx.editor.frameSelection();
+        if (focusMovedSince(document.activeElement, from, document.body)) return;
+        if (nodeId) ctx.editor.focusNode(nodeId);
+        else ctx.editor.focusViewport();
       });
     },
 
@@ -143,12 +156,13 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
     studioBack() {
       this.setWorkspace(studioBackTarget(this.studio.backTo));
       // The button that had focus is now hidden: focus the compact Studio's Expand (the way
-      // back) where it is shown, else the workspace's tab, never <body> (WCAG 2.4.3; V431 U6).
+      // back) where it is shown, else the workspace's sidebar entry, never <body> (WCAG 2.4.3;
+      // V431 U6).
       requestAnimationFrame(() => {
         const a = document.activeElement;
         if (a && a !== document.body && a.getClientRects().length) return;
         const to = [document.querySelector('[data-osc="studio.compact.expand"]'),
-          document.querySelector('.osc-nav .osc-tab.is-active')]
+          document.querySelector('#osc-nav [aria-current="page"]')]
           .find((el) => el && el.getClientRects().length);
         if (to) to.focus({ preventScroll: true });
       });
@@ -175,6 +189,7 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
       const url = this.studioLinkUrl();
       if (!url) return null;
       try {
+        // data-osc-link: studio.copyLink
         window.history.replaceState(window.history.state, '', url);
       } catch (e) { /* file:// in some */ }
       this.studio.link = url;

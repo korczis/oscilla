@@ -1,0 +1,35 @@
+id: K184
+milestone: M067
+serves:
+  - "connected-instrument#piano-keyboard"
+title: "A tap always sounds: the shared note path holds a gate open for a stated minimum"
+slug: a-tap-always-sounds-the-shared-note-path-holds-a-gate-open
+priority: p0
+profile: implementation
+objective: "Lands as fix(audio) with or right after K178 (dev-53's one keys path), on the one note/gate path every player shares, never per surface. When a touchstart and its touchend (or a pointerdown and pointerup, a key down and up, a MIDI on and off) are handled in the same task, the gate opens and closes at the same audio time and the tap is silent: 26 found it on the XY pad under K171 (Playwright touchscreen.tap does it about 1 run in 10, and a fast real tap can), a violation of project.a-phone-sounds. After: an off scheduled at or before its on plus a stated minimum gate (one constant, in seconds, in the shared note path, documented with its reason) is deferred to that minimum; a longer note is unchanged; the release envelope runs from the deferred off; the voice census is 0 after it ends."
+why: "Relayed by oscilla-b0 and dev-53 to af on 2026-11-05 from oscilla-26's K171 finding; filed by af as the owner of the playback map (C030-C034, K180-K183). The fix belongs to the one playback owner so the Synth keys, the on-screen and computer keyboards, the XY pad, the drum pads and MIDI all inherit it."
+scope:
+  - "src/js/audio"
+  - "src/js/synth"
+  - "src/js/studio/adapters/voices.js"
+  - "src/js/midi"
+  - "tests/unit/min-gate.test.mjs"
+  - "tests/browser/iphone.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Forced stops are never deferred: Stop, Escape, page hide and a panic release end every gate at once, the minimum gate applies only to an ordinary note-off (98's review of #428, F5, 2026-11-05); a unit case holds a note shorter than the minimum, sends Stop, and sees the gate end at the stop time."
+  - "tests/unit/min-gate.test.mjs, failing on the merge base: on StudioFakeContext an on and an off at the same time (and an off before the on) schedule the gate's close at on + the minimum; an off later than the minimum is unchanged; the constant is imported from one module and no surface defines its own (an import census over src/js)."
+  - "A browser check in Chromium, Firefox and WebKit, and WebKit 390x844 touch with the gesture rule on (project.a-phone-sounds): a tap whose touchstart and touchend are dispatched in the same task on the XY pad, a Synth key and an on-screen piano key raises the destination tap above -60 dBFS within a named deadline, 20 of 20 times; the node census is 0 after release."
+  - "The pull request carries a reviewer's verdict (src/js/audio and src/js/synth are guarded; project.review-verdict)."
+  - "Browser checks run through tests/browser/lib/suite.cjs with lib/wait.cjs deadlines and assume no sample rate; tests/browser/timing-baseline.json does not grow."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/min-gate.test.mjs"
+  - "node tests/browser/iphone.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

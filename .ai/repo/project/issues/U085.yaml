@@ -1,0 +1,28 @@
+id: U085
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "About's workspace descriptions say only what each workspace shows"
+slug: about-s-workspace-descriptions-say-only-what-each-workspace
+priority: p0
+profile: implementation
+objective: "Lands as fix(about). src/index.html:2884-2915 says Synthesis comes 'with the compact Studio' (false: #osc-panel-studio carries data-osc-modes playground sequencer, src/index.html:1418, and is hidden from 1280 px), Playground lists 'the labs' (hidden from 1280 px, instrument.css:291-301), Analyzer's 'mic live spectrum and spectrogram' while the large spectrogram reads the output analyser (spectrogram-panel.js:1-3), Learn's range ends before 'Signal path' (data/learn.js), and Synth omits the XY pad (synth/panels/xy.js:7). After: each description names only panels visible in that workspace at 1536x1024, checked by a test that maps phrases to selectors."
+why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
+scope:
+  - "src/index.html"
+  - "tests/unit/about-current.test.mjs"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/about-current.test.mjs maps each named panel phrase of a workspace description to its selector and asserts that panel's data-osc-modes includes that workspace; Learn names LEARN_CARDS' first and last card; Synth names the XY tab. It fails today on Synthesis, Learn and Synth."
+  - "A reverted phrase makes the test fail (shown by a mutation in the PR body)."
+  - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
+  - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/about-current.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

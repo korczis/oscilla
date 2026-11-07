@@ -1,13 +1,13 @@
 id: K165
-milestone: M064
+milestone: M080
 serves:
-- "connected-instrument#patch-cables"
+- "studio-box-system#node-declaration"
 title: "The patch bay and the cable inspector render only from the port contract"
 slug: the-patch-bay-and-the-cable-inspector-render-only-from-the-port-contract
 priority: p1
 profile: implementation
 objective: "Owner program B (2026-11-03), slice B2. Every jack the patch bay draws (src/js/ui/patch/patch-bay.js, its Synth adapter src/js/synth/view/bay.js) and every cable the cable inspector shows takes its name, type, direction, cardinality, unconnected behaviour and refusal from the one port contract: describePort and canConnect of src/js/studio/ports.js and the port and cable kinds V619 declares (PORT_KINDS, CABLE_KINDS), never from per-module code. The Synth panel's own jack labels become the declared label the contract carries; a jack whose contract lacks a field shows the field's derived default and the matrix (K164) counts it. A refusal is canConnect's sentence, unchanged. The bay's drawing stays the synth-theme layer's (F013)."
-why: "The owner's program B of 2026-11-03 asks that the bay render only from the contract so a module needs no bay code of its own; agreed on the mesh with oscilla-26 (V619 declares, dev-53 renders)."
+why: "The owner's program B of 2026-11-03 asks that the bay render only from the contract so a module needs no bay code of its own; agreed on the mesh with oscilla-26 (V619 declares, dev-53 renders). Moved from M064 (connected-instrument#patch-cables) to M080 on 2026-11-05: the two studio-box-system resolutions planned into K165 need it to serve that intent, and intent validate refuses a second serves from a milestone the intent does not name (serves_outside_milestone). patch-cables loses K165 from its issues; its bay criterion is still decided by K165's tests/unit/patch-bay-contract.test.mjs (agreed b0 with af on the mesh), once K165 adds it to that criterion's ref. af's critique of 96daa67b (AMEND 18): no criterion's ref ran the test, the Before line was stale, and M080 gated none of K164-K166 or K185."
 depends_on:
 - "V619"
 - "K164"
@@ -18,15 +18,19 @@ scope:
 - tests/unit/patch-bay-contract.test.mjs
 - tests/browser/synth.cjs
 - tests/README.md
+- .ai/repo/project/intents/studio-box-system.yaml
+- .ai/repo/project/intents/connected-instrument.yaml
 - dist
 acceptance_criteria:
-- "Before: re-verified on main after the phone-bay train lands K150 and with it src/js/ui/patch/patch-bay.js (K150's record travels in that train, so it cannot be a dependency before it lands): patch-bay.js keeps a STATE_LABEL table of its own and reads PORT_VISUALS (src/js/studio/ports.js:55) for shape and noun, and the per-module part is the Synth adapter's labels (synth/view/bay.js panelSource, from panel.jacksOf), which the port contract does not hold."
+- "Before (re-verified at origin/main a19f1ff6; K150's src/js/ui/patch/patch-bay.js is on main, while K150's record is still open, so K150 is not a dependency): patch-bay.js keeps a STATE_LABEL table of its own (:84) and reads PORT_VISUALS (imported at :19 from src/js/studio/ports.js, used at :93) for shape and noun, and the per-module part is the Synth adapter's labels (synth/view/bay.js panelSource, from panel.jacksOf), which the port contract does not hold."
 - "After: every jack's name, shape, direction and refusal on the bay come from describePort, PORT_KINDS and canConnect; a fixture source whose port changes its contract changes the bay with no bay code changed."
 - "Negative cases: a port of an unknown type, a cable of an unknown kind and a port whose contract misses its label are refused or reported by name, never drawn with a guessed shape."
 - "Rollback: revert the merge commit; nothing changes the schema or a stored record."
 - "tests/unit/patch-bay-contract.test.mjs fails on the merge base (project.fail-first); synth.cjs s-connect and s-look stay green in chromium, firefox and webkit."
+- "A criterion decides it: the same pull request adds node --test tests/unit/patch-bay-contract.test.mjs to the ref of studio-box-system#node-declaration and of connected-instrument#patch-cables (today neither ref runs it), and M080's acceptance names K165."
+- "The bay is M123's one patch bay (G024, component-system#one-implementation-per-family, origin/chore/plan-unified-controls): this issue makes the bay render from the contract and adds no second bay; Arturia and iMS-20 are a quality bar, not a look, and project.visual-identity-lock v4 holds (the Flowbite Pro interface themed by OSCILLA's tokens around its own domain views; ADR 0061, accepted)."
 - "It changes no file under src/js/studio (ports.js and registry.js are 26's and guarded): the contract is read, never edited here; a change that needs one is 26's V619."
-- "Flowbite Pro: no class token, selector or inline style is added (node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite); scripts/size-report.mjs shows the gzip delta in the pull request body; synth-wording.test.mjs passes on every new sentence; tests/browser/iphone.cjs census reach does not fall."
+- "Flowbite Pro: no class token, selector or inline style is added (node scripts/ui-flowbite-pro-record.mjs --check passes with no rewrite); scripts/size-report.mjs shows the gzip delta in the pull request body; synth-wording.test.mjs passes on every new sentence; the phone checks do not fall: synth.cjs s-mobile and tests/browser/touch-audio.cjs pass (tests/browser/iphone.cjs, named before, is not on main)."
 validation:
 - node --test tests/unit/patch-bay-contract.test.mjs
 - node tests/browser/synth.cjs --only s-connect,s-look,s-mobile
@@ -34,4 +38,4 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-03'
-updated_at: '2026-11-03'
+updated_at: '2026-11-05'

@@ -6,7 +6,7 @@
 // - main.js composes the MIDI part and starts it with the component; V502: it hands the part
 //   the engine and the sequencer's live playing state, stopPlayback (Measure and Studio PLAY
 //   taking the output) stops MIDI notes, and so does starting the sequencer.
-// - tests/browser/midi.cjs runs in the release gate (test:browser) through the harness, its seam
+// - tests/browser/midi.cjs runs in the release gate (test:synth, K075) through the harness, its seam
 //   is tests/browser/lib/midi-stub.cjs (which names itself), and every page member the module
 //   reads on a MIDIAccess or a MIDIPort is one the stub declares and the browser suite compares
 //   with the real interface.
@@ -135,8 +135,11 @@ test('docs/midi.md quotes every sentence that refuses a MIDI note', async () => 
 test('tests/browser/midi.cjs runs in the release gate', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.ok(has('tests/browser/midi.cjs'));
-  assert.match(pkg.scripts['test:browser'], /node tests\/browser\/midi\.cjs/);
-  assert.match(pkg.scripts['test:release'], /npm run test:browser/);
+  // Run by test:synth's runner, which runs every suite it names (review #330 F5; K075 moved it
+  // from test:browser into the synth line's group).
+  assert.match(pkg.scripts['test:synth'],
+    /^node tests\/browser\/lib\/run-suites\.cjs (?:\S+ )*tests\/browser\/midi\.cjs(?: |$)/);
+  assert.match(pkg.scripts['test:release'], /npm run test:synth/);
   assert.equal(pkg.scripts['test:midi'], 'node tests/browser/midi.cjs');
 });
 

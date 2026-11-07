@@ -1,0 +1,27 @@
+id: U089
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "The roadmap check reports stamps that lag merged work"
+slug: the-roadmap-check-reports-stamps-that-lag-merged-work
+priority: p1
+profile: implementation
+objective: "Lands as feat(release). Counts trail landed work: 14 issues had no stamp although merged (M080 showed 1/13 instead of 6/17), and scripts/roadmap.mjs ignores majordomus plan drift's merged_not_recorded. After: roadmapProblems takes the drift report, and under OSC_ROADMAP_CHECK=1 a release with merged-not-recorded issues in an open milestone is named (warning at prepare, listed in the release PR body)."
+why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
+scope:
+  - "scripts/roadmap.mjs"
+  - "tests/unit/about-current.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "A drift fixture yields 'M080: K164 merged but not recorded' (fails today)."
+  - "release:prepare prints the list; the release PR body carries it."
+  - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
+  - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/about-current.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

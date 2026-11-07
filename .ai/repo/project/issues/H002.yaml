@@ -34,4 +34,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:05:48Z
+started_at: 2026-11-05T00:05:26Z
+started_event: sha256:8ad277266b70752a8520215a483f844812ee4d89f05ed71ffcd57ada284a65b5
+completed_at: 2026-11-05T00:05:48Z
+completed_event: sha256:05238de94fecf86c9dd078fdcbafa6763bac30e68c304622144c4ea900ea1990
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/restore-notices.test.mjs"
+    result: "Run on a scratch git-archive copy of origin/main: 14 tests, 14 pass, 0 fail."
+    artifact: "10db73d0938bce9d3c93df6acfd5ebe04759235d"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:05:09Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/380.yaml"
+    result: "Review verdict .ai/repo/reviews/380.yaml (verdict: merge) is on origin/main; landed as #345 via C-line train B (#380, merge 10db73d0); #345 touches no guarded path, the landing train carries the verdict, main commit 10db73d0938bce9d3c93df6acfd5ebe04759235d."
+    artifact: ".ai/repo/reviews/380.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:05:17Z

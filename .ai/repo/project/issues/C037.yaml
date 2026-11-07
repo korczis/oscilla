@@ -1,0 +1,46 @@
+id: C037
+milestone: M090
+serves:
+  - "coherent-state#one-output-owner"
+title: "The playback bus, slice 1: one claim API every player starts through"
+slug: one-bus-one-playback-owner-one-claim-api-one-stop-path
+priority: p0
+profile: implementation
+objective: "Lands as fix(bus), the first of the bus slices C034 expects (the playback bus C037, one Stop/Escape/hide path C050, the duplicate state removed C051), with C052 (one master-level writer), C053 (refusal text and the leave-workspace policy) and C055 (one transport clock) after it; the replaceState part of 96daa67b moved to C054. Line numbers at origin/main a19f1ff6. af's Play audit of main 6d5efa89 (v3.19.0) found no central bus: 8 players start and claim the output through 5 mechanisms: engine.play patched in place (withLabOptions, src/js/audio/lab-play-options.js:71-77, installed at src/js/main.js:269-274 with claimOutput('instrument')); the sequencer's _claimOutput (src/js/sequencer/editor.js:638, :659-663, :758) and the sequencer panel's onStart (src/js/labs/sequencer-panel.js:171); the Studio's onClaimOutput (src/js/studio/transport.js:230, :1652-1654, wired at src/js/ui/studio/workspace.js:282) and studioPlay (src/js/ui/studio/workspace/runtime.js:281, :314; workspace.js:365); the Synth arm (src/js/synth/ui.js:704-726 and :851-860, src/js/synth/studio-sink.js:35-54, src/js/synth/view/xy-tab.js:125); engine.noteOn with no claim; the riff audition claiming three times (src/js/studio/riffs/audition.js); MEASURE capture. After: one bus module, src/js/core/output-bus.js, grown from C036's one owner table, exposes claim(owner, reason) and release(owner), and every player calls claim before it sounds and release when it ends; the bus is injected where a guarded module cannot import ui/ (transport's onClaimOutput, the sequencer's engine.claimOutput), so no new import edge from audio/, studio/ or sequencer/ into ui/ is created."
+why: "The owner's complaint of 2026-11-04 (af session): 'nothing runs through one bus', 'Play does not work on most pages'. af's Play audit wf_99782352-a93 (root causes C, D and E, the duplication map) and the oscilla-b0 Total Coherence audit of main 68b117f3. af's critique of 96daa67b (BLOCKING 5): one issue held five changes with one vacuous fail-first (bus.test.mjs failed on import), cited workspace.js lines that no longer exist after E003 (the file has 577 lines), and missed the master-level writers and most stop handlers; it is split so each slice's done is re-checkable on its own. Cross-referenced, not re-derived: C030 (a visible Play on every workspace), C032 (the status-bar Play acts on the owner on screen) and C034 (the re-check of contradicted done stamps, which expects these slices), all on origin/chore/plan-nav-folds; K181, K182 and K184."
+scope:
+  - "src/js/core/output-bus.js"
+  - "src/js/ui/output-owner.js"
+  - "src/js/main.js"
+  - "src/js/audio/lab-play-options.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/sequencer/editor.js"
+  - "src/js/labs/sequencer-panel.js"
+  - "src/js/studio/transport.js"
+  - "src/js/ui/studio/workspace.js"
+  - "src/js/ui/studio/workspace/runtime.js"
+  - "src/js/synth/ui.js"
+  - "src/js/synth/studio-sink.js"
+  - "src/js/synth/view/xy-tab.js"
+  - "src/js/studio/riffs/audition.js"
+  - "tests/unit/output-claims.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "C036"
+acceptance_criteria:
+  - "Fail-first, against seams that exist on the merge base (no import of the new module): tests/unit/output-claims.test.mjs drives each of the 8 players through its existing entry (engine.play through withLabOptions, editor.play, the sequencer panel's onStart, the transport's play with an onClaimOutput spy, studioPlay, the Synth arm, engine.noteOn, the riff audition) with a recording claim function injected through the options those modules already take, and asserts exactly one claim per start naming the player; on the merge base it fails by assertion on engine.noteOn (no claim) and the audition (three claims)."
+  - "A static scan over src/js finds no start of sound outside a claim: engine.play, engine.noteOn, studioPlay, editor.play and the Synth arm each call the bus's claim first; a mutation that removes one claim call fails the scan naming the file and line."
+  - "The newest-action-wins rule of C002 and the measurement refusal hold for every player (one case each); tests/unit/output-owner.test.mjs and tests/unit/keys-registry.test.mjs pass unchanged."
+  - "tests/browser/app.cjs starts each player and waits with until() (named deadlines) for the bus to name it as owner, in Chromium, Firefox and WebKit through the suite harness; tests/browser/touch-audio.cjs (project.a-phone-sounds, its gesture rule on) still sounds on a tap."
+  - "Risk named: K184 (a minimum gate on the shared note path, origin/chore/plan-nav-folds) and K178 (one Keys node, origin/feat/k178-*) change the same note path; whichever lands second rebases onto the bus's claim, and one lane owns src/js/midi/* meanwhile."
+  - "Guarded paths marked: src/js/audio/*, src/js/studio/*, src/js/synth/* (v2): prismatic-majordomus-98 writes the verdict; src/js/core/output-bus.js, src/js/ui/*, src/js/labs/*, src/js/sequencer/* and main.js are unguarded under v2 and judged by the screens seat of Q091 once R031 lands. Lane: dev-53 with oscilla-26 for the Studio part."
+validation:
+  - "node --test tests/unit/output-claims.test.mjs tests/unit/output-owner.test.mjs tests/unit/keys-registry.test.mjs"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/touch-audio.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-05
+updated_at: 2026-11-05

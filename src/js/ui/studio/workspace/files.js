@@ -345,6 +345,7 @@ export function createWorkspaceFiles(ctx, svc, ops) {
       if (ctx.dirty && ctx.dirty.isDirty(ctx.handle.getModel())) {
         this.notify('warning', 'Pattern not opened', 'This Studio has unsaved changes, so the '
           + 'pattern did not replace them. Save or export them in Studio, then open the pattern '
+          // data-osc-link: alert.action
           + 'again.', { action: { href: '#m=studio', text: 'Open Studio' } });
         ops.announce('The pattern was not opened: this Studio has unsaved changes.',
           { assertive: true });

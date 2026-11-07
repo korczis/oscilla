@@ -11,6 +11,7 @@
 //            onActivateNode(id) }
 //   editor.render()                     project the model and selection (keyed, incremental)
 //   editor.frameAll(), frameSelection(), zoomBy(f), panBy(dx, dy), setView(view)
+//   editor.openView()   a document was opened: fitted when its view is the default (K170)
 //   editor.toggleMinimap(on?) -> shown, minimapLayout() -> layout | null     (§153, V602:
 //                        graph-minimap.js; view state only, it moves the viewport like a pan)
 //   editor.addNodeAt(type, at?, { connectFrom }) -> result     at: logical point (default centre)
@@ -27,6 +28,13 @@
 // The pointer gestures (drag, cable, pan, pinch, wheel, tap-connect) are graph-gestures.js, its
 // pointer model is stated there; the keyboard and selection commands are graph-commands.js
 // (plan K006). This module owns the DOM, the view and the keyed render.
+//
+// The model's graph view is the view shown, from the first frame (plan K170, graph-fit.js): the
+// editor's own fit (a document opened with the default view, Frame All) commits at once as a
+// presentation-only VIEW_SET (outside studioHash, no undo entry, never dirty), and a view still
+// in fit mode fits again when the viewport changes size (the window, the docked keys); any other
+// view change leaves fit mode, so a resize never changes a zoom the user chose. Gesture views
+// commit as before: at the gesture's end, or VIEW_COMMIT_MS after the last zoom or pan step.
 
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import { summarizeGraph } from '../../studio/a11y.js';
@@ -39,6 +47,7 @@ import { coarsePointer, h, s, setAttr, setText, replaceChildren } from './graph-
 import { createMinimap } from './graph-minimap.js';
 import { createGraphGestures } from './graph-gestures.js';
 import { createGraphCommands } from './graph-commands.js';
+import { createViewFit } from './graph-fit.js';
 
 const VIEW_COMMIT_MS = 250;
 
@@ -95,7 +104,6 @@ export function createGraphEditor(host, svc) {
   // ---------------------------------------------------------------- state
   let view = normalizeView(store.getModel().view.graph);
   let size = { w: 0, h: 0 };
-  let framedOnce = false;
   const nodeEls = new Map(); // id -> { el, sig, node, ports: Map key -> el, anchors: Map }
   const edgeEls = new Map(); // id -> { g, hit, line, sig }
   let viewTimer = null;
@@ -137,6 +145,7 @@ export function createGraphEditor(host, svc) {
   }
 
   function setView(v, commit = true) {
+    fit.leave();
     view = normalizeView(v);
     applyView();
     if (commit) commitView();
@@ -162,9 +171,17 @@ export function createGraphEditor(host, svc) {
   /** Fit options: a coarse pointer keeps port targets at least 24 px (COARSE_FIT_MIN_ZOOM). */
   const fitOpts = () => (coarsePointer() ? { minZoom: COARSE_FIT_MIN_ZOOM } : {});
 
+  // Fit mode (graph-fit.js): the editor's own fits apply here and commit at once.
+  const fit = createViewFit({ store, size: () => (measureSize(), size),
+    bounds: () => boundsOf(nodeRects()), options: fitOpts, apply: (v) => {
+      if (viewTimer) clearTimeout(viewTimer);
+      viewTimer = null;
+      view = v;
+      applyView();
+    } });
+
   function frameAll() {
-    measureSize();
-    setView(fitView(boundsOf(nodeRects()), size, fitOpts()));
+    fit.frame();
     return true;
   }
 
@@ -434,13 +451,10 @@ export function createGraphEditor(host, svc) {
     svg.setAttribute('viewBox', `${x} ${y} ${w} ${hgt}`);
   }
 
+  // A view still in fit mode fits the new size (the window, the docked keys: K170).
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
     measureSize();
-    if (size.w > 0 && size.h > 0 && !framedOnce) {
-      framedOnce = true;
-      const v = model().view.graph;
-      if (v.panX === 0 && v.panY === 0 && v.zoom === 1) frameAll();
-    }
+    fit.resize();
     for (const entry of nodeEls.values()) entry.anchors = null;
     routeAll();
   }) : null;
@@ -498,11 +512,12 @@ export function createGraphEditor(host, svc) {
   const isChrome = (el) => !!el && [controls, banner, minimap.el].some((c) => c.contains(el));
   gestures = createGraphGestures({ ...base, host, preview, marquee, nodeEls, edgeEls,
     banner: { el: banner, text: bannerText, cancel: bannerCancel },
-    setLocalView: (v) => { view = v; applyView(); }, commitView, nodeRects, anchorOf,
-    routeEdge, routeAll, render, isChrome, onPress: commands.onPress });
+    setLocalView: (v) => { fit.leave(); view = v; applyView(); }, commitView, nodeRects,
+    anchorOf, routeEdge, routeAll, render, isChrome, onPress: commands.onPress });
 
   applyView();
   render();
+  fit.open();
 
   return {
     render,
@@ -512,6 +527,8 @@ export function createGraphEditor(host, svc) {
     panBy: (dx, dy) => setView(panBy(view, dx, dy)),
     setView,
     getView: () => ({ ...view }),
+    openView: () => { fit.open(); },
+    fitted: () => fit.fitted(),
     toggleMinimap,
     minimapLayout: () => minimap.layout(),
     addNodeAt: commands.addNodeAt,
@@ -551,11 +568,7 @@ export function createGraphEditor(host, svc) {
       measureSize();
       for (const entry of nodeEls.values()) entry.anchors = null;
       routeAll();
-      if (!framedOnce && size.w > 0) {
-        framedOnce = true;
-        const v = model().view.graph;
-        if (v.panX === 0 && v.panY === 0 && v.zoom === 1) frameAll();
-      }
+      fit.resize();
     },
     /** Node element geometry for tests and the compact projection: { id: { x, y, w, h } }. */
     debugInfo() {

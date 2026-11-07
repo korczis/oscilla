@@ -203,11 +203,12 @@ is a review rejection even when every functional test passes.
   "analog", "vintage", "warm" or "fat" claim in the Synth's code, markup or Learn copy.
 - `npm run test:visual`, in the release gate and CI's visual job (ADR 0029): a pixel
   regression, beyond the accepted tolerance, of a view with an accepted reference
-  (`scripts/visual-gate.mjs`, `scripts/visual-measure.mjs`, `scripts/visual-studio.mjs`;
+  (`scripts/visual-gate.mjs`, `scripts/visual-measure.mjs`, `scripts/visual-studio.mjs`,
+  `scripts/visual-synth.mjs` for the Synth panel and bay in both themes, desktop and phone;
   regions and values under `tests/visual/`). A re-skinned view gets a new reference, and
   accepting it, with its reason, is the review.
-- `tests/browser/synth.cjs` check `s-look` (in `npm run test:studio`: CI's studio job and the
-  release gate): on the rendered Synth panel, in the dark and the light theme, no legacy `svg`
+- `tests/browser/synth.cjs` check `s-look` (in `npm run test:synth`, which CI's studio job runs
+  after `test:studio`, and the release gate): on the rendered Synth panel, in the dark and the light theme, no legacy `svg`
   stroke on a jack or a plate, every jack ring and every cable colour at 3:1 or more on the
   bay card, every plate label at 4.5:1 or more on its plate, a keyboard-focused jack's ring
   shown, and a card that folds with `aria-expanded`. A re-skinned surface outside the Synth

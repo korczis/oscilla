@@ -1,0 +1,32 @@
+id: U088
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "Process milestones fold under Process on About (Q098)"
+slug: process-milestones-fold-under-process-on-about-q098
+priority: p1
+profile: implementation
+objective: "Lands as fix(about) after Q098. Six Q-only milestones (M121, M119, M104, M088, M084, M070) and M005 'Specification tail' sit under Now, M063 under Next. After: scripts/roadmap.mjs derives a process flag from each milestone's open issues (all Q) or M005 and About lists them in a folded 'Process' group."
+why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
+scope:
+  - "scripts/roadmap.mjs"
+  - "src/data/roadmap.json"
+  - "src/js/ui/about.js"
+  - "src/index.html"
+  - "tests/unit/about-current.test.mjs"
+  - "dist"
+depends_on:
+  - "Q098"
+acceptance_criteria:
+  - "No milestone title under Now, Next or Later matches /^Owner decisions of |^Specification tail$/, and each appears under Process (fails today)."
+  - "The flag is derived, never a hand list (a test adds a fixture Q-only milestone and sees it under Process)."
+  - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
+  - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/about-current.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'

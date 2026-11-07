@@ -190,9 +190,9 @@ test('mutation: a copied step drifts, here or in ci.yml', () => {
   assert.match(onlyProblem(CI, here, 'mirror: unit step'), /step 4/);
   const there = mutate(CI,
     'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n'
-    + '        timeout-minutes: 45\n',
+    + '        timeout-minutes: 60\n',
     'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n'
-    + '        timeout-minutes: 50\n');
+    + '        timeout-minutes: 65\n');
   onlyProblem(there, MAIN, 'mirror: browser step 6');
   const dropped = mutate(MAIN, '      - name: Committed dist/index.html matches a clean rebuild\n'
     + '        run: npm run build:check\n', '');
@@ -206,9 +206,9 @@ test('mutation: the Majordomus pin or a job budget differs from ci.yml', () => {
   const pinned = CI.match(/\n {6}MJ_VERSION: (\S+)\n/)[1];
   const version = mutate(CI, `      MJ_VERSION: ${pinned}\n`, `      MJ_VERSION: ${pinned}.1\n`);
   onlyProblem(version, MAIN, 'mirror: knowledge.env');
-  const budget = mutate(MAIN, '    name: unit, build, artifact rules\n    runs-on: ubuntu-latest\n'
+  const budget = mutate(MAIN, '    name: unit, build, artifact rules\n    runs-on: ubuntu-24.04\n'
     + '    timeout-minutes: 10\n', '    name: unit, build, artifact rules\n'
-    + '    runs-on: ubuntu-latest\n    timeout-minutes: 30\n');
+    + '    runs-on: ubuntu-24.04\n    timeout-minutes: 30\n');
   onlyProblem(CI, budget, 'mirror: unit.timeout-minutes');
 });
 

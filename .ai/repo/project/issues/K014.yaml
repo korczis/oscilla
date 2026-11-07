@@ -31,4 +31,23 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-05T00:07:23Z
+started_at: 2026-11-05T00:07:08Z
+started_event: sha256:d3bee6f8adf45de0158d25548a09c381c7461bc697bc37b24e7f5e923ae25cd2
+completed_at: 2026-11-05T00:07:23Z
+completed_event: sha256:6709a2ae86586920b6655665739bdb3c27968dccb4def948d5609c9d7de3dba5
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/studio-template-pack.test.mjs && node --test tests/unit/v31-studio-templates.test.mjs"
+    result: "Run on a scratch git-archive copy of origin/main: template-pack 19/19 pass, v31-studio-templates 52/52 pass."
+    artifact: "447bb27b2747c444cc518f9b9fa57da1f54028bb"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:06:53Z
+  - covers: verified
+    type: artifact
+    command: "cat .ai/repo/reviews/403.yaml"
+    result: "Review verdict .ai/repo/reviews/403.yaml (verdict: merge) is on origin/main; landed as #403 via merge train 4 (#410, merge 447bb27b); 410.yaml also says merge, main commit 447bb27b2747c444cc518f9b9fa57da1f54028bb."
+    artifact: ".ai/repo/reviews/403.yaml"
+    commit: 6d5efa8969bedeee1516b5d9c025e35296b1acaf
+    recorded_at: 2026-11-05T00:07:00Z

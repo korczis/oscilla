@@ -8,7 +8,8 @@
 //     modules (on Engines, the chosen one), after any module of another tab that is removed and
 //     breaks a normal (an engine gone from the shared chain silences what is before it)
 
-import { knobModel, knobSvg } from './knob.js';
+import { choiceLayout, choiceSvg, knobModel, knobSvg, selectorSvg } from './knob.js';
+import { ariaAttrs } from '../../ui/synth/knob.js';
 import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
 import { CHIP, LABEL, NOTE, VALUE } from '../../ui/synth/label.js';
 import { plateSvg } from '../../ui/synth/plate.js';
@@ -65,45 +66,85 @@ const named = (cid) => `aria-labelledby="synth-m-${cid.split('.')[0]} ${cid}-lab
 const why = (cid, reason) => (reason ? `<span class="sr-only" id="${cid}-why">${esc(reason)}</span>`
   : '');
 
+const disabled = (cid, reason) => (reason
+  ? ` aria-disabled="true" aria-describedby="${cid}-why"` : '');
+
+/** A knob: the layer's (view/knob.js knobSvg), its ARIA N003's position 0..1000 with the value
+ *  and unit as text (ariaAttrs), its focus ring the drawing's, shown on keyboard focus. The
+ *  readout is one line: the value with a short physical unit only (knobModel format). */
 function knobHtml(cid, c, value, reason, tokens) {
-  const m = knobModel(c.param);
-  const dis = reason ? ` aria-disabled="true" aria-describedby="${cid}-why"` : '';
+  const a = ariaAttrs(value, c.param);
   return `<div class="flex w-20 flex-col items-center gap-1" data-control="${cid}">`
     + `<span class="${LABEL} text-center leading-tight" id="${cid}-label">${esc(c.label)}</span>`
-    + `<div role="slider" tabindex="0" data-knob="${cid}" ${named(cid)} `
-    + `aria-valuemin="${c.param.min}" aria-valuemax="${c.param.max}" aria-valuenow="${value}" `
-    + `aria-valuetext="${esc(m.text(value))}" aria-orientation="vertical"${dis} `
-    + 'class="h-16 w-16 cursor-ns-resize touch-none select-none rounded-full outline-none '
-    + 'focus-visible:ring-2 focus-visible:ring-primary-500">'
+    + `<div role="${a.role}" tabindex="0" data-knob="${cid}" ${named(cid)} `
+    + `aria-valuemin="${a['aria-valuemin']}" aria-valuemax="${a['aria-valuemax']}" `
+    + `aria-valuenow="${a['aria-valuenow']}" aria-valuetext="${esc(a['aria-valuetext'])}" `
+    + `aria-orientation="vertical"${disabled(cid, reason)} `
+    + 'class="group h-16 w-16 cursor-ns-resize touch-none select-none rounded-full outline-none">'
     + `${knobSvg({ uid: cid, value, param: c.param, tokens, disabled: !!reason })}</div>`
-    + `<output class="${VALUE}" data-value="${cid}">${esc(m.format(value))}</output>`
-    + `${why(cid, reason)}</div>`;
+    + `<output class="${VALUE} whitespace-nowrap" data-value="${cid}">`
+    + `${esc(knobModel(c.param).format(value))}`
+    + `</output>${why(cid, reason)}</div>`;
 }
 
 const SEG = 'h-11 min-w-[2.75rem] px-2 text-xs font-medium border border-solid '
   + 'border-gray-300 dark:border-gray-600 first:rounded-l-lg last:rounded-r-lg -ml-px first:ml-0 '
   + 'focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500';
-const SEG_ON = 'bg-primary-600 text-white dark:bg-primary-500';
+// White on primary-600 is 5.2:1; on primary-500 it was 3.68:1, under the 4.5:1 text floor.
+const SEG_ON = 'bg-primary-600 text-white';
 const SEG_OFF = 'bg-white text-gray-900 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-200 '
   + 'dark:hover:bg-gray-600';
 
-function switchHtml(cid, c, value) {
-  const opts = c.param.options.map(([v, label]) => `<button type="button" role="radio" `
-    + `aria-checked="${v === value}" data-option="${cid}" data-v="${esc(v)}" `
-    + `class="${SEG} ${v === value ? SEG_ON : SEG_OFF}">${esc(label)}</button>`).join('');
+/** A choice's option: an invisible 44 px radio over its legend (the legend is the drawing's
+ *  silk-screened text), its name that legend for a screen reader. It shows only its target: a
+ *  thin ring on hover and Pro's focus ring on keyboard focus, both inside its box. */
+const RADIO = 'block h-full w-full rounded-md border-0 bg-transparent p-0 text-xs '
+  + 'hover:ring-1 hover:ring-inset hover:ring-gray-400 dark:hover:ring-gray-500 '
+  + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-inset '
+  + 'focus-visible:ring-primary-500';
+
+/** A choice (V8 of the SYN review): ONE control, the layer's switch by its position count (a
+ *  lever for two, a slide for three or four, a detented rotary for five to eight, a rotary with
+ *  a window for nine to twelve), drawn at 1:1 with its legends round it as panel text, so no
+ *  legend group can wrap (V9). A dial wider than the narrowest plate (CHOICE_MAX_PX) has its
+ *  legends packed below it (view/knob.js choiceLayout), so every choice fits every plate at
+ *  every width. Each option is a radio button over its legend at the layout's 44 px hit box,
+ *  named by that legend (a packed grid's "n · label"); the drawing itself takes no press.
+ *  The radios run in the drawn order (review of W1c, finding 1): a lever's and a slide's top
+ *  to bottom (the core draws option 0 at the bottom), a dial's clockwise, a grid's row by row,
+ *  so Tab and a screen reader meet the top legend first. The group is one tab stop (finding
+ *  2): the checked radio has tabindex 0, every other -1 (or the first drawn, if none is). */
+function switchHtml(cid, c, value, reason, tokens) {
+  const L = choiceLayout(c.param);
+  const b = L.box;
+  const drawn = L.style === 'toggle' || L.style === 'slide'
+    ? [...L.options].sort((p, q) => p.legend.y - q.legend.y) : L.options;
+  const stop = drawn.find((o) => o.value === value) || drawn[0];
+  const radios = drawn.map((o) => `<foreignObject x="${o.hit.x}" y="${o.hit.y}" `
+    + `width="${o.hit.width}" height="${o.hit.height}"><button type="button" role="radio" `
+    + `aria-checked="${o.value === value}" data-option="${cid}" data-v="${esc(o.value)}" `
+    + `tabindex="${o === stop ? 0 : -1}" `
+    + `class="${RADIO} ${reason ? 'cursor-not-allowed' : 'cursor-pointer'}">`
+    + `<span class="sr-only">${esc(o.legend.text)}</span></button></foreignObject>`).join('');
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
-    + `<div role="radiogroup" ${named(cid)} class="flex flex-wrap">${opts}</div>`
-    + '</div>';
+    + `<svg viewBox="${b.x} ${b.y} ${b.width} ${b.height}" width="${b.width}" height="${b.height}" `
+    + `role="radiogroup" ${named(cid)}${disabled(cid, reason)} class="shrink-0 overflow-visible" `
+    + `data-style="${L.style}">`
+    + `${choiceSvg({ value, param: c.param, tokens, disabled: !!reason })}${radios}</svg>`
+    + `${why(cid, reason)}</div>`;
 }
 
-function toggleHtml(cid, c, value, reason) {
-  const dis = reason ? ` aria-disabled="true" aria-describedby="${cid}-why"` : '';
+/** A toggle: the layer's two-position switch at its state, beside its On/Off button. */
+function toggleHtml(cid, c, value, reason, tokens) {
   return `<div class="flex flex-col gap-1" data-control="${cid}">`
     + `<span class="${LABEL}" id="${cid}-label">${esc(c.label)}</span>`
+    + '<div class="flex items-center gap-2">'
+    + `${selectorSvg({ value: !!value, param: c.param, tokens, disabled: !!reason })}`
     + `<button type="button" aria-pressed="${!!value}" data-toggle="${cid}" `
-    + `${named(cid)}${dis} class="${SEG} rounded-lg ${value ? SEG_ON : SEG_OFF}">`
-    + `${value ? 'On' : 'Off'}</button>${why(cid, reason)}</div>`;
+    + `${named(cid)}${disabled(cid, reason)} class="${SEG} rounded-lg `
+    + `${value ? SEG_ON : SEG_OFF}">${value ? 'On' : 'Off'}</button></div>`
+    + `${why(cid, reason)}</div>`;
 }
 
 /**
@@ -127,8 +168,10 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
   const head = `<header class="relative flex items-center justify-between gap-2 px-1 pt-1">`
     + `<h3 id="${hid}" class="text-sm font-bold tracking-widest text-gray-900 dark:text-white">`
     + `<button type="button" data-collapse="${m.id}" aria-expanded="${!collapsed}" `
-    + `aria-controls="${bid}" class="flex h-11 items-center gap-2 rounded-lg px-2 `
-    + 'tracking-widest focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">'
+    + `aria-controls="${bid}" class="flex h-11 items-center gap-2 rounded-lg border-0 `
+    + 'bg-transparent px-2 tracking-widest text-gray-900 hover:text-primary-600 '
+    + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-white '
+    + 'dark:hover:text-primary-400">'
     + `<span aria-hidden="true" class="text-xs">${collapsed ? '▸' : '▾'}</span>${esc(m.label)}`
     + `</button></h3><span class="px-2 ${NOTE}">`
     + `${esc(m.def.displayName)}</span></header>`;
@@ -153,9 +196,9 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
   const controls = panel.faceOf(m.id).map((c) => {
     const cid = `${m.id}.${c.key}`;
     const value = controlValue(c, node, model, panel);
-    if (c.kind === 'switch') return switchHtml(cid, c, value);
     const reason = controlReason(m, node, c, model, panel);
-    if (c.kind === 'toggle') return toggleHtml(cid, c, value, reason);
+    if (c.kind === 'switch') return switchHtml(cid, c, value, reason, tokens);
+    if (c.kind === 'toggle') return toggleHtml(cid, c, value, reason, tokens);
     if (c.kind === 'list') {
       return `<p class="${VALUE}">${esc(c.label)}: ${value.length} values (edit in Studio)</p>`;
     }
@@ -168,7 +211,8 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     return `<span class="${CHIP}" title="Fixed by the panel">${esc(f.label)} `
       + `${esc(shown)}</span>`;
   }).join('');
-  return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
+  return '<section class="relative overflow-hidden bg-white rounded-lg shadow '
+    + 'dark:bg-gray-800" '
     + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}<div id="${bid}">`
     + `<div class="relative flex flex-wrap items-start gap-x-2 gap-y-3 px-3 pb-3 pt-2">`
     + `${controls}</div>`

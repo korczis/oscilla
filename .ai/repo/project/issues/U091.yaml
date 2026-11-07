@@ -1,0 +1,28 @@
+id: U091
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "Each Engineering statement on About is bound to the evidence that proves it"
+slug: each-engineering-statement-on-about-is-bound-to-the-evidence
+priority: p1
+profile: implementation
+objective: "Lands as fix(about). 'The interface is compared against a visual reference' overstates (references exist for Playground, Measure and Studio, in Chromium only, ci.yml:400-420); 'the committed file is the deployed file' omits the stamped metadata region (pages.yml:58-63). After: each Engineering item carries a data-claim id that resolves in docs/CLAIMS.yaml with a deciding test, and the two sentences state their real scope."
+why: "The owner pasted the live About page (https://korczis.github.io/oscilla/#m=about, sections B What comes next, C Origin, D Engineering) on 2026-11-05 with 'vylad vse, deploy often, issue by issue, milestone by milestone, intent by intent' after complaining the top-nav pages are obsolete, not connected, not live and poor. af's read-only About audit (workflow wf_8aea8491-b53, three maps each adversarially verified, main 68b117f3; synthesis in the af session scratchpad about-audit-synthesis.md) found the live page byte-identical to main and the defects this issue names."
+scope:
+  - "src/index.html"
+  - "docs/CLAIMS.yaml"
+  - "tests/unit/about-engineering.test.mjs"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/about-engineering.test.mjs: every Engineering li has a data-claim resolving to a claim with a test; the visual sentence names exactly the workspaces with references; the deployed-file sentence names the stamped region. It fails today."
+  - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
+  - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
+  - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+validation:
+  - "node --test tests/unit/about-engineering.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-05'
+updated_at: '2026-11-05'
