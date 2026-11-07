@@ -48,6 +48,10 @@ test('the measure: English sentences are found, Czech ones and short labels are 
   ['Press Play to hear the tone.', 'Close the dialog and return']);
   const src = "// the comment is not shown\nconst t = 'Nothing plays until you press Play.';";
   assert.deepEqual(moduleProse(src), ['Nothing plays until you press Play.']);
+  // a3's review: a template shorter than the minimum must not pair with the next backtick.
+  const code = 'const a = `${v} BPM`;\nif (!seen.has(key)) { return; } // the code is not prose\n'
+    + 'const b = `${n} kroků je zapnutých`;';
+  assert.deepEqual(moduleProse(code), [], 'two templates, no span of code read as prose');
 });
 
 test('mutation: a new English sentence in a file is named', () => {

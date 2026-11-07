@@ -16,7 +16,7 @@ tags: [language, ui, release, process]
 The owner's order of 2026-11-07, recorded verbatim with the answer to its clarifying question
 in plan issue Q104: "odted ten artifakt musi mit ceskou prozu, vzdy a vsude, musi byt
 enforced", and, asked which artifact, "Vsechno uvedene": the app, the claude.ai artifacts, the
-release notes and GitHub. The app showed 3 183 English sentences in 269 files when the rule
+release notes and GitHub. The app showed 3 236 English sentences in 263 files when the rule
 was adopted; a translation of that size lands file by file, so the rule is a ratchet first:
 nothing new in English, and every translated file lowers its count.
 
@@ -36,7 +36,8 @@ sentences exceed its baseline, a file not in the baseline with any, a translated
 baseline was not lowered, and a baseline total that is not the sum of its counts each fail;
 mutation cases prove the measure finds an English sentence and passes a Czech one and a short
 label. The measure is `scripts/czech-prose.mjs` (three or more words, two English function
-words, no Czech letter with a diacritic), one home for the test and any later check.
+words, no Czech letter with a diacritic; the literals come from the one JavaScript lexer,
+`scripts/ui-catalog/scan.mjs` lexJs), one home for the test and any later check.
 
 The release notes, pull request bodies and published pages are held by review and by the
 issues that automate them (Q104's follow-ups); until those land, this rule binds the agents.

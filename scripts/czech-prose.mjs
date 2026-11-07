@@ -17,6 +17,7 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { lexJs } from './ui-catalog/scan.mjs';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const BASELINE_REL = 'tests/unit/czech-prose-baseline.json';
@@ -47,15 +48,15 @@ export function htmlProse(html) {
   return out;
 }
 
-/** The English sentences among the string literals of a module, comment lines excluded. */
+/**
+ * The English sentences among the string literals and templates of a module. The literals come
+ * from the repository's one JavaScript lexer (scripts/ui-catalog/scan.mjs lexJs), which tells
+ * comments, strings, templates and regular expressions apart, so a short template can never pair
+ * with the next one's backtick and turn a span of code into a "sentence" (a3's review of #469).
+ */
 export function moduleProse(source) {
-  const code = source.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
-  const out = [];
-  for (const m of code.matchAll(/'((?:[^'\\\n]|\\.){12,})'|`((?:[^`\\]|\\.){12,})`/g)) {
-    const s = m[1] || m[2] || '';
-    if (isEnglishProse(s)) out.push(s);
-  }
-  return out;
+  return lexJs(source).strings.map((s) => s.text)
+    .filter((t) => t.length >= 12 && isEnglishProse(t));
 }
 
 function jsFiles(root, dir) {
