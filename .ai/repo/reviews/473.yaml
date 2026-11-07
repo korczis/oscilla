@@ -24,12 +24,19 @@
 # Q104 test runs every generated line through czech-prose's isEnglishProse and refuses the old
 # heading words.
 #
-# Verdict: merge.
+# Round 2 at 65c1835d (2b's answer to F1 and F2): the Q104 test excludes a line only when it ends
+# with the commit link releaseNotes writes ([sha7](.../commit/sha40)) and asserts that exactly the
+# four fixture commit lines are excluded (the provenance Commit line has no such ending, so it is
+# measured); project.czech-prose says the generated notes are Czech from the release carrying #473
+# and that the Releases published before stay as written. The new digest c3b8705d...1522fbd (the
+# test changed); release-publish, czech-prose and knowledge-integrity 79/0; fail-first 1/1.
+#
+# Verdict: merge. F1 and F2 are closed.
 schema: review-verdict/v1
 pr: 473
 verdict: merge
 reviewer: oscilla-a3 (claude-code 12f1e384)
-content: f7fbe18a38bec368eac564a7bdd2d49bffccee770aaf69312f87b41893eb7938
+content: c3b8705da083db1ed1769b35fb47e229b5739d741ff82615d7e68e28e1522fbd
 findings:
-  - { id: F1, severity: P3, status: open, title: "the Q104 test excludes the listed subjects by the fixture's own first words (drop, new, stop, tidy, **): a generated line beginning with one of them would escape; exclude by the commit lines releaseNotes builds (their sha link) instead" }
-  - { id: F2, severity: P3, status: open, title: "published Releases up to v3.25.0 keep their English notes; the rule binds new notes only, so say so in project.czech-prose or regenerate them by gh release edit in a follow-up" }
+  - { id: F1, severity: P3, status: closed, title: "the Q104 test excludes the listed subjects by the fixture's own first words (drop, new, stop, tidy, **): a generated line beginning with one of them would escape; exclude by the commit lines releaseNotes builds (their sha link) instead" }
+  - { id: F2, severity: P3, status: closed, title: "published Releases up to v3.25.0 keep their English notes; the rule binds new notes only, so say so in project.czech-prose or regenerate them by gh release edit in a follow-up" }
