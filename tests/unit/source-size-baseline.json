@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 308000,
+    "src/index.html": 309000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -204,6 +204,12 @@
       "cap": 308000,
       "pr": 442,
       "reason": "the 3.22 About station (project.about-names-current-release) takes src/index.html 474 bytes past 307 100; the release adds no other markup"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 309000,
+      "pr": 457,
+      "reason": "the 3.23 About station (project.about-names-current-release) takes src/index.html 134 bytes past 308 000; the release adds no other markup, and R032 (the derived-versioning train, next) moves the timeline to data"
     }
   ]
 }
