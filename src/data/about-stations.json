@@ -182,6 +182,13 @@
       "summary": "The Pro admin shell with its sidebar and page header on every workspace, Related links, About and empty states driven by one workspace registry, one declaration per UI component, and the Synth's render budgets measured against the host it runs on",
       "commit": "bc4b154",
       "datetime": "2026-11-05T21:31:23+01:00"
+    },
+    {
+      "release": "3.23",
+      "title": "Truth",
+      "summary": "About names only what each workspace shows, the release its roadmap describes and every library the page ships, the Sequencer's blocks stay readable at phone width, Play stops saying pressed when the sequence stops elsewhere, and a source pack feeds an LLM project",
+      "commit": "d51f9b2",
+      "datetime": "2026-11-07T05:37:23+01:00"
     }
   ]
 }
