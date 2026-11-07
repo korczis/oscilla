@@ -1,0 +1,27 @@
+id: K210
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#honest-instrument"
+title: "VCO pulse width negatives: an out-of-range width and a width edge are refused, model and history unchanged"
+slug: vco-pulse-width-negatives-an-out-of-range-width-and-a-width
+priority: p2
+profile: implementation
+objective: "Lands as test(studio). K059's criterion 3 names negative cases tests/unit/synth-nodes.test.mjs does not assert: NODE_PARAM_SET of a vco width outside 5-95 % (src/js/studio/nodes/instrument.js:80) refused with the validator's sentence, and an edge into the vco's width refused with model and history unchanged (the vco's inputs are tune, pitch and fm; the width is not modulatable in Wave 1). The frequency case is met (synth-nodes.test.mjs:55, the pitch clip below 0.95 x Nyquist). Adds the cases. Before: nothing fails if a width outside the range or a width edge is accepted. After: both refusals are pinned. Rollback: revert; tests only."
+why: "Gap of K059 (criterion 3) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): the width negatives are not asserted in tests/unit/synth-nodes.test.mjs. No owner direction re-scopes it, so it is its own issue and K059's criterion points here (chore/plan-m064-rescope). K059 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "tests/unit/synth-nodes.test.mjs"
+  - "src/js/studio/nodes/instrument.js"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/synth-nodes.test.mjs: NODE_PARAM_SET of a vco width of 4 and of 96 is refused with the validator's sentence, and model, revision and history are unchanged; an EDGE_ADD from a CONTROL output into a vco width input is refused with canConnect's sentence, and model, revision and history are unchanged."
+  - "Test-only while the refusals hold: the pull request body says 'fail-first: n/a' with the reason that the cases pin existing behaviour; a refusal that does not hold makes it a fix(studio) whose case fails on the merge base, with a reviewer's verdict (src/js/studio is guarded)."
+  - "tests/README.md updates the test's row."
+validation:
+  - "node --test tests/unit/synth-nodes.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

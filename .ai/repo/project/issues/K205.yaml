@@ -1,0 +1,31 @@
+id: K205
+milestone: M064
+serves:
+  - "connected-instrument#knob-control"
+title: "Knob wheel: tests pin the shipped rule, a plain wheel turns the knob under the pointer and Ctrl or Cmd stays the page's pinch"
+slug: knob-wheel-no-turn-without-focus-and-ctrl-or-cmd-as-k058-cri
+priority: p1
+profile: implementation
+objective: "Lands as test(synth). K058 criterion 4, re-scoped on 2026-11-07 to the shipped wheel (decided with oscilla-a3 on 2026-11-07 (a Majordomus decision), on the owner's hardware direction of 2026-10-29 and .ai/repo/reviews/420.yaml R8): a plain wheel turns the knob under the pointer, focused or not, and Ctrl or Cmd with the wheel and a two-finger horizontal swipe stay the page's pinch and scroll (src/js/synth/gestures.js:58-79). This issue pins that rule with tests so it cannot drift: a unit test on the gesture handler and the browser check s-feel in every gate browser. Before: s-feel asserts the plain wheel only. After: the plain wheel, the modifier pinch and the horizontal swipe are each asserted."
+why: "Gap of K058 (criterion 4) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): the wheel turns a knob without focus and leaves Ctrl or Cmd to the page, the opposite of the criterion. No owner direction re-scopes it, so it is its own issue and K058's criterion points here (chore/plan-m064-rescope). K058 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "src/js/synth/gestures.js"
+  - "tests/unit/synth-knob-wheel.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+current_state: "was (2026-11-07): title \"Knob wheel: no turn without focus and Ctrl or Cmd, as K058 criterion 4 is written\"; the issue built a wheel that needs focus and Ctrl or Cmd, as K058 criterion 4 was written; re-scoped to pin the shipped wheel, decided with oscilla-a3 on 2026-11-07 (a Majordomus decision), on the owner's hardware direction of 2026-10-29 and .ai/repo/reviews/420.yaml R8."
+acceptance_criteria:
+  - "tests/unit/synth-knob-wheel.test.mjs, failing on the merge base: on the gesture handler of src/js/synth/gestures.js with a fake DOM, a plain wheel over a knob, focused or not, changes its value by the wheel step and is one history entry per burst; Ctrl or Cmd with the wheel and a horizontal swipe over a knob leave the value and the history unchanged and leave the event to the page (no preventDefault)."
+  - "tests/browser/synth.cjs s-feel asserts the same in every gate browser: a plain wheel over a knob changes aria-valuenow; Ctrl+wheel over a knob leaves aria-valuenow and the page zoom stays at 1; each within a named until() deadline. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate, and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "src/js/synth is guarded (project.review-verdict v2): a non-builder's verdict in .ai/repo/reviews/<pr>.yaml."
+  - "tests/README.md has a row for the new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-knob-wheel.test.mjs"
+  - "node tests/browser/synth.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07
