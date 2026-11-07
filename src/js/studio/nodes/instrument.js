@@ -65,19 +65,19 @@ export const keys = defineNode({
   capabilities: { realtime: true, offline: true, notes: true },
   compiler: 'audio/audio-engine.js#AudioEngine',
   help: {
-    what: 'The note source of a monophonic voice: the on-screen and computer keyboard and MIDI '
-      + 'notes play it while the Synth is armed, and an event clip on it gates the envelopes '
-      + 'its Gate reaches.',
-    inputs: 'None: notes arrive from the keyboard, MIDI or the Synth workspace.',
-    outputs: 'Pitch, in octaves from A4 (−6 to 6, 1.00 oct per octave of the note, exact in '
-      + 'the digital domain); Gate, a trigger at every new top note and a release when the '
-      + 'last key lifts; Velocity, 0 to 1.',
-    constraints: 'One note at a time (last, lowest or highest held key). Glide is linear in '
-      + 'exact time: the pitch arrives at the new note in exactly Glide. A released top note '
-      + 'returns to the note still held without a new gate. Notes outside 0 to 127, or '
-      + 'outside Key low to Key high, are refused with the reason. A pitch played from it is '
-      + `clamped at ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist of the running audio context, and `
-      + 'every note below the clamp tracks exactly.',
+    what: 'Zdroj not monofonního hlasu: hraje ho klávesnice na obrazovce, klávesnice počítače '
+      + 'a noty MIDI, když je Synth připravený ke hře, a klip událostí na něm spouští obálky, '
+      + 'kam vede jeho Gate.',
+    inputs: 'Žádné: noty přicházejí z klávesnice, z MIDI nebo z pracovní plochy Synth.',
+    outputs: 'Pitch v oktávách od A4 (−6 až 6, 1,00 okt. na oktávu noty, v digitální doméně '
+      + 'přesně); Gate, spouštěč při každé nové nejvyšší notě a uvolnění, když se zvedne '
+      + 'poslední klávesa; Velocity, 0 až 1.',
+    constraints: 'Jedna nota najednou (poslední, nejnižší nebo nejvyšší držená klávesa). Glide '
+      + 'je lineární v přesném čase: výška dorazí k nové notě přesně za dobu Glide. Uvolněná '
+      + 'nejvyšší nota se vrátí k notě stále držené bez nové brány. Noty mimo 0 až 127 nebo '
+      + 'mimo Key low až Key high se odmítnou s důvodem. Výška hraná z něj se omezí na '
+      + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist běžícího zvukového kontextu a každá nota pod `
+      + 'hranicí ladí přesně.',
   },
 });
 

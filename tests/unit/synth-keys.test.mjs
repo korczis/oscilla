@@ -166,11 +166,11 @@ test('AC3: Keys declares Key low and Key high with their defaults; the clamp is 
     assert.equal(p('chord'), undefined, 'no Chord until K116 plays it (project.no-inert-surfaces)');
     const defaults = Object.fromEntries(def.params.map((x) => [x.key, x.default]));
     assert.match(def.summary(defaults), /clamp 0\.95 × Nyquist/, 'the card states the clamp');
-    assert.match(def.help.constraints, /clamped at 0\.95 × Nyquist/, 'and the help');
+    assert.match(def.help.constraints, /omezí na 0\.95 × Nyquist/, 'and the help');
     const rig = armed();
     const s = state(rig);
     assert.equal(s.clampHz, (0.95 * rig.fx.ctx.sampleRate) / 2, 'at the running context rate');
-    assert.match(s.clamp, /clamped at 0\.95 × Nyquist \(22800 Hz here\)/, 'debugInfo states it');
+    assert.match(s.clamp, /omezí na 0\.95 × Nyquist \(zde 22800 Hz\)/, 'debugInfo states it');
   });
 
 // ---------------------------------------------------------------- AC8: negative cases
@@ -183,7 +183,7 @@ test('AC8: a note outside 0-127 is refused with a sentence and nothing is schedu
     const r = on(rig, note, t0);
     assert.equal(r.ok, false, `note ${note}`);
     assert.equal(r.code, 'note-range');
-    assert.equal(r.reason, `Note ${note} is outside the note range 0 to 127; it is not played.`);
+    assert.equal(r.reason, `Nota ${note} je mimo rozsah not 0 až 127; nehraje se.`);
   }
   assert.equal(off(rig, 200, t0).code, 'note-range', 'a note-off outside the range too');
   assert.equal(rig.param.calls.length, n, 'no pitch scheduled: not clamped to 127 or 0');
@@ -198,7 +198,7 @@ test('AC8: a note outside the node\'s key range is refused with the range in the
   const t0 = rig.fx.ctx.currentTime + 0.05;
   const r = on(rig, 40, t0);
   assert.deepEqual([r.ok, r.code, r.reason], [false, 'key-range',
-    "Note 40 is outside this Keys node's key range 48 to 72; it is not played."]);
+    'Nota 40 je mimo rozsah kláves tohoto uzlu Keys 48 až 72; nehraje se.']);
   assert.equal(on(rig, 48, t0).ok, true, 'the range is inclusive');
   assert.deepEqual(rig.transport.heldNotes(), [48]);
 });
