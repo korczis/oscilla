@@ -35,7 +35,8 @@
 //   n-slide    a slide into a held note opens no gate (one onset), and the Keys CV reaches its
 //              pitch within one cent by Glide + one frame, halfway at half the Glide (linear)
 //   n-chance   two renders with p 0.5 and one seed are identical, a second seed changes them,
-//              and the hits are the steps where mulberry32(seed ^ 0 ^ index) < 0.5
+//              and the hits are the steps where the pass-0 draw mulberry32(seed ^
+//              imul(1, 0x9e3779b1) ^ imul(index + 1, 0x85ebca77)) is below 0.5
 //   n-census   on a running AudioContext, STOP with a ratchet pending resolves with the engine
 //              and runtime node census 0 and no note record left
 // Tap tempo (four taps 500 ms apart: 120 BPM) is asserted at unit level
@@ -188,7 +189,7 @@ async function runBrowser(name) {
       const ch = await call('chance', { sampleRate: rate }, `n-chance renders at ${rate} Hz`);
       check(at, 'n-chance p 0.5: two renders identical, another seed differs',
         ch.same && ch.differs, `identical ${ch.same}, differs with seed 2 ${ch.differs}`);
-      check(at, 'n-chance the hits are mulberry32(seed ^ pass ^ index) < p',
+      check(at, 'n-chance the hits are noteDraw(seed, pass, index) < p',
         JSON.stringify(ch.hits) === JSON.stringify(ch.want)
           && JSON.stringify(ch.otherHits) === JSON.stringify(ch.otherWant),
         `seed 1 steps ${ch.hits.join(',')}; seed 2 steps ${ch.otherHits.join(',')}`);

@@ -9,7 +9,7 @@
 //           position; an off-grid note is unmoved
 //   r       1-8 equal onsets inside the note, each len / r long
 //   slide   no new gate; the Keys pitch glides linearly over the node's Glide (K060)
-//   p       a note plays iff mulberry32(grid.seed ^ pass ^ index) < p: the same hits live and
+//   p       a note plays iff noteDraw(grid.seed, pass, index) < p: the same hits live and
 //           offline, a new draw on each loop pass
 //   tempo   transport.tempo; a tempo change while playing rescales the later onsets
 //   tap     tapTempo(taps, now) (transport-view.js, W006's pure model): four taps 500 ms apart
@@ -276,10 +276,18 @@ test('K068 mulberry32 is the pure seeded generator: pinned values, repeatable, i
     assert.equal(x, c(), 'the same seed repeats');
     assert.ok(x >= 0 && x < 1, 'in [0, 1)');
   }
-  assert.equal(notesModule.noteDraw(5, 2, 3), mulberry32((5 ^ 2 ^ 3) >>> 0)(),
-    'noteDraw(seed, pass, index) = mulberry32(seed ^ pass ^ index)');
-  assert.equal(notesModule.noteDraw(4294967295, 1, 0), mulberry32(4294967294)(),
-    'a uint32 seed stays unsigned');
+  const mix = (s, pass, i) => (s ^ Math.imul(pass + 1, notesModule.DRAW_PASS_MUL)
+    ^ Math.imul(i + 1, notesModule.DRAW_INDEX_MUL)) >>> 0;
+  assert.equal(notesModule.noteDraw(5, 2, 3), mulberry32(mix(5, 2, 3))(),
+    'noteDraw(seed, pass, index) = mulberry32 of the seed mixed with pass and index');
+  assert.notEqual(notesModule.noteDraw(5, 2, 3), notesModule.noteDraw(5, 3, 2),
+    'the draw is not symmetric in pass and index');
+  assert.notEqual(notesModule.noteDraw(9, 0, 0), notesModule.noteDraw(9, 1, 1),
+    'pass equal to index does not cancel back to the bare seed');
+  const firstPass = new Set(Array.from({ length: 64 }, (_, i) => notesModule.noteDraw(7, 0, i)));
+  assert.equal(firstPass.size, 64, 'the 64 notes of one pass draw 64 different values');
+  const draw = notesModule.noteDraw(4294967295, 1, 0);
+  assert.ok(draw >= 0 && draw < 1, 'a uint32 seed stays unsigned and the draw in [0, 1)');
 });
 
 test('K068 notePlan: swing only on odd grid positions, ratchet, slide and the cut', () => {
@@ -393,14 +401,14 @@ test('K068 a slide opens no new gate and glides the Keys pitch linearly over its
   await stopped(rig);
 });
 
-test('K068 p: a note plays iff mulberry32(seed ^ pass ^ index) < p, drawn anew each pass', async () => {
+test('K068 p: a note plays iff noteDraw(seed, pass, index) < p, drawn anew each pass', async () => {
   const seed = 2026;
   const notes = Array.from({ length: 8 }, (_, i) => n(i * 0.5, 60 + i, 0.25, 0.8, { p: 0.5 }));
   const rig = playing({ notes, grid: { stepBeats: 0.5, swing: 0, seed }, beats: 4,
     loop: { start: 0, end: 2 } });
   rig.fx.advance(5.5);
-  const hits = (pass) => notes.map((_, i) => i).filter((i) => mulberry32((seed ^ pass ^ i)
-    >>> 0)() < 0.5);
+  const hits = (pass) => notes.map((_, i) => i)
+    .filter((i) => notesModule.noteDraw(seed, pass, i) < 0.5);
   const passStart = (k) => rig.base + k * 2;
   const got = (k) => attacks(rig).filter((t) => t >= passStart(k) - 1e-9
     && t < passStart(k + 1) - 1e-9).map((t) => Math.round((t - passStart(k)) / 0.25) || 0);

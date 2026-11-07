@@ -236,7 +236,7 @@ stays the bookkeeping wake-up: every onset time comes from the compiler. Per pas
 
 | Field | What plays |
 | --- | --- |
-| `p` | the note plays iff `mulberry32(grid.seed ^ pass ^ index) < p` (`core/math.js`; `index` in the sorted notes, `pass` the loop pass, seed 0 without a grid): a render repeats exactly, live and offline play the same hits, and each loop pass draws anew. `Math.random` is never used |
+| `p` | the note plays iff `noteDraw(grid.seed, pass, index) < p`, that is `mulberry32(grid.seed ^ imul(pass + 1, 0x9e3779b1) ^ imul(index + 1, 0x85ebca77))` with `imul` = `Math.imul`, so pass and index never swap or cancel (`core/math.js`; `index` in the sorted notes, `pass` the loop pass, seed 0 without a grid): a render repeats exactly, live and offline play the same hits, and each loop pass draws anew. `Math.random` is never used |
 | `grid.swing` | a note whose `at` is exactly an odd grid position, (2k + 1) x `stepBeats`, starts `swing x stepBeats` later, its ratchet onsets with it; a note off the grid is unmoved |
 | `r` | `r` equal onsets inside the note, onset j at `at + j x len / r`, each `len / r` long, each opening its own gate |
 | `slide` | when a gate sounds at the slide's start (an earlier onset's gate reaches it, touching included), the slide opens no gate, that gate lasts to the slide's end, and the Keys pitch glides to the note linearly over the node's Glide, arriving at exactly onset + Glide (K060). With no sounding note before it the slide plays as an ordinary note; its later ratchet onsets, if any, gate as ordinary onsets |

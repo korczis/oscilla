@@ -331,7 +331,8 @@ async function slide({ sampleRate, glide: g = 0.05 }) {
 
 /**
  * p 0.5 on sixteen notes: two renders with one seed, and one with another. -> { same, differs,
- *    hits (measured steps), want (mulberry32(seed ^ 0 ^ index) < 0.5) }
+ *    hits (measured steps), want (the steps whose pass-0 draw, ADR 0086's noteDraw re-derived,
+ *    is below 0.5) }
  */
 async function chance({ sampleRate, seed = 1, other = 2 }) {
   const notes = Array.from({ length: 16 }, (_, i) => ({ at: i * 0.25, note: 60, len: 0.15,
@@ -343,7 +344,9 @@ async function chance({ sampleRate, seed = 1, other = 2 }) {
   const equal = (x, y) => x.length === y.length && x.every((v, i) => v === y[i]);
   const stepOf = (r) => r.onsets.map((f) => Math.round((f - r.baseFrame) / (0.25 * r.spb
     * r.sampleRate)));
-  const want = (s) => notes.map((_, i) => i).filter((i) => mulberry32((s ^ 0 ^ i) >>> 0)() < 0.5);
+  // Re-derived from ADR 0086's draw, not imported from notes.js: pass 0, note i.
+  const mix = (s, i) => (s ^ Math.imul(1, 0x9e3779b1) ^ Math.imul(i + 1, 0x85ebca77)) >>> 0;
+  const want = (s) => notes.map((_, i) => i).filter((i) => mulberry32(mix(s, i))() < 0.5);
   return { sampleRate: a.sampleRate, same: equal(a.contour, b.contour) && equal(a.cv, b.cv),
     differs: !equal(a.contour, c.contour), hits: stepOf(a), want: want(seed),
     otherHits: stepOf(c), otherWant: want(other) };

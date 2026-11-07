@@ -23,7 +23,7 @@
 //
 // Execution (notePlan, read by timeline-compiler.js compilePass, the one compile path, live and
 // offline alike), in beats from the clip start:
-//   probability  a note plays iff mulberry32(seed ^ pass ^ index) < p (core/math.js; seed 0
+//   probability  a note plays iff noteDraw(seed, pass, index) < p (core/math.js; seed 0
 //                without a grid; index in the sorted array; pass the loop pass), so a render
 //                repeats exactly and each loop pass draws anew; never Math.random
 //   swing        a note whose at is exactly an odd grid position (2k + 1) x stepBeats starts
@@ -42,6 +42,7 @@
 //   notesRules(clip) -> [{ code, message, path }] (paths relative to the clip; clipRules)
 //   slideRule(clip, def) -> { code, message, path } | null   a slide on a target without glide
 //   noteDraw(seed, pass, index) -> [0, 1)      swingDelay(at, grid) -> beats
+//     (the draw mixes pass and index through DRAW_PASS_MUL and DRAW_INDEX_MUL)
 //   noteVelocity(vel) -> 1-127 (delivery: rounded, never below 1)
 //   notePlan(payload, { pass, cutBeats }) -> [{ index, onset, note, vel, velocity, start, end,
 //                                              gate, gateEnd, slide }] in onset order
@@ -216,9 +217,16 @@ export function slideRule(clip, def) {
 
 // ---------------------------------------------------------------- execution (K068)
 
-/** The probability draw of note `index` in loop pass `pass`: mulberry32(seed ^ pass ^ index). */
+// Odd 32-bit multipliers that spread pass and index over different bits before they meet the
+// seed: a plain seed ^ pass ^ index is symmetric (pass 2, note 3 draws as pass 3, note 2) and
+// cancels when pass equals index, so two notes of one pass could share every draw.
+export const DRAW_PASS_MUL = 0x9e3779b1;
+export const DRAW_INDEX_MUL = 0x85ebca77;
+
+/** The probability draw of note `index` in loop pass `pass` (ADR 0086 decision 4). */
 export function noteDraw(seed, pass, index) {
-  return mulberry32((seed ^ pass ^ index) >>> 0)();
+  return mulberry32((seed ^ Math.imul(pass + 1, DRAW_PASS_MUL)
+    ^ Math.imul(index + 1, DRAW_INDEX_MUL)) >>> 0)();
 }
 
 /** The swing delay in beats of a note at `at` (0 unless exactly on an odd grid position). */
