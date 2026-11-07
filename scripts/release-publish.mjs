@@ -81,7 +81,11 @@ export function releaseCreateFlags(version, notesFile) {
   return ['--verify-tag', ...pre, '--title', `OSCILLA v${version}`, '--notes-file', notesFile];
 }
 
-/** Release notes from real history (commits since the previous tag), grouped by impact. */
+/**
+ * Release notes from real history (commits since the previous tag), grouped by impact. The
+ * generated lines are Czech (Q104, rule project.czech-prose); the commit subjects stay as
+ * written (Conventional Commits in English, which release:analyze parses).
+ */
 export function releaseNotes({ version, previousTag, commits, commit, sourceDigest,
   repoUrl = REPO_URL, publicUrl = PUBLIC_URL }) {
   const { reasons } = analyzeCommits(commits);
@@ -98,16 +102,16 @@ export function releaseNotes({ version, previousTag, commits, commit, sourceDige
   const section = (title, items) => (items.length ? [`### ${title}`, '', ...items, ''] : []);
   return [
     `## OSCILLA v${version}`, '',
-    ...section('Breaking changes', groups.major),
-    ...section('Features', groups.minor),
-    ...section('Fixes', groups.patch),
-    ...section('Maintenance', groups.none),
-    '### Provenance', '',
+    ...section('Zásadní změny', groups.major),
+    ...section('Nové funkce', groups.minor),
+    ...section('Opravy', groups.patch),
+    ...section('Údržba', groups.none),
+    '### Původ', '',
     `- Commit: [${commit.slice(0, 7)}](${repoUrl}/commit/${commit})`,
-    `- Source digest (sha256 of the build inputs): \`${sourceDigest}\``,
-    `- Live: ${publicUrl} (verified by scripts/verify-deploy.mjs)`,
-    previousTag ? `- Changes: ${repoUrl}/compare/${previousTag}...v${version}`
-      : `- Changes: the full history up to v${version}`,
+    `- Otisk zdrojů (sha256 vstupů sestavení): \`${sourceDigest}\``,
+    `- Živá stránka: ${publicUrl} (ověřuje scripts/verify-deploy.mjs)`,
+    previousTag ? `- Rozdíl: ${repoUrl}/compare/${previousTag}...v${version}`
+      : `- Rozdíl: celá historie až po v${version}`,
     '',
   ].join('\n');
 }
