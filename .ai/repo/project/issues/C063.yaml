@@ -1,0 +1,31 @@
+id: C063
+milestone: M090
+serves:
+  - "coherent-state#saved-state-is-honest"
+title: "Opening the Synth on a fresh document leaves the Studio clean, so a template link afterwards opens"
+slug: opening-the-synth-leaves-the-studio-clean
+priority: p1
+profile: implementation
+objective: "Lands as fix(synth) with fix/derived-workspace-lists. Opening #m=synth inserts the semi-mono panel into the Studio document by itself (src/js/synth/insert.js insertDecision); the Studio's dirty tracker (src/js/studio/library.js createDirtyTracker) then counted the panel as an unsaved edit, so a later #m=studio&st=basic-tone was refused with 'this Studio has unsaved changes' and the template dialog took focus. After: createDirtyTracker().rebaseFresh(before, after) re-bases a never-saved document whose model was still the baseline, and src/js/synth/ui.js ensurePanel calls it for the automatic insertion only (never Insert)."
+why: "Found 2026-11-06 by oscilla-2b: tests/browser/first-screen.cjs began to read every workspace from WORKSPACE_IDS, Synth included, and its in-page link pass failed every Studio row after link:m=synth (main passes, 104/104, because it never visited Synth). A user who looks at the Synth and then follows a template link meets an unsaved-changes refusal for work they never did."
+scope:
+  - "src/js/studio/library.js"
+  - "src/js/synth/ui.js"
+  - "src/js/ui/studio/workspace.js"
+  - "tests/unit/synth-open-leaves-studio-clean.test.mjs"
+  - "tests/browser/first-screen.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/synth-open-leaves-studio-clean.test.mjs fails on the merge base (no rebaseFresh)."
+  - "A document the user changed, or saved, is never re-based; the Insert button never re-bases."
+  - "node tests/browser/first-screen.cjs passes with link:m=synth followed by the link:studio rows, in chromium, firefox and webkit (CI)."
+  - "The pull request carries a reviewer's verdict (src/js/studio and src/js/synth are guarded)."
+validation:
+  - "node --test tests/unit/synth-open-leaves-studio-clean.test.mjs"
+  - "node tests/browser/first-screen.cjs --browsers chromium"
+evidence_required:
+  - "verified"
+created_at: '2026-11-06'
+updated_at: '2026-11-06'

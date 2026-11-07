@@ -37,6 +37,7 @@ import * as esbuild from 'esbuild';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import { pack } from './pack-single-file.mjs';
+import { expandStations } from './about-stations.mjs';
 import { bundleWithAnalysisLibrary } from './build-analysis-worker.mjs';
 import {
   bannerComment, computeSourceDigest, readPackage, readVersion, renderRegion, sourceRecord,
@@ -222,7 +223,9 @@ async function main() {
   ].filter(Boolean));
 
   const html = pack({
-    template: readFileSync(path.join(ROOT, SRC_HTML), 'utf8').replace(/\r\n/g, '\n'),
+    // The About stations are data (src/data/about-stations.json, R032), rendered here.
+    template: expandStations(
+      readFileSync(path.join(ROOT, SRC_HTML), 'utf8').replace(/\r\n/g, '\n'), { version: VERSION }),
     css: css.code,
     tailwind,
     js: js.code,

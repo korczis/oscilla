@@ -1,0 +1,194 @@
+{
+  "schema": "oscilla-about-stations/v1",
+  "note": "The About timeline, one entry per step. Write only title and summary (a new release line: one entry at the end, without release, commit or datetime); release:prepare stamps release, commit and datetime (scripts/about-stations.mjs --stamp), and the build derives the step number, the time shown, the (Vx.y) label and the done/current state.",
+  "stations": [
+    {
+      "title": "Plan",
+      "summary": "First tracked commit: rules and a 95-section plan",
+      "commit": "1655002",
+      "datetime": "2026-10-01T22:58:26+02:00"
+    },
+    {
+      "release": "1.0",
+      "title": "V1",
+      "summary": "Single-file instrument, tagged v1.0.0",
+      "commit": "a7b7a23",
+      "datetime": "2026-10-02T03:19:42+02:00"
+    },
+    {
+      "release": "2.0",
+      "title": "V2",
+      "summary": "Modular acoustic laboratory at the end of the first night: 5 h 51 min of wall-clock time, with several AI workers in parallel",
+      "commit": "9fe0a15",
+      "datetime": "2026-10-02T04:49:03+02:00"
+    },
+    {
+      "release": "3.0",
+      "title": "Measure",
+      "summary": "Measurement architecture",
+      "commit": "14c7d5f",
+      "datetime": "2026-10-03T05:38:55+02:00"
+    },
+    {
+      "release": "3.1",
+      "title": "Studio",
+      "summary": "Composition and signal flow",
+      "commit": "320130f",
+      "datetime": "2026-10-03T07:49:26+02:00"
+    },
+    {
+      "release": "3.2",
+      "title": "Review",
+      "summary": "Independent DSP review; Studio links and a derived Signal Path",
+      "commit": "e494605",
+      "datetime": "2026-10-03T23:37:56+02:00"
+    },
+    {
+      "release": "3.3",
+      "title": "Navigate",
+      "summary": "Eight workspaces; every Studio review finding fixed",
+      "commit": "1c129bd",
+      "datetime": "2026-10-04T04:30:20+02:00"
+    },
+    {
+      "release": "3.4",
+      "title": "Records",
+      "summary": "Release records; an About page the release gate keeps current",
+      "commit": "092b562",
+      "datetime": "2026-10-04T14:17:15+02:00"
+    },
+    {
+      "release": "3.5",
+      "title": "Runtime",
+      "summary": "The Studio says what is running and why; plan identity and divergence",
+      "commit": "f9c2220",
+      "datetime": "2026-10-04T16:29:18+02:00"
+    },
+    {
+      "release": "3.6",
+      "title": "Evidence",
+      "summary": "A completed experiment is immutable, each experiment has an identity, provenance names the exact build",
+      "commit": "3801b05",
+      "datetime": "2026-10-04T19:06:11+02:00"
+    },
+    {
+      "release": "3.7",
+      "title": "Comparison",
+      "summary": "Two experiments are compared by what changed between them, against a chosen baseline",
+      "commit": "ac5fdf9",
+      "datetime": "2026-10-04T23:00:59+02:00"
+    },
+    {
+      "release": "3.8",
+      "title": "Trace",
+      "summary": "One edit followed from intent to the running graph: applied, stored or refused",
+      "commit": "ffb9765",
+      "datetime": "2026-10-05T18:25:41+02:00"
+    },
+    {
+      "release": "3.9",
+      "title": "Definitions",
+      "summary": "An experiment is executed from a versioned definition and records which version it used",
+      "commit": "8c22376",
+      "datetime": "2026-10-06T00:02:15+02:00"
+    },
+    {
+      "release": "3.10",
+      "title": "Lineage",
+      "summary": "An experiment states what produced each value and what repeating it would need, from what it stored",
+      "commit": "7fc5001",
+      "datetime": "2026-10-06T06:11:53+02:00"
+    },
+    {
+      "release": "3.11",
+      "title": "Findings",
+      "summary": "A finding cites the stored experiments it rests on, and a stored record links to the records connected to it",
+      "commit": "b032ddb",
+      "datetime": "2026-10-06T20:06:09+02:00"
+    },
+    {
+      "release": "3.12",
+      "title": "Audit",
+      "summary": "The Studio passes its final review, and a deployed page names its release state: the release itself, or how far after it",
+      "commit": "5297150",
+      "datetime": "2026-10-18T11:11:38+02:00"
+    },
+    {
+      "release": "3.13",
+      "title": "Minimap",
+      "summary": "The Studio graph shows a minimap of the whole patch, and the release scripts, size report and plan records hold what their checks claim",
+      "commit": "925b5fc",
+      "datetime": "2026-10-21T02:29:23+02:00"
+    },
+    {
+      "release": "3.14",
+      "title": "Import",
+      "summary": "The Studio opens a V2 sequence or configuration file and refuses what it cannot read, the timeline zooms by pinch, and MIDI input states whether this browser supports it",
+      "commit": "b67d1e5",
+      "datetime": "2026-10-29T19:41:19+01:00"
+    },
+    {
+      "release": "3.15",
+      "title": "Synth",
+      "summary": "A Synth workspace plays its own engines from knobs, MIDI and the computer keys play the instrument, the Studio and the Synth, and the sequencer plays through the engine's counted Filter stage",
+      "commit": "11cc9fb",
+      "datetime": "2026-11-02T02:22:41+01:00"
+    },
+    {
+      "release": "3.16",
+      "title": "Phone",
+      "summary": "The instrument sounds on a phone and the gate proves it with the browser's gesture rule on, every key and Space go through one registry, and a release rests on the CI run of its own pull request",
+      "commit": "09d5890",
+      "datetime": "2026-11-02T22:04:31+01:00"
+    },
+    {
+      "release": "3.17",
+      "title": "Patches",
+      "summary": "The Synth plays from an XY pad, one patch library of presets serves the Synth and the Studio, and the page's Escape and Space go through the one key registry",
+      "commit": "c73d27b",
+      "datetime": "2026-11-03T01:37:37+01:00"
+    },
+    {
+      "release": "3.18",
+      "title": "Riffs",
+      "summary": "The library offers original riffs to listen to and insert, the Synth gets its own look and a patch bay on the phone, presets and links restore the lab settings they name, and every control of every workspace is checked to round-trip",
+      "commit": "2f442e1",
+      "datetime": "2026-11-03T20:54:42+01:00"
+    },
+    {
+      "release": "3.19",
+      "title": "Templates",
+      "summary": "Six synthesis templates join the Studio, a notes clip holds a melody as data, a fuzzy search finds a node by its meaning, the Studio keys work wherever the Studio is shown, and the Synth's code is reviewed like the Studio it drives",
+      "commit": "76bfc30",
+      "datetime": "2026-11-04T20:08:51+01:00"
+    },
+    {
+      "release": "3.20",
+      "title": "Contracts",
+      "summary": "Every patch-bay port has a contract table derived from the registry, the Studio graph summary links each node, a node the running graph does not hold says why, and a refused Play stops the runtime and says so",
+      "commit": "68b117f",
+      "datetime": "2026-11-05T01:21:38+01:00"
+    },
+    {
+      "release": "3.21",
+      "title": "Hardware",
+      "summary": "The Synth's panel takes a hardware look from one synth-theme layer with its own visual reference, the XY pad lives on one shared mount and lets go on Stop and on leaving, the Arm button reads the transport and every keyboard disarms what it armed, and pull requests land through a merge queue",
+      "commit": "e8d54f8",
+      "datetime": "2026-11-05T13:25:18+01:00"
+    },
+    {
+      "release": "3.22",
+      "title": "Shell",
+      "summary": "The Pro admin shell with its sidebar and page header on every workspace, Related links, About and empty states driven by one workspace registry, one declaration per UI component, and the Synth's render budgets measured against the host it runs on",
+      "commit": "bc4b154",
+      "datetime": "2026-11-05T21:31:23+01:00"
+    },
+    {
+      "release": "3.23",
+      "title": "Truth",
+      "summary": "About names only what each workspace shows, the release its roadmap describes and every library the page ships, the Sequencer's blocks stay readable at phone width, Play stops saying pressed when the sequence stops elsewhere, and a source pack feeds an LLM project",
+      "commit": "d51f9b2",
+      "datetime": "2026-11-07T05:37:23+01:00"
+    }
+  ]
+}

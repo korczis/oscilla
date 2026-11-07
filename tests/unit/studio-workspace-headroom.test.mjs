@@ -9,11 +9,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { UNCAPPED } from './fixtures/source-size.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const WORKSPACE = 'src/js/ui/studio/workspace.js';
 const DIR = 'src/js/ui/studio/workspace';
-const DEFAULT_CAP = 40_000;
+const DEFAULT_CAP = UNCAPPED; // the budget's own default (fixtures/source-size.mjs)
 const ROOM = 10_000;
 
 /** What leaves a workspace module with less than ROOM bytes under its cap ([] = all have it). */

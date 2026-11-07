@@ -981,11 +981,13 @@ run it alone.
   while a release is overdue and keeps one "release overdue" issue open until it ships.
 - **Tags** are `vX.Y.Z`. V1, the original hand-written single file, is `v1.0.0` (deployed) and
   `v1.0.1` (a maintenance tag that was never deployed).
-- **About timeline.** A minor or major release adds its line to the About view's evolution
-  timeline (one station with `data-osc-release="X.Y"`, marked current) before
-  `release:prepare`. Rule `project.about-names-current-release` requires it, and
-  `tests/unit/about.test.mjs` refuses a bump to a line the page does not name, so `verify` and
-  the release gate fail until the station exists.
+- **About timeline.** The stations are data, `src/data/about-stations.json`, which the build
+  renders. A minor or major release adds one entry `{ "title", "summary" }` at its end before
+  `release:prepare`, which stamps its release line, commit and time (`node
+  scripts/about-stations.mjs --stamp`); the step number, the time shown, the `(Vx.y)` label
+  and which station is current are derived, never typed. Rule
+  `project.about-names-current-release` requires it, and the build, `verify` and the release
+  gate fail on a bump to a line with no station.
 - **In the app.** The About workspace shows the version (with `+N.g<commit>` for a build after
   the release), whether the build is that release, the commit (linked to GitHub, or
   "source build" for a local build), the channel and the source digest. Opening the page with
