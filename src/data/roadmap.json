@@ -1,6 +1,6 @@
 {
   "schema": "oscilla-roadmap/v2",
-  "release": "3.22.0",
+  "release": "3.22.1",
   "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them, as of release (package.json's version). Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
@@ -20,7 +20,7 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 29,
+      "done": 30,
       "required": 51,
       "phase": "now"
     },
@@ -63,7 +63,7 @@
       "id": "M054",
       "title": "The whole interface shows the current product",
       "done": 6,
-      "required": 60,
+      "required": 61,
       "phase": "now"
     },
     {
@@ -118,7 +118,7 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 2,
+      "done": 3,
       "required": 15,
       "phase": "now"
     },
@@ -344,13 +344,6 @@
       "title": "Owner decisions of the connected-instrument line",
       "done": 6,
       "required": 8,
-      "phase": "now"
-    },
-    {
-      "id": "M084",
-      "title": "Owner decisions of the Studio boxes and signal generator lines",
-      "done": 4,
-      "required": 4,
       "phase": "now"
     },
     {

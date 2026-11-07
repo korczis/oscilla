@@ -1,0 +1,73 @@
+# Review verdict for pull request #441 (branch fix/lane-a-review-p3): the lane-A review P3s A1 B1 B2 B3
+# and the reviewer's C1 C2, by oscilla-21. Reviewed head 917fceed (85af6215 A1/B1/B2/B3, 928ecb69
+# C1/C2, then main bc4b1545 merged with dist rebuilt); base origin/main bc4b1545. Reviewer: seat a3
+# (session oscilla-a3, claude-code 12f1e384). Disclosure: the reviewer built none of it; the review ran
+# in detached scratch worktrees; this file is the reviewer's only write.
+# The digest: origin/main bc4b1545's scripts/review-verdict.mjs --repo <scratch> --content --list
+# --base-branch origin/main at 917fceed: 619f93531875389816676ddad742e02dac889e76cb69771f6ab82442e23ceb84
+# over one guarded path, scripts/build-config.mjs; equal to the builder's figure.
+# C1 closed at 928ecb69: DARK_COMPOUND = /\.dark(?=[.#[:])|(?<=[^\s>+~(,])\.dark(?![\w\\-])/ refuses .x.dark,
+# html.dark and [dir].dark as well, with the three cases and two ancestor rewrites ('.a,.dark .x',
+# ':is(.dark) .x') in tests/unit/ui-flowbite-pro-build.test.mjs; the build passes, so flowbite emits none.
+# C2 closed at 928ecb69: tests/README.md's ui-flowbite-pro-build row names :root:not([data-theme="light"])
+# and the compound refusal. The rest of the evidence (A1 B1 B2 B3 at 85af6215) follows.
+# DRAFT review verdict for the lane-A review P3 follow-up (branch fix/lane-a-review-p3, head
+# 85af6215 "fix(build): the lane-A review P3s (#386 A1 B1 B2 B3)" by oscilla-21, on 0287fc47, a
+# head of #386). The pull request does not exist yet: `pr` and `content` are placeholders until it
+# does; the base will be main after #386 lands (0287fc47's content plus f68dd0c0, which changes
+# tests/browser/labs.cjs only, not a guarded path).
+# Reviewer: seat a3 (session oscilla-a3, claude-code 12f1e384). Disclosure: the reviewer built
+# none of this change; the review ran in detached scratch worktrees of 85af6215 and 0287fc47, the
+# builder's worktree was never written, and this file is the reviewer's only write.
+#
+# The digest: origin/main's scripts/review-verdict.mjs (git archive of d82b1a66) with
+# --repo <scratch> --content --list --base 0287fc47: c84f23fbdab07579e58409ae5a6ccee7c541ab7d
+# 5e6f7aa79c6de6f012e13801 over 1 guarded path: scripts/build-config.mjs. To be recomputed with
+# --base-branch origin/main once the PR exists (the CI judge uses the merge base; the figure holds
+# while the merge base stays 0287fc47 or main's build-config.mjs blob is the one of the head).
+#
+# Evidence at 85af6215 (scratch worktree, npm ci):
+# - Full npm test: 4944 tests, 4942 pass, 0 fail, 2 skipped. Targeted: ui-flowbite-pro-build
+#   16/16 (its test 15 is build:check), knowledge-integrity 34/34, synth-review-p2 14/14,
+#   ui-catalog 24/24, visual-identity-lock-v4 27/27, source-size-budget 16/16, ui-flowbite-pro
+#   31/31, ci-workflows 35/35. ui-flowbite-pro-record --check: the record equals the tree
+#   (measure 4, debt 3607, unchanged). build:check: dist up to date (3 390 280 B, v3.21.0, source
+#   8e367644923c).
+# - dist/index.html: 114 differing bytes between 0287fc47 and the head, all the source digest
+#   (0502e8a7... -> 8e367644...) in the build-metadata JSON (line 740) and the build-info define
+#   (line 4429); the byte count is unchanged; voice.js changed comments only.
+# - Fail-first: the head's ui-flowbite-pro-build.test.mjs on 0287fc47: 15 pass, 1 fail ("Missing
+#   expected rejection: .dark.x .y"). origin/main's fail-first.mjs --base 0287fc47: proven by 1 of
+#   2 files (synth-review-p2 passes without the change: a form change, not evidence).
+# - A1: voice.js:120-121 openCopy -> ops.openDocument; document.js:152 `if (ctx.transport &&
+#   ctx.transport.playing) ops.stopStudio({ fast: true })`: the new sentence in voice.js:10-13 and
+#   docs/v31/signal-path.md:193-195 is true.
+# - B1: package.json test:synth runs tests/browser/synth.cjs; ci.yml:323 test:studio then :329
+#   test:synth in the studio job; test:release runs test:studio && test:synth; the edit is in the
+#   v4 rule's "# Verification" section, its x-majordomus tests block unchanged
+#   (project.rules-name-their-enforcement: knowledge-integrity 34/34).
+# - B2: scripts/ui-catalog/check.mjs:26,169,175: a listed test names a hook only in a string
+#   literal; on 0287fc47 the head's trace listing with the base's regex assertion fails the
+#   contract ("synth-review-p2.test.mjs names none of its hooks in a string literal"), with the
+#   head's `html.includes('data-osc="synth.engine-elsewhere"')` it passes (24/24).
+# - B3: DARK_COMPOUND refuses .dark.x, .dark[a], .dark:hover, .dark::before and a compound in a
+#   selector list; the ancestor forms .dark .x, :is(.dark .x), .dark>.y, :not(.dark) rewrite; the
+#   dark: variant and .darkness are untouched; the throw is a rule.error inside the awaited
+#   postcss run of build.mjs:173-175, so a build fails. Residual: C1.
+# - project.ui-uses-flowbite-pro: no class token, class name, CSS or inline style added (the
+#   ratchet record is unchanged). B4 stays as the builder says: source-size-budget test 3 holds
+#   the raises ledger append-only. A3 stays open as 386.yaml records.
+schema: review-verdict/v1
+pr: 441
+verdict: merge
+reviewer: oscilla-a3 (session 12f1e384, claude-code)
+content: 619f93531875389816676ddad742e02dac889e76cb69771f6ab82442e23ceb84
+findings:
+  - { id: A1, severity: P3, status: closed, title: "voice.js:10-13 and docs/v31/signal-path.md:193-195 now say Opening starts nothing and a playing Studio stops first, as for any document it opens; true of openCopy -> openDocument (document.js:152)" }
+  - { id: A3, severity: P3, status: open, title: "synth/xy.js xyUnpatchAction composes each pad cable's unpatch against the pre-removal model and normals.js restores a jack's normals only when no other cable into it remains; carried from 386.yaml, untouched here" }
+  - { id: B1, severity: P3, status: closed, title: "visual-identity-lock.v4.md:210-211 names npm run test:synth, which CI's studio job runs after test:studio, and the release gate; true of package.json, ci.yml:323/329 and test:release" }
+  - { id: B2, severity: P3, status: closed, title: "scripts/ui-catalog/trace/synth.mjs:70-72 lists tests/unit/synth-review-p2.test.mjs for synth.engine-elsewhere, and that test names the hook in a string literal (the catalogue contract counts no regex: check.mjs:26)" }
+  - { id: B3, severity: P3, status: closed, title: "build-config.mjs darkThemeSelector refuses a compound .dark (.dark.x, .dark[a], .dark:hover) at build time; ui-flowbite-pro-build test 9 proves it and fails on 0287fc47 (1/16)" }
+  - { id: B4, severity: P3, status: open, title: "source-size-baseline.json's 307000 raise still says 300 bytes past the 306 000 cap (src/index.html 306 894 B); the raises ledger is append-only (source-size-budget test 3), so the figure cannot be restated in place" }
+  - { id: C1, severity: P3, status: closed, title: "build-config.mjs:21 DARK_COMPOUND = /\\.dark(?=[.#[:])/ catches a compound only when .dark leads it: .x.dark .y, [dir].dark .y and html.dark .y pass the refusal and are rewritten to .x:root:not(...) .y (probe at the head); the flowbite plugin emits bare .dark only (38 sites in node_modules/flowbite/plugin.js), so nothing is affected today; a lookbehind on the preceding simple selector, or a selector parser, closes it" }
+  - { id: C2, severity: P3, status: closed, title: "tests/README.md:72 (ui-flowbite-pro-build row) says dark mode is on [data-theme=\"dark\"] and the plugin's .dark ancestor is rewritten to [data-theme=\"dark\"]; since 64f9e41b the selector is :root:not([data-theme=\"light\"]) and tailwind.config.cjs:67 uses a variant; the row does not name the compound refusal test 9 adds (pre-existing wording, no file added)" }
