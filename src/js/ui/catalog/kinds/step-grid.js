@@ -116,9 +116,9 @@ export default defineKind({
   },
   target: { min: 44 },
   layout: {
-    '390x844': 'Eight steps per page, paged with [ and ] or the page buttons; the lane names '
-      + 'stay visible beside the steps.',
-    '1536x1024': 'Sixteen steps per page.',
+    '390x844': 'Eight 44 px steps per page, paged with [ and ] or the page buttons; each lane '
+      + 'name sits above its row, since no name column fits beside eight steps.',
+    '1536x1024': 'Sixteen steps per page with the lane names beside them.',
   },
   live: true,
   reducedMotion: 'With reduced motion the playing step changes only its aria-current outline: '
