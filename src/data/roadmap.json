@@ -5,7 +5,7 @@
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 20,
+      "done": 22,
       "required": 44,
       "phase": "now"
     },
@@ -61,7 +61,7 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 6,
+      "done": 7,
       "required": 61,
       "phase": "now"
     },
@@ -250,7 +250,7 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 23,
+      "done": 24,
       "required": 59,
       "phase": "now"
     },
