@@ -286,6 +286,10 @@ test('K068 mulberry32 is the pure seeded generator: pinned values, repeatable, i
     'pass equal to index does not cancel back to the bare seed');
   const firstPass = new Set(Array.from({ length: 64 }, (_, i) => notesModule.noteDraw(7, 0, i)));
   assert.equal(firstPass.size, 64, 'the 64 notes of one pass draw 64 different values');
+  const grid16 = new Set(Array.from({ length: 256 },
+    (_, k) => notesModule.noteDraw(7, Math.floor(k / 16), k % 16)));
+  assert.equal(grid16.size, 256,
+    'passes 0-15 x indices 0-15 draw pairwise distinct values (instrument-kinds critique)');
   const draw = notesModule.noteDraw(4294967295, 1, 0);
   assert.ok(draw >= 0 && draw < 1, 'a uint32 seed stays unsigned and the draw in [0, 1)');
 });
