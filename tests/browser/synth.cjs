@@ -801,7 +801,13 @@ function defineChecks() {
     const again = await openSynth(context, base, link.slice(link.indexOf('#')));
     try {
       await face(again, 'bay');
-      await again.locator('[data-osc="synth.cables"] [data-remove-cable]').first().click();
+      // Remove the cable this check patched (MG into LPF cutoff), never "the first cable": the
+      // reopened patch also holds K183's default XY cable into the cutoff (xy.y), listed first.
+      const cut = await until(() => again.evaluate(() => (window.OSCILLA.app.synthDebug().cables
+        .find((c) => c.from === 'mg.control' && c.to === 'lpf.frequency') || {}).id
+        || null),
+      { ms: 10000, what: 'the reopened link holds the MG -> LPF cutoff cable' });
+      await again.locator(`[data-osc="synth.cables"] [data-remove-cable="${cut}"]`).click();
       const depth = await until(() => again.evaluate(() => {
         const ids = window.OSCILLA.app.synthDebug().nodes;
         const e = window.OSCILLA.studio.model.graph.edges.find((x) => x.from.node === ids.eg2
