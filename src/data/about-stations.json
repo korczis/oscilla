@@ -196,6 +196,10 @@
       "summary": "Nothing is typed twice: the About timeline is data whose numbers the build derives, the roadmap names the build's own version, the Majordomus pin is written once, the counts in the docs follow the code, and opening the Synth leaves a fresh Studio clean",
       "commit": "9aeda18",
       "datetime": "2026-11-07T07:44:21+01:00"
+    },
+    {
+      "title": "Čeština",
+      "summary": "Nové texty aplikace jsou česky a anglických vět, které ještě ukazuje, po souborech jen ubývá: hlídá to pravidlo a test"
     }
   ]
 }
