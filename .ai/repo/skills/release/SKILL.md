@@ -66,6 +66,11 @@ record is on main.
    refused by `tests/unit/source-size-budget.test.mjs`), so a number taken by another pull request
    in the meantime means redoing the station commit, not editing the entry (v3.22.0, 2026-11-06).
 
+   Before `release:publish` on the primary checkout, run `npm ci` there: its node_modules may be
+   older than the lock (the worktrees install fresh), and `build:check` then reports the committed
+   dist as stale although the tree is right ("BLOCKED npm run build:check failed: dist/index.html
+   is stale", v3.22.0, 2026-11-06; the same bytes passed after `npm ci`).
+
 4. Prepare on the clean tree. It bumps once, rebuilds and runs `npm run verify` with the
    roadmap check (ADR 0082: the gate verdict is the CI run of the release pull request, the
    CI receipt); on a failure it restores what it changed. `--local-gate` runs the full gate
