@@ -1,6 +1,6 @@
 {
   "schema": "oscilla-roadmap/v2",
-  "release": "3.22.1",
+  "release": "3.23.0",
   "note": "The open milestones of the plan (.ai/repo/project) in its derived order, each with how many of its required issues are done and its phase (now, next, later), as `majordomus plan roadmap --json` gave them, as of release (package.json's version). Written by scripts/roadmap.mjs, which release:prepare runs before its build; About renders it from the bundle. Do not edit by hand.",
   "milestones": [
     {
