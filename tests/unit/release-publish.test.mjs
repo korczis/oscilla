@@ -767,7 +767,10 @@ test('Q104: the release notes speak Czech around the English commit subjects', (
       { sha: 'c'.repeat(40), subject: 'fix: stop click', body: '' },
       { sha: 'd'.repeat(40), subject: 'chore: tidy', body: '' }],
   });
-  const own = notes.split('\n').filter((l) => !/^- (\*\*|drop |new |stop |tidy)/.test(l));
+  // A commit line ends with its link to the commit; every other line is the generator's own.
+  const subject = /^- .* \(\[[0-9a-f]{7}\]\([^)]*\/commit\/[0-9a-f]{40}\)\)$/;
+  const own = notes.split('\n').filter((l) => !subject.test(l));
+  assert.equal(notes.split('\n').length - own.length, 4, 'the four commit lines are excluded');
   const english = own.filter((l) => isEnglishProse(l)
     || /\b(Breaking changes|Features|Fixes|Maintenance|Provenance|Source digest|Live|Changes)\b/
       .test(l));

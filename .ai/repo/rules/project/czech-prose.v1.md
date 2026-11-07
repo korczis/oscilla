@@ -39,8 +39,12 @@ label. The measure is `scripts/czech-prose.mjs` (three or more words, two Englis
 words, no Czech letter with a diacritic; the literals come from the one JavaScript lexer,
 `scripts/ui-catalog/scan.mjs` lexJs), one home for the test and any later check.
 
-The release notes, pull request bodies and published pages are held by review and by the
-issues that automate them (Q104's follow-ups); until those land, this rule binds the agents.
+The generated lines of the GitHub Release notes are Czech from the release that carries #473 on
+(`scripts/release-publish.mjs` releaseNotes; `tests/unit/release-publish.test.mjs` reads them
+through the same measure); the Releases published before stay as they were written, since a
+published Release is a record and is not rewritten. Pull request bodies and published pages
+are held by review and by the issues that automate them (Q104's follow-ups); until those
+land, this rule binds the agents.
 
 # Failure behaviour
 
