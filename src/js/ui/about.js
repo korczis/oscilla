@@ -20,15 +20,16 @@ export const PHASES = Object.freeze(['now', 'next', 'later'].map((id) => Object.
 const milestones = Object.freeze((ROADMAP_DATA.milestones || []).map(milestone));
 
 /**
- * The roadmap the page shows, frozen: { milestones: [{ id, title, done, required, phase }],
- * phases: [{ id, title, milestones }], phase: { now, next, later } }, each phase's
- * milestones in the plan order.
+ * The roadmap the page shows, frozen: { release, milestones: [{ id, title, done, required,
+ * phase }], phases: [{ id, title, milestones }], phase: { now, next, later } }, each phase's
+ * milestones in the plan order; release is the version the roadmap was written at (U086).
  */
 const phases = Object.freeze(PHASES.map((p) => Object.freeze({
   ...p, milestones: Object.freeze(milestones.filter((m) => m.phase === p.id)),
 })));
 
 export const ROADMAP = Object.freeze({
+  release: String(ROADMAP_DATA.release ?? ''),
   milestones,
   phases,
   /** Each phase by its id, for the page's three lists: ROADMAP.phase.later.milestones. */

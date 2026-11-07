@@ -538,3 +538,46 @@ test('C011 R-2: Stop still ends a pass that is cut ahead at the cap, now and cli
   assert.equal(ctx.liveSources, 0);
   assert.deepEqual(ed.stats(), { voices: 0, activeSourceCount: 0, activeNodeCount: 0 });
 });
+
+// ---------------------------------------------------------------- C026: the release clamp
+
+// C026 (review of #367, F1): a voice whose release is longer than half the lowered limit.
+// Release 0.8 s, limit lowered from 5 s to 0.5 s at t0 + 0.1 s. The clamp gives
+//   rel = min(0.8, max(0.005, 0.5 * 0.5)) = 0.25 s,
+// so the fade starts on the render quantum at or just before t0 + 0.5 - 0.25 = t0 + 0.25 s
+// and reaches the floor 0.25 s later, at most t0 + 0.5 s; the sources stop 10 ms after it.
+// The values are written here, not recomputed from v.release: a mutant with rel = v.release
+// (0.8 s, a fade due at t0 - 0.3 s) or with Math.max(0.005, lim) (0.5 s, due at t0) is in the
+// past at t0 + 0.1 s and takes the release-now path instead.
+const C026_RELEASE_S = 0.8;
+const C026_LIMIT_S = 0.5;
+const C026_FADE_START_S = 0.25; // after t0
+const C026_FADE_LEN_S = 0.25;
+const C026_STOP_S = 0.51; // after t0, upper bound (fade end + 10 ms)
+
+test('C026 tightenLimit: release 0.8 s under a limit lowered to 0.5 s fades over 0.25 s from '
+  + 't0 + 0.25 s to the floor at t0 + 0.5 s', { skip }, () => {
+  const { eng, advance } = engineSetup();
+  eng.play(plan({ source: 'single', pattern: 'tone' }), opt({ releaseS: C026_RELEASE_S }));
+  const v = eng.voice;
+  const q = RQ / eng.ctx.sampleRate;
+  advance(v.t0 + 0.1);
+  assert.equal(eng.tightenLimit(C026_LIMIT_S), 1, 'one voice shortened');
+  assert.deepEqual(v.fade.param.events.map((e) => e[0]), ['set', 'linear'],
+    'a scheduled fade, not a release now');
+  const [set, lin] = v.fade.param.events;
+  const start = set[2] - v.t0;
+  assert.ok(start <= C026_FADE_START_S + 1e-9 && start > C026_FADE_START_S - q - 1e-9,
+    `the fade starts ${start.toFixed(6)} s after t0, expected ${C026_FADE_START_S} s`);
+  assert.ok(onQuantum(set[2], eng.ctx.sampleRate), 'on a render quantum');
+  assert.ok(Math.abs(lin[2] - set[2] - C026_FADE_LEN_S) < 1e-9,
+    `the fade lasts ${(lin[2] - set[2]).toFixed(6)} s, expected ${C026_FADE_LEN_S} s`);
+  const floorAt = lin[2] - v.t0;
+  assert.ok(floorAt <= C026_LIMIT_S + 1e-9 && floorAt > C026_LIMIT_S - q - 1e-9,
+    `the floor is reached ${floorAt.toFixed(6)} s after t0, at the limit`);
+  const stop = lastStop(v) - v.t0;
+  assert.ok(stop <= C026_STOP_S + 1e-9 && stop > C026_STOP_S - q - 1e-9,
+    `the sources stop ${stop.toFixed(6)} s after t0`);
+  advance(v.t0 + 2);
+  assert.equal(eng.activeNodeCount, 0);
+});

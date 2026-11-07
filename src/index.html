@@ -49,7 +49,6 @@
     <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="1.5" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-record" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="currentColor" stroke="none"/></symbol>
-    <symbol id="i-skip" viewBox="0 0 24 24"><path d="M3.5 6v12l8-6zM12.5 6v12l8-6z" fill="currentColor" stroke="none"/></symbol>
     <symbol id="i-gear" viewBox="0 0 24 24"><path d="M19.08 10.24L21.5 10.65V13.35L19.08 13.76L18.25 15.77L19.68 17.76L17.76 19.68L15.77 18.25L13.76 19.08L13.35 21.5H10.65L10.24 19.08L8.23 18.25L6.24 19.68L4.32 17.76L5.75 15.77L4.92 13.76L2.5 13.35V10.65L4.92 10.24L5.75 8.23L4.32 6.24L6.24 4.32L8.23 5.75L10.24 4.92L10.65 2.5H13.35L13.76 4.92L15.77 5.75L17.76 4.32L19.68 6.24L18.25 8.23Z" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2"/></symbol>
     <symbol id="i-headphones" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><path d="M3 14h3v6H4a1 1 0 0 1-1-1zM21 14h-3v6h2a1 1 0 0 0 1-1z"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" stroke="none"/><path d="M12 11v6M12 7.5v.5" stroke="var(--osc-info-bg)" stroke-width="2.2"/></symbol>
@@ -1499,7 +1498,7 @@
           <div class="osc-seq-lane">
             <button type="button" class="osc-icon-btn osc-seq-start" id="osc-seq-start"
               data-osc="seq.start" aria-label="Play from the start">
-              <svg aria-hidden="true"><use href="#i-skip"/></svg>
+              <svg aria-hidden="true"><use href="#s-return"/></svg>
             </button>
             <div class="osc-timeline osc-chart-host" id="osc-seq-timeline" data-osc="seq.timeline"
               data-osc-chart="seq-timeline" role="listbox" aria-label="Pattern blocks"
@@ -3152,18 +3151,17 @@
 
         <section class="osc-about-block" aria-labelledby="osc-about-next" data-osc="about.next">
           <h3 class="osc-about-h" id="osc-about-next"><span class="osc-num">B</span> What comes
-            next</h3>
-          <p>The open milestones of OSCILLA's plan as of this release and how many of each one's
-            required issues are done: now under way, next ready to start, later waiting on
-            work above.</p>
+            next<span x-text="` · as of v${ROADMAP.release}`"></span></h3>
+          <p>The open milestones of OSCILLA's plan: now under way, next ready to start, later
+            waiting on work above.</p>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
             id="osc-about-next-now"
             x-text="`${ROADMAP.phase.now.title} · ${ROADMAP.phase.now.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-now" data-osc="about.next.now">
             <template x-for="m in ROADMAP.phase.now.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
@@ -3171,9 +3169,9 @@
             x-text="`${ROADMAP.phase.next.title} · ${ROADMAP.phase.next.milestones.length}`"></h4>
           <ul role="list" aria-labelledby="osc-about-next-next" data-osc="about.next.next">
             <template x-for="m in ROADMAP.phase.next.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
           <h4 class="mt-4 mb-1 text-sm font-semibold text-gray-900 dark:text-white"
@@ -3191,9 +3189,9 @@
           <ul role="list" aria-labelledby="osc-about-next-later" data-osc="about.next.later"
             id="osc-about-next-later-list" x-show="aboutLaterOpen" x-cloak>
             <template x-for="m in ROADMAP.phase.later.milestones" :key="m.id">
-              <li data-osc="about.next.milestone" :data-milestone="m.id" :data-phase="m.phase"><b
-                x-text="`${m.done} of ${m.required} done`"></b><span
-                x-text="m.title"></span></li>
+              <li class="md:!grid-cols-[1fr_auto]" data-osc="about.next.milestone" :data-milestone="m.id"
+                :data-phase="m.phase"><span x-text="m.title"></span><b
+                x-text="`${m.done} of ${m.required} issues done`"></b></li>
             </template>
           </ul>
         </section>
@@ -3279,8 +3277,9 @@
           href="#i-external"/></svg></a></dd></div>
         <div><dt>Licence</dt><dd>MIT; the full text is in the comment at the top of this
           file.</dd></div>
-        <div><dt>Built with</dt><dd>Alpine.js and uPlot (MIT), p5.js (LGPL-2.1, embedded
-          unmodified); licence texts are in the comment at the top of this file.</dd></div>
+        <div><dt>Built with</dt><dd>Alpine.js, uPlot, Flowbite and Tailwind CSS (MIT), Lucide
+          (ISC), p5.js (LGPL-2.1, embedded unmodified); licence texts are at the top of this
+          file.</dd></div>
       </dl>
     </section>
   </main>

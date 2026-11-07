@@ -22,6 +22,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { WORKSPACES } from '../../src/js/ui/app.js';
+import { LEARN_CARDS } from '../../src/js/data/learn.js';
+import SEMI_MONO from '../../src/js/synth/panels/semi-mono.js';
 import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 
 const root = new URL('../../', import.meta.url);
@@ -442,3 +444,291 @@ test('A15: under release:prepare, the roadmap is the plan\'s open milestones', a
   assert.deepEqual(roadmapProblems(JSON.parse(read(ROADMAP_REL)), planRoadmap()), [],
     'refresh it: node scripts/roadmap.mjs');
 });
+
+// ------------------------------------------------- U085: a workspace says only what it shows
+// Each panel a workspace description names, by one of the phrases below, must be on that
+// workspace's screen at 1536x1024. A focus workspace (Analyzer, Synthesis, ...) shows the panels
+// whose data-osc-modes lists it, and a full-width view (Measure, Learn, Synth, ...) is the
+// section whose data-osc-modes lists it (src/styles/integration.css hides every other panel from
+// 1280 px). The Playground is the integrated grid: from 1280 px it hides the Spectrogram panel
+// and every row-3 panel but the sequencer and the compact Studio (src/styles/instrument.css),
+// and keeps the workspace-only panels (.osc-workspace) out. "the labs" names those row-3 labs.
+// Learn names its first and last card and Synth each of its tabs, from their data modules.
+// The descriptions are the registry's summaries (lane A wave 3: shell.js WORKSPACE_REGISTRY,
+// which the page header shows too), judged on the list rendered from them (renderAboutList).
+
+/** [what the description says, the ids of the panels it names]. */
+export const PANEL_PHRASES = [
+  [/\bgenerator\b/i, ['osc-panel-source']],
+  [/\bsignal analysis\b/i, ['osc-panel-analysis']],
+  [/\bspectrogram of the output\b|\bmicrophone's live spectrum and spectrogram\b/i,
+    ['osc-panel-spectrogram']],
+  [/\bmicrophone analy[sz]er\b/i, ['osc-panel-mic']],
+  [/\bDevice & Limits\b/, ['osc-panel-device']],
+  [/\bguided measurement\b/i, ['osc-measure-flow']],
+  [/\bpattern sequencer\b|\bblock sequences\b/i, ['osc-panel-sequencer']],
+  [/\bcompact Studio\b/, ['osc-panel-studio']],
+  [/\bbiquad filter\b/i, ['osc-panel-filter']],
+  [/\bADSR envelope\b/i, ['osc-panel-envelope']],
+  [/\badditive harmonics\b/i, ['osc-panel-additive']],
+  [/\bphase and stereo\b/i, ['osc-panel-phase']],
+  [/\bbioacoustics\b/i, ['osc-panel-bio']],
+  [/\bdual oscillator\b/i, ['osc-panel-dual']],
+  [/\bthe labs\b/i, ['osc-panel-filter', 'osc-panel-envelope', 'osc-panel-additive',
+    'osc-panel-phase', 'osc-panel-bio']],
+];
+
+/** What a phrase claims about where a panel's signal comes from, checked in its source. */
+export const SOURCE_CLAIMS = [
+  [/\bspectrogram of the output\b/i, 'src/js/charts/spectrogram-panel.js', /main output analyser/],
+  [/\bmicrophone's live spectrum and spectrogram\b/i, 'src/js/charts/spectrogram-panel.js',
+    /\bmicrophone\b/],
+];
+
+/** The opening tag of the element with `id`, and where it starts ('' and -1 when absent). */
+function tagOf(markup, id) {
+  const at = markup.indexOf(`id="${id}"`);
+  if (at < 0) return { tag: '', at: -1 };
+  const from = markup.lastIndexOf('<', at);
+  return { tag: markup.slice(from, markup.indexOf('>', at) + 1), at: from };
+}
+
+const modesOf = (tag) => (tag.match(/\bdata-osc-modes="([^"]*)"/)?.[1] ?? '').split(/\s+/);
+
+/** Whether the panel `id` is on `workspace`'s screen at 1536x1024 (see the note above). */
+export function shownAt1536(markup, id, workspace) {
+  const { tag, at } = tagOf(markup, id);
+  if (at < 0) return false;
+  if (workspace === 'playground') {
+    const row3 = markup.indexOf('<div class="osc-row3"');
+    const only = markup.indexOf('<div class="osc-workspace"');
+    const views = markup.indexOf('id="osc-view-experiments"');
+    if (at > only && at < views) return false;
+    if (/\bosc-p-spectrogram\b/.test(tag)) return false;
+    if (at > row3 && at < only) return /\bosc-p-(?:sequencer|studio)\b/.test(tag);
+    if (modesOf(tag).includes('playground') || at < row3) return true;
+    const view = markup.lastIndexOf('<section class="osc-view', at);
+    return view >= 0 && /workspace !== 'playground'/.test(markup.slice(view, at));
+  }
+  if (tag.includes('data-osc-modes=')) return modesOf(tag).includes(workspace);
+  const view = markup.lastIndexOf('<section class="osc-view', at);
+  return view >= 0 && modesOf(markup.slice(view, markup.indexOf('>', view))).includes(workspace);
+}
+
+/** About's workspace descriptions as the page renders them from `rows`: { id: purpose text }. */
+function descriptions(markup, rows = WORKSPACE_REGISTRY) {
+  const view = aboutView(renderAboutList(markup, rows));
+  const at = view.indexOf('data-osc="about.workspaces"');
+  const list = at < 0 ? '' : view.slice(at, view.indexOf('</ul>', at));
+  return Object.fromEntries([...list.matchAll(WORKSPACE_ITEM)]
+    .map(([, id, , , , rest]) => [id, text(rest)]));
+}
+
+/**
+ * What About's workspace descriptions claim that the workspace does not show, one string each:
+ * a named panel off that workspace's screen, a source claim its code does not make, Learn's
+ * range not its first and last card, a Synth tab left out.
+ */
+export function workspaceTruthProblems(markup, rows = WORKSPACE_REGISTRY) {
+  const problems = [];
+  for (const [id, purpose] of Object.entries(descriptions(markup, rows))) {
+    for (const [phrase, panels] of PANEL_PHRASES) {
+      const said = purpose.match(phrase)?.[0];
+      if (!said) continue;
+      for (const panel of panels) {
+        if (!shownAt1536(markup, panel, id)) {
+          problems.push(`${id} names "${said}", but #${panel} is not on its screen at 1536 px`);
+        }
+      }
+    }
+    for (const [phrase, file, claim] of SOURCE_CLAIMS) {
+      const said = purpose.match(phrase)?.[0];
+      if (said && !claim.test(read(file).split('\n').slice(0, 4).join('\n'))) {
+        problems.push(`${id} says "${said}", which ${file} does not`);
+      }
+    }
+  }
+  const all = descriptions(markup, rows);
+  const [first, last] = [LEARN_CARDS[0].title, LEARN_CARDS.at(-1).title];
+  if (!new RegExp(`\\bfrom ${first} to ${last}\\b`, 'i').test(all.learn ?? '')) {
+    problems.push(`learn does not run from its first card to its last: "${first}" to "${last}"`);
+  }
+  const [voice, ...tabs] = SEMI_MONO.tabs;
+  if (!new RegExp(`\\b${voice.title}\\b`, 'i').test(all.synth ?? '')) {
+    problems.push(`synth does not name its ${voice.label} tab's voice: "${voice.title}"`);
+  }
+  for (const tab of tabs) {
+    if (!(all.synth ?? '').includes(`${tab.label} tab`)) {
+      problems.push(`synth does not name its ${tab.label} tab`);
+    }
+  }
+  return problems;
+}
+
+test('U085: each workspace description names only what that workspace shows at 1536 px', () => {
+  // the Playground model is the CSS's: pin the rule it reads
+  const css = read('src/styles/instrument.css');
+  assert.match(css, new RegExp('\\.osc-app\\[data-mode="playground"\\] :is\\(\\.osc-p-spectrogram,'
+    + '\\s*\\.osc-row3 > \\.osc-panel:not\\(\\.osc-p-sequencer, \\.osc-p-studio\\)\\)'));
+  assert.match(css, /\.osc-workspace \{\s*display: none;/);
+  assert.deepEqual(workspaceTruthProblems(html), []);
+});
+
+test('mutation U085: a reverted summary is named', () => {
+  const swap = (id, to) => {
+    const rows = WORKSPACE_REGISTRY.map((w) => (w.id === id ? { ...w, summary: to } : w));
+    assert.ok(rows.some((w) => w.summary === to), `${id} is in the registry`);
+    return workspaceTruthProblems(html, rows);
+  };
+  assert.ok(swap('synthesis', 'Additive harmonics, with the compact Studio.')
+    .includes('synthesis names "compact Studio", but #osc-panel-studio is not on its screen '
+      + 'at 1536 px'));
+  assert.ok(swap('playground', 'The instrument and the labs.').some((p) =>
+    p.startsWith('playground names "the labs", but #osc-panel-filter')));
+  assert.ok(swap('analyzer', 'The microphone\'s live spectrum and spectrogram.').includes(
+    'analyzer says "microphone\'s live spectrum and spectrogram", which '
+    + 'src/js/charts/spectrogram-panel.js does not'));
+  assert.ok(swap('learn', 'Concept cards from frequency to speaker limitations.').some((p) =>
+    p.startsWith('learn does not run from its first card to its last')));
+  assert.ok(swap('synth', 'A semi-modular mono voice, and an Engines tab.')
+    .includes('synth does not name its XY tab'));
+});
+
+// ------------------------------------------------- U086: the roadmap names its release
+// scripts/roadmap.mjs writes package.json's version into the roadmap as `release` when
+// release:prepare refreshes it (after the bump), and What comes next's heading reads
+// "as of v<release>" from it. version:check allows the copy in this generated file; this test
+// is what holds it to package.json.
+test('U086: the roadmap names the release it describes, and the heading renders it', async () => {
+  const { version } = JSON.parse(read('package.json'));
+  const roadmap = JSON.parse(read(ROADMAP_REL));
+  assert.equal(roadmap.release, version, 'the roadmap was written at this release: refresh it');
+  const { parseSemver } = await import('../../scripts/release-metadata.mjs');
+  assert.ok(parseSemver(roadmap.release), 'the release is a version, X.Y.Z or a candidate X.Y.Z-rc.N');
+  const { roadmapFromPlan, roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
+  assert.equal(roadmapFromPlan(planFixture()).release, version, 'roadmap.mjs writes the version');
+  assert.equal(roadmapFromPlan(planFixture(), '9.8.7').release, '9.8.7');
+  assert.deepEqual(roadmapShapeProblems({ ...roadmap, release: undefined }),
+    ['release undefined is not a version X.Y.Z or X.Y.Z-rc.N']);
+  const { ROADMAP } = await import('../../src/js/ui/about.js');
+  assert.equal(ROADMAP.release, version);
+  const at = view.indexOf('id="osc-about-next"');
+  const heading = view.slice(at, view.indexOf('</h3>', at));
+  assert.match(heading, /x-text="` · as of v\$\{ROADMAP\.release\}`"/,
+    'the heading says "as of vX.Y.Z" from the roadmap');
+  assert.doesNotMatch(text(view.slice(at, view.indexOf('<h4', at))), /\bthis release\b/,
+    'the section names the release, not "this release"');
+});
+
+// ------------------------------------------- U092: a roadmap item reads title, then its count
+// Each item of the three lists names its milestone first and then "N of M issues done", the
+// count's unit stated. From 768 px its grid gives the title the wide column and the count the
+// rest (the About list rows are a 112 px label column otherwise, src/styles/about.css); below
+// it the row is one column, the title above its count.
+/** The problems of one phase list's item template, one string each. */
+export function roadmapItemProblems(section, phase) {
+  const from = section.indexOf(`data-osc="about.next.${phase}"`);
+  if (from < 0) return [`What comes next has no ${phase} list`];
+  const item = section.slice(from, section.indexOf('</ul>', from)).match(/<li\b[\s\S]*?<\/li>/);
+  if (!item) return [`the ${phase} list has no item template`];
+  const li = item[0];
+  const problems = [];
+  const title = li.search(/x-text="m\.title"/);
+  const count = li.search(/x-text="`\$\{m\.done\} of \$\{m\.required\}[^`]*`"/);
+  if (title < 0 || count < 0) return [`the ${phase} item has no title or no count`];
+  if (count < title) problems.push(`the ${phase} item reads its count before its title`);
+  if (!/x-text="`\$\{m\.done\} of \$\{m\.required\} issues done`"/.test(li)) {
+    problems.push(`the ${phase} item's count does not say "N of M issues done"`);
+  }
+  const cols = li.match(/^<li\b[^>]*\bclass="[^"]*\bmd:!grid-cols-\[([^\]]+)\]/)?.[1];
+  if (!cols || !/^(?:minmax\(0,1fr\)|1fr)_auto$/.test(cols)) {
+    problems.push(`the ${phase} item does not give its title the wide column`);
+  }
+  return problems;
+}
+
+test('U092: each roadmap item reads its title first, then "N of M issues done"', () => {
+  const at = view.indexOf('data-osc="about.next"');
+  const section = view.slice(at, view.indexOf('</section>', at));
+  for (const phase of ['now', 'next', 'later']) {
+    assert.deepEqual(roadmapItemProblems(section, phase), [], phase);
+  }
+  // mutation: the count moved before the title, or without its unit, is named
+  const old = '<ul data-osc="about.next.now"><li class="md:!grid-cols-[1fr_auto]"><b '
+    + 'x-text="`${m.done} of ${m.required} done`"></b><span x-text="m.title"></span></li></ul>';
+  assert.deepEqual(roadmapItemProblems(old, 'now'), ['the now item reads its count before its '
+    + 'title', 'the now item\'s count does not say "N of M issues done"']);
+});
+
+// ------------------------------------------------- U090: the credits name every shipped library
+// What ships is what the build says: its runtime dependencies (package.json), the vendor
+// scripts it inlines (VENDOR_SCRIPTS) and the packages whose content reaches dist without an
+// import (BUILD_TIME_ASSETS). Each is credited by its name, followed by its licence (the first
+// parenthesis after the name), as its package.json states it.
+/** The name About credits each shipped package by; a package without one fails. */
+export const CREDIT_NAMES = Object.freeze({
+  alpinejs: 'Alpine.js', uplot: 'uPlot', p5: 'p5.js', flowbite: 'Flowbite',
+  tailwindcss: 'Tailwind CSS', 'lucide-static': 'Lucide',
+});
+
+/** The credits line: the text of the dd after "Built with". */
+export function creditsText(markup) {
+  const at = aboutView(markup).indexOf('<dt>Built with</dt>');
+  if (at < 0) return '';
+  const rest = aboutView(markup).slice(at);
+  return text(rest.slice(rest.indexOf('<dd>'), rest.indexOf('</dd>')));
+}
+
+/** Each shipped package the credits leave out or credit with another licence, one string each. */
+export function creditProblems(markup, shipped, licenceOf) {
+  const credits = creditsText(markup);
+  const problems = [];
+  for (const pkg of shipped) {
+    const name = CREDIT_NAMES[pkg];
+    if (!name) {
+      problems.push(`${pkg} ships but has no credit name (CREDIT_NAMES)`);
+      continue;
+    }
+    const at = credits.search(new RegExp(`(?<![\\w.])${name.replace(/\./g, '\\.')}(?![\\w])`));
+    if (at < 0) {
+      problems.push(`${pkg} ships but the credits do not name ${name}`);
+      continue;
+    }
+    const licence = credits.slice(at).match(/\(([^,)]+)/)?.[1].trim();
+    if (licence !== licenceOf(pkg)) {
+      problems.push(`${name} is credited ${licence}, its package says ${licenceOf(pkg)}`);
+    }
+  }
+  return problems;
+}
+
+test('U090: the credits name every library the page ships, with its licence', async () => {
+  const { VENDOR_SCRIPTS, BUILD_TIME_ASSETS } = await import('../../scripts/build-config.mjs');
+  const pkg = JSON.parse(read('package.json'));
+  const shipped = [...new Set([...Object.keys(pkg.dependencies),
+    ...VENDOR_SCRIPTS.map((v) => v.pkg), ...BUILD_TIME_ASSETS])];
+  const licenceOf = (p) => JSON.parse(read(`node_modules/${p}/package.json`)).license;
+  assert.ok(shipped.includes('flowbite') && shipped.includes('p5'), shipped.join(', '));
+  assert.deepEqual(creditProblems(html, shipped, licenceOf), []);
+  // mutation: a library dropped from the line, or credited under another licence, is named
+  const dropped = html.replace(/(<dt>Built with<\/dt><dd>[\s\S]*?)Lucide\s+\(ISC\),\s*/, '$1');
+  assert.notEqual(dropped, html, 'Lucide (ISC) is in the credits');
+  assert.deepEqual(creditProblems(dropped, ['lucide-static'], licenceOf),
+    ['lucide-static ships but the credits do not name Lucide']);
+  assert.deepEqual(creditProblems(html, ['left-pad'], licenceOf),
+    ['left-pad ships but has no credit name (CREDIT_NAMES)']);
+});
+
+test('U086: a release candidate\'s roadmap passes its own shape check (ADR 0047, release:prepare --prerelease)',
+  async () => {
+    const { roadmapShapeProblems } = await import('../../scripts/roadmap.mjs');
+    const base = { schema: ROADMAP_SCHEMA_FOR_RC(), note: 'n', milestones: [] };
+    assert.deepEqual(roadmapShapeProblems({ ...base, release: '40.0.0-rc.1' }), []);
+    assert.deepEqual(roadmapShapeProblems({ ...base, release: '40.1.0' }), []);
+    assert.equal(roadmapShapeProblems({ ...base, release: 'v4' }).length, 1);
+    assert.equal(roadmapShapeProblems({ ...base }).length, 1);
+  });
+
+function ROADMAP_SCHEMA_FOR_RC() {
+  return JSON.parse(readFileSync(new URL('src/data/roadmap.json', root), 'utf8')).schema;
+}
