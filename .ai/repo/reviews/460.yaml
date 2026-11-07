@@ -1,7 +1,7 @@
 # Review verdict for pull request #460 (branch int/derived-versioning-train): the derived-versioning
 # train (R032 About stations as data, C063 + derived workspace lists, R049 the Majordomus pin in
 # MJ_VERSION, R050 numbers held to their source, roadmap v3, plan C062 C063 R049 R050 Q102).
-# Reviewed head cab9aa9a; base origin/main 5b389ac1 (v3.23.0) plus its record #459 (0426993d).
+# Reviewed head 3248de96 (round 2; round 1 cab9aa9a); base origin/main 5b389ac1 (v3.23.0) plus its record #459 (0426993d).
 # Reviewer: oscilla-21 (claude-code 603baa3d). Disclosure: the reviewer built none of this train
 # (oscilla-2b did) and wrote only this file, in a detached review worktree.
 #
@@ -33,11 +33,21 @@
 # GITHUB_BASE_REF=main 5/0.
 #
 # Verdict: merge.
+#
+# Round 2 (3248de96 on 4cd93230): CI's unit job at cab9aa9a found git's %cI ending in Z on a UTC
+# host (the runner), which stampStations refused, so a release prepared on a UTC machine would have
+# failed at its stamp. DATETIME now accepts Z beside +HH:MM; release-about-station gains a Z case.
+# Content recomputed with origin/main 0426993d's checker: 7dbc005e...87b1d8f over the same 13 paths.
+# release-about-station 10/0 under TZ=UTC and TZ=Europe/Prague; npm test 5006/0 under TZ=UTC.
+# F3 (P3, open): a station's HH:MM is the release host's local time as git prints it, so a CET
+# machine and a UTC runner stamp in different zones; normalising to one zone keeps the timeline
+# comparable. Verdict: merge.
 schema: review-verdict/v1
 pr: 460
 verdict: merge
 reviewer: oscilla-21 (claude-code 603baa3d)
-content: d7cbae70ebb64c45cc8692a344b4da36aca993c1d1f61a304517cdb1552984bd
+content: 7dbc005e6ba755e1fd46857387978808d62b4b5d15f3439c0cc55c6be87b1d8f
 findings:
   - { id: F1, severity: P2, status: closed, title: "roadmap v3 reversed U086 and mooted R048 with neither recorded; 7f2eec7e re-scopes U086 (heading names the build's version, the roadmap holds none) and marks R048 superseded, stamps after the landing" }
   - { id: F2, severity: P3, status: closed, title: "an Undo of the Synth's automatic panel on a fresh document left it dirty with no user edit; f4d6a2b9 keeps the app-reached fresh states clean until the first save, with a test" }
+  - { id: F3, severity: P3, status: open, title: "a station's HH:MM is the release host's local time as git %cI prints it (Z on a UTC runner, +01:00 on a CET machine), so stations stamped on different hosts mix zones; normalise to one zone" }
