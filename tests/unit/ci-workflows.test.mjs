@@ -25,6 +25,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '.
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const PKG = JSON.parse(read('package.json'));
 const SUITES = browserSuites(PKG);
+import { jobAt, playwrightImage, setBound } from './fixtures/workflow-bound.mjs';
 const CI = read('.github/workflows/ci.yml');
 const PAGES = read('.github/workflows/pages.yml');
 const INSTALL = read('.github/scripts/ci-install.sh');
@@ -99,10 +100,9 @@ test('the browser suites are derived from package.json', () => {
 
 test('mutation: a job without timeout-minutes', () => {
   const head = '    name: unit, build, artifact rules\n    runs-on: ubuntu-24.04\n';
-  const text = mutate(CI, `${head}    timeout-minutes: 10\n`, head);
+  const text = setBound(CI, `${head}    `, () => null);
   assert.deepEqual(rules(ci(text)), ['job-timeout@unit']);
-  const zero = mutate(CI, '    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n',
-    '    runs-on: ubuntu-24.04\n    timeout-minutes: 0\n');
+  const zero = setBound(CI, '    runs-on: ubuntu-24.04\n    ', () => 0, jobAt(CI, 'gate'));
   assert.deepEqual(rules(ci(zero)), ['job-timeout@gate']);
 });
 
@@ -130,16 +130,14 @@ test('mutation: a bare apt install, in a workflow and in a helper script', () =>
 
 test('mutation: an install, a download or a browser suite step without its own timeout', () => {
   const step = '        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}\n';
-  const install = mutate(CI, `${step}        timeout-minutes: 15\n`, step);
+  const install = setBound(CI, `${step}        `, () => null);
   assert.deepEqual(rules(ci(install)), ['step-timeout@engine']);
-  const suite = mutate(CI, 'logs/studio-${{ matrix.browser }}.log\n        timeout-minutes: 15\n',
-    'logs/studio-${{ matrix.browser }}.log\n');
+  const suite = setBound(CI, 'logs/studio-${{ matrix.browser }}.log\n        ', () => null);
   assert.deepEqual(rules(ci(suite)), ['step-timeout@studio']);
-  const download = mutate(CI, '(pinned version and digest)\n        timeout-minutes: 5\n',
-    '(pinned version and digest)\n');
+  const download = setBound(CI, '(pinned version and digest)\n        ', () => null);
   assert.deepEqual(rules(ci(download)), ['step-timeout@knowledge']);
-  const smoke = mutate(PAGES, '      - name: Public smoke of the deployed page (fatal)\n'
-    + '        timeout-minutes: 5\n', '      - name: Public smoke of the deployed page (fatal)\n');
+  const smoke = setBound(PAGES, '      - name: Public smoke of the deployed page (fatal)\n'
+    + '        ', () => null);
   assert.deepEqual(rules(checkWorkflow('pages.yml', smoke, SUITES)), ['step-timeout@smoke']);
 });
 
@@ -187,9 +185,10 @@ test('mutation: a job that gate does not need', () => {
 test('mutation: an action on a branch, an image without a tag', () => {
   const branch = mutate(CI, 'uses: actions/checkout@v7', 'uses: actions/checkout@main');
   assert.deepEqual(rules(ci(branch)), ['pinned@unit']);
-  const latest = mutate(CI, 'playwright:v1.63.0-noble', 'playwright:latest');
+  const image = playwrightImage(CI);
+  const latest = mutate(CI, image, 'playwright:latest');
   assert.deepEqual(rules(ci(latest)), ['pinned@visual']);
-  const untagged = mutate(CI, 'playwright:v1.63.0-noble', 'playwright');
+  const untagged = mutate(CI, image, 'playwright');
   assert.deepEqual(rules(ci(untagged)), ['pinned@visual']);
 });
 
@@ -440,9 +439,10 @@ test('E022: the size step reports a pull request over the budget, bounded and ne
     assert.deepEqual(problemsOfSizeStep(mutate(CI, always, '')), ['if is undefined']);
     assert.deepEqual(problemsOfSizeStep(mutate(CI, always, '        if: success()\n')),
       ['if is "success()"']);
-    assert.deepEqual(problemsOfSizeStep(mutate(CI, '        timeout-minutes: 2\n        run: |\n'
-      + '          node scripts/size-report.mjs', '        run: |\n'
-      + '          node scripts/size-report.mjs')), ['no timeout-minutes']);
+    const unbounded = CI.replace(
+      / {8}timeout-minutes: \d+\n( {8}run: \|\n {10}node scripts\/size-report\.mjs)/, '$1');
+    assert.notEqual(unbounded, CI, 'the size step has a timeout-minutes to remove');
+    assert.deepEqual(problemsOfSizeStep(unbounded), ['no timeout-minutes']);
     const gated = mutate(CI, '| tee -a "$GITHUB_STEP_SUMMARY"\n',
       '| tee -a "$GITHUB_STEP_SUMMARY"\n          grep -q "within the threshold" '
       + '"$GITHUB_STEP_SUMMARY"\n');

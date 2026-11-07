@@ -1,0 +1,25 @@
+id: C062
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "The control census holds a row for every Synth control, and Synth leaves CENSUS_PENDING"
+slug: the-control-census-holds-a-row-for-every-synth-control
+priority: p1
+profile: implementation
+objective: "Lands as test(census). tests/browser/control-census.cjs typed the twelve workspaces of its day (tests/browser/lib/oscilla-page.cjs WORKSPACES), so its discovery never visited Synth, the thirteenth. fix/derived-workspace-lists makes it read src/js/ui/shell.js WORKSPACE_IDS and declares Synth in CENSUS_PENDING: chromium then finds 114 Synth controls with no row (the module fold buttons PANEL, PATCH BAY, KEYBOARD, VCO 1, VCO 2, RING, NOISE, MIXER, ... the knobs, jacks and cable controls). Each gets a drive, family or delegated row (the Synth suites of test:synth already drive most: a delegated row names the suite), or a debt row listed in tests/unit/control-drive-baseline.json; then Synth leaves CENSUS_PENDING."
+why: "Found 2026-11-06 by oscilla-2b when the hand-typed workspace lists were replaced by the registry (owner: 'not everything is derived'). A census that skips a workspace states a coverage it does not have."
+scope:
+  - "tests/browser/control-census.cjs"
+  - "tests/unit/control-drive-baseline.json"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "node tests/browser/control-census.cjs --browsers chromium,firefox,webkit reports census:every-control-has-a-row PASS with Synth visited and CENSUS_PENDING empty (the XPASS of census:pending-synth forces its removal)."
+  - "Every Synth control is a drive, family or delegated row, or a debt row in tests/unit/control-drive-baseline.json; the baseline grows only by these debt rows, named in the pull request."
+validation:
+  - "node tests/browser/control-census.cjs --browsers chromium"
+  - "node --test tests/unit/control-drive-baseline.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-06'
+updated_at: '2026-11-06'

@@ -11,6 +11,7 @@ import {
   FILTER_PREVIEW_SAMPLE_RATE, OCTAVE_STEP_FREQUENCIES, PROVISIONAL_SAMPLE_RATE,
 } from '../core/constants.js';
 import { encodeStudioLink } from '../core/url-state-studio.js';
+import { MAX_VOICES } from '../synth/voice-pool.js';
 
 const kHz = (hz) => `${hz / 1000} kHz`;
 
@@ -31,8 +32,9 @@ export const LEARN_INSTRUMENT_TOPICS = Object.freeze([
     // data-osc-link: learn.demo
     demo: { label: 'Open the Synth panel', viz: 'spectrum', href: '#m=synth&yp=init' } },
   { id: 'synthesis-engines', title: 'Synthesis engines',
-    body: 'The Synth Engines tab holds polyphonic engines, up to 16 voices each. Additive sums '
-      + 'harmonics (drawbars). FM drives one sine operator\'s frequency with another: a '
+    body: `The Synth Engines tab holds polyphonic engines, up to ${MAX_VOICES} voices each. `
+      + 'Additive sums harmonics (drawbars). '
+      + 'FM drives one sine operator\'s frequency with another: a '
       + 'modulator of index I moves its target by I times its own frequency, so sidebands sit at '
       + 'the carrier plus and minus multiples of the modulator. Ring modulation multiplies two '
       + 'signals into their sum and difference frequencies; AM keeps the carrier. Wavetable '

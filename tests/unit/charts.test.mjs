@@ -61,7 +61,8 @@ import {
 } from '../../src/js/charts/device-panel.js';
 import { additiveChartLabel, barSlotAt } from '../../src/js/charts/additive-chart.js';
 import { shortName, rangeLabel } from '../../src/js/charts/bio-chart.js';
-import { fieldsForType, timelineWindow } from '../../src/js/labs/sequencer-panel.js';
+import { fieldsForType, timelineWindow, TIMELINE_OPTIONS }
+  from '../../src/js/labs/sequencer-panel.js';
 import { defaultCustomPartials, presetPartials } from '../../src/js/labs/additive.js';
 import { formatQ } from '../../src/js/labs/filter-lab.js';
 import { HEARING_RANGES, CALL_EXAMPLES } from '../../src/js/data/bioacoustics.js';
@@ -431,4 +432,63 @@ test('sequencer timeline window: fits until minPxPerS, then scrolls', () => {
   assert.ok(Math.abs(long.contentPx / long.spanS - 66) < 1e-9, 'packed at minPxPerS');
   assert.ok(Math.abs(long.maxScrollPx - (long.contentPx - 500)) < 1e-9);
   assert.equal(timelineWindow({ durationS: 0, laneW: 0 }).maxScrollPx, 0);
+});
+
+// U022: the default five blocks (Tone, Sweep, Silence, Pulse, Chirp: 0.5, 0.5, 0.25, 0.5 and
+// 0.5 s; 2.25 s in all) at phone width. A block is drawn (px/s * duration - gap) wide, gap 4 px.
+const U022_BLOCKS_S = [0.5, 0.5, 0.25, 0.5, 0.5];
+const U022_GAP_PX = 4;
+const u022Blocks = (minPx) => U022_BLOCKS_S.map((durationS) => ({ durationS, minPx }));
+
+test('sequencer timeline window: the shortest block keeps 24 px (44 px coarse) at phone width '
+  + 'and the lane scrolls; the time scale stays linear (U022)', () => {
+  for (const minPx of [24, 44]) {
+    const win = timelineWindow({ durationS: 2.25, laneW: 350, blocks: u022Blocks(minPx),
+      gapPx: U022_GAP_PX });
+    const pxPerS = win.contentPx / win.spanS;
+    const shortest = pxPerS * 0.25 - U022_GAP_PX;
+    assert.ok(shortest >= minPx - 1e-9, `${minPx} px: the Silence block is ${shortest} px wide`);
+    assert.ok(win.maxScrollPx > 0, `${minPx} px: the lane scrolls (${win.maxScrollPx} px)`);
+    assert.equal(win.spanS, 3.75, 'the span is the duration window, not padded');
+  }
+  // A block needing more than the floor (its name) is honoured too: 60 px for the Silence.
+  const named = timelineWindow({ durationS: 2.25, laneW: 350, gapPx: U022_GAP_PX,
+    blocks: U022_BLOCKS_S.map((durationS, i) => ({ durationS, minPx: i === 2 ? 60 : 24 })) });
+  assert.ok((named.contentPx / named.spanS) * 0.25 - U022_GAP_PX >= 60 - 1e-9);
+  // Desktop: the default sequence already fits, the window is the merge base's (no scroll).
+  const wide = timelineWindow({ durationS: 2.25, laneW: 1536, blocks: u022Blocks(44),
+    gapPx: U022_GAP_PX });
+  assert.deepEqual(wide, { spanS: 3.75, contentPx: 1536, maxScrollPx: 0 });
+  // An empty sequence still shows minSpanS; a 10 ms block is reachable by scrolling, but its
+  // floor asks for at most phoneMaxPxPerS (4 800 px/s would ask for it): past the cap the block
+  // shows its name by title and aria-label, not by width.
+  assert.deepEqual(timelineWindow({ durationS: 0, laneW: 350, blocks: [], gapPx: 4 }),
+    { spanS: 3.75, contentPx: 350, maxScrollPx: 0 });
+  const tiny = timelineWindow({ durationS: 0.01, laneW: 350, gapPx: U022_GAP_PX,
+    blocks: [{ durationS: 0.01, minPx: 44 }] });
+  assert.ok(Math.abs(tiny.contentPx / tiny.spanS - TIMELINE_OPTIONS.phoneMaxPxPerS) < 1e-9,
+    `a 10 ms block is drawn at the cap, ${tiny.contentPx / tiny.spanS} px/s`);
+  assert.ok(Number.isFinite(tiny.contentPx) && tiny.maxScrollPx > 0);
+});
+
+// #437 fold-in (reviewer 21's P3 on U022): the per-block floor's pixels per second are capped
+// like the phone floor. Uncapped, a 10 ms block beside a 30 s one made the lane 160 k px wide,
+// past the browsers' canvas limit (32 767 px), and the ruler drew blank.
+test('sequencer timeline window: the per-block floor is capped at phoneMaxPxPerS like the '
+  + 'phone floor; a block under the cap still gets its floor (U022, #437)', () => {
+  const cap = TIMELINE_OPTIONS.phoneMaxPxPerS;
+  const capped = timelineWindow({ durationS: 30.01, laneW: 320, gapPx: U022_GAP_PX,
+    blocks: [{ durationS: 0.01, minPx: 44 }, { durationS: 30, minPx: 24 }] });
+  assert.ok(capped.contentPx <= cap * capped.spanS + 1e-9,
+    `${capped.contentPx} px for ${capped.spanS} s is ${capped.contentPx / capped.spanS} px/s`);
+  assert.ok(capped.contentPx <= 32767, `${capped.contentPx} px exceeds the canvas limit`);
+  assert.ok(capped.maxScrollPx > 0);
+  // The cap binds only past it: a 1 s block and a 0.2 s block (240 px/s) keep their 44 px.
+  for (const durationS of [1, 0.2]) {
+    const win = timelineWindow({ durationS: 30 + durationS, laneW: 320, gapPx: U022_GAP_PX,
+      blocks: [{ durationS, minPx: 44 }, { durationS: 30, minPx: 24 }] });
+    const px = (win.contentPx / win.spanS) * durationS - U022_GAP_PX;
+    assert.ok(px >= 44 - 1e-9, `${durationS} s block: ${px} px`);
+    assert.ok(win.contentPx / win.spanS <= cap + 1e-9);
+  }
 });
