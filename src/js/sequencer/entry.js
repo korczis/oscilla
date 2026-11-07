@@ -19,11 +19,11 @@ export function parseFrequencyEntry(text, { a4 = 440 } = {}) {
   if (m) {
     const n = Number(m[1]);
     if (n <= 127) return { ok: true, hz: round3(midiToFrequency(n, a4)), via: 'midi' };
-    return { ok: false, error: `MIDI note ${n} is outside 0 to 127.` };
+    return { ok: false, error: `MIDI nota ${n} je mimo rozsah 0 až 127.` };
   }
   const f = parseFrequency(s);
   if (f.ok) return { ok: true, hz: f.value, via: 'hz' };
-  return { ok: false, error: `\u201c${s}\u201d is not a note or a frequency. Try A4, C#3, m69, 440 or 1k.` };
+  return { ok: false, error: `\u201e${s}\u201c není nota ani frekvence. Zkuste A4, C#3, m69, 440 nebo 1k.` };
 }
 
 /** @returns {{ ok: true, bpm: number } | { ok: false, error: string }} */
@@ -31,10 +31,10 @@ export function parseTempoEntry(value) {
   const raw = typeof value === 'number' ? value
     : Number(String(value ?? '').trim().replace(/\s*bpm$/i, ''));
   if (!Number.isFinite(raw)) {
-    return { ok: false, error: `\u201c${String(value ?? '')}\u201d is not a tempo. Try 120 BPM.` };
+    return { ok: false, error: `\u201e${String(value ?? '')}\u201c není tempo. Zkuste 120 BPM.` };
   }
   if (raw < MIN_TEMPO_BPM || raw > MAX_TEMPO_BPM) {
-    return { ok: false, error: `Tempo ${raw} BPM is outside ${MIN_TEMPO_BPM} to ${MAX_TEMPO_BPM} BPM.` };
+    return { ok: false, error: `Tempo ${raw} BPM je mimo rozsah ${MIN_TEMPO_BPM} až ${MAX_TEMPO_BPM} BPM.` };
   }
   return { ok: true, bpm: raw };
 }

@@ -483,7 +483,7 @@ async function panelChecks(engine, browser) {
   await page.press('#osc-seq-start-hz', 'Enter');
   const saidK017 = await page.textContent('[data-osc="seq.message"]');
   await step('K017: a word is refused with a sentence and Start keeps 440 Hz',
-    (s) => block(s, 'b2').p.start === 440 && /not a note or a frequency/.test(saidK017 || ''));
+    (s) => block(s, 'b2').p.start === 440 && /není nota ani frekvence/.test(saidK017 || ''));
   await page.fill('#osc-seq-start-hz', '500');
   await page.press('#osc-seq-start-hz', 'Enter');
   await page.fill('#osc-seq-duration', '750');

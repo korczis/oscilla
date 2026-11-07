@@ -427,8 +427,8 @@ export function normalizeModel(raw, opts = {}) {
   const tempoInRange = Number.isFinite(rawTempo)
     && rawTempo >= MIN_TEMPO_BPM && rawTempo <= MAX_TEMPO_BPM;
   if (Number.isFinite(rawTempo) && !tempoInRange) {
-    issues.push(`Tempo ${rawTempo} BPM is outside ${MIN_TEMPO_BPM} to ${MAX_TEMPO_BPM} BPM; `
-      + `kept ${DEFAULT_TEMPO_BPM}.`);
+    issues.push(`Tempo ${rawTempo} BPM je mimo rozsah ${MIN_TEMPO_BPM} až ${MAX_TEMPO_BPM} BPM; `
+      + `ponecháno ${DEFAULT_TEMPO_BPM}.`);
   }
   const tempoBpm = round(tempoInRange ? rawTempo : DEFAULT_TEMPO_BPM, 3);
   const list = Array.isArray(r.blocks) ? r.blocks : [];
