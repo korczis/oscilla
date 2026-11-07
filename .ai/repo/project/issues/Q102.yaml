@@ -21,4 +21,12 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: '2026-11-06'
-updated_at: '2026-11-06'
+updated_at: 2026-11-07T09:33:42Z
+evidence:
+  - covers: owner_decision
+    type: manual
+    command: "AskUserQuestion, Claude Code session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f (oscilla-2b), 2026-11-06 ~22:58Z"
+    result: "Question (verbatim): 'Measured tonight: OSCILLA and prismatic-majordomus share one account-wide cap of 20 GitHub-hosted CI jobs. It sat at 20/20 from 18:30Z, mostly Majordomus jobs, so each OSCILLA release waits about 1.5-3 h for runners. How should CI capacity be split?' Answer (verbatim): 'Reserve 6 for OSCILLA (Recommended)'. The Majordomus-side bound is prismatic-majordomus I4532 (seat 7b); Q102 is done when it lands and is measured once (criterion 2)."
+    artifact: ".ai/repo/project/issues/Q102.yaml"
+    commit: f76538a05cff83681d02223696150a8edf59b8d7
+    recorded_at: 2026-11-07T09:33:42Z
