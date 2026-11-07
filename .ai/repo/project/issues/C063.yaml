@@ -28,4 +28,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-06'
-updated_at: '2026-11-06'
+updated_at: 2026-11-07T09:30:44Z
+started_at: 2026-11-07T09:28:41Z
+started_event: sha256:4c8ce96d40c6f96ad5e2c6ad9669b685e25f14c7a2c294307d8e869baf0bb925
+verified_at: 2026-11-07T09:28:53Z
+verified_event: sha256:e2e4663093cf130c74f630d33eeb9e8a4e2d4c9ea823a4b9f1207ef904b8f6ef
+completed_at: 2026-11-07T09:30:44Z
+completed_event: sha256:fc20475c8a117a44e620e5abb73371a323efaa34424a8beac657a655cce70dd4
+evidence:
+  - covers: verified
+    type: ci
+    command: "node --test tests/unit/synth-open-leaves-studio-clean.test.mjs; CI run 42345508613 (#460 at 67179dc0): Browser gate first-screen in chromium, firefox, webkit"
+    result: "On main f76538a0: 4 pass 0 fail (fresh document, saved/changed never rebased, Insert never rebases, Undo/Redo of the automatic panel clean). #460's CI 42345508613 success at 67179dc0, including the Browser gate legs that run first-screen.cjs (link:m=synth then the link:studio rows). Landed by #460 (7e964c0d); verdict .ai/repo/reviews/460.yaml by oscilla-21."
+    artifact: ".ai/repo/reviews/460.yaml"
+    commit: f76538a05cff83681d02223696150a8edf59b8d7
+    recorded_at: 2026-11-07T09:29:55Z
