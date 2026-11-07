@@ -29,4 +29,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-07T09:31:08Z
+started_at: 2026-11-07T09:29:30Z
+started_event: sha256:b2c17f7a6aa057de69b78e53f22ea42fb5dd492ccee6380ab692a8978302e488
+verified_at: 2026-11-07T09:29:42Z
+verified_event: sha256:1b4c257a41d06d311b8ec06cbd115f11e06872f1176cc85b2b7f1c979286b38c
+completed_at: 2026-11-07T09:31:08Z
+completed_event: sha256:ec57474f793167d05a9c96e79d5be889504fd52f6b650309b1bc607cf1eb245b
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/about-current.test.mjs tests/unit/version-authority.test.mjs"
+    result: "On main f76538a0, each criterion re-checked: the heading names the release the roadmap describes, the build's version (ROADMAP.release is BUILD.version); src/data/roadmap.json has no release key (jq has(\"release\") false) and roadmap.mjs refuses one; LINE_ALLOW is empty and version:check passes; no new ISO time or SHA in the roadmap; ui-flowbite-pro-baseline did not grow. 29 pass 0 fail. First form by #424 in #437 (d51f9b2d), re-scoped form by #460 (7e964c0d)."
+    artifact: "src/data/roadmap.json"
+    commit: f76538a05cff83681d02223696150a8edf59b8d7
+    recorded_at: 2026-11-07T09:30:07Z
