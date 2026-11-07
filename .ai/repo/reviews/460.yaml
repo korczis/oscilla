@@ -1,0 +1,43 @@
+# Review verdict for pull request #460 (branch int/derived-versioning-train): the derived-versioning
+# train (R032 About stations as data, C063 + derived workspace lists, R049 the Majordomus pin in
+# MJ_VERSION, R050 numbers held to their source, roadmap v3, plan C062 C063 R049 R050 Q102).
+# Reviewed head cab9aa9a; base origin/main 5b389ac1 (v3.23.0) plus its record #459 (0426993d).
+# Reviewer: oscilla-21 (claude-code 603baa3d). Disclosure: the reviewer built none of this train
+# (oscilla-2b did) and wrote only this file, in a detached review worktree.
+#
+# The digest. origin/main 0426993d's scripts/review-verdict.mjs --content --list --base-branch
+# origin/main at cab9aa9a: d7cbae70ebb64c45cc8692a344b4da36aca993c1d1f61a304517cdb1552984bd over 13
+# guarded paths (.github ci.yml and main-checks.yml; scripts build, release-prepare,
+# release-version-check; src/js/studio/library.js, synth/ui.js, synth/panels/engines.js;
+# tests/browser/live-smoke.cjs; tests/unit ci-workflows, release-about-station, release-ci-receipt,
+# version-authority).
+#
+# Read ahead at 62201745 (on train B's 12f7e58d) and re-checked at the head:
+# - W1: rebaseFresh refuses once the document was saved (info) or changed (digest); an explicit
+#   Insert never rebases. F2's fix (f4d6a2b9) keeps the states the app reached on a fresh document by
+#   itself as clean only while nothing was saved (clean = saved digest, or !info and in that set;
+#   markSaved and forget reset it), so an Undo of the automatic panel stays clean; its test is in
+#   synth-open-leaves-studio-clean.
+# - W2: the stations rendered from src/data/about-stations.json equal origin/main's markup after
+#   whitespace normalisation: 9 208 characters each, 27 stations (the 3.22 and 3.23 stations moved
+#   into the data with the main merges); about-stations --check holds.
+# - W3, F1: roadmap v3 drops the roadmap's copy of the version (About reads BUILD.version, LINE_ALLOW
+#   empty); U086's criterion 1 is re-scoped with the reason and R048 is marked superseded (7f2eec7e),
+#   their done stamps following the landing (V272 D4).
+# - W4: the job rename keeps the ".ai layer (majordomus doctor" prefix release-ci-receipt matches;
+#   no "majordomus doctor 1.0.0..." remains outside .yaml and CHANGELOG; MJ_VERSION is the one pin.
+# - src/index.html's cap falls 309 000 -> 300 000 (296 611 B at the head).
+#
+# Evidence at cab9aa9a: npm test 5006 pass, 0 fail, 2 skipped; version:check PASS (no line allowed);
+# about-stations --check 27; plan-evidence-commits with GITHUB_EVENT_NAME=pull_request
+# GITHUB_BASE_REF=main 5/0.
+#
+# Verdict: merge.
+schema: review-verdict/v1
+pr: 460
+verdict: merge
+reviewer: oscilla-21 (claude-code 603baa3d)
+content: d7cbae70ebb64c45cc8692a344b4da36aca993c1d1f61a304517cdb1552984bd
+findings:
+  - { id: F1, severity: P2, status: closed, title: "roadmap v3 reversed U086 and mooted R048 with neither recorded; 7f2eec7e re-scopes U086 (heading names the build's version, the roadmap holds none) and marks R048 superseded, stamps after the landing" }
+  - { id: F2, severity: P3, status: closed, title: "an Undo of the Synth's automatic panel on a fresh document left it dirty with no user edit; f4d6a2b9 keeps the app-reached fresh states clean until the first save, with a test" }
