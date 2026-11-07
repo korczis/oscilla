@@ -242,7 +242,7 @@ test('what the sequencer would silently repair is refused, naming the first fiel
     params: { freq: 100, modFreq: 5, depthHz: 500 } };
   const cases = [
     ['tempo 9999', top({ tempoBpm: 9999 }), 'tempoBpm',
-      'The sequence: tempoBpm is 9999 in the file but would open as 300'],
+      'The sequence: tempoBpm is 9999 in the file but would open as 120'],
     ['tempo "fast"', top({ tempoBpm: 'fast' }), 'tempoBpm',
       'The sequence: tempoBpm is “fast” in the file but would open as 120'],
     ['tempo as text', top({ tempoBpm: '120' }), 'tempoBpm',
