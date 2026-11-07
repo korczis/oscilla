@@ -23,7 +23,10 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 no Pro source file committed; the legacy surfaces, osc-* class tokens, class names, CSS
 and inline styles in `tests/unit/ui-flowbite-pro-baseline.json` only shrink),
 `project.a-phone-sounds` (the instrument sounds on a phone; its proving suite stays in the
-gate with the browser's gesture rule on). Read them before changing `src/`.
+gate with the browser's gesture rule on), `project.czech-prose` (the app's visible prose,
+release notes, PR and issue bodies and published pages are Czech; the English the app still
+shows only falls, per file; code and commits stay English, Q104). Read them before changing
+`src/`.
 Releases are bound by `project.release-receipt-binds-gate`, `project.release-flow-complete`
 (the flow, in order) and `project.deploy-often`. Four more bind how the repository is worked on:
 `project.rules-name-their-enforcement`, `project.no-conflict-markers`,
