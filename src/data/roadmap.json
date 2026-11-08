@@ -6,7 +6,7 @@
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
       "done": 22,
-      "required": 44,
+      "required": 45,
       "phase": "now"
     },
     {
@@ -62,7 +62,7 @@
       "id": "M054",
       "title": "The whole interface shows the current product",
       "done": 7,
-      "required": 61,
+      "required": 62,
       "phase": "now"
     },
     {
@@ -118,7 +118,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 3,
-      "required": 15,
+      "required": 35,
       "phase": "now"
     },
     {
@@ -132,7 +132,7 @@
       "id": "M066",
       "title": "Instrument wave 1c: the drum machine on the same transport",
       "done": 0,
-      "required": 3,
+      "required": 5,
       "phase": "later"
     },
     {
@@ -245,7 +245,7 @@
       "title": "Instrument kinds, wave 1: the kind contract, the meter and the 88-key piano",
       "done": 0,
       "required": 6,
-      "phase": "later"
+      "phase": "next"
     },
     {
       "id": "M090",
@@ -257,9 +257,9 @@
     {
       "id": "M118",
       "title": "Component system: Majordomus serves every component",
-      "done": 0,
+      "done": 1,
       "required": 8,
-      "phase": "next"
+      "phase": "now"
     },
     {
       "id": "M112",
@@ -341,7 +341,7 @@
     {
       "id": "M070",
       "title": "Owner decisions of the connected-instrument line",
-      "done": 6,
+      "done": 7,
       "required": 8,
       "phase": "now"
     },

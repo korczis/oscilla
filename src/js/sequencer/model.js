@@ -422,7 +422,15 @@ export function normalizeModel(raw, opts = {}) {
       `Sequence version ${String(r.version)} is not ${SEQUENCE_VERSION}; read best-effort.`,
     );
   }
-  const tempoBpm = round(toNumber(r.tempoBpm, DEFAULT_TEMPO_BPM, MIN_TEMPO_BPM, MAX_TEMPO_BPM), 3);
+  // K017: a tempo outside the bounds is reported and the default kept, never clamped silently.
+  const rawTempo = r.tempoBpm === undefined ? DEFAULT_TEMPO_BPM : Number(r.tempoBpm);
+  const tempoInRange = Number.isFinite(rawTempo)
+    && rawTempo >= MIN_TEMPO_BPM && rawTempo <= MAX_TEMPO_BPM;
+  if (Number.isFinite(rawTempo) && !tempoInRange) {
+    issues.push(`Tempo ${rawTempo} BPM je mimo rozsah ${MIN_TEMPO_BPM} až ${MAX_TEMPO_BPM} BPM; `
+      + `ponecháno ${DEFAULT_TEMPO_BPM}.`);
+  }
+  const tempoBpm = round(tempoInRange ? rawTempo : DEFAULT_TEMPO_BPM, 3);
   const list = Array.isArray(r.blocks) ? r.blocks : [];
   if (r.blocks !== undefined && !Array.isArray(r.blocks))
     issues.push('Blocks are not a list; ignored.');
