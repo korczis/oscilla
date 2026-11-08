@@ -10,8 +10,9 @@
 //     implementation and test exist, and its test is run by a script CI runs; an algorithm
 //     id in its prose is a current default, or a retained one on a line that says so; every
 //     browser check its note cites is defined in the suite it names (V272 D8);
-//   - every ADR from 0011 on is cited by a claim, a feature or a use case, or is listed with
-//     the reason it adds no capability of the page (V272 D8);
+//   - every ADR from 0011 on is cited by a claim, a feature or a use case, or is listed in
+//     .ai/repo/knowledge/adr-exemptions.yaml with the reason it adds no capability of the page,
+//     and that file is well formed and names only ADRs that exist (V272 D8; E055);
 //   - docs/v4/completion-ledger.md: every completion-matrix row names its claims (or "–"),
 //     and no row or open item that names a guaranteed claim reads MISSING, "in review" or
 //     "fixing" (V272 D7);
@@ -55,6 +56,7 @@ import { fileURLToPath } from 'node:url';
 import { ALGORITHMS, isKnownAlgorithm } from '../../src/js/measurement/algorithms.js';
 import { parseClaims, staleAlgorithmIds, unquote } from './claims-parse.mjs';
 import { pinnedVersion } from '../../scripts/majordomus-pin-check.mjs';
+import { parseYaml } from '../../scripts/yaml-subset.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -1088,52 +1090,74 @@ test('V272 D8 mutation: a renamed check, a wrong suite and prose are told apart'
 // Every ADR from 0011 on (the V2 line and later) is cited by a claim (its source or its note),
 // by a feature's front matter or by a use case, so a shipped capability a decision describes is
 // claimed with the test that proves it. A decision that adds no capability of the page is listed
-// here with its reason; an entry that becomes cited is refused as stale.
-const ADR_NOT_A_CAPABILITY = new Map([
-  ['0028', 'release provenance (the source digest and the Pages stamp): intent release-provenance'
-    + ' and tests/unit/release-provenance.test.mjs hold it'],
-  ['0029', 'the release gate\'s visual regression check: a gate, not a capability of the page'],
-  ['0047', 'release process: a major release is preceded by a release candidate'],
-  ['0051', 'a descoping decision: no knowledge explorer is built, and the method claims it names'
-    + ' are not built yet (docs/v4/completion-ledger.md)'],
-  ['0053', 'vocabulary: the names the stored records and the page use, held by'
-    + ' tests/unit/vocabulary.test.mjs; it adds no capability'],
-  ['0054', 'repository operation: the Majordomus mesh of OSCILLA\'s runtimes'],
-  ['0055', 'repository operation: how a merge train lands'],
-  ['0056', 'repository operation: when the Majordomus CI pin moves'],
-  ['0057', 'release evidence: what proves a static Pages deployment'],
-  ['0082', 'release engineering: the gate verdict of a release is the CI run of its own pull'
-    + ' request (rule project.release-receipt-binds-gate v2, tests/unit/release-ci-receipt'
-    + '.test.mjs); it adds no capability of the page'],
-  ['0060', 'a product-path decision (Q003): no commercial path before v4.0; it adds no'
-    + ' capability of the page'],
-  ['0061', 'the UI system (Flowbite Pro on Tailwind, built and inlined): rule'
-    + ' project.ui-uses-flowbite-pro and tests/unit/ui-flowbite-pro.test.mjs hold it; it adds'
-    + ' no capability of the page'],
-  ['0063', 'a proposed decision (G1 coherence contract): one output owner, value classes and'
-    + ' save-path scopes; nothing implements it yet, and the claims of C001-C003 (#280), T026'
-    + ' and H002 will cite it when they land; it adds no capability of the page today'],
-  ['0080', 'a dependency decision (Q070): Cytoscape.js is admitted for one explorer not built yet;'
-    + ' P010\'s claim cites it when the explorer ships, and this entry then fails as stale'],
-  ['0081', 'a proposed decision (J001): the component contract and its Majordomus projection;'
-    + ' nothing implements it yet, and G001\'s claim cites it when the catalogue ships, and this'
-    + ' entry then fails as stale'],
-  ['0083', 'landing engineering (E045): pull requests land through a merge queue instead of'
-    + ' racing armed auto-merges on a strict branch (rule project.ci-bounded v2, release receipt'
-    + ' v3); it adds no capability of the page'],
-  ['0084', 'a scope decision (Q062): notes clips, instrument tracks and a session grid on the'
-    + ' Studio timeline; nothing implements it yet, and K099\'s claim cites it when the notes clip'
-    + ' kind ships, and this entry then fails as stale'],
-  ['0085', 'an accepted decision (song-reconstruction critique, finding'
-    + ' lineage-and-acceptance-have-no-home): where reconstruction lineage and acceptance live;'
-    + ' nothing implements it yet, and the first issue of that intent cites it when it ships'],
-  ['0086', 'a proposed decision (programs B and C): one notes array edited by the step grid, the'
-    + ' piano roll and the beat machine; nothing implements it yet, and K099\'s claim cites it'
-    + ' when the notes clip kind ships, and this entry then fails as stale'],
-  ['0088', 'a proposed decision (Q100): an opt-in loopback bridge exports trace steps to a local'
-    + ' Majordomus and the default build stays offline; nothing implements it yet, and R046\'s'
-    + ' claim cites it when the bridge ships, and this entry then fails as stale'],
-]);
+// in .ai/repo/knowledge/adr-exemptions.yaml with its reason (E055: a data file outside tests/,
+// so that proposing an ADR changes no test); an entry that becomes cited is refused as stale.
+const ADR_EXEMPTIONS = '.ai/repo/knowledge/adr-exemptions.yaml';
+const ADR_NUMBER = /^\d{4}$/;
+const REASON_MIN = 30;
+const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * The exemptions an adr-exemptions.yaml text carries: `exempt`, a Map from ADR number to
+ * reason, and `problems`, one string per thing the file cannot say (not YAML the repository
+ * reads; not a mapping with `version: 1` and an `exemptions` list; an entry that is not a
+ * mapping with exactly `adr` and `reason`; an `adr` that is not the four-digit number as a
+ * string, so an unquoted 0028 is refused; a reason shorter than REASON_MIN; an ADR listed
+ * twice, before 0011, or not among `numbers`, the ADRs that exist). A refused entry exempts
+ * nothing.
+ */
+export function readAdrExemptions(text, numbers) {
+  const exempt = new Map();
+  let doc;
+  try {
+    doc = parseYaml(text);
+  } catch (e) {
+    return { exempt, problems: [`not YAML the repository reads: ${e.message}`] };
+  }
+  if (!isMap(doc) || doc.version !== 1 || !Array.isArray(doc.exemptions)) {
+    return { exempt,
+      problems: ['the file is a mapping with `version: 1` and an `exemptions` list'] };
+  }
+  const problems = Object.keys(doc).filter((k) => k !== 'version' && k !== 'exemptions')
+    .map((k) => `unknown top-level key: ${k}`);
+  doc.exemptions.forEach((entry, i) => {
+    const at = `exemptions[${i}]`;
+    if (!isMap(entry)) {
+      problems.push(`${at}: an entry is a mapping with adr and reason`);
+      return;
+    }
+    const keys = Object.keys(entry).sort().join(', ');
+    if (keys !== 'adr, reason') {
+      problems.push(`${at}: the keys are adr and reason, not ${keys || '(none)'}`);
+      return;
+    }
+    const { adr, reason } = entry;
+    if (typeof adr !== 'string' || !ADR_NUMBER.test(adr)) {
+      problems.push(`${at}: adr is the four-digit number as a quoted string ("0028"), not `
+        + JSON.stringify(adr));
+      return;
+    }
+    if (typeof reason !== 'string' || reason.trim().length < REASON_MIN) {
+      problems.push(`${at} (ADR ${adr}): reason says why it adds no capability of the page, `
+        + `in at least ${REASON_MIN} characters`);
+      return;
+    }
+    if (exempt.has(adr)) {
+      problems.push(`${at}: ADR ${adr} is listed twice`);
+      return;
+    }
+    if (Number(adr) < 11) {
+      problems.push(`${at}: ADR ${adr} is before 0011, which the check does not read`);
+      return;
+    }
+    if (!numbers.includes(adr)) {
+      problems.push(`${at}: ADR ${adr} does not exist under .ai/repo/adrs/`);
+      return;
+    }
+    exempt.set(adr, reason.trim());
+  });
+  return { exempt, problems };
+}
 
 /** ADR numbers (from 0011 on) that `corpus` never cites, and exemptions it does cite. */
 export function uncitedAdrs(numbers, corpus, exempt) {
@@ -1154,16 +1178,24 @@ const ADR_CORPUS = () => [
   ...useCaseFiles().map(read),
 ].join('\n');
 
+const ADR_EXEMPT = () => readAdrExemptions(read(ADR_EXEMPTIONS), ADR_NUMBERS());
+
+test('V272 D8: the ADR exemptions file is well formed and names only ADRs that exist', () => {
+  const { exempt, problems } = ADR_EXEMPT();
+  assert.deepEqual(problems, [], `${ADR_EXEMPTIONS}:\n  ${problems.join('\n  ')}`);
+  assert.ok(exempt.size > 0, `${ADR_EXEMPTIONS} carries the exemptions`);
+});
+
 test('V272 D8: every ADR from 0011 on is claimed, or says why it adds no capability', () => {
   const numbers = ADR_NUMBERS();
   assert.ok(numbers.length > 50, `ADRs listed (${numbers.length})`);
-  for (const [n, why] of ADR_NOT_A_CAPABILITY) {
-    assert.ok(numbers.includes(n), `ADR ${n} exists`);
-    assert.ok(why.length > 30, `ADR ${n} says why it adds no capability`);
-  }
-  const { uncited, stale } = uncitedAdrs(numbers, ADR_CORPUS(), ADR_NOT_A_CAPABILITY);
-  assert.deepEqual(uncited, [], `ADRs no claim, feature or use case cites: ${uncited.join(', ')}`);
-  assert.deepEqual(stale, [], `exempt ADRs that are cited now: ${stale.join(', ')}`);
+  const { exempt, problems } = ADR_EXEMPT();
+  assert.deepEqual(problems, [], `${ADR_EXEMPTIONS}:\n  ${problems.join('\n  ')}`);
+  const { uncited, stale } = uncitedAdrs(numbers, ADR_CORPUS(), exempt);
+  assert.deepEqual(uncited, [], 'ADRs no claim, feature or use case cites (claim them, or list '
+    + `them in ${ADR_EXEMPTIONS} with the reason): ${uncited.join(', ')}`);
+  assert.deepEqual(stale, [],
+    `exempt ADRs that are cited now (remove them from ${ADR_EXEMPTIONS}): ${stale.join(', ')}`);
 });
 
 test('V272 D8 mutation: an ADR cited nowhere is named, a cited exemption is stale', () => {
@@ -1171,6 +1203,49 @@ test('V272 D8 mutation: an ADR cited nowhere is named, a cited exemption is stal
   assert.deepEqual(uncitedAdrs(['0010', '0012', '0013', '0014', '0015', '0016'], corpus,
     new Map([['0015', 'why']])), { uncited: ['0016'], stale: ['0015'] });
   assert.deepEqual(uncitedAdrs(['0120'], 'ADR 01201', new Map()).uncited, ['0120']);
+});
+
+test('V272 D8 mutation: a fixture exemptions file silences an uncited ADR, reports a cited one '
+  + 'stale, and a malformed or impossible entry is refused', () => {
+  const numbers = ['0012', '0015', '0016'];
+  const corpus = 'ADR 0015';
+  const why = 'a repository process; it adds no capability of the page';
+  const file = (...entries) => `version: 1\nexemptions:\n${entries.join('')}`;
+  const entry = (adr, reason = why) => `  - adr: ${adr}\n    reason: >-\n      ${reason}\n`;
+
+  const uncitedOnly = readAdrExemptions(file(entry('"0016"')), numbers);
+  assert.deepEqual(uncitedOnly.problems, []);
+  assert.deepEqual([...uncitedOnly.exempt], [['0016', why]], 'a folded reason reads as one line');
+  assert.deepEqual(uncitedAdrs(numbers, corpus, uncitedOnly.exempt),
+    { uncited: ['0012'], stale: [] });
+  const citedOne = readAdrExemptions(file(entry('"0015"')), numbers);
+  assert.deepEqual(citedOne.problems, []);
+  assert.deepEqual(uncitedAdrs(numbers, corpus, citedOne.exempt),
+    { uncited: ['0012', '0016'], stale: ['0015'] });
+
+  const cases = [
+    ['an unquoted number', file(entry('0016')), /quoted string \("0028"\), not 16$/],
+    ['a number of the wrong shape', file(entry('"16"')), /quoted string \("0028"\), not "16"$/],
+    ['no reason', file('  - adr: "0016"\n'), /keys are adr and reason, not adr$/],
+    ['a reason that says nothing', file(entry('"0016"', 'too short')), /at least 30 characters/],
+    ['an extra key', file(`${entry('"0016"')}    note: x\n`),
+      /keys are adr and reason, not adr, note, reason$/],
+    ['an ADR that does not exist', file(entry('"0099"')), /ADR 0099 does not exist/],
+    ['an ADR before 0011', file(entry('"0005"')), /ADR 0005 is before 0011/],
+    ['the same ADR twice', file(entry('"0016"'), entry('"0016"')), /ADR 0016 is listed twice/, 1],
+    ['a bare number', file('  - "0016"\n'), /an entry is a mapping/],
+    ['no version and no list', 'exemptions: {}\n', /`version: 1` and an `exemptions` list/],
+    ['an unknown top-level key', 'version: 1\nexemptions: []\nextra: 1\n',
+      /unknown top-level key: extra/],
+    ['text the parser refuses', 'version: 1\nexemptions:\n\t- adr: "0016"\n',
+      /^not YAML the repository reads: /],
+  ];
+  for (const [what, text, re, kept = 0] of cases) {
+    const { exempt, problems } = readAdrExemptions(text, numbers);
+    assert.equal(problems.length, 1, `${what}: ${JSON.stringify(problems)}`);
+    assert.match(problems[0], re, what);
+    assert.equal(exempt.size, kept, `${what}: a refused entry exempts nothing`);
+  }
 });
 
 // ------------------------------------------------------- the v4.0 completion ledger (V272 D7)

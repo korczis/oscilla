@@ -17,6 +17,7 @@ import { capIrLength } from '../../src/js/measurement/analysis-task.js';
 import { buildIrView } from '../../src/js/measurement/views/ir-chart.js';
 import { resultsFromMeasurement } from '../../src/js/experiments/schema.js';
 import { fixedText, msText } from '../../src/js/measurement/views/common.js';
+import { createViews } from '../../src/js/ui/measure/views.js';
 
 const { inverseSweep, renderStimulus } = STIM;
 const { IR_ALGORITHMS, IR_ALGORITHMS_V1, computeImpulseResponse } = IRM;
@@ -250,4 +251,85 @@ test('T019 negative: stored IR results are unchanged (no new field, same floor)'
   assert.ok(v.summary.includes(`noise tail ${fixedText(v1.noiseFloorDb, 0)} dB re peak, `),
     v.summary);
   assert.doesNotMatch(v.summary, /≤/);
+});
+
+// T028 (review of #343 R2): the engine renders a recipe's stimulus at the device rate
+// (engine.js validateRecipe; preflight SAMPLE_RATE_DIFFERS), so a saved experiment can carry the
+// stimulus spec of the machine that made the recipe and an IR at the rate that ran it
+// (repeatExperiment copies the recipe; an import brings its own). The MEASURE adapter's IR panel
+// reads the stimulus length at the IR's rate, never the recipe's: at 44.1 kHz the 1 s sweep is
+// 44 100 frames, at 48 kHz 48 000, and the full-overlap window moves by the difference.
+const SR48 = 48000;
+const SWEEP48 = renderStimulus({ kind: 'log-sweep', sampleRate: SR48, duration: 1, f1: 20,
+  f2: 3000, level: 0.25 });
+const FRAMES48 = SWEEP48.samples.length;
+/** The capture of the 48 kHz sweep through a unit delta: PRE_S of silence, POST_S of post-roll. */
+const IR48 = (() => {
+  const pre = Math.round(PRE_S * SR48);
+  const y = new Float32Array(pre + FRAMES48 + Math.round(POST_S * SR48));
+  y.set(SWEEP48.samples, pre);
+  return computeImpulseResponse({ stimulus: SWEEP48.samples, captured: y, sampleRate: SR48,
+    f1: 20, f2: 3000, lagSamples: pre });
+})();
+/** The recipe a 44.1 kHz machine stores for the same sweep (schema: the normalized spec). */
+const SPEC441 = STIM.normalizeStimulus({ ...SWEEP48.spec, sampleRate: 44100 }).spec;
+const ms48 = (t) => msText(t * 1000, 1000 / SR48);
+const windowText48 = (frames) => {
+  const w = irNoiseFloorWindow(IR48, frames);
+  return w ? `${ms48(w[0])} to ${ms48(w[1])} after the peak` : null;
+};
+const tailNote = (notes) => notes.find((n) => n.startsWith('Noise tail estimate: full-overlap-tail'));
+
+/** The IR panel the MEASURE adapter builds for a shown source (views.js rebuildIr). */
+function irPanelOf(src) {
+  const ctx = { cmp: { meas: { view: { irSpan: 'full', irScale: 'db' } } },
+    shown: { kind: 'experiment', src, title: 'fixture' }, charts: {} };
+  createViews(ctx, {}, {}).rebuildIr();
+  return ctx.cmp.meas.ir;
+}
+
+test('T028: a recipe made at 44.1 kHz, shown with a 48 kHz IR, states the window at the IR\'s '
+  + 'rate', () => {
+  assert.equal(FRAMES48, 48000);
+  assert.equal(STIM.stimulusFrames(SPEC441), 44100, 'the recipe\'s own length');
+  const right = windowText48(FRAMES48);
+  const wrong = windowText48(44100);
+  assert.ok(right && wrong && right !== wrong, `${right} / ${wrong}`);
+  const w = irNoiseFloorWindow(IR48, FRAMES48);
+  assert.ok(Math.abs(w[1] - POST_S) < 2 / SR48 && Math.abs(w[0] - 0.9 * POST_S) < 2 / SR48, w);
+  const saved = { recipe: { stimulus: SPEC441, repeats: 1 }, results: { ir: IR48 } };
+  const panel = irPanelOf(saved);
+  const note = tailNote(panel.notes);
+  assert.ok(note && note.includes(right), note);
+  assert.ok(!note.includes(wrong), note);
+  // Mutation: the length at the recipe's rate (the merge base's reading) states the other
+  // window, 3 900 frames later than the post-roll the capture has.
+  assert.ok(tailNote(buildIrView(IR48, { stimulusFrames: 44100 }).notes).includes(wrong));
+  // The same panel as a recipe at the IR's own rate (equal rates read as today), and as the
+  // view given the rendered length.
+  assert.deepEqual(panel, irPanelOf({ recipe: { stimulus: SWEEP48.spec }, results: { ir: IR48 } }));
+  assert.deepEqual(panel.notes,
+    buildIrView(IR48, { scale: 'db', range: 'full', stimulusFrames: FRAMES48 }).notes);
+});
+
+test('T028 negative: a live capture keeps its rendered length; no stimulus or no rate reads '
+  + 'the window in words', () => {
+  // A result (live capture): stimulus.frames is the rendered length and wins over the recipe.
+  const live = { stimulus: { spec: SWEEP48.spec, frames: 47000 }, recipe: { stimulus: SPEC441 },
+    ir: IR48 };
+  const note = tailNote(irPanelOf(live).notes);
+  assert.ok(note && note.includes(windowText48(47000)), note);
+  // No stimulus, no recipe, or a stimulus with no stated rate: nothing is rescaled and the
+  // window is described, not invented (T019), as on the merge base.
+  for (const [name, recipe] of [['no stimulus', { repeats: 1 }], ['no recipe', undefined],
+    ['no rate', { stimulus: { ...SPEC441, sampleRate: null } }]]) {
+    const n = tailNote(irPanelOf({ recipe, results: { ir: IR48 } }).notes);
+    assert.match(n, /last 10 % of the lags at which the whole stimulus lies inside the capture/,
+      name);
+    assert.doesNotMatch(n, /\d ms to /, name);
+  }
+  // An IR without a rate has no panel or names no window, whatever the recipe says.
+  const p = irPanelOf({ recipe: { stimulus: SPEC441 }, results: { ir: { ...IR48,
+    sampleRate: null } } });
+  assert.ok(p === null || !/\d ms to /.test(p.notes.join(' ')), p && p.notes.join(' | '));
 });

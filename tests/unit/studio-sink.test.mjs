@@ -88,9 +88,11 @@ test('leaving the Studio disarms an armed-only run and leaves a PLAYed one', () 
   transport.disarm = () => { log.push(['disarm']); transport.armed = false;
     transport.playing = false; return Promise.resolve(); };
   sink.noteOn(60, 100);
+  assert.deepEqual(sink.heldNotes(), [{ note: 60, node: 'keys-1' }], 'the debug read of the map');
   assert.equal(sink.leave(), true);
   assert.deepEqual(log.slice(-2), [['live', 'keys-1', 'all-off', undefined], ['disarm']]);
   assert.equal(transport.armed, false);
+  assert.deepEqual(sink.heldNotes(), [], 'leaving empties the held map (K175, S18)');
   transport.playing = true; // PLAY: playing, not armed
   assert.equal(sink.leave(), false, 'a PLAYed run is the user\'s');
 });

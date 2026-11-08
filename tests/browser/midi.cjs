@@ -65,7 +65,11 @@
 //                               instead of reaching the Synth and leaving it sounding
 //   keyboard-everywhere         M086: the same A plays the Playground (a note voice), the Synth
 //                               panel and the Studio graph (its Keys node through the Studio
-//                               transport, no Playground voice), the keys docked in both
+//                               transport, no Playground voice), the keys docked in both; a key
+//                               held in the Studio and released after leaving it stops, leaving
+//                               disarms the keys' run, and the Studio sink's held map
+//                               (synthDebug().sinkHeld) reads empty after leaving, the key still
+//                               down and after its release (K175, S18)
 //   keyboard-studio-held        K175, review S18 (af's criterion): A held on the Studio
 //                               keyboard (the Synth panel's Keys, the Studio transport), the
 //                               workspace switched to the Playground, then A up: the Studio
@@ -979,14 +983,42 @@ async function keyboardEverywhere(browser, b, origin, url) {
     // note, and leaving disarms the keys' run, so the Playground's keys are not refused after.
     await page.keyboard.down('KeyA');
     await heard(page, (x) => x.peak > 0.005, `${leg}: A held in the Studio sounds`);
+    const sinkHeld = () => page.evaluate(() => window.OSCILLA.app.synthDebug().sinkHeld);
+    // The node the held key went to is the Studio's routed note target (the Synth panel's own
+    // Keys node once the panel was opened, K066) or its first notes node: a node of the graph.
+    const inStudio = await page.evaluate(() => {
+      const held = window.OSCILLA.app.synthDebug().sinkHeld;
+      const ids = window.OSCILLA.studio.model.graph.nodes.map((n) => n.id);
+      return { held, inGraph: held.every((h) => ids.includes(h.node)) };
+    });
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('playground'));
+    // K175 (S18): the sink's held map, read through the Synth's debug seam, empties on leaving
+    // (the keyboard's workspace-change release and the sink's leave(), each through the node
+    // the note went to), while the key is still down; it stays empty after the key-up.
+    let leftHeld;
+    try {
+      leftHeld = await until(async () => {
+        const h = await sinkHeld();
+        return h.length === 0 ? { held: h } : null;
+      }, { ms: STEP_MS, what: `${leg}: leaving the Studio empties the sink's held map` });
+    } catch (error) {
+      if (!(error instanceof WaitTimeout)) throw error;
+      leftHeld = { held: await sinkHeld(), timedOut: error.message };
+    }
     await page.keyboard.up('KeyA');
     const left = await heard(page, (x) => x.peak < 0.001, `${leg}: leaving the Studio silences A`);
     const tr = await page.evaluate(() => ({ armed: window.OSCILLA.studio.transport.armed,
-      playing: window.OSCILLA.studio.transport.playing }));
+      playing: window.OSCILLA.studio.transport.playing,
+      sinkHeld: window.OSCILLA.app.synthDebug().sinkHeld }));
     check(leg, id, 'a key held in the Studio is released after leaving it, and leaving disarms '
       + 'the keys\' run (the transport no longer owns the output)',
-    !left.timedOut && !tr.armed && !tr.playing, JSON.stringify({ peak: left.peak, ...tr }));
+    !left.timedOut && !tr.armed && !tr.playing, JSON.stringify({ peak: left.peak,
+      armed: tr.armed, playing: tr.playing }));
+    check(leg, id, 'the Studio sink\'s held map holds the key while it sounds in the Studio and '
+      + 'is empty after leaving, the key still down and after its release (K175, S18)',
+    inStudio.held.length === 1 && inStudio.held[0].note === 60 && inStudio.inGraph
+      && !leftHeld.timedOut && tr.sinkHeld.length === 0,
+    JSON.stringify({ inStudio, left: leftHeld, afterUp: tr.sinkHeld }));
     await go('playground');
     const pg2 = await press('playground', (x) => x.notes === 1);
     check(leg, id, 'after the Studio, the Playground\'s A sounds again (not refused)',
@@ -1050,6 +1082,7 @@ async function keyboardStudioHeld(browser, b, origin, url) {
     const app = window.OSCILLA.app;
     const sink = app.studioSink();
     const tr = window.OSCILLA.studio.transport;
+    // held: the sink's [{ note, node }] (studio-sink.js heldNotes, the train C merge of K175)
     return { held: sink && typeof sink.heldNotes === 'function' ? sink.heldNotes() : null,
       notes: tr ? tr.heldNotes() : null };
   });
@@ -1076,7 +1109,8 @@ async function keyboardStudioHeld(browser, b, origin, url) {
     check(leg, id, 'a key held on the Studio keyboard across a switch to the Playground is '
       + 'released on the Studio node: the sink and the transport hold no note, the analyser '
       + 'below -70 dB rel', !on.timedOut && !off.timedOut
-      && JSON.stringify(during.held) === '[60]' && Array.isArray(after.held)
+      && Array.isArray(during.held) && during.held.length === 1 && during.held[0].note === 60
+      && Array.isArray(after.held)
       && !after.held.length && Array.isArray(after.notes) && !after.notes.length
       && errors.length === 0,
     JSON.stringify({ on: on.peak, off: off.peak, during, after, errors }));
