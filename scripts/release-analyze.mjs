@@ -12,7 +12,9 @@
 //          the artifact, so it is never silently dropped)
 //   none   build, chore, ci, docs, refactor, style, test only; and a merge commit (two or more
 //          parents) that is not itself a conventional feat/fix/perf/revert or breaking: its
-//          members are commits of the same walk and are each counted (R051)
+//          members are commits of the same walk and are each counted (R051). A change made
+//          by hand inside a merge (beyond rebuilding dist) is thereby uncounted: land it as
+//          its own conventional commit, never in a merge's conflict resolution
 // The proposal: when package.json already carries an untagged version that satisfies the
 // required level (the initial V2 major after v1.0.0 covers any level), the release confirms
 // it; otherwise the version is bumped once from the last tag (or from package.json when that
