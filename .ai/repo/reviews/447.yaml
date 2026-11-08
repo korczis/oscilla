@@ -83,7 +83,7 @@ schema: review-verdict/v1
 pr: 447
 verdict: merge
 reviewer: oscilla-2b (claude-code 6f686fcc)
-content: 6f6bfae7ed7f04e1e155be9cf2c7442a1ee31f23ed6f5dcfc0b50e6ee466795f
+content: e597cd0631d2a36530ff9455b76623d5f98c01d53792715cd4d4973013117ebe
 findings:
   - { id: F1, severity: P2, status: closed, title: "Key low above Key high refused every note; 936b08c1 takes the interval in either order (adapter and card)" }
   - { id: F2, severity: P3, status: open, title: "two notes at the same t: the legato glide starts from the replaced note's value, not the pitch before t" }
