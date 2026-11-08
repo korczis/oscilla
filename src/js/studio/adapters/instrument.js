@@ -202,6 +202,9 @@ export const xyPad = {
       inputs: {},
       outputs: { x, y, pitch },
       outputRange: { x: UNIPOLAR, y: UNIPOLAR, pitch: KEYS_PITCH_RANGE },
+      // Performance outputs: a hand sweeps them, so their cables stay inside the target's
+      // range (compiler.js computeBases, K183).
+      fits: ['x', 'y'],
       modTarget: (key) => ({ reason: `${key} is not modulatable` }),
       applyBase() {},
       update(changed, owned, w) {
@@ -218,6 +221,14 @@ export const xyPad = {
         if (p.glide > 0 && legato) pitch.offset.setTargetAtTime(d.pitch, t, p.glide / 3);
         else pitch.offset.setValueAtTime(d.pitch, t);
         return { ...d, x: cx, y: cy };
+      },
+      /**
+       * The pad let go from t: every output that sums into a control target (X and Y, `fits`)
+       * back to its rest, 0, gliding (τ 15 ms, no click), K183 N2; the ruling on review NF3:
+       * no Hold keeps them yet (Q099). The Pitch output ends with its note and is not rested.
+       */
+      rest(t) {
+        for (const n of [x, y]) n.offset.setTargetAtTime(0, t, PARAM_TAU_S);
       },
       stop(t) {
         for (const n of [x, y, pitch]) { try { n.stop(t); } catch (e) { /* stopped */ } }

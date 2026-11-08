@@ -1287,6 +1287,14 @@ function defineChecks() {
       timeout: 5000 }).catch(() => {});
     await collect();
     await page.click('[data-osc="presets.tab"][data-value="reference"]');
+    // K171: on the Synth's XY tab the pad owns the notes and the docked keyboard folds to its
+    // handle, the one state that shows keyboard.handle.
+    await H.workspace(page, 'synth');
+    await page.click('#osc-synth-tab-xy');
+    await page.waitForSelector('[data-osc="keyboard.handle"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('#osc-synth-tab-panel');
     await H.workspace(page, 'playground');
     await page.setViewportSize({ width: 375, height: 800 });
     await H.workspace(page, 'measure');

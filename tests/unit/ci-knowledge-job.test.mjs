@@ -66,6 +66,25 @@ test('the pinned download retries transient errors and checks the digest', () =>
   assert.match(k, /MJ_VERSION: \d+\.\d+\.\d+(-[0-9A-Za-z.]+)?\n/);
 });
 
+// 2026-11-08: the pinned release's public download URLs returned 504 for hours while the API
+// served the same assets, and every pull request's knowledge job failed. Where the URL fails,
+// the job fetches the same asset of the same tag and repository through the API, bounded and
+// retried, and the digest still decides; main-checks.yml carries the same step.
+test('a failed public download falls back to the API route, same tag and repository', () => {
+  for (const k of [job('knowledge'), readFileSync(path.join(ROOT,
+    '.github/workflows/main-checks.yml'), 'utf8')]) {
+    assert.match(k, /if ! curl -fsSL/, 'the public URL is tried first and its failure is caught');
+    assert.match(k, /gh release download "v\$\{MJ_VERSION\}" -R korczis\/prismatic-majordomus\s*\\\n\s*-p "\$a"/,
+      'the fallback names the pinned tag, the repository and the exact asset');
+    assert.match(k, /timeout 60 gh release download/, 'each attempt is bounded');
+    assert.match(k, /for i in 1 2 3; do/, 'three attempts');
+    assert.match(k, /GH_TOKEN: \$\{\{ github\.token \}\}/, 'the API is called with the job token');
+    const fallback = k.indexOf('gh release download');
+    const digest = k.indexOf('sha256sum -c -');
+    assert.ok(fallback > 0 && digest > fallback, 'the digest is checked after either download');
+  }
+});
+
 test('the verdict: hook wiring is excused, any other FAIL and an empty output are not', {
   skip: HAVE_JQ ? false : 'jq is not installed here (CI runners have it)',
 }, () => {
