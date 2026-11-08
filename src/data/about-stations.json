@@ -203,6 +203,13 @@
       "summary": "Nové texty aplikace jsou česky a anglických vět, které ještě ukazuje, po souborech jen ubývá: hlídá to pravidlo a test",
       "commit": "4ff09c1",
       "datetime": "2026-11-07T16:10:32+01:00"
+    },
+    {
+      "release": "3.26",
+      "title": "Noty a tempo",
+      "summary": "Pole frekvence v sekvenceru berou název noty a číslo MIDI, tempo mimo 20 až 300 BPM se odmítne s důvodem a ovladač tempa ukazuje načtenou hodnotu",
+      "commit": "37a64b2",
+      "datetime": "2026-11-08T01:54:54+01:00"
     }
   ]
 }
