@@ -79,6 +79,23 @@
 # checker at 150f7be6: 6f6bfae7ed7f04e1e155be9cf2c7442a1ee31f23ed6f5dcfc0b50e6ee466795f over
 # the same 10 paths, equal to the builder's. synth-keys, v4-clip-target-policy, synth-panel,
 # v31-studio-ui-timeline and czech-prose: 51 pass, 0 fail. F2, F3, F4 open. Verdict: merge.
+#
+# Round 4 (71f17601 on cce08a84): 21 merged main 3a3a5a58 (#444 keys+pad, #490). Against git's
+# mechanical merge of cce08a84 with main (merge-tree 775e7abe) the head differs in live-notes.js,
+# the czech-prose baseline, synth-keys.test.mjs and dist only. live-notes.js keeps both sides of
+# both conflicts: K060's range comment beside main's gateCloseAt import, and gate() records
+# main's `opened` bookkeeping first, then forwards K060's gateAt to the Keys handle (the delayed
+# close is computed by the callers through closeAt before gate(), as on main). One semantic fix
+# the merge needed: #444's legato path (K183, kind 'legato') bypassed K060's key-range refusal,
+# so a slide to a note outside Key low..Key high played; the check now covers 'on' and 'legato',
+# a refused slide changes nothing and the held note sounds on (synth-keys: refused with the
+# key-range sentence, held [60], an in-range slide plays; 10 pass 1 fail without the fix). The
+# baseline only falls (clip-targets 21 -> 20, nodes/instrument 25 -> 17, synth/panel 1 -> 0).
+# Content with origin/main 3a3a5a58's checker at 71f17601:
+# e597cd0631d2a36530ff9455b76623d5f98c01d53792715cd4d4973013117ebe over the same 10 paths.
+# synth-keys, live-notes, v4-clip-target-policy, synth-panel and czech-prose: 35 pass, 0 fail.
+# F2, F3 open; F4 is resolved by #474's GLOSSARY entry (připravit / připravený) when it lands.
+# Verdict: merge.
 schema: review-verdict/v1
 pr: 447
 verdict: merge
