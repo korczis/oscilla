@@ -77,6 +77,10 @@ const FONT_MIN = 12;
 const KNOWN_SMALL_FONTS = new Map([
 ]);
 const SYNTH_LOAD_MS = 15000;
+// K224 F1: the Studio sizes where #444's room rule folds the docked keys, and the deadline for
+// the fold (the page's load and the dock's first decision).
+const STUDIO_FOLD_SIZES = [[375, 667], [1024, 768]];
+const STUDIO_FOLD_MS = 15000;
 // A tab is rendered on a frame after synthTab(): what only that tab's render draws.
 const SYNTH_TAB_DRAWS = { panel: '[data-module="vco1"]', engines: '[data-module="additive"]',
   xy: '[data-osc="synth.xy.pad"]' };
@@ -378,6 +382,48 @@ async function runOne(name) {
         if (bad.length) failures.push(`${w}x${h} ${ws}: ${firstOf(bad, 6)}`);
       }
       await page.close();
+    }
+
+    // K224 F1: where the Studio's room folds the docked keys (#444 keepsRoom), no frame from the
+    // load on shows the keys: a sampler set before the page's own scripts records every
+    // animation frame, and once the dock has folded none of the frames before showed the keys.
+    for (const [w, h] of STUDIO_FOLD_SIZES) {
+      const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+      await ctx.addInitScript(() => {
+        window.__dockFrames = [];
+        const tick = () => {
+          const d = document.querySelector('[data-osc="keyboard"]');
+          const k = document.querySelector('[data-osc="keyboard.keys"]');
+          if (d) {
+            window.__dockFrames.push({ state: d.getAttribute('data-dock-state'),
+              keys: k ? Math.round(k.getBoundingClientRect().height) : 0 });
+          }
+          if (window.__dockFrames.length < 600) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      const page = await ctx.newPage();
+      await page.goto(`${URL}#m=studio`);
+      let frames = [];
+      try {
+        frames = await until(async () => {
+          const f = await page.evaluate(() => window.__dockFrames || []);
+          return f.length >= 60 && f.at(-1).state === 'collapsed' ? f : null;
+        }, { ms: STUDIO_FOLD_MS, what: `${w}x${h} studio: the dock folds within its first frames` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        frames = await page.evaluate(() => window.__dockFrames || []);
+      }
+      checks++;
+      const shown = frames.filter((f) => f.keys > 0 && f.state !== 'collapsed');
+      if (!frames.length || frames.at(-1).state !== 'collapsed') {
+        failures.push(`${w}x${h} studio: the dock did not fold (${frames.length} frames, last `
+          + `${JSON.stringify(frames.at(-1) || null)})`);
+      } else if (shown.length) {
+        failures.push(`${w}x${h} studio: ${shown.length} frame(s) showed the keys before the `
+          + `fold (first ${JSON.stringify(shown[0])})`);
+      }
+      await ctx.close();
     }
 
     // Coarse pointer (touch emulation; pointer: coarse matches in all three engines).
