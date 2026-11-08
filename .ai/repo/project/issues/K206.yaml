@@ -1,0 +1,27 @@
+id: K206
+milestone: M064
+serves:
+  - "connected-instrument#knob-control"
+title: "Knob browser contract: tests/browser/knob.cjs, linked, real-time and interactive"
+slug: knob-browser-contract-tests-browser-knob-cjs-linked-real-tim
+priority: p1
+profile: implementation
+objective: "Lands as test(ui). K058's criterion 5 names tests/browser/knob.cjs, which does not exist. The shipped knob is checked inside tests/browser/synth.cjs, and nothing there covers: a knob mounted on a fixture parameter that shows the bound fixture store's value after reload (the Synth keeps nothing across a reload: s-dock asserts 'Reload keeps nothing'); aria-valuenow, aria-valuetext and the visible value changing together after a drag, a key press and a typed commit; a synthesized touch drag; the modulation dot hidden under prefers-reduced-motion (the dot is N006's measured value and is not built; N006 depends through N005 on K058, so this issue cannot name N006 in depends_on without a cycle, and its reduced-motion clause stays open, never passed vacuously, until N006 draws the dot; the plan coordinator decides whether that clause moves to N006, whose objective already hides the dot under prefers-reduced-motion). Adds the suite on the one knob model src/js/ui/synth/knob.js and its panel skin, mounted by a fixture page, wired into npm run test:synth. Rollback: revert; tests and a test fixture only."
+why: "Gap of K058 (criterion 5) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): tests/browser/knob.cjs does not exist; reload, touch drag and the reduced-motion modulation dot are unchecked. No owner direction re-scopes it, so it is its own issue and K058's criterion points here (chore/plan-m064-rescope). K058 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "tests/browser/knob.cjs"
+  - "tests/browser/fixtures"
+  - "package.json"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "A browser check in tests/browser/knob.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base (the file does not exist there) and proves the knob linked, real-time and interactive. Linked: a knob mounted on a fixture parameter shows the value that the bound fixture store holds after reload. Real-time: aria-valuenow, aria-valuetext and the visible value text change together after a drag, a key press and a typed commit, each within a named until() deadline. Interactive: pointer drag (with and without Shift), ArrowUp/Right, ArrowDown/Left, PageUp, PageDown, Home, End and a synthesized touch drag each change the value; role=slider and its aria-valuetext with unit are asserted in the accessibility tree; under emulated prefers-reduced-motion the modulation dot (N006) is not rendered, asserted only once N006 draws a dot (a check against a page with no dot is vacuous and does not count). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "The fixture mounts the shipped knob (src/js/ui/synth/knob.js, src/js/synth/view/knob.js) and builds no second knob (M123: one implementation per control kind)."
+  - "tests/README.md has a row for the new suite; package.json's test:synth names it."
+validation:
+  - "node tests/browser/knob.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07
