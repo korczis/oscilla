@@ -670,3 +670,31 @@ test('#444: a short Studio folds the dock to its handle; the handle unfolds it a
   n.flush();
   assert.equal(n.ctl.state, 'docked');
 });
+
+// #444 (webkit v31-studio-links: "ResizeObserver loop completed with undelivered notifications"):
+// the room is judged again once the dock settles, but never inside the observer's callback, where
+// a fold resizes the dock it observes; the callback only asks for one animation frame (coalesced)
+// and the judgement runs there.
+test('#444: the dock settling judges the room in the next frame, once, never in the callback',
+  async () => {
+    const d = fakeDom({ vh: 1024, pad: [200, 620] });
+    const seen = [];
+    const frames = [];
+    d.win.ResizeObserver = class { constructor(fn) { seen.push(fn); } observe() {} };
+    d.win.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
+    const updates = [];
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp: { workspace: 'synth' },
+      dock: d.dock, release: () => 0 });
+    const update = ctl.update.bind(ctl);
+    ctl.update = (why) => { updates.push(why); return update(why); };
+    await Promise.resolve();
+    const before = updates.length;
+    seen[0]();
+    seen[0]();
+    assert.equal(updates.length, before, 'no judgement inside the observer callback');
+    assert.equal(frames.length, 1, 'one frame asked for, however many callbacks');
+    frames.shift()();
+    assert.deepEqual(updates.slice(before), ['viewport'], 'judged once, in the frame');
+    seen[0]();
+    assert.equal(frames.length, 1, 'a later settling asks for a new frame');
+  });
