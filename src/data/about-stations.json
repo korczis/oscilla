@@ -212,8 +212,11 @@
       "datetime": "2026-11-08T01:54:54+01:00"
     },
     {
+      "release": "3.27",
       "title": "Klávesy a pad",
-      "summary": "Klávesy hrají hned v každé pracovní ploše a ve Studiu se dok sbalí, kde by zabral editor; XY pad zní při prvním dotyku a jeho osa Y řídí filtr; druhá úprava obálky za běhu zachová tu první a nota se vždy uvolní na nástroji, který ji převzal"
+      "summary": "Klávesy hrají hned v každé pracovní ploše a ve Studiu se dok sbalí, kde by zabral editor; XY pad zní při prvním dotyku a jeho osa Y řídí filtr; druhá úprava obálky za běhu zachová tu první a nota se vždy uvolní na nástroji, který ji převzal",
+      "commit": "1f0263d",
+      "datetime": "2026-11-08T14:39:13+01:00"
     }
   ]
 }
