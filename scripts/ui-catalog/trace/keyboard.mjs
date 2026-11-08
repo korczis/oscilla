@@ -35,4 +35,6 @@ export default {
       'tests/browser/control-census.cjs'] }),
   'keyboard.dock-status': entry({ source: 'src/js/midi/dock-yield.js', plan: ['G001', 'K171'],
     tests: ['tests/unit/keyboard-dock-yield.test.mjs'] }),
+  'keyboard.handle.held': entry({ source: 'src/js/midi/dock-yield.js', plan: ['G001', 'K171'],
+    tests: ['tests/browser/iphone.cjs'] }),
 };

@@ -30,7 +30,7 @@
 // re-places the surface only where the dock now covers it (dockCovers), and nothing is ever
 // placed from a surface with no box (a hidden face, a closed tab: an empty rect).
 
-import { dockRoom, dockState, dockYields, routeOf } from './routes.js';
+import { dockRoom, dockState, dockYields, roomFolds, routeOf } from './routes.js';
 
 export const NOTES_EVENT = 'osc:notes';
 /** The handle's key (bound in ui/keys/clients.js through the one key registry). */
@@ -72,6 +72,7 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
   const claims = new Map(); // mount id -> { owner, home, el }
   let state = null;
   let yields = false;
+  let foldable = false; // the handle shows: the dock yields or the room folds it
   let owner = null;
   let expanded = false; // the user's expansion, until the owner changes
   let pending = null; // the reason of a scheduled evaluation
@@ -92,19 +93,24 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
       owner = now;
       expanded = false;
     }
-    const input = { route: routeOf(v.workspace), owner, userExpanded: expanded };
+    const input = { route: routeOf(v.workspace), owner, userExpanded: expanded,
+      room: v.room || null };
     const next = dockState(input);
     const y = dockYields(input);
+    // The keys fold where the workspace keeps room they would take (routes.js roomFolds, #444):
+    // the handle shows and toggles as where a surface yields, but no surface is placed.
+    const f = y || roomFolds(input);
     const el = c ? c.el : null;
     // The same state with a new surface (a re-mount while the dock yields): placed again.
     const replace = next === state && y === yields && y && !!el && el !== surface;
-    if (next === state && y === yields && !replace) return state;
+    if (next === state && y === yields && f === foldable && !replace) return state;
     const was = state;
     state = next;
     yields = y;
+    foldable = f;
     surface = el;
     if (next === 'collapsed' && was !== 'collapsed') release();
-    apply(next, { yields: y, why, owner, expanded, el, replace });
+    apply(next, { yields: y, foldable: f, why, owner, expanded, el, replace });
     return state;
   }
 
@@ -128,16 +134,17 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
     update(why = 'viewport') {
       schedule(why);
     },
-    /** The handle: expand a folded dock, fold an expanded one; false where it does not yield. */
+    /** The handle: expand a folded dock, fold an expanded one; false where it does not fold. */
     toggle() {
       if (pending) evaluate(pending);
-      if (!yields) return false;
+      if (!foldable) return false;
       expanded = state === 'collapsed';
       evaluate('user');
       return true;
     },
     get state() { return state; },
     get yields() { return yields; },
+    get foldable() { return foldable; },
     get owner() { return owner; },
   };
 }
@@ -219,8 +226,23 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   handle.setAttribute('aria-expanded', 'true');
   handle.setAttribute('aria-controls', dock.id || 'osc-keyboard');
   handle.setAttribute('aria-keyshortcuts', 'Alt+K');
-  handle.className = `${buttonClass} w-full gap-2`;
+  // 44 px tall (a touch target, #444 review by 21), with a light that shows a held note while
+  // the keys are folded, so a played letter still answers on screen.
+  handle.className = `${buttonClass} w-full gap-2 min-h-11`;
   handle.innerHTML = `<span>Keyboard</span>${CHEVRON}`;
+  const heldLight = doc.createElement('span');
+  heldLight.setAttribute('data-osc', 'keyboard.handle.held');
+  heldLight.setAttribute('aria-hidden', 'true');
+  heldLight.className = 'size-2 shrink-0 rounded-full bg-gray-300';
+  if (typeof handle.prepend === 'function') handle.prepend(heldLight);
+  const showHeld = () => {
+    const on = !!(cmp && cmp.kbdHeld);
+    heldLight.setAttribute('data-held', String(on));
+    if (heldLight.classList) {
+      heldLight.classList.toggle('bg-gray-300', !on);
+      heldLight.classList.toggle('bg-primary-600', on);
+    }
+  };
   const status = doc.createElement('p');
   status.setAttribute('role', 'status');
   status.setAttribute('data-osc', 'keyboard.dock-status');
@@ -241,7 +263,7 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   function apply(state, info) {
     const collapsed = state === 'collapsed';
     dock.setAttribute('data-dock-state', state);
-    handle.hidden = !info.yields;
+    handle.hidden = !(info.foldable || info.yields);
     handle.setAttribute('aria-expanded', String(!collapsed));
     const svg = handle.querySelector('svg');
     if (svg) svg.classList.toggle('rotate-180', !collapsed);
@@ -282,7 +304,30 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     if (cmp && typeof cmp.$nextTick === 'function') cmp.$nextTick(place);
   }
 
-  const ctl = createDockYield({ release, apply, read: () => ({ workspace: cmp.workspace }) });
+  // The room the docked keys would take (routes.js roomFolds): the band measured while the dock
+  // stands docked (kept while it is folded, when it covers less), the viewport, the bottom of
+  // the toolbar the route keeps and whether the workspace is a stacked page. null where the
+  // route keeps no room, its toolbar is not shown or the band has not been measured docked.
+  let dockedBand = 0;
+  const measureBand = () => {
+    if (dock.getAttribute('data-dock-state') === 'collapsed') return;
+    if (win.getComputedStyle(dock).position !== 'fixed') return;
+    const top = dock.getBoundingClientRect().top;
+    if (top > 0) dockedBand = Math.ceil(win.innerHeight - top);
+  };
+  const measureRoom = (workspace) => {
+    const keep = routeOf(workspace).keepsRoom;
+    if (!keep) return null;
+    const bar = doc.querySelector(keep.toolbar);
+    const r = bar && bar.getBoundingClientRect();
+    if (!hasBox(r)) return null;
+    measureBand();
+    if (!dockedBand) return null;
+    return { viewH: win.innerHeight, band: dockedBand, toolbarBottom: r.bottom,
+      stacked: win.innerWidth < keep.stackedBelow };
+  };
+  const ctl = createDockYield({ release, apply,
+    read: () => ({ workspace: cmp.workspace, room: measureRoom(cmp.workspace) }) });
   // A press on the handle never takes the focus (review of #425, R8): a second finger tapping it
   // while the pad holds a note would blur the pad's group, whose focusout ends the gate
   // (ui/kinds/xy-pad.js). The focus moves on the press's mousedown (a tap's compatibility
@@ -301,12 +346,23 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     band();
     chrome();
     replace();
+    ctl.update('viewport'); // the room the keys would take changes with the viewport
   });
   // The dock's own size settles after a state change (the keys' canvas is laid out after the
   // component draws it, later in WebKit): where it then covers the pad, the pad is placed
   // against the dock as it now stands.
-  if (typeof win.ResizeObserver === 'function') new win.ResizeObserver(replace).observe(dock);
-  if (typeof cmp.$watch === 'function') cmp.$watch('workspace', () => ctl.update('workspace'));
+  // Its docked size settles late too, so the room is judged again once the keys are drawn.
+  if (typeof win.ResizeObserver === 'function') {
+    new win.ResizeObserver(() => {
+      replace();
+      if (dock.getAttribute('data-dock-state') !== 'collapsed') ctl.update('viewport');
+    }).observe(dock);
+  }
+  if (typeof cmp.$watch === 'function') {
+    cmp.$watch('workspace', () => ctl.update('workspace'));
+    cmp.$watch('kbdHeld', showHeld);
+  }
+  showHeld();
   ctl.update('init');
   return ctl;
 }

@@ -17,10 +17,19 @@
 //   yieldsTo  the surface that, while it owns the notes there, folds the docked keyboard to
 //             its handle at every size (K171): the Synth's XY pad; null where the keys always
 //             dock
+//   keepsRoom what the docked keys may not take from the workspace (#444, after Q105 armed the
+//             Studio): { toolbar, editorMin, stackedBelow }, the selector of the workspace's toolbar, which
+//             the keys never cover, and the height its editor keeps below that toolbar where
+//             the editor fills the viewport (a desktop grid; a stacked phone page scrolls, so
+//             there only the toolbar is kept; stackedBelow is that width). Where the docked keys would take it, the dock
+//             starts folded to its handle: the computer keys stay armed and play (Q105 is
+//             about the keys being armed, not about the on-screen keys showing). null: no rule
 //
 //   routeOf(workspace) -> its row (the Playground's for a workspace not listed)
-//   dockState({ route, owner, userExpanded }) -> 'docked' | 'collapsed'
+//   dockState({ route, owner, userExpanded, room }) -> 'docked' | 'collapsed'
 //             the one rule of the dock (K171), applied by midi/dock-yield.js alone
+//   roomFolds({ route, room }) -> whether the docked keys would take the room keepsRoom keeps
+//             (room: the measured viewport, see roomFolds)
 //   keysShown({ route, owner, userExpanded }) -> whether the on-screen keys are drawn: wherever
 //             the dock is docked (dockState, the same rule), so folded they go with the dock and
 //             unfolded they show and play; the keyboard's kbdKeysShown reads it (the computer
@@ -29,6 +38,9 @@
 //             where the owner's surface goes against the dock: the scroll that puts it whole
 //             above the dock's top, or its top at the top of the room (dock-yield.js reveal)
 
+/** The height the Studio's editor keeps below its toolbar on a desktop grid (keepsRoom). */
+export const STUDIO_EDITOR_MIN_PX = 360;
+
 export const KEY_ROUTES = Object.freeze({
   playground: Object.freeze({ plays: null, armed: true, leave: null, editors: null,
     yieldsTo: null }),
@@ -36,7 +48,13 @@ export const KEY_ROUTES = Object.freeze({
     yieldsTo: 'xy-pad' }),
   studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave',
     editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
-    yieldsTo: null }),
+    yieldsTo: null,
+    // The Studio's toolbar and its editor: the graph's header and two rows of node cards over
+    // the timeline's 34 % row (the Studio grid of studio.css), (45 + 2 x 96) / 0.66 = 359 -> 360.
+    // Below 768 px wide the Studio is one stacked page that scrolls (studio.css, the < 768
+    // block), so there only the toolbar is kept.
+    keepsRoom: Object.freeze({ toolbar: '[data-osc="studio.bar"]', editorMin: STUDIO_EDITOR_MIN_PX,
+      stackedBelow: 768 }) }),
 });
 
 export const routeOf = (workspace) => KEY_ROUTES[workspace] || KEY_ROUTES.playground;
@@ -59,8 +77,27 @@ export function dockYields({ route, owner } = {}) {
  * The dock's state, the one rule (K171): folded to its handle where it yields, unless the user
  * expanded it (the caller resets userExpanded when the owner changes); docked otherwise.
  */
-export function dockState({ route, owner, userExpanded = false } = {}) {
-  return dockYields({ route, owner }) && userExpanded !== true ? 'collapsed' : 'docked';
+export function dockState({ route, owner, userExpanded = false, room = null } = {}) {
+  const folds = dockYields({ route, owner }) || roomFolds({ route, room });
+  return folds && userExpanded !== true ? 'collapsed' : 'docked';
+}
+
+/**
+ * Whether the docked keys would take the room the route keeps (keepsRoom), pure. room, as
+ * dock-yield.js measures it: { viewH } the viewport's height, { band } the height the keys
+ * take docked (the dock and the status bar under it, as --osc-dock-h measures it while docked),
+ * { toolbarBottom } the bottom of the toolbar keepsRoom names, { stacked } whether the
+ * workspace is a stacked page that scrolls (a phone) rather than a grid that fills the
+ * viewport. The keys fold where their top would sit above the toolbar's bottom plus, on a grid,
+ * the editor's minimum. Unknown or incomplete input never folds.
+ */
+export function roomFolds({ route, room } = {}) {
+  const keep = route && route.keepsRoom;
+  if (!keep || !room) return false;
+  const { viewH, band, toolbarBottom, stacked } = room;
+  if (![viewH, band, toolbarBottom].every(Number.isFinite) || band <= 0) return false;
+  const need = toolbarBottom + (stacked ? 0 : keep.editorMin);
+  return viewH - band < need;
 }
 
 /**

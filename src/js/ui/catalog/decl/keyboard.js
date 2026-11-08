@@ -98,6 +98,14 @@ export default [
     in: 'keyboard',
   }),
   defineComponent({
+    id: 'keyboard.handle.held',
+    kind: 'readout',
+    label: 'Held light',
+    docs: 'Rozsvítí se na rukojeti složené klávesnice, dokud klávesy drží notu (#444).',
+    state: { none: 'svítí, dokud se drží nota; nic neupravuje' },
+    in: 'keyboard',
+  }),
+  defineComponent({
     id: 'keyboard.dock-status',
     kind: 'readout',
     label: 'Dock status',
