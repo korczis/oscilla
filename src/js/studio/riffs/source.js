@@ -5,7 +5,8 @@
 // library never presents a riff as anything but original.
 //
 // Listen auditions it (audition.js) through the Studio's engine; the Studio passes its svc and
-// component so Listen first stops the other owners (svc.stopPlayback).
+// component so Listen is refused by the output-owner table (svc.outputRefusalOf,
+// ui/output-owner.js, C024) or first stops the other owners (svc.stopPlayback).
 //
 //   registerRiffSource(svc?, cmp?)   idempotent: registering again replaces the source
 
@@ -22,9 +23,13 @@ let audition = null;
 
 export function registerRiffSource(svc = {}, cmp = null) {
   if (audition) audition.dispose();
+  // Refused through the one output-owner table (C024, svc.outputRefusalOf from main.js): a
+  // measurement or a microphone level reference holds the output, and Listen says its sentence.
   const ctl = createRiffAudition({ engine: svc.engine,
-    measuring: () => !!(cmp && typeof cmp.measureOwnsOutput === 'function'
-      && cmp.measureOwnsOutput()),
+    refused: () => {
+      const r = cmp && svc.outputRefusalOf ? svc.outputRefusalOf(cmp) : null;
+      return r ? r.text : null;
+    },
     stopOthers: () => { if (cmp && svc.stopPlayback) svc.stopPlayback(cmp); } });
   audition = ctl;
   registerPatchSource({

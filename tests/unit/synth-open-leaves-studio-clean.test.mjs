@@ -73,6 +73,7 @@ test('the Synth rebases only its automatic insertion, never the Insert button', 
     .indexOf('function ensurePanel(')));
   assert.match(body, /if \(ok && !\(opts && opts\.explicit\) && tracker\) tracker\.rebaseFresh\(/);
   const ws = readFileSync(new URL('../../src/js/ui/studio/workspace.js', import.meta.url), 'utf8');
+  // The Synth reads the Studio's dirty tracker through get() (other fields may follow it).
   assert.match(ws, new RegExp(String.raw`createSynthUi\(\{\s*get: \(\) => \(\{ handle: `
-    + String.raw`ctx\.handle, transport: ctx\.transport, dirty: ctx\.dirty \}\)`));
+    + String.raw`ctx\.handle, transport: ctx\.transport, dirty: ctx\.dirty\b`));
 });

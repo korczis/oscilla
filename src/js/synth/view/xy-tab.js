@@ -1,7 +1,8 @@
-// The Synth workspace's XY tab (plan K097, K167): a Flowbite Pro card over the panel's xy-pad
-// node. Its wiring, the pad, the "Y drives" target, Patch the pad into the voice, the presets'
-// BATCH and every release path, is the one shared mount of view/xy-wiring.js (mountSynthXy),
-// which the live landing calls too; this file keeps none of its own. Composed by synth/ui.js,
+// The Synth workspace's XY tab (plan K097, K167, K183): a Flowbite Pro card over the panel's
+// xy-pad node. Its wiring, the pad (one more note input of the keys, enabled from the first
+// open), the "Y drives" target, the presets' BATCH and every release path, is the one shared
+// mount of view/xy-wiring.js (mountSynthXy), which the live landing calls too; this file keeps
+// none of its own. Composed by synth/ui.js,
 // which renders the card into the panel view and mounts the pad after it.
 //
 // While the panel's keys sound nothing (xy.js keysSilence: the pad's cables replaced their gate
@@ -62,7 +63,8 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     if (!body || !nodes().get('xy')) return;
     const c = cmp();
     mounted = mountSynthXy(body, { store: get().handle, transport: () => get().transport, panel,
-      owner: 'synth', app: c, arm, say, jackName, dispatch, buttonClass: BTN });
+      owner: 'synth', app: c, arm, say, jackName, dispatch,
+      sampleRate: () => get().sampleRate || null });
   }
 
   function preset(id) {

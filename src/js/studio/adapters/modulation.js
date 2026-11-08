@@ -78,7 +78,10 @@ export const envelope = {
       modTarget: (key) => ({ reason: `${key} is not modulatable` }),
       applyBase() {},
       update(changed, owned, w) { // the next gate
-        adsr = adsrOf({ ...params, ...changed });
+        // The runtime hands over only the keys that changed: merge them into the node's
+        // current parameters, so a later edit of another key keeps this one (C061).
+        params = { ...params, ...changed };
+        adsr = adsrOf(params);
         did(w, changed, Object.keys(changed), 'next-gate');
       },
       /** Gate on at t (retriggered from the current value), off after durS (timeline hook). */

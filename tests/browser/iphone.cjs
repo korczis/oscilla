@@ -18,7 +18,8 @@
 //                    exempt) are counted; the count may not exceed tests/browser/iphone-baseline.json,
 //                    a debt that only shrinks (`--record` rewrites it from a passing run)
 //   sounds-<what>    after one tap on the page (the gesture unlock), HOLD TO PLAY held, TRIGGER,
-//                    the sequencer's play, the Studio's play and a key of the Synth keyboard each
+//                    the sequencer's play, the Studio's play, a key of the Synth keyboard and a
+//                    key of the Studio's keyboard, unfolded from its handle first (#444), each
 //                    leave the engine running with an active source
 //   stops-on-hide-<what>  then the page is hidden (visibilitychange, as a phone's lock or app
 //                    switch sends it) with a held control's finger still down: within HIDE_MS
@@ -178,6 +179,10 @@ const SOUNDS = [
   // the keys are drawn on one canvas: a finger holds the low part of a white key near its left
   { id: 'synth-key', ws: 'synth', sel: '[data-osc="keyboard.keys"]', how: 'hold-at',
     at: { x: 0.06, y: 0.85 } },
+  // #444: on a phone the Studio opens armed (Q105) with its keys folded to the dock's handle,
+  // so the toolbar stays clear; a tap on the handle unfolds them and a held key sounds
+  { id: 'studio-key', ws: 'studio', unfold: '[data-osc="keyboard.handle"]',
+    sel: '[data-osc="keyboard.keys"]', how: 'hold-at', at: { x: 0.06, y: 0.85 } },
 ];
 
 async function openAt(browser, engine, device, hash, init = null) {
@@ -405,6 +410,16 @@ async function runOne(engine, baseline, recorded) {
         // the first gesture unlocks audio: a real tap, on a spot that starts nothing
         const spot = await page.evaluate(inertSpot);
         if (spot) await page.touchscreen.tap(spot.x, spot.y);
+        // a folded dock is unfolded by its handle first, as a finger would (#444)
+        if (s.unfold) {
+          const handle = page.locator(s.unfold).locator('visible=true').first();
+          if (await handle.count()) {
+            await handle.tap({ timeout: 5000 });
+            await pollFor(() => page.evaluate((sel) => document.querySelector(sel)
+              ?.getAttribute('aria-expanded'), s.unfold), (x) => x === 'true',
+            `iphone: ${s.id} the dock unfolds`);
+          }
+        }
         // the first match a finger can see: a hidden copy of the control is no control
         const target = page.locator(s.sel).locator('visible=true').first();
         let result = { ok: false, last: 'no visible control' };
@@ -434,6 +449,13 @@ async function runOne(engine, baseline, recorded) {
           }
         } catch (error) {
           result = { ok: false, last: `the control did not take the gesture: ${error.message.split('\n')[0]}` };
+        }
+        // the handle's light shows the held note (#444): a played key answers on the strip too
+        if (s.unfold && result.ok) {
+          const lit = await pollFor(() => page.evaluate(() => document.querySelector(
+            '[data-osc="keyboard.handle.held"]')?.getAttribute('data-held')), (x) => x === 'true',
+          `iphone: ${s.id} the handle's light shows the held key`);
+          if (!lit.ok) result = { ok: false, last: `sounding, but the handle's light is ${lit.last}` };
         }
         check(`sounds-${s.id}@${phone}`, result.ok, JSON.stringify(result.last));
         // Journey 21 (One Living System, G): a page the phone hides (lock, switch app) stops

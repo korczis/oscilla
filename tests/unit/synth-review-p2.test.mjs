@@ -166,10 +166,23 @@ test('S5: New Synth voice inserts as Insert does: below the user\'s nodes, with 
 // ---------------------------------------------------------------- S8: a silent keyboard says why
 
 const keysEnvelopes = (m) => gateTargets(m, nodeOf(m, 'keys').id).envelopes.length;
+/** The pad's Gate into both EG gates, taken explicitly: under K183 no built-in XY preset patches
+ *  the pad's Pitch or Gate (review F3: XY lead cables Y alone and the keyboard's normals keep
+ *  sounding), so the fixture cables what silences the keys itself, one BATCH. */
+const XY_GATES = [['xy.gate', 'eg1.gate'], ['xy.gate', 'eg2.gate']];
+const takeGates = (st) => st.dispatch(XY.xyCablesAction(st.getModel(), PANEL, XY_GATES).action);
 
 test('S8: after an XY preset and Panel Init, a key says why the keys sound nothing', () => {
-  const { cmp, st, sink } = synthRig();
+  const { cmp, st, sink, transport } = synthRig();
   assert.equal(cmp.synthPreset('xy-lead'), true);
+  // K183's default preset cables Y alone: both EG gates stay the keyboard's and a key sounds.
+  assert.equal(keysEnvelopes(st.getModel()), 2, 'XY lead leaves both EG gates to the keyboard');
+  assert.equal(sink.noteOn(60, 100).ok, true, 'a key sounds on the default preset');
+  assert.deepEqual(transport.heldNotes(), [60], 'the keys hold their note');
+  assert.equal(cmp.synth.status, SYNTH_TEXT.plays(PANEL.title),
+    'the status says what plays, not why nothing sounds');
+  sink.noteOff(60);
+  assert.equal(takeGates(st).ok, true, 'the pad\'s Gate taken into EG 1 and EG 2 explicitly');
   cmp.synthTab('panel');
   assert.equal(cmp.synthPreset('init'), true);
   assert.equal(keysEnvelopes(st.getModel()), 0, 'the pad\'s cables took both EG gates');
@@ -189,6 +202,9 @@ test('S8: the Panel tab shows the reason with Unpatch the pad, one BATCH that re
       tab: () => 'panel', showTab() {}, BTN: 'btn', cmp: () => null });
     assert.equal(XYTAB.html(), '', 'a playing keyboard: no notice');
     assert.equal(st.dispatch(xyPresetAction(st.getModel(), PANEL, 'xy-lead').action).ok, true);
+    assert.equal(keysEnvelopes(st.getModel()), 2, 'K183: XY lead cables Y alone');
+    assert.equal(XYTAB.html(), '', 'the keys still play after the default preset: no notice');
+    assert.equal(takeGates(st).ok, true, 'the pad\'s Gate taken into both EG gates explicitly');
     const html = XYTAB.html();
     assert.match(html, /data-osc="synth.keys-silent"/);
     assert.match(html, /data-xy-unpatch=""[^>]*>Unpatch the pad</);

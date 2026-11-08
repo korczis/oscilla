@@ -10,6 +10,11 @@
 //            → trim (cancels the compressor's automatic makeup gain)
 //            → ceiling (WaveShaper: identity up to ±0.25, flat beyond) → analyser → destination
 //
+// The setup check plays the same way (C033): preflight({ probe }) captures the background first
+// and then plays a shortened copy of the stimulus the engine renders, through the same source,
+// fade gain and master chain, while it reads the input again; so Check setup sounds, and the
+// engine can say whether the input heard it. It stops nothing (C016).
+//
 // Effect of the chain on a measurement (§207, gap G12) — decided: the chain is PART of the
 // measured system and is not compensated; it is never bypassed. The stimulus peak is `level`
 // ≤ 1 (digital, MEASUREMENT_LEVELS, never SPL, §208) times the master gain ≤ 0.25, so it never
@@ -93,6 +98,11 @@ import {
   stopStreamTracks,
 } from '../audio/microphone.js';
 import { MeasurementError, mapError } from './engine.js';
+import { captureAudioSession } from './audio-session.js';
+import { levelOf } from './input-level.js';
+
+export { captureAudioSession, CAPTURE_AUDIO_SESSION } from './audio-session.js';
+export { levelOf } from './input-level.js';
 
 export const CAPTURE_PROCESSOR_NAME = 'oscilla-capture-v1';
 /** Frames per posted chunk (≈ 43 ms at 48 kHz): progress cadence and message overhead. */
@@ -105,6 +115,8 @@ export const SCHEDULE_LEAD_S = 0.1;
 export const ABORT_FADE_S = 0.01;
 /** Input level read during preflight. */
 export const PREFLIGHT_LEVEL_S = 0.3;
+/** Capture after the setup check's probe ends (input latency and the room's decay). */
+export const PROBE_TAIL_S = 0.2;
 /** Extra wall-clock allowance before a capture is declared stalled. */
 export const WATCHDOG_SLACK_MS = 2500;
 
@@ -333,7 +345,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   function interrupt(info) {
-    if (!busy() && !input) return;
+    // An input still opening (a permission prompt) is released too (98 F4): the epoch bump
+    // makes ensureInput close it when getUserMedia answers, so it never stays open.
+    if (!busy() && !input && !inputPending) return;
     const was = busy();
     if (typeof io.onInterrupt === 'function' && was) {
       try { io.onInterrupt(info); } catch (e) { /* engine handles it */ }
@@ -592,16 +606,17 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   // ---- input
-  // `since` is the session epoch the caller started in: a cancel() (release) while the caller
-  // was awaiting the context or the worklet module bumps the epoch, and nothing may be opened
-  // for a session that was already released (the input and the recorder would leak).
+  // `since` is the caller's session epoch: release() bumps it; nothing opens for a released
+  // session (it would leak). A pending open (a prompt) races release(), which
+  // rejects its callers at once (98 R1); a stream granted late is closed.
   const abortedSince = (since) => since !== epoch || disposed;
   async function ensureInput(ctx, since = epoch) {
     if (abortedSince(since)) throw new MeasurementError('ABORTED');
     if (input) return input;
-    if (inputPending) return inputPending;
+    if (inputPending) return inputPending.promise;
     const my = since;
-    inputPending = (async () => {
+    const pending = {};
+    const opening = (async () => {
       const opened = await openInput(ctx, { register, unregister });
       if (my !== epoch || disposed) {
         try { opened.close(); } catch (e) { /* ignore */ }
@@ -611,10 +626,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       input = opened;
       return input;
     })();
+    pending.promise = Promise.race([opening, new Promise((_, no) => { pending.abort = no; })]);
+    inputPending = pending;
     try {
-      return await inputPending;
+      return await pending.promise;
     } finally {
-      inputPending = null;
+      if (inputPending === pending) inputPending = null;
     }
   }
 
@@ -698,9 +715,35 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     stims.delete(st);
   }
 
+  // The ONE stimulus playback (a run's sweep, the setup check's probe; C033): see the header.
+  // The caller opens its capture window, then starts the source at `ssF` (frames).
+  function prepareStim(ctx, samples, ssF) {
+    const sr = ctx.sampleRate;
+    const buffer = ctx.createBuffer(1, samples.length, sr);
+    if (typeof buffer.copyToChannel === 'function') buffer.copyToChannel(samples, 0);
+    else buffer.getChannelData(0).set(samples);
+    const src = registerSource(ctx.createBufferSource());
+    src.buffer = buffer;
+    const fade = register(ctx.createGain());
+    fade.gain.value = 1;
+    src.connect(fade);
+    fade.connect(engine.master); // through the master safety chain, never around it
+    const st = { src, fade, startAt: ssF / sr, done: false, stopping: false };
+    src.onended = () => cleanupStim(st);
+    stims.add(st);
+    return st;
+  }
+  /** After its capture: free a stimulus that has ended, fade out one that still sounds. */
+  function settleStim(st, ctx, endAt) {
+    if (!st.done && ctx.currentTime >= endAt) cleanupStim(st);
+    else if (!st.done) stopStim(st, ctx, { fade: true });
+  }
+
   // ---- release everything of the current session
   function release(err) {
     epoch += 1;
+    if (inputPending) inputPending.abort(new MeasurementError('ABORTED'));
+    inputPending = null;
     const info = err && err.detail;
     dropLive(info && info.reason ? info.reason : (err && err.code) || 'released');
     const ctx = engine.ctx;
@@ -718,6 +761,42 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     for (const st of [...stims]) {
       if (ctx) stopStim(st, ctx, { fade: true });
       else cleanupStim(st);
+    }
+  }
+
+  // ---- the setup check's probe (C033, see the header): render(sampleRate) → Float32Array.
+  // Resolves { played: true, seconds, startAt, inputLevel, frames } or { played: false, reason }.
+  async function playProbe(ctx, since, render) {
+    let samples = null;
+    let why = 'stimulus se nepodařilo vytvořit';
+    try {
+      samples = render(ctx.sampleRate);
+    } catch (e) {
+      why = e && e.message ? e.message : why;
+    }
+    if (!(samples instanceof Float32Array) || !samples.length) return { played: false,
+      reason: why };
+    let st = null;
+    try {
+      await freshClock(since);
+      if (windows.size || stims.size)
+        throw new MeasurementError('INTERNAL', 'Záznam už běží (bez překryvu).');
+      const sr = ctx.sampleRate;
+      const csF = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
+      const endF = csF + samples.length + ceilFrame(PROBE_TAIL_S, sr);
+      st = prepareStim(ctx, samples, csF);
+      const p = openWindow(ctx, csF, endF - csF, null);
+      st.src.start(csF / sr);
+      const w = await p;
+      return { played: true, seconds: samples.length / sr, startAt: csF / sr,
+        inputLevel: levelOf(w.samples, w.received),
+        frames: { expected: w.frames, received: w.received, discontinuities: w.discontinuities } };
+    } catch (e) {
+      const me = mapError(e);
+      if (me.code === 'ABORTED') throw me;
+      return { played: false, reason: me.message };
+    } finally {
+      if (st) settleStim(st, ctx, st.startAt + samples.length / ctx.sampleRate);
     }
   }
 
@@ -792,6 +871,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       dropLive('measurement');
       const since = epoch;
       const given = opts ? opts.otherAudio : undefined;
+      const probe = opts && typeof opts.probe === 'function' ? opts.probe : null;
+      const onWaiting = opts && typeof opts.onWaiting === 'function' ? opts.onWaiting : null;
       let voices = null;
       let other = false;
       const sample = (t) => {
@@ -829,6 +910,10 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       facts.audioContext.state = ctx.state;
       facts.sampleRate = ctx.sampleRate;
       if (kind !== 'loopback') facts.permission = await queryMicPermission(env);
+      // The browser asks for the microphone now (a prompt): the caller says so (C033).
+      if (facts.permission === 'prompt' && onWaiting) {
+        try { onWaiting({ what: 'permission' }); } catch (e) { /* feedback only */ }
+      }
       try {
         const m = await ensureRecorderMode(ctx);
         facts.worklet = { supported: true, mode: m, error: workletError ? String(workletError
@@ -857,19 +942,14 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
           sample(start / sr); // what still sounds when the window opens
           const w = await p;
           sample(); // and what sounds after it (started during the reading)
-          let s = 0;
-          let peak = 0;
-          for (let i = 0; i < w.samples.length; i++) {
-            const v = w.samples[i];
-            s += v * v;
-            if (Math.abs(v) > peak) peak = Math.abs(v);
-          }
-          const rms = Math.sqrt(s / w.samples.length);
-          facts.inputLevel = { peak, rmsDb: rms > 0 ? 20 * Math.log10(rms) : -Infinity };
+          facts.inputLevel = levelOf(w.samples, w.received);
         } catch (e) {
           const me = mapError(e);
           if (me.code === 'ABORTED') throw me;
           facts.inputLevel = null;
+        }
+        if (typeof probe === 'function' && facts.inputLevel) {
+          facts.probe = await playProbe(ctx, since, probe);
         }
       }
       return done();
@@ -909,20 +989,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       const preF = ceilFrame(preRollS, sr);
       const ssF = csF + preF;
       const ceF = ssF + samples.length + Math.round(postRollS * sr);
-      const buffer = ctx.createBuffer(1, samples.length, sr);
-      if (typeof buffer.copyToChannel === 'function') buffer.copyToChannel(samples, 0);
-      else buffer.getChannelData(0).set(samples);
-      const src = registerSource(ctx.createBufferSource());
-      src.buffer = buffer;
-      const fade = register(ctx.createGain());
-      fade.gain.value = 1;
-      src.connect(fade);
-      fade.connect(engine.master); // through the master safety chain, never around it
-      const st = { src, fade, startAt: ssF / sr, done: false, stopping: false };
-      src.onended = () => cleanupStim(st);
-      stims.add(st);
+      const st = prepareStim(ctx, samples, ssF);
       const p = openWindow(ctx, csF, ceF - csF, onChunk);
-      src.start(ssF / sr);
+      st.src.start(ssF / sr);
       const t = { captureStartAt: csF / sr, stimulusStartAt: ssF / sr,
         stimulusEndAt: (ssF + samples.length) / sr, captureEndAt: ceF / sr };
       if (onScheduled) onScheduled(t);
@@ -930,8 +999,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       try {
         w = await p;
       } finally {
-        if (!st.done && ctx.currentTime >= t.stimulusEndAt) cleanupStim(st);
-        else if (!st.done) stopStim(st, ctx, { fade: true });
+        settleStim(st, ctx, t.stimulusEndAt);
       }
       return captureObject(ctx, w, { preRoll: preF / sr, postRoll: (ceF - ssF - samples.length)
         / sr, stimulusStartAt: t.stimulusStartAt });
@@ -1013,10 +1081,12 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
     if (!hasMicrophoneApi(nav)) throw new MeasurementError('NO_INPUT', MIC_UNAVAILABLE_TEXT);
     const audio = { ...REQUESTED_AUDIO_CONSTRAINTS };
     if (deviceId) audio.deviceId = { exact: deviceId };
+    const restoreSession = captureAudioSession(nav);
     let stream;
     try {
       stream = await nav.mediaDevices.getUserMedia({ audio });
     } catch (e) {
+      restoreSession();
       throw inputOpenError(e, deviceId);
     }
     try {
@@ -1034,6 +1104,7 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
           for (const x of stream.getTracks()) x.onended = null;
           stopStreamTracks(stream);
           unregister(node);
+          restoreSession();
         },
       };
       // A track that ends by itself: unplugged, permission revoked, device taken over.
@@ -1043,6 +1114,7 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
       return opened;
     } catch (e) {
       stopStreamTracks(stream);
+      restoreSession();
       throw e;
     }
   }

@@ -24,7 +24,9 @@
 //             update(changed, owned, w)   live change of non-modulatable, non-structural keys;
 //                                         each key it acts on is reported as w[key] = how:
 //                                         'set' | 'glide' (from now) | 'crossfade' |
-//                                         'next-gate'; a key it does not act on is not reported
+//                                         'next-gate' | 'next-note' (kept for the next gate
+//                                         or note: traced as stored, not scheduled); a key it
+//                                         does not act on is not reported
 //             (`w` is the operation trace's record, ADR 0042: optional, plain object)
 //             engage?()                   global side effects (the engine's master level), called
 //                                         by the runtime only once the transaction committed;
