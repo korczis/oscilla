@@ -1,0 +1,29 @@
+id: K219
+milestone: M064
+serves:
+  - "connected-instrument#patch-cables"
+title: "Patch bay browser suite: tests/browser/synth-patch-bay.cjs, linked, real-time and interactive"
+slug: patch-bay-browser-suite-tests-browser-synth-patch-bay-cjs-li
+priority: p1
+profile: implementation
+objective: "Lands as test(synth). K063's criterion 3 names tests/browser/synth-patch-bay.cjs, which does not exist. After K215-K218, the suite proves the bay linked to the Studio graph, real-time against the runtime and interactive by pointer, keyboard and touch, wired into npm run test:synth. Rollback: revert; tests only."
+why: "Gap of K063 (criterion 3) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): tests/browser/synth-patch-bay.cjs does not exist. No owner direction re-scopes it, so it is its own issue and K063's criterion points here (chore/plan-m064-rescope). K063 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "tests/browser/synth-patch-bay.cjs"
+  - "package.json"
+  - "tests/README.md"
+depends_on:
+  - "K215"
+  - "K216"
+  - "K217"
+  - "K218"
+acceptance_criteria:
+  - "A browser check in tests/browser/synth-patch-bay.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base (the file does not exist there). Linked: a cable patched in the Synth panel is the edge the Studio graph shows at the same revision, and undo in the Studio removes it from the panel. Real-time: a dropped cable appears in the runtime's edge list and the destination's input level (a meter tap) rises; an audio cable dropped on a trigger jack adds no edge and announces 'Audio output cannot connect to a trigger input.', each within a named until() deadline. Interactive: connect and remove by pointer drag, by keyboard (Enter on a jack, choose from the list) and by touch tap-connect each run; jacks are buttons with accessible names and the cable list is a listbox in the accessibility tree. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "tests/README.md has a row for the new suite; package.json's test:synth names it."
+validation:
+  - "node tests/browser/synth-patch-bay.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

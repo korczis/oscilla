@@ -295,7 +295,7 @@ jobs:
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
     # the sum of its step bounds (15 + 13 + 15 + 20 = 63), so a slow runner fails a named step
-    timeout-minutes: 65
+    timeout-minutes: 80
     strategy:
       fail-fast: false
       matrix:
@@ -328,7 +328,7 @@ jobs:
       # whatever the one before returned (tests/browser/lib/run-suites.cjs).
       - name: Integration map and the synth line, file:// and /oscilla/
         run: mkdir -p logs && npm run test:synth 2>&1 | tee logs/synth-${{ matrix.browser }}.log
-        timeout-minutes: 20
+        timeout-minutes: 35
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -342,7 +342,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
-    timeout-minutes: 65
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -373,9 +373,9 @@ jobs:
         # The train's browser suites (cross-links, first-screen, surface-census) take the chain
         # past 15 min on a hosted runner (~20 min measured, run 41333897971). WebKit's chain with
         # merge train 3's journeys and suites: cross-links ends at 25.7 min (run 41582489422) and
-        # the 30-minute bound ran out in first-screen; the job bounds 65.
+        # the 30-minute bound ran out in first-screen; the job bounds 90 (webkit after the Pro shell ran test:browser to the 45-minute cut, #443).
         run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
-        timeout-minutes: 45
+        timeout-minutes: 60
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -463,10 +463,11 @@ jobs:
   knowledge:
     # The .ai/ layer, checked by the same `majordomus doctor` the pre-commit hook and
     # `npm run verify` run locally, at a pinned release: the archive is downloaded from the
-    # release and checked against its SHA-256 here (the digest of v1.0.0-alpha.9's x86_64 Linux
-    # glibc archive in the release's SHA256SUMS and its record .ai/repo/releases/v1.0.0-alpha.9.yaml
-    # in korczis/prismatic-majordomus), so neither the installer script nor the latest release
-    # can change what CI runs. Bump the version and the digest together.
+    # release and checked against its SHA-256 here (the digest of the MJ_VERSION release's x86_64
+    # Linux glibc archive in its SHA256SUMS and its record .ai/repo/releases/v<MJ_VERSION>.yaml in
+    # korczis/prismatic-majordomus), so neither the installer script nor the latest release can
+    # change what CI runs. Bump the version and the digest together, here only: the version is
+    # written nowhere else in .github/ (tests/unit/majordomus-pin-one-source.test.mjs, R049).
     # The verdict is .github/doctor-verdict.jq (tested by tests/unit/ci-knowledge-job.test.mjs):
     # every doctor FAIL fails the job except the git-hook wiring entries of policy
     # `enforcement`, which describe a developer checkout's hooks that a CI runner does not
@@ -474,13 +475,13 @@ jobs:
     # output without an OK layout line.
     # The download retries, so one transient asset error does not stall every merge. Full
     # history, because curated knowledge cites V1 commits and the ADR check reads every ref.
-    name: .ai layer (majordomus doctor 1.0.0-alpha.9)
+    name: .ai layer (majordomus doctor, the pinned release)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      MJ_VERSION: 1.0.0-alpha.9
+      MJ_VERSION: 1.0.0
       MJ_TARGET: x86_64-unknown-linux-gnu
-      MJ_SHA256: a73710f2e52b3712017c850739d8bebc95764ba51333fddfb369df49eeeb8063
+      MJ_SHA256: 0fc3f6ad9ef2c4f1b5ff8454f6d6373d1b9d1c4732822ca5d06c4ce6c65cdd6e
     steps:
       - uses: actions/checkout@v7
         with:

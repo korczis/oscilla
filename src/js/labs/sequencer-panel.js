@@ -37,6 +37,8 @@ import {
   insertionMarkerX,
 } from '../sequencer/timeline.js';
 import { onFrame } from '../charts/frame-loop.js';
+import { parseFrequencyEntry } from '../sequencer/entry.js';
+import { syncTempoSelect } from '../sequencer/tempo-select.js';
 import { observeSize } from '../charts/chart-theme.js';
 import { on, setText, setAttr } from './dom.js';
 
@@ -45,17 +47,26 @@ export const TIMELINE_OPTIONS = Object.freeze({ minSpanS: 3.75, headroomRatio: 0
 /** The phone width of src/styles/responsive.css (ui/app.js PHONE_QUERY). */
 const PHONE_QUERY = '(max-width: 767.98px)';
 
+/** The shortest block the lane draws: 24 px, 44 px under a coarse pointer (U022). */
+export const MIN_BLOCK_PX = 24;
+export const TOUCH_BLOCK_PX = 44;
+
 /**
  * Horizontal window of the lane: { spanS, contentPx, maxScrollPx }. The whole sequence (plus
  * headroom) fits the lane until it would need fewer than minPxPerS; then the content is wider
- * than the lane by the factor the extra duration needs. With minBlockPx (a phone) the shortest
- * block (shortestS) is drawn at least that wide, so its label reads instead of "T...",
- * up to maxPxPerS; the lane then scrolls as it does for a long sequence.
+ * than the lane by the factor the extra duration needs. Two floors raise the pixels per second
+ * further, and the lane scrolls: with minBlockPx (a phone) the shortest block (shortestS) is
+ * drawn at least that wide, so its label reads instead of "T...", up to maxPxPerS; and blocks
+ * ([{ durationS, minPx }]) bound it block by block (U022): every block is at least its minPx
+ * wide after the gap, up to the same maxPxPerS (a 10 ms block beside a 30 s one would
+ * otherwise ask for a lane past the browsers' canvas limit; past the cap a block shows its
+ * name by its title and aria-label). The scale stays linear: one pixels-per-second for every
+ * block, so a width never misstates a duration.
  */
 export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.minSpanS,
   headroomRatio = TIMELINE_OPTIONS.headroomRatio,
   minPxPerS: basePxPerS = TIMELINE_OPTIONS.minPxPerS, minBlockPx = 0, shortestS = 0,
-  maxPxPerS = TIMELINE_OPTIONS.phoneMaxPxPerS }) {
+  maxPxPerS = TIMELINE_OPTIONS.phoneMaxPxPerS, blocks = [], gapPx = TIMELINE_OPTIONS.gapPx }) {
   const readable = minBlockPx > 0 && shortestS > 0;
   const minPxPerS = readable
     ? Math.max(basePxPerS, Math.min(maxPxPerS, minBlockPx / shortestS)) : basePxPerS;
@@ -63,7 +74,14 @@ export function timelineWindow({ durationS, laneW, minSpanS = TIMELINE_OPTIONS.m
   const spanS = Math.max(minSpanS, (durationS > 0 ? durationS : 0) * (1 + headroomRatio));
   // The reference's ~4 s axis is a floor of the visible window, except where it would draw the
   // shortest block narrower than minBlockPx.
-  const visibleS = Math.min(spanS, Math.max(readable ? 0 : minSpanS, w / minPxPerS));
+  let visibleS = Math.min(spanS, Math.max(readable ? 0 : minSpanS, w / minPxPerS));
+  let needPxPerS = 0;
+  for (const b of blocks) {
+    if (b && b.durationS > 0 && b.minPx > 0) {
+      needPxPerS = Math.max(needPxPerS, (b.minPx + Math.max(0, gapPx)) / b.durationS);
+    }
+  }
+  if (needPxPerS > 0) visibleS = Math.min(visibleS, w / Math.min(maxPxPerS, needPxPerS));
   const contentPx = (w * spanS) / visibleS;
   return { spanS, contentPx, maxScrollPx: Math.max(0, contentPx - w) };
 }
@@ -135,7 +153,8 @@ function buildField(d, value, safeMax) {
   if (d.unit) box.dataset.unit = d.unit;
   const input = document.createElement('input');
   input.className = 'osc-number';
-  input.type = 'number';
+  // K017: a frequency field is text, so a note name (A4, C#3) or a MIDI number (m69) parses too.
+  input.type = d.kind === 'freq' ? 'text' : 'number';
   input.id = fieldId(d.key);
   input.dataset.osc = 'seq.field';
   input.dataset.field = d.key;
@@ -207,6 +226,15 @@ export function mount(rootEl, adapter) {
     sampleRate: adapter.getSampleRate ? adapter.getSampleRate() || undefined : undefined,
     engine: sequencerEngine(adapter),
   });
+  // The panel's transport says what the editor does, whoever stops it: Escape, a page the
+  // phone hides and an output owner taking over all stop the editor from outside this panel
+  // (ui/output-owner.js stopSequence), and Play must not stay pressed after them.
+  const stopEditor = editor.stop;
+  editor.stop = function stopAndSay(...args) {
+    const was = stopEditor.apply(this, args);
+    renderTransport();
+    return was;
+  };
   /** The Loop control's title: the cap while it applies, and why a loop ended at it. */
   function loopTitle() {
     if (editor.loopNotice) return editor.loopNotice;
@@ -255,47 +283,91 @@ export function mount(rootEl, adapter) {
     return editor.sampleRate() * 0.475;
   }
 
+  // U022: the width a block needs for its name to read in full, from the rendered font and the
+  // block's own padding and border (measured once per font and text, never from the block's
+  // current width, which would only ever keep it as wide as it is).
+  const nameWidths = new Map();
+  let measureCtx = null;
+  function nameNeedPx(b, text) {
+    if (!text || typeof getComputedStyle !== 'function') return 0;
+    const name = b.children[0];
+    const cs = getComputedStyle(name);
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    const key = `${font}|${text}`;
+    if (!nameWidths.has(key)) {
+      if (!measureCtx) {
+        const c = document.createElement('canvas');
+        measureCtx = (c.getContext && c.getContext('2d')) || false;
+      }
+      if (!measureCtx) return 0;
+      measureCtx.font = font;
+      nameWidths.set(key, Math.ceil(measureCtx.measureText(text).width));
+    }
+    const bs = getComputedStyle(b);
+    const chrome = ['paddingLeft', 'paddingRight', 'borderLeftWidth', 'borderRightWidth']
+      .reduce((sum, k) => sum + (parseFloat(bs[k]) || 0), 0);
+    return nameWidths.get(key) + chrome + 2; // 2 px for rounding the block's width
+  }
+
+  function coarsePointer() {
+    return typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  }
+
+  function blockEl(r) {
+    let b = blockEls.get(r.id);
+    if (!b) {
+      b = document.createElement('div');
+      b.setAttribute('role', 'option');
+      b.id = `osc-seq-block-${r.id}`;
+      b.dataset.blockId = r.id;
+      b.style.position = 'absolute';
+      b.style.cursor = 'grab';
+      b.style.touchAction = 'none';
+      const name = document.createElement('span');
+      name.className = 'osc-block-name';
+      const detail = document.createElement('span');
+      detail.className = 'osc-block-detail';
+      b.append(name, detail);
+      timeline.insertBefore(b, marker);
+      blockEls.set(r.id, b);
+    }
+    const cls = `osc-block osc-block--${r.type}`;
+    if (b.className !== cls) b.className = cls;
+    setText(b.children[0], r.label);
+    setText(b.children[1], r.detail);
+    return b;
+  }
+
   function renderBlocks() {
     if (!timeline) return;
     const w = timeline.clientWidth || 400;
     const durationS = totalDuration(editor.model);
+    const layout = (originPx, widthPx) => {
+      scale = createTimeScale({ durationS, widthPx, originPx,
+        minSpanS: TIMELINE_OPTIONS.minSpanS, headroomRatio: TIMELINE_OPTIONS.headroomRatio });
+      return layoutBlocks(editor.model, scale, { y: TIMELINE_OPTIONS.blockY,
+        height: TIMELINE_OPTIONS.blockH, gapPx: TIMELINE_OPTIONS.gapPx });
+    };
+    // The blocks' floors: the touch or pointer minimum, or more where the name needs it.
+    const floor = coarsePointer() ? TOUCH_BLOCK_PX : MIN_BLOCK_PX;
+    const blocks = layout(0, w).map((r) => ({ durationS: r.endS - r.startS,
+      minPx: Math.max(floor, nameNeedPx(blockEl(r), r.label)) }));
+    // On a phone the shortest block is drawn at least phoneBlockPx wide as well.
     const phone = typeof window.matchMedia === 'function' && window.matchMedia(PHONE_QUERY).matches;
     const readable = phone ? { minBlockPx: TIMELINE_OPTIONS.phoneBlockPx,
       shortestS: shortestBlockS(editor.model) } : {};
-    win = timelineWindow({ durationS, laneW: w, ...readable });
+    win = timelineWindow({ durationS, laneW: w, blocks, gapPx: TIMELINE_OPTIONS.gapPx,
+      ...readable });
     scrollPx = Math.min(win.maxScrollPx, Math.max(0, scrollPx));
-    scale = createTimeScale({ durationS, widthPx: win.contentPx, originPx: -scrollPx,
-      minSpanS: TIMELINE_OPTIONS.minSpanS, headroomRatio: TIMELINE_OPTIONS.headroomRatio });
-    rects = layoutBlocks(editor.model, scale, { y: TIMELINE_OPTIONS.blockY,
-      height: TIMELINE_OPTIONS.blockH, gapPx: TIMELINE_OPTIONS.gapPx });
+    rects = layout(-scrollPx, win.contentPx);
     const seen = new Set();
     let prev = null;
     for (const r of rects) {
       seen.add(r.id);
-      let b = blockEls.get(r.id);
-      if (!b) {
-        b = document.createElement('div');
-        b.setAttribute('role', 'option');
-        b.id = `osc-seq-block-${r.id}`;
-        b.dataset.blockId = r.id;
-        b.style.position = 'absolute';
-        b.style.cursor = 'grab';
-        b.style.touchAction = 'none';
-        const name = document.createElement('span');
-        name.className = 'osc-block-name';
-        const detail = document.createElement('span');
-        detail.className = 'osc-block-detail';
-        b.append(name, detail);
-        timeline.insertBefore(b, marker);
-        blockEls.set(r.id, b);
-      }
-      const cls = `osc-block osc-block--${r.type}`;
-      if (b.className !== cls) b.className = cls;
+      const b = blockEl(r);
       b.style.left = `${Math.round(r.x)}px`;
       b.style.top = `${r.y}px`;
       b.style.width = `${Math.max(4, Math.round(r.w))}px`;
-      setText(b.children[0], r.label);
-      setText(b.children[1], r.detail);
       setAttr(b, 'aria-selected', r.id === editor.selectedId ? 'true' : 'false');
       paintSounding(b, r.id);
       setAttr(b, 'aria-label', `${r.label} ${r.detail}, ${(r.endS - r.startS).toFixed(2)} s`);
@@ -440,12 +512,10 @@ export function mount(rootEl, adapter) {
    * no option names selects none, so choosing any option is a change again.
    */
   function syncTempo() {
-    if (!tempoSel) return;
-    const v = String(editor.model.tempoBpm);
-    if (tempoSel.value === v) return;
-    const i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
-    tempoSel.selectedIndex = i;
+    // K017: the control shows model.tempoBpm, an off-step tempo included (sequencer/tempo-select.js).
+    syncTempoSelect(tempoSel, editor.model.tempoBpm, document);
   }
+
 
   function renderScrollbar() {
     if (!scrollEl || !thumbEl) return;
@@ -539,8 +609,26 @@ export function mount(rootEl, adapter) {
     const t = e.target;
     if (!t.matches || !t.matches('[data-osc="seq.field"]')) return;
     const key = t.dataset.field;
-    const v = t.tagName === 'SELECT' ? t.value : Number(t.value);
-    if (t.tagName !== 'SELECT' && !Number.isFinite(v)) {
+    if (t.tagName === 'SELECT') {
+      editor.updateParam(key, t.value);
+      render();
+      return;
+    }
+    if (t.closest('[data-unit="Hz"]')) {
+      // K017: note names, MIDI numbers and every frequency form; a refusal is said, not swallowed.
+      const r = parseFrequencyEntry(t.value);
+      if (!r.ok) {
+        editor.error = r.error;
+        render();
+        return;
+      }
+      editor.error = '';
+      editor.updateParam(key, r.hz);
+      render();
+      return;
+    }
+    const v = Number(t.value);
+    if (!Number.isFinite(v)) {
       render();
       return;
     }

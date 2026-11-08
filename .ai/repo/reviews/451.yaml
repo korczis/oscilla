@@ -1,0 +1,45 @@
+# Review verdict for pull request #451 (branch int/train-441-c060, train A): #441 (the lane-A review
+# P3s A1 B1 B2 B3 and the reviewer's C1 C2, by oscilla-21) and C060 (the P8 keyboard-Back fix,
+# fix/p8-keyboard-back 84fc0959, by oscilla-21), integrated by oscilla-2b on main 37c52bee.
+# Reviewed head 057f9550 (parents: the train and main 37c52bee). Reviewer: seat a3 (session
+# oscilla-a3, claude-code 12f1e384). Disclosure: the reviewer built none of it (members by 21, the
+# integration by 2b); the review ran in a detached scratch worktree of 057f9550; this file is the
+# reviewer's only write.
+#
+# The digest: origin/main 37c52bee's scripts/review-verdict.mjs --repo <scratch> --content --list
+# --base-branch origin/main at 057f9550: 619f93531875389816676ddad742e02dac889e76cb69771f6ab82442e23ceb84
+# over one guarded path, scripts/build-config.mjs: equal to 441.yaml's content at 05511d36 (the
+# train adds no guarded change; C060 touches src/js/ui/studio/workspace/navigation.js, which main's
+# GUARDED list does not name, and tests).
+#
+# Delta vs main (12 files, +212/-17, dist aside): #441's A1 (voice.js + docs/v31/signal-path.md),
+# B1 (visual-identity-lock.v4.md:210 test:synth), B2 (trace/synth.mjs + the p2 test's string literal),
+# B3 + C1 (build-config.mjs DARK_COMPOUND refuses a compound .dark, leading or trailing, with
+# ui-flowbite-pro-build.test cases), C2 (tests/README.md row); C060: navigation.js focusMovedSince
+# (pure: active is connected, not body, not the element focused when the deferral began) and the
+# deferred focus of Expand that leaves a control the user moved to, studio-expand-focus.test.mjs
+# (fail-first per 21's report), the cross-links P8 check (keyboard Back from a Studio opened from
+# the Sequencer returns there, in three engines); 2b's merges of main (e51b169d, 26399239,
+# 37c52bee: dist and tests/README.md only).
+#
+# Evidence at 057f9550 (scratch, npm ci): studio-expand-focus / ui-flowbite-pro-build /
+# knowledge-integrity / repo-hygiene 62/0; 2b: npm test 4952/0, build:check up to date, D4 5/0.
+# The P8 check is the one that cost #442 a webkit rerun today (run 42276528137 attempt 1): with C060
+# on main the release reruns stop.
+schema: review-verdict/v1
+pr: 451
+verdict: merge
+reviewer: oscilla-a3 (session 12f1e384, claude-code)
+content: 619f93531875389816676ddad742e02dac889e76cb69771f6ab82442e23ceb84
+members:
+  - { pr: 441, verdict: merge, reason: "441.yaml at 05511d36 (a3) binds 619f9353; the same content at this head" }
+findings:
+  - { id: A1, severity: P3, status: closed, title: "voice.js and signal-path.md say Open starts nothing and a playing Studio stops first (openDocument)" }
+  - { id: A3, severity: P3, status: open, title: "synth/xy.js xyUnpatchAction composes each pad cable's unpatch against the pre-removal model; two pad cables into one jack would restore no normals (none exist today); carried from 386.yaml" }
+  - { id: B1, severity: P3, status: closed, title: "visual-identity-lock.v4.md:210 names npm run test:synth" }
+  - { id: B2, severity: P3, status: closed, title: "trace/synth.mjs lists synth-review-p2.test.mjs for synth.engine-elsewhere; the hook is a string literal there" }
+  - { id: B3, severity: P3, status: closed, title: "build-config.mjs refuses a compound .dark (.dark.x, .dark[a], .dark:hover, ...) with a test that fails without it" }
+  - { id: B4, severity: P3, status: open, title: "source-size-baseline.json's 307000 raise states a stale figure; the raises ledger is append-only, so it stays (carried)" }
+  - { id: C1, severity: P3, status: closed, title: "DARK_COMPOUND also refuses a trailing .dark (.x.dark, html.dark, [dir].dark); ancestor forms still rewrite" }
+  - { id: C2, severity: P3, status: closed, title: "tests/README.md's ui-flowbite-pro-build row names :root:not([data-theme=\"light\"]) and the compound refusal" }
+  - { id: T1, severity: P3, status: closed, title: "C060: focusMovedSince is pure and the deferred focus of Expand leaves a control the user moved to; studio-expand-focus.test.mjs fails without it; cross-links P8 check in three engines; frameSelection still runs before the early return, a view change only" }

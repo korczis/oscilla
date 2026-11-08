@@ -109,7 +109,27 @@ const h002LinkView = (names) => (out) => {
   });
   return q;
 };
+// T004: the dual difference readout names the route. V1 said "amplitude beats" for every route;
+// a Stereo split carries one steady tone per channel and binaural mode describes the perceptual
+// beat only, so only the mono mix keeps V1's text. Positive cases:
+// tests/unit/readout-labels-dual-beat.test.mjs.
+const t004V1Beat = (f, period) =>
+  `Δf ${f} Hz → amplitude beats at about ${f} Hz (one every ${period}).`;
+const t004Route = (route, f, period) => (out) => {
+  const text = out.beatText;
+  assert.ok(!/amplitude beats/.test(text),
+    `V2 fix (T004): no amplitude beats on ${route}: ${text}`);
+  assert.ok(text.startsWith(`Δf ${f} Hz, `) && text.includes(`(one every ${period})`),
+    `V2 fix (T004): the ${route} text keeps the difference and period: ${text}`);
+  assert.ok(route === 'binaural'
+    ? text.includes('perceptual binaural beat') : text.includes('one steady tone per channel'),
+  `V2 fix (T004): the ${route} text names its route: ${text}`);
+  return { ...out, beatText: t004V1Beat(f, period) };
+};
 const DEVIATIONS = {
+  'dual/stereo-6Hz': t004Route('stereo', '6', '167 ms'),
+  'dual/stereo-40Hz': t004Route('stereo', '40', '25 ms'),
+  'dual/stereo-binaural-6Hz': t004Route('binaural', '6', '167 ms'),
   ...Object.fromEntries(Object.entries(G002_PARSE)
     .map(([id, d]) => [`frequency.parse/${id}`, g002Parse(d)])),
   'url.state/roundtrip:sweep-continuous-allowed': h002LinkView(['continuous repeat']),

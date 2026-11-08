@@ -21,6 +21,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseYaml } from '../../scripts/yaml-subset.mjs';
 import { browserSuites, checkWorkflow } from '../../scripts/ci-workflow-rules.mjs';
+import { setBound } from './fixtures/workflow-bound.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -188,11 +189,9 @@ test('main-checks.yml obeys project.ci-bounded and is not bound to a pull reques
 test('mutation: a copied step drifts, here or in ci.yml', () => {
   const here = mutate(MAIN, '        run: npm test\n', '        run: npm test || true\n');
   assert.match(onlyProblem(CI, here, 'mirror: unit step'), /step 4/);
-  const there = mutate(CI,
-    'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n'
-    + '        timeout-minutes: 45\n',
-    'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n'
-    + '        timeout-minutes: 50\n');
+  const there = setBound(CI,
+    'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n        ',
+    (n) => n + 5);
   onlyProblem(there, MAIN, 'mirror: browser step 6');
   const dropped = mutate(MAIN, '      - name: Committed dist/index.html matches a clean rebuild\n'
     + '        run: npm run build:check\n', '');
@@ -206,9 +205,8 @@ test('mutation: the Majordomus pin or a job budget differs from ci.yml', () => {
   const pinned = CI.match(/\n {6}MJ_VERSION: (\S+)\n/)[1];
   const version = mutate(CI, `      MJ_VERSION: ${pinned}\n`, `      MJ_VERSION: ${pinned}.1\n`);
   onlyProblem(version, MAIN, 'mirror: knowledge.env');
-  const budget = mutate(MAIN, '    name: unit, build, artifact rules\n    runs-on: ubuntu-24.04\n'
-    + '    timeout-minutes: 10\n', '    name: unit, build, artifact rules\n'
-    + '    runs-on: ubuntu-24.04\n    timeout-minutes: 30\n');
+  const budget = setBound(MAIN, '    name: unit, build, artifact rules\n    runs-on: ubuntu-24.04\n'
+    + '    ', (n) => n + 20);
   onlyProblem(CI, budget, 'mirror: unit.timeout-minutes');
 });
 

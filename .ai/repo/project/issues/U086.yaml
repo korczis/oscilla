@@ -17,15 +17,30 @@ scope:
   - "dist"
 depends_on: []
 acceptance_criteria:
-  - "A unit test asserts roadmap.release equals package.json's version and the heading renders it; it fails today (no field)."
-  - "The field passes the :323 no-time, no-SHA check."
+  - "A unit test asserts the heading names the release the roadmap describes: the build's own version (About's ROADMAP.release is BUILD.version) and the roadmap holds no copy of it (roadmap v3, re-scoped 2026-11-06; the first form, roadmap.release equal to package.json's version, shipped in #424 and went stale on its first merge of main after a bump)."
+  - "The roadmap holds no time, SHA or version (the :323 check, and version:check with LINE_ALLOW empty)."
   - "Fail-first: the named unit test fails on the merge base (project.fail-first)."
   - "No new ISO time or SHA in roadmap.json (tests/unit/about-current.test.mjs:323); src/index.html stays under its size cap or the PR records a raises entry; tests/unit/ui-flowbite-pro-baseline.json does not grow."
   - "Done only after each criterion is re-checked on a main commit (b0's rule of 2026-11-05)."
+current_state: "Delivered first by #424 (in train B #437): roadmap.mjs wrote release and About read it. Re-scoped 2026-11-06 by oscilla-2b with oscilla-21's review of the derived-versioning train (finding F1): roadmap v3 drops the copy (scripts/roadmap.mjs refuses a release key), About reads BUILD.version, release-version-check LINE_ALLOW is empty. Reason: the owner's order of 2026-11-06 (nothing typed twice) and the measured drift: train B's merge of main 26399239 showed release 3.21.0 against package.json's next version. The heading still names the release; done is stamped on main after both #437 and the derived-versioning train land, each criterion re-checked there."
 validation:
   - "node --test tests/unit/about-current.test.mjs"
   - "npm test"
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-07T09:31:08Z
+started_at: 2026-11-07T09:29:30Z
+started_event: sha256:b2c17f7a6aa057de69b78e53f22ea42fb5dd492ccee6380ab692a8978302e488
+verified_at: 2026-11-07T09:29:42Z
+verified_event: sha256:1b4c257a41d06d311b8ec06cbd115f11e06872f1176cc85b2b7f1c979286b38c
+completed_at: 2026-11-07T09:31:08Z
+completed_event: sha256:ec57474f793167d05a9c96e79d5be889504fd52f6b650309b1bc607cf1eb245b
+evidence:
+  - covers: verified
+    type: test
+    command: "node --test tests/unit/about-current.test.mjs tests/unit/version-authority.test.mjs"
+    result: "On main f76538a0, each criterion re-checked: the heading names the release the roadmap describes, the build's version (ROADMAP.release is BUILD.version); src/data/roadmap.json has no release key (jq has(\"release\") false) and roadmap.mjs refuses one; LINE_ALLOW is empty and version:check passes; no new ISO time or SHA in the roadmap; ui-flowbite-pro-baseline did not grow. 29 pass 0 fail. First form by #424 in #437 (d51f9b2d), re-scoped form by #460 (7e964c0d)."
+    artifact: "src/data/roadmap.json"
+    commit: f76538a05cff83681d02223696150a8edf59b8d7
+    recorded_at: 2026-11-07T09:30:07Z

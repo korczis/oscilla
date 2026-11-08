@@ -7,8 +7,11 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { WORKSPACES, workspaceTitle } from '../../src/js/ui/app.js';
 import { NAV_TREE } from '../../src/js/ui/shell.js';
+import { expandStations } from '../../scripts/about-stations.mjs';
 
-const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
+// The About stations are data the build renders (R032): the tests read what it renders.
+const html = expandStations(
+  readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8'));
 const aboutView = html.slice(html.indexOf('id="osc-view-about"'), html.indexOf('</main>'));
 const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
 

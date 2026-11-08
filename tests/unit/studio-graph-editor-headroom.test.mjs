@@ -7,11 +7,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { UNCAPPED } from './fixtures/source-size.mjs';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const DIR = 'src/js/ui/studio';
 const EDITOR = `${DIR}/graph-editor.js`;
-const DEFAULT_CAP = 40_000;
+const DEFAULT_CAP = UNCAPPED; // the budget's own default (fixtures/source-size.mjs)
 
 /** What leaves a graph module with less room than it needs ([] = every one has it). */
 export function headroomProblems(sizes, caps) {

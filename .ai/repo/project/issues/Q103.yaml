@@ -1,0 +1,25 @@
+id: Q103
+milestone: M064
+serves:
+  - "connected-instrument#drum-machine"
+  - "connected-instrument#performance-pad"
+  - "connected-instrument#step-sequencer"
+title: "Owner direction: the drum machine, the Synth with its sequencer strip and two integrated performance pads look and work like a hardware groovebox"
+slug: owner-direction-groovebox-views
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's direction of 2026-11-07 (Claude Code session 6f686fcc-fdbe-44a2-930d-ddf956a9ee5f, oscilla-2b, ~11:15Z), given with four reference screenshots of a commercial iPad groovebox app. Verbatim: 'takovehle views ja chci' (these are the views I want), then 'takhle integrovany kaoscillator' (an integrated XY performance pad like this) with a fifth screenshot, and a Google image search link for that app's sequencer. What the screenshots show, as requirements and never as a copy: (1) a drum machine view: six voice rows (each with its name, a sound-edit and a select button) by 16 numbered steps, each step a key with its own on-light, a row of six trigger pads with a record button below, session, playback and component switches above; (2) the semi-modular Synth face with knobs, patch cables drawn between jacks and an analog step-sequencer strip above it, and a piano keyboard below; (3) two XY performance pads under the Synth face: the left one on two parameters (filter cutoff on X, resonance on Y), the right one on pitch in a scale on X and gate on Y, each with its settings and a scale selector, a glowing touch point and a record button. The views are OSCILLA's own (project.visual-identity-lock, project.ui-uses-flowbite-pro, the synth-theme hardware layer): no third-party name, logo, trade dress or screenshot is used or committed. The owner's binding constraint, verbatim the same session: 'nezapomen, ze nechceme zadny jednorazovky; vse musi byt komponentizovane, reused, dry, vse propojitelne, jeden zivy system nad spolecnym stavem, vse ciste, pravidla znas' (no one-offs; everything componentized, reused, DRY, all connectable, one living system over shared state, all clean, the rules apply). The reference's public description (its store and vendor pages) builds every part from the one synth: a 16-step sequencer with three channels of control voltage and six sequence modes, a six-part drum machine whose sounds the synth itself makes, a seven-channel mixer with metering and effects, and two pads (one to play, one for parameters). Mapped onto the Studio model, with no new parallel system: the drum rows are notes clips on voice nodes (the perc engine or any patch: no separate drum engine), the strip is the Step Modulator node with three lanes whose outputs are typed control ports a cable patches anywhere, the pads are xy-pad nodes whose X and Y are output jacks (pad L normalled to the low-pass cutoff and resonance, re-patchable), the mixer is connected-instrument#daw-mixer; the drum grid, the strip and the Step Modulator mount one step-grid kind (W008), the two pads one pad implementation (xy.js)."
+why: "The owner's direct product order (connected-instrument, 'a proper step sequencer, a drum machine ... an XY pad'), now with the look and layout fixed by reference. Recorded the same session (owner answers live in the repository); the screenshots stay in the session (third-party material), only their content is described."
+current_state: "Direction recorded 2026-11-07. Routed on the mesh: the drum view and the step-grid chain (W008 → K069/K073) to oscilla-21 (sequencer line, K068 in review), the dual pads (K220) and the sequencer strip (K221) as new issues; the landing order stays (oscilla-2b)."
+scope:
+  - ".ai/repo/project/issues/Q103.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The direction is recorded as evidence (covers owner_decision) quoting the owner's words with date and session, and the three views are each an issue of the plan (K073 for the drum machine, K220 for the pads, K221 for the strip)."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-07'
+updated_at: '2026-11-07'

@@ -861,7 +861,7 @@ test('R021 resume with the local tag at HEAD: the notes run from the previous re
     assert.match(text, /RESUME v40\.0\.0/);
     assert.match(text, /previous tag: v39\.0\.0; 3 commit\(s\) in the notes/);
     assert.match(text, /compare\/v39\.0\.0\.\.\.v40\.0\.0/);
-    assert.ok(dry.calls.some((c) => c.join(' ') === 'git log --format=%H%x1f%s%x1f%b%x1e '
+    assert.ok(dry.calls.some((c) => c.join(' ') === 'git log --format=%H%x1f%s%x1f%b%x1f%P%x1e '
       + 'v39.0.0..HEAD'));
     const f = fakes({ tagRemote: TAG_AT(HEAD), localTag: HEAD, live: TAGGED_PAGE });
     assert.equal(await yesRun(f), 0, f.out.join('\n'));

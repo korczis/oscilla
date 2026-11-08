@@ -7,13 +7,15 @@
 // re-exports the build's assembler (or is deleted), so a test reads exactly what is built.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { expandStations } from '../../../scripts/about-stations.mjs';
 
 const root = new URL('../../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
 
 /** The shell markup: src/index.html, then any build-time partials (E005), in name order. */
 export function shellMarkup() {
-  const parts = [read('src/index.html')];
+  // The About stations are data the build renders (R032); the tests read what it renders.
+  const parts = [expandStations(read('src/index.html'))];
   const dir = new URL('src/partials/', root);
   if (existsSync(dir)) {
     for (const f of readdirSync(dir).filter((n) => n.endsWith('.html')).sort()) {
