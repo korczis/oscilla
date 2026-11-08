@@ -1,0 +1,36 @@
+id: K207
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#honest-instrument"
+title: "Contour node type: a gate-driven attack, hold and release control with invert, and tests/unit/synth-vco-contour.test.mjs"
+slug: contour-node-type-a-gate-driven-attack-hold-and-release-cont
+priority: p1
+profile: implementation
+objective: "Lands as feat(studio). K059 keeps the contour node a criterion (its amendment of 2026-11-03) and main has none: src/js/studio/nodes/instrument.js defines keys, vco and ring, and 'contour' is only an alias of the envelope node (src/js/studio/nodes/modulation.js:75). Adds the contour type of K059's objective in src/js/studio/nodes/instrument.js (attack, hold, release, invert; a gate TRIGGER input; a 0..1 CONTROL output from a ConstantSource ramped on the audio clock) with its adapter in src/js/studio/adapters/instrument.js, so that a quick-add search for 'contour' lists the new type. Before: no gate-driven control contour. After: a contour node that validates, compiles and schedules on the audio clock. Rollback: revert the pull request; a document saved with a contour node is then refused by the import pipeline with its unknown-type sentence, never dropped silently."
+why: "Gap of K059 (criterion 1 and 9) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): the contour node type and tests/unit/synth-vco-contour.test.mjs do not exist on main. No owner direction re-scopes it, so it is its own issue and K059's criterion points here (chore/plan-m064-rescope). K059 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "src/js/studio/nodes/instrument.js"
+  - "src/js/studio/nodes/modulation.js"
+  - "src/js/studio/adapters/instrument.js"
+  - "src/js/studio/registry.js"
+  - "docs/v31/studio-model.md"
+  - "tests/unit/synth-vco-contour.test.mjs"
+  - "tests/unit/synth-nodes.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/synth-vco-contour.test.mjs, failing on the merge base (no contour type there), asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census of a vco and a contour: a gate at t ramps the contour's ConstantSource to 1 over attack, holds it for hold, and ramps it to 0 over release after the gate ends, all on the audio clock; invert outputs 1 - x; the census is 0 after stop (project.fail-first)."
+  - "Negative cases, each asserted in that file: an attack, hold or release outside its declared range (NODE_PARAM_SET refused with the validator's sentence, model and history unchanged); an AUDIO edge into the gate TRIGGER input (refused by canConnect with its sentence; project.typed-ports)."
+  - "Every pinned template studioHash is unchanged: it adds a node type only (D2, K022; tests/unit/synth-nodes.test.mjs:83)."
+  - "Built by its adapter with track()/source() accounting, all timing on the audio clock, click-free ramps, the engine node census 0 after stop (project.audio-engine-discipline v2); every string it adds passes tests/unit/synth-wording.test.mjs (project.no-fake-science)."
+  - "src/js/studio is guarded (project.review-verdict v2): a non-builder's verdict in .ai/repo/reviews/<pr>.yaml, the new one for the contour node that K059's verdict criterion asks for."
+  - "scripts/size-report.mjs shows the bytes added, base and head figures in the pull request body, within K059's 4 KB gzip ceiling; tests/README.md has a row for the new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-vco-contour.test.mjs tests/unit/synth-nodes.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07
