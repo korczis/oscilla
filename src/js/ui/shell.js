@@ -27,6 +27,8 @@
 //   empty    { when, title, body, action: { label, to } }: the page's empty state, shown while
 //            the predicate `when` (registered by its adapter, ui/empty-states.js) is true;
 //            action.to is a registry id.
+//
+// ui-family: app-shell model
 
 import { roving } from './keys/roving.js';
 

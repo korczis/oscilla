@@ -33,6 +33,8 @@
 //     also describe the surface (K167: the first action), after the axes' description;
 //     readout { x(v), y(v) -> text | null, yEnds: [bottom, top] | () -> [bottom, top] | null }
 //     for the drawing (a function's ends are read again on each drawn frame)
+//
+// ui-family: pad model
 
 import { xyFromPoint } from '../../charts/drag-math.js';
 import { knobModel } from '../../synth/view/knob.js';

@@ -2,6 +2,8 @@
 // drawing on a 2D canvas. The canvas is a domain view (ADR 0061 decision 3): it draws with the
 // theme's custom properties and holds no state of its own; src/js/midi/keyboard.js owns what is
 // held. The geometry and the hit test are pure; draw() touches only the canvas it is given.
+//
+// ui-family: keyboard skin canvas
 
 import { isBlack, noteName } from './keyboard.js';
 

@@ -13,6 +13,8 @@
 // Space is never a keyboard key: it stays the workspace's play key (ADR 0050). A note sounds
 // while its key is held, past the safety limit (ADR 0062), until the key goes up or a forced
 // release (blur, hide, Escape) lets go of every note.
+//
+// ui-family: keyboard model
 
 /** Physical key -> semitones above the octave's C (the A key). */
 export const NOTE_KEYS = Object.freeze({
