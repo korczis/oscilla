@@ -125,6 +125,8 @@ const LOAD_MS = 90000;       // the page has reported ready and stated a MIDI st
 const SETTLE_MS = 30000;     // a request the stub or Chromium settles
 const FIREFOX_MS = 60000;    // Firefox rejects after 3.0-12.9 s (32 runs, ADR 0058)
 const STEP_MS = 15000;       // a state change the test drives through the stub
+// The disarmed dock's one row (the owner's 'a third of the height'; Train 4's demo-song check).
+const ONE_ROW_PX = 120;
 /**
  * Take the focus out of the editors (an armed key pressed inside one is the editor's) by a click
  * on the keys' readout, a gesture on no control; where the room folds the docked keys (the
@@ -1136,10 +1138,16 @@ async function keyboardEverywhere(browser, b, origin, url) {
     if (await handle.isVisible()) await handle.click();
     // Disarmed in the Studio, the dock is one row and the keys hide, so the graph keeps its
     // height (the owner's 'a third of the height'; demo-song's node selection in Train 4).
-    const dock = () => page.evaluate(() => ({
-      h: Math.round(document.getElementById('osc-keyboard').getBoundingClientRect().height),
-      keys: document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect().height,
-      armed: window.OSCILLA.app.kbdArmedHere }));
+    // The handle's row counts on top of the one row where the Studio's room folds the keys
+    // (#444): it stays once the user unfolded them, armed or not, so they can fold them again.
+    const dock = () => page.evaluate(() => {
+      const handle = document.querySelector('[data-osc="keyboard.handle"]');
+      return {
+        h: Math.round(document.getElementById('osc-keyboard').getBoundingClientRect().height),
+        keys: document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect().height,
+        handle: handle && !handle.hidden ? Math.round(handle.getBoundingClientRect().height) : 0,
+        armed: window.OSCILLA.app.kbdArmedHere };
+    });
     const armedDock = await until(async () => { const d = await dock(); return d.keys > 0 && d; },
       { ms: STEP_MS, what: `${leg}: the armed Studio shows its keys` }).catch(dock);
     await page.locator('[data-osc="keyboard.arm"]').click();
@@ -1160,7 +1168,8 @@ async function keyboardEverywhere(browser, b, origin, url) {
     const fits = (f) => f.content <= f.dock + 1 && f.dock - f.content <= 16;
     const fitArmed = await fit();
     check(leg, id, 'disarmed in the Studio the keys hide and the dock is one row; armed they show',
-      armedDock.keys > 0 && off.keys === 0 && off.h <= 120 && off.h < armedDock.h,
+      armedDock.keys > 0 && off.keys === 0 && off.h <= ONE_ROW_PX + off.handle
+        && off.h < armedDock.h,
       JSON.stringify({ armedDock, off }));
     const fitOff = await fit();
     check(leg, id, 'the Studio content ends at the docked keys, armed and disarmed (nothing under '
