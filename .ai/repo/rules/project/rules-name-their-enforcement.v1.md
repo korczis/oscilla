@@ -81,6 +81,10 @@ has to resolve to something that runs.
   a blocking rule resting on `reviewed_because`; an index with a row removed, a stale class
   or an extra row; a bootstrap naming a rule that does not exist; and the Pages workflow
   without its smoke step, or with the step left in a trailing comment.
+- The same file's V272 D8 check, which is not this rule's, reads
+  `.ai/repo/knowledge/adr-exemptions.yaml`: the ADRs that add no capability of the page, each
+  with its reason (E055). It is named here, where the knowledge test's inputs are, so that a
+  guard derived from the rules' enforcement sections sees it.
 
 # Failure behaviour
 

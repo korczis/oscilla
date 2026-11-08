@@ -14,6 +14,10 @@
 //       on   the top note changes: the Keys pitch moves (glide only legato), its envelopes get
 //            gate(at, null) and its clocked Random clock(at, k), k counted from arm (0 first)
 //       off  the stack empties: release(at); the top note changes: legato return, no gate
+//       legato  { from, note }: a held note moves to `note` without a gate (K183, the XY pad's
+//            finger crossing into another scale cell): `from` leaves the stack and `note` joins
+//            it; when the top changes the Keys pitch moves (its glide), no envelope is gated.
+//            A `from` not held is a plain on. An engine takes it as off(from) and on(note)
 //     notes.allOff(at) -> how many keys were held; notes.reset(); notes.held() -> [note]
 //   A polyphonic engine (nodes/engines.js, capabilities.notes, a handle with noteOn) takes the
 //   same events on its own id: on -> noteOn(at, note, velocity), off -> noteOff(at, note),
@@ -21,12 +25,14 @@
 //   A note-on that takes no voice (it sounds nothing) is not held: { silent: true }.
 //   An XY pad (nodes/instrument.js xy-pad, a handle with move) takes { kind: 'on' | 'move' |
 //   'off' | 'all-off', x, y } on its id (plan K097): on and move set X, Y and the scale step
-//   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them.
+//   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them
+//   and, as all-off does, puts Y back at its rest, 0 (handle.rest, K183).
 
 //   A note outside 0-127 is refused on every node that plays notes, and on a Keys node a note
 //   on outside its Key low to Key high: { ok: false, code: 'note-range' | 'key-range', reason },
 //   never clamped to a neighbour silently (K060).
 
+import { gateCloseAt } from '../audio/gate.js';
 import { createNoteStack } from '../synth/note-stack.js';
 import { playsNotes } from './registry.js';
 
@@ -94,12 +100,17 @@ export function createLiveNotes({ getModel, handleOf }) {
   const counts = new Map(); // clocked node id -> triggers since arm
   const poly = new Map(); // engine id -> Set of held notes (its pool holds the voices)
   const pads = new Map(); // XY pad id -> the note sounding while it is touched
+  // When each gate opened, audio time: an ordinary off closes it no sooner than MIN_GATE_S
+  // after (K184: a tap handled in one task still sounds); a forced all-off is never deferred.
+  const opened = new Map(); // keys or pad id -> its gate's on; `${id}:${note}` -> a poly note's
+  const closeAt = (k, at) => gateCloseAt(opened.get(k), at);
 
   const stackOf = (id) => {
     if (!stacks.has(id)) stacks.set(id, createNoteStack());
     return stacks.get(id);
   };
   const gate = (id, at, on) => {
+    if (on) opened.set(id, at); else opened.delete(id);
     const kh = handleOf(id);
     if (kh && typeof kh.gateAt === 'function') kh.gateAt(at, on);
     const { envelopes, clocks } = gateTargets(getModel(), id);
@@ -119,7 +130,8 @@ export function createLiveNotes({ getModel, handleOf }) {
     }
   };
 
-  function polyEvent(id, h, { kind, note, velocity = 100, at, fast = false }) {
+  function polyEvent(id, h, ev) {
+    const { kind, note, velocity = 100, at, fast = false, forced = false } = ev;
     if (!poly.has(id)) poly.set(id, new Set());
     const held = poly.get(id);
     if (kind === 'all-off') {
@@ -129,6 +141,7 @@ export function createLiveNotes({ getModel, handleOf }) {
       return { ok: true, held: 0, released: n };
     }
     if (kind === 'on') {
+      opened.set(`${id}:${note}`, at);
       const r = h.noteOn(at, note, velocity);
       // A note that sounds nothing takes no voice (adapters/voices.js: slot null, every
       // operator above the limit, a ring with no modulator): it is not held either (review of
@@ -138,16 +151,26 @@ export function createLiveNotes({ getModel, handleOf }) {
       return { ok: true, held: held.size, top: silent ? null : note, silent,
         stolen: !!(r && r.stolen), dropped: r ? r.dropped : 0 };
     }
+    if (kind === 'legato') {
+      polyEvent(id, h, { kind: 'off', note: ev.from, at });
+      return polyEvent(id, h, { kind: 'on', note, velocity, at });
+    }
     held.delete(note);
-    h.noteOff(at, note);
+    h.noteOff(forced ? at : closeAt(`${id}:${note}`, at), note);
+    opened.delete(`${id}:${note}`);
     return { ok: true, held: held.size, top: null };
   }
 
-  function padEvent(id, h, { kind, x, y, at }) {
+  function padEvent(id, h, { kind, x, y, at, forced = false }) {
     const down = pads.has(id);
     if (kind === 'off' || kind === 'all-off') {
       pads.delete(id);
-      if (down) gate(id, at, false);
+      // An ordinary off closes no sooner than the minimum gate (K184); a forced one at once.
+      const off = kind === 'off' && !forced ? closeAt(id, at) : at;
+      // Every release, forced ones too, puts Y back at rest: nothing of the last touch stays on
+      // its cable (K183 review N2; a Hold that keeps it is Q099's, not this).
+      if (h && typeof h.rest === 'function') h.rest(off);
+      if (down) gate(id, off, false);
       return { ok: true, held: 0, released: down ? 1 : 0 };
     }
     const r = h.move(at, x, y, { legato: down });
@@ -177,12 +200,22 @@ export function createLiveNotes({ getModel, handleOf }) {
       return { ok: false, reason: 'The Keys node is not running.' };
     }
     const [lo, hi] = typeof h.keyRange === 'function' ? h.keyRange() : [0, 127];
-    if (kind === 'on' && (note < lo || note > hi)) {
+    // A legato slide (K183) lands on its target note as a note-on does: outside the range it
+    // is refused the same way, and the held note it slid from keeps sounding (K060).
+    if ((kind === 'on' || kind === 'legato') && (note < lo || note > hi)) {
       return { ok: false, code: 'key-range', reason: LIVE_NOTES_TEXT.keyRange(note, lo, hi) };
     }
     const prio = typeof h.priority === 'function' ? h.priority() : 'last';
+    if (kind === 'legato') {
+      const before = st.top(prio);
+      if (!before || !st.notes.includes(ev.from)) return event(keysId, { ...ev, kind: 'on' });
+      st.release(ev.from, prio);
+      const t = st.press(note, velocity, prio).top;
+      if (t.note !== before.note) h.play(at, t.note, t.velocity, { legato: true });
+      return { ok: true, held: st.size, top: t.note, retrigger: false };
+    }
     const c = kind === 'on' ? st.press(note, velocity, prio) : st.release(note, prio);
-    if (c.empty && !c.unchanged) gate(keysId, at, false);
+    if (c.empty && !c.unchanged) gate(keysId, ev.forced ? at : closeAt(keysId, at), false);
     else if (c.top && (c.retrigger || c.legato)) {
       h.play(at, c.top.note, c.top.velocity, { legato: !!c.before, onset: !!c.retrigger });
       if (c.retrigger) gate(keysId, at, true);
@@ -200,6 +233,7 @@ export function createLiveNotes({ getModel, handleOf }) {
       return n;
     },
     reset() {
+      opened.clear();
       stacks.clear();
       counts.clear();
       poly.clear();

@@ -27,6 +27,8 @@
 //                                           touch a module it adds are added
 //   panel.tabs -> [{ id, title, description }]   the workspace tabs a panel's modules sit on
 //   panel.modulesOf(tab) -> [module]              (module.tab, default the first tab)
+//   module.adds -> [port]                   CONTROL outputs whose cables add to the normals of
+//                                           the jack they feed (synth/normals.js; the XY pad)
 //
 // A module's node is found by metadata.panel { id: panel.instance, module } (schema.js
 // isPanelRef); a node type the Studio may hold once (Master Output) is that one node.
@@ -103,6 +105,12 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     for (const [k, v] of Object.entries(values)) {
       const why = validateParamValue(params.find((p) => p.key === k), v);
       if (why) fail(pid, `${m.id}.${k} ${why}`);
+    }
+    // `adds`: CONTROL outputs whose cables add to a jack's normals (synth/normals.js, K183).
+    for (const port of m.adds || []) {
+      if (!def.outputs.some((p) => p.id === port && p.type === 'CONTROL')) {
+        fail(pid, `${m.id}.adds ${port} není výstup CONTROL`);
+      }
     }
     const hide = new Set((m.jacks && m.jacks.hide) || []);
     const jacks = [...def.inputs, ...def.outputs].filter((p) => !hide.has(p.id)).map((p) => ({

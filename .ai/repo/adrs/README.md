@@ -28,6 +28,13 @@ never rewrite the sections above them; they record what shipped, what changed si
 decision that practice has superseded. A worker does not promote a decision to `accepted`,
 `superseded` or `rejected`; it adds a resolution note and leaves the status to the owner.
 
+Every ADR from 0011 on is cited by a claim in `docs/CLAIMS.yaml`, a feature or a use case,
+or `tests/unit/knowledge-integrity.test.mjs` (V272 D8) fails. A decision that adds no
+capability of the page (a release or repository process, a vocabulary, a descoping, a
+decision nothing implements yet) is listed instead in `.ai/repo/knowledge/adr-exemptions.yaml`
+with its reason, in the pull request that proposes it; an entry for an ADR that has become
+cited fails as stale and is removed.
+
 On 2026-10-18 the owner accepted the decisions that the code implements as described and CI
 holds (explicit instruction in the session of 2026-10-18, applied by the coordinating Claude
 session). Each accepted decision says so in a dated entry under its `## Resolution notes`,

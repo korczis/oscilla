@@ -203,6 +203,21 @@ test('AC8: a note outside the node\'s key range is refused with the range in the
   assert.deepEqual(rig.transport.heldNotes(), [48]);
 });
 
+test('K060 with K183: a legato slide into a note outside the key range is refused, the held note sounds on', () => {
+  const rig = armed({ keyLow: 48, keyHigh: 72 });
+  const t0 = rig.fx.ctx.currentTime + 0.05;
+  assert.equal(on(rig, 60, t0).ok, true, 'C4 held inside the range');
+  const r = rig.transport.live(rig.keys, { kind: 'legato', from: 60, note: 80, velocity: 100,
+    at: t0 + 0.1 });
+  assert.deepEqual([r.ok, r.code, r.reason], [false, 'key-range',
+    'Nota 80 je mimo rozsah kláves tohoto uzlu Keys 48 až 72; nehraje se.']);
+  assert.deepEqual(rig.transport.heldNotes(), [60], 'the slide changed nothing: C4 is still held');
+  const ok = rig.transport.live(rig.keys, { kind: 'legato', from: 60, note: 64, velocity: 100,
+    at: t0 + 0.2 });
+  assert.equal(ok.ok, true, 'a slide inside the range plays');
+  assert.deepEqual(rig.transport.heldNotes(), [64]);
+});
+
 test('#447 F1: an inverted key range is the same interval, so it never refuses every note', () => {
   const rig = armed({ keyLow: 72, keyHigh: 48 });
   const t0 = rig.fx.ctx.currentTime + 0.05;

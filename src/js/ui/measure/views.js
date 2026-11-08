@@ -154,11 +154,18 @@ export function createViews(ctx, svc, ops) {
     return view;
   }
 
-  /** The stimulus length of a result or saved experiment, for the IR noise-tail window (T019). */
-  function irStimulusFrames(src) {
+  /**
+   * The stimulus length of a result or saved experiment, for the IR noise-tail window (T019),
+   * in frames at the IR's rate: the engine renders a recipe's stimulus at the device rate
+   * (validateRecipe), so a saved recipe made at another rate is read at `sampleRate`, the IR's
+   * (T028); a recipe with no stated rate gives no length.
+   */
+  function irStimulusFrames(src, sampleRate) {
     if (src.stimulus && Number.isInteger(src.stimulus.frames)) return src.stimulus.frames;
+    const spec = src.recipe && src.recipe.stimulus;
+    if (!spec || !Number.isFinite(spec.sampleRate) || !(sampleRate > 0)) return null;
     try {
-      return src.recipe && src.recipe.stimulus ? stimulusFrames(src.recipe.stimulus) : null;
+      return stimulusFrames({ ...spec, sampleRate });
     } catch {
       return null;
     }
@@ -177,7 +184,7 @@ export function createViews(ctx, svc, ops) {
       view = buildIrView(ir, { scale: m.view.irScale, normalize: m.view.irNormalize,
         window: m.view.irWindow ? IR_WINDOW_MS : null,
         range: span.range ? [span.range[0], span.range[1]] : 'full',
-        stimulusFrames: irStimulusFrames(src) });
+        stimulusFrames: irStimulusFrames(src, ir.sampleRate) });
     }
     m.ir = view ? { summary: view.summary, badges: view.badges.slice(), notes: view.notes.slice(),
       yLabel: `${view.axes.y.label}`, window: view.windowRegion ? view.windowRegion.label : null }

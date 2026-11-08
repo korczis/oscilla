@@ -8,6 +8,8 @@ const entry = (e) => ({ plan: ['G001'], intents: ['component-system#contract-and
   adrs: ['adr-0081', 'adr-0030'], ...e });
 
 export default {
+  'studio.bar': entry({ source: 'src/index.html',
+    tests: ['tests/unit/keys-routes.test.mjs'] }),
   'studio.toolbar.transport': entry({ source: 'src/js/ui/studio/transport-bar.js',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-timeline.cjs'] }),
   'studio.toolbar.loop': entry({ source: 'src/js/ui/studio/transport-bar.js',

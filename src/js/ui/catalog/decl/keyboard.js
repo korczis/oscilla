@@ -1,7 +1,8 @@
 // Declarations: the on-screen keyboard (the panel in src/index.html, its controller
 // midi/keyboard-ui.js), docked in the Playground, the Studio and the Synth. The arm switch and
 // the octave and velocity steps write the component's page-only keys (ui.kbdArmed, ui.kbdBase,
-// ui.kbdVelocity of sources.js), the docked keys' More switch ui.kbdMore.
+// ui.kbdVelocity of sources.js), the docked keys' More switch ui.kbdMore, the dock's handle
+// ui.kbdDockExpanded (midi/dock-yield.js builds the handle and the status line, K171).
 // Trace: scripts/ui-catalog/trace/keyboard.mjs.
 
 import { defineComponent } from '../define.js';
@@ -85,6 +86,32 @@ export default [
     label: 'More, Fewer',
     docs: 'Shows the docked keyboard controls a phone folds away, or folds them again.',
     state: 'ui.kbdMore',
+    in: 'keyboard',
+  }),
+  defineComponent({
+    id: 'keyboard.handle',
+    kind: 'switch',
+    label: 'Keyboard handle',
+    docs: 'Složí ukotvenou klávesnici do jednoho řádku, zatímco noty patří padu, nebo ji '
+      + 'rozloží (zkratka Alt+K).',
+    state: 'ui.kbdDockExpanded',
+    in: 'keyboard',
+  }),
+  defineComponent({
+    id: 'keyboard.handle.held',
+    kind: 'readout',
+    label: 'Held light',
+    docs: 'Rozsvítí se na rukojeti složené klávesnice, dokud klávesy drží notu (#444).',
+    state: { none: 'svítí, dokud se drží nota; nic neupravuje' },
+    in: 'keyboard',
+  }),
+  defineComponent({
+    id: 'keyboard.dock-status',
+    kind: 'readout',
+    label: 'Dock status',
+    docs: 'Sděluje asistenčním technologiím, zda je ukotvená klávesnice složená a která plocha '
+      + 'hraje noty.',
+    state: { none: 'hlásí, zda je klávesnice složená, a nic neupravuje' },
     in: 'keyboard',
   }),
 ];

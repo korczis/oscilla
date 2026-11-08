@@ -1,6 +1,6 @@
 {
   "note": "English prose the app still shows, per file (scripts/czech-prose.mjs, rule project.czech-prose, Q104): a count only falls and a file not listed has none. Lower it in the change that translates; never raise it.",
-  "total": 3213,
+  "total": 3203,
   "counts": {
     "src/index.html": 147,
     "src/js/analysis/analytic.js": 12,
@@ -166,7 +166,7 @@
     "src/js/synth/view/engines.js": 5,
     "src/js/synth/view/face.js": 8,
     "src/js/synth/view/xy-tab.js": 1,
-    "src/js/synth/view/xy-wiring.js": 14,
+    "src/js/synth/view/xy-wiring.js": 5,
     "src/js/synth/xy.js": 9,
     "src/js/ui/catalog/decl/about.js": 9,
     "src/js/ui/catalog/decl/cross-links.js": 32,
@@ -237,7 +237,6 @@
     "src/js/ui/studio/timeline-view.js": 9,
     "src/js/ui/studio/transport-bar.js": 2,
     "src/js/ui/studio/transport-view.js": 4,
-    "src/js/ui/studio/workspace.js": 1,
     "src/js/ui/studio/workspace/document.js": 3,
     "src/js/ui/studio/workspace/files.js": 18,
     "src/js/ui/studio/workspace/graph.js": 1,

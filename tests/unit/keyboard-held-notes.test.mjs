@@ -125,8 +125,7 @@ test('component: a held MIDI note and a held computer key sound past the limit',
   const { r, cmp, port, key } = await componentRig();
   port.send([0x90, 60, 100]);
   assert.equal(typeof cmp.kbdToggle, 'function', 'the keyboard is part of the component');
-  cmp.kbdToggle();
-  assert.equal(cmp.kbdArmedHere, true, 'armed in the Playground');
+  assert.equal(cmp.kbdArmedHere, true, 'armed in the Playground from the start (K178)');
   const down = key('keydown', 'KeyA');
   assert.equal(down.defaultPrevented, true, 'an armed key is the keyboard\'s');
   assert.equal(r.engine.noteCount, 2, 'the MIDI note and the key A both sound');
@@ -140,7 +139,6 @@ test('component: a held MIDI note and a held computer key sound past the limit',
 
 test('component: blur, hide, pagehide and Escape force-release every held note', async () => {
   const { r, cmp, port, fire, key, doc } = await componentRig();
-  cmp.kbdToggle();
   const releases = {
     blur: () => fire('win:blur'),
     hidden: () => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; },
@@ -162,12 +160,80 @@ test('component: blur, hide, pagehide and Escape force-release every held note',
   }
 });
 
+// K183: the XY pad is one more input of the keys' note layer (kbdPad): its notes are 'kbd-xy'
+// and sound where the keys sound; every forced release of the keys closes the pad's gate (its
+// release callback) and releases whatever the xy input still holds; off() unregisters it.
+test('component: the XY pad as one more input of the keys, released with them', async () => {
+  const { r, cmp, fire, key, doc } = await componentRig();
+  assert.equal(typeof cmp.kbdPad, 'function', 'the keys offer the pad an input (K183)');
+  const closed = [];
+  const pad = cmp.kbdPad((why) => { closed.push(why); return 1; });
+  assert.equal(pad.velocity(), cmp.kbdVelocity, 'the pad plays at the keys\' velocity');
+  const releases = {
+    blur: () => fire('win:blur'),
+    hidden: () => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; },
+    pagehide: () => fire('win:pagehide'),
+    escape: () => key('keydown', 'Escape', { key: 'Escape' }),
+    switch: () => cmp.kbdReleaseAll(),
+  };
+  for (const [name, release] of Object.entries(releases)) {
+    const n = closed.length;
+    assert.equal(pad.noteOn(63, 100, 'kbd-xy').ok, true, `${name}: the pad's note sounds`);
+    key('keydown', 'KeyA');
+    assert.equal(r.engine.noteCount, 2, `${name}: the pad's note beside a key's`);
+    release();
+    r.fake.advance(1);
+    assert.ok(closed.length > n, `${name}: the pad's gate was closed`);
+    assert.deepEqual(census(r), ZERO, `${name}: the pad's note released with the keys'`);
+    key('keyup', 'KeyA');
+  }
+  pad.off();
+  const n = closed.length;
+  cmp.kbdReleaseAll();
+  assert.equal(closed.length, n, 'off() unregisters the pad');
+  assert.equal(cmp.kbdPad(null), null, 'a pad without a release is refused');
+});
+
+// K183 review F4, K171: a Disarm and the dock's fold let go of the keys' own notes
+// (kbdReleaseKeys, the fold's release in midi/dock-yield.js), never the XY pad's: the pad is not the keys; the panic (blur, hide, Escape, a
+// workspace switch, All Notes Off) still cuts the pad's note with the keys'.
+test('component: Disarm releases the keys\' notes and keeps the pad\'s; the panic cuts both',
+  async () => {
+    const { r, cmp, key } = await componentRig();
+    assert.equal(typeof cmp.kbdReleaseKeys, 'function', 'the keys-only release is offered');
+    const closed = [];
+    const pad = cmp.kbdPad((why) => { closed.push(why); return 1; });
+    assert.equal(pad.noteOn(63, 100, 'kbd-xy').ok, true, 'the pad\'s note sounds');
+    key('keydown', 'KeyA');
+    assert.equal(r.engine.noteCount, 2, 'the pad\'s note beside a computer key\'s');
+    cmp.kbdToggle(); // Disarm
+    r.fake.advance(1);
+    assert.equal(cmp.kbdArmedHere, false);
+    assert.equal(r.engine.noteCount, 1, 'Disarm let go of the key; the pad\'s note sounds on');
+    assert.deepEqual(closed, [], 'the pad\'s gate stays open');
+    key('keyup', 'KeyA');
+    cmp.kbdToggle(); // armed again
+    key('keydown', 'KeyD');
+    assert.equal(cmp.kbdReleaseKeys(), 1, 'the keys-only release: the one held key');
+    r.fake.advance(1);
+    assert.equal(r.engine.noteCount, 1, 'the pad\'s note sounds on');
+    key('keyup', 'KeyD');
+    cmp.kbdReleaseAll(); // the panic
+    r.fake.advance(1);
+    assert.ok(closed.length > 0, 'the panic closes the pad\'s gate');
+    assert.deepEqual(census(r), ZERO, 'and releases its note');
+    pad.off();
+  });
+
+// K178 (the owner's decision of 2026-11-05): the keys are armed at once in every workspace that
+// plays them; Arm switches a workspace's keys off and on, each on its own.
 test('component: armed per view, never Space, never while typing', async () => {
   const { r, cmp, key } = await componentRig();
+  cmp.kbdToggle(); // switched off in the Playground
   let e = key('keydown', 'KeyA');
-  assert.equal(e.defaultPrevented, false, 'not armed: the key is not taken');
+  assert.equal(e.defaultPrevented, false, 'switched off: the key is not taken');
   assert.equal(r.engine.noteCount, 0);
-  cmp.kbdToggle();
+  cmp.kbdToggle(); // and on again
   e = key('keydown', 'Space');
   assert.equal(e.defaultPrevented, false, 'Space is never the keyboard\'s (ADR 0050)');
   assert.equal(r.engine.noteCount, 0);
@@ -177,8 +243,9 @@ test('component: armed per view, never Space, never while typing', async () => {
   assert.equal(e.defaultPrevented, false, 'Ctrl+A is a shortcut, not a note');
   assert.equal(r.engine.noteCount, 0);
   cmp.workspace = 'studio';
+  cmp.kbdToggle(); // switched off in the Studio only
   e = key('keydown', 'KeyA');
-  assert.equal(e.defaultPrevented, false, 'armed in the Playground is not armed in the Studio');
+  assert.equal(e.defaultPrevented, false, 'switched off in the Studio, the Playground unchanged');
   cmp.kbdToggle();
   e = key('keydown', 'KeyA');
   assert.equal(e.stopped, true, 'armed in the Studio: before Studio\'s own A');

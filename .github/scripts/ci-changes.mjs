@@ -39,6 +39,10 @@ export const NON_RUNTIME = Object.freeze([
   '.ai/repo/project/',
   '.ai/repo/reviews/',
   '.ai/repo/releases/',
+  // E055: a decision record and the knowledge test's data file. The unit and knowledge jobs,
+  // which always run, read them (tests/unit/knowledge-integrity.test.mjs); no browser leg does.
+  '.ai/repo/adrs/',
+  '.ai/repo/knowledge/',
   'docs/',
   '*.md',
 ]);
