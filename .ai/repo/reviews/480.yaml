@@ -1,0 +1,37 @@
+# Review verdict for pull request #480 (branch fix/r051-merges-are-none): R051, release:analyze
+# counts a merge commit by its members, not as a patch of its own. Reviewed head b1087da3 (first read at 24699a5f); base
+# origin/main 411c49b5 (v3.26.0, its record, #475), its merge base. Reviewer: oscilla-a3
+# (claude-code 12f1e384). Disclosure: the reviewer built none of this change (oscilla-2b did) and
+# wrote only this file, in a detached review worktree at the reviewed head.
+#
+# The digest. origin/main's scripts/review-verdict.mjs --content --list --base-branch origin/main at
+# b1087da3 (the branch's copy is identical to main's): 42125e83f281472a5fc7a6e4881d469fceb67f091c
+# facfe89ef21972227a3843 over three guarded paths: scripts/release-analyze.mjs,
+# tests/unit/release-analyze.test.mjs, tests/unit/release-publish.test.mjs.
+#
+# The change. readCommits asks git for %P and counts the parents (an output without the field reads
+# as 1). parseCommit carries merge = parents >= 2. commitLevel keeps its order: breaking (the "!"
+# or a BREAKING CHANGE footer) still wins on a merge; a conventional feat/fix/perf/revert or a
+# none-type keeps its own level, so a pull request's merge commit (OSCILLA lands by merge commit)
+# counts by its title as before; only a non-conventional merge ("Merge branch ...") or a merge of
+# an unknown type ("merge(main): ...") becomes none, "a merge: its members are counted". A
+# single-parent non-conventional commit stays a patch. The members are in the same since..HEAD
+# walk, so nothing they carry is dropped. release-publish.test.mjs follows the new --format only.
+#
+# b1087da3 adds to the analyze header that a change made by hand inside a merge (beyond rebuilding
+# dist) is uncounted and lands as its own conventional commit, which closes F1.
+#
+# Evidence at 24699a5f, release tests rerun at b1087da3: release-analyze and release-publish 65/0; npm test 5019 pass, 0 fail,
+# 1 skipped (GITHUB_BASE_REF=main GITHUB_EVENT_NAME=pull_request); fail-first (origin/main's
+# scripts/fail-first.mjs on the PR's title) proven by 2 of 2 files (assertion); node
+# scripts/release-analyze.mjs on 411c49b5 lists the #475 and record merges as none and proposes no
+# release, where main proposed a patch from merges alone.
+#
+# Verdict: merge. F1 is closed.
+schema: review-verdict/v1
+pr: 480
+verdict: merge
+reviewer: oscilla-a3 (claude-code 12f1e384)
+content: 42125e83f281472a5fc7a6e4881d469fceb67f091cfacfe89ef21972227a3843
+findings:
+  - { id: F1, severity: P3, status: closed, title: "a merge commit's own conflict resolution (an evil merge) now counts none; in OSCILLA a resolution re-derives members' content (dist rebuilt), so no release is missed today, but a hand-written fix inside a merge would be: say so in the release skill or the analyze header" }

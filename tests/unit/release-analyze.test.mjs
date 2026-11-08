@@ -73,6 +73,46 @@ test('non-conventional commits are never silently dropped (patch)', () => {
   assert.match(a.reasons[0].why, /not a conventional commit/);
 });
 
+// R051: a merge commit adds nothing of its own; its members are commits of the same walk and are
+// each classified. 2026-11-07: a test-only release after #458 came out as a patch from five
+// merges alone ('merge(main): ...', git's 'Merge branch ...').
+test('R051: a merge commit is counted by its members, not as a patch of its own', () => {
+  const sha = (ch) => ch.repeat(40);
+  const merges = analyzeCommits([
+    { sha: sha('a'), subject: 'merge(main): bring main into the branch', parents: 2 },
+    { sha: sha('b'), subject: "Merge branch 'x' into y", parents: 2 },
+    { sha: sha('c'), subject: 'test(iphone): the phone suite', parents: 1 },
+  ]);
+  assert.equal(merges.level, 'none', JSON.stringify(merges.reasons));
+  assert.match(merges.reasons[0].why, /a merge: its members are counted/);
+  assert.match(merges.reasons[1].why, /a merge: its members are counted/);
+  // A pull request's merge commit keeps the type of its title, and a member still counts.
+  assert.equal(analyzeCommits([
+    { sha: sha('d'), subject: 'fix(audio): stop click (#1)', parents: 2 },
+  ]).level, 'patch');
+  assert.equal(analyzeCommits([
+    { sha: sha('e'), subject: 'Merge branch x', parents: 2 },
+    { sha: sha('f'), subject: 'feat(labs): new lab', parents: 1 },
+  ]).level, 'minor');
+  assert.equal(analyzeCommits([
+    { sha: sha('g'), subject: 'Merge branch x', body: 'BREAKING CHANGE: old links fail',
+      parents: 2 },
+  ]).level, 'major', 'a breaking footer is never dropped');
+  // A single-parent commit that is not conventional is still a patch.
+  assert.equal(analyzeCommits([{ sha: sha('h'), subject: 'Update README', parents: 1 }]).level,
+    'patch');
+});
+
+test('R051: readCommits counts each commit\'s parents', () => {
+  const run = (args) => {
+    assert.equal(args[1], '--format=%H%x1f%s%x1f%b%x1f%P%x1e');
+    return `${'a'.repeat(40)}\x1fMerge branch x\x1f\x1f${'b'.repeat(40)} ${'c'.repeat(40)}\x1e\n`
+      + `${'b'.repeat(40)}\x1ftest: y\x1f\x1f${'c'.repeat(40)}\x1e\n`;
+  };
+  assert.deepEqual(readCommits('v1.0.0', run).map((c) => [c.subject, c.parents]),
+    [['Merge branch x', 2], ['test: y', 1]]);
+});
+
 test('bumpVersion: release levels and prereleases', () => {
   assert.equal(bumpVersion('40.0.0', 'patch'), '40.0.1');
   assert.equal(bumpVersion('40.0.3', 'minor'), '40.1.0');
