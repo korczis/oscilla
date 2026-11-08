@@ -42,9 +42,9 @@ const raw = (status, paths, { src = '100644', dst = '100644' } = {}) => {
 };
 const rec = (status, paths, modes) => parseRawZ(raw(status, paths, modes));
 
-test('the allowlist is exactly the five non-runtime path classes', () => {
+test('the allowlist is exactly the seven non-runtime path classes', () => {
   assert.deepEqual([...NON_RUNTIME], ['.ai/repo/project/', '.ai/repo/reviews/',
-    '.ai/repo/releases/', 'docs/', '*.md']);
+    '.ai/repo/releases/', '.ai/repo/adrs/', '.ai/repo/knowledge/', 'docs/', '*.md']);
   assert.deepEqual([...GATED_JOBS], ['engine', 'suites', 'measure', 'studio', 'browser',
     'census', 'visual']);
 });
@@ -55,6 +55,10 @@ test('isNonRuntimePath: the allowlist, and every near miss is runtime', () => {
     ['.ai/repo/project/milestones/M046.yaml', false],
     ['.ai/repo/reviews/255.yaml', false],
     ['.ai/repo/releases/v3.11.0.yaml', false],
+    ['.ai/repo/adrs/0088-an-opt-in-loopback-bridge.md', false],
+    ['.ai/repo/adrs/README.md', false],
+    ['.ai/repo/knowledge/adr-exemptions.yaml', false],
+    ['.ai/repo/knowledge/curated/web-audio-scheduling-lateness.md', false],
     ['docs/GLOSSARY.md', false],
     ['docs/v4/performance.md', false],
     ['docs/my notes.md', false],
@@ -77,6 +81,9 @@ test('isNonRuntimePath: the allowlist, and every near miss is runtime', () => {
     ['.ai/repo/ci/gates.yaml', true],
     ['.ai/README.md', true],
     ['.ai/repo/projects/x.yaml', true],
+    ['.ai/repo/adr/0001-x.md', true],
+    ['.ai/repo/knowledge', true],
+    ['.ai/repo/knowledge-base/x.yaml', true],
     ['.ai/repo/project', true],
     ['docs', true],
     ['docsx/a.md', true],
@@ -120,6 +127,9 @@ test('classify: a table of changes, fail closed', () => {
     ['a plan record', rec('A', ['.ai/repo/project/issues/E026.yaml']), false],
     ['a review record', rec('A', ['.ai/repo/reviews/276.yaml']), false],
     ['a release record', rec('A', ['.ai/repo/releases/v3.12.0.yaml']), false],
+    ['an ADR with its exemption (E055)', [...rec('A', ['.ai/repo/adrs/0089-x.md']),
+      ...rec('M', ['.ai/repo/adrs/README.md']),
+      ...rec('M', ['.ai/repo/knowledge/adr-exemptions.yaml'])], false],
     ['top-level markdown', rec('M', ['README.md']), false],
     ['plan, review and docs together', [...rec('M', ['.ai/repo/project/intents/x.yaml']),
       ...rec('A', ['.ai/repo/reviews/1.yaml']), ...rec('M', ['docs/a.md'])], false],
