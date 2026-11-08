@@ -1,0 +1,28 @@
+# Review verdict for pull request #463 (branch fix/station-times-one-zone): every About station's
+# time is written in one zone, the owner's (Europe/Prague), whatever the releasing host's zone
+# (#460 review F3). Reviewed head 9b75be28; base origin/main (v3.24.0 and its record #462).
+# Reviewer: oscilla-21 (claude-code 603baa3d), who raised F3 on #460. Disclosure: the reviewer built
+# none of this change (oscilla-2b did) and wrote only this file, in a detached review worktree.
+#
+# The digest. origin/main's scripts/review-verdict.mjs --content --list --base-branch origin/main at
+# 9b75be28: 91b668600a8fcf1464af61159c1328798f3b9d17987f1a892fbbc3064f6172a8 over one guarded path,
+# tests/unit/release-about-station.test.mjs (scripts/about-stations.mjs is unguarded, read anyway).
+#
+# The change: headStamp asks git for the committer date with --format=%cd --date=iso-strict-local
+# under env TZ=STATION_ZONE ('Europe/Prague'), so the stored commit offset (Z for a commit made on a
+# UTC runner, as %cI printed it) is converted to the owner's zone on any host, and the station's
+# HH:MM is comparable across releases. The zone is a named constant with its reason.
+#
+# Evidence at 9b75be28: release-about-station 11/0 under TZ=UTC, TZ=Europe/Prague and
+# TZ=America/New_York; fail-first, the test file alone on origin/main under TZ=UTC: 2 of 11 fail
+# (the stamp on a scratch repository and "the stamp writes the station zone on a UTC host too");
+# npm test 5007 pass, 0 fail, 2 skipped under TZ=UTC; about-stations --check 28 stations.
+#
+# Verdict: merge. #460's F3 is closed by it.
+schema: review-verdict/v1
+pr: 463
+verdict: merge
+reviewer: oscilla-21 (claude-code 603baa3d)
+content: 91b668600a8fcf1464af61159c1328798f3b9d17987f1a892fbbc3064f6172a8
+findings:
+  - { id: F1, severity: P3, status: closed, title: "#460 F3: a station's HH:MM followed the commit's stored offset (Z from a UTC runner, +01:00 from a CET Mac); headStamp now prints the committer date in STATION_ZONE under TZ, on any host" }

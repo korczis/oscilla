@@ -277,3 +277,17 @@ the hardware treatment is a skin of the domain views and of Pro components, it r
 component, adds no UI kit and no legacy selector, and the ratchet only falls. No product's
 mark, name, colourway, layout or face is imported on any surface. The status of this record
 is unchanged.
+
+### 2026-11-07: the remaining instrument visuals are domain views too
+
+The note of 2026-10-30 named the knob's arc, the patch bay's jacks and cables and the piano keys.
+Plan issue J001 planned one note for every instrument view, and the views it named but that note
+left out are covered here: the step cells of the step grid, the piano roll, the XY pad's surface,
+the meter bar and the scope trace. Each is a domain view inside a Pro card, drawn with inline SVG
+or canvas and literal Tailwind utilities, with no stylesheet, no osc-* class name and no
+`el.style`, and every colour is an OSCILLA token. Their chrome (cards, buttons, button groups,
+tabs, dropdowns, inputs, toolbars) is Pro and the ratchet counts it like any other surface. The
+domain-view exemption of `project.ui-uses-flowbite-pro` is not widened, and the hardware
+treatment of the 2026-11-02 note applies to these views as to the others. Plan issues W008 and
+K222 (the step grid in the Drums view) are the first to rely on it. The status of this record is
+unchanged.

@@ -25,6 +25,8 @@
 //   announceLabel(label) -> past-tense sentence of a history label
 //   announceSelection(model, selection) -> "Filter 1 selected" | "Tone clip on Track 1
 //     selected" | "3 nodes selected" | ...     clipLabel(clip) -> "Tone", "Noise check", ...
+//   article(label) -> 'a' | 'an'   by how the label's first word is said, never by its first
+//     letter: "an LFO", "an RTA", "a VCA", "a MIDI", "an Oscillator", "a Unison" (K172)
 //
 // INVARIANTS: no text contains pointer coordinates, positions or per-frame values (§143-§144):
 // a move is "Moved Filter 1", never where to. Names come from node metadata as plain text; the
@@ -72,6 +74,46 @@ export const SUMMARY_DEFAULTS = Object.freeze({ maxItems: 6, maxPaths: 3, maxPat
 // ---------------------------------------------------------------- small helpers
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+// ---------------------------------------------------------------- articles (K172)
+
+/**
+ * What decides "a" or "an" when the first letter does not (K172): the letters whose spoken
+ * names start with a vowel sound (an F, an H, an L, an M, an N, an R, an S, an X and the
+ * vowels), the initialisms said as a word (a MIDI, not an M-I-D-I), the vowel-initial words
+ * said with a consonant sound (a one-shot, a Unison, a user) and the consonant-initial words
+ * said with a vowel sound (an hour). Exported so a test can hand `article` another table.
+ */
+export const ARTICLE_SOUNDS = Object.freeze({
+  vowelLetterNames: 'AEFHILMNORSX',
+  saidAsWords: Object.freeze(['MIDI', 'LUFS']),
+  consonantSoundWords: Object.freeze(['one', 'once', 'unison', 'unipolar', 'unit', 'unity',
+    'user', 'uniform', 'unique', 'utility']),
+  vowelSoundWords: Object.freeze(['hour', 'honest', 'honour', 'heir']),
+});
+
+/**
+ * 'a' or 'an' before a label, by how its first word is said: an initialism (upper-case
+ * letters, digits allowed) by the name of its first letter ("an LFO", "an RTA", "an EQ",
+ * "a VCA") unless it is said as a word ("a MIDI"); a number by its first digits ("an 8-step",
+ * "an 11", "a 16-step"); any other word by its first sound ("an Oscillator", "a Filter",
+ * "a Unison", "a one-shot", "an hour", "an All-pass"). Pure; a label without a word gets 'a'.
+ * Every Studio text that puts an article before a node, type or option label calls this (the
+ * unit test scans src/js for a second decision).
+ */
+export function article(label, sounds = ARTICLE_SOUNDS) {
+  const m = /[A-Za-z0-9]+/.exec(String(label == null ? '' : label));
+  if (!m) return 'a';
+  const word = m[0];
+  if (/^[0-9]/.test(word)) return /^(8|11$|18$)/.test(word) ? 'an' : 'a';
+  if (/^[A-Z0-9]+$/.test(word) && !sounds.saidAsWords.includes(word)) {
+    return sounds.vowelLetterNames.includes(word[0]) ? 'an' : 'a';
+  }
+  const lower = word.toLowerCase();
+  if (sounds.consonantSoundWords.includes(lower)) return 'a';
+  if (sounds.vowelSoundWords.includes(lower)) return 'an';
+  return /^[aeiou]/.test(lower) ? 'an' : 'a';
+}
 
 /** "Cutoff" → "cutoff"; "Q", "A", "RMS" stay (an all-capitals word is a name). */
 function lowerLabel(label) {

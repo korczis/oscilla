@@ -51,6 +51,7 @@ import { createChecker } from '../experiments/schema.js';
 import { migrateExperiment } from '../experiments/migrate.js';
 import { scanUntrusted, utf8Length } from '../experiments/validate.js';
 import { NODE_REGISTRY } from './registry.js';
+import { article } from './a11y.js';
 import {
   DEFAULT_TRANSPORT, NAME_MAX_CHARS, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
   collectIds, copyPlain, isPosition, normalizeStudio, studioHash, withoutNodes,
@@ -458,8 +459,10 @@ export function patchParams(model, patch, onto, { registry = NODE_REGISTRY } = {
     const node = byId.get(map[src.id]);
     if (!node) throw new PatchError(`There is no node "${String(map[src.id])}".`);
     if (node.type !== src.type) {
-      throw new PatchError(`${node.metadata.name} is a ${registry.get(node.type).displayName}; `
-        + `the patch sets a ${registry.get(src.type).displayName}.`);
+      const was = registry.get(node.type).displayName;
+      const sets = registry.get(src.type).displayName;
+      throw new PatchError(`${node.metadata.name} is ${article(was)} ${was}; the patch sets `
+        + `${article(sets)} ${sets}.`);
     }
     params.set(node.id, src.params);
   }

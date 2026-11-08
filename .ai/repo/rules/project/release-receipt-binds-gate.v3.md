@@ -4,7 +4,7 @@ version: 3
 kind: rule
 title: A release is published only on a tree a gate verdict binds, local or CI
 description: release:publish tags main's HEAD only when a gate verdict binds exactly its tree - the CI run of the release pull request (the CI receipt, ADR 0082) or the local release-gate receipt - so any change on main after the verdict makes the publish refuse.
-statement: release:publish refuses unless one of two gate verdicts binds the tree of main's HEAD. The CI receipt (scripts/release-ci-receipt.mjs) holds when HEAD is the merge commit of a pull request whose head H contains the merge's base and has HEAD's tree, the newest CI pull_request run on H, or (ADR 0083) the newest CI merge_group run on HEAD itself from the merge-queue ref gh-readonly-queue/main/pr-<N>- of that same pull request N, has completed with success on its latest attempt, every job .github/workflows/ci.yml declares (a matrix job once per value) is among that run's latest jobs on the run's head with success and no other job is (the one exemption, on either event: the job with id flake-ledger whose if: is exactly ${{ always() && fromJSON(github.run_attempt) > 1 }} may be skipped on its own first attempt and must succeed from attempt 2), and the committed roadmap matches the plan (OSC_ROADMAP_CHECK=1). The local receipt (release:prepare --local-gate) holds when it binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/, all equal to the checkout's, and records browsers chromium,firefox,webkit, origins file,http and skips declared-only; release:prepare --local-gate refuses to start while OSC_BROWSERS or OSC_ORIGINS is set and runs the gate with OSC_STRICT_SKIPS=1. A fact that cannot be read is a refusal, never an empty answer.
+statement: release:publish refuses unless one of two gate verdicts binds the tree of main's HEAD. The CI receipt (scripts/release-ci-receipt.mjs) holds when HEAD is the merge commit of a pull request whose head H contains the merge's base and has HEAD's tree, the newest CI pull_request run on H, or (ADR 0083) the newest CI merge_group run on HEAD itself from the merge-queue ref gh-readonly-queue/main/pr-<N>- of that same pull request N, has completed with success on its latest attempt, every job the base's .github/workflows/ci.yml declares (read from the merge's first parent with git show, the gate main had when the release branched; a matrix job once per value) and every job HEAD's own copy adds beyond it is among that run's latest jobs on the run's head with success, and no job that neither copy declares is (the one exemption, on either event: the job with id flake-ledger whose if: is exactly ${{ always() && fromJSON(github.run_attempt) > 1 }} may be skipped on its own first attempt and must succeed from attempt 2), and the committed roadmap matches the plan (OSC_ROADMAP_CHECK=1). The local receipt (release:prepare --local-gate) holds when it binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/, all equal to the checkout's, and records browsers chromium,firefox,webkit, origins file,http and skips declared-only; release:prepare --local-gate refuses to start while OSC_BROWSERS or OSC_ORIGINS is set and runs the gate with OSC_STRICT_SKIPS=1. A fact that cannot be read is a refusal, never an empty answer.
 status: active
 class: blocking
 depends_on: [project.single-file-deliverable@2]
@@ -23,6 +23,15 @@ Both events run the same jobs under the same conditions, so the one skip excused
 version 2 excuses (amended 2026-11-05, #417): the flake ledger's own first attempt, on either
 event. A path-gated job skipped for a non-runtime change (E026, on `pull_request` and
 `merge_group` alike) still refuses; a release changes `package.json`, so its runs skip none.
+
+Amended 2026-11-05 (R037, Hardening D5): the job set a run must carry is the base's `ci.yml`,
+read from the merge's first parent B with `git show B:.github/workflows/ci.yml`, the gate main
+had when the release branched. The checkout's copy, after the merge, is the release tree's own,
+so judging the run by it alone would let a release tree drop a job and pass. The run must
+carry every job of the base's copy with success; a job the release tree's copy adds beyond it
+must succeed when the run carries it and is refused as missing when it does not; a run job
+that neither copy declares refuses; and a run that lacks a base job is refused naming the job
+and B. An unreadable or broken base copy is a refusal, never an empty job set.
 
 
 # Version 2 (ADR 0082, owner decision 2026-11-02)
@@ -48,9 +57,10 @@ release; the owner chose it over patch-only.
 - the newest run of the workflow named in `ci.yml` with event `pull_request` and
   `head_sha` H is `completed`/`success`; the run object reports its latest attempt, so a red
   re-run refuses, and an older green run never stands in for a newer one;
-- the run's latest jobs (`filter=latest`) contain every job name `ci.yml` declares, each on H,
+- the run's latest jobs (`filter=latest`) contain every job name `ci.yml` declares (amended
+  2026-11-05, R037: the base B's copy, plus what H's copy adds), each on H,
   in that run and `completed`/`success`; a missing, skipped or cancelled job refuses, and so
-  does a job `ci.yml` does not declare. The names are derived from `ci.yml`, never listed by
+  does a job neither copy declares. The names are derived from `ci.yml`, never listed by
   hand, and two jobs with one name refuse. One exemption (amended 2026-11-05, #417): the job
   with id `flake-ledger` whose `if:` is exactly `${{ always() && fromJSON(github.run_attempt) > 1 }}`
   (E010) may be `completed`/`skipped` when its own attempt is 1, since its condition skips it
@@ -80,7 +90,13 @@ roadmap check failing, and unreadable runs or jobs; the flake ledger skipped on 
 attempt verifies, and a skipped ledger stamped with a later attempt refuses (GitHub re-stamps
 jobs it carries over with the run's attempt, so a release run re-runs all its jobs), and
 near-miss conditions (a bare expression, `> 0`, extra spaces, the condition on a step, a matrix
-ledger) are not exempt. Each guard of `ciReceiptProblems()` is
+ledger) are not exempt. R037, on fixtures and on a throwaway repository whose release merge
+has a different `ci.yml` on its first parent: a base job the merge's own `ci.yml` and run lack
+refuses naming the job and the base (on `pull_request` and `merge_group`), a job the release
+tree adds verifies green and refuses red or missing, a run job neither copy declares refuses,
+an unreadable or broken base copy refuses, and `gatherCiReceipt()` reads the base copy with
+`git show <first parent>:.github/workflows/ci.yml`, never from the checkout. Each guard of
+`ciReceiptProblems()` is
 mutation-proven (removing it fails a test). `gateVerdict()` takes a verified local receipt
 without asking GitHub and otherwise reports both sets of problems.
 

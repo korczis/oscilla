@@ -165,7 +165,8 @@ async function loadModel() {
   const milestones = JSON.parse(fs.readFileSync(path.join(ROOT, 'src', 'data', 'roadmap.json'),
     'utf8')).milestones;
   JOURNEY.roadmap = ['now', 'next', 'later'].flatMap((ph) => milestones
-    .filter((m) => m.phase === ph).map((m) => [m.id, `${m.done} of ${m.required} done`]));
+    .filter((m) => m.phase === ph)
+    .map((m) => [m.id, `${m.done} of ${m.required} issues done`]));
   {
     const rows = new Map();
     const add = (from, ref) => {

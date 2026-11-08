@@ -1801,7 +1801,16 @@ function checkLedger() {
   return problems;
 }
 
-/** Discover every control on a fresh page and match it to the rows: { unrowed, stale, n }. */
+/**
+ * Workspaces whose controls the census visits but does not yet hold rows for: their unrowed
+ * controls are counted and printed, not failed, and a pending workspace with none left fails
+ * until it is removed here (an XPASS). Synth, the thirteenth workspace, was never visited
+ * while this suite typed the twelve of its day; its rows are plan issue C062. Only shrinks.
+ */
+const CENSUS_PENDING = new Map([['synth', 'C062']]);
+
+/** Discover every control on a fresh page and match it to the rows:
+ *  { unrowed, pending: { ws: [key] }, stale, n }. */
 async function census(browser) {
   const { context, page } = await op.openApp(browser, { dist: DIST, audio: false });
   try {
@@ -1815,6 +1824,7 @@ async function census(browser) {
     }));
     const seen = new Map();
     const hits = new Set();
+    const pending = Object.fromEntries([...CENSUS_PENDING.keys()].map((w) => [w, new Set()]));
     for (const ws of op.WORKSPACES) {
       await op.navTo(page, ws);
       const found = await page.evaluate(op.discoverInPage, false);
@@ -1822,13 +1832,18 @@ async function census(browser) {
       for (const c of found) {
         const m = match[c.index];
         if (m === null || m === undefined) {
-          if (!seen.has(c.key)) seen.set(c.key, ws);
+          if (pending[ws]) pending[ws].add(c.key);
+          else if (!seen.has(c.key)) seen.set(c.key, ws);
         } else hits.add(owner[m]);
       }
     }
+    // A pending workspace's controls stay in the page (hidden) after its visit, so a later
+    // workspace's discovery lists them again: they are still the pending workspace's.
+    for (const ks of Object.values(pending)) for (const k of ks) seen.delete(k);
     const ledgerStart = ROWS.length + FAMILIES.length;
     const stale = LEDGER.filter((r, i) => !hits.has(ledgerStart + i)).map((r) => r.control);
-    return { unrowed: [...seen].map(([k, ws]) => `${k} (${ws})`), stale, n: seen.size };
+    return { unrowed: [...seen].map(([k, ws]) => `${k} (${ws})`), stale, n: seen.size,
+      pending: Object.fromEntries(Object.entries(pending).map(([w, k]) => [w, [...k]])) };
   } finally { await context.close(); }
 }
 
@@ -1926,12 +1941,22 @@ if (require.main === module) {
           if (UNROWED) {
             for (const k of c.unrowed) console.log(`  unrowed ${k}`);
             for (const k of c.stale) console.log(`  stale ${k}`);
+            for (const [w, ks] of Object.entries(c.pending)) {
+              const issue = CENSUS_PENDING.get(w);
+              for (const k of ks) console.log(`  unrowed ${k} (${w}, pending ${issue})`);
+            }
             process.exitCode = 1;
             continue;
           }
           report(c.unrowed.length ? 'FAIL' : 'PASS', 'census:every-control-has-a-row',
             c.unrowed.length ? `${c.unrowed.length} control(s) with no row: ${c.unrowed
               .slice(0, 12).join(', ')}` : '');
+          for (const [w, ks] of Object.entries(c.pending)) {
+            report(ks.length ? 'XFAIL' : 'XPASS', `census:pending-${w}`, ks.length
+              ? `[expected failure: ${ks.length} ${w} control(s) without a row, plan issue `
+                + `${CENSUS_PENDING.get(w)}]`
+              : `every ${w} control has a row: remove ${w} from CENSUS_PENDING`);
+          }
           report(c.stale.length ? 'FAIL' : 'PASS', 'census:no-stale-row',
             c.stale.length ? `row(s) whose control is gone: ${c.stale.join(', ')}` : '');
           report(ledger.length ? 'FAIL' : 'PASS', 'census:ledger-holds',

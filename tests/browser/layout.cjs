@@ -18,13 +18,17 @@
 //   tightened (an entry at 0 on every tab is removed), so the list and its counts only shrink.
 // - Escape and page hide stop a playing sequence (project.audio-engine-discipline v2), checked
 //   with deadline polls, not fixed sleeps.
+// - Sequencer blocks at phone width (U022), coarse pointer at 390 and 768 px: every block of the
+//   lane is at least 44 px wide and its name reads in full, its accessible name carries its
+//   name and detail, the lane scrolls; at 390 px a tap on the scrollbar track brings the
+//   Silence block into view and a tap on it selects it.
 //
 //   node tests/browser/layout.cjs [--browsers chromium,firefox,webkit]   (or OSC_BROWSERS=...)
 
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
-const { until } = require('./lib/wait.cjs');
+const { until, WaitTimeout } = require('./lib/wait.cjs');
 
 const args = process.argv.slice(2);
 const arg = (name, def) => {
@@ -261,6 +265,78 @@ function measureView(ws) {
   return bad;
 }
 
+const SEQ_BLOCK_WIDTHS = [[390, 844], [768, 1024]];
+
+/** U022: the Sequencer lane's blocks against the touch minimum (runs in the page). */
+function measureSeqBlocks(min) {
+  const bad = [];
+  const tl = document.querySelector('#osc-panel-sequencer #osc-seq-timeline');
+  if (!tl || !tl.clientWidth) return { bad: ['no visible lane'] };
+  if (!matchMedia('(pointer: coarse)').matches) bad.push('pointer: coarse not emulated');
+  const blocks = [...tl.querySelectorAll('div.osc-block')];
+  if (blocks.length < 5) bad.push(`${blocks.length} blocks`);
+  for (const b of blocks) {
+    const r = b.getBoundingClientRect();
+    const name = b.querySelector('.osc-block-name');
+    const detail = b.querySelector('.osc-block-detail');
+    const aria = b.getAttribute('aria-label') || '';
+    if (r.width < min) bad.push(`${b.id} ${Math.round(r.width)} px wide`);
+    if (!name || name.scrollWidth > name.clientWidth) {
+      bad.push(`${b.id} name clips (${name && name.scrollWidth}/${name && name.clientWidth})`);
+    }
+    const named = name && detail && aria.includes(name.textContent)
+      && aria.includes(detail.textContent);
+    if (!named) {
+      bad.push(`${b.id} accessible name '${aria}' lacks its name or detail`);
+    }
+  }
+  // The lane scrolls: its window is wider than the lane, and at phone width the blocks
+  // themselves run past it (at 768 px they fit and only the headroom scrolls).
+  const win = window.OSCILLA.labs.sequencer.scroll;
+  if (!(win.maxScrollPx > 0)) bad.push(`the lane window does not scroll (${win.maxScrollPx})`);
+  if (innerWidth <= 390 && !(tl.scrollWidth > tl.clientWidth)) {
+    bad.push(`the blocks fit the lane (${tl.scrollWidth}/${tl.clientWidth})`);
+  }
+  return { bad };
+}
+
+/** U022 at 390 px: scroll the lane to the Silence block (horizontal wheel), then tap it. */
+async function tapSilenceBlock(page) {
+  await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.selectBlock('b1'));
+  const where = () => page.evaluate(() => {
+    const tl = document.querySelector('#osc-panel-sequencer #osc-seq-timeline')
+      .getBoundingClientRect();
+    const b = document.querySelector('#osc-seq-block-b3').getBoundingClientRect();
+    return { inView: b.left >= tl.left - 0.5 && b.right <= tl.right + 0.5,
+      x: tl.left + tl.width / 2, y: tl.top + tl.height / 2, past: b.right - tl.right };
+  });
+  try {
+    // Each poll wheels the lane by what still hides the block, so a lost event is retried.
+    await until(async () => {
+      const p = await where();
+      if (p.inView) return true;
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.wheel(Math.max(8, Math.ceil(p.past) + 8), 0);
+      return false;
+    }, { ms: 3000, what: 'U022: the Silence block scrolls into the lane' });
+  } catch (e) {
+    if (!(e instanceof WaitTimeout)) throw e;
+    const s = await page.evaluate(() => window.OSCILLA.labs.sequencer.scroll);
+    return `the lane did not scroll #osc-seq-block-b3 into view (${JSON.stringify(s)})`;
+  }
+  const scrolled = await page.evaluate(() => window.OSCILLA.labs.sequencer.scroll.scrollPx);
+  if (!(scrolled > 0)) return 'the Silence block was in view without scrolling';
+  await page.locator('#osc-seq-block-b3').tap();
+  try {
+    await until(() => page.evaluate(() => window.OSCILLA.labs.sequencer.editor.selectedId === 'b3'),
+      { ms: 2000, what: 'U022: a tap selects the Silence block' });
+  } catch (e) {
+    if (!(e instanceof WaitTimeout)) throw e;
+    return 'a tap on #osc-seq-block-b3 did not select it';
+  }
+  return null;
+}
+
 async function setWorkspace(page, ws) {
   await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
   // timing-allow: app.setWorkspace exposes no layout-settled signal; geometry is read 150 ms on
@@ -381,6 +457,36 @@ async function runOne(name) {
     if (fewerFonts.length) {
       failures.push('KNOWN_SMALL_FONTS fell (fixed? lower these counts, remove an entry at 0 on '
         + `every tab): ${fewerFonts.join(', ')}`);
+    }
+
+    // U022: the Sequencer's blocks stay readable and hittable at phone width; the lane scrolls.
+    for (const [w, h] of SEQ_BLOCK_WIDTHS) {
+      checks++;
+      const ctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: true });
+      const page = await ctx.newPage();
+      const label = `touch ${w}x${h} sequencer blocks`;
+      try {
+        await page.goto(URL);
+        await page.waitForFunction(() => window.OSCILLA && window.OSCILLA.labs
+          && window.OSCILLA.labs.sequencer, null, { timeout: 15000 });
+        await setWorkspace(page, 'sequencer');
+        let m = null;
+        try {
+          await until(async () => {
+            m = await page.evaluate(measureSeqBlocks, TOUCH_MIN);
+            return m.bad.length === 0;
+          }, { ms: 3000, what: `${label}: wide, named blocks in a scrolling lane` });
+        } catch (e) {
+          if (!(e instanceof WaitTimeout)) throw e;
+        }
+        if (m.bad.length) failures.push(`${label}: ${firstOf(m.bad, 6)}`);
+        if (w <= 390 && !m.bad.length) {
+          const bad = await tapSilenceBlock(page);
+          if (bad) failures.push(`${label}: ${bad}`);
+        }
+      } finally {
+        await ctx.close();
+      }
     }
 
     // Escape and page hide stop a playing sequence: deadline polls (start within 2 s, stop

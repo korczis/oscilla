@@ -19,8 +19,9 @@
 //   (e) the Sequencer panel of dist/index.html (file://), driven by pointer and keyboard: Tempo
 //       (BPM), Loop, the timeline selection, the Sweep's Start, End, Duration and Curve fields,
 //       Move later and earlier, Add block (pointer and keyboard) and Delete, Play from the start,
-//       Stop and Play, each judged in the editor model and in the rendered timeline or the
-//       transport's state, and the transport also by the engine's output level;
+//       Stop and Play, and Escape (a stop from outside the panel: Play is no longer pressed),
+//       each judged in the editor model and in the rendered timeline or the transport's state,
+//       and the transport also by the engine's output level;
 //   (f) seq-filter-reaches-sequence (C003), in the built dist/index.html (file://, 1536x1024):
 //       a looping 4 kHz Tone block, played with #osc-seq-play, drops by more than 20 dB once
 //       the Filter Lab's switch turns on a 200 Hz low-pass set through #osc-filter-cutoff-value;
@@ -474,6 +475,17 @@ async function panelChecks(engine, browser) {
   await step('Start 500 Hz, End 1000 Hz', (s) => block(s, 'b2').p.start === 500
     && block(s, 'b2').p.end === 1000 && /500/.test(dom(s, 'b2').label)
     && /1(000| k)/.test(dom(s, 'b2').label));
+  // K017: a note name parses to core/music.js's frequency; a word is refused with a sentence
+  await page.fill('#osc-seq-start-hz', 'A4');
+  await page.press('#osc-seq-start-hz', 'Enter');
+  await step('K017: Start takes a note name, A4 is 440 Hz', (s) => block(s, 'b2').p.start === 440);
+  await page.fill('#osc-seq-start-hz', 'loud');
+  await page.press('#osc-seq-start-hz', 'Enter');
+  const saidK017 = await page.textContent('[data-osc="seq.message"]');
+  await step('K017: a word is refused with a sentence and Start keeps 440 Hz',
+    (s) => block(s, 'b2').p.start === 440 && /není nota ani frekvence/.test(saidK017 || ''));
+  await page.fill('#osc-seq-start-hz', '500');
+  await page.press('#osc-seq-start-hz', 'Enter');
   await page.fill('#osc-seq-duration', '750');
   await page.press('#osc-seq-duration', 'Enter');
   await step('Duration 750 ms', (s) => block(s, 'b2').ms === 750
@@ -502,6 +514,22 @@ async function panelChecks(engine, browser) {
   await page.click(`#osc-seq-block-${added.selected}`);
   await page.click('#osc-seq-delete');
   await step('Delete both added blocks', (s) => s.ids.join() === 'b1,b2,b3,b4,b5' && sameOrder(s));
+  // U016: Play from the start draws the Studio's Return to start glyph (skip-back), and it
+  // renders a path; the click below still plays from the first block.
+  const glyph = await page.evaluate(() => {
+    const href = (hook) => {
+      const u = document.querySelector(`[data-osc="${hook}"] use`);
+      return u ? u.getAttribute('href') : null;
+    };
+    const start = href('seq.start');
+    const ret = href('studio.return');
+    const sym = start ? document.querySelector(start) : null;
+    const drawn = !!sym && [...sym.querySelectorAll('path')]
+      .some((p) => (p.getAttribute('d') || '').trim().length > 0);
+    return { start, ret, drawn };
+  });
+  check(engine, '(e) panel: Play from the start draws the Return to start glyph (U016)',
+    glyph.start !== null && glyph.start === glyph.ret && glyph.drawn, JSON.stringify(glyph));
   // transport: start, stop, play; the sound and the status follow
   await page.click('#osc-seq-start');
   await step('Play from the start sounds', (s) => s.playing && s.appPlaying
@@ -513,6 +541,12 @@ async function panelChecks(engine, browser) {
   await step('Play sounds', (s) => s.playing && s.peak > 0.005);
   await page.click('#osc-seq-stop');
   await step('Stop again leaves no source', (s) => !s.playing && s.sources === 0);
+  // Escape stops the sequence from outside the panel (output owner): Play stops saying pressed
+  await page.click('#osc-seq-play');
+  await step('Play sounds before Escape', (s) => s.playing && s.playAria === 'true');
+  await page.keyboard.press('Escape');
+  await step('Escape stops it and Play is no longer pressed', (s) => !s.playing && !s.appPlaying
+    && s.sources === 0 && s.playAria === 'false');
   check(engine, '(e) panel: no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   await page.close();
 }

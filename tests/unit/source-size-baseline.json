@@ -25,9 +25,9 @@
     }
   },
   "caps": {
-    "src/index.html": 307100,
+    "src/index.html": 300000,
     "src/js/audio/audio-engine.js": 73000,
-    "src/js/core/instrument.js": 63000,
+    "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
     "src/js/main.js": 52000,
     "src/js/measurement/capture.js": 55000,
@@ -192,6 +192,24 @@
       "cap": 307100,
       "pr": 386,
       "reason": "the phone HOLD margin bound to the Playground (#386 Browser gate on linux: the page header's and the safety strip's phone classes under workspace === 'playground', the sentence's max-sm:-mt-1), 29 bytes past the 307 000 cap"
+    },
+    {
+      "file": "src/js/core/instrument.js",
+      "cap": 64000,
+      "pr": 437,
+      "reason": "smalls train B's T004 dual-beat readout text (#427, 598 bytes) on lane A's instrument.js (#386, the Pro shell's hooks): 40 bytes past the 63 000 cap after the merge of main bc4b1545"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 308000,
+      "pr": 442,
+      "reason": "the 3.22 About station (project.about-names-current-release) takes src/index.html 474 bytes past 307 100; the release adds no other markup"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 309000,
+      "pr": 457,
+      "reason": "the 3.23 About station (project.about-names-current-release) takes src/index.html 134 bytes past 308 000; the release adds no other markup, and R032 (the derived-versioning train, next) moves the timeline to data"
     }
   ]
 }

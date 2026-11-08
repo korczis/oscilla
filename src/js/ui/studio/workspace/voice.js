@@ -7,9 +7,10 @@
 // document: a copy, so the Playground keeps its voice and the Studio's unsaved-work guard
 // (studioWhatWouldBeLost, ui/unsaved.js) covers the copy until it is saved or exported. One
 // action: the workspace switches to Studio with focus on its heading; Back returns to the
-// workspace it came from (navigation.js studioBack). Opening starts and stops nothing: a
-// Playground voice that is sounding keeps sounding until Studio Play takes the output, and the
-// notice says which of the two it is.
+// workspace it came from (navigation.js studioBack). Opening starts nothing. A playing Studio
+// stops first, as for any document it opens (document.js openDocument), while a Playground
+// voice that is sounding keeps sounding until Studio Play takes the output; the notice says
+// which of the two it is.
 //
 // A configuration the Studio cannot sound the same is refused with its reason, shown and
 // announced (a warning notice, role=alert), and nothing changes. Unsaved Studio work is never
@@ -124,7 +125,7 @@ export function createWorkspaceVoice(ctx, svc, ops) {
     const n = model.graph.nodes.length;
     const c = model.timeline.clips.length;
     const what = `${n} nodes${c ? `, ${c} gate clip${c === 1 ? '' : 's'}` : ''}`;
-    // Opening starts and stops nothing: say what sounds now.
+    // Opening starts nothing (a playing Studio stopped in openDocument): say what sounds now.
     const sounding = cmp.playing
       ? 'The Playground voice keeps sounding until you press Play here, which takes the output.'
       : 'Nothing plays until you press Play.';

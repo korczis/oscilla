@@ -12,12 +12,13 @@
 // offered yet (project.no-inert-surfaces (b)).
 
 import { FM_FEEDBACK_BLOCKED } from '../fm-algorithms.js';
+import { MAX_VOICES } from '../voice-pool.js';
 
 export const ENGINE_TAB = Object.freeze({ id: 'engines', label: 'Engines',
   title: 'Synthesis engines',
-  description: 'Polyphonic engines, up to 16 voices each, played by the same keys: additive, '
-    + 'FM, AM and ring, wavetable, hard sync and percussion. The keys play the engine you '
-    + 'choose; every engine sounds through the same output as the panel.' });
+  description: `Polyphonic engines, up to ${MAX_VOICES} voices each, played by the same keys: `
+    + 'additive, FM, AM and ring, wavetable, hard sync and percussion. The keys play the engine '
+    + 'you choose; every engine sounds through the same output as the panel.' });
 
 export const ENGINE_MODULES = Object.freeze([
   { id: 'additive', label: 'ADDITIVE', node: 'additive-voice' },

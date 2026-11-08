@@ -1,10 +1,15 @@
 // ADR 0082, rule project.release-receipt-binds-gate v3: the CI receipt. The CI run of the
 // release pull request is the gate verdict only for main's HEAD whose tree that run tested,
-// on its newest run and latest attempt, with every job ci.yml declares green.
+// on its newest run and latest attempt, with every job ci.yml declares green: the job set is
+// the base's ci.yml, read from the merge's first parent (R037), plus what the release tree's
+// own copy adds.
 //   node --test tests/unit/release-ci-receipt.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   CI_WORKFLOW, GH_ATTEMPTS, GH_TIMEOUT_MS, RERUN_ONLY_IF, ciReceiptProblems, expectedJobs,
   gatherCiReceipt, judgedRun,
@@ -25,13 +30,17 @@ const run = (over = {}) => ({ id: 900, name: WORKFLOW.name, event: 'pull_request
   head_branch: 'chore/release-v9.9.9',
   status: 'completed', conclusion: 'success', run_attempt: 1,
   created_at: '2026-11-02T10:00:00Z', ...over });
-const jobsOf = (r) => WORKFLOW.jobs.map((name, i) => ({ id: i + 1, name, run_id: r.id,
-  head_sha: PR, status: 'completed', conclusion: 'success', run_attempt: r.run_attempt }));
+const jobsOf = (r, names = WORKFLOW.jobs) => names.map((name, i) => ({ id: i + 1, name,
+  run_id: r.id, head_sha: PR, status: 'completed', conclusion: 'success',
+  run_attempt: r.run_attempt }));
 
+// workflow: the release tree's ci.yml (HEAD's); baseWorkflow: the base's, read from the merge's
+// first parent (R037). A release that changes no workflow has the same copy on both.
 function facts(over = {}) {
   const r = run();
   return { head: HEAD, parents: [BASE, PR], headTree: TREE, prTree: TREE, baseInPr: true,
-    workflow: WORKFLOW, pulls: [pull()], runs: [r], jobs: jobsOf(r), roadmap: true, ...over };
+    workflow: WORKFLOW, baseWorkflow: WORKFLOW, pulls: [pull()], runs: [r], jobs: jobsOf(r),
+    roadmap: true, ...over };
 }
 
 const only = (f, re) => {
@@ -258,6 +267,7 @@ test('gatherCiReceipt reads parents, trees, ancestry, the runs and the latest jo
     if (args[0] === 'rev-list') return { status: 0, stdout: `${HEAD} ${BASE} ${PR}` };
     if (args[0] === 'rev-parse') return { status: 0, stdout: TREE };
     if (args[0] === 'merge-base') return { status: 0, stdout: '' };
+    if (args[0] === 'show') return { status: 0, stdout: CI_TEXT };
     if (cmd === 'node') return { status: 0, stdout: '' };
     if (args[0] === 'api' && /\/pulls\?/.test(args[1])) {
       return { status: 0, stdout: JSON.stringify([pull()]) };
@@ -273,6 +283,10 @@ test('gatherCiReceipt reads parents, trees, ancestry, the runs and the latest jo
   assert.deepEqual(ciReceiptProblems(f), []);
   assert.ok(calls.some((c) => c[0] === 'node' && c.at(-1) === '1'),
     'the roadmap check runs with OSC_ROADMAP_CHECK=1');
+  // R037: the job set is read from the merge's first parent, never from the checkout alone
+  assert.ok(calls.some((c) => c[0] === 'git' && c[1] === 'show' && c[2] === `${BASE}:${CI_WORKFLOW}`),
+    'git show <first parent>:ci.yml');
+  assert.deepEqual(f.baseWorkflow?.jobs, WORKFLOW.jobs);
   assert.ok(calls.some((c) => c[1] === 'api' && c[2].includes(`head_sha=${PR}`)
     && c[2].includes('event=pull_request')));
   // every GitHub read is bounded (review F3 of #389)
@@ -357,6 +371,7 @@ test('review F5 (r8): gatherCiReceipt reads the queue runs of HEAD itself, event
       if (args[0] === 'rev-list') return { status: 0, stdout: `${HEAD} ${BASE} ${PR}` };
       if (args[0] === 'rev-parse') return { status: 0, stdout: TREE };
       if (args[0] === 'merge-base') return { status: 0, stdout: '' };
+      if (args[0] === 'show') return { status: 0, stdout: CI_TEXT };
       if (cmd === 'node') return { status: 0, stdout: '' };
       if (args[0] !== 'api') return { status: 1, stdout: '' };
       assert.equal(opts?.timeout, GH_TIMEOUT_MS, 'a bounded read');
@@ -434,9 +449,164 @@ test('ADR 0083 mutation: a pull_request run does not stand in when the queue com
 
 test('release:prepare defaults to the CI path and keeps the full gate behind --local-gate', () => {
   const ci = prep.CI_PREPARE_COMMANDS.map(([c, a]) => `${c} ${a.join(' ')}`);
-  assert.deepEqual(ci, ['node scripts/roadmap.mjs', 'npm run build', 'npm run version:check',
-    'npm run verify']);
+  assert.deepEqual(ci, ['node scripts/about-stations.mjs --stamp', 'node scripts/roadmap.mjs',
+    'npm run build', 'npm run version:check', 'npm run verify']);
   const local = prep.GATE_COMMANDS.map(([c, a]) => `${c} ${a.join(' ')}`);
   assert.ok(local.includes('npm run release-gate'));
   assert.match(prep.USAGE, /--local-gate/);
+});
+
+// R037: the job set a run must carry is the base's ci.yml, the gate main had when the release
+// branched, read from the merge's first parent; the release tree's own copy (the checkout's,
+// after the merge) may add jobs beyond it but never drop one. Two small workflows: the base
+// declares the visual gate, the release tree does not; or the release tree adds `extra`.
+const LEDGER = `  flake-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
+const VISUAL = '  visual:\n    name: Visual regression gate\n    runs-on: x\n';
+const EXTRA = '  extra:\n    runs-on: x\n';
+const SMALL = (jobs) => expectedJobs(`name: CI\njobs:\n  unit:\n    runs-on: x\n${LEDGER}${jobs}`);
+
+test('R037: a job the first parent\'s ci.yml declares that the merge\'s own ci.yml and run lack'
+  + ' refuses, naming it and the base', () => {
+  const base = SMALL(VISUAL);
+  const tree = SMALL('');
+  assert.deepEqual([base.problems, tree.problems], [[], []]);
+  const r = run();
+  // the run is of the release tree's workflow, so it has exactly that copy's jobs
+  const jobs = jobsOf(r, tree.jobs);
+  only(facts({ workflow: tree, baseWorkflow: base, jobs }), new RegExp('run 900 has no job '
+    + '"Visual regression gate" \\(\\.github/workflows/ci\\.yml of the base bbbbbbb '
+    + 'declares it\\)'));
+  // the same tree and run with a base that agrees verify
+  assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: tree, jobs })), []);
+  // on merge_group too
+  const q = qrun();
+  const qj = tree.jobs.map((name, i) => ({ id: 100 + i, name, run_id: q.id, head_sha: q.head_sha,
+    status: 'completed', conclusion: 'success', run_attempt: q.run_attempt }));
+  assert.match(ciReceiptProblems(queued({ workflow: tree, baseWorkflow: base, queueRuns: [q],
+    queueJobs: qj })).join(),
+  /merge_group: run 950 has no job "Visual regression gate" .*base bbbbbbb/);
+});
+
+test('R037 superset: a job the release tree adds beyond the base verifies green and refuses red;'
+  + ' a job neither copy declares refuses', () => {
+  const base = SMALL('');
+  const tree = SMALL(EXTRA);
+  const r = run();
+  const jobs = jobsOf(r, tree.jobs);
+  assert.ok(jobs.some((j) => j.name === 'extra'), 'the run carries the added job');
+  assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base, jobs })), []);
+  const red = jobs.map((j) => (j.name === 'extra' ? { ...j, conclusion: 'failure' } : j));
+  only(facts({ workflow: tree, baseWorkflow: base, jobs: red }),
+    /job "extra" of run 900 is completed\/failure/);
+  // an added job the run lacks still refuses, as today, naming the copy that declares it
+  only(facts({ workflow: tree, baseWorkflow: base, jobs: jobs.filter((j) => j.name !== 'extra') }),
+    /run 900 has no job "extra" \(\.github\/workflows\/ci\.yml declares it\)/);
+  // a run job in neither copy is undeclared, however the two copies differ
+  const alien = [...jobs, { ...jobs[0], id: 99, name: 'alien' }];
+  only(facts({ workflow: tree, baseWorkflow: base, jobs: alien }), new RegExp('run 900 has a '
+    + 'job "alien" that \\.github/workflows/ci\\.yml does not declare, at the base bbbbbbb or '
+    + 'at HEAD'));
+  // the ledger named by either copy keeps its first-attempt exemption
+  const skipLedger = jobs.map((j) => (j.name === 'flake-ledger' ? { ...j, conclusion: 'skipped' }
+    : j));
+  assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base,
+    jobs: skipLedger })), []);
+});
+
+test('R037: an unreadable or broken base ci.yml refuses, naming the base', () => {
+  only(facts({ baseWorkflow: null }),
+    /\.github\/workflows\/ci\.yml of the base bbbbbbb could not be read/);
+  const broken = { ...WORKFLOW, problems: [`${CI_WORKFLOW} does not parse: x`] };
+  only(facts({ baseWorkflow: broken }),
+    /^base bbbbbbb: \.github\/workflows\/ci\.yml does not parse: x$/);
+  const twoLedgers = expectedJobs(`name: CI\njobs:\n  unit:\n    runs-on: x\n${LEDGER}`
+    + `  second-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`);
+  assert.match(ciReceiptProblems(facts({ baseWorkflow: twoLedgers })).join('\n'),
+    /^base bbbbbbb: .*exactly one re-run-only job/m);
+});
+
+// A real release merge on a throwaway repository: B (main, the base) declares `baseJobs`, H
+// (the pull request head, a child of B) declares `headJobs`, and HEAD is the merge of B and H
+// whose tree is H's. The checkout's ci.yml is therefore H's copy; the base's is only in git.
+function mergeRepo(t, baseJobs, headJobs) {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-ci-receipt-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+    '-c', 'commit.gpgsign=false', ...args], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+    .toString().trim();
+  const ci = (jobs) => `name: CI\njobs:\n  unit:\n    runs-on: x\n${LEDGER}${jobs}`;
+  mkdirSync(path.join(root, '.github/workflows'), { recursive: true });
+  git('init', '-q');
+  git('checkout', '-q', '-b', 'main');
+  writeFileSync(path.join(root, CI_WORKFLOW), ci(baseJobs));
+  git('add', '-A');
+  git('commit', '-q', '--no-verify', '-m', 'ci: the base');
+  const base = git('rev-parse', 'HEAD');
+  writeFileSync(path.join(root, CI_WORKFLOW), ci(headJobs));
+  // --allow-empty: a release tree that keeps the base's ci.yml is a head with the base's tree
+  git('commit', '-q', '--no-verify', '--allow-empty', '-am', 'chore(release): the release tree');
+  const pr = git('rev-parse', 'HEAD');
+  const head = git('commit-tree', `${pr}^{tree}`, '-p', base, '-p', pr, '-m', 'merge');
+  git('update-ref', 'HEAD', head);
+  return { root, base, pr, head, headJobs: expectedJobs(ci(headJobs)).jobs };
+}
+
+// Real git in the repository; gh and the roadmap check faked around one green run on H.
+function repoSh(repo) {
+  const calls = [];
+  const r = run({ head_sha: repo.pr });
+  const jobs = repo.headJobs.map((name, i) => ({ id: i + 1, name, run_id: r.id,
+    head_sha: repo.pr, status: 'completed', conclusion: 'success', run_attempt: 1 }));
+  const p = pull({ head: { sha: repo.pr, ref: 'chore/release-v9.9.9' },
+    merge_commit_sha: repo.head });
+  const sh = (cmd, args) => {
+    calls.push([cmd, ...args]);
+    if (cmd === 'git') {
+      const g = spawnSync('git', args, { cwd: repo.root, encoding: 'utf8' });
+      return { status: g.status, stdout: String(g.stdout || '').trim() };
+    }
+    if (cmd === 'node') return { status: 0, stdout: '' };
+    if (args[0] === 'api' && /\/pulls\?/.test(args[1])) {
+      return { status: 0, stdout: JSON.stringify([p]) };
+    }
+    if (args[0] === 'api' && /\/jobs\?filter=latest/.test(args[1])) {
+      return { status: 0, stdout: JSON.stringify({ jobs }) };
+    }
+    if (args[0] === 'api') return { status: 0, stdout: JSON.stringify({ workflow_runs: [r] }) };
+    return { status: 1, stdout: '' };
+  };
+  return { sh, calls };
+}
+
+test('R037: gatherCiReceipt reads the job set with git show from the merge\'s first parent, not'
+  + ' from the checkout', (t) => {
+  // the base declares the visual gate; the release tree (the checkout) and its run do not
+  const dropped = mergeRepo(t, VISUAL, '');
+  const { sh, calls } = repoSh(dropped);
+  const f = gatherCiReceipt({ sh, root: dropped.root, head: dropped.head });
+  assert.deepEqual(f.parents, [dropped.base, dropped.pr]);
+  assert.ok(calls.some((c) => c[0] === 'git' && c[1] === 'show'
+    && c[2] === `${dropped.base}:${CI_WORKFLOW}`), calls.map((c) => c.join(' ')).join('\n'));
+  assert.ok(f.baseWorkflow.jobs.includes('Visual regression gate'), 'the base copy was read');
+  assert.ok(!f.workflow.jobs.includes('Visual regression gate'), 'the checkout copy was read');
+  // the pull request's run does not verify, so the queue's runs are read too (ADR 0083) and
+  // both verdicts are reported: every other fact of the real merge holds
+  const problems = ciReceiptProblems(f);
+  assert.match(problems.join('\n'), new RegExp('pull_request: run 900 has no job "Visual '
+    + `regression gate" \\(\\.github/workflows/ci\\.yml of the base ${dropped.base.slice(0, 7)} `
+    + 'declares it\\)'));
+  assert.ok(problems.every((p) => /^(pull_request|merge_group): /.test(p)), problems.join('\n'));
+  // the release tree adds a job beyond the base, and its run carries it green: verifies
+  const added = mergeRepo(t, '', EXTRA);
+  const g = gatherCiReceipt({ sh: repoSh(added).sh, root: added.root, head: added.head });
+  assert.deepEqual(ciReceiptProblems(g), []);
+  assert.equal(judgedRun(g).id, 900);
+  // the base's copy missing from git is a refusal, never an empty job set
+  const none = mergeRepo(t, '', '');
+  const blind = repoSh(none);
+  const h = gatherCiReceipt({ sh: (c, a) => (c === 'git' && a[0] === 'show'
+    ? { status: 128, stdout: '' } : blind.sh(c, a)), root: none.root, head: none.head });
+  assert.equal(h.baseWorkflow, null);
+  assert.match(ciReceiptProblems(h).join(), new RegExp(`of the base ${none.base.slice(0, 7)} `
+    + 'could not be read'));
 });

@@ -100,6 +100,7 @@ import {
 } from './model.js';
 import { compileSequence, observeClock, START_OFFSET_S, STOP_RAMP_S } from './compiler.js';
 import { reorderTarget } from './timeline.js';
+import { parseTempoEntry } from './entry.js';
 import { MAX_PROGRAMMED_S, RENDER_QUANTUM } from '../core/constants.js';
 
 export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
@@ -424,7 +425,11 @@ export function createSequencerEditor(options = {}) {
       return true;
     },
     setTempo(bpm) {
-      this._apply(setTempo(this.model, bpm));
+      // K017: a tempo outside 20 to 300 BPM is refused with a sentence, the model untouched.
+      const r = parseTempoEntry(bpm);
+      if (!r.ok) { this.error = r.error; return; }
+      this.error = '';
+      this._apply(setTempo(this.model, r.bpm));
     },
     setLoop(on) {
       this._apply(setLoop(this.model, on));
