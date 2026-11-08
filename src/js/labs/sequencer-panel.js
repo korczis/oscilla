@@ -38,6 +38,7 @@ import {
 } from '../sequencer/timeline.js';
 import { onFrame } from '../charts/frame-loop.js';
 import { parseFrequencyEntry } from '../sequencer/entry.js';
+import { syncTempoSelect } from '../sequencer/tempo-select.js';
 import { observeSize } from '../charts/chart-theme.js';
 import { on, setText, setAttr } from './dom.js';
 
@@ -511,27 +512,10 @@ export function mount(rootEl, adapter) {
    * no option names selects none, so choosing any option is a change again.
    */
   function syncTempo() {
-    if (!tempoSel) return;
-    const v = String(editor.model.tempoBpm);
-    if (tempoSel.value === v) return;
-    const dyn = tempoSel.querySelector('option[data-osc-dynamic]');
-    let i = Array.from(tempoSel.options).findIndex((o) => o.value === v && o !== dyn);
-    if (i < 0) {
-      // K017: a loaded tempo outside the offered steps gets its own option, so the control
-      // shows model.tempoBpm (G1 coherence 2.4, persist-5); it goes when the model leaves it.
-      if (dyn) dyn.remove();
-      const opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = `${v} BPM`;
-      opt.dataset.oscDynamic = '1';
-      tempoSel.appendChild(opt);
-      i = tempoSel.options.length - 1;
-    } else if (dyn) {
-      dyn.remove();
-      i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
-    }
-    tempoSel.selectedIndex = i;
+    // K017: the control shows model.tempoBpm, an off-step tempo included (sequencer/tempo-select.js).
+    syncTempoSelect(tempoSel, editor.model.tempoBpm, document);
   }
+
 
   function renderScrollbar() {
     if (!scrollEl || !thumbEl) return;
