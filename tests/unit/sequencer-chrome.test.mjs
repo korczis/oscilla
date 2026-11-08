@@ -58,3 +58,42 @@ test('K017: a loaded tempo outside the bounds keeps the default and is reported,
   assert.equal(fine.model.tempoBpm, 97.5, 'a value outside the offered steps is kept as it is');
   assert.ok(!fine.issues.some((s) => /Tempo/.test(s)));
 });
+
+// K017 criterion 3 (G1 coherence contract 2.4, persist-5): after a load or an import the tempo
+// control shows model.tempoBpm, including a tempo that is not one of its offered steps. A fake
+// <select> holds the offered steps; syncTempoSelect is what sequencer-panel.js runs on render.
+function fakeSelect(steps) {
+  const sel = { options: [], selectedIndex: 0 };
+  const option = (value, dynamic) => {
+    const o = { value: String(value), textContent: `${value} BPM`, dataset: {} };
+    if (dynamic) o.dataset.oscDynamic = '1';
+    o.remove = () => { sel.options = sel.options.filter((x) => x !== o); };
+    return o;
+  };
+  sel.options = steps.map((s) => option(s));
+  Object.defineProperty(sel, 'value', { get: () => (sel.options[sel.selectedIndex] || {}).value });
+  sel.querySelector = (q) => (q === 'option[data-osc-dynamic]'
+    ? sel.options.find((o) => o.dataset.oscDynamic) || null : null);
+  sel.appendChild = (o) => { sel.options.push(o); return o; };
+  const doc = { createElement: () => option('', false) };
+  return { sel, doc };
+}
+
+test('K017: the tempo control shows a loaded tempo that is not an offered step, and drops it after', async () => {
+  const { syncTempoSelect } = await import('../../src/js/sequencer/tempo-select.js');
+  const { sel, doc } = fakeSelect([60, 90, 120, 140]);
+  sel.selectedIndex = 2;
+  syncTempoSelect(sel, 97, doc);
+  assert.equal(sel.value, '97', 'the control shows the model tempo 97 BPM');
+  assert.equal(sel.options.filter((o) => o.dataset.oscDynamic).length, 1, 'one added option');
+  assert.equal(sel.options.at(-1).textContent, '97 BPM');
+  syncTempoSelect(sel, 103, doc);
+  assert.equal(sel.value, '103', 'a second off-step tempo replaces the first');
+  assert.equal(sel.options.length, 5, 'still one added option');
+  syncTempoSelect(sel, 90, doc);
+  assert.equal(sel.value, '90', 'an offered step is selected again');
+  assert.deepEqual(sel.options.map((o) => o.value), ['60', '90', '120', '140'],
+    'the added option goes when the model leaves it');
+  syncTempoSelect(sel, 90, doc);
+  assert.equal(sel.value, '90', 'no change when the control already shows the model');
+});
