@@ -6,7 +6,6 @@
 
 import { MEASUREMENT_STATES as S, isActiveState } from '../../measurement/state-machine.js';
 import { createMeasurementEngine, assessMeasurement } from '../../measurement/engine.js';
-import { MIC_UNAVAILABLE_TEXT } from '../../audio/microphone.js';
 import { createCaptureIo, createLoopbackIo, LOOPBACK_LABEL } from '../../measurement/capture.js';
 import {
   measureFlow, expertFields, recipeFromFields, CHARACTERIZE_PLAYBACK_CHAIN, OUTPUT_LEVEL_CHOICES,
@@ -31,7 +30,7 @@ import { createResponseChart, createIrChart, createRtaChart } from '../../charts
 import {
   MEASURE_RESULT_TABS, IR_SPANS, RTA_MODE_CHOICES, RTA_AVERAGING_CHOICES, RESPONSE_QUANTITIES,
   LIVE_RTA_FIELDS, LIVE_FIELD_HELP, LEVEL_FROM_TEST_CONTEXT, LEVEL_FROM_MICROPHONE,
-  MANUAL_TEST_CONTEXT_LABEL, FIELD_DEFAULTS, plain, levelId,
+  MANUAL_TEST_CONTEXT_LABEL, FIELD_DEFAULTS, plain, levelId, rtaLiveAvailability,
 } from './constants.js';
 
 /** The closure state of one MEASURE workspace (never Alpine-reactive). */
@@ -320,8 +319,7 @@ export function measureStatePart(ctx, svc, ops) {
       normAvail: { none: { ok: true, reason: null }, '1k': { ok: true, reason: null },
         band: { ok: true, reason: null } },
       rtaLive: { running: false, starting: false, error: null, kind: null,
-        available: !!svc.loopback || ops.microphoneAvailable(),
-        unavailableText: MIC_UNAVAILABLE_TEXT },
+        ...rtaLiveAvailability(!!svc.loopback || ops.microphoneAvailable()) },
       response: null,
       ir: null,
       rta: null,
@@ -459,6 +457,14 @@ export function measureLifecyclePart(ctx, svc, ops) {
     /** True while a measurement owns the output (main.js refuses instrument playback). */
     measureOwnsOutput() {
       return !!ctx.me && isActiveState(ctx.me.state) && ctx.me.state !== S.READY;
+    },
+    /**
+     * True while a microphone level-reference capture runs (C024): it stopped the other owners
+     * when it started (calibration.js), and no claim may start one under the reading. The
+     * loopback TEST CONTEXT captures the instrument's own output, so it refuses nothing.
+     */
+    measureReferenceOwnsOutput() {
+      return !!ctx.refCapture && ctx.ioKind !== 'loopback';
     },
     /**
      * Abort from Escape, page hide or leaving the workspace (a measurement and the live RTA);

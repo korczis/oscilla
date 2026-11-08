@@ -27,14 +27,19 @@ import { panelCables } from '../../src/js/synth/normals.js';
 import { decodeSynthLink } from '../../src/js/core/url-state-synth.js';
 import { PRESETS } from '../../src/js/synth/presets.js';
 import {
-  XY_CATEGORY, XY_RECIPES, XY_VOICE, xyCablesAction, xyPatchAction, xyPatchOf, xyPatched,
+  XY_CATEGORY, XY_RECIPES, xyCablesAction, xyPatchAction, xyPatchOf, xyPatched,
   xyPresetPatch, xyTarget, xyTargetAction, xyTargets,
 } from '../../src/js/synth/xy.js';
+import { panelEdges } from '../../src/js/synth/normals.js';
 import { createXyModel } from '../../src/js/ui/kinds/xy-pad.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
 
 const PAD = { mode: 'major', key: 'C', octave: 4, span: 1, glide: 0 };
+// A user's own Pitch and Gate cables from the pad into the voice (no built-in preset makes them
+// since K183's review F3: they replace the keyboard's normals).
+const XY_VOICE = [['xy.pitch', 'vco1.pitch'], ['xy.pitch', 'vco2.pitch'], ['xy.gate', 'eg1.gate'],
+  ['xy.gate', 'eg2.gate']];
 
 // ---------------------------------------------------------------- the node type
 
@@ -333,9 +338,25 @@ test('each XY preset is an ordinary patch: category xy, its scale, the panel and
     assert.deepEqual([pad.params.mode, pad.params.key], [recipe.scale.mode, recipe.scale.key]);
     for (const [k, v] of recipe.values) assert.equal(pad.params[k.split('.')[1]], v, k);
     assert.equal(xyTarget(m1, PANEL), recipe.y);
-    assert.equal(xyPatched(m1, PANEL), true);
+    // K183 review F3: no Pitch or Gate cable, the keys' normals live, the amounts kept.
+    assert.equal(xyPatched(m1, PANEL), false, `${recipe.id}: no Pitch or Gate cable`);
     const cables = panelCables(m1, PANEL).map((c) => `${c.from}>${c.to}`);
-    for (const [f, t] of XY_VOICE) assert.ok(cables.includes(`${f}>${t}`), `${f}>${t}`);
+    assert.deepEqual(cables, [`xy.y>${recipe.y}`], `${recipe.id}: Y's cable alone`);
+    const { normals } = panelEdges(m1, PANEL);
+    assert.deepEqual(['n1', 'n2', 'n3', 'n4'].filter((n) => normals.has(n)),
+      ['n1', 'n2', 'n3', 'n4'], `${recipe.id}: the keys' Pitch and Gate normals are live`);
+    const base = PRESETS.find((x) => x.id === recipe.base);
+    for (const am of PANEL.amounts.filter((x) => x.to.includes(recipe.y))) {
+      const want = base.amounts[am.id];
+      if (want === undefined) continue;
+      const e = m1.graph.edges.find((x) => x.from.node === PANEL.resolve(m1)
+        .get(am.source.split('.')[0]).id && am.to.some((t) => {
+        const [mod, port] = t.split('.');
+        return x.to.node === PANEL.resolve(m1).get(mod).id && x.to.port === port;
+      }));
+      assert.ok(e, `${recipe.id}: ${am.id}'s normal is there`);
+      assert.equal(e.props.depth, want, `${recipe.id}: ${am.id} keeps the base preset's depth`);
+    }
     st.undo();
     assert.equal(serializeStudio(st.getModel()), serializeStudio(m0), `${recipe.id}: one undo`);
   }
@@ -385,4 +406,71 @@ test('a document with an xy-pad is refused by name by a registry without the typ
   assert.ok(r.errors.some((e) => /xy-pad/.test(e.message)), r.errors.map((e) => e.message)
     .join(' | '));
   assert.equal(importStudio(doc).ok, true);
+});
+
+// ---------------------------------------------------------------- the pad kind's lost capture
+
+/** mountXyPad on a DOM just big enough: each selector one fake element, events recorded. */
+async function mountedPad() {
+  const { mountXyPad } = await import('../../src/js/ui/kinds/xy-pad.js');
+  const el = () => {
+    const on = new Map();
+    const attrs = new Map();
+    // children: the view's trail segments (S3), none here.
+    return { on, dataset: {}, textContent: '', children: [],
+      setAttribute: (k, v) => attrs.set(k, String(v)),
+      getAttribute: (k) => attrs.get(k), addEventListener: (t, f) => on.set(t, f),
+      removeEventListener: (t) => on.delete(t), setPointerCapture() {}, focus() {},
+      contains: () => true, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100,
+        height: 100 }), fire(t, e = {}) {
+        const f = on.get(t);
+        if (f) f({ preventDefault() {}, stopPropagation() {}, target: this, ...e });
+      } };
+  };
+  const kids = new Map();
+  const group = el();
+  const host = { innerHTML: '', firstElementChild: group,
+    querySelector: (sel) => kids.get(sel) || kids.set(sel, el()).get(sel) };
+  const saved = { window: globalThis.window, document: globalThis.document };
+  globalThis.window = el();
+  globalThis.document = { ...el(), activeElement: null, hidden: false };
+  const gates = [];
+  const view = mountXyPad(host, { label: 'pad', description: 'd', cells: [{ label: '1' }],
+    x: { key: 'x', label: 'X', type: 'integer', min: 0, max: 3, step: 1, default: 1 },
+    y: { key: 'y', label: 'Y', type: 'number', min: 0, max: 1, default: 0 },
+    value: { x: 1, y: 0 }, onGate: (open, v, why) => gates.push([open, why]) });
+  const surface = host.querySelector('[data-xy-surface]');
+  const restore = () => {
+    view.destroy();
+    globalThis.window = saved.window;
+    globalThis.document = saved.document;
+  };
+  return { view, surface, gates, restore };
+}
+
+test('a lost pointer capture of a holding pointer cancels; after its pointerup it changes '
+  + 'nothing; another pointer\'s loss leaves the touch alone (review F8)', async () => {
+  const at = { clientX: 50, clientY: 50 };
+  const a = await mountedPad();
+  try {
+    a.surface.fire('pointerdown', { pointerId: 1, ...at });
+    assert.equal(a.view.model.gated, true, 'the touch opens the gate');
+    a.surface.fire('lostpointercapture', { pointerId: 1 });
+    assert.equal(a.view.model.gated, false, 'its capture lost while it holds: cancelled');
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'cancel']]);
+    // After a pointerup the browser always fires lostpointercapture: nothing more happens.
+    a.gates.length = 0;
+    a.surface.fire('pointerdown', { pointerId: 2, ...at });
+    a.surface.fire('pointerup', { pointerId: 2 });
+    a.surface.fire('lostpointercapture', { pointerId: 2 });
+    assert.deepEqual(a.gates, [[true, 'touch'], [false, 'release']], 'one release, no cancel');
+    // A pointer that does not hold the pad (a stray capture) loses it: the touch goes on.
+    a.gates.length = 0;
+    a.surface.fire('pointerdown', { pointerId: 3, ...at });
+    a.surface.fire('lostpointercapture', { pointerId: 9 });
+    assert.equal(a.view.model.gated, true, 'a capture another pointer lost cancels nothing');
+    assert.deepEqual(a.gates, [[true, 'touch']]);
+  } finally {
+    a.restore();
+  }
 });

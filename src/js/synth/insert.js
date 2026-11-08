@@ -4,15 +4,16 @@
 // compares against.
 //
 //   insertAction(model, panel, { explicit, unroute }) -> { action, text } | { reason }
-//     the panel below the document's nodes, one BATCH, and the notice naming the Master feed
-//     it takes (SYNTH_TEXT.took); refused without `explicit` where insertDecision refuses;
-//     `unroute` clears the keys' route in the same BATCH (New Synth voice: the keys then play
-//     its Keys; review S5)
+//     the panel below the document's nodes with the XY pad's Y cable (xy.js xyInsertAction,
+//     K183), one BATCH, and the notice naming the Master feed it takes (SYNTH_TEXT.took);
+//     refused without `explicit` where insertDecision refuses; `unroute` clears the keys' route
+//     in the same BATCH (New Synth voice: the keys then play its Keys; review S5)
 //   feedNames(model, cuts) -> 'name, name'   the nodes whose Master feed the panel takes
 
 import SEMI_MONO from './panels/semi-mono.js';
 import { isSemanticallyEqual } from '../studio/schema.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../studio/templates/index.js';
+import { xyInsertAction } from './xy.js';
 
 export const SYNTH_TEXT = Object.freeze({
   inserted: `Inserted the ${SEMI_MONO.title} into the Studio document; it feeds Master Output. `
@@ -24,6 +25,8 @@ export const SYNTH_TEXT = Object.freeze({
     + `Output from ${names}. Undo removes the panel and gives it back.`,
   notInserted: 'The Synth panel is not in this Studio document: press Insert first.',
   armed: 'Synth armed: the keys play the panel.',
+  /** What the keys and the XY pad play, named from the route's node (K183 S6). */
+  plays: (name) => `Synth připraven: klávesy a XY pad hrají ${name}.`,
   disarmed: 'Synth disarmed: no note sounds.',
   refused: 'The Synth did not arm: the output belongs to the measurement. Stop it first (Esc).',
   direction: 'A cable runs from an output jack to an input jack.',
@@ -56,8 +59,8 @@ export function insertAction(model, panel = SEMI_MONO, { explicit = false, unrou
     return { reason: `${SYNTH_TEXT.notInserted} ${SYNTH_TEXT.takes(names)}` };
   }
   const ys = model.graph.nodes.map((n) => n.position.y);
-  const action = panel.instantiate(model, { at: { x: 0,
-    y: (ys.length ? Math.max(...ys) : 0) + 240 } });
+  const action = xyInsertAction(model, panel, { at: { x: 0,
+    y: (ys.length ? Math.max(...ys) : 0) + 240 } }); // K183: the pad's Y cable with it
   if (unroute && model.metadata.noteTarget) {
     action.steps.push({ type: 'METADATA_SET', noteTarget: null });
   }

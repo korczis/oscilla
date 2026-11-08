@@ -89,7 +89,7 @@
     {
       "id": "M059",
       "title": "Sequencer: audible tempo, real editing and a Studio clock",
-      "done": 3,
+      "done": 4,
       "required": 6,
       "phase": "now"
     },
@@ -103,8 +103,8 @@
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
-      "done": 2,
-      "required": 6,
+      "done": 3,
+      "required": 7,
       "phase": "now"
     },
     {
@@ -153,7 +153,7 @@
       "id": "M069",
       "title": "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid",
       "done": 5,
-      "required": 20,
+      "required": 21,
       "phase": "now"
     },
     {

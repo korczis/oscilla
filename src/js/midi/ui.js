@@ -9,6 +9,7 @@
 // The controllers and the platform objects stay out of reactive state; the component holds only
 // the plain values the markup reads (midiState, midiText, midiCanConnect).
 
+import { routeOf } from './routes.js';
 import { createMidiSupport, midiSite } from './support.js';
 import { createMidiNotes } from './notes.js';
 import { createKeyboardUi } from './keyboard-ui.js';
@@ -56,10 +57,9 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           return sequencerPlaying() ? 'sequencer' : null;
         },
         refused,
-        // The Synth's notes play its panel (synth/ui.js synthSink), the Studio's the document
-        // through the same transport (synth/studio-sink.js); elsewhere the Playground voice.
+        // What the workspace's keys play: its row of the one table (midi/routes.js, K178).
         route: () => {
-          const sink = { synth: 'synthSink', studio: 'studioSink' }[cmp.workspace];
+          const sink = routeOf(cmp.workspace).plays;
           return sink && typeof cmp[sink] === 'function' ? cmp[sink]() : null;
         },
       });
@@ -74,12 +74,13 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         return n;
       };
       if (typeof cmp.kbdInit === 'function') cmp.kbdInit({ notesFor });
-      // Leaving the Studio releases its keys and disarms an armed-only run (studio-sink.js).
+      // Leaving a workspace runs its row's leave on its sink: the Studio releases its keys and
+      // disarms an armed-only run (studio-sink.js, K176).
       if (typeof cmp.$watch === 'function') {
         cmp.$watch('workspace', (ws, old) => {
-          const s = old === 'studio' && ws !== 'studio' && typeof cmp.studioSink === 'function'
-            && cmp.studioSink();
-          if (s && typeof s.leave === 'function') s.leave();
+          const { plays, leave } = routeOf(old);
+          const s = ws !== old && leave && typeof cmp[plays] === 'function' && cmp[plays]();
+          if (s && typeof s[leave] === 'function') s[leave]();
         });
       }
       const ids = new WeakMap(); // input -> a number for the note keys, never shown or stored

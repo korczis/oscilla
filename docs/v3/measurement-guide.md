@@ -6,11 +6,13 @@ together in `docs/v3/architecture.md`.
 
 In the workspace, the guided flow runs through seven steps: input, calibration, noise check,
 stimulus, measure, review and save. **Check setup** runs the permission, input, sample-rate
-and background-noise checks. **Start measurement** plays and captures the sweep. **Save
-experiment** stores the result. **Expert settings** opens the sweep range and duration, the
-number of runs, the aggregation and the timing. The preset CHARACTERIZE PLAYBACK CHAIN is a
-good start: it runs a noise check, then a 20 Hz-20 kHz sweep, three times, at the LOW digital
-level.
+and background-noise checks, then plays the stimulus (shortened to one second) through the
+output and says whether the input heard it. **Start measurement** plays and captures the
+sweep; with a level calibration and no input checked yet it runs the setup check first, so
+the shortened stimulus sounds once before the sweep. **Save experiment** stores the result.
+**Expert settings** opens the sweep range and duration, the number of runs, the aggregation
+and the timing. The preset CHARACTERIZE PLAYBACK CHAIN is a good start: it runs a noise
+check, then a 20 Hz-20 kHz sweep, three times, at the LOW digital level.
 
 ## What you are measuring
 

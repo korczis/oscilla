@@ -170,6 +170,7 @@ export const REASON_STEP = Object.freeze({
   RANGE_CLAMPED: 'stimulus',
   OUTPUT_SILENT: 'stimulus', HIGH_OUTPUT: 'stimulus', LIMITER_RANGE: 'stimulus',
   OTHER_AUDIO: 'stimulus', OUTPUT_CHAIN_DEVIATION: 'stimulus', CHAIN_NOTES_IGNORED: 'stimulus',
+  STIMULUS_NOT_PLAYED: 'stimulus', STIMULUS_NOT_HEARD: 'stimulus',
 });
 
 const INFO_ONLY = new Set(['UNCALIBRATED', 'LEVEL_RELATIVE']);
