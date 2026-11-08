@@ -9,6 +9,14 @@ const SITE = 'src/js/ui/studio/transport-bar.js';
 
 export default [
   defineComponent({
+    id: 'studio.bar',
+    kind: 'panel',
+    label: 'Studio toolbar',
+    docs: 'Lišta Studia s přehráváním, soubory a přepínačem pohledů; ukotvená klávesnice ji nikdy '
+      + 'nezakryje (#444).',
+    state: { none: 'nese ovládání Studia; žádnou hodnotu nevlastní' },
+  }),
+  defineComponent({
     id: 'studio.toolbar.transport',
     pattern: { template: 'studio.tl.{key}', keys: ['return', 'play', 'stop'], sites: [SITE] },
     kind: 'transport',

@@ -176,7 +176,27 @@ export function createStoreHandle(initialModel, {
   return Object.freeze(handle);
 }
 
-/** The Alpine part of the STUDIO workspace. svc: { engine, stopPlayback(cmp) }. */
+/**
+ * Studio PLAY's output claim (the transport's onClaimOutput): refused with the sentence of the
+ * row of OUTPUT_REFUSALS that holds the output (svc.outputRefusalOf, ui/output-owner.js: a
+ * measurement or a microphone level-reference capture, C024), the one table every claim reads;
+ * otherwise every other owner stops (svc.stopPlayback) and the Studio takes the output.
+ */
+export function claimStudioOutput(cmp, svc, announce) {
+  const refusal = cmp && typeof svc.outputRefusalOf === 'function'
+    ? svc.outputRefusalOf(cmp) : null;
+  if (refusal) {
+    announce(refusal.text, { assertive: true });
+    return false;
+  }
+  if (cmp && svc.stopPlayback) svc.stopPlayback(cmp);
+  return true;
+}
+
+/**
+ * The Alpine part of the STUDIO workspace. svc: { engine, stopPlayback(cmp),
+ * outputRefusalOf(cmp) → the refusal row holding the output or null (Studio PLAY, the riffs) }.
+ */
 export function createStudioUi(svc = {}) {
   const registry = svc.registry || NODE_REGISTRY;
   const ctx = {
@@ -282,15 +302,7 @@ export function createStudioUi(svc = {}) {
       store: ctx.handle, registry, trace: ctx.trace,
       testContext: () => !!(ctx.cmp && ctx.cmp.meas && ctx.cmp.meas.loopback), // ADR 0052
       onMeasurement: (ev) => { if (ctx.measureRun) ctx.measureRun.hook(ev); },
-      onClaimOutput: () => {
-        const cmp = ctx.cmp;
-        if (cmp && typeof cmp.measureOwnsOutput === 'function' && cmp.measureOwnsOutput()) {
-          announce('The output belongs to the measurement: stop it first.', { assertive: true });
-          return false;
-        }
-        if (cmp && svc.stopPlayback) svc.stopPlayback(cmp);
-        return true;
-      } });
+      onClaimOutput: () => claimStudioOutput(ctx.cmp, svc, announce) });
     ctx.transport.on(onTransport);
   }
 
@@ -434,8 +446,10 @@ export function createStudioUi(svc = {}) {
   }
 
   // The Synth workspace (K058-K066) shares this part's ONE store and transport.
+  // sampleRate: the running context's (null before one), which sizes the XY pad's Y value.
   const synth = createSynthUi({
-    get: () => ({ handle: ctx.handle, transport: ctx.transport, dirty: ctx.dirty }),
+    get: () => ({ handle: ctx.handle, transport: ctx.transport, dirty: ctx.dirty,
+      sampleRate: svc.engine ? svc.engine.sampleRate : null }),
     setupAudio: () => setupAudio(), announce, registry });
 
   // ---------------------------------------------------------------- the Alpine part

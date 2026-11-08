@@ -4,8 +4,11 @@
 //
 //   panelSource(panel) -> { groups, nameOf }   every module with its jacks (panel.jacksOf)
 //   bayLayout(panel, width), baySvg({ panel, ... }), jackLabel(panel, jack, state, verdict)
+//   cableItem(cable, toState, { jackName, item, btn }) -> one row of the CABLES list: the
+//     cable, ", přičítá se k normálům" where its target jack sums (K183), and its Remove button
 
 import { patchLayout, patchSvg, portLabel } from '../../ui/patch/patch-bay.js';
+import { esc } from './face.js';
 
 export {
   BAY_TEXT, JACK_HIT, JACK_PITCH, LABEL_MAX, ROW_PITCH, cablePath, shortLabel,
@@ -25,3 +28,12 @@ export const bayLayout = (panel, width) => patchLayout(panelSource(panel), width
 export const baySvg = ({ panel, ...rest }) => patchSvg({ source: panelSource(panel), ...rest });
 export const jackLabel = (panel, j, st, verdict = null) => portLabel(panelSource(panel), j, st,
   verdict);
+
+export function cableItem(c, toState, { jackName, item, btn }) {
+  const from = esc(jackName(c.from));
+  const to = esc(jackName(c.to));
+  return `<li class="${item}"><span>${from} → ${to}${toState === 'summing'
+    ? ', přičítá se k normálům' : ''}</span><button type="button" class="${btn}" `
+    + `data-remove-cable="${esc(c.id)}" aria-label="Remove cable ${from} to ${to}">Remove`
+    + '</button></li>';
+}

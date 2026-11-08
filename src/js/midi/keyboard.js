@@ -108,6 +108,9 @@ export function codeForNote(note, base) {
  * input, lit by the MIDI layer through light()). The keyboard plays 'keys' and 'pointer'
  * itself; light() only shows what another layer plays.
  */
+/** releaseAll's stops are forced (blur, hide, Escape): never deferred by the minimum gate. */
+const FORCED = Object.freeze({ forced: true });
+
 export function createKeyboard({ play = () => ({ ok: true }), release = () => {},
   changed = () => {} } = {}) {
   let base = DEFAULT_BASE;
@@ -225,8 +228,8 @@ export function createKeyboard({ play = () => ({ ok: true }), release = () => {}
     releaseAll() {
       const n = keys.size + pointers.size;
       for (const note of new Set([...keys.values(), ...pointers.values()])) {
-        if (lit.has(note) && lit.get(note).has('keys')) release(note, 'keys');
-        if (lit.has(note) && lit.get(note).has('pointer')) release(note, 'pointer');
+        if (lit.has(note) && lit.get(note).has('keys')) release(note, 'keys', FORCED);
+        if (lit.has(note) && lit.get(note).has('pointer')) release(note, 'pointer', FORCED);
       }
       keys.clear();
       pointers.clear();

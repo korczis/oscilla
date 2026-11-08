@@ -8,9 +8,10 @@
 //   routeAction(model, panel, id) -> { action, text? } | { reason }   one history entry:
 //     METADATA_SET { noteTarget } (the panel's own Keys clears it: the tab then chooses, Keys on
 //     Panel, the chosen engine on Engines); New Synth voice inserts the panel as Insert does
-//     (insert.js insertAction: below the document's nodes, the route cleared in its BATCH, and
-//     `text` the notice naming the Master feed it took; review S5), whose Keys the keys then
-//     play; with the panel there it is disabled and says why
+//     (insert.js insertAction: below the document's nodes, the route cleared in its BATCH, the
+//     pad's Y cable with it (xy.js xyInsertAction, K183), and `text` the notice naming the
+//     Master feed it took; review S5), whose Keys the keys then play; with the panel there it
+//     is disabled and says why
 //   routedNode(model) -> node | null   the node metadata.noteTarget names, when it plays notes
 //   playedEngine(model, panel, chosen, registry) -> engine module id | null   the engine the
 //     Engines tab checks and shows (review S4: from the model's route, never a copy): the

@@ -39,6 +39,19 @@
 //     raises no OTHER_AUDIO; with the instrument, the sequencer and the Studio transport each
 //     sounding (analyser peak above the floor) it ends READY with OTHER_AUDIO and leaves that
 //     source playing (the check stops nothing), then the source stops and the output is free
+// The microphone app leg (once per browser, dist/index.html from file:// with the engine's fake
+// microphone: Chromium's fake device, Firefox's fake stream, WebKit's mock device; also under
+// --app-only):
+//   - measure-check-sounds (C033): pressing Check setup plays the stimulus: the destination tap
+//     (engine.analyser, the end of the master chain) rises above -60 dBFS while the check runs,
+//     and the result or the refusal is announced in the live regions; the RTA tab holds no
+//     "not available here" sentence for the granted microphone
+//   - measure-audio-session (C033): where navigator.audioSession exists (WebKit on macOS; not
+//     Playwright's WebKit for Linux, where it is a declared skip) the session is
+//     play-and-record in READY after Check setup and playback once the engine is reset
+//   - measure-refusal-announced (C033): WebKit with the microphone refused announces the true
+//     reason (permission denied), never "no input signal"; Firefox, whose prompt nobody
+//     answers here, announces that the check waits for the permission, and Stop is announced
 // --spike adds the V307 measurements recorded in docs/v3/spike-audioworklet-worker.md: a long
 // (--long-s, default 40 s) capture with frame-integrity counts in AudioWorklet mode and a
 // ScriptProcessor comparison, loopback lag statistics, data:/blob: worklet and worker loading,
@@ -916,6 +929,132 @@ async function runApp(browserName) {
   }
 }
 
+// ------------------------------------------------------------------------------ mic app leg
+// MEASURE in the application with a fake microphone (C033). `grant`: the microphone is allowed
+// (Chromium's fake UI, Firefox's permission pref, WebKit's granted permission); without it
+// WebKit refuses the input and Firefox shows a prompt that nobody answers.
+const PERMISSION_PREF = 'media.navigator.permission.disabled';
+function micLaunch(browserName, grant) {
+  if (browserName !== 'firefox' || grant) return LAUNCH[browserName];
+  const prefs = { ...LAUNCH.firefox.firefoxUserPrefs };
+  delete prefs[PERMISSION_PREF];
+  return { firefoxUserPrefs: prefs };
+}
+const MIC_FLOOR_DB = -60;
+
+async function runMicApp(browserName, { grant }) {
+  const key = `${browserName}/mic-app${grant ? '' : '-refused'}`;
+  const browser = await playwright[browserName].launch(micLaunch(browserName, grant));
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  if (grant && browserName === 'webkit') await context.grantPermissions(['microphone']);
+  const page = await context.newPage();
+  page.setDefaultTimeout(20000);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  console.log(`\n${key} (${browser.version()})`);
+  // The end of the master chain, which the destination plays: its peak now, in dBFS.
+  const tapDb = () => page.evaluate(() => {
+    const an = window.OSCILLA.engine.analyser;
+    if (!an) return -Infinity;
+    const buf = new Float32Array(an.fftSize);
+    an.getFloatTimeDomainData(buf);
+    let p = 0;
+    for (let i = 0; i < buf.length; i++) p = Math.max(p, Math.abs(buf[i]));
+    return p > 0 ? 20 * Math.log10(p) : -Infinity;
+  });
+  const said = () => page.evaluate(() => {
+    const t = (sel) => (document.querySelector(sel) || {}).textContent || '';
+    return { polite: t('[data-osc="measure.live"]').trim(),
+      assertive: t('[data-osc="measure.alert"]').trim(), state: window.OSCILLA.measure.state };
+  });
+  try {
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 20000 });
+    await page.mouse.click(5, 300); // a user gesture for the autoplay policy (WebKit)
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.alerts = [];
+      if (!a.safetyCollapsed) a.collapseSafety();
+      a.setWorkspace('measure');
+    });
+    await until(() => page.evaluate(() => {
+      const f = window.OSCILLA.app.meas.flow;
+      return f && f.primaryAction && f.primaryAction.id === 'preflight' && f.primaryAction.enabled;
+    }), { ms: 10000, what: `${key} MEASURE offers Check setup` });
+    await page.click('#osc-measure-primary'); // the user's own control, in a real gesture
+
+    if (grant) {
+      const loud = await until(() => tapDb().then((db) => (db > MIC_FLOOR_DB ? db : null)),
+        { ms: 20000, what: `${key} the destination tap rises above ${MIC_FLOOR_DB} dBFS `
+          + 'during Check setup' }).catch(() => null);
+      const end = await until(() => said().then((x) => (/^Setup check complete: ready$/
+        .test(x.polite) || /^Setup check failed: .+/.test(x.assertive) ? x : null)),
+      { ms: 30000, what: `${key} the setup check's result or refusal is announced` })
+        .catch(() => said());
+      const hidden = await page.evaluate(() => (document
+        .querySelector('[data-osc="measure.rtaError"]') || {}).textContent || '');
+      check(key, 'measure-check-sounds: Check setup plays the stimulus (destination tap above '
+        + `${MIC_FLOOR_DB} dBFS), its result or refusal is announced, and a granted `
+        + 'microphone is not called unavailable', loud !== null
+        && (/^Setup check complete: ready$/.test(end.polite)
+          || /^Setup check failed: .+/.test(end.assertive))
+        && !/not available here/.test(hidden),
+      `tap ${loud === null ? 'silent' : `${f(loud, 1)} dBFS`}, said ${JSON.stringify(end)}, `
+        + `RTA alert text ${JSON.stringify(hidden.trim())}`);
+      // The capture's audio session (C033, the exception in project.a-phone-sounds): read
+      // where the browser has navigator.audioSession, never elsewhere. WebKit on macOS has it
+      // and must hold it; Playwright's WebKit for Linux (the CI runner) has no audioSession, so
+      // there the check is a declared skip (tests/README.md) rather than a fail on an absent API.
+      const sessionType = () => page.evaluate(() => (navigator.audioSession
+        ? navigator.audioSession.type : null));
+      const hasSession = await page.evaluate(() => !!navigator.audioSession);
+      const held = await sessionType();
+      if (browserName === 'webkit' && !hasSession) {
+        RUN.skip(key, 'measure-audio-session', 'this WebKit build has no navigator.audioSession '
+          + "(Playwright's WebKit for Linux); C033 is held on macOS WebKit");
+      }
+      if (hasSession) {
+        const state = await page.evaluate(() => window.OSCILLA.measure.state);
+        await page.evaluate(() => window.OSCILLA.measure.engine.reset()); // closes the input
+        const back = await until(() => sessionType().then((t) => (t === 'playback' ? t : null)),
+          { ms: 5000, what: `${key} the page's playback session is back after the reset` })
+          .catch(() => sessionType());
+        check(key, 'measure-audio-session: in READY after Check setup the audio session is '
+          + 'play-and-record (the checked input is open), and playback once the check is reset',
+        state === 'READY' && held === 'play-and-record' && back === 'playback',
+        `state ${state}, session in READY ${JSON.stringify(held)}, after the reset `
+          + `${JSON.stringify(back)}`);
+      }
+    } else if (browserName === 'firefox') {
+      const wait = await until(() => said().then((x) => (/mikrofon/.test(x.polite) ? x : null)),
+        { ms: 20000, what: `${key} the check announces that it waits for the permission` })
+        .catch(() => said());
+      await page.click('#osc-measure-stop');
+      const stop = await until(() => said().then((x) => (/^Measurement stopped$/.test(x.polite)
+        ? x : null)), { ms: 10000, what: `${key} Stop is announced` }).catch(() => said());
+      check(key, 'measure-refusal-announced: a check waiting for the microphone prompt says so, '
+        + 'and Stop is announced',
+      /^Kontrola nastavení: povolte mikrofon, pokud se prohlížeč zeptá$/.test(wait.polite)
+        && /^Measurement stopped$/.test(stop.polite),
+      `waiting ${JSON.stringify(wait)}, after Stop ${JSON.stringify(stop)}`);
+    } else {
+      const end = await until(() => said().then((x) => (/^Setup check failed: .+/
+        .test(x.assertive) ? x : null)), { ms: 30000,
+        what: `${key} the refused input is announced` }).catch(() => said());
+      check(key, 'measure-refusal-announced: a refused microphone is announced with its true '
+        + 'reason (permission denied), not as "no input signal"',
+      /^Setup check failed: microphone permission denied$/.test(end.assertive),
+      JSON.stringify(end));
+    }
+    check(key, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
+  } catch (e) {
+    check(key, grant ? 'measure-check-sounds' : 'measure-refusal-announced', false,
+      e.stack || e.message);
+  } finally {
+    await browser.close();
+  }
+}
+
 async function nodeSpike() {
   const stim = await import(pathToFileURL(path.join(SRC, 'measurement', 'stimulus.js')).href);
   const al = await import(pathToFileURL(path.join(SRC, 'measurement', 'align.js')).href);
@@ -993,6 +1132,8 @@ window.__v3 = { engine, capture };`;
         }
       }
       await runApp(b);
+      await runMicApp(b, { grant: true });
+      if (b !== 'chromium') await runMicApp(b, { grant: false });
     }
   } finally {
     if (server) server.close();

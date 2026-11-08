@@ -1,0 +1,33 @@
+# Review verdict for pull request #426 (S3, the XY pad view), judged as the member head
+# 915779d8 (branch wip/xy-pad-view-nyquist; chain 81459df9 -> 6bef6d7f -> 9f464547 -> 915779d8),
+# base origin/int/train-6 bc6758ac. The builder (seat 26) puts exactly this tree on the PR head
+# when the keys+pad train's slot comes, so the digest below is the PR's. Reviewer: seat af
+# (session oscilla-af, claude-code 901211e2). Disclosure: af built none of this change and wrote
+# only this file, in a detached review worktree; the analysis ran as af's workflows
+# wf_bd31b32f-824 (first review) and wf_65e426db-c0d (re-review), two judges each.
+#
+# The digest: origin/main's scripts/ extracted with git archive, run with --content --list
+# --base-branch origin/int/train-6 at 915779d8, over six guarded paths: src/js/studio/compiler.js,
+# src/js/studio/ports.js, src/js/synth/ui.js, src/js/synth/view/xy-tab.js,
+# src/js/synth/view/xy-wiring.js, src/js/synth/xy.js.
+#
+# Evidence at 915779d8: xy-wiring, xy-pad, xy-pad-view and ui-synth-xy 83/83; the 26 unit files
+# importing studio/compiler.js or studio/ports.js 406/406; src-imports-acyclic 4/4; npm run build
+# reproduces dist byte for byte. Fail-first: the head's tests on 81459df9's source fail 80, 81, 82
+# and 40 by value ("xy-lead at 6000 Hz, 44100 Hz y 0.25: shown 8485.28, played 8201.56"); the F3
+# cases fail on 9f464547 or 6bef6d7f. No browser run by the reviewer (the builder reports xy-pad.cjs
+# and synth.cjs green in three engines); CI judges the train.
+schema: review-verdict/v1
+pr: 426
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 494c51f14fcc5e8279371037e952d0f8a03e8ef1165a363a9198d22d05434dce
+findings:
+  - { id: R1, severity: P2, status: closed, title: "The Y readout ignored the compiler's Nyquist scaling (xy.js xyYReading; the test passed a null limit): it now reads computeBases with safeMaximum at the live context's rate (provisional 44.1 kHz until audio starts) and says when a value is held at 0.95 x Nyquist; tests at 44.1 and 48 kHz compare it with the running biquad" }
+  - { id: R2, severity: P2, status: closed, title: "The note shown was the pad's Pitch output, not the note heard (XY bass, sweep and bell are not at 8'): it is now the lowest audible VCO's note (audio path to the Output above the -60 dB DB_SCALE_FLOOR, whole-octave shifts), and 'sends X' when no single honest note exists" }
+  - { id: R3, severity: P3, status: open, title: "An automation lane owning the Y target is not reflected in the readout (K201)" }
+  - { id: R4, severity: P3, status: open, title: "The Y ends do not refresh during a knob drag on the target (K201)" }
+  - { id: R5, severity: P3, status: open, title: "The phone readout may need a 4th line at 320 or 375 px with the longest target (K201)" }
+  - { id: R6, severity: P3, status: open, title: "The ring and readout numbers are proportional, so they shift width as values move; use tabular-nums (K201)" }
+  - { id: R7, severity: P3, status: open, title: "tests/unit/xy-wiring.test.mjs carries a no-op model.key('Home') line (K201)" }
+  - { id: R8, severity: P3, status: open, title: "Tune cents and the FM offset name a fifth differently (lowest note vs 'sends'); one rule for every pitch offset (K201)" }

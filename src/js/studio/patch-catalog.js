@@ -127,7 +127,8 @@ export function captureSources(model) {
 function applyReason(model, entry, target) {
   if (!entry.modes.includes('apply')) return null;
   if (entry.load) return entry.load(model, entry.patch, 'apply').reason || null;
-  const { onto } = patchTargets(model, entry.patch, { target });
+  const { onto, refused } = patchTargets(model, entry.patch, { target });
+  if (refused) return refused;
   if (Object.keys(onto).length) return null;
   if (entry.instrument === SEMI_MONO.id) {
     return 'This Studio has no Synth panel: open the Synth, or Insert the panel there first.';
