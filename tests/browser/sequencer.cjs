@@ -475,6 +475,17 @@ async function panelChecks(engine, browser) {
   await step('Start 500 Hz, End 1000 Hz', (s) => block(s, 'b2').p.start === 500
     && block(s, 'b2').p.end === 1000 && /500/.test(dom(s, 'b2').label)
     && /1(000| k)/.test(dom(s, 'b2').label));
+  // K017: a note name parses to core/music.js's frequency; a word is refused with a sentence
+  await page.fill('#osc-seq-start-hz', 'A4');
+  await page.press('#osc-seq-start-hz', 'Enter');
+  await step('K017: Start takes a note name, A4 is 440 Hz', (s) => block(s, 'b2').p.start === 440);
+  await page.fill('#osc-seq-start-hz', 'loud');
+  await page.press('#osc-seq-start-hz', 'Enter');
+  const saidK017 = await page.textContent('[data-osc="seq.message"]');
+  await step('K017: a word is refused with a sentence and Start keeps 440 Hz',
+    (s) => block(s, 'b2').p.start === 440 && /není nota ani frekvence/.test(saidK017 || ''));
+  await page.fill('#osc-seq-start-hz', '500');
+  await page.press('#osc-seq-start-hz', 'Enter');
   await page.fill('#osc-seq-duration', '750');
   await page.press('#osc-seq-duration', 'Enter');
   await step('Duration 750 ms', (s) => block(s, 'b2').ms === 750
