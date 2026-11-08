@@ -38,7 +38,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-03
-updated_at: 2026-11-08T19:35:06Z
+updated_at: 2026-11-08T21:49:49Z
+started_at: 2026-11-08T21:49:23Z
+started_event: sha256:23c4d8bfcf48f4f5123ffb29d1eff209827229a314cd8b2f48b891c3444ae96a
+verified_at: 2026-11-08T21:49:35Z
+verified_event: sha256:1a2e261062d08929eb45a0a655ea1e8233d4077b210db25e7caf2862515b1004
+completed_at: 2026-11-08T21:49:49Z
+completed_event: sha256:7f59e1f35dc6bcf5269a46641d156c2e028e1bc09406b00a78de4a37030695dc
 evidence:
   - covers: "verified"
     type: ci
