@@ -38,7 +38,7 @@ import { NODE_REGISTRY } from '../../studio/registry.js';
 import { CLIP_TARGET_TEXT, gainIsUsed, qIsUsed } from '../../studio/clip-targets.js';
 import { PORT_VISUALS, canConnect, validateEdgeProps } from '../../studio/ports.js';
 import { validateStudioModel } from '../../studio/validate.js';
-import { describeEdge, describeNode, describePortLabel } from '../../studio/a11y.js';
+import { article, describeEdge, describeNode, describePortLabel } from '../../studio/a11y.js';
 import { studioDivergence } from '../../studio/runtime.js';
 import { liveModel } from '../../studio/live-notes.js';
 
@@ -278,8 +278,8 @@ export function edgeEffectReason(model, edge, registry = NODE_REGISTRY) {
     const p = registry.param(b.type, 'type');
     const o = p && (p.options || []).find((x) => x[0] === type);
     const label = o ? o[1] : String(type);
-    return `Filter gain applies to peaking and the shelves only; ${/^[aeiou]/i.test(label)
-      ? 'an' : 'a'} ${label} filter ignores it.`;
+    return `Filter gain applies to peaking and the shelves only; ${article(label)} ${label} `
+      + 'filter ignores it.';
   }
   return null;
 }
