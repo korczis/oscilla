@@ -46,9 +46,9 @@
 //     (engine.analyser, the end of the master chain) rises above -60 dBFS while the check runs,
 //     and the result or the refusal is announced in the live regions; the RTA tab holds no
 //     "not available here" sentence for the granted microphone
-//   - measure-audio-session (C033): where navigator.audioSession exists (WebKit, required
-//     there) the session is play-and-record in READY after Check setup and playback once the
-//     engine is reset (the input closed)
+//   - measure-audio-session (C033): where navigator.audioSession exists (WebKit on macOS; not
+//     Playwright's WebKit for Linux, where the check says it is not applicable) the session is
+//     play-and-record in READY after Check setup and playback once the engine is reset
 //   - measure-refusal-announced (C033): WebKit with the microphone refused announces the true
 //     reason (permission denied), never "no input signal"; Firefox, whose prompt nobody
 //     answers here, announces that the check waits for the permission, and Stop is announced
@@ -1002,11 +1002,18 @@ async function runMicApp(browserName, { grant }) {
       `tap ${loud === null ? 'silent' : `${f(loud, 1)} dBFS`}, said ${JSON.stringify(end)}, `
         + `RTA alert text ${JSON.stringify(hidden.trim())}`);
       // The capture's audio session (C033, the exception in project.a-phone-sounds): read
-      // where the browser has navigator.audioSession (WebKit; required there), never elsewhere.
+      // where the browser has navigator.audioSession, never elsewhere. WebKit on macOS has it
+      // and must hold it; Playwright's WebKit for Linux (the CI runner) has no audioSession, so
+      // there the check says it is not applicable rather than failing on an absent API.
       const sessionType = () => page.evaluate(() => (navigator.audioSession
         ? navigator.audioSession.type : null));
+      const hasSession = await page.evaluate(() => !!navigator.audioSession);
       const held = await sessionType();
-      if (held !== null || browserName === 'webkit') {
+      if (browserName === 'webkit' && !hasSession) {
+        console.log(`  (${key} measure-audio-session: not applicable, this WebKit build has no `
+          + 'navigator.audioSession)');
+      }
+      if (hasSession) {
         const state = await page.evaluate(() => window.OSCILLA.measure.state);
         await page.evaluate(() => window.OSCILLA.measure.engine.reset()); // closes the input
         const back = await until(() => sessionType().then((t) => (t === 'playback' ? t : null)),
