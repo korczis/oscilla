@@ -1150,7 +1150,7 @@ function defineChecks() {
       return e && !e.hidden ? e.textContent : '';
     });
     // A slider drag is one history entry. The Inspector is a scroll panel: with the keys docked
-    // (the Studio opens armed, K178) Q can sit below its fold, so it is scrolled into view as a
+    // (the Studio opens armed, Q105) Q can sit below its fold, so it is scrolled into view as a
     // user would before the drag.
     const depth0 = await H.undoDepth(page);
     const slider = await page.evaluate(() => {
@@ -2703,9 +2703,10 @@ function defineChecks() {
     // K170 at 1536 x 1024 and 390 x 844 (touch), on a fresh page: the model's graph zoom is the
     // zoom the editor applies (--osc-sg-z on its world element) on every frame from the Studio's
     // first, with the keys not docked and docked (armed: the Studio shows the keys only then,
-    // M086; it opens armed, K178 acdda780 "armed everywhere", so the check toggles away from
-    // the state it finds and back); while the view is fitted, Arm, Disarm and a window resize
-    // fit it again (Frame All then changes nothing), and after a Zoom in neither changes it.
+    // M086; it opens armed, the owner's answer Q105 "armed everywhere", so the check toggles
+    // away from the state it finds and back); a template opened while the keys are docked stays
+    // fitted; while the view is fitted, Arm, Disarm and a window resize fit it again (Frame All
+    // then changes nothing), and after a Zoom in neither changes it.
     const WHAT = 'view-zoom';
     const results = {};
     for (const [w, hh, touch] of [[1536, 1024, false], [390, 844, true]]) {
@@ -2782,15 +2783,22 @@ function defineChecks() {
         const r = {};
         const load = await settled('model zoom == applied zoom after load', (v) => v.z !== 1);
         r.load = load;
-        // The state the Studio opens in decides which toggle docks the keys (K178: armed).
+        // The state the Studio opens in decides which toggle docks the keys (Q105: armed).
         const startDocked = load.armed;
+        // A template opened while the keys are docked: fitted, the two zooms agree throughout.
+        const dockedLoad = async () => {
+          await page.evaluate(() => window.OSCILLA.app.studioLoadTemplate('subtractive-synth'));
+          return settled('model zoom == applied zoom after a load with keys docked');
+        };
+        // Opened docked, the template loads before the first toggle (the keys are docked then);
+        // the first toggle is judged against the state right before it, on the same template.
+        if (startDocked) r.armedLoad = await dockedLoad();
+        const before = startDocked ? r.armedLoad : load;
         const armed = await toggleArm(startDocked ? 'disarmed (keys gone), fitted'
           : 'armed (keys docked), fitted');
         r.armed = armed;
         r.armedRefit = await frameAllKeeps('first toggle');
-        // A template opened while the keys are docked: fitted, the two zooms agree throughout.
-        await page.evaluate(() => window.OSCILLA.app.studioLoadTemplate('subtractive-synth'));
-        r.armedLoad = await settled('model zoom == applied zoom after a load with keys docked');
+        if (!startDocked) r.armedLoad = await dockedLoad();
         const disarmed = await toggleArm(startDocked ? 'armed again (keys docked), fitted'
           : 'disarmed, fitted');
         r.disarmed = disarmed;
@@ -2811,7 +2819,7 @@ function defineChecks() {
         const armed2 = await toggleArm('armed after Zoom in');
         const disarmed2 = await toggleArm('disarmed after Zoom in');
         r.user = { zoomed: zoomed.z, armed: armed2.z, disarmed: disarmed2.z };
-        const vpChanged = armed.h !== load.h;
+        const vpChanged = armed.h !== before.h;
         // Docked keys take height at 1536 x 1024, so the docked state fits the graph smaller.
         const smaller = (docked, open) => docked.z < open.z;
         results[key] = { ...r, startDocked, vpChanged, errors, ok: {
@@ -2820,7 +2828,7 @@ function defineChecks() {
           // The reference template's fit is limited by the viewport's height at 1536 x 1024,
           // so docked keys fit it smaller; on the phone the graph keeps its height.
           armedRefit: r.armedRefit && (touch || (vpChanged
-            && (startDocked ? smaller(load, armed) : smaller(armed, load)))),
+            && (startDocked ? smaller(before, armed) : smaller(armed, before)))),
           armedLoad: r.armedLoad.fitted,
           disarmedRefit: r.disarmedRefit && (touch
             || (startDocked ? smaller(disarmed, armed) : smaller(armed, disarmed))),
