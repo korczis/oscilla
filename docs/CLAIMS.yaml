@@ -257,9 +257,9 @@ claims:
 
   - id: about-names-current-release
     claim: The About view's evolution timeline names every published release line and marks the release line of the running build (package.json MAJOR.MINOR) as current, so a minor or major release cannot ship with a stale About page
-    source: .ai/repo/rules/project/about-names-current-release.v1.md
-    implementation: src/index.html
-    test: tests/unit/about.test.mjs
+    source: .ai/repo/rules/project/about-names-current-release.v2.md
+    implementation: src/data/about-stations.json
+    test: tests/unit/release-about-station.test.mjs
     status: guaranteed
     responsibility: product
     note: The current-line check reads package.json and runs everywhere, so npm test, npm run verify and npm run release-gate refuse a bump to a line the page does not name; the published-lines check reads the vX.Y.0 tags: it is skipped where tags are not fetched outside CI, and fails under GitHub Actions instead, whose unit job checks out full history and tags (tests/README.md).

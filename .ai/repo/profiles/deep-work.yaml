@@ -14,6 +14,7 @@ context:
   relevant_files: true
   failing_output: false
   recent_history_depth: 200
+  knowledge_max_items: 12
   architecture_notes: true
 verification:
   verify_command_required: true

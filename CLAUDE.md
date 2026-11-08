@@ -23,7 +23,10 @@ name): `project.single-file-deliverable`, `project.audio-engine-discipline`,
 no Pro source file committed; the legacy surfaces, osc-* class tokens, class names, CSS
 and inline styles in `tests/unit/ui-flowbite-pro-baseline.json` only shrink),
 `project.a-phone-sounds` (the instrument sounds on a phone; its proving suite stays in the
-gate with the browser's gesture rule on). Read them before changing `src/`.
+gate with the browser's gesture rule on), `project.czech-prose` (the app's visible prose,
+release notes, PR and issue bodies and published pages are Czech; the English the app still
+shows only falls, per file; code and commits stay English, Q104). Read them before changing
+`src/`.
 Releases are bound by `project.release-receipt-binds-gate`, `project.release-flow-complete`
 (the flow, in order) and `project.deploy-often`. Four more bind how the repository is worked on:
 `project.rules-name-their-enforcement`, `project.no-conflict-markers`,
@@ -65,6 +68,7 @@ npm run release:record -- --version X.Y.Z   # .ai/repo/releases/vX.Y.Z.yaml from
 npm run release:prepare -- --help  # also publish/analyze/record/stamp/verify-deploy, cadence;
                                    # bad flag: exit 2
 majordomus plan status             # milestone progress
+node scripts/pack-sources.mjs      # HEAD as an index + Markdown bundles + zip for an LLM project
 ```
 
 Ship through small PRs with `gh pr merge --auto --squash`; the required `gate` check
@@ -105,7 +109,7 @@ enumerates neither, because ranges written here go stale.
 - Build and release: `scripts/`. Tests: `tests/unit/`, `tests/browser/`, `tests/visual/`;
   `tests/README.md` says what each proves and which gate runs it.
 
-<!-- majordomus:begin 891aae631b23 f2d9a1017395dba3 -->
+<!-- majordomus:begin 5622ac57fb78 f2d9a1017395dba3 -->
 # CLAUDE.md
 
 Claude Code bootstrap. The repository's provider-neutral AI context lives under

@@ -429,8 +429,7 @@ function defineChecks() {
   def('open-every-workspace', async (ctx) => {
     // A reload or a shared address opens each workspace as a switch would: the heading shown,
     // the title, and what entering it loads (the Experiments list).
-    const ids = ['playground', 'measure', 'experiments', 'analyzer', 'filter', 'compare',
-      'synthesis', 'sequencer', 'presets', 'learn', 'studio', 'about'];
+    const ids = require('../../src/js/ui/shell.js').WORKSPACE_IDS; // the registry's, Synth too
     const rows = [];
     for (const ws of ids) {
       const page = await H.open(ctx, `${ctx.baseUrl}#m=${ws}`);
