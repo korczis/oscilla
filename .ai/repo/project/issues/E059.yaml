@@ -1,0 +1,31 @@
+id: E059
+milestone: M046
+serves:
+  - "engineering-integrity#studio-perf-budget-cpu-time"
+title: "The synth and XY pad audio checks wait on the audio clock and a measured settle time, not a fixed wall-clock budget, so CI's WebKit runner does not flake them"
+slug: synth-and-xy-pad-audio-checks-settle-on-the-audio-clock
+priority: p2
+profile: implementation
+objective: "Lands as test(browser). Two audio-level checks that came in with the keys+pad train (#444) failed on CI's WebKit runner on pull requests that touch neither: tests/browser/synth.cjs s-feel on #490 (the API download fallback) and tests/browser/xy-pad.cjs x-y-rest on #431 (docs only), 'X adds nothing to LPF Cutoff after its lift: the band within 1.5 dB of the reference with X cabled: not reached within 8000 ms (63 polls)'. Both judge a sound reached through a fixed wall-clock deadline, which a loaded WebKit runner overruns while the audio itself is right. After: each waits on the AudioContext clock (the pattern of #484's sequencer checks: the context time advanced by a stated span, then the level read) or on a deadline derived from the settle time measured on the same page (the pattern of E058's host-relative budgets), and still fails at once when the level is wrong."
+why: "oscilla-2b (2026-11-08) asked for one robustness follow-up after two unrelated pull requests went red on these checks; filed by oscilla-a3. Same principle as E058 (budgets relative to the host) and #484 (the sequencer's realtime checks on the audio clock)."
+scope:
+  - "tests/browser/synth.cjs"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/browser/lib/wait.cjs"
+  - "tests/browser/timing-baseline.json"
+  - "tests/README.md"
+depends_on:
+  - "E058"
+acceptance_criteria:
+  - "synth.cjs s-feel and xy-pad.cjs x-y-rest wait on the AudioContext clock or on a deadline derived from a settle time measured on the same page, through tests/browser/lib/wait.cjs with a named deadline; no new fixed sleep, frame count or assumed sample rate (project.bounded-test-timing), and the recorded timing debt does not rise."
+  - "Each check still fails within its deadline when the level is wrong: a mutation (the cable's depth or the release's level off by the check's own tolerance) fails both, in chromium, firefox and webkit."
+  - "Under load (the suite run with OSC_LOAD_MAX raised and a CPU-bound process beside it, or the CI WebKit leg run three times) neither check flakes, recorded in the pull request with the runs."
+  - "tests/README.md rows for synth.cjs and xy-pad.cjs say how the two checks wait."
+validation:
+  - "node tests/browser/synth.cjs --only s-feel"
+  - "node tests/browser/xy-pad.cjs --only x-y-rest"
+  - "node --test tests/unit/browser-timing.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-08
+updated_at: 2026-11-08
