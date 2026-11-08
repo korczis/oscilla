@@ -32,12 +32,21 @@
 # (surface-census.cjs 10/10 in chromium, firefox and webkit under file:// and http); the PR's CI
 # run is its gate.
 #
+# Round 2 at 9556147a (oscilla-21 merged main 3a3a5a58: #444 keys+pad, #490): the guarded edits are
+# byte for byte the ones judged at c081acd6 (the diff of the 5 guarded paths against each base is
+# identical); only main's context around them moved, so the digest is now 49194f80d541774076d6ed7e3c
+# 4433322eb84e0e30c6bdc248ea3c6520f8a44d. The ci.yml comment's 78 is right on main too: the studio
+# job's steps are bound 15, 13, 15 and 35 while main's own comment still says 20 = 63. The merge's one
+# conflict was unguarded (ui/kinds/xy-pad.js: main's trail and readout header plus the pad marker).
+# Evidence at 9556147a: npm test 5219 pass, 0 fail (GITHUB_BASE_REF=main GITHUB_EVENT_NAME=
+# pull_request); fail-first 1 of 1; 21's surface-census 10/10 in three engines over #444's XY view.
+#
 # Verdict: merge. F1 and F2 are follow-ups for G022-G030, not defects of this slice.
 schema: review-verdict/v1
 pr: 449
 verdict: merge
 reviewer: oscilla-a3 (claude-code 12f1e384)
-content: 3f4207c0c002da4c30e5cd1820c7ef0d04408a119622164463554165ab52ae24
+content: 49194f80d541774076d6ed7e3c4433322eb84e0e30c6bdc248ea3c6520f8a44d
 findings:
   - { id: F1, severity: P3, status: open, title: "the baseline refuses a stale entry but not a new one: a PR can add a duplicate and its baseline entry together; compare against the base branch's copy (as source-size-baseline's raises ledger does) in a G022-G030 slice" }
   - { id: F2, severity: P3, status: open, title: "the signatures are name-based (SWEEP_DEG, isBlack, cablePath, adsrEvents ...): a re-implementation under other names escapes the source census and is caught only by the rendered data-ui-family half; widen per family as its slice chooses the model" }
