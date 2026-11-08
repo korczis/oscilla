@@ -23,4 +23,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-08T08:59:02Z
+started_at: 2026-11-08T08:57:47Z
+started_event: sha256:58940ed8f2d6e0521e659c6fbd24a4767b606a514a660c6503ade0f610c056df
+verified_at: 2026-11-08T08:57:59Z
+verified_event: sha256:c6516b43ac8015081b2780e237282d141089cb12ec66f45169aa7efb40a2ac47
+completed_at: 2026-11-08T08:59:02Z
+completed_event: sha256:59cc5f664629c78db0d476fcb161d9622ad26f997559d6012657d2461ebc4092
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/release-ci-receipt.test.mjs (re-run by oscilla-a3 on main ee9bfd25, 2026-11-08, darwin)"
+    result: "Landed in train C #486 (merge ee9bfd25, member feat/r037-receipt-first-parent, built by oscilla-a3, judged by oscilla-21 in .ai/repo/reviews/486.yaml: merge). On main ee9bfd25: 32 pass, 0 fail: the first parent's ci.yml job missing from the merge's own ci.yml and run is a problem naming it (line 468); superset green accepted, red refused, an undeclared run job refused (line 490); #417 MERGED (the hold) and its flake-ledger case green. The criterion named prismatic-majordomus-98 as the verdict's writer; the guarded content was judged by oscilla-21, a non-builder, in 486.yaml, which holds the rule (project.review-verdict)."
+    artifact: ".ai/repo/reviews/486.yaml"
+    commit: ee9bfd25df855b0d586e0a39a6e5b073128e36fd
+    recorded_at: 2026-11-08T08:58:11Z
