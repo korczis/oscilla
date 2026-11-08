@@ -145,13 +145,15 @@ test('keysShown is the dock rule: keys drawn wherever the dock is docked, never 
   // Studio's armed-only rule kept); the computer keys stay armed in every state.
   const { createKeyboardUi } = await import('../../src/js/midi/keyboard-ui.js');
   const ui = createKeyboardUi({ win: {} });
-  const at = (workspace, tab, { owner = null, expanded = false, armed = true } = {}) => {
+  const at = (workspace, tab, { owner = null, expanded = false, armed = true,
+    decided = true } = {}) => {
     const c = Object.defineProperties({}, Object.getOwnPropertyDescriptors(ui));
     c.workspace = workspace;
     c.synth = { tab };
     c.kbdArmed = { ...c.kbdArmed, [workspace]: armed };
     c.kbdNoteOwner = owner;
     c.kbdDockExpanded = expanded;
+    c.kbdDockDecided = decided;
     return c;
   };
   assert.equal(at('synth', 'xy').kbdKeysShown, true,
@@ -168,6 +170,14 @@ test('keysShown is the dock rule: keys drawn wherever the dock is docked, never 
   assert.equal(at('studio', 'xy').kbdKeysShown, true);
   assert.equal(at('studio', 'xy', { armed: false }).kbdKeysShown, false,
     'the disarmed Studio, as before');
+  // K224 F1: before the dock has decided its first state (dock-yield.js has not applied one),
+  // no on-screen keys are drawn, so no frame shows them docked over a room that folds them.
+  assert.equal(at('studio', 'panel', { decided: false }).kbdKeysShown, false,
+    'the Studio keeps room: undecided, no keys drawn');
+  for (const ws of ['synth', 'playground']) {
+    assert.equal(at(ws, 'panel', { decided: false }).kbdKeysShown, true,
+      `${ws} keeps no room: its keys draw at once, as before`);
+  }
 });
 
 test("the pad's height follows the room: 100dvh less the chrome and the dock's band", () => {
@@ -698,6 +708,75 @@ test('#444: the dock settling judges the room in the next frame, once, never in 
     assert.deepEqual(updates.slice(before), ['viewport'], 'judged once, in the frame');
     seen[0]();
     assert.equal(frames.length, 1, 'a later settling asks for a new frame');
+  });
+
+// K224 F1: the dock's first decision is what lets the keys draw (kbdDockDecided), set by the
+// first state the dock applies.
+test('K224 F1: the first state the dock applies marks it decided', async () => {
+  const d = fakeDom({ vh: 1024 });
+  const cmp = { workspace: 'synth' };
+  const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp, dock: d.dock,
+    release: () => 0 });
+  assert.notEqual(cmp.kbdDockDecided, true, 'not before the first evaluation');
+  ctl.update('init');
+  await Promise.resolve();
+  assert.equal(cmp.kbdDockDecided, true);
+});
+
+// K224 K-2: with no requestAnimationFrame the dock settling still judges the room once, out of
+// the observer callback, through a zero timeout.
+test('K224 K-2: no requestAnimationFrame: the room is judged by a zero timeout, once', async () => {
+  const d = fakeDom({ vh: 1024 });
+  const seen = [];
+  const timers = [];
+  d.win.ResizeObserver = class { constructor(fn) { seen.push(fn); } observe() {} };
+  d.win.setTimeout = (fn, ms) => { timers.push([fn, ms]); return timers.length; };
+  const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp: { workspace: 'synth' },
+    dock: d.dock, release: () => 0 });
+  const updates = [];
+  const update = ctl.update.bind(ctl);
+  ctl.update = (why) => { updates.push(why); return update(why); };
+  seen[0]();
+  seen[0]();
+  assert.equal(updates.length, 0, 'not inside the callback');
+  assert.deepEqual(timers.map(([, ms]) => ms), [0], 'one zero timeout');
+  timers.shift()[0]();
+  assert.deepEqual(updates, ['viewport']);
+});
+
+// K224 F2: a width change while folded judges the room from the band the keys take docked at
+// the new width, measured by showing the folded children within one synchronous read (no frame
+// paints them), not from the band last measured docked.
+test('K224 F2: folded, a width change re-measures the docked band without showing the keys',
+  async () => {
+    // 1280 x 940: the docked keys take 295 px (two rows), 940 - 295 < 298 + 360: folded. At 1600
+    // wide the same keys take 240 px (one row less), 940 - 240 >= 658: they fit, so they unfold;
+    // judged from the stale 295 px they would stay folded.
+    const d = fakeDom({ vh: 940 });
+    const band = () => (d.win.innerWidth >= 1600 ? 240 : 295);
+    const keys = d.dock.children[0];
+    let shownTops = 0; // reads of the docked top while the keys were shown by the measurement
+    d.dock.getBoundingClientRect = () => {
+      if (keys.hidden) return { top: 940 - 61 };
+      if (d.dock.getAttribute('data-dock-state') === 'collapsed') shownTops += 1;
+      return { top: 940 - band() };
+    };
+    d.win.innerWidth = 1280;
+    const bar = { getBoundingClientRect: () => ({ top: 212, bottom: 298, width: 1000 }) };
+    d.doc.querySelector = (sel) => (sel === '[data-osc="studio.bar"]' ? bar : null);
+    const cmp = { workspace: 'studio' };
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp, dock: d.dock,
+      release: () => 0 });
+    ctl.update('init');
+    await Promise.resolve();
+    assert.equal(ctl.state, 'collapsed', '1280 x 940: the keys would take the editor');
+    assert.equal(keys.hidden, true);
+    d.win.innerWidth = 1600;
+    for (const f of d.listeners.resize || []) f();
+    await Promise.resolve();
+    assert.equal(shownTops, 1, 'measured once with the keys shown inside one synchronous read');
+    assert.equal(ctl.state, 'docked', 'judged from the band re-measured at the new width');
+    assert.equal(keys.hidden, false, 'unfolded where they now fit');
   });
 
 // #444 CI (webkit, 1024x768 Studio squashed by 11 px): the room was judged only when the

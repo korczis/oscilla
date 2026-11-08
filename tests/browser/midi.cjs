@@ -1134,8 +1134,11 @@ async function keyboardEverywhere(browser, b, origin, url) {
     await go('studio');
     // Where the Studio's room folds the docked keys (#444 keepsRoom) the user unfolds them by
     // the handle first, as the check below needs the armed keys shown.
+    // K224 K-3: only a folded dock is unfolded; a docked one is left as it is.
     const handle = page.locator('[data-osc="keyboard.handle"]');
-    if (await handle.isVisible()) await handle.click();
+    const folded = await page.evaluate(() => document.querySelector('[data-osc="keyboard"]')
+      ?.getAttribute('data-dock-state') === 'collapsed');
+    if (folded && await handle.isVisible()) await handle.click();
     // Disarmed in the Studio, the dock is one row and the keys hide, so the graph keeps its
     // height (the owner's 'a third of the height'; demo-song's node selection in Train 4).
     // The handle's row counts on top of the one row where the Studio's room folds the keys
