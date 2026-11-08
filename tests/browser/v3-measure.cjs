@@ -47,7 +47,7 @@
 //     and the result or the refusal is announced in the live regions; the RTA tab holds no
 //     "not available here" sentence for the granted microphone
 //   - measure-audio-session (C033): where navigator.audioSession exists (WebKit on macOS; not
-//     Playwright's WebKit for Linux, where the check says it is not applicable) the session is
+//     Playwright's WebKit for Linux, where it is a declared skip) the session is
 //     play-and-record in READY after Check setup and playback once the engine is reset
 //   - measure-refusal-announced (C033): WebKit with the microphone refused announces the true
 //     reason (permission denied), never "no input signal"; Firefox, whose prompt nobody
@@ -1004,14 +1004,14 @@ async function runMicApp(browserName, { grant }) {
       // The capture's audio session (C033, the exception in project.a-phone-sounds): read
       // where the browser has navigator.audioSession, never elsewhere. WebKit on macOS has it
       // and must hold it; Playwright's WebKit for Linux (the CI runner) has no audioSession, so
-      // there the check says it is not applicable rather than failing on an absent API.
+      // there the check is a declared skip (tests/README.md) rather than a fail on an absent API.
       const sessionType = () => page.evaluate(() => (navigator.audioSession
         ? navigator.audioSession.type : null));
       const hasSession = await page.evaluate(() => !!navigator.audioSession);
       const held = await sessionType();
       if (browserName === 'webkit' && !hasSession) {
-        console.log(`  (${key} measure-audio-session: not applicable, this WebKit build has no `
-          + 'navigator.audioSession)');
+        RUN.skip(key, 'measure-audio-session', 'this WebKit build has no navigator.audioSession '
+          + "(Playwright's WebKit for Linux); C033 is held on macOS WebKit");
       }
       if (hasSession) {
         const state = await page.evaluate(() => window.OSCILLA.measure.state);
