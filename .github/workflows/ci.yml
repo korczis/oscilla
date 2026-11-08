@@ -488,11 +488,24 @@ jobs:
           fetch-depth: 0
       - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
         timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
-          curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+          # The public download URL first; where it fails (the pinned release's returned 504 for hours on
+          # 2026-11-08 while the API served the same asset), the same asset of the same tag and
+          # repository through the API, three bounded attempts. Either way the digest decides.
+          if ! curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
             -o "$RUNNER_TEMP/$a" \
-            "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"
+            "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"; then
+            echo "::warning::the release download URL failed; fetching $a through the GitHub API"
+            for i in 1 2 3; do
+              timeout 60 gh release download "v${MJ_VERSION}" -R korczis/prismatic-majordomus \
+                -p "$a" -D "$RUNNER_TEMP" --clobber && break
+              [ "$i" = 3 ] && exit 1
+              sleep 5
+            done
+          fi
           echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/mj" && tar -xzf "$RUNNER_TEMP/$a" -C "$RUNNER_TEMP/mj"
           echo "$RUNNER_TEMP/mj/majordomus-v${MJ_VERSION}-${MJ_TARGET}/bin" >> "$GITHUB_PATH"

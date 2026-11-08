@@ -30,7 +30,7 @@
 // re-places the surface only where the dock now covers it (dockCovers), and nothing is ever
 // placed from a surface with no box (a hidden face, a closed tab: an empty rect).
 
-import { dockRoom, dockState, dockYields, roomFolds, routeOf } from './routes.js';
+import { KEY_ROUTES, dockRoom, dockState, dockYields, roomFolds, routeOf } from './routes.js';
 
 export const NOTES_EVENT = 'osc:notes';
 /** The handle's key (bound in ui/keys/clients.js through the one key registry). */
@@ -380,8 +380,11 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     if (dock.getAttribute('data-dock-state') !== 'collapsed') ctl.update('viewport');
   };
   if (typeof win.ResizeObserver === 'function') {
-    new win.ResizeObserver(() => {
-      replace();
+    // The toolbars the routes keep room under are observed too (#444 CI, WebKit): a workspace
+    // switch can judge the room before its toolbar is laid out, read no room and dock; the
+    // toolbar's first layout (and any later resize) then judges it again.
+    const ro = new win.ResizeObserver((entries) => {
+      if (!entries || entries.some((e) => e.target === dock)) replace();
       if (roomFrame) return;
       // K224 K-2: where there is no animation frame, a zero timeout still leaves the callback
       // (and only where neither exists is there nothing to defer to).
@@ -390,7 +393,14 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
       } else if (typeof win.setTimeout === 'function') {
         roomFrame = win.setTimeout(judgeRoom, 0);
       }
-    }).observe(dock);
+    });
+    ro.observe(dock);
+    const bars = new Set(Object.values(KEY_ROUTES).map((r) => r.keepsRoom && r.keepsRoom.toolbar)
+      .filter(Boolean));
+    for (const sel of bars) {
+      const bar = typeof doc.querySelector === 'function' ? doc.querySelector(sel) : null;
+      if (bar) ro.observe(bar);
+    }
   }
   if (typeof cmp.$watch === 'function') {
     cmp.$watch('workspace', () => ctl.update('workspace'));
