@@ -351,11 +351,20 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   // The dock's own size settles after a state change (the keys' canvas is laid out after the
   // component draws it, later in WebKit): where it then covers the pad, the pad is placed
   // against the dock as it now stands.
-  // Its docked size settles late too, so the room is judged again once the keys are drawn.
+  // Its docked size settles late too, so the room is judged again once the keys are drawn: in
+  // the next animation frame, once per frame, never inside the observer's callback, where a fold
+  // that resizes the dock it observes is a ResizeObserver loop (WebKit reports it as a page
+  // error, #444's v31-studio-links run).
+  let roomFrame = 0;
+  const judgeRoom = () => {
+    roomFrame = 0;
+    if (dock.getAttribute('data-dock-state') !== 'collapsed') ctl.update('viewport');
+  };
   if (typeof win.ResizeObserver === 'function') {
     new win.ResizeObserver(() => {
       replace();
-      if (dock.getAttribute('data-dock-state') !== 'collapsed') ctl.update('viewport');
+      if (roomFrame || typeof win.requestAnimationFrame !== 'function') return;
+      roomFrame = win.requestAnimationFrame(judgeRoom);
     }).observe(dock);
   }
   if (typeof cmp.$watch === 'function') {
