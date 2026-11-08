@@ -157,18 +157,21 @@ What it cannot see:
   two together: whether they still work together is what the suites of the same run are
   for, not this rule.
 - A pull request whose last green run is older than `main`. Protection on `main` requires
-  the `gate` check and, by the owner's decision of 2026-10-30, no longer an up-to-date branch
-  (`contexts: [gate]`, `strict: false`; read it with
-  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`). A run
-  judges GitHub's merge of the head into `main` as `main` stood when the run started, with
-  the guarded list and program `origin/main` held then. The pull request merges on that run
-  however old it is, so what lands on `main` after it does not judge it: a path added to
+  the `gate` check and an up-to-date branch (`contexts: [gate]`, `strict: true`; it was
+  relaxed on 2026-10-30 and is strict again; read it with
+  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`), so a
+  pull request merges only on a run of a head that contains `main` as it stands. While the
+  relaxation held, a run judged GitHub's merge of the head into `main` as `main` stood when
+  the run started, with the guarded list and program `origin/main` held then, and the pull
+  request merged on that run however old it was, so what landed on `main` after it did not
+  judge it: a path added to
   `GUARDED`, a change to this rule or its program, and a guarded file that `main` changed
   under the reviewed one (the reviewer never saw the two together, and no suite ran them
   together either). Nothing judges the pull request later: this job runs only for a pull
-  request, `ci.yml` does not run on a push to `main`, and a later pull request's run judges
-  only the guarded paths that pull request changes. Merging `main` into the branch starts a
-  run that does; nothing requires it.
+  request (and, since ADR 0083, for its merge-queue entry on `merge_group`, once the owner's
+  ruleset requires the queue), `ci.yml` does not run on a push to `main`, and a later pull
+  request's run judges only the guarded paths that pull request changes. Merging `main` into
+  the branch started a run that did, and while the relaxation held nothing required it.
 - A merge that bypasses branch protection. An administrator's merge past protection is the
   owner's and is not checked here; the protection setting itself is the owner's too, and
   this paragraph is re-read against it when it changes.

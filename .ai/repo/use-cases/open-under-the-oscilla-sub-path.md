@@ -63,4 +63,5 @@ then:
 
 Every browser check runs twice, from file:// and from a local `/oscilla/` sub-path, and
 both pass. Whether the public page carries the expected version and commit is a separate
-question that no canonical object answers yet (peer issues R003 and R005).
+question, answered by `npm run release:verify-deploy` and the release records
+(`.ai/repo/releases/v*.yaml`; R003 and R005).
