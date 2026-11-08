@@ -284,6 +284,7 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     if (cmp) {
       cmp.kbdNoteOwner = info.owner || null;
       cmp.kbdDockExpanded = !!info.expanded;
+      cmp.kbdDockDecided = true; // K224 F1: the keys may draw once the dock has decided
     }
     // As the dock stands now and once the component has drawn what the state shows (the keys
     // come back through kbdKeysShown, an Alpine effect after this call): the band the dock
@@ -309,11 +310,29 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   // the toolbar the route keeps and whether the workspace is a stacked page. null where the
   // route keeps no room, its toolbar is not shown or the band has not been measured docked.
   let dockedBand = 0;
+  let bandWidth = 0; // the viewport width the band was measured at
   const measureBand = () => {
-    if (dock.getAttribute('data-dock-state') === 'collapsed') return;
     if (win.getComputedStyle(dock).position !== 'fixed') return;
+    const collapsed = dock.getAttribute('data-dock-state') === 'collapsed';
+    // K224 F2: folded, the band is kept until the width changes (its rows may wrap differently).
+    if (collapsed && (!dockedBand || win.innerWidth === bandWidth)) return;
+    // The band as the keys would take it docked: folded children shown (F2), and before the
+    // dock's first decision the keys' box too, which the keyboard draws only once decided (F1);
+    // shown and hidden again within this one synchronous read, so no frame paints them.
+    const shown = collapsed ? [...folded] : [];
+    for (const el of shown) el.hidden = false;
+    const canvas = cmp && cmp.kbdDockDecided !== true && typeof dock.querySelector === 'function'
+      ? dock.querySelector('[data-osc="keyboard.keys"]') : null;
+    const keysBox = canvas && canvas.parentElement && canvas.parentElement.style
+      && canvas.parentElement.style.display === 'none' ? canvas.parentElement : null;
+    if (keysBox) keysBox.style.display = '';
     const top = dock.getBoundingClientRect().top;
-    if (top > 0) dockedBand = Math.ceil(win.innerHeight - top);
+    if (keysBox) keysBox.style.display = 'none';
+    for (const el of shown) el.hidden = true;
+    if (top > 0) {
+      dockedBand = Math.ceil(win.innerHeight - top);
+      bandWidth = win.innerWidth;
+    }
   };
   const measureRoom = (workspace) => {
     const keep = routeOf(workspace).keepsRoom;
@@ -363,8 +382,14 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   if (typeof win.ResizeObserver === 'function') {
     new win.ResizeObserver(() => {
       replace();
-      if (roomFrame || typeof win.requestAnimationFrame !== 'function') return;
-      roomFrame = win.requestAnimationFrame(judgeRoom);
+      if (roomFrame) return;
+      // K224 K-2: where there is no animation frame, a zero timeout still leaves the callback
+      // (and only where neither exists is there nothing to defer to).
+      if (typeof win.requestAnimationFrame === 'function') {
+        roomFrame = win.requestAnimationFrame(judgeRoom);
+      } else if (typeof win.setTimeout === 'function') {
+        roomFrame = win.setTimeout(judgeRoom, 0);
+      }
     }).observe(dock);
   }
   if (typeof cmp.$watch === 'function') {

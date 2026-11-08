@@ -132,6 +132,9 @@ export function createKeyboardUi({ win = window } = {}) {
     // sets both on a state change): what kbdKeysShown reads through routes.js keysShown.
     kbdNoteOwner: null,
     kbdDockExpanded: false,
+    // K224 F1: false until the dock has applied its first state (dock-yield.js), so no frame
+    // draws the keys docked over a room the dock then folds (read where the route keepsRoom).
+    kbdDockDecided: false,
 
     /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
     get kbdView() {
@@ -152,8 +155,13 @@ export function createKeyboardUi({ win = window } = {}) {
      *  rule, K171): folded where a pad owns the notes, they go with it; in the Studio only
      *  while armed, so the disarmed dock is one row and the graph keeps the height. */
     get kbdKeysShown() {
-      return keysShown({ route: routeOf(this.kbdView), owner: this.kbdNoteOwner,
-        userExpanded: this.kbdDockExpanded }) && (this.kbdView !== 'studio' || this.kbdArmedHere);
+      const route = routeOf(this.kbdView);
+      // K224 F1: where the room can fold the dock (keepsRoom, the Studio), the keys draw only
+      // once the dock has decided; elsewhere at once, as before (a later first draw there
+      // resized the dock inside a ResizeObserver delivery in WebKit's xy-pad run).
+      return (!route.keepsRoom || this.kbdDockDecided === true)
+        && keysShown({ route, owner: this.kbdNoteOwner, userExpanded: this.kbdDockExpanded })
+        && (this.kbdView !== 'studio' || this.kbdArmedHere);
     },
     get kbdArmedHere() {
       const v = this.kbdView;
