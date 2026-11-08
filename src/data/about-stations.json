@@ -203,6 +203,20 @@
       "summary": "Nové texty aplikace jsou česky a anglických vět, které ještě ukazuje, po souborech jen ubývá: hlídá to pravidlo a test",
       "commit": "4ff09c1",
       "datetime": "2026-11-07T16:10:32+01:00"
+    },
+    {
+      "release": "3.26",
+      "title": "Noty a tempo",
+      "summary": "Pole frekvence v sekvenceru berou název noty a číslo MIDI, tempo mimo 20 až 300 BPM se odmítne s důvodem a ovladač tempa ukazuje načtenou hodnotu",
+      "commit": "37a64b2",
+      "datetime": "2026-11-08T01:54:54+01:00"
+    },
+    {
+      "release": "3.27",
+      "title": "Klávesy a pad",
+      "summary": "Klávesy hrají hned v každé pracovní ploše a ve Studiu se dok sbalí, kde by zabral editor; XY pad zní při prvním dotyku a jeho osa Y řídí filtr; druhá úprava obálky za běhu zachová tu první a nota se vždy uvolní na nástroji, který ji převzal",
+      "commit": "1f0263d",
+      "datetime": "2026-11-08T14:39:13+01:00"
     }
   ]
 }

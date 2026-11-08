@@ -34,6 +34,12 @@ many people; silence there is the whole product failing.
   `tests/browser/surface-census.cjs` no-audio holds that).
 - Where `navigator.audioSession` exists, its type is set to `playback`; without the API
   nothing is set, and a refusal keeps the browser's default without failing the page.
+- One exception, a microphone capture (C033): WebKit refuses getUserMedia under `playback`,
+  so while a capture io holds an input open (a run, and READY after Check setup, whose
+  checked input stays open) the session is `play-and-record`, which plays as `playback` does.
+  `src/js/measurement/audio-session.js` is the one place it is set: only from `playback`, and
+  the last open input to close puts `playback` back exactly once (never over a type someone
+  else set since, never throwing when the browser refuses), on every path that closes it.
 - `tests/browser/touch-audio.cjs` stays a GATE suite in `test:browser`, launches Chromium with
   `--autoplay-policy=user-gesture-required` (never the no-gesture policy) and keeps its checks
   `audio-session-playback` and `tap-unlocks-audio`.
@@ -54,6 +60,15 @@ fails `npm test`.
 - `tests/browser/touch-audio.cjs`, in `npm run test:browser` (CI's browser gate, three
   browsers): `audio-session-playback` fails on a page without the fix; `tap-unlocks-audio`
   guards the outcome.
+- The capture exception: `tests/unit/measure-audio-session-paths.test.mjs`, in `npm test`,
+  holds `play-and-record` while the input is open and `playback` back exactly once on every
+  path that closes it (the run's end, abort, context closed, suspended or interrupted,
+  pagehide, a hidden document, dispose, the watchdog, the permission prompt aborted, the track
+  ending, a failure after getUserMedia, a refused restore, two ios sharing the session);
+  `tests/unit/measure-stimulus-emits.test.mjs` the switch before getUserMedia; and
+  `tests/browser/v3-measure.cjs` (`measure-check-sounds`, in `npm run test:measure`) reads
+  `navigator.audioSession.type` in WebKit, the browser that has it: `play-and-record` in
+  READY after Check setup, `playback` after the check is reset.
 
 Not machine-checked: a real iPhone's ringer switch and a real touch screen. The suites stand
 in for both; the first key tap of a session is a known limit until the engine replays a note

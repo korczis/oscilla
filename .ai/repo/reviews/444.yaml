@@ -1,0 +1,91 @@
+# Review verdict for pull request #444, the keys+pad train (branch int/keys-pad-train): K183 the
+# pad sounds (#428), K171 the dock yields (#425), the XY pad view (#426), on K178 and K184, with
+# coherence train B's four members, the merges of main and the rebuilds. Re-judged at 1dcc89ae on
+# base origin/main ee9bfd25 (the merge base), 2026-11-08, in the reviewer's own detached worktree,
+# over the previous verdict 80127ae8 (at 1a97186f on 54423b1b, content 4f989491, 38 paths), whose
+# reasoning for everything up to 1a97186f stands and is not repeated here (git show 80127ae8).
+# Reviewer: seat 7b (session prismatic-majordomus-7b, claude-code f9c3d552). It built, merged and
+# edited none of the commits judged here (the train's builders 2b and a3).
+#
+# Digest. This head's scripts/review-verdict.mjs, fail-first.mjs and yaml-subset.mjs equal
+# origin/main's (git diff empty), run as --content --list --repo <worktree> --head HEAD
+# --base-branch origin/main: the content below, over the same 38 guarded paths. At 552810d4 (the
+# last commit before the merge of main) with --base 5d3ac24d (its merge base) the content is still
+# 4f989491, the previous verdict's: no guarded path moved between 1a97186f and 552810d4 (the Q105
+# test and visual re-accepts, the declared skips, a3's dock fold 52ded518 and 552810d4 change only
+# unguarded files). 19eec4b1 and 1dcc89ae change tests/browser/midi.cjs alone.
+#
+# 1. The merge of main ee9bfd25 (train C, #486), 4c06c173, read with --remerge-diff. The guarded
+# delta 552810d4..4c06c173 is three files, each main's own hunk: src/js/studio/patches.js (K172's
+# article) and src/js/synth/ui.js (synthDebug().sinkHeld) with main's patch-ids; src/js/synth/
+# studio-sink.js (K175/S18: heldNotes returns [{ note, node }]) with the identical hunk, its
+# patch-id differing only by a context line (the train's forcedOff import). heldNotes' only callers
+# are ui.js's sinkHeld and midi.cjs (which reads .length and the documented shape); transport.js's
+# heldNotes is another object. Conflicts: dist/index.html (rebuilt; build:check up to date) and two
+# rows of tests/README.md (midi.cjs, v31-studio-runtime.cjs), each keeping every span both sides
+# added (checked word by word against the merge base).
+#
+# 2. K-1 (P2, found here, closed): 52ded518's fold hid the keys' readout in the Studio at the gate's
+# viewport, and tests/browser/midi.cjs midi-run clicked it without force (midi.cjs:1339): chromium
+# 182/182 at 41217e84, 2 FAIL at 52ded518, 552810d4 and 4c06c173 (file and http). Closed by
+# 19eec4b1 (focusOffEditors: a forced click on the readout where it shows, else the focus leaves the
+# editors; the Studio dock step unfolds by the handle) and 1dcc89ae (the disarmed dock's bound is
+# ONE_ROW_PX plus the handle's measured row where it shows, said in the check's comment). The
+# check's assertions are unchanged and still judge armed, held C4 and the readout.
+#
+# Whole head, measured by the reviewer at 4c06c173 (npm ci) and 1dcc89ae: GITHUB_BASE_REF=main
+# npm test 5207 tests, 5206 pass, 0 fail, 1 skipped; npm run build:check up to date (3 430 719 B,
+# v3.26.1); node scripts/czech-prose.mjs 3226 in 262 files = the baseline; at 1dcc89ae
+# tests/browser/midi.cjs --browsers chromium,firefox,webkit ALL PASS (509 checks; skips only the
+# declared Chromium-only grant and WebKit's absent MIDIAccess). Not run by the reviewer: synth.cjs,
+# xy-pad.cjs and the visual gate at this head (CI's gate is the receipt).
+#
+# Verdict: merge. No P0, P1 or P2 open. Open P3s ride as follow-ups: RK-3, NF7, TR-2, TR-3, TR-4,
+# TR-5 (unchanged), K-2 and K-3 (new).
+schema: review-verdict/v1
+pr: 444
+verdict: merge
+reviewer: prismatic-majordomus-7b (claude-code f9c3d552; re-judged at 1dcc89ae over 80127ae8; built none of the commits since 1a97186f)
+content: ee91644800221b45cc690eaafec07bd0ded8e27345bf0dc7df8078fdc7fc1b8c
+findings:
+  - { id: K-1, severity: P2, status: closed, title: "52ded518's fold hid the Studio keys' readout at the gate viewport and midi.cjs midi-run clicked it without force (2 FAIL in chromium file and http from 52ded518 on, 182/182 at 41217e84); closed by 19eec4b1 (focusOffEditors) and 1dcc89ae (the bound counts the handle's row): ALL PASS 509 in three engines at 1dcc89ae" }
+  - { id: K-2, severity: P3, status: open, title: "dock-yield.js (552810d4): where requestAnimationFrame is missing the room re-judgement after a dock resize is skipped instead of deferred (e.g. setTimeout 0); no browser lacks it; to a3's K224 follow-up" }
+  - { id: K-3, severity: P3, status: open, title: "midi.cjs keyboardEverywhere unfolds the Studio keys by clicking the handle whenever it is visible; an expanded dock whose handle shows would be folded by that click instead; click only where data-dock-state is collapsed" }
+  - { id: TR-1, severity: P2, status: closed, title: "K183's member verdict (p2, merge at 780ab5c0, digest 479d74b7) was never committed: no .ai/repo/reviews/428.yaml on any ref, so the checker reads #428 as a member that changed no guarded path; closed by the members: line for #428 below (p2's judgement, its digest reproduced with --base 6d5efa89) and the PR body's members table" }
+  - { id: TR-2, severity: P3, status: open, title: "src/js/synth/xy.js:61: keysSilence's doc names its `pad` cause as 'review S8: an XY preset, Patch the pad into the voice', main's wording; K183 removed the Patch button and no built-in XY preset cables the pad's Pitch or Gate (the S8 fixtures take the gates by xyCablesAction): name the user's cable from xy.gate into the EG gates" }
+  - { id: TR-3, severity: P3, status: open, title: "notes-sink.js legato's held-entry move (4cf35c4b: the note stays on the node its note-on played) is pinned by no case; the S3 cases cover a note-on and note-off across an undone route, not a legato; the reviewer's probe reads it right at the head (legato after the undone route goes to FM, heldNotes [] after the note-off; at ccf917a9 note 60 stayed held)" }
+  - { id: TR-4, severity: P3, status: open, title: "b8e130f6's Czech sentences splice main's English fragments still under the baseline: xy-wiring.js:244 target 'nothing' gives the pad's aria label and description 'Y řídí nothing' when no cable leaves Y; the readout keeps 'degree N of', 'gate open'; the stated line keeps ' (the XY lead's scale and target)'; limitBoundText keeps '0.95 × Nyquist at 44.1 kHz'; and SYNTH_TEXT.armed stays 'Synth armed: ...' beside the new 'Synth připraven: ...'. No meaning drift; translate them in xy-wiring.js's own pass (5 left)" }
+  - { id: TR-5, severity: P3, status: open, title: "tests/browser/synth.cjs:794 s-knobmemory's first wait ('MG is patched into LPF cutoff') reads any cable into lpf.frequency, which K183's default xy.y cable already satisfies, so it can pass before the MG cable lands; 434ade5b's later wait fails by name if the link lost it (no false pass), but match from 'mg.control' there too" }
+  - { id: NF1, severity: P3, status: closed, title: "computeBases recorded a fitted cable's factor without which bound won, so fitLimits blamed the range for a Nyquist hold (20 kHz, detune 0, Y bipolar 1200); fitted.by nyquist/range, worded by it (028d5119; test fails on b1c25f66's source)" }
+  - { id: NF2, severity: P3, status: closed, title: "the pad's idle Glide reason said KEYS, a literal; xyGlideIdle takes the panel's own module label, KEYBOARD (18da221d; test fails on 028d5119's face.js)" }
+  - { id: NF3, severity: P3, status: closed, title: "the adapter's rest() reset Y only, so X cabled into a control kept the touch's value after the lift (0.955); rest() glides X and Y to 0, Pitch alone (9e8879c9; unit fails with the hunk reversed, x-y-rest passes in three engines at ccf917a9)" }
+  - { id: NF4, severity: P3, status: closed, title: "K183's record names midi/notes.js and the xy-wiring test in its scope (31adb299, plan branch; K183.yaml at the head)" }
+  - { id: NF5, severity: P3, status: closed, title: "the reviewer's surviving mutants R-A, R-C, R-D, R-G, R-H, R-I, R-J each have a case (0e59d2a6); 11 of 12 killed at ccf917a9, R-K judged under RK-1 and RK-2" }
+  - { id: NF6, severity: P3, status: closed, title: "xy-wiring.js read target.room() on every pointermove; read once per model object, again on any change (4a16cef6; test fails on 0e59d2a6's source; 0.0452 -> 0.0032 ms per move)" }
+  - { id: NF7, severity: P3, status: open, title: "compiler.js:753 frequency-limited (cable form) blames Nyquist for a range-fitted cable: at 6f6673f5, 440 Hz, detune 1100, Y bipolar 1200 at 48 kHz still says 'the Studio keeps Oscillator 1's detuned frequency at or below 22.80 kHz' beside the correct performance-limited line; skip or word it by fitted.by (present on d5c8ba71 too; compiler.js has 138 B of its cap left)" }
+  - { id: RK-1, severity: P1, status: closed, title: "the range fit's shift raised a detune's static past the Nyquist room: 20 kHz, detune 800, Y bipolar 1200 played 26.39 kHz at 44.1 kHz (cap 20.95) and 28.73 at 48 kHz (cap 22.80); 900 bipolar 600: 21.94 / 25.99; closed by 06140d80's guard and kept by b6ca876d: 0 of 10 runtime and 0 of 40 compiler cases over the cap at 6f6673f5, the R-K test fails without the guard" }
+  - { id: RK-2, severity: P1, status: closed, title: "06140d80's ceiling was the pre-fit static clipped at 0 (detTop), so a bipolar cable on a static above ~600 cents lost it at every frequency: 440 Hz, detune 1100, Y bipolar 1200 at 48 kHz played 440..494 Hz (0..200 cents) where K183's fit played 784..880 (1000..1200); closed by b6ca876d (ceiling = top + max(0, room - the cables' final sweep); fitCables takes { top, room }) with acb350a5's five rows as a fail-first case: at 6f6673f5 0 of 40 compiler and 0 of 10 runtime cases over the cap, the rows restored (440 Hz: 784..880 Hz; 10 kHz, detune 800: 400..1200 cents), and the case fails on its first row with b6ca876d reverted" }
+  - { id: RK-3, severity: P3, status: open, title: "a positive constant the Nyquist clamp already cut is cut again by the range fit, which reads the lowered base and the unscaled sweep: 48 kHz, 20 kHz, detune 0, Y unipolar 1200 offset 600 keeps 151.2 of 226.8 cents (21.83 kHz under 22.80; 75ab88ec played 22.80), unchanged at 6f6673f5; conservative, never over the cap" }
+# af's lane (#425, #426), judged by 7b in af's absence at ccf917a9: af's R6, R7, R8 of #425 are
+# closed in the train (f31d8906, 067df74e: unit cases fail on the parents' source; x-dock-handle-hold
+# passes in chromium 'collapsed' and webkit 'docked'); R9 is deferred by d5c8ba71 (the failing
+# landscape check removed with its leg, to K201 or a follow-up) and stays open in 425.yaml; R1 (no
+# CI on the member head) closes with the train's gate; R5 is the PR body. #426's R1, R2 closed at
+# 915779d8; R3-R8 are K201's. Their own files at the head say verdict: merge, so the checker needs
+# no members: entry for them; the lines below record what 7b judged, at which heads. #428 has no
+# file of its own (TR-1): its line is p2's judgement, re-ruled by 7b on R-K and closed here.
+members:
+  - { pr: 425, verdict: merge, reason: "K171 at 1481c386 (PR) -> 2a3a3e6f (af's verdict, content 1e95a3e2, reproduced with --base a31ad98c) -> eac1314b merged at 6ac03fc6; R6-R8 closed in the train (f31d8906, 067df74e), R9 deferred (d5c8ba71); x-dock-yields 390x844 and 375x667, x-dock-desktop 1536x1024 and 1280x720, x-dock-handle-hold pass in chromium, firefox and webkit at ccf917a9 (7b's run); its hooks declared under main's G001 catalogue at 2ec7e6b0; R1 closes with CI on 6f6673f5" }
+  - { pr: 426, verdict: merge, reason: "pad view at 81459df9 (PR) -> 915779d8 (af's verdict, content 494c51f1, reproduced against origin/main) -> 9db42e42 merged at a771ff7f, oracle re-read on K183's keys path in b7e381e7; xy-pad-view, xy-wiring, xy-pad units and x-view, x-view-phone, x-view-reduced pass in three engines at ccf917a9; its xy-wiring.js and xy.js carry main's keysSilence beside the view since 4cf35c4b (read by 7b); R3-R8 to K201" }
+  - { pr: 428, verdict: merge, reason: "K183 at 674e7447 (PR) -> 780ab5c0 (p2's judgement merge, digest 479d74b7 over 30 paths with --base 6d5efa89, never committed as 428.yaml: TR-1) merged at 1e8763ed; its P3s NF1-NF6 closed at 028d5119..4a16cef6; R-K re-ruled by 7b: RK-1 closed by 06140d80, RK-2 closed by b6ca876d with acb350a5's fail-first rows, both confirmed at 6f6673f5 (0 of 40 and 0 of 10 over the cap, 440 Hz plays 784..880 Hz); xy-default-patch 29/29 in its file at the head" }
+# Coherence train B's members ride as branches without pull requests, so they cannot go under
+# members: (the checker requires a pull request number there). p2's lines, re-verified by 7b at
+# ccf917a9 and again at 6f6673f5 (each digest recomputes exactly with --base-branch origin/main at
+# the member head; guarded files at 6f6673f5 are the member's bytes except runtime.js, moved by the
+# split 73e8c728, ui/measure/session.js, the union of m1's and m4's disjoint hunks as at 75ab88ec,
+# and m4's ui/measure/input.js and run.js, auto-merged with main's later changes, the train's
+# delta on them being m4's own by patch-id):
+#   - { member: "fix/output-owner-reference-capture@1632296a", verdict: merge, content: 55e81ee35d7dae8d55f0d838089dfbad68ce995b49be19276a911fb60f8c7144, reviewer: "prismatic-majordomus-98", reason: "p2 review 04:58Z at 5b197b22; 1632296a adds P3-1/P3-2 in unguarded files (digest re-verified at ccf917a9 and 6f6673f5 by 7b); P3-3 -> C036, P3-4 follow-up issue" }
+#   - { member: "fix/studio-trace-next-note-stored@d288ad5f", verdict: merge, content: e4e4cd7bc61875dd5c39ca2c2d6dc395b376295beb7f2b6ba10db034acf100d0, reviewer: "oscilla-af", reason: "P1 stale dist and P2 dist conflict closed at train head 8e150490 (build:check up to date, member guarded files byte-identical); runtime.js at exactly its 58000 cap, unraised; split to 55 258 B by 73e8c728, judged by 7b (776/776 identical before and after)" }
+#   - { member: "fix/patches-explicit-target@fff6ec73", verdict: merge, content: a14d9a76cbe8dded5586ebf8f7ed7b60e559e9e5bc65f6356ba7b2efed822279, reviewer: "oscilla-af", reason: "P1 same-panel other module and P2 other-type target refused with named reasons (probe: both banks kept), P3 != null; open P3: (a) refusal wording for another panel instance, (b) no regression test for it, (c) unrelated selection disables one-node engine presets (intended, K186), (d) browser proof at the train head; K186 not done (waits on K187)" }
+#   - { member: "fix/c033-measure-emits-honestly@1dcc8c13", verdict: merge, content: e07d07dbf03297dfbbca47d63c1d4b7a57e21b02c03dfbc98c1ff0dc012e2900, reviewer: "prismatic-majordomus-98", reason: "p2 re-judge 06:2xZ: F1-F5, F7, F8 and cross-member R1 closed (stale-ref.cjs fixed on train 7dcef6ed in 3 engines); open P3: holds.delete untested (A6), dbOf null probe (E3), probe-side F5 untested (L2/L4), duplicate v3-measure header bullet; F6 deferred by decision; play-and-record during a pending prompt is a P3 follow-up (restore at cancel is safe via idempotent restore); tests-only 4122eeb0 after 1dcc8c13, same digest" }

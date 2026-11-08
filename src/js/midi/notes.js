@@ -25,9 +25,11 @@
 // the output (ownedBy, src/js/midi/ui.js MIDI_REFUSED).
 // The Labs stages that play() adds (filter, ADSR, additive) do not apply to notes.
 
+import { forcedOff } from '../audio/gate.js';
 import { clamp } from '../core/math.js';
 import { midiToFrequency } from '../core/music.js';
 import { WAVEFORMS } from '../core/constants.js';
+import { createHeldNotes, sameSink } from './held-notes.js';
 
 /**
  * The velocity law: amplitude (velocity / 127)^2, that is 40 log10(velocity / 127) dB. The
@@ -72,21 +74,27 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   refused = () => {}, route = () => null } = {}) {
   let refusing = null;
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
-  // Where each held key sounds, fixed at its note-on: the Synth sink, or ENGINE (the
-  // Playground's note voices). Its note-off goes there, whatever route() answers by then, so a
-  // key held across a workspace switch is released where it sounds and never left sounding.
-  const ENGINE = 'engine';
-  const via = new Map();
+  // Where each held key sounds, fixed at its note-on (src/js/midi/held-notes.js, K178): the
+  // routed sink, or ENGINE (the Playground's note voices). Its note-off goes there, whatever
+  // route() answers by then, so a key held across a workspace switch is released where it
+  // sounds and never left sounding.
+  const ENGINE = Object.freeze({ noteOff: (note, info) => (engine
+    ? engine.noteOff(info.key, { forced: forcedOff(info) }) : false) });
+  const held = createHeldNotes();
+  // The input a source belongs to: the keyboard's `kbd-<source>`, else a MIDI input's number.
+  const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
+    ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy' : 'midi');
 
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
     const key = keyOf(source, channel, note);
     const sink = route(); // the Synth panel plays the note instead (K065), one path for all
-    if (sink) {
-      via.set(key, sink);
-      return sink.noteOn(note, velocity);
-    }
-    via.set(key, ENGINE);
+    const to = sink || ENGINE;
+    // A re-press on the same player retriggers there (the engine fades the old note under the
+    // new one); on another player hold() first releases it where it sounded.
+    if (sameSink(held.sinkOf(key), to)) held.releaseKey(key, 're-press');
+    held.hold(key, { sink: to, note, velocity, input: inputOf(source) });
+    if (sink) return sink.noteOn(note, velocity);
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = ownedBy();
     if (by) {
@@ -95,6 +103,11 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       return { ok: false, reason: by };
     }
     refusing = null;
+    return startOnEngine(key, note, velocity);
+  }
+
+  /** The Playground voice of `key` at `note` (the engine's own held note). */
+  function startOnEngine(key, note, velocity) {
     const s = settings() || {};
     const result = engine.noteOn(key, {
       freq: midiToFrequency(note, s.a4 > 0 ? s.a4 : 440),
@@ -107,34 +120,42 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     return result;
   }
 
-  /** Release note `note` from `source` with its release time; false when it is not sounding. */
-  function noteOff(note, source = 0, channel = 0) {
-    const key = keyOf(source, channel, note);
-    const held = via.get(key);
-    via.delete(key);
-    const sink = held === undefined ? route() : held; // a key not held here: where it would be
-    if (sink && sink !== ENGINE) return sink.noteOff(note);
-    return engine ? engine.noteOff(key) : false;
+  /**
+   * Move a held note of `source` from `from` to `to` without a new gate (K183: the XY pad's
+   * finger crossing into another scale cell): the sink's legato(to, info) when it has one (a mono
+   * voice glides by its Keys node's glide), else its off and on; the Playground voice restarts at
+   * the new pitch. A `from` not held here is a plain press of `to`.
+   */
+  function legato(from, to, source = 0, channel = 0) {
+    const oldKey = keyOf(source, channel, from);
+    const newKey = keyOf(source, channel, to);
+    const was = held.held().find((h) => h.key === oldKey);
+    if (!was) return noteOn(to, 100, source, channel);
+    const { velocity } = was;
+    const sink = held.legato(oldKey, newKey, { note: to, velocity });
+    if (sink === ENGINE) {
+      if (engine) engine.noteOff(oldKey);
+      return engine ? startOnEngine(newKey, to, velocity) : { ok: false, reason: 'no-audio' };
+    }
+    if (typeof sink.legato === 'function') return sink.legato(to, { from, velocity, key: newKey });
+    sink.noteOff(from);
+    return sink.noteOn(to, velocity);
   }
 
-  /** Every sink a held key went to and the route's own, each told allOff once (a fresh sink
-   *  object per call is one sink by its allOff), then nothing held: a note held across a
-   *  workspace switch is released too (21's T1 on Train 6). Returns what they released. */
-  function sinksAllOff() {
-    const seen = new Set();
-    let n = 0;
-    for (const s of [route(), ...via.values()]) {
-      if (!s || s === ENGINE || typeof s.allOff !== 'function' || seen.has(s.allOff)) continue;
-      seen.add(s.allOff);
-      n += Number(s.allOff()) || 0;
-    }
-    via.clear();
-    return n;
+  /** Release note `note` from `source` with its release time; false when it is not sounding. */
+  /** `forced` (blur, hide, Escape): a stop never deferred by the minimum gate (K184). */
+  function noteOff(note, source = 0, channel = 0, { forced = false } = {}) {
+    const key = keyOf(source, channel, note);
+    // A key not held here: where it would sound now.
+    const sink = held.releaseKey(key) || route() || ENGINE;
+    return sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
+      : sink.noteOff(note, { key, forced });
   }
 
   return {
     noteOn,
     noteOff,
+    legato,
 
     /** A message from input `source` (any stable id of the input). Returns the event. */
     handle(data, source = 0) {
@@ -145,16 +166,32 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       } else if (e.kind === 'note-off') {
         noteOff(e.note, source, e.channel);
       } else if (e.kind === 'all-sound-off' || e.kind === 'all-notes-off') {
-        sinksAllOff();
+        const sink = route();
+        if (sink) sink.allOff();
         engine.notesOff(e.kind === 'all-sound-off');
+        // A key still held on another player (routed before a switch) is released there. A key
+        // on the route's own sink gets a second, redundant off here after its allOff (21's K2):
+        // harmless, an off for a note already released.
+        held.releaseAll('all-off');
       }
       return e;
     },
 
+    /**
+     * Every held key of one input released where it sounds (held-notes.js releaseAll with the
+     * input filter): 'xy' for the XY pad's 'kbd-xy' notes (K183), 'midi', 'key', ... -> count.
+     */
+    releaseInput(input, reason = 'all-off') {
+      return held.releaseAll(reason, { input });
+    },
+
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
     silence() {
-      const n = sinksAllOff();
-      return (engine ? engine.notesOff(true) : 0) + n;
+      const sink = route();
+      const n = sink ? sink.allOff() : 0;
+      const sounding = engine ? engine.notesOff(true) : 0;
+      held.releaseAll('silence');
+      return sounding + n;
     },
   };
 }

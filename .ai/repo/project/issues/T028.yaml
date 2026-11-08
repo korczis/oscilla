@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-30
-updated_at: 2026-10-30
+updated_at: 2026-11-08T08:58:49Z
+started_at: 2026-11-08T08:57:16Z
+started_event: sha256:0aef47f87bcc5317fd527200c139771dd9c873bef5028c9f1ebf98eee9b2b6be
+verified_at: 2026-11-08T08:57:29Z
+verified_event: sha256:11d19227afa7bb0b03abaebdd3b3f66f1403e5e4549eac40e1624c65c5114bb9
+completed_at: 2026-11-08T08:58:49Z
+completed_event: sha256:b96965b977d54e0ea382a9d8b389b95f431f88d099ced7bbf812a3e3938620c7
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/readout-labels-ir-tail.test.mjs (re-run by oscilla-a3 on main ee9bfd25, 2026-11-08, darwin)"
+    result: "Landed in train C #486 (merge ee9bfd25, member fix/t028-ir-stimulus-rate, built by oscilla-a3, judged by oscilla-21 in .ai/repo/reviews/486.yaml: merge). On main ee9bfd25: 13 pass, 0 fail: a 44.1 kHz recipe shown with a 48 kHz IR states the window at the IR's rate (T028, line 291); negatives (line 315): a live capture keeps its length, equal rates as before, no stimulus reads not available; fail-first held on #486; revertible on its own (one fix commit and one test commit); after T019 (irStimulusFrames on main)."
+    artifact: ".ai/repo/reviews/486.yaml"
+    commit: ee9bfd25df855b0d586e0a39a6e5b073128e36fd
+    recorded_at: 2026-11-08T08:57:41Z
