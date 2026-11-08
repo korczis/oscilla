@@ -104,6 +104,20 @@ Shipping
 15. A worker session reports a visual-reference change; it does not accept one. A reference
     is re-accepted on macOS and in the Linux CI container together, after review.
 
+16. Never act on another session's CI run: no rerun, cancel or re-trigger of a run on a pull
+    request you do not own, and no automatic rerun from an unattended watcher even on your own.
+    A rerun of a stale attempt shares the workflow's concurrency group (`ci-<ref>`) with the
+    builder's newer push and cancels it: on 2026-11-05 a watcher's `gh run rerun --failed` on
+    #386's old attempt killed 24 jobs of its fresh run. A watcher on a peer's pull request reads
+    `gh pr view` only; a rerun of your own is by hand, after `gh pr view --json headRefOid` shows
+    the run's head and the builder has said they are not pushing.
+17. A CI bound is raised to the measured run, never to a guess, and every copy follows: when every
+    check of a step passes and the step is cut at its `timeout-minutes`, read the cut job's log,
+    raise the step and its job to the measured span plus headroom, keep `main-checks.yml` in parity
+    with `ci.yml` (`tests/unit/main-checks.test.mjs` refuses drift), and name the run and the span
+    in the commit (2026-11-06, #443: webkit's Browser gate ran about 46 minutes against 45 after the
+    Pro shell; two numbers, and its mirror, were the whole fix).
+
 # Why advisory
 
 Every item is about what a session does between commits: which processes it signals, which
