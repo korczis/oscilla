@@ -5,7 +5,7 @@
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 22,
+      "done": 23,
       "required": 45,
       "phase": "now"
     },
@@ -19,7 +19,7 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 30,
+      "done": 31,
       "required": 51,
       "phase": "now"
     },
@@ -173,7 +173,7 @@
     {
       "id": "M073",
       "title": "Measurement truth in the interface",
-      "done": 8,
+      "done": 9,
       "required": 38,
       "phase": "now"
     },
@@ -250,7 +250,7 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 24,
+      "done": 25,
       "required": 59,
       "phase": "now"
     },
