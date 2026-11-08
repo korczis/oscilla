@@ -63,6 +63,9 @@
 //                               then the Synth workspace, then its Note Off: the note-off frees
 //                               the Playground note (zero live oscillators, zero engine notes)
 //                               instead of reaching the Synth and leaving it sounding
+//   keys-one-keyboard           K178: with the stub device, the Playground, the Synth and the
+//                               Studio take one octave, light and sound the same keys for QWERTY
+//                               and MIDI, and release them on Escape and on a workspace switch
 //   keyboard-everywhere         M086: the same A plays the Playground (a note voice), the Synth
 //                               panel and the Studio graph (its Keys node through the Studio
 //                               transport, no Playground voice), the keys docked in both; a key
@@ -122,6 +125,25 @@ const LOAD_MS = 90000;       // the page has reported ready and stated a MIDI st
 const SETTLE_MS = 30000;     // a request the stub or Chromium settles
 const FIREFOX_MS = 60000;    // Firefox rejects after 3.0-12.9 s (32 runs, ADR 0058)
 const STEP_MS = 15000;       // a state change the test drives through the stub
+// The disarmed dock's one row (the owner's 'a third of the height'; Train 4's demo-song check).
+const ONE_ROW_PX = 120;
+/**
+ * Take the focus out of the editors (an armed key pressed inside one is the editor's) by a click
+ * on the keys' readout, a gesture on no control; where the room folds the docked keys (the
+ * Studio, #444 keepsRoom) the readout is hidden, and the focus is put on the page itself.
+ */
+async function focusOffEditors(page) {
+  const readout = page.locator('[data-osc="keyboard.readout"]');
+  if (await readout.isVisible()) {
+    await readout.click({ force: true });
+    return;
+  }
+  await page.evaluate(() => {
+    if (document.activeElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+  });
+}
 const DARWIN = process.platform === 'darwin';
 // Off darwin (never measured) a Chromium request the platform leaves unanswered is recorded.
 const PENDING_RECORDED = !DARWIN;
@@ -933,6 +955,92 @@ async function seamSink(browser, b, origin, url) {
   }
 }
 
+// keys-one-keyboard (K178, the owner's question of 2026-11-04: why does the keyboard behave
+// differently in every workspace): with the stub MIDI device connected, the Playground, the Synth
+// and the Studio (the Synth panel's nodes, visited first) each take the same octave (Z/X set once, in the Playground), light
+// the same keys for QWERTY and MIDI, sound them, and release them the same way on Escape and on
+// a workspace switch, leaving nothing held and nothing lit.
+async function keysOneKeyboard(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keys-one-keyboard';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  const app = (f) => page.evaluate(f);
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w
+      && window.OSCILLA.app.kbdView === w, ws), { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+    if (!await app(() => window.OSCILLA.app.kbdArmedHere)) {
+      await page.locator('[data-osc="keyboard.arm"]').click();
+    }
+    await focusOffEditors(page);
+  };
+  const held = () => app(() => window.OSCILLA.app.kbdHeld);
+  const quiet = (what) => until(async () => ((await held()) === '' ? true : null),
+    { ms: STEP_MS, what }).then(() => true, () => false);
+  try {
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click();
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+    await go('playground');
+    // The keyboard ignores keys while any modal is open (keyboard-ui.js modalOpen): the Settings
+    // dialog's modal state may outlive its open attribute, so wait for what the keys wait for.
+    await until(() => app(() => !document.querySelector(
+      'dialog[open], [data-oscilla-modal][aria-modal="true"]')), { ms: STEP_MS,
+      what: `${leg}: no modal holds the keys` });
+    await page.keyboard.press('KeyX'); // one octave up, here only
+    const rows = [];
+    const order = ['playground', 'synth', 'studio'];
+    for (const [i, ws] of order.entries()) {
+      await go(ws);
+      const base = await app(() => window.OSCILLA.app.kbdBase);
+      await page.keyboard.down('KeyA');
+      const qwerty = await until(async () => (await held()) || null,
+        { ms: STEP_MS, what: `${leg}: A lights in ${ws}` }).catch(() => '');
+      const qSound = await heard(page, (x) => x.peak > 0.005, `${leg}: A sounds in ${ws}`);
+      await page.keyboard.up('KeyA');
+      const qOff = await quiet(`${leg}: A unlit in ${ws}`);
+      await msg([0x90, 64, 100]);
+      const midi = await until(async () => (await held()) || null,
+        { ms: STEP_MS, what: `${leg}: MIDI E4 lights in ${ws}` }).catch(() => '');
+      await msg([0x80, 64, 0]);
+      const mOff = await quiet(`${leg}: MIDI E4 unlit in ${ws}`);
+      await page.keyboard.down('KeyA');
+      await until(async () => (await held()) || null, { ms: STEP_MS,
+        what: `${leg}: A held in ${ws}` }).catch(() => '');
+      await page.keyboard.press('Escape');
+      const esc = await quiet(`${leg}: Escape releases A in ${ws}`);
+      await page.keyboard.up('KeyA');
+      await go(ws); // Escape may have disarmed the keys
+      await page.keyboard.down('KeyA');
+      await until(async () => (await held()) || null, { ms: STEP_MS,
+        what: `${leg}: A held again in ${ws}` }).catch(() => '');
+      const next = order[(i + 1) % order.length];
+      await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), next);
+      const sw = await quiet(`${leg}: leaving ${ws} releases A`);
+      await page.keyboard.up('KeyA');
+      const silent = await heard(page, (x) => x.peak < 0.001, `${leg}: silent after ${ws}`);
+      rows.push({ ws, base, qwerty, qSound: !qSound.timedOut, qOff, midi, mOff, esc, sw,
+        silent: !silent.timedOut });
+    }
+    const want = { base: 72, qwerty: 'C5', qSound: true, qOff: true, midi: 'E4 (MIDI)',
+      mOff: true, esc: true, sw: true, silent: true };
+    const bad = rows.filter((r) => Object.entries(want).some(([k, v]) => r[k] !== v));
+    check(leg, id, 'the Playground, the Synth and the Studio take the same octave, light and '
+      + 'sound the same keys for QWERTY and MIDI, and release them on Escape and on a switch',
+    bad.length === 0 && errors.length === 0, JSON.stringify({ bad, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
 // keyboard-everywhere (M086; the owner's report of 2026-11-03): the same computer key plays on
 // the Playground, the Synth and the Studio through the one keyboard component, and the Studio's
 // keys reach its graph (the Keys node, through the Studio transport), not the Playground voice.
@@ -947,7 +1055,7 @@ async function keyboardEverywhere(browser, b, origin, url) {
       && window.OSCILLA.app.kbdView === w, ws), { ms: STEP_MS, what: `${leg}: ${ws} opens` });
     const armed = await page.evaluate(() => window.OSCILLA.app.kbdArmedHere);
     if (!armed) await page.locator('[data-osc="keyboard.arm"]').click();
-    await page.locator('[data-osc="keyboard.readout"]').click({ force: true });
+    await focusOffEditors(page);
   };
   const press = async (ws, pred) => {
     await page.keyboard.down('KeyA');
@@ -1024,12 +1132,22 @@ async function keyboardEverywhere(browser, b, origin, url) {
     check(leg, id, 'after the Studio, the Playground\'s A sounds again (not refused)',
       !pg2.timedOut && pg2.held === 'C4', JSON.stringify(pg2));
     await go('studio');
+    // Where the Studio's room folds the docked keys (#444 keepsRoom) the user unfolds them by
+    // the handle first, as the check below needs the armed keys shown.
+    const handle = page.locator('[data-osc="keyboard.handle"]');
+    if (await handle.isVisible()) await handle.click();
     // Disarmed in the Studio, the dock is one row and the keys hide, so the graph keeps its
     // height (the owner's 'a third of the height'; demo-song's node selection in Train 4).
-    const dock = () => page.evaluate(() => ({
-      h: Math.round(document.getElementById('osc-keyboard').getBoundingClientRect().height),
-      keys: document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect().height,
-      armed: window.OSCILLA.app.kbdArmedHere }));
+    // The handle's row counts on top of the one row where the Studio's room folds the keys
+    // (#444): it stays once the user unfolded them, armed or not, so they can fold them again.
+    const dock = () => page.evaluate(() => {
+      const handle = document.querySelector('[data-osc="keyboard.handle"]');
+      return {
+        h: Math.round(document.getElementById('osc-keyboard').getBoundingClientRect().height),
+        keys: document.querySelector('[data-osc="keyboard.keys"]').getBoundingClientRect().height,
+        handle: handle && !handle.hidden ? Math.round(handle.getBoundingClientRect().height) : 0,
+        armed: window.OSCILLA.app.kbdArmedHere };
+    });
     const armedDock = await until(async () => { const d = await dock(); return d.keys > 0 && d; },
       { ms: STEP_MS, what: `${leg}: the armed Studio shows its keys` }).catch(dock);
     await page.locator('[data-osc="keyboard.arm"]').click();
@@ -1050,7 +1168,8 @@ async function keyboardEverywhere(browser, b, origin, url) {
     const fits = (f) => f.content <= f.dock + 1 && f.dock - f.content <= 16;
     const fitArmed = await fit();
     check(leg, id, 'disarmed in the Studio the keys hide and the dock is one row; armed they show',
-      armedDock.keys > 0 && off.keys === 0 && off.h <= 120 && off.h < armedDock.h,
+      armedDock.keys > 0 && off.keys === 0 && off.h <= ONE_ROW_PX + off.handle
+        && off.h < armedDock.h,
       JSON.stringify({ armedDock, off }));
     const fitOff = await fit();
     check(leg, id, 'the Studio content ends at the docked keys, armed and disarmed (nothing under '
@@ -1093,7 +1212,7 @@ async function keyboardStudioHeld(browser, b, origin, url) {
     await go('studio');
     const armed = await page.evaluate(() => window.OSCILLA.app.kbdArmedHere);
     if (!armed) await page.locator('[data-osc="keyboard.arm"]').click();
-    await page.locator('[data-osc="keyboard.readout"]').click({ force: true });
+    await focusOffEditors(page);
     await page.keyboard.down('KeyA');
     const on = await heard(page, (x) => x.peak > 0.005, `${leg}: A held in the Studio sounds`);
     const during = await read();
@@ -1247,7 +1366,7 @@ async function keyboardChecks(browser, b, origin, url) {
     await page.evaluate(() => { window.location.hash = 'm=studio&kbd=1'; });
     await until(async () => ((await kbd()).workspace === 'studio' ? true : null),
       { ms: STEP_MS, what: `${leg}: the Studio link opens the Studio` });
-    await page.locator('[data-osc="keyboard.readout"]').click();
+    await focusOffEditors(page);
     await page.keyboard.down('KeyA');
     const studio = await heard(page, (m) => m.notes === 1, `${leg}: A sounds in the Studio`);
     const k5 = await kbd();
@@ -1290,6 +1409,7 @@ async function main() {
             await seamSink(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
+            await keysOneKeyboard(browser, b, origin, url);
             await keyboardStudioHeld(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);

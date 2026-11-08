@@ -1672,7 +1672,9 @@ for (const [c, by] of [['#osc-synth-pick', 'synth.cjs'],
   ['[data-osc="keyboard.octave-up"]', 'midi.cjs'],
   ['[data-osc="keyboard.velocity-down"]', 'midi.cjs'],
   ['[data-osc="keyboard.velocity-up"]', 'midi.cjs'],
-  ['[data-osc="keyboard.more"]', 'synth.cjs']]) {
+  ['[data-osc="keyboard.more"]', 'synth.cjs'],
+  // K171: the dock's handle where a pad owns the notes (made by midi/dock-yield.js)
+  ['[data-osc="keyboard.handle"]', 'xy-pad.cjs']]) {
   delegated(c, by, 'the Synth dock, its patch library and the on-screen keyboard');
 }
 // About's "What comes next": its Later list folds open and shut (app.cjs drives and judges it)
