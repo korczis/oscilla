@@ -637,7 +637,8 @@ test("a press on the dock's handle takes no focus, so a held pad keeps its gate 
 // #444: the Studio, armed (Q105), keeps its toolbar and editor room; where the docked keys would
 // take it, the dock starts folded and its handle shows, toggles, and the user's expansion holds
 // for the session (a resize does not undo it); no surface is handed over to be placed.
-test('#444: a short Studio folds the dock to its handle; the handle unfolds it and that holds', () => {
+test('#444: a short Studio folds the dock to its handle; the handle unfolds it and that holds',
+  () => {
   const short = { viewH: 667, band: 308, toolbarBottom: 572, stacked: true };
   const tall = { viewH: 1024, band: 295, toolbarBottom: 295, stacked: false };
   const r = rig({ workspace: 'studio', room: short });
@@ -697,4 +698,36 @@ test('#444: the dock settling judges the room in the next frame, once, never in 
     assert.deepEqual(updates.slice(before), ['viewport'], 'judged once, in the frame');
     seen[0]();
     assert.equal(frames.length, 1, 'a later settling asks for a new frame');
+  });
+
+// #444 CI (webkit, 1024x768 Studio squashed by 11 px): the room was judged only when the
+// workspace changed, and where that judgement ran before the Studio's toolbar was laid out it
+// read no room, docked, and nothing judged it again (the dock's size did not change). The
+// dock's observer also watches the toolbar each route keeps room under, so its first layout
+// (and any later resize) asks for the room to be judged in the next frame.
+test('#444: the toolbar a route keeps room under is observed; its layout judges the room again',
+  async () => {
+    const d = fakeDom({ vh: 768 });
+    const bar = { tag: 'header',
+      getBoundingClientRect: () => ({ top: 230, bottom: 316, width: 900 }) };
+    d.doc.querySelector = (sel) => (sel === '[data-osc="studio.bar"]' ? bar : null);
+    const observed = [];
+    const seen = [];
+    const frames = [];
+    d.win.ResizeObserver = class {
+      constructor(fn) { seen.push(fn); }
+      observe(el) { observed.push(el); }
+    };
+    d.win.requestAnimationFrame = (fn) => { frames.push(fn); return frames.length; };
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp: { workspace: 'studio' },
+      dock: d.dock, release: () => 0 });
+    assert.ok(observed.includes(d.dock), 'the dock is observed');
+    assert.ok(observed.includes(bar), 'the Studio toolbar is observed');
+    const updates = [];
+    const update = ctl.update.bind(ctl);
+    ctl.update = (why) => { updates.push(why); return update(why); };
+    seen[0]([{ target: bar }]);
+    assert.equal(frames.length, 1, 'the toolbar\'s layout asks for one frame');
+    frames.shift()();
+    assert.deepEqual(updates, ['viewport'], 'and the room is judged there');
   });
