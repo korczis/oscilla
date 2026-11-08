@@ -210,6 +210,10 @@
       "summary": "Pole frekvence v sekvenceru berou název noty a číslo MIDI, tempo mimo 20 až 300 BPM se odmítne s důvodem a ovladač tempa ukazuje načtenou hodnotu",
       "commit": "37a64b2",
       "datetime": "2026-11-08T01:54:54+01:00"
+    },
+    {
+      "title": "Klávesy a pad",
+      "summary": "Klávesy hrají hned v každé pracovní ploše a ve Studiu se dok sbalí, kde by zabral editor; XY pad zní při prvním dotyku a jeho osa Y řídí filtr; druhá úprava obálky za běhu zachová tu první a nota se vždy uvolní na nástroji, který ji převzal"
     }
   ]
 }
