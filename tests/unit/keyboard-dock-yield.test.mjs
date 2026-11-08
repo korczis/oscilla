@@ -633,3 +633,40 @@ test("a press on the dock's handle takes no focus, so a held pad keeps its gate 
     "the pointerdown is left alone: preventing it would cancel WebKit's tap click");
   assert.equal(typeof handle.onclick, 'function', 'the click still toggles the dock');
 });
+
+// #444: the Studio, armed (Q105), keeps its toolbar and editor room; where the docked keys would
+// take it, the dock starts folded and its handle shows, toggles, and the user's expansion holds
+// for the session (a resize does not undo it); no surface is handed over to be placed.
+test('#444: a short Studio folds the dock to its handle; the handle unfolds it and that holds', () => {
+  const short = { viewH: 667, band: 308, toolbarBottom: 572, stacked: true };
+  const tall = { viewH: 1024, band: 295, toolbarBottom: 295, stacked: false };
+  const r = rig({ workspace: 'studio', room: short });
+  r.ctl.update('init');
+  r.flush();
+  assert.equal(r.ctl.state, 'collapsed', 'the keys would take the toolbar: folded');
+  assert.equal(r.ctl.foldable, true, 'the handle shows');
+  assert.equal(r.ctl.yields, false, 'no surface owns the notes');
+  const first = r.applied.at(-1);
+  assert.deepEqual([first.state, first.foldable, first.yields, first.el],
+    ['collapsed', true, false, null], 'nothing is placed against the dock');
+  assert.equal(r.ctl.toggle(), true, 'the handle unfolds it');
+  assert.equal(r.ctl.state, 'docked');
+  r.v.room = { ...short, viewH: 640 };
+  r.ctl.update('viewport');
+  r.flush();
+  assert.equal(r.ctl.state, 'docked', 'the user\'s expansion holds across a resize');
+  assert.equal(r.ctl.toggle(), true, 'and folds it again');
+  assert.equal(r.ctl.state, 'collapsed');
+  // A tall Studio docks the keys; the handle does not show there.
+  const t = rig({ workspace: 'studio', room: tall });
+  t.ctl.update('init');
+  t.flush();
+  assert.equal(t.ctl.state, 'docked');
+  assert.equal(t.ctl.foldable, false);
+  assert.equal(t.ctl.toggle(), false, 'nothing to toggle where the keys fit');
+  // No measured room (the toolbar not shown yet, the band not measured): docked.
+  const n = rig({ workspace: 'studio', room: null });
+  n.ctl.update('init');
+  n.flush();
+  assert.equal(n.ctl.state, 'docked');
+});
