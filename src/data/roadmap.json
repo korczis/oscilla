@@ -118,7 +118,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 3,
-      "required": 18,
+      "required": 35,
       "phase": "now"
     },
     {
@@ -341,7 +341,7 @@
     {
       "id": "M070",
       "title": "Owner decisions of the connected-instrument line",
-      "done": 6,
+      "done": 7,
       "required": 8,
       "phase": "now"
     },
