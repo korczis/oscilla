@@ -30,7 +30,8 @@
 //   player.stale()               the node ids whose records name a handle the runtime replaced
 //                                (the transport's afterApply rebuilds them, as rebuildClock)
 //   player.prune(now, keepS)     forget records older than keepS, except each node's last one
-//                                (the note a rebuilt node takes up); player.clear(), player.size
+//                                while the node exists (the note a rebuilt node takes up), in
+//                                one pass over the records; player.clear(), player.size
 //   notesSteps(model, playhead, registry) -> [{ clipId, step, position }]   the step under the
 //                                playhead of each playing notes clip with a grid
 
@@ -118,13 +119,16 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
         .map((x) => x.nodeId));
     },
     prune(now, keepS) {
-      const keep = new Set();
+      // One pass: each node's last record at or before now, kept while its node exists.
+      const present = new Set(getModel().graph.nodes.map((n) => n.id));
+      const last = new Map();
       for (const x of pitches.values()) {
-        const last = lastBefore(x.nodeId, now + 1e-9);
-        if (last) keep.add(last.key);
+        const l = last.get(x.nodeId);
+        if (x.time <= now && (!l || x.time >= l.time)) last.set(x.nodeId, x);
       }
       for (const [key, x] of pitches) {
-        if (x.time + keepS < now && !keep.has(key)) pitches.delete(key);
+        if (x.time + keepS >= now) continue;
+        if (last.get(x.nodeId) !== x || !present.has(x.nodeId)) pitches.delete(key);
       }
     },
     clear: () => pitches.clear(),

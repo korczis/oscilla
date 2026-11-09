@@ -11,6 +11,7 @@
 //   node --test tests/unit/studio-notes-hold.test.mjs
 // Fails on 5489ac34 (#474 with main merged in): (1) the rebuilt Keys node never steps to the
 // sounding note; (2) the STOP hold reads note 3's pitch and note 2's velocity inside note 1.
+// The prune case fails on a336fea6: the removed Keys node's last record stays (1, not 0).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -141,4 +142,26 @@ test('K068 STOP inside a dense ratchet holds that note\'s pitch and velocity, ho
     rig.fx.advance(1);
     await p;
     assert.equal(rig.engine.activeNodeCount, 0, 'engine node census 0 after stop');
+  });
+
+test('K068 prune keeps each present node\'s last note in one pass, and forgets a removed '
+  + 'node\'s', async () => {
+    // The pre-read's follow-up (P3): prune ran lastBefore once per record (O(n^2) per wake-up),
+    // and the last record of a node removed from the graph stayed until clear(). Through the
+    // transport: 64 ratchet onsets on one Keys node, then the node removed while playing.
+    const notes = Array.from({ length: 8 }, (_, i) => n(i * 0.5, 60 + i, 0.5, 0.8, { r: 8 }));
+    // A 64-beat clip (32 s) keeps the transport playing; its notes all lie in the first 2 s.
+    const rig = playing(notes, { beats: 64 });
+    rig.fx.advance(2.2); // past every onset
+    assert.equal(rig.transport.debugInfo().noteCount, 64, 'one record per onset');
+    rig.fx.advance(10.5); // every onset older than GATE_KEEP_S
+    assert.equal(rig.transport.debugInfo().noteCount, 1, 'the Keys node keeps its last note');
+    ok(rig.st.dispatch({ type: 'NODE_REMOVE', nodeId: rig.keys }), 'remove the Keys node');
+    rig.transport.sync();
+    rig.fx.advance(1); // the next wake-up prunes
+    assert.ok(rig.transport.debugInfo().playing, 'still playing');
+    assert.equal(rig.transport.debugInfo().noteCount, 0, 'a removed node keeps no record');
+    const p = rig.transport.stop();
+    rig.fx.advance(1);
+    await p;
   });
