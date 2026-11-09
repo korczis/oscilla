@@ -10,6 +10,8 @@
 //                         released it stops, a programmed pattern triggers once
 //     'keys.dock'         Alt+K, where the docked keyboard yields to a pad that owns the notes
 //                         (K171, midi/dock-yield.js): unfold or fold the keys, as its handle does
+//     'notes.record'      R, while a Record switch is shown (K223, ui/kinds/record-switch.js: the
+//                         Drums tab, a notes clip's step grid in the Studio): it presses it
 //   pageKeyContext(cmp) -> { workspace, view }   what the dispatcher scopes keys by; the
 //     Synth's view is its tab ('panel', 'engines', 'xy')
 import { instrumentTakesSpace } from '../shortcuts.js';
@@ -17,6 +19,11 @@ import { DOCK_KEY } from '../../midi/dock-yield.js';
 
 export const pageKeyContext = (cmp) => ({ workspace: cmp.workspace,
   view: cmp.workspace === 'synth' && cmp.synth ? cmp.synth.tab || null : null });
+
+/** The Record switch on screen (K223), or null. */
+const shownRecordSwitch = () => (typeof document === 'undefined' ? null
+  : [...document.querySelectorAll('[data-notes-record]')]
+    .find((b) => b.getClientRects().length > 0) || null);
 
 export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
   const offs = [
@@ -40,6 +47,10 @@ export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
       when: () => !!cmp.kbdDockYields, group: 'Keyboard',
       label: 'Rozložit nebo složit klávesnici tam, kde noty hraje pad (její úchyt)',
       run: () => cmp.kbdDockToggle() }),
+    keys.bind({ id: 'notes.record', keys: ['KeyR'], scope: { workspace: '*' },
+      when: () => !!shownRecordSwitch(), group: 'Step grid',
+      label: 'Nahrávání živých úderů do notového klipu: zapnout nebo vypnout',
+      run: () => shownRecordSwitch().click() }),
   ];
   return () => offs.forEach((off) => off());
 }

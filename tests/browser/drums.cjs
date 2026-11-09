@@ -32,6 +32,9 @@
 //               (2 s) and the hit ends with no voice left
 //   dr-padplay  a pad strike arms the transport; one press of Play (a click, a tap at 390 px)
 //               then starts the timeline and the next stops it (review R2-K222-5)
+//   dr-record   K223: the Record switch (role=switch) on, Play, three pads struck in the pass and
+//               Stop: three notes in the clip within 'take in model' (2 s) as one undo entry, and
+//               one Undo removes all three; the switch off again (the R key on the desktop)
 //   no-console-errors
 'use strict';
 
@@ -378,6 +381,64 @@ function defineChecks() {
       .playhead().playing ? null : true)), { ms: SOUND_MS,
       what: 'dr-padplay: the next press stops it' });
     return { ok: !!(armed && started && stopped) };
+  });
+
+  def('dr-record', async ({ page, size }) => {
+    // K223: Record beside Play. Armed and playing, three pad hits in one pass are three notes in
+    // the clip once the take ends (Stop), as one undo entry that one Undo removes.
+    const id = await drumClip(page);
+    await clearClip(page, id);
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const press = async (sel) => {
+      await page.locator(sel).scrollIntoViewIfNeeded();
+      if (size.touch) await page.locator(sel).tap(); else await page.locator(sel).click();
+    };
+    const strike = async (i) => {
+      const sel = `[data-drum-pad="${i}"]`;
+      await page.locator(sel).scrollIntoViewIfNeeded();
+      if (!size.touch) {
+        await page.focus(sel);
+        await page.keyboard.press('Enter');
+        return;
+      }
+      const p = await centre(page, sel);
+      for (const type of ['pointerdown', 'pointerup']) {
+        await page.evaluate(({ pt, ty }) => {
+          document.elementFromPoint(pt.x, pt.y).dispatchEvent(new PointerEvent(ty, {
+            bubbles: true, pointerId: 12, pointerType: 'touch', isPrimary: true, clientX: pt.x,
+            clientY: pt.y, buttons: ty === 'pointerdown' ? 1 : 0 }));
+        }, { pt: p, ty: type });
+      }
+    };
+    const sw = '[data-drums-bar] [data-notes-record]'; // the Studio Inspector has one too
+    const role = await page.getAttribute(sw, 'role');
+    await press(sw);
+    const armed = await until(async () => ((await page.getAttribute(sw, 'aria-checked'))
+      === 'true' ? true : null), { ms: UI_MS, what: 'dr-record: the Record switch is on' });
+    await press('[data-drums-play]');
+    await until(() => page.evaluate(() => (window.OSCILLA.studio.transport.playhead().playing
+      ? true : null)), { ms: SOUND_MS, what: 'dr-record: Play plays the timeline' });
+    const before = await depth();
+    for (const i of [0, 1, 3]) await strike(i);
+    await press('[data-drums-play]'); // Stop: the take ends
+    const take = await until(async () => {
+      const n = await notesOf(page, id);
+      return n.length === 3 ? n : null;
+    }, { ms: NOTE_MS, what: 'take in model' });
+    const one = (await depth()) === before + 1;
+    await page.evaluate(() => window.OSCILLA.studio.store.undo());
+    const undone = await until(async () => ((await notesOf(page, id)).length === 0 ? true : null),
+      { ms: NOTE_MS, what: 'dr-record: one Undo removes the take' });
+    // Off: the R key on the desktop (ui/keys/clients.js notes.record), a tap on the phone.
+    if (size.touch) await press(sw);
+    else {
+      await page.evaluate(() => document.activeElement && document.activeElement.blur());
+      await page.keyboard.press('KeyR');
+    }
+    const off = await until(async () => ((await page.getAttribute(sw, 'aria-checked'))
+      === 'false' ? true : null), { ms: UI_MS, what: 'dr-record: the Record switch is off' });
+    return { ok: role === 'switch' && !!(armed && take && one && undone && off),
+      notes: take, one };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,

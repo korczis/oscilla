@@ -14,11 +14,15 @@
 //   clipStepsView(model, clip, plays) -> { clipId, payload, stepBeats, steps, lanes, laneNames,
 //                                          start, plays }
 //   playingStep(model, view, playhead) -> step | null
-//   mountClipSteps(host, { store, playhead }, view) -> { update(view), destroy(), grid }
+//   mountClipSteps(host, { store, playhead, liveTransport, announce }, view) -> { update(view),
+//                                          destroy(), grid }   with liveTransport, the Record
+//                                          switch above the grid (K223, ui/kinds/record-switch.js)
 
 import { midiToName } from '../../core/music.js';
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { mountStepGrid } from '../kinds/step-grid.js';
+import { bindRecordSwitch, recordSwitchHtml } from '../kinds/record-switch.js';
+import { PRO } from '../pro-classes.js';
 
 /** The lane an empty notes clip shows: C4. */
 export const DEFAULT_LANE = 60;
@@ -49,7 +53,18 @@ export function mountClipSteps(host, svc, first) {
   let view = first;
   const owner = { selection: [], page: 0 };
   let grid = null; // the first fit calls onView while mountStepGrid is still building
-  grid = mountStepGrid(host, {
+  let record = null;
+  let gridHost = host;
+  if (svc.liveTransport) { // K223: Record above the grid, the same switch as the Drums tab's
+    const bar = host.ownerDocument.createElement('div');
+    bar.className = 'mb-2';
+    bar.innerHTML = recordSwitchHtml(PRO.btnSecondary);
+    gridHost = host.ownerDocument.createElement('div');
+    host.append(bar, gridHost);
+    record = bindRecordSwitch(bar.firstChild, { transport: svc.liveTransport, store: svc.store,
+      clipId: () => view.clipId, say: (text) => svc.announce && svc.announce(text) });
+  }
+  grid = mountStepGrid(gridHost, {
     mode: 'notes', label: LABEL, clipId: view.clipId, payload: view.payload, lanes: view.lanes,
     laneNames: view.laneNames, steps: view.steps, stepBeats: view.stepBeats,
     commit: (action) => {
@@ -77,6 +92,9 @@ export function mountClipSteps(host, svc, first) {
         steps: next.steps, stepBeats: next.stepBeats, selection: owner.selection,
         page: owner.page });
     },
-    destroy() { grid.destroy(); },
+    destroy() {
+      grid.destroy();
+      if (record) record.destroy();
+    },
   };
 }
