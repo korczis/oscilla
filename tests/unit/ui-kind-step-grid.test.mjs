@@ -469,3 +469,37 @@ test('a re-render waits for a held drag; the Inspector skips an unchanged clip',
   assert.notEqual(label.textContent, 'held');
   view.destroy();
 });
+
+test('R2-K221-8: a render mid value-drag never turns the release into the minimum', async () => {
+  // oscilla-c3 with oscilla-c1: a cell replaced while held measures 0 high once detached, and
+  // the release read 0, the range's minimum: -1 on the bipolar Step Modulator, full negative
+  // modulation. The drag keeps the box it started on; a 0-high box keeps the last value.
+  const { mountStepGrid } = await import('../../src/js/ui/kinds/step-grid.js');
+  const param = { key: 'steps', label: 'Kroky', type: 'list', min: -1, max: 1, minLength: 1,
+    maxLength: 16, step: 0.01 };
+  const host = fakeEl();
+  const root = fakeEl();
+  const find = root.querySelector;
+  root.querySelector = (sel) => (sel === '[data-step-detail]' ? null : find(sel)); // list: none
+  Object.defineProperty(host, 'firstElementChild', { get: () => root });
+  const actions = [];
+  const view = mountStepGrid(host, { mode: 'param-list', nodeId: 'n', param,
+    values: [0, 0, 0, 0], label: 'Kroky', laneNames: ['Kroky'],
+    commit: (a) => { actions.push(a); return true; } });
+  const surface = root.querySelector('[data-step-grid-surface]');
+  let box = { top: 100, height: 40 };
+  const cell = fakeEl();
+  cell.dataset = { lane: '0', step: '2' };
+  cell.getBoundingClientRect = () => box;
+  cell.closest = () => cell;
+  surface.setPointerCapture = () => {};
+  surface.fire('pointerdown', { target: cell, button: 0, pointerId: 1, clientY: 138 });
+  surface.fire('pointermove', { target: cell, clientY: 102 }); // near the top
+  view.set({ values: [0, 0, 0, 0] }); // a model change arrives mid-drag
+  box = { top: 0, height: 0 }; // the held cell is gone from the page
+  surface.fire('pointerup', { target: cell, clientY: 101 });
+  assert.equal(actions.length, 1, 'one action for the gesture');
+  assert.ok(actions[0].value[2] >= 0.9, `the release keeps the dragged value, got ${
+    actions[0].value[2]}`);
+  view.destroy();
+});

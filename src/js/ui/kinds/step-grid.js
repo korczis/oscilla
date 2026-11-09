@@ -239,7 +239,8 @@ export function mountStepGrid(host, opts) {
       refit = onFrame(() => {
         refit();
         refit = null;
-        if (fitted() !== null) render();
+        // Never mid-drag (a held note drag or value drag): the release renders.
+        if (fitted() !== null && !model.drag && !valueDrag) render();
       });
     });
     ro.observe(element);
@@ -258,10 +259,17 @@ export function mountStepGrid(host, opts) {
     const c = el && el.closest ? el.closest('[role="gridcell"]') : null;
     return c && surface.contains(c) ? c : null;
   };
-  let valueDrag = null; // a value lane's vertical drag: { lane, step, c, f }
-  const fractionIn = (c, e) => {
-    const r = c.getBoundingClientRect();
-    return r.height > 0 ? 1 - (e.clientY - r.top) / r.height : 0;
+  // A value lane's vertical drag: { lane, step, rect, f }. rect is the cell's box at pointerdown,
+  // kept so that a cell a render replaced mid-drag (a detached cell measures 0 high) never turns
+  // the release into 0, the range's minimum (R2-K221-8: -1, full negative modulation).
+  let valueDrag = null;
+  const fractionAt = (r, e, keep) => (r && r.height > 0
+    ? 1 - (e.clientY - r.top) / r.height : keep);
+  /** The live box of the dragged cell, re-resolved by lane and step, else the one at the start. */
+  const dragRect = (v) => {
+    const el = (cellEls[v.lane] || [])[v.step];
+    const r = el && el.isConnected !== false ? el.getBoundingClientRect() : null;
+    return r && r.height > 0 ? r : v.rect;
   };
   const listen = (el, type, fn) => {
     el.addEventListener(type, fn);
@@ -294,7 +302,9 @@ export function mountStepGrid(host, opts) {
     if (list && !e.shiftKey) {
       // A value lane drags vertically: the pointer is captured, the value follows it and is
       // committed once at pointerup, one action per gesture (W008; review of 7521fc69).
-      valueDrag = { lane, step, c, f: fractionIn(c, e) };
+      const r = c.getBoundingClientRect();
+      valueDrag = { lane, step, rect: { top: r.top, height: r.height },
+        f: fractionAt(r, e, 0) };
       try {
         surface.setPointerCapture(e.pointerId);
       } catch {
@@ -313,7 +323,7 @@ export function mountStepGrid(host, opts) {
   });
   listen(surface, 'pointermove', (e) => {
     if (valueDrag) {
-      valueDrag.f = fractionIn(valueDrag.c, e);
+      valueDrag.f = fractionAt(dragRect(valueDrag), e, valueDrag.f);
       return;
     }
     const d = model.drag;
@@ -330,7 +340,7 @@ export function mountStepGrid(host, opts) {
     if (valueDrag) {
       const v = valueDrag;
       valueDrag = null;
-      if (e && Number.isFinite(e.clientY)) v.f = fractionIn(v.c, e);
+      if (e && Number.isFinite(e.clientY)) v.f = fractionAt(dragRect(v), e, v.f);
       model.valueAt(v.lane, v.step, v.f);
       render();
       return;
@@ -386,7 +396,7 @@ export function mountStepGrid(host, opts) {
       model.set(next);
       // Never mid-drag: replacing the cells under a held pointer loses the gesture in WebKit;
       // the release renders.
-      if (!model.drag) render();
+      if (!model.drag && !valueDrag) render();
     },
     setDisabled(reason) {
       disabled = reason || null;
