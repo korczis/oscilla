@@ -278,6 +278,19 @@ test('the Synth panel shows no jack for the MG depth: 62 jacks, the LFO node kee
 
 // ---------------------------------------------------------------- epoch 3
 
+// Review C1-HE3-1: a record saved under the current epoch hashes every parameter its nodes hold.
+// A key the current epoch declares before its node type registers it would join that hash later
+// (normalizeStudio fills its default), so a record saved in between would match no epoch. The
+// current epoch therefore names only registered parameters, and it lands in the same train as
+// the changes that register them (K071, K072, K229, K230). This test fails on the epoch's own
+// commit alone; it passes once all four are merged with it.
+test('the current epoch declares only parameters its node types register', () => {
+  const missing = Object.entries(HASH_EPOCH_PARAMS[STUDIO_HASH_VERSION] || {})
+    .flatMap(([type, keys]) => keys.filter((k) => !NODE_REGISTRY.param(type, k))
+      .map((k) => `${type}.${k}`));
+  assert.deepEqual(missing, [], 'declared by the current epoch, registered by no node type');
+});
+
 test('epoch 3: the epoch 2 hash of a template is the one 15436bf9 pinned; the current differs',
   () => {
     const m = templateModel('subtractive-synth');
