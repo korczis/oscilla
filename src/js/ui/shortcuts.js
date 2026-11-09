@@ -27,6 +27,7 @@ import { KEY_HELP } from './studio/transport-view.js';
 import { WORKSPACE_LABELS } from './shell.js';
 import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
 import { OWNER } from './output-owner.js';
+import { STATUS_PLAY_WORKSPACES } from '../core/play-hints.js';
 
 /**
  * Who owns Space in each workspace (the keys are exactly app.js WORKSPACES); each owner is a
@@ -58,10 +59,11 @@ export const SOURCE_PANEL_WORKSPACES = Object.freeze(['playground', 'sequencer',
 /**
  * The instrument workspaces without that panel (C030): Analyzer, Filter Lab, Compare and
  * Presets. The status bar's Play is their Play at every width, not on a phone only, so Space is
- * never the only way to sound them; elsewhere it stays a phone's control.
+ * never the only way to sound them; elsewhere it stays a phone's control. The one list is
+ * core/play-hints.js's, whose prompts name that Play there; the test holds it equal to the
+ * workspaces SPACE_OWNER gives the instrument outside SOURCE_PANEL_WORKSPACES.
  */
-export const STATUS_PLAY_WORKSPACES = Object.freeze(Object.keys(SPACE_OWNER)
-  .filter((w) => SPACE_OWNER[w] === OWNER.instrument && !SOURCE_PANEL_WORKSPACES.includes(w)));
+export { STATUS_PLAY_WORKSPACES };
 
 /** The names the navigation shows: the one registry's (shell.js WORKSPACE_REGISTRY). */
 export { WORKSPACE_LABELS };

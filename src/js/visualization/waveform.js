@@ -278,7 +278,7 @@ export function createWaveformView() {
         p.endShape(p.CLOSE);
       }
     } else {
-      label(L.hasCtx ? 'press HOLD TO PLAY' : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2 + 3, pal.muted, compact ? 8 : 9);
+      label(L.hasCtx ? (st.idleHint || 'press HOLD TO PLAY') : 'starts with audio', rx0 + 6, (ry0 + ry1) / 2 + 3, pal.muted, compact ? 8 : 9);
     }
     const rw = rx1 - rx0;
     if (compact && dense && WV.denseNote) {

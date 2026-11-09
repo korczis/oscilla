@@ -392,6 +392,7 @@ function defineChecks() {
       const r = b.getBoundingClientRect();
       return { ws: O.app.workspace, sources: O.engine.activeSourceCount,
         nodes: O.engine.activeNodeCount, pressed: b.getAttribute('aria-pressed'),
+        idleHint: O.viz.state.idleHint,
         shown: getComputedStyle(b).display !== 'none' && r.width > 0 && r.height > 0
           && r.bottom <= window.innerHeight && r.right <= window.innerWidth };
     });
@@ -412,10 +413,15 @@ function defineChecks() {
     const res = {};
     await go('playground');
     const home = await settle((s) => s.ws === 'playground', 'the Playground is open');
-    res.playgroundOnePlay = { ...home, timedOut: !!(home.timedOut || home.shown) };
+    // ... and its idle analyser keeps the frozen V1 label (no hint of its own)
+    res.playgroundOnePlay = { ...home, timedOut: !!(home.timedOut || home.shown
+      || home.idleHint !== null) };
     for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
       await go(ws);
-      const seen = await settle((s) => s.shown, `${ws}: the status Play is on screen`);
+      // the status Play is on screen, and the idle analyser names it (core/play-hints.js)
+      const named = (s) => /Přehrát ve stavovém řádku/.test(s.idleHint || '');
+      const seen = await settle((s) => s.shown && named(s),
+        `${ws}: the status Play is on screen and the idle panel names it`);
       if (seen.timedOut) { res[ws] = seen; continue; }
       await page.click('#osc-sb-play');
       const on = await settle((s) => s.sources > 0, `${ws}: its Play sounds the instrument`);
@@ -425,6 +431,43 @@ function defineChecks() {
       const off = await settle((s) => s.sources === 0 && s.nodes === 0,
         `${ws}: Stop returns the engine to silence`);
       res[ws] = { ...off, timedOut: !!(on.timedOut || off.timedOut), rose: on.sources, stopped };
+    }
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
+
+  // C030 (oscilla-43's ruling): the status readout shows every field at 1536 px and on a phone.
+  // A field the bar has no room for (the 1536 px bar with the status Play, a phone that drops
+  // the secondary fields) is still in the readout's title, which carries the whole readout; a
+  // field cut by the bar's edge and missing from the title fails. Workspaces with and without
+  // the status Play, at both sizes, each read after a named-deadline poll for the workspace.
+  def('status-readout-fields', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const res = {};
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      for (const ws of ['playground', 'analyzer', 'presets', 'measure', 'studio']) {
+        await ev((x) => window.OSCILLA.app.setWorkspace(x), ws);
+        await until(() => ev(([x, width]) => window.OSCILLA.app.workspace === x
+          && window.innerWidth === width, [ws, w]),
+        { ms: 8000, what: `status-readout-fields: ${ws} at ${w}` });
+        res[`${ws}@${w}`] = await ev(() => {
+          const ro = document.querySelector('[data-osc="status.readout"]');
+          const box = document.querySelector('.osc-sb-state').getBoundingClientRect();
+          const title = ro.getAttribute('title') || '';
+          const fields = ['frequency', 'waveform', 'pattern', 'duration', 'gain']
+            .map((f) => ro.querySelector(`[data-osc="status.${f}"]`));
+          const lost = fields.filter((e) => {
+            const r = e.getBoundingClientRect();
+            const whole = getComputedStyle(e).display !== 'none' && r.width > 0
+              && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+            return !whole && !title.includes(e.textContent.trim());
+          }).map((e) => e.dataset.osc);
+          return { lost, title, fields: fields.length, timedOut: lost.length > 0 || !title };
+        });
+      }
     }
     await page.close();
     return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,

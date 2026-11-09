@@ -13,6 +13,7 @@ import {
   applyConfigTo, defaultEditorFields, defaultInstrumentState, droppedSentence, pickInstrumentState,
 } from './config.js';
 import { presetMaxFrequency } from '../data/presets.js';
+import { statusPlayHint } from './play-hints.js';
 
 export { base64UrlDecode, base64UrlEncode };
 
@@ -129,8 +130,11 @@ export function restoreFromHashOn(s, hash, env = {}) {
     else {
       // "Restored" never stands alone over a drop: the summary names it.
       const not = droppedSentence(out.dropped);
-      notify('info', 'Configuration restored from link',
-        `${not ? `${not} ` : ''}Nothing plays until you press HOLD TO PLAY or TRIGGER.`);
+      // where only the status bar's Play is on screen, its own sentence (C030); the frozen V1
+      // text everywhere else
+      const press = statusPlayHint(m, 'restored')
+        || 'Nothing plays until you press HOLD TO PLAY or TRIGGER.';
+      notify('info', 'Configuration restored from link', `${not ? `${not} ` : ''}${press}`);
     }
   } catch (e) {
     out.handled = true;

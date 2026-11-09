@@ -16,6 +16,9 @@ import { fileURLToPath } from 'node:url';
 import * as shortcuts from '../../src/js/ui/shortcuts.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
 import { presetLoadedNotice } from '../../src/js/core/preset-notice.js';
+import * as hints from '../../src/js/core/play-hints.js';
+import { applyConfig } from '../../src/js/core/config.js';
+import { restoreFromHash, serializeHash } from '../../src/js/core/url-state.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (f) => readFileSync(path.join(ROOT, f), 'utf8');
@@ -119,6 +122,11 @@ test('C030: the workspaces of the two Plays are one list each, matched to the ma
     'shortcuts.js names the panel\'s data-osc-modes');
   assert.deepEqual([...STATUS_PLAY_WORKSPACES].sort(),
     ['analyzer', 'compare', 'filter', 'presets']);
+  // the one list (core/play-hints.js) is the instrument's workspaces outside the panel's
+  const derived = Object.keys(SPACE_OWNER).filter((w) => SPACE_OWNER[w] === 'instrument'
+    && !SOURCE_PANEL_WORKSPACES.includes(w));
+  assert.deepEqual([...STATUS_PLAY_WORKSPACES], derived);
+  assert.equal(STATUS_PLAY_WORKSPACES, hints.STATUS_PLAY_WORKSPACES, 'shortcuts.js re-exports it');
   const sb = statusPlay();
   for (const ws of Object.keys(SPACE_OWNER)) {
     assert.equal(sb.shown(ws), STATUS_PLAY_WORKSPACES.includes(ws), ws);
@@ -152,7 +160,52 @@ test('C030: a prompt names a control on its workspace, or the workspace that has
   }
   // a Learn demo plays in the workspace it opens, which lays out Hold and Trigger
   const wbSrc = read('src/js/ui/workbench.js');
-  const go = wbSrc.match(/runLearnDemo\(topic\) \{[\s\S]*?this\.setWorkspace\(this\.source === 'dual'\s*\? '(\w+)' : '(\w+)'\)/);
+  const go = wbSrc.match(new RegExp('runLearnDemo\\(topic\\) \\{[\\s\\S]*?this\\.setWorkspace\\('
+    + "this\\.source === 'dual'\\s*\\? '(\\w+)' : '(\\w+)'\\)"));
   assert.ok(go, 'runLearnDemo opens the workspace that plays the demo');
   for (const ws of [go[1], go[2]]) assert.ok(panel.includes(ws), ws);
+});
+
+// The frozen V1 prompts (tests/unit/freeze.test.mjs) name HOLD TO PLAY and TRIGGER. Where only
+// the status Play is on screen each is replaced, by workspace, with a Czech sentence of its own
+// (core/play-hints.js) that names the Play there; the V1 text stays everywhere else.
+const STATUS_PLAY_NAMED = /Přehrát ve stavovém řádku/;
+
+test('C030: where only the status Play is on screen, each prompt names it, in Czech', () => {
+  const { statusPlayHint, STATUS_PLAY_HINTS } = hints;
+  assert.ok(statusPlayHint, 'core/play-hints.js statusPlayHint');
+  const panel = sourcePanel().modes;
+  const sb = statusPlay();
+  for (const ws of Object.keys(SPACE_OWNER)) {
+    for (const kind of Object.keys(STATUS_PLAY_HINTS)) {
+      const h = statusPlayHint(ws, kind);
+      if (sb.shown(ws)) {
+        assert.match(h, STATUS_PLAY_NAMED, `${ws}/${kind}: names the status Play`);
+        assert.doesNotMatch(h, /TRIGGER|HOLD TO PLAY/, `${ws}/${kind}`);
+      } else {
+        assert.equal(h, null, `${ws}/${kind}: the frozen V1 text stands`);
+        if (SPACE_OWNER[ws] === 'instrument') assert.ok(panel.includes(ws), ws);
+      }
+    }
+  }
+});
+
+test('C030: a restored link says what to press in the workspace it opens', () => {
+  const state = applyConfig(null, {}, { sampleRate: 48000 }).state;
+  const said = (ws) => restoreFromHash(null, `#${serializeHash(state, ws)}`,
+    { sampleRate: 48000 }).notices.find((n) => n.title === 'Configuration restored from link');
+  assert.equal(said('playground').message,
+    'Nothing plays until you press HOLD TO PLAY or TRIGGER.', 'the frozen V1 text');
+  for (const ws of hints.STATUS_PLAY_WORKSPACES) {
+    assert.equal(said(ws).message, hints.STATUS_PLAY_HINTS.restored, ws);
+  }
+});
+
+test('C030: the suspended notice and the idle analyser read the hint of the workspace', () => {
+  const inst = read('src/js/core/instrument.js');
+  assert.match(inst, /const hint = statusPlayHint\(this\.workspace, 'suspended'\);\s*this\.notify\('warning', 'Audio is suspended', hint\s*\|\| 'The browser/);
+  assert.match(read('src/js/visualization/waveform.js'),
+    /L\.hasCtx \? \(st\.idleHint \|\| 'press HOLD TO PLAY'\)/);
+  assert.match(read('src/js/main.js'),
+    /bridge\.setIdleHint\(statusPlayHint\(cmp\.workspace, 'idle'\)\)/);
 });

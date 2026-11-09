@@ -263,6 +263,15 @@ export function createWorkbench(svc) {
       if (this.continuousAllowed) return 'no limit';
       return `≤ ${this.safetyLimit} s`;
     },
+    /**
+     * Every field of the status readout in one line, its title (C030): where the bar has no room
+     * for all of them (1536 px with the status Play, a phone, which drops the secondary fields),
+     * the full readout is still there to read.
+     */
+    get statusReadoutTitle() {
+      return [this.statusFreqText, this.statusWaveText, this.statusPatternText,
+        this.statusDurationText, this.statusGainText].join(' · ');
+    },
     get statusGainText() {
       // The level actually in effect: the Studio's Master Output while it holds the master stage
       // (C012), otherwise the Playground gain. Never written into gainLevel: the gainLevel $watch
