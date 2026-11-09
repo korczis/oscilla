@@ -3,19 +3,19 @@
 // own (adapters/instrument.js keys: play, holdPitch, keyRange). No audio node is created and no
 // timer runs here: every call lands at an audio-clock time the timeline compiler computed.
 //
-//   createNotePlayer({ getModel, ready, registry, gate, clock, played, warn }) -> player
+//   createNotePlayer({ getModel, ready, registry, fan, played, warn }) -> player
 //     getModel()        the model the transport plays
 //     ready(id)         the runtime handle of node `id` when it is ready, else null
-//     gate(it, envId, deferred)   a gate record for item `it` on Envelope `envId` (transport
-//                       addGate: its unions, edits and STOP); clock(it, id) a trigger (addTick)
+//     fan(it, id, deferred)   the Keys Gate of node `id` for item `it` along its TRIGGER edges
+//                       (the transport's trigger-fanout.js fanOut, K103: gates, ticks, relays)
 //     played(it, code, reason)   the transport's unplayed bookkeeping: null code means it plays
 //     warn(code, text, entity)   a transport diagnostic
 //   player.play(it, deferred)    one `note` item (timeline-compiler.js): its pitch through the
 //                                Keys note path, handle.play(t, note, velocity, { legato: slide,
 //                                onset: gate }) (a slide glides over the node's Glide, linear in
-//                                exact time, K060), and, when it opens a gate, a gate on each
-//                                Envelope and a trigger on each clocked node the Keys Gate
-//                                reaches (live-notes.js gateTargets), as a key does. A note
+//                                exact time, K060), and, when it opens a gate, the Keys Gate
+//                                along its TRIGGER edges (fan: each Envelope, each clocked node,
+//                                each Step relay it reaches), as a key does. A note
 //                                outside the node's key range is not played and warned once per
 //                                clip (key-range), as the live keys refuse it
 //   player.cancel(key, touched)  forget a cancelled item's pitch; its node joins `touched`
@@ -36,11 +36,11 @@
 //                                playhead of each playing notes clip with a grid
 
 import { clipTarget } from './clip-targets.js';
-import { LIVE_NOTES_TEXT, gateTargets } from './live-notes.js';
+import { LIVE_NOTES_TEXT } from './live-notes.js';
 import { NODE_REGISTRY } from './registry.js';
 import { effectiveTarget } from './timeline.js';
 
-export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, gate, clock,
+export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, fan,
   played, warn }) {
   // item key -> { key, nodeId, handle, time, note, velocity, slide, gate }
   const pitches = new Map();
@@ -96,9 +96,7 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
       else apply(h, rec);
     }
     if (!it.gate) return null;
-    const targets = gateTargets(model, id);
-    for (const env of targets.envelopes) gate(it, env, deferred);
-    for (const c of targets.clocks) clock(it, c);
+    fan(it, id, deferred); // the one TRIGGER fan-out (trigger-fanout.js, K103)
     return null;
   }
 
