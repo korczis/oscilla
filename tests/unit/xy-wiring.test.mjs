@@ -40,7 +40,7 @@ import { createIdGenerator, createStudioStore } from '../../src/js/studio/action
 import { templateModel, REFERENCE_TEMPLATE_ID } from '../../src/js/studio/templates/index.js';
 
 // Namespace imports: on a tree without K183's exports each test fails on its own.
-const { XY_TEXT, mountSynthXy, xyPresetAction } = wiring;
+const { XY_TEXT, mountSynthXy, xyPresetAction, xyVelocity } = wiring;
 const { XY_RECIPES, xyPatchAction, xyPatched, xyPresetPatch, xyTarget, xyTargetAction } = xy;
 const SOURCE = 'kbd-xy';
 
@@ -50,6 +50,13 @@ function defaultStore() {
     { idGenerator: createIdGenerator() });
   assert.equal(typeof xy.xyInsertAction, 'function', 'xy.js xyInsertAction (K183)');
   const r = st.dispatch(xy.xyInsertAction(st.getModel(), PANEL, { at: { x: 0, y: 600 } }));
+  assert.equal(r.ok, true, r.reason);
+  return st;
+}
+/** A document with pad R's Y cabled into LPF Cutoff, as K183's default was before K220. */
+function cabledStore() {
+  const st = defaultStore();
+  const r = st.dispatch(xyTargetAction(st.getModel(), PANEL, 'lpf.frequency').action);
   assert.equal(r.ok, true, r.reason);
   return st;
 }
@@ -149,7 +156,7 @@ function rig({ audioState = 'running', store = defaultStore, sampleRate = 48000 
     noteOn: (n, v, src) => { noted.push(['on', n, v, src]); return layer.noteOn(n, v, src); },
     noteOff: (n, src) => { noted.push(['off', n, src]); return layer.noteOff(n, src); },
     legato: (a, b, src) => { noted.push(['legato', a, b, src]); return layer.legato(a, b, src); },
-    velocity: () => 90,
+    velocity: () => 90, // the keys' velocity, which the pad no longer follows (K220)
     off: () => { releases = null; },
   };
   const app = fakeApp('synth', audioState);
@@ -226,7 +233,10 @@ test('a touch presses the scale note as kbd-xy, a move into another cell is lega
   const noteAt = (i) => xyDegree((i + 0.5) / steps, p).note; // the node's own quantisation
   assert.equal(m.view.opts.disabled, null, 'enabled from the first open (K183)');
   m.view.model.down(1, 0.5 / steps, 0.5); // the first cell
-  assert.deepEqual(r.noted, [['on', noteAt(0), 90, SOURCE]], 'the keys\' velocity, kbd-xy');
+  // K220: Y is the touch's velocity (1-127), never the keys' 90.
+  assert.equal(typeof xyVelocity, 'function', 'xy-wiring.js xyVelocity (K220)');
+  assert.deepEqual([xyVelocity(0), xyVelocity(0.5), xyVelocity(1)], [1, 64, 127]);
+  assert.deepEqual(r.noted, [['on', noteAt(0), 64, SOURCE]], 'Y 0.5 is velocity 64, kbd-xy');
   assert.equal(r.real.playing, true);
   assert.ok(r.real.heldNotes().includes(noteAt(0)), 'the Keys node holds the note');
   m.view.model.move(1, 0.6 / steps, 0.7); // the same cell: Y only, no note change
@@ -448,7 +458,9 @@ test('first open edits nothing and plays at once: enabled, no Patch button, its 
   // (S3), reached through the keys' pitch normals the pad plays (K183).
   assert.match(stated,
     /^Výchozí: C Minor pentatonic, 2 oct od C2; pad hraje to, co hrají klávesy; /i);
-  assert.match(stated, /Y řídí LPF Cutoff \(the XY lead's scale and target\)/);
+  // K220: no Y cable by default; Y is the touch's velocity (pad L owns the filters).
+  assert.ok(stated.endsWith(XY_TEXT.free), stated);
+  assert.match(XY_TEXT.free, /^Y je síla úhozu/);
   const first = r.host.querySelector('[data-xy-first]');
   assert.equal(first.textContent, XY_TEXT.first);
   assert.equal(m.view.opts.describedBy.length, 1, 'the line describes the pad');
@@ -465,7 +477,8 @@ test('first open edits nothing and plays at once: enabled, no Patch button, its 
 });
 
 test('without the Y cable the pad plays its notes and says why Y drives nothing', () => {
-  const r = rig();
+  const r = rig({ store: cabledStore });
+  assert.equal(xyTarget(r.st.getModel(), PANEL), 'lpf.frequency');
   assert.equal(r.st.dispatch(xyTargetAction(r.st.getModel(), PANEL, null).action).ok, true);
   assert.equal(xyTarget(r.st.getModel(), PANEL), null);
   const m = r.mount();
@@ -492,7 +505,8 @@ test('the cold first touch: a suspended context says "Tap once to start audio"; 
   r.app.audio('suspended');
   assert.equal(r.noted.length, 1, 'nothing replays while the context is suspended');
   r.app.audio('running'); // the unlock, within this gesture or the next
-  assert.deepEqual(r.noted.at(-1), ['on', note, 90, SOURCE], 'the held note is played again');
+  assert.deepEqual(r.noted.at(-1), ['on', note, xyVelocity(0.5), SOURCE],
+    'the held note is played again, at its touch\'s velocity');
   assert.equal(first.textContent, XY_TEXT.first, 'the line says the pad plays');
   assert.ok(r.real.heldNotes().includes(note));
   m.view.model.up(1);
@@ -812,7 +826,9 @@ test('the Y value equals what the running graph plays at 44.1 and 48 kHz, held n
         const m = r.mount({ sampleRate: () => r.engine.sampleRate });
         hold(r, m); // the first touch arms: the runtime plays the document at `sampleRate`
         const doc = r.st.getModel();
-        const yEdge = doc.graph.edges.find((e) => e.from.port === 'y' && e.to.node === nodeId);
+        const padR = PANEL.resolve(doc).get('xy').id; // pad L's Y is normalled into HPF (K220)
+        const yEdge = doc.graph.edges.find((e) => e.from.node === padR && e.from.port === 'y'
+          && e.to.node === nodeId);
         const eh = r.runtime.edges.get(yEdge.id);
         assert.equal(eh.status, 'active');
         // Y's depth gain feeds the biquad's detune (cents per unit of Y): what plays at y.
@@ -852,11 +868,12 @@ test('the Y value equals what the running graph plays at 44.1 and 48 kHz, held n
     }
     // The rate matters: the same document plays (and reads) higher at 48 kHz.
     assert.ok(seen['xy-lead@48000'] > seen['xy-lead@44100']);
-    // On the default Synth document (K183) LPF Cutoff also takes the MG and EG 2 normals, whose
-    // excursion shares the Nyquist headroom: Y at 50 % plays 8.58 kHz there (11.21 kHz on the
-    // pad view's rig before K183, panelStore with the Pitch and Gate patched); shown = played
-    // is asserted above at every y.
-    assert.ok(Math.abs(seen['xy-lead@44100'] - 8576.08) < 0.01, `${seen['xy-lead@44100']}`);
+    // On the default Synth document (K183) LPF Cutoff also takes the MG and EG 2 normals and,
+    // since K220, pad L's X normal (2 octaves), whose excursion shares the Nyquist headroom: Y
+    // at 50 % plays 7.53 kHz there (8.58 kHz before K220, 11.21 kHz on the pad view's rig
+    // before K183, panelStore with the Pitch and Gate patched); shown = played is asserted
+    // above at every y.
+    assert.ok(Math.abs(seen['xy-lead@44100'] - 7531.39) < 0.01, `${seen['xy-lead@44100']}`);
   });
 
 test('before a context exists, Y is sized at the provisional 44.1 kHz and says so', () => {
@@ -884,11 +901,11 @@ test('the readout line sits above the pad; Y driving nothing reads no value', ()
   assert.ok(html.indexOf('data-osc="synth.xy.readout"') < html.indexOf('data-osc="synth.xy.pad"'),
     'the readout above the pad, clear of the docked keyboard');
   m.destroy();
-  assert.equal(r.st.dispatch(xyTargetAction(r.st.getModel(), PANEL, null).action).ok, true);
+  assert.equal(xyTarget(r.st.getModel(), PANEL), null, 'no Y cable by default (K220)');
   const n = r.mount();
   assert.equal(n.view.opts.readout.y(0.5), null);
   assert.equal(n.view.opts.readout.yEnds, null);
-  assert.equal(n.view.opts.text.y(0.5), '50 % to nothing');
+  assert.equal(n.view.opts.text.y(0.5), '50 %: síla úhozu 64', 'Y is the velocity (K220)');
   n.destroy();
 });
 

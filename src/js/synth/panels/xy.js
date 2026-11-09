@@ -16,3 +16,15 @@ export const XY_TAB = Object.freeze({ id: 'xy', label: 'XY', title: 'XY performa
 
 export const XY_MODULE = Object.freeze({ id: 'xy', label: 'XY PAD', node: 'xy-pad',
   tab: XY_TAB.id, adds: Object.freeze(['x', 'y']) });
+
+/**
+ * Pad L of the Synth face (plan K220, Q103): a second xy-pad node of the panel, on the Panel tab
+ * under the face, that plays no notes. Its X and Y are CONTROL outputs normalled to the LPF and
+ * HPF cutoffs (panels/semi-mono.js n25, n26; log, unipolar), so a touch sweeps a band and a cable
+ * from or into either jack replaces the normal as any cable does (project.typed-ports). Its scale
+ * parameters are fixed (a parameter pad has no scale): its card shows its jacks only. Resonance
+ * waits for K232 (a low-pass Q is no CV target yet).
+ */
+export const XYL_MODULE = Object.freeze({ id: 'xyl', label: 'PAD L', node: 'xy-pad',
+  tab: 'panel', fixed: Object.freeze({ mode: 'chromatic', key: 'C', octave: 3, span: 1,
+    glide: 0 }) });

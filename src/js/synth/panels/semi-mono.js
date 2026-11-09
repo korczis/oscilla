@@ -8,7 +8,7 @@
 
 import { definePanel } from '../panel.js';
 import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';
-import { XY_MODULE, XY_TAB } from './xy.js';
+import { XY_MODULE, XY_TAB, XYL_MODULE } from './xy.js';
 import { DRUMS_TAB } from '../drums.js';
 
 // K022: the panel's filters are 12 dB/oct by design (its description and FILTER_NOTE).
@@ -71,6 +71,7 @@ export default definePanel({
     { id: 'out', label: 'OUTPUT', node: 'master' },
     ...ENGINE_MODULES,
     XY_MODULE,
+    XYL_MODULE,
   ],
   // [id, from jack, to jack, edge props]. A cable into a `to` jack breaks every normal of that
   // jack; removing the last cable restores them, with the same ids (synth/normals.js).
@@ -98,6 +99,10 @@ export default definePanel({
     ['n20', 'eg2.control', 'hpf.frequency', { depth: 0, mapping: 'log', polarity: 'unipolar' }],
     ['n21', 'mg.control', 'lpf.frequency', { depth: 0, mapping: 'log' }],
     ['n22', 'eg2.control', 'lpf.frequency', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
+    // Pad L (K220): X sweeps the LPF cutoff up 2 octaves (with EG 2's 2 from 1200 Hz that is the
+    // room to 20 kHz: nothing is scaled at the default amounts), Y the HPF cutoff up 6.
+    ['n25', 'xyl.x', 'lpf.frequency', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
+    ['n26', 'xyl.y', 'hpf.frequency', { depth: 6, mapping: 'log', polarity: 'unipolar' }],
     ['n23', 'keys.gate', 'sh.trigger'],
   ],
   // An amount knob is the depth of every edge from `source` into its `to` jacks, normalled or

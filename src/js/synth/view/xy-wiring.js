@@ -38,7 +38,7 @@
 //
 // The pad is one more note input of the keys (K183, option B; K178's one Keys source): a touch
 // presses the note under X (xyDegree, the same quantisation as the pad node's pitch, one
-// function) through midi/notes.js as source 'kbd-xy', at the keys' velocity; a move into another
+// function) through midi/notes.js as source 'kbd-xy', at Y's velocity (K220); a move into another
 // scale cell is notes.legato (no new gate: the Keys node's glide); the release, and every
 // release path below, is its note-off. So the pad plays exactly what the keys play (the route of
 // midi/routes.js: the panel's Keys or the engine on Synth), with the Keys node's own priority
@@ -107,15 +107,23 @@ export const XY_TEXT = Object.freeze({
   first: 'Touch the pad to play. Nothing sounds until you do.',
   refused: 'The instrument did not start, so the pad plays nothing.',
   cold: 'Tap once to start audio.',
-  /** Y with no cable: the reason it drives nothing, and how to give it a target. */
-  free: 'Y neřídí nic: z jacku Y padu nevede žádný kabel. Vyberte cíl v poli Y drives.',
+  /** Y with no cable (the default since K220): the touch's velocity only, and how to add a
+   *  target. */
+  free: 'Y je síla úhozu: z jacku Y padu nevede žádný kabel. Cíl přidáte v poli Y drives.',
 });
 export const XY_LEAD = XY_RECIPES.find((r) => r.id === 'xy-lead');
 export const XY_OWNER = 'synth';
 /** The pad's source in the keys' note layer (midi/notes.js: input 'xy'). */
 export const XY_SOURCE = 'kbd-xy';
-export const XY_VELOCITY = 100; // without a keys velocity to follow
+/**
+ * The velocity of the note a touch plays (K220, the coordinator oscilla-43's decision of
+ * 2026-11-09): pad R's Y, 0 to 1, as MIDI velocity 1 to 127 (the filter axis moved to pad L).
+ */
+export const xyVelocity = (y) => Math.max(1, Math.min(127,
+  Math.round(1 + 126 * (Number.isFinite(y) ? y : 0))));
 // The workspace an owner's mount lives in: leaving it releases the pad.
+/** Y's name when it drives no cable: the touch's velocity (K220). */
+const VELOCITY_NAME = 'síla úhozu';
 const HOME = Object.freeze({ synth: 'synth', landing: 'landing' });
 const SELECT = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 text-sm '
   + 'text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
@@ -213,8 +221,11 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
       const p = pad().params;
       steps = xyDegree(1, p).steps;
       const scale = `${p.key} ${SCALE_LABELS[p.mode]}`;
-      const lead = p.mode === XY_LEAD.scale.mode && p.key === XY_LEAD.scale.key
-        && to === XY_LEAD.y;
+      const leadScale = p.mode === XY_LEAD.scale.mode && p.key === XY_LEAD.scale.key;
+      const lead = leadScale && to === XY_LEAD.y;
+      // The default since K220: the lead's scale, Y the velocity and no Y cable (pad L owns the
+      // filters).
+      const byDefault = leadScale && !to;
       // The note the voice sounds (xySounding: the VCOs' footage on the pad's note path, the
       // keys' pitch since K183); when that is not one known note, the pad's own note, said as
       // what it sends ("sends D3"). `sent` is the note the pad plays into the keys' note layer.
@@ -241,9 +252,9 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
         return seen.r;
       };
       return { params: p, steps, deg, sent, from, scale, reading,
-        target: to ? jackName(to) : 'nothing', lead,
-        stated: `${lead ? 'Výchozí: ' : ''}${range}; pad hraje to, co hrají klávesy; `
-          + (to ? `Y řídí ${jackName(to)}${tag}.` : XY_TEXT.free) };
+        target: to ? jackName(to) : VELOCITY_NAME, cabled: !!to, lead,
+        stated: `${byDefault ? 'Výchozí: ' : ''}${range}; pad hraje to, co hrají klávesy; `
+          + (to ? `Y řídí ${jackName(to)}${tag} a sílu úhozu.` : XY_TEXT.free) };
     },
     unwire() {
       while (offs.length) offs.pop()();
@@ -295,8 +306,6 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   // except the one its own first touch causes (the arm's claim stops the output's last player).
   const input = notes || (app && typeof app.kbdPad === 'function'
     ? app.kbdPad((why) => (opening ? 0 : release(why))) : null);
-  const velocity = () => (input && typeof input.velocity === 'function' ? input.velocity()
-    : XY_VELOCITY);
 
   /** arm()'s answer as { ok, reason, said }. */
   const armed = () => {
@@ -357,7 +366,9 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   const spec = target.wire(host.querySelector('[data-xy-controls]'));
   const box = host.querySelector('[data-osc="synth.xy.pad"]');
   if (spec && box) {
-    const { steps, deg, sent, from, scale, target: to, params: p, reading } = spec;
+    const { steps, deg, sent, from, scale, target: to, cabled, params: p, reading } = spec;
+    // K220: Y is the touch's velocity always, and with a cable also what it drives.
+    const yDoes = cabled ? `Y řídí ${to} a sílu úhozu` : `Y je ${VELOCITY_NAME}`;
     /** A cell's note as the pad names it: the note heard, else "sends D3" (xySounding). */
     const noteText = (d) => (d.sends ? `sends ${d.name}` : d.name);
     /**
@@ -436,7 +447,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     const press = (v) => { // the note under X, through the keys' note layer
       if (!input) return;
       held = sent(v.x).note;
-      input.noteOn(held, velocity(), XY_SOURCE);
+      input.noteOn(held, xyVelocity(v.y), XY_SOURCE); // Y is the touch's velocity (K220)
     };
     const lift = () => {
       if (held === null) return;
@@ -449,7 +460,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     offs.push(onApp(app, 'audioState', (now) => {
       if (now !== 'running' || !clear('data-xy-cold')) return;
       if (view && view.model.gated && held !== null && input) {
-        input.noteOn(held, velocity(), XY_SOURCE);
+        input.noteOn(held, xyVelocity(view.model.value.y), XY_SOURCE);
         live('on', view.model.value);
       }
     }));
@@ -480,9 +491,9 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       CURSORS.set(store, v);
     };
     view = mountPad(box, {
-      label: `XY pad: noty ve stupnici ${scale}, Y řídí ${to}`,
+      label: `XY pad: noty ve stupnici ${scale}, ${yDoes}`,
       description: `X je nota: ${steps} kroků stupnice ${scale}, ${p.span} oct od `
-        + `${from}, nízké vlevo, hraje se jako klávesy. Y řídí ${to}, nízké dole. `
+        + `${from}, nízké vlevo, hraje se jako klávesy. ${yDoes}, nízké dole. `
         + 'Šipky posouvají kurzor; podržte Enter nebo se dotkněte a nota zazní; Escape '
         + 'ji uvolní.',
       describedBy: [`${uid}-first`],
@@ -502,6 +513,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       text: { x: (i) => `${noteText(deg(i))}, degree ${deg(i).degree}`,
         y: (v) => {
           const yv = yValue(v, 'aria');
+          if (!cabled) return `${Math.round(v * 100)} %: ${VELOCITY_NAME} ${xyVelocity(v)}`;
           return `${Math.round(v * 100)} % to ${to}${yv ? `: ${yv}${others()}` : ''}`;
         } },
       readout: { x: (i) => noteText(deg(i)), y: (v) => (yValue(v) ? `${to} ${yValue(v)}` : null),

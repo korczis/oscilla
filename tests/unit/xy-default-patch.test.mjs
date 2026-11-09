@@ -47,7 +47,7 @@ const KEYS_NORMALS = ['n1', 'n2', 'n3', 'n4']; // Keys pitch into both VCOs, gat
 const LPF_NORMALS = ['n21', 'n22']; // MG and EG 2 into LPF Cutoff
 
 /** The default Synth document: the reference template with the panel the Synth inserts. */
-function defaultStore() {
+function insertedStore() {
   const st = createStudioStore(templateModel(REFERENCE_TEMPLATE_ID),
     { idGenerator: createIdGenerator() });
   assert.equal(typeof xy.xyInsertAction, 'function', 'synth/xy.js exports xyInsertAction');
@@ -55,6 +55,18 @@ function defaultStore() {
   assert.equal(a.type, 'BATCH', 'one BATCH: one undo entry');
   const r = st.dispatch(a);
   assert.equal(r.ok, true, r.reason);
+  return st;
+}
+/**
+ * The default document with Y cabled into LPF Cutoff, as K183's insertion made it and as the XY
+ * lead preset or a user still makes it: since K220 the insertion cables nothing (the filter
+ * axis moved to pad L), so the tests of a Y cable's behaviour patch it here.
+ */
+function cabledStore() {
+  const st = insertedStore();
+  const a = xy.xyTargetAction(st.getModel(), PANEL, 'lpf.frequency');
+  assert.ok(a.action, a.reason);
+  assert.equal(st.dispatch(a.action).ok, true);
   return st;
 }
 const ids = (model) => {
@@ -66,62 +78,58 @@ const live = (model, list) => {
   return list.filter((n) => normals.has(n));
 };
 
-test('the default Synth document holds the Y route as a typed model cable xy.y -> LPF Cutoff',
-  () => {
-    const st = defaultStore();
-    const m = st.getModel();
-    const id = ids(m);
-    const edges = m.graph.edges.filter((e) => e.from.node === id('xy'));
-    assert.equal(edges.length, 1, 'one cable leaves the pad');
-    const [e] = edges;
-    assert.deepEqual([e.from.port, e.to.node, e.to.port], ['y', id('lpf'), 'frequency']);
-    // project.typed-ports: the registry's own ports allow it, and its props validate.
-    const out = NODE_REGISTRY.port('xy-pad', 'y', 'out');
+test('K220: the default Synth document cables nothing from pad R; pad L\'s X and Y are the '
+  + 'typed normals into LPF and HPF Cutoff', () => {
+  // The coordinator oscilla-43's decision of 2026-11-09: the filter axis moved to pad L, and
+  // pad R's Y sets the velocity of the notes it plays (K183 cabled xy.y into LPF Cutoff here).
+  const st = insertedStore();
+  const m = st.getModel();
+  const id = ids(m);
+  assert.equal(m.graph.edges.filter((e) => e.from.node === id('xy')).length, 0,
+    'no cable leaves pad R');
+  assert.deepEqual(panelCables(m, PANEL), [], 'the insertion adds no cable');
+  assert.equal(xy.xyTarget(m, PANEL), null);
+  // Pad L: two normals, each a typed CONTROL edge the registry allows, log and unipolar.
+  const padL = m.graph.edges.filter((e) => e.from.node === id('xyl'));
+  assert.deepEqual(padL.map((e) => [e.from.port, e.to.node, e.to.port]).sort(),
+    [['x', id('lpf'), 'frequency'], ['y', id('hpf'), 'frequency']]);
+  for (const e of padL) {
+    const out = NODE_REGISTRY.port('xy-pad', e.from.port, 'out');
     const inp = NODE_REGISTRY.port('filter', 'frequency', 'in');
     const v = canConnect(out, inp, { sourceNodeId: e.from.node, targetNodeId: e.to.node });
     assert.equal(v.allowed, true, v.reason);
     assert.equal(v.signalType, 'CONTROL');
-    const checked = validateEdgeProps(e.props, v.signalType, inp,
-      NODE_REGISTRY.param('filter', 'frequency'));
-    assert.equal(checked.ok, true, JSON.stringify(checked.errors));
-    // A cable, not a normal: listed in the panel's cables (drawn, removable, linked).
-    assert.deepEqual(panelCables(m, PANEL).map((c) => [c.from, c.to]),
-      [['xy.y', xy.XY_DEFAULT_Y]]);
-    assert.equal(xy.xyTarget(m, PANEL), 'lpf.frequency');
-    assert.equal(xy.XY_DEFAULT_Y, 'lpf.frequency');
-    // No Pitch or Gate cable is needed: the keyboard's normals stay intact.
-    assert.equal(xy.xyPatched(m, PANEL), false);
-    assert.deepEqual(live(m, KEYS_NORMALS), KEYS_NORMALS);
-    // A performance output adds: LPF Cutoff keeps its MG and EG 2 normals (and amount knobs).
-    assert.deepEqual(live(m, LPF_NORMALS), LPF_NORMALS);
-    assert.equal(jackState(m, PANEL, 'lpf.frequency'), 'summing',
-      'the jack sums: its normals sound and the Y cable adds to them');
-  });
+    assert.deepEqual([e.props.mapping, e.props.polarity], ['log', 'unipolar']);
+  }
+  // The keyboard's normals are intact and LPF Cutoff keeps its MG and EG 2 normals beside pad L.
+  assert.equal(xy.xyPatched(m, PANEL), false);
+  assert.deepEqual(live(m, KEYS_NORMALS), KEYS_NORMALS);
+  assert.deepEqual(live(m, LPF_NORMALS), LPF_NORMALS);
+  assert.equal(jackState(m, PANEL, 'lpf.frequency'), 'normalled');
+});
 
 test('the Synth inserts the panel through xyInsertAction, on every insert path', () => {
   const code = (p) => readFileSync(`${ROOT}${p}`, 'utf8').replace(/^\s*\/\/.*$/gm, '');
-  // The one insert path (insert.js insertAction, review S5) cables Y; ensurePanel and New Synth
-  // voice go through it, and none instantiates the panel bare.
-  assert.match(code('src/js/synth/insert.js'), /xyInsertAction\(/,
-    'insert.js inserts with the Y cable');
+  // The one insert path (insert.js insertAction, review S5); ensurePanel and New Synth voice go
+  // through it, and none instantiates the panel bare.
+  assert.match(code('src/js/synth/insert.js'), /xyInsertAction\(/, 'insert.js inserts the panel');
   for (const p of ['src/js/synth/ui.js', 'src/js/synth/picker.js']) {
     assert.match(code(p), /\binsertAction\(/, `${p} inserts through insert.js`);
   }
   for (const p of ['src/js/synth/insert.js', 'src/js/synth/ui.js', 'src/js/synth/picker.js']) {
     assert.doesNotMatch(code(p), /panel\.instantiate\(/, `${p}: no bare instantiate`);
   }
-  // The pad already there (a reused panel): its cables are the user's, none is added.
-  const st = defaultStore();
-  assert.equal(st.dispatch(xy.xyTargetAction(st.getModel(), PANEL, null).action).ok, true);
+  // K220: the insertion adds no cable at all, over an empty document or a reused panel.
+  const st = cabledStore();
   const again = xy.xyInsertAction(st.getModel(), PANEL);
   assert.ok(!again.steps.some((s) => s.type === 'EDGE_ADD' && s.from
-    && s.from.node === ids(st.getModel())('xy')), 'no Y cable re-added over the user\'s choice');
+    && s.from.node === ids(st.getModel())('xy')), 'no pad R cable is added');
 });
 
 test('the pad\'s notes reach the voice through the one Keys source, last-note priority; a '
   + 'computer key sounds beside it', () => {
   assert.equal(KEY_ROUTES.synth.plays, 'synthSink', 'the Synth\'s keys play the Synth sink');
-  const st = defaultStore();
+  const st = cabledStore();
   const fx = createFakeAudioEnv({ sampleRate: 48000 });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init());
@@ -156,7 +164,7 @@ test('the pad\'s notes reach the voice through the one Keys source, last-note pr
 });
 
 test('removing the Y cable leaves the pad playing pitch only; the normals are as they were', () => {
-  const st = defaultStore();
+  const st = cabledStore();
   const m = st.getModel();
   const cable = panelCables(m, PANEL).find((c) => c.from === 'xy.y');
   const r = unpatch(m, PANEL, cable.id);
@@ -173,7 +181,7 @@ test('removing the Y cable leaves the pad playing pitch only; the normals are as
 
 test('a performance cable adds; any other cable still replaces the normals, and removing it '
   + 'restores them beside the Y cable', () => {
-  const st = defaultStore();
+  const st = cabledStore();
   // Y into HPF Cutoff: its MG and EG 2 normals stay.
   const y = patchCable(st.getModel(), PANEL, 'xy.y', 'hpf.frequency');
   assert.ok(y.action, y.reason);
@@ -198,8 +206,8 @@ test('a performance cable adds; any other cable still replaces the normals, and 
 });
 
 /** The default document running on the fake engine at `sampleRate`: { st, rt, fx }. */
-function runningDefault(sampleRate, edit = null) {
-  const st = defaultStore();
+function runningDefault(sampleRate, edit = null, make = cabledStore) {
+  const st = make();
   if (edit) edit(st);
   const fx = createFakeAudioEnv({ sampleRate });
   const engine = new AudioEngine({ env: fx.env });
@@ -212,7 +220,7 @@ function runningDefault(sampleRate, edit = null) {
 }
 
 test('the bay draws and names the Y cable as summing into LPF Cutoff', () => {
-  const m = defaultStore().getModel();
+  const m = cabledStore().getModel();
   // Each role as its token's name, so the roles can be told apart (no page to resolve them).
   const tokens = { ...Object.fromEntries(Object.entries(PANEL_TOKENS)
     .map(([k, name]) => [k, `var(${name})`])), cables: CABLE_TOKENS.map((n) => `var(${n})`) };
@@ -241,7 +249,7 @@ test('the bay draws and names the Y cable as summing into LPF Cutoff', () => {
   assert.doesNotMatch(sum, /stroke-dasharray/, 'not the dashed warning of open or mixed');
   assert.match(svg, new RegExp(`data-cable="${cables[0].id}"`), 'the cable itself is drawn');
   // A replacing cable is drawn as patched, not summing: the inner glyph takes its colour.
-  const st = defaultStore();
+  const st = cabledStore();
   const mg = patchCable(st.getModel(), PANEL, 'mg.control', 'lpf.frequency');
   assert.equal(st.dispatch(mg.action).ok, true);
   assert.equal(jackState(st.getModel(), PANEL, 'lpf.frequency'), 'patched');
@@ -261,7 +269,8 @@ test('Y is 0 until the first touch: the pad\'s Y output rests at 0 in the runnin
     rt.stop?.();
   });
 
-test('the sum stays within LPF Cutoff\'s declared range: normals at their amounts, Y at 1', () => {
+test('the sum stays within LPF Cutoff\'s declared range: normals at their amounts, pad L at 1',
+  () => {
   const p = NODE_REGISTRY.param('filter', 'frequency');
   const lpfAt = (st) => ids(st.getModel())('lpf');
   // The default amounts, and the worst case: Cutoff at its top, both amounts at their top.
@@ -277,13 +286,14 @@ test('the sum stays within LPF Cutoff\'s declared range: normals at their amount
   };
   for (const sampleRate of [44100, 48000]) {
     for (const edit of [null, worst]) {
-      const { st, rt } = runningDefault(sampleRate, edit);
+      // K220: the default document, where pad L's X (n25) sweeps LPF Cutoff beside n21 and n22.
+      const { st, rt } = runningDefault(sampleRate, edit, insertedStore);
       const id = lpfAt(st);
       const plan = rt.plan;
       const incoming = plan.edgeOrder.map((e) => plan.edges.get(e))
         .filter((e) => e.to.node === id && e.kind === 'control')
         .map((edge) => ({ edge, handle: rt.edges.get(edge.id) }));
-      assert.equal(incoming.length, 3, 'n21, n22 and the Y cable');
+      assert.equal(incoming.length, 3, 'n21, n22 and pad L\'s X normal n25');
       const safeMaximum = 0.95 * (sampleRate / 2);
       const cb = computeBases(plan.nodes.get(id), incoming, { safeMaximum });
       // The played cutoff: base Hz x 2^(cents / 1200), every edge's source at the extreme that
@@ -299,8 +309,8 @@ test('the sum stays within LPF Cutoff\'s declared range: normals at their amount
       assert.ok(top <= cap * (1 + 1e-9), `${sampleRate} Hz ${edit ? 'worst' : 'default'}: `
         + `${top} Hz <= ${cap} Hz`);
       assert.ok(top <= p.max, 'inside the parameter\'s declared maximum');
-      // Y adds nothing downward (unipolar, offset 0): the lowest cutoff is the normals' own.
-      const y = incoming.find(({ edge }) => edge.from.node === ids(st.getModel())('xy'));
+      // Pad L adds nothing downward (unipolar, offset 0): the lowest cutoff is the normals' own.
+      const y = incoming.find(({ edge }) => edge.from.node === ids(st.getModel())('xyl'));
       assert.deepEqual([y.edge.props.polarity, y.edge.props.offset], ['unipolar', 0]);
       assert.equal(Math.min(0, cb.gains.get(y.edge.id) * y.handle.range[0]), 0);
       if (!edit) {
@@ -341,7 +351,7 @@ test('Y never takes any target past its declared range: Hz targets capped, linea
     let checked = 0;
     for (const t of xy.xyTargets(PANEL)) {
       // A target the panel refuses Y (S&H Rate while its Clock is normalled) has no cable.
-      if (!xy.xyTargetAction(defaultStore().getModel(), PANEL, t.id).action) continue;
+      if (!xy.xyTargetAction(cabledStore().getModel(), PANEL, t.id).action) continue;
       checked += 1;
       const [mid, port] = t.id.split('.');
       const def = NODE_REGISTRY.param(PANEL.module(mid).node, port);
@@ -393,7 +403,7 @@ test('a legato opens no new gate: the Keys envelopes are gated once for the held
   // Observed on the envelopes, not on the returned retrigger flag (review F8): the pad's move
   // into another scale cell glides the Keys pitch and leaves EG 1 and EG 2 where they are.
   const { createLiveNotes } = await import('../../src/js/studio/live-notes.js');
-  const m = defaultStore().getModel();
+  const m = cabledStore().getModel();
   const id = ids(m);
   const calls = [];
   const keys = { play: (at, note, v, o) => calls.push(['play', note, !!(o && o.legato)]),
@@ -420,7 +430,7 @@ test('Y is 0 until the first touch: an armed Synth hears no X or Y from the moun
     // nobody touches the pad; an arrow on the focused pad without a gate moves only the cursor.
     const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
     const { createXyModel } = await import('../../src/js/ui/kinds/xy-pad.js');
-    const st = defaultStore();
+    const st = cabledStore();
     const fx = createFakeAudioEnv({ sampleRate: 48000 });
     const engine = new AudioEngine({ env: fx.env });
     assert.ok(engine.init());
@@ -484,7 +494,7 @@ test('Y is 0 until the first touch: an armed Synth hears no X or Y from the moun
 async function padRig(edit = null) {
   const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
   const { createXyModel } = await import('../../src/js/ui/kinds/xy-pad.js');
-  const st = defaultStore();
+  const st = cabledStore();
   if (edit) edit(st);
   const fx = createFakeAudioEnv({ sampleRate: 48000 });
   const engine = new AudioEngine({ env: fx.env });
@@ -559,7 +569,7 @@ test('N1: a performance cable into an Oscillator\'s detune keeps the Nyquist hea
     // oscillator at 20 kHz with a detune of 100: the fit to detune's range (+-1200) must not
     // replace the headroom k that 0.95 x Nyquist leaves (V272 A7).
     for (const sampleRate of [44100, 48000]) {
-      const st = defaultStore();
+      const st = cabledStore();
       const m0 = st.getModel();
       const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
       assert.ok(osc, 'the reference template has an oscillator');
@@ -615,7 +625,7 @@ test('N3: a bipolar or offset performance cable stays inside its target, above a
     assert.ok(0.3 - 0.6 * off.k >= -1e-12, 'the lowest point stays at or above the minimum');
     assert.ok(Math.abs(off.shift - (off.k - 1) * -0.6) < 1e-12, 'its constant scaled with it');
     // Through the runtime: Y bipolar 0.8 into MIXER Level 1 at 0.5.
-    const st = defaultStore();
+    const st = cabledStore();
     const a = xy.xyTargetAction(st.getModel(), PANEL, 'mix.level1');
     assert.equal(st.dispatch(a.action).ok, true);
     const m = st.getModel();
@@ -670,14 +680,14 @@ test('N4: Y with no room says so: the readout, xyRoom and a performance-limited 
     assert.match(half.readout(), /Y hraje 50 % své hloubky/);
     half.done();
     // The default document: LPF Cutoff (a frequency, capped at Nyquist) has its depth.
-    assert.equal(xy.xyRoom(defaultStore().getModel(), PANEL), null);
+    assert.equal(xy.xyRoom(cabledStore().getModel(), PANEL), null);
   });
 
 test('N4: a non-performance cable is never fitted, and the pad\'s Pitch is no performance '
   + 'output', () => {
     // Fitting is for the pad's X and Y only (review mutants M24, M25): MG into MIXER Level 1 at
     // its top keeps its depth (its excess is reported, §242), the pad's Pitch is not fitted.
-    const st = defaultStore();
+    const st = cabledStore();
     const m = st.getModel();
     const mg = patchCable(m, PANEL, 'mg.control', 'mix.level1');
     assert.equal(st.dispatch(mg.action).ok, true);
@@ -708,7 +718,7 @@ test('N4: a non-performance cable is never fitted, and the pad\'s Pitch is no pe
   });
 
 test('N5 and F2: the bay names every summing cable; only a summing cable says it adds', () => {
-  const st = defaultStore();
+  const st = cabledStore();
   assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'xy.x', 'lpf.frequency').action)
     .ok, true);
   assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'mg.control', 'vco2.tune').action)
@@ -741,7 +751,7 @@ test('N5 and F2: the bay names every summing cable; only a summing cable says it
 test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; no preset sets it',
   async () => {
     const { controlReason, xyGlideIdle } = await import('../../src/js/synth/view/face.js');
-    const st = defaultStore();
+    const st = cabledStore();
     const mod = { ...PANEL.module('xy'), def: NODE_REGISTRY.get('xy-pad') };
     const glide = { kind: 'knob', key: 'glide' };
     const node = () => PANEL.resolve(st.getModel()).get('xy');
@@ -761,7 +771,7 @@ test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; n
     assert.ok(xy.XY_RECIPES.every((r) => !r.values.some(([k]) => k === 'xy.glide')),
       'no built-in preset sets the idle Glide');
     // A document carrying a pad Glide (saved before) still loads and keeps it.
-    const s2 = defaultStore();
+    const s2 = cabledStore();
     assert.equal(s2.dispatch({ type: 'NODE_PARAM_SET', nodeId: PANEL.resolve(s2.getModel())
       .get('xy').id, params: { glide: 0.05 } }).ok, true);
   });
@@ -771,7 +781,7 @@ test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; n
 /** The default document with Y cabled into the reference oscillator's Detune (depth cents),
  *  the oscillator at `hz`, running at `sampleRate`: its runtime's diagnostics. */
 function detuneRig({ hz, detune = 0, depth = 1200, sampleRate = 48000 }) {
-  const st = defaultStore();
+  const st = cabledStore();
   const m0 = st.getModel();
   const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
   assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: osc.id,
@@ -868,7 +878,7 @@ test('NF5: a cable with its whole room makes no performance-limited diagnostic',
 
 /** The default document with X and Y both cabled into MIXER level 1 (0.7, depth 0.25 each). */
 function levelRig(edit = null) {
-  const st = defaultStore();
+  const st = cabledStore();
   assert.equal(st.dispatch(xy.xyTargetAction(st.getModel(), PANEL, 'mix.level1').action).ok,
     true);
   assert.equal(st.dispatch(patchCable(st.getModel(), PANEL, 'xy.x', 'mix.level1').action).ok,
@@ -932,7 +942,7 @@ test('NF6: Y\'s room is read once per document, not on every move, and again on 
     } } });
     const { mountSynthXy } = await import('../../src/js/synth/view/xy-wiring.js');
     const { createXyModel } = await import('../../src/js/ui/kinds/xy-pad.js');
-    const st = defaultStore();
+    const st = cabledStore();
     assert.equal(st.dispatch(xy.xyTargetAction(st.getModel(), PANEL, 'mix.level1').action).ok,
       true);
     const kids = new Map();
@@ -973,7 +983,7 @@ test('R-K: a pad cable\'s constant never lifts an Oscillator past 0.95 x Nyquist
     for (const [detune, depth, polarity, offset] of [[800, 1200, 'bipolar', 0],
       [600, 1200, 'bipolar', 0], [900, 600, 'bipolar', 0], [0, 1200, 'unipolar', 600],
       [500, 1200, 'unipolar', 400]]) {
-      const st = defaultStore();
+      const st = cabledStore();
       const m0 = st.getModel();
       const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
       assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: osc.id,
@@ -1017,7 +1027,7 @@ test('RK-2: the Nyquist guard leaves a bipolar cable the static its range fit fo
     [48000, 20000, 1100, 1200, null, null], // at the cap: the room's top, 200 cents of sweep
   ];
   for (const [sampleRate, frequency, detune, depth, lo, hi] of rows) {
-    const st = defaultStore();
+    const st = cabledStore();
     const m0 = st.getModel();
     const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
     assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: osc.id,
