@@ -6,13 +6,18 @@
 //   liveModel(model) -> model    the armed graph: every node connected to a Keys node (Master
 //                                Output included, never crossed), with an empty timeline, so
 //                                arming plays the panel and nothing else of the document
-//   keysGatedEnvelopes(model) -> Set<envelope id>   reached by an unmuted Keys gate edge: the
-//                                transport closes them at arm and PLAY (no drone without a key)
-//   gateTargets(model, keysId) -> { envelopes, clocks }
-//   createLiveNotes({ getModel, handleOf }) -> notes
+//   keysGatedEnvelopes(model) -> Set<envelope id>   reached by an unmuted Keys gate edge, also
+//                                through a Step Modulator's relay: the transport closes them at
+//                                arm and PLAY (no drone without a key)
+//   gateTargets(model, keysId) -> { envelopes, clocks }   one hop (trigger-fanout.js triggerHop)
+//   createLiveNotes({ getModel, handleOf, owner }) -> notes   owner(id) -> reason | null: the
+//                                transport's one ownership rule (K103: a TRIGGER input the
+//                                timeline drives while it plays is not gated live)
 //     notes.event(keysId, { kind: 'on' | 'off' | 'all-off', note, velocity, at }) -> result
 //       on   the top note changes: the Keys pitch moves (glide only legato), its envelopes get
-//            gate(at, null) and its clocked Random clock(at, k), k counted from arm (0 first)
+//            gate(at, null) and its clocked Random and Step Modulator clock(at, k), k counted
+//            from arm (0 first); a Step that takes a step relays the gate on its Trigger (K103).
+//            A gate left alone on a timeline-owned input: result.owned { code, reason }
 //       off  the stack empties: release(at); the top note changes: legato return, no gate
 //       legato  { from, note }: a held note moves to `note` without a gate (K183, the XY pad's
 //            finger crossing into another scale cell): `from` leaves the stack and `note` joins
@@ -35,37 +40,32 @@
 import { gateCloseAt } from '../audio/gate.js';
 import { createNoteStack } from '../synth/note-stack.js';
 import { playsNotes } from './registry.js';
+import { reachedEnvelopes, stepRelays, triggerHop } from './trigger-fanout.js';
 
 /** The router's refusals, as the user reads them. */
 export const LIVE_NOTES_TEXT = Object.freeze({
   noteRange: (n) => `Nota ${n} je mimo rozsah not 0 až 127; nehraje se.`,
   keyRange: (n, lo, hi) => `Nota ${n} je mimo rozsah kláves tohoto uzlu Keys ${lo} až ${hi}; `
     + 'nehraje se.',
+  // K103: one ownership rule, while the transport plays the timeline.
+  timelineOwned: (name) => `Hradlo uzlu ${name} teď řídí přehrávaná časová osa; živá nota ho `
+    + 'neotevře.',
 });
 const inNoteRange = (n) => Number.isInteger(n) && n >= 0 && n <= 127;
 
-const unmuted = (e) => !(e.props && e.props.muted);
 
-/** Envelope and clock targets of a Keys node's gate (its unmuted TRIGGER edges). */
-export function gateTargets(model, keysId) {
-  const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
-  const envelopes = [];
-  const clocks = [];
-  for (const e of model.graph.edges) {
-    if (e.from.node !== keysId || e.from.port !== 'gate' || !unmuted(e)) continue;
-    const n = byId.get(e.to.node);
-    if (!n) continue;
-    if (n.type === 'envelope' && e.to.port === 'gate') envelopes.push(n.id);
-    else clocks.push(n.id);
-  }
-  return { envelopes, clocks };
-}
+/**
+ * Envelope and clock targets of a gate (one hop of its unmuted TRIGGER edges): the one fan-out
+ * of trigger-fanout.js (K103), which the transport's scheduled gates use too.
+ */
+export const gateTargets = (model, keysId) => triggerHop(model, keysId);
 
+/** Envelopes a Keys or XY pad Gate reaches, through Step Modulator relays too (K103). */
 export function keysGatedEnvelopes(model) {
   const out = new Set();
   for (const n of model.graph.nodes) {
     if (n.type !== 'keys' && n.type !== 'xy-pad') continue;
-    for (const id of gateTargets(model, n.id).envelopes) out.add(id);
+    for (const id of reachedEnvelopes(model, n.id)) out.add(id);
   }
   return out;
 }
@@ -95,7 +95,7 @@ export function liveModel(model) {
   };
 }
 
-export function createLiveNotes({ getModel, handleOf }) {
+export function createLiveNotes({ getModel, handleOf, owner = () => null }) {
   const stacks = new Map(); // keys id -> note stack
   const counts = new Map(); // clocked node id -> triggers since arm
   const poly = new Map(); // engine id -> Set of held notes (its pool holds the voices)
@@ -109,25 +109,51 @@ export function createLiveNotes({ getModel, handleOf }) {
     if (!stacks.has(id)) stacks.set(id, createNoteStack());
     return stacks.get(id);
   };
-  const gate = (id, at, on) => {
-    if (on) opened.set(id, at); else opened.delete(id);
-    const kh = handleOf(id);
-    if (kh && typeof kh.gateAt === 'function') kh.gateAt(at, on);
-    const { envelopes, clocks } = gateTargets(getModel(), id);
-    for (const env of envelopes) {
+  const relaying = new Set(); // Step Modulator ids whose last live tick took a step (K103)
+  let refusal = null; // the first timeline-owned input an event's gate left alone (K103)
+  // One live trigger from `id` along its TRIGGER edges (trigger-fanout.js triggerHop, K103):
+  // its Envelopes open (on) or release (off); each clocked node it reaches takes a tick (on
+  // only, counted from arm), and a Step Modulator that takes a step relays it on its own
+  // Trigger, whose gates close with this one. An input the timeline owns while it plays
+  // (owner(id) -> its reason) is left alone, and its reason kept for the event's result.
+  const fan = (id, at, on, seen) => {
+    const m = getModel();
+    const { envelopes, clocks } = triggerHop(m, id);
+    const free = (x) => {
+      const why = owner(x);
+      if (why) refusal = refusal || why;
+      return !why;
+    };
+    for (const env of envelopes.filter(free)) {
       const h = handleOf(env);
       if (!h) continue;
       if (on && typeof h.gate === 'function') h.gate(at, null);
       if (!on && typeof h.release === 'function') h.release(at);
     }
-    if (!on) return;
     for (const c of clocks) {
+      if (seen.has(c) || !free(c)) continue;
+      seen.add(c);
+      if (!on) {
+        if (relaying.delete(c)) fan(c, at, false, seen);
+        continue;
+      }
       const h = handleOf(c);
       if (!h || typeof h.clock !== 'function') continue;
       const k = counts.get(c) || 0;
       h.clock(at, k);
       counts.set(c, k + 1);
+      relaying.delete(c);
+      if (stepRelays(m.graph.nodes.find((n) => n.id === c), k)) {
+        relaying.add(c);
+        fan(c, at, true, seen);
+      }
     }
+  };
+  const gate = (id, at, on) => {
+    if (on) opened.set(id, at); else opened.delete(id);
+    const kh = handleOf(id);
+    if (kh && typeof kh.gateAt === 'function') kh.gateAt(at, on);
+    fan(id, at, on, new Set([id]));
   };
 
   function polyEvent(id, h, ev) {
@@ -179,7 +205,18 @@ export function createLiveNotes({ getModel, handleOf }) {
     return { ok: true, held: pads.has(id) ? 1 : 0, top: r.note, ...r };
   }
 
+  /**
+   * A live event (see the header); a gate it left alone on a timeline-owned input (K103) is
+   * named on the result: owned { code: 'timeline-owned', reason }.
+   */
   function event(keysId, ev) {
+    refusal = null;
+    const r = play(keysId, ev);
+    return refusal && r && r.ok !== false
+      ? { ...r, owned: { code: 'timeline-owned', reason: refusal } } : r;
+  }
+
+  function play(keysId, ev) {
     const { kind, note, velocity = 100, at } = ev;
     const ph = handleOf(keysId);
     if ((ph && typeof ph.move === 'function') || (pads.has(keysId) && /off/.test(kind))) {
@@ -234,6 +271,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     },
     reset() {
       opened.clear();
+      relaying.clear();
       stacks.clear();
       counts.clear();
       poly.clear();
