@@ -95,6 +95,63 @@ export const OUTPUT_OWNER_TABLE = Object.freeze([
   Object.freeze({ owner: 'notes', view: 'noty', yields: Object.freeze([]) }),
 ]);
 
+/**
+ * What leaving a workspace does to each owner (C053): one table, applied by the bus on every
+ * workspace change (bus.leave, main.js's one watcher) in the same event. A row:
+ *   owner     who it concerns (the table's owners, the Synth's Arm, the lab microphone of C040)
+ *   effect    'keep' (it sounds on), 'stop' or 'disarm'
+ *   applies(from, to)   whether this change concerns it
+ *   sounding(cmp, bus)  whether it sounds (or is armed) now
+ *   act(cmp, from, to)  what the bus does (none for 'keep')
+ *   sentence  what the status bar says when the row met a sounding owner
+ * The rows keep what the app did before C053, now stated: a measurement does not run unseen
+ * (it stops whenever the workspace is not MEASURE), held keys are released, an armed-only Synth
+ * run is disarmed, the instrument, the sequence and a PLAYed Studio run sound on (Esc stops
+ * them), and the lab microphone stays on until C040 decides otherwise.
+ */
+export const LEAVE_POLICY = Object.freeze([
+  Object.freeze({ owner: 'measurement', effect: 'stop', applies: (from, to) => to !== 'measure',
+    sounding: (cmp) => call(cmp, 'measureOwnsOutput'),
+    act: (cmp) => call(cmp, 'measureAbort', 'workspace'),
+    sentence: 'Měření se zastavilo: neběží na jiné stránce.' }),
+  Object.freeze({ owner: 'reference', effect: 'stop', applies: (from, to) => to !== 'measure',
+    sounding: (cmp) => call(cmp, 'measureReferenceOwnsOutput'),
+    act: (cmp) => call(cmp, 'measureAbort', 'workspace'),
+    sentence: 'Snímání referenční úrovně se zastavilo.' }),
+  Object.freeze({ owner: 'instrument', effect: 'keep', applies: () => true,
+    sounding: (cmp) => !!cmp.playing, act: null,
+    sentence: 'Tón hraje dál; zastavíte ho klávesou Esc.' }),
+  Object.freeze({ owner: 'audition', effect: 'keep', applies: () => true,
+    sounding: (cmp, bus) => bus.owner() === 'audition', act: null,
+    sentence: 'Ukázka riffu dohraje.' }),
+  Object.freeze({ owner: 'sequencer', effect: 'keep', applies: () => true,
+    sounding: (cmp, bus) => bus.sequencerPlaying(), act: null,
+    sentence: 'Sekvence hraje dál; zastavíte ji klávesou Esc.' }),
+  // Leaving the Studio: its live notes off and an armed-only run disarmed (the key route's own
+  // leave, midi/routes.js KEY_ROUTES, run by midi/ui.js midiRouteLeave; studio-sink.js, K176);
+  // a run the user started with PLAY sounds on.
+  Object.freeze({ owner: 'studio', effect: 'disarm', applies: (from) => from === 'studio',
+    sounding: (cmp) => call(cmp, 'studioOwnsOutput'),
+    act: (cmp, from) => call(cmp, 'midiRouteLeave', from),
+    sentence: 'Studio: zapnuté klávesy se vypnuly; přehrávání spuštěné tlačítkem hraje dál.' }),
+  Object.freeze({ owner: 'synth', effect: 'disarm', applies: (from) => from === 'synth',
+    sounding: (cmp) => !!(cmp.synth && cmp.synth.armed),
+    act: (cmp) => call(cmp, 'synthLeave'),
+    sentence: 'Syntezátor se vypnul: jeho klávesy po odchodu nehrají.' }),
+  Object.freeze({ owner: 'notes', effect: 'stop', applies: () => true,
+    sounding: (cmp) => !!cmp.notesSounding,
+    act: (cmp) => call(cmp, 'kbdReleaseAll'),
+    sentence: 'Držené noty se uvolnily.' }),
+  Object.freeze({ owner: 'lab-microphone', effect: 'keep', applies: () => true,
+    sounding: (cmp) => !!cmp.micActive, act: null,
+    sentence: 'Mikrofon laboratoře zůstává zapnutý.' }),
+]);
+
+/** cmp[name](...args) when it is a function, else undefined. */
+function call(cmp, name, ...args) {
+  return cmp && typeof cmp[name] === 'function' ? cmp[name](...args) : undefined;
+}
+
 /** The owner ids as constants (OWNER.instrument === 'instrument'), for the sites that name one. */
 export const OWNER = Object.freeze(Object.fromEntries(OUTPUT_OWNER_TABLE
   .map((r) => [r.owner, r.owner])));
@@ -410,8 +467,24 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     writeMaster(engine, g, at);
   }
 
+  /**
+   * The user left workspace `from` for `to` (C053): every row of LEAVE_POLICY that applies acts
+   * now, and the rows that met a sounding owner say their sentence in the status bar's live
+   * region (cmp.announceText). -> the owners the rows met.
+   */
+  function leave(from, to) {
+    const cmp = app();
+    if (!cmp || from === to) return [];
+    const met = LEAVE_POLICY.filter((r) => r.applies(from, to) && r.sounding(cmp, api));
+    for (const r of LEAVE_POLICY) if (r.act && r.applies(from, to)) r.act(cmp, from, to);
+    step('leave', null, { detail: { from: String(from), to: String(to),
+      met: met.map((r) => `${r.owner}:${r.effect}`).join(' ') } });
+    if (met.length) cmp.announceText = met.map((r) => r.sentence).join(' ');
+    return met.map((r) => r.owner);
+  }
+
   const api = { claim, holds, release, owner, playback, subscribe, stopAll, onStop, note, armed,
-    setMaster, sequencerPlaying, stopSequence, claimOutput, stopPlayback, outputBusy };
+    setMaster, leave, sequencerPlaying, stopSequence, claimOutput, stopPlayback, outputBusy };
   if (engine && typeof engine === 'object') masterBuses.set(engine, api);
   return api;
 }

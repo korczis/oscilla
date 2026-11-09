@@ -231,7 +231,8 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
       // Escape are the playback bus's stopAll (C050), which releases the keys (kbdReleaseAll).
       win.addEventListener('blur', kbdRelease);
       if (typeof cmp.$watch === 'function') {
-        cmp.$watch('workspace', () => { kbdRelease(); if (view) view.resize(); });
+        // Leaving a workspace releases the keys through the bus's leave policy (C053).
+        cmp.$watch('workspace', () => { if (view) view.resize(); });
       }
 
       // The link key: `kbd=1` arms the view the link opens, `kbd=0` disarms it.
