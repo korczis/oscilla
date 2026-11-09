@@ -68,9 +68,13 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       + '</h3><div data-drums-body="" class="mt-2"></div></section>';
   }
 
+  const isPlaying = () => {
+    const ph = playhead();
+    return !!(ph && ph.playing);
+  };
+
   function toolbar() {
-    const t = transport();
-    const playing = !!(t && t.playing);
+    const playing = isPlaying();
     return '<div class="mb-2 flex flex-wrap items-center gap-2">'
       + `<button type="button" class="${PRIMARY}" data-drums-play="" aria-pressed="${playing}">`
       + `${playing ? TEXT.stop : TEXT.play}</button>`
@@ -123,10 +127,16 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
         if (v.page != null) owner.page = v.page;
         if (grid) grid.set({ selection: owner.selection, page: owner.page });
       },
-      // Every frame: the playhead only (transport() also sets audio up and follows the flag).
-      playStep: () => (m ? playingStep(model(), m.view, playhead()) : null),
+      // Every frame: the playhead only (transport() also sets audio up and follows the flag);
+      // the Play button follows a stop the transport made by itself (review R2-K222-2).
+      playStep: () => {
+        if (!m) return null;
+        const ph = playhead();
+        if (!!(ph && ph.playing) !== m.playing) syncBar();
+        return playingStep(model(), m.view, ph);
+      },
     });
-    m = { root: body, grid, clipId: clip.id, view };
+    m = { root: body, grid, clipId: clip.id, view, playing: isPlaying() };
     listen(body);
   }
 
@@ -190,9 +200,15 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
     });
   }
 
+  /** The Play button says what a press does now, written only when that changes. */
   function syncBar() {
-    const bar = m && m.root.querySelector('[data-drums-bar]');
-    if (bar) bar.innerHTML = toolbar();
+    if (!m) return;
+    const playing = isPlaying();
+    m.playing = playing;
+    const btn = m.root.querySelector('[data-drums-play]');
+    if (!btn) return;
+    btn.textContent = playing ? TEXT.stop : TEXT.play;
+    btn.setAttribute('aria-pressed', String(playing));
   }
 
   function mount() {

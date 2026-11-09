@@ -23,7 +23,11 @@
 //   dr-play     real-time: Play runs the Studio transport, aria-current=step moves within
 //               'step playhead moves' (3 s) and the hit sounds (the percussion engine's voices
 //               above 0) within 'drum step sounds' (3 s); at 390 px (8 a page) the grid follows
-//               the step to its page ('step playhead follows to its page', 3 s); Stop clears it
+//               the step to its page ('step playhead follows to its page', 3 s) and a page the
+//               user turns back holds while the playhead advances two steps (R2-K222-1); Stop
+//               clears it
+//   dr-end      the transport stops by itself after the bar and the Play button says Přehrát
+//               again with aria-pressed false (review R2-K222-2)
 //   dr-pad      a pad pressed (pointer, or Enter on it) sounds its row within 'drum pad sounds'
 //               (2 s) and the hit ends with no voice left
 //   no-console-errors
@@ -62,6 +66,7 @@ const UI_MS = 8000; // a render after a store commit
 const NOTE_MS = 2000; // 'step note in model'
 const PLAYHEAD_MS = 3000; // 'step playhead moves'
 const SOUND_MS = 3000; // the transport arming and the audio clock reaching the hit
+const END_MS = 12000; // one bar at the tempo, the look-ahead and the stop on a loaded host
 const CHECK_MS = 120000;
 const ROWS = ['Kopák', 'Virbl', 'Tlesk', 'Hi-hat zavřený', 'Hi-hat otevřený', 'Tom střední'];
 const GRID = '[data-drums-grid] [role="grid"]';
@@ -275,12 +280,45 @@ function defineChecks() {
       const s = await current();
       return s !== null && s >= size.steps ? s : null;
     }, { ms: PLAYHEAD_MS, what: 'step playhead follows to its page' });
+    // Review R2-K222-1: a page the user turns while it plays holds. Measured on the clock: the
+    // label stays on page 1 while the transport's playhead advances two steps.
+    let held = true;
+    if (size.steps < 16) {
+      await page.locator('[data-drums-grid] [data-step-page="-1"]').click();
+      const t0 = await page.evaluate(() => window.OSCILLA.studio.transport.playhead().position);
+      const stepS = 0.25 * 60 / (await page.evaluate(() => window.OSCILLA.studio.model.transport
+        .tempo));
+      held = await until(async () => {
+        const r = await page.evaluate(() => ({
+          label: document.querySelector('[data-drums-grid] [data-step-page-label]').textContent,
+          at: window.OSCILLA.studio.transport.playhead().position }));
+        if (!/^Stránka 1 /.test(r.label)) throw new Error(`the turned page did not hold: ${r.label}`);
+        return r.at - t0 >= 2 * stepS ? r : null;
+      }, { ms: PLAYHEAD_MS, what: 'a page turned while playing holds for two steps' });
+    }
     await page.locator('[data-drums-play]').click(); // Stop
     const quiet = await until(async () => ((await current()) === null
       && (await sources(page)) === 0 ? true : null),
     { ms: SOUND_MS, what: 'dr-play: Stop clears the step and leaves no voice' });
-    return { ok: !!(first && moved && sounded && followed && quiet), first: first.s,
-      moved: moved.s, followed };
+    return { ok: !!(first && moved && sounded && followed && held && quiet), first: first.s,
+      moved: moved.s, followed, held: !!held };
+  });
+
+  def('dr-end', async ({ page }) => {
+    // Review R2-K222-2: the transport stops by itself after the bar; the Play button says so.
+    await drumClip(page);
+    const btn = '[data-drums-play]';
+    await page.locator(btn).click();
+    await until(() => page.evaluate(() => window.OSCILLA.studio.transport.playing),
+      { ms: SOUND_MS, what: 'dr-end: Play starts the transport' });
+    const stopped = await until(async () => (await page.evaluate(() => window.OSCILLA.studio
+      .transport.playing) ? null : true), { ms: END_MS, what: 'dr-end: the bar ends' });
+    const said = await until(() => page.evaluate((sel) => {
+      const b = document.querySelector(sel);
+      return b.textContent.trim() === 'Přehrát' && b.getAttribute('aria-pressed') === 'false'
+        ? b.textContent.trim() : null;
+    }, btn), { ms: UI_MS, what: 'dr-end: the Play button says Přehrát after the bar' });
+    return { ok: !!(stopped && said), said };
   });
 
   def('dr-pad', async ({ page, size }) => {

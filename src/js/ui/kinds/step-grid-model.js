@@ -38,7 +38,8 @@
 //   grid.valueAt(lane, step, fraction) -> the vertical drag of a value lane, one action
 //   grid.menu(item, arg)  accent | ratchet n | probability p | slide, on the focused step
 //   grid.setGrid({ stepBeats?, swing?, seed? }, mode) -> one NOTES_GRID_SET (notes mode)
-//   grid.followPage(step) -> the page of a playing step off the page shown, else null
+//   grid.followPage(step) -> the page of a playing step off the page shown, else null; a page
+//     the user turned holds until the playhead enters it or playing stops
 //   grid.focus, grid.state() -> { cells, offGrid, values, focus, selection, page, pages }
 
 import { clamp } from '../../core/math.js';
@@ -199,6 +200,9 @@ export function createStepGrid(opts) {
   let disabled = false;
   let clipboard = null;
   let drag = null;
+  // A page turned by the user (pager, [ and ], arrows across a page, a tap or a drag) holds the
+  // page against following until the playhead enters it or playing stops (review R2-K222-1).
+  let held = false;
   const focus = { lane: 0, step: 0 };
 
   const project = () => (list ? null : projectNotes(payload.notes, { lanes, steps, stepBeats }));
@@ -262,7 +266,10 @@ export function createStepGrid(opts) {
     focus.lane = clamp(focus.lane + dl, 0, lanes.length - 1);
     focus.step = clamp(focus.step + ds, 0, steps - 1);
     const p = Math.floor(focus.step / pageSteps);
-    if (p !== page) onView({ page: p });
+    if (p !== page) {
+      held = true; // a page the user moved to: following waits (review R2-K222-1)
+      onView({ page: p });
+    }
     return true;
   }
   function select(ds) {
@@ -331,6 +338,7 @@ export function createStepGrid(opts) {
   function toPage(p) {
     if (p < 0 || p >= pages()) return true;
     focus.step = clamp(p * pageSteps + (focus.step % pageSteps), 0, steps - 1);
+    held = true; // a page the user turned to: following waits (review R2-K222-1)
     onView({ page: p });
     return true;
   }
@@ -394,6 +402,7 @@ export function createStepGrid(opts) {
     },
     down(lane, step, { shift = false } = {}) {
       if (disabled) return false;
+      held = true; // a tap or a drag on the page shown keeps it shown
       if (shift) {
         onView({ selection: [selection.length === 2 ? selection[0] : focus.step, step] });
         focus.lane = lane;
@@ -464,9 +473,16 @@ export function createStepGrid(opts) {
     /** The page the playing step is on, when it is not the page shown (null otherwise): a grid
      *  narrower than its clip follows the playhead (review R2-W8-7). */
     followPage(step) {
-      if (!Number.isInteger(step) || step < 0 || step >= steps) return null;
+      if (!Number.isInteger(step) || step < 0 || step >= steps) {
+        held = false; // stopped, or past the clip: the next run follows again
+        return null;
+      }
       const p = Math.floor(step / pageSteps);
-      return p === page ? null : p;
+      if (p === page) {
+        held = false; // the playhead entered the page shown: following resumes
+        return null;
+      }
+      return held ? null : p;
     },
     /** The clip's grid change (ADR 0086 decision 2): one NOTES_GRID_SET, keep by default. */
     setGrid(next, mode = 'keep') {

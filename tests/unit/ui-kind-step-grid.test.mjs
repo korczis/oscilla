@@ -532,3 +532,20 @@ test('T3 fix: sixteen steps need the 80 px name column the view draws, not 128 p
   assert.equal(pageStepsFor(800), PAGE_STEPS.wide, 'the Synth card at 1536 px is about 800 px');
   assert.equal(pageStepsFor(16 * 44 - 15 + 80 + 7), PAGE_STEPS.narrow);
 });
+
+test('R2-K222-1: a page the user turns holds until the playhead enters it or a stop', () => {
+  const { grid } = notesGrid([], { pageSteps: 4 });
+  assert.equal(grid.followPage(5), 1, 'untouched: it follows');
+  grid.set({ page: 1 }); // the owner showed the playing page
+  grid.key('['); // the user turns back to page 0 while step 6 plays
+  assert.equal(grid.state().page, 0);
+  assert.equal(grid.followPage(6), null, 'the turned page holds');
+  assert.equal(grid.followPage(9), null, 'still held while the playhead is elsewhere');
+  assert.equal(grid.followPage(1), null, 'the playhead enters the page shown');
+  assert.equal(grid.followPage(5), 1, 'and following resumes');
+  grid.set({ page: 1 });
+  grid.key(']');
+  assert.equal(grid.followPage(6), null);
+  assert.equal(grid.followPage(null), null, 'a stop releases the hold');
+  assert.equal(grid.followPage(13), 3, 'the next run follows');
+});
