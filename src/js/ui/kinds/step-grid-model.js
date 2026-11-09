@@ -39,14 +39,15 @@
 //   grid.menu(item, arg)  accent | ratchet n | probability p | slide, on the focused step
 //   grid.focus, grid.state() -> { cells, offGrid, values, focus, selection, page, pages }
 
+import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { validateParamValue } from '../../studio/registry.js';
 
 /** The velocity at or above which a step is accented (ADR 0086 decision 3). */
 export const ACCENT_VEL = 0.8;
 /** The velocity of a step switched on, and of an accent removed. */
 export const STEP_VEL = 0.7;
-/** A new step clip's grid: one 4/4 bar of sixteenths (ADR 0086 decision 2). */
-export const NEW_GRID = Object.freeze({ steps: 16, stepBeats: 0.25 });
+/** A new step clip's grid (ADR 0086 decision 2): the Studio's one constant. */
+export const NEW_GRID = NEW_STEP_GRID;
 /** Steps per page: eight 44 px steps at a phone's width, sixteen beside the names wider. */
 export const PAGE_STEPS = Object.freeze({ narrow: 8, wide: 16 });
 /** Sixteen 44 px steps and a name column need this width. */
