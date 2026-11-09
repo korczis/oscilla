@@ -23,12 +23,12 @@ scope:
   - "dist"
 depends_on:
   - "K005"
-  - "K067"
+  - "K068"
   - "K103"
 acceptance_criteria:
   - "tests/unit/drum-voices.test.mjs, failing on the merge base, asserts on StudioFakeContext (tests/unit/sequencer-fake-audio.mjs) the scheduled calls, times, ramps and node census; tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate (in the style of tests/browser/dsp.cjs) and failing on the merge base, checks the figures: the kick's instantaneous frequency falls from its start to its end frequency within 2 % at its sweep time; each voice decays to -60 dB rel within 10 % of its stated decay; a closed hat hit releases a sounding open hat in the same choke group within one render quantum, click-free under the freeze suite's step limit; velocity 0.5 is 6 dB rel below velocity 1 within 0.5 dB."
   - "Negative cases, each asserted by a test that fails on the merge base where the behaviour is new: a hit at velocity 0; a choke of a voice that is not sounding."
-  - "A browser check in tests/browser/drums.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the three voices added in the Studio appear in the Signal Path and as hits targets of a steps clip. Real-time: a hit sent through the Studio's Drive surface raises the voice's meter tap, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: each type is added by pointer, keyboard and touch, with accessible port names. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "A browser check in tests/browser/drums.cjs, wired into npm run test:synth (so CI and the release gate run it), fails on the merge base and proves the slice linked, real-time and interactive. Linked: the three voices added in the Studio appear in the Signal Path and as targets of a notes clip (a drum lane is a note number, ADR 0086 decision 5). Real-time: a hit sent through the Studio's Drive surface raises the voice's meter tap, each within a named until() deadline of tests/browser/lib/wait.cjs. Interactive: each type is added by pointer, keyboard and touch, with accessible port names. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
   - "Every edit is one undoable dispatch through the one Studio store (a continuous gesture is one history entry, undo and redo restore the exact serialized model) and the model holds plain data only (project.studio-model-is-canonical); every connection goes through canConnect and full-model validation, and a refusal shows the validator's sentence and leaves model, history and runtime unchanged (project.typed-ports, project.no-silent-feedback)."
   - "Every node it plays is built by an engine adapter with track()/source() accounting, all timing is on the audio clock (no timer or rAF times audio), envelopes are click-free, frequencies stay below 0.95 x Nyquist of the running context, the peak stays at or below the output ceiling and the engine node census is 0 after stop (project.audio-engine-discipline v2)."
   - "Every pinned template studioHash is unchanged: it adds node types, ports, capabilities, enum options or clip kinds only, never a parameter on an existing node type (D2, K022)."
@@ -44,4 +44,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-09
