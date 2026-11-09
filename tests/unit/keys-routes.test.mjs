@@ -15,8 +15,25 @@ const mod = await import('../../src/js/midi/routes.js').catch(() => ({}));
 test('one table: each workspace names its sink, its first arm state and its leave', () => {
   assert.equal(typeof mod.routeOf, 'function');
   assert.deepEqual(Object.keys(mod.KEY_ROUTES).sort(), ['playground', 'studio', 'synth']);
-  assert.deepEqual({ ...mod.KEY_ROUTES.synth },
-    { plays: 'synthSink', armed: true, leave: null, editors: null, yieldsTo: 'xy-pad' });
+  // U100: the Synth keeps its chips and three rows below the page header on a short phone.
+  assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.synth)),
+    { plays: 'synthSink', armed: true, leave: null, editors: null, yieldsTo: 'xy-pad',
+      keepsRoom: { toolbar: '[data-osc="page.header"]', editorMin: mod.SYNTH_CONTENT_MIN_PX,
+        stackedBelow: 0, keptBy: '[data-osc="synth.panel"][data-keeps-dock]' } });
+  assert.equal(mod.SYNTH_CONTENT_MIN_PX, 192);
+  // The measured phones (U100): the dock folds on both iPhone SE sizes and stays on a 13.
+  const synth = mod.KEY_ROUTES.synth;
+  const fold = (viewH, toolbarBottom) => mod.roomFolds({ route: synth,
+    room: { viewH, band: 313, toolbarBottom, stacked: false } });
+  assert.equal(fold(568, 276), true, 'iPhone SE (1st): 255 px left under 276 + 192');
+  assert.equal(fold(667, 259), true, 'iPhone SE (3rd): 354 px left under 259 + 192');
+  assert.equal(fold(844, 253), false, 'iPhone 13: 531 px left, 445 needed');
+  assert.equal(fold(1024, 150), false, 'desktop');
+  // Its Panel tab keeps the keys docked whatever the room (keepsDock -> keptBy; oscilla-43's
+  // decision of 2026-11-09: the keys are its instrument).
+  assert.equal(mod.roomFolds({ route: synth, room: { viewH: 568, band: 313, toolbarBottom: 276,
+    stacked: false, kept: true } }), false, 'kept: the Panel tab');
+  assert.equal(mod.ROOM_EVENT, 'osc:room');
   // The Studio's graph and timeline keep their letter shortcuts while they have the focus.
   assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.studio)),
     { plays: 'studioSink', armed: true, leave: 'leave',
