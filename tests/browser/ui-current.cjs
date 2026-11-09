@@ -54,6 +54,10 @@
 //                        strip (also with Presets' empty state shown);
 //     safety-more-target-<w> on a fresh page at each phone size the listening notice's More is
 //                        a 44 px target under a coarse pointer;
+//     phone-synth-room-<w>, phone-synth-panel-keys-<w>  U100, at 320x568 and 375x667: the Synth
+//                        opened from a link with both notices shown; on Engines the dock folds,
+//                        each notice is one line, Expand all takes a tap and three 44 px rows of
+//                        the tab show above the dock; the Panel tab keeps the keys docked.
 //     related-menu-phone at 390x844 under touch the page header's Related menu opens on a tap,
 //                        lists the workspace's related pages as 44 px items, and one tap on
 //                        the first opens it.
@@ -99,6 +103,8 @@ const WORK_SHARE = 2 / 3;
 const WORK_GAP = 16;
 const FONT_MIN = 12;
 const TOUCH_MIN = 44;
+// U100: what a Synth tab keeps in view on a short phone (three 44 px rows).
+const SYNTH_ROOM_MIN = 3 * 44;
 // sessionStorage key of the dismissed listening notice (src/js/core/constants.js safetySeen).
 const SAFETY_SEEN = 'oscilla.safetyNoticeCollapsed';
 const PHONE_MEASURES = ['share', 'covered', 'font', 'target', 'reopen', 'labels', 'edge',
@@ -714,6 +720,56 @@ async function runOne(name) {
           ok: b.width >= min - 0.5 && b.height >= min - 0.5 };
       }, TOUCH_MIN), (m) => m.shown && m.ok, `ui-current: safety More at ${size.width} px`);
       check(`safety-more-target-${size.width}`, r.ok, JSON.stringify(r.last));
+      await fresh.close();
+    }
+    // U100: on a short phone a Synth opened from a link, both notices shown, keeps room for its
+    // tab. On Engines the docked keys fold to their handle (one rule, routes.js roomFolds), each
+    // notice takes one line, Expand all takes a tap at its centre and SYNTH_ROOM_MIN px of the
+    // tab show between the main scroller's top and the dock; its Panel tab, whose keys are its
+    // instrument, keeps them docked (keepsDock, oscilla-43's decision of 2026-11-09).
+    for (const size of PHONE_SIZES.filter((s) => s.height < 700)) {
+      const fresh = await browser.newContext({ viewport: size, hasTouch: true,
+        ...(name === 'firefox' ? {} : { isMobile: true }) });
+      const p = await fresh.newPage();
+      await p.goto(`${URL}#m=synth&yt=engines`);
+      await until(() => p.evaluate(() => document.documentElement.dataset.ready === 'true'
+        && document.getElementById('osc-app').dataset.mode === 'synth'),
+      { ms: READY_MS, what: `ui-current: U100 Synth opened from a link at ${size.width} px` });
+      const r = await pollFor(() => p.evaluate(({ min, room }) => {
+        const dock = document.querySelector('[data-dock-state]');
+        const handle = document.querySelector('[data-osc="keyboard.handle"]');
+        const main = document.getElementById('osc-main').getBoundingClientRect();
+        const toasts = [...document.querySelectorAll('[data-osc="alert"]')]
+          .map((t) => Math.round(t.getBoundingClientRect().height));
+        const safety = document.getElementById('osc-safety');
+        const sh = safety && safety.getClientRects().length
+          ? Math.round(safety.getBoundingClientRect().height) : 0;
+        const btn = document.querySelector('[data-fold-all="open"]');
+        let tap = false;
+        if (btn) {
+          btn.scrollIntoView({ block: 'center' });
+          const b = btn.getBoundingClientRect();
+          const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          tap = !!hit && (hit === btn || btn.contains(hit)) && b.height >= min - 0.5;
+        }
+        // The dock's own top (docked: the keys; folded: its handle), else the main's bottom.
+        const top = (el) => (el && el.getClientRects().length ? el.getBoundingClientRect().top
+          : Infinity);
+        const dockTop = Math.min(top(dock), top(handle), main.bottom);
+        const shown = Math.round(Math.min(dockTop, main.bottom) - main.top);
+        const m = { state: dock && dock.getAttribute('data-dock-state'), toasts, safety: sh, tap,
+          shown };
+        m.ok = m.state === 'collapsed' && toasts.length > 0 && toasts.every((h) => h <= 64)
+          && sh > 0 && sh <= 56 && tap && shown >= room;
+        return m;
+      }, { min: TOUCH_MIN, room: SYNTH_ROOM_MIN }), (m) => m.ok,
+      `ui-current: U100 the Synth's Engines tab keeps room at ${size.width} px`);
+      check(`phone-synth-room-${size.width}`, r.ok, JSON.stringify(r.last));
+      await p.tap('#osc-synth-tab-panel');
+      const kept = await pollFor(() => p.evaluate(() => document.querySelector('[data-dock-state]')
+        ?.getAttribute('data-dock-state')), (x) => x === 'docked',
+      `ui-current: U100 the Panel tab keeps the keys docked at ${size.width} px`);
+      check(`phone-synth-panel-keys-${size.width}`, kept.ok, `dock ${kept.last}`);
       await fresh.close();
     }
     // The page header's Related menu on a phone: a tap opens it, its items are the related

@@ -21,7 +21,9 @@ export default definePanel({
   id: 'semi-mono',
   version: 1,
   title: 'Semi-modular mono voice',
-  tabs: [{ id: 'panel', label: 'Panel', title: 'Semi-modular mono voice',
+  // keepsDock (U100): the Panel tab's keys are its instrument; on a short phone they stay
+  // docked here while the other tabs yield them (midi/routes.js keepsRoom.keptBy).
+  tabs: [{ id: 'panel', label: 'Panel', title: 'Semi-modular mono voice', keepsDock: true,
     description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.' }, ENGINE_TAB,
