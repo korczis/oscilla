@@ -119,12 +119,28 @@ const scrollToGrid = (page) => page.evaluate((sel) => {
 /** Drag from step `a` to step `b` of the first lane: mouse, or touch pointers on a phone. */
 async function drag(page, a, b, touch) {
   await scrollToGrid(page);
+  // The Studio settles after an edit (a track row, a status line): the grid holds still at the
+  // same place for two reads in a row before the pointer goes down on it.
+  let last = '';
+  await until(async () => {
+    const at = await page.evaluate((sel) => {
+      const r = document.querySelector(sel).getBoundingClientRect();
+      return `${Math.round(r.left)},${Math.round(r.top)}`;
+    }, GRID);
+    const still = at === last;
+    last = at;
+    return still;
+  }, { ms: UI_MS, what: 'the step grid holds still before the drag' });
   const boxes = await page.evaluate(({ sel, a: x, b: y }) => [x, y].map((s) => {
     const r = document.querySelector(`${sel}[data-lane="0"][data-step="${s}"]`)
       .getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    const p = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    const hit = document.elementFromPoint(p.x, p.y);
+    return { ...p, hit: hit ? `${hit.tagName}.${hit.getAttribute('role') || ''}`
+      + `${hit.dataset && hit.dataset.step != null ? `#${hit.dataset.step}` : ''}` : null };
   }), { sel: CELL, a, b });
   if (!touch) {
+    page.lastDragHits = boxes.map((x) => x.hit);
     await page.mouse.move(boxes[0].x, boxes[0].y);
     await page.mouse.down();
     await page.mouse.move(boxes[1].x, boxes[1].y, { steps: 6 });
@@ -184,8 +200,10 @@ function defineChecks() {
     const notes = await until(async () => {
       seen = await notesOf(page, id);
       return seen.length === 4 ? seen : null;
-    }, { ms: NOTE_MS, what: 'step note in model' }).catch((e) => {
-      throw new Error(`${e.message}; the clip holds ${JSON.stringify(seen)}`);
+    }, { ms: NOTE_MS, what: 'step note in model' }).catch(async (e) => {
+      const sel = await page.evaluate(() => JSON.stringify(window.OSCILLA.studio.selection));
+      throw new Error(`${e.message}; the clip holds ${JSON.stringify(seen)}; under the pointer `
+        + `${JSON.stringify(page.lastDragHits || null)}; selection ${sel}`);
     });
     const one = (await undoDepth(page)) === depth + 1;
     await page.evaluate(() => window.OSCILLA.studio.store.undo());

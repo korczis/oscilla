@@ -66,7 +66,12 @@ export function mountClipSteps(host, svc, first) {
   return {
     grid,
     update(next) {
+      // The Inspector re-renders on every runtime state change: an unchanged clip changes
+      // nothing here (its payload is the same object in the immutable model).
+      const same = next.payload === view.payload && next.steps === view.steps
+        && next.stepBeats === view.stepBeats && next.lanes.join() === view.lanes.join();
       view = next;
+      if (same) return;
       grid.set({ payload: next.payload, lanes: next.lanes, laneNames: next.laneNames,
         steps: next.steps, stepBeats: next.stepBeats, selection: owner.selection,
         page: owner.page });

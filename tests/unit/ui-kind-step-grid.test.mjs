@@ -421,3 +421,25 @@ test('R2-W8-3: the Studio\'s shortcuts dialog, where the grid is mounted, lists 
   for (const k of stepGrid.keys) assert.ok(ids.has(k.row), k.row);
   assert.deepEqual([...stepGrid.workspaces], ['studio']);
 });
+
+test('a re-render waits for a held drag; the Inspector skips an unchanged clip', async () => {
+  const { mountStepGrid } = await import('../../src/js/ui/kinds/step-grid.js');
+  const host = fakeEl();
+  const root = fakeEl();
+  Object.defineProperty(host, 'firstElementChild', { get: () => root });
+  const actions = [];
+  const view = mountStepGrid(host, { mode: 'notes', lanes: [60], clipId: 'c',
+    payload: { notes: [] }, steps: 16, stepBeats: SB, pageSteps: 8,
+    commit: (a) => { actions.push(a); return true; } });
+  const label = root.querySelector('[data-step-page-label]');
+  view.model.down(0, 0);
+  label.textContent = 'held';
+  view.set({ page: 1 }); // mid-drag: no render
+  assert.equal(label.textContent, 'held');
+  view.model.over(0, 2);
+  view.model.up();
+  assert.equal(actions.length, 1);
+  view.set({});
+  assert.notEqual(label.textContent, 'held');
+  view.destroy();
+});

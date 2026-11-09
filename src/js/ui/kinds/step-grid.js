@@ -347,7 +347,9 @@ export function mountStepGrid(host, opts) {
       if (next.onView) owner.onView = next.onView;
       if (next.laneNames) laneNames = [...next.laneNames];
       model.set(next);
-      render();
+      // Never mid-drag: replacing the cells under a held pointer loses the gesture in WebKit;
+      // the release renders.
+      if (!model.drag) render();
     },
     setDisabled(reason) {
       disabled = reason || null;
