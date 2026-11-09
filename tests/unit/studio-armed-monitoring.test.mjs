@@ -17,6 +17,7 @@ import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import { createStudioTransport } from '../../src/js/studio/transport.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
+import { createStudioModel } from '../../src/js/studio/schema.js';
 import { claimStudioOutput } from '../../src/js/ui/studio/workspace.js';
 import { createTransportCommands } from '../../src/js/ui/studio/transport-commands.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
@@ -182,4 +183,66 @@ test('the Studio transport commands: PLAY while armed starts the timeline, STOP 
   await settled(s, cmd.playStop());
   assert.equal(s.transport.armed, true, 'Space while playing from armed is STOP, keys still armed');
   assert.equal(s.starts.length, 1);
+});
+
+// Review of #500 (oscilla-c1, R1-R3): a Sequence's trigger clocks a Step Modulator; four pattern
+// clips at 0, 0.5, 1 and 1.5 s.
+function clocked() {
+  const store = createStudioStore(createStudioModel(), { idGenerator: createIdGenerator() });
+  const d = (a) => {
+    const r = store.dispatch(a);
+    assert.equal(r.ok, true, r.reason);
+    return r;
+  };
+  const add = (t) => d({ type: 'NODE_ADD', nodeType: t }).created.nodes[0];
+  const edge = (f, fp, t, tp) => d({ type: 'EDGE_ADD', from: { node: f, port: fp },
+    to: { node: t, port: tp } });
+  const seq = add('sequence');
+  const master = add('master');
+  const flt = add('filter');
+  const target = add('step-modulator');
+  edge(seq, 'audio', flt, 'audio');
+  edge(flt, 'audio', master, 'audio');
+  edge(target, 'control', flt, 'frequency');
+  edge(seq, 'trigger', target, 'clock');
+  const tr = d({ type: 'TRACK_ADD', kind: 'event', target: seq }).created.tracks[0];
+  for (let i = 0; i < 4; i++) {
+    d({ type: 'CLIP_ADD', trackId: tr, kind: 'pattern', start: i * 0.5, duration: 0.25 });
+  }
+  const fx = createFakeAudioEnv({ sampleRate: 44100 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store });
+  const steps = store.getModel().graph.nodes.find((n) => n.id === target).params.steps;
+  return { fx, runtime, transport, target, steps };
+}
+
+for (const mode of ['never armed', 'armed']) {
+  test(`${mode}: after STOP the next PLAY counts clock triggers from step 0`, async () => {
+    const s = clocked();
+    if (mode === 'armed') assert.equal(s.transport.arm().ok, true);
+    assert.equal(s.transport.start({ position: 0 }).ok, true);
+    s.fx.advance(1.3); // triggers at 0, 0.5 and 1 s passed
+    await settled(s, s.transport.stop({ keepArmed: true }));
+    assert.equal(s.transport.armed, mode === 'armed');
+    const r = s.transport.start({ position: 0 });
+    assert.equal(r.ok, true, r.reason);
+    s.fx.advance(0.3);
+    const offset = s.runtime.nodes.get(s.target).outputs.control.offset;
+    const sets = offset.calls.filter((c) => c[0] === 'setValueAtTime' && c[2] >= r.baseTime - 1e-9)
+      .map((c) => c[1]);
+    assert.equal(sets[0], s.steps[0], 'the first trigger of the second PLAY is step 0');
+  });
+}
+
+test('the timeline\'s end of a run that began armed leaves the keys armed', () => {
+  const s = clocked();
+  assert.equal(s.transport.arm().ok, true);
+  assert.equal(s.transport.start({ position: 0 }).ok, true);
+  s.fx.advance(3); // the last clip ends at 1.75 s
+  assert.equal(s.transport.armed, true, 'armed after the end');
+  assert.equal(s.transport.playhead().playing, false, 'the timeline ended');
+  assert.deepEqual(s.transport.debugInfo().unplayed, [], 'nothing of the timeline is listed');
+  assert.equal(s.runtime.state, 'running');
 });

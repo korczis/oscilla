@@ -526,6 +526,8 @@ method (an engine change, out of this issue's scope):
   Stop button, its Play/Stop toggle and the timeline's transport commands) of a run that began
   armed stops the timeline and applies the live model again, still on the same runtime, so the
   keys stay armed and sounding (the owner's 'STOP keeps it armed (Recommended)', 2026-11-03);
+  the end of the timeline of such a run does the same, and clock triggers count from 0 again
+  at the next PLAY, as after a whole STOP;
   the transport bar shows it (`data-osc="studio.armed"`). Disarm, Escape, page hide, leaving
   the workspace and another owner taking the output stop it whole: every note released and
   the node census back to 0 (`tests/unit/studio-armed-monitoring.test.mjs`).

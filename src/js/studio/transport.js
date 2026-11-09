@@ -13,8 +13,9 @@
 //                                                stop the Studio output; resolves once released
 //   transport.stop({ keepArmed: true })         the user's STOP (K104): a run that began armed
 //                                                stops its timeline and stays armed on the same
-//                                                runtime, the keys sounding; any other run, a
-//                                                fast stop and every stop without it stop whole
+//                                                runtime, the keys sounding (the timeline's end
+//                                                does the same); any other run, a fast stop and
+//                                                every stop without it stop whole
 //   transport.returnToStart() -> playhead       RETURN: the return point becomes 0 (relocates
 //                                                while playing)
 //   transport.locate(position) -> playhead      the same for any position
@@ -1511,7 +1512,8 @@ export function createStudioTransport({
     const end = anchorEndTime(scheduler.getState().anchor) + STOP_PAD_S;
     if (now >= end) {
       record({ key: null, decision: 'end', at: now });
-      stop({ reason: 'end' });
+      // A run that began armed ends as the user's STOP does: the keys stay armed (K104).
+      stop({ reason: 'end', keepArmed: true });
       emit('ended', { at: now });
     } else {
       arm((end - now) * 1000 + 1);
@@ -1791,6 +1793,11 @@ export function createStudioTransport({
     const plan = scheduler.stop(ctx.currentTime);
     applyStop(plan);
     lanes.clear();
+    // As release() does: clock triggers are instants, the next PLAY counts from 0 (V272 A2,
+    // review of #500 R1), and what the timeline left unplayed is not the armed graph's (R3).
+    ticks.clear();
+    ticksPassed.clear();
+    unplayed.clear();
     armedOnly = true;
     const m = view(store.getModel());
     const rev = store.getRevision();
