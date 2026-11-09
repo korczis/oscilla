@@ -645,3 +645,20 @@ The Step Modulator's **Trigger** output relays each step it takes on its clock (
 last step of a `once` run), so a chain Clock → Step Modulator → Envelope gates on the steps. A
 trigger event clip on Random or a Step Modulator clocks it as a trigger edge does, and makes it
 `clocked` (`compiler.js`) even without a clock edge.
+
+### One TRIGGER fan-out and one ownership rule (K103)
+
+The transport and the live note router (`studio/live-notes.js`, the Synth panel and the Studio
+keys) share one fan-out, `studio/trigger-fanout.js`: from any TRIGGER output (a Keys or XY pad
+Gate, a Clock, a Sequence or Step Modulator Trigger, read from the registry) along its unmuted
+edges to every TRIGGER input it reaches (an Envelope's Gate, a Random's or Step Modulator's
+clock), through each Step Modulator's relay. Scheduled, a notes clip's and a gate clip's Keys Gate
+take the same path as a pattern clip or a Clock; live, a key's Gate walks the same hop with the
+same relay rule, and a relayed gate closes with the key's.
+
+One ownership rule decides who gates an input. While the transport plays the timeline, the
+TRIGGER inputs it drives (`timelineGateInputs`: the targets of gate and trigger clips, and every
+input a Sequence, a Keys node with clips, a clocked Step Modulator or a Clock reaches) are the
+timeline's: a live gate on one is refused, gates nothing there, and the note's result names it
+(`owned: { code: 'timeline-owned', reason }`), which the Synth and Studio keys say in the polite
+live region. While the transport is stopped (armed), live gates own every input.
