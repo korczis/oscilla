@@ -361,6 +361,7 @@ export function createStudioUi(svc = {}) {
       micBusy: () => ctx.micBusy,
       userPatches: () => library().then((l) => l.patches()),
       openLibrary: () => cmp.patchLibraryOpen(),
+      playhead: () => (ctx.transport ? ctx.transport.playhead() : null),
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {

@@ -86,7 +86,7 @@ restore earlier snapshots (`src/js/studio/actions.js`, `src/js/studio/history.js
 `SELECTION_CHANGE` and `VIEW_SET` change view state only and are neither undoable nor dirtying.
 
 <!-- actions:begin -->
-`NODE_ADD`, `NODE_REMOVE`, `NODE_MOVE`, `NODE_PARAM_SET`, `NODE_RENAME`, `EDGE_ADD`, `EDGE_REMOVE`, `EDGE_UPDATE`, `TRACK_ADD`, `TRACK_REMOVE`, `CLIP_ADD`, `CLIP_REMOVE`, `CLIP_MOVE`, `CLIP_RESIZE`, `CLIP_UPDATE`, `CLIP_SET_TIME_BASE`, `AUTOMATION_POINT_ADD`, `AUTOMATION_POINT_MOVE`, `AUTOMATION_POINT_REMOVE`, `MARKER_ADD`, `MARKER_REMOVE`, `MARKER_MOVE`, `LOOP_SET`, `TRANSPORT_SET`, `METADATA_SET`, `PASTE`, `DUPLICATE`, `PATCH_INSERT`, `BATCH`, `PATCH_REPLACE`, `SELECTION_CHANGE`, `VIEW_SET`
+`NODE_ADD`, `NODE_REMOVE`, `NODE_MOVE`, `NODE_PARAM_SET`, `NODE_RENAME`, `EDGE_ADD`, `EDGE_REMOVE`, `EDGE_UPDATE`, `TRACK_ADD`, `TRACK_REMOVE`, `CLIP_ADD`, `CLIP_REMOVE`, `CLIP_MOVE`, `CLIP_RESIZE`, `CLIP_UPDATE`, `NOTES_GRID_SET`, `CLIP_SET_TIME_BASE`, `AUTOMATION_POINT_ADD`, `AUTOMATION_POINT_MOVE`, `AUTOMATION_POINT_REMOVE`, `MARKER_ADD`, `MARKER_REMOVE`, `MARKER_MOVE`, `LOOP_SET`, `TRANSPORT_SET`, `METADATA_SET`, `PASTE`, `DUPLICATE`, `PATCH_INSERT`, `BATCH`, `PATCH_REPLACE`, `SELECTION_CHANGE`, `VIEW_SET`
 <!-- actions:end -->
 
 ## Timeline and automation
@@ -196,6 +196,7 @@ Further unit tests cover the Studio outside the `v31-studio-` prefix (`v4-*`, `v
 - `tests/browser/v31-studio-runtime.cjs`
 - `tests/browser/instrument-dsp.cjs`
 - `tests/browser/studio-keys.cjs`
+- `tests/browser/step-grid.cjs`
 <!-- browser-suites:end -->
 
 The Synth's suites (`tests/browser/synth.cjs`, `tests/browser/synth-engines.cjs`,
