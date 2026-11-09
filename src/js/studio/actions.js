@@ -20,7 +20,7 @@
 // (K061: one entry, one gate call; NODE_ADD, EDGE_ADD and TRACK_ADD (K149) may name an unused
 // id, NODE_ADD a metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop);
 // timeline additions
-// (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; patch additions (V426, patches.js):
+// (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE, NOTES_GRID_SET (W008); patch additions (V426, patches.js):
 // PATCH_INSERT { patch, at?, route? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
 // graph with <name>"), the explicit insert-or-replace intent of §114; PATCH_REPLACE { patch,
 // onto, label? } replaces the parameters of the nodes `onto` maps (patches.js patchParams: a
@@ -81,6 +81,7 @@ import {
 import { validateStudioCommit } from './validate.js';
 import { createHistory, STUDIO_HISTORY_LIMIT } from './history.js';
 import { PatchError, insertPatch, patchParams, replaceWithPatch } from './patches.js';
+import { gridSet } from './notes-grid.js';
 import { NO_TRACE } from '../core/trace.js';
 
 export { STUDIO_HISTORY_LIMIT };
@@ -572,6 +573,13 @@ const REDUCERS = {
         : c)) }),
       label: `Edit ${clip.kind} clip`,
     };
+  },
+
+  NOTES_GRID_SET(model, a, ctx) { // W008: notes-grid.js gridSet, one undo entry
+    const r = gridSet(requireIn(model.timeline.clips, a.clipId, 'clip'), a.grid, a.mode);
+    if (r.refused) reject(r.refused);
+    const out = REDUCERS.CLIP_UPDATE(model, { clipId: a.clipId, payload: r.payload }, ctx);
+    return out.label ? { ...out, label: 'Mřížka klipu' } : out;
   },
 
   CLIP_SET_TIME_BASE(model, a) {

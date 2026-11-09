@@ -74,6 +74,11 @@
 //              key arms it and the transport bar's armed indicator shows, PLAY plays, and STOP
 //              leaves the keys armed (indicator and Synth state) with A still sounding (the
 //              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
+//   s-libinsert K225 (desktop and phone): in a changed document without the panel, the Synth's
+//              Library (the Studio's one patch library) inserts the panel from its Bass preset by
+//              pointer (a tap on the phone), one undo entry, the status naming the Master feed it
+//              took; after Undo, Enter on Bass in the listbox inserts it again (LPF at 180 Hz); the
+//              Studio graph draws its nodes and normal edges, and armed, a key sounds
 //   s-normals  K214 (desktop and phone): in a changed document Insert puts the panel in by
 //              pointer (a tap on the phone) and, after Undo, by keyboard; the Studio graph draws
 //              its nodes and normal edges; VCO 2 Pitch's normal deleted in the Studio stays
@@ -195,7 +200,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices', 's-armed', 's-normals']);
+  's-library', 's-choices', 's-armed', 's-normals', 's-libinsert']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -478,11 +483,16 @@ function defineChecks() {
       what: 'a wheel burst is one undo entry' });
     // 21's R3: a drag right after a wheel notch is its own undo entry (the burst is flushed),
     // and R8: a pinch (Ctrl+wheel) is the page's and leaves the knob alone.
+    // E059: the drag starts only once the notch has landed (the knob moved): a pointerdown that
+    // overtook the notch opened the drag first, the late notch folded into the drag's gesture,
+    // and the two entries were one (#490, CI WebKit). The wait used to read `!== w0 || true`,
+    // true at once.
     const d0 = await depth();
+    const n0 = (await pos()).now;
     await page.mouse.move(cx, cy);
     await page.mouse.wheel(0, -100);
-    await until(async () => (await pos()).now !== w0 || true, { ms: 1000,
-      what: 'the notch lands' });
+    await until(async () => (await pos()).now !== n0, { ms: 5000,
+      what: 'the notch lands (the knob moves) before the drag' });
     await page.mouse.down();
     await page.mouse.move(cx, cy + 30, { steps: 3 });
     await page.mouse.up();
@@ -1413,6 +1423,80 @@ function defineChecks() {
     await until(async () => (await counts(page)).runtimeNodes === 0,
       { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
     return { ok: !(await dbg(page)).armed, off: q.rmsDb, counts: await counts(page) };
+  });
+
+  // K225: the Studio's patch library inserts the Synth panel (a panel preset's Insert).
+  def('s-libinsert', async ({ page, size }) => {
+    const press = (loc) => (size === 'phone' ? loc.tap() : loc.click());
+    const how = size === 'phone' ? 'touch' : 'pointer';
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const dlg = page.locator('[data-osc="library"]');
+    const offered = (what) => until(async () => !(await dbg(page)).present
+      && await page.locator('[data-insert-panel]').isVisible(), { ms: 10000, what });
+    const open = async () => {
+      await press(page.locator('[data-osc="synth.library"]'));
+      await until(() => dlg.isVisible(), { ms: 10000, what: 'the patch library opens' });
+      await page.locator('[data-osc="library.instrument"]').selectOption('semi-mono');
+    };
+    const close = async () => {
+      await press(page.locator('[data-osc="studio.saved.close"]'));
+      await until(async () => !(await dlg.isVisible()), { ms: 5000, what: 'the library closes' });
+    };
+    // A changed document without the panel (the workspace's own insert undone, a node of the
+    // user's): the Synth offers its own Insert, and the library offers a panel preset's.
+    await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      st.undo();
+      st.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', name: 'FM 2',
+        position: { x: 0, y: 900 } });
+    });
+    await offered('the panel is gone and Insert is offered');
+    await open();
+    await press(page.locator('[data-entry="synth-bass"]'));
+    const before = await depth();
+    await press(page.locator('[data-osc="library.insert"]'));
+    await until(async () => (await dbg(page)).present && (await depth()) === before + 1,
+      { ms: 10000, what: `the library's Insert by ${how} puts the panel in, one undo entry` });
+    const status = await page.locator('[data-osc="library.status"]').textContent();
+    await close();
+    // Keyboard: Undo, then the listbox's Enter on the Bass preset (not applicable: Insert).
+    await page.evaluate(() => window.OSCILLA.studio.store.undo());
+    await offered('Undo removes it');
+    await open();
+    await page.locator('[data-osc="library.list"]').focus();
+    // The library keeps the entry last chosen: Home goes to the first (Init), the arrow to Bass.
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowDown');
+    await until(async () => (await page.locator('[data-osc="library.name"]').textContent())
+      === 'Bass', { ms: 5000, what: 'Home and the arrow reach Bass' });
+    await page.keyboard.press('Enter');
+    await until(async () => (await dbg(page)).present, { ms: 10000,
+      what: 'Enter in the library inserts the panel' });
+    const lpf = await page.evaluate(() => {
+      const id = window.OSCILLA.app.synthDebug().nodes.lpf;
+      return window.OSCILLA.studio.model.graph.nodes.find((n) => n.id === id).params.frequency;
+    });
+    await close();
+    // Linked: the Studio graph draws the panel's nodes and normal edges.
+    const nodes = Object.values((await dbg(page)).nodes).filter(Boolean);
+    const normals = await page.evaluate(() => window.OSCILLA.studio.model.graph.edges
+      .filter((e) => /-n\d+$/.test(e.id)).map((e) => e.id));
+    await page.evaluate(() => { window.location.hash = 'm=studio'; });
+    await until(() => page.evaluate(({ n, e }) => window.OSCILLA.app.workspace === 'studio'
+      && n.every((id) => document.querySelector(`[data-node-id="${id}"]`))
+      && e.every((id) => document.querySelector(`[data-edge-id="${id}"]`)), { n: nodes,
+      e: normals }), { ms: 10000, what: 'the Studio graph draws the inserted panel' });
+    await page.evaluate(() => { window.location.hash = 'm=synth'; });
+    await until(async () => (await dbg(page)).present && await page.evaluate(() =>
+      window.OSCILLA.app.workspace === 'synth'), { ms: 10000, what: 'the Synth shows the panel' });
+    // Real-time: armed, a key sounds.
+    await press(page.locator('[data-osc="synth.arm"]'));
+    await until(async () => (await dbg(page)).armed, { ms: 10000, what: 'the Synth arms' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -40, 'a key sounds the inserted panel');
+    await page.keyboard.up('KeyA');
+    return { ok: lpf === 180 && /Master Output/.test(status), lpf, status, on: on.rmsDb,
+      nodes: nodes.length };
   });
 
   // K214 (K061 criterion 3): the panel's normals across the Synth and the Studio.

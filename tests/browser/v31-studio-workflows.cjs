@@ -88,11 +88,14 @@
 //                        and the first and second upper sidebands over the carrier are
 //                        J1(1)/J0(1) and J2(1)/J0(1) within 1 dB (the text's index 1; the
 //                        lines at 440 ± 616·k do not coincide)
-//   armed-play-refused   armed (transport.arm, as the Synth keys arm it), a PLAY refused through
-//                        the transport's Inject hook debugRefuseNextPlay (its output claim; it
-//                        refuses outside TEST CONTEXT, entered by measure.useLoopback): Play
-//                        is released, the reason is in the alert region, the runtime census is
-//                        0, and an edit after it leaves the Inspector 'not-applied', never
+//   armed-play-refused   armed (transport.arm, as the Synth keys arm it): the runtime runs, the
+//                        transport bar shows the armed indicator and Play is NOT pressed (K104:
+//                        Play shows the timeline, the indicator the keys; the owner's 'STOP keeps
+//                        it armed', 2026-11-03); a PLAY refused through the transport's Inject
+//                        hook debugRefuseNextPlay (its output claim; it refuses outside TEST
+//                        CONTEXT, entered by measure.useLoopback): Play stays released, the
+//                        armed run ends, the reason is in the alert region, the runtime census
+//                        is 0, and an edit after it leaves the Inspector 'not-applied', never
 //                        'behind' (K169)
 //   no-console-errors
 'use strict';
@@ -1379,15 +1382,20 @@ function defineChecks(fx) {
       const c = s.counts();
       const st = document.querySelector('[data-osc="studio.inspector.runtimeState"]');
       const e = s.transport.debugInfo().lastError;
+      const badge = document.querySelector('[data-osc="studio.armed"]');
       return { ...c, armed: s.transport.armed,
+        badge: !!badge && getComputedStyle(badge).display !== 'none',
         pressed: document.querySelector('[data-osc="studio.play"]').getAttribute('aria-pressed'),
         inspector: st ? st.dataset.state : null, lastError: e ? e.code : null };
     });
     const armedOk = await page.evaluate(() => window.OSCILLA.studio.transport.arm().ok);
     const armed = await until(async () => {
       const v = await view();
-      return v.armed && v.runtimeState === 'running' && v.pressed === 'true' ? v : null;
-    }, { ms: 5000, what: 'armed-play-refused: the armed run plays and Play is pressed' });
+      // K104: an armed run is shown by the armed indicator; Play is pressed only while the
+      // timeline plays (before K104 an armed run showed Play pressed).
+      return v.armed && v.runtimeState === 'running' && v.badge && v.pressed === 'false'
+        ? v : null;
+    }, { ms: 5000, what: 'armed-play-refused: the armed run runs, shown armed, Play not pressed' });
     const played = await page.evaluate(() => ({
       hook: window.OSCILLA.studio.transport.debugRefuseNextPlay(),
       ok: window.OSCILLA.app.studioPlay() }));
@@ -1403,7 +1411,8 @@ function defineChecks(fx) {
     const after = await until(async () => {
       const v = await view();
       const live = await H.live(page);
-      return v.pressed === 'false' && !v.playing && !v.armed && v.runtimeState === 'idle'
+      return v.pressed === 'false' && !v.playing && !v.armed && !v.badge
+        && v.runtimeState === 'idle'
         && v.runtimeNodes === 0 && v.runtimeSources === 0 && v.engineNodes === 0
         && v.engineSources === 0 && v.inspector !== null && v.inspector !== 'behind'
         && live.includes(said) ? { ...v, live } : null;
@@ -1415,7 +1424,7 @@ function defineChecks(fx) {
       armed: armedOk && !!armed,
       refused: played.hook === true && played.ok === false,
       edited: edit.ok,
-      released: after.pressed === 'false' && !after.playing && !after.armed,
+      released: after.pressed === 'false' && !after.playing && !after.armed && !after.badge,
       census0: after.runtimeNodes === 0 && after.engineNodes === 0
         && after.engineSources === 0,
       announced: after.live.includes(said),

@@ -24,7 +24,10 @@
 //   browseView(entries, model, { instrument, tag, query, target }) -> { instruments: [{ id,
 //     label, count }], tags: [{ id, count }], items: [entry + { inUse, applicable, reason }] }
 //     filters are exact (instrument id, tag id); `query` matches the name, case-insensitive
-//   entryAction(model, entry, mode, { target }) -> { action } | { reason }
+//   entryAction(model, entry, mode, { target }) -> { action, text? } | { reason }
+//     a Synth panel preset (entry.panelPreset, K225) inserts the whole panel with its values
+//     through registerPanelInsert's function, refused while the document holds the panel
+//   registerPanelInsert(fn)   synth/library.js: (model, presetId) -> { action, text } | { reason }
 
 import { NODE_REGISTRY, playsNotes } from './registry.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
@@ -36,6 +39,21 @@ import { PRESETS, presetPatch } from '../synth/presets.js';
 
 export const GRAPH = 'graph';
 const SOURCES = [];
+/** How a Synth panel preset is inserted (K225): synth/library.js registers it. */
+let panelInsert = null;
+
+/**
+ * K225: register how the library inserts the Synth panel with a preset's values (synth/insert.js
+ * insertWithPreset through synth/library.js registerSynthSources). (model, presetId) ->
+ * { action, text } | { reason }.
+ */
+export function registerPanelInsert(fn) {
+  panelInsert = typeof fn === 'function' ? fn : null;
+}
+
+/** Why a panel preset is not inserted where the document already holds the panel (K225). */
+export const PANEL_PRESENT_TEXT = 'Panel Synthu už v tomto dokumentu je: Apply nastaví jeho '
+  + 'hodnoty, druhý panel se nevkládá.';
 
 /** Add a category of entries (the XY pad's presets, K097); its entries are read lazily. */
 export function registerPatchSource(source) {
@@ -62,10 +80,11 @@ function factoryEntries() {
       patch = { ...patch, graph: { ...patch.graph, nodes: [{ ...n, metadata: { ...n.metadata,
         name } }] } };
     }
+    // K225: a panel preset inserts the whole panel with its values where the document has none.
     out.push({ id: `synth-${p.id}`, name, source: 'factory',
       instrument: m ? node : SEMI_MONO.id, instrumentLabel: m ? typeLabel(node) : 'Synth panel',
       tags: m ? ['engine', 'preset', ...(p.id === 'kit' ? ['kit'] : [])] : ['panel', 'preset'],
-      modes: m ? ['apply', 'insert'] : ['apply'], patch });
+      modes: ['apply', 'insert'], patch, ...(m ? {} : { panelPreset: p.id }) });
   }
   for (const [type, list] of Object.entries(FACTORY_NODE_PRESETS)) {
     for (const p of list) {
@@ -164,6 +183,11 @@ export function browseView(entries, model, { instrument = '', tag = '', query = 
 export function entryAction(model, entry, mode, { target = null } = {}) {
   if (!entry.modes.includes(mode)) return { reason: `${entry.name} cannot be loaded that way.` };
   if (entry.load) return entry.load(model, entry.patch, mode);
+  if (mode === 'insert' && entry.panelPreset) {
+    if (SEMI_MONO.resolve(model).get('vco1')) return { reason: PANEL_PRESENT_TEXT };
+    if (!panelInsert) return { reason: 'Panel Synthu sem nelze vložit.' };
+    return panelInsert(model, entry.panelPreset);
+  }
   if (mode === 'apply') {
     const reason = applyReason(model, entry, target);
     if (reason) return { reason };

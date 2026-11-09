@@ -99,6 +99,23 @@ const KEYBOARD_ROWS = Object.freeze([
   row('keyboard-octave', 'Z / X', 'Octave down / up', KEYBOARD_WHERE),
   row('keyboard-velocity', 'C / V', 'Velocity down / up (steps of 20)', KEYBOARD_WHERE),
 ]);
+// The step grid (W008, the step-grid kind of src/js/ui/catalog/kinds/step-grid.js), in the
+// Studio, whose Inspector mounts it for a selected notes clip; Czech (Q104). It never takes
+// Space or a bare letter key. K222 adds the Synth when its Drums view mounts the kind.
+const STEP_GRID_WHERE = 've zaměřené krokové mřížce';
+const STEP_GRID_ROWS = Object.freeze([
+  row('step-grid-move', 'Šipky', 'Posun po krocích a řadách', STEP_GRID_WHERE),
+  row('step-grid-select', 'Shift + šipky', 'Rozšíření výběru kroků v řadě', STEP_GRID_WHERE),
+  row('step-grid-toggle', 'Enter', 'Zapnutí nebo vypnutí kroku či výběru', STEP_GRID_WHERE),
+  row('step-grid-clipboard', 'Ctrl/⌘ C, X, V', 'Kopírování, vyjmutí a vložení kroků',
+    STEP_GRID_WHERE),
+  row('step-grid-clear', 'Delete', 'Vypnutí vybraných kroků', STEP_GRID_WHERE),
+  row('step-grid-transpose', 'PageUp / PageDown', 'Posun noty o půltón, se Shiftem o oktávu',
+    STEP_GRID_WHERE),
+  row('step-grid-page', '[ / ]', 'Předchozí a další stránka kroků', STEP_GRID_WHERE),
+  row('step-grid-menu', 'Shift + F10, klávesa nabídky',
+    'Nabídka kroku: přízvuk, ratchet, pravděpodobnost, slide', STEP_GRID_WHERE),
+]);
 // Measure's Esc is the global one and more: it replaces that row instead of repeating the key.
 const MEASURE_ROWS = Object.freeze([
   row('measure-abort', 'Esc',
@@ -148,6 +165,7 @@ export function shortcutHelp(workspace) {
   } else if (owner === OWNER.studio) {
     rows = [...STUDIO_ROWS];
   }
+  if (workspace === 'studio') rows.push(...STEP_GRID_ROWS);
   if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
     rows = [...MEASURE_ROWS];
   }
