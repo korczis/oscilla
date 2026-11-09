@@ -363,7 +363,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div class="mt-2 w-full" data-osc="synth.bay.canvas"></div>'
       + '<div data-osc="synth.connect" hidden></div>'
       + '<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" '
-      + 'id="synth-cables-title">CABLES</h4>'
+      + 'id="synth-cables-title">KABELY</h4>'
       + '<ul class="mt-1 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables" '
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
@@ -833,7 +833,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const p = presetOf(id);
         this.synth.preset = id;
         if (p.engine) showTab('engines', p.engine);
-        say(`Preset ${p.title}.`); // a name, not a sentence
+        say(`Předvolba ${p.title}.`);
       }
       return done.ok;
     },

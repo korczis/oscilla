@@ -34,6 +34,6 @@ export function cableItem(c, toState, { jackName, item, btn }) {
   const to = esc(jackName(c.to));
   return `<li class="${item}"><span>${from} → ${to}${toState === 'summing'
     ? ', přičítá se k normálům' : ''}</span><button type="button" class="${btn}" `
-    + `data-remove-cable="${esc(c.id)}" aria-label="Remove cable ${from} to ${to}">Remove`
+    + `data-remove-cable="${esc(c.id)}" aria-label="Odpojit kabel ${from} → ${to}">Odpojit`
     + '</button></li>';
 }
