@@ -48,7 +48,7 @@ export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
       label: 'Rozložit nebo složit klávesnici tam, kde noty hraje pad (její úchyt)',
       run: () => cmp.kbdDockToggle() }),
     keys.bind({ id: 'notes.record', keys: ['KeyR'], scope: { workspace: '*' },
-      when: () => !!shownRecordSwitch(), group: 'Step grid',
+      when: () => !!shownRecordSwitch(), group: 'Kroková mřížka',
       label: 'Nahrávání živých úderů do notového klipu: zapnout nebo vypnout',
       run: () => shownRecordSwitch().click() }),
   ];
