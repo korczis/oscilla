@@ -135,7 +135,7 @@ parameters; depth and offset are octaves, |value| ≤ 10. New edges take the par
 `NODE_REGISTRY` holds frozen definitions, by category (held to `NODE_REGISTRY.list()` by
 `tests/unit/docs-derived.test.mjs`): Sources (Oscillator, Noise, Sweep, Sequence,
 Microphone, VCO, Additive engine, FM engine, AM/ring engine, Wavetable engine, Percussion
-engine), Modulation (LFO, Envelope, Random, Step Modulator, Macro, Keys, XY Pad), Processing
+engine), Modulation (LFO, Envelope, Random, Step Modulator, Macro, Clock, Keys, XY Pad), Processing
 (Gain, Filter, Pan, Stereo Split, Mixer, Drive, Ring), Analysis (Scope, Spectrum, Spectrogram, Meter, RTA), Output (Master Output,
 Recorder/Export), Measurement (Capture, Calibration, Transfer Analyzer, Measurement Result).
 

@@ -576,12 +576,13 @@ test('§105 offline plan: what the transport plays renders, the rest is listed',
   const q = planOfflineRender(m, { duration: 2 });
   assert.strictEqual(q.ok, true);
   assert.deepStrictEqual(q.render, { sampleRate: 44100, channels: 1 });
-  const trigger = TRANSPORT_TEXT.eventTarget('Envelope 1');
+  // K023: a trigger event on an Envelope plays (one pulse: attack and decay, then release), so
+  // it renders too; before K023 it was listed with the event-target reason.
   assert.deepStrictEqual(q.clips.map((c) => [c.id, c.rendered, c.reason]), [
     ['clip-1', true, null], ['clip-2', false, OFFLINE_TEXT.afterEnd],
-    ['clip-3', false, trigger]]);
-  assert.deepStrictEqual(q.limitations, [`Clip clip-3: ${trigger}`]);
-  assert.strictEqual(clipPlayReason(m, m.timeline.clips[2]), trigger, 'as the transport says');
+    ['clip-3', true, null]]);
+  assert.deepStrictEqual(q.limitations, []);
+  assert.strictEqual(clipPlayReason(m, m.timeline.clips[2]), null, 'as the transport says');
   assert.strictEqual(q.nodes.find((x) => x.id === 'rec-1').reason, OFFLINE_TEXT.format);
 });
 

@@ -548,13 +548,21 @@ test('R7 clips (B2): a clip is offered, moved and nudged only onto tracks where 
     [f.envTrack, f.env2Track, f.noiseTrack]);
 });
 
-test('R7 clips (B2): the Action select offers Trigger only to a clip that already has it', () => {
+test('R7 clips (B2, K023): the Action select offers the actions that play on the clip\'s target, '
+  + 'and its own', () => {
   const ids = (o) => o.map((x) => x.id);
-  assert.deepEqual(ids(timelineView.eventActionOptions()), ['gate'],
-    'a new choice never offers an action the transport does not play');
-  assert.deepEqual(ids(timelineView.eventActionOptions('gate')), ['gate']);
-  assert.deepEqual(ids(timelineView.eventActionOptions('trigger')), ['gate', 'trigger'],
-    'a held trigger clip still shows its own action');
+  const node = (type) => withNode(type).model.graph.nodes.find((n) => n.type === type);
+  // Before K023 a trigger played nowhere, so it was offered only to a clip that had it.
+  assert.deepEqual(ids(timelineView.eventActionOptions()), ['gate', 'trigger'],
+    'without a target: every action that plays somewhere');
+  assert.deepEqual(ids(timelineView.eventActionOptions('gate', node('envelope'))),
+    ['gate', 'trigger'], 'an Envelope plays both');
+  assert.deepEqual(ids(timelineView.eventActionOptions(undefined, node('random'))), ['trigger'],
+    'Random plays only a trigger');
+  assert.deepEqual(ids(timelineView.eventActionOptions('gate', node('step-modulator'))),
+    ['gate', 'trigger'], 'a held gate on a Step Modulator still shows its own action');
+  assert.deepEqual(ids(timelineView.eventActionOptions('gate', node('oscillator'))), ['gate'],
+    'a node that plays no event keeps only the clip\'s own action');
 });
 
 test('R7 clips (P2): the clip form\'s target and track options follow the clip\'s action', () => {
@@ -567,8 +575,11 @@ test('R7 clips (P2): the clip form\'s target and track options follow the clip\'
   const ids = (o) => o.map((x) => x.id);
   const trig = timelineView.clipFormOptions(store.getModel(),
     timeline.findClip(store.getModel(), f.gate));
-  assert.deepEqual(ids(trig.targets), [''], 'a trigger clip plays nowhere: only "Track target"');
-  assert.deepEqual(ids(trig.tracks), [f.envTrack], 'and stays on its own track');
+  // K023: a trigger plays on an Envelope, Random and a Step Modulator (before: nowhere).
+  const triggered = store.getModel().graph.nodes.filter((n) => ['envelope', 'random',
+    'step-modulator'].includes(n.type)).map((n) => n.id);
+  assert.deepEqual(ids(trig.targets), ['', ...triggered], 'a trigger clip\'s targets');
+  assert.deepEqual(ids(trig.tracks), [f.envTrack, f.env2Track], 'the tracks where it plays');
   assert.deepEqual(ids(trig.actions), ['gate', 'trigger']);
   const back = store.dispatch({ type: 'CLIP_UPDATE', clipId: f.gate, payload: { action: 'gate' } });
   assert.ok(back.ok, back.reason);
@@ -577,7 +588,7 @@ test('R7 clips (P2): the clip form\'s target and track options follow the clip\'
   const envs = store.getModel().graph.nodes.filter((n) => n.type === 'envelope').map((n) => n.id);
   assert.deepEqual(ids(gate.targets), ['', ...envs]);
   assert.deepEqual(ids(gate.tracks), [f.envTrack, f.env2Track]);
-  assert.deepEqual(ids(gate.actions), ['gate']);
+  assert.deepEqual(ids(gate.actions), ['gate', 'trigger'], 'an Envelope plays both (K023)');
 });
 
 // ---------------------------------------------------------------- P2: the Inspector rebuild

@@ -394,15 +394,44 @@ export function createStudioTransport({
     return out;
   }
 
+  /**
+   * Step Modulators the unmuted TRIGGER edges of `sourceId` clock: each relays the steps it
+   * takes on its own Trigger output (K023).
+   */
+  function relayedSteps(m, sourceId) {
+    const out = [];
+    for (const e of m.graph.edges) {
+      if (e.from.node !== sourceId || e.from.port !== 'trigger' || e.to.port !== 'clock') continue;
+      if (e.props && e.props.muted) continue;
+      const n = nodeOf(m, e.to.node);
+      if (n && n.type === 'step-modulator') out.push(n.id);
+    }
+    return out;
+  }
+
+  /** Envelope ids `sourceId`'s TRIGGER edges gate, directly or through Step relays (K023). */
+  function reachedEnvelopes(m, sourceId, seen = new Set()) {
+    if (seen.has(sourceId)) return [];
+    seen.add(sourceId);
+    const out = triggerEnvelopes(m, sourceId);
+    for (const id of relayedSteps(m, sourceId)) out.push(...reachedEnvelopes(m, id, seen));
+    return out;
+  }
+
   function gatedEnvelopes(m) {
     const out = new Set();
     for (const c of m.timeline.clips) {
       const id = effectiveTarget(m, c);
       if (c.kind === 'event') {
-        if (clipVerdict(m, c, registry).how === 'gate') out.add(id);
+        const how = clipVerdict(m, c, registry).how;
+        if (how === 'gate') out.add(id);
+        else if (how === 'clock') for (const env of reachedEnvelopes(m, id)) out.add(env);
       } else if (c.kind === 'pattern') {
-        for (const env of triggerEnvelopes(m, id)) out.add(env);
+        for (const env of reachedEnvelopes(m, id)) out.add(env);
       }
+    }
+    for (const n of m.graph.nodes) { // a Clock gates what its trigger reaches (K023)
+      if (n.type === 'clock') for (const env of reachedEnvelopes(m, n.id)) out.add(env);
     }
     for (const env of keysGatedEnvelopes(m)) out.add(env); // a key opens them (live-notes.js)
     return out;
@@ -773,10 +802,40 @@ export function createStudioTransport({
         to: voice.joinAt, at: hooks.ctx.currentTime });
     }
     unplayed.delete(it.clipId);
-    for (const env of triggerEnvelopes(model, it.target)) {
-      addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime);
+    fanOut(it, it.target, it.key);
+    return null;
+  }
+
+  /**
+   * One trigger of item `it` from `sourceId` (a pattern clip's target, a Clock, a clocked Step
+   * Modulator): a gate from the item's start to its end on every Envelope its TRIGGER edges
+   * reach, and a clock tick on every clocked node. A Step Modulator relays the tick on its own
+   * Trigger output while it takes a step (a 'once' run takes none after its last), so the chain
+   * continues from it (K023). `seen` stops a TRIGGER loop.
+   */
+  function fanOut(it, sourceId, prefix, deferred = null, seen = new Set([sourceId])) {
+    for (const env of triggerEnvelopes(model, sourceId)) {
+      addGate(`${prefix}>${env}`, it, env, it.startTime, it.endTime, deferred);
     }
-    for (const id of triggerClocks(model, it.target)) addTick(`${it.key}>${id}`, it, id);
+    for (const id of triggerClocks(model, sourceId)) {
+      const k = addTick(`${prefix}>${id}`, it, id);
+      if (seen.has(id) || !stepTaken(id, k)) continue;
+      seen.add(id);
+      fanOut(it, id, `${prefix}>${id}`, deferred, seen);
+    }
+  }
+
+  /** Whether clock tick `k` of node `id` is a step a Step Modulator takes (and relays). */
+  function stepTaken(id, k) {
+    const n = nodeOf(model, id);
+    if (!n || n.type !== 'step-modulator' || k === null) return false;
+    return n.params.playback !== 'once' || k < n.params.steps.length;
+  }
+
+  /** A Clock tick (K023, timeline-compiler.js clockItems): it fans out like a trigger. */
+  function playClock(it, deferred) {
+    if (!nodeOf(model, it.target)) return null;
+    fanOut(it, it.target, it.key, deferred);
     return null;
   }
 
@@ -787,11 +846,13 @@ export function createStudioTransport({
   /** A clock trigger at the item's start on clocked node `id` (V272 A2). */
   function addTick(key, it, id) {
     const h = ready(id);
-    if (!h || typeof h.clock !== 'function') return;
+    if (!h || typeof h.clock !== 'function') return null;
     const later = [...ticks.values()].some((k) => k.nodeId === id && k.time > it.startTime);
     ticks.set(key, { key, itemKey: it.key, nodeId: id, handle: h, time: it.startTime });
+    const k = tickIndex(id, it.startTime);
     if (later) rebuildClock(id, it.startTime); // out of order: the later steps move up one
-    else h.clock(it.startTime, tickIndex(id, it.startTime));
+    else h.clock(it.startTime, k);
+    return k;
   }
 
   /**
@@ -817,8 +878,9 @@ export function createStudioTransport({
     if (!h || typeof h.gate !== 'function') {
       return skip(it, 'target-unavailable', TRANSPORT_TEXT.unavailable(nameOf(envId)));
     }
+    // pulse: a trigger event's one-shot, whose end no clip edit moves (K023).
     gates.set(key, { key, itemKey: it.key, clipId: it.clipId, nodeId: envId, handle: h, start,
-      end });
+      end, pulse: it.type === 'event' && it.action === 'trigger' });
     if (deferred && deferred.has(envId)) return null; // rebuilt below
     // Gates that overlap on one envelope are one gate, their union (V272 B9): a gate starting
     // inside another neither retriggers nor closes it early. Inside a sounding union it changes
@@ -852,10 +914,25 @@ export function createStudioTransport({
     const n = nodeOf(model, it.target);
     if (!n) return skip(it, 'no-target', TRANSPORT_TEXT.noTarget);
     const v = clipTarget(n, { kind: 'event', action: it.action }, registry);
+    if (v.how === 'clock') {
+      // A trigger on Random or a Step Modulator: one clock tick, relayed by a Step (K023).
+      unplayed.delete(it.clipId);
+      const k = addTick(it.key, it, it.target);
+      if (stepTaken(it.target, k)) {
+        fanOut(it, it.target, it.key, deferred);
+      }
+      return null;
+    }
     if (v.how !== 'gate') return skip(it, 'event-target', v.reason);
     unplayed.delete(it.clipId);
-    return addGate(it.key, it, it.target, it.startTime, it.endTime, deferred);
+    // A trigger on an Envelope is one pulse: its attack and decay once, then the release.
+    const end = it.action === 'trigger' ? it.startTime + pulseS(n) : it.endTime;
+    return addGate(it.key, it, it.target, it.startTime, end, deferred);
   }
+
+  /** The gate a trigger pulse holds on Envelope node `n`: its attack plus its decay (K023). */
+  const pulseS = (n) => (finite(n.params.attack) ? n.params.attack : 0)
+    + (finite(n.params.decay) ? n.params.decay : 0);
 
   function measurementData(it) {
     return { key: it.key, clipId: it.clipId, action: it.action, target: it.target,
@@ -866,6 +943,7 @@ export function createStudioTransport({
   function playItem(it, deferred = null) {
     if (it.type === 'pattern') playPattern(it);
     else if (it.type === 'event') playEvent(it, deferred);
+    else if (it.type === 'clock') playClock(it, deferred);
     else if (it.type === 'measurement') {
       const data = measurementData(it);
       measures.set(it.key, data);
@@ -1331,6 +1409,7 @@ export function createStudioTransport({
         }
       }
       for (const g of gatesOf(key)) {
+        if (g.pulse) continue;
         g.end = at;
         touched.add(g.nodeId);
       }

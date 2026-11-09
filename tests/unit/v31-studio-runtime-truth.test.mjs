@@ -155,10 +155,14 @@ test('runtime warnings stay structured: a failed crossfade step is a coded diagn
 test('transport: unplayed reasons and warnings carry codes, never only prose', () => {
   const model = templateModel(REFERENCE_TEMPLATE_ID);
   const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
-  const track = ok(store.dispatch({ type: 'TRACK_ADD', kind: 'event', target: 'env-1' }))
+  // A gate event on Random is held (K023: Random takes event clips) and not played: only a
+  // trigger clocks it. (Before K023 the unplayed example was a trigger on the Envelope.)
+  const rnd = ok(store.dispatch({ type: 'NODE_ADD', nodeType: 'random',
+    position: { x: 0, y: 0 } })).created.nodes[0];
+  const track = ok(store.dispatch({ type: 'TRACK_ADD', kind: 'event', target: rnd }))
     .created.tracks[0];
   const trig = ok(store.dispatch({ type: 'CLIP_ADD', trackId: track, kind: 'event', start: 0.5,
-    duration: 0.1, payload: { action: 'trigger' } })).created.clips[0];
+    duration: 0.1, payload: { action: 'gate' } })).created.clips[0];
   const a = audio();
   const warned = [];
   const transport = createStudioTransport({ runtime: a.runtime, engine: a.engine, store,

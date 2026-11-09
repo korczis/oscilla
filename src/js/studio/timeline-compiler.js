@@ -61,6 +61,7 @@ import {
   CONTIGUITY_TOLERANCE_S, MIN_LOOP_S, clipEnd, effectiveTarget, timelineEnd,
 } from './timeline.js';
 import { STUDIO_XFADE_S } from './compiler.js';
+import { clockTickHolds, clockTicks, firesTriggers, triggerEdges } from './clock.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -294,23 +295,20 @@ function clipSnapshot(model, clip) {
     target: effectiveTarget(model, clip), payload: clip.payload };
 }
 
-/** The TRIGGER edges leaving `id` (a pattern clip's target drives them at its start). */
-function triggerEdges(model, id) {
-  return model.graph.edges.filter((e) => e.from.node === id && e.from.port === 'trigger')
-    .map((e) => [e.id, e.to.node, e.to.port, !!(e.props && e.props.muted)]);
-}
+
 
 /**
  * Whether a scheduled item `a` (compiled from `prev`) plays exactly as `b` (compiled from
  * `next`, the same key): same times, target, clip, compiled sequence (waveform and tempo
- * included) and, for a pattern, the same TRIGGER edges from its target. An edit leaves such a
+ * included) and, for an item that fires its target's TRIGGER edges (a pattern, a Clock tick, a
+ * trigger event), the same edges from its target. An edit leaves such a
  * future item scheduled (EDIT_POLICY futureItem).
  */
 function sameItem(a, prev, b, next) {
   return a.type === b.type && a.startTime === b.startTime && a.endTime === b.endTime
     && a.target === b.target && a.action === b.action && a.truncated === b.truncated
     && sameJson(a.clip, b.clip) && sameJson(a.sequence, b.sequence)
-    && (a.type !== 'pattern' || sameJson(triggerEdges(prev, a.target),
+    && (!firesTriggers(a) || sameJson(triggerEdges(prev, a.target),
       triggerEdges(next, b.target)));
 }
 
@@ -322,6 +320,7 @@ function sameItem(a, prev, b, next) {
  *                events = the sequencer plan with absolute `time` (= startTime + t)
  *   event        { ..., action: 'gate' | 'trigger' }
  *   measurement  { ..., action } (seconds only; never musical)
+ *   clock        a Clock tick (clock.js clockTicks, K023)
  * Automation: [{ key, laneId, target, pass, events }] (automation.js compileLaneEvents).
  */
 export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {}) {
@@ -372,6 +371,8 @@ export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {})
       items.push({ ...base, type: clip.kind, action, duration: endTime - startTime, endTime });
     }
   });
+  items.push(...clockTicks(model, info, (pos) => audioTimeOf(anchor, k, pos), {
+    pass: k, generation: gen, tolerance: CONTIGUITY_TOLERANCE_S, registry }));
   if (looping && k > 0 && model.timeline.clips.some((c) => c.kind === 'measurement'
     && c.start >= info.posStart - CONTIGUITY_TOLERANCE_S && c.start < info.posEnd)) {
     warnings.push('Measurement clips inside the loop region repeat on every pass.');
@@ -586,6 +587,9 @@ export function createTimelineScheduler(initialModel, opts = {}) {
 
   /** Classify a scheduled item that sounds across the horizon against the edited model. */
   function decideCurrent(it, next, horizon) {
+    if (it.type === 'clock') {
+      return clockTickHolds(it, next) ? { decision: 'keep' } : { decision: 'release', at: horizon };
+    }
     const clip = next.timeline.clips.find((c) => c.id === it.clipId);
     if (!clip) return { decision: 'release', at: horizon };
     const snap = clipSnapshot(next, clip);
@@ -680,7 +684,8 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       // Clips that now cover the horizon but never started wait for their next trigger.
       for (const k of passesInWindow(anchor, horizon, horizon + 1e-9)) {
         for (const it of passCache(k).items) {
-          if (it.startTime < horizon && it.endTime > horizon && !kept.has(it.clipId)) {
+          if (it.type !== 'clock' && it.startTime < horizon && it.endTime > horizon
+            && !kept.has(it.clipId)) {
             plan.decisions.push({ key: it.key, clipId: it.clipId, decision: 'next-trigger' });
           }
         }

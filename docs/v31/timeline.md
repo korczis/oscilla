@@ -89,7 +89,7 @@ levels:
 | Level | Who reads it | What it is |
 | --- | --- | --- |
 | `holds` | the store (`clipRules`, the current track in `clipTrackReason`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds` (for a notes clip, a type that plays notes: `registry.js playsNotes`), `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
-| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`), a measurement clip always (`measurement`, as data), a notes clip nowhere yet (K099 part 1: `notes-unplayed`), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
+| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip as a gate or a trigger (one pulse: attack and decay, then the release) on an Envelope (`gate`) and as a trigger on Random or a Step Modulator (`clock`: one clock tick, K023), a measurement clip always (`measurement`, as data), a notes clip nowhere yet (K099 part 1: `notes-unplayed`), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
 
 A lane does not play on a Stereo Split pan or level (a pan law over several gains: no single
 AudioParam carries it), on a low-/high-pass Q (its AudioParam is in dB, so a linear lane would be
@@ -97,9 +97,9 @@ mis-scaled) or on a filter gain for any type but peaking (Web Audio ignores the 
 adapters refuse modulation of the same parameters with the same sentence.
 
 The UI offers only what plays. A clip moves (pointer or keyboard) only onto a track where it
-plays; its own track stays in the list even where it does not. The Action select offers Trigger
-only to a clip that already has it, and the clip form recomputes its track, target and action
-choices after every change. What is held and not played is reported with the policy's reason
+plays; its own track stays in the list even where it does not. The Action select offers the
+event actions that play on the clip's target, and its own action even where it does not (K023),
+and the clip form recomputes its track, target and action choices after every change. What is held and not played is reported with the policy's reason
 in these places, and only there:
 
 - a clip: the clip's problems in the timeline and the clip form, `debugInfo().unplayed` (same
@@ -108,7 +108,7 @@ in these places, and only there:
   the Render WAV plan's limitations. The lane editor and the import report do not show it yet
   (a held lane from an earlier file is drawn like any other).
 
-"Add clip" on a track whose target plays neither a pattern nor a gate says so instead of adding
+"Add clip" on a track whose target plays neither a pattern nor an event (a gate, or a trigger on Random or a Step Modulator) says so instead of adding
 a clip that never sounds. `tests/unit/v4-clip-target-policy.test.mjs` proves that the store,
 the UI, the offline plan and the transport (its unplayed list, owned parameters, pattern claims
 and gated envelopes after PLAY) give this verdict for every node type, clip kind, action and
@@ -570,3 +570,19 @@ one voice per pattern clip, the loop boundary rules above, `EDIT_POLICY`, `STOP_
 returns to the play start), `CONTIGUITY_TOLERANCE_S` (1 µs), `MUSICAL_TOLERANCE_S` (1 µs),
 `MIN_LOOP_S` (10 ms), `DB_SCALE_FLOOR` (−60 dB), the measurement clip bounds, and that pattern
 clips may overlap (separate voices).
+
+### Clock and trigger chains (K023)
+
+A **Clock** node ticks on the grid m × T of timeline position from 0, T =
+`divisionSeconds(division, transport.tempo)` (`studio/nodes/common.js`; 1/1 to 1/32 of a 4/4
+bar). The timeline compiler plans its ticks per pass (`studio/clock.js clockTicks`), so a loop
+pass replays the ticks of its range, a tempo change re-plans the later ones (EDIT_POLICY), STOP
+cancels the pending ones, and the offline render plays the same ticks. The transport fans each
+tick out along the Clock's unmuted TRIGGER edges (`transport.js fanOut`): a gate of half a period
+on an Envelope, a clock tick on Random and the Step Modulator. A Clock runs while the transport
+plays the timeline; a timeline with no clip or lane has no length, so a Clock alone ticks nothing.
+
+The Step Modulator's **Trigger** output relays each step it takes on its clock (none after the
+last step of a `once` run), so a chain Clock → Step Modulator → Envelope gates on the steps. A
+trigger event clip on Random or a Step Modulator clocks it as a trigger edge does, and makes it
+`clocked` (`compiler.js`) even without a clock edge.
