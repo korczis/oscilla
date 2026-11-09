@@ -62,13 +62,14 @@ export const FAMILIES = Object.freeze([
   // ui/app.js (workspace, theme, menus), ui/shell.js (navExpanded, navQuery, drawerOpen,
   // sidebarCollapsed), ui/workbench.js (labFlags, seqPlaying), labs/mic-analyzer.js
   // (micCompare), ui/studio/timeline-editor.js (timelineSnap), midi/keyboard-ui.js (kbdArmed,
-  // kbdBase, kbdVelocity, kbdMore), synth/ui.js (synthTab), synth/dock.js (synthDock: the
+  // kbdBase, kbdVelocity, kbdMore, kbdDockExpanded: the dock unfolded by its handle, K171),
+  // synth/ui.js (synthTab), synth/dock.js (synthDock: the
   // picker's open menu and the dock's oscillator), ui/about.js (aboutLaterOpen),
   // ui/studio/graph-summary-view.js (summaryOpen, summaryFull: the open and fully listed groups).
   family('ui', ['workspace', 'theme', 'menus', 'navExpanded', 'navQuery', 'drawerOpen',
     'sidebarCollapsed', 'labFlags', 'seqPlaying', 'micCompare', 'timelineSnap', 'kbdArmed',
-    'kbdBase', 'kbdVelocity', 'kbdMore', 'synthTab', 'synthDock', 'aboutLaterOpen',
-    'summaryOpen', 'summaryFull'],
+    'kbdBase', 'kbdVelocity', 'kbdMore', 'kbdDockExpanded', 'synthTab', 'synthDock',
+    'aboutLaterOpen', 'summaryOpen', 'summaryFull'],
   'The theme (oscilla.theme), the sidebar collapse (oscilla.v2.sidebar) and the expanded '
     + 'navigation groups (oscilla.v2.navGroups) in local storage and the workspace in the URL '
     + 'key m; every other key lasts for the page only.',

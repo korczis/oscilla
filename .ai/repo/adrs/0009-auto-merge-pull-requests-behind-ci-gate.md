@@ -101,3 +101,13 @@ not catch each:
 No check on `main` itself runs the gate's suites, and nothing alerts on such a breakage
 before the next pull request or release does. Closing that is a follow-up for the owner: a
 push-to-`main` workflow without a `gate` job, at the cost of one more CI round per merge.
+
+### 2026-11-03: merge commits only, and an up-to-date branch again
+
+Read from GitHub on 2026-11-03: squash merging is disabled (`allow_squash_merge: false`; merge
+commits only since 2026-10-29, whose subject is the pull request's title) and branch
+protection on `main` requires an up-to-date branch again (`strict: true`, `contexts: [gate]`).
+The decision recorded above (`gh pr merge --auto`) stands with `--merge` in place of
+`--squash`, and the relaxation of 2026-10-30 no longer holds: a pull request merges only on a
+run of a head that contains `main`. Since 2026-10-30 `.github/workflows/main-checks.yml` (E044)
+also runs the unit, `.ai` doctor and browser-gate jobs on every push to `main`.

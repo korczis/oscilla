@@ -77,6 +77,12 @@ const FONT_MIN = 12;
 const KNOWN_SMALL_FONTS = new Map([
 ]);
 const SYNTH_LOAD_MS = 15000;
+// K224 F1: the Studio sizes where #444's room rule folds the docked keys, and the deadline for
+// the fold (the page's load and the dock's first decision).
+const STUDIO_FOLD_SIZES = [[375, 667], [1024, 768]];
+const STUDIO_FOLD_MS = 15000;
+// #444: how long the Studio may take to settle once its docked keys judge the room.
+const STUDIO_SETTLE_MS = 5000;
 // A tab is rendered on a frame after synthTab(): what only that tab's render draws.
 const SYNTH_TAB_DRAWS = { panel: '[data-module="vco1"]', engines: '[data-module="additive"]',
   xy: '[data-osc="synth.xy.pad"]' };
@@ -337,6 +343,19 @@ async function tapSilenceBlock(page) {
   return null;
 }
 
+/** What the docked keys were (#444): their state, the band they cover, the room they judged. */
+function dockNow() {
+  const d = document.querySelector('[data-osc="keyboard"]');
+  const bar = document.querySelector('[data-osc="studio.bar"]');
+  const r = d && d.getBoundingClientRect();
+  return { state: d && d.getAttribute('data-dock-state'),
+    band: getComputedStyle(document.documentElement).getPropertyValue('--osc-dock-h').trim(),
+    dockTop: r && Math.round(r.top), dockH: r && Math.round(r.height),
+    position: d && getComputedStyle(d).position,
+    toolbarBottom: bar ? Math.round(bar.getBoundingClientRect().bottom) : null,
+    viewH: innerHeight, viewW: innerWidth };
+}
+
 async function setWorkspace(page, ws) {
   await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
   // timing-allow: app.setWorkspace exposes no layout-settled signal; geometry is read 150 ms on
@@ -367,17 +386,75 @@ async function runOne(name) {
       }
       for (const ws of VIEWS) {
         await setWorkspace(page, ws);
-        const bad = await page.evaluate(measureView, ws);
-        if (PANEL_VIEWS.has(ws)) {
-          const m = await page.evaluate(measure);
-          bad.push(...m.squashed.map((x) => `squashed ${x}`),
-            ...m.overlaps.map((x) => `overlap ${x}`), ...m.covered.map((x) => `covered ${x}`));
-          if (!m.panels) bad.push('no visible panel');
+        const viewBad = async () => {
+          const bad = await page.evaluate(measureView, ws);
+          if (PANEL_VIEWS.has(ws)) {
+            const m = await page.evaluate(measure);
+            bad.push(...m.squashed.map((x) => `squashed ${x}`),
+              ...m.overlaps.map((x) => `overlap ${x}`), ...m.covered.map((x) => `covered ${x}`));
+            if (!m.panels) bad.push('no visible panel');
+          }
+          return bad;
+        };
+        let bad = await viewBad();
+        // The Studio settles once its docked keys have judged the room (#444 keepsRoom): the fold
+        // follows the toolbar's layout by a frame or more, so the view is read again until it is
+        // clean or a named deadline passes, and a failure says what the dock was then.
+        if (ws === 'studio' && bad.length) {
+          try {
+            await until(async () => { bad = await viewBad(); return bad.length === 0; },
+              { ms: STUDIO_SETTLE_MS, what: `${w}x${h} studio: the view settles with the dock` });
+          } catch (e) {
+            if (!(e instanceof WaitTimeout)) throw e;
+            bad.push(`dock ${JSON.stringify(await page.evaluate(dockNow))}`);
+          }
         }
         checks++;
-        if (bad.length) failures.push(`${w}x${h} ${ws}: ${firstOf(bad, 6)}`);
+        if (bad.length) failures.push(`${w}x${h} ${ws}: ${firstOf(bad, 7)}`);
       }
       await page.close();
+    }
+
+    // K224 F1: where the Studio's room folds the docked keys (#444 keepsRoom), no frame from the
+    // load on shows the keys: a sampler set before the page's own scripts records every
+    // animation frame, and once the dock has folded none of the frames before showed the keys.
+    for (const [w, h] of STUDIO_FOLD_SIZES) {
+      const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+      await ctx.addInitScript(() => {
+        window.__dockFrames = [];
+        const tick = () => {
+          const d = document.querySelector('[data-osc="keyboard"]');
+          const k = document.querySelector('[data-osc="keyboard.keys"]');
+          if (d) {
+            window.__dockFrames.push({ state: d.getAttribute('data-dock-state'),
+              keys: k ? Math.round(k.getBoundingClientRect().height) : 0 });
+          }
+          if (window.__dockFrames.length < 600) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      const page = await ctx.newPage();
+      await page.goto(`${URL}#m=studio`);
+      let frames = [];
+      try {
+        frames = await until(async () => {
+          const f = await page.evaluate(() => window.__dockFrames || []);
+          return f.length >= 60 && f.at(-1).state === 'collapsed' ? f : null;
+        }, { ms: STUDIO_FOLD_MS, what: `${w}x${h} studio: the dock folds within its first frames` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        frames = await page.evaluate(() => window.__dockFrames || []);
+      }
+      checks++;
+      const shown = frames.filter((f) => f.keys > 0 && f.state !== 'collapsed');
+      if (!frames.length || frames.at(-1).state !== 'collapsed') {
+        failures.push(`${w}x${h} studio: the dock did not fold (${frames.length} frames, last `
+          + `${JSON.stringify(frames.at(-1) || null)})`);
+      } else if (shown.length) {
+        failures.push(`${w}x${h} studio: ${shown.length} frame(s) showed the keys before the `
+          + `fold (first ${JSON.stringify(shown[0])})`);
+      }
+      await ctx.close();
     }
 
     // Coarse pointer (touch emulation; pointer: coarse matches in all three engines).

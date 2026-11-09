@@ -7,6 +7,9 @@
 //   node tests/browser/synth.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
 //        [--only s-sound,s-filter]
 //
+// The default Synth document has one cable, the XY pad's Y into LPF Cutoff (K183): every count
+// of cables, wires, plugs and cable ends below is the check's own cables beside it.
+//
 // Checks (desktop leg; the phone leg runs s-sound, s-cable and s-mobile):
 //   s-sound    no cable: QWERTY A plays C4, VCO 1 at 16' and VCO 2 at 8' (peaks at 130.8 and
 //              261.6 Hz within one bin, RMS above -40 dB rel); key up: below -70 dB rel
@@ -58,6 +61,7 @@
 //              Fails on 3c22d01a (the receiver brings it back at its declared 2)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-tap      K184: 20 QWERTY taps whose key-down and key-up share one task each sound
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
 //              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
@@ -80,10 +84,12 @@
 //              user's; A sounds and its release falls below -70 dB rel. Fails on 3c22d01a
 //              ("The keys play KEYBOARD.", the panel at the top)
 //   s-keysilent a keyboard the pad's cables silenced says why (review S8): XY lead from the
-//              Preset menu, then the Panel tab's Init: the tab shows why the keys sound nothing
-//              with Unpatch the pad; QWERTY A stays below -70 dB rel and the status says why;
-//              Unpatch the pad removes the pad's cables and the notice, and A sounds again
-//              (RMS above -40 dB rel). Fails on 3c22d01a (no notice, a silent key says nothing)
+//              Preset menu cables Y alone (K183 review F3) and QWERTY A still sounds (RMS above
+//              -40 dB rel); the check then taps the pad's Gate into EG 1 and EG 2 itself, and
+//              after the Panel tab's Init the tab shows why the keys sound nothing with Unpatch
+//              the pad; A stays below -70 dB rel and the status says why; Unpatch the pad
+//              removes the pad's cables and the notice, and A sounds again (RMS above -40 dB
+//              rel). Fails on 3c22d01a (no notice, a silent key says nothing)
 //   s-preset   each preset, chosen in the Preset menu, is one undo entry, sets its knobs on
 //              the face and changes the sound by its own mark: Bass (LPF 180 Hz: the 1-4 kHz
 //              band 12 dB+ further below the fundamental than Init), Lead (VCO 1 at 8': no
@@ -220,6 +226,11 @@ function bandDb(p, lo, hi) {
 const read = (page) => page.evaluate(probe);
 const counts = (page) => page.evaluate(() => window.OSCILLA.studio.counts());
 const dbg = (page) => page.evaluate(() => window.OSCILLA.app.synthDebug());
+// The default Synth document's one cable (K183): the XY pad's Y into LPF Cutoff, which the
+// panel's insertion patches. The checks below count the cables they patch beside it.
+const DEFAULT_CABLES = 1;
+const isDefault = (c) => c.from === 'xy.y' && c.to === 'lpf.frequency';
+const own = (d) => d.cables.filter((c) => !isDefault(c));
 /** Poll the analyser until `pred(probe)` holds, within `ms`; returns the probe that held. */
 async function sound(page, pred, what, ms = SOUND_MS) {
   let last = null;
@@ -551,9 +562,11 @@ function defineChecks() {
     await keyKnob(page, 'lpf.frequency', 'End');
     await tapJack(page, 'keys.velocity:out');
     await tapJack(page, 'vco2.pitch:in');
-    const d = await dbg(page);
-    if (d.cables.length !== 1 || d.cables[0].to !== 'vco2.pitch') {
-      return { ok: false, detail: 'the cable is not patched', cables: d.cables };
+    const d0 = await dbg(page);
+    const d = { ...d0, cables: own(d0) };
+    if (d.cables.length !== 1 || d.cables[0].to !== 'vco2.pitch'
+      || d0.cables.length !== 1 + DEFAULT_CABLES) {
+      return { ok: false, detail: 'the cable is not patched', cables: d0.cables };
     }
     const model = await page.evaluate(() => window.OSCILLA.studio.model.graph.edges
       .map((e) => e.id));
@@ -575,7 +588,47 @@ function defineChecks() {
       'VCO 2 tracks E4 again');
     await page.keyboard.up('KeyD');
     const after = await dbg(page);
-    return { ok: model.includes(d.cables[0].id) && after.cables.length === 0, size, fixed, peaks };
+    return { ok: model.includes(d.cables[0].id) && own(after).length === 0
+      && after.cables.length === DEFAULT_CABLES, size, fixed, peaks };
+  });
+
+  // K184 (project.a-phone-sounds): a tap whose key-down and key-up are handled in the same task
+  // opened and closed the voice's gate at the same audio time, so it was silent. Each of 20 such
+  // taps on KEYS (QWERTY A, dispatched together in one task) is heard above -60 dB rel within the
+  // deadline, and the voice is silent again before the next.
+  def('s-tap', async ({ page }) => {
+    await page.locator('#osc-synth-title').click();
+    // A tap lasts tens of ms, shorter than a probe round trip: the page holds the loudest RMS
+    // of the analyser's time-domain buffer (about 43 ms wide) every frame, so none is missed.
+    await page.evaluate(() => {
+      const a = window.OSCILLA.engine.analyser;
+      const t = new Float32Array(a.fftSize);
+      window.__tapMax = -Infinity;
+      const tick = () => {
+        a.getFloatTimeDomainData(t);
+        let s = 0;
+        for (const x of t) s += x * x;
+        window.__tapMax = Math.max(window.__tapMax, 10 * Math.log10(s / t.length + 1e-24));
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    const heardTaps = [];
+    for (let i = 0; i < 20; i += 1) {
+      await page.evaluate(() => {
+        window.__tapMax = -Infinity;
+        const o = { code: 'KeyA', key: 'a', bubbles: true, cancelable: true };
+        window.dispatchEvent(new KeyboardEvent('keydown', o));
+        window.dispatchEvent(new KeyboardEvent('keyup', o));
+      });
+      const peak = await until(async () => {
+        const m = await page.evaluate(() => window.__tapMax);
+        return m > -60 ? m : null;
+      }, { ms: 3000, what: `same-task tap ${i + 1} sounds` }).catch(() => null);
+      heardTaps.push(peak === null ? null : Number(peak.toFixed(1)));
+      await silent(page, `tap ${i + 1} ends`);
+    }
+    return { ok: heardTaps.every((x) => x !== null), taps: heardTaps };
   });
 
   def('s-refuse', async ({ page }) => {
@@ -672,14 +725,16 @@ function defineChecks() {
     // playwright container: 4 Hz passed 1 of 3, 1 Hz 10 of 10, no-modulation noise 2-4.5 dB.
     await typeKnob(page, 'mg.rate', '1');
     await typeKnob(page, 'lpf.frequency', '300');
-    const d = await dbg(page);
+    const d0 = await dbg(page);
+    const d = { ...d0, cables: own(d0) };
     if (d.cables.length !== 1 || d.cables[0].to !== 'lpf.frequency') {
-      return { ok: false, detail: 'MG into LPF cutoff is not listed as a cable', cables: d.cables };
+      return { ok: false, detail: 'MG into LPF cutoff is not listed as a cable',
+        cables: d0.cables };
     }
-    const depth = (pg) => pg.evaluate(() => {
+    const depth = (pg) => pg.evaluate(() => { // the MG cable's (the pad's Y cable adds beside it)
       const ids = window.OSCILLA.app.synthDebug().nodes;
       return window.OSCILLA.studio.model.graph.edges.filter((e) => e.to.node === ids.lpf
-        && e.to.port === 'frequency').map((e) => e.props.depth);
+        && e.to.port === 'frequency' && e.from.node === ids.mg).map((e) => e.props.depth);
     });
     const here = await swings(page, 10, 'the MG sweeps the cutoff through the cable');
     // Copy link, the button: it writes the link it copies below the actions (synth.link),
@@ -693,7 +748,7 @@ function defineChecks() {
     const there = await swings(again, 10, 'the reopened link sweeps the cutoff the same way');
     const [a, b] = [await depth(page), await depth(again)];
     await again.close();
-    return { ok: /yc=/.test(hash) && JSON.stringify(d2.cables.map((c) => [c.from, c.to]))
+    return { ok: /yc=/.test(hash) && JSON.stringify(own(d2).map((c) => [c.from, c.to]))
       === JSON.stringify([['mg.control', 'lpf.frequency']]) && JSON.stringify(a) === '[3]'
       && JSON.stringify(b) === '[3]', hash, here, there, depths: [a, b] };
   });
@@ -746,7 +801,13 @@ function defineChecks() {
     const again = await openSynth(context, base, link.slice(link.indexOf('#')));
     try {
       await face(again, 'bay');
-      await again.locator('[data-osc="synth.cables"] [data-remove-cable]').first().click();
+      // Remove the cable this check patched (MG into LPF cutoff), never "the first cable": the
+      // reopened patch also holds K183's default XY cable into the cutoff (xy.y), listed first.
+      const cut = await until(() => again.evaluate(() => (window.OSCILLA.app.synthDebug().cables
+        .find((c) => c.from === 'mg.control' && c.to === 'lpf.frequency') || {}).id
+        || null),
+      { ms: 10000, what: 'the reopened link holds the MG -> LPF cutoff cable' });
+      await again.locator(`[data-osc="synth.cables"] [data-remove-cable="${cut}"]`).click();
       const depth = await until(() => again.evaluate(() => {
         const ids = window.OSCILLA.app.synthDebug().nodes;
         const e = window.OSCILLA.studio.model.graph.edges.find((x) => x.from.node === ids.eg2
@@ -1140,13 +1201,36 @@ function defineChecks() {
       lowest: Math.min(...placed), on: on.rmsDb, off: off.rmsDb };
   });
 
-  // Review of src/js/synth (oscilla-21, S8): a keyboard the pad's cables silenced says why.
+  // Review of src/js/synth (oscilla-21, S8): a keyboard the pad's cables silenced says why. Under
+  // K183 no built-in XY preset patches the pad's Gate (review F3: XY lead cables Y alone and the
+  // keys keep sounding), so the check takes both EG gates itself, by jack taps in the bay.
   def('s-keysilent', async ({ page }) => {
     const status = () => page.locator('[data-osc="synth.status"]').textContent();
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
     await tabTo(page, 'xy');
+    const before = await depth();
     await page.locator('#osc-synth-preset').selectOption('xy-lead');
-    await until(async () => (await dbg(page)).cables.some((c) => c.from === 'xy.gate'),
-      { ms: 10000, what: 'XY lead patches the pad into the voice' });
+    await until(async () => (await depth()) === before + 1,
+      { ms: 10000, what: 'XY lead is applied, one undo entry' });
+    const lead = await dbg(page);
+    if (lead.cables.some((c) => c.from === 'xy.gate' || c.from === 'xy.pitch')) {
+      return { ok: false, detail: 'XY lead patched the pad\'s Pitch or Gate (K183 review F3)',
+        cables: lead.cables };
+    }
+    await hold(page, 'KeyA');
+    const still = await sound(page, (q) => q.rmsDb > -40,
+      'under XY lead (Y alone) the keys still sound');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the key up releases the voice under XY lead');
+    for (const eg of ['eg1', 'eg2']) { // the gates taken explicitly: what silences the keys
+      await tapJack(page, 'xy.gate:out');
+      await tapJack(page, `${eg}.gate:in`);
+    }
+    await until(async () => {
+      const c = (await dbg(page)).cables;
+      return ['eg1.gate', 'eg2.gate'].every((to) => c.some((x) => x.from === 'xy.gate'
+        && x.to === to));
+    }, { ms: 10000, what: 'the pad\'s Gate is patched into EG 1 and EG 2' });
     await tabTo(page, 'panel');
     await page.locator('#osc-synth-preset').selectOption('init');
     const notice = page.locator('[data-osc="synth.keys-silent"]');
@@ -1168,8 +1252,8 @@ function defineChecks() {
     const on = await sound(page, (q) => q.rmsDb > -40, 'the keys play the voice again');
     await page.keyboard.up('KeyA');
     const off = await silent(page, 'the key up releases the voice');
-    return { ok: /Unpatch the pad/.test(text), text, said, quiet: quiet.rmsDb, on: on.rmsDb,
-      off: off.rmsDb };
+    return { ok: /Unpatch the pad/.test(text), text, said, still: still.rmsDb,
+      quiet: quiet.rmsDb, on: on.rmsDb, off: off.rmsDb };
   });
 
   def('s-riffs', async ({ page }) => {
@@ -1584,8 +1668,9 @@ function defineChecks() {
       summary: !!document.querySelector('[data-summary="lpf"]') }));
     await page.locator('[data-fold-all="open"]').click();
     const ok = Object.values(themes).every((t) => t.leaks === 0 && t.ring >= 3 && t.wire >= 3
-      && t.label >= 4.5 && t.wires === 6 && t.hw.nuts === t.hw.jacks && t.hw.jacks > 0
-      && t.hw.plugs === 12 && t.hw.plates > 0 && t.hw.screws === 2 * t.hw.plates)
+      && t.label >= 4.5 && t.wires === 6 + DEFAULT_CABLES && t.hw.nuts === t.hw.jacks
+      && t.hw.jacks > 0 && t.hw.plugs === 2 * (6 + DEFAULT_CABLES) && t.hw.plates > 0
+      && t.hw.screws === 2 * t.hw.plates)
       && focus.on === '1' && focus.off === '0'
       && fold.expanded === 'false' && fold.knobs === 0 && fold.summary;
     return { ok, themes, focus, fold };
@@ -1696,7 +1781,7 @@ function defineChecks() {
       }
       return { ends: ends.length, covered, dock: Math.round(dock.height) };
     });
-    if (reach.ends !== 62 + 12 || reach.covered.length) {
+    if (reach.ends !== 62 + 2 * (6 + DEFAULT_CABLES) || reach.covered.length) {
       return { ok: false, detail: 'a jack or a cable end stays under the dock', reach };
     }
     await page.locator('[data-goto="lpf"]').tap();

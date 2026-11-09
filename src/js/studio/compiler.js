@@ -39,7 +39,7 @@
 //                                                      target (an owner wires it, runtime.js)
 //   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, scaled,
 //                                                      clamped, lowered, loweredCents, caps,
-//                                                      exceeds }
+//                                                      exceeds, fitted }
 //   frequencyLimits(planNode, cb, ctx) -> [Diagnostic]   pure: the `frequency-limited`
 //                                                      diagnostics of one node's bases (T023)
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
@@ -68,7 +68,8 @@
 //     the static value and is bounded on its own (V272 review R-1), and the headroom an owned
 //     detune spends is its lane's peak alone (#197 R-7).
 //     Other parameters may exceed their range through
-//     modulation; that is reported (`exceeds`), never hidden (§242).
+//     modulation; that is reported (`exceeds`), never hidden (§242), except a performance
+//     output's cables (`fit`), held inside the range (performance-fit.js; `fitted`).
 //   - TRIGGER and ANALYSIS edges have no Web Audio connection: they are logical bindings for
 //     the timeline/scheduler and the measurement engine.
 //
@@ -76,7 +77,8 @@
 // handle's dispose leaves zero of its nodes in engine.nodes.
 
 import { NODE_REGISTRY } from './registry.js';
-import { validateEdgeProps } from './ports.js';
+import { controlLine, validateEdgeProps } from './ports.js';
+import { fitCables } from './performance-fit.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
 import { studioHash } from './schema.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
@@ -441,6 +443,9 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv,
     scale,
     range: planEdge.kind === 'control'
       ? (fromHandle.outputRange[planEdge.from.port] || DEFAULT_RANGE) : null,
+    // A performance output (its handle's `fits`): held inside the range (computeBases).
+    fit: planEdge.kind === 'control' && Array.isArray(fromHandle.fits)
+      && fromHandle.fits.includes(planEdge.from.port),
     nodes: own.nodes,
     dispose() {
       try { out.disconnect(gain); } catch (e) { /* already disconnected */ }
@@ -500,6 +505,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     base[key].value = to;
   };
   const exceeds = [];
+  const fitted = new Map(); // fit edge id -> { factor, key }
   const groups = new Map();
   for (const { edge, handle } of incoming) {
     if (!handle || handle.status !== 'active' || edge.kind !== 'control') continue;
@@ -508,15 +514,13 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     const pr = edge.props;
     if (pr.muted) { gains.set(edge.id, 0); continue; }
     const [lo, hi] = handle.range || DEFAULT_RANGE;
-    const t0 = pr.polarity === 'unipolar' ? 0 : -pr.depth;
-    const a = (pr.depth - t0) / (hi - lo);
-    const b = t0 - a * lo + pr.offset;
+    const { a, b } = controlLine(pr, [lo, hi]);
     const log = pr.mapping === 'log';
     if (log) base[key].cents += CENTS_PER_OCTAVE * b;
     else base[key].value += b;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ id: edge.id, a, up: Math.max(a * lo, a * hi),
-      down: Math.min(a * lo, a * hi), log, scale: handle.scale });
+    groups.get(key).push({ id: edge.id, a, c: b, up: Math.max(a * lo, a * hi),
+      down: Math.min(a * lo, a * hi), log, scale: handle.scale, fit: !!handle.fit });
   }
   const offsetOf = (key) => {
     const d = base[key].value + (lowered[key] || 0) - planNode.params[key];
@@ -533,6 +537,8 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
   // frequency's headroom (#197 R-7); a static detune without a lane is sized from itself.
   const detuneOwned = detunePeak > -Infinity;
   let detuneK = 1;
+  let detTop = Infinity; // the static detune the frequency's room was sized for (a lane's: none)
+  let detRoom = 0; // the cents the detune's cables may sweep above detTop (review RK-2)
   // Frequencies first: a detune's room is decided while its frequency is sized.
   const keys = Object.keys(base).sort((x, y) => (defs.get(y).unit === 'Hz')
     - (defs.get(x).unit === 'Hz'));
@@ -561,7 +567,9 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
         clamped.add('detune');
       }
       const stat = (detuneOwned ? detunePeak : detune.value) + detune.cents;
-      capF = cap / 2 ** (Math.max(0, Math.min(room0, stat)) / CENTS_PER_OCTAVE);
+      const top = Math.max(0, Math.min(room0, stat));
+      if (!detuneOwned) detTop = top;
+      capF = cap / 2 ** (top / CENTS_PER_OCTAVE);
     }
     const lin = list.filter((x) => !x.log);
     const logs = list.filter((x) => x.log);
@@ -573,7 +581,12 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     }
     if (k !== 1) for (const x of lin) if (limited.has(x.id)) scaled.set(x.id, k);
     up *= k;
-    for (const x of lin) gains.set(x.id, x.a * k * x.scale);
+    // Performance cables (fit): inside the range, never above k (performance-fit.js fitCables).
+    const ceil = key === 'detune' ? { top: detTop, room: detRoom } : { top: Infinity, room: 0 };
+    const { kOf, up: upF } = fitCables(lin, k, b, p, key, isFreq, ceil, lower,
+      { limited, scaled, fitted });
+    up = upF;
+    for (const x of lin) gains.set(x.id, x.a * kOf(x) * x.scale);
     let kc = 1;
     let usedC = 0;
     if (logs.length) {
@@ -598,19 +611,20 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       const dl = (groups.get('detune') || []).filter((x) => !x.log);
       const upD = dl.reduce((s, x) => s + x.up, 0);
       const roomD = CENTS_PER_OCTAVE * Math.log2(capF / Math.max(ref + up, 1e-9)) - usedC;
+      detRoom = Math.max(0, roomD);
       if (upD > 0 && upD > roomD) {
         detuneK = Math.max(0, roomD) / upD;
         for (const x of dl) limited.add(x.id);
       }
     }
     if (!isFreq && list.length) {
-      const down = lin.reduce((s, x) => s + x.down, 0);
+      const down = lin.reduce((s, x) => s + x.down * (x.fit ? kOf(x) : 1), 0);
       if (b.value + up > p.max || b.value + down < p.min) exceeds.push(key);
     } else if (!isFreq && (b.value > p.max || b.value < p.min)) {
       exceeds.push(key);
     }
   }
-  return { base, gains, limited, scaled, clamped, lowered, loweredCents, caps, exceeds };
+  return { base, gains, limited, scaled, clamped, lowered, loweredCents, caps, exceeds, fitted };
 }
 
 /**

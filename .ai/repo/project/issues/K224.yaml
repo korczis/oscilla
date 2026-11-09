@@ -1,0 +1,54 @@
+id: K224
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "The Studio's room fold holds from the first frame, after a rotation and without requestAnimationFrame (P3s of #444's reviews)"
+slug: the-studio-room-fold-holds-from-the-first-frame-and-after-a-rotation
+priority: p3
+profile: implementation
+objective: "Lands as fix(keys). #444 folds the docked keys to their handle where they would take the Studio's toolbar or editor (src/js/midi/routes.js keepsRoom and roomFolds, applied by src/js/midi/dock-yield.js; Q105 keeps the keys armed). oscilla-21's review of fix/444-dock-studio-layout (52ded518) left two P3s that this issue closes. F1: the room needs the band the keys take while docked, which dock-yield.js measures only once the keys have drawn (its ResizeObserver), so a short Studio's first frame shows the keys docked and then folds them: a band-high flash on load at 375x667 and 1024x768. F2: while folded, the band measured when the dock was last docked is reused, so after a rotation or a resize that changes the keys' docked height, roomFolds judges from a stale band until the dock is docked again. After: the fold is decided before the first frame that would show the keys docked, and a width change while folded judges from the band the keys would take at the new width, without unfolding them on screen. prismatic-majordomus-7b's verdict on #444 (dceae127) adds two more P3s, closed here as well. K-2: dock-yield.js asks for the room's re-judgement in an animation frame and skips it where requestAnimationFrame is missing; it should defer through a fallback (a zero timeout) rather than not judge. K-3: tests/browser/midi.cjs keyboard-everywhere clicks the dock's handle whenever it is visible; it should unfold only a folded dock (data-dock-state collapsed), so an already docked dock is not folded by the check."
+why: "Review of #444 by oscilla-21 (2026-11-08, P3 findings F1 and F2) and prismatic-majordomus-7b's verdict on #444 (K-2, K-3), filed by oscilla-a3 at oscilla-2b's request so the follow-up is tracked; kept out of the keys+pad train so it does not move again."
+scope:
+  - "src/js/midi/dock-yield.js"
+  - "src/js/midi/routes.js"
+  - "src/js/midi/keyboard-ui.js"
+  - "tests/unit/keyboard-dock-yield.test.mjs"
+  - "tests/browser/ui-current.cjs"
+  - "tests/browser/layout.cjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K171"
+  - "K178"
+acceptance_criteria:
+  - "F1, tests/unit/keyboard-dock-yield.test.mjs failing on the merge base: a Studio whose room folds the keys never applies 'docked' before 'collapsed' on its first evaluation; the state machine is given a band before the keys draw (the dock's declared docked height or a measurement that does not paint the keys), and an unmeasurable band still docks (the K171 rule: unknown input never folds)."
+  - "F2, the same test: after a width change while folded, the room is judged from the band the keys take at the new width (re-measured without showing them, or derived from the new width), not from the band last measured docked; a fold the user undid stays undone (the session-only expansion of #444)."
+  - "Browser: tests/browser/ui-current.cjs or layout.cjs at 375x667 and 1024x768 in chromium: from the first frame after load the Studio's toolbar is clear of the keys (no frame shows the keys docked over it), asserted by a condition poll with a named deadline (project.bounded-test-timing, project.suite-harness)."
+  - "K-2, tests/unit/keyboard-dock-yield.test.mjs failing on the merge base: with no requestAnimationFrame the dock settling still judges the room once, deferred out of the observer callback (a zero timeout), never inside it."
+  - "K-3: tests/browser/midi.cjs keyboard-everywhere unfolds the Studio's keys by the handle only where the dock reads data-dock-state collapsed; on a dock already docked it does not click the handle (midi.cjs passes in chromium, firefox and webkit)."
+  - "A fix change carries a unit test that fails on the merge base (project.fail-first); no guarded path is expected (src/js/midi), and a reviewer's verdict is attached if one is touched (project.review-verdict)."
+  - "tests/README.md rows extended for the changed tests; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/keyboard-dock-yield.test.mjs tests/unit/keys-routes.test.mjs"
+  - "node tests/browser/ui-current.cjs"
+  - "node tests/browser/midi.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-08
+updated_at: 2026-11-08T21:50:36Z
+started_at: 2026-11-08T21:50:08Z
+started_event: sha256:fc5edec6e88d8cd710307652a0192af4189b9c52d799df8d2aa9946e6e83f3b2
+verified_at: 2026-11-08T21:50:21Z
+verified_event: sha256:da495c4ad96fb698986640029cddd311cb5d868db2b07c7a7d0da2572e9b14aa
+completed_at: 2026-11-08T21:50:36Z
+completed_event: sha256:ee5f28cf5731ba2b7db442b552d70e8aabf0d2cacce3153d3d330df77fe88b4c
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/keyboard-dock-yield.test.mjs tests/unit/keys-routes.test.mjs; npm run build:check; node tests/browser/layout.cjs; node tests/browser/midi.cjs (re-run by oscilla-a3 on main f17a7c3e, 2026-11-08, darwin)"
+    result: "Landed in #495 (merge f17a7c3e, built by oscilla-a3). On main f17a7c3e: keyboard-dock-yield and keys-routes 29 pass, 0 fail: F1 (undecided, the Studio draws no keys; the first applied state marks the dock decided), F2 (a width change while folded re-measures the docked band within one synchronous read), K-2 (no requestAnimationFrame: one zero timeout out of the observer callback), the user's unfold kept; layout.cjs 107/107 in chromium and webkit, its K224 check finding no frame from the load that shows the keys before the fold at 375x667 and 1024x768 (it failed on #444's dist dceae127); midi.cjs ALL PASS 510 in three engines, the Studio step unfolding only a collapsed dock (K-3); fail-first held on #495; tests/README.md rows extended; build:check up to date. No verdict needed: scripts/review-verdict.mjs --content found no guarded path (e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)."
+    artifact: "https://github.com/korczis/oscilla/pull/495"
+    commit: f17a7c3e327f716c2265829d0c824fee9fa515c9
+    recorded_at: 2026-11-08T19:12:30Z

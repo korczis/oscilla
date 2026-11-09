@@ -32,8 +32,8 @@ scope:
   - "src/js/synth/view/face.js"
   - "src/js/midi/notes.js"
   - "tests/unit/xy-wiring.test.mjs"
+current_state: "K183's dependency on K097 is dropped as artificial, recorded under evolve principle 14 with the plan owner's judgement, quoted verbatim (oscilla-21, plan owner of instrument-kinds, 2026-11-08, asked by oscilla-a3 while K097's owner oscilla-26 was offline): 'K183 -> K097 is artificial (oscilla-21, plan owner of instrument-kinds, 2026-11-08): each of K183's nine criteria runs on the XY pad and the Keys node already on main (src/js/synth/panels/xy.js, src/js/ui/kinds/xy-pad.js, tests/unit/xy-default-patch.test.mjs, tests/browser/xy-pad.cjs, the Keys source's last-note priority in live-notes.js), so K183 needs K097's shipped pad to exist, not K097 to be DONE; K097's open blockers (K060 linear glide and key range, K062 the Pro-card panel, K104, W010 the xy-pad kind) are criteria K183 neither tests nor changes, so dropping the edge loosens nothing.' K183 -> K178 is kept (KEY_ROUTES, criterion 4), as 21 conditioned. Landed in the keys+pad train #444 (merge 3a3a5a58)."
 depends_on:
-  - "K097"
   - "K178"
 acceptance_criteria:
   - "src/js/studio/runtime.js stays within its source-size cap (tests/unit/source-size-baseline.json, 58000 B) without raising it: the keys+pad train lands after coherence train B, so it first splits a module out of runtime.js (the live-update and trace classification) as a pure move with no behaviour change and its own reviewer verdict line, then K183's edits go on top (b0's order, 2026-11-05)."
@@ -52,4 +52,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-08T21:49:04Z
+started_at: 2026-11-08T21:48:38Z
+started_event: sha256:7b27be3818bcf6a31a4a168e1b6991617ea95df2b4d3d29b55c009baba5f5499
+verified_at: 2026-11-08T21:48:51Z
+verified_event: sha256:808d865eea1b8fdb774615cfed4639d2b6c203cf6d1400b6b38a2d2d12ec3987
+completed_at: 2026-11-08T21:49:04Z
+completed_event: sha256:e6cfd65b1e10ddd84e6570c4cda67013db652ae66f19bd9d70c2b908f23c061a
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/xy-default-patch.test.mjs tests/unit/synth-normals.test.mjs tests/unit/source-size-budget.test.mjs tests/unit/browser-timing.test.mjs tests/unit/ui-flowbite-pro.test.mjs; node tests/browser/xy-pad.cjs; node tests/browser/iphone.cjs (re-run by oscilla-a3 on main f17a7c3e, 2026-11-08, darwin)"
+    result: "Landed in the keys+pad train #444 (merge 3a3a5a58, builders 2b and a3). Each criterion re-checked on main f17a7c3e: (1) src/js/studio/runtime.js 55258 B under the 58000 B cap, the baseline not raised; (2) and (4) xy-default-patch, synth-normals and source-size 33 pass, 0 fail: the Y route a typed summing model cable, n21 and n22 still active with it, the pad's notes through the one Keys source with last-note priority, the pad playing pitch only without the Y cable; (3) the Patch button absent from src/ and dist, K167's first action recorded as superseded on its record; (5) xy-pad.cjs all pass in chromium, firefox and webkit including 390x844 and 375x667: one pointer-down raises the active source count within its named deadline, x moves the pitch, release silences it; (6) verdict .ai/repo/reviews/444.yaml by seat 7b, the review-verdict check SUCCESS on #444; (7) fail-first SUCCESS on #444; (8) suite.cjs with wait.cjs deadlines, #444 changed neither tests/browser/timing-baseline.json nor tests/unit/ui-flowbite-pro-baseline.json (browser-timing and ui-flowbite-pro tests pass, 132 with the units above), iphone.cjs 55/55 per engine, census reach not fallen; (9) this re-check."
+    artifact: ".ai/repo/reviews/444.yaml"
+    commit: 3a3a5a58bddf6c897732c2651b82df1741442b7e
+    recorded_at: 2026-11-08T19:34:54Z

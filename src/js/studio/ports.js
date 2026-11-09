@@ -70,6 +70,17 @@ export const MOD_LOG_MAX_OCTAVES = 10;
 export const MOD_POLARITIES = Object.freeze(['bipolar', 'unipolar']);
 export const MOD_MAPPINGS = Object.freeze(['linear', 'log']);
 
+/**
+ * The line a CONTROL edge maps its source onto (§35): the source range [lo, hi] onto
+ * [−depth, depth] (bipolar) or [0, depth] (unipolar), plus offset, as a·s + b. Linear mapping:
+ * parameter units; log: octaves. The compiler sizes every CONTROL edge with it.
+ */
+export function controlLine(props, [lo, hi]) {
+  const t0 = props.polarity === 'unipolar' ? 0 : -props.depth;
+  const a = (props.depth - t0) / (hi - lo);
+  return { a, b: t0 - a * lo + props.offset };
+}
+
 // ---------------------------------------------------------------- port definitions
 
 /**

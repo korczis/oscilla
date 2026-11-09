@@ -17,6 +17,7 @@ scope:
   - "tests/browser/xy-pad.cjs"
   - "tests/README.md"
   - "dist"
+current_state: "The explicit Patch button #420 shipped as the phone's first action is superseded by K183 (option B, oscilla-26 and dev-53, 2026-11-05: the pad is one more note input of K178's Keys source, so the first touch sounds with no patch, which is this record's own first action, touch the pad); the keys+pad train #444 (merge 3a3a5a58) removed the button. Recorded by oscilla-a3 as K183's third criterion asks."
 depends_on:
   - "K097"
 acceptance_criteria:

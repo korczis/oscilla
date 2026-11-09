@@ -8,6 +8,7 @@ priority: p1
 profile: implementation
 objective: "Lands as feat(keys). The owner asked on 2026-11-04 (relayed by prismatic-majordomus-44): 'jaktoze neni vse propojene, jaktoze se keyboard chova vzdy jinde, jaktoze to neni interconnected' (why is nothing connected, why does the keyboard behave differently everywhere). On main the parts exist but are wired per workspace: K153 gives one key registry and dispatcher, K026 the on-screen keys and QWERTY on the V502 voices, M086 (#410) docks the keys in the Synth and the Studio, and the Studio sink, the Synth panel and the Playground voice each decide on their own what a key does, which octave and velocity apply, what is lit, when a note is released and whether the keys are armed. M061's Wave 3 'one Keys node fed by keyboard, QWERTY and MIDI' was never issued. This issue issues it: one Keys source (on-screen, QWERTY and MIDI as its inputs) with one octave, velocity, held-notes and lights state, and one arm and route rule per workspace that is declared, not coded per surface; the Playground, Synth and Studio each consume its note events through one interface, and a note is always released on the instrument that took it (K175, K176)."
 why: "The owner's direct question names the defect class: the same control behaving differently per workspace is incoherent state (coherent-state, M090) and the opposite of the interconnected instrument the owner ordered on 2026-10-29."
+current_state: "Its arming rule rests on the owner's answer of 2026-11-04 recorded verbatim as Q105 ('Armed everywhere (Recommended)', session 4fba4ca0, 23:07:30Z): the Playground, the Synth and the Studio play the computer keys at once, and Arm switches them off."
 scope:
   - "src/js/midi/"
   - "src/js/synth/studio-sink.js"
@@ -31,4 +32,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-04
-updated_at: 2026-11-04
+updated_at: 2026-11-08T21:48:20Z
+started_at: 2026-11-08T21:47:42Z
+started_event: sha256:a4a46e29c5b34ba6f6fff8c3206e9cdf30955c22316159f581efd8a58228b6af
+verified_at: 2026-11-08T21:47:56Z
+verified_event: sha256:714b7381f5b11eb0c5805a75c836900123b35ebde3d89cd281c9b0d487f406f9
+completed_at: 2026-11-08T21:48:20Z
+completed_event: sha256:867fe7654977c60cf8055d1abb5a30d30edfb4cff3f415618f003b9f52a153f5
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/keys-routes.test.mjs tests/unit/keyboard-dock-yield.test.mjs; node tests/browser/midi.cjs --browsers chromium,firefox,webkit (re-run by oscilla-a3 on main cd4f7da9's code, 2026-11-08, darwin)"
+    result: "Delivered in the keys+pad train #444 (merge 3a3a5a58, builders 2b and a3) and #497 (merge cd4f7da9, a3: criterion 1's guard). Each criterion re-checked on main cd4f7da9: (1) keys-routes 'K178 c1: one owner of the keys' octave, velocity, held notes and lights' passes and its seeded refusal of a second keyboard, held map or velocity passes (createKeyboard only in keyboard-ui.js, createHeldNotes only in notes.js, the velocity constants only in midi/keyboard.js), 31 pass with the dock units, 0 fail; (2) KEY_ROUTES in src/js/midi/routes.js is the declared table of what the keys play and when they are armed per workspace (Q105: armed everywhere), keys-routes refusing a route coded outside it, a switch changing the route only; (3) midi.cjs ALL PASS 510 in chromium, firefox and webkit, its keys-one-keyboard check playing the same sequence by pointer, QWERTY and MIDI in the Playground, the Synth and the Studio with the same octave, lights and sound, released on Escape and on a switch, keyboard-studio-held leaving no note sounding; fail-first SUCCESS on #444; (4) verdict .ai/repo/reviews/444.yaml by seat 7b for the guarded paths; #497 changes only tests/unit/keys-routes.test.mjs and tests/README.md, no guarded path (no verdict needed)."
+    artifact: "https://github.com/korczis/oscilla/pull/497"
+    commit: cd4f7da9b83f93b889b91d94369755d0f7da9c00
+    recorded_at: 2026-11-08T21:48:08Z

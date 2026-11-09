@@ -338,6 +338,61 @@ test('a live parameter step says only what the adapter did: set, glide, stored f
   s.transport.stop();
 });
 
+test('an engine parameter kept for the next note is stored, not scheduled', () => {
+  const s = gated();
+  const master = s.store.getModel().graph.nodes.find((n) => n.type === 'master');
+  ok(s.store.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', position: { x: 40, y: 40 } }));
+  const fm = s.store.getModel().graph.nodes.find((n) => n.type === 'fm-voice');
+  // Master takes one audio connection: the engine replaces the template's feed.
+  const feed = s.store.getModel().graph.edges.find((e) => e.to.node === master.id);
+  ok(s.store.dispatch({ type: 'EDGE_REMOVE', edgeId: feed.id }));
+  ok(s.store.dispatch({ type: 'EDGE_ADD', from: { node: fm.id, port: 'audio' },
+    to: { node: master.id, port: 'audio' } }));
+  ok(s.transport.start());
+  s.fx.advance(0.1);
+  // The FM engine re-reads its algorithm when a voice starts (adapters/engines.js update):
+  // nothing is written to audio now, so the step has no audio time and says what it waits for.
+  const { steps } = stepsOf(s, () => ok(s.store.dispatch({ type: 'NODE_PARAM_SET',
+    nodeId: fm.id, key: 'algorithm', value: '4-pairs' })));
+  const step = find(steps, 'runtime', 'param');
+  assert.ok(step, 'the live edit is traced to its parameter');
+  assert.deepEqual([step.outcome, step.detail.via, step.detail.at],
+    ['stored', 'next-note', null]);
+  s.transport.stop();
+});
+
+test('a parameter kept for the next gate that another owner drives is owned, not stored', () => {
+  // No shipped adapter gives a deferred key an AudioParam today, so this envelope does: its
+  // attack has one (the VCA gain stands in) for the runtime's owned check (ownedKeys). The
+  // runtime alone, without a transport, so the claim below is the only one in effect.
+  const real = NODE_ADAPTERS.envelope;
+  const envelope = { ...real, create(args) {
+    const h = real.create(args);
+    return { ...h, modTarget: (key, mapping) => (key === 'attack'
+      ? { param: h.outputs.audio.gain, scale: 1 } : h.modTarget(key, mapping)) };
+  } };
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  const trace = newTrace();
+  const runtime = createStudioRuntime({ engine, trace,
+    adapters: { ...NODE_ADAPTERS, envelope } });
+  const model = templateModel(REFERENCE_TEMPLATE_ID);
+  const store = createStudioStore(model, { idGenerator: createIdGenerator(model) });
+  ok(runtime.apply(store.getModel()));
+  ok(runtime.start());
+  fx.advance(0.1);
+  runtime.setOwnedParams([{ node: 'env-1', param: 'attack' }]);
+  ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'env-1', key: 'attack', value: 0.05 }));
+  const before = trace.steps().length ? trace.steps().at(-1).seq : 0;
+  ok(runtime.apply(store.getModel()));
+  const step = find(trace.steps().filter((x) => x.seq > before), 'runtime', 'param');
+  assert.ok(step, 'the live edit is traced to its parameter');
+  assert.deepEqual([step.outcome, step.detail.param, step.detail.via, step.detail.at],
+    ['owned', 'attack', 'next-gate', null]);
+  runtime.stop();
+});
+
 test('a base step names the AudioParam values the adapter wrote, not keys it skipped', () => {
   const run = (ownDetune) => {
     const fx = createFakeAudioEnv({ sampleRate: SR });
