@@ -7,6 +7,8 @@
 // grid's polite live region. The Inspector owns the selection and the page (rule 2 of W001).
 // The playing step is read from the Studio transport's playhead on the frame loop, only while
 // the clip's target plays notes (clip-targets.js), with no allocation of its own per frame.
+// The grid fits its pages to the Inspector's width itself (four steps in the 268 px side panel,
+// eight at a phone's full width), so no step is cut off.
 //
 //   DEFAULT_LANE, MAX_STEPS
 //   clipStepsView(model, clip, plays) -> { clipId, payload, stepBeats, steps, lanes, laneNames,
@@ -17,7 +19,6 @@
 import { midiToName } from '../../core/music.js';
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { mountStepGrid } from '../kinds/step-grid.js';
-import { pageStepsFor } from '../kinds/step-grid-model.js';
 
 /** The lane an empty notes clip shows: C4. */
 export const DEFAULT_LANE = 60;
@@ -50,7 +51,6 @@ export function mountClipSteps(host, svc, first) {
   const grid = mountStepGrid(host, {
     mode: 'notes', label: LABEL, clipId: view.clipId, payload: view.payload, lanes: view.lanes,
     laneNames: view.laneNames, steps: view.steps, stepBeats: view.stepBeats,
-    pageSteps: pageStepsFor(host.clientWidth || 0),
     commit: (action) => {
       const r = svc.store.dispatch(action);
       return r.ok ? true : { refused: r.reason || '' };

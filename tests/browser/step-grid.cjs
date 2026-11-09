@@ -11,12 +11,16 @@
 // Checks (each on a fresh notes clip of 4 beats on a Keys node's event track, selected):
 //   sg-mount    the Inspector shows the clip as a role=grid of gridcells (a row per lane, the
 //               empty clip's one lane C4), each step at least 44 px square, named
-//               "C4, krok 1, vypnuto", with no horizontal page scroll
+//               "C4, krok 1, vypnuto", four steps a page in the 268 px side panel at 1536 px and
+//               eight at 390 px, every one inside the Inspector's box (review R2-W8-1), with no
+//               horizontal page scroll
 //   sg-drag     a drag along the lane (the mouse at 1536 px, touch pointers at 390 px) switches
 //               steps 1-4 on in one CLIP_UPDATE: the notes reach the clip's notes array within
 //               'step note in model' (2 s), one undo entry, and one undo gives the empty clip
 //   sg-keys     arrows and Enter: ArrowRight then Enter puts a note at step 2 (at 0.25 beats),
-//               Delete takes it off, each one undo entry; Space builds nothing in the grid
+//               ] keeps the focus on the same column of the next page and [ brings it back
+//               (review R2-W8-2), Delete takes it off, each edit one undo entry; Space builds
+//               nothing in the grid
 //   sg-playhead with a note in the clip, Studio's Play: aria-current=step appears on a step and
 //               moves to another within 'step playhead moves' (3 s); Stop clears it
 //   no-console-errors
@@ -92,10 +96,14 @@ async function freshClip(page, notes = []) {
   // At a phone's width the Inspector is a subview: open its tab as the owner would.
   const tab = page.locator('[data-osc="studio.subview"][data-value="inspector"]');
   if (await tab.isVisible()) await tab.click();
+  // Shown and fitted: a row holds the steps its laid-out width fits (8 from 345 px, else 4),
+  // so no later re-fit replaces the cells under a check.
   await until(() => page.evaluate((sel) => {
     const g = document.querySelector(sel);
-    return !!(g && g.getClientRects().length && g.querySelector('[role="gridcell"]'));
-  }, GRID), { ms: UI_MS, what: 'the Inspector shows the notes clip as a step grid' });
+    if (!g || !g.getClientRects().length) return false;
+    const row = g.querySelectorAll('[role="row"]:first-child [role="gridcell"]').length;
+    return row === (g.clientWidth >= 345 ? 8 : 4);
+  }, GRID), { ms: UI_MS, what: 'the Inspector shows the notes clip as a fitted step grid' });
   return id;
 }
 const notesOf = (page, id) => page.evaluate((cid) => window.OSCILLA.studio.model.timeline.clips
@@ -103,10 +111,14 @@ const notesOf = (page, id) => page.evaluate((cid) => window.OSCILLA.studio.model
 const undoDepth = (page) => page.evaluate(() => window.OSCILLA.studio.store.debugInfo()
   .undoDepth);
 
+/** Below the fold at a phone's width: the grid scrolled into view, as the owner scrolls to it. */
+const scrollToGrid = (page) => page.evaluate((sel) => {
+  document.querySelector(sel).scrollIntoView({ block: 'center' });
+}, GRID);
+
 /** Drag from step `a` to step `b` of the first lane: mouse, or touch pointers on a phone. */
 async function drag(page, a, b, touch) {
-  // Below the fold at a phone's width: in view first, as the owner scrolls to it.
-  await page.locator(`${CELL}[data-lane="0"][data-step="${a}"]`).scrollIntoViewIfNeeded();
+  await scrollToGrid(page);
   const boxes = await page.evaluate(({ sel, a: x, b: y }) => [x, y].map((s) => {
     const r = document.querySelector(`${sel}[data-lane="0"][data-step="${s}"]`)
       .getBoundingClientRect();
@@ -140,19 +152,27 @@ function defineChecks() {
   const checks = [];
   const def = (name, fn) => checks.push({ name, fn });
 
-  def('sg-mount', async ({ page }) => {
+  def('sg-mount', async ({ page, size }) => {
     await freshClip(page);
+    if (size.touch) await scrollToGrid(page);
     const info = await page.evaluate((sel) => {
       const g = document.querySelector(sel);
       const cells = [...g.querySelectorAll('[role="gridcell"]')];
       const rects = cells.map((c) => c.getBoundingClientRect());
+      // Review R2-W8-1: every step inside the Inspector's clipping box, none cut off.
+      const clip = g.closest('[data-osc="studio.inspector"]').getBoundingClientRect();
+      const cut = rects.filter((r) => r.left < clip.left - 0.5 || r.right > clip.right + 0.5)
+        .length;
       return { rows: g.querySelectorAll('[role="row"]').length,
         head: g.querySelector('[role="rowheader"]').textContent.trim(), cells: cells.length,
         small: rects.filter((r) => r.width < 43.5 || r.height < 43.5).length,
         name: cells[0].getAttribute('aria-label'),
-        scroll: document.scrollingElement.scrollWidth - window.innerWidth };
+        scroll: document.scrollingElement.scrollWidth - window.innerWidth, cut };
     }, GRID);
-    return { ok: info.rows === 1 && info.head === 'C4' && info.cells >= 8 && info.small === 0
+    // Four steps a page in the 268 px side panel at 1536 px, eight at a phone's full width.
+    const want = size.touch ? 8 : 4;
+    return { ok: info.rows === 1 && info.head === 'C4' && info.cells === want && info.cut === 0
+      && info.small === 0
       && info.name === 'C4, krok 1, vypnuto' && info.scroll <= 0, ...info };
   });
 
@@ -160,10 +180,13 @@ function defineChecks() {
     const id = await freshClip(page);
     const depth = await undoDepth(page);
     await drag(page, 0, 3, size.touch);
+    let seen = null;
     const notes = await until(async () => {
-      const n = await notesOf(page, id);
-      return n.length === 4 ? n : null;
-    }, { ms: NOTE_MS, what: 'step note in model' });
+      seen = await notesOf(page, id);
+      return seen.length === 4 ? seen : null;
+    }, { ms: NOTE_MS, what: 'step note in model' }).catch((e) => {
+      throw new Error(`${e.message}; the clip holds ${JSON.stringify(seen)}`);
+    });
     const one = (await undoDepth(page)) === depth + 1;
     await page.evaluate(() => window.OSCILLA.studio.store.undo());
     const undone = await until(async () => ((await notesOf(page, id)).length === 0 ? true
@@ -186,6 +209,17 @@ function defineChecks() {
     }, { ms: NOTE_MS, what: 'step note in model' });
     const focused = await page.evaluate(() => document.activeElement
       && document.activeElement.getAttribute('aria-label'));
+    // Review R2-W8-2: ] moves the page and keeps the focus on the same column there.
+    await page.keyboard.press(']');
+    const paged = await until(() => page.evaluate(() => {
+      const a = document.activeElement;
+      return a && a.getAttribute('role') === 'gridcell' ? Number(a.dataset.step) : null;
+    }), { ms: UI_MS, what: 'sg-keys: ] keeps the focus on a step of the next page' });
+    await page.keyboard.press('[');
+    await until(() => page.evaluate(() => {
+      const a = document.activeElement;
+      return a && a.getAttribute('aria-label') === 'C4, krok 2, zapnuto';
+    }), { ms: UI_MS, what: 'sg-keys: [ brings the focus back to step 2' });
     await page.keyboard.press('Delete');
     const off = await until(async () => ((await notesOf(page, id)).length === 0 ? true : null),
       { ms: NOTE_MS, what: 'sg-keys: Delete takes the step off' });
@@ -194,7 +228,8 @@ function defineChecks() {
       await page.evaluate(() => window.OSCILLA.app.studioStop());
     }
     return { ok: spaceNotes.length === 0 && JSON.stringify(on) === '[[0.25,60]]'
-      && focused === 'C4, krok 2, zapnuto' && off && steps === 2, on, focused, steps };
+      && focused === 'C4, krok 2, zapnuto' && paged > 1 && off && steps === 2, on, focused,
+    paged, steps };
   });
 
   def('sg-playhead', async ({ page }) => {

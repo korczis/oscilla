@@ -283,7 +283,7 @@ function fakeEl() {
   const kids = new Map();
   const cls = new Set();
   const e = {
-    dataset: {}, textContent: '', disabled: false, className: '', value: '',
+    dataset: {}, textContent: '', disabled: false, className: '', value: '', clientWidth: 0,
     ownerDocument: { activeElement: null },
     classList: {
       add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c),
@@ -338,7 +338,8 @@ test('the view: one frame subscriber, freed at destroy; keys reach it, Space not
 });
 
 // ------------------------------------------------------------------------------ the Inspector
-test('the Inspector grid: lanes of the clip\'s notes, steps of its grid, the playing step', async () => {
+test('the Inspector grid: the clip\'s notes as lanes, its grid\'s steps, the playing step',
+  async () => {
   const { DEFAULT_LANE, clipStepsView, playingStep } =
     await import('../../src/js/ui/studio/inspector-steps.js');
   const model = { transport: { tempo: 120 } };
@@ -365,4 +366,58 @@ test('the Inspector grid: lanes of the clip\'s notes, steps of its grid, the pla
   assert.equal(playingStep(model, empty, { playing: true, position: 3.1 }), null);
   const held = clipStepsView(model, clip([]), false);
   assert.equal(playingStep(model, held, { playing: true, position: 1 }), null);
+});
+
+// ------------------------------------------------------------------------------ review R2-W8
+test('R2-W8-1: a page holds only the steps its width fits (4 in the 268 px Inspector)', () => {
+  // The Studio Inspector's card is 268 px wide at 1536 px: eight 44 px steps were cut off.
+  assert.equal(pageStepsFor(242), PAGE_STEPS.panel);
+  assert.equal(PAGE_STEPS.panel, 4);
+  // Neighbours share a border: eight 44 px steps take 345 px, inside a phone's 350 px Inspector.
+  assert.equal(pageStepsFor(350), PAGE_STEPS.narrow);
+  assert.equal(pageStepsFor(8 * 44 - 7), PAGE_STEPS.narrow);
+  assert.equal(pageStepsFor(8 * 44 - 8), PAGE_STEPS.panel);
+});
+
+test('R2-W8-1: the view fits its pages to the width it is laid out in', async () => {
+  const { mountStepGrid } = await import('../../src/js/ui/kinds/step-grid.js');
+  const host = fakeEl();
+  const root = fakeEl();
+  Object.defineProperty(host, 'firstElementChild', { get: () => root });
+  root.querySelector('[data-step-grid-surface]').clientWidth = 242;
+  const pages = [];
+  const view = mountStepGrid(host, { mode: 'notes', lanes: [60], clipId: 'c',
+    payload: { notes: [] }, steps: 16, stepBeats: SB, commit: () => true,
+    onView: (v) => { if (v.page != null) pages.push(v.page); } });
+  assert.equal(view.model.state().pageSteps, 4);
+  assert.equal(view.model.state().pages, 4);
+  root.querySelector('[data-step-grid-surface]').clientWidth = 400;
+  view.set({});
+  assert.equal(view.model.state().pageSteps, 8);
+  assert.deepEqual(pages, [0], 'the owner hears the page once, when the size changed');
+  view.destroy();
+});
+
+test('R2-W8-2: [ and ] keep the focused column on the new page', () => {
+  const { grid, log } = notesGrid([], { pageSteps: 4 });
+  grid.key('ArrowRight');
+  grid.key('ArrowRight'); // step 2, column 2 of page 0
+  grid.key(']');
+  assert.deepEqual(grid.focus, { lane: 0, step: 6 });
+  assert.deepEqual(log.view.at(-1), { page: 1 });
+  grid.key(']');
+  grid.key(']');
+  assert.deepEqual(grid.focus, { lane: 0, step: 14 });
+  grid.key(']'); // no page after the last: nothing moves
+  assert.deepEqual(grid.focus, { lane: 0, step: 14 });
+  grid.key('[');
+  assert.deepEqual(grid.focus, { lane: 0, step: 10 });
+});
+
+test('R2-W8-3: the Studio\'s shortcuts dialog, where the grid is mounted, lists its keys',
+  async () => {
+  const { shortcutHelp } = await import('../../src/js/ui/shortcuts.js');
+  const ids = new Set(shortcutHelp('studio').rows.map((r) => r.id));
+  for (const k of stepGrid.keys) assert.ok(ids.has(k.row), k.row);
+  assert.deepEqual([...stepGrid.workspaces], ['studio']);
 });

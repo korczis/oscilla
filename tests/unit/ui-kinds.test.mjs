@@ -146,7 +146,7 @@ test('the key rows are judged against the shortcuts table once the view exists',
   // With the view on disk, a row the dialog lacks is refused; listed, it passes.
   const exists = () => true;
   refused(check([stepGrid], { exists, shortcutRows: () => new Set() }).problems,
-    /key row step-grid-move is not in the shortcuts table of synth/);
+    /key row step-grid-move is not in the shortcuts table of studio/);
   const rows = new Set(stepGrid.keys.map((k) => k.row));
   assert.deepEqual(check([stepGrid], { exists, shortcutRows: () => rows }),
     { problems: [], pending: [] });

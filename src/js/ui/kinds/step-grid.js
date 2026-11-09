@@ -18,13 +18,15 @@
 //     -> { element, set(next), setDisabled(reason | null), destroy(), model }
 
 import { onFrame } from '../../charts/frame-loop.js';
-import { cellName, chordOf, createPlayhead, createStepGrid } from './step-grid-model.js';
+import { PAGE_STEPS, cellName, chordOf, createPlayhead, createStepGrid, pageStepsFor }
+  from './step-grid-model.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 // Classes are literal strings (Tailwind's content scan reads them; rule 3 of W001).
-const CARD = 'rounded-lg border border-solid border-gray-200 bg-white p-3 shadow-sm '
-  + 'dark:border-gray-700 dark:bg-gray-800';
+// No card of its own: the consumer's panel (the Studio Inspector, a Pro card) frames it, and
+// its whole width goes to the steps.
+const CARD = 'flex flex-col';
 const GRID_NARROW = 'flex flex-col gap-3 touch-pan-y select-none';
 const GRID_WIDE = 'flex flex-col gap-2 touch-pan-y select-none';
 const GRID_VALUE = 'flex flex-col gap-2 touch-none select-none';
@@ -33,7 +35,7 @@ const ROW_WIDE = 'flex items-center gap-2';
 const HEAD = 'w-20 shrink-0 truncate text-sm font-medium text-gray-900 dark:text-white';
 const HEAD_NARROW = 'truncate text-sm font-medium text-gray-900 dark:text-white';
 const STEPS = 'flex';
-const CELL = 'relative h-11 w-11 shrink-0 border border-solid border-gray-300 '
+const CELL = 'relative -ml-px h-11 w-11 shrink-0 border border-solid border-gray-300 first:ml-0 '
   + 'focus:z-10 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-500 '
   + 'aria-[current=step]:outline aria-[current=step]:outline-2 '
   + 'aria-[current=step]:outline-yellow-400 aria-selected:ring-2 aria-selected:ring-inset '
@@ -48,11 +50,14 @@ const BUTTON = 'inline-flex h-11 items-center gap-1 rounded-lg border border-sol
   + 'bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none '
   + 'focus-visible:ring-2 focus-visible:ring-primary-300 disabled:opacity-50 '
   + 'dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700';
-const SELECT = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-2 text-sm '
+// A 44 px square pager button: the same Pro secondary button, its name in aria-label.
+const PAGE_BUTTON = `${BUTTON} w-11 justify-center`;
+const SELECT = 'h-11 w-20 rounded-lg border border-solid border-gray-300 bg-gray-50 px-2 text-sm '
   + 'text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 '
   + 'dark:border-gray-600 dark:bg-gray-700 dark:text-white';
 const DETAIL = 'mt-2 flex flex-wrap items-center gap-2';
-const PAGER = 'mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300';
+const PAGER = 'mt-2 flex items-center gap-2 whitespace-nowrap text-sm text-gray-700 '
+  + 'dark:text-gray-300';
 const TEXT = Object.freeze({
   prev: 'Předchozí stránka', next: 'Další stránka', page: (p, n) => `Stránka ${p} z ${n}`,
   accent: 'Přízvuk', slide: 'Slide', ratchet: 'Ratchet', probability: 'Pravděpodobnost',
@@ -74,7 +79,11 @@ export function mountStepGrid(host, opts) {
     if (v.selection || v.page != null) model.set(v);
   }) };
   const live = { el: null };
-  const model = createStepGrid({ ...opts, onView: (v) => owner.onView(v),
+  // Without a pageSteps of the consumer's, the grid fits its pages to the width it is given
+  // (pageStepsFor), measured once it is laid out and again when that width changes.
+  const autoFit = opts.pageSteps == null;
+  const model = createStepGrid({ ...opts, pageSteps: autoFit ? PAGE_STEPS.panel
+    : opts.pageSteps, onView: (v) => owner.onView(v),
     say: (s) => { if (live.el) live.el.textContent = s; } });
   if (opts.selection || opts.page != null) {
     model.set({ selection: opts.selection || [], page: opts.page ?? 0 });
@@ -85,10 +94,11 @@ export function mountStepGrid(host, opts) {
   host.innerHTML = `<div class="${CARD}" data-step-grid="${list ? 'param-list' : 'notes'}">`
     + `<div role="grid" aria-label="${esc(opts.label || '')}" data-step-grid-surface="" `
     + `class="${list ? GRID_VALUE : GRID_WIDE}"></div>`
-    + `<div class="${PAGER}"><button type="button" class="${BUTTON}" data-step-page="-1">`
-    + `${esc(TEXT.prev)}</button><span data-step-page-label=""></span>`
-    + `<button type="button" class="${BUTTON}" data-step-page="1">${esc(TEXT.next)}</button>`
-    + '</div>'
+    + `<div class="${PAGER}"><button type="button" class="${PAGE_BUTTON}" data-step-page="-1" `
+    + `aria-label="${esc(TEXT.prev)}"><span aria-hidden="true">‹</span></button>`
+    + '<span data-step-page-label=""></span>'
+    + `<button type="button" class="${PAGE_BUTTON}" data-step-page="1" `
+    + `aria-label="${esc(TEXT.next)}"><span aria-hidden="true">›</span></button></div>`
     + (list ? '' : `<div class="${DETAIL}" role="group" data-step-detail="" `
       + `aria-labelledby="${uid}-dl"><span id="${uid}-dl" class="sr-only"></span>`
       + `<button type="button" class="${BUTTON}" aria-pressed="false" data-step-menu="accent">`
@@ -114,10 +124,20 @@ export function mountStepGrid(host, opts) {
   const isOn = (st, lane, step) => (list ? st.values[step] !== opts.param.min
     : !!st.cells[lane][step]);
 
+  /** The page size the laid-out width holds, or null when it is unknown or unchanged. */
+  function fitted() {
+    if (!autoFit || !surface.clientWidth) return null;
+    const ps = pageStepsFor(surface.clientWidth);
+    return ps === model.state().pageSteps ? null : ps;
+  }
+
   function render() {
     // Read before the cells are replaced: their removal may already move the focus away.
     const doc = element.ownerDocument;
     const held = gridHasFocus || (doc && surface.contains(doc.activeElement));
+    const ps = fitted();
+    const repaged = ps === null ? null : Math.floor(model.focus.step / ps);
+    if (ps !== null) model.set({ pageSteps: ps, page: repaged });
     const st = model.state();
     const wide = st.pageSteps >= 16;
     surface.className = list ? GRID_VALUE : wide ? GRID_WIDE : GRID_NARROW;
@@ -161,6 +181,7 @@ export function mountStepGrid(host, opts) {
       gridHasFocus = true;
       focusCell();
     }
+    if (repaged !== null) owner.onView({ page: repaged }); // the owner keeps the page
   }
 
   function renderDetail(st) {
@@ -207,6 +228,11 @@ export function mountStepGrid(host, opts) {
     }
   });
   const off = [];
+  if (autoFit && typeof ResizeObserver === 'function') {
+    const ro = new ResizeObserver(() => { if (fitted() !== null) render(); });
+    ro.observe(element);
+    off.push(() => ro.disconnect());
+  }
   if (typeof opts.playStep === 'function') {
     off.push(onFrame(() => playhead.tick(opts.playStep())));
   }
@@ -297,6 +323,7 @@ export function mountStepGrid(host, opts) {
     const pager = e.target.closest && e.target.closest('[data-step-page]');
     if (pager) {
       model.key(pager.dataset.stepPage === '1' ? ']' : '[');
+      render();
       return;
     }
     const item = e.target.closest && e.target.closest('button[data-step-menu]');

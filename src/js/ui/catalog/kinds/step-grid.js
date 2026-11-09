@@ -4,7 +4,8 @@
 // at = i x stepBeats of the clip's grid. Accent is vel >= ACCENT_VEL; ratchet is the note's r,
 // probability its p, slide its slide. One gesture builds one CLIP_UPDATE of the notes array;
 // a list-parameter lane builds one NODE_PARAM_SET per gesture. There is no steps clip.
-// Its view and model are W008's (src/js/ui/kinds/), first mounted by K222's Drums view.
+// Its view and model are W008's (src/js/ui/kinds/), first mounted by the Studio Inspector's step
+// grid of a selected notes clip (W008); K222's Drums view mounts it next.
 //
 // Version 2 (W008) declares the grid change, NOTES_GRID_SET of ADR 0086 decision 2 (keep, map
 // or refuse), which the Studio exports since W008; version 1 (W001) had no grid event.
@@ -110,7 +111,7 @@ export default defineKind({
       + 'nastaví a dlouhé podržení otevře nabídku kroku.',
   },
   state: ['studio.clip', 'notes'],
-  links: { opens: ['route:studio'], openedBy: ['route:synth'] },
+  links: { opens: ['route:studio'], openedBy: ['route:studio'] },
   aria: {
     role: 'grid',
     parts: { lane: 'row', laneName: 'rowheader', step: 'gridcell' },
@@ -130,7 +131,8 @@ export default defineKind({
   truth: { none: 'kreslí noty modelu a krok transportu, nikdy naměřenou hodnotu' },
   impl: { modules: ['src/js/ui/kinds/step-grid.js', 'src/js/ui/kinds/step-grid-model.js'],
     issue: 'W008' },
-  workspaces: ['synth'],
+  // Mounted in the Studio Inspector (W008); K222 adds the Synth's Drums view.
+  workspaces: ['studio'],
   transient: ['focus', 'drag-preview', 'open-entry'],
   mount: { extras: [] },
   constants: { accentVel: ACCENT_VEL },

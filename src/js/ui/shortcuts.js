@@ -96,7 +96,8 @@ const KEYBOARD_ROWS = Object.freeze([
   row('keyboard-velocity', 'C / V', 'Velocity down / up (steps of 20)', KEYBOARD_WHERE),
 ]);
 // The step grid (W008, the step-grid kind of src/js/ui/catalog/kinds/step-grid.js), in the
-// Synth where it is mounted; Czech (Q104). It never takes Space or a bare letter key.
+// Studio, whose Inspector mounts it for a selected notes clip; Czech (Q104). It never takes
+// Space or a bare letter key. K222 adds the Synth when its Drums view mounts the kind.
 const STEP_GRID_WHERE = 've zaměřené krokové mřížce';
 const STEP_GRID_ROWS = Object.freeze([
   row('step-grid-move', 'Šipky', 'Posun po krocích a řadách', STEP_GRID_WHERE),
@@ -160,7 +161,7 @@ export function shortcutHelp(workspace) {
   } else if (owner === 'studio') {
     rows = [...STUDIO_ROWS];
   }
-  if (workspace === 'synth') rows.push(...STEP_GRID_ROWS);
+  if (workspace === 'studio') rows.push(...STEP_GRID_ROWS);
   if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
     rows = [...MEASURE_ROWS];
   }

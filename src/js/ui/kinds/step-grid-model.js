@@ -15,7 +15,7 @@
 // the parameter's own sentence (studio/registry.js validateParamValue) before any action.
 //
 //   ACCENT_VEL, STEP_VEL, NEW_GRID, PAGE_STEPS, WIDE_MIN_PX, STEP_GRID_TEXT
-//   pageStepsFor(widthPx) -> 8 | 16           the steps a page shows at that width
+//   pageStepsFor(widthPx) -> 4 | 8 | 16       the steps a page shows in that width (44 px each)
 //   stepOf(at, stepBeats) -> step | null      the step a note's onset sits on, else null
 //   projectNotes(notes, { lanes, steps, stepBeats }) -> { cells, offGrid }
 //     cells[lane][step]: null or { index, vel, len, p, r, slide } (index in `notes`)
@@ -50,10 +50,16 @@ export const ACCENT_VEL = 0.8;
 export const STEP_VEL = 0.7;
 /** A new step clip's grid (ADR 0086 decision 2): the Studio's one constant. */
 export const NEW_GRID = NEW_STEP_GRID;
-/** Steps per page: eight 44 px steps at a phone's width, sixteen beside the names wider. */
-export const PAGE_STEPS = Object.freeze({ narrow: 8, wide: 16 });
+/** Steps per page: sixteen 44 px steps beside the names, eight under them, four in a side panel
+ *  (the Studio Inspector, 268 px at 1536 px), so no step is ever cut off. */
+export const PAGE_STEPS = Object.freeze({ panel: 4, narrow: 8, wide: 16 });
+/** A step's width: the 44 px minimum target. Neighbours share their 1 px border, as a Pro
+ *  button group's do, so a row of n steps is n x 44 - (n - 1) px wide. */
+export const STEP_PX = 44;
+/** The width a row of `n` steps takes. */
+export const rowPx = (n) => n * STEP_PX - (n - 1);
 /** Sixteen 44 px steps and a name column need this width. */
-export const WIDE_MIN_PX = 16 * 44 + 128;
+export const WIDE_MIN_PX = 16 * 44 - 15 + 128;
 
 const EPS = 1e-9;
 const RATCHET = [1, 8];
@@ -80,7 +86,8 @@ export const STEP_GRID_TEXT = Object.freeze({
 const fmt = (v) => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
 
 export function pageStepsFor(widthPx) {
-  return widthPx >= WIDE_MIN_PX ? PAGE_STEPS.wide : PAGE_STEPS.narrow;
+  if (widthPx >= WIDE_MIN_PX) return PAGE_STEPS.wide;
+  return widthPx >= rowPx(PAGE_STEPS.narrow) ? PAGE_STEPS.narrow : PAGE_STEPS.panel;
 }
 
 export function stepOf(at, stepBeats) {
@@ -320,6 +327,13 @@ export function createStepGrid(opts) {
     return true;
   }
 
+  function toPage(p) {
+    if (p < 0 || p >= pages()) return true;
+    focus.step = clamp(p * pageSteps + (focus.step % pageSteps), 0, steps - 1);
+    onView({ page: p });
+    return true;
+  }
+
   const KEYS = {
     ArrowLeft: () => move(0, -1), ArrowRight: () => move(0, 1),
     ArrowUp: () => move(-1, 0), ArrowDown: () => move(1, 0),
@@ -343,14 +357,9 @@ export function createStepGrid(opts) {
     },
     PageUp: () => transpose(1), PageDown: () => transpose(-1),
     'Shift+PageUp': () => transpose(12), 'Shift+PageDown': () => transpose(-12),
-    '[': () => {
-      if (page > 0) onView({ page: page - 1 });
-      return true;
-    },
-    ']': () => {
-      if (page < pages() - 1) onView({ page: page + 1 });
-      return true;
-    },
+    // A page key keeps the focused column: the focus moves a page with it (never left behind).
+    '[': () => toPage(page - 1),
+    ']': () => toPage(page + 1),
     'Shift+F10': () => {
       onView({ menu: { ...focus } });
       return true;
