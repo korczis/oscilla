@@ -30,22 +30,22 @@
 //     with no preset, so its pad is shown disabled), <theme> is dark or light.
 //   desktop-bay-<theme>    1536 wide, the Panel tab scrolled so the bay's card is at the top of
 //   phone-bay-<theme>      the scroller (390 wide with touch: the bay's own face, V636, shown
-//            through its PATCH BAY chip, 8 px under the sticky section nav). The bay's card (its
-//            21 plates and the CABLES list) is taller than the agreed heights leave above the
-//            docked keyboard (at 1536x1400 and 390x1400 the dock covered six to eight plates),
-//            so the bay is seen whole in a taller view at the agreed width. Its height is derived,
-//            not pinned: the view grows until the lowest edge it shows (the bay's card, its
-//            plates and every module card whose top is above the dock) sits BAY_MARGIN above the
-//            docked keyboard (nextBayHeight), so a longer bay (a seventh cable listed) makes a
-//            taller picture and fails the size compare instead of slipping under the dock. The
-//            capture fails closed unless the bay's card, every plate of the bay ([data-plate])
-//            and every module card shown ([data-module]) sit below the section nav and above
-//            the docked keyboard (each bay view prints its height and spare pixels), and unless
-//            all 12 cable ends are hit-testable (nothing covers them).
+//            through its PATCH BAY chip, 8 px under the sticky section nav). The bay's card (its 22
+//            plates, PAD L's since K220, and the CABLES list) is taller than the agreed heights
+//            leave above the docked keyboard (at 1536x1400 and 390x1400 the dock covered six to
+//            eight plates), so the bay is seen whole in a taller view at the agreed width. Its
+//            height is derived, not pinned: the view grows until the lowest edge it shows (the
+//            bay's card, its plates and every module card whose top is above the dock) sits
+//            BAY_MARGIN above the docked keyboard (nextBayHeight), so a longer bay (a seventh cable
+//            listed) makes a taller picture and fails the size compare instead of slipping under
+//            the dock. The capture fails closed unless the bay's card, every plate of the bay
+//            ([data-plate]) and every module card shown ([data-module]) sit below the section nav
+//            and above the docked keyboard (each bay view prints its height and spare pixels), and
+//            unless all 12 cable ends are hit-testable (nothing covers them).
 // Below xl the bay is a face of its own (V636): the cables are patched on it, through its chip,
 // and the tab views come back to the module cards through the PANEL chip.
 // Every capture fails closed unless the Synth reports the view's tab, exactly the cables the
-// document held before the patch (the default Synth document's own: K183's Y cable) and the
+// document held before the patch (the default Synth document's own: none since K220) and the
 // six patched, a drawn cable for each cable the document has (counted from the document under
 // capture, never a literal), no armed engine and no voice, the view's theme on <html>, and the
 // parked pointer lands on nothing interactive.
@@ -572,7 +572,7 @@ async function captureOn(page, view, out, target) {
   // cards unless the view is the bay's.
   const faced = !(await ev('read whether the bay face is shown', faceShown, 'bay'));
   if (faced) await showFace(page, id, 'bay');
-  // The cables the document has before the patch (K183's default Y cable): expected beside it.
+  // The cables the document has before the patch (none by default since K220): expected beside it.
   const own = await ev('read the cables the document already has',
     () => window.OSCILLA.app.synthDebug().cables.map((c) => `${c.from} -> ${c.to}`));
   const want = [...own, ...CABLES.map(([a, b]) => `${a} -> ${b}`)].sort();

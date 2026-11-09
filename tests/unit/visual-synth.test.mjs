@@ -679,7 +679,8 @@ test('the redraw waits for a drawn cable per cable the document has, never a lit
   async () => {
     const { redrawState } = await load();
     assert.equal(typeof redrawState, 'function', 'scripts/visual-synth.mjs exports redrawState');
-    // K183's default Synth document holds its own Y cable: six patched make seven.
+    // A document's own cables count too (K183's default held a Y cable, six patched made seven;
+    // since K220 it holds none): the count comes from the document, never a literal.
     const page = ({ cables, drawn }) => {
       const saved = { document: globalThis.document, window: globalThis.window,
         getComputedStyle: globalThis.getComputedStyle };
