@@ -190,6 +190,10 @@ const ROWS = [
   { type: 'step-modulator', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,
     display: 'log', param: (h) => h.outputs.control.playbackRate,
     toAudio: controlPlaybackRate, ...rateLane },
+  // K226: the step-voltage sequencer's free-running rows share one buffer source, its rate.
+  { type: 'step-voltage-sequencer', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,
+    display: 'log', param: (h) => h.info.source.playbackRate,
+    toAudio: controlPlaybackRate, ...rateLane },
   { type: 'gain', key: 'gain', unit: '', scale: 'linear', min: 0, max: 2, display: 'db',
     param: level, ...levelLane(2) },
   { type: 'filter', key: 'frequency', unit: 'Hz', scale: 'log', min: 10, max: FREQUENCY_MAX,

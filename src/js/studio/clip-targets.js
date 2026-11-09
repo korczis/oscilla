@@ -106,6 +106,7 @@ const EVENT_PLAY = Object.freeze({
   keys: Object.freeze({ gate: 'keys-gate' }), // the Keys Gate (K060)
   random: Object.freeze({ trigger: 'clock' }),
   'step-modulator': Object.freeze({ trigger: 'clock' }),
+  'step-voltage-sequencer': Object.freeze({ trigger: 'clock' }), // K226
 });
 
 /** Reasons the transport gives for what it does not play. */

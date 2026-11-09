@@ -35,6 +35,7 @@
 //                                                admitted as while playing; PLAY promotes it
 //   transport.disarm() -> Promise               every live note off; an armed run stops
 //   transport.live(keysId, { kind, note, velocity, at }) -> result, emitted as 'live' (K223)
+//   transport.step(id, at) -> result   K226: a manual step of a step-voltage sequencer (armed)
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
 //   transport.debugRefuseNextPlay() -> boolean  INJECT hook (ADR 0052; K169, tests/browser/
@@ -1935,6 +1936,15 @@ export function createStudioTransport({
       const r = live.event(keysId, { ...ev, at });
       emit('live', { id: keysId, ev, r, ph: armedOnly ? null : scheduler.playhead(at) });
       return r;
+    },
+    /**
+     * K226: a manual step of step-voltage sequencer `id` (live-notes.js step): while armed it
+     * takes one step through the live router; while the timeline plays and owns its clock it is
+     * refused with its reason; stopped, it is refused as not armed.
+     */
+    step(id, at) {
+      if (!playing) return { ok: false, code: 'not-armed', reason: LIVE_NOTES_TEXT.notRunning };
+      return live.step(id, Number.isFinite(at) ? at : hooks.soon());
     },
     get armed() { return playing && armedOnly; },
     /** Voices an engine sounds now (adapters/voices.js), 0 for any other node. */

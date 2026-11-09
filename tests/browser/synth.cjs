@@ -77,6 +77,9 @@
 //              key arms it and the transport bar's armed indicator shows, PLAY plays, and STOP
 //              leaves the keys armed (indicator and Synth state) with A still sounding (the
 //              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
+//   s-svs      K226: a step-voltage sequencer on the panel's Keys Gate, row A into VCO 1's pitch;
+//              while the Studio plays, the Inspector's Krok button by pointer (tap on the phone)
+//              and keyboard steps it, and the running CV holds each step's value (named deadline)
 //   s-steps    K221 (desktop and phone): no strip by default; the dock's picker lists
 //              Krokový sekvencer, and Enter on it adds the strip in one undo entry, shown above
 //              the face; a pointer on step 3 (a tap on the phone) puts its note (beat 0.5, C4)
@@ -1528,6 +1531,63 @@ function defineChecks() {
       - window.innerWidth);
     return { ok: hiddenFirst && narrow <= 0, hiddenFirst, first: first.v, moved: moved.v,
       narrow, fitted };
+  });
+
+  // K226: a step-voltage sequencer clocked by the panel's Keys Gate, its row A into VCO 1's
+  // pitch, stepped by the Inspector's Krok button while the Studio plays (the timeline does not
+  // own its clock input, so the live router takes the step): by pointer (a tap on the phone) and
+  // by keyboard, each step's value reaches the running CV at once. The node and its cables go in
+  // through the store (the actions the library and the connect picker dispatch, proven by their
+  // own suites); the row's step grid is the kind's param-list lane (step-grid.cjs sg-list).
+  def('s-svs', async ({ page, size }) => {
+    const press = (loc) => (size === 'phone' ? loc.tap() : loc.click());
+    const made = await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      const n = window.OSCILLA.app.synthDebug().nodes;
+      const add = st.dispatch({ type: 'NODE_ADD', nodeType: 'step-voltage-sequencer',
+        position: { x: 40, y: 40 } });
+      if (!add.ok) return { error: add.reason };
+      const id = add.created.nodes[0];
+      const e = [st.dispatch({ type: 'EDGE_ADD', from: { node: n.keys, port: 'gate' },
+        to: { node: id, port: 'clock' } }), st.dispatch({ type: 'EDGE_ADD',
+        from: { node: id, port: 'cvA' }, to: { node: n.vco1, port: 'pitch' },
+        props: { depth: 1, polarity: 'bipolar', mapping: 'linear' } })];
+      st.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [id] } });
+      return { id, error: e.filter((r) => !r.ok).map((r) => r.reason).join('; ') || null };
+    });
+    if (made.error) return { ok: false, detail: `insert and cable: ${made.error}` };
+    // The Inspector is the Studio's: open it there with the sequencer selected, and play.
+    await page.evaluate(() => { window.location.hash = '#m=studio'; });
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'the Studio opens' });
+    const tab = page.locator('[data-osc="studio.subview"][data-value="inspector"]');
+    if (await tab.isVisible()) await press(tab);
+    const step = page.locator('[data-osc="studio.inspector.svsStep"]');
+    await until(() => step.isVisible(), { ms: 10000,
+      what: 'the Inspector shows the sequencer\'s Krok button' });
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    await until(() => page.evaluate((id) => window.OSCILLA.studio.transport.playing
+      && window.OSCILLA.studio.runtime.nodes.has(id), made.id), { ms: 10000,
+      what: 'the Studio plays the sequencer' });
+    const cv = () => page.evaluate((id) => {
+      const h = window.OSCILLA.studio.runtime.nodes.get(id);
+      const o = h && h.outputs && h.outputs.cvA;
+      return o && o.offset ? o.offset.value : null;
+    }, made.id);
+    const holds = (want, what) => until(async () => {
+      const v = await cv();
+      return v !== null && Math.abs(v - want) < 1e-6 ? { v } : null;
+    }, { ms: 5000, what });
+    // Row A by default, pitch role: 0, 0.25 (three semitones), 0.5, ...
+    await press(step);
+    await holds(0, 'Krok by pointer: row A holds step 1 (0)');
+    await step.focus();
+    await page.keyboard.press('Enter');
+    const second = await holds(0.25, 'Krok by keyboard: row A holds step 2 (0.25)');
+    await page.keyboard.press('Enter');
+    const third = await holds(0.5, 'Krok again: row A holds step 3 (0.5)');
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ok: true, second: second.v, third: third.v };
   });
 
   // K225: the Studio's patch library inserts the Synth panel (a panel preset's Insert).

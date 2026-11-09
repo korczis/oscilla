@@ -44,6 +44,7 @@
 // (§184): STOP_POLICY, scheduler.stop(); Escape (§185): resolveEscape(). docs/v31/timeline.md
 // documents all three.
 
+import { svsResetSources } from './step-voltage.js';
 import {
   buildTimeline, planFromTimeline, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../sequencer/compiler.js';
@@ -388,7 +389,10 @@ export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {})
     && c.start >= info.posStart - CONTIGUITY_TOLERANCE_S && c.start < info.posEnd)) {
     warnings.push('Measurement clips inside the loop region repeat on every pass.');
   }
-  items.sort((a, b) => a.startTime - b.startTime || a.order - b.order);
+  // K226: at one instant the items that drive a step-voltage sequencer's reset go first.
+  const resetting = svsResetSources(model);
+  const rank = (it) => (resetting.has(it.target) ? 0 : 1);
+  items.sort((a, b) => a.startTime - b.startTime || rank(a) - rank(b) || a.order - b.order);
   const automation = model.timeline.automation.map((lane) => ({
     key: `${lane.id}#${gen}.${k}`,
     laneId: lane.id,

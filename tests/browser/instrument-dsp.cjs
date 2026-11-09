@@ -40,6 +40,12 @@
 //              imul(1, 0x9e3779b1) ^ imul(index + 1, 0x85ebca77)) is below 0.5
 //   n-census   on a running AudioContext, STOP with a ratchet pending resolves with the engine
 //              and runtime node census 0 and no note record left
+// K226, per browser and per rate: a Clock (1/8 at 120 BPM) steps a step-voltage sequencer whose
+// row A (role pitch: 0, a fifth 7/12, an octave 1) drives a sine VCO over a linear pitch edge of
+// depth 1, played by the Studio transport offline (fixture svsSteps):
+//   s-steps    row A's CV changes at baseTime + k x 0.25 s within one frame for k = 1 and 2, and
+//              holds 0, 7/12 and 1 in the middle of steps 1, 2 and 3
+//   s-pitch    the VCO's frequency in step 2 is step 1's x 2^(7/12) and in step 3 x 2 (1 cent)
 // Tap tempo (four taps 500 ms apart: 120 BPM) is asserted at unit level
 // (tests/unit/studio-steps-playback.test.mjs). On b7a5c9f7 (chromium) the K060 checks pass and
 // the leg fails at its first K068 render ('the suite runs': the store refuses the grid).
@@ -194,6 +200,24 @@ async function runBrowser(name) {
         JSON.stringify(ch.hits) === JSON.stringify(ch.want)
           && JSON.stringify(ch.otherHits) === JSON.stringify(ch.otherWant),
         `seed 1 steps ${ch.hits.join(',')}; seed 2 steps ${ch.otherHits.join(',')}`);
+    }
+    // K226: the step-voltage sequencer's steps on the Clock, rendered offline.
+    for (const rate of rates) {
+      const at = `${leg}@${rate}`;
+      const row = [0, 7 / 12, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      const sv = await call('svsSteps', { sampleRate: rate, row }, `s-steps renders at ${rate} Hz`);
+      const want = [1, 2].map((k) => sv.baseFrame + Math.round(k * sv.period * sv.sampleRate));
+      const near = want.map((w) => sv.changes.reduce((b, c) => (Math.abs(c - w)
+        < Math.abs(b - w) ? c : b), Infinity) - w);
+      check(at, 's-steps the CV changes on each step within one frame',
+        near.every((d) => Math.abs(d) <= 1), `offsets ${near.join(', ')} frames`);
+      check(at, 's-steps the CV holds each step\'s value (pitch role: twelfths)',
+        sv.cvAt.every((v, i) => Math.abs(v - row[i]) < 1e-6), `${sv.cvAt.map((v) => f(v, 6))}`);
+      const c2 = 1200 * Math.log2(sv.hz[1] / sv.hz[0]);
+      const c3 = 1200 * Math.log2(sv.hz[2] / sv.hz[0]);
+      check(at, 's-pitch a fifth, then an octave over step 1 (1 cent)',
+        within(c2 - 700, 1) && within(c3 - 1200, 1),
+        `${f(c2, 2)} ct and ${f(c3, 2)} ct over ${f(sv.hz[0], 2)} Hz`);
     }
     // n-census: a running AudioContext, STOP with the ratchet pending.
     const cs = await bounded(page.evaluate(() => window.K.censusStart()), { ms: CENSUS_MS,

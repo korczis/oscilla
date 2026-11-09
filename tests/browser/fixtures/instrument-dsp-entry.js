@@ -15,7 +15,10 @@
 // it), 2 the Keys pitch CV. Onsets are measured from the contour: the frame before each rise
 // that follows a frame without one. The expected frames are computed here, independently of
 // the code under test: baseTime + beats x 60 / tempo (swing on odd grid positions), and the
-// probability draws with core/math.js mulberry32 directly. census*: the same document on a
+// probability draws with core/math.js mulberry32 directly. K226 (svsSteps): a Clock (1/8 at 120
+// BPM) steps a step-voltage sequencer whose row A (role pitch) drives a sine VCO's pitch over a
+// linear edge of depth 1; the transport plays it offline as above. Its channels: 0 the Master
+// Output, 1 the row A CV itself. census*: the same document on a
 // running AudioContext (the real AudioEngine), so the runner can STOP it with a ratchet
 // pending and read the node census once the stop resolves.
 
@@ -224,6 +227,79 @@ function notesDocument({ tempo = 120, notes, grid = null, glide = 0, beats = 4 }
   return { model: st.getModel(), keys, env, store: st };
 }
 
+/** K226: Clock -> step-voltage sequencer (row A pitch) -> VCO (sine) -> Master Output. */
+function svsDocument({ row, tempo = 120 }) {
+  const empty = normalizeStudio({ kind: STUDIO_KIND, schemaVersion: 1,
+    graph: { nodes: [], edges: [] } });
+  const st = createStudioStore(empty, { idGenerator: createIdGenerator(empty) });
+  const must = (r, what) => {
+    if (!r.ok) throw new Error(`${what}: ${r.reason}`);
+    return r;
+  };
+  const add = (nodeType) => must(st.dispatch({ type: 'NODE_ADD', nodeType,
+    position: { x: 0, y: 0 } }), nodeType).created.nodes[0];
+  const clock = add('clock');
+  const svs = add('step-voltage-sequencer');
+  const vco = add('vco');
+  const out = add('master');
+  must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: clock, params: { division: '1/8' } }),
+    'clock');
+  must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: svs, params: { rowA: row, length: '8',
+    roleA: 'pitch' } }), 'sequencer');
+  must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: vco, params: { waveform: 'sine' } }), 'vco');
+  const edge = (from, fp, to, tp, props) => must(st.dispatch({ type: 'EDGE_ADD',
+    from: { node: from, port: fp }, to: { node: to, port: tp }, props }), `${fp} edge`);
+  edge(clock, 'trigger', svs, 'clock');
+  edge(svs, 'cvA', vco, 'pitch', { depth: 1, polarity: 'bipolar', mapping: 'linear' });
+  edge(vco, 'audio', out, 'audio');
+  must(st.dispatch({ type: 'TRANSPORT_SET', tempo }), 'tempo');
+  // The timeline's length: a gate clip on an Envelope wired to nothing, so the Clock ticks.
+  const env = add('envelope');
+  const trackId = must(st.dispatch({ type: 'TRACK_ADD', kind: 'event', target: env }), 'track')
+    .created.tracks[0];
+  must(st.dispatch({ type: 'CLIP_ADD', trackId, kind: 'event', start: 0.9, duration: 0.1,
+    payload: { action: 'gate' } }), 'length clip');
+  return { model: st.getModel(), svs };
+}
+
+/**
+ * K226: render svsDocument offline through the Studio transport for `seconds` at `sampleRate`:
+ * the frames where row A's CV changes, and the VCO's frequency inside each of the first `steps`
+ * steps (from 20 ms after the step to 20 ms before the next). -> { sampleRate, baseFrame,
+ * period, changes, hz, cvAt }
+ */
+async function svsSteps({ sampleRate, row, steps = 3, seconds = 1 }) {
+  const { model, svs } = svsDocument({ row });
+  const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
+  const merge = ctx.createChannelMerger(2);
+  merge.connect(ctx.destination);
+  const master = ctx.createGain();
+  master.connect(merge, 0, 0);
+  const engine = offlineEngine(ctx, master);
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store: fixedStore(model),
+    lookAheadS: seconds });
+  const started = transport.start();
+  if (!started.ok) throw new Error(`PLAY: ${started.reason}`);
+  runtime.nodes.get(svs).outputs.cvA.connect(merge, 0, 1);
+  const buf = await ctx.startRendering();
+  const sr = buf.sampleRate;
+  const out = buf.getChannelData(0);
+  const cv = buf.getChannelData(1);
+  const period = 60 / model.transport.tempo / 2; // an eighth
+  const baseFrame = Math.round(started.baseTime * sr);
+  const changes = [];
+  for (let i = baseFrame + 1; i < cv.length; i++) if (cv[i] !== cv[i - 1]) changes.push(i);
+  const hz = [];
+  const cvAt = [];
+  for (let k = 0; k < steps; k++) {
+    const t0 = started.baseTime + k * period;
+    hz.push(zeroCrossingHz(out, sr, t0 + 0.02, t0 + period - 0.02).hz);
+    cvAt.push(cv[Math.round((t0 + period / 2) * sr)]);
+  }
+  return { sampleRate: sr, baseFrame, period, changes, hz, cvAt };
+}
+
 /** A read-only store of one model, as offline.js gives its transport. */
 const fixedStore = (model) => ({ getModel: () => model, getRevision: () => 0,
   dispatch: () => ({ ok: false, reason: 'read-only' }) });
@@ -383,5 +459,5 @@ function censusDone() {
     noteRecords: C.transport.debugInfo().noteCount, keysLeft: keys.length };
 }
 
-window.K = { RATES, track, glide, clampHz, midiHz, swingGrid, ratchet, slide, chance,
+window.K = { RATES, track, glide, clampHz, midiHz, swingGrid, ratchet, slide, chance, svsSteps,
   censusStart, censusNow, censusStop, censusDone };

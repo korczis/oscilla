@@ -41,10 +41,11 @@
 //   on outside its Key low to Key high: { ok: false, code: 'note-range' | 'key-range', reason },
 //   never clamped to a neighbour silently (K060).
 
-import { gateCloseAt } from '../audio/gate.js';
+import { MIN_GATE_S, gateCloseAt } from '../audio/gate.js';
 import { createNoteStack } from '../synth/note-stack.js';
 import { playsNotes } from './registry.js';
-import { reachedEnvelopes, stepRelays, triggerHop } from './trigger-fanout.js';
+import { reachedEnvelopes, relayOf, triggerHop } from './trigger-fanout.js';
+import { svsGateFraction, svsStep } from './step-voltage.js';
 
 /** The router's refusals, as the user reads them. */
 export const LIVE_NOTES_TEXT = Object.freeze({
@@ -54,7 +55,16 @@ export const LIVE_NOTES_TEXT = Object.freeze({
   // K103: one ownership rule, while the transport plays the timeline.
   timelineOwned: (name) => `Hradlo uzlu ${name} teď řídí přehrávaná časová osa; živá nota ho `
     + 'neotevře.',
+  // K226: the step-voltage sequencer's manual step.
+  notClocked: 'Krokový sekvencer CV krokuje vlastní rychlostí: ruční krok potřebuje kabel do '
+    + 'vstupu Takt (nebo spouštěcí klip).',
+  notRunning: 'Krokový sekvencer CV teď nehraje: zapněte Synth (Arm) nebo přehrávání.',
 });
+/**
+ * K226: how long a manual step's Gate and step trigger hold, in seconds (no key-up closes them);
+ * a gate-length row scales it (its fraction of MANUAL_STEP_S, at least MIN_GATE_S).
+ */
+export const MANUAL_STEP_S = 0.2;
 const inNoteRange = (n) => Number.isInteger(n) && n >= 0 && n <= 127;
 
 
@@ -113,16 +123,18 @@ export function createLiveNotes({ getModel, handleOf, owner = () => null }) {
     if (!stacks.has(id)) stacks.set(id, createNoteStack());
     return stacks.get(id);
   };
-  const relaying = new Set(); // Step Modulator ids whose last live tick took a step (K103)
+  // Relaying ids whose last live tick took a step, with the TRIGGER outputs it relayed on (K103,
+  // K226: null for every output, a step-voltage sequencer's ['gate', 'trigN']).
+  const relaying = new Map();
   let refusal = null; // the first timeline-owned input an event's gate left alone (K103)
   // One live trigger from `id` along its TRIGGER edges (trigger-fanout.js triggerHop, K103):
   // its Envelopes open (on) or release (off); each clocked node it reaches takes a tick (on
   // only, counted from arm), and a Step Modulator that takes a step relays it on its own
   // Trigger, whose gates close with this one. An input the timeline owns while it plays
   // (owner(id) -> its reason) is left alone, and its reason kept for the event's result.
-  const fan = (id, at, on, seen) => {
+  const fan = (id, at, on, seen, ports = null) => {
     const m = getModel();
-    const { envelopes, clocks } = triggerHop(m, id);
+    const { envelopes, clocks, resets } = triggerHop(m, id, ports);
     const free = (x) => {
       const why = owner(x);
       if (why) refusal = refusal || why;
@@ -134,25 +146,64 @@ export function createLiveNotes({ getModel, handleOf, owner = () => null }) {
       if (on && typeof h.gate === 'function') h.gate(at, null);
       if (!on && typeof h.release === 'function') h.release(at);
     }
+    // K226: a reset sends a step-voltage sequencer's count back to 0 (before any tick of this
+    // gate, so a gate on both its clock and its reset plays step 1).
+    if (on) for (const c of resets) if (free(c)) counts.set(c, 0);
     for (const c of clocks) {
       if (seen.has(c) || !free(c)) continue;
       seen.add(c);
       if (!on) {
-        if (relaying.delete(c)) fan(c, at, false, seen);
+        if (relaying.has(c)) {
+          const was = relaying.get(c);
+          relaying.delete(c);
+          fan(c, at, false, seen, was);
+        }
         continue;
       }
-      const h = handleOf(c);
-      if (!h || typeof h.clock !== 'function') continue;
-      const k = counts.get(c) || 0;
-      h.clock(at, k);
-      counts.set(c, k + 1);
-      relaying.delete(c);
-      if (stepRelays(m.graph.nodes.find((n) => n.id === c), k)) {
-        relaying.add(c);
-        fan(c, at, true, seen);
-      }
+      tick(c, at, seen);
     }
   };
+  /** One live tick on clocked node `c` at `at`; a step it takes relays on its outputs. */
+  const tick = (c, at, seen) => {
+    const h = handleOf(c);
+    if (!h || typeof h.clock !== 'function') return null;
+    const k = counts.get(c) || 0;
+    h.clock(at, k);
+    counts.set(c, k + 1);
+    relaying.delete(c);
+    const relay = relayOf(getModel().graph.nodes.find((n) => n.id === c), k);
+    if (relay) {
+      relaying.set(c, relay.ports);
+      fan(c, at, true, seen, relay.ports);
+    }
+    return { k, relay };
+  };
+
+  /**
+   * K226: a manual step of step-voltage sequencer `id` at `at`: one live tick, its Gate and
+   * step trigger held MANUAL_STEP_S (a gate-length row's fraction of it), then released.
+   */
+  function step(id, at) {
+    refusal = null;
+    const why = owner(id);
+    if (why) return { ok: false, code: 'timeline-owned', reason: why };
+    const h = handleOf(id);
+    if (!h) return { ok: false, code: 'not-running', reason: LIVE_NOTES_TEXT.notRunning };
+    if (typeof h.clock !== 'function') {
+      return { ok: false, code: 'not-clocked', reason: LIVE_NOTES_TEXT.notClocked };
+    }
+    const n = getModel().graph.nodes.find((x) => x.id === id);
+    const r = tick(id, at, new Set([id]));
+    const frac = n ? svsGateFraction(n.params, svsStep(n.params, r.k)) : null;
+    const off = at + Math.max(MIN_GATE_S, MANUAL_STEP_S * (frac === null ? 1 : frac));
+    if (relaying.has(id)) {
+      const was = relaying.get(id);
+      relaying.delete(id);
+      fan(id, off, false, new Set([id]), was);
+    }
+    const res = { ok: true, step: n ? svsStep(n.params, r.k) : null, relayed: !!r.relay };
+    return refusal ? { ...res, owned: { code: 'timeline-owned', reason: refusal } } : res;
+  }
   const gate = (id, at, on) => {
     if (on) opened.set(id, at); else opened.delete(id);
     const kh = handleOf(id);
@@ -283,6 +334,7 @@ export function createLiveNotes({ getModel, handleOf, owner = () => null }) {
 
   return {
     event,
+    step,
     allOff(at) {
       let n = 0;
       for (const id of [...stacks.keys(), ...poly.keys(), ...pads.keys()]) {

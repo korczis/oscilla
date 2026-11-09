@@ -82,6 +82,7 @@ export const NODE_ADAPTERS = Object.freeze({
   sequence: sources.sequence, microphone: sources.microphone,
   lfo: modulation.lfo, envelope: modulation.envelope, random: modulation.random,
   'step-modulator': modulation.stepModulator, macro: modulation.macro, clock: modulation.clock,
+  'step-voltage-sequencer': modulation.stepVoltageSequencer,
   gain: processing.gain, filter: processing.filter, pan: processing.pan,
   'stereo-split': processing.stereoSplit, mixer: processing.mixer, drive: processing.drive,
   scope: analysis.scope, spectrum: analysis.spectrum, spectrogram: analysis.spectrogram,

@@ -1,12 +1,16 @@
 // Studio MODULATION adapters (nodes/modulation.js): LFO, Envelope, Random, Step Modulator,
-// Macro.
+// Macro, the step-voltage sequencer (K226).
 // The adapter contract is the header of adapters/nodes.js.
 
 import { mulberry32 } from '../../audio/noise.js';
 import { applyAdsr, forgetParam, holdAt, releaseAt } from '../../audio/envelope.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { BIPOLAR, UNIPOLAR, did, free, inertHandle, linearOnly, setParam } from './common.js';
+import { SVS_ROWS } from '../nodes/modulation.js';
+import { svsHeld, svsLength, svsOrder, svsRoleValue, svsUnipolar } from '../step-voltage.js';
 
+/** Why a log-mapped rate edge has no target where the browser lacks detune on a buffer. */
+const NO_DETUNE_TEXT = 'This browser has no AudioBufferSourceNode.detune for log-mapped rate.';
 /** Control-signal buffer resolution: samples per step of Random / Step Modulator. */
 export const CONTROL_STEP_SAMPLES = 480;
 /** Values in one Random loop (deterministic for the seed; the sequence repeats after them). */
@@ -152,7 +156,7 @@ function steppedControl({ ctx, acct, at, values, smooth, holdLast, rate }) {
       if (key !== 'rate') return { reason: `unknown parameter ${key}` };
       if (mapping === 'log') {
         return src.detune ? { param: src.detune, scale: CENTS_PER_OCTAVE }
-          : { reason: 'This browser has no AudioBufferSourceNode.detune for log-mapped rate.' };
+          : { reason: NO_DETUNE_TEXT };
       }
       return { param: src.playbackRate, scale: 1 / refRate };
     },
@@ -259,6 +263,125 @@ export const stepModulator = {
     const sc = steppedControl({ ...env, values, smooth: false,
       holdLast: env.params.playback === 'once', rate: env.params.rate });
     return controlHandle(sc, { values });
+  },
+};
+
+/** What the step-voltage sequencer's rate says when a clock steps it (K226). */
+export const SVS_CLOCKED_RATE_TEXT = 'Krokový sekvencer CV krokuje taktem; Rate nemá vliv.';
+
+/**
+ * K226: the step-voltage sequencer. Clocked (a clock edge or a trigger clip: plan node
+ * `clocked`), three ConstantSourceNodes hold its rows A, B and C, each set to the step the k-th
+ * step taken (k counted from PLAY or the last reset by the transport's fan-out) plays, on the
+ * audio clock: clock(t, k) and clockFrom(t, k) as clockedControl's. Free-running (no clock), one
+ * three-channel looped buffer of one cycle of steps at its rate, split into the three rows, so a
+ * rate edge moves the three together; its TRIGGER outputs fire on clocked steps only.
+ */
+export const stepVoltageSequencer = {
+  compiler: 'audio/scheduler.js#scheduleSteps',
+  structural: ['rowA', 'rowB', 'rowC', 'roleA', 'roleB', 'roleC', 'skip', 'length', 'playback'],
+  clock: 'clock',
+  create(env) {
+    const { ctx, acct, at, params } = env;
+    const n = svsLength(params);
+    // Each row as its role carries it (step-voltage.js svsRoleValue).
+    const roles = SVS_ROWS.map(([, , r]) => params[`role${r}`]);
+    const rows = SVS_ROWS.map(([key], r) => params[key].slice(0, n)
+      .map((v) => svsRoleValue(roles[r], v)));
+    const ports = SVS_ROWS.map(([, port]) => port);
+    const outputRange = Object.fromEntries(ports.map((p, r) => [p,
+      svsUnipolar(roles[r]) ? UNIPOLAR : BIPOLAR]));
+    if (env.node && env.node.clocked) {
+      if (typeof ctx.createConstantSource !== 'function') {
+        return inertHandle('degraded', 'Krokový sekvencer CV s taktem potřebuje '
+          + 'ConstantSourceNode.');
+      }
+      const srcs = rows.map((row) => {
+        const src = acct.source(acct.track(ctx.createConstantSource()));
+        src.offset.setValueAtTime(row[0], ctx.currentTime);
+        src.start(at);
+        return src;
+      });
+      const set = (t, k) => {
+        const i = svsHeld(params, k);
+        srcs.forEach((src, r) => src.offset.setValueAtTime(rows[r][i], t));
+      };
+      return {
+        inputs: {},
+        outputs: Object.fromEntries(ports.map((p, r) => [p, srcs[r]])),
+        outputRange,
+        modTarget: (key) => ({ reason: key === 'rate' ? SVS_CLOCKED_RATE_TEXT
+          : `unknown parameter ${key}` }),
+        applyBase() {},
+        update() {},
+        clock: set,
+        clockFrom(t, k) {
+          for (const src of srcs) src.offset.cancelScheduledValues(t);
+          set(t, k);
+        },
+        stop(t) {
+          for (const src of srcs) { try { src.stop(t); } catch (e) { /* already stopped */ } }
+        },
+        dispose() {},
+        info: { clocked: true, length: n },
+        status: 'ready',
+        reason: null,
+      };
+    }
+    // Free-running: one cycle of steps per channel (a 'once' run loops its last step).
+    const order = svsOrder(params);
+    const holdLast = params.playback === 'once';
+    const per = CONTROL_STEP_SAMPLES;
+    const buf = ctx.createBuffer(rows.length, order.length * per, ctx.sampleRate);
+    rows.forEach((row, r) => {
+      const data = new Float32Array(order.length * per);
+      order.forEach((i, j) => data.fill(row[i], j * per, (j + 1) * per));
+      buf.copyToChannel(data, r);
+    });
+    const src = acct.source(acct.track(ctx.createBufferSource()));
+    src.buffer = buf;
+    src.loop = true;
+    const refRate = ctx.sampleRate / per;
+    if (holdLast) {
+      src.loopStart = ((order.length - 1) * per) / ctx.sampleRate;
+      src.loopEnd = (order.length * per) / ctx.sampleRate;
+    }
+    src.playbackRate.setValueAtTime(params.rate / refRate, ctx.currentTime);
+    const split = acct.track(ctx.createChannelSplitter(rows.length));
+    src.connect(split);
+    const outs = rows.map((_, r) => {
+      const g = acct.track(ctx.createGain());
+      split.connect(g, r);
+      return g;
+    });
+    src.start(at);
+    return {
+      inputs: {},
+      outputs: Object.fromEntries(ports.map((p, r) => [p, outs[r]])),
+      outputRange,
+      modTarget(key, mapping) {
+        if (key !== 'rate') return { reason: `unknown parameter ${key}` };
+        if (mapping === 'log') {
+          return src.detune ? { param: src.detune, scale: CENTS_PER_OCTAVE }
+            : { reason: NO_DETUNE_TEXT };
+        }
+        return { param: src.playbackRate, scale: 1 / refRate };
+      },
+      applyBase(b, immediate, owned, w) {
+        const now = ctx.currentTime;
+        if (free(owned, 'rate')) {
+          setParam(src.playbackRate, Math.max(0, b.rate.value) / refRate, immediate, now);
+          if (w) w.rate = Math.max(0, b.rate.value);
+        }
+        if (src.detune) setParam(src.detune, b.rate.cents, immediate, now, w, 'detune');
+      },
+      update() {},
+      stop(t) { try { src.stop(t); } catch (e) { /* already stopped */ } },
+      dispose() {},
+      info: { clocked: false, length: n, order, source: src },
+      status: 'ready',
+      reason: null,
+    };
   },
 };
 
