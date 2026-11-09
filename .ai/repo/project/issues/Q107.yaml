@@ -1,0 +1,23 @@
+id: Q107
+milestone: M098
+serves:
+  - "public-discoverability#readme-front-page"
+title: "Owner decision: a generated, interactive landing at /oscilla/lab/ beside the app, and README stays English"
+slug: owner-decision-landing-at-lab-readme-english
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's answers of 2026-11-09, verbatim and in the repository. Session bbcd8e21-77c5-407d-b96e-e2451f1cdee9 (Claude Code project ~/dev/oscilla, working directory /Users/korczis/dev/oscilla). The owner's order, verbatim: 'vse si prostuduj a budeme updatovat github README.md page, at je generovane, derived, infered, aktualni, ma grafiku, obrazky + landing page + gh pages a je deployed a interaktivni asap'. AskUserQuestion asked at 2026-11-09T17:33:53Z. Question 1, header 'Landing', verbatim: 'Kde má být landing page na GitHub Pages? Kontext: repo dnes zakazuje „druhý web / marketingovou stránku mimo aplikaci“ (intent public-discoverability, non_goals) a in-app landing P012 (M122) je blokovaný na P013 a K167. Zvolená varianta se zapíše jako tvoje rozhodnutí (nový Q-issue), které tenhle zákaz ruší.' Its options, verbatim: (1) 'Podcesta /oscilla/lab/ (Doporučeno)': 'Statický, generovaný landing (česky, Flowbite Pro) na nové podcestě. Aplikace zůstává na /oscilla/, takže všechny deep linky fungují dál. Interaktivní: živé hrací okno se skutečnou aplikací (iframe, jeden engine), galerie screenshotů, grafy odvozené z repa a karty, které vedou do workspaců. Nasadí se hned.' (2) 'Landing na kořeni /oscilla/': 'Landing na /oscilla/ a aplikace na /oscilla/app/. Rozbije to existující sdílené odkazy a verify-deploy i live-smoke se musí přepsat. Je to pomalejší a riskantnější.' (3) 'Jen urychlit in-app P012': 'Žádná druhá stránka: urychlí se M122 (živý landing uvnitř aplikace). Je to správně podle repa, ale blokuje to P013 a K167, takže to potrvá dny.' Question 2, header 'README jazyk', verbatim: 'V jakém jazyce má být README.md? Pravidlo Q104 chce česky „publikované stránky“, ale „vývojářskou dokumentaci“ anglicky. Test positioning-consistency navíc pevně drží anglickou úvodní větu.' Its options, verbatim: (1) 'README anglicky (Doporučeno)': 'README zůstane anglicky jako vývojářská dokumentace a landing bude česky. Úvodní věta (Q002) a testy zůstanou beze změny.' (2) 'README česky': 'Přeloží se celé README. Bude to potřebovat nové rozhodnutí místo Q002, protože se mění pozicovací věta, a úpravu testů positioning-consistency a docs-derived.' The answers, verbatim, recorded at 2026-11-09T18:47:22Z: 'Podcesta /oscilla/lab/ (Doporučeno)' and 'README anglicky (Doporučeno)'. Meaning: the Pages site serves, beside the unchanged app at /oscilla/, one generated static landing page at /oscilla/lab/ (Czech prose, Flowbite Pro), whose facts are derived from the repository at build time; the app stays one self-contained file and every deep link resolves as before; the public-discoverability non-goal 'a second hosted website, a marketing page outside the application' is lifted for exactly this page; README.md stays English developer documentation with derived regions; Q089's in-app live landing (M122) is not superseded."
+why: "Owner answers live in the repository (evolve principle 13). The order asks for a README that is generated, derived and current, with graphics and images, and for a deployed, interactive landing page on GitHub Pages as soon as possible; the intent public-discoverability ruled such a page out, so lifting that needs this attributable decision."
+current_state: "Decided 2026-11-09 (18:47:22Z). Implemented by P014 on branch feat/readme-derived-landing."
+scope:
+  - ".ai/repo/project/issues/Q107.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence (covers owner_decision) quoting the order, the questions, the options and the answers with the date, the time and the session id."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
