@@ -36,7 +36,8 @@
 //     mode, tempo, time signature, loop, length, notes; edited through TRANSPORT_SET, LOOP_SET
 //     and METADATA_SET like every other field (the store validates; a refusal is announced)
 //   formatParamValue(p, v), parseParamInput(p, text), sliderRange(p), valueToSlider(p, v),
-//   sliderToValue(p, pos)                                   pure helpers of the fields
+//   sliderToValue(p, pos), SLIDER_STEPS    pure helpers of the fields (inspector-fields.js,
+//                                          re-exported here)
 //   mountInspector(host, svc) -> { render(), renderTrace(), focusFirst(), focusHeading(),
 //                                  focusKey(key), destroy() } DOM (graph-dom.js, no innerHTML);
 //                                  renderTrace refreshes only the Trace section
@@ -56,7 +57,7 @@
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
 
 import { clipTarget } from '../../studio/clip-targets.js';
-import { NODE_REGISTRY, validateParamValue } from '../../studio/registry.js';
+import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   MIN_CLIP_S, NOTES_MAX_CHARS, TEMPO_RANGE, TIME_SIGNATURE_DENOMINATORS,
 } from '../../studio/schema.js';
@@ -67,7 +68,6 @@ import {
 } from '../../studio/a11y.js';
 import { mountGraphSummary } from './graph-summary-view.js';
 import { presetMenu } from './node-preset-menu.js';
-import { formatFrequency, parseFrequency } from '../../core/frequency.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { limitBoundText, limitValueText } from '../../studio/compiler.js';
 import { sig } from '../../core/math.js';
@@ -75,92 +75,22 @@ import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
 import { clipStepsView, mountClipSteps, mountListSteps } from './inspector-steps.js';
+import {
+  SLIDER_STEPS, formatParamValue, parseParamInput, sliderToValue, valueToSlider,
+} from './inspector-fields.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { sliderFill } from '../app.js';
+// The pure helpers of the fields live in inspector-fields.js; re-exported, so callers keep their
+// import from this module.
+export {
+  SLIDER_STEPS, formatParamValue, parseParamInput, sliderRange, sliderToValue, valueToSlider,
+} from './inspector-fields.js';
 
-export const SLIDER_STEPS = 1000;
 
 /** Runtime states whose change Play and Stop already announce. */
 const QUIET = ['not-applied', 'in-sync'];
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
-
-/** The display text of a parameter value with its unit ("2.40 kHz", "0.707", "Low-pass"). */
-export function formatParamValue(p, v) {
-  switch (p.type) {
-    case 'boolean': return v ? 'On' : 'Off';
-    case 'enum': {
-      const o = (p.options || []).find((x) => x[0] === v);
-      return o ? o[1] : String(v);
-    }
-    case 'list': return Array.isArray(v) ? v.map((x) => sig(x, 4)).join(', ') : '';
-    case 'id': return v === null || v === undefined ? 'None' : `${String(v).slice(0, 12)}…`;
-    default:
-      if (!finite(v)) return '—';
-      if (p.unit === 'Hz') return formatFrequency(v);
-      return p.unit ? `${sig(v, 4)} ${p.unit}` : sig(v, 4);
-  }
-}
-
-/**
- * Parse what was typed into a parameter field. Frequencies accept "2400", "2.4k", "2.4 kHz";
- * other numbers may carry their unit ("120 ms" is not converted: the unit must match). Returns
- * { ok: true, value } or { ok: false, error } with the registry's own range text.
- */
-export function parseParamInput(p, text) {
-  const raw = String(text ?? '').trim();
-  const fail = (why) => ({ ok: false, error: `${p.label} ${why}.` });
-  let value;
-  if (p.type === 'number' || p.type === 'integer') {
-    if (p.unit === 'Hz') {
-      const r = parseFrequency(raw);
-      if (!r.ok) return { ok: false, error: r.error };
-      value = r.value;
-    } else {
-      const unit = p.unit ? p.unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
-      const stripped = unit ? raw.replace(new RegExp(`\\s*${unit}$`, 'i'), '') : raw;
-      if (!/^[+-]?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i.test(stripped.replace(',', '.'))) {
-        return fail('must be a number');
-      }
-      value = Number(stripped.replace(',', '.'));
-    }
-  } else if (p.type === 'list') {
-    const parts = raw.split(/[,;\s]+/).filter(Boolean);
-    value = parts.map((x) => Number(x.replace(',', '.')));
-    if (value.some((x) => !finite(x))) return fail('must be numbers separated by commas');
-  } else {
-    return fail('cannot be typed');
-  }
-  const why = validateParamValue(p, value);
-  return why ? fail(why) : { ok: true, value };
-}
-
-/** The slider's range: the parameter's soft (display) range, else its full range. */
-export function sliderRange(p) {
-  const lo = p.softRange ? p.softRange[0] : p.min;
-  const hi = p.softRange ? p.softRange[1] : p.max;
-  return { lo, hi, log: p.scale === 'log' && lo > 0 };
-}
-
-/** Slider position 0..SLIDER_STEPS of a value (clamped to the slider range). */
-export function valueToSlider(p, v) {
-  const { lo, hi, log } = sliderRange(p);
-  if (!finite(v) || !(hi > lo)) return 0;
-  const x = Math.min(hi, Math.max(lo, v));
-  const t = log ? Math.log(x / lo) / Math.log(hi / lo) : (x - lo) / (hi - lo);
-  return Math.round(t * SLIDER_STEPS);
-}
-
-/** The value of a slider position, rounded to the parameter's step (4 significant digits). */
-export function sliderToValue(p, pos) {
-  const { lo, hi, log } = sliderRange(p);
-  const t = Math.min(1, Math.max(0, pos / SLIDER_STEPS));
-  let v = log ? lo * (hi / lo) ** t : lo + (hi - lo) * t;
-  if (p.type === 'integer') v = Math.round(v);
-  else if (p.step) v = Math.round(v / p.step) * p.step;
-  v = Number(v.toPrecision(4));
-  return Math.min(p.max, Math.max(p.min, v)) + 0;
-}
 
 function nodeOf(model, id) {
   return model.graph.nodes.find((n) => n.id === id) || null;
