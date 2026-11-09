@@ -22,7 +22,7 @@ export default {
         + '(speaker, room, microphone), not an absolute level.',
     ],
   },
-  studioHash: '6b7754b60524614f71cb4d32b3dd77e0f3da793ffb6da976f36b42242e3c9a84',
+  studioHash: '5abd03cd24e9296d565e6c2fd6eeacf5964238ca749113108331bb626cae1022',
   model: studioDoc({
     title: 'Measurement Sweep',
     nodes: [

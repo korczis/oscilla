@@ -157,3 +157,47 @@ export function defineNode(def) {
     help: Object.freeze({ ...def.help }),
   });
 }
+
+// ---------------------------------------------------------------- tempo sync (K022, K023)
+
+/**
+ * Note divisions of the transport tempo, one list for every tempo-synced node (K022's sync on
+ * LFO, Random and Step Modulator; K023's Clock): '1/4' is a quarter note.
+ */
+export const TEMPO_DIVISIONS = Object.freeze(['1/1', '1/2', '1/4', '1/8', '1/16', '1/32']);
+
+/** Seconds of one `division` at `bpm` (a quarter note is one beat): 1/4 at 120 BPM is 0.5 s. */
+export function divisionSeconds(division, bpm) {
+  const d = Number(String(division).split('/')[1]);
+  return (240 / bpm) / d;
+}
+
+/** The sync parameter (K022): off, or one period per tempo division (rate then has no effect). */
+export function syncParam() {
+  return enumParam('sync', 'Sync', [['off', 'Off'], ...TEMPO_DIVISIONS.map((d) => [d, d])], 'off',
+    { live: 'glide' });
+}
+
+/**
+ * The rate a synced node runs at: 1 / divisionSeconds(sync, tempo) when sync is a division,
+ * else its own rate. `transport` is the model's (tempo in BPM).
+ */
+export function syncedRate(params, transport) {
+  if (!params || !params.sync || params.sync === 'off' || !transport) return params && params.rate;
+  return 1 / divisionSeconds(params.sync, transport.tempo);
+}
+
+/** The generic bypass (K022): the audio passes through unchanged, click-free. */
+export function bypassParam() {
+  return boolParam('bypass', 'Bypass', false, { live: 'crossfade' });
+}
+
+/**
+ * A node's parameters as the compiler plans them (K022): with `sync` a tempo division, `rate` is
+ * syncedRate's, so the adapters, the live diff and the offline render follow a tempo change as a
+ * rate change; otherwise `params` itself.
+ */
+export function syncedParams(params, transport) {
+  if (!params || !params.sync || params.sync === 'off') return params;
+  return { ...params, rate: syncedRate(params, transport) };
+}

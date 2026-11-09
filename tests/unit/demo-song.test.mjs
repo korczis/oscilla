@@ -12,7 +12,7 @@ import demoSong, {
   DEMO_SONG_OMITTED, DEMO_SONG_SECONDS, DEMO_SONG_TITLE,
 } from '../../src/js/studio/templates/demo-song.js';
 import * as S from '../../src/js/studio/templates/demo-song-score.js';
-import { serializeStudio, studioHash } from '../../src/js/studio/schema.js';
+import { serializeStudio, studioHash, studioHashAt } from '../../src/js/studio/schema.js';
 import { importStudio } from '../../src/js/studio/migrate.js';
 import { createStudioStore } from '../../src/js/studio/actions.js';
 import { planOfflineRender } from '../../src/js/studio/offline.js';
@@ -33,8 +33,10 @@ test('K144 the demo song is the last template and the six before it keep their h
   assert.equal(DEMO_SONG_TEMPLATE_ID, 'demo-song');
   assert.equal(STUDIO_TEMPLATES.at(-1).id, 'demo-song');
   assert.equal(getTemplate('demo-song'), STUDIO_TEMPLATES.at(-1));
-  // The six templates before the song, with the hashes they were pinned with: none changes.
-  const six = STUDIO_TEMPLATES.slice(0, 6).map((t) => [t.id, studioHash(templateModel(t.id))]);
+  // The six templates before the song, with the hashes they were pinned with: none changes
+  // (hash epoch 1, as they were pinned; K022's epoch 2 re-pins them without a content change).
+  const six = STUDIO_TEMPLATES.slice(0, 6).map((t) => [t.id, studioHashAt(templateModel(t.id),
+    1)]);
   assert.deepEqual(six, [
     ['basic-tone', 'fbfe0905d6948e9e92418623fb0d53505b89706136fe0cbe3521a92d3b7edf92'],
     ['subtractive-synth', '3982a31f8fe6f92f9206bca48ab19b7cfe091105fdb841143e7d1f1e892ec424'],
@@ -55,7 +57,9 @@ test('K144 the song validates without a warning, with its hash pinned', () => {
   assert.deepEqual(v.errors, []);
   assert.deepEqual(v.warnings.map((w) => w.code), []);
   assert.equal(demoSong.studioHash,
-    '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6');
+    'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3');
+  assert.equal(studioHashAt(templateModel('demo-song'), 1),
+    '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6', 'hash epoch 1');
   assert.equal(studioHash(templateModel('demo-song')), demoSong.studioHash);
   const m = templateModel('demo-song');
   const back = importStudio(serializeStudio(m));

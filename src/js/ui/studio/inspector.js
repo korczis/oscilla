@@ -202,7 +202,11 @@ function fieldOf(model, node, p, registry, edgeStatus, truth = null) {
     : `${text}, plays ${playedText}`;
   return {
     key: p.key,
-    label: p.label,
+    // A boolean shown inverted under another name (the Filter's `enabled` as Bypass, K022): the
+    // switch reads `checked`, and setting it writes the opposite value.
+    label: p.shownAs || p.label,
+    invert: !!p.shownAs,
+    checked: p.type === 'boolean' ? (p.shownAs ? !value : !!value) : null,
     type: p.type,
     control,
     value,
@@ -915,14 +919,14 @@ export function mountInspector(host, svc) {
 
   function toggleField(view, f) {
     const btn = h('button', { type: 'button', class: 'osc-toggle osc-si-toggle', role: 'switch',
-      'aria-checked': f.value ? 'true' : 'false', 'data-key': f.key,
+      'aria-checked': f.checked ? 'true' : 'false', 'data-key': f.key,
       'data-osc': 'studio.inspector.param' }, [
       h('span', { class: 'osc-toggle-track', 'aria-hidden': 'true' }),
       h('span', { class: 'osc-toggle-label', text: f.label }),
     ]);
     btn.addEventListener('click', () => {
-      dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key,
-        value: btn.getAttribute('aria-checked') !== 'true' });
+      const on = btn.getAttribute('aria-checked') !== 'true'; // the switch's new state
+      dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key, value: f.invert ? !on : on });
     });
     refs.set(f.key, { input: btn, field: f, toggle: true });
     return h('div', { class: 'osc-si-field', 'data-field': f.key }, [btn]);
@@ -1463,7 +1467,7 @@ export function mountInspector(host, svc) {
         if (r.readout) setText(r.readout, f.readout || f.text);
         if (r.laneNote) setText(r.laneNote, f.laneNote || '');
         if (r.limitNote) setText(r.limitNote, f.limitNote || '');
-        if (r.toggle) setAttr(r.input, 'aria-checked', f.value ? 'true' : 'false');
+        if (r.toggle) setAttr(r.input, 'aria-checked', f.checked ? 'true' : 'false');
         else if (r.input && r.input !== active) {
           if (r.input.tagName === 'SELECT') r.input.value = f.value;
           else r.input.value = f.input;

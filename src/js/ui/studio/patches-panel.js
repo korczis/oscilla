@@ -22,7 +22,7 @@
 
 import { ID_PATTERN } from '../../experiments/schema.js';
 import { createPatch } from '../../studio/patches.js';
-import { exportPatchFile, fileSlug } from '../../studio/library.js';
+import { exportPatchFile, fileSlug, hashMigrationText } from '../../studio/library.js';
 import { announceAction } from '../../studio/a11y.js';
 import { h, replaceChildren } from './graph-dom.js';
 
@@ -234,7 +234,9 @@ export function mountPatches(dialogs, svc) {
       if (!r) throw new Error('That patch is no longer saved.');
       const res = svc.store.dispatch({ type: mode === 'replace' ? 'PATCH_REPLACE'
         : 'PATCH_INSERT', patch: r.patch });
-      svc.announce(announceAction(res), { assertive: !res.ok });
+      svc.announce(res.ok && r.hashMigration
+        ? `${announceAction(res)} ${hashMigrationText(r.hashMigration)}` : announceAction(res),
+      { assertive: !res.ok });
       if (!res.ok) throw new Error(res.reason);
       svc.closeModal(libDlg.id);
     } catch (e) {

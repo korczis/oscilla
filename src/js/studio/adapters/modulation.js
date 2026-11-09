@@ -19,11 +19,17 @@ export const lfo = {
     // buildLfo's modulator: an engine oscillator whose output drives a depth gain into the
     // target parameter (here the depth gain belongs to the modulation edge, §35).
     const osc = acct.source(acct.track(hooks.oscillator(params.shape, params.rate, at)));
+    // K022: the output's depth (0..1), a gain after the oscillator, modulatable (a Macro on an
+    // LFO's depth). The control range stays −1..1: the base is at most 1.
+    const depth = acct.track(ctx.createGain());
+    depth.gain.setValueAtTime(params.depth ?? 1, ctx.currentTime);
+    osc.connect(depth);
     return {
       inputs: {},
-      outputs: { control: osc },
+      outputs: { control: depth },
       outputRange: { control: BIPOLAR },
       modTarget(key, mapping) {
+        if (key === 'depth') return linearOnly(depth.gain)(key, mapping);
         if (key !== 'rate') return { reason: `unknown parameter ${key}` };
         return mapping === 'log' ? { param: osc.detune, scale: CENTS_PER_OCTAVE }
           : { param: osc.frequency, scale: 1 };
@@ -36,6 +42,9 @@ export const lfo = {
           setParam(osc.frequency, hooks.clampFrequency(b.rate.value), immediate, now, w, 'rate');
         }
         setParam(osc.detune, b.rate.cents, immediate, now, w, 'detune'); // log-mapped edges only
+        if (b.depth && free(owned, 'depth')) {
+          setParam(depth.gain, b.depth.value, immediate, now, w, 'depth');
+        }
       },
       update() {},
       stop(t) { try { osc.stop(t); } catch (e) { /* already stopped */ } },
@@ -228,12 +237,20 @@ export const random = {
   },
 };
 
+/**
+ * K022 Step quantize: 'semitone' rounds each step to a twelfth (one semitone under a pitch edge
+ * that maps 1 to one octave, as the Keys pitch cable does); 'off' keeps the values.
+ */
+export function quantizeSteps(steps, quantize) {
+  return quantize === 'semitone' ? steps.map((v) => Math.round(v * 12) / 12 || 0) : [...steps];
+}
+
 export const stepModulator = {
   compiler: 'audio/scheduler.js#scheduleSteps',
-  structural: ['steps', 'playback'],
+  structural: ['steps', 'playback', 'quantize'],
   clock: 'clock',
   create(env) {
-    const values = [...env.params.steps];
+    const values = quantizeSteps(env.params.steps, env.params.quantize);
     if (env.node && env.node.clocked) {
       const once = env.params.playback === 'once';
       return clockedControl({ ...env, name: 'Step Modulator',

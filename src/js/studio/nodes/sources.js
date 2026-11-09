@@ -13,6 +13,10 @@ import {
   optionLabel, parts, pct, secondsParam,
 } from './common.js';
 
+/** Most unison voices of one Oscillator (K022); each is one engine-counted OscillatorNode. */
+export const UNISON_MAX = 7;
+/** Detune of unison voice i of n (cents), spread symmetrically: 0 for one voice. */
+export const unisonDetune = (i, n, spread) => (n > 1 ? spread * (i / (n - 1) - 0.5) : 0);
 const WAVE_OPTIONS = WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]);
 const audioOut = definePort({ id: 'audio', direction: 'out', type: 'AUDIO', label: 'Audio' });
 
@@ -33,10 +37,15 @@ export const oscillator = defineNode({
       modulatable: true, modDepth: 100,
     }),
     levelParam('level', 'Level', 1, { automatable: true, modulatable: true, modDepth: 0.5 }),
+    // K022: unison voices detuned symmetrically across spread cents, summed at 1/sqrt(n).
+    integerParam('unison', 'Unison', { min: 1, max: UNISON_MAX, default: 1, live: 'crossfade' }),
+    numberParam('spread', 'Spread', { min: 0, max: 100, step: 1, unit: 'cents', default: 10,
+      live: 'glide' }),
   ],
   summary(p) {
     return parts(optionLabel(oscillator, 'waveform', p.waveform), hz(p.frequency),
-      p.detune ? `${p.detune > 0 ? '+' : ''}${p.detune} ct` : null);
+      p.detune ? `${p.detune > 0 ? '+' : ''}${p.detune} ct` : null,
+      p.unison > 1 ? `${p.unison}× ${p.spread} ct` : null);
   },
   clipKinds: ['pattern', 'event'],
   sounding: true,
