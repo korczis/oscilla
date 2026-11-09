@@ -152,9 +152,11 @@ test('a cable an amount knob covers takes the knob depth; unpatching keeps the k
 
 // ------------------------------------------------------------------ no inert jack (P1)
 
-test('the filters show no Peak (Q) jack: low- and high-pass Q cannot be modulated', () => {
+test('the filters show their Peak (Q) jack since K232 (a log cable is linear in the node\'s '
+  + 'dB), and no Gain jack', () => {
   for (const mid of ['hpf', 'lpf']) {
-    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'Q'), false, mid);
+    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'Q'), true, mid);
+    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'gain'), false, mid);
     assert.ok(PANEL.faceOf(mid).some((c) => c.key === 'Q'), `${mid} keeps its Peak knob`);
   }
 });

@@ -633,7 +633,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
 
 export const PADS_TEXT = Object.freeze({
   title: 'PADY',
-  intro: 'Pad L ladí filtry, pad R hraje noty stupnice; puštěním se oba vrátí do klidu.',
+  intro: 'Pad L ladí dolní propust, pad R hraje noty stupnice; puštěním se oba vrátí do '
+    + 'klidu.',
   none: 'nic',
   axes: (x, y) => `X ladí ${x}, Y ladí ${y}.`,
   missing: (label) => `Tento dokument Studia nemá ${label}.`,

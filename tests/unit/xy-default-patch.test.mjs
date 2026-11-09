@@ -79,7 +79,7 @@ const live = (model, list) => {
 };
 
 test('K220: the default Synth document cables nothing from pad R; pad L\'s X and Y are the '
-  + 'typed normals into LPF and HPF Cutoff', () => {
+  + 'typed normals into LPF Cutoff and (since K232) LPF Peak', () => {
   // The coordinator oscilla-43's decision of 2026-11-09: the filter axis moved to pad L, and
   // pad R's Y sets the velocity of the notes it plays (K183 cabled xy.y into LPF Cutoff here).
   const st = insertedStore();
@@ -92,10 +92,10 @@ test('K220: the default Synth document cables nothing from pad R; pad L\'s X and
   // Pad L: two normals, each a typed CONTROL edge the registry allows, log and unipolar.
   const padL = m.graph.edges.filter((e) => e.from.node === id('xyl'));
   assert.deepEqual(padL.map((e) => [e.from.port, e.to.node, e.to.port]).sort(),
-    [['x', id('lpf'), 'frequency'], ['y', id('hpf'), 'frequency']]);
+    [['x', id('lpf'), 'frequency'], ['y', id('lpf'), 'Q']]);
   for (const e of padL) {
     const out = NODE_REGISTRY.port('xy-pad', e.from.port, 'out');
-    const inp = NODE_REGISTRY.port('filter', 'frequency', 'in');
+    const inp = NODE_REGISTRY.port('filter', e.to.port, 'in');
     const v = canConnect(out, inp, { sourceNodeId: e.from.node, targetNodeId: e.to.node });
     assert.equal(v.allowed, true, v.reason);
     assert.equal(v.signalType, 'CONTROL');
@@ -291,8 +291,9 @@ test('the sum stays within LPF Cutoff\'s declared range: normals at their amount
       const id = lpfAt(st);
       const plan = rt.plan;
       const incoming = plan.edgeOrder.map((e) => plan.edges.get(e))
-        .filter((e) => e.to.node === id && e.kind === 'control')
+        .filter((e) => e.to.node === id && e.to.port === 'frequency' && e.kind === 'control')
         .map((edge) => ({ edge, handle: rt.edges.get(edge.id) }));
+      // Pad L's Y (n26) goes into LPF Peak since K232: the cutoff's cables are these three.
       assert.equal(incoming.length, 3, 'n21, n22 and pad L\'s X normal n25');
       const safeMaximum = 0.95 * (sampleRate / 2);
       const cb = computeBases(plan.nodes.get(id), incoming, { safeMaximum });

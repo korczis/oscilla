@@ -14,10 +14,12 @@ import { DRUMS_TAB } from '../drums.js';
 // K022: the panel's filters are 12 dB/oct by design (its description and FILTER_NOTE).
 const FILTER_FIXED = { gain: 0, enabled: true, slope: '12' };
 const FILTER_NOTE = 'A 12 dB/oct biquad: the peak rings but does not self-oscillate.';
-// Peak (Q) has a knob and no jack: a low- or high-pass Q is a dB AudioParam in Web Audio, so the
-// runtime refuses a linear Q modulation (clip-targets.js filterQ), and a jack that takes a cable
-// and does nothing is an inert surface (project.no-inert-surfaces).
-const FILTER_JACKS = { hide: ['gain', 'Q'] };
+// Peak (Q) has a jack since K232: a low- or high-pass Q is a dB AudioParam in Web Audio, and a
+// log cable (octaves of Q, the knob's own scale) is linear in it (adapters/processing.js
+// modTarget, DB_PER_OCTAVE_Q), held at or below the knob's soft-range top (compiler.js
+// computeBases); a new cable into it is log (normals.js cableProps). Gain has no jack: the panel
+// fixes it at 0 dB and a low- or high-pass ignores it.
+const FILTER_JACKS = { hide: ['gain'] };
 
 export default definePanel({
   id: 'semi-mono',
@@ -102,9 +104,10 @@ export default definePanel({
     ['n21', 'mg.control', 'lpf.frequency', { depth: 0, mapping: 'log' }],
     ['n22', 'eg2.control', 'lpf.frequency', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
     // Pad L (K220): X sweeps the LPF cutoff up 2 octaves (with EG 2's 2 from 1200 Hz that is the
-    // room to 20 kHz: nothing is scaled at the default amounts), Y the HPF cutoff up 6.
+    // room to 20 kHz: nothing is scaled at the default amounts), Y the LPF peak up 2 octaves of Q
+    // (K232: from Q 1 to 4, +12 dB; held below the knob's soft-range top, 30).
     ['n25', 'xyl.x', 'lpf.frequency', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
-    ['n26', 'xyl.y', 'hpf.frequency', { depth: 6, mapping: 'log', polarity: 'unipolar' }],
+    ['n26', 'xyl.y', 'lpf.Q', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
     ['n23', 'keys.gate', 'sh.trigger'],
   ],
   // An amount knob is the depth of every edge from `source` into its `to` jacks, normalled or

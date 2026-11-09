@@ -102,7 +102,8 @@ test('pad L is a second xy-pad module whose X and Y are typed log normals into L
   assert.equal(PANEL.module('xy').node, 'xy-pad');
   const rows = PANEL.normals.filter((n) => n.from.startsWith('xyl.'))
     .map((n) => [n.from, n.to, n.props.mapping]);
-  assert.deepEqual(rows, [['xyl.x', 'lpf.frequency', 'log'], ['xyl.y', 'hpf.frequency', 'log']]);
+  // Y into LPF Peak since K232 (HPF Cutoff before it).
+  assert.deepEqual(rows, [['xyl.x', 'lpf.frequency', 'log'], ['xyl.y', 'lpf.Q', 'log']]);
   const out = NODE_REGISTRY.get('xy-pad').outputs;
   for (const port of ['x', 'y']) {
     assert.equal(out.find((o) => o.id === port).type, 'CONTROL', `pad L ${port} is CONTROL`);
@@ -113,17 +114,17 @@ test('pad L is a second xy-pad module whose X and Y are typed log normals into L
     .map((e) => [e.from.port, e.props.mapping, e.props.polarity]);
   assert.deepEqual(edges, [['x', 'log', 'unipolar'], ['y', 'log', 'unipolar']],
     'the default document holds both normals as model edges');
-  assert.deepEqual(pads.padTargets(m, PANEL), { x: ['lpf.frequency'], y: ['hpf.frequency'] });
-  assert.equal(jackState(m, PANEL, 'hpf.frequency'), 'normalled');
+  assert.deepEqual(pads.padTargets(m, PANEL), { x: ['lpf.frequency'], y: ['lpf.Q'] });
+  assert.equal(jackState(m, PANEL, 'lpf.Q'), 'normalled');
 });
 
-test('a cable into HPF Cutoff replaces pad L\'s Y normal, as any cable does', () => {
+test('a cable into LPF Peak replaces pad L\'s Y normal, as any cable does', () => {
   const st = defaultStore();
-  const r = patchCable(st.getModel(), PANEL, 'eg1.control', 'hpf.frequency');
+  const r = patchCable(st.getModel(), PANEL, 'eg1.control', 'lpf.Q');
   assert.ok(r.action, r.reason);
   assert.equal(st.dispatch(r.action).ok, true);
   const m = st.getModel();
-  assert.equal(jackState(m, PANEL, 'hpf.frequency'), 'patched');
+  assert.equal(jackState(m, PANEL, 'lpf.Q'), 'patched');
   assert.deepEqual(pads.padTargets(m, PANEL), { x: ['lpf.frequency'], y: [] },
     'pad L\'s Y drives nothing once a cable replaced its normal');
   // The action is a BATCH of graph edits: no NODE_PARAM_SET stands in for a normal.
@@ -280,7 +281,7 @@ test('every hook of the pads is in their markup (the catalogue\'s synth.pads fam
   const host = fakeEl();
   const m = pads.mountPadL(host, { store: st, transport: null, panel: PANEL, mountPad });
   assert.ok(host.innerHTML.includes('data-osc="synth.pads.l.pad"'), 'synth.pads.l.pad');
-  assert.ok(host.innerHTML.includes(pads.PADS_TEXT.axes('lpf.frequency', 'hpf.frequency')),
+  assert.ok(host.innerHTML.includes(pads.PADS_TEXT.axes('lpf.frequency', 'lpf.Q')),
     'the line says what each axis drives');
   m.destroy();
 });

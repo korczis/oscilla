@@ -503,6 +503,12 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     }
     const lin = list.filter((x) => !x.log);
     const logs = list.filter((x) => x.log);
+    // A log-scaled parameter that is not a frequency (a low- or high-pass Q, K232, whose biquad
+    // AudioParam is in dB and so never passes through nodeQ's clamp) holds its log cables' sum
+    // at or below the top of its knob's soft range, the CV ceiling; unlike a frequency, its own
+    // base is never lowered: a base above the ceiling leaves the cables no room upward.
+    const logCapped = !isFreq && p.scale === 'log' && logs.length > 0;
+    const logCap = logCapped ? (p.softRange ? p.softRange[1] : p.max) : capF;
     let up = lin.reduce((s, x) => s + x.up, 0);
     let k = key === 'detune' && detune ? detuneK : 1;
     if (isFreq && up > 0 && ref + up > capF) {
@@ -521,14 +527,16 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     let usedC = 0;
     if (logs.length) {
       const top = Math.max(ref + up, 1e-9);
-      const room = CENTS_PER_OCTAVE * Math.log2(capF / top);
+      const room0 = CENTS_PER_OCTAVE * Math.log2((logCapped ? logCap : capF) / top);
+      const room = logCapped ? Math.max(0, room0) : room0;
       const upC = logs.reduce((s, x) => s + CENTS_PER_OCTAVE * x.up, 0);
-      if (isFreq && b.cents > room) {
+      const capped = isFreq || logCapped;
+      if (capped && b.cents > room) {
         loweredCents[key] = (loweredCents[key] || 0) + b.cents - room;
         b.cents = room;
         for (const x of logs) limited.add(x.id);
       }
-      if (isFreq && upC > 0 && b.cents + upC > room) {
+      if (capped && upC > 0 && b.cents + upC > room) {
         kc = Math.max(0, room - b.cents) / upC;
         for (const x of logs) limited.add(x.id);
       }

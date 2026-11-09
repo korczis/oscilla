@@ -19,11 +19,12 @@ export const XY_MODULE = Object.freeze({ id: 'xy', label: 'XY PAD', node: 'xy-pa
 
 /**
  * Pad L of the Synth face (plan K220, Q103): a second xy-pad node of the panel, on the Panel tab
- * under the face, that plays no notes. Its X and Y are CONTROL outputs normalled to the LPF and
- * HPF cutoffs (panels/semi-mono.js n25, n26; log, unipolar), so a touch sweeps a band and a cable
- * from or into either jack replaces the normal as any cable does (project.typed-ports). Its scale
- * parameters are fixed (a parameter pad has no scale): its card shows its jacks only. Resonance
- * waits for K232 (a low-pass Q is no CV target yet). It is `optional`: a performance surface
+ * under the face, that plays no notes. Its X and Y are CONTROL outputs normalled to the LPF
+ * cutoff and the LPF peak (panels/semi-mono.js n25, n26; log, unipolar; the peak since K232, the
+ * HPF cutoff before it), so a touch sweeps the low-pass and its resonance, and a cable from or
+ * into either jack replaces the normal as any cable does (project.typed-ports). Its scale
+ * parameters are fixed (a parameter pad has no scale): its card shows its jacks only. It is
+ * `optional`: a performance surface
  * whose absence leaves every signal path playing (the cutoffs keep their knobs and the keys'
  * normals), so a document without it, one made before K220 or one it was removed from, has no
  * PAD L (the PADY card offers to add it) and is never told a module was removed (review
