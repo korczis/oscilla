@@ -133,7 +133,9 @@ const adapter = {
   // in a gap hides the marker and its chip), else the instrument's idle frequency. Read every
   // frame: currentFrequency() reads the audio clock and allocates nothing.
   requestedFrequency: () => {
-    if (!app) return null;
+    // Held notes (C024) request no one frequency: the marker and its chip hide while they own
+    // the output.
+    if (!app || app.outputOwner === 'notes') return null;
     const ed = labs.sequencer ? labs.sequencer.editor : null;
     const seq = !!(ed && ed.playing);
     return requestedFrequencyFor(app.playing,
@@ -281,7 +283,12 @@ withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), (plan, o
   // or a microphone level reference owns it (capture.js schedules its own source). claimOutput
   // raises the notice and refuses then (C002, C024); otherwise it takes the output from the
   // sequencer (and Studio). The riff audition claims under its own name (playOwnerOf).
-  return claimOutput(playOwnerOf(o)) !== true;
+  if (claimOutput(playOwnerOf(o)) !== true) return true;
+  // The newest action wins for the notes too (C024): the engine fades the note voices under a
+  // play() voice (ADR 0002), so the held keys and MIDI notes are released with them and stop
+  // owning the output (a note pressed later fades this voice out in turn).
+  if (app && app.notesSounding && typeof app.midiAllOff === 'function') app.midiAllOff();
+  return false;
 });
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
