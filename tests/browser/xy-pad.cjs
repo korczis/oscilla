@@ -48,7 +48,11 @@
 //              band back within 1.5 dB of the no-touch reference (named until() deadlines). E059:
 //              VCO 2 is set silent first, since VCO 1 (16') and VCO 2 (8') beat in that band (4 dB
 //              over ~30 s on one held note), and each band reading is taken settled on the audio
-//              clock (two readings 0.5 s of context time apart within 0.25 dB)
+//              clock (two readings 0.5 s of context time apart within 0.25 dB). Each touch
+//              waits for the pad's gate (aria-pressed) before what it plays, and a timeout returns
+//              the gate's history since the press (aria-pressed, pointer and capture events,
+//              store revisions, re-renders) with the pad handle's status, X and Y, the transport
+//              and the context (run 42672710947: X never rose on the last cell, cause unknown)
 //   x-keys     interactive: arrows move the cursor (aria-valuenow, aria-valuetext of both
 //              sliders), Enter held sounds and its release silences; a held Enter is released
 //              by Escape, by blur and by page hide; the surface is role=application described
@@ -288,6 +292,45 @@ const padState = (page) => page.evaluate(() => {
     pitch: h && h.outputs && h.outputs.pitch ? h.outputs.pitch.offset.value : null };
 });
 const aria = (page, sel, name) => page.locator(sel).getAttribute(name);
+
+/**
+ * The pad's gate history from now on (the flake of run 42672710947, x-y-rest's X step: X never
+ * rose, cause unknown): aria-pressed changes, lost captures, pointer events, window blur, store
+ * revisions and re-renders of the Synth view, each with its ms since the watch began.
+ */
+const watchGate = (page) => page.evaluate(() => {
+  const t0 = performance.now();
+  const log = [];
+  window.__gate = log;
+  const push = (...a) => {
+    if (log.length < 40) log.push([Math.round(performance.now() - t0), ...a]);
+  };
+  const s = document.querySelector('[data-xy-surface]');
+  new MutationObserver(() => push('pressed', s.getAttribute('aria-pressed'),
+    document.contains(s))).observe(s, { attributes: true, attributeFilter: ['aria-pressed'] });
+  new MutationObserver(() => push('render')).observe(document.getElementById('osc-view-synth'),
+    { childList: true, subtree: true });
+  for (const t of ['pointerdown', 'pointerup', 'pointercancel', 'lostpointercapture']) {
+    s.addEventListener(t, () => push(t));
+  }
+  window.addEventListener('blur', () => push('window-blur'));
+  const st = window.OSCILLA.studio;
+  st.store.subscribe(() => push('store', st.store.getRevision()));
+});
+/** What a timed-out pad step saw: the history above, the pad handle, the transport, the context. */
+const gateReport = (page) => page.evaluate(() => {
+  const st = window.OSCILLA.studio;
+  const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad' && n.id.endsWith('-xy'));
+  const h = pad && st.runtime ? st.runtime.nodes.get(pad.id) : null;
+  const ctx = window.OSCILLA.engine.ctx;
+  const s = document.querySelector('[data-xy-surface]');
+  const v = (p) => (p ? Number(p.offset.value.toFixed(3)) : null);
+  return { gate: window.__gate || null, pressed: s ? s.getAttribute('aria-pressed') : 'no pad',
+    handle: h ? h.status : 'none', x: h ? v(h.outputs.x) : null, y: h ? v(h.outputs.y) : null,
+    playing: !!(st.transport && st.transport.playing),
+    held: st.transport ? st.transport.heldNotes() : null,
+    ctx: ctx ? `${ctx.state} ${ctx.sampleRate} ${ctx.currentTime.toFixed(2)}` : null };
+});
 
 async function openXy(context, base, { preset = null, tab = 'xy' } = {}) {
   // preset null: the tab as a first open shows it; tab 'panel': the Synth opened on its Panel
@@ -856,7 +899,17 @@ function defineChecks() {
     const ref = await settled('the band with no touch settles');
     await page.keyboard.up('KeyA');
     await silent(page, 'A released');
-    const hold = await press(page, await padPoint(page, 5, 0.9)); // C4 at Y 0.9
+    const yPoint = await padPoint(page, 5, 0.9); // C4 at Y 0.9
+    await watchGate(page);
+    const hold = await press(page, yPoint);
+    // The gate first, then what it plays: a timeout names the link that broke, with the history.
+    try {
+      await until(() => page.evaluate(() => document.querySelector('[data-xy-surface]')
+        .getAttribute('aria-pressed') === 'true'), { ms: SOUND_MS,
+        what: 'the touch at Y 0.9 holds the pad\'s gate (aria-pressed)' });
+    } catch (e) {
+      return { ok: false, detail: e.message, report: await gateReport(page) };
+    }
     let opened = null;
     await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4) && (opened = rel(q)) - ref >= 6,
       'a touch at Y 0.9 opens LPF Cutoff: the band 6 dB or more over the reference');
@@ -893,9 +946,18 @@ function defineChecks() {
     const refX = await settled('the band with X cabled and no touch settles');
     await page.keyboard.up('KeyA');
     await silent(page, 'A released, X cabled');
-    const xHold = await press(page, await padPoint(page, STEPS - 1, 0.05));
-    await until(async () => (await padOut('x')) > 0.9, { ms: SOUND_MS,
-      what: 'a touch on the last cell plays X at 0.955' });
+    const xPoint = await padPoint(page, STEPS - 1, 0.05);
+    await watchGate(page);
+    const xHold = await press(page, xPoint);
+    try {
+      await until(() => page.evaluate(() => document.querySelector('[data-xy-surface]')
+        .getAttribute('aria-pressed') === 'true'), { ms: SOUND_MS,
+        what: 'the touch on the last cell holds the pad\'s gate (aria-pressed)' });
+      await until(async () => (await padOut('x')) > 0.9, { ms: SOUND_MS,
+        what: 'a touch on the last cell plays X at 0.955' });
+    } catch (e) {
+      return { ok: false, detail: e.message, report: await gateReport(page), xPoint };
+    }
     await xHold.lift();
     await silent(page, 'the lift silences, X cabled');
     await until(async () => Math.abs(await padOut('x')) < 1e-3, { ms: SOUND_MS,
