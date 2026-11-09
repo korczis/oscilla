@@ -45,7 +45,10 @@
 //              6-12 kHz band against C4; a touch at Y 0.9 raises it 6 dB or more; after the lift
 //              the pad's Y output reads 0 (X's too, cabled into LPF Cutoff and lifted from the
 //              last cell, review of #428 NF3), the readout says Y 0 %, and C4 from the keys has the
-//              band back within 1.5 dB of the no-touch reference (named until() deadlines)
+//              band back within 1.5 dB of the no-touch reference (named until() deadlines). E059:
+//              VCO 2 is set silent first, since VCO 1 (16') and VCO 2 (8') beat in that band (4 dB
+//              over ~30 s on one held note), and each band reading is taken settled on the audio
+//              clock (two readings 0.5 s of context time apart within 0.25 dB)
 //   x-keys     interactive: arrows move the cursor (aria-valuenow, aria-valuetext of both
 //              sliders), Enter held sounds and its release silences; a held Enter is released
 //              by Escape, by blur and by page hide; the surface is role=application described
@@ -804,6 +807,20 @@ function defineChecks() {
     // 0, the readout says Y 0 %, and the keys' C4 has that band back at the reference.
     const BAND = [6000, 12000];
     const rel = (q) => bandDb(q, BAND[0], BAND[1]) - levelAt(q, C4);
+    // E059: one oscillator. VCO 1 (sawtooth, 16') and VCO 2 (square, 8') share the harmonics in
+    // the band with a tiny frequency difference, so on one held note the band against C4 beat
+    // by 4 dB over about 30 s (Firefox, 2026-11-09: -73.1 dB at 1.7 s, -69.0 dB at 15 s, the
+    // cutoff and C4 constant): a reference and a reading taken seconds apart differed by the
+    // beat, not by the filter (run 42609411217). With VCO 2 silent the band held to 0.01 dB
+    // for 15 s. The check is of the filter's cutoff; the mix is not what it judges.
+    const oneVco = await page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const mix = st.model.graph.nodes.find((n) => n.type === 'mixer');
+      return !!mix && st.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: mix.id,
+        key: 'level2', value: 0 }).ok;
+    });
+    if (!oneVco) return { ok: false, detail: 'VCO 2 could not be set silent in the mixer' };
+    const clock = () => page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
     const padOut = (port) => page.evaluate((pt) => {
       const st = window.OSCILLA.studio;
       const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
@@ -811,15 +828,27 @@ function defineChecks() {
       return h && h.outputs && h.outputs[pt] ? h.outputs[pt].offset.value : null;
     }, port);
     const padY = () => padOut('y');
-    const settled = async (what) => { // the band, once two successive polls agree to 1 dB
+    // The band once it holds on the audio clock: two readings at least SETTLE_SPAN_S of context
+    // time apart within SETTLE_DB (EG 2's decay takes about 3 s of it to reach the sustain's
+    // band; two polls a frame apart agreed while it still moved).
+    const SETTLE_SPAN_S = 0.5;
+    const SETTLE_DB = 0.25;
+    const settled = async (what) => {
       let prev = null;
       let now = null;
       await until(async () => {
+        const t = await clock();
         now = rel(await read(page));
-        const same = prev !== null && Math.abs(now - prev) < 1;
-        prev = now;
+        if (prev === null) {
+          prev = { t, v: now };
+          return false;
+        }
+        if (t - prev.t < SETTLE_SPAN_S) return false;
+        const same = Math.abs(now - prev.v) < SETTLE_DB;
+        prev = { t, v: now };
         return same;
-      }, { ms: SOUND_MS, what });
+      }, { ms: SOUND_MS, what: `${what} (two readings ${SETTLE_SPAN_S} s of audio clock apart `
+        + `within ${SETTLE_DB} dB)` });
       return now;
     };
     await page.keyboard.down('KeyA');

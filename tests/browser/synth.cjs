@@ -478,11 +478,16 @@ function defineChecks() {
       what: 'a wheel burst is one undo entry' });
     // 21's R3: a drag right after a wheel notch is its own undo entry (the burst is flushed),
     // and R8: a pinch (Ctrl+wheel) is the page's and leaves the knob alone.
+    // E059: the drag starts only once the notch has landed (the knob moved): a pointerdown that
+    // overtook the notch opened the drag first, the late notch folded into the drag's gesture,
+    // and the two entries were one (#490, CI WebKit). The wait used to read `!== w0 || true`,
+    // true at once.
     const d0 = await depth();
+    const n0 = (await pos()).now;
     await page.mouse.move(cx, cy);
     await page.mouse.wheel(0, -100);
-    await until(async () => (await pos()).now !== w0 || true, { ms: 1000,
-      what: 'the notch lands' });
+    await until(async () => (await pos()).now !== n0, { ms: 5000,
+      what: 'the notch lands (the knob moves) before the drag' });
     await page.mouse.down();
     await page.mouse.move(cx, cy + 30, { steps: 3 });
     await page.mouse.up();
