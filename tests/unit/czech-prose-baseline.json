@@ -1,6 +1,6 @@
 {
   "note": "English prose the app still shows, per file (scripts/czech-prose.mjs, rule project.czech-prose, Q104): a count only falls and a file not listed has none. Lower it in the change that translates; never raise it.",
-  "total": 3216,
+  "total": 3203,
   "counts": {
     "src/index.html": 147,
     "src/js/analysis/analytic.js": 12,
@@ -102,7 +102,7 @@
     "src/js/studio/adapters/processing.js": 2,
     "src/js/studio/adapters/sources.js": 7,
     "src/js/studio/automation.js": 13,
-    "src/js/studio/clip-targets.js": 20,
+    "src/js/studio/clip-targets.js": 19,
     "src/js/studio/compiler.js": 13,
     "src/js/studio/library.js": 11,
     "src/js/studio/live-notes.js": 1,
@@ -117,7 +117,6 @@
     "src/js/studio/nodes/output.js": 7,
     "src/js/studio/nodes/processing.js": 18,
     "src/js/studio/nodes/sources.js": 16,
-    "src/js/studio/notes.js": 12,
     "src/js/studio/offline.js": 15,
     "src/js/studio/patch-catalog.js": 6,
     "src/js/studio/patches.js": 23,

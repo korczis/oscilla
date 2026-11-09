@@ -60,7 +60,9 @@
 // claim-failed, claim-refused or play-refused (the runtime refused to apply or start the model;
 // entity: the runtime diagnostic's), or a live edit's edit-refused / sync-refused.
 // debugInfo().unplayed = [{ id, code, reason }], code: no-target, pattern-target, event-target,
-// notes-unplayed (a notes clip, K099 part 1), target-unavailable, no-parameter.
+// notes-unplayed (a notes clip on a target that does not play it), target-unavailable,
+// no-parameter; a note outside its Keys node's key range is warned (key-range, note-player.js).
+// debugInfo().steps: the step under the playhead of each notes clip with a grid (K068).
 //
 // Operation trace (ADR 0042; `trace`: the core/trace.js port, default NO_TRACE). start, stop,
 // sync and admit are one operation each, or join the caller's. Steps, owner 'transport': `play`
@@ -103,6 +105,8 @@
 //                                gates is closed at PLAY (the timeline owns its gate)
 //   gate event clip on a Keys node  the same gate on every Envelope its unmuted Gate edges
 //                                reach (K060), one gate record per Envelope
+//   notes clip on a Keys node    each onset (a timeline-compiler.js `note` item) through the
+//                                Keys note path, its gate as gate records (note-player.js, K068)
 //   automation lane              applyAutomation on handle.modTarget(key, 'linear').param, the
 //                                lane's parameter owned by the transport (runtime.setOwnedParams:
 //                                the runtime does not glide it; a lane removed while playing is
@@ -151,6 +155,7 @@ import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 import { createLiveNotes, gateTargets, keysGatedEnvelopes, liveModel } from './live-notes.js';
+import { createNotePlayer, notesSteps } from './note-player.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -273,6 +278,17 @@ export function createStudioTransport({
   // (stop({ keepArmed: true })) returns it to the armed run instead of stopping the runtime.
   let armedRun = false;
   const live = createLiveNotes({ getModel: () => model, handleOf: (id) => ready(id) });
+  const notes = createNotePlayer({ getModel: () => model, ready: (id) => ready(id), registry,
+    gate: (it, env, deferred) => addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime,
+      deferred),
+    clock: (it, id) => addTick(`${it.key}>${id}`, it, id),
+    played: (it, code, reason) => {
+      if (code === null) return unplayed.delete(it.clipId);
+      const raw = runtime.nodes.get(it.target);
+      return skip(it, code, reason || TRANSPORT_TEXT.unavailable(nameOf(it.target),
+        raw && raw.reason));
+    },
+    warn: (...a) => warn(...a) });
   const view = (m) => (armedOnly && m ? liveModel(m) : m);
   const unplayed = new Map(); // clip or lane id → { code, reason }
   const decisions = [];
@@ -889,10 +905,11 @@ export function createStudioTransport({
       measures.set(it.key, data);
       unplayed.delete(it.clipId);
       measure({ type: 'schedule', ...data, model });
-    } else if (it.type === 'notes') {
-      // Held, not played yet (K099 part 1): listed with the policy's code and reason.
+    } else if (it.type === 'note') notes.play(it, deferred);
+    else if (it.type === 'notes') {
+      // A notes clip on a target that does not play it: listed with the policy's reason.
       const v = clipTarget(nodeOf(model, it.target), { kind: 'notes' }, registry);
-      skip(it, v.code, v.reason);
+      skip(it, v.code || 'no-target', v.reason || TRANSPORT_TEXT.noTarget);
     }
   }
 
@@ -1274,6 +1291,7 @@ export function createStudioTransport({
       ticks.delete(k.key);
       touched.add(k.nodeId);
     }
+    notes.cancel(key, touched);
     const m = measures.get(key);
     if (m) {
       measures.delete(key);
@@ -1361,12 +1379,15 @@ export function createStudioTransport({
     // New gates on an envelope that is rebuilt anyway are applied by the rebuild.
     const deferred = new Set(touched);
     for (const it of plan.schedule) {
-      if (it.type === 'event' && touched.has(it.target)) deferred.add(it.target);
+      if ((it.type === 'event' || it.type === 'note') && touched.has(it.target)) {
+        deferred.add(it.target);
+      }
     }
     for (const it of [...replay, ...plan.schedule]) playItem(it, deferred);
     for (const id of touched) {
       rebuildEnvelope(id, plan.horizon);
       rebuildClock(id, plan.horizon);
+      notes.rebuild(id, plan.horizon);
     }
     for (const a of plan.automation) applyLaneEdit(a);
     for (const d of plan.decisions) record(d);
@@ -1377,9 +1398,11 @@ export function createStudioTransport({
     const touched = new Set();
     for (const key of plan.cancel) cancelItem(key, touched);
     for (const { key, at } of plan.release) releaseItem(key, at, touched);
+    notes.touch(touched); // a note's Keys node holds its pitch at the stop
     for (const id of touched) {
       rebuildEnvelope(id, plan.at);
       rebuildClock(id, plan.at);
+      notes.rebuild(id, plan.at);
     }
     for (const a of plan.automation) {
       if (!a.target) continue;
@@ -1448,6 +1471,8 @@ export function createStudioTransport({
     const stale = new Set([...ticks.values()].filter((k) => k.handle !== ready(k.nodeId))
       .map((k) => k.nodeId));
     for (const id of stale) rebuildClock(id, horizon);
+    // A Keys node rebuilt by the runtime takes up the sounding note, then the later ones.
+    for (const id of notes.stale()) notes.rebuild(id, horizon);
     for (const v of voices.values()) {
       if (v.handle !== ready(v.nodeId) && !v.replacedNoted) {
         // A sounding voice fades out with the node it plays into (the runtime's crossfade);
@@ -1466,6 +1491,7 @@ export function createStudioTransport({
   function prune(now) {
     for (const [key, v] of voices) if (v.voice.ended) voices.delete(key);
     for (const [key, g] of gates) if (g.end + GATE_KEEP_S < now) gates.delete(key);
+    notes.prune(now, GATE_KEEP_S);
     for (const [key, k] of ticks) {
       if (k.time + GATE_KEEP_S >= now) continue;
       ticks.delete(key);
@@ -1742,6 +1768,7 @@ export function createStudioTransport({
     }
     voices.clear();
     gates.clear();
+    notes.clear();
     ticks.clear();
     ticksPassed.clear();
     measures.clear();
@@ -1854,6 +1881,7 @@ export function createStudioTransport({
     // Clock triggers are instants with nothing to release: the next PLAY counts from 0.
     ticks.clear();
     ticksPassed.clear();
+    notes.clear();
     return runtime.stop({ fast }).then((c) => {
       // Everything of this playback is silent and released by now; end the voices' own
       // bookkeeping too.
@@ -1932,6 +1960,8 @@ export function createStudioTransport({
       liveVoices: [...voices.values()].filter((v) => !v.voice.ended).length,
       gateCount: gates.size,
       clockCount: ticks.size,
+      noteCount: notes.size,
+      steps: notesSteps(playing ? model : null, playhead(), registry),
       measurementCount: measures.size,
       lanes: [...lanes.values()].map((l) => ({ laneId: l.laneId, target: { ...l.target },
         scheduled: l.events.length, limited: !!l.limited })),

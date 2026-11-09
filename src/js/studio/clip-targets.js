@@ -22,7 +22,8 @@
 //     plays   the transport plays it, as `how`: 'sequence' (compileSequence into the Sequence),
 //             'pattern-played' (the Oscillator's pattern bus), 'gate' (the Envelope's gate),
 //             'keys-gate' (a Keys node's Gate: the Envelopes its unmuted gate edges reach, K060),
-//             'measurement' (data for the measurement hook) or 'automation' (the lane drives
+//             'keys-notes' (a notes clip on a Keys node: each note sets its pitch and opens its
+//             Gate, K068), 'measurement' (data for the measurement hook) or 'automation' (the lane drives
 //             the parameter's AudioParam)
 //     code, reason   null when it plays; otherwise the store's first error (holds false) or the
 //             transport's unplayed code and reason (holds true)
@@ -35,8 +36,8 @@
 // reports what is held but not played with this reason where docs/v31/timeline.md "Clip-target
 // policy" lists. The subset is the table below: pattern clips play on a Sequence or an
 // Oscillator, event clips only as gates on an Envelope or a Keys node, measurement clips always
-// (as data), notes clips not yet (K099 part 1: held, reported with the notesUnplayed reason),
-// and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
+// (as data), notes clips on a Keys node (K068; held on the XY pad and the voice engines, and
+// reported there with the notesUnplayed reason), and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
 // a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
 // high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), a shelf ignores its Q,
 // and a filter's gain is ignored by Web Audio for every type but peaking and the shelves.
@@ -82,6 +83,9 @@ export const qIsUsed = usesQ;
 /** How a gate event clip plays, by target node type (absent: it does not play). */
 const EVENT_GATES = Object.freeze({ envelope: 'gate', keys: 'keys-gate' });
 
+/** How a notes clip plays, by target node type (absent: held, not played). */
+const NOTES_PLAY = Object.freeze({ keys: 'keys-notes' });
+
 /** How a pattern clip plays, by target node type (absent: it does not play). */
 const PATTERN_PLAY = Object.freeze({ sequence: 'sequence', oscillator: 'pattern-played' });
 
@@ -94,8 +98,8 @@ export const CLIP_TARGET_TEXT = Object.freeze({
     + `na ${name} se nehraje.`,
   notesTarget: (type) => 'A notes clip needs a target that plays notes (Keys, the XY pad or a '
     + `voice engine); ${article(type)} ${type} node does not play notes.`,
-  notesUnplayed: (name) => `Notes clips are kept but not played yet; this clip on ${name} is `
-    + 'not played.',
+  notesUnplayed: (name) => `Notové klipy hrají na uzlu Keys; tento klip na ${name} zůstává, ale `
+    + 'nehraje se.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
     + 'mis-scaled, so it is not applied.',
   filterQUnused: 'Web Audio ignores Q for the low-shelf and high-shelf types; a Q lane or '
@@ -176,7 +180,8 @@ export function clipTarget(node, use, registry = NODE_REGISTRY) {
   if (errors.length) return verdict(errors, false, null, errors[0].code, errors[0].message);
   if (kind === 'notes') {
     if (!node) return verdict(errors, false, null, 'no-target', CLIP_TARGET_TEXT.noTarget);
-    return verdict(errors, false, null, 'notes-unplayed', CLIP_TARGET_TEXT.notesUnplayed(name));
+    const how = NOTES_PLAY[node.type] || null;
+    return verdict(errors, !!how, how, 'notes-unplayed', CLIP_TARGET_TEXT.notesUnplayed(name));
   }
   if (kind !== 'pattern') return verdict(errors, false, null, null, null);
   if (!node) return verdict(errors, false, null, 'no-target', CLIP_TARGET_TEXT.noTarget);

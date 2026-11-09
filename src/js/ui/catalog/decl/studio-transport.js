@@ -47,6 +47,15 @@ export default [
     related: ['studio.compact.loop', 'studio.tl.loop-band'],
   }),
   defineComponent({
+    id: 'studio.tl.tap',
+    kind: 'action',
+    label: 'Tap tempo',
+    docs: 'Nastaví tempo ze čtyř ťuknutí: jejich průměrný interval, jedna úprava tempa za sérii '
+      + '(K068).',
+    state: 'studio.transport',
+    in: 'studio.tl.transport',
+  }),
+  defineComponent({
     id: 'studio.tl.transport',
     kind: 'panel',
     label: 'Studio transport',

@@ -16,6 +16,8 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/v31-studio-timeline.cjs'] }),
   'studio.toolbar.loop': entry({ source: 'src/js/ui/studio/transport-bar.js',
     tests: ['tests/unit/ui-catalog.test.mjs'] }),
+  'studio.tl.tap': entry({ source: 'src/js/ui/studio/transport-bar.js',
+    plan: ['K068'], tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/steps.cjs'] }),
   'studio.tl.transport': entry({ source: 'src/js/ui/studio/transport-bar.js',
     tests: ['tests/unit/ui-catalog.test.mjs'] }),
   'studio.tl.time': entry({ source: 'src/js/ui/studio/transport-bar.js',

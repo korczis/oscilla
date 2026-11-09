@@ -36,7 +36,7 @@ import { BLOCK_SCHEMA } from '../sequencer/model.js';
 import { CONTRACT_LIMITS, TIMING_LIMITS } from '../measurement/engine.js';
 import { DURATION_LIMITS } from '../measurement/stimulus.js';
 import { MEASUREMENT_TARGETS, clipTarget, clipUse } from './clip-targets.js';
-import { notesRules } from './notes.js';
+import { notesRules, slideRule } from './notes.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
   CLIP_KINDS, EVENT_ACTIONS, MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S,
@@ -290,8 +290,8 @@ export function clipDurationBounds(clip) {
  * duration (MIN_CLIP_S and the timeline end, then clipDurationBounds: the pattern block's or the
  * measurement engine's limits), target, event and measurement actions, a measurement clip's
  * target type, a logarithmic stimulus sweep, no musical time on a measurement clip, and a notes
- * clip's tempo link, payload and notes (notes.js notesRules). Returns
- * error diagnostics with paths relative to the clip. opts: { registry, trackById, nodeById }.
+ * clip's tempo link, payload and notes (notes.js notesRules) and a slide's glide (slideRule).
+ * Returns error diagnostics with paths relative to the clip. opts: { registry, trackById, nodeById }.
  */
 export function clipRules(model, clip, { registry = NODE_REGISTRY, trackById = null,
   nodeById = null } = {}) {
@@ -338,6 +338,9 @@ export function clipRules(model, clip, { registry = NODE_REGISTRY, trackById = n
   for (const e of clipTarget(node || null, clipUse(clip), registry).errors) {
     err(e.code, e.message, e.path, e.nodeId ? { nodeId: e.nodeId } : undefined);
   }
+  // A slide needs a target with a glide parameter (ADR 0086, notes.js slideRule).
+  const slide = clip.kind === 'notes' && node ? slideRule(clip, registry.get(node.type)) : null;
+  if (slide) err(slide.code, slide.message, slide.path, { nodeId: node.id });
   return errors;
 }
 
