@@ -455,3 +455,80 @@ test('R2-W8-7: a grid narrower than its clip follows the playing step to its pag
   assert.equal(grid.followPage(16), null, 'past the last step');
   assert.equal(log.actions.length, 0, 'following builds no action');
 });
+
+// ------------------------------------------------------------------------------ T3 view fixes
+/** A host whose surface holds real cells: innerHTML's gridcells become elements with
+ *  attributes, so the playhead's writes can be read back per lane and step. */
+function cellHost(surfaceWidth = 0) {
+  const host = fakeEl();
+  const root = fakeEl();
+  Object.defineProperty(host, 'firstElementChild', { get: () => root });
+  const surface = root.querySelector('[data-step-grid-surface]');
+  surface.clientWidth = surfaceWidth;
+  let cells = [];
+  Object.defineProperty(surface, 'innerHTML', {
+    set(html) {
+      cells = [...String(html).matchAll(/data-lane="(\d+)" data-step="(\d+)"/g)].map((m) => {
+        const c = fakeEl();
+        c.dataset = { lane: m[1], step: m[2] };
+        c.getAttribute = (k) => (c.attrs.has(k) ? c.attrs.get(k) : null);
+        return c;
+      });
+    },
+    get: () => '',
+  });
+  surface.querySelectorAll = (sel) => (sel === '[role="gridcell"]' ? cells : []);
+  return { host, cells: () => cells };
+}
+/** The frame loop's requestAnimationFrame, driven by hand. */
+function frames() {
+  let next = null;
+  globalThis.requestAnimationFrame = (fn) => { next = fn; return 1; };
+  globalThis.cancelAnimationFrame = () => { next = null; };
+  return { tick: (t = 0) => { const f = next; next = null; if (f) f(t); },
+    done: () => {
+      delete globalThis.requestAnimationFrame;
+      delete globalThis.cancelAnimationFrame;
+    } };
+}
+
+test('T3 fix: the playing step leaves no stale aria-current on any lane', async () => {
+  const { mountStepGrid } = await import('../../src/js/ui/kinds/step-grid.js');
+  const clock = frames();
+  const { host, cells } = cellHost();
+  let step = 0;
+  const view = mountStepGrid(host, { mode: 'notes', lanes: [KICK, SNARE], clipId: 'c',
+    payload: { notes: [] }, steps: 16, stepBeats: SB, pageSteps: 8, playStep: () => step,
+    commit: () => true });
+  const current = () => cells().filter((c) => c.getAttribute('aria-current') === 'step')
+    .map((c) => `${c.dataset.lane}:${c.dataset.step}`).sort();
+  clock.tick();
+  assert.deepEqual(current(), ['0:0', '1:0']);
+  step = 1;
+  clock.tick();
+  assert.deepEqual(current(), ['0:1', '1:1'], 'the second lane\'s step 0 is cleared too');
+  step = null;
+  clock.tick();
+  assert.deepEqual(current(), []);
+  view.destroy();
+  clock.done();
+});
+
+test('T3 fix: the first fit reaches the owner without a ReferenceError', async () => {
+  const { mountClipSteps } = await import('../../src/js/ui/studio/inspector-steps.js');
+  const { host } = cellHost(400); // laid out wider than the panel's four steps: a re-fit
+  const store = { dispatch: () => ({ ok: true }), getModel: () => ({ transport: { tempo: 120 } }) };
+  const view = { clipId: 'c', payload: { notes: [] }, stepBeats: SB, steps: 16, lanes: [60],
+    laneNames: ['C4'], start: 0, plays: false };
+  let steps;
+  assert.doesNotThrow(() => { steps = mountClipSteps(host, { store }, view); });
+  assert.equal(steps.grid.model.state().pageSteps, 8);
+  steps.destroy();
+});
+
+test('T3 fix: sixteen steps need the 80 px name column the view draws, not 128 px', () => {
+  // Sixteen 44 px steps sharing borders (689 px), the w-20 name column and its gap-2.
+  assert.equal(pageStepsFor(16 * 44 - 15 + 80 + 8), PAGE_STEPS.wide);
+  assert.equal(pageStepsFor(800), PAGE_STEPS.wide, 'the Synth card at 1536 px is about 800 px');
+  assert.equal(pageStepsFor(16 * 44 - 15 + 80 + 7), PAGE_STEPS.narrow);
+});

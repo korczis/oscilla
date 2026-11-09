@@ -60,7 +60,10 @@ export default definePanel({
       ranges: { gain: [0, 1] } },
     // K022's LFO depth and sync stay at full depth and free-running here: the panel's amount
     // knobs set each cable's depth, and the MG runs at its own rate.
+    // Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3): the
+    // depth is fixed at 1 here, and a jack beside the amount knobs would be a second path to it.
     { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, sync: 'off' },
+      jacks: { hide: ['depth'] },
       options: { shape: ['triangle', 'square'] },
       ranges: { rate: [0.01, 100] }, init: { shape: 'triangle', rate: 5 } },
     { id: 'sh', label: 'S&H', node: 'random', fixed: { sync: 'off' },
