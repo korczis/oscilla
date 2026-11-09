@@ -171,9 +171,10 @@
 //   s-pads     K220 (desktop and phone): the PADY card under the Panel face holds pad L beside
 //              pad R at 1536 px and pad R below pad L at 390 px; ArrowRight on pad L moves its X
 //              (aria-valuenow); Tónina D beside pad R is one undo entry and pad R's node plays D;
-//              with QWERTY A held, a press on pad L's right edge opens the low-pass (the 2-12 kHz
-//              band 6 dB+ over the held note alone) and its release closes it again (4 dB+
-//              below the opened band); a held press on pad L and one on pad R are released by a transport Stop
+//              with QWERTY A held (VCO 2 silent, E059), a press on pad L's right edge opens the
+//              low-pass (the 6-12 kHz band against C4, each reading settled on the audio clock,
+//              6 dB+ over pad L at rest) and its release closes it again (within 1.5 dB); a
+//              held press on pad L and one on pad R are released by a transport Stop
 //              (aria-pressed false), and pad R's release is silent
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              with six cables patched every jack and cable end scrolls clear of the dock,
@@ -321,6 +322,30 @@ async function hold(page, code) {
   await page.keyboard.down(code);
 }
 const silent = (page, what) => sound(page, (p) => p.rmsDb < -70, what);
+const SETTLE_SPAN_S = 0.5; // of audio clock between the two readings that agree
+const SETTLE_DB = 0.25;
+/**
+ * `measure(probe)` once it holds on the audio clock: two readings SETTLE_SPAN_S of context time
+ * apart within SETTLE_DB (an envelope still moving the filter is not a reading of the pad).
+ */
+async function settledOn(page, measure, what) {
+  let prev = null;
+  let now = null;
+  await until(async () => {
+    const q = await read(page);
+    now = measure(q);
+    if (!prev) {
+      prev = { t: q.t, v: now };
+      return false;
+    }
+    if (q.t - prev.t < SETTLE_SPAN_S) return false;
+    const same = Math.abs(now - prev.v) < SETTLE_DB;
+    prev = { t: q.t, v: now };
+    return same;
+  }, { ms: SOUND_MS, what: `${what} (two readings ${SETTLE_SPAN_S} s of audio clock apart within `
+    + `${SETTLE_DB} dB)` });
+  return now;
+}
 
 // ------------------------------------------------------------------------------ checks
 function defineChecks() {
@@ -615,23 +640,37 @@ function defineChecks() {
       what: 'Tónina D reaches pad R\'s node' });
     const k1 = await padR();
     if (k1.depth !== k0.depth + 1) return { ok: false, detail: 'not one undo entry', k0, k1 };
-    // Pad L opens the low-pass while a note is held (X normalled into LPF Cutoff).
+    // Pad L opens the low-pass while a note is held (X normalled into LPF Cutoff). Every band
+    // reading is settled (EG 2 moves the cutoff for seconds after a key) and taken against C4
+    // with VCO 2 silent (E059: the two VCOs beat in that band on one held note).
+    const quiet2 = await page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const mix = st.model.graph.nodes.find((n) => n.type === 'mixer');
+      return !!mix && st.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: mix.id,
+        key: 'level2', value: 0 }).ok;
+    });
+    if (!quiet2) return { ok: false, detail: 'VCO 2 could not be set silent in the mixer' };
     const at = async (loc, fx, fy) => {
       await loc.scrollIntoViewIfNeeded();
       const b = await loc.boundingBox();
       return { x: b.x + fx * b.width, y: b.y + (1 - fy) * b.height };
     };
-    const band = (q) => bandDb(q, 2000, 12000);
+    const rel = (q) => bandDb(q, 6000, 12000) - levelAt(q, C4);
     await hold(page, 'KeyA');
-    const base = await sound(page, (q) => q.rmsDb > -40, 'QWERTY A sounds');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'QWERTY A sounds C4');
+    const base = await settledOn(page, rel, 'the band with pad L at rest');
     const pl = await at(L, 0.97, 0.03);
     await page.mouse.move(pl.x, pl.y);
     await page.mouse.down();
-    const open = await sound(page, (q) => band(q) - band(base) >= 6,
-      'a press on pad L\'s right edge opens the low-pass: the 2-12 kHz band 6 dB+ up');
+    let open = null;
+    await until(async () => (open = await settledOn(page, rel, 'the band under pad L'))
+      - base >= 6, { ms: SOUND_MS, what: 'a press on pad L\'s right edge opens the low-pass: '
+      + 'the 2-12 kHz band 6 dB+ over pad L at rest' });
     await page.mouse.up();
-    const back = await sound(page, (q) => band(open) - band(q) >= 4,
-      'pad L\'s release closes the low-pass again: the band 4 dB+ below the opened one');
+    let back = null;
+    await until(async () => Math.abs((back = await settledOn(page, rel,
+      'the band after pad L\'s release')) - base) < 1.5, { ms: SOUND_MS,
+    what: 'pad L\'s release closes the low-pass again: the band within 1.5 dB of pad L at rest' });
     await page.keyboard.up('KeyA');
     await silent(page, 'the held note released');
     // A transport Stop releases a held press on either pad.
@@ -651,8 +690,8 @@ function defineChecks() {
         .toFixed(1));
     }
     return { ok: true, layout: size === 'phone' ? 'stacked' : 'side by side', x0, x1,
-      bandUp: Number((band(open) - band(base)).toFixed(1)),
-      bandBack: Number((band(back) - band(base)).toFixed(1)), stopped };
+      bandUp: Number((open - base).toFixed(1)), bandBack: Number((back - base).toFixed(1)),
+      stopped };
   });
 
   def('s-wave', async ({ page }) => {
