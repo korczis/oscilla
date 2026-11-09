@@ -1,0 +1,33 @@
+id: P015
+milestone: M098
+serves:
+  - "public-discoverability#lab-landing-live"
+title: "The /lab/ landing's dashboards go deep: per-release changes, roadmap, claims explorer, ADRs, code and test inventory, all derived"
+slug: lab-landing-dashboards-derived
+priority: p2
+profile: deep-work
+objective: "Extend scripts/facts.mjs and the generated landing (P014, Q107) with deeper, derived and retrospective views, each fact naming its source: per release, the commits between consecutive v* tags grouped by Conventional Commit type and scope, with the plan ids they name (inferred from subjects); the roadmap: intents, their milestones and done/total, ordered as majordomus plan roadmap orders them; a searchable, filterable claims explorer (status, area, the test that proves each claim, linked to GitHub); the ADRs with status and date; code size per src/js module and the test inventory per area over time (per release tag). New charts join CHARTS only when the README can embed them as well. Generation stays deterministic and byte-identical on macOS and linux; nothing is committed that drifts with every pull request."
+why: "The owner's loop order of 2026-11-09 asks to improve the extraction, dashboards and reports many times over, retrospectively and at top quality, after the landing went live (P014)."
+scope:
+  - "scripts/facts.mjs"
+  - "scripts/landing.mjs"
+  - "scripts/landing"
+  - "scripts/readme.mjs"
+  - "README.md"
+  - "tests/unit/landing-lab.test.mjs"
+  - "tests/unit/readme-derived.test.mjs"
+  - "tests/unit/facts.test.mjs"
+  - "tests/README.md"
+  - ".ai/repo/project/issues/P015.yaml"
+depends_on:
+  - "P014"
+acceptance_criteria:
+  - "Every new view is produced from scripts/facts.mjs with a named source; unit tests pin the derivations against fixtures (commit grouping, roadmap order, claims fields) and fail on the merge base."
+  - "Two generations are byte-identical, and a linux node:22 container generation matches the macOS one."
+  - "The new sections are Czech, Flowbite Pro, keyboard-usable, usable at 390 px and 1536 px in dark and light themes, and load nothing from another origin."
+validation:
+  - "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs tests/unit/readme-derived.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
