@@ -152,11 +152,12 @@ export const OUTPUT_YIELDS = Object.freeze(Object.fromEntries(OUTPUT_OWNER_TABLE
 /**
  * The playback bus of one page.
  * options: { app() → the reactive component or null, sequencer() → the sequencer editor or
- *            null, changed() → called (in a microtask) after app.seqPlaying was set here,
+ *            null, changed() → called (in a microtask) after the playing state changed,
  *            claimed(owner, reason) → told of every granted claim (optional), trace → the one
  *            operation trace (core/trace.js) every bus event is recorded in (optional) }
  * → { claim(owner, reason), holds(owner), release(owner), owner(), stopAll(reason),
- *      onStop(fn), note(on, { note, input }), armed(owner, on), claimOutput(owner),
+ *      onStop(fn), playback(), subscribe(fn), note(on, { note, input }), armed(owner, on),
+ *      claimOutput(owner),
  *      stopPlayback(cmp, cause), outputBusy(cmp), sequencerPlaying(), stopSequence(cmp) }
  */
 export function createOutputBus({ app, sequencer, changed = () => {}, claimed = () => {},
@@ -167,8 +168,22 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     ? trace.record('bus', kind, { ...f, entity: owner ? { kind: 'owner', id: owner } : null })
     : null);
   /** The owner holding the output changed from `from` to `to` (null: nobody). */
+  // The one observable playing state (C051): { owner, since }, published on the component as
+  // `playback` in the same event as the claim, release or stop that changed it; every mirror
+  // (seqPlaying, isSounding, anySounding, outputOwner, the status bar) is a read of it.
+  let since = 0;
+  const watchers = new Set();
+  const publish = (owner) => {
+    const state = Object.freeze({ owner: owner || null, since: ++since });
+    const cmp = app();
+    if (cmp) cmp.playback = state;
+    for (const fn of [...watchers]) fn(state);
+    later(changed);
+  };
   const moved = (from, to) => {
-    if (from !== to) step('owner', to || 'none', { detail: { from: from || 'none' } });
+    if (from === to) return;
+    step('owner', to || 'none', { detail: { from: from || 'none' } });
+    publish(to);
   };
   const later = (fn) => (typeof queueMicrotask === 'function' ? queueMicrotask(fn)
     : Promise.resolve().then(fn));
@@ -178,14 +193,11 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     return !!(ed && ed.playing);
   };
 
-  /** Stop a playing sequence (click-free fade) and clear the polled copy at once. */
-  function stopSequence(cmp) {
+  /** Stop a playing sequence (click-free fade); the sequencer releases the output at once. */
+  function stopSequence() {
     if (!sequencerPlaying()) return false;
     sequencer().stop();
-    if (cmp.seqPlaying) {
-      cmp.seqPlaying = false;
-      later(changed);
-    }
+    release(OWNER.sequencer); // also where the editor's own onStopped is not wired
     return true;
   }
 
@@ -262,10 +274,6 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
         return Object.freeze({ ok: false, by: refusal.owner, text });
       }
       yieldOutput(cmp, row.yields, !!row.forced);
-      if (owner === OWNER.sequencer && !cmp.seqPlaying) {
-        cmp.seqPlaying = true; // the views and Studio's watch learn it now, not at the next poll
-        later(changed);
-      }
     }
     const from = current ? current.owner : null;
     current = { owner, reason: String(reason || '') };
@@ -308,7 +316,6 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     const guard = (fn) => {
       try { fn(); } catch (e) { failure = failure || e; } // the other owners still stop
     };
-    const from = current ? current.owner : null;
     for (const fn of [...onStops]) guard(() => fn(reason));
     if (cmp) {
       const fast = reason !== 'status-stop';
@@ -319,9 +326,10 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
       guard(() => STOPS[OWNER.notes].stop(cmp));
       if (typeof cmp.measureAbort === 'function') guard(() => cmp.measureAbort(reason));
     }
+    const was = current ? current.owner : null; // an owner that released itself is gone
     current = null;
     step('stopAll', null, { outcome: 'stopped', detail: { cause: String(reason) } });
-    moved(from, null);
+    moved(was, null);
     if (failure) throw failure;
   }
 
@@ -331,6 +339,17 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     current = null;
     step('release', owner, { outcome: 'released' });
     moved(owner, null);
+  }
+
+  /** fn({ owner, since }) on every change of the playing state (C051) -> off(). */
+  function subscribe(fn) {
+    watchers.add(fn);
+    return () => watchers.delete(fn);
+  }
+
+  /** The playing state now: { owner, since } (owner null: nothing holds the output). */
+  function playback() {
+    return Object.freeze({ owner: current ? current.owner : null, since });
   }
 
   /** A note started or ended (the note layer tells, C050): a step of the trace. */
@@ -372,15 +391,15 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
    * output afterwards.
    */
   function stopPlayback(cmp, cause = 'measure') {
-    const from = current ? current.owner : null;
     yieldOutput(cmp, OUTPUT_YIELDS.measure, true);
+    const was = current ? current.owner : null;
     current = null;
     step('stopAll', null, { outcome: 'stopped', detail: { cause } });
-    moved(from, null);
+    moved(was, null);
   }
 
-  return { claim, holds, release, owner, stopAll, onStop, note, armed, sequencerPlaying,
-    stopSequence, claimOutput, stopPlayback, outputBusy };
+  return { claim, holds, release, owner, playback, subscribe, stopAll, onStop, note, armed,
+    sequencerPlaying, stopSequence, claimOutput, stopPlayback, outputBusy };
 }
 
 /** The answer of a granted claim. */

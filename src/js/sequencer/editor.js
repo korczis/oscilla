@@ -22,6 +22,7 @@
 //   clock?,                        the engine's transport clock (C055): the loop wakes from it
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
+//   onStopped?(),                  stop() ended a playing sequence, in the same call (C051)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
 //   openStage?() -> { input, track(node), source(node), untrack(node), dispose(), disposed }
 //                                  the engine's counted stage chain (AudioEngine.stageChain, C003):
@@ -822,6 +823,7 @@ export function createSequencerEditor(options = {}) {
       this._stopVoices();
       closeChain(); // at once when no pass is left; otherwise after the last pass's fade
       this.playing = false;
+      if (wasPlaying && engine && engine.onStopped) engine.onStopped(); // at once (C051)
       return wasPlaying;
     },
     restart() {

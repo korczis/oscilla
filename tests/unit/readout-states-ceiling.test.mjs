@@ -162,7 +162,7 @@ test('T001: the UI shows the state while sounding; the gain readout is labelled 
   const cmp = createWorkbench({});
   const o = Object.create(null);
   Object.defineProperties(o, Object.getOwnPropertyDescriptors(cmp));
-  Object.assign(o, { gainLevel: DEFAULT_GAIN, playing: false, seqPlaying: false });
+  Object.assign(o, { gainLevel: DEFAULT_GAIN, playing: false, playback: { owner: null, since: 0 } });
   assert.equal(o.outputAtCeiling, false);
   assert.equal(o.ceilingActing, false, 'idle shows nothing');
   o.outputAtCeiling = true;

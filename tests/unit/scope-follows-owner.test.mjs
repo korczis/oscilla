@@ -129,14 +129,14 @@ function workbenchCmp(fields) {
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
   Object.assign(cmp, {
     tabs: { analysis: 'waveform' }, timeWindowMs: 5, source: 'single', metricFrequency: 250,
-    effectiveSampleRate: SR, waveform: 'sine', playing: false, seqPlaying: false,
+    effectiveSampleRate: SR, waveform: 'sine', playing: false, playback: { owner: null, since: 0 },
     studio: { playing: false }, studioOwnsOutput() { return this.studio.playing; },
   }, fields);
   return cmp;
 }
 
 test('workbench: outputOwner and the canvas label name the source that sounds', () => {
-  const seq = workbenchCmp({ seqPlaying: true });
+  const seq = workbenchCmp({ playback: { owner: 'sequencer', since: 1 } });
   assert.strictEqual(seq.outputOwner, 'sequencer');
   assert.match(seq.analysisCanvasLabel, /^Live output analyser waveform \(sequencer\)/);
   assert.match(seq.analysisCanvasLabel, /relative to full scale/);
@@ -146,7 +146,7 @@ test('workbench: outputOwner and the canvas label name the source that sounds', 
   assert.strictEqual(studio.outputOwner, 'studio');
   assert.match(studio.analysisCanvasLabel, /^Live output analyser waveform \(Studio\)/);
 
-  const inst = workbenchCmp({ playing: true, seqPlaying: true });
+  const inst = workbenchCmp({ playing: true, playback: { owner: 'sequencer', since: 1 } });
   assert.strictEqual(inst.outputOwner, 'instrument');
   assert.match(inst.analysisCanvasLabel, /scaled to the set gain/);
 

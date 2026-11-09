@@ -161,6 +161,7 @@ const adapter = {
   sequencerAccounting: engine.stageAccounting(),
   // The sequencer takes the output through the one owner table (ui/output-owner.js, C002).
   claimSequencerOutput: () => claimOutput('sequencer'),
+  releaseSequencerOutput: () => bus.release(OWNER.sequencer), // stopped or ended (C051)
   holdSequencerOutput: () => bus.holds(OWNER.sequencer), // a loop pass (C037)
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
@@ -611,15 +612,8 @@ function mountLabs(root) {
       if (app && typeof app.midiAllOff === 'function') app.midiAllOff();
       return playSequence.apply(this, args);
     };
-    // UI bookkeeping only (the sequencer schedules on the audio clock itself).
-    setInterval(() => {
-      const on = !!labs.sequencer.editor.playing;
-      if (app && app.seqPlaying !== on) {
-        app.seqPlaying = on;
-        if (!on) bus.release(OWNER.sequencer); // the playback bus (C037)
-        notifyAdapter();
-      }
-    }, 150);
+    // The sequencer's playing state is the playback bus's (C051): its claim, its stop and its
+    // end publish it in the same event; there is no poll.
   }
   syncLabFlags();
 }
@@ -899,6 +893,7 @@ function createOscillaComponent(ui) {
   const studio = createStudioUi({ engine, stopPlayback, outputRefusalOf,
     claim: bus.claim, release: bus.release, // Studio PLAY and the Synth arm (C037)
     trace, onTraceIdle: (fn) => traceIdle.add(fn), // the one trace (C050)
+    onPlayback: bus.subscribe, // the playing state (C051)
     // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
     playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)
