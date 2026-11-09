@@ -774,9 +774,10 @@ async function runOne(name) {
         const advice = [...document.querySelectorAll('#osc-safety .osc-safety-text > span')]
           .filter((el) => el.getClientRects().length);
         const adviceWhole = advice.length > 0 && advice.every((el) => !cut(el))
-          // the phone's one-line advice is Czech (Q104: a new visible text, T4's short-English
-          // ratchet); a wider screen shows the whole English sentence, which starts the same way
-          && advice.some((el) => /^(Začněte potichu|Start low)/.test(el.textContent.trim()));
+          // every size here is a short touch phone (height < 700 px), so the one-line advice is
+          // shown, and it is Czech (Q104, T4's short-English ratchet; review C1-U100-5). The
+          // whole English sentence of a wider screen has its own check below.
+          && advice.some((el) => el.textContent.trim() === 'Začněte potichu.');
         const m = { state: dock && dock.getAttribute('data-dock-state'), toasts, safety: sh, tap,
           shown, errWhole, adviceWhole };
         m.ok = m.state === 'collapsed' && toasts.length > 0 && sh > 0 && sh <= 56 && tap
