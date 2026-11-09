@@ -25,4 +25,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-09T22:45:35Z
+started_at: 2026-11-09T22:41:52Z
+started_event: sha256:30a7c09a6932fcc2f4663b8f10960ab5993f8de9b5bc1d31d0fb058f9f7745e5
+verified_at: 2026-11-09T22:42:20Z
+verified_event: sha256:c056544cb0d120b3105751fe73a0fc01b3aae496cf1efba6a7c8a40af291d6be
+completed_at: 2026-11-09T22:45:35Z
+completed_event: sha256:0d84c2794db5b61c668ac5b5ce240a5e8c0bee36a9962922853d5ed72847bca4
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/about-current.test.mjs (origin/main b8bfd3b6); the same file of #424's head 75d31638 over #424's merge base a19f1ff6"
+    result: "Re-checked on main b8bfd3b6 by oscilla-ce on 2026-11-09: 'U085: each workspace description names only what that workspace shows at 1536 px' and 'mutation U085: a reverted summary is named' pass (16 of 16 in the file, 1 skipped by design); the test maps each phrase to its panel's data-osc-modes, Learn names LEARN_CARDS' first and last card, Synth each of its tabs. On a19f1ff6 the U085 test fails as an assertion (fail-first). No ISO time or SHA in the roadmap (about-current.test.mjs:423 passes); source-size and ui-flowbite-pro baseline tests pass (80/0). Delivered by #424 (merged in train #437, d51f9b2d), verdict .ai/repo/reviews/424.yaml merge."
+    artifact: "tests/unit/about-current.test.mjs"
+    commit: b8bfd3b613b9e4aac63267343c14bd1ee91f2a02
+    recorded_at: 2026-11-09T22:45:04Z
