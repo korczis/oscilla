@@ -1898,7 +1898,7 @@ function defineChecks() {
     await page.locator('[data-face="bay"]').tap();
     const bay = await page.evaluate(() => {
       const svg = document.querySelector('[data-osc="synth.bay.svg"]').getBoundingClientRect();
-      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+      const bar = document.querySelector('nav[aria-label="Sekce Synthu"]')
         .getBoundingClientRect();
       const cards = document.querySelector('[data-face-of="panel"]').getBoundingClientRect();
       const fonts = [...document.querySelectorAll('[data-osc="synth.bay.svg"] text')]
@@ -1933,7 +1933,7 @@ function defineChecks() {
     }
     const reach = await page.evaluate(() => {
       const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
-      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+      const bar = document.querySelector('nav[aria-label="Sekce Synthu"]')
         .getBoundingClientRect();
       const svg = document.querySelector('[data-osc="synth.bay.svg"]');
       const ends = [...svg.querySelectorAll('[data-jack]')].map((el) => [el, el])
@@ -1964,7 +1964,7 @@ function defineChecks() {
     await page.locator('[data-goto="lpf"]').tap();
     const chip = await page.evaluate(() => {
       const h = document.querySelector('#synth-m-lpf').getBoundingClientRect();
-      const bar = document.querySelector('nav[aria-label="Synth sections"]')
+      const bar = document.querySelector('nav[aria-label="Sekce Synthu"]')
         .getBoundingClientRect();
       const hit = document.elementFromPoint(h.left + 4, h.top + h.height / 2);
       return { top: Math.round(h.top), bar: Math.round(bar.bottom),
