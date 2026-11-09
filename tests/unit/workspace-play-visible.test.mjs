@@ -81,7 +81,7 @@ function statusPlay() {
   const get = Object.getOwnPropertyDescriptor(wb, 'statusPlayShown');
   // its class binding overrides the stylesheet's desktop display:none (Tailwind's important
   // utility), and only where the getter says so
-  const bound = /:class="statusPlayShown && '!inline-flex'"/.test(tag);
+  const bound = /:class="statusPlayShown && '!inline-flex[^']*'"/.test(tag);
   return { tag, shown: (workspace) => !!(bound && get && get.get
     && get.get.call({ workspace })) };
 }

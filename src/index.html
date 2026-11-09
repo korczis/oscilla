@@ -3135,7 +3135,8 @@
   </aside>
 
   <!-- Status bar -->
-  <footer class="osc-statusbar" aria-label="Status and actions">
+  <footer class="osc-statusbar" aria-label="Status and actions"
+    :class="statusPlayShown && '[@media(min-width:1536px)]:![grid-template-columns:auto_minmax(58px,134fr)_auto_auto_minmax(16px,213fr)_auto]'">
     <div class="osc-sb-brand">
       <span class="osc-sb-name">OSCILLA</span>
       <span class="osc-sb-version" data-osc="status.version" x-text="'v' + BUILD.label"
@@ -3147,7 +3148,7 @@
 
     <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
       aria-label="Play" aria-pressed="false" :aria-pressed="String(isSounding)"
-      :class="statusPlayShown && '!inline-flex'"
+      :class="statusPlayShown && '!inline-flex md:justify-self-end md:me-3'"
       :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Trigger')"
       @click="statusPlay()" @keydown.enter="latchKey($event)">
       <svg aria-hidden="true" x-show="!isSounding"><use href="#i-play"/></svg>
