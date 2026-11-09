@@ -193,19 +193,46 @@ test('C030: where only the status Play is on screen, each prompt names it, in Cz
 test('C030: a restored link says what to press in the workspace it opens', () => {
   const state = applyConfig(null, {}, { sampleRate: 48000 }).state;
   const said = (ws) => restoreFromHash(null, `#${serializeHash(state, ws)}`,
-    { sampleRate: 48000 }).notices.find((n) => n.title === 'Configuration restored from link');
-  assert.equal(said('playground').message,
-    'Nothing plays until you press HOLD TO PLAY or TRIGGER.', 'the frozen V1 text');
+    { sampleRate: 48000 }).notices.find((n) => /restored from link|obnoveno z odkazu/
+    .test(n.title));
+  assert.deepEqual([said('playground').title, said('playground').message],
+    ['Configuration restored from link', 'Nothing plays until you press HOLD TO PLAY or TRIGGER.'],
+    'the frozen V1 text');
   for (const ws of hints.STATUS_PLAY_WORKSPACES) {
-    assert.equal(said(ws).message, hints.STATUS_PLAY_HINTS.restored, ws);
+    // one language per notice (R2-C030-3): the Czech sentence under a Czech title
+    assert.deepEqual([said(ws).title, said(ws).message], [hints.STATUS_PLAY_TITLES.restored,
+      hints.STATUS_PLAY_HINTS.restored], ws);
   }
 });
 
-test('C030: the suspended notice and the idle analyser read the hint of the workspace', () => {
+test('C030: the suspended notice and the idle scope read the hint of the workspace', () => {
   const inst = read('src/js/core/instrument.js');
-  assert.match(inst, /const hint = statusPlayHint\(this\.workspace, 'suspended'\);\s*this\.notify\('warning', 'Audio is suspended', hint\s*\|\| 'The browser/);
-  assert.match(read('src/js/visualization/waveform.js'),
-    /L\.hasCtx \? \(st\.idleHint \|\| 'press HOLD TO PLAY'\)/);
+  assert.match(inst, new RegExp("const hint = statusPlayHint\\(this\\.workspace, 'suspended'\\);"
+    + "\\s*this\\.notify\\('warning', statusPlayTitle\\(this\\.workspace, 'suspended'\\)"
+    + "\\s*\\|\\| 'Audio is suspended', hint\\s*\\|\\| 'The browser"));
+  // the scope the analysis tabs show (ui/p5-views.js), drawn and described (R2-C030-1)
+  assert.match(read('src/js/ui/p5-views.js'),
+    /const press = st\.idleHint \|\| 'press Hold to Play for the live trace';/);
+  assert.match(read('src/js/ui/workbench.js'),
+    /statusPlayHint\(this\.workspace, 'scope'\)[^|]*\|\| 'Hold to Play shows the live output/);
   assert.match(read('src/js/main.js'),
     /bridge\.setIdleHint\(statusPlayHint\(cmp\.workspace, 'idle'\)\)/);
+});
+
+test('C030: the status Play is announced by the word the prompts name it by', () => {
+  const { tag } = tagOf(/data-osc="status\.play"/);
+  assert.match(tag, /\saria-label="Přehrát"/);
+  assert.match(tag, /:aria-label="statusPlayName" :title="statusPlayName"/);
+  const wb = createWorkbench({ engine: { analyser: { fftSize: 8192 } }, stopPlayback() {},
+    sequencerPlaying: () => false });
+  const get = Object.getOwnPropertyDescriptor(wb, 'statusPlayName').get;
+  const name = (o) => get.call({ isSounding: false, continuousAllowed: false,
+    isProgrammed: false, ...o });
+  assert.equal(name({}), 'Přehrát');
+  assert.equal(name({ continuousAllowed: true }), 'Přehrát nepřetržitě');
+  assert.equal(name({ continuousAllowed: true, isProgrammed: true }), 'Přehrát');
+  assert.equal(name({ isSounding: true }), 'Zastavit přehrávání');
+  for (const kind of Object.keys(hints.STATUS_PLAY_HINTS)) {
+    assert.match(hints.STATUS_PLAY_HINTS[kind], /Přehrát/, `${kind} names it as announced`);
+  }
 });

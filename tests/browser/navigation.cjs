@@ -379,10 +379,11 @@ function defineChecks() {
 
   // C030: a visible Play on every workspace that should sound. At the desktop width (the suite's
   // default viewport) Analyzer, Filter Lab, Compare and Presets lay out no Hold or Trigger, so
-  // the status bar's Play is theirs: a real click on it sounds the instrument (the engine's
-  // active source count rises above 0) and a second click stops it (back to 0). The Playground
-  // keeps its own Hold and Trigger and shows no second Play. Every wait is a condition poll with
-  // a named deadline (lib/wait.cjs until()).
+  // the status bar's Play is theirs: announced as "Přehrát…", named by the idle scope's drawn
+  // caption (Analyzer) and its description, a real click on it sounds the instrument (the
+  // engine's active source count rises above 0) and a second click stops it (back to 0). The
+  // Playground keeps its own Hold and Trigger, no second Play above the phone width, and the V1
+  // words. Every wait is a condition poll with a named deadline (lib/wait.cjs until()).
   def('c030-visible-play', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     const ev = (fn, arg) => page.evaluate(fn, arg);
@@ -390,9 +391,14 @@ function defineChecks() {
       const O = window.OSCILLA;
       const b = document.getElementById('osc-sb-play');
       const r = b.getBoundingClientRect();
+      const scope = O.host && O.host.views ? O.host.views.scope : null;
       return { ws: O.app.workspace, sources: O.engine.activeSourceCount,
         nodes: O.engine.activeNodeCount, pressed: b.getAttribute('aria-pressed'),
-        idleHint: O.viz.state.idleHint,
+        idleHint: O.viz.state.idleHint, name: b.getAttribute('aria-label'),
+        // what the idle scope draws in full, and the scope canvas's description
+        caption: scope ? scope.caption : null,
+        desc: document.querySelector('[data-osc-chart="waveform"]').getAttribute('aria-label'),
+        phone: window.innerWidth < 768,
         shown: getComputedStyle(b).display !== 'none' && r.width > 0 && r.height > 0
           && r.bottom <= window.innerHeight && r.right <= window.innerWidth };
     });
@@ -411,17 +417,23 @@ function defineChecks() {
         { ms: 8000, what: `c030-visible-play: the ${ws} workspace opens` });
     };
     const res = {};
+    const NAMED = /Přehrát ve stavovém řádku/;
+    await ev(() => window.OSCILLA.app.setTab('analysis', 'waveform'));
     await go('playground');
-    const home = await settle((s) => s.ws === 'playground', 'the Playground is open');
-    // ... and its idle analyser keeps the frozen V1 label (no hint of its own)
-    res.playgroundOnePlay = { ...home, timedOut: !!(home.timedOut || home.shown
-      || home.idleHint !== null) };
+    // The Playground lays out Hold and Trigger: above the phone width no second Play (on a
+    // phone the status Play is the bar's transport key everywhere, by design), and its idle
+    // scope says the V1 words, drawn and described
+    const home = await settle((s) => s.ws === 'playground' && s.shown === s.phone
+      && /press Hold to Play/.test(s.caption || '') && /Hold to Play shows/.test(s.desc),
+    'the Playground shows one Play and its scope names Hold to Play');
+    res.playgroundOnePlay = home;
     for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
       await go(ws);
-      // the status Play is on screen, and the idle analyser names it (core/play-hints.js)
-      const named = (s) => /Přehrát ve stavovém řádku/.test(s.idleHint || '');
-      const seen = await settle((s) => s.shown && named(s),
-        `${ws}: the status Play is on screen and the idle panel names it`);
+      // the status Play is on screen, announced by the word the prompts use, and the idle scope
+      // (drawn in Analyzer, described in each) names it (core/play-hints.js)
+      const seen = await settle((s) => s.shown && /^Přehrát/.test(s.name || '')
+        && NAMED.test(s.desc) && (ws !== 'analyzer' || NAMED.test(s.caption || '')),
+      `${ws}: the status Play is on screen and the idle scope names it`);
       if (seen.timedOut) { res[ws] = seen; continue; }
       await page.click('#osc-sb-play');
       const on = await settle((s) => s.sources > 0, `${ws}: its Play sounds the instrument`);

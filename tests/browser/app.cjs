@@ -3392,10 +3392,12 @@ function defineChecks() {
     return { ok, ...res };
   });
 
-  // The status-bar transport key (shown below 768 px) reads "Stop playback" while the sequence
+  // The status-bar transport key (shown below 768 px) reads STOP_NAME while the sequence
   // plays: one press (click or Enter) stops it and starts no instrument voice. Pressed inside
   // the poll window it still stops the sequence (the live state); its label returns to Play.
   def('status-key-stops-only', async ({ page }) => {
+    // the status Play's name while something sounds (ui/workbench.js statusPlayName, C030)
+    const STOP_NAME = 'Zastavit přehrávání';
     const res = {};
     const st = () => page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -3407,7 +3409,7 @@ function defineChecks() {
     const quiet = (what) => until(async () => {
       const s = await st();
       return !s.editor && !s.mirror && !s.instrument && !s.voice && s.nodes === 0
-        && s.label !== 'Stop playback' ? s : null;
+        && s.label !== STOP_NAME ? s : null;
     }, { ms: 6000, what });
     await page.setViewportSize({ width: 390, height: 844 });
     try {
@@ -3417,8 +3419,8 @@ function defineChecks() {
         await page.click('#osc-seq-play');
         const before = await until(async () => {
           const s = await st();
-          return s.label === 'Stop playback' && s.editor ? s : null;
-        }, { ms: 6000, what: `status key (${how}) reads Stop playback while the sequence plays` });
+          return s.label === STOP_NAME && s.editor ? s : null;
+        }, { ms: 6000, what: `status key (${how}) reads ${STOP_NAME} while the sequence plays` });
         res[how] = { before };
         if (how === 'click') {
           await page.click('#osc-sb-play');
@@ -3427,7 +3429,7 @@ function defineChecks() {
           await page.keyboard.press('Enter');
         }
         res[how].after = await st();
-        res[how].quiet = await quiet(`status key (${how}): nothing sounds after Stop playback`);
+        res[how].quiet = await quiet(`status key (${how}): nothing sounds after the Stop`);
       }
       res.pollWindow = await seqPollWindow(page, 'status-key');
       res.pollWindow.quiet = await quiet('status key in the poll window: nothing sounds');
@@ -3435,7 +3437,7 @@ function defineChecks() {
       await page.setViewportSize({ width: 1536, height: 1024 });
       await seqDone(page);
     }
-    const pressed = (r) => r.before.label === 'Stop playback' && !r.after.editor
+    const pressed = (r) => r.before.label === STOP_NAME && !r.after.editor
       && !r.after.instrument && !r.after.voice && !!r.quiet;
     const pw = res.pollWindow;
     // pw.at.mirror may already be true: C002's claim sets the mirror in the play (see above).

@@ -41,6 +41,7 @@ import { sessionStore } from '../core/storage.js';
 import { OWNER } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
 import { STATUS_PLAY_WORKSPACES } from './shortcuts.js';
+import { statusPlayHint } from '../core/play-hints.js';
 import { registerEmptyPredicate } from './empty-states.js';
 
 // Presets' empty state (registry field `empty`, ui/shell.js): the Custom category is in view
@@ -143,6 +144,14 @@ export function createWorkbench(svc) {
      * workspaces that lay out no Hold or Trigger (ui/shortcuts.js STATUS_PLAY_WORKSPACES).
      */
     get statusPlayShown() { return STATUS_PLAY_WORKSPACES.includes(this.workspace); },
+    /**
+     * The status Play's accessible name and title, in Czech (R2-C030-2): the word the prompts of
+     * core/play-hints.js name it by ("Přehrát") begins each name a screen reader announces.
+     */
+    get statusPlayName() {
+      if (this.isSounding) return 'Zastavit přehrávání';
+      return this.continuousAllowed && !this.isProgrammed ? 'Přehrát nepřetržitě' : 'Přehrát';
+    },
     /**
      * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
      * that describe it (C013). The Studio is read through its transport (studioOwnsOutput);
@@ -338,7 +347,8 @@ export function createWorkbench(svc) {
       if (owner !== 'instrument') {
         const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
         return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
-          + 'Hold to Play shows the live output analyser trace.';
+          + (statusPlayHint(this.workspace, 'scope') // C030: the Play on screen there
+            || 'Hold to Play shows the live output analyser trace.');
       }
       const sparse = f > 0 && sr > 0 && sr / f < 4;
       const shown = this.scopeShownMs;

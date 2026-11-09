@@ -13,7 +13,7 @@ import {
   applyConfigTo, defaultEditorFields, defaultInstrumentState, droppedSentence, pickInstrumentState,
 } from './config.js';
 import { presetMaxFrequency } from '../data/presets.js';
-import { statusPlayHint } from './play-hints.js';
+import { statusPlayHint, statusPlayTitle } from './play-hints.js';
 
 export { base64UrlDecode, base64UrlEncode };
 
@@ -134,7 +134,8 @@ export function restoreFromHashOn(s, hash, env = {}) {
       // text everywhere else
       const press = statusPlayHint(m, 'restored')
         || 'Nothing plays until you press HOLD TO PLAY or TRIGGER.';
-      notify('info', 'Configuration restored from link', `${not ? `${not} ` : ''}${press}`);
+      notify('info', statusPlayTitle(m, 'restored') || 'Configuration restored from link',
+        `${not ? `${not} ` : ''}${press}`);
     }
   } catch (e) {
     out.handled = true;

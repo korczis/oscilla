@@ -3147,9 +3147,9 @@
     </div>
 
     <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
-      aria-label="Play" aria-pressed="false" :aria-pressed="String(isSounding)"
+      aria-label="Přehrát" aria-pressed="false" :aria-pressed="String(isSounding)"
       :class="statusPlayShown && '!inline-flex md:justify-self-end md:me-3'"
-      :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Trigger')"
+      :aria-label="statusPlayName" :title="statusPlayName"
       @click="statusPlay()" @keydown.enter="latchKey($event)">
       <svg aria-hidden="true" x-show="!isSounding"><use href="#i-play"/></svg>
       <svg aria-hidden="true" x-show="isSounding" style="display: none"><use href="#i-stop"/></svg>

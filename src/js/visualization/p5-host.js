@@ -258,14 +258,17 @@ export function createP5Host(opts = {}) {
   const Ctor = P5 || e.p5;
   if (typeof Ctor !== 'function') throw new Error('p5.js is not available');
   let resizeFn = () => {};
+  const shown = views || createDefaultViews();
   const sketch = createSketch(container, {
-    bridge, views: views || createDefaultViews(), view, env: e, trackEnvelope,
+    bridge, views: shown, view, env: e, trackEnvelope,
     onResize: (fn) => { resizeFn = fn; },
   });
   const instance = new Ctor(sketch, container);
   return {
     p5: instance,
     get view() { return sketch.view; },
+    /** The views by id, read-only for the browser checks (the scope's idle caption, C030). */
+    views: shown,
     setView(id) { sketch.view = id || null; bridge.requestRedraw(); },
     resize() { resizeFn(); },
     destroy() {

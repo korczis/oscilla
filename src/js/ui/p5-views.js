@@ -236,10 +236,12 @@ export function createScopeView({ getWindowMs }) {
       }
       const state = L.hasCtx ? 'not playing' : 'audio not started';
       const what = `computed ${formatFrequency(f)} ${shape}`;
-      uiLabel(p, uiPickFit(p, [
-        `${state} · ${what} over ${msLabel(windowMs)} · press Hold to Play for the live trace`,
-        `${state} · ${what} over ${msLabel(windowMs)}`, `${state} · ${what}`, state],
-      9, x1 - x0 - 4), x0 + 2, 11, pal.muted, 9);
+      // where the status bar's Play is the only one, the caption names it (C030, R2-C030-1)
+      const press = st.idleHint || 'press Hold to Play for the live trace';
+      const caption = [`${state} · ${what} over ${msLabel(windowMs)} · ${press}`,
+        `${state} · ${what} over ${msLabel(windowMs)}`, `${state} · ${what}`, state];
+      this.caption = caption[0]; // what the idle caption says in full (read by navigation.cjs)
+      uiLabel(p, uiPickFit(p, caption, 9, x1 - x0 - 4), x0 + 2, 11, pal.muted, 9);
     },
   };
 }
