@@ -21,6 +21,7 @@
 //     holds   the store keeps it: a model with it validates, a file saved with it loads
 //     plays   the transport plays it, as `how`: 'sequence' (compileSequence into the Sequence),
 //             'pattern-played' (the Oscillator's pattern bus), 'gate' (the Envelope's gate),
+//             'keys-gate' (a Keys node's Gate: the Envelopes its unmuted gate edges reach, K060),
 //             'measurement' (data for the measurement hook) or 'automation' (the lane drives
 //             the parameter's AudioParam)
 //     code, reason   null when it plays; otherwise the store's first error (holds false) or the
@@ -33,7 +34,7 @@
 // build keeps loading; the transport plays a subset of it; the UI offers only what plays, and
 // reports what is held but not played with this reason where docs/v31/timeline.md "Clip-target
 // policy" lists. The subset is the table below: pattern clips play on a Sequence or an
-// Oscillator, event clips only as gates on an Envelope, measurement clips always
+// Oscillator, event clips only as gates on an Envelope or a Keys node, measurement clips always
 // (as data), notes clips not yet (K099 part 1: held, reported with the notesUnplayed reason),
 // and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
 // a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
@@ -78,6 +79,9 @@ export const gainIsUsed = usesGain;
  */
 export const qIsUsed = usesQ;
 
+/** How a gate event clip plays, by target node type (absent: it does not play). */
+const EVENT_GATES = Object.freeze({ envelope: 'gate', keys: 'keys-gate' });
+
 /** How a pattern clip plays, by target node type (absent: it does not play). */
 const PATTERN_PLAY = Object.freeze({ sequence: 'sequence', oscillator: 'pattern-played' });
 
@@ -86,8 +90,8 @@ export const CLIP_TARGET_TEXT = Object.freeze({
   noTarget: 'The clip has no target node.',
   patternTarget: (name) => `Pattern clips play on a Sequence or an Oscillator; this clip on `
     + `${name} is not played.`,
-  eventTarget: (name) => `Only gate events on an Envelope are played; this clip on ${name} is `
-    + 'not.',
+  eventTarget: (name) => `Hrají se jen události brány na Envelope nebo na uzlu Keys; tento klip `
+    + `na ${name} se nehraje.`,
   notesTarget: (type) => 'A notes clip needs a target that plays notes (Keys, the XY pad or a '
     + `voice engine); ${article(type)} ${type} node does not play notes.`,
   notesUnplayed: (name) => `Notes clips are kept but not played yet; this clip on ${name} is `
@@ -149,8 +153,9 @@ export function clipTarget(node, use, registry = NODE_REGISTRY) {
     const held = errors.length === 0;
     if (!held) return verdict(errors, false, null, errors[0].code, errors[0].message);
     if (!node) return verdict(errors, false, null, 'no-target', CLIP_TARGET_TEXT.noTarget);
-    const gate = node.type === 'envelope' && action === 'gate';
-    return verdict(errors, gate, 'gate', 'event-target', CLIP_TARGET_TEXT.eventTarget(name));
+    const how = EVENT_GATES[node.type];
+    return verdict(errors, !!how && action === 'gate', how, 'event-target',
+      CLIP_TARGET_TEXT.eventTarget(name));
   }
   if (kind === 'measurement') {
     const action = use.action;

@@ -45,6 +45,58 @@ const started = (acct, node, at) => {
   return node;
 };
 
+/**
+ * The pitch schedule of a Keys node as written (K060, owner decision 'Linear glide in exact
+ * time'): segments { t0, v0, t1, v1 }, a step when t1 === t0, else a linear ramp. Kept by the
+ * adapter itself because Firefox lacks cancelAndHoldAtTime: a glide cut by a new note is held
+ * at its value computed from this record (project.audio-engine-discipline v2).
+ *   createPitchSchedule(param, v0) -> { to(t, v, glide) -> value at t, valueAt(t), last() }
+ */
+export function createPitchSchedule(param, v0 = 0) {
+  let segs = [{ t0: 0, v0, t1: 0, v1: v0 }];
+  const valueAt = (t) => {
+    let s = segs[0];
+    for (const x of segs) if (x.t0 <= t) s = x;
+    if (t >= s.t1 || s.t1 === s.t0) return s.v1;
+    return s.v0 + ((s.v1 - s.v0) * Math.max(0, t - s.t0)) / (s.t1 - s.t0);
+  };
+  return {
+    valueAt,
+    last: () => segs[segs.length - 1],
+    /** From t: a step to v (glide 0), or a linear ramp that arrives at v at exactly t + glide. */
+    to(t, v, glide = 0) {
+      const from = valueAt(t);
+      const cut = segs.find((x) => x.t0 < t && t < x.t1);
+      segs = segs.filter((x) => x.t0 < t);
+      param.cancelScheduledValues(t);
+      // A ramp in progress keeps its course up to t: its start event is still in place, so a
+      // ramp to its own value at t is the schedule it had (with its end cancelled alone, the
+      // parameter would hold the start value from the start).
+      if (cut) {
+        param.linearRampToValueAtTime(from, t);
+        cut.t1 = t;
+        cut.v1 = from;
+      }
+      if (glide > 0) {
+        param.setValueAtTime(from, t);
+        param.linearRampToValueAtTime(v, t + glide);
+        segs.push({ t0: t, v0: from, t1: t + glide, v1: v });
+      } else {
+        param.setValueAtTime(v, t);
+        segs.push({ t0: t, v0: v, t1: t, v1: v });
+      }
+      if (segs.length > 8) segs = segs.slice(-8);
+      return from;
+    },
+  };
+}
+
+/** The note clamp, as the card, the Inspector help and debugInfo state it. */
+export const KEYS_CLAMP_TEXT = (hz) => `Výška hraná z Keys se omezí na `
+  + `${SAFE_NYQUIST_FACTOR} × Nyquist${hz ? ` (zde ${Math.round(hz)} Hz)` : ''}: VCO ji drží `
+  + 'na bodu své mřížky výšek na této hranici nebo pod ní, méně než 5 centů níž, a každá nota '
+  + 'pod hranicí ladí přesně.';
+
 export const keys = {
   compiler: 'audio/audio-engine.js#AudioEngine',
   structural: [],
@@ -57,7 +109,11 @@ export const keys = {
     const velocity = started(acct, ctx.createConstantSource(), at);
     pitch.offset.setValueAtTime(0, ctx.currentTime);
     velocity.offset.setValueAtTime(0, ctx.currentTime);
+    const sched = createPitchSchedule(pitch.offset, 0);
     const [lo, hi] = KEYS_PITCH_RANGE;
+    const clampHz = (SAFE_NYQUIST_FACTOR * ctx.sampleRate) / 2;
+    let note = null;
+    let gate = { open: false, at: null };
     return {
       inputs: {},
       outputs: { pitch, velocity },
@@ -68,20 +124,40 @@ export const keys = {
         p = { ...p, ...changed };
         did(w, changed, Object.keys(changed), 'next-note');
       },
-      /** Note `note` at velocity `vel` (0-127) from t; glide only between held notes. */
-      play(t, note, vel, { legato = false } = {}) {
-        const oct = Math.min(hi, Math.max(lo, (note + p.transpose - 69) / 12));
-        if (p.glide > 0 && legato) pitch.offset.setTargetAtTime(oct, t, p.glide / 3);
-        else pitch.offset.setValueAtTime(oct, t);
+      /**
+       * Note `n` at velocity `vel` (0-127) from t. Legato with Glide > 0: a linear ramp that
+       * reaches the note at exactly t + Glide; otherwise a step at t.
+       */
+      play(t, n, vel, { legato = false } = {}) {
+        const oct = Math.min(hi, Math.max(lo, (n + p.transpose - 69) / 12));
+        sched.to(t, oct, legato && p.glide > 0 ? p.glide : 0);
         if (vel != null) velocity.offset.setValueAtTime(Math.min(1, vel / 127), t);
+        note = n;
         return oct;
       },
+      /** The gate the note router (live-notes.js) opened or closed at t. */
+      gateAt(t, open) {
+        gate = { open: !!open, at: t };
+      },
       priority: () => p.priority,
+      // The range is the interval between Key low and Key high in either order (#447 F1: an
+      // inverted pair refused every note), the same interval the card names.
+      keyRange: () => {
+        const a = p.keyLow ?? 0;
+        const b = p.keyHigh ?? 127;
+        return a <= b ? [a, b] : [b, a];
+      },
+      /** debugInfo: the note, the pitch now and its target, the gate and the clamp. */
+      noteState() {
+        const s = sched.last();
+        return { note, pitch: sched.valueAt(ctx.currentTime), target: s.v1, arrives: s.t1,
+          gate: gate.open, gateAt: gate.at, clampHz, clamp: KEYS_CLAMP_TEXT(clampHz) };
+      },
       stop(t) {
         for (const n of [pitch, velocity]) { try { n.stop(t); } catch (e) { /* stopped */ } }
       },
       dispose() {},
-      info: { keys: true },
+      info: { keys: true, clampHz },
       status: 'ready',
       reason: null,
     };

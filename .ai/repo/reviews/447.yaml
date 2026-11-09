@@ -1,0 +1,108 @@
+# Review verdict for pull request #447 (branch feat/k060-keys-node): K060, the Keys node, the
+# note source of the Synth and the Studio, and the unlock of the step-sequencer line. Reviewed
+# head 39b73126; base origin/main e51b169d. Reviewer: oscilla-2b (claude-code 6f686fcc).
+# Disclosure: the reviewer built none of this change (oscilla-21's builder agent did, and 21 the
+# Chord removal) and wrote only this file, in a detached review worktree (oscilla-wt/review-447).
+#
+# The digest. origin/main e51b169d's scripts/review-verdict.mjs --content --list --repo
+# oscilla-wt/review-447 --head 39b73126 --base-branch origin/main:
+# 3d73a3d6a504c9ccf90b9b513db097b1755edc20f615e6ce4d111fa40a24fbad over 10 guarded paths
+# (src/js/studio/{adapters/instrument,clip-targets,live-notes,nodes/instrument,runtime,
+# transport}.js, src/js/synth/{notes-sink,panel,panels/semi-mono,studio-sink}.js), equal to
+# the builder's.
+#
+# What was read and run:
+# - The glide (adapters/instrument.js createPitchSchedule), the WATCH item. A ramp cut by a new
+#   note: cancelScheduledValues(t) drops the ramp's end, and linearRampToValueAtTime(from, t)
+#   re-ends it at its own value at t, so the start event keeps its course and nothing jumps back
+#   to the ramp's start (Firefox has no cancelAndHoldAtTime). Probed against a recording param:
+#   (a) a glide 0->1 over [1, 2] cut at 1.5 by a glide to 2 over 0.5: from 0.5, events
+#   cancel@1.5, ramp(0.5)@1.5, set(0.5)@1.5, ramp(2)@2.0; valueAt(1.75) 1.25, valueAt(2) 2;
+#   (b) a glide after a step starts at the step's value; (c) t earlier than the last event:
+#   the later segment is dropped and the value at t is the one before it.
+# - The note router (live-notes.js): 'note-range' for a note outside 0-127 on every node that
+#   plays notes, 'key-range' for a note on outside Key low..Key high on a Keys node, each with
+#   its sentence (LIVE_NOTES_TEXT); the Synth and Studio sinks say it assertively; no clamp to a
+#   neighbour. gateAt records the gate for debugInfo().notes.
+# - The timeline (clip-targets.js EVENT_GATES, transport.js): a gate event clip on a Keys node
+#   adds one gate record per Envelope its unmuted Gate edges reach (key `${item}>${env}`),
+#   looked up by itemKey everywhere (gatesOf, removal, rebuild); those Envelopes are already in
+#   gatedEnvelopes through keysGatedEnvelopes, so the timeline owns their gates at PLAY.
+# - The panel (synth/panel.js `studio`): Key low / Key high are validated as params of the
+#   node and left off the Synth face (Q031), so the 16 SYN references do not move.
+# - Fail-first: tests/unit/synth-keys.test.mjs and v4-clip-target-policy.test.mjs on the merge
+#   base e51b169d: 16 pass, 9 fail; at 39b73126: synth-keys, v4-clip-target-policy and
+#   synth-panel 29 pass, 0 fail.
+# - Browser, this Mac (load ~13, OSC_LOAD_MAX=30): studio-keys.cjs chromium/file 5/5;
+#   instrument-dsp.cjs chromium ALL PASS. firefox and webkit are judged by CI.
+# - runtime.js is 57 998 bytes under its 58 000 cap (WATCH): the next change to it needs a
+#   raises entry; noted, not a finding of this change.
+#
+# Findings:
+# - F1 (P2, open): Key low above Key high is accepted. Both are independent integerParams (0-127)
+#   and nothing refuses keyLow > keyHigh, so such a Keys node refuses every note ("outside this
+#   Keys node's key range 100 to 50") and its card reads "keys E7-D3". The reason is spoken, so
+#   it is not silent, and the defaults (0, 127) are unaffected; a validate diagnostic or a swap
+#   on edit belongs with K116, which makes the range editable from the piano's zones.
+# - F2 (P3, open): two notes at exactly the same t, the second legato with Glide > 0, glide from
+#   the first note's value (which never sounded) rather than the pitch before t: to(1, 1, 0)
+#   then to(1, 2, 0.5) gives from 1 where the pitch before t was 0.
+# - F3 (P3, open): the schedule keeps its last 8 segments; valueAt(t) for t before the oldest
+#   kept one returns that segment's value (12 steps, valueAt(2.5) is 5, not 2). Only debugInfo
+#   reads the past (at currentTime), so nothing audible depends on it.
+#
+# Verdict: merge. F1-F3 are open for K116 (F1) and a later glide touch (F2, F3); none changes
+# what an existing document plays.
+#
+# Round 2 (936b08c1, b7a5c9f7 on 39b73126): F1 fixed by the builder. The Keys adapter's keyRange
+# and the card take the interval between Key low and Key high in either order (an inverted pair
+# is the same interval, never a range that refuses every note). synth-keys '#447 F1': with
+# keyLow 72 / keyHigh 48 a note inside 48..72 plays, one outside is refused, the card reads
+# "keys C3-C5"; it fails with 39b73126's two source files (0 pass, 1 fail) and passes at
+# b7a5c9f7. Content recomputed with origin/main e51b169d's checker at b7a5c9f7:
+# 57b1bac8360a143ef27daa299d1018217e5ad52873f5d0853e150b5a794bc24b over the same 10 paths;
+# synth-keys, v4-clip-target-policy and synth-panel 30 pass, 0 fail. runtime.js unchanged.
+# F1 closed; F2, F3 open. Verdict: merge.
+#
+# Round 3 (6a72186c, 150f7be6 on b7a5c9f7; e2d14efb, the round-2 file, was never pushed and is
+# carried here whole): 6a72186c translates the Keys node's help, KEYS_CLAMP_TEXT,
+# LIVE_NOTES_TEXT noteRange/keyRange, clip-targets eventTarget and synth/panel.js's two
+# "is no param" refusals to Czech (Q104), and the tests that quote them follow; read line by
+# line against the English: meaning kept, numbers and units kept ("zde N Hz", "0,95 × Nyquist",
+# "méně než 5 centů níž"), the reasons still spoken. "VCO" and "Nyquist" stay as terms
+# (GLOSSARY). "když je Synth připravený ke hře" for "while the Synth is armed" reads right, but
+# the app has no Czech term for armed yet ("Arm keys" in ui/catalog/decl/keyboard.js, the
+# Studio's "armed chain", measurement-run's "Measurement armed" are English): F4. 150f7be6 is a
+# clean merge of origin/main 1c5a9252 for every guarded path (git diff against
+# merge-tree 6a72186c origin/main: none); only dist (rebuilt) and the czech-prose baseline
+# (3236 -> 3226, three files fall, none rises) differ. Content with origin/main 1c5a9252's
+# checker at 150f7be6: 6f6bfae7ed7f04e1e155be9cf2c7442a1ee31f23ed6f5dcfc0b50e6ee466795f over
+# the same 10 paths, equal to the builder's. synth-keys, v4-clip-target-policy, synth-panel,
+# v31-studio-ui-timeline and czech-prose: 51 pass, 0 fail. F2, F3, F4 open. Verdict: merge.
+#
+# Round 4 (71f17601 on cce08a84): 21 merged main 3a3a5a58 (#444 keys+pad, #490). Against git's
+# mechanical merge of cce08a84 with main (merge-tree 775e7abe) the head differs in live-notes.js,
+# the czech-prose baseline, synth-keys.test.mjs and dist only. live-notes.js keeps both sides of
+# both conflicts: K060's range comment beside main's gateCloseAt import, and gate() records
+# main's `opened` bookkeeping first, then forwards K060's gateAt to the Keys handle (the delayed
+# close is computed by the callers through closeAt before gate(), as on main). One semantic fix
+# the merge needed: #444's legato path (K183, kind 'legato') bypassed K060's key-range refusal,
+# so a slide to a note outside Key low..Key high played; the check now covers 'on' and 'legato',
+# a refused slide changes nothing and the held note sounds on (synth-keys: refused with the
+# key-range sentence, held [60], an in-range slide plays; 10 pass 1 fail without the fix). The
+# baseline only falls (clip-targets 21 -> 20, nodes/instrument 25 -> 17, synth/panel 1 -> 0).
+# Content with origin/main 3a3a5a58's checker at 71f17601:
+# e597cd0631d2a36530ff9455b76623d5f98c01d53792715cd4d4973013117ebe over the same 10 paths.
+# synth-keys, live-notes, v4-clip-target-policy, synth-panel and czech-prose: 35 pass, 0 fail.
+# F2, F3 open; F4 is resolved by #474's GLOSSARY entry (připravit / připravený) when it lands.
+# Verdict: merge.
+schema: review-verdict/v1
+pr: 447
+verdict: merge
+reviewer: oscilla-2b (claude-code 6f686fcc)
+content: e597cd0631d2a36530ff9455b76623d5f98c01d53792715cd4d4973013117ebe
+findings:
+  - { id: F1, severity: P2, status: closed, title: "Key low above Key high refused every note; 936b08c1 takes the interval in either order (adapter and card)" }
+  - { id: F2, severity: P3, status: open, title: "two notes at the same t: the legato glide starts from the replaced note's value, not the pitch before t" }
+  - { id: F3, severity: P3, status: open, title: "the pitch schedule keeps 8 segments; valueAt before the oldest kept returns its value (debugInfo only)" }
+  - { id: F4, severity: P3, status: open, title: "no Czech term for armed yet: the Keys help says připravený ke hře while Arm keys, armed chain and Measurement armed are English; one glossary term before they are translated" }
