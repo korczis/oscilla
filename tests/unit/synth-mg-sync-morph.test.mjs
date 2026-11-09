@@ -9,8 +9,11 @@
 //             neighbours; modulatable), listed in hash epoch 3 with K230's and K071/K072's
 //             keys (D2). LFOs of the other shapes and without a reset edge play as before.
 // Asserted on the pure crossfade and on the real engine, runtime and transport over
-// StudioFakeContext (tests/unit/sequencer-fake-audio.mjs). The panel half (the MG's Key sync
-// switch, its tempo sync and its Morph knob) is a separate change.
+// StudioFakeContext (tests/unit/sequencer-fake-audio.mjs).
+//   the panel the MG fixes the shape 'morph' (Morph 0 is the triangle it played) and shows the
+//             Morph knob in place of the two-shape switch, its Sync divisions (free by default)
+//             and Key sync: a cable switch that patches the Keys Gate into mg.reset and removes
+//             it, each one history entry; a cable the user patches there reads as on.
 //   node --test tests/unit/synth-mg-sync-morph.test.mjs
 // Fails on c74fc6fd (K230): the LFO has no reset input, no 'morph' shape, no morph parameter.
 
@@ -21,6 +24,9 @@ import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import * as actions from '../../src/js/studio/actions.js';
 import * as lfoMorph from '../../src/js/studio/adapters/modulation.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
+import PANEL from '../../src/js/synth/panels/semi-mono.js';
+import { patchCable, setCableSwitch, switchEdges } from '../../src/js/synth/normals.js';
+import { panelStore } from './synth-fixture.mjs';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import * as schema from '../../src/js/studio/schema.js';
 import * as transportModule from '../../src/js/studio/transport.js';
@@ -158,4 +164,50 @@ test('K229 an LFO of another shape and without a reset edge plays its one oscill
     assert.equal(h.info.oscillator.type, 'triangle');
     assert.equal(typeof h.clock, 'undefined', 'no reset: not clocked');
     await stopped(rig);
+  });
+
+// ---------------------------------------------------------------- the panel
+
+test('K229 the panel MG: Morph in place of the shape switch, Sync unfixed, Key sync on its face',
+  () => {
+    const face = PANEL.faceOf('mg').map((c) => `${c.key}:${c.kind}`);
+    assert.deepEqual(face, ['rate:knob', 'sync:switch', 'morph:knob', 'keysync:cable']);
+    assert.deepEqual(PANEL.fixedOf('mg').map((f) => [f.key, f.value]),
+      [['depth', 1], ['shape', 'morph']]);
+    const sync = PANEL.faceOf('mg').find((c) => c.key === 'sync');
+    assert.deepEqual(sync.param.options.map((o) => o[0]),
+      NODE_REGISTRY.param('lfo', 'sync').options.map((o) => o[0]), 'every division');
+    assert.equal(sync.initial, 'off', 'free by default');
+    assert.equal(PANEL.faceOf('mg').find((c) => c.key === 'morph').initial, 0,
+      'Morph 0: the triangle the MG played');
+    assert.deepEqual(PANEL.jacksOf('mg').map((j) => j.id),
+      ['mg.reset', 'mg.rate', 'mg.morph', 'mg.control']);
+  });
+
+test('K229 Key sync patches the Keys Gate into mg.reset and removes it, each one history entry; '
+  + 'undo restores the model', () => {
+    const st = panelStore();
+    const sw = PANEL.cableSwitches.find((x) => x.id === 'keysync');
+    const before = st.getModel();
+    assert.equal(switchEdges(before, PANEL, sw).length, 0, 'off by default');
+    const depth = () => st.debugInfo().undoDepth;
+    const d0 = depth();
+    const on = setCableSwitch(before, PANEL, sw, true);
+    assert.equal(on.action.type, 'BATCH');
+    ok(st.dispatch(on.action), 'Key sync on');
+    assert.equal(depth(), d0 + 1, 'one history entry');
+    const [e] = switchEdges(st.getModel(), PANEL, sw);
+    assert.ok(e, 'the Keys Gate into mg.reset');
+    assert.equal(setCableSwitch(st.getModel(), PANEL, sw, true).action, undefined,
+      'on again changes nothing');
+    ok(st.dispatch(setCableSwitch(st.getModel(), PANEL, sw, false).action), 'Key sync off');
+    assert.equal(depth(), d0 + 2, 'off is one history entry');
+    assert.equal(switchEdges(st.getModel(), PANEL, sw).length, 0);
+    ok(st.undo(), 'undo off');
+    ok(st.undo(), 'undo on');
+    assert.equal(schema.serializeStudio(st.getModel()), schema.serializeStudio(before),
+      'undo restores the model exactly');
+    // A cable the user patches from the Keys Gate into mg.reset reads as on.
+    ok(st.dispatch(patchCable(st.getModel(), PANEL, 'keys.gate', 'mg.reset').action), 'cable');
+    assert.equal(switchEdges(st.getModel(), PANEL, sw).length, 1, 'the switch reads on');
   });

@@ -23,7 +23,7 @@ import { createDock } from './dock.js';
 import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
   STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, jackReason, jackState, panelCables,
-  patchCable, restoreNormals, setAmount, unpatch,
+  patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
@@ -128,9 +128,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const c = panel.faceOf(mid).find((x) => x.key === key);
     return c ? { mid, key, c, node: nodes().get(mid) } : null;
   };
-  const valueOf = (x) => (x.c.kind === 'amount'
-    ? ((amountEdges(model(), panel, x.c.amount)[0] || { props: { depth: 0 } }).props.depth)
-    : x.node.params[x.key]);
+  const valueOf = (x) => {
+    if (x.c.kind === 'cable') return switchEdges(model(), panel, x.c.cable).length > 0;
+    return x.c.kind === 'amount'
+      ? ((amountEdges(model(), panel, x.c.amount)[0] || { props: { depth: 0 } }).props.depth)
+      : x.node.params[x.key];
+  };
 
   function setControl(cid, value) {
     gestures.flush();
@@ -139,6 +142,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (x.c.kind === 'amount') {
       const a = setAmount(model(), panel, x.c.amount, value);
       return a ? dispatch(a) : null;
+    }
+    if (x.c.kind === 'cable') {
+      const r = setCableSwitch(model(), panel, x.c.cable, !!value);
+      if (r.reason) say(r.reason, true);
+      return r.action ? dispatch(r.action) : null;
     }
     return dispatch({ type: 'NODE_PARAM_SET', nodeId: x.node.id, key: x.key, value });
   }
