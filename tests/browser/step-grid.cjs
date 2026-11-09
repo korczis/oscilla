@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (the step playhead is judged against the transport on the audio clock, with deadlines)
 // W008: the step-grid kind on its first mounted consumer, the Studio Inspector's step grid of a
 // selected notes clip, on the built dist/index.html in chromium, firefox and webkit at
 // 1536 x 1024 (a mouse) and 390 x 844 (hasTouch). Every check reads the one store or the page's
