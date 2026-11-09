@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// suite-pace: solo (gates judged on the running Envelope's contour on the audio clock)
+// suite-pace: solo (gates judged on the running Envelope's VCA gain on the audio clock)
 // K103: gates along TRIGGER edges, one fan-out live and scheduled, one ownership rule, on the
 // built dist/index.html in chromium, firefox and webkit at 1536 x 1024 (the touch connection on a
 // 390 x 844 touch phone): linked, real-time and interactive. The document is the
@@ -220,8 +220,14 @@ function defineChecks() {
     const gateOut = '#osc-dlg-studio-connect[open] [data-osc="studio.connect.output"]'
       + '[data-port="gate"]';
     await until(() => page.$(gateOut), { ms: UI_MS, what: 'tg-connect: the dialog lists Gate' });
-    await page.focus(gateOut);
-    await page.keyboard.press('Enter');
+    // The dialog places its own focus as it opens: Enter on the Gate output is repeated until
+    // that output is the checked one (Enter on the checked output changes nothing).
+    await until(async () => {
+      if ((await page.getAttribute(gateOut, 'aria-checked')) === 'true') return true;
+      await page.focus(gateOut);
+      await page.keyboard.press('Enter');
+      return (await page.getAttribute(gateOut, 'aria-checked')) === 'true';
+    }, { ms: UI_MS, what: 'tg-connect: Enter checks the Gate output' });
     const target = `#osc-dlg-studio-connect[open] [data-osc="studio.connect.target"]`
       + `[data-node="${env}"][data-port="gate"]`;
     await until(() => page.$(target), { ms: UI_MS,
