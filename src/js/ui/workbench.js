@@ -40,6 +40,7 @@ import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
 import { OWNER } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
+import { STATUS_PLAY_WORKSPACES } from './shortcuts.js';
 import { registerEmptyPredicate } from './empty-states.js';
 
 // Presets' empty state (registry field `empty`, ui/shell.js): the Custom category is in view
@@ -137,6 +138,11 @@ export function createWorkbench(svc) {
     // The instrument's own Play (ADR 0050): the status Play button triggers, latches or stops the
     // instrument and the Pattern Sequencer, never the Studio, so it reflects only them.
     get isSounding() { return this.playing || this.seqPlaying; },
+    /**
+     * Whether the status bar's Play shows at desktop width too (C030): in the instrument
+     * workspaces that lay out no Hold or Trigger (ui/shortcuts.js STATUS_PLAY_WORKSPACES).
+     */
+    get statusPlayShown() { return STATUS_PLAY_WORKSPACES.includes(this.workspace); },
     /**
      * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
      * that describe it (C013). The Studio is read through its transport (studioOwnsOutput);

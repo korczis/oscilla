@@ -377,6 +377,60 @@ function defineChecks() {
       !v.timedOut]))), ...res };
   });
 
+  // C030: a visible Play on every workspace that should sound. At the desktop width (the suite's
+  // default viewport) Analyzer, Filter Lab, Compare and Presets lay out no Hold or Trigger, so
+  // the status bar's Play is theirs: a real click on it sounds the instrument (the engine's
+  // active source count rises above 0) and a second click stops it (back to 0). The Playground
+  // keeps its own Hold and Trigger and shows no second Play. Every wait is a condition poll with
+  // a named deadline (lib/wait.cjs until()).
+  def('c030-visible-play', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const read = () => ev(() => {
+      const O = window.OSCILLA;
+      const b = document.getElementById('osc-sb-play');
+      const r = b.getBoundingClientRect();
+      return { ws: O.app.workspace, sources: O.engine.activeSourceCount,
+        nodes: O.engine.activeNodeCount, pressed: b.getAttribute('aria-pressed'),
+        shown: getComputedStyle(b).display !== 'none' && r.width > 0 && r.height > 0
+          && r.bottom <= window.innerHeight && r.right <= window.innerWidth };
+    });
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await read(); return pred(s) ? s : null; },
+          { ms: 6000, what: `c030-visible-play: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    const go = async (ws) => {
+      await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: `c030-visible-play: the ${ws} workspace opens` });
+    };
+    const res = {};
+    await go('playground');
+    const home = await settle((s) => s.ws === 'playground', 'the Playground is open');
+    res.playgroundOnePlay = { ...home, timedOut: !!(home.timedOut || home.shown) };
+    for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
+      await go(ws);
+      const seen = await settle((s) => s.shown, `${ws}: the status Play is on screen`);
+      if (seen.timedOut) { res[ws] = seen; continue; }
+      await page.click('#osc-sb-play');
+      const on = await settle((s) => s.sources > 0, `${ws}: its Play sounds the instrument`);
+      // the second click is the Stop only while it still sounds (a trigger ends on its own)
+      const stopped = on.pressed === 'true'
+        ? (await page.click('#osc-sb-play'), true) : false;
+      const off = await settle((s) => s.sources === 0 && s.nodes === 0,
+        `${ws}: Stop returns the engine to silence`);
+      res[ws] = { ...off, timedOut: !!(on.timedOut || off.timedOut), rose: on.sources, stopped };
+    }
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
+
   def('guard-studio', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     const clean = await H.state(page);
