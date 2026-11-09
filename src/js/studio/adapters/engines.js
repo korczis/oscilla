@@ -12,7 +12,7 @@ import { ADDITIVE_HARMONICS } from '../nodes/engines.js';
 import { fmAlgorithm } from '../../synth/fm-algorithms.js';
 import { MORPH_MAX, WAVETABLE_BANKS, morphCurve } from '../../synth/wavetables.js';
 import {
-  DECAY_TAU_PER_S, layerLevel, percLevelScale, percNote,
+  DECAY_TAU_PER_S, layerLevel, percLevelScale, percNote, voiceParams,
 } from '../../synth/perc-recipes.js';
 import { ringLaw } from './instrument.js';
 import { createVoiceHost } from './voices.js';
@@ -361,11 +361,19 @@ export const percVoice = {
     };
     const host = createVoiceHost({ ctx, acct, params, build(v) {
       const { voice, octaveSt } = percNote(v.note);
-      const k = 2 ** ((v.p.tune + octaveSt) / 12);
+      const own = voiceParams(voice, v.p); // the voice's tune, decay, level, choke group (K071)
+      const k = 2 ** ((v.p.tune + own.tune + octaveSt) / 12);
+      const limit = limitHz(ctx);
       let end = v.t;
-      const scale = percLevelScale(voice, v.p.tone); // the layers sum to at most 1
+      // The layers sum to at most 1, the voice's level (0..1) keeps it there.
+      const scale = percLevelScale(voice, v.p.tone) * own.level;
       for (const layer of voice.layers) {
-        const decay = layer.decayS * v.p.decay;
+        // The FM blip whose band (Carson: carrier + 2 x the modulator at index 1) would pass
+        // 0.95 x Nyquist is left out: a voice of no source sounds nothing and takes no slot.
+        if (layer.kind === 'fm' && layer.hz * k * (1 + (layer.index + 1) * layer.ratio) > limit) {
+          continue;
+        }
+        const decay = layer.decayS * v.p.decay * own.decay;
         const level = layerLevel(voice, layer, v.p.tone) * scale;
         const env = v.track(ctx.createGain());
         const start = v.t + (layer.bursts ? layer.bursts[layer.bursts.length - 1][0] : 0);
@@ -382,17 +390,25 @@ export const percVoice = {
         end = Math.max(end, start + decay);
         env.connect(v.into);
         if (layer.kind === 'tone') {
-          const o = v.source(hooks.oscillator(layer.wave, layer.hz * k, v.t));
+          const o = v.source(hooks.oscillator(layer.wave, Math.min(limit, layer.hz * k), v.t));
           if (layer.toHz) {
-            o.frequency.setValueAtTime(Math.min(limitHz(ctx), layer.hz * k), v.t);
-            o.frequency.exponentialRampToValueAtTime(Math.min(limitHz(ctx), layer.toHz * k),
+            o.frequency.setValueAtTime(Math.min(limit, layer.hz * k), v.t);
+            o.frequency.exponentialRampToValueAtTime(Math.min(limit, layer.toHz * k),
               v.t + layer.sweepS);
           }
           o.connect(env);
+        } else if (layer.kind === 'fm') { // linear FM: deviation = index x the modulator's hz
+          const c = v.source(hooks.oscillator('sine', layer.hz * k, v.t));
+          const m = v.source(hooks.oscillator('sine', layer.hz * layer.ratio * k, v.t));
+          const dev = v.track(ctx.createGain());
+          dev.gain.value = layer.index * layer.hz * layer.ratio * k;
+          m.connect(dev);
+          dev.connect(c.frequency);
+          c.connect(env);
         } else {
           const f = v.track(ctx.createBiquadFilter());
           f.type = layer.kind === 'metal' ? 'highpass' : layer.filter;
-          f.frequency.value = Math.min(limitHz(ctx), (layer.kind === 'metal' ? layer.filterHz
+          f.frequency.value = Math.min(limit, (layer.kind === 'metal' ? layer.filterHz
             : layer.hz) * (layer.tracks || layer.kind === 'metal' ? k : 1));
           if (layer.q) f.Q.value = layer.q;
           f.connect(env);
@@ -404,7 +420,7 @@ export const percVoice = {
             sum.connect(f);
             for (const r of layer.ratios) {
               const hz = layer.baseHz * r * k;
-              if (hz > limitHz(ctx)) continue;
+              if (hz > limit) continue;
               const o = v.source(hooks.oscillator('square', hz, v.t));
               o.connect(sum);
             }
@@ -417,8 +433,8 @@ export const percVoice = {
           }
         }
       }
-      return { oneShotEnd: end, group: voice.group || null,
-        chokes: v.p.choke && voice.chokes ? voice.chokes : null };
+      const group = v.p.choke && own.choke > 0 ? own.choke : null;
+      return { oneShotEnd: end, group, chokes: group };
     } });
     return engineHandle({ host, ctx });
   },

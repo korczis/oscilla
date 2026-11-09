@@ -27,7 +27,7 @@ import {
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
-import { esc, plateHtml, platesShown } from './view/face.js';
+import { esc, knobHtml, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
 import { createGestures } from './gestures.js';
 import {
@@ -126,7 +126,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   const controlOf = (cid) => {
     const [mid, key] = cid.split('.');
-    const c = panel.faceOf(mid).find((x) => x.key === key);
+    const c = panel.faceOf(mid).find((x) => x.key === key) || panel.control(mid, key);
     return c ? { mid, key, c, node: nodes().get(mid) } : null;
   };
   const valueOf = (x) => (x.c.kind === 'amount'
@@ -674,6 +674,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     ENGINE_IDS, syncArmed });
   // K222 Drums tab: the step grid on the percussion engine's notes clip
   const drums = createDrumsTab({ nodes, model, dispatch, say, transport, tab,
+    knob: (cid) => {
+      const x = controlOf(cid);
+      return x && x.node ? knobHtml(cid, x.c, valueOf(x), null, panelTokens(host())) : '';
+    },
     playhead: () => (get().transport ? get().transport.playhead() : null),
     sink: () => ({ noteOn, noteOff }), openStudio: (id) => {
       handle().dispatch({ type: 'SELECTION_CHANGE', selection: { clips: [id] } });

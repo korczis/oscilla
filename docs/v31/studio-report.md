@@ -27,7 +27,7 @@ that introduced Studio stays readable in later releases.
 | Record | Kind | Schema version |
 | --- | --- | --- |
 | Studio project (StudioModel) | oscilla-studio | 1 |
-| Studio execution-state hash (studioHash) | oscilla-studio | 2 |
+| Studio execution-state hash (studioHash) | oscilla-studio | 3 |
 | Studio patch | oscilla-patch | 1 |
 | Measured path (experiment studio.measured) | oscilla-experiment | 1 |
 | Experiment run from Studio with a measured path | oscilla-experiment | 4 |

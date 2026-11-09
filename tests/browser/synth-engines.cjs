@@ -47,7 +47,8 @@
 // OfflineAudioContext and plays notes on them; these assert the rendered samples.
 //   o-clap      the clap decays at -60 dB per 0.28 s (from its last burst) within 10 %
 //   o-perc      every pitch class (C4-B4): its voice decays at -60 dB per its longest layer's
-//               decay within 12 %, the slope fitted from -20 to -50 dB below the peak
+//               decay within 12 %, the slope fitted from -20 to -50 dB below the peak; ten
+//               voices, B the FM blip (K072)
 //   o-pitch     every FM algorithm, its default patch and every ratio at 1, at A0, E1, A1, A3 and
 //               A4: operator 1's pitch from what drives its frequency (the 0 Hz line of the
 //               deviation, a Hann mean over whole periods of the note) within 5 cents of the
@@ -583,7 +584,9 @@ function defineChecks() {
     });
     const bad = rows.filter((r) => !(r.points >= 4
       && Math.abs(r.slope / (-60 / r.decayS) - 1) <= 0.12));
-    return { ok: bad.length === 0 && new Set(rows.map((r) => r.id)).size === 9,
+    // Ten voices: K123's nine and K072's FM blip, which took B (the second noise-hit key, D4).
+    return { ok: bad.length === 0 && new Set(rows.map((r) => r.id)).size === 10
+      && rows.find((r) => r.n === 71).id === 'blip',
       slopes: rows.map((r) => `${r.id}:${Math.round(r.slope)}/${Math.round(-60 / r.decayS)}`),
       bad: bad.map((r) => r.n) };
   });
