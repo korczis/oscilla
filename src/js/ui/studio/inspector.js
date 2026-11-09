@@ -49,7 +49,8 @@
 //            onAllowMicrophone(nodeId) (asks for permission, then enables Microphone nodes),
 //            micError(nodeId) -> text | '' (why that node's input is not open),
 //            micBusy() -> boolean (a permission request is in flight), userPatches() ->
-//            Promise<[{ id, patch }]> (the saved patches: the node preset dropdown, K020) }
+//            Promise<[{ id, patch }]> (the saved patches: the node preset dropdown, K020),
+//            playhead() -> the Studio transport's playhead (a notes clip's step grid, W008) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
@@ -73,6 +74,7 @@ import { sig } from '../../core/math.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
+import { clipStepsView, mountClipSteps } from './inspector-steps.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { sliderFill } from '../app.js';
 
@@ -202,7 +204,11 @@ function fieldOf(model, node, p, registry, edgeStatus, truth = null) {
     : `${text}, plays ${playedText}`;
   return {
     key: p.key,
-    label: p.label,
+    // A boolean shown inverted under another name (the Filter's `enabled` as Bypass, K022): the
+    // switch reads `checked`, and setting it writes the opposite value.
+    label: p.shownAs || p.label,
+    invert: !!p.shownAs,
+    checked: p.type === 'boolean' ? (p.shownAs ? !value : !!value) : null,
     type: p.type,
     control,
     value,
@@ -671,6 +677,9 @@ export function inspectorView(model, selection, opts = {}) {
         targetName: target ? target.metadata.name : 'No target',
         detail: c.kind === 'pattern' ? c.payload.blockType : c.kind === 'measurement'
           ? c.payload.action : (c.payload && c.payload.action) || 'gate',
+        // W008: a notes clip is edited as a step grid (inspector-steps.js).
+        steps: c.kind === 'notes' ? clipStepsView(model, c, !!target
+          && clipTarget(target, { kind: 'notes' }, registry).plays) : null,
       };
     }
   }
@@ -740,6 +749,7 @@ export function mountInspector(host, svc) {
   let builtSig = ''; // inspectorRebuildKey of the rendered node view
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
+  let steps = null; // the step grid of a shown notes clip (W008)
   // The graph summary of the Studio card (K168): one instance, so its open groups survive a
   // rebuild; a node selects, frames and focuses in the graph (Find node's path), Connect…
   // opens the connection list of the output port.
@@ -915,14 +925,14 @@ export function mountInspector(host, svc) {
 
   function toggleField(view, f) {
     const btn = h('button', { type: 'button', class: 'osc-toggle osc-si-toggle', role: 'switch',
-      'aria-checked': f.value ? 'true' : 'false', 'data-key': f.key,
+      'aria-checked': f.checked ? 'true' : 'false', 'data-key': f.key,
       'data-osc': 'studio.inspector.param' }, [
       h('span', { class: 'osc-toggle-track', 'aria-hidden': 'true' }),
       h('span', { class: 'osc-toggle-label', text: f.label }),
     ]);
     btn.addEventListener('click', () => {
-      dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key,
-        value: btn.getAttribute('aria-checked') !== 'true' });
+      const on = btn.getAttribute('aria-checked') !== 'true'; // the switch's new state
+      dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key, value: f.invert ? !on : on });
     });
     refs.set(f.key, { input: btn, field: f, toggle: true });
     return h('div', { class: 'osc-si-field', 'data-field': f.key }, [btn]);
@@ -1201,6 +1211,11 @@ export function mountInspector(host, svc) {
     parts.push(h('div', { class: 'osc-si-field' }, [
       h('label', { class: 'osc-label osc-si-label', for: `osc-si-${view.id}-track`,
         text: 'Track' }), h('div', { class: 'osc-select' }, [track])]));
+    if (view.steps) {
+      const box = h('div', { class: 'mt-2' });
+      steps = mountClipSteps(box, svc, view.steps);
+      parts.push(box);
+    }
     return parts;
   }
 
@@ -1463,7 +1478,7 @@ export function mountInspector(host, svc) {
         if (r.readout) setText(r.readout, f.readout || f.text);
         if (r.laneNote) setText(r.laneNote, f.laneNote || '');
         if (r.limitNote) setText(r.limitNote, f.limitNote || '');
-        if (r.toggle) setAttr(r.input, 'aria-checked', f.value ? 'true' : 'false');
+        if (r.toggle) setAttr(r.input, 'aria-checked', f.checked ? 'true' : 'false');
         else if (r.input && r.input !== active) {
           if (r.input.tagName === 'SELECT') r.input.value = f.value;
           else r.input.value = f.input;
@@ -1511,6 +1526,7 @@ export function mountInspector(host, svc) {
       }
       const t = refs.get('studio.inspector.track');
       if (t && t.input !== active) t.input.value = view.trackId;
+      if (steps && view.steps) steps.update(view.steps);
       return true;
     }
     return false;
@@ -1562,6 +1578,8 @@ export function mountInspector(host, svc) {
       return;
     }
     endSliderGesture();
+    if (steps) steps.destroy();
+    steps = null;
     const hadFocus = host.contains(document.activeElement);
     const focusedKey = hadFocus ? document.activeElement.getAttribute('data-key') : null;
     const focusedOsc = hadFocus ? document.activeElement.getAttribute('data-osc') : null;
@@ -1617,6 +1635,7 @@ export function mountInspector(host, svc) {
     },
     destroy() {
       endSliderGesture();
+      if (steps) steps.destroy();
       replaceChildren(host, []);
     },
   };

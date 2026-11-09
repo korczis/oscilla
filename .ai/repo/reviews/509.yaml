@@ -1,0 +1,104 @@
+# Review verdict for pull request #509 (train/t3-sequencer): train T3 of the sequencer line and
+# release v3.30.0. Members: F-2 the Synth bay speaks Czech (4aa056e8), C036 one output-owner table
+# (9a70a163), the CI browser legs (ci/shard-browser-gate, 703e1cef), K022 one hash epoch v2
+# (d1109da9), K023 Clock node, Step trigger out, trigger clips and the trigger fan-out split
+# (b80f1eb2), W008 the step-grid kind and the Inspector's step grid (6c7c7d9b, 1a68c485), K225 the
+# patch library inserts the Synth panel (33c2faed), release-bounded's first attempt reads no clock
+# (c8c2b77a); plus the Tap 44 px fix (e2e8496a, already on main), the v3.29.0 record, the 3.30
+# About station and chore(release): v3.30.0.
+# Judged at 949585a0 on base origin/main 7637039e (#507 merged, v3.29.0), 2026-11-09, in the
+# reviewer's own detached worktree ~/dev/oscilla-wt/review-509 (earlier heads in review-506).
+# Reviewers: rev-seat (session oscilla-c1, claude-code 7cad3015) for Studio core, transport,
+# audio adapters, release and CI; rev-seat-2 (session oscilla-c3) for the UI and screens (W008's
+# view, F-2, K022-3's panel call), whose findings and runs are folded in here by name. Neither
+# built any of it (builders: oscilla-2e K022/F-2/K225, oscilla-ee W008, others per member;
+# integrator oscilla-43).
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 949585a0:
+# 39d6a8dc... over 50 guarded paths (.github ci.yml, main-checks.yml, ci-changes.mjs;
+# scripts/release-bounded.mjs; 42 src/js/studio and src/js/synth files incl. the 15 templates
+# re-pinned by the epoch; tests/unit/ci-workflows and release-ci-receipt tests). Every one of
+# them is byte-identical at 949585a0 and at c023e9ec, and at 0375a89d all but
+# release-bounded.mjs and its test are; the main merge and the release commits after that touch
+# no guarded path.
+#
+# What was judged, member by member (severity, who found it, where it was closed):
+# - K022 (hash epoch v2: unison, 24 dB slope, LFO depth, sync, quantize, bypass): read in full at
+#   49589646. K022-1 P2 unison summed at 1/sqrt(n) over phase-aligned voices (+8.5 dB at 7) and
+#   K022-2 P2 "24 dB/oct" shown for band-pass and notch: fixed at 64c799e9, the new cases fail
+#   with 49589646's adapters (10/2) and pass (12/12). The 1/n RMS loss is stated in the help
+#   (8b03ad0e). K022-3 P2 (found by c1 at the T3 head: s-mobile 77 vs 76 ends) the Synth panel
+#   grew an MG depth jack: hidden on the panel at d1109da9 (c3's call, c3 proved its case fails
+#   with the old semi-mono.js, 12/1 -> 13/13), panel back to 62 jacks.
+# - K023 (Clock): clock.js ticks on the m x T grid per pass, cut at the pass end; triggerEdges
+#   recurses through Step Modulators with a seen-set; studio-clock.test 7/7 incl. the criterion
+#   (offline, 1/4 at 120 BPM, every 0.5 s within one render quantum at 44.1 and 48 kHz). The
+#   refactor b80f1eb2 was checked line by line: every line it removes from transport.js is in
+#   trigger-fanout.js or replaced by a call to it (renamed parameters only), and K104's armed
+#   STOP still restarts the clock count (backToArmed calls triggers.clear()).
+# - W008 (step grid): NOTES_GRID_SET / gridSet (keep, map, refuse; one undo entry) read, no
+#   finding; the view's P1 (grid clipped by the Inspector) and two P2 (focus lost on paging,
+#   Studio shortcuts missing) found and closed by c3 (d5192451), plan text restated (6c7c7d9b),
+#   the view fixes 1a68c485 judged by c3 with fail-first 3/3.
+# - F-2: c3's two P2 (English left in the bay, "vstupy" for outputs) closed at 4aa056e8; c3
+#   discloses that its first pass at 5a879cd0 ran only synth.cjs and missed synth-engines e-link,
+#   which 4aa056e8 also fixed.
+# - C036: the guarded part (riffs/audition.js) drops a `measuring` option its caller never
+#   passed; the refusal comes from the one owner table through `refused`. No finding.
+# - K225: the preset's targets are read from the model with the insert's NODE_ADDs projected
+#   (ids only); PATCH_REPLACE then applies to the real model inside the one BATCH. Its P3 (test
+#   order dependency) fixed at 33c2faed; its README row restored at 05745051.
+# - release-bounded c8c2b77a: the first attempt gets min(timeoutMs, budgetMs) without reading
+#   the clock, a retry what the injected clock leaves; the two new cases fail with c8c2b77a^'s
+#   file (13/2), 55/0 with it.
+# - CI legs (ci.yml leg-1/leg-2, shards.cjs, run-suites.cjs): the suites are derived from
+#   test:release, every unit of every browser in exactly one leg (browser-shards.test), every leg
+#   runs something, a failed or timed-out unit fails the leg; solo suites (those judging the
+#   realtime clock, and any undeclared one) run alone; SIGTERM is followed by SIGKILL after
+#   15 s (c1's P3, 703e1cef); gate needs leg-1 and leg-2; the receipt and main-checks follow.
+#
+# THE CONDITION of this verdict. The legs have never run in CI before this pull request: on a
+# pull request GitHub runs the ci.yml it carries, so this train's first run is their first
+# execution. This verdict binds only when, in that first run, the reviewer has read the six
+# "Browser leg N (browser)" logs and found for each leg its shards plan line, "run-suites: all K
+# suites passed", and PASS lines equal to that leg's plan at this head (shards.cjs --plan:
+# chromium 21 + 19, firefox 20 + 20, webkit 19 + 21, 40 units a browser = 39 release suites with
+# the census in two parts). Agreed with the integrator (oscilla-43): auto-merge is armed only
+# after the reviewer reports "legs OK"; if a check fails, the reviewer commits a superseding
+# verdict `changes-requested`.
+#
+# Measured by the reviewers:
+# - at 949585a0 (c1): npm test exit 0 (5377 tests, 5375 pass, 0 fail, 2 skipped); build:check up
+#   to date (v3.30.0); shards.cjs --plan as above.
+# - at 0375a89d (c1; guarded content equal to this head but release-bounded): chromium, all 14
+#   suites PASS: v31-studio graph, timeline, audio, transport, offline (66 checks), workflows
+#   (15 + 3), links, runtime; instrument-dsp at 44.1 and 48 kHz; steps; studio-keys; step-grid;
+#   synth (incl. s-mobile on the phone); synth-engines.
+# - c3 at its heads: chromium and webkit probes of W008's view (1536, 1280, 390 touch), synth.cjs
+#   and synth-engines.cjs, the synth units 530/530.
+# Not run by the reviewers: firefox and webkit for the whole set (the legs are their receipt),
+# the visual gate.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open; three P3 ride as follow-ups.
+schema: review-verdict/v1
+pr: 509
+verdict: merge
+reviewer: oscilla-c1 rev-seat with oscilla-c3 rev-seat-2 (claude-code 7cad3015; built none of 949585a0)
+content: 39d6a8dc6f2edd90a41b39788acac4e04bc0e509406fa74c0ca548fe3a059874
+findings:
+  - { id: K022-1, severity: P2, status: closed, title: "unison summed at 1/sqrt(n) over phase-aligned voices: +8.5 dB over Level at 7 voices; 1/n at 64c799e9" }
+  - { id: K022-2, severity: P2, status: closed, title: "24 dB/oct shown for band-pass and notch (12 dB/oct a side, no slope); low-/high-pass only at 64c799e9" }
+  - { id: K022-3, severity: P2, status: closed, title: "the Synth panel grew an MG depth jack (62 -> 63) although MG depth is fixed at 1; hidden at d1109da9" }
+  - { id: K022-4, severity: P3, status: closed, title: "1/n unison plays about 10 log10(n) dB quieter; stated in the Oscillator help at 8b03ad0e" }
+  - { id: K022-5, severity: P3, status: closed, title: "cascade doubles the resonance and moves -3 dB below cutoff; the top unison voice can pass 0.95 x Nyquist under modulation; stated in help" }
+  - { id: R2-W8-1, severity: P1, status: closed, title: "the step grid was clipped by the Inspector card (c3); d5192451" }
+  - { id: R2-W8-2, severity: P2, status: closed, title: "paging dropped focus to BODY (c3); d5192451" }
+  - { id: R2-W8-3, severity: P2, status: closed, title: "the grid keys were missing from the Studio's shortcuts (c3); d5192451" }
+  - { id: R2-W8-6, severity: P3, status: closed, title: "W008.yaml promised 16 steps at 1536 px; restated at 6c7c7d9b (c3)" }
+  - { id: R2-F2-1, severity: P2, status: closed, title: "English left in the Czech bay flows (c3); 4aa056e8" }
+  - { id: R2-F2-2, severity: P2, status: closed, title: "connect prompt said vstupy for outputs (c3); konektory at 4aa056e8" }
+  - { id: R2-F2-4, severity: P3, status: open, title: "Expand all / Collapse all (synth/ui.js) still English and not on the kept-on-purpose list (c3)" }
+  - { id: K225-1, severity: P3, status: closed, title: "patch-browser.test depended on test order (module-global inserter); 33c2faed" }
+  - { id: CI-1, severity: P3, status: closed, title: "run-suites sent SIGTERM only at a deadline; SIGKILL after 15 s at 703e1cef" }
+  - { id: K023-1, severity: P3, status: open, title: "a document with a Clock and no clips ends at once: timelineEnd counts clips and lanes only, so the Clock never ticks without a loop" }
+  - { id: R2-W8-7, severity: P3, status: open, title: "the Inspector's 4-step page does not follow the playing step (c3); closed in K222 at 600741c4, which rides T4" }

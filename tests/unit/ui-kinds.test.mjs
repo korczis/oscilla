@@ -79,12 +79,17 @@ test('one kind mechanism: every declared kind is a name of kinds.js KINDS, decla
 });
 
 test('step-grid: a projection of the notes clip, one action per gesture, no steps clip', () => {
-  assert.equal(stepGrid.version, 1);
+  // Version 2 (W008): the grid change, NOTES_GRID_SET, joined with the Studio's action.
+  assert.equal(stepGrid.version, 2);
+  assert.deepEqual(stepGrid.events.find((e) => e.name === 'grid').emits, ['NOTES_GRID_SET']);
   assert.deepEqual([...stepGrid.state], ['studio.clip', 'notes']);
   for (const s of stepGrid.state) assert.ok(FACTS.sources.has(s), s);
   const targets = new Set(stepGrid.events.flatMap((e) => e.emits || []));
-  assert.deepEqual([...targets].sort(), ['CLIP_UPDATE', 'NODE_PARAM_SET', 'view']);
-  for (const t of ['CLIP_UPDATE', 'NODE_PARAM_SET']) assert.ok(FACTS.actionTypes.has(t), t);
+  assert.deepEqual([...targets].sort(), ['CLIP_UPDATE', 'NODE_PARAM_SET', 'NOTES_GRID_SET',
+    'view']);
+  for (const t of ['CLIP_UPDATE', 'NODE_PARAM_SET', 'NOTES_GRID_SET']) {
+    assert.ok(FACTS.actionTypes.has(t), t);
+  }
   assert.ok(!JSON.stringify(stepGrid).includes('steps clip'));
   // Defaults validate; ADR 0086 decision 2's default grid and decision 3's accent.
   for (const p of stepGrid.props) assert.equal(validateParamValue(p, p.default), null, p.key);
@@ -127,17 +132,21 @@ test('step-grid: every pointer and touch event is reached by a key, Space is nev
   });
 });
 
-test('the key rows wait on W008 for the shortcuts table, judged once the view exists', async () => {
-  const { pending } = await checkKindRepository(ROOT);
-  assert.deepEqual(pending.map((p) => `${p.kind} ${p.workspace} ${p.row} ${p.issue}`), [
-    'step-grid synth step-grid-move W008', 'step-grid synth step-grid-select W008',
-    'step-grid synth step-grid-toggle W008', 'step-grid synth step-grid-clipboard W008',
-    'step-grid synth step-grid-clear W008', 'step-grid synth step-grid-transpose W008',
-    'step-grid synth step-grid-page W008', 'step-grid synth step-grid-menu W008']);
+test('the key rows are judged against the shortcuts table once the view exists', async () => {
+  // W001 left them pending on W008; with src/js/ui/kinds/step-grid.js on disk none is pending
+  // and every row is in the Synth's Keyboard shortcuts dialog.
+  const { pending, problems } = await checkKindRepository(ROOT);
+  assert.deepEqual(pending, []);
+  assert.deepEqual(problems, []);
+  // Without the view, the rows wait on the issue that adds it.
+  const absent = (rel) => !rel.startsWith('src/js/ui/kinds/step-grid');
+  assert.deepEqual(check([stepGrid], { exists: absent }).pending
+    .map((p) => `${p.row} ${p.issue}`).slice(0, 2),
+  ['step-grid-move W008', 'step-grid-select W008']);
   // With the view on disk, a row the dialog lacks is refused; listed, it passes.
   const exists = () => true;
-  refused(check([stepGrid], { exists }).problems,
-    /key row step-grid-move is not in the shortcuts table of synth/);
+  refused(check([stepGrid], { exists, shortcutRows: () => new Set() }).problems,
+    /key row step-grid-move is not in the shortcuts table of studio/);
   const rows = new Set(stepGrid.keys.map((k) => k.row));
   assert.deepEqual(check([stepGrid], { exists, shortcutRows: () => rows }),
     { problems: [], pending: [] });
@@ -265,14 +274,15 @@ test('negative 8: a declared shape changed without a version bump', () => {
     default: 16 }); });
   refused(pinProblems([prop1], pin), /changed without a version bump/);
   // A bump must be re-pinned; once re-pinned, an earlier copy at the old version passes.
-  const bumped = { ...changed, version: 2 };
-  refused(pinProblems([bumped], pin), /version 2, pinned 1: re-pin/);
+  const v = stepGrid.version;
+  const bumped = { ...changed, version: v + 1 };
+  refused(pinProblems([bumped], pin), new RegExp(`version ${v + 1}, pinned ${v}: re-pin`));
   assert.deepEqual(pinProblems([bumped], pinOf([bumped]), [{ sha: 'base', pin }]), []);
   // Re-pinned without a bump, the base branch's copy still refuses it.
   refused(pinProblems([changed], pinOf([changed]), [{ sha: 'origin/main', pin }]),
-    /without a version bump \(version 1 at origin\/main\)/);
-  refused(pinProblems([{ ...stepGrid, version: 1 }], { 'step-grid': { ...pin['step-grid'],
-    version: 2 } }), /version 1 is below 2/);
+    new RegExp(`without a version bump \\(version ${v} at origin\\/main\\)`));
+  refused(pinProblems([{ ...stepGrid, version: v }], { 'step-grid': { ...pin['step-grid'],
+    version: v + 1 } }), new RegExp(`version ${v} is below ${v + 1}`));
   refused(pinProblems([], pin), /pinned .* but not declared/);
   refused(pinProblems([stepGrid], {}), /no pin in tests\/unit\/ui-kinds-digest\.json/);
   // Only the shape is hashed: docs and layout change no digest.
@@ -420,7 +430,10 @@ test('links resolve to a workspace route or a catalogue id; G007 is not built', 
 test('impl modules exist or are named by the issue that adds them', () => {
   const other = variant((v) => { v.impl.modules = ['src/js/ui/kinds/elsewhere.js']; });
   refused(check([other]).problems, /impl module src\/js\/ui\/kinds\/elsewhere\.js does not exist/);
-  const unnamed = variant((v) => { delete v.impl.issue; });
+  const unnamed = variant((v) => {
+    v.impl.modules = ['src/js/ui/kinds/elsewhere.js'];
+    delete v.impl.issue;
+  });
   refused(check([unnamed]).problems, /no issue that adds it names it/);
   refused(check([variant((v) => { v.impl.issue = 'W999'; })]).problems, /W999 does not exist/);
   // An existing module needs no issue.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (the graph editor; no audio judged)
 // OSCILLA V3.1 Studio workspace and graph editor gate: the built dist/index.html in chromium,
 // firefox and webkit, from file:// (every check) and from a GitHub-Pages-like sub-path
 // (http://127.0.0.1:<port>/oscilla/, the smoke checks). Spec §50-§80, §118-§141, §185,

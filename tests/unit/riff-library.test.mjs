@@ -12,6 +12,7 @@ import { compileStudio } from '../../src/js/studio/compiler.js';
 import { midiOf, noteHz } from '../../src/js/studio/templates/demo-song-score.js';
 import sweep from '../../src/js/studio/templates/sweep-sequence.js';
 import { REFERENCE_TEMPLATE_ID, templateModel } from '../../src/js/studio/templates/index.js';
+import { OUTPUT_REFUSAL } from '../../src/js/ui/output-owner.js';
 
 const lib = await import('../../src/js/studio/riffs/library.js').catch(() => ({}));
 const ex = await import('../../src/js/studio/riffs/expand.js').catch(() => ({}));
@@ -284,16 +285,17 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   engine.voice = null;
   a.dispose();
   assert.equal(unsubscribed, 1, 'dispose unsubscribes from the engine');
-  // While a measurement owns the output, Listen is refused with a sentence BEFORE anything is
-  // stopped or played: a running capture is never aborted silently (Q032, rule C002).
+  // While a measurement owns the output, Listen is refused with the output-owner table's
+  // sentence BEFORE anything is stopped or played: a running capture is never aborted silently
+  // (Q032, rule C002; the table's own refusal since C036, no sentence of the audition's).
   refuse = false;
   log.length = 0;
   let measuring = true;
   const m = au.createRiffAudition({ engine, stopOthers: () => log.push(['others']),
-    measuring: () => measuring });
+    refused: () => (measuring ? OUTPUT_REFUSAL : null) });
   const busy = m.start('mirrorball-octaves');
   assert.equal(busy.ok, false);
-  assert.match(busy.reason, /measurement is running/);
+  assert.equal(busy.reason, OUTPUT_REFUSAL);
   assert.deepEqual(log, [], 'nothing stopped, nothing played');
   measuring = false;
   assert.equal(m.start('mirrorball-octaves').ok, true);

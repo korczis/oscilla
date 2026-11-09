@@ -476,11 +476,13 @@ test('the component part: Playground settings per note, a refusal said, every st
   let measuring = false;
   let sequencing = false;
   let studio = false;
+  let micReference = false;
   const cmp = Object.assign(createMidiUi({ win, engine: r.engine,
     sequencerPlaying: () => sequencing }), {
     a4: 440, waveform: 'triangle', attack: 20, release: 120, safetyLimit: 2,
     continuousAllowed: false, notify: (...a) => notices.push(a),
     measureOwnsOutput: () => measuring, studioOwnsOutput: () => studio,
+    measureReferenceOwnsOutput: () => micReference,
     meas: { levelForm: { capturing: false } },
   });
   await cmp.midiInit();
@@ -523,14 +525,24 @@ test('the component part: Playground settings per note, a refusal said, every st
     assert.deepEqual(notices, [['info', 'MIDI', MIDI_REFUSED[by]]], `${by}: said once`);
     unset();
   };
-  refusedBy(() => { cmp.meas.levelForm.capturing = true; },
-    () => { cmp.meas.levelForm.capturing = false; }, 'reference');
+  // A microphone level-reference capture (session.js measureReferenceOwnsOutput) refuses them.
+  refusedBy(() => { micReference = true; cmp.meas.levelForm.capturing = true; },
+    () => { micReference = false; cmp.meas.levelForm.capturing = false; }, 'reference');
   refusedBy(() => { studio = true; }, () => { studio = false; }, 'studio');
-  // The documented divergence (output-owner.js claimOutput): a loopback TEST CONTEXT capture
-  // refuses the MIDI and keyboard notes too, while the output table's reference row does not.
-  // After the studio run, so the refusal is a new run and is said again.
-  refusedBy(() => { cmp.meas.loopback = true; cmp.meas.levelForm.capturing = true; },
-    () => { cmp.meas.levelForm.capturing = false; cmp.meas.loopback = false; }, 'reference');
+  // C036: the notes read the same reference row as every other claim, so a loopback TEST
+  // CONTEXT capture, which records the output itself, lets a note play (the divergence the
+  // table used to document is gone).
+  notices.length = 0;
+  cmp.meas.loopback = true;
+  cmp.meas.levelForm.capturing = true;
+  port.send([0x90, 60, 100]);
+  assert.equal(r.engine.noteCount, 1, 'a loopback reference capture refuses no note');
+  assert.deepEqual(notices, []);
+  cmp.midiAllOff();
+  r.fake.advance(1);
+  assert.ok(allGone(r));
+  cmp.meas.levelForm.capturing = false;
+  cmp.meas.loopback = false;
   refusedBy(() => { sequencing = true; }, () => { sequencing = false; }, 'sequencer');
   notices.length = 0;
   port.send([0x90, 60, 100]);

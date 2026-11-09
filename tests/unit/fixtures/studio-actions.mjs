@@ -489,6 +489,26 @@ export const MAKERS = Object.freeze({
     return valid({ type: 'CLIP_UPDATE', clipId: c.id, payload });
   },
 
+  // W008 (ADR 0086 decision 2): a notes clip's grid; a stale clip, a clip that is not a notes
+  // clip or an unknown mode is refused.
+  NOTES_GRID_SET(m, rng, mem, bad) {
+    const notes = m.timeline.clips.filter((c) => c.kind === 'notes');
+    const other = m.timeline.clips.filter((c) => c.kind !== 'notes');
+    if (bad || !notes.length) {
+      if (other.length && rng.chance(0.4)) {
+        return invalid('not-notes', { type: 'NOTES_GRID_SET', clipId: rng.pick(other).id,
+          grid: { seed: 1 }, mode: 'keep' });
+      }
+      return notes.length && rng.chance(0.5)
+        ? invalid('bad-mode', { type: 'NOTES_GRID_SET', clipId: rng.pick(notes).id,
+          grid: { seed: 1 }, mode: 'snap' })
+        : invalid('stale-clip', { type: 'NOTES_GRID_SET', clipId: staleId(m, rng, mem, 'clip'),
+          grid: { seed: 1 }, mode: 'keep' });
+    }
+    return valid({ type: 'NOTES_GRID_SET', clipId: rng.pick(notes).id,
+      grid: { swing: rng.pick([0, 0.25, 0.5]), seed: rng.pick([0, 7, 42]) }, mode: 'keep' });
+  },
+
   CLIP_SET_TIME_BASE(m, rng, mem, bad) {
     const clips = m.timeline.clips;
     if (bad || !clips.length) {

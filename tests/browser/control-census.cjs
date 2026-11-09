@@ -1,10 +1,15 @@
 #!/usr/bin/env node
+// suite-pace: solo (audio rows read a tone level on the realtime analyser, 10 s deadline)
 // OSCILLA control census (C021, PACK 03 "One Instrument, One Coherent State"): every control
 // of every workspace has a row, and every row round-trips. dist/index.html from file:// in
 // chromium, firefox and webkit.
 //
 //   node tests/browser/control-census.cjs [--dist dist/index.html] [--browsers chromium,...]
-//                                         [--only <row id>,...] [--unrowed]
+//                                         [--only <row id>,...] [--unrowed] [--part <i>/<n>]
+//
+// --part i/n runs the i-th of n parts (a CI leg each, tests/browser/lib/shards.cjs): the
+// discovery checks, then every family, then every row, are numbered in that order and dealt
+// round robin (lib/shards.cjs dealt()), so the n parts together run each check exactly once.
 //
 // The table is the census. A row names its control (a CSS selector), how it is driven, and the
 // effect read back. There are four kinds:
@@ -48,6 +53,7 @@ const suite = require('./lib/suite.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
 const op = require('./lib/oscilla-page.cjs');
 const seam = require('./lib/measure-seam.cjs');
+const shards = require('./lib/shards.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -60,6 +66,19 @@ const RUN = suite.open({ name: 'control-census', browsers: arg('browsers') });
 const playwright = RUN.playwright;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const UNROWED = argv.includes('--unrowed');
+let PART = null;
+try {
+  PART = shards.parsePart(argv);
+} catch (e) {
+  console.error(`[control-census] ${e.message}`);
+  process.exit(2);
+}
+if (PART && UNROWED) {
+  console.error('[control-census] --unrowed lists the discovery, which --part does not split');
+  process.exit(2);
+}
+/** Whether the check numbered `index` (discovery 0, then families, then rows) is this part's. */
+const mine = (index) => !PART || shards.dealt(index, PART);
 
 const ROW_MS = 10000;  // deadline of one row's expectation (a glide is 15-50 ms of audio)
 // A family's deadline unless it declares its own (ms).
@@ -1944,7 +1963,7 @@ if (require.main === module) {
         console.log(`  ${status.padEnd(5)}  ${name} ${id}${msg ? `  ${msg}` : ''}`);
       };
       try {
-        if (!ONLY || UNROWED) {
+        if ((!ONLY || UNROWED) && mine(0)) {
           const c = await bounded(census(browser), { ms: 240000, what: 'the control discovery' });
           if (UNROWED) {
             for (const k of c.unrowed) console.log(`  unrowed ${k}`);
@@ -1970,14 +1989,16 @@ if (require.main === module) {
           report(ledger.length ? 'FAIL' : 'PASS', 'census:ledger-holds',
             ledger.length ? ledger.join('; ') : `${LEDGER.length} delegated and debt row(s)`);
         }
-        for (const f of FAMILIES) {
+        for (const [fi, f] of FAMILIES.entries()) {
+          if (!mine(1 + fi)) continue;
           if (ONLY && !ONLY.has(f.id)) continue;
           const r = await bounded(runFamily(browser, f), { ms: f.ms || FAMILY_MS,
             what: `family ${f.id}` });
           report(r.ok ? 'PASS' : 'FAIL', `family:${f.id}`, r.ok ? JSON.stringify(r.detail)
             : r.error);
         }
-        for (const r of ROWS) {
+        for (const [ri, r] of ROWS.entries()) {
+          if (!mine(1 + FAMILIES.length + ri)) continue;
           if (ONLY && !ONLY.has(r.id)) continue;
           const res = await bounded(runRow(browser, r), { ms: (r.timeout || ROW_MS) * 4 + 60000,
             what: `row ${r.id}` });

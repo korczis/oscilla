@@ -26,6 +26,9 @@ const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const PKG = JSON.parse(read('package.json'));
 const SUITES = browserSuites(PKG);
 import { jobAt, playwrightImage, setBound } from './fixtures/workflow-bound.mjs';
+import shards from '../browser/lib/shards.cjs';
+
+const { releaseSuites } = shards;
 const CI = read('.github/workflows/ci.yml');
 const PAGES = read('.github/workflows/pages.yml');
 const INSTALL = read('.github/scripts/ci-install.sh');
@@ -81,7 +84,9 @@ test('every workflow file is read, and the checker sees their jobs and steps', (
     }
   }
   assert.ok(jobs >= 11, `jobs parsed: ${jobs}`);
-  assert.ok(bounded >= 20, `steps recognised as install, download or browser suite: ${bounded}`);
+  // ci-speed: the browser legs replaced 18 per-category browser jobs (each an install and a
+  // suite step) with 6, so the floor fell with them
+  assert.ok(bounded >= 15, `steps recognised as install, download or browser suite: ${bounded}`);
 });
 
 test('the browser suites are derived from package.json', () => {
@@ -91,10 +96,18 @@ test('the browser suites are derived from package.json', () => {
     assert.ok(SUITES.has(s), s);
   }
   for (const s of ['test', 'verify', 'build', 'version:check']) assert.ok(!SUITES.has(s), s);
-  // every suite of the release gate is run by some job of ci.yml
+  // every suite of the release gate is run by some job of ci.yml: by its script, or (ci-speed)
+  // in a browser leg, test:leg, which runs every browser suite of test:release but the visual
+  // gate (tests/browser/lib/shards.cjs; each suite in exactly one leg per browser,
+  // tests/unit/browser-shards.test.mjs)
   const runs = CI.match(/npm run [\w:.-]+/g).map((m) => m.slice(8));
+  const legged = new Set(releaseSuites(PKG));
+  assert.ok(runs.includes('test:leg') && legged.size >= 30, `legs run ${legged.size} suites`);
   for (const s of PKG.scripts['test:release'].match(/npm run [\w:.-]+/g).map((m) => m.slice(8))) {
-    assert.ok(runs.includes(s), `ci.yml runs ${s}`);
+    const files = PKG.scripts[s].match(/tests\/browser\/[\w.-]+\.cjs/g) || [];
+    const inLegs = files.length > 0 && files.every((f) => f === 'tests/browser/lib/run-suites.cjs'
+      || legged.has(f));
+    assert.ok(runs.includes(s) || inLegs, `ci.yml runs ${s}`);
   }
 });
 
@@ -120,7 +133,7 @@ test('mutation: a bare `npx playwright install --with-deps` step', () => {
 test('mutation: a bare apt install, in a workflow and in a helper script', () => {
   const text = mutate(CI, '          .github/scripts/ci-install.sh apt pulseaudio\n',
     '          sudo apt-get update -q && sudo apt-get install -y pulseaudio\n');
-  assert.deepEqual(rules(ci(text)), ['install-wrapper@engine']);
+  assert.deepEqual(rules(ci(text)), ['install-wrapper@leg-1']);
   assert.deepEqual(checkScript('.github/scripts/other.sh', 'sudo apt-get -y install jq\n')
     .map((v) => v.rule), ['install-wrapper']);
   assert.deepEqual(checkScript('.github/scripts/ci-install.sh', INSTALL), []);
@@ -131,9 +144,9 @@ test('mutation: a bare apt install, in a workflow and in a helper script', () =>
 test('mutation: an install, a download or a browser suite step without its own timeout', () => {
   const step = '        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}\n';
   const install = setBound(CI, `${step}        `, () => null);
-  assert.deepEqual(rules(ci(install)), ['step-timeout@engine']);
-  const suite = setBound(CI, 'logs/studio-${{ matrix.browser }}.log\n        ', () => null);
-  assert.deepEqual(rules(ci(suite)), ['step-timeout@studio']);
+  assert.deepEqual(rules(ci(install)), ['step-timeout@leg-1']);
+  const suite = setBound(CI, 'logs/leg-2-${{ matrix.browser }}.log\n        ', () => null);
+  assert.deepEqual(rules(ci(suite)), ['step-timeout@leg-2']);
   const download = setBound(CI, '(pinned version and digest)\n        ', () => null);
   assert.deepEqual(rules(ci(download)), ['step-timeout@knowledge']);
   const smoke = setBound(PAGES, '      - name: Public smoke of the deployed page (fatal)\n'

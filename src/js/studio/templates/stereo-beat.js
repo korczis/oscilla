@@ -19,7 +19,7 @@ export default {
       'Use a moderate volume: the level shown is relative, not a sound pressure.',
     ],
   },
-  studioHash: 'c32148891dbbad5f44ff5559a936daeaf183de8ac63bf2959945b02a2ff29c2b',
+  studioHash: '7519d4bb4e5c45810c06841e905f8fc4342a53cb77652564b164c6b6d8cfdd3e',
   model: studioDoc({
     title: 'Stereo Beat',
     nodes: [

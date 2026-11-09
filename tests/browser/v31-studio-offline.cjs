@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (an OfflineAudioContext render, no realtime deadline)
 // OSCILLA V3.1 Studio offline rendering in real browsers (spec §105, §256; plan issue V427):
 // src/js/studio/offline.js renders shipped templates through the Studio runtime on an
 // OfflineAudioContext (audio/offline-renderer.js), in chromium, firefox and webkit, from file://.

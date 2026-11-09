@@ -25,6 +25,7 @@
 //     embedded graph through migrate.js importStudio with PATCH_IMPORT_LIMITS (§115, §159)
 //   serializePatch(patch, space?) -> canonical JSON text (§161)
 //   patchHash(patch) -> SHA-256 hex of the patch graph's execution state (schema.js studioHash)
+//   patchHashEpoch(patch, hash) -> the hash epoch `hash` was computed under, or null (K022)
 //   insertPatch(model, patch, at?, { newId, registry }) -> { model, created, idMap, skipped }
 //     new ids for every node, edge, lane and point; positions offset to `at` (§114)
 //   replaceWithPatch(model, patch, { newId, registry, at }) -> { model, created, idMap,
@@ -58,7 +59,7 @@ import { NODE_REGISTRY } from './registry.js';
 import { article } from './a11y.js';
 import {
   DEFAULT_TRANSPORT, NAME_MAX_CHARS, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
-  collectIds, copyPlain, isPosition, normalizeStudio, studioHash, withoutNodes,
+  collectIds, copyPlain, hashEpochOf, isPosition, normalizeStudio, studioHash, withoutNodes,
 } from './schema.js';
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
@@ -295,6 +296,13 @@ export function patchHash(patch) {
   const r = importPatch(patch);
   if (!r.ok) throw new PatchError(`Invalid patch: ${r.errors[0].message}`, r.errors);
   return studioHash(normalizeStudio(asStudioDoc(r.patch)));
+}
+
+/** The hash epoch whose patchHash of `patch` is `hash`, or null (schema.js hashEpochOf, K022). */
+export function patchHashEpoch(patch, hash) {
+  const r = importPatch(patch);
+  if (!r.ok) return null;
+  return hashEpochOf(normalizeStudio(asStudioDoc(r.patch)), hash);
 }
 
 // ---------------------------------------------------------------- insert / replace (§114)

@@ -25,20 +25,24 @@ import { STUDIO_SHORTCUTS } from './studio/graph-keys.js';
 import { KEY_HELP } from './studio/transport-view.js';
 import { WORKSPACE_LABELS } from './shell.js';
 import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
+import { OWNER } from './output-owner.js';
 
-/** Who owns Space in each workspace (the keys are exactly app.js WORKSPACES). */
+/**
+ * Who owns Space in each workspace (the keys are exactly app.js WORKSPACES); each owner is a
+ * row of the one output-owner table (ui/output-owner.js OWNER, C036).
+ */
 export const SPACE_OWNER = Object.freeze({
-  playground: 'instrument',
+  playground: OWNER.instrument,
   measure: null,
   experiments: null,
-  analyzer: 'instrument',
-  filter: 'instrument',
-  compare: 'instrument',
-  synthesis: 'instrument',
-  sequencer: 'instrument',
-  presets: 'instrument',
+  analyzer: OWNER.instrument,
+  filter: OWNER.instrument,
+  compare: OWNER.instrument,
+  synthesis: OWNER.instrument,
+  sequencer: OWNER.instrument,
+  presets: OWNER.instrument,
   learn: null,
-  studio: 'studio',
+  studio: OWNER.studio,
   synth: null, // the Synth plays from its keys; Space starts nothing there (ADR 0050)
   about: null,
 });
@@ -95,6 +99,23 @@ const KEYBOARD_ROWS = Object.freeze([
   row('keyboard-octave', 'Z / X', 'Octave down / up', KEYBOARD_WHERE),
   row('keyboard-velocity', 'C / V', 'Velocity down / up (steps of 20)', KEYBOARD_WHERE),
 ]);
+// The step grid (W008, the step-grid kind of src/js/ui/catalog/kinds/step-grid.js), in the
+// Studio, whose Inspector mounts it for a selected notes clip; Czech (Q104). It never takes
+// Space or a bare letter key. K222 adds the Synth when its Drums view mounts the kind.
+const STEP_GRID_WHERE = 've zaměřené krokové mřížce';
+const STEP_GRID_ROWS = Object.freeze([
+  row('step-grid-move', 'Šipky', 'Posun po krocích a řadách', STEP_GRID_WHERE),
+  row('step-grid-select', 'Shift + šipky', 'Rozšíření výběru kroků v řadě', STEP_GRID_WHERE),
+  row('step-grid-toggle', 'Enter', 'Zapnutí nebo vypnutí kroku či výběru', STEP_GRID_WHERE),
+  row('step-grid-clipboard', 'Ctrl/⌘ C, X, V', 'Kopírování, vyjmutí a vložení kroků',
+    STEP_GRID_WHERE),
+  row('step-grid-clear', 'Delete', 'Vypnutí vybraných kroků', STEP_GRID_WHERE),
+  row('step-grid-transpose', 'PageUp / PageDown', 'Posun noty o půltón, se Shiftem o oktávu',
+    STEP_GRID_WHERE),
+  row('step-grid-page', '[ / ]', 'Předchozí a další stránka kroků', STEP_GRID_WHERE),
+  row('step-grid-menu', 'Shift + F10, klávesa nabídky',
+    'Nabídka kroku: přízvuk, ratchet, pravděpodobnost, slide', STEP_GRID_WHERE),
+]);
 // Measure's Esc is the global one and more: it replaces that row instead of repeating the key.
 const MEASURE_ROWS = Object.freeze([
   row('measure-abort', 'Esc',
@@ -120,7 +141,7 @@ export function spaceOwner(workspace) {
 
 /** True when the instrument's Hold to Play may answer Space in `workspace`. */
 export function instrumentTakesSpace(workspace) {
-  return spaceOwner(workspace) === 'instrument';
+  return spaceOwner(workspace) === OWNER.instrument;
 }
 
 /** A Space key event, by character or by physical key. */
@@ -138,12 +159,13 @@ export function isSpace(e) {
 export function shortcutHelp(workspace) {
   const owner = spaceOwner(workspace);
   let rows = [];
-  if (owner === 'instrument') {
+  if (owner === OWNER.instrument) {
     rows = [...INSTRUMENT_ROWS];
     if (workspace === 'sequencer') rows.push(...SEQUENCER_ROWS);
-  } else if (owner === 'studio') {
+  } else if (owner === OWNER.studio) {
     rows = [...STUDIO_ROWS];
   }
+  if (workspace === 'studio') rows.push(...STEP_GRID_ROWS);
   if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
     rows = [...MEASURE_ROWS];
   }
@@ -153,8 +175,8 @@ export function shortcutHelp(workspace) {
     title: has(WORKSPACE_LABELS, workspace) ? WORKSPACE_LABELS[workspace] : '',
     space: SPACE_MEANING[owner || 'none'],
     rows,
-    timeline: owner === 'studio' ? KEY_HELP : null,
-    note: owner === 'studio' ? STUDIO_NOTE : null,
+    timeline: owner === OWNER.studio ? KEY_HELP : null,
+    note: owner === OWNER.studio ? STUDIO_NOTE : null,
     global: GLOBAL_SHORTCUTS.filter((g) => !own.has(shown(g))),
   };
 }

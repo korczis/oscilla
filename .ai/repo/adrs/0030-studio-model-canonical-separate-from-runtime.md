@@ -129,3 +129,30 @@ Appended; the sections above are left as written on 2026-10-02, and the status s
   and question records live in one checkout's `.ai/local/` state, never committed; on
   2026-10-04 the primary checkout's logs held none of the Studio ones, so these notes and
   that table are the repository's record.
+
+### 2026-11-09: hash epoch 2 (K022, decision D2 of intent playable-instrument)
+
+`STUDIO_HASH_VERSION` is 2 (`src/js/studio/schema.js`). It is the one hash epoch for the new
+parameters on existing node types: unison and spread (Oscillator), slope (Filter), depth and sync
+(LFO), sync (Random), sync and quantize (Step Modulator), and bypass (Gain, Pan, Drive), listed in
+`HASH_EPOCH_PARAMS`. The model schema stays 1. Normalization fills each new parameter with its
+default, so an old document migrates without a schema step.
+
+- A saved record keeps the hash it was stored with. `hashEpochOf(model, hash)` finds the epoch
+  that computed it. `studioHashAt(model, 1)` hashes the model as epoch 1 did, leaving out what
+  epoch 2 added, and returns null when one of those parameters is off its default (epoch 1
+  could not have recorded that value).
+- Projects and patches (`library.js` loadProject, loadPatch) and an experiment's Studio block
+  (`provenance.js` verifyExperimentStudio, read through `execution.v`) saved under epoch 1 open
+  migrated: `hashMigration: { from: 1, originalHash }`. The UI says so in Czech
+  (`hashMigrationText`, rule `project.czech-prose`), and the stored record is never rewritten.
+- Every template is re-pinned under epoch 2 without a content change. Each template keeps its
+  version, and `tests/unit/v31-studio-templates.test.mjs` keeps the epoch 1 pins and proves them
+  through `studioHashAt`. Re-pinned: basic-tone, subtractive-synth, sweep-sequence, stereo-beat,
+  filter-automation, measurement-sweep, first-patch, filter-envelope-synth, fm-chime, ring-mod,
+  drive-lead, macro-pad, step-bass and demo-song.
+- The Filter keeps `enabled` in the model. The Inspector shows it as the same Bypass switch the
+  other processing nodes have, inverted, so the UI has one bypass vocabulary and no data is
+  renamed (C043, agreed with the integrator on 2026-11-09). A rename would be a later epoch.
+
+Proven by `tests/unit/studio-hash-epoch.test.mjs`. The status stays `proposed`.

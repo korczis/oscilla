@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (renders measured to the cent; kept alone until a CI run shows it unaffected)
 // K060: the Keys node's pitch CV, measured from real renders (Chromium, Firefox and WebKit).
 // K068: notes clips played by the Studio transport on the audio clock, measured the same way.
 //

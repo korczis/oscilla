@@ -1,5 +1,5 @@
-// E044: .github/workflows/main-checks.yml runs the pull request gate's unit, knowledge and
-// browser jobs again on every push to main, so two green pull requests that combine into a red
+// E044: .github/workflows/main-checks.yml runs the pull request gate's unit and knowledge jobs,
+// and the browser gate (npm run test:browser in every browser), again on every push to main, so two green pull requests that combine into a red
 // main show it on the merge commit (branch protection no longer asks for an up-to-date
 // branch). The jobs are ci.yml's: each one must equal the ci.yml job of the same key, field by
 // field and step by step, except the steps listed in PR_ONLY_STEPS, which need a pull request.
@@ -30,7 +30,14 @@ const CI = read('.github/workflows/ci.yml');
 const MAIN = read(MAIN_PATH);
 
 /** The ci.yml jobs main-checks.yml runs again, under the same keys. */
-export const MIRRORED = ['unit', 'knowledge', 'browser'];
+export const MIRRORED = ['unit', 'knowledge'];
+/**
+ * main-checks.yml's own browser job (ci-speed, 2026-11-09): ci.yml deals its browser suites over
+ * the legs leg-1 and leg-2, which a push to main does not run again; this job runs the browser gate's
+ * script in every browser, as ci.yml's browser job did, and is held to that here.
+ */
+export const OWN_BROWSER = Object.freeze({ key: 'browser', script: 'npm run test:browser',
+  browsers: ['chromium', 'firefox', 'webkit'] });
 /** The aggregate of main-checks.yml; deliberately not `gate`. */
 export const REPORT = 'report';
 /**
@@ -87,7 +94,7 @@ export function mainChecksProblems(ciText, mainText) {
       found.push(`jobs: ${key} is a gate job; this workflow requires nothing and has none`);
     }
   }
-  const want = [...MIRRORED, REPORT].sort();
+  const want = [...MIRRORED, OWN_BROWSER.key, REPORT].sort();
   if (json(Object.keys(jobs).sort()) !== json(want)) {
     found.push(`jobs: main-checks.yml has ${Object.keys(jobs).sort().join(', ')}, `
       + `not ${want.join(', ')}`);
@@ -136,6 +143,31 @@ export function mainChecksProblems(ciText, mainText) {
     }
   }
 
+  // the own browser job: every browser, the browser gate's script, no pull-request gate
+  const own = jobs[OWN_BROWSER.key];
+  if (own) {
+    const k = OWN_BROWSER.key;
+    if (json(own.strategy?.matrix?.browser) !== json(OWN_BROWSER.browsers)) {
+      found.push(`browser: ${k}.strategy.matrix.browser is ${json(own.strategy?.matrix?.browser)}, `
+        + `not ${json(OWN_BROWSER.browsers)}`);
+    }
+    if (own.env?.OSC_BROWSERS !== '${{ matrix.browser }}') {
+      found.push(`browser: ${k} does not set OSC_BROWSERS from its matrix`);
+    }
+    const runs = (own.steps ?? []).map((st) => st.run ?? '').join('\n');
+    if (!runs.includes(OWN_BROWSER.script)) {
+      found.push(`browser: ${k} does not run ${OWN_BROWSER.script}`);
+    }
+    for (const field of ['needs', 'if']) {
+      if (own[field] !== undefined) {
+        found.push(`browser: ${k}.${field} is set; a push to main runs every browser`);
+      }
+    }
+    if (PULL_REQUEST_ONLY.test(json(own))) {
+      found.push(`browser: ${k} reads the pull request, which a push to main has not`);
+    }
+  }
+
   // the report: always, every other job, a summary and a failure that is loud
   const report = jobs[REPORT];
   if (report) {
@@ -174,7 +206,7 @@ function onlyProblem(ciText, mainText, prefix) {
   return found[0];
 }
 
-test('main-checks.yml runs ci.yml\'s unit, knowledge and browser jobs on a push to main', () => {
+test('main-checks.yml runs ci.yml\'s unit and knowledge jobs and the browser gate on a push to main', () => {
   assert.deepEqual(mainChecksProblems(CI, MAIN), []);
 });
 
@@ -189,10 +221,9 @@ test('main-checks.yml obeys project.ci-bounded and is not bound to a pull reques
 test('mutation: a copied step drifts, here or in ci.yml', () => {
   const here = mutate(MAIN, '        run: npm test\n', '        run: npm test || true\n');
   assert.match(onlyProblem(CI, here, 'mirror: unit step'), /step 4/);
-  const there = setBound(CI,
-    'npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log\n        ',
-    (n) => n + 5);
-  onlyProblem(there, MAIN, 'mirror: browser step 6');
+  const there = mutate(CI, '        run: npm run version:check\n',
+    '        run: npm run version:check || true\n');
+  onlyProblem(there, MAIN, 'mirror: unit step 5');
   const dropped = mutate(MAIN, '      - name: Committed dist/index.html matches a clean rebuild\n'
     + '        run: npm run build:check\n', '');
   onlyProblem(CI, dropped, 'mirror: unit step 6');
@@ -214,23 +245,30 @@ test('mutation: a browser leg is dropped', () => {
   const two = MAIN.replace('        browser: [chromium, firefox, webkit]\n',
     '        browser: [chromium, firefox]\n');
   assert.notEqual(two, MAIN);
-  onlyProblem(CI, two, 'mirror: browser.strategy');
+  onlyProblem(CI, two, 'browser: browser.strategy.matrix.browser');
+  const other = mutate(MAIN, 'npm run test:browser 2>&1', 'npm run test:census 2>&1');
+  onlyProblem(CI, other, 'browser: browser does not run npm run test:browser');
 });
 
 test('mutation: the E026 path gate is copied to main, or ci.yml gates on something else', () => {
   const gated = mutate(MAIN, '\n  browser:\n', '\n  browser:\n    needs: unit\n');
-  onlyProblem(CI, gated, 'mirror: browser.needs carries');
+  onlyProblem(CI, gated, 'browser: browser.needs is set');
   const exact = mutate(MAIN, '\n  browser:\n', '\n  browser:\n    needs: changes\n'
     + "    if: needs.changes.outputs.runtime != 'false'\n");
   const found = mainChecksProblems(CI, exact);
   assert.deepEqual(found, [
-    "mirror: browser.if carries ci.yml's pull-request-only path gate",
-    "mirror: browser.needs carries ci.yml's pull-request-only path gate",
+    'browser: browser.needs is set; a push to main runs every browser',
+    'browser: browser.if is set; a push to main runs every browser',
   ]);
-  const other = CI.replaceAll("if: needs.changes.outputs.runtime != 'false'",
-    "if: needs.changes.outputs.docs != 'true'");
-  assert.notEqual(other, CI);
-  onlyProblem(other, MAIN, 'mirror: browser.if');
+  // E026's exact gate on a mirrored ci.yml job is excused here; any other condition is a drift
+  const exempt = mutate(CI, '    name: unit, build, artifact rules\n',
+    "    name: unit, build, artifact rules\n    needs: changes\n"
+    + "    if: needs.changes.outputs.runtime != 'false'\n");
+  assert.deepEqual(mainChecksProblems(exempt, MAIN), []);
+  const other = mutate(CI, '    name: unit, build, artifact rules\n',
+    "    name: unit, build, artifact rules\n    needs: changes\n"
+    + "    if: needs.changes.outputs.docs != 'true'\n");
+  onlyProblem(other, MAIN, 'mirror: unit.if');
 });
 
 test('mutation: the pull-request-only size report is copied, or its exception goes stale', () => {
