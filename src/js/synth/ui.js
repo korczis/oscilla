@@ -798,12 +798,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       });
       this.$watch('theme', () => { if (this.workspace === 'synth') renderAll(); });
       window.addEventListener('resize', () => { if (this.workspace === 'synth') renderBay(); });
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.workspace === 'synth') {
-          pending = null;
-          disarm(true);
-        }
-      });
       if (typeof this.navRegister === 'function') {
         this.navRegister('synth', (hash) => this.synthApplyLinkHash(hash));
       }
@@ -819,6 +813,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const t = transport();
       if (!t || !ensurePanel()) return false;
       if (typeof this.ensureAudio === 'function') this.ensureAudio();
+      // The Arm is a step of the playback bus's trace (C050); its claim is the transport's.
+      if (typeof this.busArmed === 'function') this.busArmed('studio', true);
       const r = t.arm();
       if (!r.ok) say(r.code === 'claim-refused' ? SYNTH_TEXT.refused : r.reason, true);
       else say(armedText());
@@ -826,7 +822,15 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       return r.ok;
     },
 
+    /** The playback bus's stopAll (C050: Escape, a page hide): on the Synth, Arm is off. */
+    synthStopped() {
+      if (this.workspace !== 'synth') return;
+      pending = null;
+      disarm(true);
+    },
+
     synthDisarm() {
+      if (typeof this.busArmed === 'function') this.busArmed('studio', false);
       return disarm(true);
     },
 

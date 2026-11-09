@@ -413,7 +413,9 @@ export function createWorkbench(svc) {
      */
     statusPlay() {
       if (this.isSounding || svc.sequencerPlaying()) {
-        svc.stopPlayback(this);
+        // The status-bar stop is the playback bus's stopAll (C050), else the older stopPlayback.
+        if (typeof svc.stopAll === 'function') svc.stopAll('status-stop');
+        else svc.stopPlayback(this);
         return;
       }
       if (this.continuousAllowed && !this.isProgrammed) this.toggleLatch();

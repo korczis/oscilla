@@ -58,7 +58,7 @@ import {
   sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
 } from '../audio/patterns.js';
 import { micErrorMessage, MIC_PRIVACY_NOTICE } from '../audio/microphone.js';
-import { OWNER, playOwnerOf } from '../ui/output-owner.js';
+import { OWNER, playOwnerOf } from './output-bus.js';
 import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
