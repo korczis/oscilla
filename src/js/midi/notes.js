@@ -67,14 +67,16 @@ export function parseMidiMessage(data) {
  * `claim(reason)` is the playback bus's claim for the notes (C037, core/output-bus.js): asked
  * once for each note that starts on the Playground's voices, it answers { ok } or
  * { ok: false, by } with the owner that refuses it; `release()` tells the bus the last held
- * note is gone. Without a claim, `ownedBy()` names who owns the output ('measurement',
+ * note is gone; `noted(on, note, source)` tells it each note that starts or ends (its trace,
+ * C050). Without a claim, `ownedBy()` names who owns the output ('measurement',
  * 'reference', 'studio', 'sequencer') or returns null, as before the bus. `refused(by)`
  * is told once per run of refused notes (the caller says so to the user).
  * The MIDI inputs and the on-screen and computer keyboard (K026, src/js/midi/keyboard.js) play
  * through the same layer, each with its own `source` in the note key.
  */
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,
-  refused = () => {}, route = () => null, claim = null, release = () => {} } = {}) {
+  refused = () => {}, route = () => null, claim = null, release = () => {},
+  noted = () => {} } = {}) {
   let refusing = null;
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
   // Where each held key sounds, fixed at its note-on (src/js/midi/held-notes.js, K178): the
@@ -109,7 +111,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     // new one); on another player hold() first releases it where it sounded.
     if (sameSink(held.sinkOf(key), to)) held.releaseKey(key, 're-press');
     held.hold(key, { sink: to, note, velocity, input: inputOf(source) });
-    if (sink) return sink.noteOn(note, velocity);
+    if (sink) return played(sink.noteOn(note, velocity), note, source);
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = refusedBy();
     if (by) {
@@ -118,7 +120,13 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       return { ok: false, reason: by };
     }
     refusing = null;
-    return startOnEngine(key, note, velocity);
+    return played(startOnEngine(key, note, velocity), note, source);
+  }
+
+  /** A started note is told to the bus (noted); the result passes through. */
+  function played(result, note, source) {
+    if (result && result.ok !== false) noted(true, note, source);
+    return result;
   }
 
   /** The Playground voice of `key` at `note` (the engine's own held note). */
@@ -165,6 +173,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     const sink = held.releaseKey(key) || route() || ENGINE;
     const off = sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
       : sink.noteOff(note, { key, forced });
+    noted(false, note, source);
     releaseIfIdle();
     return off;
   }

@@ -68,6 +68,7 @@ import { createKeyDispatcher } from './ui/keys/dispatcher.js';
 import { bindPageKeys, pageKeyContext } from './ui/keys/clients.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
 import { createOutputBus, OWNER, outputRefusalOf, playOwnerOf } from './core/output-bus.js';
+import { createTrace } from './core/trace.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { sequenceDigest } from './sequencer/editor.js';
@@ -275,7 +276,13 @@ function playgroundVoiceInput() {
 // The playback bus (C002, C016, C037; core/output-bus.js): one output owner at a time, one
 // claim every player starts through and a release when it ends. stopPlayback also frees the
 // MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
+// The one operation trace (core/trace.js, ADR 0042): the bus records every claim, release,
+// stop, owner change, note and arm in it (C050), the Studio its store, runtime and transport
+// steps; the Inspector's Trace reads it.
+const traceIdle = new Set();
+const trace = createTrace({ now: Date.now, onIdle: () => { for (const fn of traceIdle) fn(); } });
 const bus = createOutputBus({
+  trace,
   app: () => app,
   sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
 const { claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy } = bus;
@@ -688,19 +695,18 @@ function integrationInit() {
   // The page's keys (Escape stops, Space is Hold to Play where the instrument owns it) are
   // bound through the one key registry and its one dispatcher (ui/keys/, K153).
   const keys = createKeyRegistry();
-  bindPageKeys({ keys, cmp, stopSequencer });
+  bindPageKeys({ keys, cmp, stopSequencer, stopAll: bus.stopAll }); // Escape (C050)
   createKeyDispatcher({ registry: keys, context: () => pageKeyContext(cmp) }).attach();
   cmp.keys = keys;
   window.addEventListener('blur', () => cmp.releaseHold());
-  const hide = () => {
-    cmp.releaseHold();
-    stopSequencer();
-    cmp.measureAbort('pagehide'); // spec §169 (the capture io also aborts on its own)
-    if (!cmp.latched) return;
-    cmp.stop();
-  };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) hide(); });
-  window.addEventListener('pagehide', hide);
+  // A page hide is the playback bus's stopAll (C050): the one listener pair. Every owner stops,
+  // a measurement aborts (spec §169; the capture io also aborts on its own).
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) bus.stopAll('hidden');
+  });
+  window.addEventListener('pagehide', () => bus.stopAll('pagehide'));
+  // The Synth's own reaction to a stop (its pending arm, the Arm button's state).
+  bus.onStop((why) => { if (typeof cmp.synthStopped === 'function') cmp.synthStopped(why); });
   document.addEventListener('fullscreenchange', () => {
     requestAnimationFrame(() => { if (host) host.resize(); });
     repairCharts();
@@ -881,7 +887,7 @@ function createOscillaComponent(ui) {
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
     labSnapshot: () => snapshotLabs(labs), applyLabSnapshot, labsMounted,
     relayout: () => { if (host) host.resize(); repairCharts(); },
-    stopPlayback, sequencerPlaying,
+    stopPlayback, sequencerPlaying, stopAll: bus.stopAll, // the status-bar stop (C050)
   });
   const measure = createMeasureUi({
     engine, build: BUILD, stopPlayback, outputBusy,
@@ -892,6 +898,7 @@ function createOscillaComponent(ui) {
   const connections = createConnectionsUi();
   const studio = createStudioUi({ engine, stopPlayback, outputRefusalOf,
     claim: bus.claim, release: bus.release, // Studio PLAY and the Synth arm (C037)
+    trace, onTraceIdle: (fn) => traceIdle.add(fn), // the one trace (C050)
     // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
     playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)
@@ -901,7 +908,7 @@ function createOscillaComponent(ui) {
   const midi = createMidiUi({ engine, sequencerPlaying, bus });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
-    TEMPLATE_HELPERS);
+    TEMPLATE_HELPERS, { busArmed: (owner, on) => bus.armed(owner, on) });
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {

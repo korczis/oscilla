@@ -245,14 +245,21 @@ export function createStudioUi(svc = {}) {
     tracePending: false,
   };
   // The Inspector's Trace refreshes once an operation has ended (coalesced per task).
-  ctx.trace = createTrace({ now: Date.now, onIdle: () => {
+  const traceIdle = () => {
     if (ctx.tracePending) return;
     ctx.tracePending = true;
     queueMicrotask(() => {
       ctx.tracePending = false;
       if (ctx.inspector) ctx.inspector.renderTrace();
     });
-  } });
+  };
+  // The page's one trace (main.js, C050: the playback bus records in it too), else its own.
+  if (svc.trace) {
+    ctx.trace = svc.trace;
+    if (typeof svc.onTraceIdle === 'function') svc.onTraceIdle(traceIdle);
+  } else {
+    ctx.trace = createTrace({ now: Date.now, onIdle: traceIdle });
+  }
 
   const viewEl = () => document.getElementById('osc-view-studio');
   const compactEl = () => document.querySelector('[data-osc="studio.compact"]');
@@ -556,9 +563,7 @@ export function createStudioUi(svc = {}) {
       document.addEventListener('fullscreenchange', onFullscreen);
       document.addEventListener('webkitfullscreenchange', onFullscreen);
       // Deep links reach studioApplyLinkHash through the hash dispatcher (main.js).
-      const hide = () => { if (ctx.transport && ctx.transport.playing) stopStudio({ fast: true }); };
-      document.addEventListener('visibilitychange', () => { if (document.hidden) hide(); });
-      window.addEventListener('pagehide', hide);
+      // A page hide stops the Studio through the playback bus's stopAll (main.js, C050).
       this.$nextTick(() => {
         mount(this);
         library().catch(() => {});

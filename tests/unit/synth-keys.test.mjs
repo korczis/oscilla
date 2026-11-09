@@ -30,6 +30,7 @@ import { createMidiUi } from '../../src/js/midi/ui.js';
 import { createSynthUi } from '../../src/js/synth/ui.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
+import { createOutputBus } from '../../src/js/core/output-bus.js';
 
 const SR = 48000; // the fake context's rate; every figure below reads ctx.sampleRate
 const CENT = 1 / 1200; // one cent in octaves
@@ -329,15 +330,14 @@ async function pageRig() {
 test('AC4: blur, hide and Escape release every held note through the shipped release paths',
   async () => {
     const rig = await pageRig();
+    // A page hide and Escape are the playback bus's stopAll (C050), wired as main.js wires it:
+    // the Synth's own reaction (onStop) first, then every note through midiAllOff.
+    const bus = createOutputBus({ app: () => rig.cmp, sequencer: () => null });
+    bus.onStop((why) => rig.cmp.synthStopped(why));
     const releases = {
       blur: () => rig.fire('win:blur'),
-      hidden: () => {
-        rig.doc.hidden = true;
-        rig.fire('doc:visibilitychange');
-        rig.doc.hidden = false;
-      },
-      escape: () => rig.fire('win:keydown', { key: 'Escape', code: 'Escape', target: null,
-        preventDefault() {}, stopImmediatePropagation() {} }),
+      hidden: () => bus.stopAll('hidden'),
+      escape: () => bus.stopAll('escape'),
     };
     for (const [name, release] of Object.entries(releases)) {
       rig.port.send([0x90, 60, 100]); // MIDI Note On: the Synth sink arms and plays Keys

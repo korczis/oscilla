@@ -52,6 +52,8 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         // claims the output as the notes, and the last released note gives it back.
         claim: bus ? (reason) => bus.claim(OWNER.notes, reason) : null,
         release: bus ? () => bus.release(OWNER.notes) : () => {},
+        noted: bus ? (on, note, source) => bus.note(on, { note, input: String(source) })
+          : () => {},
         refused,
         // What the workspace's keys play: its row of the one table (midi/routes.js, K178).
         route: () => {
@@ -102,16 +104,9 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         onSilence: silence,
       });
       // Nothing keeps sounding where its Note Off may never come (ADR 0062): the window loses
-      // the focus, the page is hidden, Escape.
-      const doc = win.document;
-      if (doc && typeof doc.addEventListener === 'function') {
-        doc.addEventListener('visibilitychange', () => { if (doc.hidden) silence(); });
-      }
-      if (typeof win.addEventListener === 'function') {
-        win.addEventListener('blur', silence);
-        win.addEventListener('pagehide', silence);
-        win.addEventListener('keydown', (e) => { if (e.key === 'Escape') silence(); });
-      }
+      // the focus here; a page hide and Escape are the playback bus's stopAll (C050), which
+      // releases every note through midiAllOff.
+      if (typeof win.addEventListener === 'function') win.addEventListener('blur', silence);
       return support.init();
     },
 
@@ -134,5 +129,5 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
   };
   // The keyboard (K026) is part of the same component part: its getters stay getters.
   return Object.defineProperties(part,
-    Object.getOwnPropertyDescriptors(createKeyboardUi({ win })));
+    Object.getOwnPropertyDescriptors(createKeyboardUi({ win, bus })));
 }

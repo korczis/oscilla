@@ -99,7 +99,7 @@ test('V502: main.js hands the engine to the MIDI part, and taking the output sto
     assert.match(main, /const bus = createOutputBus\(\{/);
     assert.match(main, /const \{[^}]*\bstopPlayback\b[^}]*\} = bus;/);
     const owner = code(read('src/js/core/output-bus.js'));
-    const stop = /function stopPlayback\(cmp\) \{([\s\S]*?)\n {2}\}/.exec(owner);
+    const stop = /function stopPlayback\(cmp(?:, [^)]*)?\) \{([\s\S]*?)\n {2}\}/.exec(owner);
     assert.ok(stop, 'stopPlayback (Measure and Studio PLAY take the output)');
     // C036: the measurement row's yields, forced, include the notes, whose stop is midiAllOff.
     assert.match(stop[1], /yieldOutput\(cmp, OUTPUT_YIELDS\.measure, true\)/);

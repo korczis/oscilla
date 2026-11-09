@@ -5241,6 +5241,87 @@ function defineChecks() {
     }
   });
 
+  // C050, one stop path: each player is started, then stopped by Escape, a page hide and (for
+  // the instrument and the sequencer, the owners the status-bar key stops, ADR 0050) the
+  // status-bar stop; after each stop the page waits, against a named deadline, for nothing
+  // playing: no bus owner, no sequence, no Studio, no note, an engine census of 0.
+  def('stop-path-one-stopall', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const workspace = async (ws) => {
+      await inPage((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => inPage((w) => document.querySelector('#osc-app').dataset.mode === w, ws),
+        { ms: 8000, what: `stop-path-one-stopall: the ${ws} workspace opens` });
+    };
+    /** What still plays, from each owner and the engine's own census. */
+    const sounding = () => inPage(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      return { owner: O.bus.owner(), instrument: !!a.playing,
+        sequence: !!O.labs.sequencer.editor.playing, studio: !!a.studioOwnsOutput(),
+        notes: O.engine.noteCount, nodes: O.engine.activeNodeCount,
+        seqSources: O.labs.sequencer.editor.stats().activeSourceCount };
+    });
+    const silent = (s) => s.owner === null && !s.instrument && !s.sequence && !s.studio
+      && s.notes === 0 && s.nodes === 0 && s.seqSources === 0;
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await sounding(); return pred(s) ? s : null; },
+          { ms: 6000, what: `stop-path-one-stopall: ${what}` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        return { timedOut: true, ...(await sounding()) };
+      }
+    };
+    const PLAYERS = {
+      instrument: { ws: 'playground', start: () => inPage(() => {
+        window.OSCILLA.app.setContinuous(true);
+        window.OSCILLA.app.toggleLatch();
+      }), on: (s) => s.instrument },
+      sequencer: { ws: 'sequencer', start: () => p.click('#osc-seq-play'),
+        on: (s) => s.sequence },
+      studio: { ws: 'studio', start: () => inPage(() => window.OSCILLA.app.studioPlay()),
+        on: (s) => s.studio },
+      synth: { ws: 'synth', start: () => inPage(() => window.OSCILLA.app.synthArm()),
+        on: (s) => s.studio },
+      notes: { ws: 'playground', start: async () => {
+        await p.locator('[data-osc="keyboard.readout"]').click();
+        await p.keyboard.down('KeyA');
+      }, on: (s) => s.notes > 0, after: () => p.keyboard.up('KeyA') },
+    };
+    const STOPS = {
+      escape: () => p.keyboard.press('Escape'),
+      pagehide: () => inPage(() => window.dispatchEvent(new Event('pagehide'))),
+      // the status-bar key's own action (the key shows at narrow widths; status-key-stops-only)
+      'status-stop': () => inPage(() => window.OSCILLA.app.statusPlay()),
+    };
+    const res = {};
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      for (const [stop, doStop] of Object.entries(STOPS)) {
+        for (const [name, pl] of Object.entries(PLAYERS)) {
+          if (stop === 'status-stop' && !['instrument', 'sequencer'].includes(name)) continue;
+          const key = `${name}/${stop}`;
+          await workspace(pl.ws);
+          await pl.start();
+          const on = await settle(pl.on, `${key}: the ${name} plays`);
+          await doStop();
+          const off = await settle(silent, `${key}: nothing plays and the census is 0`);
+          if (pl.after) await pl.after();
+          res[key] = { on: !on.timedOut, off: !off.timedOut, left: off.timedOut ? off : null };
+        }
+      }
+      const failed = Object.keys(res).filter((k) => !res[k].on || !res[k].off);
+      if (errs.length) failed.push('pageerror');
+      return { ok: failed.length === 0, failed, errs, res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
   // C037, the playback bus: each player is started through its own entry (a latched tone, the
   // sequencer's Play, Studio PLAY, the Synth's Arm, a held computer key, Listen on a riff) and
   // the bus names it as the owner within a named deadline; after its stop the bus names nobody.
