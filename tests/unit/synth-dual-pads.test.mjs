@@ -284,3 +284,35 @@ test('every hook of the pads is in their markup (the catalogue\'s synth.pads fam
     'the line says what each axis drives');
   m.destroy();
 });
+
+test('review C1-K220-1: a document without pad L (one made before K220) is not told a module '
+  + 'was removed, and is offered PAD L', async () => {
+  const { brokenByRemoval } = await import('../../src/js/synth/normals.js');
+  const { platesShown } = await import('../../src/js/synth/view/face.js');
+  const st = defaultStore();
+  const id = PANEL.resolve(st.getModel()).get('xyl').id;
+  // oscilla-c1's probe: the panel minus the xyl node and its edges, as a pre-K220 document.
+  assert.equal(st.dispatch({ type: 'NODE_REMOVE', nodeId: id }).ok, true);
+  const m = st.getModel();
+  assert.equal(m.graph.edges.some((e) => e.from.node === id || e.to.node === id), false);
+  assert.equal(PANEL.module('xyl').optional, true);
+  assert.deepEqual(brokenByRemoval(m, PANEL).filter((r) => r.module === 'xyl'), [],
+    'no "PAD L removed in the Studio" row');
+  const shown = platesShown({ panel: PANEL, tab: 'panel', resolved: PANEL.resolve(m), model: m });
+  assert.ok(shown.some((x) => x.id === 'xyl'), 'its own plate on the Panel tab, not a removed one');
+  assert.equal(shown.filter((x) => x.id === 'xyl').length, 1);
+  // Both cutoffs keep their MG and EG 2 normals (n19-n22): neither reads as open.
+  assert.equal(jackState(m, PANEL, 'hpf.frequency'), 'normalled');
+  assert.equal(jackState(m, PANEL, 'lpf.frequency'), 'normalled');
+  const { plateHtml } = await import('../../src/js/synth/view/face.js');
+  const plate = plateHtml({ panel: PANEL, module: PANEL.module('xyl'), node: null, model: m,
+    tokens: new Proxy({}, { get: () => 'currentColor' }), collapsed: false });
+  assert.doesNotMatch(plate, /removed|odstraněn/i, 'the plate says no removal');
+  assert.match(plate, /Tento dokument Studia nemá PAD L\./);
+  assert.match(plate, /data-restore-module="xyl"/);
+  // A module that is not optional still reads as removed (the rule is pad L's alone).
+  const st2 = defaultStore();
+  const eg2 = PANEL.resolve(st2.getModel()).get('eg2').id;
+  assert.equal(st2.dispatch({ type: 'NODE_REMOVE', nodeId: eg2 }).ok, true);
+  assert.deepEqual(brokenByRemoval(st2.getModel(), PANEL).map((r) => r.module), ['eg2']);
+});

@@ -29,6 +29,9 @@
 //   panel.modulesOf(tab) -> [module]              (module.tab, default the first tab)
 //   module.adds -> [port]                   CONTROL outputs whose cables add to the normals of
 //                                           the jack they feed (synth/normals.js; the XY pad)
+//   module.optional -> true                 a performance surface whose absence breaks no
+//                                           signal path (PAD L, K220): normals.js
+//                                           brokenByRemoval never lists it as removed
 //
 // A module's node is found by metadata.panel { id: panel.instance, module } (schema.js
 // isPanelRef); a node type the Studio may hold once (Master Output) is that one node.

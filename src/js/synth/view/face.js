@@ -191,6 +191,14 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + `</button></h3><span class="px-2 ${NOTE}">`
     + `${esc(m.def.displayName)}</span></header>`;
   const bg = plateSvg({ id: m.id, tokens });
+  if (!node && m.optional) { // PAD L (K220): a document without it simply has none
+    return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
+      + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}`
+      + `<p class="relative px-3 pb-3 text-sm text-gray-600 dark:text-gray-300">Tento dokument `
+      + `Studia nemá ${esc(m.label)}. <button type="button" class="font-medium text-primary-600 `
+      + `underline dark:text-primary-400" data-restore-module="${m.id}">Přidat ${esc(m.label)}`
+      + '</button></p></section>';
+  }
   if (!node) {
     const row = model ? brokenByRemoval(model, panel).find((r) => r.module === m.id) : null;
     return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `

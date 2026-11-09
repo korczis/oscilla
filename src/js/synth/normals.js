@@ -133,12 +133,14 @@ export function jackState(model, panel, jack) {
  * module, [{ module, label, jacks: ['module.port'] }] in declaration order, a jack listed when
  * a normal into it starts or ends at the gone module and no cable patches it. Restore module
  * (not Restore normal) is the fix for these: a normal cannot come back without its module.
+ * An `optional` module (panel.js; PAD L, K220) is never listed: a document without it is one
+ * that has no PAD L, made before K220 or not, never one that lost a signal path.
  */
 export function brokenByRemoval(model, panel) {
   const res = panel.resolve(model);
   const rows = [];
   for (const m of panel.modules) {
-    if (res.get(m.id)) continue;
+    if (res.get(m.id) || m.optional) continue;
     const jacks = [];
     for (const n of panel.normals) {
       const ends = [splitJack(n.from).module, splitJack(n.to).module];

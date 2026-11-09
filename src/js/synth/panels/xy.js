@@ -23,8 +23,12 @@ export const XY_MODULE = Object.freeze({ id: 'xy', label: 'XY PAD', node: 'xy-pa
  * HPF cutoffs (panels/semi-mono.js n25, n26; log, unipolar), so a touch sweeps a band and a cable
  * from or into either jack replaces the normal as any cable does (project.typed-ports). Its scale
  * parameters are fixed (a parameter pad has no scale): its card shows its jacks only. Resonance
- * waits for K232 (a low-pass Q is no CV target yet).
+ * waits for K232 (a low-pass Q is no CV target yet). It is `optional`: a performance surface
+ * whose absence leaves every signal path playing (the cutoffs keep their knobs and the keys'
+ * normals), so a document without it, one made before K220 or one it was removed from, has no
+ * PAD L (the PADY card offers to add it) and is never told a module was removed (review
+ * C1-K220-1 of oscilla-c1: the graph cannot tell the two apart).
  */
 export const XYL_MODULE = Object.freeze({ id: 'xyl', label: 'PAD L', node: 'xy-pad',
-  tab: 'panel', fixed: Object.freeze({ mode: 'chromatic', key: 'C', octave: 3, span: 1,
+  tab: 'panel', optional: true, fixed: Object.freeze({ mode: 'chromatic', key: 'C', octave: 3, span: 1,
     glide: 0 }) });
