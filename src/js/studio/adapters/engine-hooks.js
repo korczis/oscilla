@@ -15,11 +15,13 @@
 //     hooks.safeMaximum          engine.safeMaximum
 //     hooks.oscillator(t, f, at) engine._osc(type, f, at): an OscillatorNode, frequency clamped,
 //                                started at `at` (the engine's own oscillator factory)
-//     hooks.setMasterLevel(g)    engine.setMasterGain(g) (clamped to MAX_OUTPUT_GAIN, smoothed)
+//     hooks.setMasterLevel(g)    the engine's master level `g`, asked of the playback bus, its one
+//                                writer (C052: core/output-bus.js requestMasterLevel; clamped
+//                                to MAX_OUTPUT_GAIN, smoothed)
 //     hooks.masterLevel          engine.gainLevel: the engine's requested master level
 //     hooks.masterWrites         engine.masterWrites: how many times anyone wrote the level
 //                                (null on an engine that does not count)
-//     hooks.restoreMasterLevel(g, at)  engine.holdMasterGain(g, at): its glide held until `at`
+//     hooks.restoreMasterLevel(g, at)  the level asked of the bus with its glide held until `at`
 //                                (audio clock) so a level restored after STOP waits for the
 //                                fade-out; any later setMasterGain cancels the held glide
 //     hooks.timers               engine._timers (UI bookkeeping only: cleanup after a fade)
@@ -34,6 +36,9 @@
 // INVARIANT: no function here connects anything to ctx.destination.
 
 import { RENDER_QUANTUM, SAFE_NYQUIST_FACTOR } from '../../core/constants.js';
+import { OWNER, requestMasterLevel } from '../../core/output-bus.js';
+
+const STUDIO = OWNER.studio; // who asks the bus for the master level (C052)
 
 const LEAD_S = 0.02; // scheduler.js SCHEDULE_LEAD_S, used only when the engine lacks _soon
 const MASTER_TAU_S = 0.02; // engine.setMasterGain's own time constant
@@ -79,7 +84,7 @@ export function createEngineHooks(engine) {
         engine.master.gain.cancelScheduledValues(engine.ctx.currentTime);
       }
       held = null;
-      engine.setMasterGain(g);
+      requestMasterLevel(engine, g, { owner: STUDIO }); // the bus writes it (C052)
     },
     get masterLevel() { return engine.gainLevel; },
     get masterWrites() {
@@ -88,11 +93,11 @@ export function createEngineHooks(engine) {
     restoreMasterLevel(g, at) {
       if (typeof engine.holdMasterGain === 'function') {
         held = null;
-        engine.holdMasterGain(g, at);
+        requestMasterLevel(engine, g, { owner: STUDIO, at }); // a held glide (C052)
         return;
       }
       held = null;
-      engine.setMasterGain(g);
+      requestMasterLevel(engine, g, { owner: STUDIO });
       const p = engine.master && engine.master.gain;
       const ctx = engine.ctx;
       if (!p || !ctx || !(at > ctx.currentTime)) return;

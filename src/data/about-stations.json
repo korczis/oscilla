@@ -238,6 +238,10 @@
       "summary": "Uzel Clock a výstup Step trigger rozvádějí takt po trigger hranách; notes clip se dá kreslit jako step grid v Inspectoru Studia; oscilátory mají unisono a synchronizaci s tempem, filtry strmost 24 dB/okt a pracovní plocha jednoho vlastníka zvuku; knihovna patchů vkládá panel Synthu",
       "commit": "503bb9f",
       "datetime": "2026-11-09T16:34:25+01:00"
+    },
+    {
+      "title": "Bicí a jedny hodiny",
+      "summary": "Záložka Bicí hraje šest řádků jednoho notes clipu se šesti pady; pás krokového sekvenceru nad Synthem hraje klávesy panelu ve smyčce; sekvencer i Studio běží z jedněch hodin a každé přehrávání se hlásí jedné sběrnici, která ho jedním stiskem zastaví; trigger hrany rozvádějí gate a na krátkých telefonech zůstane obsah Synthu vidět"
     }
   ]
 }

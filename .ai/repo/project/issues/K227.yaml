@@ -1,0 +1,40 @@
+id: K227
+milestone: M071
+serves:
+  - "connected-instrument#session-and-midi"
+  - "connected-instrument#daw-mixer"
+  - "connected-instrument#one-transport"
+title: "Instrument bar: session browse and save, the BAR:PTN position with the song/pattern switch, the component switch and the controllers, each bound to its existing owner"
+slug: instrument-bar-session-position-component-switch-and-controllers
+priority: p2
+profile: implementation
+objective: "Lands as feat(ui). One bar across the instrument workspaces (Synth, Drums, Song, Mixer), mobile-first (a tablet in landscape the reference; a phone stacks it), a Flowbite Pro toolbar. It owns no state: every part reads and writes an owner that exists. Session: Browse opens the Studio's Projects and patches dialog and K102's one patch browser, Save saves through the same project save (no second save path). Position: BAR:PTN reads the one Studio transport (the bar and, under K079's song mode, the pattern playing), and its Song / Pattern switch is K079's mode toggle, one undoable dispatch. Components: Synth, Drums, Song and Mixer switch the workspace through the one router (ui/navigation.js), each an address of its own, Back and Forward walk them. Controllers: Keyboard and XY pads show or hide the existing keyboard dock and XY pad (src/js/midi/keyboard-ui.js, src/js/ui/synth/xy.js), whose state stays theirs. Before: these live in four places with four looks, and the position and the song/pattern state are not shown together. After: one bar shows and drives them, and a change made elsewhere (the Studio transport, the router, the dock) shows in the bar at once. Rollback: revert the pull request; no saved state depends on it."
+why: "Owner direction of 2026-11-09, relayed by the integrator oscilla-43: the owner sent screenshots of a semi-modular tablet instrument and asked that it be split into independent functional components on OSCILLA's own model, functional only (no trade dress or labels, project.visual-identity-lock). Its top bar (session, position, song/pattern, components, controllers) has no issue: K079 gives song mode, K102 the patch browser, K108 the mixer view and ui/navigation.js the workspaces, but nothing joins them. Bound to those owners on the integrator's condition: no second store. Checked against origin/main 7637039e."
+scope:
+  - "src/js/ui/instrument-bar.js"
+  - "src/js/ui/navigation.js"
+  - "src/js/ui/shell.js"
+  - "src/index.html"
+  - "src/js/ui/catalog"
+  - "tests/unit/instrument-bar.test.mjs"
+  - "tests/browser/instrument-bar.cjs"
+  - "package.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K079"
+  - "K102"
+  - "K108"
+acceptance_criteria:
+  - "tests/unit/instrument-bar.test.mjs, failing on the merge base: the bar's view model is derived from the store, the transport and the router only (a test replaces each owner with a fake and the bar follows it; the bar module exports no setter that writes state of its own); BAR:PTN reads 1:1 at the start, the bar the transport is in during play and, in song mode, the pattern K079 says is playing; the Song / Pattern switch dispatches K079's own action as one history entry; each component names the workspace route the router serves; Save calls the project save the Projects and patches dialog calls."
+  - "tests/browser/instrument-bar.cjs, a new entry suite added to npm run test:browser (so CI's legs and the release gate run it): from file:// and /oscilla/, in chromium, firefox and webkit, at 1024x768 touch and 390x844: the components switch walks Synth, Drums, Song and Mixer by pointer, keyboard and touch, each a history entry Back and Forward return through; BAR:PTN advances with PLAY on the transport and shows the pattern in song mode; a tempo or mode changed in the Studio shows in the bar, and the bar's change shows in the Studio, at the same revision; Keyboard and XY pads show and hide the dock and the pad, which keep their state; every touch target is 44x44 at least (tests/browser/layout.cjs's rule); every wait through tests/browser/lib/wait.cjs until() with a named deadline, inside tests/browser/lib/suite.cjs, tests/browser/timing-baseline.json does not grow."
+  - "Every control is declared in the UI catalogue (src/js/ui/catalog) with its owner as its state path, and tests/browser/control-census.cjs drives or delegates every one of them (no inert surface, project.no-inert-surfaces)."
+  - "Every string it adds is Czech (project.czech-prose) with no product, brand or model name; the UI is Flowbite Pro with no new legacy class (project.ui-uses-flowbite-pro); scripts/size-report.mjs shows at most 3 KB gzip added; tests/README.md has a row for each new test; dist is rebuilt."
+validation:
+  - "node --test tests/unit/instrument-bar.test.mjs"
+  - "node tests/browser/instrument-bar.cjs"
+  - "node tests/browser/control-census.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09

@@ -72,15 +72,6 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         return n;
       };
       if (typeof cmp.kbdInit === 'function') cmp.kbdInit({ notesFor });
-      // Leaving a workspace runs its row's leave on its sink: the Studio releases its keys and
-      // disarms an armed-only run (studio-sink.js, K176).
-      if (typeof cmp.$watch === 'function') {
-        cmp.$watch('workspace', (ws, old) => {
-          const { plays, leave } = routeOf(old);
-          const s = ws !== old && leave && typeof cmp[plays] === 'function' && cmp[plays]();
-          if (s && typeof s[leave] === 'function') s[leave]();
-        });
-      }
       const ids = new WeakMap(); // input -> a number for the note keys, never shown or stored
       let inputs = 0;
       support = createMidiSupport({
@@ -108,6 +99,17 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
       // releases every note through midiAllOff.
       if (typeof win.addEventListener === 'function') win.addEventListener('blur', silence);
       return support.init();
+    },
+
+    /**
+     * Leaving workspace `old` runs its key route's leave on its sink (KEY_ROUTES: the Studio
+     * releases its keys and disarms an armed-only run, studio-sink.js, K176). Called by the
+     * playback bus's leave policy (C053, LEAVE_POLICY 'studio'), never by a watcher of its own.
+     */
+    midiRouteLeave(old) {
+      const { plays, leave } = routeOf(old);
+      const s = leave && typeof this[plays] === 'function' && this[plays]();
+      if (s && typeof s[leave] === 'function') s[leave]();
     },
 
     /** Connect MIDI (the explicit user action): asks the browser for access. */

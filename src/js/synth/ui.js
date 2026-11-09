@@ -331,7 +331,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div class="mt-2 w-full" data-osc="synth.bay.canvas"></div>'
       + '<div data-osc="synth.connect" hidden></div>'
       + '<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" '
-      + 'id="synth-cables-title">CABLES</h4>'
+      + 'id="synth-cables-title">KABELY</h4>'
       + '<ul class="mt-1 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables" '
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
@@ -754,11 +754,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         el.addEventListener('wheel', gestures.wheel, { passive: false });
         el.addEventListener('keydown', onKeyDown);
       }
-      this.$watch('workspace', (ws, old) => {
-        if (old === 'synth' && ws !== 'synth') {
-          pending = null;
-          disarm(false);
-        }
+      this.$watch('workspace', (ws) => {
+        // Leaving the Synth disarms it through the bus's leave policy (C053: synthLeave).
         if (ws === 'synth') {
           syncArmed();
           strip.sync();
@@ -792,6 +789,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       return r.ok;
     },
 
+    /** The bus's leave policy (C053): leaving the Synth ends a pending connect and disarms. */
+    synthLeave() {
+      pending = null;
+      disarm(false);
+    },
+
     /** The playback bus's stopAll (C050: Escape, a page hide): on the Synth, Arm is off. */
     synthStopped() {
       if (this.workspace !== 'synth') return;
@@ -819,7 +822,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const p = presetOf(id);
         this.synth.preset = id;
         if (p.engine) showTab('engines', p.engine);
-        say(`Preset ${p.title}.`); // a name, not a sentence
+        say(`Předvolba ${p.title}.`);
       }
       return done.ok;
     },

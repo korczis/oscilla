@@ -1,0 +1,38 @@
+id: K228
+milestone: M067
+serves:
+  - "connected-instrument#modulation-everywhere"
+  - "connected-instrument#honest-instrument"
+  - "connected-instrument#synth-panel"
+title: "The Follower module conditions its input: a band-pass ahead of the detector and a gate threshold"
+slug: the-follower-module-conditions-its-input-band-pass-and-gate-threshold
+priority: p3
+profile: implementation
+objective: "Lands as feat(synth). The panel's Follower module (K080) gets an input stage: a band-pass ahead of its detector, built from the existing filter node with type bandpass (src/js/audio/filters.js FILTER_TYPES) as a normalled edge, so it is a cable a user can see and break, with Centre and Width knobs (D11; Width shown as Q with its -3 dB band in Hz derived from the running rate), and a gate Threshold knob (a level in dB relative to the follower's input, stated as such) that the gate detector compares the envelope with. The pitch CV (the frequency-to-voltage conversion), the envelope and the gate stay K080's; this adds only what conditions the signal before them. No new node type: the band-pass is a filter node, and the threshold is a parameter of K080's follower type, which does not exist on main yet (origin/main 7637039e). It joins that type before the type ships in a release (land it with K080 or right after, in the same release); once the follower has shipped, a new parameter on it waits for an epoch (D2) and this issue is restated to say so. Before: the follower reads the whole band, so a drum loop or a voice with hiss gives a jittering pitch CV and gate. After: the user narrows the band and sets the threshold, and the card says what band and threshold apply. Rollback: revert the pull request; a document with the input stage keeps its filter node and edges, which play as ordinary nodes."
+why: "Owner direction of 2026-11-09, relayed by the integrator oscilla-43: the owner sent screenshots of a semi-modular tablet instrument and asked that it be split into independent functional components on OSCILLA's own model, functional only (no trade dress or labels, project.visual-identity-lock). Its external-signal section has a band-pass and a frequency-to-voltage converter: K080 covers the converter (pitch CV), the envelope and the gate, not the band-pass or a threshold, so only those are filed here. Checked against origin/main 7637039e."
+scope:
+  - "src/js/synth/panels"
+  - "src/js/studio/nodes"
+  - "src/js/analysis"
+  - "src/js/ui/synth"
+  - "tests/unit/synth-follower-input.test.mjs"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K080"
+acceptance_criteria:
+  - "tests/unit/synth-follower-input.test.mjs, failing on the merge base: the Follower module's declaration normals a bandpass filter node ahead of the detector (a derived edge, never a stored flag), its Centre, Width and Threshold knobs are declared with their units, and every pinned template studioHash is unchanged (D2); the detector's pure kernel opens the gate on a frame whose level is above the threshold and not on one below it, for a threshold set by the knob; the -3 dB band the card states equals the biquad's response computed at the running rate (44.1 kHz and 48 kHz)."
+  - "tests/browser/instrument-dsp.cjs renders offline a 440 Hz tone with a 4 kHz tone 6 dB louder: with the band centred at 440 Hz and narrowed, the follower's pitch CV reads A4 within K080's stated uncertainty, and with the band open it does not; a level 6 dB under the threshold opens no gate; no sample rate assumed."
+  - "A browser check in tests/browser/synth.cjs (run by npm run test:synth): breaking the band-pass normal by a cable and restoring it by pointer, keyboard and touch changes what the follower reads at the same revision in the Studio graph and the panel; turning Threshold changes whether a stated input opens the gate within a named until() deadline of tests/browser/lib/wait.cjs; inside tests/browser/lib/suite.cjs; tests/browser/timing-baseline.json does not grow."
+  - "Every edit is one undoable dispatch through the one Studio store (project.studio-model-is-canonical); a path from the microphone to the output stays refused (K080's live-input-to-output); the band and the threshold are labelled as what they are, a setpoint, never as a measurement (project.no-fake-science)."
+  - "Every string it adds is Czech (project.czech-prose) and passes tests/unit/synth-wording.test.mjs; scripts/size-report.mjs shows at most 1 KB gzip added; a reviewer's verdict for the guarded paths (project.review-verdict); tests/README.md has a row for each new test; dist is rebuilt."
+validation:
+  - "node --test tests/unit/synth-follower-input.test.mjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm run test:synth"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09
