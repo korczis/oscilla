@@ -157,6 +157,7 @@ import { NO_TRACE } from '../core/trace.js';
 import { createLiveNotes, gateTargets, keysGatedEnvelopes, liveModel } from './live-notes.js';
 import { createNotePlayer, notesSteps } from './note-player.js';
 import { createTriggerFanout, reachedEnvelopes } from './trigger-fanout.js';
+import { transportClockOf } from '../audio/clock.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -375,13 +376,16 @@ export function createStudioTransport({
       warn('measurement-callback-failed', `Measurement callback: ${messageOf(e)}`);
     }
   };
+  // The engine's one transport clock wakes it and the sequencer's loop (C055).
+  const clock = transportClockOf(engine);
+  const wakeKey = {};
   const clearTimer = () => {
-    if (timer != null) hooks.timers.clearTimeout(timer);
+    if (timer != null) clock.cancel(timer);
     timer = null;
   };
   const arm = (ms) => {
     clearTimer();
-    timer = hooks.timers.setTimeout(tick, Math.max(1, Math.round(ms)));
+    clock.wake((timer = wakeKey), Math.max(1, Math.round(ms)), tick);
   };
 
   // ------------------------------------------------------------ ownership

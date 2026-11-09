@@ -19,6 +19,7 @@
 //                                  Asked once by play() (C037).
 //   holdOutput?(),                 still held? Asked before every loop pass; stops nothing
 //                                  (else claimOutput is asked there).
+//   clock?,                        the engine's transport clock (C055): the loop wakes from it
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
@@ -104,8 +105,10 @@ import { compileSequence, observeClock, START_OFFSET_S, STOP_RAMP_S } from './co
 import { reorderTarget } from './timeline.js';
 import { parseTempoEntry } from './entry.js';
 import { MAX_PROGRAMMED_S, RENDER_QUANTUM } from '../core/constants.js';
+import { TRANSPORT_LOOKAHEAD_S } from '../audio/clock.js';
+import { createLoopWake } from './loop-wake.js';
 
-export const LOOKAHEAD_S = 1.0; // compile the next loop pass this far ahead of its start
+export const LOOKAHEAD_S = TRANSPORT_LOOKAHEAD_S; // the next pass this far ahead (C055)
 /** C011: how long a loop may play without the continuous permission (ADR 0005). */
 export const LOOP_CAP_S = MAX_PROGRAMMED_S;
 export const LOOP_CAP_REASON = `Loop capped at ${LOOP_CAP_S} s: allow continuous playback to `
@@ -164,12 +167,12 @@ export function sequenceDigest(model) {
 export function createSequencerEditor(options = {}) {
   const engine = options.engine || null;
   const timers = options.timers === undefined ? defaultTimers() : options.timers;
+  const loopWake = createLoopWake({ clock: engine && engine.clock, timers });
   const priv = {
     voices: new Set(),
     passes: [], // [{ voice, t0, end, model, layout }] in start order
     sameCache: { a: null, b: null, same: false, layout: false },
     lastEnd: null,
-    loopTimer: null,
     self: null,
     chain: null, // the session's stage chain (engine.openStage), or null
     undo: [], // [{ model, selectedId }] before each edit, oldest first (K003)
@@ -224,8 +227,7 @@ export function createSequencerEditor(options = {}) {
     if (chain && !chain.disposed) chain.dispose();
   };
   const clearLoopTimer = () => {
-    if (priv.loopTimer !== null && timers) timers.clearTimeout(priv.loopTimer);
-    priv.loopTimer = null;
+    loopWake.clear();
   };
   const currentPass = (now) => {
     let found = null;
@@ -611,7 +613,7 @@ export function createSequencerEditor(options = {}) {
     _voiceEnded(voice, info) {
       priv.voices.delete(voice);
       priv.passes = priv.passes.filter((p) => p.voice !== voice);
-      if (priv.voices.size === 0 && priv.loopTimer === null) {
+      if (priv.voices.size === 0 && !loopWake.armed) {
         closeChain(); // the last pass has ended: nothing sounds through the stages any more
         const self = priv.self || this;
         self.playing = false;
@@ -628,7 +630,7 @@ export function createSequencerEditor(options = {}) {
       clearLoopTimer();
       const self = priv.self || this;
       const ctx = getCtx();
-      if (!ctx || !self.playing || !self.model.loop || !timers) return;
+      if (!ctx || !self.playing || !self.model.loop || !loopWake.able) return;
       let queued = 0;
       for (const v of priv.voices) if (!v.stopping && v.t0 > ctx.currentTime) queued++;
       while (
@@ -654,10 +656,7 @@ export function createSequencerEditor(options = {}) {
         queued++;
       }
       const wait = Math.max(50, (priv.lastEnd - LOOKAHEAD_S - ctx.currentTime) * 1000);
-      priv.loopTimer = timers.setTimeout(() => {
-        priv.loopTimer = null;
-        self._pump();
-      }, wait);
+      loopWake.arm(wait, () => self._pump());
     },
     /**
      * Ask the adapter for the output (claimOutput, C002). True when granted or when the adapter

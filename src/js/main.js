@@ -143,6 +143,7 @@ const adapter = {
       seq ? ed.currentFrequency() : null);
   },
   isPlaying: () => !!(app && (app.playing || app.seqPlaying)),
+  audioEngine: engine, // the sequencer's loop wakes from its one transport clock (C055)
   // C011: read-only; the sequencer's loop keeps to its cap without the permission.
   continuousAllowed: () => !!(app && app.continuousAllowed),
   getA4: () => (app && app.a4) || 440,

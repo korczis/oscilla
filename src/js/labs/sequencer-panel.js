@@ -41,6 +41,7 @@ import { parseFrequencyEntry } from '../sequencer/entry.js';
 import { syncTempoSelect } from '../sequencer/tempo-select.js';
 import { observeSize } from '../charts/chart-theme.js';
 import { on, setText, setAttr } from './dom.js';
+import { transportClockOf } from '../audio/clock.js';
 
 export const TIMELINE_OPTIONS = Object.freeze({ minSpanS: 3.75, headroomRatio: 0.1, blockY: 5,
   blockH: 40, gapPx: 4, minPxPerS: 66, phoneBlockPx: 72, phoneMaxPxPerS: 480 });
@@ -181,6 +182,8 @@ function buildField(d, value, safeMax) {
 export function sequencerEngine(adapter) {
   const getCtx = () => (adapter.getContext ? adapter.getContext() : null);
   return {
+    // The engine's one transport clock (C055): the loop wakes from the Studio transport's timer.
+    clock: adapter.audioEngine ? transportClockOf(adapter.audioEngine) : null,
     getContext: getCtx,
     getDestination: () => {
       const d = adapter.getDestination ? adapter.getDestination() : null;
