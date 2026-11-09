@@ -689,6 +689,59 @@ test('H001: a continuation that starts after the runtime crossfade fades in from
   await noLeaks(s, tr);
 });
 
+test('C1-H001-2: a prepare that takes longer than the crossfade leaves no silent seam: the old '
+  + 'routes fade from where the continuation starts', async () => {
+  // CI run 42713534778 (firefox, a 2-core runner): building the rebuilt oscillator took about
+  // 30 ms of audio time. runtime.apply had read its crossfade time before it, so the old routes
+  // faded out over [xfadeAt, xfadeAt + 20 ms] and the Tone continued only at the transport's
+  // horizon read after apply, 32 ms later: -106.8 dB between them. Here the first oscillator
+  // built inside apply (the prepare) moves the audio clock PREPARE_S.
+  const PREPARE_S = 0.04;
+  let xfadeAt = null;
+  let oldRoute = null;
+  const view = (s) => {
+    let armed = false;
+    const osc = s.engine._osc.bind(s.engine);
+    s.engine._osc = (...args) => {
+      if (armed) {
+        armed = false;
+        s.ctx.advance(s.ctx.currentTime + PREPARE_S);
+      }
+      return osc(...args);
+    };
+    return createStudioTransport({ engine: s.engine, store: s.store,
+      runtime: Object.create(s.runtime, { apply: { value: (...args) => {
+        const e = s.runtime.edges.get('edge-1');
+        if (!e) return s.runtime.apply(...args); // PLAY: nothing sounds yet
+        oldRoute = e.gain;
+        armed = true;
+        const r = s.runtime.apply(...args);
+        armed = false;
+        if (r && r.at !== undefined) xfadeAt = r.at;
+        return r;
+      } } }) });
+  };
+  const { s, tr, cont } = waveformEdit({ transport: view });
+  assert.ok(oldRoute && xfadeAt !== null, 'the edit went through the runtime');
+  assert.equal(cont.length, 1, 'the Tone continues, one voice');
+  const t0 = cont[0].startAt;
+  const route = s.runtime.edges.get('edge-1').gain;
+  assert.notEqual(route, oldRoute, 'the routes were rebuilt');
+  // The old route still sounds where the continuation starts, and the sum of the old route and
+  // the continued voice (its fade x its new route) never falls to silence across the seam.
+  assert.ok(gainAt(oldRoute, t0) > 0.5, `old route ${gainAt(oldRoute, t0)} at t0 ${t0}, `
+    + `crossfade from ${xfadeAt}`);
+  const fade = hop(cont[0], 4);
+  let low = Infinity;
+  for (let i = 0; i <= 40; i += 1) {
+    const tau = Math.min(xfadeAt, t0) + (i / 40) * (Math.abs(t0 - xfadeAt) + 2 * STUDIO_XFADE_S);
+    const voice = tau < t0 ? 0 : gainAt(fade, tau) * gainAt(route, tau);
+    low = Math.min(low, gainAt(oldRoute, tau) + voice);
+  }
+  assert.ok(low > 0.5, `the seam falls to ${low}`);
+  await noLeaks(s, tr);
+});
+
 test('H001: every voice sounding into the rebuilt oscillator continues, each its own clip',
   async () => {
   // Two pattern clips on two tracks play into osc-1 at once (review of #320, T3: continuing
