@@ -23,6 +23,12 @@
 //              100 ms +- one render quantum (128 frames at the rate) and not before, is halfway
 //              at 50 ms (linear), and the VCO plays A4 within 1 cent from 100 ms + one quantum.
 //              Fails on e51b169d, whose glide was an exponential approach (time constant 33 ms)
+//   e-dadsr    K230: an Envelope with delay 0.1 s and hold 0.2 s (one note through the transport,
+//              offline): below -60 dB through the delay, within 0.5 dB of the peak through the
+//              hold, and the attack, the peak and the decay each within one frame of gate +
+//              delay, + attack, + hold computed from the parameters; with delay and hold 0 the
+//              attack starts at the gate and the decay at the peak (today's ADSR). Fails on
+//              0410c679 (no delay or hold parameter)
 //
 // K068, per browser and per rate: a notes clip on the Keys node of Keys -> VCO -> Envelope ->
 // Master Output played by the Studio transport offline (the render length as its look-ahead, as
@@ -149,6 +155,22 @@ async function runBrowser(name) {
       check(at, 'k-glide the VCO plays A4 within 1 cent after the glide',
         within(g.centsAfter, 1) && within(g.centsBefore, 1),
         `${f(g.hzAfter, 4)} Hz (${f(g.centsAfter, 4)} ct); A3 before ${f(g.centsBefore, 4)} ct`);
+      // e-dadsr (K230): the delay and the hold stages, measured from the contour.
+      for (const [delay, hold] of [[0.1, 0.2], [0, 0]]) {
+        const d = await call('dadsr', { sampleRate: rate, delay, hold },
+          `e-dadsr renders at ${rate} Hz, delay ${delay} s, hold ${hold} s`);
+        const off = (k) => (d.got[k] === null ? null : d.got[k] - d.want[k]);
+        const stages = ['attack', 'peak', 'decay'];
+        check(at, `e-dadsr delay ${delay} s hold ${hold} s: each stage within one frame`,
+          stages.every((k) => off(k) !== null && Math.abs(off(k)) <= 1),
+          stages.map((k) => `${k} ${d.got[k]} (computed ${d.want[k]}, ${off(k)})`).join('; '));
+        if (delay > 0) {
+          check(at, 'e-dadsr below -60 dB through the delay, within 0.5 dB of the peak through '
+            + 'the hold', d.delayMaxDb !== null && d.delayMaxDb < -60 && d.holdMinDb !== null
+            && d.holdMinDb >= -0.5, `delay max ${f(d.delayMaxDb, 2)} dB, hold min `
+            + `${f(d.holdMinDb, 4)} dB`);
+        }
+      }
       // K068: notes clips on the audio clock.
       const half = {};
       for (const tempo of [120, 97]) {

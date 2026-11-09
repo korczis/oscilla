@@ -27,6 +27,13 @@
 //   s-rest     armed with no key held (Arm, no note), a cable from EG 1 into the VCA: below
 //              -70 dB rel over 0.5 s of audio time (no drone; the transport closes the
 //              Keys-gated envelopes at arm, and an EG cable rests at 0)
+//   s-dadsr    K230 (desktop and phone): EG 1's Delay turns by a pointer drag (a touch drag on
+//              the phone: a trusted one through CDP in chromium; firefox and webkit drive no held
+//              trusted touch, so there the phone leg drags with the pointer) and EG 2's Hold by
+//              ArrowUp, each one undo entry; with EG 1 patched into the VCA and its Delay typed
+//              0.6 s, a held key stays below -70 dB rel for 0.4 s of audio time and then sounds
+//              (named deadlines); the Studio graph's EG cards and the Inspector show the Delay
+//              and the Hold at the revision the Synth left
 //   s-armstall the first Arm with the page's main thread stalled inside the apply (every
 //              AudioNode.connect busy-waits 20 ms, as a loaded host did): from the click until
 //              0.5 s of audio time after armed, the analyser never reads above -70 dB rel (the
@@ -209,7 +216,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert']);
+  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -355,6 +362,102 @@ function defineChecks() {
     }
     const after = await quiet(page, -70, 0.5, 'an EG cable into the VCA rests at 0');
     return { ok: true, before, after };
+  });
+
+  // K230: EG 1's Delay and EG 2's Hold on the face, heard and shown in the Studio.
+  def('s-dadsr', async ({ page, size }) => {
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const param = (cid) => page.evaluate((c) => {
+      const [m, k] = c.split('.');
+      const id = window.OSCILLA.app.synthDebug().nodes[m];
+      const n = window.OSCILLA.studio.store.getModel().graph.nodes.find((x) => x.id === id);
+      return n ? n.params[k] : null;
+    }, cid);
+    const out = {};
+    await face(page, 'panel');
+    // The Delay by a drag: the pointer, or a finger on the phone.
+    const delay = knob(page, 'eg1.delay');
+    await delay.scrollIntoViewIfNeeded();
+    const b = await delay.boundingBox();
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    const d0 = await depth();
+    const chromium = page.context().browser().browserType().name() === 'chromium';
+    if (size === 'phone' && chromium) {
+      const cdp = await page.context().newCDPSession(page);
+      const touch = (type, y) => cdp.send('Input.dispatchTouchEvent', { type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x: cx, y }] });
+      await touch('touchStart', cy);
+      for (let i = 1; i <= 6; i++) await touch('touchMove', cy - 10 * i);
+      await touch('touchEnd');
+      out.drag = 'touch (CDP)';
+    } else {
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 60, { steps: 6 });
+      await page.mouse.up();
+      out.drag = 'pointer';
+    }
+    await until(async () => (await param('eg1.delay')) > 0, { ms: 5000,
+      what: `a ${out.drag} drag turns EG 1's Delay up from 0` });
+    await until(async () => (await depth()) === d0 + 1, { ms: 5000,
+      what: 'the Delay drag is one undo entry' });
+    out.dragged = await param('eg1.delay');
+    // The Hold by keyboard.
+    const h0 = await depth();
+    await keyKnob(page, 'eg2.hold', 'ArrowUp');
+    await until(async () => (await param('eg2.hold')) > 0, { ms: 5000,
+      what: 'ArrowUp turns EG 2\'s Hold up from 0' });
+    await until(async () => (await depth()) === h0 + 1, { ms: 5000,
+      what: 'the Hold key is one undo entry' });
+    out.hold = await param('eg2.hold');
+    // Heard: EG 1 into the VCA (it breaks EG 2's normal), its Delay typed 0.6 s.
+    await typeKnob(page, 'eg1.delay', '0.6');
+    await until(async () => (await param('eg1.delay')) === 0.6, { ms: 5000,
+      what: 'the Delay typed 0.6 s' });
+    await tapJack(page, 'eg1.control:out');
+    await tapJack(page, 'vca.gain:in');
+    const d = await dbg(page);
+    if (!d.cables.some((c) => c.from === 'eg1.control' && c.to === 'vca.gain')) {
+      return { ok: false, detail: 'EG 1 into the VCA is not patched', cables: d.cables };
+    }
+    await hold(page, 'KeyA');
+    out.during = await quiet(page, -70, 0.4, 'a key held through the Delay stays silent');
+    const p = await sound(page, (q) => q.rmsDb > -50, 'the key sounds after the Delay');
+    out.after = p.rmsDb;
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the note releases below -70 dB rel');
+    // Shown in the Studio graph and Inspector at the Synth's revision.
+    const rev = await page.evaluate(() => window.OSCILLA.studio.store.getRevision());
+    const [delayS, holdS] = [await param('eg1.delay'), await param('eg2.hold')];
+    await page.locator('[data-osc="synth.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'Studio opens' });
+    const sum = (id) => page.locator(`[data-node-id="${id}"] .osc-sg-sum`).textContent()
+      .catch(() => '');
+    const ms = (v) => `${Math.round(v * 1000)} ms`;
+    const graph = page.locator('[data-osc="studio.subview"][data-value="graph"]');
+    if (await graph.isVisible()) await graph.click();
+    await until(async () => (await sum(d.nodes.eg1)).includes(`Zp ${ms(delayS)}`)
+      && (await sum(d.nodes.eg2)).includes(`V ${ms(holdS)}`), { ms: 10000,
+      what: 'the graph cards show EG 1\'s Delay and EG 2\'s Hold' });
+    out.cards = [await sum(d.nodes.eg1), await sum(d.nodes.eg2)];
+    const tab = page.locator('[data-osc="studio.subview"][data-value="inspector"]');
+    const field = (key) => page.locator(`[data-osc="studio.inspector.param"][data-key="${key}"]`)
+      .inputValue().catch(() => '');
+    const shows = async (id, key, v) => {
+      await page.evaluate((n) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+        selection: { nodes: [n] } }), id);
+      if (await tab.isVisible()) await tab.click();
+      await until(async () => Math.abs(Number((await field(key)).replace(',', '.')) - v) < 1e-9,
+        { ms: 10000, what: `the Inspector shows ${key} ${v} s` });
+      return field(key);
+    };
+    out.inspector = [await shows(d.nodes.eg1, 'delay', delayS),
+      await shows(d.nodes.eg2, 'hold', holdS)];
+    out.sameRevision = rev === await page.evaluate(() => window.OSCILLA.studio.store
+      .getRevision());
+    return { ok: out.sameRevision, ...out };
   });
 
   def('s-armstall', async ({ page }) => {

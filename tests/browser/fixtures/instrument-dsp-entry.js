@@ -18,6 +18,9 @@
 // probability draws with core/math.js mulberry32 directly. census*: the same document on a
 // running AudioContext (the real AudioEngine), so the runner can STOP it with a ratchet
 // pending and read the node census once the stop resolves.
+//
+// K230 (dadsr): the same notes document with the Envelope's delay and hold set, one note held
+// past every stage; its contour against the stage times computed here from the parameters.
 
 import { AudioEngine } from '../../../src/js/audio/audio-engine.js';
 import { mulberry32 } from '../../../src/js/core/math.js';
@@ -31,6 +34,7 @@ import {
   PITCH_CLIP_POINTS, PITCH_SPAN_OCT, pitchCeilingOct, vcoBaseHz,
 } from '../../../src/js/studio/adapters/instrument.js';
 import { RENDER_QUANTUM, SAFE_NYQUIST_FACTOR } from '../../../src/js/core/constants.js';
+import { ENVELOPE_FLOOR } from '../../../src/js/audio/envelope.js';
 
 /** The rates the renders request; every figure reads the rendered buffer's own sampleRate. */
 // timing-allow: the OfflineAudioContext render rates the criterion names (44.1 and 48 kHz)
@@ -193,7 +197,7 @@ async function glide({ from = 57, to = 69, glide: g = 0.1, sampleRate }) {
 const ADSR = { attack: 0.002, decay: 0.01, sustain: 0.5, release: 0.005 };
 
 /** The K068 document (see the header) at `tempo` with the notes clip `{ notes, grid }`. */
-function notesDocument({ tempo = 120, notes, grid = null, glide = 0, beats = 4 }) {
+function notesDocument({ tempo = 120, notes, grid = null, glide = 0, beats = 4, adsr = ADSR }) {
   const empty = normalizeStudio({ kind: STUDIO_KIND, schemaVersion: 1,
     graph: { nodes: [], edges: [] } });
   const st = createStudioStore(empty, { idGenerator: createIdGenerator(empty) });
@@ -209,7 +213,7 @@ function notesDocument({ tempo = 120, notes, grid = null, glide = 0, beats = 4 }
   const out = add('master');
   must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: keys, key: 'glide', value: glide }), 'glide');
   must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: vco, params: { waveform: 'sine' } }), 'vco');
-  must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: env, params: ADSR }), 'envelope');
+  must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: env, params: adsr }), 'envelope');
   const edge = (from, fp, to, tp, props) => must(st.dispatch({ type: 'EDGE_ADD',
     from: { node: from, port: fp }, to: { node: to, port: tp }, props }), `${fp} edge`);
   edge(keys, 'pitch', vco, 'pitch', { depth: 6, polarity: 'bipolar', mapping: 'linear' });
@@ -352,6 +356,41 @@ async function chance({ sampleRate, seed = 1, other = 2 }) {
     otherHits: stepOf(c), otherWant: want(other) };
 }
 
+/**
+ * K230: one note held past every stage of an Envelope with `delay` and `hold`; the contour's
+ * stage starts against the times computed from the parameters (gate + delay: the attack; +
+ * attack: the peak; + hold: the decay), and its level through the delay and the hold in dB.
+ * -> { sampleRate, want, got (frames), delayMaxDb, holdMinDb }
+ */
+async function dadsr({ sampleRate, delay, hold }) {
+  const adsr = { attack: 0.01, decay: 0.05, sustain: 0.5, release: 0.02, delay, hold };
+  const r = await renderNotes({ sampleRate, adsr, notes: [{ at: 1, note: 69, len: 1,
+    vel: 1 }] });
+  const sr = r.sampleRate;
+  const c = r.contour;
+  const gate = frameOf(r, 1);
+  const at = (s) => gate + Math.round(s * sr);
+  const want = { attack: at(delay), peak: at(delay + adsr.attack),
+    decay: at(delay + adsr.attack + hold) };
+  const top = 1 - 1e-4; // the peak, as a float32 linear ramp reaches it
+  const first = (from, test) => {
+    for (let i = from; i < c.length; i++) if (test(c[i])) return i;
+    return null;
+  };
+  const rise = first(gate, (v) => v > 2 * ENVELOPE_FLOOR);
+  const peak = rise === null ? null : first(rise, (v) => v >= top);
+  const fall = peak === null ? null : first(peak, (v) => v < top);
+  const db = (v) => 20 * Math.log10(Math.max(v, 1e-12));
+  let delayMax = 0;
+  for (let i = gate; i < want.attack; i++) delayMax = Math.max(delayMax, c[i]);
+  let holdMin = Infinity;
+  for (let i = want.peak + 1; i < want.decay; i++) holdMin = Math.min(holdMin, c[i]);
+  return { sampleRate: sr, want, got: { attack: rise === null ? null : rise - 1, peak,
+    decay: fall === null ? null : fall - 1 },
+  delayMaxDb: want.attack > gate ? db(delayMax) : null,
+  holdMinDb: want.decay > want.peak + 1 ? db(holdMin) : null };
+}
+
 // The census: the same document on a running AudioContext, stopped with a ratchet pending.
 const C = { engine: null, runtime: null, transport: null, done: null, stopAt: null };
 
@@ -383,5 +422,5 @@ function censusDone() {
     noteRecords: C.transport.debugInfo().noteCount, keysLeft: keys.length };
 }
 
-window.K = { RATES, track, glide, clampHz, midiHz, swingGrid, ratchet, slide, chance,
+window.K = { RATES, track, glide, clampHz, midiHz, swingGrid, ratchet, slide, chance, dadsr,
   censusStart, censusNow, censusStop, censusDone };
