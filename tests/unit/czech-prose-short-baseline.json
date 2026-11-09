@@ -1,6 +1,6 @@
 {
   "note": "Short English the app still shows, per file: labels, buttons, headings and short announcements the sentence measure cannot see (scripts/czech-prose-short.mjs, plan U098, rule project.czech-prose, Q104). A count only falls and a file not listed has none. Lower it in the change that translates; never raise it.",
-  "total": 1927,
+  "total": 1925,
   "counts": {
     "src/index.html": 299,
     "src/js/analysis/compare.js": 2,
@@ -29,6 +29,7 @@
     "src/js/core/constants.js": 4,
     "src/js/core/frequency.js": 1,
     "src/js/core/instrument.js": 43,
+    "src/js/core/output-bus.js": 2,
     "src/js/core/platform.js": 3,
     "src/js/core/preset-notice.js": 4,
     "src/js/core/storage.js": 3,
@@ -196,7 +197,6 @@
     "src/js/ui/measure/test-seam.js": 1,
     "src/js/ui/measure/views.js": 6,
     "src/js/ui/navigation.js": 3,
-    "src/js/ui/output-owner.js": 3,
     "src/js/ui/p5-views.js": 6,
     "src/js/ui/patch-browser.js": 15,
     "src/js/ui/patch/patch-bay.js": 2,
@@ -227,7 +227,7 @@
     "src/js/ui/studio/workspace.js": 2,
     "src/js/ui/studio/workspace/document.js": 3,
     "src/js/ui/studio/workspace/files.js": 17,
-    "src/js/ui/studio/workspace/graph.js": 2,
+    "src/js/ui/studio/workspace/graph.js": 1,
     "src/js/ui/studio/workspace/measurement.js": 1,
     "src/js/ui/studio/workspace/navigation.js": 13,
     "src/js/ui/studio/workspace/runtime.js": 6,

@@ -100,7 +100,8 @@ export function mountPatchBrowser(host, svc) {
     hush();
     const r = entryAction(svc.store.getModel(), item, mode, { target: svc.target() });
     const res = r.action ? svc.store.dispatch(r.action) : { ok: false, reason: r.reason };
-    const text = res.ok ? `${MODES.find((m) => m[0] === mode)[1]}: ${item.name}.`
+    // An action that says what it did (the panel's Insert names the Master feed it took, K225).
+    const text = res.ok ? (r.text || `${MODES.find((m) => m[0] === mode)[1]}: ${item.name}.`)
       : announceAction(res);
     status.textContent = res.ok ? text : res.reason;
     svc.announce(text, { assertive: !res.ok });

@@ -154,9 +154,14 @@ import { effectiveTarget } from './timeline.js';
 import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
-import { createLiveNotes, gateTargets, keysGatedEnvelopes, liveModel } from './live-notes.js';
+import {
+  LIVE_NOTES_TEXT, createLiveNotes, keysGatedEnvelopes, liveModel,
+} from './live-notes.js';
 import { createNotePlayer, notesSteps } from './note-player.js';
-import { createTriggerFanout, reachedEnvelopes } from './trigger-fanout.js';
+import {
+  createTimelineOwner, createTriggerFanout, reachedEnvelopes,
+} from './trigger-fanout.js';
+import { transportClockOf } from '../audio/clock.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -276,11 +281,14 @@ export function createStudioTransport({
   // This run began armed (K104, the owner's 'STOP keeps it armed', 2026-11-03): a user STOP
   // (stop({ keepArmed: true })) returns it to the armed run instead of stopping the runtime.
   let armedRun = false;
-  const live = createLiveNotes({ getModel: () => model, handleOf: (id) => ready(id) });
+  // K103's one ownership rule: while the timeline plays, a live gate on a TRIGGER input it
+  // drives is refused (trigger-fanout.js timelineGateInputs).
+  const owns = createTimelineOwner(() => model, registry);
+  const live = createLiveNotes({ getModel: () => model, handleOf: (id) => ready(id),
+    owner: (id) => (playing && !armedOnly && owns(id) ? LIVE_NOTES_TEXT.timelineOwned(nameOf(id))
+      : null) });
   const notes = createNotePlayer({ getModel: () => model, ready: (id) => ready(id), registry,
-    gate: (it, env, deferred) => addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime,
-      deferred),
-    clock: (it, id) => triggers.tick(`${it.key}>${id}`, it, id),
+    fan: (it, id, deferred) => triggers.fanOut(it, id, it.key, deferred),
     played: (it, code, reason) => {
       if (code === null) return unplayed.delete(it.clipId);
       const raw = runtime.nodes.get(it.target);
@@ -375,13 +383,16 @@ export function createStudioTransport({
       warn('measurement-callback-failed', `Measurement callback: ${messageOf(e)}`);
     }
   };
+  // The engine's one transport clock wakes it and the sequencer's loop (C055).
+  const clock = transportClockOf(engine);
+  const wakeKey = {};
   const clearTimer = () => {
-    if (timer != null) hooks.timers.clearTimeout(timer);
+    if (timer != null) clock.cancel(timer);
     timer = null;
   };
   const arm = (ms) => {
     clearTimer();
-    timer = hooks.timers.setTimeout(tick, Math.max(1, Math.round(ms)));
+    clock.wake((timer = wakeKey), Math.max(1, Math.round(ms)), tick);
   };
 
   // ------------------------------------------------------------ ownership
@@ -839,11 +850,9 @@ export function createStudioTransport({
     if (!v.plays) return skip(it, 'event-target', v.reason);
     unplayed.delete(it.clipId);
     if (v.how === 'keys-gate') {
-      // K060: a gate on a Keys node is a gate on each Envelope its unmuted Gate edges reach,
-      // one gate record each (live-notes.js gateTargets), as a key held for the clip would be.
-      for (const env of gateTargets(model, it.target).envelopes) {
-        addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime, deferred);
-      }
+      // K060, K103: a gate on a Keys node is its Gate along its TRIGGER edges for the clip, as a
+      // key held for the clip would be: each Envelope, clocked node and Step relay it reaches.
+      triggers.fanOut(it, it.target, it.key, deferred);
       return null;
     }
     // A trigger on an Envelope is one pulse: its attack and decay once, then the release.
