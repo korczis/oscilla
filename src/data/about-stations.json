@@ -238,6 +238,10 @@
       "summary": "Záložka Bicí hraje šest řádků jednoho notes clipu se šesti pady a nahrává údery; pás krokového sekvenceru nad Synthem hraje klávesy panelu ve smyčce a notes clip se dá kreslit jako step grid v Inspectoru Studia; uzel Clock a trigger hrany rozvádějí takt, sekvencer i Studio běží z jedněch hodin a každé přehrávání se hlásí jedné sběrnici; oscilátory mají unisono a synchronizaci s tempem, filtry strmost 24 dB/okt",
       "commit": "503bb9f",
       "datetime": "2026-11-09T16:34:25+01:00"
+    },
+    {
+      "title": "Dva pady",
+      "summary": "Pod panelem Synthu jsou dva pady jedné implementace: pad L ladí přes normály Cutoff LPF a HPF, pad R hraje noty zvolené tóniny a stupnice a jeho osa Y je nově síla úhozu, už ne filtr; nový dokument proto nevede kabel z osy Y do filtru a starší dokumenty si ho ponechají"
     }
   ]
 }
