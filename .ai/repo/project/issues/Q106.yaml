@@ -1,0 +1,26 @@
+id: Q106
+milestone: M054
+serves:
+  - "ui-current#about-tells-the-project"
+title: "Owner decision: /proceed works in OSCILLA; Majordomus is upgraded to 1.0.1 once it is published, and the skill is generated for the adopter"
+slug: owner-decision-proceed-skill-and-majordomus-1-0-1
+priority: p2
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's question and answer of 2026-11-09 (Claude Code session c9ae388a-1265-4c28-8fad-5fdaea45ef04, oscilla-43, ~17:20Z). The owner asked, verbatim: 'jaktoze zas nefunguje prikaz \"/proceed\" mame posledni verzi majordomus?'. Found: OSCILLA never had .claude/skills/proceed/SKILL.md (the skill is generated only inside prismatic-majordomus by `majordomus generate editors`); the installed Majordomus is 1.0.0; v1.0.1 is tagged in prismatic-majordomus but not published (no GitHub release, https://majordomus.dev/releases/v1.0.1.json answers 404). The question asked (AskUserQuestion), verbatim: '`/proceed` doesn't work in OSCILLA because the skill file (.claude/skills/proceed/SKILL.md) only exists in the prismatic-majordomus repo, which generates it for itself. OSCILLA never had it (git history is empty for it). The installed Majordomus is 1.0.0; the latest is v1.0.1. The capability itself works in 1.0.0 (`majordomus proceed step` / MCP `majordomus_proceed_step`). What should I do?' The answer, verbatim: 'Upgrade + skill (Recommended)', whose option read: 'Upgrade the global majordomus to 1.0.1, raise OSCILLA's pin to 1.0.1 on a branch (chore/majordomus-1.0.1, CI MJ_VERSION), generate .claude/skills/proceed in OSCILLA, and land it in the next train. If 1.0.1 can't generate the skill for an adopter, file an issue in Majordomus.'"
+why: "The owner's direct answer; recorded the same session (owner answers live in the repository)."
+current_state: "Decided 2026-11-09. The upgrade could not run: 1.0.1 is not published, so the installer refused and 1.0.0 stays. The skill is added now as .claude/skills/proceed/SKILL.md, the text prismatic-majordomus generates, against the proceed.step capability that 1.0.0 already serves. Open: raise the pin to 1.0.1 when it is published, and have Majordomus generate the skill for an adopter instead of the copy."
+scope:
+  - ".ai/repo/project/issues/Q106.yaml"
+  - ".claude/skills/proceed/SKILL.md"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence (covers owner_decision) quoting the question and the answer with date and session."
+  - "In Claude Code in OSCILLA, /proceed runs proceed.step with the typed text as its intent."
+  - "When Majordomus 1.0.1 is published, OSCILLA's pin (CI MJ_VERSION, scripts/majordomus-pin-check.mjs) moves to it on a branch, and the skill comes from Majordomus's generation for an adopter, or an issue in Majordomus says why it cannot."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
