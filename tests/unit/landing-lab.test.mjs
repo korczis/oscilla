@@ -135,12 +135,21 @@ test('expectedLab regenerates a commit behind HEAD from its own tree, never from
     git('commit', '--quiet', '-m', 'new generator');
     const head = git('rev-parse', 'HEAD');
 
+    // A foreign worktree whose directory is momentarily missing: its record must survive.
+    const foreign = path.join(dir, '..', `${path.basename(dir)}-foreign`);
+    git('worktree', 'add', '--detach', '--quiet', foreign, before);
+    rmSync(foreign, { recursive: true, force: true });
+    const records = () => git('worktree', 'list', '--porcelain').split('\n')
+      .filter((l) => l.startsWith('worktree ')).length;
+    assert.equal(records(), 2);
+
     const atHead = await expectedLab({ root: dir, commit: head });
     assert.equal(atHead.get('index.html').toString(), `new ${head}`);
     const behind = await expectedLab({ root: dir, commit: old });
     assert.equal(behind.get('index.html').toString(), `old ${old}`);
     assert.equal(await expectedLab({ root: dir, commit: before }), null);
-    assert.equal(git('worktree', 'list').split('\n').length, 1, 'the temporary worktree is removed');
+    assert.equal(records(), 2, 'the temporary worktree is removed and the foreign one kept');
+    assert.match(git('worktree', 'list', '--porcelain'), /-foreign/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

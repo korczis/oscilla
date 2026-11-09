@@ -184,11 +184,12 @@ export function checkLabFile({ name, status, contentType, body, expected }) {
  * charts and the screenshots), regenerated at `commit`. When `commit` is not this checkout's
  * HEAD (the release task's closing check runs after main has moved on), the landing is
  * regenerated from a temporary detached worktree of `commit` that borrows this checkout's
- * node_modules, and the worktree is removed afterwards; it is never skipped. A commit whose tree
+ * node_modules, and only that worktree is removed afterwards; it is never skipped. A commit whose tree
  * has no scripts/landing.mjs (before Q107) deployed no landing: null, and nothing is compared.
  */
-export async function expectedLab({ root, commit }) {
-  const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+export async function expectedLab({ root, commit, warn = (m) => console.error(m) }) {
+  const git = (args, cwd = root) => execFileSync('git', args,
+    { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   const head = git(['rev-parse', 'HEAD']);
   const want = git(['rev-parse', '--verify', `${commit}^{commit}`]);
   if (want === head && existsSync(path.join(root, 'scripts', 'landing.mjs'))) {
@@ -210,9 +211,15 @@ export async function expectedLab({ root, commit }) {
     const at = await import(new URL(`file://${path.join(tree, 'scripts', 'landing.mjs')}`));
     return await at.generateLanding({ root: tree, commit: want });
   } finally {
-    try { git(['worktree', 'remove', '--force', tree]); } catch { /* removed below */ }
+    // Only this run's own worktree is removed: no repository-wide prune, which on a shared
+    // machine could drop another session's worktree record whose directory is briefly absent.
+    try {
+      git(['worktree', 'remove', '--force', tree]);
+    } catch (e) {
+      warn(`  lab: could not remove the temporary worktree ${tree}: ${e.message}; `
+        + `remove it with: git worktree remove --force ${tree}`);
+    }
     rmSync(dir, { recursive: true, force: true });
-    try { git(['worktree', 'prune']); } catch { /* best effort */ }
   }
 }
 
