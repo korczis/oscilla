@@ -135,3 +135,80 @@ test('#444: the Studio route\'s stacked width is studio.css\'s one-panel breakpo
     + '\\.osc-studio\\s*\\{[^}]*grid-template-columns: minmax\\(0, 1fr\\);'),
   'the Studio stacks below the width the route keeps its toolbar at');
 });
+
+// K178 criterion 1: one module owns the keyboard state (octave, velocity, held notes, lights,
+// armed) for the on-screen keys, QWERTY and MIDI, and no workspace keeps its own copy. The
+// routes and the arm map have their one owner (routes.js, above); the octave, the velocity and
+// the lit notes live in the one keyboard midi/keyboard.js creates, made once, by keyboard-ui.js;
+// the held notes in the one map midi/held-notes.js creates, made once, by notes.js; and the
+// velocity constants are read only where that keyboard keeps the velocity. A module that makes a
+// second keyboard or held map, or keeps a velocity of its own from those constants, is a second
+// owner.
+const STATE_OWNERS = [
+  { what: 'the keyboard (octave, velocity, lit notes)', re: /\bcreateKeyboard\s*\(/g,
+    allowed: { 'src/js/midi/keyboard.js': 'defines', 'src/js/midi/keyboard-ui.js': 1 } },
+  { what: 'the held notes', re: /\bcreateHeldNotes\s*\(/g,
+    allowed: { 'src/js/midi/held-notes.js': 'defines', 'src/js/midi/notes.js': 1 } },
+  { what: 'the velocity', re: /\b(?:DEFAULT_VELOCITY|VELOCITY_STEP|MIN_VELOCITY|MAX_VELOCITY)\b/g,
+    allowed: { 'src/js/midi/keyboard.js': 'defines' } },
+];
+
+/** Every second owner of the keys' state in `files` ({ 'src/js/...': text }). */
+function secondOwners(files) {
+  const bad = [];
+  for (const { what, re, allowed } of STATE_OWNERS) {
+    for (const [file, text] of Object.entries(files)) {
+      const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      const n = (code.match(re) || []).length;
+      if (!n) continue;
+      const ok = allowed[file];
+      if (ok === 'defines') continue;
+      if (ok === undefined) bad.push(`${file}: a second owner of ${what}`);
+      else if (n > ok) bad.push(`${file}: ${n} of ${what}, at most ${ok}`);
+    }
+  }
+  return bad;
+}
+
+function sources() {
+  const files = {};
+  const walk = (d) => {
+    for (const e of readdirSync(path.join(ROOT, d), { withFileTypes: true })) {
+      const p = `${d}/${e.name}`;
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.js')) files[p] = readFileSync(path.join(ROOT, p), 'utf8');
+    }
+  };
+  walk('src/js');
+  return files;
+}
+
+test('K178 c1: one owner of the keys\' octave, velocity, held notes and lights', () => {
+  const files = sources();
+  assert.deepEqual(secondOwners(files), [], 'a second owner of the keys\' state');
+  // Each owner is made where the table says, so the guard is not vacuous.
+  assert.match(files['src/js/midi/keyboard-ui.js'], /\bcreateKeyboard\s*\(/);
+  assert.match(files['src/js/midi/notes.js'], /\bcreateHeldNotes\s*\(/);
+  assert.match(files['src/js/midi/keyboard.js'], /let velocity = DEFAULT_VELOCITY/);
+});
+
+test('K178 c1, seeded: a second keyboard, held map or velocity is refused', () => {
+  const files = sources();
+  const seeds = [
+    ['src/js/synth/second-keys.js', 'const kb = createKeyboard({ play });', 'the keyboard'],
+    ['src/js/ui/second-held.js', 'const held = createHeldNotes();', 'the held notes'],
+    ['src/js/labs/second-velocity.js', 'let velocity = DEFAULT_VELOCITY;', 'the velocity'],
+  ];
+  for (const [file, text, what] of seeds) {
+    const bad = secondOwners({ ...files, [file]: text });
+    assert.equal(bad.length, 1, `${file}: refused`);
+    assert.match(bad[0], new RegExp(`${file.replace(/[/.]/g, '\\$&')}: a second owner of ${what}`));
+  }
+  // A second keyboard made by the one owner itself is refused too.
+  const twice = { ...files, 'src/js/midi/keyboard-ui.js':
+    `${files['src/js/midi/keyboard-ui.js']}\nconst again = createKeyboard({});` };
+  assert.match(secondOwners(twice).join(), /keyboard-ui\.js: 2 of the keyboard/);
+  // A mention in a comment is no owner.
+  assert.deepEqual(secondOwners({ ...files, 'src/js/x.js': '// createKeyboard() lives in midi' }),
+    []);
+});

@@ -40,8 +40,10 @@ The flow, in the order it is practised. Each step names what holds it in place.
    while the newest release has no record, and refuses the first stable release of a new
    major that no published `vX.0.0-rc.N` preceded. "First stable release of a new major" is
    any stable version whose major is above every stable tag in the history: `X.0.0`, and
-   equally `X.0.1` or `X.1.0` typed into `package.json`. It bumps once, rebuilds, runs the
-   full gate and writes the receipt. The first candidate of a major is cut with
+   equally `X.0.1` or `X.1.0` typed into `package.json`. It bumps once, rebuilds and runs
+   `npm run verify` with the roadmap check, and writes no receipt: the gate verdict is the CI
+   run of the release pull request (the CI receipt, ADR 0082). `-- --local-gate` instead runs
+   the full gate here and writes the local receipt. The first candidate of a major is cut with
    `npm run release:prepare -- --prerelease`, and who sets its version depends on the
    commits. With a breaking commit since the last tag the script proposes `X.0.0-rc.1`
    itself. Without one it proposes a candidate of the next minor or patch, so the operator
@@ -53,14 +55,17 @@ The flow, in the order it is practised. Each step names what holds it in place.
    and the candidate refusal above then stops it. Once the candidate is published and
    recorded, a plain `release:prepare` proposes `X.0.0` even when no releasable commit
    followed the candidate.
-3. **The `chore(release): vX.Y.Z` pull request, merged by auto-merge** behind the required
-   `gate` check. It is the only pull request armed while a release is in flight: any other
-   merge to main changes the gate tree and the publish refuses until the gate is re-run
-   (`project.release-receipt-binds-gate`).
-4. **`npm run release:publish`, then `-- --yes`**, from a checkout of main at `origin/main`
-   that has the receipt (the receipt lives in the common git directory, so a linked worktree
-   of the clone that prepared it sees it; a separate fresh clone needs the receipt file copied
-   into its `.git/`). It refuses without a matching receipt, on a dirty tree, off main, when
+3. **The `chore(release): vX.Y.Z` pull request, merged by auto-merge with a merge commit**
+   (`gh pr merge <n> --auto --merge`) behind the required `gate` check; its CI run is the
+   gate verdict the CI receipt judges. It is the only pull request armed while a release is
+   in flight: any other merge to main changes the tree the verdict binds and the publish
+   refuses until a new verdict exists (`project.release-receipt-binds-gate`).
+4. **`npm run release:publish`, then `-- --yes`**, from a checkout of main at `origin/main`.
+   It accepts the CI receipt (main's HEAD is the merge of the release pull request, with the
+   tree its newest green CI run tested) or a local receipt from `--local-gate` (which lives in
+   the common git directory, so a linked worktree of the clone that prepared it sees it; a
+   separate fresh clone needs the receipt file copied into its `.git/`). It refuses without a
+   verdict that binds the tree, on a dirty tree, off main, when
    HEAD is not `origin/main`, when the tag exists, when `build:check` fails, while a Pages
    run is stuck and when the Pages runs cannot be listed. It tags, pushes the tag, waits for
    a job of the Pages run of HEAD to start, watches the run, runs `verify-deploy` against
@@ -213,9 +218,9 @@ Not mechanically enforced, and stated as such:
 
 - that dist-changing pull requests land one at a time. `build:check` in the `gate` and in
   `pages.yml` refuses a stale committed dist, and two such pull requests normally conflict in
-  `dist/index.html`, but no check orders them, and since 2026-10-30 branch protection does
-  not require an up-to-date branch (`strict: false`), so a stale dist that does not conflict
-  is first refused by `pages.yml` on `main`, which then does not deploy;
+  `dist/index.html`; branch protection requires an up-to-date branch (`strict: true`, again
+  after the relaxation of 2026-10-30), so each lands rebuilt on the main it merges into, but
+  no check orders them;
 - that auto-merge stays unarmed during a release. The consequence is enforced
   (`project.release-receipt-binds-gate`), the abstention is not;
 - that the record pull request uses the branch name above, and that the task is closed with

@@ -57,3 +57,9 @@ What replaced it, by practice and by ADR 0009 rather than by a superseding ADR:
   its own scope.
 
 The status stays `proposed`; whether to mark it `superseded` is the owner's call.
+
+### 2026-11-03: merge commits only
+
+Pull requests land by merge commit (`gh pr merge --auto --merge`); squash merging has been
+disabled on the repository since 2026-10-29 (read from GitHub on 2026-11-03), so the
+`--squash` in the decision above is historical. ADR 0009's note of the same date has the rest.
