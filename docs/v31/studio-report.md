@@ -51,7 +51,7 @@ no audio node; the compiler builds each one with the existing engine's builders 
 | Category | Count | Node types |
 | --- | --- | --- |
 | Sources | 11 | Oscillator `oscillator`, Noise `noise`, Sweep `sweep`, Sequence `sequence`, Microphone `microphone`, VCO `vco`, Additive engine `additive-voice`, FM engine `fm-voice`, AM/ring engine `am-voice`, Wavetable engine `wavetable-voice`, Percussion engine `perc-voice` |
-| Modulation | 8 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro`, Clock `clock`, Keys `keys`, XY Pad `xy-pad` |
+| Modulation | 9 | LFO `lfo`, Envelope `envelope`, Random `random`, Step Modulator `step-modulator`, Macro `macro`, Clock `clock`, Keys `keys`, XY Pad `xy-pad`, Contour `contour` |
 | Processing | 7 | Gain `gain`, Filter `filter`, Pan `pan`, Stereo Split `stereo-split`, Mixer `mixer`, Drive `drive`, Ring `ring` |
 | Analysis | 5 | Scope `scope`, Spectrum `spectrum`, Spectrogram `spectrogram`, Meter `meter`, RTA `rta` |
 | Output | 2 | Master Output `master`, Recorder/Export `recorder` |

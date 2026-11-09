@@ -92,6 +92,7 @@ export const NODE_ADAPTERS = Object.freeze({
   'transfer-analyzer': dataNode('measurement/transfer.js#computeTransfer'),
   'measurement-result': dataNode('experiments/schema.js#withResults'),
   keys: instrument.keys, vco: instrument.vco, ring: instrument.ring, 'xy-pad': instrument.xyPad,
+  contour: instrument.contour,
   'additive-voice': engines.additiveVoice, 'fm-voice': engines.fmVoice,
   'am-voice': engines.amVoice, 'wavetable-voice': engines.wavetableVoice,
   'perc-voice': engines.percVoice,

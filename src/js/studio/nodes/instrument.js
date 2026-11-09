@@ -1,8 +1,10 @@
 // Studio node types of the Synth panel (plan K059, K060; design synth-design.md §1, §4): Keys
 // (the note source the keyboard, MIDI and the panel's gate fan-out drive), VCO (an oscillator
 // whose pitch is a linear octave input, so a keyboard tracks it exactly) and Ring (ring and
-// amplitude modulation of two audio signals), and the XY Pad (plan K097: X, Y and a pitch
-// quantised to a scale of core/music.js, gated while touched). K060 added Key low and Key high
+// amplitude modulation of two audio signals), the XY Pad (plan K097: X, Y and a pitch
+// quantised to a scale of core/music.js, gated while touched) and Contour (plan K207: a
+// gate-driven attack, hold and release control, 0 to 1, with invert; adapters/instrument.js
+// schedules it with audio/envelope.js). K060 added Key low and Key high
 // to Keys: a saved document holding a Keys node takes their defaults on load, so its
 // studioHash changes once (a hash epoch for documents with Keys; no pinned template holds one).
 //
@@ -13,9 +15,10 @@
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { NOTE_NAMES, SCALE_LABELS, SCALE_MODES, midiToName, scaleNote } from '../../core/music.js';
 import { definePort } from '../ports.js';
+import { MIN_SEGMENT_S } from '../../audio/envelope.js';
 import {
-  CATEGORIES, defineNode, enumParam, integerParam, numberParam, optionLabel, parts, secondsParam,
-  secs,
+  CATEGORIES, boolParam, defineNode, enumParam, integerParam, numberParam, optionLabel, parts,
+  secondsParam, secs,
 } from './common.js';
 
 /** The Keys pitch output: octaves from A4, the range its edges are sized from. */
@@ -199,4 +202,42 @@ export const xyPad = defineNode({
   },
 });
 
-export default [keys, vco, ring, xyPad];
+export const contour = defineNode({
+  type: 'contour',
+  displayName: 'Contour',
+  idPrefix: 'contour',
+  category: CATEGORIES.MODULATION,
+  aliases: ['ahr', 'ar', 'gate contour', 'obrys', 'řídicí obálka', 'náběh držení doznění'],
+  inputs: [definePort({ id: 'gate', direction: 'in', type: 'TRIGGER', label: 'Brána',
+    channels: 1, rate: 'event', unconnected: 'brána otevřená od startu grafu', monitor: false,
+    compact: false, version: 1 })],
+  outputs: [definePort({ id: 'control', direction: 'out', type: 'CONTROL', label: 'Řízení',
+    channels: 1, rate: 'a-rate', monitor: false, compact: false, version: 1 })],
+  params: [
+    secondsParam('attack', 'Náběh', 0.01, MIN_SEGMENT_S, 10, { live: 'next-gate' }),
+    secondsParam('hold', 'Držení', 0, 0, 10, { live: 'next-gate' }),
+    secondsParam('release', 'Doznění', 0.3, MIN_SEGMENT_S, 10, { live: 'next-gate' }),
+    // structural: the adapter rebuilds the node (crossfaded), never a step on a running output
+    boolParam('invert', 'Obrátit', false, { live: 'crossfade' }),
+  ],
+  summary(p) {
+    return parts(`A ${secs(p.attack)}`, p.hold > 0 ? `H ${secs(p.hold)}` : null,
+      `R ${secs(p.release)}`, p.invert ? 'obráceně' : null);
+  },
+  clipKinds: ['event'],
+  capabilities: { realtime: true, offline: true },
+  compiler: 'audio/envelope.js#applyAdsr',
+  reuses: ['audio/envelope.js#releaseAt'],
+  help: {
+    what: 'Řídicí obrys spouštěný bránou: po otevření brány stoupne lineárně za dobu Náběh '
+      + 'k 1, drží se, a po zavření brány klesne za dobu Doznění k dolní mezi obálky.',
+    inputs: 'Brána, spouštěč (brána uzlu Keys nebo XY Pad, klip událostí jeho stopy).',
+    outputs: 'Řízení, 0 až 1; s volbou Obrátit 1 minus obrys.',
+    constraints: 'Doznění začne se zavřením brány, nejdřív ale po uplynutí Náběhu a Držení, '
+      + 'takže i krátký ťuk dojde k 1 a vydrží Držení. Náběh a Doznění trvají aspoň 1 ms; '
+      + 'uvolnění končí na dolní mezi obálky (−80 dB), ne přesně v nule. Hodnoty se počítají '
+      + 'v digitální doméně a jsou relativní.',
+  },
+});
+
+export default [keys, vco, ring, xyPad, contour];

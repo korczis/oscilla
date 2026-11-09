@@ -1,8 +1,12 @@
-// Studio adapters of the Synth panel's node types (nodes/instrument.js): Keys, VCO, Ring.
+// Studio adapters of the Synth panel's node types (nodes/instrument.js): Keys, VCO, Ring, the
+// XY Pad and Contour.
 // The adapter contract is the header of adapters/nodes.js. Native Web Audio only, every node
 // through acct.track / acct.source; no recurrence and no DelayNode (project.no-silent-feedback).
 
 import { SAFE_NYQUIST_FACTOR } from '../../core/constants.js';
+import {
+  ENVELOPE_FLOOR, applyAdsr, forgetParam, holdAt, releaseAt, setAt,
+} from '../../audio/envelope.js';
 import { buildPeriodicWave, pulseSeries } from '../../audio/additive.js';
 import { KEYS_PITCH_RANGE, VCO_SCALES, xyDegree } from '../nodes/instrument.js';
 import {
@@ -362,6 +366,78 @@ export const xyPad = {
       },
       dispose() {},
       info: { pad: true },
+      status: 'ready',
+      reason: null,
+    };
+  },
+};
+
+/**
+ * Contour (K207): a gate-driven attack, hold and release on a ConstantSource's offset, through
+ * audio/envelope.js so every ramp starts from the value the contour has (cancelAndHold or its
+ * emulation, no step) and is recorded. The attack is the envelope's linear ramp to 1 with a
+ * flat sustain at 1; the release, to the envelope floor, starts when the gate ends but never
+ * before the attack and Hold have passed (a tap still reaches 1 and holds). Invert (structural)
+ * subtracts the contour from a constant 1: sign gain -1 and a bias source into the output.
+ * A contour its owner gates (`gated`) is built closed, as an Envelope is.
+ */
+export const contour = {
+  compiler: 'audio/envelope.js#applyAdsr',
+  structural: ['invert'],
+  create({ ctx, acct, at, params, gated = false }) {
+    if (!hasConstant(ctx)) {
+      return inertHandle('degraded', 'Contour potřebuje ConstantSourceNode, který tento '
+        + 'prohlížeč nemá.');
+    }
+    let p = { ...params };
+    const shape = () => ({ a: p.attack, d: 0.001, s: 1, r: p.release });
+    const src = acct.source(acct.track(ctx.createConstantSource()));
+    const out = acct.track(ctx.createGain());
+    const sign = p.invert ? acct.track(ctx.createGain()) : null;
+    const bias = p.invert ? acct.source(acct.track(ctx.createConstantSource())) : null;
+    if (sign) {
+      sign.gain.setValueAtTime(-1, at);
+      bias.offset.setValueAtTime(1, at);
+      src.connect(sign);
+      sign.connect(out);
+      bias.connect(out);
+      bias.start(at);
+    } else src.connect(out);
+    const level = src.offset;
+    let opened = at; // when the last gate opened: the release waits for attack + hold after it
+    // Ungated, the gate opens when the graph starts, as an Envelope's does; gated, the level sits
+    // at the floor from `at` (no attack is ever scheduled) until the owner's first gate.
+    if (gated) setAt(level, at, ENVELOPE_FLOOR);
+    else applyAdsr(level, at, shape());
+    src.start(at);
+    const earliest = () => opened + p.attack + p.hold;
+    return {
+      inputs: {},
+      outputs: { control: out },
+      outputRange: { control: UNIPOLAR },
+      modTarget: (key) => ({ reason: `Parametr ${key} uzlu Contour nelze modulovat.` }),
+      applyBase() {},
+      update(changed, owned, w) { // the next gate
+        p = { ...p, ...changed };
+        did(w, changed, Object.keys(changed), 'next-gate');
+      },
+      /** Gate on at t (from the value the contour has), off after durS (timeline hook). */
+      gate(t, durS) {
+        opened = t;
+        applyAdsr(level, t, shape(), 1, { retrigger: true });
+        if (durS != null) releaseAt(level, Math.max(t + durS, earliest()), p.release);
+      },
+      /** Gate off at t: release once attack and hold have passed (timeline and live hook). */
+      release(t) { releaseAt(level, Math.max(t, earliest()), p.release); },
+      /** Hold the contour at t, dropping everything scheduled after it (timeline edits). */
+      hold(t) { holdAt(level, t); },
+      stop(t) {
+        for (const s of [src, bias]) {
+          if (s) { try { s.stop(t); } catch (e) { /* stopped */ } }
+        }
+      },
+      dispose() { forgetParam(level); },
+      info: { contour: src, sign, bias, params: () => ({ ...p }) },
       status: 'ready',
       reason: null,
     };

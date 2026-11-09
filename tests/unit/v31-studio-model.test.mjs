@@ -446,11 +446,13 @@ test('registry holds the §29 library and every definition validates', () => {
     'wavetable-voice', 'perc-voice');
   // The XY pad (K097) follows Keys among the modulation sources (nodes/instrument.js).
   expected.splice(expected.indexOf('keys') + 1, 0, 'xy-pad');
+  // The Contour (K207) follows the XY pad (nodes/instrument.js).
+  expected.splice(expected.indexOf('xy-pad') + 1, 0, 'contour');
   // The Clock (K023) closes the modulation types of nodes/modulation.js, before Keys.
   expected.splice(expected.indexOf('macro') + 1, 0, 'clock');
   assert.deepStrictEqual(R.list().map((d) => d.type), expected);
   assert.deepStrictEqual(R.categories().map((c) => [c.id, c.types.length]), [['SOURCES', 11],
-    ['MODULATION', 8], ['PROCESSING', 7], ['ANALYSIS', 5], ['OUTPUT', 2], ['MEASUREMENT', 4]]);
+    ['MODULATION', 9], ['PROCESSING', 7], ['ANALYSIS', 5], ['OUTPUT', 2], ['MEASUREMENT', 4]]);
   for (const def of NODE_DEFINITIONS) assert.deepStrictEqual(validateNodeDefinition(def), []);
   for (const def of R.list()) {
     for (const p of def.params) {
