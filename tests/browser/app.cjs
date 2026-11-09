@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (tone and release checks on the realtime engine, read on its analyser)
 // OSCILLA dist release gate: the built dist/index.html in chromium, firefox and webkit, each
 // from file:// AND from a GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/ served by
 // python3 -m http.server).
@@ -16,7 +17,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const shell = require('./lib/shell.cjs');
-const { until } = require('./lib/wait.cjs');
+const { until, WaitTimeout } = require('./lib/wait.cjs');
 const seam = require('./lib/measure-seam.cjs');
 
 const argv = process.argv.slice(2);
@@ -554,7 +555,7 @@ function defineChecks() {
   // `studioTimeline` left the list with ledger W7a: it built a second Studio store and
   // transport, and the timeline suite now drives the canonical ones.
   def('seam-surface-pinned', async ({ page }) => {
-    const OSCILLA_KEYS = ['engine', 'viz', 'adapter', 'labs', 'labErrors', 'app', 'host',
+    const OSCILLA_KEYS = ['engine', 'viz', 'adapter', 'labs', 'labErrors', 'app', 'host', 'bus',
       'measure', 'experiments', 'studio', 'navigation', 'unsaved', 'buildPlan', 'planFreqAt',
       'parseFrequency', 'parseFrequencyList', 'formatFrequency', 'formatPeriod',
       'formatWavelength', 'frequencyToNormalized', 'normalizedToFrequency', 'nearestNote',
@@ -5240,6 +5241,175 @@ function defineChecks() {
     }
   });
 
+  // C050, one stop path: each player is started, then stopped by Escape, a page hide and (for
+  // the instrument and the sequencer, the owners the status-bar key stops, ADR 0050) the
+  // status-bar stop; after each stop the page waits, against a named deadline, for nothing
+  // playing: no bus owner, no sequence, no Studio, no note, an engine census of 0.
+  def('stop-path-one-stopall', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const workspace = async (ws) => {
+      await inPage((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => inPage((w) => document.querySelector('#osc-app').dataset.mode === w, ws),
+        { ms: 8000, what: `stop-path-one-stopall: the ${ws} workspace opens` });
+    };
+    /** What still plays, from each owner and the engine's own census. */
+    const sounding = () => inPage(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      return { owner: O.bus.owner(), instrument: !!a.playing,
+        sequence: !!O.labs.sequencer.editor.playing, studio: !!a.studioOwnsOutput(),
+        notes: O.engine.noteCount, nodes: O.engine.activeNodeCount,
+        seqSources: O.labs.sequencer.editor.stats().activeSourceCount };
+    });
+    const silent = (s) => s.owner === null && !s.instrument && !s.sequence && !s.studio
+      && s.notes === 0 && s.nodes === 0 && s.seqSources === 0;
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await sounding(); return pred(s) ? s : null; },
+          { ms: 6000, what: `stop-path-one-stopall: ${what}` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        return { timedOut: true, ...(await sounding()) };
+      }
+    };
+    const PLAYERS = {
+      instrument: { ws: 'playground', start: () => inPage(() => {
+        window.OSCILLA.app.setContinuous(true);
+        window.OSCILLA.app.toggleLatch();
+      }), on: (s) => s.instrument },
+      sequencer: { ws: 'sequencer', start: () => p.click('#osc-seq-play'),
+        on: (s) => s.sequence },
+      studio: { ws: 'studio', start: () => inPage(() => window.OSCILLA.app.studioPlay()),
+        on: (s) => s.studio },
+      synth: { ws: 'synth', start: () => inPage(() => window.OSCILLA.app.synthArm()),
+        on: (s) => s.studio },
+      notes: { ws: 'playground', start: async () => {
+        await p.locator('[data-osc="keyboard.readout"]').click();
+        await p.keyboard.down('KeyA');
+      }, on: (s) => s.notes > 0, after: () => p.keyboard.up('KeyA') },
+    };
+    const STOPS = {
+      escape: () => p.keyboard.press('Escape'),
+      pagehide: () => inPage(() => window.dispatchEvent(new Event('pagehide'))),
+      // the status-bar key's own action (the key shows at narrow widths; status-key-stops-only)
+      'status-stop': () => inPage(() => window.OSCILLA.app.statusPlay()),
+    };
+    const res = {};
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      for (const [stop, doStop] of Object.entries(STOPS)) {
+        for (const [name, pl] of Object.entries(PLAYERS)) {
+          if (stop === 'status-stop' && !['instrument', 'sequencer'].includes(name)) continue;
+          const key = `${name}/${stop}`;
+          await workspace(pl.ws);
+          await pl.start();
+          const on = await settle(pl.on, `${key}: the ${name} plays`);
+          await doStop();
+          const off = await settle(silent, `${key}: nothing plays and the census is 0`);
+          if (pl.after) await pl.after();
+          res[key] = { on: !on.timedOut, off: !off.timedOut, left: off.timedOut ? off : null };
+        }
+      }
+      const failed = Object.keys(res).filter((k) => !res[k].on || !res[k].off);
+      if (errs.length) failed.push('pageerror');
+      return { ok: failed.length === 0, failed, errs, res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
+  // C037, the playback bus: each player is started through its own entry (a latched tone, the
+  // sequencer's Play, Studio PLAY, the Synth's Arm, a held computer key, Listen on a riff) and
+  // the bus names it as the owner within a named deadline; after its stop the bus names nobody.
+  def('bus-names-each-player', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const res = {};
+    /** The bus's owner, polled until it is `want` (null: nobody) or the named deadline. */
+    const owned = async (want, label) => {
+      try {
+        return await until(() => inPage((w) => {
+          const o = window.OSCILLA.bus.owner();
+          return o === w ? { owner: o } : null;
+        }, want), { ms: 6000, what: `bus-names-each-player: ${label}` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        return { timedOut: true, owner: await inPage(() => window.OSCILLA.bus.owner()) };
+      }
+    };
+    const workspace = async (ws) => {
+      await inPage((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => inPage((w) => document.querySelector('#osc-app').dataset.mode === w, ws),
+        { ms: 8000, what: `bus-names-each-player: the ${ws} workspace opens` });
+    };
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      // the instrument: a latched tone
+      await workspace('playground');
+      await inPage(() => {
+        window.OSCILLA.app.setContinuous(true);
+        window.OSCILLA.app.toggleLatch();
+      });
+      res.instrument = await owned('instrument', 'a latched tone is the instrument');
+      await inPage(() => window.OSCILLA.app.stopNow());
+      res.instrumentOff = await owned(null, 'the stopped tone gives the output back');
+      // the sequencer: its Play button
+      await workspace('sequencer');
+      await p.click('#osc-seq-play');
+      res.sequencer = await owned('sequencer', 'the sequencer\'s Play is the sequencer');
+      await inPage(() => window.OSCILLA.labs.sequencer.editor.stop());
+      res.sequencerOff = await owned(null, 'the stopped sequence gives the output back');
+      // the Studio: PLAY
+      await workspace('studio');
+      await inPage(() => window.OSCILLA.app.studioPlay());
+      res.studio = await owned('studio', 'Studio PLAY is the Studio');
+      await inPage(() => window.OSCILLA.app.studioStop());
+      res.studioOff = await owned(null, 'the stopped Studio gives the output back');
+      // the Synth: Arm (the Studio transport's claim)
+      await workspace('synth');
+      await inPage(() => window.OSCILLA.app.synthArm());
+      res.synth = await owned('studio', 'the Synth\'s Arm claims as the Studio');
+      await inPage(() => window.OSCILLA.app.synthDisarm());
+      res.synthOff = await owned(null, 'the disarmed Synth gives the output back');
+      // the notes: a held computer key in the Playground (armed there by default)
+      await workspace('playground');
+      await p.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
+      await p.keyboard.down('KeyA');
+      res.notes = await owned('notes', 'a held key is the notes');
+      await p.keyboard.up('KeyA');
+      res.notesOff = await owned(null, 'the released key gives the output back');
+      // the riff audition: Listen in the patch library
+      await workspace('synth');
+      await inPage(() => window.OSCILLA.app.patchLibraryOpen());
+      const list = p.locator('[data-osc="library.list"]');
+      await until(() => list.isVisible(), { ms: 10000,
+        what: 'bus-names-each-player: the patch library opens' });
+      const inst = p.locator('[data-osc="library.instrument"]');
+      await until(async () => (await inst.locator('option[value="riffs"]').count()) === 1,
+        { ms: 10000, what: 'bus-names-each-player: the Riffs category is offered' });
+      await inst.selectOption('riffs');
+      const listen = p.locator('[data-osc="library.listen"]');
+      await listen.click();
+      res.audition = await owned('audition', 'Listen is the audition');
+      await listen.click();
+      res.auditionOff = await owned(null, 'the stopped Listen gives the output back');
+      const players = ['instrument', 'sequencer', 'studio', 'synth', 'notes', 'audition'];
+      const failed = players.flatMap((k) => [k, `${k}Off`])
+        .filter((k) => !res[k] || res[k].timedOut);
+      if (errs.length) failed.push('pageerror');
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
   // C002 (finding coupling-1): while a measurement owns the output the sequencer is refused
   // exactly like the instrument, with the same notice, and the measurement goes on. The Studio
   // template Measurement Sweep hands the output to MEASURE from the Sequencer workspace, where
@@ -5290,7 +5460,7 @@ function defineChecks() {
         return O.engine.activeNodeCount === 0 && !O.app.measureOwnsOutput()
           && O.labs.sequencer.editor.stats().activeSourceCount === 0 ? true : null;
       }), { ms: 10000, what: 'seq-refused-during-measure: every node released after the abort' });
-      const REFUSAL = /^The output belongs to the measurement/;
+      const REFUSAL = /^Výstup patří měření/; // OUTPUT_REFUSAL (core/output-bus.js, Q104)
       const v = {
         opened: res.opened === true,
         owns: res.owns === true,

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (links and workspaces; no audio judged)
 // OSCILLA cross-links and honest link labels (U010; UX link audit 2026-10-29, links.md) on the
 // built dist/index.html in chromium, firefox and webkit, from file:// and from the Pages sub-path
 // (http://127.0.0.1:<port>/oscilla/), every check on both.

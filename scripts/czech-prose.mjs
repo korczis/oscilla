@@ -32,6 +32,8 @@ const CZECH = /[áčďéěíňóřšťúůýž]/i;
 export function isEnglishProse(text) {
   const t = String(text).replace(/\$\{[^}]*\}/g, ' ').replace(/<[^>]+>/g, ' ').trim();
   if (CZECH.test(t)) return false;
+  // A hex digest (a pinned SHA-256) is no sentence, whatever letters its digits leave (K022).
+  if (/^[0-9a-f]{16,}$/i.test(t)) return false;
   const words = t.toLowerCase().match(/[a-z']+/g) || [];
   return words.length >= 3 && words.filter((w) => STOP.has(w)).length >= 2;
 }

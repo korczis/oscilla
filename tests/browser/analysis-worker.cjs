@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (the analysis Worker on fixed buffers; no realtime audio)
 // M10: the offline analysis in the data: URL Worker vs on the main thread, in real browsers.
 //
 //   node tests/browser/analysis-worker.cjs [--browsers chromium,firefox,webkit]

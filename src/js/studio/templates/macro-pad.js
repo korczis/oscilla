@@ -21,7 +21,7 @@ export default {
         + 'deleting the lane.',
     ],
   },
-  studioHash: '915a0e756f4a78226d903c349b6bc5e522812168f0a6d97cc8713702fcd4dbaf',
+  studioHash: 'd907885f0f26bec7b3ecec3f7aeea594981a2433d10cf9b6781279124936e239',
   model: studioDoc({
     title: 'Macro Pad',
     nodes: [

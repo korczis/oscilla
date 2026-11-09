@@ -18,11 +18,16 @@ import { DOCK_KEY } from '../../midi/dock-yield.js';
 export const pageKeyContext = (cmp) => ({ workspace: cmp.workspace,
   view: cmp.workspace === 'synth' && cmp.synth ? cmp.synth.tab || null : null });
 
-export function bindPageKeys({ keys, cmp, stopSequencer }) {
+export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
   const offs = [
+    // Escape is the playback bus's stopAll (C050): every owner stops in this one binding.
     keys.bind({ id: 'page.escape', keys: ['Escape'], scope: { workspace: '*', focus: '*' },
       prevent: false, label: 'Stop: the instrument, a sequence, a measurement', group: 'Page',
       run: (e) => {
+        if (typeof stopAll === 'function') {
+          stopAll('escape');
+          return;
+        }
         stopSequencer();
         cmp.measureAbort('escape');
         cmp.onKeyDown(e);

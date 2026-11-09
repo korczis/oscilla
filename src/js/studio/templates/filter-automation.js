@@ -17,7 +17,7 @@ export default {
       'The Spectrum shows the band of noise that passes the filter.',
     ],
   },
-  studioHash: '5c107b61379ebc01c124e73c9888679120407c3a1ad695bb519e62954e4f66c7',
+  studioHash: '1bb4478c57b8831b4cae68cc4826c2e950b8df0a9fe3115814aea5c6b87dc24f',
   model: studioDoc({
     title: 'Filter Automation',
     nodes: [

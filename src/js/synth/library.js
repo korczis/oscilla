@@ -3,13 +3,16 @@
 // (xy.js xyPresetPatch), a saved XY preset is an ordinary patch with category 'xy', and every
 // one loads through xy.js xyPatchAction, one BATCH. Nothing here is a second store.
 //
-//   registerSynthSources()   idempotent: registering again replaces the source
+//   registerSynthSources()   idempotent: registering again replaces the source; it also
+//                            registers the panel's Insert from the library (K225)
 
-import { registerPatchSource } from '../studio/patch-catalog.js';
+import { registerPanelInsert, registerPatchSource } from '../studio/patch-catalog.js';
+import { insertWithPreset } from './insert.js';
 import SEMI_MONO from './panels/semi-mono.js';
 import { XY_CATEGORY, XY_RECIPES, xyPatchAction, xyPatchOf, xyPresetPatch } from './xy.js';
 
 export function registerSynthSources(panel = SEMI_MONO) {
+  registerPanelInsert((model, presetId) => insertWithPreset(model, panel, presetId));
   registerPatchSource({
     id: XY_CATEGORY,
     label: 'XY pad',

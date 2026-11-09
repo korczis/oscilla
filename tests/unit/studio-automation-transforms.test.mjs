@@ -180,6 +180,11 @@ const ROWS = [
   // K010: an audio-rate LFO; a lane above 0.95 x Nyquist is clamped there, as a frequency is.
   { type: 'lfo', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: FREQUENCY_MAX,
     display: 'log', param: (h) => osc(h).frequency, ...freqLane },
+  // K022: the LFO depth is the gain after its oscillator (its control output), linear 0..1.
+  { type: 'lfo', key: 'depth', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: (h) => h.outputs.control.gain,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
   { type: 'random', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100, display: 'log',
     param: (h) => h.outputs.control.playbackRate, toAudio: controlPlaybackRate, ...rateLane },
   { type: 'step-modulator', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,

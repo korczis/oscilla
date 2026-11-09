@@ -231,6 +231,13 @@
       "summary": "Notes clipy hrají na uzlu Keys na audio hodinách se swingem, ratchetem, slidem, seedovanou pravděpodobností a tap tempem; STOP nechá klávesy připravené a jejich hraní zní i při zastaveném transportu; hrané noty vlastní scope a stavový řádek a obnovený normal v Synthu se ohlásí",
       "commit": "710d1da",
       "datetime": "2026-11-09T14:17:46+01:00"
+    },
+    {
+      "release": "3.30",
+      "title": "Hodiny a step grid",
+      "summary": "Uzel Clock a výstup Step trigger rozvádějí takt po trigger hranách; notes clip se dá kreslit jako step grid v Inspectoru Studia; oscilátory mají unisono a synchronizaci s tempem, filtry strmost 24 dB/okt a pracovní plocha jednoho vlastníka zvuku; knihovna patchů vkládá panel Synthu",
+      "commit": "503bb9f",
+      "datetime": "2026-11-09T16:34:25+01:00"
     }
   ]
 }

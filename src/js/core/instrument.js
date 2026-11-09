@@ -58,6 +58,7 @@ import {
   sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
 } from '../audio/patterns.js';
 import { micErrorMessage, MIC_PRIVACY_NOTICE } from '../audio/microphone.js';
+import { OWNER, playOwnerOf } from './output-bus.js';
 import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
@@ -1205,7 +1206,8 @@ export function createInstrument(deps = {}) {
       viz.sync(this.vizInputs(res));
       // A voice another owner started on the instrument's path (a riff audition, audition.js)
       // is not the instrument's plan: its live update leaves it alone.
-      const other = engine.voice && engine.voice.opts && engine.voice.opts.owner;
+      const other = !!engine.voice
+        && playOwnerOf(engine.voice.opts) !== OWNER.instrument; // the one table's (C036)
       if (this.playing && res.ok && !other) engine.updateLive(res.plan);
     },
     /** Plain values the visualization bridge needs (what V1 syncViz copied into viz.state). */

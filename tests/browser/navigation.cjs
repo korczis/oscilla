@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (navigation, history and focus; no audio judged)
 // OSCILLA unsaved-work guard and workspace navigation history (ledger W2, W4; ADR 0045) on the
 // built dist/index.html in chromium, firefox and webkit, from file:// and from a
 // GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/), every check on both.

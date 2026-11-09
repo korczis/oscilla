@@ -24,7 +24,7 @@ import { TRANSPORT_TEXT, clipPlayReason } from '../../src/js/studio/transport.js
 import { compileStudio } from '../../src/js/studio/compiler.js';
 import { createIdGenerator, createStudioStore } from '../../src/js/studio/actions.js';
 import {
-  STUDIO_KIND, normalizeStudio, serializeStudio, studioHash,
+  STUDIO_KIND, normalizeStudio, serializeStudio, studioHash, studioHashAt,
 } from '../../src/js/studio/schema.js';
 import { importStudio } from '../../src/js/studio/migrate.js';
 import { adjacentMarker, validateClip } from '../../src/js/studio/timeline.js';
@@ -123,8 +123,9 @@ for (const t of STUDIO_TEMPLATES) {
 }
 
 // The pinned hash of every template: a template added (V617, the K014 pack) leaves the others'
-// unchanged.
-const PINNED = {
+// unchanged. PINNED_V1 is hash epoch 1, as they were pinned; K022's epoch 2 re-pins every one
+// (PINNED) without changing a template's content, which studioHashAt(model, 1) proves.
+const PINNED_V1 = {
   'basic-tone': 'fbfe0905d6948e9e92418623fb0d53505b89706136fe0cbe3521a92d3b7edf92',
   'subtractive-synth': '3982a31f8fe6f92f9206bca48ab19b7cfe091105fdb841143e7d1f1e892ec424',
   'sweep-sequence': 'a4e06d13f869a5976ff7058e7b42533a6735061268c6d7e7910c5119b635b5df',
@@ -140,12 +141,29 @@ const PINNED = {
   'step-bass': '701d7e300d2c0307da24b0c8b75610e30de59c4d6da2a0e2e9fa2439cc5079fc',
   'demo-song': '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
 };
+const PINNED = {
+  'basic-tone': '8da6e6e69b3449cd22e6013ea778600bfe9bf638f7027ffce2f88629cfd5ccee',
+  'subtractive-synth': 'df0e4cf3bb9a9f8ceafbbaf5cbbeb9aa334ae018733474a083e45f806884a9d7',
+  'sweep-sequence': '5ae816652785ab76197f1a5290caa7a1ff81848b51c3b7c02e0fd7365055cada',
+  'stereo-beat': '7519d4bb4e5c45810c06841e905f8fc4342a53cb77652564b164c6b6d8cfdd3e',
+  'filter-automation': '1bb4478c57b8831b4cae68cc4826c2e950b8df0a9fe3115814aea5c6b87dc24f',
+  'measurement-sweep': '5abd03cd24e9296d565e6c2fd6eeacf5964238ca749113108331bb626cae1022',
+  'first-patch': 'c22c47f51aee30544bb6ad853ee7b5ae58000e8c0be236acf1844392cd19c1de',
+  'filter-envelope-synth': 'eea1d68a41f2e93a7d30da0a9c757cc42fef09c0c0240b67e4269339d7eb55e4',
+  'fm-chime': '633470493e7b74b5f94ed9e23202d5d08e40cd411b2567cc9d71a70ce4d8d060',
+  'ring-mod': '70b3a6e62912cdc143ba332ab0b960c4971b8345017878b91950889ead22b170',
+  'drive-lead': '494d54a3ba1d2f3d51f5432a53f3fe5426633ecbb1ad16f5abe1cdeb891c77c4',
+  'macro-pad': 'd907885f0f26bec7b3ecec3f7aeea594981a2433d10cf9b6781279124936e239',
+  'step-bass': 'bf4ccc6463b4e3915c43563c41dc74a9b956980309f0b907b6f5d1477bad5330',
+  'demo-song': 'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3',
+};
 
 test('V617 every template keeps its pinned hash; the hashes are distinct', () => {
   assert.deepStrictEqual(Object.fromEntries(STUDIO_TEMPLATES.map((t) => [t.id, t.studioHash])),
     PINNED);
   for (const t of STUDIO_TEMPLATES) {
     assert.strictEqual(studioHash(templateModel(t.id)), PINNED[t.id], t.id);
+    assert.strictEqual(studioHashAt(templateModel(t.id), 1), PINNED_V1[t.id], `${t.id} epoch 1`);
   }
   assert.strictEqual(new Set(Object.values(PINNED)).size, STUDIO_TEMPLATES.length);
 });
@@ -558,12 +576,13 @@ test('§105 offline plan: what the transport plays renders, the rest is listed',
   const q = planOfflineRender(m, { duration: 2 });
   assert.strictEqual(q.ok, true);
   assert.deepStrictEqual(q.render, { sampleRate: 44100, channels: 1 });
-  const trigger = TRANSPORT_TEXT.eventTarget('Envelope 1');
+  // K023: a trigger event on an Envelope plays (one pulse: attack and decay, then release), so
+  // it renders too; before K023 it was listed with the event-target reason.
   assert.deepStrictEqual(q.clips.map((c) => [c.id, c.rendered, c.reason]), [
     ['clip-1', true, null], ['clip-2', false, OFFLINE_TEXT.afterEnd],
-    ['clip-3', false, trigger]]);
-  assert.deepStrictEqual(q.limitations, [`Clip clip-3: ${trigger}`]);
-  assert.strictEqual(clipPlayReason(m, m.timeline.clips[2]), trigger, 'as the transport says');
+    ['clip-3', true, null]]);
+  assert.deepStrictEqual(q.limitations, []);
+  assert.strictEqual(clipPlayReason(m, m.timeline.clips[2]), null, 'as the transport says');
   assert.strictEqual(q.nodes.find((x) => x.id === 'rec-1').reason, OFFLINE_TEXT.format);
 });
 

@@ -10,7 +10,8 @@ import { definePanel } from '../panel.js';
 import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';
 import { XY_MODULE, XY_TAB } from './xy.js';
 
-const FILTER_FIXED = { gain: 0, enabled: true };
+// K022: the panel's filters are 12 dB/oct by design (its description and FILTER_NOTE).
+const FILTER_FIXED = { gain: 0, enabled: true, slope: '12' };
 const FILTER_NOTE = 'A 12 dB/oct biquad: the peak rings but does not self-oscillate.';
 // Peak (Q) has a knob and no jack: a low- or high-pass Q is a dB AudioParam in Web Audio, so the
 // runtime refuses a linear Q modulation (clip-targets.js filterQ), and a jack that takes a cable
@@ -55,12 +56,19 @@ export default definePanel({
       init: { attack: 0.005, decay: 0.3, sustain: 0.2, release: 0.3 } },
     { id: 'eg2', label: 'EG 2', node: 'envelope', jacks: { hide: ['audio'] },
       init: { attack: 0.005, decay: 0.2, sustain: 0.8, release: 0.25 } },
-    { id: 'vca', label: 'VCA', node: 'gain', init: { gain: 0 }, labels: { gain: 'Initial gain' },
+    { id: 'vca', label: 'VCA', node: 'gain', fixed: { bypass: false }, init: { gain: 0 },
+      labels: { gain: 'Initial gain' },
       ranges: { gain: [0, 1] } },
-    { id: 'mg', label: 'MG / LFO', node: 'lfo', options: { shape: ['triangle', 'square'] },
+    // K022's LFO depth and sync stay at full depth and free-running here: the panel's amount
+    // knobs set each cable's depth, and the MG runs at its own rate.
+    // Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3): the
+    // depth is fixed at 1 here, and a jack beside the amount knobs would be a second path to it.
+    { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, sync: 'off' },
+      jacks: { hide: ['depth'] },
+      options: { shape: ['triangle', 'square'] },
       ranges: { rate: [0.01, 100] }, init: { shape: 'triangle', rate: 5 } },
-    { id: 'sh', label: 'S&H', node: 'random', note: 'Seeded random steps, one per gate; it '
-      + 'samples no input.' },
+    { id: 'sh', label: 'S&H', node: 'random', fixed: { sync: 'off' },
+      note: 'Seeded random steps, one per gate; it samples no input.' },
     { id: 'out', label: 'OUTPUT', node: 'master' },
     ...ENGINE_MODULES,
     XY_MODULE,
