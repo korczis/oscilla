@@ -34,7 +34,7 @@
 //                                                liveModel: no timeline, no end); edits are
 //                                                admitted as while playing; PLAY promotes it
 //   transport.disarm() -> Promise               every live note off; an armed run stops
-//   transport.live(keysId, { kind, note, velocity, at }) -> result   a note on a Keys node
+//   transport.live(keysId, { kind, note, velocity, at }) -> result, emitted as 'live' (K223)
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
 //   transport.debugRefuseNextPlay() -> boolean  INJECT hook (ADR 0052; K169, tests/browser/
@@ -1934,7 +1934,10 @@ export function createStudioTransport({
     disarm,
     live(keysId, ev = {}) {
       if (!playing) return { ok: false, reason: 'not-armed' };
-      return live.event(keysId, { ...ev, at: Number.isFinite(ev.at) ? ev.at : hooks.soon() });
+      const at = Number.isFinite(ev.at) ? ev.at : hooks.soon();
+      const r = live.event(keysId, { ...ev, at });
+      emit('live', { id: keysId, ev, r, ph: armedOnly ? null : scheduler.playhead(at) });
+      return r;
     },
     get armed() { return playing && armedOnly; },
     /** Voices an engine sounds now (adapters/voices.js), 0 for any other node. */

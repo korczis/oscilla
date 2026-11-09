@@ -149,6 +149,18 @@ export function getSchedule(param) {
   return (schedules.get(param) || []).map((e) => ({ ...e }));
 }
 
+/**
+ * setAt(param, t, value): a level set at t through this module's record, so a later holdAt or
+ * releaseAt starts from it (review C1-K222-7: a one-shot's level, which a choke, a steal or a
+ * stop then releases without a step; set behind the record's back, holdAt held param.value, the
+ * gain's default 1, and the release began with a jump to full scale).
+ */
+export function setAt(param, t, value) {
+  const e = { kind: 'set', time: t, value };
+  apply(param, e);
+  schedules.set(param, [...(schedules.get(param) || []).filter((x) => x.time < t), e]);
+}
+
 /** Drop the recorded schedule (call when the param's node is discarded or reused). */
 export function forgetParam(param) {
   schedules.delete(param);
