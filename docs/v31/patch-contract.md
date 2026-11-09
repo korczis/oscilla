@@ -5,7 +5,7 @@ Derived by `node scripts/patch-contract.mjs --write` from the Studio node regist
 `--check` fails when it is stale, and `tests/unit/patch-contract.test.mjs` holds the missing
 counts to `tests/unit/patch-contract-baseline.json`, which only fall.
 
-37 node types, 97 ports, 159 parameters. A field is declared,
+37 node types, 97 ports, 199 parameters. A field is declared,
 defaulted (derived by the declaration: a parameter port, or a field the port or parameter
 lists as defaulted) or missing; a field that does not apply is not counted.
 
@@ -24,14 +24,14 @@ lists as defaulted) or missing; a field that does not apply is not counted.
 | port | `monitor` | 2 | 1 | 94 |
 | port | `compact` | 2 | 1 | 94 |
 | port | `version` | 2 | 1 | 94 |
-| parameter | `type` | 159 | 0 | 0 |
-| parameter | `unit` | 159 | 0 | 0 |
-| parameter | `default` | 158 | 0 | 1 |
-| parameter | `range` | 149 | 0 | 0 |
-| parameter | `mapping` | 112 | 0 | 0 |
-| parameter | `automatable` | 159 | 0 | 0 |
-| parameter | `modulatable` | 159 | 0 | 0 |
-| parameter | `live` | 14 | 0 | 145 |
+| parameter | `type` | 199 | 0 | 0 |
+| parameter | `unit` | 199 | 0 | 0 |
+| parameter | `default` | 198 | 0 | 1 |
+| parameter | `range` | 189 | 0 | 0 |
+| parameter | `mapping` | 152 | 0 | 0 |
+| parameter | `automatable` | 199 | 0 | 0 |
+| parameter | `modulatable` | 199 | 0 | 0 |
+| parameter | `live` | 54 | 0 | 145 |
 
 ## Compatibility and cardinality
 
@@ -130,7 +130,7 @@ One output feeds many inputs. 24 input ports take more than one cable, 33 take o
 | `keys` | 3 | 5 | 18 |
 | `pan` | 3 | 2 | 18 |
 | `sequence` | 3 | 2 | 18 |
-| `perc-voice` | 2 | 5 | 16 |
+| `perc-voice` | 2 | 45 | 16 |
 | `sweep` | 2 | 5 | 15 |
 | `calibration` | 2 | 2 | 14 |
 | `noise` | 2 | 3 | 14 |

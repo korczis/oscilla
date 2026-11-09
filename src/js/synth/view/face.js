@@ -87,7 +87,7 @@ const disabled = (cid, reason) => (reason
 /** A knob: the layer's (view/knob.js knobSvg), its ARIA N003's position 0..1000 with the value
  *  and unit as text (ariaAttrs), its focus ring the drawing's, shown on keyboard focus. The
  *  readout is one line: the value with a short physical unit only (knobModel format). */
-function knobHtml(cid, c, value, reason, tokens) {
+export function knobHtml(cid, c, value, reason, tokens) {
   const a = ariaAttrs(value, c.param);
   return `<div class="flex w-20 flex-col items-center gap-1" data-control="${cid}">`
     + `<span class="${LABEL} text-center leading-tight" id="${cid}-label">${esc(c.label)}</span>`

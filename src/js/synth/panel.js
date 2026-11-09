@@ -186,6 +186,9 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     return { ids, kept, added, cuts };
   }
 
+  const control = (m, p) => ({ key: p.key, kind: KIND[p.type], label: p.label, param: p,
+    initial: p.key in m.values ? m.values[p.key] : p.default });
+
   const panel = {
     id: pid, instance, version: decl.version || 1, title: decl.title,
     description: decl.description || '', modules, normals, amounts, layout: decl.layout || {},
@@ -201,15 +204,20 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
       const m = byId.get(mid);
       if (!m) return [];
       const params = m.params.filter((p) => !(p.key in (m.fixed || {}))
-        && !(m.studio || []).includes(p.key))
-        .map((p) => ({ key: p.key, kind: KIND[p.type], label: p.label, param: p,
-          initial: p.key in m.values ? m.values[p.key] : p.default }));
+        && !(m.studio || []).includes(p.key)).map((p) => control(m, p));
       const amts = amounts.filter((a) => a.module === mid).map((a) => ({ key: a.key,
         kind: 'amount', label: a.label, amount: a,
         param: Object.freeze({ key: a.key, label: a.label, type: 'number', min: a.range[0],
           max: a.range[1], step: 0.01, unit: a.unit || 'oct', scale: 'linear',
           default: 0 }) }));
       return [...params, ...amts];
+    },
+    /** The face control of any parameter of a module, its Studio-only ones included (the Drums
+     *  tab's sound editor edits the percussion engine's per-voice keys, K071), or null. */
+    control(mid, key) {
+      const m = byId.get(mid);
+      const p = m && !(key in (m.fixed || {})) && m.params.find((x) => x.key === key);
+      return p ? control(m, p) : null;
     },
     jacksOf,
     resolve(model) {

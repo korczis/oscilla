@@ -311,7 +311,7 @@ test('P2 every FM algorithm (all 7) connects its table: edges, carriers, ratios,
 
 test('P2 every percussion key plays what the face says, and the facts are the keymap', () => {
   assert.deepEqual([...PERC_KEYMAP], ['kick', 'clap', 'snare', 'clap', 'tomLow', 'tomMid',
-    'hatClosed', 'tomHigh', 'hatClosed', 'noise', 'hatOpen', 'noise']);
+    'hatClosed', 'tomHigh', 'hatClosed', 'noise', 'hatOpen', 'blip']); // B: K072's FM blip
   const facts = NODE_REGISTRY.get('perc-voice').facts(defaults('perc-voice'));
   const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const keys = /Keys: (.*?);/.exec(facts)[1];

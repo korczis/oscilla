@@ -32,11 +32,20 @@ test('every engine module is a 16-voice note source with a generated face', () =
     assert.equal(m.def.capabilities.notes, true, m.id);
     assert.equal(m.def.capabilities.voices, 16, m.id);
     const face = PANEL.faceOf(m.id);
-    assert.equal(face.length, m.def.params.length - Object.keys(m.fixed || {}).length, m.id);
+    const studio = m.studio || [];
+    assert.equal(face.length, m.def.params.length - Object.keys(m.fixed || {}).length
+      - studio.length, m.id);
     for (const c of face) assert.ok(m.def.params.some((p) => p.key === c.key), `${m.id}.${c.key}`);
+    // A key off the face (K071: the percussion engine's per-voice parameters, edited in the
+    // Drums tab's sound editor) is still a control of the module.
+    for (const k of studio) assert.equal(PANEL.control(m.id, k).key, k, `${m.id}.${k}`);
     assert.ok(PANEL.jacksOf(m.id).some((j) => j.id === `${m.id}.thru` && j.direction === 'in'));
   }
   assert.equal(PANEL.module('sync').values.bank, 'sync', 'the sync module fixes its bank');
+  const perVoice = /^[a-z]+(?:[A-Z][a-z]+)?(Decay|Tune|Level|Choke)$/;
+  assert.deepEqual([...PANEL.module('perc').studio].sort(), NODE_REGISTRY.get('perc-voice').params
+    .map((p) => p.key).filter((k) => perVoice.test(k)).sort(),
+  'the percussion face keeps its five kit knobs; the 40 per-voice keys are the sound editor\'s');
   assert.deepEqual(PANEL.module('wavetable').params.find((p) => p.key === 'bank').options
     .map((o) => o[0]), ['basic', 'formant', 'pulse']);
 });
