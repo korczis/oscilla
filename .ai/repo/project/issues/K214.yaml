@@ -24,4 +24,24 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-07
-updated_at: 2026-11-09
+updated_at: 2026-11-09T21:34:03Z
+started_at: 2026-11-09T21:32:51Z
+started_event: sha256:4af0f681e742ccda56b9d30634eef9b82cfc0a12fa82b3a32f0b34e388070e94
+verified_at: 2026-11-09T21:33:15Z
+verified_event: sha256:821704032545fb50096fbb6c3ea84530adb8e9482692f1c906aea5b187de4ce3
+completed_at: 2026-11-09T21:34:03Z
+completed_event: sha256:d34933e7b7bcbe656503cdebd9864dd43798eaa4bf617ee86b9be8b944918293
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node tests/browser/synth.cjs --only s-normals (OSC_BROWSERS chromium, firefox, webkit; desktop and phone)"
+    result: "on main cb414b85 (K214 landed in df5c2ab1): s-normals PASS 1/1 desktop and 1/1 phone in chromium, firefox and webkit (21 nodes, 23 normals; the restored normal announced in the polite region; a Studio cable sums beside a normal; Break normal drops it while the cable plays); test:synth runs synth.cjs; tests/README.md names s-normals"
+    commit: cb414b85e90bb0700bac6368bcb3a7fc0aacba5f
+    recorded_at: 2026-11-09T21:33:38Z
+  - covers: "verified"
+    type: manual
+    command: "review verdict of the K214 pull request #504 (src/js/synth is guarded)"
+    result: "verdict merge for the fix(synth) K214 change (announce a restored normal; the panel normals browser check), with a unit test failing on its merge base"
+    artifact: ".ai/repo/reviews/504.yaml"
+    commit: cb414b85e90bb0700bac6368bcb3a7fc0aacba5f
+    recorded_at: 2026-11-09T21:33:50Z
