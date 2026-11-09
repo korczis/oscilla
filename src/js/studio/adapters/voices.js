@@ -42,7 +42,7 @@
 // line (ring at ratio 1, a carrier at a whole multiple of its modulator) keeps that mean, and
 // its engine's face says so.
 
-import { applyAdsr, forgetParam, releaseAt } from '../../audio/envelope.js';
+import { applyAdsr, forgetParam, releaseAt, setAt } from '../../audio/envelope.js';
 import { midiToFrequency } from '../../core/music.js';
 import { velocityLevel } from '../../midi/notes.js';
 import { MAX_VOICES, createVoicePool } from '../../synth/voice-pool.js';
@@ -159,7 +159,7 @@ export function createVoiceHost({ ctx, acct, params, build }) {
     }
     if (Number.isFinite(built.oneShotEnd)) {
       v.oneShot = true;
-      v.amp.gain.setValueAtTime(peak, start);
+      setAt(v.amp.gain, start, peak); // through the record: a cut holds this level (K071)
       stopAt(v, built.oneShotEnd);
       pool.off(note, t);
       pool.end(a.slot, built.oneShotEnd);

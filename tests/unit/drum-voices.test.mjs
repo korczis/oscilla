@@ -158,3 +158,22 @@ test('velocity 64 peaks at (64/127)^2 of velocity 127: 40 log10 rel, -11.9 dB', 
   const db = 20 * Math.log10(peak(64) / peak(127));
   assert.ok(Math.abs(db - 40 * Math.log10(64 / 127)) < 1e-9, `${db} dB`);
 });
+
+// The real render (tests/browser/instrument-dsp.cjs d-choke) found the cut of a ringing one-shot
+// starting with a jump to full scale: its level was set behind the envelope record's back, so
+// holdAt held the gain's default 1. Every cut (a choke, a steal, all-off) now holds the level.
+test('a cut one-shot is held at its own level, never at full scale (choke, all-off)', () => {
+  for (const cut of [(h) => h.noteOn(0.2, CLOSED, 100), (h) => h.allOff(0.2)]) {
+    const { ctx, h } = engineEnv('perc-voice');
+    h.noteOn(0.1, OPEN, 100);
+    const open = ampOf(ctx, h);
+    const peak = open.gain.calls.find((c) => c[0] === 'setValueAtTime' && c[2] === 0.1)[1];
+    assert.ok(peak > 0 && peak < 0.1, `the voice peaks at ${peak}`);
+    cut(h);
+    const at = open.gain.calls.findIndex((c) => c[0] === 'cancelAndHoldAtTime');
+    const held = open.gain.calls.slice(at).find((c) => c[0] === 'setValueAtTime');
+    assert.ok(held && Math.abs(held[1] - peak) < 1e-12, `held at ${held && held[1]}, not ${peak}`);
+    assert.ok(open.gain.calls.slice(at).every((c) => c[0] === 'cancelAndHoldAtTime'
+      || c[1] <= peak + 1e-12), 'nothing above the voice\'s level after the cut');
+  }
+});

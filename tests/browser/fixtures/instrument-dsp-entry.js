@@ -31,6 +31,7 @@ import {
   PITCH_CLIP_POINTS, PITCH_SPAN_OCT, pitchCeilingOct, vcoBaseHz,
 } from '../../../src/js/studio/adapters/instrument.js';
 import { RENDER_QUANTUM, SAFE_NYQUIST_FACTOR } from '../../../src/js/core/constants.js';
+import * as drums from './instrument-dsp-drums.js';
 
 /** The rates the renders request; every figure reads the rendered buffer's own sampleRate. */
 // timing-allow: the OfflineAudioContext render rates the criterion names (44.1 and 48 kHz)
@@ -384,4 +385,6 @@ function censusDone() {
 }
 
 window.K = { RATES, track, glide, clampHz, midiHz, swingGrid, ratchet, slide, chance,
-  censusStart, censusNow, censusStop, censusDone };
+  censusStart, censusNow, censusStop, censusDone, drumKick: drums.kickSweep,
+  drumDecays: drums.decays, drumChoke: drums.choke, drumVelocity: drums.velocity,
+  drumClap: drums.clapOnsets, drumToms: drums.toms, drumBlip: drums.blip };

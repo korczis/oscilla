@@ -40,6 +40,25 @@
 //              imul(1, 0x9e3779b1) ^ imul(index + 1, 0x85ebca77)) is below 0.5
 //   n-census   on a running AudioContext, STOP with a ratchet pending resolves with the engine
 //              and runtime node census 0 and no note record left
+// K071 and K072, per browser and per rate: a Percussion engine -> Master Output document, hits
+// struck on the engine's handle on the audio clock (fixtures/instrument-dsp-drums.js); every
+// expected value is computed from the recipes' stated figures (synth/perc-recipes.js):
+//   d-kick     each period of the kick's tone between rising zero crossings is the mean of the
+//              stated law hz x (toHz / hz)^(t / sweepS) over it within 2 %, so its frequency
+//              falls from 150 to 48 Hz at its sweep time, and the first period after it is 48 Hz
+//              within 2 %
+//   d-decay    every voice decays to -60 dB rel within 10 % of its stated decay (its longest
+//              layer; the slope of its 5 ms RMS in dB over its first 50 dB)
+//   d-choke    a closed hat (its level 0, group 1) releases a sounding open hat from the frame
+//              of its hit (within one render quantum), never above the hat's own level (no
+//              jump: the found defect held the gain's default 1), with no fall in one frame
+//              larger than 1.5 x the release ramp's first; one quantum after the release time it
+//              is at the envelope floor, and below -120 dBFS once its sources stop
+//   d-vel      velocity 64 is 40 log10(64 / 127) = -11.9 dB rel velocity 127 within 0.5 dB
+//              (the velocity law of midi/notes.js; K071 restated)
+//   d-clap     the clap's three burst onsets within one frame of 0, 11 and 22 ms
+//   d-toms     each tom's fundamental after its sweep within 1 % of its tuning
+//   d-blip     the FM blip's first sideband J1(1) / J0(1) = -4.80 dB rel its carrier within 1 dB
 // Tap tempo (four taps 500 ms apart: 120 BPM) is asserted at unit level
 // (tests/unit/studio-steps-playback.test.mjs). On b7a5c9f7 (chromium) the K060 checks pass and
 // the leg fails at its first K068 render ('the suite runs': the store refuses the grid).
@@ -87,6 +106,60 @@ function check(leg, name, ok, detail) {
 }
 const f = (x, d = 3) => (x == null ? 'null' : Number(x).toFixed(d));
 const within = (c, tol) => c !== null && Math.abs(c) <= tol;
+
+/** J0 and J1 of the FM blip's index from their series (K072's figure, computed here). */
+function bessel(n, x) {
+  let sum = 0;
+  let term = (x / 2) ** n / [1, 1, 2, 6][n];
+  for (let k = 0; k < 30; k++) {
+    sum += term;
+    term *= -((x / 2) ** 2) / ((k + 1) * (k + 1 + n));
+  }
+  return sum;
+}
+
+async function drumChecks(call, rate, leg) {
+  const k = await call('drumKick', { sampleRate: rate }, `d-kick renders at ${rate} Hz`);
+  const at = `${leg} @ ${k.sampleRate} Hz`;
+  const worstK = k.rows.reduce((w, r) => Math.max(w, Math.abs(r.ratio - 1)), 0);
+  check(at, 'd-kick every period follows the stated sweep within 2 %, 48 Hz after it',
+    k.rows.length > 10 && worstK <= 0.02 && Math.abs(k.endHz / k.toHz - 1) <= 0.02,
+    `${k.rows.length} periods, worst ${f(worstK * 100)} %; after ${k.sweepS * 1000} ms `
+      + `${f(k.endHz, 2)} Hz`);
+  const d = await call('drumDecays', { sampleRate: rate }, `d-decay renders at ${rate} Hz`);
+  check(at, 'd-decay every voice at -60 dB rel within 10 % of its stated decay',
+    d.rows.every((r) => r.t60 !== null && Math.abs(r.t60 / r.stated - 1) <= 0.1),
+    d.rows.map((r) => `${r.id} ${f(r.t60, 4)}/${r.stated} s`).join('; '));
+  const c = await call('drumChoke', { sampleRate: rate }, `d-choke renders at ${rate} Hz`);
+  check(at, 'd-choke releases from the hit, within one quantum, never above its level',
+    c.before <= 1e-4 && c.start !== null && c.start <= c.quantum && c.maxAfter <= 1 + 1e-4,
+    `falls from frame ${c.start} (quantum ${c.quantum}); largest after the hit ${f(c.maxAfter, 5)}`
+      + `; before it the renders differ by ${c.before.toExponential(1)}`);
+  check(at, 'd-choke click-free: no fall in one frame above 1.5 x the ramp\'s first',
+    c.worst <= 1.5 * c.rampStep, `largest fall ${f(c.worst, 4)} a frame, the ramp's first `
+      + `${f(c.rampStep, 4)} (${f(c.releaseFrames, 1)} frames to the floor)`);
+  check(at, 'd-choke at the floor one quantum after the release, silent once stopped',
+    c.atRelease !== null && c.atRelease <= c.floor * 1.05 && c.silentFrom !== null
+      && c.silentFrom <= c.stopFrames + c.quantum, `${c.atRelease === null ? 'null'
+      : c.atRelease.toExponential(2)} (floor ${c.floor.toExponential(2)}); silent from frame `
+      + `${c.silentFrom} (stop at ${f(c.stopFrames, 0)})`);
+  const v = await call('drumVelocity', { sampleRate: rate }, `d-vel renders at ${rate} Hz`);
+  check(at, 'd-vel velocity 64 is 40 log10(64/127) dB rel 127 within 0.5 dB',
+    Math.abs(v.db - v.law) <= 0.5, `${f(v.db)} dB (law ${f(v.law)} dB)`);
+  const cl = await call('drumClap', { sampleRate: rate }, `d-clap renders at ${rate} Hz`);
+  check(at, 'd-clap three burst onsets within one frame of 0, 11 and 22 ms',
+    cl.onsets.length === 3 && cl.onsets.every((o, i) => Math.abs(o - cl.want[i]) <= 1),
+    `onsets ${cl.onsets.join(', ')} frames, stated ${cl.want.join(', ')}`);
+  const t = await call('drumToms', { sampleRate: rate }, `d-toms renders at ${rate} Hz`);
+  check(at, 'd-toms each fundamental after its sweep within 1 % of its tuning',
+    t.rows.every((r) => r.hz !== null && Math.abs(r.hz / r.want - 1) <= 0.01),
+    t.rows.map((r) => `${r.id} ${f(r.hz, 3)}/${r.want} Hz`).join('; '));
+  const b = await call('drumBlip', { sampleRate: rate }, `d-blip renders at ${rate} Hz`);
+  const want = 20 * Math.log10(bessel(1, b.index) / bessel(0, b.index));
+  check(at, 'd-blip first sideband at J1/J0 of its index within 1 dB',
+    Math.abs(b.db - want) <= 1, `${f(b.db)} dB rel the carrier (J1/J0(${b.index}) ${f(want)} `
+      + `dB; carrier ${b.carrier} Hz, modulator ${b.modulator} Hz)`);
+}
 
 async function runBrowser(name) {
   const browser = await playwright[name].launch(LAUNCH[name]);
@@ -187,6 +260,7 @@ async function runBrowser(name) {
           && within(sl.centsHalf, 1),
         `arrives ${sl.arriveFrames} frames after the slide (Glide ${sl.glideFrames}); `
           + `${f(sl.centsHalf, 3)} ct from the midpoint at half the Glide`);
+      await drumChecks(call, rate, leg);
       const ch = await call('chance', { sampleRate: rate }, `n-chance renders at ${rate} Hz`);
       check(at, 'n-chance p 0.5: two renders identical, another seed differs',
         ch.same && ch.differs, `identical ${ch.same}, differs with seed 2 ${ch.differs}`);
