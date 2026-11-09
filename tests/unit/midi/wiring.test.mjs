@@ -99,7 +99,9 @@ test('V502: main.js hands the engine to the MIDI part, and taking the output sto
     const owner = code(read('src/js/ui/output-owner.js'));
     const stop = /function stopPlayback\(cmp\) \{([\s\S]*?)\n {2}\}/.exec(owner);
     assert.ok(stop, 'stopPlayback (Measure and Studio PLAY take the output)');
-    assert.match(stop[1], /cmp\.midiAllOff\(\)/);
+    // C036: the measurement row's yields, forced, include the notes, whose stop is midiAllOff.
+    assert.match(stop[1], /yieldOutput\(cmp, OUTPUT_YIELDS\.measure, true\)/);
+    assert.match(owner, /\[OWNER\.notes\]: \{ forced: true,[\s\S]*?cmp\.midiAllOff\(\)/);
   });
 
 test('V502: the sequencer and MIDI notes never sound together (review of #261, P2-1)', () => {
@@ -119,7 +121,8 @@ test('V502: the sequencer and MIDI notes never sound together (review of #261, P
     && body.indexOf('app.midiAllOff()') < body.indexOf('playSequence.apply(this, args)'),
   'the notes stop before the sequence is scheduled');
   const ui = code(read('src/js/midi/ui.js'));
-  assert.match(ui, /return sequencerPlaying\(\) \? 'sequencer' : null;/);
+  // C036: the sequencer row of the one table refuses notes, probed by the editor's own flag.
+  assert.match(ui, /ownedBy: \(\) => notesRefusalOf\(cmp, \{ sequencerPlaying \}\)/);
 });
 
 test('docs/midi.md quotes every sentence that refuses a MIDI note', async () => {

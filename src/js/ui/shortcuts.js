@@ -25,20 +25,24 @@ import { STUDIO_SHORTCUTS } from './studio/graph-keys.js';
 import { KEY_HELP } from './studio/transport-view.js';
 import { WORKSPACE_LABELS } from './shell.js';
 import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
+import { OWNER } from './output-owner.js';
 
-/** Who owns Space in each workspace (the keys are exactly app.js WORKSPACES). */
+/**
+ * Who owns Space in each workspace (the keys are exactly app.js WORKSPACES); each owner is a
+ * row of the one output-owner table (ui/output-owner.js OWNER, C036).
+ */
 export const SPACE_OWNER = Object.freeze({
-  playground: 'instrument',
+  playground: OWNER.instrument,
   measure: null,
   experiments: null,
-  analyzer: 'instrument',
-  filter: 'instrument',
-  compare: 'instrument',
-  synthesis: 'instrument',
-  sequencer: 'instrument',
-  presets: 'instrument',
+  analyzer: OWNER.instrument,
+  filter: OWNER.instrument,
+  compare: OWNER.instrument,
+  synthesis: OWNER.instrument,
+  sequencer: OWNER.instrument,
+  presets: OWNER.instrument,
   learn: null,
-  studio: 'studio',
+  studio: OWNER.studio,
   synth: null, // the Synth plays from its keys; Space starts nothing there (ADR 0050)
   about: null,
 });
@@ -120,7 +124,7 @@ export function spaceOwner(workspace) {
 
 /** True when the instrument's Hold to Play may answer Space in `workspace`. */
 export function instrumentTakesSpace(workspace) {
-  return spaceOwner(workspace) === 'instrument';
+  return spaceOwner(workspace) === OWNER.instrument;
 }
 
 /** A Space key event, by character or by physical key. */
@@ -138,10 +142,10 @@ export function isSpace(e) {
 export function shortcutHelp(workspace) {
   const owner = spaceOwner(workspace);
   let rows = [];
-  if (owner === 'instrument') {
+  if (owner === OWNER.instrument) {
     rows = [...INSTRUMENT_ROWS];
     if (workspace === 'sequencer') rows.push(...SEQUENCER_ROWS);
-  } else if (owner === 'studio') {
+  } else if (owner === OWNER.studio) {
     rows = [...STUDIO_ROWS];
   }
   if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
@@ -153,8 +157,8 @@ export function shortcutHelp(workspace) {
     title: has(WORKSPACE_LABELS, workspace) ? WORKSPACE_LABELS[workspace] : '',
     space: SPACE_MEANING[owner || 'none'],
     rows,
-    timeline: owner === 'studio' ? KEY_HELP : null,
-    note: owner === 'studio' ? STUDIO_NOTE : null,
+    timeline: owner === OWNER.studio ? KEY_HELP : null,
+    note: owner === OWNER.studio ? STUDIO_NOTE : null,
     global: GLOBAL_SHORTCUTS.filter((g) => !own.has(shown(g))),
   };
 }
