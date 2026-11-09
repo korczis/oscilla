@@ -7,7 +7,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GRAPH, browseView, captureSources, catalogEntries, entryAction, registerPatchSource,
+  GRAPH, browseView, captureSources, catalogEntries, entryAction, registerPanelInsert,
+  registerPatchSource,
 } from '../../src/js/studio/patch-catalog.js';
 import { createPatch, importPatch } from '../../src/js/studio/patches.js';
 import { nodePresetPatch } from '../../src/js/studio/node-presets.js';
@@ -116,10 +117,15 @@ test('negative: a patch for an instrument the model lacks says so; Insert still 
   assert.match(entryAction(empty, fm, 'apply').reason, /has no FM engine: Insert adds one/);
   const st = store(empty);
   assert.equal(st.dispatch(entryAction(empty, fm, 'insert').action).ok, true);
-  // K225: a panel preset now inserts the panel itself once synth/library.js has registered how
-  // (registerSynthSources, called by a later test of this file); before that the catalog says
-  // it cannot. The insert itself is tests/unit/synth-panel-library-insert.test.mjs.
+  // K225: a panel preset inserts the panel itself through the inserter synth/library.js
+  // registers; the registration is module-global, so both states are set here, not inherited
+  // from another test. The insert itself is tests/unit/synth-panel-library-insert.test.mjs.
+  registerPanelInsert(null);
   assert.equal(entryAction(empty, panel, 'insert').reason, 'Panel Synthu sem nelze vložit.');
+  registerSynthSources();
+  const ins = entryAction(empty, panel, 'insert');
+  assert.equal(ins.action && ins.action.type, 'BATCH', 'registered, Insert builds the panel');
+  registerPanelInsert(null);
   // Several of the type and nothing selected: choose one; selected: it applies to that one.
   const p = panelStore().getModel();
   const dark = all.find((e) => e.id === 'node-filter-dark');
