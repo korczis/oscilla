@@ -219,8 +219,11 @@
       "datetime": "2026-11-08T14:39:13+01:00"
     },
     {
+      "release": "3.28",
       "title": "Uzel Keys",
-      "summary": "Uzel Keys je jediný zdroj not pro Synth i Studio: posílá přesnou výšku a gate na audio hodinách, klouže lineárně v přesném čase, drží rozsah kláves, noty mimo rozsah odmítne s důvodem a řekne, kde oscilátor drží výšku pod 0,95 × Nyquist"
+      "summary": "Uzel Keys je jediný zdroj not pro Synth i Studio: posílá přesnou výšku a gate na audio hodinách, klouže lineárně v přesném čase, drží rozsah kláves, noty mimo rozsah odmítne s důvodem a řekne, kde oscilátor drží výšku pod 0,95 × Nyquist",
+      "commit": "1790b64",
+      "datetime": "2026-11-09T12:24:14+01:00"
     }
   ]
 }
