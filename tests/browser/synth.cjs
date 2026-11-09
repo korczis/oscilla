@@ -18,6 +18,8 @@
 //   s-feel     the knob and choice feel (p2's W1b review): during a drag the ARIA position is the
 //              0..1000 travel; Shift mid-drag moves nothing; a double-click restores the initial
 //              value; the wheel turns the knob under the pointer, a burst one undo entry;
+//              Ctrl+wheel (the page's pinch, K205) turns nothing and opens no undo entry, judged
+//              by a plain sentinel notch after it that lands exactly one notch past it;
 //              arrows, Home and End move a choice (a rotary: its radios are in option order)
 //              and focus stays on the checked option; a
 //              double-click on a disabled knob changes nothing, and a cancelled pointer on a
@@ -502,16 +504,34 @@ function defineChecks() {
     await page.mouse.wheel(0, -100);
     await until(async () => (await pos()).now !== n0, { ms: 5000,
       what: 'the notch lands (the knob moves) before the drag' });
+    const notch = (await pos()).now - n0; // one plain notch, in ARIA positions
     await page.mouse.down();
     await page.mouse.move(cx, cy + 30, { steps: 3 });
     await page.mouse.up();
     await until(async () => (await depth()) === d0 + 2, { ms: 5000,
       what: 'the wheel burst and the drag are two undo entries' });
+    // K205: the pinch is judged once it has certainly been handled. A plain notch follows it as
+    // a sentinel (wheel events reach the page in order): when the sentinel has landed, the knob
+    // is exactly one notch past p0 and history one entry deeper, so the Ctrl+wheel before it
+    // turned nothing and opened nothing. Read at once, as before, it proved nothing.
     const p0 = (await pos()).now;
+    const h0 = await depth();
+    const zoom = () => page.evaluate(() => ({ scale: window.visualViewport
+      ? window.visualViewport.scale : 1, dpr: window.devicePixelRatio }));
+    const z0 = await zoom();
+    await page.mouse.move(cx, cy);
     await page.keyboard.down('Control');
     await page.mouse.wheel(0, -100);
     await page.keyboard.up('Control');
-    const pinch = (await pos()).now;
+    await page.mouse.wheel(0, -100);
+    const { now: sentinel } = await until(async () => {
+      const now = (await pos()).now;
+      return now !== p0 ? { now } : null; // an object: a position of 0 is a landing too
+    }, { ms: 5000, what: 'the plain notch after the pinch lands' });
+    await until(async () => (await depth()) === h0 + 1, { ms: 5000,
+      what: 'the pinch opened no undo entry, the sentinel notch one' });
+    const pinch = sentinel - notch; // the knob as the pinch left it
+    const z1 = await zoom();
     // A choice: arrows, Home and End move the selection and focus stays on the checked option.
     // A rotary, whose radios run in option order; a slide's and a lever's run as drawn, top to
     // bottom, and s-choicekeys holds their keys to the drawing.
@@ -570,8 +590,8 @@ function defineChecks() {
     const ok = mid.max === '1000' && mid.now >= 0 && mid.now <= 1000 && mid.now !== start.now
       && Math.abs(fine.now - mid.now) <= 20 && disabled === 'true' && wa === wb
       && cancel.after === cancel.before && !cancel.pending && cancel.touch === 'none'
-      && pinch === p0;
-    return { ok, start, mid, fine, disabled, wa, wb, cancel, pinch, p0 };
+      && pinch === p0 && notch !== 0;
+    return { ok, start, mid, fine, disabled, wa, wb, cancel, pinch, p0, notch, zoom: [z0, z1] };
   });
 
   def('s-wave', async ({ page }) => {
