@@ -124,6 +124,7 @@ const CONTRACT = [
   ['synth.keys-silent', 'readout', 'div'], ['synth.engine-elsewhere', 'readout', 'p'],
   ['studio.inspector.connect', 'open', 'button'], ['studio.inspector.savePatch', 'open', 'button'],
   ['studio.inspector.allowMic', 'action', 'button'],
+  ['studio.inspector.svsStep', 'action', 'button'], // K226
   ['studio.inspector.limitNote', 'readout', 'p'],
   ['studio.inspector.presetsBox', 'panel', 'div'], ['studio.inspector.presets', 'open', 'button'],
   ['studio.inspector.presets.menu', 'choice', 'ul'],

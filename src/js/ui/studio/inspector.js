@@ -51,7 +51,8 @@
 //            micError(nodeId) -> text | '' (why that node's input is not open),
 //            micBusy() -> boolean (a permission request is in flight), userPatches() ->
 //            Promise<[{ id, patch }]> (the saved patches: the node preset dropdown, K020),
-//            playhead() -> the Studio transport's playhead (a notes clip's step grid, W008) }
+//            playhead() -> the Studio transport's playhead (a notes clip's step grid, W008),
+//            stepNode(nodeId) -> result (K226: inspector-steps.js svsStepButton) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
@@ -74,7 +75,9 @@ import { sig } from '../../core/math.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
-import { clipStepsView, mountClipSteps, mountListSteps } from './inspector-steps.js';
+import {
+  clipStepsView, mountClipSteps, mountListSteps, svsStepButton,
+} from './inspector-steps.js';
 import {
   SLIDER_STEPS, formatParamValue, parseParamInput, sliderToValue, valueToSlider,
 } from './inspector-fields.js';
@@ -996,6 +999,7 @@ export function mountInspector(host, svc) {
           'data-osc': 'studio.inspector.micError', text: view.mic.error }) : null,
       ]));
     }
+    parts.push(svsStepButton(view, svc)); // K226: null for any other node
     if (typeof svc.userPatches === 'function') parts.push(presetMenu(view, svc)); // K020
     parts.push(textInput(`osc-si-${view.id}-name`, 'Name', view.name,
       (v) => dispatch({ type: 'NODE_RENAME', nodeId: view.id, name: v }),
