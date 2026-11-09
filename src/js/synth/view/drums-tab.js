@@ -7,8 +7,10 @@
 // rewrites that lane in one CLIP_UPDATE (refused, with its sentence, for a voice another row
 // holds). Below the grid one pad per row plays its note live through the Synth's one note path
 // (notes-sink.js: the Drums tab routes the keys to the percussion engine), by pointer, touch and
-// Enter or Space on a focused pad (its click; no key listener of its own). Play and Stop are the Studio transport's; the playing step follows its playhead through
-// the step grid's one frame-loop subscriber. Open in Studio selects the clip in the timeline.
+// Enter on a focused pad (its click; no key listener of its own). Space is the transport's key
+// (W008: the grid never takes it), so Space on a pad starts or stops the Studio transport, never
+// a hit (review R2-K222-3). Play and Stop are the Studio transport's; the playing step follows
+// its playhead through the step grid's one frame-loop subscriber. Open in Studio selects the clip in the timeline.
 // Every edit is one dispatch through the one store; the row order is view state of this page.
 //
 //   createDrumsTab({ nodes, model, dispatch, say, transport, playhead, sink, openStudio, tab })

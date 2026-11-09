@@ -133,7 +133,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
   { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch',
     summary: 'A semi-modular mono voice on the Studio model with a patch bay and docked keys, '
       + 'an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion '
-      + 'voices, an XY tab and a Drums tab of drum steps.',
+      + 'voices, an XY tab and a Bicí tab of drum steps.',
     related: [
       { id: 'studio', why: 'The same document as a graph and a timeline' },
       { id: 'sequencer', why: 'Block sequences of tones and sweeps' },

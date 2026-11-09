@@ -21,7 +21,7 @@
 import { NEW_STEP_GRID } from '../studio/notes-grid.js';
 
 /** The Synth's Drums tab (Q019: a Pro tab of the one Synth workspace). */
-export const DRUMS_TAB = Object.freeze({ id: 'drums', label: 'Drums', title: 'Bicí',
+export const DRUMS_TAB = Object.freeze({ id: 'drums', label: 'Bicí', title: 'Bicí',
   description: 'Bicí kroky jednoho taktu na perkusním enginu panelu: řada je zvuk sady, krok '
     + 'jeho úder. Pady pod mřížkou zahrají řadu hned; Přehrát spustí transport Studia.' });
 
