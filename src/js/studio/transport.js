@@ -1463,6 +1463,8 @@ export function createStudioTransport({
     const stale = new Set([...ticks.values()].filter((k) => k.handle !== ready(k.nodeId))
       .map((k) => k.nodeId));
     for (const id of stale) rebuildClock(id, horizon);
+    // A Keys node rebuilt by the runtime takes up the sounding note, then the later ones.
+    for (const id of notes.stale()) notes.rebuild(id, horizon);
     for (const v of voices.values()) {
       if (v.handle !== ready(v.nodeId) && !v.replacedNoted) {
         // A sounding voice fades out with the node it plays into (the runtime's crossfade);

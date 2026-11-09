@@ -23,8 +23,14 @@
 //   player.rebuild(id, horizon)  re-play node `id`'s pitches from `horizon`: hold the pitch
 //                                there (handle.holdPitch), then every later record in time
 //                                order, so an edit, an out-of-order onset or STOP leaves exactly
-//                                the notes still due
-//   player.prune(now, keepS), player.clear(), player.size
+//                                the notes still due. On a node the runtime rebuilt (a record
+//                                still names the old handle) the note sounding at `horizon`, the
+//                                last record before it, is stepped to there first: the new node
+//                                starts at pitch 0 otherwise (#474 pre-read)
+//   player.stale()               the node ids whose records name a handle the runtime replaced
+//                                (the transport's afterApply rebuilds them, as rebuildClock)
+//   player.prune(now, keepS)     forget records older than keepS, except each node's last one
+//                                (the note a rebuilt node takes up); player.clear(), player.size
 //   notesSteps(model, playhead, registry) -> [{ clipId, step, position }]   the step under the
 //                                playhead of each playing notes clip with a grid
 
@@ -39,12 +45,27 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
   const pitches = new Map();
   const apply = (h, x) => h.play(x.time, x.note, x.velocity, { legato: x.slide, onset: x.gate });
 
+  /** The last record of node `id` before `t`, or null. */
+  const lastBefore = (id, t) => {
+    let last = null;
+    for (const x of pitches.values()) {
+      if (x.nodeId === id && x.time < t && (!last || x.time >= last.time)) last = x;
+    }
+    return last;
+  };
+
   function rebuild(id, horizon) {
     const h = ready(id);
     if (!h || typeof h.holdPitch !== 'function') return;
-    const list = [...pitches.values()].filter((x) => x.nodeId === id && x.time >= horizon)
-      .sort((a, b) => a.time - b.time);
+    const mine = [...pitches.values()].filter((x) => x.nodeId === id);
+    const replaced = mine.some((x) => x.handle !== h);
+    const list = mine.filter((x) => x.time >= horizon).sort((a, b) => a.time - b.time);
     h.holdPitch(horizon);
+    const sounding = replaced ? lastBefore(id, horizon) : null;
+    if (sounding) {
+      sounding.handle = h;
+      h.play(horizon, sounding.note, sounding.velocity);
+    }
     for (const x of list) {
       x.handle = h;
       apply(h, x);
@@ -92,8 +113,19 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
     touch(touched) {
       for (const x of pitches.values()) touched.add(x.nodeId);
     },
+    stale() {
+      return new Set([...pitches.values()].filter((x) => x.handle !== ready(x.nodeId))
+        .map((x) => x.nodeId));
+    },
     prune(now, keepS) {
-      for (const [key, x] of pitches) if (x.time + keepS < now) pitches.delete(key);
+      const keep = new Set();
+      for (const x of pitches.values()) {
+        const last = lastBefore(x.nodeId, now + 1e-9);
+        if (last) keep.add(last.key);
+      }
+      for (const [key, x] of pitches) {
+        if (x.time + keepS < now && !keep.has(key)) pitches.delete(key);
+      }
     },
     clear: () => pitches.clear(),
     get size() { return pitches.size; },
