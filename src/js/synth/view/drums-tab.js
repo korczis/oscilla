@@ -12,7 +12,9 @@
 // never starts the timeline). A strike's note arms the Studio transport (K104), which is why
 // transport.playing reads true after it while playhead().playing stays false (review R2-K222-3,
 // measured in chromium, firefox and webkit). Play and Stop are the Studio transport's; the
-// playing step follows its playhead through the step grid's one frame-loop subscriber. Open in Studio selects the clip in the timeline.
+// playing step follows its playhead through the step grid's one frame-loop subscriber; Record
+// beside Play writes the live hits of a take into the clip (K223, ui/kinds/record-switch.js).
+// Open in Studio selects the clip in the timeline.
 // Every edit is one dispatch through the one store; the row order is view state of this page.
 //
 // Below the pads, the row's sound editor (K071): the voice of one row (the last pad struck, or
@@ -28,6 +30,7 @@ import { DRUM_ROWS, DRUM_VOICES, drumClipOf, lanesOf, namesOf, newDrumClip, rows
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { PERC_VOICE_PARAMS, percParamKey } from '../perc-recipes.js';
 import { mountStepGrid } from '../../ui/kinds/step-grid.js';
+import { bindRecordSwitch, recordSwitchHtml } from '../../ui/kinds/record-switch.js';
 import { clipStepsView, playingStep } from '../../ui/studio/inspector-steps.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -89,7 +92,7 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
     const playing = isPlaying();
     return '<div class="mb-2 flex flex-wrap items-center gap-2">'
       + `<button type="button" class="${PRIMARY}" data-drums-play="" aria-pressed="${playing}">`
-      + `${playing ? TEXT.stop : TEXT.play}</button>`
+      + `${playing ? TEXT.stop : TEXT.play}</button>${recordSwitchHtml(BUTTON)}`
       + `<button type="button" class="${BUTTON}" data-drums-open="" `
       + `data-osc="synth.drums.studio" data-osc-link="open-in">${TEXT.open}</button></div>`;
   }
@@ -175,6 +178,9 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       },
     });
     m = { root: body, grid, clipId: clip.id, view, playing: isPlaying() };
+    // K223: Record beside Play, the transport's one recorder armed for this clip.
+    m.record = bindRecordSwitch(body.querySelector('[data-notes-record]'), { transport,
+      store: { getModel: model, dispatch }, clipId: () => (m ? m.clipId : null), say });
     listen(body);
   }
 
@@ -295,7 +301,10 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       sink().noteOff(held.get(i));
       held.delete(i);
     }
-    if (m) m.grid.destroy();
+    if (m) {
+      m.grid.destroy();
+      m.record.destroy();
+    }
     m = null;
   }
 
