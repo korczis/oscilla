@@ -140,7 +140,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // Knob drags and the wheel (gestures.js): the panel's state through these four.
   const gestures = createGestures({ controlOf, valueOf, setControl, handle, say,
-    label: (x) => `Change ${panel.module(x.mid).label} ${x.c.label}` });
+    label: (x) => `Změnit ${panel.module(x.mid).label} ${x.c.label}` });
 
   // ------------------------------------------------------------------ cables
 
@@ -188,7 +188,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const r = patchCable(model(), panel, from, to, { registry });
     if (r.reason) return say(r.reason, true);
     const done = dispatch(r.action);
-    if (done.ok) say(`Patched ${jackName(from)} to ${jackName(to)}.`);
+    if (done.ok) say(`Propojeno: ${jackName(from)} → ${jackName(to)}.`);
     return done;
   }
 
@@ -196,12 +196,13 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!pending) {
       pending = id;
       const n = compatibleWith(id).size;
-      say(`Propojuji z ${jackName(id)}; vstupy, které kabel přijmou: ${n}. Vyberte jeden `
+      // Konektory, ne vstupy: z výstupu vede kabel do vstupů, ze vstupu do výstupů (c3, F-2).
+      say(`Propojuji z ${jackName(id)}; konektory, které kabel přijmou: ${n}. Vyberte jeden `
         + 'v seznamu spojení pod patch bayí nebo přímo na ní, nebo stejný konektor '
         + 'pro zrušení.');
     } else if (pending === id) {
       pending = null;
-      say('Connection cancelled.');
+      say('Propojování zrušeno.');
     } else {
       const from = pending;
       pending = null;
@@ -230,7 +231,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   function connectList(m, verdicts, cables) {
     const a = jackOf(pending);
     if (!a) return '';
-    const name = (k) => `${jackName(k)} ${jackOf(k).direction === 'in' ? 'input' : 'output'}`;
+    const name = (k) => `${jackName(k)} ${jackOf(k).direction === 'in' ? 'vstup' : 'výstup'}`;
     const ok = [...verdicts].filter(([, v]) => v.ok).map(([k]) => `<li class="${ITEM}">`
       + `<span>${esc(name(k))}</span><button type="button" class="${BTN}" data-connect-to=`
       + `"${esc(k)}" aria-label="Patch ${esc(jackName(pending))} to ${esc(name(k))}">Patch`
@@ -240,10 +241,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       .join('');
     const mine = cables.filter((c) => `${c.from}:out` === pending || `${c.to}:in` === pending)
       .map((c) => `<li class="${ITEM}"><span>${esc(jackName(c.from))} → ${esc(jackName(c.to))}`
-      + `</span><button type="button" class="${BTN}" data-remove-cable="${esc(c.id)}">Remove `
-      + 'cable</button></li>').join('');
+      + `</span><button type="button" class="${BTN}" data-remove-cable="${esc(c.id)}">Odpojit `
+      + 'kabel</button></li>').join('');
     return `<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" `
-      + `id="synth-connect-title">CONNECT FROM ${esc(name(pending).toUpperCase())}</h4>`
+      + `id="synth-connect-title">PROPOJIT Z ${esc(name(pending).toUpperCase())}</h4>`
       + '<ul class="divide-y divide-gray-200 dark:divide-gray-700" '
       + `aria-labelledby="synth-connect-title">${mine}${ok}${no}</ul>`
       + `<button type="button" class="${BTN} mt-2" data-connect-cancel="">Cancel</button>`;
@@ -283,14 +284,15 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       list.innerHTML = cables.map((c) => cableItem(c, states.get(`${c.to}:in`),
         { jackName, item: ITEM, btn: BTN })).join('')
         + gone.map((r) => `<li class="${ITEM}" data-gone="${r.module}"><span>${esc(r.label)} `
-        + `removed in Studio: ${esc(r.jacks.join(', '))} open</span><button type="button" `
-        + `class="${BTN}" data-restore-module="${r.module}">Restore module</button></li>`).join('')
+        + `odstraněn ve Studiu, bez signálu: ${esc(r.jacks.join(', '))}</span><button `
+        + `type="button" class="${BTN}" data-restore-module="${r.module}">Obnovit modul`
+        + '</button></li>').join('')
         + mixed.map((j) => `<li class="${ITEM}"><span>${esc(jackName(j))}: ${STATE_TEXT.mixed}`
         + `</span><button type="button" class="${BTN}" data-break-normal="${esc(j)}">`
-        + 'Break normal</button></li>').join('')
-        + open.map((j) => `<li class="${ITEM}"><span>${esc(jackName(j))}: open, normal removed `
-        + `in Studio</span><button type="button" class="${BTN}" data-restore-normal="${esc(j)}">`
-        + 'Restore normal</button></li>').join('')
+        + 'Rozpojit normál</button></li>').join('')
+        + open.map((j) => `<li class="${ITEM}"><span>${esc(jackName(j))}: bez signálu, normál `
+        + `odstraněn ve Studiu</span><button type="button" class="${BTN}" `
+        + `data-restore-normal="${esc(j)}">Obnovit normál</button></li>`).join('')
         + (cables.length || open.length || mixed.length || gone.length ? ''
           : `<li class="${ITEM}">Žádné kabely: každý vstup hraje svůj normál. `
           + 'Táhněte z jednoho konektoru na druhý, nebo klepněte na dva konektory.</li>');
@@ -319,7 +321,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
           + `${esc(SYNTH_TEXT.takes(feedNames(model(), cuts)))}</p>` : '')
         + '<button type="button" data-insert-panel="" class="mt-3 rounded-lg bg-primary-600 px-4 '
         + 'h-11 font-medium text-white focus:outline-none focus-visible:ring-2 '
-        + `focus-visible:ring-primary-500">Insert the ${esc(panel.title)}</button></div>`;
+        + `focus-visible:ring-primary-500">Vložit ${esc(panel.title)}</button></div>`;
       shape = 'empty';
       return;
     }
@@ -339,7 +341,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + 'border-solid border-gray-200 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 '
       + 'focus-visible:ring-primary-500 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600 '
       + 'dark:hover:bg-gray-700';
-    el.innerHTML = `<nav aria-label="${engines ? 'Synth engines' : 'Synth sections'}" `
+    el.innerHTML = `<nav aria-label="${engines ? 'Enginy Synthu' : 'Sekce Synthu'}" `
       + 'class="sticky top-0 z-20 -mx-4 mb-3 flex snap-x snap-mandatory gap-2 overflow-x-auto '
       + `bg-gray-50 px-4 py-2 dark:bg-gray-900 ${engines ? 'lg:flex-wrap' : 'xl:hidden'}" `
       + `>${faceChips(face)}${chips}</nav>`
@@ -432,7 +434,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       e.preventDefault();
       k.setPointerCapture(e.pointerId);
       knob = gestures.press(k.dataset.knob, x, e);
-      handle().beginGesture(`Change ${panel.module(x.mid).label} ${x.c.label}`);
+      handle().beginGesture(`Změnit ${panel.module(x.mid).label} ${x.c.label}`);
       return;
     }
     const j = e.target.closest('[data-jack]');
@@ -526,7 +528,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       gotoSection(d.goto);
     } else if (d.cable) {
       selected = selected === d.cable ? null : d.cable;
-      say(selected ? 'Cable selected: Delete removes it.' : 'Cable deselected.');
+      say(selected ? 'Kabel vybrán: Delete ho odpojí.' : 'Výběr kabelu zrušen.');
       renderBay();
     } else if (d.removeCable) {
       const r = unpatch(model(), panel, d.removeCable);
@@ -553,7 +555,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     } else if ('connectCancel' in d) {
       const j = pending;
       pending = null;
-      say('Connection cancelled.');
+      say('Propojování zrušeno.');
       renderBay();
       const again = j && host().querySelector(`[data-jack="${j}"]`);
       if (again) again.focus({ preventScroll: true });
@@ -580,7 +582,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const target = el && el.querySelector(`[data-module="${mid}"]`);
     if (!target) return;
     target.scrollIntoView({ block: 'start', behavior: 'auto' });
-    const bar = el.querySelector('nav[aria-label="Synth sections"]');
+    const bar = el.querySelector('nav[aria-label="Sekce Synthu"]');
     const r = bar ? bar.getBoundingClientRect() : null;
     const over = r && r.height ? r.bottom + 8 - target.getBoundingClientRect().top : 0;
     let s = target.parentElement;
@@ -610,7 +612,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       steps.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: id(a.module), port: a.port },
         to: { node: id(b.module), port: b.port }, props: n.props });
     }
-    dispatch({ type: 'BATCH', label: `Restore ${m.label}`, steps });
+    dispatch({ type: 'BATCH', label: `Obnovit ${m.label}`, steps });
   }
 
   function onKeyDown(e) {
@@ -655,7 +657,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const input = document.createElement('input');
     input.type = 'text';
     input.value = knobModel(x.c.param).format(valueOf(x));
-    input.setAttribute('aria-label', `${panel.module(x.mid).label} ${x.c.label}, type a value`);
+    input.setAttribute('aria-label', `${panel.module(x.mid).label} ${x.c.label}, zadejte hodnotu`);
     input.className = 'w-20 rounded border border-solid border-gray-300 bg-gray-50 px-1 text-xs '
       + 'text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
     out.replaceWith(input);
@@ -827,7 +829,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const p = presetOf(id);
         this.synth.preset = id;
         if (p.engine) showTab('engines', p.engine);
-        say(`Preset ${p.title}.`);
+        say(`Preset ${p.title}.`); // a name, not a sentence
       }
       return done.ok;
     },
@@ -851,7 +853,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const url = `${window.location.href.split('#')[0]}#${hash}`;
       this.synth.link = url;
       try {
-        navigator.clipboard.writeText(url).then(() => say('Synth link copied.'),
+        navigator.clipboard.writeText(url).then(() => say('Odkaz na Synth zkopírován.'),
           () => say('Zkopírujte odkaz níže; schránka tu není k dispozici.'));
       } catch (e) {
         say('Zkopírujte odkaz níže; schránka tu není k dispozici.');
