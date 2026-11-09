@@ -754,11 +754,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         el.addEventListener('wheel', gestures.wheel, { passive: false });
         el.addEventListener('keydown', onKeyDown);
       }
-      this.$watch('workspace', (ws, old) => {
-        if (old === 'synth' && ws !== 'synth') {
-          pending = null;
-          disarm(false);
-        }
+      this.$watch('workspace', (ws) => {
+        // Leaving the Synth disarms it through the bus's leave policy (C053: synthLeave).
         if (ws === 'synth') {
           syncArmed();
           strip.sync();
@@ -790,6 +787,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       else say(armedText());
       this.synth.armed = !!t.armed;
       return r.ok;
+    },
+
+    /** The bus's leave policy (C053): leaving the Synth ends a pending connect and disarms. */
+    synthLeave() {
+      pending = null;
+      disarm(false);
     },
 
     /** The playback bus's stopAll (C050: Escape, a page hide): on the Synth, Arm is off. */
