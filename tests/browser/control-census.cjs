@@ -772,6 +772,12 @@ both({ id: 'studio.tempo', ws: 'studio', control: '[data-osc="studio.tl.tempo"]'
   pointer: D.type('[data-osc="studio.tl.tempo"]', '90'),
   keyboard: D.typeKeys('[data-osc="studio.tl.tempo"]', '90'),
   expect: (s) => s.studio.tempo === 90 });
+// K068: four taps in one series set the tempo by their mean interval, clamped to the tempo range
+// (taps this fast clamp at its maximum), one tempo edit per series.
+both({ id: 'studio.tap', ws: 'studio', control: '[data-osc="studio.tl.tap"]',
+  pointer: seq(...[1, 2, 3, 4].map(() => D.click('[data-osc="studio.tl.tap"]'))),
+  keyboard: seq(...[1, 2, 3, 4].map(() => D.keys('[data-osc="studio.tl.tap"]', 'Enter'))),
+  expect: (s, b) => s.studio.tempo !== b.studio.tempo });
 row({ id: 'studio.graph.node.pointer', ws: 'studio', control: '[data-osc="studio.graph.node"]',
   how: 'pointer', act: async (page) => { await S.studioNode('oscillator')(page); },
   expect: (s) => (s.studio.selection.nodes || []).length === 1 });

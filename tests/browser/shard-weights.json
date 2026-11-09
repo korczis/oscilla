@@ -5,13 +5,15 @@
     "prints both), one suite at a time. tests/browser/lib/shards.cjs balances the CI legs with",
     "them. A suite without a weight gets its browser's median; a weight for a suite the release",
     "gate no longer runs fails tests/unit/browser-shards.test.mjs. v3-ui prints no harness lines:",
-    "its weight is its CI step's end minus analysis-worker's end line."
+    "its weight is its CI step's end minus analysis-worker's end line. instrument-dsp and studio-keys are from the last two runs only."
   ],
   "runs": [
     42513898661,
     42509049766,
     42520947188,
-    42522764794
+    42522764794,
+    42609411217,
+    42606070454
   ],
   "seconds": {
     "chromium": {
@@ -23,6 +25,7 @@
       "dsp": 1,
       "engine-v1port": 109,
       "first-screen": 112,
+      "instrument-dsp": 1,
       "integration-map": 348,
       "iphone": 19,
       "journeys": 93,
@@ -33,6 +36,7 @@
       "navigation": 182,
       "qa-regressions": 46,
       "sequencer": 71,
+      "studio-keys": 3,
       "surface-census": 38,
       "synth": 114,
       "synth-engines": 52,
@@ -60,6 +64,7 @@
       "dsp": 4,
       "engine-v1port": 139,
       "first-screen": 187,
+      "instrument-dsp": 2,
       "integration-map": 522,
       "iphone": 40,
       "journeys": 161,
@@ -70,6 +75,7 @@
       "navigation": 253,
       "qa-regressions": 71,
       "sequencer": 58,
+      "studio-keys": 5,
       "surface-census": 62,
       "synth": 169,
       "synth-engines": 64,
@@ -97,6 +103,7 @@
       "dsp": 3,
       "engine-v1port": 117,
       "first-screen": 217,
+      "instrument-dsp": 1,
       "integration-map": 735,
       "iphone": 63,
       "journeys": 154,
@@ -107,6 +114,7 @@
       "navigation": 256,
       "qa-regressions": 62,
       "sequencer": 77,
+      "studio-keys": 6,
       "surface-census": 61,
       "synth": 273,
       "synth-engines": 76,

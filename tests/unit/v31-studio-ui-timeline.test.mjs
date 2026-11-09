@@ -144,7 +144,7 @@ test('a clip the transport would not play lists the reason as a problem', () => 
   assert.ok(r.ok, r.reason);
   const m = s.getModel();
   const v = clipView(m, m.timeline.clips.find((c) => c.id === r.created.clips[0]));
-  assert.ok(v.problems.some((p) => /Only gate events on an Envelope/.test(p)),
+  assert.ok(v.problems.some((p) => /Hrají se jen události brány na Envelope/.test(p)),
     v.problems.join(' | '));
   assert.match(v.aria, /problem/);
 });

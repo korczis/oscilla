@@ -2,7 +2,10 @@
 // their faces (knobs, switches, jacks), the normalling and the amount knobs. Pure: no DOM, no
 // Web Audio. Every control and jack is generated from the registry's defineNode descriptors;
 // a panel may only fix, relabel, narrow (a range or the options) or set initial values, each
-// validated against the registry, so adding a module is one declaration entry.
+// validated against the registry, so adding a module is one declaration entry. A module's
+// `studio` lists the parameters it leaves to the Studio Inspector (shown there, not on the
+// face, with the reason the module states: Keys' key range, which the piano's zones edit, K060
+// and K116); each must be a parameter of its node type.
 //
 //   definePanel(decl, registry?) -> panel   frozen; throws TypeError on an authoring error
 //   panel.faceOf(moduleId)  -> [control]    control = { key, kind: 'knob' | 'switch' |
@@ -89,9 +92,12 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     const def = registry.get(m.node);
     if (!def) fail(pid, `module ${m.id} names unknown node type ${m.node}`);
     if (!/^[a-z][a-z0-9-]{0,31}$/.test(m.id)) fail(pid, `module id ${m.id}`);
+    for (const k of m.studio || []) {
+      if (!def.params.some((p) => p.key === k)) fail(pid, `${m.id}.studio.${k} není parametr`);
+    }
     for (const group of ['fixed', 'init', 'labels', 'ranges', 'options']) {
       for (const k of Object.keys(m[group] || {})) {
-        if (!def.params.some((p) => p.key === k)) fail(pid, `${m.id}.${group}.${k} is no param`);
+        if (!def.params.some((p) => p.key === k)) fail(pid, `${m.id}.${group}.${k} není parametr`);
       }
     }
     const params = def.params.map((p) => narrow(pid, m, p));
@@ -194,7 +200,8 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     faceOf(mid) {
       const m = byId.get(mid);
       if (!m) return [];
-      const params = m.params.filter((p) => !(p.key in (m.fixed || {})))
+      const params = m.params.filter((p) => !(p.key in (m.fixed || {}))
+        && !(m.studio || []).includes(p.key))
         .map((p) => ({ key: p.key, kind: KIND[p.type], label: p.label, param: p,
           initial: p.key in m.values ? m.values[p.key] : p.default }));
       const amts = amounts.filter((a) => a.module === mid).map((a) => ({ key: a.key,

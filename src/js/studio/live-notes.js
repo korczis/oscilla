@@ -28,9 +28,21 @@
 //   (legato while touched); on opens its gate's targets as a Keys gate does, off releases them
 //   and, as all-off does, puts Y back at its rest, 0 (handle.rest, K183).
 
+//   A note outside 0-127 is refused on every node that plays notes, and on a Keys node a note
+//   on outside its Key low to Key high: { ok: false, code: 'note-range' | 'key-range', reason },
+//   never clamped to a neighbour silently (K060).
+
 import { gateCloseAt } from '../audio/gate.js';
 import { createNoteStack } from '../synth/note-stack.js';
 import { playsNotes } from './registry.js';
+
+/** The router's refusals, as the user reads them. */
+export const LIVE_NOTES_TEXT = Object.freeze({
+  noteRange: (n) => `Nota ${n} je mimo rozsah not 0 až 127; nehraje se.`,
+  keyRange: (n, lo, hi) => `Nota ${n} je mimo rozsah kláves tohoto uzlu Keys ${lo} až ${hi}; `
+    + 'nehraje se.',
+});
+const inNoteRange = (n) => Number.isInteger(n) && n >= 0 && n <= 127;
 
 const unmuted = (e) => !(e.props && e.props.muted);
 
@@ -99,6 +111,8 @@ export function createLiveNotes({ getModel, handleOf }) {
   };
   const gate = (id, at, on) => {
     if (on) opened.set(id, at); else opened.delete(id);
+    const kh = handleOf(id);
+    if (kh && typeof kh.gateAt === 'function') kh.gateAt(at, on);
     const { envelopes, clocks } = gateTargets(getModel(), id);
     for (const env of envelopes) {
       const h = handleOf(env);
@@ -171,6 +185,9 @@ export function createLiveNotes({ getModel, handleOf }) {
     if ((ph && typeof ph.move === 'function') || (pads.has(keysId) && /off/.test(kind))) {
       return padEvent(keysId, ph, ev);
     }
+    if ((kind === 'on' || kind === 'off') && !inNoteRange(note)) {
+      return { ok: false, code: 'note-range', reason: LIVE_NOTES_TEXT.noteRange(note) };
+    }
     if (ph && typeof ph.noteOn === 'function') return polyEvent(keysId, ph, ev);
     const st = stackOf(keysId);
     if (kind === 'all-off') {
@@ -181,6 +198,12 @@ export function createLiveNotes({ getModel, handleOf }) {
     const h = handleOf(keysId);
     if (!h || typeof h.play !== 'function') {
       return { ok: false, reason: 'The Keys node is not running.' };
+    }
+    const [lo, hi] = typeof h.keyRange === 'function' ? h.keyRange() : [0, 127];
+    // A legato slide (K183) lands on its target note as a note-on does: outside the range it
+    // is refused the same way, and the held note it slid from keeps sounding (K060).
+    if ((kind === 'on' || kind === 'legato') && (note < lo || note > hi)) {
+      return { ok: false, code: 'key-range', reason: LIVE_NOTES_TEXT.keyRange(note, lo, hi) };
     }
     const prio = typeof h.priority === 'function' ? h.priority() : 'last';
     if (kind === 'legato') {
@@ -194,7 +217,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     const c = kind === 'on' ? st.press(note, velocity, prio) : st.release(note, prio);
     if (c.empty && !c.unchanged) gate(keysId, ev.forced ? at : closeAt(keysId, at), false);
     else if (c.top && (c.retrigger || c.legato)) {
-      h.play(at, c.top.note, c.top.velocity, { legato: !!c.before });
+      h.play(at, c.top.note, c.top.velocity, { legato: !!c.before, onset: !!c.retrigger });
       if (c.retrigger) gate(keysId, at, true);
     }
     return { ok: true, held: st.size, top: c.top ? c.top.note : null, retrigger: !!c.retrigger };
