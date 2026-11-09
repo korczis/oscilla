@@ -154,14 +154,15 @@ export const OUTPUT_YIELDS = Object.freeze(Object.fromEntries(OUTPUT_OWNER_TABLE
  * options: { app() → the reactive component or null, sequencer() → the sequencer editor or
  *            null, changed() → called (in a microtask) after the playing state changed,
  *            claimed(owner, reason) → told of every granted claim (optional), trace → the one
- *            operation trace (core/trace.js) every bus event is recorded in (optional) }
+ *            operation trace (core/trace.js) every bus event is recorded in (optional),
+ *            engine → the live AudioEngine whose master level the bus alone writes (C052) }
  * → { claim(owner, reason), holds(owner), release(owner), owner(), stopAll(reason),
  *      onStop(fn), playback(), subscribe(fn), note(on, { note, input }), armed(owner, on),
- *      claimOutput(owner),
+ *      setMaster(level, { owner, at }), claimOutput(owner),
  *      stopPlayback(cmp, cause), outputBusy(cmp), sequencerPlaying(), stopSequence(cmp) }
  */
 export function createOutputBus({ app, sequencer, changed = () => {}, claimed = () => {},
-  trace = null }) {
+  trace = null, engine = null }) {
   // Every bus event is a step of the one operation trace (C050, core/trace.js, ADR 0042),
   // recorded here and never by a player: owner 'bus', the owner it concerns as the entity.
   const step = (kind, owner, f = {}) => (trace && typeof trace.record === 'function'
@@ -398,8 +399,47 @@ export function createOutputBus({ app, sequencer, changed = () => {}, claimed = 
     moved(was, null);
   }
 
-  return { claim, holds, release, owner, playback, subscribe, stopAll, onStop, note, armed,
-    sequencerPlaying, stopSequence, claimOutput, stopPlayback, outputBusy };
+  /**
+   * The live engine's master level (C052): the bus is its one writer. `owner` asks for level
+   * `g` (the status-bar level for the instrument and the sequencer, the Studio's Output
+   * level); `at` starts the glide at that audio time (a level given back after a fade, the
+   * Studio's STOP). Newest wins, as C012 shipped it: the write applies at once.
+   */
+  function setMaster(g, { owner: who = null, at = null } = {}) {
+    step('master', who, { detail: { level: g, held: at !== null && at !== undefined } });
+    writeMaster(engine, g, at);
+  }
+
+  const api = { claim, holds, release, owner, playback, subscribe, stopAll, onStop, note, armed,
+    setMaster, sequencerPlaying, stopSequence, claimOutput, stopPlayback, outputBusy };
+  if (engine && typeof engine === 'object') masterBuses.set(engine, api);
+  return api;
+}
+
+// ------------------------------------------------------------ the master level (C052)
+
+const masterBuses = new WeakMap(); // the live engine -> the bus that writes its master level
+
+/** The one place a master level reaches an engine: a held glide when `at` is given. */
+function writeMaster(engine, g, at = null) {
+  if (!engine) return;
+  if (at !== null && at !== undefined && typeof engine.holdMasterGain === 'function') {
+    engine.holdMasterGain(g, at);
+  } else if (typeof engine.setMasterGain === 'function') {
+    engine.setMasterGain(g);
+  }
+}
+
+/**
+ * Ask for `engine`'s master level `g` (C052): through the engine's bus when main.js composed
+ * one (it records and writes it), else written here (an offline render's engine, a test's).
+ * Every other module asks this; none writes the engine's master level itself.
+ *   opts: { owner, at } as bus.setMaster
+ */
+export function requestMasterLevel(engine, g, opts = {}) {
+  const bus = engine && typeof engine === 'object' ? masterBuses.get(engine) : null;
+  if (bus) bus.setMaster(g, opts);
+  else writeMaster(engine, g, opts.at);
 }
 
 /** The answer of a granted claim. */

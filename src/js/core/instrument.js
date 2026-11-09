@@ -58,7 +58,7 @@ import {
   sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
 } from '../audio/patterns.js';
 import { micErrorMessage, MIC_PRIVACY_NOTICE } from '../audio/microphone.js';
-import { OWNER, playOwnerOf } from './output-bus.js';
+import { OWNER, playOwnerOf, requestMasterLevel } from './output-bus.js';
 import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
@@ -420,7 +420,7 @@ export function createInstrument(deps = {}) {
       // running context would replace the level the Studio's Master Output set while it plays
       // (C012, engine-sync-2). The gainLevel $watch in main.js keeps a running engine in step,
       // and claimMasterLevel gives the Playground its level when it starts a voice.
-      if (first) engine.setMasterGain(this.gainLevel);
+      if (first) requestMasterLevel(engine, this.gainLevel, { owner: OWNER.instrument });
       if (!engine.init()) { this.status = 'ERROR'; return false; }
       this.sampleRate = engine.sampleRate;
       this.audioState = engine.state;
@@ -493,7 +493,7 @@ export function createInstrument(deps = {}) {
      * ensureAudio claims nothing: a click or a key press elsewhere leaves the level alone.
      */
     claimMasterLevel() {
-      engine.setMasterGain(this.gainLevel);
+      requestMasterLevel(engine, this.gainLevel, { owner: OWNER.instrument }); // the bus (C052)
       if (this.studio && Number.isFinite(this.studio.masterLevel)) this.studio.masterLevel = null;
     },
 

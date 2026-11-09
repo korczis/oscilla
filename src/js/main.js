@@ -284,6 +284,7 @@ const traceIdle = new Set();
 const trace = createTrace({ now: Date.now, onIdle: () => { for (const fn of traceIdle) fn(); } });
 const bus = createOutputBus({
   trace,
+  engine, // the bus is the one writer of its master level (C052)
   app: () => app,
   sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
 const { claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy } = bus;
@@ -737,7 +738,7 @@ function integrationInit() {
     notifyAdapter();
   });
   cmp.$watch('gainLevel', (g) => {
-    engine.setMasterGain(g);
+    bus.setMaster(g, { owner: OWNER.instrument }); // the status-bar level (C052)
     // The newer level: the status bar drops the Studio's Master (C012; kept at STOP, #119 D2).
     if (cmp.studio && cmp.studio.masterLevel !== null) cmp.studio.masterLevel = null;
   });
