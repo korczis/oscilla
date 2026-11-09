@@ -127,7 +127,7 @@ function statusBar({ engine = { masterWrites: 7 } } = {}) {
   const wb = createWorkbench({ engine });
   const cmp = {};
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
-  Object.assign(cmp, { status: 'READY', playing: false, releasing: false, seqPlaying: false,
+  Object.assign(cmp, { status: 'READY', playing: false, releasing: false, playback: { owner: null, since: 0 },
     gainLevel: 0.08, source: 'single', pattern: 'tone', dualFa: 440, dualFb: 441,
     metricFrequencyIdle: 440, instFreq: null, currentPattern: { label: 'Continuous tone' },
     pp: {}, studio: { playing: false, masterLevel: null, masterWrites: null } });

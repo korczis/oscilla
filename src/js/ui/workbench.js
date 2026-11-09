@@ -38,6 +38,7 @@ import {
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
+import { OWNER } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
 import { registerEmptyPredicate } from './empty-states.js';
 
@@ -86,7 +87,11 @@ export function createWorkbench(svc) {
     rovingKeydown,
     timeWindowMs: 5,
     announceText: '',
-    seqPlaying: false,
+    // The playback bus's one playing state (C051, core/output-bus.js publishes it here in the
+    // same event as a claim, release or stop): every playing mirror below reads it.
+    playback: { owner: null, since: 0 },
+    /** The sequencer holds the output: a read of the bus's state, never assigned (C051). */
+    get seqPlaying() { return !!this.playback && this.playback.owner === OWNER.sequencer; },
     // The sequence's digest now and at its last load, import or export (C019): main.js updates
     // seqDigest from the editor's onChange, markSequenceSaved() sets both.
     seqDigest: '',

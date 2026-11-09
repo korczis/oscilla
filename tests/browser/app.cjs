@@ -5241,6 +5241,64 @@ function defineChecks() {
     }
   });
 
+  // C051, one playing state: after each hand-over (the sequencer, then the Studio, then the
+  // sequencer again, then the instrument) the status bar, the scope's owner (the bridge), the
+  // bus and the Studio transport agree, read in one evaluate (one frame), within a named
+  // deadline: no 150 ms poll window in which they disagree.
+  def('one-playing-state', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    /** Every view of who plays, read in the same frame. */
+    const views = () => inPage(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      return { bus: O.bus.owner(), playback: a.playback ? a.playback.owner : null,
+        seq: !!a.seqPlaying, studio: !!a.studioOwnsOutput(), instrument: !!a.playing,
+        scope: O.viz.state.outputOwner, label: a.statusLabel, pattern: a.statusPatternText };
+    });
+    const agree = (want) => (v) => v.bus === want && v.playback === want && v.scope === want
+      && v.seq === (want === 'sequencer') && v.studio === (want === 'studio')
+      && v.instrument === (want === 'instrument') && v.label === 'PLAYING';
+    const res = {};
+    const settle = async (want, what) => {
+      try {
+        return await until(async () => {
+          const v = await views();
+          return agree(want)(v) ? v : null;
+        }, { ms: 6000, what: `one-playing-state: ${what}` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        return { timedOut: true, ...(await views()) };
+      }
+    };
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      await inPage(() => window.OSCILLA.app.setWorkspace('sequencer'));
+      await until(() => inPage(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: 'one-playing-state: the Sequencer opens' });
+      await p.click('#osc-seq-play');
+      res.sequencer = await settle('sequencer', 'the sequence plays, every view says so');
+      await inPage(() => window.OSCILLA.app.studioPlay());
+      res.studio = await settle('studio', 'Studio PLAY takes over, every view says so');
+      await p.click('#osc-seq-play');
+      res.sequencerAgain = await settle('sequencer', 'the sequence takes it back');
+      await inPage(() => {
+        window.OSCILLA.app.setContinuous(true);
+        window.OSCILLA.app.toggleLatch();
+      });
+      res.instrument = await settle('instrument', 'the instrument takes over');
+      await inPage(() => window.dispatchEvent(new Event('pagehide'))); // leave nothing playing
+      const failed = Object.keys(res).filter((k) => res[k].timedOut);
+      if (errs.length) failed.push('pageerror');
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
   // C050, one stop path: each player is started, then stopped by Escape, a page hide and (for
   // the instrument and the sequencer, the owners the status-bar key stops, ADR 0050) the
   // status-bar stop; after each stop the page waits, against a named deadline, for nothing

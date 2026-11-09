@@ -95,7 +95,7 @@ test('C002: the sequencer takes the output from instrument and Studio at once', 
   const { owner, cmp, log, changes } = setup({ playing: true, studio: true });
   assert.equal(owner.claimOutput('sequencer'), true);
   assert.deepEqual(log, ['instrument.stopNow', 'studio.stop']);
-  assert.equal(cmp.seqPlaying, true, 'set in the action, not by the 150 ms poll');
+  assert.equal(cmp.playback.owner, 'sequencer', 'published in the action, no poll (C051)');
   await tick();
   assert.equal(changes(), 1, 'the adapter listeners hear of it');
 });
@@ -107,7 +107,7 @@ test('C002: an instrument voice stops a playing sequence from its live state', a
   assert.equal(owner.claimOutput('instrument'), true);
   assert.deepEqual(log, ['seq.stop']);
   assert.equal(editor.playing, false);
-  assert.equal(cmp.seqPlaying, false);
+  assert.equal(cmp.playback.owner, 'instrument', 'the bus\'s state names the newer owner');
 });
 
 test('C002: stopPlayback (MEASURE, Studio PLAY) reads the live sequencer, not the copy', () => {
@@ -115,7 +115,7 @@ test('C002: stopPlayback (MEASURE, Studio PLAY) reads the live sequencer, not th
   editor.playing = true; // started inside the poll window: cmp.seqPlaying still false
   owner.stopPlayback(cmp);
   assert.deepEqual(log, ['seq.stop', 'instrument.stopNow', 'studio.stop']);
-  assert.equal(cmp.seqPlaying, false);
+  assert.notEqual((cmp.playback || {}).owner, 'sequencer');
   // C036: the notes are a row of the one table, released by stopPlayback too (V502).
   assert.deepEqual(OUTPUT_YIELDS.measure, ['sequencer', 'instrument', 'studio', 'notes']);
 });
@@ -206,7 +206,8 @@ function notesCmp(fields) {
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
   Object.assign(cmp, {
     tabs: { analysis: 'waveform' }, timeWindowMs: 5, source: 'single', metricFrequency: 250,
-    effectiveSampleRate: 48000, waveform: 'sine', playing: false, seqPlaying: false,
+    effectiveSampleRate: 48000, waveform: 'sine', playing: false,
+    playback: { owner: null, since: 0 },
     studio: { playing: false }, studioOwnsOutput() { return this.studio.playing; },
     status: 'READY', kbdSounding: false, kbdHeld: '',
   }, fields);

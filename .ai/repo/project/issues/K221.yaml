@@ -6,7 +6,7 @@ title: "A step-sequencer strip above the Synth face plays the panel's Keys from 
 slug: a-step-sequencer-strip-above-the-synth-face
 priority: p2
 profile: implementation
-objective: "Lands as feat(synth). Q103 (2): a strip of 8 or 16 steps above the Synth panel, each with a pitch, a gate and an on-light, playing the panel's Keys on the transport. It is the Step Modulator node's face with three lanes (pitch and two control voltages, as the reference's 16 steps by three channels), its outputs typed control ports a cable patches to the Keys or any parameter, and its steps a grid projection (ADR 0086), mounted through the one step-grid kind (W008) that the drum machine (K073) mounts too, never a second grid model; until W008 exists it waits."
+objective: "Lands as feat(synth). Q103 (2): a step-sequencer strip above the Synth panel plays the panel's Keys on the transport. As built (restated 2026-11-09 after oscilla-c1's review C1-K221-2 of 7521fc69; the criteria are unchanged): the strip is a notes clip of 16 steps of 1/16 on its own event track (synth-steps) targeting the panel's Keys, its steps a grid projection (ADR 0086) drawn and edited by the one step-grid kind (W008) through the Studio Inspector's clip-steps mount, never a second grid model, and played by the transport's notes path (K068) in a loop the strip sets when the document has none. Known limit (oscilla-c1, C1-K221-4): that loop is written in seconds at the tempo of the moment it is created; a later tempo change rescales the tempo-linked clip but not the loop, so the two diverge until the loop is set again (a tempo-linked loop is follow-up work, not this issue). It shows only once its clip exists and is added from the dock's instrument picker (Krokový sekvencer), so the default Synth view and its visual references are unchanged. The Step Modulator's steps in the Studio Inspector are edited through the same kind's param-list mode. The earlier wording (the Step Modulator node's face with three lanes, pitch and two control voltages with typed control outputs, 8 or 16 steps) is not built here; a three-lane modulator face would be its own issue."
 why: "Owner direction Q103 (the analog sequencer above the semi-modular face)."
 scope:
   - "src/js/synth/ui.js"
@@ -27,4 +27,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-07'
-updated_at: '2026-11-07'
+updated_at: '2026-11-09'

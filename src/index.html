@@ -2732,6 +2732,14 @@
         aria-live="polite" data-osc="synth.status" x-text="synth.status"></p>
       <p class="mb-3 break-all text-xs text-gray-500 dark:text-gray-400" x-show="synth.link"
         data-osc="synth.link" x-text="synth.link"></p>
+      <!-- K221: the step-sequencer strip above the face, shown once its notes clip exists (the
+           picker's "Krokový sekvencer" adds it); the one step-grid kind draws it. -->
+      <section data-osc="synth.steps" x-show="synth.strip && synth.tab === 'panel'" x-cloak
+        aria-labelledby="osc-synth-steps-title"
+        class="mb-4 rounded-lg bg-white p-4 shadow dark:bg-gray-800">
+        <h3 id="osc-synth-steps-title" class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Krokový sekvencer</h3>
+        <div id="osc-synth-steps-grid"></div>
+      </section>
       <div data-osc="synth.panel" role="tabpanel" :aria-labelledby="'osc-synth-tab-' + synth.tab"></div>
     </section>
 

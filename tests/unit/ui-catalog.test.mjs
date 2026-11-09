@@ -135,6 +135,7 @@ const CONTRACT = [
   ['nav.about', 'open', 'a'],
   ['synth-view', 'workspace', 'section'], ['synth.preset', 'choice', 'select'],
   ['synth.arm', 'switch', 'button'], ['synth.studio', 'open', 'button'],
+  ['synth.steps', 'panel', 'section'],
   ['synth.drums.studio', 'open', 'button'],
   ['synth.copy-link', 'action', 'button'], ['synth.tab', 'choice', 'button'],
   ['synth.status', 'readout', 'p'], ['synth.link', 'readout', 'p'],

@@ -164,8 +164,22 @@ export function chordOf(e) {
     : ''}${k}`;
 }
 
-export function cellName(laneName, step, cell, mode = 'notes') {
-  const state = cell ? STEP_GRID_TEXT.on : STEP_GRID_TEXT.off;
+/**
+ * The value a list step is off at (K221, review of 7521fc69): 0 on a range that spans it (the
+ * Step Modulator's bipolar -1..1, where 0 is no modulation), else the range's minimum.
+ */
+export function listOffValue(param) {
+  return param.min < 0 && param.max > 0 ? 0 : param.min;
+}
+
+/** A list value rounded to the parameter's step, else to 0.01, and held in its range. */
+export function listValue(param, v) {
+  const unit = param.step || 0.01;
+  return clamp(Math.round(v / unit) * unit, param.min, param.max);
+}
+
+export function cellName(laneName, step, cell, mode = 'notes', on = !!cell) {
+  const state = on ? STEP_GRID_TEXT.on : STEP_GRID_TEXT.off;
   if (mode === 'param-list') return `${STEP_GRID_TEXT.Step(step + 1)}, ${fmt(cell)}, ${state}`;
   const accent = cell && cell.vel >= ACCENT_VEL ? `, ${STEP_GRID_TEXT.accent}` : '';
   return `${laneName}, ${STEP_GRID_TEXT.step(step + 1)}, ${state}${accent}`;
@@ -208,7 +222,8 @@ export function createStepGrid(opts) {
   const project = () => (list ? null : projectNotes(payload.notes, { lanes, steps, stepBeats }));
   let grid = project();
   const pages = () => Math.max(1, Math.ceil(steps / pageSteps));
-  const on = (lane, step) => (list ? values[step] !== param.min : !!grid.cells[lane][step]);
+  const offValue = list ? listOffValue(param) : null;
+  const on = (lane, step) => (list ? values[step] !== offValue : !!grid.cells[lane][step]);
 
   /** The steps a gesture acts on: the selected range of the focused lane, else the focus. */
   function targets() {
@@ -235,7 +250,10 @@ export function createStepGrid(opts) {
     if (JSON.stringify(notes) === JSON.stringify(payload.notes)) return null;
     return { type: 'CLIP_UPDATE', clipId: opts.clipId, payload: { ...payload, notes } };
   }
-  function listAction(next) {
+  function listAction(proposed) {
+    // Held in the range and on the parameter's step: a key at the end of the range changes
+    // nothing and says nothing (review of 7521fc69), as a slider at its stop.
+    const next = proposed.map((v, i) => (v === values[i] ? v : listValue(param, v)));
     if (next.every((v, i) => v === values[i])) return null;
     const why = validateParamValue(param, next);
     if (why) {
@@ -248,8 +266,8 @@ export function createStepGrid(opts) {
   function setAll(ts, state) {
     if (list) {
       const next = [...values];
-      for (const t of ts) next[t.step] = state ? (values[t.step] !== param.min
-        ? values[t.step] : param.max) : param.min;
+      for (const t of ts) next[t.step] = state ? (values[t.step] !== offValue
+        ? values[t.step] : param.max) : offValue;
       return listAction(next);
     }
     return notesAction(ts.filter((t) => on(t.lane, t.step) !== state)
@@ -435,8 +453,7 @@ export function createStepGrid(opts) {
       const f = clamp(fraction, 0, 1);
       if (list) {
         const next = [...values];
-        next[step] = param.min + f * (param.max - param.min);
-        if (param.step) next[step] = Math.round(next[step] / param.step) * param.step;
+        next[step] = param.min + f * (param.max - param.min); // rounded by listAction
         return send(listAction(next));
       }
       const vel = Math.max(0.01, Math.round(f * 100) / 100);

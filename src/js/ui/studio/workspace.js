@@ -524,7 +524,12 @@ export function createStudioUi(svc = {}) {
       window.addEventListener('keydown', onKeyDown);
       window.addEventListener('keyup', onKeyUp);
       this.$watch('playing', (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); });
-      this.$watch('seqPlaying', (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); });
+      // A sequence that takes the output stops the Studio: a subscription to the playback bus's
+      // state (C051; its claim already stops the Studio through its yields), else the old watch.
+      const seqTook = (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); };
+      if (typeof svc.onPlayback === 'function') {
+        svc.onPlayback((st) => seqTook(st.owner === OWNER.sequencer));
+      } else this.$watch('seqPlaying', seqTook);
       // A Studio measurement shows MEASURE's own state and progress in the Studio task strip.
       const follow = () => {
         if (ctx.measureRun && ctx.measureRun.busy) setTask(measureTaskView());

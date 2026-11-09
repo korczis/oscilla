@@ -74,7 +74,7 @@ import { sig } from '../../core/math.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
-import { clipStepsView, mountClipSteps } from './inspector-steps.js';
+import { clipStepsView, mountClipSteps, mountListSteps } from './inspector-steps.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
 import { sliderFill } from '../app.js';
 
@@ -750,6 +750,11 @@ export function mountInspector(host, svc) {
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
   let steps = null; // the step grid of a shown notes clip (W008)
+  const listGrids = new Map(); // K221: param key -> its step grid
+  const dropListGrids = () => {
+    listGrids.forEach((g) => g.destroy());
+    listGrids.clear();
+  };
   // The graph summary of the Studio card (K168): one instance, so its open groups survive a
   // rebuild; a node selects, frames and focuses in the graph (Find node's path), Connect…
   // opens the connection list of the output port.
@@ -938,27 +943,23 @@ export function mountInspector(host, svc) {
     return h('div', { class: 'osc-si-field', 'data-field': f.key }, [btn]);
   }
 
+  /** K221: a list parameter is a step grid (mountListSteps) and a count. */
   function listField(view, f) {
-    const id = `osc-si-${view.id}-${f.key}`;
-    const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
-      autocomplete: 'off', 'data-key': f.key, 'data-osc': 'studio.inspector.param',
-      value: f.input, 'aria-describedby': `${id}-err` });
-    const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
-    const r = { input, error, field: f };
-    input.addEventListener('change', () => {
-      const p = parseParamInput(f.param, input.value);
-      if (!p.ok) {
-        showError(r, p.error);
-        svc.announce(p.error, { assertive: true });
-        return;
-      }
-      const res = dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key,
-        value: p.value });
-      showError(r, res.ok ? '' : res.reason);
-    });
-    refs.set(f.key, r);
-    return h('div', { class: 'osc-si-field', 'data-field': f.key }, [
-      h('label', { class: 'osc-label osc-si-label', for: id, text: f.label }), input, error]);
+    const box = h('div', { class: 'mt-2', 'data-field': f.key });
+    const g = mountListSteps(box, { dispatch, say: (t) => svc.announce(t) },
+      { nodeId: view.id, param: f.param, values: f.value });
+    listGrids.set(f.key, g);
+    const count = numberInput(`osc-si-${view.id}-${f.key}-count`, 'Počet kroků', f.value.length,
+      '', (n) => {
+        const cur = svc.store.getModel().graph.nodes.find((x) => x.id === view.id);
+        const next = g.resize(n, cur ? cur.params[f.key] : f.value);
+        return next.reason ? { ok: false, reason: next.reason }
+          : dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key, value: next });
+      }, 'studio.inspector.param', { key: `${f.key}.count`,
+      nan: 'Počet kroků musí být číslo.' });
+    g.count = refs.get(`${f.key}.count`);
+    return h('div', { class: 'osc-si-field' }, [
+      h('span', { class: 'osc-label osc-si-label', text: f.label }), box, count]);
   }
 
   function readonlyField(f) {
@@ -985,18 +986,20 @@ export function mountInspector(host, svc) {
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }), input, error]);
   }
 
-  function numberInput(id, label, value, unit, apply, dataOsc) {
+  // opts: key (data-key and refs key), nan (the not-a-number sentence).
+  function numberInput(id, label, value, unit, apply, dataOsc, opts = {}) {
+    const key = opts.key || dataOsc;
     const unitId = unit ? `${id}-unit` : null;
     const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
       inputmode: 'decimal', autocomplete: 'off', value: String(value), 'data-osc': dataOsc,
-      'data-key': dataOsc, 'aria-describedby': describedBy(unitId, `${id}-err`) });
+      'data-key': key, 'aria-describedby': describedBy(unitId, `${id}-err`) });
     const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
     const unitEl = unit ? h('span', { class: 'osc-si-unit', id: unitId, text: unit }) : null;
     const ref = { input, error, unit: unitEl, field: { input: String(value) } };
     input.addEventListener('change', () => {
       const v = Number(String(input.value).trim().replace(',', '.'));
       if (!finite(v)) {
-        const why = `${label} must be a number.`;
+        const why = opts.nan || `${label} must be a number.`;
         showError(ref, why);
         svc.announce(why, { assertive: true });
         return;
@@ -1005,7 +1008,7 @@ export function mountInspector(host, svc) {
       showError(ref, r && !r.ok ? r.reason : '');
     });
     keepModelValue(ref);
-    refs.set(dataOsc, ref);
+    refs.set(key, ref);
     return h('div', { class: 'osc-si-field osc-si-field--half' }, [
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }),
       h('div', { class: 'osc-si-row osc-si-row--edit' }, [input, unitEl]),
@@ -1472,6 +1475,11 @@ export function mountInspector(host, svc) {
     const active = document.activeElement;
     if (view.kind === 'node') {
       for (const f of view.fields) {
+        const lg = listGrids.get(f.key); // K221
+        if (lg) lg.update(f.value);
+        if (lg && lg.count && lg.count.input !== active) {
+          lg.count.input.value = String(f.value.length);
+        }
         const r = refs.get(f.key);
         if (!r) continue;
         r.field = f;
@@ -1580,6 +1588,7 @@ export function mountInspector(host, svc) {
     endSliderGesture();
     if (steps) steps.destroy();
     steps = null;
+    dropListGrids();
     const hadFocus = host.contains(document.activeElement);
     const focusedKey = hadFocus ? document.activeElement.getAttribute('data-key') : null;
     const focusedOsc = hadFocus ? document.activeElement.getAttribute('data-osc') : null;
@@ -1636,6 +1645,7 @@ export function mountInspector(host, svc) {
     destroy() {
       endSliderGesture();
       if (steps) steps.destroy();
+      dropListGrids();
       replaceChildren(host, []);
     },
   };
