@@ -17,7 +17,10 @@
 //       on   the top note changes: the Keys pitch moves (glide only legato), its envelopes get
 //            gate(at, null) and its clocked Random and Step Modulator clock(at, k), k counted
 //            from arm (0 first); a Step that takes a step relays the gate on its Trigger (K103).
-//            A gate left alone on a timeline-owned input: result.owned { code, reason }
+//            A gate left alone on a timeline-owned input: result.owned { code, reason }; on a
+//            Keys node a notes clip plays (the timeline playing) the live note is refused
+//            whole: { ok: false, code: 'timeline-owned', reason, owned }, pitch and gate
+//            untouched (C1-K103-1); a release only lets go of the key
 //       off  the stack empties: release(at); the top note changes: legato return, no gate
 //       legato  { from, note }: a held note moves to `note` without a gate (K183, the XY pad's
 //            finger crossing into another scale cell): `from` leaves the stack and `note` joins
@@ -243,6 +246,20 @@ export function createLiveNotes({ getModel, handleOf, owner = () => null }) {
       return { ok: false, code: 'key-range', reason: LIVE_NOTES_TEXT.keyRange(note, lo, hi) };
     }
     const prio = typeof h.priority === 'function' ? h.priority() : 'last';
+    // A Keys node a notes clip plays is the timeline's while it plays (K103, C1-K103-1): a live
+    // note on it is refused whole (its pitch, its gate), with the owner's sentence; a release
+    // only lets go of a key held from before, and moves nothing.
+    const why = owner(keysId);
+    if (why) {
+      if (kind === 'off') st.release(note, prio);
+      if (kind === 'off' || kind === 'all-off') {
+        if (kind === 'all-off') st.clear();
+        return { ok: true, held: st.size, top: null, retrigger: false,
+          owned: { code: 'timeline-owned', reason: why } };
+      }
+      return { ok: false, code: 'timeline-owned', reason: why,
+        owned: { code: 'timeline-owned', reason: why } };
+    }
     if (kind === 'legato') {
       const before = st.top(prio);
       if (!before || !st.notes.includes(ev.from)) return event(keysId, { ...ev, kind: 'on' });
