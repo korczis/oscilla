@@ -30,6 +30,8 @@
 //               again with aria-pressed false (review R2-K222-2)
 //   dr-pad      a pad pressed (pointer, or Enter on it) sounds its row within 'drum pad sounds'
 //               (2 s) and the hit ends with no voice left
+//   dr-padplay  a pad strike arms the transport; one press of Play (a click, a tap at 390 px)
+//               then starts the timeline and the next stops it (review R2-K222-5)
 //   no-console-errors
 'use strict';
 
@@ -351,6 +353,31 @@ function defineChecks() {
     const quiet = await until(async () => ((await sources(page)) === 0 ? true : null),
       { ms: SOUND_MS, what: 'dr-pad: the kick ends with no voice left' });
     return { ok: !!(sounded && quiet) };
+  });
+
+  def('dr-padplay', async ({ page, size }) => {
+    // Review R2-K222-5: a pad strike arms the transport (K104: playing true, the timeline not);
+    // one press of Play must then start the timeline, not disarm it.
+    await drumClip(page);
+    const pad = page.locator('[data-drum-pad="0"]');
+    await pad.scrollIntoViewIfNeeded();
+    await pad.focus();
+    await page.keyboard.press('Enter');
+    const armed = await until(() => page.evaluate(() => {
+      const t = window.OSCILLA.studio.transport;
+      return t.armed && !t.playhead().playing ? true : null;
+    }), { ms: SOUND_MS, what: 'dr-padplay: the pad strike arms the transport' });
+    const play = page.locator('[data-drums-play]');
+    if (size.touch) await play.tap(); else await play.click();
+    const started = await until(() => page.evaluate(() => {
+      const t = window.OSCILLA.studio.transport;
+      return t.playing && !t.armed && t.playhead().playing ? true : null;
+    }), { ms: SOUND_MS, what: 'dr-padplay: one press of Play starts the timeline' });
+    if (size.touch) await play.tap(); else await play.click();
+    const stopped = await until(() => page.evaluate(() => (window.OSCILLA.studio.transport
+      .playhead().playing ? null : true)), { ms: SOUND_MS,
+      what: 'dr-padplay: the next press stops it' });
+    return { ok: !!(armed && started && stopped) };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,

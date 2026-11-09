@@ -148,7 +148,10 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
     body.addEventListener('click', (e) => {
       const t = transport();
       if (e.target.closest('[data-drums-play]') && t) {
-        const r = t.playing ? t.stop() : t.start();
+        // The timeline runs iff the transport plays and is not merely armed: a pad strike arms
+        // it (K104, playing true), and Play must then start the timeline, not disarm (review
+        // R2-K222-5).
+        const r = t.playing && !t.armed ? t.stop() : t.start();
         if (r && r.ok === false && r.reason) say(r.reason, true);
         syncBar();
       } else if (e.target.closest('[data-drums-open]') && m) {
