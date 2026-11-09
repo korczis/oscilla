@@ -19,9 +19,14 @@
 //   shape     vendor marker (data-vendor="p5@") present, no module script
 //   og        og:image meta == <url>og-image.png; og-image.png and apple-touch-icon.png are
 //             image/png and byte-equal to site/ (the crawler-only share assets)
+//   lab       every file of <url>lab/ (index.html, charts/<name>.svg, shots/*.png) is byte-equal
+//             to scripts/landing.mjs regenerated at the expected commit (the generated landing,
+//             owner decision Q107); a commit other than HEAD is regenerated in a temporary
+//             detached worktree
 //
 //   node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] [--attempts 10] [--delay 10]
-//        [--dist dist/index.html] [--site site] [--no-assets] [--no-cache-bust] [--help]
+//        [--dist dist/index.html] [--site site] [--no-assets] [--no-lab] [--no-cache-bust]
+//        [--help]
 //
 // The arguments are parsed against that list first (parseFlags of release-analyze.mjs): --help
 // prints the usage and exits 0; an unknown flag, a flag missing its value or a bad --attempts
@@ -34,7 +39,9 @@
 // a failed one fails its attempt; --attempts is the retry.
 // Each request carries a unique query string (?oscilla-verify=<commit>.<attempt>) so a stale
 // CDN edge cannot satisfy or fail the check; --no-cache-bust fetches the exact URL instead.
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseFlags } from './release-analyze.mjs';
@@ -45,6 +52,11 @@ import {
 } from './release-metadata.mjs';
 
 export const SHARE_ASSETS = ['og-image.png', 'apple-touch-icon.png'];
+/** The generated landing's path under the site, and the content type of each file it checks. */
+export const LAB_DIR = 'lab/';
+const LAB_TYPES = {
+  '.html': /^text\/html\b/, '.svg': /^image\/svg\+xml\b/, '.png': /^image\/png\b/,
+};
 
 /**
  * Pure check of a fetched page against the committed dist and the expected provenance.
@@ -148,12 +160,76 @@ export function checkAsset({ name, status, contentType, body, expected }) {
   return problems;
 }
 
+/**
+ * Problems with one fetched file of the generated landing against its regeneration.
+ * @param {{ name: string, status: number, contentType: string, body: Buffer|Uint8Array,
+ *   expected: Buffer }} o  name: the path under lab/ (index.html, charts/<name>.svg)
+ */
+export function checkLabFile({ name, status, contentType, body, expected }) {
+  const problems = [];
+  if (status !== 200) problems.push(`lab: ${name} HTTP ${status}`);
+  const type = LAB_TYPES[path.extname(name)];
+  if (type && !type.test(contentType || '')) {
+    problems.push(`lab: ${name} content-type ${contentType}`);
+  }
+  if (!Buffer.from(body).equals(expected)) {
+    problems.push(`lab: ${name} (${body.length} B) differs from its regeneration at this commit `
+      + `(${expected.length} B)`);
+  }
+  return problems;
+}
+
+/**
+ * The landing files verify-deploy compares: every file the generator writes (index.html, the
+ * charts and the screenshots), regenerated at `commit`. When `commit` is not this checkout's
+ * HEAD (the release task's closing check runs after main has moved on), the landing is
+ * regenerated from a temporary detached worktree of `commit` that borrows this checkout's
+ * node_modules, and only that worktree is removed afterwards; it is never skipped. A commit whose tree
+ * has no scripts/landing.mjs (before Q107) deployed no landing: null, and nothing is compared.
+ */
+export async function expectedLab({ root, commit, warn = (m) => console.error(m) }) {
+  const git = (args, cwd = root) => execFileSync('git', args,
+    { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+  const head = git(['rev-parse', 'HEAD']);
+  const want = git(['rev-parse', '--verify', `${commit}^{commit}`]);
+  if (want === head && existsSync(path.join(root, 'scripts', 'landing.mjs'))) {
+    const at = await import(new URL(`file://${path.join(root, 'scripts', 'landing.mjs')}`));
+    return at.generateLanding({ root, commit: want });
+  }
+  try {
+    git(['cat-file', '-e', `${want}:scripts/landing.mjs`]);
+  } catch {
+    return null;
+  }
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-lab-'));
+  const tree = path.join(dir, 'tree');
+  try {
+    git(['worktree', 'add', '--detach', '--quiet', tree, want]);
+    const modules = path.join(root, 'node_modules');
+    if (existsSync(modules)) symlinkSync(modules, path.join(tree, 'node_modules'), 'dir');
+    // The generator module of the commit itself, so the comparison is that commit's page.
+    const at = await import(new URL(`file://${path.join(tree, 'scripts', 'landing.mjs')}`));
+    return await at.generateLanding({ root: tree, commit: want });
+  } finally {
+    // Only this run's own worktree is removed: no repository-wide prune, which on a shared
+    // machine could drop another session's worktree record whose directory is briefly absent.
+    try {
+      git(['worktree', 'remove', '--force', tree]);
+    } catch (e) {
+      warn(`  lab: could not remove the temporary worktree ${tree}: ${e.message}; `
+        + `remove it with: git worktree remove --force ${tree}`);
+    }
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 export const USAGE = 'usage: node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] '
   + '[--attempts 10] [--delay 10] [--dist dist/index.html] [--site site] [--no-assets] '
-  + '[--no-cache-bust] [--help]';
+  + '[--no-lab] [--no-cache-bust] [--help]';
 const FLAGS = {
   '--url': 'value', '--commit': 'value', '--attempts': 'value', '--delay': 'value',
-  '--dist': 'value', '--site': 'value', '--no-assets': 'boolean', '--no-cache-bust': 'boolean',
+  '--dist': 'value', '--site': 'value', '--no-assets': 'boolean', '--no-lab': 'boolean',
+  '--no-cache-bust': 'boolean',
 };
 
 /** The options of `argv` (parseFlags of release-analyze.mjs); throws exitCode 2 on misuse. */
@@ -166,7 +242,7 @@ function parseArgs(argv) {
     attempts: '--attempts' in f ? Number(f['--attempts']) : 10,
     delay: '--delay' in f ? Number(f['--delay']) : 10,
     dist: f['--dist'] ?? 'dist/index.html', site: f['--site'] ?? 'site',
-    assets: !f['--no-assets'], bust: !f['--no-cache-bust'],
+    assets: !f['--no-assets'], lab: !f['--no-lab'], bust: !f['--no-cache-bust'],
   };
   if (!o.url.endsWith('/')) o.url += '/';
   if (!(Number.isInteger(o.attempts) && o.attempts >= 1)) {
@@ -183,7 +259,7 @@ const get = (url) => boundedFetch(url, { attempts: 1,
 
 const sleep = (s) => new Promise((r) => { setTimeout(r, s * 1000); });
 
-async function attempt(o, expected, dist, n, root) {
+async function attempt(o, expected, dist, n, root, lab) {
   const q = (u) => (o.bust ? `${u}?oscilla-verify=${expected.commit.slice(0, 12)}.${n}` : u);
   const problems = [];
   let page;
@@ -207,6 +283,16 @@ async function attempt(o, expected, dist, n, root) {
         problems.push(...checkAsset({ name, ...res, expected: want }));
       } catch (e) {
         problems.push(`og: GET ${name} failed: ${e.message}`);
+      }
+    }
+  }
+  if (lab) {
+    for (const [name, want] of lab) {
+      try {
+        const res = await get(q(`${o.url}${LAB_DIR}${name}`));
+        problems.push(...checkLabFile({ name, ...res, expected: want }));
+      } catch (e) {
+        problems.push(`lab: GET ${name} failed: ${e.message}`);
       }
     }
   }
@@ -272,13 +358,18 @@ async function verify(o, { root, run, env, log, err }) {
     + `release ${release ? describe(release) : `unknown (${releaseError})`}, `
     + `source ${expected.sourceDigest}, artifact ${sha256(dist)}`);
 
+  // The landing is regenerated once, before the attempts: a failed regeneration is fatal.
+  const lab = o.lab ? await expectedLab({ root, commit }) : null;
+  if (lab) log(`  lab: ${lab.size} file(s) regenerated at ${commit.slice(0, 12)}`);
+  else if (o.lab) log(`  lab: none at ${commit.slice(0, 12)} (its tree has no scripts/landing.mjs)`);
+
   let problems = [];
   for (let n = 1; n <= o.attempts; n++) {
-    problems = await attempt(o, expected, dist, n, root);
+    problems = await attempt(o, expected, dist, n, root, lab);
     if (!problems.length) {
       log(`  PASS attempt ${n}/${o.attempts}: live page is the committed dist stamped `
-        + `with commit ${commit}; version, release state, digest, shape and share assets `
-        + 'verified');
+        + `with commit ${commit}; version, release state, digest, shape, share assets`
+        + `${lab ? ' and the generated lab/' : ''} verified`);
       return 0;
     }
     log(`  attempt ${n}/${o.attempts}: ${problems.length} problem(s); `
