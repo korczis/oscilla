@@ -57,9 +57,7 @@ test('the job list is derived from ci.yml: every matrix value, the visual gate, 
     assert.ok(WORKFLOW.jobs.includes(`Browser leg 1 (${b})`), b);
     assert.ok(WORKFLOW.jobs.includes(`Browser leg 2 (${b})`), b);
   }
-  // ci-speed: a matrix that leaves a value out has no job of it (chromium takes two legs)
-  assert.ok(WORKFLOW.jobs.includes('Browser leg 3 (webkit)'));
-  assert.ok(!WORKFLOW.jobs.includes('Browser leg 3 (chromium)'));
+  assert.ok(!WORKFLOW.jobs.some((n) => /Browser leg 3/.test(n)), 'two legs a browser');
   assert.ok(WORKFLOW.jobs.includes('Visual regression gate'));
   assert.ok(WORKFLOW.jobs.includes('gate'));
   assert.ok(WORKFLOW.jobs.some((j) => j.startsWith('.ai layer (majordomus doctor')));
@@ -93,9 +91,9 @@ test('a job missing, skipped, cancelled or from another run or sha refuses', () 
   const r = run();
   const drop = jobsOf(r).filter((j) => j.name !== 'Visual regression gate');
   only(facts({ jobs: drop }), /no job "Visual regression gate"/);
-  const skipped = jobsOf(r).map((j) => (j.name === 'Browser leg 3 (webkit)'
+  const skipped = jobsOf(r).map((j) => (j.name === 'Browser leg 2 (webkit)'
     ? { ...j, conclusion: 'skipped' } : j));
-  only(facts({ jobs: skipped }), /job "Browser leg 3 \(webkit\)" of run 900 is completed\/skipped/);
+  only(facts({ jobs: skipped }), /job "Browser leg 2 \(webkit\)" of run 900 is completed\/skipped/);
   const cancelled = jobsOf(r).map((j) => (j.name === 'gate' ? { ...j, conclusion: 'cancelled' }
     : j));
   only(facts({ jobs: cancelled }), /job "gate" of run 900 is completed\/cancelled/);
@@ -436,12 +434,12 @@ test('ADR 0083 with #417: on merge_group too only the flake ledger\'s own first 
   assert.match(ciReceiptProblems(queued({ queueRuns: [q1],
     queueJobs: skipLedger(q1, { run_attempt: 2 }) })).join(), /flake ledger.*completed\/skipped/i);
   // a path-gated job (E026) skipped in the queue run is not excused: a browser leg, say
-  const leg = WORKFLOW.jobs.find((n) => /Browser leg 3/i.test(n));
+  const leg = WORKFLOW.jobs.find((n) => /Browser leg 2/i.test(n));
   assert.ok(leg, 'ci.yml declares a third browser leg');
   const skipLeg = qjobs(q1).map((j) => (j.name === leg ? { ...j, conclusion: 'skipped' }
     : j));
   assert.match(ciReceiptProblems(queued({ queueRuns: [q1], queueJobs: skipLeg })).join(),
-    /merge_group: job "Browser leg 3.*" of run 950 is completed\/skipped/i);
+    /merge_group: job "Browser leg 2.*" of run 950 is completed\/skipped/i);
 });
 
 test('ADR 0083 mutation: a pull_request run does not stand in when the queue commit\'s tree'

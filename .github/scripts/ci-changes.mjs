@@ -2,8 +2,8 @@
 // E026: does a pull request change anything the browser and visual legs of CI could observe?
 // The `changes` job of .github/workflows/ci.yml runs the BASE branch's copy of this file (taken
 // with `git cat-file blob`, so a pull request cannot edit the allowlist and benefit in the same
-// run) and writes `runtime=true|false` to $GITHUB_OUTPUT. The browser legs (leg-1, leg-2,
-// leg-3) and the visual job run unless the answer is exactly `false`, and `gate` accepts their
+// run) and writes `runtime=true|false` to $GITHUB_OUTPUT. The browser legs (leg-1, leg-2)
+// and the visual job run unless the answer is exactly `false`, and `gate` accepts their
 // skip only when this job succeeded with `false`.
 //
 //   node .github/scripts/ci-changes.mjs --repo <dir> --event <name> --head <rev>
@@ -69,7 +69,7 @@ export function baseName(ref) {
 }
 
 /** The jobs of ci.yml that run only for a runtime change. */
-export const GATED_JOBS = Object.freeze(['leg-1', 'leg-2', 'leg-3', 'visual']);
+export const GATED_JOBS = Object.freeze(['leg-1', 'leg-2', 'visual']);
 
 const REGULAR = new Set(['100644', '100755']);
 const ABSENT = '000000';

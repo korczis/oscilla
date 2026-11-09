@@ -30,7 +30,7 @@ const { runUnits } = require('./run-suites.cjs');
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const BROWSERS = Object.freeze(['chromium', 'firefox', 'webkit']);
 /** How many CI runners (ci.yml jobs leg-1 .. leg-N, matrix browser) each browser's suites take. */
-const LEGS = Object.freeze({ chromium: 2, firefox: 3, webkit: 3 });
+const LEGS = Object.freeze({ chromium: 2, firefox: 2, webkit: 2 });
 /** Suites dealt over several processes with `--part <i>/<n>`; each must accept the flag. */
 const PARTS = Object.freeze({ 'tests/browser/control-census.cjs': 2 });
 /** The release gate's npm script whose browser suites the legs run. */
@@ -38,7 +38,7 @@ const RELEASE_SCRIPT = 'test:release';
 /** The one browser suite that runs in its own container job, not in a leg. */
 const OWN_JOB = new Set(['test:visual']);
 /** The slowest leg's suites, by the weights, may take at most this many seconds one by one. */
-const LEG_BUDGET_S = 34 * 60;
+const LEG_BUDGET_S = 50 * 60;
 
 /** The browser suites of the release gate, in the order its scripts name them. */
 function releaseSuites(pkg) {

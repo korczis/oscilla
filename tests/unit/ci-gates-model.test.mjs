@@ -242,26 +242,26 @@ test('a job ci.yml gains or loses is a disagreement', () => {
   const extra = mutate(CI, '  visual:\n', '  lint:\n    runs-on: ubuntu-24.04\n    steps:\n'
     + '      - run: npm run build:check\n\n  visual:\n');
   assert.ok(has(compare(extra, MODEL), 'ci.yml job lint has no gate lint'));
-  const fewer = mutate(CI, `    name: Browser leg 3 (\${{ matrix.browser }})
+  const fewer = mutate(CI, `    name: Browser leg 2 (\${{ matrix.browser }})
     needs: changes
     if: ${RUNTIME_IF}
     runs-on: ubuntu-24.04
-    # the sum of the step limits (15 + 13 + 50), rounded up (project.ci-bounded)
-    timeout-minutes: 80
+    # the sum of the step limits (15 + 13 + 60), rounded up (project.ci-bounded)
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        browser: [firefox, webkit]`, `    name: Browser leg 3 (\${{ matrix.browser }})
+        browser: [chromium, firefox, webkit]`, `    name: Browser leg 2 (\${{ matrix.browser }})
     needs: changes
     if: ${RUNTIME_IF}
     runs-on: ubuntu-24.04
-    # the sum of the step limits (15 + 13 + 50), rounded up (project.ci-bounded)
-    timeout-minutes: 80
+    # the sum of the step limits (15 + 13 + 60), rounded up (project.ci-bounded)
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
-        browser: [firefox]`);
-  assert.ok(has(compare(fewer, MODEL), 'gate leg-3-webkit is no job or matrix leg'));
+        browser: [chromium, firefox]`);
+  assert.ok(has(compare(fewer, MODEL), 'gate leg-2-webkit is no job or matrix leg'));
 });
 
 test('a gate the model gains or loses is a disagreement', () => {
@@ -276,8 +276,8 @@ test('a gate the model gains or loses is a disagreement', () => {
 });
 
 test('a command that differs on either side is a disagreement', () => {
-  assert.ok(has(compare(mutate(CI, 'npm run test:leg 2>&1 | tee logs/leg-3-',
-    'npm run test:leg:fast 2>&1 | tee logs/leg-3-'), MODEL), 'gate leg-3-firefox runs'));
+  assert.ok(has(compare(mutate(CI, 'npm run test:leg 2>&1 | tee logs/leg-2-',
+    'npm run test:leg:fast 2>&1 | tee logs/leg-2-'), MODEL), 'gate leg-2-chromium runs'));
   assert.ok(has(compare(mutate(CI, 'run: npm run verify-dist\n', 'run: npm run build\n'), MODEL),
     'gate unit runs'));
   const unit = parseYaml(MODEL).gates.find((g) => g.id === 'unit').runs;
@@ -317,7 +317,7 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
     const gatedLedger = mutate(CI, ledgerIf, `    if: ${RUNTIME_IF}\n`);
     assert.ok(has(compare(gatedLedger, MODEL), 'job flake-ledger runs only if'));
     const gatedOnChanges = mutate(gatedLedger, '    needs: [unit, knowledge, fail-first, '
-      + 'review-verdict, changes, leg-1, leg-2, leg-3, visual]\n',
+      + 'review-verdict, changes, leg-1, leg-2, visual]\n',
     '    needs: changes\n');
     assert.ok(has(compare(gatedOnChanges, MODEL), 'job flake-ledger runs only if'));
     const andGated = mutate(CI, ledgerIf,
@@ -333,7 +333,7 @@ test('a path filter or a job condition in ci.yml is a disagreement, and so is a 
 
 test('the aggregate gate requires exactly what ci.yml gate needs', () => {
   const needs = 'needs: [unit, knowledge, fail-first, review-verdict, changes, leg-1, leg-2, '
-    + 'leg-3, visual, flake-ledger]';
+    + 'visual, flake-ledger]';
   const fewer = mutate(CI, needs, needs.replace(', visual', ''));
   assert.ok(has(compare(fewer, MODEL), 'aggregate: gate requires'));
   const dropped = MODEL.replace(/\n {6}- visual(?=\n)/, '');

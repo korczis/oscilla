@@ -1,6 +1,6 @@
 // E026: path-gated CI. .github/scripts/ci-changes.mjs classifies a pull request as runtime
-// (every job of ci.yml runs) or non-runtime (the browser legs leg-1..3 and the visual job are
-// skipped), and ci.yml's `gate` accepts those skips only on the classifier's
+// (every job of ci.yml runs) or non-runtime (the browser legs leg-1, leg-2 and the visual job
+// are skipped), and ci.yml's `gate` accepts those skips only on the classifier's
 // `runtime=false`. Fail closed throughout: these tables hold every case that must run
 // everything (renamed, deleted, spaced and control-character names, a .md under tests/, an
 // empty diff, links and submodules, any event but a pull request and its merge-queue entry, a
@@ -45,7 +45,7 @@ const rec = (status, paths, modes) => parseRawZ(raw(status, paths, modes));
 test('the allowlist is exactly the seven non-runtime path classes', () => {
   assert.deepEqual([...NON_RUNTIME], ['.ai/repo/project/', '.ai/repo/reviews/',
     '.ai/repo/releases/', '.ai/repo/adrs/', '.ai/repo/knowledge/', 'docs/', '*.md']);
-  assert.deepEqual([...GATED_JOBS], ['leg-1', 'leg-2', 'leg-3', 'visual']);
+  assert.deepEqual([...GATED_JOBS], ['leg-1', 'leg-2', 'visual']);
 });
 
 test('isNonRuntimePath: the allowlist, and every near miss is runtime', () => {
@@ -394,7 +394,7 @@ test('the program writes runtime=<bool> for the job, and exits 1 without an answ
   assert.equal(r1.status, 0, r1.stderr);
   assert.equal(readFileSync(outDocs, 'utf8'), 'runtime=false\n');
   assert.match(r1.stdout, /runtime=false/);
-  assert.match(r1.stdout, /skipped for this pull request: leg-1, leg-2, leg-3, visual/);
+  assert.match(r1.stdout, /skipped for this pull request: leg-1, leg-2, visual/);
 
   const outPush = path.join(dir, 'push');
   const r2 = run(docs, ['--event', 'push'], outPush);
@@ -476,7 +476,7 @@ test('the gate verdict: a path-gated skip passes only on the classifier\'s runti
       ['a gated job failed on runtime=false', needs({ runtime: 'false',
         gated: { 'leg-2': 'failure' } }), false],
       ['a gated job cancelled on runtime=false', needs({ runtime: 'false',
-        gated: { 'leg-3': 'cancelled' } }), false],
+        gated: { 'visual': 'cancelled' } }), false],
       ['a gated job failed on runtime=true', needs({ gated: { 'leg-1': 'failure' } }), false],
       ...ALWAYS.flatMap((j) => [
         [`${j} skipped on runtime=false`, needs({ runtime: 'false', gated: 'skipped',
@@ -538,7 +538,7 @@ const browserLegs = (doc) => Object.entries(doc.jobs)
 
 test('every browser leg of ci.yml is path-gated, so a plan or record change runs none (#404 R1)', () => {
   const legs = browserLegs(CI);
-  assert.ok(['leg-1', 'leg-2', 'leg-3'].every((k) => legs.includes(k)), `browser legs found: ${legs}`);
+  assert.ok(['leg-1', 'leg-2'].every((k) => legs.includes(k)), `browser legs found: ${legs}`);
   for (const k of legs) assert.ok(GATED_JOBS.includes(k), `${k} runs a browser and is path-gated`);
 });
 

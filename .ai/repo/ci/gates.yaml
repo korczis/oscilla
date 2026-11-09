@@ -19,8 +19,8 @@
 #     (E010: it runs after every job the aggregate judges, on a re-run only, and is skipped on
 #     a first attempt; it is never path gated) and (E026) the path-gated jobs'
 #     `needs.changes.outputs.runtime != 'false'`: in CI, the base branch's
-#     .github/scripts/ci-changes.mjs skips the browser legs (leg-1, leg-2, leg-3) and the
-#     visual job for a pull request into main whose every changed path is under
+#     .github/scripts/ci-changes.mjs skips the browser legs (leg-1, leg-2) and the visual
+#     job for a pull request into main whose every changed path is under
 #     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (on
 #     merge_group the paths of HEAD^1..HEAD, the queued pull request's merge). A local task
 #     keeps them: the model does not encode that allowlist (a path class cannot say "every
@@ -60,7 +60,7 @@ gates:
     job: changes
     always: true
     runs: node .github/scripts/ci-changes.mjs --repo . --event <event> --head HEAD --base-branch origin/<base>
-    summary: whether the pull request (on pull_request) or the queued pull request (on merge_group, ADR 0083; its queue merge commit's HEAD^1..HEAD, and only when HEAD has two parents) changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the four path-gated jobs (leg-1, leg-2, leg-3, visual), anything else runs them
+    summary: whether the pull request (on pull_request) or the queued pull request (on merge_group, ADR 0083; its queue merge commit's HEAD^1..HEAD, and only when HEAD has two parents) changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the three path-gated jobs (leg-1, leg-2, visual), anything else runs them
 
   - id: leg-1-chromium
     job: leg-1
@@ -97,18 +97,6 @@ gates:
     always: true
     runs: OSC_LEG=2 OSC_SUITE_JOBS=2 OSC_BROWSERS=webkit npm run test:leg
     summary: leg 2 of the release gate's browser suites in WebKit (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
-
-  - id: leg-3-firefox
-    job: leg-3
-    always: true
-    runs: OSC_LEG=3 OSC_SUITE_JOBS=2 OSC_BROWSERS=firefox npm run test:leg
-    summary: leg 3 of the release gate's browser suites in Firefox (a PulseAudio null sink on the runner) (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
-
-  - id: leg-3-webkit
-    job: leg-3
-    always: true
-    runs: OSC_LEG=3 OSC_SUITE_JOBS=2 OSC_BROWSERS=webkit npm run test:leg
-    summary: leg 3 of the release gate's browser suites in WebKit (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
 
   - id: visual
     job: visual
@@ -156,8 +144,6 @@ gates:
       - leg-2-chromium
       - leg-2-firefox
       - leg-2-webkit
-      - leg-3-firefox
-      - leg-3-webkit
       - visual
       - flake-ledger
     runs: echo "$RESULTS" | jq -e "$VERDICT"

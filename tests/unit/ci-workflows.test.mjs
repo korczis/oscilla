@@ -84,7 +84,9 @@ test('every workflow file is read, and the checker sees their jobs and steps', (
     }
   }
   assert.ok(jobs >= 11, `jobs parsed: ${jobs}`);
-  assert.ok(bounded >= 20, `steps recognised as install, download or browser suite: ${bounded}`);
+  // ci-speed: the browser legs replaced 18 per-category browser jobs (each an install and a
+  // suite step) with 6, so the floor fell with them
+  assert.ok(bounded >= 15, `steps recognised as install, download or browser suite: ${bounded}`);
 });
 
 test('the browser suites are derived from package.json', () => {

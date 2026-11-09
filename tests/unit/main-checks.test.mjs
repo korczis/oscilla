@@ -33,7 +33,7 @@ const MAIN = read(MAIN_PATH);
 export const MIRRORED = ['unit', 'knowledge'];
 /**
  * main-checks.yml's own browser job (ci-speed, 2026-11-09): ci.yml deals its browser suites over
- * the legs leg-1..3, which a push to main does not run again; this job runs the browser gate's
+ * the legs leg-1 and leg-2, which a push to main does not run again; this job runs the browser gate's
  * script in every browser, as ci.yml's browser job did, and is held to that here.
  */
 export const OWN_BROWSER = Object.freeze({ key: 'browser', script: 'npm run test:browser',

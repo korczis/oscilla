@@ -1,5 +1,5 @@
 // ci-speed (2026-11-09): ci.yml runs the release gate's browser suites in legs, per browser
-// (jobs leg-1..3, matrix browser), as tests/browser/lib/shards.cjs deals them. Nothing loses a
+// (jobs leg-1 and leg-2, matrix browser), as tests/browser/lib/shards.cjs deals them. Nothing loses a
 // run in the split:
 //   - the suites are derived from package.json (test:release and the scripts it runs, the
 //     visual gate apart, which has its own job), never listed by hand, and a suite added to one
@@ -137,7 +137,7 @@ test('mutation: a dropped, a doubled and an invented unit are each named', () =>
   assert.match(coverageProblems(drop, us, 'webkit').join(), /is in no leg/);
   const twice = legs.map((l, i) => (i === 1 ? { ...l, units: [...l.units, legs[0].units[0]] } : l));
   assert.match(coverageProblems(twice, us, 'webkit').join(), /is in legs 1, 2/);
-  const invent = legs.map((l, i) => (i === 2
+  const invent = legs.map((l, i) => (i === 0
     ? { ...l, units: [...l.units, { label: 'tests/browser/ghost.cjs' }] } : l));
   assert.match(coverageProblems(invent, us, 'webkit').join(), /ghost\.cjs is no unit/);
   const empty = deal([], 2, () => 1);
@@ -147,7 +147,7 @@ test('mutation: a dropped, a doubled and an invented unit are each named', () =>
 test('ci.yml declares exactly the legs LEGS names, each running its own leg of its browser', () => {
   assert.deepEqual(workflowProblems(CI), []);
   for (const b of BROWSERS) assert.ok(LEGS[b] >= 1 && Number.isInteger(LEGS[b]), b);
-  assert.deepEqual(CI.jobs.gate.needs.filter((j) => /^leg-/.test(j)), ['leg-1', 'leg-2', 'leg-3']);
+  assert.deepEqual(CI.jobs.gate.needs.filter((j) => /^leg-/.test(j)), ['leg-1', 'leg-2']);
   // the old per-category browser jobs are gone: their suites run in the legs
   for (const k of ['engine', 'suites', 'measure', 'studio', 'browser', 'census']) {
     assert.equal(CI.jobs[k], undefined, `${k} runs in the legs`);
@@ -156,10 +156,10 @@ test('ci.yml declares exactly the legs LEGS names, each running its own leg of i
 
 test('mutation: a leg dropped from a matrix, a wrong OSC_LEG or another script is named', () => {
   const ci = JSON.parse(JSON.stringify(CI));
-  ci.jobs['leg-3'].strategy.matrix.browser = ['firefox'];
-  assert.match(workflowProblems(ci).join(), /leg-3: matrix browser \["firefox"\]/);
-  const more = { ...LEGS, chromium: 3 };
-  assert.match(workflowProblems(CI, more).join(), /leg-3: matrix browser/);
+  ci.jobs['leg-2'].strategy.matrix.browser = ['chromium', 'firefox'];
+  assert.match(workflowProblems(ci).join(), /leg-2: matrix browser \["chromium","firefox"\]/);
+  const more = { ...LEGS, webkit: 3 };
+  assert.match(workflowProblems(CI, more).join(), /ci\.yml has 2 leg jobs, LEGS needs 3/);
   const wrong = JSON.parse(JSON.stringify(CI));
   wrong.jobs['leg-2'].env.OSC_LEG = 1;
   assert.match(workflowProblems(wrong).join(), /leg-2: OSC_LEG is 1/);
