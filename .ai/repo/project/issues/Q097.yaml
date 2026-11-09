@@ -9,7 +9,7 @@ profile: routine
 owner: "repository owner, or LLM peers on the mesh under the owner's order of 2026-11-05"
 objective: "Two questions with options, not decisions. Hardening S9, owner decisions 1 and 2. (1) Should the timing-allow markers in tests/browser (27 counted by the audit at 68b117f3) get a count ratchet like timing-baseline.json? (a) yes, a baseline that only shrinks; (b) no, keep reviewer judgement. b0's recommended default: (a). (2) contrast-axe never runs, because axe-core is not a dependency (tests/browser/qa-regressions.cjs:75-78 loads it only when installed), and contrast is Chromium-only with no recorded reason: (a) add axe-core as a devDependency so the axe pass gates; (b) delete the check; (c) keep it declared and record the reason. b0's recommended default: (a), and run contrast in all three engines."
 why: "oscilla-b0's hardening audit of origin/main 68b117f3 (v3.19.0), synthesis S9. E053 and E054 build the answers and depend on this issue."
-current_state: "Open: not answered. The answer is recorded as Q091's was (the deciding sessions and the mesh thread named, the owner free to override)."
+current_state: "Decided 2026-11-09 by LLM peers oscilla-43, oscilla-c1 and oscilla-ce on the mesh, under the owner's order of 2026-11-05: both questions answer (a), with oscilla-c1's amendments, recorded in the owner_decision evidence below; E053 and E054 carry them as criteria. The owner may override it."
 scope:
   - ".ai/repo/project/issues/Q097.yaml"
 depends_on: []
@@ -21,4 +21,16 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-09T22:54:27Z
+started_at: 2026-11-09T22:53:35Z
+started_event: sha256:07c0d858302d9c4d46e3ebcd1a053e8669bbc6cd745d57059ddb31675a9a6333
+completed_at: 2026-11-09T22:54:27Z
+completed_event: sha256:ff5cad843cc5dbee5c278b7f1c70e5898df4c7e063d437786aac0ddd83436364
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "LLM peer decision on the OSCILLA mesh, 2026-11-09 ~22:40-22:53Z (UTC), under the owner's order of 2026-11-05 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090). Deciding sessions: oscilla-ce (proposer, proceed lane, Claude Code session 385c170b), oscilla-43 (integrator) and oscilla-c1 (independent reviewer, rev-seat). Thread: oscilla-ce's proposal to oscilla-43 and oscilla-c1, then each one's reply by cross-session message. The owner may override it."
+    result: "Question 1, timing-allow markers: answer (a), a shrink-only count baseline seeded at today's count, 33 markers across 17 files on main b8bfd3b6 (the audit counted 27 at 68b117f3). oscilla-c1's amendment: the baseline is per file and lists each existing marker with its file and the reason it exists, so the six added since 68b117f3 are visible rather than forgiven; a rise needs a raises entry naming the file, the marker and the reason (the source-size ledger's pattern); the test is mutation-proven both ways (a new marker fails, an unrecorded fall fails). Question 2, contrast-axe: answer (a). axe-core is an exactly pinned devDependency with lockfile integrity (no range), loaded into the page from node_modules by the suite, never from a CDN; contrast and its axe pass run in chromium, firefox and webkit, and an engine is excluded only with a reason recorded in the suite (no silent skip); its measured seconds go into tests/browser/shard-weights.json so the legs stay within LEG_BUDGET_S; under project.ci-bounded the install stays inside the existing npm ci step. oscilla-c1's third amendment: the change that adds axe-core is guarded only if it touches .github or the build scripts, and then needs its own reviewer verdict. oscilla-43 agreed to both (a) with the exact pin and the install-time bound; oscilla-c1 agreed with the amendments above."
+    artifact: ".ai/repo/project/issues/Q097.yaml"
+    commit: b8bfd3b613b9e4aac63267343c14bd1ee91f2a02
+    recorded_at: 2026-11-09T22:54:05Z
