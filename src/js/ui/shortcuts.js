@@ -116,6 +116,9 @@ const STEP_GRID_ROWS = Object.freeze([
   row('step-grid-menu', 'Shift + F10, klávesa nabídky',
     'Nabídka kroku: přízvuk, ratchet, pravděpodobnost, slide', STEP_GRID_WHERE),
 ]);
+// K223: R presses the Record switch wherever one is shown (ui/keys/clients.js notes.record).
+const RECORD_ROW = row('step-grid-record', 'R',
+  'Nahrávání živých úderů do notového klipu: zapnout nebo vypnout', 'u přepínače Nahrávat');
 const DRUM_PAD_ROW = row('drum-pads', 'Enter, mezerník', 'Zaměřený pad zahraje úder své řady',
   'na kartě Drums');
 // Measure's Esc is the global one and more: it replaces that row instead of repeating the key.
@@ -167,8 +170,8 @@ export function shortcutHelp(workspace) {
   } else if (owner === OWNER.studio) {
     rows = [...STUDIO_ROWS];
   }
-  if (workspace === 'studio') rows.push(...STEP_GRID_ROWS);
-  if (workspace === 'synth') rows.push(...STEP_GRID_ROWS, DRUM_PAD_ROW);
+  if (workspace === 'studio') rows.push(...STEP_GRID_ROWS, RECORD_ROW);
+  if (workspace === 'synth') rows.push(...STEP_GRID_ROWS, DRUM_PAD_ROW, RECORD_ROW);
   if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
     rows = [...MEASURE_ROWS];
   }
