@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (step clips judged by level on the analyser and by the audio clock)
 // K068: notes clips PLAY on the audio clock, on the built dist/index.html in chromium, firefox and
 // webkit at 1536 x 1024 (the touch checks in a hasTouch page of the same size): linked,
 // real-time and interactive. Every check reads the one store, the transport's or the runtime's

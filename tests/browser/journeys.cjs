@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (tone levels and the audio clock read on the realtime engine against deadlines)
 // OSCILLA user journeys (C021, PACK 03 "One Instrument, One Coherent State") on the built
 // dist/index.html (file://) in chromium, firefox and webkit. One fresh page per check. Each
 // journey drives the controls a user drives (pointer and keyboard on the page; never a lab's

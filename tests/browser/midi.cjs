@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (note timing scheduled on the realtime audio clock and read from the analyser)
 // OSCILLA MIDI support state (plan issue V501; ADR 0058 and its V500 note) on the built
 // dist/index.html in chromium, firefox and webkit, from file:// and from the Pages-like
 // sub-path http://127.0.0.1:<port>/oscilla/ (served locally on 127.0.0.1: it is not the Pages

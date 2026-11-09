@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (link walks between workspaces; no audio level judged)
 // K075: every row of the integration map (tests/browser/integration-map.json) walked on the
 // built dist/index.html, in chromium, firefox and webkit, from file:// and from the Pages
 // sub-path (http://127.0.0.1:<port>/oscilla/). A thin driver: the walker is

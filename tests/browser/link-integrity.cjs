@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (routes and links; no audio judged)
 // OSCILLA link integrity on the built dist/index.html (UX audit 2026-10-29, links.md), in
 // chromium, firefox and webkit, from file:// and from the Pages sub-path
 // (http://127.0.0.1:<port>/oscilla/), every check on both.

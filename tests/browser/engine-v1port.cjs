@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (V1 engine checks on a realtime AudioContext, levels read from its analyser)
 // OSCILLA V2 engine test: the V1 audio-engine suite (index.html@a7b7a23, tests/engine.cjs, 77
 // checks) run against the V2 modules. The fixture page bundles src/js/audio/audio-engine.js and
 // src/js/core/instrument.js with esbuild and mounts the instrument as an Alpine component on

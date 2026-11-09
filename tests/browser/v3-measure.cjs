@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (loopback measurements on a realtime AudioContext; capture timing matters)
 // OSCILLA V3 measurement orchestration in real browsers: MeasurementEngine (engine.js) driving
 // the browser io (capture.js) on the V2 AudioEngine, in chromium, firefox and webkit, each from
 // file:// AND from a GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/).

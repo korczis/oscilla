@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (the timeline editor; no audio judged)
 // OSCILLA V3.1 Studio timeline gate: the timeline editor, transport strip, automation lanes and
 // compact timeline of the built dist/index.html in chromium, firefox and webkit, each from
 // file:// AND from a GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/).

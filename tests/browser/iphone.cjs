@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (layout at phone sizes; no audio judged)
 // OSCILLA on a phone (owner, 2026-11-02: "on the iPhone OSCILLA practically does not work;
 // verify every route and element, cover it with tests"). Every workspace of the surface census
 // (tests/unit/surface-census.json) opens fresh at its deep link on an emulated phone, and the

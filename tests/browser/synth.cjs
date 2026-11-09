@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (synth voices judged by level and pitch on the realtime analyser with deadlines)
 // OSCILLA Synth workspace (plan K058-K066, K103 part, K104, K106 part) on the built
 // dist/index.html in chromium, firefox and webkit, at 1536 x 1024 and 390 x 844. Every check
 // asserts the sound, read from the engine's analyser after the safety chain (RMS, spectrum
