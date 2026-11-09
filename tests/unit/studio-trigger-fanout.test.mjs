@@ -247,6 +247,30 @@ test('K103 a live key on a Keys node a notes clip plays is refused; the pitch sc
     await stopped(rig);
   });
 
+// c1's P3 C1-K103-2: a key pressed before the timeline took the Keys node (armed, then PLAY with
+// a notes clip) and released while the timeline owns it frees the stack and its live gate's
+// record too (the Keys gate itself is the clip's, untouched), so nothing reads a stale open.
+test('K103 a key held across PLAY and released while owned leaves no live gate open', () => {
+  let owned = null;
+  const calls = [];
+  const keysHandle = { play: (at, note) => calls.push(['play', note]),
+    gateAt: (at, on) => calls.push(['gateAt', on]), keyRange: () => [0, 127],
+    priority: () => 'last' };
+  const model = { graph: { nodes: [{ id: 'k', type: 'keys', params: {}, metadata: {} }],
+    edges: [] }, timeline: { clips: [], tracks: [] } };
+  const notes = liveNotes.createLiveNotes({ getModel: () => model,
+    handleOf: (id) => (id === 'k' ? keysHandle : null), owner: () => owned });
+  ok(notes.event('k', { kind: 'on', note: 60, velocity: 100, at: 1 }), 'armed: the key plays');
+  assert.deepEqual(notes.openGates(), ['k'], 'its live gate is open');
+  owned = 'the timeline owns it'; // PLAY with a notes clip on that Keys node
+  calls.length = 0;
+  const off = notes.event('k', { kind: 'off', note: 60, at: 2 });
+  assert.notEqual(off.ok, false);
+  assert.deepEqual(notes.held(), [], 'the stack is free');
+  assert.deepEqual(notes.openGates(), [], 'and so is the live gate\'s record');
+  assert.deepEqual(calls, [], 'the Keys pitch and gate, the clip\'s now, are not touched');
+});
+
 test('K103 a trigger into a node without a trigger input is refused by canConnect', () => {
   const doc = document();
   const r = doc.st.dispatch({ type: 'EDGE_ADD', from: { node: doc.keys, port: 'gate' },
