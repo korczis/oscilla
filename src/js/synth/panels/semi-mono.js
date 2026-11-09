@@ -63,8 +63,10 @@ export default definePanel({
     // knobs set each cable's depth, and the MG runs at its own rate.
     // Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3): the
     // depth is fixed at 1 here, and a jack beside the amount knobs would be a second path to it.
-    { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, sync: 'off' },
-      jacks: { hide: ['depth'] },
+    // K229's key sync (the reset input) and morph wait for the panel half of K229, which adds
+    // the MG's Key sync switch and Morph knob; until then the MG plays as before.
+    { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, sync: 'off', morph: 0 },
+      jacks: { hide: ['depth', 'reset', 'morph'] },
       options: { shape: ['triangle', 'square'] },
       ranges: { rate: [0.01, 100] }, init: { shape: 'triangle', rate: 5 } },
     { id: 'sh', label: 'S&H', node: 'random', fixed: { sync: 'off' },

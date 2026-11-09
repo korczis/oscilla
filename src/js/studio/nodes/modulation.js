@@ -46,6 +46,10 @@ export const LFO_SLIDER_RANGE = Object.freeze([0.01, 100]);
 const randomPeriodS = (DEFAULT_PATTERN_PARAMS.random.toneMs + DEFAULT_PATTERN_PARAMS.random.gapMs)
   / 1000;
 
+/** The input port of an LFO parameter (depth, morph): one a-rate channel, the value unconnected. */
+const A_RATE_PARAM_PORT = Object.freeze({ channels: 1, rate: 'a-rate',
+  unconnected: 'parameter value', monitor: false, compact: false, version: 1 });
+
 export const lfo = defineNode({
   type: 'lfo',
   displayName: 'LFO',
@@ -53,21 +57,31 @@ export const lfo = defineNode({
   category: CATEGORIES.MODULATION,
   aliases: ['low frequency oscillator', 'modulator', 'wobble', 'vibrato', 'tremolo', 'fm',
     'am', 'ring modulator'],
+  // K229: key sync. A trigger on reset restarts the phase at its time (a Keys Gate cabled here
+  // starts each note's modulation at the same phase); unconnected, the LFO runs freely.
+  inputs: [definePort({ id: 'reset', direction: 'in', type: 'TRIGGER', label: 'Synchronizace',
+    channels: 1, rate: 'event', unconnected: 'none', monitor: false, compact: false,
+    version: 1 })],
   outputs: [controlOut],
   params: [
-    enumParam('shape', 'Shape', WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]), 'sine'),
+    // K229: 'morph' crossfades triangle, sawtooth and square by the morph parameter.
+    enumParam('shape', 'Shape', [...WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]),
+      ['morph', 'Prolínání']], 'sine'),
     rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1, { max: FREQUENCY_MAX_HZ,
       softRange: LFO_SLIDER_RANGE, laneRange: [0.01, FREQUENCY_MAX_HZ] }),
     // K022 (hash epoch 2): the output's depth, and tempo sync.
     numberParam('depth', 'Depth', { min: 0, max: 1, step: 0.01, default: 1, automatable: true,
       modulatable: true, modDepth: 0.5, live: 'glide',
       // Its CONTROL input: one AudioParam (a gain), a-rate; uncabled, the depth itself holds.
-      port: { channels: 1, rate: 'a-rate', unconnected: 'parameter value', monitor: false,
-        compact: false, version: 1 } }),
+      port: A_RATE_PARAM_PORT }),
     syncParam(),
+    // K229 (hash epoch 3): the morph of the 'morph' shape, triangle 0, sawtooth 0.5, square 1.
+    numberParam('morph', 'Prolínání tvaru', { min: 0, max: 1, step: 0.01, default: 0,
+      automatable: true, modulatable: true, modDepth: 0.5, live: 'glide',
+      port: A_RATE_PARAM_PORT }),
   ],
   summary(p) {
-    return parts(optionLabel(lfo, 'shape', p.shape),
+    return parts(optionLabel(lfo, 'shape', p.shape), p.shape === 'morph' ? pct(p.morph) : null,
       p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`, p.depth < 1 ? pct(p.depth) : null);
   },
   capabilities: { realtime: true, offline: true },

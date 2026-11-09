@@ -185,6 +185,11 @@ const ROWS = [
     param: (h) => h.outputs.control.gain,
     points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
     checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
+  // K229: the morph of an LFO of the morph shape is its morph source's offset, linear 0..1.
+  { type: 'lfo', key: 'morph', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    node: { shape: 'morph' }, param: (h) => h.info.morph.offset,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
   { type: 'random', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100, display: 'log',
     param: (h) => h.outputs.control.playbackRate, toAudio: controlPlaybackRate, ...rateLane },
   { type: 'step-modulator', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,
