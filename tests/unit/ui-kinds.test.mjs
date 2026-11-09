@@ -132,16 +132,20 @@ test('step-grid: every pointer and touch event is reached by a key, Space is nev
   });
 });
 
-test('the key rows wait on W008 for the shortcuts table, judged once the view exists', async () => {
-  const { pending } = await checkKindRepository(ROOT);
-  assert.deepEqual(pending.map((p) => `${p.kind} ${p.workspace} ${p.row} ${p.issue}`), [
-    'step-grid synth step-grid-move W008', 'step-grid synth step-grid-select W008',
-    'step-grid synth step-grid-toggle W008', 'step-grid synth step-grid-clipboard W008',
-    'step-grid synth step-grid-clear W008', 'step-grid synth step-grid-transpose W008',
-    'step-grid synth step-grid-page W008', 'step-grid synth step-grid-menu W008']);
+test('the key rows are judged against the shortcuts table once the view exists', async () => {
+  // W001 left them pending on W008; with src/js/ui/kinds/step-grid.js on disk none is pending
+  // and every row is in the Synth's Keyboard shortcuts dialog.
+  const { pending, problems } = await checkKindRepository(ROOT);
+  assert.deepEqual(pending, []);
+  assert.deepEqual(problems, []);
+  // Without the view, the rows wait on the issue that adds it.
+  const absent = (rel) => !rel.startsWith('src/js/ui/kinds/step-grid');
+  assert.deepEqual(check([stepGrid], { exists: absent }).pending
+    .map((p) => `${p.row} ${p.issue}`).slice(0, 2),
+  ['step-grid-move W008', 'step-grid-select W008']);
   // With the view on disk, a row the dialog lacks is refused; listed, it passes.
   const exists = () => true;
-  refused(check([stepGrid], { exists }).problems,
+  refused(check([stepGrid], { exists, shortcutRows: () => new Set() }).problems,
     /key row step-grid-move is not in the shortcuts table of synth/);
   const rows = new Set(stepGrid.keys.map((k) => k.row));
   assert.deepEqual(check([stepGrid], { exists, shortcutRows: () => rows }),
@@ -426,7 +430,10 @@ test('links resolve to a workspace route or a catalogue id; G007 is not built', 
 test('impl modules exist or are named by the issue that adds them', () => {
   const other = variant((v) => { v.impl.modules = ['src/js/ui/kinds/elsewhere.js']; });
   refused(check([other]).problems, /impl module src\/js\/ui\/kinds\/elsewhere\.js does not exist/);
-  const unnamed = variant((v) => { delete v.impl.issue; });
+  const unnamed = variant((v) => {
+    v.impl.modules = ['src/js/ui/kinds/elsewhere.js'];
+    delete v.impl.issue;
+  });
   refused(check([unnamed]).problems, /no issue that adds it names it/);
   refused(check([variant((v) => { v.impl.issue = 'W999'; })]).problems, /W999 does not exist/);
   // An existing module needs no issue.

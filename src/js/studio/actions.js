@@ -20,8 +20,7 @@
 // (K061: one entry, one gate call; NODE_ADD, EDGE_ADD and TRACK_ADD (K149) may name an unused
 // id, NODE_ADD a metadata.panel { id, module }, which PASTE, DUPLICATE and PATCH_INSERT drop);
 // timeline additions
-// (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE; NOTES_GRID_SET { clipId, grid,
-// mode } (W008, notes-grid.js); patch additions (V426, patches.js):
+// (V416-V420): CLIP_UPDATE, CLIP_SET_TIME_BASE, MARKER_MOVE, NOTES_GRID_SET (W008); patch additions (V426, patches.js):
 // PATCH_INSERT { patch, at?, route? } ("Insert <name>") and PATCH_REPLACE { patch, at? } ("Replace
 // graph with <name>"), the explicit insert-or-replace intent of §114; PATCH_REPLACE { patch,
 // onto, label? } replaces the parameters of the nodes `onto` maps (patches.js patchParams: a
@@ -576,19 +575,11 @@ const REDUCERS = {
     };
   },
 
-  // W008, ADR 0086 decision 2: a notes clip's grid, one undo entry; keep, map or refuse
-  // (notes-grid.js gridSet). A refused change leaves the clip as it was.
-  NOTES_GRID_SET(model, a) {
-    const clip = requireIn(model.timeline.clips, a.clipId, 'clip');
-    const r = gridSet(clip, a.grid, a.mode ?? 'keep');
+  NOTES_GRID_SET(model, a, ctx) { // W008: notes-grid.js gridSet, one undo entry
+    const r = gridSet(requireIn(model.timeline.clips, a.clipId, 'clip'), a.grid, a.mode);
     if (r.refused) reject(r.refused);
-    if (JSON.stringify(r.payload) === JSON.stringify(clip.payload)) return { model, label: '' };
-    const updated = { ...clip, payload: normalizeClipPayload(clip.kind, r.payload) };
-    return {
-      model: withTimeline(model, { clips: model.timeline.clips.map((c) => (c === clip ? updated
-        : c)) }),
-      label: 'Mřížka notového klipu',
-    };
+    const out = REDUCERS.CLIP_UPDATE(model, { clipId: a.clipId, payload: r.payload }, ctx);
+    return out.label ? { ...out, label: 'Mřížka klipu' } : out;
   },
 
   CLIP_SET_TIME_BASE(model, a) {

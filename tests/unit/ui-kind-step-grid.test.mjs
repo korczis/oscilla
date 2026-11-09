@@ -263,6 +263,7 @@ test('pages and names: 8 steps at 390 px, 16 at 1536 px; a cell names lane, step
   assert.equal(cellName('Kopák', 0, null), 'Kopák, krok 1, vypnuto');
   assert.equal(cellName('', 4, 0.5, 'param-list'), 'Krok 5, 0,50, zapnuto');
   assert.equal(stepGrid.constants.accentVel, ACCENT_VEL);
+  assert.equal(stepGrid.kind, 'step-grid');
 });
 
 test('the grid change is one NOTES_GRID_SET, keep unless the gesture names a mode', () => {
@@ -273,4 +274,65 @@ test('the grid change is one NOTES_GRID_SET, keep unless the gesture names a mod
     { type: 'NOTES_GRID_SET', clipId: 'clip-1', grid: { stepBeats: 0.5 }, mode: 'keep' },
     { type: 'NOTES_GRID_SET', clipId: 'clip-1', grid: { stepBeats: 0.125 }, mode: 'map' }]);
   assert.ok(ACTION_TYPES.includes('NOTES_GRID_SET'));
+});
+
+// ------------------------------------------------------------------------------ the view
+/** A minimal element: attributes, classes, listeners; querySelector answers stubs by selector. */
+function fakeEl() {
+  const on = new Map();
+  const kids = new Map();
+  const cls = new Set();
+  const e = {
+    dataset: {}, textContent: '', disabled: false, className: '', value: '',
+    ownerDocument: { activeElement: null },
+    classList: {
+      add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c),
+      toggle(c, f) { if (f ?? !cls.has(c)) cls.add(c); else cls.delete(c); },
+    },
+    attrs: new Map(),
+    setAttribute(k, v) { e.attrs.set(k, String(v)); },
+    removeAttribute(k) { e.attrs.delete(k); },
+    addEventListener(t, fn) { if (!on.has(t)) on.set(t, new Set()); on.get(t).add(fn); },
+    removeEventListener(t, fn) { if (on.has(t)) on.get(t).delete(fn); },
+    fire(t, ev = {}) {
+      let prevented = false;
+      for (const fn of [...(on.get(t) || [])]) {
+        fn({ target: e, preventDefault() { prevented = true; }, ...ev });
+      }
+      return prevented;
+    },
+    listeners: () => [...on.values()].reduce((n, s) => n + s.size, 0),
+    querySelector(sel) { if (!kids.has(sel)) kids.set(sel, fakeEl()); return kids.get(sel); },
+    querySelectorAll: () => [],
+    contains: () => true,
+    focus() {},
+  };
+  return e;
+}
+
+test('the view: one frame subscriber, freed at destroy; keys reach it, Space not', async () => {
+  const { mountStepGrid } = await import('../../src/js/ui/kinds/step-grid.js');
+  const { frameSubscriberCount } = await import('../../src/js/charts/frame-loop.js');
+  const host = fakeEl();
+  const root = fakeEl();
+  Object.defineProperty(host, 'firstElementChild', { get: () => root });
+  const actions = [];
+  const before = frameSubscriberCount();
+  const view = mountStepGrid(host, { mode: 'notes', lanes: [KICK, SNARE],
+    laneNames: ['Kopák', 'Virbl'], clipId: 'clip-1', payload: { notes: [] }, steps: 16,
+    stepBeats: SB, pageSteps: 16, label: 'Bicí', playStep: () => null,
+    commit: (a) => { actions.push(a); return true; } });
+  for (const k of ['element', 'set', 'setDisabled', 'destroy']) assert.ok(k in view, k);
+  assert.equal(frameSubscriberCount(), before + 1);
+  const surface = root.querySelector('[data-step-grid-surface]');
+  assert.equal(surface.fire('keydown', { key: ' ' }), false, 'Space is not taken');
+  assert.equal(actions.length, 0);
+  assert.equal(surface.fire('keydown', { key: 'Enter' }), true);
+  assert.deepEqual(actions.map((a) => a.type), ['CLIP_UPDATE']);
+  view.setDisabled('Klip je jen ke čtení.');
+  surface.fire('keydown', { key: 'Enter' });
+  assert.equal(actions.length, 1, 'a disabled grid builds nothing');
+  view.destroy();
+  assert.equal(frameSubscriberCount(), before);
+  assert.equal(surface.listeners(), 0);
 });
