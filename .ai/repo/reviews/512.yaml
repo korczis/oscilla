@@ -1,0 +1,54 @@
+# Review verdict for pull request #512 (feat/lab-landing-on-main): the README derived from the
+# repository and the generated Czech landing at /oscilla/lab/ (owner decision Q107, plan P014),
+# staged by pages.yml and proven by a new fatal 'lab' check of scripts/verify-deploy.mjs.
+# Judged at 65a520b1 on base origin/main cb414b85 (merge base), 2026-11-09, in the reviewer's own
+# detached worktree ~/dev/oscilla-wt/review-512.
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), which built none of it
+# (builder: oscilla-0b). First reviewed as #511 (3840e8d9..4a879f2f, on the T4 head c46742ee);
+# #512 carries the same patches on main: every file it changes has the blob of 4a879f2f except
+# dist/index.html and README.md (regenerated on main: build:check and readme:check pass), and the
+# patches of package.json and tests/README.md are identical to #511's.
+#
+# Guarded content (the base branch's scripts/review-verdict.mjs --content --list, run from an
+# extract of origin/main scripts/): .github/workflows/pages.yml and scripts/verify-deploy.mjs only.
+#
+# Read:
+# - pages.yml: one staging command, node scripts/landing.mjs --out _site/lab --commit $GITHUB_SHA,
+#   no network, inside the deploy job's 10-minute bound (project.ci-bounded); pinned actions
+#   unchanged; the verify step passes no --no-lab.
+# - verify-deploy.mjs: the app checks are untouched; the lab is regenerated once before the
+#   attempts (a failed regeneration is fatal) and every lab file (index.html, charts/*.svg,
+#   shots/*.png) is compared byte for byte with its content type in the same attempt, so a missing
+#   or wrong landing fails Pages (project.release-receipt-binds-gate). A --commit other than HEAD
+#   is regenerated from a temporary detached worktree of that commit with that commit's own
+#   landing.mjs; a commit without scripts/landing.mjs (before Q107) expects no landing and says so.
+# - project.single-file-deliverable: no src/ change, nothing in the app loads lab/, the exception
+#   is written into the rule (v2) and the app works without it.
+#
+# Measured by the reviewer:
+# - At 65a520b1: landing-lab, readme-derived, release-*, ci-workflows, review-verdict and
+#   knowledge-integrity 286/286; npm run build:check and readme:check exit 0.
+# - expectedLab at HEAD 21 files (15 shots), at HEAD^ 21 files through the temporary worktree, at
+#   7637039e (before Q107) null; no oscilla-lab worktree left; the worktree route at 7f815739
+#   gave the same sha256 for all 21 files as the in-place generation of that commit.
+# - Cross-platform: a clean clone of 7f815739 in a linux node:22-bookworm container (node
+#   22.23.4, npm ci) generated all 21 landing files with sha256 identical to macOS arm64 node
+#   22.20.0, which release:publish's local verify-deploy relies on.
+# - Fail-first of R2-511-1: before the fix, expectedLab({ commit: HEAD^ }) threw "--commit X is
+#   not the checkout's HEAD" (reproduced at 7f815739).
+# Not run by the reviewer: the full npm test / npm run verify (the builder reports 5490/0), the
+# Pages workflow itself (its first run after merge is the receipt), firefox/webkit suites (no
+# browser-facing change in the app).
+#
+# Verdict: merge. Every P2 is closed; one P3 rides as plan issue R052.
+schema: review-verdict/v1
+pr: 512
+verdict: merge
+reviewer: rev-seat-2 oscilla-c3 (claude-code c0f0687c; built none of 65a520b1)
+content: 64ad090a385e416fa6a34b36c35085a553cf3bf25830ed470f482a57bf5a36c2
+findings:
+  - { id: R2-511-1, severity: P2, status: closed, title: "verify-deploy failed fatally whenever --commit was not the checkout's HEAD, breaking release-publish's printed closing command release:verify-deploy -- --commit <published> once main moved; fixed by regenerating that commit's landing in a temporary detached worktree (61fdb82c)" }
+  - { id: R2-511-2, severity: P2, status: closed, title: "lab/shots/*.png were deployed but not compared; now every lab file is byte-compared with its content type (61fdb82c)" }
+  - { id: R2-511-3, severity: P3, status: open, title: "scripts/landing.mjs, scripts/landing/ and scripts/facts.mjs decide what verify-deploy expects but are not GUARDED; filed as plan issue R052 (review-verdict v3)" }
+  - { id: R2-511-4, severity: P3, status: closed, title: "a repository-wide git worktree prune in verify-deploy's finally could drop other sessions' worktree records on the shared Mac; now only its own temporary worktree is removed, a failed removal is warned (65a520b1)" }
+  - { id: R2-511-5, severity: P3, status: closed, title: "git cat-file stderr ('fatal: path ... not in <sha>') leaked into the log on the pre-Q107 path; git's stderr is now ignored in expectedLab (65a520b1)" }
