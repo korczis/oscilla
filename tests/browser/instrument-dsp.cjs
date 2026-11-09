@@ -29,6 +29,21 @@
 //              delay, + attack, + hold computed from the parameters; with delay and hold 0 the
 //              attack starts at the gate and the decay at the peak (today's ADSR). Fails on
 //              0410c679 (no delay or hold parameter)
+//   m-sync     K229: a sine LFO synced to 1/4 at 120 BPM, played by the transport offline: its
+//              period equals the same LFO's free-running at 2 Hz (0.01 frame: the sync is the
+//              division's rate exactly) and is 0.5 s within one frame in chromium and webkit.
+//              Firefox's own OscillatorNode runs 2 Hz with a constant period of 22045.92 frames
+//              at 44.1 kHz and 24001.28 at 48 kHz (0.32 cent, measured 2026-11-09, Firefox 155),
+//              so there the period is held within 1 cent, as k-track holds every pitch
+//   m-keysync  K229: a 3 Hz sine LFO keyed by the Keys Gate (into its reset), two notes 0.3 s
+//              apart: the 50 ms after each note-on agree sample for sample (1e-4) and start at
+//              phase 0; unkeyed, the same notes find it at another phase
+//   m-morph    K229: the morph shape at 0 equals a triangle LFO sample for sample within 1e-5
+//              (-100 dB; float32 phase accumulation of its frequency, the rate source summed in
+//              at audio rate, measured at 2.5e-6 in chromium): the panel's MG plays it where it
+//              played the triangle; the 3rd harmonic over the 1st
+//              is a triangle's 1/9 at morph 0 and a square's 1/3 at morph 1, each within 2 %.
+//              Fails on c74fc6fd (no reset input, no morph shape)
 //
 // K068, per browser and per rate: a notes clip on the Keys node of Keys -> VCO -> Envelope ->
 // Master Output played by the Studio transport offline (the render length as its look-ahead, as
@@ -171,6 +186,31 @@ async function runBrowser(name) {
             + `${f(d.holdMinDb, 4)} dB`);
         }
       }
+      // K229: the LFO's tempo sync, key sync and morph.
+      const ms = await call('lfoSync', { sampleRate: rate }, `m-sync renders at ${rate} Hz`);
+      const want = 0.5 * ms.sampleRate;
+      const exactOsc = name !== 'firefox';
+      check(at, `m-sync 1/4 at 120 BPM: the period is 0.5 s ${exactOsc ? 'within one frame'
+        : 'within 1 cent'}, the free 2 Hz LFO's own`,
+        ms.periodFrames !== null && Math.abs(ms.periodFrames - ms.freeFrames) <= 0.01
+          && (exactOsc ? Math.abs(ms.periodFrames - want) <= 1
+            : Math.abs(1200 * Math.log2(ms.periodFrames / want)) <= 1),
+        `${f(ms.periodFrames, 3)} frames over ${ms.periods} periods (computed ${want}; free `
+          + `2 Hz ${f(ms.freeFrames, 3)}); rising crossings ${ms.ups.join(' ')}`);
+      const mk = await call('lfoKeySync', { sampleRate: rate }, `m-keysync renders at ${rate} Hz`);
+      check(at, 'm-keysync two notes 0.3 s apart start the keyed LFO at the same phase',
+        mk.keyedDiff <= 1e-4 && mk.keyedAt.every((v) => Math.abs(v) < 0.01)
+          && mk.freeDiff > 0.1,
+        `keyed: max difference ${mk.keyedDiff.toExponential(2)}, at the onsets `
+          + `${mk.keyedAt.map((v) => f(v, 4)).join(', ')}; free: ${f(mk.freeDiff, 3)}`);
+      const mm = await call('lfoMorph', { sampleRate: rate }, `m-morph renders at ${rate} Hz`);
+      check(at, 'm-morph morph 0 equals the triangle LFO sample for sample',
+        mm.diff <= 1e-5 && mm.peak > 0.9, `max difference ${mm.diff.toExponential(2)} (peak `
+          + `${f(mm.peak, 4)})`);
+      check(at, "m-morph 3rd over 1st harmonic: a triangle's 1/9 at 0, a square's 1/3 at 1",
+        Math.abs(mm.ratio0 / (1 / 9) - 1) <= 0.02 && Math.abs(mm.ratio1 / (1 / 3) - 1) <= 0.02,
+        `morph 0: ${f(mm.ratio0, 5)} (1/9 = ${f(1 / 9, 5)}); morph 1: ${f(mm.ratio1, 5)} `
+          + `(1/3 = ${f(1 / 3, 5)})`);
       // K068: notes clips on the audio clock.
       const half = {};
       for (const tempo of [120, 97]) {

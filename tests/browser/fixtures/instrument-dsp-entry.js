@@ -21,6 +21,10 @@
 //
 // K230 (dadsr): the same notes document with the Envelope's delay and hold set, one note held
 // past every stage; its contour against the stage times computed here from the parameters.
+//
+// K229 (lfoRender): Keys -> VCO -> Master Output with an LFO into the VCO's FM (so it is
+// built and plays) and, when keyed, the Keys Gate into the LFO's reset; played by the transport
+// offline as renderNotes plays its document. Channel 1 is the LFO's control output itself.
 
 import { AudioEngine } from '../../../src/js/audio/audio-engine.js';
 import { mulberry32 } from '../../../src/js/core/math.js';
@@ -391,6 +395,140 @@ async function dadsr({ sampleRate, delay, hold }) {
   holdMinDb: want.decay > want.peak + 1 ? db(holdMin) : null };
 }
 
+/**
+ * K229: render an LFO of `lfo` params for `seconds` through the transport at `tempo`, with the
+ * notes `notes` on the Keys node and, when `keyed`, the Keys Gate into the LFO's reset.
+ * -> { sampleRate, baseFrame, spb, lfo (Float32Array: its control output), unplayed }
+ */
+async function lfoRender({ sampleRate, seconds = 2, tempo = 120, lfo, notes = [], keyed = false }) {
+  const empty = normalizeStudio({ kind: STUDIO_KIND, schemaVersion: 1,
+    graph: { nodes: [], edges: [] } });
+  const st = createStudioStore(empty, { idGenerator: createIdGenerator(empty) });
+  const must = (r, what) => {
+    if (!r.ok) throw new Error(`${what}: ${r.reason}`);
+    return r;
+  };
+  const add = (nodeType) => must(st.dispatch({ type: 'NODE_ADD', nodeType,
+    position: { x: 0, y: 0 } }), nodeType).created.nodes[0];
+  const keys = add('keys');
+  const vco = add('vco');
+  const mod = add('lfo');
+  const out = add('master');
+  must(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: mod, params: lfo }), 'lfo params');
+  const edge = (from, fp, to, tp, props) => must(st.dispatch({ type: 'EDGE_ADD',
+    from: { node: from, port: fp }, to: { node: to, port: tp }, props }), `${fp} edge`);
+  edge(keys, 'pitch', vco, 'pitch', { depth: 6, polarity: 'bipolar', mapping: 'linear' });
+  edge(mod, 'control', vco, 'fm', { depth: 0.01 });
+  edge(vco, 'audio', out, 'audio');
+  if (keyed) edge(keys, 'gate', mod, 'reset');
+  must(st.dispatch({ type: 'TRANSPORT_SET', tempo }), 'tempo');
+  const trackId = must(st.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys }), 'track')
+    .created.tracks[0];
+  must(st.dispatch({ type: 'CLIP_ADD', trackId, kind: 'notes', startBeats: 0,
+    durationBeats: Math.max(1, Math.ceil(seconds * tempo / 60)), payload: { notes } }), 'clip');
+  const model = st.getModel();
+  const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
+  const merge = ctx.createChannelMerger(2);
+  merge.connect(ctx.destination);
+  const master = ctx.createGain();
+  master.connect(merge, 0, 0);
+  const engine = offlineEngine(ctx, master);
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store: fixedStore(model),
+    lookAheadS: seconds });
+  const started = transport.start();
+  if (!started.ok) throw new Error(`PLAY: ${started.reason}`);
+  runtime.nodes.get(mod).outputs.control.connect(merge, 0, 1);
+  const unplayed = transport.debugInfo().unplayed;
+  const buf = await ctx.startRendering();
+  return { sampleRate: buf.sampleRate, baseFrame: Math.round(started.baseTime * buf.sampleRate),
+    spb: 60 / tempo, lfo: buf.getChannelData(1), unplayed };
+}
+
+/** The amplitude of the `hz` component of x over [i0, i1) (a DFT bin on whole periods). */
+function partial(x, sr, hz, i0, i1) {
+  let re = 0;
+  let im = 0;
+  for (let i = i0; i < i1; i++) {
+    const w = (2 * Math.PI * hz * i) / sr;
+    re += x[i] * Math.cos(w);
+    im += x[i] * Math.sin(w);
+  }
+  return (2 * Math.hypot(re, im)) / (i1 - i0);
+}
+
+/**
+ * K229 m-sync: a sine LFO synced to `division` at `tempo`, and the same LFO free-running at the
+ * rate the division gives (1 / divisionSeconds): each one's period in frames, from its rising
+ * zero crossings, and the crossings of the synced one.
+ */
+async function lfoSync({ sampleRate, division = '1/4', tempo = 120 }) {
+  const period = async (lfo) => {
+    const r = await lfoRender({ sampleRate, seconds: 3, tempo, lfo });
+    const m = zeroCrossingHz(r.lfo, r.sampleRate, 0.25, 2.95);
+    const ups = [];
+    for (let i = 1; i < r.lfo.length; i++) {
+      if (r.lfo[i - 1] < 0 && r.lfo[i] >= 0) {
+        ups.push(i - 1 + r.lfo[i - 1] / (r.lfo[i - 1] - r.lfo[i]));
+      }
+    }
+    return { sampleRate: r.sampleRate, frames: m.hz ? r.sampleRate / m.hz : null,
+      periods: m.periods, ups: ups.map((x) => Number(x.toFixed(2))) };
+  };
+  const synced = await period({ shape: 'sine', rate: 7, sync: division });
+  const free = await period({ shape: 'sine', rate: tempo / 60, sync: 'off' }); // 1/4: one beat
+  return { sampleRate: synced.sampleRate, periodFrames: synced.frames, freeFrames: free.frames,
+    periods: synced.periods, ups: synced.ups };
+}
+
+/**
+ * K229 m-keysync: a sine LFO at 3 Hz keyed by two notes 0.3 s apart (not a whole number of its
+ * periods): the LFO over the 50 ms after each note-on, sample against sample, and its value at
+ * each onset (a sine restarted at its phase 0). Unkeyed, the same render for contrast.
+ */
+async function lfoKeySync({ sampleRate }) {
+  const tempo = 120;
+  const notes = [{ at: 1, note: 60, len: 0.4, vel: 0.8 }, { at: 1.6, note: 64, len: 0.4,
+    vel: 0.8 }]; // 0.5 s and 0.8 s: 0.3 s apart
+  const run = async (keyed) => {
+    const r = await lfoRender({ sampleRate, seconds: 1.5, tempo, keyed,
+      lfo: { shape: 'sine', rate: 3 }, notes });
+    const on = notes.map((n) => r.baseFrame + Math.round(n.at * r.spb * r.sampleRate));
+    const span = Math.round(0.05 * r.sampleRate);
+    let diff = 0;
+    for (let j = 0; j < span; j++) {
+      diff = Math.max(diff, Math.abs(r.lfo[on[0] + j] - r.lfo[on[1] + j]));
+    }
+    return { sampleRate: r.sampleRate, diff, at: on.map((f) => r.lfo[f + 1]) };
+  };
+  const keyed = await run(true);
+  const free = await run(false);
+  return { sampleRate: keyed.sampleRate, keyedDiff: keyed.diff, freeDiff: free.diff,
+    keyedAt: keyed.at };
+}
+
+/**
+ * K229 m-morph: an LFO of the morph shape at morph 0 against a triangle LFO, sample against
+ * sample (the panel's MG plays morph 0 where it played the triangle); and the third harmonic
+ * over the first at morph 0 and 1, against a triangle's (1/9) and a square's (1/3).
+ */
+async function lfoMorph({ sampleRate, hz = 100 }) {
+  const seconds = 1.2;
+  const lfo = (p) => lfoRender({ sampleRate, seconds, lfo: { rate: hz, ...p } });
+  const tri = await lfo({ shape: 'triangle' });
+  const m0 = await lfo({ shape: 'morph', morph: 0 });
+  const m1 = await lfo({ shape: 'morph', morph: 1 });
+  const sr = tri.sampleRate;
+  let diff = 0;
+  for (let i = 0; i < tri.lfo.length; i++) diff = Math.max(diff, Math.abs(tri.lfo[i] - m0.lfo[i]));
+  // 100 whole periods from 0.1 s (the LFO starts with the transport, before it).
+  const i0 = Math.round(0.1 * sr);
+  const i1 = i0 + Math.round((100 / hz) * sr);
+  const ratio = (x) => partial(x, sr, 3 * hz, i0, i1) / partial(x, sr, hz, i0, i1);
+  return { sampleRate: sr, diff, peak: Math.max(...tri.lfo.slice(i0, i1)),
+    ratio0: ratio(m0.lfo), ratio1: ratio(m1.lfo) };
+}
+
 // The census: the same document on a running AudioContext, stopped with a ratchet pending.
 const C = { engine: null, runtime: null, transport: null, done: null, stopAt: null };
 
@@ -423,4 +561,5 @@ function censusDone() {
 }
 
 window.K = { RATES, track, glide, clampHz, midiHz, swingGrid, ratchet, slide, chance, dadsr,
+  lfoSync, lfoKeySync, lfoMorph,
   censusStart, censusNow, censusStop, censusDone };
