@@ -377,6 +377,7 @@ export function createStudioUi(svc = {}) {
       userPatches: () => library().then((l) => l.patches()),
       openLibrary: () => cmp.patchLibraryOpen(),
       playhead: () => (ctx.transport ? ctx.transport.playhead() : null),
+      liveTransport: () => ctx.transport || null, // K223: the step grid's Record switch
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {

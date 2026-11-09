@@ -36,6 +36,8 @@
 //                    accessible name, and letting go stops within HIDE_MS and says false
 //   escape-stops-sequencer  the sequencer started by a tap stops at Escape within HIDE_MS and
 //                    its Play control stops saying pressed
+//   records-drums-take  K223: on the Drums tab, after one tap on the page, Record and Play
+//                    tapped, two pads tapped and Stop tapped: the clip holds the two hits
 //
 // Every wait is a condition poll with a named wall-clock deadline (tests/browser/lib/wait.cjs).
 //
@@ -230,6 +232,50 @@ function denyCapabilities() {
   else {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true,
       value: { getUserMedia: refused('NotAllowedError') } });
+  }
+}
+
+/**
+ * K223: a take recorded by fingers on the Drums tab, with the browser's own gesture rule. A
+ * tap on an inert spot unlocks audio; the notices close and the clip is made by taps; Record and
+ * Play are tapped, then two pads, then Stop: the clip holds the two hits.
+ */
+async function recordJourney(browser, engine, device, phone, check) {
+  const { context, page, errors } = await openAt(browser, engine, device, '#m=synth&yt=drums');
+  const tap = async (sel, optional = false) => {
+    const el = page.locator(sel).locator('visible=true').first();
+    if (optional && !(await el.count())) return true;
+    const shown = await pollFor(() => el.count(), (n) => n > 0, `iphone: record shows ${sel}`);
+    if (!shown.ok) return false;
+    await el.scrollIntoViewIfNeeded({ timeout: 5000 });
+    await el.tap({ timeout: 5000 });
+    return true;
+  };
+  const notes = () => page.evaluate(() => {
+    const c = window.OSCILLA.studio.model.timeline.clips.find((x) => x.kind === 'notes');
+    return c ? c.payload.notes.length : -1;
+  });
+  let detail = '';
+  try {
+    const spot = await page.evaluate(inertSpot);
+    if (spot) await page.touchscreen.tap(spot.x, spot.y);
+    for (const { sel } of CLOSE_NOTICES) await tap(sel, true);
+    if (!(await tap('[data-drums-new]', true))) detail = 'no clip';
+    const sw = '[data-drums-bar] [data-notes-record]';
+    const armed = (await tap(sw)) && (await pollFor(() => page.getAttribute(sw, 'aria-checked'),
+      (v) => v === 'true', 'iphone: record the switch is on')).ok;
+    const played = armed && (await tap('[data-drums-play]')) && (await pollFor(() => page
+      .evaluate(() => window.OSCILLA.studio.transport.playhead().playing), (v) => v === true,
+    'iphone: record Play plays the timeline')).ok;
+    const struck = played && (await tap('[data-drum-pad="0"]')) && (await tap('[data-drum-pad="1"]'));
+    const stopped = struck && (await tap('[data-drums-play]'));
+    const take = stopped ? await pollFor(notes, (n) => n === 2, 'iphone: record take in model')
+      : { ok: false, last: null };
+    detail = detail || `armed ${armed}, played ${played}, struck ${struck}, notes ${take.last}`;
+    check(`records-drums-take@${phone}`, take.ok && errors.length === 0,
+      `${detail}; ${errors.join(' | ')}`);
+  } finally {
+    await context.close();
   }
 }
 
@@ -507,6 +553,7 @@ async function runOne(engine, baseline, recorded) {
       }
       await deniedJourney(browser, engine, device, phone, check);
       await sameActionJourney(browser, engine, device, phone, check);
+      await recordJourney(browser, engine, device, phone, check);
     }
   } finally {
     await browser.close();

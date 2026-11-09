@@ -326,7 +326,9 @@
     <template x-for="a in alerts" :key="a.id">
       <div class="osc-toast" :class="'osc-toast--' + a.level"
         :role="a.level === 'error' || a.level === 'warning' ? 'alert' : 'status'" data-osc="alert">
-        <div class="osc-toast-text">
+        <!-- U100: on a short phone an info or success toast is one line; a warning or an error
+             (a refusal's stated reason, project.no-silent-feedback) always wraps whole. -->
+        <div class="osc-toast-text min-w-0" :class="(a.level === 'info' || a.level === 'success') && '[@media(max-height:700px)_and_(pointer:coarse)]:truncate'">
           <strong x-text="a.title"></strong>
           <span x-text="a.message"></span>
           <template x-if="a.action">
@@ -357,11 +359,15 @@
   <section class="osc-safety relative z-[1]" :class="workspace === 'playground' && 'max-sm:mt-0'" id="osc-safety" data-osc="safety" aria-labelledby="osc-safety-title"
     x-show="!safetyCollapsed" style="display: none">
     <svg class="osc-safety-icon" aria-hidden="true"><use href="#i-info"/></svg>
-    <p class="osc-safety-text">
-      <strong id="osc-safety-title">Listening safety.</strong>
+    <!-- U100: on a short phone (a short viewport and a coarse pointer, never a short desktop
+         window), collapsed, the notice is one line: its title, the advice's short form "Start
+         low." whole, and More, which shows the whole advice; expanded it wraps as everywhere. -->
+    <p class="osc-safety-text" :class="!safetyExpanded && '[@media(max-height:700px)_and_(pointer:coarse)]:flex [@media(max-height:700px)_and_(pointer:coarse)]:items-center [@media(max-height:700px)_and_(pointer:coarse)]:gap-1 [@media(max-height:700px)_and_(pointer:coarse)]:min-w-0'">
+      <strong id="osc-safety-title" class="shrink-0">Listening safety.</strong>
       <span class="osc-safety-more" :class="{ 'is-open': safetyExpanded }">Audio can be
         uncomfortable or harmful at excessive output levels.</span>
-      <span>Start low, especially with headphones.</span>
+      <span :class="!safetyExpanded && '[@media(max-height:700px)_and_(pointer:coarse)]:hidden'">Start low, especially with headphones.</span>
+      <span class="hidden" :class="!safetyExpanded && '[@media(max-height:700px)_and_(pointer:coarse)]:inline'" data-safety-short="">Začněte potichu.</span>
       <span class="osc-safety-more" id="osc-safety-more" :class="{ 'is-open': safetyExpanded }">
         Perceived loudness is not a reliable measure of acoustic output. Digital signal generation
         does not guarantee that your hardware reproduces the requested frequency.</span>
@@ -2740,7 +2746,8 @@
         <h3 id="osc-synth-steps-title" class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Krokový sekvencer</h3>
         <div id="osc-synth-steps-grid"></div>
       </section>
-      <div data-osc="synth.panel" role="tabpanel" :aria-labelledby="'osc-synth-tab-' + synth.tab"></div>
+      <div data-osc="synth.panel" role="tabpanel" :aria-labelledby="'osc-synth-tab-' + synth.tab"
+        :data-keeps-dock="synth.tabs.some((t) => t.id === synth.tab && t.keepsDock) ? '' : null"></div>
     </section>
 
     <!-- STUDIO (V3.1): visual signal programming
