@@ -74,6 +74,11 @@
 //              key arms it and the transport bar's armed indicator shows, PLAY plays, and STOP
 //              leaves the keys armed (indicator and Synth state) with A still sounding (the
 //              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
+//   s-steps    K221 (desktop and phone): no strip by default; the dock's picker lists
+//              Krokový sekvencer, and Enter on it adds the strip in one undo entry, shown above
+//              the face; a pointer on step 3 (a tap on the phone) puts its note (beat 0.5, C4)
+//              in the strip's notes clip on the panel's Keys; while the Studio plays the strip's
+//              playing step shows and moves; no horizontal page scroll
 //   s-libinsert K225 (desktop and phone): in a changed document without the panel, the Synth's
 //              Library (the Studio's one patch library) inserts the panel from its Bass preset by
 //              pointer (a tap on the phone), one undo entry, the status naming the Master feed it
@@ -204,7 +209,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices', 's-armed', 's-normals', 's-libinsert']);
+  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -952,7 +957,8 @@ function defineChecks() {
     out.inspector = await field.inputValue();
     out.sameRevision = rev === await page.evaluate(() => window.OSCILLA.studio.store
       .getRevision());
-    return { ok: out.items === 9 && out.expanded === 'true' && out.routeEntries === 1
+    // Eight notes nodes, New Synth voice and, since K221, Krokový sekvencer.
+    return { ok: out.items === 10 && out.expanded === 'true' && out.routeEntries === 1
       && /^Play .* from the keys$/.test(out.label) && out.sameRevision, ...out };
   });
 
@@ -1427,6 +1433,71 @@ function defineChecks() {
     await until(async () => (await counts(page)).runtimeNodes === 0,
       { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
     return { ok: !(await dbg(page)).armed, off: q.rmsDb, counts: await counts(page) };
+  });
+
+  // K221: the step-sequencer strip above the face, found from the default view's picker.
+  def('s-steps', async ({ page, size }) => {
+    const press = (loc) => (size === 'phone' ? loc.tap() : loc.click());
+    const strip = page.locator('[data-osc="synth.steps"]');
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const notes = () => page.evaluate(() => {
+      const m = window.OSCILLA.studio.model;
+      const keys = window.OSCILLA.app.synthDebug().nodes.keys;
+      const t = m.timeline.tracks.find((x) => x.kind === 'event' && x.target === keys);
+      const c = t && m.timeline.clips.find((x) => x.trackId === t.id && x.kind === 'notes');
+      return c ? c.payload.notes.map((n) => [n.at, n.note]) : null;
+    });
+    const hiddenFirst = !(await strip.isVisible()) && (await notes()) === null;
+    // V635: on a phone the instrument row is folded behind the dock's More button.
+    const more = page.locator('[data-osc="keyboard.more"]');
+    if (await more.isVisible()) {
+      await press(more);
+      await until(() => page.locator('[data-osc="synth.pick"]').isVisible(),
+        { ms: 5000, what: 'More unfolds the instrument row' });
+    }
+    await page.locator('#osc-synth-pick').focus();
+    await page.keyboard.press('Enter');
+    const item = page.locator('[data-osc="synth.pick.menu"] [data-pick="steps"]');
+    await until(() => item.isVisible(), { ms: 5000,
+      what: 'the picker lists Krokový sekvencer' });
+    const d0 = await depth();
+    // By the keyboard, as s-dock chooses: a pointer on the item outlives the menu it closes.
+    await item.focus();
+    await page.keyboard.press('Enter');
+    await until(async () => (await strip.isVisible()) && (await depth()) === d0 + 1
+      && JSON.stringify(await notes()) === '[]', { ms: 10000,
+      what: 'the strip is added in one undo entry and shown above the face' });
+    // Fitted once and settled: the same step count on two reads a frame apart.
+    const cells = () => page.evaluate(() => new Promise((res) => requestAnimationFrame(() => res(
+      document.querySelectorAll('[data-osc="synth.steps"] [role="gridcell"]').length))));
+    let last = -1;
+    const fitted = await until(async () => {
+      const n = await cells();
+      const still = n > 0 && n === last;
+      last = n;
+      return still ? n : null;
+    }, { ms: 5000, what: 'the strip\'s step grid settles at one page size' });
+    // Step 3: on the first page at every width (four steps a page at a phone's 390 px).
+    const cell = strip.locator('[role="gridcell"][data-lane="0"][data-step="2"]');
+    await cell.scrollIntoViewIfNeeded();
+    await press(cell);
+    await until(async () => JSON.stringify(await notes()) === '[[0.5,60]]', { ms: 5000,
+      what: 'step 3 puts its note in the strip\'s clip' });
+    // The transport plays it: the strip's playhead moves while the Studio plays.
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    const at = () => page.evaluate(() => {
+      const c = document.querySelector('[data-osc="synth.steps"] [aria-current="step"]');
+      return c ? Number(c.dataset.step) : null;
+    });
+    const first = await until(async () => { const v = await at(); return v === null ? null
+      : { v }; }, { ms: 5000, what: 'the strip shows the playing step' });
+    const moved = await until(async () => { const v = await at(); return v !== null
+      && v !== first.v ? { v } : null; }, { ms: 5000, what: 'the strip\'s playing step moves' });
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    const narrow = await page.evaluate(() => document.scrollingElement.scrollWidth
+      - window.innerWidth);
+    return { ok: hiddenFirst && narrow <= 0, hiddenFirst, first: first.v, moved: moved.v,
+      narrow, fitted };
   });
 
   // K225: the Studio's patch library inserts the Synth panel (a panel preset's Insert).

@@ -13,6 +13,8 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs'] }),
   'synth.arm': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
+  'synth.steps': entry({ source: 'src/index.html',
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
   'synth.studio': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
   'synth.copy-link': entry({ source: 'src/index.html',
