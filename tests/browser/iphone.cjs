@@ -36,6 +36,14 @@
 //                    accessible name, and letting go stops within HIDE_MS and says false
 //   escape-stops-sequencer  the sequencer started by a tap stops at Escape within HIDE_MS and
 //                    its Play control stops saying pressed
+//   tap-same-task-<what>  K184 (the minimum gate, src/js/audio/gate.js): after the gesture
+//                    unlock, 20 taps whose finger down and up (touch pointerdown and pointerup,
+//                    what the surfaces listen to) are dispatched in one task, on a key of the
+//                    Synth's on-screen piano and on the Synth's XY pad: each raises the engine's
+//                    analyser (the destination tap) above TAP_HEARD_DB within TAP_MS, and the
+//                    output falls below TAP_QUIET_DB before the next; the analyser is read every
+//                    frame because a tap lasts less than a probe's round trip. Desktop QWERTY taps
+//                    are s-tap of tests/browser/synth.cjs
 //   records-drums-take  K223: on the Drums tab, after one tap on the page, Record and Play
 //                    tapped, two pads tapped and Stop tapped: the clip holds the two hits
 //
@@ -67,6 +75,12 @@ const SETTLE_MS = 8000;
 // a hidden page stops with a fast fade, well inside this; a control that ends on its own (a
 // trigger's note, a transport's last step) takes longer, so it cannot pass for a stop
 const HIDE_MS = 1500;
+// K184: a same-task tap is heard within TAP_MS above TAP_HEARD_DB (dB re digital full scale, the
+// RMS of the analyser's buffer) and is over below TAP_QUIET_DB; TAP_COUNT taps per surface
+const TAP_MS = 3000;
+const TAP_HEARD_DB = -60;
+const TAP_QUIET_DB = -70;
+const TAP_COUNT = 20;
 const PHONES = {
   webkit: ['iPhone 13', 'iPhone SE'],
   chromium: ['Pixel 7'],
@@ -362,6 +376,83 @@ const announced = (page, sel) => page.evaluate((q) => {
  * pressed; letting go stops within HIDE_MS and says not pressed. The sequencer started by a tap
  * stops at Escape, and its Play control stops saying pressed.
  */
+// K184: the surfaces a same-task tap is proven on; `at` is where a finger lands, as fractions of
+// the control's box (a white key's low part; the pad's middle, where Y opens the filter)
+const TAPS = [
+  { id: 'synth-key', hash: '#m=synth', sel: '[data-osc="keyboard.keys"]',
+    at: { x: 0.06, y: 0.85 } },
+  { id: 'xy-pad', hash: '#m=synth&yt=xy', sel: '[data-osc="synth.xy"] [data-xy-surface]',
+    at: { x: 0.5, y: 0.6 } },
+];
+
+/**
+ * In the page: the loudest RMS (dB) of the engine's analyser since the last reset, every frame.
+ * The engine builds its analyser when the first note starts it, so the watch takes it up then.
+ */
+function watchLoudest() {
+  let t = null;
+  window.__tapMax = -Infinity;
+  window.__tapNow = -Infinity;
+  const tick = () => {
+    const a = window.OSCILLA.engine && window.OSCILLA.engine.analyser;
+    if (a) {
+      if (!t || t.length !== a.fftSize) t = new Float32Array(a.fftSize);
+      a.getFloatTimeDomainData(t);
+      let s = 0;
+      for (const x of t) s += x * x;
+      window.__tapNow = 10 * Math.log10(s / t.length + 1e-24);
+      window.__tapMax = Math.max(window.__tapMax, window.__tapNow);
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+/** In the page: one tap, its finger down and up dispatched in this one task (K184). */
+function sameTaskTap([sel, at]) {
+  const el = [...document.querySelectorAll(sel)].find((e) => e.getClientRects().length);
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  const o = { clientX: r.left + r.width * at.x, clientY: r.top + r.height * at.y,
+    pointerType: 'touch', pointerId: 7, isPrimary: true, bubbles: true, cancelable: true };
+  window.__tapMax = -Infinity;
+  el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
+  el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+  return true;
+}
+
+async function sameTaskTapJourney(browser, engine, device, phone, check) {
+  for (const s of TAPS) {
+    const { context, page, errors } = await openAt(browser, engine, device, s.hash);
+    try {
+      const spot = await page.evaluate(inertSpot);
+      if (spot) await page.touchscreen.tap(spot.x, spot.y);
+      const target = page.locator(s.sel).locator('visible=true').first();
+      const shown = await target.count() > 0;
+      if (shown) await target.scrollIntoViewIfNeeded({ timeout: 5000 });
+      await page.evaluate(watchLoudest);
+      const heard = [];
+      for (let i = 0; shown && i < TAP_COUNT; i += 1) {
+        const quiet = await pollFor(() => page.evaluate(() => window.__tapNow),
+          (db) => db < TAP_QUIET_DB, `iphone: ${s.id} quiet before tap ${i + 1}`, TAP_MS);
+        if (!quiet.ok) {
+          heard.push(`not quiet ${quiet.last}`);
+          break;
+        }
+        await page.evaluate(sameTaskTap, [s.sel, s.at]);
+        const peak = await pollFor(() => page.evaluate(() => window.__tapMax),
+          (db) => db > TAP_HEARD_DB, `iphone: same-task tap ${i + 1} on ${s.id} sounds`, TAP_MS);
+        heard.push(peak.ok ? Number(peak.last.toFixed(1)) : null);
+      }
+      const ok = shown && heard.length === TAP_COUNT && heard.every((x) => typeof x === 'number')
+        && errors.length === 0;
+      check(`tap-same-task-${s.id}@${phone}`, ok, JSON.stringify({ shown, heard, errors }));
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 async function sameActionJourney(browser, engine, device, phone, check) {
   const { context, page, errors } = await openAt(browser, engine, device, '#m=playground');
   try {
@@ -553,6 +644,7 @@ async function runOne(engine, baseline, recorded) {
       }
       await deniedJourney(browser, engine, device, phone, check);
       await sameActionJourney(browser, engine, device, phone, check);
+      await sameTaskTapJourney(browser, engine, device, phone, check);
       await recordJourney(browser, engine, device, phone, check);
     }
   } finally {
