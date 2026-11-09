@@ -13,14 +13,10 @@ import { routeOf } from './routes.js';
 import { createMidiSupport, midiSite } from './support.js';
 import { createMidiNotes } from './notes.js';
 import { createKeyboardUi } from './keyboard-ui.js';
+import { notesRefusalOf, notesRefusedSentences } from '../ui/output-owner.js';
 
-export const MIDI_REFUSED = Object.freeze({
-  measurement: 'MIDI notes do not play while the measurement owns the output: stop it (Esc) '
-    + 'first.',
-  reference: 'MIDI notes do not play while the level reference is being captured.',
-  studio: 'MIDI notes do not play while the Studio is playing: stop it first.',
-  sequencer: 'MIDI notes do not play while the sequencer is playing: stop it (Esc) first.',
-});
+/** What a refused MIDI note says, per owner: the one output-owner table's (C036). */
+export const MIDI_REFUSED = notesRefusedSentences('midi');
 
 /**
  * `engine`: the AudioEngine the notes sound through. `sequencerPlaying()`: whether the
@@ -40,7 +36,6 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
     /** Called once by the component's init: the load-time read, never a request. */
     midiInit() {
       const cmp = this;
-      const owns = (fn) => typeof cmp[fn] === 'function' && cmp[fn]();
       // One note layer per player (MIDI, the keyboard): the same settings and owners, each
       // saying a refusal in its own words.
       const notesFor = (refused) => createMidiNotes({
@@ -49,13 +44,10 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         settings: () => ({ a4: cmp.a4, waveform: cmp.waveform, attackS: cmp.attack / 1000,
           releaseS: cmp.release / 1000, limitS: cmp.safetyLimit,
           continuous: cmp.continuousAllowed }),
-        ownedBy: () => {
-          if (owns('measureOwnsOutput')) return 'measurement';
-          const form = cmp.meas && cmp.meas.levelForm;
-          if (form && form.capturing) return 'reference';
-          if (owns('studioOwnsOutput')) return 'studio';
-          return sequencerPlaying() ? 'sequencer' : null;
-        },
+        // Who refuses a note now: the rows of the one output-owner table that refuse notes
+        // (C036): the measurement, a microphone level-reference capture (the loopback's
+        // reference is the output itself, as for every other claim), the Studio, the sequencer.
+        ownedBy: () => notesRefusalOf(cmp, { sequencerPlaying }),
         refused,
         // What the workspace's keys play: its row of the one table (midi/routes.js, K178).
         route: () => {
