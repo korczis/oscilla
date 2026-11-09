@@ -241,7 +241,7 @@
     },
     {
       "title": "Bicí a jedny hodiny",
-      "summary": "Záložka Bicí hraje šest řádků jednoho notes clipu se šesti pady; pás krokového sekvenceru nad Synthem hraje klávesy panelu ve smyčce; sekvencer i Studio běží z jedněch hodin a každé přehrávání se hlásí jedné sběrnici, která ho jedním stiskem zastaví; trigger hrany rozvádějí gate a na krátkých telefonech zůstane obsah Synthu vidět"
+      "summary": "Záložka Bicí hraje šest řádků jednoho notes clipu se šesti pady; pás krokového sekvenceru nad Synthem hraje klávesy panelu ve smyčce; sekvencer i Studio běží z jedněch hodin a každé přehrávání se hlásí jedné sběrnici, která ho jedním stiskem zastaví; trigger hrany rozvádějí gate a na krátkých telefonech zůstane obsah Synthu vidět; pod panelem Synthu jsou dva pady: pad L ladí filtry, pad R hraje noty stupnice a jeho osa Y je nově síla úhozu, už ne filtr"
     }
   ]
 }

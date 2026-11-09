@@ -530,9 +530,11 @@ additive (drawbars), FM (2-4 operators, 7 algorithms), AM and ring, wavetable wi
 sync at set ratios and a percussion kit on the keys. The keyboard, the computer keys and MIDI
 play the panel or the chosen engine; presets and **Copy link** keep a sound. Beside the piano,
 a picker chooses what the keys play, with an oscillator's waveform and quick presets. The **XY**
-tab is a module of the same panel: a cable from its Pitch and Gate into the voice replaces the
-keyboard's, its Y drives the timbre target its cable names, and its presets patch both. The
-Synth's sounds and the XY presets sit in the one patch library the Studio also opens, each
+tab is a module of the same panel: a touch plays the scale note under X on the keys at Y's
+velocity, a cable from its Y drives the timbre target it names, and its presets patch it. Under
+the panel's cards two pads share the same pad kind: pad L, whose X and Y are normalled into the
+LPF and HPF cutoffs (a cable replaces either), and pad R, the XY pad with its key and scale
+beside it; Stop and leaving the Synth release both. The Synth's sounds and the XY presets sit in the one patch library the Studio also opens, each
 loading as one undoable step. Details, cables and the honest limits: [docs/synth.md](docs/synth.md).
 
 ## The V3.1 Studio
