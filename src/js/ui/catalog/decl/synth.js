@@ -34,6 +34,16 @@ export default [
     related: ['keyboard.arm'],
   }),
   defineComponent({
+    id: 'synth.steps',
+    kind: 'panel',
+    label: 'Krokový sekvencer',
+    docs: 'Kroky nad panelem Synthu hrají klávesy panelu z notového klipu (K221); ukáže se, jakmile '
+      + 'klip existuje.',
+    state: { none: 'skupina drží mřížku kroků; hodnotu vlastní notový klip' },
+    in: 'synth-view',
+    related: ['synth.pick'],
+  }),
+  defineComponent({
     id: 'synth.studio',
     kind: 'open',
     label: 'Open in Studio',

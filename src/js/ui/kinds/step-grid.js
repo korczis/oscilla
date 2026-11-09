@@ -229,9 +229,24 @@ export function mountStepGrid(host, opts) {
   });
   const off = [];
   if (autoFit && typeof ResizeObserver === 'function') {
-    const ro = new ResizeObserver(() => { if (fitted() !== null) render(); });
+    // The re-fit runs on the next frame of the one frame loop, once, never inside the
+    // observer's own delivery: a render there resizes what it observes (WebKit reports
+    // "ResizeObserver loop completed with undelivered notifications" when the Synth's strip
+    // first lays out, K221).
+    let refit = null;
+    const ro = new ResizeObserver(() => {
+      if (refit) return;
+      refit = onFrame(() => {
+        refit();
+        refit = null;
+        if (fitted() !== null) render();
+      });
+    });
     ro.observe(element);
-    off.push(() => ro.disconnect());
+    off.push(() => {
+      ro.disconnect();
+      if (refit) refit();
+    });
   }
   if (typeof opts.playStep === 'function') {
     off.push(onFrame(() => playhead.tick(opts.playStep())));

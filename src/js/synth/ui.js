@@ -42,6 +42,7 @@ import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
 import { createArmedFollow } from './armed-follow.js';
+import { createStripView } from './step-strip-view.js';
 import { createSynthNotes } from './notes-sink.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
@@ -415,6 +416,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     follow(get().transport);
     if (!cmp || cmp.workspace !== 'synth') return;
     syncArmed();
+    strip.sync(); // K221
     if (knob) updateKnob(knob.cid);
     else if (!cable) renderAll();
   }
@@ -736,6 +738,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   const dock = createDock({ panel, registry, cmp: () => cmp, model, present, played,
     ensurePanel, dispatch, say, allOff });
+  const strip = createStripView({ cmp: () => cmp, panel, model, present, handle, transport,
+    ensurePanel, dispatch, say });
 
   // ------------------------------------------------------------------ the part
 
@@ -749,6 +753,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       presets: [...PRESETS, ...xy.presets].map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
       preset: 'init',
       armed: false,
+      strip: false, // K221: the step-sequencer strip's clip exists (step-strip.js)
       status: '',
       link: '',
       dock: dock.state(), // K066, beside the piano (synth/dock.js)
@@ -781,6 +786,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         }
         if (ws === 'synth') {
           syncArmed();
+          strip.sync();
           ensurePanel();
           requestAnimationFrame(renderAll);
         }
@@ -817,6 +823,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     synthDisarm() {
       return disarm(true);
+    },
+
+    /** K221: the picker's "Krokový sekvencer" (step-strip-view.js). */
+    synthSteps() {
+      return strip.add();
     },
 
     synthPreset(id) {

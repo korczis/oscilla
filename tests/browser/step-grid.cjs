@@ -24,6 +24,10 @@
 //               nothing in the grid
 //   sg-playhead with a note in the clip, Studio's Play: aria-current=step appears on a step and
 //               moves to another within 'step playhead moves' (3 s); Stop clears it
+//   sg-list     K221: a selected Step Modulator's steps are the kind's param-list lane in the
+//               Inspector (no comma-separated text field): a pointer near the top of step 3 (a
+//               tap on the phone) sets it near the maximum, and ArrowRight then Enter switch
+//               step 4 off to the minimum -1, each one undo entry on the node's steps parameter
 //   no-console-errors
 'use strict';
 
@@ -270,6 +274,68 @@ function defineChecks() {
     const cleared = await until(async () => ((await current()) === null ? true : null),
       { ms: UI_MS, what: 'sg-playhead: Stop clears the playing step' });
     return { ok: !!(first && moved && cleared), first: first.s, moved: moved.s };
+  });
+
+  // K221: the Step Modulator's steps in the Inspector are the kind's param-list lane, not the
+  // comma-separated text field: a step by pointer (a tap on the phone) and one by keyboard
+  // (ArrowRight, Enter) each set the node's steps parameter in one undo entry.
+  def('sg-list', async ({ page, size }) => {
+    const LIST = '[data-step-grid="param-list"] [role="grid"]';
+    const id = await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      if (window.OSCILLA.studio.transport.playing) window.OSCILLA.app.studioStop();
+      const n = st.dispatch({ type: 'NODE_ADD', nodeType: 'step-modulator',
+        position: { x: 60, y: 60 } }).created.nodes[0];
+      st.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: [n] } });
+      return n;
+    });
+    const tab = page.locator('[data-osc="studio.subview"][data-value="inspector"]');
+    if (await tab.isVisible()) await tab.click();
+    await until(() => page.evaluate((sel) => {
+      const g = document.querySelector(sel);
+      return !!(g && g.getClientRects().length);
+    }, LIST), { ms: UI_MS, what: 'the Inspector shows the Step Modulator steps as a step grid' });
+    const text = await page.evaluate(() => [...document.querySelectorAll(
+      '[data-osc="studio.inspector"] input[data-key="steps"]')].length);
+    const steps = () => page.evaluate((nid) => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.id === nid).params.steps, id);
+    const before = await steps();
+    const d0 = await undoDepth(page);
+    await page.evaluate((sel) => document.querySelector(sel).scrollIntoView({ block: 'center' }),
+      LIST);
+    // A value lane's pointer sets the step from its vertical position: near the cell's top is
+    // near the maximum (the kind's value gesture, step-grid-model.js valueAt).
+    const cell = page.locator(`${LIST} [role="gridcell"][data-step="2"]`);
+    const top = { x: 22, y: 3 };
+    if (size.touch) await cell.tap({ position: top }); else await cell.click({ position: top });
+    const a = await until(async () => {
+      const v = await steps();
+      return v[2] !== before[2] ? v : null;
+    }, { ms: NOTE_MS, what: 'sg-list: a pointer on step 3 sets the steps parameter' });
+    const one = (await undoDepth(page)) === d0 + 1;
+    // Keyboard, through the grid's one tab stop: Home, three arrows to step 4, Enter switches
+    // it (on: off).
+    await page.locator(`${LIST} [role="gridcell"][tabindex="0"]`).focus();
+    for (const k of ['Home', 'ArrowRight', 'ArrowRight', 'ArrowRight']) {
+      await page.keyboard.press(k);
+    }
+    await page.keyboard.press('Enter');
+    const b = await until(async () => {
+      const v = await steps();
+      return v[3] !== a[3] ? v : null;
+    }, { ms: NOTE_MS, what: 'sg-list: Enter on step 4 sets the steps parameter' })
+      .catch(async (e) => {
+        const now = await steps();
+        const f = await page.evaluate(() => document.activeElement
+          && document.activeElement.getAttribute('aria-label'));
+        throw new Error(`${e.message}; steps ${JSON.stringify(now)}; focus ${f}`);
+      });
+    const two = (await undoDepth(page)) === d0 + 2;
+    // The default steps: 0 at step 3 rises near the maximum, -0.5 at step 4 is on (above the
+    // minimum -1) and Enter switches it off to -1; nothing else moves.
+    return { ok: text === 0 && one && two && a[2] > 0.5 && b[3] === -1
+      && b.length === before.length
+      && b.every((v, i) => (i === 2 || i === 3 ? true : v === before[i])), before, a, b, text };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
