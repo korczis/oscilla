@@ -40,6 +40,7 @@
 //   grid.setGrid({ stepBeats?, swing?, seed? }, mode) -> one NOTES_GRID_SET (notes mode)
 //   grid.focus, grid.state() -> { cells, offGrid, values, focus, selection, page, pages }
 
+import { clamp } from '../../core/math.js';
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { validateParamValue } from '../../studio/registry.js';
 
@@ -76,7 +77,6 @@ export const STEP_GRID_TEXT = Object.freeze({
   copied: (n) => `Zkopírováno kroků: ${n}.`,
 });
 
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const fmt = (v) => (Math.round(v * 100) / 100).toFixed(2).replace('.', ',');
 
 export function pageStepsFor(widthPx) {
@@ -182,7 +182,7 @@ export function createStepGrid(opts) {
   const param = opts.param || null;
   let lanes = list ? [0] : [...opts.lanes];
   let steps = opts.steps ?? (list ? (opts.values || []).length : NEW_GRID.steps);
-  const stepBeats = opts.stepBeats ?? NEW_GRID.stepBeats;
+  let stepBeats = opts.stepBeats ?? NEW_GRID.stepBeats;
   let pageSteps = opts.pageSteps ?? PAGE_STEPS.wide;
   let payload = opts.payload || { notes: [] };
   let values = list ? [...(opts.values || [])] : null;
@@ -368,6 +368,7 @@ export function createStepGrid(opts) {
       if (next.values) values = [...next.values];
       if (next.lanes && !list) lanes = [...next.lanes];
       if (next.steps != null) steps = next.steps;
+      if (next.stepBeats) stepBeats = next.stepBeats;
       if (list && next.values) steps = values.length;
       if (next.pageSteps) pageSteps = next.pageSteps;
       if (next.selection) selection = [...next.selection];

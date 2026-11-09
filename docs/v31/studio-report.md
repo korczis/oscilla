@@ -196,6 +196,7 @@ Further unit tests cover the Studio outside the `v31-studio-` prefix (`v4-*`, `v
 - `tests/browser/v31-studio-runtime.cjs`
 - `tests/browser/instrument-dsp.cjs`
 - `tests/browser/studio-keys.cjs`
+- `tests/browser/step-grid.cjs`
 <!-- browser-suites:end -->
 
 The Synth's suites (`tests/browser/synth.cjs`, `tests/browser/synth-engines.cjs`,

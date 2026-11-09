@@ -297,7 +297,7 @@ function fakeEl() {
     fire(t, ev = {}) {
       let prevented = false;
       for (const fn of [...(on.get(t) || [])]) {
-        fn({ target: e, preventDefault() { prevented = true; }, ...ev });
+        fn({ target: e, preventDefault() { prevented = true; }, stopPropagation() {}, ...ev });
       }
       return prevented;
     },
@@ -335,4 +335,34 @@ test('the view: one frame subscriber, freed at destroy; keys reach it, Space not
   view.destroy();
   assert.equal(frameSubscriberCount(), before);
   assert.equal(surface.listeners(), 0);
+});
+
+// ------------------------------------------------------------------------------ the Inspector
+test('the Inspector grid: lanes of the clip\'s notes, steps of its grid, the playing step', async () => {
+  const { DEFAULT_LANE, clipStepsView, playingStep } =
+    await import('../../src/js/ui/studio/inspector-steps.js');
+  const model = { transport: { tempo: 120 } };
+  const clip = (notes, extra = {}) => ({ id: 'c1', kind: 'notes', start: 1, duration: 2,
+    musical: { durationBeats: 4 }, payload: { notes }, ...extra });
+  // An empty clip shows C4; a clip's notes are its lanes, highest first, named.
+  const empty = clipStepsView(model, clip([]), true);
+  assert.deepEqual(empty.lanes, [DEFAULT_LANE]);
+  assert.deepEqual(empty.laneNames, ['C4']);
+  assert.equal(empty.steps, 16);
+  const v = clipStepsView(model, clip([note(0, 36), note(1, 38), note(2, 36)]), true);
+  assert.deepEqual(v.lanes, [38, 36]);
+  assert.deepEqual(v.laneNames, ['D2', 'C2']);
+  // The clip's own grid sets the steps: 4 beats of 0.5 are 8 steps.
+  const half = clipStepsView(model, clip([], { payload: { notes: [],
+    grid: { stepBeats: 0.5, swing: 0, seed: 0 } } }), true);
+  assert.equal(half.steps, 8);
+  // The playing step: the playhead's seconds from the clip start in steps (120 bpm: 0.125 s a
+  // step), null when stopped, outside the clip or on a target that does not play notes.
+  assert.equal(playingStep(model, empty, { playing: true, position: 1 }), 0);
+  assert.equal(playingStep(model, empty, { playing: true, position: 1.3 }), 2);
+  assert.equal(playingStep(model, empty, { playing: false, position: 1.3 }), null);
+  assert.equal(playingStep(model, empty, { playing: true, position: 0.5 }), null);
+  assert.equal(playingStep(model, empty, { playing: true, position: 3.1 }), null);
+  const held = clipStepsView(model, clip([]), false);
+  assert.equal(playingStep(model, held, { playing: true, position: 1 }), null);
 });

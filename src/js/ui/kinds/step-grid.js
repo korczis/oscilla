@@ -29,31 +29,30 @@ const GRID_NARROW = 'flex flex-col gap-3 touch-pan-y select-none';
 const GRID_WIDE = 'flex flex-col gap-2 touch-pan-y select-none';
 const GRID_VALUE = 'flex flex-col gap-2 touch-none select-none';
 const ROW_NARROW = 'flex flex-col gap-1';
-const ROW_WIDE = 'flex flex-row items-center gap-2';
-const HEAD = 'w-32 shrink-0 truncate text-sm font-medium text-gray-900 dark:text-white';
+const ROW_WIDE = 'flex items-center gap-2';
+const HEAD = 'w-20 shrink-0 truncate text-sm font-medium text-gray-900 dark:text-white';
 const HEAD_NARROW = 'truncate text-sm font-medium text-gray-900 dark:text-white';
-const STEPS = 'flex flex-row gap-0';
+const STEPS = 'flex';
 const CELL = 'relative h-11 w-11 shrink-0 border border-solid border-gray-300 '
-  + 'focus:outline-none focus-visible:z-10 focus-visible:ring-4 focus-visible:ring-primary-500 '
+  + 'focus:z-10 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-500 '
   + 'aria-[current=step]:outline aria-[current=step]:outline-2 '
-  + 'aria-[current=step]:outline-offset-[-4px] aria-[current=step]:outline-yellow-400 '
-  + 'aria-selected:ring-2 aria-selected:ring-inset aria-selected:ring-blue-400 '
-  + 'dark:border-gray-600';
+  + 'aria-[current=step]:outline-yellow-400 aria-selected:ring-2 aria-selected:ring-inset '
+  + 'aria-selected:ring-primary-300 dark:border-gray-600';
 const CELL_ON = 'bg-primary-600 dark:bg-primary-500';
-const CELL_ACCENT = 'bg-primary-800 dark:bg-primary-300';
+const CELL_ACCENT = 'bg-primary-700';
 const CELL_OFF = 'bg-gray-50 dark:bg-gray-700';
-const CELL_BEAT = 'bg-gray-100 dark:bg-gray-600';
-const OFF_GRID = 'ms-2 rounded bg-yellow-100 px-1.5 py-0.5 text-xs font-medium text-yellow-800 '
-  + 'dark:bg-yellow-900 dark:text-yellow-300';
-const BUTTON = 'inline-flex h-11 items-center rounded-lg border border-solid border-gray-200 '
+const CELL_BEAT = 'bg-gray-100 dark:bg-gray-800';
+const OFF_GRID = 'ml-2 rounded bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800';
+// The Pro secondary button of the Studio's preset menu (node-preset-menu.js), 44 px tall.
+const BUTTON = 'inline-flex h-11 items-center gap-1 rounded-lg border border-solid border-gray-300 '
   + 'bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none '
-  + 'focus-visible:ring-4 focus-visible:ring-primary-300 disabled:opacity-50 '
-  + 'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700';
+  + 'focus-visible:ring-2 focus-visible:ring-primary-300 disabled:opacity-50 '
+  + 'dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700';
 const SELECT = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-2 text-sm '
-  + 'text-gray-900 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary-300 '
+  + 'text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 '
   + 'dark:border-gray-600 dark:bg-gray-700 dark:text-white';
-const DETAIL = 'mt-3 flex flex-wrap items-center gap-2';
-const PAGER = 'mt-3 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300';
+const DETAIL = 'mt-2 flex flex-wrap items-center gap-2';
+const PAGER = 'mt-2 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300';
 const TEXT = Object.freeze({
   prev: 'Předchozí stránka', next: 'Další stránka', page: (p, n) => `Stránka ${p} z ${n}`,
   accent: 'Přízvuk', slide: 'Slide', ratchet: 'Ratchet', probability: 'Pravděpodobnost',
@@ -66,7 +65,7 @@ let mounted = 0;
 export function mountStepGrid(host, opts) {
   const uid = `step-grid-${(mounted += 1)}`;
   const list = opts.mode === 'param-list';
-  const laneNames = opts.laneNames || [];
+  let laneNames = opts.laneNames || [];
   let disabled = null;
   let gridHasFocus = false;
   // The owner keeps selection and page (rule 2). Without one, the mount applies them itself,
@@ -110,12 +109,15 @@ export function mountStepGrid(host, opts) {
   const detail = element.querySelector('[data-step-detail]');
   live.el = element.querySelector('[data-step-live]');
 
-  const nameOf = (lane) => (list ? '' : laneNames[lane] || `${opts.lanes[lane]}`);
+  const nameOf = (lane) => (list ? '' : laneNames[lane] || `${model.state().lanes[lane]}`);
   const valueOf = (st, lane, step) => (list ? st.values[step] : st.cells[lane][step]);
   const isOn = (st, lane, step) => (list ? st.values[step] !== opts.param.min
     : !!st.cells[lane][step]);
 
   function render() {
+    // Read before the cells are replaced: their removal may already move the focus away.
+    const doc = element.ownerDocument;
+    const held = gridHasFocus || (doc && surface.contains(doc.activeElement));
     const st = model.state();
     const wide = st.pageSteps >= 16;
     surface.className = list ? GRID_VALUE : wide ? GRID_WIDE : GRID_NARROW;
@@ -155,7 +157,10 @@ export function mountStepGrid(host, opts) {
     if (detail) renderDetail(st);
     lit = null;
     playhead.reset();
-    if (gridHasFocus) focusCell();
+    if (held) {
+      gridHasFocus = true;
+      focusCell();
+    }
   }
 
   function renderDetail(st) {
@@ -225,6 +230,7 @@ export function mountStepGrid(host, opts) {
     const chord = chordOf(e);
     if (!chord || !model.key(chord)) return;
     e.preventDefault();
+    e.stopPropagation(); // a key the grid handled is not also the page's (Studio's Delete)
     if (chord === 'Shift+F10' || chord === 'ContextMenu') {
       const first = detail && detail.querySelector('button:not([disabled]), select');
       if (first) first.focus();
@@ -248,8 +254,12 @@ export function mountStepGrid(host, opts) {
       return;
     }
     model.down(lane, step, { shift: e.shiftKey });
-    if (surface.setPointerCapture) surface.setPointerCapture(e.pointerId);
-    c.classList.add('ring-4');
+    try {
+      surface.setPointerCapture(e.pointerId);
+    } catch {
+      // A pointer the browser no longer tracks: the drag still follows elementFromPoint.
+    }
+    c.classList.add('ring-2');
   });
   listen(surface, 'pointermove', (e) => {
     const d = model.drag;
@@ -259,7 +269,7 @@ export function mountStepGrid(host, opts) {
     const now = model.drag;
     const [a, b] = [Math.min(now.from, now.to), Math.max(now.from, now.to)];
     (cellEls[now.lane] || []).forEach((el, step) => {
-      if (el) el.classList.toggle('ring-4', step >= a && step <= b);
+      if (el) el.classList.toggle('ring-2', step >= a && step <= b);
     });
   });
   listen(surface, 'pointerup', () => {
@@ -308,6 +318,7 @@ export function mountStepGrid(host, opts) {
     model,
     set(next = {}) {
       if (next.onView) owner.onView = next.onView;
+      if (next.laneNames) laneNames = [...next.laneNames];
       model.set(next);
       render();
     },
