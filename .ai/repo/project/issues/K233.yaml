@@ -1,0 +1,36 @@
+id: K233
+milestone: M069
+serves:
+  - "connected-instrument#performance-pad"
+title: "The XY pad's Hold keeps the gate and the last X and Y; X is assignable to pitch or one existing control target (Q099)"
+slug: the-xy-pad-s-hold-and-assignable-x
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). Implements Q099 (1) and (2) in two commits of one pull request, Hold first. Hold: a toggle on the XY tab, labelled in Czech 'Držet' (aria-label 'Držet bod a gate po zvednutí prstu'), keeps the gate and the last X and Y after the pointer lifts; the next touch moves the held point; Hold off releases it; Stop, page hide and Escape always release a held X and Y (project.no-silent-feedback, the owner's Stop-always-works order), through the one stop path C050 builds where it has landed, else the existing ones. Assignable X: a select labelled 'Osa X' whose options are 'Výška tónu' (pitch, the default, as today) and the CONTROL targets xyTargets(panel) already declares for Y (src/js/synth/xy.js); X on a control target writes that target the way Y does, through the one store action of each change, and adds no param to any existing node type (K097). Hold and the X target are part of the pad's state the patch, the link and the XY preset carry. Delay, reverb or any new effect node stays out (Q099 (3)). Every new visible string is Czech (project.czech-prose) and the controls use the Flowbite Pro toggle and select (project.ui-uses-flowbite-pro); neither the English count nor tests/unit/ui-flowbite-pro-baseline.json grows."
+why: "Q099 (LLM decision: af proposed and 26 accepted on 2026-11-05 under the owner's order 'discuss answers with other llms, do not wait for human, be llm autonomous'): Hold/latch and an assignable X are in scope for the XY pad, and Q099's acceptance needs the build issue that carries its case. Filed by oscilla-ce on 2026-11-09 at oscilla-43's request (lane proceed): no issue of the plan built Hold or an assignable X (xy.js on origin/main 7637039e declares targets for Y only)."
+scope:
+  - "src/js/synth/xy.js"
+  - "src/js/synth/panels/xy.js"
+  - "src/js/synth/view/xy-tab.js"
+  - "src/js/ui/kinds/xy-pad.js"
+  - "tests/unit/xy-hold.test.mjs"
+  - "tests/browser/xy-pad.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K183"
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/xy-hold.test.mjs, fails on the merge base, which has no Hold): with Hold on, a touch at y 0.9 then a lift keeps the Y cable's value at 0.9 and the filter opened, and the gate held; with Hold off, K183's case holds (Y returns to 0 and the gate ends on the lift); Stop, page hide and Escape each release a held X and Y (gate off, Y back to 0)."
+  - "Fail-first unit: X assigned to a target of xyTargets(panel) writes that target through one store action per move and plays no pitch; X back on 'Výška tónu' plays the scale as before; an X target not in xyTargets(panel) is refused with a stated reason and leaves the model unchanged; no existing node type gains a param (the registry's params per type are unchanged)."
+  - "Browser (tests/browser/xy-pad.cjs through tests/browser/lib/suite.cjs, waits by lib/wait.cjs with named deadlines, no assumed sample rate; chromium, firefox, webkit): Hold on keeps the sound after the lift, read from the analyser, and Escape silences it; the 'Držet' toggle and the 'Osa X' select are 44 px or more at 390 px; tests/browser/timing-baseline.json does not grow."
+  - "The XY tab's new strings are Czech; the patch, the link and an XY preset round-trip Hold and the X target."
+  - "Guarded (src/js/synth): a reviewer's verdict (project.review-verdict); the builder writes none."
+  - "Q099's why is named here; Q099 is marked done only after this issue's criteria are re-checked on a main commit."
+validation:
+  - "node --test tests/unit/xy-hold.test.mjs"
+  - "node tests/browser/xy-pad.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
