@@ -10,6 +10,8 @@
 //   scanKindModules(files, views) -> [{ file, message }]     the static scan (W001 section 1.5)
 //   runtimeImportProblems(files) -> [{ file, message }]      rule 5
 //   transportCommands(text), issueScope(text), truthKeys(text)   facts parsed from the sources
+//   undeclaredViewProblems(kinds, { exists, issueExists }) -> [{ file, message }]
+//                                             UNDECLARED_VIEWS, the views the scan waits on
 //   loadKindFacts(root), kindModuleFiles(root, kinds), checkKindRepository(root)
 //   node scripts/ui-catalog/kinds-check.mjs [--pin]   prints the problems; --pin rewrites the pin
 //
@@ -401,9 +403,39 @@ function walkJs(root, dir) {
   });
 }
 
-/** The modules the scan reads: src/js/ui/kinds and every existing impl module of a kind. */
-export function kindModuleFiles(root, kinds) {
-  const rels = new Set(walkJs(root, KINDS_VIEW_DIR));
+/**
+ * Views under src/js/ui/kinds that landed before their kind is declared, each with the plan
+ * issue that lands the declaration (W001's amendment of 2026-11-07: each kind declares in the
+ * slice of its first consumer). The XY pad view came with K183 (#426) before W010 declares the
+ * xy-pad kind. The scan leaves such a view out until then, and the list only shrinks:
+ * undeclaredViewProblems refuses an entry whose file is gone, whose kind a declaration now
+ * names, or whose issue does not exist.
+ */
+export const UNDECLARED_VIEWS = Object.freeze({
+  'src/js/ui/kinds/xy-pad.js': 'W010',
+});
+
+/** The problems of the undeclared-view list against the declarations and the repository. */
+export function undeclaredViewProblems(kinds, { exists, issueExists },
+  undeclared = UNDECLARED_VIEWS) {
+  const named = new Set(kinds.flatMap((d) => d.impl.modules));
+  return Object.entries(undeclared).flatMap(([file, issue]) => {
+    const at = (why) => [{ file, message: `${file}: listed as an undeclared view (${issue}), `
+      + `but ${why}: remove it from UNDECLARED_VIEWS` }];
+    if (!file.startsWith(`${KINDS_VIEW_DIR}/`)) return at(`it is outside ${KINDS_VIEW_DIR}`);
+    if (!exists(file)) return at('the file does not exist');
+    if (named.has(file)) return at('a declaration names it, so the scan reads it');
+    if (!issueExists(issue)) return at(`plan issue ${issue} does not exist`);
+    return [];
+  });
+}
+
+/**
+ * The modules the scan reads: src/js/ui/kinds (less the views of UNDECLARED_VIEWS) and every
+ * existing impl module of a kind.
+ */
+export function kindModuleFiles(root, kinds, undeclared = UNDECLARED_VIEWS) {
+  const rels = new Set(walkJs(root, KINDS_VIEW_DIR).filter((r) => !Object.hasOwn(undeclared, r)));
   for (const d of kinds) {
     for (const m of d.impl.modules) if (existsSync(path.join(root, m))) rels.add(m);
   }
@@ -432,6 +464,10 @@ export async function checkKindRepository(root = ROOT) {
     pending,
     problems: [...problems.map((p) => p.message),
       ...pinProblems(kinds, pin, pinCopies(root)).map((p) => p.message),
+      ...undeclaredViewProblems(kinds, {
+        exists: (rel) => existsSync(path.join(root, rel)),
+        issueExists: (id) => existsSync(path.join(root, `.ai/repo/project/issues/${id}.yaml`)),
+      }).map((p) => p.message),
       ...scanKindModules(kindModuleFiles(root, kinds), viewsOf(root, kinds)).map((p) => p.message),
       ...runtimeImportProblems(src).map((p) => p.message)],
   };

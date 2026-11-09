@@ -37,9 +37,9 @@ import { ARIA_ROLES, IO, MIN_TARGET_PX, OWNER_STATE, TRANSIENT_STATE, canonicalJ
   chordProblems, defineKind, instanceProblems, kindProblems, prop }
   from '../../src/js/ui/catalog/kind.js';
 import { validateParamValue } from '../../src/js/studio/registry.js';
-import { checkKindRepository, checkKinds, digestOf, issueScope, loadKindFacts, pinOf,
-  pinProblems, runtimeImportProblems, scanKindModules, transportCommands }
-  from '../../scripts/ui-catalog/kinds-check.mjs';
+import { checkKindRepository, checkKinds, digestOf, issueScope, kindModuleFiles, loadKindFacts,
+  pinOf, pinProblems, runtimeImportProblems, scanKindModules, transportCommands,
+  UNDECLARED_VIEWS, undeclaredViewProblems } from '../../scripts/ui-catalog/kinds-check.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FACTS = await loadKindFacts(ROOT);
@@ -141,6 +141,27 @@ test('the key rows wait on W008 for the shortcuts table, judged once the view ex
   const rows = new Set(stepGrid.keys.map((k) => k.row));
   assert.deepEqual(check([stepGrid], { exists, shortcutRows: () => rows }),
     { problems: [], pending: [] });
+});
+
+test('a view whose kind is not declared yet waits outside the scan, listed with its issue', () => {
+  // The XY pad view landed with K183 (#426) before W010 declares the xy-pad kind.
+  assert.deepEqual({ ...UNDECLARED_VIEWS }, { 'src/js/ui/kinds/xy-pad.js': 'W010' });
+  const files = kindModuleFiles(ROOT, KIND_DECLARATIONS);
+  assert.ok(!('src/js/ui/kinds/xy-pad.js' in files), 'the undeclared view is left out');
+  // Unlisted, the same view is scanned (and its timer refused): the list is what exempts it.
+  refused(scanKindModules(kindModuleFiles(ROOT, KIND_DECLARATIONS, {})),
+    /xy-pad\.js: calls a timer or an animation frame/);
+  // The list only shrinks: a stale, declared, misplaced or unplanned entry is refused.
+  const env = { exists: () => true, issueExists: () => true };
+  assert.deepEqual(undeclaredViewProblems(KIND_DECLARATIONS, env), []);
+  refused(undeclaredViewProblems(KIND_DECLARATIONS, { ...env, exists: () => false }),
+    /the file does not exist/);
+  refused(undeclaredViewProblems(KIND_DECLARATIONS, { ...env, issueExists: () => false }),
+    /plan issue W010 does not exist/);
+  refused(undeclaredViewProblems(KIND_DECLARATIONS, env, { 'src/js/synth/ui.js': 'W010' }),
+    /outside src\/js\/ui\/kinds/);
+  const declared = variant((v) => { v.impl.modules = ['src/js/ui/kinds/xy-pad.js']; });
+  refused(undeclaredViewProblems([declared], env), /a declaration names it/);
 });
 
 test('the facts are read from the source: transport commands, note router, issue scope', () => {
