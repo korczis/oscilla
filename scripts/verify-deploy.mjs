@@ -19,9 +19,10 @@
 //   shape     vendor marker (data-vendor="p5@") present, no module script
 //   og        og:image meta == <url>og-image.png; og-image.png and apple-touch-icon.png are
 //             image/png and byte-equal to site/ (the crawler-only share assets)
-//   lab       <url>lab/index.html and every <url>lab/charts/<name>.svg (CHARTS) are byte-equal to
-//             scripts/landing.mjs regenerated here (the generated landing, owner decision Q107);
-//             the regeneration reads this checkout, which must be the expected commit
+//   lab       every file of <url>lab/ (index.html, charts/<name>.svg, shots/*.png) is byte-equal
+//             to scripts/landing.mjs regenerated at the expected commit (the generated landing,
+//             owner decision Q107); a commit other than HEAD is regenerated in a temporary
+//             detached worktree
 //
 //   node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] [--attempts 10] [--delay 10]
 //        [--dist dist/index.html] [--site site] [--no-assets] [--no-lab] [--no-cache-bust]
@@ -38,7 +39,9 @@
 // a failed one fails its attempt; --attempts is the retry.
 // Each request carries a unique query string (?oscilla-verify=<commit>.<attempt>) so a stale
 // CDN edge cannot satisfy or fail the check; --no-cache-bust fetches the exact URL instead.
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseFlags } from './release-analyze.mjs';
@@ -51,7 +54,9 @@ import {
 export const SHARE_ASSETS = ['og-image.png', 'apple-touch-icon.png'];
 /** The generated landing's path under the site, and the content type of each file it checks. */
 export const LAB_DIR = 'lab/';
-const LAB_TYPES = { '.html': /^text\/html\b/, '.svg': /^image\/svg\+xml\b/ };
+const LAB_TYPES = {
+  '.html': /^text\/html\b/, '.svg': /^image\/svg\+xml\b/, '.png': /^image\/png\b/,
+};
 
 /**
  * Pure check of a fetched page against the committed dist and the expected provenance.
@@ -174,11 +179,41 @@ export function checkLabFile({ name, status, contentType, body, expected }) {
   return problems;
 }
 
-/** The landing files verify-deploy compares: index.html and the charts, regenerated here. */
+/**
+ * The landing files verify-deploy compares: every file the generator writes (index.html, the
+ * charts and the screenshots), regenerated at `commit`. When `commit` is not this checkout's
+ * HEAD (the release task's closing check runs after main has moved on), the landing is
+ * regenerated from a temporary detached worktree of `commit` that borrows this checkout's
+ * node_modules, and the worktree is removed afterwards; it is never skipped. A commit whose tree
+ * has no scripts/landing.mjs (before Q107) deployed no landing: null, and nothing is compared.
+ */
 export async function expectedLab({ root, commit }) {
-  const { generateLanding } = await import('./landing.mjs');
-  const files = await generateLanding({ root, commit });
-  return new Map([...files].filter(([rel]) => rel === 'index.html' || rel.startsWith('charts/')));
+  const git = (args, cwd = root) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+  const head = git(['rev-parse', 'HEAD']);
+  const want = git(['rev-parse', '--verify', `${commit}^{commit}`]);
+  if (want === head && existsSync(path.join(root, 'scripts', 'landing.mjs'))) {
+    const at = await import(new URL(`file://${path.join(root, 'scripts', 'landing.mjs')}`));
+    return at.generateLanding({ root, commit: want });
+  }
+  try {
+    git(['cat-file', '-e', `${want}:scripts/landing.mjs`]);
+  } catch {
+    return null;
+  }
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-lab-'));
+  const tree = path.join(dir, 'tree');
+  try {
+    git(['worktree', 'add', '--detach', '--quiet', tree, want]);
+    const modules = path.join(root, 'node_modules');
+    if (existsSync(modules)) symlinkSync(modules, path.join(tree, 'node_modules'), 'dir');
+    // The generator module of the commit itself, so the comparison is that commit's page.
+    const at = await import(new URL(`file://${path.join(tree, 'scripts', 'landing.mjs')}`));
+    return await at.generateLanding({ root: tree, commit: want });
+  } finally {
+    try { git(['worktree', 'remove', '--force', tree]); } catch { /* removed below */ }
+    rmSync(dir, { recursive: true, force: true });
+    try { git(['worktree', 'prune']); } catch { /* best effort */ }
+  }
 }
 
 export const USAGE = 'usage: node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] '
@@ -319,6 +354,7 @@ async function verify(o, { root, run, env, log, err }) {
   // The landing is regenerated once, before the attempts: a failed regeneration is fatal.
   const lab = o.lab ? await expectedLab({ root, commit }) : null;
   if (lab) log(`  lab: ${lab.size} file(s) regenerated at ${commit.slice(0, 12)}`);
+  else if (o.lab) log(`  lab: none at ${commit.slice(0, 12)} (its tree has no scripts/landing.mjs)`);
 
   let problems = [];
   for (let n = 1; n <= o.attempts; n++) {

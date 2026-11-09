@@ -80,7 +80,7 @@ jobs:
         # version == package.json, release state == git's, digest == recomputed, p5 vendor
         # marker, no module script,
         # og:image meta, og-image.png and apple-touch-icon.png byte-equal to site/, and
-        # lab/index.html and lab/charts/*.svg byte-equal to a regeneration at this commit.
+        # every lab/ file (index.html, charts, shots) byte-equal to a regeneration at this commit.
         run: >-
           node scripts/verify-deploy.mjs --url "${{ steps.deployment.outputs.page_url }}"
           --commit "$GITHUB_SHA" --attempts 10 --delay 10
