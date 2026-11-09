@@ -9,6 +9,8 @@ import { BIPOLAR, UNIPOLAR, did, free, inertHandle, linearOnly, setParam } from 
 import { SVS_ROWS } from '../nodes/modulation.js';
 import { svsHeld, svsLength, svsOrder, svsRoleValue, svsUnipolar } from '../step-voltage.js';
 
+/** Why a log-mapped rate edge has no target where the browser lacks detune on a buffer. */
+const NO_DETUNE_TEXT = 'This browser has no AudioBufferSourceNode.detune for log-mapped rate.';
 /** Control-signal buffer resolution: samples per step of Random / Step Modulator. */
 export const CONTROL_STEP_SAMPLES = 480;
 /** Values in one Random loop (deterministic for the seed; the sequence repeats after them). */
@@ -154,7 +156,7 @@ function steppedControl({ ctx, acct, at, values, smooth, holdLast, rate }) {
       if (key !== 'rate') return { reason: `unknown parameter ${key}` };
       if (mapping === 'log') {
         return src.detune ? { param: src.detune, scale: CENTS_PER_OCTAVE }
-          : { reason: 'This browser has no AudioBufferSourceNode.detune for log-mapped rate.' };
+          : { reason: NO_DETUNE_TEXT };
       }
       return { param: src.playbackRate, scale: 1 / refRate };
     },
@@ -361,7 +363,7 @@ export const stepVoltageSequencer = {
         if (key !== 'rate') return { reason: `unknown parameter ${key}` };
         if (mapping === 'log') {
           return src.detune ? { param: src.detune, scale: CENTS_PER_OCTAVE }
-            : { reason: 'This browser has no AudioBufferSourceNode.detune for log-mapped rate.' };
+            : { reason: NO_DETUNE_TEXT };
         }
         return { param: src.playbackRate, scale: 1 / refRate };
       },
@@ -376,7 +378,7 @@ export const stepVoltageSequencer = {
       update() {},
       stop(t) { try { src.stop(t); } catch (e) { /* already stopped */ } },
       dispose() {},
-      info: { clocked: false, length: n, order },
+      info: { clocked: false, length: n, order, source: src },
       status: 'ready',
       reason: null,
     };

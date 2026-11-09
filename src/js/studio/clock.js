@@ -43,21 +43,34 @@ export function clockTicks(model, info, toAudio, { pass = 0, generation = 0, tol
 
 const nodeOf = (model, id) => model.graph.nodes.find((n) => n.id === id) || null;
 
+/** Whether `port` of node `id` is a TRIGGER output (by the registry; 'trigger' when unknown). */
+function isTriggerOut(model, id, port, registry) {
+  const n = nodeOf(model, id);
+  const def = n ? registry.get(n.type) : null;
+  if (!def) return port === 'trigger';
+  return def.outputs.some((p) => p.id === port && p.type === 'TRIGGER');
+}
+
+/** Node types whose own TRIGGER outputs relay the steps their clock input takes (K023, K226). */
+const RELAY_TYPES = new Set(['step-modulator', 'step-voltage-sequencer']);
+
 /**
  * The TRIGGER edges leaving `id` (a pattern clip's target, a Clock or a trigger event clip's
- * target drives them), and those of every Step Modulator they reach, whose own Trigger output
- * relays each step it takes: [[edgeId, toNode, toPort, muted]]. An edit keeps a scheduled item
- * only while these are unchanged (timeline-compiler.js sameItem).
+ * target drives them), and those of every relaying node their clock input reaches (a Step
+ * Modulator's Trigger, K023; a step-voltage sequencer's Gate and step triggers, K226):
+ * [[edgeId, toNode, toPort, muted]]. An edit keeps a scheduled item only while these are
+ * unchanged (timeline-compiler.js sameItem).
  */
-export function triggerEdges(model, id, seen = new Set()) {
+export function triggerEdges(model, id, seen = new Set(), registry = NODE_REGISTRY) {
   if (seen.has(id)) return [];
   seen.add(id);
-  const own = model.graph.edges.filter((e) => e.from.node === id && e.from.port === 'trigger');
+  const own = model.graph.edges.filter((e) => e.from.node === id
+    && isTriggerOut(model, id, e.from.port, registry));
   const out = own.map((e) => [e.id, e.to.node, e.to.port, !!(e.props && e.props.muted)]);
   for (const e of own) {
     const n = nodeOf(model, e.to.node);
-    if (n && n.type === 'step-modulator' && !(e.props && e.props.muted)) {
-      out.push(...triggerEdges(model, n.id, seen));
+    if (n && RELAY_TYPES.has(n.type) && e.to.port === 'clock' && !(e.props && e.props.muted)) {
+      out.push(...triggerEdges(model, n.id, seen, registry));
     }
   }
   return out;

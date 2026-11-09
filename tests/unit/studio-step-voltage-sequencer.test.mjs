@@ -351,3 +351,86 @@ test('K226 a skipped step is passed over and its trigger stays silent; all skipp
       'every step skipped: no Gate');
     await stopped(rig2b);
   });
+
+// ---------------------------------------------------------------- 5. live: keys and the Step
+
+/** Keys -> VCO -> Envelope -> Master, Keys Gate -> the sequencer's clock: { s, keys, svs, ... } */
+function armedDoc(params = {}) {
+  const s = studio();
+  const keys = s.add('keys');
+  const vco = s.add('vco', { waveform: 'sine' });
+  const env = s.add('envelope', ADSR);
+  const env2 = s.add('envelope', ADSR);
+  const mix = s.add('mixer');
+  const out = s.add('master');
+  s.edge(keys, 'pitch', vco, 'pitch', { depth: 6, polarity: 'bipolar', mapping: 'linear' });
+  s.edge(vco, 'audio', env, 'audio');
+  s.edge(vco, 'audio', env2, 'audio');
+  s.edge(env, 'audio', mix, 'in1');
+  s.edge(env2, 'audio', mix, 'in2');
+  s.edge(mix, 'audio', out, 'audio');
+  const svs = s.add(TYPE, { rowA: ROW_A, length: '8', ...params });
+  s.edge(keys, 'gate', svs, 'clock');
+  s.edge(svs, 'cvA', vco, 'pitch', { depth: 0.1 });
+  s.edge(svs, 'gate', env, 'gate');
+  s.edge(svs, 'trig2', env2, 'gate');
+  return { ...s, keys, vco, env, env2, svs };
+}
+
+function armed(st) {
+  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
+  const runtime = createStudioRuntime({ engine });
+  const transport = transportModule.createStudioTransport({ runtime, engine, store: st });
+  return { fx, engine, runtime, transport };
+}
+
+test('K226 live (armed): a key\'s Gate steps it; trig2 opens only on step 2; the Step button '
+  + 'takes one step and holds its Gate for MANUAL_STEP_S', async () => {
+    const doc = armedDoc();
+    const rig = armed(doc.st);
+    ok(rig.transport.arm(), 'arm');
+    const g1 = [];
+    const g2 = [];
+    for (const [id, list] of [[doc.env, g1], [doc.env2, g2]]) {
+      const h = rig.runtime.nodes.get(id);
+      const gate = h.gate.bind(h);
+      h.gate = (at, dur, ...rest) => { list.push(at); return gate(at, dur, ...rest); };
+    }
+    for (const note of [60, 62]) {
+      ok(rig.transport.live(doc.keys, { kind: 'on', note, velocity: 100 }), `on ${note}`);
+      rig.fx.advance(0.05);
+      ok(rig.transport.live(doc.keys, { kind: 'off', note }), `off ${note}`);
+      rig.fx.advance(0.05);
+    }
+    assert.equal(g1.length, 2, 'the sequencer\'s Gate opens on each step a key takes');
+    assert.equal(g2.length, 1, 'trig2 opens on step 2 only');
+    const r = ok(rig.transport.step(doc.svs), 'the Step button');
+    assert.equal(r.step, 2, 'the manual step plays step 3 (0-based 2)');
+    assert.equal(g1.length, 3, 'its Gate opens');
+    await stopped(rig);
+  });
+
+test('K226 the Step button is refused while stopped and while the timeline\'s Clock owns its '
+  + 'clock input', async () => {
+  const doc = armedDoc();
+  const rig = armed(doc.st);
+  const stoppedR = rig.transport.step(doc.svs);
+  assert.equal(stoppedR.ok, false, 'stopped: refused');
+  assert.equal(stoppedR.code, 'not-armed');
+  // A Clock drives the clock input while the timeline plays: the timeline owns it.
+  const s = rig2();
+  const clock = s.add('clock', { division: '1/8' });
+  const svs = s.add(TYPE, { length: '8' });
+  s.edge(clock, 'trigger', svs, 'clock');
+  s.edge(svs, 'gate', s.env, 'gate');
+  eventClip(s, s.osc, 0.9, 0.1, 'gate');
+  const play = playing(s.st);
+  const r = play.transport.step(svs);
+  assert.equal(r.ok, false, 'while the timeline plays its Clock owns the sequencer');
+  assert.equal(r.code, 'timeline-owned');
+  assert.ok(String(r.reason).length > 10, 'with its reason');
+  await stopped(play);
+});

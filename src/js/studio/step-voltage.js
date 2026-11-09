@@ -13,6 +13,10 @@
 //   svsRoleValue(role, v) -> what a row of that role carries for step value v
 //   svsGateFraction(params, step) -> the fraction of the step period its Gate holds (a
 //                         gateLength row's value as 0..1), or null when no row has that role
+//   svsResetSources(model) -> ids of the nodes with an unmuted edge into a sequencer's reset:
+//                         the timeline compiler takes their items first at one instant, so a
+//                         reset and a clock tick at the same time restart on that tick whichever
+//                         source sends each
 //
 // A skipped step (params.skip[i] === 1) is passed over: the steps played are those within the
 // length that are not skipped, in the playback's order; with none left nothing plays.
@@ -81,6 +85,16 @@ export function svsGateFraction(params, step) {
   const row = SVS_ROWS.find(([, , r]) => params && params[`role${r}`] === 'gateLength');
   if (!row || step === null) return null;
   return svsRoleValue('gateLength', params[row[0]][step]);
+}
+
+export function svsResetSources(model) {
+  const out = new Set();
+  for (const e of model.graph.edges) {
+    if (e.to.port !== 'reset' || (e.props && e.props.muted)) continue;
+    const n = model.graph.nodes.find((x) => x.id === e.to.node);
+    if (n && n.type === 'step-voltage-sequencer') out.add(e.from.node);
+  }
+  return out;
 }
 
 export { SVS_MAX_STEPS };

@@ -44,6 +44,7 @@
 // (§184): STOP_POLICY, scheduler.stop(); Escape (§185): resolveEscape(). docs/v31/timeline.md
 // documents all three.
 
+import { svsResetSources } from './step-voltage.js';
 import {
   buildTimeline, planFromTimeline, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../sequencer/compiler.js';
@@ -318,20 +319,6 @@ function sameItem(a, prev, b, next) {
 }
 
 /**
- * Node ids with an unmuted edge into a step-voltage sequencer's reset input (K226): the items on
- * them are taken first at one instant.
- */
-function resetSources(model) {
-  const out = new Set();
-  for (const e of model.graph.edges) {
-    if (e.to.port !== 'reset' || (e.props && e.props.muted)) continue;
-    const n = model.graph.nodes.find((x) => x.id === e.to.node);
-    if (n && n.type === 'step-voltage-sequencer') out.add(e.from.node);
-  }
-  return out;
-}
-
-/**
  * Everything pass k of the timeline schedules: { items, automation, warnings }.
  * Items (sorted by start time, then model order):
  *   pattern      { key, type, clipId, trackId, target, pass, position, startTime, endTime,
@@ -402,9 +389,8 @@ export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {})
     && c.start >= info.posStart - CONTIGUITY_TOLERANCE_S && c.start < info.posEnd)) {
     warnings.push('Measurement clips inside the loop region repeat on every pass.');
   }
-  // K226: at one instant the items that drive a step-voltage sequencer's reset go first, so a
-  // reset and a clock tick at the same time restart on that tick whichever source sends each.
-  const resetting = resetSources(model);
+  // K226: at one instant the items that drive a step-voltage sequencer's reset go first.
+  const resetting = svsResetSources(model);
   const rank = (it) => (resetting.has(it.target) ? 0 : 1);
   items.sort((a, b) => a.startTime - b.startTime || rank(a) - rank(b) || a.order - b.order);
   const automation = model.timeline.automation.map((lane) => ({
