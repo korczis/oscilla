@@ -219,6 +219,14 @@ export function mountStepGrid(host, opts) {
     for (const el of lit) el.removeAttribute('aria-current');
     lit.length = 0;
     if (step === null) return;
+    // The playing step on another page: the owner shows that page (it keeps the page), unless
+    // the user is on the grid (a drag held, or the keyboard focus in it: their paging wins);
+    // the render lights the step on the next frame.
+    const follow = model.drag || gridHasFocus ? null : model.followPage(step);
+    if (follow !== null) {
+      owner.onView({ page: follow });
+      return;
+    }
     for (const row of cellEls) {
       const el = row[step];
       if (el) {

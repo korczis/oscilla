@@ -445,7 +445,7 @@ test('R2-W8-3: the Studio\'s shortcuts dialog, where the grid is mounted, lists 
   const { shortcutHelp } = await import('../../src/js/ui/shortcuts.js');
   const ids = new Set(shortcutHelp('studio').rows.map((r) => r.id));
   for (const k of stepGrid.keys) assert.ok(ids.has(k.row), k.row);
-  assert.deepEqual([...stepGrid.workspaces], ['studio']);
+  assert.deepEqual([...stepGrid.workspaces], ['studio', 'synth']); // K222: the Drums tab
 });
 
 test('a re-render waits for a held drag; the Inspector skips an unchanged clip', async () => {
@@ -502,6 +502,18 @@ test('R2-K221-8: a render mid value-drag never turns the release into the minimu
   assert.ok(actions[0].value[2] >= 0.9, `the release keeps the dragged value, got ${
     actions[0].value[2]}`);
   view.destroy();
+});
+
+test('R2-W8-7: a grid narrower than its clip follows the playing step to its page', () => {
+  const { grid, log } = notesGrid([], { pageSteps: 4 });
+  assert.equal(grid.followPage(2), null, 'on the page shown');
+  assert.equal(grid.followPage(5), 1);
+  grid.set({ page: 1 });
+  assert.equal(grid.followPage(5), null);
+  assert.equal(grid.followPage(15), 3);
+  assert.equal(grid.followPage(null), null);
+  assert.equal(grid.followPage(16), null, 'past the last step');
+  assert.equal(log.actions.length, 0, 'following builds no action');
 });
 
 // ------------------------------------------------------------------------------ T3 view fixes
@@ -579,4 +591,21 @@ test('T3 fix: sixteen steps need the 80 px name column the view draws, not 128 p
   assert.equal(pageStepsFor(16 * 44 - 15 + 80 + 8), PAGE_STEPS.wide);
   assert.equal(pageStepsFor(800), PAGE_STEPS.wide, 'the Synth card at 1536 px is about 800 px');
   assert.equal(pageStepsFor(16 * 44 - 15 + 80 + 7), PAGE_STEPS.narrow);
+});
+
+test('R2-K222-1: a page the user turns holds until the playhead enters it or a stop', () => {
+  const { grid } = notesGrid([], { pageSteps: 4 });
+  assert.equal(grid.followPage(5), 1, 'untouched: it follows');
+  grid.set({ page: 1 }); // the owner showed the playing page
+  grid.key('['); // the user turns back to page 0 while step 6 plays
+  assert.equal(grid.state().page, 0);
+  assert.equal(grid.followPage(6), null, 'the turned page holds');
+  assert.equal(grid.followPage(9), null, 'still held while the playhead is elsewhere');
+  assert.equal(grid.followPage(1), null, 'the playhead enters the page shown');
+  assert.equal(grid.followPage(5), 1, 'and following resumes');
+  grid.set({ page: 1 });
+  grid.key(']');
+  assert.equal(grid.followPage(6), null);
+  assert.equal(grid.followPage(null), null, 'a stop releases the hold');
+  assert.equal(grid.followPage(13), 3, 'the next run follows');
 });

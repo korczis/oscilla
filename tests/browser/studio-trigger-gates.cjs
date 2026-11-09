@@ -315,9 +315,16 @@ function defineChecks() {
       const v = await contour(page, r.env);
       return v !== null && v < 0.1 ? true : null;
     }, { ms: SOUND_MS, what: 'tg-clip: the clip\'s end releases the relayed gate' });
-    const playing = await page.evaluate(() => window.OSCILLA.studio.transport.playhead().playing);
+    // The transport as the release left it: still playing the looped timeline (a release by the
+    // timeline's end would read playing false), and what it says about itself otherwise.
+    const state = await page.evaluate(() => {
+      const t = window.OSCILLA.studio.transport;
+      const d = t.debugInfo();
+      return { playing: t.playhead().playing, armed: t.armed, loop: d.loop,
+        lastError: d.lastError && d.lastError.code, warnings: d.warnings.slice(-2) };
+    });
     const census = await stopAndCensus(page, 'tg-clip: after stop the census is 0');
-    return { ok: open > 0.5 && closed && playing && !!census, open, playing };
+    return { ok: open > 0.5 && closed && state.playing && !!census, open, state };
   });
 
   def('tg-owned', async ({ page }) => {

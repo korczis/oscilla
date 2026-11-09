@@ -44,6 +44,11 @@
       "row": "sequencer > seq.toStudio > studio",
       "issue": "V604",
       "why": "the Studio document lives in memory: a reload of #m=studio opens the default template, so the voice the Synth instantiated (or the converted pattern) is gone; V604 saves the working draft and restores it"
+    },
+    {
+      "row": "synth > synth.drums.studio > studio",
+      "issue": "V604",
+      "why": "the Studio document lives in memory: a reload of #m=studio opens the default template, so the Drums tab's clip and the panel it plays on are gone; V604 saves the working draft and restores it"
     }
   ],
   "rows": [
@@ -1207,6 +1212,26 @@
       "studio": "same",
       "source": "declared",
       "why": "Open in Studio is a button (synthOpenStudio) showing the same document in Studio; the registry's Synth -> Studio entry is the strip link"
+    },
+    {
+      "id": "synth > synth.drums.studio > studio",
+      "kind": "open-in",
+      "from": "synth",
+      "control": "synth.drums.studio",
+      "selector": "[data-osc=\"synth.drums.studio\"]",
+      "role": "button",
+      "to": "studio",
+      "href": null,
+      "template": null,
+      "studio": "same",
+      "source": "declared",
+      "setup": {
+        "open": "m=synth&yt=drums",
+        "click": [
+          "[data-drums-new]"
+        ]
+      },
+      "why": "the Drums tab's Open in Studio is a button (synth/view/drums-tab.js openStudio) selecting its notes clip in the same document's Studio timeline; the tab's clip is made by Vytvořit bicí klip first (K222)"
     },
     {
       "id": "playground > studio.compact.expand > studio",

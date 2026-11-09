@@ -23,7 +23,9 @@
 //             'pattern-played' (the Oscillator's pattern bus), 'gate' (the Envelope's gate),
 //             'keys-gate' (a Keys node's Gate: the Envelopes its unmuted gate edges reach, K060),
 //             'keys-notes' (a notes clip on a Keys node: each note sets its pitch and opens its
-//             Gate, K068), 'clock' (one clock tick of Random or the Step Modulator, K023),
+//             Gate, K068), 'engine-notes' (a notes clip on the percussion engine: each note a
+//             note-on and note-off of its voice pool, K222), 'clock' (one clock tick of Random or
+//             the Step Modulator, K023),
 //             'measurement' (data for the measurement hook) or 'automation' (the lane drives the
 //             parameter's AudioParam)
 //     code, reason   null when it plays; otherwise the store's first error (holds false) or the
@@ -38,8 +40,9 @@
 // policy" lists. The subset is the table below: pattern clips play on a Sequence or an
 // Oscillator, event clips as gates or triggers on an Envelope, as gates on a Keys node and as
 // triggers on Random and the Step Modulator (EVENT_PLAY, K023), measurement clips always
-// (as data), notes clips on a Keys node (K068; held on the XY pad and the voice engines, and
-// reported there with the notesUnplayed reason), and a lane plays unless its parameter has no
+// (as data), notes clips on a Keys node (K068) and on the percussion engine (K222; held on the
+// XY pad and the other voice engines, and reported there with the notesUnplayed reason), and a
+// lane plays unless its parameter has no
 // linear AudioParam that Web Audio uses:
 // a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
 // high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), a shelf ignores its Q,
@@ -83,8 +86,12 @@ export const gainIsUsed = usesGain;
  */
 export const qIsUsed = usesQ;
 
-/** How a notes clip plays, by target node type (absent: held, not played). */
-const NOTES_PLAY = Object.freeze({ keys: 'keys-notes' });
+/**
+ * How a notes clip plays, by target node type (absent: held, not played). On the percussion
+ * engine (K222, ADR 0086 decisions 5 and 6) a drum lane is a note number of its key map: each
+ * note is a note-on and a note-off on its voice pool, as the keys play it ('engine-notes').
+ */
+const NOTES_PLAY = Object.freeze({ keys: 'keys-notes', 'perc-voice': 'engine-notes' });
 
 /** How a pattern clip plays, by target node type (absent: it does not play). */
 const PATTERN_PLAY = Object.freeze({ sequence: 'sequence', oscillator: 'pattern-played' });
@@ -111,7 +118,8 @@ export const CLIP_TARGET_TEXT = Object.freeze({
     + `${name} nehraje.`,
   notesTarget: (type) => 'A notes clip needs a target that plays notes (Keys, the XY pad or a '
     + `voice engine); ${article(type)} ${type} node does not play notes.`,
-  notesUnplayed: (name) => `Notové klipy hrají na uzlu Keys; tento klip na ${name} zůstává, ale `
+  notesUnplayed: (name) => `Notové klipy hrají na uzlu Keys a na perkusním enginu; tento klip na `
+    + `${name} zůstává, ale `
     + 'nehraje se.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
     + 'mis-scaled, so it is not applied.',

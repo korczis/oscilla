@@ -385,6 +385,12 @@ test('P3 the offline plan says an engine plays no notes and passes its Chain inp
   const engines = plan.nodes.filter((n) => ENGINE_TYPES.includes(n.type));
   assert.ok(engines.length >= 5);
   for (const n of engines) {
+    // K222: the percussion engine renders (its notes clips play offline as live); the others
+    // play notes only from the keys, so a render holds none.
+    if (n.type === 'perc-voice') {
+      assert.deepEqual([n.role, n.reason], ['rendered', null], n.type);
+      continue;
+    }
     assert.equal(n.reason, OFFLINE_TEXT.notes, n.type);
     assert.notEqual(n.reason, OFFLINE_TEXT.analysis);
   }

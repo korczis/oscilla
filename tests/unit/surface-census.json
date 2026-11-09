@@ -1247,6 +1247,24 @@
       ]
     },
     {
+      "id": "synth.tab:drums",
+      "kind": "subview",
+      "reachedFrom": [
+        "synth"
+      ],
+      "purpose": "The Drums tab: one bar of drum steps on the panel's percussion engine as a step grid, with a pad per row",
+      "state": "src/js/synth/view/drums-tab.js",
+      "evidence": "none",
+      "deepLink": "#m=synth&yt=drums",
+      "tests": [
+        "tests/browser/drums.cjs"
+      ],
+      "plan": [
+        "K222",
+        "Q019"
+      ]
+    },
+    {
       "id": "exps.panel:detail",
       "kind": "subview",
       "reachedFrom": [

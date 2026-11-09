@@ -3,7 +3,7 @@
 // the module cards and the cables name studio.model; arming arms the Studio transport; the tab
 // is the component's page-only key ui.synthTab of sources.js. The dock beside the piano
 // (synth/dock.js) keeps its open menu and oscillator in ui.synthDock; its built radio groups are
-// patterns. The XY tab is synth/view/xy-tab.js.
+// patterns. The XY tab is synth/view/xy-tab.js, the Drums tab synth/view/drums-tab.js (K222).
 // Trace: scripts/ui-catalog/trace/synth.mjs.
 
 import { defineComponent } from '../define.js';
@@ -48,6 +48,15 @@ export default [
     kind: 'open',
     label: 'Open in Studio',
     docs: 'Opens the Studio with the nodes of the Synth panel selected.',
+    state: 'studio.selection',
+    effect: { route: 'studio' },
+    in: 'synth-view',
+  }),
+  defineComponent({
+    id: 'synth.drums.studio',
+    kind: 'open',
+    label: 'Otevřít ve Studiu',
+    docs: 'Otevře Studio s notovým klipem karty Drums vybraným v jeho časové ose (K222).',
     state: 'studio.selection',
     effect: { route: 'studio' },
     in: 'synth-view',

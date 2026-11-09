@@ -26,7 +26,7 @@ Track kinds exist only where semantics differ (§82):
 
 | Row | Model | Holds |
 | --- | --- | --- |
-| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; played on a Keys node, K068) |
+| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; played on a Keys node, K068, and on the percussion engine, K222) |
 | measurement track | `timeline.tracks` kind `measurement` | measurement clips (noise-check, pre-roll, stimulus, capture, tail, analysis) |
 | automation lane | `timeline.automation` | one lane per node parameter (points, not clips) |
 | markers | `timeline.markers` | annotations and anchors; never executed (§96) |
@@ -61,9 +61,11 @@ unknown grid field until the step editor adds it outside the hash. Absent fields
 written, so a document without them serializes and hashes as before (every pinned template and
 a K099 document keep their `studioHash`); each field present is execution state and changes it.
 The import limits `notesPerClip` (4096) and `notesPerDocument` (65536) bound the notes
-(`limit-exceeded`). A notes clip plays on a Keys node, live and offline (see "Notes clips on
-the audio clock" below); on the XY pad or a voice engine the transport and the offline render
-list it unplayed with code `notes-unplayed` and the policy's sentence.
+(`limit-exceeded`). A notes clip plays on a Keys node and on the percussion engine (K222: a
+drum lane is a note number of its key map, each note a note-on and note-off of its voice pool,
+`engine-notes`), live and offline (see "Notes clips on the audio clock" below); on the XY pad or
+another voice engine the transport and the offline render list it unplayed with code
+`notes-unplayed` and the policy's sentence.
 
 ### Clip validation (§87)
 
