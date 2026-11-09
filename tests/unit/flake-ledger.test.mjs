@@ -296,7 +296,7 @@ const GATE = CI.jobs.gate;
 const LEDGER_JOB = 'flake-ledger';
 const VERDICT_STEP = 'Every release-gate job passed, or was skipped for a non-runtime change';
 /** E026's path-gated jobs, as the verdict lists them (tests/unit/ci-changes.test.mjs). */
-const PATH_GATED = ['engine', 'suites', 'measure', 'studio', 'browser', 'census', 'visual'];
+const PATH_GATED = ['leg-1', 'leg-2', 'leg-3', 'visual'];
 const LEDGER_IF = '${{ always() && fromJSON(github.run_attempt) > 1 }}';
 
 test('the ledger is its own job, after every judged job, on a re-run only (R-1, R-4)', () => {
@@ -311,8 +311,8 @@ test('the ledger is its own job, after every judged job, on a re-run only (R-1, 
   // and is never path gated: its condition is exactly this, whatever `changes` said.
   assert.equal(fl.if, LEDGER_IF);
   assert.deepEqual([...fl.needs].sort(), GATE.needs.filter((j) => j !== LEDGER_JOB).sort());
-  assert.ok(fl.needs.includes('changes') && fl.needs.includes('census'),
-    'the ledger waits for every job the gate judges, changes and census included');
+  assert.ok(fl.needs.includes('changes') && fl.needs.includes('leg-3'),
+    'the ledger waits for every job the gate judges, changes and the browser legs included');
   assert.deepEqual(fl.permissions, { contents: 'read', actions: 'read' });
   assert.ok(Number(fl['timeout-minutes']) > 0);
   const s = fl.steps.find((x) => /scripts\/flake-ledger\.mjs/.test(x.run ?? ''));
@@ -394,7 +394,7 @@ test('mutation: a verdict that judges the ledger, or reads its skip as E026\'s, 
   assert.ok(kept.some((f) => /ledger failure: fails/.test(f)), kept.join('\n'));
   // The ledger listed among the path-gated jobs instead of dropped: its skip then counts as
   // E026's and needs runtime=false, and its failure still fails the gate.
-  const list = '["engine", "suites", "measure", "studio", "browser", "census", "visual"]';
+  const list = '["leg-1", "leg-2", "leg-3", "visual"]';
   const listed = ledgerDecides(mutatedGate(exclusion,
     [list, list.replace(']', ', "flake-ledger"]')]), { perJob: false });
   assert.ok(listed.some((f) => /runtime=true, ledger skipped: fails/.test(f)), listed.join('\n'));

@@ -54,9 +54,12 @@ test('the job list is derived from ci.yml: every matrix value, the visual gate, 
   assert.deepEqual(WORKFLOW.problems, []);
   assert.equal(WORKFLOW.name, 'CI');
   for (const b of ['chromium', 'firefox', 'webkit']) {
-    assert.ok(WORKFLOW.jobs.includes(`Browser gate (${b})`), b);
-    assert.ok(WORKFLOW.jobs.includes(`V1 engine checks (${b})`), b);
+    assert.ok(WORKFLOW.jobs.includes(`Browser leg 1 (${b})`), b);
+    assert.ok(WORKFLOW.jobs.includes(`Browser leg 2 (${b})`), b);
   }
+  // ci-speed: a matrix that leaves a value out has no job of it (chromium takes two legs)
+  assert.ok(WORKFLOW.jobs.includes('Browser leg 3 (webkit)'));
+  assert.ok(!WORKFLOW.jobs.includes('Browser leg 3 (chromium)'));
   assert.ok(WORKFLOW.jobs.includes('Visual regression gate'));
   assert.ok(WORKFLOW.jobs.includes('gate'));
   assert.ok(WORKFLOW.jobs.some((j) => j.startsWith('.ai layer (majordomus doctor')));
@@ -90,9 +93,9 @@ test('a job missing, skipped, cancelled or from another run or sha refuses', () 
   const r = run();
   const drop = jobsOf(r).filter((j) => j.name !== 'Visual regression gate');
   only(facts({ jobs: drop }), /no job "Visual regression gate"/);
-  const skipped = jobsOf(r).map((j) => (j.name === 'Browser gate (webkit)'
+  const skipped = jobsOf(r).map((j) => (j.name === 'Browser leg 3 (webkit)'
     ? { ...j, conclusion: 'skipped' } : j));
-  only(facts({ jobs: skipped }), /job "Browser gate \(webkit\)" of run 900 is completed\/skipped/);
+  only(facts({ jobs: skipped }), /job "Browser leg 3 \(webkit\)" of run 900 is completed\/skipped/);
   const cancelled = jobsOf(r).map((j) => (j.name === 'gate' ? { ...j, conclusion: 'cancelled' }
     : j));
   only(facts({ jobs: cancelled }), /job "gate" of run 900 is completed\/cancelled/);
@@ -124,9 +127,9 @@ test('from the second attempt the flake ledger must succeed; any other skip stil
   const skipLedger = jobsOf(r2).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
   only(facts({ runs: [r2], jobs: skipLedger }), /flake ledger.*completed\/skipped/i);
   const r1 = run({ run_attempt: 1 });
-  const other = WORKFLOW.jobs.find((n) => n !== ledger && /Browser gate/.test(n));
+  const other = WORKFLOW.jobs.find((n) => n !== ledger && /Browser leg/.test(n));
   const skipOther = jobsOf(r1).map((j) => (j.name === other ? { ...j, conclusion: 'skipped' } : j));
-  only(facts({ runs: [r1], jobs: skipOther }), /Browser gate.*completed\/skipped/);
+  only(facts({ runs: [r1], jobs: skipOther }), /Browser leg.*completed\/skipped/);
 });
 
 test('mutation-proven guard: on attempt 1 a cancelled, failed or running ledger refuses (#417 R1)',
@@ -432,13 +435,13 @@ test('ADR 0083 with #417: on merge_group too only the flake ledger\'s own first 
     /merge_group: job "flake ledger.*" of run 950 is completed\/skipped/i);
   assert.match(ciReceiptProblems(queued({ queueRuns: [q1],
     queueJobs: skipLedger(q1, { run_attempt: 2 }) })).join(), /flake ledger.*completed\/skipped/i);
-  // a path-gated job (E026) skipped in the queue run is not excused: the census, say
-  const census = WORKFLOW.jobs.find((n) => /census/i.test(n));
-  assert.ok(census, 'ci.yml declares a census leg');
-  const skipCensus = qjobs(q1).map((j) => (j.name === census ? { ...j, conclusion: 'skipped' }
+  // a path-gated job (E026) skipped in the queue run is not excused: a browser leg, say
+  const leg = WORKFLOW.jobs.find((n) => /Browser leg 3/i.test(n));
+  assert.ok(leg, 'ci.yml declares a third browser leg');
+  const skipLeg = qjobs(q1).map((j) => (j.name === leg ? { ...j, conclusion: 'skipped' }
     : j));
-  assert.match(ciReceiptProblems(queued({ queueRuns: [q1], queueJobs: skipCensus })).join(),
-    /merge_group: job ".*census.*" of run 950 is completed\/skipped/i);
+  assert.match(ciReceiptProblems(queued({ queueRuns: [q1], queueJobs: skipLeg })).join(),
+    /merge_group: job "Browser leg 3.*" of run 950 is completed\/skipped/i);
 });
 
 test('ADR 0083 mutation: a pull_request run does not stand in when the queue commit\'s tree'
