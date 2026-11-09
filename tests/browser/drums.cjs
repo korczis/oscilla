@@ -34,7 +34,9 @@
 //               then starts the timeline and the next stops it (review R2-K222-5)
 //   dr-record   K223: the Record switch (role=switch) on, Play, three pads struck in the pass and
 //               Stop: three notes in the clip within 'take in model' (2 s) as one undo entry, and
-//               one Undo removes all three; the switch off again (the R key on the desktop)
+//               one Undo removes all three; Stop says the take ('Záznam zapsán: 3 údery, ...',
+//               R2-K223-1/2); the switch off again (the R key on the desktop) says
+//               'Nahrávání vypnuto.'
 //   no-console-errors
 'use strict';
 
@@ -425,6 +427,10 @@ function defineChecks() {
       const n = await notesOf(page, id);
       return n.length === 3 ? n : null;
     }, { ms: NOTE_MS, what: 'take in model' });
+    const status = () => page.evaluate(() => window.OSCILLA.app.synth.status);
+    // Review R2-K223-1: the write is said where it happens, with its Czech count.
+    const said = await until(async () => ((await status()) === 'Záznam zapsán: 3 údery, jedna '
+      + 'úprava.' ? true : null), { ms: UI_MS, what: 'dr-record: Stop says the take' });
     const one = (await depth()) === before + 1;
     await page.evaluate(() => window.OSCILLA.studio.store.undo());
     const undone = await until(async () => ((await notesOf(page, id)).length === 0 ? true : null),
@@ -436,8 +442,9 @@ function defineChecks() {
       await page.keyboard.press('KeyR');
     }
     const off = await until(async () => ((await page.getAttribute(sw, 'aria-checked'))
-      === 'false' ? true : null), { ms: UI_MS, what: 'dr-record: the Record switch is off' });
-    return { ok: role === 'switch' && !!(armed && take && one && undone && off),
+      === 'false' && (await status()) === 'Nahrávání vypnuto.' ? true : null),
+    { ms: UI_MS, what: 'dr-record: the Record switch is off and says so, counting nothing' });
+    return { ok: role === 'switch' && !!(armed && take && said && one && undone && off),
       notes: take, one };
   });
 

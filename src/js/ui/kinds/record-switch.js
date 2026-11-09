@@ -13,11 +13,15 @@
 
 import { recorderOf } from '../../studio/notes-record.js';
 
+/** Czech count of hits: 1 úder, 2-4 údery, 5 and more úderů (review R2-K223-2). */
+export const hitsText = (n) => `${n} ${n === 1 ? 'úder' : n >= 2 && n <= 4 ? 'údery' : 'úderů'}`;
+
 export const RECORD_TEXT = Object.freeze({
   label: 'Nahrávat',
   on: 'Nahrávání zapnuto: údery z padů a kláves se zapíší do klipu, když transport hraje.',
-  off: (n) => (n ? `Nahrávání vypnuto: ${n} úderů zapsáno jako jedna úprava.`
-    : 'Nahrávání vypnuto: nic nezapsáno.'),
+  off: 'Nahrávání vypnuto.',
+  // The take is said when it is written: at Stop, or when Record goes off (review R2-K223-1).
+  written: (n) => `Záznam zapsán: ${hitsText(n)}, jedna úprava.`,
   noTransport: 'Nahrávat lze až se zvukem Studia: stiskněte Přehrát.',
 });
 
@@ -35,7 +39,7 @@ export function bindRecordSwitch(btn, { transport, store, clipId, say = () => {}
     const t = transport();
     if (!rec && t) {
       rec = recorderOf(t, store);
-      off = rec.on(sync);
+      off = rec.on(onEvent);
     }
     return rec;
   };
@@ -44,6 +48,18 @@ export function bindRecordSwitch(btn, { transport, store, clipId, say = () => {}
   function sync() {
     btn.setAttribute('aria-checked', String(!!(rec && rec.armed && rec.clipId === clipId())));
   }
+  // A take written for this switch's clip is said where it happens; switched off with hits
+  // pending, the take sentence carries the off state too, so one message says both.
+  let switching = false;
+  function onEvent(e) {
+    sync();
+    if (!e || e.type !== 'take') return;
+    // Two switches may share the recorder (the Drums tab, the Studio Inspector): the one shown
+    // says it, once.
+    if (!btn.isConnected || !btn.getClientRects().length) return;
+    say(e.reason === 'disarm' && switching ? `${RECORD_TEXT.written(e.n)} ${RECORD_TEXT.off}`
+      : RECORD_TEXT.written(e.n));
+  }
   const onClick = () => {
     const r = recorder();
     if (!r) {
@@ -51,10 +67,12 @@ export function bindRecordSwitch(btn, { transport, store, clipId, say = () => {}
       return;
     }
     const on = r.armed && r.clipId === clipId();
-    const n = r.pending;
-    r.toggle(clipId());
+    const pending = r.pending;
+    switching = true;
+    try { r.toggle(clipId()); } finally { switching = false; }
     sync();
-    say(on ? RECORD_TEXT.off(n) : RECORD_TEXT.on);
+    if (!on) say(RECORD_TEXT.on);
+    else if (!pending) say(RECORD_TEXT.off);
   };
   btn.addEventListener('click', onClick);
   sync();

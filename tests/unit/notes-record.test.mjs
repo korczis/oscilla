@@ -18,6 +18,7 @@ import * as transportModule from '../../src/js/studio/transport.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const rec = await import('../../src/js/studio/notes-record.js').catch(() => ({}));
+const sw = await import('../../src/js/ui/kinds/record-switch.js').catch(() => ({}));
 
 const SR = 48000;
 const ok = (r, what = '') => {
@@ -198,3 +199,28 @@ test('C1-K223-1: notes played while the playhead is before or after the armed cl
     assert.deepEqual(clipOf(st, clip).payload.notes.map((n) => [n.at, n.note]), [[1, 62]],
       'only the hit inside it, at beat 1 of the clip');
   });
+
+test('R2-K223-1/2: the recorder says when a take is written, and its count reads in Czech', async () => {
+  assert.equal(typeof sw.hitsText, 'function', 'record-switch.js exports hitsText');
+  assert.deepEqual([0, 1, 2, 4, 5, 11, 22].map(sw.hitsText), ['0 úderů', '1 úder', '2 údery',
+    '4 údery', '5 úderů', '11 úderů', '22 úderů']);
+  assert.equal(sw.RECORD_TEXT.written(3), 'Záznam zapsán: 3 údery, jedna úprava.');
+  assert.equal(sw.RECORD_TEXT.off, 'Nahrávání vypnuto.', 'the off sentence counts nothing');
+  const { st, perc, clip } = kit();
+  const rig = rigOf(st);
+  const r = rec.recorderOf(rig.transport, st);
+  const events = [];
+  r.on((e) => events.push(e));
+  r.arm(clip);
+  const { baseTime } = ok(rig.transport.start(), 'PLAY');
+  for (const s of [0.1, 0.6]) {
+    ok(rig.transport.live(perc, { kind: 'on', note: 60, velocity: 100, at: baseTime + s }), 'hit');
+  }
+  const p = rig.transport.stop();
+  rig.fx.advance(1);
+  await p;
+  assert.deepEqual(events, [{ type: 'arm' }, { type: 'take', n: 2, reason: 'stop' }],
+    'Stop writes the take and says so, where it happens');
+  r.disarm();
+  assert.deepEqual(events.at(-1), { type: 'disarm' }, 'a disarm with nothing pending writes none');
+});

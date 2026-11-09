@@ -14,7 +14,9 @@
 //   takeAction(model, clipId, hits) -> CLIP_UPDATE | null   null for a take with no hit
 //   recorderOf(transport, store) -> recorder   one per transport; store { getModel, dispatch }
 //     recorder.arm(clipId), disarm() -> the take's dispatch result | null, toggle(clipId),
-//     .armed, .clipId, .pending (hits of the take so far), on(fn) -> off (fn() on arm/disarm)
+//     .armed, .clipId, .pending (hits of the take so far), on(fn) -> off: fn(event) on
+//     { type: 'arm' | 'disarm' } and, when a take with hits is written, { type: 'take', n,
+//     reason: 'stop' | 'disarm' | 'rearm' } (review R2-K223-1: the write is said where it happens)
 //   A take runs from arm to disarm, or to a stop of the transport; only notes the router
 //   delivered to the clip's target while the timeline plays the clip count, on any loop pass
 //   (Record while stopped is armed and writes nothing until Play; a note played while the
@@ -67,14 +69,19 @@ function createRecorder(transport, store) {
   let clipId = null;
   let hits = [];
   const listeners = new Set();
-  const notify = () => listeners.forEach((fn) => { try { fn(); } catch (e) { /* its own */ } });
-  const commit = () => {
+  const notify = (event) => listeners.forEach((fn) => {
+    try { fn(event); } catch (e) { /* a listener's error is its own */ }
+  });
+  const commit = (reason) => {
+    const n = hits.length;
     const a = clipId ? takeAction(store.getModel(), clipId, hits) : null;
     hits = [];
-    return a ? store.dispatch(a) : null;
+    const r = a ? store.dispatch(a) : null;
+    if (r && r.ok) notify({ type: 'take', n, reason });
+    return r;
   };
   transport.on((type, d) => {
-    if (type === 'state' && d && d.playing === false) commit();
+    if (type === 'state' && d && d.playing === false) commit('stop');
     if (type !== 'live' || !clipId || !d || !d.ph || !d.ph.playing) return;
     if (d.ev.kind !== 'on' || (d.r && d.r.ok === false)) return;
     const m = store.getModel();
@@ -90,14 +97,14 @@ function createRecorder(transport, store) {
     get clipId() { return clipId; },
     get pending() { return hits.length; },
     arm(id) {
-      if (clipId && clipId !== id) commit();
+      if (clipId && clipId !== id) commit('rearm');
       clipId = id;
-      notify();
+      notify({ type: 'arm' });
     },
     disarm() {
-      const r = commit();
+      const r = commit('disarm');
       clipId = null;
-      notify();
+      notify({ type: 'disarm' });
       return r;
     },
     toggle(id) { return clipId === id ? rec.disarm() : rec.arm(id); },
