@@ -1,0 +1,41 @@
+id: P014
+milestone: M098
+serves:
+  - "public-discoverability#readme-front-page"
+  - "public-discoverability#lab-landing-live"
+title: "README derived from the repository, with real screenshots and live charts, and a generated interactive Czech landing at /oscilla/lab/"
+slug: readme-derived-and-generated-landing-at-lab
+priority: p1
+profile: deep-work
+objective: "Q107 (owner, 2026-11-09). One derivation module, scripts/facts.mjs, reads the repository (the workspace registry, the Studio templates, the Synth engines, docs/CLAIMS.yaml, the release records under .ai/repo/releases, the plan's milestones, the ADRs, the test inventory and git history) and returns plain facts, every one carrying the file it was read from. scripts/readme.mjs renders README.md's marked derived regions from it (npm run readme writes, npm run readme:check fails on a stale region and runs in verify), only for facts that change with the product (workspaces, templates, engines, claims), never counts that drift with every pull request. The README shows the committed, gated visual references as its screenshots and embeds charts the Pages deploy regenerates (release timeline, single-file size per release, plan progress, claims by status), so the numbers are current on every deploy without a commit. scripts/landing.mjs generates, at deploy time, one static Czech page at /oscilla/lab/ on Flowbite Pro with Tailwind compiled and inlined: the real app in a playable frame (the one engine, nothing started until pressed), derived workspace cards with deep links into the app, the screenshot gallery and interactive charts; it loads nothing from another origin. The app at /oscilla/ and every deep link stay exactly as they are."
+why: "The owner asked for a README that is generated, derived, inferred and current, with graphics and images, and for a deployed, interactive landing page as soon as possible (Q107)."
+scope:
+  - "README.md"
+  - "scripts/facts.mjs"
+  - "scripts/readme.mjs"
+  - "scripts/landing.mjs"
+  - "scripts/landing"
+  - "scripts/verify-deploy.mjs"
+  - ".github/workflows/pages.yml"
+  - "package.json"
+  - "tests/unit"
+  - "tests/README.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/project/issues/P014.yaml"
+  - ".ai/repo/project/issues/Q107.yaml"
+  - ".ai/repo/project/intents/public-discoverability.yaml"
+  - ".ai/repo/rules/project/single-file-deliverable.v2.md"
+depends_on:
+  - "Q107"
+acceptance_criteria:
+  - "npm run readme:check passes on the head and fails when a derived region is edited by hand or a registry row is added without regenerating (fail-first unit test)."
+  - "Every fact the README and the landing show is produced by scripts/facts.mjs from a named source file; no version literal appears in README.md or a committed asset (version:check)."
+  - "The Pages workflow stages /lab/ generated from the deployed commit, verify-deploy proves the live /lab/ equals a regeneration and that /oscilla/ is still the committed dist, and the landing loads nothing from another origin."
+  - "The landing's prose is Czech, built on Flowbite Pro components with no Pro source file committed, usable at 390 px and 1536 px, in dark and light themes, and its frame starts no audio until pressed."
+validation:
+  - "npm run readme:check"
+  - "node --test tests/unit/readme-derived.test.mjs tests/unit/landing-lab.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
