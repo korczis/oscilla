@@ -21,6 +21,7 @@ import { definePort } from '../ports.js';
 import {
   CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam,
   integerParam, listParam, numberParam, optionLabel, parts, pct, secondsParam, secs, num,
+  syncParam,
 } from './common.js';
 
 const controlOut = definePort({ id: 'control', direction: 'out', type: 'CONTROL',
@@ -51,9 +52,17 @@ export const lfo = defineNode({
     enumParam('shape', 'Shape', WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]), 'sine'),
     rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1, { max: FREQUENCY_MAX_HZ,
       softRange: LFO_SLIDER_RANGE, laneRange: [0.01, FREQUENCY_MAX_HZ] }),
+    // K022 (hash epoch 2): the output's depth, and tempo sync.
+    numberParam('depth', 'Depth', { min: 0, max: 1, step: 0.01, default: 1, automatable: true,
+      modulatable: true, modDepth: 0.5, live: 'glide',
+      // Its CONTROL input: one AudioParam (a gain), a-rate; uncabled, the depth itself holds.
+      port: { channels: 1, rate: 'a-rate', unconnected: 'parameter value', monitor: false,
+        compact: false, version: 1 } }),
+    syncParam(),
   ],
   summary(p) {
-    return parts(optionLabel(lfo, 'shape', p.shape), `${num(p.rate)} Hz`);
+    return parts(optionLabel(lfo, 'shape', p.shape),
+      p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`, p.depth < 1 ? pct(p.depth) : null);
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/modulation.js#buildLfo',
@@ -116,9 +125,11 @@ export const random = defineNode({
     integerParam('seed', 'Seed', { min: 0, max: 2 ** 31 - 1,
       default: DEFAULT_PATTERN_PARAMS.random.seed }),
     boolParam('smooth', 'Smooth', false),
+    syncParam(), // K022
   ],
   summary(p) {
-    return parts(`${num(p.rate)} Hz`, p.smooth ? 'smooth' : 'stepped', `seed ${p.seed}`);
+    return parts(p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`,
+      p.smooth ? 'smooth' : 'stepped', `seed ${p.seed}`);
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/noise.js#mulberry32',
@@ -149,9 +160,16 @@ export const stepModulator = defineNode({
     }),
     rate(1000 / DEFAULT_PATTERN_PARAMS.alternating.toneMs, 1),
     enumParam('playback', 'Playback', [['loop', 'Loop'], ['once', 'Once']], 'loop'),
+    // K022: tempo sync, and each step rounded to a twelfth (a semitone under a pitch edge that
+    // maps 1 to one octave, as the Keys pitch cable does).
+    syncParam(),
+    enumParam('quantize', 'Quantize', [['off', 'Off'], ['semitone', 'Semitone']], 'off',
+      { live: 'crossfade' }),
   ],
   summary(p) {
-    return parts(`${p.steps.length} steps`, `${num(p.rate)} Hz`, p.playback);
+    return parts(`${p.steps.length} steps`,
+      p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`, p.playback,
+      p.quantize === 'semitone' ? 'semitones' : null);
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/scheduler.js#scheduleSteps',

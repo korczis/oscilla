@@ -30,7 +30,9 @@
 //   measuredPath(model) -> { nodes, edges, clips } (ids, sorted by code unit) | null
 //   withStudioProvenance(experiment, model) -> a copy of the experiment with `studio` set
 //   executionToModel(execution) -> normalized StudioModel (default names, positions at 0)
-//   verifyExperimentStudio(experiment) -> { ok, present, model?, errors: [text] }
+//   verifyExperimentStudio(experiment) -> { ok, present, model?, errors: [text], hashMigration }
+//     hashMigration: { from, originalHash, studioHash } for a block hashed under an earlier
+//     epoch (execution.v < STUDIO_HASH_VERSION; K022), checked as that epoch hashed it; else null
 //     the Studio semantics experiments/validate.js does not check (node types, ports, cycles),
 //     plus hash and canonical-form agreement and, when the block has one, that `measured` names
 //     the measured path of its own graph; ok and present false when there is no block
@@ -44,7 +46,9 @@ import { DEFAULT_TIMING, TIMING_LIMITS } from '../measurement/engine.js';
 import { normalizeStimulus } from '../measurement/stimulus.js';
 import { DEFAULT_POINTS_PER_OCTAVE } from '../measurement/transfer.js';
 import { SWEEP_FADE_S } from './adapters/nodes.js';
-import { STUDIO_KIND, executionState, studioHash } from './schema.js';
+import {
+  STUDIO_HASH_VERSION, STUDIO_KIND, executionState, studioHash, studioHashAt,
+} from './schema.js';
 import { validateStudioModel } from './validate.js';
 import { importStudio } from './migrate.js';
 
@@ -118,10 +122,19 @@ export function verifyExperimentStudio(experiment) {
   if (model.schemaVersion !== s.schemaVersion) {
     errors.push('studio.schemaVersion differs from the migrated execution state');
   }
-  if (canonicalJson(executionState(model)) !== canonicalJson(s.execution)) {
+  // A block written under an earlier hash epoch (K022, D2) is checked as that epoch hashed it:
+  // its execution state and hash stay as recorded, and the result says it was migrated.
+  const v = Number.isInteger(s.execution && s.execution.v) ? s.execution.v : STUDIO_HASH_VERSION;
+  const known = v >= 1 && v <= STUDIO_HASH_VERSION;
+  if (!known) errors.push(`studio.execution.v ${v}: neznámá hashová epocha`);
+  else if (canonicalJson(executionState(model, v)) !== canonicalJson(s.execution)) {
     errors.push('studio.execution is not in the normalized form of its own model');
   }
-  if (studioHash(model) !== s.studioHash) errors.push('studio.studioHash does not match');
+  if (known && studioHashAt(model, v) !== s.studioHash) {
+    errors.push('studio.studioHash does not match');
+  }
+  const hashMigration = known && v !== STUDIO_HASH_VERSION
+    ? { from: v, originalHash: s.studioHash, studioHash: studioHash(model) } : null;
   if (s.measured) {
     const path = measuredPath(model);
     const same = !!path && ['nodes', 'edges', 'clips'].every((k) => canonicalJson(path[k])
@@ -132,7 +145,7 @@ export function verifyExperimentStudio(experiment) {
           + 'Sweep reference into a Transfer Analyzer'})`);
     }
   }
-  return { ok: errors.length === 0, present: true, model, errors };
+  return { ok: errors.length === 0, present: true, model, errors, hashMigration };
 }
 
 // ---------------------------------------------------------------- recipe from topology (§110)

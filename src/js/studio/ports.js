@@ -87,9 +87,13 @@ export function controlLine(props, [lo, hi]) {
  * A frozen port definition with defaults filled in. Throws TypeError on an impossible
  * definition (registry authoring error, never user input).
  */
+/** The patch contract's port fields a definition may state (scripts/patch-contract.mjs). */
+const CONTRACT_FIELDS = Object.freeze(['channels', 'rate', 'unconnected', 'monitor', 'compact',
+  'version']);
+
 export function definePort({
   id, direction, type, role, label, multiple = false, required = false, liveInput = false,
-  param = null,
+  param = null, ...contract
 }) {
   if (typeof id !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,31}$/.test(id)) {
     throw new TypeError(`definePort: invalid port id ${String(id)}`);
@@ -116,6 +120,8 @@ export function definePort({
     required: direction === 'in' ? !!required : false,
     liveInput: direction === 'out' ? !!liveInput : false,
     param: param ? Object.freeze({ ...param, range: Object.freeze([...param.range]) }) : null,
+    ...Object.fromEntries(CONTRACT_FIELDS.filter((f) => contract[f] !== undefined)
+      .map((f) => [f, contract[f]])),
   });
 }
 
@@ -125,6 +131,7 @@ export function definePort({
  */
 export function parameterPort(paramDef) {
   return definePort({
+    ...(paramDef.port || {}), // the contract fields the parameter states for its port (K022)
     id: paramDef.key,
     direction: 'in',
     type: 'CONTROL',

@@ -251,7 +251,7 @@ test('normalizeStudio fills engine defaults and never mutates its input', () => 
   const m = normalizeStudio(input);
   assert.strictEqual(JSON.stringify(input), before);
   const [f, env, sweep, master] = m.graph.nodes;
-  assert.deepStrictEqual(f.params, { ...DEFAULT_FILTER, frequency: 2400 });
+  assert.deepStrictEqual(f.params, { ...DEFAULT_FILTER, frequency: 2400, slope: '12' });
   assert.deepStrictEqual(f.position, { x: 430, y: 160 });
   assert.strictEqual(f.metadata.name, 'Filter 1');
   assert.deepStrictEqual(env.params, { attack: DEFAULT_ADSR.a, decay: DEFAULT_ADSR.d,
@@ -478,11 +478,12 @@ test('every compiler and reuse key names an existing export (§28)', async () =>
 });
 
 test('node defaults match the existing engine defaults', () => {
-  assert.deepStrictEqual(R.defaults('filter'), { ...DEFAULT_FILTER });
+  // K022 (hash epoch 2) adds the slope; the engine's filter defaults are unchanged.
+  assert.deepStrictEqual(R.defaults('filter'), { ...DEFAULT_FILTER, slope: '12' });
   assert.deepStrictEqual(R.defaults('envelope'), { attack: DEFAULT_ADSR.a,
     decay: DEFAULT_ADSR.d, sustain: DEFAULT_ADSR.s, release: DEFAULT_ADSR.r });
   assert.deepStrictEqual(R.defaults('oscillator'), { waveform: 'sine', frequency: 440,
-    detune: 0, level: 1 });
+    detune: 0, level: 1, unison: 1, spread: 10 });
   assert.deepStrictEqual(R.defaults('stereo-split'), { mode: 'split', panA: -1, panB: 1,
     levelA: 1, levelB: 1 });
   assert.strictEqual(R.defaults('master').level, DEFAULT_GAIN);

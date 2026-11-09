@@ -77,6 +77,7 @@
 // handle's dispose leaves zero of its nodes in engine.nodes.
 
 import { NODE_REGISTRY } from './registry.js';
+import { syncedParams } from './nodes/common.js'; // K022 tempo sync
 import { controlLine, validateEdgeProps } from './ports.js';
 import { fitCables } from './performance-fit.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
@@ -182,7 +183,7 @@ export function compileStudio(model, {
     const clocked = !!(adapter && adapter.clock) && model.graph.edges.some((e) => e.to.node === id
       && e.to.port === adapter.clock && !(e.props && e.props.muted));
     nodes.set(id, Object.freeze({ id, type: node.type, name: nameOf(node, def), def, adapter,
-      params: node.params, status, code, reason, clocked }));
+      params: syncedParams(node.params, model.transport), status, code, reason, clocked }));
   }
   const rank = new Map(report.order.map((id, i) => [id, i]));
   const edges = new Map();

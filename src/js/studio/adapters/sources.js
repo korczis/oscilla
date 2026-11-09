@@ -7,54 +7,147 @@ import { createNoiseSource } from '../../audio/noise.js';
 import { renderStimulus } from '../../measurement/stimulus.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
 import { did, free, linearOnly, setParam } from './common.js';
+import { unisonDetune } from '../nodes/sources.js';
 
 /** Fade of a rendered Studio sweep: min(SWEEP_FADE_S, duration / 4) (recipeFromStudio too). */
 export const SWEEP_FADE_S = 0.01;
 
 export const oscillator = {
   compiler: 'audio/audio-engine.js#AudioEngine',
-  structural: ['waveform'],
-  create({ ctx, hooks, acct, at, params }) {
-    // The engine's own oscillator factory: frequency clamped to 0.95 × Nyquist, started at `at`.
-    const osc = acct.source(acct.track(hooks.oscillator(params.waveform, params.frequency, at)));
-    const level = acct.track(ctx.createGain());
-    level.gain.setValueAtTime(params.level, ctx.currentTime);
-    osc.connect(level);
-    return {
-      inputs: {},
-      outputs: { audio: level },
-      outputRange: {},
-      modTarget(key, mapping) {
-        if (key === 'frequency') {
-          return mapping === 'log' ? { param: osc.detune, scale: CENTS_PER_OCTAVE }
-            : { param: osc.frequency, scale: 1 };
-        }
-        if (key === 'detune') return linearOnly(osc.detune)(key, mapping);
-        if (key === 'level') return linearOnly(level.gain)(key, mapping);
-        return { reason: `unknown parameter ${key}` };
-      },
-      applyBase(b, immediate, owned, w) {
-        const now = ctx.currentTime;
-        if (free(owned, 'frequency')) {
-          setParam(osc.frequency, hooks.clampFrequency(b.frequency.value), immediate, now, w,
-            'frequency');
-        }
-        // detune carries the log-mapped frequency offsets too: an owned detune owns them.
-        if (free(owned, 'detune')) {
-          setParam(osc.detune, b.detune.value + b.detune.cents + b.frequency.cents, immediate,
-            now, w, 'detune');
-        }
-        if (free(owned, 'level')) setParam(level.gain, b.level.value, immediate, now, w, 'level');
-      },
-      update() {},
-      stop(t) { try { osc.stop(t); } catch (e) { /* already stopped */ } },
-      dispose() {},
-      info: { oscillator: osc },
-      status: 'ready',
-      reason: null,
-    };
+  structural: ['waveform', 'unison'],
+  create(env) {
+    const { ctx, params } = env;
+    if (params.unison > 1 && typeof ctx.createConstantSource === 'function') return unison(env);
+    return single(env, params.unison > 1
+      ? 'Unison needs ConstantSourceNode: one voice plays.' : null);
   },
 };
+
+/** One voice (unison 1, the Oscillator before K022): unchanged. */
+function single({ ctx, hooks, acct, at, params }, reason) {
+  // The engine's own oscillator factory: frequency clamped to 0.95 × Nyquist, started at `at`.
+  const osc = acct.source(acct.track(hooks.oscillator(params.waveform, params.frequency, at)));
+  const level = acct.track(ctx.createGain());
+  level.gain.setValueAtTime(params.level, ctx.currentTime);
+  osc.connect(level);
+  return {
+    inputs: {},
+    outputs: { audio: level },
+    outputRange: {},
+    modTarget(key, mapping) {
+      if (key === 'frequency') {
+        return mapping === 'log' ? { param: osc.detune, scale: CENTS_PER_OCTAVE }
+          : { param: osc.frequency, scale: 1 };
+      }
+      if (key === 'detune') return linearOnly(osc.detune)(key, mapping);
+      if (key === 'level') return linearOnly(level.gain)(key, mapping);
+      return { reason: `unknown parameter ${key}` };
+    },
+    applyBase(b, immediate, owned, w) {
+      const now = ctx.currentTime;
+      if (free(owned, 'frequency')) {
+        setParam(osc.frequency, hooks.clampFrequency(b.frequency.value), immediate, now, w,
+          'frequency');
+      }
+      // detune carries the log-mapped frequency offsets too: an owned detune owns them.
+      if (free(owned, 'detune')) {
+        setParam(osc.detune, b.detune.value + b.detune.cents + b.frequency.cents, immediate,
+          now, w, 'detune');
+      }
+      if (free(owned, 'level')) setParam(level.gain, b.level.value, immediate, now, w, 'level');
+    },
+    update() {},
+    stop(t) { try { osc.stop(t); } catch (e) { /* already stopped */ } },
+    dispose() {},
+    info: { oscillator: osc, voices: 1 },
+    status: reason ? 'degraded' : 'ready',
+    reason,
+  };
+}
+
+/**
+ * K022 unison: `unison` engine oscillators detuned symmetrically across `spread` cents
+ * (nodes/sources.js unisonDetune), summed at 1/n into the level (peak-safe). Frequency and
+ * detune are ConstantSourceNode buses every voice follows, so a modulation edge, an automation
+ * lane and the base each move one AudioParam and every voice with it. The base frequency is
+ * lowered so the highest voice stays at or below 0.95 × Nyquist; a modulation edge or a lane on
+ * the bus can still lift that voice past it by half the spread (stated in the Oscillator's help).
+ */
+function unison({ ctx, hooks, acct, at, params }) {
+  const n = params.unison;
+  const now = ctx.currentTime;
+  const bus = (v) => {
+    const c = acct.source(acct.track(ctx.createConstantSource()));
+    c.offset.setValueAtTime(v, now);
+    c.start(at);
+    return c;
+  };
+  const fBus = bus(params.frequency);
+  const dBus = bus(params.detune);
+  const level = acct.track(ctx.createGain());
+  level.gain.setValueAtTime(params.level, now);
+  // 1/n, not 1/sqrt(n): voices that line up in phase (spread 0, or at every beat) sum to at
+  // most one voice's peak, so Level keeps its meaning (review of K022, P2-1).
+  const mix = acct.track(ctx.createGain());
+  mix.gain.setValueAtTime(1 / n, now);
+  mix.connect(level);
+  let spread = params.spread;
+  const voices = [];
+  for (let i = 0; i < n; i++) {
+    const o = acct.source(acct.track(hooks.oscillator(params.waveform, params.frequency, at)));
+    o.frequency.setValueAtTime(0, now); // the bus carries the frequency
+    o.detune.setValueAtTime(unisonDetune(i, n, spread), now);
+    fBus.connect(o.frequency);
+    dBus.connect(o.detune);
+    o.connect(mix);
+    voices.push(o);
+  }
+  let lastF = params.frequency;
+  const top = () => 2 ** (spread / 2 / CENTS_PER_OCTAVE);
+  const setFrequency = (f, immediate, w) => setParam(fBus.offset,
+    hooks.clampFrequency(f * top()) / top(), immediate, ctx.currentTime, w, 'frequency');
+  return {
+    inputs: {},
+    outputs: { audio: level },
+    outputRange: {},
+    modTarget(key, mapping) {
+      if (key === 'frequency') {
+        return mapping === 'log' ? { param: dBus.offset, scale: CENTS_PER_OCTAVE }
+          : { param: fBus.offset, scale: 1 };
+      }
+      if (key === 'detune') return linearOnly(dBus.offset)(key, mapping);
+      if (key === 'level') return linearOnly(level.gain)(key, mapping);
+      return { reason: `unknown parameter ${key}` };
+    },
+    applyBase(b, immediate, owned, w) {
+      lastF = b.frequency.value;
+      if (free(owned, 'frequency')) setFrequency(lastF, immediate, w);
+      if (free(owned, 'detune')) {
+        setParam(dBus.offset, b.detune.value + b.detune.cents + b.frequency.cents, immediate,
+          ctx.currentTime, w, 'detune');
+      }
+      if (free(owned, 'level')) setParam(level.gain, b.level.value, immediate, ctx.currentTime, w,
+        'level');
+    },
+    update(changed, owned, w) {
+      if (!('spread' in changed)) return;
+      spread = changed.spread;
+      voices.forEach((o, i) => setParam(o.detune, unisonDetune(i, n, spread), false,
+        ctx.currentTime, null, 'spread'));
+      if (free(owned, 'frequency')) setFrequency(lastF, false, null); // the top voice's headroom
+      did(w, changed, ['spread'], 'glide');
+    },
+    stop(t) {
+      for (const x of [...voices, fBus, dBus]) {
+        try { x.stop(t); } catch (e) { /* already stopped */ }
+      }
+    },
+    dispose() {},
+    info: { oscillator: voices[0], voices: n, mix },
+    status: 'ready',
+    reason: null,
+  };
+}
 
 export const noise = {
   compiler: 'audio/noise.js#createNoiseSource',

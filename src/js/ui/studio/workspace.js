@@ -39,7 +39,7 @@ import {
   REFERENCE_TEMPLATE_ID, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
 import { createSynthUi } from '../../synth/ui.js';
-import { createDirtyTracker } from '../../studio/library.js';
+import { createDirtyTracker, hashMigrationText } from '../../studio/library.js';
 import { openModal, closeModal } from '../dialogs.js';
 import { createGraphEditor } from './graph-editor.js';
 import { createConnectDialog, createFindNode, createQuickAdd } from './graph-picker.js';
@@ -396,7 +396,8 @@ export function createStudioUi(svc = {}) {
         if (ctx.dirty) ctx.dirty.markSaved(ctx.handle.getModel(), { id: r.summary.id,
           savedAt: r.summary.savedAt });
         refreshState();
-        announce(`Opened ${r.summary.name}`);
+        announce(r.hashMigration ? `Opened ${r.summary.name}. ${hashMigrationText(r.hashMigration)}`
+          : `Opened ${r.summary.name}`);
       },
       recordDeleted: (id) => detachDeleted(id),
       connections: (id) => (ctx.cmp && typeof ctx.cmp.connectionsOfStudioProject === 'function'

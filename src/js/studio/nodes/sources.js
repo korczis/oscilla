@@ -13,6 +13,10 @@ import {
   optionLabel, parts, pct, secondsParam,
 } from './common.js';
 
+/** Most unison voices of one Oscillator (K022); each is one engine-counted OscillatorNode. */
+export const UNISON_MAX = 7;
+/** Detune of unison voice i of n (cents), spread symmetrically: 0 for one voice. */
+export const unisonDetune = (i, n, spread) => (n > 1 ? spread * (i / (n - 1) - 0.5) : 0);
 const WAVE_OPTIONS = WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]);
 const audioOut = definePort({ id: 'audio', direction: 'out', type: 'AUDIO', label: 'Audio' });
 
@@ -33,10 +37,15 @@ export const oscillator = defineNode({
       modulatable: true, modDepth: 100,
     }),
     levelParam('level', 'Level', 1, { automatable: true, modulatable: true, modDepth: 0.5 }),
+    // K022: unison voices detuned symmetrically across spread cents, summed at 1/n.
+    integerParam('unison', 'Unison', { min: 1, max: UNISON_MAX, default: 1, live: 'crossfade' }),
+    numberParam('spread', 'Spread', { min: 0, max: 100, step: 1, unit: 'cents', default: 10,
+      live: 'glide' }),
   ],
   summary(p) {
     return parts(optionLabel(oscillator, 'waveform', p.waveform), hz(p.frequency),
-      p.detune ? `${p.detune > 0 ? '+' : ''}${p.detune} ct` : null);
+      p.detune ? `${p.detune > 0 ? '+' : ''}${p.detune} ct` : null,
+      p.unison > 1 ? `${p.unison}× ${p.spread} ct` : null);
   },
   clipKinds: ['pattern', 'event'],
   sounding: true,
@@ -44,7 +53,11 @@ export const oscillator = defineNode({
   compiler: 'audio/audio-engine.js#AudioEngine',
   reuses: ['audio/additive.js#createAdditiveOscillator', 'audio/patterns.js#buildPlan'],
   help: {
-    what: 'A periodic tone at a requested digital frequency.',
+    what: 'A periodic tone at a requested digital frequency. '
+      + 'Unison (K022) sčítá hlasy na 1/n, takže špička nepřesáhne jeden hlas; '
+      + 'nejvyšší hlas může při modulaci nebo automatizaci '
+      + `frekvence přesáhnout ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquistova limitu o polovinu `
+      + 'rozladění (spread).',
     inputs: 'Frequency, detune and level accept modulation.',
     outputs: 'Audio.',
     constraints: `Frequencies are limited to ${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist `
