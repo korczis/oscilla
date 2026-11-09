@@ -1,0 +1,25 @@
+id: R052
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "review-verdict v3 guards what verify-deploy expects: scripts/landing.mjs, scripts/landing/ and scripts/facts.mjs"
+slug: review-verdict-guards-the-landing-generator
+priority: p3
+profile: implementation
+objective: "Since P014 the Pages deploy and the release task's closing check (scripts/verify-deploy.mjs, guarded) compare the live /lab/ with a regeneration by scripts/landing.mjs, which reads scripts/landing/ and scripts/facts.mjs; a change there decides what a deploy is proven against, yet none of the three is a guarded path of project.review-verdict v2. Propose review-verdict v3 adding them to the guarded list, with scripts/review-verdict.mjs's list, its tests and the rule text changed together, and the list applying from the base branch as before."
+why: "Review of PR #511 (rev-seat-2 oscilla-c3, finding R2-511-3, P3, seconded by oscilla-c1 on 2026-11-09): what verify-deploy expects now comes from unguarded code, and a failure there fails the Pages deploy."
+scope:
+  - ".ai/repo/rules/project"
+  - "scripts/review-verdict.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - ".ai/repo/project/issues/R052.yaml"
+depends_on:
+  - "P014"
+acceptance_criteria:
+  - "The rule's next version lists scripts/landing.mjs, scripts/landing/ and scripts/facts.mjs as guarded, scripts/review-verdict.mjs enforces exactly that list, and a unit case refuses a change to each without a verdict."
+validation:
+  - "node --test tests/unit/review-verdict.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
