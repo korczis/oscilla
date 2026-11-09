@@ -336,7 +336,12 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     root.addEventListener('osc:ui', leave);
     offs.push(() => root.removeEventListener('osc:ui', leave));
   }
+  // A notification is a move only when the owner changed: the playback bus re-reads
+  // outputOwner on its own claim (C051), and a touch's arm made it say null again.
+  let seen = app ? app.outputOwner : undefined;
   offs.push(onApp(app, 'outputOwner', (now) => { // the audio owner moves away from the output
+    if (now === seen) return;
+    seen = now;
     // No owner at all follows a Stop (which released already): it is the Stop's, never 'owner'.
     if (now !== target.output) release(now === null ? 'stop' : 'owner');
   }));
