@@ -1,0 +1,33 @@
+id: U099
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "The Synth bay's CABLES heading and cable rows in Czech, with the visual reference updated"
+slug: the-synth-bay-s-cables-heading-and-cable-rows-in-czech-with-the-visual-reference
+priority: p2
+profile: implementation
+objective: "Lands as fix(synth). The Synth bay's last English texts, the CABLES heading (src/js/synth/ui.js) and the cable rows with their Remove button (src/js/synth/view/bay.js cableItem), were kept English in 4aa056e8 because the Synth visual references (scripts/visual-synth.mjs, tests/visual/synth) draw them. Translate them and update the references through the visual gate with the recorded reason (the text changed language), per environment, so the gate stays on. Rollback: revert, which restores the previous references."
+why: "Owner order Q104 (Czech everywhere, enforced); review F-2 of #504 (oscilla-c1) and of 5a879cd0 (oscilla-c3), 2026-11-09; oscilla-43 placed it in train T4."
+current_state: "Filed 2026-11-09 by oscilla-2e; not started."
+scope:
+  - "src/js/synth/ui.js"
+  - "src/js/synth/view/bay.js"
+  - "tests/visual/synth"
+  - "scripts/visual-synth.mjs"
+  - "tests/unit/visual-synth.test.mjs"
+  - "tests/unit/xy-default-patch.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "The bay's CABLES heading and every cable row and its button are Czech, and a unit test reading the rendered bay (synth/ui.js with view/bay.js cableItem) fails on the merge base where they are English."
+  - "The Synth visual references are updated through npm run visual's accept path with the reason recorded beside them, for every environment the gate compares (linux-x64 in CI included), and the visual gate passes on the pull request."
+  - "src/js/synth/view/bay.js and src/js/synth/ui.js show no English the czech-prose measure counts, and a reviewer's verdict covers the guarded paths (project.review-verdict)."
+validation:
+  - "npm run visual"
+  - "node tests/browser/synth.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09
+updated_at: 2026-11-09

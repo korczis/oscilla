@@ -142,6 +142,13 @@ test('the markup scan sees the marker on templated controls and the JS scan on b
   assert.equal(nav.kind, 'jump');
   const built = scanJs(JS).producers.find((p) => p.control === 'studio.compact.expand');
   assert.equal(built.kind, 'open-in');
+  // K222: markup built in JS that carries data-osc-link beside its data-osc, in either order.
+  const drums = scanJs(JS).producers.find((p) => p.control === 'synth.drums.studio');
+  assert.deepEqual([drums.kind, drums.file], ['open-in', 'src/js/synth/view/drums-tab.js']);
+  const fixture = (line) => scanJs([{ file: 'f.js', text: line }]).producers[0];
+  assert.deepEqual([fixture('`<a data-osc-link="jump" data-osc="x.y">`').control,
+    fixture('`<a data-osc-link="jump" data-osc="x.y">`').kind], ['x.y', 'jump']);
+  assert.equal(fixture('`<b data-osc="x.y">`'), undefined, 'no marker, no producer');
 });
 
 // ------------------------------------------------------------------------------ the judge

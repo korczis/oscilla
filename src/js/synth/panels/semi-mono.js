@@ -9,6 +9,7 @@
 import { definePanel } from '../panel.js';
 import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';
 import { XY_MODULE, XY_TAB } from './xy.js';
+import { DRUMS_TAB } from '../drums.js';
 
 // K022: the panel's filters are 12 dB/oct by design (its description and FILTER_NOTE).
 const FILTER_FIXED = { gain: 0, enabled: true, slope: '12' };
@@ -26,7 +27,7 @@ export default definePanel({
     description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.' }, ENGINE_TAB,
-  XY_TAB],
+  XY_TAB, DRUMS_TAB],
   description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.',
@@ -59,7 +60,10 @@ export default definePanel({
       ranges: { gain: [0, 1] } },
     // K022's LFO depth and sync stay at full depth and free-running here: the panel's amount
     // knobs set each cable's depth, and the MG runs at its own rate.
+    // Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3): the
+    // depth is fixed at 1 here, and a jack beside the amount knobs would be a second path to it.
     { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, sync: 'off' },
+      jacks: { hide: ['depth'] },
       options: { shape: ['triangle', 'square'] },
       ranges: { rate: [0.01, 100] }, init: { shape: 'triangle', rate: 5 } },
     { id: 'sh', label: 'S&H', node: 'random', fixed: { sync: 'off' },

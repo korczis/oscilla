@@ -21,7 +21,7 @@ import { EDGE_PROPERTY_FIELDS, MOD_MAPPINGS, MOD_POLARITIES, validateEdgeProps }
 export const SYNTH_LINK_MODE = 'synth';
 export const SYNTH_LINK_KEYS = Object.freeze({ tab: 'yt', engine: 'ye', preset: 'yp',
   values: 'yv', cables: 'yc' });
-export const SYNTH_TABS = Object.freeze(['panel', 'engines', 'xy']);
+export const SYNTH_TABS = Object.freeze(['panel', 'engines', 'xy', 'drums']); // drums: K222
 const MAX_ITEMS = 128;
 
 const strip = (h) => String(h || '').replace(/^#/, '');

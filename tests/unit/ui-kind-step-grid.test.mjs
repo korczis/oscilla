@@ -3,8 +3,8 @@
 // target's length; Space builds nothing; the playhead writes only on a step change and keeps
 // its state across ticks; a list-parameter grid builds one NODE_PARAM_SET per gesture. The
 // four negative cases of W008: a paste longer than the target (its length kept), Delete on an
-// empty step (no action), Space (the transport's), a value out of the parameter's range
-// (refused with its sentence).
+// empty step (no action), Space (the transport's), a value step past the parameter's range
+// (held at its end, no action; K221's review of the spliced English sentence).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -167,8 +167,9 @@ test('a list-parameter grid builds one NODE_PARAM_SET per gesture', () => {
   const param = { key: 'steps', label: 'Kroky', type: 'list', min: -1, max: 1, minLength: 1,
     maxLength: 16, step: 0.01 };
   const log = { actions: [], said: [] };
+  // K221 review: a bipolar list is off at 0 (no modulation), not at its minimum -1.
   const grid = createStepGrid({ mode: 'param-list', nodeId: 'stepmod-1', param,
-    values: [0, -1, 0.5, -1], pageSteps: 16,
+    values: [0, 0, 0.5, 0], pageSteps: 16,
     commit: (a) => { log.actions.push(a); grid.set({ values: a.value }); return true; },
     say: (s) => log.said.push(s) });
   // A drag along the lane paints three steps on: one action.
@@ -183,15 +184,41 @@ test('a list-parameter grid builds one NODE_PARAM_SET per gesture', () => {
   grid.valueAt(0, 0, 0.75);
   assert.equal(log.actions.length, 2);
   assert.equal(log.actions[1].value[0], 0.5);
-  // Delete on the lane's minimum builds nothing.
+  // Delete switches a step off to 0, the neutral value of the bipolar range, never to -1; on a
+  // step already off it builds nothing.
   grid.key('ArrowRight');
   grid.key('Delete');
   assert.equal(log.actions.length, 3);
+  const changed = log.actions[2].value.filter((v, i) => v !== log.actions[1].value[i]);
+  assert.deepEqual(changed, [0], 'the step Delete switched off reads 0');
   grid.key('Delete');
   assert.equal(log.actions.length, 3);
+  // The step's name says what it plays: 0 is off, -1 (full negative modulation) is on.
+  assert.match(cellName('', 1, 0, 'param-list', false), /vypnuto$/);
+  assert.match(cellName('', 1, -1, 'param-list', true), /zapnuto$/);
 });
 
-test('a value out of the parameter\'s range is refused with its sentence (negative case)', () => {
+test('K221 review: a value step past the range end is held there, with no action and no word',
+  () => {
+    const param = { key: 'steps', label: 'Kroky', type: 'list', min: -1, max: 1, minLength: 1,
+      maxLength: 16, step: 0.01 };
+    const log = { actions: [], said: [] };
+    const grid = createStepGrid({ mode: 'param-list', nodeId: 'n', param, values: [1, 0.995],
+      commit: (a) => { log.actions.push(a); grid.set({ values: a.value }); return true; },
+      say: (s) => log.said.push(s) });
+    grid.key('PageUp'); // 1 + 0.01 past max: held at 1, nothing to do
+    assert.deepEqual([log.actions.length, log.said.length], [0, 0]);
+    grid.key('ArrowRight');
+    grid.key('PageUp'); // 0.995 + 0.01 -> held at 1, one action
+    assert.equal(log.actions.length, 1);
+    assert.equal(log.actions[0].value[1], 1);
+    grid.valueAt(0, 0, 0.4321); // a pointer value is rounded to the parameter's step
+    assert.equal(log.actions[1].value[0], -0.14);
+  });
+
+test('a value at the range end is not stepped past it (negative case)', () => {
+  // W008's negative case as restated by K221's review: a step past the end of the range is held
+  // there and refused silently, instead of a sentence spliced from the store's English reason.
   const param = { key: 'steps', label: 'Kroky', type: 'list', min: 0, max: 1, minLength: 1,
     maxLength: 16, step: 0.1 };
   const log = { actions: [], said: [] };
@@ -199,8 +226,7 @@ test('a value out of the parameter\'s range is refused with its sentence (negati
     commit: (a) => { log.actions.push(a); return true; }, say: (s) => log.said.push(s) });
   grid.key('PageUp'); // 1 + 0.1 > max
   assert.equal(log.actions.length, 0);
-  assert.equal(log.said.length, 1);
-  assert.match(log.said[0], /^Kroky: hodnota values must be numbers between 0 and 1\.$/);
+  assert.equal(log.said.length, 0);
 });
 
 test('a refusal says the store\'s sentence once and leaves the grid as it was', () => {
@@ -419,7 +445,7 @@ test('R2-W8-3: the Studio\'s shortcuts dialog, where the grid is mounted, lists 
   const { shortcutHelp } = await import('../../src/js/ui/shortcuts.js');
   const ids = new Set(shortcutHelp('studio').rows.map((r) => r.id));
   for (const k of stepGrid.keys) assert.ok(ids.has(k.row), k.row);
-  assert.deepEqual([...stepGrid.workspaces], ['studio']);
+  assert.deepEqual([...stepGrid.workspaces], ['studio', 'synth']); // K222: the Drums tab
 });
 
 test('a re-render waits for a held drag; the Inspector skips an unchanged clip', async () => {
@@ -442,4 +468,144 @@ test('a re-render waits for a held drag; the Inspector skips an unchanged clip',
   view.set({});
   assert.notEqual(label.textContent, 'held');
   view.destroy();
+});
+
+test('R2-K221-8: a render mid value-drag never turns the release into the minimum', async () => {
+  // oscilla-c3 with oscilla-c1: a cell replaced while held measures 0 high once detached, and
+  // the release read 0, the range's minimum: -1 on the bipolar Step Modulator, full negative
+  // modulation. The drag keeps the box it started on; a 0-high box keeps the last value.
+  const { mountStepGrid } = await import('../../src/js/ui/kinds/step-grid.js');
+  const param = { key: 'steps', label: 'Kroky', type: 'list', min: -1, max: 1, minLength: 1,
+    maxLength: 16, step: 0.01 };
+  const host = fakeEl();
+  const root = fakeEl();
+  const find = root.querySelector;
+  root.querySelector = (sel) => (sel === '[data-step-detail]' ? null : find(sel)); // list: none
+  Object.defineProperty(host, 'firstElementChild', { get: () => root });
+  const actions = [];
+  const view = mountStepGrid(host, { mode: 'param-list', nodeId: 'n', param,
+    values: [0, 0, 0, 0], label: 'Kroky', laneNames: ['Kroky'],
+    commit: (a) => { actions.push(a); return true; } });
+  const surface = root.querySelector('[data-step-grid-surface]');
+  let box = { top: 100, height: 40 };
+  const cell = fakeEl();
+  cell.dataset = { lane: '0', step: '2' };
+  cell.getBoundingClientRect = () => box;
+  cell.closest = () => cell;
+  surface.setPointerCapture = () => {};
+  surface.fire('pointerdown', { target: cell, button: 0, pointerId: 1, clientY: 138 });
+  surface.fire('pointermove', { target: cell, clientY: 102 }); // near the top
+  view.set({ values: [0, 0, 0, 0] }); // a model change arrives mid-drag
+  box = { top: 0, height: 0 }; // the held cell is gone from the page
+  surface.fire('pointerup', { target: cell, clientY: 101 });
+  assert.equal(actions.length, 1, 'one action for the gesture');
+  assert.ok(actions[0].value[2] >= 0.9, `the release keeps the dragged value, got ${
+    actions[0].value[2]}`);
+  view.destroy();
+});
+
+test('R2-W8-7: a grid narrower than its clip follows the playing step to its page', () => {
+  const { grid, log } = notesGrid([], { pageSteps: 4 });
+  assert.equal(grid.followPage(2), null, 'on the page shown');
+  assert.equal(grid.followPage(5), 1);
+  grid.set({ page: 1 });
+  assert.equal(grid.followPage(5), null);
+  assert.equal(grid.followPage(15), 3);
+  assert.equal(grid.followPage(null), null);
+  assert.equal(grid.followPage(16), null, 'past the last step');
+  assert.equal(log.actions.length, 0, 'following builds no action');
+});
+
+// ------------------------------------------------------------------------------ T3 view fixes
+/** A host whose surface holds real cells: innerHTML's gridcells become elements with
+ *  attributes, so the playhead's writes can be read back per lane and step. */
+function cellHost(surfaceWidth = 0) {
+  const host = fakeEl();
+  const root = fakeEl();
+  Object.defineProperty(host, 'firstElementChild', { get: () => root });
+  const surface = root.querySelector('[data-step-grid-surface]');
+  surface.clientWidth = surfaceWidth;
+  let cells = [];
+  Object.defineProperty(surface, 'innerHTML', {
+    set(html) {
+      cells = [...String(html).matchAll(/data-lane="(\d+)" data-step="(\d+)"/g)].map((m) => {
+        const c = fakeEl();
+        c.dataset = { lane: m[1], step: m[2] };
+        c.getAttribute = (k) => (c.attrs.has(k) ? c.attrs.get(k) : null);
+        return c;
+      });
+    },
+    get: () => '',
+  });
+  surface.querySelectorAll = (sel) => (sel === '[role="gridcell"]' ? cells : []);
+  return { host, cells: () => cells };
+}
+/** The frame loop's requestAnimationFrame, driven by hand. */
+function frames() {
+  let next = null;
+  globalThis.requestAnimationFrame = (fn) => { next = fn; return 1; };
+  globalThis.cancelAnimationFrame = () => { next = null; };
+  return { tick: (t = 0) => { const f = next; next = null; if (f) f(t); },
+    done: () => {
+      delete globalThis.requestAnimationFrame;
+      delete globalThis.cancelAnimationFrame;
+    } };
+}
+
+test('T3 fix: the playing step leaves no stale aria-current on any lane', async () => {
+  const { mountStepGrid } = await import('../../src/js/ui/kinds/step-grid.js');
+  const clock = frames();
+  const { host, cells } = cellHost();
+  let step = 0;
+  const view = mountStepGrid(host, { mode: 'notes', lanes: [KICK, SNARE], clipId: 'c',
+    payload: { notes: [] }, steps: 16, stepBeats: SB, pageSteps: 8, playStep: () => step,
+    commit: () => true });
+  const current = () => cells().filter((c) => c.getAttribute('aria-current') === 'step')
+    .map((c) => `${c.dataset.lane}:${c.dataset.step}`).sort();
+  clock.tick();
+  assert.deepEqual(current(), ['0:0', '1:0']);
+  step = 1;
+  clock.tick();
+  assert.deepEqual(current(), ['0:1', '1:1'], 'the second lane\'s step 0 is cleared too');
+  step = null;
+  clock.tick();
+  assert.deepEqual(current(), []);
+  view.destroy();
+  clock.done();
+});
+
+test('T3 fix: the first fit reaches the owner without a ReferenceError', async () => {
+  const { mountClipSteps } = await import('../../src/js/ui/studio/inspector-steps.js');
+  const { host } = cellHost(400); // laid out wider than the panel's four steps: a re-fit
+  const store = { dispatch: () => ({ ok: true }), getModel: () => ({ transport: { tempo: 120 } }) };
+  const view = { clipId: 'c', payload: { notes: [] }, stepBeats: SB, steps: 16, lanes: [60],
+    laneNames: ['C4'], start: 0, plays: false };
+  let steps;
+  assert.doesNotThrow(() => { steps = mountClipSteps(host, { store }, view); });
+  assert.equal(steps.grid.model.state().pageSteps, 8);
+  steps.destroy();
+});
+
+test('T3 fix: sixteen steps need the 80 px name column the view draws, not 128 px', () => {
+  // Sixteen 44 px steps sharing borders (689 px), the w-20 name column and its gap-2.
+  assert.equal(pageStepsFor(16 * 44 - 15 + 80 + 8), PAGE_STEPS.wide);
+  assert.equal(pageStepsFor(800), PAGE_STEPS.wide, 'the Synth card at 1536 px is about 800 px');
+  assert.equal(pageStepsFor(16 * 44 - 15 + 80 + 7), PAGE_STEPS.narrow);
+});
+
+test('R2-K222-1: a page the user turns holds until the playhead enters it or a stop', () => {
+  const { grid } = notesGrid([], { pageSteps: 4 });
+  assert.equal(grid.followPage(5), 1, 'untouched: it follows');
+  grid.set({ page: 1 }); // the owner showed the playing page
+  grid.key('['); // the user turns back to page 0 while step 6 plays
+  assert.equal(grid.state().page, 0);
+  assert.equal(grid.followPage(6), null, 'the turned page holds');
+  assert.equal(grid.followPage(9), null, 'still held while the playhead is elsewhere');
+  assert.equal(grid.followPage(1), null, 'the playhead enters the page shown');
+  assert.equal(grid.followPage(5), 1, 'and following resumes');
+  grid.set({ page: 1 });
+  grid.key(']');
+  assert.equal(grid.followPage(6), null);
+  assert.equal(grid.followPage(null), null, 'a stop releases the hold');
+  assert.equal(grid.followPage(13), 3, 'the next run follows');
 });

@@ -26,7 +26,7 @@ Track kinds exist only where semantics differ (§82):
 
 | Row | Model | Holds |
 | --- | --- | --- |
-| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; played on a Keys node, K068) |
+| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; played on a Keys node, K068, and on the percussion engine, K222) |
 | measurement track | `timeline.tracks` kind `measurement` | measurement clips (noise-check, pre-roll, stimulus, capture, tail, analysis) |
 | automation lane | `timeline.automation` | one lane per node parameter (points, not clips) |
 | markers | `timeline.markers` | annotations and anchors; never executed (§96) |
@@ -61,9 +61,11 @@ unknown grid field until the step editor adds it outside the hash. Absent fields
 written, so a document without them serializes and hashes as before (every pinned template and
 a K099 document keep their `studioHash`); each field present is execution state and changes it.
 The import limits `notesPerClip` (4096) and `notesPerDocument` (65536) bound the notes
-(`limit-exceeded`). A notes clip plays on a Keys node, live and offline (see "Notes clips on
-the audio clock" below); on the XY pad or a voice engine the transport and the offline render
-list it unplayed with code `notes-unplayed` and the policy's sentence.
+(`limit-exceeded`). A notes clip plays on a Keys node and on the percussion engine (K222: a
+drum lane is a note number of its key map, each note a note-on and note-off of its voice pool,
+`engine-notes`), live and offline (see "Notes clips on the audio clock" below); on the XY pad or
+another voice engine the transport and the offline render list it unplayed with code
+`notes-unplayed` and the policy's sentence.
 
 ### Clip validation (§87)
 
@@ -645,3 +647,20 @@ The Step Modulator's **Trigger** output relays each step it takes on its clock (
 last step of a `once` run), so a chain Clock → Step Modulator → Envelope gates on the steps. A
 trigger event clip on Random or a Step Modulator clocks it as a trigger edge does, and makes it
 `clocked` (`compiler.js`) even without a clock edge.
+
+### One TRIGGER fan-out and one ownership rule (K103)
+
+The transport and the live note router (`studio/live-notes.js`, the Synth panel and the Studio
+keys) share one fan-out, `studio/trigger-fanout.js`: from any TRIGGER output (a Keys or XY pad
+Gate, a Clock, a Sequence or Step Modulator Trigger, read from the registry) along its unmuted
+edges to every TRIGGER input it reaches (an Envelope's Gate, a Random's or Step Modulator's
+clock), through each Step Modulator's relay. Scheduled, a notes clip's and a gate clip's Keys Gate
+take the same path as a pattern clip or a Clock; live, a key's Gate walks the same hop with the
+same relay rule, and a relayed gate closes with the key's.
+
+One ownership rule decides who gates an input. While the transport plays the timeline, the
+TRIGGER inputs it drives (`timelineGateInputs`: the targets of gate and trigger clips, and every
+input a Sequence, a Keys node with clips, a clocked Step Modulator or a Clock reaches) are the
+timeline's: a live gate on one is refused, gates nothing there, and the note's result names it
+(`owned: { code: 'timeline-owned', reason }`), which the Synth and Studio keys say in the polite
+live region. While the transport is stopped (armed), live gates own every input.

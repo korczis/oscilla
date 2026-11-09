@@ -100,8 +100,8 @@ const KEYBOARD_ROWS = Object.freeze([
   row('keyboard-velocity', 'C / V', 'Velocity down / up (steps of 20)', KEYBOARD_WHERE),
 ]);
 // The step grid (W008, the step-grid kind of src/js/ui/catalog/kinds/step-grid.js), in the
-// Studio, whose Inspector mounts it for a selected notes clip; Czech (Q104). It never takes
-// Space or a bare letter key. K222 adds the Synth when its Drums view mounts the kind.
+// Studio, whose Inspector mounts it for a selected notes clip, and in the Synth, whose Drums
+// tab mounts it (K222) with a pad per row; Czech (Q104). It never takes Space or a bare letter.
 const STEP_GRID_WHERE = 've zaměřené krokové mřížce';
 const STEP_GRID_ROWS = Object.freeze([
   row('step-grid-move', 'Šipky', 'Posun po krocích a řadách', STEP_GRID_WHERE),
@@ -116,6 +116,8 @@ const STEP_GRID_ROWS = Object.freeze([
   row('step-grid-menu', 'Shift + F10, klávesa nabídky',
     'Nabídka kroku: přízvuk, ratchet, pravděpodobnost, slide', STEP_GRID_WHERE),
 ]);
+const DRUM_PAD_ROW = row('drum-pads', 'Enter, mezerník', 'Zaměřený pad zahraje úder své řady',
+  'na kartě Drums');
 // Measure's Esc is the global one and more: it replaces that row instead of repeating the key.
 const MEASURE_ROWS = Object.freeze([
   row('measure-abort', 'Esc',
@@ -166,6 +168,7 @@ export function shortcutHelp(workspace) {
     rows = [...STUDIO_ROWS];
   }
   if (workspace === 'studio') rows.push(...STEP_GRID_ROWS);
+  if (workspace === 'synth') rows.push(...STEP_GRID_ROWS, DRUM_PAD_ROW);
   if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
     rows = [...MEASURE_ROWS];
   }

@@ -118,14 +118,14 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 3,
-      "required": 35,
+      "required": 36,
       "phase": "now"
     },
     {
       "id": "M065",
       "title": "Instrument wave 1b: the piano keyboard, one note source and a proper step sequencer",
       "done": 0,
-      "required": 8,
+      "required": 7,
       "phase": "later"
     },
     {
