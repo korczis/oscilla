@@ -11,8 +11,10 @@
 // --measure-noise), above a floor. The record at this acceptance (the W1b chain: the adoption
 // with the synth-theme core's S9/S10 and the knob's W1c, chromium 153.0.8010.12), the largest
 // count over every view, at threshold 0.05 / 0:
-//   STABILITY darwin-arm64 2 / 654 (10 runs), linux-x64 19 / 433 (10 runs)
-// (U099 re-accepted the four bay views: the CABLES heading and the cable rows in Czech; before
+//   STABILITY darwin-arm64 2 / 103 (10 runs), linux-x64 10 / 145 (10 runs)
+// (K220 re-accepted the eight XY and bay views: pad R's default line and velocity readout, no
+// default Y cable, PAD L's plate in the bay; before it, darwin 2 / 654 and linux 19 / 433 over
+// 10 runs; U099 re-accepted the four bay views: the CABLES heading and the cable rows in Czech; before
 // it, darwin 2 / 77 and linux 19 / 412 over 10 runs; #444, the keys+pad train, re-accepted the eight XY and bay views: K183's pad view and K171's
 // folded dock; before it, darwin 2 / 113 and linux 9 / 184 over 10 runs; lane A re-accepted
 // all 16 views: the Pro shell's sidebar and page header, and the plates
