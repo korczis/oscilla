@@ -10,6 +10,7 @@
 import { formatClock, formatSeconds as formatSecondsText } from '../../core/frequency.js';
 import { BLOCK_SCHEMA, BLOCK_TYPES, describeBlock } from '../../sequencer/model.js';
 import { clipTarget } from '../../studio/clip-targets.js';
+import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   MEASUREMENT_ACTIONS, TIMELINE_MAX_S, TRACK_CLIP_KINDS,
@@ -471,18 +472,27 @@ export function addClipAction(model, trackId, time, registry = NODE_REGISTRY) {
     kind = 'measurement';
     payload = { action: 'pre-roll' };
   } else {
-    // The first of a pattern clip, a gate event and a trigger event (K023: Random and the Step
-    // Modulator) that plays on the track's target (clip-targets.js, R7); a track without a
-    // target gets a pattern clip.
+    // The first of a pattern clip, a gate event, a trigger event (K023: Random and the Step
+    // Modulator) and a notes clip (K222: the percussion engine) that plays on the track's
+    // target (clip-targets.js, R7); a track without a target gets a pattern clip.
     const node = nodeOf(model, track.target);
     const pattern = { kind: 'pattern' };
     const gate = { kind: 'event', action: 'gate' };
     const trigger = { kind: 'event', action: 'trigger' };
+    const notes = { kind: 'notes' };
     const use = !node ? pattern
-      : [pattern, gate, trigger].find((u) => clipTarget(node, u, registry).plays);
+      : [pattern, gate, trigger, notes].find((u) => clipTarget(node, u, registry).plays);
     if (!use) {
       return { reason: `${node.metadata.name} nehraje žádné vzorové ani událostní klipy; jako `
         + 'cíl stopy zvolte Sequence, Oscillator, Envelope, Random nebo Step Modulator.' };
+    }
+    if (use.kind === 'notes') {
+      // A new step clip: one 4/4 bar of sixteenths (NEW_STEP_GRID), tempo-linked, empty.
+      const spb = 60 / model.transport.tempo;
+      const beats = NEW_STEP_GRID.steps * NEW_STEP_GRID.stepBeats;
+      const at = clamp(finite(time) ? time : 0, 0, TIMELINE_MAX_S - beats * spb);
+      return { action: { type: 'CLIP_ADD', trackId, kind: 'notes',
+        startBeats: cleanTime(at / spb), durationBeats: beats, payload: { notes: [] } } };
     }
     kind = use.kind;
     payload = kind === 'pattern' ? { blockType: 'tone' } : { action: use.action };

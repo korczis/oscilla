@@ -1,4 +1,7 @@
-// Notes clips on a Keys node, as the Studio transport plays them (K068, ADR 0086 decision 6).
+// Notes clips on a Keys node, as the Studio transport plays them (K068, ADR 0086 decision 6),
+// and on the percussion engine (K222): there each note is a note-on and a note-off of its voice
+// pool (handle.noteOn, noteOff), and a rebuild from a horizon releases every voice from there
+// (handle.allOff(horizon, fast)) and strikes the notes still due again.
 // Composed by transport.js; pure apart from the handles it is given, which are the runtime's
 // own (adapters/instrument.js keys: play, holdPitch, keyRange). No audio node is created and no
 // timer runs here: every call lands at an audio-clock time the timeline compiler computed.
@@ -44,6 +47,13 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
   played, warn }) {
   // item key -> { key, nodeId, handle, time, note, velocity, slide, gate }
   const pitches = new Map();
+  // The percussion engine's notes (K222, 'engine-notes'): item key -> { nodeId, handle, time,
+  // end, note, velocity }. Each is a note-on and a note-off on the engine's voice pool.
+  const hits = new Map();
+  const strike = (h, x) => {
+    h.noteOn(x.time, x.note, x.velocity);
+    h.noteOff(x.end, x.note);
+  };
   const apply = (h, x) => h.play(x.time, x.note, x.velocity, { legato: x.slide, onset: x.gate });
 
   /** The last record of node `id` before `t`, or null. */
@@ -57,6 +67,18 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
 
   function rebuild(id, horizon) {
     const h = ready(id);
+    if (h && typeof h.allOff === 'function' && typeof h.holdPitch !== 'function') {
+      // An engine: every voice from the horizon is released (one not yet started never
+      // sounds), then the notes still due are struck again (an edit, or STOP with none due).
+      h.allOff(horizon, true);
+      const due = [...hits.values()].filter((x) => x.nodeId === id && x.time >= horizon)
+        .sort((a, b) => a.time - b.time);
+      for (const x of due) {
+        x.handle = h;
+        strike(h, x);
+      }
+      return;
+    }
     if (!h || typeof h.holdPitch !== 'function') return;
     const mine = [...pitches.values()].filter((x) => x.nodeId === id);
     const replaced = mine.some((x) => x.handle !== h);
@@ -78,6 +100,7 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
     const n = model.graph.nodes.find((x) => x.id === it.target) || null;
     const v = clipTarget(n, { kind: 'notes' }, registry);
     if (!v.plays) return played(it, v.code, v.reason);
+    if (v.how === 'engine-notes') return playHit(it, deferred);
     const h = ready(it.target);
     if (!h || typeof h.play !== 'function') return played(it, 'target-unavailable', null);
     played(it, null, null);
@@ -102,21 +125,35 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
     return null;
   }
 
+  /** One note of a notes clip on the percussion engine: a note-on and a note-off (K222). */
+  function playHit(it, deferred) {
+    const h = ready(it.target);
+    if (!h || typeof h.noteOn !== 'function') return played(it, 'target-unavailable', null);
+    played(it, null, null);
+    const rec = { nodeId: it.target, handle: h, time: it.startTime, end: it.endTime,
+      note: it.note, velocity: it.velocity };
+    hits.set(it.key, rec);
+    if (!(deferred && deferred.has(it.target))) strike(h, rec); // else the caller rebuilds
+    return null;
+  }
+
   return {
     play,
     rebuild,
     cancel(key, touched) {
-      const x = pitches.get(key);
+      const x = pitches.get(key) || hits.get(key);
       if (!x) return;
       pitches.delete(key);
+      hits.delete(key);
       touched.add(x.nodeId);
     },
     touch(touched) {
       for (const x of pitches.values()) touched.add(x.nodeId);
+      for (const x of hits.values()) touched.add(x.nodeId);
     },
     stale() {
-      return new Set([...pitches.values()].filter((x) => x.handle !== ready(x.nodeId))
-        .map((x) => x.nodeId));
+      return new Set([...pitches.values(), ...hits.values()]
+        .filter((x) => x.handle !== ready(x.nodeId)).map((x) => x.nodeId));
     },
     prune(now, keepS) {
       // One pass: each node's last record at or before now, kept while its node exists.
@@ -130,9 +167,13 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
         if (x.time + keepS >= now) continue;
         if (last.get(x.nodeId) !== x || !present.has(x.nodeId)) pitches.delete(key);
       }
+      for (const [key, x] of hits) if (x.end + keepS < now) hits.delete(key);
     },
-    clear: () => pitches.clear(),
-    get size() { return pitches.size; },
+    clear: () => {
+      pitches.clear();
+      hits.clear();
+    },
+    get size() { return pitches.size + hits.size; },
   };
 }
 
