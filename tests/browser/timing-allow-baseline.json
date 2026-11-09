@@ -1,0 +1,67 @@
+{
+  "note": "Every timing-allow marker of tests/browser, per file with its reason (plan E053, Q097 answer 1, decided 2026-11-09 by oscilla-43, oscilla-c1 and oscilla-ce). It only shrinks: seed is the count it was made with and may only fall; a marker added later is listed here and has a raises entry { file, reason, why, by } naming its file, its reason, why it is needed and the pull request or plan id; seed + raises is the listed total. tests/unit/browser-timing.test.mjs fails on an unlisted marker, a listed one that is gone (drop it and lower seed) and a seed that rises in git history.",
+  "seed": 28,
+  "markers": {
+    "tests/browser/analysis-worker.cjs": [
+      "a memory sampler; it ends when the bounded page.evaluate below settles",
+      "the retained reading is defined 1.5 s after the analysis ends",
+      "the sampler's 20 ms period, inside the loop explained above"
+    ],
+    "tests/browser/cross-links.cjs": [
+      "Expand defers its focus by one frame (navigation.js studioExpand); the"
+    ],
+    "tests/browser/demo-song.cjs": [
+      "5 ms analysis blocks of the downloaded file, read at its own sample rate",
+      "counts spectrum bins between 40 and 400 Hz, not audio frames"
+    ],
+    "tests/browser/engine-v1port.cjs": [
+      "post-ready settle; each check then starts its own audio and waits on its clock",
+      "the gap between two holds; the next iteration presses again",
+      "the hold itself; the pointer stays down 200 ms before the event under test",
+      "the one-second interval the clock rate is measured over, in a timeout report"
+    ],
+    "tests/browser/fixtures/dsp-entry.js": [
+      "the rate this fixture requests for every context it creates, live and offline"
+    ],
+    "tests/browser/fixtures/instrument-dsp-entry.js": [
+      "the OfflineAudioContext render rates the criterion names (44.1 and 48 kHz)"
+    ],
+    "tests/browser/fixtures/synth-engines-offline-entry.js": [
+      "the OfflineAudioContext render rate these renders request"
+    ],
+    "tests/browser/fixtures/v3-experiments.mjs": [
+      "the synthetic io's own sample rate; these fixtures never open an AudioContext"
+    ],
+    "tests/browser/labs.cjs": [
+      "--screenshot is a manual diagnostic, never a check; 11 s of the visual fixture"
+    ],
+    "tests/browser/layout.cjs": [
+      "a deliberate 150 ms of playback before the stop under test",
+      "app.setWorkspace exposes no layout-settled signal; geometry is read 150 ms on"
+    ],
+    "tests/browser/lib/suite.cjs": [
+      "bounded by `boundMs` on the injected clock, which is Date.now by default",
+      "the load poll's period, inside the loop bounded above"
+    ],
+    "tests/browser/sequencer.cjs": [
+      "the OfflineAudioContext render rate of the reference renders",
+      "the second OfflineAudioContext render rate, on purpose not the first"
+    ],
+    "tests/browser/synth-engines.cjs": [
+      "80 characters of the bay row's text, not frames",
+      "80 characters of the status text, not frames"
+    ],
+    "tests/browser/v3-measure.cjs": [
+      "rates of synthetic captures analysed in Node; no AudioContext is involved"
+    ],
+    "tests/browser/v31-studio-offline.cjs": [
+      "OfflineAudioContext render rates this check requests and asserts back",
+      "OfflineAudioContext render rates this check requests and asserts back",
+      "the offline render rate requested above (sampleRate: 48000)"
+    ],
+    "tests/browser/v31-studio-workflows.cjs": [
+      "the WAV header of the offline render, whose rate the dialog states"
+    ]
+  },
+  "raises": []
+}
