@@ -15,6 +15,7 @@ import { registerRiffSource } from '../../src/js/studio/riffs/source.js';
 import { catalogEntries } from '../../src/js/studio/patch-catalog.js';
 import { measureLifecyclePart } from '../../src/js/ui/measure/session.js';
 import { claimStudioOutput } from '../../src/js/ui/studio/workspace.js';
+import { withLabOptions } from '../../src/js/audio/lab-play-options.js';
 
 /** A component whose measurement and reference probes the test sets. */
 function component({ measuring = false, reference = false, playing = false, seq = false } = {}) {
@@ -83,9 +84,13 @@ test('the audition is refused by the table during a reference capture, before an
     play: () => { log.push('play'); return { id: 1 }; }, stopAll: () => log.push('stopAll') };
   let reference = true;
   let measuring = false;
-  const cmp = { measureOwnsOutput: () => measuring, measureReferenceOwnsOutput: () => reference };
-  registerRiffSource({ engine, stopPlayback: () => log.push('stopPlayback'),
-    outputRefusalOf: oo.outputRefusalOf }, cmp);
+  const cmp = { measureOwnsOutput: () => measuring, measureReferenceOwnsOutput: () => reference,
+    notify() {}, playing: false, stopNow: () => log.push('stopNow'),
+    midiAllOff: () => log.push('notes.off') };
+  // C037: Listen's one claim is the engine.play guard (main.js), here on a real bus.
+  const bus = oo.createOutputBus({ app: () => cmp, sequencer: () => null });
+  withLabOptions(engine, () => ({}), (plan, o) => !bus.claim(oo.playOwnerOf(o), 'play').ok);
+  registerRiffSource({ engine, outputRefusalOf: oo.outputRefusalOf }, cmp);
   const entry = catalogEntries({}).find((e) => e.id === 'riff-mirrorball-octaves');
   assert.ok(entry && entry.audition, 'the riff entry carries its audition');
   const busy = entry.audition.ctl.start('mirrorball-octaves');
@@ -98,13 +103,17 @@ test('the audition is refused by the table during a reference capture, before an
     'a measurement refuses it with the table\'s sentence');
   measuring = false;
   assert.equal(entry.audition.ctl.start('mirrorball-octaves').ok, true);
-  assert.deepEqual(log, ['stopPlayback', 'play']);
+  assert.deepEqual(log, ['notes.off', 'play'], 'the claim stops what the audition row yields');
+  cmp.playing = true; // the engine's play event (core/instrument.js onEngine)
+  assert.equal(bus.owner(), 'audition', 'the bus names the audition while its voice sounds');
+  cmp.playing = false;
+  assert.equal(bus.owner(), null, 'and nobody once it ended');
   registerRiffSource(); // leave no source holding this test's engine
 });
 
 test('main.js wires the table: the play guard claims playOwnerOf, the Studio gets refusals', () => {
   const main = readFileSync(new URL('../../src/js/main.js', import.meta.url), 'utf8');
-  assert.match(main, /claimOutput\(playOwnerOf\(o\)\) !== true/);
+  assert.match(main, /return !bus\.claim\(playOwnerOf\(o\), 'play'\)\.ok;/); // C037
   assert.doesNotMatch(main, /claimOutput\('instrument'\)/);
   assert.match(main, /createStudioUi\(\{[^}]*\boutputRefusalOf\b/);
 });
@@ -152,7 +161,8 @@ import { KEYBOARD_REFUSED } from '../../src/js/midi/keyboard-ui.js';
 import { SPACE_OWNER } from '../../src/js/ui/shortcuts.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const TABLE_FILE = path.join('src', 'js', 'ui', 'output-owner.js');
+// The table moved into the playback bus (C037); ui/output-owner.js only re-exports it.
+const TABLE_FILE = path.join('src', 'js', 'core', 'output-bus.js');
 
 test('C036: one table names every owner, in precedence order, with its rule and sentence', () => {
   const t = oo.OUTPUT_OWNER_TABLE;
@@ -297,7 +307,10 @@ function secondTables(text) {
   return found;
 }
 
-test('C036 N1: no owner table or refusal list outside src/js/ui/output-owner.js', () => {
+test('C036 N1: no owner table or refusal list outside src/js/core/output-bus.js', () => {
+  const ui = readFileSync(path.join(ROOT, 'src', 'js', 'ui', 'output-owner.js'), 'utf8');
+  assert.match(ui, /^export \* from '\.\.\/core\/output-bus\.js';$/m, 'ui/ re-exports the bus');
+  assert.doesNotMatch(ui, /\bconst\b|\bfunction\b/, 'and declares nothing');
   const hits = jsFiles().filter((f) => f !== TABLE_FILE)
     .map((f) => [f, secondTables(readFileSync(path.join(ROOT, f), 'utf8'))])
     .filter(([, kinds]) => kinds.length);
