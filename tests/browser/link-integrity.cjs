@@ -377,13 +377,24 @@ async function runLeg(name, origin) {
     }
 
     if (want('routes-link') || want('garbage') || want('headings')) {
-      const page = await H.open(context, base, '');
       const wrong = [];
       const lists = [];
       const headingOf = {};
       if (want('routes-link') || want('headings')) lists.push(['link', ROUTES.filter(([h]) => h)]);
       if (want('garbage')) lists.push(['garbage', GARBAGE]);
+      // Each list walks on a page of its own. WebKit drops a navigation past its rate limit
+      // without an event ("Excessive navigation attempts blocked." on the console): with both
+      // lists on one page, the routes walk (a hash, Back and Forward each) spent that budget, so
+      // on a fast machine `location.hash = '#m=experiments&exp=../../etc'` did nothing and the
+      // check read the Playground it never left (main and T2 alike, 2026-11-09). A new document
+      // starts with its own budget; a blocked navigation is still named below, never read as
+      // the app's answer.
       for (const [kind, list] of lists) {
+        const page = await H.open(context, base, '');
+        const blocked = [];
+        page.on('console', (m) => {
+          if (/Excessive navigation attempts blocked/i.test(m.text())) blocked.push(m.text());
+        });
         for (const [hash, w, refusedKeys = [], expect = null] of list) {
           await H.setWorkspace(page, 'playground');
           // The last link's heading keeps focus (the Sequencer's is shown in the Playground too),
@@ -394,6 +405,12 @@ async function runLeg(name, origin) {
             `garbage #${hash.slice(0, 40)}`);
           if (!s) {
             const at = await H.state(page);
+            if (blocked.length) {
+              wrong.push(`${kind === 'garbage' ? 'garbage ' : ''}#${hash.slice(0, 40)}: the browser `
+                + `blocked the navigation (${blocked[0]}): the walk exceeded its navigation limit, `
+                + 'the app was never asked');
+              continue;
+            }
             wrong.push(`${kind} #${hash.slice(0, 40)} did not settle in ${w}: ${at.workspace} `
               + `${at.hash.slice(0, 60)}`);
             continue;
@@ -427,6 +444,7 @@ async function runLeg(name, origin) {
             if (fwd.workspace !== w) wrong.push(`#${hash}: Forward -> ${fwd.workspace}`);
           }
         }
+        await page.close();
       }
       if (want('headings')) {
         const ids = WORKSPACES.filter((w) => w !== 'playground').map((w) => [w, headingOf[w]]);
@@ -442,7 +460,6 @@ async function runLeg(name, origin) {
         check(leg, `${GARBAGE.length} garbage hashes fail gracefully`,
           !wrong.some((x) => x.startsWith('garbage')), wrong.filter((x) => x.startsWith('garbage')).join(' | '));
       }
-      await page.close();
     }
 
     if (want('garbage-reload')) {
