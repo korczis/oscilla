@@ -159,7 +159,7 @@ export function createVoiceHost({ ctx, acct, params, build }) {
     }
     if (Number.isFinite(built.oneShotEnd)) {
       v.oneShot = true;
-      setAt(v.amp.gain, start, peak); // through the record: a cut holds this level (K071)
+      setAt(v.amp.gain, start, peak); // through the record: a cut holds this level (C1-K222-7)
       stopAt(v, built.oneShotEnd);
       pool.off(note, t);
       pool.end(a.slot, built.oneShotEnd);

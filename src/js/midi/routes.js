@@ -18,6 +18,8 @@
 //             its handle at every size (K171): the Synth's XY pad; null where the keys always
 //             dock
 //   keepsRoom what the docked keys may not take from the workspace (#444, after Q105 armed the
+//             Studio; U100 the Synth; keptBy: a selector of the surface that keeps the keys
+//             docked whatever the room, the Synth's Panel tab whose keys are its instrument;
 //             Studio): { toolbar, editorMin, stackedBelow }, the selector of the workspace's toolbar, which
 //             the keys never cover, and the height its editor keeps below that toolbar where
 //             the editor fills the viewport (a desktop grid; a stacked phone page scrolls, so
@@ -40,12 +42,23 @@
 
 /** The height the Studio's editor keeps below its toolbar on a desktop grid (keepsRoom). */
 export const STUDIO_EDITOR_MIN_PX = 360;
+/** The height the Synth keeps below the page header (keepsRoom, U100): its sticky section chips
+ *  (60 px) and three 44 px rows of its tab's content. */
+export const SYNTH_CONTENT_MIN_PX = 60 + 3 * 44;
 
 export const KEY_ROUTES = Object.freeze({
   playground: Object.freeze({ plays: null, armed: true, leave: null, editors: null,
     yieldsTo: null }),
   synth: Object.freeze({ plays: 'synthSink', armed: true, leave: null, editors: null,
-    yieldsTo: 'xy-pad' }),
+    yieldsTo: 'xy-pad',
+    // U100: on a short phone the docked keys (256 px) took the whole main area (235 px at
+    // 320 x 568). The Synth keeps, below the page header, its sticky section chips (60 px) and
+    // three 44 px rows of its tab; never stacked (it scrolls, but its content must show). A tab
+    // whose keys are its instrument declares keepsDock (panels/semi-mono.js: the Panel tab) and
+    // the tab panel then carries data-keeps-dock: there the keys stay docked (keptBy).
+    keepsRoom: Object.freeze({ toolbar: '[data-osc="page.header"]',
+      editorMin: SYNTH_CONTENT_MIN_PX, stackedBelow: 0,
+      keptBy: '[data-osc="synth.panel"][data-keeps-dock]' }) }),
   studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave',
     editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
     yieldsTo: null,
@@ -82,19 +95,23 @@ export function dockState({ route, owner, userExpanded = false, room = null } = 
   return folds && userExpanded !== true ? 'collapsed' : 'docked';
 }
 
+/** The event a surface sends when what keeps the dock may have changed (a Synth tab, U100). */
+export const ROOM_EVENT = 'osc:room';
+
 /**
  * Whether the docked keys would take the room the route keeps (keepsRoom), pure. room, as
  * dock-yield.js measures it: { viewH } the viewport's height, { band } the height the keys
  * take docked (the dock and the status bar under it, as --osc-dock-h measures it while docked),
  * { toolbarBottom } the bottom of the toolbar keepsRoom names, { stacked } whether the
  * workspace is a stacked page that scrolls (a phone) rather than a grid that fills the
- * viewport. The keys fold where their top would sit above the toolbar's bottom plus, on a grid,
+ * viewport, { kept } whether the surface shown keeps the keys docked (keepsRoom.keptBy). The keys fold where their top would sit above the toolbar's bottom plus, on a grid,
  * the editor's minimum. Unknown or incomplete input never folds.
  */
 export function roomFolds({ route, room } = {}) {
   const keep = route && route.keepsRoom;
   if (!keep || !room) return false;
-  const { viewH, band, toolbarBottom, stacked } = room;
+  const { viewH, band, toolbarBottom, stacked, kept } = room;
+  if (kept === true) return false; // the surface shown keeps the keys docked (keptBy, U100)
   if (![viewH, band, toolbarBottom].every(Number.isFinite) || band <= 0) return false;
   const need = toolbarBottom + (stacked ? 0 : keep.editorMin);
   return viewH - band < need;

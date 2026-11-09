@@ -147,7 +147,9 @@ export function timelineGateInputs(m, registry = NODE_REGISTRY) {
     const id = effectiveTarget(m, c);
     const n = nodeOf(m, id);
     const how = n ? clipTarget(n, clipUse(c), registry).how : null;
-    if (how === 'gate' || how === 'clock') out.add(id);
+    // A Keys node a notes clip plays is the timeline's too (C1-K103-1): its pitch is the
+    // clip's, so a live key may not move it.
+    if (how === 'gate' || how === 'clock' || how === 'keys-notes') out.add(id);
     if (DRIVES.has(how)) reachedInputs(m, id, out);
   }
   for (const n of m.graph.nodes) if (n.type === 'clock') reachedInputs(m, n.id, out);

@@ -41,6 +41,7 @@ import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
 import { createDrumsTab } from './view/drums-tab.js';
+import { ROOM_EVENT } from '../midi/routes.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
@@ -712,7 +713,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     cmp.synth.title = info.title;
     cmp.synth.description = info.description;
     dock.sync();
-    requestAnimationFrame(renderAll);
+    requestAnimationFrame(() => { // the tab panel's data-keeps-dock is bound by then (U100)
+      renderAll();
+      window.dispatchEvent(new Event(ROOM_EVENT));
+    });
   }
 
   const dock = createDock({ panel, registry, cmp: () => cmp, model, present, played,
@@ -726,7 +730,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synth: {
       title: panel.title,
       description: panel.description,
-      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.label })),
+      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.label, keepsDock: !!x.keepsDock })),
       tab: 'panel',
       engine: ENGINE_IDS[0],
       presets: [...PRESETS, ...xy.presets].map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
