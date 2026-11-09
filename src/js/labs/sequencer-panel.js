@@ -210,6 +210,9 @@ export function sequencerEngine(adapter) {
     // (C012 F1); the editor calls it only once a pass is scheduled, so a refused PLAY claims
     // nothing.
     onStart: () => { if (adapter.claimOutput) adapter.claimOutput(); },
+    // The playback bus learns at once that the sequence stopped or ended (C051: no poll).
+    onStopped: () => { if (adapter.releaseSequencerOutput) adapter.releaseSequencerOutput(); },
+    onEnded: () => { if (adapter.releaseSequencerOutput) adapter.releaseSequencerOutput(); },
   };
 }
 

@@ -279,10 +279,10 @@ test('C003: the status bar names the sequence waveform, not Additive, while the 
   const wb = createWorkbench({ labs: {} });
   const cmp = {};
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
-  Object.assign(cmp, { seqPlaying: true, playing: false, source: 'single', waveform: 'square',
+  Object.assign(cmp, { playback: { owner: 'sequencer', since: 1 }, playing: false, source: 'single', waveform: 'square',
     labFlags: { additive: true, envelope: true, filter: true } });
   assert.equal(cmp.statusWaveText, WAVEFORM_LABELS.square,
     'the sequence plays its own waveform: the additive lab is instrument-only');
-  cmp.seqPlaying = false;
+  cmp.playback = { owner: null, since: 0 };
   assert.equal(cmp.statusWaveText, 'Additive', 'the instrument still reports the additive wave');
 });

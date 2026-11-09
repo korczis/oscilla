@@ -81,7 +81,8 @@ test('C050 trace: the sequencer plays, a status-bar stop ends it', () => {
   assert.deepEqual(p.steps(), PLAY('sequencer'));
   p.bus.stopAll('status-stop');
   assert.equal(ed.playing, false);
-  assert.deepEqual(p.steps(), [...STOPPED('status-stop'), 'owner none - -']);
+  // the sequencer releases the output at its stop (C051), then the stop is recorded
+  assert.deepEqual(p.steps(), [...RELEASED('sequencer'), ...STOPPED('status-stop')]);
 });
 
 test('C050 trace: the MIDI and on-screen keys: claim, note on, note off, release', () => {

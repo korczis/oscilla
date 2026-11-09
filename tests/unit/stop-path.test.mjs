@@ -114,7 +114,7 @@ test('C050: page.escape, the page hide pair and the status-bar stop each call st
     stopPlayback: () => calls.push('stopPlayback'), sequencerPlaying: () => false });
   const cmp = {};
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
-  Object.assign(cmp, { playing: true, seqPlaying: false });
+  Object.assign(cmp, { playing: true, playback: { owner: null, since: 0 } });
   cmp.statusPlay();
   assert.deepEqual(calls, ['status-stop'], 'the status-bar stop is one stopAll');
 });
