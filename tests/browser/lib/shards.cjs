@@ -10,9 +10,11 @@
 // order; a suite added to any of them is in a leg on the next run. A suite named in PARTS is
 // split into that many processes, each given `--part <i>/<n>` (the suite deals its checks over
 // the parts, lib/shards.cjs dealt()). The units are dealt over the legs by their measured
-// seconds (tests/browser/shard-weights.json), longest first, each to the leg with the least so
-// far (ties to the lower leg, so the plan is the same on every runner). A unit without a weight
-// gets its browser's median. tests/unit/browser-shards.test.mjs holds the plan to: every unit
+// seconds (tests/browser/shard-weights.json): every leg within LEG_BUDGET_S one by one where a
+// plan can be, then the slowest leg's sharing estimate as short as possible (deal(): for two
+// legs every partition is searched, else the longest-first deal is improved by moves and swaps;
+// deterministic, so the plan is the same on every runner). A unit without a weight gets its
+// browser's median. tests/unit/browser-shards.test.mjs holds the plan to: every unit
 // of every browser in exactly one leg, the legs ci.yml declares equal to LEGS, and the slowest
 // leg within LEG_BUDGET_S by the weights.
 //
@@ -113,24 +115,137 @@ function weightOf(unit, browser, seconds, parts = PARTS) {
   return (typeof w === 'number' ? w : median) / (parts[unit.file] || 1);
 }
 
+/** Up to this many units a two-leg plan is searched exhaustively (2^(n-1) partitions). */
+const EXACT_MAX_UNITS = 24;
+
 /**
- * Deal `us` over `legs` legs: longest first (by `weigh`, a shared unit's seconds divided by
- * `speedup`), each to the leg that would take least so far (lowest index on a tie). Returns
- * [{ leg, s, est, units }] in leg order: `s` the seconds one by one, `est` the estimate with
- * the shared units sharing; each leg's units longest first.
+ * The cost of a plan, smaller is better, compared in order: how far its slowest leg one by one
+ * runs over LEG_BUDGET_S (the budget's measure; 0 within it), the slowest leg's estimate with
+ * the shared units sharing (the wall clock the legs take), then the slowest leg one by one.
+ */
+const costOf = (legs) => {
+  const s = Math.max(...legs.map((l) => l.s));
+  return { over: Math.max(0, s - LEG_BUDGET_S), est: Math.max(...legs.map((l) => l.est)), s };
+};
+const worse = (a, b) => a.over - b.over || a.est - b.est || a.s - b.s;
+
+/**
+ * The longest-first deal (the whole dealer before the balanced search): each item, by `key`
+ * descending, to the leg whose `key` sum is least so far (lowest index on a tie). Returns the
+ * leg index of every item.
+ */
+function lpt(items, legs, key) {
+  const sum = new Array(legs).fill(0);
+  const at = new Array(items.length);
+  const order = items.map((x, k) => k).sort((a, b) => items[b][key] - items[a][key] || a - b);
+  for (const k of order) {
+    let best = 0;
+    for (let l = 1; l < legs; l++) if (sum[l] < sum[best]) best = l;
+    at[k] = best;
+    sum[best] += items[k][key];
+  }
+  return at;
+}
+
+/**
+ * Two legs, exactly: every partition with item 0 in the first leg, the one of least cost
+ * (costOf), the smallest mask on a tie. 2^(n-1) partitions.
+ */
+function exactTwo(items) {
+  const n = items.length;
+  const S = items.reduce((t, x) => t + x.w, 0);
+  const E = items.reduce((t, x) => t + x.e, 0);
+  let best = null;
+  const limit = 2 ** (n - 1);
+  for (let m = 0; m < limit; m++) {
+    // the second leg holds item k + 1 for every set bit k of m
+    let s2 = 0;
+    let e2 = 0;
+    for (let k = 0, b = m; b; k++, b >>>= 1) {
+      if (b & 1) { s2 += items[k + 1].w; e2 += items[k + 1].e; }
+    }
+    const cost = costOf([{ s: S - s2, est: E - e2 }, { s: s2, est: e2 }]);
+    if (!best || worse(cost, best.cost) < 0) best = { cost, m };
+  }
+  return items.map((x, k) => (k > 0 && (best.m >>> (k - 1)) & 1 ? 1 : 0));
+}
+
+/**
+ * Improve an assignment: move one item to another leg, or swap two items of different legs,
+ * while that makes the plan's cost (costOf) strictly less; first improvement in item order,
+ * repeated until none is left. Deterministic, and never worse than its input.
+ */
+function improve(items, at, legs) {
+  const loads = () => Array.from({ length: legs }, (_, l) => items.reduce((t, x, k) => (at[k]
+    === l ? { s: t.s + x.w, est: t.est + x.e } : t), { s: 0, est: 0 }));
+  for (let guard = 0; guard < 10000; guard++) {
+    const cur = costOf(loads());
+    let moved = false;
+    const tryAt = (next) => {
+      const was = at.slice();
+      next();
+      if (worse(costOf(loads()), cur) < 0) return true;
+      at.splice(0, at.length, ...was);
+      return false;
+    };
+    for (let i = 0; i < items.length && !moved; i++) {
+      for (let l = 0; l < legs && !moved; l++) {
+        if (l !== at[i]) moved = tryAt(() => { at[i] = l; });
+      }
+      for (let j = i + 1; j < items.length && !moved; j++) {
+        if (at[i] !== at[j]) moved = tryAt(() => { [at[i], at[j]] = [at[j], at[i]]; });
+      }
+    }
+    if (!moved) return at;
+  }
+  return at;
+}
+
+/**
+ * Deal `us` over `legs` legs at the least cost the search finds (costOf): every leg one by one
+ * (`weigh`, the measure LEG_BUDGET_S holds) within the budget where any plan is, then the
+ * slowest leg's estimate with the shared units sharing (a shared unit's seconds divided by
+ * `speedup`) as short as possible, then its seconds one by one. Two legs of at
+ * most EXACT_MAX_UNITS units are searched exhaustively; otherwise the longest-first deal is
+ * improved by single moves and pairwise swaps. Deterministic: the same units and weights give
+ * the same plan on every runner. The leg holding the first unit (longest first, by index on a
+ * tie) is leg 1. Returns [{ leg, s, est, units }] in leg order: `s` the seconds one by one,
+ * `est` the estimate with the shared units sharing; each leg's units longest first.
  */
 function deal(us, legs, weigh, speedup = SHARED_SPEEDUP) {
-  const out = Array.from({ length: legs }, (_, i) => ({ leg: i + 1, s: 0, est: 0, units: [] }));
-  const order = us.map((u, i) => ({ u, i, w: weigh(u) }))
+  const items = us.map((u, i) => ({ u, i, w: weigh(u) }))
     .map((x) => ({ ...x, e: x.u.solo === false ? x.w / speedup : x.w }))
     .sort((a, b) => b.e - a.e || a.i - b.i);
-  for (const { u, w, e } of order) {
-    let best = out[0];
-    for (const l of out) if (l.est < best.est) best = l;
-    best.units.push(u);
-    best.s += w;
-    best.est += e;
-  }
+  let at;
+  if (legs <= 1 || !items.length) at = items.map(() => 0);
+  else if (legs === 2 && items.length <= EXACT_MAX_UNITS) at = exactTwo(items);
+  else at = improve(items, lpt(items, legs, 'w'), legs);
+  // Number the legs by their first item, so leg 1 holds the longest unit.
+  const rank = [];
+  for (const l of at) if (!rank.includes(l)) rank.push(l);
+  for (let l = 0; l < legs; l++) if (!rank.includes(l)) rank.push(l);
+  const out = Array.from({ length: legs }, (_, i) => ({ leg: i + 1, s: 0, est: 0, units: [] }));
+  items.forEach((x, k) => {
+    const leg = out[rank.indexOf(at[k])];
+    leg.units.push(x.u);
+    leg.s += x.w;
+    leg.est += x.e;
+  });
+  return out;
+}
+
+/** The longest-first deal by the estimate, the dealer before the balanced search (a baseline). */
+function dealLongestFirst(us, legs, weigh, speedup = SHARED_SPEEDUP) {
+  const items = us.map((u, i) => ({ u, i, w: weigh(u) }))
+    .map((x) => ({ ...x, e: x.u.solo === false ? x.w / speedup : x.w }))
+    .sort((a, b) => b.e - a.e || a.i - b.i);
+  const at = lpt(items, legs, 'e');
+  const out = Array.from({ length: legs }, (_, i) => ({ leg: i + 1, s: 0, est: 0, units: [] }));
+  items.forEach((x, k) => {
+    out[at[k]].units.push(x.u);
+    out[at[k]].s += x.w;
+    out[at[k]].est += x.e;
+  });
   return out;
 }
 
@@ -200,4 +315,5 @@ if (require.main === module) {
 }
 
 module.exports = { BROWSERS, LEGS, PARTS, LEG_BUDGET_S, SHARED_SPEEDUP, RELEASE_SCRIPT,
-  releaseSuites, units, paceOf, soloOf, weightOf, deal, plan, dealt, parsePart };
+  EXACT_MAX_UNITS, releaseSuites, units, paceOf, soloOf, weightOf, deal, dealLongestFirst, plan,
+  dealt, parsePart };

@@ -34,8 +34,8 @@ const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const shards = require(path.join(ROOT, 'tests', 'browser', 'lib', 'shards.cjs'));
 const { runPool, startSuite } = require(path.join(ROOT, 'tests', 'browser', 'lib',
   'run-suites.cjs'));
-const { BROWSERS, LEGS, PARTS, LEG_BUDGET_S, releaseSuites, units, plan, deal, dealt,
-  parsePart, paceOf, soloOf } = shards;
+const { BROWSERS, LEGS, PARTS, LEG_BUDGET_S, SHARED_SPEEDUP, EXACT_MAX_UNITS, releaseSuites,
+  units, plan, deal, dealLongestFirst, dealt, parsePart, paceOf, soloOf } = shards;
 const PKG = JSON.parse(read('package.json'));
 const WEIGHTS = JSON.parse(read('tests/browser/shard-weights.json'));
 const CI_TEXT = read('.github/workflows/ci.yml');
@@ -377,3 +377,118 @@ test('a suite that ignores SIGTERM at its deadline is killed after the grace (c1
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+// ---------------------------------------------------------------- the balanced dealer
+
+/** How far the slowest leg's estimate is above an even split of the total, in % of it. */
+const spread = (legs) => {
+  const even = legs.reduce((t, l) => t + l.est, 0) / legs.length;
+  return (100 * (Math.max(...legs.map((l) => l.est)) - even)) / even;
+};
+/** Fixture units: `ws` seconds, shared where `shared[i]`, labelled by index. */
+const fixtureUnits = (ws, shared = []) => ws.map((w, i) => ({ file: `tests/browser/u${i}.cjs`,
+  label: `u${i}`, w, solo: !shared[i] }));
+const byW = (u) => u.w;
+/** A seeded generator (mulberry32), so the random instances are the same on every run. */
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// The stated balance: within the budget, each browser's slowest leg takes at most 2 % more than
+// an even split of its sharing estimate.
+const BALANCE_PCT = 2;
+
+test(`the repository's plan: every leg within the budget, the slowest estimate within `
+  + `${BALANCE_PCT} % of an even split`, () => {
+  for (const b of BROWSERS) {
+    const legs = plan(b);
+    for (const l of legs) assert.ok(l.s <= LEG_BUDGET_S, `${b} leg ${l.leg}: ${Math.round(l.s)} s`);
+    assert.ok(spread(legs) <= BALANCE_PCT, `${b}: ${spread(legs).toFixed(2)} % above even`);
+  }
+});
+
+test('two legs are searched exhaustively: no partition costs less (an independent brute force)',
+  () => {
+    const r = rng(229);
+    for (let n = 2; n <= 12; n++) {
+      const us = fixtureUnits(Array.from({ length: n }, () => Math.round(30 + r() * 900)),
+        Array.from({ length: n }, () => r() < 0.6));
+      const got = deal(us, 2, byW);
+      const e = (u) => (u.solo ? u.w : u.w / SHARED_SPEEDUP);
+      let best = null;
+      for (let m = 0; m < 2 ** n; m++) {
+        const legs = [0, 1].map((side) => us.filter((u, k) => ((m >>> k) & 1) === side));
+        const s = Math.max(...legs.map((l) => l.reduce((t, u) => t + u.w, 0)));
+        const est = Math.max(...legs.map((l) => l.reduce((t, u) => t + e(u), 0)));
+        const c = [Math.max(0, s - LEG_BUDGET_S), est, s];
+        const less = best && (c[0] - best[0] || c[1] - best[1] || c[2] - best[2]) < 0;
+        if (!best || less) best = c;
+      }
+      const s = Math.max(...got.map((l) => l.s));
+      const est = Math.max(...got.map((l) => l.est));
+      assert.deepEqual([Math.max(0, s - LEG_BUDGET_S), est, s].map((x) => +x.toFixed(9)),
+        best.map((x) => +x.toFixed(9)), `n ${n}`);
+    }
+  });
+
+test('more legs, or more units than the exact search takes: never worse than longest first, '
+  + 'and the same plan on every run', () => {
+  const r = rng(54);
+  for (const [n, legs] of [[EXACT_MAX_UNITS + 4, 2], [20, 3], [30, 4]]) {
+    const us = fixtureUnits(Array.from({ length: n }, () => Math.round(30 + r() * 900)),
+      Array.from({ length: n }, () => r() < 0.6));
+    const a = deal(us, legs, byW);
+    const lpt = dealLongestFirst(us, legs, byW);
+    const cost = (p) => [Math.max(0, Math.max(...p.map((l) => l.s)) - LEG_BUDGET_S),
+      Math.max(...p.map((l) => l.est))];
+    const [ca, cl] = [cost(a), cost(lpt)];
+    assert.ok(ca[0] < cl[0] || (ca[0] === cl[0] && ca[1] <= cl[1] + 1e-9),
+      `${n} units over ${legs}: ${ca} vs longest first ${cl}`);
+    assert.deepEqual(deal(us, legs, byW).map((l) => l.units.map((u) => u.label)),
+      a.map((l) => l.units.map((u) => u.label)), 'deterministic');
+    assert.equal(a.flatMap((l) => l.units).length, n, 'every unit dealt once');
+  }
+});
+
+// E054's measured weights (oscilla-ce, test/e054-contrast-axe 64021cf3: qa-regressions slower
+// in every browser), the release suites unchanged. The longest-first dealer packed webkit as
+// 2795 / 3364 s, over the 3300 s budget, although its 6159 s fit two legs of about 3080 s.
+const E054 = JSON.parse(read('tests/unit/fixtures/shard-weights-e054.json'));
+// The stated balance one by one: the slowest leg at most 5 % above an even split.
+const EVEN_S_PCT = 5;
+
+/** Every way a dealer's plan on `weights` misses the budget or the stated balance. */
+function balanceProblems(dealer, weights) {
+  const found = [];
+  for (const b of BROWSERS) {
+    const legs = dealer(units(PKG), LEGS[b], (u) => shards.weightOf(u, b, weights.seconds));
+    const total = legs.reduce((t, l) => t + l.s, 0);
+    const slow = Math.max(...legs.map((l) => l.s));
+    const sPct = (100 * (slow - total / legs.length)) / (total / legs.length);
+    const shown = legs.map((l) => Math.round(l.s)).join(' / ');
+    if (slow > LEG_BUDGET_S) found.push(`${b}: ${shown} s, over the ${LEG_BUDGET_S} s budget`);
+    if (sPct > EVEN_S_PCT) found.push(`${b}: ${shown} s, ${sPct.toFixed(1)} % above even`);
+    if (spread(legs) > BALANCE_PCT) {
+      found.push(`${b}: estimate ${spread(legs).toFixed(1)} % above even`);
+    }
+  }
+  return found;
+}
+
+test(`E054's weights: every leg within the budget, the slowest one by one within ${EVEN_S_PCT} % `
+  + `and its estimate within ${BALANCE_PCT} % of an even split; longest first misses both`, () => {
+  assert.deepEqual(balanceProblems(deal, E054), []);
+  assert.deepEqual(balanceProblems(dealLongestFirst, E054), [
+    'webkit: 2795 / 3364 s, over the 3300 s budget',
+    'webkit: 2795 / 3364 s, 9.2 % above even',
+  ], 'the longest-first plan E054 failed on');
+  // and on the repository's own weights
+  assert.deepEqual(balanceProblems(deal, WEIGHTS), []);
+});
