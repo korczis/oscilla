@@ -18,6 +18,7 @@ import assert from 'node:assert/strict';
 import { AudioEngine, NOTE_POLYPHONY } from '../../src/js/audio/audio-engine.js';
 import { GAIN_FLOOR, MAX_OUTPUT_GAIN } from '../../src/js/core/constants.js';
 import { createMidiUi } from '../../src/js/midi/ui.js';
+import { createOutputBus } from '../../src/js/core/output-bus.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const LIMIT_S = 2;
@@ -138,12 +139,15 @@ test('component: a held MIDI note and a held computer key sound past the limit',
 });
 
 test('component: blur, hide, pagehide and Escape force-release every held note', async () => {
-  const { r, cmp, port, fire, key, doc } = await componentRig();
+  const { r, cmp, port, fire, key } = await componentRig();
+  // A page hide and Escape are the playback bus's stopAll (C050: main.js and page.escape),
+  // whose notes owner releases through midiAllOff; blur stays the keys' own (ADR 0062).
+  const bus = createOutputBus({ app: () => cmp, sequencer: () => null });
   const releases = {
     blur: () => fire('win:blur'),
-    hidden: () => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; },
-    pagehide: () => fire('win:pagehide'),
-    escape: () => key('keydown', 'Escape', { key: 'Escape' }),
+    hidden: () => bus.stopAll('hidden'),
+    pagehide: () => bus.stopAll('pagehide'),
+    escape: () => bus.stopAll('escape'),
   };
   for (const [name, release] of Object.entries(releases)) {
     port.send([0x90, 64, 100]);
@@ -164,16 +168,17 @@ test('component: blur, hide, pagehide and Escape force-release every held note',
 // and sound where the keys sound; every forced release of the keys closes the pad's gate (its
 // release callback) and releases whatever the xy input still holds; off() unregisters it.
 test('component: the XY pad as one more input of the keys, released with them', async () => {
-  const { r, cmp, fire, key, doc } = await componentRig();
+  const { r, cmp, fire, key } = await componentRig();
+  const bus = createOutputBus({ app: () => cmp, sequencer: () => null }); // stopAll (C050)
   assert.equal(typeof cmp.kbdPad, 'function', 'the keys offer the pad an input (K183)');
   const closed = [];
   const pad = cmp.kbdPad((why) => { closed.push(why); return 1; });
   assert.equal(pad.velocity(), cmp.kbdVelocity, 'the pad plays at the keys\' velocity');
   const releases = {
     blur: () => fire('win:blur'),
-    hidden: () => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; },
-    pagehide: () => fire('win:pagehide'),
-    escape: () => key('keydown', 'Escape', { key: 'Escape' }),
+    hidden: () => bus.stopAll('hidden'),
+    pagehide: () => bus.stopAll('pagehide'),
+    escape: () => bus.stopAll('escape'),
     switch: () => cmp.kbdReleaseAll(),
   };
   for (const [name, release] of Object.entries(releases)) {

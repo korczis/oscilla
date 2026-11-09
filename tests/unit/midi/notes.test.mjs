@@ -29,6 +29,7 @@ import { midiToFrequency } from '../../../src/js/core/music.js';
 import { createMidiNotes, parseMidiMessage, velocityLevel } from '../../../src/js/midi/notes.js';
 import { createMidiSupport } from '../../../src/js/midi/support.js';
 import { createFakeAudioEnv } from '../sequencer-fake-audio.mjs';
+import { createOutputBus } from '../../../src/js/core/output-bus.js';
 
 const SETTINGS = { a4: 440, waveform: 'sine', attackS: 0.01, releaseS: 0.05, limitS: 2,
   continuous: true };
@@ -503,9 +504,12 @@ test('the component part: Playground settings per note, a refusal said, every st
     r.fake.advance(1);
     assert.ok(allGone(r));
   };
-  held(() => { doc.hidden = true; fire('doc:visibilitychange'); doc.hidden = false; });
-  held(() => fire('win:pagehide'));
-  held(() => fire('win:keydown', { key: 'Escape' }));
+  // A page hide and Escape are the playback bus's stopAll (C050), which releases the notes
+  // through midiAllOff; blur stays the MIDI part's own (ADR 0062).
+  const bus = createOutputBus({ app: () => cmp, sequencer: () => null });
+  held(() => bus.stopAll('hidden'));
+  held(() => bus.stopAll('pagehide'));
+  held(() => bus.stopAll('escape'));
   held(() => fire('win:blur')); // ADR 0062: a Note Off may never come while away
   held(() => assert.equal(cmp.midiAllOff(), 1, 'stopPlayback (main.js) silences MIDI'));
   measuring = true;
