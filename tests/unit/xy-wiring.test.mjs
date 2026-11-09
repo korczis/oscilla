@@ -92,7 +92,12 @@ function fakeApp(workspace = 'synth', audioState = 'running') {
     workspace, $root: root, audioState,
     $watch(key, fn) { watches.push([key, fn]); },
     leave(to) { root.fire('osc:ui', { detail: { kind: 'mode', key: 'mode', value: to } }); },
-    owner(now) { for (const [k, fn] of watches) if (k === 'outputOwner') fn(now); },
+    owner(now) {
+      app.outputOwner = now;
+      for (const [k, fn] of watches) if (k === 'outputOwner') fn(now);
+    },
+    /** A notification of the owner it already has (C051's publish re-reads the getter). */
+    renotify() { for (const [k, fn] of watches) if (k === 'outputOwner') fn(app.outputOwner); },
     audio(now) {
       app.audioState = now;
       for (const [k, fn] of watches) if (k === 'audioState') fn(now);
@@ -294,12 +299,32 @@ test('transport Stop releases a held gate and its notes; the pad is free for the
     assert.equal(m.view.model.down(2, 0.2, 0.5), true);
     assert.equal(r.real.playing, true, 'the next touch arms again and plays');
     assert.ok(r.real.heldNotes().length >= 1);
+    r.app.owner('studio'); // the arm's claim
     r.app.owner(null); // no owner while held: released as the Stop's
     assert.deepEqual(r.pad.reasons, ['stop', 'stop']);
     letGo(r, 'no owner');
     m.destroy();
     stopNow(r);
   });
+
+test('negative: a notification that moves no owner releases nothing (the C051 bus re-reads '
+  + 'outputOwner at the touch\'s own claim)', () => {
+  const r = rig();
+  r.app.outputOwner = null; // nothing owns the output before the first touch
+  const m = r.mount();
+  hold(r, m);
+  r.app.renotify(); // null again: the owner did not move
+  assert.equal(m.view.model.gated, true, 'the touch still holds');
+  assert.deepEqual(r.pad.reasons, []);
+  r.app.owner('studio');
+  r.app.renotify();
+  assert.equal(m.view.model.gated, true);
+  r.app.owner('sequencer'); // a real move away still releases
+  assert.equal(m.view.model.gated, false);
+  assert.deepEqual(r.pad.reasons, ['owner']);
+  m.destroy();
+  stopNow(r);
+});
 
 test('a workspace leave releases through the router before the Synth disarms', () => {
   const r = rig();

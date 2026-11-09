@@ -40,6 +40,7 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { createPads } from './view/pads.js';
 import { createDrumsTab } from './view/drums-tab.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
@@ -281,6 +282,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       .find(([, v]) => v) : null;
     if (!present()) {
       xy.destroy();
+      pads.destroy();
       drums.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
@@ -320,7 +322,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
       + xy.html() + drums.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
-      + `data-osc="synth.modules">${plates}</div></div>`
+      + `data-osc="synth.modules">${plates}</div>${pads.html()}</div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
       + `xl:sticky xl:top-4 ${faceClass(face, 'bay')}" data-face-of="bay" `
       + 'aria-labelledby="synth-bay-title" data-osc="synth.bay" '
@@ -337,6 +339,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     shape = shapeOf();
     renderBay();
     xy.mount();
+    pads.mount();
     drums.mount();
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
@@ -665,6 +668,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // K097 XY tab
   const xy = createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab,
     BTN, cmp: () => cmp });
+  // K220 the two performance pads under the face
+  const pads = createPads({ panel, get, host, nodes, dispatch, say, jackName, tab,
+    cmp: () => cmp, arm: xy.arm });
 
   // ------------------------------------------------------------------ notes
 

@@ -6,7 +6,7 @@
 // the one patch catalog, and synth/xy.js xyInsertAction cables Y at the panel's insertion.
 //
 //   mountSynthXy(host, { store, transport, panel, owner, app, arm, say, jackName, dispatch,
-//     notes, mountPad, sampleRate }) -> { view, owner, notes, release(reason), destroy() }
+//     notes, mountPad, sampleRate, claim }) -> { view, owner, notes, release(reason), destroy() }
 //     store      the Studio store handle (getModel, dispatch): the one writer of the document
 //     transport  the Studio transport, or a function returning it (late-bound: null before
 //                audio); the pad's X and Y reach its node through transport.live, never the
@@ -24,6 +24,8 @@
 //     notes      the note input the pad plays (default app.kbdPad(release), midi/keyboard-ui.js:
 //                { noteOn, noteOff, legato, velocity, off }); without one the pad plays only its
 //                own node
+//     claim      false: the pad claims no notes from the docked keyboard (K220, pad R under the
+//                Panel face, beside the keyboard); default true (the XY tab, K171)
 //     mountPad   the pad kind's mount (ui/kinds/xy-pad.js mountXyPad; a seam for unit tests)
 //     sampleRate()  the running AudioContext's rate, null before one exists (default: none);
 //                Y's value is sized at its 0.95 x Nyquist (xyYReading), else at the provisional
@@ -88,6 +90,17 @@
 // down to stay at or below 0.95 x Nyquist; the Y ends are at(0) and at(1), read again on each
 // drawn frame. The readout line sits above the pad, clear of the docked keyboard.
 //   xyCellX(i, steps) -> the x (0..1) the mount sends for cell i: its centre
+//
+// Pad L (K220) is the same pad kind, mounted here too (the kind's one mount site): the panel's
+// `xyl` module, which plays no notes; its X and Y reach its node through transport.live (on,
+// move, off; all-off on a release with no touch), and its typed normals carry them to the LPF
+// and HPF cutoffs. It releases through the same paths as pad R (padReleasePaths).
+//   padReleasePaths({ transport, app, owner, output, release }) -> { listenStop(), off() }
+//   padTargets(model, panel, module = 'xyl') -> { x: [jack], y: [jack] }   what each output
+//     drives, normals and cables alike ('lpf.frequency'); muted edges left out
+//   mountPadL(host, { store, transport, panel, app, arm, say, jackName, mountPad, owner })
+//     -> { view, release(reason), destroy() }
+//   PADS_TEXT   the pads' sentences (Czech, Q104)
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
 import { xyDegree } from '../../studio/nodes/instrument.js';
@@ -283,9 +296,57 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
   };
 }
 
+/**
+ * The release paths every Synth pad mount shares (K220: pad R's mountSynthXy and pad L's
+ * view/pads.js): transport Stop (its 'state' event with playing false), leaving the workspace
+ * (`osc:ui` 'mode' on the app root) and the audio owner moving away from `output` (a change to
+ * no owner at all is the Stop's, released as 'stop'). -> { listenStop(), off() }; listenStop
+ * follows a transport made only by a later touch.
+ */
+export function padReleasePaths({ transport, app, owner, output, release }) {
+  const offs = [];
+  let heard = null; // the transport whose Stop this mount listens to
+  let offHeard = () => {};
+  const listenStop = () => {
+    const t = transport();
+    if (!t || t === heard || typeof t.on !== 'function') return;
+    offHeard();
+    heard = t;
+    offHeard = t.on((type, d) => {
+      if (type === 'state' && d && d.playing === false) release('stop');
+    });
+  };
+  listenStop();
+  const root = app && app.$root;
+  if (root && typeof root.addEventListener === 'function') { // leaving the workspace
+    const home = HOME[owner] || app.workspace;
+    const leave = (e) => {
+      const d = e.detail || {};
+      if (d.kind === 'mode' && d.value !== home) release('leave');
+    };
+    root.addEventListener('osc:ui', leave);
+    offs.push(() => root.removeEventListener('osc:ui', leave));
+  }
+  // A notification is a move only when the owner changed: the playback bus re-reads
+  // outputOwner on its own claim (C051), and a touch's arm made it say null again.
+  let seen = app ? app.outputOwner : undefined;
+  offs.push(onApp(app, 'outputOwner', (now) => {
+    if (now === seen) return;
+    seen = now;
+    if (now !== output) release(now === null ? 'stop' : 'owner');
+  }));
+  return {
+    listenStop,
+    off() {
+      offHeard();
+      while (offs.length) offs.pop()();
+    },
+  };
+}
+
 export function mountSynthXy(host, { store, transport = null, panel, owner = XY_OWNER, app = null,
   arm = null, say = () => {}, jackName = (id) => String(id), dispatch = null, notes = null,
-  mountPad = mountXyPad, sampleRate = () => null } = {}) {
+  mountPad = mountXyPad, sampleRate = () => null, claim = true } = {}) {
   const tp = () => (typeof transport === 'function' ? transport() : transport);
   const target = documentTarget({ store, panel, transport: tp, owner, say, jackName,
     sampleRate, dispatch: dispatch || ((a) => store.dispatch(a)),
@@ -298,8 +359,6 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   let view = null;
   let destroyed = false;
   let owns = null; // 'xy-pad' while the pad is mounted and playable: it owns the notes (K171)
-  let heard = null; // the transport whose Stop this mount listens to
-  let offHeard = () => {};
   let held = null; // the note the pad holds in the keys' note layer, while its gate is open
   let opening = false; // inside the touch that opens the gate (its arm claims the output)
   // The keys' note layer: the pad is one more of its inputs; its forced releases close the gate,
@@ -325,30 +384,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   }
 
   // ---- the release paths (the mount's, never the target's)
-  function listenStop() { // transport Stop: its 'state' event with playing false
-    const t = tp();
-    if (!t || t === heard || typeof t.on !== 'function') return;
-    offHeard();
-    heard = t;
-    offHeard = t.on((type, d) => {
-      if (type === 'state' && d && d.playing === false) release('stop');
-    });
-  }
-  listenStop();
-  const root = app && app.$root;
-  if (root && typeof root.addEventListener === 'function') { // leaving the workspace
-    const home = HOME[owner] || app.workspace;
-    const leave = (e) => {
-      const d = e.detail || {};
-      if (d.kind === 'mode' && d.value !== home) release('leave');
-    };
-    root.addEventListener('osc:ui', leave);
-    offs.push(() => root.removeEventListener('osc:ui', leave));
-  }
-  offs.push(onApp(app, 'outputOwner', (now) => { // the audio owner moves away from the output
-    // No owner at all follows a Stop (which released already): it is the Stop's, never 'owner'.
-    if (now !== target.output) release(now === null ? 'stop' : 'owner');
-  }));
+  const paths = padReleasePaths({ transport: tp, app, owner, output: target.output, release });
+  const { listenStop } = paths;
   // Page hide, blur and Escape: the pad kind's own listeners end the gate ('hide', 'blur',
   // 'escape'), which onGate below routes through the same release.
 
@@ -551,7 +588,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
   const win = host.ownerDocument && host.ownerDocument.defaultView;
   // The pad owns the notes only while it is shown (K171 R7): a box on screen, not a face hidden
   // below xl (`max-xl:hidden`) or a closed tab; its ResizeObserver follows it shown and hidden.
-  const surface = owns ? box.querySelector('[data-xy-surface]') || box : null;
+  // Pad R under the Panel face (K220) plays beside the docked keyboard: it claims nothing.
+  const surface = owns && claim ? box.querySelector('[data-xy-surface]') || box : null;
   let claimed = false;
   const shown = () => typeof surface.getBoundingClientRect !== 'function'
     || hasBox(surface.getBoundingClientRect());
@@ -581,12 +619,129 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       else target.release('destroy');
       destroyed = true;
       view = null;
-      offHeard();
+      paths.off();
       while (offs.length) offs.pop()();
       if (input && typeof input.off === 'function') input.off();
       target.unwire();
       if (claimed) claimNotes(win, { id: uid, owner: null });
       claimed = false;
+    },
+  };
+}
+
+// ---------------------------------------------------------------- pad L (K220)
+
+export const PADS_TEXT = Object.freeze({
+  title: 'PADY',
+  intro: 'Pad L ladí filtry, pad R hraje noty stupnice; puštěním se oba vrátí do klidu.',
+  none: 'nic',
+  axes: (x, y) => `X ladí ${x}, Y ladí ${y}.`,
+  missing: (label) => `Tento dokument Studia nemá ${label}.`,
+  restore: (label) => `Přidat ${label}`,
+  scale: (key, mode) => `Pad R hraje stupnici ${key} ${mode}.`,
+});
+
+let padMounts = 0;
+const PAD_LABEL = 'text-sm text-gray-700 dark:text-gray-300';
+
+export function padTargets(model, panel, module = 'xyl') {
+  const res = panel.resolve(model);
+  const node = res.get(module);
+  const out = { x: [], y: [] };
+  if (!node) return out;
+  const byNode = new Map([...res].filter(([, n]) => n).map(([mid, n]) => [n.id, mid]));
+  for (const e of model.graph.edges) {
+    if (e.from.node !== node.id || !(e.from.port in out) || (e.props && e.props.muted)) continue;
+    out[e.from.port].push(`${byNode.get(e.to.node) || e.to.node}.${e.to.port}`);
+  }
+  return out;
+}
+
+/** arm()'s answer as { ok, reason, said } (xy-wiring.js reads its own the same way). */
+function armedOf(arm) {
+  const r = arm();
+  if (r === true || (r && r.ok === true)) return { ok: true };
+  return { ok: false, reason: (typeof r === 'string' && r) || (r && r.reason) || '',
+    said: !!(r && r.said) };
+}
+
+export function mountPadL(host, { store, transport = null, panel, app = null, arm = null,
+  say = () => {}, jackName = (id) => String(id), mountPad = mountXyPad, owner = 'synth' } = {}) {
+  const tp = () => (typeof transport === 'function' ? transport() : transport);
+  const node = () => panel.resolve(store.getModel()).get('xyl');
+  const uid = `synth-pad-l-${(padMounts += 1)}`;
+  let view = null;
+  let destroyed = false;
+  let gated = false;
+  const live = (kind, v) => {
+    const t = tp();
+    const n = node();
+    return t && t.playing && n ? t.live(n.id, { kind, x: v.x, y: v.y }) : null;
+  };
+  function release(reason) {
+    if (destroyed) return 0;
+    if (view && view.model.gated) {
+      view.model.end(reason); // onGate(false): X and Y back at rest
+      return 1;
+    }
+    live('all-off', { x: 0, y: 0 });
+    return 0;
+  }
+  const paths = padReleasePaths({ transport: tp, app, owner, output: 'studio', release });
+  const t = padTargets(store.getModel(), panel);
+  const name = (list) => (list.length ? list.map(jackName).join(' + ') : PADS_TEXT.none);
+  const nx = name(t.x);
+  const ny = name(t.y);
+  host.innerHTML = `<p class="${PAD_LABEL}" data-pad-axes="">${esc(PADS_TEXT.axes(nx, ny))}</p>`
+    + `<p id="${uid}-line" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white" `
+    + 'data-pad-line="" aria-live="polite"></p>'
+    + '<div class="mt-2" data-osc="synth.pads.l.pad"></div>';
+  const line = host.querySelector('[data-pad-line]');
+  const pct = (v) => Math.round(v * 100);
+  view = mountPad(host.querySelector('[data-osc="synth.pads.l.pad"]'), {
+    label: `Pad L: X ladí ${nx}, Y ladí ${ny}`,
+    description: `X ladí ${nx}, nízké vlevo; Y ladí ${ny}, nízké dole. Šipky posouvají kurzor; `
+      + 'podržte Enter nebo se dotkněte a pad ladí; puštěním se X i Y vrátí do klidu.',
+    describedBy: [`${uid}-line`],
+    disabled: null,
+    x: { key: 'x', label: `X: ${nx}`, type: 'number', min: 0, max: 1, default: 0 },
+    y: { key: 'y', label: `Y: ${ny}`, type: 'number', min: 0, max: 1, default: 0 },
+    value: { x: 0, y: 0 },
+    text: { x: (v) => `${pct(v)} %: ${nx}`, y: (v) => `${pct(v)} %: ${ny}` },
+    readout: { x: (v) => `X ${pct(v)} %`, y: (v) => `Y ${pct(v)} %` },
+    onPreview(v) {
+      if (gated) live('move', v);
+    },
+    onGate(open, v) {
+      if (open) {
+        const a = armedOf(arm || (() => !!tp() && (tp().playing || tp().arm().ok)));
+        if (!a.ok) { // a refused touch is never silent (project.no-silent-feedback)
+          if (a.reason && !a.said) say(a.reason, true);
+          line.textContent = a.reason;
+          view.model.end('refused');
+          return;
+        }
+        line.textContent = '';
+        paths.listenStop(); // the transport may exist only from this touch on
+        gated = true;
+        live('on', v);
+        return;
+      }
+      if (!gated) return;
+      gated = false;
+      live('off', v); // live-notes.js rests X and Y (handle.rest)
+      if (view && typeof view.model.place === 'function') view.model.place({ x: 0, y: 0 });
+    },
+  });
+  return {
+    get view() { return view; },
+    release,
+    destroy() {
+      if (destroyed) return;
+      if (view) view.destroy(); // the kind ends a held gate ('hide'): onGate releases it
+      destroyed = true;
+      view = null;
+      paths.off();
     },
   };
 }

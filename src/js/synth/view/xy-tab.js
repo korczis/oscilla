@@ -11,7 +11,8 @@
 // says it (notes-sink.js).
 //
 //   createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab, BTN,
-//     cmp }) -> { presets, has(id), html(), mount(), destroy(), preset(id) }
+//     cmp }) -> { presets, has(id), html(), mount(), destroy(), preset(id), arm() }
+//     arm() is the first touch's arm, which the pads under the face (view/pads.js) share
 //     html() is the tab's markup: the notice on the Panel tab, the card on XY
 
 import { XY_RECIPES } from '../xy.js';
@@ -94,5 +95,6 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     mount,
     destroy,
     preset,
+    arm,
   };
 }
