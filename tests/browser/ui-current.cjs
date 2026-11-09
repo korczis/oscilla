@@ -106,6 +106,9 @@ const FONT_MIN = 12;
 const TOUCH_MIN = 44;
 // U100: what a Synth tab keeps in view on a short phone (three 44 px rows).
 const SYNTH_ROOM_MIN = 3 * 44;
+// A refusal's reason long enough to need more than one line on a phone (R2-U100-1).
+const LONG_REASON = 'Tento uzel nelze připojit: jeho výstup je zvuk a vstup, který jste '
+  + 'zvolili, přijímá jen řídicí signál, proto spojení odmítám.';
 // sessionStorage key of the dismissed listening notice (src/js/core/constants.js safetySeen).
 const SAFETY_SEEN = 'oscilla.safetyNoticeCollapsed';
 const PHONE_MEASURES = ['share', 'covered', 'font', 'target', 'reopen', 'labels', 'edge',
@@ -736,6 +739,9 @@ async function runOne(name) {
       await until(() => p.evaluate(() => document.documentElement.dataset.ready === 'true'
         && document.getElementById('osc-app').dataset.mode === 'synth'),
       { ms: READY_MS, what: `ui-current: U100 Synth opened from a link at ${size.width} px` });
+      // A refusal's stated reason (project.no-silent-feedback): an error toast stays whole.
+      await p.evaluate((text) => window.OSCILLA.app.notify('error', 'Odmítnuto', text),
+        LONG_REASON);
       const r = await pollFor(() => p.evaluate(({ min, room }) => {
         const dock = document.querySelector('[data-dock-state]');
         const handle = document.querySelector('[data-osc="keyboard.handle"]');
@@ -758,10 +764,21 @@ async function runOne(name) {
           : Infinity);
         const dockTop = Math.min(top(dock), top(handle), main.bottom);
         const shown = Math.round(Math.min(dockTop, main.bottom) - main.top);
+        // Review R2-U100-1/2: no shown text of the notices is cut (an info toast may be one
+        // line; an error toast and the safety advice never lose their words).
+        // An inline box clips nothing (Firefox reports its scrollWidth over a 0 clientWidth).
+        const cut = (el) => getComputedStyle(el).display !== 'inline'
+          && el.scrollWidth > el.clientWidth + 1;
+        const errText = [...document.querySelectorAll('.osc-toast--error .osc-toast-text')];
+        const errWhole = errText.length > 0 && errText.every((el) => !cut(el));
+        const advice = [...document.querySelectorAll('#osc-safety .osc-safety-text > span')]
+          .filter((el) => el.getClientRects().length);
+        const adviceWhole = advice.length > 0 && advice.every((el) => !cut(el))
+          && advice.some((el) => /^Start low/.test(el.textContent.trim()));
         const m = { state: dock && dock.getAttribute('data-dock-state'), toasts, safety: sh, tap,
-          shown };
-        m.ok = m.state === 'collapsed' && toasts.length > 0 && toasts.every((h) => h <= 64)
-          && sh > 0 && sh <= 56 && tap && shown >= room;
+          shown, errWhole, adviceWhole };
+        m.ok = m.state === 'collapsed' && toasts.length > 0 && sh > 0 && sh <= 56 && tap
+          && shown >= room && errWhole && adviceWhole;
         return m;
       }, { min: TOUCH_MIN, room: SYNTH_ROOM_MIN }), (m) => m.ok,
       `ui-current: U100 the Synth's Engines tab keeps room at ${size.width} px`);
@@ -772,6 +789,24 @@ async function runOne(name) {
       `ui-current: U100 the Panel tab keeps the keys docked at ${size.width} px`);
       check(`phone-synth-panel-keys-${size.width}`, kept.ok, `dock ${kept.last}`);
       await fresh.close();
+    }
+    // Review R2-U100-2: a short desktop window (a fine pointer) keeps the safety notice as on any
+    // desktop: the whole advice shown, nothing cut (the one-line rule is a phone's only).
+    {
+      const desk = await browser.newContext({ viewport: { width: 1366, height: 650 } });
+      const p = await desk.newPage();
+      await p.goto(`${URL}#m=synth`);
+      const r = await pollFor(() => p.evaluate(() => {
+        const spans = [...document.querySelectorAll('#osc-safety .osc-safety-text > span')]
+          .filter((el) => el.getClientRects().length);
+        const text = spans.map((el) => el.textContent.trim()).join(' ');
+        const whole = /Start low, especially with headphones\./.test(text)
+          && spans.every((el) => getComputedStyle(el).display === 'inline'
+            || el.scrollWidth <= el.clientWidth + 1);
+        return { text: text.slice(0, 60), whole };
+      }), (m) => m.whole, 'ui-current: U100 the safety advice at 1366x650');
+      check('desktop-short-safety-whole', r.ok, JSON.stringify(r.last));
+      await desk.close();
     }
     // The page header's Related menu on a phone: a tap opens it, its items are the related
     // pages at 44 px, and a tap on the first opens that workspace.
