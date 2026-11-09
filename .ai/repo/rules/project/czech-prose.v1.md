@@ -39,6 +39,15 @@ label. The measure is `scripts/czech-prose.mjs` (three or more words, two Englis
 words, no Czech letter with a diacritic; the literals come from the one JavaScript lexer,
 `scripts/ui-catalog/scan.mjs` lexJs), one home for the test and any later check.
 
+A second count (plan U098) sees the short English the sentence measure cannot: labels, buttons,
+headings, aria-labels and short announcements ('Restore normal', 'CABLES', 'Connection
+cancelled.'), found by `scripts/czech-prose-short.mjs` (a UI word list over text-shaped strings,
+code shapes such as class lists, key names and id templates left out, the terms the rule lets
+stand never counted) into `tests/unit/czech-prose-short-baseline.json`.
+`tests/unit/czech-prose-short.test.mjs` holds it to the same ratchet: a rise, a file not listed
+with any and an unrecorded fall each fail, and mutation cases prove it finds short English and
+passes Czech text and code.
+
 The release notes, pull request bodies and published pages are held by review and by the
 issues that automate them (Q104's follow-ups); until those land, this rule binds the agents.
 

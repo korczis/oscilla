@@ -246,7 +246,8 @@ test('K099 a notes clip plays on a Keys node; on an XY pad it is reported kept, 
   const m = store.getModel();
   const clip = m.timeline.clips.find((c) => c.id === id);
   const why = transportModule.clipPlayReason(m, clip);
-  assert.match(why, /^Notové klipy hrají na uzlu Keys; tento klip na .+ zůstává, ale nehraje se\.$/);
+  assert.match(why,
+    /^Notové klipy hrají na uzlu Keys a na perkusním enginu; tento klip na .+ zůstává, ale nehraje se\.$/);
   const plan = offline.planOfflineRender(m);
   const row = plan.clips.find((c) => c.id === id);
   assert.deepEqual([row.kind, row.rendered, row.reason], ['notes', false, why]);

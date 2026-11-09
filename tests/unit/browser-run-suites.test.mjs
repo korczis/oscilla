@@ -32,7 +32,7 @@ const SUITES = ['app', 'layout', 'qa-regressions', 'navigation', 'link-integrity
   'ui-flowbite-pro', 'ui-current', 'touch-audio', 'demo-song', 'cross-links',
   'first-screen', 'surface-census', 'journeys', 'iphone'].map((s) => `tests/browser/${s}.cjs`);
 // K075: the synth line's group, the integration map first (midi moved here from test:browser).
-const SYNTH = ['integration-map', 'synth', 'synth-engines', 'xy-pad', 'midi', 'steps']
+const SYNTH = ['integration-map', 'synth', 'synth-engines', 'xy-pad', 'drums', 'midi', 'steps']
   .map((s) => `tests/browser/${s}.cjs`);
 
 test('test:browser runs its suites through the runner, none chained with &&', () => {

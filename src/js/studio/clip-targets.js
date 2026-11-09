@@ -23,8 +23,11 @@
 //             'pattern-played' (the Oscillator's pattern bus), 'gate' (the Envelope's gate),
 //             'keys-gate' (a Keys node's Gate: the Envelopes its unmuted gate edges reach, K060),
 //             'keys-notes' (a notes clip on a Keys node: each note sets its pitch and opens its
-//             Gate, K068), 'measurement' (data for the measurement hook) or 'automation' (the lane drives
-//             the parameter's AudioParam)
+//             Gate, K068), 'engine-notes' (a notes clip on the percussion engine: each note a
+//             note-on and note-off of its voice pool, K222), 'clock' (one clock tick of Random or
+//             the Step Modulator, K023),
+//             'measurement' (data for the measurement hook) or 'automation' (the lane drives the
+//             parameter's AudioParam)
 //     code, reason   null when it plays; otherwise the store's first error (holds false) or the
 //             transport's unplayed code and reason (holds true)
 //     errors  the store's errors: [{ code, message, path, nodeId? }] (path relative to the clip)
@@ -35,9 +38,12 @@
 // build keeps loading; the transport plays a subset of it; the UI offers only what plays, and
 // reports what is held but not played with this reason where docs/v31/timeline.md "Clip-target
 // policy" lists. The subset is the table below: pattern clips play on a Sequence or an
-// Oscillator, event clips only as gates on an Envelope or a Keys node, measurement clips always
-// (as data), notes clips on a Keys node (K068; held on the XY pad and the voice engines, and
-// reported there with the notesUnplayed reason), and a lane plays unless its parameter has no linear AudioParam that Web Audio uses:
+// Oscillator, event clips as gates or triggers on an Envelope, as gates on a Keys node and as
+// triggers on Random and the Step Modulator (EVENT_PLAY, K023), measurement clips always
+// (as data), notes clips on a Keys node (K068) and on the percussion engine (K222; held on the
+// XY pad and the other voice engines, and reported there with the notesUnplayed reason), and a
+// lane plays unless its parameter has no
+// linear AudioParam that Web Audio uses:
 // a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
 // high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), a shelf ignores its Q,
 // and a filter's gain is ignored by Web Audio for every type but peaking and the shelves.
@@ -80,25 +86,40 @@ export const gainIsUsed = usesGain;
  */
 export const qIsUsed = usesQ;
 
-/** How a gate event clip plays, by target node type (absent: it does not play). */
-const EVENT_GATES = Object.freeze({ envelope: 'gate', keys: 'keys-gate' });
-
-/** How a notes clip plays, by target node type (absent: held, not played). */
-const NOTES_PLAY = Object.freeze({ keys: 'keys-notes' });
+/**
+ * How a notes clip plays, by target node type (absent: held, not played). On the percussion
+ * engine (K222, ADR 0086 decisions 5 and 6) a drum lane is a note number of its key map: each
+ * note is a note-on and a note-off on its voice pool, as the keys play it ('engine-notes').
+ */
+const NOTES_PLAY = Object.freeze({ keys: 'keys-notes', 'perc-voice': 'engine-notes' });
 
 /** How a pattern clip plays, by target node type (absent: it does not play). */
 const PATTERN_PLAY = Object.freeze({ sequence: 'sequence', oscillator: 'pattern-played' });
+/**
+ * How an event clip plays, by target node type and action (absent: it does not play). On an
+ * Envelope a gate holds it open for the clip and a trigger (one pulse at the clip start, K023)
+ * runs its attack and decay once, then releases; on a Keys node a gate opens its Gate (K060);
+ * on Random and the Step Modulator a trigger is one clock tick, as a trigger edge gives.
+ */
+const EVENT_PLAY = Object.freeze({
+  envelope: Object.freeze({ gate: 'gate', trigger: 'gate' }),
+  keys: Object.freeze({ gate: 'keys-gate' }), // the Keys Gate (K060)
+  random: Object.freeze({ trigger: 'clock' }),
+  'step-modulator': Object.freeze({ trigger: 'clock' }),
+});
 
 /** Reasons the transport gives for what it does not play. */
 export const CLIP_TARGET_TEXT = Object.freeze({
   noTarget: 'The clip has no target node.',
   patternTarget: (name) => `Pattern clips play on a Sequence or an Oscillator; this clip on `
     + `${name} is not played.`,
-  eventTarget: (name) => `Hrají se jen události brány na Envelope nebo na uzlu Keys; tento klip `
-    + `na ${name} se nehraje.`,
+  eventTarget: (name) => 'Událostní klip hraje jako hradlo nebo spouštěč na obálce (Envelope), '
+    + 'jako hradlo na uzlu Keys a jako spouštěč na Random nebo Step Modulator; tento klip na '
+    + `${name} nehraje.`,
   notesTarget: (type) => 'A notes clip needs a target that plays notes (Keys, the XY pad or a '
     + `voice engine); ${article(type)} ${type} node does not play notes.`,
-  notesUnplayed: (name) => `Notové klipy hrají na uzlu Keys; tento klip na ${name} zůstává, ale `
+  notesUnplayed: (name) => `Notové klipy hrají na uzlu Keys a na perkusním enginu; tento klip na `
+    + `${name} zůstává, ale `
     + 'nehraje se.',
   filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
     + 'mis-scaled, so it is not applied.',
@@ -157,9 +178,8 @@ export function clipTarget(node, use, registry = NODE_REGISTRY) {
     const held = errors.length === 0;
     if (!held) return verdict(errors, false, null, errors[0].code, errors[0].message);
     if (!node) return verdict(errors, false, null, 'no-target', CLIP_TARGET_TEXT.noTarget);
-    const how = EVENT_GATES[node.type];
-    return verdict(errors, !!how && action === 'gate', how, 'event-target',
-      CLIP_TARGET_TEXT.eventTarget(name));
+    const how = EVENT_PLAY[node.type] ? EVENT_PLAY[node.type][action] || null : null;
+    return verdict(errors, !!how, how, 'event-target', CLIP_TARGET_TEXT.eventTarget(name));
   }
   if (kind === 'measurement') {
     const action = use.action;
@@ -214,4 +234,20 @@ function laneTarget(node, key, registry) {
 export function clipUse(clip) {
   return clip.kind === 'pattern' ? { kind: 'pattern' }
     : { kind: clip.kind, action: clip.payload ? clip.payload.action : undefined };
+}
+
+/**
+ * Node ids a trigger event clip targets (its own target, else its track's): the compiler plans
+ * them `clocked`, so a clip clocks a Random or Step Modulator that no edge does (K023).
+ */
+export function triggerClipTargets(model) {
+  const tl = model.timeline || {};
+  const trackTarget = new Map((tl.tracks || []).map((t) => [t.id, t.target]));
+  const out = new Set();
+  for (const c of tl.clips || []) {
+    if (c.kind !== 'event' || !c.payload || c.payload.action !== 'trigger') continue;
+    const id = c.target !== null && c.target !== undefined ? c.target : trackTarget.get(c.trackId);
+    if (id) out.add(id);
+  }
+  return out;
 }

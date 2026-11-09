@@ -113,13 +113,15 @@ is no second synthesizer; the decisions are the V502 note of ADR 0058.
 - **The output.** A note and a Playground tone never sound together: whichever starts fades the
   other out first. A note and the sequencer do not sound together either: starting a sequence
   stops the notes, which fade within 8 ms as the sequence begins, and while it plays notes are
-  refused. While a measurement runs, a level reference is being captured or the Studio is
-  playing, notes are refused too. OSCILLA says so once per run of refused notes, with one of
-  these sentences:
-  - "MIDI notes do not play while the measurement owns the output: stop it (Esc) first."
-  - "MIDI notes do not play while the level reference is being captured."
-  - "MIDI notes do not play while the Studio is playing: stop it first."
-  - "MIDI notes do not play while the sequencer is playing: stop it (Esc) first."
+  refused. While a measurement runs, a level reference is being captured from the microphone
+  or the Studio is playing, notes are refused too (a loopback reference capture records the
+  output itself, so there notes play, as the Playground tone does). These rules, and the
+  sentences below, are rows of the one output-owner table (`src/js/ui/output-owner.js`, plan
+  issue C036). OSCILLA says so once per run of refused notes, with one of these sentences:
+  - "MIDI noty nehrají, dokud výstup patří měření: nejdřív ho zastavte (Esc)."
+  - "MIDI noty nehrají, dokud se z mikrofonu snímá referenční úroveň."
+  - "MIDI noty nehrají, dokud hraje sekvencer: nejdřív ho zastavte (Esc)."
+  - "MIDI noty nehrají, dokud hraje Studio: nejdřív ho zastavte."
 
 `tests/unit/midi/notes.test.mjs` proves this on a fake audio context; `tests/browser/midi.cjs`
 check `midi-seam-notes` plays synthetic MIDI events from the test seam into the built page in
@@ -130,7 +132,7 @@ and latency is not measured.
 
 The Playground, the Studio and the Synth each have a keyboard (plan issue K026). It plays the same
 note voices as a MIDI input, through the same engine and with the same Playground settings, limits
-and refusals; a refusal says "Keyboard notes do not play while …" instead of "MIDI notes".
+and refusals; a refusal says "Noty z klávesnice nehrají, dokud …" instead of "MIDI noty".
 
 - **Arm it.** **Arm keys** under the Playground's panels (and under the Studio) arms the
   computer keyboard in that view only; a link with `kbd=1` (`#m=playground&kbd=1`,

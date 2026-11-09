@@ -233,9 +233,12 @@ test('K068 notes without the new fields serialize and hash as before; the fields
     durationBeats: 4, payload: { notes: [n(0, 60, 1, 0.8), n(1.5, 64, 0.5, 0.5),
       n(2, 67, 2, 1)] } })).created.clips[0];
   const base = st.getModel();
-  assert.equal(schema.studioHash(base),
+  assert.equal(schema.studioHashAt(base, 1),
     '9ca60a9d6a456204c21099af04a08c250c6626bfdedb384ca935706068cc5ca0',
-    'the studioHash this document has on b7a5c9f7');
+    'the studioHash this document has on b7a5c9f7 (hash epoch 1)');
+  assert.equal(schema.studioHash(base),
+    'fb26d85501ec399f33318a57b374645c14fde20578d99d5614f366a7df2c00cd',
+    'and under hash epoch 2 (K022)');
   const text = schema.serializeStudio(base);
   assert.ok(!/"(p|r|slide|grid)"/.test(text), 'no absent field is written');
   const before = schema.studioHash(base);

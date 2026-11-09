@@ -345,7 +345,7 @@ function resetScroll() {
 function scrollToTop(sel) {
   const main = document.querySelector('.osc-main');
   const target = document.querySelector(`#osc-view-synth ${sel}`);
-  const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+  const nav = document.querySelector('#osc-view-synth nav[aria-label$=" Synthu"]');
   const shown = nav && getComputedStyle(nav).display !== 'none';
   if (!main || !target) return;
   main.scrollTop = Math.round(main.scrollTop + target.getBoundingClientRect().top
@@ -451,7 +451,7 @@ function inspect({ pairs, bay, park, content }) {
   let unseen = null;
   if (content) {
     const el = document.querySelector(`#osc-view-synth ${content}`);
-    const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+    const nav = document.querySelector('#osc-view-synth nav[aria-label$=" Synthu"]');
     const navBottom = nav && getComputedStyle(nav).display !== 'none'
       ? nav.getBoundingClientRect().bottom : 0;
     const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
@@ -485,7 +485,7 @@ function inspect({ pairs, bay, park, content }) {
   let fit = null;
   if (bay) {
     const card = document.querySelector('[data-osc="synth.bay"]');
-    const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+    const nav = document.querySelector('#osc-view-synth nav[aria-label$=" Synthu"]');
     const navBottom = nav && getComputedStyle(nav).display !== 'none'
       ? nav.getBoundingClientRect().bottom : 0;
     const dock = document.getElementById('osc-keyboard').getBoundingClientRect();

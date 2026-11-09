@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (output glitch detection on the realtime engine (an AudioWorklet tap))
 // OSCILLA Studio runtime truth in the Inspector (ADR 0039): the built dist/index.html in
 // chromium, firefox and webkit from file://. With nothing selected the Inspector's Runtime
 // section says what runs, from runtime.js studioDivergence, runtime.applied() and the runtime

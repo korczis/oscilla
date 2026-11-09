@@ -64,7 +64,7 @@ It does not see a factory reached through an alias or a re-export.
 `workspace` check requires one timeline editor in the page, and its `compact` check that a
 clip duplicated in the timeline, and then its undo, are the clip chips of the Playground's
 compact Studio. `tests/browser/v31-studio-graph.cjs` check compact-sync, in
-`npm run test:studio` (CI's `studio` job, three browsers): a clip moved in the compact widget
+`npm run test:studio` (CI's browser legs, three browsers): a clip moved in the compact widget
 by keyboard is the clip the full Studio and the Inspector show, a Filter added in the full
 Studio appears in the compact signal path, and both read the same store object.
 

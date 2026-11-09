@@ -4,8 +4,10 @@
 # The suites of `npm run release-gate` run as parallel jobs and `gate` aggregates them: the
 # serial gate measured 519 s (engine 167 s + browser 287 s + browser install 43 s), and the dsp,
 # labs, sequencer and visual suites add about 100 s more; split, the wall time is the slowest
-# job (about 4 min). Every job runs the same npm scripts as the local release-gate; matrix legs
-# narrow the browsers with OSC_BROWSERS. A failed job names the suite; `gate` names the job.
+# job (about 4 min). Every job runs the same npm scripts as the local release-gate, the browser
+# legs (leg-1, leg-2) the same suites dealt over runners (test:leg, tests/browser/lib/shards.cjs);
+# matrix legs narrow the browsers with OSC_BROWSERS. A failed leg's summary names the suite;
+# `gate` names the job.
 #
 # Playwright browsers are not cached: in the measured install step the apt dependencies took
 # 28 s (not cacheable by a browser cache) and the downloads of all three browsers 13 s, about
@@ -29,10 +31,10 @@
 # .ai/repo/knowledge/ (E055), docs/ or a top-level *.md (and at least one path changed) in a
 # pull request into main is the answer `runtime=false` (a train
 # or stacked base runs everything: the head's `gate` would satisfy main's required check too),
-# and then the engine, suites, measure, studio, browser, census and visual jobs are skipped;
+# and then the browser legs (leg-1, leg-2) and the visual job are skipped;
 # anything else, an empty diff, an error or a missing answer runs them (fail closed). unit, knowledge, fail-first and review-verdict always
 # run: the plan, knowledge and build:check tests guard what a non-runtime change can break.
-# `gate` accepts a skipped job only when it is one of those seven and `changes` succeeded with
+# `gate` accepts a skipped job only when it is one of those three and `changes` succeeded with
 # `runtime=false`. ci.yml is started by pull_request and merge_group only (project.ci-bounded
 # v2, `triggers`), so nothing on main is path-gated here; on merge_group the classifier judges
 # the queued pull request by HEAD^1..HEAD, the queue's merge of it (ADR 0083), and it answers
@@ -151,18 +153,40 @@ jobs:
             echo "runtime=true" >> "$GITHUB_OUTPUT"
           fi
 
-  engine:
-    name: V1 engine checks (${{ matrix.browser }})
+  leg-1:
+    # ci-speed (2026-11-09): every browser suite of `npm run test:release` but the visual gate
+    # (test:engine, dsp, labs, sequencer, measure, studio, synth, browser, census) runs in one of
+    # these legs, per browser: tests/browser/lib/shards.cjs reads the suites from package.json
+    # and deals them over LEGS[browser] legs by their measured seconds
+    # (tests/browser/shard-weights.json). A suite declared `suite-pace: shared` runs two at a
+    # time on the 4-vCPU runner (OSC_SUITE_JOBS); one declared `solo` (it judges the realtime
+    # output or the audio clock against a deadline) runs alone, after them. Every suite runs
+    # whatever the one before returned (lib/run-suites.cjs); the census is dealt over two
+    # processes by --part. tests/unit/browser-shards.test.mjs holds every suite of every
+    # browser to exactly one leg and these matrices to LEGS: two legs a browser, six jobs, one
+    # round on the six hosted jobs the account keeps for OSCILLA (Q102). They replace six jobs a
+    # browser (engine, suites, measure, studio, browser, census), whose work measured 58 job-min
+    # chromium, 88 firefox, 97 webkit one by one (runs 42513898661, 42509049766, 42520947188,
+    # 42522764794), each job adding its setup again. Firefox keeps the PulseAudio null sink its
+    # AudioContext needs on the runner, while Chromium's realtime clock stalls behind that sink,
+    # so each browser has its own legs.
+    name: Browser leg 1 (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # the sum of the step limits (15 + 13 + 70), rounded up (project.ci-bounded)
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
     env:
       OSC_BROWSERS: ${{ matrix.browser }}
+      OSC_LEG: 1
+      OSC_SUITE_JOBS: 2
+      # a suite's own bound in run-suites: two at a time slow each, and integration-map alone
+      # took 735 s in WebKit, near the 20-minute default
+      OSC_SUITE_MS: 1800000
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -181,83 +205,37 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
-      - name: V1 engine checks against the V2 engine
-        run: mkdir -p logs && npm run test:engine 2>&1 | tee logs/engine-${{ matrix.browser }}.log
-        timeout-minutes: 15
+      - name: Leg 1 of the browser's release-gate suites, file:// and /oscilla/
+        # a leg measures 29-52 min one by one by the weights (shards.cjs --plan); its shared
+        # suites two at a time it should take less, and the bound leaves room for a slow runner
+        run: mkdir -p logs && npm run test:leg 2>&1 | tee logs/leg-1-${{ matrix.browser }}.log
+        timeout-minutes: 70
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: logs-engine-${{ matrix.browser }}
+          name: logs-leg-1-${{ matrix.browser }}
           path: logs/
           retention-days: 14
 
-  suites:
-    # Per browser: Firefox needs a PulseAudio null sink to run an AudioContext on the runner,
-    # while Chromium's realtime clock stalls behind that sink, so each gets its own job.
-    name: DSP, labs, sequencer (${{ matrix.browser }})
+  leg-2:
+    name: Browser leg 2 (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # the sum of the step limits (15 + 13 + 70), rounded up (project.ci-bounded)
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
         browser: [chromium, firefox, webkit]
     env:
       OSC_BROWSERS: ${{ matrix.browser }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Install the browser
-        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}
-        timeout-minutes: 15
-      - name: Audio sink for headless Firefox (no sound server on the runner)
-        if: matrix.browser == 'firefox'
-        timeout-minutes: 13
-        run: |
-          .github/scripts/ci-install.sh apt pulseaudio
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=ci_null
-          pactl set-default-sink ci_null
-      - name: DSP modules
-        shell: bash
-        run: mkdir -p logs && npm run test:dsp 2>&1 | tee logs/dsp.log
-        timeout-minutes: 5
-      - name: Chart renderers and lab controllers
-        shell: bash
-        run: npm run test:labs 2>&1 | tee logs/labs.log
-        timeout-minutes: 5
-      - name: Pattern sequencer on real Web Audio
-        shell: bash
-        run: npm run test:sequencer 2>&1 | tee logs/sequencer.log
-        timeout-minutes: 5
-      - name: Upload the logs on failure
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: logs-suites-${{ matrix.browser }}
-          path: logs/
-          retention-days: 14
-
-  measure:
-    # V3: the measurement engine on real Web Audio (v3-measure.cjs) and the MEASURE /
-    # EXPERIMENTS workspaces of dist (v3-ui.cjs), one browser per job like the browser gate.
-    name: V3 measurement and UI (${{ matrix.browser }})
-    needs: changes
-    if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 50
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
-    env:
-      OSC_BROWSERS: ${{ matrix.browser }}
+      OSC_LEG: 2
+      OSC_SUITE_JOBS: 2
+      # a suite's own bound in run-suites: two at a time slow each, and integration-map alone
+      # took 735 s in WebKit, near the 20-minute default
+      OSC_SUITE_MS: 1800000
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -276,153 +254,16 @@ jobs:
           pulseaudio --start --exit-idle-time=-1
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
-      - name: Measurement engine and MEASURE / EXPERIMENTS UI, file:// and /oscilla/
-        run: mkdir -p logs && npm run test:measure 2>&1 | tee logs/measure-${{ matrix.browser }}.log
-        timeout-minutes: 20
+      - name: Leg 2 of the browser's release-gate suites, file:// and /oscilla/
+        # a leg measures 29-52 min one by one by the weights (shards.cjs --plan); its shared
+        # suites two at a time it should take less, and the bound leaves room for a slow runner
+        run: mkdir -p logs && npm run test:leg 2>&1 | tee logs/leg-2-${{ matrix.browser }}.log
+        timeout-minutes: 70
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: logs-measure-${{ matrix.browser }}
-          path: logs/
-          retention-days: 14
-
-  studio:
-    # V3.1: the STUDIO workspace, graph editor, timeline, transport and automation editors of dist
-    # (v31-studio-graph.cjs, v31-studio-timeline.cjs), one browser per job like the measure gate.
-    name: V3.1 Studio UI (${{ matrix.browser }})
-    needs: changes
-    if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-24.04
-    # the sum of its step bounds (15 + 13 + 15 + 20 = 63), so a slow runner fails a named step
-    timeout-minutes: 80
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
-    env:
-      OSC_BROWSERS: ${{ matrix.browser }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Install ${{ matrix.browser }}
-        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}
-        timeout-minutes: 15
-      - name: Audio sink for headless Firefox (no sound server on the runner)
-        if: matrix.browser == 'firefox'
-        timeout-minutes: 13
-        run: |
-          .github/scripts/ci-install.sh apt pulseaudio
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=ci_null
-          pactl set-default-sink ci_null
-      - name: STUDIO workspace, graph and timeline editors, file:// and /oscilla/
-        run: mkdir -p logs && npm run test:studio 2>&1 | tee logs/studio-${{ matrix.browser }}.log
-        timeout-minutes: 15
-      # K075: the synth line's suites (Synth, engines, XY pad, MIDI) moved here from test:studio
-      # and test:browser, after the integration map that walks every link; every suite runs,
-      # whatever the one before returned (tests/browser/lib/run-suites.cjs).
-      - name: Integration map and the synth line, file:// and /oscilla/
-        run: mkdir -p logs && npm run test:synth 2>&1 | tee logs/synth-${{ matrix.browser }}.log
-        timeout-minutes: 35
-      - name: Upload the log on failure
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: logs-studio-${{ matrix.browser }}
-          path: logs/
-          retention-days: 14
-
-  browser:
-    name: Browser gate (${{ matrix.browser }})
-    needs: changes
-    if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
-    env:
-      OSC_BROWSERS: ${{ matrix.browser }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Install ${{ matrix.browser }}
-        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}
-        timeout-minutes: 15
-      - name: Audio sink for headless Firefox (no sound server on the runner)
-        if: matrix.browser == 'firefox'
-        timeout-minutes: 13
-        run: |
-          .github/scripts/ci-install.sh apt pulseaudio
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=ci_null
-          pactl set-default-sink ci_null
-      # Every suite of test:browser runs, whatever the one before returned (review #330 F5,
-      # tests/browser/lib/run-suites.cjs); an && chain stopped at the first failure.
-      - name: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop, journeys
-        # The train's browser suites (cross-links, first-screen, surface-census) take the chain
-        # past 15 min on a hosted runner (~20 min measured, run 41333897971). WebKit's chain with
-        # merge train 3's journeys and suites: cross-links ends at 25.7 min (run 41582489422) and
-        # the 30-minute bound ran out in first-screen; the job bounds 90 (webkit after the Pro shell ran test:browser to the 45-minute cut, #443).
-        run: mkdir -p logs && npm run test:browser 2>&1 | tee logs/browser-${{ matrix.browser }}.log
-        timeout-minutes: 60
-      - name: Upload the log on failure
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: logs-browser-${{ matrix.browser }}
-          path: logs/
-          retention-days: 14
-
-  census:
-    name: Control census (${{ matrix.browser }})
-    needs: changes
-    if: needs.changes.outputs.runtime != 'false'
-    runs-on: ubuntu-24.04
-    # the sum of the step limits (15 + 13 + 35), rounded up (project.ci-bounded)
-    timeout-minutes: 65
-    strategy:
-      fail-fast: false
-      matrix:
-        browser: [chromium, firefox, webkit]
-    env:
-      OSC_BROWSERS: ${{ matrix.browser }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Install ${{ matrix.browser }}
-        run: .github/scripts/ci-install.sh browser ${{ matrix.browser }}
-        timeout-minutes: 15
-      - name: Audio sink for headless Firefox (no sound server on the runner)
-        if: matrix.browser == 'firefox'
-        timeout-minutes: 13
-        run: |
-          .github/scripts/ci-install.sh apt pulseaudio
-          pulseaudio --start --exit-idle-time=-1
-          pactl load-module module-null-sink sink_name=ci_null
-          pactl set-default-sink ci_null
-      - name: Every control of every workspace has a row, and every row round-trips (C021)
-        run: mkdir -p logs && npm run test:census 2>&1 | tee logs/census-${{ matrix.browser }}.log
-        timeout-minutes: 35
-      - name: Upload the log on failure
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: logs-census-${{ matrix.browser }}
+          name: logs-leg-2-${{ matrix.browser }}
           path: logs/
           retention-days: 14
 
@@ -633,7 +474,7 @@ jobs:
             --pr "$PR" --head HEAD --base-branch "$DIFF_BASE"
 
   gate:
-    # The required check. Every job it judges succeeded, or (E026) is one of the seven path-gated
+    # The required check. Every job it judges succeeded, or (E026) is one of the three path-gated
     # jobs and was skipped while `changes` succeeded with runtime=false. A skip for any other
     # reason, a cancelled or failed job, and a failed or silent `changes` fail it. It needs
     # flake-ledger too (gate-needs: every job), and the verdict drops that job's entry before
@@ -644,7 +485,7 @@ jobs:
     # whatever the verdict, and project.ci-bounded forbids continue-on-error.
     name: gate
     if: always()
-    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual, flake-ledger]
+    needs: [unit, knowledge, fail-first, review-verdict, changes, leg-1, leg-2, visual, flake-ledger]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -658,7 +499,7 @@ jobs:
             | all(.value.result == "success"
                 or ($nonruntime and .value.result == "skipped"
                     and (.key as $k
-                         | ["engine", "suites", "measure", "studio", "browser", "census", "visual"]
+                         | ["leg-1", "leg-2", "visual"]
                          | any(. == $k))))
         run: |
           echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
@@ -675,7 +516,7 @@ jobs:
     # and never the gate's; on a first attempt it is skipped.
     name: flake ledger (checks that passed only on a re-run)
     if: ${{ always() && fromJSON(github.run_attempt) > 1 }}
-    needs: [unit, knowledge, fail-first, review-verdict, changes, engine, suites, measure, studio, browser, census, visual]
+    needs: [unit, knowledge, fail-first, review-verdict, changes, leg-1, leg-2, visual]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

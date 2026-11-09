@@ -174,10 +174,11 @@ test('keysShown is the dock rule: keys drawn wherever the dock is docked, never 
   // no on-screen keys are drawn, so no frame shows them docked over a room that folds them.
   assert.equal(at('studio', 'panel', { decided: false }).kbdKeysShown, false,
     'the Studio keeps room: undecided, no keys drawn');
-  for (const ws of ['synth', 'playground']) {
-    assert.equal(at(ws, 'panel', { decided: false }).kbdKeysShown, true,
-      `${ws} keeps no room: its keys draw at once, as before`);
-  }
+  // U100: the Synth keeps room on a short phone too, so its keys wait for that decision.
+  assert.equal(at('synth', 'panel', { decided: false }).kbdKeysShown, false,
+    'the Synth keeps room (U100): undecided, no keys drawn');
+  assert.equal(at('playground', 'panel', { decided: false }).kbdKeysShown, true,
+    'the Playground keeps no room: its keys draw at once, as before');
 });
 
 test("the pad's height follows the room: 100dvh less the chrome and the dock's band", () => {

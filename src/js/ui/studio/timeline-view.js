@@ -10,6 +10,7 @@
 import { formatClock, formatSeconds as formatSecondsText } from '../../core/frequency.js';
 import { BLOCK_SCHEMA, BLOCK_TYPES, describeBlock } from '../../sequencer/model.js';
 import { clipTarget } from '../../studio/clip-targets.js';
+import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   MEASUREMENT_ACTIONS, TIMELINE_MAX_S, TRACK_CLIP_KINDS,
@@ -448,7 +449,9 @@ export function clipFormOptions(model, clip, registry = NODE_REGISTRY) {
     targets: [{ id: '', label: 'Track target' },
       ...offered.map((n) => ({ id: n.id, label: n.name }))],
     actions: clip.kind === 'pattern' ? blockTypeOptions() : clip.kind === 'notes' ? []
-      : clip.kind === 'event' ? eventActionOptions(action) : measurementActionOptions(),
+      : clip.kind === 'event'
+        ? eventActionOptions(action, nodeOf(model, effectiveTarget(model, clip)), registry)
+        : measurementActionOptions(),
     notes: clip.kind === 'notes' ? NOTES_CLIP_TEXT.line(notesCount(clip)) : null,
   };
 }
@@ -469,19 +472,30 @@ export function addClipAction(model, trackId, time, registry = NODE_REGISTRY) {
     kind = 'measurement';
     payload = { action: 'pre-roll' };
   } else {
-    // The first of a pattern clip and a gate event that plays on the track's target
-    // (clip-targets.js, R7); a track without a target gets a pattern clip.
+    // The first of a pattern clip, a gate event, a trigger event (K023: Random and the Step
+    // Modulator) and a notes clip (K222: the percussion engine) that plays on the track's
+    // target (clip-targets.js, R7); a track without a target gets a pattern clip.
     const node = nodeOf(model, track.target);
     const pattern = { kind: 'pattern' };
     const gate = { kind: 'event', action: 'gate' };
+    const trigger = { kind: 'event', action: 'trigger' };
+    const notes = { kind: 'notes' };
     const use = !node ? pattern
-      : [pattern, gate].find((u) => clipTarget(node, u, registry).plays);
+      : [pattern, gate, trigger, notes].find((u) => clipTarget(node, u, registry).plays);
     if (!use) {
-      return { reason: `${node.metadata.name} plays no pattern or event clips; choose a `
-        + 'Sequence, an Oscillator or an Envelope as the track target.' };
+      return { reason: `${node.metadata.name} nehraje žádné vzorové ani událostní klipy; jako `
+        + 'cíl stopy zvolte Sequence, Oscillator, Envelope, Random nebo Step Modulator.' };
+    }
+    if (use.kind === 'notes') {
+      // A new step clip: one 4/4 bar of sixteenths (NEW_STEP_GRID), tempo-linked, empty.
+      const spb = 60 / model.transport.tempo;
+      const beats = NEW_STEP_GRID.steps * NEW_STEP_GRID.stepBeats;
+      const at = clamp(finite(time) ? time : 0, 0, TIMELINE_MAX_S - beats * spb);
+      return { action: { type: 'CLIP_ADD', trackId, kind: 'notes',
+        startBeats: cleanTime(at / spb), durationBeats: beats, payload: { notes: [] } } };
     }
     kind = use.kind;
-    payload = kind === 'pattern' ? { blockType: 'tone' } : { action: 'gate' };
+    payload = kind === 'pattern' ? { blockType: 'tone' } : { action: use.action };
   }
   const duration = NEW_CLIP_DURATION_S[kind];
   const start = cleanTime(clamp(finite(time) ? time : 0, 0, TIMELINE_MAX_S - duration));
@@ -579,12 +593,15 @@ export function blockTypeOptions() {
 }
 
 /**
- * Event clip actions offered for a clip whose action is `current`: [{ id, label }]. Only gate
- * plays (clip-targets.js, R7); trigger is held by the store and listed only for a clip that
- * already has it, so that the select shows it and the clip can be switched to gate.
+ * Event clip actions offered for a clip whose action is `current` on target `node`:
+ * [{ id, label }]. The actions that play on the node (clip-targets.js, R7; K023: gate and
+ * trigger on an Envelope, trigger on Random and the Step Modulator), and `current` even where
+ * it does not, so that the select shows it and the clip can be switched. Without a node, the
+ * actions that play somewhere (both).
  */
-export function eventActionOptions(current = undefined) {
-  return EVENT_ACTIONS.filter((a) => a !== 'trigger' || current === 'trigger')
+export function eventActionOptions(current = undefined, node = null, registry = NODE_REGISTRY) {
+  const plays = (a) => !node || clipTarget(node, { kind: 'event', action: a }, registry).plays;
+  return EVENT_ACTIONS.filter((a) => a === current || plays(a))
     .map((a) => ({ id: a, label: a === 'trigger' ? 'Trigger' : 'Gate' }));
 }
 

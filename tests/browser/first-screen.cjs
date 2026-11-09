@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (reads the output peak only to prove silence at first screen)
 // OSCILLA first-screen entry-path inventory (plan P002, intent first-run-experience,
 // critique deep-links-have-no-inventory) on the built dist/index.html in chromium, firefox and
 // webkit, from file:// and from the GitHub Pages sub-path (http://127.0.0.1:<port>/oscilla/),

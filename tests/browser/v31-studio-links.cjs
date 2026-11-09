@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (Studio links; no audio judged)
 // OSCILLA V3.1 Studio deep links and browser fullscreen (spec §133-§135, §199-§200; plan V422)
 // on the built dist/index.html in chromium, firefox and webkit, from file:// and from a
 // GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/), every check on both.

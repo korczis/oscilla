@@ -58,6 +58,7 @@ import {
   sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
 } from '../audio/patterns.js';
 import { micErrorMessage, MIC_PRIVACY_NOTICE } from '../audio/microphone.js';
+import { OWNER, playOwnerOf, requestMasterLevel } from './output-bus.js';
 import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
@@ -419,7 +420,7 @@ export function createInstrument(deps = {}) {
       // running context would replace the level the Studio's Master Output set while it plays
       // (C012, engine-sync-2). The gainLevel $watch in main.js keeps a running engine in step,
       // and claimMasterLevel gives the Playground its level when it starts a voice.
-      if (first) engine.setMasterGain(this.gainLevel);
+      if (first) requestMasterLevel(engine, this.gainLevel, { owner: OWNER.instrument });
       if (!engine.init()) { this.status = 'ERROR'; return false; }
       this.sampleRate = engine.sampleRate;
       this.audioState = engine.state;
@@ -492,7 +493,7 @@ export function createInstrument(deps = {}) {
      * ensureAudio claims nothing: a click or a key press elsewhere leaves the level alone.
      */
     claimMasterLevel() {
-      engine.setMasterGain(this.gainLevel);
+      requestMasterLevel(engine, this.gainLevel, { owner: OWNER.instrument }); // the bus (C052)
       if (this.studio && Number.isFinite(this.studio.masterLevel)) this.studio.masterLevel = null;
     },
 
@@ -1205,7 +1206,8 @@ export function createInstrument(deps = {}) {
       viz.sync(this.vizInputs(res));
       // A voice another owner started on the instrument's path (a riff audition, audition.js)
       // is not the instrument's plan: its live update leaves it alone.
-      const other = engine.voice && engine.voice.opts && engine.voice.opts.owner;
+      const other = !!engine.voice
+        && playOwnerOf(engine.voice.opts) !== OWNER.instrument; // the one table's (C036)
       if (this.playing && res.ok && !other) engine.updateLive(res.plan);
     },
     /** Plain values the visualization bridge needs (what V1 syncViz copied into viz.state). */

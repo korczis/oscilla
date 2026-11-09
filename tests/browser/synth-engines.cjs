@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (engine voices judged on the realtime analyser with deadlines)
 // OSCILLA Synth engines (plan K090-K092, K089 part, K121-K123; Q019, Q021) on the built
 // dist/index.html in chromium, firefox and webkit, at 1536 x 1024 and 390 x 844. Every check
 // asserts the sound read from the engine's analyser after the safety chain (line levels, peaks,
@@ -432,7 +433,7 @@ function defineChecks() {
     await sound(page, (q) => peakAt(q, C4 / 2), 'Restore module brings the panel back');
     await page.keyboard.up('KeyA');
     const back = (await dbg(page)).nodes.additive;
-    return { ok: r.ok && onPanel === 1 && /ADDITIVE removed in Studio/.test(row) && !!back,
+    return { ok: r.ok && onPanel === 1 && /ADDITIVE odstraněn ve Studiu/.test(row) && !!back,
       // timing-allow: 80 characters of the bay row's text, not frames
       gone: +gone.rmsDb.toFixed(1), row: row.slice(0, 80), onPanel };
   });
@@ -493,8 +494,8 @@ function defineChecks() {
     const p = await sound(page, (q) => peakAt(q, A4) && q.rmsDb > -55, 'the bell sounds');
     await page.keyboard.up('KeyH');
     const hash = await page.evaluate(() => window.OSCILLA.app.synthCopyLink());
-    await until(() => page.evaluate(() => /copied|Copy the link/.test(window.OSCILLA.app.synth
-      .status)), { ms: 10000, what: 'the copy settles before the next link' });
+    await until(() => page.evaluate(() => /zkopírován|Zkopírujte odkaz/.test(window.OSCILLA.app
+      .synth.status)), { ms: 10000, what: 'the copy settles before the next link' });
     await page.goto(`${base}#m=synth&ye=lpf`);
     await until(() => page.evaluate(() => window.location.hash.indexOf('ye=') < 0
       && /no engine/.test(window.OSCILLA.app.synth.status)),

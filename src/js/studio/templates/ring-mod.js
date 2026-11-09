@@ -23,7 +23,7 @@ export default {
         + 'note returns between the sidebands.',
     ],
   },
-  studioHash: '8df8b92b54ca3aeec049565352b0125ab8f9d4f62fbb983e7805ee707831fede',
+  studioHash: '70b3a6e62912cdc143ba332ab0b960c4971b8345017878b91950889ead22b170',
   model: studioDoc({
     title: 'Ring Mod',
     nodes: [

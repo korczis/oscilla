@@ -61,6 +61,7 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     held.set(note, n.id);
     const r = t.live(n.id, { kind: 'on', note, velocity });
     if (r && r.ok === false && /range$/.test(r.code || '')) say(r.reason, true); // K060
+    if (r && r.owned) say(r.owned.reason); // K103: the timeline owns that gate while it plays
     return r;
   }
 

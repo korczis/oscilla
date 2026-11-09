@@ -7,7 +7,9 @@
 //   createStudioLibrary(store) -> library
 //     library.persistent                         false on the memory store (say so in the UI)
 //     saveProject(model, { id, now }) -> Promise<summary>      overwrites the project `id`
-//     loadProject(id) -> Promise<{ model, warnings, migratedFrom, summary } | null>
+//     loadProject(id) -> Promise<{ model, warnings, migratedFrom, hashMigration, summary } | null>
+//       hashMigration: { from, originalHash } when the record was saved under an earlier hash
+//       epoch (schema.js hashEpochOf; K022), else null
 //     savePatch(patch, { id, now, overwrite = false }) -> Promise<summary>
 //       an existing patch is never silently overwritten (§155): ExperimentStoreError 'exists'
 //     loadPatch(id) -> Promise<{ patch, warnings, migratedFrom, summary } | null>
@@ -42,13 +44,14 @@ import { canonicalJson } from '../experiments/canonical-json.js';
 import { ExperimentStoreError } from '../experiments/store.js';
 import { toIsoTimestamp } from '../experiments/schema.js';
 import {
-  STUDIO_FILE_EXTENSION, STUDIO_KIND, semanticState, serializeStudio, studioHash,
+  STUDIO_FILE_EXTENSION, STUDIO_HASH_VERSION, STUDIO_KIND, hashEpochOf, semanticState,
+  serializeStudio, studioHash,
 } from './schema.js';
 import { STUDIO_IMPORT_LIMITS, readUntrustedInput, validateStudioCommit } from './validate.js';
 import { importStudio } from './migrate.js';
 import { exportSequence, importSequenceDocument, isSequenceDocument } from './sequence-import.js';
 import {
-  PATCH_FILE_EXTENSION, PATCH_KIND, importPatch, patchHash, serializePatch,
+  PATCH_FILE_EXTENSION, PATCH_KIND, importPatch, patchHash, patchHashEpoch, serializePatch,
 } from './patches.js';
 
 export const STUDIO_FILE_TYPE = 'application/json';
@@ -58,6 +61,15 @@ const invalid = (what, why) => new ExperimentStoreError('invalid', `${what} not 
 const corrupt = (id, why) => new ExperimentStoreError('corrupt', `stored Studio record ${id} `
   + `cannot be loaded: ${why}`);
 const firstMessage = (errors) => (errors && errors[0] ? errors[0].message : 'invalid');
+
+/**
+ * What a record saved under an earlier hash epoch says when it opens (K022, D2): the epoch it was
+ * saved under, that it was migrated, and its original hash, which the stored record keeps.
+ */
+export function hashMigrationText(m) {
+  return `Uloženo pod hashem v${m.from}, převedeno na v${STUDIO_HASH_VERSION}; původní hash `
+    + `${m.originalHash.slice(0, 12)}… zůstává v uloženém záznamu.`;
+}
 
 /** The library over an experiment store (openExperimentStoreOrMemory().store). */
 export function createStudioLibrary(store) {
@@ -98,11 +110,16 @@ export function createStudioLibrary(store) {
       if (!r) return null;
       const imported = importStudio(r.rec.doc);
       if (!imported.ok) throw corrupt(id, firstMessage(imported.errors));
-      if (studioHash(imported.model) !== r.rec.studioHash) {
+      // A record saved under an earlier hash epoch (K022, D2) matches that epoch's hash: it is
+      // migrated, its original hash kept beside the model, never rewritten in the store.
+      const epoch = hashEpochOf(imported.model, r.rec.studioHash);
+      if (epoch === null) {
         throw corrupt(id, 'its content does not match its stored studioHash');
       }
+      const hashMigration = epoch === STUDIO_HASH_VERSION ? null
+        : { from: epoch, originalHash: r.rec.studioHash };
       return { model: imported.model, warnings: imported.warnings,
-        migratedFrom: imported.migratedFrom, summary: r.summary };
+        migratedFrom: imported.migratedFrom, hashMigration, summary: r.summary };
     },
 
     async savePatch(patch, { id, now, overwrite = false } = {}) {
@@ -129,11 +146,14 @@ export function createStudioLibrary(store) {
       if (!r) return null;
       const imported = importPatch(r.rec.doc);
       if (!imported.ok) throw corrupt(id, firstMessage(imported.errors));
-      if (patchHash(imported.patch) !== r.rec.studioHash) {
+      const epoch = patchHashEpoch(imported.patch, r.rec.studioHash);
+      if (epoch === null) {
         throw corrupt(id, 'its content does not match its stored studioHash');
       }
+      const hashMigration = epoch === STUDIO_HASH_VERSION ? null
+        : { from: epoch, originalHash: r.rec.studioHash };
       return { patch: imported.patch, warnings: imported.warnings,
-        migratedFrom: imported.migratedFrom, summary: r.summary };
+        migratedFrom: imported.migratedFrom, hashMigration, summary: r.summary };
     },
 
     list: ({ kind } = {}) => store.listStudio({ kind }),

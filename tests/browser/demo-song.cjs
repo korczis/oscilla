@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (judges a rendered WAV download, not the realtime output)
 // The demo song as a vertical slice (plan issue K144): one user journey through every part of
 // OSCILLA that exists, on the built dist/index.html from file:// in chromium, firefox and
 // webkit. The song is "Lantern in the Slag Yard", an original piece (src/js/studio/templates/

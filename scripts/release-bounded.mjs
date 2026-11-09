@@ -109,14 +109,18 @@ function blockingSleepMs(ms) {
  *   opts.retryTimedOut  false: an attempt stopped at its bound is not repeated (a watch whose
  *                  bound is the whole budget)
  *   opts.budgetMs  the bound of all attempts together: each attempt gets what is left of it,
- *                  and none starts once it is spent (review 373 L2)
+ *                  and none starts once it is spent (review 373 L2); the first attempt gets
+ *                  min(timeoutMs, budgetMs) without reading the clock, so a millisecond that
+ *                  ticks between two readings cannot shave it (#507, run 42625504429)
  * @param {{ cwd?: string, spawn?: Function, sleepMs?: (ms: number) => void,
- *   echo?: (text: string) => void, note?: (line: string) => void }} [o]  spawn: spawnSync's
- *   signature (tests inject one that hangs or fails); note: one line per retry
+ *   echo?: (text: string) => void, note?: (line: string) => void, now?: () => number }} [o]
+ *   spawn: spawnSync's signature (tests inject one that hangs or fails); note: one line per
+ *   retry; now: the clock a budget is measured on (Date.now; tests inject theirs)
  */
 export function boundedRunner({
   cwd = process.cwd(), spawn = spawnSync, sleepMs = blockingSleepMs,
   echo = (t) => process.stderr.write(t), note = (l) => process.stderr.write(`${l}\n`),
+  now = Date.now,
 } = {}) {
   const once = (cmd, args, { inherit, binary, timeoutMs, env }) => {
     const r = spawn(cmd, args, {
@@ -144,10 +148,13 @@ export function boundedRunner({
     // `timeout` is the spelling of the CI receipt's callers (release-ci-receipt.mjs); same bound.
     const timeoutMs = opts.timeoutMs ?? opts.timeout ?? defaultTimeoutMs(cmd, args);
     const max = opts.attempts ?? (isNetworkCall(cmd, args) ? NET_ATTEMPTS : 1);
-    const deadline = opts.budgetMs ? Date.now() + opts.budgetMs : null;
+    const start = opts.budgetMs ? now() : null;
     let r;
     for (let n = 1; n <= max; n++) {
-      const left = deadline === null ? timeoutMs : Math.min(timeoutMs, deadline - Date.now());
+      // the first attempt: the whole budget, the clock unread; a retry: what that clock leaves
+      const leftOfBudget = start === null ? Infinity
+        : opts.budgetMs - (n === 1 ? 0 : now() - start);
+      const left = Math.min(timeoutMs, leftOfBudget);
       if (n > 1 && left <= 0) break;
       r = { ...once(cmd, args, { ...opts, timeoutMs: Math.max(1, left) }), attempts: n };
       const kind = transientKind(r);

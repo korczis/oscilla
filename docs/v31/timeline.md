@@ -26,7 +26,7 @@ Track kinds exist only where semantics differ (§82):
 
 | Row | Model | Holds |
 | --- | --- | --- |
-| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; played on a Keys node, K068) |
+| event track | `timeline.tracks` kind `event` | pattern clips (sequencer blocks), event clips (gate / trigger) and notes clips (K099; played on a Keys node, K068, and on the percussion engine, K222) |
 | measurement track | `timeline.tracks` kind `measurement` | measurement clips (noise-check, pre-roll, stimulus, capture, tail, analysis) |
 | automation lane | `timeline.automation` | one lane per node parameter (points, not clips) |
 | markers | `timeline.markers` | annotations and anchors; never executed (§96) |
@@ -61,9 +61,11 @@ unknown grid field until the step editor adds it outside the hash. Absent fields
 written, so a document without them serializes and hashes as before (every pinned template and
 a K099 document keep their `studioHash`); each field present is execution state and changes it.
 The import limits `notesPerClip` (4096) and `notesPerDocument` (65536) bound the notes
-(`limit-exceeded`). A notes clip plays on a Keys node, live and offline (see "Notes clips on
-the audio clock" below); on the XY pad or a voice engine the transport and the offline render
-list it unplayed with code `notes-unplayed` and the policy's sentence.
+(`limit-exceeded`). A notes clip plays on a Keys node and on the percussion engine (K222: a
+drum lane is a note number of its key map, each note a note-on and note-off of its voice pool,
+`engine-notes`), live and offline (see "Notes clips on the audio clock" below); on the XY pad or
+another voice engine the transport and the offline render list it unplayed with code
+`notes-unplayed` and the policy's sentence.
 
 ### Clip validation (§87)
 
@@ -104,7 +106,7 @@ levels:
 | Level | Who reads it | What it is |
 | --- | --- | --- |
 | `holds` | the store (`clipRules`, the current track in `clipTrackReason`, lane validation, `AUTOMATION_POINT_ADD`) | what the registry declares: a node type's `clipKinds` (for a notes clip, a type that plays notes: `registry.js playsNotes`), `MEASUREMENT_TARGETS` per action, a parameter's `automatable`. A model with it validates, so a file saved by an earlier build keeps loading |
-| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip only as a gate on an Envelope (`gate`) or on a Keys node (`keys-gate`, K060: the same gate on every Envelope its unmuted Gate edges reach), a measurement clip always (`measurement`, as data), a notes clip on a Keys node (`keys-notes`, K068; held on the XY pad and the voice engines: `notes-unplayed`), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
+| `plays`, `how` | the transport (`clipPlayReason`, pattern-played oscillators, gated envelopes, lane parameters), the offline render plan (`planOfflineRender`, clips and lanes) and the timeline UI (track and clip target options, "add clip", the tracks a clip may move or be nudged to, the clip form's Action options, the Automate form and button) | the subset the transport plays: a pattern clip on a Sequence (`sequence`) or an Oscillator (`pattern-played`), an event clip as a gate or a trigger (one pulse: attack and decay, then the release) on an Envelope (`gate`), as a gate on a Keys node (`keys-gate`, K060: the same gate on every Envelope its unmuted Gate edges reach) and as a trigger on Random or a Step Modulator (`clock`: one clock tick, K023), a measurement clip always (`measurement`, as data), a notes clip on a Keys node (`keys-notes`, K068; held on the XY pad and the voice engines: `notes-unplayed`), a lane on a parameter with a linear AudioParam that Web Audio uses (`automation`) |
 
 A lane does not play on a Stereo Split pan or level (a pan law over several gains: no single
 AudioParam carries it), on a low-/high-pass Q (its AudioParam is in dB, so a linear lane would be
@@ -112,9 +114,9 @@ mis-scaled) or on a filter gain for any type but peaking (Web Audio ignores the 
 adapters refuse modulation of the same parameters with the same sentence.
 
 The UI offers only what plays. A clip moves (pointer or keyboard) only onto a track where it
-plays; its own track stays in the list even where it does not. The Action select offers Trigger
-only to a clip that already has it, and the clip form recomputes its track, target and action
-choices after every change. What is held and not played is reported with the policy's reason
+plays; its own track stays in the list even where it does not. The Action select offers the
+event actions that play on the clip's target, and its own action even where it does not (K023),
+and the clip form recomputes its track, target and action choices after every change. What is held and not played is reported with the policy's reason
 in these places, and only there:
 
 - a clip: the clip's problems in the timeline and the clip form, `debugInfo().unplayed` (same
@@ -123,7 +125,7 @@ in these places, and only there:
   the Render WAV plan's limitations. The lane editor and the import report do not show it yet
   (a held lane from an earlier file is drawn like any other).
 
-"Add clip" on a track whose target plays neither a pattern nor a gate says so instead of adding
+"Add clip" on a track whose target plays neither a pattern nor an event (a gate, or a trigger on Random or a Step Modulator) says so instead of adding
 a clip that never sounds. `tests/unit/v4-clip-target-policy.test.mjs` proves that the store,
 the UI, the offline plan and the transport (its unplayed list, owned parameters, pattern claims
 and gated envelopes after PLAY) give this verdict for every node type, clip kind, action and
@@ -629,3 +631,36 @@ one voice per pattern clip, the loop boundary rules above, `EDIT_POLICY`, `STOP_
 returns to the play start), `CONTIGUITY_TOLERANCE_S` (1 µs), `MUSICAL_TOLERANCE_S` (1 µs),
 `MIN_LOOP_S` (10 ms), `DB_SCALE_FLOOR` (−60 dB), the measurement clip bounds, and that pattern
 clips may overlap (separate voices).
+
+### Clock and trigger chains (K023)
+
+A **Clock** node ticks on the grid m × T of timeline position from 0, T =
+`divisionSeconds(division, transport.tempo)` (`studio/nodes/common.js`; 1/1 to 1/32 of a 4/4
+bar). The timeline compiler plans its ticks per pass (`studio/clock.js clockTicks`), so a loop
+pass replays the ticks of its range, a tempo change re-plans the later ones (EDIT_POLICY), STOP
+cancels the pending ones, and the offline render plays the same ticks. The transport fans each
+tick out along the Clock's unmuted TRIGGER edges (`transport.js fanOut`): a gate of half a period
+on an Envelope, a clock tick on Random and the Step Modulator. A Clock runs while the transport
+plays the timeline; a timeline with no clip or lane has no length, so a Clock alone ticks nothing.
+
+The Step Modulator's **Trigger** output relays each step it takes on its clock (none after the
+last step of a `once` run), so a chain Clock → Step Modulator → Envelope gates on the steps. A
+trigger event clip on Random or a Step Modulator clocks it as a trigger edge does, and makes it
+`clocked` (`compiler.js`) even without a clock edge.
+
+### One TRIGGER fan-out and one ownership rule (K103)
+
+The transport and the live note router (`studio/live-notes.js`, the Synth panel and the Studio
+keys) share one fan-out, `studio/trigger-fanout.js`: from any TRIGGER output (a Keys or XY pad
+Gate, a Clock, a Sequence or Step Modulator Trigger, read from the registry) along its unmuted
+edges to every TRIGGER input it reaches (an Envelope's Gate, a Random's or Step Modulator's
+clock), through each Step Modulator's relay. Scheduled, a notes clip's and a gate clip's Keys Gate
+take the same path as a pattern clip or a Clock; live, a key's Gate walks the same hop with the
+same relay rule, and a relayed gate closes with the key's.
+
+One ownership rule decides who gates an input. While the transport plays the timeline, the
+TRIGGER inputs it drives (`timelineGateInputs`: the targets of gate and trigger clips, and every
+input a Sequence, a Keys node with clips, a clocked Step Modulator or a Clock reaches) are the
+timeline's: a live gate on one is refused, gates nothing there, and the note's result names it
+(`owned: { code: 'timeline-owned', reason }`), which the Synth and Studio keys say in the polite
+live region. While the transport is stopped (armed), live gates own every input.

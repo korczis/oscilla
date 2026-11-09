@@ -722,7 +722,7 @@ test('N5 and F2: the bay names every summing cable; only a summing cable says it
   const svg = bay.baySvg({ panel: PANEL, layout: bay.bayLayout(PANEL, 376), cables, states,
     tokens });
   assert.match(svg, /aria-label="LPF Cutoff input, control, normalled, plus XY PAD X and Y"/);
-  // The CABLES list as synth/ui.js renders it (bay.js cableItem).
+  // The CABLES list as synth/ui.js renders it (bay.js cableListHtml: one cableItem per cable).
   const jackName = (j) => j;
   const rows = cables.map((c) => bay.cableItem(c, states.get(`${c.to}:in`),
     { jackName, item: 'i', btn: 'b' }));
@@ -732,8 +732,10 @@ test('N5 and F2: the bay names every summing cable; only a summing cable says it
   assert.ok(adds.every((r) => /^<li class="i"><span>xy\.[xy] → lpf\.frequency, přičítá/.test(r)));
   assert.match(rows.find((r) => r.includes('mg.control')), /<span>mg\.control → vco2\.tune<\/span>/,
     'a plain cable says nothing more');
+  assert.equal(bay.cableListHtml({ cables, states, gone: [], mixed: [], open: [], jackName,
+    mixedText: '', item: 'i', btn: 'b' }), rows.join(''), 'the list renders each row so');
   const ui = readFileSync(`${ROOT}src/js/synth/ui.js`, 'utf8');
-  assert.match(ui, /cableItem\(c, states\.get\(`\$\{c\.to\}:in`\)/, 'the list renders each row so');
+  assert.match(ui, /cableListHtml\(\{ cables, states,/, 'synth/ui.js renders that list');
 });
 
 test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; no preset sets it',

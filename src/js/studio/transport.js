@@ -34,7 +34,7 @@
 //                                                liveModel: no timeline, no end); edits are
 //                                                admitted as while playing; PLAY promotes it
 //   transport.disarm() -> Promise               every live note off; an armed run stops
-//   transport.live(keysId, { kind, note, velocity, at }) -> result   a note on a Keys node
+//   transport.live(keysId, { kind, note, velocity, at }) -> result, emitted as 'live' (K223)
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
 //   transport.debugRefuseNextPlay() -> boolean  INJECT hook (ADR 0052; K169, tests/browser/
@@ -154,8 +154,19 @@ import { effectiveTarget } from './timeline.js';
 import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
-import { createLiveNotes, gateTargets, keysGatedEnvelopes, liveModel } from './live-notes.js';
+import {
+  LIVE_NOTES_TEXT, createLiveNotes, keysGatedEnvelopes, liveModel,
+} from './live-notes.js';
 import { createNotePlayer, notesSteps } from './note-player.js';
+import {
+  createTimelineOwner, createTriggerFanout, reachedEnvelopes,
+} from './trigger-fanout.js';
+import { transportClockOf } from '../audio/clock.js';
+import {
+  LINEAR, clamp, fadeCurve, FADE_KNOTS, rampAcross, segRamp, segValue,
+} from './transport-ramps.js';
+
+export { FADE_KNOTS, fadeCurve } from './transport-ramps.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -174,50 +185,11 @@ export const TRANSPORT_TEXT = Object.freeze({
 const GATE_KEEP_S = 10;
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
-const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-/** A linear segment { t0, v0, t1, v1 } at time t: v0 before t0, v1 from t1. */
-const segValue = (g, t) => (t >= g.t1 || !(g.t1 > g.t0) ? g.v1
-  : g.v0 + (g.v1 - g.v0) * clamp((t - g.t0) / (g.t1 - g.t0), 0, 1));
-const LINEAR = 'linearRampToValueAtTime';
-/**
- * The ramp a hold at t cuts on a param whose last transport segment is `g`: the segment itself
- * while it runs (or ends at t), or the ramp re-ended at t when `g` starts there from a hold.
- */
-const segRamp = (g, t) => (g.t0 < t && t <= g.t1 ? LINEAR : (g.t0 === t && g.reEnd) || null);
-/** The ramp a hold at t cuts on compiled automation `events` (timeline-compiler holdEvents). */
-function rampAcross(events, t) {
-  let next = null;
-  for (const e of events) if (e.time >= t && (!next || e.time < next.time)) next = e;
-  return next && next.method !== 'setValueAtTime' ? next.method : null;
-}
 const messageOf = (e) => (e && e.message) || String(e);
 /** The message of a failed runtime result's first diagnostic, or `fallback`. */
 const errorOf = (r, fallback) => (r.errors && r.errors[0] && r.errors[0].message) || fallback;
 
 const REFUSALS = Object.freeze(['edit-refused', 'sync-refused']);
-
-/** Segments of a continued voice's fade gain (fadeCurve). */
-export const FADE_KNOTS = 8;
-
-/**
- * The fade gain of a pattern voice continued on a rebuilt node from `t0` (H001,
- * continueVoice), as [[time, gain], ...] from t0 to t0 + xfadeS, linear between the knots. The
- * voice should rise as E = (tau - t0) / xfadeS. The new node's routes already ramp 0 -> 1 over
- * [rampAt, rampAt + xfadeS] (the runtime's crossfade, equal-gain against the old routes), so the
- * gain is E / route: 1 when t0 is the crossfade time (the routes alone fade the voice in, and a
- * second ramp on top would dip the crossfade to E^2), 0 at a later t0 the routes are already
- * open by. With no route ramp (rampAt null) it is E.
- */
-export function fadeCurve(t0, rampAt, xfadeS = STUDIO_XFADE_S) {
-  const route = (tau) => (rampAt === null ? 1 : clamp((tau - rampAt) / xfadeS, 0, 1));
-  const out = [];
-  for (let i = 0; i <= FADE_KNOTS; i += 1) {
-    const tau = t0 + (i * xfadeS) / FADE_KNOTS;
-    const r = route(tau);
-    out.push([tau, r <= 1e-6 ? 1 : Math.min(1, i / FADE_KNOTS / r)]);
-  }
-  return out;
-}
 
 /** The clip-target verdict (clip-targets.js) of a model clip on its effective target. */
 export function clipVerdict(model, clip, registry = NODE_REGISTRY) {
@@ -252,8 +224,6 @@ export function createStudioTransport({
   const listeners = new Set();
   const voices = new Map(); // item key → { key, item, voice, nodeId, handle }
   const gates = new Map(); // gate key → { key, itemKey, clipId, nodeId, handle, start, end }
-  const ticks = new Map(); // tick key → { key, itemKey, nodeId, handle, time }: clock triggers
-  const ticksPassed = new Map(); // clocked node id → triggers pruned from `ticks` (still counted)
   const measures = new Map(); // item key → measurement data
   // lane id → { laneId, target, param, handle, events (as applied), raw (the scheduler's events
   // they were fitted from), offset (the baseOffset they were fitted with), mode (see fit) }
@@ -277,11 +247,14 @@ export function createStudioTransport({
   // This run began armed (K104, the owner's 'STOP keeps it armed', 2026-11-03): a user STOP
   // (stop({ keepArmed: true })) returns it to the armed run instead of stopping the runtime.
   let armedRun = false;
-  const live = createLiveNotes({ getModel: () => model, handleOf: (id) => ready(id) });
+  // K103's one ownership rule: while the timeline plays, a live gate on a TRIGGER input it
+  // drives is refused (trigger-fanout.js timelineGateInputs).
+  const owns = createTimelineOwner(() => model, registry);
+  const live = createLiveNotes({ getModel: () => model, handleOf: (id) => ready(id),
+    owner: (id) => (playing && !armedOnly && owns(id) ? LIVE_NOTES_TEXT.timelineOwned(nameOf(id))
+      : null) });
   const notes = createNotePlayer({ getModel: () => model, ready: (id) => ready(id), registry,
-    gate: (it, env, deferred) => addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime,
-      deferred),
-    clock: (it, id) => addTick(`${it.key}>${id}`, it, id),
+    fan: (it, id, deferred) => triggers.fanOut(it, id, it.key, deferred),
     played: (it, code, reason) => {
       if (code === null) return unplayed.delete(it.clipId);
       const raw = runtime.nodes.get(it.target);
@@ -289,6 +262,9 @@ export function createStudioTransport({
         raw && raw.reason));
     },
     warn: (...a) => warn(...a) });
+  // TRIGGER fan-out and clock ticks (trigger-fanout.js: V272 A2, K023).
+  const triggers = createTriggerFanout({ getModel: () => model, ready: (id) => ready(id),
+    nodes: runtime.nodes, gate: (...a) => addGate(...a) });
   const view = (m) => (armedOnly && m ? liveModel(m) : m);
   const unplayed = new Map(); // clip or lane id → { code, reason }
   const decisions = [];
@@ -373,13 +349,16 @@ export function createStudioTransport({
       warn('measurement-callback-failed', `Measurement callback: ${messageOf(e)}`);
     }
   };
+  // The engine's one transport clock wakes it and the sequencer's loop (C055).
+  const clock = transportClockOf(engine);
+  const wakeKey = {};
   const clearTimer = () => {
-    if (timer != null) hooks.timers.clearTimeout(timer);
+    if (timer != null) clock.cancel(timer);
     timer = null;
   };
   const arm = (ms) => {
     clearTimer();
-    timer = hooks.timers.setTimeout(tick, Math.max(1, Math.round(ms)));
+    clock.wake((timer = wakeKey), Math.max(1, Math.round(ms)), tick);
   };
 
   // ------------------------------------------------------------ ownership
@@ -392,43 +371,20 @@ export function createStudioTransport({
     return out;
   }
 
-  /**
-   * Envelope ids a pattern clip on `sourceId` gates through its TRIGGER edges. A muted edge
-   * carries nothing (ports.js: every edge can be muted), so it gates nothing (V272 A3).
-   */
-  function triggerEnvelopes(m, sourceId) {
-    const out = [];
-    for (const e of m.graph.edges) {
-      if (e.from.node !== sourceId || e.from.port !== 'trigger' || e.to.port !== 'gate') continue;
-      if (e.props && e.props.muted) continue;
-      const n = nodeOf(m, e.to.node);
-      if (n && n.type === 'envelope') out.push(n.id);
-    }
-    return out;
-  }
-
-  /** Clocked nodes (plan `clocked`: Random, Step Modulator) a pattern clip on `sourceId` clocks. */
-  function triggerClocks(m, sourceId) {
-    const out = [];
-    for (const e of m.graph.edges) {
-      if (e.from.node !== sourceId || e.from.port !== 'trigger') continue;
-      if (e.props && e.props.muted) continue;
-      const n = nodeOf(m, e.to.node);
-      const a = n ? runtime.nodes.get(n.id) : null;
-      if (a && typeof a.clock === 'function') out.push(n.id);
-    }
-    return out;
-  }
-
   function gatedEnvelopes(m) {
     const out = new Set();
     for (const c of m.timeline.clips) {
       const id = effectiveTarget(m, c);
       if (c.kind === 'event') {
-        if (clipVerdict(m, c, registry).how === 'gate') out.add(id);
+        const how = clipVerdict(m, c, registry).how;
+        if (how === 'gate') out.add(id);
+        else if (how === 'clock') for (const env of reachedEnvelopes(m, id)) out.add(env);
       } else if (c.kind === 'pattern') {
-        for (const env of triggerEnvelopes(m, id)) out.add(env);
+        for (const env of reachedEnvelopes(m, id)) out.add(env);
       }
+    }
+    for (const n of m.graph.nodes) { // a Clock gates what its trigger reaches (K023)
+      if (n.type === 'clock') for (const env of reachedEnvelopes(m, n.id)) out.add(env);
     }
     for (const env of keysGatedEnvelopes(m)) out.add(env); // a key opens them (live-notes.js)
     return out;
@@ -799,43 +755,15 @@ export function createStudioTransport({
         to: voice.joinAt, at: hooks.ctx.currentTime });
     }
     unplayed.delete(it.clipId);
-    for (const env of triggerEnvelopes(model, it.target)) {
-      addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime);
-    }
-    for (const id of triggerClocks(model, it.target)) addTick(`${it.key}>${id}`, it, id);
+    triggers.fanOut(it, it.target, it.key);
     return null;
   }
 
-  /** Index of a trigger at `time` on clocked node `id`: the triggers before it since PLAY. */
-  const tickIndex = (id, time) => (ticksPassed.get(id) || 0)
-    + [...ticks.values()].filter((k) => k.nodeId === id && k.time < time).length;
-
-  /** A clock trigger at the item's start on clocked node `id` (V272 A2). */
-  function addTick(key, it, id) {
-    const h = ready(id);
-    if (!h || typeof h.clock !== 'function') return;
-    const later = [...ticks.values()].some((k) => k.nodeId === id && k.time > it.startTime);
-    ticks.set(key, { key, itemKey: it.key, nodeId: id, handle: h, time: it.startTime });
-    if (later) rebuildClock(id, it.startTime); // out of order: the later steps move up one
-    else h.clock(it.startTime, tickIndex(id, it.startTime));
-  }
-
-  /**
-   * Re-render a clocked node's steps from `horizon` from the trigger records (after an edit or
-   * a STOP removed one, or its node was replaced): hold the step it has there, then every
-   * later trigger again with its index.
-   */
-  function rebuildClock(id, horizon) {
-    const h = ready(id);
-    if (!h || typeof h.clockFrom !== 'function') return;
-    const list = [...ticks.values()].filter((k) => k.nodeId === id && k.time >= horizon)
-      .sort((a, b) => a.time - b.time);
-    const before = tickIndex(id, horizon);
-    h.clockFrom(horizon, Math.max(0, before - 1));
-    list.forEach((k, i) => {
-      k.handle = h;
-      h.clock(k.time, before + i);
-    });
+  /** A Clock tick (K023, timeline-compiler.js clockItems): it fans out like a trigger. */
+  function playClock(it, deferred) {
+    if (!nodeOf(model, it.target)) return null;
+    triggers.fanOut(it, it.target, it.key, deferred);
+    return null;
   }
 
   function addGate(key, it, envId, start, end, deferred = null) {
@@ -843,8 +771,9 @@ export function createStudioTransport({
     if (!h || typeof h.gate !== 'function') {
       return skip(it, 'target-unavailable', TRANSPORT_TEXT.unavailable(nameOf(envId)));
     }
+    // pulse: a trigger event's one-shot, whose end no clip edit moves (K023).
     gates.set(key, { key, itemKey: it.key, clipId: it.clipId, nodeId: envId, handle: h, start,
-      end });
+      end, pulse: it.type === 'event' && it.action === 'trigger' });
     if (deferred && deferred.has(envId)) return null; // rebuilt below
     // Gates that overlap on one envelope are one gate, their union (V272 B9): a gate starting
     // inside another neither retriggers nor closes it early. Inside a sounding union it changes
@@ -878,18 +807,28 @@ export function createStudioTransport({
     const n = nodeOf(model, it.target);
     if (!n) return skip(it, 'no-target', TRANSPORT_TEXT.noTarget);
     const v = clipTarget(n, { kind: 'event', action: it.action }, registry);
+    if (v.how === 'clock') {
+      // A trigger on Random or a Step Modulator: one clock tick, relayed by a Step (K023).
+      unplayed.delete(it.clipId);
+      triggers.trigger(it, deferred);
+      return null;
+    }
     if (!v.plays) return skip(it, 'event-target', v.reason);
     unplayed.delete(it.clipId);
     if (v.how === 'keys-gate') {
-      // K060: a gate on a Keys node is a gate on each Envelope its unmuted Gate edges reach,
-      // one gate record each (live-notes.js gateTargets), as a key held for the clip would be.
-      for (const env of gateTargets(model, it.target).envelopes) {
-        addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime, deferred);
-      }
+      // K060, K103: a gate on a Keys node is its Gate along its TRIGGER edges for the clip, as a
+      // key held for the clip would be: each Envelope, clocked node and Step relay it reaches.
+      triggers.fanOut(it, it.target, it.key, deferred);
       return null;
     }
-    return addGate(it.key, it, it.target, it.startTime, it.endTime, deferred);
+    // A trigger on an Envelope is one pulse: its attack and decay once, then the release.
+    const end = it.action === 'trigger' ? it.startTime + pulseS(n) : it.endTime;
+    return addGate(it.key, it, it.target, it.startTime, end, deferred);
   }
+
+  /** The gate a trigger pulse holds on Envelope node `n`: its attack plus its decay (K023). */
+  const pulseS = (n) => (finite(n.params.attack) ? n.params.attack : 0)
+    + (finite(n.params.decay) ? n.params.decay : 0);
 
   function measurementData(it) {
     return { key: it.key, clipId: it.clipId, action: it.action, target: it.target,
@@ -900,6 +839,7 @@ export function createStudioTransport({
   function playItem(it, deferred = null) {
     if (it.type === 'pattern') playPattern(it);
     else if (it.type === 'event') playEvent(it, deferred);
+    else if (it.type === 'clock') playClock(it, deferred);
     else if (it.type === 'measurement') {
       const data = measurementData(it);
       measures.set(it.key, data);
@@ -1286,11 +1226,7 @@ export function createStudioTransport({
       gates.delete(g.key);
       touched.add(g.nodeId);
     }
-    for (const k of [...ticks.values()]) {
-      if (k.itemKey !== key) continue;
-      ticks.delete(k.key);
-      touched.add(k.nodeId);
-    }
+    triggers.cancel(key, touched);
     notes.cancel(key, touched);
     const m = measures.get(key);
     if (m) {
@@ -1367,6 +1303,7 @@ export function createStudioTransport({
         }
       }
       for (const g of gatesOf(key)) {
+        if (g.pulse) continue;
         g.end = at;
         touched.add(g.nodeId);
       }
@@ -1386,7 +1323,7 @@ export function createStudioTransport({
     for (const it of [...replay, ...plan.schedule]) playItem(it, deferred);
     for (const id of touched) {
       rebuildEnvelope(id, plan.horizon);
-      rebuildClock(id, plan.horizon);
+      triggers.rebuild(id, plan.horizon);
       notes.rebuild(id, plan.horizon);
     }
     for (const a of plan.automation) applyLaneEdit(a);
@@ -1401,8 +1338,8 @@ export function createStudioTransport({
     notes.touch(touched); // a note's Keys node holds its pitch at the stop
     for (const id of touched) {
       rebuildEnvelope(id, plan.at);
-      rebuildClock(id, plan.at);
-      notes.rebuild(id, plan.at);
+      triggers.rebuild(id, plan.at);
+      notes.rebuild(id, plan.at, true); // STOP: an engine releases every voice
     }
     for (const a of plan.automation) {
       if (!a.target) continue;
@@ -1468,9 +1405,7 @@ export function createStudioTransport({
     }
     for (const id of wantEnv) if (!gateOwned.has(id)) ownEnvelope(id, fresh.has(id));
     // A clocked node rebuilt by the runtime continues its steps on the new node.
-    const stale = new Set([...ticks.values()].filter((k) => k.handle !== ready(k.nodeId))
-      .map((k) => k.nodeId));
-    for (const id of stale) rebuildClock(id, horizon);
+    for (const id of triggers.stale()) triggers.rebuild(id, horizon);
     // A Keys node rebuilt by the runtime takes up the sounding note, then the later ones.
     for (const id of notes.stale()) notes.rebuild(id, horizon);
     for (const v of voices.values()) {
@@ -1492,11 +1427,7 @@ export function createStudioTransport({
     for (const [key, v] of voices) if (v.voice.ended) voices.delete(key);
     for (const [key, g] of gates) if (g.end + GATE_KEEP_S < now) gates.delete(key);
     notes.prune(now, GATE_KEEP_S);
-    for (const [key, k] of ticks) {
-      if (k.time + GATE_KEEP_S >= now) continue;
-      ticks.delete(key);
-      ticksPassed.set(k.nodeId, (ticksPassed.get(k.nodeId) || 0) + 1);
-    }
+    triggers.prune(now, GATE_KEEP_S);
     for (const [key, m] of measures) if (m.endTime + STOP_PAD_S < now) measures.delete(key);
     const keep = (evs) => {
       let i = 0;
@@ -1769,8 +1700,7 @@ export function createStudioTransport({
     voices.clear();
     gates.clear();
     notes.clear();
-    ticks.clear();
-    ticksPassed.clear();
+    triggers.clear();
     measures.clear();
     lanes.clear();
     claims.clear();
@@ -1832,8 +1762,7 @@ export function createStudioTransport({
     lanes.clear();
     // As release() does: clock triggers are instants, the next PLAY counts from 0 (V272 A2,
     // review of #500 R1), and what the timeline left unplayed is not the armed graph's (R3).
-    ticks.clear();
-    ticksPassed.clear();
+    triggers.clear();
     unplayed.clear();
     armedOnly = true;
     const m = view(store.getModel());
@@ -1879,8 +1808,7 @@ export function createStudioTransport({
     const ownVoices = [...voices.values()];
     const ownGates = [...gates.values()];
     // Clock triggers are instants with nothing to release: the next PLAY counts from 0.
-    ticks.clear();
-    ticksPassed.clear();
+    triggers.clear();
     notes.clear();
     return runtime.stop({ fast }).then((c) => {
       // Everything of this playback is silent and released by now; end the voices' own
@@ -1959,7 +1887,7 @@ export function createStudioTransport({
       voiceCount: voices.size,
       liveVoices: [...voices.values()].filter((v) => !v.voice.ended).length,
       gateCount: gates.size,
-      clockCount: ticks.size,
+      clockCount: triggers.size,
       noteCount: notes.size,
       steps: notesSteps(playing ? model : null, playhead(), registry),
       measurementCount: measures.size,
@@ -2003,7 +1931,10 @@ export function createStudioTransport({
     disarm,
     live(keysId, ev = {}) {
       if (!playing) return { ok: false, reason: 'not-armed' };
-      return live.event(keysId, { ...ev, at: Number.isFinite(ev.at) ? ev.at : hooks.soon() });
+      const at = Number.isFinite(ev.at) ? ev.at : hooks.soon();
+      const r = live.event(keysId, { ...ev, at });
+      emit('live', { id: keysId, ev, r, ph: armedOnly ? null : scheduler.playhead(at) });
+      return r;
     },
     get armed() { return playing && armedOnly; },
     /** Voices an engine sounds now (adapters/voices.js), 0 for any other node. */

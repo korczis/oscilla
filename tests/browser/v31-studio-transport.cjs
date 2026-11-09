@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (the Studio transport judged on the audio clock)
 // OSCILLA V3.1 Studio transport in real browsers (spec §93-§104, §180-§185, §211-§213, §257):
 // src/js/studio/transport.js playing the Basic Synth template on the real AudioEngine in
 // chromium, firefox and webkit, from file://.

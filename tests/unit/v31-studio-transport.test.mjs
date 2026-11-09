@@ -908,8 +908,15 @@ test('gate event clips gate their Envelope; unsupported clips are listed with a 
   const track = d({ type: 'TRACK_ADD', kind: 'event', target: 'env-1' }).created.tracks[0];
   d({ type: 'CLIP_ADD', trackId: track, kind: 'event', start: 0.25, duration: 0.5,
     payload: { action: 'gate' } });
-  const trig = d({ type: 'CLIP_ADD', trackId: track, kind: 'event', start: 0.5, duration: 0.1,
-    payload: { action: 'trigger' } }).created.clips[0];
+  // K023: a trigger on the Envelope plays (a pulse inside the gate: the union is unchanged);
+  // the unsupported example is now a gate on Random, which only a trigger clocks.
+  d({ type: 'CLIP_ADD', trackId: track, kind: 'event', start: 0.5, duration: 0.1,
+    payload: { action: 'trigger' } });
+  const rnd = d({ type: 'NODE_ADD', nodeType: 'random', position: { x: 0, y: 0 } })
+    .created.nodes[0];
+  const rTrack = d({ type: 'TRACK_ADD', kind: 'event', target: rnd }).created.tracks[0];
+  const trig = d({ type: 'CLIP_ADD', trackId: rTrack, kind: 'event', start: 0.5, duration: 0.1,
+    payload: { action: 'gate' } }).created.clips[0];
   const s = setup(store.getModel());
   const { baseTime: b } = ok(s.transport.start());
   const bF = Math.round(b * SR);
@@ -919,7 +926,7 @@ test('gate event clips gate their Envelope; unsupported clips are listed with a 
   assert.ok(vca.calls.some((c) => c[0] === 'exponentialRampToValueAtTime'
     && Math.abs(c[2] - (at(bF, 0.75) + 0.2)) < EPS), 'released at 0.75 s over R');
   assert.deepEqual(s.transport.debugInfo().unplayed, [{ id: trig, code: 'event-target',
-    reason: TRANSPORT_TEXT.eventTarget('Envelope 1') }]);
+    reason: TRANSPORT_TEXT.eventTarget('Random 1') }]);
 });
 
 test('measurement clips are handed to the measurement callback as plain data', async () => {

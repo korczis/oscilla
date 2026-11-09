@@ -4,10 +4,11 @@
 // at = i x stepBeats of the clip's grid. Accent is vel >= ACCENT_VEL; ratchet is the note's r,
 // probability its p, slide its slide. One gesture builds one CLIP_UPDATE of the notes array;
 // a list-parameter lane builds one NODE_PARAM_SET per gesture. There is no steps clip.
-// Its view and model are W008's (src/js/ui/kinds/), first mounted by K222's Drums view.
+// Its view and model are W008's (src/js/ui/kinds/), first mounted by the Studio Inspector's step
+// grid of a selected notes clip (W008); K222's Drums view mounts it next.
 //
-// Not declared yet: the grid change (NOTES_GRID_SET of ADR 0086 decision 2), because the Studio
-// does not export that action type; it joins with a version bump in the slice that adds it.
+// Version 2 (W008) declares the grid change, NOTES_GRID_SET of ADR 0086 decision 2 (keep, map
+// or refuse), which the Studio exports since W008; version 1 (W001) had no grid event.
 
 import { defineKind, prop } from '../kind.js';
 
@@ -21,7 +22,7 @@ const key = (chord, event, row) => ({ chord, event, row });
 
 export default defineKind({
   kind: 'step-grid',
-  version: 1,
+  version: 2,
   label: 'Kroková mřížka',
   docs: 'Upravuje klip not jako řady kroků: řada je číslo noty a zapnutý krok je nota na '
     + 'at = i × stepBeats; řada seznamového parametru upravuje jeden seznamový parametr uzlu.',
@@ -75,6 +76,9 @@ export default defineKind({
       does: 'Nastaví pravděpodobnost noty p, větší než nula a nejvýš jedna.' },
     { name: 'slide', emits: ['CLIP_UPDATE'], keyPath: STEP_MENU,
       does: 'Zapne nebo vypne slide noty, klouzání z předchozí noty.' },
+    { name: 'grid', emits: ['NOTES_GRID_SET'], keyPath: STEP_MENU,
+      does: 'Změní mřížku klipu (doby na krok, swing, seed) jednou akcí v režimu keep, map '
+        + 'nebo refuse; noty se samy nikdy nepřesunou.' },
   ],
   keys: [
     key('ArrowLeft', 'move', 'step-grid-move'), key('ArrowRight', 'move', 'step-grid-move'),
@@ -96,17 +100,18 @@ export default defineKind({
   ],
   pointer: {
     events: ['toggle', 'select', 'paint', 'value', 'menu', 'accent', 'ratchet', 'probability',
-      'slide'],
+      'slide', 'grid'],
     rule: 'Klepnutí přepne krok, Shift s klepnutím rozšíří výběr, tah po řadě maluje, svislý '
       + 'tah na řadě hodnot ji nastaví a klepnutí pravým tlačítkem otevře nabídku.',
   },
   touch: {
-    events: ['toggle', 'paint', 'value', 'menu', 'accent', 'ratchet', 'probability', 'slide'],
+    events: ['toggle', 'paint', 'value', 'menu', 'accent', 'ratchet', 'probability', 'slide',
+      'grid'],
     rule: 'Ťuknutí přepne krok, vodorovný tah po řadě maluje, svislý tah na řadě hodnot ji '
       + 'nastaví a dlouhé podržení otevře nabídku kroku.',
   },
   state: ['studio.clip', 'notes'],
-  links: { opens: ['route:studio'], openedBy: ['route:synth'] },
+  links: { opens: ['route:studio'], openedBy: ['route:studio', 'route:synth'] },
   aria: {
     role: 'grid',
     parts: { lane: 'row', laneName: 'rowheader', step: 'gridcell' },
@@ -126,7 +131,8 @@ export default defineKind({
   truth: { none: 'kreslí noty modelu a krok transportu, nikdy naměřenou hodnotu' },
   impl: { modules: ['src/js/ui/kinds/step-grid.js', 'src/js/ui/kinds/step-grid-model.js'],
     issue: 'W008' },
-  workspaces: ['synth'],
+  // Mounted in the Studio Inspector (W008) and the Synth's Drums tab (K222).
+  workspaces: ['studio', 'synth'],
   transient: ['focus', 'drag-preview', 'open-entry'],
   mount: { extras: [] },
   constants: { accentVel: ACCENT_VEL },

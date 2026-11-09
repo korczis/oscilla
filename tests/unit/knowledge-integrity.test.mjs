@@ -57,6 +57,7 @@ import { ALGORITHMS, isKnownAlgorithm } from '../../src/js/measurement/algorithm
 import { parseClaims, staleAlgorithmIds, unquote } from './claims-parse.mjs';
 import { pinnedVersion } from '../../scripts/majordomus-pin-check.mjs';
 import { parseYaml } from '../../scripts/yaml-subset.mjs';
+import shards from '../browser/lib/shards.cjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
@@ -98,6 +99,9 @@ export function invokedFiles(code) {
   return new Set([...code.matchAll(INVOKED)].map((m) => m[1] || m[2]));
 }
 
+/** The CI legs' runner (tests/browser/lib/shards.cjs). */
+const SHARD_RUNNER = 'tests/browser/lib/shards.cjs';
+
 /**
  * What a text runs: `runs(rel)` for a repository file, `scripts` for the npm scripts reached.
  * The text is the body of an npm script, or a workflow. In a workflow (`workflow: true`) a
@@ -115,6 +119,10 @@ export function invocations(text, scripts = PKG.scripts, { workflow = false } = 
   const files = new Set(all.split(/[\s"'&|;]+/)
     .filter((t) => /^(tests|scripts|\.github)\//.test(t)));
   if (workflow) for (const f of invokedFiles(code)) files.add(f);
+  // ci-speed: the browser legs' runner reads its suites from package.json (test:release's
+  // scripts, the visual gate apart) and runs each in one leg per browser
+  // (tests/unit/browser-shards.test.mjs), so reaching it runs every one of them.
+  if (files.has(SHARD_RUNNER)) for (const f of shards.releaseSuites({ scripts })) files.add(f);
   return {
     files, globs, scripts: reached.scripts,
     runs: (rel) => files.has(rel) || globs.some((re) => re.test(rel)),

@@ -13,7 +13,7 @@ export default {
       'project.ui-uses-flowbite-pro', 'project.audio-engine-discipline',
       'project.single-file-deliverable', 'project.rules-name-their-enforcement'],
     adrs: ['adr-0081', 'adr-0086', 'adr-0061', 'adr-0050'],
-    tests: ['tests/unit/ui-kinds.test.mjs'],
+    tests: ['tests/unit/ui-kinds.test.mjs', 'tests/unit/ui-kind-step-grid.test.mjs'],
     since: '2026-11-07',
   },
 };
