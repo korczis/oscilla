@@ -318,3 +318,28 @@ export const macro = {
     };
   },
 };
+
+/**
+ * The Clock (K023): no audio node at all. Its TRIGGER output is logical: the timeline compiler
+ * plans its ticks (timeline-compiler.js clockItems) and the transport fans each one out along
+ * the Clock's trigger edges, as it does a pattern clip's (transport.js fanOut).
+ */
+export const clock = {
+  compiler: 'studio/timeline-compiler.js#compilePass',
+  structural: [],
+  create() {
+    return {
+      inputs: {},
+      outputs: {},
+      outputRange: {},
+      modTarget: (key) => ({ reason: `${key}: Clock nemá modulovatelný parametr` }),
+      applyBase() {},
+      update() {},
+      stop() {},
+      dispose() {},
+      info: { clock: true },
+      status: 'ready',
+      reason: null,
+    };
+  },
+};

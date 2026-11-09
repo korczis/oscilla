@@ -5,33 +5,33 @@ Derived by `node scripts/patch-contract.mjs --write` from the Studio node regist
 `--check` fails when it is stale, and `tests/unit/patch-contract.test.mjs` holds the missing
 counts to `tests/unit/patch-contract-baseline.json`, which only fall.
 
-36 node types, 95 ports, 158 parameters. A field is declared,
+37 node types, 97 ports, 159 parameters. A field is declared,
 defaulted (derived by the declaration: a parameter port, or a field the port or parameter
 lists as defaulted) or missing; a field that does not apply is not counted.
 
 | Kind | Field | Declared | Defaulted | Missing |
 |---|---|---:|---:|---:|
-| port | `id` | 71 | 24 | 0 |
-| port | `owner` | 71 | 24 | 0 |
-| port | `direction` | 71 | 24 | 0 |
-| port | `type` | 71 | 24 | 0 |
-| port | `role` | 71 | 24 | 0 |
-| port | `cardinality` | 71 | 24 | 0 |
-| port | `required` | 71 | 24 | 0 |
-| port | `channels` | 0 | 1 | 94 |
-| port | `rate` | 0 | 1 | 94 |
+| port | `id` | 73 | 24 | 0 |
+| port | `owner` | 73 | 24 | 0 |
+| port | `direction` | 73 | 24 | 0 |
+| port | `type` | 73 | 24 | 0 |
+| port | `role` | 73 | 24 | 0 |
+| port | `cardinality` | 73 | 24 | 0 |
+| port | `required` | 73 | 24 | 0 |
+| port | `channels` | 2 | 1 | 94 |
+| port | `rate` | 2 | 1 | 94 |
 | port | `unconnected` | 0 | 1 | 56 |
-| port | `monitor` | 0 | 1 | 94 |
-| port | `compact` | 0 | 1 | 94 |
-| port | `version` | 0 | 1 | 94 |
-| parameter | `type` | 158 | 0 | 0 |
-| parameter | `unit` | 158 | 0 | 0 |
-| parameter | `default` | 157 | 0 | 1 |
-| parameter | `range` | 148 | 0 | 0 |
+| port | `monitor` | 2 | 1 | 94 |
+| port | `compact` | 2 | 1 | 94 |
+| port | `version` | 2 | 1 | 94 |
+| parameter | `type` | 159 | 0 | 0 |
+| parameter | `unit` | 159 | 0 | 0 |
+| parameter | `default` | 158 | 0 | 1 |
+| parameter | `range` | 149 | 0 | 0 |
 | parameter | `mapping` | 112 | 0 | 0 |
-| parameter | `automatable` | 158 | 0 | 0 |
-| parameter | `modulatable` | 158 | 0 | 0 |
-| parameter | `live` | 13 | 0 | 145 |
+| parameter | `automatable` | 159 | 0 | 0 |
+| parameter | `modulatable` | 159 | 0 | 0 |
+| parameter | `live` | 14 | 0 | 145 |
 
 ## Compatibility and cardinality
 
@@ -122,7 +122,7 @@ One output feeds many inputs. 24 input ports take more than one cable, 33 take o
 | `stereo-split` | 3 | 5 | 22 |
 | `am-voice` | 2 | 10 | 21 |
 | `random` | 3 | 4 | 20 |
-| `step-modulator` | 3 | 5 | 20 |
+| `step-modulator` | 4 | 5 | 20 |
 | `drive` | 3 | 3 | 19 |
 | `ring` | 3 | 2 | 19 |
 | `transfer-analyzer` | 3 | 2 | 19 |

@@ -240,6 +240,27 @@ export function scheduledValueAt(events, t, defaultValue = null) {
   return automationValueAt(toRampEvents(events), t, defaultValue);
 }
 
+/**
+ * Events that hold a param at `at` given what was scheduled (`scheduled`, compiled events in
+ * order): after cancelScheduledValues(at), a ramp that was in progress across `at` is re-ended
+ * at `at` with its exact value (same curve up to `at`), then the value is pinned. Returns
+ * { value, events }; value is null when nothing was scheduled.
+ */
+export function holdEvents(scheduled, at, defaultValue = null) {
+  const value = scheduledValueAt(scheduled, at, defaultValue);
+  if (value === null) return { value, events: [] };
+  let next = null;
+  for (const e of scheduled) if (e.time >= at && (!next || e.time < next.time)) next = e;
+  const events = [];
+  if (next && next.method === 'linearRampToValueAtTime') {
+    events.push({ method: 'linearRampToValueAtTime', value, time: at, hold: true });
+  } else if (next && next.method === 'exponentialRampToValueAtTime' && value > 0) {
+    events.push({ method: 'exponentialRampToValueAtTime', value, time: at, hold: true });
+  }
+  events.push({ method: 'setValueAtTime', value, time: at, hold: true });
+  return { value, events };
+}
+
 // ---------------------------------------------------------------- thin applier
 
 /**
