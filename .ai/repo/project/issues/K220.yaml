@@ -2,11 +2,11 @@ id: K220
 milestone: M064
 serves:
   - "connected-instrument#performance-pad"
-title: "Two performance pads under the Synth face: L on two parameters (cutoff, resonance), R on pitch in a scale and gate"
+title: "Two performance pads under the Synth face: L on two parameters (LPF and HPF cutoff), R on pitch in a scale and gate"
 slug: two-performance-pads-under-the-synth-face
 priority: p1
 profile: implementation
-objective: "Lands as feat(synth). Q103 (3): below the Synth panel at 1536 px (stacked at 390 px), two XY pads share the panel's store. Pad L drives two parameters of the panel through the Studio model (default X the low-pass cutoff, Y its resonance; each axis's target chosen in its settings from the parameters the panel exposes, the mapping log for a frequency); pad R plays the Keys like the existing XY pad (pitch in the chosen scale on X, gate or velocity on Y, the scale selector beside it). Both draw their touch point, release on Stop and on leaving (the shared mount of 3.21), and record into a notes or automation clip when record is armed. Reuses src/js/synth/xy.js and panels/xy.js (one pad implementation, two instances), no second pad model. Each pad is an xy-pad node of the Studio model: its X and Y are typed control output jacks in the patch bay, so the cutoff and resonance targets are normals a cable replaces (project.typed-ports, project.studio-model-is-canonical), never a hard-wired special case; the pad's touch, release and recording go through the one shared note and gesture paths (the owner's Q103 constraint: no one-offs, all connectable, one living system over shared state)."
+objective: "Lands as feat(synth). Q103 (3): below the Synth panel at 1536 px (stacked at 390 px), two XY pads share the panel's store. Pad L drives two parameters of the panel through the Studio model (default X the low-pass cutoff, Y its resonance; each axis's target chosen in its settings from the parameters the panel exposes, the mapping log for a frequency); pad R plays the Keys like the existing XY pad (pitch in the chosen scale on X, gate or velocity on Y, the scale selector beside it). Both draw their touch point, release on Stop and on leaving (the shared mount of 3.21), and record into a notes or automation clip when record is armed. Reuses src/js/synth/xy.js and panels/xy.js (one pad implementation, two instances), no second pad model. Each pad is an xy-pad node of the Studio model: its X and Y are typed control output jacks in the patch bay, so the cutoff and resonance targets are normals a cable replaces (project.typed-ports, project.studio-model-is-canonical), never a hard-wired special case; the pad's touch, release and recording go through the one shared note and gesture paths (the owner's Q103 constraint: no one-offs, all connectable, one living system over shared state). Amended 2026-11-09 (the coordinator oscilla-43, on oscilla-ee's findings): pad L's default Y is the HPF cutoff, not the LPF resonance, because the Studio refuses a low-pass Q as a CV target (studio/adapters/processing.js modTarget, filterQ: the biquad's Q is in dB) and Q099 allows only the targets xyTargets declares; with X on the LPF cutoff the pad sweeps a band, and its label says what each axis drives. K227 makes the low-pass Q a dB-aware CV target and then moves Y to resonance. Recording (REC on pad L) is split out to K226, on K223's record model. This slice: the two pads, their normals, the scale picker beside pad R, both releasing on Stop and on leaving."
 why: "Owner direction Q103 (an integrated pad like the reference); the Synth has one XY pad on its own tab today."
 scope:
   - "src/js/synth/xy.js"
@@ -19,7 +19,7 @@ scope:
   - "dist"
 depends_on: []
 acceptance_criteria:
-  - "Fail-first unit: pad L's X sets the cutoff and Y the resonance of the panel's low-pass through one NODE_PARAM_SET each (log mapping for the cutoff), pad R's touch plays a note of the scale and its release ends it; on the merge base no second pad exists."
+  - "Fail-first unit: pad L is a second xy-pad module of the Synth panel whose X and Y outputs are normalled to the LPF cutoff and the HPF cutoff (log mapping, typed CONTROL edges, a cable replaces each normal, no NODE_PARAM_SET shortcut), a touch on it moves those targets through transport.live and its release returns them to rest; pad R's touch plays a note of the scale and its release ends it; on the merge base no second pad exists."
   - "Browser (chromium, firefox, webkit): both pads are on the Synth face at 1536 px and stacked at 390 px, each answers pointer and keyboard (arrows move the point), Stop releases both."
   - "One pad implementation (xy.js) serves both; the census rows exist (C062 is not widened)."
   - "Guarded (src/js/synth): a non-builder verdict."
@@ -29,4 +29,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-07'
-updated_at: '2026-11-07'
+updated_at: '2026-11-09'
