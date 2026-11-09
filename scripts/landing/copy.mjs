@@ -77,6 +77,34 @@ export const MILESTONE_STATUS_COPY = Object.freeze({
   todo: 'otevřeno', cancelled: 'zrušeno', proposed: 'navrženo',
 });
 
+/** Conventional Commit type -> Czech heading of its group in the per-release changelog. */
+export const COMMIT_TYPE_COPY = Object.freeze({
+  feat: 'Nové funkce', fix: 'Opravy', perf: 'Výkon', refactor: 'Přestavba kódu',
+  revert: 'Vrácené změny', docs: 'Dokumentace', test: 'Testy', build: 'Sestavení', ci: 'CI',
+  style: 'Styl kódu', chore: 'Údržba a plán', review: 'Revize', merge: 'Sloučení větví',
+  proposal: 'Návrhy', other: 'Ostatní (mimo Conventional Commits)',
+});
+/** The groups a release's changelog shows unfolded; the rest start folded. */
+export const COMMIT_TYPES_OPEN = Object.freeze(['feat', 'fix', 'perf', 'revert']);
+/**
+ * How many of the newest releases list their commits one by one (besides "Zatím nevydáno");
+ * an older release keeps its type counts, plan-id chips, PR links and the compare link, which
+ * lists its commits on GitHub. Keeps the page near 700 kB instead of every commit ever made.
+ */
+export const CHANGELOG_FULL_RELEASES = 8;
+
+/** The derived milestone status (scripts/facts.mjs plan()) -> Czech name. */
+export const PLAN_STATUS_COPY = Object.freeze({ DONE: 'hotovo', ACTIVE: 'rozpracováno',
+  OPEN: 'otevřeno' });
+
+/** ADR front-matter status -> Czech name; an unknown status is shown as it is. */
+export const ADR_STATUS_COPY = Object.freeze({ accepted: 'přijato', proposed: 'navrženo',
+  superseded: 'nahrazeno', deprecated: 'zastaralé', rejected: 'zamítnuto' });
+
+/** Claim area (facts.claims.areaRule) -> Czech name where the area is not a module name. */
+export const AREA_COPY = Object.freeze({ none: 'bez implementace', tooling: 'nástroje (scripts)',
+  app: 'kompozice (src/js)', data: 'data (src/data)', ui: 'ui' });
+
 /** The frame's tabs: the deep links the playable frame switches between. */
 export const FRAME_TABS = Object.freeze([
   { id: 'playground', name: 'Playground', hash: '#m=playground',

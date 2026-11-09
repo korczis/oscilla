@@ -29,7 +29,7 @@ import { ICON_SVG } from './social-assets.mjs';
 import { fmtDate, renderCharts } from './landing/charts.mjs';
 import { FRAME_TABS, checkCopy } from './landing/copy.mjs';
 import {
-  REPO_URL, SCRIPT_MARKER, STYLE_MARKER, renderPage, shotText,
+  LINK_SHA, REPO_URL, SCRIPT_MARKER, STYLE_MARKER, renderPage, shotText,
 } from './landing/page.mjs';
 
 const require = createRequire(import.meta.url);
@@ -39,6 +39,77 @@ export const TIMELINE_LENGTH = 8;
 /** The flowbite components the client imports; Tailwind scans them for the classes they add. */
 const FLOWBITE_COMPONENTS = ['collapse', 'modal', 'tabs'];
 const NOTICE_PACKAGES = ['flowbite', 'lucide-static', 'tailwindcss'];
+
+// The long lists (the changelog's commits, the claims and the roadmap) style their links once
+// here instead of on each of thousands of elements: the same Pro link classes, by @apply.
+// The `hidden` attribute wins over a display utility (a filtered table row is `block` on a
+// phone), so the script's filters can toggle it on any element.
+const LIST_CSS = `@layer base {
+  [hidden]:where(:not([hidden="until-found"])) { display: none !important; }
+}
+@layer components {
+  .lab-links a { @apply rounded font-medium text-primary-700 underline-offset-2 hover:underline
+    focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
+    dark:text-primary-400; }
+  .lab-commits a { @apply font-mono text-xs; }
+  .lab-chips a { @apply inline-flex rounded bg-gray-100 px-2 py-0.5 font-mono text-xs font-medium
+    text-gray-800 hover:bg-primary-100 hover:text-primary-800 focus:outline-none
+    focus-visible:ring-2 focus-visible:ring-primary-500 dark:bg-gray-700 dark:text-gray-200
+    dark:hover:bg-primary-900 dark:hover:text-primary-200; }
+  .lab-group { @apply border-t border-gray-200 py-2 dark:border-gray-700; }
+  .lab-group > summary { @apply flex cursor-pointer list-none items-center gap-2 rounded-lg py-1
+    text-sm font-semibold text-gray-900 focus:outline-none focus-visible:ring-2
+    focus-visible:ring-primary-500 dark:text-white; }
+  .lab-group > summary::-webkit-details-marker { display: none; }
+  .lab-group > summary::before { content: ''; @apply ms-1 me-1 h-2 w-2 shrink-0 -rotate-45
+    border-b-2 border-r-2 border-gray-500 transition-transform dark:border-gray-400; }
+  .lab-group[open] > summary::before { @apply rotate-45; }
+  .lab-group > summary code { @apply text-xs font-normal text-gray-500 dark:text-gray-400; }
+  .lab-group > summary span { @apply ms-auto text-xs font-normal tabular-nums text-gray-500
+    dark:text-gray-400; }
+  .lab-rel > summary { @apply flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2
+    rounded-lg p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500; }
+  .lab-rel > summary::-webkit-details-marker { display: none; }
+  .lab-rel > summary::before { content: ''; @apply ms-1 h-2.5 w-2.5 shrink-0 rotate-45
+    border-b-2 border-r-2 border-gray-500 transition-transform dark:border-gray-400; }
+  .lab-rel[open] > summary::before { @apply -rotate-[135deg]; }
+  .lab-badge { @apply me-2 inline-flex items-center rounded px-2.5 py-0.5 text-xs font-medium; }
+  .lab-badge-blue { @apply bg-primary-100 text-primary-800 dark:bg-primary-900
+    dark:text-primary-300; }
+  .lab-badge-gray { @apply bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300; }
+  .lab-badge-green { @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300; }
+  .lab-badge-indigo { @apply bg-indigo-100 text-indigo-800 dark:bg-indigo-900
+    dark:text-indigo-300; }
+  .lab-ctable tbody tr { @apply border-b border-gray-200 dark:border-gray-700; }
+  .lab-ctable td, .lab-ctable tbody th { @apply whitespace-nowrap px-3 py-2; }
+  .lab-ctable tbody th { @apply font-medium text-gray-900 dark:text-white; }
+  .lab-rows > tr { @apply border-b border-gray-200 bg-white align-top last:border-0
+    dark:border-gray-700 dark:bg-gray-800; }
+  .lab-claims > tr { @apply block py-2 md:table-row md:py-0; }
+  .lab-claims > tr > * { @apply block px-4 py-1 md:table-cell md:py-3; }
+  .lab-adr > tr > * { @apply px-4 py-3; }
+  .lab-paths span { @apply text-gray-400 dark:text-gray-500; }
+  .lab-paths a { @apply break-all; }
+  .lab-types > span { @apply me-2 inline-flex items-center rounded px-2.5 py-0.5 text-xs
+    font-medium; }
+  .lab-types > span:not([class]) { @apply bg-gray-100 text-gray-800 dark:bg-gray-700
+    dark:text-gray-300; }
+  .lab-bar { @apply w-full rounded-full bg-gray-200 dark:bg-gray-700; }
+  .lab-bar > div { @apply h-full rounded-full bg-primary-600 dark:bg-primary-500; }
+  .lab-rel > div { @apply border-t border-gray-200 p-4 dark:border-gray-700; }
+  .lab-rel h4 { @apply mb-1 text-sm font-medium text-gray-900 dark:text-white; }
+  .lab-rel .lab-meta { @apply mb-3 text-sm text-gray-500 dark:text-gray-400; }
+  .lab-rel .lab-ver { @apply text-lg font-semibold; }
+  .lab-rel .lab-when { @apply text-sm text-gray-500 dark:text-gray-400; }
+  .lab-ms > li { @apply py-2; }
+  .lab-ms-row { @apply mb-1 flex items-start justify-between gap-3 text-sm; }
+  .lab-ms-row > span:first-child { @apply min-w-0; }
+  .lab-ms-row > span:first-child > a { @apply font-mono; }
+  .lab-ms-row > span:first-child > span { @apply text-gray-600 dark:text-gray-300; }
+  .lab-ms-row > span:last-child { @apply flex shrink-0 items-center; }
+  .lab-ms-row > span:last-child > span:last-child { @apply tabular-nums text-gray-500
+    dark:text-gray-400; }
+}`;
 
 const LUCIDE_PAINT = 'fill="none" stroke="currentColor" stroke-width="2" '
   + 'stroke-linecap="round" stroke-linejoin="round"';
@@ -135,7 +206,7 @@ async function compileCss(html, js) {
     },
     plugins: [require('flowbite/plugin')({ forms: false })],
   };
-  const input = '@tailwind base;\n@tailwind components;\n@tailwind utilities;\n';
+  const input = `@tailwind base;\n@tailwind components;\n${LIST_CSS}\n@tailwind utilities;\n`;
   const result = await postcss([tailwindcss(config)]).process(input, { from: undefined });
   const out = await esbuild.transform(result.css, {
     loader: 'css', minify: true, target: TARGETS, legalComments: 'none', charset: 'utf8',
@@ -168,10 +239,10 @@ export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts
   const model = {
     facts: f, appHref, charts, chartNames: CHARTS, shots, frameTabs, timeline,
     latestRelease: f.releases.items[f.releases.items.length - 1] ?? null,
-    shortSha: sha.slice(0, 7), commitDay: fmtDate(f.git.headDate),
+    sha, shortSha: sha.slice(0, 7), commitDay: fmtDate(f.git.headDate),
     commitUrl: `${REPO_URL}/commit/${sha}`,
-    blob: (p) => `${REPO_URL}/blob/${sha}/${p}`,
-    tree: (p) => `${REPO_URL}/tree/${sha}/${p}`,
+    blob: (p) => `${REPO_URL}/blob/${sha.slice(0, LINK_SHA)}/${p}`,
+    tree: (p) => `${REPO_URL}/tree/${sha.slice(0, LINK_SHA)}/${p}`,
     icons, mark: markFactory(), workspaceIcon: workspaceIconOf(root),
     favicon: `data:image/svg+xml,${encodeURIComponent(ICON_SVG)}`,
   };

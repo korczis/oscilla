@@ -9,12 +9,19 @@
 
 import { esc, fmtDate, fmtDec, fmtInt, MB, chartTable } from './charts.mjs';
 import {
-  CATEGORY_COPY, CLAIM_STATUS_COPY, ENGINE_COPY, FRAME_TABS, GROUP_COPY, WORKSPACE_COPY,
+  ADR_STATUS_COPY, AREA_COPY, CATEGORY_COPY, CLAIM_STATUS_COPY, COMMIT_TYPE_COPY,
+  CHANGELOG_FULL_RELEASES, COMMIT_TYPES_OPEN, ENGINE_COPY, FRAME_TABS, GROUP_COPY, PLAN_STATUS_COPY, WORKSPACE_COPY,
 } from './copy.mjs';
 
 export const STYLE_MARKER = '<!-- lab:style -->';
 export const SCRIPT_MARKER = '<!-- lab:script -->';
 export const REPO_URL = 'https://github.com/korczis/oscilla';
+/**
+ * The length of the commit id in the page's blob, tree and commit links: GitHub resolves an
+ * abbreviated id, and twelve hex digits stay unambiguous in this repository while sparing
+ * 28 bytes on each of about 1 600 links.
+ */
+export const LINK_SHA = 12;
 
 // The page's own policy: nothing but this origin, inline style and script, and data: images.
 export const CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; "
@@ -42,10 +49,11 @@ const LINK = 'font-medium text-primary-700 underline-offset-2 hover:underline '
   + 'dark:text-primary-400';
 const CARD = 'rounded-lg border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 '
   + 'dark:bg-gray-800';
-const BADGE = 'me-2 inline-flex items-center rounded px-2.5 py-0.5 text-xs font-medium';
-const BADGE_BLUE = `${BADGE} bg-primary-100 text-primary-800 dark:bg-primary-900 `
-  + 'dark:text-primary-300';
-const BADGE_GRAY = `${BADGE} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300`;
+// The Pro badge, its colours as @apply components (scripts/landing.mjs LIST_CSS): the page
+// shows hundreds of them, so each carries two short classes instead of fourteen.
+const BADGE = 'lab-badge';
+const BADGE_BLUE = 'lab-badge lab-badge-blue';
+const BADGE_GRAY = 'lab-badge lab-badge-gray';
 const H2 = 'mb-4 text-3xl font-extrabold tracking-tight text-gray-900 dark:text-white';
 const LEAD = 'mb-8 max-w-3xl text-gray-500 dark:text-gray-400 sm:text-lg';
 const SECTION = 'scroll-mt-20 bg-white dark:bg-gray-900';
@@ -53,9 +61,27 @@ const SECTION_ALT = 'scroll-mt-20 bg-gray-50 dark:bg-gray-800/40';
 const WRAP = 'mx-auto max-w-screen-xl px-4 py-12 lg:px-6 lg:py-16';
 
 const NAV = [
-  ['#hrat', 'Hrát'], ['#plochy', 'Pracovní plochy'], ['#galerie', 'Galerie'],
-  ['#grafy', 'Grafy'], ['#dukazy', 'Důkazy'], ['#vydani', 'Vydání'],
+  ['#hrat', 'Hrát'], ['#plochy', 'Plochy'], ['#galerie', 'Galerie'],
+  ['#grafy', 'Grafy'], ['#dukazy', 'Důkazy'], ['#tvrzeni', 'Tvrzení'], ['#vydani', 'Vydání'],
+  ['#zmeny', 'Změny'], ['#roadmapa', 'Roadmapa'], ['#adr', 'ADR'],
 ];
+const BADGE_GREEN = 'lab-badge lab-badge-green';
+const BADGE_INDIGO = 'lab-badge lab-badge-indigo';
+const TYPE_BADGE = Object.freeze({ feat: 'lab-badge-blue', fix: 'lab-badge-indigo',
+  perf: 'lab-badge-green' });
+const PLAN_BADGE = Object.freeze({ DONE: BADGE_GREEN, ACTIVE: BADGE_BLUE, OPEN: BADGE_GRAY });
+const ADR_BADGE = Object.freeze({ accepted: BADGE_GREEN, proposed: BADGE_GRAY });
+const FOCUS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500';
+const INPUT = 'block w-full rounded-lg border border-gray-300 bg-gray-50 p-2.5 text-sm '
+  + 'text-gray-900 focus:border-primary-500 focus:outline-none focus:ring-2 '
+  + 'focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white '
+  + 'dark:placeholder-gray-400 dark:focus:border-primary-500 dark:focus:ring-primary-500';
+const TH = 'px-4 py-3';
+const TABLE = 'w-full text-left text-sm text-gray-500 dark:text-gray-400';
+const THEAD = 'bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400';
+const pct = (done, total) => (total > 0 ? Math.round((1000 * done) / total) / 10 : 0);
+const plural = (n, one, few, many) => `${fmtInt(n)} ${n === 1 ? one : n >= 2 && n <= 4 ? few
+  : many}`;
 
 const VIEW_CS = Object.freeze({ timeline: 'časová osa', bay: 'patch bay',
   engines: 'záložka Engines', panel: 'panel', xy: 'záložka XY' });
@@ -79,20 +105,20 @@ const icon = (icons, name, cls = 'h-5 w-5') => icons(name, cls);
 function header(m) {
   const links = NAV.map(([href, label]) => `<li><a href="${href}" class="block rounded-lg px-3 `
     + 'py-2 text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 '
-    + 'focus-visible:ring-primary-500 dark:text-gray-300 dark:hover:bg-gray-700 lg:p-2 '
-    + `lg:hover:bg-transparent lg:hover:text-primary-700 dark:lg:hover:text-white">${label}</a>`
+    + 'focus-visible:ring-primary-500 dark:text-gray-300 dark:hover:bg-gray-700 xl:p-2 '
+    + `xl:hover:bg-transparent xl:hover:text-primary-700 dark:xl:hover:text-white">${label}</a>`
     + '</li>').join('');
   return `<header class="sticky top-0 z-30">
-<nav class="border-b border-gray-200 bg-white px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800 lg:px-6" aria-label="Hlavní">
+<nav class="border-b border-gray-200 bg-white px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800 xl:px-6" aria-label="Hlavní">
 <div class="mx-auto flex max-w-screen-xl flex-wrap items-center justify-between">
 <a href="#top" class="flex items-center gap-3 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">${m.mark('h-8 w-8')}<span class="self-center whitespace-nowrap text-xl font-semibold text-gray-900 dark:text-white">OSCILLA</span></a>
-<div class="flex items-center gap-2 lg:order-2">
+<div class="flex items-center gap-2 xl:order-2">
 <button type="button" data-theme-toggle aria-pressed="false" aria-label="Přepnout motiv" class="rounded-lg p-2.5 text-sm text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-700"><span class="dark:hidden">${icon(m.icons, 'moon')}</span><span class="hidden dark:inline">${icon(m.icons, 'sun')}</span></button>
 <a href="${esc(m.appHref)}" class="hidden rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800 sm:inline-flex">Otevřít laboratoř</a>
-<button type="button" data-lab-menu-toggle aria-controls="lab-menu" aria-expanded="false" class="inline-flex items-center rounded-lg p-2 text-sm text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600 lg:hidden"><span class="sr-only">Otevřít menu</span>${icon(m.icons, 'menu', 'h-6 w-6')}</button>
+<button type="button" data-lab-menu-toggle aria-controls="lab-menu" aria-expanded="false" class="inline-flex items-center rounded-lg p-2 text-sm text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600 xl:hidden"><span class="sr-only">Otevřít menu</span>${icon(m.icons, 'menu', 'h-6 w-6')}</button>
 </div>
-<div class="hidden w-full items-center justify-between lg:order-1 lg:flex lg:w-auto" id="lab-menu">
-<ul class="mt-4 flex flex-col font-medium lg:mt-0 lg:flex-row lg:space-x-4">${links}</ul>
+<div class="hidden w-full items-center justify-between xl:order-1 xl:flex xl:w-auto" id="lab-menu">
+<ul class="mt-4 flex flex-col font-medium xl:mt-0 xl:flex-row xl:space-x-1">${links}</ul>
 </div>
 </div>
 </nav>
@@ -118,13 +144,15 @@ function hero(m) {
 <a href="${esc(m.appHref)}" class="${BTN_PRIMARY}">Otevřít laboratoř ${icon(m.icons, 'arrow-right', 'ms-2 h-5 w-5')}</a>
 <a href="#hrat" class="${BTN_OUTLINE}">${icon(m.icons, 'play', 'me-2 h-5 w-5')} Vyzkoušet přímo tady</a>
 </div>
-<dl class="mx-auto grid max-w-screen-lg grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+<dl class="mx-auto grid max-w-screen-xl grid-cols-2 gap-4 sm:grid-cols-4 xl:grid-cols-8">
 ${stat(fmtInt(f.workspaces.items.length), 'pracovních ploch')}
 ${stat(fmtInt(f.templates.items.length), 'šablon Studia')}
 ${stat(fmtInt(f.engines.items.length), 'enginů Synthu')}
 ${stat(fmtInt(guaranteed), 'zaručených tvrzení')}
 ${stat(fmtInt(f.releases.items.length), 'vydání')}
 ${stat(`${fmtDec(f.dist.gzip / MB, 2)}&nbsp;MB`, 'jeden soubor, gzip')}
+${stat(fmtInt(f.git.commits), 'commitů')}
+${stat(fmtInt(f.adrs.total), 'rozhodnutí (ADR)')}
 </dl>
 </div>
 </section>`;
@@ -227,12 +255,12 @@ ${items}
 function chartsSection(m) {
   const cards = m.chartNames.map((name) => {
     const t = chartTable(name, m.facts);
-    const rows = t.rows.map((r) => `<tr class="border-b border-gray-200 dark:border-gray-700">${r.map((c, i) => (i === 0 ? `<th scope="row" class="whitespace-nowrap px-3 py-2 font-medium text-gray-900 dark:text-white">${esc(c)}</th>` : `<td class="whitespace-nowrap px-3 py-2">${esc(c)}</td>`)).join('')}</tr>`).join('');
+    const rows = t.rows.map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${esc(c)}</th>` : `<td>${esc(c)}</td>`)).join('')}</tr>`).join('');
     return `<figure class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-<div data-chart-box class="relative"><div class="overflow-x-auto rounded-xl p-1 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full [&>svg]:min-w-[600px] [&>svg]:rounded-xl [&>svg:focus]:outline-none [&>svg:focus-visible]:ring-4 [&>svg:focus-visible]:ring-primary-500">${m.charts[name].trim()}</div><p class="sr-only" aria-live="polite" data-chart-live></p></div>
+<div data-chart-box class="relative"><div class="overflow-x-auto rounded-xl p-1 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full [&>svg]:min-w-[540px] [&>svg]:rounded-xl [&>svg:focus]:outline-none [&>svg:focus-visible]:ring-4 [&>svg:focus-visible]:ring-primary-500">${m.charts[name].trim()}</div><p class="sr-only" aria-live="polite" data-chart-live></p></div>
 <figcaption class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500 dark:text-gray-400"><span>Najetím, nebo po zaměření grafu šipkami, zobrazíte hodnoty. Na úzkém displeji graf posunete do strany.</span><a class="${LINK}" href="charts/${name}.svg">SVG soubor</a></figcaption>
 <details class="mt-2 text-sm text-gray-500 dark:text-gray-400"><summary class="cursor-pointer rounded font-medium text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-white">Tabulka hodnot</summary>
-<div class="mt-2 max-h-72 overflow-auto"><table class="w-full text-left text-sm text-gray-500 dark:text-gray-400"><thead class="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400"><tr>${t.head.map((h) => `<th scope="col" class="px-3 py-2">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+<div class="mt-2 max-h-72 overflow-auto"><table class="lab-ctable w-full text-left text-sm text-gray-500 dark:text-gray-400"><thead class="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400"><tr>${t.head.map((h) => `<th scope="col" class="px-3 py-2">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
 </details>
 </figure>`;
   }).join('\n');
@@ -255,7 +283,6 @@ function proof(m) {
     const c = CLAIM_STATUS_COPY[s] ?? { name: s, text: '' };
     return `<div class="${CARD}"><p class="mb-1 text-4xl font-extrabold text-gray-900 dark:text-white">${fmtInt(f.claims.byStatus[s])}</p><h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">${esc(c.name)}</h3><p class="text-gray-500 dark:text-gray-400">${esc(c.text)}</p></div>`;
   }).join('');
-  const ids = f.claims.items.map((c) => `<li><span class="${c.status === 'guaranteed' ? BADGE_BLUE : BADGE_GRAY}">${esc(CLAIM_STATUS_COPY[c.status]?.name ?? c.status)}</span><code class="text-xs">${esc(c.id)}</code></li>`).join('');
   return `<section id="dukazy" class="${SECTION}">
 <div class="${WRAP}">
 <h2 class="${H2}">Jak víme, že to platí</h2>
@@ -265,7 +292,7 @@ ${cards}
 <div class="${CARD}"><p class="mb-1 text-4xl font-extrabold text-gray-900 dark:text-white">${fmtInt(f.tests.unit)}</p><h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">souborů unit testů</h3><p class="text-gray-500 dark:text-gray-400">a ${fmtInt(f.tests.browser)} souborů prohlížečových sad; co každý dokazuje, popisuje <a class="${LINK}" href="${esc(m.blob('tests/README.md'))}">tests/README.md</a>.</p></div>
 <div class="${CARD}"><p class="mb-1 text-4xl font-extrabold text-gray-900 dark:text-white">${fmtInt(f.adrs.total)}</p><h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">rozhodnutí (ADR)</h3><p class="text-gray-500 dark:text-gray-400">Proč je aplikace taková, jaká je: <a class="${LINK}" href="${esc(m.tree(f.adrs.source))}">${esc(f.adrs.source)}</a>.</p></div>
 </div>
-<details class="${CARD}"><summary class="cursor-pointer rounded font-medium text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-white">Všech ${fmtInt(f.claims.total)} tvrzení podle identifikátoru</summary><ul class="mt-4 grid gap-2 text-gray-700 dark:text-gray-300 sm:grid-cols-2 lg:grid-cols-3">${ids}</ul></details>
+<p class="${CARD} text-gray-500 dark:text-gray-400">Všech ${fmtInt(f.claims.total)} tvrzení se stavem, oblastí, zdrojem, kódem a testem prohledáte v <a class="${LINK}" href="#tvrzeni">průzkumníku tvrzení</a>.</p>
 </div>
 </section>`;
 }
@@ -277,13 +304,164 @@ function releasesSection(m) {
 <time class="mb-2 block text-sm font-normal leading-none text-gray-400 dark:text-gray-500" datetime="${esc(r.published_at)}">${esc(fmtDate(r.published_at))}</time>
 <p class="text-gray-500 dark:text-gray-400">Jeden soubor HTML, ${Number.isFinite(r.size) ? `${fmtDec(r.size / MB)}&nbsp;MB` : 'velikost neuvedena'}${r.sha256 ? `, SHA-256 <code class="break-all text-xs">${esc(r.sha256.slice(0, 16))}…</code>` : ''}</p>
 </li>`).join('\n');
-  return `<section id="vydani" class="${SECTION_ALT}">
+  return `<section id="vydani" class="${SECTION}">
 <div class="${WRAP}">
 <h2 class="${H2}">Vydání</h2>
 <p class="${LEAD}">Posledních ${fmtInt(m.timeline.length)} z ${fmtInt(m.facts.releases.items.length)} vydání. Každé je jeden soubor HTML, který si můžete stáhnout a otevřít i bez připojení; velikost a otisk pocházejí z release záznamu. <a class="${LINK}" href="${REPO_URL}/releases">Všechna vydání na GitHubu</a>.</p>
 <ol class="relative ms-3 border-s border-gray-200 dark:border-gray-700">
 ${rs}
 </ol>
+</div>
+</section>`;
+}
+
+/** A Flowbite progress bar (role progressbar) of `done` out of `total`. */
+function progress(done, total, label, size = 'h-2.5') {
+  return `<div class="lab-bar ${size}" role="progressbar" aria-label="${esc(label)}" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><div style="width:${pct(done, total)}%"></div></div>`;
+}
+
+function claimsExplorer(m) {
+  const f = m.facts;
+  const c = f.claims;
+  const pathLink = (label, p) => `<li><span>${label}</span> ${p && p !== '-' ? `<a href="${esc(m.blob(p))}">${esc(p)}</a>` : '–'}</li>`;
+  const areaName = (a) => AREA_COPY[a] ?? a;
+  const rows = c.items.map((x) => `<tr data-claim="${esc(x.id)}" data-status="${esc(x.status)}" data-area="${esc(x.area)}">
+<th scope="row" class="font-normal"><code class="text-sm font-semibold text-gray-900 dark:text-white">${esc(x.id)}</code><p lang="en" class="mt-1 max-w-prose text-gray-600 dark:text-gray-300">${esc(x.claim)}</p></th>
+<td><span class="${x.status === 'guaranteed' ? BADGE_BLUE : BADGE_GRAY}">${esc(CLAIM_STATUS_COPY[x.status]?.name ?? x.status)}</span></td>
+<td><span class="${BADGE_GRAY}">${esc(areaName(x.area))}</span></td>
+<td><ul class="lab-paths space-y-1 text-xs">${pathLink('zdroj', x.source)}${pathLink('kód', x.implementation)}${pathLink('test', x.test)}</ul></td>
+</tr>`).join('\n');
+  const option = (v, label, n) => `<option value="${esc(v)}">${esc(label)} (${fmtInt(n)})</option>`;
+  const statusOpts = Object.entries(c.byStatus).map(([k, n]) => option(k, CLAIM_STATUS_COPY[k]?.name ?? k, n)).join('');
+  const areaOpts = Object.entries(c.byArea).map(([k, n]) => option(k, areaName(k), n)).join('');
+  return `<section id="tvrzeni" class="${SECTION_ALT}" data-claims>
+<div class="${WRAP}">
+<h2 class="${H2}">Průzkumník tvrzení</h2>
+<p class="${LEAD}">Všech ${fmtInt(c.total)} tvrzení z <a class="${LINK}" href="${esc(m.blob(c.source))}">${esc(c.source)}</a>, každé se souborem, který chování definuje, s kódem, který ho implementuje, a s testem, který ho dokazuje; odkazy vedou na GitHub do commitu, ze kterého je stránka. Oblast se odvozuje z cesty implementace (pravidlo pod tabulkou). Věty tvrzení jsou anglicky, jak stojí v matici.</p>
+<div data-claims-controls hidden class="mb-4 grid gap-3 md:grid-cols-[1fr_12rem_14rem] md:items-end">
+<div><label for="claims-q" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Hledat</label><div class="relative"><div class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500 dark:text-gray-400">${icon(m.icons, 'search', 'h-4 w-4')}</div><input type="search" id="claims-q" autocomplete="off" placeholder="id, věta nebo cesta k souboru" class="${INPUT} ps-10"></div></div>
+<div><label for="claims-status" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Stav</label><select id="claims-status" class="${INPUT}"><option value="">Všechny stavy</option>${statusOpts}</select></div>
+<div><label for="claims-area" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Oblast</label><select id="claims-area" class="${INPUT}"><option value="">Všechny oblasti</option>${areaOpts}</select></div>
+<p class="text-sm text-gray-500 dark:text-gray-400 md:col-span-3" aria-live="polite" data-claims-count>Zobrazeno ${fmtInt(c.total)} z ${fmtInt(c.total)} tvrzení.</p>
+</div>
+<div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm dark:border-gray-700">
+<table class="${TABLE} lab-links block md:table"><caption class="sr-only">Tvrzení z ${esc(c.source)}: identifikátor a věta, stav, oblast, zdroj, kód a test</caption>
+<thead class="${THEAD} hidden md:table-header-group"><tr><th scope="col" class="${TH}">Tvrzení</th><th scope="col" class="${TH}">Stav</th><th scope="col" class="${TH}">Oblast</th><th scope="col" class="${TH}">Zdroj, kód, test</th></tr></thead>
+<tbody class="lab-rows lab-claims block md:table-row-group">
+${rows}
+<tr data-claims-empty hidden class="bg-white dark:bg-gray-800"><td colspan="4" class="px-4 py-6 text-center">Filtru neodpovídá žádné tvrzení.</td></tr>
+</tbody></table>
+</div>
+<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">Odvození oblasti: <code>${esc(c.areaRule)}</code>.</p>
+</div>
+</section>`;
+}
+
+function commitList(m, commits) {
+  const items = commits.map((c) => `<li><a href="${REPO_URL}/commit/${c.sha.slice(0, LINK_SHA)}">${c.sha.slice(0, 7)}</a> ${esc(c.subject)}</li>`).join('');
+  return `<ul lang="en" class="lab-links lab-commits mt-2 space-y-1.5 break-words text-sm text-gray-600 dark:text-gray-300">${items}</ul>`;
+}
+
+function changeBody(m, r, range, full) {
+  const ids = r.planIds.map((id) => `<li><a href="${esc(m.blob(`${m.facts.releaseChanges.issueSource}/${id}.yaml`))}">${esc(id)}</a></li>`).join('');
+  const prs = r.prs.map((n) => `<li><a href="${REPO_URL}/pull/${n}">#${n}</a></li>`).join('');
+  const history = r.from ? `${REPO_URL}/compare/${esc(r.from)}...${esc(range.to)}`
+    : `${REPO_URL}/commits/${esc(range.to)}`;
+  const groups = !full ? `<p class="lab-meta border-t border-gray-200 pt-3 dark:border-gray-700" data-commits-elsewhere>Jednotlivé commity: viz <a class="${LINK}" href="${history}">${r.from ? 'porovnání' : 'historii'} na GitHubu</a>.</p>` : r.groups.map((g) => `<details class="lab-group"${COMMIT_TYPES_OPEN.includes(g.type) ? ' open' : ''}><summary>${esc(COMMIT_TYPE_COPY[g.type] ?? g.type)} <code>${esc(g.type)}</code><span>${fmtInt(g.commits.length)}</span></summary>${commitList(m, g.commits)}</details>`).join('');
+  const compare = r.from ? ` · <a class="${LINK}" href="${REPO_URL}/compare/${esc(r.from)}...${esc(range.to)}">porovnat na GitHubu</a>` : '';
+  return `<div>
+<p class="lab-meta">${plural(r.commits, 'commit', 'commity', 'commitů')} v rozsahu <code class="text-xs">${esc(range.text)}</code>${compare}.</p>
+${ids ? `<div class="mb-3"><h4>Úkoly plánu v předmětech commitů (${fmtInt(r.planIds.length)})</h4><ul class="lab-chips flex flex-wrap gap-1.5">${ids}</ul></div>` : ''}
+${prs ? `<div class="mb-3"><h4>Pull requesty (${fmtInt(r.prs.length)})</h4><ul class="lab-links flex flex-wrap gap-x-3 gap-y-1 text-sm">${prs}</ul></div>` : ''}
+${groups}
+</div>`;
+}
+
+function typeBadges(r) {
+  // Inside .lab-types a plain span is the gray badge; feat, fix and perf carry their colour.
+  return Object.entries(r.byType).map(([t, n]) => `<span${TYPE_BADGE[t] ? ` class="${TYPE_BADGE[t]}"` : ''}>${esc(t)} ${fmtInt(n)}</span>`).join('');
+}
+
+function changesSection(m) {
+  const rc = m.facts.releaseChanges;
+  const card = (head, r, range, open, full) => `<details class="lab-rel rounded-lg border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800" data-release="${esc(range.to)}"${open ? ' open' : ''}>
+<summary>${head}<span class="lab-types flex flex-wrap gap-y-1">${typeBadges(r)}</span></summary>
+${changeBody(m, r, range, full)}
+</details>`;
+  const cards = [];
+  if (rc.unreleased) {
+    cards.push(card(`<span class="text-lg font-semibold text-gray-900 dark:text-white">Zatím nevydáno</span><span class="text-sm text-gray-500 dark:text-gray-400">od ${esc(rc.unreleased.from)} po commit ${esc(m.shortSha)}</span>`,
+      rc.unreleased, { to: m.sha, text: `${rc.unreleased.from}..${m.shortSha}` }, false, true));
+  }
+  const items = rc.items.slice().reverse();
+  items.forEach((r, i) => {
+    const when = r.published_at ? `<time class="lab-when" datetime="${esc(r.published_at)}">${esc(fmtDate(r.published_at))}</time>` : '<span class="lab-when">bez release záznamu</span>';
+    cards.push(card(`<a class="lab-ver ${LINK}" href="${REPO_URL}/releases/tag/${esc(r.tag)}">v${esc(r.version)}</a>${when}`,
+      r, { to: r.tag, text: r.from ? `${r.from}..${r.tag}` : `${r.tag} (od prvního commitu)` }, i === 0,
+      i < CHANGELOG_FULL_RELEASES));
+  });
+  return `<section id="zmeny" class="${SECTION_ALT}">
+<div class="${WRAP}">
+<h2 class="${H2}">Co přinesla která verze</h2>
+<p class="${LEAD}">Ke každé značce vydání commity od předchozí značky, každý jednou (i ty, které přišly sloučením větve), roztříděné podle typu Conventional Commits. Úkoly plánu se odvozují z předmětů commitů a odkazují na svůj soubor v ${esc(rc.issueSource)}; čísla pull requestů také. Jednotlivé commity vypisujeme u zatím nevydaných změn a u ${fmtInt(CHANGELOG_FULL_RELEASES)} nejnovějších vydání; u starších zůstávají počty podle typu, úkoly, pull requesty a odkaz na porovnání na GitHubu, kde jsou commity vypsané. Předměty commitů jsou anglicky, jak je píše historie.</p>
+<div class="space-y-3">
+${cards.join('\n')}
+</div>
+<p class="mt-3 text-xs text-gray-500 dark:text-gray-400 break-words">Zdroj: <code>${esc(rc.source)}</code>.</p>
+</div>
+</section>`;
+}
+
+function roadmapSection(m) {
+  const rm = m.facts.roadmap;
+  const ms = m.facts.plan.items;
+  const by = (s) => ms.filter((x) => x.status === s).length;
+  const milestone = (x) => `<li data-status="${esc(x.status)}"><div class="lab-ms-row"><span><a href="${esc(m.blob(`${rm.dirs.milestones}/${x.id}.yaml`))}">${esc(x.id)}</a> <span lang="en">${esc(x.title)}</span></span><span><span class="${PLAN_BADGE[x.status] ?? BADGE_GRAY}">${esc(PLAN_STATUS_COPY[x.status] ?? x.status)}</span><span>${fmtInt(x.done)}/${fmtInt(x.total)}</span></span></div>${progress(x.done, x.total, `${x.id}: ${x.done} z ${x.total} úkolů hotovo`, 'h-1.5')}</li>`;
+  const card = (id, title, href, done, total, list) => `<article data-intent="${esc(id)}" class="${CARD} flex flex-col">
+<div class="mb-1 flex items-baseline justify-between gap-3"><h3 class="min-w-0 text-lg font-bold text-gray-900 dark:text-white">${href ? `<a class="${LINK} font-mono" href="${esc(href)}">${esc(id)}</a>` : esc(id)}</h3><span class="shrink-0 text-sm tabular-nums text-gray-500 dark:text-gray-400">${fmtInt(done)} / ${fmtInt(total)} úkolů</span></div>
+${title ? `<p lang="en" class="mb-3 text-sm text-gray-500 dark:text-gray-400">${esc(title)}</p>` : ''}
+${progress(done, total, `${id}: ${done} z ${total} úkolů hotovo`)}
+<ul class="lab-links lab-ms mt-3 divide-y divide-gray-200 dark:divide-gray-700">${list.map(milestone).join('')}</ul>
+<p data-intent-empty hidden class="mt-3 text-sm text-gray-500 dark:text-gray-400">Filtru neodpovídá žádný milník tohoto záměru.</p>
+</article>`;
+  const cards = rm.items.map((i) => card(i.id, i.title, m.blob(`${rm.dirs.intents}/${i.id}.yaml`), i.done, i.total, i.milestones));
+  if (rm.unassigned.length) {
+    cards.push(card('Milníky mimo záměry', '', null, rm.unassigned.reduce((n, x) => n + x.done, 0),
+      rm.unassigned.reduce((n, x) => n + x.total, 0), rm.unassigned));
+  }
+  const btn = (v, label, n, first) => `<button type="button" data-roadmap-filter="${v}" aria-pressed="${first}" class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 sm:rounded-none sm:first:rounded-s-lg sm:last:rounded-e-lg hover:bg-gray-100 hover:text-primary-700 focus:z-10 focus:outline-none focus:ring-2 focus:ring-primary-500 aria-pressed:bg-primary-700 aria-pressed:text-white dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-600">${label} <span class="tabular-nums opacity-80">${fmtInt(n)}</span></button>`;
+  return `<section id="roadmapa" class="${SECTION}" data-roadmap>
+<div class="${WRAP}">
+<h2 class="${H2}">Roadmapa</h2>
+<p class="${LEAD}">Záměry plánu a jejich milníky, u každého kolik úkolů je hotovo. Stav milníku se odvozuje ze souborů úkolů stejně jako u grafu plánu (hotovo: všechny požadované úkoly mají completed_at; rozpracováno: některé; otevřeno: žádný). Pořadí: milníky podle pole <code class="text-sm">order</code>, pak podle id; záměry podle svého prvního milníku. Názvy jsou anglicky, jak stojí v plánu. Zdroj: <a class="${LINK}" href="${esc(m.tree(rm.dirs.intents))}">${esc(rm.dirs.intents)}</a>, <a class="${LINK}" href="${esc(m.tree(rm.dirs.milestones))}">${esc(rm.dirs.milestones)}</a> a <a class="${LINK}" href="${esc(m.tree(rm.dirs.issues))}">úkoly</a>.</p>
+<div data-roadmap-controls hidden class="mb-6 grid grid-cols-2 gap-2 sm:inline-flex sm:gap-0 sm:rounded-lg sm:shadow-sm" role="group" aria-label="Filtr milníků podle stavu">${btn('', 'Vše', ms.length, true)}${btn('DONE', 'Hotovo', by('DONE'), false)}${btn('ACTIVE', 'Rozpracováno', by('ACTIVE'), false)}${btn('OPEN', 'Otevřeno', by('OPEN'), false)}</div>
+<div class="grid items-start gap-6 lg:grid-cols-2">
+${cards.join('\n')}
+</div>
+</div>
+</section>`;
+}
+
+function adrSection(m) {
+  const a = m.facts.adrs;
+  const rows = a.items.slice().reverse().map((x) => {
+    const badge = `<span class="${ADR_BADGE[x.status] ?? BADGE_GRAY}">${esc(ADR_STATUS_COPY[x.status] ?? x.status)}</span>`;
+    const date = x.date ? `<time datetime="${esc(x.date)}">${esc(fmtDate(`${x.date}T00:00:00Z`))}</time>` : '–';
+    return `<tr><td class="font-mono text-gray-900 dark:text-white">${String(x.number).padStart(4, '0')}</td><th scope="row" class="font-normal"><a lang="en" href="${esc(m.blob(x.path))}">${esc(x.title)}</a><div class="mt-2 flex items-center text-xs tabular-nums md:hidden">${badge}${date}</div></th><td class="hidden md:table-cell">${badge}</td><td class="hidden whitespace-nowrap tabular-nums md:table-cell">${date}</td></tr>`;
+  }).join('\n');
+  const counts = Object.entries(a.byStatus).map(([k, n]) => `${fmtInt(n)} ${esc(ADR_STATUS_COPY[k] ?? k)}`).join(', ');
+  const dir = a.items[0]?.path.replace(/\/[^/]+$/, '') ?? '.ai/repo/adrs';
+  return `<section id="adr" class="${SECTION_ALT}">
+<div class="${WRAP}">
+<h2 class="${H2}">Rozhodnutí (ADR)</h2>
+<p class="${LEAD}">${plural(a.total, 'rozhodnutí', 'rozhodnutí', 'rozhodnutí')} o architektuře (${counts}), nejnovější nahoře. Číslo, název, stav a datum pocházejí z hlavičky každého souboru v <a class="${LINK}" href="${esc(m.tree(dir))}">${esc(dir)}</a>; které přijal vlastník a proč ostatní zůstávají navržená, říká <a class="${LINK}" href="${esc(m.blob(`${dir}/README.md`))}">README</a>. Názvy jsou anglicky, jak stojí v souborech.</p>
+<div class="max-h-[40rem] overflow-auto rounded-lg border border-gray-200 shadow-sm dark:border-gray-700">
+<table class="${TABLE}"><caption class="sr-only">Rozhodnutí o architektuře: číslo, název, stav a datum</caption>
+<thead class="${THEAD} sticky top-0"><tr><th scope="col" class="${TH}">Č.</th><th scope="col" class="${TH}">Rozhodnutí</th><th scope="col" class="${TH} hidden md:table-cell">Stav</th><th scope="col" class="${TH} hidden md:table-cell">Datum</th></tr></thead>
+<tbody class="lab-rows lab-adr lab-links">
+${rows}
+</tbody></table>
+</div>
 </div>
 </section>`;
 }
@@ -331,7 +509,11 @@ ${libraries(m)}
 ${gallery(m)}
 ${chartsSection(m)}
 ${proof(m)}
+${claimsExplorer(m)}
 ${releasesSection(m)}
+${changesSection(m)}
+${roadmapSection(m)}
+${adrSection(m)}
 </main>
 ${footer(m)}
 ${SCRIPT_MARKER}

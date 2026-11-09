@@ -167,6 +167,8 @@ export const CHART_ALT = Object.freeze({
   plan: 'Plan progress: the issues done of each milestone, by milestone status',
   claims: 'The claims of docs/CLAIMS.yaml by status',
   activity: `Commits per ISO week over the last ${ACTIVITY_WEEKS} weeks of the repository`,
+  modules: 'Source size of each src/js module at the deployed commit, largest first',
+  growth: 'Unit test files and browser suites in the tree of each release tag',
 });
 
 function renderLive() {
@@ -174,8 +176,10 @@ function renderLive() {
     html(CHART_ALT[name] ?? name)}"></p>`);
   return [
     'These charts are regenerated from the repository on every Pages deploy (release records,',
-    'the plan, the claims ledger and git history, through `scripts/facts.mjs`), so they are',
-    `current without a commit. The interactive versions are on the [landing page](${LANDING_URL}).`,
+    'the plan, the claims ledger, git history and the trees of the release tags, read by',
+    '`scripts/facts.mjs`), so they are current without a commit. The interactive versions, with',
+    `the per-release changes, the roadmap and the claims explorer, are on the [landing page](${
+      LANDING_URL}).`,
     '',
     ...imgs,
   ].join('\n');

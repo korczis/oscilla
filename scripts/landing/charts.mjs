@@ -12,7 +12,8 @@
 // The titles are Czech (project.czech-prose: published pages), each with an English subtitle
 // for the README.
 //
-//   renderCharts(facts) -> { releases, size, plan, claims, activity }   (SVG strings)
+//   renderCharts(facts) -> { releases, size, plan, claims, activity, modules, growth }
+//                                                                        (SVG strings)
 //   chartTable(name, facts) -> { caption, head: [..], rows: [[..]] }     (the table view)
 
 import { CHARTS } from '../facts.mjs';
@@ -61,13 +62,13 @@ function niceStep(max, n = 4) {
   return [1, 2, 2.5, 5, 10].map((m) => m * p).find((s) => s >= raw) || p * 10;
 }
 
-function frame(name, title, subtitle, desc, body) {
+function frame(name, title, subtitle, desc, body, h = H) {
   const id = `oscilla-chart-${name}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" `
-    + `height="${H}" role="img" aria-labelledby="${id}-t ${id}-d" data-chart="${name}" `
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${h}" width="${W}" `
+    + `height="${h}" role="img" aria-labelledby="${id}-t ${id}-d" data-chart="${name}" `
     + `font-family="${FONT}">`
     + `<title id="${id}-t">${esc(title)}</title><desc id="${id}-d">${esc(desc)}</desc>`
-    + `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="12" fill="${T.ground}" `
+    + `<rect x="0.5" y="0.5" width="${W - 1}" height="${h - 1}" rx="12" fill="${T.ground}" `
     + `stroke="${T.border}"/>`
     + `<text x="24" y="38" fill="${T.text}" font-size="18" font-weight="600">${esc(title)}</text>`
     + `<text x="24" y="60" fill="${T.muted}" font-size="12">${esc(subtitle)}</text>`
@@ -336,9 +337,103 @@ function activityChart(facts) {
     + `nejvíce ${fmtInt(peak.commits)} v týdnu od ${fmtDate(`${peak.start}T00:00:00Z`)}.`, body);
 }
 
+// ------------------------------------------------------------------------------- modules
+export const KB = 1000;
+
+function modulesChart(facts) {
+  const title = 'Kód podle modulů';
+  const sub = 'Source size per src/js module at the generated commit (kB, git ls-tree)';
+  const ms = facts.codeInventory?.modules || [];
+  if (!ms.length) return empty('modules', title, sub);
+  const x0 = 140;
+  const x1 = PLOT.x1 - 80;
+  const row = 22;
+  const h = 16;
+  const top0 = PLOT.y0 - 14;
+  const height = top0 + ms.length * row + 24;
+  const max = ms[0].bytes || 1;
+  const total = ms.reduce((n, m) => n + m.bytes, 0);
+  let body = '';
+  ms.forEach((m, i) => {
+    const top = top0 + i * row;
+    const w = Math.max(((x1 - x0) * m.bytes) / max, 2);
+    const kb = m.bytes / KB;
+    const share = Math.round((1000 * m.bytes) / total) / 10;
+    body += `<text x="24" y="${r1(top + h / 2 + 4)}" fill="${T.text2}" font-size="12">`
+      + `${esc(m.module)}</text>`
+      + mark(`${m.module}: ${fmtInt(kb)} kB v ${fmtInt(m.files)} souborech (${fmtDec(share, 1)} %)`,
+        `<rect x="${x0}" y="${r1(top - (row - h) / 2)}" width="${r1(x1 - x0 + 60)}" `
+        + `height="${row}" fill="transparent"/>`
+        + `<path d="${barRight(x0, top, w, h)}" fill="${T.blue}"/>`)
+      + `<text x="${r1(x0 + w + 8)}" y="${r1(top + h / 2 + 4)}" fill="${T.text}" `
+      + `font-size="12" font-weight="600" pointer-events="none">${fmtInt(kb)} kB</text>`;
+  });
+  return frame('modules', title, sub, `${fmtInt(ms.length)} modulů src/js, celkem `
+    + `${fmtInt(total / KB)} kB; největší ${ms[0].module} (${fmtInt(max / KB)} kB).`, body, height);
+}
+
+// ------------------------------------------------------------------------------- growth
+function growthChart(facts) {
+  const title = 'Testy podle vydání';
+  const sub = 'Unit test files and browser suites in the tree of each release tag (git ls-tree)';
+  const rs = facts.codeInventory?.perRelease || [];
+  if (!rs.length) return empty('growth', title, sub);
+  const series = [
+    { key: 'unit', name: 'unit testy', colour: T.blue },
+    { key: 'browser', name: 'prohlížečové sady', colour: T.second },
+  ];
+  const maxN = Math.max(1, ...rs.flatMap((r) => series.map((s) => r[s.key])));
+  const step = niceStep(maxN);
+  const max = Math.ceil(maxN / step) * step;
+  const x1 = PLOT.x1 - 140;
+  const x = (i) => PLOT.x0 + (rs.length < 2 ? (x1 - PLOT.x0) / 2
+    : (i / (rs.length - 1)) * (x1 - PLOT.x0));
+  const y = (n) => PLOT.y1 - (n / max) * (PLOT.y1 - PLOT.y0);
+  let body = yAxis(max, step, fmtInt).replace(new RegExp(`x2="${PLOT.x1}"`, 'g'), `x2="${x1}"`);
+  const every = Math.max(1, Math.ceil(rs.length / 6));
+  rs.forEach((r, i) => {
+    if (i % every === 0 && rs.length - 1 - i >= every / 2) body += xLabel(x(i), `v${r.version}`);
+  });
+  body += xLabel(x(rs.length - 1), `v${rs[rs.length - 1].version}`, 'middle');
+  for (const s of series) {
+    const d = rs.map((r, i) => `${i ? 'L' : 'M'}${r1(x(i))},${r1(y(r[s.key]))}`).join('');
+    body += `<path d="${d}" fill="none" stroke="${s.colour}" stroke-width="2" `
+      + 'stroke-linejoin="round" stroke-linecap="round"/>';
+  }
+  // one hover target per release: a column holding both values
+  const slot = rs.length > 1 ? (x1 - PLOT.x0) / (rs.length - 1) : x1 - PLOT.x0;
+  rs.forEach((r, i) => {
+    const cx = r1(x(i));
+    body += mark(`v${r.version}: ${fmtInt(r.unit)} unit testů, ${fmtInt(r.browser)} `
+      + 'prohlížečových sad',
+    `<rect x="${r1(x(i) - slot / 2)}" y="${PLOT.y0}" width="${r1(slot)}" `
+      + `height="${PLOT.y1 - PLOT.y0}" fill="transparent"/>`
+      + series.map((s) => `<circle cx="${cx}" cy="${r1(y(r[s.key]))}" r="4" fill="${s.colour}" `
+        + `stroke="${T.ground}" stroke-width="2" class="dot"/>`).join(''));
+  });
+  const last = rs[rs.length - 1];
+  const ends = series.map((s) => ({ s, y: y(last[s.key]) }));
+  if (Math.abs(ends[0].y - ends[1].y) < 16) ends[1].y = ends[0].y + 16;
+  for (const { s, y: ly } of ends) {
+    body += `<text x="${r1(x(rs.length - 1) + 10)}" y="${r1(ly + 4)}" fill="${T.text}" `
+      + `font-size="12" font-weight="600">${fmtInt(last[s.key])} ${esc(s.name)}</text>`;
+  }
+  const height = H + 14;
+  let lx = PLOT.x0;
+  const ly = height - 18;
+  for (const s of series) {
+    body += `<rect x="${lx}" y="${ly - 6}" width="16" height="3" rx="1.5" fill="${s.colour}"/>`
+      + `<text x="${lx + 22}" y="${ly}" fill="${T.text2}" font-size="12">${esc(s.name)}</text>`;
+    lx += 40 + s.name.length * 7;
+  }
+  return frame('growth', title, sub, `Od v${rs[0].version} po v${last.version}: unit testy `
+    + `${fmtInt(rs[0].unit)} až ${fmtInt(last.unit)}, prohlížečové sady ${fmtInt(rs[0].browser)} `
+    + `až ${fmtInt(last.browser)} souborů.`, body, height);
+}
+
 const RENDERERS = Object.freeze({
   releases: releasesChart, size: sizeChart, plan: planChart, claims: claimsChart,
-  activity: activityChart,
+  activity: activityChart, modules: modulesChart, growth: growthChart,
 });
 
 /** Every chart of CHARTS, rendered: { <name>: svg }. Throws on a name without a renderer. */
@@ -370,6 +465,16 @@ export function chartTable(name, facts) {
   if (name === 'activity') {
     return { head: ['Týden', 'Od', 'Commity'], rows: (facts.git?.weeks || []).slice().reverse()
       .map((w) => [w.week, fmtDate(`${w.start}T00:00:00Z`), fmtInt(w.commits)]) };
+  }
+  if (name === 'modules') {
+    return { head: ['Modul', 'Souborů', 'Velikost'], rows: (facts.codeInventory?.modules || [])
+      .map((m) => [m.module, fmtInt(m.files), `${fmtInt(m.bytes / KB)} kB`]) };
+  }
+  if (name === 'growth') {
+    return { head: ['Vydání', 'Unit testy', 'Prohlížečové sady', 'Soubory src/js', 'dist'],
+      rows: (facts.codeInventory?.perRelease || []).slice().reverse().map((r) => [
+        `v${r.version}`, fmtInt(r.unit), fmtInt(r.browser), fmtInt(r.srcFiles),
+        Number.isFinite(r.distBytes) ? `${fmtDec(r.distBytes / MB)} MB` : '–']) };
   }
   throw new Error(`charts: no table for chart "${name}"`);
 }

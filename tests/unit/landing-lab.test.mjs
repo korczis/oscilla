@@ -11,18 +11,29 @@
 //   - every chart of CHARTS exists with <title> and <desc>, inlined in the page byte for byte;
 //   - a registry id without Czech copy fails the generator (a fake workspace, a fake engine);
 //   - checkLabFile of verify-deploy names a file that differs from its regeneration;
+//   - the P015 dashboards: the sections Co přinesla která verze, Roadmapa, Průzkumník tvrzení
+//     and Rozhodnutí (ADR) exist with their nav entries; the changelog has a card per release
+//     tag, the unreleased changes and the newest CHANGELOG_FULL_RELEASES (8) list their commits
+//     and older ones link GitHub's compare view instead (the page stays under 850 kB), each
+//     plan-id chip links an issue file that exists and each PR link its number; the
+//     claims explorer holds a row for every claim with its status and area and links its
+//     source, implementation and test, and its filter controls stay hidden without the script;
+//     the roadmap lists every milestone; the ADR table every ADR; the hero counts commits and
+//     ADRs;
 //   - expectedLab regenerates a commit behind HEAD from that commit's own tree (a fixture repo
 //     whose two commits carry different generators), and a commit without the generator
 //     deployed no landing (null), so the release task's closing check works after main moves.
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { CHARTS, collectFacts } from '../../scripts/facts.mjs';
+import { CHARTS, REPO_ROOT, collectFacts } from '../../scripts/facts.mjs';
+import { esc } from '../../scripts/landing/charts.mjs';
+import { CHANGELOG_FULL_RELEASES } from '../../scripts/landing/copy.mjs';
 import { generateLanding } from '../../scripts/landing.mjs';
-import { CSP } from '../../scripts/landing/page.mjs';
+import { CSP, LINK_SHA } from '../../scripts/landing/page.mjs';
 import { checkLabFile, expectedLab } from '../../scripts/verify-deploy.mjs';
 import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 import { ENGINE_MODULES } from '../../src/js/synth/panels/engines.js';
@@ -88,6 +99,102 @@ test('every chart of CHARTS exists with a title and a description and is inlined
     assert.match(svg, new RegExp(`<title id="oscilla-chart-${name}-t">[^<]+</title>`));
     assert.match(svg, new RegExp(`<desc id="oscilla-chart-${name}-d">[^<]+</desc>`));
     assert.ok(HTML.includes(svg.trim()), `${name} inlined byte for byte`);
+  }
+});
+
+const section = (id) => {
+  const at = MARKUP.indexOf(`<section id="${id}"`);
+  assert.ok(at >= 0, `section #${id}`);
+  return MARKUP.slice(at, MARKUP.indexOf('</section>', at));
+};
+const REF = FACTS.git.head.slice(0, LINK_SHA);
+const BLOB = new RegExp(`^https://github\\.com/korczis/oscilla/blob/${REF}/(.+)$`);
+
+test('the P015 dashboards exist, each with its nav entry and its source named', () => {
+  for (const [id, heading] of [['zmeny', 'Co přinesla která verze'], ['roadmapa', 'Roadmapa'],
+    ['tvrzeni', 'Průzkumník tvrzení'], ['adr', 'Rozhodnutí (ADR)']]) {
+    assert.ok(section(id).includes(`>${heading}</h2>`), heading);
+    assert.match(MARKUP, new RegExp(`<a href="#${id}" class=`), `nav #${id}`);
+  }
+  assert.ok(section('zmeny').includes(esc(FACTS.releaseChanges.source)), 'changelog source');
+  assert.ok(section('tvrzeni').includes(esc(FACTS.claims.areaRule)), 'area rule');
+  const top = section('top');
+  assert.match(top, /commitů<\/dd>/);
+  assert.match(top, /rozhodnutí \(ADR\)<\/dd>/);
+});
+
+test('the changelog has a card per release tag, with plan-id chips and PR links that resolve',
+  () => {
+    const z = section('zmeny');
+    const cards = [...z.matchAll(/<details class="lab-rel [^"]*" data-release="([^"]+)"/g)]
+      .map((m) => m[1]);
+    const tags = FACTS.releaseChanges.items.map((r) => r.tag).reverse();
+    assert.ok(tags.length > 10, `release tags: ${tags.length}`);
+    assert.deepEqual(cards.filter((c) => c.startsWith('v')), tags, 'newest first, every tag');
+    let chips = 0;
+    for (const [, url] of z.matchAll(/<a href="([^"]+\/\.ai\/repo\/project\/issues\/[^"]+)"/g)) {
+      const rel = BLOB.exec(url)?.[1];
+      assert.ok(rel && existsSync(path.join(REPO_ROOT, rel)), `${url} names an existing issue`);
+      chips += 1;
+    }
+    assert.ok(chips > 0, 'plan-id chips exist');
+    const prs = FACTS.releaseChanges.items.flatMap((r) => r.prs);
+    for (const n of prs.slice(-20)) assert.ok(z.includes(`/pull/${n}">#${n}</a>`), `PR #${n}`);
+    // CHANGELOG_FULL_RELEASES: the unreleased changes and the newest releases list each commit
+    // once; an older release links its compare view instead and lists none.
+    assert.equal(CHANGELOG_FULL_RELEASES, 8);
+    const items = FACTS.releaseChanges.items.slice().reverse();
+    const full = items.slice(0, CHANGELOG_FULL_RELEASES);
+    const commits = full.reduce((n, r) => n + r.commits, 0)
+      + (FACTS.releaseChanges.unreleased?.commits ?? 0);
+    assert.equal(z.split('/commit/').length - 1, commits, 'every listed commit once');
+    assert.ok(z.includes(`u ${CHANGELOG_FULL_RELEASES} nejnovějších vydání`), 'rule stated');
+    const card = (tag) => {
+      const at = z.indexOf(`data-release="${tag}"`);
+      return z.slice(at, z.indexOf('</details>\n', at));
+    };
+    for (const r of full) assert.doesNotMatch(card(r.tag), /data-commits-elsewhere/, r.tag);
+    for (const r of items.slice(CHANGELOG_FULL_RELEASES)) {
+      const c = card(r.tag);
+      assert.doesNotMatch(c, /\/commit\//, `${r.tag} lists no commit`);
+      assert.match(c, /data-commits-elsewhere>Jednotlivé commity: viz <a /, r.tag);
+      const link = r.from ? `/compare/${r.from}...${r.tag}"` : `/commits/${r.tag}"`;
+      assert.ok(c.includes(link), `${r.tag} links ${link}`);
+      for (const id of r.planIds) assert.ok(c.includes(`/issues/${id}.yaml"`), `${r.tag} ${id}`);
+      for (const n of r.prs) assert.ok(c.includes(`/pull/${n}"`), `${r.tag} #${n}`);
+    }
+    assert.ok(HTML.length <= 850_000, `index.html is ${HTML.length} B (ceiling 850 000)`);
+  });
+
+test('the claims explorer has a row per claim, linking its source, code and test', () => {
+  const t = section('tvrzeni');
+  assert.match(t, /<div data-claims-controls hidden /, 'filters hidden until the script runs');
+  assert.match(t, /<input type="search" id="claims-q"/);
+  for (const c of FACTS.claims.items) {
+    const at = t.indexOf(`<tr data-claim="${c.id}" data-status="${c.status}" `
+      + `data-area="${c.area}"`);
+    assert.ok(at >= 0, `row ${c.id}`);
+    const row = t.slice(at, t.indexOf('</tr>', at));
+    for (const p of [c.source, c.implementation, c.test].filter((x) => x && x !== '-')) {
+      assert.ok(row.includes(`/blob/${REF}/${p}"`), `${c.id} links ${p}`);
+    }
+  }
+  for (const area of Object.keys(FACTS.claims.byArea)) {
+    assert.ok(t.includes(`<option value="${area}">`), `area filter ${area}`);
+  }
+});
+
+test('the roadmap lists every milestone under its intents, and the ADR table every ADR', () => {
+  const r = section('roadmapa');
+  for (const i of FACTS.roadmap.items) assert.ok(r.includes(`data-intent="${i.id}"`), i.id);
+  for (const ms of FACTS.plan.items) {
+    assert.ok(r.includes(`/blob/${REF}/.ai/repo/project/milestones/${ms.id}.yaml"`),
+      ms.id);
+  }
+  assert.match(r, /<div data-roadmap-controls hidden /);
+  const a = section('adr');
+  for (const x of FACTS.adrs.items) {
+    assert.ok(a.includes(`/blob/${REF}/${x.path}"`), x.path);
   }
 });
 
