@@ -18,6 +18,7 @@ import * as transportModule from '../../src/js/studio/transport.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const rec = await import('../../src/js/studio/notes-record.js').catch(() => ({}));
+const sw = await import('../../src/js/ui/kinds/record-switch.js').catch(() => ({}));
 
 const SR = 48000;
 const ok = (r, what = '') => {
@@ -85,13 +86,15 @@ test('K223 a hit on a step already on keeps one note with the later velocity', (
     vel: Number((32 / 127).toFixed(9)) }]);
 });
 
-test('K223 a hit past the clip\'s end on a loop pass is wrapped into the clip, never written '
-  + 'beyond it', () => {
+test('K223 nothing is written at or past the clip\'s length: the last half step wraps to the '
+  + 'first, a hit outside the clip is dropped (C1-K223-1)', () => {
+    // A loop pass brings the playhead back into the clip, so a hit there is inside it; a hit the
+    // playhead puts before or after the clip (a longer timeline) is not the clip's note.
     const { st, clip } = kit();
     const a = rec.takeAction(st.getModel(), clip, [{ beat: 4.26, note: 60, velocity: 100 },
-      { beat: 3.9, note: 62, velocity: 100 }]);
-    assert.deepEqual(a.payload.notes.map((n) => [n.at, n.note]), [[0, 62], [0.25, 60]],
-      'beat 4.26 wraps to 0.25; 3.9 rounds to 4, the clip\'s end, and wraps to its first step');
+      { beat: 3.9, note: 62, velocity: 100 }, { beat: -1, note: 64, velocity: 100 }]);
+    assert.deepEqual(a.payload.notes.map((n) => [n.at, n.note]), [[0, 62]],
+      '3.9 rounds to 4, the clip\'s end, and wraps to its first step; 4.26 and -1 are dropped');
     assert.ok(a.payload.notes.every((n) => n.at < 4), 'nothing at or after the clip\'s length');
   });
 
@@ -166,4 +169,58 @@ test('K223 the transport emits each live note with the timeline\'s playhead at i
   assert.ok(seen[0].ph && seen[0].ph.playing, 'with the timeline playhead');
   assert.ok(Math.abs(seen[0].ph.position - 0.75) < 1e-6, 'at the note\'s own time');
   rig.transport.stop({ fast: true });
+});
+
+test('C1-K223-1: notes played while the playhead is before or after the armed clip leave it '
+  + 'unchanged', async () => {
+    // The clip spans beats 4 to 8 (2 s to 4 s at 120 BPM) of a timeline that runs on to 6 s.
+    const { st, perc, clip } = kit();
+    ok(st.dispatch({ type: 'CLIP_MOVE', clipId: clip, start: 2 }), 'the clip moves to 2 s');
+    const track = st.getModel().timeline.clips.find((c) => c.id === clip).trackId;
+    ok(st.dispatch({ type: 'CLIP_ADD', trackId: track, kind: 'notes', startBeats: 10,
+      durationBeats: 2, payload: { notes: [] } }), 'a second clip sets the timeline to 6 s');
+    const rig = rigOf(st);
+    const r = rec.recorderOf(rig.transport, st);
+    r.arm(clip);
+    const { baseTime } = ok(rig.transport.start(), 'PLAY');
+    for (const s of [1, 4.5]) { // before the clip, after it
+      ok(rig.transport.live(perc, { kind: 'on', note: 60, velocity: 100, at: baseTime + s }),
+        `a hit at ${s} s`);
+    }
+    assert.equal(r.pending, 0, 'neither hit is the clip\'s');
+    ok(rig.transport.live(perc, { kind: 'on', note: 62, velocity: 100, at: baseTime + 2.5 }),
+      'a hit inside the clip');
+    assert.equal(r.pending, 1, 'a hit inside the clip is taken');
+    const depth = st.debugInfo().undoDepth;
+    const p = rig.transport.stop();
+    rig.fx.advance(1);
+    await p;
+    assert.equal(st.debugInfo().undoDepth, depth + 1);
+    assert.deepEqual(clipOf(st, clip).payload.notes.map((n) => [n.at, n.note]), [[1, 62]],
+      'only the hit inside it, at beat 1 of the clip');
+  });
+
+test('R2-K223-1/2: the recorder says when a take is written, and its count reads in Czech', async () => {
+  assert.equal(typeof sw.hitsText, 'function', 'record-switch.js exports hitsText');
+  assert.deepEqual([0, 1, 2, 4, 5, 11, 22].map(sw.hitsText), ['0 úderů', '1 úder', '2 údery',
+    '4 údery', '5 úderů', '11 úderů', '22 úderů']);
+  assert.equal(sw.RECORD_TEXT.written(3), 'Záznam zapsán: 3 údery, jedna úprava.');
+  assert.equal(sw.RECORD_TEXT.off, 'Nahrávání vypnuto.', 'the off sentence counts nothing');
+  const { st, perc, clip } = kit();
+  const rig = rigOf(st);
+  const r = rec.recorderOf(rig.transport, st);
+  const events = [];
+  r.on((e) => events.push(e));
+  r.arm(clip);
+  const { baseTime } = ok(rig.transport.start(), 'PLAY');
+  for (const s of [0.1, 0.6]) {
+    ok(rig.transport.live(perc, { kind: 'on', note: 60, velocity: 100, at: baseTime + s }), 'hit');
+  }
+  const p = rig.transport.stop();
+  rig.fx.advance(1);
+  await p;
+  assert.deepEqual(events, [{ type: 'arm' }, { type: 'take', n: 2, reason: 'stop' }],
+    'Stop writes the take and says so, where it happens');
+  r.disarm();
+  assert.deepEqual(events.at(-1), { type: 'disarm' }, 'a disarm with nothing pending writes none');
 });
