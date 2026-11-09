@@ -464,6 +464,7 @@ export function createStudioUi(svc = {}) {
       memoryHeld: 0, // Studio projects and patches held by the memory fallback store
       storeNote: '',
       playing: false,
+      armed: false, // the keys play the running graph while the timeline is stopped (K104)
       // The Studio's Master Output level while it holds the engine's master stage (runtime
       // 'master' events) and engine.masterWrites after that write; null otherwise (C012).
       masterLevel: null,

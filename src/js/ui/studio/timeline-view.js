@@ -286,12 +286,12 @@ const MEASUREMENT_LABEL = Object.freeze({ 'noise-check': 'Noise check', 'pre-rol
   stimulus: 'Stimulus', capture: 'Capture', tail: 'Tail', analysis: 'Analysis' });
 
 /**
- * What the clip form says about a notes clip (K099 part 1): it shows the notes read-only, since
- * no editor of them exists yet, and why its time base is fixed.
+ * What the clip form says about a notes clip (K099 part 1, K068): it shows the notes read-only,
+ * since no editor of them exists yet, where they play, and why its time base is fixed.
  */
 export const NOTES_CLIP_TEXT = Object.freeze({
-  line: (n) => `Notes clip · ${n} note${n === 1 ? '' : 's'}. The notes are kept; editing and `
-    + 'playback arrive with the piano roll.',
+  line: (n) => `Notes clip · ${n} note${n === 1 ? '' : 's'}. The notes play on a Keys node; `
+    + 'editing them arrives with the piano roll.',
   timeBase: 'A notes clip is always tempo-linked: its notes are in beats from the clip start.',
 });
 

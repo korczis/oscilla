@@ -103,7 +103,7 @@
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
-      "done": 3,
+      "done": 4,
       "required": 7,
       "phase": "now"
     },
@@ -152,7 +152,7 @@
     {
       "id": "M069",
       "title": "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid",
-      "done": 5,
+      "done": 8,
       "required": 21,
       "phase": "now"
     },

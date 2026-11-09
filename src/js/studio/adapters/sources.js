@@ -67,10 +67,11 @@ function single({ ctx, hooks, acct, at, params }, reason) {
 
 /**
  * K022 unison: `unison` engine oscillators detuned symmetrically across `spread` cents
- * (nodes/sources.js unisonDetune), summed at 1/sqrt(n) into the level. Frequency and detune are
- * ConstantSourceNode buses every voice follows, so a modulation edge, an automation lane and the
- * base each move one AudioParam and every voice with it. The base frequency is lowered so the
- * highest voice stays at or below 0.95 × Nyquist.
+ * (nodes/sources.js unisonDetune), summed at 1/n into the level (peak-safe). Frequency and
+ * detune are ConstantSourceNode buses every voice follows, so a modulation edge, an automation
+ * lane and the base each move one AudioParam and every voice with it. The base frequency is
+ * lowered so the highest voice stays at or below 0.95 × Nyquist; a modulation edge or a lane on
+ * the bus can still lift that voice past it by half the spread (stated in the Oscillator's help).
  */
 function unison({ ctx, hooks, acct, at, params }) {
   const n = params.unison;
@@ -85,8 +86,10 @@ function unison({ ctx, hooks, acct, at, params }) {
   const dBus = bus(params.detune);
   const level = acct.track(ctx.createGain());
   level.gain.setValueAtTime(params.level, now);
+  // 1/n, not 1/sqrt(n): voices that line up in phase (spread 0, or at every beat) sum to at
+  // most one voice's peak, so Level keeps its meaning (review of K022, P2-1).
   const mix = acct.track(ctx.createGain());
-  mix.gain.setValueAtTime(1 / Math.sqrt(n), now);
+  mix.gain.setValueAtTime(1 / n, now);
   mix.connect(level);
   let spread = params.spread;
   const voices = [];
@@ -140,7 +143,7 @@ function unison({ ctx, hooks, acct, at, params }) {
       }
     },
     dispose() {},
-    info: { oscillator: voices[0], voices: n },
+    info: { oscillator: voices[0], voices: n, mix },
     status: 'ready',
     reason: null,
   };

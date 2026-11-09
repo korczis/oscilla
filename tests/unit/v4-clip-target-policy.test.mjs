@@ -53,7 +53,7 @@ const policyModule = await import('../../src/js/studio/clip-targets.js').catch((
 const SR = 48000;
 /**
  * Every clip use: kind × action (pattern and notes clips have no action). Notes clips (K099
- * part 1) are held on a node that plays notes and played nowhere yet.
+ * part 1) are held on a node that plays notes and played on a Keys node (K068).
  */
 const CLIP_USES = [{ kind: 'pattern' }, { kind: 'event', action: 'gate' },
   { kind: 'event', action: 'trigger' },
@@ -618,3 +618,73 @@ test('R7 Inspector (P2): a filter type change rebuilds the Inspector, so the Q n
     const again = inspector.inspectorView(store.getModel(), { nodes: [bp.id] });
     assert.equal(inspector.inspectorRebuildKey(again), inspector.inspectorRebuildKey(before));
   });
+
+// ---------------------------------------------------------------- K060: the keys row
+
+test('R7 keys row (K060): an event clip gates a Keys node: held, offered, played and rendered '
+  + 'as a gate on the Envelopes its Gate reaches', async () => {
+  const clipTarget = policyOf();
+  const { panelStore } = await import('./synth-fixture.mjs');
+  const PANEL = (await import('../../src/js/synth/panels/semi-mono.js')).default;
+  const { gateTargets } = await import('../../src/js/studio/live-notes.js');
+  const st = panelStore();
+  const keys = PANEL.resolve(st.getModel()).get('keys');
+  const envs = gateTargets(st.getModel(), keys.id).envelopes;
+  assert.equal(envs.length, 2, 'the panel normals Gate into EG 1 and EG 2');
+  // The policy: a gate event plays on Keys (how keys-gate), a trigger event is held, unplayed.
+  const v = clipTarget(keys, { kind: 'event', action: 'gate' });
+  assert.deepEqual([v.holds, v.plays, v.how], [true, true, 'keys-gate']);
+  const trig = clipTarget(keys, { kind: 'event', action: 'trigger' });
+  assert.deepEqual([trig.holds, trig.plays, trig.code], [true, false, 'event-target']);
+  assert.equal(trig.reason, policyModule.CLIP_TARGET_TEXT.eventTarget(keys.metadata.name));
+  // The timeline UI offers it, as an event track's target and an event clip's.
+  const ids = (list) => list.map((n) => n.id);
+  assert.ok(ids(timelineView.trackTargetOptions(st.getModel(), 'event')).includes(keys.id));
+  assert.ok(ids(timelineView.clipTargetOptions(st.getModel(), 'event', NODE_REGISTRY, 'gate'))
+    .includes(keys.id));
+  // The store holds it; "add clip" on a Keys track proposes the gate event.
+  const track = st.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys.id });
+  assert.ok(track.ok, track.reason);
+  const add = timelineView.addClipAction(st.getModel(), track.created.tracks[0], 0.5);
+  assert.deepEqual([add.reason, add.action && add.action.kind,
+    add.action && add.action.payload.action], [undefined, 'event', 'gate']);
+  const clip = st.dispatch({ ...add.action, start: 0.5, duration: 0.5 });
+  assert.ok(clip.ok, clip.reason);
+  const m = st.getModel();
+  const c = m.timeline.clips.find((x) => x.id === clip.created.clips[0]);
+  assert.equal(transportModule.clipPlayReason(m, c), null, 'the transport plays it');
+  // The offline plan renders it.
+  const row = offline.planOfflineRender(m).clips.find((x) => x.id === c.id);
+  assert.deepEqual([row.rendered, row.reason], [true, null], 'the offline render plays it');
+  // PLAY: one gate record per Envelope the Gate reaches, at the clip's start.
+  const a = audio();
+  const transport = transportModule.createStudioTransport({ runtime: a.runtime,
+    engine: a.engine, store: storeOf(m) });
+  const started = transport.start();
+  assert.ok(started.ok, JSON.stringify(started));
+  const d = transport.debugInfo();
+  assert.equal(d.unplayed.find((u) => u.id === c.id), undefined, 'listed as played');
+  assert.equal(d.gateCount, envs.length, 'a gate on EG 1 and on EG 2');
+  for (const env of envs) assert.ok(d.gatedEnvelopes.includes(env), `${env} owned by the gate`);
+  const at = d.baseTime + c.start;
+  for (const env of envs) {
+    const h = a.runtime.nodes.get(env);
+    const evs = h.outputs.control.offset.events;
+    assert.ok(evs.some((e) => Math.abs(e.t - at) < 1e-9), `${env}: the contour starts at the `
+      + `clip start ${at}`);
+    assert.ok(evs.some((e) => Math.abs(e.t - (at + c.duration)) < 1e-9),
+      `${env}: and is released at its end`);
+  }
+  transport.stop({ fast: true });
+  // A muted Gate edge carries nothing: one Envelope fewer.
+  const gate = m.graph.edges.find((e) => e.from.node === keys.id && e.from.port === 'gate'
+    && e.to.node === envs[0]);
+  const ms = storeOf(m);
+  assert.ok(ms.dispatch({ type: 'EDGE_UPDATE', edgeId: gate.id, props: { muted: true } }).ok);
+  const b = audio();
+  const t2 = transportModule.createStudioTransport({ runtime: b.runtime, engine: b.engine,
+    store: ms });
+  assert.ok(t2.start().ok);
+  assert.equal(t2.debugInfo().gateCount, envs.length - 1, 'the muted edge gates nothing');
+  t2.stop({ fast: true });
+});

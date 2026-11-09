@@ -61,7 +61,9 @@ import {
   CONTIGUITY_TOLERANCE_S, MIN_LOOP_S, clipEnd, effectiveTarget, timelineEnd,
 } from './timeline.js';
 import { STUDIO_XFADE_S } from './compiler.js';
+import { clipTarget } from './clip-targets.js';
 import { clockTickHolds, clockTicks, firesTriggers, triggerEdges } from './clock.js';
+import { noteItems } from './notes.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -277,6 +279,11 @@ function nodeOf(model, id) {
   return id ? model.graph.nodes.find((n) => n.id === id) || null : null;
 }
 
+/** Whether a notes clip on `target` plays note by note (the clip-target policy). */
+function playsNotesClip(model, target, registry) {
+  return clipTarget(nodeOf(model, target), { kind: 'notes' }, registry).plays;
+}
+
 /** The one-block V2 sequence that plays a pattern clip (the sequencer's own model). */
 export function clipSequence(model, clip, { durationS = clip.duration, sampleRate } = {}) {
   const node = nodeOf(model, effectiveTarget(model, clip));
@@ -294,8 +301,6 @@ function clipSnapshot(model, clip) {
   return { start: clip.start, duration: clip.duration, trackId: clip.trackId, kind: clip.kind,
     target: effectiveTarget(model, clip), payload: clip.payload };
 }
-
-
 
 /**
  * Whether a scheduled item `a` (compiled from `prev`) plays exactly as `b` (compiled from
@@ -320,6 +325,8 @@ function sameItem(a, prev, b, next) {
  *                events = the sequencer plan with absolute `time` (= startTime + t)
  *   event        { ..., action: 'gate' | 'trigger' }
  *   measurement  { ..., action } (seconds only; never musical)
+ *   note         one onset of a notes clip on a Keys node (K068, notes.js noteItems)
+ *   notes        a notes clip on a target that does not play it (reported unplayed)
  *   clock        a Clock tick (clock.js clockTicks, K023)
  * Automation: [{ key, laneId, target, pass, events }] (automation.js compileLaneEvents).
  */
@@ -364,6 +371,10 @@ export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {})
       items.push({ ...base, type: 'pattern', duration: tl.duration,
         endTime: startTime + tl.duration, sequence, events,
         level: node && finite(node.params.level) ? node.params.level : 1 });
+    } else if (clip.kind === 'notes' && playsNotesClip(model, target, registry)) {
+      // K068: one item per onset, so an edit or a tempo change re-plans those after its horizon.
+      items.push(...noteItems(clip, base, { pass: k, tempo: model.transport.tempo,
+        cutS: truncated ? duration : null, toAudio: (pos) => audioTimeOf(anchor, k, pos) }));
     } else {
       const endTime = audioTimeOf(anchor, k, clip.start + duration);
       const action = clip.kind === 'event' ? (clip.payload.action || 'gate')
@@ -597,6 +608,8 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       return { decision: 'release', at: horizon };
     }
     if (sameJson(snap, it.clip)) return { decision: 'keep' };
+    // A sounding note onset (K068) plays as scheduled; the clip's later onsets are re-planned.
+    if (it.type === 'note') return { decision: 'keep-until-end' };
     const onlyDuration = snap.start === it.clip.start && snap.trackId === it.clip.trackId
       && sameJson(snap.payload, it.clip.payload);
     if (onlyDuration) {
