@@ -10,6 +10,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { isEnglishProse } from '../../scripts/czech-prose.mjs';
 import {
   PUBLIC_URL, REGION_CLOSE, REGION_OPEN, gitRunner,
 } from '../../scripts/release-metadata.mjs';
@@ -149,7 +150,7 @@ test('dry run with every precondition met: plans, prints notes, mutates nothing'
   assert.match(text, /OK all preconditions hold/);
   assert.match(text, /git tag -a v40\.0\.0 .* f187f66/);
   assert.match(text, /gh release create v40\.0\.0/);
-  assert.match(text, /### Breaking changes\n\n- drop v=0 links — old links fail/);
+  assert.match(text, /### Zásadní změny\n\n- drop v=0 links — old links fail/);
 });
 
 // E025: the deploy of the release commit ran before the tag existed, so its page says
@@ -749,10 +750,36 @@ test('release notes come from the real commit list, grouped by impact', () => {
       { sha: 'c'.repeat(40), subject: 'Update README', body: '' }],
   });
   assert.match(notes, /^## OSCILLA v40\.1\.0/);
-  assert.match(notes, /### Features\n\n- \*\*labs:\*\* new lab \(\[aaaaaaa\]/);
-  assert.match(notes, /### Fixes\n\n- stop click .*\n- Update README/);
+  assert.match(notes, /### Nové funkce\n\n- \*\*labs:\*\* new lab \(\[aaaaaaa\]/);
+  assert.match(notes, /### Opravy\n\n- stop click .*\n- Update README/);
   assert.match(notes, /compare\/v40\.0\.0\.\.\.v40\.1\.0/);
   assert.match(notes, new RegExp(FP.sourceDigest));
+});
+
+// Q104 (rule project.czech-prose): the Release notes are Czech prose. What the generator
+// writes around the commit subjects (headings, provenance) holds no English sentence or
+// heading; the subjects stay English (Conventional Commits, parsed by release:analyze).
+test('Q104: the release notes speak Czech around the English commit subjects', () => {
+  const notes = releaseNotes({
+    version: '40.1.0', previousTag: 'v40.0.0', commit: HEAD, sourceDigest: FP.sourceDigest,
+    commits: [{ sha: 'a'.repeat(40), subject: 'feat!: drop old links', body: '' },
+      { sha: 'b'.repeat(40), subject: 'feat(labs): new lab', body: '' },
+      { sha: 'c'.repeat(40), subject: 'fix: stop click', body: '' },
+      { sha: 'd'.repeat(40), subject: 'chore: tidy', body: '' }],
+  });
+  // A commit line ends with its link to the commit; every other line is the generator's own.
+  const subject = /^- .* \(\[[0-9a-f]{7}\]\([^)]*\/commit\/[0-9a-f]{40}\)\)$/;
+  const own = notes.split('\n').filter((l) => !subject.test(l));
+  assert.equal(notes.split('\n').length - own.length, 4, 'the four commit lines are excluded');
+  const english = own.filter((l) => isEnglishProse(l)
+    || /\b(Breaking changes|Features|Fixes|Maintenance|Provenance|Source digest|Live|Changes)\b/
+      .test(l));
+  assert.deepEqual(english, [], 'write the generated lines of the notes in Czech');
+  for (const h of ['### Zásadní změny', '### Nové funkce', '### Opravy', '### Údržba',
+    '### Původ']) assert.ok(notes.includes(`${h}\n`), h);
+  const none = releaseNotes({ version: '40.0.1', previousTag: null, commit: HEAD,
+    sourceDigest: FP.sourceDigest, commits: [] });
+  assert.match(none, /celá historie až po v40\.0\.1/);
 });
 
 // R021: the publish of 2026-10-28 (release commit e272fac) pushed its tag, then the
@@ -866,7 +893,7 @@ test('R021 resume with the local tag at HEAD: the notes run from the previous re
     const f = fakes({ tagRemote: TAG_AT(HEAD), localTag: HEAD, live: TAGGED_PAGE });
     assert.equal(await yesRun(f), 0, f.out.join('\n'));
     const notes = notesOf(f);
-    assert.match(notes, /### Features\n\n- \*\*labs:\*\* new lab/);
+    assert.match(notes, /### Nové funkce\n\n- \*\*labs:\*\* new lab/);
     assert.match(notes, /compare\/v39\.0\.0\.\.\.v40\.0\.0/);
     assert.doesNotMatch(notes, /v40\.0\.0\.\.\.v40\.0\.0/);
   });
