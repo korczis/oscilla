@@ -89,7 +89,7 @@ export function mountStepGrid(host, opts) {
     model.set({ selection: opts.selection || [], page: opts.page ?? 0 });
   }
   let cellEls = [];
-  let lit = null;
+  const lit = []; // the playing step's cells, one per lane; reused, never reallocated per frame
 
   host.innerHTML = `<div class="${CARD}" data-step-grid="${list ? 'param-list' : 'notes'}">`
     + `<div role="grid" aria-label="${esc(opts.label || '')}" data-step-grid-surface="" `
@@ -175,7 +175,7 @@ export function mountStepGrid(host, opts) {
       || st.page >= st.pages - 1;
     surface.setAttribute('aria-disabled', disabled ? 'true' : 'false');
     if (detail) renderDetail(st);
-    lit = null;
+    lit.length = 0; // the cells were replaced: none of them is lit
     playhead.reset();
     if (held) {
       gridHasFocus = true;
@@ -216,14 +216,14 @@ export function mountStepGrid(host, opts) {
 
   // The playing step: one frame-loop subscriber, a DOM write only when the index changes.
   const playhead = createPlayhead((step) => {
-    if (lit) lit.removeAttribute('aria-current');
-    lit = null;
+    for (const el of lit) el.removeAttribute('aria-current');
+    lit.length = 0;
     if (step === null) return;
     for (const row of cellEls) {
       const el = row[step];
       if (el) {
         el.setAttribute('aria-current', 'step');
-        if (!lit) lit = el;
+        lit.push(el);
       }
     }
   });

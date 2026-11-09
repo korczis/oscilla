@@ -111,7 +111,7 @@ export default defineKind({
       + 'nastaví a dlouhé podržení otevře nabídku kroku.',
   },
   state: ['studio.clip', 'notes'],
-  links: { opens: ['route:studio'], openedBy: ['route:studio'] },
+  links: { opens: ['route:studio'], openedBy: ['route:studio', 'route:synth'] },
   aria: {
     role: 'grid',
     parts: { lane: 'row', laneName: 'rowheader', step: 'gridcell' },
@@ -131,8 +131,8 @@ export default defineKind({
   truth: { none: 'kreslí noty modelu a krok transportu, nikdy naměřenou hodnotu' },
   impl: { modules: ['src/js/ui/kinds/step-grid.js', 'src/js/ui/kinds/step-grid-model.js'],
     issue: 'W008' },
-  // Mounted in the Studio Inspector (W008); K222 adds the Synth's Drums view.
-  workspaces: ['studio'],
+  // Mounted in the Studio Inspector (W008) and the Synth's Drums tab (K222).
+  workspaces: ['studio', 'synth'],
   transient: ['focus', 'drag-preview', 'open-entry'],
   mount: { extras: [] },
   constants: { accentVel: ACCENT_VEL },

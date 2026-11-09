@@ -59,7 +59,7 @@ export const STEP_PX = 44;
 /** The width a row of `n` steps takes. */
 export const rowPx = (n) => n * STEP_PX - (n - 1);
 /** Sixteen 44 px steps and a name column need this width. */
-export const WIDE_MIN_PX = 16 * 44 - 15 + 128;
+export const WIDE_MIN_PX = 16 * 44 - 15 + 80 + 8; // the w-20 name column and its gap-2
 
 const EPS = 1e-9;
 const RATCHET = [1, 8];

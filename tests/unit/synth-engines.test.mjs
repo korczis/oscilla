@@ -26,7 +26,8 @@ const ENGINE_TYPES = ['additive-voice', 'fm-voice', 'am-voice', 'wavetable-voice
 test('every engine module is a 16-voice note source with a generated face', () => {
   const mods = PANEL.modulesOf('engines');
   assert.deepEqual(mods.map((m) => m.id), ENGINE_MODULES.map((m) => m.id));
-  assert.deepEqual(PANEL.tabs.map((t) => t.id), ['panel', 'engines', 'xy'], 'XY: K097');
+  assert.deepEqual(PANEL.tabs.map((t) => t.id), ['panel', 'engines', 'xy', 'drums'],
+    'XY: K097; Drums: K222');
   for (const m of mods) {
     assert.equal(m.def.capabilities.notes, true, m.id);
     assert.equal(m.def.capabilities.voices, 16, m.id);
@@ -121,7 +122,8 @@ test('a link carries the tab and the engine, strictly', () => {
   assert.match(hash, /yt=engines&ye=fm&yp=fm-bell/);
   assert.deepEqual(decodeSynthLink(`#${hash}`, PANEL, PRESETS), { ok: true, link });
   assert.match(decodeSynthLink('#m=synth&ye=lpf', PANEL, PRESETS).reason, /no engine "lpf"/);
-  assert.match(decodeSynthLink('#m=synth&yt=drums', PANEL, PRESETS).reason, /no tab/);
+  assert.match(decodeSynthLink('#m=synth&yt=mix', PANEL, PRESETS).reason, /no tab/);
+  assert.equal(decodeSynthLink('#m=synth&yt=drums', PANEL, PRESETS).link.tab, 'drums'); // K222
   assert.equal(decodeSynthLink('#m=synth&ye=perc', PANEL, PRESETS).link.tab, 'engines');
 });
 

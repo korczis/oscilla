@@ -9,6 +9,7 @@
 import { definePanel } from '../panel.js';
 import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';
 import { XY_MODULE, XY_TAB } from './xy.js';
+import { DRUMS_TAB } from '../drums.js';
 
 // K022: the panel's filters are 12 dB/oct by design (its description and FILTER_NOTE).
 const FILTER_FIXED = { gain: 0, enabled: true, slope: '12' };
@@ -26,7 +27,7 @@ export default definePanel({
     description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.' }, ENGINE_TAB,
-  XY_TAB],
+  XY_TAB, DRUMS_TAB],
   description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
     + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
     + 'with no cable, and a cable into a jack replaces what was normalled there.',

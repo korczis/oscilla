@@ -48,7 +48,8 @@ export function playingStep(model, view, ph) {
 export function mountClipSteps(host, svc, first) {
   let view = first;
   const owner = { selection: [], page: 0 };
-  const grid = mountStepGrid(host, {
+  let grid = null; // the first fit calls onView while mountStepGrid is still building
+  grid = mountStepGrid(host, {
     mode: 'notes', label: LABEL, clipId: view.clipId, payload: view.payload, lanes: view.lanes,
     laneNames: view.laneNames, steps: view.steps, stepBeats: view.stepBeats,
     commit: (action) => {
@@ -58,7 +59,7 @@ export function mountClipSteps(host, svc, first) {
     onView: (v) => {
       if (v.selection) owner.selection = v.selection;
       if (v.page != null) owner.page = v.page;
-      grid.set({ selection: owner.selection, page: owner.page });
+      if (grid) grid.set({ selection: owner.selection, page: owner.page });
     },
     playStep: () => playingStep(svc.store.getModel(), view,
       svc.playhead ? svc.playhead() : null),

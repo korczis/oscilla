@@ -419,7 +419,7 @@ test('R2-W8-3: the Studio\'s shortcuts dialog, where the grid is mounted, lists 
   const { shortcutHelp } = await import('../../src/js/ui/shortcuts.js');
   const ids = new Set(shortcutHelp('studio').rows.map((r) => r.id));
   for (const k of stepGrid.keys) assert.ok(ids.has(k.row), k.row);
-  assert.deepEqual([...stepGrid.workspaces], ['studio']);
+  assert.deepEqual([...stepGrid.workspaces], ['studio', 'synth']); // K222: the Drums tab
 });
 
 test('a re-render waits for a held drag; the Inspector skips an unchanged clip', async () => {

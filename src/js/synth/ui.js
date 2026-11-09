@@ -38,6 +38,7 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { createDrumsTab } from './view/drums-tab.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
@@ -68,7 +69,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const engineId = () => playedEngine(model(), panel, cmp && ENGINE_IDS.includes(cmp.synth
     .engine) ? cmp.synth.engine : ENGINE_IDS[0], registry);
   /** The module the keys play now: Keys on the Panel tab, the chosen engine on Engines. */
-  const playedModule = () => (tab() === 'engines' ? engineId() : 'keys');
+  const playedModule = () => (tab() === 'engines' ? engineId() : tab() === 'drums' ? 'perc'
+    : 'keys');
   /** The node the keys play: the one routed by the picker (K066), else the tab's module. */
   const played = () => routedNode(model(), registry) || nodes().get(playedModule());
   const handle = () => get().handle;
@@ -314,6 +316,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       .find(([, v]) => v) : null;
     if (!present()) {
       xy.destroy();
+      drums.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
         + 'text-gray-700 dark:text-gray-300"><p>Tento dokument Studia nemá panel Synthu.</p>'
@@ -350,7 +353,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
       + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
-      + xy.html()
+      + xy.html() + drums.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
@@ -369,6 +372,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     shape = shapeOf();
     renderBay();
     xy.mount();
+    drums.mount();
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
     if (keep) {
@@ -416,7 +420,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!cmp || cmp.workspace !== 'synth') return;
     syncArmed();
     if (knob) updateKnob(knob.cid);
-    else if (!cable) renderAll();
+    else if (!cable && !drums.update()) renderAll();
   }
 
   // ------------------------------------------------------------------ events
@@ -701,6 +705,13 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const { noteOn, noteOff, legato, allOff, disarm, armedText } = createSynthNotes({ get,
     transport, ensurePanel, cmp: () => cmp, say, played, playedModule, present, nodes, panel,
     ENGINE_IDS, syncArmed });
+  // K222 Drums tab: the step grid on the percussion engine's notes clip
+  const drums = createDrumsTab({ nodes, model, dispatch, say, transport, tab,
+    playhead: () => (get().transport ? get().transport.playhead() : null),
+    sink: () => ({ noteOn, noteOff }), openStudio: (id) => {
+      handle().dispatch({ type: 'SELECTION_CHANGE', selection: { clips: [id] } });
+      cmp.setWorkspace('studio');
+    } });
 
   // ------------------------------------------------------------------ links
 
