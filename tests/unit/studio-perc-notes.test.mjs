@@ -99,6 +99,7 @@ test('K222 the note player: engine notes on and off, an edit replays from its ho
     noteOn: (t, note, vel) => { calls.push(['on', t, note, vel]); return { slot: 0 }; },
     noteOff: (t, note) => { calls.push(['off', t, note]); return true; },
     allOff: (t, fast) => { calls.push(['all', t, fast]); return 0; },
+    cancelFrom: (t) => { calls.push(['cancel', t]); return 0; },
   };
   const node = { id: 'perc-1', type: 'perc-voice', params: {}, metadata: { name: 'Bicí' } };
   const model = { graph: { nodes: [node], edges: [] }, timeline: { clips: [] } };
@@ -114,17 +115,18 @@ test('K222 the note player: engine notes on and off, an edit replays from its ho
   assert.deepEqual(played, [null, null]);
   assert.deepEqual(calls, [['on', 1, 36, 101], ['off', 1.1, 36], ['on', 2, 38, 101],
     ['off', 2.1, 38]]);
-  // An edit at horizon 1.5: every voice from there is released, the notes still due replayed.
+  // An edit at horizon 1.5: the voices scheduled from there are dropped (one sounding rings
+  // on, C1-K222-5) and the notes still due struck again.
   calls.length = 0;
   player.rebuild('perc-1', 1.5);
-  assert.deepEqual(calls, [['all', 1.5, true], ['on', 2, 38, 101], ['off', 2.1, 38]]);
+  assert.deepEqual(calls, [['cancel', 1.5], ['on', 2, 38, 101], ['off', 2.1, 38]]);
   // A cancelled note is not replayed; STOP (cancel, then rebuild at the stop) releases all.
   calls.length = 0;
   const touched = new Set();
   player.cancel('b', touched);
   assert.deepEqual([...touched], ['perc-1']);
-  player.rebuild('perc-1', 1.6);
-  assert.deepEqual(calls, [['all', 1.6, true]]);
+  player.rebuild('perc-1', 1.6, true);
+  assert.deepEqual(calls, [['all', 1.6, true]], 'STOP releases every voice (allOff)');
   const all = new Set();
   player.touch(all);
   assert.deepEqual([...all], ['perc-1'], 'its node is touched by STOP');
@@ -145,3 +147,71 @@ test('K222 Add clip on a percussion track makes an empty one-bar notes clip that
   const clip = st.getModel().timeline.clips.find((c) => c.id === id);
   assert.equal(transportModule.clipPlayReason(st.getModel(), clip), null);
 });
+
+test('C1-K222-5: an edit while playing leaves ringing hits and strikes due ones once',
+  () => {
+    // A kick at beat 2.5 (1.25 s at 120 BPM) rings to 1.75 s; a snare is due at beat 3
+    // (1.5 s), on a slot of its own (the pool assigns slots when a hit is scheduled).
+    const { st, perc, clip } = kit([n(2.5, 60), n(3, 62)]);
+    const fx = createFakeAudioEnv({ sampleRate: SR });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init(), 'engine.init');
+    if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
+    const runtime = createStudioRuntime({ engine });
+    const transport = transportModule.createStudioTransport({ runtime, engine, store: st,
+      lookAheadS: 3 });
+    const base = ok(transport.start(), 'PLAY').baseTime;
+    const h = runtime.nodes.get(perc);
+    fx.advanceTo(base + 1.3);
+    const kick = () => h.info.hits().filter((x) => x.note === 60);
+    assert.equal(kick().length, 1, 'the kick was struck');
+    assert.equal(kick()[0].released, null, 'and rings at 1.3 s');
+    // An edit while playing: a step added at beat 3.25 (1.625 s), past the horizon, while the
+    // kick still holds its slot (a slot is reused from its voice's end, at scheduling).
+    const notes = st.getModel().timeline.clips.find((c) => c.id === clip).payload.notes;
+    ok(st.dispatch({ type: 'CLIP_UPDATE', clipId: clip, payload: { notes: [...notes,
+      n(3.25, 61)] } }), 'an edit while playing');
+    ok(transport.sync(), 'the transport follows the edit');
+    fx.advanceTo(base + 1.35);
+    assert.equal(kick().length, 1, 'the kick still rings after the edit (an allOff cut it)');
+    assert.equal(kick()[0].released, null, 'unreleased');
+    assert.ok(kick()[0].end > fx.ctx.currentTime, 'its decay is not cut');
+    // The snare due at 1.5 s: exactly one voice will sound it (a dropped one is released
+    // before its onset), and the added clap at 1.625 s is struck once too.
+    const due = (note) => h.info.hits().filter((x) => x.note === note && x.end > x.start);
+    assert.equal(due(62).length, 1, 'the snare sounds once, not twice');
+    assert.equal(due(61).length, 1, 'the added step is struck');
+    transport.stop({ fast: true });
+  });
+
+test('C1-K222-5: an edit drops a scheduled hit that a later hit displaced from its slot, so no '
+  + 'hit sounds twice', () => {
+    // Two kicks on one slot: the second (beat 3.75, 1.875 s) is scheduled after the first one
+    // (beat 2.5) has ended, so the pool gives it the same slot and it displaces the first from
+    // the host's slot map at PLAY, before either has started. An edit before both must drop
+    // both scheduled voices, the displaced one included, before it strikes them again.
+    const { st, perc, clip } = kit([n(2.5, 60), n(3, 62), n(3.75, 60)]);
+    const fx = createFakeAudioEnv({ sampleRate: SR });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init(), 'engine.init');
+    if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
+    const runtime = createStudioRuntime({ engine });
+    const transport = transportModule.createStudioTransport({ runtime, engine, store: st,
+      lookAheadS: 3 });
+    const base = ok(transport.start(), 'PLAY').baseTime;
+    const h = runtime.nodes.get(perc);
+    fx.advanceTo(base + 0.5);
+    const notes = st.getModel().timeline.clips.find((c) => c.id === clip).payload.notes;
+    ok(st.dispatch({ type: 'CLIP_UPDATE', clipId: clip, payload: { notes: [...notes,
+      n(3.5, 61)] } }), 'an edit before every hit');
+    ok(transport.sync(), 'the transport follows the edit');
+    // A voice sounds iff its end lies after its onset (a cancelled one ends before it starts;
+    // `released` is also set on a voice a later one displaced, without cutting it).
+    const sounding = (note, beat) => h.info.hits().filter((x) => x.note === note
+      && x.end > x.start && Math.abs(x.start - (base + beat * 0.5)) < 0.01);
+    assert.equal(sounding(60, 2.5).length, 1, 'the first kick sounds once');
+    assert.equal(sounding(62, 3).length, 1, 'the snare sounds once');
+    assert.equal(sounding(60, 3.75).length, 1, 'the second kick sounds once');
+    assert.equal(sounding(61, 3.5).length, 1, 'the added clap is struck');
+    transport.stop({ fast: true });
+  });

@@ -1364,7 +1364,7 @@ export function createStudioTransport({
     for (const id of touched) {
       rebuildEnvelope(id, plan.at);
       triggers.rebuild(id, plan.at);
-      notes.rebuild(id, plan.at);
+      notes.rebuild(id, plan.at, true); // STOP: an engine releases every voice
     }
     for (const a of plan.automation) {
       if (!a.target) continue;

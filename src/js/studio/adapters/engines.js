@@ -37,12 +37,14 @@ function engineHandle({ host, ctx, extra = {}, onUpdate = () => {}, sources = []
     noteOn: (t, note, velocity) => host.noteOn(t, note, velocity),
     noteOff: (t, note) => host.noteOff(t, note),
     allOff: (t, fast) => host.allOff(t, fast),
+    cancelFrom: (t) => host.cancelFrom(t),
     stop(t) {
       host.stop(t);
       for (const s of sources) { try { s.stop(t); } catch (e) { /* stopped */ } }
     },
     dispose() { host.dispose(); },
     info: { notes: true, voices: (t) => host.voices(t), held: () => host.held(),
+      hits: () => host.hits(),
       sampleRate: ctx.sampleRate, ...(extra.info || {}) },
     status: 'ready',
     reason: null,

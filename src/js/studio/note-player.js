@@ -1,7 +1,8 @@
 // Notes clips on a Keys node, as the Studio transport plays them (K068, ADR 0086 decision 6),
 // and on the percussion engine (K222): there each note is a note-on and a note-off of its voice
-// pool (handle.noteOn, noteOff), and a rebuild from a horizon releases every voice from there
-// (handle.allOff(horizon, fast)) and strikes the notes still due again.
+// pool (handle.noteOn, noteOff), and a rebuild from a horizon drops the voices scheduled from
+// there (handle.cancelFrom(horizon); one already sounding rings on) and strikes the notes still
+// due again.
 // Composed by transport.js; pure apart from the handles it is given, which are the runtime's
 // own (adapters/instrument.js keys: play, holdPitch, keyRange). No audio node is created and no
 // timer runs here: every call lands at an audio-clock time the timeline compiler computed.
@@ -23,7 +24,10 @@
 //                                clip (key-range), as the live keys refuse it
 //   player.cancel(key, touched)  forget a cancelled item's pitch; its node joins `touched`
 //   player.touch(touched)        every node a note played on joins `touched` (STOP)
-//   player.rebuild(id, horizon)  re-play node `id`'s pitches from `horizon`: hold the pitch
+//   player.rebuild(id, horizon, stop)  an engine (K222): STOP (stop true) releases every voice
+//                                from `horizon` (allOff), an edit drops only those scheduled from
+//                                there (cancelFrom), then the notes still due are struck again.
+//                                A Keys node: re-play its pitches from `horizon`: hold the pitch
 //                                there (handle.holdPitch), then every later record in time
 //                                order, so an edit, an out-of-order onset or STOP leaves exactly
 //                                the notes still due. On a node the runtime rebuilt (a record
@@ -65,12 +69,14 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
     return last;
   };
 
-  function rebuild(id, horizon) {
+  function rebuild(id, horizon, stop = false) {
     const h = ready(id);
     if (h && typeof h.allOff === 'function' && typeof h.holdPitch !== 'function') {
-      // An engine: every voice from the horizon is released (one not yet started never
-      // sounds), then the notes still due are struck again (an edit, or STOP with none due).
-      h.allOff(horizon, true);
+      // An engine. STOP releases every voice from the horizon (allOff, fast); an edit drops only
+      // the voices scheduled from there (cancelFrom; a voice already sounding rings on, review
+      // C1-K222-5). Then the notes still due are struck again, so none sounds twice.
+      if (!stop && typeof h.cancelFrom === 'function') h.cancelFrom(horizon);
+      else h.allOff(horizon, true);
       const due = [...hits.values()].filter((x) => x.nodeId === id && x.time >= horizon)
         .sort((a, b) => a.time - b.time);
       for (const x of due) {
