@@ -11,6 +11,10 @@
 //   transport.start({ position }) -> result     PLAY from `position` (default: the return point)
 //   transport.stop({ fast }) -> Promise<counts>  STOP (§184): release, cancel, hold automation,
 //                                                stop the Studio output; resolves once released
+//   transport.stop({ keepArmed: true })         the user's STOP (K104): a run that began armed
+//                                                stops its timeline and stays armed on the same
+//                                                runtime, the keys sounding; any other run, a
+//                                                fast stop and every stop without it stop whole
 //   transport.returnToStart() -> playhead       RETURN: the return point becomes 0 (relocates
 //                                                while playing)
 //   transport.locate(position) -> playhead      the same for any position
@@ -262,6 +266,9 @@ export function createStudioTransport({
   const levelTaps = new Map();
   const gateOwned = new Map(); // envelope id → handle (closed at PLAY, gated by the timeline)
   let armedOnly = false; // armed (K104): the live model plays, no timeline and no end
+  // This run began armed (K104, the owner's 'STOP keeps it armed', 2026-11-03): a user STOP
+  // (stop({ keepArmed: true })) returns it to the armed run instead of stopping the runtime.
+  let armedRun = false;
   const live = createLiveNotes({ getModel: () => model, handleOf: (id) => ready(id) });
   const view = (m) => (armedOnly && m ? liveModel(m) : m);
   const unplayed = new Map(); // clip or lane id → { code, reason }
@@ -1612,7 +1619,10 @@ export function createStudioTransport({
   function startNow({ position } = {}) {
     if (disposed) return fail('start', 'The Studio transport is disposed.', 'disposed');
     if (playing && !armedOnly) return { ok: true, playing: true, already: true };
-    if (!playing) return playNow(position);
+    if (!playing) {
+      armedRun = false; // armLive marks its own run once it plays
+      return playNow(position);
+    }
     // PLAY while armed: the whole document, on the same running runtime. Once the armed run is
     // left, every way this PLAY fails (a refused claim or apply, or a throw) ends in
     // leaveArmedRun (K169): a runtime left running under a stopped transport strands each later
@@ -1712,6 +1722,7 @@ export function createStudioTransport({
     clearTimer();
     playing = false;
     armedOnly = false;
+    armedRun = false;
     live.reset();
     trace.record('transport', 'stop', { outcome: 'aborted', detail: { reason } });
     for (const v of voices.values()) {
@@ -1737,8 +1748,9 @@ export function createStudioTransport({
     return trace.run(() => stopNow(args));
   }
 
-  function stopNow({ fast = false, reason = 'stop' } = {}) {
+  function stopNow({ fast = false, reason = 'stop', keepArmed = false } = {}) {
     if (!playing) return runtime.stop({ fast }).then(counts);
+    if (keepArmed && !fast && armedRun) return backToArmed(reason);
     trace.record('transport', 'stop', { revision: lastRevision, outcome: 'stopped',
       detail: { reason, fast } });
     clearTimer();
@@ -1762,10 +1774,53 @@ export function createStudioTransport({
     warn('stop-failed', message);
   }
 
+  /**
+   * A user STOP of a run that began armed (K104, the owner's 'STOP keeps it armed', 2026-11-03):
+   * the timeline stops as STOP_POLICY says (release, cancel, hold), its lanes and clip claims are
+   * dropped, and the same running runtime takes the armed (live) model again, so a held key keeps
+   * sounding and the next note gates. Already armed: nothing to stop. If the runtime refuses the
+   * live model, or the context is gone, it is a whole STOP after all.
+   */
+  function backToArmed(reason) {
+    if (armedOnly) return Promise.resolve(counts({}));
+    const ctx = hooks.ctx;
+    if (!ctx || ctx.state === 'closed') return stopNow({ reason });
+    trace.record('transport', 'stop', { revision: lastRevision, outcome: 'stopped',
+      detail: { reason, fast: false, armed: true } });
+    clearTimer();
+    const plan = scheduler.stop(ctx.currentTime);
+    applyStop(plan);
+    lanes.clear();
+    armedOnly = true;
+    const m = view(store.getModel());
+    const rev = store.getRevision();
+    let applied;
+    try {
+      runtime.setOwnedParams(ownedFor(m), { gated: gatedEnvelopes(m), releaseAt: plan.at });
+      applied = runtime.apply(m, { revision: rev });
+    } catch (e) {
+      applied = { ok: false, reason: messageOf(e) };
+    }
+    if (!applied.ok) {
+      armedOnly = false;
+      warn('stop-failed', `Stop: ${errorOf(applied, 'runtime odmítl graf zapnutých kláves')}`);
+      return release({ fast: false, reason });
+    }
+    model = m;
+    lastRevision = rev;
+    scheduler = createTimelineScheduler(m, { sampleRate: ctx.sampleRate, baseTime: hooks.soon(),
+      startPosition, registry, lookAheadS });
+    afterApply(freshOf(applied));
+    emit('state', { playing: false, armed: true, reason });
+    tick();
+    return Promise.resolve(counts({}));
+  }
+
   /** STOP once the schedule is stopped: drop the ownership, say 'state', stop the runtime. */
   function release({ fast, reason }) {
     playing = false;
     armedOnly = false;
+    armedRun = false;
     live.reset();
     lanes.clear();
     claims.clear();
@@ -1885,6 +1940,7 @@ export function createStudioTransport({
     armedOnly = true;
     const r = start({ position: 0 });
     if (!r.ok) armedOnly = false;
+    else armedRun = true;
     return r;
   }
 

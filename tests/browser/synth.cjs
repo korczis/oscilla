@@ -66,6 +66,13 @@
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
 //              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
 //              Synth: it reads Arm, Arm arms and a key sounds. Fails on 9cf786ac (Disarm stays)
+//   s-armed    K104 (desktop and phone): Arm by pointer (a tap on the phone) stops a playing
+//              Playground voice and checks the role=switch; Enter and Space on it disarm and
+//              arm, Escape disarms; armed and stopped, QWERTY A is held on the running Keys
+//              node and sounds. Desktop: leaving the Synth disarms (census 0); in the Studio a
+//              key arms it and the transport bar's armed indicator shows, PLAY plays, and STOP
+//              leaves the keys armed (indicator and Synth state) with A still sounding (the
+//              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
 //   s-xyengine an XY preset writes only the voice it plays (review S6): drawbar 1 of the
 //              additive engine set by Home, then XY bass from the Preset menu (one undo entry,
 //              the pad in D Dorian): the drawbar keeps its value in the model and on its face.
@@ -180,7 +187,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices']);
+  's-library', 's-choices', 's-armed']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -1076,6 +1083,78 @@ function defineChecks() {
     const on = await sound(page, (q) => q.rmsDb > -40, 'the re-armed panel sounds');
     await page.keyboard.up('KeyA');
     return { ok: true, on: on.rmsDb };
+  });
+
+  // K104, armed monitoring, and the owner's 'STOP keeps it armed (Recommended)' (2026-11-03).
+  def('s-armed', async ({ page, size }) => {
+    const sw = page.locator('[data-osc="synth.arm"]');
+    const app = (fn) => page.evaluate(fn);
+    const state = async () => ({ armed: (await dbg(page)).armed,
+      checked: await sw.getAttribute('aria-checked') });
+    const is = (want, what) => until(async () => {
+      const s = await state();
+      return s.armed === want && s.checked === String(want);
+    }, { ms: 10000, what });
+    const role = await sw.getAttribute('role');
+    // Real-time: arming stops a playing Playground voice (the output owner's release path).
+    await app(() => { const a = window.OSCILLA.app; a.duration = 4000; return a.play('trigger'); });
+    await until(() => app(() => !!window.OSCILLA.app.playing),
+      { ms: 10000, what: 'the Playground voice plays' });
+    if (size === 'phone') await sw.tap(); else await sw.click();
+    await is(true, `Arm by ${size === 'phone' ? 'touch' : 'pointer'}: the switch is checked`);
+    await until(() => app(() => !window.OSCILLA.app.playing && !window.OSCILLA.engine.voice),
+      { ms: 10000, what: 'arming stopped the Playground voice' });
+    // Interactive: the switch by keyboard, and Escape disarms.
+    await sw.focus();
+    await page.keyboard.press('Enter');
+    await is(false, 'Enter on the switch disarms');
+    await page.keyboard.press('Space');
+    await is(true, 'Space on the switch arms');
+    await page.keyboard.press('Escape');
+    await is(false, 'Escape disarms');
+    if (size === 'phone') await sw.tap(); else await sw.click();
+    await is(true, 'armed again');
+    // Real-time: a key while armed and stopped reaches the running Keys node and sounds.
+    await hold(page, 'KeyA');
+    await until(async () => (await dbg(page)).held.includes(60),
+      { ms: 10000, what: 'C4 while armed and stopped is held on the running Keys node' });
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the armed, stopped panel sounds');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the key up releases it');
+    if (size === 'phone') return { ok: role === 'switch', role, on: on.rmsDb };
+    // Linked: leaving the Synth disarms; in the Studio a key arms it, PLAY plays the document,
+    // and STOP stops the timeline while the keys stay armed: the transport bar's indicator and
+    // the Synth's own state both say armed, and a key still sounds.
+    await page.locator('[data-osc="nav.studio"]').click();
+    await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed,
+      { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
+    const badge = page.locator('[data-osc="studio.armed"]');
+    await page.evaluate(() => {
+      if (document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+      }
+    });
+    await page.keyboard.down('KeyA');
+    await until(async () => (await dbg(page)).armed && await badge.isVisible(),
+      { ms: 10000, what: 'a key in the Studio arms it and the transport bar shows armed' });
+    await page.keyboard.up('KeyA');
+    await page.locator('[data-osc="studio.play"]').click();
+    await until(() => app(() => window.OSCILLA.app.studio.playing
+      && window.OSCILLA.studio.transport.playhead().playing),
+    { ms: 10000, what: 'PLAY while armed plays the timeline' });
+    await page.locator('[data-osc="studio.stop"]').click();
+    await until(async () => (await dbg(page)).armed && await badge.isVisible()
+      && await app(() => !window.OSCILLA.app.studio.playing && window.OSCILLA.app.synth.armed),
+    { ms: 10000, what: 'STOP after PLAY leaves the keys armed, shown in the bar and the Synth' });
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.keyboard.down('KeyA');
+    const after = await sound(page, (q) => q.rmsDb > -40, 'a key after STOP still sounds');
+    await page.keyboard.up('KeyA');
+    await page.locator('[data-osc="nav.synth"]').click();
+    await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed
+      && (await sw.getAttribute('aria-checked')) === 'false',
+    { ms: 10000, what: 'leaving the Studio disarms it: census 0, the switch unchecked' });
+    return { ok: role === 'switch', role, on: on.rmsDb, after: after.rmsDb };
   });
 
   // Review of src/js/synth (oscilla-21, S6): an XY preset writes the voice it plays, never an

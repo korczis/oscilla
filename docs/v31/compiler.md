@@ -518,6 +518,17 @@ method (an engine change, out of this issue's scope):
   and uses the start's crossfade time as the timeline's `baseTime`, applies every model change
   with `runtime.apply` before `scheduler.edit`, and stops the Studio output with
   `runtime.stop()`.
+- **Armed monitoring** (K104): `transport.arm()` claims the output once (`onClaimOutput`, so a
+  playing Playground voice stops through the output owner) and starts the runtime on the live
+  model (`live-notes.js` `liveModel`: everything connected to a Keys node, no timeline), so a
+  key sounds while the timeline is stopped. PLAY while armed applies the whole document to the
+  same running runtime. The user's STOP (`transport.stop({ keepArmed: true })`: the Studio's
+  Stop button, its Play/Stop toggle and the timeline's transport commands) of a run that began
+  armed stops the timeline and applies the live model again, still on the same runtime, so the
+  keys stay armed and sounding (the owner's 'STOP keeps it armed (Recommended)', 2026-11-03);
+  the transport bar shows it (`data-osc="studio.armed"`). Disarm, Escape, page hide, leaving
+  the workspace and another owner taking the output stop it whole: every note released and
+  the node census back to 0 (`tests/unit/studio-armed-monitoring.test.mjs`).
 - **Owned parameters** (the decision "Automated parameters belong to their lane", wired):
   `runtime.setOwnedParams([{ node, param }])` names the parameters another owner drives (the
   transport: every automation lane's target, and the `level` of a pattern-played Oscillator);
