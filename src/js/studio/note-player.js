@@ -25,8 +25,9 @@
 //   player.cancel(key, touched)  forget a cancelled item's pitch; its node joins `touched`
 //   player.touch(touched)        every node a note played on joins `touched` (STOP)
 //   player.rebuild(id, horizon, stop)  an engine (K222): STOP (stop true) releases every voice
-//                                from `horizon` (allOff), an edit drops only those scheduled from
-//                                there (cancelFrom), then the notes still due are struck again.
+//                                from `horizon` (allOff), an edit drops only its own hits
+//                                scheduled from there (cancelFrom with CLIP_TAG; a live pad's
+//                                rings on), then the notes still due are struck again.
 //                                A Keys node: re-play its pitches from `horizon`: hold the pitch
 //                                there (handle.holdPitch), then every later record in time
 //                                order, so an edit, an out-of-order onset or STOP leaves exactly
@@ -47,6 +48,9 @@ import { LIVE_NOTES_TEXT, gateTargets } from './live-notes.js';
 import { NODE_REGISTRY } from './registry.js';
 import { effectiveTarget } from './timeline.js';
 
+/** The tag the note player strikes an engine's hits with (voices.js cancelFrom, C1-K222-6). */
+export const CLIP_TAG = 'clip';
+
 export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, gate, clock,
   played, warn }) {
   // item key -> { key, nodeId, handle, time, note, velocity, slide, gate }
@@ -54,8 +58,10 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
   // The percussion engine's notes (K222, 'engine-notes'): item key -> { nodeId, handle, time,
   // end, note, velocity }. Each is a note-on and a note-off on the engine's voice pool.
   const hits = new Map();
+  // The note player's own hits carry CLIP_TAG, so an edit's rebuild drops only them and a live
+  // pad hit on the same engine rings on (review C1-K222-6).
   const strike = (h, x) => {
-    h.noteOn(x.time, x.note, x.velocity);
+    h.noteOn(x.time, x.note, x.velocity, CLIP_TAG);
     h.noteOff(x.end, x.note);
   };
   const apply = (h, x) => h.play(x.time, x.note, x.velocity, { legato: x.slide, onset: x.gate });
@@ -75,7 +81,7 @@ export function createNotePlayer({ getModel, ready, registry = NODE_REGISTRY, ga
       // An engine. STOP releases every voice from the horizon (allOff, fast); an edit drops only
       // the voices scheduled from there (cancelFrom; a voice already sounding rings on, review
       // C1-K222-5). Then the notes still due are struck again, so none sounds twice.
-      if (!stop && typeof h.cancelFrom === 'function') h.cancelFrom(horizon);
+      if (!stop && typeof h.cancelFrom === 'function') h.cancelFrom(horizon, CLIP_TAG);
       else h.allOff(horizon, true);
       const due = [...hits.values()].filter((x) => x.nodeId === id && x.time >= horizon)
         .sort((a, b) => a.time - b.time);

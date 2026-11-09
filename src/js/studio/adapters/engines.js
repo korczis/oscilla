@@ -34,10 +34,10 @@ function engineHandle({ host, ctx, extra = {}, onUpdate = () => {}, sources = []
       onUpdate(changed);
       did(w, changed, Object.keys(changed), 'next-note');
     },
-    noteOn: (t, note, velocity) => host.noteOn(t, note, velocity),
+    noteOn: (t, note, velocity, tag) => host.noteOn(t, note, velocity, tag),
     noteOff: (t, note) => host.noteOff(t, note),
     allOff: (t, fast) => host.allOff(t, fast),
-    cancelFrom: (t) => host.cancelFrom(t),
+    cancelFrom: (t, tag) => host.cancelFrom(t, tag),
     stop(t) {
       host.stop(t);
       for (const s of sources) { try { s.stop(t); } catch (e) { /* stopped */ } }

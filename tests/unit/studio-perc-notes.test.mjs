@@ -99,7 +99,7 @@ test('K222 the note player: engine notes on and off, an edit replays from its ho
     noteOn: (t, note, vel) => { calls.push(['on', t, note, vel]); return { slot: 0 }; },
     noteOff: (t, note) => { calls.push(['off', t, note]); return true; },
     allOff: (t, fast) => { calls.push(['all', t, fast]); return 0; },
-    cancelFrom: (t) => { calls.push(['cancel', t]); return 0; },
+    cancelFrom: (t, tag) => { calls.push(['cancel', t, tag]); return 0; },
   };
   const node = { id: 'perc-1', type: 'perc-voice', params: {}, metadata: { name: 'Bicí' } };
   const model = { graph: { nodes: [node], edges: [] }, timeline: { clips: [] } };
@@ -119,7 +119,8 @@ test('K222 the note player: engine notes on and off, an edit replays from its ho
   // on, C1-K222-5) and the notes still due struck again.
   calls.length = 0;
   player.rebuild('perc-1', 1.5);
-  assert.deepEqual(calls, [['cancel', 1.5], ['on', 2, 38, 101], ['off', 2.1, 38]]);
+  assert.deepEqual(calls, [['cancel', 1.5, 'clip'], ['on', 2, 38, 101], ['off', 2.1, 38]],
+    'an edit drops only the note player\'s own hits (CLIP_TAG, C1-K222-6)');
   // A cancelled note is not replayed; STOP (cancel, then rebuild at the stop) releases all.
   calls.length = 0;
   const touched = new Set();
@@ -213,5 +214,34 @@ test('C1-K222-5: an edit drops a scheduled hit that a later hit displaced from i
     assert.equal(sounding(62, 3).length, 1, 'the snare sounds once');
     assert.equal(sounding(60, 3.75).length, 1, 'the second kick sounds once');
     assert.equal(sounding(61, 3.5).length, 1, 'the added clap is struck');
+    transport.stop({ fast: true });
+  });
+
+test('C1-K222-6: an edit drops the clip\'s scheduled hits, never a live pad hit on the same '
+  + 'engine', () => {
+    // A pad played live at the moment of an edit: its onset lies at or after the edit's horizon
+    // (the live path schedules it a little ahead), as the clip's own scheduled hits do.
+    const { st, perc, clip } = kit([n(3, 62)]);
+    const fx = createFakeAudioEnv({ sampleRate: SR });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init(), 'engine.init');
+    if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
+    const runtime = createStudioRuntime({ engine });
+    const transport = transportModule.createStudioTransport({ runtime, engine, store: st,
+      lookAheadS: 3 });
+    const base = ok(transport.start(), 'PLAY').baseTime;
+    const h = runtime.nodes.get(perc);
+    fx.advanceTo(base + 0.5);
+    const padAt = fx.ctx.currentTime + 0.2; // after the edit's horizon
+    ok(transport.live(perc, { kind: 'on', note: 64, velocity: 100, at: padAt }), 'a pad hit');
+    const notes = st.getModel().timeline.clips.find((c) => c.id === clip).payload.notes;
+    ok(st.dispatch({ type: 'CLIP_UPDATE', clipId: clip, payload: { notes: [...notes,
+      n(3.5, 61)] } }), 'an edit while the pad hit is due');
+    ok(transport.sync(), 'the transport follows the edit');
+    const sounds = (note) => h.info.hits().filter((x) => x.note === note && x.end > x.start);
+    assert.equal(sounds(64).length, 1, 'the pad hit still sounds');
+    assert.ok(Math.abs(sounds(64)[0].start - padAt) < 1e-6, 'at its own time');
+    assert.equal(sounds(62).length, 1, 'the clip\'s snare sounds once');
+    assert.equal(sounds(61).length, 1, 'and the added step is struck');
     transport.stop({ fast: true });
   });

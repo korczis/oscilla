@@ -15,9 +15,11 @@
 //                  chokes an open one). A builder that starts no source sounds nothing: that
 //                  note takes no voice and steals none.
 //     host.out                       the engine's output; host.thru the Chain input (into out)
-//     host.noteOn(t, note, velocity) -> { slot, stolen, retrigger, dropped }
+//     host.noteOn(t, note, velocity, tag) -> { slot, stolen, retrigger, dropped }   tag: who
+//                                    struck it (the note player's 'clip'; a live key none)
 //     host.noteOff(t, note) -> bool  host.allOff(t) -> n   host.stop(t)   host.dispose()
-//     host.cancelFrom(t) -> n        drops the voices whose onset is at or after t (K222)
+//     host.cancelFrom(t, tag) -> n   drops the voices whose onset is at or after t (K222), only
+//                                    those struck with `tag` when one is given (C1-K222-6)
 //     host.hits() -> [{ note, start, released, end }]   the live voices (diagnostics)
 //     host.update(params)            the next notes use these parameters
 //     host.voices(t?) -> n           voices sounding (held, or releasing before their end)
@@ -105,7 +107,7 @@ export function createVoiceHost({ ctx, acct, params, build }) {
 
   const adsrOf = () => ({ a: p.attack, d: p.decay, s: p.sustain, r: p.release });
 
-  function noteOn(t, note, velocity = 100) {
+  function noteOn(t, note, velocity = 100, tag = null) {
     const peak = voicePeak(p.level, velocity);
     const same = pool.heldSlot(note);
     const held = same == null ? null : live.get(same);
@@ -117,8 +119,8 @@ export function createVoiceHost({ ctx, acct, params, build }) {
     // A full pool steals: the new voice starts once the stolen one has faded.
     const full = same == null && pool.active(t) >= pool.max;
     const start = full ? t + STEAL_RELEASE_S : t;
-    const v = { slot: null, note, start, nodes: [], sources: [], end: Infinity, released: null,
-      oneShot: false, gone: false, ended: 0 };
+    const v = { slot: null, note, start, tag, nodes: [], sources: [], end: Infinity,
+      released: null, oneShot: false, gone: false, ended: 0 };
     const track = (n) => { v.nodes.push(acct.track(n)); return n; };
     const source = (n) => {
       track(n);
@@ -194,9 +196,10 @@ export function createVoiceHost({ ctx, acct, params, build }) {
     /** Release only the voices whose onset is at or after t (scheduled, not started): an edit's
      *  rebuild drops them before it strikes the notes still due, and every voice already
      *  sounding rings on (K222, review C1-K222-5). Returns how many it dropped. */
-    cancelFrom(t) {
+    cancelFrom(t, tag = undefined) {
       let n = 0;
       for (const v of [...voices]) {
+        if (tag !== undefined && v.tag !== tag) continue; // a live pad's hit is not the clip's
         // Not `released == null`: a later voice that takes this one's slot releases it at its
         // own onset, at or after this one's end, which cuts nothing; end > start means it will
         // still sound.
