@@ -22,7 +22,8 @@
 //   dr-linked   linked: Open in Studio selects the same clip in the Studio at the same revision
 //   dr-play     real-time: Play runs the Studio transport, aria-current=step moves within
 //               'step playhead moves' (3 s) and the hit sounds (the percussion engine's voices
-//               above 0) within 'drum step sounds' (3 s); Stop clears the step, no voice left
+//               above 0) within 'drum step sounds' (3 s); at 390 px (8 a page) the grid follows
+//               the step to its page ('step playhead follows to its page', 3 s); Stop clears it
 //   dr-pad      a pad pressed (pointer, or Enter on it) sounds its row within 'drum pad sounds'
 //               (2 s) and the hit ends with no voice left
 //   no-console-errors
@@ -248,7 +249,7 @@ function defineChecks() {
       ...there, rev };
   });
 
-  def('dr-play', async ({ page }) => {
+  def('dr-play', async ({ page, size }) => {
     const id = await drumClip(page);
     await page.evaluate((cid) => window.OSCILLA.studio.store.dispatch({ type: 'CLIP_UPDATE',
       clipId: cid, payload: { notes: [0, 1, 2, 3].map((b) => ({ at: b, note: 60, len: 0.25,
@@ -268,11 +269,18 @@ function defineChecks() {
     }, { ms: PLAYHEAD_MS, what: 'step playhead moves' });
     const sounded = await until(async () => ((await sources(page)) > 0 ? true : null),
       { ms: SOUND_MS, what: 'drum step sounds' });
+    // A page narrower than the clip follows the playing step (review R2-W8-7): at 390 px the
+    // second page's steps light in turn.
+    const followed = size.steps >= 16 ? true : await until(async () => {
+      const s = await current();
+      return s !== null && s >= size.steps ? s : null;
+    }, { ms: PLAYHEAD_MS, what: 'step playhead follows to its page' });
     await page.locator('[data-drums-play]').click(); // Stop
     const quiet = await until(async () => ((await current()) === null
       && (await sources(page)) === 0 ? true : null),
     { ms: SOUND_MS, what: 'dr-play: Stop clears the step and leaves no voice' });
-    return { ok: !!(first && moved && sounded && quiet), first: first.s, moved: moved.s };
+    return { ok: !!(first && moved && sounded && followed && quiet), first: first.s,
+      moved: moved.s, followed };
   });
 
   def('dr-pad', async ({ page, size }) => {

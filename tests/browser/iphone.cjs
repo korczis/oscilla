@@ -20,8 +20,9 @@
 //                    a debt that only shrinks (`--record` rewrites it from a passing run)
 //   sounds-<what>    after one tap on the page (the gesture unlock), HOLD TO PLAY held, TRIGGER,
 //                    the sequencer's play, the Studio's play, a key of the Synth keyboard and a
-//                    key of the Studio's keyboard, unfolded from its handle first (#444), each
-//                    leave the engine running with an active source
+//                    key of the Studio's keyboard, unfolded from its handle first (#444), and on
+//                    the Synth's Drums tab (K222, its clip made by a tap) a pad and a step tapped
+//                    on then Play, each leave the engine running with an active source
 //   stops-on-hide-<what>  then the page is hidden (visibilitychange, as a phone's lock or app
 //                    switch sends it) with a held control's finger still down: within HIDE_MS
 //                    the engine is left with no active source and no surface still claims to
@@ -170,6 +171,10 @@ const sounding = (page) => page.evaluate(() => {
 });
 const isSounding = (s) => !!s && s.running && s.sources > 0;
 
+// The notices a finger closes before it reaches a tab's content on a small phone (if shown).
+const CLOSE_NOTICES = [{ sel: '[data-osc="safety.dismiss"]', optional: true },
+  { sel: 'button[aria-label="Dismiss notification"]', optional: true }];
+
 // What each sounding control is, where it lives and how a finger drives it.
 const SOUNDS = [
   { id: 'hold-to-play', ws: 'playground', sel: '#osc-hold-play', how: 'hold' },
@@ -184,6 +189,15 @@ const SOUNDS = [
   // so the toolbar stays clear; a tap on the handle unfolds them and a held key sounds
   { id: 'studio-key', ws: 'studio', unfold: '[data-osc="keyboard.handle"]',
     sel: '[data-osc="keyboard.keys"]', how: 'hold-at', at: { x: 0.06, y: 0.85 } },
+  // K222: the Synth's Drums tab. A finger closes the notices that bury the tab on an iPhone
+  // SE (if shown), makes the clip by a tap; a pad strikes its row's hit, which decays by itself
+  // (no hide proof), and a step tapped on then Play sounds it.
+  { id: 'drums-pad', ws: 'synth', hash: '#m=synth&yt=drums', prep: [...CLOSE_NOTICES,
+    { sel: '[data-drums-new]' }], sel: '[data-drum-pad="0"]', how: 'tap', endsByItself: true },
+  { id: 'drums-step', ws: 'synth', hash: '#m=synth&yt=drums', prep: [...CLOSE_NOTICES,
+    { sel: '[data-drums-new]' },
+    { sel: '[data-drums-grid] [role="gridcell"][data-lane="0"][data-step="0"]' }],
+    sel: '[data-drums-play]', how: 'tap' },
 ];
 
 async function openAt(browser, engine, device, hash, init = null) {
@@ -405,12 +419,26 @@ async function runOne(engine, baseline, recorded) {
         await context.close();
       }
       for (const s of SOUNDS) {
-        const { context, page } = await openAt(browser, engine, device, `#m=${s.ws}`);
+        const { context, page } = await openAt(browser, engine, device, s.hash || `#m=${s.ws}`);
         await pollFor(() => page.evaluate(() => document.getElementById('osc-app')?.dataset.mode),
           (m) => m === s.ws, `iphone: ${s.ws} shown for ${s.id}`);
         // the first gesture unlocks audio: a real tap, on a spot that starts nothing
         const spot = await page.evaluate(inertSpot);
         if (spot) await page.touchscreen.tap(spot.x, spot.y);
+        // a surface made by taps first (K222: the Drums tab's clip, then a step on)
+        let prepped = null;
+        for (const { sel, optional } of s.prep || []) {
+          const el = page.locator(sel).locator('visible=true').first();
+          if (optional && !(await el.count())) continue;
+          const shown = await pollFor(() => el.count(), (n) => n > 0, `iphone: ${s.id} shows ${sel}`);
+          if (!shown.ok) {
+            prepped = `${sel} never shown`;
+            break;
+          }
+          await el.scrollIntoViewIfNeeded({ timeout: 5000 });
+          await el.tap({ timeout: 5000 }).catch((e) => { prepped = `${sel}: ${e.message.split('\n')[0]}`; });
+          if (prepped) break;
+        }
         // a folded dock is unfolded by its handle first, as a finger would (#444)
         if (s.unfold) {
           const handle = page.locator(s.unfold).locator('visible=true').first();
@@ -423,10 +451,10 @@ async function runOne(engine, baseline, recorded) {
         }
         // the first match a finger can see: a hidden copy of the control is no control
         const target = page.locator(s.sel).locator('visible=true').first();
-        let result = { ok: false, last: 'no visible control' };
+        let result = { ok: false, last: prepped ? `prep failed: ${prepped}` : 'no visible control' };
         let lift = null; // a held control's finger stays down until the page has been hidden
         try {
-          if (await target.count()) {
+          if (!prepped && await target.count()) {
             await target.scrollIntoViewIfNeeded({ timeout: 5000 });
             if (s.how === 'tap') {
               await target.tap({ timeout: 5000 });

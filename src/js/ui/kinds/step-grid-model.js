@@ -38,6 +38,7 @@
 //   grid.valueAt(lane, step, fraction) -> the vertical drag of a value lane, one action
 //   grid.menu(item, arg)  accent | ratchet n | probability p | slide, on the focused step
 //   grid.setGrid({ stepBeats?, swing?, seed? }, mode) -> one NOTES_GRID_SET (notes mode)
+//   grid.followPage(step) -> the page of a playing step off the page shown, else null
 //   grid.focus, grid.state() -> { cells, offGrid, values, focus, selection, page, pages }
 
 import { clamp } from '../../core/math.js';
@@ -459,6 +460,13 @@ export function createStepGrid(opts) {
       }
       if (item === 'slide') return send(editOn([t], () => ({ slide: !cell.slide })));
       return false;
+    },
+    /** The page the playing step is on, when it is not the page shown (null otherwise): a grid
+     *  narrower than its clip follows the playhead (review R2-W8-7). */
+    followPage(step) {
+      if (!Number.isInteger(step) || step < 0 || step >= steps) return null;
+      const p = Math.floor(step / pageSteps);
+      return p === page ? null : p;
     },
     /** The clip's grid change (ADR 0086 decision 2): one NOTES_GRID_SET, keep by default. */
     setGrid(next, mode = 'keep') {

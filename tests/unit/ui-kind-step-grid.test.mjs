@@ -443,3 +443,15 @@ test('a re-render waits for a held drag; the Inspector skips an unchanged clip',
   assert.notEqual(label.textContent, 'held');
   view.destroy();
 });
+
+test('R2-W8-7: a grid narrower than its clip follows the playing step to its page', () => {
+  const { grid, log } = notesGrid([], { pageSteps: 4 });
+  assert.equal(grid.followPage(2), null, 'on the page shown');
+  assert.equal(grid.followPage(5), 1);
+  grid.set({ page: 1 });
+  assert.equal(grid.followPage(5), null);
+  assert.equal(grid.followPage(15), 3);
+  assert.equal(grid.followPage(null), null);
+  assert.equal(grid.followPage(16), null, 'past the last step');
+  assert.equal(log.actions.length, 0, 'following builds no action');
+});
