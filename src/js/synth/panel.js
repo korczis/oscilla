@@ -27,6 +27,10 @@
 //                                           touch a module it adds are added
 //   panel.tabs -> [{ id, title, description }]   the workspace tabs a panel's modules sit on
 //   panel.modulesOf(tab) -> [module]              (module.tab, default the first tab)
+//   decl.cableSwitches -> [{ id, module, label, from, to }]   K229: a face toggle (kind 'cable')
+//                                           that patches the cable from jack `from` to jack `to`
+//                                           and removes it (normals.js setCableSwitch); it reads
+//                                           on while any such cable is patched, a user's too
 //   module.adds -> [port]                   CONTROL outputs whose cables add to the normals of
 //                                           the jack they feed (synth/normals.js; the XY pad)
 //
@@ -144,6 +148,14 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     for (const t of a.to) portOf(t, 'in');
     return Object.freeze({ ...a, key: a.id || `amount${i + 1}` });
   });
+  const cableSwitches = (decl.cableSwitches || []).map((s) => {
+    if (!byId.has(s.module)) fail(pid, `cableSwitch ${s.id}: unknown module ${s.module}`);
+    const a = portOf(s.from, 'out');
+    const b = portOf(s.to, 'in');
+    const v = canConnect(a.p, b.p, { sourceNodeId: s.from, targetNodeId: s.to });
+    if (!v.allowed) fail(pid, `cableSwitch ${s.id}: ${v.reason}`);
+    return Object.freeze({ ...s });
+  });
   const jacksOf = (mid) => (byId.get(mid) || { jacks: [] }).jacks.map((j) => ({ ...j,
     normals: normals.filter((n) => n.to === j.id || (j.direction === 'out' && n.from === j.id))
       .map((n) => n.id) }));
@@ -191,7 +203,8 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
 
   const panel = {
     id: pid, instance, version: decl.version || 1, title: decl.title,
-    description: decl.description || '', modules, normals, amounts, layout: decl.layout || {},
+    description: decl.description || '', modules, normals, amounts, cableSwitches,
+    layout: decl.layout || {},
     tabs,
     modulesOf: (tab) => modules.filter((m) => m.tab === tab),
     module: (mid) => byId.get(mid) || null,
@@ -210,7 +223,10 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
         param: Object.freeze({ key: a.key, label: a.label, type: 'number', min: a.range[0],
           max: a.range[1], step: 0.01, unit: a.unit || 'oct', scale: 'linear',
           default: 0 }) }));
-      return [...params, ...amts];
+      const cables = cableSwitches.filter((s) => s.module === mid).map((s) => ({ key: s.id,
+        kind: 'cable', label: s.label, cable: s,
+        param: Object.freeze({ key: s.id, label: s.label, type: 'boolean', default: false }) }));
+      return [...params, ...amts, ...cables];
     },
     /** The face control of any parameter of a module, its Studio-only ones included (the Drums
      *  tab's sound editor edits the percussion engine's per-voice keys, K071), or null. */

@@ -18,6 +18,9 @@
 //   unpatch(model, panel, edgeId) -> { action } | { reason }
 //   restoreNormals(model, panel, jackId) -> { action } | { reason }
 //   amountEdges(model, panel, amount) -> [edge];  setAmount(model, panel, amount, depth) -> action
+//   switchEdges(model, panel, sw) -> [edge]   K229: the cables of a cable switch (from -> to)
+//   setCableSwitch(model, panel, sw, on) -> { action } | { reason }   on: patchCable; off: one
+//     BATCH removing every cable of the switch
 //   amountDepth(model, panel, amount) -> depth | null   the knob's: its first edge's, else the
 //     depth the model remembers for it
 //   rememberAmounts(model, panel, steps) -> steps   the steps, and when they remove every edge
@@ -295,6 +298,24 @@ export function unpatch(model, panel, edgeId) {
   if (jack && !rest.length) steps.push(...normalSteps(model, panel, jack));
   return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`,
     steps: rememberAmounts(model, panel, steps) } };
+}
+
+/** The edges from the switch's `from` jack to its `to` jack (K229 cable switches). */
+export function switchEdges(model, panel, sw) {
+  const { id } = nodeIds(model, panel);
+  const a = splitJack(sw.from);
+  const b = splitJack(sw.to);
+  return model.graph.edges.filter((e) => startsAt(e, id(a.module), a.port)
+    && endsAt(e, id(b.module), b.port));
+}
+
+/** Turn a cable switch on (patch its cable) or off (remove its cables), one BATCH. */
+export function setCableSwitch(model, panel, sw, on) {
+  const have = switchEdges(model, panel, sw);
+  if (on) return have.length ? { reason: null } : patchCable(model, panel, sw.from, sw.to);
+  if (!have.length) return { reason: null };
+  return { action: { type: 'BATCH', label: `Odpojit ${sw.from} → ${sw.to}`,
+    steps: [{ type: 'EDGE_REMOVE', edgeIds: have.map((e) => e.id) }] } };
 }
 
 export function restoreNormals(model, panel, jack) {

@@ -128,6 +128,8 @@ export const CLIP_TARGET_TEXT = Object.freeze({
     + 'modulation on this type would change nothing, so it is not applied.',
   filterGain: 'Web Audio uses the gain of a filter only for the peaking and shelving types; a '
     + 'gain lane or modulation on this type would change nothing, so it is not applied.',
+  lfoMorph: 'Prolínání tvaru platí jen pro tvar Prolínání; na jiném tvaru LFO by dráha ani '
+    + 'modulace nic nezměnila, a proto se nepoužije.',
   stereoSplit: (name, label) => `${name} ${label} sets a pan law over several gains; no single `
     + 'AudioParam carries it, so a lane cannot drive it.',
 });
@@ -143,6 +145,8 @@ const LANE_LIMITS = Object.freeze({
     if (p.key === 'gain' && !gainIsUsed(node.params.type)) return CLIP_TARGET_TEXT.filterGain;
     return null;
   },
+  lfo: (node, p) => (p.key === 'morph' && node.params.shape !== 'morph'
+    ? CLIP_TARGET_TEXT.lfoMorph : null), // K229: the morph acts on the morph shape only
   'stereo-split': (node, p) => CLIP_TARGET_TEXT.stereoSplit(node.metadata.name, p.label),
 });
 

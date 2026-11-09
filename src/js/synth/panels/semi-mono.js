@@ -53,21 +53,23 @@ export default definePanel({
       jacks: FILTER_JACKS,
       init: { frequency: 1200, Q: 1 }, labels: { frequency: 'Cutoff', Q: 'Peak' },
       ranges: { frequency: [10, 20000], Q: [0.5, 30] } },
-    { id: 'eg1', label: 'EG 1', node: 'envelope', jacks: { hide: ['audio'] },
+    // K230: EG 1 is a DADSR (its Delay on the face, its hold fixed at 0), EG 2 an AHDSR.
+    { id: 'eg1', label: 'EG 1', node: 'envelope', jacks: { hide: ['audio'] }, fixed: { hold: 0 },
       init: { attack: 0.005, decay: 0.3, sustain: 0.2, release: 0.3 } },
-    { id: 'eg2', label: 'EG 2', node: 'envelope', jacks: { hide: ['audio'] },
+    { id: 'eg2', label: 'EG 2', node: 'envelope', jacks: { hide: ['audio'] }, fixed: { delay: 0 },
       init: { attack: 0.005, decay: 0.2, sustain: 0.8, release: 0.25 } },
     { id: 'vca', label: 'VCA', node: 'gain', fixed: { bypass: false }, init: { gain: 0 },
       labels: { gain: 'Initial gain' },
       ranges: { gain: [0, 1] } },
-    // K022's LFO depth and sync stay at full depth and free-running here: the panel's amount
-    // knobs set each cable's depth, and the MG runs at its own rate.
-    // Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3): the
-    // depth is fixed at 1 here, and a jack beside the amount knobs would be a second path to it.
-    { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, sync: 'off' },
+    // K022's LFO depth stays at full depth here: the panel's amount knobs set each cable's
+    // depth. Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3):
+    // a jack beside the amount knobs would be a second path to it. K229: the MG follows the
+    // transport's divisions when Sync is not off (free by default), morphs its shape by Morph
+    // (0 a triangle, as the MG was, 0.5 a sawtooth, 1 a square) and restarts on each note while
+    // Key sync patches the Keys Gate into its reset (the cable switch below).
+    { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, shape: 'morph' },
       jacks: { hide: ['depth'] },
-      options: { shape: ['triangle', 'square'] },
-      ranges: { rate: [0.01, 100] }, init: { shape: 'triangle', rate: 5 } },
+      ranges: { rate: [0.01, 100] }, init: { rate: 5, morph: 0 } },
     { id: 'sh', label: 'S&H', node: 'random', fixed: { sync: 'off' },
       note: 'Seeded random steps, one per gate; it samples no input.' },
     { id: 'out', label: 'OUTPUT', node: 'master' },
@@ -104,6 +106,10 @@ export default definePanel({
   ],
   // An amount knob is the depth of every edge from `source` into its `to` jacks, normalled or
   // patched; with none it is disabled and says why. One knob, one BATCH of EDGE_UPDATEs.
+  // K229: Key sync on the MG face patches the Keys Gate into the MG's reset (one cable, one
+  // history entry) and removes it; a cable the user patches there reads as on.
+  cableSwitches: [{ id: 'keysync', module: 'mg', label: 'Synchronizace s klávesou',
+    from: 'keys.gate', to: 'mg.reset' }],
   amounts: [
     { id: 'vco-mg', module: 'vco1', label: 'MG → pitch', source: 'mg.control',
       to: ['vco1.fm', 'vco2.fm'], range: [0, 2] },

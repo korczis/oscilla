@@ -5,6 +5,7 @@
 import { mulberry32 } from '../../audio/noise.js';
 import { applyAdsr, forgetParam, holdAt, releaseAt } from '../../audio/envelope.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
+import { CLIP_TARGET_TEXT } from '../clip-targets.js';
 import { BIPOLAR, UNIPOLAR, did, free, inertHandle, linearOnly, setParam } from './common.js';
 import { SVS_ROWS } from '../nodes/modulation.js';
 import { svsHeld, svsLength, svsOrder, svsRoleValue, svsUnipolar } from '../step-voltage.js';
@@ -16,51 +17,213 @@ export const CONTROL_STEP_SAMPLES = 480;
 /** Values in one Random loop (deterministic for the seed; the sequence repeats after them). */
 export const RANDOM_LOOP_VALUES = 64;
 
+/** K229: the morph shape's oscillators, in morph order (0 triangle, 0.5 sawtooth, 1 square). */
+export const MORPH_TYPES = Object.freeze(['triangle', 'sawtooth', 'square']);
+/** Points of each morph gain curve over the parameter's 0..1. */
+export const MORPH_CURVE_SIZE = 65;
+/** Why `morph` modulates nothing on an LFO of another shape (the lane policy's own reason). */
+const MORPH_SHAPE_TEXT = CLIP_TARGET_TEXT.lfoMorph;
+const LFO_NEEDS_CONSTANT_TEXT = 'LFO se synchronizací nebo prolínáním tvaru potřebuje '
+  + 'ConstantSourceNode.';
+const MORPH_LINEAR_TEXT = 'Prolínání tvaru se moduluje lineárně.';
+
+/** The gains of triangle, sawtooth and square at morph m (0..1): a linear crossfade. */
+export function morphGains(m) {
+  const x = Math.min(1, Math.max(0, Number(m) || 0));
+  return [Math.max(0, 1 - 2 * x), 1 - Math.abs(2 * x - 1), Math.max(0, 2 * x - 1)];
+}
+
+/** The three gain curves of the morph, `size` points over m 0..1: point i is m i / (size - 1). */
+export function morphCurves(size = MORPH_CURVE_SIZE) {
+  const out = MORPH_TYPES.map(() => new Float32Array(size));
+  for (let i = 0; i < size; i++) morphGains(i / (size - 1)).forEach((g, k) => { out[k][i] = g; });
+  return out;
+}
+
+/**
+ * A morph curve as a WaveShaper applies it: over its input -1..1. The morph source carries m
+ * itself (a lane or an edge writes it in the parameter's unit), so the curve's upper half is the
+ * curve over 0..1 and its lower half holds the value at m 0.
+ */
+const shaperCurve = (curve) => {
+  const n = curve.length;
+  const out = new Float32Array(2 * n - 1);
+  out.fill(curve[0], 0, n - 1);
+  out.set(curve, n - 1);
+  return out;
+};
+
+/**
+ * K229: the LFO that restarts its phase on a reset trigger (key sync: plan node `clocked`, a
+ * reset edge), or that morphs its shape (shape 'morph'). A voice is its oscillators (one, or the
+ * three of the morph) started at its time; clock(t) starts a fresh voice at t and stops the one
+ * before at t. Each voice's frequency is the shared rate source (the oscillators' own frequency
+ * held at 0), so the rate's base, edges and automation act on every voice, as do the morph
+ * source and the depth gain. clockFrom(t) drops the voices from t on and starts one at t.
+ */
+function resettableLfo({ ctx, hooks, acct, at, params, clocked }) {
+  if (typeof ctx.createConstantSource !== 'function') {
+    return inertHandle('degraded', LFO_NEEDS_CONSTANT_TEXT);
+  }
+  const morphing = params.shape === 'morph';
+  const types = morphing ? MORPH_TYPES : [params.shape];
+  const now0 = ctx.currentTime;
+  const depth = acct.track(ctx.createGain());
+  depth.gain.setValueAtTime(params.depth ?? 1, now0);
+  const constant = (v) => {
+    const c = acct.source(acct.track(ctx.createConstantSource()));
+    c.offset.setValueAtTime(v, now0);
+    return c;
+  };
+  const rate = constant(hooks.clampFrequency(params.rate));
+  const detune = constant(0);
+  const morph = morphing ? constant(params.morph ?? 0) : null;
+  const shapers = morphing ? morphCurves().map((curve) => {
+    const w = acct.track(ctx.createWaveShaper());
+    w.curve = shaperCurve(curve);
+    morph.connect(w);
+    return w;
+  }) : [];
+  for (const c of [rate, detune, morph]) if (c) c.start(at);
+  const voices = [];
+  const voice = (t) => {
+    const oscs = types.map((type, k) => {
+      const o = acct.source(acct.track(hooks.oscillator(type, 1, t)));
+      o.frequency.cancelScheduledValues(0);
+      o.frequency.setValueAtTime(0, now0);
+      rate.connect(o.frequency);
+      detune.connect(o.detune);
+      if (!morphing) {
+        o.connect(depth);
+        return o;
+      }
+      const g = acct.track(ctx.createGain());
+      g.gain.setValueAtTime(0, now0);
+      shapers[k].connect(g.gain);
+      o.connect(g);
+      g.connect(depth);
+      o.addEventListener('ended', () => {
+        try { g.disconnect(); } catch (e) { /* already disconnected */ }
+        acct.untrack(g);
+      });
+      return o;
+    });
+    voices.push({ start: t, types: [...types], oscs });
+  };
+  const stopVoice = (v, t) => {
+    for (const o of v.oscs) { try { o.stop(Math.max(t, v.start)); } catch (e) { /* stopped */ } }
+  };
+  voice(at);
+  const handle = {
+    inputs: {},
+    outputs: { control: depth },
+    outputRange: { control: BIPOLAR },
+    modTarget(key, mapping) {
+      if (key === 'depth') return linearOnly(depth.gain)(key, mapping);
+      if (key === 'morph') {
+        if (!morph) return { reason: MORPH_SHAPE_TEXT };
+        return mapping === 'log' ? { reason: MORPH_LINEAR_TEXT } : { param: morph.offset, scale: 1 };
+      }
+      if (key !== 'rate') return { reason: `unknown parameter ${key}` };
+      return mapping === 'log' ? { param: detune.offset, scale: CENTS_PER_OCTAVE }
+        : { param: rate.offset, scale: 1 };
+    },
+    applyBase(b, immediate, owned, w) {
+      const now = ctx.currentTime;
+      if (free(owned, 'rate')) {
+        setParam(rate.offset, hooks.clampFrequency(b.rate.value), immediate, now, w, 'rate');
+      }
+      setParam(detune.offset, b.rate.cents, immediate, now, w, 'detune'); // log-mapped edges only
+      if (b.depth && free(owned, 'depth')) {
+        setParam(depth.gain, b.depth.value, immediate, now, w, 'depth');
+      }
+      if (morph && b.morph && free(owned, 'morph')) {
+        setParam(morph.offset, b.morph.value, immediate, now, w, 'morph');
+      }
+    },
+    update() {},
+    stop(t) {
+      for (const v of voices) stopVoice(v, t);
+      for (const c of [rate, detune, morph]) {
+        if (c) { try { c.stop(t); } catch (e) { /* already stopped */ } }
+      }
+    },
+    dispose() {},
+    info: { voices: () => voices.map((v) => ({ start: v.start, types: v.types })), rate, morph },
+    status: 'ready',
+    reason: null,
+  };
+  if (clocked) {
+    handle.clock = (t) => {
+      const last = voices.at(-1);
+      if (last.start >= t) return; // a voice starts there already
+      stopVoice(last, t);
+      voice(t);
+    };
+    handle.clockFrom = (t) => {
+      while (voices.length > 1 && voices.at(-1).start >= t) stopVoice(voices.pop(), 0);
+      handle.clock(t);
+    };
+  }
+  return handle;
+}
+
 export const lfo = {
   compiler: 'audio/modulation.js#buildLfo',
   structural: ['shape'],
-  create({ ctx, hooks, acct, at, params }) {
-    // buildLfo's modulator: an engine oscillator whose output drives a depth gain into the
-    // target parameter (here the depth gain belongs to the modulation edge, §35).
-    const osc = acct.source(acct.track(hooks.oscillator(params.shape, params.rate, at)));
-    // K022: the output's depth (0..1), a gain after the oscillator, modulatable (a Macro on an
-    // LFO's depth). The control range stays −1..1: the base is at most 1.
-    const depth = acct.track(ctx.createGain());
-    depth.gain.setValueAtTime(params.depth ?? 1, ctx.currentTime);
-    osc.connect(depth);
-    return {
-      inputs: {},
-      outputs: { control: depth },
-      outputRange: { control: BIPOLAR },
-      modTarget(key, mapping) {
-        if (key === 'depth') return linearOnly(depth.gain)(key, mapping);
-        if (key !== 'rate') return { reason: `unknown parameter ${key}` };
-        return mapping === 'log' ? { param: osc.detune, scale: CENTS_PER_OCTAVE }
-          : { param: osc.frequency, scale: 1 };
-      },
-      applyBase(b, immediate, owned, w) {
-        const now = ctx.currentTime;
-        // Audio rate (K010): 0.01 Hz … 0.95 × Nyquist of the running context, the engine's own
-        // clamp (computeBases lowers the base there first and reports it as limited).
-        if (free(owned, 'rate')) {
-          setParam(osc.frequency, hooks.clampFrequency(b.rate.value), immediate, now, w, 'rate');
-        }
-        setParam(osc.detune, b.rate.cents, immediate, now, w, 'detune'); // log-mapped edges only
-        if (b.depth && free(owned, 'depth')) {
-          setParam(depth.gain, b.depth.value, immediate, now, w, 'depth');
-        }
-      },
-      update() {},
-      stop(t) { try { osc.stop(t); } catch (e) { /* already stopped */ } },
-      dispose() {},
-      info: { oscillator: osc },
-      status: 'ready',
-      reason: null,
-    };
+  clock: 'reset', // K229: a reset edge (key sync) makes the node clocked
+  create(env) {
+    const clocked = !!(env.node && env.node.clocked);
+    if (clocked || env.params.shape === 'morph') return resettableLfo({ ...env, clocked });
+    return plainLfo(env);
   },
 };
 
-const adsrOf = (p) => ({ a: p.attack, d: p.decay, s: p.sustain, r: p.release });
+/** The LFO without a reset edge and of a fixed shape, as before K229. */
+function plainLfo({ ctx, hooks, acct, at, params }) {
+  // buildLfo's modulator: an engine oscillator whose output drives a depth gain into the
+  // target parameter (here the depth gain belongs to the modulation edge, §35).
+  const osc = acct.source(acct.track(hooks.oscillator(params.shape, params.rate, at)));
+  // K022: the output's depth (0..1), a gain after the oscillator, modulatable (a Macro on an
+  // LFO's depth). The control range stays −1..1: the base is at most 1.
+  const depth = acct.track(ctx.createGain());
+  depth.gain.setValueAtTime(params.depth ?? 1, ctx.currentTime);
+  osc.connect(depth);
+  return {
+    inputs: {},
+    outputs: { control: depth },
+    outputRange: { control: BIPOLAR },
+    modTarget(key, mapping) {
+      if (key === 'depth') return linearOnly(depth.gain)(key, mapping);
+      if (key === 'morph') return { reason: MORPH_SHAPE_TEXT };
+      if (key !== 'rate') return { reason: `unknown parameter ${key}` };
+      return mapping === 'log' ? { param: osc.detune, scale: CENTS_PER_OCTAVE }
+        : { param: osc.frequency, scale: 1 };
+    },
+    applyBase(b, immediate, owned, w) {
+      const now = ctx.currentTime;
+      // Audio rate (K010): 0.01 Hz … 0.95 × Nyquist of the running context, the engine's own
+      // clamp (computeBases lowers the base there first and reports it as limited).
+      if (free(owned, 'rate')) {
+        setParam(osc.frequency, hooks.clampFrequency(b.rate.value), immediate, now, w, 'rate');
+      }
+      setParam(osc.detune, b.rate.cents, immediate, now, w, 'detune'); // log-mapped edges only
+      if (b.depth && free(owned, 'depth')) {
+        setParam(depth.gain, b.depth.value, immediate, now, w, 'depth');
+      }
+    },
+    update() {},
+    stop(t) { try { osc.stop(t); } catch (e) { /* already stopped */ } },
+    dispose() {},
+    info: { oscillator: osc },
+    status: 'ready',
+    reason: null,
+  };
+}
+
+// K230: a delay and a hold join the ADSR only when longer than 0 (DADSR / AHDSR).
+const adsrOf = (p) => ({ a: p.attack, d: p.decay, s: p.sustain, r: p.release,
+  ...(p.delay > 0 ? { delay: p.delay } : {}), ...(p.hold > 0 ? { hold: p.hold } : {}) });
 
 export const envelope = {
   compiler: 'audio/envelope.js#applyAdsr',
