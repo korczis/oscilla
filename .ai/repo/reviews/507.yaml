@@ -1,0 +1,72 @@
+# Review verdict for pull request #507 (train/t2-sequencer): train T2 of the sequencer line.
+# Members: K068 notes clips play on a Keys node (#474 at cfac09ac), W001 kind contract (#467 at
+# b0c56f91), K104 armed monitoring (#500 at ce629c01), K214 panel normals (#504 at 1882b390),
+# K212 panel normals unit test (#503 at 16a397e4), K225 plan (#505 at 1e98dfee), C024 notes
+# register with outputOwner (#501 at 79690181), K067 cancelled (#502 at a84e98fe); integration
+# merges, one dist rebuild 2fecb7a7 and the transport.js source-size raise c36b254e.
+# Judged at c36b254e on base feat/k060-keys-node 4c21be6e (the v3.28.0 release head of #447,
+# which becomes main when #447 merges), 2026-11-09, in the reviewer's own detached worktree
+# ~/dev/oscilla-wt/review-506.
+# Reviewer: rev-seat (session oscilla-c1, claude-code 7cad3015), which built none of it
+# (builders: oscilla-75 K068, oscilla-2e K104/K214, others per member; integrator oscilla-43).
+#
+# The digest: 4c21be6e's scripts/review-verdict.mjs --content --list --head c36b254e
+# --base-branch 4c21be6e: c8e7f405... over 9 guarded paths: src/js/studio/{adapters/instrument,
+# clip-targets,live-notes,note-player,notes,timeline-compiler,timeline,transport}.js (K068;
+# transport.js also K104) and src/js/synth/ui.js (K214). W001, K212, K225, C024 and K067 change
+# no guarded path at their heads. A merge of main that leaves these nine as reviewed (main =
+# #447's 4c21be6e plus unguarded commits) keeps this digest.
+#
+# Members, how each was judged:
+# - K068 (#474): read in full at 637b3091 (pre-read), then its fixes for the reviewer's three P3
+#   (a336fea6: a Keys node rebuilt mid-note takes up the sounding note, afterApply rebuilds
+#   notes.stale() as rebuildClock; pitch and velocity records kept by the audio clock, not by
+#   count; cfac09ac: prune in one pass, a removed node's last record dropped). Each fix's test
+#   fails on its predecessor's sources (studio-notes-hold.test.mjs 0/2 on 5489ac34's three files,
+#   the prune case fails on a336fea6's note-player.js) and passes here. Prune measured 6.6 ms ->
+#   0.16 ms per wake-up at 1600 records.
+# - K104 (#500): read at 8a1753b0; the reviewer's P1 (backToArmed kept ticks/ticksPassed, so the
+#   next PLAY from armed started a clocked node at the old count) and two P3 fixed at ce629c01;
+#   its new unit cases fail with 8a1753b0's transport.js and pass after.
+# - K214 (#504): its own verdict 504.yaml (merge, this reviewer) at 1882b390, ui.js unchanged here.
+# - The merged transport.js (K068 and K104 together, seen by nobody before this train): a
+#   scratch test on the real engine/runtime/transport (fake Web Audio) arms, PLAYs a notes clip
+#   (60, 64, 67 at 0/1/2 s) on a Keys node, STOPs with keepArmed at 0.3 s: armed stays true on
+#   the same Keys handle; no pitch event of 64 or 67 after the stop; a live key 72 then sets the
+#   pitch to its own value; PLAY again from armed starts on note 60 at the new base. One note
+#   record stays (the node's last, by design) until the next run.
+#
+# Measured by the reviewer at c36b254e (Node 22.20.0): npm test exit 0 (5299 tests, 5297 pass,
+# 0 fail); npm run build:check: dist up to date (v3.28.0); browser, chromium only, file origin,
+# under load ~29 with OSC_LOAD_MAX=40: steps.cjs 5/5, instrument-dsp.cjs all PASS at 44.1 and
+# 48 kHz (onsets within one frame, swing, ratchet, slide, chance, census 0), studio-keys.cjs
+# 5/5, synth.cjs s-armed,s-armstop,s-escape,s-normals desktop 4/4 and phone 2/2. Not run by the
+# reviewer: firefox and webkit legs and the full release gate (CI and the release gate are the
+# receipt). source-size-baseline.json raises transport.js to 94 000 with a ledger entry; the file
+# is 93 386 bytes.
+#
+# Re-issued 2026-11-09 for #507 (the train's pull request; #506 went to a bot issue): the
+# reviewer re-checked at 5ea1e37d (merge base origin/main 603bd0f5 = #447 merged) that the
+# guarded digest is unchanged, c8e7f405 over the same 9 paths; 4b051e0f..5ea1e37d changes only
+# dist, package.json/lock, src/data/{about-stations,roadmap}.json, tests/README.md,
+# tests/browser/{synth,xy-pad,v31-studio-workflows}.cjs and the v3.28.0 release record.
+# 2048fcb0 (armed-play-refused restated for K104) was reproduced by the reviewer: the old
+# expectation fails in chromium on the same dist, the new one passes 15/15 file + 3/3 http in
+# chromium, firefox and webkit.
+#
+# Verdict: merge. No open finding; the members' earlier findings are listed closed.
+schema: review-verdict/v1
+pr: 507
+verdict: merge
+reviewer: oscilla-c1 rev-seat (claude-code 7cad3015; built none of c36b254e)
+content: c8e7f405cdb11ffeb6ae6df8b706ebcdfbaaa98a8dc90654ae2c7e6908312763
+members:
+  - { pr: 474, verdict: merge, reason: "K068 judged by name at cfac09ac in this train: three P3 of the pre-read fixed and proven fail-first; no open finding" }
+  - { pr: 500, verdict: merge, reason: "K104 judged by name at ce629c01 in this train: P1 R1 and P3 R2/R3 fixed and proven fail-first; no open finding" }
+findings:
+  - { id: K068-1, severity: P3, status: closed, title: "a Keys node rebuilt mid-play did not take up the scheduled note pitches (afterApply rebuilt clocks only); fixed a336fea6" }
+  - { id: K068-2, severity: P3, status: closed, title: "velocity/pitch records capped by count could mis-hold under dense ratchets; kept by the audio clock in a336fea6" }
+  - { id: K068-3, severity: P3, status: closed, title: "note-player prune was O(n^2) per wake-up (6.6 ms at 1600 records) and kept a removed node's record; one pass in cfac09ac" }
+  - { id: K104-R1, severity: P1, status: closed, title: "STOP back to armed kept ticks/ticksPassed: the next PLAY started a clocked node at the old trigger count; cleared in ce629c01" }
+  - { id: K104-R2, severity: P3, status: closed, title: "a run begun armed disarmed at the timeline end; decided to keep armed, pinned and documented in ce629c01" }
+  - { id: K104-R3, severity: P3, status: closed, title: "unplayed entries of the timeline run stayed while armed; cleared in ce629c01" }

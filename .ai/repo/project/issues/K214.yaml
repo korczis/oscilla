@@ -2,7 +2,7 @@ id: K214
 milestone: M064
 serves:
   - "connected-instrument#synth-panel"
-title: "Panel normals in the browser: patches-dialog insert, Restore normal, the runtime edge list and the polite announcement"
+title: "Panel normals in the browser: Insert, Restore normal, the runtime edge list and the polite announcement"
 slug: panel-normals-in-the-browser-patches-dialog-insert-restore-n
 priority: p1
 profile: implementation
@@ -15,7 +15,7 @@ scope:
   - "dist"
 depends_on: []
 acceptance_criteria:
-  - "A browser check in tests/browser/synth.cjs, wired into npm run test:synth (so CI and the release gate run it). Linked: a panel inserted through the Studio's patches dialog shows its nodes and normal edges in the Studio graph, and a normal deleted there stays deleted while the panel shows its jack open with Restore normal, which restores it as one history entry. Real-time: a cable patched over a normal in the Studio graph removes the normal from the runtime's edge list (debugInfo) and the cable carries the signal, each within a named until() deadline. Interactive: the panel is inserted by pointer, keyboard and touch, and the restored-normal announcement is in the polite live region. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "A browser check in tests/browser/synth.cjs, wired into npm run test:synth (so CI and the release gate run it). Linked: a panel inserted through the Synth's own Insert shows its nodes and normal edges in the Studio graph (restated 2026-11-09 with oscilla-43: the Studio's patches dialog has no Insert for the panel on c589955b, src/js/studio/patch-catalog.js lists its presets apply-only; that path is K225), and a normal deleted there stays deleted while the panel shows its jack open with Restore normal, which restores it as one history entry. Real-time: a cable beside a normal in the Studio graph sums with it (K183: the jack is mixed, both edges active in the runtime's edge list), and Break normal removes the normal from that list while the cable stays active and carries the signal (restated 2026-11-09: a Studio cable never breaks a normal by itself), each within a named until() deadline. Interactive: the panel is inserted by pointer, keyboard and touch, and the restored-normal announcement is in the polite live region. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
   - "Test-only while the behaviour holds: the pull request body says 'fail-first: n/a' with the reason; a missing announcement or edge makes it a fix(synth) with a unit test that fails on the merge base and a reviewer's verdict (src/js/synth is guarded)."
   - "tests/README.md names the new checks in its row for tests/browser/synth.cjs."
 validation:
@@ -24,4 +24,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-07
-updated_at: 2026-11-07
+updated_at: 2026-11-09

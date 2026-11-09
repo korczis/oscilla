@@ -36,7 +36,7 @@
     "src/js/sequencer/compiler.js": 46000,
     "src/js/studio/actions.js": 50000,
     "src/js/studio/runtime.js": 58000,
-    "src/js/studio/transport.js": 92000,
+    "src/js/studio/transport.js": 94000,
     "src/js/studio/validate.js": 49000,
     "src/js/ui/experiments.js": 53000,
     "src/js/ui/studio/inspector.js": 81000,
@@ -210,6 +210,18 @@
       "cap": 309000,
       "pr": 457,
       "reason": "the 3.23 About station (project.about-names-current-release) takes src/index.html 134 bytes past 308 000; the release adds no other markup, and R032 (the derived-versioning train, next) moves the timeline to data"
+    },
+    {
+      "file": "src/js/studio/transport.js",
+      "cap": 94000,
+      "pr": 506,
+      "reason": "train T2 lands K068 (notes clips play on the audio clock: note player, grid wake, tap tempo) and K104 (STOP keeps the keys armed) in the one transport; together they take it 1 386 bytes past 92 000, and splitting the note player out is follow-up work, not a train change"
+    },
+    {
+      "file": "src/js/studio/transport.js",
+      "cap": 94000,
+      "pr": 507,
+      "reason": "the same raise as the entry naming pull request 506, which was a mis-numbered guess: train T2 (K068 + K104) lands as pull request 507; entries are added, never edited, so this one corrects it"
     }
   ]
 }

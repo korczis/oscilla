@@ -90,6 +90,15 @@
 //                               and Velocity buttons, down and up; Space stays Hold to
 //                               Play; a pointer on the on-screen C4 plays and lights it; disarmed,
 //                               the keys play nothing; the Studio is armed on its own and plays
+//   notes-own-the-scope         C024, in the keyboard-qwerty page: a held computer key alone
+//                               owns the output; within 2 s ('notes own the scope') the bridge
+//                               draws the notes owner, the canvas description names it and the
+//                               status bar says PLAYING, names the same owner and shows the held
+//                               note; within 2 s of the release all three name no owner; Hold
+//                               to Play over a held key releases the notes and the instrument
+//                               is the one owner all three name. Fails
+//                               on c589955b (the keyboard overrode vizInputs, which outputOwner
+//                               did not know)
 //
 // A gate build or platform not in the record (the CI runners, ubuntu-latest) is held to the
 // states the ADR allows for it and prints what it measured on a RECORD line. There a Chromium
@@ -168,6 +177,7 @@ const NYQUIST_NOTE = 124;
 const LIMIT_MARGIN_S = 2;    // a note at the safety limit is freed within its release + this
 let NOTE_POLYPHONY;
 let MIDI_REFUSED;
+let OUTPUT_OWNER_NAMES; // src/js/visualization/output-owner.js (C024)
 
 // ------------------------------------------------------------------------- pure judgements
 /**
@@ -1252,7 +1262,21 @@ async function keyboardChecks(browser, b, origin, url) {
       const a = window.OSCILLA.app;
       return { workspace: a.workspace, armed: a.kbdArmedHere, held: a.kbdHeld,
         readout: a.kbdReadout, base: a.kbdBase, velocity: a.kbdVelocity,
-        live: a.vizInputs().playing, playing: a.playing };
+        owner: a.outputOwner, playing: a.playing };
+    });
+    // What the scope draws (the bridge's owner), what its description says and what the status
+    // bar names, read in one evaluate (C024).
+    const scopeOwner = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      const host = document.querySelector('[data-osc-chart="waveform"]');
+      const text = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? el.textContent.trim() : null;
+      };
+      return { owner: a.outputOwner, drawn: window.OSCILLA.viz.state.outputOwner,
+        label: host ? host.getAttribute('aria-label') : null,
+        state: text('[data-osc="status.label"]'), pattern: text('[data-osc="status.pattern"]'),
+        frequency: text('[data-osc="status.frequency"]'), held: a.kbdHeld };
     });
     const idle = (m) => m.live === 0 && m.nodes === 0 && m.sources === 0 && m.notes === 0;
     const k0 = await kbd();
@@ -1268,8 +1292,8 @@ async function keyboardChecks(browser, b, origin, url) {
     check(leg, id, 'A, D and G held play C4, E4 and G4 through the AudioEngine (three live '
       + 'oscillators)', !chord.timedOut && k1.held === 'C4, E4, G4',
     JSON.stringify({ held: k1.held, live: chord.live, notes: chord.notes }));
-    check(leg, id, 'while notes sound, the analysis views show the live output',
-      k1.live === true, JSON.stringify(k1));
+    check(leg, id, 'while notes sound, they own the output the analysis views show',
+      k1.owner === 'notes' && !k1.playing, JSON.stringify(k1));
     const { limitS, releaseS } = await page.evaluate(() => ({
       limitS: window.OSCILLA.app.safetyLimit, releaseS: window.OSCILLA.app.release / 1000 }));
     const past = await heard(page, (m) => m.time - chord.time > limitS + releaseS
@@ -1280,6 +1304,54 @@ async function keyboardChecks(browser, b, origin, url) {
     JSON.stringify({ from: chord.time, at: past.time, live: past.live, notes: past.notes }));
     for (const k of CHORD) await page.keyboard.up(k);
     const up = await heard(page, idle, `${leg}: releasing the keys frees the notes`);
+
+    // C024: a held computer key alone owns the output; the drawing, the canvas description and
+    // the status bar name the same owner, and all three clear after the release.
+    const NOTES_OWN_MS = 2000;
+    const name = OUTPUT_OWNER_NAMES.notes;
+    const named = (o) => o.owner === 'notes' && o.drawn === 'notes'
+      && !!o.label && o.label.includes(`(${name})`) && !/not playing/.test(o.label)
+      && o.state === 'PLAYING' && !!o.pattern && o.pattern.toLowerCase() === name.toLowerCase()
+      && o.frequency === 'C4';
+    const cleared = (o) => o.owner === null && o.drawn === null && o.held === ''
+      && !!o.label && /not playing/.test(o.label) && o.state !== 'PLAYING'
+      && !!o.pattern && o.pattern.toLowerCase() !== name.toLowerCase();
+    const waitOwner = async (pred, what) => {
+      try {
+        return await until(async () => {
+          const o = await scopeOwner();
+          return pred(o) ? o : null;
+        }, { ms: NOTES_OWN_MS, what });
+      } catch (error) {
+        if (!(error instanceof WaitTimeout)) throw error;
+        return { timedOut: true, last: await scopeOwner() };
+      }
+    };
+    await page.keyboard.down('KeyA');
+    const owned = await waitOwner(named, `${leg}: notes own the scope`);
+    check(leg, 'notes-own-the-scope', 'a held key alone: the scope draws the notes, and its '
+      + 'description and the status bar name the same owner', !owned.timedOut,
+    JSON.stringify(owned));
+    await page.keyboard.up('KeyA');
+    const freedOwner = await waitOwner(cleared, `${leg}: notes own the scope (released)`);
+    check(leg, 'notes-own-the-scope', 'after the release the drawing, the description and the '
+      + 'status bar name no owner', !freedOwner.timedOut, JSON.stringify(freedOwner));
+    await heard(page, idle, `${leg}: the key's note is freed`);
+    // The newest action wins (C002 for the notes): Hold to Play over a held key releases the
+    // notes, and the instrument is the one owner all three name.
+    await page.keyboard.down('KeyA');
+    await waitOwner(named, `${leg}: notes own the scope before Hold to Play`);
+    await page.keyboard.down('Space');
+    const took = await waitOwner((o) => o.owner === 'instrument' && o.drawn === 'instrument'
+      && o.held === '' && !!o.label && !/\(noty\)|not playing/.test(o.label)
+      && o.pattern.toLowerCase() !== name.toLowerCase(),
+    `${leg}: the instrument takes the output from the notes`);
+    check(leg, 'notes-own-the-scope', 'Hold to Play over a held key releases the notes: the '
+      + 'instrument is the one owner', !took.timedOut, JSON.stringify(took));
+    await page.keyboard.up('Space');
+    await page.keyboard.up('KeyA');
+    await heard(page, (m) => m.live === 0 && m.voices === 0 && m.notes === 0,
+      `${leg}: Hold to Play and the key are let go`);
     check(leg, id, 'releasing the keys frees every note (zero oscillators and engine nodes)',
       !up.timedOut && (await kbd()).held === '', JSON.stringify(up));
 
@@ -1393,6 +1465,8 @@ async function main() {
     'audio-engine.js')).href));
   ({ MIDI_REFUSED } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
     'ui.js')).href));
+  ({ OUTPUT_OWNER_NAMES } = await import(pathToFileURL(path.join(ROOT, 'src', 'js',
+    'visualization', 'output-owner.js')).href));
   await RUN.ready();
   const server = RUN.origins.includes('http') ? await serveDist(DIST, { prefix: 'oscilla-midi-' })
     : null;

@@ -58,6 +58,7 @@ test('the allowance lists exactly the undeclared hooks the generator derives', (
 const CONTRACT = [
   ['studio.tl.return', 'transport', 'button'], ['studio.tl.play', 'transport', 'button'],
   ['studio.tl.stop', 'transport', 'button'], ['studio.tl.loop', 'switch', 'button'],
+  ['studio.tl.tap', 'action', 'button'],
   ['studio.tl.transport', 'panel', 'div'], ['studio.tl.time', 'readout', 'output'],
   ['studio.tl.state', 'readout', 'span'], ['studio.tl.mode-seconds', 'choice', 'button'],
   ['studio.tl.mode-musical', 'choice', 'button'], ['studio.tl.tempo', 'param', 'input'],
@@ -153,6 +154,7 @@ const CONTRACT = [
   ['keyboard.keys', 'action', 'canvas'], ['keyboard.more', 'switch', 'button'],
   ['keyboard.handle', 'switch', 'button'], ['keyboard.dock-status', 'readout', 'p'],
   ['keyboard.handle.held', 'readout', 'span'], ['studio.bar', 'panel', 'header'],
+  ['studio.armed', 'readout', 'span'],
   ['alert.action', 'open', 'a'], ['mic.counterparts', 'panel', 'p'],
   ['counterpart.measure-rta', 'open', 'a'], ['counterpart.experiments', 'open', 'a'],
   ['measure.toStudio', 'open', 'a'], ['seq.toStudioTemplate', 'open', 'a'],

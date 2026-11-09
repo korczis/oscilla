@@ -423,7 +423,7 @@ function defineChecks() {
       await page.keyboard.press('Escape');
       return result({
         noActionList: form.tag === 'OUTPUT' && form.label === 'Notes',
-        readOnlyLine: /^Notes clip · 2 notes\. The notes are kept; editing and playback arrive /
+        readOnlyLine: /^Notes clip · 2 notes\. The notes play on a Keys node; editing them arrives /
           .test(form.text || ''),
         timeBaseFixed: form.timeBaseDisabled && /always tempo-linked/.test(form.hint || ''),
         startWorks: form.start && near(moved.musical.startBeats, 2),
@@ -793,6 +793,23 @@ function defineChecks() {
       const light = Object.values(contrast).every((r) => r >= 4.5);
       return result({ noOverflow: ok, light, dark: Object.values(dark).every((r) => r >= 4.5) },
         { out, contrast, dark });
+    } },
+
+    // K068: Tap joins the tempo in the toolbar without growing it. At 36 px it pushed the
+    // timeline down 12 px (the visual reference and the pinch's lane point both moved).
+    { name: 'tap-fits-toolbar', fn: async ({ page }) => {
+      await fresh(page);
+      const h = await page.evaluate((tl) => {
+        const q = (s) => document.querySelector(`${tl} ${s}`);
+        const px = (e) => (e ? Math.round(e.getBoundingClientRect().height) : null);
+        return { tap: px(q('[data-osc="studio.tl.tap"]')), tempo: px(q('.osc-stl-tempo')),
+          tool: px(q('[data-osc="studio.tl.marker"]')), strip: px(q('.osc-stl-transport')) };
+      }, TL);
+      return result({
+        drawn: h.tap > 0 && h.tempo > 0,
+        asTallAsTempo: h.tap === h.tempo,
+        stripNotGrown: h.strip <= Math.max(h.tempo, h.tool),
+      }, h);
     } },
 
     { name: 'pinch', fn: async ({ page }) => {

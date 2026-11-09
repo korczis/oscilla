@@ -217,7 +217,7 @@ export function createLiveNotes({ getModel, handleOf }) {
     const c = kind === 'on' ? st.press(note, velocity, prio) : st.release(note, prio);
     if (c.empty && !c.unchanged) gate(keysId, ev.forced ? at : closeAt(keysId, at), false);
     else if (c.top && (c.retrigger || c.legato)) {
-      h.play(at, c.top.note, c.top.velocity, { legato: !!c.before });
+      h.play(at, c.top.note, c.top.velocity, { legato: !!c.before, onset: !!c.retrigger });
       if (c.retrigger) gate(keysId, at, true);
     }
     return { ok: true, held: st.size, top: c.top ? c.top.note : null, retrigger: !!c.retrigger };

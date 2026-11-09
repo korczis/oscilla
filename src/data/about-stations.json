@@ -224,6 +224,13 @@
       "summary": "Uzel Keys je jediný zdroj not pro Synth i Studio: posílá přesnou výšku a gate na audio hodinách, klouže lineárně v přesném čase, drží rozsah kláves, noty mimo rozsah odmítne s důvodem a řekne, kde oscilátor drží výšku pod 0,95 × Nyquist",
       "commit": "1790b64",
       "datetime": "2026-11-09T12:24:14+01:00"
+    },
+    {
+      "release": "3.29",
+      "title": "Noty na audio hodinách",
+      "summary": "Notes clipy hrají na uzlu Keys na audio hodinách se swingem, ratchetem, slidem, seedovanou pravděpodobností a tap tempem; STOP nechá klávesy připravené a jejich hraní zní i při zastaveném transportu; hrané noty vlastní scope a stavový řádek a obnovený normal v Synthu se ohlásí",
+      "commit": "710d1da",
+      "datetime": "2026-11-09T14:17:46+01:00"
     }
   ]
 }

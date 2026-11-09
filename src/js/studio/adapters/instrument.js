@@ -46,13 +46,26 @@ const started = (acct, node, at) => {
 };
 
 /**
+ * `list` (in time order) from its last entry at or before `now`: the entries a time at or after
+ * now can still read (the value held then, and everything scheduled later).
+ */
+export function fromNow(list, now, timeOf) {
+  let i = 0;
+  while (i + 1 < list.length && timeOf(list[i + 1]) <= now) i++;
+  return i > 0 ? list.slice(i) : list;
+}
+
+/**
  * The pitch schedule of a Keys node as written (K060, owner decision 'Linear glide in exact
  * time'): segments { t0, v0, t1, v1 }, a step when t1 === t0, else a linear ramp. Kept by the
  * adapter itself because Firefox lacks cancelAndHoldAtTime: a glide cut by a new note is held
  * at its value computed from this record (project.audio-engine-discipline v2).
- *   createPitchSchedule(param, v0) -> { to(t, v, glide) -> value at t, valueAt(t), last() }
+ * The record is kept by the audio clock, not by count: every segment from the last one that
+ * started at or before now() (#474 pre-read: a count cap lost a held note under dense ratchets
+ * scheduled ahead). now() defaults to 0, which keeps every segment.
+ *   createPitchSchedule(param, v0, now) -> { to(t, v, glide) -> value at t, valueAt(t), last() }
  */
-export function createPitchSchedule(param, v0 = 0) {
+export function createPitchSchedule(param, v0 = 0, now = () => 0) {
   let segs = [{ t0: 0, v0, t1: 0, v1: v0 }];
   const valueAt = (t) => {
     let s = segs[0];
@@ -85,11 +98,14 @@ export function createPitchSchedule(param, v0 = 0) {
         param.setValueAtTime(v, t);
         segs.push({ t0: t, v0: v, t1: t, v1: v });
       }
-      if (segs.length > 8) segs = segs.slice(-8);
+      segs = fromNow(segs, now(), (x) => x.t0);
       return from;
     },
   };
 }
+
+/** Gate onsets a Keys node keeps for debugInfo (noteState().onsets). */
+export const ONSET_LOG = 16;
 
 /** The note clamp, as the card, the Inspector help and debugInfo state it. */
 export const KEYS_CLAMP_TEXT = (hz) => `Výška hraná z Keys se omezí na `
@@ -109,11 +125,22 @@ export const keys = {
     const velocity = started(acct, ctx.createConstantSource(), at);
     pitch.offset.setValueAtTime(0, ctx.currentTime);
     velocity.offset.setValueAtTime(0, ctx.currentTime);
-    const sched = createPitchSchedule(pitch.offset, 0);
+    const sched = createPitchSchedule(pitch.offset, 0, () => ctx.currentTime);
     const [lo, hi] = KEYS_PITCH_RANGE;
     const clampHz = (SAFE_NYQUIST_FACTOR * ctx.sampleRate) / 2;
     let note = null;
     let gate = { open: false, at: null };
+    // Velocity steps as written ({ t, v }), so holdPitch can hold the value it has at a time;
+    // kept by the audio clock (fromNow), as the pitch schedule.
+    let vels = [{ t: 0, v: 0 }];
+    // The last ONSET_LOG gate onsets this node played (a note that opened its gate), in time
+    // order, as scheduled: debugInfo's onsets and the interval between the last two (K068).
+    let onsets = [];
+    const velAt = (t) => {
+      let v = vels[0].v;
+      for (const x of vels) if (x.t <= t) v = x.v;
+      return v;
+    };
     return {
       inputs: {},
       outputs: { pitch, velocity },
@@ -128,12 +155,31 @@ export const keys = {
        * Note `n` at velocity `vel` (0-127) from t. Legato with Glide > 0: a linear ramp that
        * reaches the note at exactly t + Glide; otherwise a step at t.
        */
-      play(t, n, vel, { legato = false } = {}) {
+      play(t, n, vel, { legato = false, onset = false } = {}) {
         const oct = Math.min(hi, Math.max(lo, (n + p.transpose - 69) / 12));
         sched.to(t, oct, legato && p.glide > 0 ? p.glide : 0);
-        if (vel != null) velocity.offset.setValueAtTime(Math.min(1, vel / 127), t);
+        if (vel != null) {
+          const v = Math.min(1, vel / 127);
+          velocity.offset.setValueAtTime(v, t);
+          vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v }), ctx.currentTime,
+            (x) => x.t);
+        }
+        if (onset) onsets = onsets.filter((x) => x < t).concat(t).slice(-ONSET_LOG);
         note = n;
         return oct;
+      },
+      /**
+       * Hold the pitch and the velocity at t, dropping what was scheduled after it (the
+       * transport re-plays its later notes from there after an edit or a STOP, K068).
+       */
+      holdPitch(t) {
+        sched.to(t, sched.valueAt(t), 0);
+        const v = velAt(t);
+        velocity.offset.cancelScheduledValues(t);
+        velocity.offset.setValueAtTime(v, t);
+        vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v }), ctx.currentTime,
+          (x) => x.t);
+        onsets = onsets.filter((x) => x < t);
       },
       /** The gate the note router (live-notes.js) opened or closed at t. */
       gateAt(t, open) {
@@ -147,11 +193,16 @@ export const keys = {
         const b = p.keyHigh ?? 127;
         return a <= b ? [a, b] : [b, a];
       },
-      /** debugInfo: the note, the pitch now and its target, the gate and the clamp. */
+      /**
+       * debugInfo: the note, the pitch now and its target, the gate, the clamp, and the last
+       * gate onsets as scheduled with the interval between the last two (K068).
+       */
       noteState() {
         const s = sched.last();
+        const n = onsets.length;
         return { note, pitch: sched.valueAt(ctx.currentTime), target: s.v1, arrives: s.t1,
-          gate: gate.open, gateAt: gate.at, clampHz, clamp: KEYS_CLAMP_TEXT(clampHz) };
+          gate: gate.open, gateAt: gate.at, clampHz, clamp: KEYS_CLAMP_TEXT(clampHz),
+          onsets: [...onsets], interval: n > 1 ? onsets[n - 1] - onsets[n - 2] : null };
       },
       stop(t) {
         for (const n of [pitch, velocity]) { try { n.stop(t); } catch (e) { /* stopped */ } }
