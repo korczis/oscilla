@@ -31,6 +31,9 @@ import { clipTarget, clipUse } from './clip-targets.js';
 import { effectiveTarget } from './timeline.js';
 
 const nodeOf = (m, id) => (m && id ? m.graph.nodes.find((n) => n.id === id) || null : null);
+/** The node types a Gate opens and closes: the Envelope and the Contour (K207). */
+export const GATED_TYPES = Object.freeze(['envelope', 'contour']);
+const gatedType = (n) => !!n && GATED_TYPES.includes(n.type);
 
 /**
  * Whether edge `e` leaves a TRIGGER output of its source (K103: any of them, a Keys or XY pad
@@ -57,7 +60,7 @@ export function triggerHop(m, sourceId) {
     if (e.from.node !== sourceId || !triggerOut(m, e)) continue;
     const n = nodeOf(m, e.to.node);
     if (!n) continue;
-    if (n.type === 'envelope' && e.to.port === 'gate') envelopes.push(n.id);
+    if (gatedType(n) && e.to.port === 'gate') envelopes.push(n.id);
     else clocks.push(n.id);
   }
   return { envelopes, clocks };
@@ -81,7 +84,7 @@ function triggerEnvelopes(m, sourceId) {
   for (const e of m.graph.edges) {
     if (e.from.node !== sourceId || e.to.port !== 'gate' || !triggerOut(m, e)) continue;
     const n = nodeOf(m, e.to.node);
-    if (n && n.type === 'envelope') out.push(n.id);
+    if (gatedType(n)) out.push(n.id);
   }
   return out;
 }
