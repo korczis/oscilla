@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (the surfaces each workspace shows; no audio judged)
 // OSCILLA navigable-surface census (plan issue U063) on the built dist/index.html in chromium,
 // firefox and webkit, from file:// and from the GitHub-Pages-like sub-path
 // (http://127.0.0.1:<port>/oscilla/), every check on both. The contract is

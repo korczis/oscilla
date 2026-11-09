@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (audio rows read a tone level on the realtime analyser, 10 s deadline)
 // OSCILLA control census (C021, PACK 03 "One Instrument, One Coherent State"): every control
 // of every workspace has a row, and every row round-trips. dist/index.html from file:// in
 // chromium, firefox and webkit.

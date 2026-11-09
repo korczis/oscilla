@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (layout and touch targets; no audio judged)
 // Layout and stop regression gate for dist/index.html (file://).
 //
 // - No visible panel is squashed (content taller than its box) and no two visible panels

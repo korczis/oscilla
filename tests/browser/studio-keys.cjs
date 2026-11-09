@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (key bindings of the Studio; no audio judged)
 // K060: the Keys node in the Studio on the built dist/index.html in chromium, firefox and webkit
 // at 1536 x 1024 (the touch add in a hasTouch page of the same size): linked, real-time and
 // interactive. Every check reads the one store, the runtime's debugInfo or the page's own

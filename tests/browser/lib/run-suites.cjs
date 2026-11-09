@@ -16,7 +16,10 @@
 // OSC_SUITE_JOBS (default 1) runs that many suites at once (the CI legs, lib/shards.cjs, on a
 // 4-vCPU runner). With 1 every suite writes straight to the terminal, one after another; with
 // more each suite's output is held and printed as one block when it exits, so the log reads
-// suite by suite.
+// suite by suite. A unit marked solo (lib/shards.cjs, a suite that judges the realtime output)
+// never shares: the shared units run first, OSC_SUITE_JOBS at a time, then the solo ones alone.
+// A suite stopped at its deadline gets SIGTERM, then SIGKILL after KILL_GRACE_MS if it is still
+// there, so a child that ignores SIGTERM cannot hold the run to its step's bound.
 //
 // Exit: 0 when every suite exited 0; 2 when no suite was named, a named file does not exist,
 // OSC_SUITE_MS is not a positive number or OSC_SUITE_JOBS not a positive integer (nothing is
@@ -28,6 +31,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const DEFAULT_MS = 20 * 60 * 1000;
+/** How long a suite has to exit after SIGTERM before it gets SIGKILL. */
+const KILL_GRACE_MS = 15000;
 
 /** The per-suite deadline from OSC_SUITE_MS; null when the value is not a positive number. */
 function suiteDeadline(env = process.env) {
@@ -82,7 +87,8 @@ async function runPool(units, start, { jobs = 1 } = {}) {
  * Start one suite as a child process, stopped with SIGTERM after `ms`. With `hold` its output
  * is collected and printed as one block when it exits; else it is the terminal's.
  */
-function startSuite(unit, { ms, hold, env = process.env, log = console.log }) {
+function startSuite(unit, { ms, hold, env = process.env, log = console.log,
+  graceMs = KILL_GRACE_MS }) {
   return new Promise((resolve) => {
     const label = unit.label || unit.file;
     if (!hold) log(`run-suites: ${label}`);
@@ -94,12 +100,15 @@ function startSuite(unit, { ms, hold, env = process.env, log = console.log }) {
       child.stderr.on('data', (b) => out.push(b));
     }
     let timedOut = false;
+    let killer = null;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGTERM');
+      killer = setTimeout(() => child.kill('SIGKILL'), graceMs);
     }, ms);
     const finish = (r) => {
       clearTimeout(timer);
+      clearTimeout(killer);
       if (hold) {
         log(`run-suites: ${label} (its output, held while ${label} ran)`);
         log(Buffer.concat(out).toString('utf8').replace(/\n$/, ''));
@@ -143,9 +152,18 @@ async function runUnits(units, env = process.env) {
     console.error(`run-suites: no such suite: ${missing.map((u) => u.file).join(', ')}`);
     return 2;
   }
-  if (jobs > 1) console.log(`run-suites: ${units.length} suites, ${jobs} at a time`);
-  const run = await runPool(units, (u) => startSuite(u, { ms, hold: jobs > 1, env }), { jobs });
-  return summarize(run);
+  const shared = units.filter((u) => !u.solo);
+  const solo = units.filter((u) => u.solo);
+  if (jobs > 1) {
+    console.log(`run-suites: ${units.length} suites, the ${shared.length} shared ${jobs} at a `
+      + `time, then the ${solo.length} solo one by one`);
+  }
+  const start = (hold) => (u) => startSuite(u, { ms, hold, env });
+  const a = jobs > 1 ? await runPool(shared, start(true), { jobs })
+    : await runPool(units, start(false), { jobs: 1 });
+  const b = jobs > 1 ? await runPool(solo, start(false), { jobs: 1 }) : { results: [] };
+  const results = [...a.results, ...b.results];
+  return summarize({ code: results.every((r) => r.ok) ? 0 : 1, results });
 }
 
 /**
@@ -171,9 +189,13 @@ function main(argv) {
     console.error('usage: node tests/browser/lib/run-suites.cjs <suite.cjs> [<suite.cjs> ...]');
     return Promise.resolve(2);
   }
-  return runUnits(files.map((file) => ({ file })));
+  // each named suite's own pace declaration (lib/shards.cjs; loaded here, as it loads this)
+  // eslint-disable-next-line global-require
+  const { soloOf } = require('./shards.cjs');
+  return runUnits(files.map((file) => ({ file, solo: soloOf(file) })));
 }
 
 if (require.main === module) main(process.argv).then((code) => { process.exitCode = code; });
 
-module.exports = { runAll, runPool, runUnits, startSuite, suiteDeadline, suiteJobs, DEFAULT_MS };
+module.exports = { runAll, runPool, runUnits, startSuite, suiteDeadline, suiteJobs, DEFAULT_MS,
+  KILL_GRACE_MS };

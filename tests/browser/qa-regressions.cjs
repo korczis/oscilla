@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (stereo analysers on the realtime output against the audio clock)
 // OSCILLA V2 final-QA regressions on the built dist/index.html (file://), in chromium, firefox
 // and webkit. One fresh page per check. The pure halves are tests/unit/qa-regressions.test.mjs.
 //

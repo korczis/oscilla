@@ -11,7 +11,11 @@
 //     and runs `npm run test:leg`, which runs shards.cjs;
 //   - a split suite deals its checks over its parts exactly (dealt()) and accepts --part;
 //   - the weights name only suites the gate runs, and the slowest leg stays within its budget;
-//   - lib/run-suites.cjs runs every unit, at most OSC_SUITE_JOBS at once.
+//   - every release suite declares its pace (`// suite-pace: solo|shared (<reason>)`); a suite
+//     that declares none runs solo; solo units never share a runner, shared ones run
+//     OSC_SUITE_JOBS at a time (review c1 of 913a522d);
+//   - lib/run-suites.cjs runs every unit, at most OSC_SUITE_JOBS at once, and a suite that
+//     ignores SIGTERM at its deadline is killed after the grace (review c1, P3).
 // Each rule is also applied to a mutated plan, workflow or package, and must say what broke.
 //   node --test tests/unit/browser-shards.test.mjs
 import test from 'node:test';
@@ -28,9 +32,10 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const read = (rel) => readFileSync(path.join(ROOT, rel), 'utf8');
 const shards = require(path.join(ROOT, 'tests', 'browser', 'lib', 'shards.cjs'));
-const { runPool } = require(path.join(ROOT, 'tests', 'browser', 'lib', 'run-suites.cjs'));
+const { runPool, startSuite } = require(path.join(ROOT, 'tests', 'browser', 'lib',
+  'run-suites.cjs'));
 const { BROWSERS, LEGS, PARTS, LEG_BUDGET_S, releaseSuites, units, plan, deal, dealt,
-  parsePart } = shards;
+  parsePart, paceOf, soloOf } = shards;
 const PKG = JSON.parse(read('package.json'));
 const WEIGHTS = JSON.parse(read('tests/browser/shard-weights.json'));
 const CI_TEXT = read('.github/workflows/ci.yml');
@@ -267,14 +272,15 @@ test('shards.cjs as a process: a leg of fixture suites two at a time; bad select
     // output is printed as one block, and a failure fails the run
     const suite = (name, body) => {
       const file = path.join(dir, `${name}.cjs`);
-      writeFileSync(file, `console.log('${name} line 1');\n${body}\nconsole.log('${name} line 2');\n`);
+      writeFileSync(file, `// suite-pace: shared (a fixture that judges no audio at all)\n`
+        + `console.log('${name} line 1');\n${body}\nconsole.log('${name} line 2');\n`);
       return file;
     };
     const files = [suite('p1', ''), suite('f1', 'process.exitCode = 1;'), suite('p2', '')];
     const r = spawnSync(process.execPath, ['tests/browser/lib/run-suites.cjs', ...files],
       { cwd: ROOT, encoding: 'utf8', env: { ...process.env, OSC_SUITE_JOBS: '2' }, timeout: 60000 });
     assert.equal(r.status, 1, r.stdout + r.stderr);
-    assert.match(r.stdout, /3 suites, 2 at a time/);
+    assert.match(r.stdout, /3 suites, the 3 shared 2 at a time, then the 0 solo one by one/);
     for (const n of ['p1', 'f1', 'p2']) {
       assert.match(r.stdout, new RegExp(`${n}\\.cjs \\(its output[^\\n]*\\n${n} line 1\\n${n} line 2\\n`
         + `run-suites: end of [^\\n]*${n}\\.cjs`), `${n} printed as one block`);
@@ -284,3 +290,90 @@ test('shards.cjs as a process: a leg of fixture suites two at a time; bad select
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('every release suite declares its pace with a reason; none declared runs solo', () => {
+  const found = [];
+  for (const file of releaseSuites(PKG)) {
+    const text = read(file);
+    const lines = text.split('\n').filter((l) => l.includes('suite-pace:'));
+    const p = paceOf(text);
+    if (lines.length !== 1 || !p) found.push(`${file}: ${lines.length} suite-pace line(s)`);
+    else if (p.reason.trim().split(/\s+/).length < 5) found.push(`${file}: reason "${p.reason}"`);
+  }
+  assert.deepEqual(found, []);
+  const us = units(PKG);
+  assert.ok(us.some((u) => u.solo) && us.some((u) => !u.solo), 'both paces are dealt');
+  for (const f of ['tests/browser/xy-pad.cjs', 'tests/browser/synth.cjs',
+    'tests/browser/instrument-dsp.cjs', 'tests/browser/v31-studio-transport.cjs',
+    'tests/browser/midi.cjs', 'tests/browser/control-census.cjs']) {
+    assert.equal(soloOf(f), true, `${f} judges the realtime output: solo`);
+  }
+  // mutation: a suite whose declaration is gone (or never written) is solo, and so is a file
+  // that does not exist
+  assert.equal(paceOf('#!/usr/bin/env node\n// a suite\n'), null);
+  assert.deepEqual(paceOf('x\n// suite-pace: shared (no audio is judged here at all)\n'),
+    { pace: 'shared', reason: 'no audio is judged here at all' });
+  assert.equal(soloOf('tests/browser/zz-none.cjs'), true);
+  const allSolo = units(PKG, PARTS, () => true);
+  assert.ok(allSolo.every((u) => u.solo));
+  // the dealing weighs a shared unit less, never a solo one
+  const legs = deal([{ label: 'a', solo: true }, { label: 'b', solo: false }], 1, () => 90, 1.5);
+  assert.equal(legs[0].s, 180);
+  assert.equal(legs[0].est, 150);
+});
+
+test('run-suites: solo units never share the runner, shared ones run two at a time', () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'osc-pace-'));
+  try {
+    const log = path.join(dir, 'spans.log');
+    const suite = (name) => {
+      const file = path.join(dir, `${name}.cjs`);
+      writeFileSync(file, `const fs = require('node:fs');
+fs.appendFileSync(${JSON.stringify(log)}, '${name} start ' + Date.now() + '\\n');
+const t = Date.now(); while (Date.now() - t < 300) {}
+fs.appendFileSync(${JSON.stringify(log)}, '${name} end ' + Date.now() + '\\n');
+`);
+      return file;
+    };
+    const runner = path.join(ROOT, 'tests', 'browser', 'lib', 'run-suites.cjs');
+    const entry = path.join(dir, 'entry.cjs');
+    const us = [['s1', false], ['s2', false], ['s3', false], ['o1', true], ['o2', true]]
+      .map(([n, solo]) => ({ file: suite(n), label: n, solo }));
+    writeFileSync(entry, `require(${JSON.stringify(runner)}).runUnits(${JSON.stringify(us)})
+  .then((c) => { process.exitCode = c; });\n`);
+    const r = spawnSync(process.execPath, [entry], { encoding: 'utf8', timeout: 60000,
+      env: { ...process.env, OSC_SUITE_JOBS: '2' } });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /the 3 shared 2 at a time, then the 2 solo one by one/);
+    const spans = {};
+    for (const line of readFileSync(log, 'utf8').trim().split('\n')) {
+      const [n, what, at] = line.split(' ');
+      spans[n] = { ...spans[n], [what]: Number(at) };
+    }
+    const overlap = (a, b) => spans[a].start < spans[b].end && spans[b].start < spans[a].end;
+    assert.ok(overlap('s1', 's2'), 'two shared suites ran at once');
+    for (const o of ['o1', 'o2']) {
+      for (const other of Object.keys(spans).filter((n) => n !== o)) {
+        assert.ok(!overlap(o, other), `${o} ran alone (not beside ${other})`);
+      }
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a suite that ignores SIGTERM at its deadline is killed after the grace (c1 P3)',
+  async () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'osc-kill-'));
+    try {
+      const file = path.join(dir, 'stubborn.cjs');
+      writeFileSync(file, "process.on('SIGTERM', () => {});\nsetInterval(() => {}, 1000);\n");
+      const t0 = Date.now();
+      const r = await startSuite({ file, label: 'stubborn' }, { ms: 500, graceMs: 500,
+        hold: true, log: () => {} });
+      assert.ok(Date.now() - t0 < 20000, 'it did not wait for the step bound');
+      assert.equal(r.error && r.error.code, 'ETIMEDOUT');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });

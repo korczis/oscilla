@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (engine voices judged on the realtime analyser with deadlines)
 // OSCILLA Synth engines (plan K090-K092, K089 part, K121-K123; Q019, Q021) on the built
 // dist/index.html in chromium, firefox and webkit, at 1536 x 1024 and 390 x 844. Every check
 // asserts the sound read from the engine's analyser after the safety chain (line levels, peaks,

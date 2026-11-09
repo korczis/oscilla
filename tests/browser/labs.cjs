@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (lab controllers waited on the realtime audio clock and read from analysers)
 // OSCILLA V2 chart renderers and lab controllers: browser checks with a fake engine adapter.
 //
 //   NODE_PATH=<checkout>/tests/node_modules node tests/browser/labs.cjs

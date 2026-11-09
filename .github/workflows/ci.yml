@@ -158,21 +158,24 @@ jobs:
     # (test:engine, dsp, labs, sequencer, measure, studio, synth, browser, census) runs in one of
     # these legs, per browser: tests/browser/lib/shards.cjs reads the suites from package.json
     # and deals them over LEGS[browser] legs by their measured seconds
-    # (tests/browser/shard-weights.json), two at a time on the 4-vCPU runner (OSC_SUITE_JOBS),
-    # every suite whatever the one before returned (lib/run-suites.cjs). The census is dealt
-    # over two processes by --part. tests/unit/browser-shards.test.mjs holds every suite of
-    # every browser to exactly one leg and these matrices to LEGS: two legs a browser, six
-    # jobs in all, one round on the six hosted jobs the account keeps for OSCILLA (Q102). Six
-    # jobs a browser (engine, suites, measure, studio, browser, census) became its legs: the work measured 58 job-min chromium, 88 firefox, 97 webkit one by one (runs
-    # 42513898661, 42509049766, 42520947188, 42522764794), each job adding its setup again.
-    # Firefox keeps the PulseAudio null sink its AudioContext needs on the runner, while
-    # Chromium's realtime clock stalls behind that sink, so each browser has its own legs.
+    # (tests/browser/shard-weights.json). A suite declared `suite-pace: shared` runs two at a
+    # time on the 4-vCPU runner (OSC_SUITE_JOBS); one declared `solo` (it judges the realtime
+    # output or the audio clock against a deadline) runs alone, after them. Every suite runs
+    # whatever the one before returned (lib/run-suites.cjs); the census is dealt over two
+    # processes by --part. tests/unit/browser-shards.test.mjs holds every suite of every
+    # browser to exactly one leg and these matrices to LEGS: two legs a browser, six jobs, one
+    # round on the six hosted jobs the account keeps for OSCILLA (Q102). They replace six jobs a
+    # browser (engine, suites, measure, studio, browser, census), whose work measured 58 job-min
+    # chromium, 88 firefox, 97 webkit one by one (runs 42513898661, 42509049766, 42520947188,
+    # 42522764794), each job adding its setup again. Firefox keeps the PulseAudio null sink its
+    # AudioContext needs on the runner, while Chromium's realtime clock stalls behind that sink,
+    # so each browser has its own legs.
     name: Browser leg 1 (${{ matrix.browser }})
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
-    # the sum of the step limits (15 + 13 + 60), rounded up (project.ci-bounded)
-    timeout-minutes: 90
+    # the sum of the step limits (15 + 13 + 70), rounded up (project.ci-bounded)
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -203,10 +206,10 @@ jobs:
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
       - name: Leg 1 of the browser's release-gate suites, file:// and /oscilla/
-        # a leg measures 29-49 min one by one by the weights; two at a time it should take
-        # well under that, and the bound leaves room for a slow runner
+        # a leg measures 29-52 min one by one by the weights (shards.cjs --plan); its shared
+        # suites two at a time it should take less, and the bound leaves room for a slow runner
         run: mkdir -p logs && npm run test:leg 2>&1 | tee logs/leg-1-${{ matrix.browser }}.log
-        timeout-minutes: 60
+        timeout-minutes: 70
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7
@@ -220,8 +223,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.runtime != 'false'
     runs-on: ubuntu-24.04
-    # the sum of the step limits (15 + 13 + 60), rounded up (project.ci-bounded)
-    timeout-minutes: 90
+    # the sum of the step limits (15 + 13 + 70), rounded up (project.ci-bounded)
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -252,10 +255,10 @@ jobs:
           pactl load-module module-null-sink sink_name=ci_null
           pactl set-default-sink ci_null
       - name: Leg 2 of the browser's release-gate suites, file:// and /oscilla/
-        # a leg measures 29-49 min one by one by the weights; two at a time it should take
-        # well under that, and the bound leaves room for a slow runner
+        # a leg measures 29-52 min one by one by the weights (shards.cjs --plan); its shared
+        # suites two at a time it should take less, and the bound leaves room for a slow runner
         run: mkdir -p logs && npm run test:leg 2>&1 | tee logs/leg-2-${{ matrix.browser }}.log
-        timeout-minutes: 60
+        timeout-minutes: 70
       - name: Upload the log on failure
         if: failure()
         uses: actions/upload-artifact@v7

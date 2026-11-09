@@ -246,8 +246,8 @@ test('a job ci.yml gains or loses is a disagreement', () => {
     needs: changes
     if: ${RUNTIME_IF}
     runs-on: ubuntu-24.04
-    # the sum of the step limits (15 + 13 + 60), rounded up (project.ci-bounded)
-    timeout-minutes: 90
+    # the sum of the step limits (15 + 13 + 70), rounded up (project.ci-bounded)
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:
@@ -255,8 +255,8 @@ test('a job ci.yml gains or loses is a disagreement', () => {
     needs: changes
     if: ${RUNTIME_IF}
     runs-on: ubuntu-24.04
-    # the sum of the step limits (15 + 13 + 60), rounded up (project.ci-bounded)
-    timeout-minutes: 90
+    # the sum of the step limits (15 + 13 + 70), rounded up (project.ci-bounded)
+    timeout-minutes: 100
     strategy:
       fail-fast: false
       matrix:

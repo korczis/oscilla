@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (the pattern sequencer on real Web Audio, its timing judged on the audio clock)
 // OSCILLA V2 pattern sequencer: browser checks against the real Web Audio implementation.
 //
 //   NODE_PATH=<checkout>/tests/node_modules node tests/browser/sequencer.cjs

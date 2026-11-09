@@ -16,8 +16,15 @@
 // of every browser in exactly one leg, the legs ci.yml declares equal to LEGS, and the slowest
 // leg within LEG_BUDGET_S by the weights.
 //
+// Each suite declares its pace in a header line, `// suite-pace: solo (<reason>)` or
+// `// suite-pace: shared (<reason>)`: a suite that judges the realtime output or the audio clock
+// against a deadline runs alone on its runner, the rest OSC_SUITE_JOBS at a time
+// (tests/unit/browser-shards.test.mjs holds every release suite to one declaration). A suite
+// without one is solo. The dealing weighs a shared suite at its seconds / SHARED_SPEEDUP.
+//
 // Each leg runs its units through lib/run-suites.cjs (every unit runs, whatever the one before
-// returned; OSC_SUITE_JOBS at a time, OSC_SUITE_MS each), with OSC_BROWSERS as given.
+// returned; its shared units OSC_SUITE_JOBS at a time, then its solo units one by one,
+// OSC_SUITE_MS each), with OSC_BROWSERS as given.
 //
 // Exit: what run-suites returns; 2 when OSC_BROWSERS is not exactly one known browser or OSC_LEG
 // is not a leg of it.
@@ -38,7 +45,27 @@ const RELEASE_SCRIPT = 'test:release';
 /** The one browser suite that runs in its own container job, not in a leg. */
 const OWN_JOB = new Set(['test:visual']);
 /** The slowest leg's suites, by the weights, may take at most this many seconds one by one. */
-const LEG_BUDGET_S = 50 * 60;
+const LEG_BUDGET_S = 55 * 60;
+/**
+ * What running shared suites OSC_SUITE_JOBS (2) at a time is assumed to gain, for the dealing
+ * only: an estimate until CI measures it, never a bound.
+ */
+const SHARED_SPEEDUP = 1.5;
+const PACE = /^\/\/ suite-pace: (solo|shared) \((.+)\)$/m;
+
+/** A suite's declared pace: { pace, reason }, or null when it declares none. */
+function paceOf(text) {
+  const m = PACE.exec(String(text));
+  return m ? { pace: m[1], reason: m[2] } : null;
+}
+
+/** Whether `file` (repository-relative) runs alone: declared solo, or declaring nothing. */
+function soloOf(file, root = ROOT) {
+  const full = path.resolve(root, file);
+  if (!fs.existsSync(full)) return true;
+  const p = paceOf(fs.readFileSync(full, 'utf8'));
+  return !p || p.pace === 'solo';
+}
 
 /** The browser suites of the release gate, in the order its scripts name them. */
 function releaseSuites(pkg) {
@@ -59,14 +86,16 @@ function releaseSuites(pkg) {
 }
 
 /** The units of a release: one per suite, PARTS[suite] for a split one. */
-function units(pkg, parts = PARTS) {
+function units(pkg, parts = PARTS, solo = soloOf) {
   const out = [];
   for (const file of releaseSuites(pkg)) {
     const n = parts[file] || 1;
-    if (n === 1) out.push({ file, args: [], label: file });
+    const s = solo(file);
+    if (n === 1) out.push({ file, args: [], label: file, solo: s });
     else {
       for (let i = 1; i <= n; i++) {
-        out.push({ file, args: ['--part', `${i}/${n}`], label: `${file} --part ${i}/${n}` });
+        out.push({ file, args: ['--part', `${i}/${n}`], label: `${file} --part ${i}/${n}`,
+          solo: s });
       }
     }
   }
@@ -85,18 +114,22 @@ function weightOf(unit, browser, seconds, parts = PARTS) {
 }
 
 /**
- * Deal `us` over `legs` legs: longest first, each to the least-loaded leg (lowest index on a
- * tie). Returns [{ leg, s, units }] in leg order; each leg's units longest first.
+ * Deal `us` over `legs` legs: longest first (by `weigh`, a shared unit's seconds divided by
+ * `speedup`), each to the leg that would take least so far (lowest index on a tie). Returns
+ * [{ leg, s, est, units }] in leg order: `s` the seconds one by one, `est` the estimate with
+ * the shared units sharing; each leg's units longest first.
  */
-function deal(us, legs, weigh) {
-  const out = Array.from({ length: legs }, (_, i) => ({ leg: i + 1, s: 0, units: [] }));
+function deal(us, legs, weigh, speedup = SHARED_SPEEDUP) {
+  const out = Array.from({ length: legs }, (_, i) => ({ leg: i + 1, s: 0, est: 0, units: [] }));
   const order = us.map((u, i) => ({ u, i, w: weigh(u) }))
-    .sort((a, b) => b.w - a.w || a.i - b.i);
-  for (const { u, w } of order) {
+    .map((x) => ({ ...x, e: x.u.solo === false ? x.w / speedup : x.w }))
+    .sort((a, b) => b.e - a.e || a.i - b.i);
+  for (const { u, w, e } of order) {
     let best = out[0];
-    for (const l of out) if (l.s < best.s) best = l;
+    for (const l of out) if (l.est < best.est) best = l;
     best.units.push(u);
     best.s += w;
+    best.est += e;
   }
   return out;
 }
@@ -142,8 +175,8 @@ async function main(argv, env = process.env) {
   if (argv.includes('--plan')) {
     for (const l of legs) {
       console.log(`${browser} leg ${l.leg}/${legs.length}: ${(l.s / 60).toFixed(1)} min by the `
-        + `weights, ${l.units.length} suites`);
-      for (const u of l.units) console.log(`  ${u.label}`);
+        + `weights one by one, ~${(l.est / 60).toFixed(1)} sharing, ${l.units.length} suites`);
+      for (const u of l.units) console.log(`  ${u.solo ? 'solo  ' : 'shared'} ${u.label}`);
     }
     return 0;
   }
@@ -154,8 +187,11 @@ async function main(argv, env = process.env) {
       + `${JSON.stringify(env.OSC_LEG)}`);
     return 2;
   }
-  console.log(`shards: ${browser} leg ${leg.leg} of ${legs.length}, ${leg.units.length} suites, `
-    + `${(leg.s / 60).toFixed(1)} min one by one by the weights`);
+  const solo = leg.units.filter((u) => u.solo).length;
+  console.log(`shards: ${browser} leg ${leg.leg} of ${legs.length}, ${leg.units.length} suites `
+    + `(${leg.units.length - solo} shared, ${solo} solo), ${(leg.s / 60).toFixed(1)} min one by `
+    + 'one by the weights');
+  for (const u of leg.units) console.log(`shards:   ${u.solo ? 'solo  ' : 'shared'} ${u.label}`);
   return runUnits(leg.units, env);
 }
 
@@ -163,5 +199,5 @@ if (require.main === module) {
   main(process.argv.slice(2)).then((code) => { process.exitCode = code; });
 }
 
-module.exports = { BROWSERS, LEGS, PARTS, LEG_BUDGET_S, RELEASE_SCRIPT, releaseSuites, units,
-  weightOf, deal, plan, dealt, parsePart };
+module.exports = { BROWSERS, LEGS, PARTS, LEG_BUDGET_S, SHARED_SPEEDUP, RELEASE_SCRIPT,
+  releaseSuites, units, paceOf, soloOf, weightOf, deal, plan, dealt, parsePart };
