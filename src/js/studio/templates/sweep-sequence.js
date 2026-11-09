@@ -19,7 +19,7 @@ export default {
         + 'not alter what you hear.',
     ],
   },
-  studioHash: '5ae816652785ab76197f1a5290caa7a1ff81848b51c3b7c02e0fd7365055cada',
+  studioHash: '19f46f44b4d3e43fee7ff76c89073e6ce72e8b119c72fdb976ea025b0047bb90',
   model: studioDoc({
     title: 'Sweep Sequence',
     nodes: [

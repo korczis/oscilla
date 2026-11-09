@@ -1,10 +1,11 @@
-// K022 (D2): one hash epoch for every new parameter on an existing node type. STUDIO_HASH_VERSION
-// goes from 1 to 2 once, with unison and spread (Oscillator), slope (Filter), depth and sync
-// (LFO), sync (Random), sync and quantize (Step Modulator) and bypass (Gain, Pan, Drive). A
-// project, a patch and an experiment saved under hash v1 open migrated, their original hash kept;
-// the new parameters at their defaults build what the node built before; each new parameter acts
-// (a Macro on an LFO's depth, unison voices, a 24 dB/oct cascade, tempo sync, Step quantize,
-// bypass).
+// K022 (D2): one hash epoch for every new parameter on an existing node type. Epoch 3 (K071/K072
+// and K229/K230) is checked at the end: a record saved under v2 opens migrated, and a key not yet
+// on a node blocks no earlier epoch. STUDIO_HASH_VERSION went from 1 to 2 once, with unison and
+// spread (Oscillator), slope (Filter), depth and sync (LFO), sync (Random), sync and quantize
+// (Step Modulator) and bypass (Gain, Pan, Drive). A project, a patch and an experiment saved
+// under hash v1 open migrated, their original hash kept; the new parameters at their defaults
+// build what the node built before; each new parameter acts (a Macro on an LFO's depth, unison
+// voices, a 24 dB/oct cascade, tempo sync, Step quantize, bypass).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -32,8 +33,17 @@ const EPOCH_2 = {
   random: ['sync'], 'step-modulator': ['sync', 'quantize'], gain: ['bypass'], pan: ['bypass'],
   drive: ['bypass'],
 };
+/** The keys epoch 3 adds (K071/K072 and K229/K230, agreed by oscilla-2e and oscilla-04). */
+const PERC_VOICES = ['kick', 'snare', 'clap', 'tomLow', 'tomMid', 'tomHigh', 'hatClosed',
+  'hatOpen', 'noise', 'blip'];
+const EPOCH_3 = {
+  'perc-voice': PERC_VOICES.flatMap((v) => ['Decay', 'Tune', 'Level', 'Choke'].map((s) => v + s)),
+  lfo: ['morph'], envelope: ['delay', 'hold'],
+};
 /** subtractive-synth's studioHash as main pinned it under hash epoch 1 (before K022). */
 const SUBTRACTIVE_V1 = '3982a31f8fe6f92f9206bca48ab19b7cfe091105fdb841143e7d1f1e892ec424';
+/** Its studioHash under hash epoch 2 (K022, before epoch 3), as 15436bf9 computed it. */
+const SUBTRACTIVE_V2 = 'df0e4cf3bb9a9f8ceafbbaf5cbbeb9aa334ae018733474a083e45f806884a9d7';
 
 /** A document as hash epoch 1 saved it: the model's own JSON without epoch 2's parameters. */
 function v1Doc(model) {
@@ -42,10 +52,16 @@ function v1Doc(model) {
   return doc;
 }
 
-test('STUDIO_HASH_VERSION is bumped once, and every new parameter is in that bump', () => {
-  assert.equal(STUDIO_HASH_VERSION, 2);
-  assert.deepEqual(Object.keys(HASH_EPOCH_PARAMS), ['2'], 'one epoch after the first');
+test('STUDIO_HASH_VERSION is bumped once per epoch, and every new parameter is in its bump', () => {
+  assert.equal(STUDIO_HASH_VERSION, 3);
+  assert.deepEqual(Object.keys(HASH_EPOCH_PARAMS), ['2', '3'], 'two epochs after the first');
   assert.deepEqual(JSON.parse(JSON.stringify(HASH_EPOCH_PARAMS[2])), EPOCH_2);
+  assert.deepEqual(JSON.parse(JSON.stringify(HASH_EPOCH_PARAMS[3])), EPOCH_3);
+  // Epoch 3's keys are registered by their own changes (K071/K072, K229/K230), each of which
+  // asserts its keys exist; one not yet registered is absent from every node and blocks nothing.
+  const keys = Object.values(HASH_EPOCH_PARAMS).flatMap((byType) => Object.entries(byType)
+    .flatMap(([type, ks]) => ks.map((k) => `${type}.${k}`)));
+  assert.equal(new Set(keys).size, keys.length, 'no parameter in two epochs');
   for (const [type, keys] of Object.entries(EPOCH_2)) {
     for (const k of keys) assert.ok(NODE_REGISTRY.param(type, k), `${type}.${k} exists`);
   }
@@ -59,9 +75,9 @@ test('the epoch 1 hash of a template is the one main pinned; the current hash di
   const m = templateModel('subtractive-synth');
   assert.equal(studioHashAt(m, 1), SUBTRACTIVE_V1);
   assert.notEqual(studioHash(m), SUBTRACTIVE_V1);
-  assert.equal(executionState(m).v, 2);
+  assert.equal(executionState(m).v, 3);
   assert.equal(hashEpochOf(m, SUBTRACTIVE_V1), 1);
-  assert.equal(hashEpochOf(m, studioHash(m)), 2);
+  assert.equal(hashEpochOf(m, studioHash(m)), 3);
   // A value epoch 1 could not record is never matched to an epoch 1 hash.
   const st = createStudioStore(m, { idGenerator: createIdGenerator(m) });
   assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'unison', value: 3 })
@@ -80,7 +96,7 @@ test('a project and a patch saved under hash v1 open migrated, the original hash
   assert.deepEqual(r.hashMigration, { from: 1, originalHash: SUBTRACTIVE_V1 });
   assert.equal(studioHash(r.model), studioHash(m), 'the new parameters at their defaults');
   const text = hashMigrationText(r.hashMigration);
-  assert.match(text, /hashem v1, převedeno na v2/);
+  assert.match(text, /hashem v1, převedeno na v3/);
   assert.ok(text.includes(SUBTRACTIVE_V1.slice(0, 12)), 'it names the original hash');
   const kept = await store.getStudio('p-v1');
   assert.equal(kept.studioHash, SUBTRACTIVE_V1, 'the stored record is not rewritten');
@@ -258,4 +274,47 @@ test('the Synth panel shows no jack for the MG depth: 62 jacks, the LFO node kee
   assert.deepEqual(PANEL.jacksOf('mg').map((j) => j.id), ['mg.rate', 'mg.control']);
   assert.equal(PANEL.modules.reduce((n, m) => n + PANEL.jacksOf(m.id).length, 0), 62);
   assert.ok(NODE_REGISTRY.port('lfo', 'depth', 'in'), 'the Studio\'s LFO keeps its depth input');
+});
+
+// ---------------------------------------------------------------- epoch 3
+
+test('epoch 3: the epoch 2 hash of a template is the one 15436bf9 pinned; the current differs',
+  () => {
+    const m = templateModel('subtractive-synth');
+    assert.equal(studioHashAt(m, 2), SUBTRACTIVE_V2);
+    assert.equal(studioHashAt(m, 1), SUBTRACTIVE_V1, 'epoch 1 unchanged');
+    assert.notEqual(studioHash(m), SUBTRACTIVE_V2);
+    assert.equal(hashEpochOf(m, SUBTRACTIVE_V2), 2);
+  });
+
+test('epoch 3: a key a node does not hold blocks no earlier epoch; one off its default does',
+  () => {
+    const m = templateModel('subtractive-synth');
+    const lfo = m.graph.nodes.find((n) => n.type === 'lfo');
+    assert.ok(lfo, 'the template has an LFO');
+    // An epoch 3 key not (yet) on the node: the epoch 2 hash still verifies.
+    const without = { ...m, graph: { ...m.graph, nodes: m.graph.nodes.map((n) => (n === lfo
+      ? { ...n, params: Object.fromEntries(Object.entries(n.params)
+        .filter(([k]) => k !== 'morph')) } : n)) } };
+    assert.equal(studioHashAt(without, 2), SUBTRACTIVE_V2);
+    // A value epoch 2 could not record never matches an epoch 2 hash.
+    const odd = { ...m, graph: { ...m.graph, nodes: m.graph.nodes.map((n) => (n === lfo
+      ? { ...n, params: { ...n.params, morph: '__epoch3__' } } : n)) } };
+    assert.equal(studioHashAt(odd, 2), null);
+    assert.equal(hashEpochOf(odd, SUBTRACTIVE_V2), null);
+  });
+
+test('epoch 3: a project saved under hash v2 opens migrated, the original hash kept', async () => {
+  const store = createMemoryStore();
+  const lib = createStudioLibrary(store);
+  const m = templateModel('subtractive-synth');
+  const doc = JSON.parse(serializeStudio(m));
+  for (const n of doc.graph.nodes) for (const k of EPOCH_3[n.type] || []) delete n.params[k];
+  await store.putStudio({ id: 'p-v2', kind: STUDIO_KIND, name: 'Epoch 2 synth',
+    savedAt: '2026-11-09T00:00:00.000Z', studioHash: SUBTRACTIVE_V2, doc });
+  const r = await lib.loadProject('p-v2');
+  assert.deepEqual(r.hashMigration, { from: 2, originalHash: SUBTRACTIVE_V2 });
+  assert.equal(studioHash(r.model), studioHash(m));
+  assert.match(hashMigrationText(r.hashMigration), /hashem v2, převedeno na v3/);
+  assert.equal((await store.getStudio('p-v2')).studioHash, SUBTRACTIVE_V2, 'not rewritten');
 });

@@ -141,7 +141,8 @@ const PINNED_V1 = {
   'step-bass': '701d7e300d2c0307da24b0c8b75610e30de59c4d6da2a0e2e9fa2439cc5079fc',
   'demo-song': '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
 };
-const PINNED = {
+/** Epoch 2 (K022, before epoch 3). */
+const PINNED_V2 = {
   'basic-tone': '8da6e6e69b3449cd22e6013ea778600bfe9bf638f7027ffce2f88629cfd5ccee',
   'subtractive-synth': 'df0e4cf3bb9a9f8ceafbbaf5cbbeb9aa334ae018733474a083e45f806884a9d7',
   'sweep-sequence': '5ae816652785ab76197f1a5290caa7a1ff81848b51c3b7c02e0fd7365055cada',
@@ -157,6 +158,23 @@ const PINNED = {
   'step-bass': 'bf4ccc6463b4e3915c43563c41dc74a9b956980309f0b907b6f5d1477bad5330',
   'demo-song': 'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3',
 };
+/** Epoch 3 (K071/K072, K229/K230): the current studioHash. */
+const PINNED = {
+  'basic-tone': '59dff06b79e068668072ef5593847473813c9bdf05b3d8ad3da01a1e4a027b5a',
+  'subtractive-synth': 'ece3897f0af58688f5c886b6dbdd63edf651fcc5260d2d160a95b2983be9051c',
+  'sweep-sequence': '19f46f44b4d3e43fee7ff76c89073e6ce72e8b119c72fdb976ea025b0047bb90',
+  'stereo-beat': '678383bd023645f4406656c47b173c3866ab73d74732f479be2e92f72a7e19a8',
+  'filter-automation': 'eecf6ca408107759f05e45275e1d82f366ddab18b127474a0756065cdd1a1055',
+  'measurement-sweep': '0dcbd47a7d0ee4f56be81aae899a587ed7584139b9edf5a1525fdd2ca9174873',
+  'first-patch': '606db03955e838fb4a5ded74b120ee3641fc6aa6958b6e5b52999cce6a517c4a',
+  'filter-envelope-synth': 'ac6d4911931d4f4d33576139704d126340cfbdd10af108b52ff00febd34e74df',
+  'fm-chime': 'c1970bcb09944dd6915fa9e2f27c8c14ae69494c5e200d179f01bc266f402589',
+  'ring-mod': 'c68121d5b95bf281a8ce6b54f64fb4cd881ce6db4e8ebb60dfc999b991bbbd3d',
+  'drive-lead': '8df349d9160942b5d4b0967ba83c206b5d66489d9c1baa73df82e2b486a7cb29',
+  'macro-pad': 'a95972ab09c6901f3fdbf36bc1842d82614b79437f573a307527d2d1bfe15ac8',
+  'step-bass': '98d2e7036f0701fd4fbf462453feb1142afe6c72e3dbc7891756a65b1588a277',
+  'demo-song': '2207dc6f700b0a2e6d7d02db2557fadd1af48b695d04c76fc99f22fe61b05321',
+};
 
 test('V617 every template keeps its pinned hash; the hashes are distinct', () => {
   assert.deepStrictEqual(Object.fromEntries(STUDIO_TEMPLATES.map((t) => [t.id, t.studioHash])),
@@ -164,6 +182,7 @@ test('V617 every template keeps its pinned hash; the hashes are distinct', () =>
   for (const t of STUDIO_TEMPLATES) {
     assert.strictEqual(studioHash(templateModel(t.id)), PINNED[t.id], t.id);
     assert.strictEqual(studioHashAt(templateModel(t.id), 1), PINNED_V1[t.id], `${t.id} epoch 1`);
+    assert.strictEqual(studioHashAt(templateModel(t.id), 2), PINNED_V2[t.id], `${t.id} epoch 2`);
   }
   assert.strictEqual(new Set(Object.values(PINNED)).size, STUDIO_TEMPLATES.length);
 });

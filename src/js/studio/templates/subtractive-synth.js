@@ -20,7 +20,7 @@ export default {
         + 'does not change it.',
     ],
   },
-  studioHash: 'df0e4cf3bb9a9f8ceafbbaf5cbbeb9aa334ae018733474a083e45f806884a9d7',
+  studioHash: 'ece3897f0af58688f5c886b6dbdd63edf651fcc5260d2d160a95b2983be9051c',
   model: studioDoc({
     title: 'Subtractive Synth',
     nodes: [
