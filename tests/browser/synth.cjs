@@ -185,6 +185,10 @@ const arg = (name, fallback) => {
 };
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.join(ROOT, 'dist', 'index.html');
+/** Every jack the panel declares (its modules' jacksOf), read from the source, not the page. */
+const panelJacks = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'panels',
+  'semi-mono.js')).href).then(({ default: p }) => p.modules
+  .reduce((n, m) => n + p.jacksOf(m.id).length, 0));
 const RUN = suite.open({ name: 'synth', browsers: arg('browsers'), origins: arg('origins'),
   defaultOrigins: ['file'] });
 const playwright = RUN.playwright;
@@ -2043,8 +2047,10 @@ function defineChecks() {
       }
       return { ends: ends.length, covered, dock: Math.round(dock.height) };
     });
-    if (reach.ends !== 62 + 2 * (6 + DEFAULT_CABLES) || reach.covered.length) {
-      return { ok: false, detail: 'a jack or a cable end stays under the dock', reach };
+    // The declared jacks (62 since K022-3 hid the MG depth input) and both ends of each cable.
+    const jacks = await panelJacks();
+    if (reach.ends !== jacks + 2 * (6 + DEFAULT_CABLES) || reach.covered.length) {
+      return { ok: false, detail: 'a jack or a cable end stays under the dock', reach, jacks };
     }
     await page.locator('[data-goto="lpf"]').tap();
     const chip = await page.evaluate(() => {
