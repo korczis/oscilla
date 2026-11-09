@@ -30,7 +30,8 @@
 // re-places the surface only where the dock now covers it (dockCovers), and nothing is ever
 // placed from a surface with no box (a hidden face, a closed tab: an empty rect).
 
-import { KEY_ROUTES, dockRoom, dockState, dockYields, roomFolds, routeOf } from './routes.js';
+import { dockRoom, dockState, dockYields, KEY_ROUTES, ROOM_EVENT, roomFolds, routeOf }
+  from './routes.js';
 
 export const NOTES_EVENT = 'osc:notes';
 /** The handle's key (bound in ui/keys/clients.js through the one key registry). */
@@ -336,14 +337,15 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   };
   const measureRoom = (workspace) => {
     const keep = routeOf(workspace).keepsRoom;
-    if (!keep) return null;
+    if (!keep || typeof doc.querySelector !== 'function') return null;
     const bar = doc.querySelector(keep.toolbar);
     const r = bar && bar.getBoundingClientRect();
     if (!hasBox(r)) return null;
     measureBand();
     if (!dockedBand) return null;
     return { viewH: win.innerHeight, band: dockedBand, toolbarBottom: r.bottom,
-      stacked: win.innerWidth < keep.stackedBelow };
+      stacked: win.innerWidth < keep.stackedBelow,
+      kept: !!(keep.keptBy && doc.querySelector(keep.keptBy)) };
   };
   const ctl = createDockYield({ release, apply,
     read: () => ({ workspace: cmp.workspace, room: measureRoom(cmp.workspace) }) });
@@ -356,6 +358,7 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   handle.addEventListener('click', () => ctl.toggle());
   for (const d of (LIVE.get(win) || new Map()).values()) ctl.claim(d);
   win.addEventListener(NOTES_EVENT, (e) => ctl.claim(e.detail));
+  win.addEventListener(ROOM_EVENT, () => ctl.update('room')); // a surface's keptBy changed
   // A resize or a rotation: the chrome measured again and, while the dock yields and covers the
   // owner's surface, the surface re-placed against the dock (folded or unfolded).
   const replace = () => {

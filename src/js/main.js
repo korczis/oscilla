@@ -284,6 +284,7 @@ const traceIdle = new Set();
 const trace = createTrace({ now: Date.now, onIdle: () => { for (const fn of traceIdle) fn(); } });
 const bus = createOutputBus({
   trace,
+  engine, // the bus is the one writer of its master level (C052)
   app: () => app,
   sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
 const { claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy } = bus;
@@ -715,8 +716,14 @@ function integrationInit() {
   Alpine.effect(() => syncNoteOffRelease(cmp));
   // Calm announcements (V1 a7b7a23): only PLAYING, SUSPENDED, STOPPED and ERROR, kept until the
   // next one; RELEASING/READY and readout changes are not announced.
+  // Said once per change: since seqPlaying reads the playback bus's state (C051), this effect
+  // also re-runs when another owner changes (a released note), and a repeated "Playback
+  // STOPPED" would drown the newer sentence (the leave policy's, C053).
+  let announced = null;
   Alpine.effect(() => {
     const st = cmp.seqPlaying && !cmp.playing ? 'PLAYING' : cmp.status;
+    if (st === announced) return;
+    announced = st;
     if (st === 'SUSPENDED') cmp.announceText = 'Playback SUSPENDED: tap or press a key to start audio';
     else if (['PLAYING', 'STOPPED', 'ERROR'].includes(st)) cmp.announceText = `Playback ${st}`;
   });
@@ -737,7 +744,7 @@ function integrationInit() {
     notifyAdapter();
   });
   cmp.$watch('gainLevel', (g) => {
-    engine.setMasterGain(g);
+    bus.setMaster(g, { owner: OWNER.instrument }); // the status-bar level (C052)
     // The newer level: the status bar drops the Studio's Master (C012; kept at STOP, #119 D2).
     if (cmp.studio && cmp.studio.masterLevel !== null) cmp.studio.masterLevel = null;
   });
@@ -759,8 +766,7 @@ function integrationInit() {
     }
   };
   cmp.$watch('workspace', (ws) => {
-    // A measurement does not keep running unseen: leaving MEASURE stops it.
-    if (ws !== 'measure') cmp.measureAbort('workspace');
+    // (leaving a workspace: the bus's leave policy, registered first in init, C053)
     loadExperiments(ws);
     repairCharts();
   });
@@ -918,6 +924,12 @@ function createOscillaComponent(ui) {
   });
   Object.defineProperty(cmp, 'init', {
     value() {
+      // What leaving a workspace does to each owner is the playback bus's one table (C053:
+      // core/output-bus.js LEAVE_POLICY): a measurement stops, held keys are released, an
+      // armed-only Synth or Studio run is disarmed, the rest sounds on and the status bar says
+      // so. Registered first, so it reads every owner before another watcher of the workspace
+      // (the keys' dock folding releases them too) has changed it.
+      this.$watch('workspace', (ws, old) => bus.leave(old, ws));
       shellInit.call(this);
       this.measureInit();
       this.experimentsInit();

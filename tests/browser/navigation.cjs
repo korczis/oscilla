@@ -292,6 +292,91 @@ function defineChecks() {
   const checks = [];
   const def = (name, fn) => checks.push({ name, fn });
 
+  // C053: leaving a workspace applies the playback bus's leave policy (core/output-bus.js
+  // LEAVE_POLICY): the instrument and the sequence sound on, held keys are released, the Synth's
+  // Arm goes off, and the status bar's live region says each row's sentence; every wait is a
+  // condition poll with a named deadline (lib/wait.cjs until()).
+  def('leave-policy', async (ctx) => {
+    const { LEAVE_POLICY } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'core',
+      'output-bus.js')).href);
+    const sentence = (owner) => LEAVE_POLICY.find((r) => r.owner === owner).sentence;
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const read = () => ev(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      return { ws: a.workspace, playing: !!a.playing, seq: !!O.labs.sequencer.editor.playing,
+        armed: !!(a.synth && a.synth.armed), notes: O.engine.noteCount,
+        said: (window.__said || []).join(' | '), nodes: O.engine.activeNodeCount,
+        kbd: !!a.notesSounding, status: a.status };
+    });
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await read(); return pred(s) ? s : null; },
+          { ms: 6000, what: `leave-policy: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    const go = async (ws) => {
+      await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: `leave-policy: the ${ws} workspace opens` });
+    };
+    // stopAll, then wait until the stop's fade has ended and its own announcement was made, so
+    // it cannot land over the next leave's sentence
+    const quiet = async (what) => {
+      await ev(() => window.dispatchEvent(new Event('pagehide')));
+      await settle((s) => !s.playing && !s.seq && !s.armed && s.notes === 0 && s.nodes === 0
+        && s.status !== 'PLAYING' && s.status !== 'RELEASING', `quiet after ${what}`);
+    };
+    // Every sentence the status bar's live region says, in order: a later status announcement
+    // (the stopped voice's "Playback STOPPED") may follow the leave sentence at once.
+    await ev(() => {
+      window.__said = [];
+      window.OSCILLA.app.$watch('announceText', (v) => { if (v) window.__said.push(v); });
+    });
+    const forget = () => ev(() => { window.__said.length = 0; });
+    const res = {};
+    await go('playground');
+    await ev(() => { window.OSCILLA.app.setContinuous(true); window.OSCILLA.app.toggleLatch(); });
+    await settle((s) => s.playing, 'the tone plays');
+    await forget();
+    await go('studio');
+    res.instrumentKeeps = await settle((s) => s.playing && s.said.includes(sentence('instrument')),
+      'leaving the Playground, the tone sounds on and the status bar says so');
+    await quiet('the tone');
+    await go('sequencer');
+    await page.click('#osc-seq-play');
+    await settle((s) => s.seq, 'the sequence plays');
+    await forget();
+    await go('playground');
+    res.sequenceKeeps = await settle((s) => s.seq && s.said.includes(sentence('sequencer')),
+      'leaving the Sequencer, the sequence sounds on and the status bar says so');
+    await quiet('the sequence');
+    await page.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
+    await page.keyboard.down('KeyA');
+    res.keyHeld = await settle((s) => s.notes > 0 && s.kbd, 'a held key sounds and is lit');
+    await forget();
+    await go('studio'); // the keys' dock folds there too: the bus's leave reads them first
+    res.keysReleased = await settle((s) => s.notes === 0 && s.said.includes(sentence('notes')),
+      'leaving with a key held releases it and the status bar says so');
+    await page.keyboard.up('KeyA');
+    await quiet('the keys');
+    await go('synth');
+    await ev(() => window.OSCILLA.app.synthArm());
+    await settle((s) => s.armed, 'the Synth is armed');
+    await forget();
+    await go('playground');
+    res.synthDisarmed = await settle((s) => !s.armed && s.said.includes(sentence('synth')),
+      'leaving the Synth turns Arm off and the status bar says so');
+    await quiet('the Synth');
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
+
   def('guard-studio', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     const clean = await H.state(page);

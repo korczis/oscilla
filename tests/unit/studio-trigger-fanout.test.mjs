@@ -216,6 +216,61 @@ test('K103 one ownership rule: while the timeline plays, a live gate on an input
     await stopped(rig);
   });
 
+// c1's P2 C1-K103-1 on train T4: while a notes clip plays on a Keys node, a live key used to move
+// that Keys node's pitch (live-notes.js play() moved it before any ownership test, and owner()
+// was asked only for the fan-out targets), so the clip's note was bent until its next onset.
+// The Keys node itself is the timeline's while a notes clip plays on it: the whole live note is
+// refused with the ownership sentence (the Studio sink says it in the polite region) and the
+// pitch schedule stays as the clip wrote it; the key's release takes nothing.
+test('K103 a live key on a Keys node a notes clip plays is refused; the pitch schedule stays',
+  async () => {
+    const doc = document();
+    const track = doc.d({ type: 'TRACK_ADD', kind: 'event', target: doc.keys }).created.tracks[0];
+    doc.d({ type: 'CLIP_ADD', trackId: track, kind: 'notes', startBeats: 0, durationBeats: 4,
+      payload: { notes: [{ at: 0, note: 60, len: 4, vel: 0.8 }] } });
+    const rig = rigOf(doc.st);
+    ok(rig.transport.start(), 'PLAY');
+    rig.fx.advance(0.1);
+    const pitch = rig.runtime.nodes.get(doc.keys).outputs.pitch.offset;
+    const schedule = () => JSON.stringify(pitch.events.map((e) => [e.ramp, r9(e.value), r9(e.t)]));
+    const before = schedule();
+    const at = rig.fx.ctx.currentTime + 0.2; // inside the clip's note
+    const r = rig.transport.live(doc.keys, { kind: 'on', note: 72, velocity: 100, at });
+    assert.equal(r.ok, false, 'the live note is refused');
+    assert.equal(r.code, 'timeline-owned');
+    assert.ok(r.owned && r.owned.reason === r.reason, 'the sink says it (result.owned)');
+    assert.equal(r.reason, liveNotes.LIVE_NOTES_TEXT.timelineOwned('Keys 1'));
+    assert.equal(schedule(), before, 'the clip\'s pitch schedule is unchanged');
+    const off = rig.transport.live(doc.keys, { kind: 'off', note: 72, at: at + 0.1 });
+    assert.notEqual(off.ok, false, 'its release is taken quietly');
+    assert.equal(schedule(), before, 'and changes nothing either');
+    await stopped(rig);
+  });
+
+// c1's P3 C1-K103-2: a key pressed before the timeline took the Keys node (armed, then PLAY with
+// a notes clip) and released while the timeline owns it frees the stack and its live gate's
+// record too (the Keys gate itself is the clip's, untouched), so nothing reads a stale open.
+test('K103 a key held across PLAY and released while owned leaves no live gate open', () => {
+  let owned = null;
+  const calls = [];
+  const keysHandle = { play: (at, note) => calls.push(['play', note]),
+    gateAt: (at, on) => calls.push(['gateAt', on]), keyRange: () => [0, 127],
+    priority: () => 'last' };
+  const model = { graph: { nodes: [{ id: 'k', type: 'keys', params: {}, metadata: {} }],
+    edges: [] }, timeline: { clips: [], tracks: [] } };
+  const notes = liveNotes.createLiveNotes({ getModel: () => model,
+    handleOf: (id) => (id === 'k' ? keysHandle : null), owner: () => owned });
+  ok(notes.event('k', { kind: 'on', note: 60, velocity: 100, at: 1 }), 'armed: the key plays');
+  assert.deepEqual(notes.openGates(), ['k'], 'its live gate is open');
+  owned = 'the timeline owns it'; // PLAY with a notes clip on that Keys node
+  calls.length = 0;
+  const off = notes.event('k', { kind: 'off', note: 60, at: 2 });
+  assert.notEqual(off.ok, false);
+  assert.deepEqual(notes.held(), [], 'the stack is free');
+  assert.deepEqual(notes.openGates(), [], 'and so is the live gate\'s record');
+  assert.deepEqual(calls, [], 'the Keys pitch and gate, the clip\'s now, are not touched');
+});
+
 test('K103 a trigger into a node without a trigger input is refused by canConnect', () => {
   const doc = document();
   const r = doc.st.dispatch({ type: 'EDGE_ADD', from: { node: doc.keys, port: 'gate' },

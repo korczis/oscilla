@@ -62,7 +62,7 @@
       "id": "M054",
       "title": "The whole interface shows the current product",
       "done": 7,
-      "required": 62,
+      "required": 67,
       "phase": "now"
     },
     {
@@ -139,7 +139,7 @@
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
       "done": 0,
-      "required": 20,
+      "required": 24,
       "phase": "next"
     },
     {
@@ -160,7 +160,7 @@
       "id": "M071",
       "title": "Instrument wave 4a: the parameter contract, deep links, the mixer and the full piano",
       "done": 0,
-      "required": 7,
+      "required": 8,
       "phase": "later"
     },
     {
