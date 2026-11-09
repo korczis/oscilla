@@ -37,7 +37,7 @@ export const oscillator = defineNode({
       modulatable: true, modDepth: 100,
     }),
     levelParam('level', 'Level', 1, { automatable: true, modulatable: true, modDepth: 0.5 }),
-    // K022: unison voices detuned symmetrically across spread cents, summed at 1/sqrt(n).
+    // K022: unison voices detuned symmetrically across spread cents, summed at 1/n.
     integerParam('unison', 'Unison', { min: 1, max: UNISON_MAX, default: 1, live: 'crossfade' }),
     numberParam('spread', 'Spread', { min: 0, max: 100, step: 1, unit: 'cents', default: 10,
       live: 'glide' }),
@@ -53,7 +53,11 @@ export const oscillator = defineNode({
   compiler: 'audio/audio-engine.js#AudioEngine',
   reuses: ['audio/additive.js#createAdditiveOscillator', 'audio/patterns.js#buildPlan'],
   help: {
-    what: 'A periodic tone at a requested digital frequency.',
+    what: 'A periodic tone at a requested digital frequency. '
+      + 'Unison (K022) sčítá hlasy na 1/n, takže špička nepřesáhne jeden hlas; '
+      + 'nejvyšší hlas může při modulaci nebo automatizaci '
+      + `frekvence přesáhnout ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquistova limitu o polovinu `
+      + 'rozladění (spread).',
     inputs: 'Frequency, detune and level accept modulation.',
     outputs: 'Audio.',
     constraints: `Frequencies are limited to ${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist `

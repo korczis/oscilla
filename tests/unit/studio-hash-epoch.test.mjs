@@ -163,15 +163,48 @@ test('unison: n engine oscillators detuned across spread, one bus each for frequ
     assert.equal(h.info.voices, 5);
     assert.equal(h.status, 'ready');
     assert.ok(h.modTarget('frequency', 'linear').param, 'one frequency target for every voice');
+    const set = h.info.mix.gain.calls.find((c) => c[0] === 'setValueAtTime');
+    assert.equal(set && set[1], 1 / 5, 'the voices sum at 1/n');
   });
 
-test('slope 24 cascades two biquads on the pass and notch types; 12 keeps one', () => {
+test('unison is peak-safe: at spread 0 and 10 ct the summed voices never pass one voice', () => {
+  // The engine starts every voice at the same time, so their sines start in phase (the worst
+  // case: at spread 0 they stay aligned, at any spread they align again at the beat rate).
+  const sr = 44100;
+  for (const n of [2, 3, 7]) {
+    for (const spread of [0, 10]) {
+      let peak = 0;
+      let rootN = 0;
+      for (let k = 0; k < sr; k++) {
+        let sum = 0;
+        for (let i = 0; i < n; i++) {
+          const f = 440 * 2 ** (unisonDetune(i, n, spread) / 1200);
+          sum += Math.sin((2 * Math.PI * f * k) / sr);
+        }
+        peak = Math.max(peak, Math.abs(sum / n));
+        rootN = Math.max(rootN, Math.abs(sum / Math.sqrt(n)));
+      }
+      assert.ok(peak <= 1 + 1e-9, `n ${n}, spread ${spread}: peak ${peak} within one voice`);
+      assert.ok(rootN > 1.2, `n ${n}, spread ${spread}: 1/sqrt(n) would peak at ${rootN}`);
+    }
+  }
+});
+
+test('slope 24 cascades two biquads on low- and high-pass only; 12 keeps one', () => {
   const s = running(graph([['f-12', 'filter', {}], ['f-24', 'filter', { slope: '24' }],
+    ['f-hp', 'filter', { type: 'highpass', slope: '24' }],
+    ['f-bp', 'filter', { type: 'bandpass', slope: '24' }],
+    ['f-notch', 'filter', { type: 'notch', slope: '24' }],
     ['f-shelf', 'filter', { type: 'lowshelf', slope: '24' }]]));
-  assert.equal(s.runtime.nodes.get('f-24').info.slope, 24);
-  assert.equal(s.runtime.nodes.get('f-24').info.stages.length, 2);
-  assert.equal(s.runtime.nodes.get('f-12').info.slope, undefined, 'one stage');
-  assert.equal(s.runtime.nodes.get('f-shelf').info.slope, undefined, 'a shelf keeps one biquad');
+  for (const id of ['f-24', 'f-hp']) {
+    assert.equal(s.runtime.nodes.get(id).info.slope, 24, id);
+    assert.equal(s.runtime.nodes.get(id).info.stages.length, 2, id);
+  }
+  for (const id of ['f-12', 'f-bp', 'f-notch', 'f-shelf']) {
+    assert.equal(s.runtime.nodes.get(id).info.slope, undefined, `${id}: one biquad`);
+  }
+  const opt = NODE_REGISTRY.param('filter', 'slope').options.find((o) => o[0] === '24');
+  assert.match(opt[1], /low-\/high-pass/, 'the option says where 24 dB/oct applies');
 });
 
 test('sync: one period per tempo division of the transport, in the compiled plan', () => {

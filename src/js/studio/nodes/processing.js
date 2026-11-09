@@ -26,8 +26,12 @@ export const FILTER_TYPE_LABELS = Object.freeze({
 });
 export const MIXER_CHANNELS = 4;
 
-/** Filter types a 24 dB/oct slope cascades (K022); the others keep one biquad. */
-export const CASCADES = Object.freeze(['lowpass', 'highpass', 'bandpass', 'notch']);
+/**
+ * Filter types a 24 dB/oct slope cascades (K022): low- and high-pass only, where the order
+ * doubles the roll-off. A band-pass cascade is 12 dB/oct a side and a notch has no such slope
+ * (review of K022, P2-2): those, and the others, keep one biquad.
+ */
+export const CASCADES = Object.freeze(['lowpass', 'highpass']);
 const signedDb = (g) => `${g > 0 ? '+' : ''}${num(g, 3)} dB`;
 
 export const gain = defineNode({
@@ -86,8 +90,8 @@ export const filter = defineNode({
     // Shown as Bypass (inverted), the one bypass control every processing node has (K022,
     // C043); the model keeps `enabled`, so no saved Filter changes.
     boolParam('enabled', 'Enabled', DEFAULT_FILTER.enabled, { shownAs: 'Bypass' }),
-    // K022: 24 dB/oct cascades a second identical biquad (low-, high-, band-pass and notch).
-    enumParam('slope', 'Slope', [['12', '12 dB/oct'], ['24', '24 dB/oct']], '12',
+    // K022: 24 dB/oct cascades a second identical biquad (low- and high-pass only).
+    enumParam('slope', 'Slope', [['12', '12 dB/oct'], ['24', '24 dB/oct (low-/high-pass)']], '12',
       { live: 'crossfade' }),
   ],
   summary(p) {
@@ -101,7 +105,9 @@ export const filter = defineNode({
   reuses: ['audio/filters.js#normalizeFilter'],
   help: {
     what: 'A biquad filter (low-pass, high-pass, band-pass, notch, peaking, low-shelf, '
-      + 'high-shelf, all-pass) with click-free bypass.',
+      + 'high-shelf, all-pass) with click-free bypass. '
+      + 'Sklon 24 dB/okt. (K022) platí jen pro dolní a horní propust: kaskáda dvou stejných '
+      + 'biquadů zdvojnásobí rezonanci a pokles o 3 dB leží pod mezní frekvencí.',
     inputs: 'Audio; cutoff, Q and gain accept modulation.',
     outputs: 'Audio.',
     constraints: 'Q is linear for every type and ignored by the shelves; gain applies to '
