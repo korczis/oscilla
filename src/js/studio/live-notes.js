@@ -26,7 +26,8 @@
 //            finger crossing into another scale cell): `from` leaves the stack and `note` joins
 //            it; when the top changes the Keys pitch moves (its glide), no envelope is gated.
 //            A `from` not held is a plain on. An engine takes it as off(from) and on(note)
-//     notes.allOff(at) -> how many keys were held; notes.reset(); notes.held() -> [note]
+//     notes.allOff(at) -> how many keys were held; notes.reset(); notes.held() -> [note];
+//     notes.openGates() -> [id]: the live gates open now
 //   A polyphonic engine (nodes/engines.js, capabilities.notes, a handle with noteOn) takes the
 //   same events on its own id: on -> noteOn(at, note, velocity), off -> noteOff(at, note),
 //   all-off -> allOff(at, fast); its voice pool allocates (adapters/voices.js), no note stack.
@@ -254,6 +255,9 @@ export function createLiveNotes({ getModel, handleOf, owner = () => null }) {
       if (kind === 'off') st.release(note, prio);
       if (kind === 'off' || kind === 'all-off') {
         if (kind === 'all-off') st.clear();
+        // the live gate a key held from before opened is let go of here too (C1-K103-2); the
+        // Keys gate itself is the clip's now, so nothing is scheduled on it
+        if (!st.size) opened.delete(keysId);
         return { ok: true, held: st.size, top: null, retrigger: false,
           owned: { code: 'timeline-owned', reason: why } };
       }
@@ -296,5 +300,7 @@ export function createLiveNotes({ getModel, handleOf, owner = () => null }) {
     },
     held: () => [...stacks.values()].flatMap((s) => s.notes)
       .concat([...poly.values()].flatMap((s) => [...s]), [...pads.values()]),
+    /** The ids (and poly `${id}:${note}` keys) whose live gate is open now. */
+    openGates: () => [...opened.keys()],
   };
 }
