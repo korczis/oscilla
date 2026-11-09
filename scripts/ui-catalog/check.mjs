@@ -241,7 +241,9 @@ export function checkCatalog({ catalog, census, allowance, history = [], baseAll
   for (const d of declared) {
     out.push(...traceProblems(d, traces[d.id], { census, testCorpus, read }));
   }
+  // A kind:<kind> entry traces an instrument kind (trace/kinds.mjs): kinds-check.mjs judges it.
   for (const id of Object.keys(traces)) {
+    if (id.startsWith('kind:')) continue;
     if (!catalog.has(id)) out.push({ id, message: `${id}: trace entry for an undeclared id` });
   }
 
