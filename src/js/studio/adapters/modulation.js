@@ -56,7 +56,9 @@ export const lfo = {
   },
 };
 
-const adsrOf = (p) => ({ a: p.attack, d: p.decay, s: p.sustain, r: p.release });
+// K230: a delay and a hold join the ADSR only when longer than 0 (DADSR / AHDSR).
+const adsrOf = (p) => ({ a: p.attack, d: p.decay, s: p.sustain, r: p.release,
+  ...(p.delay > 0 ? { delay: p.delay } : {}), ...(p.hold > 0 ? { hold: p.hold } : {}) });
 
 export const envelope = {
   compiler: 'audio/envelope.js#applyAdsr',

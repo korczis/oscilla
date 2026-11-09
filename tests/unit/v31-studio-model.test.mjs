@@ -255,7 +255,7 @@ test('normalizeStudio fills engine defaults and never mutates its input', () => 
   assert.deepStrictEqual(f.position, { x: 430, y: 160 });
   assert.strictEqual(f.metadata.name, 'Filter 1');
   assert.deepStrictEqual(env.params, { attack: DEFAULT_ADSR.a, decay: DEFAULT_ADSR.d,
-    sustain: DEFAULT_ADSR.s, release: DEFAULT_ADSR.r });
+    sustain: DEFAULT_ADSR.s, release: DEFAULT_ADSR.r, delay: 0, hold: 0 }); // K230: 0 = ADSR
   assert.strictEqual(sweep.params.start, DEFAULT_SWEEP.start);
   assert.strictEqual(sweep.params.end, DEFAULT_SWEEP.end);
   assert.strictEqual(sweep.params.duration, DEFAULT_SWEEP.durationMs / 1000);
@@ -483,7 +483,8 @@ test('node defaults match the existing engine defaults', () => {
   // K022 (hash epoch 2) adds the slope; the engine's filter defaults are unchanged.
   assert.deepStrictEqual(R.defaults('filter'), { ...DEFAULT_FILTER, slope: '12' });
   assert.deepStrictEqual(R.defaults('envelope'), { attack: DEFAULT_ADSR.a,
-    decay: DEFAULT_ADSR.d, sustain: DEFAULT_ADSR.s, release: DEFAULT_ADSR.r });
+    decay: DEFAULT_ADSR.d, sustain: DEFAULT_ADSR.s, release: DEFAULT_ADSR.r, delay: 0,
+    hold: 0 }); // K230: a delay and a hold of 0 are the engine's ADSR
   assert.deepStrictEqual(R.defaults('oscillator'), { waveform: 'sine', frequency: 440,
     detune: 0, level: 1, unison: 1, spread: 10 });
   assert.deepStrictEqual(R.defaults('stereo-split'), { mode: 'split', panA: -1, panB: 1,

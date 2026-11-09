@@ -826,9 +826,12 @@ export function createStudioTransport({
     return addGate(it.key, it, it.target, it.startTime, end, deferred);
   }
 
-  /** The gate a trigger pulse holds on Envelope node `n`: its attack plus its decay (K023). */
-  const pulseS = (n) => (finite(n.params.attack) ? n.params.attack : 0)
-    + (finite(n.params.decay) ? n.params.decay : 0);
+  /**
+   * The gate a trigger pulse holds on Envelope node `n`: its attack plus its decay (K023), and its
+   * delay and hold (K230).
+   */
+  const pulseS = (n) => ['delay', 'attack', 'hold', 'decay']
+    .reduce((s, k) => s + (finite(n.params[k]) ? n.params[k] : 0), 0);
 
   function measurementData(it) {
     return { key: it.key, clipId: it.clipId, action: it.action, target: it.target,

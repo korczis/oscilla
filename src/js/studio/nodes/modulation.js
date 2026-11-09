@@ -101,9 +101,13 @@ export const envelope = defineNode({
     secondsParam('decay', 'Decay', DEFAULT_ADSR.d, MIN_SEGMENT_S, 10),
     numberParam('sustain', 'Sustain', { min: 0, max: 1, step: 0.01, default: DEFAULT_ADSR.s }),
     secondsParam('release', 'Release', DEFAULT_ADSR.r, MIN_SEGMENT_S, 10),
+    // K230 (hash epoch 3): a delay before the attack and a hold at the peak; 0 is today's ADSR.
+    secondsParam('delay', 'Zpoždění', 0, 0, 10, { live: 'next-gate' }),
+    secondsParam('hold', 'Výdrž', 0, 0, 10, { live: 'next-gate' }),
   ],
   summary(p) {
-    return parts(`A ${secs(p.attack)}`, `D ${secs(p.decay)}`, `S ${num(p.sustain, 2)}`,
+    return parts(p.delay > 0 ? `Zp ${secs(p.delay)}` : null, `A ${secs(p.attack)}`,
+      p.hold > 0 ? `V ${secs(p.hold)}` : null, `D ${secs(p.decay)}`, `S ${num(p.sustain, 2)}`,
       `R ${secs(p.release)}`);
   },
   clipKinds: ['event'],

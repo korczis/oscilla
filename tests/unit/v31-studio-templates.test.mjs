@@ -161,19 +161,19 @@ const PINNED_V2 = {
 /** Epoch 3 (K071/K072, K229/K230): the current studioHash. */
 const PINNED = {
   'basic-tone': '59dff06b79e068668072ef5593847473813c9bdf05b3d8ad3da01a1e4a027b5a',
-  'subtractive-synth': 'ece3897f0af58688f5c886b6dbdd63edf651fcc5260d2d160a95b2983be9051c',
+  'subtractive-synth': '0c0a15dad10fb97b3a60377497d8b959f2ff1f571307b85876b20f31bcb70d24',
   'sweep-sequence': '19f46f44b4d3e43fee7ff76c89073e6ce72e8b119c72fdb976ea025b0047bb90',
   'stereo-beat': '678383bd023645f4406656c47b173c3866ab73d74732f479be2e92f72a7e19a8',
   'filter-automation': 'eecf6ca408107759f05e45275e1d82f366ddab18b127474a0756065cdd1a1055',
   'measurement-sweep': '0dcbd47a7d0ee4f56be81aae899a587ed7584139b9edf5a1525fdd2ca9174873',
   'first-patch': '606db03955e838fb4a5ded74b120ee3641fc6aa6958b6e5b52999cce6a517c4a',
-  'filter-envelope-synth': 'ac6d4911931d4f4d33576139704d126340cfbdd10af108b52ff00febd34e74df',
-  'fm-chime': 'c1970bcb09944dd6915fa9e2f27c8c14ae69494c5e200d179f01bc266f402589',
+  'filter-envelope-synth': '14e13e0ef12b77d7fcfca657d6d4566f6b6df2f249c8a7184e5c7552985cd02c',
+  'fm-chime': '05073baf0945e3dd12e9aecb33b0b80737d170863816a6727632c4bb4d73dc45',
   'ring-mod': 'c68121d5b95bf281a8ce6b54f64fb4cd881ce6db4e8ebb60dfc999b991bbbd3d',
   'drive-lead': '8df349d9160942b5d4b0967ba83c206b5d66489d9c1baa73df82e2b486a7cb29',
-  'macro-pad': 'a95972ab09c6901f3fdbf36bc1842d82614b79437f573a307527d2d1bfe15ac8',
+  'macro-pad': '61472bb65ff35d98b25b05e90e37f68369ab3a85ab32a170d0a947013ed5aa78',
   'step-bass': '98d2e7036f0701fd4fbf462453feb1142afe6c72e3dbc7891756a65b1588a277',
-  'demo-song': '2207dc6f700b0a2e6d7d02db2557fadd1af48b695d04c76fc99f22fe61b05321',
+  'demo-song': '112a9519b710a4b8a3830de8287c784885bf291593371a517dbb4f799fc4da12',
 };
 
 test('V617 every template keeps its pinned hash; the hashes are distinct', () => {

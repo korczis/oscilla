@@ -57,7 +57,7 @@ test('K144 the song validates without a warning, with its hash pinned', () => {
   assert.deepEqual(v.errors, []);
   assert.deepEqual(v.warnings.map((w) => w.code), []);
   assert.equal(demoSong.studioHash,
-    '2207dc6f700b0a2e6d7d02db2557fadd1af48b695d04c76fc99f22fe61b05321');
+    '112a9519b710a4b8a3830de8287c784885bf291593371a517dbb4f799fc4da12');
   assert.equal(studioHashAt(templateModel('demo-song'), 2),
     'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3', 'hash epoch 2');
   assert.equal(studioHashAt(templateModel('demo-song'), 1),

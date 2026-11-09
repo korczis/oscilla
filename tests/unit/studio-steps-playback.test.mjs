@@ -240,7 +240,7 @@ test('K068 notes without the new fields serialize and hash as before; the fields
     'fb26d85501ec399f33318a57b374645c14fde20578d99d5614f366a7df2c00cd',
     'and under hash epoch 2 (K022)');
   assert.equal(schema.studioHash(base),
-    'f97927330e950d0fa8d18e5f73b3a6339b508840ca915bb7b1e017d1c5442f41',
+    '065b7b56d7521684559187a2657a58a34293e1a43a5bf20c2173e6f1f9f8f1f8',
     'and under hash epoch 3 (K071/K072, K229/K230)');
   const text = schema.serializeStudio(base);
   assert.ok(!/"(p|r|slide|grid)"/.test(text), 'no absent field is written');

@@ -51,9 +51,10 @@ export default definePanel({
       jacks: FILTER_JACKS,
       init: { frequency: 1200, Q: 1 }, labels: { frequency: 'Cutoff', Q: 'Peak' },
       ranges: { frequency: [10, 20000], Q: [0.5, 30] } },
-    { id: 'eg1', label: 'EG 1', node: 'envelope', jacks: { hide: ['audio'] },
+    // K230: EG 1 is a DADSR (its Delay on the face, its hold fixed at 0), EG 2 an AHDSR.
+    { id: 'eg1', label: 'EG 1', node: 'envelope', jacks: { hide: ['audio'] }, fixed: { hold: 0 },
       init: { attack: 0.005, decay: 0.3, sustain: 0.2, release: 0.3 } },
-    { id: 'eg2', label: 'EG 2', node: 'envelope', jacks: { hide: ['audio'] },
+    { id: 'eg2', label: 'EG 2', node: 'envelope', jacks: { hide: ['audio'] }, fixed: { delay: 0 },
       init: { attack: 0.005, decay: 0.2, sustain: 0.8, release: 0.25 } },
     { id: 'vca', label: 'VCA', node: 'gain', fixed: { bypass: false }, init: { gain: 0 },
       labels: { gain: 'Initial gain' },
