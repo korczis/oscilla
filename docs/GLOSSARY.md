@@ -37,6 +37,9 @@ audio signals, giving their sum and difference frequencies.
 **Arm keys / armed.** Whether the computer keyboard plays notes in a workspace: armed, its letter
 keys play the keyboard's notes (docs/midi.md "The computer and on-screen keyboard"); disarmed,
 they keep their workspace meanings. The Playground and the Studio start disarmed, the Synth armed.
+In the Czech interface (Q104, `project.czech-prose`) the one term is *připravit* / *připravený*:
+"Arm keys" is "Připravit klávesy", armed is "připravený" ("když je Synth připravený ke hře"), and the
+Studio's armed chain and "Measurement armed" use the same word when they are translated.
 
 **Key registry.** The one place every key the page answers is bound (`src/js/ui/keys/`, K153),
 with one dispatcher as the page's only key listener (docs/midi.md "Keys"). A **chord** is a

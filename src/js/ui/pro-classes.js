@@ -4,6 +4,13 @@
 // legacy-debt ratchet into a size ratchet. Tailwind compiles these because its content globs read src/js/**/*.js.
 const BTN = 'inline-flex items-center justify-center px-3 text-sm font-medium rounded-lg '
   + 'min-h-9 [@media(pointer:coarse)]:min-h-11 focus:outline-none focus:ring-4';
+// Pro's extra-small size, for a dense toolbar whose other controls are 24 px (the Studio
+// timeline's): 24 px on a fine pointer, still 44 px on a coarse one.
+const BTN_XS = 'inline-flex items-center justify-center px-2 text-xs font-medium rounded-lg '
+  + 'min-h-6 [@media(pointer:coarse)]:min-h-11 focus:outline-none focus:ring-4';
+const SECONDARY = 'text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 '
+  + 'hover:text-primary-700 focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 '
+  + 'dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700';
 
 export const PRO = Object.freeze({
   /** Pro primary button (white on primary-700, 4.5:1 in both themes). */
@@ -11,9 +18,9 @@ export const PRO = Object.freeze({
     + 'disabled:cursor-not-allowed disabled:opacity-50 dark:bg-primary-700 '
     + 'dark:hover:bg-primary-800 dark:focus:ring-primary-800',
   /** Pro secondary (alternative) button. */
-  btnSecondary: `${BTN} text-gray-900 bg-white border border-gray-200 hover:bg-gray-100 `
-    + 'hover:text-primary-700 focus:ring-gray-100 dark:bg-gray-800 dark:text-gray-400 '
-    + 'dark:border-gray-600 dark:hover:text-white dark:hover:bg-gray-700 dark:focus:ring-gray-700',
+  btnSecondary: `${BTN} ${SECONDARY}`,
+  /** Pro secondary button, extra small (a 24 px toolbar; 44 px on a coarse pointer). */
+  btnSecondaryXs: `${BTN_XS} ${SECONDARY}`,
   /** Pro text link, 44 px tall on a coarse pointer. */
   link: 'inline-flex items-center text-sm font-medium min-h-9 [@media(pointer:coarse)]:min-h-11 '
     + 'text-primary-700 hover:underline dark:text-primary-500',

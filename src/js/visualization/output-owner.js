@@ -8,23 +8,32 @@
 // was drawn as "not playing" over a computed instrument wave, and the Spectrum marked the idle
 // instrument frequency beside the real peak.
 
-/** The owners a view can name; null is "nothing owns the output". */
-export const OUTPUT_OWNERS = Object.freeze(['instrument', 'sequencer', 'studio']);
+/**
+ * The owners a view can name; null is "nothing owns the output". 'notes' are the held keyboard
+ * and MIDI notes (C024): the MIDI inputs, the computer keys and the on-screen keys, in every
+ * route.
+ */
+export const OUTPUT_OWNERS = Object.freeze(['instrument', 'sequencer', 'studio', 'notes']);
 
 /** How a view names each owner in its label. */
 export const OUTPUT_OWNER_NAMES = Object.freeze({
-  instrument: 'instrument', sequencer: 'sequencer', studio: 'Studio',
+  instrument: 'instrument', sequencer: 'sequencer', studio: 'Studio', notes: 'noty',
 });
 
 /**
- * The output owner from the three playing flags: 'instrument' | 'sequencer' | 'studio' | null.
- * The instrument first, then the sequencer, then the Studio, the precedence the composition root
- * (main.js) already uses for what counts as playing.
+ * The output owner from the playing flags: 'instrument' | 'sequencer' | 'studio' | 'notes' |
+ * null. The instrument first, then the sequencer, then the Studio, the precedence the
+ * composition root (main.js) already uses for what counts as playing; held notes last: they are
+ * refused while the sequencer or the Studio owns the output (midi/ui.js ownedBy), and a note and
+ * an instrument voice never sound together (the newer fades the older out, ADR 0002; main.js
+ * releases the notes when the instrument takes the output), so they meet only inside that fade.
  */
-export function outputOwnerOf({ instrument = false, sequencer = false, studio = false } = {}) {
+export function outputOwnerOf({ instrument = false, sequencer = false, studio = false,
+  notes = false } = {}) {
   if (instrument) return 'instrument';
   if (sequencer) return 'sequencer';
   if (studio) return 'studio';
+  if (notes) return 'notes';
   return null;
 }
 

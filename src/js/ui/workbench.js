@@ -142,8 +142,14 @@ export function createWorkbench(svc) {
       const st = this.studio;
       const studio = !!(st && st.playing) && (typeof this.studioOwnsOutput !== 'function'
         || this.studioOwnsOutput());
-      return outputOwnerOf({ instrument: this.playing, sequencer: this.seqPlaying, studio });
+      return outputOwnerOf({ instrument: this.playing, sequencer: this.seqPlaying, studio,
+        notes: this.notesSounding });
     },
+    /**
+     * Held keyboard and MIDI notes sound (C024): the keys light every note that sounds, from
+     * the computer keys, a pointer or a MIDI input (midi/keyboard-ui.js kbdSounding).
+     */
+    get notesSounding() { return !!this.kbdSounding; },
     /** The ceiling acts on what sounds now (idle shows nothing, whatever the tap read last). */
     get ceilingActing() { return this.outputAtCeiling && this.isSounding; },
     /** The gain readout is the master setpoint, not the level the output carries. */
@@ -157,7 +163,7 @@ export function createWorkbench(svc) {
     /** Whether the Studio transport plays (cmp.studio, the workspace's plain view state). */
     get studioPlaying() { return !!(this.studio && this.studio.playing); },
     /** Anything audible from this page: the status state and its dot (C012). */
-    get anySounding() { return this.isSounding || this.studioPlaying; },
+    get anySounding() { return this.isSounding || this.studioPlaying || this.notesSounding; },
     /**
      * The Studio's Master Output level while it holds the engine's master level, else null.
      * cmp.studio.masterLevel mirrors the runtime's 'master' events (a number, never an engine
@@ -183,12 +189,13 @@ export function createWorkbench(svc) {
       if (this.status === 'ERROR') return 'ERROR';
       if (this.status === 'SUSPENDED') return 'SUSPENDED';
       if (this.playing) return this.releasing ? 'RELEASING' : 'PLAYING';
-      if (this.seqPlaying || this.studioPlaying) return 'PLAYING';
+      if (this.seqPlaying || this.studioPlaying || this.notesSounding) return 'PLAYING';
       return this.status === 'READY' ? 'READY' : 'STOPPED';
     },
     get statusFreqText() {
       if (this.seqPlaying && !this.playing) return 'sequence';
       if (this.studioPlaying && !this.playing) return 'studio';
+      if (this.outputOwner === 'notes') return this.kbdHeld || OUTPUT_OWNER_NAMES.notes;
       if (this.source === 'dual') return `${groupedHz(this.dualFa)} / ${groupedHz(this.dualFb)} Hz`;
       const f = this.playing && this.instFreq != null ? this.instFreq : this.metricFrequencyIdle;
       return `${groupedHz(f)} Hz`;
@@ -208,6 +215,8 @@ export function createWorkbench(svc) {
     get statusPatternText() {
       if (this.seqPlaying && !this.playing) return 'Sequencer';
       if (this.studioPlaying && !this.playing) return 'Studio';
+      // The owner the scope's description names (C024), capitalised as a status-bar label.
+      if (this.outputOwner === 'notes') return 'Noty';
       if (this.source === 'dual') return this.dual.stereo ? 'Dual (stereo)' : 'Dual (mono)';
       if (this.source === 'sweep') return `Sweep (${this.sweep.curve})`;
       const p = this.currentPattern;
@@ -232,6 +241,7 @@ export function createWorkbench(svc) {
           return `${next}${loop}`;
         }
       }
+      if (this.outputOwner === 'notes') return 'po dobu držení';
       const p = this.planSummary;
       if (p && p.kind === 'continuous') return 'until stopped';
       if (p && p.kind === 'finite' && this.source === 'single' && this.pattern === 'finite'

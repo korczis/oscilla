@@ -11,7 +11,9 @@
 // - Held notes sound past the safety limit while held and are released on window blur, page
 //   hide, Escape and when the view is left (ADR 0062).
 // - The keys light up whoever plays them: the computer keyboard, a pointer, a MIDI input.
-// - While a note sounds, the analysis views show the live output (vizInputs: playing).
+// - While a note sounds, the notes own the output (kbdSounding -> the one output-owner
+//   computation, workbench.js outputOwner; C024): the scope, its description and the status
+//   bar name them, as they name the instrument, the sequencer or the Studio.
 // - The XY pad is one more input of this note layer (K183, kbdPad): its notes are 'kbd-xy', and
 //   every forced release of the keys (blur, page hide, Escape, a workspace switch, All Notes
 //   Off) closes the pad's gate too and then releases whatever the 'xy' input still holds; a
@@ -259,16 +261,6 @@ export function createKeyboardUi({ win = window } = {}) {
           }
           return true;
         });
-      }
-
-      // A sounding note is live output: the analysis views show it as they show a played tone.
-      const vizInputs = cmp.vizInputs;
-      if (typeof vizInputs === 'function') {
-        cmp.vizInputs = function vizInputsWithNotes(res) {
-          const u = vizInputs.call(this, res);
-          if (this.kbdSounding && u) u.playing = true;
-          return u;
-        };
       }
 
       if (doc && typeof doc.querySelector === 'function') {

@@ -535,7 +535,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     } else if (d.restoreNormal) {
       const r = restoreNormals(model(), panel, d.restoreNormal);
       if (r.reason) say(r.reason);
-      else dispatch(r.action);
+      else if (dispatch(r.action).ok) {
+        say(`Normál vstupu ${jackName(d.restoreNormal)} je obnoven.`); // polite (K214)
+      }
     } else if (d.breakNormal) {
       const r = breakNormals(model(), panel, d.breakNormal);
       if (r.reason) say(r.reason);
