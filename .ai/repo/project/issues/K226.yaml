@@ -1,0 +1,38 @@
+id: K226
+milestone: M067
+serves:
+  - "connected-instrument#step-sequencer"
+  - "connected-instrument#modulation-everywhere"
+  - "connected-instrument#one-transport"
+title: "Step-voltage sequencer node: three rows of step values, a CONTROL out per row and a TRIGGER out per step, on the one transport"
+slug: step-voltage-sequencer-node-three-rows-of-step-values-on-the-one-transport
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). A new node type, step-voltage-sequencer (category MODULATION): rows A, B and C of 8 or 16 step values each (a length enum 8 | 16, values -1..1, every step a D11 knob on its face), one shared step position; inputs clock (TRIGGER, one step per trigger; with no cable it steps at a rate parameter like the Step Modulator) and reset (TRIGGER, back to step 1 on the next step boundary); outputs a CONTROL per row (cv-a, cv-b, cv-c, the current step's value held to the next step), a TRIGGER per step (trig-1 .. trig-16, the ones past the length silent and said so on the card) and a gate TRIGGER on every step; a playback enum (forward, back and forth, once). It compiles through the scheduler the Step Modulator uses (audio/scheduler.js scheduleSteps) on the one Studio transport, so a K023 Clock or the transport's own tempo drives it and its steps fall on the same frames as the synth's, the drums' and the clips' (one-transport). The existing Step Modulator (one row, no reset, no step triggers) is unchanged: rows and step triggers would be new parameters and ports on an existing type (D2), so this is a type of its own. It is a projection of the one Studio store like every node (no second sequencer state). Before: a patch cannot have three stepped CV rows sharing one position, nor a trigger out per step, nor a reset. After: one node gives three cable-able CV rows, a trigger per step and a reset, live and offline. Rollback: revert the pull request; a document saved with the new type is then refused by the import pipeline with its unknown-type sentence, never dropped silently."
+why: "Owner direction of 2026-11-09, relayed by the integrator oscilla-43: the owner sent screenshots of a semi-modular tablet instrument and asked that it be split into independent functional components on OSCILLA's own model, functional only (no trade dress or labels, project.visual-identity-lock). Its step-voltage sequencer has no issue: K221 and W008 play notes from a notes clip grid, K078's CV lanes are clip data written onto a parameter, and the Step Modulator (src/js/studio/nodes/modulation.js) has one row, no reset and no trigger per step. Checked against origin/main 7637039e."
+scope:
+  - "src/js/studio/nodes/modulation.js"
+  - "src/js/studio/registry.js"
+  - "src/js/audio/scheduler.js"
+  - "src/js/studio/adapters"
+  - "tests/unit/studio-step-voltage-sequencer.test.mjs"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K023"
+acceptance_criteria:
+  - "tests/unit/studio-step-voltage-sequencer.test.mjs, failing on the merge base: the type is registered with the ports and parameters above and every pinned template studioHash is unchanged (D2); the scheduler's plan for 16 clock triggers at a stated tempo puts row A, B and C's values and trig-1 .. trig-16 on the step times the clock gives, the same times a Step Modulator on that clock plays (one-transport); a reset on step 5 plays step 1 at the next step boundary, never mid-step; length 8 leaves trig-9 .. trig-16 silent; back and forth and once play their stated orders; a cable from cv-a into a VCO's pitch and from trig-3 into an Envelope's gate passes canConnect, and a TRIGGER out into an AUDIO input is refused with the validator's sentence (project.typed-ports)."
+  - "tests/browser/instrument-dsp.cjs renders, offline at 44.1 kHz and at 48 kHz, cv-a stepping a VCO through three stated values: each step's frequency within one bin of the stated one at its computed time, and trig-1 opening an envelope on step 1 only; no sample rate assumed."
+  - "A browser check in tests/browser/synth.cjs (run by npm run test:synth) proves it linked, real-time and interactive: inserted from the Studio, cabled by pointer, keyboard and touch into the Synth panel's VCO and EG, it plays on PLAY with the drums on the same transport; turning a step knob changes that step's value in the Studio store and in the sound at the next pass; every wait through tests/browser/lib/wait.cjs until() with a named deadline, inside tests/browser/lib/suite.cjs, and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every edit is one undoable dispatch through the one Studio store (a knob drag one history entry; undo and redo restore the exact serialized model) (project.studio-model-is-canonical); every node it plays is built through the engine with track()/source() accounting, all timing on the audio clock, and the engine node census is 0 after stop (project.audio-engine-discipline)."
+  - "Every string it adds is Czech (project.czech-prose) and passes tests/unit/synth-wording.test.mjs (no product, brand or model name); the UI is Flowbite Pro and the D11 knob (project.ui-uses-flowbite-pro); scripts/size-report.mjs shows at most 3 KB gzip added; a reviewer's verdict for the guarded paths (project.review-verdict); tests/README.md has a row for each new test; dist is rebuilt."
+validation:
+  - "node --test tests/unit/studio-step-voltage-sequencer.test.mjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm run test:synth"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09
