@@ -55,7 +55,7 @@ import { RENDER_QUANTUM } from '../core/constants.js';
 import { SCHEDULE_LEAD_S, TOP_UP_EVERY_MS } from '../audio/scheduler.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
-  compileLaneEvents, laneParamDef, laneValueAt, scheduledValueAt,
+  compileLaneEvents, laneParamDef, laneValueAt, holdEvents, scheduledValueAt,
 } from './automation.js';
 import {
   CONTIGUITY_TOLERANCE_S, MIN_LOOP_S, clipEnd, effectiveTarget, timelineEnd,
@@ -460,26 +460,9 @@ export function compileTimeline(model, opts = {}) {
 
 // ---------------------------------------------------------------- holding automation
 
-/**
- * Events that hold a param at `at` given what was scheduled (`scheduled`, compiled events in
- * order): after cancelScheduledValues(at), a ramp that was in progress across `at` is re-ended
- * at `at` with its exact value (same curve up to `at`), then the value is pinned. Returns
- * { value, events }; value is null when nothing was scheduled.
- */
-export function holdEvents(scheduled, at, defaultValue = null) {
-  const value = scheduledValueAt(scheduled, at, defaultValue);
-  if (value === null) return { value, events: [] };
-  let next = null;
-  for (const e of scheduled) if (e.time >= at && (!next || e.time < next.time)) next = e;
-  const events = [];
-  if (next && next.method === 'linearRampToValueAtTime') {
-    events.push({ method: 'linearRampToValueAtTime', value, time: at, hold: true });
-  } else if (next && next.method === 'exponentialRampToValueAtTime' && value > 0) {
-    events.push({ method: 'exponentialRampToValueAtTime', value, time: at, hold: true });
-  }
-  events.push({ method: 'setValueAtTime', value, time: at, hold: true });
-  return { value, events };
-}
+// holdEvents lives in automation.js beside scheduledValueAt (split for the source budget, K023);
+// re-exported here, where the scheduler and the transport have always imported it.
+export { holdEvents } from './automation.js';
 
 // ---------------------------------------------------------------- scheduler
 

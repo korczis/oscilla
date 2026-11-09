@@ -156,6 +156,7 @@ import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 import { createLiveNotes, gateTargets, keysGatedEnvelopes, liveModel } from './live-notes.js';
 import { createNotePlayer, notesSteps } from './note-player.js';
+import { createTriggerFanout, reachedEnvelopes } from './trigger-fanout.js';
 
 /** Reasons shown for what the transport does not play. */
 export const TRANSPORT_TEXT = Object.freeze({
@@ -252,8 +253,6 @@ export function createStudioTransport({
   const listeners = new Set();
   const voices = new Map(); // item key → { key, item, voice, nodeId, handle }
   const gates = new Map(); // gate key → { key, itemKey, clipId, nodeId, handle, start, end }
-  const ticks = new Map(); // tick key → { key, itemKey, nodeId, handle, time }: clock triggers
-  const ticksPassed = new Map(); // clocked node id → triggers pruned from `ticks` (still counted)
   const measures = new Map(); // item key → measurement data
   // lane id → { laneId, target, param, handle, events (as applied), raw (the scheduler's events
   // they were fitted from), offset (the baseOffset they were fitted with), mode (see fit) }
@@ -281,7 +280,7 @@ export function createStudioTransport({
   const notes = createNotePlayer({ getModel: () => model, ready: (id) => ready(id), registry,
     gate: (it, env, deferred) => addGate(`${it.key}>${env}`, it, env, it.startTime, it.endTime,
       deferred),
-    clock: (it, id) => addTick(`${it.key}>${id}`, it, id),
+    clock: (it, id) => triggers.tick(`${it.key}>${id}`, it, id),
     played: (it, code, reason) => {
       if (code === null) return unplayed.delete(it.clipId);
       const raw = runtime.nodes.get(it.target);
@@ -289,6 +288,9 @@ export function createStudioTransport({
         raw && raw.reason));
     },
     warn: (...a) => warn(...a) });
+  // TRIGGER fan-out and clock ticks (trigger-fanout.js: V272 A2, K023).
+  const triggers = createTriggerFanout({ getModel: () => model, ready: (id) => ready(id),
+    nodes: runtime.nodes, gate: (...a) => addGate(...a) });
   const view = (m) => (armedOnly && m ? liveModel(m) : m);
   const unplayed = new Map(); // clip or lane id → { code, reason }
   const decisions = [];
@@ -389,58 +391,6 @@ export function createStudioTransport({
     for (const c of m.timeline.clips) {
       if (clipVerdict(m, c, registry).how === 'pattern-played') out.add(effectiveTarget(m, c));
     }
-    return out;
-  }
-
-  /**
-   * Envelope ids a pattern clip on `sourceId` gates through its TRIGGER edges. A muted edge
-   * carries nothing (ports.js: every edge can be muted), so it gates nothing (V272 A3).
-   */
-  function triggerEnvelopes(m, sourceId) {
-    const out = [];
-    for (const e of m.graph.edges) {
-      if (e.from.node !== sourceId || e.from.port !== 'trigger' || e.to.port !== 'gate') continue;
-      if (e.props && e.props.muted) continue;
-      const n = nodeOf(m, e.to.node);
-      if (n && n.type === 'envelope') out.push(n.id);
-    }
-    return out;
-  }
-
-  /** Clocked nodes (plan `clocked`: Random, Step Modulator) a pattern clip on `sourceId` clocks. */
-  function triggerClocks(m, sourceId) {
-    const out = [];
-    for (const e of m.graph.edges) {
-      if (e.from.node !== sourceId || e.from.port !== 'trigger') continue;
-      if (e.props && e.props.muted) continue;
-      const n = nodeOf(m, e.to.node);
-      const a = n ? runtime.nodes.get(n.id) : null;
-      if (a && typeof a.clock === 'function') out.push(n.id);
-    }
-    return out;
-  }
-
-  /**
-   * Step Modulators the unmuted TRIGGER edges of `sourceId` clock: each relays the steps it
-   * takes on its own Trigger output (K023).
-   */
-  function relayedSteps(m, sourceId) {
-    const out = [];
-    for (const e of m.graph.edges) {
-      if (e.from.node !== sourceId || e.from.port !== 'trigger' || e.to.port !== 'clock') continue;
-      if (e.props && e.props.muted) continue;
-      const n = nodeOf(m, e.to.node);
-      if (n && n.type === 'step-modulator') out.push(n.id);
-    }
-    return out;
-  }
-
-  /** Envelope ids `sourceId`'s TRIGGER edges gate, directly or through Step relays (K023). */
-  function reachedEnvelopes(m, sourceId, seen = new Set()) {
-    if (seen.has(sourceId)) return [];
-    seen.add(sourceId);
-    const out = triggerEnvelopes(m, sourceId);
-    for (const id of relayedSteps(m, sourceId)) out.push(...reachedEnvelopes(m, id, seen));
     return out;
   }
 
@@ -828,75 +778,15 @@ export function createStudioTransport({
         to: voice.joinAt, at: hooks.ctx.currentTime });
     }
     unplayed.delete(it.clipId);
-    fanOut(it, it.target, it.key);
+    triggers.fanOut(it, it.target, it.key);
     return null;
-  }
-
-  /**
-   * One trigger of item `it` from `sourceId` (a pattern clip's target, a Clock, a clocked Step
-   * Modulator): a gate from the item's start to its end on every Envelope its TRIGGER edges
-   * reach, and a clock tick on every clocked node. A Step Modulator relays the tick on its own
-   * Trigger output while it takes a step (a 'once' run takes none after its last), so the chain
-   * continues from it (K023). `seen` stops a TRIGGER loop.
-   */
-  function fanOut(it, sourceId, prefix, deferred = null, seen = new Set([sourceId])) {
-    for (const env of triggerEnvelopes(model, sourceId)) {
-      addGate(`${prefix}>${env}`, it, env, it.startTime, it.endTime, deferred);
-    }
-    for (const id of triggerClocks(model, sourceId)) {
-      const k = addTick(`${prefix}>${id}`, it, id);
-      if (seen.has(id) || !stepTaken(id, k)) continue;
-      seen.add(id);
-      fanOut(it, id, `${prefix}>${id}`, deferred, seen);
-    }
-  }
-
-  /** Whether clock tick `k` of node `id` is a step a Step Modulator takes (and relays). */
-  function stepTaken(id, k) {
-    const n = nodeOf(model, id);
-    if (!n || n.type !== 'step-modulator' || k === null) return false;
-    return n.params.playback !== 'once' || k < n.params.steps.length;
   }
 
   /** A Clock tick (K023, timeline-compiler.js clockItems): it fans out like a trigger. */
   function playClock(it, deferred) {
     if (!nodeOf(model, it.target)) return null;
-    fanOut(it, it.target, it.key, deferred);
+    triggers.fanOut(it, it.target, it.key, deferred);
     return null;
-  }
-
-  /** Index of a trigger at `time` on clocked node `id`: the triggers before it since PLAY. */
-  const tickIndex = (id, time) => (ticksPassed.get(id) || 0)
-    + [...ticks.values()].filter((k) => k.nodeId === id && k.time < time).length;
-
-  /** A clock trigger at the item's start on clocked node `id` (V272 A2). */
-  function addTick(key, it, id) {
-    const h = ready(id);
-    if (!h || typeof h.clock !== 'function') return null;
-    const later = [...ticks.values()].some((k) => k.nodeId === id && k.time > it.startTime);
-    ticks.set(key, { key, itemKey: it.key, nodeId: id, handle: h, time: it.startTime });
-    const k = tickIndex(id, it.startTime);
-    if (later) rebuildClock(id, it.startTime); // out of order: the later steps move up one
-    else h.clock(it.startTime, k);
-    return k;
-  }
-
-  /**
-   * Re-render a clocked node's steps from `horizon` from the trigger records (after an edit or
-   * a STOP removed one, or its node was replaced): hold the step it has there, then every
-   * later trigger again with its index.
-   */
-  function rebuildClock(id, horizon) {
-    const h = ready(id);
-    if (!h || typeof h.clockFrom !== 'function') return;
-    const list = [...ticks.values()].filter((k) => k.nodeId === id && k.time >= horizon)
-      .sort((a, b) => a.time - b.time);
-    const before = tickIndex(id, horizon);
-    h.clockFrom(horizon, Math.max(0, before - 1));
-    list.forEach((k, i) => {
-      k.handle = h;
-      h.clock(k.time, before + i);
-    });
   }
 
   function addGate(key, it, envId, start, end, deferred = null) {
@@ -943,10 +833,7 @@ export function createStudioTransport({
     if (v.how === 'clock') {
       // A trigger on Random or a Step Modulator: one clock tick, relayed by a Step (K023).
       unplayed.delete(it.clipId);
-      const k = addTick(it.key, it, it.target);
-      if (stepTaken(it.target, k)) {
-        fanOut(it, it.target, it.key, deferred);
-      }
+      triggers.trigger(it, deferred);
       return null;
     }
     if (!v.plays) return skip(it, 'event-target', v.reason);
@@ -1364,11 +1251,7 @@ export function createStudioTransport({
       gates.delete(g.key);
       touched.add(g.nodeId);
     }
-    for (const k of [...ticks.values()]) {
-      if (k.itemKey !== key) continue;
-      ticks.delete(k.key);
-      touched.add(k.nodeId);
-    }
+    triggers.cancel(key, touched);
     notes.cancel(key, touched);
     const m = measures.get(key);
     if (m) {
@@ -1465,7 +1348,7 @@ export function createStudioTransport({
     for (const it of [...replay, ...plan.schedule]) playItem(it, deferred);
     for (const id of touched) {
       rebuildEnvelope(id, plan.horizon);
-      rebuildClock(id, plan.horizon);
+      triggers.rebuild(id, plan.horizon);
       notes.rebuild(id, plan.horizon);
     }
     for (const a of plan.automation) applyLaneEdit(a);
@@ -1480,7 +1363,7 @@ export function createStudioTransport({
     notes.touch(touched); // a note's Keys node holds its pitch at the stop
     for (const id of touched) {
       rebuildEnvelope(id, plan.at);
-      rebuildClock(id, plan.at);
+      triggers.rebuild(id, plan.at);
       notes.rebuild(id, plan.at);
     }
     for (const a of plan.automation) {
@@ -1547,9 +1430,7 @@ export function createStudioTransport({
     }
     for (const id of wantEnv) if (!gateOwned.has(id)) ownEnvelope(id, fresh.has(id));
     // A clocked node rebuilt by the runtime continues its steps on the new node.
-    const stale = new Set([...ticks.values()].filter((k) => k.handle !== ready(k.nodeId))
-      .map((k) => k.nodeId));
-    for (const id of stale) rebuildClock(id, horizon);
+    for (const id of triggers.stale()) triggers.rebuild(id, horizon);
     // A Keys node rebuilt by the runtime takes up the sounding note, then the later ones.
     for (const id of notes.stale()) notes.rebuild(id, horizon);
     for (const v of voices.values()) {
@@ -1571,11 +1452,7 @@ export function createStudioTransport({
     for (const [key, v] of voices) if (v.voice.ended) voices.delete(key);
     for (const [key, g] of gates) if (g.end + GATE_KEEP_S < now) gates.delete(key);
     notes.prune(now, GATE_KEEP_S);
-    for (const [key, k] of ticks) {
-      if (k.time + GATE_KEEP_S >= now) continue;
-      ticks.delete(key);
-      ticksPassed.set(k.nodeId, (ticksPassed.get(k.nodeId) || 0) + 1);
-    }
+    triggers.prune(now, GATE_KEEP_S);
     for (const [key, m] of measures) if (m.endTime + STOP_PAD_S < now) measures.delete(key);
     const keep = (evs) => {
       let i = 0;
@@ -1848,8 +1725,7 @@ export function createStudioTransport({
     voices.clear();
     gates.clear();
     notes.clear();
-    ticks.clear();
-    ticksPassed.clear();
+    triggers.clear();
     measures.clear();
     lanes.clear();
     claims.clear();
@@ -1911,8 +1787,7 @@ export function createStudioTransport({
     lanes.clear();
     // As release() does: clock triggers are instants, the next PLAY counts from 0 (V272 A2,
     // review of #500 R1), and what the timeline left unplayed is not the armed graph's (R3).
-    ticks.clear();
-    ticksPassed.clear();
+    triggers.clear();
     unplayed.clear();
     armedOnly = true;
     const m = view(store.getModel());
@@ -1958,8 +1833,7 @@ export function createStudioTransport({
     const ownVoices = [...voices.values()];
     const ownGates = [...gates.values()];
     // Clock triggers are instants with nothing to release: the next PLAY counts from 0.
-    ticks.clear();
-    ticksPassed.clear();
+    triggers.clear();
     notes.clear();
     return runtime.stop({ fast }).then((c) => {
       // Everything of this playback is silent and released by now; end the voices' own
@@ -2038,7 +1912,7 @@ export function createStudioTransport({
       voiceCount: voices.size,
       liveVoices: [...voices.values()].filter((v) => !v.voice.ended).length,
       gateCount: gates.size,
-      clockCount: ticks.size,
+      clockCount: triggers.size,
       noteCount: notes.size,
       steps: notesSteps(playing ? model : null, playhead(), registry),
       measurementCount: measures.size,
