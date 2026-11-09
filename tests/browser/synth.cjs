@@ -146,7 +146,8 @@
 //              choice's option boxes and legends lie inside its plate's padding box, 44 px+ of
 //              every option box can be pressed, and a press on a legend's centre lands on its
 //              own option's radio, the one its text names
-//   s-choicekeys every slide and lever (11 on the tabs), from its bottom option: ArrowUp moves
+//   s-choicekeys every slide and lever (10 on the tabs since K229 fixed the MG's shape lever), from
+//              its bottom option: ArrowUp moves
 //              the checked radio's box up (a smaller y), ArrowDown moves it down, Home checks
 //              the top radio and End the bottom one, focus on the checked radio, in the drawn
 //              order its radios run in (review of W1c, finding 1). It needs choiceKey
@@ -611,16 +612,18 @@ function defineChecks() {
         && q.starts.at(-1) > before && q.t > q.starts.at(-1) + 0.02 ? q : null; }, { ms: 5000,
       what: `key press ${n} restarts the MG (a voice from its reset, Key sync on)` });
       await page.keyboard.up('KeyA');
-      return { ...r, since: tri((r.t - r.starts.at(-1)) * 0.5),
-        sinceFirst: tri((r.t - r.starts[0]) * 0.5) };
+      return { ...r, reset: r.starts.at(-1), since: tri((r.t - r.starts.at(-1)) * 0.5) };
     };
     const first = await pressOnce(1);
     // The second press a good part of a period later: its phase differs from the first's.
-    await until(async () => (await scope(ids.mg)).t > first.starts.at(-1) + 0.7, { ms: 5000,
+    await until(async () => (await scope(ids.mg)).t > first.reset + 0.7, { ms: 5000,
       what: 'the audio clock runs on 0.7 s' });
     const second = await pressOnce(2);
+    // Had the MG run on from the first press's reset, it would read this phase instead.
+    second.sinceFirst = tri((second.t - first.reset) * 0.5);
     const near = (q) => Math.abs(q.v - q.since) <= 0.01;
-    out.scope = [first, second].map((q) => ({ v: q.v, since: q.since, sinceFirst: q.sinceFirst }));
+    out.scope = [first, second].map((q) => ({ v: q.v, reset: q.reset, t: q.t, since: q.since,
+      sinceFirst: q.sinceFirst }));
     await page.evaluate(() => { const s = window.__mgScope; if (s) s.a.disconnect(); });
     const restarted = near(first) && near(second)
       && Math.abs(second.v - second.sinceFirst) > 0.1;
@@ -2180,7 +2183,7 @@ function defineChecks() {
       }
       await page.close();
     }
-    return { ok: bad.length === 0 && seen.size === 11, controls: seen.size, bad: bad.slice(0, 14),
+    return { ok: bad.length === 0 && seen.size === 10, controls: seen.size, bad: bad.slice(0, 14),
       more: Math.max(0, bad.length - 14) };
   });
 
