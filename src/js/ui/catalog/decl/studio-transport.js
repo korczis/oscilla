@@ -17,6 +17,16 @@ export default [
     state: { none: 'nese ovládání Studia; žádnou hodnotu nevlastní' },
   }),
   defineComponent({
+    id: 'studio.armed',
+    kind: 'readout',
+    label: 'Klávesy zapnuté',
+    docs: 'Ukazuje, že klávesy hrají běžící graf, i když časová osa stojí; Stop po Play je '
+      + 'nechá zapnuté (K104).',
+    state: 'studio.transport',
+    in: 'studio.bar',
+    related: ['synth.arm'],
+  }),
+  defineComponent({
     id: 'studio.toolbar.transport',
     pattern: { template: 'studio.tl.{key}', keys: ['return', 'play', 'stop'], sites: [SITE] },
     kind: 'transport',

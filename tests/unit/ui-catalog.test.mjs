@@ -153,6 +153,7 @@ const CONTRACT = [
   ['keyboard.keys', 'action', 'canvas'], ['keyboard.more', 'switch', 'button'],
   ['keyboard.handle', 'switch', 'button'], ['keyboard.dock-status', 'readout', 'p'],
   ['keyboard.handle.held', 'readout', 'span'], ['studio.bar', 'panel', 'header'],
+  ['studio.armed', 'readout', 'span'],
   ['alert.action', 'open', 'a'], ['mic.counterparts', 'panel', 'p'],
   ['counterpart.measure-rta', 'open', 'a'], ['counterpart.experiments', 'open', 'a'],
   ['measure.toStudio', 'open', 'a'], ['seq.toStudioTemplate', 'open', 'a'],
