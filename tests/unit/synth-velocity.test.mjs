@@ -132,3 +132,30 @@ test('a document made before VELOCITY: no false cable, no removed module; adding
   assert.deepEqual([e1.from.node, e1.to.node], [vel, additive], 'e1 as declared');
   assert.equal(jackState(now, PANEL, 'vel.gain'), 'normalled', 'n28 added');
 });
+
+test('review C1-K220-2: a velocity change under a sounding note glides in, never a step on '
+  + 'VELOCITY\'s path', async () => {
+  const instrument = await import('../../src/js/studio/adapters/instrument.js');
+  assert.ok(instrument.VELOCITY_TAU_S > 0 && instrument.VELOCITY_TAU_S <= 0.005,
+    'adapters/instrument.js VELOCITY_TAU_S: a few ms');
+  const st = defaultStore();
+  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const t = createStudioTransport({ runtime, engine, store: st });
+  assert.equal(t.arm().ok, true);
+  const keys = PANEL.resolve(st.getModel()).get('keys').id;
+  const out = runtime.nodes.get(keys).outputs.velocity.offset;
+  assert.equal(t.live(keys, { kind: 'on', note: 60, velocity: 100 }).ok, true);
+  fx.advance(0.2); // the note sounds through the VCA and VELOCITY
+  const n0 = out.events.length;
+  assert.equal(t.live(keys, { kind: 'on', note: 64, velocity: 40 }).ok, true); // legato
+  const added = out.events.slice(n0);
+  assert.ok(added.length > 0, 'the second note writes its velocity');
+  assert.deepEqual(added.filter((e) => e.ramp === 'set'), [], 'no step under the sounding note');
+  const g = added.find((e) => e.ramp === 'target');
+  assert.ok(g && Math.abs(g.value - 40 / 127) < 1e-12 && g.tau === instrument.VELOCITY_TAU_S,
+    JSON.stringify(added));
+  t.stop({ fast: true });
+});
