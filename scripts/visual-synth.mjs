@@ -38,10 +38,11 @@
 //            bay's card, its plates and every module card whose top is above the dock) sits
 //            BAY_MARGIN above the docked keyboard (nextBayHeight), so a longer bay (a seventh cable
 //            listed) makes a taller picture and fails the size compare instead of slipping under
-//            the dock. The capture fails closed unless the bay's card, every plate of the bay
-//            ([data-plate]) and every module card shown ([data-module]) sit below the section nav
-//            and above the docked keyboard (each bay view prints its height and spare pixels), and
-//            unless all 12 cable ends are hit-testable (nothing covers them).
+//            the dock. The capture fails closed unless the bay's card,
+//            every plate of the bay ([data-plate]) and every module card shown ([data-module])
+//            sit below the section nav and above the docked keyboard (each bay view prints its
+//            height and spare pixels), and unless all 12 cable ends are hit-testable (nothing
+//            covers them).
 // Below xl the bay is a face of its own (V636): the cables are patched on it, through its chip,
 // and the tab views come back to the module cards through the PANEL chip.
 // Every capture fails closed unless the Synth reports the view's tab, exactly the cables the
