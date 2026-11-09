@@ -238,7 +238,7 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
       return { id: seq };
     },
     stopAll: () => log.push(['stopAll']) };
-  const a = au.createRiffAudition({ engine, stopOthers: () => log.push(['others']) });
+  const a = au.createRiffAudition({ engine });
   let ended = 0;
   assert.deepEqual(a.start('mirrorball-octaves', undefined, { onEnd: () => { ended++; } }),
     { ok: true });
@@ -266,11 +266,10 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   assert.equal(a.playing, null, 'the context closed');
   a.start('mirrorball-octaves');
   log.length = 0;
-  log.push(['others'], ['play', 'steps']);
   assert.equal(a.stop(), true);
   assert.equal(a.playing, null);
   assert.equal(a.stop(), false, 'nothing to stop');
-  assert.deepEqual(log, [['others'], ['play', 'steps'], ['stopAll']]);
+  assert.deepEqual(log, [['stopAll']]);
   refuse = true;
   const r = a.start('mirrorball-octaves');
   assert.equal(r.ok, false);
@@ -285,20 +284,19 @@ test('a riff auditions as one finite steps plan through the guarded engine', asy
   engine.voice = null;
   a.dispose();
   assert.equal(unsubscribed, 1, 'dispose unsubscribes from the engine');
-  // While a measurement owns the output, Listen is refused with the output-owner table's
-  // sentence BEFORE anything is stopped or played: a running capture is never aborted silently
-  // (Q032, rule C002; the table's own refusal since C036, no sentence of the audition's).
-  refuse = false;
+  // While a measurement owns the output, Listen's one claim (the engine.play guard, C037) is
+  // refused before any voice starts (a running capture is never aborted silently: Q032, rule
+  // C002), and Listen says the output-owner table's sentence (C036), not one of its own.
+  refuse = true;
   log.length = 0;
-  let measuring = true;
-  const m = au.createRiffAudition({ engine, stopOthers: () => log.push(['others']),
-    refused: () => (measuring ? OUTPUT_REFUSAL : null) });
+  const m = au.createRiffAudition({ engine, refused: () => OUTPUT_REFUSAL });
   const busy = m.start('mirrorball-octaves');
   assert.equal(busy.ok, false);
   assert.equal(busy.reason, OUTPUT_REFUSAL);
-  assert.deepEqual(log, [], 'nothing stopped, nothing played');
-  measuring = false;
+  assert.deepEqual(log, [['play', 'steps']], 'one claim, the guarded play, and it was refused');
+  refuse = false;
+  log.length = 0;
   assert.equal(m.start('mirrorball-octaves').ok, true);
-  assert.deepEqual(log, [['others'], ['play', 'steps']]);
+  assert.deepEqual(log, [['play', 'steps']], 'nothing else stopped or played by the audition');
   assert.match(au.createRiffAudition({}).start('mirrorball-octaves').reason, /no audio/i);
 });

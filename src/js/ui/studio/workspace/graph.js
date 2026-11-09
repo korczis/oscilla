@@ -44,10 +44,9 @@ export function createWorkspaceGraph(ctx, svc, ops) {
         ctx.editor.cancelTransient();
         e.preventDefault();
         e.stopImmediatePropagation();
-      } else if (action === 'stop-audio') {
-        ops.stopStudio({ fast: true });
-        ops.announce('Studio stopped');
       }
+      // 'stop-audio': the key registry's page.escape stops everything through the playback
+      // bus (C050: stopAll, the Studio fast as §185 asks), so nothing stops here.
       return;
     }
     if (!(active || inCompact) || studioDialogOpen() || otherDialogOpen()) return;

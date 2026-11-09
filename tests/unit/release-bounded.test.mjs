@@ -154,6 +154,44 @@ test('a budget bounds all attempts together: a retry gets only what is left (rev
     assert.ok(out.attempts < 10, `attempts stop once the budget is spent: ${out.attempts}`);
   });
 
+test('the first attempt of a budget gets the whole budget, however the clock ticks (#507)',
+  () => {
+    // T2's CI (#507, run 42625504429): `gh run watch` got 1799999 ms of its 1800000 ms budget,
+    // because the deadline and the time left were two readings of the real clock and a
+    // millisecond ticked between them. Here the real clock advances 1 ms at every reading: the
+    // first attempt still gets exactly min(timeoutMs, budgetMs).
+    const real = Date.now;
+    let t = real();
+    Date.now = () => { t += 1; return t; };
+    try {
+      const r = scripted([{ status: 0, stdout: '', stderr: '' }]);
+      r.sh('gh', ['run', 'watch', '7003', '--exit-status'],
+        { timeoutMs: 30 * 60_000, budgetMs: 30 * 60_000, retryTimedOut: false });
+      assert.equal(r.spawned[0].opts.timeout, 30 * 60_000);
+      const s = scripted([{ status: 0, stdout: '', stderr: '' }]);
+      s.sh('gh', ['run', 'list'], { timeoutMs: 1000, budgetMs: 5000 });
+      assert.equal(s.spawned[0].opts.timeout, 1000, 'a budget above the bound leaves the bound');
+    } finally {
+      Date.now = real;
+    }
+  });
+
+test('a budget\'s retries read the injected clock (now): each gets what that clock leaves', () => {
+  let t = 0;
+  const spawned = [];
+  const sh = boundedRunner({ cwd: '/nonexistent', now: () => t, sleepMs: (ms) => { t += ms; },
+    note: () => {}, echo: () => {},
+    spawn: (cmd, args, opts) => { spawned.push(opts.timeout); t += 30; return { status: 1,
+      stdout: '', stderr: PORTS }; } });
+  const out = sh('gh', ['run', 'list'], { timeoutMs: 60_000, budgetMs: 30_000, attempts: 3 });
+  assert.equal(out.attempts, 3);
+  // the first attempt: the whole budget; then the budget less the 30 ms attempts and the
+  // NET_RETRY_DELAY_MS waits that clock saw
+  assert.equal(spawned[0], 30_000);
+  assert.equal(spawned[1], 30_000 - 30 - NET_RETRY_DELAY_MS);
+  assert.equal(spawned[2], 30_000 - 60 - 3 * NET_RETRY_DELAY_MS);
+});
+
 test('release:record downloads with --clobber, so a retry replaces a partial file (L1)', () => {
   const src = readFileSync(new URL('../../scripts/release-record.mjs', import.meta.url), 'utf8');
   const call = src.match(/\['release', 'download'[^\]]*\]/s);

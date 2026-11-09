@@ -41,6 +41,9 @@
 //   (g) seq-loop-cap (C011): without "Allow continuous playback" a looped sequence keeps to the
 //       30 s cap (ADR 0005): a 36 s first pass is cut at it on its nodes' own stop times; a 12 s
 //       loop's end is the editor's forecast; the cap is on the Loop control.
+//   (h) seq-loop-seams (C055): a looped sequence in the built app, woken by the engine's one
+//       transport clock, plays three passes back to back, each starting where the one before
+//       ended within one sample at the context's own rate.
 // Exit code 0 only when every check passes in every browser.
 'use strict';
 
@@ -918,6 +921,65 @@ async function checkPlayheadAfterEdit(engine, browser) {
   }
 }
 
+/**
+ * seq-loop-seams (C055): in the built app a looped sequence plays three passes back to back,
+ * woken by the engine's one transport clock (the Studio transport's timer): each pass starts
+ * where the one before ended, within one sample at the context's own rate (no gap, no
+ * overlap). The pass starts are sampled in the page; the test waits only through until() with
+ * named deadlines and assumes no sample rate.
+ */
+async function checkLoopSeams(engine, browser) {
+  const name = 'seq-loop-seams';
+  const context = await browser.newContext({ viewport: { width: 1536, height: 1024 } });
+  const errors = [];
+  try {
+    const page = await context.newPage();
+    page.on('pageerror', (e) => errors.push(String(e)));
+    await page.goto(pathToFileURL(DIST).href, { waitUntil: 'load' });
+    await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+      { ms: 30000, what: `${name}: the app is ready` });
+    await page.mouse.click(5, 5); // the first gesture creates the AudioContext
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'sequencer'),
+      { ms: 10000, what: `${name}: the Sequencer is shown` });
+    await page.evaluate(() => {
+      const lab = window.OSCILLA.labs.sequencer;
+      lab.editor.load({ tempoBpm: 120, loop: true, waveform: 'sine', blocks: [
+        { id: 'a', type: 'tone', durationMs: 400, params: { freq: 440 } },
+        { id: 'b', type: 'tone', durationMs: 300, params: { freq: 660 } }] });
+      lab.render();
+      // Every pass start the page sees (a sampler of the editor's own timing, not a wait).
+      window.__seams = [];
+      window.__seamTimer = setInterval(() => {
+        const t = lab.editor.currentPassTiming();
+        const last = window.__seams[window.__seams.length - 1];
+        if (t && (!last || t.t0 !== last.t0)) window.__seams.push(t);
+      }, 25);
+    });
+    await page.click('#osc-seq-play');
+    const r = await settle(() => page.evaluate(() => ({ seams: window.__seams.slice(),
+      sr: window.OSCILLA.engine.ctx.sampleRate,
+      playing: window.OSCILLA.labs.sequencer.editor.playing })),
+    (v) => v.seams.length >= 3, 15000, `${name}: three looped passes`);
+    await page.evaluate(() => {
+      clearInterval(window.__seamTimer);
+      window.OSCILLA.labs.sequencer.editor.stop();
+    });
+    const { seams, sr } = r.value;
+    const gaps = [];
+    for (let k = 1; k < Math.min(3, seams.length); k++) {
+      gaps.push(seams[k].t0 - (seams[k - 1].t0 + seams[k - 1].duration));
+    }
+    const sample = 1 / sr;
+    check(engine, `${name}: three passes, each starting where the one before ended (one sample)`,
+      r.ok && gaps.length === 2 && gaps.every((g) => Math.abs(g) <= sample),
+      JSON.stringify({ sr, gaps, seams: seams.slice(0, 3) }));
+    check(engine, `${name}: no page errors`, errors.length === 0, errors.slice(0, 3).join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function runEngine(engine, bundle) {
   console.log(`\n${engine}`);
   const launch = {
@@ -1137,6 +1199,11 @@ async function runEngine(engine, bundle) {
       await checkPlayheadAfterEdit(engine, browser);
     } catch (e) {
       check(engine, 'seq-playhead-after-edit', false, String(e && e.message ? e.message : e));
+    }
+    try {
+      await checkLoopSeams(engine, browser);
+    } catch (e) {
+      check(engine, 'seq-loop-seams', false, String(e && e.message ? e.message : e));
     }
   } finally {
     await browser.close();

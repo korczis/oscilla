@@ -1,4 +1,4 @@
-# Review verdict for pull request #506 (train/t2-sequencer): train T2 of the sequencer line.
+# Review verdict for pull request #507 (train/t2-sequencer): train T2 of the sequencer line.
 # Members: K068 notes clips play on a Keys node (#474 at cfac09ac), W001 kind contract (#467 at
 # b0c56f91), K104 armed monitoring (#500 at ce629c01), K214 panel normals (#504 at 1882b390),
 # K212 panel normals unit test (#503 at 16a397e4), K225 plan (#505 at 1e98dfee), C024 notes
@@ -45,9 +45,18 @@
 # receipt). source-size-baseline.json raises transport.js to 94 000 with a ledger entry; the file
 # is 93 386 bytes.
 #
+# Re-issued 2026-11-09 for #507 (the train's pull request; #506 went to a bot issue): the
+# reviewer re-checked at 5ea1e37d (merge base origin/main 603bd0f5 = #447 merged) that the
+# guarded digest is unchanged, c8e7f405 over the same 9 paths; 4b051e0f..5ea1e37d changes only
+# dist, package.json/lock, src/data/{about-stations,roadmap}.json, tests/README.md,
+# tests/browser/{synth,xy-pad,v31-studio-workflows}.cjs and the v3.28.0 release record.
+# 2048fcb0 (armed-play-refused restated for K104) was reproduced by the reviewer: the old
+# expectation fails in chromium on the same dist, the new one passes 15/15 file + 3/3 http in
+# chromium, firefox and webkit.
+#
 # Verdict: merge. No open finding; the members' earlier findings are listed closed.
 schema: review-verdict/v1
-pr: 506
+pr: 507
 verdict: merge
 reviewer: oscilla-c1 rev-seat (claude-code 7cad3015; built none of c36b254e)
 content: c8e7f405cdb11ffeb6ae6df8b706ebcdfbaaa98a8dc90654ae2c7e6908312763
