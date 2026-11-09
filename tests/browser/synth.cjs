@@ -530,7 +530,10 @@ function defineChecks() {
     await page.keyboard.down('Control');
     await page.mouse.wheel(0, -100);
     await page.keyboard.up('Control');
-    await page.mouse.wheel(0, -100);
+    // The sentinel goes to the knob itself: Chromium and WebKit act on the pinch (the zoom it
+    // is left for), so the pointer's old coordinates may no longer be over the knob.
+    await knob.dispatchEvent('wheel', { deltaY: -100, deltaMode: 0, bubbles: true,
+      cancelable: true });
     const { now: sentinel } = await until(async () => {
       const now = (await pos()).now;
       return now !== p0 ? { now } : null; // an object: a position of 0 is a landing too
