@@ -16,7 +16,9 @@
 //   claimOutput?(),                take the shared output before anything is scheduled (C002):
 //                                  true grants it; false or a reason string refuses, and the
 //                                  editor then schedules nothing and sets `error` to the reason.
-//                                  Asked by play() and again before every loop pass.
+//                                  Asked once by play() (C037).
+//   holdOutput?(),                 still held? Asked before every loop pass; stops nothing
+//                                  (else claimOutput is asked there).
 //   onStart?({ t0, duration }),    playback started (status bar)
 //   onEnded?({ stopped }),         playback fully ended (natural end or after a stop fade)
 //   onRecord?(sequenceJson),       the record-style button: hand the sequence to the WAV export
@@ -639,8 +641,8 @@ export function createSequencerEditor(options = {}) {
           self._endLoopAtCap();
           return;
         }
-        // A loop never schedules into an output another owner took meanwhile (C002).
-        if (!self._claimOutput()) {
+        // A loop never schedules into an output another owner took meanwhile (C002, C037).
+        if (!self._holdOutput()) {
           self.stop();
           return;
         }
@@ -662,10 +664,16 @@ export function createSequencerEditor(options = {}) {
      * has no claim; on a refusal `error` holds the reason and false is returned.
      */
     _claimOutput() {
-      if (!engine || typeof engine.claimOutput !== 'function') return true;
+      return this._askOutput('claimOutput');
+    },
+    _holdOutput() {
+      return this._askOutput(engine && engine.holdOutput ? 'holdOutput' : 'claimOutput');
+    },
+    _askOutput(method) {
+      if (!engine || typeof engine[method] !== 'function') return true;
       let answer;
       try {
-        answer = engine.claimOutput();
+        answer = engine[method]();
       } catch (e) {
         answer = String((e && e.message) || e);
       }

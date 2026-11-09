@@ -75,6 +75,7 @@ export {
 export {
   studioStatus, compileWarningLine, MIC_SETTLE_MS, settleMicrophones, microphoneOutcome,
 } from './workspace/runtime.js';
+import { OWNER } from '../output-owner.js';
 
 /** The parts of the workspace (./workspace/*.js), in the order their functions join `ops`. */
 const PARTS = [createWorkspaceDocument, createWorkspaceRuntime, createWorkspaceMeasurement,
@@ -180,9 +181,16 @@ export function createStoreHandle(initialModel, {
  * Studio PLAY's output claim (the transport's onClaimOutput): refused with the sentence of the
  * row of OUTPUT_REFUSALS that holds the output (svc.outputRefusalOf, ui/output-owner.js: a
  * measurement or a microphone level-reference capture, C024), the one table every claim reads;
- * otherwise every other owner stops (svc.stopPlayback) and the Studio takes the output.
+ * otherwise every other owner stops (svc.stopPlayback) and the Studio takes the output. With
+ * the playback bus (svc.claim, C037) it is the bus's one claim as the Studio.
  */
 export function claimStudioOutput(cmp, svc, announce) {
+  // The playback bus's claim (C037, svc.claim from main.js): the same table, refusal and stops.
+  if (typeof svc.claim === 'function') {
+    const r = svc.claim(OWNER.studio, 'play', { notify: false });
+    if (!r.ok) announce(r.text, { assertive: true });
+    return r.ok;
+  }
   const refusal = cmp && typeof svc.outputRefusalOf === 'function'
     ? svc.outputRefusalOf(cmp) : null;
   if (refusal) {

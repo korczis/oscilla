@@ -93,10 +93,12 @@ test('main.js composes the MIDI part and starts it with the component', () => {
 test('V502: main.js hands the engine to the MIDI part, and taking the output stops MIDI notes',
   () => {
     const main = code(read('src/js/main.js'));
-    assert.match(main, /const midi = createMidiUi\(\{ engine, sequencerPlaying \}\);/);
-    // stopPlayback is the one output owner's (ui/output-owner.js, C002), composed in main.js.
-    assert.match(main, /const \{[^}]*\bstopPlayback\b[^}]*\} = createOutputOwner\(/);
-    const owner = code(read('src/js/ui/output-owner.js'));
+    // C037: the MIDI part gets the playback bus, whose claim each note on the engine makes.
+    assert.match(main, /const midi = createMidiUi\(\{ engine, sequencerPlaying, bus \}\);/);
+    // stopPlayback is the playback bus's (core/output-bus.js, C002, C037), composed in main.js.
+    assert.match(main, /const bus = createOutputBus\(\{/);
+    assert.match(main, /const \{[^}]*\bstopPlayback\b[^}]*\} = bus;/);
+    const owner = code(read('src/js/core/output-bus.js'));
     const stop = /function stopPlayback\(cmp\) \{([\s\S]*?)\n {2}\}/.exec(owner);
     assert.ok(stop, 'stopPlayback (Measure and Studio PLAY take the output)');
     // C036: the measurement row's yields, forced, include the notes, whose stop is midiAllOff.
@@ -108,9 +110,9 @@ test('V502: the sequencer and MIDI notes never sound together (review of #261, P
   const main = code(read('src/js/main.js'));
   // The live state of the editor, not the 150 ms seqPlaying copy.
   // (C002: the one output owner reads the editor itself; main.js takes sequencerPlaying from it.)
-  assert.match(main, /const \{[^}]*\bsequencerPlaying\b[^}]*\} = createOutputOwner\(\{/);
+  assert.match(main, /const \{[^}]*\bsequencerPlaying\b[^}]*\} = bus;/);
   assert.match(main, /sequencer: \(\) => \(labs\.sequencer \? labs\.sequencer\.editor : null\)/);
-  const owner = code(read('src/js/ui/output-owner.js'));
+  const owner = code(read('src/js/core/output-bus.js'));
   assert.match(owner, /const sequencerPlaying = \(\) => \{\s*const ed = sequencer\(\);\s*return !!\(ed && ed\.playing\);/);
   // Starting a sequence stops every note before the editor schedules it.
   const wrap = /editor\.play = function playAfterMidi\(\.\.\.args\) \{([\s\S]*?)\n {4}\};/

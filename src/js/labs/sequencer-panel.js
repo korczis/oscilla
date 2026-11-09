@@ -198,6 +198,9 @@ export function sequencerEngine(adapter) {
     accounting: adapter.sequencerAccounting || null,
     // One output owner at a time (C002): the app decides before anything is scheduled.
     claimOutput: () => (adapter.claimSequencerOutput ? adapter.claimSequencerOutput() : true),
+    // Each loop pass asks only whether the sequence still holds it (C037: one claim per start).
+    holdOutput: () => (adapter.holdSequencerOutput ? adapter.holdSequencerOutput()
+      : adapter.claimSequencerOutput ? adapter.claimSequencerOutput() : true),
     // C011: read-only; without it the loop keeps to the cap (LOOP_CAP_S).
     continuousAllowed: () => !!(adapter.continuousAllowed && adapter.continuousAllowed()),
     // A started sequence takes the output at the Playground gain, also over a playing Studio

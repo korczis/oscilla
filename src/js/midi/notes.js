@@ -64,14 +64,17 @@ export function parseMidiMessage(data) {
 /**
  * The note layer of one page. `engine` is the AudioEngine; `settings()` returns the
  * Playground's { a4, waveform, attackS, releaseS, limitS, continuous } at the time of a note;
- * `ownedBy()` names who owns the output ('measurement', 'reference', 'studio',
- * 'sequencer') or returns null; `refused(by)`
+ * `claim(reason)` is the playback bus's claim for the notes (C037, core/output-bus.js): asked
+ * once for each note that starts on the Playground's voices, it answers { ok } or
+ * { ok: false, by } with the owner that refuses it; `release()` tells the bus the last held
+ * note is gone. Without a claim, `ownedBy()` names who owns the output ('measurement',
+ * 'reference', 'studio', 'sequencer') or returns null, as before the bus. `refused(by)`
  * is told once per run of refused notes (the caller says so to the user).
  * The MIDI inputs and the on-screen and computer keyboard (K026, src/js/midi/keyboard.js) play
  * through the same layer, each with its own `source` in the note key.
  */
 export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () => null,
-  refused = () => {}, route = () => null } = {}) {
+  refused = () => {}, route = () => null, claim = null, release = () => {} } = {}) {
   let refusing = null;
   const keyOf = (source, channel, note) => `${source}:${channel}:${note}`;
   // Where each held key sounds, fixed at its note-on (src/js/midi/held-notes.js, K178): the
@@ -85,6 +88,18 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
     ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy' : 'midi');
 
+  /** Who refuses a note that would start on the engine now: the bus's claim, else ownedBy(). */
+  function refusedBy() {
+    if (typeof claim !== 'function') return ownedBy();
+    const c = claim('note-on');
+    return c && c.ok === false ? (c.by || 'refused') : null;
+  }
+
+  /** The bus learns that no note is held any more (C037: the notes release the output). */
+  function releaseIfIdle() {
+    if (!held.held().length) release();
+  }
+
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
     const key = keyOf(source, channel, note);
@@ -96,7 +111,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     held.hold(key, { sink: to, note, velocity, input: inputOf(source) });
     if (sink) return sink.noteOn(note, velocity);
     if (!engine) return { ok: false, reason: 'no-audio' };
-    const by = ownedBy();
+    const by = refusedBy();
     if (by) {
       if (refusing !== by) refused(by);
       refusing = by;
@@ -148,8 +163,10 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     const key = keyOf(source, channel, note);
     // A key not held here: where it would sound now.
     const sink = held.releaseKey(key) || route() || ENGINE;
-    return sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
+    const off = sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
       : sink.noteOff(note, { key, forced });
+    releaseIfIdle();
+    return off;
   }
 
   return {
@@ -173,6 +190,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
         // on the route's own sink gets a second, redundant off here after its allOff (21's K2):
         // harmless, an off for a note already released.
         held.releaseAll('all-off');
+        releaseIfIdle();
       }
       return e;
     },
@@ -182,7 +200,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
      * input filter): 'xy' for the XY pad's 'kbd-xy' notes (K183), 'midi', 'key', ... -> count.
      */
     releaseInput(input, reason = 'all-off') {
-      return held.releaseAll(reason, { input });
+      const n = held.releaseAll(reason, { input });
+      releaseIfIdle();
+      return n;
     },
 
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
@@ -191,6 +211,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       const n = sink ? sink.allOff() : 0;
       const sounding = engine ? engine.notesOff(true) : 0;
       held.releaseAll('silence');
+      releaseIfIdle();
       return sounding + n;
     },
   };

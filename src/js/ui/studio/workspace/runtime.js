@@ -22,6 +22,7 @@ import {
 import { announceAction } from '../../../studio/a11y.js';
 import { compiledEdgeStatus, compiledStatus, nodeWarnings, runtimeStatus } from '../graph-view.js';
 import { compactTime } from '../compact.js';
+import { OWNER } from '../../output-owner.js';
 
 /**
  * The node and edge status the Studio shows (§170-§171): from the running runtime while it plays
@@ -249,6 +250,8 @@ export function createWorkspaceRuntime(ctx, svc, ops) {
       }
       if (!playing) {
         tick();
+        // The playback bus (C037): the Studio no longer holds the output.
+        if (typeof svc.release === 'function') svc.release(OWNER.studio);
         if (detail && detail.reason === 'end') ops.announce('Studio playback ended');
       }
     } else if (type === 'warning') {

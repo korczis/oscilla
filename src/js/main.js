@@ -67,7 +67,7 @@ import { createKeyRegistry } from './ui/keys/registry.js';
 import { createKeyDispatcher } from './ui/keys/dispatcher.js';
 import { bindPageKeys, pageKeyContext } from './ui/keys/clients.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
-import { createOutputOwner, outputRefusalOf, playOwnerOf } from './ui/output-owner.js';
+import { createOutputBus, OWNER, outputRefusalOf, playOwnerOf } from './core/output-bus.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { sequenceDigest } from './sequencer/editor.js';
@@ -159,6 +159,7 @@ const adapter = {
   sequencerAccounting: engine.stageAccounting(),
   // The sequencer takes the output through the one owner table (ui/output-owner.js, C002).
   claimSequencerOutput: () => claimOutput('sequencer'),
+  holdSequencerOutput: () => bus.holds(OWNER.sequencer), // a loop pass (C037)
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
@@ -270,13 +271,13 @@ function playgroundVoiceInput() {
   return voiceInputFrom(app, labVizInputs);
 }
 
-// One output owner at a time (C002, C016): instrument, sequencer, Studio, a measurement.
-// stopPlayback also frees the MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
-const {
-  claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy,
-} = createOutputOwner({
+// The playback bus (C002, C016, C037; core/output-bus.js): one output owner at a time, one
+// claim every player starts through and a release when it ends. stopPlayback also frees the
+// MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
+const bus = createOutputBus({
   app: () => app,
   sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
+const { claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy } = bus;
 
 withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), (plan, o) => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
@@ -285,7 +286,7 @@ withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), (plan, o
   // sequencer (and Studio). The riff audition claims under its own name (playOwnerOf).
   // The newest action wins for the notes too (C024): the claim releases held notes, whose
   // voices the engine fades under a play() voice (ADR 0002; OUTPUT_YIELDS.instrument).
-  return claimOutput(playOwnerOf(o)) !== true;
+  return !bus.claim(playOwnerOf(o), 'play').ok;
 });
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
@@ -607,6 +608,7 @@ function mountLabs(root) {
       const on = !!labs.sequencer.editor.playing;
       if (app && app.seqPlaying !== on) {
         app.seqPlaying = on;
+        if (!on) bus.release(OWNER.sequencer); // the playback bus (C037)
         notifyAdapter();
       }
     }, 150);
@@ -665,6 +667,10 @@ function integrationInit() {
   if (cmp.source !== 'single' || cmp.pattern !== 'tone') cmp.sourceKind = 'pattern';
   engine.on((type, d) => {
     cmp.onEngine(type, d);
+    if (type === 'ended') { // the play() voice ended: the instrument's or the audition's (C037)
+      bus.release(OWNER.instrument);
+      bus.release(OWNER.audition);
+    }
     notifyAdapter();
   });
   if (!engine.isSupported()) {
@@ -884,13 +890,14 @@ function createOscillaComponent(ui) {
   const findings = createFindingsUi();
   const connections = createConnectionsUi();
   const studio = createStudioUi({ engine, stopPlayback, outputRefusalOf,
+    claim: bus.claim, release: bus.release, // Studio PLAY and the Synth arm (C037)
     // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
     playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)
   });
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
-  const midi = createMidiUi({ engine, sequencerPlaying });
+  const midi = createMidiUi({ engine, sequencerPlaying, bus });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
     TEMPLATE_HELPERS);
@@ -995,6 +1002,8 @@ window.OSCILLA = {
   labErrors,
   get app() { return app; },
   get host() { return host; },
+  // OBSERVES the playback bus (C037): which player holds the output now, or null.
+  bus: Object.freeze({ owner: () => bus.owner() }),
   get measure() { return app ? app.measureTestSeam() : null; },
   get experiments() { return app ? app.experimentsTestSeam() : null; },
   get studio() { return app ? app.studioTestSeam() : null; },

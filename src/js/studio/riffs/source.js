@@ -23,14 +23,14 @@ let audition = null;
 
 export function registerRiffSource(svc = {}, cmp = null) {
   if (audition) audition.dispose();
-  // Refused through the one output-owner table (C024, svc.outputRefusalOf from main.js): a
-  // measurement or a microphone level reference holds the output, and Listen says its sentence.
+  // Claimed by the engine.play guard (C037, the playback bus); when it refuses, Listen says the
+  // sentence of the row of the one output-owner table that holds the output (svc.outputRefusalOf
+  // from main.js: a measurement or a microphone level reference, C024).
   const ctl = createRiffAudition({ engine: svc.engine,
     refused: () => {
       const r = cmp && svc.outputRefusalOf ? svc.outputRefusalOf(cmp) : null;
       return r ? r.text : null;
-    },
-    stopOthers: () => { if (cmp && svc.stopPlayback) svc.stopPlayback(cmp); } });
+    } });
   audition = ctl;
   registerPatchSource({
     id: RIFF_CATEGORY,
