@@ -116,7 +116,10 @@ test('negative: a patch for an instrument the model lacks says so; Insert still 
   assert.match(entryAction(empty, fm, 'apply').reason, /has no FM engine: Insert adds one/);
   const st = store(empty);
   assert.equal(st.dispatch(entryAction(empty, fm, 'insert').action).ok, true);
-  assert.equal(entryAction(empty, panel, 'insert').reason, 'Bass cannot be loaded that way.');
+  // K225: a panel preset now inserts the panel itself once synth/library.js has registered how
+  // (registerSynthSources, called by a later test of this file); before that the catalog says
+  // it cannot. The insert itself is tests/unit/synth-panel-library-insert.test.mjs.
+  assert.equal(entryAction(empty, panel, 'insert').reason, 'Panel Synthu sem nelze vložit.');
   // Several of the type and nothing selected: choose one; selected: it applies to that one.
   const p = panelStore().getModel();
   const dark = all.find((e) => e.id === 'node-filter-dark');
