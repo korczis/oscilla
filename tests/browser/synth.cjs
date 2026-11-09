@@ -66,6 +66,20 @@
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
 //              the button reads Arm and Arm arms; Arm, the Studio and its Stop, back to the
 //              Synth: it reads Arm, Arm arms and a key sounds. Fails on 9cf786ac (Disarm stays)
+//   s-armed    K104 (desktop and phone): Arm by pointer (a tap on the phone) stops a playing
+//              Playground voice and checks the role=switch; Enter and Space on it disarm and
+//              arm, Escape disarms; armed and stopped, QWERTY A is held on the running Keys
+//              node and sounds. Desktop: leaving the Synth disarms (census 0); in the Studio a
+//              key arms it and the transport bar's armed indicator shows, PLAY plays, and STOP
+//              leaves the keys armed (indicator and Synth state) with A still sounding (the
+//              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
+//   s-normals  K214 (desktop and phone): in a changed document Insert puts the panel in by
+//              pointer (a tap on the phone) and, after Undo, by keyboard; the Studio graph draws
+//              its nodes and normal edges; VCO 2 Pitch's normal deleted in the Studio stays
+//              deleted, the Synth shows the jack open and Restore normal brings it back with its
+//              id in one history entry, announced in the polite live region (fails on c589955b);
+//              armed, a Studio cable beside the normal sums with it, and Break normal drops the
+//              normal from the runtime edge list while the cable stays active and the voice sounds
 //   s-xyengine an XY preset writes only the voice it plays (review S6): drawbar 1 of the
 //              additive engine set by Home, then XY bass from the Preset menu (one undo entry,
 //              the pad in D Dorian): the drawbar keeps its value in the model and on its face.
@@ -180,7 +194,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices']);
+  's-library', 's-choices', 's-armed', 's-normals']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -1078,6 +1092,78 @@ function defineChecks() {
     return { ok: true, on: on.rmsDb };
   });
 
+  // K104, armed monitoring, and the owner's 'STOP keeps it armed (Recommended)' (2026-11-03).
+  def('s-armed', async ({ page, size }) => {
+    const sw = page.locator('[data-osc="synth.arm"]');
+    const app = (fn) => page.evaluate(fn);
+    const state = async () => ({ armed: (await dbg(page)).armed,
+      checked: await sw.getAttribute('aria-checked') });
+    const is = (want, what) => until(async () => {
+      const s = await state();
+      return s.armed === want && s.checked === String(want);
+    }, { ms: 10000, what });
+    const role = await sw.getAttribute('role');
+    // Real-time: arming stops a playing Playground voice (the output owner's release path).
+    await app(() => { const a = window.OSCILLA.app; a.duration = 4000; return a.play('trigger'); });
+    await until(() => app(() => !!window.OSCILLA.app.playing),
+      { ms: 10000, what: 'the Playground voice plays' });
+    if (size === 'phone') await sw.tap(); else await sw.click();
+    await is(true, `Arm by ${size === 'phone' ? 'touch' : 'pointer'}: the switch is checked`);
+    await until(() => app(() => !window.OSCILLA.app.playing && !window.OSCILLA.engine.voice),
+      { ms: 10000, what: 'arming stopped the Playground voice' });
+    // Interactive: the switch by keyboard, and Escape disarms.
+    await sw.focus();
+    await page.keyboard.press('Enter');
+    await is(false, 'Enter on the switch disarms');
+    await page.keyboard.press('Space');
+    await is(true, 'Space on the switch arms');
+    await page.keyboard.press('Escape');
+    await is(false, 'Escape disarms');
+    if (size === 'phone') await sw.tap(); else await sw.click();
+    await is(true, 'armed again');
+    // Real-time: a key while armed and stopped reaches the running Keys node and sounds.
+    await hold(page, 'KeyA');
+    await until(async () => (await dbg(page)).held.includes(60),
+      { ms: 10000, what: 'C4 while armed and stopped is held on the running Keys node' });
+    const on = await sound(page, (q) => q.rmsDb > -40, 'the armed, stopped panel sounds');
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the key up releases it');
+    if (size === 'phone') return { ok: role === 'switch', role, on: on.rmsDb };
+    // Linked: leaving the Synth disarms; in the Studio a key arms it, PLAY plays the document,
+    // and STOP stops the timeline while the keys stay armed: the transport bar's indicator and
+    // the Synth's own state both say armed, and a key still sounds.
+    await page.locator('[data-osc="nav.studio"]').click();
+    await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed,
+      { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
+    const badge = page.locator('[data-osc="studio.armed"]');
+    await page.evaluate(() => {
+      if (document.activeElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+      }
+    });
+    await page.keyboard.down('KeyA');
+    await until(async () => (await dbg(page)).armed && await badge.isVisible(),
+      { ms: 10000, what: 'a key in the Studio arms it and the transport bar shows armed' });
+    await page.keyboard.up('KeyA');
+    await page.locator('[data-osc="studio.play"]').click();
+    await until(() => app(() => window.OSCILLA.app.studio.playing
+      && window.OSCILLA.studio.transport.playhead().playing),
+    { ms: 10000, what: 'PLAY while armed plays the timeline' });
+    await page.locator('[data-osc="studio.stop"]').click();
+    await until(async () => (await dbg(page)).armed && await badge.isVisible()
+      && await app(() => !window.OSCILLA.app.studio.playing && window.OSCILLA.app.synth.armed),
+    { ms: 10000, what: 'STOP after PLAY leaves the keys armed, shown in the bar and the Synth' });
+    await page.evaluate(() => document.activeElement && document.activeElement.blur());
+    await page.keyboard.down('KeyA');
+    const after = await sound(page, (q) => q.rmsDb > -40, 'a key after STOP still sounds');
+    await page.keyboard.up('KeyA');
+    await page.locator('[data-osc="nav.synth"]').click();
+    await until(async () => (await counts(page)).runtimeNodes === 0 && !(await dbg(page)).armed
+      && (await sw.getAttribute('aria-checked')) === 'false',
+    { ms: 10000, what: 'leaving the Studio disarms it: census 0, the switch unchecked' });
+    return { ok: role === 'switch', role, on: on.rmsDb, after: after.rmsDb };
+  });
+
   // Review of src/js/synth (oscilla-21, S6): an XY preset writes the voice it plays, never an
   // engine of the Engines tab.
   def('s-xyengine', async ({ page }) => {
@@ -1326,6 +1412,97 @@ function defineChecks() {
     await until(async () => (await counts(page)).runtimeNodes === 0,
       { ms: 10000, what: 'leaving the Synth disarms: runtime census 0' });
     return { ok: !(await dbg(page)).armed, off: q.rmsDb, counts: await counts(page) };
+  });
+
+  // K214 (K061 criterion 3): the panel's normals across the Synth and the Studio.
+  def('s-normals', async ({ page, size }) => {
+    const press = (loc) => (size === 'phone' ? loc.tap() : loc.click());
+    const how = size === 'phone' ? 'touch' : 'pointer';
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const insertBtn = page.locator('[data-insert-panel]');
+    const go = async (ws) => {
+      await page.evaluate((w) => { window.location.hash = `m=${w}`; }, ws);
+      await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 10000, what: `the ${ws} workspace opens` });
+    };
+    const offered = (what) => until(async () => !(await dbg(page)).present
+      && await insertBtn.isVisible(), { ms: 10000, what });
+    const inserted = (what) => until(async () => (await dbg(page)).present, { ms: 10000, what });
+    // Interactive: a changed document without the panel (the workspace's own insert undone, a
+    // node of the user's) offers Insert; pointer (touch on the phone) and keyboard insert it.
+    await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      st.undo();
+      st.dispatch({ type: 'NODE_ADD', nodeType: 'fm-voice', name: 'FM 2',
+        position: { x: 0, y: 900 } });
+    });
+    await offered('the view offers Insert, the panel gone');
+    await press(insertBtn);
+    await inserted(`Insert by ${how} inserts the panel`);
+    await page.evaluate(() => window.OSCILLA.studio.store.undo());
+    await offered('Undo removes the panel and Insert is offered again');
+    await insertBtn.focus();
+    await page.keyboard.press('Enter');
+    await inserted('Insert by keyboard inserts the panel');
+    // Linked: the Studio graph shows the panel's nodes and its normal edges.
+    const panelNodes = Object.values((await dbg(page)).nodes).filter(Boolean);
+    const normalEdges = await page.evaluate(() => window.OSCILLA.studio.model.graph.edges
+      .filter((e) => /-n\d+$/.test(e.id)).map((e) => e.id));
+    const n2 = normalEdges.find((id) => id.endsWith('-n2'));
+    await go('studio');
+    await until(() => page.evaluate(({ nodes, edges }) => nodes.every((id) => document
+      .querySelector(`[data-node-id="${id}"]`)) && edges.every((id) => document
+      .querySelector(`[data-edge-id="${id}"]`)), { nodes: panelNodes, edges: normalEdges }),
+    { ms: 10000, what: `the Studio graph draws ${panelNodes.length} panel nodes and `
+      + `${normalEdges.length} normal edges` });
+    // A normal deleted in the Studio (the graph's Delete is this one EDGE_REMOVE) stays deleted.
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({ type: 'EDGE_REMOVE',
+      edgeIds: [id] }), n2);
+    await until(() => page.evaluate((id) => !document.querySelector(`[data-edge-id="${id}"]`),
+      n2), { ms: 10000, what: 'the deleted normal leaves the Studio graph' });
+    await go('synth');
+    await face(page, 'bay');
+    const restore = page.locator('[data-restore-normal="vco2.pitch"]');
+    await until(() => restore.isVisible(), { ms: 10000,
+      what: 'the Synth shows VCO 2 Pitch open with Restore normal' });
+    const before = await depth();
+    await press(restore);
+    await until(async () => (await depth()) === before + 1 && await page.evaluate((id) => window
+      .OSCILLA.studio.model.graph.edges.some((e) => e.id === id), n2),
+    { ms: 10000, what: 'Restore normal restores it with its id in one history entry' });
+    const live = page.locator('[data-osc="studio.live"]');
+    await until(async () => (await live.getAttribute('aria-live')) === 'polite'
+      && /obnoven/.test(await live.textContent()), { ms: 10000,
+      what: 'the restored normal is announced in the polite live region' });
+    // Real-time: armed, a Studio cable beside the normal sums with it (the jack is mixed);
+    // Break normal takes the normal out of the running graph and the cable alone drives it.
+    await page.locator('[data-osc="synth.arm"]').click();
+    await until(async () => (await dbg(page)).armed, { ms: 10000, what: 'the Synth arms' });
+    const cable = await page.evaluate(() => {
+      const d = window.OSCILLA.app.synthDebug().nodes;
+      const r = window.OSCILLA.studio.store.dispatch({ type: 'EDGE_ADD',
+        from: { node: d.keys, port: 'velocity' }, to: { node: d.vco2, port: 'pitch' },
+        props: { depth: 1, polarity: 'unipolar', mapping: 'linear', offset: 0 } });
+      return r.ok ? r.created.edges[0] : null;
+    });
+    const edgeState = () => page.evaluate(({ c, n }) => {
+      const rt = window.OSCILLA.studio.runtime;
+      const st = (id) => (rt.edges.has(id) ? rt.edges.get(id).status : null);
+      return { cable: st(c), normal: st(n) };
+    }, { c: cable, n: n2 });
+    await until(async () => { const e = await edgeState();
+      return e.cable === 'active' && e.normal === 'active'; },
+    { ms: 10000, what: 'the running graph holds the Studio cable and the normal' });
+    const brk = page.locator('[data-break-normal="vco2.pitch"]');
+    await until(() => brk.isVisible(), { ms: 10000, what: 'the Synth offers Break normal' });
+    await press(brk);
+    await until(async () => { const e = await edgeState();
+      return e.cable === 'active' && e.normal === null; },
+    { ms: 10000, what: 'Break normal drops the normal from the runtime edge list' });
+    await hold(page, 'KeyA');
+    const on = await sound(page, (q) => q.rmsDb > -45, 'the cable-driven voice sounds');
+    await page.keyboard.up('KeyA');
+    return { ok: !!cable, nodes: panelNodes.length, normals: normalEdges.length, on: on.rmsDb };
   });
 
   /** The note's steady level: two probes 0.25 s of audio time apart agree within 0.5 dB. */

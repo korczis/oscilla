@@ -2703,7 +2703,8 @@
               <option :value="p.id" :selected="p.id === synth.preset" x-text="p.title"></option>
             </template>
           </select>
-          <button type="button" data-osc="synth.arm" :aria-pressed="String(synth.armed)"
+          <button type="button" data-osc="synth.arm" role="switch" aria-checked="false"
+            :aria-checked="String(synth.armed)"
             @click="synth.armed ? synthDisarm() : synthArm()" x-text="synth.armed ? 'Disarm' : 'Arm'"
             class="h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">Arm</button>
           <button type="button" data-osc="synth.library" @click="patchLibraryOpen()"
@@ -2766,7 +2767,7 @@
                 <span x-text="studio.playing ? 'Playing' : 'Play'">Play</span>
               </button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.stop" aria-label="Stop"
-                title="Stop (Esc)" aria-keyshortcuts="Escape" @click="studioStop()">
+                title="Stop (Esc)" aria-keyshortcuts="Escape" @click="studioStop({ keepArmed: true })">
                 <svg aria-hidden="true"><use href="#i-stop"/></svg></button>
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.return"
                 aria-label="Return to start" title="Return to start" @click="studioReturn()">
@@ -2776,6 +2777,11 @@
                 @click="studioToggleLoop()"><svg aria-hidden="true"><use href="#s-loop"/></svg></button>
               <span class="osc-st-time osc-num" data-osc="studio.time" role="timer"
                 aria-label="Playhead position">00:00.000</span>
+              <!-- K104: the keys play the running graph while the timeline is stopped; STOP after
+                   a PLAY from armed keeps it (the owner's 'STOP keeps it armed', 2026-11-03). -->
+              <span data-osc="studio.armed" x-show="studio.armed" x-cloak role="status"
+                class="inline-flex items-center gap-1 rounded-sm bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900 dark:text-green-300">
+                <span class="h-2 w-2 rounded-full bg-green-500" aria-hidden="true"></span>Klávesy zapnuté</span>
             </div>
             <div class="osc-st-group" role="group" aria-label="Edit">
               <button type="button" class="osc-icon-btn osc-st-ico" data-osc="studio.undo"
