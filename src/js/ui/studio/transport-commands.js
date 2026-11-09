@@ -22,8 +22,11 @@ export function createTransportCommands(ctx) {
     return p && Number.isFinite(p.position) ? p.position : 0;
   };
 
+  /** The timeline plays (an armed run alone is stopped: its keys sound, K104). */
+  const timelinePlaying = () => !!transport.playing && !transport.armed;
+
   function play() {
-    if (transport.playing) return { ok: true, already: true };
+    if (timelinePlaying()) return { ok: true, already: true };
     const pos = position();
     const r = transport.start({ position: pos });
     if (r && r.ok) say(transportAnnouncement('play', { position: pos }, model()));
@@ -31,16 +34,19 @@ export function createTransportCommands(ctx) {
     return r;
   }
 
-  /** STOP (§184): releases everything; resolves with the transport's counts. */
+  /**
+   * STOP (§184): releases everything; resolves with the transport's counts. A run that began
+   * armed stays armed (K104, the owner's 'STOP keeps it armed'); Escape (fast) disarms.
+   */
   function stop({ fast = false, silent = false } = {}) {
-    const was = transport.playing;
-    const p = transport.stop({ fast });
+    const was = timelinePlaying();
+    const p = transport.stop({ fast, keepArmed: !fast });
     if (was && !silent) say(transportAnnouncement(fast ? 'escape' : 'stop', {}, model()));
     return p;
   }
 
   function playStop() {
-    return transport.playing ? stop() : play();
+    return timelinePlaying() ? stop() : play();
   }
 
   function locate(p) {
