@@ -10,13 +10,20 @@
 //   - no <iframe> exists in the HTML: the frame is created only on a press;
 //   - every chart of CHARTS exists with <title> and <desc>, inlined in the page byte for byte;
 //   - a registry id without Czech copy fails the generator (a fake workspace, a fake engine);
-//   - checkLabFile of verify-deploy names a file that differs from its regeneration.
+//   - checkLabFile of verify-deploy names a file that differs from its regeneration;
+//   - expectedLab regenerates a commit behind HEAD from that commit's own tree (a fixture repo
+//     whose two commits carry different generators), and a commit without the generator
+//     deployed no landing (null), so the release task's closing check works after main moves.
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CHARTS, collectFacts } from '../../scripts/facts.mjs';
 import { generateLanding } from '../../scripts/landing.mjs';
 import { CSP } from '../../scripts/landing/page.mjs';
-import { checkLabFile } from '../../scripts/verify-deploy.mjs';
+import { checkLabFile, expectedLab } from '../../scripts/verify-deploy.mjs';
 import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 import { ENGINE_MODULES } from '../../src/js/synth/panels/engines.js';
 
@@ -103,4 +110,38 @@ test('mutation: verify-deploy names a lab file that differs from its regeneratio
     /^lab: charts\/plan\.svg .* differs from its regeneration/);
   assert.match(checkLabFile({ ...ok, status: 404 })[0], /HTTP 404/);
   assert.match(checkLabFile({ ...ok, contentType: 'text/plain' })[0], /content-type/);
+});
+
+test('expectedLab regenerates a commit behind HEAD from its own tree, never from HEAD', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-lab-fixture-'));
+  const git = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8' }).trim();
+  const stub = (tag) => 'export async function generateLanding({ commit }) {\n'
+    + `  return new Map([['index.html', Buffer.from('${tag} ' + commit)]]);\n}\n`;
+  try {
+    git('init', '--quiet');
+    git('config', 'user.email', 'fixture@example.invalid');
+    git('config', 'user.name', 'fixture');
+    writeFileSync(path.join(dir, 'README.md'), 'before the landing\n');
+    git('add', '-A');
+    git('commit', '--quiet', '-m', 'before');
+    const before = git('rev-parse', 'HEAD');
+    mkdirSync(path.join(dir, 'scripts'));
+    writeFileSync(path.join(dir, 'scripts', 'landing.mjs'), stub('old'));
+    git('add', '-A');
+    git('commit', '--quiet', '-m', 'old generator');
+    const old = git('rev-parse', 'HEAD');
+    writeFileSync(path.join(dir, 'scripts', 'landing.mjs'), stub('new'));
+    git('add', '-A');
+    git('commit', '--quiet', '-m', 'new generator');
+    const head = git('rev-parse', 'HEAD');
+
+    const atHead = await expectedLab({ root: dir, commit: head });
+    assert.equal(atHead.get('index.html').toString(), `new ${head}`);
+    const behind = await expectedLab({ root: dir, commit: old });
+    assert.equal(behind.get('index.html').toString(), `old ${old}`);
+    assert.equal(await expectedLab({ root: dir, commit: before }), null);
+    assert.equal(git('worktree', 'list').split('\n').length, 1, 'the temporary worktree is removed');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
