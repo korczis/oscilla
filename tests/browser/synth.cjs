@@ -34,6 +34,15 @@
 //              0.6 s, a held key stays below -70 dB rel for 0.4 s of audio time and then sounds
 //              (named deadlines); the Studio graph's EG cards and the Inspector show the Delay
 //              and the Hold at the revision the Synth left
+//   s-mg       K229 (desktop and phone): the MG's Key sync toggles by pointer (a tap on the
+//              phone) and keyboard, its Sync division by pointer (tap) and ArrowRight, its Morph
+//              knob by a pointer drag (a CDP touch drag on the chromium phone leg, the pointer
+//              in firefox and webkit) and ArrowUp, each one undo entry; with Key sync on, Sync
+//              off and Rate 0.5 Hz, a scope probe (an AnalyserNode on the MG's control output)
+//              reads after each of two key presses the triangle at the phase since that press's
+//              reset within 0.01, more than 0.1 from the phase since the first (named
+//              deadlines); the Studio graph's MG card, its
+//              Keys Gate edge and the Inspector show the values at the Synth's revision
 //   s-armstall the first Arm with the page's main thread stalled inside the apply (every
 //              AudioNode.connect busy-waits 20 ms, as a loaded host did): from the click until
 //              0.5 s of audio time after armed, the analyser never reads above -70 dB rel (the
@@ -216,7 +225,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr']);
+  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -458,6 +467,165 @@ function defineChecks() {
     out.sameRevision = rev === await page.evaluate(() => window.OSCILLA.studio.store
       .getRevision());
     return { ok: out.sameRevision, ...out };
+  });
+
+  // K229: the MG's Key sync, Sync division and Morph on the face, the restart in a scope probe.
+  def('s-mg', async ({ page, size }) => {
+    const press = (loc) => (size === 'phone' ? loc.tap() : loc.click());
+    const depth = () => page.evaluate(() => window.OSCILLA.studio.store.debugInfo().undoDepth);
+    const mgParam = (k) => page.evaluate((key) => {
+      const id = window.OSCILLA.app.synthDebug().nodes.mg;
+      return window.OSCILLA.studio.store.getModel().graph.nodes.find((x) => x.id === id)
+        .params[key];
+    }, k);
+    const keyed = () => page.evaluate(() => {
+      const n = window.OSCILLA.app.synthDebug().nodes;
+      return window.OSCILLA.studio.store.getModel().graph.edges.filter((e) => e.from.node
+        === n.keys && e.from.port === 'gate' && e.to.node === n.mg && e.to.port === 'reset')
+        .length;
+    });
+    const oneEntry = async (d0, what) => until(async () => (await depth()) === d0 + 1,
+      { ms: 5000, what: `${what} is one undo entry` });
+    const out = {};
+    await face(page, 'panel');
+    // Key sync: on by pointer (tap), off and on again by keyboard.
+    const sync = page.locator('[data-toggle="mg.keysync"]');
+    await sync.scrollIntoViewIfNeeded();
+    let d0 = await depth();
+    await press(sync);
+    await until(async () => (await keyed()) === 1, { ms: 5000,
+      what: 'Key sync on patches the Keys Gate into the MG reset' });
+    await oneEntry(d0, 'Key sync on');
+    d0 = await depth();
+    await page.locator('[data-toggle="mg.keysync"]').focus();
+    await page.keyboard.press('Enter');
+    await until(async () => (await keyed()) === 0, { ms: 5000, what: 'Enter turns Key sync off' });
+    await oneEntry(d0, 'Key sync off');
+    await page.locator('[data-toggle="mg.keysync"]').focus();
+    await page.keyboard.press('Space');
+    await until(async () => (await keyed()) === 1, { ms: 5000, what: 'Space turns Key sync on' });
+    out.pressed = await page.locator('[data-toggle="mg.keysync"]').getAttribute('aria-pressed');
+    // Sync: 1/4 by pointer (tap), the next division by ArrowRight.
+    d0 = await depth();
+    await press(page.locator('[data-option="mg.sync"][data-v="1/4"]'));
+    await until(async () => (await mgParam('sync')) === '1/4', { ms: 5000,
+      what: 'a press on 1/4 syncs the MG' });
+    await oneEntry(d0, 'the Sync press');
+    await page.locator('[data-option="mg.sync"][aria-checked="true"]').focus();
+    await page.keyboard.press('ArrowRight');
+    await until(async () => !['off', '1/4'].includes(await mgParam('sync')), { ms: 5000,
+      what: 'ArrowRight moves the Sync division' });
+    out.sync = await mgParam('sync');
+    // Morph: a drag (the pointer, or a finger on the phone), then ArrowUp.
+    const morph = knob(page, 'mg.morph');
+    await morph.scrollIntoViewIfNeeded();
+    const b = await morph.boundingBox();
+    const cx = b.x + b.width / 2;
+    const cy = b.y + b.height / 2;
+    d0 = await depth();
+    const chromium = page.context().browser().browserType().name() === 'chromium';
+    if (size === 'phone' && chromium) {
+      const cdp = await page.context().newCDPSession(page);
+      const touch = (type, y) => cdp.send('Input.dispatchTouchEvent', { type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x: cx, y }] });
+      await touch('touchStart', cy);
+      for (let i = 1; i <= 4; i++) await touch('touchMove', cy - 10 * i);
+      await touch('touchEnd');
+      out.drag = 'touch (CDP)';
+    } else {
+      await page.mouse.move(cx, cy);
+      await page.mouse.down();
+      await page.mouse.move(cx, cy - 40, { steps: 4 });
+      await page.mouse.up();
+      out.drag = 'pointer';
+    }
+    await until(async () => (await mgParam('morph')) > 0, { ms: 5000,
+      what: `a ${out.drag} drag turns Morph up from 0` });
+    await oneEntry(d0, 'the Morph drag');
+    const m1 = await mgParam('morph');
+    await keyKnob(page, 'mg.morph', 'ArrowUp');
+    await until(async () => (await mgParam('morph')) > m1, { ms: 5000,
+      what: 'ArrowUp turns Morph up' });
+    out.morph = await mgParam('morph');
+    // Shown in the Studio at the Synth's revision.
+    const rev = await page.evaluate(() => window.OSCILLA.studio.store.getRevision());
+    const ids = (await dbg(page)).nodes;
+    await page.locator('[data-osc="synth.studio"]').click();
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'studio'),
+      { ms: 10000, what: 'Studio opens' });
+    const graph = page.locator('[data-osc="studio.subview"][data-value="graph"]');
+    if (await graph.isVisible()) await graph.click();
+    const pctText = `${Math.round(out.morph * 100)} %`;
+    const card = () => page.locator(`[data-node-id="${ids.mg}"] .osc-sg-sum`).textContent()
+      .catch(() => '');
+    await until(async () => { const t = await card(); return t.includes(out.sync)
+      && t.includes(pctText); }, { ms: 10000,
+    what: 'the graph card shows the MG\'s Sync division and Morph' });
+    out.card = await card();
+    const tab = page.locator('[data-osc="studio.subview"][data-value="inspector"]');
+    await page.evaluate((n) => window.OSCILLA.studio.store.dispatch({ type: 'SELECTION_CHANGE',
+      selection: { nodes: [n] } }), ids.mg);
+    if (await tab.isVisible()) await tab.click();
+    const field = (key) => page.locator(`[data-osc="studio.inspector.param"][data-key="${key}"]`)
+      .inputValue().catch(() => '');
+    await until(async () => Math.abs(Number((await field('morph')).replace(',', '.'))
+      - out.morph) < 1e-9 && (await field('sync')) === out.sync, { ms: 10000,
+    what: 'the Inspector shows the MG\'s Morph and Sync' });
+    out.inspector = [await field('morph'), await field('sync')];
+    out.sameRevision = rev === await page.evaluate(() => window.OSCILLA.studio.store
+      .getRevision());
+    out.edge = await keyed();
+    // The restart, heard in a scope probe: Sync off, Rate 0.5 Hz, Morph 0 (the triangle).
+    await page.evaluate(() => { window.location.hash = '#m=synth'; });
+    await until(() => page.evaluate(() => window.OSCILLA.app.workspace === 'synth'),
+      { ms: 10000, what: 'back in the Synth' });
+    await face(page, 'panel');
+    await page.evaluate((id) => {
+      const st = window.OSCILLA.studio.store;
+      st.dispatch({ type: 'NODE_PARAM_SET', nodeId: id, params: { sync: 'off', rate: 0.5,
+        morph: 0 } });
+    }, ids.mg);
+    const scope = (id) => page.evaluate((nid) => {
+      const e = window.OSCILLA.engine;
+      const h = window.OSCILLA.studio.runtime.nodes.get(nid);
+      // The Synth builds its graph at the first key: until then there is nothing to probe.
+      if (!h || !h.info || typeof h.info.voices !== 'function') return null;
+      if (!window.__mgScope || window.__mgScope.h !== h) {
+        const a = e.ctx.createAnalyser();
+        a.fftSize = 256;
+        h.outputs.control.connect(a);
+        window.__mgScope = { a, h };
+      }
+      const buf = new Float32Array(window.__mgScope.a.fftSize);
+      window.__mgScope.a.getFloatTimeDomainData(buf);
+      return { t: e.ctx.currentTime, v: buf[buf.length - 1],
+        starts: h.info.voices().map((x) => x.start) };
+    }, id);
+    const tri = (p) => { const x = p - Math.floor(p); return x < 0.25 ? 4 * x
+      : x < 0.75 ? 2 - 4 * x : 4 * x - 4; };
+    const pressOnce = async (n) => {
+      const s0 = await scope(ids.mg);
+      const before = s0 ? s0.starts.at(-1) : -Infinity;
+      await hold(page, 'KeyA');
+      const r = await until(async () => { const q = await scope(ids.mg); return q
+        && q.starts.at(-1) > before && q.t > q.starts.at(-1) + 0.02 ? q : null; }, { ms: 5000,
+      what: `key press ${n} restarts the MG (a voice from its reset, Key sync on)` });
+      await page.keyboard.up('KeyA');
+      return { ...r, since: tri((r.t - r.starts.at(-1)) * 0.5),
+        sinceFirst: tri((r.t - r.starts[0]) * 0.5) };
+    };
+    const first = await pressOnce(1);
+    // The second press a good part of a period later: its phase differs from the first's.
+    await until(async () => (await scope(ids.mg)).t > first.starts.at(-1) + 0.7, { ms: 5000,
+      what: 'the audio clock runs on 0.7 s' });
+    const second = await pressOnce(2);
+    const near = (q) => Math.abs(q.v - q.since) <= 0.01;
+    out.scope = [first, second].map((q) => ({ v: q.v, since: q.since, sinceFirst: q.sinceFirst }));
+    await page.evaluate(() => { const s = window.__mgScope; if (s) s.a.disconnect(); });
+    const restarted = near(first) && near(second)
+      && Math.abs(second.v - second.sinceFirst) > 0.1;
+    return { ok: out.sameRevision && out.edge === 1 && out.pressed === 'true' && restarted,
+      restarted, ...out };
   });
 
   def('s-armstall', async ({ page }) => {
