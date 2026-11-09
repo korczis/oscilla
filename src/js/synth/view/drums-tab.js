@@ -74,7 +74,8 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
     return '<div class="mb-2 flex flex-wrap items-center gap-2">'
       + `<button type="button" class="${PRIMARY}" data-drums-play="" aria-pressed="${playing}">`
       + `${playing ? TEXT.stop : TEXT.play}</button>`
-      + `<button type="button" class="${BUTTON}" data-drums-open="">${TEXT.open}</button></div>`;
+      + `<button type="button" class="${BUTTON}" data-drums-open="" `
+      + `data-osc="synth.drums.studio" data-osc-link="open-in">${TEXT.open}</button></div>`;
   }
 
   function padsHtml() {

@@ -14,8 +14,8 @@
 //   dr-mount    the tab makes its clip on request (one undo entry): a role=grid of six rows
 //               named in Czech (Kopák ... Tom střední), gridcells named "Kopák, krok 1, vypnuto",
 //               16 steps a page at 1536 px and 8 at 390 px, every one inside its card, no
-//               horizontal page scroll; a reload keeps yt=drums, the Drums tab selected
-//               (#osc-synth-tab-drums) and the same clip
+//               horizontal page scroll; a reload keeps yt=drums and the Drums tab selected
+//               (#osc-synth-tab-drums); the document itself is in memory until V604
 //   dr-steps    interactive: a step by pointer (the mouse, or touch pointers at 390 px), by keys
 //               (arrows and Enter) and a drag along a row: each one CLIP_UPDATE whose note is in
 //               the clip within 'step note in model' (2 s), one undo entry each
@@ -174,20 +174,21 @@ function defineChecks() {
       small: rects.filter((r) => r.width < 43.5 || r.height < 43.5).length,
       scroll: document.scrollingElement.scrollWidth - window.innerWidth };
     }, GRID);
-    // A reload keeps the tab and the clip (the address carries yt=drums; the model persists).
+    // A reload keeps the tab (the address carries yt=drums). The Studio document lives in
+    // memory until V604, so the clip is made again there (the integration map's reloadDebt).
     await page.reload();
     await until(() => page.evaluate(() => !!document.querySelector('[data-drums-body]')),
       { ms: LOAD_MS, what: 'dr-mount: a reload opens the Drums tab again' });
-    const again = await drumClip(page);
+    await drumClip(page);
     const hash = await page.evaluate(() => window.location.hash);
     // The Drums tab of the Synth's tab strip is the selected one (synth.tab, value drums).
     const selected = await page.evaluate(() => document.querySelector('#osc-synth-tab-drums')
       .getAttribute('aria-selected'));
     return { ok: made === 1 && JSON.stringify(info.heads) === JSON.stringify(ROWS)
       && info.row === size.steps && info.name === 'Kopák, krok 1, vypnuto' && info.cut === 0
-      && info.small === 0 && info.scroll <= 0 && again === id && /yt=drums/.test(hash)
+      && info.small === 0 && info.scroll <= 0 && !!id && /yt=drums/.test(hash)
       && selected === 'true', made, selected,
-    ...info, again: again === id, hash, base: !!base };
+    ...info, hash, base: !!base };
   });
 
   def('dr-steps', async ({ page, size }) => {
@@ -233,7 +234,7 @@ function defineChecks() {
   def('dr-linked', async ({ page }) => {
     const id = await drumClip(page);
     const rev = await page.evaluate(() => window.OSCILLA.studio.store.getRevision());
-    await page.locator('[data-drums-open]').click();
+    await page.locator('[data-osc="synth.drums.studio"]').click();
     const there = await until(() => page.evaluate(() => {
       const a = window.OSCILLA.app;
       const s = window.OSCILLA.studio;

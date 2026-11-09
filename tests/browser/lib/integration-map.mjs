@@ -189,6 +189,16 @@ export function scanJs(files) {
       if (/\bhref\s*:\s*['`]#m=/.test(c)) {
         producers.push({ file, line: i + 1, marker: markerAt(lines, i), what: 'route literal' });
       }
+      // A control built in JS as markup that carries its marker beside its data-osc (K222: the
+      // Drums tab's Open in Studio, synth/view/drums-tab.js): the marker is the declaration.
+      const tagged = /data-osc="([^"]+)"[^<>]*data-osc-link="([^"]+)"/.exec(raw)
+        || /data-osc-link="([^"]+)"[^<>]*data-osc="([^"]+)"/.exec(raw);
+      if (tagged) {
+        const [ctl, kind] = /^data-osc="/.test(tagged[0]) ? [tagged[1], tagged[2]]
+          : [tagged[2], tagged[1]];
+        producers.push({ file, line: i + 1, marker: ctl, kind, control: ctl,
+          what: 'JS-built markup' });
+      }
       // A control built in JS ('data-osc': ...) whose onClick opens another workspace.
       if (/'data-osc'\s*:/.test(c)) {
         const next = lines.slice(i + 1, i + 4).findIndex((l) => /'data-osc'\s*:/.test(l));

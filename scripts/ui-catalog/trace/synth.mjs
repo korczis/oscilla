@@ -15,6 +15,8 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
   'synth.studio': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
+  'synth.drums.studio': entry({ source: 'src/js/synth/view/drums-tab.js', plan: ['G001', 'K222'],
+    tests: ['tests/browser/drums.cjs', 'tests/unit/integration-map.test.mjs'] }),
   'synth.copy-link': entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs'] }),
   'synth.tab': entry({ source: 'src/index.html',
