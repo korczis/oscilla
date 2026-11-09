@@ -1,0 +1,28 @@
+id: E060
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "The CI receipt accepts a base job the release tree's ci.yml provably replaces, so a release that renames gate jobs can carry its own receipt"
+slug: the-ci-receipt-accepts-a-base-job-the-release-tree-provably-replaces
+priority: p1
+profile: implementation
+objective: "Lands as fix(release). scripts/release-ci-receipt.mjs (rule project.release-receipt-binds-gate v3, R037) requires every job the base's .github/workflows/ci.yml declares in the release pull request's run. Pull request 509 (a release, merged cb414b85) brought the CI legs in place of the per-category browser jobs, so its run carried leg-1 and leg-2 while the base (7637039) still declared V1 engine checks, DSP, labs, sequencer, V3 measurement and UI, V3.1 Studio UI, Browser gate and Control census: release:publish refused, and no pull request that renames gate jobs could ever carry its own release. After: a base job the release tree's copy no longer declares is accepted when that copy provably replaces it, from the two copies and the release tree's package.json alone (replacedJob): the base job ran at least one npm script, and each one is run, for the same matrix value, by a job of the release tree's copy, by name or through a job running test:leg, whose browser suites are test:release's but the visual gate (tests/browser/lib/shards.cjs), when every suite the script names is among them. The replacing jobs stay required with success. A job of programs only, a script run nowhere, a browser without its leg, or no package.json replaces nothing and still refuses, naming the job and the base, so R037 holds: a release tree still cannot drop a check and pass. The rule's statement and a dated amendment of version 3 say so. Rollback: revert the pull request; a release that renames gate jobs then refuses again, as before."
+why: "The integrator oscilla-43 (2026-11-09): the release of pull request 509 could not publish, a release-process defect from the CI sharding (ci/shard-browser-gate, lane ci-speed); its content was folded into the next release, whose base already has the new ci.yml. Filed and fixed by the ci-speed lane (oscilla p7)."
+scope:
+  - "scripts/release-ci-receipt.mjs"
+  - "tests/unit/release-ci-receipt.test.mjs"
+  - ".ai/repo/rules/project/release-receipt-binds-gate.v3.md"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: tests/unit/release-ci-receipt.test.mjs, failing on cb414b85: a base ci.yml with a per-browser job running npm run test:engine and a release tree whose legs run npm run test:leg in the same browsers verify, and the legs stay required (a red leg refuses); on the real ci.yml and package.json the per-category jobs of the ci.yml before the legs (each with the scripts it ran, in chromium, firefox and webkit) are all replaced."
+  - "Mutations, each still refusing with the job and the base named: a browser without its leg; a script whose suites test:release does not name; a leg running another script; no package.json; a base job of programs only (the changes classifier) dropped."
+  - "The rule's statement and its version-3 amendment of 2026-11-09 state the replacement; R037's tests (a dropped job of no npm script refuses, a job neither copy declares refuses, an unreadable base refuses) pass unchanged."
+  - "A reviewer's verdict for the guarded paths (scripts/release-*, tests/unit/release-*; project.review-verdict); tests/README.md's row says what the receipt now accepts."
+  - "Done only after each criterion is re-checked on a main commit."
+validation:
+  - "node --test tests/unit/release-ci-receipt.test.mjs tests/unit/release-publish.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09
