@@ -40,7 +40,7 @@
 //              in firefox and webkit) and ArrowUp, each one undo entry; with Key sync on, Sync
 //              off and Rate 0.5 Hz, a scope probe (an AnalyserNode on the MG's control output)
 //              reads after each of two key presses the triangle at the phase since that press's
-//              reset within 0.01, more than 0.1 from the phase since the first (named
+//              reset within 0.05, more than 0.15 from the phase since the first (named
 //              deadlines); the Studio graph's MG card, its
 //              Keys Gate edge and the Inspector show the values at the Synth's revision
 //   s-armstall the first Arm with the page's main thread stalled inside the apply (every
@@ -331,6 +331,12 @@ async function hold(page, code) {
   await page.keyboard.down(code);
 }
 const silent = (page, what) => sound(page, (p) => p.rmsDb < -70, what);
+/** The running graph (if any) is the store's current revision: an edit has reached the audio
+ *  before a key is judged against it (a loaded host applies a little after the dispatch). */
+const settled = (page, what) => until(() => page.evaluate(() => {
+  const a = window.OSCILLA.studio.runtime.applied();
+  return !a || a.revision === window.OSCILLA.studio.store.getRevision();
+}), { ms: 10000, what });
 
 // ------------------------------------------------------------------------------ checks
 function defineChecks() {
@@ -431,6 +437,7 @@ function defineChecks() {
     if (!d.cables.some((c) => c.from === 'eg1.control' && c.to === 'vca.gain')) {
       return { ok: false, detail: 'EG 1 into the VCA is not patched', cables: d.cables };
     }
+    await settled(page, 'the running graph has EG 1 into the VCA and the Delay');
     await hold(page, 'KeyA');
     out.during = await quiet(page, -70, 0.4, 'a key held through the Delay stays silent');
     const p = await sound(page, (q) => q.rmsDb > -50, 'the key sounds after the Delay');
@@ -592,14 +599,18 @@ function defineChecks() {
       // The Synth builds its graph at the first key: until then there is nothing to probe.
       if (!h || !h.info || typeof h.info.voices !== 'function') return null;
       if (!window.__mgScope || window.__mgScope.h !== h) {
+        if (window.__mgScope) window.__mgScope.a.disconnect();
         const a = e.ctx.createAnalyser();
         a.fftSize = 256;
         h.outputs.control.connect(a);
-        window.__mgScope = { a, h };
+        window.__mgScope = { a, h, at: e.ctx.currentTime };
       }
-      const buf = new Float32Array(window.__mgScope.a.fftSize);
-      window.__mgScope.a.getFloatTimeDomainData(buf);
+      const s = window.__mgScope;
+      const buf = new Float32Array(s.a.fftSize);
+      s.a.getFloatTimeDomainData(buf);
+      // Ready once the clock has run two analysis windows past the probe's connection.
       return { t: e.ctx.currentTime, v: buf[buf.length - 1],
+        ready: e.ctx.currentTime > s.at + (2 * s.a.fftSize) / e.ctx.sampleRate,
         starts: h.info.voices().map((x) => x.start) };
     }, id);
     const tri = (p) => { const x = p - Math.floor(p); return x < 0.25 ? 4 * x
@@ -608,25 +619,30 @@ function defineChecks() {
       const s0 = await scope(ids.mg);
       const before = s0 ? s0.starts.at(-1) : -Infinity;
       await hold(page, 'KeyA');
-      const r = await until(async () => { const q = await scope(ids.mg); return q
+      const r = await until(async () => { const q = await scope(ids.mg); return q && q.ready
         && q.starts.at(-1) > before && q.t > q.starts.at(-1) + 0.02 ? q : null; }, { ms: 5000,
       what: `key press ${n} restarts the MG (a voice from its reset, Key sync on)` });
       await page.keyboard.up('KeyA');
       return { ...r, reset: r.starts.at(-1), since: tri((r.t - r.starts.at(-1)) * 0.5) };
     };
+    await settled(page, 'the running graph has the MG at Sync off, Rate 0.5 Hz, Morph 0');
     const first = await pressOnce(1);
-    // The second press a good part of a period later: its phase differs from the first's.
-    await until(async () => (await scope(ids.mg)).t > first.reset + 0.7, { ms: 5000,
-      what: 'the audio clock runs on 0.7 s' });
+    // The second press a quarter period (0.5 s) or more after the first: read within 0.2 s of
+    // its reset (phase p <= 0.1), the triangle since it is 4p and since the first 1 - 4p or
+    // beyond, at least 0.2 apart.
+    await until(async () => (await scope(ids.mg)).t > first.reset + 0.5, { ms: 5000,
+      what: 'the audio clock runs on 0.5 s' });
     const second = await pressOnce(2);
     // Had the MG run on from the first press's reset, it would read this phase instead.
     second.sinceFirst = tri((second.t - first.reset) * 0.5);
-    const near = (q) => Math.abs(q.v - q.since) <= 0.01;
+    // 0.05: 25 ms of the triangle's slope, the analyser's newest sample behind the clock.
+    const near = (q) => Math.abs(q.v - q.since) <= 0.05;
     out.scope = [first, second].map((q) => ({ v: q.v, reset: q.reset, t: q.t, since: q.since,
       sinceFirst: q.sinceFirst }));
     await page.evaluate(() => { const s = window.__mgScope; if (s) s.a.disconnect(); });
     const restarted = near(first) && near(second)
-      && Math.abs(second.v - second.sinceFirst) > 0.1;
+      && Math.abs(second.v - second.sinceFirst) > 0.15
+      && second.t - second.reset <= 0.2;
     return { ok: out.sameRevision && out.edge === 1 && out.pressed === 'true' && restarted,
       restarted, ...out };
   });
