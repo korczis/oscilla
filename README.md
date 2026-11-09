@@ -720,7 +720,7 @@ ring modulator and noise into a mixer, a high-pass and a low-pass 12 dB/oct filt
 two envelopes, a VCA, a modulation generator and a sample-and-hold, every jack normalled so it
 sounds with no cable, and a patch bay to re-route it. The panel is generated from one data
 declaration and the Studio node registry, and it is the same document as Studio: **Open in
-Studio** shows its nodes. Its **Engines** tab adds polyphonic engines, up to 16 voices each:
+Studio** shows its nodes. Its **Engines** tab adds polyphonic engines, up to 8 voices each:
 additive (drawbars), FM (2-4 operators, 7 algorithms), AM and ring, wavetable with morph, hard
 sync at set ratios and a percussion kit on the keys. The keyboard, the computer keys and MIDI
 play the panel or the chosen engine; presets and **Copy link** keep a sound. Beside the piano,

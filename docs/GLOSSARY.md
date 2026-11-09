@@ -23,7 +23,7 @@ restores it. **Patch bay**: the panel's view of every jack, grouped by module, w
 drawn.
 
 **Engine.** A polyphonic note source of the Synth's Engines tab (`docs/synth.md`): additive,
-FM, AM / ring, wavetable, hard sync or percussion, up to 16 **voices**; a 17th note takes the
+FM, AM / ring, wavetable, hard sync or percussion, up to 8 **voices**; a 9th note takes the
 voice released first, else the oldest (**voice stealing**). **FM index**: how far a modulator
 moves its target's frequency, Δf = I x f_mod Hz. **Morph**: the wavetable position, a
 level-continuous crossfade of two neighbouring tables. **Hard sync**: a wave reset at every period of

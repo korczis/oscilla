@@ -1,6 +1,6 @@
 // Review of #332 (K090-K092, K121-K123): defects a player meets on the Engines tab.
 //   - A note that builds no source (every drawbar at 0, every FM operator above 0.95 × Nyquist)
-//     must not hold a voice: the census and the 16-voice ceiling count only what sounds.
+//     must not hold a voice: the census and the MAX_VOICES ceiling count only what sounds.
 //   - An engine removed in Studio breaks the chain into the one Output; the panel and the
 //     engines before it go silent. The bay says which module is gone and offers Restore module
 //     (not "normal removed" and a Restore normal that has nothing to restore), and the tab the
