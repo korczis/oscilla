@@ -1,0 +1,33 @@
+id: U100
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "On a short phone the Synth keeps no room for its content: the docked keyboard (256 px) and the open notices take the whole main area"
+slug: on-a-short-phone-the-synth-keeps-no-room-for-its-content
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Found by K222's phone proof (tests/browser/iphone.cjs, sounds-drums-pad and sounds-drums-step, oscilla-ee 2026-11-09) and measured on main 7637039e in WebKit with Playwright's iPhone SE profiles, the Synth opened from a link (#m=synth&yt=engines): at 320 x 568 the app bar takes 65 px, the link notice 63, the listening safety notice 86 and the page header 57, so the main scroller is 235 px tall, and the docked keyboard inside it is 256 px (--osc-dock-h): no row of the tab's own content is left; at 375 x 667 the main is 351 px, the dock 256 and the Synth's sticky section chips 60, leaving 35 px. Closing both notices gives 68 px at 320 x 568. A control near the top of a tab (Engines' Expand all, the Drums tab's Vytvořit bicí klip) is covered whichever way it is scrolled into view: by the page header or by the dock; Playwright's tap refuses it, and iphone.cjs closes the notices first (CLOSE_NOTICES) so its Drums checks run. Before: on a short phone (a viewport height of 700 px or less) the Synth's tabs other than the keys have no usable content area. After: on a short phone the dock yields on the tabs whose own surface plays (as the XY tab already folds it to its handle, K171), the notices take at most one line each there, and every tab keeps at least 44 px x 3 rows of its content in view under the sticky chips with the notices open. Rollback: revert; the layout returns as it is.""
+why: "Owner order of 2026-11-02 (the whole interface mobile-first, the phone-whole criterion) and 2026-11-04 (no control hidden under another), and project.a-phone-sounds (no sound on a phone must not happen: a sound the finger cannot reach is the same failure). Asked by the coordinator oscilla-43 on 2026-11-09 to be filed as its own issue for the UI lane, not fixed inside K222."
+current_state: "Filed 2026-11-09 from K222's iphone.cjs finding and measured on main 7637039e; not started. iphone.cjs's CLOSE_NOTICES step (feat/k222-drum-view, 600741c4) is the workaround this issue removes."
+scope:
+  - "src/index.html"
+  - "src/js/ui"
+  - "src/js/synth/dock.js"
+  - "src/js/synth/ui.js"
+  - "src/styles"
+  - "tests/browser/iphone.cjs"
+  - "tests/browser/ui-current.cjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first: a phone-whole check (tests/browser/ui-current.cjs) opens #m=synth&yt=engines fresh from a link at 320 x 568 and 375 x 667 (WebKit iPhone SE profiles and the same viewports in chromium and firefox) with the link notice and the safety notice shown, and finds the tab's first control (Expand all) tappable: inside the main scroller's visible area below the sticky chips and above the dock, not covered at its centre, at least 44 px; and the main scroller keeps at least 132 px of the tab's content in view. On the merge base it fails at both sizes."
+  - "On a short phone (viewport height 700 px or less) the docked keyboard yields on the Synth tabs whose own surface plays or edits (Engines' picker and cards, XY, Drums when it lands), folded to its handle as K171 folds it for the XY tab, and unfolds by its handle as there; on the Panel tab, whose keys are the instrument, it stays docked. The listening safety notice keeps its wording behind its More control and its reopen control, and takes one line on a short phone; a link notice takes at most one line there."
+  - "iphone.cjs's CLOSE_NOTICES prep is removed (it lands with K222) and its Drums checks pass on both iPhone SE profiles with the notices open; no other workspace's phone-whole checks regress at 320 x 568 and 375 x 667."
+  - "One rule per surface (the shell's notice area, the dock's yield), no per-workspace exception beyond the dock's tab list; the Flowbite Pro baseline and the legacy class ledger only shrink; no inline style is added. Guarded paths (src/js/synth) carry a non-builder's verdict."
+validation:
+  - "node tests/browser/iphone.cjs"
+  - "node tests/browser/ui-current.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
