@@ -100,3 +100,63 @@ test('the transport plays step 5 at its onset: EG 1 attacks at baseTime + 1 beat
     `an attack at ${want} s (step 5), got ${onsets.map((t) => t.toFixed(6)).join(', ')}`);
   assert.ok(!onsets.some((t) => t < want - 1e-6), 'no attack before step 5');
 });
+
+// Review of 7521fc69 (oscilla-c1): C1-K221-1 the strip loops, C1-K221-3 only its own track.
+test('adding the strip loops it when no loop is on, and keeps a loop that is', () => {
+  const st = panelStore();
+  if (st.getModel().timeline.loop.enabled) {
+    assert.equal(st.dispatch({ type: 'LOOP_SET', enabled: false }).ok, true);
+  }
+  const r = stripCreateAction(st.getModel(), PANEL);
+  assert.equal(r.text, STRIP_TEXT.created);
+  assert.equal(st.dispatch(r.action).ok, true);
+  const beat = 60 / st.getModel().transport.tempo;
+  assert.deepEqual(st.getModel().timeline.loop, { enabled: true, start: 0, end: 4 * beat },
+    'the loop is the strip\'s 16 steps');
+  const kept = panelStore();
+  assert.equal(kept.dispatch({ type: 'LOOP_SET', enabled: true, start: 1, end: 3 }).ok, true);
+  const k = stripCreateAction(kept.getModel(), PANEL);
+  assert.equal(k.text, STRIP_TEXT.createdKeptLoop);
+  assert.equal(kept.dispatch(k.action).ok, true);
+  assert.deepEqual(kept.getModel().timeline.loop, { enabled: true, start: 1, end: 3 });
+});
+
+test('Play repeats the strip: step 1 attacks again on pass 2', () => {
+  const { st, grid } = withStrip();
+  grid.down(0, 0);
+  grid.up();
+  const fx = createFakeAudioEnv({ sampleRate: SR });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init(), 'engine.init');
+  if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
+  const runtime = createStudioRuntime({ engine });
+  const transport = createStudioTransport({ runtime, engine, store: st });
+  const started = transport.start({ position: 0 });
+  assert.equal(started.ok, true, started.reason);
+  fx.advance(3);
+  const eg1 = PANEL.resolve(st.getModel()).get('eg1').id;
+  const contour = runtime.nodes.get(eg1).outputs.control.offset;
+  const attack = st.getModel().graph.nodes.find((n) => n.id === eg1).params.attack;
+  const onsets = contour.events.filter((e) => e.ramp === 'linear' && e.value === 1)
+    .map((e) => e.t - attack);
+  const pass = (4 * 60) / st.getModel().transport.tempo; // 16 steps of 1/16: 4 beats
+  for (const k of [0, 1]) {
+    const want = (Math.round(started.baseTime * SR) + Math.round(k * pass * SR)) / SR;
+    assert.ok(onsets.some((t) => Math.abs(t - want) < 1e-6),
+      `pass ${k + 1}: an attack at ${want} s, got ${onsets.map((t) => t.toFixed(6)).join(', ')}`);
+  }
+  assert.equal(transport.playing, true, 'still playing after the first pass');
+});
+
+test('a notes clip made in the Studio on the panel\'s Keys is not the strip', () => {
+  const st = panelStore();
+  const keys = PANEL.resolve(st.getModel()).get('keys').id;
+  const track = st.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys }).created.tracks[0];
+  assert.equal(st.dispatch({ type: 'CLIP_ADD', trackId: track, kind: 'notes', startBeats: 0,
+    durationBeats: 8, payload: { notes: [{ at: 0, note: 64, len: 1, vel: 0.8 }] } }).ok, true);
+  assert.equal(stripOf(st.getModel(), PANEL), null, 'the user\'s melody stays the user\'s');
+  const r = stripCreateAction(st.getModel(), PANEL);
+  assert.ok(r.action, r.reason);
+  assert.equal(st.dispatch(r.action).ok, true);
+  assert.equal(stripOf(st.getModel(), PANEL).track.id, 'synth-steps');
+});

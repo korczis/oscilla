@@ -25,9 +25,10 @@
 //   sg-playhead with a note in the clip, Studio's Play: aria-current=step appears on a step and
 //               moves to another within 'step playhead moves' (3 s); Stop clears it
 //   sg-list     K221: a selected Step Modulator's steps are the kind's param-list lane in the
-//               Inspector (no comma-separated text field): a pointer near the top of step 3 (a
-//               tap on the phone) sets it near the maximum, and ArrowRight then Enter switch
-//               step 4 off to the minimum -1, each one undo entry on the node's steps parameter
+//               Inspector (no comma-separated text field): a vertical drag up step 3 (mouse;
+//               touch pointers on the phone) raises it near the maximum in one undo entry;
+//               PageUp at the maximum adds nothing and says no spliced English; Delete on
+//               step 4 switches it off to 0, the bipolar range's neutral value, never -1
 //   no-console-errors
 'use strict';
 
@@ -299,43 +300,61 @@ function defineChecks() {
       '[data-osc="studio.inspector"] input[data-key="steps"]')].length);
     const steps = () => page.evaluate((nid) => window.OSCILLA.studio.model.graph.nodes
       .find((n) => n.id === nid).params.steps, id);
-    const before = await steps();
+    const before = await steps(); // [1, 0.5, 0, -0.5, -1, -0.5, 0, 0.5]
     const d0 = await undoDepth(page);
     await page.evaluate((sel) => document.querySelector(sel).scrollIntoView({ block: 'center' }),
       LIST);
-    // A value lane's pointer sets the step from its vertical position: near the cell's top is
-    // near the maximum (the kind's value gesture, step-grid-model.js valueAt).
-    const cell = page.locator(`${LIST} [role="gridcell"][data-step="2"]`);
-    const top = { x: 22, y: 3 };
-    if (size.touch) await cell.tap({ position: top }); else await cell.click({ position: top });
+    // A vertical drag on step 3 from its bottom to its top: the value follows the pointer and is
+    // committed once (one undo entry), near the maximum (c3's P2-1 of 7521fc69).
+    const box = await page.evaluate((sel) => {
+      const r = document.querySelector(`${sel} [role="gridcell"][data-step="2"]`)
+        .getBoundingClientRect();
+      return { x: r.left + r.width / 2, bottom: r.bottom - 2, top: r.top + 2 };
+    }, LIST);
+    if (!size.touch) {
+      await page.mouse.move(box.x, box.bottom);
+      await page.mouse.down();
+      await page.mouse.move(box.x, box.top, { steps: 6 });
+      await page.mouse.up();
+    } else {
+      await page.evaluate((b) => {
+        const fire = (type, y, target) => target.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, composed: true, pointerId: 7, pointerType: 'touch',
+          isPrimary: true, clientX: b.x, clientY: y, button: 0,
+          buttons: type === 'pointerup' ? 0 : 1 }));
+        const cell = document.elementFromPoint(b.x, b.bottom);
+        fire('pointerdown', b.bottom, cell);
+        for (let i = 1; i <= 6; i += 1) {
+          fire('pointermove', b.bottom + ((b.top - b.bottom) * i) / 6, cell);
+        }
+        fire('pointerup', b.top, cell);
+      }, box);
+    }
     const a = await until(async () => {
       const v = await steps();
-      return v[2] !== before[2] ? v : null;
-    }, { ms: NOTE_MS, what: 'sg-list: a pointer on step 3 sets the steps parameter' });
+      return v[2] > 0.8 ? v : null;
+    }, { ms: NOTE_MS, what: 'sg-list: a drag up step 3 raises it near the maximum' });
     const one = (await undoDepth(page)) === d0 + 1;
-    // Keyboard, through the grid's one tab stop: Home, three arrows to step 4, Enter switches
-    // it (on: off).
+    // Keyboard through the one tab stop: Home (step 1, at the maximum 1), PageUp there changes
+    // nothing; then three arrows to step 4 (-0.5, on) and Delete switches it off to 0, the
+    // neutral value of the bipolar range, never -1 (c3's P2-2 and P2-3).
     await page.locator(`${LIST} [role="gridcell"][tabindex="0"]`).focus();
-    for (const k of ['Home', 'ArrowRight', 'ArrowRight', 'ArrowRight']) {
-      await page.keyboard.press(k);
-    }
-    await page.keyboard.press('Enter');
+    await page.keyboard.press('Home');
+    await page.keyboard.press('PageUp');
+    for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Delete');
     const b = await until(async () => {
       const v = await steps();
       return v[3] !== a[3] ? v : null;
-    }, { ms: NOTE_MS, what: 'sg-list: Enter on step 4 sets the steps parameter' })
-      .catch(async (e) => {
-        const now = await steps();
-        const f = await page.evaluate(() => document.activeElement
-          && document.activeElement.getAttribute('aria-label'));
-        throw new Error(`${e.message}; steps ${JSON.stringify(now)}; focus ${f}`);
-      });
-    const two = (await undoDepth(page)) === d0 + 2;
-    // The default steps: 0 at step 3 rises near the maximum, -0.5 at step 4 is on (above the
-    // minimum -1) and Enter switches it off to -1; nothing else moves.
-    return { ok: text === 0 && one && two && a[2] > 0.5 && b[3] === -1
+    }, { ms: NOTE_MS, what: 'sg-list: Delete on step 4 sets the steps parameter' });
+    const two = (await undoDepth(page)) === d0 + 2; // PageUp at the maximum added no entry
+    const live = await page.evaluate(() => [...document.querySelectorAll('[aria-live]')]
+      .map((el) => el.textContent).join(' '));
+    const spliced = /values must be numbers/.test(live);
+    return { ok: text === 0 && one && two && b[3] === 0 && b[0] === 1 && !spliced
       && b.length === before.length
-      && b.every((v, i) => (i === 2 || i === 3 ? true : v === before[i])), before, a, b, text };
+      && b.every((v, i) => (i === 2 || i === 3 ? true : v === before[i])), before, a, b, text,
+    spliced };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,

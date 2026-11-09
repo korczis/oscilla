@@ -3,8 +3,8 @@
 // target's length; Space builds nothing; the playhead writes only on a step change and keeps
 // its state across ticks; a list-parameter grid builds one NODE_PARAM_SET per gesture. The
 // four negative cases of W008: a paste longer than the target (its length kept), Delete on an
-// empty step (no action), Space (the transport's), a value out of the parameter's range
-// (refused with its sentence).
+// empty step (no action), Space (the transport's), a value step past the parameter's range
+// (held at its end, no action; K221's review of the spliced English sentence).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -167,8 +167,9 @@ test('a list-parameter grid builds one NODE_PARAM_SET per gesture', () => {
   const param = { key: 'steps', label: 'Kroky', type: 'list', min: -1, max: 1, minLength: 1,
     maxLength: 16, step: 0.01 };
   const log = { actions: [], said: [] };
+  // K221 review: a bipolar list is off at 0 (no modulation), not at its minimum -1.
   const grid = createStepGrid({ mode: 'param-list', nodeId: 'stepmod-1', param,
-    values: [0, -1, 0.5, -1], pageSteps: 16,
+    values: [0, 0, 0.5, 0], pageSteps: 16,
     commit: (a) => { log.actions.push(a); grid.set({ values: a.value }); return true; },
     say: (s) => log.said.push(s) });
   // A drag along the lane paints three steps on: one action.
@@ -183,15 +184,41 @@ test('a list-parameter grid builds one NODE_PARAM_SET per gesture', () => {
   grid.valueAt(0, 0, 0.75);
   assert.equal(log.actions.length, 2);
   assert.equal(log.actions[1].value[0], 0.5);
-  // Delete on the lane's minimum builds nothing.
+  // Delete switches a step off to 0, the neutral value of the bipolar range, never to -1; on a
+  // step already off it builds nothing.
   grid.key('ArrowRight');
   grid.key('Delete');
   assert.equal(log.actions.length, 3);
+  const changed = log.actions[2].value.filter((v, i) => v !== log.actions[1].value[i]);
+  assert.deepEqual(changed, [0], 'the step Delete switched off reads 0');
   grid.key('Delete');
   assert.equal(log.actions.length, 3);
+  // The step's name says what it plays: 0 is off, -1 (full negative modulation) is on.
+  assert.match(cellName('', 1, 0, 'param-list', false), /vypnuto$/);
+  assert.match(cellName('', 1, -1, 'param-list', true), /zapnuto$/);
 });
 
-test('a value out of the parameter\'s range is refused with its sentence (negative case)', () => {
+test('K221 review: a value step past the range end is held there, with no action and no word',
+  () => {
+    const param = { key: 'steps', label: 'Kroky', type: 'list', min: -1, max: 1, minLength: 1,
+      maxLength: 16, step: 0.01 };
+    const log = { actions: [], said: [] };
+    const grid = createStepGrid({ mode: 'param-list', nodeId: 'n', param, values: [1, 0.995],
+      commit: (a) => { log.actions.push(a); grid.set({ values: a.value }); return true; },
+      say: (s) => log.said.push(s) });
+    grid.key('PageUp'); // 1 + 0.01 past max: held at 1, nothing to do
+    assert.deepEqual([log.actions.length, log.said.length], [0, 0]);
+    grid.key('ArrowRight');
+    grid.key('PageUp'); // 0.995 + 0.01 -> held at 1, one action
+    assert.equal(log.actions.length, 1);
+    assert.equal(log.actions[0].value[1], 1);
+    grid.valueAt(0, 0, 0.4321); // a pointer value is rounded to the parameter's step
+    assert.equal(log.actions[1].value[0], -0.14);
+  });
+
+test('a value at the range end is not stepped past it (negative case)', () => {
+  // W008's negative case as restated by K221's review: a step past the end of the range is held
+  // there and refused silently, instead of a sentence spliced from the store's English reason.
   const param = { key: 'steps', label: 'Kroky', type: 'list', min: 0, max: 1, minLength: 1,
     maxLength: 16, step: 0.1 };
   const log = { actions: [], said: [] };
@@ -199,8 +226,7 @@ test('a value out of the parameter\'s range is refused with its sentence (negati
     commit: (a) => { log.actions.push(a); return true; }, say: (s) => log.said.push(s) });
   grid.key('PageUp'); // 1 + 0.1 > max
   assert.equal(log.actions.length, 0);
-  assert.equal(log.said.length, 1);
-  assert.match(log.said[0], /^Kroky: hodnota values must be numbers between 0 and 1\.$/);
+  assert.equal(log.said.length, 0);
 });
 
 test('a refusal says the store\'s sentence once and leaves the grid as it was', () => {

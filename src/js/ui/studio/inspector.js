@@ -750,9 +750,9 @@ export function mountInspector(host, svc) {
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
   let steps = null; // the step grid of a shown notes clip (W008)
-  const listGrids = new Map(); // param key -> its step grid (K221, W008)
+  const listGrids = new Map(); // K221: param key -> its step grid
   const dropListGrids = () => {
-    for (const g of listGrids.values()) g.destroy();
+    listGrids.forEach((g) => g.destroy());
     listGrids.clear();
   };
   // The graph summary of the Studio card (K168): one instance, so its open groups survive a
@@ -943,7 +943,7 @@ export function mountInspector(host, svc) {
     return h('div', { class: 'osc-si-field', 'data-field': f.key }, [btn]);
   }
 
-  /** K221: a list parameter is a step grid (inspector-steps.js mountListSteps) and a count. */
+  /** K221: a list parameter is a step grid (mountListSteps) and a count. */
   function listField(view, f) {
     const box = h('div', { class: 'mt-2', 'data-field': f.key });
     const g = mountListSteps(box, { dispatch, say: (t) => svc.announce(t) },
@@ -955,10 +955,9 @@ export function mountInspector(host, svc) {
         const next = g.resize(n, cur ? cur.params[f.key] : f.value);
         return next.reason ? { ok: false, reason: next.reason }
           : dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key, value: next });
-      }, 'studio.inspector.param');
-    // Kept with its grid, not in refs under the shared hook name.
-    g.count = refs.get('studio.inspector.param');
-    refs.delete('studio.inspector.param');
+      }, 'studio.inspector.param', { key: `${f.key}.count`,
+      nan: 'Počet kroků musí být číslo.' });
+    g.count = refs.get(`${f.key}.count`);
     return h('div', { class: 'osc-si-field' }, [
       h('span', { class: 'osc-label osc-si-label', text: f.label }), box, count]);
   }
@@ -987,18 +986,20 @@ export function mountInspector(host, svc) {
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }), input, error]);
   }
 
-  function numberInput(id, label, value, unit, apply, dataOsc) {
+  // opts: key (data-key and refs key), nan (the not-a-number sentence).
+  function numberInput(id, label, value, unit, apply, dataOsc, opts = {}) {
+    const key = opts.key || dataOsc;
     const unitId = unit ? `${id}-unit` : null;
     const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
       inputmode: 'decimal', autocomplete: 'off', value: String(value), 'data-osc': dataOsc,
-      'data-key': dataOsc, 'aria-describedby': describedBy(unitId, `${id}-err`) });
+      'data-key': key, 'aria-describedby': describedBy(unitId, `${id}-err`) });
     const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
     const unitEl = unit ? h('span', { class: 'osc-si-unit', id: unitId, text: unit }) : null;
     const ref = { input, error, unit: unitEl, field: { input: String(value) } };
     input.addEventListener('change', () => {
       const v = Number(String(input.value).trim().replace(',', '.'));
       if (!finite(v)) {
-        const why = `${label} must be a number.`;
+        const why = opts.nan || `${label} must be a number.`;
         showError(ref, why);
         svc.announce(why, { assertive: true });
         return;
@@ -1007,7 +1008,7 @@ export function mountInspector(host, svc) {
       showError(ref, r && !r.ok ? r.reason : '');
     });
     keepModelValue(ref);
-    refs.set(dataOsc, ref);
+    refs.set(key, ref);
     return h('div', { class: 'osc-si-field osc-si-field--half' }, [
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }),
       h('div', { class: 'osc-si-row osc-si-row--edit' }, [input, unitEl]),
@@ -1474,7 +1475,7 @@ export function mountInspector(host, svc) {
     const active = document.activeElement;
     if (view.kind === 'node') {
       for (const f of view.fields) {
-        const lg = listGrids.get(f.key); // K221: the grid and count follow the model
+        const lg = listGrids.get(f.key); // K221
         if (lg) lg.update(f.value);
         if (lg && lg.count && lg.count.input !== active) {
           lg.count.input.value = String(f.value.length);

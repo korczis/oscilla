@@ -18,8 +18,8 @@
 //     -> { element, set(next), setDisabled(reason | null), destroy(), model }
 
 import { onFrame } from '../../charts/frame-loop.js';
-import { PAGE_STEPS, cellName, chordOf, createPlayhead, createStepGrid, pageStepsFor }
-  from './step-grid-model.js';
+import { PAGE_STEPS, cellName, chordOf, createPlayhead, createStepGrid, listOffValue,
+  pageStepsFor } from './step-grid-model.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -121,7 +121,7 @@ export function mountStepGrid(host, opts) {
 
   const nameOf = (lane) => (list ? '' : laneNames[lane] || `${model.state().lanes[lane]}`);
   const valueOf = (st, lane, step) => (list ? st.values[step] : st.cells[lane][step]);
-  const isOn = (st, lane, step) => (list ? st.values[step] !== opts.param.min
+  const isOn = (st, lane, step) => (list ? st.values[step] !== listOffValue(opts.param)
     : !!st.cells[lane][step]);
 
   /** The page size the laid-out width holds, or null when it is unknown or unchanged. */
@@ -161,7 +161,7 @@ export function mountStepGrid(host, opts) {
         cells.push(`<div role="gridcell" class="${CELL} ${tone}" data-lane="${lane}" `
           + `data-step="${step}" tabindex="${focused ? 0 : -1}" aria-selected="${lane
             === st.focus.lane && step >= a && step <= b}" aria-label="${esc(cellName(nameOf(lane),
-            step, list ? v : on && v, list ? 'param-list' : 'notes'))}"></div>`);
+            step, list ? v : on && v, list ? 'param-list' : 'notes', on))}"></div>`);
       }
       return `<div role="row" class="${wide ? ROW_WIDE : ROW_NARROW}">${head}`
         + `<div class="${STEPS}">${cells.join('')}</div></div>`;
@@ -258,6 +258,7 @@ export function mountStepGrid(host, opts) {
     const c = el && el.closest ? el.closest('[role="gridcell"]') : null;
     return c && surface.contains(c) ? c : null;
   };
+  let valueDrag = null; // a value lane's vertical drag: { lane, step, c, f }
   const fractionIn = (c, e) => {
     const r = c.getBoundingClientRect();
     return r.height > 0 ? 1 - (e.clientY - r.top) / r.height : 0;
@@ -291,7 +292,15 @@ export function mountStepGrid(host, opts) {
     const step = Number(c.dataset.step);
     gridHasFocus = true;
     if (list && !e.shiftKey) {
-      model.valueAt(lane, step, fractionIn(c, e));
+      // A value lane drags vertically: the pointer is captured, the value follows it and is
+      // committed once at pointerup, one action per gesture (W008; review of 7521fc69).
+      valueDrag = { lane, step, c, f: fractionIn(c, e) };
+      try {
+        surface.setPointerCapture(e.pointerId);
+      } catch {
+        // A pointer the browser no longer tracks: the value is taken where it was let go.
+      }
+      c.classList.add('ring-2');
       return;
     }
     model.down(lane, step, { shift: e.shiftKey });
@@ -303,6 +312,10 @@ export function mountStepGrid(host, opts) {
     c.classList.add('ring-2');
   });
   listen(surface, 'pointermove', (e) => {
+    if (valueDrag) {
+      valueDrag.f = fractionIn(valueDrag.c, e);
+      return;
+    }
     const d = model.drag;
     if (!d) return;
     const c = cellAt(e);
@@ -313,12 +326,21 @@ export function mountStepGrid(host, opts) {
       if (el) el.classList.toggle('ring-2', step >= a && step <= b);
     });
   });
-  listen(surface, 'pointerup', () => {
+  listen(surface, 'pointerup', (e) => {
+    if (valueDrag) {
+      const v = valueDrag;
+      valueDrag = null;
+      if (e && Number.isFinite(e.clientY)) v.f = fractionIn(v.c, e);
+      model.valueAt(v.lane, v.step, v.f);
+      render();
+      return;
+    }
     if (!model.drag) return;
     model.up();
     render();
   });
   listen(surface, 'pointercancel', () => {
+    valueDrag = null;
     model.cancel();
     render();
   });

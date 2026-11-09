@@ -89,7 +89,8 @@ export function mountClipSteps(host, svc, first) {
 export function mountListSteps(host, svc, { nodeId, param, values }) {
   const owner = { selection: [], page: 0 };
   let shown = values;
-  const grid = mountStepGrid(host, { mode: 'param-list', label: param.label,
+  let grid = null; // set below; onView may run during the mount (the TDZ 1a68c485 fixed)
+  grid = mountStepGrid(host, { mode: 'param-list', label: param.label,
     laneNames: [param.label], nodeId, param, values, steps: values.length,
     commit: (action) => {
       const r = svc.dispatch(action);
@@ -98,7 +99,7 @@ export function mountListSteps(host, svc, { nodeId, param, values }) {
     onView: (v) => {
       if (v.selection) owner.selection = v.selection;
       if (v.page != null) owner.page = v.page;
-      grid.set({ selection: owner.selection, page: owner.page });
+      if (grid) grid.set({ selection: owner.selection, page: owner.page });
     },
     say: (text) => svc.say(text),
     playStep: () => null });

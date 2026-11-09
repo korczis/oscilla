@@ -61,7 +61,7 @@ export function createStripView(ctx) {
     }
     const done = ctx.dispatch(r.action);
     if (done.ok) {
-      ctx.say(STRIP_TEXT.created);
+      ctx.say(r.text);
       show();
     }
     return done.ok;
