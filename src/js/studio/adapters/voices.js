@@ -32,7 +32,8 @@
 // its sources run on); all-off releases the held voices and cuts the ringing one-shots.
 //
 // Headroom (ADR 0058's rule for note voices, review of #332): a voice peaks at Level / 4 /
-// MAX_VOICES of digital full scale times the velocity law, so the 16 voices at the highest
+// MAX_VOICES of digital full scale times the velocity law (1/8 at Level 4 and full velocity, the
+// owner's Q021 gain per voice), so the MAX_VOICES (8) voices at the highest
 // Level (4) and velocity together peak at most at full scale and the Master Output level stays
 // the cap: the output ceiling is never the limiter. No high-pass follows a voice: at some
 // settings one raises its peak above that bound (measured: an FM stack +35 %, a square at E2

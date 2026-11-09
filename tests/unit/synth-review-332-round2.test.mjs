@@ -2,7 +2,7 @@
 // Audio context (the measured sound is tests/browser/synth-engines.cjs, its offline checks).
 //   P1  the clap keeps its 0.28 s decay after the last burst; a modulator that is itself
 //       modulated is a phase operator, no frequency drive and no high-pass (round 3: its 0 Hz
-//       line would detune the note, the block rang at bass notes); 16 voices at the highest
+//       line would detune the note, the block rang at bass notes); MAX_VOICES (8, Q021) voices at the highest
 //       Level and velocity sum to at most digital full scale
 //       (ADR 0058's rule for note voices), and a steal starts after the stolen voice's fade
 //   P2  the wavetable morph is level-continuous and never peaks above one table; the hat sum
@@ -136,7 +136,7 @@ test('P1 a modulator that is itself modulated is a phase operator: no drive, no 
 
 // ------------------------------------------------------------------ P1 voice sum
 
-test('P1 16 voices at the highest Level and velocity sum to at most full scale', () => {
+test('P1 MAX_VOICES voices at the highest Level and velocity sum to at most full scale', () => {
   for (const type of ENGINE_TYPES) {
     const max = NODE_REGISTRY.param(type, 'level').max;
     assert.ok(MAX_VOICES * voicePeak(max, 127) <= 1 + 1e-12, `${type}: Level ${max}`);
@@ -145,7 +145,7 @@ test('P1 16 voices at the highest Level and velocity sum to at most full scale',
   }
   // ADR 0058's rule, the instrument's note voices: each note at level / NOTE_POLYPHONY.
   const text = NODE_REGISTRY.get('fm-voice').help.constraints;
-  assert.match(text, /16 voices together peak at most at digital full scale/);
+  assert.match(text, new RegExp(`${MAX_VOICES} voices together peak at most at digital full scale`));
   assert.doesNotMatch(text, /output ceiling limits them/);
 });
 
@@ -223,12 +223,12 @@ test('P2 the hat sum is bounded by its coherent peak; a voice\'s layers by their
 test('P2 a note that sounds nothing steals no voice from a full pool', () => {
   const { h } = engineEnv('fm-voice', { algorithm: '2-op', ratio1: 1, ratio2: 1 },
     { sampleRate: 44100 });
-  for (let i = 0; i < 16; i++) h.noteOn(0.1, 48 + i, 100);
+  for (let i = 0; i < MAX_VOICES; i++) h.noteOn(0.1, 48 + i, 100);
   h.update({ ratio1: 16, ratio2: 16 });
   const r = h.noteOn(0.2, 100, 100);
   assert.equal(r.stolen, false);
   assert.equal(r.dropped, 2);
-  assert.equal(h.info.voices(0.25), 16);
+  assert.equal(h.info.voices(0.25), MAX_VOICES);
   assert.ok(h.info.held().includes(48));
   assert.equal(h.noteOff(0.4, 48), true);
 });

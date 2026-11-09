@@ -1,14 +1,14 @@
 // Studio node types of the Synth engines (plan K090 FM, K091 additive, K092 wavetable with the
 // sync bank of K089, K121 AM and ring, K123 percussion; the voice pool K122). Each is a
-// polyphonic note source (capabilities.notes, up to 16 voices, owner decision Q021) played by
+// polyphonic note source (capabilities.notes, MAX_VOICES voices: 8 at 1/8 gain, owner Q021) played by
 // the keyboard, the on-screen keys and MIDI through the Synth workspace; the semi-modular panel
 // stays mono. New types only: no existing definition changes, so every pinned template hash and
 // saved studioHash stays as it is (design D2).
 //
 // Every engine has a Chain input: the audio there passes to the output unchanged and the
 // engine's voices are added to it, which is how several instruments share the one Master
-// Output (its input takes one cable). Levels are relative: a voice peaks at Level / 64 of
-// digital full scale times the velocity law, so the 16 voices at Level 4 and full velocity
+// Output (its input takes one cable). Levels are relative: a voice peaks at Level / 32 of
+// digital full scale times the velocity law, so the 8 voices at Level 4 and full velocity
 // together peak at most at full scale and the Master Output level stays the cap (ADR 0058's
 // rule for note voices; adapters/voices.js). Pitch is a requested digital frequency
 // (project.no-fake-science).
@@ -46,7 +46,8 @@ const voiceParams = (release = 0.3) => [
   secondsParam('release', 'Release', release, 0.001, 10, { scale: 'log' }),
 ];
 const POLY = `Up to ${MAX_VOICES} voices: a ${MAX_VOICES + 1}th note takes the voice released `
-  + 'first, else the oldest, after a 5 ms fade. A voice peaks at Level / 64 of digital full scale '
+  + `first, else the oldest, after a 5 ms fade. A voice peaks at Level / ${4 * MAX_VOICES} of `
+  + 'digital full scale '
   + `times (velocity / 127)², so the ${MAX_VOICES} voices together peak at most at digital full `
   + 'scale (at Level 4, the highest) and the Master Output level stays the cap. A note-on for a '
   + 'held note re-attacks it from the level it holds.';

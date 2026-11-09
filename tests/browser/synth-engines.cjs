@@ -23,7 +23,8 @@
 //   e-perc      the kick (QWERTY A) decays at -60 dB per 0.5 s within 10 %, fitted from 6 to
 //               30 dB below its peak (the idle panel's floor is some 55 dB below it); the hat
 //               choke is o-choke (the hats sit too close to that floor live)
-//   e-poly      16 held notes: voice census 16; a 17th: still 16 and the oldest note's line gone;
+//   e-poly      N held notes (N = Q021's recorded answer, 8, read by tests/unit/owner-answer.mjs;
+//               K180): voice census N; one more: still N and the oldest note's line gone;
 //               all off: the runtime node census back to its count before the notes
 //   e-nosource  every drawbar at 0: a held note sounds nothing and holds no voice (census 0)
 //   e-removed   the Additive engine removed in Studio: the panel's held note is silent (the
@@ -38,7 +39,7 @@
 //               and sounds; the copied link names yt=engines&ye=fm; a bad ye is refused
 //   e-mobile    390 x 844 with touch: no horizontal page scroll, every tab, engine and knob 44 px+,
 //               a tap on an engine selects it and a tap on the docked keys sounds
-//   e-headroom  16 notes held at full velocity at the default Level with the Master Output at
+//   e-headroom  N notes held at full velocity at the default Level with the Master Output at
 //               its highest level: no sample of the output reaches the ceiling (MAX_OUTPUT_GAIN)
 //
 // Offline checks (review of #332; desktop leg): tests/browser/fixtures/synth-engines-offline-
@@ -59,11 +60,11 @@
 //               cosine tables stay in quadrature, so a stack's 0 Hz line becomes a slow line
 //               there; closing that needs sample-exact operators (an AudioWorklet), not a table.
 //               The result prints each browser's `margin` (5 cents minus the worst reading)
-//   o-headroom  16 notes at full velocity at the default Level, each engine: the sum peaks at
-//               or below digital full scale; one voice at Level 4 peaks at or below 1/16
+//   o-headroom  N notes at full velocity at the default Level, each engine: the sum peaks at
+//               or below digital full scale; one voice at Level 4 peaks at or below 1/N (Q021)
 //               (every FM algorithm, AM and ring, every percussion key, the additive shapes)
 //   o-morph     every wavetable bank at morph 0 to 3 in steps of 0.25: the level within 0.5 dB
-//               of its two tables' levels interpolated in dB, the peak at or below 1/16
+//               of its two tables' levels interpolated in dB, the peak at or below 1/N (Q021)
 //   o-retrig    a held formant pad retriggered: its level never falls more than 1 dB
 //   o-choke     a closed hat chokes an open one: 40 dB down within 0.1 s of it; with Hat choke
 //               off the open hat takes 0.3 s+ for those 40 dB (its 0.5 s decay: 0.33 s)
@@ -118,6 +119,10 @@ async function offline(context) {
   await until(() => page.evaluate(() => !!window.E), { ms: LOAD_MS, what: 'the fixture loads' });
   return page;
 }
+// Q021 (owner, 2026-11-03): an engine holds up to VOICES voices at VOICE_GAIN each; read from the
+// plan record in main below (K180), never retyped.
+let VOICES = 0;
+let VOICE_GAIN = 0;
 const ALGORITHMS = ['2-op', '3-stack', '3-y', '4-stack', '4-pairs', '4-three', '4-parallel'];
 
 // ------------------------------------------------------------------------------ page probes
@@ -180,8 +185,8 @@ async function openSynth(context, base, hash) {
     && window.OSCILLA.app.synthDebug && window.OSCILLA.app.synthDebug().present
     && document.querySelector('[data-osc="synth.bay.svg"]'))),
   { ms: LOAD_MS, what: 'the Synth is rendered' });
-  // The Master Output at its highest level: a voice peaks at 1/16 of full scale at Level 4
-  // (16 voices sum to full scale), so the checks read the engines 10 dB above the default.
+  // The Master Output at its highest level: a voice peaks at 1/VOICES of full scale at Level 4
+  // (VOICES voices sum to full scale), so the checks read the engines 10 dB above the default.
   const r = await page.evaluate((v) => {
     const st = window.OSCILLA.studio.store;
     const m = st.getModel().graph.nodes.find((n) => n.type === 'master');
@@ -385,23 +390,24 @@ function defineChecks() {
       await sink(page, 'noteOff', 60);
       await silent(page, 'released');
       const base = (await counts(page)).runtimeNodes;
-      // The oldest note, C6, is alone above 600 Hz: the 15 after it are 36-50 (four harmonics
-      // at most, the drawbar defaults) and the 17th is G5 (784 Hz).
-      const notes = [84, ...Array.from({ length: 15 }, (_, i) => 36 + i)];
+      // The oldest note, C6, is alone above 600 Hz: the VOICES - 1 after it start at 36 (four
+      // harmonics at most, the drawbar defaults, all below 600 Hz) and the one more is G5
+      // (784 Hz).
+      const notes = [84, ...Array.from({ length: VOICES - 1 }, (_, i) => 36 + i)];
       for (const n of notes) await sink(page, 'noteOn', n, 100);
-      const sixteen = (await dbg(page)).voices;
+      const full = (await dbg(page)).voices;
       const oldest = 1046.5;
       const before = await sound(page, (q) => peakAt(q, oldest), 'the oldest note sounds');
       await sink(page, 'noteOn', 79, 100);
       const p = await sound(page, (q) => peakAt(q, 783.99)
         && lineDb(q, oldest) <= lineDb(before, oldest) - 20,
-      'the 17th note takes the oldest voice');
+      'the note past the cap takes the oldest voice');
       const still = (await dbg(page)).voices;
       await sink(page, 'allOff');
       await silent(page, 'all off');
       await until(async () => (await counts(page)).runtimeNodes === base,
         { ms: 5000, what: 'the node census returns to its count before the notes' });
-      return { ok: sixteen === 16 && still === 16, sixteen, still, base,
+      return { ok: full === VOICES && still === VOICES, voices: VOICES, full, still, base,
         line: +lineDb(p, 783.99).toFixed(1) };
     });
 
@@ -531,9 +537,9 @@ function defineChecks() {
       .find((n) => n.type === 'master').id);
     const set = await page.evaluate(([id, v]) => window.OSCILLA.studio.store.dispatch({
       type: 'NODE_PARAM_SET', nodeId: id, key: 'level', value: v }), [masterId, MAX_OUTPUT_GAIN]);
-    const notes = Array.from({ length: 16 }, (_, i) => 48 + i);
+    const notes = Array.from({ length: VOICES }, (_, i) => 48 + i);
     for (const n of notes) await sink(page, 'noteOn', n, 127);
-    await sound(page, (q) => q.rmsDb > -60, 'the 16 voices sound');
+    await sound(page, (q) => q.rmsDb > -60, 'the VOICES voices sound');
     // The output after the safety chain, frame by frame over 1 s of audio clock.
     const r = await page.evaluate(async () => {
       const e = window.OSCILLA.engine;
@@ -551,7 +557,7 @@ function defineChecks() {
       return { peak, frames, voices: window.OSCILLA.app.synthDebug().voices };
     });
     await sink(page, 'allOff');
-    return { ok: set.ok && r.voices === 16 && r.frames >= 5 && r.peak < MAX_OUTPUT_GAIN * 0.999,
+    return { ok: set.ok && r.voices === VOICES && r.frames >= 5 && r.peak < MAX_OUTPUT_GAIN * 0.999,
       peak: +r.peak.toFixed(4), ceiling: MAX_OUTPUT_GAIN, frames: r.frames, voices: r.voices };
   });
 
@@ -631,9 +637,9 @@ function defineChecks() {
 
   def('o-headroom', null, async ({ context }) => {
     const page = await offline(context);
-    const r = await page.evaluate(async (algs) => {
+    const r = await page.evaluate(async ([algs, voices]) => {
       const sum = {};
-      const notes = Array.from({ length: 16 }, (_, i) => 48 + i);
+      const notes = Array.from({ length: voices }, (_, i) => 48 + i);
       for (const t of ['additive-voice', 'fm-voice', 'am-voice', 'wavetable-voice',
         'perc-voice']) sum[t] = (await window.E.peak(t, { sustain: 1 }, notes)).peak;
       const one = [];
@@ -648,11 +654,11 @@ function defineChecks() {
       for (let n = 60; n < 72; n++) await voice('perc-voice', {}, n);
       for (const tone of [0, 1]) await voice('perc-voice', { tone }, 62);
       return { sum, one };
-    }, ALGORITHMS);
-    const over = r.one.filter(([, pk]) => pk > (1 / 16) * 1.001);
+    }, [ALGORITHMS, VOICES]);
+    const over = r.one.filter(([, pk]) => pk > VOICE_GAIN * 1.001);
     return { ok: Object.values(r.sum).every((x) => x <= 1) && over.length === 0,
       sum: Object.fromEntries(Object.entries(r.sum).map(([k, v]) => [k, +v.toFixed(3)])),
-      worstVoice: +Math.max(...r.one.map((x) => x[1] * 16)).toFixed(3), over };
+      worstVoice: +Math.max(...r.one.map((x) => x[1] / VOICE_GAIN)).toFixed(3), over };
   });
 
   def('o-morph', null, async ({ context }) => {
@@ -672,7 +678,7 @@ function defineChecks() {
         const x = r.m - i;
         const want = at(i).rmsDb + (at(i + 1).rmsDb - at(i).rmsDb) * x;
         worst = Math.max(worst, Math.abs(r.rmsDb - want));
-        peak = Math.max(peak, r.peak * 16);
+        peak = Math.max(peak, r.peak / VOICE_GAIN);
       }
     }
     return { ok: worst <= 0.5 && peak <= 1.001, worstDb: +worst.toFixed(3),
@@ -750,6 +756,8 @@ async function runLeg(browserName, sizeName, base) {
     process.exit(2);
   }
   const sizes = Object.keys(SIZES).filter((sz) => known.some((n) => runsAt(n, sz)));
+  ({ voices: VOICES, gain: VOICE_GAIN } = (await import(pathToFileURL(path.join(ROOT, 'tests',
+    'unit', 'owner-answer.mjs')).href)).engineVoices());
   await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);

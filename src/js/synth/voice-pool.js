@@ -1,8 +1,10 @@
-// The voice allocator of the Synth engines (Q021: 16 voices per engine; the semi-modular panel
-// stays mono). Pure bookkeeping: it decides which slot a note plays in and which voice it
+// The voice allocator of the Synth engines. Q021, the owner's answer of 2026-11-03 as recorded
+// on its evidence: "Up to 8 voices, 1/8 gain": an engine node holds up to 8 voices at 1/8 gain
+// each, as V502's note voices do, and the semi-modular panel stays monophonic (K180; the gain is
+// studio/adapters/voices.js's VOICE_LEVEL_SCALE). Pure bookkeeping: it decides which slot a note plays in and which voice it
 // steals; the Web Audio lifecycle of a voice is studio/adapters/voices.js.
 //
-//   createVoicePool({ max = 16 }) -> pool
+//   createVoicePool({ max = MAX_VOICES }) -> pool
 //     pool.on(note, t)  -> { slot, steal: slot | null, retrigger: bool }
 //                          the same note held again retriggers its own slot; a free slot is
 //                          taken; when all `max` are in use the released voice that released
@@ -17,7 +19,7 @@
 // Every loop runs over the `max` slots once: no loop depends on a side effect to terminate
 // (the lesson of #261's R-2).
 
-export const MAX_VOICES = 16;
+export const MAX_VOICES = 8;
 
 export function createVoicePool({ max = MAX_VOICES } = {}) {
   const n = Math.max(1, Math.min(64, Math.floor(max)));
