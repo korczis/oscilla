@@ -2,6 +2,7 @@
 // (src/js/visualization/output-owner.js). Pure functions; main.js wires them.
 // C002 (findings coupling-1, -2, -3): one output owner at a time, decided by one table that the
 // engine.play wrapper and the sequencer's claimOutput share (src/js/ui/output-owner.js).
+// C024: keyboard and MIDI notes are an output owner (the vizInputs override removed).
 //   node --test tests/unit/output-owner.test.mjs
 
 import test from 'node:test';
@@ -10,6 +11,14 @@ import {
   OUTPUT_OWNERS, OUTPUT_OWNER_NAMES, assertOutputOwner, outputOwnerOf, requestedFrequencyFor,
 } from '../../src/js/visualization/output-owner.js';
 import { createOutputOwner, OUTPUT_REFUSAL, OUTPUT_YIELDS } from '../../src/js/ui/output-owner.js';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createWorkbench } from '../../src/js/ui/workbench.js';
+import { createScopeView } from '../../src/js/ui/p5-views.js';
+import { VisualizationBridge } from '../../src/js/visualization/visualization-bridge.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 test('outputOwnerOf: the instrument first, then the sequencer, then the Studio, else null', () => {
   assert.strictEqual(outputOwnerOf({}), null);
@@ -158,4 +167,137 @@ test('C016: outputBusy and stopPlayback name the same owners (OUTPUT_YIELDS.meas
   assert.equal(all.owner.outputBusy(all.cmp), true);
   all.owner.stopPlayback(all.cmp);
   assert.deepEqual(all.log.sort(), ['instrument.stopNow', 'seq.stop', 'studio.stop']);
+});
+
+// ---------------------------------------------------------------- C024 (review F5 'D4', F7)
+// Keyboard and MIDI notes are an output owner: held notes alone make outputOwnerOf name them,
+// the scope's description, the drawing and the status bar name the same owner, and the
+// keyboard no longer overrides the instrument's vizInputs (the override outputOwner did not
+// know). Fails on the merge base, where notes reach the scope only through that override.
+
+test('C024: held notes alone own the output, after the instrument, sequencer and Studio', () => {
+  assert.ok(OUTPUT_OWNERS.includes('notes'));
+  assert.strictEqual(assertOutputOwner('notes'), 'notes');
+  assert.strictEqual(typeof OUTPUT_OWNER_NAMES.notes, 'string');
+  assert.ok(OUTPUT_OWNER_NAMES.notes.length > 0);
+  assert.strictEqual(outputOwnerOf({ notes: true }), 'notes');
+  // Notes are refused while the sequencer or the Studio owns the output (midi/ui.js ownedBy),
+  // and an instrument voice and a note never sound together (ADR 0002): they overlap only in
+  // a fade, where the newer owner is already the one named.
+  assert.strictEqual(outputOwnerOf({ instrument: true, notes: true }), 'instrument');
+  assert.strictEqual(outputOwnerOf({ sequencer: true, notes: true }), 'sequencer');
+  assert.strictEqual(outputOwnerOf({ studio: true, notes: true }), 'studio');
+  assert.strictEqual(outputOwnerOf({ notes: false }), null);
+});
+
+function notesCmp(fields) {
+  const wb = createWorkbench({ engine: { analyser: { fftSize: 8192 } } });
+  const cmp = {};
+  Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
+  Object.assign(cmp, {
+    tabs: { analysis: 'waveform' }, timeWindowMs: 5, source: 'single', metricFrequency: 250,
+    effectiveSampleRate: 48000, waveform: 'sine', playing: false, seqPlaying: false,
+    studio: { playing: false }, studioOwnsOutput() { return this.studio.playing; },
+    status: 'READY', kbdSounding: false, kbdHeld: '',
+  }, fields);
+  return cmp;
+}
+
+test('C024: the description and the status bar name the notes while only notes sound', () => {
+  const held = notesCmp({ kbdSounding: true, kbdHeld: 'C4, E4, G4' });
+  const name = OUTPUT_OWNER_NAMES.notes;
+  assert.strictEqual(held.outputOwner, 'notes');
+  assert.ok(held.analysisCanvasLabel.includes(`(${name})`), held.analysisCanvasLabel);
+  assert.doesNotMatch(held.analysisCanvasLabel, /not playing/);
+  assert.match(held.analysisCanvasLabel, /relative to full scale/);
+  assert.strictEqual(held.statusLabel, 'PLAYING');
+  assert.strictEqual(held.anySounding, true, 'the status dot shows the notes sounding');
+  assert.strictEqual(held.statusPatternText.toLowerCase(), name.toLowerCase(),
+    'the status bar names the owner the description names');
+  assert.strictEqual(held.statusFreqText, 'C4, E4, G4', 'the status bar shows the held notes');
+  // The status Play button is the instrument's and the sequencer's (ADR 0050): not the notes'.
+  assert.strictEqual(held.isSounding, false);
+
+  const released = notesCmp({ kbdSounding: false, source: 'sweep', sweep: { curve: 'log' } });
+  assert.strictEqual(released.outputOwner, null);
+  assert.match(released.analysisCanvasLabel, /not playing/);
+  assert.strictEqual(released.statusLabel, 'READY');
+  assert.notStrictEqual(released.statusPatternText.toLowerCase(), name.toLowerCase());
+
+  const both = notesCmp({ kbdSounding: true, playing: true });
+  assert.strictEqual(both.outputOwner, 'instrument');
+});
+
+test('C024: the bridge takes the notes owner and the scope draws and names it', () => {
+  const env = {
+    document: { hidden: false, documentElement: {}, addEventListener() {},
+      removeEventListener() {} },
+    requestAnimationFrame: () => 1, setTimeout: () => 1, setInterval: () => 1,
+    clearInterval() {},
+  };
+  const bridge = new VisualizationBridge({ env });
+  bridge.attachP5({ canvas: {}, loop() {}, noLoop() {}, redraw() {} });
+  bridge.state.reducedMotion = true;
+  bridge.setOutputOwner('notes');
+  assert.strictEqual(bridge.state.outputOwner, 'notes');
+  assert.strictEqual(bridge.looping, true, 'held notes keep the scope updating');
+
+  const drawn = [];
+  const ctx = {
+    font: '', fillStyle: '', textAlign: '', textBaseline: '', save() {}, restore() {},
+    fillText: (t) => { drawn.push(String(t)); },
+    measureText: (t) => ({ width: String(t).length * 5 }),
+  };
+  const base = {
+    LEFT: 'left', RIGHT: 'right', CENTER: 'center', CLOSE: 'close', drawingContext: ctx,
+    color: () => ({ setAlpha() {}, toString: () => 'rgb(0,0,0)' }), vertex() {},
+  };
+  const p = new Proxy(base, { get: (t, k) => (k in t ? t[k] : () => {}) });
+  const d = new Float32Array(8192);
+  for (let i = 0; i < d.length; i++) d[i] = 0.5 * Math.sin((2 * Math.PI * 440 * i) / 48000);
+  // The keyboard's override no longer marks the instrument playing: the owner alone draws.
+  const st = { live: { timeData: d, sampleRate: 48000, inst: NaN, refFreq: 250, hasCtx: true },
+    playing: false, outputOwner: 'notes', gain: 0.08, frequency: 250, waveform: 'sine',
+    plan: null };
+  createScopeView({ getWindowMs: () => 5 }).draw({ p, W: 600, H: 200, pal: { gridSoft: 'g',
+    muted: 'm', accent: 'a', dim: 'd', accentFaint: 'f', accentSoft: 's' },
+  bandMin: new Float32Array(600), bandMax: new Float32Array(600) }, st);
+  const label = drawn.find((t) => t.startsWith('output analyser'));
+  assert.ok(label, JSON.stringify(drawn));
+  assert.ok(label.includes(`· ${OUTPUT_OWNER_NAMES.notes}`), label);
+  assert.match(label, /relative to full scale/);
+});
+
+/** Every .js file under src/js. */
+function jsFiles(dir) {
+  const out = [];
+  for (const name of readdirSync(dir)) {
+    const p = path.join(dir, name);
+    if (statSync(p).isDirectory()) out.push(...jsFiles(p));
+    else if (name.endsWith('.js')) out.push(p);
+  }
+  return out;
+}
+
+/** The files (relative to ROOT) that assign a `vizInputs` member, outside instrument.js. */
+function vizInputsOverrides(files, read = (f) => readFileSync(f, 'utf8')) {
+  const assign = /\.vizInputs\s*=(?!=)|\[\s*['"]vizInputs['"]\s*\]\s*=(?!=)/;
+  return files.filter((f) => !f.endsWith(path.join('src', 'js', 'core', 'instrument.js'))
+    && assign.test(read(f))).map((f) => path.relative(ROOT, f));
+}
+
+test('C024: no file reassigns cmp.vizInputs outside src/js/core/instrument.js', () => {
+  assert.deepStrictEqual(vizInputsOverrides(jsFiles(path.join(ROOT, 'src', 'js'))), []);
+});
+
+test('C024 mutation: the scan finds a restored override and passes a comparison', () => {
+  const kb = path.join(ROOT, 'src', 'js', 'midi', 'keyboard-ui.js');
+  const restored = 'const v = cmp.vizInputs;\ncmp.vizInputs = function vizInputsWithNotes(r) {};';
+  assert.deepStrictEqual(vizInputsOverrides([kb], () => restored),
+    [path.join('src', 'js', 'midi', 'keyboard-ui.js')]);
+  assert.deepStrictEqual(vizInputsOverrides([kb], () => "cmp['vizInputs'] = f;"),
+    [path.join('src', 'js', 'midi', 'keyboard-ui.js')]);
+  assert.deepStrictEqual(vizInputsOverrides([kb], () => 'if (cmp.vizInputs === f) {}'), []);
+  const inst = path.join(ROOT, 'src', 'js', 'core', 'instrument.js');
+  assert.deepStrictEqual(vizInputsOverrides([inst], () => restored), []);
 });
