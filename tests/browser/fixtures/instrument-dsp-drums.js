@@ -170,9 +170,10 @@ export async function choke({ sampleRate }) {
   const sr = free.sampleRate;
   const h = Math.round(hit * sr);
   let peak = 0;
-  for (let i = h - 256; i < h + 256; i++) peak = Math.max(peak, Math.abs(free.x[i]));
+  const q = RENDER_QUANTUM; // the hat's peak over two quanta around the hit
+  for (let i = h - 2 * q; i < h + 2 * q; i++) peak = Math.max(peak, Math.abs(free.x[i]));
   const env = [];
-  for (let i = h - 64; i < h + Math.round(0.02 * sr); i++) {
+  for (let i = h - q / 2; i < h + Math.round(0.02 * sr); i++) {
     if (Math.abs(free.x[i]) > 0.01 * peak) env.push([i - h, cut.x[i] / free.x[i]]);
   }
   const before = Math.max(...env.filter(([k]) => k < 0).map(([, e]) => Math.abs(e - 1)));
