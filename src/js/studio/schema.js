@@ -41,6 +41,8 @@
 //   serializeStudio(model, space?) -> string        (canonical key order, §161)
 //   executionState(model) / semanticState(model) / splitExecutionAndView(model)
 //   studioHash(model, { sha256Hex }) -> hex         (SHA-256 of the execution state, §162)
+//   studioHashAt(model, version) -> hex | null      the hash as an earlier epoch computed it
+//   hashEpochOf(model, hash) -> version | null      which epoch's hash `hash` is (K022, D2)
 //   assertPlainData(value), isSemanticallyEqual(a, b), edgeSignalType(model, edge)
 
 import { canonicalJson } from '../experiments/canonical-json.js';
@@ -57,7 +59,25 @@ export const STUDIO_SCHEMA_VERSION = 1;
 export const STUDIO_KIND = 'oscilla-studio';
 export const STUDIO_FILE_EXTENSION = '.oscilla-studio.json';
 /** Version of the hashed execution-state selection; bump when its contents change. */
-export const STUDIO_HASH_VERSION = 1;
+export const STUDIO_HASH_VERSION = 2;
+/**
+ * The parameters each hash epoch added to existing node types (D2: every new parameter on an
+ * existing type lands in one epoch). Epoch 2 is K022. A record hashed under an earlier epoch
+ * is checked by studioHashAt(model, v), which leaves out what later epochs added; it matches
+ * only while those parameters are at their defaults (a v1 record cannot hold them).
+ */
+export const HASH_EPOCH_PARAMS = Object.freeze({
+  2: Object.freeze({
+    oscillator: Object.freeze(['unison', 'spread']),
+    filter: Object.freeze(['slope']),
+    lfo: Object.freeze(['depth', 'sync']),
+    random: Object.freeze(['sync']),
+    'step-modulator': Object.freeze(['sync', 'quantize']),
+    gain: Object.freeze(['bypass']),
+    pan: Object.freeze(['bypass']),
+    drive: Object.freeze(['bypass']),
+  }),
+});
 
 export { CLIP_KINDS };
 export const TRACK_KINDS = Object.freeze(['event', 'measurement']);
@@ -427,14 +447,15 @@ const byId = (list) => [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id 
  * The EXECUTION state (§163, §255): what the hash covers. Arrays of identified records are
  * sorted by id, so authoring order (z-order, list order) does not change the hash.
  */
-export function executionState(model) {
+export function executionState(model, version = STUDIO_HASH_VERSION) {
   const g = model.graph;
   const t = model.timeline;
   return {
-    v: STUDIO_HASH_VERSION,
+    v: version,
     kind: STUDIO_KIND,
     schemaVersion: model.schemaVersion,
-    nodes: byId(g.nodes).map((n) => ({ id: n.id, type: n.type, params: n.params })),
+    nodes: byId(g.nodes).map((n) => ({ id: n.id, type: n.type,
+      params: version === STUDIO_HASH_VERSION ? n.params : paramsAt(n, version) })),
     edges: byId(g.edges).map((e) => ({ id: e.id, from: e.from, to: e.to, props: e.props })),
     timeline: {
       tracks: byId(t.tracks).map((x) => ({ id: x.id, kind: x.kind, target: x.target })),
@@ -509,6 +530,51 @@ export function studioHash(model, { sha256Hex = defaultSha256Hex } = {}) {
     throw new TypeError('studioHash: sha256Hex must be a function');
   }
   return sha256Hex(canonicalJson(executionState(model)));
+}
+
+/** The keys hash epochs after `version` added to `type`. */
+function laterKeys(type, version) {
+  const out = [];
+  for (const [v, byType] of Object.entries(HASH_EPOCH_PARAMS)) {
+    if (Number(v) > version && byType[type]) out.push(...byType[type]);
+  }
+  return out;
+}
+
+/** A node's parameters as hash epoch `version` hashed them (later epochs' keys left out). */
+function paramsAt(node, version) {
+  const drop = laterKeys(node.type, version);
+  if (!drop.length) return node.params;
+  return Object.fromEntries(Object.entries(node.params).filter(([k]) => !drop.includes(k)));
+}
+
+/**
+ * studioHash of a normalized model as hash epoch `version` computed it (K022, D2), or null when
+ * the model holds a value that epoch could not record: a parameter a later epoch added that is
+ * not at its default.
+ */
+export function studioHashAt(model, version, { sha256Hex = defaultSha256Hex,
+  registry = NODE_REGISTRY } = {}) {
+  if (version === STUDIO_HASH_VERSION) return studioHash(model, { sha256Hex });
+  if (!Number.isInteger(version) || version < 1 || version > STUDIO_HASH_VERSION) return null;
+  for (const n of model.graph.nodes) {
+    for (const k of laterKeys(n.type, version)) {
+      const def = registry.param(n.type, k);
+      if (!def || canonicalJson(n.params[k]) !== canonicalJson(def.default)) return null;
+    }
+  }
+  return sha256Hex(canonicalJson(executionState(model, version)));
+}
+
+/**
+ * The hash epoch whose studioHash of `model` is `hash` (the current one first), or null: how a
+ * saved record's stored hash is checked after an epoch bump.
+ */
+export function hashEpochOf(model, hash, opts = {}) {
+  for (let v = STUDIO_HASH_VERSION; v >= 1; v -= 1) {
+    if (studioHashAt(model, v, opts) === hash) return v;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------- lookups

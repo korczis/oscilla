@@ -70,7 +70,9 @@ test('the dialog names the Space meaning of the workspace in view', () => {
 test('Studio lists STUDIO_SHORTCUTS in order (Space first) and the timeline keys', () => {
   const h = shortcutHelp('studio');
   // The keyboard's rows (K026) follow Studio's own; tests/unit/midi/keyboard.test.mjs pins them.
-  const listed = [h.space, ...h.rows.filter((r) => !r.id.startsWith('keyboard-'))]
+  // The step grid's rows (W008, the Inspector's notes clip) too; ui-kind-step-grid pins them.
+  const listed = [h.space, ...h.rows.filter((r) => !r.id.startsWith('keyboard-')
+    && !r.id.startsWith('step-grid-'))]
     .map((r) => `${r.keys}|${r.text}`);
   assert.deepEqual(listed, STUDIO_SHORTCUTS.map((s) => `${s.keys}|${s.text}`));
   assert.equal(h.timeline, KEY_HELP);

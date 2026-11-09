@@ -28,14 +28,10 @@ import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
 import { armedDefaults, keysShown, routeOf } from './routes.js';
 import { mountDockYield } from './dock-yield.js';
+import { notesRefusedSentences } from '../ui/output-owner.js';
 
-export const KEYBOARD_REFUSED = Object.freeze({
-  measurement: 'Keyboard notes do not play while the measurement owns the output: stop it '
-    + '(Esc) first.',
-  reference: 'Keyboard notes do not play while the level reference is being captured.',
-  studio: 'Keyboard notes do not play while the Studio is playing: stop it first.',
-  sequencer: 'Keyboard notes do not play while the sequencer is playing: stop it (Esc) first.',
-});
+/** What a refused keyboard note says, per owner: the one output-owner table's (C036). */
+export const KEYBOARD_REFUSED = notesRefusedSentences('keyboard');
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
 

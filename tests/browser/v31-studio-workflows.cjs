@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (live input and the realtime analyser judged against short deadlines)
 // OSCILLA V3.1 Studio workflows the evidence audit found missing, on the built dist/index.html in
 // chromium, firefox and webkit, from file:// (every check) and from a GitHub-Pages-like sub-path
 // (http://127.0.0.1:<port>/oscilla/, the smoke checks). Spec §78, §105-§110, §145, §250-§251;

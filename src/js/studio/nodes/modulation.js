@@ -19,12 +19,19 @@ import { DEFAULT_ADSR, MIN_SEGMENT_S } from '../../audio/envelope.js';
 import { DEFAULT_PATTERN_PARAMS } from '../../audio/patterns.js';
 import { definePort } from '../ports.js';
 import {
-  CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam,
+  CATEGORIES, FREQUENCY_MAX_HZ, TEMPO_DIVISIONS, boolParam, defineNode, enumParam,
   integerParam, listParam, numberParam, optionLabel, parts, pct, secondsParam, secs, num,
+  syncParam,
 } from './common.js';
 
 const controlOut = definePort({ id: 'control', direction: 'out', type: 'CONTROL',
   label: 'Control' });
+/**
+ * A TRIGGER output (K023: the Clock's, the Step Modulator's): logical, one event per trigger
+ * that the transport schedules on the audio clock; no audio node carries it.
+ */
+const triggerOut = () => definePort({ id: 'trigger', direction: 'out', type: 'TRIGGER',
+  label: 'Trigger', channels: 1, rate: 'event', monitor: false, compact: false, version: 1 });
 const rate = (def, modDepth, opts = {}) => numberParam('rate', 'Rate', {
   min: 0.01, max: 100, unit: 'Hz', scale: 'log', default: def, automatable: true,
   modulatable: true, modDepth, ...opts,
@@ -51,9 +58,17 @@ export const lfo = defineNode({
     enumParam('shape', 'Shape', WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]), 'sine'),
     rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1, { max: FREQUENCY_MAX_HZ,
       softRange: LFO_SLIDER_RANGE, laneRange: [0.01, FREQUENCY_MAX_HZ] }),
+    // K022 (hash epoch 2): the output's depth, and tempo sync.
+    numberParam('depth', 'Depth', { min: 0, max: 1, step: 0.01, default: 1, automatable: true,
+      modulatable: true, modDepth: 0.5, live: 'glide',
+      // Its CONTROL input: one AudioParam (a gain), a-rate; uncabled, the depth itself holds.
+      port: { channels: 1, rate: 'a-rate', unconnected: 'parameter value', monitor: false,
+        compact: false, version: 1 } }),
+    syncParam(),
   ],
   summary(p) {
-    return parts(optionLabel(lfo, 'shape', p.shape), `${num(p.rate)} Hz`);
+    return parts(optionLabel(lfo, 'shape', p.shape),
+      p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`, p.depth < 1 ? pct(p.depth) : null);
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/modulation.js#buildLfo',
@@ -111,14 +126,17 @@ export const random = defineNode({
   aliases: ['sample and hold', 's&h', 'noise modulator', 'random modulator'],
   inputs: [definePort({ id: 'trigger', direction: 'in', type: 'TRIGGER', label: 'Clock' })],
   outputs: [controlOut],
+  clipKinds: ['event'], // K023: a trigger event clip clocks it, as a trigger edge does
   params: [
     rate(Number((1 / randomPeriodS).toPrecision(6)), 1),
     integerParam('seed', 'Seed', { min: 0, max: 2 ** 31 - 1,
       default: DEFAULT_PATTERN_PARAMS.random.seed }),
     boolParam('smooth', 'Smooth', false),
+    syncParam(), // K022
   ],
   summary(p) {
-    return parts(`${num(p.rate)} Hz`, p.smooth ? 'smooth' : 'stepped', `seed ${p.seed}`);
+    return parts(p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`,
+      p.smooth ? 'smooth' : 'stepped', `seed ${p.seed}`);
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/noise.js#mulberry32',
@@ -141,7 +159,10 @@ export const stepModulator = defineNode({
   category: CATEGORIES.MODULATION,
   aliases: ['step sequencer', 'steps', 'stepped modulation', 'cv sequencer'],
   inputs: [definePort({ id: 'clock', direction: 'in', type: 'TRIGGER', label: 'Clock' })],
-  outputs: [controlOut],
+  // K023: Trigger fires on each step the clocked Step Modulator takes (none after the last step
+  // of a 'once' run), so a step can gate an Envelope or clock another node.
+  outputs: [controlOut, triggerOut()],
+  clipKinds: ['event'], // K023: a trigger event clip clocks it, as a trigger edge does
   params: [
     listParam('steps', 'Steps', {
       min: -1, max: 1, minLength: 1, maxLength: 32,
@@ -149,9 +170,16 @@ export const stepModulator = defineNode({
     }),
     rate(1000 / DEFAULT_PATTERN_PARAMS.alternating.toneMs, 1),
     enumParam('playback', 'Playback', [['loop', 'Loop'], ['once', 'Once']], 'loop'),
+    // K022: tempo sync, and each step rounded to a twelfth (a semitone under a pitch edge that
+    // maps 1 to one octave, as the Keys pitch cable does).
+    syncParam(),
+    enumParam('quantize', 'Quantize', [['off', 'Off'], ['semitone', 'Semitone']], 'off',
+      { live: 'crossfade' }),
   ],
   summary(p) {
-    return parts(`${p.steps.length} steps`, `${num(p.rate)} Hz`, p.playback);
+    return parts(`${p.steps.length} steps`,
+      p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`, p.playback,
+      p.quantize === 'semitone' ? 'semitones' : null);
   },
   capabilities: { realtime: true, offline: true },
   compiler: 'audio/scheduler.js#scheduleSteps',
@@ -163,6 +191,38 @@ export const stepModulator = defineNode({
       + 'modulation.',
     outputs: 'Control, −1 to 1.',
     constraints: '1-32 steps.',
+  },
+});
+
+/** The Clock's default division: quarter notes, one trigger per beat of a 4/4 bar. */
+export const CLOCK_DEFAULT_DIVISION = '1/4';
+/** The gate a Clock trigger holds on an Envelope: this fraction of its period (a square). */
+export const CLOCK_GATE_FRACTION = 0.5;
+
+export const clock = defineNode({
+  type: 'clock',
+  displayName: 'Clock',
+  idPrefix: 'clock',
+  category: CATEGORIES.MODULATION,
+  aliases: ['clock', 'metronome', 'pulse', 'tempo clock', 'trigger', 'hodiny', 'takt'],
+  outputs: [triggerOut()],
+  params: [
+    // A change re-plans the ticks after the edit horizon: it applies from the next tick.
+    enumParam('division', 'Dělení', TEMPO_DIVISIONS.map((d) => [d, d]), CLOCK_DEFAULT_DIVISION,
+      { live: 'next-gate' }),
+  ],
+  summary(p) {
+    return p.division;
+  },
+  capabilities: { realtime: true, offline: true },
+  compiler: 'studio/timeline-compiler.js#compilePass',
+  help: {
+    what: 'Spouští TRIGGER v dělení tempa transportu (1/1 až 1/32), na zvukových hodinách, '
+      + 'dokud transport hraje časovou osu.',
+    inputs: 'Žádné; tempo bere z transportu.',
+    outputs: 'Trigger: hradlo obálky na polovinu periody, takt pro Random a Step Modulator.',
+    constraints: 'Takty leží na mřížce dělení od začátku časové osy a ve smyčce se '
+      + 'opakují.',
   },
 });
 
@@ -194,4 +254,4 @@ export const macro = defineNode({
   },
 });
 
-export default [lfo, envelope, random, stepModulator, macro];
+export default [lfo, envelope, random, stepModulator, macro, clock];

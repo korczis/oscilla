@@ -283,12 +283,9 @@ withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), (plan, o
   // or a microphone level reference owns it (capture.js schedules its own source). claimOutput
   // raises the notice and refuses then (C002, C024); otherwise it takes the output from the
   // sequencer (and Studio). The riff audition claims under its own name (playOwnerOf).
-  if (claimOutput(playOwnerOf(o)) !== true) return true;
-  // The newest action wins for the notes too (C024): the engine fades the note voices under a
-  // play() voice (ADR 0002), so the held keys and MIDI notes are released with them and stop
-  // owning the output (a note pressed later fades this voice out in turn).
-  if (app && app.notesSounding && typeof app.midiAllOff === 'function') app.midiAllOff();
-  return false;
+  // The newest action wins for the notes too (C024): the claim releases held notes, whose
+  // voices the engine fades under a play() voice (ADR 0002; OUTPUT_YIELDS.instrument).
+  return claimOutput(playOwnerOf(o)) !== true;
 });
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (tone and release checks on the realtime engine, read on its analyser)
 // OSCILLA dist release gate: the built dist/index.html in chromium, firefox and webkit, each
 // from file:// AND from a GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/ served by
 // python3 -m http.server).

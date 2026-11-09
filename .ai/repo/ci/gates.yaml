@@ -19,8 +19,8 @@
 #     (E010: it runs after every job the aggregate judges, on a re-run only, and is skipped on
 #     a first attempt; it is never path gated) and (E026) the path-gated jobs'
 #     `needs.changes.outputs.runtime != 'false'`: in CI, the base branch's
-#     .github/scripts/ci-changes.mjs skips the engine, suites, measure, studio, browser, census
-#     and visual jobs for a pull request into main whose every changed path is under
+#     .github/scripts/ci-changes.mjs skips the browser legs (leg-1, leg-2) and the visual
+#     job for a pull request into main whose every changed path is under
 #     .ai/repo/project/, .ai/repo/reviews/, .ai/repo/releases/, docs/ or a top-level *.md (on
 #     merge_group the paths of HEAD^1..HEAD, the queued pull request's merge). A local task
 #     keeps them: the model does not encode that allowlist (a path class cannot say "every
@@ -60,119 +60,44 @@ gates:
     job: changes
     always: true
     runs: node .github/scripts/ci-changes.mjs --repo . --event <event> --head HEAD --base-branch origin/<base>
-    summary: whether the pull request (on pull_request) or the queued pull request (on merge_group, ADR 0083; its queue merge commit's HEAD^1..HEAD, and only when HEAD has two parents) changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the seven path-gated jobs (engine, suites, measure, studio, browser, census, visual), anything else runs them
+    summary: whether the pull request (on pull_request) or the queued pull request (on merge_group, ADR 0083; its queue merge commit's HEAD^1..HEAD, and only when HEAD has two parents) changes a runtime path (anything outside .ai/repo/project, .ai/repo/reviews, .ai/repo/releases, docs and top-level *.md); runtime=false skips the three path-gated jobs (leg-1, leg-2, visual), anything else runs them
 
-  - id: engine-chromium
-    job: engine
+  - id: leg-1-chromium
+    job: leg-1
     always: true
-    runs: OSC_BROWSERS=chromium npm run test:engine
-    summary: the V1 engine checks against the V2 engine in Chromium
+    runs: OSC_LEG=1 OSC_SUITE_JOBS=2 OSC_BROWSERS=chromium npm run test:leg
+    summary: leg 1 of the release gate's browser suites in Chromium (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
 
-  - id: engine-firefox
-    job: engine
+  - id: leg-1-firefox
+    job: leg-1
     always: true
-    runs: OSC_BROWSERS=firefox npm run test:engine
-    summary: the V1 engine checks against the V2 engine in Firefox (a PulseAudio null sink on the runner)
+    runs: OSC_LEG=1 OSC_SUITE_JOBS=2 OSC_BROWSERS=firefox npm run test:leg
+    summary: leg 1 of the release gate's browser suites in Firefox (a PulseAudio null sink on the runner) (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
 
-  - id: engine-webkit
-    job: engine
+  - id: leg-1-webkit
+    job: leg-1
     always: true
-    runs: OSC_BROWSERS=webkit npm run test:engine
-    summary: the V1 engine checks against the V2 engine in WebKit
+    runs: OSC_LEG=1 OSC_SUITE_JOBS=2 OSC_BROWSERS=webkit npm run test:leg
+    summary: leg 1 of the release gate's browser suites in WebKit (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
 
-  - id: suites-chromium
-    job: suites
+  - id: leg-2-chromium
+    job: leg-2
     always: true
-    runs: OSC_BROWSERS=chromium npm run test:dsp && OSC_BROWSERS=chromium npm run test:labs && OSC_BROWSERS=chromium npm run test:sequencer
-    summary: the DSP modules, the chart renderers and lab controllers, and the pattern sequencer on real Web Audio in Chromium
+    runs: OSC_LEG=2 OSC_SUITE_JOBS=2 OSC_BROWSERS=chromium npm run test:leg
+    summary: leg 2 of the release gate's browser suites in Chromium (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
 
-  - id: suites-firefox
-    job: suites
+  - id: leg-2-firefox
+    job: leg-2
     always: true
-    runs: OSC_BROWSERS=firefox npm run test:dsp && OSC_BROWSERS=firefox npm run test:labs && OSC_BROWSERS=firefox npm run test:sequencer
-    summary: the DSP modules, the chart renderers and lab controllers, and the pattern sequencer on real Web Audio in Firefox
+    runs: OSC_LEG=2 OSC_SUITE_JOBS=2 OSC_BROWSERS=firefox npm run test:leg
+    summary: leg 2 of the release gate's browser suites in Firefox (a PulseAudio null sink on the runner) (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
 
-  - id: suites-webkit
-    job: suites
+  - id: leg-2-webkit
+    job: leg-2
     always: true
-    runs: OSC_BROWSERS=webkit npm run test:dsp && OSC_BROWSERS=webkit npm run test:labs && OSC_BROWSERS=webkit npm run test:sequencer
-    summary: the DSP modules, the chart renderers and lab controllers, and the pattern sequencer on real Web Audio in WebKit
+    runs: OSC_LEG=2 OSC_SUITE_JOBS=2 OSC_BROWSERS=webkit npm run test:leg
+    summary: leg 2 of the release gate's browser suites in WebKit (V1 engine, DSP, labs, sequencer, measurement, Studio, synth line, browser gate, control census; file:// and /oscilla/), as tests/browser/lib/shards.cjs deals them over the browser's legs by their measured seconds
 
-  - id: measure-chromium
-    job: measure
-    always: true
-    runs: OSC_BROWSERS=chromium npm run test:measure
-    summary: the V3 measurement engine on real Web Audio and the MEASURE and EXPERIMENTS workspaces of dist, file:// and /oscilla/, in Chromium
-
-  - id: measure-firefox
-    job: measure
-    always: true
-    runs: OSC_BROWSERS=firefox npm run test:measure
-    summary: the V3 measurement engine on real Web Audio and the MEASURE and EXPERIMENTS workspaces of dist, file:// and /oscilla/, in Firefox
-
-  - id: measure-webkit
-    job: measure
-    always: true
-    runs: OSC_BROWSERS=webkit npm run test:measure
-    summary: the V3 measurement engine on real Web Audio and the MEASURE and EXPERIMENTS workspaces of dist, file:// and /oscilla/, in WebKit
-
-  - id: studio-chromium
-    job: studio
-    always: true
-    runs: OSC_BROWSERS=chromium npm run test:studio && OSC_BROWSERS=chromium npm run test:synth
-    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation, then the integration map and the synth line (Synth, engines, XY pad, MIDI) of dist, file:// and /oscilla/, in Chromium
-
-  - id: studio-firefox
-    job: studio
-    always: true
-    runs: OSC_BROWSERS=firefox npm run test:studio && OSC_BROWSERS=firefox npm run test:synth
-    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation, then the integration map and the synth line (Synth, engines, XY pad, MIDI) of dist, file:// and /oscilla/, in Firefox
-
-  - id: studio-webkit
-    job: studio
-    always: true
-    runs: OSC_BROWSERS=webkit npm run test:studio && OSC_BROWSERS=webkit npm run test:synth
-    summary: the V3.1 STUDIO workspace, graph and timeline editors, transport and automation, then the integration map and the synth line (Synth, engines, XY pad, MIDI) of dist, file:// and /oscilla/, in WebKit
-
-  - id: browser-chromium
-    job: browser
-    always: true
-    runs: OSC_BROWSERS=chromium npm run test:browser
-    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop and the user journeys, in Chromium
-
-  - id: browser-firefox
-    job: browser
-    always: true
-    runs: OSC_BROWSERS=firefox npm run test:browser
-    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop and the user journeys, in Firefox
-
-  - id: browser-webkit
-    job: browser
-    always: true
-    runs: OSC_BROWSERS=webkit npm run test:browser
-    summary: dist from file:// and the /oscilla/ sub-path; layout, touch targets, stop and the user journeys, in WebKit
-
-  - id: census-chromium
-    job: census
-    always: true
-    runs: OSC_BROWSERS=chromium npm run test:census
-    summary: every control of every workspace has a row of the control census and every row round-trips, in Chromium
-
-  - id: census-firefox
-    job: census
-    always: true
-    runs: OSC_BROWSERS=firefox npm run test:census
-    summary: every control of every workspace has a row of the control census and every row round-trips, in Firefox
-
-  - id: census-webkit
-    job: census
-    always: true
-    runs: OSC_BROWSERS=webkit npm run test:census
-    summary: every control of every workspace has a row of the control census and every row round-trips, in WebKit
-
-  # The accepted linux-x64 values in tests/visual/baseline.json were measured in the job's
-  # container image (mcr.microsoft.com/playwright, the lockfile's Playwright version); a run
-  # outside that image is not comparable.
   - id: visual
     job: visual
     always: true
@@ -213,24 +138,12 @@ gates:
       - fail-first
       - review-verdict
       - changes
-      - engine-chromium
-      - engine-firefox
-      - engine-webkit
-      - suites-chromium
-      - suites-firefox
-      - suites-webkit
-      - measure-chromium
-      - measure-firefox
-      - measure-webkit
-      - studio-chromium
-      - studio-firefox
-      - studio-webkit
-      - browser-chromium
-      - browser-firefox
-      - browser-webkit
-      - census-chromium
-      - census-firefox
-      - census-webkit
+      - leg-1-chromium
+      - leg-1-firefox
+      - leg-1-webkit
+      - leg-2-chromium
+      - leg-2-firefox
+      - leg-2-webkit
       - visual
       - flake-ledger
     runs: echo "$RESULTS" | jq -e "$VERDICT"

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (the shell and its current UI; no audio judged)
 // The current interface against the audit of 2026-10-28 (intent ui-current, docs/ui-audit.md).
 // U005 introduced it; U003, U004, U006, U007 and U008 extend it with their workspaces.
 //

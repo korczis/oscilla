@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (the Studio runtime on the real AudioEngine, levels read from it)
 // OSCILLA V3.1 Studio graph compiler and incremental runtime in real browsers (spec §209, §210,
 // §213, §45; plan issues V414, V415): src/js/studio/{compiler,runtime}.js on the real
 // AudioEngine in chromium, firefox and webkit, from file://.

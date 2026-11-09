@@ -160,7 +160,7 @@ export default {
         + 'mix in the outro.',
     ],
   },
-  studioHash: '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
+  studioHash: 'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3',
   model: {
     kind: 'oscilla-studio',
     schemaVersion: 1,

@@ -10,7 +10,9 @@ import assert from 'node:assert/strict';
 import {
   OUTPUT_OWNERS, OUTPUT_OWNER_NAMES, assertOutputOwner, outputOwnerOf, requestedFrequencyFor,
 } from '../../src/js/visualization/output-owner.js';
-import { createOutputOwner, OUTPUT_REFUSAL, OUTPUT_YIELDS } from '../../src/js/ui/output-owner.js';
+import {
+  createOutputOwner, OUTPUT_OWNER_TABLE, OUTPUT_REFUSAL, OUTPUT_YIELDS,
+} from '../../src/js/ui/output-owner.js';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,15 +22,21 @@ import { VisualizationBridge } from '../../src/js/visualization/visualization-br
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-test('outputOwnerOf: the instrument first, then the sequencer, then the Studio, else null', () => {
+test('outputOwnerOf: the one table\'s view order (instrument, sequencer, Studio, notes)', () => {
+  // C036: the precedence is the order of the table's rows that the views name, not a list here.
+  const order = OUTPUT_OWNER_TABLE.filter((r) => r.view).map((r) => r.owner);
+  assert.deepStrictEqual(order, ['instrument', 'sequencer', 'studio', 'notes']);
+  assert.deepStrictEqual(OUTPUT_OWNERS, order);
   assert.strictEqual(outputOwnerOf({}), null);
   assert.strictEqual(outputOwnerOf(), null);
-  assert.strictEqual(outputOwnerOf({ instrument: true }), 'instrument');
-  assert.strictEqual(outputOwnerOf({ sequencer: true }), 'sequencer');
-  assert.strictEqual(outputOwnerOf({ studio: true }), 'studio');
-  assert.strictEqual(outputOwnerOf({ instrument: true, sequencer: true, studio: true }),
-    'instrument');
-  assert.strictEqual(outputOwnerOf({ sequencer: true, studio: true }), 'sequencer');
+  for (const [i, o] of order.entries()) {
+    assert.strictEqual(outputOwnerOf({ [o]: true }), o);
+    // every owner after it in the table loses to it
+    const all = Object.fromEntries(order.slice(i).map((x) => [x, true]));
+    assert.strictEqual(outputOwnerOf(all), o, `${o} before ${order.slice(i + 1)}`);
+  }
+  // the audition and the refusing rows are never named as the views' owner
+  assert.strictEqual(outputOwnerOf({ audition: true, measurement: true, reference: true }), null);
 });
 
 test('assertOutputOwner accepts the named owners and null, and refuses anything else', () => {
@@ -108,7 +116,8 @@ test('C002: stopPlayback (MEASURE, Studio PLAY) reads the live sequencer, not th
   owner.stopPlayback(cmp);
   assert.deepEqual(log, ['seq.stop', 'instrument.stopNow', 'studio.stop']);
   assert.equal(cmp.seqPlaying, false);
-  assert.deepEqual(OUTPUT_YIELDS.measure, ['sequencer', 'instrument', 'studio']);
+  // C036: the notes are a row of the one table, released by stopPlayback too (V502).
+  assert.deepEqual(OUTPUT_YIELDS.measure, ['sequencer', 'instrument', 'studio', 'notes']);
 });
 
 test('C002: no component yet grants the claim; an unknown owner is a programming error', () => {
@@ -162,7 +171,8 @@ test('C016: outputBusy reads the sequencer live, not the 150 ms seqPlaying copy'
 });
 
 test('C016: outputBusy and stopPlayback name the same owners (OUTPUT_YIELDS.measure)', () => {
-  assert.deepEqual([...OUTPUT_YIELDS.measure].sort(), ['instrument', 'sequencer', 'studio']);
+  assert.deepEqual([...OUTPUT_YIELDS.measure].sort(),
+    ['instrument', 'notes', 'sequencer', 'studio']);
   const all = setup({ playing: true, studio: true, seq: true });
   assert.equal(all.owner.outputBusy(all.cmp), true);
   all.owner.stopPlayback(all.cmp);
