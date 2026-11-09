@@ -266,6 +266,14 @@ export default [
     in: 'synth.panel',
   }),
   defineComponent({
+    id: 'synth.pads.toggle',
+    kind: 'choice',
+    label: 'Zobrazený pad',
+    docs: 'Na telefonu a tabletu na výšku volí, který pad je vidět; od šířky lg jsou vidět oba.',
+    state: 'ui.synthPadShown',
+    in: 'synth.pads',
+  }),
+  defineComponent({
     id: 'synth.pads.l',
     kind: 'panel',
     label: 'Pad L',

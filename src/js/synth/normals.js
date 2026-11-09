@@ -74,9 +74,14 @@ function normalEdge(model, n, id) {
   const b = splitJack(n.to);
   const from = id(a.module);
   const to = id(b.module);
-  if (!from || !to) return null;
-  return model.graph.edges.find((e) => e.id === n.edgeId && startsAt(e, from, a.port)
-    && endsAt(e, to, b.port)) || null;
+  if (!to) return null;
+  const e = model.graph.edges.find((x) => x.id === n.edgeId);
+  if (!e || !endsAt(e, to, b.port)) return null;
+  // As declared; or, while its declared source module is absent, the same normal as an older
+  // panel declared it (K220: e1 fed the engines' chain from the VCA before VELOCITY): the edge
+  // holds the normal's id and feeds its jack, so it is no user cable (panel.js plan replaces it
+  // when the module is added).
+  return startsAt(e, from, a.port) || !from ? e : null;
 }
 
 export function panelEdges(model, panel) {

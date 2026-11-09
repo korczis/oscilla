@@ -169,13 +169,15 @@
 //              inserts the first in one undo entry: an event track of its name with its clips
 //              on an Oscillator that reaches the Master Output
 //   s-pads     K220 (desktop and phone): the PADY card under the Panel face holds pad L beside
-//              pad R at 1536 px and pad R below pad L at 390 px; ArrowRight on pad L moves its X
+//              pad R at 1536 px; at 390 px one pad at a time, chosen by the L/R toggle (44 px
+//              buttons, review R2-K220-2); ArrowRight on pad L moves its X
 //              (aria-valuenow); Tónina D beside pad R is one undo entry and pad R's node plays D;
 //              with QWERTY A held (VCO 2 silent, E059), a press on pad L's right edge opens the
 //              low-pass (the 6-12 kHz band against C4, each reading settled on the audio clock,
 //              6 dB+ over pad L at rest) and its release closes it again (within 1.5 dB); a
 //              held press on pad L and one on pad R are released by a transport Stop
-//              (aria-pressed false), and pad R's release is silent
+//              (aria-pressed false), and pad R's release is silent; pad R's Y is heard as
+//              velocity (review R2-K220-1): a note at Y 95 % 6 dB+ over Y 5 %, each settled
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              with six cables patched every jack and cable end scrolls clear of the dock,
 //              the Patch bay chip shows the bay at the card's width with the cards hidden, its
@@ -614,13 +616,36 @@ function defineChecks() {
     await until(async () => await L.count() === 1 && await R.count() === 1,
       { ms: 10000, what: 'the PADY card shows pad L and pad R' });
     await page.locator('[data-osc="synth.pads"]').scrollIntoViewIfNeeded();
-    // The columns: pad R's controls sit above its surface, so the surfaces need not align.
-    const bl = await page.locator('[data-osc="synth.pads.l"]').boundingBox();
-    const br = await page.locator('[data-osc="synth.pads.r"]').boundingBox();
-    const side = Math.abs(bl.y - br.y) < 2 && bl.x + bl.width <= br.x;
-    const stacked = br.y >= bl.y + bl.height;
-    if (size === 'phone' ? !stacked : !side) {
-      return { ok: false, detail: 'pad L and pad R are not laid out for this width', bl, br };
+    // Below lg one pad at a time through the L/R toggle (review R2-K220-2); from lg both, side
+    // by side. show(k) presses the toggle where it is shown.
+    const toggle = page.locator('[data-osc="synth.pads.toggle"]');
+    const show = async (k) => {
+      if (!await toggle.isVisible()) return;
+      await toggle.locator(`[data-pad-show="${k}"]`).click();
+      await until(async () => await (k === 'l' ? L : R).isVisible(), { ms: 10000,
+        what: `the toggle shows pad ${k.toUpperCase()}` });
+    };
+    if (size === 'phone') {
+      const vis = async () => [await L.isVisible(), await R.isVisible()];
+      const first = await vis();
+      await show('r');
+      const second = await vis();
+      const boxes = await toggle.locator('button').evaluateAll((bs) => bs.map((b) => {
+        const r = b.getBoundingClientRect();
+        return [Math.round(r.width), Math.round(r.height)];
+      }));
+      if (String(first) !== 'true,false' || String(second) !== 'false,true'
+        || boxes.some(([w, h]) => w < 44 || h < 44)) {
+        return { ok: false, detail: 'the phone shows one pad at a time through a 44 px toggle',
+          first, second, boxes };
+      }
+      await show('l');
+    } else {
+      const bl = await page.locator('[data-osc="synth.pads.l"]').boundingBox();
+      const br = await page.locator('[data-osc="synth.pads.r"]').boundingBox();
+      if (!(Math.abs(bl.y - br.y) < 2 && bl.x + bl.width <= br.x) || await toggle.isVisible()) {
+        return { ok: false, detail: 'pad L and pad R are not side by side', bl, br };
+      }
     }
     const ax = '[data-osc="synth.pads.l"] [data-xy-axis="x"]';
     await L.focus();
@@ -635,11 +660,13 @@ function defineChecks() {
       return { key: n && n.params.key, depth: st.store.debugInfo().undoDepth };
     });
     const k0 = await padR();
+    await show('r');
     await page.locator('[data-osc="synth.pads.r.scale"] #synth-pad-r-key').selectOption('D');
     await until(async () => (await padR()).key === 'D', { ms: 10000,
       what: 'Tónina D reaches pad R\'s node' });
     const k1 = await padR();
     if (k1.depth !== k0.depth + 1) return { ok: false, detail: 'not one undo entry', k0, k1 };
+    await show('l');
     // Pad L opens the low-pass while a note is held (X normalled into LPF Cutoff). Every band
     // reading is settled (EG 2 moves the cutoff for seconds after a key) and taken against C4
     // with VCO 2 silent (E059: the two VCOs beat in that band on one held note).
@@ -651,7 +678,8 @@ function defineChecks() {
     });
     if (!quiet2) return { ok: false, detail: 'VCO 2 could not be set silent in the mixer' };
     const at = async (loc, fx, fy) => {
-      await loc.scrollIntoViewIfNeeded();
+      // The pad at the view's centre: its edges clear of the sticky chip bar and the dock.
+      await loc.evaluate((el) => el.scrollIntoView({ block: 'center' }));
       const b = await loc.boundingBox();
       return { x: b.x + fx * b.width, y: b.y + (1 - fy) * b.height };
     };
@@ -665,7 +693,7 @@ function defineChecks() {
     let open = null;
     await until(async () => (open = await settledOn(page, rel, 'the band under pad L'))
       - base >= 6, { ms: SOUND_MS, what: 'a press on pad L\'s right edge opens the low-pass: '
-      + 'the 2-12 kHz band 6 dB+ over pad L at rest' });
+      + 'the 6-12 kHz band 6 dB+ over pad L at rest' });
     await page.mouse.up();
     let back = null;
     await until(async () => Math.abs((back = await settledOn(page, rel,
@@ -673,10 +701,29 @@ function defineChecks() {
     what: 'pad L\'s release closes the low-pass again: the band within 1.5 dB of pad L at rest' });
     await page.keyboard.up('KeyA');
     await silent(page, 'the held note released');
+    // Pad R's Y is the touch's velocity, heard through VELOCITY (review R2-K220-1): a held note
+    // at Y 95 % is 6 dB or more over the same note at Y 5 %, each level settled.
+    await show('r');
+    const level = async (fy) => {
+      const p = await at(R, 0.05, fy);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      await sound(page, (q) => q.rmsDb > -70, `pad R at Y ${fy} sounds`);
+      const v = await settledOn(page, (q) => q.rmsDb, `pad R's level at Y ${fy}`);
+      await page.mouse.up();
+      await silent(page, `pad R released at Y ${fy}`);
+      return v;
+    };
+    const soft = await level(0.05);
+    const hard = await level(0.95);
+    if (!(hard - soft >= 6)) {
+      return { ok: false, detail: 'pad R\'s Y is not heard as velocity', soft, hard };
+    }
     // A transport Stop releases a held press on either pad.
     const pressed = (loc) => loc.getAttribute('aria-pressed');
     const stopped = {};
     for (const [name, loc] of [['L', L], ['R', R]]) {
+      await show(name.toLowerCase());
       const p = await at(loc, 0.5, 0.5);
       await page.mouse.move(p.x, p.y);
       await page.mouse.down();
@@ -689,9 +736,9 @@ function defineChecks() {
       stopped[name] = Number((await silent(page, `pad ${name} silent after the Stop`)).rmsDb
         .toFixed(1));
     }
-    return { ok: true, layout: size === 'phone' ? 'stacked' : 'side by side', x0, x1,
+    return { ok: true, layout: size === 'phone' ? 'one at a time' : 'side by side', x0, x1,
       bandUp: Number((open - base).toFixed(1)), bandBack: Number((back - base).toFixed(1)),
-      stopped };
+      velocityDb: Number((hard - soft).toFixed(1)), stopped };
   });
 
   def('s-wave', async ({ page }) => {

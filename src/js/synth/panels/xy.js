@@ -10,9 +10,10 @@
 // any cable does (no built-in XY preset patches them, K183 review F3).
 
 export const XY_TAB = Object.freeze({ id: 'xy', label: 'XY', title: 'XY performance pad',
-  description: 'Dotkněte se padu a hraje hlas kláves: X volí notu stupnice, Y sílu úhozu a s '
-    + 'kabelem z Y i ovládání, kam kabel vede; nota zní, dokud se padu dotýkáte. XY preset je '
-    + 'patch panelu se stupnicí.' });
+  description: 'Dotkněte se padu a hraje hlas kláves: X volí notu stupnice, Y sílu úhozu (v '
+    + 'novém dokumentu ji slyšíte přes modul VELOCITY) a s kabelem z Y i ovládání, kam kabel '
+    + 'vede; starší dokumenty mají Y kabelem do LPF Cutoff. Nota zní, dokud se padu dotýkáte. '
+    + 'XY preset je patch panelu se stupnicí.' });
 
 export const XY_MODULE = Object.freeze({ id: 'xy', label: 'XY PAD', node: 'xy-pad',
   tab: XY_TAB.id, adds: Object.freeze(['x', 'y']) });

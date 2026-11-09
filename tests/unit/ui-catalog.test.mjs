@@ -149,7 +149,7 @@ const CONTRACT = [
   ['synth.dock.preset', 'choice', 'div'], ['synth.xy', 'panel', 'section'],
   ['synth.xy.target', 'choice', 'select'], ['synth.xy.pad', 'action', 'div'],
   ['synth.xy.readout', 'readout', 'p'], ['synth.pads', 'panel', 'section'],
-  ['synth.pads.l', 'panel', 'div'], ['synth.pads.l.pad', 'action', 'div'],
+  ['synth.pads.toggle', 'choice', 'div'], ['synth.pads.l', 'panel', 'div'], ['synth.pads.l.pad', 'action', 'div'],
   ['synth.pads.r', 'panel', 'div'], ['synth.pads.r.scale', 'choice', 'div'],
   ['keyboard', 'panel', 'div'], ['keyboard.arm', 'switch', 'button'],
   ['keyboard.octave-down', 'action', 'button'], ['keyboard.octave-up', 'action', 'button'],

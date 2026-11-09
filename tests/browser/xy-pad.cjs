@@ -91,6 +91,12 @@
 //              starts it running even under the gesture rule, so there the line must never say
 //              it); the lift silences, the line says the pad plays, a second held touch sounds
 //              and its release silences; no touch edits the document
+//   x-pads-cold   (K220; the phone-cold leg, the gesture rule ON) the Synth opened on its Panel
+//              tab with no user activation: the phone shows pad L first (the L/R toggle); its
+//              first touch starts the audio and holds its gate (aria-pressed), its lift closes it;
+//              a tap on the toggle's PAD R shows pad R, whose touch sounds (above -45 dB rel) and
+//              whose lift silences (below -70 dB rel); no touch edits the document; pad R there
+//              claims no notes, so the docked keyboard stays
 //   x-dock-yields    (K171; 390 x 844 and 375 x 667, the iPhone 13 and SE sizes; touch, mobile
 //              where the engine has it, the gesture rule ON; every engine) from the Synth's
 //              own entry on its Panel tab (no pad mounted: the keys own the notes, the dock
@@ -1061,22 +1067,34 @@ function defineChecks() {
       const hit = document.elementFromPoint(p.x, p.y);
       return { ...p, hit: !!hit && hit.closest('[data-xy-surface]') === el };
     }, [sel, fx, fy]);
-    const pr = await at(R, 0.3, 0.6);
-    if (!pr.hit) return { ok: false, detail: 'pad R\'s point is covered', pr };
-    const first = await press(page, pr, { touch: chromium });
-    await until(async () => (await look()).ctx === 'running', { ms: SOUND_MS,
-      what: 'the first touch on pad R starts the audio' });
-    const on = await loud(page, 'the first touch on pad R sounds');
-    await first.lift();
-    const off = await silent(page, 'its lift silences');
+    // A phone shows pad L first (the L/R toggle, review R2-K220-2): its touch is the first one.
     const pl = await at(L, 0.5, 0.5);
     if (!pl.hit) return { ok: false, detail: 'pad L\'s point is covered', pl };
     const l = await press(page, pl, { touch: chromium });
+    await until(async () => (await look()).ctx === 'running', { ms: SOUND_MS,
+      what: 'the first touch, on pad L, starts the audio' });
     await until(() => quiet((q) => document.querySelector(q).getAttribute('aria-pressed')
       === 'true', L), { ms: SOUND_MS, what: 'pad L holds its gate under the touch' });
     await l.lift();
     await until(() => quiet((q) => document.querySelector(q).getAttribute('aria-pressed')
       === 'false', L), { ms: SOUND_MS, what: 'pad L\'s lift closes its gate' });
+    // The toggle's PAD R, tapped, shows pad R; its touch sounds and its lift silences.
+    const tb = await quiet(() => {
+      const b = document.querySelector('[data-osc="synth.pads.toggle"] [data-pad-show="r"]');
+      b.scrollIntoView({ block: 'center' });
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    const tap = await press(page, tb, { touch: chromium });
+    await tap.lift();
+    await until(() => quiet((q) => document.querySelector(q).getBoundingClientRect().height > 0,
+      R), { ms: SOUND_MS, what: 'the toggle shows pad R' });
+    const pr = await at(R, 0.3, 0.6);
+    if (!pr.hit) return { ok: false, detail: 'pad R\'s point is covered', pr };
+    const first = await press(page, pr, { touch: chromium });
+    const on = await loud(page, 'a touch on pad R sounds');
+    await first.lift();
+    const off = await silent(page, 'its lift silences');
     const after = await look();
     if (after.rev !== entry.rev) {
       return { ok: false, detail: 'a touch edited the document', entry, after };
