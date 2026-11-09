@@ -43,6 +43,13 @@ the runtime may not.
   URL) and `site/apple-touch-icon.png`. The page never loads them, works identically without
   them from `file://`, and carries its own favicon and touch icon inline as `data:` URLs.
   `npm run social` regenerates them from the built app; `dist/` still holds only `index.html`.
+- Exception, the generated landing `/lab/` (owner decision Q107, plan P014): the Pages workflow
+  also publishes `lab/index.html`, `lab/charts/*.svg` and `lab/shots/*.png`, which
+  `scripts/landing.mjs` generates from the deployed commit and which are never committed. The
+  APP stays one file: the landing is a separate, self-contained, generated page (its CSS and
+  its one script inlined, nothing fetched from another origin) that the app never loads, and
+  the app works identically without it. `scripts/verify-deploy.mjs` proves the live
+  `lab/index.html` and every chart equal a regeneration at the deployed commit.
 
 # Failure behaviour
 

@@ -19,9 +19,13 @@
 //   shape     vendor marker (data-vendor="p5@") present, no module script
 //   og        og:image meta == <url>og-image.png; og-image.png and apple-touch-icon.png are
 //             image/png and byte-equal to site/ (the crawler-only share assets)
+//   lab       <url>lab/index.html and every <url>lab/charts/<name>.svg (CHARTS) are byte-equal to
+//             scripts/landing.mjs regenerated here (the generated landing, owner decision Q107);
+//             the regeneration reads this checkout, which must be the expected commit
 //
 //   node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] [--attempts 10] [--delay 10]
-//        [--dist dist/index.html] [--site site] [--no-assets] [--no-cache-bust] [--help]
+//        [--dist dist/index.html] [--site site] [--no-assets] [--no-lab] [--no-cache-bust]
+//        [--help]
 //
 // The arguments are parsed against that list first (parseFlags of release-analyze.mjs): --help
 // prints the usage and exits 0; an unknown flag, a flag missing its value or a bad --attempts
@@ -45,6 +49,9 @@ import {
 } from './release-metadata.mjs';
 
 export const SHARE_ASSETS = ['og-image.png', 'apple-touch-icon.png'];
+/** The generated landing's path under the site, and the content type of each file it checks. */
+export const LAB_DIR = 'lab/';
+const LAB_TYPES = { '.html': /^text\/html\b/, '.svg': /^image\/svg\+xml\b/ };
 
 /**
  * Pure check of a fetched page against the committed dist and the expected provenance.
@@ -148,12 +155,39 @@ export function checkAsset({ name, status, contentType, body, expected }) {
   return problems;
 }
 
+/**
+ * Problems with one fetched file of the generated landing against its regeneration.
+ * @param {{ name: string, status: number, contentType: string, body: Buffer|Uint8Array,
+ *   expected: Buffer }} o  name: the path under lab/ (index.html, charts/<name>.svg)
+ */
+export function checkLabFile({ name, status, contentType, body, expected }) {
+  const problems = [];
+  if (status !== 200) problems.push(`lab: ${name} HTTP ${status}`);
+  const type = LAB_TYPES[path.extname(name)];
+  if (type && !type.test(contentType || '')) {
+    problems.push(`lab: ${name} content-type ${contentType}`);
+  }
+  if (!Buffer.from(body).equals(expected)) {
+    problems.push(`lab: ${name} (${body.length} B) differs from its regeneration at this commit `
+      + `(${expected.length} B)`);
+  }
+  return problems;
+}
+
+/** The landing files verify-deploy compares: index.html and the charts, regenerated here. */
+export async function expectedLab({ root, commit }) {
+  const { generateLanding } = await import('./landing.mjs');
+  const files = await generateLanding({ root, commit });
+  return new Map([...files].filter(([rel]) => rel === 'index.html' || rel.startsWith('charts/')));
+}
+
 export const USAGE = 'usage: node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] '
   + '[--attempts 10] [--delay 10] [--dist dist/index.html] [--site site] [--no-assets] '
-  + '[--no-cache-bust] [--help]';
+  + '[--no-lab] [--no-cache-bust] [--help]';
 const FLAGS = {
   '--url': 'value', '--commit': 'value', '--attempts': 'value', '--delay': 'value',
-  '--dist': 'value', '--site': 'value', '--no-assets': 'boolean', '--no-cache-bust': 'boolean',
+  '--dist': 'value', '--site': 'value', '--no-assets': 'boolean', '--no-lab': 'boolean',
+  '--no-cache-bust': 'boolean',
 };
 
 /** The options of `argv` (parseFlags of release-analyze.mjs); throws exitCode 2 on misuse. */
@@ -166,7 +200,7 @@ function parseArgs(argv) {
     attempts: '--attempts' in f ? Number(f['--attempts']) : 10,
     delay: '--delay' in f ? Number(f['--delay']) : 10,
     dist: f['--dist'] ?? 'dist/index.html', site: f['--site'] ?? 'site',
-    assets: !f['--no-assets'], bust: !f['--no-cache-bust'],
+    assets: !f['--no-assets'], lab: !f['--no-lab'], bust: !f['--no-cache-bust'],
   };
   if (!o.url.endsWith('/')) o.url += '/';
   if (!(Number.isInteger(o.attempts) && o.attempts >= 1)) {
@@ -183,7 +217,7 @@ const get = (url) => boundedFetch(url, { attempts: 1,
 
 const sleep = (s) => new Promise((r) => { setTimeout(r, s * 1000); });
 
-async function attempt(o, expected, dist, n, root) {
+async function attempt(o, expected, dist, n, root, lab) {
   const q = (u) => (o.bust ? `${u}?oscilla-verify=${expected.commit.slice(0, 12)}.${n}` : u);
   const problems = [];
   let page;
@@ -207,6 +241,16 @@ async function attempt(o, expected, dist, n, root) {
         problems.push(...checkAsset({ name, ...res, expected: want }));
       } catch (e) {
         problems.push(`og: GET ${name} failed: ${e.message}`);
+      }
+    }
+  }
+  if (lab) {
+    for (const [name, want] of lab) {
+      try {
+        const res = await get(q(`${o.url}${LAB_DIR}${name}`));
+        problems.push(...checkLabFile({ name, ...res, expected: want }));
+      } catch (e) {
+        problems.push(`lab: GET ${name} failed: ${e.message}`);
       }
     }
   }
@@ -272,13 +316,17 @@ async function verify(o, { root, run, env, log, err }) {
     + `release ${release ? describe(release) : `unknown (${releaseError})`}, `
     + `source ${expected.sourceDigest}, artifact ${sha256(dist)}`);
 
+  // The landing is regenerated once, before the attempts: a failed regeneration is fatal.
+  const lab = o.lab ? await expectedLab({ root, commit }) : null;
+  if (lab) log(`  lab: ${lab.size} file(s) regenerated at ${commit.slice(0, 12)}`);
+
   let problems = [];
   for (let n = 1; n <= o.attempts; n++) {
-    problems = await attempt(o, expected, dist, n, root);
+    problems = await attempt(o, expected, dist, n, root, lab);
     if (!problems.length) {
       log(`  PASS attempt ${n}/${o.attempts}: live page is the committed dist stamped `
-        + `with commit ${commit}; version, release state, digest, shape and share assets `
-        + 'verified');
+        + `with commit ${commit}; version, release state, digest, shape, share assets`
+        + `${lab ? ' and the generated lab/' : ''} verified`);
       return 0;
     }
     log(`  attempt ${n}/${o.attempts}: ${problems.length} problem(s); `

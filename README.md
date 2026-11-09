@@ -13,6 +13,11 @@ runtime: no install, no account, nothing sent anywhere, and the same file runs w
 [`dist/index.html`](dist/index.html) from disk (claims `dist-self-contained`,
 `opens-from-file-and-subpath`).
 
+**Landing page:** <https://korczis.github.io/oscilla/lab/>, an interactive overview in Czech
+with the app in a playable frame, cards that open each workspace, the screenshots below and
+charts of the releases, the plan and the claims. It is generated from this repository on every
+Pages deploy, beside the unchanged app.
+
 ### Three things to try first
 
 Each link opens its workspace and starts nothing until you press a button.
@@ -76,6 +81,51 @@ captured by `npm run social` from `dist/index.html`:
 
 ![OSCILLA playing a 440 Hz sine: source, waveform, relative spectrum, spectrogram, microphone analyzer, sequencer and device limits](site/og-image.png)
 
+### Screenshots
+
+<!-- derived:screenshots:begin (npm run readme) -->
+These are the visual-gate references of the built app, not mock-ups: CI renders
+`dist/index.html` and the visual scripts (`scripts/visual-*.mjs`) fail the build when a
+render drifts from them. They are read from
+`tests/visual/reference.png + tests/visual/*/linux-x64-*.png`.
+
+<table>
+<tr>
+<td align="center"><a href="tests/visual/reference.png"><img src="tests/visual/reference.png" width="400" alt="Playground on a desktop: the visual-gate reference of the built app"></a><br><sub>Playground</sub></td>
+<td align="center"><a href="tests/visual/measure/linux-x64-desktop.png"><img src="tests/visual/measure/linux-x64-desktop.png" width="400" alt="Measure on a desktop: the visual-gate reference of the built app"></a><br><sub>Measure</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-desktop.png"><img src="tests/visual/studio/linux-x64-desktop.png" width="400" alt="Studio on a desktop: the visual-gate reference of the built app"></a><br><sub>Studio</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="tests/visual/studio/linux-x64-desktop-timeline.png"><img src="tests/visual/studio/linux-x64-desktop-timeline.png" width="400" alt="Studio, timeline on a desktop: the visual-gate reference of the built app"></a><br><sub>Studio, timeline</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-compact.png"><img src="tests/visual/studio/linux-x64-compact.png" width="400" alt="Studio in the compact layout: the visual-gate reference of the built app"></a><br><sub>Studio, compact layout</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-bay-dark.png"><img src="tests/visual/synth/linux-x64-desktop-bay-dark.png" width="400" alt="Synth, patch bay on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, patch bay, dark theme</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-engines-dark.png"><img src="tests/visual/synth/linux-x64-desktop-engines-dark.png" width="400" alt="Synth, Engines tab on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, Engines tab, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-panel-dark.png"><img src="tests/visual/synth/linux-x64-desktop-panel-dark.png" width="400" alt="Synth, panel on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, panel, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-xy-dark.png"><img src="tests/visual/synth/linux-x64-desktop-xy-dark.png" width="400" alt="Synth, XY tab on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, XY tab, dark theme</sub></td>
+</tr>
+</table>
+
+On a phone, 390 px wide:
+
+<table>
+<tr>
+<td align="center"><a href="tests/visual/measure/linux-x64-phone.png"><img src="tests/visual/measure/linux-x64-phone.png" width="150" alt="Measure on a phone: the visual-gate reference of the built app"></a><br><sub>Measure</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-phone.png"><img src="tests/visual/studio/linux-x64-phone.png" width="150" alt="Studio on a phone: the visual-gate reference of the built app"></a><br><sub>Studio</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-phone-timeline.png"><img src="tests/visual/studio/linux-x64-phone-timeline.png" width="150" alt="Studio, timeline on a phone: the visual-gate reference of the built app"></a><br><sub>Studio, timeline</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-bay-dark.png"><img src="tests/visual/synth/linux-x64-phone-bay-dark.png" width="150" alt="Synth, patch bay on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, patch bay, dark theme</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-engines-dark.png"><img src="tests/visual/synth/linux-x64-phone-engines-dark.png" width="150" alt="Synth, Engines tab on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, Engines tab, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-panel-dark.png"><img src="tests/visual/synth/linux-x64-phone-panel-dark.png" width="150" alt="Synth, panel on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, panel, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-xy-dark.png"><img src="tests/visual/synth/linux-x64-phone-xy-dark.png" width="150" alt="Synth, XY tab on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, XY tab, dark theme</sub></td>
+</tr>
+</table>
+
+The same views in the light theme: [Synth, patch bay, light theme, desktop](tests/visual/synth/linux-x64-desktop-bay-light.png), [Synth, Engines tab, light theme, desktop](tests/visual/synth/linux-x64-desktop-engines-light.png), [Synth, panel, light theme, desktop](tests/visual/synth/linux-x64-desktop-panel-light.png), [Synth, XY tab, light theme, desktop](tests/visual/synth/linux-x64-desktop-xy-light.png), [Synth, patch bay, light theme, phone](tests/visual/synth/linux-x64-phone-bay-light.png), [Synth, Engines tab, light theme, phone](tests/visual/synth/linux-x64-phone-engines-light.png), [Synth, panel, light theme, phone](tests/visual/synth/linux-x64-phone-panel-light.png), [Synth, XY tab, light theme, phone](tests/visual/synth/linux-x64-phone-xy-light.png).
+<!-- derived:screenshots:end -->
+
 ## What it does
 
 OSCILLA generates signals with the native Web Audio API and measures them while they play. It
@@ -102,6 +152,151 @@ keyboard takes A, C, F and T ahead of the Studio's own letters.
 
 The words OSCILLA uses for its objects (project, Studio, runtime, measurement, run, experiment,
 definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
+
+## Workspaces, templates and engines
+
+The lists in this section are generated: `npm run readme` renders them from the registries in
+`src/` through `scripts/facts.mjs`, and `npm run readme:check` (part of `npm run verify`) fails
+when one of them is edited by hand or a registry changes without them (claim `readme-derived`).
+
+<!-- derived:workspaces:begin (npm run readme) -->
+Every workspace of the app, in sidebar order, read from `WORKSPACE_REGISTRY` in
+`src/js/ui/shell.js`. **Open** starts the live app in that workspace; the links
+under *Leads on to* are the Related strip its page header shows.
+
+| Workspace | What it does | Leads on to | Open |
+| --- | --- | --- | --- |
+| **Playground** | The instrument on one screen: generator, signal analysis, microphone analyzer, guided measurement, pattern sequencer and compact Studio. | [Measure](https://korczis.github.io/oscilla/#m=measure "Measure the speaker, room and microphone the tone plays through"), [Synth](https://korczis.github.io/oscilla/#m=synth "A voice with filters, envelopes and keys"), [Learn](https://korczis.github.io/oscilla/#m=learn "Concept cards whose demos play here") | [Open](https://korczis.github.io/oscilla/#m=playground) |
+| **Measure** | A guided measurement of the speaker, room and microphone chain: frequency response, impulse response and RTA, each run rated for quality. | [Experiments](https://korczis.github.io/oscilla/#m=experiments "Keep a run as an experiment and compare it with others"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep "The measurement sweep as a Studio document"), [Learn](https://korczis.github.io/oscilla/#m=learn "Logarithmic scales and speaker limits explained") | [Open](https://korczis.github.io/oscilla/#m=measure) |
+| **Experiments** | Saved measurements as experiments: their definitions, a comparison against a baseline, and the findings that cite them. | [Measure](https://korczis.github.io/oscilla/#m=measure "Run the measurement an experiment records"), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer "A live microphone spectrum, before a calibrated run") | [Open](https://korczis.github.io/oscilla/#m=experiments) |
+| **Analyzer** (Analyze) | A spectrogram of the output and the microphone analyzer: live views, not a calibrated measurement. | [Measure](https://korczis.github.io/oscilla/#m=measure "A calibrated RTA and frequency response"), [Experiments](https://korczis.github.io/oscilla/#m=experiments "Compare saved experiments"), [Learn](https://korczis.github.io/oscilla/#m=learn "Harmonics, sampling and aliasing explained") | [Open](https://korczis.github.io/oscilla/#m=analyzer) |
+| **Filter Lab** (Analyze) | A biquad filter and the response the browser computes for it, set by type, cutoff and Q. | [Synth](https://korczis.github.io/oscilla/#m=synth "The Synth's voice filters what you play on its keys"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=filter-automation "A cutoff automated over time, as a Studio document"), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer "The spectrum of what the microphone hears") | [Open](https://korczis.github.io/oscilla/#m=filter) |
+| **Compare** (Analyze) | The microphone analyzer beside the bioacoustics hearing ranges and the phase and stereo views. | [Experiments](https://korczis.github.io/oscilla/#m=experiments "Compare saved experiments"), [Measure](https://korczis.github.io/oscilla/#m=measure "A calibrated measurement of the chain"), [Learn](https://korczis.github.io/oscilla/#m=learn "Hearing ranges and ultrasound explained") | [Open](https://korczis.github.io/oscilla/#m=compare) |
+| **Synthesis** (Synthesis) | Additive harmonics, the ADSR envelope, the phase and stereo views and the dual oscillator, beside the generator and its analysis. | [Synth](https://korczis.github.io/oscilla/#m=synth "Envelopes and oscillators on a voice you play from keys"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth "An enveloped, filtered voice as a Studio document"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat "Two detuned tones beating, as a Studio document") | [Open](https://korczis.github.io/oscilla/#m=synthesis) |
+| **Sequencer** (Synthesis) | Block sequences of tones, sweeps, pulses and modulation, beside the compact Studio. | [Synth](https://korczis.github.io/oscilla/#m=synth "A voice to play the notes from keys"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence "A sweep sequence as a Studio document"), [Presets](https://korczis.github.io/oscilla/#m=presets "Pattern presets to start from") | [Open](https://korczis.github.io/oscilla/#m=sequencer) |
+| **Presets** (Synthesis) | Built-in and saved instrument settings, and the history of what was played. | [Playground](https://korczis.github.io/oscilla/#m=playground "Where a loaded preset plays: TRIGGER or hold to play"), [Synth](https://korczis.github.io/oscilla/#m=synth "The Synth keeps its own patches"), [Synthesis](https://korczis.github.io/oscilla/#m=synthesis "Where the dual-oscillator presets play") | [Open](https://korczis.github.io/oscilla/#m=presets) |
+| **Learn** | Concept cards from frequency to signal path, most with a demo to play. | [Analyzer](https://korczis.github.io/oscilla/#m=analyzer "Waveforms, harmonics and aliasing in a live spectrum"), [Synth](https://korczis.github.io/oscilla/#m=synth "Modulation, AM and FM on the Synth's engines"), [Measure](https://korczis.github.io/oscilla/#m=measure "Logarithmic scales and speakers, measured") | [Open](https://korczis.github.io/oscilla/#m=learn) |
+| **Studio** | A signal graph you patch, with a timeline, transport and automation, run on Web Audio. | [Synth](https://korczis.github.io/oscilla/#m=synth "A Studio document played from a panel and keys"), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer "Block sequences that open here as patterns"), [Filter Lab](https://korczis.github.io/oscilla/#m=filter "The filter response the templates automate") | [Open](https://korczis.github.io/oscilla/#m=studio) |
+| **Synth** | A semi-modular mono voice on the Studio model with a patch bay and docked keys, an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion voices, and an XY tab. | [Studio](https://korczis.github.io/oscilla/#m=studio "The same document as a graph and a timeline"), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer "Block sequences of tones and sweeps"), [Learn](https://korczis.github.io/oscilla/#m=learn "Modulation, AM and FM explained") | [Open](https://korczis.github.io/oscilla/#m=synth) |
+| **About** | This page: what OSCILLA is, how it got here and what comes next. | [Playground](https://korczis.github.io/oscilla/#m=playground "Start with the instrument"), [Learn](https://korczis.github.io/oscilla/#m=learn "The concepts, each with a demo"), [Measure](https://korczis.github.io/oscilla/#m=measure "A guided measurement of your speaker and room") | [Open](https://korczis.github.io/oscilla/#m=about) |
+
+How the workspaces lead into each other, inferred from the same registry (each arrow is a
+`related` entry, labelled with its reason or the Studio template it opens):
+
+```mermaid
+flowchart LR
+  ws_playground["Playground"]
+  ws_measure["Measure"]
+  ws_experiments["Experiments"]
+  ws_learn["Learn"]
+  ws_studio["Studio"]
+  ws_synth["Synth"]
+  ws_about["About"]
+  subgraph grp_analyze["Analyze"]
+    ws_analyzer["Analyzer"]
+    ws_filter["Filter Lab"]
+    ws_compare["Compare"]
+  end
+  subgraph grp_synthesis["Synthesis"]
+    ws_synthesis["Synthesis"]
+    ws_sequencer["Sequencer"]
+    ws_presets["Presets"]
+  end
+  ws_playground -->|"Measure the speaker, room and…"| ws_measure
+  ws_playground -->|"A voice with filters, envelopes…"| ws_synth
+  ws_playground -->|"Concept cards whose demos play…"| ws_learn
+  ws_measure -->|"Keep a run as an experiment and…"| ws_experiments
+  ws_measure -->|"Measurement Sweep template"| ws_studio
+  ws_measure -->|"Logarithmic scales and speaker…"| ws_learn
+  ws_experiments -->|"Run the measurement an…"| ws_measure
+  ws_experiments -->|"A live microphone spectrum…"| ws_analyzer
+  ws_analyzer -->|"A calibrated RTA and frequency…"| ws_measure
+  ws_analyzer -->|"Compare saved experiments"| ws_experiments
+  ws_analyzer -->|"Harmonics, sampling and aliasing…"| ws_learn
+  ws_filter -->|"The Synth's voice filters what…"| ws_synth
+  ws_filter -->|"Filter Automation template"| ws_studio
+  ws_filter -->|"The spectrum of what the…"| ws_analyzer
+  ws_compare -->|"Compare saved experiments"| ws_experiments
+  ws_compare -->|"A calibrated measurement of the…"| ws_measure
+  ws_compare -->|"Hearing ranges and ultrasound…"| ws_learn
+  ws_synthesis -->|"Envelopes and oscillators on a…"| ws_synth
+  ws_synthesis -->|"Subtractive Synth template"| ws_studio
+  ws_synthesis -->|"Stereo Beat template"| ws_studio
+  ws_sequencer -->|"A voice to play the notes from…"| ws_synth
+  ws_sequencer -->|"Sweep Sequence template"| ws_studio
+  ws_sequencer -->|"Pattern presets to start from"| ws_presets
+  ws_presets -->|"Where a loaded preset plays…"| ws_playground
+  ws_presets -->|"The Synth keeps its own patches"| ws_synth
+  ws_presets -->|"Where the dual-oscillator…"| ws_synthesis
+  ws_learn -->|"Waveforms, harmonics and…"| ws_analyzer
+  ws_learn -->|"Modulation, AM and FM on the…"| ws_synth
+  ws_learn -->|"Logarithmic scales and speakers…"| ws_measure
+  ws_studio -->|"A Studio document played from a…"| ws_synth
+  ws_studio -->|"Block sequences that open here…"| ws_sequencer
+  ws_studio -->|"The filter response the…"| ws_filter
+  ws_synth -->|"The same document as a graph and…"| ws_studio
+  ws_synth -->|"Block sequences of tones and…"| ws_sequencer
+  ws_synth -->|"Modulation, AM and FM explained"| ws_learn
+  ws_about -->|"Start with the instrument"| ws_playground
+  ws_about -->|"The concepts, each with a demo"| ws_learn
+  ws_about -->|"A guided measurement of your…"| ws_measure
+```
+<!-- derived:workspaces:end -->
+
+### Studio templates
+
+<!-- derived:templates:begin (npm run readme) -->
+The Studio templates, in library order, read from `STUDIO_TEMPLATES` in
+`src/js/studio/templates/index.js`. Each link opens the template in the live Studio; nothing
+plays until you press Play.
+
+| Template | Category | What it is | Open |
+| --- | --- | --- | --- |
+| **Basic Tone** | synthesis | One oscillator into the Master Output: the shortest signal path a Studio can have. | [Open](https://korczis.github.io/oscilla/#m=studio&st=basic-tone) |
+| **Subtractive Synth** | synthesis | A bright sawtooth shaped by an envelope, then darkened by a low-pass filter whose cutoff an LFO and an automation lane move. | [Open](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth) |
+| **Sweep Sequence** | synthesis | A rising sweep, a short silence and a falling sweep, played by the existing sequencer from pattern clips on the timeline. | [Open](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence) |
+| **Stereo Beat** | synthesis | Two sine tones, 200 Hz on the left and 204 Hz on the right, routed by a Stereo Split. | [Open](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat) |
+| **Filter Automation** | synthesis | Noise through a band-pass filter; an automation lane moves the centre frequency from 200 Hz to 4 kHz and back over 8 seconds. | [Open](https://korczis.github.io/oscilla/#m=studio&st=filter-automation) |
+| **Measurement Sweep** | measurement | A transfer measurement: a logarithmic sweep plays through the output while the microphone records, and the Transfer Analyzer compares the two. | [Open](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep) |
+| **First Patch** | synthesis | A sawtooth Oscillator into the Master Output, with five timeline markers that name the first steps: play, add a Filter, move its cutoff, add a Spectrum, save. | [Open](https://korczis.github.io/oscilla/#m=studio&st=first-patch) |
+| **Filter Envelope Synth** | synthesis | A sawtooth through an Envelope and a resonant low-pass filter; the Envelope shapes the level of each note and, through its control output, sweeps the cutoff. | [Open](https://korczis.github.io/oscilla/#m=studio&st=filter-envelope-synth) |
+| **FM Chime** | synthesis | An inharmonic FM tone: a 440 Hz sine whose frequency an LFO at 616 Hz (ratio 1.4) modulates by ±616 Hz, struck by an Envelope that decays. | [Open](https://korczis.github.io/oscilla/#m=studio&st=fm-chime) |
+| **Ring Mod** | synthesis | A triangle line multiplied by a 470 Hz sine: a Gain at 0 with a bipolar LFO edge of depth 1 on its gain, so the gain runs from -1 to 1. | [Open](https://korczis.github.io/oscilla/#m=studio&st=ring-mod) |
+| **Drive Lead** | synthesis | A sawtooth lead through the Drive, a tanh soft-saturation curve, then a low-pass filter at 3.2 kHz. | [Open](https://korczis.github.io/oscilla/#m=studio&st=drive-lead) |
+| **Macro Pad** | synthesis | An A minor chord of three sawtooth Oscillators; one Macro opens the filter and brings in the fifth, and an automation lane moves the Macro from 0 to 1 and back. | [Open](https://korczis.github.io/oscilla/#m=studio&st=macro-pad) |
+| **Step Bass** | synthesis | A sawtooth bass line through a low-pass filter whose cutoff a Step Modulator moves by up to 1.5 octaves, one step per 16th note. | [Open](https://korczis.github.io/oscilla/#m=studio&st=step-bass) |
+| **Demo song: Lantern in the Slag Yard** | synthesis | An original slow riff-rock song in A minor at 96 BPM: 44 bars of bass riff, lead line and drums, played by Studio nodes from tempo-linked clips (110 s). | [Open](https://korczis.github.io/oscilla/#m=studio&st=demo-song) |
+<!-- derived:templates:end -->
+
+### Synth engines
+
+<!-- derived:engines:begin (npm run readme) -->
+The polyphonic engines of the Synth's Engines tab, in picker order, read from
+`ENGINE_MODULES` in `src/js/synth/panels/engines.js` ([open the Synth](https://korczis.github.io/oscilla/#m=synth)):
+
+- **ADDITIVE** (`additive`)
+- **FM** (`fm`)
+- **AM / RING** (`am`)
+- **WAVETABLE** (`wavetable`)
+- **HARD SYNC** (`sync`)
+- **PERCUSSION** (`perc`)
+
+Shown disabled, each with the reason it cannot be offered yet (`ENGINE_BLOCKED`): **PLUCKED STRING**, **FM FEEDBACK**.
+<!-- derived:engines:end -->
+
+### Live charts
+
+<!-- derived:live:begin (npm run readme) -->
+These charts are regenerated from the repository on every Pages deploy (release records,
+the plan, the claims ledger and git history, through `scripts/facts.mjs`), so they are
+current without a commit. The interactive versions are on the [landing page](https://korczis.github.io/oscilla/lab/).
+
+<p><img src="https://korczis.github.io/oscilla/lab/charts/releases.svg" width="100%" alt="Release timeline: every published release of OSCILLA by its publication date"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/size.svg" width="100%" alt="The size of the single-file app (dist/index.html) in each published release"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/plan.svg" width="100%" alt="Plan progress: the issues done of each milestone, by milestone status"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/claims.svg" width="100%" alt="The claims of docs/CLAIMS.yaml by status"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/activity.svg" width="100%" alt="Commits per ISO week over the last 26 weeks of the repository"></p>
+<!-- derived:live:end -->
 
 ## Navigation
 
