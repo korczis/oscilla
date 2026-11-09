@@ -37,6 +37,7 @@
 //   grid.down(lane, step, { shift }), grid.over(lane, step), grid.up() -> a painted gesture
 //   grid.valueAt(lane, step, fraction) -> the vertical drag of a value lane, one action
 //   grid.menu(item, arg)  accent | ratchet n | probability p | slide, on the focused step
+//   grid.setGrid({ stepBeats?, swing?, seed? }, mode) -> one NOTES_GRID_SET (notes mode)
 //   grid.focus, grid.state() -> { cells, offGrid, values, focus, selection, page, pages }
 
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
@@ -448,6 +449,11 @@ export function createStepGrid(opts) {
       }
       if (item === 'slide') return send(editOn([t], () => ({ slide: !cell.slide })));
       return false;
+    },
+    /** The clip's grid change (ADR 0086 decision 2): one NOTES_GRID_SET, keep by default. */
+    setGrid(next, mode = 'keep') {
+      if (disabled || list) return false;
+      return send({ type: 'NOTES_GRID_SET', clipId: opts.clipId, grid: { ...next }, mode });
     },
     state() {
       return { cells: grid && grid.cells, offGrid: grid ? grid.offGrid : [], values,

@@ -264,3 +264,13 @@ test('pages and names: 8 steps at 390 px, 16 at 1536 px; a cell names lane, step
   assert.equal(cellName('', 4, 0.5, 'param-list'), 'Krok 5, 0,50, zapnuto');
   assert.equal(stepGrid.constants.accentVel, ACCENT_VEL);
 });
+
+test('the grid change is one NOTES_GRID_SET, keep unless the gesture names a mode', () => {
+  const { grid, log } = notesGrid([note(0, KICK)]);
+  grid.setGrid({ stepBeats: 0.5 });
+  grid.setGrid({ stepBeats: 0.125 }, 'map');
+  assert.deepEqual(log.actions, [
+    { type: 'NOTES_GRID_SET', clipId: 'clip-1', grid: { stepBeats: 0.5 }, mode: 'keep' },
+    { type: 'NOTES_GRID_SET', clipId: 'clip-1', grid: { stepBeats: 0.125 }, mode: 'map' }]);
+  assert.ok(ACTION_TYPES.includes('NOTES_GRID_SET'));
+});
