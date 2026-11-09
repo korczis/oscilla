@@ -164,7 +164,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       for (const j of panel.jacksOf(mod.id)) {
         if (j.direction === a.direction) continue;
         if (j.module === a.module) {
-          out.set(j.key, { ok: false, reason: 'A module cannot patch into itself.' });
+          out.set(j.key, { ok: false, reason: 'Modul nelze propojit sám se sebou.' });
           continue;
         }
         const [s, t] = a.direction === 'out' ? [portOf(a), portOf(j)] : [portOf(j), portOf(a)];
@@ -196,8 +196,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!pending) {
       pending = id;
       const n = compatibleWith(id).size;
-      say(`Connecting from ${jackName(id)}: ${n} jacks can take the cable. Choose one in the `
-        + 'connection list below the patch bay or on the bay, or the same jack to cancel.');
+      say(`Propojuji z ${jackName(id)}; vstupy, které kabel přijmou: ${n}. Vyberte jeden `
+        + 'v seznamu spojení pod patch bayí nebo přímo na ní, nebo stejný konektor '
+        + 'pro zrušení.');
     } else if (pending === id) {
       pending = null;
       say('Connection cancelled.');
@@ -291,8 +292,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         + `in Studio</span><button type="button" class="${BTN}" data-restore-normal="${esc(j)}">`
         + 'Restore normal</button></li>').join('')
         + (cables.length || open.length || mixed.length || gone.length ? ''
-          : `<li class="${ITEM}">No cables: every jack plays its normal. Drag from one jack to `
-          + 'another, or tap two jacks.</li>');
+          : `<li class="${ITEM}">Žádné kabely: každý vstup hraje svůj normál. `
+          + 'Táhněte z jednoho konektoru na druhý, nebo klepněte na dva konektory.</li>');
     }
   }
 
@@ -313,7 +314,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       xy.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
-        + 'text-gray-700 dark:text-gray-300"><p>This Studio document has no Synth panel.</p>'
+        + 'text-gray-700 dark:text-gray-300"><p>Tento dokument Studia nemá panel Synthu.</p>'
         + (cuts.length ? `<p class="mt-2" data-osc="synth.insert-cuts">`
           + `${esc(SYNTH_TEXT.takes(feedNames(model(), cuts)))}</p>` : '')
         + '<button type="button" data-insert-panel="" class="mt-3 rounded-lg bg-primary-600 px-4 '
@@ -355,8 +356,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + 'aria-labelledby="synth-bay-title" data-osc="synth.bay" '
       + 'data-module="bay"><h3 id="synth-bay-title" class="text-sm font-bold tracking-widest '
       + 'text-gray-900 dark:text-white">PATCH BAY</h3><p class="mt-1 text-xs text-gray-500 '
-      + 'dark:text-gray-400">Every input is normalled: it plays with no cable. A cable into a '
-      + 'jack replaces its normal; removing the cable restores it.</p>'
+      + 'dark:text-gray-400">Každý vstup má normál: hraje i bez kabelu. Kabel zapojený do '
+      + 'vstupu jeho normál nahradí; odpojením kabelu se normál vrátí.</p>'
       + '<div class="mt-2 w-full" data-osc="synth.bay.canvas"></div>'
       + '<div data-osc="synth.connect" hidden></div>'
       + '<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" '
@@ -425,7 +426,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       if (!x || !x.node) return;
       if (k.getAttribute('aria-disabled') === 'true') {
         const why = document.getElementById(`${k.dataset.knob}-why`);
-        say(why ? why.textContent : 'This control is disabled.');
+        say(why ? why.textContent : 'Tento ovladač je vypnutý.');
         return;
       }
       e.preventDefault();
@@ -499,7 +500,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       allOff();
       dock.unroute();
       showTab('engines', d.engine);
-      say(`${panel.module(d.engine).label}: the keys play this engine.`);
+      say(`${panel.module(d.engine).label}: klávesy hrají tento engine.`);
     } else if (d.blocked) {
       const b = ENGINE_BLOCKED.find((x) => x.id === d.blocked);
       if (b) say(b.reason);
@@ -512,7 +513,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const x = controlOf(d.toggle);
       if (t.getAttribute('aria-disabled') === 'true') {
         const why = document.getElementById(`${d.toggle}-why`);
-        say(why ? why.textContent : 'This control is disabled.');
+        say(why ? why.textContent : 'Tento ovladač je vypnutý.');
       } else if (x) setControl(d.toggle, !valueOf(x));
     } else if (d.face) {
       showFace(d.face);
@@ -531,7 +532,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const r = unpatch(model(), panel, d.removeCable);
       pending = null;
       if (r.reason) say(r.reason, true);
-      else if (dispatch(r.action).ok) say('Cable removed; the normal is restored.');
+      else if (dispatch(r.action).ok) say('Kabel odpojen; normál je obnoven.');
     } else if (d.restoreNormal) {
       const r = restoreNormals(model(), panel, d.restoreNormal);
       if (r.reason) say(r.reason);
@@ -541,7 +542,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     } else if (d.breakNormal) {
       const r = breakNormals(model(), panel, d.breakNormal);
       if (r.reason) say(r.reason);
-      else if (dispatch(r.action).ok) say(`The normal of ${jackName(d.breakNormal)} is broken.`);
+      else if (dispatch(r.action).ok) say(`Normál vstupu ${jackName(d.breakNormal)} je rozpojen.`);
     } else if (d.connectTo) {
       const from = pending;
       pending = null;
@@ -851,9 +852,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       this.synth.link = url;
       try {
         navigator.clipboard.writeText(url).then(() => say('Synth link copied.'),
-          () => say('Copy the link below; the clipboard is not available here.'));
+          () => say('Zkopírujte odkaz níže; schránka tu není k dispozici.'));
       } catch (e) {
-        say('Copy the link below; the clipboard is not available here.');
+        say('Zkopírujte odkaz níže; schránka tu není k dispozici.');
       }
       return hash;
     },
@@ -868,8 +869,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       }
       const ok = applyLink(r.link);
       const p = ok && presetOf(r.link.preset); // a link is answered (surface-census routes)
-      if (ok && this.notify) this.notify('info', 'Synth opened from the link',
-        `${p ? p.title : this.synth.title}. Nothing plays until you play a note.`);
+      if (ok && this.notify) this.notify('info', 'Synth otevřen z odkazu',
+        `${p ? p.title : this.synth.title}. Nic nehraje, dokud nezahrajete notu.`);
       return ok;
     },
 
