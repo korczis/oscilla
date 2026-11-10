@@ -380,6 +380,40 @@ test('unfolded by the user, the pad goes above the keys; folded, nothing moves',
   }
 });
 
+// C1-R2T51-1: a reader of the dock's state (the Synth's section nav, synth/ui.js navRoom) hears
+// each applied state through onDockChange, so no module but this one names the state attribute.
+test('each applied dock state is sent to onDockChange subscribers; unsubscribing stops it',
+  async () => {
+    const d = fakeDom({ vh: 720, pad: [200, 620] });
+    d.win.CustomEvent = class { constructor(type, init) { this.type = type;
+      this.detail = init && init.detail; } };
+    d.win.dispatchEvent = (e) => { for (const f of d.listeners[e.type] || []) f(e); return true; };
+    d.win.removeEventListener = (t, f) => {
+      d.listeners[t] = (d.listeners[t] || []).filter((x) => x !== f); };
+    // the page header the Synth's route keeps room under, so the docked band is measured
+    const header = { getBoundingClientRect: () => ({ top: 0, bottom: 100, width: 390 }) };
+    d.doc.querySelector = (sel) => (sel === '[data-osc="page.header"]' ? header : null);
+    const heard = [];
+    const off = yieldMod.onDockChange(d.win, (x) => heard.push(x));
+    const ctl = yieldMod.mountDockYield({ win: d.win, doc: d.doc, cmp: { workspace: 'synth' },
+      dock: d.dock, release: () => 0 });
+    ctl.claim({ ...PAD, el: d.surface });
+    ctl.update('init');
+    await Promise.resolve();
+    assert.equal(ctl.state, 'collapsed');
+    // band: the height the keys take docked, measured docked and kept while folded (400 here)
+    assert.deepEqual(heard.at(-1), { state: 'collapsed', yields: true, foldable: true, band: 400 });
+    assert.equal(ctl.toggle(), true);
+    assert.deepEqual(heard.at(-1), { state: 'docked', yields: true, foldable: true, band: 400 });
+    const n = heard.length;
+    off();
+    assert.equal(ctl.toggle(), true);
+    assert.equal(heard.length, n, 'unsubscribed: nothing more');
+    assert.equal(yieldMod.DOCK_EVENT, 'osc:dock');
+    // no window: a no-op that still returns an unsubscribe
+    assert.equal(typeof yieldMod.onDockChange(null, () => {}), 'function');
+  });
+
 test('what the status line says of each state', () => {
   assert.match(yieldMod.dockSentence('collapsed', { yields: true, owner: 'xy-pad' }),
     /složí do úchytu, zatímco noty hraje XY pad: Alt\+K nebo úchyt ji zobrazí/);
