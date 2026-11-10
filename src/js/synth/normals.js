@@ -181,11 +181,14 @@ export function jackReason(model, panel, jack, from = null) {
     return `${m.label} Rate has no effect while Clock is patched (normalled to the keyboard `
       + 'gate): each gate steps the value. Unpatch Clock first.';
   }
-  // K238: a gain stage that rests closed (the VCA, VELOCITY: gain 0) adds its cables to 0, and a
-  // cable into its gain replaces its envelope or velocity normal. A bipolar source there (an
-  // LFO, the S&H) would open it with no key held, so it is refused; a unipolar one (an
-  // envelope) keeps it closed at rest and is allowed.
-  if (m && m.node === 'gain' && port === 'gain' && restsClosed(m) && from && bipolar(panel, from)) {
+  // K238: a gain stage that rests closed (the VCA: gain 0) adds its cables to 0, and a cable into
+  // its gain replaces its envelope normal. A bipolar source there (an LFO, the S&H) would make
+  // it sound with no key held, so it is refused; a unipolar one (an envelope) keeps it closed
+  // at rest and is allowed. A closed stage whose audio comes only through another closed one
+  // (VELOCITY after the VCA) cannot sound with no key: a bipolar source there is the gated
+  // tremolo, and it is allowed.
+  if (m && m.node === 'gain' && port === 'gain' && restsClosed(m) && from && bipolar(panel, from)
+    && !gatedUpstream(model, panel, module)) {
     return `${m.label}: bipolární zdroj by otevřel VCA bez stisknuté klávesy. Do zesílení `
       + 'patří unipolární zdroj, například obálka.';
   }
@@ -194,6 +197,39 @@ export function jackReason(model, panel, jack, from = null) {
 
 /** A panel module of a gain node whose gain is 0 when nothing drives it (fixed or init). */
 const restsClosed = (m) => ((m.fixed || {}).gain ?? (m.init || {}).gain) === 0;
+
+/**
+ * Whether every audio edge into panel module `module` (in the model, as patched) comes from a
+ * closed gain stage of the panel, or from a module that is itself so gated: then it is silent
+ * with no key whatever drives its own gain. No audio input at all is not gated.
+ */
+function gatedUpstream(model, panel, module, seen = new Set()) {
+  if (seen.has(module)) return false;
+  seen.add(module);
+  const res = panel.resolve(model);
+  const node = res.get(module);
+  if (!node) return false;
+  const byNode = new Map([...res].filter(([, n]) => n).map(([mid, n]) => [n.id, mid]));
+  const into = model.graph.edges.filter((e) => e.to.node === node.id && e.to.port === 'audio'
+    && !(e.props && e.props.muted));
+  return into.length > 0 && into.every((e) => {
+    const mid = byNode.get(e.from.node);
+    const up = mid && panel.module(mid);
+    if (!up) return false;
+    if (up.node === 'gain' && restsClosed(up) && !driveOpens(model, panel, mid)) return true;
+    return gatedUpstream(model, panel, mid, seen);
+  });
+}
+
+/** Whether a closed gain stage is opened at rest by a bipolar cable into its gain. */
+function driveOpens(model, panel, module) {
+  const res = panel.resolve(model);
+  const node = res.get(module);
+  const byNode = new Map([...res].filter(([, n]) => n).map(([mid, n]) => [n.id, mid]));
+  return model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'gain'
+    && !(e.props && e.props.muted) && byNode.get(e.from.node)
+    && bipolar(panel, `${byNode.get(e.from.node)}.${e.from.port}`));
+}
 
 /** Whether the CONTROL output `jack` swings below 0 (its range starts under 0). */
 function bipolar(panel, jack) {

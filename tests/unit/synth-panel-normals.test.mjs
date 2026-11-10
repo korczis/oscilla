@@ -278,3 +278,42 @@ test('K238: a bipolar source into VCA gain is refused; an envelope there leaves 
     // without a source named the jack itself has no refusal (the hint of an unpatched jack)
     assert.equal(jackReason(m, PANEL, 'vca.gain'), null);
   });
+
+test('K238: a bipolar source into VELOCITY gain is the gated tremolo: silent with no key, '
+  + 'tremolo with one', () => {
+    // VELOCITY sits after the VCA (n27 vca.audio -> vel.audio; the compiler ranks it later), so
+    // the closed VCA keeps it silent with no key whatever drives its gain.
+    const st = panelStore();
+    const m = st.getModel();
+    const id = (mod) => nodeOf(m, mod).id;
+    const order = compileStudio(m).order;
+    assert.ok(m.graph.edges.some((e) => e.from.node === id('vca') && e.to.node === id('vel')
+      && e.to.port === 'audio'), 'the VCA feeds VELOCITY');
+    assert.ok(order.indexOf(id('vca')) < order.indexOf(id('vel')), 'VELOCITY is downstream');
+    assert.equal(jackReason(m, PANEL, 'vel.gain', 'mg.control'), null);
+    const r = patchCable(m, PANEL, 'mg.control', 'vel.gain');
+    assert.ok(r.action, r.reason);
+    assert.equal(st.dispatch(r.action).ok, true);
+    // The voice's level is the VCA's gain times VELOCITY's (two gain stages in series), each its
+    // base plus its cables (ports.js controlLine over each source's range).
+    const level = (edge, mod, v) => {
+      const { a, b } = controlLine(edge.props, PANEL.sourceRange(edge.from));
+      return nodeOf(st.getModel(), mod).params.gain + a * v + b;
+    };
+    const vcaEdge = { props: PANEL.normals.find((n) => n.to === 'vca.gain').props,
+      from: 'eg2.control' };
+    const lfo = { props: st.getModel().graph.edges.find((e) => e.to.node === id('vel')
+      && e.to.port === 'gain').props, from: 'mg.control' };
+    const swing = [-1, -0.5, 0, 0.5, 1];
+    // no key: EG 2 at rest (0), the VCA closed, the voice silent at every LFO value
+    assert.deepEqual(swing.map((v) => Math.abs(level(vcaEdge, 'vca', 0) * level(lfo, 'vel', v))),
+      swing.map(() => 0));
+    // a key held: EG 2 at its sustain, the voice's level follows the LFO (tremolo)
+    const held = level(vcaEdge, 'vca', PANEL.module('eg2').init.sustain);
+    const voice = swing.map((v) => Math.abs(held * level(lfo, 'vel', v)));
+    assert.ok(held > 0, 'the VCA is open');
+    assert.ok(Math.max(...voice) > Math.min(...voice), `the level moves: ${voice.join(', ')}`);
+    // the VCA itself still refuses a bipolar source: it would sound with no key
+    assert.match(jackReason(st.getModel(), PANEL, 'vca.gain', 'mg.control'),
+      /bipolární zdroj by otevřel VCA bez stisknuté klávesy/);
+  });
