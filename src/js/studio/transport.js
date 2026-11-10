@@ -165,7 +165,8 @@ import {
 } from './trigger-fanout.js';
 import { transportClockOf } from '../audio/clock.js';
 import {
-  LINEAR, clamp, continueAt, fadeCurve, FADE_KNOTS, rampAcross, segRamp, segValue,
+  LINEAR, baseTarget, clamp, continueAt, createReleaseWindows, fadeCurve, FADE_KNOTS, glideAt,
+  rampAcross, segRamp, segValue,
 } from './transport-ramps.js';
 
 export { FADE_KNOTS, fadeCurve } from './transport-ramps.js';
@@ -235,6 +236,7 @@ export function createStudioTransport({
   const offsetSources = new WeakMap();
   // Lane AudioParam → { at, v, to }: a removed lane's glide from v back to the base `to`.
   const released = new WeakMap();
+  const windows = createReleaseWindows(); // C065, transport-ramps.js
   // oscillator id → { id, handle, bus, param, level, fadeAt (null: fresh), routes }
   const claims = new Map();
   // Carrier level AudioParam → the transport's last segment on it { t0, v0, t1, v1, reEnd }
@@ -1076,6 +1078,7 @@ export function createStudioTransport({
     fitted(rec, dest);
     lanes.set(laneId, rec);
     released.delete(dest.param);
+    windows.close(dest.param);
     if (evs.length && !offsetSources.has(dest.param)) {
       moveOffset(dest, evs[0].time, dest.offset, false);
     }
@@ -1157,12 +1160,11 @@ export function createStudioTransport({
    */
   function unownedValueAt(dest, target, t) {
     const r = released.get(dest.param);
-    if (r) return r.to + (r.v - r.to) * Math.exp(-Math.max(0, t - r.at) / PARAM_TAU_S);
+    if (r) return glideAt(r, t);
     const n = nodeOf(model, target.node);
     const base = n && n.params[target.param];
     if (!finite(base)) return null;
-    return dest.bounds ? clamp(base + dest.offset, dest.bounds.min, dest.bounds.max)
-      : base + dest.offset;
+    return baseTarget(dest, base);
   }
 
   function applyLaneEdit(a) {
@@ -1208,11 +1210,12 @@ export function createStudioTransport({
       const held = evs.length ? evs[evs.length - 1].value : null;
       let to = held;
       if (finite(base)) {
-        to = base + dest.offset;
-        if (dest.bounds) to = clamp(to, dest.bounds.min, dest.bounds.max);
+        to = baseTarget(dest, base);
         dest.param.setTargetAtTime(to * dest.scale, a.cancelFrom, PARAM_TAU_S);
       }
-      if (held !== null) released.set(dest.param, { at: a.cancelFrom, v: held, to });
+      if (held !== null) {
+        released.set(dest.param, windows.open(dest, a.target, { at: a.cancelFrom, v: held, to }));
+      }
       moveOffset(dest, a.cancelFrom, 0, true);
     } catch (e) {
       laneWarn(a.laneId, e);
@@ -1390,6 +1393,7 @@ export function createStudioTransport({
   /** Bring claims, envelope ownership and lanes in line with the runtime after an apply. */
   function afterApply(fresh) {
     const horizon = safeHorizon(ctxNow(), hooks.ctx.sampleRate);
+    windows.reaim(model, ctxNow(), horizon);
     const wantOsc = patternOscillators(model);
     for (const [id, c] of [...claims]) {
       const h = ready(id);

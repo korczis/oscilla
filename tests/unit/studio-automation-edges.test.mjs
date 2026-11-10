@@ -186,3 +186,64 @@ test('E018: a parameter claimed again inside the release window is owned again',
   const p = s.runtime.nodes.get('filter-1').modTarget('frequency', 'linear').param;
   assert.ok(Number.isFinite(actualAt(s, p, s.ctx.currentTime)), 'the cutoff has a value');
 });
+
+// ---------------------------------------------------------------- C065: an edit in the window
+
+/** The cutoff's lane removed while playing; returns the param and the node's base then. */
+function removedCutoffLane(s) {
+  ok(s.transport.start());
+  s.fx.advance(1.0);
+  const p = s.runtime.nodes.get('filter-1').modTarget('frequency', 'linear').param;
+  const last = trimLane(s, 'filter-1', 'frequency');
+  dispatch(s, { type: 'AUTOMATION_POINT_REMOVE', ...last }); // the lane is gone
+  const base = s.store.getModel().graph.nodes.find((n) => n.id === 'filter-1').params.frequency;
+  return { p, base };
+}
+
+const setCutoff = (s, hz) => dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'filter-1',
+  params: { frequency: hz } });
+
+for (const rate of [44100, 48000]) {
+  test(`C065: a base edit 5 ms after a lane is removed is the value played (${rate} Hz)`, () => {
+    const s = setup(templateModel(REFERENCE_TEMPLATE_ID), rate);
+    const { p, base } = removedCutoffLane(s);
+    assert.equal(base, 500, 'the template cutoff the release glides back to');
+    s.fx.advance(0.005); // inside the release window (one edit horizon)
+    setCutoff(s, 2000);
+    s.fx.advance(0.5);
+    near(actualAt(s, p, s.ctx.currentTime), 2000, 1e-2, 'the edited base, never the old 500');
+    const last = p.calls.filter((c) => c[0] === 'setTargetAtTime').at(-1);
+    near(last[1], 2000, 1e-9, 'the last scheduled target is the edited base');
+  });
+}
+
+test('C065: undo and redo of a base edit inside the window end on the base the model holds',
+  () => {
+    const s = setup(templateModel(REFERENCE_TEMPLATE_ID), 48000);
+    const { p, base } = removedCutoffLane(s);
+    // All three inside the window: the edit, its undo and its redo each re-aim the glide.
+    setCutoff(s, 2000);
+    ok(s.store.undo()); // back to the base the lane was removed with
+    const mid = s.ctx.currentTime + 0.02;
+    ok(s.store.redo());
+    s.fx.advance(0.5);
+    near(actualAt(s, p, s.ctx.currentTime), 2000, 1e-2, 'redo: the edited base is played');
+    assert.ok(Number.isFinite(actualAt(s, p, mid)), 'the cutoff has a value throughout');
+    // An undo inside a new window ends on the base the model holds after it.
+    const again = setup(templateModel(REFERENCE_TEMPLATE_ID), 48000);
+    const r = removedCutoffLane(again);
+    setCutoff(again, 2000);
+    ok(again.store.undo());
+    again.fx.advance(0.5);
+    near(actualAt(again, r.p, again.ctx.currentTime), base, 1e-2, 'undo: the model\'s base');
+  });
+
+test('C065: an edit to another parameter inside the window does not re-aim the cutoff', () => {
+  const s = setup(templateModel(REFERENCE_TEMPLATE_ID), 48000);
+  const { p, base } = removedCutoffLane(s);
+  const n0 = p.calls.length;
+  dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'filter-1', params: { Q: 2 } });
+  assert.deepEqual(glidesSince(p, n0), [], 'no new glide on the cutoff');
+  s.fx.advance(0.5);
+  near(actualAt(s, p, s.ctx.currentTime), base, 1e-2, 'the cutoff ends on its unchanged base');
+});

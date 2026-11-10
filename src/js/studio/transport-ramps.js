@@ -5,6 +5,7 @@
 // its callers and tests have read them.
 
 import { SCHEDULE_LEAD_S } from '../audio/scheduler.js';
+import { PARAM_TAU_S } from './adapters/nodes.js';
 import { STUDIO_XFADE_S } from './compiler.js';
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -67,3 +68,54 @@ export function continueAt({ rampAt, soon, soonest, q, startTime }) {
   const from = rampAt !== null && rampAt >= rendered + q - 1e-9 ? 'crossfade' : 'soonest';
   return { at: Math.max(from === 'crossfade' ? rampAt : soonest, startTime), from };
 }
+
+/** A removed lane's glide record { at, v, to } at time t (setTargetAtTime with PARAM_TAU_S). */
+export const glideAt = (r, t) => r.to + (r.v - r.to) * Math.exp(-Math.max(0, t - r.at)
+  / PARAM_TAU_S);
+
+/** The value a parameter's base reaches: the base plus the edges' offset, within the bounds. */
+export function baseTarget(dest, base) {
+  const to = base + dest.offset;
+  return dest.bounds ? clamp(to, dest.bounds.min, dest.bounds.max) : to;
+}
+
+/**
+ * C065: the lane releases still inside their window. A removed lane's parameter glides back to
+ * the base read at removal (transport.js applyLaneEdit) while the runtime holds the key until
+ * the edit horizon (runtime.js heldKeys), so a base edit landing in that window would be skipped
+ * and the glide would end on the stale base. open() records a release, close() drops it when a
+ * lane claims the parameter again, reaim(model, now, horizon) re-aims every open release whose
+ * node's base the model changed: from max(its start, the horizon) it glides to the new base
+ * (plus the offset, within the bounds) with the same tau, and its record follows, so the
+ * transport's unownedValueAt stays exact. A release past its window (one schedule lead after
+ * its start; the runtime writes the base itself from then on) is dropped.
+ */
+export function createReleaseWindows() {
+  const open = new Map(); // param -> { dest, target, rec: { at, v, to } }
+  return {
+    open(dest, target, rec) {
+      open.set(dest.param, { dest, target, rec });
+      return rec;
+    },
+    close(param) { open.delete(param); },
+    reaim(model, now, horizon) {
+      for (const [param, { dest, target, rec }] of open) {
+        if (now >= rec.at + SCHEDULE_LEAD_S) {
+          open.delete(param);
+          continue;
+        }
+        const n = model.graph.nodes.find((x) => x.id === target.node);
+        const base = n ? n.params[target.param] : null;
+        if (typeof base !== 'number' || !Number.isFinite(base)) continue;
+        const to = baseTarget(dest, base);
+        if (to === rec.to) continue;
+        const t = Math.max(rec.at, horizon);
+        const v = glideAt(rec, t);
+        param.cancelScheduledValues(t);
+        param.setTargetAtTime(to * dest.scale, t, PARAM_TAU_S);
+        Object.assign(rec, { at: t, v, to });
+      }
+    },
+  };
+}
+
