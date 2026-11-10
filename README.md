@@ -659,8 +659,9 @@ What it does not do yet, each named with the work that would fill it:
 - A MIDI performance cannot be recorded into the song (V505).
 - Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
   gap G4).
-- A filter's Q cannot be automated, so the build's rising resonance is in the score only (K144
-  gap G10).
+- The song has no filter Q lane yet, so the build's rising resonance is in the score only (K144
+  gap G10): the Studio plays a low-pass Q lane since K232, and the template adds it in its next
+  version.
 - The Studio's view nodes draw nothing (K016).
 - After a reload the Studio opens the default template, not the last project (V604).
 - No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
