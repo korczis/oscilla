@@ -96,5 +96,6 @@ node scripts/review-verdict.mjs --pr <number> --pr-json pr.json   # a train, wit
 An audit of the findings still marked open lives here as `audit-<date>.yaml` (schema
 `review-audit/v1`): each P0-P2 finding classified against `main` as fixed (the verified commit),
 superseded (why) or open (the plan issue now tracking it), and the P3s counted. It never edits a
-verdict file; the verdict's `status` stays as written and the audit says what holds now. The first
-is `audit-2026-11-10.yaml`.
+verdict file; the verdict's `status` stays as written and the audit says what holds now. A later
+audit supersedes an earlier one by its date; the earlier one stays as the record of its base. The
+first is `audit-2026-11-10.yaml`.

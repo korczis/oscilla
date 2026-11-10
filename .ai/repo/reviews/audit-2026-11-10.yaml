@@ -8,7 +8,8 @@
 # Method: the open findings were extracted from the 96 verdict files at the base with
 # scripts/yaml-subset.mjs (613 findings, 381 open: 2 P1, 61 P2, 318 P3). The P1s and #367 F1
 # were judged by oscilla-c3; the other P2s by four read-only reviewer agents of oscilla-c3, each in
-# its own detached worktree at the base (mutations run and reverted, no browser suite), and
+# its own detached worktree at the base b8bfd3b6 (~/dev/oscilla-wt/audit-a1, -a2, -b, -c; mutations
+# run and reverted, no browser suite; the worktrees were removed clean afterwards), and
 # re-checked by oscilla-c3 where an agent rated a finding above P2 (252 R1, 304 R1 reproduced).
 # No finding is re-rated: severities stay the reviewers' (oscilla-43 kept 252 R1 at P2 and asked
 # for it to be fixed first, as E061).
