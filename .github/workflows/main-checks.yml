@@ -43,14 +43,9 @@ jobs:
     # against git and every published v*.*.0 tag against its station, and fails rather than
     # skips under CI without them (a full checkout measured 4 s against 2 s shallow, in the
     # knowledge job).
-    # The pinned majordomus as in ci.yml's unit job (the /lab/ milestone status, P015).
     name: unit, build, artifact rules
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      MJ_VERSION: 1.0.0
-      MJ_TARGET: x86_64-unknown-linux-gnu
-      MJ_SHA256: 0fc3f6ad9ef2c4f1b5ff8454f6d6373d1b9d1c4732822ca5d06c4ce6c65cdd6e
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -60,31 +55,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
-        timeout-minutes: 5
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
-          # The public download URL first; where it fails (the pinned release's returned 504 for hours on
-          # 2026-11-08 while the API served the same asset), the same asset of the same tag and
-          # repository through the API, three bounded attempts. Either way the digest decides.
-          if ! curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
-            -o "$RUNNER_TEMP/$a" \
-            "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"; then
-            echo "::warning::the release download URL failed; fetching $a through the GitHub API"
-            for i in 1 2 3; do
-              timeout 60 gh release download "v${MJ_VERSION}" -R korczis/prismatic-majordomus \
-                -p "$a" -D "$RUNNER_TEMP" --clobber && break
-              [ "$i" = 3 ] && exit 1
-              sleep 5
-            done
-          fi
-          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -
-          mkdir -p "$RUNNER_TEMP/mj" && tar -xzf "$RUNNER_TEMP/$a" -C "$RUNNER_TEMP/mj"
-          echo "$RUNNER_TEMP/mj/majordomus-v${MJ_VERSION}-${MJ_TARGET}/bin" >> "$GITHUB_PATH"
-      - name: The installed version is the pinned one
-        run: test "$(majordomus version)" = "majordomus ${MJ_VERSION}"
       - name: Unit and freeze suites
         run: npm test
       - name: One product version (package.json) everywhere, no hard-coded copies
@@ -133,6 +103,18 @@ jobs:
           echo "$RUNNER_TEMP/mj/majordomus-v${MJ_VERSION}-${MJ_TARGET}/bin" >> "$GITHUB_PATH"
       - name: The installed version is the pinned one
         run: test "$(majordomus version)" = "majordomus ${MJ_VERSION}"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # P015: the /lab/ milestone status is Majordomus's; here, with the pinned majordomus on
+      # PATH, the facts' status of every milestone is compared with `majordomus plan roadmap
+      # --json`. OSC_FACTS_MAJORDOMUS makes a missing majordomus a failure, never a skip
+      # (tests/unit/facts-majordomus.test.mjs, which also guards that this step exists).
+      - name: The /lab/ milestone status is majordomus plan roadmap --json's
+        timeout-minutes: 5
+        env:
+          OSC_FACTS_MAJORDOMUS: '1'
+        run: node --test tests/unit/facts-majordomus.test.mjs
       - name: majordomus doctor (git-hook wiring excepted)
         run: |
           set +e; majordomus doctor --json > doctor.jsonl; code=$?; set -e

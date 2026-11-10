@@ -1,8 +1,7 @@
 // R049: the Majordomus pin has one source, MJ_VERSION and MJ_SHA256 of ci.yml's knowledge job.
-// main-checks.yml's mirror is held equal to it, and so (P015) is every other job that installs
-// the pinned majordomus (ci.yml's unit job, pages.yml's deploy job, for the /lab/ milestone
-// status): each pin equal, each install step byte-equal to the knowledge job's, and the
-// version is written nowhere else under
+// main-checks.yml's mirror is held equal to it, and so (P015) is pages.yml's deploy job, which
+// installs the pinned majordomus for the /lab/ milestone status: its pin equal, its install
+// step byte-equal to the knowledge job's, and the version is written nowhere else under
 // .github/: no job name (a check name renamed on every bump, review 291), no comment. The bump
 // e880703e edited eight files by hand (owner, 2026-11-06: "numbers are duplicated, not
 // everything is derived").
@@ -85,16 +84,15 @@ test('every job that installs majordomus pins ci.yml\'s release and digest, step
   const all = ['.github/workflows/ci.yml', '.github/workflows/pages.yml',
     '.github/workflows/main-checks.yml'].flatMap(pins);
   assert.deepEqual(all.map((p) => `${p[0]}#${p[1]}`).sort(), [
-    '.github/workflows/ci.yml#knowledge', '.github/workflows/ci.yml#unit',
-    '.github/workflows/main-checks.yml#knowledge', '.github/workflows/main-checks.yml#unit',
+    '.github/workflows/ci.yml#knowledge', '.github/workflows/main-checks.yml#knowledge',
     '.github/workflows/pages.yml#deploy'].sort());
   for (const [file, job, version, digest] of all) {
     assert.deepEqual([version, digest], want, `${file} ${job}`);
   }
-  const [knowledge, ...copies] = [installSteps('.github/workflows/ci.yml').at(-1),
-    ...installSteps('.github/workflows/ci.yml').slice(0, -1),
-    ...installSteps('.github/workflows/pages.yml'),
+  const [knowledge, ...extra] = installSteps('.github/workflows/ci.yml');
+  assert.deepEqual(extra, [], 'ci.yml installs majordomus in its knowledge job only');
+  const copies = [...installSteps('.github/workflows/pages.yml'),
     ...installSteps('.github/workflows/main-checks.yml')];
-  assert.ok(knowledge && copies.length === 4, 'the unit, deploy and main-checks copies exist');
+  assert.ok(knowledge && copies.length === 2, 'the deploy and main-checks copies exist');
   for (const step of copies) assert.equal(step, knowledge, 'byte-equal to the knowledge job\'s');
 });

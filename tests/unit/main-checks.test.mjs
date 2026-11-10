@@ -220,33 +220,22 @@ test('main-checks.yml obeys project.ci-bounded and is not bound to a pull reques
 
 test('mutation: a copied step drifts, here or in ci.yml', () => {
   const here = mutate(MAIN, '        run: npm test\n', '        run: npm test || true\n');
-  assert.match(onlyProblem(CI, here, 'mirror: unit step'), /step 6/);
+  assert.match(onlyProblem(CI, here, 'mirror: unit step'), /step 4/);
   const there = mutate(CI, '        run: npm run version:check\n',
     '        run: npm run version:check || true\n');
-  onlyProblem(there, MAIN, 'mirror: unit step 7');
+  onlyProblem(there, MAIN, 'mirror: unit step 5');
   const dropped = mutate(MAIN, '      - name: Committed dist/index.html matches a clean rebuild\n'
     + '        run: npm run build:check\n', '');
-  onlyProblem(CI, dropped, 'mirror: unit step 8');
+  onlyProblem(CI, dropped, 'mirror: unit step 6');
 });
 
 test('mutation: the Majordomus pin or a job budget differs from ci.yml', () => {
   const sha = MAIN.match(/MJ_SHA256: ([0-9a-f]{64})/)[1];
-  // since P015 the unit job pins majordomus too (the /lab/ milestone status): each job's own
-  // pin is mutated in that job only
-  const inJob = (text, job, from, to) => {
-    const at = text.indexOf(`\n  ${job}:\n`);
-    const next = text.slice(at + 1).search(/\n {2}[a-z][\w-]*:\n/);
-    const end = next === -1 ? text.length : at + 1 + next;
-    return text.slice(0, at) + mutate(text.slice(at, end), from, to) + text.slice(end);
-  };
-  for (const job of ['unit', 'knowledge']) {
-    const pin = inJob(MAIN, job, `MJ_SHA256: ${sha}`, `MJ_SHA256: ${'0'.repeat(64)}`);
-    onlyProblem(CI, pin, `mirror: ${job}.env`);
-    const pinned = CI.match(/\n {6}MJ_VERSION: (\S+)\n/)[1];
-    const version = inJob(CI, job, `      MJ_VERSION: ${pinned}\n`,
-      `      MJ_VERSION: ${pinned}.1\n`);
-    onlyProblem(version, MAIN, `mirror: ${job}.env`);
-  }
+  const pin = mutate(MAIN, `MJ_SHA256: ${sha}`, `MJ_SHA256: ${'0'.repeat(64)}`);
+  onlyProblem(CI, pin, 'mirror: knowledge.env');
+  const pinned = CI.match(/\n {6}MJ_VERSION: (\S+)\n/)[1];
+  const version = mutate(CI, `      MJ_VERSION: ${pinned}\n`, `      MJ_VERSION: ${pinned}.1\n`);
+  onlyProblem(version, MAIN, 'mirror: knowledge.env');
   const budget = setBound(MAIN, '    name: unit, build, artifact rules\n    runs-on: ubuntu-24.04\n'
     + '    ', (n) => n + 20);
   onlyProblem(CI, budget, 'mirror: unit.timeout-minutes');
@@ -289,7 +278,7 @@ test('mutation: the pull-request-only size report is copied, or its exception go
   const copied = mutate(MAIN, '\n  knowledge:\n', `${step}\n  knowledge:\n`);
   const found = mainChecksProblems(CI, copied);
   assert.equal(found.length, 2, found.join('\n'));
-  assert.ok(found[0].startsWith('mirror: unit step 10 ("Size of dist'), found[0]);
+  assert.ok(found[0].startsWith('mirror: unit step 8 ("Size of dist'), found[0]);
   assert.equal(found[1], 'mirror: unit reads the pull request, which a push to main has not');
   const renamed = mutate(CI,
     '- name: Size of dist/index.html against the budget and the merge base',

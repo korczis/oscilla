@@ -48,7 +48,6 @@ import {
   prsIn, ratchets, releaseCadence, releaseChanges, releaseTags, reviewAudits, reviews, roadmap,
   utcDay, auditorName, hexTokens, milestoneStatuses, plan,
 } from '../../scripts/facts.mjs';
-import { spawnSync } from 'node:child_process';
 
 // A repository whose every commit has its own fixed date, one minute after the previous one.
 function fixture() {
@@ -645,33 +644,6 @@ test('plan: each milestone takes the status Majordomus derives, never one from i
     rmSync(dir, { recursive: true, force: true });
   }
 });
-
-// The page's milestone status against the tool itself. It needs this repository's history (the
-// fail-first tree has none) and majordomus: under CI a missing majordomus fails (ci.yml's unit
-// job installs the pinned one), locally it is skipped with the reason.
-const MAJORDOMUS = spawnSync('majordomus', ['version'], { encoding: 'utf8' });
-const HAS_MAJORDOMUS = !MAJORDOMUS.error && MAJORDOMUS.status === 0;
-test('every milestone\'s status is the one `majordomus plan roadmap --json` derives',
-  { skip: !HAS_HISTORY ? 'this checkout has no commit history (a git archive tree)'
-    : !HAS_MAJORDOMUS && !process.env.CI && 'majordomus is not on PATH (it is required under CI)' },
-  () => {
-    assert.ok(HAS_MAJORDOMUS, 'majordomus is on PATH under CI (ci.yml installs the pinned one)');
-    const r = spawnSync('majordomus', ['plan', 'roadmap', '--json'], { cwd: REPO_ROOT,
-      encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 180_000 });
-    assert.equal(r.status, 0, r.stderr);
-    // written out here, not imported: DONE and CANCELLED as they are, ACTIVE and VERIFY in
-    // progress (now), PLANNED (next) and BLOCKED (later) open
-    const want = { DONE: ['DONE', null], CANCELLED: ['CANCELLED', null], ACTIVE: ['ACTIVE', 'now'],
-      VERIFY: ['ACTIVE', 'now'], PLANNED: ['OPEN', 'next'], BLOCKED: ['OPEN', 'later'] };
-    const tool = new Map(JSON.parse(r.stdout).milestones.map((m) => [m.id, want[m.status]
-      ?? ['OPEN', 'next']]));
-    const st = milestoneStatuses(REPO_ROOT, { requireMajordomus: true });
-    assert.equal(st.source, 'majordomus plan roadmap --json');
-    assert.match(st.tool.version, /^\d+\.\d+\.\d+/);
-    const page = plan(REPO_ROOT, st).items;
-    assert.equal(page.length, tool.size);
-    for (const m of page) assert.deepEqual([m.status, m.phase], tool.get(m.id), m.id);
-  });
 
 test('reviewAudits: an extension completes its audit, a same-day -b re-audit supersedes it', () => {
   const { dir, write, commit } = fixture();
