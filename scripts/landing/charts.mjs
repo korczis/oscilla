@@ -587,7 +587,7 @@ function claimsTrendChart(facts) {
   const shown = keys.filter((k) => items.some((x) => x.present && (x.byStatus[k.key] ?? 0) > 0));
   body += legendRow(shown, height);
   return frame('claims-trend', title, sub, `${fmtInt(items.length)} vydání; `
-    + `${absent ? `${fmtInt(absent)} bez souboru docs/CLAIMS.yaml; ` : ''}v v${last.version} `
+    + `${absent ? `${fmtInt(absent)} bez souboru docs/CLAIMS.yaml; ` : ''}ve v${last.version} `
     + `${last.present ? `${fmtInt(last.total)} tvrzení` : 'soubor chybí'}.`, body, height);
 }
 

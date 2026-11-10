@@ -109,7 +109,7 @@ async function withHistory(fn) {
   }
 }
 
-const FACTS = await withHistory(() => collectFacts({ git: true }));
+const FACTS = await withHistory(() => collectFacts({ git: true, majordomus: false }));
 const FILES = await generateLanding({ facts: FACTS });
 const HTML = FILES.get('index.html').toString('utf8');
 const stripScripts = (html) => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,
@@ -150,7 +150,7 @@ const PAGE_CEILING = Object.freeze({
 });
 
 test('two generations from the same checkout are byte-identical', async () => {
-  const again = await withHistory(() => generateLanding());
+  const again = await withHistory(() => generateLanding({ majordomus: false }));
   assert.deepEqual([...again.keys()], [...FILES.keys()]);
   for (const [name, body] of FILES) assert.ok(again.get(name).equals(body), name);
   assert.ok(FILES.has('index.html'));
@@ -636,7 +636,7 @@ function auditFacts() {
     split: { open: 1, fixed: 2, superseded: 1, unaudited: 1, total: 5 },
     bySeverity: {}, p3: { audit: '.ai/repo/reviews/audit-2026-11-10.yaml', total: 435,
       open: 318, byClass: { fixed: 9, superseded: 5, open: 17, unclassified: 287 },
-      signals: { named_nowhere: 141 }, sample: 31 },
+      signals: { named_nowhere: 141 }, sample: 31, extensions: [], classified: 31 },
   };
   return f;
 }
@@ -713,4 +713,85 @@ test('with no audit the section says so and keeps P016\'s counts and chart', asy
   delete p016.reviewAudits;
   const { renderCharts } = await import('../../scripts/landing/charts.mjs');
   assert.equal(svg, renderCharts(p016).reviews, 'the chart is P016\'s, byte for byte');
+});
+
+test('an audit\'s extension is shown beside it; its P3 classes complete the block', async () => {
+  const f = auditFacts();
+  const ext = '.ai/repo/reviews/audit-2026-11-10-p3.yaml';
+  f.reviewAudits.audits.push({ file: ext, schema: 'review-audit/v1', date: '2026-11-10',
+    base: 'b8bfd3b613b9e4aac63267343c14bd1ee91f2a02',
+    judgedOn: 'a710235836f2c1bb8205f5edccfacf50051d060e', extends: f.reviewAudits.audits[0].file,
+    completes: f.reviewAudits.audits[0].file, baseKnown: true,
+    auditors: ['oscilla-ce (proceed-lane)'], scope: 'the open P3 findings left', summary: null });
+  f.reviewAudits.p3 = { ...f.reviewAudits.p3, extensions: [ext], classified: 318,
+    byClass: { fixed: 69, superseded: 42, open: 207, unclassified: 0 } };
+  const files = await generateLanding({ facts: f });
+  const r = sectionOf(files.get('revize/index.html').toString('utf8'), 'revize');
+  assert.ok(r.includes('>audit-2026-11-10.yaml</a> · <time'),
+    'the audit it extends stays the latest');
+  const row = (/<div class="sm:col-span-2" data-audit-extension>([\s\S]*?)<\/div>/.exec(r)
+    || [])[1];
+  assert.ok(row && row.includes('>audit-2026-11-10-p3.yaml</a>'), 'the extension is named');
+  assert.ok(row.includes('ověřeno proti <a href="https://github.com/korczis/oscilla/commit/'
+    + 'a710235836f2c1bb8205f5edccfacf50051d060e"><code>a7102358</code></a>'), 'its judged_on');
+  assert.ok(row.includes('<code class="text-xs">oscilla-ce (proceed-lane)</code>'));
+  assert.doesNotMatch(r, /Starší audity/, 'an extension is not an older audit');
+  assert.match(r,
+    /Audit spolu s doplněním <code class="text-xs">audit-2026-11-10-p3\.yaml<\/code>/);
+  assert.match(r, /stále otevřené 207, opraveno 69, nahrazeno 42; <strong[^>]*>neklasifikováno 0</);
+});
+
+test('the milestone status names its source: majordomus and its version, or the release',
+  async () => {
+  const roadmapPage = (files) => sectionOf(files.get('roadmapa/index.html').toString('utf8'),
+    'roadmapa');
+  const meta = (files, name) => (/<meta name="oscilla-lab-status-source" content="([^"]*)">/
+    .exec(files.get(name).toString('utf8')) || [])[1];
+  const version = JSON.parse(readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')).version;
+  assert.equal(FACTS.plan.statusSource.source, 'src/data/roadmap.json');
+  assert.ok(roadmapPage(FILES).includes(`stav k vydání ${version} ze souboru `
+    + '<code class="text-sm">src/data/roadmap.json</code>'), 'the fallback names its release');
+  for (const name of [...FILES.keys()].filter((n) => n.endsWith('.html'))) {
+    assert.equal(meta(FILES, name), `src/data/roadmap.json ${version}`, name);
+  }
+  const f = clone(FACTS);
+  f.plan.statusSource = { source: 'majordomus plan roadmap --json',
+    tool: { name: 'majordomus', version: '1.0.0' }, release: null, fallback: null };
+  const files = await generateLanding({ facts: f });
+  assert.ok(roadmapPage(files).includes('stav podle Majordomus 1.0.0, příkaz <code '
+    + 'class="text-sm">majordomus plan roadmap --json</code>'));
+  assert.equal(meta(files, 'index.html'), 'majordomus 1.0.0');
+  // verify-deploy names a page built from another status source before the bytes
+  const live = files.get('index.html');
+  const here = FILES.get('index.html');
+  const problems = checkLabFile({ name: 'index.html', status: 200,
+    contentType: 'text/html; charset=utf-8', body: live, expected: here });
+  assert.match(problems[0], new RegExp('milestone status from "majordomus 1\\.0\\.0" on the '
+    + 'live page, "src/data/roadmap\\.json '));
+});
+
+// P3-1 of review r517b: every free text the page prints is escaped. The expected strings are
+// written out, not built with the page's own esc().
+test('mutation guard: commit subjects, ADR titles, claims and verdict titles are escaped',
+  async () => {
+  const f = auditFacts();
+  const nasty = 'a <b> & "c"';
+  const rel = f.releaseChanges.items[f.releaseChanges.items.length - 1];
+  rel.groups[0].commits[0] = { ...rel.groups[0].commits[0], subject: `fix: ${nasty} subject` };
+  f.adrs.items[f.adrs.items.length - 1] = { ...f.adrs.items[f.adrs.items.length - 1],
+    title: `${nasty} title` };
+  f.claims.items[0] = { ...f.claims.items[0], claim: `${nasty} claim` };
+  f.reviewAudits.perFinding[4] = { ...f.reviewAudits.perFinding[4], title: `${nasty} finding` };
+  const files = await generateLanding({ facts: f });
+  const page = (n) => files.get(n).toString('utf8');
+  const want = 'a &lt;b&gt; &amp; &quot;c&quot;';
+  assert.ok(page('zmeny/index.html').includes(`fix: ${want} subject`), 'commit subject');
+  assert.ok(page('adr/index.html').includes(`${want} title</a>`), 'ADR title');
+  assert.ok(page('tvrzeni/index.html').includes(`${want} claim</p>`), 'claim');
+  assert.ok(page('revize/index.html').includes(`<span lang="en">${want} finding</span>`),
+    'unaudited finding title');
+  for (const n of ['zmeny/index.html', 'adr/index.html', 'tvrzeni/index.html',
+    'revize/index.html']) {
+    assert.ok(!page(n).includes(nasty), `${n} prints no raw markup`);
+  }
 });

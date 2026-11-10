@@ -93,9 +93,12 @@ export const COMMIT_TYPES_OPEN = Object.freeze(['feat', 'fix', 'perf', 'revert']
  */
 export const CHANGELOG_FULL_RELEASES = 8;
 
-/** The derived milestone status (scripts/facts.mjs plan()) -> Czech name. */
+/**
+ * The milestone status Majordomus derives, grouped as scripts/facts.mjs plan() groups it (ACTIVE:
+ * its phase now; OPEN: next and later) -> Czech name.
+ */
 export const PLAN_STATUS_COPY = Object.freeze({ DONE: 'hotovo', ACTIVE: 'rozpracováno',
-  OPEN: 'otevřeno' });
+  OPEN: 'otevřeno', CANCELLED: 'zrušeno', UNKNOWN: 'neznámý' });
 
 /** ADR front-matter status -> Czech name; an unknown status is shown as it is. */
 export const ADR_STATUS_COPY = Object.freeze({ accepted: 'přijato', proposed: 'navrženo',

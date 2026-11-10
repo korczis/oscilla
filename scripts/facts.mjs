@@ -22,7 +22,9 @@
 //                    byArea: { <area>: n }, items: [{ id, claim, status, source,
 //                    implementation, test, area }] },
 //     releases:    { source, items: [{ version, tag, published_at, size, sha256 }] },
-//     plan:        { source, byStatus, items: [{ id, title, order, status, done, total }] },
+//     plan:        { source, statusSource: { source, tool, release, fallback }, byStatus,
+//                    items: [{ id, title, order, status, phase, done, total }] }  (status:
+//                    Majordomus's, milestoneStatuses; done/total: the issue files)
 //     roadmap:     { source, dirs: { intents, milestones, issues }, order,
 //                    items: [{ id, title, done, total, milestones: [{ id, title, order,
 //                    status, done, total }] }], unassigned: [<milestone>] },
@@ -58,20 +60,23 @@
 //                    bySeverity }], findings: [{ source: '<pr>.yaml#<id>', pr, id, severity,
 //                    status, title }] }                                   only when git: true
 //     reviewAudits: { source, rule, commitRule, severities, classes, audits: [{ file, schema,
-//                    date, base, auditors, scope, summary, baseKnown }], perFinding: [{ source, pr, id, severity, title,
+//                    date, base, judgedOn, extends, extendsMissing, completes, auditors, scope,
+//                    summary, baseKnown }], perFinding: [{ source, pr, id, severity, title,
 //                    class, audit, auditDate, evidence, issue, issueFile, commit }],
 //                    unaudited: [<source>],
 //                    orphans: [{ source, pr, id, class, audit }], split: { <class>: n, total },
-//                    bySeverity: { <sev>: { <class>: n } }, p3: { audit, total, open, byClass,
-//                    signals, sample } | null }                    (P017) only when git: true
+//                    bySeverity: { <sev>: { <class>: n } }, p3: { audit, extensions, total,
+//                    open, byClass, signals, sample, classified } | null }
+//                                                                  (P017) only when git: true
 //   }
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { parseClaims, unquote } from '../tests/unit/claims-parse.mjs';
+import { CLOSED as ROADMAP_CLOSED, PHASE_OF, ROADMAP_REL } from './roadmap.mjs';
 import { parseYaml } from './yaml-subset.mjs';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -212,12 +217,107 @@ function releases(root) {
   return { source: SOURCES.releases, items };
 }
 
-// The status `majordomus plan status` derives, read from the files alone (no executable, so
-// CI and the Pages deploy compute the same): an issue is DONE when `majordomus plan done`
-// stamped completed_at, CANCELLED when cancelled: true. A milestone is DONE when every issue
-// it still requires is done, ACTIVE when some are, OPEN when none are (majordomus splits OPEN
-// into PLANNED and BLOCKED by the dependency graph, which the charts do not need).
-export function plan(root) {
+// ------------------------------------------------------------------- milestone status (P015)
+/** The environment variable that makes the /lab/ build require Majordomus (Pages sets it). */
+export const REQUIRE_MAJORDOMUS_ENV = 'OSC_LAB_REQUIRE_MAJORDOMUS';
+/** The page's three milestone groups by Majordomus's phase: now is in progress, the rest open. */
+export const STATUS_OF_PHASE = Object.freeze({ now: 'ACTIVE', next: 'OPEN', later: 'OPEN' });
+export const MAJORDOMUS_SOURCE = 'majordomus plan roadmap --json';
+const statusCache = new Map();
+
+function runTool(bin, args, root) {
+  const r = spawnSync(bin, args, { cwd: root, encoding: 'utf8', timeout: 180_000,
+    maxBuffer: 64 * 1024 * 1024 });
+  if (r.error) {
+    return { error: r.error.code === 'ENOENT' ? `${bin} is not on PATH`
+      : `${bin} ${args.join(' ')}: ${r.error.message}` };
+  }
+  if (r.status !== 0) {
+    return { error: `${bin} ${args.join(' ')} exited ${r.status}: ${(r.stderr || '').trim()
+      .split('\n').slice(-1)[0] ?? ''}`.trim() };
+  }
+  return { out: r.stdout };
+}
+
+/**
+ * The status of every milestone as Majordomus derives it (decision of oscilla-43, 2026-11-10,
+ * recorded in P015): never recomputed here. First `majordomus plan roadmap --json` in `root`:
+ * DONE and CANCELLED as it says, every other status grouped by its phase (scripts/roadmap.mjs
+ * PHASE_OF: ACTIVE and VERIFY now, PLANNED next, BLOCKED later). With `requireMajordomus` (the
+ * Pages deploy, --require-majordomus or OSC_LAB_REQUIRE_MAJORDOMUS=1) a missing or failing
+ * majordomus throws by name. Without it, or with `useMajordomus: false`, the committed
+ * src/data/roadmap.json, which release:prepare writes from the same command: a milestone it
+ * lists takes its phase, one it does not list is DONE (CANCELLED when its file says
+ * cancelled: true), as of the release package.json names; it may be one release behind the
+ * plan files, and its status is shown as it is, never corrected from the issue counts.
+ * -> { source, tool: { name, version } | null, release, fallback, statuses: { <id>: { status,
+ *      phase, derived } } }   (memoised per root and options within one process)
+ */
+export function milestoneStatuses(root, { requireMajordomus = false, useMajordomus = true,
+  bin = 'majordomus' } = {}) {
+  const key = `${path.resolve(root)}\0${requireMajordomus}\0${useMajordomus}\0${bin}`;
+  if (statusCache.has(key)) return statusCache.get(key);
+  let fallback = useMajordomus ? null : 'not asked (useMajordomus: false)';
+  if (useMajordomus) {
+    const v = runTool(bin, ['version'], root);
+    const r = v.error ? v : runTool(bin, ['plan', 'roadmap', '--json'], root);
+    let plan = null;
+    if (!r.error) {
+      try {
+        plan = JSON.parse(r.out);
+      } catch (e) {
+        r.error = `${MAJORDOMUS_SOURCE} gave no JSON: ${e.message}`;
+      }
+      if (plan && !Array.isArray(plan.milestones)) {
+        r.error = `${MAJORDOMUS_SOURCE} gave no milestones list`;
+      }
+    }
+    if (!r.error) {
+      const statuses = {};
+      for (const m of plan.milestones) {
+        const derived = String(m.status);
+        const phase = ROADMAP_CLOSED.includes(derived) ? null : PHASE_OF[derived] ?? 'next';
+        statuses[m.id] = { status: phase ? STATUS_OF_PHASE[phase] : derived, phase, derived };
+      }
+      const version = (/(\d+\.\d+\.\d+\S*)/.exec(v.out) || [])[1] ?? v.out.trim();
+      const out = { source: MAJORDOMUS_SOURCE, tool: { name: 'majordomus', version },
+        release: null, fallback: null, statuses };
+      statusCache.set(key, out);
+      return out;
+    }
+    if (requireMajordomus) {
+      throw new Error(`facts: the milestone status needs Majordomus (${MAJORDOMUS_SOURCE}): `
+        + `${r.error}; install the pinned majordomus, or build without --require-majordomus `
+        + `(${REQUIRE_MAJORDOMUS_ENV}) to read ${ROADMAP_REL}`);
+    }
+    fallback = r.error;
+  }
+  const file = path.join(root, ROADMAP_REL);
+  if (!existsSync(file)) {
+    throw new Error(`facts: no milestone status: ${fallback}, and ${ROADMAP_REL} is missing`);
+  }
+  const listed = new Map(JSON.parse(readFileSync(file, 'utf8')).milestones
+    .map((m) => [m.id, m]));
+  const statuses = {};
+  const dir = path.join(root, SOURCES.plan);
+  for (const f of yamlFiles(dir)) {
+    const m = parseYaml(readFileSync(path.join(dir, f), 'utf8'));
+    const l = listed.get(m.id);
+    statuses[m.id] = l ? { status: STATUS_OF_PHASE[l.phase] ?? 'OPEN', phase: l.phase,
+      derived: null } : { status: m.cancelled === true ? 'CANCELLED' : 'DONE', phase: null,
+      derived: null };
+  }
+  const pkg = path.join(root, 'package.json');
+  const release = existsSync(pkg) ? String(JSON.parse(readFileSync(pkg, 'utf8')).version) : null;
+  const out = { source: ROADMAP_REL, tool: null, release, fallback, statuses };
+  statusCache.set(key, out);
+  return out;
+}
+
+// Each milestone with the status Majordomus derives (milestoneStatuses) and its progress from
+// the issue files: done (completed_at, not cancelled) of total (not cancelled). A milestone the
+// status source does not name is UNKNOWN, never guessed.
+export function plan(root, statusFacts = milestoneStatuses(root, { useMajordomus: false })) {
   const counts = {};
   const issueDir = path.join(root, SOURCES.issues);
   for (const f of yamlFiles(issueDir)) {
@@ -231,15 +331,17 @@ export function plan(root) {
   const items = yamlFiles(dir).map((f) => {
     const m = parseYaml(readFileSync(path.join(dir, f), 'utf8'));
     const c = counts[m.id] ?? { total: 0, done: 0, cancelled: 0 };
-    const total = c.total - c.cancelled;
-    const status = c.done === total && (total > 0 || c.cancelled > 0) ? 'DONE'
-      : c.done > 0 ? 'ACTIVE' : 'OPEN';
+    const st = statusFacts.statuses[m.id] ?? { status: 'UNKNOWN', phase: null };
     return { id: m.id, title: m.title, order: Number.isFinite(m.order) ? m.order : null,
-      status, done: c.done, total };
+      status: st.status, phase: st.phase, done: c.done, total: c.total - c.cancelled };
   });
   items.sort((a, b) => byString(a.id, b.id));
-  return { source: `${SOURCES.plan} + ${SOURCES.issues}`, byStatus: countBy(items, 'status'),
-    items };
+  // the status source last: a file (the fallback) or the majordomus command (statusSource
+  // carries its version, or the release the file describes)
+  return { source: `${SOURCES.plan} + ${SOURCES.issues} + ${statusFacts.source}`,
+    statusSource: { source: statusFacts.source, tool: statusFacts.tool,
+      release: statusFacts.release, fallback: statusFacts.fallback },
+    byStatus: countBy(items, 'status'), items };
 }
 
 // Only single-line fields of the front matter (id, title, status, date): an ADR's other
@@ -979,11 +1081,19 @@ export function isAncestor(root, a, b) {
   }
 }
 
+/** How the audits are ordered and joined (reviewAudits' `rule`, .ai/repo/reviews/README.md). */
+export const AUDIT_RULE = 'an audit naming another in extends: completes it: it adds rows for '
+  + 'the findings that one does not name and its p3_total completes that one\'s P3 block, and '
+  + 'replaces nothing; the other audits are ordered by date, then file name without .yaml (so '
+  + 'a same-day audit-<date>-b.yaml follows audit-<date>.yaml), and the latest naming '
+  + '<pr>.yaml#<id> gives the class; a finding open at P0-P2 in its verdict that no audit names '
+  + 'is unaudited';
+
 /** How a fixed finding's commit is found (reviewAudits' `commitRule`). */
 export const COMMIT_RULE = 'a fixed finding links the first token of its evidence of 7-40 '
   + 'lowercase hex digits (one at least a digit) that is a commit of this repository (git '
-  + 'cat-file --batch-check) and an ancestor of its audit\'s base (git merge-base '
-  + '--is-ancestor); else no commit';
+  + 'cat-file --batch-check) and an ancestor of the commit its audit judged on (judged_on, '
+  + 'else base; git merge-base --is-ancestor); else no commit';
 
 const str = (v) => (v === undefined || v === null ? null : String(v));
 
@@ -1013,29 +1123,55 @@ export function auditorName(a) {
 export function reviewAudits(root, reviewsFacts) {
   const dir = path.join(root, REVIEWS);
   const files = yamlFiles(dir).filter((f) => AUDIT_FILE.test(f));
-  const docs = files.map((file) => ({ file, doc: parseYaml(readFileSync(path.join(dir, file),
-    'utf8')) })).map(({ file, doc }) => ({ file, doc, date: utcDay(doc.date) }))
-    .sort((a, b) => byString(a.date ?? '', b.date ?? '') || byString(a.file, b.file));
-  const audits = docs.map(({ file, doc, date }) => ({ file: `${REVIEWS}/${file}`,
-    schema: str(doc.schema), date, base: str(doc.base),
-    auditors: (Array.isArray(doc.auditors) ? doc.auditors : [doc.auditors]).filter((x) =>
+  const parsed = files.map((file) => {
+    const doc = parseYaml(readFileSync(path.join(dir, file), 'utf8'));
+    return { file, stem: file.replace(/\.yaml$/, ''), doc, date: utcDay(doc.date),
+      extends: str(doc.extends) };
+  });
+  const byFile = new Map(parsed.map((d) => [d.file, d]));
+  // the audit an extension completes, followed through extensions of extensions; an extension
+  // that names no audit present here stands on its own (extendsMissing)
+  const rootOf = (d, seen = new Set()) => {
+    const target = d.extends ? byFile.get(d.extends.replace(/^.*\//, '')) : null;
+    if (!target || target === d || seen.has(target.file)) return d;
+    seen.add(d.file);
+    return rootOf(target, seen);
+  };
+  const order = (a, b) => byString(a.date ?? '', b.date ?? '') || byString(a.stem, b.stem);
+  const chains = parsed.filter((d) => rootOf(d) === d).sort(order).map((r) => [r,
+    ...parsed.filter((d) => d !== r && rootOf(d) === r).sort(order)]);
+  const docs = chains.flat();
+  const audits = docs.map((d) => ({ file: `${REVIEWS}/${d.file}`, schema: str(d.doc.schema),
+    date: d.date, base: str(d.doc.base), judgedOn: str(d.doc.judged_on),
+    extends: d.extends ? `${REVIEWS}/${d.extends.replace(/^.*\//, '')}` : null,
+    extendsMissing: Boolean(d.extends) && rootOf(d) === d,
+    completes: rootOf(d) === d ? null : `${REVIEWS}/${rootOf(d).file}`,
+    auditors: (Array.isArray(d.doc.auditors) ? d.doc.auditors : [d.doc.auditors]).filter((x) =>
       x !== undefined && x !== null).map(auditorName),
-    scope: str(doc.scope), summary: doc.summary && typeof doc.summary === 'object'
-      ? doc.summary : null }));
-  // the latest audit naming a source wins: later audits overwrite earlier ones
+    scope: str(d.doc.scope), summary: d.doc.summary && typeof d.doc.summary === 'object'
+      ? d.doc.summary : null }));
+  const auditOf = new Map(docs.map((d, i) => [d, audits[i]]));
+  // Within a chain the audit it extends keeps its rows and an extension only adds rows for the
+  // sources it does not name; across chains the later root (by date, then file stem, so a
+  // same-day audit-<date>-b.yaml follows audit-<date>.yaml) supersedes per source.
   const verdict = new Map((reviewsFacts?.findings ?? []).filter((x) => x.source)
     .map((x) => [x.source, x]));
   const latest = new Map();
-  for (const [i, { doc }] of docs.entries()) {
-    const entries = [...(Array.isArray(doc.findings) ? doc.findings : []),
-      ...(Array.isArray(doc.p3_sample) ? doc.p3_sample : [])];
-    for (const e of entries) {
-      const source = str(e.source);
-      if (!source) continue;
-      latest.set(source, { audit: audits[i].file, date: audits[i].date, base: audits[i].base,
-        cls: str(e.class),
-        evidence: str(e.evidence), issue: str(e.issue), title: str(e.title) });
+  for (const chain of chains) {
+    const rows = new Map();
+    for (const d of chain) {
+      const a = auditOf.get(d);
+      const entries = [...(Array.isArray(d.doc.findings) ? d.doc.findings : []),
+        ...(Array.isArray(d.doc.p3_sample) ? d.doc.p3_sample : [])];
+      for (const e of entries) {
+        const source = str(e.source);
+        if (!source || rows.has(source)) continue;
+        rows.set(source, { audit: a.file, date: a.date, base: a.judgedOn ?? a.base,
+          cls: str(e.class), evidence: str(e.evidence), issue: str(e.issue),
+          title: str(e.title) });
+      }
     }
+    for (const [source, row] of rows) latest.set(source, row);
   }
   const perFinding = (reviewsFacts?.findings ?? []).filter((x) => x.status === 'open'
     && AUDITED_SEVERITIES.includes(x.severity)).map((x) => {
@@ -1051,10 +1187,11 @@ export function reviewAudits(root, reviewsFacts) {
   });
   // the fixing commits: every candidate token and base resolved by one cat-file process
   const fixed = perFinding.filter((x) => x.class === 'fixed');
+  const checkBase = (a) => a.judgedOn ?? a.base;
   const types = objectTypes(root, [...fixed.flatMap((x) => hexTokens(x.evidence)),
-    ...audits.map((x) => x.base).filter(Boolean)]);
+    ...audits.map(checkBase).filter(Boolean)]);
   const baseSha = (b) => (b && types.get(b)?.type === 'commit' ? types.get(b).sha : null);
-  for (const x of audits) x.baseKnown = Boolean(baseSha(x.base));
+  for (const x of audits) x.baseKnown = Boolean(baseSha(checkBase(x)));
   const ancestry = new Map();
   for (const x of fixed) {
     const base = baseSha(x.base);
@@ -1085,18 +1222,43 @@ export function reviewAudits(root, reviewsFacts) {
     bySeverity[x.severity][x.class] += 1;
   }
   const unknownBases = audits.filter((x) => !x.baseKnown).map((x) => x.file);
-  const last = docs[docs.length - 1];
-  const p3 = last && last.doc.p3 && typeof last.doc.p3 === 'object' ? {
-    audit: audits[audits.length - 1].file, total: last.doc.p3.total ?? null,
-    open: last.doc.p3.open ?? null, byClass: last.doc.p3.by_class ?? null,
-    signals: last.doc.p3_signals ?? null,
-    sample: Array.isArray(last.doc.p3_sample) ? last.doc.p3_sample.length : 0 } : null;
+  // The P3 block of the latest chain: its root's p3 as recorded, completed by each extension's
+  // p3_total (the classes over all of the root's open P3s; open_at_base its open count) or p3.
+  const chain = chains[chains.length - 1] ?? [];
+  let p3 = null;
+  for (const d of chain) {
+    const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : null);
+    const block = obj(d.doc.p3);
+    const total = obj(d.doc.p3_total);
+    if (!block && !total) continue;
+    p3 ??= { audit: auditOf.get(chain[0]).file, extensions: [], total: null, open: null,
+      byClass: null, signals: null,
+      sample: Array.isArray(chain[0].doc.p3_sample) ? chain[0].doc.p3_sample.length : 0,
+      classified: 0 };
+    if (block) {
+      p3.total = block.total ?? p3.total;
+      p3.open = block.open ?? p3.open;
+      p3.byClass = obj(block.by_class) ?? p3.byClass;
+    }
+    if (total) {
+      // p3_total: the classes over all of the root's open P3s, and open_at_base their count
+      p3.open = total.open_at_base ?? p3.open;
+      p3.byClass = Object.fromEntries(Object.entries(total).filter(([k]) => k !== 'open_at_base'));
+    }
+    p3.signals = obj(d.doc.p3_signals) ?? p3.signals;
+  }
+  if (p3) {
+    const files = new Set(chain.map((d) => auditOf.get(d).file));
+    p3.extensions = chain.slice(1).map((x) => auditOf.get(x).file);
+    p3.classified = [...latest].filter(([source, r]) => files.has(r.audit)
+      && verdict.get(source)?.severity === 'P3').length;
+  }
   return {
     source: `${REVIEWS}/audit-*.yaml (review-audit/v1) + ${REVIEWS}/<pr>.yaml`,
-    rule: 'audits by date, then file name; the latest audit naming <pr>.yaml#<id> gives the '
-      + 'class; a finding open at P0-P2 in its verdict that no audit names is unaudited',
-    commitRule: `${COMMIT_RULE}${unknownBases.length ? `; the base of ${unknownBases.join(', ')} `
-      + 'is not a commit of this clone, so its ancestor check is skipped' : ''}`,
+    rule: AUDIT_RULE,
+    commitRule: `${COMMIT_RULE}${unknownBases.length ? `; the judged commit of ${
+      unknownBases.join(', ')} is not a commit of this clone, so its ancestor check is `
+      + 'skipped' : ''}`,
     severities: [...AUDITED_SEVERITIES], classes, audits, perFinding,
     unaudited: perFinding.filter((x) => x.class === UNAUDITED).map((x) => x.source),
     orphans, split: { ...split, total: perFinding.length }, bySeverity, p3,
@@ -1132,7 +1294,26 @@ export function releaseCadence(releaseFacts) {
     median: m === null ? null : Math.round(m * 100) / 100 };
 }
 
-export async function collectFacts({ root = REPO_ROOT, git = true } = {}) {
+/**
+ * Every fact group of the checkout at `root`. `git` adds the groups read from its history (and
+ * fails by name in a tree without one, such as a git archive: facts.mjs --no-git works there);
+ * `majordomus` (default: `git`) asks `majordomus plan roadmap --json` for the milestone status,
+ * and `requireMajordomus` (default: OSC_LAB_REQUIRE_MAJORDOMUS=1) refuses the fallback to
+ * src/data/roadmap.json (milestoneStatuses).
+ */
+export async function collectFacts({ root = REPO_ROOT, git = true, majordomus = git,
+  requireMajordomus = process.env[REQUIRE_MAJORDOMUS_ENV] === '1' } = {}) {
+  if (git) {
+    try {
+      execFileSync('git', ['rev-parse', '--verify', '-q', 'HEAD'], { cwd: root,
+        stdio: ['ignore', 'ignore', 'ignore'] });
+    } catch {
+      throw new Error(`facts: ${root} has no git history (a git archive tree?); the git groups `
+        + 'need it: node scripts/facts.mjs --no-git works without them');
+    }
+  }
+  const statusFacts = milestoneStatuses(root, { requireMajordomus,
+    useMajordomus: majordomus || requireMajordomus });
   const facts = {
     schema: 'oscilla-facts/v1',
     appUrl: APP_URL,
@@ -1141,7 +1322,7 @@ export async function collectFacts({ root = REPO_ROOT, git = true } = {}) {
     engines: await engines(root),
     claims: claims(root),
     releases: releases(root),
-    plan: plan(root),
+    plan: plan(root, statusFacts),
     adrs: adrs(root),
     tests: tests(root),
     dist: dist(root),
@@ -1164,6 +1345,13 @@ export async function collectFacts({ root = REPO_ROOT, git = true } = {}) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const facts = await collectFacts({ git: !process.argv.includes('--no-git') });
-  process.stdout.write(`${JSON.stringify(facts, null, 2)}\n`);
+  try {
+    const facts = await collectFacts({ git: !process.argv.includes('--no-git'),
+      requireMajordomus: process.argv.includes('--require-majordomus')
+        || process.env[REQUIRE_MAJORDOMUS_ENV] === '1' });
+    process.stdout.write(`${JSON.stringify(facts, null, 2)}\n`);
+  } catch (e) {
+    process.stderr.write(`${e.message}\n`);
+    process.exitCode = 1;
+  }
 }

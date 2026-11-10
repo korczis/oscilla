@@ -4,7 +4,7 @@
 // committed. The app at /oscilla/ stays the one self-contained dist/index.html and never loads
 // these pages (project.single-file-deliverable, its /lab/ exception).
 //
-//   node scripts/landing.mjs --out <dir> [--app-href ../] [--commit <sha>]
+//   node scripts/landing.mjs --out <dir> [--app-href ../] [--commit <sha>] [--require-majordomus]
 //     writes <dir>/index.html (the light front page), <dir>/<sub>/index.html for every
 //     dashboard sub-page of SUBPAGES (plan P018: grafy, tvrzeni, zmeny, roadmapa, dluh, revize,
 //     adr), <dir>/charts/<name>.svg for every name of CHARTS, and <dir>/shots/*.png, copies of
@@ -24,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
-import { CHARTS, REPO_ROOT, collectFacts } from './facts.mjs';
+import { CHARTS, REPO_ROOT, REQUIRE_MAJORDOMUS_ENV, collectFacts } from './facts.mjs';
 import { parseFlags } from './release-analyze.mjs';
 import { guardRawText, inlineIcon } from './pack-single-file.mjs';
 import { TARGETS } from './build-config.mjs';
@@ -266,10 +266,16 @@ async function compileCss(htmls, js) {
 /**
  * The landing's files for the checkout at `root`: { 'index.html': Buffer, '<sub>/index.html':
  * Buffer, 'charts/<n>.svg': Buffer, 'shots/<f>.png': Buffer }, in a fixed order.
- * @param {{ root?: string, appHref?: string, facts?: object, commit?: string }} [o]
+ * `requireMajordomus` (default: OSC_LAB_REQUIRE_MAJORDOMUS=1, which pages.yml sets) makes the
+ * milestone status come from `majordomus plan roadmap --json` or fail by name, never from the
+ * committed src/data/roadmap.json (facts.mjs milestoneStatuses).
+ * @param {{ root?: string, appHref?: string, facts?: object, commit?: string,
+ *   requireMajordomus?: boolean, majordomus?: boolean }} [o]  majordomus: false reads only
+ *   the committed roadmap.json (tests)
  */
-export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts, commit } = {}) {
-  const f = facts ?? await collectFacts({ root, git: true });
+export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts, commit,
+  requireMajordomus = process.env[REQUIRE_MAJORDOMUS_ENV] === '1', majordomus = true } = {}) {
+  const f = facts ?? await collectFacts({ root, git: true, majordomus, requireMajordomus });
   if (!f.git) throw new Error('landing: the facts carry no git group (collectFacts git: true)');
   if (commit && commit !== f.git.head) {
     throw new Error(`landing: --commit ${commit} is not the checkout's HEAD ${f.git.head}`);
@@ -327,8 +333,9 @@ export function writeLanding(out, files) {
 }
 
 export const USAGE = 'usage: node scripts/landing.mjs --out <dir> [--app-href ../] '
-  + '[--commit <sha>] [--help]';
-const FLAGS = { '--out': 'value', '--app-href': 'value', '--commit': 'value' };
+  + '[--commit <sha>] [--require-majordomus] [--help]';
+const FLAGS = { '--out': 'value', '--app-href': 'value', '--commit': 'value',
+  '--require-majordomus': 'boolean' };
 
 export async function main({ argv = process.argv.slice(2), root = REPO_ROOT, log = console.log,
   err = console.error } = {}) {
@@ -349,7 +356,8 @@ export async function main({ argv = process.argv.slice(2), root = REPO_ROOT, log
   }
   try {
     const files = await generateLanding({ root, appHref: f['--app-href'] ?? '../',
-      commit: f['--commit'] });
+      commit: f['--commit'], requireMajordomus: Boolean(f['--require-majordomus'])
+        || process.env[REQUIRE_MAJORDOMUS_ENV] === '1' });
     writeLanding(path.resolve(f['--out']), files);
     const bytes = [...files.values()].reduce((s, b) => s + b.length, 0);
     log(`landing: wrote ${files.size} files (${bytes} B) to ${f['--out']}`);

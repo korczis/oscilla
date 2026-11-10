@@ -8,13 +8,18 @@ priority: p2
 profile: deep-work
 objective: "Extend scripts/facts.mjs and the generated landing (P014, Q107) with deeper, derived and retrospective views, each fact naming its source: per release, the commits between consecutive v* tags grouped by Conventional Commit type and scope, with the plan ids they name (inferred from subjects); the roadmap: intents, their milestones and done/total, ordered as majordomus plan roadmap orders them; a searchable, filterable claims explorer (status, area, the test that proves each claim, linked to GitHub); the ADRs with status and date; code size per src/js module and the test inventory per area over time (per release tag). New charts join CHARTS only when the README can embed them as well. Generation stays deterministic and byte-identical on macOS and linux; nothing is committed that drifts with every pull request."
 why: "The owner's loop order of 2026-11-09 asks to improve the extraction, dashboards and reports many times over, retrospectively and at top quality, after the landing went live (P014)."
-current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261109224239-52a2 on feat/lab-dashboards (#517), with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261109224239-52a2 on feat/lab-dashboards (#517), with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns. Decision on the roadmap's milestone status (review r517b P2-2), option B, by oscilla-43 (integrator), 2026-11-10, relayed by the coordinator: the status is the one `majordomus plan roadmap --json` derives, read at deploy (pages.yml installs the pinned majordomus and builds with --require-majordomus; verify-deploy regenerates the same way), with src/data/roadmap.json only as the local fallback. Reason, verbatim: \"the /lab/ page shows the tool's status, never a committed copy that a done-stamp PR would leave stale; A would put a new rebuild obligation on every plan PR\" (oscilla-43, 2026-11-10)."
 scope:
   - "scripts/facts.mjs"
   - "scripts/landing.mjs"
   - "scripts/landing"
   - "scripts/readme.mjs"
+  - "scripts/verify-deploy.mjs"
+  - ".github/workflows/pages.yml"
+  - ".github/workflows/ci.yml"
   - "README.md"
+  - "tests/unit/ci-workflows.test.mjs"
+  - "tests/unit/majordomus-pin-one-source.test.mjs"
   - "tests/unit/landing-lab.test.mjs"
   - "tests/unit/readme-derived.test.mjs"
   - "tests/unit/facts.test.mjs"
@@ -31,4 +36,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-09'
+updated_at: '2026-11-10'

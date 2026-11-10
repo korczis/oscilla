@@ -147,8 +147,13 @@ test('mutation: an install, a download or a browser suite step without its own t
   assert.deepEqual(rules(ci(install)), ['step-timeout@leg-1']);
   const suite = setBound(CI, 'logs/leg-2-${{ matrix.browser }}.log\n        ', () => null);
   assert.deepEqual(rules(ci(suite)), ['step-timeout@leg-2']);
+  // the pinned Majordomus install: in ci.yml the unit job's copy comes first (P015), then
+  // the knowledge job's; pages.yml's deploy job holds the same step
   const download = setBound(CI, '(pinned version and digest)\n        ', () => null);
-  assert.deepEqual(rules(ci(download)), ['step-timeout@knowledge']);
+  assert.deepEqual(rules(ci(download)), ['step-timeout@unit']);
+  const pagesDownload = setBound(PAGES, '(pinned version and digest)\n        ', () => null);
+  assert.deepEqual(rules(checkWorkflow('pages.yml', pagesDownload, SUITES)),
+    ['step-timeout@deploy']);
   const smoke = setBound(PAGES, '      - name: Public smoke of the deployed page (fatal)\n'
     + '        ', () => null);
   assert.deepEqual(rules(checkWorkflow('pages.yml', smoke, SUITES)), ['step-timeout@smoke']);
@@ -156,10 +161,12 @@ test('mutation: an install, a download or a browser suite step without its own t
 
 test('mutation: a curl without --retry or --connect-timeout', () => {
   const noRetry = mutate(CI, " --retry 5 --retry-all-errors --retry-delay 5", '');
-  assert.deepEqual(rules(ci(noRetry)), ['curl-flags@knowledge']);
+  assert.deepEqual(rules(ci(noRetry)), ['curl-flags@unit']);
+  assert.deepEqual(rules(checkWorkflow('pages.yml', mutate(PAGES,
+    ' --retry 5 --retry-all-errors --retry-delay 5', ''), SUITES)), ['curl-flags@deploy']);
   assert.match(ci(noRetry)[0].message, /curl without --retry <n>/);
   const noConnect = mutate(CI, ' --connect-timeout 20', '');
-  assert.deepEqual(rules(ci(noConnect)), ['curl-flags@knowledge']);
+  assert.deepEqual(rules(ci(noConnect)), ['curl-flags@unit']);
   assert.match(ci(noConnect)[0].message, /curl without --connect-timeout <s>/);
   assert.deepEqual(checkScript('.github/scripts/x.sh', 'wget https://example.org/a.tgz\n')
     .map((v) => v.rule), ['curl-flags', 'download-digest']);
@@ -168,15 +175,18 @@ test('mutation: a curl without --retry or --connect-timeout', () => {
 test('mutation: a download that is not checked against a pinned digest', () => {
   const unchecked = mutate(CI,
     '          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -\n', '');
-  assert.deepEqual(rules(ci(unchecked)), ['download-digest@knowledge']);
+  assert.deepEqual(rules(ci(unchecked)), ['download-digest@unit']);
+  assert.deepEqual(rules(checkWorkflow('pages.yml', mutate(PAGES,
+    '          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -\n', ''), SUITES)),
+  ['download-digest@deploy']);
   const unpinned = CI.replace(/\n {6}MJ_SHA256: [0-9a-f]{64}\n/, '\n');
   assert.notEqual(unpinned, CI);
-  assert.deepEqual(rules(ci(unpinned)), ['download-digest@knowledge']);
+  assert.deepEqual(rules(ci(unpinned)), ['download-digest@unit']);
   const piped = mutate(CI, '      - name: The installed version is the pinned one\n',
     '      - name: Installer\n        timeout-minutes: 5\n        run: curl -fsSL --retry 3'
     + ' --connect-timeout 20 https://majordomus.dev/install.sh | sh\n'
     + '      - name: The installed version is the pinned one\n');
-  assert.deepEqual(rules(ci(piped)), ['pipe-to-shell@knowledge']);
+  assert.deepEqual(rules(ci(piped)), ['pipe-to-shell@unit']);
 });
 
 test('mutation: a job that gate does not need', () => {

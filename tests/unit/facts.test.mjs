@@ -46,8 +46,9 @@ import {
   BASELINE_FILE, CHARTS, COMMIT_TYPES, REPO_ROOT, adrs, baselineTotal, catFiles, claimArea,
   claimsPerRelease, codeInventory, collectFacts, median, parseCommitSubject, planBurnup, planIdsIn,
   prsIn, ratchets, releaseCadence, releaseChanges, releaseTags, reviewAudits, reviews, roadmap,
-  utcDay, auditorName, hexTokens,
+  utcDay, auditorName, hexTokens, milestoneStatuses, plan,
 } from '../../scripts/facts.mjs';
+import { spawnSync } from 'node:child_process';
 
 // A repository whose every commit has its own fixed date, one minute after the previous one.
 function fixture() {
@@ -198,6 +199,11 @@ test('roadmap: milestones by order then id, intents by their first milestone, do
     issue('K003', 'M002', "completed_at: '2026-01-01'\n");
     issue('K004', 'M002', 'cancelled: true\n');
     issue('K005', 'M003');
+    // the status is Majordomus's, here its committed copy: M002 is not listed, so DONE
+    write('src/data/roadmap.json', JSON.stringify({ schema: 'oscilla-roadmap/v3', milestones: [
+      { id: 'M001', phase: 'now' }, { id: 'M003', phase: 'next' }, { id: 'M004', phase: 'later' },
+    ] }));
+    write('package.json', '{ "version": "1.2.3" }');
     write('.ai/repo/project/intents/b-late.yaml', 'id: b-late\ntitle: "Late"\nmilestones:\n'
       + '  - "M003"\n');
     write('.ai/repo/project/intents/a-first.yaml', 'id: a-first\ntitle: "First"\n'
@@ -261,7 +267,8 @@ const HAS_HISTORY = (() => {
 test('collectFacts carries the new groups for this repository, as plain JSON, twice the same',
   { skip: !HAS_HISTORY && 'this checkout has no commit history (a git archive tree)' },
   async () => {
-    const [a, b] = [await collectFacts({ git: true }), await collectFacts({ git: true })];
+    const [a, b] = [await collectFacts({ git: true, majordomus: false }),
+      await collectFacts({ git: true, majordomus: false })];
     assert.deepEqual(a, b);
     assert.deepEqual(JSON.parse(JSON.stringify(a)), a);
     for (const name of ['modules', 'growth']) assert.ok(CHARTS.includes(name), name);
@@ -464,7 +471,7 @@ test('releaseCadence: hours between consecutive published releases and their med
 
 test('collectFacts carries the P016 trends for this repository',
   { skip: !HAS_HISTORY && 'this checkout has no commit history (a git archive tree)' }, async () => {
-  const f = await collectFacts({ git: true });
+  const f = await collectFacts({ git: true, majordomus: false });
   for (const name of ['burnup', 'claims-trend', 'ratchets', 'reviews', 'cadence']) {
     assert.ok(CHARTS.includes(name), name);
   }
@@ -577,8 +584,9 @@ test('reviewAudits: the latest audit per finding, unaudited, orphans, commits an
       ], 'newer overrides older (R1, whose first hex token is no object and the second the fix); '
         + 'the older alone covers R2 and F3 (an unknown base: no ancestor check); F2 no audit '
         + 'names; F4 names a commit that is not an ancestor of the base');
-      assert.match(a.commitRule, /ancestor of its audit's base/);
-      assert.match(a.commitRule, /the base of \.ai\/repo\/reviews\/audit-zz-old\.yaml is not a /);
+      assert.match(a.commitRule, /ancestor of the commit its audit judged on/);
+      assert.match(a.commitRule,
+        /the judged commit of \.ai\/repo\/reviews\/audit-zz-old\.yaml is not a /);
       assert.equal(a.perFinding[3].title, 't F2', 'an unaudited finding keeps its verdict title');
       assert.deepEqual(a.unaudited, ['30.yaml#F2']);
       assert.deepEqual(a.orphans, [{ source: '99.yaml#X', pr: 99, id: 'X', class: 'fixed',
@@ -587,9 +595,147 @@ test('reviewAudits: the latest audit per finding, unaudited, orphans, commits an
       assert.deepEqual(a.bySeverity.P0, { open: 0, fixed: 0, superseded: 0, unaudited: 1 });
       assert.deepEqual(a.p3, { audit: '.ai/repo/reviews/audit-aa-new.yaml', total: 6, open: 2,
         byClass: { fixed: 1, superseded: 0, open: 1, unclassified: 0 },
-        signals: { named_nowhere: 1 }, sample: 1 }, 'the latest audit\'s P3 block as recorded');
+        signals: { named_nowhere: 1 }, sample: 1, extensions: [], classified: 1 },
+      'the latest audit\'s P3 block as recorded');
       assert.deepEqual(rv.totals.byStatus, { open: 7, closed: 1 }, 'the verdicts are untouched');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+test('plan: each milestone takes the status Majordomus derives, never one from its issues', () => {
+  const { dir, write } = fixture();
+  try {
+    const ms = (id, extra = '') => write(`.ai/repo/project/milestones/${id}.yaml`,
+      `id: ${id}\ntitle: "Milestone ${id}"\n${extra}`);
+    const issue = (id, m, extra = '') => write(`.ai/repo/project/issues/${id}.yaml`,
+      `id: ${id}\nmilestone: ${m}\n${extra}`);
+    ms('M036'); // DONE 0/0: no issue, closed by its milestone evidence
+    ms('M040');
+    issue('K001', 'M040', "completed_at: '2026-01-01'\n");
+    issue('K002', 'M040');
+    ms('M050'); // every issue done, still listed open: the copy lags, its status is shown
+    issue('K003', 'M050', "completed_at: '2026-01-01'\n");
+    ms('M060', 'cancelled: true\n');
+    ms('M070');
+    write('src/data/roadmap.json', JSON.stringify({ schema: 'oscilla-roadmap/v3', milestones: [
+      { id: 'M040', phase: 'now' }, { id: 'M050', phase: 'next' }, { id: 'M070', phase: 'later' },
+    ] }));
+    write('package.json', '{ "version": "9.8.7" }');
+    const st = milestoneStatuses(dir, { useMajordomus: false });
+    assert.deepEqual([st.source, st.tool, st.release], ['src/data/roadmap.json', null, '9.8.7']);
+    const p = plan(dir, st);
+    assert.deepEqual(p.items.map((m) => [m.id, m.status, m.phase, m.done, m.total]), [
+      ['M036', 'DONE', null, 0, 0],
+      ['M040', 'ACTIVE', 'now', 1, 2],
+      ['M050', 'OPEN', 'next', 1, 1],
+      ['M060', 'CANCELLED', null, 0, 0],
+      ['M070', 'OPEN', 'later', 0, 0],
+    ], 'DONE 0/0 by the status source; the lagging copy is shown as it is');
+    assert.deepEqual(p.byStatus, { ACTIVE: 1, CANCELLED: 1, DONE: 1, OPEN: 2 });
+    assert.equal(p.source, '.ai/repo/project/milestones + .ai/repo/project/issues + '
+      + 'src/data/roadmap.json');
+    // a majordomus that is not there: the fallback, named; required, it throws by name
+    const missing = milestoneStatuses(dir, { bin: 'majordomus-not-installed-here' });
+    assert.equal(missing.source, 'src/data/roadmap.json');
+    assert.match(missing.fallback, /majordomus-not-installed-here is not on PATH/);
+    assert.throws(() => milestoneStatuses(dir, { bin: 'majordomus-not-installed-here',
+      requireMajordomus: true }), /the milestone status needs Majordomus .*not on PATH/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// The page's milestone status against the tool itself. It needs this repository's history (the
+// fail-first tree has none) and majordomus: under CI a missing majordomus fails (ci.yml's unit
+// job installs the pinned one), locally it is skipped with the reason.
+const MAJORDOMUS = spawnSync('majordomus', ['version'], { encoding: 'utf8' });
+const HAS_MAJORDOMUS = !MAJORDOMUS.error && MAJORDOMUS.status === 0;
+test('every milestone\'s status is the one `majordomus plan roadmap --json` derives',
+  { skip: !HAS_HISTORY ? 'this checkout has no commit history (a git archive tree)'
+    : !HAS_MAJORDOMUS && !process.env.CI && 'majordomus is not on PATH (it is required under CI)' },
+  () => {
+    assert.ok(HAS_MAJORDOMUS, 'majordomus is on PATH under CI (ci.yml installs the pinned one)');
+    const r = spawnSync('majordomus', ['plan', 'roadmap', '--json'], { cwd: REPO_ROOT,
+      encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, timeout: 180_000 });
+    assert.equal(r.status, 0, r.stderr);
+    // written out here, not imported: DONE and CANCELLED as they are, ACTIVE and VERIFY in
+    // progress (now), PLANNED (next) and BLOCKED (later) open
+    const want = { DONE: ['DONE', null], CANCELLED: ['CANCELLED', null], ACTIVE: ['ACTIVE', 'now'],
+      VERIFY: ['ACTIVE', 'now'], PLANNED: ['OPEN', 'next'], BLOCKED: ['OPEN', 'later'] };
+    const tool = new Map(JSON.parse(r.stdout).milestones.map((m) => [m.id, want[m.status]
+      ?? ['OPEN', 'next']]));
+    const st = milestoneStatuses(REPO_ROOT, { requireMajordomus: true });
+    assert.equal(st.source, 'majordomus plan roadmap --json');
+    assert.match(st.tool.version, /^\d+\.\d+\.\d+/);
+    const page = plan(REPO_ROOT, st).items;
+    assert.equal(page.length, tool.size);
+    for (const m of page) assert.deepEqual([m.status, m.phase], tool.get(m.id), m.id);
+  });
+
+test('reviewAudits: an extension completes its audit, a same-day -b re-audit supersedes it', () => {
+  const { dir, write, commit } = fixture();
+  try {
+    write('.ai/repo/reviews/12.yaml', VERDICT(12, [['A1', 'P2', 'open'], ['A2', 'P2', 'open'],
+      ['A3', 'P2', 'open'], ['B1', 'P3', 'open'], ['B2', 'P3', 'open'], ['B3', 'P3', 'open']]));
+    const base = commit('chore: the audit base', '2026-01-05T10:00:00Z');
+    const fix = commit('fix(x): after the base, before the judged commit');
+    const judged = commit('chore: the extension judged here');
+    const row = (src, cls, evidence = 'x') => `  - { source: "${src}", class: ${cls}, `
+      + `evidence: "${evidence}", issue: null }\n`;
+    // the audit; its extension (sorts before it by file name: '-' < '.'); a same-day re-audit
+    write('.ai/repo/reviews/audit-2026-01-10.yaml', 'schema: review-audit/v1\n'
+      + `date: 2026-01-10\nauditors: [c3]\nbase: ${base}\nscope: "first"\nfindings:\n`
+      + row('12.yaml#A1', 'open') + row('12.yaml#A2', 'open')
+      + 'p3: { total: 3, open: 3, by_class: { fixed: 1, unclassified: 2 } }\n'
+      + `p3_signals: { named_nowhere: 2 }\np3_sample:\n${row('12.yaml#B1', 'fixed')}`);
+    write('.ai/repo/reviews/audit-2026-01-10-p3.yaml', 'schema: review-audit/v1\n'
+      + 'date: 2026-01-10\nextends: audit-2026-01-10.yaml\n'
+      + `auditors: [{ session: oscilla-ce, seat: proceed-lane }]\nbase: ${base}\n`
+      + `judged_on: ${judged}\nscope: "the rest"\n`
+      + 'p3_total: { open_at_base: 3, fixed: 2, superseded: 1, open: 0, unclassified: 0 }\n'
+      + `findings:\n${row('12.yaml#B1', 'open', 'the extension does not replace this')}`
+      + row('12.yaml#A1', 'fixed', 'nor this: the audit it extends says open')
+      + row('12.yaml#B2', 'fixed') + row('12.yaml#B3', 'superseded')
+      + row('12.yaml#A3', 'fixed', `fixed by ${fix.slice(0, 9)}, which judged_on holds`));
+    let a = reviewAudits(dir, reviews(dir));
+    assert.deepEqual(a.audits.map((x) => [x.file.replace(/^.*\//, ''), x.completes
+      && x.completes.replace(/^.*\//, ''), x.auditors]), [
+      ['audit-2026-01-10.yaml', null, ['c3']],
+      ['audit-2026-01-10-p3.yaml', 'audit-2026-01-10.yaml', ['oscilla-ce (proceed-lane)']]],
+    'the extension follows the audit it extends, whatever its file name');
+    assert.deepEqual(a.perFinding.map((x) => [x.id, x.class, x.commit]), [
+      ['A1', 'open', null], ['A2', 'open', null], ['A3', 'fixed', fix]],
+    'A3 only the extension names; its commit is an ancestor of judged_on, not of base');
+    assert.deepEqual(a.p3, { audit: '.ai/repo/reviews/audit-2026-01-10.yaml',
+      extensions: ['.ai/repo/reviews/audit-2026-01-10-p3.yaml'], total: 3, open: 3,
+      byClass: { fixed: 2, superseded: 1, open: 0, unclassified: 0 },
+      signals: { named_nowhere: 2 }, sample: 1, classified: 3 },
+    'p3_total completes the P3 block; the audit\'s own B1 row stands');
+    // a same-day re-audit, audit-<date>-b.yaml: a new root, after the first by its file stem
+    write('.ai/repo/reviews/audit-2026-01-10-b.yaml', 'schema: review-audit/v1\n'
+      + `date: 2026-01-10\nauditors: [c1]\nbase: ${judged}\nscope: "again"\nfindings:\n`
+      + row('12.yaml#A1', 'superseded', 'moot now'));
+    commit('review: the audits');
+    a = reviewAudits(dir, reviews(dir));
+    assert.deepEqual(a.audits.map((x) => x.file.replace(/^.*\//, '')), ['audit-2026-01-10.yaml',
+      'audit-2026-01-10-p3.yaml', 'audit-2026-01-10-b.yaml']);
+    assert.deepEqual(a.perFinding.map((x) => [x.id, x.class, x.audit.replace(/^.*\//, '')]), [
+      ['A1', 'superseded', 'audit-2026-01-10-b.yaml'], ['A2', 'open', 'audit-2026-01-10.yaml'],
+      ['A3', 'fixed', 'audit-2026-01-10-p3.yaml']], 'the -b re-audit wins where it speaks');
+    assert.equal(a.p3, null, 'the latest audit, the -b re-audit, records no P3 block');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('collectFacts in a tree without git history says so and names --no-git', async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'oscilla-facts-nogit-'));
+  try {
+    execFileSync('git', ['init', '--quiet'], { cwd: dir });
+    await assert.rejects(collectFacts({ root: dir, git: true }),
+      /has no git history \(a git archive tree\?\).*node scripts\/facts\.mjs --no-git works/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

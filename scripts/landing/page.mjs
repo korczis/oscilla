@@ -456,6 +456,21 @@ ${cards.join('\n')}
 </section>`;
 }
 
+/**
+ * The meta every page carries naming the source of the milestone status: `majordomus <version>`
+ * or `<file> <release>`; scripts/verify-deploy.mjs names a mismatch of it before any byte diff.
+ */
+export const STATUS_SOURCE_META = 'oscilla-lab-status-source';
+export function statusSourceId(src) {
+  return src?.tool ? `${src.tool.name} ${src.tool.version}` : `${src?.source ?? '-'} ${src?.release ?? '-'}`;
+}
+
+/** Where the milestone status came from (facts.plan.statusSource), in Czech. */
+export function statusSourceText(src) {
+  if (src?.tool) return `stav podle Majordomus ${esc(src.tool.version)}, příkaz <code class="text-sm">${esc(src.source)}</code>`;
+  return `stav k vydání ${esc(src?.release ?? '?')} ze souboru <code class="text-sm">${esc(src?.source ?? '')}</code>, který při každém vydání zapisuje <code class="text-sm">majordomus plan roadmap --json</code>`;
+}
+
 function roadmapSection(m) {
   const rm = m.facts.roadmap;
   const ms = m.facts.plan.items;
@@ -477,7 +492,7 @@ ${progress(done, total, `${id}: ${done} z ${total} úkolů hotovo`)}
   return `<section id="roadmapa" class="${SECTION}" data-roadmap>
 <div class="${WRAP}">
 ${pageHeading(m, 'roadmapa')}
-<p class="${LEAD}">Záměry plánu a jejich milníky, u každého kolik úkolů je hotovo. Stav milníku se odvozuje ze souborů úkolů stejně jako u grafu plánu (hotovo: všechny požadované úkoly mají completed_at; rozpracováno: některé; otevřeno: žádný). Pořadí: milníky podle pole <code class="text-sm">order</code>, pak podle id; záměry podle svého prvního milníku. Názvy jsou anglicky, jak stojí v plánu. Zdroj: <a class="${LINK}" href="${esc(m.tree(rm.dirs.intents))}">${esc(rm.dirs.intents)}</a>, <a class="${LINK}" href="${esc(m.tree(rm.dirs.milestones))}">${esc(rm.dirs.milestones)}</a> a <a class="${LINK}" href="${esc(m.tree(rm.dirs.issues))}">úkoly</a>.</p>
+<p class="${LEAD}">Záměry plánu a jejich milníky, u každého kolik úkolů je hotovo. Stav milníku nepočítáme: je to stav, který odvozuje Majordomus (${statusSourceText(m.facts.plan.statusSource)}); rozpracováno je jeho fáze „now“ (ACTIVE a VERIFY), otevřeno fáze „next“ a „later“ (PLANNED a BLOCKED). Počet hotových úkolů je ze souborů úkolů. Pořadí: milníky podle pole <code class="text-sm">order</code>, pak podle id; záměry podle svého prvního milníku. Názvy jsou anglicky, jak stojí v plánu. Zdroj: <a class="${LINK}" href="${esc(m.tree(rm.dirs.intents))}">${esc(rm.dirs.intents)}</a>, <a class="${LINK}" href="${esc(m.tree(rm.dirs.milestones))}">${esc(rm.dirs.milestones)}</a> a <a class="${LINK}" href="${esc(m.tree(rm.dirs.issues))}">úkoly</a>.</p>
 <div data-roadmap-controls hidden class="mb-6 grid grid-cols-2 gap-2 sm:inline-flex sm:gap-0 sm:rounded-lg sm:shadow-sm" role="group" aria-label="Filtr milníků podle stavu">${btn('', 'Vše', ms.length, true)}${btn('DONE', 'Hotovo', by('DONE'), false)}${btn('ACTIVE', 'Rozpracováno', by('ACTIVE'), false)}${btn('OPEN', 'Otevřeno', by('OPEN'), false)}</div>
 <div class="grid items-start gap-6 lg:grid-cols-2">
 ${cards.join('\n')}
@@ -589,10 +604,16 @@ function auditBlock(m) {
 <p class="text-gray-500 dark:text-gray-400">V <a class="${LINK}" href="${esc(m.tree('.ai/repo/reviews'))}">.ai/repo/reviews</a> zatím žádný audit (audit-*.yaml) není. Čísla výše jsou stavy, jak je zapsaly záznamy revizí: otevřených nálezů P0 až P2 je v nich ${fmtInt(rawOpen)}, a co z nich platí dnes, řekne až audit, který je ověří proti main.</p>
 </div>`;
   }
-  const latest = a.audits[a.audits.length - 1];
+  // the latest audit that completes no other; its extensions (extends:) are shown beside it
+  const roots = a.audits.filter((x) => !x.completes);
+  const latest = roots[roots.length - 1] ?? a.audits[a.audits.length - 1];
+  const exts = a.audits.filter((x) => x.completes === latest.file);
+  const fileLink = (x) => `<a href="${esc(m.blob(x.file))}">${esc(x.file.replace(/^.*\//, ''))}</a>`;
+  const shaLink = (sha) => `<a href="${REPO_URL}/commit/${esc(sha)}"><code>${esc(sha.slice(0, 8))}</code></a>`;
+  const extRows = exts.map((x) => `<div class="sm:col-span-2" data-audit-extension><dt class="text-gray-500 dark:text-gray-400">Doplňující audit (extends)</dt><dd class="font-medium text-gray-900 dark:text-white">${fileLink(x)}${x.judgedOn ? ` · ověřeno proti ${shaLink(x.judgedOn)}` : ''}${x.auditors.length ? ` · ${x.auditors.map((n) => `<code class="text-xs">${esc(n)}</code>`).join(', ')}` : ''}${x.scope ? ` · <span lang="en">${esc(x.scope)}</span>` : ''}</dd></div>`).join('\n');
   const day = latest.date ? `<time datetime="${esc(latest.date)}">${esc(fmtDate(`${latest.date}T00:00:00Z`))}</time>` : 'bez data';
   const base = latest.base ? `<a href="${REPO_URL}/commit/${esc(latest.base)}"><code>${esc(latest.base.slice(0, 8))}</code></a>` : 'neuvedena';
-  const older = a.audits.slice(0, -1).reverse().map((x) => `<a href="${esc(m.blob(x.file))}">${esc(x.file.replace(/^.*\//, ''))}</a>`).join(', ');
+  const older = a.audits.filter((x) => x !== latest && !exts.includes(x)).reverse().map(fileLink).join(', ');
   const total = a.split.total;
   const bar = a.classes.filter((k) => a.split[k] > 0).map((k) => `<div class="${AUDIT_BAR[k] ?? 'bg-gray-600'} h-full" style="width:${pct(a.split[k], total)}%" title="${esc(`${AUDIT_CLASS_COPY[k] ?? k}: ${a.split[k]}`)}"></div>`).join('');
   const legend = a.classes.map((k) => `<li class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded ${AUDIT_BAR[k] ?? 'bg-gray-600'}" aria-hidden="true"></span>${esc(AUDIT_CLASS_COPY[k] ?? k)} <span class="font-semibold tabular-nums text-gray-900 dark:text-white">${fmtInt(a.split[k] ?? 0)}</span></li>`).join('');
@@ -601,7 +622,9 @@ function auditBlock(m) {
   const rows = a.perFinding.map((x) => auditRow(m, x)).join('\n');
   const orphans = a.orphans.length ? `<p class="mt-3 text-sm text-gray-500 dark:text-gray-400" data-audit-orphans>Nálezy, které audit jmenuje a žádný záznam revize nemá (${fmtInt(a.orphans.length)}): ${a.orphans.map((o) => `<code class="text-xs">${esc(o.source)}</code>`).join(', ')}.</p>` : '';
   const p = a.p3;
-  const p3 = p ? `<div class="mt-6" data-audit-p3><h4 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Nálezy P3</h4><p class="text-gray-500 dark:text-gray-400">Audit P3 jen počítá: ${p.total === null ? 'celkový počet neuvádí' : `${fmtInt(p.total)} nálezů P3`}, z nich ${p.open === null ? '–' : fmtInt(p.open)} otevřených ve verdiktech. Ze vzorku ${fmtInt(p.sample)} ověřených proti main: ${['open', 'fixed', 'superseded'].filter((k) => p.byClass && k in p.byClass).map((k) => `${esc((AUDIT_CLASS_COPY[k] ?? k).toLowerCase())} ${fmtInt(p.byClass[k])}`).join(', ')}; <strong class="font-semibold text-gray-900 dark:text-white">neklasifikováno ${p.byClass && 'unclassified' in p.byClass ? fmtInt(p.byClass.unclassified) : '–'}</strong>, tedy bez třídy, dokud je další audit neověří. Odkazy z commitů na nálezy audit zapisuje jen jako signály, ne jako třídy${p.signals ? `: ${Object.entries(p.signals).map(([k, v]) => `<code class="text-xs">${esc(k)}</code> ${esc(typeof v === 'number' ? fmtInt(v) : v)}`).join(', ')}` : ''}.</p></div>` : '';
+  const p3Classes = p && p.byClass ? `${['open', 'fixed', 'superseded'].filter((k) => k in p.byClass).map((k) => `${esc((AUDIT_CLASS_COPY[k] ?? k).toLowerCase())} ${fmtInt(p.byClass[k])}`).join(', ')}; <strong class="font-semibold text-gray-900 dark:text-white">neklasifikováno ${'unclassified' in p.byClass ? fmtInt(p.byClass.unclassified) : '–'}</strong>` : 'třídy neuvádí';
+  const p3By = p && p.extensions.length ? `Audit spolu s doplněním ${p.extensions.map((f) => `<code class="text-xs">${esc(f.replace(/^.*\//, ''))}</code>`).join(', ')} je klasifikoval proti main (řádků P3 v auditech: ${fmtInt(p.classified)}): ${p3Classes}.` : `Ze vzorku ${p ? fmtInt(p.sample) : 0} ověřených proti main: ${p3Classes}, tedy bez třídy, dokud je další audit neověří.`;
+  const p3 = p ? `<div class="mt-6" data-audit-p3><h4 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Nálezy P3</h4><p class="text-gray-500 dark:text-gray-400">${p.total === null ? 'Celkový počet P3 audit neuvádí' : `Nálezů P3 je ${fmtInt(p.total)}`}, z nich ${p.open === null ? '–' : fmtInt(p.open)} otevřených ve verdiktech. ${p3By} Odkazy z commitů na nálezy audit zapisuje jen jako signály, ne jako třídy${p.signals ? `: ${Object.entries(p.signals).map(([k, v]) => `<code class="text-xs">${esc(k)}</code> ${esc(typeof v === 'number' ? fmtInt(v) : v)}`).join(', ')}` : ''}.</p></div>` : '';
   return `<div class="${CARD} mb-6" data-audit>
 <h3 class="mb-2 text-xl font-bold text-gray-900 dark:text-white">Audit nálezů</h3>
 <p class="mb-4 text-gray-500 dark:text-gray-400">Záznamy revizí jsou historické: stav nálezu v nich zůstává, jak ho recenzent zapsal k hlavě pull requestu, a nikdo je dodatečně nepřepisuje. Co platí dnes, říká audit, který každý otevřený nález P0 až P2 ověřil proti main: opraveno (commit, který ho opravil), nahrazeno (proč už neplatí), nebo stále otevřené (úkol plánu, který ho teď sleduje). Třídu nálezu dává vždy audit, generátor stránky nic nepřeřazuje; platí poslední audit, který nález jmenuje.</p>
@@ -610,6 +633,7 @@ function auditBlock(m) {
 <div><dt class="text-gray-500 dark:text-gray-400">Báze (commit main, proti kterému se ověřovalo)</dt><dd class="font-medium text-gray-900 dark:text-white">${base}</dd></div>
 <div><dt class="text-gray-500 dark:text-gray-400">Auditoři</dt><dd class="font-medium text-gray-900 dark:text-white">${latest.auditors.length ? latest.auditors.map((x) => `<code class="text-xs">${esc(x)}</code>`).join(', ') : 'neuvedeni'}</dd></div>
 <div><dt class="text-gray-500 dark:text-gray-400">Rozsah</dt><dd lang="en" class="font-medium text-gray-900 dark:text-white">${esc(latest.scope ?? '–')}</dd></div>
+${extRows}
 ${older ? `<div class="sm:col-span-2"><dt class="text-gray-500 dark:text-gray-400">Starší audity</dt><dd>${older}</dd></div>` : ''}
 </dl>
 <p class="mb-2 text-sm text-gray-500 dark:text-gray-400">Z ${plural(rawOpen, 'nálezu', 'nálezů', 'nálezů')} P0 až P2, které záznamy revizí dnes vedou jako otevřené:</p>
@@ -832,6 +856,7 @@ function documentOf(m, main, meta) {
 <meta http-equiv="Content-Security-Policy" content="${CSP}">
 <meta name="description" content="${esc(meta.desc)}">
 <meta name="color-scheme" content="light dark">
+<meta name="${STATUS_SOURCE_META}" content="${esc(statusSourceId(m.facts.plan.statusSource))}">
 <title>${esc(meta.title)}</title>
 <link rel="icon" href="${m.favicon}">
 <script>(function(){var t=null;try{t=localStorage.getItem('oscilla-lab-theme')}catch(e){}var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d)})();</script>
