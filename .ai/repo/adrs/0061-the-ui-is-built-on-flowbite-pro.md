@@ -291,3 +291,15 @@ domain-view exemption of `project.ui-uses-flowbite-pro` is not widened, and the 
 treatment of the 2026-11-02 note applies to these views as to the others. Plan issues W008 and
 K222 (the step grid in the Drums view) are the first to rely on it. The status of this record is
 unchanged.
+
+### 2026-11-09: the knob that ships is the one knob model and its panel skin
+
+The note of 2026-10-30 called K058's own component (`src/js/ui/kinds/param/knob.js`) planned
+work and the Synth panel's knob a panel-local view until it lands. The knob shipped another
+way (pull requests #367 and #420): the one knob model is the synth-theme layer's control core,
+`src/js/ui/synth/knob.js` (value mapping, keys, drag, typed entry, text and the drawing), and
+`src/js/synth/view/knob.js` is its panel skin, a thin adapter under the names the panel and
+the XY pad import. The DRY-families decision of 2026-11-05 (M123, G021, G022) makes that core
+the one knob everywhere; no separate K058 component will be built, and any later split of the
+model is G022's to decide. This note names what ships (plan issue K203, the gap of K058's first
+criterion); it changes no decision above, and the status of this record is unchanged.

@@ -26,4 +26,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-09T22:46:46Z
+started_at: 2026-11-09T22:44:01Z
+started_event: sha256:c131b553d4001e3084893d159ab5cce3abdc44316a41f0325f460b76dabac180
+verified_at: 2026-11-09T22:44:37Z
+verified_event: sha256:2fc53ca57d6a12afa5b08540a879a727ba2f3cedefad023aa15205950eb4900c
+completed_at: 2026-11-09T22:46:46Z
+completed_event: sha256:f8f489f8970067624b04dac802db203e39e20c89b32d2a95218eec0ac998ff3e
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/about-current.test.mjs (origin/main b8bfd3b6); the same file of #424's head 75d31638 over #424's merge base a19f1ff6"
+    result: "Re-checked on main b8bfd3b6 by oscilla-ce on 2026-11-09: 'U092: each roadmap item reads its title first, then \"N of M issues done\"' passes. On a19f1ff6 it fails as an assertion (fail-first). The ui-flowbite-pro baseline, the roadmap ISO/SHA check and source-size tests pass. Delivered by #424 (train #437, d51f9b2d), verdict merge."
+    artifact: "tests/unit/about-current.test.mjs"
+    commit: b8bfd3b613b9e4aac63267343c14bd1ee91f2a02
+    recorded_at: 2026-11-09T22:45:24Z

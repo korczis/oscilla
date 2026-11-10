@@ -1,0 +1,35 @@
+id: U102
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "Every field of the status readout is visible without hover at 1536 px and on a phone"
+slug: every-status-readout-field-visible-without-hover
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Found while building C030 (oscilla-d9, 2026-11-09): at 1536 x 1024 the status bar's readout (frequency, waveform, pattern, duration, gain) is cut at its right edge on every workspace, so Gain reads 'Gain -21.9 dI' on the merge base of C030 and only 'Gain' in the four workspaces where C030 shows the status Play; at 390 x 844 the bar drops the pattern, duration and gain fields by design (src/styles/responsive.css hides .osc-sb-extra). C030 put the whole readout in the readout's title as an interim step, which a touch screen cannot reach. Before: at 1536 px and on a phone some readout fields are visible only on hover. After: every field is visible on screen without hover at 1536 x 1024 and 390 x 844 (a second line, a narrower field set worded to fit, or the bar's room re-divided), and the visual references are re-accepted through the visual gate with the reason recorded. Rollback: revert."
+why: "oscilla-43, coordinator, on C030 (2026-11-09): 'A title isn't reachable by touch, though, so file a follow-up issue (U-series, serves the ui-current phone-whole / status criterion) so that every status field is visible without hover at 1536 and 390. That one will re-accept the visual references.' The phone-whole criterion asks that nothing a workspace shows is hidden on a phone; the readout is the page's one statement of what the instrument will play."
+current_state: "Filed 2026-11-09 from C030's rulings; not started. C030 (fix/c030-visible-play, ed23fa19, rides T5) gives the readout its title and adds navigation.cjs status-readout-fields, which accepts a field that is either whole in the bar or in the title."
+scope:
+  - "src/index.html"
+  - "src/styles"
+  - "src/js/ui/workbench.js"
+  - "tests/browser/navigation.cjs"
+  - "tests/visual"
+  - "tests/unit/ui-flowbite-pro-baseline.json"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - C030
+acceptance_criteria:
+  - "Fail-first: navigation.cjs status-readout-fields no longer accepts the title: at 1536 x 1024 and 390 x 844, in the Playground, Analyzer, Presets, Measure and Studio, every readout field is displayed and lies whole inside the status bar; on the merge base it fails."
+  - "The status Play of C030 stays on screen where C030 shows it and keeps its column; no control of the bar is covered (ui-current#phone-whole)."
+  - "The visual references that change (tests/visual reference, measure, studio, synth) are re-accepted through the visual gate with the reason recorded, and the iphone.cjs census reach does not fall."
+  - "Its chrome is Flowbite Pro and tests/unit/ui-flowbite-pro-baseline.json only falls (project.ui-uses-flowbite-pro); every string it adds is Czech (project.czech-prose)."
+validation:
+  - "node tests/browser/navigation.cjs --only status-readout-fields"
+  - "npm run visual"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'
