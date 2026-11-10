@@ -267,14 +267,17 @@ test('at their defaults the new parameters build what the node built before', ()
   }
 });
 
-test('the Synth panel shows no jack for the MG depth: 64 jacks, the LFO node keeps its input', async () => {
+test('the Synth panel shows no jack for the MG depth: 73 jacks, the LFO node keeps its input', async () => {
   // K022-3 (oscilla-43 with oscilla-c1 and oscilla-c3): the panel fixes the MG's depth at 1 and
   // its amount knobs set each cable's depth, so a depth jack would be a second path to it.
   const { default: PANEL } = await import('../../src/js/synth/panels/semi-mono.js');
   // K229 adds the MG's reset (key sync) and morph inputs.
   assert.deepEqual(PANEL.jacksOf('mg').map((j) => j.id),
     ['mg.reset', 'mg.rate', 'mg.morph', 'mg.control']);
-  assert.equal(PANEL.modules.reduce((n, m) => n + PANEL.jacksOf(m.id).length, 0), 64);
+  // 73: 62, K229's MG reset and morph (2), K220's pad L outputs (X, Y, Pitch, Gate: 4), K232's
+  // LPF and HPF Peak (Q) jacks (2) and K220's VELOCITY stage (its Audio in and out and its Gain
+  // input, 3).
+  assert.equal(PANEL.modules.reduce((n, m) => n + PANEL.jacksOf(m.id).length, 0), 73);
   assert.ok(NODE_REGISTRY.port('lfo', 'depth', 'in'), 'the Studio\'s LFO keeps its depth input');
 });
 

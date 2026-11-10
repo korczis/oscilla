@@ -40,6 +40,7 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { createPads } from './view/pads.js';
 import { createDrumsTab } from './view/drums-tab.js';
 import { ROOM_EVENT } from '../midi/routes.js';
 import { createStudioSink } from './studio-sink.js';
@@ -290,6 +291,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       .find(([, v]) => v) : null;
     if (!present()) {
       xy.destroy();
+      pads.destroy();
       drums.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
@@ -329,7 +331,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
       + xy.html() + drums.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
-      + `data-osc="synth.modules">${plates}</div></div>`
+      + `data-osc="synth.modules">${plates}</div>${pads.html()}</div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
       + `xl:sticky xl:top-4 ${faceClass(face, 'bay')}" data-face-of="bay" `
       + 'aria-labelledby="synth-bay-title" data-osc="synth.bay" '
@@ -346,6 +348,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     shape = shapeOf();
     renderBay();
     xy.mount();
+    pads.mount();
     drums.mount();
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
@@ -546,7 +549,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       collapsed = d.foldAll === 'closed' ? new Set(panel.modules.map((x) => x.id)) : new Set();
       renderAll();
     } else if (d.restoreModule) {
-      restoreModule(d.restoreModule);
+      restoreModule(d.restoreModule, !!t.closest('[data-osc="synth.pads"]'));
     } else if ('insertPanel' in d) {
       ensurePanel({ explicit: true });
     }
@@ -573,25 +576,22 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     target.focus({ preventScroll: true });
   }
 
-  function restoreModule(mid) {
-    const m = panel.module(mid);
-    const vals = presetValues(panel, presetOf('init'))[mid];
-    const steps = [{ type: 'NODE_ADD', id: panel.nodeIdOf(mid), nodeType: m.node,
-      params: vals, name: m.label, panel: { id: panel.instance, module: mid },
-      position: { x: 0, y: 0 } }];
-    const res = nodes();
-    for (const n of panel.normals) {
-      const a = splitJack(n.from);
-      const b = splitJack(n.to);
-      if (a.module !== mid && b.module !== mid) continue;
-      const other = a.module === mid ? b.module : a.module;
-      if (!res.get(other)) continue;
-      const id = (x) => (x === mid ? panel.nodeIdOf(mid) : res.get(x).id);
-      if (model().graph.edges.some((e) => e.id === n.edgeId)) continue;
-      steps.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: id(a.module), port: a.port },
-        to: { node: id(b.module), port: b.port }, props: n.props });
-    }
-    dispatch({ type: 'BATCH', label: `Obnovit ${m.label}`, steps });
+  // panel.js restoreAction: the node, its normals, an older panel's edge replaced (K220).
+  // Focus lands on what came back and the step is said (review R2-K220-4).
+  function restoreModule(mid, fromPads = false) {
+    const a = panel.restoreAction(model(), mid,
+      { values: presetValues(panel, presetOf('init'))[mid] });
+    if (!dispatch(a).ok) return;
+    say(`${a.label}: hotovo.`);
+    queueMicrotask(() => { // after the re-render the store change queued
+      const el = host();
+      // From the PADY card: the pad that came back (review R2-K220-6); else its plate.
+      const pad = fromPads && el && el.querySelector(mid === 'xyl'
+        ? '[data-osc="synth.pads.l.pad"] [data-xy-surface]'
+        : '[data-osc="synth.pads.r"] [data-xy-surface]');
+      const to = pad || (el && el.querySelector(`[data-module="${mid}"] h3 button`));
+      if (to) to.focus({ preventScroll: false });
+    });
   }
 
   function onKeyDown(e) {
@@ -674,6 +674,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // K097 XY tab
   const xy = createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab,
     BTN, cmp: () => cmp });
+  // K220 the two performance pads under the face
+  const pads = createPads({ panel, get, host, nodes, dispatch, say, jackName, tab,
+    cmp: () => cmp, arm: xy.arm });
 
   // ------------------------------------------------------------------ notes
 

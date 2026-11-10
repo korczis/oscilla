@@ -70,6 +70,18 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // ---------------------------------------------------------------- parameter domain
 
 /** True when exponential ramps are legal for a parameter: its domain is strictly positive. */
+/**
+ * A lane's events in its AudioParam's own values (clip-targets.js laneMap, K232: a low- or
+ * high-pass Q's dB): each value through `map`, an exponential ramp a linear one (exponential in
+ * Q is linear in dB). No map: the events as they are.
+ */
+export function mapEvents(events, map) {
+  if (!map) return events;
+  const lin = { method: AUTOMATION_METHODS.linear };
+  return events.map((e) => ({ ...e, value: map(e.value),
+    ...(e.method === 'exponentialRampToValueAtTime' ? lin : {}) }));
+}
+
 export function isExponentialLegal(paramDef) {
   return !!paramDef && finite(paramDef.min) && paramDef.min > 0;
 }

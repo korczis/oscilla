@@ -82,6 +82,8 @@
 //                                  the audio thread render that attack: review of #332, V4);
 //                                  [] or no `gated` builds every envelope open, as before
 //   runtime.ownedParams()          the current claims, [{ node, param }]
+//   runtime.baseCents(id, key)     the log cables' constant cents into a parameter (a mapped
+//                                  lane on a low- or high-pass Q adds them in dB, K232)
 //   runtime.baseOffset(id, key)    the constant part the modulation edges add to a parameter's
 //                                  base (linear edges: unipolar polarity, offset), in its unit,
 //                                  never the amount a base was lowered to fit (V272 R-1),
@@ -170,6 +172,7 @@
 // reassigned.
 
 import { NODE_REGISTRY } from './registry.js';
+import { laneMap } from './clip-targets.js';
 import { NODE_ADAPTERS } from './adapters/nodes.js';
 import { createEngineHooks } from './adapters/engine-hooks.js';
 import {
@@ -510,12 +513,21 @@ export function createStudioRuntime({
     const keys = h && owned.get(h.id);
     if (!keys || !keys.size) return NONE_OWNED;
     const out = new Set();
-    for (const key of keys) {
-      let target = null;
-      try { target = h.modTarget(key, 'linear'); } catch (e) { target = null; }
-      if (target && target.param) out.add(key);
-    }
+    for (const key of keys) if (laneParam(h, key)) out.add(key);
     return out.size ? out : NONE_OWNED;
+  }
+
+  /**
+   * The AudioParam a lane on `key` of handle `h` drives: the linear one, or for a parameter
+   * whose lane is mapped (clip-targets.js laneMap: a low- or high-pass Q, K232) its log target,
+   * the dB Q the lane plays on. null: nothing an owner could drive.
+   */
+  function laneParam(h, key) {
+    const lin = modParam(h, key, 'linear');
+    if (lin) return lin;
+    const pn = plan && plan.nodes.get(h.id);
+    const def = pn && pn.def.params.find((p) => p.key === key);
+    return def && laneMap(def, pn.params) ? modParam(h, key, 'log') : null;
   }
 
   /**
@@ -528,10 +540,7 @@ export function createStudioRuntime({
     if (!rel) return own;
     const out = new Set(own);
     for (const [key, until] of Object.entries(rel)) {
-      if (!(now < until)) continue;
-      let target = null;
-      try { target = h.modTarget(key, 'linear'); } catch (e) { target = null; }
-      if (target && target.param) out.add(key);
+      if (now < until && laneParam(h, key)) out.add(key);
     }
     return out.size ? out : NONE_OWNED;
   }
@@ -597,6 +606,12 @@ export function createStudioRuntime({
     const out = [];
     for (const [node, keys] of owned) for (const param of keys) out.push({ node, param });
     return out;
+  }
+
+  /** The log cables' constant cents into `key` of node `id` (a mapped lane adds them, K232). */
+  function baseCents(id, key) {
+    const cb = bases.get(id);
+    return cb && cb.base[key] ? cb.base[key].cents || 0 : 0;
   }
 
   function baseOffset(id, key) {
@@ -1115,6 +1130,7 @@ export function createStudioRuntime({
     setOwnedParams,
     ownedParams,
     baseOffset,
+    baseCents,
     applied,
     unresolved,
     on(fn) {

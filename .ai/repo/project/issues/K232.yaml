@@ -1,0 +1,33 @@
+id: K232
+milestone: M064
+serves:
+  - "connected-instrument#performance-pad"
+title: "Low-pass Q as a dB-aware CV and automation target, so a pad, a cable or a lane can drive a filter's resonance"
+slug: low-pass-q-as-a-db-aware-cv-and-automation-target
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). Found while planning K220 (oscilla-ee, 2026-11-09): the Studio refuses a low-pass or high-pass filter's Q as a modulation target (studio/adapters/processing.js modTarget('Q') answers CLIP_TARGET_TEXT.filterQ, since the biquad's Q is in dB for those types and a linear CV would be mis-scaled), and so refuses Q automation lanes; the Synth panel's LPF hides its Q jack (panels/semi-mono.js FILTER_JACKS). K220's pad L therefore drives X = LPF cutoff and Y = HPF cutoff (the coordinator oscilla-43's decision of 2026-11-09, option (a)), not resonance. This slice makes Q a CV and automation target on those types with a dB-aware mapping (the modulation and the lane in the parameter's own scale, converted to the biquad's dB the way applyBase converts the base value, nodeQ), shows the Q jack on the panel's filters, and moves pad L's Y default to LPF resonance. Before: a filter's resonance can only be set by its knob. After: a cable, a pad and a lane drive it, scaled as its knob is. Rollback: revert; models keep validating (an edge into Q is held where it does not play, with its reason)."
+why: "Owner direction Q103 and the reference instrument of 2026-11-09 (a pad on cutoff and resonance); K220 lands on HPF cutoff until this is in."
+current_state: "Filed 2026-11-09 from K220's planning; not started."
+scope:
+  - "src/js/studio/adapters/processing.js"
+  - "src/js/studio/clip-targets.js"
+  - "src/js/audio"
+  - "src/js/synth/panels/semi-mono.js"
+  - "src/js/synth/panels/xy.js"
+  - "tests/unit"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - K220
+acceptance_criteria:
+  - "Fail-first unit: an edge from a CONTROL output into a low-pass filter's Q validates and plays, its modulation reaching the biquad in dB through the same conversion as the knob's value (a sweep of the CV between the knob's range ends gives the knob's dB at each end, measured on the fake context); a Q automation lane on a low-pass plays the same way; on the merge base both are refused with filterQ."
+  - "The Synth panel's LPF and HPF show their Q jack (Peak), xyTargets lists them, and pad L's Y default is LPF Peak (K220's normal moved); a cable still replaces the normal."
+  - "No audio-engine discipline is broken (one AudioEngine, every node through track/source accounting, no new timer); the clip-target policy test covers the change for every filter type."
+  - "Guarded (src/js/studio, src/js/synth): a non-builder verdict (oscilla-c1)."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'

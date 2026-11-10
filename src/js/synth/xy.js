@@ -52,10 +52,13 @@
 //   xyPatchOf(model, panel, { name, description }) -> patch        the panel as an XY preset
 //   xyPresetPatch(model, panel, recipe) -> patch                    a built-in preset's patch
 //   xyPatchAction(model, panel, patch) -> { action } | { reason }   load it, one BATCH
-//   xyInsertAction(model, panel, { at }) -> BATCH   the panel's insertion (panel.instantiate)
-//                                  with Y cabled into XY_DEFAULT_Y when this insertion adds the
-//                                  pad (K183): the default Synth document's Y route, a visible,
-//                                  removable cable; one BATCH, one undo entry
+//   xyInsertAction(model, panel, { at }) -> BATCH   the panel's insertion (panel.instantiate),
+//                                  one BATCH, one undo entry. Since K220 it cables nothing: the
+//                                  filter axis moved to pad L (panels/xy.js XYL_MODULE, normalled
+//                                  to the LPF and HPF cutoffs), and pad R's Y sets the velocity of
+//                                  the notes it plays (the coordinator oscilla-43's decision of
+//                                  2026-11-09); K183 cabled Y into the LPF cutoff here. A document
+//                                  saved with that cable keeps it (no migration).
 //   keysSilence(model, panel) -> { reason, pad } | null   why the panel's Keys sound nothing:
 //     their Gate reaches no envelope (studio/live-notes.js gateTargets), `pad` when the XY
 //     pad's cables broke those normals (review S8: an XY preset, Patch the pad into the voice)
@@ -320,12 +323,7 @@ export function xyPatchAction(model, panel, patch) {
 }
 
 export function xyInsertAction(model, panel, { at } = {}) {
-  const a = panel.instantiate(model, { at });
-  if (panel.resolve(model).get('xy')) return a; // the pad was there: its cables are the user's
-  const after = afterSteps(model, a.steps);
-  if (!panel.resolve(after).get('xy') || xyTarget(after, panel)) return a;
-  const r = patchCable(after, panel, 'xy.y', XY_DEFAULT_Y);
-  return r.action ? { ...a, steps: [...a.steps, ...r.action.steps] } : a;
+  return panel.instantiate(model, { at });
 }
 
 export const KEYS_SILENT = Object.freeze({

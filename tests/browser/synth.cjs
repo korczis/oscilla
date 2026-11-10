@@ -8,8 +8,9 @@
 //   node tests/browser/synth.cjs [--browsers chromium,firefox,webkit] [--origins file,http]
 //        [--only s-sound,s-filter]
 //
-// The default Synth document has one cable, the XY pad's Y into LPF Cutoff (K183): every count
-// of cables, wires, plugs and cable ends below is the check's own cables beside it.
+// The default Synth document has no cable (K220: pad L's typed normals drive the filters; K183's
+// Y cable into LPF Cutoff is no longer patched): every count of cables, wires, plugs and cable
+// ends below is the check's own.
 //
 // Checks (desktop leg; the phone leg runs s-sound, s-cable and s-mobile):
 //   s-sound    no cable: QWERTY A plays C4, VCO 1 at 16' and VCO 2 at 8' (peaks at 130.8 and
@@ -162,7 +163,7 @@
 //   s-connect  Enter on a jack opens the connection list (targets, refused ones with reasons);
 //              choosing a target patches; the jack names say which can take the cable
 //   s-dock     K066, beside the piano: the instrument picker is a menu button whose role=menu
-//              lists every notes node (8, the XY pad too) and New Synth voice; arrows and
+//              lists every notes node (9, both XY pads too) and New Synth voice; arrows and
 //              Enter route the keys to the FM engine in one undo entry (a note then takes an FM voice) and undo
 //              routes them back; the waveform radiogroup by arrow keys turns VCO 1's saw into a
 //              square (its 2nd harmonic 30 dB+ below the 3rd); a quick preset by pointer (tap
@@ -190,6 +191,19 @@
 //              undo entry (an ephemeral audition, Q032); Enter
 //              inserts the first in one undo entry: an event track of its name with its clips
 //              on an Oscillator that reaches the Master Output
+//   s-pads     K220 (desktop and phone): the PADY card under the Panel face holds pad L beside
+//              pad R at 1536 px; at 390 px one pad at a time, chosen by the L/R toggle (44 px
+//              buttons, review R2-K220-2); ArrowRight on pad L moves its X
+//              (aria-valuenow); Tónina D beside pad R is one undo entry and pad R's node plays D;
+//              with QWERTY A held (VCO 2 silent, E059), a press on pad L's right edge opens the
+//              low-pass (the 6-12 kHz band against C4, each reading settled on the audio clock,
+//              6 dB+ over pad L at rest) and its release closes it again (within 1.5 dB); a
+//              held press on pad L and one on pad R are released by a transport Stop
+//              (aria-pressed false), and pad R's release is silent; pad R's Y is heard as
+//              velocity (review R2-K220-1): a note at Y 95 % 6 dB+ over Y 5 %, each settled
+//   s-gateclip K220 review R2-K220-5: a Keys gate clip (K060) on the panel's Keys, which plays no
+//              note, is heard through VELOCITY (RMS above -45 dB rel; the velocity rests at 100)
+//              and the transport's Stop silences it (below -70 dB rel)
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              with six cables patched every jack and cable end scrolls clear of the dock,
 //              the Patch bay chip shows the bay at the card's width with the cards hidden, its
@@ -232,7 +246,7 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg']);
+  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg', 's-pads']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -278,11 +292,10 @@ function bandDb(p, lo, hi) {
 const read = (page) => page.evaluate(probe);
 const counts = (page) => page.evaluate(() => window.OSCILLA.studio.counts());
 const dbg = (page) => page.evaluate(() => window.OSCILLA.app.synthDebug());
-// The default Synth document's one cable (K183): the XY pad's Y into LPF Cutoff, which the
-// panel's insertion patches. The checks below count the cables they patch beside it.
-const DEFAULT_CABLES = 1;
-const isDefault = (c) => c.from === 'xy.y' && c.to === 'lpf.frequency';
-const own = (d) => d.cables.filter((c) => !isDefault(c));
+// The default Synth document's cables: none since K220 (the panel's insertion patches nothing;
+// pad L's X and Y are normals). The checks below count the cables they patch beside them.
+const DEFAULT_CABLES = 0;
+const own = (d) => d.cables;
 /** Poll the analyser until `pred(probe)` holds, within `ms`; returns the probe that held. */
 async function sound(page, pred, what, ms = SOUND_MS) {
   let last = null;
@@ -343,6 +356,30 @@ const settled = (page, what) => until(() => page.evaluate(() => {
   const a = window.OSCILLA.studio.runtime.applied();
   return !a || a.revision === window.OSCILLA.studio.store.getRevision();
 }), { ms: 10000, what });
+const SETTLE_SPAN_S = 0.5; // of audio clock between the two readings that agree
+const SETTLE_DB = 0.25;
+/**
+ * `measure(probe)` once it holds on the audio clock: two readings SETTLE_SPAN_S of context time
+ * apart within SETTLE_DB (an envelope still moving the filter is not a reading of the pad).
+ */
+async function settledOn(page, measure, what) {
+  let prev = null;
+  let now = null;
+  await until(async () => {
+    const q = await read(page);
+    now = measure(q);
+    if (!prev) {
+      prev = { t: q.t, v: now };
+      return false;
+    }
+    if (q.t - prev.t < SETTLE_SPAN_S) return false;
+    const same = Math.abs(now - prev.v) < SETTLE_DB;
+    prev = { t: q.t, v: now };
+    return same;
+  }, { ms: SOUND_MS, what: `${what} (two readings ${SETTLE_SPAN_S} s of audio clock apart within `
+    + `${SETTLE_DB} dB)` });
+  return now;
+}
 
 // ------------------------------------------------------------------------------ checks
 function defineChecks() {
@@ -897,6 +934,159 @@ function defineChecks() {
     return { ok, start, mid, fine, disabled, wa, wb, cancel, pinch, p0, notch, pinchPrevented };
   });
 
+  // K220: the two performance pads under the face (synth.pads.l.pad, synth.pads.r.scale)
+  def('s-pads', async ({ page, size }) => {
+    await face(page, 'panel');
+    const L = page.locator('[data-osc="synth.pads.l.pad"] [data-xy-surface]');
+    const R = page.locator('[data-osc="synth.pads.r"] [data-xy-surface]');
+    await until(async () => await L.count() === 1 && await R.count() === 1,
+      { ms: 10000, what: 'the PADY card shows pad L and pad R' });
+    await page.locator('[data-osc="synth.pads"]').scrollIntoViewIfNeeded();
+    // Below lg one pad at a time through the L/R toggle (review R2-K220-2); from lg both, side
+    // by side. show(k) presses the toggle where it is shown.
+    const toggle = page.locator('[data-osc="synth.pads.toggle"]');
+    const show = async (k) => {
+      if (!await toggle.isVisible()) return;
+      await toggle.locator(`[data-pad-show="${k}"]`).click();
+      await until(async () => await (k === 'l' ? L : R).isVisible(), { ms: 10000,
+        what: `the toggle shows pad ${k.toUpperCase()}` });
+    };
+    if (size === 'phone') {
+      const vis = async () => [await L.isVisible(), await R.isVisible()];
+      const first = await vis();
+      await show('r');
+      const second = await vis();
+      const boxes = await toggle.locator('button').evaluateAll((bs) => bs.map((b) => {
+        const r = b.getBoundingClientRect();
+        return [Math.round(r.width), Math.round(r.height)];
+      }));
+      if (String(first) !== 'true,false' || String(second) !== 'false,true'
+        || boxes.some(([w, h]) => w < 44 || h < 44)) {
+        return { ok: false, detail: 'the phone shows one pad at a time through a 44 px toggle',
+          first, second, boxes };
+      }
+      await show('l');
+    } else {
+      const bl = await page.locator('[data-osc="synth.pads.l"]').boundingBox();
+      const br = await page.locator('[data-osc="synth.pads.r"]').boundingBox();
+      if (!(Math.abs(bl.y - br.y) < 2 && bl.x + bl.width <= br.x) || await toggle.isVisible()) {
+        return { ok: false, detail: 'pad L and pad R are not side by side', bl, br };
+      }
+    }
+    const ax = '[data-osc="synth.pads.l"] [data-xy-axis="x"]';
+    await L.focus();
+    const x0 = Number(await page.locator(ax).getAttribute('aria-valuenow'));
+    await page.keyboard.press('ArrowRight');
+    const x1 = Number(await page.locator(ax).getAttribute('aria-valuenow'));
+    if (!(x1 > x0)) return { ok: false, detail: 'ArrowRight did not move pad L', x0, x1 };
+    // The key picker beside pad R: one undo entry, pad R's node takes it.
+    const padR = () => page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const n = st.model.graph.nodes.find((x) => x.type === 'xy-pad' && x.id.endsWith('-xy'));
+      return { key: n && n.params.key, depth: st.store.debugInfo().undoDepth };
+    });
+    const k0 = await padR();
+    await show('r');
+    await page.locator('[data-osc="synth.pads.r.scale"] #synth-pad-r-key').selectOption('D');
+    await until(async () => (await padR()).key === 'D', { ms: 10000,
+      what: 'Tónina D reaches pad R\'s node' });
+    const k1 = await padR();
+    if (k1.depth !== k0.depth + 1) return { ok: false, detail: 'not one undo entry', k0, k1 };
+    await show('l');
+    // Pad L opens the low-pass while a note is held (X normalled into LPF Cutoff). Every band
+    // reading is settled (EG 2 moves the cutoff for seconds after a key) and taken against C4
+    // with VCO 2 silent (E059: the two VCOs beat in that band on one held note).
+    const quiet2 = await page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const mix = st.model.graph.nodes.find((n) => n.type === 'mixer');
+      return !!mix && st.store.dispatch({ type: 'NODE_PARAM_SET', nodeId: mix.id,
+        key: 'level2', value: 0 }).ok;
+    });
+    if (!quiet2) return { ok: false, detail: 'VCO 2 could not be set silent in the mixer' };
+    const at = async (loc, fx, fy) => {
+      // The pad at the view's centre: its edges clear of the sticky chip bar and the dock.
+      await loc.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      const b = await loc.boundingBox();
+      return { x: b.x + fx * b.width, y: b.y + (1 - fy) * b.height };
+    };
+    const rel = (q) => bandDb(q, 6000, 12000) - levelAt(q, C4);
+    await hold(page, 'KeyA');
+    await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'QWERTY A sounds C4');
+    const base = await settledOn(page, rel, 'the band with pad L at rest');
+    const pl = await at(L, 0.97, 0.03);
+    await page.mouse.move(pl.x, pl.y);
+    await page.mouse.down();
+    let open = null;
+    await until(async () => (open = await settledOn(page, rel, 'the band under pad L'))
+      - base >= 6, { ms: SOUND_MS, what: 'a press on pad L\'s right edge opens the low-pass: '
+      + 'the 6-12 kHz band 6 dB+ over pad L at rest' });
+    await page.mouse.up();
+    let back = null;
+    await until(async () => Math.abs((back = await settledOn(page, rel,
+      'the band after pad L\'s release')) - base) < 1.5, { ms: SOUND_MS,
+    what: 'pad L\'s release closes the low-pass again: the band within 1.5 dB of pad L at rest' });
+    await page.keyboard.up('KeyA');
+    await silent(page, 'the held note released');
+    // Pad R's Y is the touch's velocity, heard through VELOCITY (review R2-K220-1): a held note
+    // at Y 95 % is 6 dB or more over the same note at Y 5 %, each level settled.
+    await show('r');
+    const level = async (fy) => {
+      const p = await at(R, 0.05, fy);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      await sound(page, (q) => q.rmsDb > -70, `pad R at Y ${fy} sounds`);
+      const v = await settledOn(page, (q) => q.rmsDb, `pad R's level at Y ${fy}`);
+      await page.mouse.up();
+      await silent(page, `pad R released at Y ${fy}`);
+      return v;
+    };
+    const soft = await level(0.05);
+    const hard = await level(0.95);
+    if (!(hard - soft >= 6)) {
+      return { ok: false, detail: 'pad R\'s Y is not heard as velocity', soft, hard };
+    }
+    // A transport Stop releases a held press on either pad.
+    const pressed = (loc) => loc.getAttribute('aria-pressed');
+    const stopped = {};
+    for (const [name, loc] of [['L', L], ['R', R]]) {
+      await show(name.toLowerCase());
+      const p = await at(loc, 0.5, 0.5);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      await until(async () => await pressed(loc) === 'true', { ms: SOUND_MS,
+        what: `pad ${name} is pressed` });
+      await page.evaluate(() => window.OSCILLA.studio.transport.stop());
+      await until(async () => await pressed(loc) === 'false', { ms: SOUND_MS,
+        what: `a transport Stop releases pad ${name}` });
+      await page.mouse.up();
+      stopped[name] = Number((await silent(page, `pad ${name} silent after the Stop`)).rmsDb
+        .toFixed(1));
+    }
+    return { ok: true, layout: size === 'phone' ? 'one at a time' : 'side by side', x0, x1,
+      bandUp: Number((open - base).toFixed(1)), bandBack: Number((back - base).toFixed(1)),
+      velocityDb: Number((hard - soft).toFixed(1)), stopped };
+  });
+
+  // K220 review R2-K220-5: a Keys gate clip (K060) plays no note; through VELOCITY it must still
+  // sound, at the keys' resting velocity (100), and stop silent.
+  def('s-gateclip', async ({ page }) => {
+    const ok = await page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const keys = st.model.graph.nodes.find((n) => n.id.endsWith('-keys'));
+      const tr = st.store.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys.id });
+      if (!tr.ok) return false;
+      return st.store.dispatch({ type: 'CLIP_ADD', trackId: tr.created.tracks[0], kind: 'event',
+        start: 0, duration: 4, payload: { action: 'gate' } }).ok;
+    });
+    if (!ok) return { ok: false, detail: 'the gate clip could not be added' };
+    await page.evaluate(() => window.OSCILLA.studio.transport.start());
+    const on = await sound(page, (q) => q.rmsDb > -45,
+      'the gate clip on the panel\'s Keys is heard through VELOCITY');
+    await page.evaluate(() => window.OSCILLA.studio.transport.stop());
+    const off = await silent(page, 'Stop silences it');
+    return { ok: true, on: Number(on.rmsDb.toFixed(1)), off: Number(off.rmsDb.toFixed(1)) };
+  });
+
   def('s-wave', async ({ page }) => {
     await keyKnob(page, 'mix.level2', 'Home');
     await keyKnob(page, 'lpf.frequency', 'End');
@@ -1280,8 +1470,9 @@ function defineChecks() {
     out.inspector = await field.inputValue();
     out.sameRevision = rev === await page.evaluate(() => window.OSCILLA.studio.store
       .getRevision());
-    // Eight notes nodes, New Synth voice and, since K221, Krokový sekvencer.
-    return { ok: out.items === 10 && out.expanded === 'true' && out.routeEntries === 1
+    // Nine notes nodes (pad L too since K220, the same xy-pad kind as pad R), New Synth voice
+    // and, since K221, Krokový sekvencer.
+    return { ok: out.items === 11 && out.expanded === 'true' && out.routeEntries === 1
       && /^Play .* from the keys$/.test(out.label) && out.sameRevision, ...out };
   });
 

@@ -32,7 +32,7 @@ scope:
   - "src/js/synth/view/face.js"
   - "src/js/midi/notes.js"
   - "tests/unit/xy-wiring.test.mjs"
-current_state: "K183's dependency on K097 is dropped as artificial, recorded under evolve principle 14 with the plan owner's judgement, quoted verbatim (oscilla-21, plan owner of instrument-kinds, 2026-11-08, asked by oscilla-a3 while K097's owner oscilla-26 was offline): 'K183 -> K097 is artificial (oscilla-21, plan owner of instrument-kinds, 2026-11-08): each of K183's nine criteria runs on the XY pad and the Keys node already on main (src/js/synth/panels/xy.js, src/js/ui/kinds/xy-pad.js, tests/unit/xy-default-patch.test.mjs, tests/browser/xy-pad.cjs, the Keys source's last-note priority in live-notes.js), so K183 needs K097's shipped pad to exist, not K097 to be DONE; K097's open blockers (K060 linear glide and key range, K062 the Pro-card panel, K104, W010 the xy-pad kind) are criteria K183 neither tests nor changes, so dropping the edge loosens nothing.' K183 -> K178 is kept (KEY_ROUTES, criterion 4), as 21 conditioned. Landed in the keys+pad train #444 (merge 3a3a5a58)."
+current_state: "K183's dependency on K097 is dropped as artificial, recorded under evolve principle 14 with the plan owner's judgement, quoted verbatim (oscilla-21, plan owner of instrument-kinds, 2026-11-08, asked by oscilla-a3 while K097's owner oscilla-26 was offline): 'K183 -> K097 is artificial (oscilla-21, plan owner of instrument-kinds, 2026-11-08): each of K183's nine criteria runs on the XY pad and the Keys node already on main (src/js/synth/panels/xy.js, src/js/ui/kinds/xy-pad.js, tests/unit/xy-default-patch.test.mjs, tests/browser/xy-pad.cjs, the Keys source's last-note priority in live-notes.js), so K183 needs K097's shipped pad to exist, not K097 to be DONE; K097's open blockers (K060 linear glide and key range, K062 the Pro-card panel, K104, W010 the xy-pad kind) are criteria K183 neither tests nor changes, so dropping the edge loosens nothing.' K183 -> K178 is kept (KEY_ROUTES, criterion 4), as 21 conditioned. Landed in the keys+pad train #444 (merge 3a3a5a58). The default is restated by K220 (the integrator oscilla-43's decision (i), 2026-11-09): the filter axis moved to pad L in K220, so a new Synth document cables nothing from pad R's Y; pad L's X and Y are the typed normals n25 and n26 into LPF and HPF Cutoff (the keys' MG and EG 2 normals stay), and pad R's Y is the touch's velocity (1-127). Existing documents keep their Y cable (no migration). Criterion 4's Y route as a typed summing model cable is checked on a document that has it (tests/unit/xy-default-patch.test.mjs cabledStore); the rest of K183 (the pad as a note input of the one Keys source, first touch sounds, no Patch button) is unchanged."
 depends_on:
   - "K178"
 acceptance_criteria:
@@ -52,7 +52,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: 2026-11-08T21:49:04Z
+updated_at: 2026-11-09T18:30:00Z
 started_at: 2026-11-08T21:48:38Z
 started_event: sha256:7b27be3818bcf6a31a4a168e1b6991617ea95df2b4d3d29b55c009baba5f5499
 verified_at: 2026-11-08T21:48:51Z

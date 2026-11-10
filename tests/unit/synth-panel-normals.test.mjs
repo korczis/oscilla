@@ -23,7 +23,10 @@ import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
 
 const CUTOFF = 'lpf.frequency';
-const CUTOFF_NORMALS = ['n21', 'n22'];
+// Every normal into LPF Cutoff, read from the panel (MG, EG 2 and, since K220, pad L's X).
+const CUTOFF_NORMALS = PANEL.normals.filter((n) => n.to === CUTOFF).map((n) => n.id);
+/** The model ids of the cutoff's normals (the panel instance's ids). */
+const CUTOFF_IDS = CUTOFF_NORMALS.map((n) => `semi-mono-1-${n}`);
 const normalIds = (m, ids = CUTOFF_NORMALS) => {
   const { normals } = panelEdges(m, PANEL);
   return ids.map((id) => (normals.has(id) ? normals.get(id).id : null));
@@ -33,7 +36,7 @@ const depth = (st) => st.debugInfo().undoDepth;
 test('a cable into the Low-pass cutoff takes its normals out in one entry; undo restores them', () => {
   const st = panelStore();
   const ids = normalIds(st.getModel());
-  assert.deepEqual(ids, ['semi-mono-1-n21', 'semi-mono-1-n22'], 'MG and EG 2 normal the cutoff');
+  assert.deepEqual(ids, CUTOFF_IDS, 'MG, EG 2 and pad L\'s X normal the cutoff');
   assert.equal(jackState(st.getModel(), PANEL, CUTOFF), 'normalled');
   const rev = st.getRevision();
   const undo = depth(st);
@@ -41,7 +44,7 @@ test('a cable into the Low-pass cutoff takes its normals out in one entry; undo 
   assert.equal(r.ok, true, r.reason);
   assert.equal(st.getRevision(), rev + 1, 'one revision');
   assert.equal(depth(st), undo + 1, 'one history entry');
-  assert.deepEqual(normalIds(st.getModel()), [null, null], 'both normals out with the cable in');
+  assert.deepEqual(normalIds(st.getModel()), CUTOFF_NORMALS.map(() => null), 'both normals out with the cable in');
   assert.equal(jackState(st.getModel(), PANEL, CUTOFF), 'patched');
   assert.equal(st.undo().ok, true);
   assert.deepEqual(normalIds(st.getModel()), ids, 'one undo step restores both with their ids');
@@ -87,7 +90,7 @@ test('deleting a normal while a cable occupies its jack keeps the cable and neve
     assert.equal(r.ok, true, r.reason);
   }
   const m = st.getModel();
-  assert.deepEqual(normalIds(m), [null, null], 'both normals deleted');
+  assert.deepEqual(normalIds(m), CUTOFF_NORMALS.map(() => null), 'every normal deleted');
   assert.ok(m.graph.edges.some((e) => e.id === cable), 'the cable stays');
   assert.equal(jackState(m, PANEL, CUTOFF), 'patched');
   // Reading never repairs, and a later edit elsewhere does not bring a normal back.
@@ -95,7 +98,7 @@ test('deleting a normal while a cable occupies its jack keeps the cable and neve
   const other = st.dispatch({ type: 'NODE_PARAM_SET', nodeId: ids.get('lpf').id, key: 'Q',
     value: 2 });
   assert.equal(other.ok, true, other.reason);
-  assert.deepEqual(normalIds(st.getModel()), [null, null], 'no normal re-added');
+  assert.deepEqual(normalIds(st.getModel()), CUTOFF_NORMALS.map(() => null), 'no normal re-added');
   assert.equal(jackState(st.getModel(), PANEL, CUTOFF), 'patched');
 });
 
@@ -155,7 +158,7 @@ test('while the transport plays, a panel BATCH over a normal is admitted exactly
   assert.equal(s.transport.playing, true);
   const cable = panelEdges(s.store.getModel(), PANEL).cables[0];
   assert.ok(s.runtime.edges.has(cable.id), 'the running graph has the cable');
-  for (const id of ['semi-mono-1-n21', 'semi-mono-1-n22']) {
+  for (const id of CUTOFF_IDS) {
     assert.equal(s.runtime.edges.has(id), false, `${id} left the running graph`);
   }
 });
@@ -177,5 +180,5 @@ test('a panel BATCH whose second step is refused leaves model, history and runti
   assert.equal(depth(s.store), undo, 'the history');
   assert.equal(s.admits.length, 0, 'the running graph was never asked');
   assert.deepEqual(runtimeShape(s.runtime), shape, 'the runtime');
-  assert.deepEqual(normalIds(s.store.getModel()), ['semi-mono-1-n21', 'semi-mono-1-n22']);
+  assert.deepEqual(normalIds(s.store.getModel()), CUTOFF_IDS);
 });

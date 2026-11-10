@@ -145,7 +145,7 @@ import { PARAM_TAU_S } from './adapters/nodes.js';
 import { createRamp } from './adapters/ramp.js';
 import { CLEANUP_MARGIN_S, ROUTE_FLOOR, STUDIO_XFADE_S } from './compiler.js';
 import {
-  applyAutomation, detuneCeiling, isExponentialLegal, paramBounds, scheduledValueAt,
+  applyAutomation, detuneCeiling, isExponentialLegal, mapEvents, paramBounds, scheduledValueAt,
 } from './automation.js';
 import {
   LANE_GLIDE_S, anchorEndTime, createTimelineScheduler, frameCeil, holdEvents, resolveEscape,
@@ -153,6 +153,7 @@ import {
 } from './timeline-compiler.js';
 import { effectiveTarget } from './timeline.js';
 import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
+import { qLaneDest } from './q-lane.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 import {
@@ -819,6 +820,9 @@ export function createStudioTransport({
     if (v.how === 'keys-gate') {
       // K060, K103: a gate on a Keys node is its Gate along its TRIGGER edges for the clip, as a
       // key held for the clip would be: each Envelope, clocked node and Step relay it reaches.
+      // It carries no velocity: the Keys' velocity output plays at rest for it (R2-K220-5).
+      const kh = ready(it.target);
+      if (kh && typeof kh.restVelocity === 'function') kh.restVelocity(it.startTime);
       triggers.fanOut(it, it.target, it.key, deferred);
       return null;
     }
@@ -932,6 +936,11 @@ export function createStudioTransport({
       // A pattern-played oscillator: its level is the pattern bus (the voices).
       return { param: c.bus.gain, handle: h, offset, bounds, mode: 'shift', scale: 1 };
     }
+    // A low- or high-pass Q (K232): q-lane.js, on the biquad's dB Q.
+    const qDest = qLaneDest(def, n.params, h, target.param, { sampleRate: sr,
+      centsOf: () => (typeof runtime.baseCents === 'function'
+        ? runtime.baseCents(target.node, target.param) : 0) });
+    if (qDest) return qDest;
     let t = null;
     try { t = h.modTarget(target.param, 'linear'); } catch (e) { t = null; }
     if (!t || !t.param) {
@@ -969,8 +978,9 @@ export function createStudioTransport({
    * keep its frequency at 0.95 × Nyquist). `offset`: the one to fit with.
    */
   function fit(events, dest, offset = dest.offset) {
-    if (!offset && !dest.bounds) return events;
-    return events.map((e) => {
+    const evs = mapEvents(events, dest.map);
+    if (!offset && !dest.bounds) return evs;
+    return evs.map((e) => {
       const total = e.value + offset;
       const c = dest.bounds ? clamp(total, dest.bounds.min, dest.bounds.max) : total;
       let v = c;
@@ -983,7 +993,7 @@ export function createStudioTransport({
   }
 
   /** True when `dest`'s bounds clamp any of the lane's events (debugInfo limitedLanes). */
-  const clampsAny = (events, dest) => !!dest.bounds && events.some((e) => {
+  const clampsAny = (events, dest) => !!dest.bounds && mapEvents(events, dest.map).some((e) => {
     const total = e.value + dest.offset;
     return total > dest.bounds.max || total < dest.bounds.min;
   });
