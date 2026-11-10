@@ -1156,6 +1156,7 @@ function defineChecks() {
         const o = { code: 'KeyA', key: 'a', bubbles: true, cancelable: true };
         window.dispatchEvent(new KeyboardEvent('keydown', o));
         window.dispatchEvent(new KeyboardEvent('keyup', o));
+        window.__tapAttach(); // same task: the analyser is attached before the tap renders
       });
       const peak = await until(async () => {
         const m = await page.evaluate(() => window.__tapMax);

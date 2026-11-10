@@ -396,6 +396,7 @@ function sameTaskTap([sel, at]) {
     pointerType: 'touch', pointerId: 7, isPrimary: true, bubbles: true, cancelable: true };
   el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
   el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+  window.__tapAttach(); // same task: a tap that builds the analyser is metered from its start
   return true;
 }
 
@@ -412,7 +413,8 @@ async function sameTaskTapJourney(browser, engine, device, phone, check) {
       const heard = [];
       for (let i = 0; shown && i < TAP_COUNT; i += 1) {
         const quiet = await pollFor(() => page.evaluate(() => window.__tapNow),
-          (db) => db < TAP_QUIET_DB, `iphone: ${s.id} quiet before tap ${i + 1}`, TAP_MS);
+          (db) => db !== undefined && db < TAP_QUIET_DB,
+          `iphone: ${s.id} quiet before tap ${i + 1}`, TAP_MS);
         if (!quiet.ok) {
           heard.push(`not quiet ${quiet.last}`);
           break;
