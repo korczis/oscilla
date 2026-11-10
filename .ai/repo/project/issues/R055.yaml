@@ -1,0 +1,25 @@
+id: R055
+milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
+title: "The pinned Majordomus download bounds each public attempt, so the API fallback always gets its time"
+slug: majordomus-download-bounded-per-attempt
+priority: p2
+profile: implementation
+objective: "The Majordomus install steps (.github/workflows/ci.yml:339, .github/workflows/main-checks.yml:90) fetch the public release URL with --retry 5 --connect-timeout 20 but no --max-time, under a 5-minute step. A slow 504 or a stalled transfer can use the whole step before the GitHub API fallback (3 x 60 s) starts, so the job fails although the fallback would have served the same asset (project.ci-bounded). After: each public attempt has a --max-time, and the public retries plus the fallback fit within the step's timeout."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 490.yaml#F-1 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+scope:
+  - ".github/workflows/ci.yml"
+  - ".github/workflows/main-checks.yml"
+  - "tests/unit/ci-knowledge-job.test.mjs"
+  - ".ai/repo/project/issues/R055.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/ci-knowledge-job.test.mjs, fails on a7102358): each Majordomus install step's public curl carries --max-time N, and N x (retries + 1) plus the retry delays plus the fallback's bound stays under the step's timeout-minutes."
+  - "Guarded (.github): a non-builder's verdict in .ai/repo/reviews/<pr>.yaml."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
