@@ -178,6 +178,9 @@
 //              held press on pad L and one on pad R are released by a transport Stop
 //              (aria-pressed false), and pad R's release is silent; pad R's Y is heard as
 //              velocity (review R2-K220-1): a note at Y 95 % 6 dB+ over Y 5 %, each settled
+//   s-gateclip K220 review R2-K220-5: a Keys gate clip (K060) on the panel's Keys, which plays no
+//              note, is heard through VELOCITY (RMS above -45 dB rel; the velocity rests at 100)
+//              and the transport's Stop silences it (below -70 dB rel)
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              with six cables patched every jack and cable end scrolls clear of the dock,
 //              the Patch bay chip shows the bay at the card's width with the cards hidden, its
@@ -739,6 +742,26 @@ function defineChecks() {
     return { ok: true, layout: size === 'phone' ? 'one at a time' : 'side by side', x0, x1,
       bandUp: Number((open - base).toFixed(1)), bandBack: Number((back - base).toFixed(1)),
       velocityDb: Number((hard - soft).toFixed(1)), stopped };
+  });
+
+  // K220 review R2-K220-5: a Keys gate clip (K060) plays no note; through VELOCITY it must still
+  // sound, at the keys' resting velocity (100), and stop silent.
+  def('s-gateclip', async ({ page }) => {
+    const ok = await page.evaluate(() => {
+      const st = window.OSCILLA.studio;
+      const keys = st.model.graph.nodes.find((n) => n.id.endsWith('-keys'));
+      const tr = st.store.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys.id });
+      if (!tr.ok) return false;
+      return st.store.dispatch({ type: 'CLIP_ADD', trackId: tr.created.tracks[0], kind: 'event',
+        start: 0, duration: 4, payload: { action: 'gate' } }).ok;
+    });
+    if (!ok) return { ok: false, detail: 'the gate clip could not be added' };
+    await page.evaluate(() => window.OSCILLA.studio.transport.start());
+    const on = await sound(page, (q) => q.rmsDb > -45,
+      'the gate clip on the panel\'s Keys is heard through VELOCITY');
+    await page.evaluate(() => window.OSCILLA.studio.transport.stop());
+    const off = await silent(page, 'Stop silences it');
+    return { ok: true, on: Number(on.rmsDb.toFixed(1)), off: Number(off.rmsDb.toFixed(1)) };
   });
 
   def('s-wave', async ({ page }) => {
