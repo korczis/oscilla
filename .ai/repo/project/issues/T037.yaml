@@ -1,0 +1,26 @@
+id: T037
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The no-coverage note says no measured point is covered, not that the profile lies outside the measured range"
+slug: no-coverage-note-names-the-points
+priority: p2
+profile: implementation
+objective: "noCoverageText (src/js/measurement/views/response-chart.js:554-561) says the profile 'covers none of the measured range (lo-hi)' even for a one-point 1 kHz profile inside a 100 Hz-10 kHz sweep, which is false: the profile lies inside the range and covers none of its points. A fix ('covers none of the N measured points') exists only on the closed duplicate #322's branch, never merged. After: the note states that none of the N measured points is covered."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 304.yaml#R2 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+current_state: "in progress (2026-11-10): built by oscilla-ce (proceed lane), tasks t-20261110063303-88e7 and t-20261110063510-929f, as f7cc126d on fix/t037-no-coverage-note-names-points from T5 42ee6c6e (local); the note in Czech names the 319 measured points; fail-first unit fails on 42ee6c6e; awaits oscilla-c1's verdict and a train (oscilla-43)."
+scope:
+  - "src/js/measurement/views/response-chart.js"
+  - "tests/unit/readout-labels-calibration-coverage.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/T037.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/readout-labels-calibration-coverage.test.mjs, fails on a7102358): for the one-point 1 kHz profile the note names the measured point count and does not claim the profile is outside the measured range."
+  - "Every string it adds is Czech (project.czech-prose); dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

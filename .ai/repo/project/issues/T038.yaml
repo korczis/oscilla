@@ -1,0 +1,27 @@
+id: T038
+milestone: M073
+serves:
+  - "v3-measure#readout-provenance"
+title: "An experiment CSV never labels uncovered values as frequency-profile corrected"
+slug: csv-corrected-column-only-where-covered
+priority: p2
+profile: implementation
+objective: "src/js/ui/experiments.js:198-201 passes applyFrequencyCorrection().correctedDb whenever the profile id matches; for bins the profile does not cover that array holds the raw value (src/js/calibration/interpolate.js:146-148), yet src/js/experiments/csv.js:190-192 labels the whole column 'frequency-profile corrected (microphone deviation removed)', also for a profile that covers no point. After: an uncovered bin has an empty corrected cell and the column note claims correction only for covered bins."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 304.yaml#R6 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+current_state: "in progress (2026-11-10): built by oscilla-ce (proceed lane), tasks t-20261110061126-7e12 and t-20261110061712-b68f, as 6d5a3098 on fix/t038-csv-corrected-only-where-covered from T5 42ee6c6e (local); one predicate correctionInEffect for the CSV and the response view; fail-first unit fails on 42ee6c6e; awaits oscilla-c1's verdict and a train (oscilla-43)."
+scope:
+  - "src/js/ui/experiments.js"
+  - "src/js/experiments/csv.js"
+  - "tests/unit/v3-review-calibration.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/T038.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/v3-review-calibration.test.mjs, fails on a7102358): the CSV of an experiment with a 12-16 kHz profile on a 100 Hz-10 kHz sweep has no non-empty corrected cell and no line claiming frequency-profile correction."
+  - "dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

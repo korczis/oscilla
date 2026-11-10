@@ -54,19 +54,25 @@ const REDEPLOYED = [{ databaseId: 8001, status: 'completed', conclusion: 'succes
 // `localTag` is the commit the local tag v40.0.0 names (null: no local tag); `tags` is what
 // `git tag --merged HEAD --list v*` prints, by default v39.0.0 plus v40.0.0 when the local tag
 // is at HEAD, as in the checkout of an interrupted publish. `git log <tag>..HEAD` of a tag at
-// HEAD is empty, as in git.
+// HEAD is empty, as in git. R034: `state` is what git status and git rev-parse HEAD answer
+// now, and `watch(state)` runs on gh run watch (the longest wait), where a test rewrites the
+// tree or moves HEAD; `committed` is what git show HEAD:dist/index.html prints, and `uploads`
+// the bytes of each asset gh release create was given.
+const COMMITTED_DIST = Buffer.from('<!doctype html><title>committed v40.0.0</title>\n');
 function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '', ok = true,
   runs = [], jobs = {}, ancestor = 0,
   redeploy = (dispatched) => (dispatched ? REDEPLOYED : []), live = TAGGED_PAGE,
-  releaseExists = false, localTag = null,
+  releaseExists = false, localTag = null, watch = () => {}, committed = COMMITTED_DIST,
   tags = localTag === HEAD ? 'v39.0.0\nv40.0.0' : 'v39.0.0' } = {}) {
   const calls = [];
   let dispatched = false;
+  const state = { head: HEAD, dirty };
+  const uploads = [];
   const run = (args) => {
     calls.push(['git', ...args]);
-    if (args[0] === 'rev-parse' && args[1] === 'HEAD') return HEAD;
+    if (args[0] === 'rev-parse' && args[1] === 'HEAD') return state.head;
     if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') return branch;
-    if (args[0] === 'status') return dirty;
+    if (args[0] === 'status') return state.dirty;
     if (args[0] === 'tag') return tags;
     if (args[0] === 'log') {
       return localTag === HEAD && args.at(-1) === 'v40.0.0..HEAD' ? '' : COMMITS;
@@ -78,6 +84,12 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     calls.push([cmd, ...args]);
     if (cmd === 'gh' && args[0] === 'release' && args[1] === 'create') {
       notes.push(readFileSync(args[args.indexOf('--notes-file') + 1], 'utf8'));
+      uploads.push(readFileSync(args[3]));
+    }
+    if (cmd === 'gh' && args[0] === 'run' && args[1] === 'watch') watch(state);
+    if (cmd === 'git' && args[0] === 'show') {
+      return args[1] === `${HEAD}:dist/index.html` ? { status: 0, stdout: committed }
+        : { status: 128, stdout: Buffer.alloc(0), stderr: `fatal: invalid object ${args[1]}` };
     }
     if (cmd === 'git' && args[0] === 'ls-remote' && args[1] === '--tags') {
       return { status: 0, stdout: tagRemote };
@@ -123,7 +135,7 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
     if (live instanceof Error) throw live;
     return typeof live === 'function' ? live() : live;
   };
-  return { run, sh, calls, notes, out, log: (l) => out.push(l), fetchPage,
+  return { run, sh, calls, notes, uploads, state, out, log: (l) => out.push(l), fetchPage,
     dispatched: () => dispatched };
 }
 
@@ -630,6 +642,107 @@ test('a publish leaves no oscilla-release-* directory behind (the notes and asse
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+// ---------------------------------------------------------------- R034: the committed bytes
+// The tree is checked clean once, at the start; then up to three --pages-timeout waits pass
+// before verify-deploy and the upload. A checkout rewritten or advanced in that time must
+// not reach the Release: the publish re-asserts both and uploads the dist of the commit.
+const WATCHED = (args) => (args.includes('--commit') && !args.includes('workflow_dispatch')
+  ? [{ databaseId: 7006, status: 'in_progress', headSha: HEAD, createdAt: ago(1) }] : []);
+const MOVED = '1234567890abcdef1234567890abcdef12345678';
+
+function distRoot() {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-r034-'));
+  mkdirSync(path.join(root, 'dist'));
+  writeFileSync(path.join(root, 'dist/index.html'), COMMITTED_DIST);
+  return root;
+}
+
+test('R034: a dist rewritten during the Pages wait refuses before verify-deploy; the Release '
+  + 'gets the committed bytes', async () => {
+  const root = distRoot();
+  try {
+    const rewrite = () => writeFileSync(path.join(root, 'dist/index.html'), '<!doctype html>x');
+    const f = fakes({ runs: WATCHED, watch: (st) => { rewrite(); st.dirty = ' M dist/index.html'; } });
+    const code = await publish({ argv: ['--yes'], root, run: f.run, sh: f.sh, log: f.log,
+      receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+    const text = f.out.join('\n');
+    assert.equal(code, 1, text);
+    assert.match(text, new RegExp('RELEASE:PUBLISH FAILED: before deployment verification: the '
+      + `working tree is no longer clean \\(M dist/index\\.html\\); the publish judged a clean `
+      + `tree at ${HEAD} \\(R034\\)`));
+    assert.ok(!f.calls.some((c) => c[0] === 'node' && /verify-deploy/.test(c[1])), text);
+    assert.ok(!f.calls.some((c) => c[0] === 'gh' && c[1] === 'release'), text);
+    assert.match(text, /The tag v40\.0\.0 is on origin but no GitHub Release was created/);
+
+    // A rewrite git status does not report (a skip-worktree or assume-unchanged entry): the
+    // upload is still the committed dist, not the working tree's.
+    const g = fakes({ runs: WATCHED, watch: rewrite });
+    assert.equal(await publish({ argv: ['--yes'], root, run: g.run, sh: g.sh, log: g.log,
+      receipt: RECEIPT, fingerprint: FP, fetchPage: g.fetchPage, ...fakeTime() }), 0,
+    g.out.join('\n'));
+    assert.equal(g.uploads.length, 1);
+    assert.deepEqual(g.uploads[0], COMMITTED_DIST);
+    assert.ok(g.calls.some((c) => c.join(' ') === `git show ${HEAD}:dist/index.html`));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('R034: a commit made during the Pages wait refuses before verify-deploy, naming both '
+  + 'commits; a clean, unchanged tree publishes as before', async () => {
+  const f = fakes({ runs: WATCHED, watch: (st) => { st.head = MOVED; } });
+  const code = await publish({ argv: ['--yes'], run: f.run, sh: f.sh, log: f.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: f.fetchPage, ...fakeTime() });
+  const text = f.out.join('\n');
+  assert.equal(code, 1, text);
+  assert.match(text, new RegExp(`RELEASE:PUBLISH FAILED: before deployment verification: HEAD `
+    + `moved from ${HEAD} to ${MOVED};`));
+  assert.ok(!f.calls.some((c) => c[0] === 'node' && /verify-deploy/.test(c[1])), text);
+  assert.ok(!f.calls.some((c) => c[0] === 'gh' && c[1] === 'release'), text);
+
+  const same = fakes({ runs: WATCHED });
+  assert.equal(await publish({ argv: ['--yes'], run: same.run, sh: same.sh, log: same.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: same.fetchPage, ...fakeTime() }), 0,
+  same.out.join('\n'));
+  assert.deepEqual(same.uploads, [COMMITTED_DIST]);
+});
+
+test('R034: the checkout is re-read before the tag and before the upload as well', async () => {
+  // Before the tag: a tree dirtied between the precondition read and the tag (the gh and npm
+  // calls in between) tags nothing.
+  let reads = 0;
+  const early = fakes({ runs: WATCHED });
+  const run = (args) => {
+    if (args[0] === 'status' && (reads += 1) > 1) return '?? stray.txt';
+    return early.run(args);
+  };
+  assert.equal(await publish({ argv: ['--yes'], run, sh: early.sh, log: early.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: early.fetchPage, ...fakeTime() }), 1);
+  assert.match(early.out.join('\n'),
+    /FAILED: before the tag: the working tree is no longer clean \(\?\? stray\.txt\)/);
+  assert.ok(!early.calls.some((c) => c[0] === 'git' && c[1] === 'tag' && c[2] === '-a'));
+  assert.doesNotMatch(early.out.join('\n'), /is on origin/, 'nothing was pushed to undo');
+
+  // Before the upload: a commit made while the live page was read (after verify-deploy).
+  const late = fakes({ runs: WATCHED });
+  const fetchPage = async (url) => { late.state.head = MOVED; return late.fetchPage(url); };
+  assert.equal(await publish({ argv: ['--yes'], run: late.run, sh: late.sh, log: late.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage, ...fakeTime() }), 1);
+  assert.match(late.out.join('\n'), new RegExp(`FAILED: before the upload: HEAD moved from ${HEAD}`));
+  assert.ok(late.calls.some((c) => c[0] === 'node' && /verify-deploy/.test(c[1])));
+  assert.ok(!late.calls.some((c) => c[0] === 'gh' && c[1] === 'release'));
+
+  // An unreadable committed dist fails the publish with the call, not an empty asset.
+  const none = fakes({ runs: WATCHED, committed: null });
+  const sh = (cmd, args, o) => (cmd === 'git' && args[0] === 'show'
+    ? { status: 128, stdout: Buffer.alloc(0), stderr: 'fatal: path not in tree' }
+    : none.sh(cmd, args, o));
+  assert.equal(await publish({ argv: ['--yes'], run: none.run, sh, log: none.log,
+    receipt: RECEIPT, fingerprint: FP, fetchPage: none.fetchPage, ...fakeTime() }), 1);
+  assert.match(none.out.join('\n'), new RegExp(`reading dist/index\\.html at ${HEAD} failed`));
+  assert.ok(!none.calls.some((c) => c[0] === 'gh' && c[1] === 'release'));
+});
 
 // ---------------------------------------------------------------- E025: the redeploy after the tag
 const sequence = (f) => f.calls.map((c) => c.join(' '));

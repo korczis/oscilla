@@ -17,7 +17,10 @@
 # itself, and a required red check would block that pull request.
 #
 # Token: the repository contents are only read. `issues: write` is the one write permission,
-# and only for the "release overdue" issue. Nothing is installed: the script uses Node built-ins
+# and only for the "release overdue" issue. `pull-requests: read` lets the script see an open
+# record pull request (R035): a tag counts as a release only with its GitHub Release and its
+# record on main or an open record pull request younger than 24 h, so a tag push alone no
+# longer clears the cadence. Nothing is installed: the script uses Node built-ins
 # and git, so there is no `npm ci` and no cache to restore.
 name: Release cadence
 
@@ -32,6 +35,7 @@ on:
 permissions:
   contents: read
   issues: write
+  pull-requests: read
 
 # One verdict at a time, so two runs cannot both open the issue.
 concurrency:

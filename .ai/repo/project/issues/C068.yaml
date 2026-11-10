@@ -1,0 +1,25 @@
+id: C068
+milestone: M090
+serves:
+  - "coherent-state#live-edits-reach-the-voice"
+title: "A live Additive edit swaps the sounding carrier's wave through the click-free dip"
+slug: additive-edit-swaps-wave-click-free
+priority: p2
+profile: implementation
+objective: "setPeriodicWave (src/js/audio/audio-engine.js:1427-1432) calls v.carrier.setPeriodicWave(wave) on the sounding carrier with no dip, while clearPeriodicWave (:1439-1444) goes through _switchWaves; main.js calls it on every Additive lab change of a held note, so each edit is a step in the waveform (project.audio-engine-discipline). After: the swap goes through the same click-free dip as a waveform change."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 314.yaml#R-2 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+scope:
+  - "src/js/audio/audio-engine.js"
+  - "tests/unit/engine-additive.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/C068.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/engine-additive.test.mjs, fails on a7102358): with the recording mock context, setPeriodicWave on a held voice schedules a ramp of the voice level to the gain floor before the carrier's setPeriodicWave and the level returns after it."
+  - "Guarded (src/js/audio): a non-builder's verdict in .ai/repo/reviews/<pr>.yaml (project.review-verdict); dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

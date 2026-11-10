@@ -1,0 +1,30 @@
+id: K241
+milestone: M059
+serves:
+  - "playable-instrument#studio-clock"
+title: "A Studio document with a Clock plays until STOP, past its content, and its Clock keeps ticking"
+slug: clock-only-document-ticks
+priority: p2
+profile: implementation
+objective: "timelineEnd (src/js/studio/timeline.js) counts only clips and automation points, so a document with a Clock ended at its content (at 0 with no clips): the Clock's ticks stopped and the transport ended the run by itself. After (scope widened by the integrator oscilla-43 and restated per C1-K241-2): a live document with a Clock and no loop of the user's plays until STOP, past its content: it plays the content, then repeats the empty bar after it (clock.js freeRunLoop, applied by createAnchor for PLAY and every re-anchor), so the Clock keeps its grid; a clip added during the run plays and the run goes on; the playhead counts up. A document without a Clock ends at its content as before; an offline render ends at its content. The Clock's Czech help states this (CLOCK_FREE_RUN_TEXT). No template or panel ships a Clock, so existing documents are unaffected."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 509.yaml#K023-1 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) on fix/k241-clock-only-ticks off train T5 192a21fa, commit 27ad5ce1 (clock.js freeRunLoop applied by createAnchor); for train T6, judged by oscilla-c1."
+scope:
+  - "src/js/studio/timeline.js"
+  - "src/js/studio/timeline-compiler.js"
+  - "src/js/studio/transport.js"
+  - "tests/unit/studio-clock.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/K241.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/studio-clock.test.mjs, fails on 192a21fa): a model with a Clock -> Step Modulator, no clips and loop off, after PLAY on the fake audio environment, has not ended after 2 s of audio time and has scheduled clock ticks on the grid."
+  - "Fail-first unit (fails on 192a21fa and 27ad5ce1): a one-bar clip added while a Clock document free-runs plays at its position, the Clock ticks on its grid for three more bars, the run does not end, and the playhead counts up and keeps its value across the edit."
+  - "A document without a Clock ends at its content; an offline render of a Clock document ends at its content; the Clock's Czech help states the free run and a unit case pins it to freeRunLoop."
+  - "Guarded (src/js/studio): a non-builder's verdict; dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

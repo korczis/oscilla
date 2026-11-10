@@ -38,4 +38,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-09'
+updated_at: 2026-11-09T22:33:36Z
+started_at: 2026-11-09T22:31:43Z
+started_event: sha256:346d0278f251c2c00b5496952d81745c09dca9dcf332de171430d81f603e4d6e
+verified_at: 2026-11-09T22:32:18Z
+verified_event: sha256:f7bbd2d73dc5eb362b5c9d362c3bd79e05e1ec634dc8d690a70f0e5ac665254c
+completed_at: 2026-11-09T22:33:36Z
+completed_event: sha256:3e5adfa23d9f6228258fd99d00fc5018daf1a4e79eb26fa13b8717406c72ef82
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "gh run view 42711394436 (Pages deploy of b8bfd3b6, #512); curl -s -o /dev/null -w '%{http_code}' https://korczis.github.io/oscilla/lab/; npm run readme:check; node --test tests/unit/readme-derived.test.mjs tests/unit/landing-lab.test.mjs"
+    result: "Pages run 42711394436 succeeded: verify-deploy 'lab: 21 file(s) regenerated at b8bfd3b613b9' and 'PASS attempt 1/10 ... and the generated lab/ verified'; public smoke chromium/firefox/webkit pass. Live /lab/ 200 text/html and five /lab/charts/*.svg 200 image/svg+xml; README on GitHub renders the five charts (720x280 each). PR #512 CI: unit/build (readme:check, readme-derived, landing-lab, version:check), fail-first, visual, six browser legs and review-verdict (.ai/repo/reviews/512.yaml, merge, oscilla-c3) passed. Criteria re-checked on main b8bfd3b6: readme:check in verify with a fail-first test; facts carry sources and no version literal; the landing is Czech, Flowbite Pro, self-contained (CSP self), 390/1536 px dark and light, frame created only on press; generation byte-identical on macOS arm64 and linux x64."
+    artifact: "https://korczis.github.io/oscilla/lab/"
+    commit: b8bfd3b613b9e4aac63267343c14bd1ee91f2a02
+    recorded_at: 2026-11-09T22:33:10Z

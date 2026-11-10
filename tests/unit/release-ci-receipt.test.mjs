@@ -580,6 +580,53 @@ test('E060 mutations: a browser without its leg, a suite the legs do not run, a 
   assert.match(r[0], /run 900 has no job "changes" .*base bbbbbbb/);
 });
 
+// E068 (C1-E060-1): a base job of no matrix runs its browser suites in every browser they
+// default to, so a head job for one matrix value (chromium only) does not replace it; head
+// jobs for every browser, or a head job of no matrix, do. Other scripts keep the wildcard.
+const BASE_NO_MATRIX = `name: CI\njobs:\n  unit:\n    runs-on: x\n    steps:\n      - run: npm test\n`
+  + `${LEDGER}  studio:\n    name: Studio suites\n    runs-on: x\n    steps:\n`
+  + '      - run: npm run test:studio\n      - run: npm run test:lint\n';
+const headWith = (job) => `name: CI\njobs:\n  unit:\n    runs-on: x\n    steps:\n`
+  + `      - run: npm test\n${LEDGER}${job}`;
+const perBrowser = (browsers, script = 'test:studio') => '  studio-b:\n    name: Studio '
+  + `(\${{ matrix.browser }})\n    runs-on: x\n    strategy:\n      matrix:\n        browser: `
+  + `[${browsers.join(', ')}]\n    steps:\n      - run: npm run ${script}\n      - run: npm run `
+  + 'test:lint\n';
+const PKG_STUDIO = { scripts: { 'test:release': 'npm run test:studio',
+  'test:studio': 'node tests/browser/v31-studio-graph.cjs && node tests/browser/v31-studio-audio.cjs',
+  'test:leg': 'node tests/browser/lib/shards.cjs', 'test:lint': 'node scripts/lint.mjs' } };
+
+test('E068: a no-matrix base job running browser suites is not replaced by a chromium-only job',
+  () => {
+    const base = expectedJobs(BASE_NO_MATRIX);
+    assert.deepEqual(base.problems, []);
+    const judge = (headText) => {
+      const tree = expectedJobs(headText);
+      assert.deepEqual(tree.problems, []);
+      return ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base,
+        jobs: jobsOf(run(), tree.jobs), pkg: PKG_STUDIO }));
+    };
+    // the mutation of the criterion: chromium only drops firefox and webkit, and refuses
+    const chromium = judge(headWith(perBrowser(['chromium'])));
+    assert.equal(chromium.length, 1, chromium.join('\n'));
+    assert.match(chromium[0], /run 900 has no job "Studio suites" .*base bbbbbbb/);
+    assert.equal(judge(headWith(perBrowser(['chromium', 'webkit']))).length, 1, 'two of three');
+    // every browser the suites default to, or one job of no matrix, replaces it
+    assert.deepEqual(judge(headWith(perBrowser(['chromium', 'firefox', 'webkit']))), []);
+    assert.deepEqual(judge(headWith('  studio-all:\n    name: Studio, all browsers\n    runs-on: '
+      + 'x\n    steps:\n      - run: npm run test:studio\n      - run: npm run test:lint\n')), []);
+    // through the browser legs as well: all three legs replace it, a chromium leg does not
+    assert.deepEqual(judge(headWith(perBrowser(['chromium', 'firefox', 'webkit'], 'test:leg')
+      .replace('      - run: npm run test:lint\n', '') + '  lint:\n    runs-on: x\n    steps:\n'
+      + '      - run: npm run test:lint\n')), []);
+    assert.equal(judge(headWith(perBrowser(['chromium'], 'test:leg'))).length, 1);
+    // a script that names no browser suite keeps the wildcard: one matrix value serves it
+    const lintOnly = expectedJobs(BASE_NO_MATRIX.replace('      - run: npm run test:studio\n', ''));
+    const tree = expectedJobs(headWith(perBrowser(['chromium'])));
+    assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: lintOnly,
+      jobs: jobsOf(run(), tree.jobs), pkg: PKG_STUDIO })), []);
+  });
+
 test('E060 on the real files: the legs of this ci.yml replace every per-category browser job '
   + 'of the ci.yml before them (#509)', () => {
   const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));

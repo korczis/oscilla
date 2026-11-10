@@ -22,10 +22,11 @@ import { playedEngine, routedNode } from './picker.js';
 import { createDock } from './dock.js';
 import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
-  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, jackReason, jackState, panelCables,
+  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, cableNote, jackReason, jackState,
+  panelCables,
   patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
 } from './normals.js';
-import { linkAction, linkOf } from './link.js';
+import { linkOf, linkOmissionText, linkOmissions, linkPlan, skippedText } from './link.js';
 import { splitJack } from './panel.js';
 import { esc, knobHtml, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
@@ -186,8 +187,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const [s, t] = a.direction === 'out' ? [portOf(a), portOf(j)] : [portOf(j), portOf(a)];
         const v = canConnect(s, t);
         if (!v.allowed) { out.set(j.key, { ok: false, reason: v.reason }); continue; }
-        const to = a.direction === 'out' ? j.id : a.id;
-        const why = jackReason(m, panel, to);
+        const [from, to] = a.direction === 'out' ? [a.id, j.id] : [j.id, a.id];
+        const why = jackReason(m, panel, to, from);
         out.set(j.key, why ? { ok: false, reason: why } : { ok: true, reason: null });
       }
     }
@@ -231,7 +232,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     return panelCables(model(), panel).map((c) => {
       const { port } = splitJack(c.from);
       const p = registry.port(panel.module(c.fromModule).node, port, 'out');
-      return { ...c, type: p ? p.type : 'AUDIO' };
+      return { ...c, type: p ? p.type : 'AUDIO',
+        note: cableNote(model(), panel, c, { registry }) };
     });
   }
 
@@ -713,8 +715,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!ensurePanel()) return false;
     showTab(link.tab || 'panel', link.engine);
     if (!link.preset && !link.values.length && !link.cables.length) return true;
-    const r = dispatch(linkAction(model(), panel, link, { registry }));
+    const plan = linkPlan(model(), panel, link, { registry });
+    const r = dispatch(plan.action);
     if (r.ok && link.preset) cmp.synth.preset = link.preset;
+    // K239: a cable the receiver's patch refuses is named, never dropped in silence.
+    const missed = r.ok ? skippedText(plan.skipped) : null;
+    if (missed) say(missed, true);
     return r.ok;
   }
 
@@ -876,11 +882,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const hash = linkNow();
       const url = `${window.location.href.split('#')[0]}#${hash}`;
       this.synth.link = url;
+      // K239: what the link leaves out is said with the copy, never dropped in silence.
+      const left = present() ? linkOmissionText(linkOmissions(model(), panel)) : null;
+      const tail = left ? ` ${left}` : '';
       try {
-        navigator.clipboard.writeText(url).then(() => say('Odkaz na Synth zkopírován.'),
-          () => say('Zkopírujte odkaz níže; schránka tu není k dispozici.'));
+        navigator.clipboard.writeText(url).then(() => say(`Odkaz na Synth zkopírován.${tail}`),
+          () => say(`Zkopírujte odkaz níže; schránka tu není k dispozici.${tail}`));
       } catch (e) {
-        say('Zkopírujte odkaz níže; schránka tu není k dispozici.');
+        say(`Zkopírujte odkaz níže; schránka tu není k dispozici.${tail}`);
       }
       return hash;
     },
