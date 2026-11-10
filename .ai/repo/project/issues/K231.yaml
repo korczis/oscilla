@@ -6,27 +6,44 @@ title: "REC on the Synth's pad L: a take of its X and Y written into an automati
 slug: rec-on-the-synth-pad-l
 priority: p2
 profile: implementation
-objective: "Lands as feat(synth). Split from K220 on 2026-11-09 (the coordinator oscilla-43): K220 lands the two performance pads under the Synth face; this slice adds REC on pad L. With REC armed and the Studio transport playing, a take of pad L's X and Y (the targets its normals or cables feed) is written as automation of those targets at the playhead, one undo entry per take, through the one record path K223 builds for live pad and key hits (oscilla-75's record model: hits into a clip at the playhead, quantised, one undo per take), so pads, keys and the pad's automation share one recorder. Before: pad L plays its targets live only. After: a take replays from the timeline. Rollback: revert; the take's automation stays valid model data."
-why: "Owner direction Q103 and the owner's screenshots of 2026-11-09 (an integrated performance pad with record); K220's objective names recording, split out so the pads land first."
-current_state: "Filed 2026-11-09 when K220 was split; waits for K220 and K223's record model."
+objective: "Lands as feat(synth). Split from K220 on 2026-11-09 (the coordinator oscilla-43): K220 lands the two performance pads under the Synth face; this slice adds REC on pad L. With REC armed and the Studio transport playing, a take of pad L's X and Y is written as automation of the pad's own X and Y (two automatable parameters of the xy-pad node, x and y, default 0, the outputs' value at rest, elided from the serialised model and the hash while at that default) at the playhead, one undo entry per take, through the one record path K223 built for live pad and key hits (studio/notes-record.js, generalised: an armed take collects notes for a notes clip or pad points for lanes), so pads, keys and the pad's automation share one recorder. On replay the lanes move the pad's outputs, and whatever normals or cables pad L feeds (LPF cutoff and peak by default) carry them, so the mapping stays the edge's and a re-patch after the take re-targets it; a live touch overrides the lanes while held and the outputs glide back to them on release. Before: pad L plays its targets live only. After: a take replays from the timeline. Rollback: revert; the take's lanes stay valid model data."
+why: "Owner direction Q103 and the owner's screenshots of 2026-11-09 (an integrated performance pad with record); K220's objective names recording, split out so the pads land first. Coordinator decision (oscilla-43, 2026-11-10), verbatim: 'Option A, decided. Record it in K231 verbatim as the coordinator's decision with its reason (§103-104: automation authors the base and modulation stays the edge's; a take of the pad's own X and Y survives a re-patch).' Option B, lanes on the targets (lpf.frequency, lpf.peak) as the first text said, would author the base from the edge's mapping, against studio/automation.js §103-104, and go stale on every re-patch; the review seat oscilla-c1 accepted A with conditions (the acceptance criteria below)."
+current_state: "Built by oscilla-d9 in task t-20261110045417-5059 on feat/k231-pad-l-rec from train T5 91838acb (K220 in T5, K223's record model on main); goes into T6, judged by oscilla-c1."
 scope:
   - "src/js/synth"
   - "src/js/studio/actions.js"
+  - "src/js/studio/notes-record.js"
+  - "src/js/studio/nodes/instrument.js"
+  - "src/js/studio/adapters/instrument.js"
+  - "src/js/studio/schema.js"
+  - "src/js/studio/patches.js"
+  - "src/js/studio/live-notes.js"
+  - "src/js/studio/clip-targets.js"
+  - "src/js/studio/offline.js"
+  - "src/js/audio/audio-engine.js"
+  - "src/js/ui/kinds/record-switch.js"
+  - "src/js/ui/catalog"
+  - "src/js/ui/keys"
   - "tests/unit"
-  - "tests/browser/synth.cjs"
+  - "tests/browser"
   - "tests/README.md"
   - "dist"
+  - ".ai/repo/project/issues/K231.yaml"
 depends_on:
   - K220
   - K223
 acceptance_criteria:
-  - "Fail-first unit: with REC armed and the transport playing, a pad L gesture writes automation points of its two targets at the playhead's positions in one undo entry; REC off writes nothing; a take while stopped is refused with its sentence."
-  - "One record path: the take goes through K223's recorder (no second recorder for the pad); undo and redo restore the exact serialized model."
-  - "Browser (chromium, firefox, webkit), through tests/browser/lib/suite.cjs and wait.cjs until(): a recorded take replays (the target's automation lane drives it on the next pass); a phone check with the gesture rule on; the suite pace declared."
-  - "Guarded (src/js/synth, src/js/studio): a non-builder verdict."
+  - "Fail-first unit: with REC armed and the transport playing, a pad L gesture writes points of lanes xyl.x and xyl.y at the audio-clock playhead positions of the take, in one BATCH and one undo entry; REC off writes nothing; a take while stopped is refused with its sentence (Czech)."
+  - "Hash (oscilla-43 (1), oscilla-c1 1): x and y at their default 0 are elided from the serialised model and the hash, so every pinned template and every epoch-3 record hashes unchanged and no epoch 4 is needed; a unit test proves an untouched pad hashes as on the base; the C1-HE3-1 guard test (registered params only) stays green."
+  - "Touch over lane (oscilla-43 (2), oscilla-c1 2): while a touch is held it overrides the lanes; on release the outputs return to the lanes' value through the same glide as today's pad release (no step on cutoff or peak); a unit test pins it at 44100 and 48000 Hz."
+  - "A take (oscilla-c1 3): points outside the armed span are dropped (as C1-K223-1); a re-take replaces the take's span on each lane and keeps the rest; points are thinned to a stated step on the audio clock, never one per pointermove."
+  - "Replay (oscilla-c1 4): the lanes move the pad's outputs through whatever normals or cables pad L feeds, a re-patch after the take included, and the offline render plays them too."
+  - "One recorder (oscilla-43 (3), oscilla-c1 5): studio/notes-record.js generalised, the same 'take' event and Czech sentence; every K223 test green unchanged; undo and redo restore the exact serialized model."
+  - "Browser (chromium, firefox, webkit), through tests/browser/lib/suite.cjs and wait.cjs until(): a recorded take replays (the pad's lane drives the target on the next pass); a phone check with the gesture rule on; the suite pace declared."
+  - "Guarded (src/js/synth, src/js/studio, src/js/audio): a non-builder verdict; the PR says what the xy-pad realisation change touches (oscilla-c1 6)."
 validation:
   - "npm test"
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-09'
+updated_at: '2026-11-10'
