@@ -1,0 +1,23 @@
+id: E068
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "The release receipt's replacedJob compares matrix values only when both jobs have one"
+slug: release-receipt-replaced-job-compares-matrix-values-only-when-both-have-one
+priority: p3
+profile: implementation
+objective: "C1-E060-1 (P3, oscilla-c1's review of train T5). release-ci-receipt.mjs replacedJob's same() treats null as a wildcard, so a base job with no matrix, which runs its browser suites in every browser, counts as replaced by a head job for one matrix value (e.g. chromium only). That drops firefox and webkit without a refusal. Latent today: the only base job with no matrix that runs a browser script is the visual gate. Require a no-matrix base job running a browser script to be covered for every browser the suites default to, or by a no-matrix head job. Follows E060 (689b2a33), which lands with train T5."
+why: "oscilla-c1, rev-seat, finding C1-E060-1 (P3) in the T5 train review (2026-11-10); filed by rev-seat-2 oscilla-c3 on oscilla-43's order."
+scope:
+  - "scripts/release-ci-receipt.mjs"
+  - "tests/unit/release-ci-receipt.test.mjs"
+  - ".ai/repo/project/issues/E068.yaml"
+depends_on: []
+acceptance_criteria:
+  - "A mutation test (base no-matrix test:studio, head chromium-only test:studio) is refused; it fails on 689b2a33."
+validation:
+  - "node --test tests/unit/release-ci-receipt.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
