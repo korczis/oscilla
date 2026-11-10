@@ -151,7 +151,9 @@ import {
   safeHorizon,
 } from './timeline-compiler.js';
 import { effectiveTarget } from './timeline.js';
-import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
+import { CLIP_TARGET_TEXT, clipTarget, clipUse, laneMap } from './clip-targets.js';
+import { DB_PER_OCTAVE_Q } from '../audio/filters.js';
+import { CENTS_PER_OCTAVE } from '../core/music.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 import {
@@ -928,6 +930,21 @@ export function createStudioTransport({
       // A pattern-played oscillator: its level is the pattern bus (the voices).
       return { param: c.bus.gain, handle: h, offset, bounds, mode: 'shift', scale: 1 };
     }
+    // A low- or high-pass Q (K232): the lane is in Q and plays on the biquad's dB Q, the AudioParam
+    // its log cables drive; values, bounds and the log cables' constant part are in dB there
+    // (clip-targets.js laneMap), every segment a step or a linear ramp, so 'shift' is exact.
+    const map = laneMap(def, n.params);
+    if (map) {
+      let q = null;
+      try { q = h.modTarget(target.param, 'log'); } catch (e) { q = null; }
+      if (q && q.param) {
+        const pb = paramBounds(def, sr);
+        const cents = typeof runtime.baseCents === 'function'
+          ? runtime.baseCents(target.node, target.param) : 0;
+        return { param: q.param, handle: h, offset: (cents / CENTS_PER_OCTAVE) * DB_PER_OCTAVE_Q,
+          bounds: { min: map(pb.min), max: map(pb.max) }, mode: 'shift', scale: 1, map };
+      }
+    }
     let t = null;
     try { t = h.modTarget(target.param, 'linear'); } catch (e) { t = null; }
     if (!t || !t.param) {
@@ -965,8 +982,9 @@ export function createStudioTransport({
    * keep its frequency at 0.95 × Nyquist). `offset`: the one to fit with.
    */
   function fit(events, dest, offset = dest.offset) {
-    if (!offset && !dest.bounds) return events;
-    return events.map((e) => {
+    const evs = mappedEvents(events, dest);
+    if (!offset && !dest.bounds) return evs;
+    return evs.map((e) => {
       const total = e.value + offset;
       const c = dest.bounds ? clamp(total, dest.bounds.min, dest.bounds.max) : total;
       let v = c;
@@ -978,8 +996,18 @@ export function createStudioTransport({
     });
   }
 
+  /**
+   * A lane's events in its AudioParam's own values (dest.map, clip-targets.js laneMap, K232): each
+   * value mapped, an exponential ramp a linear one (exponential in Q is linear in dB).
+   */
+  function mappedEvents(events, dest) {
+    if (!dest.map) return events;
+    return events.map((e) => ({ ...e, value: dest.map(e.value),
+      ...(e.method === 'exponentialRampToValueAtTime' ? { method: LINEAR } : {}) }));
+  }
+
   /** True when `dest`'s bounds clamp any of the lane's events (debugInfo limitedLanes). */
-  const clampsAny = (events, dest) => !!dest.bounds && events.some((e) => {
+  const clampsAny = (events, dest) => !!dest.bounds && mappedEvents(events, dest).some((e) => {
     const total = e.value + dest.offset;
     return total > dest.bounds.max || total < dest.bounds.min;
   });

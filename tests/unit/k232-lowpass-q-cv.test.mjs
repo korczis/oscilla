@@ -129,3 +129,54 @@ test('the Synth panel: LPF and HPF show Peak, the pad targets list them, pad L\'
   assert.equal(st.dispatch(r.action).ok, true);
   assert.equal(jackState(st.getModel(), PANEL, 'lpf.Q'), 'patched');
 });
+
+// ---------------------------------------------------------------- lanes (review condition 2)
+
+test('a Q lane on a low- or high-pass plays on the biquad\'s dB Q: each point mapped, an '
+  + 'exponential segment a linear ramp in dB', async () => {
+  const { laneMap, clipTarget } = await import('../../src/js/studio/clip-targets.js');
+  const { createStudioTransport } = await import('../../src/js/studio/transport.js');
+  const { NODE_REGISTRY } = await import('../../src/js/studio/registry.js');
+  const qDef = NODE_REGISTRY.param('filter', 'Q');
+  assert.equal(qDef.lane, 'db-of-q', 'the mapping is declared on the parameter definition');
+  assert.equal(laneMap(qDef, { type: 'bandpass' }), null, 'other types play Q as it is');
+  near(laneMap(qDef, { type: 'lowpass' })(4), filters.nodeQ('lowpass', 4), 'laneMap is nodeQ');
+  for (const [type, slope] of [['lowpass', '12'], ['highpass', '24']]) {
+    const empty = schema.normalizeStudio({ kind: schema.STUDIO_KIND, schemaVersion: 1,
+      graph: { nodes: [], edges: [] } });
+    const st = actions.createStudioStore(empty, { idGenerator: actions.createIdGenerator(empty) });
+    const f = st.dispatch({ type: 'NODE_ADD', nodeType: 'filter', position: { x: 0, y: 0 } })
+      .created.nodes[0];
+    for (const [key, value] of Object.entries({ type, slope, Q: 1 })) {
+      assert.equal(st.dispatch({ type: 'NODE_PARAM_SET', nodeId: f, key, value }).ok, true);
+    }
+    const node = st.getModel().graph.nodes.find((n) => n.id === f);
+    assert.equal(clipTarget(node, { kind: 'automation', param: 'Q' }).plays, true,
+      `${type}: the policy plays a Q lane`);
+    for (const [time, value, curve] of [[0, 1, 'linear'], [1, 4, 'exponential']]) {
+      assert.equal(st.dispatch({ type: 'AUTOMATION_POINT_ADD', target: { node: f, param: 'Q' },
+        time, value, curve }).ok, true);
+    }
+    const fx = createFakeAudioEnv({ sampleRate: 48000 });
+    const engine = new AudioEngine({ env: fx.env });
+    assert.ok(engine.init());
+    const runtime = createStudioRuntime({ engine });
+    const t = createStudioTransport({ runtime, engine, store: st });
+    assert.equal(t.start().ok, true);
+    fx.advance(0.1);
+    const q = runtime.nodes.get(f).modTarget('Q', 'log').param;
+    const vals = q.events.map((e) => [e.ramp, Math.round(e.value * 1e6) / 1e6]);
+    const db4 = Math.round(filters.nodeQ(type, 4) * 1e6) / 1e6;
+    assert.ok(vals.some(([ramp, v]) => ramp === 'linear' && v === db4),
+      `${type} ${slope}: the point at Q 4 arrives as ${db4} dB on a linear ramp: ${
+        JSON.stringify(vals)}`);
+    assert.ok(!vals.some(([, v]) => v === 4), `${type}: no unmapped Q value reaches the node`);
+    assert.ok(runtime.ownedParams().some((o) => o.node === f && o.param === 'Q'),
+      `${type}: the lane owns Q, so the base does not write it`);
+    t.stop({ fast: true });
+    fx.advance(0.5);
+  }
+  // A shelf still ignores Q: its lane stays refused.
+  const shelf = { id: 'x', type: 'filter', params: { type: 'lowshelf' }, metadata: { name: 'x' } };
+  assert.equal(clipTarget(shelf, { kind: 'automation', param: 'Q' }).plays, false);
+});

@@ -120,10 +120,15 @@ function transportLane(model, id, key) {
   const started = transport.start();
   assert.ok(started.ok, `PLAY with a ${key} lane: ${JSON.stringify(started)}`);
   const un = transport.debugInfo().unplayed.find((u) => u.id === lane.id);
-  // What the node's adapter offers a linear owner (adapters/nodes.js modTarget).
+  // What the node's adapter offers the lane's owner (adapters/nodes.js modTarget): the linear
+  // AudioParam, or for a mapped lane (clip-targets.js laneMap, a low-/high-pass Q, K232) the
+  // log target its values reach in dB, as the runtime and the transport read it.
   const h = a.runtime.nodes.get(id);
+  const node = store.getModel().graph.nodes.find((n) => n.id === id);
+  const mapped = policyModule.laneMap
+    && policyModule.laneMap(NODE_REGISTRY.param(node.type, key), node.params);
   let t = null;
-  try { t = h ? h.modTarget(key, 'linear') : null; } catch (e) { t = null; }
+  try { t = h ? h.modTarget(key, mapped ? 'log' : 'linear') : null; } catch (e) { t = null; }
   transport.stop({ fast: true });
   return { holds: true, plays: !un, code: un ? un.code : null, reason: un ? un.reason : null,
     adapter: !!(t && t.param) };
@@ -304,11 +309,16 @@ test('R7 policy: the store still holds what it held, so saved files keep loading
   const lane = clipTarget(split.model.graph.nodes.find((n) => n.id === split.id),
     { kind: 'automation', param: 'panA' });
   assert.deepEqual([lane.holds, lane.plays, lane.code], [true, false, 'no-parameter']);
-  // The Inspector says why it offers no Automate on a parameter the registry calls automatable.
-  const lp = withNode('filter');
-  const q = inspector.inspectorView(lp.model, { nodes: [lp.id] }).fields.find((f) => f.key === 'Q');
+  // The Inspector says why it offers no Automate on a parameter the registry calls automatable:
+  // a shelf ignores Q. A low-pass Q is automated since K232 (laneMap: its lane plays in dB).
+  const sh = withNode('filter', { type: 'lowshelf' });
+  const q = inspector.inspectorView(sh.model, { nodes: [sh.id] }).fields.find((f) => f.key === 'Q');
   assert.equal(q.automatable, false);
-  assert.equal(q.automateReason, policyModule.CLIP_TARGET_TEXT.filterQ);
+  assert.equal(q.automateReason, policyModule.CLIP_TARGET_TEXT.filterQUnused);
+  const lp = withNode('filter');
+  const lq = inspector.inspectorView(lp.model, { nodes: [lp.id] }).fields
+    .find((f) => f.key === 'Q');
+  assert.deepEqual([lq.automatable, lq.automateReason], [true, null], 'a low-pass Q (K232)');
   const cutoff = inspector.inspectorView(lp.model, { nodes: [lp.id] }).fields
     .find((f) => f.key === 'frequency');
   assert.deepEqual([cutoff.automatable, cutoff.automateReason], [true, null]);
@@ -447,20 +457,26 @@ test('R7 lanes (B1): the offline render plan renders a lane exactly where the tr
     assert.deepEqual(wrong, []);
   });
 
-test('R7 lanes (B1): a band-pass Q lane after low-pass and a Stereo Split pan lane are not '
-  + 'rendered, with the reason', () => {
+test('R7 lanes (B1): a band-pass Q lane after a shelf and a Stereo Split pan lane are not '
+  + 'rendered, with the reason; after low-pass it is (K232)', () => {
   const text = policyModule.CLIP_TARGET_TEXT || {};
-  // Q lane added while the filter is band-pass (it plays), then the type changes to low-pass.
+  // Q lane added while the filter is band-pass (it plays), then the type changes to a shelf,
+  // which ignores Q (a low-pass Q lane plays in dB since K232, laneMap).
   const bp = withNode('filter', { type: 'bandpass' });
   const q = withLane(bp.model, bp.id, 'Q');
   assert.ok(q, 'a band-pass Q lane is held');
   const store = storeOf(q.model);
-  const r = store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id, params: { type: 'lowpass' } });
+  const lp = store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id, params: { type: 'lowpass' } });
+  assert.ok(lp.ok, lp.reason);
+  const lpRow = offline.planOfflineRender(store.getModel()).automation
+    .find((a) => a.id === q.laneId);
+  assert.deepEqual([lpRow.rendered, lpRow.reason], [true, null], 'after low-pass it renders');
+  const r = store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id, params: { type: 'lowshelf' } });
   assert.ok(r.ok, r.reason);
   const plan = offline.planOfflineRender(store.getModel());
   const row = plan.automation.find((a) => a.id === q.laneId);
-  assert.deepEqual([row.rendered, row.reason], [false, text.filterQ]);
-  assert.ok(plan.limitations.includes(`Automation ${q.laneId}: ${text.filterQ}`),
+  assert.deepEqual([row.rendered, row.reason], [false, text.filterQUnused]);
+  assert.ok(plan.limitations.includes(`Automation ${q.laneId}: ${text.filterQUnused}`),
     plan.limitations.join(' | '));
   const split = withNode('stereo-split');
   const pan = withLane(split.model, split.id, 'panA');
@@ -602,16 +618,17 @@ test('R7 Inspector (P2): a filter type change rebuilds the Inspector, so the Q n
     const before = inspector.inspectorView(store.getModel(), { nodes: [bp.id] });
     const qBefore = before.fields.find((f) => f.key === 'Q');
     assert.deepEqual([qBefore.automatable, qBefore.automateReason], [true, null]);
+    // A shelf ignores Q (a low-pass Q is automated since K232, laneMap).
     assert.ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id,
-      params: { type: 'lowpass' } }).ok);
+      params: { type: 'lowshelf' } }).ok);
     const after = inspector.inspectorView(store.getModel(), { nodes: [bp.id] });
     const qAfter = after.fields.find((f) => f.key === 'Q');
     assert.deepEqual([qAfter.automatable, qAfter.automateReason],
-      [false, policyModule.CLIP_TARGET_TEXT.filterQ], 'the note appears, Automate goes');
+      [false, policyModule.CLIP_TARGET_TEXT.filterQUnused], 'the note appears, Automate goes');
     // The view keeps its key (same node), so only the rebuild key can make the panel rebuild.
     assert.equal(after.key, before.key);
     assert.notEqual(inspector.inspectorRebuildKey(after), inspector.inspectorRebuildKey(before),
-      'band-pass -> low-pass changes the rebuild key');
+      'band-pass -> low-shelf changes the rebuild key');
     // The reverse direction too (the browser check covers low-pass -> band-pass).
     assert.ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id,
       params: { type: 'bandpass' } }).ok);

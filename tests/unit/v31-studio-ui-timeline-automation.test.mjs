@@ -148,10 +148,10 @@ test('automatable targets list each node with its automatable parameters and lan
   const t = automatableTargets(m);
   const filter = t.find((x) => x.id === 'filter-1');
   assert.ok(filter.params.find((p) => p.key === 'frequency').laned);
-  // R7 (clip-targets.js): a low-pass Q lane would never play (its AudioParam is in dB), so the
-  // form does not offer it; a band-pass Q lane plays and is offered.
+  // R7 (clip-targets.js): a low-pass Q lane plays since K232 (laneMap: its values reach the dB
+  // AudioParam), so the form offers it; a band-pass Q lane plays and is offered too.
   assert.equal(m.graph.nodes.find((n) => n.id === 'filter-1').params.type, 'lowpass');
-  assert.ok(!filter.params.some((p) => p.key === 'Q'));
+  assert.ok(filter.params.some((p) => p.key === 'Q' && !p.laned));
   const s = storeOf(m);
   assert.ok(s.dispatch({ type: 'NODE_PARAM_SET', nodeId: 'filter-1', key: 'type',
     value: 'bandpass' }).ok);
