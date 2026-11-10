@@ -54,6 +54,22 @@ export const SYNTH_PANEL = SEMI_MONO;
 export { SYNTH_TEXT, insertDecision };
 const DRAG_PX = 4;
 
+/** R2-T5-1: the room below the Synth's section nav it keeps sticking for: a 44 px row and a gap. */
+export const NAV_ROW_PX = 44 + 8;
+
+/**
+ * R2-T5-1, pure: whether the Synth's section nav sticks over its scroller (mainH tall, the
+ * docked keys covering dockH of it) and the token the scroller then keeps clear at its top
+ * (--osc-synth-nav-h, the app's <main> scroll-pt): the nav's height where a row of the face fits
+ * between it and the dock, else 0 and the nav scrolls with the face. No nav, or no scroller
+ * measured: 0.
+ */
+export function navRoomOf({ mainH, navH, dockH = 0 } = {}) {
+  if (!(navH > 0) || !Number.isFinite(mainH)) return { sticks: false, token: 0 };
+  const sticks = mainH - navH - (dockH > 0 ? dockH : 0) >= NAV_ROW_PX;
+  return { sticks, token: sticks ? navH : 0 };
+}
+
 export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   registry = NODE_REGISTRY } = {}) {
   const panel = SEMI_MONO;
@@ -346,6 +362,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<ul class="mt-1 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables" '
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
+    navRoom(el);
     renderBay();
     xy.mount();
     pads.mount();
@@ -553,6 +570,31 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     } else if ('insertPanel' in d) {
       ensurePanel({ explicit: true });
     }
+  }
+
+  /**
+   * R2-T5-1: the sticky section nav's height as --osc-synth-nav-h on the root, the one token the
+   * Synth's scroller keeps clear at its top (src/index.html: <main>'s scroll-pt, as its
+   * scroll-pb keeps the docked keys' --osc-dock-h), so a control scrolled into view (centred,
+   * focused, a section chip's plate) is never under the nav. The nav sticks only where that
+   * leaves a row of the face (NAV_ROW_PX) between it and the dock; on a phone shorter than that
+   * (an iPhone SE: 20 px between the nav and the Panel's docked keys) it scrolls with the face
+   * and the token is 0px, as where the nav is hidden (the panel face from xl).
+   */
+  function navRoom(el = host()) {
+    const root = document.documentElement;
+    const nav = el && el.querySelector(':scope > nav[aria-label]');
+    const navH = nav && nav.getClientRects().length
+      ? Math.ceil(nav.getBoundingClientRect().height) : 0;
+    const main = el && el.closest('main'); // the Synth's scroller
+    // the band the docked keys cover, read as midi/keyboard-ui.js measures --osc-dock-h
+    const keys = document.querySelector('[data-osc="keyboard"]');
+    const top = keys && getComputedStyle(keys).position === 'fixed'
+      ? keys.getBoundingClientRect().top : 0;
+    const room = navRoomOf({ mainH: main ? main.clientHeight : NaN, navH,
+      dockH: top > 0 ? Math.ceil(window.innerHeight - top) : 0 });
+    if (nav && navH) nav.classList.toggle('sticky', room.sticks);
+    if (root && root.style) root.style.setProperty('--osc-synth-nav-h', `${room.token}px`);
   }
 
   /**
@@ -783,7 +825,23 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         }
       });
       this.$watch('theme', () => { if (this.workspace === 'synth') renderAll(); });
-      window.addEventListener('resize', () => { if (this.workspace === 'synth') renderBay(); });
+      window.addEventListener('resize', () => {
+        if (this.workspace !== 'synth') return;
+        navRoom(); // the chips may wrap or the nav hide at another width
+        renderBay();
+      });
+      // The docked keys' band decides whether the nav keeps a row below it (R2-T5-1): judged
+      // again, at once, on what midi/keyboard-ui.js measures --osc-dock-h on: the dock's resize
+      // and its class (fixed over the page or not, folded or docked). At once, so the nav and
+      // the dock never disagree for a frame; the nav's class never resizes the dock observed.
+      // navRoom reads only the Synth's own nav (0px where it is not shown).
+      const keys = document.querySelector('[data-osc="keyboard"]');
+      const judge = () => navRoom();
+      if (keys && typeof ResizeObserver === 'function') new ResizeObserver(judge).observe(keys);
+      if (keys && typeof MutationObserver === 'function') {
+        new MutationObserver(judge).observe(keys, { attributes: true,
+          attributeFilter: ['class', 'data-dock-state'] });
+      }
       if (typeof this.navRegister === 'function') {
         this.navRegister('synth', (hash) => this.synthApplyLinkHash(hash));
       }
