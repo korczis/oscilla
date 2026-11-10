@@ -62,6 +62,14 @@ export default definePanel({
     { id: 'vca', label: 'VCA', node: 'gain', fixed: { bypass: false }, init: { gain: 0 },
       labels: { gain: 'Initial gain' },
       ranges: { gain: [0, 1] } },
+    // VELOCITY (K220, review R2-K220-1 of oscilla-c3): the note's velocity scales the voice after
+    // the VCA, so a key's velocity and pad R's Y (the touch's velocity) are heard. A gain whose
+    // base is 0 and whose level is the keys' velocity normal n28 alone: linear, depth 1.27, so
+    // velocity 100 (the keys' default) is gain 1.00 and today's level, 127 is +2.08 dB, 40 is
+    // -7.96 dB and 1 is -40 dB. `optional`: a document made before it plays through the VCA as
+    // it did, offered VELOCITY to add.
+    { id: 'vel', label: 'VELOCITY', node: 'gain', optional: true,
+      fixed: { gain: 0, bypass: false } },
     // K022's LFO depth and sync stay at full depth and free-running here: the panel's amount
     // knobs set each cable's depth, and the MG runs at its own rate.
     // Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3): the
@@ -93,7 +101,11 @@ export default definePanel({
     ['n11', 'mix.audio', 'hpf.audio'],
     ['n12', 'hpf.audio', 'lpf.audio'],
     ['n13', 'lpf.audio', 'vca.audio'],
-    ...enginesChain('vca.audio', 'out.audio'), // e1: VCA into the engines' chain, then Output
+    ['n27', 'vca.audio', 'vel.audio'],
+    // e1: VELOCITY into the engines' chain, then Output (the VCA's before K220: normals.js reads
+    // such an older e1 as the normal, panel.js replaces it when VELOCITY is added).
+    ...enginesChain('vel.audio', 'out.audio'),
+    ['n28', 'keys.velocity', 'vel.gain', { depth: 1.27, polarity: 'unipolar', mapping: 'linear' }],
     ['n24', 'eg2.control', 'vca.gain', { depth: 1, polarity: 'unipolar', mapping: 'linear' }],
     ['n15', 'mg.control', 'vco1.fm', { depth: 0 }],
     ['n16', 'mg.control', 'vco2.fm', { depth: 0 }],
@@ -127,5 +139,5 @@ export default definePanel({
       to: ['lpf.frequency'], range: [-4, 4] },
   ],
   layout: { desktop: [['vco1', 'vco2', 'ring', 'noise', 'mix', 'hpf', 'lpf'],
-    ['keys', 'eg1', 'eg2', 'vca', 'mg', 'sh', 'out'], ENGINE_MODULES.map((m) => m.id), ['xy']] },
+    ['keys', 'eg1', 'eg2', 'vca', 'vel', 'mg', 'sh', 'out'], ENGINE_MODULES.map((m) => m.id), ['xy']] },
 });

@@ -144,7 +144,7 @@ import { PARAM_TAU_S } from './adapters/nodes.js';
 import { createRamp } from './adapters/ramp.js';
 import { CLEANUP_MARGIN_S, ROUTE_FLOOR, STUDIO_XFADE_S } from './compiler.js';
 import {
-  applyAutomation, detuneCeiling, isExponentialLegal, paramBounds, scheduledValueAt,
+  applyAutomation, detuneCeiling, isExponentialLegal, mapEvents, paramBounds, scheduledValueAt,
 } from './automation.js';
 import {
   LANE_GLIDE_S, anchorEndTime, createTimelineScheduler, frameCeil, holdEvents, resolveEscape,
@@ -820,6 +820,9 @@ export function createStudioTransport({
     if (v.how === 'keys-gate') {
       // K060, K103: a gate on a Keys node is its Gate along its TRIGGER edges for the clip, as a
       // key held for the clip would be: each Envelope, clocked node and Step relay it reaches.
+      // It carries no velocity: the Keys' velocity output plays at rest for it (R2-K220-5).
+      const kh = ready(it.target);
+      if (kh && typeof kh.restVelocity === 'function') kh.restVelocity(it.startTime);
       triggers.fanOut(it, it.target, it.key, deferred);
       return null;
     }
@@ -982,7 +985,7 @@ export function createStudioTransport({
    * keep its frequency at 0.95 × Nyquist). `offset`: the one to fit with.
    */
   function fit(events, dest, offset = dest.offset) {
-    const evs = mappedEvents(events, dest);
+    const evs = mapEvents(events, dest.map);
     if (!offset && !dest.bounds) return evs;
     return evs.map((e) => {
       const total = e.value + offset;
@@ -996,18 +999,8 @@ export function createStudioTransport({
     });
   }
 
-  /**
-   * A lane's events in its AudioParam's own values (dest.map, clip-targets.js laneMap, K232): each
-   * value mapped, an exponential ramp a linear one (exponential in Q is linear in dB).
-   */
-  function mappedEvents(events, dest) {
-    if (!dest.map) return events;
-    return events.map((e) => ({ ...e, value: dest.map(e.value),
-      ...(e.method === 'exponentialRampToValueAtTime' ? { method: LINEAR } : {}) }));
-  }
-
   /** True when `dest`'s bounds clamp any of the lane's events (debugInfo limitedLanes). */
-  const clampsAny = (events, dest) => !!dest.bounds && mappedEvents(events, dest).some((e) => {
+  const clampsAny = (events, dest) => !!dest.bounds && mapEvents(events, dest.map).some((e) => {
     const total = e.value + dest.offset;
     return total > dest.bounds.max || total < dest.bounds.min;
   });

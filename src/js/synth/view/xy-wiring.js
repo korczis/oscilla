@@ -130,10 +130,14 @@ export const XY_OWNER = 'synth';
 export const XY_SOURCE = 'kbd-xy';
 /**
  * The velocity of the note a touch plays (K220, the coordinator oscilla-43's decision of
- * 2026-11-09): pad R's Y, 0 to 1, as MIDI velocity 1 to 127 (the filter axis moved to pad L).
+ * 2026-11-09): pad R's Y, 0 to 1, as MIDI velocity XY_VELOCITY_FLOOR to 127 (the filter axis
+ * moved to pad L). The floor keeps the pad's bottom edge and a keyboard Enter at the cursor's
+ * rest (Y 0) heard: 40 plays 8 dB under the keys' default 100 through VELOCITY, where velocity 1
+ * would be 40 dB under it; Y 5 % and 95 % still play 8.9 dB apart.
  */
-export const xyVelocity = (y) => Math.max(1, Math.min(127,
-  Math.round(1 + 126 * (Number.isFinite(y) ? y : 0))));
+export const XY_VELOCITY_FLOOR = 40;
+export const xyVelocity = (y) => Math.max(XY_VELOCITY_FLOOR, Math.min(127,
+  Math.round(XY_VELOCITY_FLOOR + (127 - XY_VELOCITY_FLOOR) * (Number.isFinite(y) ? y : 0))));
 // The workspace an owner's mount lives in: leaving it releases the pad.
 /** Y's name when it drives no cable: the touch's velocity (K220). */
 const VELOCITY_NAME = 'síla úhozu';
@@ -545,7 +549,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       disabled: null,
       x: { key: 'x', label: 'Note', type: 'integer', min: 0, max: steps - 1, step: 1,
         default: Math.floor(steps / 2) },
-      y: { key: 'y', label: `Y: ${to}`, type: 'number', min: 0, max: 1, default: 0 },
+      // The kind names the axis itself ("Y: …", review R2-K220-3): the label is its target.
+      y: { key: 'y', label: to, type: 'number', min: 0, max: 1, default: 0 },
       value: pos,
       text: { x: (i) => `${noteText(deg(i))}, degree ${deg(i).degree}`,
         y: (v) => {
@@ -640,6 +645,7 @@ export const PADS_TEXT = Object.freeze({
   missing: (label) => `Tento dokument Studia nemá ${label}.`,
   restore: (label) => `Přidat ${label}`,
   scale: (key, mode) => `Pad R hraje stupnici ${key} ${mode}.`,
+  choose: 'Zobrazený pad',
 });
 
 let padMounts = 0;
@@ -705,8 +711,8 @@ export function mountPadL(host, { store, transport = null, panel, app = null, ar
       + 'podržte Enter nebo se dotkněte a pad ladí; puštěním se X i Y vrátí do klidu.',
     describedBy: [`${uid}-line`],
     disabled: null,
-    x: { key: 'x', label: `X: ${nx}`, type: 'number', min: 0, max: 1, default: 0 },
-    y: { key: 'y', label: `Y: ${ny}`, type: 'number', min: 0, max: 1, default: 0 },
+    x: { key: 'x', label: nx, type: 'number', min: 0, max: 1, default: 0 },
+    y: { key: 'y', label: ny, type: 'number', min: 0, max: 1, default: 0 },
     value: { x: 0, y: 0 },
     text: { x: (v) => `${pct(v)} %: ${nx}`, y: (v) => `${pct(v)} %: ${ny}` },
     readout: { x: (v) => `X ${pct(v)} %`, y: (v) => `Y ${pct(v)} %` },

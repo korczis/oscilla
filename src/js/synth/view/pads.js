@@ -26,10 +26,15 @@ const H = 'text-sm font-bold tracking-widest text-gray-900 dark:text-white';
 const SELECT = 'h-11 rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 text-sm '
   + 'text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white';
 const LABEL = 'text-sm text-gray-700 dark:text-gray-300';
+const TOGGLE = 'h-11 min-w-11 px-4 text-sm font-medium text-gray-900 bg-white border border-solid '
+  + 'border-gray-200 hover:bg-gray-100 aria-pressed:bg-primary-600 aria-pressed:text-white '
+  + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:bg-gray-800 '
+  + 'dark:text-white dark:border-gray-600 dark:hover:bg-gray-700';
 
 export function createPads({ panel, get, host, nodes, dispatch, say, jackName, tab, cmp, arm }) {
   let left = null;
   let right = null;
+  let shown = 'l'; // the pad shown below lg (review R2-K220-2)
 
   const missing = (id) => {
     const label = panel.module(id).label;
@@ -57,13 +62,22 @@ export function createPads({ panel, get, host, nodes, dispatch, say, jackName, t
     return `<section class="${CARD}" data-osc="synth.pads" aria-labelledby="synth-pads-title">`
       + `<h3 id="synth-pads-title" class="${H}">${PADS_TEXT.title}</h3>`
       + `<p class="mt-1 ${LABEL}">${PADS_TEXT.intro}</p>`
+      // Below lg one pad at a time, chosen here (review R2-K220-2: on a phone the two never fit
+      // the screen together); from lg both, side by side.
+      + '<div class="mt-2 inline-flex rounded-lg shadow-sm lg:hidden" role="group" '
+      + `aria-label="${PADS_TEXT.choose}" data-osc="synth.pads.toggle">`
+      + ['l', 'r'].map((k, i) => `<button type="button" data-pad-show="${k}" `
+        + `aria-pressed="${k === shown}" class="${TOGGLE} ${i ? 'rounded-e-lg' : 'rounded-s-lg'}">`
+        + `PAD ${k.toUpperCase()}</button>`).join('') + '</div>'
       + '<div class="mt-2 grid grid-cols-1 gap-4 lg:grid-cols-2">'
-      + '<div data-osc="synth.pads.l"><h4 class="text-xs font-bold tracking-widest '
+      + `<div data-osc="synth.pads.l" class="${shown === 'l' ? '' : 'max-lg:hidden'}">`
+      + '<h4 class="text-xs font-bold tracking-widest '
       + `text-gray-900 dark:text-white">${esc(panel.module('xyl').label)}</h4>`
       + (l ? '<div class="mt-2" data-pad-body=""></div>' : missing('xyl')) + '</div>'
-      + '<div data-osc="synth.pads.r"><h4 class="text-xs font-bold tracking-widest '
-      + 'text-gray-900 dark:text-white">PAD R</h4>'
-      + (r ? `${scalePicker(r.params)}<div class="mt-2" data-pad-body=""></div>`
+      + `<div data-osc="synth.pads.r" class="${shown === 'r' ? '' : 'max-lg:hidden'}">`
+      + '<h4 class="text-xs font-bold tracking-widest text-gray-900 dark:text-white">PAD R</h4>'
+      // The scale row below the surface, so pad R's surface sits near pad L's (R2-K220-2).
+      + (r ? `<div class="mt-2" data-pad-body=""></div>${scalePicker(r.params)}`
         : missing('xy')) + '</div></div></section>';
   }
 
@@ -87,6 +101,17 @@ export function createPads({ panel, get, host, nodes, dispatch, say, jackName, t
     if (rb) {
       right = mountSynthXy(rb, { store, transport, panel, owner: 'synth', app, arm, say,
         jackName, dispatch, claim: false, sampleRate: () => get().sampleRate || null });
+    }
+    for (const b of root.querySelectorAll('[data-pad-show]')) {
+      b.addEventListener('click', () => {
+        shown = b.getAttribute('data-pad-show');
+        for (const x of root.querySelectorAll('[data-pad-show]')) {
+          x.setAttribute('aria-pressed', String(x === b));
+        }
+        const cols = { l: root.querySelector('[data-osc="synth.pads.l"]'),
+          r: root.querySelector('[data-osc="synth.pads.r"]') };
+        for (const k of ['l', 'r']) cols[k].classList.toggle('max-lg:hidden', k !== shown);
+      });
     }
     for (const s of root.querySelectorAll('[data-pad-param]')) {
       s.addEventListener('change', () => {

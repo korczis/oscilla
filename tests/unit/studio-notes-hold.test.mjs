@@ -99,7 +99,9 @@ test('K068 a Keys node the runtime rebuilds mid-note takes the sounding note\'s 
     rig.fx.advance(0.2);
     assert.equal(r9(setAt(pitch, rig.fx.ctx.currentTime).value), r9(oct(60)),
       'the rebuilt node holds note 60 until note 64');
-    const vel = setAt(fresh.outputs.velocity.offset, rig.fx.ctx.currentTime);
+    // The velocity glides in (review C1-K220-2 of K220): its last write is a target.
+    const vel = fresh.outputs.velocity.offset.events.filter((e) => (e.ramp === 'set'
+      || e.ramp === 'target') && e.t <= rig.fx.ctx.currentTime + 1e-9).at(-1);
     assert.ok(vel && vel.value > 0.5, 'and its velocity');
     const p = rig.transport.stop();
     rig.fx.advance(1);
@@ -118,7 +120,8 @@ test('K068 STOP inside a dense ratchet holds that note\'s pitch and velocity, ho
     const kh = rig.runtime.nodes.get(rig.keys);
     const pitch = kh.outputs.pitch.offset;
     const velocity = kh.outputs.velocity.offset;
-    const first = velocity.events.find((e) => e.ramp === 'set' && e.t >= rig.base - 1e-9
+    // Each velocity glides in (VELOCITY_TAU_S, review C1-K220-2 of K220): a target, not a step.
+    const first = velocity.events.find((e) => e.ramp === 'target' && e.t >= rig.base - 1e-9
       && e.value > 0);
     assert.ok(first, 'note 1 set its velocity');
     const v1 = first.value;

@@ -275,7 +275,8 @@ test('every hook of the pads is in their markup (the catalogue\'s synth.pads fam
     nodes: () => PANEL.resolve(st.getModel()), dispatch: (a) => st.dispatch(a), say() {},
     jackName: String, tab: () => 'panel', cmp: () => null, arm: () => true });
   const html = card.html();
-  for (const id of ['synth.pads', 'synth.pads.l', 'synth.pads.r', 'synth.pads.r.scale']) {
+  for (const id of ['synth.pads', 'synth.pads.toggle', 'synth.pads.l', 'synth.pads.r',
+    'synth.pads.r.scale']) {
     assert.ok(html.includes(`data-osc="${id}"`), id);
   }
   const host = fakeEl();

@@ -240,8 +240,9 @@ test('a touch presses the scale note as kbd-xy, a move into another cell is lega
   m.view.model.down(1, 0.5 / steps, 0.5); // the first cell
   // K220: Y is the touch's velocity (1-127), never the keys' 90.
   assert.equal(typeof xyVelocity, 'function', 'xy-wiring.js xyVelocity (K220)');
-  assert.deepEqual([xyVelocity(0), xyVelocity(0.5), xyVelocity(1)], [1, 64, 127]);
-  assert.deepEqual(r.noted, [['on', noteAt(0), 64, SOURCE]], 'Y 0.5 is velocity 64, kbd-xy');
+  // The floor (40) keeps the bottom edge and a keyboard Enter at Y 0 heard (review of K220).
+  assert.deepEqual([xyVelocity(0), xyVelocity(0.5), xyVelocity(1)], [40, 84, 127]);
+  assert.deepEqual(r.noted, [['on', noteAt(0), 84, SOURCE]], 'Y 0.5 is velocity 84, kbd-xy');
   assert.equal(r.real.playing, true);
   assert.ok(r.real.heldNotes().includes(noteAt(0)), 'the Keys node holds the note');
   m.view.model.move(1, 0.6 / steps, 0.7); // the same cell: Y only, no note change
@@ -930,7 +931,7 @@ test('the readout line sits above the pad; Y driving nothing reads no value', ()
   const n = r.mount();
   assert.equal(n.view.opts.readout.y(0.5), null);
   assert.equal(n.view.opts.readout.yEnds, null);
-  assert.equal(n.view.opts.text.y(0.5), '50 %: síla úhozu 64', 'Y is the velocity (K220)');
+  assert.equal(n.view.opts.text.y(0.5), '50 %: síla úhozu 84', 'Y is the velocity (K220)');
   n.destroy();
 });
 
