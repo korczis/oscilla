@@ -20,7 +20,7 @@
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
       "done": 31,
-      "required": 51,
+      "required": 52,
       "phase": "now"
     },
     {
@@ -69,7 +69,7 @@
       "id": "M079",
       "title": "Coherence fixes that wait on no open plan: live Studio edits and honest restores",
       "done": 1,
-      "required": 2,
+      "required": 3,
       "phase": "now"
     },
     {
@@ -118,7 +118,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 3,
-      "required": 36,
+      "required": 39,
       "phase": "now"
     },
     {
