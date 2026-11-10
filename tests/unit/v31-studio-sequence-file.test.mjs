@@ -457,7 +457,7 @@ test('C066: a sequence the Sequencer saves at a clamping tempo opens in Studio a
     const p = importSequenceDocument(probe);
     assert.equal(p.ok, true, JSON.stringify(p.errors));
     assert.equal(p.model.timeline.clips[0].musical.durationBeats, 3.333333);
-    assert.deepEqual(p.warnings, ['Blok 1: při 40 BPM zní jen 3,333333 z uložených 4 dob; '
+    assert.deepEqual(p.warnings, ['Blok 1: při 40 BPM zní jen 3,33 z uložených 4 dob; '
       + 'Studio převezme znějící délku.']);
   });
 

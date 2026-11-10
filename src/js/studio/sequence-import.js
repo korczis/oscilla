@@ -473,7 +473,8 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
     warnings: clampWarnings(canon) };
 }
 
-const czNumber = (n) => String(n).replace('.', ',');
+// For people: at most 2 decimals (C1-C066-4); the file and every comparison keep 6.
+const czNumber = (n) => String(round(n, 2)).replace('.', ',');
 
 /**
  * One warning (Czech, Q104) per tempo-locked block whose stored beats its type's bound clamps at
