@@ -4,7 +4,7 @@ version: 3
 kind: rule
 title: A release is published only on a tree a gate verdict binds, local or CI
 description: release:publish tags main's HEAD only when a gate verdict binds exactly its tree - the CI run of the release pull request (the CI receipt, ADR 0082) or the local release-gate receipt - so any change on main after the verdict makes the publish refuse.
-statement: release:publish refuses unless one of two gate verdicts binds the tree of main's HEAD. The CI receipt (scripts/release-ci-receipt.mjs) holds when HEAD is the merge commit of a pull request whose head H contains the merge's base and has HEAD's tree, the newest CI pull_request run on H, or (ADR 0083) the newest CI merge_group run on HEAD itself from the merge-queue ref gh-readonly-queue/main/pr-<N>- of that same pull request N, has completed with success on its latest attempt, every job the base's .github/workflows/ci.yml declares (read from the merge's first parent with git show, the gate main had when the release branched; a matrix job once per value) and every job HEAD's own copy adds beyond it is among that run's latest jobs on the run's head with success, and no job that neither copy declares is (the one exemption, on either event: the job with id flake-ledger whose if: is exactly ${{ always() && fromJSON(github.run_attempt) > 1 }} may be skipped on its own first attempt and must succeed from attempt 2), and the committed roadmap matches the plan (OSC_ROADMAP_CHECK=1). The local receipt (release:prepare --local-gate) holds when it binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/, all equal to the checkout's, and records browsers chromium,firefox,webkit, origins file,http and skips declared-only; release:prepare --local-gate refuses to start while OSC_BROWSERS or OSC_ORIGINS is set and runs the gate with OSC_STRICT_SKIPS=1. A fact that cannot be read is a refusal, never an empty answer.
+statement: release:publish refuses unless one of two gate verdicts binds the tree of main's HEAD. The CI receipt (scripts/release-ci-receipt.mjs) holds when HEAD is the merge commit of a pull request whose head H contains the merge's base and has HEAD's tree, the newest CI pull_request run on H, or (ADR 0083) the newest CI merge_group run on HEAD itself from the merge-queue ref gh-readonly-queue/main/pr-<N>- of that same pull request N, has completed with success on its latest attempt, every job the base's .github/workflows/ci.yml declares (read from the merge's first parent with git show, the gate main had when the release branched; a matrix job once per value), except one HEAD's own copy no longer declares and provably replaces (E060: each npm script it ran is run, for the same matrix value, by a job of HEAD's copy, by name or through the browser legs that run test:release's browser suites), and every job HEAD's own copy adds beyond it is among that run's latest jobs on the run's head with success, and no job that neither copy declares is (the one exemption, on either event: the job with id flake-ledger whose if: is exactly ${{ always() && fromJSON(github.run_attempt) > 1 }} may be skipped on its own first attempt and must succeed from attempt 2), and the committed roadmap matches the plan (OSC_ROADMAP_CHECK=1). The local receipt (release:prepare --local-gate) holds when it binds the version, the source digest, the sha256 of dist/index.html and gateTree, a digest of every tracked file except the release records .ai/repo/releases/v*.yaml and .ai/local/, all equal to the checkout's, and records browsers chromium,firefox,webkit, origins file,http and skips declared-only; release:prepare --local-gate refuses to start while OSC_BROWSERS or OSC_ORIGINS is set and runs the gate with OSC_STRICT_SKIPS=1. A fact that cannot be read is a refusal, never an empty answer.
 status: active
 class: blocking
 depends_on: [project.single-file-deliverable@2]
@@ -33,6 +33,22 @@ must succeed when the run carries it and is refused as missing when it does not;
 that neither copy declares refuses; and a run that lacks a base job is refused naming the job
 and B. An unreadable or broken base copy is a refusal, never an empty job set.
 
+
+Amended 2026-11-09 (E060, from the release of pull request 509): a release whose tree
+renames gate jobs could never carry its own receipt. Pull request 509 brought the CI legs
+(`leg-1`..`leg-2`, `npm run test:leg`) in place of the per-category browser jobs (V1 engine
+checks, DSP, labs, sequencer, V3 measurement and UI, V3.1 Studio UI, Browser gate, Control
+census), so its run carried the legs while the base's `ci.yml` still required the old names.
+A base job that the release tree's copy no longer declares is now accepted when that copy
+provably replaces it, decided from the two copies and the release tree's `package.json` alone
+(`replacedJob` in `scripts/release-ci-receipt.mjs`): the base job ran at least one npm script,
+and each of them is run, for the same matrix value, by a job of the release tree's copy, by its
+name or through a job running `test:leg`, whose browser suites are those of `test:release` but
+the visual gate (`tests/browser/lib/shards.cjs`), when every suite the script names is among
+them. The replacing jobs are themselves required with success, as every job of that copy is. A
+base job of programs only (the classifier, the doctor), a script run nowhere, a browser without
+its leg or a tree without its `package.json` replaces nothing, and its refusal still names the
+job and B, so a release tree still cannot drop a check and pass.
 
 # Version 2 (ADR 0082, owner decision 2026-11-02)
 

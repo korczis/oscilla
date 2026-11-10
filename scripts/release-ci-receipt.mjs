@@ -28,13 +28,21 @@
 //     package.json, so its run skips none). One exemption, on either event: the job with id
 //     flake-ledger whose `if:` is exactly RERUN_ONLY_IF (E010) may be `completed`/`skipped` on
 //     its own first attempt, and must succeed from attempt 2; each copy of ci.yml must declare
-//     exactly one such job and no two jobs may share a name;
+//     exactly one such job and no two jobs may share a name. E060: a base job the release
+//     tree's copy no longer declares is not required when that copy provably replaces it
+//     (replacedJob: each npm script it ran is run for the same matrix value, by name or through
+//     the browser legs that run test:release's browser suites); a job of programs only, or one
+//     whose scripts are not all run, still refuses;
 //   - the committed roadmap matches the plan (tests/unit/about-current.test.mjs with
 //     OSC_ROADMAP_CHECK=1, the one check the local gate ran that CI does not).
 // Each fact that cannot be read is a problem of its own, never an empty answer.
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { parseYaml } from './yaml-subset.mjs';
+
+// E060: the browser suites the CI legs run, by a package.json (the legs' own plan).
+const { releaseSuites } = createRequire(import.meta.url)('../tests/browser/lib/shards.cjs');
 
 export const CI_WORKFLOW = '.github/workflows/ci.yml';
 export const REPO_SLUG = 'korczis/oscilla';
@@ -52,7 +60,22 @@ export const RERUN_ONLY_IF = '${{ always() && fromJSON(github.run_attempt) > 1 }
 /** The id of the one job that may carry RERUN_ONLY_IF (E010's flake ledger). */
 export const RERUN_ONLY_JOB = 'flake-ledger';
 
-/** The job names a run of the workflow text shows, a matrix job once per value of its one key. */
+/** The npm scripts a job's steps run (`npm test` as 'test', `npm run x` as 'x'), in order. */
+function npmScripts(job) {
+  const out = [];
+  for (const st of job.steps || []) {
+    for (const m of String(st.run || '').matchAll(/\bnpm\s+(test\b|run\s+([\w:.-]+))/g)) {
+      const sc = m[2] || 'test';
+      if (!out.includes(sc)) out.push(sc);
+    }
+  }
+  return out;
+}
+
+/**
+ * The job names a run of the workflow text shows, a matrix job once per value of its one key,
+ * and each one's details (E060): [{ name, value (the matrix value, or null), scripts }].
+ */
 export function expectedJobs(ciText) {
   let doc;
   try {
@@ -61,13 +84,16 @@ export function expectedJobs(ciText) {
     return { name: null, jobs: [], problems: [`${CI_WORKFLOW} does not parse: ${e.message}`] };
   }
   const jobs = [];
+  const details = [];
   const rerunOnly = [];
   const problems = [];
   for (const [id, job] of Object.entries(doc?.jobs || {})) {
     const name = typeof job.name === 'string' ? job.name : id;
     const matrix = job.strategy?.matrix;
+    const scripts = npmScripts(job);
     if (!matrix) {
       jobs.push(name);
+      details.push({ name, value: null, scripts });
       if (job.if === RERUN_ONLY_IF) rerunOnly.push({ id, name });
       continue;
     }
@@ -79,7 +105,10 @@ export function expectedJobs(ciText) {
     }
     const key = keys[0];
     const slot = new RegExp(`\\$\\{\\{\\s*matrix\\.${key}\\s*\\}\\}`, 'g');
-    for (const v of matrix[key]) jobs.push(name.replace(slot, String(v)));
+    for (const v of matrix[key]) {
+      jobs.push(name.replace(slot, String(v)));
+      details.push({ name: jobs.at(-1), value: String(v), scripts });
+    }
   }
   if (!jobs.length) problems.push(`${CI_WORKFLOW} declares no jobs`);
   const seen = new Set();
@@ -93,7 +122,7 @@ export function expectedJobs(ciText) {
     problems.push(`${CI_WORKFLOW} must declare exactly one re-run-only job, id ${RERUN_ONLY_JOB} `
       + `(found: ${rerunOnly.map((j) => j.id).join(', ') || 'none'})`);
   }
-  return { name: typeof doc?.name === 'string' ? doc.name : null, jobs,
+  return { name: typeof doc?.name === 'string' ? doc.name : null, jobs, details,
     rerunOnly: rerunOnly.length === 1 && rerunOnly[0].id === RERUN_ONLY_JOB ? [rerunOnly[0].name] : [],
     problems };
 }
@@ -238,16 +267,46 @@ function runProblems(f, event, allRuns, allJobs) {
  * The jobs a run must carry and which copy of ci.yml declares each (R037): every job of the
  * base's copy, the gate main had when the release branched (`base`), and every job the release
  * tree's own copy adds beyond it (`head`); a run job in neither is undeclared. A base job the
- * release tree dropped is still required, and its refusal names the base. The re-run-only
- * exemption (E010) holds for the ledger either copy names.
+ * release tree dropped is still required, and its refusal names the base, unless the release
+ * tree's copy provably replaces it (E060, replacedJob). The re-run-only exemption (E010) holds
+ * for the ledger either copy names.
  */
 function declaredJobs(f) {
   const by = new Map();
   for (const name of f.workflow?.jobs || []) by.set(name, 'head');
-  for (const name of f.baseWorkflow?.jobs || []) by.set(name, 'base');
+  for (const name of f.baseWorkflow?.jobs || []) {
+    if (by.has(name) || !replacedJob(f, name)) by.set(name, 'base');
+  }
   const rerunOnly = new Set([...(f.workflow?.rerunOnly || []),
     ...(f.baseWorkflow?.rerunOnly || [])]);
   return { by, rerunOnly };
+}
+
+/**
+ * E060: whether base job `name`, which the release tree's ci.yml does not declare, is replaced
+ * by it: the base job ran at least one npm script and nothing it ran is lost. Each of its
+ * scripts is run, for the same matrix value (a job of no matrix serves every value), by a job
+ * of the release tree's copy, by name or through the browser legs: a job running `test:leg`
+ * runs every browser suite of test:release but the visual gate (tests/browser/lib/shards.cjs,
+ * by the release tree's package.json, f.pkg), so a script whose suites all lie among them is
+ * run there. A base job of programs only, or a fact not read (no package.json), is not replaced.
+ */
+export function replacedJob(f, name) {
+  const b = (f.baseWorkflow?.details || []).find((d) => d.name === name);
+  const head = f.workflow?.details || [];
+  if (!b || !b.scripts.length || !f.pkg || !f.pkg.scripts) return false;
+  const same = (d) => d.value === null || b.value === null || d.value === b.value;
+  let legged;
+  try {
+    legged = new Set(releaseSuites(f.pkg));
+  } catch {
+    return false;
+  }
+  const suitesOf = (sc) => (String(f.pkg.scripts[sc] || '').match(/tests\/browser\/[\w.-]+\.cjs/g)
+    || []).filter((x) => x !== 'tests/browser/lib/run-suites.cjs');
+  return b.scripts.every((sc) => head.some((d) => same(d) && (d.scripts.includes(sc)
+    || (d.scripts.includes('test:leg') && suitesOf(sc).length > 0
+      && suitesOf(sc).every((x) => legged.has(x))))));
 }
 
 /** The run judged, for the log line of a verified receipt: the pull request's, else the queue's. */
@@ -289,9 +348,14 @@ export function gatherCiReceipt({ sh, root, head }) {
   try {
     ciText = readFileSync(path.join(root, CI_WORKFLOW), 'utf8');
   } catch { /* judged as no jobs */ }
+  // E060: the release tree's package.json, whose test:release the CI legs run (replacedJob).
+  let pkg = null;
+  try {
+    pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+  } catch { /* no package.json: nothing is known to be replaced */ }
   const facts = { head, parents, headTree: tree(head), prTree: null, baseInPr: null,
-    workflow: expectedJobs(ciText), baseWorkflow: null, pulls: null, runs: null, jobs: null,
-    roadmap: false };
+    workflow: expectedJobs(ciText), baseWorkflow: null, pkg, pulls: null, runs: null,
+    jobs: null, roadmap: false };
   const [cmd, args] = ROADMAP_CHECK;
   facts.roadmap = sh(cmd, args, { env: { OSC_ROADMAP_CHECK: '1' } }).status === 0;
   if (!parents || parents.length !== 2) return facts;
