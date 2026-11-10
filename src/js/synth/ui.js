@@ -541,7 +541,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       collapsed = d.foldAll === 'closed' ? new Set(panel.modules.map((x) => x.id)) : new Set();
       renderAll();
     } else if (d.restoreModule) {
-      restoreModule(d.restoreModule);
+      restoreModule(d.restoreModule, !!t.closest('[data-osc="synth.pads"]'));
     } else if ('insertPanel' in d) {
       ensurePanel({ explicit: true });
     }
@@ -570,15 +570,18 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // panel.js restoreAction: the node, its normals, an older panel's edge replaced (K220).
   // Focus lands on what came back and the step is said (review R2-K220-4).
-  function restoreModule(mid) {
+  function restoreModule(mid, fromPads = false) {
     const a = panel.restoreAction(model(), mid,
       { values: presetValues(panel, presetOf('init'))[mid] });
     if (!dispatch(a).ok) return;
     say(`${a.label}: hotovo.`);
     queueMicrotask(() => { // after the re-render the store change queued
       const el = host();
-      const to = el && (el.querySelector(`[data-module="${mid}"] h3 button`)
-        || (mid === 'xyl' && el.querySelector('[data-osc="synth.pads.l.pad"] [data-xy-surface]')));
+      // From the PADY card: the pad that came back (review R2-K220-6); else its plate.
+      const pad = fromPads && el && el.querySelector(mid === 'xyl'
+        ? '[data-osc="synth.pads.l.pad"] [data-xy-surface]'
+        : '[data-osc="synth.pads.r"] [data-xy-surface]');
+      const to = pad || (el && el.querySelector(`[data-module="${mid}"] h3 button`));
       if (to) to.focus({ preventScroll: false });
     });
   }
