@@ -73,7 +73,8 @@ function frame(name, title, subtitle, desc, body, h = H) {
     + `<rect x="0.5" y="0.5" width="${W - 1}" height="${h - 1}" rx="12" fill="${T.ground}" `
     + `stroke="${T.border}"/>`
     + `<text x="24" y="38" fill="${T.text}" font-size="18" font-weight="600">${esc(title)}</text>`
-    + `<text x="24" y="60" fill="${T.muted}" font-size="12">${esc(subtitle)}</text>`
+    + `<text x="24" y="60" fill="${T.muted}" font-size="12" data-role="subtitle" `
+    + `xml:lang="en">${esc(subtitle)}</text>`
     + body + '</svg>\n';
 }
 
@@ -748,7 +749,7 @@ function auditPanel(a, top) {
     + `<text x="${PLOT.x0}" y="${top + 22}" fill="${T.text}" font-size="12" font-weight="600">`
     + `${esc(`Otevřené P0–P2 podle auditu z ${fmtDate(dayIso(latest.date ?? '1970-01-01'))}`)}`
     + `</text><text x="${PLOT.x1}" y="${top + 22}" fill="${T.muted}" font-size="11" `
-    + 'text-anchor="end">Open P0-P2 findings, by the latest review audit</text>';
+    + 'text-anchor="end" xml:lang="en">Open P0-P2 findings, by the latest review audit</text>';
   const by = top + 32;
   const bh = 16;
   const span = PLOT.x1 - PLOT.x0;

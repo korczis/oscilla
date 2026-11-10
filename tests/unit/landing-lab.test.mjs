@@ -58,7 +58,7 @@ import { esc, fmtInt } from '../../scripts/landing/charts.mjs';
 import { CHANGELOG_FULL_RELEASES, RATCHET_COPY } from '../../scripts/landing/copy.mjs';
 import { generateLanding, ruleFileOf } from '../../scripts/landing.mjs';
 import * as LANDING_PAGE from '../../scripts/landing/page.mjs';
-import { chartTable } from '../../scripts/landing/charts.mjs';
+import { chartTable, renderCharts } from '../../scripts/landing/charts.mjs';
 import { readFileSync } from 'node:fs';
 import { checkLabFile, expectedLab } from '../../scripts/verify-deploy.mjs';
 import { beginMarker, endMarker } from '../../scripts/readme.mjs';
@@ -711,7 +711,6 @@ test('with no audit the section says so and keeps P016\'s counts and chart', asy
   assert.doesNotMatch(svg, /podle auditu/);
   const p016 = clone(FACTS);
   delete p016.reviewAudits;
-  const { renderCharts } = await import('../../scripts/landing/charts.mjs');
   assert.equal(svg, renderCharts(p016).reviews, 'the chart is P016\'s, byte for byte');
 });
 
@@ -794,4 +793,36 @@ test('mutation guard: commit subjects, ADR titles, claims and verdict titles are
     'revize/index.html']) {
     assert.ok(!page(n).includes(nasty), `${n} prints no raw markup`);
   }
+});
+
+// P3-3 of review r517b: the charts' English lines (each subtitle, written for the README, and
+// any other English line) carry xml:lang="en" in the standalone SVG and in the page that inlines
+// it. The subtitle is found by its data-role, not by a count; any other text line that reads as
+// English (an English function word, no Czech letter) must carry it too.
+const ENGLISH_WORD = /\b(?:the|of|per|by|and|at|each|every|its|in|on)\b/i;
+const CZECH_LETTER = /[ěščřžýáíéůúťďňóĚŠČŘŽÝÁÍÉŮÚŤĎŇÓ]/;
+function englishWithoutLang(svg) {
+  return [...svg.matchAll(/<text([^>]*)>([^<]*)<\/text>/g)]
+    .filter(([, attrs, text]) => !/\sxml:lang="en"/.test(attrs) && ENGLISH_WORD.test(text)
+      && !CZECH_LETTER.test(text)).map(([, , text]) => text);
+}
+
+test('every English chart line carries xml:lang="en", in the SVG files and in the page', () => {
+  const audit = auditFacts();
+  const svgs = [...CHARTS.map((n) => [n, FILES.get(`charts/${n}.svg`).toString('utf8')]),
+    ['reviews with an audit', renderCharts(audit).reviews]];
+  for (const [name, svg] of svgs) {
+    const subs = [...svg.matchAll(/<text([^>]*)\sdata-role="subtitle"([^>]*)>/g)];
+    assert.equal(subs.length, 1, `${name}: one subtitle`);
+    assert.match(subs[0][0], /\sxml:lang="en"/, `${name}: its subtitle is marked English`);
+    assert.deepEqual(englishWithoutLang(svg), [], `${name}: no unmarked English line`);
+  }
+  const grafy = FILES.get('grafy/index.html').toString('utf8');
+  for (const name of CHARTS) {
+    assert.ok(grafy.includes(FILES.get(`charts/${name}.svg`).toString('utf8').trim()),
+      `${name}: the page inlines the marked SVG`);
+  }
+  // the checker finds an unmarked English line
+  assert.deepEqual(englishWithoutLang('<svg><text x="1">Open findings by the audit</text>'
+    + '<text x="2">Dluh migrace na Flowbite Pro</text></svg>'), ['Open findings by the audit']);
 });
