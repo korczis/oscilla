@@ -106,7 +106,8 @@ A train goes in this order:
    stamp touches no guarded path).
 6. Push, the CI legs, "legs OK", arm.
 
-T5 was stamped first, and two stale suites plus C1-K229-1 forced a rebuild and a re-stamp.
+T5 was stamped first; stale assertions in three suites (v31-studio-graph, demo-song, app) and
+C1-K229-1 forced a rebuild and a re-stamp.
 
 ## Checking one locally
 
