@@ -247,8 +247,11 @@
       "datetime": "2026-11-10T05:25:24+01:00"
     },
     {
+      "release": "3.32",
       "title": "Kalibrace jen v pásmu profilu",
-      "summary": "Měření frekvenční odezvy hlásí kalibraci jen tam, kde ji profil mikrofonu opravdu pokrývá: profil pro 12–16 kHz nad měřením 20 Hz–20 kHz ukáže „CALIBRATED jen 12–16 kHz“, profil zcela mimo měřené pásmo zůstane nekalibrovaný s poznámkou „mimo pásmo“ a jen profil přes celé pásmo opraví každý bod; vydání nově před každým krokem ověřuje čistý strom a nahrává stránku přesně z vydaného commitu, kadence počítá jen vydání, která mají GitHub Release a záznam, a každý pokus o stažení v CI má časový limit"
+      "summary": "Měření frekvenční odezvy hlásí kalibraci jen tam, kde ji profil mikrofonu opravdu pokrývá: profil pro 12–16 kHz nad měřením 20 Hz–20 kHz ukáže „CALIBRATED jen 12–16 kHz“, profil zcela mimo měřené pásmo zůstane nekalibrovaný s poznámkou „mimo pásmo“ a jen profil přes celé pásmo opraví každý bod; vydání nově před každým krokem ověřuje čistý strom a nahrává stránku přesně z vydaného commitu, kadence počítá jen vydání, která mají GitHub Release a záznam, a každý pokus o stažení v CI má časový limit",
+      "commit": "51b478f",
+      "datetime": "2026-11-10T22:09:18+01:00"
     }
   ]
 }
