@@ -84,6 +84,7 @@ function fakeRoot() {
  */
 function fakeAdapter() {
   const listeners = new Set();
+  const stateListeners = new Set();
   const analysers = [];
   const ctx = { state: 'running', sampleRate: 48000, resume: () => Promise.resolve() };
   let current = null; // { analyser, stream }, the engine's micAttachment
@@ -119,6 +120,16 @@ function fakeAdapter() {
       listeners.add(fn);
       return () => listeners.delete(fn);
     },
+    /** The engine's 'context' event (ctx.onstatechange), as main.js forwards it (C067). */
+    onContextState(fn) {
+      stateListeners.add(fn);
+      return () => stateListeners.delete(fn);
+    },
+    emitContext(state) {
+      ctx.state = state;
+      for (const fn of [...stateListeners]) fn(state);
+    },
+    get stateListenerCount() { return stateListeners.size; },
     /** The engine's own detach ('closed': _discardContext), outside any lab call. */
     engineDetach(reason) { return detach(reason); },
     /** A detach event for a graph the engine does not hold (another analyser, or none named). */
@@ -285,4 +296,48 @@ test('lab: its own stop is not reported as an engine detach; a restart works', a
   assert.equal(lab.analyser, adapter.analysers[3]);
   assert.equal(toggle.getAttribute('aria-pressed'), 'true');
   lab.dispose();
+});
+
+// C067 (289.yaml#F4, audit-2026-11-10-p3): a context the system suspends or interrupts (a phone
+// call, another app taking the audio device) delivers no input, so the analyser's buffer
+// freezes; before C067 the lab kept "Stop microphone" and read that frozen buffer as live,
+// because it stopped only on the engine's detach ('closed'). Now it pauses: the microphone
+// stays on, the readout says why (Czech, Q104) and no reading is kept, until the context runs.
+// Fails on 2aa5883a: the lab neither listens to the context state nor pauses.
+test('C067: a suspended or interrupted context pauses the live lab and says why', async () => {
+  for (const state of ['interrupted', 'suspended']) {
+    const { lab, adapter, toggle, detected } = await liveLab();
+    assert.equal(adapter.stateListenerCount, 1, 'the lab listens through adapter.onContextState');
+    adapter.emitContext(state);
+    assert.equal(lab.paused, true, `${state}: the lab is paused`);
+    assert.ok(typeof lab.pauseReason === 'string' && lab.pauseReason.length > 0, state);
+    assert.equal(detected.textContent, lab.pauseReason, `${state}: the readout says why`);
+    assert.match(lab.pauseReason, state === 'interrupted' ? /přerušen/ : /pozastaven/);
+    assert.equal(lab.estimate, null, `${state}: no reading of the frozen buffer`);
+    assert.equal(lab.comparison, null);
+    assert.equal(lab.active, true, 'the microphone stays on: the pause is the context\'s');
+    assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+    // The context runs again: the lab is live, the pause note gone.
+    adapter.emitContext('running');
+    assert.equal(lab.paused, false, `${state}: running resumes the lab`);
+    assert.notEqual(detected.textContent, lab.pauseReason);
+    assert.equal(lab.pauseReason, '');
+    lab.dispose();
+    assert.equal(adapter.stateListenerCount, 0, 'dispose() unsubscribes');
+  }
+});
+
+test('C067: a pause while the microphone is off, or a stop while paused, leaves no pause', async () => {
+  const { root } = fakeRoot();
+  const adapter = fakeAdapter();
+  const lab = mount(root, adapter);
+  adapter.emitContext('suspended');
+  assert.equal(lab.paused, false, 'nothing to pause while the microphone is off');
+  lab.dispose();
+  const live = await liveLab();
+  live.adapter.emitContext('interrupted');
+  live.lab.stop();
+  assert.equal(live.lab.paused, false, 'Stop clears the pause');
+  assert.equal(live.detected.textContent, MIC_OFF);
+  live.lab.dispose();
 });
