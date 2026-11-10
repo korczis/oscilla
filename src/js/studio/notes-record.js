@@ -182,9 +182,11 @@ function createRecorder(transport, store) {
   const commit = (reason) => {
     const pad = padOf(clipId);
     if (pad) close();
-    const n = pad ? points() : hits.length;
     const a = !clipId ? null : pad ? padTakeAction(store.getModel(), pad, segments)
       : takeAction(store.getModel(), clipId, hits);
+    // A pad take counts the lane points it writes; a notes take its hits.
+    const n = pad ? (a ? a.steps.filter((x) => x.type === 'AUTOMATION_POINT_ADD').length : 0)
+      : hits.length;
     hits = [];
     segments = [];
     const r = a ? store.dispatch(a) : null;
