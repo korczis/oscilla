@@ -191,6 +191,37 @@ test('K023 a trigger clip advances a Step Modulator, a Random and an Envelope at
     await stopped(rig);
   });
 
+test('K241 a document with a Clock and no clips plays until STOP and its Clock ticks',
+  async () => {
+    // Clock 1/4 at 120 BPM (0.5 s) -> Step Modulator -> the oscillator's frequency; no clip,
+    // no automation, loop off. Before K241 the timeline ended at 0: the first pass had no
+    // frames, the Clock's ticks an empty pass, and the transport ended the run at once.
+    const s = voice();
+    const clock = s.add('clock', { division: '1/4' });
+    const steps = s.add('step-modulator', { steps: [1, -1, 0.5] });
+    s.edge(clock, 'trigger', steps, 'clock');
+    s.edge(steps, 'control', s.osc, 'frequency', { depth: 0.1 });
+    assert.equal(s.st.getModel().timeline.clips.length, 0, 'no clips');
+    assert.equal(s.st.getModel().timeline.loop.enabled, false, 'loop off');
+    const rig = playing(s.st);
+    let ended = 0;
+    const off = rig.transport.on((type) => { if (type === 'ended') ended++; });
+    rig.fx.advance(2.2); // 2.2 s of audio time: past four ticks and a bar
+    const sr = rig.fx.ctx.sampleRate;
+    const at = (pos) => (Math.round(rig.base * sr) + Math.round(pos * sr)) / sr;
+    assert.equal(ended, 0, 'the run has not ended');
+    assert.equal(rig.transport.debugInfo().playing, true, 'still playing after 2.2 s');
+    const h = rig.runtime.nodes.get(steps);
+    const ticks = h.outputs.control.offset.events.filter((e) => e.t >= rig.base - 1e-9)
+      .map((e) => e.t);
+    for (const pos of [0, 0.5, 1, 1.5, 2]) {
+      assert.ok(ticks.some((t) => Math.abs(t - at(pos)) < 1e-6),
+        `a clock tick steps the Step Modulator at ${pos} s (${ticks.length} steps scheduled)`);
+    }
+    off();
+    await stopped(rig);
+  });
+
 test('K023 the Step Modulator\'s Trigger relays each step it takes; a once run stops relaying '
   + 'after its last step', async () => {
     const s = voice();

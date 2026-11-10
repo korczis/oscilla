@@ -63,7 +63,9 @@ import {
 } from './timeline.js';
 import { STUDIO_XFADE_S } from './compiler.js';
 import { clipTarget } from './clip-targets.js';
-import { clockTickHolds, clockTicks, firesTriggers, triggerEdges } from './clock.js';
+import {
+  clockTickHolds, clockTicks, firesTriggers, freeRunLoop, triggerEdges,
+} from './clock.js';
 import { noteItems } from './notes.js';
 
 // ---------------------------------------------------------------- constants
@@ -179,9 +181,10 @@ export function createAnchor(model, { baseTime = 0, startPosition = 0, sampleRat
   const sr = rateOf(sampleRate);
   const baseFrame = Math.ceil(baseTime * sr - 1e-6);
   const l = model.timeline.loop;
-  const loop = l.enabled && l.end - l.start >= MIN_LOOP_S && startPosition < l.end
-    ? { start: l.start, end: l.end } : null;
   const end = timelineEnd(model);
+  const loop = l.enabled && l.end - l.start >= MIN_LOOP_S && startPosition < l.end
+    ? { start: l.start, end: l.end } : freeRunLoop(model, startPosition, end,
+      CONTIGUITY_TOLERANCE_S);
   const firstEnd = loop ? loop.end : end;
   return {
     sampleRate: sr,

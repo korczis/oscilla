@@ -41,6 +41,28 @@ export function clockTicks(model, info, toAudio, { pass = 0, generation = 0, tol
   return out;
 }
 
+/**
+ * K241: a document with nothing left to play ahead of startPosition (no clip or automation
+ * point ends after it) but with a Clock plays until STOP and its Clock ticks. Without this the
+ * timeline ended at 0: the first pass had no frames, the ticks an empty pass, and the run ended
+ * at once. The run then repeats the bar it starts in, [k x bar, (k + 1) x bar) with bar = one
+ * 4/4 bar at the tempo: every Clock division (1/1 ... 1/32, TEMPO_DIVISIONS) divides a bar, so
+ * the ticks keep the grid m x T from position 0 across passes, exactly as an open timeline would.
+ * Marked freeRun, so a reader can tell it from a loop the user set. Null otherwise; the
+ * timeline compiler's createAnchor applies it when no loop of the user's is active.
+ */
+export function freeRunLoop(model, startPosition, end, tolerance = 1e-6) {
+  if (end > startPosition + tolerance) return null;
+  const tempo = model.transport && finite(model.transport.tempo) && model.transport.tempo > 0
+    ? model.transport.tempo : 120;
+  const clocked = model.graph.nodes.some((n) => n.type === 'clock'
+    && divisionSeconds(n.params.division, tempo) > 0);
+  if (!clocked) return null;
+  const bar = 240 / tempo;
+  const k = Math.floor((startPosition + tolerance) / bar);
+  return { start: k * bar, end: (k + 1) * bar, freeRun: true };
+}
+
 const nodeOf = (model, id) => model.graph.nodes.find((n) => n.id === id) || null;
 
 /** Whether `port` of node `id` is a TRIGGER output (by the registry; 'trigger' when unknown). */
