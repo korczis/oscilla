@@ -801,7 +801,8 @@ function integrationInit() {
   engine.enableCeilingTap();
   bridge.onCeiling = (acting) => {
     cmp.outputAtCeiling = acting;
-    if (acting && cmp.isSounding) cmp.announceText = cmp.ceilingText;
+    // Announced for whichever owner sounds (C069): the indicator's own source.
+    if (cmp.ceilingActing) cmp.announceText = cmp.ceilingText;
   };
 
   cmp.$nextTick(() => {

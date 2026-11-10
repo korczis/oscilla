@@ -218,6 +218,20 @@ export const OUTPUT_YIELDS = Object.freeze(Object.fromEntries(OUTPUT_OWNER_TABLE
  *      setMaster(level, { owner, at }), claimOutput(owner),
  *      stopPlayback(cmp, cause), outputBusy(cmp), sequencerPlaying(), stopSequence(cmp) }
  */
+/**
+ * The owner whose sound reaches the master chain now (C069), the one source of what the views
+ * say sounds: a running measurement (its row's probe; it never claims, it refuses every claim),
+ * else the owner the bus published (cmp.playback, C051: the instrument, the sequencer, the
+ * Studio, the notes, the audition), else null. A microphone level-reference capture keeps the
+ * output silent, so it is no sounding owner. The output-ceiling indicator reads it.
+ */
+export function soundingOwner(cmp) {
+  if (!cmp) return null;
+  const probe = ownerRow(OWNER.measurement).probe;
+  if (typeof cmp[probe] === 'function' && cmp[probe]()) return OWNER.measurement;
+  return (cmp.playback && cmp.playback.owner) || null;
+}
+
 export function createOutputBus({ app, sequencer, changed = () => {}, claimed = () => {},
   trace = null, engine = null }) {
   // Every bus event is a step of the one operation trace (C050, core/trace.js, ADR 0042),
