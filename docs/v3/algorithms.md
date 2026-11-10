@@ -1604,9 +1604,12 @@ point covered, and a profile covering no point leaves the column empty and says 
 calibration never turns a transfer column into "dB SPL" (with the offset added |H| would be the
 SPL a full-scale digital stimulus would produce, which the file does not claim); the old
 `calibratedDb`/`calibratedUnit` options throw a TypeError naming the replacement. Absolute
-level belongs to level outputs: `rtaCsv` adds level_db_corrected (option `correctedDb`, needs a
-frequency profile) and, only under a VALID LevelCalibration, level_db_spl = (corrected or
-relative band level) + offset, its unit line naming the base column and the offset; zero power
+level belongs to level outputs: `rtaCsv` adds level_db_corrected (options `correctedDb` and
+`covered` = `applyFrequencyCorrectionToBands()`'s two arrays, needs a frequency profile; a band's
+cell is written only where `correctionInEffect` counts it covered, and a profile covering no band
+leaves the column empty and says so, T038) and, only under a VALID LevelCalibration,
+level_db_spl = (corrected or relative band level) + offset, its unit line naming the base column
+and the offset, empty for a band that was not corrected when it follows the corrected levels; zero power
 (−300 dB) has an empty SPL field. `aggregateCsv` is described under [Aggregation](#aggregate).
 The specification's column list (§164, "magnitude_db_calibrated") predates this split; it is not
 edited here.

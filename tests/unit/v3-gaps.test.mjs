@@ -35,6 +35,7 @@ import { bandCenters, rtaResult } from '../../src/js/measurement/rta.js';
 import { createMeasurementEngine, assessMeasurement } from '../../src/js/measurement/engine.js';
 import { createLevelCalibration } from '../../src/js/calibration/level.js';
 import { createFrequencyProfile } from '../../src/js/calibration/profile.js';
+import { applyFrequencyCorrectionToBands } from '../../src/js/calibration/interpolate.js';
 import {
   createExperiment, createRecipe, experimentToJson, formatErrors, withResults,
 } from '../../src/js/experiments/schema.js';
@@ -409,7 +410,9 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
   // taken out of the offset; with only { id, name } it follows the uncorrected levels.
   const profileRef = { id: 'b'.repeat(64), name: 'mic' };
   const corrected = Float64Array.from(rta.levelsDb, (v) => v - 1);
-  const both = rtaCsv(rta, meta({ frequency: profileRef, level }), { correctedDb: corrected })
+  const all = new Uint8Array(bands.length).fill(1);
+  const both = rtaCsv(rta, meta({ frequency: profileRef, level }),
+    { correctedDb: corrected, covered: all })
     .split('\n');
   assert.ok(both.includes('band_nominal_hz,band_lo_hz,band_hi_hz,level_db_relative,'
     + 'level_db_corrected,level_db_spl'));
@@ -420,12 +423,14 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
   // a flat +1 dB deviation profile: corrected = relative − 1, SPL = corrected + (124.5 + 1)
   const profile = createFrequencyProfile({ name: 'mic', points: [[20, 1], [20000, 1]],
     convention: 'deviation' });
-  const full = rtaCsv(rta, meta({ frequency: profile, level }), { correctedDb: corrected })
+  const full = rtaCsv(rta, meta({ frequency: profile, level }),
+    { correctedDb: corrected, covered: all })
     .split('\n');
   assert.ok(full.some((l) => l.startsWith('# column level_db_spl: dB SPL (CALIBRATED: '
     + 'level_db_corrected + 125.5')));
   assert.ok(full.includes(`${b1.nominal},${b1.lo},${b1.hi},-39,-40,${-40 + 125.5}`));
-  assert.throws(() => rtaCsv(rta, meta({ frequency: null, level }), { correctedDb: corrected }),
+  assert.throws(() => rtaCsv(rta, meta({ frequency: null, level }),
+    { correctedDb: corrected, covered: all }),
     /no frequency calibration/);
   // Tampered level calibration: no SPL column, no "SPL" anywhere.
   const tampered = rtaCsv(rta, meta({ frequency: null, level: { ...level, offsetDb: 1 } }));
@@ -439,6 +444,52 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
   assert.ok(columns.every((l) => !/SPL/.test(l)), columns.join('\n'));
   assert.ok(columns.includes('frequency_hz,magnitude_db_relative,magnitude_db_corrected,snr_db,'
     + 'reliable,phase_deg'));
+});
+
+// T038 (304.yaml#R6, oscilla-43: rtaCsv too): the band CSV fills level_db_corrected only for the
+// bands the profile covers (calibration/interpolate.js correctionInEffect, the response view's
+// and the transfer CSV's predicate), a profile covering no band claims none, and an SPL computed
+// from corrected levels is left empty where the band was not corrected. Fail-first: on the base
+// every uncovered band's raw level is written as "frequency-profile corrected".
+test('T038: the RTA CSV corrects only the bands the profile covers', () => {
+  const bands = bandCenters('octave', 125, 8000, 48000);
+  const rta = rtaResult({ sampleRate: 48000, resolution: 'octave', bands,
+    levelsDb: Float64Array.from(bands, (_, i) => -40 + i) });
+  const level = createLevelCalibration({ referenceHz: 1000, referenceDbSpl: 94,
+    observedDbRelative: -30.5, createdAt: '2026-10-02T09:00:00.000Z' });
+  const meta = (frequency) => ({ oscillaVersion: '9.8.7', experimentId: 'x', sampleRate: 48000,
+    calibration: { frequency, level } });
+  const rowsOf = (csv) => {
+    const lines = csv.split('\n');
+    const head = lines.findIndex((l) => l.startsWith('band_nominal_hz,'));
+    return { lines, rows: lines.slice(head + 1, -1).map((r) => r.split(',')) };
+  };
+  // A profile covering 12-16 kHz: no octave band up to 8 kHz is corrected.
+  const high = createFrequencyProfile({ name: 'Covers 12-16 kHz only',
+    points: [[12000, 1], [16000, 2]], convention: 'deviation' });
+  const h = applyFrequencyCorrectionToBands(rta, high);
+  assert.equal(h.covered.reduce((a, b) => a + b, 0), 0);
+  const none = rowsOf(rtaCsv(rta, meta(high), { correctedDb: h.correctedDb, covered: h.covered }));
+  assert.deepEqual(none.rows.map((r) => r[4]), bands.map(() => ''), 'no corrected cell');
+  assert.equal(none.lines.some((l) => /frequency-profile corrected|korigováno/.test(l)), false);
+  assert.ok(none.lines.includes(`# column level_db_corrected: prázdné (frekvenční profil "Covers `
+    + `12-16 kHz only" nepokrývá žádné z ${bands.length} pásem)`), none.lines.join('\n'));
+  // A profile covering 400 Hz-3 kHz: corrected cells exactly where its band coverage says so.
+  const mid = createFrequencyProfile({ name: 'mid', points: [[400, 1], [3000, 1]],
+    convention: 'deviation' });
+  const m = applyFrequencyCorrectionToBands(rta, mid);
+  const n = m.covered.reduce((a, b) => a + b, 0);
+  assert.ok(n > 0 && n < bands.length, `a partial cover (${n} of ${bands.length})`);
+  const part = rowsOf(rtaCsv(rta, meta(mid), { correctedDb: m.correctedDb, covered: m.covered }));
+  assert.deepEqual(part.rows.map((r) => r[4] !== ''), Array.from(m.covered, Boolean));
+  part.rows.forEach((r, i) => {
+    if (m.covered[i]) assert.equal(Number(r[4]), m.correctedDb[i], `band ${i}`);
+    assert.equal(r[5] !== '', !!m.covered[i], `band ${i}: SPL only from a corrected level`);
+  });
+  assert.ok(part.lines.some((l) => l.startsWith('# column level_db_corrected: ')
+    && l.includes(`v ${n} z ${bands.length} pásem`)), part.lines.join('\n'));
+  // Corrected levels without their coverage are refused.
+  assert.throws(() => rtaCsv(rta, meta(mid), { correctedDb: m.correctedDb }), /potřebuje covered/);
 });
 
 // ----------------------------------------------------------------------------- G17
