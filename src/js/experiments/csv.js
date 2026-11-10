@@ -8,9 +8,13 @@
 // must say how it was derived and is labelled as not raw.
 //
 //   csvMeta(experiment) -> meta
-//   transferCsv(result, meta, { view, derivation, correctedDb, reliable, run })
+//   transferCsv(result, meta, { view, derivation, correctedDb, covered, reliable, run })
 //     columns frequency_hz, magnitude_db_relative, magnitude_db_corrected, snr_db, reliable,
 //     phase_deg (empty, with the reason in its column line, when the transfer has no phase)
+//     `correctedDb` comes with `covered` (applyFrequencyCorrection's two arrays): a corrected
+//     cell is written only where the profile covers the point, by correctionInEffect, the
+//     response view's predicate, and a profile covering no point leaves the column empty and
+//     says so (T038, project.no-fake-science).
 //     `reliable` is the quality assessment's mask (quality.mask.reliable) when the caller passes
 //     it — reliableFromQuality() takes it from an experiment only when the mask lies on the
 //     transfer's grid — else membership of the valid range, and the column line says which.
@@ -44,6 +48,7 @@
 // "SPL".
 
 import { UNKNOWN, describeCalibration } from './schema.js';
+import { correctionInEffect } from '../calibration/interpolate.js';
 import { ZERO_POWER_DB, PHASE_REASONS } from '../measurement/transfer.js';
 import {
   RELATIVE_SCALE_LABEL, RELATIVE_UNIT, SPL_UNIT, isValidLevelCalibration, levelOffsetWithProfile,
@@ -148,6 +153,21 @@ function checkLength(arr, n, what) {
 }
 
 /**
+ * The magnitude_db_corrected column line: what the cells hold, so a reader never takes an empty
+ * or raw cell for a corrected one (T038). `effect` is correctionInEffect's answer, `given`
+ * whether corrected values were passed at all.
+ */
+function correctedColumn(effect, given, cal, n) {
+  if (effect) {
+    return `${TRANSFER_RATIO_UNIT}, korigováno frekvenčním profilem (odchylka mikrofonu odečtena) `
+      + `v ${effect.count} z ${n} bodů, které profil pokrývá; jinde prázdné (bez extrapolace)`;
+  }
+  if (!given) return 'empty (no frequency calibration applied)';
+  const name = cal.frequency && cal.frequency.name ? ` "${cal.frequency.name}"` : '';
+  return `prázdné (frekvenční profil${name} nepokrývá žádný z ${n} měřených bodů)`;
+}
+
+/**
  * Frequency response CSV from a TransferResult. `correctedDb` is the frequency-profile
  * corrected magnitude (applyFrequencyCorrection().correctedDb); it needs a frequency profile in
  * the metadata and stays a ratio in dB, whatever the level calibration (G19).
@@ -160,13 +180,22 @@ export function transferCsv(result, meta, opts = {}) {
     throw new TypeError('transferCsv: calibratedDb/calibratedUnit were replaced by correctedDb '
       + '(a transfer magnitude is a ratio, never dB SPL)');
   }
-  const corrected = opts.correctedDb ?? null;
-  if (corrected && !hasFrequencyCal(cal)) {
+  const given = opts.correctedDb ?? null;
+  if (given && !hasFrequencyCal(cal)) {
     throw new RangeError('corrected values given but the metadata names no frequency calibration');
   }
   checkLength(r.magnitudeDb, n, 'magnitudeDb');
   checkLength(r.snrDb, n, 'snrDb');
-  checkLength(corrected, n, 'correctedDb');
+  checkLength(given, n, 'correctedDb');
+  if (given && !opts.covered) {
+    throw new TypeError('transferCsv: correctedDb potřebuje covered, pokrytí každého bodu '
+      + 'profilem (applyFrequencyCorrection().covered); nepokrytý bod se nekoriguje (T038)');
+  }
+  checkLength(given && opts.covered, n, 'covered');
+  // The correction as the response view counts it (T038): covered points only, none if none.
+  const effect = given ? correctionInEffect({ correctedDb: given, covered: opts.covered }, n)
+    : null;
+  const corrected = effect ? effect.correctedDb : null;
   checkLength(opts.reliable, n, 'reliable');
   checkLength(r.phaseDeg, n, 'phaseDeg');
   const [vLo, vHi] = r.validRange || [NaN, NaN];
@@ -188,9 +217,7 @@ export function transferCsv(result, meta, opts = {}) {
     opts, [
       ['frequency_hz', 'Hz'],
       ['magnitude_db_relative', `${TRANSFER_RATIO_UNIT}, uncorrected${centre}`],
-      ['magnitude_db_corrected', corrected
-        ? `${TRANSFER_RATIO_UNIT}, frequency-profile corrected (microphone deviation removed)`
-        : 'empty (no frequency calibration applied)'],
+      ['magnitude_db_corrected', correctedColumn(effect, given, cal, n)],
       ['snr_db', r.snrDb ? `dB, ESTIMATED signal-to-noise ratio${derived
         ? ', lowest of the runs' : ''}` : 'empty (not estimated)'],
       ['reliable', opts.reliable ? '1 = reliable, 0 = not (quality assessment mask)'
@@ -211,7 +238,8 @@ export function transferCsv(result, meta, opts = {}) {
   for (let i = 0; i < n; i++) {
     const f = r.frequencies[i];
     const rel = opts.reliable ? (opts.reliable[i] ? 1 : 0) : (f >= vLo && f <= vHi ? 1 : 0);
-    lines.push([num(f), num(r.magnitudeDb[i]), corrected ? num(corrected[i]) : '',
+    lines.push([num(f), num(r.magnitudeDb[i]), corrected && effect.covered[i] ? num(corrected[i])
+      : '',
       r.snrDb ? num(r.snrDb[i]) : '', rel, r.phaseDeg ? num(r.phaseDeg[i]) : ''].join(','));
   }
   return `${lines.join('\n')}\n`;

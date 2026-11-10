@@ -446,7 +446,7 @@ test('pipeline calibrated: profile applied to transfer and bands; SPL only when 
     quality: calibrated, id: 2 });
   roundTrip(calE);
   const calText = texts(calE, calibrated, rtaE, {
-    csv: { correctedDb: corrected.correctedDb },
+    csv: { correctedDb: corrected.correctedDb, covered: corrected.covered },
     level: formatMod.formatDb(levelMod.toDisplayLevel(rta.levelsDb[10], LEVEL).value,
       { kind: levelMod.levelLabel(LEVEL).calibrated ? 'spl' : 'relative' }),
   });

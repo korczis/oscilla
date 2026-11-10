@@ -1593,9 +1593,14 @@ bits set); the module uses no randomness or clock of its own.
 
 A transfer magnitude is a ratio (capture / stimulus), never a level. `transferCsv` columns are
 frequency_hz, magnitude_db_relative ("dB re unity digital transfer (capture/stimulus ratio),
-uncorrected"), **magnitude_db_corrected** (option `correctedDb` =
-`applyFrequencyCorrection().correctedDb`, "…, frequency-profile corrected (microphone deviation
-removed)"; requires a frequency profile in the metadata), snr_db, reliable. A level
+uncorrected"), **magnitude_db_corrected** (options `correctedDb` and `covered` =
+`applyFrequencyCorrection()`'s two arrays, "…, korigováno frekvenčním profilem (odchylka
+mikrofonu odečtena) v N z M bodů, které profil pokrývá; jinde prázdné (bez extrapolace)", Czech
+since T038 (Q104);
+requires a frequency profile in the metadata; a cell is written only where
+`correctionInEffect` (calibration/interpolate.js), the response view's predicate, counts the
+point covered, and a profile covering no point leaves the column empty and says so, T038;
+`correctedDb` without `covered` is refused), snr_db, reliable. A level
 calibration never turns a transfer column into "dB SPL" (with the offset added |H| would be the
 SPL a full-scale digital stimulus would produce, which the file does not claim); the old
 `calibratedDb`/`calibratedUnit` options throw a TypeError naming the replacement. Absolute

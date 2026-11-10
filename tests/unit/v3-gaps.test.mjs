@@ -432,7 +432,8 @@ test('G19: absolute level only in level/RTA outputs under a valid level calibrat
   assert.doesNotMatch(tampered, /SPL/);
   // The transfer CSV never says SPL, with or without a level calibration.
   const t = transferCsv(CLEAN_T[0], meta({ frequency: profileRef, level }),
-    { correctedDb: CLEAN_T[0].magnitudeDb });
+    { correctedDb: CLEAN_T[0].magnitudeDb,
+      covered: new Uint8Array(CLEAN_T[0].magnitudeDb.length).fill(1) });
   const columns = t.split('\n')
     .filter((l) => l.startsWith('# column ') || /^frequency_hz,/.test(l));
   assert.ok(columns.every((l) => !/SPL/.test(l)), columns.join('\n'));
