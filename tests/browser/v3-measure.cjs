@@ -40,6 +40,11 @@
 //     raises no OTHER_AUDIO; with the instrument, the sequencer and the Studio transport each
 //     sounding (analyser peak above the floor) it ends READY with OTHER_AUDIO and leaves that
 //     source playing (the check stops nothing), then the source stops and the output is free
+//   - measure-freq-coverage (T036, 304 R1): with a profile covering 12-16 kHz only and a
+//     100 Hz-10 kHz sweep the header's Frequency indicator reads UNCALIBRATED (mimo pásmo)
+//     before the run and over the completed result (title: 0 of the grid's points corrected),
+//     never CALIBRATED; a 20 Hz-20 kHz profile over the same result reads CALIBRATED with the
+//     grid's span and every point corrected
 // The microphone app leg (once per browser, dist/index.html from file:// with the engine's fake
 // microphone: Chromium's fake device, Firefox's fake stream, WebKit's mock device; also under
 // --app-only):
@@ -69,6 +74,7 @@ const zlib = require('node:zlib');
 const esbuild = require('esbuild');
 const suite = require('./lib/suite.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
+const seam = require('./lib/measure-seam.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -846,6 +852,51 @@ const APP_SOURCES = [
   ['studio', () => window.OSCILLA.app.studioPlay(), () => window.OSCILLA.app.studioOwnsOutput()],
 ];
 
+// The header's Frequency indicator, as rendered (T036).
+const FREQ_HEAD = () => {
+  const el = document.querySelector('[data-osc="measure.freqIndicator"]');
+  return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(),
+    on: el.classList.contains('is-on'), title: el.getAttribute('title') || '' } : null;
+};
+const NOT_COVERED = /^Frequency UNCALIBRATED \(mimo pásmo\)$/;
+
+/** measure-freq-coverage (T036): the header never says CALIBRATED without coverage. */
+async function freqCoverage(page, key) {
+  const name = 'measure-freq-coverage';
+  try {
+    const says = (re, what) => until(() => page.evaluate(FREQ_HEAD)
+      .then((h) => (h && re.test(h.text) ? h : null)), { ms: 5000,
+      what: `${key} ${name}: the Frequency indicator reads ${what}` });
+    const load = (text, file) => page.evaluate(([t, n]) => window.OSCILLA.app
+      .measureImportCalibrationText(t, n), [text, file]);
+    await seam.loopback(page, { values: { f1: 100, f2: 10000, duration: 1, repeats: 1 } });
+    const high = await load('Hz,dB\n12000,1\n16000,2\n', 't036-high.csv');
+    const before = await says(NOT_COVERED, 'UNCALIBRATED before the run');
+    await page.evaluate(() => { window.OSCILLA.app.measureStart(); });
+    const end = await until(() => page.evaluate(() => window.OSCILLA.measure.state)
+      .then((s) => (['COMPLETE', 'INVALID', 'ERROR', 'ABORTED'].includes(s) ? s : null)),
+    { ms: 60000, what: `${key} ${name}: the loopback measurement ends` });
+    const none = await says(NOT_COVERED, 'UNCALIBRATED over the result');
+    const wide = await load('Hz,dB\n20,0\n1000,0.5\n20000,1\n', 't036-wide.csv');
+    const full = await says(/^Frequency CALIBRATED \d[^–]*Hz–[^–]*Hz$/,
+      'CALIBRATED over the grid');
+    const all = /korigováno (\d+) z \1 bodů/.test(full.title);
+    check(key, `${name}: a profile covering none of the measured points reads UNCALIBRATED before `
+      + 'and after the run; one covering the whole grid reads CALIBRATED with its span',
+    high === true && wide === true && end === 'COMPLETE' && !before.on && !none.on
+      && /korigováno 0 z \d+ bodů/.test(none.title) && full.on && all,
+    JSON.stringify({ high, wide, end, before, none, full }));
+  } catch (e) {
+    check(key, name, false, e.stack || e.message);
+  } finally {
+    await page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      a.measureClearCalibration();
+      if (window.OSCILLA.measure.engine) window.OSCILLA.measure.engine.reset();
+    }).catch(() => {});
+  }
+}
+
 async function runApp(browserName) {
   const key = `${browserName}/app`;
   const browser = await playwright[browserName].launch(LAUNCH[browserName]);
@@ -932,6 +983,7 @@ async function runApp(browserName) {
       `peak before ${f(before, 3)}, ${JSON.stringify(r)}, still playing ${still}`);
       await stopAll(`after ${id}`);
     }
+    await freqCoverage(page, key);
     check(key, 'no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
   } catch (e) {
     check(key, 'preflight-other-audio', false, e.stack || e.message);
