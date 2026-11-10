@@ -296,6 +296,38 @@ test('tempo-locked durations: beats lock, ms unlock, setTempo rescales only lock
   assert.equal(chirp.blocks[0].beats, 10);
 });
 
+// C066 (266.yaml#R-3, audit-2026-11-10-p3): a tempo change keeps each tempo-locked block's
+// stored beats and clamps only the duration it derives, so a tempo excursion to a type's bound
+// is undone by the tempo coming back. Fail-first: on the base setTempo and normalizeBlock
+// re-derive beats from the clamped duration (8 beats -> 5 at 60 BPM -> 2500 ms at 120).
+test('C066: a tempo excursion past a type bound keeps the block\'s beats', async () => {
+  const model = await import('../../src/js/sequencer/model.js');
+  const m = createSequence({ tempoBpm: 120, blocks: [{ type: 'chirp', beats: 8 }] });
+  assert.equal(m.blocks[0].durationMs, 4000);
+  const slow = setTempo(m, 60);
+  assert.equal(slow.blocks[0].durationMs, BLOCK_SCHEMA.chirp.durationMs.max, 'clamped');
+  assert.equal(slow.blocks[0].beats, 8, 'the stored beats survive the clamp');
+  const back = setTempo(slow, 120);
+  assert.equal(back.blocks[0].beats, 8);
+  assert.equal(back.blocks[0].durationMs, 4000, 'the round trip restores the length');
+  // A params edit made at the slow tempo renormalises the block; the beats still survive.
+  const edited = updateBlock(slow, 'b1', { params: { start: 300 } });
+  assert.equal(edited.blocks[0].beats, 8);
+  assert.equal(setTempo(edited, 120).blocks[0].durationMs, 4000);
+  // A save at the slow tempo loads with the same beats.
+  const { model: loaded } = parseSequence(JSON.stringify(serializeSequence(slow)));
+  assert.equal(loaded.blocks[0].beats, 8);
+  assert.equal(loaded.blocks[0].durationMs, BLOCK_SCHEMA.chirp.durationMs.max);
+  // What sounds is the clamped length: soundingBeats says so, for the consumers of beats.
+  assert.equal(typeof model.soundingBeats, 'function', 'soundingBeats is exported');
+  assert.equal(model.soundingBeats(slow.blocks[0], 60), 5);
+  assert.equal(model.soundingBeats(back.blocks[0], 120), 8);
+  assert.equal(model.soundingBeats({ ...back.blocks[0], beats: null }, 120), null);
+  // Beats typed into a block are still limited to what fits at the current tempo.
+  const typed = updateBlock(m, 'b1', { beats: 100 });
+  assert.equal(typed.blocks[0].beats, 10);
+});
+
 test('selection helpers', () => {
   const m = referenceSequence({ sampleRate: SR });
   assert.equal(selectBlock(m, 'b2'), 'b2');

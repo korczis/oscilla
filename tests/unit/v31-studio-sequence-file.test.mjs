@@ -399,6 +399,9 @@ test('a tempo-locked durationMs outside the rounding of its beats is still refus
     // Beats past a bound by more than their rounding are clamped, which changes them.
     [at(20, 5000, 1.666668, 'chirp'),
       'Block 1: beats is 1.666668 in the file but would open as 1.666667'],
+    // The Sequencer keeps beats its bound clamps (C066): an 8-beat chirp saved at 60 BPM
+    // sounds 5 beats, and a Studio clip carries what sounds, so Studio still refuses it.
+    [at(60, 5000, 8, 'chirp'), 'Block 1: beats is 8 in the file but would open as 5'],
   ];
   for (const [text, message] of cases) {
     assert.ok(text.includes('"beats": '), 'the fixture is tempo-locked');

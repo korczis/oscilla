@@ -41,7 +41,7 @@ import { ID_PATTERN } from '../experiments/schema.js';
 import {
   BLOCK_SCHEMA, DEFAULT_SEED, MAX_BLOCKS, MAX_BLOCK_MS, MIN_BLOCK_MS, PROVISIONAL_SAMPLE_RATE,
   SEQUENCE_VERSION, clamp, formatCompactFrequency, formatMs, isNum, nextBlockId, normalizeModel,
-  paramSchema, parseSequence, round, safeMaximum, serializeSequence,
+  paramSchema, parseSequence, round, safeMaximum, serializeSequence, soundingBeats,
 } from '../sequencer/model.js';
 import { createStudioModel } from './schema.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
@@ -84,7 +84,9 @@ export function sequenceToTimeline(input, { trackId = IMPORT_IDS.track, startAt 
       payload: { blockType: b.type, params: { ...b.params } },
     };
     if (b.beats !== null) {
-      clip.musical = { startBeats: start * seq.tempoBpm / 60, durationBeats: b.beats };
+      // The beats that sound: a clip has no type bound to clamp its stored beats (C066).
+      clip.musical = { startBeats: start * seq.tempoBpm / 60,
+        durationBeats: soundingBeats(b, seq.tempoBpm) };
     }
     clips.push(clip);
   });
@@ -439,7 +441,10 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
     return refuse(at('blocks'), `The sequencer could not read the sequence (${
       String((e && e.message) || e).slice(0, 80)})`);
   }
+  // A Studio clip carries the beats that sound, so a block whose stored beats its type's bound
+  // clamps (the Sequencer keeps them since C066) would open shorter: refused as before.
   const canon = serializeSequence(parsed);
+  canon.blocks = canon.blocks.map((c) => ({ ...c, beats: soundingBeats(c, canon.tempoBpm) }));
   const diff = firstDifference(seq, canon, rate);
   if (diff) return refuse(at(diff.path), diff.message);
   // Every repair changes a value, so none is left here; this only guards that invariant. The
