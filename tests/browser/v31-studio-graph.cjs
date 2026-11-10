@@ -159,6 +159,10 @@ const { until } = require('./lib/wait.cjs');
 const studioSubviews = async () => (await import(pathToFileURL(path.join(__dirname, '..', '..',
   'src', 'js', 'ui', 'studio', 'workspace.js')).href)).STUDIO_SUBVIEWS;
 
+// A Studio clip-target reason, from the module that words it: a check never restates its text.
+const clipTargetText = async (key) => (await import(pathToFileURL(path.join(__dirname, '..', '..',
+  'src', 'js', 'studio', 'clip-targets.js')).href)).CLIP_TARGET_TEXT[key];
+
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
@@ -1164,13 +1168,13 @@ function defineChecks() {
     await sleep(80);
     const depth1 = await H.undoDepth(page);
     const q = (await H.model(page)).nodes.find((n) => n.id === 'filter-1').params.Q;
-    // R7 (clip-targets.js): a low-pass Q lane would never play (its AudioParam is in dB), so
-    // Filter 1 (low-pass) offers no AUTOMATE on Q and says why; as a band-pass it does.
-    const noQLane = await page.evaluate(() => {
+    // K232 (clip-targets.js laneMap): a low-pass Q lane plays, each point mapped to the
+    // biquad's dB Q, so Filter 1 (low-pass) offers AUTOMATE on Q with no reason against it; as
+    // a band-pass it does too.
+    const qLaneLowpass = await page.evaluate(() => {
       const f = document.querySelector('.osc-si-field[data-field="Q"]');
-      const why = f.querySelector('[data-osc="studio.inspector.no-automate"]');
-      return !f.querySelector('[data-osc="studio.inspector.automate"]')
-        && !!why && /dB AudioParam/.test(why.textContent);
+      return !!f.querySelector('[data-osc="studio.inspector.automate"]')
+        && !f.querySelector('[data-osc="studio.inspector.no-automate"]');
     });
     await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
       nodeId: 'filter-1', key: 'type', value: 'bandpass' }));
@@ -1210,7 +1214,7 @@ function defineChecks() {
       renamed: name === 'HF Filter' && cardTitle === 'HF FILTER',
       clipDuration: clip.duration === 1.5,
       announced: live.includes('Changed Filter 1 Cutoff'),
-      automate: lane.join() === 'frequency:2,Q:1', revealed, noQLane,
+      automate: lane.join() === 'frequency:2,Q:1', revealed, qLaneLowpass,
     }), f1, f2, err, depth0, depth1, q, live: live.slice(-4) };
   });
 
@@ -2115,6 +2119,9 @@ function defineChecks() {
 
   def('inactive-cables', async ({ page }) => {
     // V431 A5/X3 (#14): cables that carry nothing are drawn and labelled as such (§237).
+    // The reason a linear cable into a low-pass Q is not applied, from its source (K232 made it
+    // Czech and names the log mapping that is applied).
+    const filterQ = await clipTargetText('filterQ');
     await H.fresh(page);
     const ids = await page.evaluate(() => {
       const s = window.OSCILLA.studio.store;
@@ -2163,13 +2170,14 @@ function defineChecks() {
         && idle.rec.cross !== ''
         && /No Web Audio route: Recorder\/Export 1 is offline only/.test(idle.rec.title),
       noEffectDrawn: /\bis-inactive\b/.test(idle.q.cls) && idle.q.route === 'no-effect'
-        && idle.q.cross !== '' && /No audible effect: .*not applied/.test(idle.q.title),
+        && idle.q.cross !== ''
+        && idle.q.title.includes(`No audible effect: ${filterQ}`),
       liveUnchanged: !/is-inactive/.test(idle.live.cls) && idle.live.cross === ''
         && idle.live.route === 'live' && !/is-inactive/.test(idle.liveControl.cls),
       distinctDash: idle.rec.dash !== idle.live.dash && idle.q.dash !== idle.liveControl.dash,
       noRunningEmphasis: running.live.width === 2 && running.rec.width < 2
         && running.q.width < 2,
-      inspectorReason: /^No audible effect: .*not applied/.test(note),
+      inspectorReason: note.trim().startsWith(`No audible effect: ${filterQ}`),
       bandpassLive: !/is-inactive/.test(after.q.cls) && after.q.cross === '' && noteAfter
         && /is-inactive/.test(after.rec.cls),
     }), idle, running: { live: running.live.width, rec: running.rec.width, q: running.q.width },
