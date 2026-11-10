@@ -1478,8 +1478,8 @@ export function mountInspector(host, svc) {
   // the press's click (a Krok press lost to an edit arriving mid-press, K226 R2-T5-7). While a
   // pointer is down in the Inspector a rebuild waits; it runs in the task after the up, past
   // the click. In-place updates still run. A press whose up never comes (the window blurred,
-  // as a hidden tab's does, a context menu, a lost capture) ends there, or after 1 s
-  // (C1-INSP-1); no page-hide listener (C050 keeps those on the bus).
+  // as a hidden tab's does, a context menu, a lost capture) ends there, or after 1 s with no
+  // move (C1-INSP-1: a slider or step drag keeps its control); no page-hide listener (C050).
   let pressed = false;
   let deferred = false;
   let cap = null;
@@ -1492,11 +1492,15 @@ export function mountInspector(host, svc) {
       setTimeout(() => { if (host.isConnected) render(); }, 0);
     }
   };
-  const onDown = () => {
-    pressed = true;
+  const arm = () => {
     clearTimeout(cap);
     cap = setTimeout(onUp, 1000);
   };
+  const onDown = () => {
+    pressed = true;
+    arm();
+  };
+  const onMove = () => { if (pressed) arm(); };
   const UPS = ['pointerup', 'pointercancel', 'contextmenu'];
   const win = typeof window !== 'undefined' ? window : null;
   if (typeof host.addEventListener === 'function') {
@@ -1506,6 +1510,7 @@ export function mountInspector(host, svc) {
   if (win) {
     for (const t of UPS) win.addEventListener(t, onUp, true);
     win.addEventListener('blur', onUp); // the window's own (an element's blur never bubbles)
+    win.addEventListener('pointermove', onMove, true);
   }
   let said = null; // the runtime state last rendered
   function render() {
@@ -1626,6 +1631,7 @@ export function mountInspector(host, svc) {
       if (win) {
         for (const t of UPS) win.removeEventListener(t, onUp, true);
         win.removeEventListener('blur', onUp);
+        win.removeEventListener('pointermove', onMove, true);
       }
     },
   };
