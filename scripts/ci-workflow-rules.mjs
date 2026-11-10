@@ -28,7 +28,7 @@
 //   triggers         ci.yml started by anything but pull_request (a manual run has no pull
 //                    request, so fail-first and review-verdict would have nothing to check)
 //
-// Why each exists is in .ai/repo/rules/project/ci-bounded.v1.md. The unit test
+// Why each exists is in .ai/repo/rules/project/ci-bounded.v3.md. The unit test
 // tests/unit/ci-workflows.test.mjs runs this on the repository and on mutated copies.
 
 import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';

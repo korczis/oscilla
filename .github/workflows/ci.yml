@@ -42,7 +42,7 @@
 # Tested by tests/unit/ci-changes.test.mjs.
 name: CI
 
-# pull_request and merge_group only (project.ci-bounded v2, `triggers`; ADR 0083): a pull
+# pull_request and merge_group only (project.ci-bounded v3, `triggers`; ADR 0083): a pull
 # request is judged on its own branch, then again in the merge queue on main plus the pull
 # requests ahead of it, which is the tree that lands. The fail-first and review-verdict jobs
 # judge a pull request in both: on merge_group the one the queue ref names
