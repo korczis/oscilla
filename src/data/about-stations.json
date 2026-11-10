@@ -245,6 +245,10 @@
       "summary": "Pod panelem Synthu jsou dva pady jedné implementace: pad L ladí přes normály Cutoff LPF a HPF, pad R hraje noty zvolené tóniny a stupnice a jeho osa Y je nově síla úhozu, už ne filtr; sílu úhozu kláves i padu je slyšet přes nový modul VELOCITY za VCA (při síle 100 beze změny hlasitosti); nový dokument proto nevede kabel z osy Y do filtru a starší dokumenty si ho ponechají",
       "commit": "72692c1",
       "datetime": "2026-11-10T05:25:24+01:00"
+    },
+    {
+      "title": "Kalibrace jen v pásmu profilu",
+      "summary": "Měření frekvenční odezvy hlásí kalibraci jen tam, kde ji profil mikrofonu opravdu pokrývá: profil pro 12–16 kHz nad měřením 20 Hz–20 kHz ukáže „CALIBRATED jen 12–16 kHz“, profil zcela mimo měřené pásmo zůstane nekalibrovaný s poznámkou „mimo pásmo“ a jen profil přes celé pásmo opraví každý bod; vydání nově před každým krokem ověřuje čistý strom a nahrává stránku přesně z vydaného commitu, kadence počítá jen vydání, která mají GitHub Release a záznam, a každý pokus o stažení v CI má časový limit"
     }
   ]
 }
