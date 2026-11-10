@@ -25,10 +25,23 @@
 //                                           a module still in the model (a panel partly deleted
 //                                           in Studio) is reused, and only the normals that
 //                                           touch a module it adds are added
+//   panel.restoreAction(model, mid, { values }) -> BATCH   module `mid` back (Studio removed
+//                                           it, or the document predates it): its node and the
+//                                           normals between it and the modules present, one
+//                                           history entry; a normal whose id an edge with other
+//                                           ends holds (an older panel's) is replaced. Labelled
+//                                           "Přidat" for an optional module, else "Obnovit"
 //   panel.tabs -> [{ id, title, description }]   the workspace tabs a panel's modules sit on
 //   panel.modulesOf(tab) -> [module]              (module.tab, default the first tab)
+//   decl.cableSwitches -> [{ id, module, label, from, to }]   K229: a face toggle (kind 'cable')
+//                                           that patches the cable from jack `from` to jack `to`
+//                                           and removes it (normals.js setCableSwitch); it reads
+//                                           on while any such cable is patched, a user's too
 //   module.adds -> [port]                   CONTROL outputs whose cables add to the normals of
 //                                           the jack they feed (synth/normals.js; the XY pad)
+//   module.optional -> true                 a performance surface whose absence breaks no
+//                                           signal path (PAD L, K220): normals.js
+//                                           brokenByRemoval never lists it as removed
 //
 // A module's node is found by metadata.panel { id: panel.instance, module } (schema.js
 // isPanelRef); a node type the Studio may hold once (Master Output) is that one node.
@@ -144,6 +157,14 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
     for (const t of a.to) portOf(t, 'in');
     return Object.freeze({ ...a, key: a.id || `amount${i + 1}` });
   });
+  const cableSwitches = (decl.cableSwitches || []).map((s) => {
+    if (!byId.has(s.module)) fail(pid, `cableSwitch ${s.id}: unknown module ${s.module}`);
+    const a = portOf(s.from, 'out');
+    const b = portOf(s.to, 'in');
+    const v = canConnect(a.p, b.p, { sourceNodeId: s.from, targetNodeId: s.to });
+    if (!v.allowed) fail(pid, `cableSwitch ${s.id}: ${v.reason}`);
+    return Object.freeze({ ...s });
+  });
   const jacksOf = (mid) => (byId.get(mid) || { jacks: [] }).jacks.map((j) => ({ ...j,
     normals: normals.filter((n) => n.to === j.id || (j.direction === 'out' && n.from === j.id))
       .map((n) => n.id) }));
@@ -174,23 +195,70 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
       'in');
     const feeds = (j) => model.graph.edges.filter((e) => e.to.node === ids.get(splitJack(j)
       .module) && e.to.port === splitJack(j).port);
+    // An edge holding a normal's id with other ends is that normal as an older panel declared
+    // it (K220: e1 from the VCA, before VELOCITY): replaced, cut and added as declared.
+    const older = [];
     const added = normals.filter((n) => {
       const a = splitJack(n.from).module;
       const b = splitJack(n.to).module;
       if (kept.size && old(a) && old(b)) return false;
-      if (model.graph.edges.some((e) => e.id === n.edgeId)) return false;
+      const e = model.graph.edges.find((x) => x.id === n.edgeId);
+      if (e) {
+        const x = splitJack(n.from);
+        const y = splitJack(n.to);
+        if (e.from.node === ids.get(x.module) && e.from.port === x.port
+          && e.to.node === ids.get(y.module) && e.to.port === y.port) return false;
+        older.push(e);
+        return true;
+      }
       return !(kept.has(b) && !portIn(n.to).multiple && feeds(n.to).length);
     });
     const cuts = added.filter((n) => byId.get(splitJack(n.to).module).def.maxInstances === 1
-      && !portIn(n.to).multiple).flatMap((n) => feeds(n.to));
+      && !portIn(n.to).multiple).flatMap((n) => feeds(n.to))
+      .filter((e) => !older.includes(e)).concat(older);
     return { ids, kept, added, cuts };
+  }
+
+  const control = (m, p) => ({ key: p.key, kind: KIND[p.type], label: p.label, param: p,
+    initial: p.key in m.values ? m.values[p.key] : p.default });
+
+  function restoreAction(model, mid, { values = {} } = {}) {
+    const m = byId.get(mid);
+    const res = panel.resolve(model);
+    const steps = [{ type: 'NODE_ADD', id: panel.nodeIdOf(mid), nodeType: m.node,
+      params: values, name: m.label, panel: { id: instance, module: mid },
+      position: { x: 0, y: 0 } }];
+    const cut = [];
+    const adds = [];
+    for (const n of normals) {
+      const a = splitJack(n.from);
+      const b = splitJack(n.to);
+      if (a.module !== mid && b.module !== mid) continue;
+      const other = a.module === mid ? b.module : a.module;
+      if (!res.get(other)) continue;
+      const id = (x) => (x === mid ? panel.nodeIdOf(mid) : res.get(x).id);
+      const e = model.graph.edges.find((x) => x.id === n.edgeId);
+      if (e) {
+        const same = e.from.node === id(a.module) && e.from.port === a.port
+          && e.to.node === id(b.module) && e.to.port === b.port;
+        if (same) continue;
+        cut.push(e.id); // an older panel's e1 (from the VCA, before VELOCITY, K220)
+      }
+      adds.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: id(a.module), port: a.port },
+        to: { node: id(b.module), port: b.port }, props: n.props });
+    }
+    if (cut.length) steps.push({ type: 'EDGE_REMOVE', edgeIds: cut });
+    return { type: 'BATCH', label: `${m.optional ? 'Přidat' : 'Obnovit'} ${m.label}`,
+      steps: [...steps, ...adds] };
   }
 
   const panel = {
     id: pid, instance, version: decl.version || 1, title: decl.title,
-    description: decl.description || '', modules, normals, amounts, layout: decl.layout || {},
+    description: decl.description || '', modules, normals, amounts, cableSwitches,
+    layout: decl.layout || {},
     tabs,
     modulesOf: (tab) => modules.filter((m) => m.tab === tab),
+    restoreAction,
     module: (mid) => byId.get(mid) || null,
     fixedOf: (mid) => {
       const m = byId.get(mid);
@@ -201,15 +269,23 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
       const m = byId.get(mid);
       if (!m) return [];
       const params = m.params.filter((p) => !(p.key in (m.fixed || {}))
-        && !(m.studio || []).includes(p.key))
-        .map((p) => ({ key: p.key, kind: KIND[p.type], label: p.label, param: p,
-          initial: p.key in m.values ? m.values[p.key] : p.default }));
+        && !(m.studio || []).includes(p.key)).map((p) => control(m, p));
       const amts = amounts.filter((a) => a.module === mid).map((a) => ({ key: a.key,
         kind: 'amount', label: a.label, amount: a,
         param: Object.freeze({ key: a.key, label: a.label, type: 'number', min: a.range[0],
           max: a.range[1], step: 0.01, unit: a.unit || 'oct', scale: 'linear',
           default: 0 }) }));
-      return [...params, ...amts];
+      const cables = cableSwitches.filter((s) => s.module === mid).map((s) => ({ key: s.id,
+        kind: 'cable', label: s.label, cable: s,
+        param: Object.freeze({ key: s.id, label: s.label, type: 'boolean', default: false }) }));
+      return [...params, ...amts, ...cables];
+    },
+    /** The face control of any parameter of a module, its Studio-only ones included (the Drums
+     *  tab's sound editor edits the percussion engine's per-voice keys, K071), or null. */
+    control(mid, key) {
+      const m = byId.get(mid);
+      const p = m && !(key in (m.fixed || {})) && m.params.find((x) => x.key === key);
+      return p ? control(m, p) : null;
     },
     jacksOf,
     resolve(model) {

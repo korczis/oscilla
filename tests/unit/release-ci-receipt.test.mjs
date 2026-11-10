@@ -514,6 +514,93 @@ test('R037 superset: a job the release tree adds beyond the base verifies green 
     jobs: skipLedger })), []);
 });
 
+// E060: a release that renames gate jobs (the CI legs of #509 replaced engine, suites, measure,
+// studio, browser and census) can carry its own receipt. A base job the release tree's ci.yml no
+// longer declares is accepted only when that copy provably replaces it: every npm script the
+// base job ran is run, for the same matrix value, by a job of the release tree's copy, by name
+// or through the browser legs (npm run test:leg runs every browser suite test:release names but
+// the visual gate, tests/browser/lib/shards.cjs, by the release tree's package.json). Anything
+// else the base job ran (a program, no npm script at all) cannot be replaced and still refuses.
+const BASE_LEGACY = `name: CI\njobs:\n  unit:\n    runs-on: x\n    steps:\n      - run: npm test\n${LEDGER}`
+  + '  engine:\n    name: V1 engine checks (${{ matrix.browser }})\n    runs-on: x\n'
+  + '    strategy:\n      matrix:\n        browser: [chromium, webkit]\n    steps:\n'
+  + '      - run: npm run test:engine\n'
+  + '  changes:\n    runs-on: x\n    steps:\n      - run: node .github/scripts/ci-changes.mjs\n';
+const legsOf = (browsers, script = 'test:leg') => `name: CI\njobs:\n  unit:\n    runs-on: x\n`
+  + `    steps:\n      - run: npm test\n${LEDGER}`
+  + '  leg-1:\n    name: Browser leg 1 (${{ matrix.browser }})\n    runs-on: x\n'
+  + `    strategy:\n      matrix:\n        browser: [${browsers.join(', ')}]\n    steps:\n`
+  + `      - run: npm run ${script}\n`
+  + '  changes:\n    runs-on: x\n    steps:\n      - run: node .github/scripts/ci-changes.mjs\n';
+const PKG_LEGS = { scripts: { 'test:release': 'npm run test:engine && npm run test:visual',
+  'test:engine': 'node tests/browser/engine-v1port.cjs',
+  'test:leg': 'node tests/browser/lib/shards.cjs', 'test:visual': 'node scripts/visual-gate.mjs' } };
+
+test('E060: a base job the release tree\'s legs provably replace is not required; the legs are',
+  () => {
+    const base = expectedJobs(BASE_LEGACY);
+    const tree = expectedJobs(legsOf(['chromium', 'webkit']));
+    assert.deepEqual([base.problems, tree.problems], [[], []]);
+    const jobs = jobsOf(run(), tree.jobs);
+    assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base, jobs,
+      pkg: PKG_LEGS })), [], 'V1 engine checks (chromium, webkit) are run by the legs');
+    // the legs themselves stay required: a red or missing leg refuses
+    const red = jobs.map((j) => (j.name === 'Browser leg 1 (webkit)' ? { ...j,
+      conclusion: 'failure' } : j));
+    only(facts({ workflow: tree, baseWorkflow: base, jobs: red, pkg: PKG_LEGS }),
+      /job "Browser leg 1 \(webkit\)" of run 900 is completed\/failure/);
+  });
+
+test('E060 mutations: a browser without its leg, a suite the legs do not run, a program job '
+  + 'dropped, or a leg running another script each still refuse', () => {
+  const base = expectedJobs(BASE_LEGACY);
+  const judge = (headText, pkg = PKG_LEGS, drop = null) => {
+    const tree = expectedJobs(headText);
+    const names = drop ? tree.jobs.filter((n) => n !== drop) : tree.jobs;
+    return ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base,
+      jobs: jobsOf(run(), names), pkg }));
+  };
+  const noWebkit = judge(legsOf(['chromium']));
+  assert.equal(noWebkit.length, 1, noWebkit.join('\n'));
+  assert.match(noWebkit[0], /run 900 has no job "V1 engine checks \(webkit\)" .*base bbbbbbb/);
+  const notInRelease = judge(legsOf(['chromium', 'webkit']), { scripts: { ...PKG_LEGS.scripts,
+    'test:release': 'npm run test:visual' } });
+  assert.equal(notInRelease.length, 2, notInRelease.join('\n'));
+  assert.ok(notInRelease.every((p) => /has no job "V1 engine checks \((chromium|webkit)\)"/
+    .test(p)), notInRelease.join('\n'));
+  const otherScript = judge(legsOf(['chromium', 'webkit'], 'test:browser'));
+  assert.equal(otherScript.length, 2, otherScript.join('\n'));
+  // without the release tree's package.json nothing is known to be replaced
+  assert.equal(judge(legsOf(['chromium', 'webkit']), null).length, 2);
+  // a job of programs, not npm scripts, cannot be replaced: dropping changes refuses
+  const noChanges = expectedJobs(legsOf(['chromium', 'webkit']).replace(/  changes:[\s\S]*$/, ''));
+  const r = ciReceiptProblems(facts({ workflow: noChanges, baseWorkflow: base,
+    jobs: jobsOf(run(), noChanges.jobs), pkg: PKG_LEGS }));
+  assert.equal(r.length, 1, r.join('\n'));
+  assert.match(r[0], /run 900 has no job "changes" .*base bbbbbbb/);
+});
+
+test('E060 on the real files: the legs of this ci.yml replace every per-category browser job '
+  + 'of the ci.yml before them (#509)', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const browsers = ['chromium', 'firefox', 'webkit'];
+  // The jobs ci.yml declared before the legs (7637039), each with the scripts it ran.
+  const legacy = [['V1 engine checks', ['test:engine']],
+    ['DSP, labs, sequencer', ['test:dsp', 'test:labs', 'test:sequencer']],
+    ['V3 measurement and UI', ['test:measure']], ['V3.1 Studio UI', ['test:studio', 'test:synth']],
+    ['Browser gate', ['test:browser']], ['Control census', ['test:census']]];
+  const job = ([name, scripts], key) => `  ${key}:\n    name: ${name} (\${{ matrix.browser }})\n`
+    + `    runs-on: x\n    strategy:\n      matrix:\n        browser: [${browsers.join(', ')}]\n`
+    + `    steps:\n${scripts.map((sc) => `      - run: npm run ${sc}\n`).join('')}`;
+  const baseText = CI_TEXT.replace(/\njobs:\n/, `\njobs:\n${legacy.map((l, i) => job(l, `old${i}`))
+    .join('')}`);
+  const base = expectedJobs(baseText);
+  assert.deepEqual(base.problems, []);
+  assert.equal(base.jobs.length, WORKFLOW.jobs.length + legacy.length * browsers.length);
+  assert.deepEqual(ciReceiptProblems(facts({ baseWorkflow: base, pkg })), [],
+    'every legacy job is replaced by the legs of the real ci.yml');
+});
+
 test('R037: an unreadable or broken base ci.yml refuses, naming the base', () => {
   only(facts({ baseWorkflow: null }),
     /\.github\/workflows\/ci\.yml of the base bbbbbbb could not be read/);

@@ -5,7 +5,7 @@ argument-hint: "<intent>"
 ---
 <!-- GENERATED FILE — DO NOT EDIT DIRECTLY
      Source: apps/majordomus-cli/src/capability/builtin/proceed.rs; regenerate with `majordomus generate`
-     Generator: majordomus-cli 1.0.1, copied for OSCILLA on Majordomus 1.0.0 (Q106) until the adopter generation lands -->
+     Generator: majordomus-cli 1.0.1 -->
 
 # Proceed: the next step, as one work order
 

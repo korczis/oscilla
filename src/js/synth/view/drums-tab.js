@@ -17,12 +17,18 @@
 // Open in Studio selects the clip in the timeline.
 // Every edit is one dispatch through the one store; the row order is view state of this page.
 //
-//   createDrumsTab({ nodes, model, dispatch, say, transport, playhead, sink, openStudio, tab })
-//     -> { html(), mount(), update() -> updated in place, destroy() }
+// Below the pads, the row's sound editor (K071): the voice of one row (the last pad struck, or
+// the one picked) with its own decay, tune, level and choke group as the Synth's knobs (`knob`,
+// view/face.js knobHtml through ui.js), driven by the panel's one knob gesture path, so a drag is
+// one history entry. It is drawn again on every store update; a drag redraws only its knob.
+//
+//   createDrumsTab({ nodes, model, dispatch, say, transport, playhead, sink, openStudio, tab,
+//     knob(cid) -> html }) -> { html(), mount(), update() -> updated in place, destroy() }
 
 import { DRUM_ROWS, DRUM_VOICES, drumClipOf, lanesOf, namesOf, newDrumClip, rowsOf,
   voiceChange } from '../drums.js';
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
+import { PERC_VOICE_PARAMS, percParamKey } from '../perc-recipes.js';
 import { mountStepGrid } from '../../ui/kinds/step-grid.js';
 import { bindRecordSwitch, recordSwitchHtml } from '../../ui/kinds/record-switch.js';
 import { clipStepsView, playingStep } from '../../ui/studio/inspector-steps.js';
@@ -44,16 +50,18 @@ const SELECT = 'h-11 w-full rounded-lg border border-solid border-gray-300 bg-gr
   + 'dark:border-gray-600 dark:bg-gray-700 dark:text-white';
 const TEXT = Object.freeze({
   title: 'BICÍ', grid: 'Bicí kroky', play: 'Přehrát', stop: 'Zastavit', open: 'Otevřít ve Studiu',
-  pads: 'Pady', voice: (name) => `Zvuk řady ${name}`, noKit: 'Tento dokument Studia nemá '
+  pads: 'Pady', voice: (name) => `Zvuk řady ${name}`, sound: 'ZVUK ŘADY',
+  soundPick: 'Upravit zvuk řady', noKit: 'Tento dokument Studia nemá '
     + 'perkusní engine panelu.', empty: 'Bicí ještě nemají klip: vytvořte jeden takt kroků na '
     + 'stopě perkusního enginu.', make: 'Vytvořit bicí klip',
 });
 const PAD_VELOCITY = 100;
 
 export function createDrumsTab({ nodes, model, dispatch, say, transport, playhead, sink,
-  openStudio, tab }) {
+  openStudio, tab, knob = () => '' }) {
   let m = null; // { root, grid, clipId, view } while the grid is mounted
   let rows = null; // the row order of this page (view state)
+  let sound = null; // the row voice the sound editor shows (view state)
   const owner = { selection: [], page: 0 };
   const held = new Map(); // pad index -> note sounding
 
@@ -102,6 +110,44 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       }).join('') + '</ul>';
   }
 
+  /** The sound editor of one row's voice: its four knobs (the panel's `perc` module keys). */
+  function soundHtml() {
+    if (!rows.includes(sound)) sound = rows[0];
+    const names = namesOf(rows);
+    return `<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white">`
+      + `${TEXT.sound}</h4><select class="${SELECT} mt-1 sm:w-64" data-drums-sound="" `
+      + `aria-label="${TEXT.soundPick}">`
+      + rows.map((r, i) => `<option value="${r}"${r === sound ? ' selected' : ''}>`
+        + `${esc(names[i])}</option>`).join('') + '</select>'
+      + '<div class="mt-2 flex flex-wrap gap-3" data-drums-knobs="">'
+      + PERC_VOICE_PARAMS.map((name) => knob(`perc.${percParamKey(sound, name)}`)).join('')
+      + '</div>';
+  }
+
+  /**
+   * Replace a container's markup; the control inside it that had focus keeps it (a knob after an
+   * arrow key's edit, the row select or a pad's voice select after a pick: R2-T5-2, the redraw
+   * used to destroy the select that fired the change and drop focus to the body).
+   */
+  function redrawKeepingFocus(box, html) {
+    const a = typeof document !== 'undefined' ? document.activeElement : null;
+    const d = a && box.contains(a) && a.dataset ? a.dataset : null;
+    let selector = null;
+    if (d && d.knob) selector = `[data-knob="${d.knob}"]`;
+    else if (d && 'drumsSound' in d) selector = '[data-drums-sound]';
+    else if (d && d.drumVoice != null) selector = `[data-drum-voice="${d.drumVoice}"]`;
+    box.innerHTML = html;
+    const k = selector && box.querySelector(selector);
+    if (k) k.focus({ preventScroll: true });
+  }
+
+  /** Redraw the sound editor; the control that had focus keeps it. */
+  function syncSound() {
+    const box = m && m.root.querySelector('[data-drums-sound-box]');
+    if (!box) return;
+    redrawKeepingFocus(box, soundHtml());
+  }
+
   function build(body) {
     if (!perc()) {
       body.innerHTML = '<p class="px-2 text-sm text-gray-700 sm:px-0 dark:text-gray-300">'
@@ -119,7 +165,8 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
     const view = viewOf(clip);
     body.innerHTML = `<div class="px-2 sm:px-0" data-drums-bar="">${toolbar()}</div>`
       + '<div data-drums-grid=""></div>'
-      + `<div class="px-2 sm:px-0" data-drums-pads="">${padsHtml()}</div>`;
+      + `<div class="px-2 sm:px-0" data-drums-pads="">${padsHtml()}</div>`
+      + `<div class="px-2 sm:px-0" data-drums-sound-box="">${soundHtml()}</div>`;
     let grid = null; // the first fit calls onView while mountStepGrid is still building
     grid = mountStepGrid(body.querySelector('[data-drums-grid]'), {
       mode: 'notes', label: TEXT.grid, clipId: clip.id, payload: clip.payload,
@@ -165,6 +212,12 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       }
     });
     body.addEventListener('change', (e) => {
+      const pick = e.target.closest('[data-drums-sound]');
+      if (pick) {
+        sound = pick.value;
+        syncSound();
+        return;
+      }
       const sel = e.target.closest('[data-drum-voice]');
       const clip = clipNow();
       if (!sel || !clip) return;
@@ -178,13 +231,18 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       if (r.action) dispatch(r.action);
       update();
       const pads = body.querySelector('[data-drums-pads]');
-      if (pads) pads.innerHTML = padsHtml();
+      if (pads) redrawKeepingFocus(pads, padsHtml());
+      syncSound();
     });
     const press = (i) => {
       const note = lanesOf(rows)[i];
       if (note == null || held.has(i)) return;
       held.set(i, note);
       sink().noteOn(note, PAD_VELOCITY);
+      if (rows[i] !== sound) { // the editor follows the pad struck
+        sound = rows[i];
+        syncSound();
+      }
     };
     const lift = (i) => {
       if (!held.has(i)) return;
@@ -247,6 +305,7 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       steps: m.view.steps, stepBeats: m.view.stepBeats, selection: owner.selection,
       page: owner.page });
     syncBar();
+    syncSound(); // undo, redo and the Studio's edits of the row's parameters
     return true;
   }
 

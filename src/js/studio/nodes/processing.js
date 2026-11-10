@@ -79,9 +79,11 @@ export const filter = defineNode({
     frequencyParam('frequency', 'Cutoff', DEFAULT_FILTER.frequency, {
       min: 10, max: FREQUENCY_MAX_HZ, automatable: true, modulatable: true, modDepth: 1200,
     }),
+    // `lane`: a lane on a low- or high-pass Q is in Q and plays on the biquad's dB Q
+    // (clip-targets.js laneMap, K232); the other types' Q is linear on the node.
     numberParam('Q', 'Q', {
       min: 1e-4, max: 1000, scale: 'log', default: DEFAULT_FILTER.Q, automatable: true,
-      modulatable: true, modDepth: 0.5, softRange: [0.1, 30],
+      modulatable: true, modDepth: 0.5, softRange: [0.1, 30], lane: 'db-of-q',
     }),
     numberParam('gain', 'Gain', {
       min: -40, max: 40, step: 0.1, unit: 'dB', default: DEFAULT_FILTER.gain,

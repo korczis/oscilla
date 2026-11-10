@@ -23,6 +23,27 @@
 //              100 ms +- one render quantum (128 frames at the rate) and not before, is halfway
 //              at 50 ms (linear), and the VCO plays A4 within 1 cent from 100 ms + one quantum.
 //              Fails on e51b169d, whose glide was an exponential approach (time constant 33 ms)
+//   e-dadsr    K230: an Envelope with delay 0.1 s and hold 0.2 s (one note through the transport,
+//              offline): below -60 dB through the delay, within 0.5 dB of the peak through the
+//              hold, and the attack, the peak and the decay each within one frame of gate +
+//              delay, + attack, + hold computed from the parameters; with delay and hold 0 the
+//              attack starts at the gate and the decay at the peak (today's ADSR). Fails on
+//              0410c679 (no delay or hold parameter)
+//   m-sync     K229: a sine LFO synced to 1/4 at 120 BPM, played by the transport offline: its
+//              period equals the same LFO's free-running at 2 Hz (0.01 frame: the sync is the
+//              division's rate exactly) and is 0.5 s within one frame in chromium and webkit.
+//              Firefox's own OscillatorNode runs 2 Hz with a constant period of 22045.92 frames
+//              at 44.1 kHz and 24001.28 at 48 kHz (0.32 cent, measured 2026-11-09, Firefox 155),
+//              so there the period is held within 1 cent, as k-track holds every pitch
+//   m-keysync  K229: a 3 Hz sine LFO keyed by the Keys Gate (into its reset), two notes 0.3 s
+//              apart: the 50 ms after each note-on agree sample for sample (1e-4) and start at
+//              phase 0; unkeyed, the same notes find it at another phase
+//   m-morph    K229: the morph shape at 0 equals a triangle LFO sample for sample within 1e-5
+//              (-100 dB; float32 phase accumulation of its frequency, the rate source summed in
+//              at audio rate, measured at 2.5e-6 in chromium): the panel's MG plays it where it
+//              played the triangle; the 3rd harmonic over the 1st
+//              is a triangle's 1/9 at morph 0 and a square's 1/3 at morph 1, each within 2 %.
+//              Fails on c74fc6fd (no reset input, no morph shape)
 //
 // K068, per browser and per rate: a notes clip on the Keys node of Keys -> VCO -> Envelope ->
 // Master Output played by the Studio transport offline (the render length as its look-ahead, as
@@ -40,6 +61,31 @@
 //              imul(1, 0x9e3779b1) ^ imul(index + 1, 0x85ebca77)) is below 0.5
 //   n-census   on a running AudioContext, STOP with a ratchet pending resolves with the engine
 //              and runtime node census 0 and no note record left
+// K226, per browser and per rate: a Clock (1/8 at 120 BPM) steps a step-voltage sequencer whose
+// row A (role pitch: 0, a fifth 7/12, an octave 1) drives a sine VCO over a linear pitch edge of
+// depth 1, played by the Studio transport offline (fixture svsSteps):
+//   s-steps    row A's CV changes at baseTime + k x 0.25 s within one frame for k = 1 and 2, and
+//              holds 0, 7/12 and 1 in the middle of steps 1, 2 and 3
+//   s-pitch    the VCO's frequency in step 2 is step 1's x 2^(7/12) and in step 3 x 2 (1 cent)
+// K071 and K072, per browser and per rate: a Percussion engine -> Master Output document, hits
+// struck on the engine's handle on the audio clock (fixtures/instrument-dsp-drums.js); every
+// expected value is computed from the recipes' stated figures (synth/perc-recipes.js):
+//   d-kick     each period of the kick's tone between rising zero crossings is the mean of the
+//              stated law hz x (toHz / hz)^(t / sweepS) over it within 2 %, so its frequency
+//              falls from 150 to 48 Hz at its sweep time, and the first period after it is 48 Hz
+//              within 2 %
+//   d-decay    every voice decays to -60 dB rel within 10 % of its stated decay (its longest
+//              layer; the slope of its 5 ms RMS in dB over its first 50 dB)
+//   d-choke    a closed hat (its level 0, group 1) releases a sounding open hat from the frame
+//              of its hit (within one render quantum), never above the hat's own level (no
+//              jump: the found defect held the gain's default 1), with no fall in one frame
+//              larger than 1.5 x the release ramp's first; one quantum after the release time it
+//              is at the envelope floor, and below -120 dBFS once its sources stop
+//   d-vel      velocity 64 is 40 log10(64 / 127) = -11.9 dB rel velocity 127 within 0.5 dB
+//              (the velocity law of midi/notes.js; K071 restated)
+//   d-clap     the clap's three burst onsets within one frame of 0, 11 and 22 ms
+//   d-toms     each tom's fundamental after its sweep within 1 % of its tuning
+//   d-blip     the FM blip's first sideband J1(1) / J0(1) = -4.80 dB rel its carrier within 1 dB
 // Tap tempo (four taps 500 ms apart: 120 BPM) is asserted at unit level
 // (tests/unit/studio-steps-playback.test.mjs). On b7a5c9f7 (chromium) the K060 checks pass and
 // the leg fails at its first K068 render ('the suite runs': the store refuses the grid).
@@ -87,6 +133,60 @@ function check(leg, name, ok, detail) {
 }
 const f = (x, d = 3) => (x == null ? 'null' : Number(x).toFixed(d));
 const within = (c, tol) => c !== null && Math.abs(c) <= tol;
+
+/** J0 and J1 of the FM blip's index from their series (K072's figure, computed here). */
+function bessel(n, x) {
+  let sum = 0;
+  let term = (x / 2) ** n / [1, 1, 2, 6][n];
+  for (let k = 0; k < 30; k++) {
+    sum += term;
+    term *= -((x / 2) ** 2) / ((k + 1) * (k + 1 + n));
+  }
+  return sum;
+}
+
+async function drumChecks(call, rate, leg) {
+  const k = await call('drumKick', { sampleRate: rate }, `d-kick renders at ${rate} Hz`);
+  const at = `${leg} @ ${k.sampleRate} Hz`;
+  const worstK = k.rows.reduce((w, r) => Math.max(w, Math.abs(r.ratio - 1)), 0);
+  check(at, 'd-kick every period follows the stated sweep within 2 %, 48 Hz after it',
+    k.rows.length > 10 && worstK <= 0.02 && Math.abs(k.endHz / k.toHz - 1) <= 0.02,
+    `${k.rows.length} periods, worst ${f(worstK * 100)} %; after ${k.sweepS * 1000} ms `
+      + `${f(k.endHz, 2)} Hz`);
+  const d = await call('drumDecays', { sampleRate: rate }, `d-decay renders at ${rate} Hz`);
+  check(at, 'd-decay every voice at -60 dB rel within 10 % of its stated decay',
+    d.rows.every((r) => r.t60 !== null && Math.abs(r.t60 / r.stated - 1) <= 0.1),
+    d.rows.map((r) => `${r.id} ${f(r.t60, 4)}/${r.stated} s`).join('; '));
+  const c = await call('drumChoke', { sampleRate: rate }, `d-choke renders at ${rate} Hz`);
+  check(at, 'd-choke releases from the hit, within one quantum, never above its level',
+    c.before <= 1e-4 && c.start !== null && c.start <= c.quantum && c.maxAfter <= 1 + 1e-4,
+    `falls from frame ${c.start} (quantum ${c.quantum}); largest after the hit ${f(c.maxAfter, 5)}`
+      + `; before it the renders differ by ${c.before.toExponential(1)}`);
+  check(at, 'd-choke click-free: no fall in one frame above 1.5 x the ramp\'s first',
+    c.worst <= 1.5 * c.rampStep, `largest fall ${f(c.worst, 4)} a frame, the ramp's first `
+      + `${f(c.rampStep, 4)} (${f(c.releaseFrames, 1)} frames to the floor)`);
+  check(at, 'd-choke at the floor one quantum after the release, silent once stopped',
+    c.atRelease !== null && c.atRelease <= c.floor * 1.05 && c.silentFrom !== null
+      && c.silentFrom <= c.stopFrames + c.quantum, `${c.atRelease === null ? 'null'
+      : c.atRelease.toExponential(2)} (floor ${c.floor.toExponential(2)}); silent from frame `
+      + `${c.silentFrom} (stop at ${f(c.stopFrames, 0)})`);
+  const v = await call('drumVelocity', { sampleRate: rate }, `d-vel renders at ${rate} Hz`);
+  check(at, 'd-vel velocity 64 is 40 log10(64/127) dB rel 127 within 0.5 dB',
+    Math.abs(v.db - v.law) <= 0.5, `${f(v.db)} dB (law ${f(v.law)} dB)`);
+  const cl = await call('drumClap', { sampleRate: rate }, `d-clap renders at ${rate} Hz`);
+  check(at, 'd-clap three burst onsets within one frame of 0, 11 and 22 ms',
+    cl.onsets.length === 3 && cl.onsets.every((o, i) => Math.abs(o - cl.want[i]) <= 1),
+    `onsets ${cl.onsets.join(', ')} frames, stated ${cl.want.join(', ')}`);
+  const t = await call('drumToms', { sampleRate: rate }, `d-toms renders at ${rate} Hz`);
+  check(at, 'd-toms each fundamental after its sweep within 1 % of its tuning',
+    t.rows.every((r) => r.hz !== null && Math.abs(r.hz / r.want - 1) <= 0.01),
+    t.rows.map((r) => `${r.id} ${f(r.hz, 3)}/${r.want} Hz`).join('; '));
+  const b = await call('drumBlip', { sampleRate: rate }, `d-blip renders at ${rate} Hz`);
+  const want = 20 * Math.log10(bessel(1, b.index) / bessel(0, b.index));
+  check(at, 'd-blip first sideband at J1/J0 of its index within 1 dB',
+    Math.abs(b.db - want) <= 1, `${f(b.db)} dB rel the carrier (J1/J0(${b.index}) ${f(want)} `
+      + `dB; carrier ${b.carrier} Hz, modulator ${b.modulator} Hz)`);
+}
 
 async function runBrowser(name) {
   const browser = await playwright[name].launch(LAUNCH[name]);
@@ -149,6 +249,47 @@ async function runBrowser(name) {
       check(at, 'k-glide the VCO plays A4 within 1 cent after the glide',
         within(g.centsAfter, 1) && within(g.centsBefore, 1),
         `${f(g.hzAfter, 4)} Hz (${f(g.centsAfter, 4)} ct); A3 before ${f(g.centsBefore, 4)} ct`);
+      // e-dadsr (K230): the delay and the hold stages, measured from the contour.
+      for (const [delay, hold] of [[0.1, 0.2], [0, 0]]) {
+        const d = await call('dadsr', { sampleRate: rate, delay, hold },
+          `e-dadsr renders at ${rate} Hz, delay ${delay} s, hold ${hold} s`);
+        const off = (k) => (d.got[k] === null ? null : d.got[k] - d.want[k]);
+        const stages = ['attack', 'peak', 'decay'];
+        check(at, `e-dadsr delay ${delay} s hold ${hold} s: each stage within one frame`,
+          stages.every((k) => off(k) !== null && Math.abs(off(k)) <= 1),
+          stages.map((k) => `${k} ${d.got[k]} (computed ${d.want[k]}, ${off(k)})`).join('; '));
+        if (delay > 0) {
+          check(at, 'e-dadsr below -60 dB through the delay, within 0.5 dB of the peak through '
+            + 'the hold', d.delayMaxDb !== null && d.delayMaxDb < -60 && d.holdMinDb !== null
+            && d.holdMinDb >= -0.5, `delay max ${f(d.delayMaxDb, 2)} dB, hold min `
+            + `${f(d.holdMinDb, 4)} dB`);
+        }
+      }
+      // K229: the LFO's tempo sync, key sync and morph.
+      const ms = await call('lfoSync', { sampleRate: rate }, `m-sync renders at ${rate} Hz`);
+      const want = 0.5 * ms.sampleRate;
+      const exactOsc = name !== 'firefox';
+      check(at, `m-sync 1/4 at 120 BPM: the period is 0.5 s ${exactOsc ? 'within one frame'
+        : 'within 1 cent'}, the free 2 Hz LFO's own`,
+        ms.periodFrames !== null && Math.abs(ms.periodFrames - ms.freeFrames) <= 0.01
+          && (exactOsc ? Math.abs(ms.periodFrames - want) <= 1
+            : Math.abs(1200 * Math.log2(ms.periodFrames / want)) <= 1),
+        `${f(ms.periodFrames, 3)} frames over ${ms.periods} periods (computed ${want}; free `
+          + `2 Hz ${f(ms.freeFrames, 3)}); rising crossings ${ms.ups.join(' ')}`);
+      const mk = await call('lfoKeySync', { sampleRate: rate }, `m-keysync renders at ${rate} Hz`);
+      check(at, 'm-keysync two notes 0.3 s apart start the keyed LFO at the same phase',
+        mk.keyedDiff <= 1e-4 && mk.keyedAt.every((v) => Math.abs(v) < 0.01)
+          && mk.freeDiff > 0.1,
+        `keyed: max difference ${mk.keyedDiff.toExponential(2)}, at the onsets `
+          + `${mk.keyedAt.map((v) => f(v, 4)).join(', ')}; free: ${f(mk.freeDiff, 3)}`);
+      const mm = await call('lfoMorph', { sampleRate: rate }, `m-morph renders at ${rate} Hz`);
+      check(at, 'm-morph morph 0 equals the triangle LFO sample for sample',
+        mm.diff <= 1e-5 && mm.peak > 0.9, `max difference ${mm.diff.toExponential(2)} (peak `
+          + `${f(mm.peak, 4)})`);
+      check(at, "m-morph 3rd over 1st harmonic: a triangle's 1/9 at 0, a square's 1/3 at 1",
+        Math.abs(mm.ratio0 / (1 / 9) - 1) <= 0.02 && Math.abs(mm.ratio1 / (1 / 3) - 1) <= 0.02,
+        `morph 0: ${f(mm.ratio0, 5)} (1/9 = ${f(1 / 9, 5)}); morph 1: ${f(mm.ratio1, 5)} `
+          + `(1/3 = ${f(1 / 3, 5)})`);
       // K068: notes clips on the audio clock.
       const half = {};
       for (const tempo of [120, 97]) {
@@ -187,6 +328,7 @@ async function runBrowser(name) {
           && within(sl.centsHalf, 1),
         `arrives ${sl.arriveFrames} frames after the slide (Glide ${sl.glideFrames}); `
           + `${f(sl.centsHalf, 3)} ct from the midpoint at half the Glide`);
+      await drumChecks(call, rate, leg);
       const ch = await call('chance', { sampleRate: rate }, `n-chance renders at ${rate} Hz`);
       check(at, 'n-chance p 0.5: two renders identical, another seed differs',
         ch.same && ch.differs, `identical ${ch.same}, differs with seed 2 ${ch.differs}`);
@@ -194,6 +336,24 @@ async function runBrowser(name) {
         JSON.stringify(ch.hits) === JSON.stringify(ch.want)
           && JSON.stringify(ch.otherHits) === JSON.stringify(ch.otherWant),
         `seed 1 steps ${ch.hits.join(',')}; seed 2 steps ${ch.otherHits.join(',')}`);
+    }
+    // K226: the step-voltage sequencer's steps on the Clock, rendered offline.
+    for (const rate of rates) {
+      const at = `${leg}@${rate}`;
+      const row = [0, 7 / 12, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+      const sv = await call('svsSteps', { sampleRate: rate, row }, `s-steps renders at ${rate} Hz`);
+      const want = [1, 2].map((k) => sv.baseFrame + Math.round(k * sv.period * sv.sampleRate));
+      const near = want.map((w) => sv.changes.reduce((b, c) => (Math.abs(c - w)
+        < Math.abs(b - w) ? c : b), Infinity) - w);
+      check(at, 's-steps the CV changes on each step within one frame',
+        near.every((d) => Math.abs(d) <= 1), `offsets ${near.join(', ')} frames`);
+      check(at, 's-steps the CV holds each step\'s value (pitch role: twelfths)',
+        sv.cvAt.every((v, i) => Math.abs(v - row[i]) < 1e-6), `${sv.cvAt.map((v) => f(v, 6))}`);
+      const c2 = 1200 * Math.log2(sv.hz[1] / sv.hz[0]);
+      const c3 = 1200 * Math.log2(sv.hz[2] / sv.hz[0]);
+      check(at, 's-pitch a fifth, then an octave over step 1 (1 cent)',
+        within(c2 - 700, 1) && within(c3 - 1200, 1),
+        `${f(c2, 2)} ct and ${f(c3, 2)} ct over ${f(sv.hz[0], 2)} Hz`);
     }
     // n-census: a running AudioContext, STOP with the ratchet pending.
     const cs = await bounded(page.evaluate(() => window.K.censusStart()), { ms: CENSUS_MS,

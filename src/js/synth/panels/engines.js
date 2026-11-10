@@ -13,6 +13,12 @@
 
 import { FM_FEEDBACK_BLOCKED } from '../fm-algorithms.js';
 import { MAX_VOICES } from '../voice-pool.js';
+import { PERC_VOICES, PERC_VOICE_PARAMS, percParamKey } from '../perc-recipes.js';
+
+/** The percussion engine's per-voice parameters (K071): edited per row in the Drums tab's sound
+ *  editor and in the Studio, not as 40 knobs on the engine's face. */
+const PERC_ROW_KEYS = Object.freeze(Object.keys(PERC_VOICES).flatMap((id) => PERC_VOICE_PARAMS
+  .map((name) => percParamKey(id, name))));
 
 export const ENGINE_TAB = Object.freeze({ id: 'engines', label: 'Engines',
   title: 'Synthesis engines',
@@ -28,7 +34,7 @@ export const ENGINE_MODULES = Object.freeze([
     options: { bank: ['basic', 'formant', 'pulse'] }, init: { attack: 0.02 } },
   { id: 'sync', label: 'HARD SYNC', node: 'wavetable-voice', fixed: { bank: 'sync' },
     init: { morph: 1 } },
-  { id: 'perc', label: 'PERCUSSION', node: 'perc-voice' },
+  { id: 'perc', label: 'PERCUSSION', node: 'perc-voice', studio: PERC_ROW_KEYS },
 ].map((m) => Object.freeze({ ...m, tab: ENGINE_TAB.id })));
 
 export const PLUCK_BLOCKED = 'The plucked string needs a short delay loop: a loop in the '

@@ -136,11 +136,13 @@ test('a cable an amount knob covers takes the knob depth; unpatching keeps the k
   step(patchCable(st.getModel(), PANEL, 'eg2.control', 'lpf.frequency').action);
   assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5']);
   step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id).action);
-  assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5', 'mg.control@1']);
+  assert.deepEqual(into(st.getModel(), 'lpf.frequency'),
+    ['eg2.control@3.5', 'mg.control@1', 'xyl.x@2']); // K220: pad L's X normal restored too
   // A cable from another source: both knobs come back as they were.
   step(patchCable(st.getModel(), PANEL, 'eg1.control', 'lpf.frequency').action);
   step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id).action);
-  assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5', 'mg.control@1']);
+  assert.deepEqual(into(st.getModel(), 'lpf.frequency'),
+    ['eg2.control@3.5', 'mg.control@1', 'xyl.x@2']); // K220: pad L's X normal restored too
   // One knob, equal depths: MG into VCO 1 FM next to the VCO 2 FM normal.
   step(setAmount(st.getModel(), PANEL, amount('vco-mg'), 0.5));
   step(patchCable(st.getModel(), PANEL, 'mg.control', 'vco1.fm').action);
@@ -150,9 +152,11 @@ test('a cable an amount knob covers takes the knob depth; unpatching keeps the k
 
 // ------------------------------------------------------------------ no inert jack (P1)
 
-test('the filters show no Peak (Q) jack: low- and high-pass Q cannot be modulated', () => {
+test('the filters show their Peak (Q) jack since K232 (a log cable is linear in the node\'s '
+  + 'dB), and no Gain jack', () => {
   for (const mid of ['hpf', 'lpf']) {
-    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'Q'), false, mid);
+    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'Q'), true, mid);
+    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'gain'), false, mid);
     assert.ok(PANEL.faceOf(mid).some((c) => c.key === 'Q'), `${mid} keeps its Peak knob`);
   }
 });

@@ -1,4 +1,5 @@
-// Studio MODULATION node types (spec §29): LFO, Envelope, Random, Step Modulator, Macro.
+// Studio MODULATION node types (spec §29): LFO, Envelope, Random, Step Modulator, Macro, and
+// the step-voltage sequencer (K226).
 // Defaults: LFO rate 5 Hz sine (DEFAULT_PATTERN_PARAMS.wobble, audio/patterns.js; buildLfo in
 // audio/modulation.js), ADSR a 0.01 / d 0.1 / s 0.7 / r 0.2 s (DEFAULT_ADSR, audio/envelope.js),
 // Random 5 Hz (one value per 150 ms tone + 50 ms gap of DEFAULT_PATTERN_PARAMS.random) with its
@@ -24,6 +25,8 @@ import {
   syncParam,
 } from './common.js';
 
+/** What a parameter's modulation input carries when nothing is cabled into it (the contract). */
+const UNCONNECTED_PARAM = 'parameter value';
 const controlOut = definePort({ id: 'control', direction: 'out', type: 'CONTROL',
   label: 'Control' });
 /**
@@ -46,6 +49,10 @@ export const LFO_SLIDER_RANGE = Object.freeze([0.01, 100]);
 const randomPeriodS = (DEFAULT_PATTERN_PARAMS.random.toneMs + DEFAULT_PATTERN_PARAMS.random.gapMs)
   / 1000;
 
+/** The input port of an LFO parameter (depth, morph): one a-rate channel, the value unconnected. */
+const A_RATE_PARAM_PORT = Object.freeze({ channels: 1, rate: 'a-rate',
+  unconnected: UNCONNECTED_PARAM, monitor: false, compact: false, version: 1 });
+
 export const lfo = defineNode({
   type: 'lfo',
   displayName: 'LFO',
@@ -53,21 +60,31 @@ export const lfo = defineNode({
   category: CATEGORIES.MODULATION,
   aliases: ['low frequency oscillator', 'modulator', 'wobble', 'vibrato', 'tremolo', 'fm',
     'am', 'ring modulator'],
+  // K229: key sync. A trigger on reset restarts the phase at its time (a Keys Gate cabled here
+  // starts each note's modulation at the same phase); unconnected, the LFO runs freely.
+  inputs: [definePort({ id: 'reset', direction: 'in', type: 'TRIGGER', label: 'Synchronizace',
+    channels: 1, rate: 'event', unconnected: 'none', monitor: false, compact: false,
+    version: 1 })],
   outputs: [controlOut],
   params: [
-    enumParam('shape', 'Shape', WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]), 'sine'),
+    // K229: 'morph' crossfades triangle, sawtooth and square by the morph parameter.
+    enumParam('shape', 'Shape', [...WAVEFORMS.map((w) => [w, WAVEFORM_LABELS[w]]),
+      ['morph', 'Prolínání']], 'sine'),
     rate(DEFAULT_PATTERN_PARAMS.wobble.rate, 1, { max: FREQUENCY_MAX_HZ,
       softRange: LFO_SLIDER_RANGE, laneRange: [0.01, FREQUENCY_MAX_HZ] }),
     // K022 (hash epoch 2): the output's depth, and tempo sync.
     numberParam('depth', 'Depth', { min: 0, max: 1, step: 0.01, default: 1, automatable: true,
       modulatable: true, modDepth: 0.5, live: 'glide',
       // Its CONTROL input: one AudioParam (a gain), a-rate; uncabled, the depth itself holds.
-      port: { channels: 1, rate: 'a-rate', unconnected: 'parameter value', monitor: false,
-        compact: false, version: 1 } }),
+      port: A_RATE_PARAM_PORT }),
     syncParam(),
+    // K229 (hash epoch 3): the morph of the 'morph' shape, triangle 0, sawtooth 0.5, square 1.
+    numberParam('morph', 'Prolínání tvaru', { min: 0, max: 1, step: 0.01, default: 0,
+      automatable: true, modulatable: true, modDepth: 0.5, live: 'glide',
+      port: A_RATE_PARAM_PORT }),
   ],
   summary(p) {
-    return parts(optionLabel(lfo, 'shape', p.shape),
+    return parts(optionLabel(lfo, 'shape', p.shape), p.shape === 'morph' ? pct(p.morph) : null,
       p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`, p.depth < 1 ? pct(p.depth) : null);
   },
   capabilities: { realtime: true, offline: true },
@@ -101,9 +118,13 @@ export const envelope = defineNode({
     secondsParam('decay', 'Decay', DEFAULT_ADSR.d, MIN_SEGMENT_S, 10),
     numberParam('sustain', 'Sustain', { min: 0, max: 1, step: 0.01, default: DEFAULT_ADSR.s }),
     secondsParam('release', 'Release', DEFAULT_ADSR.r, MIN_SEGMENT_S, 10),
+    // K230 (hash epoch 3): a delay before the attack and a hold at the peak; 0 is today's ADSR.
+    secondsParam('delay', 'Zpoždění', 0, 0, 10, { live: 'next-gate' }),
+    secondsParam('hold', 'Výdrž', 0, 0, 10, { live: 'next-gate' }),
   ],
   summary(p) {
-    return parts(`A ${secs(p.attack)}`, `D ${secs(p.decay)}`, `S ${num(p.sustain, 2)}`,
+    return parts(p.delay > 0 ? `Zp ${secs(p.delay)}` : null, `A ${secs(p.attack)}`,
+      p.hold > 0 ? `V ${secs(p.hold)}` : null, `D ${secs(p.decay)}`, `S ${num(p.sustain, 2)}`,
       `R ${secs(p.release)}`);
   },
   clipKinds: ['event'],
@@ -226,6 +247,100 @@ export const clock = defineNode({
   },
 });
 
+/** K226: the step-voltage sequencer's steps per row, and the lengths it plays. */
+export const SVS_MAX_STEPS = 16;
+export const SVS_LENGTHS = Object.freeze(['8', '16']);
+/** The three rows of the step-voltage sequencer: parameter key and CONTROL output id. */
+export const SVS_ROWS = Object.freeze([['rowA', 'cvA', 'A'], ['rowB', 'cvB', 'B'],
+  ['rowC', 'cvC', 'C']]);
+const svsRow = (key, label, def) => listParam(key, label, {
+  min: -1, max: 1, minLength: SVS_MAX_STEPS, maxLength: SVS_MAX_STEPS, default: def,
+  live: 'crossfade' });
+/**
+ * What a row's output carries (K226, amended): its step value as it is (cv), rounded to a twelfth
+ * (pitch: a semitone under a pitch edge that maps 1 to one octave), rounded to a whole unit
+ * (octave), or carried as 0..1 (velocity; gateLength, which also sets how long each step's Gate
+ * and trigger hold, a fraction of the step period). step-voltage.js svsRoleValue.
+ */
+export const SVS_ROLES = Object.freeze(['cv', 'pitch', 'octave', 'gateLength', 'velocity']);
+const SVS_ROLE_LABELS = Object.freeze({ cv: 'CV', pitch: 'Výška (půltóny)', octave: 'Oktáva',
+  gateLength: 'Délka hradla', velocity: 'Síla úhozu' });
+const svsRole = (key, label, def) => enumParam(key, label,
+  SVS_ROLES.map((r) => [r, SVS_ROLE_LABELS[r]]), def, { live: 'crossfade' });
+
+/**
+ * K226: the step-voltage sequencer. Three rows of step values (A, B, C) share one step position;
+ * each row's CONTROL output holds the current step's value, the Gate TRIGGER fires on every step
+ * it takes and trigN on step N only (logical outputs, fanned out by the transport as the Clock's
+ * are, studio/trigger-fanout.js). The clock input steps it (with no clock cable it steps at its
+ * rate, and its TRIGGER outputs stay silent: they fire on clocked steps); the reset input sends
+ * it back to step 1 at the next step boundary, or on a clock tick at the same instant.
+ */
+export const stepVoltageSequencer = defineNode({
+  type: 'step-voltage-sequencer',
+  displayName: 'Krokový sekvencer CV',
+  idPrefix: 'svs',
+  category: CATEGORIES.MODULATION,
+  aliases: ['sekvencer', 'krokový sekvencer', 'sekvencer napětí', 'sekvencer CV',
+    'třířadý sekvencer'],
+  inputs: [
+    // Unconnected, the clock leaves it free-running at its rate; the reset leaves it be.
+    definePort({ id: 'clock', direction: 'in', type: 'TRIGGER', label: 'Takt', channels: 1,
+      rate: 'event', unconnected: 'rate', monitor: false, compact: false, version: 1 }),
+    definePort({ id: 'reset', direction: 'in', type: 'TRIGGER', label: 'Na začátek',
+      channels: 1, rate: 'event', unconnected: 'none', monitor: false, compact: false,
+      version: 1 }),
+  ],
+  outputs: [
+    ...SVS_ROWS.map(([, id, row]) => definePort({ id, direction: 'out', type: 'CONTROL',
+      label: `CV ${row}`, channels: 1, rate: 'a-rate', monitor: false, compact: false,
+      version: 1 })),
+    definePort({ id: 'gate', direction: 'out', type: 'TRIGGER', label: 'Hradlo',
+      channels: 1, rate: 'event', monitor: false, compact: false, version: 1 }),
+    ...Array.from({ length: SVS_MAX_STEPS }, (_, i) => definePort({ id: `trig${i + 1}`,
+      direction: 'out', type: 'TRIGGER', label: `Krok ${i + 1}`, channels: 1, rate: 'event',
+      monitor: false, compact: true, version: 1 })),
+  ],
+  clipKinds: ['event'], // a trigger event clip clocks it, as a clock edge does
+  params: [
+    svsRow('rowA', 'Řada A', [0, 0.25, 0.5, 0.75, 1, 0.75, 0.5, 0.25,
+      0, -0.25, -0.5, -0.75, -1, -0.75, -0.5, -0.25]),
+    svsRow('rowB', 'Řada B', Array(SVS_MAX_STEPS).fill(0)),
+    svsRow('rowC', 'Řada C', Array(SVS_MAX_STEPS).fill(0)),
+    svsRole('roleA', 'Role řady A', 'pitch'),
+    svsRole('roleB', 'Role řady B', 'cv'),
+    svsRole('roleC', 'Role řady C', 'cv'),
+    // 1 skips the step: it is passed over and its trigger stays silent.
+    listParam('skip', 'Přeskočit', { min: 0, max: 1, step: 1, minLength: SVS_MAX_STEPS,
+      maxLength: SVS_MAX_STEPS, default: Array(SVS_MAX_STEPS).fill(0), live: 'crossfade' }),
+    enumParam('length', 'Délka', SVS_LENGTHS.map((l) => [l, `${l} kroků`]), '8',
+      { live: 'crossfade' }),
+    enumParam('playback', 'Přehrávání', [['forward', 'Vpřed'], ['pingpong', 'Tam a zpět'],
+      ['once', 'Jednou']], 'forward', { live: 'crossfade' }),
+    rate(1000 / DEFAULT_PATTERN_PARAMS.alternating.toneMs, 1, { live: 'glide',
+      port: { channels: 1, rate: 'a-rate', unconnected: UNCONNECTED_PARAM, monitor: false,
+        compact: false, version: 1 } }),
+    syncParam(),
+  ],
+  summary(p) {
+    return parts(`${p.length} kroků`, p.playback,
+      p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`);
+  },
+  capabilities: { realtime: true, offline: true },
+  compiler: 'audio/scheduler.js#scheduleSteps',
+  help: {
+    what: 'Tři řady krokových hodnot (A, B, C) se společnou pozicí: každá řada má svůj výstup '
+      + 'CV, Hradlo spouští každý krok a Krok N jen krok N.',
+    inputs: 'Takt posune o krok (první takt hraje krok 1); Na začátek vrátí na krok 1 na příští '
+      + 'hranici kroku, nebo na takt ve stejném okamžiku. Bez taktu krokuje rychlostí Rate a '
+      + 'výstupy TRIGGER mlčí.',
+    outputs: 'CV A, B, C: řízení −1 až 1. Hradlo a Krok 1 až 16: TRIGGER.',
+    constraints: 'Délka 8 nebo 16 kroků; kroky za délkou a přeskočené kroky se nehrají a '
+      + 'jejich Krok mlčí. Role řady určuje, co nese její výstup: CV, výšku v půltónech, '
+      + 'oktávu, délku hradla kroku nebo sílu úhozu (0 až 1).',
+  },
+});
+
 export const macro = defineNode({
   type: 'macro',
   displayName: 'Macro',
@@ -254,4 +369,4 @@ export const macro = defineNode({
   },
 });
 
-export default [lfo, envelope, random, stepModulator, macro, clock];
+export default [lfo, envelope, random, stepModulator, macro, clock, stepVoltageSequencer];

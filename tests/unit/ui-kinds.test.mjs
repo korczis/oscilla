@@ -182,7 +182,8 @@ test('the facts are read from the source: transport commands, note router, issue
     + '  return Object.freeze({\n    start,\n    live(a) {\n    },\n    get playing() {},\n'
     + '  });\n}'), ['start', 'live', 'playing']);
   assert.deepEqual([...FACTS.noteRouterCalls].sort(),
-    ['allOff', 'event', 'held', 'openGates', 'reset']); // openGates: C1-K103-2's read
+    ['allOff', 'event', 'held', 'openGates', 'reset', 'step']); // openGates: C1-K103-2's read;
+  // step: K226's manual step of a step-voltage sequencer
   assert.deepEqual(issueScope('id: X\nscope:\n- a/b.js\n  - "c d"\nnext: 1\n'), ['a/b.js', 'c d']);
 });
 

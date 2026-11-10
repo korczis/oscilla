@@ -126,8 +126,6 @@ const PHONE_WHOLE_DEBT = new Map([
   ['@320:playground:share', 'at 568 px of height the navbar, the page header and the Q002 '
     + 'sentence leading <main> (P002, Q004 option A: wrapped to five lines at 320 px) leave the '
     + 'Playground 63.8 % of the first screen: the first screen of P002, owned by the Playground'],
-  ['@320:synth:covered', 'the docked keyboard covers the Synth panel\'s header controls and tabs '
-    + '(synth.arm, synth.studio, synth.copy-link, the tabs): the Synth lane, #385 and V635'],
   ['@320:synth:overlap', 'the keyboard dock\'s arm, octave and velocity buttons overlap the Synth '
     + 'panel\'s header controls: the Synth lane, #385 and V635'],
   ['@375:synth:overlap', 'the Synth picker (osc-synth-pick) and the docked keyboard\'s buttons '

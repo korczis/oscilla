@@ -18,6 +18,9 @@
 //   unpatch(model, panel, edgeId) -> { action } | { reason }
 //   restoreNormals(model, panel, jackId) -> { action } | { reason }
 //   amountEdges(model, panel, amount) -> [edge];  setAmount(model, panel, amount, depth) -> action
+//   switchEdges(model, panel, sw) -> [edge]   K229: the cables of a cable switch (from -> to)
+//   setCableSwitch(model, panel, sw, on) -> { action } | { reason }   on: patchCable; off: one
+//     BATCH removing every cable of the switch
 //   amountDepth(model, panel, amount) -> depth | null   the knob's: its first edge's, else the
 //     depth the model remembers for it
 //   rememberAmounts(model, panel, steps) -> steps   the steps, and when they remove every edge
@@ -74,9 +77,14 @@ function normalEdge(model, n, id) {
   const b = splitJack(n.to);
   const from = id(a.module);
   const to = id(b.module);
-  if (!from || !to) return null;
-  return model.graph.edges.find((e) => e.id === n.edgeId && startsAt(e, from, a.port)
-    && endsAt(e, to, b.port)) || null;
+  if (!to) return null;
+  const e = model.graph.edges.find((x) => x.id === n.edgeId);
+  if (!e || !endsAt(e, to, b.port)) return null;
+  // As declared; or, while its declared source module is absent, the same normal as an older
+  // panel declared it (K220: e1 fed the engines' chain from the VCA before VELOCITY): the edge
+  // holds the normal's id and feeds its jack, so it is no user cable (panel.js plan replaces it
+  // when the module is added).
+  return startsAt(e, from, a.port) || !from ? e : null;
 }
 
 export function panelEdges(model, panel) {
@@ -133,12 +141,14 @@ export function jackState(model, panel, jack) {
  * module, [{ module, label, jacks: ['module.port'] }] in declaration order, a jack listed when
  * a normal into it starts or ends at the gone module and no cable patches it. Restore module
  * (not Restore normal) is the fix for these: a normal cannot come back without its module.
+ * An `optional` module (panel.js; PAD L, K220) is never listed: a document without it is one
+ * that has no PAD L, made before K220 or not, never one that lost a signal path.
  */
 export function brokenByRemoval(model, panel) {
   const res = panel.resolve(model);
   const rows = [];
   for (const m of panel.modules) {
-    if (res.get(m.id)) continue;
+    if (res.get(m.id) || m.optional) continue;
     const jacks = [];
     for (const n of panel.normals) {
       const ends = [splitJack(n.from).module, splitJack(n.to).module];
@@ -295,6 +305,24 @@ export function unpatch(model, panel, edgeId) {
   if (jack && !rest.length) steps.push(...normalSteps(model, panel, jack));
   return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`,
     steps: rememberAmounts(model, panel, steps) } };
+}
+
+/** The edges from the switch's `from` jack to its `to` jack (K229 cable switches). */
+export function switchEdges(model, panel, sw) {
+  const { id } = nodeIds(model, panel);
+  const a = splitJack(sw.from);
+  const b = splitJack(sw.to);
+  return model.graph.edges.filter((e) => startsAt(e, id(a.module), a.port)
+    && endsAt(e, id(b.module), b.port));
+}
+
+/** Turn a cable switch on (patch its cable) or off (remove its cables), one BATCH. */
+export function setCableSwitch(model, panel, sw, on) {
+  const have = switchEdges(model, panel, sw);
+  if (on) return have.length ? { reason: null } : patchCable(model, panel, sw.from, sw.to);
+  if (!have.length) return { reason: null };
+  return { action: { type: 'BATCH', label: `Odpojit ${sw.from} → ${sw.to}`,
+    steps: [{ type: 'EDGE_REMOVE', edgeIds: have.map((e) => e.id) }] } };
 }
 
 export function restoreNormals(model, panel, jack) {

@@ -1,14 +1,14 @@
 // Studio node types of the Synth engines (plan K090 FM, K091 additive, K092 wavetable with the
 // sync bank of K089, K121 AM and ring, K123 percussion; the voice pool K122). Each is a
-// polyphonic note source (capabilities.notes, up to 16 voices, owner decision Q021) played by
+// polyphonic note source (capabilities.notes, MAX_VOICES voices: 8 at 1/8 gain, owner Q021) played by
 // the keyboard, the on-screen keys and MIDI through the Synth workspace; the semi-modular panel
 // stays mono. New types only: no existing definition changes, so every pinned template hash and
 // saved studioHash stays as it is (design D2).
 //
 // Every engine has a Chain input: the audio there passes to the output unchanged and the
 // engine's voices are added to it, which is how several instruments share the one Master
-// Output (its input takes one cable). Levels are relative: a voice peaks at Level / 64 of
-// digital full scale times the velocity law, so the 16 voices at Level 4 and full velocity
+// Output (its input takes one cable). Levels are relative: a voice peaks at Level / 32 of
+// digital full scale times the velocity law, so the 8 voices at Level 4 and full velocity
 // together peak at most at full scale and the Master Output level stays the cap (ADR 0058's
 // rule for note voices; adapters/voices.js). Pitch is a requested digital frequency
 // (project.no-fake-science).
@@ -23,11 +23,13 @@ import { FM_ALGORITHMS, FM_FEEDBACK_BLOCKED, FM_OPERATORS, operatorRole } from
   '../../synth/fm-algorithms.js';
 import { MORPH_MAX, WAVETABLE_BANKS, WAVETABLE_BANK_IDS, morphText } from
   '../../synth/wavetables.js';
-import { percDecays, percKeysText } from '../../synth/perc-recipes.js';
+import {
+  CHOKE_GROUPS, PERC_VOICES, percDecays, percKeysText, percParamKey,
+} from '../../synth/perc-recipes.js';
 import { MAX_VOICES } from '../../synth/voice-pool.js';
 import {
-  CATEGORIES, boolParam, defineNode, enumParam, levelParam, numberParam, optionLabel, parts,
-  secondsParam, secs,
+  CATEGORIES, boolParam, defineNode, enumParam, integerParam, levelParam, numberParam,
+  optionLabel, parts, secondsParam, secs,
 } from './common.js';
 
 export const ADDITIVE_HARMONICS = 12;
@@ -46,7 +48,8 @@ const voiceParams = (release = 0.3) => [
   secondsParam('release', 'Release', release, 0.001, 10, { scale: 'log' }),
 ];
 const POLY = `Up to ${MAX_VOICES} voices: a ${MAX_VOICES + 1}th note takes the voice released `
-  + 'first, else the oldest, after a 5 ms fade. A voice peaks at Level / 64 of digital full scale '
+  + `first, else the oldest, after a 5 ms fade. A voice peaks at Level / ${4 * MAX_VOICES} of `
+  + 'digital full scale '
   + `times (velocity / 127)², so the ${MAX_VOICES} voices together peak at most at digital full `
   + 'scale (at Level 4, the highest) and the Master Output level stays the cap. A note-on for a '
   + 'held note re-attacks it from the level it holds.';
@@ -256,6 +259,22 @@ export const wavetableVoice = engine({
   },
 });
 
+/** Each voice's own parameters (K071, hash epoch 3): tune, decay, level and choke group, named
+ *  in Czech after the voice (perc-recipes.js `cs`); their defaults play what the kit played. */
+export const PERC_VOICE_PARAM_DEFS = Object.freeze(Object.values(PERC_VOICES).flatMap((v) => {
+  const key = (name) => percParamKey(v.id, name);
+  const live = 'next-note';
+  return [
+    numberParam(key('decay'), `${v.cs}: doznění`, { min: 0.25, max: 4, step: 0.01, unit: '×',
+      default: 1, scale: 'log', live }),
+    numberParam(key('tune'), `${v.cs}: ladění`, { min: -24, max: 24, step: 1, unit: 'st',
+      default: 0, live }),
+    levelParam(key('level'), `${v.cs}: hlasitost`, 1, { live }),
+    integerParam(key('choke'), `${v.cs}: skupina dusení`, { min: 0, max: CHOKE_GROUPS,
+      default: v.choke, live }),
+  ];
+}));
+
 export const percVoice = engine({
   type: 'perc-voice',
   // It renders offline (K222): its notes clips play there on the one compile path, as live.
@@ -270,20 +289,24 @@ export const percVoice = engine({
     levelParam('tone', 'Tone / noise', 0.5),
     boolParam('choke', 'Hat choke', true),
     numberParam('level', 'Level', { min: 0, max: 4, step: 0.01, default: 4 }),
+    ...PERC_VOICE_PARAM_DEFS,
   ],
   summary: (p) => parts(p.tune ? `${p.tune} st` : null, `decay × ${p.decay}`),
-  facts: (p) => `Decay to −60 dB rel: ${percDecays(p.decay).map((d) => `${d.label} `
+  facts: (p) => `Decay to −60 dB rel: ${percDecays(p).map((d) => `${d.label} `
     + `${secs(d.decayS)}`).join(' · ')}. Keys: ${percKeysText()}; each octave tunes ±12 st.`,
   help: {
-    what: 'A percussion kit on the keys: kick (a sine with a falling pitch and a noise click), '
-      + 'snare (two tones and noise), clap (noise with three short bursts), three toms, hats '
-      + '(six square oscillators at fixed non-harmonic ratios through a high-pass) and a noise '
-      + 'hit.',
-    constraints: 'Each hit decays exponentially to −60 dB rel at its stated decay (the clap '
-      + 'from its last burst); a key release does not shorten it, all-off cuts it. A voice\'s '
-      + 'layers are scaled to sum to at most 1, and the six hat squares by 1/6 (they start in '
-      + 'phase, so their sum is coherent). With Hat choke on, a closed hat releases a sounding '
-      + 'open hat on the audio clock.',
+    what: 'Bicí sada na klávesách: kopák (sinus s klesající výškou a šumovým klikem), virbl '
+      + '(dva tóny a šum), tlesk (šum se třemi krátkými záblesky), tři tomy, hi-hat (šest '
+      + 'obdélníkových oscilátorů v pevných neharmonických poměrech přes horní propust), šumový '
+      + 'úder a FM úder (sinusová nosná rozkmitaná sinusem na 0,35 × své frekvence, index 1).',
+    constraints: 'Každý úder doznívá exponenciálně na −60 dB rel za uvedenou dobu doznění (tlesk '
+      + 'od posledního záblesku); puštění klávesy ho nezkrátí, vypnutí všech ho utne. Vrstvy '
+      + 'zvuku jsou škálované tak, aby jejich součet byl nejvýš 1, a šest obdélníků hi-hatu na '
+      + '1/6 (začínají ve fázi, takže jejich součet je koherentní). Každý zvuk sady má vlastní '
+      + 'ladění, doznění, hlasitost a skupinu dusení: se zapnutým Hat choke úder ve skupině 1–4 '
+      + 'utne zvuky své skupiny, které v tu chvíli znějí, na hodinách zvuku; hi-haty sdílejí '
+      + 'skupinu 1. FM úder se vynechá, kde by jeho pásmo (nosná + 2 × modulátor) přesáhlo '
+      + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquistovy frekvence.`,
   },
 });
 

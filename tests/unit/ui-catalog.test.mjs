@@ -124,6 +124,7 @@ const CONTRACT = [
   ['synth.keys-silent', 'readout', 'div'], ['synth.engine-elsewhere', 'readout', 'p'],
   ['studio.inspector.connect', 'open', 'button'], ['studio.inspector.savePatch', 'open', 'button'],
   ['studio.inspector.allowMic', 'action', 'button'],
+  ['studio.inspector.svsStep', 'action', 'button'], // K226
   ['studio.inspector.limitNote', 'readout', 'p'],
   ['studio.inspector.presetsBox', 'panel', 'div'], ['studio.inspector.presets', 'open', 'button'],
   ['studio.inspector.presets.menu', 'choice', 'ul'],
@@ -148,7 +149,9 @@ const CONTRACT = [
   ['synth.dock.osc', 'choice', 'div'], ['synth.dock.wave', 'choice', 'div'],
   ['synth.dock.preset', 'choice', 'div'], ['synth.xy', 'panel', 'section'],
   ['synth.xy.target', 'choice', 'select'], ['synth.xy.pad', 'action', 'div'],
-  ['synth.xy.readout', 'readout', 'p'],
+  ['synth.xy.readout', 'readout', 'p'], ['synth.pads', 'panel', 'section'],
+  ['synth.pads.toggle', 'choice', 'div'], ['synth.pads.l', 'panel', 'div'], ['synth.pads.l.pad', 'action', 'div'],
+  ['synth.pads.r', 'panel', 'div'], ['synth.pads.r.scale', 'choice', 'div'],
   ['keyboard', 'panel', 'div'], ['keyboard.arm', 'switch', 'button'],
   ['keyboard.octave-down', 'action', 'button'], ['keyboard.octave-up', 'action', 'button'],
   ['keyboard.velocity-down', 'action', 'button'], ['keyboard.velocity-up', 'action', 'button'],

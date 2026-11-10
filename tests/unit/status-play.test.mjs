@@ -53,9 +53,9 @@ test('statusPlay: a sequence started inside the poll window is stopped and nothi
   assert.equal(wb.seqPlaying, false);
 });
 
-test('statusPlay: while only the sequence plays ("Stop playback") it stops, starts nothing', () => {
+test('statusPlay: while only the sequence plays ("Zastavit") it stops, starts nothing', () => {
   const { wb, editor, calls } = rig({ editorPlaying: true, seqPlaying: true });
-  assert.equal(wb.isSounding, true, 'the key reads Stop playback');
+  assert.equal(wb.isSounding, true, 'the key reads Zastavit přehrávání');
   wb.statusPlay();
   assert.equal(editor.playing, false);
   assert.equal(started(calls), 0, 'a stop never triggers or latches the instrument');

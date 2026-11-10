@@ -23,11 +23,11 @@ import { createDock } from './dock.js';
 import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
   STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, jackReason, jackState, panelCables,
-  patchCable, restoreNormals, setAmount, unpatch,
+  patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
 } from './normals.js';
 import { linkAction, linkOf } from './link.js';
 import { splitJack } from './panel.js';
-import { esc, plateHtml, platesShown } from './view/face.js';
+import { esc, knobHtml, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
 import { createGestures } from './gestures.js';
 import {
@@ -40,8 +40,10 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { createPads } from './view/pads.js';
 import { createDrumsTab } from './view/drums-tab.js';
 import { ROOM_EVENT } from '../midi/routes.js';
+import { applyNavRoom, watchNavRoom } from './nav-room.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
@@ -126,12 +128,15 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   const controlOf = (cid) => {
     const [mid, key] = cid.split('.');
-    const c = panel.faceOf(mid).find((x) => x.key === key);
+    const c = panel.faceOf(mid).find((x) => x.key === key) || panel.control(mid, key);
     return c ? { mid, key, c, node: nodes().get(mid) } : null;
   };
-  const valueOf = (x) => (x.c.kind === 'amount'
-    ? ((amountEdges(model(), panel, x.c.amount)[0] || { props: { depth: 0 } }).props.depth)
-    : x.node.params[x.key]);
+  const valueOf = (x) => {
+    if (x.c.kind === 'cable') return switchEdges(model(), panel, x.c.cable).length > 0;
+    return x.c.kind === 'amount'
+      ? ((amountEdges(model(), panel, x.c.amount)[0] || { props: { depth: 0 } }).props.depth)
+      : x.node.params[x.key];
+  };
 
   function setControl(cid, value) {
     gestures.flush();
@@ -140,6 +145,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (x.c.kind === 'amount') {
       const a = setAmount(model(), panel, x.c.amount, value);
       return a ? dispatch(a) : null;
+    }
+    if (x.c.kind === 'cable') {
+      const r = setCableSwitch(model(), panel, x.c.cable, !!value);
+      if (r.reason) say(r.reason, true);
+      return r.action ? dispatch(r.action) : null;
     }
     return dispatch({ type: 'NODE_PARAM_SET', nodeId: x.node.id, key: x.key, value });
   }
@@ -282,6 +292,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       .find(([, v]) => v) : null;
     if (!present()) {
       xy.destroy();
+      pads.destroy();
       drums.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
@@ -321,7 +332,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
       + xy.html() + drums.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
-      + `data-osc="synth.modules">${plates}</div></div>`
+      + `data-osc="synth.modules">${plates}</div>${pads.html()}</div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
       + `xl:sticky xl:top-4 ${faceClass(face, 'bay')}" data-face-of="bay" `
       + 'aria-labelledby="synth-bay-title" data-osc="synth.bay" '
@@ -336,8 +347,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<ul class="mt-1 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables" '
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
+    navRoom(el);
     renderBay();
     xy.mount();
+    pads.mount();
     drums.mount();
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
@@ -538,10 +551,15 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       collapsed = d.foldAll === 'closed' ? new Set(panel.modules.map((x) => x.id)) : new Set();
       renderAll();
     } else if (d.restoreModule) {
-      restoreModule(d.restoreModule);
+      restoreModule(d.restoreModule, !!t.closest('[data-osc="synth.pads"]'));
     } else if ('insertPanel' in d) {
       ensurePanel({ explicit: true });
     }
+  }
+
+  /** R2-T5-1: the room the sticky section nav keeps (synth/nav-room.js). */
+  function navRoom(el = host()) {
+    applyNavRoom(el, window);
   }
 
   /**
@@ -565,25 +583,22 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     target.focus({ preventScroll: true });
   }
 
-  function restoreModule(mid) {
-    const m = panel.module(mid);
-    const vals = presetValues(panel, presetOf('init'))[mid];
-    const steps = [{ type: 'NODE_ADD', id: panel.nodeIdOf(mid), nodeType: m.node,
-      params: vals, name: m.label, panel: { id: panel.instance, module: mid },
-      position: { x: 0, y: 0 } }];
-    const res = nodes();
-    for (const n of panel.normals) {
-      const a = splitJack(n.from);
-      const b = splitJack(n.to);
-      if (a.module !== mid && b.module !== mid) continue;
-      const other = a.module === mid ? b.module : a.module;
-      if (!res.get(other)) continue;
-      const id = (x) => (x === mid ? panel.nodeIdOf(mid) : res.get(x).id);
-      if (model().graph.edges.some((e) => e.id === n.edgeId)) continue;
-      steps.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: id(a.module), port: a.port },
-        to: { node: id(b.module), port: b.port }, props: n.props });
-    }
-    dispatch({ type: 'BATCH', label: `Obnovit ${m.label}`, steps });
+  // panel.js restoreAction: the node, its normals, an older panel's edge replaced (K220).
+  // Focus lands on what came back and the step is said (review R2-K220-4).
+  function restoreModule(mid, fromPads = false) {
+    const a = panel.restoreAction(model(), mid,
+      { values: presetValues(panel, presetOf('init'))[mid] });
+    if (!dispatch(a).ok) return;
+    say(`${a.label}: hotovo.`);
+    queueMicrotask(() => { // after the re-render the store change queued
+      const el = host();
+      // From the PADY card: the pad that came back (review R2-K220-6); else its plate.
+      const pad = fromPads && el && el.querySelector(mid === 'xyl'
+        ? '[data-osc="synth.pads.l.pad"] [data-xy-surface]'
+        : '[data-osc="synth.pads.r"] [data-xy-surface]');
+      const to = pad || (el && el.querySelector(`[data-module="${mid}"] h3 button`));
+      if (to) to.focus({ preventScroll: false });
+    });
   }
 
   function onKeyDown(e) {
@@ -666,6 +681,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // K097 XY tab
   const xy = createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab,
     BTN, cmp: () => cmp });
+  // K220 the two performance pads under the face
+  const pads = createPads({ panel, get, host, nodes, dispatch, say, jackName, tab,
+    cmp: () => cmp, arm: xy.arm });
 
   // ------------------------------------------------------------------ notes
 
@@ -674,6 +692,10 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     ENGINE_IDS, syncArmed });
   // K222 Drums tab: the step grid on the percussion engine's notes clip
   const drums = createDrumsTab({ nodes, model, dispatch, say, transport, tab,
+    knob: (cid) => {
+      const x = controlOf(cid);
+      return x && x.node ? knobHtml(cid, x.c, valueOf(x), null, panelTokens(host())) : '';
+    },
     playhead: () => (get().transport ? get().transport.playhead() : null),
     sink: () => ({ noteOn, noteOff }), openStudio: (id) => {
       handle().dispatch({ type: 'SELECTION_CHANGE', selection: { clips: [id] } });
@@ -768,7 +790,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         }
       });
       this.$watch('theme', () => { if (this.workspace === 'synth') renderAll(); });
-      window.addEventListener('resize', () => { if (this.workspace === 'synth') renderBay(); });
+      window.addEventListener('resize', () => {
+        if (this.workspace !== 'synth') return;
+        navRoom(); // the chips may wrap or the nav hide at another width
+        renderBay();
+      });
+      watchNavRoom(window, () => navRoom()); // the dock's band decides the nav's room (R2-T5-1)
       if (typeof this.navRegister === 'function') {
         this.navRegister('synth', (hash) => this.synthApplyLinkHash(hash));
       }

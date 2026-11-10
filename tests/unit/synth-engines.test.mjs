@@ -1,6 +1,6 @@
 // The Engines tab (K090-K092, K121-K123; Q019, Q021): one declaration. Every engine module names a
-// note-source node with 16 voices and its face is generated from the registry (the panel's count
-// rule); the chain into the one Output is derived, so adding an engine is one entry; the blocked
+// note-source node with MAX_VOICES voices (Q021) and its face is generated from the registry
+// (the panel's count rule); the chain into the one Output is derived, so adding an engine is one entry; the blocked
 // engines say why; no engine adapter builds a cycle or a DelayNode (project.no-silent-feedback
 // v1); the live notes route to an engine's voice pool; links carry the tab and the engine; a
 // preset sets only its own tab.
@@ -18,25 +18,35 @@ import { PRESETS } from '../../src/js/synth/presets.js';
 import { createLiveNotes, liveModel } from '../../src/js/studio/live-notes.js';
 import { compileStudio } from '../../src/js/studio/compiler.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
+import { MAX_VOICES } from '../../src/js/synth/voice-pool.js';
 import { engineEnv, hasCycle } from './engine-fixture.mjs';
 import { panelStore } from './synth-fixture.mjs';
 
 const ENGINE_TYPES = ['additive-voice', 'fm-voice', 'am-voice', 'wavetable-voice', 'perc-voice'];
 
-test('every engine module is a 16-voice note source with a generated face', () => {
+test('every engine module is a MAX_VOICES-voice note source with a generated face', () => {
   const mods = PANEL.modulesOf('engines');
   assert.deepEqual(mods.map((m) => m.id), ENGINE_MODULES.map((m) => m.id));
   assert.deepEqual(PANEL.tabs.map((t) => t.id), ['panel', 'engines', 'xy', 'drums'],
     'XY: K097; Drums: K222');
   for (const m of mods) {
     assert.equal(m.def.capabilities.notes, true, m.id);
-    assert.equal(m.def.capabilities.voices, 16, m.id);
+    assert.equal(m.def.capabilities.voices, MAX_VOICES, m.id);
     const face = PANEL.faceOf(m.id);
-    assert.equal(face.length, m.def.params.length - Object.keys(m.fixed || {}).length, m.id);
+    const studio = m.studio || [];
+    assert.equal(face.length, m.def.params.length - Object.keys(m.fixed || {}).length
+      - studio.length, m.id);
     for (const c of face) assert.ok(m.def.params.some((p) => p.key === c.key), `${m.id}.${c.key}`);
+    // A key off the face (K071: the percussion engine's per-voice parameters, edited in the
+    // Drums tab's sound editor) is still a control of the module.
+    for (const k of studio) assert.equal(PANEL.control(m.id, k).key, k, `${m.id}.${k}`);
     assert.ok(PANEL.jacksOf(m.id).some((j) => j.id === `${m.id}.thru` && j.direction === 'in'));
   }
   assert.equal(PANEL.module('sync').values.bank, 'sync', 'the sync module fixes its bank');
+  const perVoice = /^[a-z]+(?:[A-Z][a-z]+)?(Decay|Tune|Level|Choke)$/;
+  assert.deepEqual([...PANEL.module('perc').studio].sort(), NODE_REGISTRY.get('perc-voice').params
+    .map((p) => p.key).filter((k) => perVoice.test(k)).sort(),
+  'the percussion face keeps its five kit knobs; the 40 per-voice keys are the sound editor\'s');
   assert.deepEqual(PANEL.module('wavetable').params.find((p) => p.key === 'bank').options
     .map((o) => o[0]), ['basic', 'formant', 'pulse']);
 });
@@ -157,7 +167,8 @@ test('the engine node types are new registry entries, sources, never a feedback 
   for (const type of ENGINE_TYPES) {
     const d = NODE_REGISTRY.get(type);
     assert.equal(d.category, 'SOURCES');
-    assert.ok(d.help.constraints.includes('16 voices') || /16/.test(d.help.constraints), type);
+    assert.ok(d.help.constraints.includes(`Up to ${MAX_VOICES} voices`), type);
+    assert.equal(d.capabilities.voices, MAX_VOICES, type);
     assert.ok(!d.params.some((p) => /feedback/i.test(p.key)), type);
   }
 });

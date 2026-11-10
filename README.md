@@ -716,19 +716,22 @@ is in [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reasons.md).
 ## The Synth
 
 **Synth** (`#m=synth`) is a playable semi-modular mono voice with a docked keyboard: two VCOs, a
-ring modulator and noise into a mixer, a high-pass and a low-pass 12 dB/oct filter in series,
-two envelopes, a VCA, a modulation generator and a sample-and-hold, every jack normalled so it
-sounds with no cable, and a patch bay to re-route it. The panel is generated from one data
-declaration and the Studio node registry, and it is the same document as Studio: **Open in
-Studio** shows its nodes. Its **Engines** tab adds polyphonic engines, up to 16 voices each:
-additive (drawbars), FM (2-4 operators, 7 algorithms), AM and ring, wavetable with morph, hard
-sync at set ratios and a percussion kit on the keys. The keyboard, the computer keys and MIDI
-play the panel or the chosen engine; presets and **Copy link** keep a sound. Beside the piano,
-a picker chooses what the keys play, with an oscillator's waveform and quick presets. The **XY**
-tab is a module of the same panel: a cable from its Pitch and Gate into the voice replaces the
-keyboard's, its Y drives the timbre target its cable names, and its presets patch both. The
-Synth's sounds and the XY presets sit in the one patch library the Studio also opens, each
-loading as one undoable step. Details, cables and the honest limits: [docs/synth.md](docs/synth.md).
+ring modulator and noise into a mixer, a high-pass and a low-pass 12 dB/oct filter in series, two
+envelopes, a VCA, a modulation generator and a sample-and-hold, every jack normalled so it sounds
+with no cable, and a patch bay to re-route it. The panel is generated from one data declaration and
+the Studio node registry, and it is the same document as Studio: **Open in Studio** shows its nodes.
+Its **Engines** tab adds polyphonic engines, up to 8 voices each: additive (drawbars), FM (2-4
+operators, 7 algorithms), AM and ring, wavetable with morph, hard sync at set ratios and a
+percussion kit on the keys. The keyboard, the computer keys and MIDI play the panel or the chosen
+engine; presets and **Copy link** keep a sound. Beside the piano, a picker chooses what the keys
+play, with an oscillator's waveform and quick presets. The **XY** tab is a module of the same panel:
+a touch plays the scale note under X on the keys at Y's velocity, a cable from its Y drives the
+timbre target it names, and its presets patch it. Under the panel's cards two pads share the same
+pad kind: pad L, whose X and Y are normalled into the LPF cutoff and its peak (resonance, since
+K232; a cable replaces either), and pad R, the XY pad with its key and scale beside it; Stop and
+leaving the Synth release both. The Synth's sounds and the XY presets sit in the one patch library
+the Studio also opens, each loading as one undoable step. Details, cables and the honest limits:
+[docs/synth.md](docs/synth.md).
 
 ## The V3.1 Studio
 
@@ -851,8 +854,9 @@ What it does not do yet, each named with the work that would fill it:
 - A MIDI performance cannot be recorded into the song (V505).
 - Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
   gap G4).
-- A filter's Q cannot be automated, so the build's rising resonance is in the score only (K144
-  gap G10).
+- The song has no filter Q lane yet, so the build's rising resonance is in the score only (K144
+  gap G10): the Studio plays a low-pass Q lane since K232, and the template adds it in its next
+  version.
 - The Studio's view nodes draw nothing (K016).
 - After a reload the Studio opens the default template, not the last project (V604).
 - No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
@@ -1091,7 +1095,7 @@ and a real touch screen.
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
 | V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
 | Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`); the Keys node's pitch CV rendered at 44.1 and 48 kHz: tracking, the 4' clamp and the linear glide, and notes clips on the audio clock: onsets within a frame with swing, ratchets, slides and seeded chance (`tests/browser/instrument-dsp.cjs`), the Keys node added, named, linked and played in the Studio (`tests/browser/studio-keys.cjs`), and a selected notes clip edited as a step grid in the Inspector by pointer, touch and keys, its playing step following the transport (`tests/browser/step-grid.cjs`), and gates along TRIGGER edges: a Keys Gate cable made by pointer, keyboard and touch, a key and a gate clip relayed through a Step Modulator to an Envelope, and a live gate refused on an input the playing timeline owns (`tests/browser/studio-trigger-gates.cjs`) |
-| Synth line browser | `npm run test:synth` | The integration map first: every link between workspaces, instruments and labs of `tests/browser/integration-map.json`, walked by pointer, keyboard and touch with Back, Forward and a reload (`tests/browser/integration-map.cjs`); then the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`), the Synth XY pad's scale steps, timbre axis, presets, keys and touch (`tests/browser/xy-pad.cjs`), the Synth's Drums tab: one bar of drum steps on the percussion engine by pointer, touch and keys, its pads, Play and Open in Studio (`tests/browser/drums.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), and notes clips with a grid on the panel's Keys node played from the one transport in the Studio and the Synth workspace: the step under the playhead, a tempo change while playing, Play, Stop and Tap by pointer, keyboard and touch (`tests/browser/steps.cjs`) |
+| Synth line browser | `npm run test:synth` | The integration map first: every link between workspaces, instruments and labs of `tests/browser/integration-map.json`, walked by pointer, keyboard and touch with Back, Forward and a reload (`tests/browser/integration-map.cjs`); then the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), the knob contract on a fixture store: the value shown in step with the model after a drag, a key, a typed value and a touch drag, and kept across a reload (`tests/browser/knob.cjs`), the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`), the Synth XY pad's scale steps, timbre axis, presets, keys and touch (`tests/browser/xy-pad.cjs`), the Synth's Drums tab: one bar of drum steps on the percussion engine by pointer, touch and keys, its pads, Play and Open in Studio (`tests/browser/drums.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), and notes clips with a grid on the panel's Keys node played from the one transport in the Studio and the Synth workspace: the step under the playhead, a tempo change while playing, Play, Stop and Tap by pointer, keyboard and touch (`tests/browser/steps.cjs`) |
 | Studio visual | `scripts/visual-studio.mjs`, `tests/visual/studio/` | Studio at 1536x1024 and its GRAPH and TIMELINE subviews at 390x844, against the accepted reference for each environment (part of `npm run test:visual`) |
 | Synth visual | `scripts/visual-synth.mjs`, `tests/visual/synth/` | The Synth's Panel, Engines and XY tabs at 1536x1024 and 390x844 (on a phone, the tab's content scrolled above the docked keyboard) in the dark and the light theme, and its patch bay with six cables seen whole (1536x1280, 390x1400), against the accepted reference for each environment (part of `npm run test:visual`) |
 

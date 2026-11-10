@@ -13,6 +13,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
+import { SCHEDULE_LEAD_S } from '../../src/js/audio/scheduler.js';
 import { valueAtTime } from '../../src/js/audio/envelope.js';
 import {
   EDGE_S, GAIN_FLOOR, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S, automationValueAt,
@@ -40,7 +41,8 @@ function ok(r) {
 }
 
 function setup(model = templateModel(REFERENCE_TEMPLATE_ID), opts = {}) {
-  const fx = createFakeAudioEnv({ sampleRate: SR, holdSupported: !!opts.hold });
+  const fx = createFakeAudioEnv({ sampleRate: opts.sampleRate || SR,
+    holdSupported: !!opts.hold });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init(), 'engine.init');
   if (engine.limiterFeed) engine.limiterFeed.infrastructure = true; // see liveAllSources
@@ -640,9 +642,9 @@ function waveformEdit({ model, editAt = 0.4, transport = null, pre = null, s = s
   s.fx.advanceTo(b + editAt);
   const tone = voiceCarriers(s, 'sawtooth');
   dispatch(s, { type: 'NODE_PARAM_SET', nodeId: 'osc-1', key: 'waveform', value: 'square' });
-  const horizon = frameCeil(s.ctx.currentTime + SAFE_HORIZON_S, SR);
+  const horizon = frameCeil(s.ctx.currentTime + SAFE_HORIZON_S, s.ctx.sampleRate);
   const r = tr.sync();
-  const cont = startedIn(s, horizon, at(bF, 1));
+  const cont = startedIn(s, horizon, b + 1);
   assert.ok(cont.every((o) => o.type === 'square'), `continued as ${cont.map((o) => o.type)}`);
   return { s, tr, b, bF, tone, horizon, r, cont };
 }
@@ -660,32 +662,193 @@ async function noLeaks(s, tr) {
   assert.equal(s.fx.timers.size, 0, 'no timer left behind');
 }
 
-test('H001: a continuation that starts after the runtime crossfade fades in from 0 through '
-  + 'the open route, with no step and no dip', async () => {
-  // The audio clock moves between runtime.apply choosing its crossfade time (hooks.soon()) and
-  // the transport's continuation (a main-thread delay of three render quanta): the new route is
-  // already partly open at t0, so a voice started there at its programmed level would step up
-  // (a click), and its own 0 -> 1 ramp on top of the route's would dip. The level through fade x
-  // route rises linearly from 0 at t0 (review of #320, T1 and the double-fade P3).
+const RENDER_Q = 128;
+const RATES = [44100, 48000];
+
+/**
+ * A waveform edit at sample rate `sr` whose main thread stalls once runtime.apply has returned
+ * (H008): the audio clock moves to stallTo(xfadeAt, q, now) before the transport plans the edit
+ * and continues the Tone. xfadeAt: the runtime's crossfade time; q: a render quantum.
+ */
+function stalledEdit(sr, stallTo) {
   let xfadeAt = null;
+  let oldRoute = null;
+  let stalledAt = null;
   const view = (s) => createStudioTransport({ engine: s.engine, store: s.store,
     runtime: Object.create(s.runtime, { apply: { value: (...args) => {
+      const e = s.runtime.edges.get('edge-1');
+      if (!e) return s.runtime.apply(...args); // PLAY: nothing sounds yet
+      oldRoute = e.gain;
       const r = s.runtime.apply(...args);
       if (r && r.at !== undefined) xfadeAt = r.at;
-      s.ctx.advance(s.ctx.currentTime + (3 * 128) / SR);
+      stalledAt = stallTo(xfadeAt, RENDER_Q / sr, s.ctx.currentTime);
+      s.ctx.advance(stalledAt);
       return r;
     } } }) });
-  const { s, tr, tone, horizon, cont } = waveformEdit({ transport: view });
-  assert.equal(cont.length, 1);
+  const out = waveformEdit({ transport: view, s: setup(undefined, { sampleRate: sr }) });
+  assert.ok(oldRoute && xfadeAt !== null, 'the edit went through the runtime');
+  assert.equal(out.cont.length, 1, 'the Tone continues, one voice');
+  const route = out.s.runtime.edges.get('edge-1').gain;
+  assert.notEqual(route, oldRoute, 'the routes were rebuilt');
+  const [d] = continued(out.tr, 'clip-1');
+  return { ...out, xfadeAt, oldRoute, route, stalledAt, q: RENDER_Q / sr, t0: out.cont[0].startAt,
+    decision: d };
+}
+
+
+/** The lowest old route + continued voice (its fade x its new route) across the seam. */
+function seamLow({ oldRoute, route, cont, t0, xfadeAt }) {
+  const fade = hop(cont[0], 4);
+  let low = Infinity;
+  for (let i = 0; i <= 40; i += 1) {
+    const tau = Math.min(xfadeAt, t0) + (i / 40) * (Math.abs(t0 - xfadeAt) + 2 * STUDIO_XFADE_S);
+    const voice = tau < t0 ? 0 : gainAt(fade, tau) * gainAt(route, tau);
+    low = Math.min(low, gainAt(oldRoute, tau) + voice);
+  }
+  return low;
+}
+
+for (const sr of RATES) {
+  test(`H008 (${sr} Hz): a main-thread stall after runtime.apply that leaves the crossfade time `
+    + 'ahead of the clock continues the voice at the crossfade: no dip, no gap', async () => {
+    // Review of #320, R4: the continuation's start was read again (hooks.soon) after apply, so a
+    // stall there started the voice late against old routes already fading from the crossfade
+    // time: a dip, and silence once the stall passes STUDIO_XFADE_S. Here the clock moves the
+    // crossfade lead less two render quanta: the crossfade time stays ahead of it by two.
+    const e = stalledEdit(sr, (x, q, now) => now + SCHEDULE_LEAD_S - 2 * q);
+    assert.ok(e.xfadeAt >= e.stalledAt + e.q - EPS, `${e.xfadeAt} still ahead of ${e.stalledAt}`);
+    // The equal-gain crossfade is whole: the routes alone fade the voice in.
+    const low = seamLow(e);
+    assert.ok(low > 0.95, `the seam falls to ${low} (continued at ${e.t0}, crossfade from `
+      + `${e.xfadeAt})`);
+    near(e.t0, e.xfadeAt);
+    assertRise(hop(e.cont[0], 4), e.route, e.t0, 0.02);
+    assert.deepEqual([e.decision.at, e.decision.resumeFrom], [e.t0, 'crossfade']);
+    await noLeaks(e.s, e.tr);
+  });
+
+  for (const [name, stallTo] of [
+    ['past the crossfade time', (x, q) => x + q],
+    ['into the last render quantum before the crossfade time', (x, q) => x - q / 2],
+  ]) {
+    test(`H008 (${sr} Hz): a stall ${name} continues from the soonest render quantum and fades `
+      + 'in from 0 through the open route, never in the past', async () => {
+      // The old routes' fade may be rendered already, which no later schedule undoes: the voice
+      // continues as soon as it can, and a voice started at its programmed level on the partly
+      // or fully open route would step up (a click), its own 0 -> 1 ramp on top of the route's
+      // would dip: the level through fade x route rises linearly from 0 at t0 (review of #320,
+      // T1 and the double-fade P3).
+      const e = stalledEdit(sr, stallTo);
+      assert.ok(e.t0 >= e.stalledAt + SCHEDULE_LEAD_S - EPS, `${e.t0} after ${e.stalledAt}`);
+      assert.ok(e.t0 > e.xfadeAt + e.q - EPS, `${e.t0} after the crossfade ${e.xfadeAt}`);
+      assert.ok(Math.abs(e.t0 / e.q - Math.round(e.t0 / e.q)) < 1e-6, 'on a render quantum');
+      near(gainAt(e.route, e.xfadeAt), 0);
+      assert.ok(gainAt(e.route, e.t0) > 0.3, 'the route is open at t0');
+      const fade = continuedFade(e.s, e.cont[0], e.tone[0], e.route);
+      near(gainAt(fade, e.t0), 0);
+      assertRise(fade, e.route, e.t0, 0.02);
+      assert.deepEqual([e.decision.at, e.decision.resumeFrom], [e.t0, 'soonest']);
+      await noLeaks(e.s, e.tr);
+    });
+  }
+}
+
+/**
+ * A waveform edit at sample rate `sr` whose stall after runtime.apply moves the performance clock
+ * (engine._rendered, hooks.soon) by perfStall(xfadeAt, q, currentTime) seconds while currentTime
+ * stands still, as Firefox's does within a task (V249; C1-H008-1, oscilla-c1's probe).
+ */
+function frozenClockEdit(sr, perfStall) {
+  let extra = 0;
+  let rendered = null;
+  const view = (s) => {
+    s.fx.env.performance = { now: () => s.ctx.currentTime * 1000 + extra };
+    return createStudioTransport({ engine: s.engine, store: s.store,
+      runtime: Object.create(s.runtime, { apply: { value: (...args) => {
+        if (!s.runtime.edges.get('edge-1')) return s.runtime.apply(...args); // PLAY
+        const r = s.runtime.apply(...args);
+        s.engine._observeClock(s.ctx); // a reading at the frozen currentTime
+        extra += perfStall(r.at, RENDER_Q / sr, s.ctx.currentTime) * 1000;
+        rendered = s.engine._rendered(s.ctx);
+        return { ...r, frozenAt: s.ctx.currentTime };
+      } } }) });
+  };
+  const out = waveformEdit({ transport: view, s: setup(undefined, { sampleRate: sr }) });
+  assert.equal(out.cont.length, 1, 'the Tone continues, one voice');
+  const [d] = continued(out.tr, 'clip-1');
+  return { ...out, rendered, t0: out.cont[0].startAt, decision: d };
+}
+
+for (const sr of RATES) {
+  test(`C1-H008-1 (${sr} Hz): with currentTime standing still, a stall past the crossfade time `
+    + 'continues from the soonest quantum after what is rendered, never in the past', async () => {
+    const e = frozenClockEdit(sr, (x, q, ct) => x - ct + q);
+    assert.ok(e.rendered > e.s.ctx.currentTime, 'the performance clock moved, currentTime not');
+    assert.ok(e.t0 >= e.rendered, `continued at ${e.t0}, already rendered to ${e.rendered}`);
+    assert.equal(e.decision.resumeFrom, 'soonest');
+    await noLeaks(e.s, e.tr);
+  });
+
+  test(`C1-H008-1 (${sr} Hz): with currentTime standing still, a stall under the lead less a `
+    + 'quantum still continues at the crossfade time', async () => {
+    const e = frozenClockEdit(sr, (x, q) => SCHEDULE_LEAD_S - 2 * q);
+    assert.ok(e.t0 >= e.rendered + RENDER_Q / sr - EPS, `${e.t0} ahead of ${e.rendered}`);
+    assert.equal(e.decision.resumeFrom, 'crossfade');
+    assert.equal(e.decision.at, e.t0);
+    await noLeaks(e.s, e.tr);
+  });
+}
+
+test('C1-H001-2: a prepare that takes longer than the crossfade leaves no silent seam: the old '
+  + 'routes fade from where the continuation starts', async () => {
+  // CI run 42713534778 (firefox, a 2-core runner): building the rebuilt oscillator took about
+  // 30 ms of audio time. runtime.apply had read its crossfade time before it, so the old routes
+  // faded out over [xfadeAt, xfadeAt + 20 ms] and the Tone continued only at the transport's
+  // horizon read after apply, 32 ms later: -106.8 dB between them. Here the first oscillator
+  // built inside apply (the prepare) moves the audio clock PREPARE_S.
+  const PREPARE_S = 0.04;
+  let xfadeAt = null;
+  let oldRoute = null;
+  const view = (s) => {
+    let armed = false;
+    const osc = s.engine._osc.bind(s.engine);
+    s.engine._osc = (...args) => {
+      if (armed) {
+        armed = false;
+        s.ctx.advance(s.ctx.currentTime + PREPARE_S);
+      }
+      return osc(...args);
+    };
+    return createStudioTransport({ engine: s.engine, store: s.store,
+      runtime: Object.create(s.runtime, { apply: { value: (...args) => {
+        const e = s.runtime.edges.get('edge-1');
+        if (!e) return s.runtime.apply(...args); // PLAY: nothing sounds yet
+        oldRoute = e.gain;
+        armed = true;
+        const r = s.runtime.apply(...args);
+        armed = false;
+        if (r && r.at !== undefined) xfadeAt = r.at;
+        return r;
+      } } }) });
+  };
+  const { s, tr, cont } = waveformEdit({ transport: view });
+  assert.ok(oldRoute && xfadeAt !== null, 'the edit went through the runtime');
+  assert.equal(cont.length, 1, 'the Tone continues, one voice');
   const t0 = cont[0].startAt;
-  assert.ok(t0 >= horizon && t0 > xfadeAt + 2 * (128 / SR) - EPS, `${t0} after ${xfadeAt}`);
   const route = s.runtime.edges.get('edge-1').gain;
-  near(gainAt(route, xfadeAt), 0);
-  assert.ok(gainAt(route, t0) > 0.3, 'the route is partly open at t0');
-  const fade = continuedFade(s, cont[0], tone[0], route);
-  near(gainAt(fade, t0), 0);
-  assertRise(fade, route, t0, 0.02);
-  assert.deepEqual(continued(tr, 'clip-1').map((d) => d.at), [t0]);
+  assert.notEqual(route, oldRoute, 'the routes were rebuilt');
+  // The old route still sounds where the continuation starts, and the sum of the old route and
+  // the continued voice (its fade x its new route) never falls to silence across the seam.
+  assert.ok(gainAt(oldRoute, t0) > 0.5, `old route ${gainAt(oldRoute, t0)} at t0 ${t0}, `
+    + `crossfade from ${xfadeAt}`);
+  const fade = hop(cont[0], 4);
+  let low = Infinity;
+  for (let i = 0; i <= 40; i += 1) {
+    const tau = Math.min(xfadeAt, t0) + (i / 40) * (Math.abs(t0 - xfadeAt) + 2 * STUDIO_XFADE_S);
+    const voice = tau < t0 ? 0 : gainAt(fade, tau) * gainAt(route, tau);
+    low = Math.min(low, gainAt(oldRoute, tau) + voice);
+  }
+  assert.ok(low > 0.5, `the seam falls to ${low}`);
   await noLeaks(s, tr);
 });
 

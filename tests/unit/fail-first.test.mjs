@@ -10,7 +10,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gitRepo } from './fixtures/git-repo.mjs';
-import { waiver } from '../../scripts/fail-first.mjs';
+import { trainMembers, waiver } from '../../scripts/fail-first.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SCRIPT = path.join(ROOT, 'scripts', 'fail-first.mjs');
@@ -423,4 +423,47 @@ test('a train member needs a conventional type, and every member table is read',
   assert.equal(r.status, 1, r.out);
   assert.match(r.out, /train member #1: docs\(x\): a \| b/);
   assert.match(r.out, /train member #2 is fix\(y\): the value/);
+});
+
+// 252 R1 (reproduced by oscilla-c3): the member table ended at the first line without a leading
+// pipe, which GFM renders as a row of the same table, so that row and every later one went
+// unjudged here and in review-verdict's per-member check. The table is now read as GFM renders
+// it: to a blank line or the start of another block, every line before that a row.
+test('252 R1: a row without a leading pipe, and every row after it, is judged', (t) => {
+  const repo = fixture();
+  t.after(() => repo.dispose());
+  repo.commit('docs', { 'README.md': 'fixture, documented\n' });
+  const r = run(repo, 'train(x): #1, #2, #3', TRAIN_BODY([
+    '| #1 | docs(x): say more |',
+    '#2 | feat(y): a new control',
+    '| #3 | fix(z): the value |',
+  ]));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /train member #2 is feat\(y\): a new control/);
+  assert.match(r.out, /train member #3 is fix\(z\): the value/);
+  // a line with no pipe at all is a row of one cell, refused as no pull request number
+  const bare = run(repo, 'train(x): #1, #2', TRAIN_BODY(['| #1 | docs(x): y |',
+    '#2 feat(y): a new control']));
+  assert.equal(bare.status, 1, bare.out);
+  assert.match(bare.out, /train member "#2 feat\(y\): a new control" is not a pull request number/);
+});
+
+test('252 R1: the member table is read as GFM renders it, and ends where GFM ends it', () => {
+  const rows = (lines) => (trainMembers(lines.join('\n')) || []).map((r) => r.member);
+  // the header and the delimiter without their outer pipes, aligned delimiters
+  assert.deepEqual(rows(['member | what', ':--- | ---:', '#1 | docs: a', '| #2 | chore: b |']),
+    ['#1', '#2']);
+  // a blank line, a heading, a list item, a rule or HTML ends it; what follows is not a row
+  for (const end of ['', '## Next', '- a note', '1. a note', '***', '<details>']) {
+    assert.deepEqual(rows(['| member | what |', '|---|---|', '| #1 | docs: a |', end,
+      '| #9 | chore: later |']), ['#1'], JSON.stringify(end));
+  }
+  // prose straight after the rows is a row of the table, as GFM renders it
+  assert.deepEqual(rows(['| member | what |', '|---|---|', '| #1 | docs: a |',
+    'Folded in later.']), ['#1', 'Folded in later.']);
+  // a pipe escaped in a cell stays in the cell; a header of other cells is no member table
+  assert.deepEqual(trainMembers('| member | what |\n|---|---|\n#1 | docs: a \\| b\n'),
+    [{ member: '#1', what: 'docs: a | b' }]);
+  assert.equal(trainMembers('| member | what | when |\n|---|---|---|\n| #1 | docs: a | x |\n'),
+    null);
 });

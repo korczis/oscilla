@@ -64,6 +64,7 @@ import {
 } from '../data/presets.js';
 import { LEARN_TOPICS } from '../data/learn.js';
 import { presetLoadedNotice } from './preset-notice.js';
+import { statusPlayHint, statusPlayTitle } from './play-hints.js';
 import { V1_LAB_HOOKS, restoreRecordLabs } from './instrument-labs.js';
 
 let alertSeq = 0;
@@ -451,7 +452,11 @@ export function createInstrument(deps = {}) {
         engine.resume().then((ok) => {
           this.audioState = engine.state;
           if (!ok && this.playing) {
-            this.notify('warning', 'Audio is suspended', 'The browser has not allowed audio to start. Press HOLD TO PLAY again.');
+            // C030: where only the status bar's Play is on screen, its own sentence
+            const hint = statusPlayHint(this.workspace, 'suspended');
+            this.notify('warning', statusPlayTitle(this.workspace, 'suspended')
+              || 'Audio is suspended', hint
+              || 'The browser has not allowed audio to start. Press HOLD TO PLAY again.');
           }
         });
       }

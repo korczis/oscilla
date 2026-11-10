@@ -59,13 +59,23 @@ export const STUDIO_SCHEMA_VERSION = 1;
 export const STUDIO_KIND = 'oscilla-studio';
 export const STUDIO_FILE_EXTENSION = '.oscilla-studio.json';
 /** Version of the hashed execution-state selection; bump when its contents change. */
-export const STUDIO_HASH_VERSION = 2;
+export const STUDIO_HASH_VERSION = 3;
 /**
  * The parameters each hash epoch added to existing node types (D2: every new parameter on an
- * existing type lands in one epoch). Epoch 2 is K022. A record hashed under an earlier epoch
- * is checked by studioHashAt(model, v), which leaves out what later epochs added; it matches
- * only while those parameters are at their defaults (a v1 record cannot hold them).
+ * existing type lands in one epoch). Epoch 2 is K022; epoch 3 is shared by K071/K072 (the
+ * percussion engine's per-voice decay, tune, level and choke group) and K229/K230 (the LFO's
+ * morph, the envelope's delay and hold). A record hashed under an earlier epoch is checked by
+ * studioHashAt(model, v), which leaves out what later epochs added; it matches only while those
+ * parameters are at their defaults (an earlier record cannot hold them).
  */
+/** Each voice of the kit (perc-recipes.js and the FM blip): decay, tune, level, choke group. */
+const PERC_VOICE_KEYS = ['kickDecay', 'kickTune', 'kickLevel', 'kickChoke', 'snareDecay',
+  'snareTune', 'snareLevel', 'snareChoke', 'clapDecay', 'clapTune', 'clapLevel', 'clapChoke',
+  'tomLowDecay', 'tomLowTune', 'tomLowLevel', 'tomLowChoke', 'tomMidDecay', 'tomMidTune',
+  'tomMidLevel', 'tomMidChoke', 'tomHighDecay', 'tomHighTune', 'tomHighLevel', 'tomHighChoke',
+  'hatClosedDecay', 'hatClosedTune', 'hatClosedLevel', 'hatClosedChoke', 'hatOpenDecay',
+  'hatOpenTune', 'hatOpenLevel', 'hatOpenChoke', 'noiseDecay', 'noiseTune', 'noiseLevel',
+  'noiseChoke', 'blipDecay', 'blipTune', 'blipLevel', 'blipChoke'];
 export const HASH_EPOCH_PARAMS = Object.freeze({
   2: Object.freeze({
     oscillator: Object.freeze(['unison', 'spread']),
@@ -76,6 +86,11 @@ export const HASH_EPOCH_PARAMS = Object.freeze({
     gain: Object.freeze(['bypass']),
     pan: Object.freeze(['bypass']),
     drive: Object.freeze(['bypass']),
+  }),
+  3: Object.freeze({
+    'perc-voice': Object.freeze(PERC_VOICE_KEYS),
+    lfo: Object.freeze(['morph']),
+    envelope: Object.freeze(['delay', 'hold']),
   }),
 });
 
@@ -559,6 +574,7 @@ export function studioHashAt(model, version, { sha256Hex = defaultSha256Hex,
   if (!Number.isInteger(version) || version < 1 || version > STUDIO_HASH_VERSION) return null;
   for (const n of model.graph.nodes) {
     for (const k of laterKeys(n.type, version)) {
+      if (n.params[k] === undefined) continue; // a key the node does not hold changes nothing
       const def = registry.param(n.type, k);
       if (!def || canonicalJson(n.params[k]) !== canonicalJson(def.default)) return null;
     }

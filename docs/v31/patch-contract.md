@@ -5,39 +5,39 @@ Derived by `node scripts/patch-contract.mjs --write` from the Studio node regist
 `--check` fails when it is stale, and `tests/unit/patch-contract.test.mjs` holds the missing
 counts to `tests/unit/patch-contract-baseline.json`, which only fall.
 
-37 node types, 97 ports, 159 parameters. A field is declared,
+39 node types, 124 ports, 217 parameters. A field is declared,
 defaulted (derived by the declaration: a parameter port, or a field the port or parameter
 lists as defaulted) or missing; a field that does not apply is not counted.
 
 | Kind | Field | Declared | Defaulted | Missing |
 |---|---|---:|---:|---:|
-| port | `id` | 73 | 24 | 0 |
-| port | `owner` | 73 | 24 | 0 |
-| port | `direction` | 73 | 24 | 0 |
-| port | `type` | 73 | 24 | 0 |
-| port | `role` | 73 | 24 | 0 |
-| port | `cardinality` | 73 | 24 | 0 |
-| port | `required` | 73 | 24 | 0 |
-| port | `channels` | 2 | 1 | 94 |
-| port | `rate` | 2 | 1 | 94 |
-| port | `unconnected` | 0 | 1 | 56 |
-| port | `monitor` | 2 | 1 | 94 |
-| port | `compact` | 2 | 1 | 94 |
-| port | `version` | 2 | 1 | 94 |
-| parameter | `type` | 159 | 0 | 0 |
-| parameter | `unit` | 159 | 0 | 0 |
-| parameter | `default` | 158 | 0 | 1 |
-| parameter | `range` | 149 | 0 | 0 |
-| parameter | `mapping` | 112 | 0 | 0 |
-| parameter | `automatable` | 159 | 0 | 0 |
-| parameter | `modulatable` | 159 | 0 | 0 |
-| parameter | `live` | 14 | 0 | 145 |
+| port | `id` | 98 | 26 | 0 |
+| port | `owner` | 98 | 26 | 0 |
+| port | `direction` | 98 | 26 | 0 |
+| port | `type` | 98 | 26 | 0 |
+| port | `role` | 98 | 26 | 0 |
+| port | `cardinality` | 98 | 26 | 0 |
+| port | `required` | 98 | 26 | 0 |
+| port | `channels` | 27 | 3 | 94 |
+| port | `rate` | 27 | 3 | 94 |
+| port | `unconnected` | 4 | 3 | 56 |
+| port | `monitor` | 27 | 3 | 94 |
+| port | `compact` | 27 | 3 | 94 |
+| port | `version` | 27 | 3 | 94 |
+| parameter | `type` | 217 | 0 | 0 |
+| parameter | `unit` | 217 | 0 | 0 |
+| parameter | `default` | 216 | 0 | 1 |
+| parameter | `range` | 202 | 0 | 0 |
+| parameter | `mapping` | 159 | 0 | 0 |
+| parameter | `automatable` | 217 | 0 | 0 |
+| parameter | `modulatable` | 217 | 0 | 0 |
+| parameter | `live` | 72 | 0 | 145 |
 
 ## Compatibility and cardinality
 
 From `canConnect` (`src/js/studio/ports.js`) over every pair of port types and the
 roles each allows.
-One output feeds many inputs. 24 input ports take more than one cable, 33 take one.
+One output feeds many inputs. 26 input ports take more than one cable, 37 take one.
 
 | From | To | Connects | Refusal |
 |---|---|---|---|
@@ -116,7 +116,7 @@ One output feeds many inputs. 24 input ports take more than one cable, 33 take o
 | `additive-voice` | 2 | 19 | 30 |
 | `vco` | 4 | 6 | 29 |
 | `oscillator` | 4 | 6 | 27 |
-| `envelope` | 4 | 4 | 26 |
+| `envelope` | 4 | 6 | 26 |
 | `xy-pad` | 4 | 5 | 25 |
 | `wavetable-voice` | 3 | 7 | 24 |
 | `stereo-split` | 3 | 5 | 22 |
@@ -130,13 +130,13 @@ One output feeds many inputs. 24 input ports take more than one cable, 33 take o
 | `keys` | 3 | 5 | 18 |
 | `pan` | 3 | 2 | 18 |
 | `sequence` | 3 | 2 | 18 |
-| `perc-voice` | 2 | 5 | 16 |
+| `perc-voice` | 2 | 45 | 16 |
 | `sweep` | 2 | 5 | 15 |
 | `calibration` | 2 | 2 | 14 |
 | `noise` | 2 | 3 | 14 |
 | `rta` | 2 | 3 | 14 |
 | `capture` | 2 | 2 | 13 |
-| `lfo` | 3 | 4 | 13 |
+| `lfo` | 5 | 5 | 13 |
 | `macro` | 2 | 1 | 12 |
 | `spectrogram` | 1 | 5 | 11 |
 | `microphone` | 2 | 0 | 10 |

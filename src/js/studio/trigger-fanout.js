@@ -25,12 +25,31 @@
 //   fan.prune(now, keepS), fan.clear(), fan.size
 //   reachedEnvelopes(model, sourceId)   Envelope ids `sourceId`'s TRIGGER edges gate, directly
 //                or through Step relays (the transport's gate ownership, gatedEnvelopes)
+//   relayOf(node, k) -> null | { ports }   whether the k-th step a clocked node takes relays, and
+//                along which of its TRIGGER outputs (ports null: all of them)
+//
+// K226: the step-voltage sequencer relays on its Gate every step and on trigN on step N only
+// (step-voltage.js svsRelayPorts), and its reset input is not a clock: a trigger into it sends
+// the step count back to 0 at the trigger's time, so the next tick (or a tick at that same
+// instant) plays step 1. Within one fan-out the edges into a reset go first; across items at one
+// instant the timeline compiler puts the items that drive a reset first (timeline-compiler.js).
 
 import { NODE_REGISTRY } from './registry.js';
 import { clipTarget, clipUse } from './clip-targets.js';
 import { effectiveTarget } from './timeline.js';
+import { svsGateFraction, svsRelayPorts, svsStep } from './step-voltage.js';
+import { MIN_SEGMENT_S } from '../audio/envelope.js';
+
+/** The node types whose own TRIGGER outputs relay the steps they take (K023, K226). */
+const RELAYS = new Set(['step-modulator', 'step-voltage-sequencer']);
+/** Whether edge `e` enters a step-voltage sequencer's reset (K226): a reset, not a clock tick. */
+const isReset = (m, e) => e.to.port === 'reset' && (nodeOf(m, e.to.node) || {}).type
+  === 'step-voltage-sequencer';
 
 const nodeOf = (m, id) => (m && id ? m.graph.nodes.find((n) => n.id === id) || null : null);
+/** The node types a Gate opens and closes: the Envelope and the Contour (K207). */
+export const GATED_TYPES = Object.freeze(['envelope', 'contour']);
+const gatedType = (n) => !!n && GATED_TYPES.includes(n.type);
 
 /**
  * Whether edge `e` leaves a TRIGGER output of its source (K103: any of them, a Keys or XY pad
@@ -45,69 +64,106 @@ function triggerOut(m, e) {
   return def.outputs.some((p) => p.id === e.from.port && p.type === 'TRIGGER');
 }
 
+/** Whether edge `e` leaves `sourceId` on one of `ports` (null: any) as an unmuted TRIGGER. */
+const leaves = (m, e, sourceId, ports) => e.from.node === sourceId && triggerOut(m, e)
+  && (!ports || ports.includes(e.from.port));
+
 /**
- * One hop of the fan-out from `sourceId` (K103): the Envelopes whose Gate its unmuted TRIGGER
- * edges reach, and every other node a TRIGGER edge of it reaches (a Random's or Step
- * Modulator's clock). -> { envelopes, clocks }
+ * One hop of the fan-out from `sourceId` (K103), along its TRIGGER outputs `ports` (null: all):
+ * the Envelopes whose Gate its unmuted TRIGGER edges reach, every other node a TRIGGER edge of it
+ * clocks (a Random's or Step Modulator's clock), and the step-voltage sequencers whose reset it
+ * reaches (K226). -> { envelopes, clocks, resets }
  */
-export function triggerHop(m, sourceId) {
+export function triggerHop(m, sourceId, ports = null) {
   const envelopes = [];
   const clocks = [];
+  const resets = [];
   for (const e of m.graph.edges) {
-    if (e.from.node !== sourceId || !triggerOut(m, e)) continue;
+    if (!leaves(m, e, sourceId, ports)) continue;
     const n = nodeOf(m, e.to.node);
     if (!n) continue;
-    if (n.type === 'envelope' && e.to.port === 'gate') envelopes.push(n.id);
+    if (gatedType(n) && e.to.port === 'gate') envelopes.push(n.id);
+    else if (isReset(m, e)) resets.push(n.id);
     else clocks.push(n.id);
   }
-  return { envelopes, clocks };
+  return { envelopes, clocks, resets };
 }
 
 /**
- * Whether the k-th clock tick (from 0) of node `n` is a step a Step Modulator takes, which its
- * own Trigger then relays (K023): every tick, but none after the last step of a 'once' run.
+ * Whether the k-th step (from 0) a clocked node `n` takes relays on its own TRIGGER outputs, and
+ * on which: a Step Modulator relays every step on its Trigger, none after the last of a 'once'
+ * run (K023); a step-voltage sequencer on its Gate and on the trigger of that step (K226).
+ * -> null (no relay) | { ports } (ports null: every TRIGGER output)
  */
-export function stepRelays(n, k) {
-  if (!n || n.type !== 'step-modulator' || k === null || k === undefined) return false;
-  return n.params.playback !== 'once' || k < n.params.steps.length;
+export function relayOf(n, k) {
+  if (!n || !RELAYS.has(n.type) || k === null || k === undefined) return null;
+  if (n.type === 'step-voltage-sequencer') {
+    const ports = svsRelayPorts(n.params, k);
+    return ports.length ? { ports } : null;
+  }
+  return n.params.playback !== 'once' || k < n.params.steps.length ? { ports: null } : null;
+}
+
+/** Whether the k-th step of node `n` relays (relayOf, as a boolean; K023's name). */
+export const stepRelays = (n, k) => relayOf(n, k) !== null;
+
+/**
+ * The item a relay of the k-th step of node `n` passes on (K226): a step-voltage sequencer with
+ * a gate-length row holds its Gate and step trigger for that fraction of the step period (a
+ * Clock's period, else the trigger's own length), at least MIN_SEGMENT_S; any other relay passes
+ * `it` as it is.
+ */
+export function relayItem(n, k, it) {
+  if (!n || n.type !== 'step-voltage-sequencer') return it;
+  const frac = svsGateFraction(n.params, svsStep(n.params, k));
+  if (frac === null) return it;
+  const period = Number.isFinite(it.period) && it.period > 0 ? it.period
+    : it.endTime - it.startTime;
+  const endTime = it.startTime + Math.max(MIN_SEGMENT_S, frac * period);
+  return { ...it, endTime, duration: endTime - it.startTime };
 }
 
 /**
- * Envelope ids a pattern clip on `sourceId` gates through its TRIGGER edges. A muted edge
- * carries nothing (ports.js: every edge can be muted), so it gates nothing (V272 A3).
+ * Envelope ids a pattern clip on `sourceId` gates through its TRIGGER edges (on `ports`, null:
+ * all). A muted edge carries nothing (ports.js: every edge can be muted), so it gates nothing
+ * (V272 A3).
  */
-function triggerEnvelopes(m, sourceId) {
+function triggerEnvelopes(m, sourceId, ports = null) {
   const out = [];
   for (const e of m.graph.edges) {
-    if (e.from.node !== sourceId || e.to.port !== 'gate' || !triggerOut(m, e)) continue;
+    if (e.to.port !== 'gate' || !leaves(m, e, sourceId, ports)) continue;
     const n = nodeOf(m, e.to.node);
-    if (n && n.type === 'envelope') out.push(n.id);
+    if (gatedType(n)) out.push(n.id);
   }
   return out;
 }
 
-/** Clocked nodes (plan `clocked`: Random, Step Modulator) a pattern clip on `sourceId` clocks. */
-function triggerClocks(m, sourceId, nodes) {
+/**
+ * Clocked nodes (plan `clocked`: Random, Step Modulator, the step-voltage sequencer) a pattern
+ * clip on `sourceId` reaches along `ports` (null: all), each with the input it reaches:
+ * [{ id, reset }], the resets first (K226: a reset at a tick's instant restarts on that tick).
+ */
+function triggerClocks(m, sourceId, nodes, ports = null) {
   const out = [];
   for (const e of m.graph.edges) {
-    if (e.from.node !== sourceId || !triggerOut(m, e)) continue;
+    if (!leaves(m, e, sourceId, ports)) continue;
     const n = nodeOf(m, e.to.node);
     const a = n ? nodes.get(n.id) : null;
-    if (a && typeof a.clock === 'function') out.push(n.id);
+    if (a && typeof a.clock === 'function') out.push({ id: n.id, reset: isReset(m, e) });
   }
-  return out;
+  return [...out.filter((t) => t.reset), ...out.filter((t) => !t.reset)];
 }
 
 /**
- * Step Modulators the unmuted TRIGGER edges of `sourceId` clock: each relays the steps it
- * takes on its own Trigger output (K023).
+ * Relaying nodes the unmuted TRIGGER edges of `sourceId` clock: each relays the steps it takes
+ * on its own TRIGGER outputs (K023 Step Modulator, K226 step-voltage sequencer).
  */
 function relayedSteps(m, sourceId) {
   const out = [];
   for (const e of m.graph.edges) {
     if (e.from.node !== sourceId || e.to.port !== 'clock' || !triggerOut(m, e)) continue;
     const n = nodeOf(m, e.to.node);
-    if (n && n.type === 'step-modulator') out.push(n.id);
+    if (n && RELAYS.has(n.type)) out.push(n.id);
   }
   return out;
 }
@@ -173,6 +229,9 @@ export function createTimelineOwner(getModel, registry = NODE_REGISTRY) {
 export function createTriggerFanout({ getModel, ready, nodes, gate }) {
   const ticks = new Map(); // tick key → { key, itemKey, nodeId, handle, time }: clock triggers
   const ticksPassed = new Map(); // clocked node id → triggers pruned from `ticks` (still counted)
+  // K226: node id → its resets [{ key, itemKey, time, raw }] by time; `raw`, once a reset is
+  // older than what prune keeps, freezes the trigger count before it.
+  const resets = new Map();
 
   /**
    * One trigger of item `it` from `sourceId` (a pattern clip's target, a Clock, a clocked Step
@@ -181,25 +240,57 @@ export function createTriggerFanout({ getModel, ready, nodes, gate }) {
    * Trigger output while it takes a step (a 'once' run takes none after its last), so the chain
    * continues from it (K023). `seen` stops a TRIGGER loop.
    */
-  function fanOut(it, sourceId, prefix, deferred = null, seen = new Set([sourceId])) {
+  function fanOut(it, sourceId, prefix, deferred = null, seen = new Set([sourceId]),
+    ports = null) {
     const model = getModel();
-    for (const env of triggerEnvelopes(model, sourceId)) {
+    for (const env of triggerEnvelopes(model, sourceId, ports)) {
       gate(`${prefix}>${env}`, it, env, it.startTime, it.endTime, deferred);
     }
-    for (const id of triggerClocks(model, sourceId, nodes)) {
+    for (const { id, reset } of triggerClocks(model, sourceId, nodes, ports)) {
+      if (reset) {
+        addReset(`${prefix}>${id}!reset`, it, id);
+        continue;
+      }
       const k = addTick(`${prefix}>${id}`, it, id);
-      if (seen.has(id) || !stepTaken(id, k)) continue;
+      const n = nodeOf(model, id);
+      const relay = relayOf(n, k);
+      if (seen.has(id) || !relay) continue;
       seen.add(id);
-      fanOut(it, id, `${prefix}>${id}`, deferred, seen);
+      fanOut(relayItem(n, k, it), id, `${prefix}>${id}`, deferred, seen, relay.ports);
     }
   }
 
-  /** Whether clock tick `k` of node `id` is a step a Step Modulator takes (and relays). */
-  const stepTaken = (id, k) => stepRelays(nodeOf(getModel(), id), k);
-
-  /** Index of a trigger at `time` on clocked node `id`: the triggers before it since PLAY. */
-  const tickIndex = (id, time) => (ticksPassed.get(id) || 0)
+  /** Raw index of a trigger at `time` on clocked node `id`: the triggers before it since PLAY. */
+  const rawIndex = (id, time) => (ticksPassed.get(id) || 0)
     + [...ticks.values()].filter((k) => k.nodeId === id && k.time < time).length;
+
+  /**
+   * Index of a trigger at `time` on clocked node `id`: the triggers before it since PLAY, or
+   * since its last reset at or before `time` (K226: a tick at a reset's instant is step 1).
+   */
+  function tickIndex(id, time) {
+    const list = resets.get(id);
+    const r = list ? list.filter((x) => x.time <= time).at(-1) : null;
+    if (!r) return rawIndex(id, time);
+    return rawIndex(id, time) - (r.raw !== undefined ? r.raw : rawIndex(id, r.time));
+  }
+
+  /**
+   * A reset of item `it` on step-voltage sequencer `id` at its start (K226). Ticks already
+   * planned at or after it are rendered again from it (an edit or an out-of-order item); the
+   * gates they relayed stay, so the transport orders resets first at one instant.
+   */
+  function addReset(key, it, id) {
+    const h = ready(id);
+    if (!h || typeof h.clock !== 'function') return;
+    const list = (resets.get(id) || []).filter((x) => x.key !== key);
+    list.push({ key, itemKey: it.key, time: it.startTime });
+    list.sort((a, b) => a.time - b.time);
+    resets.set(id, list);
+    if ([...ticks.values()].some((k) => k.nodeId === id && k.time >= it.startTime)) {
+      rebuildClock(id, it.startTime);
+    }
+  }
 
   /** A clock trigger at the item's start on clocked node `id` (V272 A2). */
   function addTick(key, it, id) {
@@ -225,10 +316,10 @@ export function createTriggerFanout({ getModel, ready, nodes, gate }) {
       .sort((a, b) => a.time - b.time);
     const before = tickIndex(id, horizon);
     h.clockFrom(horizon, Math.max(0, before - 1));
-    list.forEach((k, i) => {
+    for (const k of list) {
       k.handle = h;
-      h.clock(k.time, before + i);
-    });
+      h.clock(k.time, tickIndex(id, k.time));
+    }
   }
 
   return {
@@ -236,8 +327,11 @@ export function createTriggerFanout({ getModel, ready, nodes, gate }) {
     /** A trigger on Random or a Step Modulator: one clock tick, relayed by a Step (K023). */
     trigger(it, deferred = null) {
       const k = addTick(it.key, it, it.target);
-      if (stepTaken(it.target, k)) {
-        fanOut(it, it.target, it.key, deferred);
+      const n = nodeOf(getModel(), it.target);
+      const relay = relayOf(n, k);
+      if (relay) {
+        fanOut(relayItem(n, k, it), it.target, it.key, deferred, new Set([it.target]),
+          relay.ports);
       }
     },
     tick: addTick,
@@ -248,6 +342,12 @@ export function createTriggerFanout({ getModel, ready, nodes, gate }) {
         ticks.delete(k.key);
         touched.add(k.nodeId);
       }
+      for (const [id, list] of resets) {
+        const kept = list.filter((x) => x.itemKey !== itemKey);
+        if (kept.length === list.length) continue;
+        resets.set(id, kept);
+        touched.add(id);
+      }
     },
     /** A clocked node rebuilt by the runtime continues its steps on the new node. */
     stale() {
@@ -255,6 +355,13 @@ export function createTriggerFanout({ getModel, ready, nodes, gate }) {
         .map((k) => k.nodeId));
     },
     prune(now, keepS) {
+      // K226: a reset older than what is kept freezes the count before it, then only the last
+      // such reset stays (it still decides the ticks after it).
+      for (const [id, list] of resets) {
+        const old = list.filter((x) => x.time + keepS < now);
+        for (const x of old) if (x.raw === undefined) x.raw = rawIndex(id, x.time);
+        if (old.length > 1) resets.set(id, list.filter((x) => !old.slice(0, -1).includes(x)));
+      }
       for (const [key, k] of ticks) {
         if (k.time + keepS >= now) continue;
         ticks.delete(key);
@@ -265,6 +372,7 @@ export function createTriggerFanout({ getModel, ready, nodes, gate }) {
     clear() {
       ticks.clear();
       ticksPassed.clear();
+      resets.clear();
     },
     get size() { return ticks.size; },
   };

@@ -2,7 +2,7 @@
 // Drive.
 // The adapter contract is the header of adapters/nodes.js.
 
-import { createFilterStage, nodeQ, normalizeFilter } from '../../audio/filters.js';
+import { DB_PER_OCTAVE_Q, createFilterStage, nodeQ, normalizeFilter } from '../../audio/filters.js';
 import { createStereoRouter } from '../../audio/stereo.js';
 import { createDriveStage } from '../../audio/drive.js';
 import { CLIP_TARGET_TEXT, gainIsUsed, qIsDecibels, qIsUsed } from '../clip-targets.js';
@@ -105,7 +105,12 @@ function singleFilter({ ctx, acct, params }) {
           : { param: biquad.frequency, scale: 1 };
       }
       if (key === 'Q') {
-        if (qIsDecibels(params.type)) return { reason: CLIP_TARGET_TEXT.filterQ };
+        // A low-/high-pass Q is dB on the node: a log cable (octaves of Q) is linear in it
+        // (K232); a linear one would be mis-scaled and stays refused.
+        if (qIsDecibels(params.type)) {
+          return mapping === 'log' ? { param: biquad.Q, scale: DB_PER_OCTAVE_Q }
+            : { reason: CLIP_TARGET_TEXT.filterQ };
+        }
         if (!qIsUsed(params.type)) return { reason: CLIP_TARGET_TEXT.filterQUnused };
         return linearOnly(biquad.Q)(key, mapping);
       }
@@ -116,7 +121,9 @@ function singleFilter({ ctx, acct, params }) {
       return { reason: `unknown parameter ${key}` };
     },
     applyBase(b, immediate, owned, w) {
-      last = { frequency: b.frequency.value, Q: b.Q.value, gain: b.gain.value };
+      // The Q's log cables' constant part, folded into the linear Q (K232): nodeQ(Q * 2^c) is
+      // nodeQ(Q) + c * DB_PER_OCTAVE_Q, so the knob's conversion carries it.
+      last = { frequency: b.frequency.value, Q: qWithCents(b.Q), gain: b.gain.value };
       const c = normalizeFilter({ ...stage.config, ...last }, ctx.sampleRate);
       // What reaches the biquad: clamped frequency, Q converted for the node, gain.
       for (const [k, v] of [['frequency', c.frequency], ['Q', nodeQ(c.type, c.Q)],
@@ -155,6 +162,9 @@ function singleFilter({ ctx, acct, params }) {
     reason: null,
   };
 }
+
+/** A filter base's Q with its log cables' constant cents (K232; none: the Q as stored). */
+const qWithCents = (bq) => bq.value * 2 ** ((bq.cents || 0) / CENTS_PER_OCTAVE);
 
 /**
  * K022 24 dB/oct: two identical biquads in series (low-, high-, band-pass and notch; the other
@@ -208,7 +218,10 @@ function cascade({ ctx, acct, at, params }) {
           : { param: buses.frequency.offset, scale: 1 };
       }
       if (key === 'Q') {
-        if (qIsDecibels(params.type)) return { reason: CLIP_TARGET_TEXT.filterQ };
+        if (qIsDecibels(params.type)) { // as the one-biquad filter's (K232)
+          return mapping === 'log' ? { param: buses.Q.offset, scale: DB_PER_OCTAVE_Q }
+            : { reason: CLIP_TARGET_TEXT.filterQ };
+        }
         if (!qIsUsed(params.type)) return { reason: CLIP_TARGET_TEXT.filterQUnused };
         return linearOnly(buses.Q.offset)(key, mapping);
       }
@@ -219,7 +232,7 @@ function cascade({ ctx, acct, at, params }) {
       return { reason: `unknown parameter ${key}` };
     },
     applyBase(b, immediate, owned, w) {
-      c = normalizeFilter({ ...c, frequency: b.frequency.value, Q: b.Q.value,
+      c = normalizeFilter({ ...c, frequency: b.frequency.value, Q: qWithCents(b.Q),
         gain: b.gain.value }, sr);
       const vals = { frequency: c.frequency, Q: nodeQ(c.type, c.Q), gain: c.gain };
       for (const [k, v] of Object.entries(vals)) {

@@ -48,7 +48,11 @@
 //              band back within 1.5 dB of the no-touch reference (named until() deadlines). E059:
 //              VCO 2 is set silent first, since VCO 1 (16') and VCO 2 (8') beat in that band (4 dB
 //              over ~30 s on one held note), and each band reading is taken settled on the audio
-//              clock (two readings 0.5 s of context time apart within 0.25 dB)
+//              clock (two readings 0.5 s of context time apart within 0.25 dB). Each touch
+//              waits for the pad's gate (aria-pressed) before what it plays, and a timeout returns
+//              the gate's history since the press (aria-pressed, pointer and capture events,
+//              store revisions, re-renders) with the pad handle's status, X and Y, the transport
+//              and the context (run 42672710947: X never rose on the last cell, cause unknown)
 //   x-keys     interactive: arrows move the cursor (aria-valuenow, aria-valuetext of both
 //              sliders), Enter held sounds and its release silences; a held Enter is released
 //              by Escape, by blur and by page hide; the surface is role=application described
@@ -91,6 +95,12 @@
 //              starts it running even under the gesture rule, so there the line must never say
 //              it); the lift silences, the line says the pad plays, a second held touch sounds
 //              and its release silences; no touch edits the document
+//   x-pads-cold   (K220; the phone-cold leg, the gesture rule ON) the Synth opened on its Panel
+//              tab with no user activation: the phone shows pad L first (the L/R toggle); its
+//              first touch starts the audio and holds its gate (aria-pressed), its lift closes it;
+//              a tap on the toggle's PAD R shows pad R, whose touch sounds (above -45 dB rel) and
+//              whose lift silences (below -70 dB rel); no touch edits the document; pad R there
+//              claims no notes, so the docked keyboard stays
 //   x-dock-yields    (K171; 390 x 844 and 375 x 667, the iPhone 13 and SE sizes; touch, mobile
 //              where the engine has it, the gesture rule ON; every engine) from the Synth's
 //              own entry on its Panel tab (no pad mounted: the keys own the notes, the dock
@@ -159,6 +169,7 @@ const SIZES = { desktop: { width: 1536, height: 1024 }, laptop: { width: 1280, h
   phone: { width: 390, height: 844 }, 'phone-cold': { width: 390, height: 844 },
   'phone-dock': { width: 390, height: 844 }, 'phone-dock-se': { width: 375, height: 667 } };
 const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-cold-touch': 'phone-cold',
+  'x-pads-cold': 'phone-cold',
   'x-view-phone': 'phone' };
 const CONTEXT_OF = { 'x-view-reduced': { reducedMotion: 'reduce' } };
 // x-first runs on the desktop and the phone legs; K171 holds at the iPhone 13 and SE sizes,
@@ -175,7 +186,7 @@ const PRESET_OF = { 'x-link': 'xy-lead', 'x-pointer': 'xy-lead', 'x-view': 'xy-l
 // The tab a check opens the Synth on (default the XY tab): x-dock-yields starts on its Panel.
 const TAB_OF = { 'x-dock-yields': 'panel' };
 // Checks that open their own page (x-cold-touch: with no user activation before its touch).
-const SELF_OPEN = new Set(['x-cold-touch']);
+const SELF_OPEN = new Set(['x-cold-touch', 'x-pads-cold']);
 // Engines a check cannot run on, with the reason (reported as a skip, never as a check).
 const SKIP_OF = {
   'x-touch': { firefox: 'two touch points need the CDP touch input',
@@ -280,7 +291,8 @@ const loud = (page, what) => sound(page, (p) => p.rmsDb > -45, what);
 /** The pad node, its edges and the runtime pitch of its handle (null when not running). */
 const padState = (page) => page.evaluate(() => {
   const st = window.OSCILLA.studio;
-  const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
+  // Pad R: the panel's xy module (pad L, xyl, is an xy-pad node too since K220).
+  const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad' && n.id.endsWith('-xy'));
   const h = pad && st.runtime && st.runtime.nodes.get(pad.id);
   return { id: pad ? pad.id : null, params: pad ? pad.params : null,
     edges: pad ? st.model.graph.edges.filter((e) => e.from.node === pad.id)
@@ -288,6 +300,60 @@ const padState = (page) => page.evaluate(() => {
     pitch: h && h.outputs && h.outputs.pitch ? h.outputs.pitch.offset.value : null };
 });
 const aria = (page, sel, name) => page.locator(sel).getAttribute(name);
+
+/**
+ * The pad's gate history from now on (the flake of run 42672710947, x-y-rest's X step: X never
+ * rose, cause unknown): aria-pressed changes, lost captures, pointer events, window blur, store
+ * revisions and re-renders of the Synth view, each with its ms since the watch began.
+ */
+const watchGate = (page) => page.evaluate(() => {
+  const t0 = performance.now();
+  const log = [];
+  window.__gate = log;
+  const push = (...a) => {
+    if (log.length < 40) log.push([Math.round(performance.now() - t0), ...a]);
+  };
+  const s = document.querySelector('[data-xy-surface]');
+  new MutationObserver(() => push('pressed', s.getAttribute('aria-pressed'),
+    document.contains(s))).observe(s, { attributes: true, attributeFilter: ['aria-pressed'] });
+  new MutationObserver(() => push('render')).observe(document.getElementById('osc-view-synth'),
+    { childList: true, subtree: true });
+  for (const t of ['pointerdown', 'pointerup', 'pointercancel', 'lostpointercapture']) {
+    s.addEventListener(t, () => push(t));
+  }
+  window.addEventListener('blur', () => push('window-blur'));
+  const st = window.OSCILLA.studio;
+  st.store.subscribe(() => push('store', st.store.getRevision()));
+});
+/** What a timed-out pad step saw: the history above, the pad handle, the transport, the context. */
+const gateReport = (page) => page.evaluate(() => {
+  const st = window.OSCILLA.studio;
+  const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad' && n.id.endsWith('-xy'));
+  const h = pad && st.runtime ? st.runtime.nodes.get(pad.id) : null;
+  const ctx = window.OSCILLA.engine.ctx;
+  const s = document.querySelector('[data-xy-surface]');
+  const v = (p) => (p ? Number(p.offset.value.toFixed(3)) : null);
+  return { gate: window.__gate || null, pressed: s ? s.getAttribute('aria-pressed') : 'no pad',
+    handle: h ? h.status : 'none', x: h ? v(h.outputs.x) : null, y: h ? v(h.outputs.y) : null,
+    playing: !!(st.transport && st.transport.playing),
+    held: st.transport ? st.transport.heldNotes() : null,
+    ctx: ctx ? `${ctx.state} ${ctx.sampleRate} ${ctx.currentTime.toFixed(2)}` : null };
+});
+
+/**
+ * A page evaluation that grants no user activation: in chromium a CDP evaluation with
+ * userGesture false (Playwright's own waits and evaluations grant one), elsewhere evaluate.
+ */
+async function quietOf(page, chromium) {
+  const cdp = chromium ? await page.context().newCDPSession(page) : null;
+  return async (fn, arg) => {
+    if (!cdp) return page.evaluate(fn, arg);
+    const r = await cdp.send('Runtime.evaluate', { expression: `(${fn})(${JSON.stringify(arg)
+      === undefined ? '' : JSON.stringify(arg)})`, returnByValue: true, userGesture: false });
+    if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
+    return r.result.value;
+  };
+}
 
 async function openXy(context, base, { preset = null, tab = 'xy' } = {}) {
   // preset null: the tab as a first open shows it; tab 'panel': the Synth opened on its Panel
@@ -377,7 +443,7 @@ const hzOf = (t) => {
  */
 const cutoffAt = (page, y) => page.evaluate((yy) => {
   const st = window.OSCILLA.studio;
-  const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
+  const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad' && n.id.endsWith('-xy'));
   const e = st.model.graph.edges.find((x) => x.from.node === pad.id && x.from.port === 'y');
   const h = st.runtime && st.runtime.nodes.get(e.to.node);
   const eh = st.runtime && st.runtime.edges.get(e.id);
@@ -464,8 +530,9 @@ function defineChecks() {
     const keyDb = await keyA(page, 'after the XY lead preset: the keys still play');
     await page.evaluate(() => window.OSCILLA.studio.store.undo());
     const undone = await padState(page);
-    // One undo gives the default document back: its one Y cable into LPF Cutoff (K183).
-    if (JSON.stringify(undone.edges.map((e) => `${e.port}>${e.to.port}`)) !== '["y>frequency"]') {
+    // One undo gives the default document back: pad R cables nothing since K220 (the filter
+    // axis moved to pad L).
+    if (JSON.stringify(undone.edges.map((e) => `${e.port}>${e.to.port}`)) !== '[]') {
       return { ok: false, detail: 'one undo does not give the default cables back', undone };
     }
     await page.evaluate(() => window.OSCILLA.studio.store.redo());
@@ -508,7 +575,7 @@ function defineChecks() {
         && n.metadata.panel.module === 'lpf');
       const eg2 = m.graph.nodes.find((n) => n.metadata && n.metadata.panel
         && n.metadata.panel.module === 'eg2');
-      const pad = m.graph.nodes.find((n) => n.type === 'xy-pad');
+      const pad = m.graph.nodes.find((n) => n.type === 'xy-pad' && n.id.endsWith('-xy'));
       const into = m.graph.edges.filter((e) => e.to.node === lpf.id && e.to.port === 'frequency')
         .map((e) => ({ from: e.from.node === pad.id ? 'y' : e.from.node === eg2.id ? 'eg2'
           : 'other', ...e.props }));
@@ -561,7 +628,7 @@ function defineChecks() {
           x.getAttribute('aria-valuenow'), x.getAttribute('aria-valuetext')]) };
     });
     if (role !== 'application' || desc.group !== 'group' || desc.sliders.length !== 2
-      || !/X je nota/.test(desc.text) || !/Y řídí/.test(desc.text)) {
+      || !/X je nota/.test(desc.text) || !/Y je síla úhozu/.test(desc.text)) {
       return { ok: false, detail: 'the surface is not described by its axes', role, desc };
     }
     await surface.focus();
@@ -570,7 +637,8 @@ function defineChecks() {
     await page.keyboard.press('ArrowUp');
     const x1 = Number(await aria(page, '[data-xy-axis="x"]', 'aria-valuenow'));
     const y1 = await aria(page, '[data-xy-axis="y"]', 'aria-valuetext');
-    if (x1 !== x0 + 1 || !/% to LPF Cutoff/.test(y1)) {
+    // K220: with no Y cable (the default) Y reads as the touch's velocity.
+    if (x1 !== x0 + 1 || !/%: síla úhozu \d+$/.test(y1)) {
       return { ok: false, detail: 'the arrows did not move the cursor', x0, x1, y1 };
     }
     const held = async (what) => {
@@ -820,10 +888,16 @@ function defineChecks() {
         key: 'level2', value: 0 }).ok;
     });
     if (!oneVco) return { ok: false, detail: 'VCO 2 could not be set silent in the mixer' };
+    // K220: a new document cables nothing from pad R's Y; this check is of a Y cable into LPF
+    // Cutoff, as a document from before K220 keeps it: chosen in Y drives, as a user does.
+    await page.locator('[data-osc="synth.xy.target"]').selectOption('lpf.frequency');
+    await until(() => page.evaluate(() => window.OSCILLA.studio.model.graph.edges.some((e) =>
+      e.from.node.endsWith('-xy') && e.from.port === 'y')), { ms: 10000,
+      what: 'Y drives LPF Cutoff: the cable is in the document' });
     const clock = () => page.evaluate(() => window.OSCILLA.engine.ctx.currentTime);
     const padOut = (port) => page.evaluate((pt) => {
       const st = window.OSCILLA.studio;
-      const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad');
+      const pad = st.model.graph.nodes.find((n) => n.type === 'xy-pad' && n.id.endsWith('-xy'));
       const h = pad && st.runtime && st.runtime.nodes.get(pad.id);
       return h && h.outputs && h.outputs[pt] ? h.outputs[pt].offset.value : null;
     }, port);
@@ -856,7 +930,17 @@ function defineChecks() {
     const ref = await settled('the band with no touch settles');
     await page.keyboard.up('KeyA');
     await silent(page, 'A released');
-    const hold = await press(page, await padPoint(page, 5, 0.9)); // C4 at Y 0.9
+    const yPoint = await padPoint(page, 5, 0.9); // C4 at Y 0.9
+    await watchGate(page);
+    const hold = await press(page, yPoint);
+    // The gate first, then what it plays: a timeout names the link that broke, with the history.
+    try {
+      await until(() => page.evaluate(() => document.querySelector('[data-xy-surface]')
+        .getAttribute('aria-pressed') === 'true'), { ms: SOUND_MS,
+        what: 'the touch at Y 0.9 holds the pad\'s gate (aria-pressed)' });
+    } catch (e) {
+      return { ok: false, detail: e.message, report: await gateReport(page) };
+    }
     let opened = null;
     await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4) && (opened = rel(q)) - ref >= 6,
       'a touch at Y 0.9 opens LPF Cutoff: the band 6 dB or more over the reference');
@@ -882,7 +966,7 @@ function defineChecks() {
     const cabled = await page.evaluate(() => {
       const st = window.OSCILLA.studio;
       const g = st.model.graph;
-      const pad = g.nodes.find((n) => n.type === 'xy-pad');
+      const pad = g.nodes.find((n) => n.type === 'xy-pad' && n.id.endsWith('-xy'));
       const ye = g.edges.find((e) => e.from.node === pad.id && e.from.port === 'y');
       return st.store.dispatch({ type: 'EDGE_ADD', id: 'x-rest-probe', from: { node: pad.id,
         port: 'x' }, to: { ...ye.to }, props: { ...ye.props } }).ok;
@@ -893,9 +977,18 @@ function defineChecks() {
     const refX = await settled('the band with X cabled and no touch settles');
     await page.keyboard.up('KeyA');
     await silent(page, 'A released, X cabled');
-    const xHold = await press(page, await padPoint(page, STEPS - 1, 0.05));
-    await until(async () => (await padOut('x')) > 0.9, { ms: SOUND_MS,
-      what: 'a touch on the last cell plays X at 0.955' });
+    const xPoint = await padPoint(page, STEPS - 1, 0.05);
+    await watchGate(page);
+    const xHold = await press(page, xPoint);
+    try {
+      await until(() => page.evaluate(() => document.querySelector('[data-xy-surface]')
+        .getAttribute('aria-pressed') === 'true'), { ms: SOUND_MS,
+        what: 'the touch on the last cell holds the pad\'s gate (aria-pressed)' });
+      await until(async () => (await padOut('x')) > 0.9, { ms: SOUND_MS,
+        what: 'a touch on the last cell plays X at 0.955' });
+    } catch (e) {
+      return { ok: false, detail: e.message, report: await gateReport(page), xPoint };
+    }
     await xHold.lift();
     await silent(page, 'the lift silences, X cabled');
     await until(async () => Math.abs(await padOut('x')) < 1e-3, { ms: SOUND_MS,
@@ -918,14 +1011,7 @@ function defineChecks() {
     // userGesture false (Playwright's own waits and evaluations grant one).
     const chromium = browserName === 'chromium';
     const page = chromium ? await context.newPage() : await openXy(context, base);
-    const cdp = chromium ? await context.newCDPSession(page) : null;
-    const quiet = async (fn, arg) => {
-      if (!cdp) return page.evaluate(fn, arg);
-      const r = await cdp.send('Runtime.evaluate', { expression: `(${fn})(${JSON.stringify(arg)
-        === undefined ? '' : JSON.stringify(arg)})`, returnByValue: true, userGesture: false });
-      if (r.exceptionDetails) throw new Error(r.exceptionDetails.text);
-      return r.result.value;
-    };
+    const quiet = await quietOf(page, chromium);
     const look = () => quiet(() => {
       const e = window.OSCILLA && window.OSCILLA.engine;
       const s = document.querySelector('[data-xy-surface]');
@@ -1006,6 +1092,76 @@ function defineChecks() {
     }
     return { ok: true, coldSeen, lines: after.lines.slice(0, 4),
       off: Number(off.rmsDb.toFixed(1)) };
+  });
+
+  // K220 with project.a-phone-sounds: on a cold page (no activation, the gesture rule on) the
+  // first touch on pad R under the Panel face sounds and its lift silences; a touch on pad L
+  // arms and holds its gate; neither edits the document.
+  def('x-pads-cold', async ({ context, base, browserName }) => {
+    const chromium = browserName === 'chromium';
+    const page = chromium ? await context.newPage()
+      : await openXy(context, base, { tab: 'panel' });
+    const quiet = await quietOf(page, chromium);
+    const R = '[data-osc="synth.pads.r"] [data-xy-surface]';
+    const L = '[data-osc="synth.pads.l"] [data-xy-surface]';
+    if (chromium) await page.goto(`${base}#m=synth`);
+    await until(() => quiet(([r, l]) => !!document.querySelector(r)
+      && !!document.querySelector(l), [R, L]), { ms: LOAD_MS,
+      what: 'the PADY card is mounted (read without a user activation)' });
+    const look = () => quiet((r) => {
+      const e = window.OSCILLA && window.OSCILLA.engine;
+      return { ctx: e && e.ctx ? e.ctx.state : null,
+        active: !!(navigator.userActivation && navigator.userActivation.hasBeenActive),
+        rev: window.OSCILLA.studio.store.getRevision(),
+        pressedR: document.querySelector(r).getAttribute('aria-pressed') };
+    }, R);
+    const entry = await look();
+    if (entry.ctx === 'running' || (chromium && entry.active)) {
+      return { ok: false, detail: 'audio or an activation before a touch', entry };
+    }
+    /** A point of the pad, scrolled to the top of the view, clear of the dock. */
+    const at = (sel, fx, fy) => quiet(([q, x, y]) => {
+      const el = document.querySelector(q);
+      el.scrollIntoView({ block: 'start' });
+      window.scrollBy(0, -80);
+      const b = el.getBoundingClientRect();
+      const p = { x: b.left + x * b.width, y: b.top + (1 - y) * b.height };
+      const hit = document.elementFromPoint(p.x, p.y);
+      return { ...p, hit: !!hit && hit.closest('[data-xy-surface]') === el };
+    }, [sel, fx, fy]);
+    // A phone shows pad L first (the L/R toggle, review R2-K220-2): its touch is the first one.
+    const pl = await at(L, 0.5, 0.5);
+    if (!pl.hit) return { ok: false, detail: 'pad L\'s point is covered', pl };
+    const l = await press(page, pl, { touch: chromium });
+    await until(async () => (await look()).ctx === 'running', { ms: SOUND_MS,
+      what: 'the first touch, on pad L, starts the audio' });
+    await until(() => quiet((q) => document.querySelector(q).getAttribute('aria-pressed')
+      === 'true', L), { ms: SOUND_MS, what: 'pad L holds its gate under the touch' });
+    await l.lift();
+    await until(() => quiet((q) => document.querySelector(q).getAttribute('aria-pressed')
+      === 'false', L), { ms: SOUND_MS, what: 'pad L\'s lift closes its gate' });
+    // The toggle's PAD R, tapped, shows pad R; its touch sounds and its lift silences.
+    const tb = await quiet(() => {
+      const b = document.querySelector('[data-osc="synth.pads.toggle"] [data-pad-show="r"]');
+      b.scrollIntoView({ block: 'center' });
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    const tap = await press(page, tb, { touch: chromium });
+    await tap.lift();
+    await until(() => quiet((q) => document.querySelector(q).getBoundingClientRect().height > 0,
+      R), { ms: SOUND_MS, what: 'the toggle shows pad R' });
+    const pr = await at(R, 0.3, 0.6);
+    if (!pr.hit) return { ok: false, detail: 'pad R\'s point is covered', pr };
+    const first = await press(page, pr, { touch: chromium });
+    const on = await loud(page, 'a touch on pad R sounds');
+    await first.lift();
+    const off = await silent(page, 'its lift silences');
+    const after = await look();
+    if (after.rev !== entry.rev) {
+      return { ok: false, detail: 'a touch edited the document', entry, after };
+    }
+    return { ok: true, on: Number(on.rmsDb.toFixed(1)), off: Number(off.rmsDb.toFixed(1)) };
   });
 
   // ---- K171: the docked keyboard yields to the pad that owns the notes

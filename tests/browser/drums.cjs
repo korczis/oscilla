@@ -32,6 +32,15 @@
 //               (2 s) and the hit ends with no voice left
 //   dr-padplay  a pad strike arms the transport; one press of Play (a click, a tap at 390 px)
 //               then starts the timeline and the next stops it (review R2-K222-5)
+//   dr-sound   K071: the row's sound editor shows the first row's voice (Kopák) with its four
+//              knobs named in Czech (Kopák: doznění, ladění, hlasitost, skupina dusení); one key
+//              (ArrowUp, at 1536 px) or one pointer drag (at 390 px) on Kopák: doznění raises the
+//              engine's kickDecay in the one store, one undo entry, within 'sound knob in model'
+//              (2 s); striking the Virbl pad turns the editor to Virbl's knobs
+//              ('the editor follows the pad', 2 s)
+//   dr-sound-focus R2-T5-2: a pick in the sound editor's row select turns the editor to that
+//              row ('the editor turns to the picked row', 2 s) and the select keeps focus; a
+//              pick in a pad's voice select changes it and that select keeps focus
 //   dr-record   K223: the Record switch (role=switch) on, Play, three pads struck in the pass and
 //               Stop: three notes in the clip within 'take in model' (2 s) as one undo entry, and
 //               one Undo removes all three; Stop says the take ('Záznam zapsán: 3 údery, ...',
@@ -358,6 +367,84 @@ function defineChecks() {
     const quiet = await until(async () => ((await sources(page)) === 0 ? true : null),
       { ms: SOUND_MS, what: 'dr-pad: the kick ends with no voice left' });
     return { ok: !!(sounded && quiet) };
+  });
+
+  def('dr-sound', async ({ page, size }) => {
+    await drumClip(page);
+    const knobs = () => page.evaluate(() => [...document.querySelectorAll(
+      '[data-drums-knobs] [data-knob]')].map((k) => ({ cid: k.dataset.knob,
+      name: document.getElementById(`${k.dataset.knob}-label`).textContent.trim(),
+      role: k.getAttribute('role') })));
+    const first = await knobs();
+    const names = first.map((k) => k.name);
+    const named = JSON.stringify(names) === JSON.stringify(['Kopák: doznění', 'Kopák: ladění',
+      'Kopák: hlasitost', 'Kopák: skupina dusení']) && first.every((k) => k.role === 'slider');
+    const cid = 'perc.kickDecay';
+    const knob = page.locator(`[data-knob="${cid}"]`);
+    await knob.scrollIntoViewIfNeeded();
+    const depth = await undoDepth(page);
+    const decay = () => page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
+      .find((n) => n.type === 'perc-voice').params.kickDecay);
+    if (size.touch) { // a real pointer drag upward (pointer capture needs a live pointer)
+      const p = await centre(page, `[data-knob="${cid}"]`);
+      await page.mouse.move(p.x, p.y);
+      await page.mouse.down();
+      for (let k = 1; k <= 6; k++) await page.mouse.move(p.x, p.y - 8 * k);
+      await page.mouse.up();
+    } else {
+      await knob.focus();
+      await page.keyboard.press('ArrowUp');
+    }
+    const raised = await until(async () => ((await decay()) > 1 ? decay() : null),
+      { ms: NOTE_MS, what: 'sound knob in model' });
+    const entries = (await undoDepth(page)) - depth;
+    const pad = page.locator('[data-drum-pad="1"]');
+    await pad.scrollIntoViewIfNeeded();
+    await pad.focus();
+    await page.keyboard.press('Enter');
+    const follows = await until(async () => {
+      const k = await knobs();
+      return k.length === 4 && k.every((x) => x.cid.startsWith('perc.snare')) ? k : null;
+    }, { ms: NOTE_MS, what: 'the editor follows the pad' });
+    return { ok: named && raised > 1 && entries === 1 && !!follows, names, raised, entries };
+  });
+
+  // R2-T5-2: a pick in the sound editor's row select (and in a pad's voice select) redraws the
+  // editor; the select that fired the change keeps focus, so a keyboard user stays where they
+  // were (before the fix the redraw destroyed it and focus fell to BODY in every engine).
+  def('dr-sound-focus', async ({ page }) => {
+    await drumClip(page);
+    const active = () => page.evaluate(() => {
+      const a = document.activeElement;
+      if (!a || a === document.body) return 'BODY';
+      if (a.matches('[data-drums-sound]')) return 'sound';
+      return a.matches('[data-drum-voice]') ? `voice:${a.dataset.drumVoice}` : a.tagName;
+    });
+    const pick = page.locator('[data-drums-sound]');
+    await pick.scrollIntoViewIfNeeded();
+    await pick.focus();
+    const second = await pick.evaluate((s) => s.options[1].value);
+    await pick.selectOption(second);
+    const knobs = await until(async () => {
+      const ids = await page.evaluate(() => [...document.querySelectorAll(
+        '[data-drums-knobs] [data-knob]')].map((k) => k.dataset.knob));
+      return ids.length === 4 && ids.every((x) => x.startsWith('perc.snare')) ? ids : null;
+    }, { ms: NOTE_MS, what: 'the editor turns to the picked row' });
+    const afterSound = await active();
+    const voice = page.locator('[data-drum-voice="0"]');
+    await voice.scrollIntoViewIfNeeded();
+    await voice.focus();
+    // a voice no row plays yet (a voice already on another row is refused as a duplicate)
+    const other = await voice.evaluate((s) => {
+      const used = new Set([...document.querySelectorAll('[data-drum-voice]')].map((x) => x.value));
+      return [...s.options].map((o) => o.value).find((v) => !used.has(v));
+    });
+    await voice.selectOption(other);
+    const changed = await until(async () => (await voice.evaluate((s) => s.value)) === other
+      || null, { ms: NOTE_MS, what: 'the pad voice is changed' });
+    const afterVoice = await active();
+    return { ok: !!knobs && !!changed && afterSound === 'sound' && afterVoice === 'voice:0',
+      afterSound, afterVoice };
   });
 
   def('dr-padplay', async ({ page, size }) => {

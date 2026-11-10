@@ -32,7 +32,8 @@
 // its sources run on); all-off releases the held voices and cuts the ringing one-shots.
 //
 // Headroom (ADR 0058's rule for note voices, review of #332): a voice peaks at Level / 4 /
-// MAX_VOICES of digital full scale times the velocity law, so the 16 voices at the highest
+// MAX_VOICES of digital full scale times the velocity law (1/8 at Level 4 and full velocity, the
+// owner's Q021 gain per voice), so the MAX_VOICES (8) voices at the highest
 // Level (4) and velocity together peak at most at full scale and the Master Output level stays
 // the cap: the output ceiling is never the limiter. No high-pass follows a voice: at some
 // settings one raises its peak above that bound (measured: an FM stack +35 %, a square at E2
@@ -108,6 +109,9 @@ export function createVoiceHost({ ctx, acct, params, build }) {
   const adsrOf = () => ({ a: p.attack, d: p.decay, s: p.sustain, r: p.release });
 
   function noteOn(t, note, velocity = 100, tag = null) {
+    // Velocity 0 sounds nothing (K071): no voice is built, taken or stolen for it.
+    if (velocityLevel(velocity) <= 0) return { slot: null, stolen: false, retrigger: false,
+      dropped: 0 };
     const peak = voicePeak(p.level, velocity);
     const same = pool.heldSlot(note);
     const held = same == null ? null : live.get(same);
@@ -146,9 +150,12 @@ export function createVoiceHost({ ctx, acct, params, build }) {
     v.slot = a.slot;
     v.amp.connect(out);
     v.group = built.group || null;
-    if (built.chokes) { // a choke group: this hit releases the group's sounding voices
+    if (built.chokes) { // a choke group: this hit releases the group's voices sounding at it,
+      // never one scheduled to start later or one that has already ended (K071)
       for (const o of live.values()) {
-        if (o.group === built.chokes) pool.end(o.slot, release(o, start, CHOKE_RELEASE_S));
+        if (o.group === built.chokes && o.start <= start && o.end > start) {
+          pool.end(o.slot, release(o, start, CHOKE_RELEASE_S));
+        }
       }
     }
     if (Number.isFinite(built.oneShotEnd)) {

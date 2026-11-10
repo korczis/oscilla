@@ -40,6 +40,8 @@ import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
 import { OWNER } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
+import { STATUS_PLAY_WORKSPACES } from './shortcuts.js';
+import { statusPlayHint } from '../core/play-hints.js';
 import { registerEmptyPredicate } from './empty-states.js';
 
 // Presets' empty state (registry field `empty`, ui/shell.js): the Custom category is in view
@@ -137,6 +139,19 @@ export function createWorkbench(svc) {
     // The instrument's own Play (ADR 0050): the status Play button triggers, latches or stops the
     // instrument and the Pattern Sequencer, never the Studio, so it reflects only them.
     get isSounding() { return this.playing || this.seqPlaying; },
+    /**
+     * Whether the status bar's Play shows at desktop width too (C030): in the instrument
+     * workspaces that lay out no Hold or Trigger (ui/shortcuts.js STATUS_PLAY_WORKSPACES).
+     */
+    get statusPlayShown() { return STATUS_PLAY_WORKSPACES.includes(this.workspace); },
+    /**
+     * The status Play's accessible name and title, in Czech (R2-C030-2): the word the prompts of
+     * core/play-hints.js name it by ("Přehrát") begins each name a screen reader announces.
+     */
+    get statusPlayName() {
+      if (this.isSounding) return 'Zastavit přehrávání';
+      return this.continuousAllowed && !this.isProgrammed ? 'Přehrát nepřetržitě' : 'Přehrát';
+    },
     /**
      * Who owns the one output now ('instrument' | 'sequencer' | 'studio' | null), for the views
      * that describe it (C013). The Studio is read through its transport (studioOwnsOutput);
@@ -257,6 +272,15 @@ export function createWorkbench(svc) {
       if (this.continuousAllowed) return 'no limit';
       return `≤ ${this.safetyLimit} s`;
     },
+    /**
+     * Every field of the status readout in one line, its title (C030): where the bar has no room
+     * for all of them (1536 px with the status Play, a phone, which drops the secondary fields),
+     * the full readout is still there to read.
+     */
+    get statusReadoutTitle() {
+      return [this.statusFreqText, this.statusWaveText, this.statusPatternText,
+        this.statusDurationText, this.statusGainText].join(' · ');
+    },
     get statusGainText() {
       // The level actually in effect: the Studio's Master Output while it holds the master stage
       // (C012), otherwise the Playground gain. Never written into gainLevel: the gainLevel $watch
@@ -323,7 +347,8 @@ export function createWorkbench(svc) {
       if (owner !== 'instrument') {
         const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
         return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
-          + 'Hold to Play shows the live output analyser trace.';
+          + (statusPlayHint(this.workspace, 'scope') // C030: the Play on screen there
+            || 'Hold to Play shows the live output analyser trace.');
       }
       const sparse = f > 0 && sr > 0 && sr / f < 4;
       const shown = this.scopeShownMs;

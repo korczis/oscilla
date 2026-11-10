@@ -22,12 +22,17 @@
 //     K221: a list parameter (the Step Modulator's steps) as the kind's param-list lane, one
 //     NODE_PARAM_SET per gesture; resize pads with 0 or cuts to `length` within the parameter's
 //     minLength..maxLength
+//   svsStepButton(view, svc) -> element | null   K226: a step-voltage sequencer's manual step
+//     (Krok), null for any other node or without svc.stepNode: svc.stepNode(id) (the workspace's,
+//     transport.step) takes one step through the live router while armed; the step, or the
+//     reason it was refused, is said through svc.announce
 
 import { midiToName } from '../../core/music.js';
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { mountStepGrid } from '../kinds/step-grid.js';
 import { bindRecordSwitch, recordSwitchHtml } from '../kinds/record-switch.js';
 import { PRO } from '../pro-classes.js';
+import { h } from './graph-dom.js';
 
 /** The lane an empty notes clip shows: C4. */
 export const DEFAULT_LANE = 60;
@@ -139,4 +144,17 @@ export function mountListSteps(host, svc, { nodeId, param, values }) {
     },
     destroy() { grid.destroy(); },
   };
+}
+
+export function svsStepButton(view, svc) {
+  if (view.type !== 'step-voltage-sequencer' || typeof svc.stepNode !== 'function') return null;
+  return h('div', { class: 'flex items-center gap-2 my-2' }, [
+    h('button', { type: 'button', class: PRO.btnSecondary, 'data-osc': 'studio.inspector.svsStep',
+      'data-key': 'studio.inspector.svsStep', text: 'Krok', 'aria-label': 'Ruční krok sekvenceru',
+      onClick: () => {
+        const r = svc.stepNode(view.id) || {};
+        svc.announce(r.ok ? `Krok ${Number.isInteger(r.step) ? r.step + 1 : ''}`.trim()
+          : r.reason || 'Krok se nepodařil.');
+      } }),
+  ]);
 }

@@ -66,6 +66,14 @@ export default [
     effect: { command: 'request microphone permission from the browser' },
   }),
   defineComponent({
+    id: 'studio.inspector.svsStep',
+    kind: 'action',
+    label: 'Krok',
+    docs: 'Posune krokový sekvencer CV o jeden krok, když je Studio připravené ke hře.',
+    state: { none: 'počet kroků drží živý směrovač transportu, ne model' },
+    effect: { command: 'jeden ruční krok vybraného krokového sekvenceru CV' },
+  }),
+  defineComponent({
     id: 'studio.inspector.limitNote',
     kind: 'readout',
     label: 'Played value limit',

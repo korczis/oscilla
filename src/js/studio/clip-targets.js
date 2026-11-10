@@ -45,12 +45,13 @@
 // lane plays unless its parameter has no
 // linear AudioParam that Web Audio uses:
 // a Stereo Split pan or level is a pan law over several gains (no single AudioParam), a low-/
-// high-pass Q AudioParam is in dB (a linear lane would be mis-scaled), a shelf ignores its Q,
+// high-pass Q AudioParam is in dB (its lane plays through laneMap since K232), a shelf ignores
+// its Q,
 // and a filter's gain is ignored by Web Audio for every type but peaking and the shelves.
 // tests/unit/v4-clip-target-policy.test.mjs proves the store, the UI and the transport give this
 // verdict for every node type, clip kind, action and parameter in the registry.
 
-import { usesGain, usesQ } from '../audio/filters.js';
+import { nodeQ, usesGain, usesQ } from '../audio/filters.js';
 import { NODE_REGISTRY, playsNotes } from './registry.js';
 import { article } from './a11y.js';
 import { EVENT_ACTIONS, MEASUREMENT_ACTIONS } from './schema.js';
@@ -71,6 +72,19 @@ export const MEASUREMENT_TARGETS = Object.freeze({
  */
 export function qIsDecibels(type) {
   return type === 'lowpass' || type === 'highpass';
+}
+
+/**
+ * How a lane's values reach its AudioParam (K232, review condition 2 of oscilla-c1: declared on
+ * the parameter definition, one function for the live transport, the offline render and the
+ * policy): (paramDef, node params) -> value map | null. A low- or high-pass Q's lane
+ * (`lane: 'db-of-q'`) is in Q and plays on the biquad's dB Q, nodeQ of each value: a step stays
+ * a step, an exponential ramp in Q is a linear one in dB (exact), and a linear ramp in Q plays
+ * linear in dB between its exact ends (the knob's log scale between them). null: the value as is.
+ */
+export function laneMap(def, params) {
+  return def && def.lane === 'db-of-q' && params && qIsDecibels(params.type)
+    ? (v) => nodeQ(params.type, v) : null;
 }
 
 /**
@@ -106,6 +120,7 @@ const EVENT_PLAY = Object.freeze({
   keys: Object.freeze({ gate: 'keys-gate' }), // the Keys Gate (K060)
   random: Object.freeze({ trigger: 'clock' }),
   'step-modulator': Object.freeze({ trigger: 'clock' }),
+  'step-voltage-sequencer': Object.freeze({ trigger: 'clock' }), // K226
 });
 
 /** Reasons the transport gives for what it does not play. */
@@ -121,12 +136,14 @@ export const CLIP_TARGET_TEXT = Object.freeze({
   notesUnplayed: (name) => `Notové klipy hrají na uzlu Keys a na perkusním enginu; tento klip na `
     + `${name} zůstává, ale `
     + 'nehraje se.',
-  filterQ: 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q modulation would be '
-    + 'mis-scaled, so it is not applied.',
+  filterQ: 'Q dolní a horní propusti je ve Web Audio v dB: lineární kabel by měl špatné '
+    + 'měřítko, a proto se nepoužije; kabel v log mapování (oktávy Q) a automatizace ano.',
   filterQUnused: 'Web Audio ignores Q for the low-shelf and high-shelf types; a Q lane or '
     + 'modulation on this type would change nothing, so it is not applied.',
   filterGain: 'Web Audio uses the gain of a filter only for the peaking and shelving types; a '
     + 'gain lane or modulation on this type would change nothing, so it is not applied.',
+  lfoMorph: 'Prolínání tvaru platí jen pro tvar Prolínání; na jiném tvaru LFO by dráha ani '
+    + 'modulace nic nezměnila, a proto se nepoužije.',
   stereoSplit: (name, label) => `${name} ${label} sets a pan law over several gains; no single `
     + 'AudioParam carries it, so a lane cannot drive it.',
 });
@@ -137,11 +154,15 @@ export const CLIP_TARGET_TEXT = Object.freeze({
  */
 const LANE_LIMITS = Object.freeze({
   filter: (node, p) => {
-    if (p.key === 'Q' && qIsDecibels(node.params.type)) return CLIP_TARGET_TEXT.filterQ;
+    if (p.key === 'Q' && qIsDecibels(node.params.type) && !laneMap(p, node.params)) {
+      return CLIP_TARGET_TEXT.filterQ;
+    }
     if (p.key === 'Q' && !qIsUsed(node.params.type)) return CLIP_TARGET_TEXT.filterQUnused;
     if (p.key === 'gain' && !gainIsUsed(node.params.type)) return CLIP_TARGET_TEXT.filterGain;
     return null;
   },
+  lfo: (node, p) => (p.key === 'morph' && node.params.shape !== 'morph'
+    ? CLIP_TARGET_TEXT.lfoMorph : null), // K229: the morph acts on the morph shape only
   'stereo-split': (node, p) => CLIP_TARGET_TEXT.stereoSplit(node.metadata.name, p.label),
 });
 

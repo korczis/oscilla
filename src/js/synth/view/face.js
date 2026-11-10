@@ -10,7 +10,7 @@
 
 import { choiceLayout, choiceSvg, knobModel, knobSvg, selectorSvg } from './knob.js';
 import { ariaAttrs } from '../../ui/synth/knob.js';
-import { amountEdges, amountReason, brokenByRemoval } from '../normals.js';
+import { amountEdges, amountReason, brokenByRemoval, switchEdges } from '../normals.js';
 import { CHIP, LABEL, NOTE, VALUE } from '../../ui/synth/label.js';
 import { plateSvg } from '../../ui/synth/plate.js';
 import { displayHtml } from '../../ui/synth/display.js';
@@ -44,6 +44,7 @@ export const xyGlideIdle = (keys) => 'Glide tvaruje vlastní výstup Pitch XY pa
 /** Why a control on this face does nothing now, or null (project.no-inert-surfaces (b)). */
 export function controlReason(module, node, control, model, panel) {
   if (control.kind === 'amount') return amountReason(model, panel, control.amount);
+  if (control.kind === 'cable') return null; // a cable switch patches or removes its cable
   // The node type's own rule (nodes/engines.js `inactive`): data, beside its parameters.
   const own = typeof module.def.inactive === 'function'
     ? module.def.inactive(node.params, control.key) : null;
@@ -69,6 +70,7 @@ export function controlReason(module, node, control, model, panel) {
 }
 
 export function controlValue(control, node, model, panel) {
+  if (control.kind === 'cable') return switchEdges(model, panel, control.cable).length > 0;
   if (control.kind !== 'amount') return node.params[control.key];
   const e = amountEdges(model, panel, control.amount)[0];
   return e ? e.props.depth : 0;
@@ -87,7 +89,7 @@ const disabled = (cid, reason) => (reason
 /** A knob: the layer's (view/knob.js knobSvg), its ARIA N003's position 0..1000 with the value
  *  and unit as text (ariaAttrs), its focus ring the drawing's, shown on keyboard focus. The
  *  readout is one line: the value with a short physical unit only (knobModel format). */
-function knobHtml(cid, c, value, reason, tokens) {
+export function knobHtml(cid, c, value, reason, tokens) {
   const a = ariaAttrs(value, c.param);
   return `<div class="flex w-20 flex-col items-center gap-1" data-control="${cid}">`
     + `<span class="${LABEL} text-center leading-tight" id="${cid}-label">${esc(c.label)}</span>`
@@ -191,6 +193,14 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     + `</button></h3><span class="px-2 ${NOTE}">`
     + `${esc(m.def.displayName)}</span></header>`;
   const bg = plateSvg({ id: m.id, tokens });
+  if (!node && m.optional) { // PAD L (K220): a document without it simply has none
+    return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
+      + `aria-labelledby="${hid}" data-module="${m.id}">${bg}${head}`
+      + `<p class="relative px-3 pb-3 text-sm text-gray-600 dark:text-gray-300">Tento dokument `
+      + `Studia nemá ${esc(m.label)}. <button type="button" class="font-medium text-primary-600 `
+      + `underline dark:text-primary-400" data-restore-module="${m.id}">Přidat ${esc(m.label)}`
+      + '</button></p></section>';
+  }
   if (!node) {
     const row = model ? brokenByRemoval(model, panel).find((r) => r.module === m.id) : null;
     return `<section class="relative overflow-hidden bg-white rounded-lg shadow dark:bg-gray-800" `
@@ -213,7 +223,9 @@ export function plateHtml({ panel, module: m, node, model, tokens, collapsed = f
     const value = controlValue(c, node, model, panel);
     const reason = controlReason(m, node, c, model, panel);
     if (c.kind === 'switch') return switchHtml(cid, c, value, reason, tokens);
-    if (c.kind === 'toggle') return toggleHtml(cid, c, value, reason, tokens);
+    if (c.kind === 'toggle' || c.kind === 'cable') { // K229: a cable switch is a toggle
+      return toggleHtml(cid, c, value, reason, tokens);
+    }
     if (c.kind === 'list') {
       return `<p class="${VALUE}">${esc(c.label)}: ${value.length} values (edit in Studio)</p>`;
     }

@@ -573,7 +573,7 @@ function defineChecks() {
       'projectId', 'templateId', 'measurementRun', 'rendering', 'trace', 'library', 'counts'];
     const TRANSPORT_KEYS = ['start', 'stop', 'arm', 'disarm', 'live', 'armed', 'liveVoices',
       'heldNotes', 'locate', 'returnToStart', 'setLoop', 'sync', 'admit', 'escape', 'playhead',
-      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing'];
+      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing', 'step'];
     const got = await page.evaluate(() => {
       const O = window.OSCILLA;
       const m = O.measure;
@@ -2029,6 +2029,22 @@ function defineChecks() {
     const DROP = 'Continuous repeat not restored';
     const inPage = (fn, arg) => page.evaluate(fn, arg);
     /** The notices the page shows, as "title: message", read from the DOM. */
+    // The restored-link notice's title by the link's workspace, read from the source that sets
+    // it (core/play-hints.js), so the check follows the list instead of copying it (R2-C030-5).
+    const hints = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'js', 'core',
+      'play-hints.js'), 'utf8');
+    // A source whose shape changed fails by name, not as an undefined further on (R2-C030-6).
+    const fromHints = (re, what) => {
+      const m = re.exec(hints);
+      if (!m) throw new Error(`${what} not found in src/js/core/play-hints.js (its shape changed)`);
+      return m[1];
+    };
+    const playWs = JSON.parse(fromHints(/STATUS_PLAY_WORKSPACES = Object\.freeze\((\[[^\]]*\])\)/,
+      'STATUS_PLAY_WORKSPACES').replace(/'/g, '"'));
+    const czechTitle = fromHints(/STATUS_PLAY_TITLES = Object\.freeze\(\{[^}]*?restored: '([^']+)'/,
+      'STATUS_PLAY_TITLES.restored');
+    const restoredTitle = (m) => (playWs.includes(m) ? czechTitle
+      : 'Configuration restored from link');
     const shown = (p) => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
       .filter((el) => el.getClientRects().length > 0)
       .map((el) => `${el.querySelector('strong').textContent}: `
@@ -2114,7 +2130,12 @@ function defineChecks() {
           await p2.goto(url);
           await H.ready(p2);
           leg.link = await told(p2, `link restore names the drop at ${w}px`);
-          leg.link.summary = leg.link.notices.find((t) => t.startsWith('Configuration restored'));
+          // The link's workspace (its m key) picks the notice's title: Czech where the status
+          // bar's Play is the only one (C030, core/play-hints.js), V1's elsewhere.
+          const m = (/(?:^|&)m=([^&]+)/.exec(hash) || [])[1] || null;
+          leg.link.m = m;
+          leg.link.title = restoredTitle(m);
+          leg.link.summary = leg.link.notices.find((t) => t.startsWith(`${leg.link.title}: `));
         } finally {
           await p2.close();
         }
@@ -2141,7 +2162,9 @@ function defineChecks() {
         && l[k].allowed === false)
       && !/All settings were restored/.test(l.import.summary)
       && /Not restored: continuous repeat/.test(l.import.summary)
-      && /Not restored: continuous repeat/.test(l.link.summary || '');
+      && /Not restored: continuous repeat/.test(l.link.summary || '')
+      && typeof czechTitle === 'string'
+      && (!playWs.includes(l.link.m) || l.link.summary.startsWith(`${czechTitle}: `));
     const ok = Object.keys(legs).length === 2 && Object.values(legs).every(legOk);
     return { ok, legs };
   });
@@ -3392,10 +3415,12 @@ function defineChecks() {
     return { ok, ...res };
   });
 
-  // The status-bar transport key (shown below 768 px) reads "Stop playback" while the sequence
+  // The status-bar transport key (shown below 768 px) reads STOP_NAME while the sequence
   // plays: one press (click or Enter) stops it and starts no instrument voice. Pressed inside
   // the poll window it still stops the sequence (the live state); its label returns to Play.
   def('status-key-stops-only', async ({ page }) => {
+    // the status Play's name while something sounds (ui/workbench.js statusPlayName, C030)
+    const STOP_NAME = 'Zastavit přehrávání';
     const res = {};
     const st = () => page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -3407,7 +3432,7 @@ function defineChecks() {
     const quiet = (what) => until(async () => {
       const s = await st();
       return !s.editor && !s.mirror && !s.instrument && !s.voice && s.nodes === 0
-        && s.label !== 'Stop playback' ? s : null;
+        && s.label !== STOP_NAME ? s : null;
     }, { ms: 6000, what });
     await page.setViewportSize({ width: 390, height: 844 });
     try {
@@ -3417,8 +3442,8 @@ function defineChecks() {
         await page.click('#osc-seq-play');
         const before = await until(async () => {
           const s = await st();
-          return s.label === 'Stop playback' && s.editor ? s : null;
-        }, { ms: 6000, what: `status key (${how}) reads Stop playback while the sequence plays` });
+          return s.label === STOP_NAME && s.editor ? s : null;
+        }, { ms: 6000, what: `status key (${how}) reads ${STOP_NAME} while the sequence plays` });
         res[how] = { before };
         if (how === 'click') {
           await page.click('#osc-sb-play');
@@ -3427,7 +3452,7 @@ function defineChecks() {
           await page.keyboard.press('Enter');
         }
         res[how].after = await st();
-        res[how].quiet = await quiet(`status key (${how}): nothing sounds after Stop playback`);
+        res[how].quiet = await quiet(`status key (${how}): nothing sounds after the Stop`);
       }
       res.pollWindow = await seqPollWindow(page, 'status-key');
       res.pollWindow.quiet = await quiet('status key in the poll window: nothing sounds');
@@ -3435,7 +3460,7 @@ function defineChecks() {
       await page.setViewportSize({ width: 1536, height: 1024 });
       await seqDone(page);
     }
-    const pressed = (r) => r.before.label === 'Stop playback' && !r.after.editor
+    const pressed = (r) => r.before.label === STOP_NAME && !r.after.editor
       && !r.after.instrument && !r.after.voice && !!r.quiet;
     const pw = res.pollWindow;
     // pw.at.mirror may already be true: C002's claim sets the mirror in the play (see above).

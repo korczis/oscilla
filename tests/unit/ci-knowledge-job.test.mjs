@@ -111,12 +111,12 @@ const MISSING_KEY = {
 };
 
 // The same situation under the pinned Majordomus: the lines the verdict reads, as
-// `majordomus doctor --json` CAPTURED_WITH printed them on 2026-11-07 (first on 2026-10-29 with
-// 1.0.0-alpha.9, unchanged) for a copy of this repository with the `knowledge:` block removed
-// and no git hooks, as on a CI runner. The missing-key WARN is word for word the 0.13.2 line;
+// `majordomus doctor --json` CAPTURED_WITH printed them on 2026-11-10 (first on 2026-10-29 with
+// 1.0.0-alpha.9, then 1.0.0 on 2026-11-07, unchanged) for a copy of this repository with the
+// `knowledge:` block removed and no git hooks, as on a CI runner. The missing-key WARN is word for word the 0.13.2 line;
 // the stderr line gained the policy path.
 // Capture again when a pin change alters doctor's output.
-const CAPTURED_WITH = '1.0.0';
+const CAPTURED_WITH = '1.0.1';
 const PINNED = {
   layout: { level: 'OK', category: 'layout', subject: '.ai/manifest.yaml',
     message: 'schema ai-repository/v1', reproduce: '' },

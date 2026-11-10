@@ -1,13 +1,30 @@
-// Studio adapters of the Synth panel's node types (nodes/instrument.js): Keys, VCO, Ring.
+// Studio adapters of the Synth panel's node types (nodes/instrument.js): Keys, VCO, Ring, the
+// XY Pad and Contour.
 // The adapter contract is the header of adapters/nodes.js. Native Web Audio only, every node
 // through acct.track / acct.source; no recurrence and no DelayNode (project.no-silent-feedback).
 
 import { SAFE_NYQUIST_FACTOR } from '../../core/constants.js';
+import {
+  ENVELOPE_FLOOR, applyAdsr, forgetParam, holdAt, releaseAt, setAt,
+} from '../../audio/envelope.js';
 import { buildPeriodicWave, pulseSeries } from '../../audio/additive.js';
 import { KEYS_PITCH_RANGE, VCO_SCALES, xyDegree } from '../nodes/instrument.js';
 import {
   PARAM_TAU_S, UNIPOLAR, did, free, inertHandle, linearOnly, setParam,
 } from './common.js';
+
+/**
+ * The time constant the Keys node's velocity output glides to a note's velocity with (review
+ * C1-K220-2): 3 ms, 97 % in about 10 ms, so a velocity change under a sounding voice is no click
+ * and a note from silence has its velocity within an envelope's attack.
+ */
+export const VELOCITY_TAU_S = 0.003;
+/**
+ * The Keys node's velocity output at rest: the keys' default velocity, 100 (review R2-K220-5 of
+ * oscilla-c3, seconded by oscilla-c1). The Synth panel's VELOCITY stage is gain 1.00 there, so a
+ * gate without a note (a K060 gate clip) sounds at the level it had before VELOCITY.
+ */
+export const KEYS_REST_VELOCITY = 100 / 127;
 
 /** Octaves the VCO pitch clip spans each way (its WaveShaper input is pitch / span). */
 export const PITCH_SPAN_OCT = 8;
@@ -124,7 +141,7 @@ export const keys = {
     const pitch = started(acct, ctx.createConstantSource(), at);
     const velocity = started(acct, ctx.createConstantSource(), at);
     pitch.offset.setValueAtTime(0, ctx.currentTime);
-    velocity.offset.setValueAtTime(0, ctx.currentTime);
+    velocity.offset.setValueAtTime(KEYS_REST_VELOCITY, ctx.currentTime);
     const sched = createPitchSchedule(pitch.offset, 0, () => ctx.currentTime);
     const [lo, hi] = KEYS_PITCH_RANGE;
     const clampHz = (SAFE_NYQUIST_FACTOR * ctx.sampleRate) / 2;
@@ -132,14 +149,17 @@ export const keys = {
     let gate = { open: false, at: null };
     // Velocity steps as written ({ t, v }), so holdPitch can hold the value it has at a time;
     // kept by the audio clock (fromNow), as the pitch schedule.
-    let vels = [{ t: 0, v: 0 }];
+    // Each velocity change glides in (VELOCITY_TAU_S, review C1-K220-2 of oscilla-c1): since
+    // K220 the panel's VELOCITY stage scales the sounding voice by it, so a step at a note-on
+    // over a release tail or a legato note would click. A record keeps where its glide began.
+    let vels = [{ t: 0, v: KEYS_REST_VELOCITY, from: KEYS_REST_VELOCITY }];
     // The last ONSET_LOG gate onsets this node played (a note that opened its gate), in time
     // order, as scheduled: debugInfo's onsets and the interval between the last two (K068).
     let onsets = [];
     const velAt = (t) => {
-      let v = vels[0].v;
-      for (const x of vels) if (x.t <= t) v = x.v;
-      return v;
+      let x = vels[0];
+      for (const y of vels) if (y.t <= t) x = y;
+      return x.v + (x.from - x.v) * Math.exp(-Math.max(0, t - x.t) / VELOCITY_TAU_S);
     };
     return {
       inputs: {},
@@ -153,15 +173,17 @@ export const keys = {
       },
       /**
        * Note `n` at velocity `vel` (0-127) from t. Legato with Glide > 0: a linear ramp that
-       * reaches the note at exactly t + Glide; otherwise a step at t.
+       * reaches the note at exactly t + Glide; otherwise a step at t. The velocity glides in
+       * from t (VELOCITY_TAU_S: 97 % in 10 ms, inside an envelope's attack).
        */
       play(t, n, vel, { legato = false, onset = false } = {}) {
         const oct = Math.min(hi, Math.max(lo, (n + p.transpose - 69) / 12));
         sched.to(t, oct, legato && p.glide > 0 ? p.glide : 0);
         if (vel != null) {
           const v = Math.min(1, vel / 127);
-          velocity.offset.setValueAtTime(v, t);
-          vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v }), ctx.currentTime,
+          const from = velAt(t);
+          velocity.offset.setTargetAtTime(v, t, VELOCITY_TAU_S);
+          vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v, from }), ctx.currentTime,
             (x) => x.t);
         }
         if (onset) onsets = onsets.filter((x) => x < t).concat(t).slice(-ONSET_LOG);
@@ -174,12 +196,22 @@ export const keys = {
        */
       holdPitch(t) {
         sched.to(t, sched.valueAt(t), 0);
-        const v = velAt(t);
+        const v = velAt(t); // where its glide is at t: held there, no step
         velocity.offset.cancelScheduledValues(t);
         velocity.offset.setValueAtTime(v, t);
-        vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v }), ctx.currentTime,
+        vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v, from: v }), ctx.currentTime,
           (x) => x.t);
         onsets = onsets.filter((x) => x < t);
+      },
+      /**
+       * A gate that carries no velocity (a K060 gate clip, transport.js keys-gate) plays at rest:
+       * the velocity glides back to KEYS_REST_VELOCITY from t, not the last note's.
+       */
+      restVelocity(t) {
+        const from = velAt(t);
+        velocity.offset.setTargetAtTime(KEYS_REST_VELOCITY, t, VELOCITY_TAU_S);
+        vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v: KEYS_REST_VELOCITY, from }),
+          ctx.currentTime, (x) => x.t);
       },
       /** The gate the note router (live-notes.js) opened or closed at t. */
       gateAt(t, open) {
@@ -362,6 +394,78 @@ export const xyPad = {
       },
       dispose() {},
       info: { pad: true },
+      status: 'ready',
+      reason: null,
+    };
+  },
+};
+
+/**
+ * Contour (K207): a gate-driven attack, hold and release on a ConstantSource's offset, through
+ * audio/envelope.js so every ramp starts from the value the contour has (cancelAndHold or its
+ * emulation, no step) and is recorded. The attack is the envelope's linear ramp to 1 with a
+ * flat sustain at 1; the release, to the envelope floor, starts when the gate ends but never
+ * before the attack and Hold have passed (a tap still reaches 1 and holds). Invert (structural)
+ * subtracts the contour from a constant 1: sign gain -1 and a bias source into the output.
+ * A contour its owner gates (`gated`) is built closed, as an Envelope is.
+ */
+export const contour = {
+  compiler: 'audio/envelope.js#applyAdsr',
+  structural: ['invert'],
+  create({ ctx, acct, at, params, gated = false }) {
+    if (!hasConstant(ctx)) {
+      return inertHandle('degraded', 'Contour potřebuje ConstantSourceNode, který tento '
+        + 'prohlížeč nemá.');
+    }
+    let p = { ...params };
+    const shape = () => ({ a: p.attack, d: 0.001, s: 1, r: p.release });
+    const src = acct.source(acct.track(ctx.createConstantSource()));
+    const out = acct.track(ctx.createGain());
+    const sign = p.invert ? acct.track(ctx.createGain()) : null;
+    const bias = p.invert ? acct.source(acct.track(ctx.createConstantSource())) : null;
+    if (sign) {
+      sign.gain.setValueAtTime(-1, at);
+      bias.offset.setValueAtTime(1, at);
+      src.connect(sign);
+      sign.connect(out);
+      bias.connect(out);
+      bias.start(at);
+    } else src.connect(out);
+    const level = src.offset;
+    let opened = at; // when the last gate opened: the release waits for attack + hold after it
+    // Ungated, the gate opens when the graph starts, as an Envelope's does; gated, the level sits
+    // at the floor from `at` (no attack is ever scheduled) until the owner's first gate.
+    if (gated) setAt(level, at, ENVELOPE_FLOOR);
+    else applyAdsr(level, at, shape());
+    src.start(at);
+    const earliest = () => opened + p.attack + p.hold;
+    return {
+      inputs: {},
+      outputs: { control: out },
+      outputRange: { control: UNIPOLAR },
+      modTarget: (key) => ({ reason: `Parametr ${key} uzlu Contour nelze modulovat.` }),
+      applyBase() {},
+      update(changed, owned, w) { // the next gate
+        p = { ...p, ...changed };
+        did(w, changed, Object.keys(changed), 'next-gate');
+      },
+      /** Gate on at t (from the value the contour has), off after durS (timeline hook). */
+      gate(t, durS) {
+        opened = t;
+        applyAdsr(level, t, shape(), 1, { retrigger: true });
+        if (durS != null) releaseAt(level, Math.max(t + durS, earliest()), p.release);
+      },
+      /** Gate off at t: release once attack and hold have passed (timeline and live hook). */
+      release(t) { releaseAt(level, Math.max(t, earliest()), p.release); },
+      /** Hold the contour at t, dropping everything scheduled after it (timeline edits). */
+      hold(t) { holdAt(level, t); },
+      stop(t) {
+        for (const s of [src, bias]) {
+          if (s) { try { s.stop(t); } catch (e) { /* stopped */ } }
+        }
+      },
+      dispose() { forgetParam(level); },
+      info: { contour: src, sign, bias, params: () => ({ ...p }) },
       status: 'ready',
       reason: null,
     };
