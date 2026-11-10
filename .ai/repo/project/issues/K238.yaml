@@ -1,0 +1,25 @@
+id: K238
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "Synth bay cables into S&H Rate, VCO Tune and VCA gain do what their jacks say"
+slug: synth-bay-rate-tune-gain-jacks-honest
+priority: p2
+profile: implementation
+objective: "Three jacks of the Synth bay disagree with the compiler (probe on a7102358). src/js/synth/normals.js:157-163 jackReason refuses S&H Rate while its Clock edge is muted, though the compiler ignores muted clock edges (compiler.js:185-186). cableProps(keys.pitch -> vco1.tune) gives a depth of 100 cents over a +/-6 octave source, so pitch tracks 1/72 octave per octave. A bipolar cable mg.control -> vca.gain with depth 0.5 opens the VCA with no key. After: each jack's refusal and default depth match what the patch does."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 329.yaml#R9 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+scope:
+  - "src/js/synth/normals.js"
+  - "tests/unit/synth-panel-normals.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/K238.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/synth-panel-normals.test.mjs, fails on a7102358): with the S&H clock edge muted jackReason for sh.rate is null; keys.pitch -> vco1.tune tracks one octave per source octave; an LFO into VCA gain leaves the VCA closed without a gate."
+  - "Guarded (src/js/synth): a non-builder's verdict in .ai/repo/reviews/<pr>.yaml; dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

@@ -1,0 +1,27 @@
+id: U104
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "The phone measurement row always shows one step: the current one, else the blocked one, else the last"
+slug: phone-measurement-row-always-shows-a-step
+priority: p2
+profile: implementation
+objective: "Below 768 px src/styles/instrument.css:123-126 hides every .osc-m-step that is not .is-current, while src/js/measurement/views/measure-flow.js:331-345 marks no step current once one is blocked or every step is done (saved). Before: on a phone the measurement row shows no step at all, the blocked preflight's fail icon included. After: exactly one step stays visible, the current one, else the blocked one, else the last."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 278.yaml#R2 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+scope:
+  - "src/styles/instrument.css"
+  - "src/js/measurement/views/measure-flow.js"
+  - "src/index.html"
+  - "tests/unit/first-screen-layout.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/U104.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/first-screen-layout.test.mjs, fails on a7102358): for a measure flow with a blocked preflight and for a saved result, exactly one step carries the class the phone rule keeps visible."
+  - "dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
