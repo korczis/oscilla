@@ -97,5 +97,7 @@ An audit of the findings still marked open lives here as `audit-<date>.yaml` (sc
 `review-audit/v1`): each P0-P2 finding classified against `main` as fixed (the verified commit),
 superseded (why) or open (the plan issue now tracking it), and the P3s counted. It never edits a
 verdict file; the verdict's `status` stays as written and the audit says what holds now. A later
-audit supersedes an earlier one by its date; the earlier one stays as the record of its base. The
-first is `audit-2026-11-10.yaml`.
+audit supersedes an earlier one by its date; the earlier one stays as the record of its base. An
+audit that only completes another (`audit-<date>-<part>.yaml`, such as the P3s an audit left
+unclassified) names it in `extends:` and the `main` it judged on in `judged_on:`; it covers only
+what that one left unclassified and replaces nothing in it. The first is `audit-2026-11-10.yaml`.
