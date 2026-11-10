@@ -9,7 +9,9 @@
 //   softRange /* [lo, hi] Inspector display range inside [min, max] */,
 //   laneRange /* [lo, hi] automation lane range inside [min, max], where it differs from the
 //                softRange (null: the lane shows the softRange, else the range) */,
-//   minLength, maxLength /* list */, pattern /* id */ }
+//   minLength, maxLength /* list */, pattern /* id */,
+//   elide /* left out of the serialised model, patch and hash while at its default (K231: the
+//            xy-pad's x and y), so documents that never moved it keep their text and hash */ }
 // Ranges are model validity ranges, independent of any running AudioContext: frequencies may be
 // stored up to FREQUENCY_MAX_HZ and the compiler clamps them to 0.95 × Nyquist of the context it
 // runs on (project rule audio-engine-discipline), as the sequencer compiler already does.

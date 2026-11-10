@@ -99,7 +99,11 @@
 //   padTargets(model, panel, module = 'xyl') -> { x: [jack], y: [jack] }   what each output
 //     drives, normals and cables alike ('lpf.frequency'); muted edges left out
 //   mountPadL(host, { store, transport, panel, app, arm, say, jackName, mountPad, owner })
-//     -> { view, release(reason), destroy() }
+//     -> { view, record, release(reason), destroy() }
+//     Its Record switch (K231, ui/kinds/record-switch.js) arms the transport's one recorder
+//     (studio/notes-record.js) with padTakeId(pad L's node): a take of its X and Y is written as
+//     automation of the pad's own x and y while the timeline plays, which replays through
+//     whatever its normals or cables feed.
 //   PADS_TEXT   the pads' sentences (Czech, Q104)
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
@@ -114,6 +118,10 @@ import { limitBoundText } from '../../studio/compiler.js';
 import { esc } from './face.js';
 import { claimNotes, hasBox } from '../../midi/dock-yield.js';
 import { knobModel } from './knob.js';
+import { padTakeId } from '../../studio/notes-record.js';
+import {
+  PAD_RECORD_TEXT, bindRecordSwitch, recordSwitchHtml,
+} from '../../ui/kinds/record-switch.js';
 
 export const XY_TEXT = Object.freeze({
   missing: 'The XY pad is not in this Studio document: press Add the XY pad first.',
@@ -650,6 +658,11 @@ export const PADS_TEXT = Object.freeze({
 
 let padMounts = 0;
 const PAD_LABEL = 'text-sm text-gray-700 dark:text-gray-300';
+const RECORD_BUTTON = 'inline-flex h-11 items-center gap-1 rounded-lg border border-solid '
+  + 'border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 '
+  + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 '
+  + 'aria-checked:border-red-600 aria-checked:text-red-700 dark:border-gray-600 dark:bg-gray-800 '
+  + 'dark:text-white dark:hover:bg-gray-700';
 
 export function padTargets(model, panel, module = 'xyl') {
   const res = panel.resolve(model);
@@ -702,7 +715,9 @@ export function mountPadL(host, { store, transport = null, panel, app = null, ar
   host.innerHTML = `<p class="${PAD_LABEL}" data-pad-axes="">${esc(PADS_TEXT.axes(nx, ny))}</p>`
     + `<p id="${uid}-line" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white" `
     + 'data-pad-line="" aria-live="polite"></p>'
-    + '<div class="mt-2" data-osc="synth.pads.l.pad"></div>';
+    + '<div class="mt-2" data-osc="synth.pads.l.pad"></div>'
+    + '<div class="mt-2 flex items-center gap-2" data-pad-record="">'
+    + `${recordSwitchHtml(RECORD_BUTTON)}</div>`;
   const line = host.querySelector('[data-pad-line]');
   const pct = (v) => Math.round(v * 100);
   view = mountPad(host.querySelector('[data-osc="synth.pads.l.pad"]'), {
@@ -740,14 +755,23 @@ export function mountPadL(host, { store, transport = null, panel, app = null, ar
       if (view && typeof view.model.place === 'function') view.model.place({ x: 0, y: 0 });
     },
   });
+  const record = bindRecordSwitch(host.querySelector('[data-pad-record] [data-notes-record]'), {
+    transport: tp, store, say, text: PAD_RECORD_TEXT,
+    clipId: () => {
+      const n = node();
+      return n ? padTakeId(n.id) : null;
+    },
+  });
   return {
     get view() { return view; },
+    record,
     release,
     destroy() {
       if (destroyed) return;
       if (view) view.destroy(); // the kind ends a held gate ('hide'): onGate releases it
       destroyed = true;
       view = null;
+      record.destroy();
       paths.off();
     },
   };

@@ -59,7 +59,8 @@ import { NODE_REGISTRY } from './registry.js';
 import { article } from './a11y.js';
 import {
   DEFAULT_TRANSPORT, NAME_MAX_CHARS, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
-  collectIds, copyPlain, hashEpochOf, isPosition, normalizeStudio, studioHash, withoutNodes,
+  collectIds, copyPlain, elideParams, hashEpochOf, isPosition, normalizeStudio, studioHash,
+  withoutNodes,
 } from './schema.js';
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
@@ -283,11 +284,15 @@ export function importPatch(input, opts = {}) {
   };
 }
 
-/** Deterministic text of a (valid) patch: canonical JSON, keys sorted (§161). */
+/**
+ * Deterministic text of a (valid) patch: canonical JSON, keys sorted (§161), the parameters a
+ * definition elides at their default left out (schema.js elideParams, K231).
+ */
 export function serializePatch(patch, space = 0) {
   const r = importPatch(patch);
   if (!r.ok) throw new PatchError(`Invalid patch: ${r.errors[0].message}`, r.errors);
-  const text = canonicalJson(r.patch);
+  const text = canonicalJson({ ...r.patch, graph: { ...r.patch.graph,
+    nodes: r.patch.graph.nodes.map((n) => ({ ...n, params: elideParams(n.type, n.params) })) } });
   return space ? JSON.stringify(JSON.parse(text), null, space) : text;
 }
 
