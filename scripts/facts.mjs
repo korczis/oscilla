@@ -55,7 +55,15 @@
 //                    findings, bySeverity, byStatus, openBySeverity, addedAt, week }],
 //                    totals: { reviews, findings, bySeverity, byStatus, openBySeverity,
 //                    byVerdict, undated }, weeks: [{ week, start, reviews, findings,
-//                    bySeverity }] }                                      only when git: true
+//                    bySeverity }], findings: [{ source: '<pr>.yaml#<id>', pr, id, severity,
+//                    status, title }] }                                   only when git: true
+//     reviewAudits: { source, rule, commitRule, severities, classes, audits: [{ file, schema,
+//                    date, base, auditors, scope, summary, baseKnown }], perFinding: [{ source, pr, id, severity, title,
+//                    class, audit, auditDate, evidence, issue, issueFile, commit }],
+//                    unaudited: [<source>],
+//                    orphans: [{ source, pr, id, class, audit }], split: { <class>: n, total },
+//                    bySeverity: { <sev>: { <class>: n } }, p3: { audit, total, open, byClass,
+//                    signals, sample } | null }                    (P017) only when git: true
 //   }
 
 import { execFileSync } from 'node:child_process';
@@ -897,6 +905,12 @@ export function reviews(root) {
   }
   const sum = (key, keys) => Object.fromEntries(keys.map((k) => [k,
     items.reduce((n, x) => n + x[key][k], 0)]));
+  // every finding once, by the key an audit names it with: <pr>.yaml#<id> (P017)
+  const findingList = raw.flatMap(({ file, findings }) => findings.map((x) => ({
+    source: x.id === undefined || x.id === null ? null : `${file}#${x.id}`,
+    pr: Number(file.replace(/\.yaml$/, '')), id: x.id === undefined || x.id === null ? null
+      : String(x.id), severity: String(x.severity), status: String(x.status),
+    title: String(x.title ?? '') }))).sort((a, b) => (a.pr - b.pr));
   return {
     source: `${REVIEWS}/<pr>.yaml (review-verdict/v1)`,
     dateSource: `git log --diff-filter=A --no-renames --format=%cI HEAD -- ${REVIEWS}`,
@@ -906,6 +920,186 @@ export function reviews(root) {
       openBySeverity: sum('openBySeverity', allSev), byVerdict: countBy(items, 'verdict'),
       undated: items.length - dated.length },
     weeks,
+    findings: findingList,
+  };
+}
+
+// ------------------------------------------------------------------- review audits (P017)
+/** The audit files beside the verdicts: .ai/repo/reviews/audit-<date>.yaml (review-audit/v1). */
+export const AUDIT_FILE = /^audit-[^/]+\.yaml$/;
+/** The severities an audit classifies; P3s it only counts (its p3 block). */
+export const AUDITED_SEVERITIES = Object.freeze(['P0', 'P1', 'P2']);
+/** The classes review-audit/v1 declares, then `unaudited`: an open finding no audit covers. */
+export const AUDIT_CLASSES = Object.freeze(['open', 'fixed', 'superseded']);
+export const UNAUDITED = 'unaudited';
+const SOURCE_REF = /^(\d+\.yaml)#(.+)$/;
+
+/**
+ * The tokens of a text that may name a commit: 7 to 40 lowercase hex digits standing alone, at
+ * least one of them a digit (so an English word made of a-f letters is not taken for one), in
+ * the order they appear.
+ */
+export function hexTokens(text) {
+  return [...String(text ?? '').matchAll(/(?<![0-9A-Za-z])[0-9a-f]{7,40}(?![0-9A-Za-z])/g)]
+    .map((m) => m[0]).filter((t) => /\d/.test(t));
+}
+
+/**
+ * `git cat-file --batch-check` over `names`, one process: Map name -> { sha, type }, or null for
+ * a name that is missing or ambiguous (and for every name when git cannot run there).
+ */
+export function objectTypes(root, names) {
+  const list = [...new Set(names)];
+  const out = new Map(list.map((n) => [n, null]));
+  if (!list.length) return out;
+  let text;
+  try {
+    text = execFileSync('git', ['cat-file', '--batch-check'], { cwd: root, encoding: 'utf8',
+      input: `${list.join('\n')}\n`, maxBuffer: 16 * 1024 * 1024,
+      stdio: ['pipe', 'pipe', 'ignore'] });
+  } catch {
+    return out;
+  }
+  const lines = text.split('\n');
+  list.forEach((n, i) => {
+    const m = /^([0-9a-f]{40,64}) (\w+) \d+$/.exec(lines[i] ?? '');
+    out.set(n, m ? { sha: m[1], type: m[2] } : null);
+  });
+  return out;
+}
+
+/** Whether commit `a` is an ancestor of (or is) commit `b`: git merge-base --is-ancestor. */
+export function isAncestor(root, a, b) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', a, b], { cwd: root,
+      stdio: ['ignore', 'ignore', 'ignore'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** How a fixed finding's commit is found (reviewAudits' `commitRule`). */
+export const COMMIT_RULE = 'a fixed finding links the first token of its evidence of 7-40 '
+  + 'lowercase hex digits (one at least a digit) that is a commit of this repository (git '
+  + 'cat-file --batch-check) and an ancestor of its audit\'s base (git merge-base '
+  + '--is-ancestor); else no commit';
+
+const str = (v) => (v === undefined || v === null ? null : String(v));
+
+/**
+ * An audit's auditor as one name: a string as written, or a { session, seat } object as
+ * "<session> (<seat>)" (either alone when the other is missing).
+ */
+export function auditorName(a) {
+  if (!a || typeof a !== 'object') return String(a);
+  const session = str(a.session);
+  const seat = str(a.seat);
+  if (session && seat) return `${session} (${seat})`;
+  return session ?? seat ?? JSON.stringify(a);
+}
+
+/**
+ * The review audits (.ai/repo/reviews/audit-*.yaml) joined to the verdict findings of
+ * `reviewsFacts` (reviews(), its `findings`). Audits are ordered by their `date`, then file
+ * name, and the latest that names a finding (`source: <pr>.yaml#<id>`, in `findings` or
+ * `p3_sample`) gives its class, evidence and issue: nothing is classified here. Every finding
+ * a verdict still marks open at P0-P2 is listed under `perFinding`, as its audit class or as
+ * `unaudited` when no audit names it; `orphans` are the sources an audit names that no verdict
+ * holds; `p3` is the latest audit's P3 block as it records it (null without one). `issueFile`
+ * is the plan issue's file when it exists in this tree (an audit may name an issue its own
+ * pull request adds), else null. `commit` is the fixing commit by COMMIT_RULE, else null.
+ */
+export function reviewAudits(root, reviewsFacts) {
+  const dir = path.join(root, REVIEWS);
+  const files = yamlFiles(dir).filter((f) => AUDIT_FILE.test(f));
+  const docs = files.map((file) => ({ file, doc: parseYaml(readFileSync(path.join(dir, file),
+    'utf8')) })).map(({ file, doc }) => ({ file, doc, date: utcDay(doc.date) }))
+    .sort((a, b) => byString(a.date ?? '', b.date ?? '') || byString(a.file, b.file));
+  const audits = docs.map(({ file, doc, date }) => ({ file: `${REVIEWS}/${file}`,
+    schema: str(doc.schema), date, base: str(doc.base),
+    auditors: (Array.isArray(doc.auditors) ? doc.auditors : [doc.auditors]).filter((x) =>
+      x !== undefined && x !== null).map(auditorName),
+    scope: str(doc.scope), summary: doc.summary && typeof doc.summary === 'object'
+      ? doc.summary : null }));
+  // the latest audit naming a source wins: later audits overwrite earlier ones
+  const verdict = new Map((reviewsFacts?.findings ?? []).filter((x) => x.source)
+    .map((x) => [x.source, x]));
+  const latest = new Map();
+  for (const [i, { doc }] of docs.entries()) {
+    const entries = [...(Array.isArray(doc.findings) ? doc.findings : []),
+      ...(Array.isArray(doc.p3_sample) ? doc.p3_sample : [])];
+    for (const e of entries) {
+      const source = str(e.source);
+      if (!source) continue;
+      latest.set(source, { audit: audits[i].file, date: audits[i].date, base: audits[i].base,
+        cls: str(e.class),
+        evidence: str(e.evidence), issue: str(e.issue), title: str(e.title) });
+    }
+  }
+  const perFinding = (reviewsFacts?.findings ?? []).filter((x) => x.status === 'open'
+    && AUDITED_SEVERITIES.includes(x.severity)).map((x) => {
+    const a = x.source ? latest.get(x.source) : undefined;
+    const cls = a?.cls ?? UNAUDITED;
+    return { source: x.source, pr: x.pr, id: x.id, severity: x.severity, title: x.title,
+      class: cls, audit: a?.audit ?? null, auditDate: a?.date ?? null,
+      evidence: a?.evidence ?? null, issue: a?.issue ?? null,
+      issueFile: a?.issue && /^[A-Z]\d{3}$/.test(a.issue)
+        && existsSync(path.join(root, SOURCES.issues, `${a.issue}.yaml`))
+        ? `${SOURCES.issues}/${a.issue}.yaml` : null,
+      commit: null, base: a?.base ?? null };
+  });
+  // the fixing commits: every candidate token and base resolved by one cat-file process
+  const fixed = perFinding.filter((x) => x.class === 'fixed');
+  const types = objectTypes(root, [...fixed.flatMap((x) => hexTokens(x.evidence)),
+    ...audits.map((x) => x.base).filter(Boolean)]);
+  const baseSha = (b) => (b && types.get(b)?.type === 'commit' ? types.get(b).sha : null);
+  for (const x of audits) x.baseKnown = Boolean(baseSha(x.base));
+  const ancestry = new Map();
+  for (const x of fixed) {
+    const base = baseSha(x.base);
+    for (const tok of hexTokens(x.evidence)) {
+      const t = types.get(tok);
+      if (t?.type !== 'commit') continue;
+      const key = `${t.sha} ${base}`;
+      if (base && !ancestry.has(key)) ancestry.set(key, isAncestor(root, t.sha, base));
+      if (!base || ancestry.get(key)) {
+        x.commit = t.sha;
+        break;
+      }
+    }
+  }
+  for (const x of perFinding) delete x.base;
+  const orphans = [...latest].filter(([source]) => !verdict.has(source))
+    .map(([source, a]) => {
+      const m = SOURCE_REF.exec(source);
+      return { source, pr: m ? Number(m[1].replace(/\.yaml$/, '')) : null, id: m ? m[2] : null,
+        class: a.cls, audit: a.audit };
+    }).sort((a, b) => byString(a.source, b.source));
+  const classes = statusOrder([...new Set([...AUDIT_CLASSES, ...perFinding.map((x) => x.class)
+    .filter((c) => c !== UNAUDITED)])], [...AUDIT_CLASSES]).concat(UNAUDITED);
+  const split = zeroed(classes);
+  const bySeverity = Object.fromEntries(AUDITED_SEVERITIES.map((s) => [s, zeroed(classes)]));
+  for (const x of perFinding) {
+    split[x.class] += 1;
+    bySeverity[x.severity][x.class] += 1;
+  }
+  const unknownBases = audits.filter((x) => !x.baseKnown).map((x) => x.file);
+  const last = docs[docs.length - 1];
+  const p3 = last && last.doc.p3 && typeof last.doc.p3 === 'object' ? {
+    audit: audits[audits.length - 1].file, total: last.doc.p3.total ?? null,
+    open: last.doc.p3.open ?? null, byClass: last.doc.p3.by_class ?? null,
+    signals: last.doc.p3_signals ?? null,
+    sample: Array.isArray(last.doc.p3_sample) ? last.doc.p3_sample.length : 0 } : null;
+  return {
+    source: `${REVIEWS}/audit-*.yaml (review-audit/v1) + ${REVIEWS}/<pr>.yaml`,
+    rule: 'audits by date, then file name; the latest audit naming <pr>.yaml#<id> gives the '
+      + 'class; a finding open at P0-P2 in its verdict that no audit names is unaudited',
+    commitRule: `${COMMIT_RULE}${unknownBases.length ? `; the base of ${unknownBases.join(', ')} `
+      + 'is not a commit of this clone, so its ancestor check is skipped' : ''}`,
+    severities: [...AUDITED_SEVERITIES], classes, audits, perFinding,
+    unaudited: perFinding.filter((x) => x.class === UNAUDITED).map((x) => x.source),
+    orphans, split: { ...split, total: perFinding.length }, bySeverity, p3,
   };
 }
 
@@ -964,6 +1158,7 @@ export async function collectFacts({ root = REPO_ROOT, git = true } = {}) {
     facts.claimsPerRelease = claimsPerRelease(root, tags);
     facts.ratchets = ratchets(root, tags);
     facts.reviews = reviews(root);
+    facts.reviewAudits = reviewAudits(root, facts.reviews);
   }
   return facts;
 }

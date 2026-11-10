@@ -18,7 +18,7 @@
 //   chartTable(name, facts) -> { caption, head: [..], rows: [[..]] }     (the table view)
 
 import { CHARTS } from '../facts.mjs';
-import { RATCHET_COPY } from './copy.mjs';
+import { AUDIT_CLASS_COPY, RATCHET_COPY } from './copy.mjs';
 
 // OSCILLA tokens (src/styles/tokens.css, the dark reference): ground, outline, text, marks.
 // The two categorical slots (blue, magenta) pass the dataviz validator on the ground (CVD 8.9,
@@ -727,13 +727,54 @@ function ratchetsChart(facts, copy) {
 export const SEVERITY_RAMP = Object.freeze({ P0: '#b8d4f0', P1: '#4da3ff', P2: '#007afd',
   P3: '#00468c' });
 
+/**
+ * The review-audit classes on the chart ground: still open in the second categorical slot,
+ * fixed in the first (the validated pair), superseded in the recessive neutral, unaudited in
+ * the warning step. Each segment is labelled in the legend with its count, never by colour
+ * alone (validated --pairs all, dark: CVD 8.9, normal 18.0, contrast >= 3:1; the neutral and
+ * the warning step sit outside the categorical band by design).
+ */
+export const AUDIT_CLASS_COLOURS = Object.freeze({ open: T.second, fixed: T.blue,
+  superseded: T.dim, unaudited: '#fab219' });
+const AUDIT_PANEL = 80;
+
+/** The second panel: open P0-P2 findings now, by the class the latest audit gives them. */
+function auditPanel(a, top) {
+  const latest = a.audits[a.audits.length - 1];
+  const classes = a.classes.map((k) => ({ key: k, n: a.split[k] ?? 0,
+    colour: AUDIT_CLASS_COLOURS[k] ?? T.rest, label: AUDIT_CLASS_COPY[k] ?? k }));
+  const total = a.split.total;
+  let body = `<line x1="24" x2="${W - 24}" y1="${top}" y2="${top}" stroke="${T.border}"/>`
+    + `<text x="${PLOT.x0}" y="${top + 22}" fill="${T.text}" font-size="12" font-weight="600">`
+    + `${esc(`Otevřené P0–P2 podle auditu z ${fmtDate(dayIso(latest.date ?? '1970-01-01'))}`)}`
+    + `</text><text x="${PLOT.x1}" y="${top + 22}" fill="${T.muted}" font-size="11" `
+    + 'text-anchor="end">Open P0-P2 findings, by the latest review audit</text>';
+  const by = top + 32;
+  const bh = 16;
+  const span = PLOT.x1 - PLOT.x0;
+  const parts = classes.filter((c) => c.n > 0);
+  let x = PLOT.x0;
+  parts.forEach((c, i) => {
+    const w = total ? (c.n / total) * span : 0;
+    const last = i === parts.length - 1;
+    const segW = Math.max(1, last ? w : w - 2);
+    body += mark(`${c.label}: ${fmtInt(c.n)} z ${fmtInt(total)} otevřených P0–P2`,
+      `<path d="${barRight(x, by, segW, bh, last)}" fill="${c.colour}"/>`);
+    x += w;
+  });
+  body += legendRow(classes.map((c) => ({ colour: c.colour, name: `${c.label} ${fmtInt(c.n)}` })),
+    top + AUDIT_PANEL);
+  return body;
+}
+
 function reviewsChart(facts) {
   const title = 'Revize: nálezy podle závažnosti';
   const sub = 'Review findings per ISO week of the review record\'s first commit, by severity';
   const r = facts.reviews;
   const weeks = r?.weeks || [];
   if (!weeks.length) return empty('reviews', title, sub);
-  const height = H + 14;
+  const audit = facts.reviewAudits?.audits?.length ? facts.reviewAudits : null;
+  const height = H + 14 + (audit ? AUDIT_PANEL : 0);
   const sev = r.severities.map((k) => ({ key: k, name: k === 'P0' || k === 'P1' ? `${k} blokuje`
     : k, colour: SEVERITY_RAMP[k] ?? T.rest }));
   const maxN = Math.max(1, ...weeks.map((w) => w.findings));
@@ -765,10 +806,14 @@ function reviewsChart(facts) {
         + `${fmtInt(wk.findings)}</text>`;
     }
   });
-  body += legendRow(sev, height);
+  body += legendRow(sev, H + 14);
+  if (audit) body += auditPanel(audit, H + 14);
+  const split = audit ? ` Otevřené P0–P2 podle auditu: ${audit.classes.map((k) =>
+    `${(AUDIT_CLASS_COPY[k] ?? k).toLowerCase()} ${fmtInt(audit.split[k] ?? 0)}`).join(', ')}.`
+    : '';
   return frame('reviews', title, sub, `${fmtInt(r.totals.findings)} nálezů v `
     + `${fmtInt(r.totals.reviews)} revizích za ${fmtInt(weeks.length)} týdnů: ${sev.map((s) =>
-      `${s.key} ${fmtInt(r.totals.bySeverity[s.key])}`).join(', ')}.`, body, height);
+      `${s.key} ${fmtInt(r.totals.bySeverity[s.key])}`).join(', ')}.${split}`, body, height);
 }
 
 /** Hours as Czech text: '4,9 h', or days beside them from 48 h on. */

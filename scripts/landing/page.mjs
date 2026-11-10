@@ -11,7 +11,7 @@ import {
   esc, fmtDate, fmtDec, fmtInt, MB, chartTable, ratchetSpark, ratchetValue,
 } from './charts.mjs';
 import {
-  ADR_STATUS_COPY, AREA_COPY, CATEGORY_COPY, CLAIM_STATUS_COPY, COMMIT_TYPE_COPY,
+  ADR_STATUS_COPY, AREA_COPY, AUDIT_CLASS_COPY, CATEGORY_COPY, CLAIM_STATUS_COPY, COMMIT_TYPE_COPY,
   CHANGELOG_FULL_RELEASES, COMMIT_TYPES_OPEN, ENGINE_COPY, FRAME_TABS, GROUP_COPY,
   PLAN_STATUS_COPY, RATCHET_COPY, VERDICT_COPY, WORKSPACE_COPY,
 } from './copy.mjs';
@@ -521,6 +521,86 @@ ${r.items.map((it) => ratchetCard(m, it)).join('\n')}
 </section>`;
 }
 
+const AUDIT_BADGE = Object.freeze({ open: 'lab-badge lab-badge-pink', fixed: BADGE_BLUE,
+  superseded: BADGE_GRAY, unaudited: 'lab-badge lab-badge-yellow' });
+/** The stacked bar's segment colours, the hues of the reviews chart's audit panel. */
+const AUDIT_BAR = Object.freeze({ open: 'bg-pink-500', fixed: 'bg-primary-600',
+  superseded: 'bg-gray-400 dark:bg-gray-500', unaudited: 'bg-yellow-300' });
+
+/**
+ * One open P0-P2 finding of a verdict, with what the latest audit says of it. Its cells are
+ * styled once by .lab-au (scripts/landing.mjs LIST_CSS), so a row carries no class lists.
+ */
+function auditRow(m, x) {
+  const cls = AUDIT_CLASS_COPY[x.class] ?? x.class;
+  const evidence = x.evidence ? `<td lang="en">${esc(x.evidence)}</td>`
+    : `<td>Žádný audit tento nález nejmenuje. Ve verdiktu: <span lang="en">${esc(x.title)}</span></td>`;
+  const links = [];
+  if (x.class === 'fixed') {
+    links.push(x.commit ? `<p><span>commit</span> <a href="${REPO_URL}/commit/${esc(x.commit.slice(0, LINK_SHA))}">${esc(x.commit.slice(0, 7))}</a></p>`
+      : '<p><span>commit</span> důkaz neuvádí commit z main</p>');
+  }
+  if (x.issue) {
+    links.push(x.issueFile ? `<p><span>úkol</span> <a href="${esc(m.blob(x.issueFile))}">${esc(x.issue)}</a></p>`
+      : `<p><span>úkol</span> ${esc(x.issue)} (soubor v tomto commitu není)</p>`);
+  }
+  return `<tr data-class="${esc(x.class)}"><th scope="row"><a href="${REPO_URL}/pull/${x.pr}">#${x.pr}</a> <code>${esc(x.id ?? '–')}</code> <span>${esc(x.severity)}</span></th><td><span class="${AUDIT_BADGE[x.class] ?? BADGE_GRAY}">${esc(cls)}</span></td>${evidence}<td>${links.join('') || '–'}</td></tr>`;
+}
+
+/** The review audits: the latest audit's header, its classes of the open P0-P2, the P3s. */
+function auditBlock(m) {
+  const r = m.facts.reviews;
+  const a = m.facts.reviewAudits;
+  const rawOpen = ['P0', 'P1', 'P2'].reduce((n, k) => n + (r.totals.openBySeverity[k] ?? 0), 0);
+  if (!a || !a.audits.length) {
+    return `<div class="${CARD} mb-6" data-audit-none>
+<h3 class="mb-2 text-xl font-bold text-gray-900 dark:text-white">Audit nálezů</h3>
+<p class="text-gray-500 dark:text-gray-400">V <a class="${LINK}" href="${esc(m.tree('.ai/repo/reviews'))}">.ai/repo/reviews</a> zatím žádný audit (audit-*.yaml) není. Čísla výše jsou stavy, jak je zapsaly záznamy revizí: otevřených nálezů P0 až P2 je v nich ${fmtInt(rawOpen)}, a co z nich platí dnes, řekne až audit, který je ověří proti main.</p>
+</div>`;
+  }
+  const latest = a.audits[a.audits.length - 1];
+  const day = latest.date ? `<time datetime="${esc(latest.date)}">${esc(fmtDate(`${latest.date}T00:00:00Z`))}</time>` : 'bez data';
+  const base = latest.base ? `<a href="${REPO_URL}/commit/${esc(latest.base)}"><code>${esc(latest.base.slice(0, 8))}</code></a>` : 'neuvedena';
+  const older = a.audits.slice(0, -1).reverse().map((x) => `<a href="${esc(m.blob(x.file))}">${esc(x.file.replace(/^.*\//, ''))}</a>`).join(', ');
+  const total = a.split.total;
+  const bar = a.classes.filter((k) => a.split[k] > 0).map((k) => `<div class="${AUDIT_BAR[k] ?? 'bg-gray-600'} h-full" style="width:${pct(a.split[k], total)}%" title="${esc(`${AUDIT_CLASS_COPY[k] ?? k}: ${a.split[k]}`)}"></div>`).join('');
+  const legend = a.classes.map((k) => `<li class="flex items-center gap-2"><span class="h-3 w-3 shrink-0 rounded ${AUDIT_BAR[k] ?? 'bg-gray-600'}" aria-hidden="true"></span>${esc(AUDIT_CLASS_COPY[k] ?? k)} <span class="font-semibold tabular-nums text-gray-900 dark:text-white">${fmtInt(a.split[k] ?? 0)}</span></li>`).join('');
+  const btn = (v, label, n, first) => `<button type="button" data-audit-filter="${v}" aria-pressed="${first}">${esc(label)} <span>${fmtInt(n)}</span></button>`;
+  const chips = [btn('', 'Vše', total, true), ...a.classes.map((k) => btn(k, AUDIT_CLASS_COPY[k] ?? k, a.split[k] ?? 0, false))].join('');
+  const rows = a.perFinding.map((x) => auditRow(m, x)).join('\n');
+  const orphans = a.orphans.length ? `<p class="mt-3 text-sm text-gray-500 dark:text-gray-400" data-audit-orphans>Nálezy, které audit jmenuje a žádný záznam revize nemá (${fmtInt(a.orphans.length)}): ${a.orphans.map((o) => `<code class="text-xs">${esc(o.source)}</code>`).join(', ')}.</p>` : '';
+  const p = a.p3;
+  const p3 = p ? `<div class="mt-6" data-audit-p3><h4 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">Nálezy P3</h4><p class="text-gray-500 dark:text-gray-400">Audit P3 jen počítá: ${p.total === null ? 'celkový počet neuvádí' : `${fmtInt(p.total)} nálezů P3`}, z nich ${p.open === null ? '–' : fmtInt(p.open)} otevřených ve verdiktech. Ze vzorku ${fmtInt(p.sample)} ověřených proti main: ${['open', 'fixed', 'superseded'].filter((k) => p.byClass && k in p.byClass).map((k) => `${esc((AUDIT_CLASS_COPY[k] ?? k).toLowerCase())} ${fmtInt(p.byClass[k])}`).join(', ')}; <strong class="font-semibold text-gray-900 dark:text-white">neklasifikováno ${p.byClass && 'unclassified' in p.byClass ? fmtInt(p.byClass.unclassified) : '–'}</strong>, tedy bez třídy, dokud je další audit neověří. Odkazy z commitů na nálezy audit zapisuje jen jako signály, ne jako třídy${p.signals ? `: ${Object.entries(p.signals).map(([k, v]) => `<code class="text-xs">${esc(k)}</code> ${esc(typeof v === 'number' ? fmtInt(v) : v)}`).join(', ')}` : ''}.</p></div>` : '';
+  return `<div class="${CARD} mb-6" data-audit>
+<h3 class="mb-2 text-xl font-bold text-gray-900 dark:text-white">Audit nálezů</h3>
+<p class="mb-4 text-gray-500 dark:text-gray-400">Záznamy revizí jsou historické: stav nálezu v nich zůstává, jak ho recenzent zapsal k hlavě pull requestu, a nikdo je dodatečně nepřepisuje. Co platí dnes, říká audit, který každý otevřený nález P0 až P2 ověřil proti main: opraveno (commit, který ho opravil), nahrazeno (proč už neplatí), nebo stále otevřené (úkol plánu, který ho teď sleduje). Třídu nálezu dává vždy audit, generátor stránky nic nepřeřazuje; platí poslední audit, který nález jmenuje.</p>
+<dl class="lab-links mb-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+<div><dt class="text-gray-500 dark:text-gray-400">Poslední audit</dt><dd class="font-medium text-gray-900 dark:text-white"><a href="${esc(m.blob(latest.file))}">${esc(latest.file.replace(/^.*\//, ''))}</a> · ${day}</dd></div>
+<div><dt class="text-gray-500 dark:text-gray-400">Báze (commit main, proti kterému se ověřovalo)</dt><dd class="font-medium text-gray-900 dark:text-white">${base}</dd></div>
+<div><dt class="text-gray-500 dark:text-gray-400">Auditoři</dt><dd class="font-medium text-gray-900 dark:text-white">${latest.auditors.length ? latest.auditors.map((x) => `<code class="text-xs">${esc(x)}</code>`).join(', ') : 'neuvedeni'}</dd></div>
+<div><dt class="text-gray-500 dark:text-gray-400">Rozsah</dt><dd lang="en" class="font-medium text-gray-900 dark:text-white">${esc(latest.scope ?? '–')}</dd></div>
+${older ? `<div class="sm:col-span-2"><dt class="text-gray-500 dark:text-gray-400">Starší audity</dt><dd>${older}</dd></div>` : ''}
+</dl>
+<p class="mb-2 text-sm text-gray-500 dark:text-gray-400">Z ${plural(rawOpen, 'nálezu', 'nálezů', 'nálezů')} P0 až P2, které záznamy revizí dnes vedou jako otevřené:</p>
+<div class="mb-2 flex h-4 w-full gap-0.5 overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700" role="img" aria-label="${esc(a.classes.map((k) => `${AUDIT_CLASS_COPY[k] ?? k} ${a.split[k] ?? 0}`).join(', '))}">${bar}</div>
+<ul class="mb-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600 dark:text-gray-300">${legend}</ul>
+<div data-audit-controls hidden class="lab-filter mb-4 grid grid-cols-2 gap-2 sm:inline-flex sm:gap-0 sm:rounded-lg sm:shadow-sm" role="group" aria-label="Filtr nálezů podle třídy auditu">${chips}</div>
+<p class="sr-only" aria-live="polite" data-audit-count></p>
+<div class="max-h-[40rem] overflow-auto rounded-lg border border-gray-200 dark:border-gray-700">
+<table class="${TABLE} lab-links block md:table"><caption class="sr-only">Otevřené nálezy P0 až P2 ze záznamů revizí: pull request, nález a závažnost, třída podle auditu, důkaz, commit nebo úkol</caption>
+<thead class="${THEAD} sticky top-0 hidden md:table-header-group"><tr><th scope="col" class="${TH}">Nález</th><th scope="col" class="${TH}">Třída</th><th scope="col" class="${TH}">Důkaz auditu</th><th scope="col" class="${TH}">Commit, úkol</th></tr></thead>
+<tbody class="lab-rows lab-claims lab-au block md:table-row-group">
+${rows}
+<tr data-audit-empty hidden class="bg-white dark:bg-gray-800"><td colspan="4" class="px-4 py-6 text-center">V této třídě žádný nález není.</td></tr>
+</tbody></table>
+</div>
+<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">U čísla pull requestu stojí identifikátor nálezu ze záznamu revize <code>.ai/repo/reviews/&lt;číslo&gt;.yaml</code> a závažnost, jak ji určil recenzent. Důkazy jsou anglicky, jak je audit zapsal. U opraveného nálezu se odkazuje první commit, který důkaz jmenuje, je v tomto repozitáři a je předkem báze auditu (pravidlo níže); úkol plánu, když jeho soubor v tomto commitu existuje.</p>
+${orphans}
+${p3}
+<p class="lab-src">Zdroj: <code>${esc(a.source)}</code>; pravidlo: <code>${esc(a.rule)}</code>; commit: <code>${esc(a.commitRule)}</code>.</p>
+</div>`;
+}
+
 function reviewsSection(m) {
   const r = m.facts.reviews;
   const t = r.totals;
@@ -545,6 +625,7 @@ ${stat(fmtInt(t.findings), 'nálezů')}
 ${stat(fmtInt(t.byStatus.open ?? 0), 'nálezů stále otevřených')}
 ${stat(fmtInt(openBlocking), 'otevřených P0 a P1')}
 </dl>
+${auditBlock(m)}
 <div class="max-h-[40rem] overflow-auto rounded-lg border border-gray-200 shadow-sm dark:border-gray-700">
 <table class="${TABLE} lab-rv"><caption class="sr-only">Revize: pull request, verdikt, nálezy podle závažnosti, otevřené a uzavřené, datum záznamu</caption>
 <thead class="${THEAD} sticky top-0"><tr><th scope="col">PR</th><th scope="col">Verdikt</th>${sev.map((k) => `<th scope="col">${k}</th>`).join('')}<th scope="col">Otevřeno</th><th scope="col">Uzavřeno</th><th scope="col">Zapsáno</th></tr></thead>

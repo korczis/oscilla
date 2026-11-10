@@ -26,6 +26,16 @@
 //   - reviews reads verdicts and findings per pull request, dates each record by the commit that
 //     added it and fills every ISO week of the span, an empty one with zeros;
 //   - releaseCadence takes the hours between consecutive published_at and their median.
+// The review audits of plan P017, on a fixture of two verdicts and two audits:
+//   - reviewAudits orders the audits by date, then file name, lets the latest audit naming a
+//     finding (<pr>.yaml#<id>) give its class, evidence and issue, keeps a finding only the
+//     older audit names under that one, lists a verdict's open P0-P2 finding no audit names as
+//     unaudited and an audited source no verdict holds as an orphan, takes the P3 block from the
+//     latest audit as recorded, links a fixed finding's commit only when a hex token of its
+//     evidence is a commit of the repository and an ancestor of the audit's base (the first
+//     such token; the ancestor check skipped for a base the clone does not have), reads
+//     auditors as strings or { session, seat } objects, and with no audit file returns no
+//     audit and every open P0-P2 unaudited.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
@@ -35,7 +45,8 @@ import assert from 'node:assert/strict';
 import {
   BASELINE_FILE, CHARTS, COMMIT_TYPES, REPO_ROOT, adrs, baselineTotal, catFiles, claimArea,
   claimsPerRelease, codeInventory, collectFacts, median, parseCommitSubject, planBurnup, planIdsIn,
-  prsIn, ratchets, releaseCadence, releaseChanges, releaseTags, reviews, roadmap, utcDay,
+  prsIn, ratchets, releaseCadence, releaseChanges, releaseTags, reviewAudits, reviews, roadmap,
+  utcDay, auditorName, hexTokens,
 } from '../../scripts/facts.mjs';
 
 // A repository whose every commit has its own fixed date, one minute after the previous one.
@@ -477,4 +488,108 @@ test('collectFacts carries the P016 trends for this repository',
   assert.equal(last.doneTotal, f.plan.items.reduce((n, m) => n + m.done, 0),
     'the burn-up ends at the plan\'s done count');
   assert.equal(f.releaseCadence.items.length, f.releaseCadence.releases - 1);
+  // P017: every open P0-P2 finding of the verdicts has one row, audited or not
+  assert.equal(f.reviewAudits.perFinding.length, ['P0', 'P1', 'P2'].reduce((n, k) =>
+    n + f.reviews.totals.openBySeverity[k], 0));
+  assert.equal(f.reviewAudits.split.total, f.reviewAudits.perFinding.length);
 });
+
+test('hexTokens: 7-40 lowercase hex digits standing alone, a digit among them, in order', () => {
+  assert.deepEqual(hexTokens('9898b9e2 fix(audio): C011 (landed in 11cc9fbc, train #367)'),
+    ['9898b9e2', '11cc9fbc']);
+  assert.deepEqual(hexTokens('acceded: an English word; E017 added x; abc123 is too short'), []);
+  assert.deepEqual(hexTokens('test e5ee79c5d51f9b2d; xe5ee79c5 and e5ee79c5x are not alone'),
+    ['e5ee79c5d51f9b2d']);
+  assert.deepEqual(hexTokens(null), []);
+});
+
+test('auditorName: a string as written, a { session, seat } object as "session (seat)"', () => {
+  assert.equal(auditorName('oscilla-c3'), 'oscilla-c3');
+  assert.equal(auditorName({ session: 'oscilla-c3', seat: 'rev-seat-2' }),
+    'oscilla-c3 (rev-seat-2)');
+  assert.equal(auditorName({ session: 'oscilla-c3' }), 'oscilla-c3');
+});
+
+const VERDICT = (pr, findings) => `schema: review-verdict/v1\npr: ${pr}\nverdict: merge\n`
+  + `reviewer: r\ncontent: x\nfindings:\n${findings.map(([id, sev, status]) =>
+    `  - { id: ${id}, severity: ${sev}, status: ${status}, title: "t ${id}" }\n`).join('')}`;
+
+test('reviewAudits: the latest audit per finding, unaudited, orphans, commits and the P3 block',
+  () => {
+    const { dir, write, commit } = fixture();
+    try {
+      write('.ai/repo/project/issues/E001.yaml', 'id: E001\nmilestone: M001\n');
+      write('.ai/repo/reviews/12.yaml', VERDICT(12, [['R1', 'P1', 'open'],
+        ['R2', 'P2', 'open'], ['R3', 'P3', 'open'], ['R4', 'P2', 'closed']]));
+      write('.ai/repo/reviews/30.yaml', VERDICT(30, [['F1', 'P2', 'open'], ['F2', 'P0', 'open'],
+        ['F3', 'P2', 'open'], ['F4', 'P2', 'open']]));
+      const fix = commit('fix(x): the fix', '2026-01-05T10:00:00Z');
+      const base = commit('chore: the audit base');
+      const after = commit('fix(y): after the base');
+      const rv = reviews(dir);
+      const none = reviewAudits(dir, rv);
+      assert.deepEqual([none.audits, none.p3, none.orphans], [[], null, []]);
+      assert.deepEqual(none.split, { open: 0, fixed: 0, superseded: 0, unaudited: 6, total: 6 },
+        'with no audit every open P0-P2 finding is unaudited, none is classified');
+      // the older audit's file name sorts after the newer one's: the date orders them; its
+      // base is no commit of this repository, so its ancestor check is skipped
+      write('.ai/repo/reviews/audit-zz-old.yaml', 'schema: review-audit/v1\ndate: 2026-01-10\n'
+        + 'auditors: [a1, a2]\nbase: a111111111111111111111111111111111111111\nscope: "old"\n'
+        + 'summary: { p0_p2: 3 }\nfindings:\n'
+        + '  - { source: "12.yaml#R1", pr: 12, severity: P1, title: "t", class: open, '
+        + 'evidence: "still there", issue: E002 }\n'
+        + '  - { source: "12.yaml#R2", pr: 12, severity: P2, title: "t", class: open, '
+        + 'evidence: "reproduced", issue: E001 }\n'
+        + `  - { source: "30.yaml#F3", pr: 30, severity: P2, title: "t", class: fixed, `
+        + `evidence: "fixed by ${after.slice(0, 8)}", issue: null }\n`
+        + '  - { source: "99.yaml#X", pr: 99, severity: P2, title: "t", class: fixed, '
+        + 'evidence: "abcdef1 gone", issue: null }\n'
+        + 'p3: { total: 5, open: 3, by_class: { fixed: 1, unclassified: 2 } }\n');
+      write('.ai/repo/reviews/audit-aa-new.yaml', 'schema: review-audit/v1\ndate: 2026-02-01\n'
+        + `auditors: [{ session: oscilla-c3, seat: rev-seat-2 }, a3]\nbase: ${base}\n`
+        + 'scope: "new"\nsummary: { p0_p2: 2 }\nfindings:\n'
+        + '  - { source: "12.yaml#R1", pr: 12, severity: P1, title: "t", class: fixed, '
+        + `evidence: "deadbee1 is no object; the fix is ${fix.slice(0, 9)} (2 tests)", `
+        + 'issue: null }\n'
+        + '  - { source: "30.yaml#F1", pr: 30, severity: P2, title: "t", class: fixed, '
+        + 'evidence: "acceded: fixed in prose", issue: null }\n'
+        + '  - { source: "30.yaml#F4", pr: 30, severity: P2, title: "t", class: fixed, '
+        + `evidence: "${after.slice(0, 10)} landed after the base", issue: null }\n`
+        + 'p3: { total: 6, open: 2, by_class: { fixed: 1, superseded: 0, open: 1, '
+        + 'unclassified: 0 } }\np3_signals: { named_nowhere: 1 }\np3_sample:\n'
+        + '  - { source: "12.yaml#R3", class: fixed, evidence: "b2c3d4e5 fix", issue: null }\n');
+      commit('review: audits');
+      const a = reviewAudits(dir, reviews(dir));
+      assert.deepEqual(a.audits.map((x) => [x.file, x.date, x.base.slice(0, 4), x.auditors,
+        x.scope, x.baseKnown]), [
+        ['.ai/repo/reviews/audit-zz-old.yaml', '2026-01-10', 'a111', ['a1', 'a2'], 'old', false],
+        ['.ai/repo/reviews/audit-aa-new.yaml', '2026-02-01', base.slice(0, 4),
+          ['oscilla-c3 (rev-seat-2)', 'a3'], 'new', true]]);
+      assert.deepEqual(a.perFinding.map((x) => [x.source, x.severity, x.class, x.audit
+        && x.audit.replace(/^.*\//, ''), x.issue, x.issueFile, x.commit]), [
+        ['12.yaml#R1', 'P1', 'fixed', 'audit-aa-new.yaml', null, null, fix],
+        ['12.yaml#R2', 'P2', 'open', 'audit-zz-old.yaml', 'E001',
+          '.ai/repo/project/issues/E001.yaml', null],
+        ['30.yaml#F1', 'P2', 'fixed', 'audit-aa-new.yaml', null, null, null],
+        ['30.yaml#F2', 'P0', 'unaudited', null, null, null, null],
+        ['30.yaml#F3', 'P2', 'fixed', 'audit-zz-old.yaml', null, null, after],
+        ['30.yaml#F4', 'P2', 'fixed', 'audit-aa-new.yaml', null, null, null],
+      ], 'newer overrides older (R1, whose first hex token is no object and the second the fix); '
+        + 'the older alone covers R2 and F3 (an unknown base: no ancestor check); F2 no audit '
+        + 'names; F4 names a commit that is not an ancestor of the base');
+      assert.match(a.commitRule, /ancestor of its audit's base/);
+      assert.match(a.commitRule, /the base of \.ai\/repo\/reviews\/audit-zz-old\.yaml is not a /);
+      assert.equal(a.perFinding[3].title, 't F2', 'an unaudited finding keeps its verdict title');
+      assert.deepEqual(a.unaudited, ['30.yaml#F2']);
+      assert.deepEqual(a.orphans, [{ source: '99.yaml#X', pr: 99, id: 'X', class: 'fixed',
+        audit: '.ai/repo/reviews/audit-zz-old.yaml' }]);
+      assert.deepEqual(a.split, { open: 1, fixed: 4, superseded: 0, unaudited: 1, total: 6 });
+      assert.deepEqual(a.bySeverity.P0, { open: 0, fixed: 0, superseded: 0, unaudited: 1 });
+      assert.deepEqual(a.p3, { audit: '.ai/repo/reviews/audit-aa-new.yaml', total: 6, open: 2,
+        byClass: { fixed: 1, superseded: 0, open: 1, unclassified: 0 },
+        signals: { named_nowhere: 1 }, sample: 1 }, 'the latest audit\'s P3 block as recorded');
+      assert.deepEqual(rv.totals.byStatus, { open: 7, closed: 1 }, 'the verdicts are untouched');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });

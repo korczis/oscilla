@@ -15,7 +15,7 @@
 //     and Rozhodnutí (ADR) exist with their nav entries; the changelog has a card per release
 //     tag, the unreleased changes and the newest CHANGELOG_FULL_RELEASES (8) list their commits
 //     and older ones link GitHub's compare view instead (the page stays under its ceiling,
-//     1 000 000 characters since P016), each plan-id chip links an issue file that exists and
+//     1 200 000 characters since P017), each plan-id chip links an issue file that exists and
 //     each PR link its number; the claims explorer holds a row for every claim with its
 //     status and area and links its source, implementation and test, and its filter controls
 //     stay hidden without the script;
@@ -27,6 +27,12 @@
 //     a review row per record, newest first, each linking its pull request, with every open
 //     P0 or P1 named; every chart card names the source of its fact group; a ratchet without
 //     Czech copy fails the generator; the absent ledger of a release reads as absent;
+//   - the P017 review audit (facts injected, so the repository's own audits do not decide it):
+//     with an audit the reviews section shows its header (file, date, base commit, auditors,
+//     scope), a row per open P0-P2 finding with its Czech class, the evidence in English, the
+//     fixed commit and the plan issue linked, the class filter (hidden without the script) and
+//     the P3 block naming the unclassified remainder, and the reviews chart gains the audit
+//     panel; with no audit it says "zatím žádný audit", keeps P016's counts and chart;
 //   - expectedLab regenerates a commit behind HEAD from that commit's own tree (a fixture repo
 //     whose two commits carry different generators), and a commit without the generator
 //     deployed no landing (null), so the release task's closing check works after main moves.
@@ -177,9 +183,15 @@ test('the changelog has a card per release tag, with plan-id chips and PR links 
     // and the review table of every record (32 kB), after dropping each chart mark's duplicated
     // data-tip attribute (19 kB): 940 150 characters (946 655 B, 119 963 B gzip, which is what
     // Pages sends) measured on 2026-11-10, so the ceiling is 1 000 000. The cap on the
-    // changelog's listed commits stays as P015 set it.
-    assert.ok(HTML.length <= 1_000_000,
-      `index.html is ${HTML.length} characters (ceiling 1 000 000)`);
+    // changelog's listed commits stays as P015 set it. P017's review audit adds about 50 000
+    // characters with the first audit (63 open P0-P2 rows, their evidence 23 000): 992 166
+    // characters measured on 2026-11-10 with audit-2026-11-10.yaml in the tree (949 149 B
+    // without it), its rows' cells styled once by .lab-au rather than per row. That leaves
+    // under 8 000 characters for the next verdicts, releases and audits, so the ceiling is
+    // 1 200 000; plan P018 splits the heavy sections (changelog, claims, reviews) into
+    // sub-pages instead of raising it again.
+    assert.ok(HTML.length <= 1_200_000,
+      `index.html is ${HTML.length} characters (ceiling 1 200 000)`);
   });
 
 test('the claims explorer has a row per claim, linking its source, code and test', () => {
@@ -349,4 +361,112 @@ test('expectedLab regenerates a commit behind HEAD from its own tree, never from
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// A review audit injected into the repository's facts: one finding of each class.
+function auditFacts() {
+  const f = clone(FACTS);
+  const issue = '.ai/repo/project/issues/P016.yaml';
+  const row = (pr, id, severity, cls, extra) => ({ source: `${pr}.yaml#${id}`, pr, id, severity,
+    title: `title ${id}`, class: cls, audit: '.ai/repo/reviews/audit-2026-11-10.yaml',
+    auditDate: '2026-11-10', evidence: null, issue: null, issueFile: null, commit: null,
+    ...extra });
+  f.reviewAudits = {
+    source: '.ai/repo/reviews/audit-*.yaml (review-audit/v1) + .ai/repo/reviews/<pr>.yaml',
+    rule: 'fixture rule', commitRule: 'fixture commit rule', severities: ['P0', 'P1', 'P2'],
+    classes: ['open', 'fixed', 'superseded', 'unaudited'],
+    audits: [{ file: '.ai/repo/reviews/audit-2026-11-10.yaml', schema: 'review-audit/v1',
+      date: '2026-11-10', base: 'b8bfd3b613b9e4aac63267343c14bd1ee91f2a02', baseKnown: true,
+      auditors: ['oscilla-c3', 'rev-seat-2'], scope: 'open findings of severity P0-P2',
+      summary: { p0_p2: 4 } }],
+    perFinding: [
+      row(164, 'R1-P2-4b', 'P2', 'open', { evidence: 'still open <here>', issue: 'P016',
+        issueFile: issue }),
+      row(303, 'R-1', 'P1', 'fixed', { evidence: '9898b9e2 fix(audio): clamp',
+        commit: '9898b9e2ab12cd34ef56ab78cd90ef12ab34cd56' }),
+      row(304, 'R-2', 'P2', 'fixed', { evidence: 'fixed in prose' }),
+      row(425, 'R1', 'P1', 'superseded', { evidence: '#425 closed unmerged' }),
+      row(512, 'R2-511-9', 'P2', 'unaudited', { audit: null, auditDate: null }),
+    ],
+    unaudited: ['512.yaml#R2-511-9'], orphans: [{ source: '99.yaml#X', pr: 99, id: 'X',
+      class: 'fixed', audit: '.ai/repo/reviews/audit-2026-11-10.yaml' }],
+    split: { open: 1, fixed: 2, superseded: 1, unaudited: 1, total: 5 },
+    bySeverity: {}, p3: { audit: '.ai/repo/reviews/audit-2026-11-10.yaml', total: 435,
+      open: 318, byClass: { fixed: 9, superseded: 5, open: 17, unclassified: 287 },
+      signals: { named_nowhere: 141 }, sample: 31 },
+  };
+  return f;
+}
+
+const sectionOf = (html, id) => {
+  const markup = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '<script></script>');
+  const at = markup.indexOf(`<section id="${id}"`);
+  return markup.slice(at, markup.indexOf('</section>', at));
+};
+
+test('the reviews section shows the latest audit and its classes of every open P0-P2', async () => {
+  const f = auditFacts();
+  const files = await generateLanding({ facts: f });
+  const r = sectionOf(files.get('index.html').toString('utf8'), 'revize');
+  const audit = r.slice(r.indexOf('data-audit>'));
+  assert.ok(audit.length > 0 && r.includes('data-audit>'), 'the audit block');
+  assert.ok(audit.includes('>audit-2026-11-10.yaml</a>'), 'the audit file');
+  assert.match(audit, /<time datetime="2026-11-10">10\.\s11\.\s2026<\/time>/, 'its date');
+  assert.ok(audit.includes('href="https://github.com/korczis/oscilla/commit/'
+    + 'b8bfd3b613b9e4aac63267343c14bd1ee91f2a02"'), 'its base links the commit');
+  assert.ok(audit.includes('<code class="text-xs">oscilla-c3</code>, '
+    + '<code class="text-xs">rev-seat-2</code>'), 'its auditors');
+  assert.ok(audit.includes('<dd lang="en" class="font-medium text-gray-900 dark:text-white">'
+    + 'open findings of severity P0-P2</dd>'), 'its scope');
+  const rows = [...audit.matchAll(/<tr data-class="([a-z]+)">([\s\S]*?)<\/tr>/g)];
+  assert.deepEqual(rows.map((m) => m[1]),
+    ['open', 'fixed', 'fixed', 'superseded', 'unaudited']);
+  const [open, fixed, prose, superseded, unaudited] = rows.map((m) => m[2]);
+  for (const [cells, pr, label] of [[open, 164, 'Stále otevřené'], [fixed, 303, 'Opraveno'],
+    [superseded, 425, 'Nahrazeno'], [unaudited, 512, 'Neauditováno']]) {
+    assert.ok(cells.includes(`<a href="https://github.com/korczis/oscilla/pull/${pr}">#${pr}</a>`),
+      `${pr} links its pull request`);
+    assert.ok(cells.includes(`>${label}</span>`), `${pr}: ${label}`);
+  }
+  assert.ok(open.includes('<td lang="en">still open &lt;here&gt;</td>'), 'evidence as written');
+  assert.match(open, new RegExp(`<a href="https://github\\.com/korczis/oscilla/blob/${REF}/`
+    + '\\.ai/repo/project/issues/P016\\.yaml">P016</a>'), 'an open finding links its issue');
+  assert.ok(fixed.includes('<a href="https://github.com/korczis/oscilla/commit/9898b9e2ab12">'
+    + '9898b9e</a>'), 'a fixed finding links its commit');
+  assert.ok(prose.includes('důkaz neuvádí commit z main'), 'a fixed finding without one says so');
+  assert.ok(audit.includes('commit: <code>fixture commit rule</code>'), 'the commit rule');
+  assert.ok(unaudited.includes('Žádný audit tento nález nejmenuje. Ve verdiktu: '
+    + '<span lang="en">title R2-511-9</span>'), 'an unaudited finding shows its verdict title');
+  assert.match(audit, /<div data-audit-controls hidden class="lab-filter/);
+  for (const [v, label, n] of [['', 'Vše', 5], ['open', 'Stále otevřené', 1],
+    ['fixed', 'Opraveno', 2], ['superseded', 'Nahrazeno', 1], ['unaudited', 'Neauditováno', 1]]) {
+    assert.ok(audit.includes(`data-audit-filter="${v}" aria-pressed="${v === ''}">${label} `
+      + `<span>${n}</span></button>`), `chip ${label}`);
+  }
+  assert.match(audit, /neklasifikováno 287<\/strong>/, 'the P3 remainder is named');
+  assert.ok(audit.includes('<code class="text-xs">99.yaml#X</code>'), 'the orphan is named');
+  assert.match(audit, /Záznamy revizí jsou historické: stav nálezu v nich zůstává/);
+  assert.ok(r.includes(`>${f.reviews.totals.reviews}</dt>`), 'P016\'s counts stay');
+  const svg = files.get('charts/reviews.svg').toString('utf8');
+  assert.match(svg, /Otevřené P0–P2 podle auditu z 10\.\s11\.\s2026/);
+  assert.match(svg, /Stále otevřené 1<\/text>/);
+  assert.match(svg, /Opraveno 2<\/text>/);
+  assert.ok(files.get('index.html').length <= 1_200_000, 'inside the page ceiling');
+});
+
+test('with no audit the section says so and keeps P016\'s counts and chart', async () => {
+  const f = auditFacts();
+  f.reviewAudits = { ...f.reviewAudits, audits: [], p3: null, orphans: [] };
+  const files = await generateLanding({ facts: f });
+  const r = sectionOf(files.get('index.html').toString('utf8'), 'revize');
+  assert.match(r, /data-audit-none>/);
+  assert.match(r, /zatím žádný audit/);
+  assert.doesNotMatch(r, /data-audit>|<tr data-class=/);
+  assert.ok(r.includes(`>${f.reviews.totals.reviews}</dt>`), 'the record count');
+  const svg = files.get('charts/reviews.svg').toString('utf8');
+  assert.doesNotMatch(svg, /podle auditu/);
+  const p016 = clone(FACTS);
+  delete p016.reviewAudits;
+  const { renderCharts } = await import('../../scripts/landing/charts.mjs');
+  assert.equal(svg, renderCharts(p016).reviews, 'the chart is P016\'s, byte for byte');
 });

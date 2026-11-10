@@ -80,6 +80,9 @@ const LIST_CSS = `@layer base {
   .lab-badge-green { @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300; }
   .lab-badge-indigo { @apply bg-indigo-100 text-indigo-800 dark:bg-indigo-900
     dark:text-indigo-300; }
+  .lab-badge-pink { @apply bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300; }
+  .lab-badge-yellow { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900
+    dark:text-yellow-300; }
   .lab-ctable tbody tr { @apply border-b border-gray-200 dark:border-gray-700; }
   .lab-ctable td, .lab-ctable tbody th { @apply whitespace-nowrap px-3 py-2; }
   .lab-ctable tbody th { @apply font-medium text-gray-900 dark:text-white; }
@@ -115,6 +118,22 @@ const LIST_CSS = `@layer base {
   .lab-rv tbody th { @apply font-medium; }
   .lab-rv tbody th > span { @apply text-xs text-gray-500 dark:text-gray-400; }
   .lab-rv td > span + span { @apply ms-1; }
+  .lab-au > tr > th { @apply font-normal md:whitespace-nowrap; }
+  .lab-au > tr > td:nth-child(2) { @apply whitespace-nowrap; }
+  .lab-au > tr > th code { @apply text-xs; }
+  .lab-au > tr > th > span { @apply text-xs text-gray-500 dark:text-gray-400; }
+  .lab-au > tr > td:nth-child(3) { @apply break-words text-gray-600 dark:text-gray-300; }
+  .lab-au > tr > td:last-child { @apply whitespace-nowrap text-xs; }
+  .lab-au > tr > td:last-child span { @apply text-gray-400 dark:text-gray-500; }
+  .lab-au > tr > td:last-child a { @apply font-mono; }
+  .lab-au > tr > td:last-child > p + p { @apply mt-1; }
+  .lab-filter > button { @apply rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm
+    font-medium text-gray-900 hover:bg-gray-100 hover:text-primary-700 focus:z-10
+    focus:outline-none focus:ring-2 focus:ring-primary-500 aria-pressed:bg-primary-700
+    aria-pressed:text-white sm:rounded-none sm:first:rounded-s-lg sm:last:rounded-e-lg
+    dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700
+    dark:aria-pressed:bg-primary-600; }
+  .lab-filter > button > span { @apply tabular-nums opacity-80; }
   [data-chart-box] .mark[data-active] > :nth-child(2) { fill: rgb(255 255 255 / 0.07); }
 }`;
 

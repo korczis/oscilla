@@ -159,6 +159,14 @@ export const RATCHET_COPY = Object.freeze({
 export const VERDICT_COPY = Object.freeze({ merge: 'sloučit', changes: 'změny',
   'changes-requested': 'změny požadovány' });
 
+/**
+ * Review-audit class (review-audit/v1 `class`, scripts/facts.mjs reviewAudits) -> its Czech
+ * name, in the order the page's filter and the chart list them; `unaudited` is a finding still
+ * open in its verdict that no audit names. An unknown class is shown as it is.
+ */
+export const AUDIT_CLASS_COPY = Object.freeze({ open: 'Stále otevřené', fixed: 'Opraveno',
+  superseded: 'Nahrazeno', unaudited: 'Neauditováno' });
+
 /** The frame's tabs: the deep links the playable frame switches between. */
 export const FRAME_TABS = Object.freeze([
   { id: 'playground', name: 'Playground', hash: '#m=playground',

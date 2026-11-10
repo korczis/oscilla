@@ -11,7 +11,8 @@
 //   - the charts' readout: hover, or focus a chart and move with the arrow keys;
 //   - the claims explorer's search and its status and area filters (without the script the
 //     table shows every claim and the controls stay hidden);
-//   - the roadmap's filter by milestone status (likewise hidden without the script).
+//   - the roadmap's filter by milestone status (likewise hidden without the script);
+//   - the review audit's filter by class (likewise).
 import Collapse from 'flowbite/lib/esm/components/collapse';
 import Modal from 'flowbite/lib/esm/components/modal';
 import Tabs from 'flowbite/lib/esm/components/tabs';
@@ -295,6 +296,36 @@ function initRoadmap() {
   controls.hidden = false;
 }
 
+// The review audit's filter by class (Vše / Stále otevřené / Opraveno / Nahrazeno /
+// Neauditováno); hidden without the script, when the table shows every finding.
+const AUDIT_NAMES = { '': 'všechny třídy', open: 'stále otevřené', fixed: 'opraveno',
+  superseded: 'nahrazeno', unaudited: 'neauditováno' };
+
+function initAudit() {
+  const block = $('[data-audit]');
+  if (!block) return;
+  const controls = $('[data-audit-controls]', block);
+  const buttons = $$('[data-audit-filter]', controls);
+  const rows = $$('tr[data-class]', block);
+  const empty = $('[data-audit-empty]', block);
+  const count = $('[data-audit-count]', block);
+  const apply = (value) => {
+    let shown = 0;
+    for (const b of buttons) {
+      b.setAttribute('aria-pressed', String(b.dataset.auditFilter === value));
+    }
+    for (const tr of rows) {
+      tr.hidden = Boolean(value) && tr.dataset.class !== value;
+      if (!tr.hidden) shown += 1;
+    }
+    empty.hidden = shown > 0;
+    count.textContent = `Zobrazeno ${shown} z ${rows.length} nálezů: `
+      + `${AUDIT_NAMES[value] ?? value}.`;
+  };
+  for (const b of buttons) b.addEventListener('click', () => apply(b.dataset.auditFilter));
+  controls.hidden = false;
+}
+
 initTheme();
 initMenu();
 initFrame();
@@ -302,3 +333,4 @@ initLightbox();
 initCharts();
 initClaims();
 initRoadmap();
+initAudit();
