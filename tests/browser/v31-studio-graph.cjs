@@ -784,14 +784,57 @@ function defineChecks() {
     const m1 = await H.settle(() => H.model(page), (m) => !m.nodes.some((n) => n.id === 'env-1'),
       'Shift+Delete removed the Envelope');
     const d1 = await H.undoDepth(page);
-    // M on a clicked cable (edge-3, Filter -> Master), twice.
-    const pt = await page.evaluate(() => {
-      const p = document.querySelector('.osc-sg-edge[data-edge-id="edge-3"] .osc-sg-edge-line');
-      const q = p.getPointAtLength(p.getTotalLength() / 2);
-      const m = p.getScreenCTM();
-      return { x: q.x * m.a + q.y * m.c + m.e, y: q.x * m.b + q.y * m.d + m.f };
-    });
-    await page.mouse.click(pt.x, pt.y);
+    // M on a clicked cable (edge-3, Filter -> Master), twice. R2-T5-8: the click point is
+    // computed, never a fixed fraction of the path (its midpoint lay on edge-5 once K232 showed
+    // the Filter's Q port): a point of edge-3 farther than CLEAR_PX from every other cable's
+    // hit stroke, each measured as a distance to samples along that path, not by the topmost
+    // element; the one with the most room. No such point fails by name, and the click must
+    // select edge-3 alone before M is pressed.
+    const pick = await page.evaluate(({ id, clear }) => {
+      const screen = (p) => {
+        const m = p.getScreenCTM();
+        return (q) => ({ x: q.x * m.a + q.y * m.c + m.e, y: q.x * m.b + q.y * m.d + m.f });
+      };
+      const along = (p, from = 0, to = 1) => {
+        const len = p.getTotalLength();
+        const at = screen(p);
+        const n = Math.max(2, Math.ceil(len * (to - from)));
+        return Array.from({ length: n + 1 }, (_, i) => at(p.getPointAtLength(len
+          * (from + ((to - from) * i) / n))));
+      };
+      const hitOf = (g) => g.querySelector('.osc-sg-edge-hit');
+      const half = (p) => (parseFloat(getComputedStyle(p).strokeWidth) || 0) / 2
+        * Math.hypot(p.getScreenCTM().a, p.getScreenCTM().b);
+      const groups = [...document.querySelectorAll('.osc-sg-edge[data-edge-id]')];
+      const own = groups.find((g) => g.dataset.edgeId === id);
+      if (!own) return { none: `${id} is not drawn` };
+      const others = groups.filter((g) => g !== own).map((g) => ({ id: g.dataset.edgeId,
+        reach: half(hitOf(g)), pts: along(hitOf(g)) }));
+      let best = null;
+      for (const q of along(hitOf(own), 0.1, 0.9)) {
+        const el = document.elementFromPoint(q.x, q.y);
+        const g = el && el.closest('[data-edge-id]');
+        if (!g || g !== own || el.closest('[data-node-id]')) continue;
+        let room = Infinity;
+        let near = null;
+        for (const o of others) {
+          for (const r of o.pts) {
+            const d = Math.hypot(r.x - q.x, r.y - q.y) - o.reach;
+            if (d < room) [room, near] = [d, o.id];
+          }
+        }
+        if (room > clear && (!best || room > best.room)) best = { ...q, room, near };
+      }
+      return best || { none: `no point of ${id} lies ${clear} px clear of every other cable` };
+    }, { id: 'edge-3', clear: 4 });
+    if (pick.none) throw new Error(`no click point unique to edge-3: ${pick.none}`);
+    await page.mouse.click(pick.x, pick.y);
+    const picked = await H.settle(() => page.evaluate(() => window.OSCILLA.studio.selection.edges
+      .slice()), (e) => e.length === 1 && e[0] === 'edge-3', 'the click selected edge-3');
+    if (!(picked.length === 1 && picked[0] === 'edge-3')) {
+      throw new Error(`the click at ${Math.round(pick.x)},${Math.round(pick.y)} (${
+        pick.room.toFixed(1)} px clear of ${pick.near}) selected [${picked}], not edge-3`);
+    }
     await page.keyboard.press('m');
     const mutedOf = async () => ({ model: (await H.model(page)).edges.find((e) => e.id === 'edge-3')
       .props.muted, drawn: await page.evaluate(() => document.querySelector(
@@ -817,7 +860,8 @@ function defineChecks() {
       bridgeOneEntry: d1 === d0 + 1,
       muted: mu1.model && mu1.drawn, unmuted: !mu2.model && !mu2.drawn, muteEntries: d2 === d1 + 2,
       tidied: p1 !== p0, tidyOneEntry: d3 === d2 + 1, tidyStable: p2 === p1 && d4 === d3,
-    }), mu1, mu2, p0, p1 };
+    }), mu1, mu2, p0, p1, pick: { x: Math.round(pick.x), y: Math.round(pick.y),
+      room: Math.round(pick.room * 10) / 10, near: pick.near } };
   });
 
   /**
