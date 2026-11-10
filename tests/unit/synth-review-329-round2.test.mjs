@@ -171,8 +171,11 @@ test('every input jack a cable reaches is active in the runtime, or the cable is
       const st = panelStore();
       const r = patchCable(st.getModel(), PANEL, from, j.id);
       if (r.reason) {
-        assert.equal(j.id, 'sh.rate', `only a clocked S&H Rate refuses: ${j.id} ${r.reason}`);
-        assert.match(r.reason, /Clock is patched/);
+        // A clocked S&H Rate refuses, and (K238) a bipolar source into the gain of a stage that
+        // rests closed (VCA, VELOCITY), which would open it with no key held.
+        const closed = /^(vca|vel)\.gain$/.test(j.id);
+        assert.ok(j.id === 'sh.rate' || closed, `only those refuse: ${j.id} ${r.reason}`);
+        assert.match(r.reason, closed ? /bipolární zdroj by otevřel VCA/ : /Clock is patched/);
         continue;
       }
       const done = st.dispatch(r.action);

@@ -12,8 +12,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
-import { jackState, panelEdges, patchCable } from '../../src/js/synth/normals.js';
-import { canConnect } from '../../src/js/studio/ports.js';
+import {
+  cableNote, jackReason, jackState, panelCables, panelEdges, patchCable, tuneNote,
+} from '../../src/js/synth/normals.js';
+import { cableItem } from '../../src/js/synth/view/bay.js';
+import { inspectorView } from '../../src/js/ui/studio/inspector.js';
+import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
+import { canConnect, controlLine } from '../../src/js/studio/ports.js';
+import { compileStudio } from '../../src/js/studio/compiler.js';
 import { createPatch } from '../../src/js/studio/patches.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
@@ -182,3 +188,93 @@ test('a panel BATCH whose second step is refused leaves model, history and runti
   assert.deepEqual(runtimeShape(s.runtime), shape, 'the runtime');
   assert.deepEqual(normalIds(s.store.getModel()), CUTOFF_IDS);
 });
+
+// ------------------------------------------------------------- K238: the jacks say what they do
+// Three jacks disagreed with the compiler (probe on a7102358, 329.yaml#R9): S&H Rate was refused
+// while its Clock cable was muted, though a muted Clock does not clock the S&H; Keys pitch into
+// VCO Tune moved 100 cents over a +/-6 octave source (1/72 octave per octave); and a bipolar
+// LFO into VCA gain, which replaces EG 2's normal, opened the VCA with no key held.
+const nodeOf = (m, mod) => PANEL.resolve(m).get(mod);
+const edgeInto = (m, mod, port) => m.graph.edges.find((e) => e.to.node === nodeOf(m, mod).id
+  && e.to.port === port);
+
+test('K238: S&H Rate is refused only while an unmuted Clock clocks it, as the compiler says', () => {
+  const st = panelStore();
+  const clock = edgeInto(st.getModel(), 'sh', 'trigger');
+  assert.ok(clock, 'Keys Gate is normalled into the S&H Clock (n23)');
+  const clocked = (m) => compileStudio(m).nodes.get(nodeOf(m, 'sh').id).clocked;
+  assert.equal(clocked(st.getModel()), true);
+  assert.match(jackReason(st.getModel(), PANEL, 'sh.rate'), /Rate has no effect while Clock/);
+  const r = st.dispatch({ type: 'EDGE_UPDATE', edgeId: clock.id, props: { muted: true } });
+  assert.equal(r.ok, true, r.reason);
+  assert.equal(clocked(st.getModel()), false, 'the compiler ignores a muted Clock cable');
+  assert.equal(jackReason(st.getModel(), PANEL, 'sh.rate'), null, 'so Rate is not refused');
+  assert.ok(patchCable(st.getModel(), PANEL, 'mg.control', 'sh.rate').action,
+    'a cable into Rate can be patched while Clock is muted');
+});
+
+test('K238: Keys pitch into VCO Tune modulates by Tune\'s span, and its text says so and '
+  + 'points to Pitch', () => {
+    // oscilla-43's decision: Tune is fine tuning (+/-12 semitones); Pitch tracks 1:1 (n1/n2).
+    // An octave source into Tune takes Tune's whole span as its depth, and the bay and the
+    // Inspector state the ratio that depth gives, both read from the same numbers here.
+    const st = panelStore();
+    const m = st.getModel();
+    const range = PANEL.sourceRange('keys.pitch');
+    const tune = NODE_REGISTRY.param('vco', 'tune');
+    const step = patchCable(m, PANEL, 'keys.pitch', 'vco1.tune').action.steps
+      .find((x) => x.type === 'EDGE_ADD');
+    const span = tune.max - tune.min;
+    assert.deepEqual(step.props, { depth: span, polarity: 'bipolar', mapping: 'linear',
+      offset: 0 }, 'the depth is Tune\'s span, 2400 cents (the edge validator\'s limit)');
+    // What the compiler does with it (ports.js controlLine): cents per source octave, and the
+    // whole swing over the source's range.
+    const { a } = controlLine(step.props, range);
+    const swing = (a * (range[1] - range[0])) / 2 / 1200; // octaves, each way
+    assert.equal(a, span / ((range[1] - range[0]) / 2), 'a third of an octave per octave');
+    assert.equal(swing, 2);
+    const text = `posune ladění až o ±${swing} oktávy přes celý rozsah zdroje; pro sledování `
+      + 'výšky použij vstup Pitch';
+    assert.equal(tuneNote('oct', tune, step.props), text);
+    // the bay's cable row says it
+    assert.equal(st.dispatch(patchCable(m, PANEL, 'keys.pitch', 'vco1.tune').action).ok, true);
+    const cable = panelCables(st.getModel(), PANEL).find((c) => c.to === 'vco1.tune');
+    assert.equal(cableNote(st.getModel(), PANEL, cable), text);
+    const row = cableItem({ ...cable, note: cableNote(st.getModel(), PANEL, cable) }, 'patched',
+      { jackName: (j) => j, item: 'i', btn: 'b' });
+    assert.ok(row.includes(`keys.pitch → vco1.tune; ${text}</span>`), row);
+    // and so does the Inspector's view of the edge
+    const edge = st.getModel().graph.edges.find((e) => e.id === cable.id);
+    const view = inspectorView(st.getModel(), { nodes: [], edges: [edge.id], clips: [] });
+    assert.equal(view.note, text);
+    // a half depth says half, in the same words; the Pitch normal (1:1) carries no note
+    assert.match(tuneNote('oct', tune, { ...step.props, depth: 600 }), /až o ±0,5 oktávy /);
+    assert.match(tuneNote('oct', tune, { ...step.props, depth: 1200, polarity: 'unipolar' }),
+      /až o 1 oktávu /);
+    const pitch = PANEL.normals.find((n) => n.from === 'keys.pitch' && n.to === 'vco1.pitch');
+    assert.equal(controlLine({ offset: 0, ...pitch.props }, range).a, 1, 'Pitch tracks 1:1');
+    assert.equal(tuneNote('oct', NODE_REGISTRY.param('vco', 'pitch'), pitch.props), null);
+  });
+
+test('K238: a bipolar source into VCA gain is refused; an envelope there leaves it closed at rest',
+  () => {
+    const m = panelStore().getModel();
+    const reason = 'VCA: bipolární zdroj by otevřel VCA bez stisknuté klávesy. Do zesílení '
+      + 'patří unipolární zdroj, například obálka.';
+    for (const from of ['mg.control', 'sh.control']) {
+      assert.ok(PANEL.sourceRange(from)[0] < 0, `${from} is bipolar`);
+      assert.deepEqual(patchCable(m, PANEL, from, 'vca.gain'), { reason }, from);
+      assert.equal(jackReason(m, PANEL, 'vca.gain', from), reason);
+    }
+    // A unipolar envelope is allowed, and at rest (the source at 0) it adds nothing to the
+    // VCA's base gain of 0: closed until a key opens the envelope.
+    const r = patchCable(m, PANEL, 'eg1.control', 'vca.gain');
+    assert.ok(r.action, r.reason);
+    const props = r.action.steps.find((x) => x.type === 'EDGE_ADD').props;
+    const [lo] = PANEL.sourceRange('eg1.control');
+    const { a, b } = controlLine(props, PANEL.sourceRange('eg1.control'));
+    assert.equal(lo, 0);
+    assert.equal(nodeOf(m, 'vca').params.gain + a * lo + b, 0, 'the VCA rests closed');
+    // without a source named the jack itself has no refusal (the hint of an unpatched jack)
+    assert.equal(jackReason(m, PANEL, 'vca.gain'), null);
+  });

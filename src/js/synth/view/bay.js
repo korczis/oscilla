@@ -5,7 +5,8 @@
 //   panelSource(panel) -> { groups, nameOf }   every module with its jacks (panel.jacksOf)
 //   bayLayout(panel, width), baySvg({ panel, ... }), jackLabel(panel, jack, state, verdict)
 //   cableItem(cable, toState, { jackName, item, btn }) -> one row of the CABLES list: the
-//     cable, ", přičítá se k normálům" where its target jack sums (K183), and its Remove button
+//     cable, ", přičítá se k normálům" where its target jack sums (K183), its note (K238: what
+//     an octave source into Tune does, normals.js tuneNote) and its Remove button
 //   connectListHtml({ pending, verdicts, cables, jackName, jackOf, item, btn }) -> the connection
 //     list of a pending jack (K063): its cables to remove, the jacks that take the cable, the
 //     refused ones with the validator's sentence, and Cancel
@@ -39,7 +40,8 @@ export function cableItem(c, toState, { jackName, item, btn }) {
   const from = esc(jackName(c.from));
   const to = esc(jackName(c.to));
   return `<li class="${item}"><span>${from} → ${to}${toState === 'summing'
-    ? ', přičítá se k normálům' : ''}</span><button type="button" class="${btn}" `
+    ? ', přičítá se k normálům' : ''}${c.note ? `; ${esc(c.note)}` : ''}</span><button `
+    + `type="button" class="${btn}" `
     + `data-remove-cable="${esc(c.id)}" aria-label="Odpojit kabel ${from} → ${to}">Odpojit`
     + '</button></li>';
 }
