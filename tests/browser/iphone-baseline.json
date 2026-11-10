@@ -188,7 +188,7 @@
     },
     "webkit/iPhone 13/synth": {
       "offscreen": 0,
-      "covered": 81,
+      "covered": 0,
       "tiny": 0
     },
     "webkit/iPhone 13/synthesis": {
@@ -253,7 +253,7 @@
     },
     "webkit/iPhone SE/synth": {
       "offscreen": 0,
-      "covered": 81,
+      "covered": 0,
       "tiny": 0
     },
     "webkit/iPhone SE/synthesis": {
@@ -262,8 +262,5 @@
       "tiny": 0
     }
   },
-  "reasons": {
-    "webkit/iPhone 13/synth.covered": "U095: WebKit leaves a Synth control under the docked keys after scrollIntoView (Chromium and Firefox 0); one shell fix (26)",
-    "webkit/iPhone SE/synth.covered": "U095: WebKit leaves a Synth control under the docked keys after scrollIntoView (Chromium and Firefox 0); one shell fix (26)"
-  }
+  "reasons": {}
 }
