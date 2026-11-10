@@ -101,8 +101,11 @@ function resettableLfo({ ctx, hooks, acct, at, params, clocked }) {
     if (i >= 0 && i !== voices.length - 1) voices.splice(i, 1);
   };
   const voice = (t) => {
-    const v = { start: t, types: [...types], oscs: [], gains: [] };
-    let live = types.length;
+    // A current voice that ended before this reset (its stop was reached) was kept as the last
+    // one; it goes now, so no ended voice stays held for good (oscilla-04's review).
+    const last = voices.at(-1);
+    if (last && last.live === 0) voices.pop();
+    const v = { start: t, types: [...types], oscs: [], gains: [], live: types.length };
     v.oscs = types.map((type, k) => {
       const o = acct.source(acct.track(hooks.oscillator(type, 1, t)));
       o.frequency.cancelScheduledValues(0);
@@ -110,8 +113,8 @@ function resettableLfo({ ctx, hooks, acct, at, params, clocked }) {
       rate.connect(o.frequency);
       detune.connect(o.detune);
       o.addEventListener('ended', () => {
-        live -= 1;
-        if (live === 0) retire(v);
+        v.live -= 1;
+        if (v.live === 0) retire(v);
       });
       if (!morphing) {
         o.connect(depth);
