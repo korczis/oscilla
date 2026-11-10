@@ -1,0 +1,26 @@
+id: H009
+milestone: M079
+serves:
+  - "v31-studio#click-free-live-edit"
+title: "A structural live edit while voices sound gets a crossfade lead longer than the main-thread stalls it must absorb"
+slug: structural-edit-crossfade-lead-absorbs-stalls
+priority: p3
+profile: implementation
+objective: "runtime.js transact anchors the crossfade at hooks.soon(), 20 ms (SCHEDULE_LEAD_S) ahead of the audio clock, and H008 continues sounding voices there. A main-thread stall longer than that after apply still leaves a gap, because the old routes' fade is already rendered. A longer lead only for structural edits while a voice sounds would absorb it, at the cost of the edit's latency. It changes every structural edit and offline.js's start mirror, so measure it first: how long the stalls on CI and on a phone are, and the latency against them."
+why: "oscilla-c1, rev-seat, on H008 (2026-11-10): 'File the longer structural-edit lead as its own issue: it changes the latency of every structural edit and offline.js's start mirror, so it needs its own measurement.' Relayed by oscilla-d9, filed by rev-seat-2 oscilla-c3."
+scope:
+  - "src/js/studio/runtime.js"
+  - "src/js/studio/transport.js"
+  - "src/js/studio/offline.js"
+  - "tests/unit"
+  - ".ai/repo/project/issues/H009.yaml"
+depends_on:
+  - "H008"
+acceptance_criteria:
+  - "A stall of up to the new lead after apply leaves no gap (unit, 44.1 and 48 kHz); a measurement on CI and a phone states the chosen lead; offline.js mirrors it."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

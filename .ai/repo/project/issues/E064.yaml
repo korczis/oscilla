@@ -1,0 +1,25 @@
+id: E064
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "The rule jobs cannot be disarmed by the pull request they judge, and a retitle is judged again"
+slug: rule-jobs-not-disarmed-by-the-judged-pr
+priority: p2
+profile: implementation
+objective: "On main the fail-first and review-verdict jobs run from the pull request's own ci.yml: adding `ref: main` to either job's checkout, or `export PATH=...` before the review-verdict call, breaks no test (tests/unit/ci-workflows.test.mjs problemsOfRuleJob reads only the last step; 75/75 pass under each mutant; 164 R3-P2-1). Nothing runs from the base branch to catch it: no pull_request_target workflow and no ruleset (`gh api repos/korczis/oscilla/rulesets` is []), so the merge queue is not required either (164 R2-P2-7, review-verdict.v2.md:182-187 \"not closed\"); and pull_request has no `edited` type, so a retitle to feat or fix is judged only by a later run (164 R1-P2-4b). Pin the whole rule job (checkout without ref or repository, no PATH or env change before the call) in the ci-workflows check with a mutation case each; then the owner-only part: a required base-branch workflow or the merge-queue ruleset (O1), and `edited` in the pull_request types or the queue's re-read."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 164.yaml#R3-P2-1, 164.yaml#R2-P2-7 and 164.yaml#R1-P2-4b (P2) still open on main b8bfd3b6. The ruleset part is the owner's (mesh strategy 2.1, O1)."
+scope:
+  - "tests/unit/ci-workflows.test.mjs"
+  - "scripts/ci-workflow-rules.mjs"
+  - ".github/workflows/ci.yml"
+  - ".ai/repo/rules/project"
+  - ".ai/repo/project/issues/E064.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The three mutants above each fail a unit test; the rule text names what still runs from the pull request's tree until the owner's ruleset lands, and a retitle is judged again (edited type or the queue)."
+validation:
+  - "node --test tests/unit/ci-workflows.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

@@ -1,0 +1,26 @@
+id: K236
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "The Synth bay restores a mixed jack's normals, a preset updates the remembered depth, and Escape closes the connection list"
+slug: synth-bay-mixed-jack-preset-depth-escape
+priority: p2
+profile: implementation
+objective: "Three open findings of #329 on main: on a mixed jack (a Studio edge plus normals) patching then removing a panel cable leaves no normals while the panel says \"Kabel odpojen; normál je obnoven.\" (normals.js unpatch skips normalSteps while a foreign edge remains; ui.js:537; 329 R4, reproduced); a preset applied while an amount knob's edges are broken does not update metadata.synthAmounts (presetAction is a PATCH_REPLACE), so unpatching restores the normal at the old depth (329 R5, reproduced with bass, lpf-eg2 3 vs 2); Escape clears the pending jack but never re-renders the bay, so the connection list stays open with Patch buttons that do nothing (ui.js:790-795; 329 R6, code-read). Fix each with a check that fails on main."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 329.yaml#R4, #R5 and #R6 (P2) still open on main b8bfd3b6."
+scope:
+  - "src/js/synth/normals.js"
+  - "src/js/synth/presets.js"
+  - "src/js/synth/ui.js"
+  - "tests/unit"
+  - "tests/browser"
+  - ".ai/repo/project/issues/K236.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Each of the three cases has a check that fails on b8bfd3b6: the normals come back (or the notice says why not), the preset's depth is the restored one, and Escape closes the list."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
