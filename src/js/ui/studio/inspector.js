@@ -1474,6 +1474,25 @@ export function mountInspector(host, svc) {
     return false;
   }
 
+  // A rebuild replaces the shown controls: one between a pointer's down and its up would drop
+  // the press's click (a Krok press lost to an edit arriving mid-press, K226 R2-T5-7). While a
+  // pointer is down in the Inspector a rebuild waits; it runs in the task after the up, past
+  // the click. In-place updates still run.
+  let pressed = false;
+  let deferred = false;
+  const onDown = () => { pressed = true; };
+  const onUp = () => {
+    if (!pressed) return;
+    pressed = false;
+    if (deferred) {
+      deferred = false;
+      setTimeout(() => { if (host.isConnected) render(); }, 0);
+    }
+  };
+  const UPS = ['pointerup', 'pointercancel'];
+  const win = typeof window !== 'undefined' ? window : null;
+  if (typeof host.addEventListener === 'function') host.addEventListener('pointerdown', onDown);
+  if (win) for (const t of UPS) win.addEventListener(t, onUp, true);
   let said = null; // the runtime state last rendered
   function render() {
     const model = svc.store.getModel();
@@ -1517,6 +1536,10 @@ export function mountInspector(host, svc) {
       const sub = host.querySelector('.osc-si-sub');
       if (sub) setText(sub, `${view.counts.nodes} nodes · ${view.counts.edges} connections · `
         + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`);
+      return;
+    }
+    if (pressed) {
+      deferred = true;
       return;
     }
     endSliderGesture();
@@ -1581,6 +1604,10 @@ export function mountInspector(host, svc) {
       if (steps) steps.destroy();
       dropListGrids();
       replaceChildren(host, []);
+      if (typeof host.removeEventListener === 'function') {
+        host.removeEventListener('pointerdown', onDown);
+      }
+      if (win) for (const t of UPS) win.removeEventListener(t, onUp, true);
     },
   };
 }
