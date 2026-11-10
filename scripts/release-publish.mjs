@@ -39,8 +39,12 @@
 //   release `tagged` for HEAD (verify-deploy alone also accepts the untagged page of the
 //   release commit); gh release create
 //   with notes generated from the commits since the previous tag and the committed
-//   dist/index.html attached as oscilla-v<version>.html (the artifact the release record of
-//   scripts/release-record.mjs names); a SemVer prerelease (X.Y.Z-rc.N) is created with
+//   dist/index.html (git show <HEAD>:dist/index.html, never the working tree) attached as
+//   oscilla-v<version>.html (the artifact the release record of scripts/release-record.mjs
+//   names). Before the tag, before verify-deploy and before the upload the run re-reads git
+//   status and HEAD and refuses, naming what changed, when the tree is no longer clean or HEAD
+//   is no longer the commit the preconditions judged (R034: up to three --pages-timeout waits
+//   lie between the clean check and the upload); a SemVer prerelease (X.Y.Z-rc.N) is created with
 //   --prerelease --latest=false, so GitHub never shows it as the latest release and its record
 //   lands on the prerelease channel. A failure after the push stops before the GitHub Release
 //   and says how to undo the tag. Both modes print the `majordomus finish` line that closes
@@ -59,7 +63,7 @@
 // ECONNRESET, "can't assign requested address", an HTTP 5xx), and a call out of attempts
 // named in the refusal or failure with its reason. The publish of 2026-10-31: one gh run list sat
 // for 2 h 20 min, and local port exhaustion ended the wait for the dispatched Pages run.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -306,6 +310,28 @@ export function defaultSh(root, o = {}) {
   return boundedRunner({ cwd: root, ...o });
 }
 
+/**
+ * Pure (R034): why the checkout is no longer the one the preconditions judged, or null. The
+ * publish reads the tree clean and HEAD at `head` once at the start, then waits up to three
+ * times --pages-timeout before verify-deploy and the upload; a file rewritten or a commit made
+ * in that time must not reach the Release unnoticed. `status` is git status --porcelain.
+ */
+export function checkoutDrift({ head, now, status, stage }) {
+  const problems = [];
+  if (now !== head) {
+    problems.push(`HEAD moved from ${head} to ${now || 'an unreadable commit'}`);
+  }
+  if (status) {
+    const lines = status.split('\n').filter(Boolean);
+    const shown = lines.slice(0, 5).map((l) => l.trim()).join('; ');
+    problems.push(`the working tree is no longer clean (${shown}`
+      + `${lines.length > 5 ? `; and ${lines.length - 5} more` : ''})`);
+  }
+  if (!problems.length) return null;
+  return `${stage}: ${problems.join(', and ')}; the publish judged a clean tree at ${head} `
+    + '(R034)';
+}
+
 export const USAGE = 'usage: node scripts/release-publish.mjs [--yes] '
   + '[--pages-timeout <minutes>] [--help]';
 const FLAGS = { '--yes': 'boolean', '--pages-timeout': 'value' };
@@ -494,9 +520,16 @@ export async function publish({
     if (r.status !== 0) throw new Error(`${what} failed (${failure(cmd, args, r)})`);
     return r;
   };
+  // R034: the tree must still be the clean one at `head` that the preconditions judged.
+  const reassert = (stage) => {
+    const drift = checkoutDrift({ head, stage, now: run(['rev-parse', 'HEAD']),
+      status: run(['status', '--porcelain', '--untracked-files=normal']) });
+    if (drift) throw new Error(drift);
+  };
   let pushed = resume;
   try {
     if (!resume) {
+      reassert('before the tag');
       must('git', ['tag', '-a', tag, '-m', `OSCILLA ${tag}`, head], 'tagging');
       must('git', ['push', 'origin', `refs/tags/${tag}`], 'pushing the tag');
       pushed = true;
@@ -582,6 +615,7 @@ export async function publish({
           + `'${redeploy.conclusion}'. Inspect: gh run view ${redeploy.databaseId}`);
       }
     }
+    reassert('before deployment verification');
     must('node', ['scripts/verify-deploy.mjs', '--commit', head], 'deployment verification');
     let tagged = 'not read';
     for (let n = 1; n <= TAGGED_ATTEMPTS; n++) {
@@ -601,9 +635,16 @@ export async function publish({
     try {
       const notesFile = path.join(dir, 'notes.md');
       writeFileSync(notesFile, notes);
-      // The clean tree and build:check above make the working-tree dist the committed one.
+      // R034: the asset is the dist of the published commit, read from git, never the working
+      // tree, which the waits above leave open to change for up to three --pages-timeouts.
+      reassert('before the upload');
+      const shown = sh('git', ['show', `${head}:${DIST_PATH}`], { binary: true });
+      if (shown.status !== 0) {
+        throw new Error(`reading ${DIST_PATH} at ${head} failed `
+          + `(${failure('git', ['show', `${head}:${DIST_PATH}`], shown)})`);
+      }
       const assetFile = path.join(dir, asset);
-      writeFileSync(assetFile, readFileSync(path.join(root, DIST_PATH)));
+      writeFileSync(assetFile, shown.stdout);
       must('gh', ['release', 'create', tag, assetFile, ...releaseCreateFlags(version, notesFile)],
         'creating the GitHub Release');
     } finally {

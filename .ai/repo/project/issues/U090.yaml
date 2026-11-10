@@ -24,4 +24,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-09T22:46:12Z
+started_at: 2026-11-09T22:42:48Z
+started_event: sha256:c7315b332a4f40101acc89f91b28991b75b35fbf7fdc009828c26f3c7e2e9b0d
+verified_at: 2026-11-09T22:43:27Z
+verified_event: sha256:da191b89da6412d1f9f1e00c954cda5dbcad17fe9622d54594fa4183700df5f2
+completed_at: 2026-11-09T22:46:12Z
+completed_event: sha256:a885d3e8c9c351591a242418f1ac8106c15182a39f10083497e0d6b7c3e40cfc
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/about-current.test.mjs (origin/main b8bfd3b6); the same file of #424's head 75d31638 over #424's merge base a19f1ff6"
+    result: "Re-checked on main b8bfd3b6 by oscilla-ce on 2026-11-09: 'U090: the credits name every library the page ships, with its licence' passes; it reads VENDOR_SCRIPTS and BUILD_TIME_ASSETS from scripts/build-config.mjs and the runtime dependencies. On a19f1ff6 it fails as an assertion (fail-first). Roadmap ISO/SHA check, source-size and ui-flowbite-pro baseline tests pass. Delivered by #424 (train #437, d51f9b2d), verdict merge."
+    artifact: "tests/unit/about-current.test.mjs"
+    commit: b8bfd3b613b9e4aac63267343c14bd1ee91f2a02
+    recorded_at: 2026-11-09T22:45:15Z

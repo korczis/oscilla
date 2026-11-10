@@ -1,0 +1,24 @@
+id: R054
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "review-verdict's next version states that the reviewer is a separate top-level session, never a subagent of the builder's orchestrating session (Q108 answer A)"
+slug: review-verdict-reviewer-is-a-separate-session
+priority: p2
+profile: implementation
+objective: "The owner answered Q108 on 2026-11-10 with A: a reviewer subagent of the builder's own orchestrating session does not count as the independent reviewer; the reviewer must be a separate top-level session, as practised since #232, and the past verdicts written by such a subagent stand as history, named by the review-findings audit of 2026-11-10 (.ai/repo/reviews/audit-2026-11-10.yaml, findings 164 V-2, 174 V-1, 179 V-1, 197 R-3). Rule project.review-verdict v2 says only \"a session other than the one that built the change\". Its next version says it explicitly: the reviewer is a top-level session other than the builder's, a subagent spawned by the builder's session or by the session orchestrating the builders is not one, and the verdict's reviewer field names that top-level session; it names the verdicts written before the answer as history and the audit that lists them. This part stays reviewer-owned (no program can tell who wrote a file), so the version states what stays with the reviewer. If R052's guarded-list change is not yet landed, both go into the same next version."
+why: "Owner decision Q108 (A), asked by oscilla-43 on 2026-11-10 ~01:05Z; Q108's acceptance criterion asks for the rule's next version to state it. Filed by rev-seat-2 oscilla-c3 on oscilla-43's order."
+scope:
+  - ".ai/repo/rules/project"
+  - ".ai/repo/reviews/README.md"
+  - ".ai/repo/project/issues/R054.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The rule's next version says that the reviewer is a top-level session other than the builder's, that a subagent of the builder's session or of the session orchestrating the builders is not an independent reviewer, that the verdict's reviewer field names the top-level session, and that verdicts written before Q108's answer stand as history named by .ai/repo/reviews/audit-2026-11-10.yaml; .ai/repo/reviews/README.md (Who writes these) says the same; the previous version is kept and marked superseded."
+validation:
+  - "majordomus doctor"
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

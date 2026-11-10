@@ -1,0 +1,22 @@
+id: E063
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "fail-first's tests kill the four mutants that survive them on main"
+slug: fail-first-tests-kill-surviving-mutants
+priority: p2
+profile: implementation
+objective: "Four mutants of scripts/fail-first.mjs survive tests/unit/fail-first.test.mjs (21/21) and review-verdict.test.mjs (26/26) on main b8bfd3b6: TRAIN_BRANCH unanchored (/^train\\// -> /train\\//, 252 R4), the --head-branch flag unparsed (252 R5), the member check unanchored (/^#\\d+$/ -> /#\\d+/, 252 R6), TYPED without its bracketed-tag prefix (252 R7). Add one unit case per mutant that fails when it is applied."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 252.yaml#R4 to #R7 (P2); each mutant was applied and reverted by the audit still open on main b8bfd3b6."
+scope:
+  - "tests/unit/fail-first.test.mjs"
+  - ".ai/repo/project/issues/E063.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Each of the four mutants, applied alone, fails at least one test of fail-first.test.mjs."
+validation:
+  - "node --test tests/unit/fail-first.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

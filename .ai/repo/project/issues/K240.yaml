@@ -1,0 +1,25 @@
+id: K240
+milestone: M064
+serves:
+  - "connected-instrument#performance-pad"
+title: "A range-fitted cable's frequency-limited line does not blame Nyquist"
+slug: range-fitted-cable-does-not-blame-nyquist
+priority: p2
+profile: implementation
+objective: "The cable-form frequency-limited diagnostic (src/js/studio/compiler.js:653-688) covers every limited edge, including those the performance fit limited by range (src/js/studio/performance-fit.js:65), and never reads fitted.by. Reproduced on a7102358: an oscillator at 440 Hz, detune 1100 and Y -> Detune bipolar 1200 at 48 kHz says it keeps the frequency at or below 22.80 kHz, 0.95 x Nyquist, beside performance-limited by range. After: a range-fitted edge reports only the range fit."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 444.yaml#NF7 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+scope:
+  - "src/js/studio/compiler.js"
+  - "tests/unit/xy-default-patch.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/K240.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/xy-default-patch.test.mjs, fails on a7102358): in the case above no frequency-limited diagnostic for the Y -> Detune edge names Nyquist, while its performance-limited diagnostic has by 'range'."
+  - "Guarded (src/js/studio): a non-builder's verdict; dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

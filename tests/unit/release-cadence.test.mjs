@@ -7,9 +7,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import {
-  ISSUE_TITLE, MAX_AGE_HOURS, cadence, formatCadence, issueBody, main, readDatedCommits,
-  syncIssue,
+  ISSUE_TITLE, MAX_AGE_HOURS, RECORD_PR_HOURS, cadence, countedReleaseTag, formatCadence,
+  issueBody, main, readDatedCommits, recordBranch, releaseGap, syncIssue,
 } from '../../scripts/release-cadence.mjs';
+import { lastReleaseTag } from '../../scripts/release-analyze.mjs';
 
 const NOW = Date.parse('2026-10-07T12:00:00Z');
 const HOUR = 3_600_000;
@@ -69,11 +70,26 @@ test('releasable is what release:analyze counts: fix, perf, breaking, non-conven
 
 // ---------------------------------------------------------------- CLI against a fake git
 
-function fakeGit({ tags = 'v40.10.2\nv40.10.3', commits = [] } = {}) {
+// `records`: the tags whose record file HEAD carries (default: every tag). `ranges` (R035)
+// answers git log by its range, as git would, so a cadence measured from another tag reads
+// other commits; without it the log must be asked for v40.10.3..HEAD.
+const RECORD_AT = (args) => /^HEAD:\.ai\/repo\/releases\/(v[^/]+)\.yaml$/.exec(args[1] || '');
+function fakeGit({ tags = 'v40.10.2\nv40.10.3', commits = [], records = null,
+  ranges = null } = {}) {
   return (args) => {
     if (args[0] === 'tag') return tags;
+    if (args[0] === 'show' && RECORD_AT(args)) {
+      const tag = RECORD_AT(args)[1];
+      if (records && !records.includes(tag)) throw new Error(`fatal: path does not exist`);
+      return `schema: release/v1\ntag: ${tag}\n`;
+    }
     if (args[0] === 'log') {
-      assert.deepEqual(args, ['log', '--format=%H%x1f%ct%x1f%s%x1f%b%x1e', 'v40.10.3..HEAD']);
+      if (ranges) {
+        assert.ok(args.at(-1) in ranges, `unexpected range ${args.at(-1)}`);
+        commits = ranges[args.at(-1)];
+      } else {
+        assert.deepEqual(args, ['log', '--format=%H%x1f%ct%x1f%s%x1f%b%x1e', 'v40.10.3..HEAD']);
+      }
       return commits.map((x) => `${x.sha}\x1f${x.date / 1000}\x1f${x.subject}\x1f${x.body}\x1e\n`)
         .join('');
     }
@@ -81,7 +97,33 @@ function fakeGit({ tags = 'v40.10.2\nv40.10.3', commits = [] } = {}) {
   };
 }
 
-function cli(argv, git, sh) {
+/**
+ * gh for the releases (R035): `releases` the tags with a published GitHub Release (default:
+ * every tag; `drafts` are drafts), `prs` the open pull requests by head branch, `unread` makes
+ * every release view fail as a network error would. Anything else goes to `rest` (the issue).
+ */
+function fakeReleases({ releases = null, drafts = [], prs = {}, unread = false,
+  rest = () => ({ status: 0, stdout: '[]' }) } = {}) {
+  const calls = [];
+  const sh = (cmd, args) => {
+    calls.push([cmd, ...args]);
+    if (cmd === 'gh' && args[0] === 'release' && args[1] === 'view') {
+      if (unread) return { status: 1, stdout: '', stderr: 'HTTP 502: Bad Gateway' };
+      if (releases && !releases.includes(args[2])) {
+        return { status: 1, stdout: '', stderr: 'release not found' };
+      }
+      return { status: 0, stdout: JSON.stringify({ tagName: args[2],
+        isDraft: drafts.includes(args[2]) }) };
+    }
+    if (cmd === 'gh' && args[0] === 'pr' && args[1] === 'list') {
+      return { status: 0, stdout: JSON.stringify(prs[args[args.indexOf('--head') + 1]] || []) };
+    }
+    return rest(cmd, args);
+  };
+  return { sh, calls };
+}
+
+function cli(argv, git, sh = fakeReleases().sh) {
   const out = [];
   const code = main({ argv, run: fakeGit(git), sh, now: NOW, log: (l) => out.push(l),
     err: (l) => out.push(l) });
@@ -110,6 +152,84 @@ test('CLI: without a reachable v* tag there is no verdict (2), and --report says
   assert.match(none.text, /no v\* tag is reachable from HEAD/);
   assert.equal(cli(['--report'], { tags: '' }).code, 0);
 });
+
+// ------------------------------------------------------- R035: a tag alone is not a release
+// A publish that fails after pushing its tag leaves no deploy and no Release; the cadence
+// must stay overdue. v40.10.3 is at HEAD with no record and no Release here; v40.10.2 is the
+// last release that finished.
+const WAITING = [c('chore(release): v40.10.3', 1, 2), c('feat(x): waiting', 30, 1)];
+const STRANDED = { tags: 'v40.10.2\nv40.10.3', records: ['v40.10.2'],
+  ranges: { 'v40.10.2..HEAD': WAITING, 'v40.10.3..HEAD': [c('fix: fresh', 2, 3)],
+    HEAD: [...WAITING, c('feat: first', 900, 4)] } };
+
+test('R035: a tag with no Release and no record does not clear the cadence, and says why', () => {
+  const r = cli([], STRANDED, fakeReleases({ releases: ['v40.10.2'] }).sh);
+  assert.equal(r.code, 1, r.text);
+  assert.match(r.text, /OVERDUE; 1 releasable commit\(s\) since v40\.10\.2 /);
+  assert.match(r.text, new RegExp('v40\\.10\\.3 is not counted as a release: no GitHub Release; '
+    + 'no record \\.ai/repo/releases/v40\\.10\\.3\\.yaml on HEAD and no open record pull '
+    + 'request \\(chore/release-record-v40\\.10\\.3\\)'));
+  // lastReleaseTag, shared with release:analyze and release:publish, still names the tag
+  assert.equal(lastReleaseTag(fakeGit(STRANDED)), 'v40.10.3');
+  // the issue body carries the same reason
+  const json = JSON.parse(cli(['--json'], STRANDED, fakeReleases({ releases: ['v40.10.2'] }).sh)
+    .text);
+  assert.deepEqual([json.lastTag, json.skipped.map((x) => x.tag)], ['v40.10.2', ['v40.10.3']]);
+  assert.match(issueBody(json), /- v40\.10\.3 is not counted as a release: no GitHub Release/);
+  // a Release without the record, or a draft, still leaves it overdue
+  const noRecord = cli([], STRANDED);
+  assert.equal(noRecord.code, 1);
+  assert.match(noRecord.text, /v40\.10\.3 is not counted as a release: no record /);
+  assert.doesNotMatch(noRecord.text, /no GitHub Release/);
+  const draft = cli([], { ...STRANDED, records: null },
+    fakeReleases({ drafts: ['v40.10.3'] }).sh);
+  assert.match(draft.text, /v40\.10\.3 is not counted as a release: no GitHub Release$/m);
+});
+
+test('R035: a Release with its record, or with a young open record PR, clears it as today', () => {
+  // since the counted v40.10.3 only a fresh fix is unreleased
+  const recorded = cli([], { ...STRANDED, records: null });
+  assert.equal(recorded.code, 0, recorded.text);
+  assert.match(recorded.text, /since v40\.10\.3 /);
+  assert.doesNotMatch(recorded.text, /not counted/);
+
+  const pr = (hours) => ({ [recordBranch('v40.10.3')]: [{ number: 530,
+    createdAt: new Date(NOW - hours * HOUR).toISOString() }] });
+  const young = cli([], STRANDED, fakeReleases({ prs: pr(3) }).sh);
+  assert.equal(young.code, 0, young.text);
+  assert.doesNotMatch(young.text, /not counted/);
+  const old = cli([], STRANDED, fakeReleases({ prs: pr(RECORD_PR_HOURS + 2) }).sh);
+  assert.equal(old.code, 1, old.text);
+  assert.match(old.text, new RegExp('v40\\.10\\.3 is not counted as a release: no record '
+    + '\\.ai/repo/releases/v40\\.10\\.3\\.yaml on HEAD, and its record pull request #530 has '
+    + 'been open 26 h \\(limit 24 h\\)'));
+  assert.equal(releaseGap({ tag: 'v40.10.3', release: true, record: false, now: NOW,
+    recordPr: { number: 1, createdAt: new Date(NOW - RECORD_PR_HOURS * HOUR).toISOString() } }),
+  null, 'the limit itself still counts');
+});
+
+test('R035: unreadable GitHub state is no verdict; --report reads none and measures as before',
+  () => {
+    const unread = cli([], STRANDED, fakeReleases({ unread: true }).sh);
+    assert.equal(unread.code, 2, unread.text);
+    assert.match(unread.text, /the releases cannot be read.*gh release view v40\.10\.3 failed: /);
+    const gh = fakeReleases({ unread: true });
+    const report = cli(['--report'], STRANDED, gh.sh);
+    assert.equal(report.code, 0, report.text);
+    assert.match(report.text, /--report: measured from the newest tag/);
+    assert.deepEqual(gh.calls, [], '--report asks GitHub nothing');
+    // no tag counts at all: the lag runs over the whole history
+    const none = cli([], { ...STRANDED, records: [] }, fakeReleases({ releases: [] }).sh);
+    assert.equal(none.code, 1, none.text);
+    assert.match(none.text, /since the start of history \(no counted release\)/);
+    assert.match(none.text, /v40\.10\.2 is not counted/);
+    // the walk keeps lastReleaseTag's order and filter
+    const seen = [];
+    const mixed = fakeGit({ tags: 'v40.9.0\nnot-a-tag\nv40.10.3\nv40.10.2' });
+    assert.deepEqual(countedReleaseTag({ run: mixed,
+      gap: (t) => (seen.push(t), t === 'v40.9.0' ? null : 'no') }).tag, 'v40.9.0');
+    assert.deepEqual(seen, ['v40.10.3', 'v40.10.2', 'v40.9.0']);
+  });
 
 // ---------------------------------------------------------------- the issue, against a fake gh
 
@@ -153,7 +273,8 @@ test('the issue: opened once, updated while overdue, closed when it clears', () 
   assert.throws(() => syncIssue({ result: overdue, sh: fakeGh([], { fail: true }).sh }),
     /gh issue list failed: HTTP 403/);
   const viaCli = fakeGh([]);
-  const r = cli(['--issue'], { commits: [c('feat(x): new panel', 48)] }, viaCli.sh);
+  const r = cli(['--issue'], { commits: [c('feat(x): new panel', 48)] },
+    fakeReleases({ rest: viaCli.sh }).sh);
   assert.equal(r.code, 1, 'the workflow is red AND the issue exists');
   assert.match(r.text, /release overdue issue: created/);
 });
@@ -165,8 +286,10 @@ test('cadence.yml runs the check hourly and on main, bounded, with a minimal tok
     'utf8');
   assert.match(yml, /\n {2}schedule:\n {4}- cron: '\d+ \* \* \* \*'\n/, 'hourly');
   assert.match(yml, /\n {2}push:\n {4}branches: \[main\]\n/);
-  assert.match(yml, /\npermissions:\n {2}contents: read\n {2}issues: write\n\n/,
-    'read-only contents; issues: write for the one issue, and nothing else');
+  assert.match(yml,
+    /\npermissions:\n {2}contents: read\n {2}issues: write\n {2}pull-requests: read\n\n/,
+    'read-only contents and pull requests (R035: the open record PR); issues: write for the '
+    + 'one issue, and nothing else');
   assert.match(yml, /\n {4}timeout-minutes: \d+\n/);
   assert.match(yml, /fetch-depth: 0\n/, 'tags and history: the unreleased range needs both');
   assert.match(yml, /\n {8}run: node scripts\/release-cadence\.mjs --issue\n/);

@@ -1,0 +1,27 @@
+id: T039
+milestone: M073
+serves:
+  - "v3-measure#measurement-quality"
+title: "The capture clip check sees every input channel, or says it judges the mono downmix"
+slug: clip-check-sees-every-channel
+priority: p2
+profile: implementation
+objective: "src/js/measurement/capture.js:457-459 builds the capture worklet with channelCount 1, channelCountMode 'explicit' and channelInterpretation 'speakers', so a multi-channel input is downmixed before the peak and rail check: one channel at the rail can be halved below 0.98 and the quality bar then states that no sample reached 0.98 of digital full scale. Nothing states this limit. After: the check judges each channel's peak, or the quality bar says it judges the downmix."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 307.yaml#R5 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+current_state: "in progress (2026-11-10): built by oscilla-ce (proceed lane), tasks t-20261110070641-83d0, t-20261110071228-8a39 and t-20261110072859-aa64, as ff4e0d9b on fix/t039-clip-check-every-channel from T5 2aa5883a (local); the recorder takes every channel, the clip check judges each and names the worst; fail-first unit fails on 2aa5883a; awaits oscilla-c1's verdict, a train and the v3-measure browser check after T5 (oscilla-43)."
+scope:
+  - "src/js/measurement/capture.js"
+  - "src/js/measurement/views/quality-bar.js"
+  - "tests/unit/readout-states-quality-bar.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/T039.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/readout-states-quality-bar.test.mjs or a new capture test, fails on a7102358): a two-channel capture with the left channel at 1.0 and the right silent is rated at the rail or clipping detected, never clipping none."
+  - "dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

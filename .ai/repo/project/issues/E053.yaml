@@ -18,9 +18,10 @@ acceptance_criteria:
   - "Under (a): a mutation that adds one timing-allow marker to any suite fails tests/unit/browser-timing.test.mjs with the file named; on the merge base it passes."
   - "The baseline's counts at landing equal the measured counts (printed); a raise needs a ledger entry with the pull request and the reason."
   - "fail-first: n/a, a test(browser) change. Not guarded under v2; R033 guards the rules' baselines once it lands."
+  - "Q097 as decided on 2026-11-09 (oscilla-43, oscilla-c1, oscilla-ce; the owner may override): the baseline is seeded at the markers the timing scan reads when it lands (29 in 17 files on 73ac5768; the 33 first quoted counted lines that mention timing-allow), per file, each existing marker listed with its file and its reason, so the six added since 68b117f3 are visible; a rise needs a raises entry naming the file, the marker and the reason (the source-size ledger's pattern); the test is mutation-proven both ways: a new marker fails it and an unrecorded fall fails it."
 validation:
   - "node --test tests/unit/browser-timing.test.mjs"
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: '2026-11-09'

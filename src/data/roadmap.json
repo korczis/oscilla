@@ -5,8 +5,8 @@
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 23,
-      "required": 46,
+      "done": 24,
+      "required": 50,
       "phase": "now"
     },
     {
@@ -19,8 +19,8 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 31,
-      "required": 52,
+      "done": 32,
+      "required": 60,
       "phase": "now"
     },
     {
@@ -55,21 +55,21 @@
       "id": "M055",
       "title": "The whole interface on Flowbite Pro",
       "done": 1,
-      "required": 13,
+      "required": 14,
       "phase": "now"
     },
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 7,
-      "required": 67,
+      "done": 10,
+      "required": 69,
       "phase": "now"
     },
     {
       "id": "M079",
       "title": "Coherence fixes that wait on no open plan: live Studio edits and honest restores",
       "done": 1,
-      "required": 3,
+      "required": 5,
       "phase": "now"
     },
     {
@@ -90,7 +90,7 @@
       "id": "M059",
       "title": "Sequencer: audible tempo, real editing and a Studio clock",
       "done": 4,
-      "required": 6,
+      "required": 7,
       "phase": "now"
     },
     {
@@ -117,8 +117,8 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 3,
-      "required": 39,
+      "done": 6,
+      "required": 44,
       "phase": "now"
     },
     {
@@ -132,7 +132,7 @@
       "id": "M066",
       "title": "Instrument wave 1c: the drum machine on the same transport",
       "done": 0,
-      "required": 5,
+      "required": 6,
       "phase": "later"
     },
     {
@@ -153,7 +153,7 @@
       "id": "M069",
       "title": "Instrument wave 3: the XY performance pad, notes clips, MIDI record and out, the session grid",
       "done": 8,
-      "required": 21,
+      "required": 22,
       "phase": "now"
     },
     {
@@ -174,7 +174,7 @@
       "id": "M073",
       "title": "Measurement truth in the interface",
       "done": 9,
-      "required": 38,
+      "required": 42,
       "phase": "now"
     },
     {
@@ -251,7 +251,7 @@
       "id": "M090",
       "title": "One instrument, one coherent state",
       "done": 25,
-      "required": 59,
+      "required": 66,
       "phase": "now"
     },
     {
@@ -299,7 +299,7 @@
     {
       "id": "M098",
       "title": "The public face: README front page, GitHub shell and a measured library decision",
-      "done": 3,
+      "done": 5,
       "required": 6,
       "phase": "now"
     },
