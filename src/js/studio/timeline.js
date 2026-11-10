@@ -32,11 +32,12 @@
 //   moveClipResult / resizeClipResult / duplicateClipPlacement / nudgeClipResult -> action data
 //   snapTime(t, snap, context)        musical conversion helpers        loop and marker helpers
 
-import { BLOCK_SCHEMA } from '../sequencer/model.js';
+import { BLOCK_SCHEMA, PROVISIONAL_SAMPLE_RATE } from '../sequencer/model.js';
 import { CONTRACT_LIMITS, TIMING_LIMITS } from '../measurement/engine.js';
 import { DURATION_LIMITS } from '../measurement/stimulus.js';
 import { MEASUREMENT_TARGETS, clipTarget, clipUse } from './clip-targets.js';
 import { notesRules, slideRule } from './notes.js';
+import { freeRunLoop } from './clock.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
   CLIP_KINDS, EVENT_ACTIONS, MARKER_KINDS, MIN_CLIP_S, TIMELINE_MAX_S,
@@ -688,3 +689,83 @@ export function moveMarkerAction(model, markerId, time, snap) {
 
 /** Model track kinds (re-exported for editors). */
 export { TRACK_KINDS };
+
+// ---------------------------------------------------------------- transport anchor
+// The mapping between timeline positions and audio times of one playback (timeline-compiler.js
+// re-exports these; its header describes passes, whole frames and the look-ahead).
+
+const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
+
+
+/**
+ * The mapping between timeline positions and audio times for one playback.
+ *   createAnchor(model, { baseTime, startPosition = 0, sampleRate, generation = 0, freeRun })
+ * -> { sampleRate, baseFrame, baseTime, startPosition, loop: { start, end } | null, end,
+ *      firstPassFrames, loopFrames, generation }
+ * The loop applies when enabled, at least MIN_LOOP_S long and still ahead of startPosition.
+ */
+export function createAnchor(model, { baseTime = 0, startPosition = 0, sampleRate,
+  generation = 0, freeRun = false } = {}) {
+  const sr = rateOf(sampleRate);
+  const baseFrame = Math.ceil(baseTime * sr - 1e-6);
+  const l = model.timeline.loop;
+  const end = timelineEnd(model);
+  const loop = l.enabled && l.end - l.start >= MIN_LOOP_S && startPosition < l.end
+    ? { start: l.start, end: l.end }
+    : freeRun ? freeRunLoop(model, startPosition, end, CONTIGUITY_TOLERANCE_S) : null;
+  const firstEnd = loop ? loop.end : end;
+  return {
+    sampleRate: sr,
+    baseFrame,
+    baseTime: baseFrame / sr,
+    startPosition,
+    loop,
+    end,
+    firstPassFrames: Math.max(0, Math.round((firstEnd - startPosition) * sr)),
+    loopFrames: loop ? Math.round((loop.end - loop.start) * sr) : 0,
+    generation,
+  };
+}
+
+/** Position range and first frame of pass k: { pass, posStart, posEnd, startFrame, endFrame }. */
+export function passInfo(anchor, k) {
+  const posStart = k === 0 ? anchor.startPosition : anchor.loop.start;
+  const posEnd = anchor.loop ? anchor.loop.end : anchor.end;
+  const startFrame = anchor.baseFrame + (k === 0 ? 0
+    : anchor.firstPassFrames + (k - 1) * anchor.loopFrames);
+  const endFrame = startFrame + (k === 0 ? anchor.firstPassFrames : anchor.loopFrames);
+  return { pass: k, posStart, posEnd, startFrame, endFrame,
+    startTime: startFrame / anchor.sampleRate, endTime: endFrame / anchor.sampleRate };
+}
+
+/** Audio time of a timeline position inside pass k (whole frames). */
+export function audioTimeOf(anchor, k, position) {
+  const p = passInfo(anchor, k);
+  return (p.startFrame + Math.round((position - p.posStart) * anchor.sampleRate))
+    / anchor.sampleRate;
+}
+
+/**
+ * The playhead at audio time t (§94): { position, pass, playing } — before baseTime the head
+ * waits at startPosition (playing false), after a non-looping end it returns null.
+ */
+export function positionAt(anchor, t) {
+  const sr = anchor.sampleRate;
+  const frames = t * sr - anchor.baseFrame;
+  if (frames < 0) return { position: anchor.startPosition, pass: 0, playing: false };
+  if (frames < anchor.firstPassFrames) {
+    return { position: anchor.startPosition + frames / sr, pass: 0, playing: true };
+  }
+  if (!anchor.loop || anchor.loopFrames <= 0) return null;
+  const rest = frames - anchor.firstPassFrames;
+  const k = Math.floor(rest / anchor.loopFrames);
+  // K241 free run: the head counts up; pass k + 1 is lap k + 1.
+  const lap = anchor.loop.freeRun ? (k + 1) * (anchor.loop.end - anchor.loop.start) : 0;
+  return { position: anchor.loop.start + lap + (rest - k * anchor.loopFrames) / sr, pass: k + 1,
+    playing: true };
+}
+
+/** Audio time at which a non-looping playback ends (Infinity while a loop is active). */
+export function anchorEndTime(anchor) {
+  return anchor.loop ? Infinity : (anchor.baseFrame + anchor.firstPassFrames) / anchor.sampleRate;
+}

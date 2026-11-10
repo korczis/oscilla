@@ -23,6 +23,8 @@ import assert from 'node:assert/strict';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import * as actions from '../../src/js/studio/actions.js';
+import * as clockModule from '../../src/js/studio/clock.js';
+import * as modulationNodes from '../../src/js/studio/nodes/modulation.js';
 import * as offline from '../../src/js/studio/offline.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
@@ -264,6 +266,28 @@ test('K241 a clip added while a Clock document free-runs: the run goes on and th
     }
     off();
     await stopped(rig);
+  });
+
+test('K241 the Clock\'s Czech help says what freeRunLoop does, and the two stay together',
+  () => {
+    // 43's order: the behaviour a user notices (a document with a Clock runs until STOP) is in
+    // the Clock's help; this case fails when either side changes without the other.
+    const text = modulationNodes.CLOCK_FREE_RUN_TEXT;
+    assert.equal(typeof text, 'string');
+    const help = NODE_REGISTRY.get('clock').help;
+    assert.ok(help.constraints.includes(text), 'the help states the free run');
+    for (const words of ['hraje, dokud ho nezastavíte', 'opakuje prázdný takt',
+      'hodiny dál tikají', 'končí s obsahem']) {
+      assert.ok(text.includes(words), `the help says "${words}"`);
+    }
+    const free = clockModule.freeRunLoop;
+    assert.equal(typeof free, 'function', 'clock.js freeRunLoop exists');
+    const s = voice();
+    assert.equal(free(s.st.getModel(), 0, 0), null, 'no Clock: the run ends with its content');
+    s.add('clock', { division: '1/4' });
+    eventClip(s, s.env, 0, 2.5, 'gate'); // content to 2.5 s; a bar is 2 s at 120 BPM
+    assert.deepEqual(free(s.st.getModel(), 0, 2.5), { start: 4, end: 6, freeRun: true },
+      'with a Clock: the empty bar after the content repeats until STOP');
   });
 
 test('K241 an offline render of a Clock document ends with its content (no free run)',
