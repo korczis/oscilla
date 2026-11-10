@@ -72,7 +72,7 @@ import { CENTS_PER_OCTAVE } from '../core/music.js';
 import { VCO_SCALES } from '../studio/nodes/instrument.js';
 import { DB_SCALE_FLOOR } from '../studio/automation.js';
 import { linkAction, linkOf } from './link.js';
-import { panelCables, patchCable, unpatch } from './normals.js';
+import { ALREADY_PATCHED, panelCables, patchCable, unpatch } from './normals.js';
 import { SOURCE_RANGES, splitJack } from './panel.js';
 import { XY_TAB } from './panels/xy.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
@@ -237,7 +237,7 @@ export function xyCablesAction(model, panel, pairs, label = 'Patch the XY pad') 
   const steps = [];
   for (const [from, to] of pairs) {
     const r = patchCable(model, panel, from, to);
-    if (r.reason && !/already patched/.test(r.reason)) return r;
+    if (r.reason && r.reason !== ALREADY_PATCHED) return r;
     if (r.action) steps.push(...r.action.steps);
   }
   return { action: { type: 'BATCH', label, steps } };

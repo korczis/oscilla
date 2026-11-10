@@ -26,7 +26,7 @@ import {
   panelCables,
   patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
 } from './normals.js';
-import { linkAction, linkOf, linkOmissionText, linkOmissions } from './link.js';
+import { linkOf, linkOmissionText, linkOmissions, linkPlan, skippedText } from './link.js';
 import { splitJack } from './panel.js';
 import { esc, knobHtml, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
@@ -715,8 +715,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (!ensurePanel()) return false;
     showTab(link.tab || 'panel', link.engine);
     if (!link.preset && !link.values.length && !link.cables.length) return true;
-    const r = dispatch(linkAction(model(), panel, link, { registry }));
+    const plan = linkPlan(model(), panel, link, { registry });
+    const r = dispatch(plan.action);
     if (r.ok && link.preset) cmp.synth.preset = link.preset;
+    // K239: a cable the receiver's patch refuses is named, never dropped in silence.
+    const missed = r.ok ? skippedText(plan.skipped) : null;
+    if (missed) say(missed, true);
     return r.ok;
   }
 

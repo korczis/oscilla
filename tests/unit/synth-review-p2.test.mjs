@@ -335,6 +335,6 @@ test('S7: cable props in a link are strict; a link without them decodes as befor
     'vco1.audio>mix.in2@depth:1']) {
     const r = dec(bad);
     assert.equal(r.ok, false, bad);
-    assert.match(r.reason, /^Synth link refused: /, bad);
+    assert.match(r.reason, /^Odkaz Synthu odmítnut: /, bad);
   }
 });

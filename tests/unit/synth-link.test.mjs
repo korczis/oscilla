@@ -15,7 +15,9 @@ import {
 } from '../../src/js/ui/navigation.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { PRESETS } from '../../src/js/synth/presets.js';
-import { linkOf, linkOmissionText, linkOmissions } from '../../src/js/synth/link.js';
+import {
+  linkAction, linkOf, linkOmissionText, linkOmissions, linkPlan, skippedText,
+} from '../../src/js/synth/link.js';
 import { panelStore } from './synth-fixture.mjs';
 
 const dec = (h) => decodeSynthLink(h, PANEL, PRESETS);
@@ -30,11 +32,12 @@ test('round trip of a preset, values, an amount and a cable', () => {
 });
 
 test('strict: one bad item refuses the whole link with a sentence', () => {
-  for (const [h, re] of [['m=synth&yp=nope', /no preset "nope"/], ['m=synth&yt=mix', /no tab/],
-    ['m=synth&yv=vco1.width:200', /Pulse width must be between 5 and 95/],
-    ['m=synth&yv=vco1.pitch:1', /names no knob/], ['m=synth&yv=xx.y:1', /names no knob/],
-    ['m=synth&yc=lpf.audio>mg.control', /not a cable/], ['m=synth&yp=bass&yp=lead', /twice/],
-    ['m=synth&yv=lpf.lpf-eg2:9', /between -4 and 4/]]) {
+  for (const [h, re] of [['m=synth&yp=nope', /předvolba "nope" neexistuje/],
+    ['m=synth&yt=mix', /karta "mix" neexistuje/],
+    ['m=synth&yv=vco1.width:200', /Pulse width musí být mezi 5 a 95/],
+    ['m=synth&yv=vco1.pitch:1', /není knoflík panelu/], ['m=synth&yv=xx.y:1', /není knoflík/],
+    ['m=synth&yc=lpf.audio>mg.control', /není kabel z výstupu do vstupu/],
+    ['m=synth&yp=bass&yp=lead', /dvakrát/], ['m=synth&yv=lpf.lpf-eg2:9', /mezi -4 a 4/]]) {
     const r = dec(`#${h}`);
     assert.equal(r.ok, false, h);
     assert.match(r.reason, re, h);
@@ -66,15 +69,15 @@ test('no key clashes with the Studio, instrument, recipe, record or keyboard key
 test('K239: a link with two cables into a one-connection input is refused at decode', () => {
   const hpf = dec('#m=synth&yc=vco1.audio>hpf.audio,vco2.audio>hpf.audio');
   assert.equal(hpf.ok, false);
-  assert.equal(hpf.reason, 'Synth link refused: do vstupu HPF Audio (hpf.audio) vedou 2 kabely, '
-    + 'ale přijímá jen jedno spojení.');
+  assert.equal(hpf.reason, 'Odkaz Synthu odmítnut: do vstupu HPF Audio (hpf.audio) vedou 2 '
+    + 'kabely, ale přijímá jen jedno spojení.');
   const clock = dec('#m=synth&yc=keys.gate>sh.trigger,keys.gate>sh.trigger');
   assert.match(clock.reason, /kabel keys\.gate → sh\.trigger je v odkazu dvakrát/);
   const two = dec('#m=synth&yc=keys.gate>sh.trigger,keys.gate>mg.reset,keys.gate>sh.trigger');
   assert.match(two.reason, /je v odkazu dvakrát/, 'one cable twice, wherever it repeats');
   const type = dec('#m=synth&yc=mg.control>sh.trigger');
-  assert.match(type.reason,
-    /^Synth link refused: kabel mg\.control → sh\.trigger nelze zapojit \(/);
+  assert.equal(type.reason, 'Odkaz Synthu odmítnut: kabel mg.control → sh.trigger nelze '
+    + 'zapojit: výstup typu CONTROL nelze zapojit do vstupu typu TRIGGER.');
   // a control input sums its cables (multiple): two into the cutoff decode as before
   assert.deepEqual(dec('#m=synth&yc=mg.control>lpf.frequency,eg1.control>lpf.frequency').link
     .cables, [['mg.control', 'lpf.frequency'], ['eg1.control', 'lpf.frequency']]);
@@ -98,3 +101,27 @@ test('K239: a link of a patch with Studio edges or opened normals says what it l
   const link = linkOf(st.getModel(), PANEL, 'init');
   assert.deepEqual(link.cables, []);
 });
+
+test('K239: a cable the receiver\'s patch refuses is named when the link applies, never dropped',
+  () => {
+    // sh.rate while Clock is normalled (n23, Keys Gate into S&H Clock): patchCable refuses it,
+    // and linkAction skipped it in silence. linkPlan returns it with its reason.
+    const st = panelStore();
+    const link = { tab: 'panel', engine: null, preset: null, values: [],
+      cables: [['mg.control', 'sh.rate'], ['mg.control', 'lpf.frequency']] };
+    const plan = linkPlan(st.getModel(), PANEL, link);
+    assert.deepEqual(plan.skipped.map((x) => [x.from, x.to]), [['mg.control', 'sh.rate']]);
+    assert.match(plan.skipped[0].reason, /^S&H Rate nemá účinek, dokud je zapojený Clock/);
+    assert.equal(skippedText(plan.skipped), 'Odkaz nezapojil 1 kabel: mg.control → sh.rate '
+      + `(${plan.skipped[0].reason.replace(/\.$/, '')}).`);
+    // the rest of the link applies, and linkAction is the same BATCH
+    assert.deepEqual(linkAction(st.getModel(), PANEL, link), plan.action);
+    assert.equal(st.dispatch(plan.action).ok, true);
+    const cables = linkOf(st.getModel(), PANEL, 'init').cables.map(([a, b]) => `${a}>${b}`);
+    assert.deepEqual(cables, ['mg.control>lpf.frequency']);
+    // two refused: the count says it in Czech
+    const two = linkPlan(panelStore().getModel(), PANEL, { ...link,
+      cables: [['mg.control', 'sh.rate'], ['mg.control', 'vca.gain']] });
+    assert.match(skippedText(two.skipped), /^Odkaz nezapojil 2 kabely: mg\.control → sh\.rate \(/);
+    assert.equal(skippedText([]), null);
+  });

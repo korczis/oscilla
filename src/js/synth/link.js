@@ -11,6 +11,10 @@
 //     this patch does not carry (K239): Studio connections touching the panel's modules (not
 //     normals, not panel cables) and inputs whose normal was removed in the Studio ('open');
 //   linkOmissionText(omissions) -> Czech sentence | null   said when the link is copied
+//   linkPlan(model, panel, link, { registry, modules }) -> { action, skipped }   the BATCH and
+//     the link's cables it does not apply because patchCable refuses them on the receiver's
+//     state, [{ from, to, reason }] (K239: never dropped in silence; sh.rate while Clock clocks)
+//   skippedText(skipped) -> Czech sentence | null   what the Synth says after applying the link
 //   linkAction(model, panel, link, { registry, modules }) -> BATCH action   one history entry
 //     modules: the module ids the link may write (an XY preset, synth/xy.js xyScope); null,
 //     the default, is the whole panel. Outside them no value, preset or cable is touched.
@@ -128,7 +132,20 @@ export function linkOmissionText({ studio, open }) {
     + 'bez nich.' : null;
 }
 
-export function linkAction(model0, panel, link, { registry = NODE_REGISTRY, modules = null }
+/** Czech count of cables: 1 kabel, 2-4 kabely, 5 and more kabelů. */
+const cablesWord = (n) => (n === 1 ? 'kabel' : n >= 2 && n <= 4 ? 'kabely' : 'kabelů');
+
+export function skippedText(skipped) {
+  if (!skipped.length) return null;
+  const which = skipped.map((x) => `${x.from} → ${x.to} (${x.reason.replace(/\.$/, '')})`);
+  return `Odkaz nezapojil ${skipped.length} ${cablesWord(skipped.length)}: ${which.join('; ')}.`;
+}
+
+export function linkAction(model0, panel, link, opts = {}) {
+  return linkPlan(model0, panel, link, opts).action;
+}
+
+export function linkPlan(model0, panel, link, { registry = NODE_REGISTRY, modules = null }
   = {}) {
   const p = presetOf(link.preset || 'init') || presetOf('init');
   const within = modules ? new Set(modules) : null;
@@ -154,10 +171,14 @@ export function linkAction(model0, panel, link, { registry = NODE_REGISTRY, modu
     } else steps.push({ type: 'NODE_PARAM_SET', nodeId: node.id, key, value: v });
   }
   const removed = new Set();
+  const skipped = [];
   for (const [from, to, own] of link.cables) {
     if (!ours(from) || !ours(to)) continue;
     const r = patchCable(model, panel, from, to, { registry });
-    if (!r.action) continue;
+    if (!r.action) {
+      skipped.push({ from, to, reason: r.reason });
+      continue;
+    }
     for (const s of r.action.steps) {
       if (s.type === 'METADATA_SET') continue; // remembered below, at the link's depths
       if (s.type === 'EDGE_REMOVE') {
@@ -178,5 +199,5 @@ export function linkAction(model0, panel, link, { registry = NODE_REGISTRY, modu
     panel, a)]).filter(([, edges]) => edges.length && edges.every((e) => removed.has(e.id)))
     .map(([a]) => [a.key, given.get(`${a.module}.${a.key}`) ?? p.amounts[a.key] ?? 0]);
   if (kept.length) steps.push({ type: 'METADATA_SET', synthAmounts: Object.fromEntries(kept) });
-  return { type: 'BATCH', label: 'Apply link to Synth panel', steps };
+  return { action: { type: 'BATCH', label: 'Apply link to Synth panel', steps }, skipped };
 }

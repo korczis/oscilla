@@ -178,8 +178,8 @@ export function jackReason(model, panel, jack, from = null) {
   if (m && node && m.node === 'random' && port === 'rate'
     && model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'trigger'
       && !(e.props && e.props.muted))) {
-    return `${m.label} Rate has no effect while Clock is patched (normalled to the keyboard `
-      + 'gate): each gate steps the value. Unpatch Clock first.';
+    return `${m.label} Rate nemá účinek, dokud je zapojený Clock (normálně brána klávesnice): `
+      + 'každá brána posune hodnotu. Nejdřív odpojte Clock.';
   }
   // K238: a gain stage that rests closed (the VCA: gain 0) adds its cables to 0, and a cable into
   // its gain replaces its envelope normal. A bipolar source there (an LFO, the S&H) would make
@@ -338,16 +338,19 @@ const portOf = (panel, jack, dir, registry) => {
   return m ? registry.port(m.node, port, dir) : null;
 };
 
+/** patchCable's refusal of a cable that is already there (xy.js reads it as done). */
+export const ALREADY_PATCHED = 'Ten kabel už je zapojený.';
+
 export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY } = {}) {
   const { id } = nodeIds(model, panel);
   const a = splitJack(from);
   const b = splitJack(to);
-  if (!id(a.module) || !id(b.module)) return { reason: 'That module is not in the Studio.' };
+  if (!id(a.module) || !id(b.module)) return { reason: 'Ten modul není ve Studiu.' };
   const out = portOf(panel, from, 'out', registry);
   const inp = portOf(panel, to, 'in', registry);
   if (!out || !inp || !panel.jacksOf(b.module).some((j) => j.id === to && j.direction === 'in')
     || !panel.jacksOf(a.module).some((j) => j.id === from && j.direction === 'out')) {
-    return { reason: 'A cable runs from an output jack to an input jack.' };
+    return { reason: 'Kabel vede z výstupního konektoru do vstupního.' };
   }
   const why = jackReason(model, panel, to, from);
   if (why) return { reason: why };
@@ -359,7 +362,7 @@ export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY } 
     : cablesInto(model, panel, to, { foreign: true }).map((e) => e.id);
   const same = model.graph.edges.find((e) => startsAt(e, id(a.module), a.port)
     && endsAt(e, id(b.module), b.port) && !broken.includes(e.id));
-  if (same) return { reason: 'That cable is already patched.' };
+  if (same) return { reason: ALREADY_PATCHED };
   const gone = [...broken, ...replaced];
   if (gone.length) steps.push({ type: 'EDGE_REMOVE', edgeIds: gone });
   steps.push({ type: 'EDGE_ADD', from: { node: id(a.module), port: a.port },

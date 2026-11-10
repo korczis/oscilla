@@ -198,13 +198,15 @@ const nodeOf = (m, mod) => PANEL.resolve(m).get(mod);
 const edgeInto = (m, mod, port) => m.graph.edges.find((e) => e.to.node === nodeOf(m, mod).id
   && e.to.port === port);
 
-test('K238: S&H Rate is refused only while an unmuted Clock clocks it, as the compiler says', () => {
+test('K238: S&H Rate is refused only while an unmuted Clock clocks it, as the compiler '
+  + 'says', () => {
   const st = panelStore();
   const clock = edgeInto(st.getModel(), 'sh', 'trigger');
   assert.ok(clock, 'Keys Gate is normalled into the S&H Clock (n23)');
   const clocked = (m) => compileStudio(m).nodes.get(nodeOf(m, 'sh').id).clocked;
   assert.equal(clocked(st.getModel()), true);
-  assert.match(jackReason(st.getModel(), PANEL, 'sh.rate'), /Rate has no effect while Clock/);
+  assert.match(jackReason(st.getModel(), PANEL, 'sh.rate'),
+    /Rate nemá účinek, dokud je zapojený Clock/);
   const r = st.dispatch({ type: 'EDGE_UPDATE', edgeId: clock.id, props: { muted: true } });
   assert.equal(r.ok, true, r.reason);
   assert.equal(clocked(st.getModel()), false, 'the compiler ignores a muted Clock cable');

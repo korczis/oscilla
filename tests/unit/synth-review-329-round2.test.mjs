@@ -175,7 +175,8 @@ test('every input jack a cable reaches is active in the runtime, or the cable is
         // would open it with no key held (VELOCITY, after the VCA, takes it: gated tremolo).
         const closed = j.id === 'vca.gain';
         assert.ok(j.id === 'sh.rate' || closed, `only those refuse: ${j.id} ${r.reason}`);
-        assert.match(r.reason, closed ? /bipolární zdroj by otevřel VCA/ : /Clock is patched/);
+        assert.match(r.reason, closed ? /bipolární zdroj by otevřel VCA/
+          : /dokud je zapojený Clock/);
         continue;
       }
       const done = st.dispatch(r.action);
