@@ -385,9 +385,11 @@ export function createWorkspaceFiles(ctx, svc, ops) {
       ops.openDocument(r.model, { reason: 'import' });
       if (r.kind === 'sequence') {
         const n = r.model.timeline.clips.length;
+        // A block whose stored beats the tempo clamps opens as it sounds; say so (C066).
+        const notes = r.warnings && r.warnings.length ? ` ${r.warnings.join(' ')}` : '';
         ops.announce(`Imported the ${r.source === 'config' ? 'configuration file\'s ' : ''}V2 `
-          + `sequence: ${n} pattern clip${n === 1 ? '' : 's'} on one track`);
-        return { ok: true, kind: 'sequence', clips: n };
+          + `sequence: ${n} pattern clip${n === 1 ? '' : 's'} on one track${notes}`);
+        return { ok: true, kind: 'sequence', clips: n, warnings: r.warnings || [] };
       }
       ops.announce(`Imported ${r.model.metadata.title}`);
       return { ok: true, kind: 'project' };

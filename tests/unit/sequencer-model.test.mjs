@@ -326,6 +326,14 @@ test('C066: a tempo excursion past a type bound keeps the block\'s beats', async
   // Beats typed into a block are still limited to what fits at the current tempo.
   const typed = updateBlock(m, 'b1', { beats: 100 });
   assert.equal(typed.blocks[0].beats, 10);
+  // C1-C066-2: the typed fit is rounded as stored beats are (6 decimals), no float noise.
+  const slowTyped = updateBlock(setTempo(m, 20), 'b1', { beats: 100 });
+  assert.equal(slowTyped.blocks[0].beats, 1.666667);
+  // C1-C066-3: a params edit of a block the tempo already clamps does not report it again;
+  // typing beats past the bound does.
+  assert.deepEqual(updateBlockWithIssues(slow, 'b1', { params: { start: 300 } }).issues, []);
+  assert.ok(updateBlockWithIssues(m, 'b1', { beats: 100 }).issues
+    .some((x) => /duration limited/.test(x)));
 });
 
 test('selection helpers', () => {

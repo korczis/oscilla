@@ -31,7 +31,11 @@
 // and derives its durationMs from the unrounded beats, so its own save of a slow tempo-locked
 // block (100 ms at 20 BPM is 0.033333 beats, which re-derive 99.999 ms) is not a fixed point.
 // Such a durationMs is accepted when some beats value that rounds to the file's beats derives
-// it, and the block opens as the sequencer opens it, from the beats. Frequencies are checked at
+// it, and the block opens as the sequencer opens it, from the beats. A second (C066): the
+// sequencer keeps a tempo-locked block's stored beats where its type's bound clamps the
+// duration, and saves them so; such a block opens as it sounds (its clip carries soundingBeats,
+// since a Studio clip's seconds equal its beats at the tempo and Studio has no type bound), with
+// a warning naming both, and its export writes the sounding beats. Frequencies are checked at
 // the rate the file was saved at (a configuration file's sampleRateRequested), else at the
 // Studio's (`sampleRate`; 44.1 kHz before audio, as the sequencer itself reads it). A seed
 // other than DEFAULT_SEED is refused: the app never writes one, and the Studio keeps no seed
@@ -441,10 +445,11 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
     return refuse(at('blocks'), `The sequencer could not read the sequence (${
       String((e && e.message) || e).slice(0, 80)})`);
   }
-  // A Studio clip carries the beats that sound, so a block whose stored beats its type's bound
-  // clamps (the Sequencer keeps them since C066) would open shorter: refused as before.
+  // Since C066 the Sequencer keeps a block's stored beats where its type's bound clamps the
+  // duration, and saves them so: such a file is one the app writes, so it opens. Its clip
+  // carries the beats that sound (sequenceToTimeline: soundingBeats), since a Studio clip's
+  // seconds equal its beats at the tempo and Studio has no type bound to clamp them against.
   const canon = serializeSequence(parsed);
-  canon.blocks = canon.blocks.map((c) => ({ ...c, beats: soundingBeats(c, canon.tempoBpm) }));
   const diff = firstDifference(seq, canon, rate);
   if (diff) return refuse(at(diff.path), diff.message);
   // Every repair changes a value, so none is left here; this only guards that invariant. The
@@ -465,5 +470,22 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
     : 'Imported sequence' });
   if (!imp.ok) return { ok: false, warnings: [], errors: imp.errors };
   return { ok: true, model: imp.model, source: config ? 'config' : 'sequence', sampleRate: rate,
-    warnings: [] };
+    warnings: clampWarnings(canon) };
+}
+
+const czNumber = (n) => String(n).replace('.', ',');
+
+/**
+ * One warning (Czech, Q104) per tempo-locked block whose stored beats its type's bound clamps at
+ * the file's tempo: Studio takes the sounding length (C066, oscilla-c1's C1-C066-1).
+ */
+function clampWarnings(canon) {
+  const out = [];
+  canon.blocks.forEach((c, i) => {
+    const sounding = soundingBeats(c, canon.tempoBpm);
+    if (c.beats === null || sounding === c.beats) return;
+    out.push(`Blok ${i + 1}: při ${czNumber(canon.tempoBpm)} BPM zní jen ${czNumber(sounding)} `
+      + `z uložených ${czNumber(c.beats)} dob; Studio převezme znějící délku.`);
+  });
+  return out;
 }
