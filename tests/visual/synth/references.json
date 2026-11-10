@@ -438,8 +438,8 @@
         },
         "desktop-engines-light": {
           "runs": 10,
-          "px": 3,
-          "faint": 41
+          "px": 6,
+          "faint": 60
         },
         "desktop-xy-dark": {
           "runs": 10,
@@ -514,14 +514,6 @@
               "px": 187,
               "faint": 203
             },
-            "desktop-engines-dark": {
-              "px": 431,
-              "faint": 465
-            },
-            "desktop-engines-light": {
-              "px": 427,
-              "faint": 468
-            },
             "desktop-xy-dark": {
               "px": 0,
               "faint": 0
@@ -583,14 +575,6 @@
               "px": 0,
               "faint": 11
             },
-            "desktop-engines-dark": {
-              "px": 0,
-              "faint": 0
-            },
-            "desktop-engines-light": {
-              "px": 0,
-              "faint": 26
-            },
             "desktop-xy-dark": {
               "px": 0,
               "faint": 0
@@ -649,14 +633,6 @@
               "faint": 39458
             },
             "desktop-panel-light": {
-              "px": 0,
-              "faint": 0
-            },
-            "desktop-engines-dark": {
-              "px": 0,
-              "faint": 50985
-            },
-            "desktop-engines-light": {
               "px": 0,
               "faint": 0
             },
@@ -720,14 +696,6 @@
             "desktop-panel-light": {
               "px": 0,
               "faint": 11
-            },
-            "desktop-engines-dark": {
-              "px": 0,
-              "faint": 0
-            },
-            "desktop-engines-light": {
-              "px": 0,
-              "faint": 0
             },
             "desktop-xy-dark": {
               "px": 0,
