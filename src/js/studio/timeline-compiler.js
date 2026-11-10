@@ -49,7 +49,7 @@ import {
   buildTimeline, planFromTimeline, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../sequencer/compiler.js';
 import {
-  BLOCK_SCHEMA, DEFAULT_SEED, PROVISIONAL_SAMPLE_RATE, WAVEFORMS, normalizeModel,
+  BLOCK_SCHEMA, DEFAULT_SEED, WAVEFORMS, normalizeModel,
 } from '../sequencer/model.js';
 import { LOOKAHEAD_S } from '../sequencer/editor.js';
 import { RENDER_QUANTUM } from '../core/constants.js';
@@ -60,7 +60,7 @@ import {
 } from './automation.js';
 import {
   CONTIGUITY_TOLERANCE_S, anchorEndTime, audioTimeOf, clipEnd, createAnchor,
-  effectiveTarget, passInfo, positionAt, timelineEnd,
+  effectiveTarget, passInfo, positionAt, rateOf, timelineEnd,
 } from './timeline.js';
 import { STUDIO_XFADE_S } from './compiler.js';
 import { clipTarget } from './clip-targets.js';
@@ -128,7 +128,6 @@ export const ESCAPE_PRIORITY = Object.freeze(['cancel-gesture', 'close-popup',
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 /** Two lane values equal up to float rounding (relative 1e-9). */
 const sameValue = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
-const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
 
 /** Smallest whole-frame time >= t. */
 export function frameCeil(t, sampleRate) {

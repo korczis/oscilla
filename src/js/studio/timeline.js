@@ -694,7 +694,8 @@ export { TRACK_KINDS };
 // The mapping between timeline positions and audio times of one playback (timeline-compiler.js
 // re-exports these; its header describes passes, whole frames and the look-ahead).
 
-const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
+/** A usable sample rate: `sr` when positive, else the provisional rate (the compiler's too). */
+export const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
 
 
 /**
