@@ -386,6 +386,11 @@ test('what the status line says of each state', () => {
   assert.match(yieldMod.dockSentence('docked', { yields: true, owner: 'xy-pad' }),
     /zobrazená pod padem/);
   assert.equal(yieldMod.dockSentence('docked', { yields: false, why: 'viewport' }), '');
+  // U101: folded for the room (no surface owns the notes), it names no player and says the
+  // computer keys still play (it said "zatímco noty hraje null").
+  const room = yieldMod.dockSentence('collapsed', { yields: false, owner: null, why: 'room' });
+  assert.doesNotMatch(room, /null|undefined/);
+  assert.match(room, /počítačové klávesy dál hrají\. Alt\+K nebo úchyt ji zobrazí\.$/);
 });
 
 // ---------------------------------------------------------------- the owner, derived
