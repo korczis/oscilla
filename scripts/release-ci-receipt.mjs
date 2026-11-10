@@ -42,7 +42,8 @@ import path from 'node:path';
 import { parseYaml } from './yaml-subset.mjs';
 
 // E060: the browser suites the CI legs run, by a package.json (the legs' own plan).
-const { releaseSuites } = createRequire(import.meta.url)('../tests/browser/lib/shards.cjs');
+const { BROWSERS, releaseSuites } = createRequire(import.meta.url)(
+  '../tests/browser/lib/shards.cjs');
 
 export const CI_WORKFLOW = '.github/workflows/ci.yml';
 export const REPO_SLUG = 'korczis/oscilla';
@@ -290,6 +291,12 @@ function declaredJobs(f) {
  * runs every browser suite of test:release but the visual gate (tests/browser/lib/shards.cjs,
  * by the release tree's package.json, f.pkg), so a script whose suites all lie among them is
  * run there. A base job of programs only, or a fact not read (no package.json), is not replaced.
+ *
+ * E068 (C1-E060-1): a base job of no matrix that runs a browser script (one naming suites under
+ * tests/browser/) ran those suites in every browser they default to (BROWSERS), so a head job
+ * of one matrix value covers only that browser. Such a script is replaced only by a head job
+ * of no matrix, or by head jobs for every one of BROWSERS; a chromium-only job is not enough.
+ * Any other script keeps the wildcard: a job of no matrix serves every value.
  */
 export function replacedJob(f, name) {
   const b = (f.baseWorkflow?.details || []).find((d) => d.name === name);
@@ -304,9 +311,15 @@ export function replacedJob(f, name) {
   }
   const suitesOf = (sc) => (String(f.pkg.scripts[sc] || '').match(/tests\/browser\/[\w.-]+\.cjs/g)
     || []).filter((x) => x !== 'tests/browser/lib/run-suites.cjs');
-  return b.scripts.every((sc) => head.some((d) => same(d) && (d.scripts.includes(sc)
-    || (d.scripts.includes('test:leg') && suitesOf(sc).length > 0
-      && suitesOf(sc).every((x) => legged.has(x))))));
+  const runs = (d, sc) => d.scripts.includes(sc) || (d.scripts.includes('test:leg')
+    && suitesOf(sc).length > 0 && suitesOf(sc).every((x) => legged.has(x)));
+  return b.scripts.every((sc) => {
+    if (b.value === null && suitesOf(sc).length > 0) {
+      return head.some((d) => d.value === null && runs(d, sc))
+        || BROWSERS.every((browser) => head.some((d) => d.value === browser && runs(d, sc)));
+    }
+    return head.some((d) => same(d) && runs(d, sc));
+  });
 }
 
 /** The run judged, for the log line of a verified receipt: the pull request's, else the queue's. */

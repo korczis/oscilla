@@ -12,6 +12,7 @@ scope:
   - "scripts/release-ci-receipt.mjs"
   - "tests/unit/release-ci-receipt.test.mjs"
   - ".ai/repo/project/issues/E068.yaml"
+current_state: "Built by oscilla-75 in task t-20261110052742-928e on fix/e068-receipt-matrix-cover (c3's 6396ec6b with E060 689b2a33 merged in), on the coordinator's assignment (oscilla-43); it lands in train T6 with the verdict from oscilla-c1. T5's receipt is unchanged: T5's ci.yml (192a21fa) declares all 14 jobs of main's (a7102358), so replacedJob is never consulted for it, and the old and new verdicts agree on every job (0 differ)."
 depends_on: []
 acceptance_criteria:
   - "A mutation test (base no-matrix test:studio, head chromium-only test:studio) is refused; it fails on 689b2a33."
