@@ -2,7 +2,11 @@
 // npm run release:prepare — turn the current clean tree into a release candidate. Never tags.
 //
 //   node scripts/release-prepare.mjs [--dry-run] [--local-gate] [--prerelease [--preid rc]]
-//     [--no-rc-because <ADR>] [--help]
+//     [--no-rc-because <ADR>] [--check-station] [--help]
+//
+// --check-station changes nothing: it judges the release commit of package.json's version
+// against its parent (scripts/about-stations.mjs checkStation, R032): only the derived fields
+// of the one pending About station may differ there. It runs on any tree, before step 1.
 //
 // ADR 0082 (owner, 2026-11-02): the gate verdict of a release is, by default, the CI run of
 // its own chore(release) pull request (the CI receipt, scripts/release-ci-receipt.mjs, judged
@@ -62,7 +66,7 @@ import {
 } from './release-record.mjs';
 import { parseYaml } from './yaml-subset.mjs';
 import { ROADMAP_REL } from './roadmap.mjs';
-import { STATIONS_REL } from './about-stations.mjs';
+import { STATIONS_REL, checkStation } from './about-stations.mjs';
 
 export const RECEIPT_NAME = 'oscilla-release-gate.json';
 export const RESTORE_PATHS = [
@@ -398,10 +402,10 @@ function loud(lines) {
 }
 
 export const USAGE = 'usage: node scripts/release-prepare.mjs [--dry-run] [--local-gate] '
-  + '[--prerelease [--preid <id>]] [--no-rc-because <ADR>] [--help]';
+  + '[--prerelease [--preid <id>]] [--no-rc-because <ADR>] [--check-station] [--help]';
 const FLAGS = {
   '--dry-run': 'boolean', '--local-gate': 'boolean', '--prerelease': 'boolean', '--preid': 'value',
-  '--no-rc-because': 'value',
+  '--no-rc-because': 'value', '--check-station': 'boolean',
 };
 
 export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(root),
@@ -417,6 +421,7 @@ export function main(argv = process.argv.slice(2), root = ROOT, run = gitRunner(
     console.log(USAGE);
     return 0;
   }
+  if (o['--check-station']) return checkStation(root);
   const narrowed = gateEnvProblems(env);
   if (narrowed.length) {
     loud(['refusing to start (rule project.release-receipt-binds-gate):', ...narrowed,
