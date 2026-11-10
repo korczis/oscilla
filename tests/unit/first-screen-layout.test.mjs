@@ -26,6 +26,8 @@ import { readFileSync } from 'node:fs';
 
 import { DESCRIPTION } from '../../scripts/social-assets.mjs';
 import { createMeasureUi } from '../../src/js/ui/measure.js';
+import { measureFlow } from '../../src/js/measurement/views/measure-flow.js';
+import { MEASUREMENT_STATES as S } from '../../src/js/measurement/state-machine.js';
 // A namespace import: on a tree without PHONE_QUERY the tests fail one by one, not at link time.
 import * as appUi from '../../src/js/ui/app.js';
 
@@ -200,4 +202,39 @@ test('foldOnPhone: folded below 768 px, open from 768 px, following the width', 
   const el = { open: true };
   bare.foldOnPhone(el); // no window here: the markup's own state (open) stays
   assert.equal(el.open, true);
+});
+
+// U104 (278.yaml#R2): below 768 px the measurement row folds to one step. It kept only
+// .is-current, and a flow with a blocked step or a saved result has no current step, so a phone
+// showed no step at all, the blocked preflight's fail icon included. The row keeps the step the
+// flow marks `shown`: the current one, else the blocked one, else the last.
+test('U104: on a phone exactly one measurement step stays visible, blocked or saved too', () => {
+  const css = readFileSync(new URL('../../src/styles/instrument.css', import.meta.url), 'utf8');
+  const rule = /@media \(max-width: 767\.98px\) \{\s*\.osc-app\[data-mode="playground"\] \.osc-m-step:not\(\[([\w-]+)\]\) \{\s*display: none;/
+    .exec(css);
+  assert.ok(rule, 'the phone rule hides every step without one attribute');
+  const attr = rule[1].replace(/^data-/, '');
+  const bind = [...html.matchAll(/<li class="osc-m-step"[\s\S]*?>/g)][0][0];
+  const expr = (new RegExp(`\\s:data-${attr}="([^"]*)"`).exec(bind) || [])[1];
+  assert.ok(expr, `the step binds data-${attr}`);
+  // The binding is an Alpine expression over `s`, the step; null leaves the attribute off.
+  // eslint-disable-next-line no-new-func
+  const on = (s) => Function('s', `return (${expr});`)(s) != null;
+  const visible = (flow) => flow.steps.filter(on);
+  const ready = { ready: true, sampleRate: 48000, blockers: [], warnings: [] };
+  const recipe = { stimulus: { kind: 'log-sweep', duration: 10, level: 'low', f1: 20, f2: 20000 },
+    repeats: 3 };
+  const blocked = measureFlow({ state: S.INVALID, recipe, preflight: { ready: false,
+    sampleRate: 48000, blockers: [{ code: 'NO_INPUT', text: 'No input device.' }],
+    warnings: [] } });
+  assert.ok(!blocked.steps.some((s) => s.status === 'current'), 'no step is current');
+  assert.deepEqual(visible(blocked).map((s) => s.status), ['blocked'],
+    'the blocked step, with its fail icon');
+  const saved = measureFlow({ state: S.COMPLETE, recipe, preflight: ready, saved: true,
+    result: { state: S.COMPLETE, quality: { status: 'GOOD' }, runs: [{}, {}, {}],
+      noise: { rmsDb: -60 } } });
+  assert.ok(!saved.steps.some((s) => s.status === 'current' || s.status === 'blocked'));
+  assert.deepEqual(visible(saved).map((s) => s.id), [saved.steps.at(-1).id], 'the last step');
+  const open = measureFlow({ state: S.IDLE, recipe });
+  assert.deepEqual(visible(open).map((s) => s.status), ['current'], 'else the current one');
 });
