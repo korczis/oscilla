@@ -7,6 +7,10 @@
 //     panelCables), each with the props (depth, polarity, mapping, offset, muted) where they
 //     differ from what linkAction would give it (review S7: an Inspector edit, the XY pad's Y
 //     range); a cable without them is rebuilt as before.
+//   linkOmissions(model, panel) -> { studio: [edge id], open: ['module.port'] }   what a link of
+//     this patch does not carry (K239): Studio connections touching the panel's modules (not
+//     normals, not panel cables) and inputs whose normal was removed in the Studio ('open');
+//   linkOmissionText(omissions) -> Czech sentence | null   said when the link is copied
 //   linkAction(model, panel, link, { registry, modules }) -> BATCH action   one history entry
 //     modules: the module ids the link may write (an XY preset, synth/xy.js xyScope); null,
 //     the default, is the whole panel. Outside them no value, preset or cable is touched.
@@ -24,7 +28,8 @@
 import { NODE_REGISTRY } from '../studio/registry.js';
 import { EDGE_PROPERTY_FIELDS, defaultEdgeProps } from '../studio/ports.js';
 import {
-  amountDepth, amountEdges, cableProps, normalSteps, panelCables, panelEdges, patchCable,
+  amountDepth, amountEdges, cableProps, jackState, normalSteps, panelCables, panelEdges,
+  patchCable,
 } from './normals.js';
 import { splitJack } from './panel.js';
 import { presetAction, presetOf, presetValues } from './presets.js';
@@ -93,6 +98,34 @@ export function linkOf(model, panel, presetId, { registry = NODE_REGISTRY } = {}
     const own = ownProps(model, panel, c, registry);
     return own ? [c.from, c.to, own] : [c.from, c.to];
   }) };
+}
+
+export function linkOmissions(model, panel) {
+  const pe = panelEdges(model, panel);
+  const kept = new Set([...[...pe.normals.values()].map((e) => e.id),
+    ...pe.cables.map((e) => e.id)]);
+  const mine = new Set([...panel.resolve(model).values()].filter(Boolean).map((n) => n.id));
+  const studio = model.graph.edges.filter((e) => !kept.has(e.id)
+    && (mine.has(e.from.node) || mine.has(e.to.node))).map((e) => e.id);
+  const open = [];
+  for (const m of panel.modules) {
+    if (!panel.resolve(model).get(m.id)) continue;
+    for (const j of panel.jacksOf(m.id)) {
+      if (j.direction === 'in' && jackState(model, panel, j.id) === 'open') open.push(j.id);
+    }
+  }
+  return { studio, open };
+}
+
+export function linkOmissionText({ studio, open }) {
+  const parts = [];
+  if (studio.length) parts.push(`${studio.length} spojení se Studiem`);
+  if (open.length) {
+    parts.push(`${open.length === 1 ? 'normál odpojený' : 'normály odpojené'} ve Studiu `
+      + `(${open.join(', ')})`);
+  }
+  return parts.length ? `Odkaz nenese ${parts.join(' ani ')}; kdo ho otevře, dostane panel `
+    + 'bez nich.' : null;
 }
 
 export function linkAction(model0, panel, link, { registry = NODE_REGISTRY, modules = null }

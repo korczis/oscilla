@@ -9,14 +9,19 @@
 //       the ones the panel gives it carries them after '@' as 'key:value' joined by ';'
 //       (depth, polarity, mapping, offset, muted; synth/link.js, review S7)
 // Strict, like the Studio and recipe links: one unknown preset, module, parameter, value or jack
-// refuses the whole link with a sentence, and nothing of it is applied.
+// refuses the whole link with a sentence, and nothing of it is applied. So does a link whose
+// cables cannot all apply (K238/K239): two cables into an input that accepts one connection
+// (the registry port is not `multiple`: a filter's audio, the S&H Clock), one cable twice, or a
+// cable canConnect refuses (a control into a trigger); before, it decoded as ok and the BATCH
+// was refused or the cable dropped in silence.
 //
 //   decodeSynthLink(hash, panel, presets) -> { ok: true, link } | { ok: false, reason } | null
 //   encodeSynthLink(link) -> 'm=synth&...'   withoutSynthParams(hash) -> hash
 
 import { NODE_REGISTRY, validateParamValue } from '../studio/registry.js';
-import { EDGE_PROPERTY_FIELDS, MOD_MAPPINGS, MOD_POLARITIES, validateEdgeProps }
-  from '../studio/ports.js';
+import {
+  EDGE_PROPERTY_FIELDS, MOD_MAPPINGS, MOD_POLARITIES, canConnect, validateEdgeProps,
+} from '../studio/ports.js';
 
 export const SYNTH_LINK_MODE = 'synth';
 export const SYNTH_LINK_KEYS = Object.freeze({ tab: 'yt', engine: 'ye', preset: 'yp',
@@ -123,6 +128,7 @@ export function decodeSynthLink(hash, panel, presets) {
     values.push([`${m[1]}.${m[2]}`, v]);
   }
   const cables = [];
+  const into = new Map(); // input jack id -> cables into it so far
   const rawCables = q.get(K.cables);
   for (const item of rawCables ? rawCables.split(',') : []) {
     const [ends, extra, more] = item.split('@');
@@ -135,6 +141,18 @@ export function decodeSynthLink(hash, panel, presets) {
     const inp = jack(b, 'in');
     if (!out || !inp) {
       return no(`"${item.slice(0, 48)}" is not a cable from an output to an input jack.`);
+    }
+    if (cables.some(([x, y]) => x === a && y === b)) {
+      return no(`kabel ${a} → ${b} je v odkazu dvakrát.`);
+    }
+    const port = NODE_REGISTRY.port(panel.module(inp.module).node, inp.port, 'in');
+    const src = NODE_REGISTRY.port(panel.module(out.module).node, out.port, 'out');
+    const v = canConnect(src, port);
+    if (!v.allowed) return no(`kabel ${a} → ${b} nelze zapojit (${v.reason})`);
+    into.set(b, (into.get(b) || 0) + 1);
+    if (port && !port.multiple && into.get(b) > 1) {
+      return no(`do vstupu ${panel.module(inp.module).label} ${port.label} (${b}) vedou `
+        + `${into.get(b)} kabely, ale přijímá jen jedno spojení.`);
     }
     if (extra === undefined) { cables.push([a, b]); continue; }
     const r = more === undefined && extra ? cablePropsOf(extra, inp, panel)

@@ -11,9 +11,11 @@ why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the i
 scope:
   - "src/js/core/url-state-synth.js"
   - "src/js/synth/link.js"
+  - "src/js/synth/ui.js"
   - "tests/unit/synth-link.test.mjs"
   - "dist"
   - ".ai/repo/project/issues/K239.yaml"
+current_state: "Built by oscilla-75 in task t-20261110071847-2fa7 on fix/k239-link-refused-at-decode from train/t6-sequencer 6c3b27df, on the coordinator's assignment (oscilla-43); unit side, for train T7. decodeSynthLink refuses, naming the jack, a link with two cables into an input that accepts one connection (the registry port is not multiple: hpf.audio, sh.trigger), a cable listed twice, and a cable canConnect refuses (a control into a trigger, which linkAction dropped in silence); its added sentences are Czech, and canConnect's own sentence is quoted inside one. link.js linkOmissions and linkOmissionText name what a copied link does not carry (Studio connections touching the panel, normals opened in the Studio), and Copy link says it after the copy."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit (tests/unit/synth-link.test.mjs, fails on a7102358): decodeSynthLink of two cables into hpf.audio returns ok false with a reason naming the HPF audio input."

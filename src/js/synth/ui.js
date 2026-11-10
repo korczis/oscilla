@@ -25,7 +25,7 @@ import {
   STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, jackReason, jackState, panelCables,
   patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
 } from './normals.js';
-import { linkAction, linkOf } from './link.js';
+import { linkAction, linkOf, linkOmissionText, linkOmissions } from './link.js';
 import { splitJack } from './panel.js';
 import { esc, knobHtml, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
@@ -876,11 +876,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const hash = linkNow();
       const url = `${window.location.href.split('#')[0]}#${hash}`;
       this.synth.link = url;
+      // K239: what the link leaves out is said with the copy, never dropped in silence.
+      const left = present() ? linkOmissionText(linkOmissions(model(), panel)) : null;
+      const tail = left ? ` ${left}` : '';
       try {
-        navigator.clipboard.writeText(url).then(() => say('Odkaz na Synth zkopírován.'),
-          () => say('Zkopírujte odkaz níže; schránka tu není k dispozici.'));
+        navigator.clipboard.writeText(url).then(() => say(`Odkaz na Synth zkopírován.${tail}`),
+          () => say(`Zkopírujte odkaz níže; schránka tu není k dispozici.${tail}`));
       } catch (e) {
-        say('Zkopírujte odkaz níže; schránka tu není k dispozici.');
+        say(`Zkopírujte odkaz níže; schránka tu není k dispozici.${tail}`);
       }
       return hash;
     },
