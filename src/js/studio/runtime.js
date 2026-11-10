@@ -32,7 +32,9 @@
 //                                  record, diagnostics, ... (§177); diagnostics include one
 //                                  `frequency-limited` per value held below what it asks
 //                                  (its range or 0.95 × Nyquist; compiler.js
-//                                  frequencyLimits, T023), while the graph runs
+//                                  frequencyLimits, T023) and one `q-limited` per log cable
+//                                  held at a Q knob's top (runtime-trace.js qLimits, K235),
+//                                  while the graph runs
 //   runtime.applied() -> { revision, studioHash, planHash, at } | null   the applied record:
 //                                  what the running graph holds, set only when a transaction
 //                                  commits (start, apply while running), null while stopped;
