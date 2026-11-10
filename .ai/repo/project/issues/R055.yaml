@@ -13,6 +13,7 @@ scope:
   - ".github/workflows/main-checks.yml"
   - "tests/unit/ci-knowledge-job.test.mjs"
   - ".ai/repo/project/issues/R055.yaml"
+current_state: "Built by oscilla-75 in task t-20261110054634-738e on fix/r055-majordomus-curl-max-time from ce's ee54c5b5, on the coordinator's assignment (oscilla-43); it lands in train T6 with the verdict from oscilla-c1. Each public attempt carries --max-time 20 and the retries fall from 5 to 3, giving a worst case of 285 s (4 x 20 + 3 x 5, then the fallback's 3 x 60 + 2 x 5) inside the 300 s step, in ci.yml and main-checks.yml alike; ci-workflows.test.mjs's curl mutation targets the new flags."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit (tests/unit/ci-knowledge-job.test.mjs, fails on a7102358): each Majordomus install step's public curl carries --max-time N, and N x (retries + 1) plus the retry delays plus the fallback's bound stays under the step's timeout-minutes."
