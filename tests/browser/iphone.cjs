@@ -76,7 +76,8 @@ const SETTLE_MS = 8000;
 // trigger's note, a transport's last step) takes longer, so it cannot pass for a stop
 const HIDE_MS = 1500;
 // K184: a same-task tap is heard within TAP_MS above TAP_HEARD_DB (dB re digital full scale, the
-// RMS of the analyser's buffer) and is over below TAP_QUIET_DB; TAP_COUNT taps per surface
+// loudest 2048-sample RMS of the output after the tap, see watchLoudest) and is over below
+// TAP_QUIET_DB (the engine analyser's RMS); TAP_COUNT taps per surface
 const TAP_MS = 3000;
 const TAP_HEARD_DB = -60;
 const TAP_QUIET_DB = -70;
@@ -386,22 +387,48 @@ const TAPS = [
 ];
 
 /**
- * In the page: the loudest RMS (dB) of the engine's analyser since the last reset, every frame.
- * The engine builds its analyser when the first note starts it, so the watch takes it up then.
+ * In the page: the engine analyser's RMS (dB) now, every frame (__tapNow, for "quiet"), and the
+ * loudest RMS of any 2048-sample window of the output since the last tap (__tapMax, for "heard").
+ * "Heard" reads a second analyser fed from the engine's (an AnalyserNode passes its input on)
+ * with the longest buffer, 32768 samples (0.74 s at 44.1 kHz), and only the samples after the
+ * tap's own context time. A frame that stalls longer than the engine analyser's 8192 samples
+ * (186 ms; linux WebKit on CI) therefore cannot miss a tap, and a tap is never credited with the
+ * one before it. The engine builds its analyser when the first note starts it, so the watch
+ * takes it up then.
  */
 function watchLoudest() {
   let t = null;
+  let w = null;
+  let from = null;
+  let wt = null;
   window.__tapMax = -Infinity;
   window.__tapNow = -Infinity;
+  window.__tapAt = Infinity;
   const tick = () => {
-    const a = window.OSCILLA.engine && window.OSCILLA.engine.analyser;
+    const e = window.OSCILLA.engine;
+    const a = e && e.analyser;
     if (a) {
       if (!t || t.length !== a.fftSize) t = new Float32Array(a.fftSize);
       a.getFloatTimeDomainData(t);
       let s = 0;
       for (const x of t) s += x * x;
       window.__tapNow = 10 * Math.log10(s / t.length + 1e-24);
-      window.__tapMax = Math.max(window.__tapMax, window.__tapNow);
+      if (from !== a) {
+        w = a.context.createAnalyser();
+        w.fftSize = 32768;
+        a.connect(w);
+        from = a;
+        wt = new Float32Array(w.fftSize);
+      }
+      w.getFloatTimeDomainData(wt);
+      const since = (a.context.currentTime - window.__tapAt) * a.context.sampleRate;
+      const n = Math.min(wt.length, Math.max(0, Math.ceil(since) + 128));
+      const span = Math.min(2048, n);
+      for (let end = wt.length; span > 0 && end - span >= wt.length - n; end -= 1024) {
+        let q = 0;
+        for (let i = end - span; i < end; i += 1) q += wt[i] * wt[i];
+        window.__tapMax = Math.max(window.__tapMax, 10 * Math.log10(q / span + 1e-24));
+      }
     }
     requestAnimationFrame(tick);
   };
@@ -416,6 +443,8 @@ function sameTaskTap([sel, at]) {
   const o = { clientX: r.left + r.width * at.x, clientY: r.top + r.height * at.y,
     pointerType: 'touch', pointerId: 7, isPrimary: true, bubbles: true, cancelable: true };
   window.__tapMax = -Infinity;
+  const e = window.OSCILLA.engine;
+  window.__tapAt = e && e.analyser ? e.analyser.context.currentTime : -Infinity;
   el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
   el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
   return true;
