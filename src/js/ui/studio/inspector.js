@@ -73,6 +73,8 @@ import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { limitBoundText, limitValueText } from '../../studio/compiler.js';
 import { sig } from '../../core/math.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
+import { SOURCE_RANGES } from '../../synth/panel.js';
+import { tuneNote } from '../../synth/normals.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
 import {
@@ -560,9 +562,14 @@ export function inspectorView(model, selection, opts = {}) {
       const code = route.state === 'no-route' && est ? est.code : null;
       const statusText = [code ? `${route.text} (${code})` : route.text,
         ...entityNotes(opts.truth, 'edge', e.id)].filter(Boolean).join(' · ');
+      // K238: what an octave source (Keys pitch, the pad's Pitch) does in a cents parameter.
+      const srcUnit = ((SOURCE_RANGES[a.type] || {})[e.from.port] || {}).unit || null;
+      const note = control && tgt.param ? tuneNote(srcUnit,
+        registry.param(b.type, tgt.param.key), e.props) : null;
       return {
         kind: 'edge',
-        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${statusText}`,
+        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${statusText}:${note || ''}`,
+        note,
         route: route.state,
         routeReason: route.reason,
         routeText: route.text,
@@ -1064,6 +1071,10 @@ export function mountInspector(host, svc) {
         'data-osc': 'studio.inspector.edgeStatus', 'data-route': view.route,
         text: view.statusText }));
       if (view.cause) parts.push(causeLink(view.cause));
+    }
+    if (view.note) {
+      parts.push(h('p', { class: 'mt-1 text-xs text-gray-600 dark:text-gray-400', role: 'note',
+        text: view.note }));
     }
     parts.push(h('dl', { class: 'osc-si-dl', 'data-osc': 'studio.inspector.edge' }, [
       h('div', {}, [h('dt', { text: 'From' }), h('dd', { text: view.fromText })]),

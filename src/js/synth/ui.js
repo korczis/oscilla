@@ -22,7 +22,8 @@ import { playedEngine, routedNode } from './picker.js';
 import { createDock } from './dock.js';
 import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
-  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, jackReason, jackState, panelCables,
+  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, cableNote, jackReason, jackState,
+  panelCables,
   patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
 } from './normals.js';
 import { linkAction, linkOf, linkOmissionText, linkOmissions } from './link.js';
@@ -186,8 +187,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const [s, t] = a.direction === 'out' ? [portOf(a), portOf(j)] : [portOf(j), portOf(a)];
         const v = canConnect(s, t);
         if (!v.allowed) { out.set(j.key, { ok: false, reason: v.reason }); continue; }
-        const to = a.direction === 'out' ? j.id : a.id;
-        const why = jackReason(m, panel, to);
+        const [from, to] = a.direction === 'out' ? [a.id, j.id] : [j.id, a.id];
+        const why = jackReason(m, panel, to, from);
         out.set(j.key, why ? { ok: false, reason: why } : { ok: true, reason: null });
       }
     }
@@ -231,7 +232,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     return panelCables(model(), panel).map((c) => {
       const { port } = splitJack(c.from);
       const p = registry.port(panel.module(c.fromModule).node, port, 'out');
-      return { ...c, type: p ? p.type : 'AUDIO' };
+      return { ...c, type: p ? p.type : 'AUDIO',
+        note: cableNote(model(), panel, c, { registry }) };
     });
   }
 
