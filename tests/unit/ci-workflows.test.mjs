@@ -155,7 +155,7 @@ test('mutation: an install, a download or a browser suite step without its own t
 });
 
 test('mutation: a curl without --retry or --connect-timeout', () => {
-  const noRetry = mutate(CI, " --retry 5 --retry-all-errors --retry-delay 5", '');
+  const noRetry = mutate(CI, " --retry 3 --retry-all-errors --retry-delay 5", '');
   assert.deepEqual(rules(ci(noRetry)), ['curl-flags@knowledge']);
   assert.match(ci(noRetry)[0].message, /curl without --retry <n>/);
   const noConnect = mutate(CI, ' --connect-timeout 20', '');
