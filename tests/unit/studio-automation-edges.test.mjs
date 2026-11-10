@@ -247,3 +247,19 @@ test('C065: an edit to another parameter inside the window does not re-aim the c
   s.fx.advance(0.5);
   near(actualAt(s, p, s.ctx.currentTime), base, 1e-2, 'the cutoff ends on its unchanged base');
 });
+
+test('C1-C065-1: an edge offset changed with the base inside the window is the offset played',
+  () => {
+    // The LFO -> cutoff edge as a linear one with a 300 Hz constant offset, from the start.
+    const m = templateModel(REFERENCE_TEMPLATE_ID);
+    const edges = m.graph.edges.map((e) => (e.id === 'edge-4'
+      ? { ...e, props: { ...e.props, mapping: 'linear', offset: 300, depth: 0.1 } } : e));
+    const s = setup({ ...m, graph: { ...m.graph, edges } }, 48000);
+    const { p } = removedCutoffLane(s);
+    near(s.runtime.baseOffset('filter-1', 'frequency'), 300, 1e-9, 'the edge offset at removal');
+    // Inside the window: the edge's offset to 600 and the base to 2000.
+    dispatch(s, { type: 'EDGE_UPDATE', edgeId: 'edge-4', props: { offset: 600 } });
+    setCutoff(s, 2000);
+    s.fx.advance(0.5);
+    near(actualAt(s, p, s.ctx.currentTime), 2600, 1e-2, 'the base plus the live offset');
+  });

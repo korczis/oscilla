@@ -85,8 +85,8 @@ export function baseTarget(dest, base) {
  * the edit horizon (runtime.js heldKeys), so a base edit landing in that window would be skipped
  * and the glide would end on the stale base. open() records a release, close() drops it when a
  * lane claims the parameter again, reaim(model, now, horizon) re-aims every open release whose
- * node's base the model changed: from max(its start, the horizon) it glides to the new base
- * (plus the offset, within the bounds) with the same tau, and its record follows, so the
+ * node's base or edge offset changed: from max(its start, the horizon) it glides to the new base
+ * (plus the edges' offset as offsetOf(target) gives it now, within the bounds) with the same tau, and its record follows, so the
  * transport's unownedValueAt stays exact. A release past its window (one schedule lead after
  * its start; the runtime writes the base itself from then on) is dropped.
  */
@@ -98,7 +98,7 @@ export function createReleaseWindows() {
       return rec;
     },
     close(param) { open.delete(param); },
-    reaim(model, now, horizon) {
+    reaim(model, now, horizon, offsetOf = null) {
       for (const [param, { dest, target, rec }] of open) {
         if (now >= rec.at + SCHEDULE_LEAD_S) {
           open.delete(param);
@@ -107,6 +107,10 @@ export function createReleaseWindows() {
         const n = model.graph.nodes.find((x) => x.id === target.node);
         const base = n ? n.params[target.param] : null;
         if (typeof base !== 'number' || !Number.isFinite(base)) continue;
+        // The edges' offset as the runtime holds it now (C1-C065-1): an edit in the window may
+        // change an edge into the parameter as well as its base.
+        const live = offsetOf ? offsetOf(target) : null;
+        if (Number.isFinite(live)) dest.offset = live;
         const to = baseTarget(dest, base);
         if (to === rec.to) continue;
         const t = Math.max(rec.at, horizon);

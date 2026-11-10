@@ -1309,7 +1309,8 @@ export function createStudioTransport({
   /** Bring claims, envelope ownership and lanes in line with the runtime after an apply. */
   function afterApply(fresh) {
     const horizon = safeHorizon(ctxNow(), hooks.ctx.sampleRate);
-    windows.reaim(model, ctxNow(), horizon);
+    windows.reaim(model, ctxNow(), horizon, typeof runtime.baseOffset === 'function'
+      ? (tg) => runtime.baseOffset(tg.node, tg.param) : null);
     const wantOsc = patternOscillators(model);
     for (const [id, c] of [...claims]) {
       const h = ready(id);
