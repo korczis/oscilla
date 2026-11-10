@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 
 import * as checks from '../../src/js/measurement/capture-checks.js';
 import * as capture from '../../src/js/measurement/capture.js';
+import { BLOCK, rig } from './fixtures/capture-rig.mjs';
 
 const SR = 48000;
 const N = SR / 2;
@@ -125,4 +126,40 @@ test('T039: a capture window keeps each channel where its frames land', () => {
   // A chunk with another channel count drops the per-channel record (the downmix is judged).
   capture.writeCaptureChannels(w, 104, [Float32Array.of(1, 1, 1, 1)]);
   assert.equal(w.channels, null);
+});
+
+// oscilla-43: the ScriptProcessor fallback has every channel of its inputBuffer, so it judges
+// them by the same rule and the same downmix (speakersMono). Driven through the capture io on
+// the shared stub context (tests/unit/fixtures/capture-rig.mjs).
+test('T039: the ScriptProcessor fallback keeps every channel, so a left-only clip is caught',
+  async () => {
+    // A left channel of flat tops at the rail (runs of four samples at ±1), a silent right.
+    const left = Float32Array.from({ length: BLOCK }, (_, i) => (Math.floor(i / 4) % 2 ? 1 : -1));
+    const right = new Float32Array(BLOCK);
+    const r = rig({ channels: () => [left, right] });
+    const cap = await r.drive(r.io.captureNoise(0.2));
+    assert.ok(Array.isArray(cap.channels) && cap.channels.length === 2, 'the capture has both');
+    assert.ok(Math.max(...cap.samples.map(Math.abs)) <= 0.5, 'the downmix is 0.5 (L + R)');
+    const c = checks.checkCapture(cap);
+    assert.equal(c.clipping.channel, 0);
+    assert.ok(c.clipping.regions.length > 0 && c.peak >= checks.CLIP_THRESHOLD);
+    assert.match(c.reasons.find((x) => x.code === 'CLIPPING').text, /kanál 1 \(levý\)/);
+    // A mono microphone upmixed to L = R: the exact downmix, and no channel named.
+    const m = Float32Array.from({ length: BLOCK }, (_, i) => 0.3 * Math.sin(i / 7));
+    const mono = rig({ channels: () => [m, m] });
+    const mc = await mono.drive(mono.io.captureNoise(0.2));
+    const filled = mc.samples.findIndex((x) => x !== 0);
+    assert.ok(filled >= 0);
+    assert.equal(mc.samples[filled], mc.channels[0][filled], 'the downmix of L = R is L');
+    const check = checks.checkCapture(mc);
+    assert.equal(check.clipping.channel, null);
+    assert.equal(check.reasons.some((x) => x.code === 'CLIPPING'), false);
+  });
+
+test('T039: the worklet and the fallback share one downmix (speakersMono)', () => {
+  assert.ok(capture.CAPTURE_WORKLET_SOURCE.includes(capture.speakersMono.toString()),
+    'the worklet embeds the source of the function the fallback calls');
+  const L = Float32Array.of(1, -1, 0.5);
+  const R = Float32Array.of(0, 1, 0.5);
+  assert.deepEqual(Array.from(capture.speakersMono([L, R], 3, new Float32Array(3))), [0.5, 0, 0.5]);
 });

@@ -1,0 +1,73 @@
+{
+ "id": "oscilla.clip.v3",
+ "digits": 10,
+ "output": {
+  "clipping": {
+   "ratio": 0.04125,
+   "regions": [
+    {
+     "start": 1007,
+     "end": 1094
+    },
+    {
+     "start": 2002,
+     "end": 2399
+    }
+   ]
+  },
+  "dropouts": [
+   {
+    "start": 1500,
+    "end": 1700
+   }
+  ],
+  "rms": 0.3428336851,
+  "peak": 1.000456929,
+  "empty": false,
+  "reasons": ["CLIPPING", "DROPOUT", "DISCONTINUITY"],
+  "stereo": {
+   "clipping": {
+    "ratio": 0.04125,
+    "regions": [
+     {
+      "start": 1007,
+      "end": 1094
+     },
+     {
+      "start": 2002,
+      "end": 2399
+     }
+    ],
+    "channel": 0,
+    "channels": [
+     {
+      "channel": 0,
+      "ratio": 0.04125,
+      "clipped": 165,
+      "regions": [
+       {
+        "start": 1007,
+        "end": 1094
+       },
+       {
+        "start": 2002,
+        "end": 2399
+       }
+      ],
+      "peak": 1.000456929
+     },
+     {
+      "channel": 1,
+      "ratio": 0,
+      "clipped": 0,
+      "regions": [],
+      "peak": 0
+     }
+    ]
+   },
+   "peak": 1.000456929,
+   "reasons": ["kanál 1 (levý): 165 vzorků (4,125 %) na mezi v 2 oblastech; sloučený signál to skrývá.", "1 constant run(s) inside the capture.", "2 discontinuities (sample-to-sample steps up to 0.2739, ≥ 8× the local slope)."]
+  },
+  "stereoV2Ratio": 0
+ }
+}

@@ -100,12 +100,12 @@ import {
 import { MeasurementError, mapError } from './engine.js';
 import { captureAudioSession } from './audio-session.js';
 import { levelOf } from './input-level.js';
-import { CAPTURE_NODE_OPTIONS, writeCaptureChannels } from './capture-channels.js';
+import { CAPTURE_NODE_OPTIONS, speakersMono, writeCaptureChannels } from './capture-channels.js';
 import { buildLoopbackSystem } from './capture-loopback-system.js';
 
 export { captureAudioSession, CAPTURE_AUDIO_SESSION } from './audio-session.js';
 export { levelOf } from './input-level.js';
-export { CAPTURE_NODE_OPTIONS, writeCaptureChannels } from './capture-channels.js';
+export { CAPTURE_NODE_OPTIONS, speakersMono, writeCaptureChannels } from './capture-channels.js';
 
 export const CAPTURE_PROCESSOR_NAME = 'oscilla-capture-v1';
 /** Frames per posted chunk (≈ 43 ms at 48 kHz): progress cadence and message overhead. */
@@ -152,6 +152,7 @@ export const CLOCK_NOTE_LIMIT = 32;
  * stays a real gap, reported as missing frames (never silently relabelled audio).
  */
 export const CAPTURE_WORKLET_SOURCE = `
+const speakersMono = ${speakersMono.toString()};
 class OscillaCapture extends AudioWorkletProcessor {
   constructor(options) {
     super();
@@ -195,19 +196,11 @@ class OscillaCapture extends AudioWorkletProcessor {
       this.n = 0;
     }
   }
-  // The Web Audio speakers downmix to mono, as the node made it from one channel (T039).
+  // T039: the speakers downmix (capture-channels.js).
   mono(x, len) {
-    const k = x.length;
-    if (k === 1) return x[0];
+    if (x.length === 1) return x[0];
     if (!this.tmp || this.tmp.length !== len) this.tmp = new Float32Array(len);
-    const o = this.tmp;
-    for (let i = 0; i < len; i++) {
-      o[i] = k === 2 ? 0.5 * (x[0][i] + x[1][i])
-        : k === 4 ? 0.25 * (x[0][i] + x[1][i] + x[2][i] + x[3][i])
-          : k === 6 ? Math.SQRT1_2 * (x[0][i] + x[1][i]) + x[2][i] + 0.5 * (x[4][i] + x[5][i])
-            : x[0][i];
-    }
-    return o;
+    return speakersMono(x, len, this.tmp);
   }
   process(inputs) {
     if (!this.alive) return false;
@@ -513,13 +506,18 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
         }
       };
     } else {
-      node = register(ctx.createScriptProcessor(SCRIPT_PROCESSOR_FRAMES, 1, 1));
+      // T039: two channels, stereo kept, mono upmixed to L = R (an exact downmix).
+      node = register(ctx.createScriptProcessor(SCRIPT_PROCESSOR_FRAMES, 2, 1));
       node.onaudioprocess = (e) => {
         if (!armed) return;
-        const data = e.inputBuffer.getChannelData(0);
+        const ib = e.inputBuffer;
+        const k = ib.numberOfChannels || 1;
+        const chs = k > 1 ? Array.from({ length: k }, (_, c) => ib.getChannelData(c)) : null;
+        const data = chs ? speakersMono(chs, chs[0].length, new Float32Array(chs[0].length))
+          : ib.getChannelData(0);
         const frame = Math.round(e.playbackTime * sr) - data.length;
         const w = armed;
-        deliver(w.id, frame, data);
+        deliver(w.id, frame, data, chs);
         if (frame + data.length >= w.endFrame && windows.get(w.id)) finish(w.id);
       };
     }

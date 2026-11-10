@@ -37,3 +37,20 @@ export function writeCaptureChannels(w, frame, channels) {
   }
 }
 
+/**
+ * The Web Audio "speakers" downmix to mono of `len` frames of the channels `x` into `o`: 2
+ * channels 0.5 (L + R), 4 0.25 (L + R + SL + SR), 6 (5.1) sqrt(0.5) (L + R) + C + 0.5 (SL + SR),
+ * any other count channel 0 (discrete). The one copy: the worklet embeds this source and the
+ * ScriptProcessor fallback calls it, so both analyse what the one-channel node made (T039).
+ * Self-contained (no outer name), since its text runs in the AudioWorkletGlobalScope.
+ */
+export function speakersMono(x, len, o) {
+  const k = x.length;
+  for (let i = 0; i < len; i++) {
+    o[i] = k === 2 ? 0.5 * (x[0][i] + x[1][i])
+      : k === 4 ? 0.25 * (x[0][i] + x[1][i] + x[2][i] + x[3][i])
+        : k === 6 ? Math.SQRT1_2 * (x[0][i] + x[1][i]) + x[2][i] + 0.5 * (x[4][i] + x[5][i])
+          : x[0][i];
+  }
+  return o;
+}

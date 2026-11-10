@@ -6,7 +6,9 @@
 //
 // Clipping: a sample is "at the rail" when |x| ≥ clipThreshold; clipping is at least
 // clipMinRun rail samples within clipWindowS, because a lone full-scale sample is a legitimate
-// transient while an overloaded input keeps returning to the rail. 'oscilla.clip.v2' (V382)
+// transient while an overloaded input keeps returning to the rail. 'oscilla.clip.v3' (T039) is
+// v2 on every input channel of a multichannel capture (`channels`), the worst one named; v1
+// and v2 judge the analysed downmix only. 'oscilla.clip.v2' (V382)
 // takes 1 ms: above a few kHz a flat top spans one or two samples, so an overload of a
 // high-frequency tone puts its rail samples a few samples apart but never three in a row
 // (a 1 dB overload of a sweep above 5 kHz left 5.1 % of the samples at the rail and no v1
@@ -59,7 +61,8 @@ export const CLIP_MIN_RUN = 3;
 /** clip.v2: the clipMinRun rail samples lie within this span (1 ms: a few periods at 3 kHz). */
 export const CLIP_WINDOW_S = 0.001;
 /** Clipping algorithms checkCapture implements (opts.algorithm; ALGORITHMS.clip by default). */
-export const CLIP_ALGORITHM_IDS = Object.freeze(['oscilla.clip.v1', 'oscilla.clip.v2']);
+export const CLIP_ALGORITHM_IDS = Object.freeze(['oscilla.clip.v1', 'oscilla.clip.v2',
+  'oscilla.clip.v3']);
 /** Clip regions closer than this merge (5 ms ≈ half a period at 100 Hz: one overload). */
 export const CLIP_MERGE_GAP_S = 0.005;
 /** Shortest constant run reported as a dropout: 20 ms (960 frames at 48 kHz) is shorter than a
@@ -368,16 +371,19 @@ export function checkCapture(capture, opts = {}) {
     );
   // T039: a clip on any input channel counts, however the downmix hides it; the worst channel
   // (by rail ratio) is reported, named, when it is worse than the downmix.
-  const perChannel = channelClipping(capture, n, clipThreshold,
+  // clip.v3 only: v1 and v2 judge the analysed downmix alone, as stored results did (C1-T039-1).
+  const perChannel = clipAlgorithm !== 'oscilla.clip.v3' ? null : channelClipping(capture, n,
+    clipThreshold,
     () => clipGrouper(clipMinRun, span, [], null), Math.round(mergeGapS * sr),
     span === clipMinRun - 1);
   const channelPeak = perChannel ? Math.max(...perChannel.map((c) => c.peak)) : 0;
   const worst = perChannel ? perChannel.reduce((a, c) => (c.ratio > (a ? a.ratio : clipped / n)
     && c.regions.length ? c : a), null) : null;
   if (worst) {
+    const pc = ((100 * worst.clipped) / n).toFixed(3).replace('.', ',');
     reasons.push(reason('CLIPPING', `${channelName(worst.channel, perChannel.length)}: `
-      + `${worst.clipped} vzorků (${((100 * worst.clipped) / n).toFixed(3)} %) na mezi `
-      + `v ${worst.regions.length} oblastech; sloučený signál to skrývá.`));
+      + `${worst.clipped} vzorků (${pc} %) na mezi v ${worst.regions.length} oblastech; `
+      + 'sloučený signál to skrývá.'));
   } else if (regions.length)
     reasons.push(
       reason(

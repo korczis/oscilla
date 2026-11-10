@@ -24,7 +24,7 @@ listed under [Gaps](#gaps), not resolved here.
 | --- | --- | --- |
 | (none; recorded through the recipe) | `measurement/stimulus.js` | [Stimuli](#stimuli) |
 | `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
-| `oscilla.clip.v2` (retained `oscilla.clip.v1`), `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
+| `oscilla.clip.v3` (retained `oscilla.clip.v1`, `.v2`), `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
 | `oscilla.align.xcorr.v2` (retained `.v1`) | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v3` (retained `.v1`, `.v2`) | `measurement/transfer.js` | [Transfer function](#transfer) |
 | (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
@@ -307,7 +307,7 @@ sidelobes ≈ −72 dB there, Blackman-Harris −92 dB: < 1e-6 of the power), th
 non-bin-centred tone (< 1e-6) and float32 input rounding (≈ −150 dB).
 
 <a id="capture-checks"></a>
-## Capture checks — `oscilla.clip.v2`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
+## Capture checks — `oscilla.clip.v3`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
 
 `checkCapture(capture, opts) → { algorithms: { clip, discontinuity }, clipping: { ratio,
 regions }, dropouts, discontinuities, rms, peak, empty, invalid, reasons }`. Digital integrity
@@ -326,14 +326,18 @@ only; a capture that passes can still be acoustically wrong. Regions are half-op
   `checkCapture(c, { algorithm: 'oscilla.clip.v1' })`) required consecutive rail samples; it
   is the same rule with a window of `CLIP_MIN_RUN − 1` samples and reproduces v1 exactly
   (0 differences in 3000 fuzzed captures).
-  Every input channel (T039): the recorder takes all channels of the input and makes the
-  analysed mono downmix itself, by the Web Audio speakers rules (stereo `0.5·(L + R)`), so a
-  clip on one channel is not halved under the rail. A multichannel capture carries
-  `channels` beside `samples`; the same rule runs on each channel, the worst channel (when worse
-  than the downmix) gives `clipping.ratio` and `regions`, `clipping.channel` names it and
-  `clipping.channels` holds every channel's result, and `peak` is over every channel (the
-  quality bar's AT RAIL). A mono capture's output is unchanged (the golden of its ID). The
-  ScriptProcessor fallback still takes one channel: there the downmix is judged.
+  `oscilla.clip.v3` (T039, the current ID) is v2 on every input channel. The recorder takes
+  all channels of the input (the worklet node with channelCountMode 'max', the ScriptProcessor
+  fallback with two input channels, a mono input upmixed to L = R) and makes the analysed mono
+  downmix itself with `speakersMono` (`measurement/capture-channels.js`, the Web Audio speakers
+  rules: stereo `0.5·(L + R)`, quad, 5.1, else channel 0; the worklet embeds the same
+  function's source), so a clip on one channel is not halved under the rail. A multichannel
+  capture carries `channels` beside `samples`; v3 runs the v2 rule on each channel, the worst
+  channel (when worse than the downmix) gives `clipping.ratio` and `regions`,
+  `clipping.channel` names it ("kanál 1 (levý)" in its reason) and `clipping.channels` holds
+  every channel's result, and `peak` is over every channel (the quality bar's AT RAIL). A mono
+  capture gives the same numbers under v2 and v3 (the ID names the method, not the input); v2
+  and v1 judge the downmix only, so a stored v2 result stays reproducible (C1-T039-1).
 - **Dropout**: a run of at least `max(2, ceil(DROPOUT_MIN_S·sr))` samples
   (`DROPOUT_MIN_S = 0.02` s) whose peak-to-peak spread stays within
   `CONSTANT_TOLERANCE = 2^−20` (≈ −120 dBFS), that touches neither the first nor the last
