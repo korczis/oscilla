@@ -236,7 +236,19 @@ test('claimArea derives the area from the implementation path; adrs reads the fr
     }
   });
 
+// The repository's own history: fail-first runs the tests in a tree extracted by git archive
+// with no commit (scripts/fail-first.mjs), where only the fixture repositories above have one.
+const HAS_HISTORY = (() => {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', '-q', 'HEAD'], { cwd: REPO_ROOT, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 test('collectFacts carries the new groups for this repository, as plain JSON, twice the same',
+  { skip: !HAS_HISTORY && 'this checkout has no commit history (a git archive tree)' },
   async () => {
     const [a, b] = [await collectFacts({ git: true }), await collectFacts({ git: true })];
     assert.deepEqual(a, b);
