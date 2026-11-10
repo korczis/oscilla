@@ -198,21 +198,23 @@ test('K229 C1-K229-1: a reset retires the stopped voice; the shared sources feed
   assert.ok(due <= 3, `the look-ahead holds only the last resets (${due})`);
   assert.ok(held <= due + 1,
     `stopped voices are retired: ${held} of ${resets} still held, ${due} ahead of ${now}`);
-  if (h.info.held) {
-    const oscs = h.info.held().flatMap((v) => v.oscs);
-    const gains = h.info.held().flatMap((v) => v.gains);
-    const frequencies = new Set(oscs.map((o) => o.frequency));
-    const detunes = new Set(oscs.map((o) => o.detune));
-    assert.ok(h.info.rate.outputs.every((p) => frequencies.has(p)), 'rate feeds held voices only');
-    assert.ok(h.info.detune.outputs.every((p) => detunes.has(p)),
-      'detune feeds held voices only');
-    const gainParams = new Set(gains.map((g) => g.gain));
-    for (const w of h.info.shapers) {
-      assert.ok(w.outputs.every((p) => gainParams.has(p)), 'a shaper feeds held gains only');
-    }
-  }
-  assert.ok(h.info.rate.outputs.length <= 3 * held,
-    `rate feeds ${h.info.rate.outputs.length} parameters for ${held} held voice(s)`);
+  assert.ok(held >= 1, 'the current voice is held');
+  // The shared sources feed exactly the held voices: every held oscillator and gain is fed (the
+  // LFO still sounds), and nothing else is (the stopped voices are no longer fed). Set equality,
+  // so neither an empty fan-out nor a leftover connection passes (oscilla-04's review).
+  const sameSet = (outputs, want, what) => {
+    assert.equal(outputs.length, want.length, `${what}: ${outputs.length} outputs for `
+      + `${want.length} held parameters`);
+    assert.deepEqual(new Set(outputs), new Set(want), what);
+  };
+  const heldVoices = h.info.held();
+  const oscs = heldVoices.flatMap((v) => v.oscs);
+  assert.equal(oscs.length, 3 * held, 'three oscillators per morph voice');
+  sameSet(h.info.rate.outputs, oscs.map((o) => o.frequency), 'rate -> o.frequency');
+  sameSet(h.info.detune.outputs, oscs.map((o) => o.detune), 'detune -> o.detune');
+  h.info.shapers.forEach((w, k) => {
+    sameSet(w.outputs, heldVoices.map((v) => v.gains[k].gain), `shaper ${k} -> g.gain`);
+  });
   await stopped(rig);
 });
 
