@@ -296,7 +296,8 @@ toneToMeanSquare(power, window) -> Float64Array  // ×1/(2·ENBW) inside, ×1/EN
 windowAlgorithm(name) -> id;  WINDOW_ALGORITHMS = { hann, 'blackman-harris' }
 
 // capture.js (browser) / capture-checks.js (pure)
-Capture = { sampleRate, samples: Float32Array /* mono */, preRoll /* s */, postRoll /* s */,
+Capture = { sampleRate, samples: Float32Array /* mono */, channels? /* Float32Array[] of a
+  multichannel input, each as long as samples (T039) */, preRoll /* s */, postRoll /* s */,
   startedAt /* AudioContext time */, constraints: { requested, applied /* or null */ },
   device: { label: string|null, id: string|null },
   integrity? /* browser io: { expectedFrames, receivedFrames, discontinuities, timing:

@@ -326,6 +326,14 @@ only; a capture that passes can still be acoustically wrong. Regions are half-op
   `checkCapture(c, { algorithm: 'oscilla.clip.v1' })`) required consecutive rail samples; it
   is the same rule with a window of `CLIP_MIN_RUN − 1` samples and reproduces v1 exactly
   (0 differences in 3000 fuzzed captures).
+  Every input channel (T039): the recorder takes all channels of the input and makes the
+  analysed mono downmix itself, by the Web Audio speakers rules (stereo `0.5·(L + R)`), so a
+  clip on one channel is not halved under the rail. A multichannel capture carries
+  `channels` beside `samples`; the same rule runs on each channel, the worst channel (when worse
+  than the downmix) gives `clipping.ratio` and `regions`, `clipping.channel` names it and
+  `clipping.channels` holds every channel's result, and `peak` is over every channel (the
+  quality bar's AT RAIL). A mono capture's output is unchanged (the golden of its ID). The
+  ScriptProcessor fallback still takes one channel: there the downmix is judged.
 - **Dropout**: a run of at least `max(2, ceil(DROPOUT_MIN_S·sr))` samples
   (`DROPOUT_MIN_S = 0.02` s) whose peak-to-peak spread stays within
   `CONSTANT_TOLERANCE = 2^−20` (≈ −120 dBFS), that touches neither the first nor the last

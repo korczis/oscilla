@@ -181,6 +181,69 @@ function findDiscontinuities(x, sr, o, skip) {
 }
 
 /**
+ * The clip grouping of the header for one sample stream: rail(i) for a rail sample at i, close()
+ * where the stream breaks. Appends regions to `runs`; onCount() once per counted rail sample.
+ */
+function clipGrouper(clipMinRun, span, runs, onCount) {
+  const recent = [];
+  let counted = -1; // last rail index already counted
+  let count = 0;
+  return {
+    runs,
+    get count() { return count; },
+    rail(i) {
+      recent.push(i);
+      if (recent.length > clipMinRun) recent.shift();
+      if (recent.length < clipMinRun || i - recent[0] > span) return;
+      const last = runs[runs.length - 1];
+      if (last && recent[0] <= last.end) last.end = i + 1;
+      else runs.push({ start: recent[0], end: i + 1 });
+      for (const k of recent) {
+        if (k > counted) {
+          count++;
+          if (onCount) onCount();
+        }
+      }
+      counted = i;
+    },
+    close() { recent.length = 0; },
+  };
+}
+
+/** "kanál 1 (levý)": a channel of the input, its stereo side named for two channels (Q104). */
+function channelName(c, count) {
+  const side = count === 2 ? (c === 0 ? ' (levý)' : ' (pravý)') : '';
+  return `kanál ${c + 1}${side}`;
+}
+
+/**
+ * T039: the clip check of every input channel of a multichannel capture (`capture.channels`,
+ * one array per channel, each as long as the analysed samples), by the same rule as the
+ * analysed downmix. null for a mono capture or channels that do not fit it.
+ */
+function channelClipping(capture, n, clipThreshold, grouper, mergeGap, consecutive) {
+  const chs = capture && capture.channels;
+  if (!Array.isArray(chs) || chs.length < 2 || chs.some((c) => !c || c.length !== n)) return null;
+  return chs.map((ch, channel) => {
+    const g = grouper();
+    let peak = 0;
+    for (let i = 0; i < n; i++) {
+      const v = ch[i];
+      if (!Number.isFinite(v)) {
+        g.close();
+        continue;
+      }
+      const a = Math.abs(v);
+      if (a > peak) peak = a;
+      if (a >= clipThreshold) g.rail(i);
+      else if (consecutive) g.close(); // clip.v1: consecutive rail samples only
+    }
+    return { channel, ratio: g.count / n, clipped: g.count,
+      regions: mergeRegions(g.runs, mergeGap), peak };
+  });
+}
+
+/**
  * checkCapture(capture, opts) → { algorithms: { clip, discontinuity }, clipping: { ratio,
  *   regions }, dropouts, discontinuities: [{ start, end, jump, ratio }], rms, peak, empty,
  *   invalid, reasons: [{ code, text }] }
@@ -243,19 +306,9 @@ export function checkCapture(capture, opts = {}) {
     : Math.max(clipMinRun - 1, Math.round(clipWindowS * sampleRate));
   const clipRuns = [];
   let clipped = 0;
-  const recent = [];
-  let counted = -1; // last rail index already counted in `clipped`
-  const rail = (i) => {
-    recent.push(i);
-    if (recent.length > clipMinRun) recent.shift();
-    if (recent.length < clipMinRun || i - recent[0] > span) return;
-    const last = clipRuns[clipRuns.length - 1];
-    if (last && recent[0] <= last.end) last.end = i + 1;
-    else clipRuns.push({ start: recent[0], end: i + 1 });
-    for (const k of recent) if (k > counted) clipped++;
-    counted = i;
-  };
-  const closeRail = () => { recent.length = 0; };
+  const grouper = clipGrouper(clipMinRun, span, clipRuns, () => { clipped++; });
+  const rail = grouper.rail;
+  const closeRail = grouper.close;
 
   const dropouts = [];
   const minRun = Math.max(2, Math.ceil(dropoutMinS * sr));
@@ -313,7 +366,19 @@ export function checkCapture(capture, opts = {}) {
     reasons.push(
       reason('EMPTY', `Capture RMS ${rmsDb.toFixed(1)} dBFS is below ${emptyDbfs} dBFS.`),
     );
-  if (regions.length)
+  // T039: a clip on any input channel counts, however the downmix hides it; the worst channel
+  // (by rail ratio) is reported, named, when it is worse than the downmix.
+  const perChannel = channelClipping(capture, n, clipThreshold,
+    () => clipGrouper(clipMinRun, span, [], null), Math.round(mergeGapS * sr),
+    span === clipMinRun - 1);
+  const channelPeak = perChannel ? Math.max(...perChannel.map((c) => c.peak)) : 0;
+  const worst = perChannel ? perChannel.reduce((a, c) => (c.ratio > (a ? a.ratio : clipped / n)
+    && c.regions.length ? c : a), null) : null;
+  if (worst) {
+    reasons.push(reason('CLIPPING', `${channelName(worst.channel, perChannel.length)}: `
+      + `${worst.clipped} vzorků (${((100 * worst.clipped) / n).toFixed(3)} %) na mezi `
+      + `v ${worst.regions.length} oblastech; sloučený signál to skrývá.`));
+  } else if (regions.length)
     reasons.push(
       reason(
         'CLIPPING',
@@ -333,11 +398,16 @@ export function checkCapture(capture, opts = {}) {
   return {
     algorithms: clipAlgorithm === CAPTURE_CHECK_ALGORITHMS.clip ? CAPTURE_CHECK_ALGORITHMS
       : Object.freeze({ ...CAPTURE_CHECK_ALGORITHMS, clip: clipAlgorithm }),
-    clipping: { ratio: clipped / n, regions },
+    // A mono capture's output is the golden one of its algorithm ID; only a multichannel
+    // capture adds the channel fields (T039).
+    clipping: !perChannel ? { ratio: clipped / n, regions }
+      : worst ? { ratio: worst.ratio, regions: worst.regions, channel: worst.channel,
+        channels: perChannel } : { ratio: clipped / n, regions, channel: null,
+        channels: perChannel },
     dropouts,
     discontinuities,
     rms,
-    peak,
+    peak: channelPeak > peak ? channelPeak : peak,
     empty,
     invalid: reasons.length > 0,
     reasons,
