@@ -1,0 +1,31 @@
+id: P018
+milestone: M098
+serves:
+  - "public-discoverability#lab-landing-live"
+title: "The /lab/ landing splits its heavy dashboards into generated sub-pages, so the first page is light on a phone"
+slug: lab-landing-subpages
+priority: p2
+profile: implementation
+objective: "The generated landing (P014-P017) is one index.html near 1 MB. Keep /oscilla/lab/ as the light front page (hero, playable frame whose poster loads lazily, workspace cards, gallery, the chart overview) and move the heavy dashboards into generated sub-pages under /oscilla/lab/: zmeny/ (per-release changes), roadmapa/ (roadmap), tvrzeni/ (claims explorer), dluh/ (ratchets), revize/ (reviews and audits), adr/ (ADRs), grafy/ (the interactive charts with their values and sources; the front page shows them as lazy images linking there), each a full self-contained page sharing the same inlined CSS and script bundle built once, with the same nav (links between pages, the current one marked), Czech, Flowbite Pro. Each sub-page keeps its own ceiling and the front page a much lower one. verify-deploy already compares every file the generator writes, so the sub-pages are verified without a change there; the README links the sub-pages where it names a dashboard."
+why: "The front page reached 999,753 B (133,617 B gzip) with P017 and grows with every release, review and audit; a phone visitor pays for every dashboard before seeing the instrument (project.a-phone-sounds puts the phone first)."
+scope:
+  - "scripts/landing.mjs"
+  - "scripts/landing"
+  - "scripts/readme.mjs"
+  - "README.md"
+  - "tests/unit/landing-lab.test.mjs"
+  - "tests/README.md"
+  - ".ai/repo/project/issues/P018.yaml"
+depends_on:
+  - "P017"
+acceptance_criteria:
+  - "The front page is at most 300,000 B raw and every sub-page within its own ceiling; a test pins each ceiling and fails on the merge base."
+  - "Every in-page anchor that moved still resolves: the nav and every internal link point at a generated file and an id that exists in it (a test walks them)."
+  - "Generation is byte-identical twice and between macOS and a linux node:22 container; verify-deploy's lab check covers every sub-page (its file list comes from the generator)."
+  - "Each page is Czech, Flowbite Pro, usable at 390 px and 1536 px in dark and light, loads nothing from another origin, and the playable frame stays on the front page."
+validation:
+  - "node --test tests/unit/landing-lab.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
