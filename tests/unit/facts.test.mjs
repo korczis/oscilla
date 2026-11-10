@@ -451,7 +451,8 @@ test('releaseCadence: hours between consecutive published releases and their med
   assert.equal(median([]), null);
 });
 
-test('collectFacts carries the P016 trends for this repository', async () => {
+test('collectFacts carries the P016 trends for this repository',
+  { skip: !HAS_HISTORY && 'this checkout has no commit history (a git archive tree)' }, async () => {
   const f = await collectFacts({ git: true });
   for (const name of ['burnup', 'claims-trend', 'ratchets', 'reviews', 'cadence']) {
     assert.ok(CHARTS.includes(name), name);
