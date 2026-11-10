@@ -1,0 +1,32 @@
+id: P017
+milestone: M098
+serves:
+  - "public-discoverability#lab-landing-live"
+title: "The /lab/ reviews view reads the review audits: every open P0-P2 finding shown as fixed, superseded or still open, with its evidence and plan issue"
+slug: lab-reviews-read-the-audits
+priority: p2
+profile: implementation
+objective: "On top of P016, scripts/facts.mjs reads every .ai/repo/reviews/audit-*.yaml (schema review-audit/v1, parsed with scripts/yaml-subset.mjs; the <n>.yaml verdicts stay the only verdict source and are never edited) and joins each audited finding to the verdict record it names (source <pr>.yaml#<id>). The landing's reviews section shows, beside the raw verdict counts, the latest audit's base and date, its P0-P2 findings by class (fixed with the commit that fixed it, superseded with why, open with the plan issue that tracks it, linked), the P3 counts by class with the unclassified remainder named as such, and a finding still open in a verdict and not covered by any audit as 'neauditováno'. The reviews chart separates audited-open from audited-closed. Nothing is reclassified by the generator: every class comes from an audit record."
+why: "oscilla-c1 and oscilla-c3 (2026-11-10) record the review findings sweep as an audit beside the verdicts (PR #519); P016's view counted 381 open findings from statuses the verdicts froze at their heads, which the audit shows are mostly fixed or superseded."
+scope:
+  - "scripts/facts.mjs"
+  - "scripts/landing.mjs"
+  - "scripts/landing"
+  - "scripts/readme.mjs"
+  - "README.md"
+  - "tests/unit/facts.test.mjs"
+  - "tests/unit/landing-lab.test.mjs"
+  - "tests/README.md"
+  - ".ai/repo/project/issues/P017.yaml"
+depends_on:
+  - "P016"
+acceptance_criteria:
+  - "Fixture tests (two audits of different dates, a finding covered by the newer one only, a finding named by an audit that no verdict holds, a P3 summary) pin the join and the latest-audit rule, and fail on the merge base."
+  - "With no audit file the view shows the raw counts exactly as P016 does and says no audit exists yet; generation stays byte-identical on macOS and linux and inside the page ceiling."
+  - "The section is Czech, Flowbite Pro, keyboard-usable at 390 px and 1536 px in dark and light themes; every fixed finding whose evidence names a commit that is an ancestor of the audit's base links that commit (the rest say the evidence names none), every open one its plan issue."
+validation:
+  - "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
