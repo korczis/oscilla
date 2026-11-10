@@ -1,0 +1,23 @@
+id: C070
+milestone: M090
+serves:
+  - "coherent-state#every-control-reaches-its-subsystem"
+title: "A click at a crossing of two cables selects a different cable from the one drawn on top"
+slug: a-click-at-a-cable-crossing-selects-the-cable-drawn-on-top
+priority: p3
+profile: implementation
+objective: "R2-T5-8 (product note, P3; found by rev-seat-2 oscilla-c3's control run of graph-keys-k009 at train T5 91838acb, webkit). In the Studio graph (src/js/ui/studio/graph-editor.js draws each cable as a group with an osc-sg-edge-hit path), a click at the midpoint of edge-3 (Filter -> Master), where edge-5 crosses it, selected edge-5, while document.elementFromPoint at that point returned edge-3's hit path: the graph's pick does not follow the paint order, so the cable drawn on top is not the one a click selects. Make a click select the cable that is topmost at the pointer (the hit path elementFromPoint returns), or draw the selected-on-click cable on top, so the cable a user sees under the pointer is the one selected."
+why: "oscilla-c1's T5 train review (2026-11-10) took R2-T5-8's test fix (a) into T5 and filed the product side (b) for T6; oscilla-43 ordered it filed. Main a7102358 selects edge-3 at the same test only because no other cable crosses its midpoint there."
+scope:
+  - "src/js/ui/studio"
+  - "tests/browser/v31-studio-graph.cjs"
+  - ".ai/repo/project/issues/C070.yaml"
+depends_on: []
+acceptance_criteria:
+  - "A browser check in chromium, firefox and webkit clicks a crossing of two cables and finds the selected cable is the one whose hit path elementFromPoint returns there; it fails on train T5 91838acb in webkit."
+validation:
+  - "node tests/browser/v31-studio-graph.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
