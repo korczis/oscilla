@@ -9,13 +9,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'nod
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
-  MARKER, STATIONS_REL, deriveStations, expandStations, formatStations, lineLabel, lineOf,
-  headStamp, main, readStations, renderStations, stampStations, stationsGitProblems,
-  stationsShapeProblems,
+  MARKER, STATIONS_REL, checkStation, deriveStations, expandStations, formatStations, lineLabel,
+  lineOf, headStamp, main, readStations, renderStations, stampCommitProblems, stampStations,
+  stationsGitProblems, stationsShapeProblems,
 } from '../../scripts/about-stations.mjs';
 import {
-  CI_PREPARE_COMMANDS, GATE_COMMANDS, RESTORE_PATHS,
+  CI_PREPARE_COMMANDS, GATE_COMMANDS, RESTORE_PATHS, main as prepareMain,
 } from '../../scripts/release-prepare.mjs';
+import { LITERAL_ALLOW, findVersionLiterals } from '../../scripts/release-version-check.mjs';
 
 const ROOT = new URL('../../', import.meta.url);
 const html = readFileSync(new URL('src/index.html', ROOT), 'utf8');
@@ -185,4 +186,157 @@ test('the stamp writes the station zone on a UTC host too (#460 review F3)', (t)
   assert.equal(git('show', '-s', '--format=%cI', 'HEAD'), '2026-07-01T12:00:00Z', 'a UTC host');
   assert.equal(headStamp(dir).datetime, '2026-07-01T14:00:00+02:00', 'summer time in Prague');
   assert.equal(headStamp(dir, 'UTC').datetime, '2026-07-01T12:00:00Z', 'git writes Z for UTC');
+});
+
+// ------------------------------------------------- R032 --check-station: the release commit
+// A base branch judges a release pull request by its release commit (chore(release): vX.Y.Z,
+// made of release:prepare's output) against that commit's own parent: there only the derived
+// fields of the one pending station may change. Not the pull request against its base: a
+// release pull request is often a train whose docs(about) members write the station's prose.
+const PENDING = { title: 'Nine', summary: 'The ninth line' };
+const withPending = () => {
+  const d = fixture();
+  d.stations.push({ ...PENDING });
+  return d;
+};
+
+test('--check-station (pure): only the stamp of the pending station passes', () => {
+  const parent = withPending();
+  const stamped = stampStations(parent, '9.9.0', HEAD).doc;
+  assert.deepEqual(stampCommitProblems({ parent, release: stamped, version: '9.9.0',
+    stamp: HEAD }), []);
+  const edit = (fn) => {
+    const r = structuredClone(stamped);
+    fn(r.stations);
+    return stampCommitProblems({ parent, release: r, version: '9.9.0', stamp: HEAD });
+  };
+  assert.deepEqual(edit((st) => { st[3].title = 'Nine!'; }), ['station 4: the title changed in '
+    + 'the release commit; prose is reviewed, never generated: land it as a docs(about) commit '
+    + 'with a verdict']);
+  assert.match(edit((st) => { st[1].summary = 'Tagged v1'; })[0],
+    /^station 2: the summary changed in the release commit/);
+  assert.deepEqual(edit((st) => { st[3].commit = '0000000'; }), ['station 4: commit is '
+    + '"0000000", the stamp writes "abcdef0" (a hand-edited derived field)']);
+  assert.match(edit((st) => { st[3].datetime = '2026-11-06T21:31:24+01:00'; })[0],
+    /^station 4: datetime is .*a hand-edited derived field/);
+  assert.match(edit((st) => { st[2].release = '9.7'; }).join('\n'), /station 3: release is "9\.7"/);
+  assert.match(edit((st) => { st.push({ title: 'Ten', summary: 'x' }); }).join('\n'),
+    /has 5 station\(s\), its parent's file stamped has 4/);
+  // a patch release changes nothing, and a prose edit in it is still prose
+  const line = fixture();
+  assert.deepEqual(stampCommitProblems({ parent: line, release: fixture(), version: '9.8.4',
+    stamp: HEAD }), []);
+  const touched = fixture();
+  touched.stations[2].summary = 'The eighth line, again';
+  assert.match(stampCommitProblems({ parent: line, release: touched, version: '9.8.4',
+    stamp: HEAD }).join('\n'), /station 3: the summary changed in the release commit/);
+  // a new line whose parent has no pending station cannot be stamped at all
+  assert.match(stampCommitProblems({ parent: fixture(), release: fixture(), version: '9.9.0',
+    stamp: HEAD }).join('\n'), /cannot be recomputed from the parent: release line 9\.9 has no /);
+});
+
+/**
+ * A scratch train: base 9.8.0 → a docs(about) member on a side branch, merged into the train
+ * → a feat → the release commit (bump to 9.9.0 + --stamp, `tamper` edits the file after the
+ * stamp) → a later commit, so the release commit is found by its subject, not as HEAD.
+ */
+function trainRepo(t, { tamper = null } = {}) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'osc-check-station-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const env = { ...process.env, GIT_CONFIG_NOSYSTEM: '1' };
+  const git = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8', env }).trim();
+  const write = (rel, text) => writeFileSync(path.join(dir, rel), text);
+  git('init', '-q', '-b', 'train');
+  git('config', 'user.email', 't@example.invalid');
+  git('config', 'user.name', 'T');
+  mkdirSync(path.join(dir, 'src', 'data'), { recursive: true });
+  write(STATIONS_REL, formatStations(fixture()));
+  write('package.json', '{"version":"9.8.0"}\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'chore: base');
+  git('checkout', '-q', '-b', 'docs/about-9.9');
+  write(STATIONS_REL, formatStations(withPending()));
+  git('commit', '-q', '-am', 'docs(about): the 9.9 station');
+  git('checkout', '-q', 'train');
+  git('merge', '-q', '--no-ff', '-m', 'merge(train): the 9.9 station', 'docs/about-9.9');
+  write('x.js', 'export const x = 1;\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'feat(x): a feature');
+  write('package.json', '{"version":"9.9.0"}\n');
+  const quiet = console.log;
+  console.log = () => {};
+  try {
+    assert.equal(main(['--stamp'], dir), 0);
+  } finally {
+    console.log = quiet;
+  }
+  if (tamper) {
+    const d = JSON.parse(readFileSync(path.join(dir, STATIONS_REL), 'utf8'));
+    tamper(d.stations);
+    write(STATIONS_REL, formatStations(d));
+  }
+  git('commit', '-q', '-am', 'chore(release): v9.9.0');
+  const release = git('rev-parse', 'HEAD');
+  write('y.js', 'export const y = 2;\n');
+  git('add', '-A');
+  git('commit', '-q', '-m', 'docs: after the release commit');
+  return { dir, git, release };
+}
+
+const judge = (dir, rev = null) => {
+  const out = [];
+  const code = checkStation(dir, rev, { log: (l) => out.push(l), err: (l) => out.push(l) });
+  return { code, text: out.join('\n') };
+};
+
+test('--check-station: a train with a docs(about) member and a clean stamp passes', (t) => {
+  const { dir, git, release } = trainRepo(t);
+  const r = judge(dir);
+  assert.equal(r.code, 0, r.text);
+  const parent = git('rev-parse', '--short=7', `${release}^1`);
+  assert.match(r.text, new RegExp(`^about-stations: ${release.slice(0, 7)} \\(chore\\(release\\): `
+    + `v9\\.9\\.0\\) changes only the derived fields the stamp writes \\(9\\.9 at ${parent} `));
+  assert.equal(judge(dir, release).code, 0, 'the same commit named explicitly');
+  // release:prepare --check-station is the same judgement, on any tree, changing nothing
+  const before = git('status', '--porcelain');
+  const saved = [console.log, console.error];
+  const said = [];
+  console.log = (l) => said.push(l);
+  console.error = (l) => said.push(l);
+  try {
+    assert.equal(prepareMain(['--check-station'], dir), 0, said.join('\n'));
+  } finally {
+    [console.log, console.error] = saved;
+  }
+  assert.equal(git('status', '--porcelain'), before);
+});
+
+test('--check-station: a stamp commit that also edits the prose or a derived field is refused',
+  (t) => {
+    const prose = trainRepo(t, { tamper: (st) => { st[3].summary = 'The ninth line, polished'; } });
+    const r = judge(prose.dir);
+    assert.equal(r.code, 1, r.text);
+    assert.match(r.text, new RegExp(`${prose.release.slice(0, 7)} station 4: the summary changed `
+      + 'in the release commit; prose is reviewed, never generated'));
+    const derived = trainRepo(t, { tamper: (st) => { st[3].commit = '1234567'; } });
+    const d = judge(derived.dir);
+    assert.equal(d.code, 1, d.text);
+    assert.match(d.text, /station 4: commit is "1234567", the stamp writes "[0-9a-f]{7}" \(a hand-/);
+    // no release commit of package.json's version: nothing to judge, so no verdict (2)
+    writeFileSync(path.join(prose.dir, 'package.json'), '{"version":"9.10.0"}\n');
+    const missing = judge(prose.dir);
+    assert.equal(missing.code, 2, missing.text);
+    assert.match(missing.text, /no commit "chore\(release\): v9\.10\.0" in HEAD's history/);
+  });
+
+test('R032: a station that stores X.Y.Z is refused by the shape check and by version:check', () => {
+  const d = withPending();
+  d.stations[3] = { release: '9.9.0', ...PENDING, commit: 'abcdef0',
+    datetime: '2026-11-06T21:31:23+01:00' };
+  assert.match(stationsShapeProblems(d).join('\n'),
+    /station 4: release 9\.9\.0 is not MAJOR\.MINOR \(the file never holds X\.Y\.Z\)/);
+  assert.ok(!LITERAL_ALLOW.some((a) => a.test(STATIONS_REL)), 'src/data/ is scanned');
+  const hits = findVersionLiterals([{ path: STATIONS_REL, content: formatStations(d) }], '9.9.0');
+  assert.deepEqual(hits.map((h) => h.path), [STATIONS_REL]);
+  assert.match(hits[0].text, /"release": "9\.9\.0"/);
 });
