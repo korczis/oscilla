@@ -290,8 +290,8 @@ Shown disabled, each with the reason it cannot be offered yet (`ENGINE_BLOCKED`)
 These charts are regenerated from the repository on every Pages deploy (release records,
 the plan, the claims ledger, the review records, git history and the trees of the release
 tags, read by `scripts/facts.mjs`), so they are current without a commit; nothing in them
-is estimated. The interactive versions, with the per-release changes, the roadmap, the
-claims explorer, the ratchets and the reviews, are on the [landing page](https://korczis.github.io/oscilla/lab/).
+is estimated. The interactive versions are on the landing's [charts page](https://korczis.github.io/oscilla/lab/grafy/), and each dashboard of the [landing page](https://korczis.github.io/oscilla/lab/) has its
+own page: [claims explorer](https://korczis.github.io/oscilla/lab/tvrzeni/), [per-release changes](https://korczis.github.io/oscilla/lab/zmeny/), [roadmap](https://korczis.github.io/oscilla/lab/roadmapa/), [ratchets](https://korczis.github.io/oscilla/lab/dluh/), [reviews and audits](https://korczis.github.io/oscilla/lab/revize/) and [ADRs](https://korczis.github.io/oscilla/lab/adr/).
 
 <p><img src="https://korczis.github.io/oscilla/lab/charts/releases.svg" width="100%" alt="Release timeline: every published release of OSCILLA by its publication date"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/size.svg" width="100%" alt="The size of the single-file app (dist/index.html) in each published release"></p>

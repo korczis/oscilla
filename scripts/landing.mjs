@@ -1,17 +1,20 @@
 #!/usr/bin/env node
-// The generated landing at /oscilla/lab/ (plan P014, owner decision Q107): one static Czech page
+// The generated landing at /oscilla/lab/ (plan P014, owner decision Q107): static Czech pages
 // on Flowbite Pro beside the app, built at deploy time from the deployed commit and never
 // committed. The app at /oscilla/ stays the one self-contained dist/index.html and never loads
-// this page (project.single-file-deliverable, its /lab/ exception).
+// these pages (project.single-file-deliverable, its /lab/ exception).
 //
 //   node scripts/landing.mjs --out <dir> [--app-href ../] [--commit <sha>]
-//     writes <dir>/index.html, <dir>/charts/<name>.svg for every name of CHARTS, and
-//     <dir>/shots/*.png, copies of the committed visual references the page shows.
+//     writes <dir>/index.html (the light front page), <dir>/<sub>/index.html for every
+//     dashboard sub-page of SUBPAGES (plan P018: grafy, tvrzeni, zmeny, roadmapa, dluh, revize,
+//     adr), <dir>/charts/<name>.svg for every name of CHARTS, and <dir>/shots/*.png, copies of
+//     the committed visual references the front page shows.
 //
-// Self-contained: Tailwind with the flowbite plugin compiled over the page's own markup and
-// inlined, the one script (scripts/landing/client.js with three flowbite components) bundled
-// and inlined, icons inlined, images only from shots/ beside the page; a Content-Security-Policy
-// meta refuses every other origin. Deterministic for a commit: every fact comes from
+// Self-contained: Tailwind with the flowbite plugin compiled once over the markup of every page
+// and inlined into each (the same bytes in every page, so the policy below stays inline-only
+// and each page renders alone), the one script (scripts/landing/client.js with three flowbite
+// components) bundled once and inlined into each, icons inlined, images only from shots/ and
+// charts/ under lab/; a Content-Security-Policy meta refuses every other origin. Deterministic for a commit: every fact comes from
 // scripts/facts.mjs, and the only date is the commit's own; a rerun writes identical bytes,
 // which scripts/verify-deploy.mjs relies on (it regenerates the page and compares the live one).
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -29,7 +32,7 @@ import { ICON_SVG } from './social-assets.mjs';
 import { fmtDate, renderCharts } from './landing/charts.mjs';
 import { FRAME_TABS, checkCopy } from './landing/copy.mjs';
 import {
-  LINK_SHA, REPO_URL, SCRIPT_MARKER, STYLE_MARKER, renderPage, shotText,
+  LINK_SHA, REPO_URL, SCRIPT_MARKER, STYLE_MARKER, renderPages, shotText,
 } from './landing/page.mjs';
 
 const require = createRequire(import.meta.url);
@@ -230,11 +233,11 @@ async function bundleClient() {
   return { code: result.outputFiles[0].text.trim(), pkgs };
 }
 
-async function compileCss(html, js) {
+async function compileCss(htmls, js) {
   const flowbiteDir = path.dirname(require.resolve('flowbite/package.json'));
   const config = {
     content: [
-      { raw: html, extension: 'html' },
+      ...htmls.map((raw) => ({ raw, extension: 'html' })),
       { raw: js, extension: 'js' },
       ...FLOWBITE_COMPONENTS.map((c) => path.join(flowbiteDir, 'lib/esm/components', c,
         'index.js')),
@@ -261,8 +264,8 @@ async function compileCss(html, js) {
 }
 
 /**
- * The landing's files for the checkout at `root`: { 'index.html': Buffer, 'charts/<n>.svg':
- * Buffer, 'shots/<f>.png': Buffer }, in a fixed order.
+ * The landing's files for the checkout at `root`: { 'index.html': Buffer, '<sub>/index.html':
+ * Buffer, 'charts/<n>.svg': Buffer, 'shots/<f>.png': Buffer }, in a fixed order.
  * @param {{ root?: string, appHref?: string, facts?: object, commit?: string }} [o]
  */
 export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts, commit } = {}) {
@@ -289,19 +292,20 @@ export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts
     commitUrl: `${REPO_URL}/commit/${sha}`,
     blob: (p) => `${REPO_URL}/blob/${sha.slice(0, LINK_SHA)}/${p}`,
     tree: (p) => `${REPO_URL}/tree/${sha.slice(0, LINK_SHA)}/${p}`,
-    icons, mark: markFactory(), workspaceIcon: workspaceIconOf(root), rule: ruleFileOf(root),
+    icons, newMark: markFactory, workspaceIcon: workspaceIconOf(root), rule: ruleFileOf(root),
     favicon: `data:image/svg+xml,${encodeURIComponent(ICON_SVG)}`,
   };
-  const page = renderPage(model);
+  const pages = renderPages(model);
   const client = await bundleClient();
-  const css = await compileCss(page, readFileSync(CLIENT, 'utf8'));
-  const html = page
-    .replace(STYLE_MARKER, () => `<style>${guardRawText(css, 'style', 'landing css')}</style>`)
-    .replace(SCRIPT_MARKER, () => `<script>${guardRawText(client.code, 'script', 'landing js')}`
-      + '</script>')
-    .replace('<html lang="cs"', () => `${notice([...NOTICE_PACKAGES, ...client.pkgs])}\n`
-      + '<html lang="cs"');
-  const files = new Map([['index.html', Buffer.from(html, 'utf8')]]);
+  const css = await compileCss(pages.map(([, page]) => page), readFileSync(CLIENT, 'utf8'));
+  const style = `<style>${guardRawText(css, 'style', 'landing css')}</style>`;
+  const script = `<script>${guardRawText(client.code, 'script', 'landing js')}</script>`;
+  const head = `${notice([...NOTICE_PACKAGES, ...client.pkgs])}\n<html lang="cs"`;
+  const files = new Map();
+  for (const [name, page] of pages) {
+    files.set(name, Buffer.from(page.replace(STYLE_MARKER, () => style)
+      .replace(SCRIPT_MARKER, () => script).replace('<html lang="cs"', () => head), 'utf8'));
+  }
   for (const name of CHARTS) files.set(`charts/${name}.svg`, Buffer.from(charts[name], 'utf8'));
   const copied = new Map();
   for (const s of [...frameTabs.map((t) => t.shot).filter(Boolean), ...shots]) {

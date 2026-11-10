@@ -1,11 +1,16 @@
-// The markup of the generated landing at /oscilla/lab/ (plan P014, owner decision Q107): one
-// Czech page on Flowbite Pro's marketing blocks (header navbar, hero with app preview, card
-// statistics, feature card list, tabs, project-portfolio grid with a modal, timeline, footer),
-// adapted into OSCILLA's own markup; no Pro source file is copied. Every number and list comes
-// from the facts (scripts/facts.mjs); every sentence from scripts/landing/copy.mjs or here.
+// The markup of the generated landing at /oscilla/lab/ (plan P014, owner decision Q107): Czech
+// pages on Flowbite Pro's marketing blocks (header navbar, breadcrumb, hero with app preview,
+// card statistics, feature card list, tabs, project-portfolio grid with a modal, timeline,
+// footer), adapted into OSCILLA's own markup; no Pro source file is copied. Every number and
+// list comes from the facts (scripts/facts.mjs); every sentence from scripts/landing/copy.mjs or
+// here. Plan P018: the front page (lab/index.html) stays light for a phone (hero, playable
+// frame, workspaces, gallery, the chart overview as images, a teaser card per dashboard); each
+// heavy dashboard is its own page lab/<dir>/index.html (SUBPAGES), with the same header, nav,
+// footer, theme toggle, CSS and script, and every link written relative to its own page.
 //
-//   renderPage(model) -> the HTML document with the markers STYLE and SCRIPT still in place
-//   (scripts/landing.mjs compiles Tailwind over this markup, then fills them).
+//   renderPages(model) -> [[path, html]] for the front page and every sub-page, each with the
+//   markers STYLE and SCRIPT still in place (scripts/landing.mjs compiles Tailwind once over
+//   all of them, then fills them).
 
 import {
   esc, fmtDate, fmtDec, fmtInt, MB, chartTable, ratchetSpark, ratchetValue,
@@ -63,12 +68,31 @@ const SECTION = 'scroll-mt-20 bg-white dark:bg-gray-900';
 const SECTION_ALT = 'scroll-mt-20 bg-gray-50 dark:bg-gray-800/40';
 const WRAP = 'mx-auto max-w-screen-xl px-4 py-12 lg:px-6 lg:py-16';
 
-const NAV = [
-  ['#hrat', 'Hrát'], ['#plochy', 'Plochy'], ['#galerie', 'Galerie'],
-  ['#grafy', 'Grafy'], ['#dukazy', 'Důkazy'], ['#tvrzeni', 'Tvrzení'], ['#vydani', 'Vydání'],
-  ['#zmeny', 'Změny'], ['#roadmapa', 'Roadmapa'], ['#dluh', 'Dluh'], ['#revize', 'Revize'],
-  ['#adr', 'ADR'],
-];
+/**
+ * The dashboard sub-pages (plan P018), each lab/<dir>/index.html with one section whose id is
+ * its dir; `nav` is its entry in the shared navbar, `title` its H1 and <title>, `en` the words
+ * the README links it by (scripts/readme.mjs), `icon` its Lucide icon on the teaser card.
+ */
+export const SUBPAGES = Object.freeze([
+  { dir: 'grafy', nav: 'Grafy', title: 'Grafy z repozitáře', en: 'charts', icon: 'chart-column',
+    desc: 'Všechny grafy OSCILLA z repozitáře, interaktivně a s tabulkou hodnot.' },
+  { dir: 'tvrzeni', nav: 'Tvrzení', title: 'Průzkumník tvrzení', en: 'claims explorer',
+    icon: 'shield-check',
+    desc: 'Každé tvrzení OSCILLA se zdrojem, kódem a testem, který ho dokazuje.' },
+  { dir: 'zmeny', nav: 'Změny', title: 'Co přinesla která verze', en: 'per-release changes',
+    icon: 'git-commit', desc: 'Commity, úkoly plánu a pull requesty každého vydání OSCILLA.' },
+  { dir: 'roadmapa', nav: 'Roadmapa', title: 'Roadmapa', en: 'roadmap', icon: 'milestone',
+    desc: 'Záměry a milníky plánu OSCILLA a kolik jejich úkolů je hotovo.' },
+  { dir: 'dluh', nav: 'Dluh', title: 'Dluh, který jen klesá', en: 'ratchets',
+    icon: 'trending-down', desc: 'Každý ratchet OSCILLA s hodnotou v každém vydání a teď.' },
+  { dir: 'revize', nav: 'Revize', title: 'Revize a jejich nálezy', en: 'reviews and audits',
+    icon: 'clipboard-check',
+    desc: 'Záznamy revizí OSCILLA, jejich nálezy a co z nich podle auditu platí dnes.' },
+  { dir: 'adr', nav: 'ADR', title: 'Rozhodnutí (ADR)', en: 'ADRs', icon: 'scroll-text',
+    desc: 'Rozhodnutí o architektuře OSCILLA se stavem a datem.' },
+]);
+/** The front page's own sections in the navbar, before the sub-pages. */
+const FRONT_NAV = [['hrat', 'Hrát'], ['plochy', 'Plochy'], ['galerie', 'Galerie']];
 const BADGE_GREEN = 'lab-badge lab-badge-green';
 const BADGE_INDIGO = 'lab-badge lab-badge-indigo';
 const TYPE_BADGE = Object.freeze({ feat: 'lab-badge-blue', fix: 'lab-badge-indigo',
@@ -106,16 +130,23 @@ export function shotText(shot, workspaces) {
 
 const icon = (icons, name, cls = 'h-5 w-5') => icons(name, cls);
 
+const NAV_LINK = 'block rounded-lg px-3 py-2 hover:bg-gray-100 focus:outline-none '
+  + 'focus-visible:ring-2 focus-visible:ring-primary-500 dark:hover:bg-gray-700 xl:p-2 '
+  + 'xl:hover:bg-transparent xl:hover:text-primary-700 dark:xl:hover:text-white';
+const NAV_IDLE = 'text-gray-700 dark:text-gray-300';
+const NAV_CURRENT = 'bg-primary-700 text-white dark:bg-primary-600 xl:bg-transparent '
+  + 'xl:text-primary-700 dark:xl:bg-transparent dark:xl:text-primary-400';
+
 function header(m) {
-  const links = NAV.map(([href, label]) => `<li><a href="${href}" class="block rounded-lg px-3 `
-    + 'py-2 text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 '
-    + 'focus-visible:ring-primary-500 dark:text-gray-300 dark:hover:bg-gray-700 xl:p-2 '
-    + `xl:hover:bg-transparent xl:hover:text-primary-700 dark:xl:hover:text-white">${label}</a>`
-    + '</li>').join('');
+  const entry = (href, label, current) => `<li><a href="${esc(href)}" class="${NAV_LINK} `
+    + `${current ? NAV_CURRENT : NAV_IDLE}"${current ? ' aria-current="page"' : ''}>${label}</a>`
+    + '</li>';
+  const links = [...FRONT_NAV.map(([id, label]) => entry(m.to('', id), label, false)),
+    ...SUBPAGES.map((p) => entry(m.to(p.dir), p.nav, p.dir === m.page))].join('');
   return `<header class="sticky top-0 z-30">
 <nav class="border-b border-gray-200 bg-white px-4 py-2.5 dark:border-gray-700 dark:bg-gray-800 xl:px-6" aria-label="Hlavní">
 <div class="mx-auto flex max-w-screen-xl flex-wrap items-center justify-between">
-<a href="#top" class="flex items-center gap-3 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">${m.mark('h-8 w-8')}<span class="self-center whitespace-nowrap text-xl font-semibold text-gray-900 dark:text-white">OSCILLA</span></a>
+<a href="${esc(m.to(''))}" class="flex items-center gap-3 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500">${m.mark('h-8 w-8')}<span class="self-center whitespace-nowrap text-xl font-semibold text-gray-900 dark:text-white">OSCILLA</span></a>
 <div class="flex items-center gap-2 xl:order-2">
 <button type="button" data-theme-toggle aria-pressed="false" aria-label="Přepnout motiv" class="rounded-lg p-2.5 text-sm text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-700"><span class="dark:hidden">${icon(m.icons, 'moon')}</span><span class="hidden dark:inline">${icon(m.icons, 'sun')}</span></button>
 <a href="${esc(m.appHref)}" class="hidden rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-600 dark:hover:bg-primary-700 dark:focus:ring-primary-800 sm:inline-flex">Otevřít laboratoř</a>
@@ -168,7 +199,7 @@ function frameSection(m) {
   const panels = tabs.map((t) => `<div id="frame-${t.id}" role="tabpanel" aria-labelledby="frame-tab-${t.id}" class="hidden">
 <p class="mb-3 text-sm text-gray-500 dark:text-gray-400">${esc(t.text)} <a class="${LINK}" href="${esc(m.appHref + t.hash)}">Otevřít na celé stránce</a></p>
 <div data-frame-poster class="relative overflow-hidden rounded-lg border border-gray-200 bg-gray-950 dark:border-gray-700">
-${t.shot ? `<img src="shots/${esc(t.shot.file)}" alt="${esc(t.shot.alt)}" width="${t.shot.width}" height="${t.shot.height}" class="block h-auto w-full opacity-70" loading="${t === tabs[0] ? 'eager' : 'lazy'}" decoding="async">` : '<div class="aspect-video"></div>'}
+${t.shot ? `<img src="shots/${esc(t.shot.file)}" alt="${esc(t.shot.alt)}" width="${t.shot.width}" height="${t.shot.height}" class="block h-auto w-full opacity-70" loading="lazy" decoding="async">` : '<div class="aspect-video"></div>'}
 <div class="absolute inset-0 flex items-center justify-center p-4"><button type="button" data-frame-start="frame-tab-${t.id}" class="${BTN_PRIMARY} shadow-lg">${icon(m.icons, 'play', 'me-2 h-5 w-5')} Spustit ${esc(t.name)} v tomto okně</button></div>
 </div>
 </div>`).join('\n');
@@ -268,9 +299,9 @@ function chartsSection(m) {
     const group = m.facts[CHART_GROUP[name]];
     const source = group ? `${group.source}${group.field ? ` (${group.field})` : ''}${group.dateSource ? `; ${group.dateSource}` : ''}` : '';
     const rows = t.rows.map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${esc(c)}</th>` : `<td>${esc(c)}</td>`)).join('')}</tr>`).join('');
-    return `<figure class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    return `<figure id="graf-${name}" class="min-w-0 scroll-mt-20 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
 <div data-chart-box class="relative"><div class="overflow-x-auto rounded-xl p-1 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full [&>svg]:min-w-[540px] [&>svg]:rounded-xl [&>svg:focus]:outline-none [&>svg:focus-visible]:ring-4 [&>svg:focus-visible]:ring-primary-500">${m.charts[name].trim()}</div><p class="sr-only" aria-live="polite" data-chart-live></p></div>
-<figcaption class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500 dark:text-gray-400"><span>Najetím, nebo po zaměření grafu šipkami, zobrazíte hodnoty. Na úzkém displeji graf posunete do strany.</span><a class="${LINK}" href="charts/${name}.svg">SVG soubor</a></figcaption>
+<figcaption class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500 dark:text-gray-400"><span>Najetím, nebo po zaměření grafu šipkami, zobrazíte hodnoty. Na úzkém displeji graf posunete do strany.</span><a class="${LINK}" href="${m.up}charts/${name}.svg">SVG soubor</a></figcaption>
 ${source ? `<p class="lab-src">Zdroj: <code>${esc(source)}</code></p>` : ''}
 <details class="mt-2 text-sm text-gray-500 dark:text-gray-400"><summary class="cursor-pointer rounded font-medium text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-white">Tabulka hodnot</summary>
 <div class="mt-2 max-h-72 overflow-auto"><table class="lab-ctable w-full text-left text-sm text-gray-500 dark:text-gray-400"><thead class="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400"><tr>${t.head.map((h) => `<th scope="col" class="px-3 py-2">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
@@ -279,7 +310,7 @@ ${source ? `<p class="lab-src">Zdroj: <code>${esc(source)}</code></p>` : ''}
   }).join('\n');
   return `<section id="grafy" class="${SECTION_ALT}">
 <div class="${WRAP}">
-<h2 class="${H2}">Grafy z repozitáře</h2>
+${pageHeading(m, 'grafy')}
 <p class="${LEAD}">Grafy se kreslí při každém nasazení z commitu, který se nasazuje: z release záznamů v <a class="${LINK}" href="${esc(m.tree(m.facts.releases.source))}">${esc(m.facts.releases.source)}</a>, z plánu, z <a class="${LINK}" href="${esc(m.blob(m.facts.claims.source))}">${esc(m.facts.claims.source)}</a>, ze záznamů revizí, z historie gitu a ze stromů značek vydání. Nic se neodhaduje, neinterpoluje ani nedopočítává: každé číslo je spočítané ze souboru nebo příkazu gitu, který karta grafu uvádí, a co v souboru chybí, graf ukazuje jako chybějící, ne jako nulu. Tytéž soubory SVG ukazuje README.</p>
 <div class="relative grid gap-6 lg:grid-cols-2">
 ${cards}
@@ -305,7 +336,7 @@ ${cards}
 <div class="${CARD}"><p class="mb-1 text-4xl font-extrabold text-gray-900 dark:text-white">${fmtInt(f.tests.unit)}</p><h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">souborů unit testů</h3><p class="text-gray-500 dark:text-gray-400">a ${fmtInt(f.tests.browser)} souborů prohlížečových sad; co každý dokazuje, popisuje <a class="${LINK}" href="${esc(m.blob('tests/README.md'))}">tests/README.md</a>.</p></div>
 <div class="${CARD}"><p class="mb-1 text-4xl font-extrabold text-gray-900 dark:text-white">${fmtInt(f.adrs.total)}</p><h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">rozhodnutí (ADR)</h3><p class="text-gray-500 dark:text-gray-400">Proč je aplikace taková, jaká je: <a class="${LINK}" href="${esc(m.tree(f.adrs.source))}">${esc(f.adrs.source)}</a>.</p></div>
 </div>
-<p class="${CARD} text-gray-500 dark:text-gray-400">Všech ${fmtInt(f.claims.total)} tvrzení se stavem, oblastí, zdrojem, kódem a testem prohledáte v <a class="${LINK}" href="#tvrzeni">průzkumníku tvrzení</a>.</p>
+<p class="${CARD} text-gray-500 dark:text-gray-400">Všech ${fmtInt(f.claims.total)} tvrzení se stavem, oblastí, zdrojem, kódem a testem prohledáte v <a class="${LINK}" href="${esc(m.to('tvrzeni'))}">průzkumníku tvrzení</a>.</p>
 </div>
 </section>`;
 }
@@ -349,7 +380,7 @@ function claimsExplorer(m) {
   const areaOpts = Object.entries(c.byArea).map(([k, n]) => option(k, areaName(k), n)).join('');
   return `<section id="tvrzeni" class="${SECTION_ALT}" data-claims>
 <div class="${WRAP}">
-<h2 class="${H2}">Průzkumník tvrzení</h2>
+${pageHeading(m, 'tvrzeni')}
 <p class="${LEAD}">Všech ${fmtInt(c.total)} tvrzení z <a class="${LINK}" href="${esc(m.blob(c.source))}">${esc(c.source)}</a>, každé se souborem, který chování definuje, s kódem, který ho implementuje, a s testem, který ho dokazuje; odkazy vedou na GitHub do commitu, ze kterého je stránka. Oblast se odvozuje z cesty implementace (pravidlo pod tabulkou). Věty tvrzení jsou anglicky, jak stojí v matici.</p>
 <div data-claims-controls hidden class="mb-4 grid gap-3 md:grid-cols-[1fr_12rem_14rem] md:items-end">
 <div><label for="claims-q" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Hledat</label><div class="relative"><div class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500 dark:text-gray-400">${icon(m.icons, 'search', 'h-4 w-4')}</div><input type="search" id="claims-q" autocomplete="off" placeholder="id, věta nebo cesta k souboru" class="${INPUT} ps-10"></div></div>
@@ -415,7 +446,7 @@ ${changeBody(m, r, range, full)}
   });
   return `<section id="zmeny" class="${SECTION_ALT}">
 <div class="${WRAP}">
-<h2 class="${H2}">Co přinesla která verze</h2>
+${pageHeading(m, 'zmeny')}
 <p class="${LEAD}">Ke každé značce vydání commity od předchozí značky, každý jednou (i ty, které přišly sloučením větve), roztříděné podle typu Conventional Commits. Úkoly plánu se odvozují z předmětů commitů a odkazují na svůj soubor v ${esc(rc.issueSource)}; čísla pull requestů také. Jednotlivé commity vypisujeme u zatím nevydaných změn a u ${fmtInt(CHANGELOG_FULL_RELEASES)} nejnovějších vydání; u starších zůstávají počty podle typu, úkoly, pull requesty a odkaz na porovnání na GitHubu, kde jsou commity vypsané. Předměty commitů jsou anglicky, jak je píše historie.</p>
 <div class="space-y-3">
 ${cards.join('\n')}
@@ -445,7 +476,7 @@ ${progress(done, total, `${id}: ${done} z ${total} úkolů hotovo`)}
   const btn = (v, label, n, first) => `<button type="button" data-roadmap-filter="${v}" aria-pressed="${first}" class="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 sm:rounded-none sm:first:rounded-s-lg sm:last:rounded-e-lg hover:bg-gray-100 hover:text-primary-700 focus:z-10 focus:outline-none focus:ring-2 focus:ring-primary-500 aria-pressed:bg-primary-700 aria-pressed:text-white dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 dark:aria-pressed:bg-primary-600">${label} <span class="tabular-nums opacity-80">${fmtInt(n)}</span></button>`;
   return `<section id="roadmapa" class="${SECTION}" data-roadmap>
 <div class="${WRAP}">
-<h2 class="${H2}">Roadmapa</h2>
+${pageHeading(m, 'roadmapa')}
 <p class="${LEAD}">Záměry plánu a jejich milníky, u každého kolik úkolů je hotovo. Stav milníku se odvozuje ze souborů úkolů stejně jako u grafu plánu (hotovo: všechny požadované úkoly mají completed_at; rozpracováno: některé; otevřeno: žádný). Pořadí: milníky podle pole <code class="text-sm">order</code>, pak podle id; záměry podle svého prvního milníku. Názvy jsou anglicky, jak stojí v plánu. Zdroj: <a class="${LINK}" href="${esc(m.tree(rm.dirs.intents))}">${esc(rm.dirs.intents)}</a>, <a class="${LINK}" href="${esc(m.tree(rm.dirs.milestones))}">${esc(rm.dirs.milestones)}</a> a <a class="${LINK}" href="${esc(m.tree(rm.dirs.issues))}">úkoly</a>.</p>
 <div data-roadmap-controls hidden class="mb-6 grid grid-cols-2 gap-2 sm:inline-flex sm:gap-0 sm:rounded-lg sm:shadow-sm" role="group" aria-label="Filtr milníků podle stavu">${btn('', 'Vše', ms.length, true)}${btn('DONE', 'Hotovo', by('DONE'), false)}${btn('ACTIVE', 'Rozpracováno', by('ACTIVE'), false)}${btn('OPEN', 'Otevřeno', by('OPEN'), false)}</div>
 <div class="grid items-start gap-6 lg:grid-cols-2">
@@ -466,7 +497,7 @@ function adrSection(m) {
   const dir = a.items[0]?.path.replace(/\/[^/]+$/, '') ?? '.ai/repo/adrs';
   return `<section id="adr" class="${SECTION_ALT}">
 <div class="${WRAP}">
-<h2 class="${H2}">Rozhodnutí (ADR)</h2>
+${pageHeading(m, 'adr')}
 <p class="${LEAD}">${plural(a.total, 'rozhodnutí', 'rozhodnutí', 'rozhodnutí')} o architektuře (${counts}), nejnovější nahoře. Číslo, název, stav a datum pocházejí z hlavičky každého souboru v <a class="${LINK}" href="${esc(m.tree(dir))}">${esc(dir)}</a>; které přijal vlastník a proč ostatní zůstávají navržená, říká <a class="${LINK}" href="${esc(m.blob(`${dir}/README.md`))}">README</a>. Názvy jsou anglicky, jak stojí v souborech.</p>
 <div class="max-h-[40rem] overflow-auto rounded-lg border border-gray-200 shadow-sm dark:border-gray-700">
 <table class="${TABLE}"><caption class="sr-only">Rozhodnutí o architektuře: číslo, název, stav a datum</caption>
@@ -511,8 +542,8 @@ function ratchetsSection(m) {
   const falling = r.items.filter((it) => it.rises === 0).length;
   return `<section id="dluh" class="${SECTION_ALT}">
 <div class="${WRAP}">
-<h2 class="${H2}">Dluh, který jen klesá</h2>
-<p class="${LEAD}">Ratchet je soubor, který zapisuje zbývající dluh, a test, který selže, když dluh stoupne. Tady je každý takový soubor, který repozitář drží (tests/unit/*-baseline.json a tests/browser/*-baseline.json, nalezené ve stromu, ne vypsané ručně), s hodnotou v každé značce vydání a teď. Co soubor počítá, se čte z jeho vlastní struktury tak, jak ho čte jeho test (pravidlo pod kartami). ${fmtInt(falling)} z ${fmtInt(r.items.length)} od svého vzniku nikdy nestouplo; stropy velikosti souborů stoupat smějí, ale jen se záznamem v seznamu raises, a karta ty nárůsty počítá. Graf všech najdete také mezi <a class="${LINK}" href="#grafy">grafy</a>.</p>
+${pageHeading(m, 'dluh')}
+<p class="${LEAD}">Ratchet je soubor, který zapisuje zbývající dluh, a test, který selže, když dluh stoupne. Tady je každý takový soubor, který repozitář drží (tests/unit/*-baseline.json a tests/browser/*-baseline.json, nalezené ve stromu, ne vypsané ručně), s hodnotou v každé značce vydání a teď. Co soubor počítá, se čte z jeho vlastní struktury tak, jak ho čte jeho test (pravidlo pod kartami). ${fmtInt(falling)} z ${fmtInt(r.items.length)} od svého vzniku nikdy nestouplo; stropy velikosti souborů stoupat smějí, ale jen se záznamem v seznamu raises, a karta ty nárůsty počítá. Graf všech najdete také mezi <a class="${LINK}" href="${esc(m.to('grafy', 'graf-ratchets'))}">grafy</a>.</p>
 <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
 ${r.items.map((it) => ratchetCard(m, it)).join('\n')}
 </div>
@@ -617,7 +648,7 @@ function reviewsSection(m) {
   const verdicts = Object.entries(t.byVerdict).map(([k, n]) => `${fmtInt(n)} ${esc(VERDICT_COPY[k] ?? k)}`).join(', ');
   return `<section id="revize" class="${SECTION}">
 <div class="${WRAP}">
-<h2 class="${H2}">Revize a jejich nálezy</h2>
+${pageHeading(m, 'revize')}
 <p class="${LEAD}">Pull request, který mění střežené cesty, potřebuje záznam revize, který napsal někdo jiný než autor změny (pravidlo <a class="${LINK}" href="${esc(m.blob(m.rule('project.review-verdict')))}">project.review-verdict</a>). Každý záznam v <a class="${LINK}" href="${esc(m.tree('.ai/repo/reviews'))}">.ai/repo/reviews</a> uvádí verdikt a všechny nálezy se závažností P0 až P3 a stavem; otevřený nález P0 nebo P1 sloučení blokuje. Datum je okamžik, kdy byl záznam poprvé commitnut. Verdikty: ${verdicts}.</p>
 <dl class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
 ${stat(fmtInt(t.reviews), 'záznamů revizí')}
@@ -642,7 +673,7 @@ function footer(m) {
   return `<footer class="bg-white dark:bg-gray-900">
 <div class="mx-auto max-w-screen-xl p-4 py-8 md:p-8">
 <div class="sm:flex sm:items-center sm:justify-between">
-<a href="#top" class="mb-4 flex items-center gap-3 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:mb-0">${m.mark('h-8 w-8')}<span class="text-xl font-semibold text-gray-900 dark:text-white">OSCILLA</span></a>
+<a href="${esc(m.to(''))}" class="mb-4 flex items-center gap-3 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 sm:mb-0">${m.mark('h-8 w-8')}<span class="text-xl font-semibold text-gray-900 dark:text-white">OSCILLA</span></a>
 <ul class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm font-medium text-gray-500 dark:text-gray-400">
 <li><a href="${esc(m.appHref)}" class="hover:underline">Aplikace</a></li>
 <li><a href="${REPO_URL}" class="inline-flex items-center gap-1 hover:underline">${GITHUB_MARK} GitHub</a></li>
@@ -655,17 +686,153 @@ function footer(m) {
 </footer>`;
 }
 
-/** The page; `m` is the view model scripts/landing.mjs builds. */
-export function renderPage(m) {
+/**
+ * The heading of a dashboard section: on its own sub-page the breadcrumb (Pro breadcrumb block)
+ * and the page's H1, elsewhere an H2.
+ */
+function pageHeading(m, dir) {
+  const p = SUBPAGES.find((x) => x.dir === dir);
+  if (m.page !== dir) return `<h2 class="${H2}">${esc(p.title)}</h2>`;
+  return `<nav class="mb-4 flex" aria-label="Drobečková navigace">
+<ol class="inline-flex flex-wrap items-center gap-1 text-sm font-medium md:gap-2">
+<li class="inline-flex items-center"><a href="${esc(m.to(''))}" class="inline-flex items-center rounded text-gray-700 hover:text-primary-700 ${FOCUS} dark:text-gray-400 dark:hover:text-white">${icon(m.icons, 'house', 'me-2 h-4 w-4')}Laboratoř</a></li>
+<li aria-current="page" class="inline-flex items-center text-gray-500 dark:text-gray-400">${icon(m.icons, 'chevron-right', 'me-1 h-4 w-4 md:me-2')}${esc(p.nav)}</li>
+</ol>
+</nav>
+<h1 class="${H2}">${esc(p.title)}</h1>`;
+}
+
+/** The chart's own name and description, as its SVG writes them (already escaped). */
+function chartLabel(svg) {
+  const t = /<title id="[^"]+">([^<]*)<\/title><desc id="[^"]+">([^<]*)<\/desc>/.exec(svg);
+  const size = /^<svg [^>]*?width="(\d+)" height="(\d+)"/.exec(svg);
+  return { title: t?.[1] ?? '', desc: t?.[2] ?? '', width: size?.[1], height: size?.[2] };
+}
+
+/**
+ * The front page's chart overview (P018): each chart as an image of its own file under charts/
+ * (the bytes the README embeds), loaded lazily, linking its interactive version with the table
+ * of values and the source on the grafy/ page.
+ */
+function chartsOverview(m) {
+  const cards = m.chartNames.map((name) => {
+    const c = chartLabel(m.charts[name]);
+    return `<li><a href="${esc(m.to('grafy', `graf-${name}`))}" class="group flex h-full flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm hover:border-primary-300 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-primary-700 dark:focus:ring-primary-800"><img src="charts/${name}.svg" alt="${c.title}. ${c.desc}" width="${c.width}" height="${c.height}" loading="lazy" decoding="async" class="block h-auto w-full"><span class="mt-auto flex items-center justify-between gap-2 p-3 text-sm font-medium text-primary-700 group-hover:underline dark:text-primary-400">Hodnoty, zdroj a interaktivní graf ${icon(m.icons, 'arrow-right', 'h-4 w-4 shrink-0')}</span></a></li>`;
+  }).join('\n');
+  return `<section id="grafy" class="${SECTION_ALT}">
+<div class="${WRAP}">
+<h2 class="${H2}">Grafy z repozitáře</h2>
+<p class="${LEAD}">${fmtInt(m.chartNames.length)} grafů, nakreslených při každém nasazení z commitu, který se nasazuje: z release záznamů, z plánu, z matice tvrzení, ze záznamů revizí, z historie gitu a ze stromů značek vydání. Nic se neodhaduje ani nedopočítává. Hodnoty po najetí nebo šipkami, tabulku hodnot a zdroj každého grafu ukazuje stránka <a class="${LINK}" href="${esc(m.to('grafy'))}">Grafy</a>; tytéž soubory SVG ukazuje README.</p>
+<ul class="grid gap-6 md:grid-cols-2">
+${cards}
+</ul>
+</div>
+</section>`;
+}
+
+/** One or two headline numbers of each dashboard sub-page, derived from the facts. */
+function teaserStats(m, dir) {
+  const f = m.facts;
+  const ratio = (a, b) => `${fmtInt(a)}&nbsp;/&nbsp;${fmtInt(b)}`;
+  switch (dir) {
+    case 'grafy':
+      return [[fmtInt(m.chartNames.length), 'grafů s tabulkou hodnot'],
+        [fmtInt(f.releases.items.length), 'vydání na časové ose']];
+    case 'tvrzeni':
+      return [[fmtInt(f.claims.total), 'tvrzení'],
+        [fmtInt(f.claims.byStatus.guaranteed ?? 0), 'zaručených testem']];
+    case 'zmeny': {
+      const rc = f.releaseChanges;
+      return [[fmtInt(rc.items.length), 'značek vydání'],
+        ...(rc.unreleased ? [[fmtInt(rc.unreleased.commits), 'commitů zatím nevydáno']] : [])];
+    }
+    case 'roadmapa': {
+      const ms = f.plan.items;
+      return [[ratio(ms.filter((x) => x.status === 'DONE').length, ms.length), 'milníků hotovo'],
+        [ratio(ms.reduce((n, x) => n + x.done, 0), ms.reduce((n, x) => n + x.total, 0)),
+          'úkolů hotovo']];
+    }
+    case 'dluh': {
+      const r = f.ratchets.items;
+      return [[ratio(r.filter((x) => x.rises === 0).length, r.length), 'ratchetů jen klesá']];
+    }
+    case 'revize': {
+      const t = f.reviews.totals;
+      return [[fmtInt(t.reviews), 'záznamů revizí'],
+        [fmtInt((t.openBySeverity.P0 ?? 0) + (t.openBySeverity.P1 ?? 0)), 'otevřených P0 a P1']];
+    }
+    case 'adr':
+      return [[fmtInt(f.adrs.total), 'rozhodnutí'],
+        [fmtInt(f.adrs.byStatus.accepted ?? 0), 'přijatých vlastníkem']];
+    default:
+      return [];
+  }
+}
+
+/**
+ * A teaser card per dashboard sub-page (Pro feature cards with statistics): on the front page
+ * every one, on a sub-page the others.
+ */
+function dashboards(m) {
+  const pages = SUBPAGES.filter((p) => p.dir !== m.page);
+  const cards = pages.map((p) => {
+    const stats = teaserStats(m, p.dir).map(([v, label]) => `<div><dt class="text-2xl font-extrabold tabular-nums text-gray-900 dark:text-white">${v}</dt><dd class="text-sm text-gray-500 dark:text-gray-400">${label}</dd></div>`).join('');
+    return `<article class="${CARD} flex flex-col" data-teaser="${p.dir}">
+<div class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-primary-300">${icon(m.icons, p.icon, 'h-6 w-6')}</div>
+<h3 class="mb-2 text-xl font-bold text-gray-900 dark:text-white">${esc(p.title)}</h3>
+<dl class="mb-3 grid grid-cols-2 gap-3">${stats}</dl>
+<p class="mb-4 flex-1 text-gray-500 dark:text-gray-400">${esc(p.desc)}</p>
+<a href="${esc(m.to(p.dir))}" class="${LINK} inline-flex items-center">Otevřít ${esc(p.nav)} ${icon(m.icons, 'arrow-right', 'ms-1 h-4 w-4')}</a>
+</article>`;
+  }).join('\n');
+  const front = m.page === '';
+  return `<section id="prehledy" class="${front ? SECTION : SECTION_ALT}">
+<div class="${WRAP}">
+<h2 class="${H2}">${front ? 'Přehledy z repozitáře' : 'Další přehledy'}</h2>
+${front ? `<p class="${LEAD}">Každý přehled má vlastní stránku, aby se tahle načítala rychle i na telefonu. Čísla na kartách jsou spočítaná ze stejného commitu jako stránky, na které vedou.</p>` : ''}
+<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+${cards}
+</div>
+</div>
+</section>`;
+}
+
+/** The section each sub-page shows. */
+const SUBPAGE_SECTION = Object.freeze({ grafy: chartsSection, tvrzeni: claimsExplorer,
+  zmeny: changesSection, roadmapa: roadmapSection, dluh: ratchetsSection,
+  revize: reviewsSection, adr: adrSection });
+
+const ABSOLUTE = /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i;
+
+/**
+ * The view model of one page: `page` is '' for the front page or a sub-page's dir; `up` the
+ * prefix from it to lab/; `appHref` the app relative to it; `to(target, fragment)` the link from
+ * it to the front page ('') or a sub-page, or to a fragment of its own page.
+ */
+export function pageModel(m, page) {
+  const up = page ? '../' : '';
+  const to = (target, frag) => {
+    if (target === page) return `#${frag ?? (page || 'top')}`;
+    return `${up}${target ? `${target}/` : ''}${frag ? `#${frag}` : ''}`;
+  };
+  return { ...m, page, up, to, mark: m.newMark(),
+    appHref: ABSOLUTE.test(m.appHref) ? m.appHref : `${up}${m.appHref}` };
+}
+
+const FRONT = Object.freeze({ title: 'OSCILLA · Laboratoř zvuku a frekvencí',
+  desc: 'OSCILLA: akustická laboratoř v prohlížeči bez instalace. Generujte, měřte a opakujte '
+    + 'zvukové experimenty a vězte, nakolik lze každému výsledku věřit.' });
+
+function documentOf(m, main, meta) {
   return `<!doctype html>
 <html lang="cs" class="motion-safe:scroll-smooth">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="${CSP}">
-<meta name="description" content="OSCILLA: akustická laboratoř v prohlížeči bez instalace. Generujte, měřte a opakujte zvukové experimenty a vězte, nakolik lze každému výsledku věřit.">
+<meta name="description" content="${esc(meta.desc)}">
 <meta name="color-scheme" content="light dark">
-<title>OSCILLA · Laboratoř zvuku a frekvencí</title>
+<title>${esc(meta.title)}</title>
 <link rel="icon" href="${m.favicon}">
 <script>(function(){var t=null;try{t=localStorage.getItem('oscilla-lab-theme')}catch(e){}var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d)})();</script>
 ${STYLE_MARKER}
@@ -674,24 +841,29 @@ ${STYLE_MARKER}
 <a href="#hlavni" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-primary-700 focus:px-4 focus:py-2 focus:text-white">Přeskočit na obsah</a>
 ${header(m)}
 <main id="hlavni">
-${hero(m)}
-${frameSection(m)}
-${workspaceCards(m)}
-${libraries(m)}
-${gallery(m)}
-${chartsSection(m)}
-${proof(m)}
-${claimsExplorer(m)}
-${releasesSection(m)}
-${changesSection(m)}
-${roadmapSection(m)}
-${ratchetsSection(m)}
-${reviewsSection(m)}
-${adrSection(m)}
+${main}
 </main>
 ${footer(m)}
 ${SCRIPT_MARKER}
 </body>
 </html>
 `;
+}
+
+/**
+ * Every page: [['index.html', html], ['<dir>/index.html', html], ...] in SUBPAGES order; `m` is
+ * the view model scripts/landing.mjs builds (with `newMark`, a factory of the wave mark).
+ */
+export function renderPages(m) {
+  const front = pageModel(m, '');
+  const pages = [['index.html', documentOf(front, [hero(front), frameSection(front),
+    workspaceCards(front), libraries(front), gallery(front), chartsOverview(front),
+    dashboards(front), proof(front), releasesSection(front)].join('\n'), FRONT)]];
+  for (const p of SUBPAGES) {
+    const pm = pageModel(m, p.dir);
+    pages.push([`${p.dir}/index.html`, documentOf(pm,
+      `${SUBPAGE_SECTION[p.dir](pm)}\n${dashboards(pm)}`,
+      { title: `${p.title} · OSCILLA`, desc: p.desc })]);
+  }
+  return pages;
 }
