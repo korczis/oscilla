@@ -213,9 +213,10 @@ function initCharts() {
       const m = marks[i];
       m.setAttribute('data-active', 'true');
       box.append(tip);
-      tip.textContent = m.dataset.tip;
+      const text = m.querySelector('title').textContent;
+      tip.textContent = text;
       place(box, m.lastElementChild || m);
-      box.querySelector('[data-chart-live]').textContent = m.dataset.tip;
+      box.querySelector('[data-chart-live]').textContent = text;
     };
     const hide = () => {
       marks.forEach((m) => m.removeAttribute('data-active'));

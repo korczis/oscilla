@@ -41,6 +41,21 @@
 //                    unreleased: <the same, for lastTag..HEAD> | null }   only when git: true
 //     codeInventory: { source, modules: [{ module, files, bytes }], perRelease: [{ version,
 //                    tag, unit, browser, srcFiles, srcBytes, distBytes }] }  only when git: true
+//     planBurnup:  { source, rule, issues, totals: { created, cancelled, scope, done },
+//                    undated: { created, completed }, days: [{ day, created, cancelled, done,
+//                    createdTotal, cancelledTotal, scopeTotal, doneTotal }] }        (P016)
+//     releaseCadence: { source, field: 'published_at', unit: 'h', releases, undated, median,
+//                    items: [{ version, from, published_at, hours }] }
+//     claimsPerRelease: { source, statuses, items: [{ version, tag, present, total,
+//                    byStatus }] }                                        only when git: true
+//     ratchets:    { source, rule, items: [{ file, how, field, unit, derived, firstTag, rises,
+//                    head: { present, value, series, extra }, perRelease: [{ version, tag,
+//                    present, value, series, extra }] }] }                only when git: true
+//     reviews:     { source, dateSource, severities, statuses, items: [{ pr, verdict, members,
+//                    findings, bySeverity, byStatus, openBySeverity, addedAt, week }],
+//                    totals: { reviews, findings, bySeverity, byStatus, openBySeverity,
+//                    byVerdict, undated }, weeks: [{ week, start, reviews, findings,
+//                    bySeverity }] }                                      only when git: true
 //   }
 
 import { execFileSync } from 'node:child_process';
@@ -56,7 +71,7 @@ export const APP_URL = 'https://korczis.github.io/oscilla/';
 /** Where the Pages deploy publishes the charts (scripts/landing.mjs renders them). */
 export const CHART_BASE = 'https://korczis.github.io/oscilla/lab/charts/';
 export const CHARTS = Object.freeze(['releases', 'size', 'plan', 'claims', 'activity',
-  'modules', 'growth']);
+  'modules', 'growth', 'burnup', 'claims-trend', 'ratchets', 'reviews', 'cadence']);
 /** How many ISO weeks the activity series covers, ending at HEAD's week. */
 export const ACTIVITY_WEEKS = 26;
 
@@ -574,6 +589,355 @@ export function codeInventory(root, tags = releaseTags(root)) {
   };
 }
 
+// ------------------------------------------------------------------- retrospective trends (P016)
+const DAY = /^\d{4}-\d{2}-\d{2}/;
+
+/** The UTC day of a date field ('2026-11-09' or an ISO time), or null when it is not one. */
+export function utcDay(value) {
+  if (value === null || value === undefined) return null;
+  const s = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const t = Date.parse(s);
+  return DAY.test(s) && Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null;
+}
+
+const addDays = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS)
+  .toISOString().slice(0, 10);
+
+/**
+ * The plan's burn-up from the issue files: per UTC day from the first created_at to the last
+ * created_at or completed_at, the issues created that day (created_at), those of them since
+ * cancelled (cancelled: true; the files carry no cancellation date, so a cancelled issue is
+ * counted on the day it was created) and the issues done that day (completed_at, cancelled
+ * excluded, as plan() counts done), each with its running total. `undated` counts the issues
+ * whose created_at or completed_at is not a date, which no day can hold.
+ */
+export function planBurnup(root) {
+  const dir = path.join(root, SOURCES.issues);
+  const created = new Map();
+  const cancelled = new Map();
+  const done = new Map();
+  const undated = { created: 0, completed: 0 };
+  const bump = (m, d) => m.set(d, (m.get(d) ?? 0) + 1);
+  let total = 0;
+  for (const f of yamlFiles(dir)) {
+    const issue = parseYaml(readFileSync(path.join(dir, f), 'utf8'));
+    total += 1;
+    const c = utcDay(issue.created_at);
+    if (c) {
+      bump(created, c);
+      if (issue.cancelled === true) bump(cancelled, c);
+    } else undated.created += 1;
+    if (issue.cancelled !== true && issue.completed_at) {
+      const d = utcDay(issue.completed_at);
+      if (d) bump(done, d);
+      else undated.completed += 1;
+    }
+  }
+  const all = [...created.keys(), ...done.keys()].sort(byString);
+  const days = [];
+  if (all.length) {
+    const sums = { created: 0, cancelled: 0, done: 0 };
+    for (let d = all[0]; d <= all[all.length - 1]; d = addDays(d, 1)) {
+      const row = { day: d, created: created.get(d) ?? 0, cancelled: cancelled.get(d) ?? 0,
+        done: done.get(d) ?? 0 };
+      sums.created += row.created;
+      sums.cancelled += row.cancelled;
+      sums.done += row.done;
+      days.push({ ...row, createdTotal: sums.created, cancelledTotal: sums.cancelled,
+        scopeTotal: sums.created - sums.cancelled, doneTotal: sums.done });
+    }
+  }
+  const last = days[days.length - 1];
+  return {
+    source: SOURCES.issues,
+    rule: 'created: created_at (UTC day); done: completed_at (UTC day) of an issue that is not '
+      + 'cancelled; cancelled: cancelled: true, counted on its created_at day (the files carry '
+      + 'no cancellation date); scope = created - cancelled',
+    issues: total,
+    totals: { created: last?.createdTotal ?? 0, cancelled: last?.cancelledTotal ?? 0,
+      scope: last?.scopeTotal ?? 0, done: last?.doneTotal ?? 0 },
+    undated,
+    days,
+  };
+}
+
+/**
+ * `git cat-file --batch` over `specs` ('<ref>:<path>'): a Map spec -> text, or null for a
+ * spec that names no blob. One process for every read, in the order given.
+ */
+export function catFiles(root, specs) {
+  const out = new Map();
+  if (!specs.length) return out;
+  const buf = execFileSync('git', ['cat-file', '--batch'], { cwd: root,
+    input: `${specs.join('\n')}\n`, maxBuffer: 512 * 1024 * 1024,
+    stdio: ['pipe', 'pipe', 'pipe'] });
+  let at = 0;
+  for (const spec of specs) {
+    const nl = buf.indexOf(0x0a, at);
+    const header = buf.toString('utf8', at, nl);
+    at = nl + 1;
+    const m = /^[0-9a-f]+ (\w+) (\d+)$/.exec(header);
+    if (!m) { out.set(spec, null); continue; }
+    const size = Number(m[2]);
+    out.set(spec, m[1] === 'blob' ? buf.toString('utf8', at, at + size) : null);
+    at += size + 1;
+  }
+  return out;
+}
+
+const statusOrder = (keys, first) => [...first.filter((k) => keys.includes(k)),
+  ...keys.filter((k) => !first.includes(k)).sort(byString)];
+
+/**
+ * The claims ledger at every release tag reachable from HEAD: `git show <tag>:docs/CLAIMS.yaml`
+ * read by the claims parser its tests use, counted by status. A tag whose tree has no ledger is
+ * `present: false` with null counts, never zero.
+ */
+export function claimsPerRelease(root, tags = releaseTags(root)) {
+  const texts = catFiles(root, tags.map((t) => `${t}:${SOURCES.claims}`));
+  const items = tags.map((tag) => {
+    const text = texts.get(`${tag}:${SOURCES.claims}`);
+    if (text === null || text === undefined) {
+      return { version: tag.slice(1), tag, present: false, total: null, byStatus: null };
+    }
+    const list = parseClaims(text);
+    return { version: tag.slice(1), tag, present: true, total: list.length,
+      byStatus: countBy(list, 'status') };
+  });
+  const statuses = statusOrder([...new Set(items.flatMap((x) => Object.keys(x.byStatus ?? {})))],
+    ['guaranteed', 'planned']);
+  return { source: `git show <tag>:${SOURCES.claims} for each v* tag reachable from HEAD, read `
+    + 'by tests/unit/claims-parse.mjs', statuses, items };
+}
+
+/** The ratchet baselines a tree keeps: tests/{unit,browser}/*-baseline.json. */
+export const BASELINE_FILE = /^tests\/(?:unit|browser)\/[^/]+-baseline\.json$/;
+const BASELINE_DIRS = ['tests/unit', 'tests/browser'];
+
+const sumNumbers = (v) => (typeof v === 'number' && Number.isFinite(v) ? v
+  : v && typeof v === 'object' ? Object.values(v).reduce((n, x) => n + sumNumbers(x), 0) : 0);
+const arrayFields = (j) => Object.entries(j).filter(([, v]) => Array.isArray(v));
+
+/**
+ * What a baseline file counts, read from its own structure (each rule is the field its test
+ * enforces): `total` when the file states one (czech-prose: its test pins total = the sum of
+ * counts); a numeric `debt` with its `measure` as the series (ui-flowbite-pro: the numbers of one
+ * measure compare only with each other); `caps`, the byte caps summed (source-size); the length
+ * of the one list a file keeps (control-drive's undriven, readout-provenance's undescribed,
+ * collection-count's entries); the numbers of `counts` or of an object `debt` summed, nested
+ * ones included (key-listener, patch-contract, timing, iphone). Anything else is not derived:
+ * its raw top-level entry count, `derived: false`.
+ * -> { how, field, unit, value, series, derived, extra }
+ */
+export function baselineTotal(json) {
+  const j = json && typeof json === 'object' && !Array.isArray(json) ? json : {};
+  if (typeof j.total === 'number') {
+    return { how: 'total', field: 'total', unit: 'count', value: j.total, series: null,
+      derived: true, extra: null };
+  }
+  if (typeof j.debt === 'number') {
+    return { how: 'debt', field: 'debt', unit: 'count', value: j.debt,
+      series: typeof j.measure === 'number' ? `measure ${j.measure}` : null, derived: true,
+      extra: null };
+  }
+  if (j.caps && typeof j.caps === 'object' && !Array.isArray(j.caps)) {
+    return { how: 'sum', field: 'caps', unit: 'bytes', value: sumNumbers(j.caps), series: null,
+      derived: true, extra: { files: Object.keys(j.caps).length,
+        raises: Array.isArray(j.raises) ? j.raises.length : 0 } };
+  }
+  const lists = arrayFields(j);
+  if (lists.length === 1) {
+    return { how: 'length', field: lists[0][0], unit: 'count', value: lists[0][1].length,
+      series: null, derived: true, extra: null };
+  }
+  for (const field of ['counts', 'debt']) {
+    if (j[field] && typeof j[field] === 'object' && !Array.isArray(j[field])) {
+      return { how: 'sum', field, unit: 'count', value: sumNumbers(j[field]), series: null,
+        derived: true, extra: null };
+    }
+  }
+  const keys = Object.keys(j).filter((k) => !['note', 'rule'].includes(k));
+  return { how: 'raw', field: null, unit: 'entries', value: keys.length, series: null,
+    derived: false, extra: null };
+}
+
+const fileList = (root, ref) => lsTree(root, ref, BASELINE_DIRS).map((e) => e.path)
+  .filter((p) => BASELINE_FILE.test(p));
+
+/**
+ * Every ratchet baseline the tree of HEAD or of any release tag reachable from it keeps
+ * (BASELINE_FILE, found by git ls-tree, never listed by hand), with its total (baselineTotal)
+ * at each tag and at HEAD. `rises` counts the consecutive tags (and the last tag to HEAD) at
+ * which a total of the same series went up: a ratchet that only falls has none.
+ */
+export function ratchets(root, tags = releaseTags(root)) {
+  const refs = [...tags, 'HEAD'];
+  const present = new Map(refs.map((r) => [r, new Set(fileList(root, r))]));
+  const files = [...new Set(refs.flatMap((r) => [...present.get(r)]))].sort(byString);
+  const specs = refs.flatMap((r) => files.filter((f) => present.get(r).has(f))
+    .map((f) => `${r}:${f}`));
+  const texts = catFiles(root, specs);
+  const read = (ref, file) => {
+    const text = texts.get(`${ref}:${file}`);
+    if (text === null || text === undefined) return null;
+    try {
+      return baselineTotal(JSON.parse(text));
+    } catch {
+      return { how: 'unreadable', field: null, unit: 'entries', value: null, series: null,
+        derived: false, extra: null };
+    }
+  };
+  const items = files.map((file) => {
+    const point = (ref) => {
+      const t = read(ref, file);
+      return t ? { present: true, value: t.value, series: t.series, extra: t.extra, t }
+        : { present: false, value: null, series: null, extra: null, t: null };
+    };
+    const perRelease = tags.map((tag) => {
+      const { t, ...p } = point(tag);
+      return { version: tag.slice(1), tag, ...p };
+    });
+    const { t: headT, ...head } = point('HEAD');
+    const seq = [...perRelease, head].filter((p) => p.present && p.value !== null);
+    let rises = 0;
+    for (let i = 1; i < seq.length; i += 1) {
+      if (seq[i].series === seq[i - 1].series && seq[i].value > seq[i - 1].value) rises += 1;
+    }
+    const latest = headT ?? [...tags].reverse().map((tag) => read(tag, file)).find(Boolean);
+    return { file, how: latest.how, field: latest.field, unit: latest.unit,
+      derived: latest.derived, firstTag: perRelease.find((p) => p.present)?.tag ?? null,
+      rises, head, perRelease };
+  });
+  return {
+    source: `git ls-tree -r <ref> -- ${BASELINE_DIRS.join(' ')} (files matching ${
+      BASELINE_FILE.source}) + git cat-file --batch <ref>:<file>, for HEAD and each v* tag `
+      + 'reachable from HEAD',
+    rule: 'total: the file\'s total; debt: a numeric debt (series: its measure); caps: the sum '
+      + 'of the byte caps; one list: its length; counts or an object debt: the sum of its '
+      + 'numbers; anything else: the raw top-level entry count, not derived',
+    items,
+  };
+}
+
+/** The review records' severities and statuses in the order review-verdict.mjs declares them. */
+export const REVIEW_SEVERITIES = Object.freeze(['P0', 'P1', 'P2', 'P3']);
+export const REVIEW_STATUSES = Object.freeze(['open', 'closed']);
+const REVIEWS = '.ai/repo/reviews';
+
+/** The date each file under `dir` was first added in HEAD's history: Map path -> ISO time. */
+export function addedDates(root, dir) {
+  const out = gitRunner(root)(['log', '--diff-filter=A', '--no-renames', '--name-only',
+    '--format=%x1e%cI', 'HEAD', '--', dir]);
+  const first = new Map();
+  for (const rec of out.split('\x1e').filter((r) => r.trim())) {
+    const [date, ...names] = rec.trim().split('\n');
+    const iso = new Date(date.trim()).toISOString();
+    // newest first: a later (older) record replaces, so the first addition wins
+    for (const n of names.filter(Boolean)) first.set(n.trim(), iso);
+  }
+  return first;
+}
+
+const zeroed = (keys) => Object.fromEntries(keys.map((k) => [k, 0]));
+
+/**
+ * The review verdicts (.ai/repo/reviews/<pr>.yaml, schema review-verdict/v1): per pull request
+ * its verdict, its findings by severity and by status, the open ones by severity, and the time
+ * the record was first committed (git log --diff-filter=A); per ISO week of that time the
+ * findings by severity. A severity or status outside the declared lists is kept under its own
+ * name, after them.
+ */
+export function reviews(root) {
+  const dir = path.join(root, REVIEWS);
+  const files = yamlFiles(dir).filter((f) => /^\d+\.yaml$/.test(f));
+  const added = addedDates(root, REVIEWS);
+  const raw = files.map((f) => {
+    const doc = parseYaml(readFileSync(path.join(dir, f), 'utf8'));
+    const findings = Array.isArray(doc.findings) ? doc.findings : [];
+    return { file: f, doc, findings };
+  });
+  const severities = statusOrder([...new Set(raw.flatMap((r) => r.findings.map((x) =>
+    String(x.severity))))], [...REVIEW_SEVERITIES]);
+  const allSev = statusOrder([...new Set([...REVIEW_SEVERITIES, ...severities])],
+    [...REVIEW_SEVERITIES]);
+  const statuses = statusOrder([...new Set([...REVIEW_STATUSES, ...raw.flatMap((r) =>
+    r.findings.map((x) => String(x.status)))])], [...REVIEW_STATUSES]);
+  const items = raw.map(({ file, doc, findings }) => {
+    const bySeverity = zeroed(allSev);
+    const byStatus = zeroed(statuses);
+    const openBySeverity = zeroed(allSev);
+    for (const x of findings) {
+      bySeverity[String(x.severity)] += 1;
+      byStatus[String(x.status)] += 1;
+      if (String(x.status) === 'open') openBySeverity[String(x.severity)] += 1;
+    }
+    const at = added.get(`${REVIEWS}/${file}`) ?? null;
+    return { pr: Number(file.replace(/\.yaml$/, '')), verdict: String(doc.verdict ?? 'unknown'),
+      members: Array.isArray(doc.members) ? doc.members.length : 0, findings: findings.length,
+      bySeverity, byStatus, openBySeverity, addedAt: at, week: at ? isoWeek(new Date(at)).week
+        : null };
+  }).sort((a, b) => a.pr - b.pr);
+  const dated = items.filter((x) => x.addedAt);
+  const weeks = [];
+  if (dated.length) {
+    const times = dated.map((x) => Date.parse(x.addedAt));
+    const last = isoWeek(new Date(Math.max(...times))).week;
+    let start = isoWeek(new Date(Math.min(...times))).start;
+    for (;;) {
+      const w = isoWeek(new Date(`${start}T00:00:00Z`));
+      const these = dated.filter((x) => x.week === w.week);
+      const bySeverity = zeroed(allSev);
+      for (const x of these) for (const k of allSev) bySeverity[k] += x.bySeverity[k];
+      weeks.push({ ...w, reviews: these.length,
+        findings: these.reduce((n, x) => n + x.findings, 0), bySeverity });
+      if (w.week === last) break;
+      start = addDays(start, 7);
+    }
+  }
+  const sum = (key, keys) => Object.fromEntries(keys.map((k) => [k,
+    items.reduce((n, x) => n + x[key][k], 0)]));
+  return {
+    source: `${REVIEWS}/<pr>.yaml (review-verdict/v1)`,
+    dateSource: `git log --diff-filter=A --no-renames --format=%cI HEAD -- ${REVIEWS}`,
+    severities: allSev, statuses, items,
+    totals: { reviews: items.length, findings: items.reduce((n, x) => n + x.findings, 0),
+      bySeverity: sum('bySeverity', allSev), byStatus: sum('byStatus', statuses),
+      openBySeverity: sum('openBySeverity', allSev), byVerdict: countBy(items, 'verdict'),
+      undated: items.length - dated.length },
+    weeks,
+  };
+}
+
+/** The median of numbers (the mean of the middle two of an even count), or null. */
+export function median(values) {
+  const v = values.slice().sort((a, b) => a - b);
+  if (!v.length) return null;
+  const mid = Math.floor(v.length / 2);
+  return v.length % 2 ? v[mid] : (v[mid - 1] + v[mid]) / 2;
+}
+
+const hours2 = (ms) => Math.round(ms / 36000) / 100;
+
+/**
+ * The hours between consecutive published releases (the release records' published_at, in
+ * publication order), rounded to 0.01 h, and their median. A record without published_at has
+ * no interval.
+ */
+export function releaseCadence(releaseFacts) {
+  const rs = releaseFacts.items.filter((r) => r.published_at && Number.isFinite(
+    Date.parse(r.published_at))).slice()
+    .sort((a, b) => byString(a.published_at, b.published_at) || compareSemver(a.version,
+      b.version));
+  const items = rs.slice(1).map((r, i) => ({ version: r.version, from: rs[i].version,
+    published_at: r.published_at,
+    hours: hours2(Date.parse(r.published_at) - Date.parse(rs[i].published_at)) }));
+  const m = median(items.map((x) => x.hours));
+  return { source: releaseFacts.source, field: 'published_at', unit: 'h', releases: rs.length,
+    undated: releaseFacts.items.length - rs.length, items,
+    median: m === null ? null : Math.round(m * 100) / 100 };
+}
+
 export async function collectFacts({ root = REPO_ROOT, git = true } = {}) {
   const facts = {
     schema: 'oscilla-facts/v1',
@@ -590,11 +954,16 @@ export async function collectFacts({ root = REPO_ROOT, git = true } = {}) {
     screenshots: screenshots(root),
   };
   facts.roadmap = roadmap(root, facts.plan);
+  facts.planBurnup = planBurnup(root);
+  facts.releaseCadence = releaseCadence(facts.releases);
   if (git) {
     facts.git = gitFacts(root);
     const tags = releaseTags(root);
     facts.releaseChanges = releaseChanges(root, { releases: facts.releases.items, tags });
     facts.codeInventory = codeInventory(root, tags);
+    facts.claimsPerRelease = claimsPerRelease(root, tags);
+    facts.ratchets = ratchets(root, tags);
+    facts.reviews = reviews(root);
   }
   return facts;
 }

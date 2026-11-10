@@ -169,6 +169,11 @@ export const CHART_ALT = Object.freeze({
   activity: `Commits per ISO week over the last ${ACTIVITY_WEEKS} weeks of the repository`,
   modules: 'Source size of each src/js module at the deployed commit, largest first',
   growth: 'Unit test files and browser suites in the tree of each release tag',
+  burnup: 'Plan burn-up: issues in the plan and issues done, cumulative per UTC day',
+  'claims-trend': 'The claims of docs/CLAIMS.yaml by status at every release tag',
+  ratchets: 'Every ratchet baseline of the repository at each release tag, one panel each',
+  reviews: 'Review findings by severity per ISO week of the review record',
+  cadence: 'Hours between consecutive published releases, with their median',
 });
 
 function renderLive() {
@@ -176,10 +181,10 @@ function renderLive() {
     html(CHART_ALT[name] ?? name)}"></p>`);
   return [
     'These charts are regenerated from the repository on every Pages deploy (release records,',
-    'the plan, the claims ledger, git history and the trees of the release tags, read by',
-    '`scripts/facts.mjs`), so they are current without a commit. The interactive versions, with',
-    `the per-release changes, the roadmap and the claims explorer, are on the [landing page](${
-      LANDING_URL}).`,
+    'the plan, the claims ledger, the review records, git history and the trees of the release',
+    'tags, read by `scripts/facts.mjs`), so they are current without a commit; nothing in them',
+    'is estimated. The interactive versions, with the per-release changes, the roadmap, the',
+    `claims explorer, the ratchets and the reviews, are on the [landing page](${LANDING_URL}).`,
     '',
     ...imgs,
   ].join('\n');

@@ -14,7 +14,7 @@
 // meta refuses every other origin. Deterministic for a commit: every fact comes from
 // scripts/facts.mjs, and the only date is the commit's own; a rerun writes identical bytes,
 // which scripts/verify-deploy.mjs relies on (it regenerates the page and compares the live one).
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,6 +109,13 @@ const LIST_CSS = `@layer base {
   .lab-ms-row > span:last-child { @apply flex shrink-0 items-center; }
   .lab-ms-row > span:last-child > span:last-child { @apply tabular-nums text-gray-500
     dark:text-gray-400; }
+  .lab-src { @apply mt-2 break-words text-xs text-gray-500 dark:text-gray-400; }
+  .lab-rv th, .lab-rv td { @apply whitespace-nowrap px-3 py-2; }
+  .lab-rv td { @apply tabular-nums; }
+  .lab-rv tbody th { @apply font-medium; }
+  .lab-rv tbody th > span { @apply text-xs text-gray-500 dark:text-gray-400; }
+  .lab-rv td > span + span { @apply ms-1; }
+  [data-chart-box] .mark[data-active] > :nth-child(2) { fill: rgb(255 255 255 / 0.07); }
 }`;
 
 const LUCIDE_PAINT = 'fill="none" stroke="currentColor" stroke-width="2" '
@@ -131,6 +138,25 @@ function workspaceIconOf(root) {
     if (marker) return icons(marker[1], 'h-6 w-6');
     return `<svg aria-hidden="true" focusable="false" class="h-6 w-6" viewBox="0 0 24 24" `
       + `${LUCIDE_PAINT}>${m[1].trim()}</svg>`;
+  };
+}
+
+const RULES_DIR = '.ai/repo/rules/project';
+
+/**
+ * The file of a project rule (`project.<name>` -> .ai/repo/rules/project/<name>.v<N>.md, the
+ * highest N); throws for a rule with no file, so the page never links a rule that is not there.
+ */
+export function ruleFileOf(root) {
+  const dir = path.join(root, RULES_DIR);
+  const files = existsSync(dir) ? readdirSync(dir) : [];
+  return (id) => {
+    const name = String(id).replace(/^project\./, '');
+    const versions = /^[a-z0-9-]+$/.test(name) ? files.map((f) => f.startsWith(`${name}.v`)
+      && /^\.v(\d+)\.md$/.exec(f.slice(name.length))).filter(Boolean).map((x) => Number(x[1]))
+      : [];
+    if (!versions.length) throw new Error(`landing: rule ${id} has no file under ${RULES_DIR}`);
+    return `${RULES_DIR}/${name}.v${Math.max(...versions)}.md`;
   };
 }
 
@@ -226,7 +252,8 @@ export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts
   if (commit && commit !== f.git.head) {
     throw new Error(`landing: --commit ${commit} is not the checkout's HEAD ${f.git.head}`);
   }
-  checkCopy({ workspaces: f.workspaces.items, engines: f.engines.items });
+  checkCopy({ workspaces: f.workspaces.items, engines: f.engines.items,
+    ratchets: f.ratchets?.items });
   const sha = f.git.head;
   const charts = renderCharts(f);
   const all = f.screenshots.items.map((s) => ({ ...s, file: shotFile(s.path),
@@ -243,7 +270,7 @@ export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts
     commitUrl: `${REPO_URL}/commit/${sha}`,
     blob: (p) => `${REPO_URL}/blob/${sha.slice(0, LINK_SHA)}/${p}`,
     tree: (p) => `${REPO_URL}/tree/${sha.slice(0, LINK_SHA)}/${p}`,
-    icons, mark: markFactory(), workspaceIcon: workspaceIconOf(root),
+    icons, mark: markFactory(), workspaceIcon: workspaceIconOf(root), rule: ruleFileOf(root),
     favicon: `data:image/svg+xml,${encodeURIComponent(ICON_SVG)}`,
   };
   const page = renderPage(model);

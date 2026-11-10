@@ -5,18 +5,20 @@
 //
 // Each chart carries its own ground (OSCILLA's dark panel surface, src/styles/tokens.css), so it
 // reads the same on GitHub's light and dark themes and on both landing themes; a <title> and a
-// <desc> name it for assistive technology, and every mark is a <g data-tip> with its own <title>
-// (the landing's script turns those into a hover and focus readout; a browser shows the
-// <title> natively). Marks follow the dataviz rules: one axis, thin marks with 4 px rounded
-// data ends, a 2 px ground gap between fills, text in text tokens, never in a series colour.
+// <desc> name it for assistive technology, and every mark is a <g class="mark"> whose first
+// child is its <title> (the landing's script turns those into a hover and focus readout; a
+// browser shows the <title> natively; the text is written once, not again as an attribute).
+// Marks follow the dataviz rules: one axis, thin marks with 4 px rounded data ends, a 2 px
+// ground gap between fills, text in text tokens, never in a series colour.
 // The titles are Czech (project.czech-prose: published pages), each with an English subtitle
 // for the README.
 //
-//   renderCharts(facts) -> { releases, size, plan, claims, activity, modules, growth }
-//                                                                        (SVG strings)
+//   renderCharts(facts) -> { releases, size, plan, claims, activity, modules, growth, burnup,
+//                            'claims-trend', ratchets, reviews, cadence }    (SVG strings)
 //   chartTable(name, facts) -> { caption, head: [..], rows: [[..]] }     (the table view)
 
 import { CHARTS } from '../facts.mjs';
+import { RATCHET_COPY } from './copy.mjs';
 
 // OSCILLA tokens (src/styles/tokens.css, the dark reference): ground, outline, text, marks.
 // The two categorical slots (blue, magenta) pass the dataviz validator on the ground (CVD 8.9,
@@ -93,7 +95,7 @@ function xLabel(x, text, anchor = 'middle') {
 }
 
 function mark(tip, inner) {
-  return `<g class="mark" data-tip="${esc(tip)}"><title>${esc(tip)}</title>${inner}</g>`;
+  return `<g class="mark"><title>${esc(tip)}</title>${inner}</g>`;
 }
 
 // A bar from the baseline with 4 px rounded data end (top), as a path.
@@ -431,9 +433,405 @@ function growthChart(facts) {
     + `až ${fmtInt(last.browser)} souborů.`, body, height);
 }
 
+// ------------------------------------------------------------------------------- P016 trends
+const dayIso = (day) => `${day}T00:00:00Z`;
+
+/** A legend of line or swatch keys at the bottom of a chart of height `h`. */
+function legendRow(items, h, x0 = PLOT.x0, line = false) {
+  let lx = x0;
+  const ly = h - 18;
+  let out = '';
+  for (const s of items) {
+    out += (line
+      ? `<rect x="${lx}" y="${ly - 6}" width="16" height="3" rx="1.5" fill="${s.colour}"/>`
+      : `<rect x="${lx}" y="${ly - 10}" width="12" height="12" rx="3" fill="${s.colour}"/>`)
+      + `<text x="${lx + (line ? 22 : 18)}" y="${ly}" fill="${T.text2}" font-size="12">`
+      + `${esc(s.name)}</text>`;
+    lx += (line ? 40 : 34) + s.name.length * 7;
+  }
+  return out;
+}
+
+// A segment of a stacked column from `base` up to `top`: the top one carries the 4 px rounded
+// data end; the others stop 1 px short, and the next starts 1 px higher (a 2 px ground gap).
+function stackSegment(x, w, top, base, colour, last) {
+  return last ? `<path d="${barUp(x, w, top, base)}" fill="${colour}"/>`
+    : `<path d="M${r1(x)},${r1(base)}V${r1(Math.min(base, top + 1))}H${r1(x + w)}V${r1(base)}Z" `
+      + `fill="${colour}"/>`;
+}
+
+/** Two end labels at y values kept at least 16 px apart. */
+function endLabels(x, ends) {
+  const ys = ends.map((e) => e.y);
+  if (ys.length === 2 && Math.abs(ys[0] - ys[1]) < 16) {
+    if (ys[0] <= ys[1]) ys[1] = ys[0] + 16; else ys[0] = ys[1] + 16;
+  }
+  return ends.map((e, i) => `<text x="${r1(x)}" y="${r1(ys[i] + 4)}" fill="${T.text}" `
+    + `font-size="12" font-weight="600">${esc(e.text)}</text>`).join('');
+}
+
+function burnupChart(facts) {
+  const title = 'Plán: úkoly přibývají a odcházejí hotové';
+  const sub = 'Plan burn-up per UTC day: issues in the plan (created_at, cancelled excluded) and '
+    + 'done (completed_at)';
+  const b = facts.planBurnup;
+  const days = b?.days || [];
+  if (!days.length) return empty('burnup', title, sub);
+  const height = H + 14;
+  const x1 = PLOT.x1 - 130;
+  const t0 = Date.parse(dayIso(days[0].day));
+  const t1 = Date.parse(dayIso(days[days.length - 1].day));
+  const span = Math.max(t1 - t0, 86400000);
+  const x = (day) => PLOT.x0 + ((Date.parse(dayIso(day)) - t0) / span) * (x1 - PLOT.x0);
+  const maxN = Math.max(1, ...days.map((d) => d.scopeTotal), ...days.map((d) => d.doneTotal));
+  const step = niceStep(maxN);
+  const max = Math.ceil(maxN / step) * step;
+  const y = (n) => PLOT.y1 - (n / max) * (PLOT.y1 - PLOT.y0);
+  let body = yAxis(max, step, fmtInt).replace(new RegExp(`x2="${PLOT.x1}"`, 'g'), `x2="${x1}"`);
+  for (const t of dateTicks(t0, t1)) {
+    const iso = new Date(t).toISOString();
+    body += xLabel(PLOT.x0 + ((t - t0) / span) * (x1 - PLOT.x0), fmtDate(iso, false));
+  }
+  const series = [
+    { key: 'scopeTotal', name: 'v plánu (bez zrušených)', colour: T.second },
+    { key: 'doneTotal', name: 'hotovo', colour: T.blue },
+  ];
+  for (const s of series) {
+    const d = days.map((r, i) => `${i ? 'L' : 'M'}${r1(x(r.day))},${r1(y(r[s.key]))}`).join('');
+    body += `<path d="${d}" fill="none" stroke="${s.colour}" stroke-width="2" `
+      + 'stroke-linejoin="round" stroke-linecap="round"/>';
+  }
+  const slot = days.length > 1 ? (x1 - PLOT.x0) / (days.length - 1) : x1 - PLOT.x0;
+  for (const r of days) {
+    const cx = r1(x(r.day));
+    const cancelled = r.cancelled ? ` (z nich ${fmtInt(r.cancelled)} zrušeno)` : '';
+    body += mark(`${fmtDate(dayIso(r.day))}: +${fmtInt(r.created)} založeno${cancelled}, `
+      + `+${fmtInt(r.done)} hotovo; v plánu ${fmtInt(r.scopeTotal)}, hotovo ${fmtInt(r.doneTotal)}`,
+    `<rect x="${r1(cx - slot / 2)}" y="${PLOT.y0}" width="${r1(slot)}" `
+      + `height="${PLOT.y1 - PLOT.y0}" fill="transparent"/>`);
+  }
+  const last = days[days.length - 1];
+  for (const s of series) {
+    body += `<circle cx="${r1(x(last.day))}" cy="${r1(y(last[s.key]))}" r="4" fill="${s.colour}" `
+      + `stroke="${T.ground}" stroke-width="2"/>`;
+  }
+  body += endLabels(x(last.day) + 10, series.map((s) => ({ y: y(last[s.key]),
+    text: `${fmtInt(last[s.key])} ${s.name === 'hotovo' ? 'hotovo' : 'v plánu'}` })));
+  body += legendRow(series, height, PLOT.x0, true);
+  return frame('burnup', title, sub, `Od ${fmtDate(dayIso(days[0].day))} do `
+    + `${fmtDate(dayIso(last.day))}: ${fmtInt(b.totals.created)} založených úkolů, z nich `
+    + `${fmtInt(b.totals.cancelled)} zrušených, ${fmtInt(b.totals.done)} hotových.`, body, height);
+}
+
+const CLAIM_SERIES = Object.freeze([
+  { key: 'guaranteed', name: 'zaručeno', colour: T.blue },
+  { key: 'planned', name: 'plánováno', colour: T.second },
+]);
+
+function claimsTrendChart(facts) {
+  const title = 'Tvrzení v každém vydání';
+  const sub = 'Claims by status at every release tag (git show <tag>:docs/CLAIMS.yaml)';
+  const items = facts.claimsPerRelease?.items || [];
+  if (!items.some((x) => x.present)) return empty('claims-trend', title, sub);
+  const height = H + 14;
+  const x1 = PLOT.x1 - 120;
+  const keys = [...CLAIM_SERIES, ...(facts.claimsPerRelease.statuses || [])
+    .filter((k) => !CLAIM_SERIES.some((s) => s.key === k))
+    .map((k) => ({ key: k, name: k, colour: T.rest }))];
+  const maxN = Math.max(1, ...items.map((x) => x.total ?? 0));
+  const step = niceStep(maxN);
+  const max = Math.ceil(maxN / step) * step;
+  const slot = (x1 - PLOT.x0) / items.length;
+  const w = Math.max(2, Math.min(18, slot - 2));
+  const y = (n) => PLOT.y1 - (n / max) * (PLOT.y1 - PLOT.y0);
+  let body = yAxis(max, step, fmtInt).replace(new RegExp(`x2="${PLOT.x1}"`, 'g'), `x2="${x1}"`);
+  const every = Math.max(1, Math.ceil(items.length / 6));
+  items.forEach((r, i) => {
+    const bx = PLOT.x0 + i * slot + (slot - w) / 2;
+    const hit = `<rect x="${r1(PLOT.x0 + i * slot)}" y="${PLOT.y0}" width="${r1(slot)}" `
+      + `height="${PLOT.y1 - PLOT.y0}" fill="transparent"/>`;
+    if (!r.present) {
+      body += mark(`v${r.version}: docs/CLAIMS.yaml ve stromu vydání není`, `${hit}<path d="M${
+        r1(bx)},${PLOT.y1 - 1}h${r1(w)}" stroke="${T.dim}" stroke-width="2"/>`);
+    } else {
+      const parts = keys.filter((k) => (r.byStatus[k.key] ?? 0) > 0);
+      let base = PLOT.y1;
+      let segs = '';
+      parts.forEach((k, pi) => {
+        const top = base - (r.byStatus[k.key] / max) * (PLOT.y1 - PLOT.y0);
+        segs += stackSegment(bx, w, top, base, k.colour, pi === parts.length - 1);
+        base = top - 1;
+      });
+      body += mark(`v${r.version}: ${keys.map((k) => `${k.name} ${fmtInt(r.byStatus[k.key] ?? 0)}`)
+        .join(', ')} z ${fmtInt(r.total)} tvrzení`, hit + segs);
+    }
+    if (i % every === 0 && items.length - 1 - i >= every / 2) {
+      body += xLabel(bx + w / 2, `v${r.version}`);
+    }
+  });
+  const li = items.length - 1;
+  const last = items[li];
+  body += xLabel(PLOT.x0 + li * slot + slot / 2, `v${last.version}`);
+  if (last.present) {
+    const gx = PLOT.x0 + li * slot + slot / 2 + 10;
+    let below = 0;
+    const ends = keys.filter((k) => (last.byStatus[k.key] ?? 0) > 0).map((k) => {
+      const n = last.byStatus[k.key];
+      const mid = below + n / 2;
+      below += n;
+      return { y: y(mid), text: `${fmtInt(n)} ${k.name}` };
+    }).reverse();
+    body += endLabels(gx, ends);
+  }
+  const absent = items.filter((x) => !x.present).length;
+  const shown = keys.filter((k) => items.some((x) => x.present && (x.byStatus[k.key] ?? 0) > 0));
+  body += legendRow(shown, height);
+  return frame('claims-trend', title, sub, `${fmtInt(items.length)} vydání; `
+    + `${absent ? `${fmtInt(absent)} bez souboru docs/CLAIMS.yaml; ` : ''}v v${last.version} `
+    + `${last.present ? `${fmtInt(last.total)} tvrzení` : 'soubor chybí'}.`, body, height);
+}
+
+const MAX_RATCHET_COLS = 2;
+
+/** A ratchet's value as text: bytes in kB, counts as they are. */
+export function ratchetValue(item, value) {
+  if (value === null || value === undefined) return '–';
+  return item.unit === 'bytes' ? `${fmtInt(value / KB)} kB` : fmtInt(value);
+}
+
+/** The runs of equal (value, series) of a ratchet over its points: [{ from, to, value }]. */
+export function ratchetRuns(points) {
+  const runs = [];
+  points.forEach((p, i) => {
+    if (!p.present) return;
+    const prev = runs[runs.length - 1];
+    if (prev && prev.to === i - 1 && prev.value === p.value && prev.series === p.series) {
+      prev.to = i;
+    } else runs.push({ from: i, to: i, value: p.value, series: p.series });
+  });
+  return runs;
+}
+
+/**
+ * A ratchet's small multiple for its card on the landing: the step line of its totals at every
+ * release tag and HEAD on its own axis from zero, decorative (the card prints the numbers).
+ */
+export function ratchetSpark(item, w = 240, h = 44) {
+  const pts = [...item.perRelease, item.head];
+  const max = Math.max(1, ...pts.filter((p) => p.present).map((p) => p.value));
+  const x = (i) => 2 + (pts.length < 2 ? 0 : (i / (pts.length - 1)) * (w - 4));
+  const y = (v) => h - 3 - (v / max) * (h - 8);
+  let d = '';
+  const runs = ratchetRuns(pts);
+  runs.forEach((run, ri) => {
+    const prev = runs[ri - 1];
+    const joined = prev && prev.to === run.from - 1 && prev.series === run.series;
+    d += `${joined ? `H${r1(x(run.from))}V` : `M${r1(x(run.from))},`}${r1(y(run.value))}`
+      + `H${r1(x(run.to))}`;
+  });
+  const last = runs[runs.length - 1];
+  return `<svg aria-hidden="true" focusable="false" viewBox="0 0 ${w} ${h}" class="h-11 w-full" `
+    + 'preserveAspectRatio="none"><path d="M2,' + `${h - 2}H${w - 2}" stroke="currentColor" `
+    + 'stroke-opacity="0.25" vector-effect="non-scaling-stroke"/>'
+    + `<path d="${d}" fill="none" stroke="#007afd" stroke-width="2" stroke-linejoin="round" `
+    + 'stroke-linecap="round" vector-effect="non-scaling-stroke"/>'
+    // the newest value as a dot: a zero-length round-capped stroke stays round when stretched
+    + (last ? `<path d="M${r1(x(last.to))},${r1(y(last.value))}h0" stroke="#007afd" `
+      + 'stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke"/>' : '')
+    + '</svg>';
+}
+
+function ratchetsChart(facts, copy) {
+  const title = 'Ratchety: dluh podle vydání';
+  const sub = 'Every *-baseline.json at each release tag and HEAD; each panel on its own axis '
+    + 'from zero';
+  const items = facts.ratchets?.items || [];
+  if (!items.length) return empty('ratchets', title, sub);
+  const cols = MAX_RATCHET_COLS;
+  const rows = Math.ceil(items.length / cols);
+  const gx = 24;
+  const cw = (W - 2 * gx - (cols - 1) * 24) / cols;
+  const ch = 78;
+  const top0 = 84;
+  const height = top0 + rows * ch + 30;
+  const labels = items[0].perRelease.map((p) => `v${p.version}`).concat('nyní');
+  let body = '';
+  items.forEach((it, idx) => {
+    const c = copy[it.file] || { name: it.file };
+    const cx0 = gx + (idx % cols) * (cw + 24);
+    const cy0 = top0 + Math.floor(idx / cols) * ch;
+    const pts = [...it.perRelease, it.head];
+    const vals = pts.filter((p) => p.present).map((p) => p.value);
+    const max = Math.max(1, ...vals);
+    const px0 = cx0;
+    const px1 = cx0 + cw - 70;
+    const py0 = cy0 + 24;
+    const py1 = cy0 + ch - 14;
+    const x = (i) => px0 + (pts.length < 2 ? 0 : (i / (pts.length - 1)) * (px1 - px0));
+    const y = (v) => py1 - (v / max) * (py1 - py0);
+    body += `<text x="${r1(cx0)}" y="${r1(cy0 + 12)}" fill="${T.text2}" font-size="12">`
+      + `${esc(c.name)}</text>`
+      + `<line x1="${r1(px0)}" x2="${r1(px1)}" y1="${r1(py1)}" y2="${r1(py1)}" stroke="${T.grid}" `
+      + 'stroke-opacity="0.35"/>';
+    const runs = ratchetRuns(pts);
+    let d = '';
+    runs.forEach((run, ri) => {
+      // a step after: the previous value holds up to this run's first tag
+      const prev = runs[ri - 1];
+      const joined = prev && prev.to === run.from - 1 && prev.series === run.series;
+      d += `${joined ? `H${r1(x(run.from))}V` : `M${r1(x(run.from))},`}${r1(y(run.value))}`
+        + `H${r1(x(run.to))}`;
+    });
+    body += `<path d="${d}" fill="none" stroke="${T.blue}" stroke-width="2" `
+      + 'stroke-linejoin="round" stroke-linecap="round"/>';
+    const slot = pts.length > 1 ? (px1 - px0) / (pts.length - 1) : px1 - px0;
+    for (const run of runs) {
+      const span = run.from === run.to ? labels[run.from]
+        : `${labels[run.from]} až ${labels[run.to]}`;
+      const series = run.series ? ` (${run.series})` : '';
+      body += mark(`${c.name}: ${ratchetValue(it, run.value)}${series} · ${span}`,
+        `<rect x="${r1(x(run.from) - slot / 2)}" y="${r1(py0 - 4)}" width="${
+        r1(Math.max(slot, x(run.to) - x(run.from) + slot))}" height="${r1(py1 - py0 + 8)}" `
+        + 'fill="transparent"/>');
+    }
+    const first = runs[0];
+    if (first) {
+      body += `<circle cx="${r1(x(first.from))}" cy="${r1(y(first.value))}" r="3" fill="${T.blue}" `
+        + `stroke="${T.ground}" stroke-width="2"/>`;
+    }
+    const lastRun = runs[runs.length - 1];
+    if (lastRun) {
+      body += `<circle cx="${r1(x(lastRun.to))}" cy="${r1(y(lastRun.value))}" r="3" `
+        + `fill="${T.blue}" stroke="${T.ground}" stroke-width="2"/>`
+        + `<text x="${r1(px1 + 8)}" y="${r1(Math.min(py1, y(lastRun.value)) + 4)}" `
+        + `fill="${T.text}" font-size="12" font-weight="600">`
+        + `${esc(ratchetValue(it, lastRun.value))}</text>`;
+    }
+    if (first) {
+      // where the file begins: left of the line's start, or under it when the start is near
+      const fx = x(first.from);
+      const left = fx - px0 > 80;
+      body += `<text x="${r1(left ? fx - 8 : fx)}" y="${r1(left ? y(first.value) + 4 : py1 + 11)}" `
+        + `fill="${T.dim}" font-size="11"${left ? ' text-anchor="end"' : ''}>od `
+        + `${esc(labels[first.from])}</text>`;
+    }
+  });
+  const firstTag = items[0].perRelease[0];
+  body += `<text x="${gx}" y="${height - 14}" fill="${T.dim}" font-size="11">Osa x: vydání `
+    + `v${esc(firstTag?.version ?? '')} až nyní, stejná pro všechny panely.</text>`;
+  return frame('ratchets', title, sub, items.map((it) => `${(copy[it.file] || {}).name || it.file} `
+    + `${ratchetValue(it, it.head.value)}`).join('; ') + '.', body, height);
+}
+
+/** The ordinal ramp of review severities on the chart ground (validated, --ordinal, dark). */
+export const SEVERITY_RAMP = Object.freeze({ P0: '#b8d4f0', P1: '#4da3ff', P2: '#007afd',
+  P3: '#00468c' });
+
+function reviewsChart(facts) {
+  const title = 'Revize: nálezy podle závažnosti';
+  const sub = 'Review findings per ISO week of the review record\'s first commit, by severity';
+  const r = facts.reviews;
+  const weeks = r?.weeks || [];
+  if (!weeks.length) return empty('reviews', title, sub);
+  const height = H + 14;
+  const sev = r.severities.map((k) => ({ key: k, name: k === 'P0' || k === 'P1' ? `${k} blokuje`
+    : k, colour: SEVERITY_RAMP[k] ?? T.rest }));
+  const maxN = Math.max(1, ...weeks.map((w) => w.findings));
+  const step = niceStep(maxN);
+  const max = Math.ceil(maxN / step) * step;
+  const slot = (PLOT.x1 - PLOT.x0) / weeks.length;
+  const w = Math.max(4, Math.min(48, slot - 8));
+  const y = (n) => PLOT.y1 - (n / max) * (PLOT.y1 - PLOT.y0);
+  let body = yAxis(max, step, fmtInt);
+  weeks.forEach((wk, i) => {
+    const bx = PLOT.x0 + i * slot + (slot - w) / 2;
+    const parts = sev.filter((s) => wk.bySeverity[s.key] > 0);
+    let base = PLOT.y1;
+    let segs = '';
+    parts.forEach((s, pi) => {
+      const top = base - (wk.bySeverity[s.key] / max) * (PLOT.y1 - PLOT.y0);
+      segs += stackSegment(bx, w, top, base, s.colour, pi === parts.length - 1);
+      base = top - 1;
+    });
+    const counts = sev.map((s) => `${s.key} ${fmtInt(wk.bySeverity[s.key])}`).join(', ');
+    body += mark(`týden od ${fmtDate(dayIso(wk.start))} (${wk.week}): `
+      + `${fmtInt(wk.findings)} nálezů v ${fmtInt(wk.reviews)} revizích; ${counts}`,
+      `<rect x="${r1(PLOT.x0 + i * slot)}" y="${PLOT.y0}" width="${r1(slot)}" `
+      + `height="${PLOT.y1 - PLOT.y0}" fill="transparent"/>${segs}`);
+    body += xLabel(bx + w / 2, fmtDate(dayIso(wk.start), false));
+    if (wk.findings) {
+      body += `<text x="${r1(bx + w / 2)}" y="${r1(y(wk.findings) - 6)}" fill="${T.text}" `
+        + `font-size="12" font-weight="600" text-anchor="middle" pointer-events="none">`
+        + `${fmtInt(wk.findings)}</text>`;
+    }
+  });
+  body += legendRow(sev, height);
+  return frame('reviews', title, sub, `${fmtInt(r.totals.findings)} nálezů v `
+    + `${fmtInt(r.totals.reviews)} revizích za ${fmtInt(weeks.length)} týdnů: ${sev.map((s) =>
+      `${s.key} ${fmtInt(r.totals.bySeverity[s.key])}`).join(', ')}.`, body, height);
+}
+
+/** Hours as Czech text: '4,9 h', or days beside them from 48 h on. */
+export function fmtHours(h) {
+  const base = `${fmtDec(h, h < 10 ? 1 : 0)} h`;
+  return h >= 48 ? `${base} (${fmtDec(h / 24, 1)} dne)` : base;
+}
+
+function cadenceChart(facts) {
+  const title = 'Kadence vydání';
+  const sub = 'Hours between consecutive published releases (release records); logarithmic axis';
+  const c = facts.releaseCadence;
+  const items = (c?.items || []).filter((x) => x.hours > 0);
+  if (!items.length) return empty('cadence', title, sub);
+  const lo = 10 ** Math.floor(Math.log10(Math.min(...items.map((x) => x.hours))));
+  const hi = 10 ** Math.ceil(Math.log10(Math.max(...items.map((x) => x.hours))));
+  const ly = (h) => PLOT.y1 - ((Math.log10(h) - Math.log10(lo)) / (Math.log10(hi)
+    - Math.log10(lo))) * (PLOT.y1 - PLOT.y0);
+  const x1 = PLOT.x1 - 64;
+  let body = '';
+  for (let v = lo; v <= hi * 1.0001; v *= 10) {
+    const yy = r1(ly(v));
+    body += `<line x1="${PLOT.x0}" x2="${x1}" y1="${yy}" y2="${yy}" stroke="${T.grid}" `
+      + `stroke-opacity="${v === lo ? 0.35 : 0.14}"/><text x="${PLOT.x0 - 8}" y="${r1(yy + 4)}" `
+      + `fill="${T.dim}" font-size="11" text-anchor="end">${esc(`${fmtDec(v, v < 1 ? 1 : 0)} h`)}`
+      + '</text>';
+  }
+  const slot = (x1 - PLOT.x0) / items.length;
+  const every = Math.max(1, Math.ceil(items.length / 6));
+  if (c.median) {
+    const my = r1(ly(c.median));
+    body += `<line x1="${PLOT.x0}" x2="${x1}" y1="${my}" y2="${my}" stroke="${T.text2}" `
+      + `stroke-opacity="0.7"/><text x="${x1 + 8}" y="${r1(my - 3)}" fill="${T.text}" `
+      + 'font-size="12" font-weight="600">medián</text>'
+      + `<text x="${x1 + 8}" y="${r1(my + 12)}" fill="${T.text}" font-size="12" `
+      + `font-weight="600">${esc(fmtHours(c.median))}</text>`;
+  }
+  items.forEach((r, i) => {
+    const cx = r1(PLOT.x0 + i * slot + slot / 2);
+    const cy = r1(ly(r.hours));
+    body += mark(`v${r.version} po v${r.from}: ${fmtHours(r.hours)}`,
+      `<rect x="${r1(PLOT.x0 + i * slot)}" y="${PLOT.y0}" width="${r1(slot)}" `
+      + `height="${PLOT.y1 - PLOT.y0}" fill="transparent"/>`
+      + `<circle cx="${cx}" cy="${cy}" r="4" fill="${T.blue}" stroke="${T.ground}" `
+      + 'stroke-width="2"/>');
+    if (i % every === 0 && items.length - 1 - i >= every / 2) body += xLabel(cx, `v${r.version}`);
+  });
+  const li = items.length - 1;
+  body += xLabel(PLOT.x0 + li * slot + slot / 2, `v${items[li].version}`);
+  const longest = items.reduce((a, b) => (b.hours > a.hours ? b : a));
+  const lx = PLOT.x0 + items.indexOf(longest) * slot + slot / 2;
+  body += `<text x="${r1(lx - 8)}" y="${r1(ly(longest.hours) + 4)}" fill="${T.text2}" `
+    + `font-size="12" text-anchor="end">${esc(fmtHours(longest.hours))}</text>`;
+  return frame('cadence', title, sub, `${fmtInt(items.length)} intervalů mezi `
+    + `${fmtInt(c.releases)} vydáními; medián ${fmtHours(c.median)}, nejdelší `
+    + `${fmtHours(longest.hours)} (před v${longest.version}).`, body);
+}
+
 const RENDERERS = Object.freeze({
   releases: releasesChart, size: sizeChart, plan: planChart, claims: claimsChart,
-  activity: activityChart, modules: modulesChart, growth: growthChart,
+  activity: activityChart, modules: modulesChart, growth: growthChart, burnup: burnupChart,
+  'claims-trend': claimsTrendChart, ratchets: (f) => ratchetsChart(f, RATCHET_COPY),
+  reviews: reviewsChart, cadence: cadenceChart,
 });
 
 /** Every chart of CHARTS, rendered: { <name>: svg }. Throws on a name without a renderer. */
@@ -475,6 +873,43 @@ export function chartTable(name, facts) {
       rows: (facts.codeInventory?.perRelease || []).slice().reverse().map((r) => [
         `v${r.version}`, fmtInt(r.unit), fmtInt(r.browser), fmtInt(r.srcFiles),
         Number.isFinite(r.distBytes) ? `${fmtDec(r.distBytes / MB)} MB` : '–']) };
+  }
+  if (name === 'burnup') {
+    return { head: ['Den', 'Založeno', 'Z toho zrušeno', 'Hotovo', 'V plánu celkem',
+      'Hotovo celkem'], rows: (facts.planBurnup?.days || []).slice().reverse().map((d) => [
+      fmtDate(dayIso(d.day)), fmtInt(d.created), fmtInt(d.cancelled), fmtInt(d.done),
+      fmtInt(d.scopeTotal), fmtInt(d.doneTotal)]) };
+  }
+  if (name === 'claims-trend') {
+    const st = facts.claimsPerRelease?.statuses || [];
+    return { head: ['Vydání', ...st.map((k) => CLAIM_NAMES[k] || k), 'Celkem'],
+      rows: (facts.claimsPerRelease?.items || []).slice().reverse().map((r) => [`v${r.version}`,
+        ...st.map((k) => (r.present ? fmtInt(r.byStatus[k] ?? 0) : 'chybí')),
+        r.present ? fmtInt(r.total) : 'soubor chybí']) };
+  }
+  if (name === 'ratchets') {
+    const items = facts.ratchets?.items || [];
+    const cell = (it, p) => (p.present ? `${ratchetValue(it, p.value)}${p.series ? ` (${
+      p.series})` : ''}` : '–');
+    const rows = [['nyní', ...items.map((it) => cell(it, it.head))]];
+    const n = items[0]?.perRelease.length ?? 0;
+    for (let i = n - 1; i >= 0; i -= 1) {
+      rows.push([`v${items[0].perRelease[i].version}`, ...items.map((it) =>
+        cell(it, it.perRelease[i]))]);
+    }
+    return { head: ['Vydání', ...items.map((it) => RATCHET_COPY[it.file]?.short ?? it.file)],
+      rows };
+  }
+  if (name === 'reviews') {
+    const sev = facts.reviews?.severities || [];
+    return { head: ['Týden', 'Od', 'Revize', ...sev, 'Nálezy'], rows: (facts.reviews?.weeks
+      || []).slice().reverse().map((w) => [w.week, fmtDate(dayIso(w.start)), fmtInt(w.reviews),
+      ...sev.map((k) => fmtInt(w.bySeverity[k])), fmtInt(w.findings)]) };
+  }
+  if (name === 'cadence') {
+    return { head: ['Vydání', 'Po vydání', 'Publikováno', 'Odstup'],
+      rows: (facts.releaseCadence?.items || []).slice().reverse().map((r) => [`v${r.version}`,
+        `v${r.from}`, fmtDate(r.published_at), fmtHours(r.hours)]) };
   }
   throw new Error(`charts: no table for chart "${name}"`);
 }

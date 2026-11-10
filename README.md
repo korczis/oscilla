@@ -288,9 +288,10 @@ Shown disabled, each with the reason it cannot be offered yet (`ENGINE_BLOCKED`)
 
 <!-- derived:live:begin (npm run readme) -->
 These charts are regenerated from the repository on every Pages deploy (release records,
-the plan, the claims ledger, git history and the trees of the release tags, read by
-`scripts/facts.mjs`), so they are current without a commit. The interactive versions, with
-the per-release changes, the roadmap and the claims explorer, are on the [landing page](https://korczis.github.io/oscilla/lab/).
+the plan, the claims ledger, the review records, git history and the trees of the release
+tags, read by `scripts/facts.mjs`), so they are current without a commit; nothing in them
+is estimated. The interactive versions, with the per-release changes, the roadmap, the
+claims explorer, the ratchets and the reviews, are on the [landing page](https://korczis.github.io/oscilla/lab/).
 
 <p><img src="https://korczis.github.io/oscilla/lab/charts/releases.svg" width="100%" alt="Release timeline: every published release of OSCILLA by its publication date"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/size.svg" width="100%" alt="The size of the single-file app (dist/index.html) in each published release"></p>
@@ -299,6 +300,11 @@ the per-release changes, the roadmap and the claims explorer, are on the [landin
 <p><img src="https://korczis.github.io/oscilla/lab/charts/activity.svg" width="100%" alt="Commits per ISO week over the last 26 weeks of the repository"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/modules.svg" width="100%" alt="Source size of each src/js module at the deployed commit, largest first"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/growth.svg" width="100%" alt="Unit test files and browser suites in the tree of each release tag"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/burnup.svg" width="100%" alt="Plan burn-up: issues in the plan and issues done, cumulative per UTC day"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/claims-trend.svg" width="100%" alt="The claims of docs/CLAIMS.yaml by status at every release tag"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/ratchets.svg" width="100%" alt="Every ratchet baseline of the repository at each release tag, one panel each"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/reviews.svg" width="100%" alt="Review findings by severity per ISO week of the review record"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/cadence.svg" width="100%" alt="Hours between consecutive published releases, with their median"></p>
 <!-- derived:live:end -->
 
 ## Navigation

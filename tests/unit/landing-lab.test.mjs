@@ -14,12 +14,19 @@
 //   - the P015 dashboards: the sections Co přinesla která verze, Roadmapa, Průzkumník tvrzení
 //     and Rozhodnutí (ADR) exist with their nav entries; the changelog has a card per release
 //     tag, the unreleased changes and the newest CHANGELOG_FULL_RELEASES (8) list their commits
-//     and older ones link GitHub's compare view instead (the page stays under 850 kB), each
-//     plan-id chip links an issue file that exists and each PR link its number; the
-//     claims explorer holds a row for every claim with its status and area and links its
-//     source, implementation and test, and its filter controls stay hidden without the script;
+//     and older ones link GitHub's compare view instead (the page stays under its ceiling,
+//     1 000 000 characters since P016), each plan-id chip links an issue file that exists and
+//     each PR link its number; the claims explorer holds a row for every claim with its
+//     status and area and links its source, implementation and test, and its filter controls
+//     stay hidden without the script;
 //     the roadmap lists every milestone; the ADR table every ADR; the hero counts commits and
 //     ADRs;
+//   - the P016 trends: the sections Dluh, který jen klesá and Revize a jejich nálezy exist with
+//     their nav entries; a card per ratchet baseline the facts find, each linking its file, the
+//     test that enforces it (a test that reads that file) and its rule (a file that exists);
+//     a review row per record, newest first, each linking its pull request, with every open
+//     P0 or P1 named; every chart card names the source of its fact group; a ratchet without
+//     Czech copy fails the generator; the absent ledger of a release reads as absent;
 //   - expectedLab regenerates a commit behind HEAD from that commit's own tree (a fixture repo
 //     whose two commits carry different generators), and a commit without the generator
 //     deployed no landing (null), so the release task's closing check works after main moves.
@@ -31,9 +38,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CHARTS, REPO_ROOT, collectFacts } from '../../scripts/facts.mjs';
 import { esc } from '../../scripts/landing/charts.mjs';
-import { CHANGELOG_FULL_RELEASES } from '../../scripts/landing/copy.mjs';
-import { generateLanding } from '../../scripts/landing.mjs';
-import { CSP, LINK_SHA } from '../../scripts/landing/page.mjs';
+import { CHANGELOG_FULL_RELEASES, RATCHET_COPY } from '../../scripts/landing/copy.mjs';
+import { generateLanding, ruleFileOf } from '../../scripts/landing.mjs';
+import { CHART_GROUP, CSP, LINK_SHA } from '../../scripts/landing/page.mjs';
+import { chartTable } from '../../scripts/landing/charts.mjs';
+import { readFileSync } from 'node:fs';
 import { checkLabFile, expectedLab } from '../../scripts/verify-deploy.mjs';
 import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 import { ENGINE_MODULES } from '../../src/js/synth/panels/engines.js';
@@ -163,7 +172,14 @@ test('the changelog has a card per release tag, with plan-id chips and PR links 
       for (const id of r.planIds) assert.ok(c.includes(`/issues/${id}.yaml"`), `${r.tag} ${id}`);
       for (const n of r.prs) assert.ok(c.includes(`/pull/${n}"`), `${r.tag} #${n}`);
     }
-    assert.ok(HTML.length <= 850_000, `index.html is ${HTML.length} B (ceiling 850 000)`);
+    // The ceiling, in characters of index.html: 850 000 at P015 (812 145 measured). P016 adds
+    // five charts inline with their table views (about 80 kB), the ten ratchet cards (21 kB)
+    // and the review table of every record (32 kB), after dropping each chart mark's duplicated
+    // data-tip attribute (19 kB): 940 150 characters (946 655 B, 119 963 B gzip, which is what
+    // Pages sends) measured on 2026-11-10, so the ceiling is 1 000 000. The cap on the
+    // changelog's listed commits stays as P015 set it.
+    assert.ok(HTML.length <= 1_000_000,
+      `index.html is ${HTML.length} characters (ceiling 1 000 000)`);
   });
 
 test('the claims explorer has a row per claim, linking its source, code and test', () => {
@@ -196,6 +212,79 @@ test('the roadmap lists every milestone under its intents, and the ADR table eve
   for (const x of FACTS.adrs.items) {
     assert.ok(a.includes(`/blob/${REF}/${x.path}"`), x.path);
   }
+});
+
+test('the P016 sections exist with their nav entries, each naming its source', () => {
+  for (const [id, heading] of [['dluh', 'Dluh, který jen klesá'],
+    ['revize', 'Revize a jejich nálezy']]) {
+    assert.ok(section(id).includes(`>${heading}</h2>`), heading);
+    assert.match(MARKUP, new RegExp(`<a href="#${id}" class=`), `nav #${id}`);
+  }
+  assert.ok(section('dluh').includes(esc(FACTS.ratchets.source)), 'ratchets source');
+  assert.ok(section('dluh').includes(esc(FACTS.ratchets.rule)), 'ratchets derivation');
+  assert.ok(section('revize').includes(esc(FACTS.reviews.dateSource)), 'review dates source');
+  const g = section('grafy');
+  assert.match(g, /Nic se neodhaduje, neinterpoluje ani nedopočítává/);
+  for (const name of CHARTS) {
+    const group = FACTS[CHART_GROUP[name]];
+    assert.ok(group?.source, `${name}: fact group ${CHART_GROUP[name]}`);
+    const at = g.indexOf(`data-chart="${name}"`);
+    const card = g.slice(at, g.indexOf('</figure>', at));
+    assert.ok(card.includes(`<p class="lab-src">Zdroj: <code>${esc(group.source)}`), name);
+  }
+});
+
+test('a card per ratchet baseline, linking its file, its enforcing test and its rule', () => {
+  const d = section('dluh');
+  const rule = ruleFileOf(REPO_ROOT);
+  assert.ok(FACTS.ratchets.items.length >= 8, `ratchets: ${FACTS.ratchets.items.length}`);
+  for (const it of FACTS.ratchets.items) {
+    const at = d.indexOf(`data-ratchet="${it.file}"`);
+    assert.ok(at >= 0, `card ${it.file}`);
+    const card = d.slice(at, d.indexOf('</article>', at));
+    const c = RATCHET_COPY[it.file];
+    assert.ok(card.includes(`>${esc(c.name)}</h3>`), it.file);
+    assert.ok(card.includes(`/blob/${REF}/${it.file}"`), `${it.file} links itself`);
+    assert.ok(card.includes(`/blob/${REF}/${c.test}"`), `${it.file} links ${c.test}`);
+    assert.ok(readFileSync(path.join(REPO_ROOT, c.test), 'utf8')
+      .includes(path.basename(it.file)), `${c.test} reads ${it.file}`);
+    if (c.rule) {
+      const file = rule(c.rule);
+      assert.ok(existsSync(path.join(REPO_ROOT, file)), file);
+      assert.ok(card.includes(`/blob/${REF}/${file}"`), `${it.file} links ${file}`);
+    }
+    assert.ok(card.includes(it.rises === 0 ? '>jen klesá</span>' : 'nárůst'), `${it.file} rises`);
+  }
+  assert.throws(() => rule('project.no-such-rule'), /has no file/);
+});
+
+test('the review table has a row per record, newest first, naming every open P0 and P1', () => {
+  const r = section('revize');
+  const row = new RegExp('<tr><th scope="row"><a href="https://github\\.com/korczis/oscilla/'
+    + 'pull/(\\d+)">', 'g');
+  const prs = [...r.matchAll(row)].map((m) => Number(m[1]));
+  assert.deepEqual(prs, FACTS.reviews.items.map((x) => x.pr).reverse());
+  const open = FACTS.reviews.items.reduce((n, x) => n + x.openBySeverity.P0
+    + x.openBySeverity.P1, 0);
+  const named = [...r.matchAll(/>(\d+) P[01] otevřený</g)].reduce((n, m) => n + Number(m[1]), 0);
+  assert.equal(named, open, 'every open P0 and P1 is named in its row');
+  assert.ok(r.includes(`>${FACTS.reviews.totals.reviews}</dt>`), 'the record count');
+});
+
+test('a release whose tree has no claims ledger reads as absent in the trend, not as zero', () => {
+  const facts = clone(FACTS);
+  facts.claimsPerRelease.items[0] = { ...facts.claimsPerRelease.items[0], present: false,
+    total: null, byStatus: null };
+  const t = chartTable('claims-trend', facts);
+  assert.equal(t.rows[t.rows.length - 1][t.head.length - 1], 'soubor chybí');
+  assert.ok(t.rows[t.rows.length - 1].slice(1, -1).every((c) => c === 'chybí'));
+});
+
+test('mutation: a ratchet baseline without Czech copy fails the generator', async () => {
+  const f = clone(FACTS);
+  f.ratchets.items.push({ ...f.ratchets.items[0], file: 'tests/unit/new-debt-baseline.json' });
+  await assert.rejects(generateLanding({ facts: f }),
+    /no Czech copy for ratchet "tests\/unit\/new-debt-baseline\.json"/);
 });
 
 test('mutation: a registry id without Czech copy fails the generator', async () => {

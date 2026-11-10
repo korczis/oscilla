@@ -7,10 +7,13 @@
 //   renderPage(model) -> the HTML document with the markers STYLE and SCRIPT still in place
 //   (scripts/landing.mjs compiles Tailwind over this markup, then fills them).
 
-import { esc, fmtDate, fmtDec, fmtInt, MB, chartTable } from './charts.mjs';
+import {
+  esc, fmtDate, fmtDec, fmtInt, MB, chartTable, ratchetSpark, ratchetValue,
+} from './charts.mjs';
 import {
   ADR_STATUS_COPY, AREA_COPY, CATEGORY_COPY, CLAIM_STATUS_COPY, COMMIT_TYPE_COPY,
-  CHANGELOG_FULL_RELEASES, COMMIT_TYPES_OPEN, ENGINE_COPY, FRAME_TABS, GROUP_COPY, PLAN_STATUS_COPY, WORKSPACE_COPY,
+  CHANGELOG_FULL_RELEASES, COMMIT_TYPES_OPEN, ENGINE_COPY, FRAME_TABS, GROUP_COPY,
+  PLAN_STATUS_COPY, RATCHET_COPY, VERDICT_COPY, WORKSPACE_COPY,
 } from './copy.mjs';
 
 export const STYLE_MARKER = '<!-- lab:style -->';
@@ -63,7 +66,8 @@ const WRAP = 'mx-auto max-w-screen-xl px-4 py-12 lg:px-6 lg:py-16';
 const NAV = [
   ['#hrat', 'Hrát'], ['#plochy', 'Plochy'], ['#galerie', 'Galerie'],
   ['#grafy', 'Grafy'], ['#dukazy', 'Důkazy'], ['#tvrzeni', 'Tvrzení'], ['#vydani', 'Vydání'],
-  ['#zmeny', 'Změny'], ['#roadmapa', 'Roadmapa'], ['#adr', 'ADR'],
+  ['#zmeny', 'Změny'], ['#roadmapa', 'Roadmapa'], ['#dluh', 'Dluh'], ['#revize', 'Revize'],
+  ['#adr', 'ADR'],
 ];
 const BADGE_GREEN = 'lab-badge lab-badge-green';
 const BADGE_INDIGO = 'lab-badge lab-badge-indigo';
@@ -252,13 +256,22 @@ ${items}
 </section>`;
 }
 
+/** The fact group each chart draws from (scripts/facts.mjs), whose `source` the card names. */
+export const CHART_GROUP = Object.freeze({ releases: 'releases', size: 'releases', plan: 'plan',
+  claims: 'claims', activity: 'git', modules: 'codeInventory', growth: 'codeInventory',
+  burnup: 'planBurnup', 'claims-trend': 'claimsPerRelease', ratchets: 'ratchets',
+  reviews: 'reviews', cadence: 'releaseCadence' });
+
 function chartsSection(m) {
   const cards = m.chartNames.map((name) => {
     const t = chartTable(name, m.facts);
+    const group = m.facts[CHART_GROUP[name]];
+    const source = group ? `${group.source}${group.field ? ` (${group.field})` : ''}${group.dateSource ? `; ${group.dateSource}` : ''}` : '';
     const rows = t.rows.map((r) => `<tr>${r.map((c, i) => (i === 0 ? `<th scope="row">${esc(c)}</th>` : `<td>${esc(c)}</td>`)).join('')}</tr>`).join('');
     return `<figure class="min-w-0 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
 <div data-chart-box class="relative"><div class="overflow-x-auto rounded-xl p-1 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full [&>svg]:min-w-[540px] [&>svg]:rounded-xl [&>svg:focus]:outline-none [&>svg:focus-visible]:ring-4 [&>svg:focus-visible]:ring-primary-500">${m.charts[name].trim()}</div><p class="sr-only" aria-live="polite" data-chart-live></p></div>
 <figcaption class="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500 dark:text-gray-400"><span>Najetím, nebo po zaměření grafu šipkami, zobrazíte hodnoty. Na úzkém displeji graf posunete do strany.</span><a class="${LINK}" href="charts/${name}.svg">SVG soubor</a></figcaption>
+${source ? `<p class="lab-src">Zdroj: <code>${esc(source)}</code></p>` : ''}
 <details class="mt-2 text-sm text-gray-500 dark:text-gray-400"><summary class="cursor-pointer rounded font-medium text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-white">Tabulka hodnot</summary>
 <div class="mt-2 max-h-72 overflow-auto"><table class="lab-ctable w-full text-left text-sm text-gray-500 dark:text-gray-400"><thead class="bg-gray-50 text-xs uppercase text-gray-700 dark:bg-gray-700 dark:text-gray-400"><tr>${t.head.map((h) => `<th scope="col" class="px-3 py-2">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
 </details>
@@ -267,7 +280,7 @@ function chartsSection(m) {
   return `<section id="grafy" class="${SECTION_ALT}">
 <div class="${WRAP}">
 <h2 class="${H2}">Grafy z repozitáře</h2>
-<p class="${LEAD}">Grafy se kreslí při každém nasazení z commitu, který se nasazuje: z release záznamů v <a class="${LINK}" href="${esc(m.tree(m.facts.releases.source))}">${esc(m.facts.releases.source)}</a>, z plánu, z <a class="${LINK}" href="${esc(m.blob(m.facts.claims.source))}">${esc(m.facts.claims.source)}</a> a z historie gitu. Tytéž soubory SVG ukazuje README.</p>
+<p class="${LEAD}">Grafy se kreslí při každém nasazení z commitu, který se nasazuje: z release záznamů v <a class="${LINK}" href="${esc(m.tree(m.facts.releases.source))}">${esc(m.facts.releases.source)}</a>, z plánu, z <a class="${LINK}" href="${esc(m.blob(m.facts.claims.source))}">${esc(m.facts.claims.source)}</a>, ze záznamů revizí, z historie gitu a ze stromů značek vydání. Nic se neodhaduje, neinterpoluje ani nedopočítává: každé číslo je spočítané ze souboru nebo příkazu gitu, který karta grafu uvádí, a co v souboru chybí, graf ukazuje jako chybějící, ne jako nulu. Tytéž soubory SVG ukazuje README.</p>
 <div class="relative grid gap-6 lg:grid-cols-2">
 ${cards}
 </div>
@@ -466,6 +479,84 @@ ${rows}
 </section>`;
 }
 
+const signedPct = (from, to) => {
+  if (!from) return null;
+  const p = Math.round((1000 * (to - from)) / from) / 10;
+  return `${p > 0 ? '+' : p < 0 ? '−' : ''}${fmtDec(Math.abs(p), 1)} %`;
+};
+
+function ratchetCard(m, it) {
+  const c = RATCHET_COPY[it.file];
+  const first = it.perRelease.find((p) => p.present);
+  const now = it.head.present ? it.head : [...it.perRelease].reverse().find((p) => p.present);
+  const change = first && now && first.series === now.series ? signedPct(first.value, now.value)
+    : null;
+  const badge = it.rises === 0 ? `<span class="${BADGE_GREEN} shrink-0">jen klesá</span>`
+    : `<span class="${BADGE_GRAY} shrink-0">${plural(it.rises, 'nárůst', 'nárůsty', 'nárůstů')}</span>`;
+  const raises = it.head.extra?.raises ? ` Zvýšení stropu zapsaná v seznamu raises: ${fmtInt(it.head.extra.raises)}.` : '';
+  const series = now?.series ? ` Hodnoty jsou z měření „${esc(now.series)}“; jiné měření se s nimi nesrovnává.` : '';
+  const derived = it.derived ? '' : ' Význam souboru se ze struktury odvodit nedá: číslo je jen počet jeho položek nejvyšší úrovně.';
+  const rule = c.rule ? m.rule(c.rule) : null;
+  return `<article class="${CARD} flex flex-col" data-ratchet="${esc(it.file)}">
+<div class="mb-2 flex items-start justify-between gap-3"><h3 class="min-w-0 text-lg font-bold text-gray-900 dark:text-white">${esc(c.name)}</h3>${badge}</div>
+<p class="mb-3 text-sm text-gray-500 dark:text-gray-400">${esc(c.counts)}.${raises}${series}${derived}</p>
+<div class="mb-1 flex flex-wrap items-baseline gap-x-3"><span class="text-3xl font-extrabold text-gray-900 dark:text-white">${esc(ratchetValue(it, now?.value))}</span><span class="text-sm text-gray-500 dark:text-gray-400">${first ? `ve v${esc(first.version)}: ${esc(ratchetValue(it, first.value))}${change ? ` · ${change}` : ''}` : ''}</span></div>
+<div class="mb-3 text-gray-400 dark:text-gray-500">${ratchetSpark(it)}</div>
+<ul class="lab-links lab-paths mt-auto space-y-1 text-xs"><li><span>soubor</span> <a href="${esc(m.blob(it.file))}">${esc(it.file)}</a></li><li><span>test</span> <a href="${esc(m.blob(c.test))}">${esc(c.test)}</a></li>${rule ? `<li><span>pravidlo</span> <a href="${esc(m.blob(rule))}">${esc(c.rule)}</a></li>` : '<li><span>pravidlo</span> žádné vlastní, váže ho test</li>'}</ul>
+</article>`;
+}
+
+function ratchetsSection(m) {
+  const r = m.facts.ratchets;
+  const falling = r.items.filter((it) => it.rises === 0).length;
+  return `<section id="dluh" class="${SECTION_ALT}">
+<div class="${WRAP}">
+<h2 class="${H2}">Dluh, který jen klesá</h2>
+<p class="${LEAD}">Ratchet je soubor, který zapisuje zbývající dluh, a test, který selže, když dluh stoupne. Tady je každý takový soubor, který repozitář drží (tests/unit/*-baseline.json a tests/browser/*-baseline.json, nalezené ve stromu, ne vypsané ručně), s hodnotou v každé značce vydání a teď. Co soubor počítá, se čte z jeho vlastní struktury tak, jak ho čte jeho test (pravidlo pod kartami). ${fmtInt(falling)} z ${fmtInt(r.items.length)} od svého vzniku nikdy nestouplo; stropy velikosti souborů stoupat smějí, ale jen se záznamem v seznamu raises, a karta ty nárůsty počítá. Graf všech najdete také mezi <a class="${LINK}" href="#grafy">grafy</a>.</p>
+<div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+${r.items.map((it) => ratchetCard(m, it)).join('\n')}
+</div>
+<p class="mt-4 break-words text-xs text-gray-500 dark:text-gray-400">Odvození: <code>${esc(r.rule)}</code>. Zdroj: <code>${esc(r.source)}</code>.</p>
+</div>
+</section>`;
+}
+
+function reviewsSection(m) {
+  const r = m.facts.reviews;
+  const t = r.totals;
+  const sev = r.severities;
+  const blocking = sev.filter((k) => k === 'P0' || k === 'P1');
+  const openBlocking = blocking.reduce((n, k) => n + (t.openBySeverity[k] ?? 0), 0);
+  const day = (iso) => (iso ? `<time datetime="${esc(iso)}">${esc(fmtDate(iso))}</time>` : '–');
+  const rows = r.items.slice().reverse().map((x) => {
+    const ob = blocking.filter((k) => x.openBySeverity[k] > 0).map((k) => `<span class="${BADGE_GRAY}">${fmtInt(x.openBySeverity[k])} ${k} otevřený</span>`).join('');
+    // a verdict other than merge is a badge; the merges, nearly every row, are plain text
+    const verdict = x.verdict === 'merge' ? esc(VERDICT_COPY.merge) : `<span class="${BADGE_GRAY}">${esc(VERDICT_COPY[x.verdict] ?? x.verdict)}</span>`;
+    return `<tr><th scope="row"><a href="${REPO_URL}/pull/${x.pr}">#${x.pr}</a>${x.members ? ` <span>+${fmtInt(x.members)}</span>` : ''}</th><td>${verdict}${ob}</td>${sev.map((k) => `<td>${fmtInt(x.bySeverity[k])}</td>`).join('')}<td>${fmtInt(x.byStatus.open ?? 0)}</td><td>${fmtInt(x.byStatus.closed ?? 0)}</td><td>${day(x.addedAt)}</td></tr>`;
+  }).join('\n');
+  const verdicts = Object.entries(t.byVerdict).map(([k, n]) => `${fmtInt(n)} ${esc(VERDICT_COPY[k] ?? k)}`).join(', ');
+  return `<section id="revize" class="${SECTION}">
+<div class="${WRAP}">
+<h2 class="${H2}">Revize a jejich nálezy</h2>
+<p class="${LEAD}">Pull request, který mění střežené cesty, potřebuje záznam revize, který napsal někdo jiný než autor změny (pravidlo <a class="${LINK}" href="${esc(m.blob(m.rule('project.review-verdict')))}">project.review-verdict</a>). Každý záznam v <a class="${LINK}" href="${esc(m.tree('.ai/repo/reviews'))}">.ai/repo/reviews</a> uvádí verdikt a všechny nálezy se závažností P0 až P3 a stavem; otevřený nález P0 nebo P1 sloučení blokuje. Datum je okamžik, kdy byl záznam poprvé commitnut. Verdikty: ${verdicts}.</p>
+<dl class="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+${stat(fmtInt(t.reviews), 'záznamů revizí')}
+${stat(fmtInt(t.findings), 'nálezů')}
+${stat(fmtInt(t.byStatus.open ?? 0), 'nálezů stále otevřených')}
+${stat(fmtInt(openBlocking), 'otevřených P0 a P1')}
+</dl>
+<div class="max-h-[40rem] overflow-auto rounded-lg border border-gray-200 shadow-sm dark:border-gray-700">
+<table class="${TABLE} lab-rv"><caption class="sr-only">Revize: pull request, verdikt, nálezy podle závažnosti, otevřené a uzavřené, datum záznamu</caption>
+<thead class="${THEAD} sticky top-0"><tr><th scope="col">PR</th><th scope="col">Verdikt</th>${sev.map((k) => `<th scope="col">${k}</th>`).join('')}<th scope="col">Otevřeno</th><th scope="col">Uzavřeno</th><th scope="col">Zapsáno</th></tr></thead>
+<tbody class="lab-rows lab-links">
+${rows}
+</tbody></table>
+</div>
+<p class="mt-3 text-xs text-gray-500 dark:text-gray-400">„+N“ u čísla pull requestu: záznam vlaku, který posuzuje i N dalších pull requestů. Zdroj: <code>${esc(r.source)}</code>; datum: <code>${esc(r.dateSource)}</code>.</p>
+</div>
+</section>`;
+}
+
 function footer(m) {
   return `<footer class="bg-white dark:bg-gray-900">
 <div class="mx-auto max-w-screen-xl p-4 py-8 md:p-8">
@@ -513,6 +604,8 @@ ${claimsExplorer(m)}
 ${releasesSection(m)}
 ${changesSection(m)}
 ${roadmapSection(m)}
+${ratchetsSection(m)}
+${reviewsSection(m)}
 ${adrSection(m)}
 </main>
 ${footer(m)}
