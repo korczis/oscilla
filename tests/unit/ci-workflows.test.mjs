@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { parseYaml as parse } from '../../scripts/yaml-subset.mjs';
 import {
   actionNeedsTimeout, browserSuites, checkAction, checkRepository, checkScript, checkWorkflow,
+  curlWorstSeconds,
   format, logicalLines, QUEUE_SAFE_CANCEL, stepNeedsTimeout,
 } from '../../scripts/ci-workflow-rules.mjs';
 
@@ -49,7 +50,7 @@ function withStep(run, { timeout = 3, extra = '' } = {}) {
     `      - name: Probe\n${timeout ? `        timeout-minutes: ${timeout}\n` : ''}${extra}`
     + `        run: |\n${body}      - name: Unit and freeze suites\n`);
 }
-const CURL = 'curl -fsSL --retry 3 --connect-timeout 5';
+const CURL = 'curl -fsSL --retry 3 --connect-timeout 5 --max-time 30';
 
 /** A scratch copy of .github and package.json, with more files; removed after the test. */
 function scratch(t, files) {
@@ -165,6 +166,60 @@ test('mutation: a curl without --retry or --connect-timeout', () => {
     .map((v) => v.rule), ['curl-flags', 'download-digest']);
 });
 
+// R055, the class: every curl and wget the checker reads carries a per-attempt bound
+// (--max-time / --timeout, or a `timeout <s>` prefix), and a step's curls at their worst fit
+// the step's timeout-minutes. A mutation per workflow file: a probe step added to the first
+// job of each, unbounded, is named there; bounded, it is not.
+const DIGEST_ENV = `          echo "${'a'.repeat(64)}  x" | sha256sum -c -\n`;
+function probeIn(text, run, minutes = 3) {
+  const at = text.indexOf('\n    steps:\n');
+  assert.ok(at >= 0, 'a job with steps');
+  const job = [...text.slice(0, at + 1).matchAll(/\n {2}([\w-]+):\n/g)].at(-1)[1];
+  const step = `      - name: R055 probe\n        timeout-minutes: ${minutes}\n        run: |\n`
+    + run.split('\n').map((l) => `          ${l}\n`).join('') + DIGEST_ENV;
+  const pos = at + '\n    steps:\n'.length;
+  return { job, text: `${text.slice(0, pos)}${step}${text.slice(pos)}` };
+}
+
+test('R055: a curl or wget without a per-attempt bound is named in every workflow file', () => {
+  const files = readdirSync(path.join(ROOT, '.github/workflows')).filter((f) => /\.ya?ml$/.test(f));
+  assert.ok(files.length >= 3, files.join());
+  for (const f of files) {
+    const text = read(`.github/workflows/${f}`);
+    const check = (t) => checkWorkflow(f, t, SUITES).filter((v) => v.step === 'R055 probe');
+    const bare = probeIn(text, 'curl -fsSL --retry 3 --connect-timeout 5 -o x https://x.example/x');
+    const v = check(bare.text);
+    assert.deepEqual(v.map((x) => `${x.rule}@${x.job}`), [`curl-flags@${bare.job}`], f);
+    assert.match(v[0].message, /curl without --max-time <s> \(or a timeout <s> prefix\)/);
+    const wget = probeIn(text, 'wget --tries=3 --connect-timeout=5 -O x https://x.example/x');
+    assert.match(check(wget.text).map((x) => x.message).join(), /wget without --timeout <s>/, f);
+    for (const ok of [
+      'curl -fsSL --retry 3 --connect-timeout 5 --max-time 30 -o x https://x.example/x',
+      'timeout 60 curl -fsSL --retry 3 --connect-timeout 5 -o x https://x.example/x',
+      'wget --tries=3 --connect-timeout=5 --timeout=30 -O x https://x.example/x']) {
+      assert.deepEqual(check(probeIn(text, ok).text), [], `${f}: ${ok}`);
+    }
+  }
+});
+
+test('R055: a step whose curls at their bounds outlast its timeout-minutes is named', () => {
+  const v = (run, minutes) => checkWorkflow('ci.yml', probeIn(CI, run, minutes).text, SUITES)
+    .filter((x) => x.step === 'R055 probe').map((x) => x.rule);
+  const curl = 'curl -fsSL --retry 5 --retry-delay 5 --connect-timeout 20 --max-time 30 -o x '
+    + 'https://x.example/x';
+  assert.deepEqual(v(curl, 4), [], '6 x 30 + 5 x 5 = 205 s fit 240');
+  assert.deepEqual(v(curl, 3), ['download-budget'], '205 s do not fit 180');
+  assert.deepEqual(v(`${curl}\n${curl}`, 4), ['download-budget'], 'the curls of a step add up');
+  assert.deepEqual(v('timeout 5m curl -fsSL --retry 9 --connect-timeout 5 -o x https://x.example/x',
+    4), ['download-budget'], 'a timeout prefix is the bound');
+  assert.equal(curlWorstSeconds('curl --retry 3 --connect-timeout 5 --max-time 10 u'), 47,
+    'no --retry-delay: curl backs off 1 + 2 + 4 s');
+  assert.equal(curlWorstSeconds('curl --retry "$N" --max-time 10 u'), null, 'a variable bound');
+  // the real install steps (ci.yml knowledge, main-checks.yml) fit: 95 s of 300
+  assert.equal(curlWorstSeconds("curl -fsSL --proto '=https' --retry 3 --retry-all-errors "
+    + '--retry-delay 5 --connect-timeout 20 --max-time 20 -o x u'), 95);
+});
+
 test('mutation: a download that is not checked against a pinned digest', () => {
   const unchecked = mutate(CI,
     '          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -\n', '');
@@ -174,7 +229,7 @@ test('mutation: a download that is not checked against a pinned digest', () => {
   assert.deepEqual(rules(ci(unpinned)), ['download-digest@knowledge']);
   const piped = mutate(CI, '      - name: The installed version is the pinned one\n',
     '      - name: Installer\n        timeout-minutes: 5\n        run: curl -fsSL --retry 3'
-    + ' --connect-timeout 20 https://majordomus.dev/install.sh | sh\n'
+    + ' --connect-timeout 20 --max-time 30 https://majordomus.dev/install.sh | sh\n'
     + '      - name: The installed version is the pinned one\n');
   assert.deepEqual(rules(ci(piped)), ['pipe-to-shell@knowledge']);
 });
@@ -286,7 +341,7 @@ test('mutation: a download kept by a redirect, a tee or the log, with no digest 
     `${CURL} https://x.example/t.tgz | tee t.tgz > /dev/null`,
     `${CURL} https://x.example/version.txt`,
     `${CURL} -o i.sh https://x.example/i.sh && sh i.sh`,
-    'wget --tries=3 --connect-timeout=5 https://x.example/t.tgz',
+    'wget --tries=3 --connect-timeout=5 --timeout=30 https://x.example/t.tgz',
   ]) {
     assert.deepEqual(rules(ci(withStep(run))), ['download-digest@unit'], run);
   }
@@ -315,7 +370,7 @@ test('mutation: a download that is executed, in every form', () => {
     `${CURL} https://x.example/install.sh | sudo -E bash -s -- --yes`,
     `${CURL} https://x.example/install.sh | env A=1 /bin/sh`,
     `${CURL} https://x.example/install.sh.gz | gunzip | zsh`,
-    'wget --tries=3 --connect-timeout=5 -qO- https://x.example/install.sh | sh',
+    'wget --tries=3 --connect-timeout=5 --timeout=30 -qO- https://x.example/install.sh | sh',
   ]) {
     assert.deepEqual(rules(ci(withStep(run))), ['pipe-to-shell@unit'], run);
   }
@@ -702,7 +757,8 @@ test('lines that only name a program are not commands', (t) => {
   for (const run of ['echo "::notice::the apt mirror was slow last run"',
     'echo "curl failed, see the wget log"', 'printf "%s\\n" "install with apt-get or dpkg -i"',
     'command -v curl > /dev/null', 'which wget', 'type curl',
-    'curl -fsS --retry "$RETRIES" --connect-timeout "${WAIT}" -o /dev/null https://x.example/',
+    'curl -fsS --retry "$RETRIES" --connect-timeout "${WAIT}" --max-time "$LIMIT" -o /dev/null '
+      + 'https://x.example/',
   ]) {
     assert.deepEqual(rules(ci(withStep(run, { timeout: run.startsWith('curl') ? 3 : 0 }))), [],
       run);

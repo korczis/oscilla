@@ -9,7 +9,13 @@
 //   step-timeout     a step that installs, downloads or runs a browser suite without its own
 //   install-wrapper  a browser or apt install outside .github/scripts/ci-install.sh, a script
 //                    of package.json included
-//   curl-flags       a curl without --retry and --connect-timeout (wget: --tries)
+//   curl-flags       a curl without --retry, --connect-timeout and --max-time (wget: --tries,
+//                    --connect-timeout and --timeout); a `timeout <s>` prefix bounds the call in
+//                    place of --max-time or --timeout (R055: a retried download with no
+//                    per-attempt bound can use its whole step before a fallback gets its turn)
+//   download-budget  a step whose curls, each at its worst (every attempt at --max-time, every
+//                    retry delay taken: --retry-delay, else curl's backoff of 1, 2, 4 ... s),
+//                    or at its `timeout` prefix, do not fit the step's timeout-minutes
 //   download-digest  a download not checked with `sha256sum -c` against a pinned digest
 //   pipe-to-shell    a download that is executed: piped into an interpreter, substituted into
 //                    a command ($(curl), <(curl), backticks) or in a step that uses eval
@@ -221,6 +227,35 @@ export function runnerLabels(job) {
 
 /** A number, or a variable that holds one (`--retry "$RETRIES"`). */
 const COUNT = '(?:\\d+|"?\\$\\{?\\w+\\}?"?)';
+/** curl's own bound of one attempt: --max-time <s> or -m <s>. */
+const CURL_MAX_TIME = new RegExp(`(?:--max-time|(?:^|\\s)-m)[= ]?\\s*${COUNT}`);
+/** `timeout [opts] <n>[smhd] [sudo] curl|wget`: the whole call, retries included, is bounded. */
+const TIMEOUT_PREFIX = new RegExp(`${WORD}timeout\\s+(?:-\\S+\\s+)*(\\d+(?:\\.\\d+)?)([smhd]?)`
+  + '\\s+(?:sudo\\s+)?(?:curl|wget)\\b');
+const UNIT_S = { '': 1, s: 1, m: 60, h: 3600, d: 86400 };
+
+/**
+ * The worst case in seconds of one curl line (R055): its `timeout` prefix, else every attempt
+ * at --max-time plus every retry delay (--retry-delay, else curl's doubling backoff from 1 s,
+ * at most 600 s each). null when a bound is a variable or missing, which curl-flags judges.
+ */
+export function curlWorstSeconds(line) {
+  const prefix = TIMEOUT_PREFIX.exec(line);
+  if (prefix) return Number(prefix[1]) * UNIT_S[prefix[2]];
+  const num = (re) => {
+    const m = re.exec(line);
+    return m && /^\d+$/.test(m[1]) ? Number(m[1]) : null;
+  };
+  const max = num(/(?:--max-time|(?:^|\s)-m)[= ]?\s*(\S+)/);
+  if (max === null) return null;
+  const retries = /--retry\s/.test(line) ? num(/--retry\s+(\S+)/) : 0;
+  if (retries === null) return null;
+  const delay = /--retry-delay\s/.test(line) ? num(/--retry-delay\s+(\S+)/) : null;
+  if (/--retry-delay\s/.test(line) && delay === null) return null;
+  let waits = 0;
+  for (let i = 0; i < retries; i++) waits += delay ?? Math.min(2 ** i, 600);
+  return (retries + 1) * max + waits;
+}
 
 /** Violations of the curl / wget / digest rules in one shell text. */
 function shellViolations(text, digestScope) {
@@ -231,11 +266,15 @@ function shellViolations(text, digestScope) {
     const isCurl = /\bcurl\b/.test(line);
     const isWget = /\bwget\b/.test(line);
     if (!isCurl && !isWget) continue;
+    const prefixed = TIMEOUT_PREFIX.test(line);
     if (isCurl) {
       const missing = [];
       if (!new RegExp(`--retry\\s+${COUNT}`).test(line)) missing.push('--retry <n>');
       if (!new RegExp(`--connect-timeout\\s+${COUNT}`).test(line)) {
         missing.push('--connect-timeout <s>');
+      }
+      if (!prefixed && !CURL_MAX_TIME.test(line)) {
+        missing.push('--max-time <s> (or a timeout <s> prefix)');
       }
       if (missing.length) {
         out.push(['curl-flags', `curl without ${missing.join(' and ')}: ${line}`]);
@@ -245,6 +284,9 @@ function shellViolations(text, digestScope) {
       const missing = [];
       if (!/(--tries[= ]\d+|(^|\s)-t\s*\d+)/.test(line)) missing.push('--tries <n>');
       if (!/--connect-timeout[= ]\d+/.test(line)) missing.push('--connect-timeout <s>');
+      if (!prefixed && !/(--timeout[= ]\d+|(^|\s)-T\s*\d+)/.test(line)) {
+        missing.push('--timeout <s> (or a timeout <s> prefix)');
+      }
       if (missing.length) {
         out.push(['curl-flags', `wget without ${missing.join(' and ')}: ${line}`]);
       }
@@ -304,6 +346,20 @@ function stepViolations(step, suites, envScope) {
   }
   const scope = `${envScope}\n${JSON.stringify(step.env || {})}\n${step.run}`;
   out.push(...shellViolations(step.run, scope));
+  // R055: the curls of a step, each at its worst, fit the step's own bound.
+  if (positive(step['timeout-minutes'])) {
+    const limit = step['timeout-minutes'] * 60;
+    const curls = runLines.map(commandText).filter((l) => l && /\bcurl\b/.test(l));
+    const worst = curls.map(curlWorstSeconds);
+    if (worst.every((w) => w !== null)) {
+      const total = worst.reduce((a, b) => a + b, 0);
+      if (total > limit) {
+        out.push(['download-budget', `the step's curls take up to ${total} s at their bounds `
+          + `(every attempt at --max-time, every retry delay), beyond its timeout-minutes `
+          + `(${limit} s): ${curls.join(' ; ')}`]);
+      }
+    }
+  }
   return out;
 }
 
