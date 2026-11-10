@@ -34,7 +34,8 @@
 //                                  (its range or 0.95 × Nyquist; compiler.js
 //                                  frequencyLimits, T023) and one `q-limited` per log cable
 //                                  held at a Q knob's top (runtime-trace.js qLimits, K235),
-//                                  while the graph runs
+//                                  while the graph runs; `limits` holds those limit
+//                                  diagnostics alone, every kind (limitDiagnostics)
 //   runtime.applied() -> { revision, studioHash, planHash, at } | null   the applied record:
 //                                  what the running graph holds, set only when a transaction
 //                                  commits (start, apply while running), null while stopped;
@@ -1082,8 +1083,8 @@ export function createStudioRuntime({
     }
     // Validation's warnings, the last transaction's, failures still in effect and the values
     // the running graph holds below what they ask (T023), once each.
-    const warned = [...new Set([...plan.warnings, ...lastWarnings, ...unresolved(),
-      ...limitDiagnostics(bases, plan, owned)])];
+    const limits = limitDiagnostics(bases, plan, owned);
+    const warned = [...new Set([...plan.warnings, ...lastWarnings, ...unresolved(), ...limits])];
     const limitedEdges = [];
     const limitedParams = []; // static bases lowered below 0.95 × Nyquist (V272 A7)
     const exceeds = [];
@@ -1113,6 +1114,7 @@ export function createStudioRuntime({
       exceeds,
       warnings: warned.map((w) => w.message),
       diagnostics: warned,
+      limits, // the limit diagnostics among them, whatever their kind (K235)
       lastOps,
       lastError,
       applied: applied(),

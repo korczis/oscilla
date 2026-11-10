@@ -108,3 +108,52 @@ test('the Inspector names it beside the held cable, with its code', () => {
     { truth: free.truth() });
   assert.ok(!fv.statusText.includes(CODE), fv.statusText);
 });
+
+// The Runtime section's summary counts every limit diagnostic in effect, whatever its kind
+// (runtime debugInfo().limits, runtime-trace.js limitDiagnostics): a revision whose Q cable or
+// fit cable is held does not "play as edited" (project.no-fake-science). On the merge base it
+// counted `frequency-limited` alone.
+test('the Runtime summary counts a held Q cable: not "plays as edited"', () => {
+  const s = rig({ Q: 20, depth: 2 });
+  const rv = inspector.runtimeView(s.store.getModel(), s.truth());
+  assert.equal(rv.state, 'in-sync');
+  assert.ok(!rv.text.includes('plays as edited'), rv.text);
+  assert.equal(rv.text, `Revize ${rv.applied.revision} hraje s omezením: Studio drží 1 `
+    + 'hodnotu na horní mezi knoflíku nebo pod ní; viz diagnostiky níže.');
+  const free = rig({ Q: 1, depth: 2 });
+  const fv = inspector.runtimeView(free.store.getModel(), free.truth());
+  assert.equal(fv.text, `Revision ${fv.applied.revision} plays as edited.`);
+});
+
+test('the Runtime summary counts a fit cable held by its range (performance-limited)', () => {
+  const empty = schema.normalizeStudio({ kind: schema.STUDIO_KIND, schemaVersion: 1,
+    graph: { nodes: [], edges: [] } });
+  const store = actions.createStudioStore(empty,
+    { idGenerator: actions.createIdGenerator(empty) });
+  const add = (nodeType) => store.dispatch({ type: 'NODE_ADD', nodeType,
+    position: { x: 0, y: 0 } }).created.nodes[0];
+  const pad = add('xy-pad');
+  const g = add('gain');
+  // Gain at the top of 0..2: the pad's Y has no room upward, so it is fit to nothing.
+  assert.equal(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: g, key: 'gain', value: 2 }).ok,
+    true);
+  const r = store.dispatch({ type: 'EDGE_ADD', from: { node: pad, port: 'y' },
+    to: { node: g, port: 'gain' }, props: { depth: 1, mapping: 'linear', polarity: 'unipolar' } });
+  assert.equal(r.ok, true, r.reason);
+  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = runtimeMod.createStudioRuntime({ engine });
+  assert.equal(runtime.apply(store.getModel(), { revision: store.getRevision() }).ok, true);
+  assert.equal(runtime.start().ok, true);
+  fx.advance(0.2);
+  const dbg = runtime.debugInfo();
+  const perf = dbg.diagnostics.filter((d) => d.code === 'performance-limited');
+  assert.equal(perf.length, 1, dbg.diagnostics.map((d) => d.code).join());
+  assert.ok(dbg.limits.includes(perf[0]), 'debugInfo().limits holds it');
+  const rv = inspector.runtimeView(store.getModel(), { verdict: runtimeMod.studioDivergence({
+    model: store.getModel(), revision: store.getRevision() }, runtime), runtime: dbg,
+  transport: null });
+  assert.equal(rv.text, `Revize ${rv.applied.revision} hraje s omezením: Studio drží 1 `
+    + 'hodnotu v rozsahu svého parametru; viz diagnostiky níže.');
+});

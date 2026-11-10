@@ -298,18 +298,26 @@ export function runtimeView(model, truth, opts = {}) {
   const a = v && v.applied;
   const d = v ? v.desired : { revision: null, studioHash: null };
   const why = v && v.reason ? v.reason.message : '';
-  // A value the runtime plays below the stored one is not "as edited" (T023).
-  const limits = runtimeDiagnostics(truth).filter((x) => x.code === 'frequency-limited');
+  // A value the runtime plays below the stored one is not "as edited" (T023): every limit
+  // diagnostic in effect counts, whatever its kind (K235: the runtime's `limits`, built by
+  // runtime-trace.js limitDiagnostics; a held Q cable and a fit cable included).
+  const limits = (v && v.applied && truth.runtime && truth.runtime.limits) || [];
   const lowered = limits.length;
   // Each one is a value (a parameter, a cable's depth), not a frequency of its own, and the
-  // reason is the cap that applied: a parameter's range, 0.95 × Nyquist, or both (review R1).
-  const bounds = new Set(limits.map((x) => (x.details && x.details.bound) || 'nyquist'));
-  const held = [bounds.has('range') ? 'within their parameters\' ranges' : null,
-    bounds.has('nyquist') ? `at or below ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist` : null]
-    .filter(Boolean).join(' and ');
-  const text = state === 'in-sync' ? (lowered ? `Revision ${a.revision} plays with ${lowered} `
-    + `value${lowered === 1 ? '' : 's'} lowered to keep ${bounds.has('range') ? 'them'
-      : 'frequencies'} ${held}; see the diagnostics below.`
+  // reason is the cap that applied: a parameter's range, 0.95 × Nyquist, a knob's top (a Q's
+  // ceiling), or several (review R1), read from the diagnostic's own details.
+  const bounds = new Set(limits.map(({ details: x = {} }) => x.bound || x.by
+    || (x.ceiling ? 'ceiling' : 'nyquist')));
+  // In Czech (project.czech-prose, Q104): "drží 1 hodnotu", "2 hodnoty", "5 hodnot".
+  const one = lowered === 1;
+  const held = [bounds.has('range') ? `v rozsahu ${one ? 'svého parametru'
+    : 'svých parametrů'}` : null,
+  bounds.has('ceiling') ? 'na horní mezi knoflíku nebo pod ní' : null,
+  bounds.has('nyquist') ? `na ${SAFE_NYQUIST_FACTOR_TEXT.replace('.', ',')} × Nyquistovy `
+    + 'frekvence nebo pod ní' : null].filter(Boolean).join(' a ');
+  const text = state === 'in-sync' ? (lowered ? `Revize ${a.revision} hraje s omezením: `
+    + `Studio drží ${lowered} ${one ? 'hodnotu' : lowered < 5 ? 'hodnoty' : 'hodnot'} ${held}; `
+    + 'viz diagnostiky níže.'
     : `Revision ${a.revision} plays as edited.`)
     : state === 'degraded' ? `Revision ${a.revision} plays, short of its plan: ${why}`
     : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
