@@ -23,9 +23,10 @@ export const PRO = Object.freeze({
   btnSecondary: `${BTN} ${SECONDARY}`,
   /** Pro secondary button, extra small (a 24 px toolbar; 44x44 on a coarse pointer). */
   btnSecondaryXs: `${BTN_XS} ${SECONDARY}`,
-  /** Pro text link, 44 px tall on a coarse pointer. */
+  /** Pro text link, 44 px tall on a coarse pointer. Dark text is primary-400: primary-500 is
+   *  3.99:1 on a dark card, under WCAG AA 4.5:1 (U103, found by E054's axe pass). */
   link: 'inline-flex items-center text-sm font-medium min-h-9 [@media(pointer:coarse)]:min-h-11 '
-    + 'text-primary-700 hover:underline dark:text-primary-500',
+    + 'text-primary-700 hover:underline dark:text-primary-400',
   /** A Pro card in a list or grid. */
   card: 'flex flex-col justify-between gap-3 p-4 bg-white border rounded-lg shadow-sm '
     + 'dark:bg-gray-800',

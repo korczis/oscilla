@@ -114,10 +114,9 @@ try {
  * entry is dropped in the change that fixes it. `where` is theme/width/workspace, `target` a
  * fragment of axe's selector for the node.
  */
-const AXE_KNOWN = Object.freeze([
-  { where: 'dark/1536/learn', target: 'data-osc="learn.tool"', ratio: 3.99, issue: 'U103',
-    why: 'the shared PRO.link token on a Learn card in the dark theme is 3.99:1, under AA 4.5:1' },
-]);
+// U103 fixed the one entry this list started with (the Learn tool links at 3.99:1 in the dark
+// theme, PRO.link's primary-500): an entry is added only with the plan issue that fixes it.
+const AXE_KNOWN = Object.freeze([]);
 /** A 2:1 text contrast (#aaa on #fff is 2.32:1) that axe's color-contrast must flag. */
 const AXE_FIXTURE = '<!doctype html><html lang="en"><head><title>axe fixture</title></head>'
   + '<body style="background:#fff"><p style="color:#aaa;font-size:14px">Low contrast</p>'
