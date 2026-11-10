@@ -86,18 +86,39 @@ function resettableLfo({ ctx, hooks, acct, at, params, clocked }) {
   }) : [];
   for (const c of [rate, detune, morph]) if (c) c.start(at);
   const voices = [];
+  // C1-K229-1: a voice whose oscillators have all ended is retired. The shared sources stop
+  // feeding it (rate and detune into its oscillators, each morph shaper into its gain), and it
+  // leaves `voices` unless it is still the current (last) one. Before this every reset kept its
+  // voice and connections for the whole play (400 resets: 404 voices).
+  const retire = (v) => {
+    v.oscs.forEach((o, k) => {
+      try { rate.disconnect(o.frequency); } catch (e) { /* already disconnected */ }
+      try { detune.disconnect(o.detune); } catch (e) { /* already disconnected */ }
+      const g = v.gains[k];
+      if (g) { try { shapers[k].disconnect(g.gain); } catch (e) { /* already disconnected */ } }
+    });
+    const i = voices.indexOf(v);
+    if (i >= 0 && i !== voices.length - 1) voices.splice(i, 1);
+  };
   const voice = (t) => {
-    const oscs = types.map((type, k) => {
+    const v = { start: t, types: [...types], oscs: [], gains: [] };
+    let live = types.length;
+    v.oscs = types.map((type, k) => {
       const o = acct.source(acct.track(hooks.oscillator(type, 1, t)));
       o.frequency.cancelScheduledValues(0);
       o.frequency.setValueAtTime(0, now0);
       rate.connect(o.frequency);
       detune.connect(o.detune);
+      o.addEventListener('ended', () => {
+        live -= 1;
+        if (live === 0) retire(v);
+      });
       if (!morphing) {
         o.connect(depth);
         return o;
       }
       const g = acct.track(ctx.createGain());
+      v.gains[k] = g;
       g.gain.setValueAtTime(0, now0);
       shapers[k].connect(g.gain);
       o.connect(g);
@@ -108,7 +129,7 @@ function resettableLfo({ ctx, hooks, acct, at, params, clocked }) {
       });
       return o;
     });
-    voices.push({ start: t, types: [...types], oscs });
+    voices.push(v);
   };
   const stopVoice = (v, t) => {
     for (const o of v.oscs) { try { o.stop(Math.max(t, v.start)); } catch (e) { /* stopped */ } }
@@ -149,7 +170,12 @@ function resettableLfo({ ctx, hooks, acct, at, params, clocked }) {
       }
     },
     dispose() {},
-    info: { voices: () => voices.map((v) => ({ start: v.start, types: v.types })), rate, morph },
+    info: {
+      voices: () => voices.map((v) => ({ start: v.start, types: v.types })),
+      rate, detune, morph, shapers,
+      /** The oscillators and morph gains of the voices still held (what the sources feed). */
+      held: () => voices.map((v) => ({ oscs: [...v.oscs], gains: v.gains.filter(Boolean) })),
+    },
     status: 'ready',
     reason: null,
   };
