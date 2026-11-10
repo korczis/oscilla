@@ -6,8 +6,9 @@
 //                 Playground, Analyzer, Filter Lab, Compare, Synthesis, Sequencer and Presets
 //                 (Load readies the instrument and says "Press Space to play it here"). Space is
 //                 Hold to Play (V1, frozen): held, it plays; released, it stops; a programmed
-//                 pattern triggers once. It is so whether or not a Play control is on screen:
-//                 Hold and Trigger are laid out by width, the owner is not.
+//                 pattern triggers once. A Play is on screen beside it at every width (C030):
+//                 Hold and Trigger where the Source & Pattern panel is laid out, the status
+//                 bar's Play in the others (SOURCE_PANEL_WORKSPACES, STATUS_PLAY_WORKSPACES).
 //   'studio'      Studio. Space plays or stops the Studio transport, as its Play button does.
 //   null          Measure, Experiments, Learn and About. Space starts nothing there (it used
 //                 to start the instrument, which none of them plays or loads).
@@ -26,6 +27,7 @@ import { KEY_HELP } from './studio/transport-view.js';
 import { WORKSPACE_LABELS } from './shell.js';
 import { KEYBOARD_VIEWS } from '../midi/keyboard.js';
 import { OWNER } from './output-owner.js';
+import { STATUS_PLAY_WORKSPACES } from '../core/play-hints.js';
 
 /**
  * Who owns Space in each workspace (the keys are exactly app.js WORKSPACES); each owner is a
@@ -46,6 +48,22 @@ export const SPACE_OWNER = Object.freeze({
   synth: null, // the Synth plays from its keys; Space starts nothing there (ADR 0050)
   about: null,
 });
+
+/**
+ * The instrument workspaces whose Source & Pattern panel lays out Hold to Play and Trigger: the
+ * panel's data-osc-modes in src/index.html (tests/unit/workspace-play-visible.test.mjs holds
+ * them equal).
+ */
+export const SOURCE_PANEL_WORKSPACES = Object.freeze(['playground', 'sequencer', 'synthesis']);
+
+/**
+ * The instrument workspaces without that panel (C030): Analyzer, Filter Lab, Compare and
+ * Presets. The status bar's Play is their Play at every width, not on a phone only, so Space is
+ * never the only way to sound them; elsewhere it stays a phone's control. The one list is
+ * core/play-hints.js's, whose prompts name that Play there; the test holds it equal to the
+ * workspaces SPACE_OWNER gives the instrument outside SOURCE_PANEL_WORKSPACES.
+ */
+export { STATUS_PLAY_WORKSPACES };
 
 /** The names the navigation shows: the one registry's (shell.js WORKSPACE_REGISTRY). */
 export { WORKSPACE_LABELS };

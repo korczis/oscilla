@@ -42,6 +42,7 @@ import { encodeWav, parseWav } from './audio/wav.js';
 import { buildPlan, planFreqAt, PATTERNS } from './audio/patterns.js';
 import { createVisualizationBridge } from './visualization/visualization-bridge.js';
 import { requestedFrequencyFor } from './visualization/output-owner.js';
+import { statusPlayHint } from './core/play-hints.js';
 import { startVisualizer, createDefaultViews } from './visualization/p5-host.js';
 import { harmonicTable } from './visualization/harmonics.js';
 import { createInstrument } from './core/instrument.js';
@@ -712,6 +713,8 @@ function integrationInit() {
   // C013: the views of the one output follow its owner (instrument, sequencer or Studio), handed
   // to the bridge as a plain string on every play, stop and Studio transport state change.
   Alpine.effect(() => bridge.setOutputOwner(cmp.outputOwner));
+  // C030: the idle analyser panel names the Play that is on screen in this workspace
+  Alpine.effect(() => bridge.setIdleHint(statusPlayHint(cmp.workspace, 'idle')));
   // ... and the release a held note will use when let go (C009), next to updateLive above
   Alpine.effect(() => syncNoteOffRelease(cmp));
   // Calm announcements (V1 a7b7a23): only PLAYING, SUSPENDED, STOPPED and ERROR, kept until the

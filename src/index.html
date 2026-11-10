@@ -3135,7 +3135,8 @@
   </aside>
 
   <!-- Status bar -->
-  <footer class="osc-statusbar" aria-label="Status and actions">
+  <footer class="osc-statusbar" aria-label="Status and actions"
+    :class="statusPlayShown && '[@media(min-width:1536px)]:![grid-template-columns:auto_minmax(58px,134fr)_auto_auto_minmax(16px,213fr)_auto]'">
     <div class="osc-sb-brand">
       <span class="osc-sb-name">OSCILLA</span>
       <span class="osc-sb-version" data-osc="status.version" x-text="'v' + BUILD.label"
@@ -3146,8 +3147,9 @@
     </div>
 
     <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
-      aria-label="Play" aria-pressed="false" :aria-pressed="String(isSounding)"
-      :aria-label="isSounding ? 'Stop playback' : (continuousAllowed && !isProgrammed ? 'Play continuously' : 'Trigger')"
+      aria-label="Přehrát" aria-pressed="false" :aria-pressed="String(isSounding)"
+      :class="statusPlayShown && '!inline-flex md:justify-self-end md:me-3'"
+      :aria-label="statusPlayName" :title="statusPlayName"
       @click="statusPlay()" @keydown.enter="latchKey($event)">
       <svg aria-hidden="true" x-show="!isSounding"><use href="#i-play"/></svg>
       <svg aria-hidden="true" x-show="isSounding" style="display: none"><use href="#i-stop"/></svg>
@@ -3166,7 +3168,7 @@
           aria-hidden="true">&#x26A0;&#xFE0E;</span> <span x-text="ceilingText">OUTPUT AT
           CEILING (clipped)</span></span>
       </span>
-      <span class="osc-sb-readout osc-num" data-osc="status.readout">
+      <span class="osc-sb-readout osc-num" data-osc="status.readout" :title="statusReadoutTitle">
         <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
         <span class="osc-sb-dot" aria-hidden="true">•</span>
         <span data-osc="status.waveform" x-text="statusWaveText">Sine</span>

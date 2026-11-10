@@ -377,6 +377,115 @@ function defineChecks() {
       !v.timedOut]))), ...res };
   });
 
+  // C030: a visible Play on every workspace that should sound. At the desktop width (the suite's
+  // default viewport) Analyzer, Filter Lab, Compare and Presets lay out no Hold or Trigger, so
+  // the status bar's Play is theirs: announced as "Přehrát…", named by the idle scope's drawn
+  // caption (Analyzer) and its description, a real click on it sounds the instrument (the
+  // engine's active source count rises above 0) and a second click stops it (back to 0). The
+  // Playground keeps its own Hold and Trigger, no second Play above the phone width, and the V1
+  // words. Every wait is a condition poll with a named deadline (lib/wait.cjs until()).
+  def('c030-visible-play', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const read = () => ev(() => {
+      const O = window.OSCILLA;
+      const b = document.getElementById('osc-sb-play');
+      const r = b.getBoundingClientRect();
+      const scope = O.host && O.host.views ? O.host.views.scope : null;
+      return { ws: O.app.workspace, sources: O.engine.activeSourceCount,
+        nodes: O.engine.activeNodeCount, pressed: b.getAttribute('aria-pressed'),
+        idleHint: O.viz.state.idleHint, name: b.getAttribute('aria-label'),
+        // what the idle scope draws in full, and the scope canvas's description
+        caption: scope ? scope.caption : null,
+        desc: document.querySelector('[data-osc-chart="waveform"]').getAttribute('aria-label'),
+        phone: window.innerWidth < 768,
+        shown: getComputedStyle(b).display !== 'none' && r.width > 0 && r.height > 0
+          && r.bottom <= window.innerHeight && r.right <= window.innerWidth };
+    });
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await read(); return pred(s) ? s : null; },
+          { ms: 6000, what: `c030-visible-play: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    const go = async (ws) => {
+      await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: `c030-visible-play: the ${ws} workspace opens` });
+    };
+    const res = {};
+    const NAMED = /Přehrát ve stavovém řádku/;
+    await ev(() => window.OSCILLA.app.setTab('analysis', 'waveform'));
+    await go('playground');
+    // The Playground lays out Hold and Trigger: above the phone width no second Play (on a
+    // phone the status Play is the bar's transport key everywhere, by design), and its idle
+    // scope says the V1 words, drawn and described
+    const home = await settle((s) => s.ws === 'playground' && s.shown === s.phone
+      && /press Hold to Play/.test(s.caption || '') && /Hold to Play shows/.test(s.desc),
+    'the Playground shows one Play and its scope names Hold to Play');
+    res.playgroundOnePlay = home;
+    for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
+      await go(ws);
+      // the status Play is on screen, announced by the word the prompts use, and the idle scope
+      // (drawn in Analyzer, described in each) names it (core/play-hints.js)
+      const seen = await settle((s) => s.shown && /^Přehrát/.test(s.name || '')
+        && NAMED.test(s.desc) && (ws !== 'analyzer' || NAMED.test(s.caption || '')),
+      `${ws}: the status Play is on screen and the idle scope names it`);
+      if (seen.timedOut) { res[ws] = seen; continue; }
+      await page.click('#osc-sb-play');
+      const on = await settle((s) => s.sources > 0, `${ws}: its Play sounds the instrument`);
+      // the second click is the Stop only while it still sounds (a trigger ends on its own)
+      const stopped = on.pressed === 'true'
+        ? (await page.click('#osc-sb-play'), true) : false;
+      const off = await settle((s) => s.sources === 0 && s.nodes === 0,
+        `${ws}: Stop returns the engine to silence`);
+      res[ws] = { ...off, timedOut: !!(on.timedOut || off.timedOut), rose: on.sources, stopped };
+    }
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
+
+  // C030 (oscilla-43's ruling): the status readout shows every field at 1536 px and on a phone.
+  // A field the bar has no room for (the 1536 px bar with the status Play, a phone that drops
+  // the secondary fields) is still in the readout's title, which carries the whole readout; a
+  // field cut by the bar's edge and missing from the title fails. Workspaces with and without
+  // the status Play, at both sizes, each read after a named-deadline poll for the workspace.
+  def('status-readout-fields', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const res = {};
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      for (const ws of ['playground', 'analyzer', 'presets', 'measure', 'studio']) {
+        await ev((x) => window.OSCILLA.app.setWorkspace(x), ws);
+        await until(() => ev(([x, width]) => window.OSCILLA.app.workspace === x
+          && window.innerWidth === width, [ws, w]),
+        { ms: 8000, what: `status-readout-fields: ${ws} at ${w}` });
+        res[`${ws}@${w}`] = await ev(() => {
+          const ro = document.querySelector('[data-osc="status.readout"]');
+          const box = document.querySelector('.osc-sb-state').getBoundingClientRect();
+          const title = ro.getAttribute('title') || '';
+          const fields = ['frequency', 'waveform', 'pattern', 'duration', 'gain']
+            .map((f) => ro.querySelector(`[data-osc="status.${f}"]`));
+          const lost = fields.filter((e) => {
+            const r = e.getBoundingClientRect();
+            const whole = getComputedStyle(e).display !== 'none' && r.width > 0
+              && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+            return !whole && !title.includes(e.textContent.trim());
+          }).map((e) => e.dataset.osc);
+          return { lost, title, fields: fields.length, timedOut: lost.length > 0 || !title };
+        });
+      }
+    }
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
+
   def('guard-studio', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     const clean = await H.state(page);
