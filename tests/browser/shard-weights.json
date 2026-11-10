@@ -5,7 +5,8 @@
     "prints both), one suite at a time. tests/browser/lib/shards.cjs balances the CI legs with",
     "them. A suite without a weight gets its browser's median; a weight for a suite the release",
     "gate no longer runs fails tests/unit/browser-shards.test.mjs. v3-ui prints no harness lines:",
-    "its weight is its CI step's end minus analysis-worker's end line. instrument-dsp and studio-keys are from the last two runs only."
+    "its weight is its CI step's end minus analysis-worker's end line. instrument-dsp and studio-keys are from the last two runs only.",
+    "qa-regressions adds the contrast check's seconds measured locally on 2026-11-09 at load ~45 (E054: the axe pass in chromium, the whole check in firefox and webkit), until the next CI-measured refresh."
   ],
   "runs": [
     42513898661,
@@ -34,7 +35,7 @@
       "link-integrity": 346,
       "midi": 52,
       "navigation": 182,
-      "qa-regressions": 46,
+      "qa-regressions": 76,
       "sequencer": 71,
       "studio-keys": 3,
       "surface-census": 38,
@@ -73,7 +74,7 @@
       "link-integrity": 569,
       "midi": 80,
       "navigation": 253,
-      "qa-regressions": 71,
+      "qa-regressions": 174,
       "sequencer": 58,
       "studio-keys": 5,
       "surface-census": 62,
@@ -112,7 +113,7 @@
       "link-integrity": 558,
       "midi": 87,
       "navigation": 256,
-      "qa-regressions": 62,
+      "qa-regressions": 102,
       "sequencer": 77,
       "studio-keys": 6,
       "surface-census": 61,

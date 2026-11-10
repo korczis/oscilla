@@ -16,7 +16,10 @@
 //   seq-status-duration-follows-edits [C004]  and follows the Add menu and the Loop button
 //                                 while it plays (dup-stale-6)
 //   contrast [9]                  computed contrast of the fixed fills/texts >= 4.5:1, and
-//                                 axe-core color-contrast (wcag2a/aa/21aa) when installed
+//                                 axe-core color-contrast (wcag2a/aa/21aa), in chromium,
+//                                 firefox and webkit (E054, Q097 answer 2): axe-core is an exactly
+//                                 pinned devDependency read from node_modules; without it the
+//                                 check fails, and a 2:1 fixture must be flagged first
 //   analysis-header-no-overlap [12]  tabs vs Pause/Time/fullscreen at 1280-1536 px
 //   tablet-nav-focus [13]         768-1279 px: the nav scrolls and rings the workspace panels
 //   correlation-states [14]       mono "1.00 mono", stereo "… est." (visible), idle "—"
@@ -96,10 +99,29 @@ const CATALOG_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'u
 const WORKSPACES = ['playground', 'analyzer', 'sequencer', 'filter', 'synthesis', 'compare',
   'presets', 'learn'];
 
+// E054 (Q097 answer 2): axe-core is a devDependency pinned exactly in package.json, installed by
+// npm ci and read here from node_modules, never from a CDN. Missing, the contrast check fails.
 let axeSource = null;
+let axeMissing = null;
 try {
   axeSource = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
-} catch (e) { /* optional: npm i --no-save axe-core */ }
+} catch (e) {
+  axeMissing = `axe-core is not installed (${e.code || e.message}): run npm ci`;
+}
+/**
+ * Known color-contrast violations, each with the plan issue that fixes it (E054). A violation not
+ * listed fails the check; a listed one that no longer occurs in an engine fails it too, so the
+ * entry is dropped in the change that fixes it. `where` is theme/width/workspace, `target` a
+ * fragment of axe's selector for the node.
+ */
+const AXE_KNOWN = Object.freeze([
+  { where: 'dark/1536/learn', target: 'data-osc="learn.tool"', ratio: 3.99, issue: 'U103',
+    why: 'the shared PRO.link token on a Learn card in the dark theme is 3.99:1, under AA 4.5:1' },
+]);
+/** A 2:1 text contrast (#aaa on #fff is 2.32:1) that axe's color-contrast must flag. */
+const AXE_FIXTURE = '<!doctype html><html lang="en"><head><title>axe fixture</title></head>'
+  + '<body style="background:#fff"><p style="color:#aaa;font-size:14px">Low contrast</p>'
+  + '</body></html>';
 
 // ------------------------------------------------------------------------------ page helpers
 /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
@@ -1368,11 +1390,22 @@ function defineChecks() {
       await context.close();
     }
     const low = Object.entries(res).filter(([, v]) => v == null || v < 4.5);
-    // axe-core, when installed (npm i --no-save axe-core): color-contrast across workspaces.
-    let axe = 'skipped (axe-core not installed)';
+    // axe-core color-contrast across workspaces (E054): it runs in every engine, and it proves
+    // first that it flags a 2:1 fixture, so a pass that checks nothing cannot pass.
+    let axe = axeMissing;
     const axeBad = [];
-    if (!axeSource) RUN.skip(browserName, 'contrast-axe', 'axe-core is not installed');
+    let fixtureFlagged = false;
+    const seenKnown = new Set();
     if (axeSource) {
+      const fx = await browser.newContext();
+      const fp = await fx.newPage();
+      await fp.setContent(AXE_FIXTURE);
+      await fp.addScriptTag({ content: axeSource });
+      fixtureFlagged = await fp.evaluate(async () => {
+        const r = await window.axe.run(document, { runOnly: ['wcag2aa'] });
+        return r.violations.some((x) => x.id === 'color-contrast');
+      });
+      await fx.close();
       let runs = 0;
       for (const theme of ['dark', 'light']) {
         for (const w of [375, 768, 1280, 1536]) {
@@ -1389,15 +1422,28 @@ function defineChecks() {
                 n.any[0] && n.any[0].data ? n.any[0].data.contrastRatio : ''}`) : [];
             });
             runs++;
-            if (v.length) axeBad.push(`${theme}/${w}/${ws}: ${v.slice(0, 3).join(' | ')}`);
+            const where = `${theme}/${w}/${ws}`;
+            for (const node of v) {
+              const k = AXE_KNOWN.find((x) => x.where === where && node.includes(x.target));
+              if (k) seenKnown.add(k);
+              else axeBad.push(`${where}: ${node}`);
+            }
           }
           await context.close();
         }
       }
-      axe = `${runs} runs, ${axeBad.length} with color-contrast`;
+      axe = `${runs} runs, ${axeBad.length} unlisted color-contrast node(s), `
+        + `${seenKnown.size}/${AXE_KNOWN.length} known; the 2:1 fixture `
+        + `${fixtureFlagged ? 'flagged' : 'NOT flagged'}`;
     }
-    return { ok: low.length === 0 && axeBad.length === 0, res, low, axe, axeBad: axeBad.slice(0, 5) };
-  }, { browsers: ['chromium'] });
+    // A known violation that no longer occurs is fixed: drop its AXE_KNOWN entry with the fix.
+    const goneKnown = axeSource ? AXE_KNOWN.filter((k) => !seenKnown.has(k))
+      .map((k) => `${k.where} ${k.target} (${k.issue}) no longer occurs: drop it from AXE_KNOWN`)
+      : [];
+    return { ok: !!axeSource && fixtureFlagged && low.length === 0 && axeBad.length === 0
+      && goneKnown.length === 0, browserName, axe, axeBad: axeBad.slice(0, 5), goneKnown, low,
+    res };
+  });
 
   return checks;
 }
@@ -1417,10 +1463,8 @@ function defineChecks() {
     const bad = [];
     for (const c of defineChecks()) {
       if (ONLY && !ONLY.has(c.name)) continue;
-      if (c.browsers && !c.browsers.includes(name)) {
-        RUN.skip(name, c.name, `defined for ${c.browsers.join(', ')} only`);
-        continue;
-      }
+      // Every check runs in every engine (E054 removed the last engine-only check, contrast);
+      // a check restricted again needs its skip back here and declared in tests/README.md.
       n++;
       let r;
       try {
