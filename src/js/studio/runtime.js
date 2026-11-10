@@ -686,6 +686,14 @@ export function createStudioRuntime({
         h.applyBase(withInitials(cb.base, initials.get(id)), true, NONE_OWNED, w);
         written.set(id, w);
       }
+      // The crossfade starts no earlier than the soonest time read after the prepare: building
+      // the new nodes can take longer than the crossfade itself (a slow CPU, a phone, a starved
+      // CI runner: 30 ms of audio time on CI run 42713534778), and a crossfade anchored before
+      // it faded the old routes out before the transport could continue a sounding voice on the
+      // new ones, which it does from the soonest time it reads after this apply (H001's
+      // continuation): a silent seam. The new nodes' sources started at the earlier `env.at`
+      // are silent behind their routes until `t` (C1-H001-2).
+      t = Math.max(t, hooks.soon());
     } catch (err) {
       for (const eh of created.edges.values()) {
         try { eh.dispose(); } catch (e) { /* ignore */ }
