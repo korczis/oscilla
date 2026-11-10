@@ -1,8 +1,10 @@
 // The Studio transport's ramp maths (pure), split from transport.js (the source-size budget,
 // K222 on the T4 base; no behaviour change): a transport segment's value and the ramp a hold
-// cuts, and the fade gain of a pattern voice continued on a rebuilt node. transport.js imports
-// them and re-exports fadeCurve and FADE_KNOTS, where its callers and tests have read them.
+// cuts, the fade gain of a pattern voice continued on a rebuilt node and where it continues
+// (continueAt, H008). transport.js imports them and re-exports fadeCurve and FADE_KNOTS, where
+// its callers and tests have read them.
 
+import { SCHEDULE_LEAD_S } from '../audio/scheduler.js';
 import { STUDIO_XFADE_S } from './compiler.js';
 
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -43,4 +45,25 @@ export function fadeCurve(t0, rampAt, xfadeS = STUDIO_XFADE_S) {
     out.push([tau, r <= 1e-6 ? 1 : Math.min(1, i / FADE_KNOTS / r)]);
   }
   return out;
+}
+
+/**
+ * Where a sounding voice continues on a node the runtime rebuilt (H008, transport applyEdit):
+ * at the runtime's crossfade time `rampAt`, where its old routes start to fade, while that is at
+ * least a render quantum `q` past the time the audio has rendered. No time read after apply moves
+ * it then, so a main-thread stall between apply and the continuation keeps the equal-gain
+ * crossfade whole instead of starting the voice late against routes already fading (review of
+ * #320, R4). The rendered time is the one `soon` (hooks.soon(), read after the stall) is built
+ * on, soon - max(SCHEDULE_LEAD_S, 2q) (rounded up to a quantum), not currentTime: Firefox's
+ * stands still within a task (V249), and a stall is one long task (C1-H008-1). Closer to it or
+ * past it the old routes' fade may be rendered, which no later schedule undoes: the voice
+ * continues at `soonest` (the soonest render quantum at or after the edit's horizon) and fades
+ * in through the open route (fadeCurve), as it does with no route ramp (rampAt null). A stall
+ * longer than the lead less a quantum still leaves that gap (H009). Never before `startTime`.
+ * -> { at, from: 'crossfade' | 'soonest' }
+ */
+export function continueAt({ rampAt, soon, soonest, q, startTime }) {
+  const rendered = soon - Math.max(SCHEDULE_LEAD_S, 2 * q);
+  const from = rampAt !== null && rampAt >= rendered + q - 1e-9 ? 'crossfade' : 'soonest';
+  return { at: Math.max(from === 'crossfade' ? rampAt : soonest, startTime), from };
 }
