@@ -10,6 +10,7 @@ objective: "In src/js/studio/transport.js applyEdit (about :1284-1288 on main) t
 why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 320.yaml#R4 (P2); the code is unchanged since 8ef29c6f still open on main b8bfd3b6. Objective and criterion amended 2026-11-10 at oscilla-c1's review of the fix (fix/h008-continue-at-crossfade 1866f616, train T5 dd420718): a stall past the crossfade lead is not recoverable by any later schedule, so it is H009. Second criterion added at oscilla-c1's finding C1-H008-1 on 1866f616 (currentTime frozen within a Firefox task, V249)."
 scope:
   - "src/js/studio/transport.js"
+  - "src/js/studio/transport-ramps.js"
   - "tests/unit"
   - "tests/browser"
   - ".ai/repo/project/issues/H008.yaml"
