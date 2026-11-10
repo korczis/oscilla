@@ -1477,11 +1477,14 @@ export function mountInspector(host, svc) {
   // A rebuild replaces the shown controls: one between a pointer's down and its up would drop
   // the press's click (a Krok press lost to an edit arriving mid-press, K226 R2-T5-7). While a
   // pointer is down in the Inspector a rebuild waits; it runs in the task after the up, past
-  // the click. In-place updates still run.
+  // the click. In-place updates still run. A press whose up never comes (the window blurred,
+  // as a hidden tab's does, a context menu, a lost capture) ends there, or after 1 s
+  // (C1-INSP-1); no page-hide listener (C050 keeps those on the bus).
   let pressed = false;
   let deferred = false;
-  const onDown = () => { pressed = true; };
+  let cap = null;
   const onUp = () => {
+    clearTimeout(cap);
     if (!pressed) return;
     pressed = false;
     if (deferred) {
@@ -1489,10 +1492,21 @@ export function mountInspector(host, svc) {
       setTimeout(() => { if (host.isConnected) render(); }, 0);
     }
   };
-  const UPS = ['pointerup', 'pointercancel'];
+  const onDown = () => {
+    pressed = true;
+    clearTimeout(cap);
+    cap = setTimeout(onUp, 1000);
+  };
+  const UPS = ['pointerup', 'pointercancel', 'contextmenu'];
   const win = typeof window !== 'undefined' ? window : null;
-  if (typeof host.addEventListener === 'function') host.addEventListener('pointerdown', onDown);
-  if (win) for (const t of UPS) win.addEventListener(t, onUp, true);
+  if (typeof host.addEventListener === 'function') {
+    host.addEventListener('pointerdown', onDown);
+    host.addEventListener('lostpointercapture', onUp);
+  }
+  if (win) {
+    for (const t of UPS) win.addEventListener(t, onUp, true);
+    win.addEventListener('blur', onUp); // the window's own (an element's blur never bubbles)
+  }
   let said = null; // the runtime state last rendered
   function render() {
     const model = svc.store.getModel();
@@ -1604,10 +1618,15 @@ export function mountInspector(host, svc) {
       if (steps) steps.destroy();
       dropListGrids();
       replaceChildren(host, []);
+      clearTimeout(cap);
       if (typeof host.removeEventListener === 'function') {
         host.removeEventListener('pointerdown', onDown);
+        host.removeEventListener('lostpointercapture', onUp);
       }
-      if (win) for (const t of UPS) win.removeEventListener(t, onUp, true);
+      if (win) {
+        for (const t of UPS) win.removeEventListener(t, onUp, true);
+        win.removeEventListener('blur', onUp);
+      }
     },
   };
 }

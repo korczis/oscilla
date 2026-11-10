@@ -102,7 +102,9 @@
 //                        button with an edit that rebuilds the node view (a connection out of the
 //                        sequencer) between its down and its up still steps it ("Krok 1" in the
 //                        live region), and the deferred rebuild runs after it (the button is a
-//                        new element); before the fix the press was lost
+//                        new element); before the fix the press was lost. A press whose up never
+//                        comes is ended by the window's blur (a selection change then shows) or
+//                        after 1 s, and its deferred rebuild runs (C1-INSP-1)
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -1468,6 +1470,12 @@ function defineChecks(fx) {
       && window.OSCILLA.studio.runtime.nodes.has(id), made.svs), { ms: 10000,
     what: 'inspector-press-kept: the Studio plays the sequencer' });
     await H.recordLive(page);
+    // Focus in a field of the Inspector first: the press then moves focus (an element's blur,
+    // which must not end the press).
+    await page.evaluate(() => {
+      const f = document.querySelector('[data-osc="studio.inspector"] input');
+      if (f) f.focus();
+    });
     await page.evaluate((s) => { window.__krokButton = document.querySelector(s); }, sel);
     const b = await page.locator(sel).boundingBox();
     await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
@@ -1489,9 +1497,40 @@ function defineChecks(fx) {
       return !!now && now !== window.__krokButton;
     }, sel), { ms: 5000, what: 'inspector-press-kept: the deferred rebuild runs after the '
       + 'press' }).catch(() => false);
+    // A press whose up never comes is ended by the window's blur, or after 1 s (C1-INSP-1): the
+    // rebuild deferred by it runs, and a selection change after it is shown.
+    const pending = async (end, what) => {
+      await page.evaluate((s) => { window.__krokButton = document.querySelector(s); }, sel);
+      const c = await page.locator(sel).boundingBox();
+      await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+      await page.mouse.down();
+      await page.evaluate(({ id, port }) => window.OSCILLA.studio.store.dispatch({
+        type: 'EDGE_ADD', from: { node: id, port }, to: { node: 'filter-1', port: 'frequency' } }),
+      { id: made.svs, port: end === 'blur' ? 'cvC' : 'cvA' });
+      if (end === 'blur') await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      const ran = await until(() => page.evaluate((s) => {
+        const now = document.querySelector(s);
+        return !!now && now !== window.__krokButton;
+      }, sel), { ms: 5000, what }).catch(() => false);
+      await page.mouse.up();
+      return ran;
+    };
+    const afterBlur = await pending('blur', 'inspector-press-kept: the window\'s blur ends a '
+      + 'press with no up and the deferred rebuild runs');
+    const shown = await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({
+      type: 'SELECTION_CHANGE', selection: { nodes: [id] } }).ok, made.keys)
+      && await until(() => page.evaluate((s) => !document.querySelector(s), sel), { ms: 5000,
+        what: 'inspector-press-kept: a selection change after the blur is shown' })
+        .catch(() => false);
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({
+      type: 'SELECTION_CHANGE', selection: { nodes: [id] } }), made.svs);
+    await until(() => page.locator(sel).isVisible(), { ms: 5000,
+      what: 'inspector-press-kept: the sequencer is shown again' });
+    const afterCap = await pending('cap', 'inspector-press-kept: a press with no up and no blur '
+      + 'ends after 1 s and the deferred rebuild runs');
     await page.evaluate(() => window.OSCILLA.app.studioStop());
-    return { ...H.verdict({ edited: edit.ok, stepped, rebuilt }), edit,
-      heard: heard.slice(-4) };
+    return { ...H.verdict({ edited: edit.ok, stepped, rebuilt, afterBlur, shown, afterCap }),
+      edit, heard: heard.slice(-4) };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,
