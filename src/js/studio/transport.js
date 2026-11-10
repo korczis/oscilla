@@ -818,6 +818,9 @@ export function createStudioTransport({
     if (v.how === 'keys-gate') {
       // K060, K103: a gate on a Keys node is its Gate along its TRIGGER edges for the clip, as a
       // key held for the clip would be: each Envelope, clocked node and Step relay it reaches.
+      // It carries no velocity: the Keys' velocity output plays at rest for it (R2-K220-5).
+      const kh = ready(it.target);
+      if (kh && typeof kh.restVelocity === 'function') kh.restVelocity(it.startTime);
       triggers.fanOut(it, it.target, it.key, deferred);
       return null;
     }

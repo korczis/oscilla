@@ -159,3 +159,44 @@ test('review C1-K220-2: a velocity change under a sounding note glides in, never
     JSON.stringify(added));
   t.stop({ fast: true });
 });
+
+test('review R2-K220-5: a Keys gate clip (K060), which plays no note, sounds at today\'s level: '
+  + 'the velocity rests at 100, and a gate after a note returns to it', async () => {
+  const instrument = await import('../../src/js/studio/adapters/instrument.js');
+  assert.ok(Math.abs(instrument.KEYS_REST_VELOCITY - 100 / 127) < 1e-12,
+    'adapters/instrument.js KEYS_REST_VELOCITY: the keys\' default, 100');
+  const st = defaultStore();
+  const res = PANEL.resolve(st.getModel());
+  const keys = res.get('keys').id;
+  const track = st.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys }).created.tracks[0];
+  assert.ok(st.dispatch({ type: 'CLIP_ADD', trackId: track, kind: 'event', start: 0.5,
+    duration: 1, payload: { action: 'gate' } }).ok);
+  const fx = createFakeAudioEnv({ sampleRate: 48000 });
+  const engine = new AudioEngine({ env: fx.env });
+  assert.ok(engine.init());
+  const runtime = createStudioRuntime({ engine });
+  const t = createStudioTransport({ runtime, engine, store: st });
+  const vel = () => runtime.nodes.get(res.get('vel').id);
+  // Before any note: the velocity output starts at rest, so VELOCITY is gain 1.00.
+  assert.equal(t.arm().ok, true);
+  const out = runtime.nodes.get(keys).outputs.velocity.offset;
+  const e = st.getModel().graph.edges.find((x) => x.from.node === keys
+    && x.from.port === 'velocity');
+  const gain = (v) => last(vel().modTarget('gain', 'linear').param)
+    + last(runtime.edges.get(e.id).gain.gain) * v;
+  assert.ok(Math.abs(gain(out.events[0].value) - 1) < 1e-9,
+    `at rest VELOCITY is gain 1.00: ${gain(out.events[0].value)}`);
+  // A note at 40, then the gate clip: its velocity glides back to rest at the clip's start.
+  assert.equal(t.live(keys, { kind: 'on', note: 60, velocity: 40 }).ok, true);
+  assert.equal(t.live(keys, { kind: 'off', note: 60 }).ok, true);
+  t.stop({ fast: true });
+  fx.advance(0.5);
+  assert.equal(t.start().ok, true);
+  fx.advance(0.4);
+  const g = runtime.nodes.get(keys).outputs.velocity.offset.events.filter((x) => x.ramp === 'target')
+    .at(-1);
+  assert.ok(g && Math.abs(gain(g.value) - 1) < 1e-9, `the gate clip plays at gain 1.00: ${
+    JSON.stringify(g)}`);
+  t.stop({ fast: true });
+  fx.advance(0.5);
+});

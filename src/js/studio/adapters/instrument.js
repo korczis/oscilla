@@ -15,6 +15,12 @@ import {
  * and a note from silence has its velocity within an envelope's attack.
  */
 export const VELOCITY_TAU_S = 0.003;
+/**
+ * The Keys node's velocity output at rest: the keys' default velocity, 100 (review R2-K220-5 of
+ * oscilla-c3, seconded by oscilla-c1). The Synth panel's VELOCITY stage is gain 1.00 there, so a
+ * gate without a note (a K060 gate clip) sounds at the level it had before VELOCITY.
+ */
+export const KEYS_REST_VELOCITY = 100 / 127;
 
 /** Octaves the VCO pitch clip spans each way (its WaveShaper input is pitch / span). */
 export const PITCH_SPAN_OCT = 8;
@@ -131,7 +137,7 @@ export const keys = {
     const pitch = started(acct, ctx.createConstantSource(), at);
     const velocity = started(acct, ctx.createConstantSource(), at);
     pitch.offset.setValueAtTime(0, ctx.currentTime);
-    velocity.offset.setValueAtTime(0, ctx.currentTime);
+    velocity.offset.setValueAtTime(KEYS_REST_VELOCITY, ctx.currentTime);
     const sched = createPitchSchedule(pitch.offset, 0, () => ctx.currentTime);
     const [lo, hi] = KEYS_PITCH_RANGE;
     const clampHz = (SAFE_NYQUIST_FACTOR * ctx.sampleRate) / 2;
@@ -142,7 +148,7 @@ export const keys = {
     // Each velocity change glides in (VELOCITY_TAU_S, review C1-K220-2 of oscilla-c1): since
     // K220 the panel's VELOCITY stage scales the sounding voice by it, so a step at a note-on
     // over a release tail or a legato note would click. A record keeps where its glide began.
-    let vels = [{ t: 0, v: 0, from: 0 }];
+    let vels = [{ t: 0, v: KEYS_REST_VELOCITY, from: KEYS_REST_VELOCITY }];
     // The last ONSET_LOG gate onsets this node played (a note that opened its gate), in time
     // order, as scheduled: debugInfo's onsets and the interval between the last two (K068).
     let onsets = [];
@@ -192,6 +198,16 @@ export const keys = {
         vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v, from: v }), ctx.currentTime,
           (x) => x.t);
         onsets = onsets.filter((x) => x < t);
+      },
+      /**
+       * A gate that carries no velocity (a K060 gate clip, transport.js keys-gate) plays at rest:
+       * the velocity glides back to KEYS_REST_VELOCITY from t, not the last note's.
+       */
+      restVelocity(t) {
+        const from = velAt(t);
+        velocity.offset.setTargetAtTime(KEYS_REST_VELOCITY, t, VELOCITY_TAU_S);
+        vels = fromNow(vels.filter((x) => x.t < t).concat({ t, v: KEYS_REST_VELOCITY, from }),
+          ctx.currentTime, (x) => x.t);
       },
       /** The gate the note router (live-notes.js) opened or closed at t. */
       gateAt(t, open) {
