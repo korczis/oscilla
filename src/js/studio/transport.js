@@ -165,7 +165,7 @@ import {
 } from './trigger-fanout.js';
 import { transportClockOf } from '../audio/clock.js';
 import {
-  LINEAR, clamp, fadeCurve, FADE_KNOTS, rampAcross, segRamp, segValue,
+  LINEAR, clamp, continueAt, fadeCurve, FADE_KNOTS, rampAcross, segRamp, segValue,
 } from './transport-ramps.js';
 
 export { FADE_KNOTS, fadeCurve } from './transport-ramps.js';
@@ -697,7 +697,7 @@ export function createStudioTransport({
    * structural, so the Inspector's waveform edit replaces the node): the old voice plays into
    * the old node's pattern bus and fades out with its routes (the runtime's crossfade), which
    * left the clip silent until its next trigger. Its item continues on the new node from `t`
-   * (the crossfade time or later: applyEdit startOf) until `end` (the item's, or the end a
+   * (the crossfade time or later: continueAt) until `end` (the item's, or the end a
    * retime gave it): the same compiled sequence from the offset it has reached there, with the
    * node's waveform now, faded in from 0 over STUDIO_XFADE_S while the old one fades out.
    * `rampAt`: when the runtime's crossfade ramps the new node's routes 0 -> 1 (over
@@ -1267,17 +1267,14 @@ export function createStudioTransport({
     // A future voice the scheduler kept is rebuilt when the node it plays into was replaced
     // (or its pattern bus changed): it never started, so it is discarded unheard.
     const replay = [];
-    // A sounding voice continues on its rebuilt node at the runtime's crossfade time while it is
-    // a quantum ahead of the clock (H008), else (the fade may be rendered) at the soonest one.
-    let soonest = null;
+    // A sounding voice continues on its rebuilt node at the runtime's crossfade time, or at the
+    // soonest render quantum at or after the horizon (H008, transport-ramps.js continueAt).
+    let soon = null;
     const startOf = (v, rampAt) => {
       const q = RENDER_QUANTUM / hooks.ctx.sampleRate;
-      const from = rampAt !== null && rampAt >= hooks.ctx.currentTime + q - 1e-9 ? 'crossfade'
-        : 'soonest';
-      if (from === 'soonest' && soonest === null) {
-        soonest = Math.max(hooks.soon(), Math.ceil(plan.horizon / q - 1e-9) * q);
-      }
-      return { at: Math.max(from === 'crossfade' ? rampAt : soonest, v.item.startTime), from };
+      if (soon === null) soon = hooks.soon();
+      return continueAt({ rampAt, soon, q, startTime: v.item.startTime,
+        soonest: Math.max(soon, Math.ceil(plan.horizon / q - 1e-9) * q) });
     };
     const replaced = (v) => v.handle !== ready(v.nodeId) || v.dest !== destOf(v.item);
     // The end a sounding voice still plays to: its item's, or the one a retime gave it (a voice

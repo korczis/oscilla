@@ -753,6 +753,52 @@ for (const sr of RATES) {
   }
 }
 
+/**
+ * A waveform edit at sample rate `sr` whose stall after runtime.apply moves the performance clock
+ * (engine._rendered, hooks.soon) by perfStall(xfadeAt, q, currentTime) seconds while currentTime
+ * stands still, as Firefox's does within a task (V249; C1-H008-1, oscilla-c1's probe).
+ */
+function frozenClockEdit(sr, perfStall) {
+  let extra = 0;
+  let rendered = null;
+  const view = (s) => {
+    s.fx.env.performance = { now: () => s.ctx.currentTime * 1000 + extra };
+    return createStudioTransport({ engine: s.engine, store: s.store,
+      runtime: Object.create(s.runtime, { apply: { value: (...args) => {
+        if (!s.runtime.edges.get('edge-1')) return s.runtime.apply(...args); // PLAY
+        const r = s.runtime.apply(...args);
+        s.engine._observeClock(s.ctx); // a reading at the frozen currentTime
+        extra += perfStall(r.at, RENDER_Q / sr, s.ctx.currentTime) * 1000;
+        rendered = s.engine._rendered(s.ctx);
+        return { ...r, frozenAt: s.ctx.currentTime };
+      } } }) });
+  };
+  const out = waveformEdit({ transport: view, s: setup(undefined, { sampleRate: sr }) });
+  assert.equal(out.cont.length, 1, 'the Tone continues, one voice');
+  const [d] = continued(out.tr, 'clip-1');
+  return { ...out, rendered, t0: out.cont[0].startAt, decision: d };
+}
+
+for (const sr of RATES) {
+  test(`C1-H008-1 (${sr} Hz): with currentTime standing still, a stall past the crossfade time `
+    + 'continues from the soonest quantum after what is rendered, never in the past', async () => {
+    const e = frozenClockEdit(sr, (x, q, ct) => x - ct + q);
+    assert.ok(e.rendered > e.s.ctx.currentTime, 'the performance clock moved, currentTime not');
+    assert.ok(e.t0 >= e.rendered, `continued at ${e.t0}, already rendered to ${e.rendered}`);
+    assert.equal(e.decision.resumeFrom, 'soonest');
+    await noLeaks(e.s, e.tr);
+  });
+
+  test(`C1-H008-1 (${sr} Hz): with currentTime standing still, a stall under the lead less a `
+    + 'quantum still continues at the crossfade time', async () => {
+    const e = frozenClockEdit(sr, (x, q) => SCHEDULE_LEAD_S - 2 * q);
+    assert.ok(e.t0 >= e.rendered + RENDER_Q / sr - EPS, `${e.t0} ahead of ${e.rendered}`);
+    assert.equal(e.decision.resumeFrom, 'crossfade');
+    assert.equal(e.decision.at, e.t0);
+    await noLeaks(e.s, e.tr);
+  });
+}
+
 test('C1-H001-2: a prepare that takes longer than the crossfade leaves no silent seam: the old '
   + 'routes fade from where the continuation starts', async () => {
   // CI run 42713534778 (firefox, a 2-core runner): building the rebuilt oscillator took about
