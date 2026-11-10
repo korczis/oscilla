@@ -96,7 +96,10 @@
 //              owner's 'STOP keeps it armed', 2026-11-03); leaving the Studio disarms it
 //   s-svs      K226: a step-voltage sequencer on the panel's Keys Gate, row A into VCO 1's pitch;
 //              while the Studio plays, the Inspector's Krok button by pointer (tap on the phone)
-//              and keyboard steps it, and the running CV holds each step's value (named deadline)
+//              and keyboard steps it: each press says its step (Krok 1, 2, 3; a lost or refused
+//              one fails there, with what the Inspector said) and the running CV holds each
+//              step's value (named deadline); the timeline loops while it runs (R2-T5-7: the
+//              default document plays 3 s, shorter than the deadlines), undone after
 //   s-steps    K221 (desktop and phone): no strip by default; the dock's picker lists
 //              Krokový sekvencer, and Enter on it adds the strip in one undo entry, shown above
 //              the face; a pointer on step 3 (a tap on the phone) puts its note (beat 0.5, C4)
@@ -2046,6 +2049,12 @@ function defineChecks() {
     const step = page.locator('[data-osc="studio.inspector.svsStep"]');
     await until(() => step.isVisible(), { ms: 10000,
       what: 'the Inspector shows the sequencer\'s Krok button' });
+    // R2-T5-7: the default document's timeline ends at 3 s and does not loop, shorter than this
+    // check's own deadlines; on a loaded host the playback ended mid-check, the runtime dropped
+    // the node and the CV read null. The check loops the timeline while it runs (undone after).
+    const looped = await page.evaluate(() => window.OSCILLA.studio.store.dispatch({
+      type: 'LOOP_SET', enabled: true, start: 0, end: 4 }).ok);
+    if (!looped) return { ok: false, detail: 'the timeline could not be looped' };
     await page.evaluate(() => window.OSCILLA.app.studioPlay());
     await until(() => page.evaluate((id) => window.OSCILLA.studio.transport.playing
       && window.OSCILLA.studio.runtime.nodes.has(id), made.id), { ms: 10000,
@@ -2059,15 +2068,34 @@ function defineChecks() {
       const v = await cv();
       return v !== null && Math.abs(v - want) < 1e-6 ? { v } : null;
     }, { ms: 5000, what });
+    // Each press is proved by the step it announces ("Krok n", the Inspector's live region), not
+    // by the value alone: step 1's value is the row's first, which the sequencer holds before
+    // any step, so a press lost or refused (the region then says why) would shift every later
+    // step by one (R2-T5-7).
+    const said = () => page.evaluate(() => String(window.OSCILLA.app.studio.live || '')
+      .replace(/\u200b/g, ''));
+    const announced = async (n, what) => {
+      let heard = '';
+      try {
+        await until(async () => ((heard = await said()) === `Krok ${n}` ? true : null),
+          { ms: 5000, what: `${what}: the Inspector says Krok ${n}` });
+      } catch (e) {
+        throw new Error(`${e.message.split('\n')[0]}; it said "${heard}"`);
+      }
+    };
     // Row A by default, pitch role: 0, 0.25 (three semitones), 0.5, ...
     await press(step);
+    await announced(1, 'Krok by pointer');
     await holds(0, 'Krok by pointer: row A holds step 1 (0)');
     await step.focus();
     await page.keyboard.press('Enter');
+    await announced(2, 'Krok by keyboard');
     const second = await holds(0.25, 'Krok by keyboard: row A holds step 2 (0.25)');
     await page.keyboard.press('Enter');
+    await announced(3, 'Krok again');
     const third = await holds(0.5, 'Krok again: row A holds step 3 (0.5)');
     await page.evaluate(() => window.OSCILLA.app.studioStop());
+    await page.evaluate(() => window.OSCILLA.studio.store.undo()); // the loop, as it was
     return { ok: true, second: second.v, third: third.v };
   });
 
