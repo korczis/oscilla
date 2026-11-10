@@ -48,6 +48,7 @@
 //     that file, and every link out of lab/ to exactly the app root (../ from the front page,
 //     ../../ from a sub-page), whatever its fragment.
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -65,7 +66,7 @@ import { beginMarker, endMarker } from '../../scripts/readme.mjs';
 import { WORKSPACE_REGISTRY } from '../../src/js/ui/shell.js';
 import { ENGINE_MODULES } from '../../src/js/synth/panels/engines.js';
 
-const { CHART_GROUP, CSP, LINK_SHA } = LANDING_PAGE;
+const { CHART_GROUP, LINK_SHA } = LANDING_PAGE;
 // Plan P018's sub-pages; read off the module so that, at a merge base without them, the tests
 // fail by assertion rather than by a missing export.
 const SUBPAGES = LANDING_PAGE.SUBPAGES ?? [];
@@ -158,14 +159,19 @@ test('two generations from the same checkout are byte-identical', async () => {
   assert.ok([...FILES.keys()].some((k) => k.startsWith('shots/') && k.endsWith('.png')));
 });
 
+/** The policy of a page's Content-Security-Policy meta, or null. */
+function cspOf(html) {
+  return (/<meta http-equiv="Content-Security-Policy" content="([^"]*)">/.exec(html) || [])[1]
+    ?? null;
+}
+
 test('every page is Czech and loads nothing from another origin', () => {
-  assert.match(CSP, /default-src 'none'/);
   const LOAD = new RegExp('<(script|link|img|iframe|source|video|audio|embed|object)\\b'
     + '[^>]*?\\s(?:src|href|data|srcset)="([^"]*)"', 'gi');
   for (const [name, html] of PAGES) {
     const markup = stripScripts(html);
     assert.match(html, /<html lang="cs"/, name);
-    assert.ok(html.includes(`<meta http-equiv="Content-Security-Policy" content="${CSP}">`), name);
+    assert.match(cspOf(html) ?? '', /^default-src 'none'; /, name);
     const loads = [...markup.matchAll(LOAD)];
     assert.ok(loads.length > 0, `${name} has an icon`);
     for (const [, tag, url] of loads) {
@@ -775,8 +781,14 @@ test('mutation guard: commit subjects, ADR titles, claims and verdict titles are
   async () => {
   const f = auditFacts();
   const nasty = 'a <b> & "c"';
-  const rel = f.releaseChanges.items[f.releaseChanges.items.length - 1];
-  rel.groups[0].commits[0] = { ...rel.groups[0].commits[0], subject: `fix: ${nasty} subject` };
+  // a release of its own, newest, so a tree without tags (fail-first) lists it as well
+  const prev = f.releaseChanges.items[f.releaseChanges.items.length - 1];
+  const commit = { sha: 'e'.repeat(40), subject: `fix: ${nasty} subject`, type: 'fix',
+    scope: null, breaking: false, conventional: true, date: '2026-01-01T00:00:00.000Z',
+    planIds: [], prs: [] };
+  f.releaseChanges.items.push({ version: '99.0.0', tag: 'v99.0.0', from: prev?.tag ?? null,
+    published_at: null, recorded: false, commits: 1, byType: { fix: 1 }, planIds: [], prs: [],
+    groups: [{ type: 'fix', commits: [commit] }] });
   f.adrs.items[f.adrs.items.length - 1] = { ...f.adrs.items[f.adrs.items.length - 1],
     title: `${nasty} title` };
   f.claims.items[0] = { ...f.claims.items[0], claim: `${nasty} claim` };
@@ -825,4 +837,69 @@ test('every English chart line carries xml:lang="en", in the SVG files and in th
   // the checker finds an unmarked English line
   assert.deepEqual(englishWithoutLang('<svg><text x="1">Open findings by the audit</text>'
     + '<text x="2">Dluh migrace na Flowbite Pro</text></svg>'), ['Open findings by the audit']);
+});
+
+// P3-2 of review r517b: no 'unsafe-inline' for scripts. Each page's policy lists one
+// 'sha256-...' per inline script it carries, recomputed here from the page's own bytes.
+test('the CSP runs only the page\'s inline scripts, each by its SHA-256', () => {
+  for (const [name, html] of PAGES) {
+    const csp = cspOf(html);
+    const scriptSrc = (/(?:^|; )script-src ([^;]*)/.exec(csp) || [])[1] ?? '';
+    assert.doesNotMatch(scriptSrc, /'unsafe-inline'|'unsafe-eval'|\*/, `${name}: ${scriptSrc}`);
+    const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    assert.equal(inline.length, 2, `${name}: the theme script and the client`);
+    assert.doesNotMatch(html, /<script\s+[^>]*src=/i, `${name}: no external script`);
+    const want = inline.map((t) => `'sha256-${createHash('sha256').update(t, 'utf8')
+      .digest('base64')}'`);
+    assert.deepEqual(scriptSrc.split(' ').sort(), want.sort(), name);
+  }
+});
+
+// P3-5 of review r517b: the counts the page's script writes after a filter group thousands as
+// the generated page does (a no-break space), through the one formatter both share.
+test('the script\'s live counts group thousands like the page', async () => {
+  const format = await import('../../scripts/landing/format.mjs').catch(() => ({}));
+  assert.equal(typeof format.shownText, 'function', 'scripts/landing/format.mjs shownText');
+  assert.equal(format.shownText(1234, 23456, 'tvrzení'), 'Zobrazeno 1 234 z 23 456 tvrzení');
+  assert.equal(format.fmtInt(1234567), '1 234 567');
+  const client = readFileSync(path.join(REPO_ROOT, 'scripts/landing/client.js'), 'utf8');
+  const raw = [...client.matchAll(/textContent = `[^`]*`/g)].map((m) => m[0])
+    .filter((t) => /\$\{(?!fmtInt\(|shownText\()[^}]*(?:shown|length|index)/.test(t));
+  assert.deepEqual(raw, [], 'every count the script writes goes through fmtInt or shownText');
+});
+
+// P3-7 of review r517b: a ratchet that sums over a changing file set (the source-size byte caps)
+// shows the file count beside the sum at every tag, and says that a falling sum is no progress
+// by itself; its percentage change is not shown.
+test('a ratchet summed over a changing file set shows its file count per tag', async () => {
+  // facts injected, so a tree without release tags (fail-first) judges the same thing
+  const f = clone(FACTS);
+  const file = 'tests/unit/source-size-baseline.json';
+  const point = (version, value, files) => ({ version, tag: `v${version}`, present: true, value,
+    series: null, extra: { files, raises: 0 } });
+  f.ratchets.items = [{ file, how: 'sum', field: 'caps', unit: 'bytes', derived: true,
+    firstTag: 'v1.0.0', rises: 1,
+    head: { present: true, value: 1_242_000, series: null, extra: { files: 16, raises: 2 } },
+    perRelease: [point('1.0.0', 1_454_000, 19), point('1.1.0', 1_401_000, 18),
+      { version: '1.2.0', tag: 'v1.2.0', present: false, value: null, series: null,
+        extra: null }, point('1.3.0', 1_412_000, 18)] }];
+  const files = await generateLanding({ facts: f });
+  const dluh = (files.get('dluh/index.html') ?? files.get('index.html')).toString('utf8');
+  const at = dluh.indexOf(`data-ratchet="${file}"`);
+  const card = dluh.slice(at, dluh.indexOf('</article>', at));
+  assert.match(card,
+    /sadu souborů, která se mezi vydáními mění \(ve v1\.0\.0 19 souborů, nyní 16 souborů\)/);
+  assert.match(card, /pokles součtu sám o sobě pokrok neznamená/);
+  assert.match(card, /1\s242 kB<\/span><span[^>]*> v 16 souborech</);
+  assert.doesNotMatch(card, / · [+−]?\d+,\d %/, 'no percentage over a changed set');
+  const tags = card.slice(card.indexOf('data-ratchet-tags'));
+  for (const [v, n] of [['nyní', 16], ['v1.3.0', 18], ['v1.1.0', 18], ['v1.0.0', 19]]) {
+    assert.match(tags, new RegExp(`<li>${v.replace(/\./g, '\\.')}: [^<]* / ${n} souborů</li>`),
+      `${v}: its sum with ${n} files`);
+  }
+  assert.doesNotMatch(tags, /v1\.2\.0/, 'a tag without the file lists nothing');
+  const table = chartTable('ratchets', f);
+  assert.deepEqual(table.rows.map((r) => r[1]), ['1 242 kB / 16 souborů',
+    '1 412 kB / 18 souborů', '–', '1 401 kB / 18 souborů',
+    '1 454 kB / 19 souborů'], 'every table cell names its file count');
 });

@@ -16,6 +16,7 @@
 import Collapse from 'flowbite/lib/esm/components/collapse';
 import Modal from 'flowbite/lib/esm/components/modal';
 import Tabs from 'flowbite/lib/esm/components/tabs';
+import { fmtInt, shownText } from './format.mjs';
 
 const THEME_KEY = 'oscilla-lab-theme';
 const root = document.documentElement;
@@ -158,7 +159,7 @@ function initLightbox() {
     img.width = Number(s.dataset.width) || 0;
     img.height = Number(s.dataset.height) || 0;
     caption.textContent = s.dataset.caption;
-    count.textContent = `${index + 1} / ${shots.length}`;
+    count.textContent = `${fmtInt(index + 1)} / ${fmtInt(shots.length)}`;
   };
   const modal = new Modal(el, {
     placement: 'center', backdrop: 'dynamic', closable: true,
@@ -264,7 +265,7 @@ function initClaims() {
       if (ok) shown += 1;
     }
     empty.hidden = shown > 0;
-    count.textContent = `Zobrazeno ${shown} z ${rows.length} tvrzení.`;
+    count.textContent = `${shownText(shown, rows.length, 'tvrzení')}.`;
   };
   q.addEventListener('input', apply);
   status.addEventListener('change', apply);
@@ -319,7 +320,7 @@ function initAudit() {
       if (!tr.hidden) shown += 1;
     }
     empty.hidden = shown > 0;
-    count.textContent = `Zobrazeno ${shown} z ${rows.length} nálezů: `
+    count.textContent = `${shownText(shown, rows.length, 'nálezů')}: `
       + `${AUDIT_NAMES[value] ?? value}.`;
   };
   for (const b of buttons) b.addEventListener('click', () => apply(b.dataset.auditFilter));

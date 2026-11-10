@@ -19,6 +19,7 @@
 
 import { CHARTS } from '../facts.mjs';
 import { AUDIT_CLASS_COPY, RATCHET_COPY } from './copy.mjs';
+import { fmtInt } from './format.mjs';
 
 // OSCILLA tokens (src/styles/tokens.css, the dark reference): ground, outline, text, marks.
 // The two categorical slots (blue, magenta) pass the dataviz validator on the ground (CVD 8.9,
@@ -41,10 +42,7 @@ const r1 = (n) => Math.round(n * 10) / 10;
 export const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
   .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-/** 12345 -> '12 345' (Czech grouping, a no-break space). */
-export function fmtInt(n) {
-  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-}
+export { fmtInt };
 /** 2.94 -> '2,94' (Czech decimal comma). */
 export function fmtDec(n, digits = 2) {
   const [i, f] = n.toFixed(digits).split('.');
@@ -600,6 +598,23 @@ export function ratchetValue(item, value) {
   return item.unit === 'bytes' ? `${fmtInt(value / KB)} kB` : fmtInt(value);
 }
 
+/**
+ * The number of files a point's sum runs over (baselineTotal's extra.files: the byte caps of
+ * source-size), or null for a ratchet that counts no file set.
+ */
+export function ratchetFiles(point) {
+  return Number.isFinite(point?.extra?.files) ? point.extra.files : null;
+}
+
+/** A point of a ratchet as a cell: its value, its series, the files a sum runs over. */
+export function ratchetCell(item, point) {
+  if (!point?.present) return '–';
+  const files = ratchetFiles(point);
+  return `${ratchetValue(item, point.value)}${point.series ? ` (${point.series})` : ''}`
+    + `${files === null ? '' : ` / ${fmtInt(files)} ${files === 1 ? 'soubor' : files >= 2
+      && files <= 4 ? 'soubory' : 'souborů'}`}`;
+}
+
 /** The runs of equal (value, series) of a ratchet over its points: [{ from, to, value }]. */
 export function ratchetRuns(points) {
   const runs = [];
@@ -935,8 +950,7 @@ export function chartTable(name, facts) {
   }
   if (name === 'ratchets') {
     const items = facts.ratchets?.items || [];
-    const cell = (it, p) => (p.present ? `${ratchetValue(it, p.value)}${p.series ? ` (${
-      p.series})` : ''}` : '–');
+    const cell = ratchetCell;
     const rows = [['nyní', ...items.map((it) => cell(it, it.head))]];
     const n = items[0]?.perRelease.length ?? 0;
     for (let i = n - 1; i >= 0; i -= 1) {

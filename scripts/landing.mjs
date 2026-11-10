@@ -14,9 +14,11 @@
 // and inlined into each (the same bytes in every page, so the policy below stays inline-only
 // and each page renders alone), the one script (scripts/landing/client.js with three flowbite
 // components) bundled once and inlined into each, icons inlined, images only from shots/ and
-// charts/ under lab/; a Content-Security-Policy meta refuses every other origin. Deterministic for a commit: every fact comes from
-// scripts/facts.mjs, and the only date is the commit's own; a rerun writes identical bytes,
-// which scripts/verify-deploy.mjs relies on (it regenerates the page and compares the live one).
+// charts/ under lab/; a Content-Security-Policy meta refuses every other origin and runs only
+// the two inline scripts it names by their SHA-256 (the head's theme script and the client).
+// Deterministic for a commit: every fact comes from scripts/facts.mjs, and the only date is the
+// commit's own; a rerun writes identical bytes, which scripts/verify-deploy.mjs relies on (it
+// regenerates the page and compares the live one).
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -32,7 +34,8 @@ import { ICON_SVG } from './social-assets.mjs';
 import { fmtDate, renderCharts } from './landing/charts.mjs';
 import { FRAME_TABS, checkCopy } from './landing/copy.mjs';
 import {
-  LINK_SHA, REPO_URL, SCRIPT_MARKER, STYLE_MARKER, renderPages, shotText,
+  LINK_SHA, REPO_URL, SCRIPT_HASHES_MARKER, SCRIPT_MARKER, STYLE_MARKER, THEME_SCRIPT,
+  renderPages, scriptHash, shotText,
 } from './landing/page.mjs';
 
 const require = createRequire(import.meta.url);
@@ -305,12 +308,16 @@ export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts
   const client = await bundleClient();
   const css = await compileCss(pages.map(([, page]) => page), readFileSync(CLIENT, 'utf8'));
   const style = `<style>${guardRawText(css, 'style', 'landing css')}</style>`;
-  const script = `<script>${guardRawText(client.code, 'script', 'landing js')}</script>`;
+  const code = guardRawText(client.code, 'script', 'landing js');
+  const script = `<script>${code}</script>`;
+  // the CSP names each inline script by the hash of the very bytes inlined (P3-2)
+  const hashes = [THEME_SCRIPT, code].map(scriptHash).join(' ');
   const head = `${notice([...NOTICE_PACKAGES, ...client.pkgs])}\n<html lang="cs"`;
   const files = new Map();
   for (const [name, page] of pages) {
     files.set(name, Buffer.from(page.replace(STYLE_MARKER, () => style)
-      .replace(SCRIPT_MARKER, () => script).replace('<html lang="cs"', () => head), 'utf8'));
+      .replace(SCRIPT_MARKER, () => script).replace(SCRIPT_HASHES_MARKER, () => hashes)
+      .replace('<html lang="cs"', () => head), 'utf8'));
   }
   for (const name of CHARTS) files.set(`charts/${name}.svg`, Buffer.from(charts[name], 'utf8'));
   const copied = new Map();

@@ -12,9 +12,12 @@
 //   markers STYLE and SCRIPT still in place (scripts/landing.mjs compiles Tailwind once over
 //   all of them, then fills them).
 
+import { createHash } from 'node:crypto';
 import {
-  esc, fmtDate, fmtDec, fmtInt, MB, chartTable, ratchetSpark, ratchetValue,
+  esc, fmtDate, fmtDec, fmtInt, MB, chartTable, ratchetCell, ratchetFiles, ratchetSpark,
+  ratchetValue,
 } from './charts.mjs';
+import { shownText } from './format.mjs';
 import {
   ADR_STATUS_COPY, AREA_COPY, AUDIT_CLASS_COPY, CATEGORY_COPY, CLAIM_STATUS_COPY, COMMIT_TYPE_COPY,
   CHANGELOG_FULL_RELEASES, COMMIT_TYPES_OPEN, ENGINE_COPY, FRAME_TABS, GROUP_COPY,
@@ -31,9 +34,22 @@ export const REPO_URL = 'https://github.com/korczis/oscilla';
  */
 export const LINK_SHA = 12;
 
-// The page's own policy: nothing but this origin, inline style and script, and data: images.
-export const CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; "
-  + "script-src 'unsafe-inline'; frame-src 'self'; base-uri 'none'; form-action 'none'";
+// The page's own policy: nothing but this origin, inline style, data: images, and only the
+// inline scripts it carries, each by its SHA-256 (review r517b P3-2): THEME_SCRIPT and the
+// bundled client. The page is rendered with SCRIPT_HASHES_MARKER in place of their hashes;
+// scripts/landing.mjs computes them from the bytes it inlines (scriptHash) and fills it in.
+export const SCRIPT_HASHES_MARKER = '__LAB_SCRIPT_HASHES__';
+export const cspWith = (scriptSrc) => "default-src 'none'; img-src 'self' data:; "
+  + `style-src 'unsafe-inline'; script-src ${scriptSrc}; frame-src 'self'; base-uri 'none'; `
+  + "form-action 'none'";
+/** The CSP source of one inline script: 'sha256-<base64 of the SHA-256 of its UTF-8 text>'. */
+export function scriptHash(text) {
+  return `'sha256-${createHash('sha256').update(text, 'utf8').digest('base64')}'`;
+}
+/** The head's theme script: the stored or preferred theme, before the first paint. */
+export const THEME_SCRIPT = "(function(){var t=null;try{t=localStorage.getItem('oscilla-lab-theme')"
+  + "}catch(e){}var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;"
+  + "document.documentElement.classList.toggle('dark',d)})();";
 
 const GITHUB_MARK = '<svg aria-hidden="true" focusable="false" class="h-5 w-5" '
   + 'viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 '
@@ -386,7 +402,7 @@ ${pageHeading(m, 'tvrzeni')}
 <div><label for="claims-q" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Hledat</label><div class="relative"><div class="pointer-events-none absolute inset-y-0 start-0 flex items-center ps-3 text-gray-500 dark:text-gray-400">${icon(m.icons, 'search', 'h-4 w-4')}</div><input type="search" id="claims-q" autocomplete="off" placeholder="id, věta nebo cesta k souboru" class="${INPUT} ps-10"></div></div>
 <div><label for="claims-status" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Stav</label><select id="claims-status" class="${INPUT}"><option value="">Všechny stavy</option>${statusOpts}</select></div>
 <div><label for="claims-area" class="mb-2 block text-sm font-medium text-gray-900 dark:text-white">Oblast</label><select id="claims-area" class="${INPUT}"><option value="">Všechny oblasti</option>${areaOpts}</select></div>
-<p class="text-sm text-gray-500 dark:text-gray-400 md:col-span-3" aria-live="polite" data-claims-count>Zobrazeno ${fmtInt(c.total)} z ${fmtInt(c.total)} tvrzení.</p>
+<p class="text-sm text-gray-500 dark:text-gray-400 md:col-span-3" aria-live="polite" data-claims-count>${shownText(c.total, c.total, 'tvrzení')}.</p>
 </div>
 <div class="overflow-hidden rounded-lg border border-gray-200 shadow-sm dark:border-gray-700">
 <table class="${TABLE} lab-links block md:table"><caption class="sr-only">Tvrzení z ${esc(c.source)}: identifikátor a věta, stav, oblast, zdroj, kód a test</caption>
@@ -535,8 +551,21 @@ function ratchetCard(m, it) {
   const c = RATCHET_COPY[it.file];
   const first = it.perRelease.find((p) => p.present);
   const now = it.head.present ? it.head : [...it.perRelease].reverse().find((p) => p.present);
-  const change = first && now && first.series === now.series ? signedPct(first.value, now.value)
-    : null;
+  // A sum over a file set that changes between tags (the byte caps of source-size) is shown
+  // with its file count, and no percentage: a file that drops under the threshold or goes
+  // takes its cap out of the sum though nothing got smaller (review r517b P3-7).
+  const files = (p) => ratchetFiles(p);
+  const fileSet = first && now && files(first) !== null && files(now) !== null;
+  const change = !fileSet && first && now && first.series === now.series
+    ? signedPct(first.value, now.value) : null;
+  const inFiles = (p) => (files(p) === null ? '' : ` v ${plural(files(p), 'souboru', 'souborech',
+    'souborech')}`);
+  const perTag = fileSet ? `<details class="mb-3 text-sm text-gray-500 dark:text-gray-400" data-ratchet-tags><summary class="cursor-pointer rounded font-medium text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-white">Součet a počet souborů u každého vydání</summary><ul class="mt-2 max-h-48 space-y-0.5 overflow-auto tabular-nums">${[...(it.head.present ? [{ ...it.head, version: null }] : []), ...it.perRelease.filter((p) => p.present).reverse()].map((p) => `<li>${p.version ? `v${esc(p.version)}` : 'nyní'}: ${esc(ratchetCell(it, p))}</li>`).join('')}</ul></details>` : '';
+  const nFiles = (p) => plural(files(p), 'soubor', 'soubory', 'souborů');
+  const setNote = fileSet ? ` Součet se počítá přes sadu souborů, která se mezi vydáními mění `
+    + `(ve v${esc(first.version)} ${nFiles(first)}, nyní ${nFiles(now)}): soubor, který klesne `
+    + 'pod práh nebo zmizí, ubere ze součtu svůj strop, aniž by se cokoli zmenšilo, takže pokles '
+    + 'součtu sám o sobě pokrok neznamená.' : '';
   const badge = it.rises === 0 ? `<span class="${BADGE_GREEN} shrink-0">jen klesá</span>`
     : `<span class="${BADGE_GRAY} shrink-0">${plural(it.rises, 'nárůst', 'nárůsty', 'nárůstů')}</span>`;
   const raises = it.head.extra?.raises ? ` Zvýšení stropu zapsaná v seznamu raises: ${fmtInt(it.head.extra.raises)}.` : '';
@@ -545,9 +574,10 @@ function ratchetCard(m, it) {
   const rule = c.rule ? m.rule(c.rule) : null;
   return `<article class="${CARD} flex flex-col" data-ratchet="${esc(it.file)}">
 <div class="mb-2 flex items-start justify-between gap-3"><h3 class="min-w-0 text-lg font-bold text-gray-900 dark:text-white">${esc(c.name)}</h3>${badge}</div>
-<p class="mb-3 text-sm text-gray-500 dark:text-gray-400">${esc(c.counts)}.${raises}${series}${derived}</p>
-<div class="mb-1 flex flex-wrap items-baseline gap-x-3"><span class="text-3xl font-extrabold text-gray-900 dark:text-white">${esc(ratchetValue(it, now?.value))}</span><span class="text-sm text-gray-500 dark:text-gray-400">${first ? `ve v${esc(first.version)}: ${esc(ratchetValue(it, first.value))}${change ? ` · ${change}` : ''}` : ''}</span></div>
+<p class="mb-3 text-sm text-gray-500 dark:text-gray-400">${esc(c.counts)}.${raises}${series}${derived}${setNote}</p>
+<div class="mb-1 flex flex-wrap items-baseline gap-x-3"><span class="text-3xl font-extrabold text-gray-900 dark:text-white">${esc(ratchetValue(it, now?.value))}</span>${fileSet ? `<span class="text-sm text-gray-500 dark:text-gray-400">${inFiles(now)}</span>` : ''}<span class="text-sm text-gray-500 dark:text-gray-400">${first ? `ve v${esc(first.version)}: ${esc(ratchetValue(it, first.value))}${inFiles(first)}${change ? ` · ${change}` : ''}` : ''}</span></div>
 <div class="mb-3 text-gray-400 dark:text-gray-500">${ratchetSpark(it)}</div>
+${perTag}
 <ul class="lab-links lab-paths mt-auto space-y-1 text-xs"><li><span>soubor</span> <a href="${esc(m.blob(it.file))}">${esc(it.file)}</a></li><li><span>test</span> <a href="${esc(m.blob(c.test))}">${esc(c.test)}</a></li>${rule ? `<li><span>pravidlo</span> <a href="${esc(m.blob(rule))}">${esc(c.rule)}</a></li>` : '<li><span>pravidlo</span> žádné vlastní, váže ho test</li>'}</ul>
 </article>`;
 }
@@ -853,13 +883,13 @@ function documentOf(m, main, meta) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="${CSP}">
+<meta http-equiv="Content-Security-Policy" content="${cspWith(SCRIPT_HASHES_MARKER)}">
 <meta name="description" content="${esc(meta.desc)}">
 <meta name="color-scheme" content="light dark">
 <meta name="${STATUS_SOURCE_META}" content="${esc(statusSourceId(m.facts.plan.statusSource))}">
 <title>${esc(meta.title)}</title>
 <link rel="icon" href="${m.favicon}">
-<script>(function(){var t=null;try{t=localStorage.getItem('oscilla-lab-theme')}catch(e){}var d=t?t==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.classList.toggle('dark',d)})();</script>
+<script>${THEME_SCRIPT}</script>
 ${STYLE_MARKER}
 </head>
 <body class="bg-white font-sans text-gray-900 antialiased dark:bg-gray-900 dark:text-white">

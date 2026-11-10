@@ -1194,13 +1194,15 @@ export function reviewAudits(root, reviewsFacts) {
   for (const x of audits) x.baseKnown = Boolean(baseSha(checkBase(x)));
   const ancestry = new Map();
   for (const x of fixed) {
+    // an audit whose judged commit this clone lacks proves no ancestry: it links nothing (P3-6)
     const base = baseSha(x.base);
+    if (!base) continue;
     for (const tok of hexTokens(x.evidence)) {
       const t = types.get(tok);
       if (t?.type !== 'commit') continue;
       const key = `${t.sha} ${base}`;
-      if (base && !ancestry.has(key)) ancestry.set(key, isAncestor(root, t.sha, base));
-      if (!base || ancestry.get(key)) {
+      if (!ancestry.has(key)) ancestry.set(key, isAncestor(root, t.sha, base));
+      if (ancestry.get(key)) {
         x.commit = t.sha;
         break;
       }
@@ -1257,8 +1259,8 @@ export function reviewAudits(root, reviewsFacts) {
     source: `${REVIEWS}/audit-*.yaml (review-audit/v1) + ${REVIEWS}/<pr>.yaml`,
     rule: AUDIT_RULE,
     commitRule: `${COMMIT_RULE}${unknownBases.length ? `; the judged commit of ${
-      unknownBases.join(', ')} is not a commit of this clone, so its ancestor check is `
-      + 'skipped' : ''}`,
+      unknownBases.join(', ')} is not a commit of this clone, so no finding of it links a `
+      + 'commit' : ''}`,
     severities: [...AUDITED_SEVERITIES], classes, audits, perFinding,
     unaudited: perFinding.filter((x) => x.class === UNAUDITED).map((x) => x.source),
     orphans, split: { ...split, total: perFinding.length }, bySeverity, p3,

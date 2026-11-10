@@ -46,6 +46,7 @@ import {
   BASELINE_FILE, CHARTS, COMMIT_TYPES, REPO_ROOT, adrs, baselineTotal, catFiles, claimArea,
   claimsPerRelease, codeInventory, collectFacts, median, parseCommitSubject, planBurnup, planIdsIn,
   prsIn, ratchets, releaseCadence, releaseChanges, releaseTags, reviewAudits, reviews, roadmap,
+  addedDates,
   utcDay, auditorName, hexTokens, milestoneStatuses, plan,
 } from '../../scripts/facts.mjs';
 
@@ -162,6 +163,8 @@ test('codeInventory counts unit and browser test files and the dist per tag', ()
   try {
     write('tests/unit/a.test.mjs', 'x');
     write('tests/unit/helper.mjs', 'x');
+    // a test file nested under tests/unit is not one of its files (r517b P3-8)
+    write('tests/unit/fixtures/nested.test.mjs', 'x');
     write('tests/browser/s.cjs', 'x');
     write('tests/browser/lib/wait.cjs', 'x');
     write('dist/index.html', '<!doctype html>');
@@ -394,6 +397,7 @@ test('ratchets: every baseline at each tag and HEAD, its total, rises within a s
     const [timing, flow, keys] = r.items;
     assert.deepEqual(keys.perRelease.map((p) => [p.tag, p.value]), [['v1.0.0', 5], ['v1.1.0', 3]]);
     assert.deepEqual([keys.head.value, keys.rises, keys.how, keys.field], [3, 0, 'sum', 'counts']);
+    assert.equal(keys.firstTag, 'v1.0.0', 'the first tag that holds the file, not the last');
     assert.deepEqual(timing.perRelease.map((p) => [p.present, p.value]), [[false, null],
       [true, 4]]);
     assert.deepEqual([timing.firstTag, timing.head.value, timing.rises], ['v1.1.0', 3, 0]);
@@ -578,14 +582,16 @@ test('reviewAudits: the latest audit per finding, unaudited, orphans, commits an
           '.ai/repo/project/issues/E001.yaml', null],
         ['30.yaml#F1', 'P2', 'fixed', 'audit-aa-new.yaml', null, null, null],
         ['30.yaml#F2', 'P0', 'unaudited', null, null, null, null],
-        ['30.yaml#F3', 'P2', 'fixed', 'audit-zz-old.yaml', null, null, after],
+        ['30.yaml#F3', 'P2', 'fixed', 'audit-zz-old.yaml', null, null, null],
         ['30.yaml#F4', 'P2', 'fixed', 'audit-aa-new.yaml', null, null, null],
       ], 'newer overrides older (R1, whose first hex token is no object and the second the fix); '
-        + 'the older alone covers R2 and F3 (an unknown base: no ancestor check); F2 no audit '
+        + 'the older alone covers R2 and F3 (an unknown base proves no ancestry: no commit, '
+        + 'P3-6); F2 no audit '
         + 'names; F4 names a commit that is not an ancestor of the base');
       assert.match(a.commitRule, /ancestor of the commit its audit judged on/);
       assert.match(a.commitRule,
-        /the judged commit of \.ai\/repo\/reviews\/audit-zz-old\.yaml is not a /);
+        new RegExp('the judged commit of \\.ai/repo/reviews/audit-zz-old\\.yaml is not a commit '
+          + 'of this clone, so no finding of it links a commit'));
       assert.equal(a.perFinding[3].title, 't F2', 'an unaudited finding keeps its verdict title');
       assert.deepEqual(a.unaudited, ['30.yaml#F2']);
       assert.deepEqual(a.orphans, [{ source: '99.yaml#X', pr: 99, id: 'X', class: 'fixed',
@@ -707,6 +713,72 @@ test('collectFacts in a tree without git history says so and names --no-git', as
     execFileSync('git', ['init', '--quiet'], { cwd: dir });
     await assert.rejects(collectFacts({ root: dir, git: true }),
       /has no git history \(a git archive tree\?\).*node scripts\/facts\.mjs --no-git works/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// Review r517b P3-8: the facts mutants that survived c3's run, each killed here.
+test('addedDates: a record deleted and added again keeps the date it was first added', () => {
+  const { dir, git, write, commit } = fixture();
+  try {
+    write('.ai/repo/reviews/12.yaml', VERDICT(12, [['R1', 'P2', 'open']]));
+    commit('review: #12', '2026-01-05T10:00:00Z');
+    git('rm', '--quiet', '.ai/repo/reviews/12.yaml');
+    commit('chore: drop it', '2026-01-06T10:00:00Z');
+    write('.ai/repo/reviews/12.yaml', VERDICT(12, [['R1', 'P2', 'open']]));
+    commit('review: #12 again', '2026-01-20T10:00:00Z');
+    assert.equal(addedDates(dir, '.ai/repo/reviews').get('.ai/repo/reviews/12.yaml'),
+      '2026-01-05T10:00:00.000Z', 'the first addition, not the newest');
+    assert.equal(reviews(dir).items[0].addedAt, '2026-01-05T10:00:00.000Z');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('reviews lists its findings by PR number, not by file name; issueFile only for a file', () => {
+  const { dir, write, commit } = fixture();
+  try {
+    // '10.yaml' sorts before '9.yaml' by name; the findings come by number: 9, then 10
+    write('.ai/repo/reviews/10.yaml', VERDICT(10, [['A', 'P2', 'open']]));
+    write('.ai/repo/reviews/9.yaml', VERDICT(9, [['B', 'P2', 'open'], ['C', 'P2', 'open']]));
+    write('.ai/repo/project/issues/E001.yaml', 'id: E001\nmilestone: M001\n');
+    write('.ai/repo/reviews/audit-2026-01-10.yaml', 'schema: review-audit/v1\n'
+      + 'date: 2026-01-10\nauditors: [c3]\nbase: x\nscope: "s"\nfindings:\n'
+      + '  - { source: "9.yaml#B", class: open, evidence: "e", issue: E001 }\n'
+      + '  - { source: "9.yaml#C", class: open, evidence: "e", issue: E404 }\n');
+    commit('review: two records and an audit', '2026-01-10T10:00:00Z');
+    const rv = reviews(dir);
+    assert.deepEqual(rv.findings.map((x) => x.source), ['9.yaml#B', '9.yaml#C', '10.yaml#A']);
+    const a = reviewAudits(dir, rv);
+    assert.deepEqual(a.perFinding.map((x) => [x.source, x.issue, x.issueFile]), [
+      ['9.yaml#B', 'E001', '.ai/repo/project/issues/E001.yaml'],
+      ['9.yaml#C', 'E404', null],
+      ['10.yaml#A', null, null]], 'a plan issue with no file in this tree links no file');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('reviewAudits: an audit whose judged_on this clone lacks links no commit, and says so', () => {
+  const { dir, write, commit } = fixture();
+  try {
+    write('.ai/repo/reviews/12.yaml', VERDICT(12, [['A1', 'P2', 'open']]));
+    const base = commit('chore: the base', '2026-01-05T10:00:00Z');
+    const fix = commit('fix(x): the fix');
+    // base is here, judged_on is not: the ancestor check has nothing to check against
+    write('.ai/repo/reviews/audit-2026-01-10.yaml', 'schema: review-audit/v1\n'
+      + `date: 2026-01-10\nauditors: [c3]\nbase: ${base}\n`
+      + `judged_on: ${'b'.repeat(40)}\nscope: "s"\nfindings:\n`
+      + `  - { source: "12.yaml#A1", class: fixed, evidence: "${fix.slice(0, 9)} fixed it", `
+      + 'issue: null }\n');
+    commit('review: the audit');
+    const a = reviewAudits(dir, reviews(dir));
+    assert.deepEqual(a.perFinding.map((x) => [x.source, x.class, x.commit]),
+      [['12.yaml#A1', 'fixed', null]], 'an unknown judged commit proves no ancestry');
+    assert.equal(a.audits[0].baseKnown, false);
+    assert.match(a.commitRule, new RegExp('the judged commit of \\.ai/repo/reviews/'
+      + 'audit-2026-01-10\\.yaml is not a commit of this clone, so no finding of it links'));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
