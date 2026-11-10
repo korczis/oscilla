@@ -968,7 +968,7 @@
             <span class="osc-m-preset" x-text="CHARACTERIZE_PLAYBACK_CHAIN.label"></span>
             <span class="osc-spacer"></span>
             <span class="osc-m-ind" data-osc="measure.freqIndicator"
-              :class="{ 'is-on': measureFreqIndicator === 'CALIBRATED' }">
+              :class="{ 'is-on': measureFreqCoverage.on }" :title="measureFreqCoverage.title">
               <span class="osc-m-ind-k">Frequency</span>
               <span x-text="measureFreqIndicator">UNCALIBRATED</span></span>
             <span class="osc-m-ind" data-osc="measure.levelIndicator"
