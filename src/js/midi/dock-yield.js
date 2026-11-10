@@ -34,6 +34,26 @@ import { dockRoom, dockState, dockYields, KEY_ROUTES, ROOM_EVENT, roomFolds, rou
   from './routes.js';
 
 export const NOTES_EVENT = 'osc:notes';
+/** Sent on the window each time the dock's state is applied (C1-R2T51-1): its readers subscribe
+ *  with onDockChange, so the state stays this module's alone (no reader observes it). */
+export const DOCK_EVENT = 'osc:dock';
+
+/**
+ * Subscribe fn({ state, yields, foldable, band }) to every applied dock state (the Synth's section
+ * nav judges its room on it, synth/nav-room.js); band is the height the keys take docked, as
+ * measured while docked and kept while folded (0 until measured); returns the unsubscribe. A
+ * no-op without a window.
+ */
+export function onDockChange(win, fn) {
+  if (!win || typeof win.addEventListener !== 'function' || typeof fn !== 'function') {
+    return () => {};
+  }
+  const h = (e) => fn(e && e.detail);
+  win.addEventListener(DOCK_EVENT, h);
+  return () => {
+    if (typeof win.removeEventListener === 'function') win.removeEventListener(DOCK_EVENT, h);
+  };
+}
 /** The handle's key (bound in ui/keys/clients.js through the one key registry). */
 export const DOCK_KEY = 'Alt+KeyK';
 const OWNER_NAMES = Object.freeze({ 'xy-pad': 'XY pad' });
@@ -304,6 +324,10 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     place(); // now, as the dock's own children stand
     // and again once the component has drawn (an Alpine nextTick can be held while it starts).
     if (cmp && typeof cmp.$nextTick === 'function') cmp.$nextTick(place);
+    if (typeof win.dispatchEvent === 'function' && typeof win.CustomEvent === 'function') {
+      win.dispatchEvent(new win.CustomEvent(DOCK_EVENT, { detail: { state,
+        yields: !!info.yields, foldable: !!info.foldable, band: dockedBand } }));
+    }
   }
 
   // The room the docked keys would take (routes.js roomFolds): the band measured while the dock
