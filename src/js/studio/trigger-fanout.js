@@ -26,7 +26,51 @@
 //   reachedEnvelopes(model, sourceId)   Envelope ids `sourceId`'s TRIGGER edges gate, directly
 //                or through Step relays (the transport's gate ownership, gatedEnvelopes)
 
+import { NODE_REGISTRY } from './registry.js';
+import { clipTarget, clipUse } from './clip-targets.js';
+import { effectiveTarget } from './timeline.js';
+
 const nodeOf = (m, id) => (m && id ? m.graph.nodes.find((n) => n.id === id) || null : null);
+
+/**
+ * Whether edge `e` leaves a TRIGGER output of its source (K103: any of them, a Keys or XY pad
+ * Gate, a Clock, Sequence or Step Modulator Trigger) and is not muted (V272 A3).
+ */
+function triggerOut(m, e) {
+  if (e.props && e.props.muted) return false;
+  const n = nodeOf(m, e.from.node);
+  const def = n && n.type ? NODE_REGISTRY.get(n.type) : null;
+  // A node of no known type (a partial model) is read by its port names, as before K103.
+  if (!def) return e.from.port === 'gate' || e.from.port === 'trigger';
+  return def.outputs.some((p) => p.id === e.from.port && p.type === 'TRIGGER');
+}
+
+/**
+ * One hop of the fan-out from `sourceId` (K103): the Envelopes whose Gate its unmuted TRIGGER
+ * edges reach, and every other node a TRIGGER edge of it reaches (a Random's or Step
+ * Modulator's clock). -> { envelopes, clocks }
+ */
+export function triggerHop(m, sourceId) {
+  const envelopes = [];
+  const clocks = [];
+  for (const e of m.graph.edges) {
+    if (e.from.node !== sourceId || !triggerOut(m, e)) continue;
+    const n = nodeOf(m, e.to.node);
+    if (!n) continue;
+    if (n.type === 'envelope' && e.to.port === 'gate') envelopes.push(n.id);
+    else clocks.push(n.id);
+  }
+  return { envelopes, clocks };
+}
+
+/**
+ * Whether the k-th clock tick (from 0) of node `n` is a step a Step Modulator takes, which its
+ * own Trigger then relays (K023): every tick, but none after the last step of a 'once' run.
+ */
+export function stepRelays(n, k) {
+  if (!n || n.type !== 'step-modulator' || k === null || k === undefined) return false;
+  return n.params.playback !== 'once' || k < n.params.steps.length;
+}
 
 /**
  * Envelope ids a pattern clip on `sourceId` gates through its TRIGGER edges. A muted edge
@@ -35,8 +79,7 @@ const nodeOf = (m, id) => (m && id ? m.graph.nodes.find((n) => n.id === id) || n
 function triggerEnvelopes(m, sourceId) {
   const out = [];
   for (const e of m.graph.edges) {
-    if (e.from.node !== sourceId || e.from.port !== 'trigger' || e.to.port !== 'gate') continue;
-    if (e.props && e.props.muted) continue;
+    if (e.from.node !== sourceId || e.to.port !== 'gate' || !triggerOut(m, e)) continue;
     const n = nodeOf(m, e.to.node);
     if (n && n.type === 'envelope') out.push(n.id);
   }
@@ -47,8 +90,7 @@ function triggerEnvelopes(m, sourceId) {
 function triggerClocks(m, sourceId, nodes) {
   const out = [];
   for (const e of m.graph.edges) {
-    if (e.from.node !== sourceId || e.from.port !== 'trigger') continue;
-    if (e.props && e.props.muted) continue;
+    if (e.from.node !== sourceId || !triggerOut(m, e)) continue;
     const n = nodeOf(m, e.to.node);
     const a = n ? nodes.get(n.id) : null;
     if (a && typeof a.clock === 'function') out.push(n.id);
@@ -63,8 +105,7 @@ function triggerClocks(m, sourceId, nodes) {
 function relayedSteps(m, sourceId) {
   const out = [];
   for (const e of m.graph.edges) {
-    if (e.from.node !== sourceId || e.from.port !== 'trigger' || e.to.port !== 'clock') continue;
-    if (e.props && e.props.muted) continue;
+    if (e.from.node !== sourceId || e.to.port !== 'clock' || !triggerOut(m, e)) continue;
     const n = nodeOf(m, e.to.node);
     if (n && n.type === 'step-modulator') out.push(n.id);
   }
@@ -78,6 +119,55 @@ export function reachedEnvelopes(m, sourceId, seen = new Set()) {
   const out = triggerEnvelopes(m, sourceId);
   for (const id of relayedSteps(m, sourceId)) out.push(...reachedEnvelopes(m, id, seen));
   return out;
+}
+
+/** Every TRIGGER input `sourceId` reaches, through Step relays: Set of node ids. */
+function reachedInputs(m, sourceId, out = new Set(), seen = new Set()) {
+  if (seen.has(sourceId)) return out;
+  seen.add(sourceId);
+  const { envelopes, clocks } = triggerHop(m, sourceId);
+  for (const id of [...envelopes, ...clocks]) out.add(id);
+  for (const id of relayedSteps(m, sourceId)) reachedInputs(m, id, out, seen);
+  return out;
+}
+
+/** How a clip plays whose target's TRIGGER outputs (or the target itself) the timeline drives. */
+const DRIVES = new Set(['sequence', 'clock', 'keys-gate', 'keys-notes']);
+
+/**
+ * The TRIGGER inputs the timeline drives in `m` (K103's one ownership rule): an Envelope a gate
+ * clip plays on, a node a trigger clip clocks, and every input reached from a clip-driven
+ * source (a Sequence's pattern clips, a Keys node's notes and gate clips, a clocked Step's
+ * relay) or from a Clock. While the transport plays the timeline these are its own, and a
+ * live gate on one is refused (live-notes.js). -> Set of node ids
+ */
+export function timelineGateInputs(m, registry = NODE_REGISTRY) {
+  const out = new Set();
+  for (const c of m.timeline.clips) {
+    const id = effectiveTarget(m, c);
+    const n = nodeOf(m, id);
+    const how = n ? clipTarget(n, clipUse(c), registry).how : null;
+    // A Keys node a notes clip plays is the timeline's too (C1-K103-1): its pitch is the
+    // clip's, so a live key may not move it.
+    if (how === 'gate' || how === 'clock' || how === 'keys-notes') out.add(id);
+    if (DRIVES.has(how)) reachedInputs(m, id, out);
+  }
+  for (const n of m.graph.nodes) if (n.type === 'clock') reachedInputs(m, n.id, out);
+  return out;
+}
+
+/**
+ * The ownership test the transport hands the live router (K103): (id) -> whether `id` is a
+ * TRIGGER input the timeline drives in getModel(), memoized per model.
+ */
+export function createTimelineOwner(getModel, registry = NODE_REGISTRY) {
+  let memo = { m: null, set: null };
+  return (id) => {
+    const m = getModel();
+    if (!m) return false;
+    if (memo.m !== m) memo = { m, set: timelineGateInputs(m, registry) };
+    return memo.set.has(id);
+  };
 }
 
 export function createTriggerFanout({ getModel, ready, nodes, gate }) {
@@ -105,11 +195,7 @@ export function createTriggerFanout({ getModel, ready, nodes, gate }) {
   }
 
   /** Whether clock tick `k` of node `id` is a step a Step Modulator takes (and relays). */
-  function stepTaken(id, k) {
-    const n = nodeOf(getModel(), id);
-    if (!n || n.type !== 'step-modulator' || k === null) return false;
-    return n.params.playback !== 'once' || k < n.params.steps.length;
-  }
+  const stepTaken = (id, k) => stepRelays(nodeOf(getModel(), id), k);
 
   /** Index of a trigger at `time` on clocked node `id`: the triggers before it since PLAY. */
   const tickIndex = (id, time) => (ticksPassed.get(id) || 0)

@@ -28,7 +28,7 @@ import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
 import { armedDefaults, keysShown, routeOf } from './routes.js';
 import { mountDockYield } from './dock-yield.js';
-import { notesRefusedSentences } from '../ui/output-owner.js';
+import { OWNER, notesRefusedSentences } from '../core/output-bus.js';
 
 /** What a refused keyboard note says, per owner: the one output-owner table's (C036). */
 export const KEYBOARD_REFUSED = notesRefusedSentences('keyboard');
@@ -98,7 +98,7 @@ export function takesText(el) {
  * `win`: the window. kbdInit({ notesFor }) takes `notesFor(refused)`, which returns a note
  * layer (createMidiNotes) whose refusals are said with the keyboard's sentences.
  */
-export function createKeyboardUi({ win = window } = {}) {
+export function createKeyboardUi({ win = window, bus = null } = {}) {
   let kb = null;
   let notes = null;
   let view = null; // { canvas, layout, octaves, draw() }
@@ -212,7 +212,6 @@ export function createKeyboardUi({ win = window } = {}) {
         && doc.querySelector('dialog[open], [data-oscilla-modal][aria-modal="true"]'));
       // Capture, so an armed key is the keyboard's before Studio's own letters (A, C, F, T).
       win.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') { kbdRelease(); return; }
         if (!cmp.kbdArmedHere || !playableEvent(e)) return;
         if (takesText(e.target) || takesText(doc && doc.activeElement) || modalOpen()) return;
         // An editor that owns its letters keeps them while it has the focus (KEY_ROUTES).
@@ -228,14 +227,12 @@ export function createKeyboardUi({ win = window } = {}) {
           e.stopImmediatePropagation();
         }
       }, { capture: true });
-      // The forced releases of ADR 0062: a key whose keyup may never come.
+      // The forced releases of ADR 0062: a key whose keyup may never come. A page hide and
+      // Escape are the playback bus's stopAll (C050), which releases the keys (kbdReleaseAll).
       win.addEventListener('blur', kbdRelease);
-      win.addEventListener('pagehide', kbdRelease);
-      if (doc && typeof doc.addEventListener === 'function') {
-        doc.addEventListener('visibilitychange', () => { if (doc.hidden) kbdRelease(); });
-      }
       if (typeof cmp.$watch === 'function') {
-        cmp.$watch('workspace', () => { kbdRelease(); if (view) view.resize(); });
+        // Leaving a workspace releases the keys through the bus's leave policy (C053).
+        cmp.$watch('workspace', () => { if (view) view.resize(); });
       }
 
       // The link key: `kbd=1` arms the view the link opens, `kbd=0` disarms it.
@@ -297,6 +294,7 @@ export function createKeyboardUi({ win = window } = {}) {
       const v = this.kbdView;
       if (!v) return;
       this.kbdArmed[v] = !this.kbdArmed[v];
+      if (bus) bus.armed(OWNER.notes, this.kbdArmed[v]); // a step of the bus's trace (C050)
       if (!this.kbdArmed[v]) kbdReleaseKeys(); // the keys' notes, never a pad's
     },
 

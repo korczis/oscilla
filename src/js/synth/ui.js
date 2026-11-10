@@ -30,7 +30,9 @@ import { splitJack } from './panel.js';
 import { esc, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
 import { createGestures } from './gestures.js';
-import { bayLayout, baySvg, cableItem, cablePath } from './view/bay.js';
+import {
+  bayLayout, baySvg, cableListHtml, cablePath, connectListHtml,
+} from './view/bay.js';
 import { panelTokens } from './view/tokens.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
 import { canConnect } from '../studio/ports.js';
@@ -38,10 +40,13 @@ import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
 import { createXyTab } from './view/xy-tab.js';
+import { createDrumsTab } from './view/drums-tab.js';
+import { ROOM_EVENT } from '../midi/routes.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
 import { createArmedFollow } from './armed-follow.js';
+import { createStripView } from './step-strip-view.js';
 import { createSynthNotes } from './notes-sink.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
@@ -68,7 +73,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const engineId = () => playedEngine(model(), panel, cmp && ENGINE_IDS.includes(cmp.synth
     .engine) ? cmp.synth.engine : ENGINE_IDS[0], registry);
   /** The module the keys play now: Keys on the Panel tab, the chosen engine on Engines. */
-  const playedModule = () => (tab() === 'engines' ? engineId() : 'keys');
+  const playedModule = () => (tab() === 'engines' ? engineId() : tab() === 'drums' ? 'perc'
+    : 'keys');
   /** The node the keys play: the one routed by the picker (K066), else the tab's module. */
   const played = () => routedNode(model(), registry) || nodes().get(playedModule());
   const handle = () => get().handle;
@@ -224,32 +230,6 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const ITEM = 'flex items-center justify-between gap-2 py-1 text-xs text-gray-700 '
     + 'dark:text-gray-300';
 
-  /**
-   * The connection list of a pending jack (K063): the jacks that can take the cable, then the
-   * refused ones with the validator's sentence, then Remove for each cable on the jack.
-   */
-  function connectList(m, verdicts, cables) {
-    const a = jackOf(pending);
-    if (!a) return '';
-    const name = (k) => `${jackName(k)} ${jackOf(k).direction === 'in' ? 'vstup' : 'výstup'}`;
-    const ok = [...verdicts].filter(([, v]) => v.ok).map(([k]) => `<li class="${ITEM}">`
-      + `<span>${esc(name(k))}</span><button type="button" class="${BTN}" data-connect-to=`
-      + `"${esc(k)}" aria-label="Patch ${esc(jackName(pending))} to ${esc(name(k))}">Patch`
-      + '</button></li>').join('');
-    const no = [...verdicts].filter(([, v]) => !v.ok).map(([k, v]) => '<li class="py-1 text-xs '
-      + `text-gray-600 dark:text-gray-400"><s>${esc(name(k))}</s>: ${esc(v.reason)}</li>`)
-      .join('');
-    const mine = cables.filter((c) => `${c.from}:out` === pending || `${c.to}:in` === pending)
-      .map((c) => `<li class="${ITEM}"><span>${esc(jackName(c.from))} → ${esc(jackName(c.to))}`
-      + `</span><button type="button" class="${BTN}" data-remove-cable="${esc(c.id)}">Odpojit `
-      + 'kabel</button></li>').join('');
-    return `<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" `
-      + `id="synth-connect-title">PROPOJIT Z ${esc(name(pending).toUpperCase())}</h4>`
-      + '<ul class="divide-y divide-gray-200 dark:divide-gray-700" '
-      + `aria-labelledby="synth-connect-title">${mine}${ok}${no}</ul>`
-      + `<button type="button" class="${BTN} mt-2" data-connect-cancel="">Cancel</button>`;
-  }
-
   function renderBay() {
     const el = host();
     const box = el && el.querySelector('[data-osc="synth.bay.canvas"]');
@@ -270,7 +250,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       compatible: new Set([...verdicts].filter(([, v]) => v.ok).map(([k]) => k)) });
     const conn = el.querySelector('[data-osc="synth.connect"]');
     if (conn) {
-      conn.innerHTML = pending ? connectList(m, verdicts, cables) : '';
+      conn.innerHTML = pending ? connectListHtml({ pending, verdicts, cables, jackName, jackOf,
+        item: ITEM, btn: BTN }) : '';
       conn.hidden = !pending;
     }
     const list = el.querySelector('[data-osc="synth.cables"]');
@@ -281,21 +262,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const open = jacksIn('open');
     const mixed = jacksIn('mixed');
     if (list) {
-      list.innerHTML = cables.map((c) => cableItem(c, states.get(`${c.to}:in`),
-        { jackName, item: ITEM, btn: BTN })).join('')
-        + gone.map((r) => `<li class="${ITEM}" data-gone="${r.module}"><span>${esc(r.label)} `
-        + `odstraněn ve Studiu, bez signálu: ${esc(r.jacks.join(', '))}</span><button `
-        + `type="button" class="${BTN}" data-restore-module="${r.module}">Obnovit modul`
-        + '</button></li>').join('')
-        + mixed.map((j) => `<li class="${ITEM}"><span>${esc(jackName(j))}: ${STATE_TEXT.mixed}`
-        + `</span><button type="button" class="${BTN}" data-break-normal="${esc(j)}">`
-        + 'Rozpojit normál</button></li>').join('')
-        + open.map((j) => `<li class="${ITEM}"><span>${esc(jackName(j))}: bez signálu, normál `
-        + `odstraněn ve Studiu</span><button type="button" class="${BTN}" `
-        + `data-restore-normal="${esc(j)}">Obnovit normál</button></li>`).join('')
-        + (cables.length || open.length || mixed.length || gone.length ? ''
-          : `<li class="${ITEM}">Žádné kabely: každý vstup hraje svůj normál. `
-          + 'Táhněte z jednoho konektoru na druhý, nebo klepněte na dva konektory.</li>');
+      list.innerHTML = cableListHtml({ cables, states, gone, mixed, open, jackName,
+        mixedText: STATE_TEXT.mixed, item: ITEM, btn: BTN });
     }
   }
 
@@ -314,6 +282,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       .find(([, v]) => v) : null;
     if (!present()) {
       xy.destroy();
+      drums.destroy();
       const cuts = panel.cutsOf(model());
       el.innerHTML = '<div class="bg-white rounded-lg shadow dark:bg-gray-800 p-6 text-sm '
         + 'text-gray-700 dark:text-gray-300"><p>Tento dokument Studia nemá panel Synthu.</p>'
@@ -350,7 +319,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
       + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
       + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
-      + xy.html()
+      + xy.html() + drums.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div></div>`
       + '<section class="bg-white rounded-lg shadow dark:bg-gray-800 self-start p-3 '
@@ -363,12 +332,13 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<div class="mt-2 w-full" data-osc="synth.bay.canvas"></div>'
       + '<div data-osc="synth.connect" hidden></div>'
       + '<h4 class="mt-3 text-xs font-bold tracking-widest text-gray-900 dark:text-white" '
-      + 'id="synth-cables-title">CABLES</h4>'
+      + 'id="synth-cables-title">KABELY</h4>'
       + '<ul class="mt-1 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables" '
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
     renderBay();
     xy.mount();
+    drums.mount();
     const chosen = engines && el.querySelector('[data-engine][aria-checked="true"]');
     if (chosen) chosen.parentElement.parentElement.scrollLeft = chosen.offsetLeft - 16;
     if (keep) {
@@ -415,8 +385,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     follow(get().transport);
     if (!cmp || cmp.workspace !== 'synth') return;
     syncArmed();
+    strip.sync(); // K221
     if (knob) updateKnob(knob.cid);
-    else if (!cable) renderAll();
+    else if (!cable && !drums.update()) renderAll();
   }
 
   // ------------------------------------------------------------------ events
@@ -701,6 +672,13 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const { noteOn, noteOff, legato, allOff, disarm, armedText } = createSynthNotes({ get,
     transport, ensurePanel, cmp: () => cmp, say, played, playedModule, present, nodes, panel,
     ENGINE_IDS, syncArmed });
+  // K222 Drums tab: the step grid on the percussion engine's notes clip
+  const drums = createDrumsTab({ nodes, model, dispatch, say, transport, tab,
+    playhead: () => (get().transport ? get().transport.playhead() : null),
+    sink: () => ({ noteOn, noteOff }), openStudio: (id) => {
+      handle().dispatch({ type: 'SELECTION_CHANGE', selection: { clips: [id] } });
+      cmp.setWorkspace('studio');
+    } });
 
   // ------------------------------------------------------------------ links
 
@@ -731,11 +709,16 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     cmp.synth.title = info.title;
     cmp.synth.description = info.description;
     dock.sync();
-    requestAnimationFrame(renderAll);
+    requestAnimationFrame(() => { // the tab panel's data-keeps-dock is bound by then (U100)
+      renderAll();
+      window.dispatchEvent(new Event(ROOM_EVENT));
+    });
   }
 
   const dock = createDock({ panel, registry, cmp: () => cmp, model, present, played,
     ensurePanel, dispatch, say, allOff });
+  const strip = createStripView({ cmp: () => cmp, panel, model, present, handle, transport,
+    ensurePanel, dispatch, say });
 
   // ------------------------------------------------------------------ the part
 
@@ -743,12 +726,13 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     synth: {
       title: panel.title,
       description: panel.description,
-      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.label })),
+      tabs: panel.tabs.map((x) => ({ id: x.id, label: x.label, keepsDock: !!x.keepsDock })),
       tab: 'panel',
       engine: ENGINE_IDS[0],
       presets: [...PRESETS, ...xy.presets].map((p) => ({ id: p.id, title: p.title, tab: p.tab })),
       preset: 'init',
       armed: false,
+      strip: false, // K221: the step-sequencer strip's clip exists (step-strip.js)
       status: '',
       link: '',
       dock: dock.state(), // K066, beside the piano (synth/dock.js)
@@ -774,25 +758,17 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         el.addEventListener('wheel', gestures.wheel, { passive: false });
         el.addEventListener('keydown', onKeyDown);
       }
-      this.$watch('workspace', (ws, old) => {
-        if (old === 'synth' && ws !== 'synth') {
-          pending = null;
-          disarm(false);
-        }
+      this.$watch('workspace', (ws) => {
+        // Leaving the Synth disarms it through the bus's leave policy (C053: synthLeave).
         if (ws === 'synth') {
           syncArmed();
+          strip.sync();
           ensurePanel();
           requestAnimationFrame(renderAll);
         }
       });
       this.$watch('theme', () => { if (this.workspace === 'synth') renderAll(); });
       window.addEventListener('resize', () => { if (this.workspace === 'synth') renderBay(); });
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && this.workspace === 'synth') {
-          pending = null;
-          disarm(true);
-        }
-      });
       if (typeof this.navRegister === 'function') {
         this.navRegister('synth', (hash) => this.synthApplyLinkHash(hash));
       }
@@ -808,6 +784,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const t = transport();
       if (!t || !ensurePanel()) return false;
       if (typeof this.ensureAudio === 'function') this.ensureAudio();
+      // The Arm is a step of the playback bus's trace (C050); its claim is the transport's.
+      if (typeof this.busArmed === 'function') this.busArmed('studio', true);
       const r = t.arm();
       if (!r.ok) say(r.code === 'claim-refused' ? SYNTH_TEXT.refused : r.reason, true);
       else say(armedText());
@@ -815,8 +793,27 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       return r.ok;
     },
 
+    /** The bus's leave policy (C053): leaving the Synth ends a pending connect and disarms. */
+    synthLeave() {
+      pending = null;
+      disarm(false);
+    },
+
+    /** The playback bus's stopAll (C050: Escape, a page hide): on the Synth, Arm is off. */
+    synthStopped() {
+      if (this.workspace !== 'synth') return;
+      pending = null;
+      disarm(true);
+    },
+
     synthDisarm() {
+      if (typeof this.busArmed === 'function') this.busArmed('studio', false);
       return disarm(true);
+    },
+
+    /** K221: the picker's "Krokový sekvencer" (step-strip-view.js). */
+    synthSteps() {
+      return strip.add();
     },
 
     synthPreset(id) {
@@ -829,7 +826,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         const p = presetOf(id);
         this.synth.preset = id;
         if (p.engine) showTab('engines', p.engine);
-        say(`Preset ${p.title}.`); // a name, not a sentence
+        say(`Předvolba ${p.title}.`);
       }
       return done.ok;
     },

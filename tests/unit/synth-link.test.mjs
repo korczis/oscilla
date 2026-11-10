@@ -28,7 +28,7 @@ test('round trip of a preset, values, an amount and a cable', () => {
 });
 
 test('strict: one bad item refuses the whole link with a sentence', () => {
-  for (const [h, re] of [['m=synth&yp=nope', /no preset "nope"/], ['m=synth&yt=drums', /no tab/],
+  for (const [h, re] of [['m=synth&yp=nope', /no preset "nope"/], ['m=synth&yt=mix', /no tab/],
     ['m=synth&yv=vco1.width:200', /Pulse width must be between 5 and 95/],
     ['m=synth&yv=vco1.pitch:1', /names no knob/], ['m=synth&yv=xx.y:1', /names no knob/],
     ['m=synth&yc=lpf.audio>mg.control', /not a cable/], ['m=synth&yp=bass&yp=lead', /twice/],

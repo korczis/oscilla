@@ -14,11 +14,20 @@
 //   clipStepsView(model, clip, plays) -> { clipId, payload, stepBeats, steps, lanes, laneNames,
 //                                          start, plays }
 //   playingStep(model, view, playhead) -> step | null
-//   mountClipSteps(host, { store, playhead }, view) -> { update(view), destroy(), grid }
+//   mountClipSteps(host, { store, playhead, liveTransport, announce }, view) -> { update(view),
+//                                          destroy(), grid }   with liveTransport, the Record
+//                                          switch above the grid (K223, ui/kinds/record-switch.js)
+//   mountListSteps(host, { dispatch, say }, { nodeId, param, values })
+//     -> { update(values), resize(length, now) -> values | { reason }, destroy(), grid }
+//     K221: a list parameter (the Step Modulator's steps) as the kind's param-list lane, one
+//     NODE_PARAM_SET per gesture; resize pads with 0 or cuts to `length` within the parameter's
+//     minLength..maxLength
 
 import { midiToName } from '../../core/music.js';
 import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { mountStepGrid } from '../kinds/step-grid.js';
+import { bindRecordSwitch, recordSwitchHtml } from '../kinds/record-switch.js';
+import { PRO } from '../pro-classes.js';
 
 /** The lane an empty notes clip shows: C4. */
 export const DEFAULT_LANE = 60;
@@ -49,7 +58,18 @@ export function mountClipSteps(host, svc, first) {
   let view = first;
   const owner = { selection: [], page: 0 };
   let grid = null; // the first fit calls onView while mountStepGrid is still building
-  grid = mountStepGrid(host, {
+  let record = null;
+  let gridHost = host;
+  if (svc.liveTransport) { // K223: Record above the grid, the same switch as the Drums tab's
+    const bar = host.ownerDocument.createElement('div');
+    bar.className = 'mb-2';
+    bar.innerHTML = recordSwitchHtml(PRO.btnSecondary);
+    gridHost = host.ownerDocument.createElement('div');
+    host.append(bar, gridHost);
+    record = bindRecordSwitch(bar.firstChild, { transport: svc.liveTransport, store: svc.store,
+      clipId: () => view.clipId, say: (text) => svc.announce && svc.announce(text) });
+  }
+  grid = mountStepGrid(gridHost, {
     mode: 'notes', label: LABEL, clipId: view.clipId, payload: view.payload, lanes: view.lanes,
     laneNames: view.laneNames, steps: view.steps, stepBeats: view.stepBeats,
     commit: (action) => {
@@ -76,6 +96,46 @@ export function mountClipSteps(host, svc, first) {
       grid.set({ payload: next.payload, lanes: next.lanes, laneNames: next.laneNames,
         steps: next.steps, stepBeats: next.stepBeats, selection: owner.selection,
         page: owner.page });
+    },
+    destroy() {
+      grid.destroy();
+      if (record) record.destroy();
+    },
+  };
+}
+
+/** K221: the step grid of a list parameter (the Step Modulator's steps), see the header. */
+export function mountListSteps(host, svc, { nodeId, param, values }) {
+  const owner = { selection: [], page: 0 };
+  let shown = values;
+  let grid = null; // set below; onView may run during the mount (the TDZ 1a68c485 fixed)
+  grid = mountStepGrid(host, { mode: 'param-list', label: param.label,
+    laneNames: [param.label], nodeId, param, values, steps: values.length,
+    commit: (action) => {
+      const r = svc.dispatch(action);
+      return r.ok ? true : { refused: r.reason || '' };
+    },
+    onView: (v) => {
+      if (v.selection) owner.selection = v.selection;
+      if (v.page != null) owner.page = v.page;
+      if (grid) grid.set({ selection: owner.selection, page: owner.page });
+    },
+    say: (text) => svc.say(text),
+    playStep: () => null });
+  const min = param.minLength ?? 1;
+  const max = param.maxLength ?? 32;
+  return {
+    grid,
+    update(next) {
+      if (next === shown) return;
+      shown = next;
+      grid.set({ values: next, steps: next.length, selection: owner.selection,
+        page: owner.page });
+    },
+    resize(length, now) {
+      const n = Math.round(length);
+      if (!(n >= min && n <= max)) return { reason: `Počet kroků musí být ${min} až ${max}.` };
+      return Array.from({ length: n }, (_, i) => (i < now.length ? now[i] : 0));
     },
     destroy() { grid.destroy(); },
   };

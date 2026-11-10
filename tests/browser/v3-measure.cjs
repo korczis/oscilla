@@ -829,8 +829,18 @@ async function runOne(browserName, origin, url, workerSource, micDone) {
 // ------------------------------------------------------------------------------ app leg
 // The application itself (dist/index.html), TEST CONTEXT loopback: what MEASURE's setup check
 // reports while one of the app's own output owners sounds (C016).
+// The instrument holds a note under the Playground's safety limit (core/instrument.js
+// safetyLimit, 2 s by default, without continuous play): the engine ends the hold there
+// (audio-engine.js play, limitS). Start, peak and Check setup take about 2 s on a CI runner
+// (1.93 s passed on run 42689001733, 2.29 s read "still playing false" on run 42713534778), so
+// the source starts with the longest limit offered (5 s) and is still sounding when the check
+// ends (the sequencer and the Studio after it have no such limit).
 const APP_SOURCES = [
-  ['instrument', () => window.OSCILLA.app.play('hold'), () => !!window.OSCILLA.app.playing],
+  ['instrument', () => {
+    const a = window.OSCILLA.app;
+    if (!a.setSafetyLimit(5)) throw new Error('the 5 s safety limit is not offered');
+    a.play('hold');
+  }, () => !!window.OSCILLA.app.playing],
   ['sequencer', () => window.OSCILLA.labs.sequencer.editor.play(),
     () => !!window.OSCILLA.labs.sequencer.editor.playing],
   ['studio', () => window.OSCILLA.app.studioPlay(), () => window.OSCILLA.app.studioOwnsOutput()],

@@ -25,13 +25,14 @@ function rig({ editorPlaying = false, seqPlaying = false, playing = false,
     stopPlayback(cmp) {
       calls.stopPlayback += 1;
       assert.equal(cmp, wb, 'stopPlayback is handed the component');
-      if (sequencerPlaying()) { labs.sequencer.editor.stop(); cmp.seqPlaying = false; }
+      if (sequencerPlaying()) { labs.sequencer.editor.stop(); cmp.playback = { owner: null, since: 0 }; }
       if (cmp.playing) cmp.stopNow();
     },
   };
   wb = createWorkbench(svc);
   Object.assign(wb, {
-    seqPlaying, playing, continuousAllowed, isProgrammed,
+    playback: { owner: seqPlaying ? 'sequencer' : null, since: 0 }, // the bus's state (C051)
+    playing, continuousAllowed, isProgrammed,
     stopNow() { calls.stopNow += 1; this.playing = false; },
     trigger() { calls.trigger += 1; this.playing = true; },
     toggleLatch() { calls.toggleLatch += 1; this.playing = true; },

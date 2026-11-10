@@ -30,6 +30,8 @@ import { createMidiUi } from '../../src/js/midi/ui.js';
 import { createSynthUi } from '../../src/js/synth/ui.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
+import { createOutputBus } from '../../src/js/core/output-bus.js';
+import { claimStudioOutput } from '../../src/js/ui/studio/workspace.js';
 
 const SR = 48000; // the fake context's rate; every figure below reads ctx.sampleRate
 const CENT = 1 / 1200; // one cent in octaves
@@ -288,7 +290,7 @@ const settle = () => new Promise((resolve) => { setImmediate(resolve); });
  * included) and the Synth part (src/js/synth/ui.js) on one fake window, workspace synth, a
  * connected MIDI input. `fire(key)` dispatches a window or document event to every listener.
  */
-async function pageRig() {
+async function pageRig({ claim = false } = {}) {
   const listeners = {};
   const listen = (target) => (type, fn) => { (listeners[`${target}:${type}`] ||= []).push(fn); };
   const doc = { hidden: false, activeElement: null, addEventListener: listen('doc'),
@@ -307,15 +309,21 @@ async function pageRig() {
   assert.ok(engine.init(), 'engine.init');
   if (engine.limiterFeed) engine.limiterFeed.infrastructure = true;
   const runtime = createStudioRuntime({ engine });
-  const transport = createStudioTransport({ runtime, engine, store: st });
+  // claim: the app's Studio claim through the playback bus (C037: claimStudioOutput, whose
+  // studio row releases every note, forced), as main.js and the workspace wire it
+  let cmp = null;
+  let bus = null;
+  const transport = createStudioTransport({ runtime, engine, store: st,
+    onClaimOutput: claim ? () => claimStudioOutput(cmp, { claim: bus.claim }, () => {}) : null });
   const handle = Object.create(st, { subscribe: { value: () => () => {} } });
   const synth = createSynthUi({ get: () => ({ handle, transport }) });
-  const cmp = createMidiUi({ win, engine });
+  cmp = createMidiUi({ win, engine });
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(synth));
   Object.assign(cmp, { workspace: 'synth', a4: 440, waveform: 'sine', attack: 10,
     release: 50, safetyLimit: 2, continuousAllowed: false, notify: () => {}, ensureAudio() {},
     measureOwnsOutput: () => false, studioOwnsOutput: () => false,
     meas: { levelForm: { capturing: false } }, $watch() {}, $nextTick() {} });
+  if (claim) bus = createOutputBus({ app: () => cmp, sequencer: () => null });
   cmp.synthInit();
   await cmp.midiInit();
   cmp.midiConnect();
@@ -329,15 +337,14 @@ async function pageRig() {
 test('AC4: blur, hide and Escape release every held note through the shipped release paths',
   async () => {
     const rig = await pageRig();
+    // A page hide and Escape are the playback bus's stopAll (C050), wired as main.js wires it:
+    // the Synth's own reaction (onStop) first, then every note through midiAllOff.
+    const bus = createOutputBus({ app: () => rig.cmp, sequencer: () => null });
+    bus.onStop((why) => rig.cmp.synthStopped(why));
     const releases = {
       blur: () => rig.fire('win:blur'),
-      hidden: () => {
-        rig.doc.hidden = true;
-        rig.fire('doc:visibilitychange');
-        rig.doc.hidden = false;
-      },
-      escape: () => rig.fire('win:keydown', { key: 'Escape', code: 'Escape', target: null,
-        preventDefault() {}, stopImmediatePropagation() {} }),
+      hidden: () => bus.stopAll('hidden'),
+      escape: () => bus.stopAll('escape'),
     };
     for (const [name, release] of Object.entries(releases)) {
       rig.port.send([0x90, 60, 100]); // MIDI Note On: the Synth sink arms and plays Keys
@@ -360,3 +367,28 @@ test('AC4: blur, hide and Escape release every held note through the shipped rel
       rig.port.send([0x80, 64, 0]);
     }
   });
+
+// The rev-seat's P3 on the bus stack (oscilla-c1, 2026-11-09): the Studio's claim releases every
+// held note (forced), and the Synth's first key arms inside the sink's noteOn before its own
+// live note; with the app's claim wired through the bus, a key held across that Arm and across
+// PLAY while armed neither hangs nor drops, and its Note Off releases it.
+test('a key held across the Arm and across PLAY while armed neither hangs nor drops',
+  async () => {
+  const rig = await pageRig({ claim: true });
+  const gate = () => {
+    const n = rig.runtime.debugInfo().notes.find((x) => x.id === rig.keys);
+    return n ? [n.note, n.gate] : null;
+  };
+  rig.port.send([0x90, 60, 100]); // the first key arms the Synth (the Studio's claim) and plays
+  assert.equal(rig.transport.armed, true, 'the key armed the Synth');
+  assert.deepEqual(rig.transport.heldNotes(), [60], 'the arming key is held, not dropped');
+  assert.deepEqual(gate(), [60, true], 'its gate is open');
+  assert.equal(rig.transport.start({ position: 0 }).ok, true, 'PLAY while armed');
+  assert.equal(rig.transport.playing, true);
+  assert.deepEqual(rig.transport.heldNotes(), [60], 'the key is still held after PLAY');
+  assert.deepEqual(gate(), [60, true], 'and still sounds');
+  rig.port.send([0x80, 60, 0]);
+  assert.deepEqual(rig.transport.heldNotes(), [], 'its Note Off releases it: nothing hangs');
+  assert.deepEqual(gate(), [60, false], 'the gate closed');
+  rig.transport.stop({ fast: true });
+});

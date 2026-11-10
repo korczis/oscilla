@@ -8,7 +8,7 @@
 // was drawn as "not playing" over a computed instrument wave, and the Spectrum marked the idle
 // instrument frequency beside the real peak.
 
-import { VIEW_OWNER_ROWS } from '../ui/output-owner.js';
+import { VIEW_OWNER_ROWS } from '../core/output-bus.js';
 
 /**
  * The owners a view can name, in precedence order; null is "nothing owns the output". A

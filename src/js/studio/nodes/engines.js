@@ -258,6 +258,8 @@ export const wavetableVoice = engine({
 
 export const percVoice = engine({
   type: 'perc-voice',
+  // It renders offline (K222): its notes clips play there on the one compile path, as live.
+  capabilities: { realtime: true, offline: true, notes: true, voices: MAX_VOICES },
   displayName: 'Percussion engine',
   idPrefix: 'perc',
   aliases: ['drums', 'percussion', 'kick', 'snare', 'hat', 'clap', 'tom', 'noise hit', 'kit'],
