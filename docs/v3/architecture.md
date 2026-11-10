@@ -298,7 +298,9 @@ windowAlgorithm(name) -> id;  WINDOW_ALGORITHMS = { hann, 'blackman-harris' }
 // capture.js (browser) / capture-checks.js (pure)
 Capture = { sampleRate, samples: Float32Array /* mono */, channels? /* Float32Array[] of a
   multichannel input, each as long as samples (T039; a window holds them beside the downmix:
-  a 30 s stereo take at 48 kHz is about 11.5 MB more) */, preRoll /* s */, postRoll /* s */,
+  a 30 s stereo take at 48 kHz is about 11.5 MB more; the ScriptProcessor fallback takes
+  two channels, so an input of more than two reaches it as the browser's stereo mix) */,
+  preRoll /* s */, postRoll /* s */,
   startedAt /* AudioContext time */, constraints: { requested, applied /* or null */ },
   device: { label: string|null, id: string|null },
   integrity? /* browser io: { expectedFrames, receivedFrames, discontinuities, timing:

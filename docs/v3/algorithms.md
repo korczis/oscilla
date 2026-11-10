@@ -338,6 +338,11 @@ only; a capture that passes can still be acoustically wrong. Regions are half-op
   every channel's result, and `peak` is over every channel (the quality bar's AT RAIL). A mono
   capture gives the same numbers under v2 and v3 (the ID names the method, not the input); v2
   and v1 judge the downmix only, so a stored v2 result stays reproducible (C1-T039-1).
+  Limit of the fallback (C1-T039-2): its two input channels are fixed ('explicit'), so the
+  browser first mixes an input of more than two channels to stereo; a quad input still comes
+  out exact, but a 5.1 input reaches `speakersMono` as L' = L + √½(C + SL), R' = R + √½(C + SR),
+  and its analysed mono is 0.5(L + R) + √½·C + (√½/2)(SL + SR), not the worklet's
+  √½(L + R) + C + 0.5(SL + SR). Only a browser without AudioWorklet analyses a 5.1 input so.
 - **Dropout**: a run of at least `max(2, ceil(DROPOUT_MIN_S·sr))` samples
   (`DROPOUT_MIN_S = 0.02` s) whose peak-to-peak spread stays within
   `CONSTANT_TOLERANCE = 2^−20` (≈ −120 dBFS), that touches neither the first nor the last
