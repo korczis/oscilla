@@ -781,7 +781,7 @@ test('N6: the pad\'s Glide says why it is idle while its Pitch feeds no cable; n
 
 /** The default document with Y cabled into the reference oscillator's Detune (depth cents),
  *  the oscillator at `hz`, running at `sampleRate`: its runtime's diagnostics. */
-function detuneRig({ hz, detune = 0, depth = 1200, sampleRate = 48000 }) {
+function detuneRig({ hz, detune = 0, depth = 1200, sampleRate = 48000, polarity = 'unipolar' }) {
   const st = cabledStore();
   const m0 = st.getModel();
   const osc = m0.graph.nodes.find((n) => n.type === 'oscillator');
@@ -789,7 +789,7 @@ function detuneRig({ hz, detune = 0, depth = 1200, sampleRate = 48000 }) {
     params: { frequency: hz, detune } }).ok, true);
   assert.equal(st.dispatch({ type: 'EDGE_ADD', id: 'y-detune', from: { node: ids(m0)('xy'),
     port: 'y' }, to: { node: osc.id, port: 'detune' }, props: { muted: false, depth,
-    polarity: 'unipolar', mapping: 'linear', offset: 0 } }).ok, true);
+    polarity, mapping: 'linear', offset: 0 } }).ok, true);
   const fx = createFakeAudioEnv({ sampleRate });
   const engine = new AudioEngine({ env: fx.env });
   assert.ok(engine.init());
@@ -816,6 +816,26 @@ test('NF1: a Y cable held by the Nyquist headroom is not blamed on its range', (
   assert.equal(r.perf.length, 1);
   assert.equal(r.perf[0].details.by, 'range');
   assert.match(r.perf[0].message, /nechávají jen tolik z rozsahu \(-1200 až 1200\)/);
+});
+
+test('K240: a range-fitted cable reports only its range fit, never Nyquist', () => {
+  // 444.yaml#NF7, reproduced on a7102358: an oscillator at 440 Hz, detune 1100, Y -> Detune
+  // bipolar 1200 at 48 kHz. The range (+-1200) is what holds Y; its frequency-limited line
+  // still said the Studio keeps the frequency at or below 0.95 x Nyquist.
+  const { rt, perf } = detuneRig({ hz: 440, detune: 1100, depth: 1200, polarity: 'bipolar' });
+  const fit = perf.filter((d) => d.details.edge === 'y-detune');
+  assert.equal(fit.length, 1, perf.map((d) => d.message).join(' | '));
+  assert.equal(fit[0].details.by, 'range');
+  const lines = rt.debugInfo().diagnostics.filter((d) => d.code === 'frequency-limited'
+    && d.entity && d.entity.kind === 'edge' && d.entity.id === 'y-detune');
+  assert.deepEqual(lines.map((d) => d.message), [], 'no frequency-limited line for the edge');
+  assert.ok(!rt.debugInfo().diagnostics.some((d) => d.entity && d.entity.id === 'y-detune'
+    && /Nyquist/.test(d.message)), 'nothing about the edge names Nyquist');
+  // A cable the Nyquist headroom holds keeps its line (NF1's case): the fix reads fitted.by.
+  const ny = detuneRig({ hz: 20000 });
+  assert.equal(ny.perf[0].details.by, 'nyquist');
+  assert.ok(ny.rt.debugInfo().diagnostics.some((d) => d.code === 'frequency-limited'
+    && d.entity && d.entity.id === 'y-detune'), 'a Nyquist-held cable is still frequency-limited');
 });
 
 test('NF3: every pad output summing into a control target rests at 0 on lift; Pitch does not',
