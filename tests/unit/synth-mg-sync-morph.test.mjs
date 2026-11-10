@@ -166,6 +166,58 @@ test('K229 an LFO of another shape and without a reset edge plays its one oscill
     await stopped(rig);
   });
 
+test('K229 C1-K229-1: a reset retires the stopped voice; the shared sources feed only the live '
+  + 'one', async () => {
+  // A morph LFO reset by a Clock every 0.125 s (1/16 at 120 BPM) for 2 s: 16 resets, all
+  // scheduled at PLAY inside the 3 s look-ahead. Once the clock has passed their stops, every
+  // stopped voice has ended: none may stay held, and rate, detune and the morph shapers must
+  // feed only the oscillators and gains of the voices still held (on b431d86d all 16 stayed,
+  // each with its connections).
+  const s = studio();
+  const clock = s.add('clock', { division: '1/16' });
+  const lfo = s.add('lfo', { shape: 'morph', morph: 0.4, rate: 5 });
+  const osc = s.add('oscillator', { waveform: 'sine' });
+  const out = s.add('master');
+  s.edge(clock, 'trigger', lfo, 'reset');
+  s.edge(lfo, 'control', osc, 'frequency', { depth: 0.1 });
+  s.edge(osc, 'audio', out, 'audio');
+  const env = s.add('envelope');
+  const track = s.d({ type: 'TRACK_ADD', kind: 'event', target: env }).created.tracks[0];
+  s.d({ type: 'CLIP_ADD', trackId: track, kind: 'event', start: 2.4, duration: 0.1,
+    payload: { action: 'gate' } }); // the timeline runs past the last reset
+  const rig = playing(s.st);
+  const h = rig.runtime.nodes.get(lfo);
+  const resets = h.info.voices().length;
+  assert.ok(resets >= 16, `the resets were scheduled (${resets} voices at PLAY)`);
+  rig.fx.advance(2.2); // past most resets' stops, before the end of the timeline
+  const now = rig.fx.ctx.currentTime;
+  const voices = h.info.voices();
+  const held = voices.length;
+  // The current voice and the resets still ahead of the clock may be held; nothing else.
+  const due = voices.filter((v) => v.start > now).length;
+  assert.ok(due <= 3, `the look-ahead holds only the last resets (${due})`);
+  assert.ok(held <= due + 1,
+    `stopped voices are retired: ${held} of ${resets} still held, ${due} ahead of ${now}`);
+  assert.ok(held >= 1, 'the current voice is held');
+  // The shared sources feed exactly the held voices: every held oscillator and gain is fed (the
+  // LFO still sounds), and nothing else is (the stopped voices are no longer fed). Set equality,
+  // so neither an empty fan-out nor a leftover connection passes (oscilla-04's review).
+  const sameSet = (outputs, want, what) => {
+    assert.equal(outputs.length, want.length, `${what}: ${outputs.length} outputs for `
+      + `${want.length} held parameters`);
+    assert.deepEqual(new Set(outputs), new Set(want), what);
+  };
+  const heldVoices = h.info.held();
+  const oscs = heldVoices.flatMap((v) => v.oscs);
+  assert.equal(oscs.length, 3 * held, 'three oscillators per morph voice');
+  sameSet(h.info.rate.outputs, oscs.map((o) => o.frequency), 'rate -> o.frequency');
+  sameSet(h.info.detune.outputs, oscs.map((o) => o.detune), 'detune -> o.detune');
+  h.info.shapers.forEach((w, k) => {
+    sameSet(w.outputs, heldVoices.map((v) => v.gains[k].gain), `shaper ${k} -> g.gain`);
+  });
+  await stopped(rig);
+});
+
 // ---------------------------------------------------------------- the panel
 
 test('K229 the panel MG: Morph in place of the shape switch, Sync unfixed, Key sync on its face',

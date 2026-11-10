@@ -1,0 +1,122 @@
+# Review verdict for pull request #522 (train/t5-sequencer): train T5 of the sequencer line and
+# release v3.31.0. Members: E060 (the CI receipt accepts a base job the release tree provably
+# replaces, 689b2a33), E061 (the train member table read as GFM renders it, ce9f99eb), K071/K072
+# (per-voice drum parameters, choke groups, the FM blip and the sound editor: 31614c82, 4df3fc85,
+# 0647ad86), hash epoch 3 (a034e460 with the guard 0410c679), K226 (the step-voltage sequencer:
+# 1bfe7def, d4d0f327), K229 (the LFO's key sync and morph, the MG face: b431d86d, f8e630dd, with
+# the C1-K229-1 fix 6310b86d + b36c5e12), K230 (delay and hold, c74fc6fd), K220/K232 (pad L, the
+# VELOCITY stage, the low-/high-pass Q lane and log cable: 2aabb567 .. 3cfe0ec0, eb3b4644,
+# 864d44ee, f06fcff5, c67ea16e), K180 (Q021's 8-voice cap, 4096a085/11fc0c86), K207 (the Contour
+# node, 5977c527), H007 (466de004), H008 (1866f616 + d3c33835), C030 (ed2ceee6, 7ff3a399), the
+# Majordomus 1.0.1 pin (a1df7478), K184, K205, K206, E053, E054, U103, the xy diagnostics, the
+# balanced dealer, the linux visual references; the review fixes R2-T5-1 (436ac17f + 2775c6aa),
+# R2-T5-2 (5747fba0), R2-T5-8 (307bfc28) and K232's restated browser checks (f1a5f7a3); the
+# v3.30.0 record and chore(release): v3.31.0.
+# Judged at 2aa5883a on base origin/main a7102358 (v3.30.0, #520), 2026-11-10, in the reviewer's
+# own detached worktrees ~/dev/oscilla-wt/review-515 (the head) and review-522-ff (fail-first on
+# each member's predecessor; earlier heads 91838acb, 192a21fa and each fix head).
+# Reviewers: rev-seat (session oscilla-c1, claude-code 7cad3015) for audio, Studio core,
+# transport, the Synth's guarded modules, CI and release; rev-seat-2 (session oscilla-c3) for UI
+# and screens, whose findings and runs are folded in by name. Neither built any of it (builders:
+# oscilla-2e K071/K072/epoch/K229-K230 assembly and the train, oscilla-04 E060/E061/K229 and
+# R2-T5-1, oscilla-0b the C1-K229-1 fix and R2-T5-2, oscilla-ee K220/K232 and R2-T5-8, oscilla-ce
+# K180/K207, oscilla-d9 H007/H008/C030, oscilla-75 the pin, others per member; integrator
+# oscilla-43).
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 2aa5883a: cfc9aaaa...
+# over 62 guarded paths (.github ci.yml, main-checks.yml; scripts/fail-first.mjs,
+# release-ci-receipt.mjs; src/js/audio envelope.js, filters.js; 37 src/js/studio files incl. the
+# 15 templates re-pinned by epoch 3; 15 src/js/synth files incl. the new nav-room.js; the
+# ci-knowledge-job, fail-first, release-ci-receipt and review-verdict tests). Of these, 58 are
+# byte-identical to 91838acb (judged there), and the four that moved are byte-identical to the
+# commits judged for them: studio/adapters/modulation.js = 192a21fa (0b's C1-K229-1 delta, patch-id
+# equal to b680ba53..b36c5e12), synth/view/drums-tab.js = 5747fba0, synth/ui.js and
+# synth/nav-room.js = 2775c6aa. The release stamp touches no guarded path.
+#
+# How each member was judged (fail-first: the member's tests on its predecessor's sources, run by
+# the reviewer unless marked):
+# - E060: replacedJob fails closed (no package.json, a programs-only job, a throw); 6 fail with
+#   main's scripts. C1-E060-1 P3 (a no-matrix base job counted as replaced by a single-browser
+#   head job; latent: the only such base job is the visual gate) filed for T6.
+# - E061: the member table as GFM renders it; anything unreadable is refused (fails closed).
+# - Hash epoch 3: C1-HE3-1 (P1, earlier keys pre-declared) closed: the guard "the current epoch
+#   declares only parameters its node types register" passes with all four features; v2 records
+#   migrate, template pins of epochs 1 and 2 kept.
+# - K071/K072: 30/12 on 15436bf9. Velocity 0 takes no voice; a choke releases only voices
+#   sounding at the hit; the FM blip's Carson bound hz x k x (1 + (index + 1) x ratio) <= 0.95 x
+#   Nyquist is right; B plays the blip as K072 states (no shipped content plays pitch class 11).
+#   C1-K071-1 P3 (the hats now choke both ways, a default sound change) filed for T6.
+# - K226: 180/20 on 0f9403d8. The reset counting (a tick at a reset's instant is step 1, a reset
+#   frozen before its ticks are pruned, the reset list bounded), the clocked and free-running
+#   adapters and the live manual step read; no finding.
+# - K229: 212/12 on bdd15df5. C1-K229-1 P2 (a reset LFO kept every voice: the shared rate, detune
+#   and morph sources still fed each stopped oscillator; 400 resets held 404 voices) closed by
+#   6310b86d + b36c5e12: synth-mg-sync-morph 8/0, 7/1 with b680ba53's modulation.js; the
+#   reviewer's probe holds 1 voice after 400 resets, sine and morph.
+# - K230: 131/11 on 0410c679; delay and hold events, the pulse length and the release in either
+#   stage read.
+# - K220/K232: judged at T4/T5 heads (C1-K220-1/-2 P2 closed; R2-K220-1..6 closed by c3, incl.
+#   R2-K220-5 P1 at c67ea16e, whose restVelocity the reviewer read); K232 no P0-P2, C1-K232-1 P3.
+# - K180, K207, H007: judged at their heads (digests 4987c55c, 34d85437; H007's case 42/1 on
+#   9fa580e0); the files are unchanged since.
+# - H008: C1-H008-1 P2 (Firefox's currentTime stands still in a task, so the margin read the
+#   past) closed at d3c33835: 52/0, 50/2 with 1866f616's transport.js, 42/10 with dd420718's;
+#   d9's chromium/firefox/webkit transport and workflows suites exit 0.
+# - C030: c3's merge at ed2ceee6, R2-C030-5 P2 and R2-C030-6 P3 closed (7ff3a399).
+# - Majordomus 1.0.1 pin: MJ_SHA256 524adfd3 equals the release asset's own digest.
+# - R2-T5-1 (c3, P1: iphone.cjs webkit covered 96 > 81, the sticky section nav over the Synth's
+#   controls): 2775c6aa on 436ac17f. The reviewer's C1-R2T51-1 P1 (436ac17f named data-dock-state
+#   outside dock-yield.js: keyboard-dock-yield red) and C1-R2T51-2 P1 (c3: the nav re-stuck over
+#   the XY pad when the dock folded) closed there: onDockChange is the readers' subscription, the
+#   nav is judged against the docked band; synth-nav-room + keyboard-dock-yield 29/0, 23/3 on
+#   436ac17f; c3: xy-pad, iphone (covered 81 -> 0), synth, drums rc=0 in chromium and webkit.
+# - R2-T5-2 (c3, P2: the sound editor's select dropped focus): 5747fba0, redrawKeepingFocus; c3
+#   and 0b: drums.cjs 11/11, fails BODY/BODY on the base.
+# - R2-T5-8 (c3, P1: graph-keys-k009 webkit red, T5 fails 3/3 and main passes 3/3): 307bfc28
+#   (test only) clicks a computed point clear of every other cable and asserts the selection
+#   before M; c3: 3/3 in three engines, v31-studio-graph webkit 41/41.
+#
+# THE CONDITION of this verdict (as for #509 and #515): it binds once the reviewer has read the six
+# "Browser leg N (browser)" logs of this pull request's run and found each leg's shards plan
+# line, "run-suites: all K suites passed" and PASS lines equal to that leg's plan at this head
+# (shards.cjs --plan: chromium, firefox and webkit 21 + 22 each; 43 units a browser), AND has run
+# the release CI receipt check against this run with the base ci.yml (a7102358's: the same job
+# names as this head's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise
+# a superseding verdict.
+#
+# Measured by the reviewer at 2aa5883a: npm test exit 0 (5615 tests, 5613 pass, 0 fail, 2
+# skipped; majordomus 1.0.1 first on PATH), build:check up to date (v3.31.0), the leg plans above.
+# Measured by others at 2aa5883a (2e): webkit iphone 122/122, xy-pad 6/6, v31-studio-graph 41/41 +
+# 6/6; chromium app 66/66 x2, demo-song ALL PASS, drums 11/11 x2, s-mg 1/1 x2. Not run by the
+# reviewer: the browser suites (the Mac's load 35-46 throughout; the legs are their receipt) and
+# the visual gate.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 522
+verdict: merge
+reviewer: oscilla-c1 rev-seat with oscilla-c3 rev-seat-2 (claude-code 7cad3015; built none of 2aa5883a)
+content: cfc9aaaa4bdd8e0fa1b0272a0e1a1828cba9c07fa3c01ada5215ebd49a49484e
+findings:
+  - { id: C1-HE3-1, severity: P1, status: closed, title: "hash epoch 3 pre-declared 44 keys no node held, so records saved in between were unverifiable; the registry guard 0410c679 holds with all four features" }
+  - { id: R2-T5-1, severity: P1, status: closed, title: "iphone.cjs webkit: the sticky Synth section nav covered T5's new controls (96 > 81) (c3); 2775c6aa, covered 81 -> 0" }
+  - { id: C1-R2T51-1, severity: P1, status: closed, title: "436ac17f named data-dock-state outside dock-yield.js, keyboard-dock-yield red; onDockChange at 2775c6aa" }
+  - { id: C1-R2T51-2, severity: P1, status: closed, title: "436ac17f re-stuck the nav over the XY pad when the dock folded, xy-pad x-dock-yields red (c3); docked band at 2775c6aa" }
+  - { id: R2-T5-8, severity: P1, status: closed, title: "graph-keys-k009 webkit: the cable midpoint moved onto edge-5 with K232's jacks, M muted the wrong cable (c3); 307bfc28" }
+  - { id: R2-K220-5, severity: P1, status: closed, title: "VELOCITY silenced a Keys gate clip on the panel (c3); the Keys velocity rests at 100 at c67ea16e" }
+  - { id: C1-K229-1, severity: P2, status: closed, title: "a reset LFO kept every voice and its inbound connections during play (400 resets: 404 voices); retired on 'ended' at 6310b86d + b36c5e12" }
+  - { id: C1-H008-1, severity: P2, status: closed, title: "H008's margin read ctx.currentTime, which Firefox holds still within a task: a stall started the voice in rendered time; d3c33835" }
+  - { id: R2-T5-2, severity: P2, status: closed, title: "picking a row in the drums sound editor's select dropped focus to BODY (c3); 5747fba0" }
+  - { id: C1-K220-2, severity: P2, status: closed, title: "the Keys velocity output stepped under a sounding voice; glides at 195fc51a" }
+  - { id: R2-C030-5, severity: P2, status: closed, title: "the restored-link check copied the play workspaces instead of reading them (c3); ed2ceee6" }
+  - { id: R2-C030-6, severity: P3, status: closed, title: "the play-hints read failed generically when play-hints.js changed shape (c3); 7ff3a399" }
+  - { id: R2-T5-7, severity: P3, status: open, title: "s-svs webkit failed in full synth runs (c3): the 3 s timeline ended inside the check's deadlines; the check is fixed in d9's b9ad2043 (T6), the lost-press mechanism (an Inspector rebuild mid-click) is K226's T7 fix" }
+  - { id: C1-E060-1, severity: P3, status: open, title: "replacedJob counts a no-matrix base job as replaced by a single-browser head job; latent, T6 issue" }
+  - { id: C1-K071-1, severity: P3, status: open, title: "the hats' shared choke group now chokes both ways and a new open hat cuts the last, a default sound change the help should state; T6 issue" }
+  - { id: C1-K180-1, severity: P3, status: open, title: "VOICE_LEVEL_SCALE 1/64 -> 1/32: every engine voice plays +6.02 dB at the same Level with no hash change; for the release notes" }
+  - { id: C1-K232-1, severity: P3, status: open, title: "a held (capped) Q cable has no runtime diagnostic; the limited text is Hz-shaped" }
+  - { id: R2-T5-3, severity: P3, status: open, title: "Krok while stopped says its reason only to screen readers (c3)" }
+  - { id: R2-T5-4, severity: P3, status: open, title: "mixed language on the MG and EG faces (Rate, Sync, Attack.. beside Czech) (c3)" }
+  - { id: R2-T5-5, severity: P3, status: open, title: "Key sync's undo label shows raw jack ids and English (c3)" }
+  - { id: R2-T5-6, severity: P3, status: open, title: "EG 1's Delay sits last on the face, not first as DADSR (c3)" }
+  - { id: R2-T5-TM, severity: P3, status: open, title: "c3's notes on the test members: E053 record can grow by naming, E054 axe list misses four workspaces, the dealer's search untried on the real plan, U103 inline classes, K205 synthetic sentinel, K206 unchecked shows(), xy diagnostics cap, K184 last tap" }

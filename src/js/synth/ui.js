@@ -43,6 +43,7 @@ import { createXyTab } from './view/xy-tab.js';
 import { createPads } from './view/pads.js';
 import { createDrumsTab } from './view/drums-tab.js';
 import { ROOM_EVENT } from '../midi/routes.js';
+import { applyNavRoom, watchNavRoom } from './nav-room.js';
 import { createStudioSink } from './studio-sink.js';
 import { BTN } from '../ui/synth/label.js';
 import { applyFace, faceChips, faceClass } from './view/faces.js';
@@ -346,6 +347,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + '<ul class="mt-1 divide-y divide-gray-200 dark:divide-gray-700" data-osc="synth.cables" '
       + 'aria-labelledby="synth-cables-title"></ul></section></div>';
     shape = shapeOf();
+    navRoom(el);
     renderBay();
     xy.mount();
     pads.mount();
@@ -553,6 +555,11 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     } else if ('insertPanel' in d) {
       ensurePanel({ explicit: true });
     }
+  }
+
+  /** R2-T5-1: the room the sticky section nav keeps (synth/nav-room.js). */
+  function navRoom(el = host()) {
+    applyNavRoom(el, window);
   }
 
   /**
@@ -783,7 +790,12 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
         }
       });
       this.$watch('theme', () => { if (this.workspace === 'synth') renderAll(); });
-      window.addEventListener('resize', () => { if (this.workspace === 'synth') renderBay(); });
+      window.addEventListener('resize', () => {
+        if (this.workspace !== 'synth') return;
+        navRoom(); // the chips may wrap or the nav hide at another width
+        renderBay();
+      });
+      watchNavRoom(window, () => navRoom()); // the dock's band decides the nav's room (R2-T5-1)
       if (typeof this.navRegister === 'function') {
         this.navRegister('synth', (hash) => this.synthApplyLinkHash(hash));
       }

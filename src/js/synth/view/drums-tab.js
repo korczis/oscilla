@@ -125,15 +125,28 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       + '</div>';
   }
 
-  /** Redraw the sound editor; a knob that had focus (an arrow key's edit) keeps it. */
+  /**
+   * Replace a container's markup; the control inside it that had focus keeps it (a knob after an
+   * arrow key's edit, the row select or a pad's voice select after a pick: R2-T5-2, the redraw
+   * used to destroy the select that fired the change and drop focus to the body).
+   */
+  function redrawKeepingFocus(box, html) {
+    const a = typeof document !== 'undefined' ? document.activeElement : null;
+    const d = a && box.contains(a) && a.dataset ? a.dataset : null;
+    let selector = null;
+    if (d && d.knob) selector = `[data-knob="${d.knob}"]`;
+    else if (d && 'drumsSound' in d) selector = '[data-drums-sound]';
+    else if (d && d.drumVoice != null) selector = `[data-drum-voice="${d.drumVoice}"]`;
+    box.innerHTML = html;
+    const k = selector && box.querySelector(selector);
+    if (k) k.focus({ preventScroll: true });
+  }
+
+  /** Redraw the sound editor; the control that had focus keeps it. */
   function syncSound() {
     const box = m && m.root.querySelector('[data-drums-sound-box]');
     if (!box) return;
-    const a = typeof document !== 'undefined' ? document.activeElement : null;
-    const focused = a && box.contains(a) && a.dataset ? a.dataset.knob : null;
-    box.innerHTML = soundHtml();
-    const k = focused && box.querySelector(`[data-knob="${focused}"]`);
-    if (k) k.focus({ preventScroll: true });
+    redrawKeepingFocus(box, soundHtml());
   }
 
   function build(body) {
@@ -213,7 +226,7 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
       if (r.action) dispatch(r.action);
       update();
       const pads = body.querySelector('[data-drums-pads]');
-      if (pads) pads.innerHTML = padsHtml();
+      if (pads) redrawKeepingFocus(pads, padsHtml());
       syncSound();
     });
     const press = (i) => {
