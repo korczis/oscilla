@@ -2029,6 +2029,16 @@ function defineChecks() {
     const DROP = 'Continuous repeat not restored';
     const inPage = (fn, arg) => page.evaluate(fn, arg);
     /** The notices the page shows, as "title: message", read from the DOM. */
+    // The restored-link notice's title by the link's workspace, read from the source that sets
+    // it (core/play-hints.js), so the check follows the list instead of copying it (R2-C030-5).
+    const hints = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'js', 'core',
+      'play-hints.js'), 'utf8');
+    const playWs = JSON.parse((/STATUS_PLAY_WORKSPACES = Object\.freeze\((\[[^\]]*\])\)/
+      .exec(hints) || [])[1].replace(/'/g, '"'));
+    const czechTitle = (/restored: '([^']+)'/.exec(hints.slice(hints.indexOf('STATUS_PLAY_TITLES')))
+      || [])[1];
+    const restoredTitle = (m) => (playWs.includes(m) ? czechTitle
+      : 'Configuration restored from link');
     const shown = (p) => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
       .filter((el) => el.getClientRects().length > 0)
       .map((el) => `${el.querySelector('strong').textContent}: `
@@ -2114,7 +2124,12 @@ function defineChecks() {
           await p2.goto(url);
           await H.ready(p2);
           leg.link = await told(p2, `link restore names the drop at ${w}px`);
-          leg.link.summary = leg.link.notices.find((t) => t.startsWith('Configuration restored'));
+          // The link's workspace (its m key) picks the notice's title: Czech where the status
+          // bar's Play is the only one (C030, core/play-hints.js), V1's elsewhere.
+          const m = (/(?:^|&)m=([^&]+)/.exec(hash) || [])[1] || null;
+          leg.link.m = m;
+          leg.link.title = restoredTitle(m);
+          leg.link.summary = leg.link.notices.find((t) => t.startsWith(`${leg.link.title}: `));
         } finally {
           await p2.close();
         }
@@ -2141,7 +2156,9 @@ function defineChecks() {
         && l[k].allowed === false)
       && !/All settings were restored/.test(l.import.summary)
       && /Not restored: continuous repeat/.test(l.import.summary)
-      && /Not restored: continuous repeat/.test(l.link.summary || '');
+      && /Not restored: continuous repeat/.test(l.link.summary || '')
+      && typeof czechTitle === 'string'
+      && (!playWs.includes(l.link.m) || l.link.summary.startsWith(`${czechTitle}: `));
     const ok = Object.keys(legs).length === 2 && Object.values(legs).every(legOk);
     return { ok, legs };
   });
