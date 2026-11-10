@@ -16,6 +16,7 @@ import { serializeStudio, studioHash, studioHashAt } from '../../src/js/studio/s
 import { importStudio } from '../../src/js/studio/migrate.js';
 import { createStudioStore } from '../../src/js/studio/actions.js';
 import { planOfflineRender } from '../../src/js/studio/offline.js';
+import { clipTarget } from '../../src/js/studio/clip-targets.js';
 import { adsrEvents, releaseEvents, valueAtTime } from '../../src/js/audio/envelope.js';
 import { decodeStudioLink, encodeStudioLink } from '../../src/js/core/url-state-studio.js';
 
@@ -52,16 +53,35 @@ test('K144 the demo song is the last template and the six before it keep their h
   assert.equal(entry.category, 'synthesis');
 });
 
+// The song's pinned hashes by template version, each at hash epochs 1-3 (schema.js
+// studioHashAt; epoch 3 is the current studioHash). Version 1 is kept as history: links carry
+// only the template id and nothing reads a saved project's templateVersion or studioHash, so a
+// project saved from version 1 keeps loading (proved below); no history field ships with the
+// template (oscilla-43's decision on K144 v2, project.no-inert-surfaces).
+const PINNED = Object.freeze({
+  1: { 1: '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
+    2: 'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3',
+    3: 'a93e800886ce42c6fee5da20290ed332caaf5aa15beead339b159fc98a9b51d9' },
+  2: { 1: '65de98eba81a1fa81d60d51d52e6afefe26d32497f61d7c6591f8d87cd5ee15d',
+    2: '31ea9e48470c9385712153a7cf4960309d8edd857321dd3ae23bbddc197fa43b',
+    3: '019d30d01b1ffb11708bfe80caec15a180951ba501936b9aa5e7934e0cc0bc04' },
+});
+/** The model version 1 built: version 2 less the bass filter's Q lane, which it added. */
+const v1Model = () => {
+  const m = structuredClone(templateModel('demo-song'));
+  m.timeline.automation = m.timeline.automation.filter((l) => l.id !== 'lane-bass-q');
+  return m;
+};
+
 test('K144 the song validates without a warning, with its hash pinned', () => {
   const v = validateTemplate(demoSong);
   assert.deepEqual(v.errors, []);
   assert.deepEqual(v.warnings.map((w) => w.code), []);
-  assert.equal(demoSong.studioHash,
-    'a93e800886ce42c6fee5da20290ed332caaf5aa15beead339b159fc98a9b51d9');
-  assert.equal(studioHashAt(templateModel('demo-song'), 2),
-    'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3', 'hash epoch 2');
-  assert.equal(studioHashAt(templateModel('demo-song'), 1),
-    '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6', 'hash epoch 1');
+  assert.equal(demoSong.version, 2);
+  assert.equal(demoSong.studioHash, PINNED[2][3]);
+  for (const e of [1, 2]) {
+    assert.equal(studioHashAt(templateModel('demo-song'), e), PINNED[2][e], `hash epoch ${e}`);
+  }
   assert.equal(studioHash(templateModel('demo-song')), demoSong.studioHash);
   const m = templateModel('demo-song');
   const back = importStudio(serializeStudio(m));
@@ -124,8 +144,8 @@ test('K144 the parts are wired: synth voices, filter, LFO, drums, mixer and four
   const drums = m.graph.nodes.find((n) => n.id === 'drum-mix').params;
   assert.equal(drums.level4, drums.level3, 'the open hat plays at the closed hat\'s level');
   assert.deepEqual(m.timeline.automation.map((l) => `${l.target.node}.${l.target.param}`), [
-    'bass-filter.frequency', 'lead-lfo.rate', 'main-mix.level1', 'main-mix.level2',
-    'main-mix.level3']);
+    'bass-filter.frequency', 'lead-lfo.rate', 'bass-filter.Q', 'main-mix.level1',
+    'main-mix.level2', 'main-mix.level3']);
 });
 
 test('K144 the open hat rings on, and the closed hat keeps its 12 ms ring', () => {
@@ -175,15 +195,50 @@ test('K144 the offline render plays every clip and lane, 110 s, with no limitati
   assert.deepEqual(plan.nodes.filter((n) => n.role === 'refused').map((n) => n.id), []);
 });
 
+test('K144 v2: the bass filter\'s Q lane is the score\'s, and a low-pass Q lane plays (G10)',
+  () => {
+    const m = templateModel('demo-song');
+    const q = m.timeline.automation.find((l) => l.id === 'lane-bass-q');
+    assert.deepEqual([q.target.node, q.target.param], ['bass-filter', 'Q']);
+    const spb = 60 / S.TEMPO_BPM;
+    assert.deepEqual(q.points.map((p) => [p.time, p.value, p.curve]), S.AUTOMATION.bassQ
+      .map(([beat, value, curve]) => [Math.round(beat * spb * 1e6) / 1e6, value, curve]));
+    const filter = m.graph.nodes.find((n) => n.id === 'bass-filter');
+    assert.equal(filter.params.type, 'lowpass');
+    assert.equal(clipTarget(filter, { kind: 'automation', param: 'Q' }).plays, true,
+      'the clip-target policy plays it (K232)');
+    const plan = planOfflineRender(m);
+    assert.deepEqual(plan.automation.filter((a) => a.id === 'lane-bass-q')
+      .map((a) => a.rendered), [true], 'the offline render plays it');
+  });
+
+test('K144 v2: a project saved from version 1 still loads and plays the same notes', () => {
+  const v1 = v1Model();
+  for (const e of [1, 2, 3]) {
+    assert.equal(studioHashAt(v1, e), PINNED[1][e], `the version 1 model at hash epoch ${e}`);
+  }
+  const back = importStudio(serializeStudio(v1));
+  assert.equal(back.ok, true, 'the untrusted import pipeline accepts the version 1 file');
+  assert.deepEqual(back.warnings || [], []);
+  const p1 = planOfflineRender(back.model);
+  const p2 = planOfflineRender(templateModel('demo-song'));
+  assert.equal(p1.ok, true, JSON.stringify(p1.errors));
+  assert.deepEqual(p1.limitations, []);
+  assert.equal(p1.clips.length, 744);
+  assert.deepEqual(p1.clips, p2.clips, 'the same clips, every note where version 2 has it');
+  assert.deepEqual(p1.clips.filter((c) => !c.rendered).map((c) => c.id), []);
+  assert.deepEqual(p1.automation.map((a) => a.id), p2.automation.map((a) => a.id)
+    .filter((id) => id !== 'lane-bass-q'), 'its lanes are version 2\'s but the Q lane');
+  assert.ok(p1.automation.every((a) => a.rendered));
+});
+
 test('K144 what the Studio cannot play is left out and said, never shipped inert', () => {
   const m = templateModel('demo-song');
-  const lanes = m.timeline.automation.map((l) => `${l.target.node}.${l.target.param}`);
-  assert.ok(!lanes.includes('bass-filter.Q'), 'the refused Q lane is not shipped');
   assert.ok(!m.graph.nodes.some((n) => n.type === 'drive'), 'no Drive node on this tree');
-  assert.equal(DEMO_SONG_OMITTED.length, 3);
-  assert.match(DEMO_SONG_OMITTED.join(' '), /velocity.*Q lane.*Drive node/s);
-  assert.ok(S.AUTOMATION.bassQ.length > 0 && S.AUTOMATION.drive.length > 0,
-    'the score keeps them for when the Studio can play them');
+  assert.equal(DEMO_SONG_OMITTED.length, 2);
+  assert.match(DEMO_SONG_OMITTED.join(' '), /velocity.*Drive node/s);
+  assert.ok(!/Q lane/.test(DEMO_SONG_OMITTED.join(' ')), 'the Q lane plays since version 2');
+  assert.ok(S.AUTOMATION.drive.length > 0, 'the score keeps it for when the Studio can play it');
   const learn = [demoSong.learn.summary, ...demoSong.learn.points].join(' ');
   assert.match(learn, /original/);
   assert.match(learn, /sine sweep/);
