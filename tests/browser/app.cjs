@@ -573,7 +573,7 @@ function defineChecks() {
       'projectId', 'templateId', 'measurementRun', 'rendering', 'trace', 'library', 'counts'];
     const TRANSPORT_KEYS = ['start', 'stop', 'arm', 'disarm', 'live', 'armed', 'liveVoices',
       'heldNotes', 'locate', 'returnToStart', 'setLoop', 'sync', 'admit', 'escape', 'playhead',
-      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing'];
+      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing', 'step'];
     const got = await page.evaluate(() => {
       const O = window.OSCILLA;
       const m = O.measure;
@@ -2033,10 +2033,16 @@ function defineChecks() {
     // it (core/play-hints.js), so the check follows the list instead of copying it (R2-C030-5).
     const hints = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'js', 'core',
       'play-hints.js'), 'utf8');
-    const playWs = JSON.parse((/STATUS_PLAY_WORKSPACES = Object\.freeze\((\[[^\]]*\])\)/
-      .exec(hints) || [])[1].replace(/'/g, '"'));
-    const czechTitle = (/restored: '([^']+)'/.exec(hints.slice(hints.indexOf('STATUS_PLAY_TITLES')))
-      || [])[1];
+    // A source whose shape changed fails by name, not as an undefined further on (R2-C030-6).
+    const fromHints = (re, what) => {
+      const m = re.exec(hints);
+      if (!m) throw new Error(`${what} not found in src/js/core/play-hints.js (its shape changed)`);
+      return m[1];
+    };
+    const playWs = JSON.parse(fromHints(/STATUS_PLAY_WORKSPACES = Object\.freeze\((\[[^\]]*\])\)/,
+      'STATUS_PLAY_WORKSPACES').replace(/'/g, '"'));
+    const czechTitle = fromHints(/STATUS_PLAY_TITLES = Object\.freeze\(\{[^}]*?restored: '([^']+)'/,
+      'STATUS_PLAY_TITLES.restored');
     const restoredTitle = (m) => (playWs.includes(m) ? czechTitle
       : 'Configuration restored from link');
     const shown = (p) => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
