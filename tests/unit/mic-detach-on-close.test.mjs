@@ -327,17 +327,57 @@ test('C067: a suspended or interrupted context pauses the live lab and says why'
   }
 });
 
-test('C067: a pause while the microphone is off, or a stop while paused, leaves no pause', async () => {
+test('C067: a pause while the microphone is off, or a stop while paused, leaves no pause',
+  async () => {
+    const { root } = fakeRoot();
+    const adapter = fakeAdapter();
+    const lab = mount(root, adapter);
+    adapter.emitContext('suspended');
+    assert.equal(lab.paused, false, 'nothing to pause while the microphone is off');
+    lab.dispose();
+    const live = await liveLab();
+    live.adapter.emitContext('interrupted');
+    live.lab.stop();
+    assert.equal(live.lab.paused, false, 'Stop clears the pause');
+    assert.equal(live.detected.textContent, MIC_OFF);
+    live.lab.dispose();
+  });
+
+/** A spectrum chart stand-in (deps.chart): its mic reader holds a 1 kHz tone at 48 kHz. */
+function stubChart() {
+  const sr = 48000;
+  const n = 8192;
+  const time = Float32Array.from({ length: n },
+    (_, i) => 0.5 * Math.sin((2 * Math.PI * 1000 * i) / sr));
+  const bin = 1000 / (sr / n);
+  const frequency = Float32Array.from({ length: n / 2 },
+    (_, k) => -100 + 70 * Math.exp(-((k - bin) ** 2) / 2));
+  const reads = [];
+  return {
+    reads,
+    readers: { mic: { frequency, readFrequency: (now) => { reads.push(now); },
+      readTime: () => time } },
+    setPeak() {}, refreshTheme() {}, dispose() {},
+  };
+}
+
+test('C067: no reading is kept or taken while the context is paused (the frame step)', async () => {
   const { root } = fakeRoot();
   const adapter = fakeAdapter();
-  const lab = mount(root, adapter);
-  adapter.emitContext('suspended');
-  assert.equal(lab.paused, false, 'nothing to pause while the microphone is off');
+  const chart = stubChart();
+  const lab = mount(root, adapter, { chart });
+  await withMediaDevices(fakeStream(), () => lab.start());
+  lab.step(1000);
+  assert.ok(lab.estimate && Math.abs(lab.estimate.frequencyHz - 1000) < 20,
+    `setup: a live frame reads the 1 kHz tone (${JSON.stringify(lab.estimate)})`);
+  const before = chart.reads.length;
+  adapter.emitContext('interrupted');
+  assert.equal(lab.estimate, null, 'the pause drops the reading of the frozen buffer');
+  lab.step(2000);
+  assert.equal(lab.estimate, null, 'a frame while paused takes no reading');
+  assert.equal(chart.reads.length, before, 'and reads no analyser');
+  adapter.emitContext('running');
+  lab.step(3000);
+  assert.ok(lab.estimate, 'running again, a frame reads again');
   lab.dispose();
-  const live = await liveLab();
-  live.adapter.emitContext('interrupted');
-  live.lab.stop();
-  assert.equal(live.lab.paused, false, 'Stop clears the pause');
-  assert.equal(live.detected.textContent, MIC_OFF);
-  live.lab.dispose();
 });

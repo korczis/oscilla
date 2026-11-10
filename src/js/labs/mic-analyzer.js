@@ -142,8 +142,11 @@ function layer(host) {
   return d;
 }
 
-/** mount(rootEl, adapter) → lab (see the return value). */
-export function mount(rootEl, adapter) {
+/**
+ * mount(rootEl, adapter, deps) → lab (see the return value). deps.chart replaces the spectrum
+ * chart (its readers, setPeak, refreshTheme, dispose): the seam a test reads frames through.
+ */
+export function mount(rootEl, adapter, deps = {}) {
   const q = (sel) => rootEl.querySelector(sel);
   const toggle = q('#osc-mic-toggle');
   const host = q('#osc-chart-mic');
@@ -166,7 +169,7 @@ export function mount(rootEl, adapter) {
   const spectrumLayer = host ? layer(host) : null;
   const spgLayer = host ? layer(host) : null;
   if (spgLayer) spgLayer.hidden = true;
-  const chart = spectrumLayer
+  const chart = deps.chart || (spectrumLayer
     ? createSpectrumChart(spectrumLayer, {
       mode: 'dual',
       minDb: -80,
@@ -182,7 +185,7 @@ export function mount(rootEl, adapter) {
       getAnalyser: () => adapter.getAnalyser(),
       getRequested: () => adapter.requestedFrequency(),
     })
-    : null;
+    : null);
   let spg = null;
   const toolbar = host ? makeToolbar(host, rootEl) : null;
 
@@ -364,12 +367,15 @@ export function mount(rootEl, adapter) {
     if (chart) chart.setPeak(estimate ? { hz: estimate.frequencyHz, db: estimate.levelDb } : null);
   }
 
-  const stopFrames = onFrame((now) => {
+  // One frame of the lab: a reading at most every READOUT_INTERVAL_MS, none while the context
+  // is paused (C067) or Compare is frozen. The shared frame loop calls it; lab.step exposes it.
+  function frameStep(now) {
     if (now - lastReadout < READOUT_INTERVAL_MS) return;
     lastReadout = now;
     if (stream && !paused && !(tab === 'compare' && opts.freeze)) measure(now);
     renderReadout();
-  });
+  }
+  const stopFrames = onFrame(frameStep);
 
   const offs = [
     stopFrames,
@@ -430,6 +436,8 @@ export function mount(rootEl, adapter) {
     },
     start,
     stop,
+    /** One frame step at `now` (ms), as the frame loop runs it (tests drive it). */
+    step: frameStep,
     update(state = {}) {
       if (state.compare) Object.assign(opts, state.compare);
       applyView();
