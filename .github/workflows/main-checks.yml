@@ -87,8 +87,11 @@ jobs:
           # The public download URL first; where it fails (the pinned release's returned 504 for hours on
           # 2026-11-08 while the API served the same asset), the same asset of the same tag and
           # repository through the API, three bounded attempts. Either way the digest decides.
-          if ! curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
-            -o "$RUNNER_TEMP/$a" \
+          # Each public attempt is bounded too (R055, project.ci-bounded): 4 x 20 s + 3 x 5 s,
+          # then the fallback's 3 x 60 s + 2 x 5 s, 285 s in all, inside the step's 5 minutes, so
+          # a stalled transfer cannot use the step before the API route gets its turn.
+          if ! curl -fsSL --proto '=https' --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            --max-time 20 -o "$RUNNER_TEMP/$a" \
             "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"; then
             echo "::warning::the release download URL failed; fetching $a through the GitHub API"
             for i in 1 2 3; do

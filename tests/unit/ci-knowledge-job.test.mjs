@@ -56,7 +56,7 @@ test('the pinned download retries transient errors and checks the digest', () =>
   const k = job('knowledge');
   const curl = k.split('\n').find((l) => /\bcurl\b/.test(l));
   assert.ok(curl, 'the job downloads with curl');
-  for (const flag of ['--retry 5', '--retry-all-errors', '--retry-delay 5',
+  for (const flag of ['--retry 3', '--retry-all-errors', '--retry-delay 5',
     '--connect-timeout 20', "--proto '=https'", '-f']) {
     assert.ok(curl.includes(flag), `curl ${flag}`);
   }
@@ -83,6 +83,56 @@ test('a failed public download falls back to the API route, same tag and reposit
     const digest = k.indexOf('sha256sum -c -');
     assert.ok(fallback > 0 && digest > fallback, 'the digest is checked after either download');
   }
+});
+
+// R055 (project.ci-bounded): the public download had --retry 5 but no --max-time, under a
+// 5-minute step, so one stalled transfer could use the whole step before the API fallback
+// (3 x 60 s) started. Every public attempt is bounded now, and the worst case of both routes
+// (each attempt at its bound, each delay taken) fits inside the step's timeout-minutes.
+/** The `Install Majordomus` step of a workflow text: from its `- name:` to the next step. */
+function installStep(text) {
+  const start = text.indexOf('- name: Install Majordomus');
+  assert.ok(start >= 0, 'an Install Majordomus step');
+  const rest = text.slice(start);
+  const next = rest.slice(2).search(/\n {6}- (name|uses):/);
+  return next < 0 ? rest : rest.slice(0, next + 2);
+}
+
+/** Worst-case seconds of the step's two download routes, read from its own text. */
+function downloadBudget(step) {
+  const num = (re, what) => {
+    const m = re.exec(step);
+    assert.ok(m, what);
+    return Number(m[1]);
+  };
+  const curl = step.slice(step.indexOf('curl '), step.indexOf('; then'));
+  const max = (() => {
+    const m = /--max-time (\d+)/.exec(curl);
+    return m ? Number(m[1]) : Infinity;
+  })();
+  const retries = Number(/--retry (\d+)/.exec(curl)[1]);
+  const delay = Number(/--retry-delay (\d+)/.exec(curl)[1]);
+  const attempts = (/for i in ([\d ]+); do/.exec(step) || [, ''])[1].trim().split(/\s+/).length;
+  const bound = num(/timeout (\d+) gh release download/, 'each fallback attempt bounded');
+  const pause = num(/\n\s*sleep (\d+)\n/, 'a pause between fallback attempts');
+  const limit = num(/^\s*timeout-minutes: (\d+)$/m, 'the step has timeout-minutes') * 60;
+  return { max, retries, limit,
+    total: max * (retries + 1) + delay * retries + attempts * bound + (attempts - 1) * pause };
+}
+
+test('R055: every public download attempt is bounded and both routes fit the step', () => {
+  for (const [file, text] of [['ci.yml', CI], ['main-checks.yml', readFileSync(path.join(ROOT,
+    '.github/workflows/main-checks.yml'), 'utf8')]]) {
+    const b = downloadBudget(installStep(text));
+    assert.ok(Number.isFinite(b.max), `${file}: the public curl carries --max-time`);
+    assert.ok(b.total < b.limit, `${file}: ${b.total} s worst case, step bound ${b.limit} s`);
+  }
+  // the arithmetic itself: without --max-time no total is finite; at --retry 5 and --max-time
+  // 20 the six attempts no longer leave the fallback its time
+  const step = installStep(CI);
+  assert.equal(downloadBudget(step.replace(/--max-time \d+ /, '')).total, Infinity);
+  const greedy = downloadBudget(step.replace('--retry 3 ', '--retry 5 '));
+  assert.ok(greedy.total >= greedy.limit, `${greedy.total} s at --retry 5`);
 });
 
 test('the verdict: hook wiring is excused, any other FAIL and an empty output are not', {
