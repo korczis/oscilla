@@ -20,4 +20,18 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: '2026-11-09'
-updated_at: '2026-11-09'
+updated_at: 2026-11-09T22:31:15Z
+started_at: 2026-11-09T22:29:45Z
+started_event: sha256:6580a1d95089f18f33aae823e4a0b675756f744d12c9eaae1a08f96f077828cd
+verified_at: 2026-11-09T22:30:32Z
+verified_event: sha256:ea76a0f5cf73be406568384a5b827decd60658149421b6ba3add28d76f6d1bcf
+completed_at: 2026-11-09T22:31:15Z
+completed_event: sha256:b7af08578b98eb035bbc1fa4f8e9caa25f6a948b26b89eabf4cdb2aec9b33108
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "AskUserQuestion in session bbcd8e21-77c5-407d-b96e-e2451f1cdee9 (~/.claude/projects/-Users-korczis-dev-oscilla/bbcd8e21-77c5-407d-b96e-e2451f1cdee9.jsonl), asked 2026-11-09T17:33:53Z, answered 2026-11-09T18:47:22Z"
+    result: "Landing: 'Podcesta /oscilla/lab/ (Doporučeno)'. README jazyk: 'README anglicky (Doporučeno)'. The order, the questions and every option are quoted verbatim in the objective; extracted from the session's toolUseResult.answers by oscilla-0b on 2026-11-09."
+    artifact: "session:bbcd8e21-77c5-407d-b96e-e2451f1cdee9"
+    commit: b8bfd3b613b9e4aac63267343c14bd1ee91f2a02
+    recorded_at: 2026-11-09T22:30:59Z
