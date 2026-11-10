@@ -215,6 +215,7 @@ export function clipPlayReason(model, clip, registry = NODE_REGISTRY) {
 export function createStudioTransport({
   runtime, engine, store, onClaimOutput = null, onMeasurement = null,
   registry = NODE_REGISTRY, lookAheadS = null, trace = NO_TRACE, testContext = () => false,
+  freeRun = true,
 } = {}) {
   if (!runtime || typeof runtime.apply !== 'function') {
     throw new TypeError('createStudioTransport: a Studio runtime is required');
@@ -1692,7 +1693,7 @@ export function createStudioTransport({
     warnings.length = 0;
     playing = true;
     scheduler = createTimelineScheduler(m, { sampleRate: hooks.ctx.sampleRate, baseTime,
-      startPosition: pos, registry, lookAheadS });
+      startPosition: pos, registry, lookAheadS, freeRun });
     afterApply(fresh);
     emit('state', { playing: true });
     tick();

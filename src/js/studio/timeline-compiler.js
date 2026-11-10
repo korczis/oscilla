@@ -171,20 +171,20 @@ const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
  * The mapping between timeline positions and audio times for one playback.
- *   createAnchor(model, { baseTime, startPosition = 0, sampleRate, generation = 0 })
+ *   createAnchor(model, { baseTime, startPosition = 0, sampleRate, generation = 0, freeRun })
  * -> { sampleRate, baseFrame, baseTime, startPosition, loop: { start, end } | null, end,
  *      firstPassFrames, loopFrames, generation }
  * The loop applies when enabled, at least MIN_LOOP_S long and still ahead of startPosition.
  */
 export function createAnchor(model, { baseTime = 0, startPosition = 0, sampleRate,
-  generation = 0 } = {}) {
+  generation = 0, freeRun = false } = {}) {
   const sr = rateOf(sampleRate);
   const baseFrame = Math.ceil(baseTime * sr - 1e-6);
   const l = model.timeline.loop;
   const end = timelineEnd(model);
   const loop = l.enabled && l.end - l.start >= MIN_LOOP_S && startPosition < l.end
-    ? { start: l.start, end: l.end } : freeRunLoop(model, startPosition, end,
-      CONTIGUITY_TOLERANCE_S);
+    ? { start: l.start, end: l.end }
+    : freeRun ? freeRunLoop(model, startPosition, end, CONTIGUITY_TOLERANCE_S) : null;
   const firstEnd = loop ? loop.end : end;
   return {
     sampleRate: sr,
@@ -231,7 +231,9 @@ export function positionAt(anchor, t) {
   if (!anchor.loop || anchor.loopFrames <= 0) return null;
   const rest = frames - anchor.firstPassFrames;
   const k = Math.floor(rest / anchor.loopFrames);
-  return { position: anchor.loop.start + (rest - k * anchor.loopFrames) / sr, pass: k + 1,
+  // K241 free run: the head counts up; pass k + 1 is lap k + 1.
+  const lap = anchor.loop.freeRun ? (k + 1) * (anchor.loop.end - anchor.loop.start) : 0;
+  return { position: anchor.loop.start + lap + (rest - k * anchor.loopFrames) / sr, pass: k + 1,
     playing: true };
 }
 
@@ -491,8 +493,9 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     : TIMELINE_LOOKAHEAD_S;
   const playStart = finite(opts.startPosition) ? opts.startPosition : 0;
   let model = initialModel;
+  const freeRun = opts.freeRun === true; // K241
   let anchor = createAnchor(model, { baseTime: opts.baseTime || 0, startPosition: playStart,
-    sampleRate: sr });
+    sampleRate: sr, freeRun });
   let scheduledUntil = anchor.baseTime;
   let firstWindow = true;
   let stopped = false;
@@ -541,7 +544,7 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       const at = startLeadTime(now, sr);
       reanchored = { from: anchor.baseTime, to: at };
       anchor = createAnchor(model, { baseTime: at, startPosition: anchor.startPosition,
-        sampleRate: sr, generation: anchor.generation });
+        sampleRate: sr, generation: anchor.generation, freeRun });
       cache = new Map();
       scheduledUntil = anchor.baseTime;
     }
@@ -631,11 +634,12 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     model = nextModel;
     if (!sameJson(l0, l1) && pos) {
       anchor = createAnchor(model, { baseTime: horizon, startPosition: pos.position,
-        sampleRate: sr, generation: anchor.generation + 1 });
+        sampleRate: sr, generation: anchor.generation + 1, freeRun });
       plan.reanchored = true;
     } else {
       anchor = { ...createAnchor(model, { baseTime: anchor.baseTime,
-        startPosition: anchor.startPosition, sampleRate: sr, generation: anchor.generation }),
+        startPosition: anchor.startPosition, sampleRate: sr, generation: anchor.generation,
+        freeRun }),
       baseFrame: anchor.baseFrame, baseTime: anchor.baseTime };
     }
     cache = new Map();

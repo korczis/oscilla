@@ -42,25 +42,30 @@ export function clockTicks(model, info, toAudio, { pass = 0, generation = 0, tol
 }
 
 /**
- * K241: a document with nothing left to play ahead of startPosition (no clip or automation
- * point ends after it) but with a Clock plays until STOP and its Clock ticks. Without this the
- * timeline ended at 0: the first pass had no frames, the ticks an empty pass, and the run ended
- * at once. The run then repeats the bar it starts in, [k x bar, (k + 1) x bar) with bar = one
- * 4/4 bar at the tempo: every Clock division (1/1 ... 1/32, TEMPO_DIVISIONS) divides a bar, so
- * the ticks keep the grid m x T from position 0 across passes, exactly as an open timeline would.
- * Marked freeRun, so a reader can tell it from a loop the user set. Null otherwise; the
- * timeline compiler's createAnchor applies it when no loop of the user's is active.
+ * K241: a document with a Clock and no loop of the user's plays until STOP and its Clock keeps
+ * ticking; a document without a Clock still ends where its content ends. Before, the run ended
+ * at timelineEnd (0 with no clips): the Clock's ticks stopped there and the run ended by itself.
+ * The run plays its content as before, then repeats the empty bar after it: [E, E + bar), bar
+ * being one 4/4 bar at the tempo and E the first bar line at or after both the content's end and
+ * startPosition. No clip starts in that bar, so repeating it is exactly an open timeline: only
+ * the Clocks tick there, and every Clock division (1/1 ... 1/32, TEMPO_DIVISIONS) divides a bar,
+ * so the ticks keep the grid m x T from position 0 across passes. Marked freeRun, so a reader can
+ * tell it from a loop the user set. createAnchor calls this for every anchor (the first PLAY and
+ * every re-anchor after an edit), so a clip added during the run moves E and the run keeps going.
+ * Null when the document has no Clock. Only the live transport free-runs (createAnchor's
+ * freeRun option): an offline render ends with its content. The playhead counts up through the
+ * repeated bar (timeline-compiler.js positionAt), so the display keeps going and an edit
+ * re-anchors from the same position (C1-K241-1).
  */
 export function freeRunLoop(model, startPosition, end, tolerance = 1e-6) {
-  if (end > startPosition + tolerance) return null;
   const tempo = model.transport && finite(model.transport.tempo) && model.transport.tempo > 0
     ? model.transport.tempo : 120;
   const clocked = model.graph.nodes.some((n) => n.type === 'clock'
     && divisionSeconds(n.params.division, tempo) > 0);
   if (!clocked) return null;
   const bar = 240 / tempo;
-  const k = Math.floor((startPosition + tolerance) / bar);
-  return { start: k * bar, end: (k + 1) * bar, freeRun: true };
+  const e = Math.max(0, Math.ceil((Math.max(end, startPosition) - tolerance) / bar)) * bar;
+  return { start: e, end: e + bar, freeRun: true };
 }
 
 const nodeOf = (model, id) => model.graph.nodes.find((n) => n.id === id) || null;
