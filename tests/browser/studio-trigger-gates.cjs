@@ -61,6 +61,10 @@ const VIEWPORT = { width: 1536, height: 1024 };
 const PHONE = { width: 390, height: 844 }; // the touch connection: a phone on the Graph subview
 const LOAD_MS = 60000;
 const UI_MS = 8000; // a store commit and its render, a dialog opening
+// A drag's end points are read only once the layout has held still this long: in Linux WebKit
+// the Studio's layout can still move after both ports are drawn (on run 42713534778 the Keys Gate
+// moved 57 px up between its read and the press, which then landed on the timeline's loop band).
+const SETTLE_MS = 300;
 const SOUND_MS = 15000; // the runtime starting, the audio clock reaching a gate
 const CHECK_MS = 180000;
 
@@ -130,6 +134,18 @@ const center = (page, sel) => page.evaluate((q) => {
   const r = el.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 }, sel);
+/** Both ports' centres once neither has moved for SETTLE_MS (a condition poll, deadline UI_MS). */
+async function settled(page, sa, sb, what) {
+  let last = null;
+  return until(async () => {
+    const a = await center(page, sa);
+    const b = await center(page, sb);
+    if (!a || !b) { last = null; return null; }
+    const key = `${a.x},${a.y},${b.x},${b.y}`;
+    if (!last || last.key !== key) { last = { key, at: Date.now() }; return null; }
+    return Date.now() - last.at >= SETTLE_MS ? { a, b } : null;
+  }, { ms: UI_MS, what });
+}
 /** Frame the two nodes in the graph (the user's F on a selection), then clear the selection. */
 async function frame(page, a, b) {
   await page.evaluate(([x, y]) => {
@@ -196,10 +212,18 @@ function defineChecks() {
     // Pointer: drag from the Keys Gate to the Envelope's Gate.
     await frame(page, keys, env);
     let d0 = await depth(page);
-    const a = await center(page, port(keys, 'out', 'gate'));
-    const b = await center(page, port(env, 'in', 'gate'));
+    const outSel = port(keys, 'out', 'gate');
+    const inSel = port(env, 'in', 'gate');
+    // Hover the Gate output first (the first pointer event the page sees), then read both ends
+    // once the layout holds still, and press where the output is now.
+    const first = await settled(page, outSel, inSel, 'tg-connect: the ports hold still');
+    await page.mouse.move(first.a.x, first.a.y);
+    const { a } = await settled(page, outSel, inSel, 'tg-connect: the ports hold still under '
+      + 'the pointer');
     await page.mouse.move(a.x, a.y);
     await page.mouse.down();
+    const { b } = await settled(page, outSel, inSel, 'tg-connect: the ports hold still while '
+      + 'the button is down');
     await page.mouse.move(a.x + (b.x - a.x) / 12, a.y + (b.y - a.y) / 12);
     await page.mouse.move(b.x, b.y, { steps: 12 });
     await page.mouse.up();
