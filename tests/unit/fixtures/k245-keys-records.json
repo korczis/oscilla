@@ -1,0 +1,3544 @@
+{
+ "$comment": [
+  "K245: two Studio records exactly as released OSCILLA saved them, made by running that",
+  "release's own src (git archive <tag>): the basic-tone template with the Synth's semi-modular",
+  "panel inserted (its Keys node), saved as a project (serializeStudio + studioHash) and as an",
+  "experiment's Studio block (executionState + studioHash). v3.27.0 predates #447 (v3.28.0), which",
+  "gave the Keys node keyLow and keyHigh without a hash epoch; both releases hashed at epoch 1.",
+  "Generator: the K245 task note (scratch keys-record.mjs); never edit by hand."
+ ],
+ "v3.27.0": {
+  "hashVersion": 1,
+  "keysParams": {
+   "glide": 0,
+   "transpose": 0,
+   "priority": "last"
+  },
+  "project": {
+   "studioHash": "c3d7ae493a8281b2aa9d1be18d02555383bdef03b0271d879a48dcc88c3dccde",
+   "doc": {
+    "graph": {
+     "edges": [
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "pitch"
+       },
+       "id": "semi-mono-1-n1",
+       "props": {
+        "depth": 6,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco1",
+        "port": "pitch"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "pitch"
+       },
+       "id": "semi-mono-1-n2",
+       "props": {
+        "depth": 6,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco2",
+        "port": "pitch"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "gate"
+       },
+       "id": "semi-mono-1-n3",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-eg1",
+        "port": "gate"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "gate"
+       },
+       "id": "semi-mono-1-n4",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-eg2",
+        "port": "gate"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco1",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n5",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in1"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco2",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n6",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in2"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-noise",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n7",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in3"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-ring",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n8",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in4"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco1",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n9",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-ring",
+        "port": "carrier"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco2",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n10",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-ring",
+        "port": "modulator"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mix",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n11",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-hpf",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-hpf",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n12",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-lpf",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-lpf",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n13",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-vca",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vca",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e1",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-additive",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-additive",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e2",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-fm",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-fm",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e3",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-am",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-am",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e4",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-wavetable",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-wavetable",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e5",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-sync",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-sync",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e6",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-perc",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-perc",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e7",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "master-1",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg2",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n24",
+       "props": {
+        "depth": 1,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vca",
+        "port": "gain"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n15",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco1",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n16",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco2",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg1",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n17",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco1",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg1",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n18",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco2",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n19",
+       "props": {
+        "depth": 0,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-hpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg2",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n20",
+       "props": {
+        "depth": 0,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-hpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n21",
+       "props": {
+        "depth": 0,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-lpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg2",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n22",
+       "props": {
+        "depth": 2,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-lpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "gate"
+       },
+       "id": "semi-mono-1-n23",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-sh",
+        "port": "trigger"
+       }
+      }
+     ],
+     "nodes": [
+      {
+       "id": "osc-1",
+       "metadata": {
+        "name": "Oscillator 1"
+       },
+       "params": {
+        "detune": 0,
+        "frequency": 440,
+        "level": 1,
+        "waveform": "sine"
+       },
+       "position": {
+        "x": 80,
+        "y": 160
+       },
+       "type": "oscillator"
+      },
+      {
+       "id": "master-1",
+       "metadata": {
+        "name": "Master"
+       },
+       "params": {
+        "level": 0.08
+       },
+       "position": {
+        "x": 360,
+        "y": 160
+       },
+       "type": "master"
+      },
+      {
+       "id": "semi-mono-1-keys",
+       "metadata": {
+        "name": "KEYBOARD",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "keys"
+        }
+       },
+       "params": {
+        "glide": 0,
+        "priority": "last",
+        "transpose": 0
+       },
+       "position": {
+        "x": 0,
+        "y": 200
+       },
+       "type": "keys"
+      },
+      {
+       "id": "semi-mono-1-vco1",
+       "metadata": {
+        "name": "VCO 1",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "vco1"
+        }
+       },
+       "params": {
+        "fm": 0,
+        "pitch": 0,
+        "scale": "16",
+        "tune": 0,
+        "waveform": "sawtooth",
+        "width": 50
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       },
+       "type": "vco"
+      },
+      {
+       "id": "semi-mono-1-vco2",
+       "metadata": {
+        "name": "VCO 2",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "vco2"
+        }
+       },
+       "params": {
+        "fm": 0,
+        "pitch": 0,
+        "scale": "8",
+        "tune": 0,
+        "waveform": "square",
+        "width": 50
+       },
+       "position": {
+        "x": 220,
+        "y": 0
+       },
+       "type": "vco"
+      },
+      {
+       "id": "semi-mono-1-ring",
+       "metadata": {
+        "name": "RING",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "ring"
+        }
+       },
+       "params": {
+        "depth": 1,
+        "mode": "ring"
+       },
+       "position": {
+        "x": 440,
+        "y": 0
+       },
+       "type": "ring"
+      },
+      {
+       "id": "semi-mono-1-noise",
+       "metadata": {
+        "name": "NOISE",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "noise"
+        }
+       },
+       "params": {
+        "color": "white",
+        "level": 0.5,
+        "seed": 1
+       },
+       "position": {
+        "x": 660,
+        "y": 0
+       },
+       "type": "noise"
+      },
+      {
+       "id": "semi-mono-1-mix",
+       "metadata": {
+        "name": "MIXER",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "mix"
+        }
+       },
+       "params": {
+        "level1": 0.7,
+        "level2": 0.5,
+        "level3": 0,
+        "level4": 0
+       },
+       "position": {
+        "x": 880,
+        "y": 0
+       },
+       "type": "mixer"
+      },
+      {
+       "id": "semi-mono-1-hpf",
+       "metadata": {
+        "name": "HPF",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "hpf"
+        }
+       },
+       "params": {
+        "Q": 0.7,
+        "enabled": true,
+        "frequency": 20,
+        "gain": 0,
+        "type": "highpass"
+       },
+       "position": {
+        "x": 1100,
+        "y": 0
+       },
+       "type": "filter"
+      },
+      {
+       "id": "semi-mono-1-lpf",
+       "metadata": {
+        "name": "LPF",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "lpf"
+        }
+       },
+       "params": {
+        "Q": 1,
+        "enabled": true,
+        "frequency": 1200,
+        "gain": 0,
+        "type": "lowpass"
+       },
+       "position": {
+        "x": 1320,
+        "y": 0
+       },
+       "type": "filter"
+      },
+      {
+       "id": "semi-mono-1-eg1",
+       "metadata": {
+        "name": "EG 1",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "eg1"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "decay": 0.3,
+        "release": 0.3,
+        "sustain": 0.2
+       },
+       "position": {
+        "x": 220,
+        "y": 200
+       },
+       "type": "envelope"
+      },
+      {
+       "id": "semi-mono-1-eg2",
+       "metadata": {
+        "name": "EG 2",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "eg2"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "decay": 0.2,
+        "release": 0.25,
+        "sustain": 0.8
+       },
+       "position": {
+        "x": 440,
+        "y": 200
+       },
+       "type": "envelope"
+      },
+      {
+       "id": "semi-mono-1-vca",
+       "metadata": {
+        "name": "VCA",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "vca"
+        }
+       },
+       "params": {
+        "gain": 0
+       },
+       "position": {
+        "x": 660,
+        "y": 200
+       },
+       "type": "gain"
+      },
+      {
+       "id": "semi-mono-1-mg",
+       "metadata": {
+        "name": "MG / LFO",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "mg"
+        }
+       },
+       "params": {
+        "rate": 5,
+        "shape": "triangle"
+       },
+       "position": {
+        "x": 880,
+        "y": 200
+       },
+       "type": "lfo"
+      },
+      {
+       "id": "semi-mono-1-sh",
+       "metadata": {
+        "name": "S&H",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "sh"
+        }
+       },
+       "params": {
+        "rate": 5,
+        "seed": 20261001,
+        "smooth": false
+       },
+       "position": {
+        "x": 1100,
+        "y": 200
+       },
+       "type": "random"
+      },
+      {
+       "id": "semi-mono-1-additive",
+       "metadata": {
+        "name": "ADDITIVE",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "additive"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "decay": 0.3,
+        "h1": 1,
+        "h10": 0,
+        "h11": 0,
+        "h12": 0,
+        "h2": 0.25,
+        "h3": 0.16666666666666666,
+        "h4": 0.125,
+        "h5": 0,
+        "h6": 0,
+        "h7": 0,
+        "h8": 0,
+        "h9": 0,
+        "level": 4,
+        "release": 0.3,
+        "shape": "custom",
+        "sustain": 0.7,
+        "tilt": 0
+       },
+       "position": {
+        "x": 0,
+        "y": 400
+       },
+       "type": "additive-voice"
+      },
+      {
+       "id": "semi-mono-1-fm",
+       "metadata": {
+        "name": "FM",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "fm"
+        }
+       },
+       "params": {
+        "algorithm": "2-op",
+        "attack": 0.005,
+        "decay": 0.3,
+        "index1": 1,
+        "index2": 2,
+        "index3": 1,
+        "index4": 1,
+        "level": 4,
+        "level1": 1,
+        "level2": 0.5,
+        "level3": 0.5,
+        "level4": 0.5,
+        "modDecay": 0.4,
+        "modSustain": 0.5,
+        "ratio1": 1,
+        "ratio2": 2,
+        "ratio3": 3,
+        "ratio4": 4,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 220,
+        "y": 400
+       },
+       "type": "fm-voice"
+      },
+      {
+       "id": "semi-mono-1-am",
+       "metadata": {
+        "name": "AM / RING",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "am"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "carrier": "sine",
+        "decay": 0.3,
+        "depth": 1,
+        "level": 4,
+        "mode": "ring",
+        "modulator": "sine",
+        "ratio": 1.25,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 440,
+        "y": 400
+       },
+       "type": "am-voice"
+      },
+      {
+       "id": "semi-mono-1-wavetable",
+       "metadata": {
+        "name": "WAVETABLE",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "wavetable"
+        }
+       },
+       "params": {
+        "attack": 0.02,
+        "bank": "basic",
+        "decay": 0.3,
+        "level": 4,
+        "morph": 0,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 660,
+        "y": 400
+       },
+       "type": "wavetable-voice"
+      },
+      {
+       "id": "semi-mono-1-sync",
+       "metadata": {
+        "name": "HARD SYNC",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "sync"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "bank": "sync",
+        "decay": 0.3,
+        "level": 4,
+        "morph": 1,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 880,
+        "y": 400
+       },
+       "type": "wavetable-voice"
+      },
+      {
+       "id": "semi-mono-1-perc",
+       "metadata": {
+        "name": "PERCUSSION",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "perc"
+        }
+       },
+       "params": {
+        "choke": true,
+        "decay": 1,
+        "level": 4,
+        "tone": 0.5,
+        "tune": 0
+       },
+       "position": {
+        "x": 1100,
+        "y": 400
+       },
+       "type": "perc-voice"
+      },
+      {
+       "id": "semi-mono-1-xy",
+       "metadata": {
+        "name": "XY PAD",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "xy"
+        }
+       },
+       "params": {
+        "glide": 0,
+        "key": "C",
+        "mode": "minor-pentatonic",
+        "octave": 3,
+        "span": 2
+       },
+       "position": {
+        "x": 0,
+        "y": 600
+       },
+       "type": "xy-pad"
+      }
+     ]
+    },
+    "kind": "oscilla-studio",
+    "metadata": {
+     "notes": "",
+     "title": "Basic Tone"
+    },
+    "schemaVersion": 1,
+    "timeline": {
+     "automation": [],
+     "clips": [],
+     "loop": {
+      "enabled": false,
+      "end": 4,
+      "start": 0
+     },
+     "markers": [],
+     "tracks": []
+    },
+    "transport": {
+     "tempo": 120,
+     "timeMode": "seconds",
+     "timeSignature": [
+      4,
+      4
+     ]
+    },
+    "view": {
+     "graph": {
+      "panX": 0,
+      "panY": 0,
+      "zoom": 1
+     },
+     "timeline": {
+      "pxPerSecond": 100,
+      "scrollX": 0
+     }
+    }
+   }
+  },
+  "experimentStudio": {
+   "schemaVersion": 1,
+   "studioHash": "c3d7ae493a8281b2aa9d1be18d02555383bdef03b0271d879a48dcc88c3dccde",
+   "execution": {
+    "v": 1,
+    "kind": "oscilla-studio",
+    "schemaVersion": 1,
+    "nodes": [
+     {
+      "id": "master-1",
+      "type": "master",
+      "params": {
+       "level": 0.08
+      }
+     },
+     {
+      "id": "osc-1",
+      "type": "oscillator",
+      "params": {
+       "waveform": "sine",
+       "frequency": 440,
+       "detune": 0,
+       "level": 1
+      }
+     },
+     {
+      "id": "semi-mono-1-additive",
+      "type": "additive-voice",
+      "params": {
+       "shape": "custom",
+       "h1": 1,
+       "h2": 0.25,
+       "h3": 0.16666666666666666,
+       "h4": 0.125,
+       "h5": 0,
+       "h6": 0,
+       "h7": 0,
+       "h8": 0,
+       "h9": 0,
+       "h10": 0,
+       "h11": 0,
+       "h12": 0,
+       "tilt": 0,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-am",
+      "type": "am-voice",
+      "params": {
+       "mode": "ring",
+       "carrier": "sine",
+       "modulator": "sine",
+       "ratio": 1.25,
+       "depth": 1,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-eg1",
+      "type": "envelope",
+      "params": {
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.2,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-eg2",
+      "type": "envelope",
+      "params": {
+       "attack": 0.005,
+       "decay": 0.2,
+       "sustain": 0.8,
+       "release": 0.25
+      }
+     },
+     {
+      "id": "semi-mono-1-fm",
+      "type": "fm-voice",
+      "params": {
+       "algorithm": "2-op",
+       "ratio1": 1,
+       "index1": 1,
+       "level1": 1,
+       "ratio2": 2,
+       "index2": 2,
+       "level2": 0.5,
+       "ratio3": 3,
+       "index3": 1,
+       "level3": 0.5,
+       "ratio4": 4,
+       "index4": 1,
+       "level4": 0.5,
+       "modDecay": 0.4,
+       "modSustain": 0.5,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-hpf",
+      "type": "filter",
+      "params": {
+       "type": "highpass",
+       "frequency": 20,
+       "Q": 0.7,
+       "gain": 0,
+       "enabled": true
+      }
+     },
+     {
+      "id": "semi-mono-1-keys",
+      "type": "keys",
+      "params": {
+       "glide": 0,
+       "transpose": 0,
+       "priority": "last"
+      }
+     },
+     {
+      "id": "semi-mono-1-lpf",
+      "type": "filter",
+      "params": {
+       "type": "lowpass",
+       "frequency": 1200,
+       "Q": 1,
+       "gain": 0,
+       "enabled": true
+      }
+     },
+     {
+      "id": "semi-mono-1-mg",
+      "type": "lfo",
+      "params": {
+       "shape": "triangle",
+       "rate": 5
+      }
+     },
+     {
+      "id": "semi-mono-1-mix",
+      "type": "mixer",
+      "params": {
+       "level1": 0.7,
+       "level2": 0.5,
+       "level3": 0,
+       "level4": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-noise",
+      "type": "noise",
+      "params": {
+       "color": "white",
+       "level": 0.5,
+       "seed": 1
+      }
+     },
+     {
+      "id": "semi-mono-1-perc",
+      "type": "perc-voice",
+      "params": {
+       "tune": 0,
+       "decay": 1,
+       "tone": 0.5,
+       "choke": true,
+       "level": 4
+      }
+     },
+     {
+      "id": "semi-mono-1-ring",
+      "type": "ring",
+      "params": {
+       "mode": "ring",
+       "depth": 1
+      }
+     },
+     {
+      "id": "semi-mono-1-sh",
+      "type": "random",
+      "params": {
+       "rate": 5,
+       "seed": 20261001,
+       "smooth": false
+      }
+     },
+     {
+      "id": "semi-mono-1-sync",
+      "type": "wavetable-voice",
+      "params": {
+       "bank": "sync",
+       "morph": 1,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-vca",
+      "type": "gain",
+      "params": {
+       "gain": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-vco1",
+      "type": "vco",
+      "params": {
+       "waveform": "sawtooth",
+       "width": 50,
+       "scale": "16",
+       "tune": 0,
+       "pitch": 0,
+       "fm": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-vco2",
+      "type": "vco",
+      "params": {
+       "waveform": "square",
+       "width": 50,
+       "scale": "8",
+       "tune": 0,
+       "pitch": 0,
+       "fm": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-wavetable",
+      "type": "wavetable-voice",
+      "params": {
+       "bank": "basic",
+       "morph": 0,
+       "level": 4,
+       "attack": 0.02,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-xy",
+      "type": "xy-pad",
+      "params": {
+       "mode": "minor-pentatonic",
+       "key": "C",
+       "octave": 3,
+       "span": 2,
+       "glide": 0
+      }
+     }
+    ],
+    "edges": [
+     {
+      "id": "semi-mono-1-e1",
+      "from": {
+       "node": "semi-mono-1-vca",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-additive",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e2",
+      "from": {
+       "node": "semi-mono-1-additive",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-fm",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e3",
+      "from": {
+       "node": "semi-mono-1-fm",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-am",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e4",
+      "from": {
+       "node": "semi-mono-1-am",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-wavetable",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e5",
+      "from": {
+       "node": "semi-mono-1-wavetable",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-sync",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e6",
+      "from": {
+       "node": "semi-mono-1-sync",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-perc",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e7",
+      "from": {
+       "node": "semi-mono-1-perc",
+       "port": "audio"
+      },
+      "to": {
+       "node": "master-1",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n1",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "pitch"
+      },
+      "to": {
+       "node": "semi-mono-1-vco1",
+       "port": "pitch"
+      },
+      "props": {
+       "muted": false,
+       "depth": 6,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n10",
+      "from": {
+       "node": "semi-mono-1-vco2",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-ring",
+       "port": "modulator"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n11",
+      "from": {
+       "node": "semi-mono-1-mix",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-hpf",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n12",
+      "from": {
+       "node": "semi-mono-1-hpf",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-lpf",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n13",
+      "from": {
+       "node": "semi-mono-1-lpf",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-vca",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n15",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco1",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n16",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco2",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n17",
+      "from": {
+       "node": "semi-mono-1-eg1",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco1",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "unipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n18",
+      "from": {
+       "node": "semi-mono-1-eg1",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco2",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "unipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n19",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-hpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n2",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "pitch"
+      },
+      "to": {
+       "node": "semi-mono-1-vco2",
+       "port": "pitch"
+      },
+      "props": {
+       "muted": false,
+       "depth": 6,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n20",
+      "from": {
+       "node": "semi-mono-1-eg2",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-hpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "unipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n21",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-lpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n22",
+      "from": {
+       "node": "semi-mono-1-eg2",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-lpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 2,
+       "polarity": "unipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n23",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "gate"
+      },
+      "to": {
+       "node": "semi-mono-1-sh",
+       "port": "trigger"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n24",
+      "from": {
+       "node": "semi-mono-1-eg2",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vca",
+       "port": "gain"
+      },
+      "props": {
+       "muted": false,
+       "depth": 1,
+       "polarity": "unipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n3",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "gate"
+      },
+      "to": {
+       "node": "semi-mono-1-eg1",
+       "port": "gate"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n4",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "gate"
+      },
+      "to": {
+       "node": "semi-mono-1-eg2",
+       "port": "gate"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n5",
+      "from": {
+       "node": "semi-mono-1-vco1",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in1"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n6",
+      "from": {
+       "node": "semi-mono-1-vco2",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in2"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n7",
+      "from": {
+       "node": "semi-mono-1-noise",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in3"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n8",
+      "from": {
+       "node": "semi-mono-1-ring",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in4"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n9",
+      "from": {
+       "node": "semi-mono-1-vco1",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-ring",
+       "port": "carrier"
+      },
+      "props": {
+       "muted": false
+      }
+     }
+    ],
+    "timeline": {
+     "tracks": [],
+     "clips": [],
+     "automation": [],
+     "loop": {
+      "enabled": false,
+      "start": 0,
+      "end": 4
+     }
+    },
+    "transport": {
+     "timeMode": "seconds",
+     "tempo": 120,
+     "timeSignature": [
+      4,
+      4
+     ]
+    }
+   }
+  }
+ },
+ "v3.28.0": {
+  "hashVersion": 1,
+  "keysParams": {
+   "glide": 0,
+   "transpose": 0,
+   "priority": "last",
+   "keyLow": 0,
+   "keyHigh": 127
+  },
+  "project": {
+   "studioHash": "faefbd85cca88c5b4aff9f2fa7e95efff5d0ad8a719bf46f20f969a0f344aa4c",
+   "doc": {
+    "graph": {
+     "edges": [
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "pitch"
+       },
+       "id": "semi-mono-1-n1",
+       "props": {
+        "depth": 6,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco1",
+        "port": "pitch"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "pitch"
+       },
+       "id": "semi-mono-1-n2",
+       "props": {
+        "depth": 6,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco2",
+        "port": "pitch"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "gate"
+       },
+       "id": "semi-mono-1-n3",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-eg1",
+        "port": "gate"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "gate"
+       },
+       "id": "semi-mono-1-n4",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-eg2",
+        "port": "gate"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco1",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n5",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in1"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco2",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n6",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in2"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-noise",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n7",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in3"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-ring",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n8",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-mix",
+        "port": "in4"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco1",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n9",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-ring",
+        "port": "carrier"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vco2",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n10",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-ring",
+        "port": "modulator"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mix",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n11",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-hpf",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-hpf",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n12",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-lpf",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-lpf",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-n13",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-vca",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-vca",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e1",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-additive",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-additive",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e2",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-fm",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-fm",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e3",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-am",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-am",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e4",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-wavetable",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-wavetable",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e5",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-sync",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-sync",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e6",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-perc",
+        "port": "thru"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-perc",
+        "port": "audio"
+       },
+       "id": "semi-mono-1-e7",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "master-1",
+        "port": "audio"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg2",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n24",
+       "props": {
+        "depth": 1,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vca",
+        "port": "gain"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n15",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco1",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n16",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco2",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg1",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n17",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco1",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg1",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n18",
+       "props": {
+        "depth": 0,
+        "mapping": "linear",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-vco2",
+        "port": "fm"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n19",
+       "props": {
+        "depth": 0,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-hpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg2",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n20",
+       "props": {
+        "depth": 0,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-hpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-mg",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n21",
+       "props": {
+        "depth": 0,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "bipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-lpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-eg2",
+        "port": "control"
+       },
+       "id": "semi-mono-1-n22",
+       "props": {
+        "depth": 2,
+        "mapping": "log",
+        "muted": false,
+        "offset": 0,
+        "polarity": "unipolar"
+       },
+       "to": {
+        "node": "semi-mono-1-lpf",
+        "port": "frequency"
+       }
+      },
+      {
+       "from": {
+        "node": "semi-mono-1-keys",
+        "port": "gate"
+       },
+       "id": "semi-mono-1-n23",
+       "props": {
+        "muted": false
+       },
+       "to": {
+        "node": "semi-mono-1-sh",
+        "port": "trigger"
+       }
+      }
+     ],
+     "nodes": [
+      {
+       "id": "osc-1",
+       "metadata": {
+        "name": "Oscillator 1"
+       },
+       "params": {
+        "detune": 0,
+        "frequency": 440,
+        "level": 1,
+        "waveform": "sine"
+       },
+       "position": {
+        "x": 80,
+        "y": 160
+       },
+       "type": "oscillator"
+      },
+      {
+       "id": "master-1",
+       "metadata": {
+        "name": "Master"
+       },
+       "params": {
+        "level": 0.08
+       },
+       "position": {
+        "x": 360,
+        "y": 160
+       },
+       "type": "master"
+      },
+      {
+       "id": "semi-mono-1-keys",
+       "metadata": {
+        "name": "KEYBOARD",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "keys"
+        }
+       },
+       "params": {
+        "glide": 0,
+        "keyHigh": 127,
+        "keyLow": 0,
+        "priority": "last",
+        "transpose": 0
+       },
+       "position": {
+        "x": 0,
+        "y": 200
+       },
+       "type": "keys"
+      },
+      {
+       "id": "semi-mono-1-vco1",
+       "metadata": {
+        "name": "VCO 1",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "vco1"
+        }
+       },
+       "params": {
+        "fm": 0,
+        "pitch": 0,
+        "scale": "16",
+        "tune": 0,
+        "waveform": "sawtooth",
+        "width": 50
+       },
+       "position": {
+        "x": 0,
+        "y": 0
+       },
+       "type": "vco"
+      },
+      {
+       "id": "semi-mono-1-vco2",
+       "metadata": {
+        "name": "VCO 2",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "vco2"
+        }
+       },
+       "params": {
+        "fm": 0,
+        "pitch": 0,
+        "scale": "8",
+        "tune": 0,
+        "waveform": "square",
+        "width": 50
+       },
+       "position": {
+        "x": 220,
+        "y": 0
+       },
+       "type": "vco"
+      },
+      {
+       "id": "semi-mono-1-ring",
+       "metadata": {
+        "name": "RING",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "ring"
+        }
+       },
+       "params": {
+        "depth": 1,
+        "mode": "ring"
+       },
+       "position": {
+        "x": 440,
+        "y": 0
+       },
+       "type": "ring"
+      },
+      {
+       "id": "semi-mono-1-noise",
+       "metadata": {
+        "name": "NOISE",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "noise"
+        }
+       },
+       "params": {
+        "color": "white",
+        "level": 0.5,
+        "seed": 1
+       },
+       "position": {
+        "x": 660,
+        "y": 0
+       },
+       "type": "noise"
+      },
+      {
+       "id": "semi-mono-1-mix",
+       "metadata": {
+        "name": "MIXER",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "mix"
+        }
+       },
+       "params": {
+        "level1": 0.7,
+        "level2": 0.5,
+        "level3": 0,
+        "level4": 0
+       },
+       "position": {
+        "x": 880,
+        "y": 0
+       },
+       "type": "mixer"
+      },
+      {
+       "id": "semi-mono-1-hpf",
+       "metadata": {
+        "name": "HPF",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "hpf"
+        }
+       },
+       "params": {
+        "Q": 0.7,
+        "enabled": true,
+        "frequency": 20,
+        "gain": 0,
+        "type": "highpass"
+       },
+       "position": {
+        "x": 1100,
+        "y": 0
+       },
+       "type": "filter"
+      },
+      {
+       "id": "semi-mono-1-lpf",
+       "metadata": {
+        "name": "LPF",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "lpf"
+        }
+       },
+       "params": {
+        "Q": 1,
+        "enabled": true,
+        "frequency": 1200,
+        "gain": 0,
+        "type": "lowpass"
+       },
+       "position": {
+        "x": 1320,
+        "y": 0
+       },
+       "type": "filter"
+      },
+      {
+       "id": "semi-mono-1-eg1",
+       "metadata": {
+        "name": "EG 1",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "eg1"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "decay": 0.3,
+        "release": 0.3,
+        "sustain": 0.2
+       },
+       "position": {
+        "x": 220,
+        "y": 200
+       },
+       "type": "envelope"
+      },
+      {
+       "id": "semi-mono-1-eg2",
+       "metadata": {
+        "name": "EG 2",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "eg2"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "decay": 0.2,
+        "release": 0.25,
+        "sustain": 0.8
+       },
+       "position": {
+        "x": 440,
+        "y": 200
+       },
+       "type": "envelope"
+      },
+      {
+       "id": "semi-mono-1-vca",
+       "metadata": {
+        "name": "VCA",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "vca"
+        }
+       },
+       "params": {
+        "gain": 0
+       },
+       "position": {
+        "x": 660,
+        "y": 200
+       },
+       "type": "gain"
+      },
+      {
+       "id": "semi-mono-1-mg",
+       "metadata": {
+        "name": "MG / LFO",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "mg"
+        }
+       },
+       "params": {
+        "rate": 5,
+        "shape": "triangle"
+       },
+       "position": {
+        "x": 880,
+        "y": 200
+       },
+       "type": "lfo"
+      },
+      {
+       "id": "semi-mono-1-sh",
+       "metadata": {
+        "name": "S&H",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "sh"
+        }
+       },
+       "params": {
+        "rate": 5,
+        "seed": 20261001,
+        "smooth": false
+       },
+       "position": {
+        "x": 1100,
+        "y": 200
+       },
+       "type": "random"
+      },
+      {
+       "id": "semi-mono-1-additive",
+       "metadata": {
+        "name": "ADDITIVE",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "additive"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "decay": 0.3,
+        "h1": 1,
+        "h10": 0,
+        "h11": 0,
+        "h12": 0,
+        "h2": 0.25,
+        "h3": 0.16666666666666666,
+        "h4": 0.125,
+        "h5": 0,
+        "h6": 0,
+        "h7": 0,
+        "h8": 0,
+        "h9": 0,
+        "level": 4,
+        "release": 0.3,
+        "shape": "custom",
+        "sustain": 0.7,
+        "tilt": 0
+       },
+       "position": {
+        "x": 0,
+        "y": 400
+       },
+       "type": "additive-voice"
+      },
+      {
+       "id": "semi-mono-1-fm",
+       "metadata": {
+        "name": "FM",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "fm"
+        }
+       },
+       "params": {
+        "algorithm": "2-op",
+        "attack": 0.005,
+        "decay": 0.3,
+        "index1": 1,
+        "index2": 2,
+        "index3": 1,
+        "index4": 1,
+        "level": 4,
+        "level1": 1,
+        "level2": 0.5,
+        "level3": 0.5,
+        "level4": 0.5,
+        "modDecay": 0.4,
+        "modSustain": 0.5,
+        "ratio1": 1,
+        "ratio2": 2,
+        "ratio3": 3,
+        "ratio4": 4,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 220,
+        "y": 400
+       },
+       "type": "fm-voice"
+      },
+      {
+       "id": "semi-mono-1-am",
+       "metadata": {
+        "name": "AM / RING",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "am"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "carrier": "sine",
+        "decay": 0.3,
+        "depth": 1,
+        "level": 4,
+        "mode": "ring",
+        "modulator": "sine",
+        "ratio": 1.25,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 440,
+        "y": 400
+       },
+       "type": "am-voice"
+      },
+      {
+       "id": "semi-mono-1-wavetable",
+       "metadata": {
+        "name": "WAVETABLE",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "wavetable"
+        }
+       },
+       "params": {
+        "attack": 0.02,
+        "bank": "basic",
+        "decay": 0.3,
+        "level": 4,
+        "morph": 0,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 660,
+        "y": 400
+       },
+       "type": "wavetable-voice"
+      },
+      {
+       "id": "semi-mono-1-sync",
+       "metadata": {
+        "name": "HARD SYNC",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "sync"
+        }
+       },
+       "params": {
+        "attack": 0.005,
+        "bank": "sync",
+        "decay": 0.3,
+        "level": 4,
+        "morph": 1,
+        "release": 0.3,
+        "sustain": 0.7
+       },
+       "position": {
+        "x": 880,
+        "y": 400
+       },
+       "type": "wavetable-voice"
+      },
+      {
+       "id": "semi-mono-1-perc",
+       "metadata": {
+        "name": "PERCUSSION",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "perc"
+        }
+       },
+       "params": {
+        "choke": true,
+        "decay": 1,
+        "level": 4,
+        "tone": 0.5,
+        "tune": 0
+       },
+       "position": {
+        "x": 1100,
+        "y": 400
+       },
+       "type": "perc-voice"
+      },
+      {
+       "id": "semi-mono-1-xy",
+       "metadata": {
+        "name": "XY PAD",
+        "panel": {
+         "id": "semi-mono-1",
+         "module": "xy"
+        }
+       },
+       "params": {
+        "glide": 0,
+        "key": "C",
+        "mode": "minor-pentatonic",
+        "octave": 3,
+        "span": 2
+       },
+       "position": {
+        "x": 0,
+        "y": 600
+       },
+       "type": "xy-pad"
+      }
+     ]
+    },
+    "kind": "oscilla-studio",
+    "metadata": {
+     "notes": "",
+     "title": "Basic Tone"
+    },
+    "schemaVersion": 1,
+    "timeline": {
+     "automation": [],
+     "clips": [],
+     "loop": {
+      "enabled": false,
+      "end": 4,
+      "start": 0
+     },
+     "markers": [],
+     "tracks": []
+    },
+    "transport": {
+     "tempo": 120,
+     "timeMode": "seconds",
+     "timeSignature": [
+      4,
+      4
+     ]
+    },
+    "view": {
+     "graph": {
+      "panX": 0,
+      "panY": 0,
+      "zoom": 1
+     },
+     "timeline": {
+      "pxPerSecond": 100,
+      "scrollX": 0
+     }
+    }
+   }
+  },
+  "experimentStudio": {
+   "schemaVersion": 1,
+   "studioHash": "faefbd85cca88c5b4aff9f2fa7e95efff5d0ad8a719bf46f20f969a0f344aa4c",
+   "execution": {
+    "v": 1,
+    "kind": "oscilla-studio",
+    "schemaVersion": 1,
+    "nodes": [
+     {
+      "id": "master-1",
+      "type": "master",
+      "params": {
+       "level": 0.08
+      }
+     },
+     {
+      "id": "osc-1",
+      "type": "oscillator",
+      "params": {
+       "waveform": "sine",
+       "frequency": 440,
+       "detune": 0,
+       "level": 1
+      }
+     },
+     {
+      "id": "semi-mono-1-additive",
+      "type": "additive-voice",
+      "params": {
+       "shape": "custom",
+       "h1": 1,
+       "h2": 0.25,
+       "h3": 0.16666666666666666,
+       "h4": 0.125,
+       "h5": 0,
+       "h6": 0,
+       "h7": 0,
+       "h8": 0,
+       "h9": 0,
+       "h10": 0,
+       "h11": 0,
+       "h12": 0,
+       "tilt": 0,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-am",
+      "type": "am-voice",
+      "params": {
+       "mode": "ring",
+       "carrier": "sine",
+       "modulator": "sine",
+       "ratio": 1.25,
+       "depth": 1,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-eg1",
+      "type": "envelope",
+      "params": {
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.2,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-eg2",
+      "type": "envelope",
+      "params": {
+       "attack": 0.005,
+       "decay": 0.2,
+       "sustain": 0.8,
+       "release": 0.25
+      }
+     },
+     {
+      "id": "semi-mono-1-fm",
+      "type": "fm-voice",
+      "params": {
+       "algorithm": "2-op",
+       "ratio1": 1,
+       "index1": 1,
+       "level1": 1,
+       "ratio2": 2,
+       "index2": 2,
+       "level2": 0.5,
+       "ratio3": 3,
+       "index3": 1,
+       "level3": 0.5,
+       "ratio4": 4,
+       "index4": 1,
+       "level4": 0.5,
+       "modDecay": 0.4,
+       "modSustain": 0.5,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-hpf",
+      "type": "filter",
+      "params": {
+       "type": "highpass",
+       "frequency": 20,
+       "Q": 0.7,
+       "gain": 0,
+       "enabled": true
+      }
+     },
+     {
+      "id": "semi-mono-1-keys",
+      "type": "keys",
+      "params": {
+       "glide": 0,
+       "transpose": 0,
+       "priority": "last",
+       "keyLow": 0,
+       "keyHigh": 127
+      }
+     },
+     {
+      "id": "semi-mono-1-lpf",
+      "type": "filter",
+      "params": {
+       "type": "lowpass",
+       "frequency": 1200,
+       "Q": 1,
+       "gain": 0,
+       "enabled": true
+      }
+     },
+     {
+      "id": "semi-mono-1-mg",
+      "type": "lfo",
+      "params": {
+       "shape": "triangle",
+       "rate": 5
+      }
+     },
+     {
+      "id": "semi-mono-1-mix",
+      "type": "mixer",
+      "params": {
+       "level1": 0.7,
+       "level2": 0.5,
+       "level3": 0,
+       "level4": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-noise",
+      "type": "noise",
+      "params": {
+       "color": "white",
+       "level": 0.5,
+       "seed": 1
+      }
+     },
+     {
+      "id": "semi-mono-1-perc",
+      "type": "perc-voice",
+      "params": {
+       "tune": 0,
+       "decay": 1,
+       "tone": 0.5,
+       "choke": true,
+       "level": 4
+      }
+     },
+     {
+      "id": "semi-mono-1-ring",
+      "type": "ring",
+      "params": {
+       "mode": "ring",
+       "depth": 1
+      }
+     },
+     {
+      "id": "semi-mono-1-sh",
+      "type": "random",
+      "params": {
+       "rate": 5,
+       "seed": 20261001,
+       "smooth": false
+      }
+     },
+     {
+      "id": "semi-mono-1-sync",
+      "type": "wavetable-voice",
+      "params": {
+       "bank": "sync",
+       "morph": 1,
+       "level": 4,
+       "attack": 0.005,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-vca",
+      "type": "gain",
+      "params": {
+       "gain": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-vco1",
+      "type": "vco",
+      "params": {
+       "waveform": "sawtooth",
+       "width": 50,
+       "scale": "16",
+       "tune": 0,
+       "pitch": 0,
+       "fm": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-vco2",
+      "type": "vco",
+      "params": {
+       "waveform": "square",
+       "width": 50,
+       "scale": "8",
+       "tune": 0,
+       "pitch": 0,
+       "fm": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-wavetable",
+      "type": "wavetable-voice",
+      "params": {
+       "bank": "basic",
+       "morph": 0,
+       "level": 4,
+       "attack": 0.02,
+       "decay": 0.3,
+       "sustain": 0.7,
+       "release": 0.3
+      }
+     },
+     {
+      "id": "semi-mono-1-xy",
+      "type": "xy-pad",
+      "params": {
+       "mode": "minor-pentatonic",
+       "key": "C",
+       "octave": 3,
+       "span": 2,
+       "glide": 0
+      }
+     }
+    ],
+    "edges": [
+     {
+      "id": "semi-mono-1-e1",
+      "from": {
+       "node": "semi-mono-1-vca",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-additive",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e2",
+      "from": {
+       "node": "semi-mono-1-additive",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-fm",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e3",
+      "from": {
+       "node": "semi-mono-1-fm",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-am",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e4",
+      "from": {
+       "node": "semi-mono-1-am",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-wavetable",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e5",
+      "from": {
+       "node": "semi-mono-1-wavetable",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-sync",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e6",
+      "from": {
+       "node": "semi-mono-1-sync",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-perc",
+       "port": "thru"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-e7",
+      "from": {
+       "node": "semi-mono-1-perc",
+       "port": "audio"
+      },
+      "to": {
+       "node": "master-1",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n1",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "pitch"
+      },
+      "to": {
+       "node": "semi-mono-1-vco1",
+       "port": "pitch"
+      },
+      "props": {
+       "muted": false,
+       "depth": 6,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n10",
+      "from": {
+       "node": "semi-mono-1-vco2",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-ring",
+       "port": "modulator"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n11",
+      "from": {
+       "node": "semi-mono-1-mix",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-hpf",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n12",
+      "from": {
+       "node": "semi-mono-1-hpf",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-lpf",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n13",
+      "from": {
+       "node": "semi-mono-1-lpf",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-vca",
+       "port": "audio"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n15",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco1",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n16",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco2",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n17",
+      "from": {
+       "node": "semi-mono-1-eg1",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco1",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "unipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n18",
+      "from": {
+       "node": "semi-mono-1-eg1",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vco2",
+       "port": "fm"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "unipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n19",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-hpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n2",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "pitch"
+      },
+      "to": {
+       "node": "semi-mono-1-vco2",
+       "port": "pitch"
+      },
+      "props": {
+       "muted": false,
+       "depth": 6,
+       "polarity": "bipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n20",
+      "from": {
+       "node": "semi-mono-1-eg2",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-hpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "unipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n21",
+      "from": {
+       "node": "semi-mono-1-mg",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-lpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 0,
+       "polarity": "bipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n22",
+      "from": {
+       "node": "semi-mono-1-eg2",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-lpf",
+       "port": "frequency"
+      },
+      "props": {
+       "muted": false,
+       "depth": 2,
+       "polarity": "unipolar",
+       "mapping": "log",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n23",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "gate"
+      },
+      "to": {
+       "node": "semi-mono-1-sh",
+       "port": "trigger"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n24",
+      "from": {
+       "node": "semi-mono-1-eg2",
+       "port": "control"
+      },
+      "to": {
+       "node": "semi-mono-1-vca",
+       "port": "gain"
+      },
+      "props": {
+       "muted": false,
+       "depth": 1,
+       "polarity": "unipolar",
+       "mapping": "linear",
+       "offset": 0
+      }
+     },
+     {
+      "id": "semi-mono-1-n3",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "gate"
+      },
+      "to": {
+       "node": "semi-mono-1-eg1",
+       "port": "gate"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n4",
+      "from": {
+       "node": "semi-mono-1-keys",
+       "port": "gate"
+      },
+      "to": {
+       "node": "semi-mono-1-eg2",
+       "port": "gate"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n5",
+      "from": {
+       "node": "semi-mono-1-vco1",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in1"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n6",
+      "from": {
+       "node": "semi-mono-1-vco2",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in2"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n7",
+      "from": {
+       "node": "semi-mono-1-noise",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in3"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n8",
+      "from": {
+       "node": "semi-mono-1-ring",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-mix",
+       "port": "in4"
+      },
+      "props": {
+       "muted": false
+      }
+     },
+     {
+      "id": "semi-mono-1-n9",
+      "from": {
+       "node": "semi-mono-1-vco1",
+       "port": "audio"
+      },
+      "to": {
+       "node": "semi-mono-1-ring",
+       "port": "carrier"
+      },
+      "props": {
+       "muted": false
+      }
+     }
+    ],
+    "timeline": {
+     "tracks": [],
+     "clips": [],
+     "automation": [],
+     "loop": {
+      "enabled": false,
+      "start": 0,
+      "end": 4
+     }
+    },
+    "transport": {
+     "timeMode": "seconds",
+     "tempo": 120,
+     "timeSignature": [
+      4,
+      4
+     ]
+    }
+   }
+  }
+ }
+}
