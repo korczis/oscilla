@@ -11,6 +11,7 @@ why: "project.no-silent-feedback and the held-notes-safe criterion: a note that 
 scope:
   - "src/js/synth/studio-sink.js"
   - "tests/unit/"
+current_state: "Landed in part by train 5 #413 (68b117f3, fix/studio-keyboard 2124f226: \"the same note pressed on another node first releases the old one (covers K173)\"). Criteria audit by oscilla-0b on origin/main 04d33aaf (2026-11-11): 1 of 2 met. Met: the unit behaviour, tests/unit/studio-sink.test.mjs:101 (\"a note pressed again on another node releases it on the first one\"; 10/10 pass): A gets its note-off at the second press, B at the release, one each; the test releases once, not twice as the criterion words it. Unmet: no browser check in tests/browser/midi.cjs proves that no voice is left sounding after the press, re-route, press, release sequence in chromium, firefox and webkit. That check is what is left before the stamp."
 depends_on: []
 acceptance_criteria:
   - "A unit test presses note N routed to node A, re-routes, presses N again (node B), releases N twice: A and B each receive one note-off; it fails on 15d1bc67."
