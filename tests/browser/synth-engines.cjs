@@ -505,7 +505,7 @@ function defineChecks() {
       .synth.status)), { ms: 10000, what: 'the copy settles before the next link' });
     await page.goto(`${base}#m=synth&ye=lpf`);
     await until(() => page.evaluate(() => window.location.hash.indexOf('ye=') < 0
-      && /no engine/.test(window.OSCILLA.app.synth.status)),
+      && /na panelu není/.test(window.OSCILLA.app.synth.status)),
     { ms: 15000, what: 'a bad engine is refused and its keys leave the address' });
     await page.close();
     return { ok: d.tab === 'engines' && d.engine === 'fm' && ratio === '3.50'

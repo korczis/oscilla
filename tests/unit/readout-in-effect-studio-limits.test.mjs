@@ -113,7 +113,7 @@ test('T023: an Oscillator stored at 30 kHz says it plays 0.95 x Nyquist, at 44.1
       assert.equal(rv.state, 'in-sync');
       assert.ok(!rv.text.includes('plays as edited'), rv.text);
       assert.match(rv.text,
-        /plays with 1 value lowered to keep frequencies at or below 0\.95 × Nyquist/);
+        /hraje s omezením: Studio drží 1 hodnotu na 0,95 × Nyquistovy frekvence nebo pod ní/);
       const named = rv.diagnostics.filter((x) => x.code === CODE);
       assert.equal(named.length, 1);
       assert.equal(named[0].entity.kind, 'node');
@@ -237,7 +237,7 @@ test('T023 review: a cable offset is included in what plays, and the count is of
   assert.ok(f.limitNote.startsWith('Plays 22.80 kHz, its cables\' constant 5.00 kHz included:'),
     f.limitNote);
   const rv = inspector.runtimeView(s.store.getModel(), truthOf(s));
-  assert.match(rv.text, /plays with 2 values lowered to keep frequencies at or below/);
+  assert.match(rv.text, /hraje s omezením: Studio drží 2 hodnoty na 0,95 × Nyquistovy/);
 });
 
 // Review of #342 (P2): a base an automation lane owns plays its lane, so neither the runtime
@@ -321,7 +321,7 @@ test('T023 review R1: a Rate capped by its range names the range, not 0.95 x Nyq
     + 'keeps this rate at or below 100 Hz, the top of its range.');
   const rv = inspector.runtimeView(s.store.getModel(), truthOf(s));
   assert.ok(!/Nyquist/.test(rv.text), rv.text);
-  assert.match(rv.text, /lowered to keep them within their parameters' ranges; see/);
+  assert.match(rv.text, /Studio drží 2 hodnoty v rozsahu svých parametrů; viz/);
 });
 
 test('T023 review R1: a cable into a Rate names the Rate and its range', () => {
@@ -343,7 +343,7 @@ test('T023 review R1: a cable into a Rate names the Rate and its range', () => {
   assert.ok(e.message.endsWith(': the Studio keeps Oscillator 1 Frequency at or below '
     + '22.80 kHz, 0.95 × Nyquist at 48 kHz.'), e.message);
   const both = inspector.runtimeView(o.store.getModel(), truthOf(o));
-  assert.match(both.text, /lowered to keep frequencies at or below 0\.95 × Nyquist; see/);
+  assert.match(both.text, /drží 1 hodnotu na 0,95 × Nyquistovy frekvence nebo pod ní; viz/);
 });
 
 // R2 (P2): "plays" is what sounds, the AudioParam base shifted by the log cables' constant

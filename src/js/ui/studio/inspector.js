@@ -73,6 +73,8 @@ import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { limitBoundText, limitValueText } from '../../studio/compiler.js';
 import { sig } from '../../core/math.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
+import { SOURCE_RANGES } from '../../synth/panel.js';
+import { tuneNote } from '../../synth/normals.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
 import {
@@ -82,6 +84,14 @@ import {
   SLIDER_STEPS, formatParamValue, parseParamInput, sliderToValue, valueToSlider,
 } from './inspector-fields.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
+import { pressGuard } from './inspector-press.js';
+import {
+  BAD, TRACE_OPS_SHOWN, causeRef, entityRef, nodeOf, paramText, runtimeDiagnostics, runtimeState,
+  shortHash, traceView,
+} from './inspector-runtime.js';
+export {
+  TRACE_OPS_SHOWN, runtimeDiagnostics, runtimeState, shortHash, traceView,
+} from './inspector-runtime.js';
 import { sliderFill } from '../app.js';
 // The pure helpers of the fields live in inspector-fields.js; re-exported, so callers keep their
 // import from this module.
@@ -94,10 +104,6 @@ export {
 const QUIET = ['not-applied', 'in-sync'];
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
-
-function nodeOf(model, id) {
-  return model.graph.nodes.find((n) => n.id === id) || null;
-}
 
 /**
  * The runtime's `frequency-limited` diagnostic of a node's parameter (T023), when it is about
@@ -229,68 +235,6 @@ export const RUNTIME_LABELS = Object.freeze({
   failed: 'Failed',
 });
 
-/** The divergence state, with a stopped runtime that refused PLAY as 'failed'. */
-export const runtimeState = (v) => (!v ? 'not-applied'
-  : v.state === 'not-applied' && v.reason ? 'failed' : v.state);
-
-/** The first 8 hex digits of a hash, '—' for none. */
-export const shortHash = (h) => (h ? h.slice(0, 8) : '—');
-
-export function runtimeDiagnostics(truth) {
-  const v = truth && truth.verdict;
-  if (!v) return [];
-  const of = (x) => (v.applied && x && x.diagnostics) || [];
-  // Once each: a degraded verdict's reason is also one of the runtime's diagnostics.
-  return [...new Set([...(v.reason ? [v.reason] : []), ...of(truth.runtime),
-    ...of(truth.transport)])];
-}
-
-/** A diagnostic's entity as the Inspector links it: its name and the selection showing it. */
-function entityRef(model, ent, registry) {
-  if (!ent) return null;
-  const { kind, id } = ent;
-  let label = null;
-  let selection = null;
-  if (kind === 'node') {
-    const n = nodeOf(model, id);
-    if (n) [label, selection] = [n.metadata.name, { nodes: [id] }];
-  } else if (kind === 'edge') {
-    if (model.graph.edges.some((e) => e.id === id)) {
-      const d = describeEdge(model, id, { registry });
-      [label, selection] = [`${d[0].toLowerCase()}${d.slice(1)}`, { edges: [id] }];
-    }
-  } else if (kind === 'clip') {
-    const c = model.timeline.clips.find((x) => x.id === id);
-    if (c) [label, selection] = [`${c.kind} clip`, { clips: [id] }];
-  } else if (kind === 'lane') {
-    const l = model.timeline.automation.find((x) => x.id === id);
-    if (l) {
-      label = `${paramText(model, l.target, registry)} lane`;
-      selection = { nodes: [l.target.node], points: l.points.map((p) => p.id) };
-    }
-  }
-  return { kind, id, label: label || id, selection };
-}
-
-/**
- * The entity a status's `cause` names (graph-view.js divergenceCause) as entityRef links it, or
- * null when there is none to select or it is `self`, the entity shown.
- */
-function causeRef(model, cause, self, registry) {
-  if (!cause) return null;
-  const kind = ['node', 'edge', 'clip', 'lane'].find((k) => cause[k]);
-  if (!kind || (kind === self.kind && cause[kind] === self.id)) return null;
-  const ref = entityRef(model, { kind, id: cause[kind] }, registry);
-  return ref && ref.selection ? ref : null;
-}
-
-/** "Filter Cutoff": a { node, param } target by name. */
-function paramText(model, t, registry) {
-  const n = nodeOf(model, t.node);
-  const p = n && registry.param(n.type, t.param);
-  return `${n ? n.metadata.name : t.node} ${p ? p.label : t.param}`;
-}
-
 export function runtimeView(model, truth, opts = {}) {
   const registry = opts.registry || NODE_REGISTRY;
   const v = (truth && truth.verdict) || null;
@@ -298,18 +242,26 @@ export function runtimeView(model, truth, opts = {}) {
   const a = v && v.applied;
   const d = v ? v.desired : { revision: null, studioHash: null };
   const why = v && v.reason ? v.reason.message : '';
-  // A value the runtime plays below the stored one is not "as edited" (T023).
-  const limits = runtimeDiagnostics(truth).filter((x) => x.code === 'frequency-limited');
+  // A value the runtime plays below the stored one is not "as edited" (T023): every limit
+  // diagnostic in effect counts, whatever its kind (K235: the runtime's `limits`, built by
+  // runtime-trace.js limitDiagnostics; a held Q cable and a fit cable included).
+  const limits = (v && v.applied && truth.runtime && truth.runtime.limits) || [];
   const lowered = limits.length;
   // Each one is a value (a parameter, a cable's depth), not a frequency of its own, and the
-  // reason is the cap that applied: a parameter's range, 0.95 × Nyquist, or both (review R1).
-  const bounds = new Set(limits.map((x) => (x.details && x.details.bound) || 'nyquist'));
-  const held = [bounds.has('range') ? 'within their parameters\' ranges' : null,
-    bounds.has('nyquist') ? `at or below ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist` : null]
-    .filter(Boolean).join(' and ');
-  const text = state === 'in-sync' ? (lowered ? `Revision ${a.revision} plays with ${lowered} `
-    + `value${lowered === 1 ? '' : 's'} lowered to keep ${bounds.has('range') ? 'them'
-      : 'frequencies'} ${held}; see the diagnostics below.`
+  // reason is the cap that applied: a parameter's range, 0.95 × Nyquist, a knob's top (a Q's
+  // ceiling), or several (review R1), read from the diagnostic's own details.
+  const bounds = new Set(limits.map(({ details: x = {} }) => x.bound || x.by
+    || (x.ceiling ? 'ceiling' : 'nyquist')));
+  // In Czech (project.czech-prose, Q104): "drží 1 hodnotu", "2 hodnoty", "5 hodnot".
+  const one = lowered === 1;
+  const held = [bounds.has('range') ? `v rozsahu ${one ? 'svého parametru'
+    : 'svých parametrů'}` : null,
+  bounds.has('ceiling') ? 'na horní mezi knoflíku nebo pod ní' : null,
+  bounds.has('nyquist') ? `na ${SAFE_NYQUIST_FACTOR_TEXT.replace('.', ',')} × Nyquistovy `
+    + 'frekvence nebo pod ní' : null].filter(Boolean).join(' a ');
+  const text = state === 'in-sync' ? (lowered ? `Revize ${a.revision} hraje s omezením: `
+    + `Studio drží ${lowered} ${one ? 'hodnotu' : lowered < 5 ? 'hodnoty' : 'hodnot'} ${held}; `
+    + 'viz diagnostiky níže.'
     : `Revision ${a.revision} plays as edited.`)
     : state === 'degraded' ? `Revision ${a.revision} plays, short of its plan: ${why}`
     : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
@@ -347,66 +299,6 @@ export function runtimeView(model, truth, opts = {}) {
     diagnostics: runtimeDiagnostics(truth).map((x) => ({ code: x.code, severity: x.severity,
       owner: x.owner, message: x.message, entity: entityRef(model, x.entity, registry) })),
   };
-}
-
-/** Operations the Trace section lists. */
-export const TRACE_OPS_SHOWN = 12;
-const TRACE_SECONDS = ['at', 'end', 'baseTime', 'fade', 'position'];
-const BAD = ['refused', 'failed', 'rejected'];
-
-export function traceView(model, steps, opts = {}) {
-  const registry = opts.registry || NODE_REGISTRY;
-  const byOp = new Map();
-  for (const st of steps || []) {
-    if (!byOp.has(st.op)) byOp.set(st.op, []);
-    byOp.get(st.op).push(st);
-  }
-  const all = [...byOp].reverse().filter(([, list]) => !opts.nodeId || list.some((x) =>
-    x.entity && x.entity.kind === 'node' && x.entity.id === opts.nodeId));
-  const ops = all.slice(0, TRACE_OPS_SHOWN).map(([op, list]) => {
-    const first = list.find((x) => x.owner === 'store') || list.find((x) => x.owner
-      === 'transport') || list[0];
-    const commit = list.find((x) => x.kind === 'commit');
-    // The headline is the store's verdict (else the first refusal, else the last step); a
-    // committed edit lists the steps that failed after it separately.
-    const bad = list.filter((x) => BAD.includes(x.outcome));
-    const end = commit || bad[0] || list[list.length - 1];
-    const ill = BAD.includes(end.outcome);
-    const code = end.code || (ill && bad[0] ? bad[0].code : null);
-    const failed = ill ? [] : bad.map((x) => x.code || x.kind);
-    const label = commit && commit.detail.label;
-    const title = first.owner === 'store' ? label || (first.detail && first.detail.type)
-      || first.kind : `${first.owner} ${first.kind}`;
-    return {
-      op,
-      title: first.kind === 'undo' || first.kind === 'redo' ? `${first.kind} ${label || ''}`.trim()
-        : title,
-      outcome: `${end.outcome}${code ? ` (${code})` : ''}${commit && commit.revision != null
-        ? `, revision ${commit.revision}` : ''}${failed.length ? ` · failed: ${failed.join(', ')}`
-        : ''}`,
-      steps: list.map((x) => ({ text: traceText(model, x, registry), outcome: x.outcome,
-        code: x.code })),
-    };
-  });
-  return { ops, shown: ops.length, total: all.length };
-}
-
-/** One step in words: owner, kind, outcome (code), what it names and its detail. */
-function traceText(model, x, registry) {
-  const n = x.entity && x.entity.kind === 'node' ? nodeOf(model, x.entity.id) : null;
-  const d = { ...x.detail };
-  const p = n && d.param ? registry.param(n.type, d.param) : null;
-  const what = [x.entity ? `${n ? n.metadata.name : `${x.entity.kind} ${x.entity.id}`}${d.param
-    ? ` ${p ? p.label : d.param}` : ''}` : ''];
-  if (p && typeof d.value === 'number') what[0] += ` ${formatParamValue(p, d.value)}`;
-  else if (d.param) what[0] += ` ${d.value} ${d.unit || ''}`.trimEnd();
-  if (d.param) for (const k of ['param', 'value', 'unit']) delete d[k];
-  if (!d.cents) delete d.cents;
-  what.push(...Object.entries(d).filter(([, v]) => v !== null && v !== '').map(([k, v]) => (
-    k === 'planHash' ? `plan ${shortHash(v)}` : typeof v === 'number' ? `${k} ${sig(v, 4)}${
-      TRACE_SECONDS.includes(k) ? ' s' : ''}` : `${k} ${v}`)));
-  return `${x.owner} ${x.kind}: ${x.outcome}${x.code ? ` (${x.code})` : ''}${x.revision != null
-    ? ` · rev ${x.revision}` : ''} · ${what.filter(Boolean).join(', ')}`.replace(/ · $/, '');
 }
 
 /** Codes of a Microphone node whose input the user can (re)allow. */
@@ -560,9 +452,14 @@ export function inspectorView(model, selection, opts = {}) {
       const code = route.state === 'no-route' && est ? est.code : null;
       const statusText = [code ? `${route.text} (${code})` : route.text,
         ...entityNotes(opts.truth, 'edge', e.id)].filter(Boolean).join(' · ');
+      // K238: what an octave source (Keys pitch, the pad's Pitch) does in a cents parameter.
+      const srcUnit = ((SOURCE_RANGES[a.type] || {})[e.from.port] || {}).unit || null;
+      const note = control && tgt.param ? tuneNote(srcUnit,
+        registry.param(b.type, tgt.param.key), e.props) : null;
       return {
         kind: 'edge',
-        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${statusText}`,
+        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${statusText}:${note || ''}`,
+        note,
         route: route.state,
         routeReason: route.reason,
         routeText: route.text,
@@ -1065,6 +962,10 @@ export function mountInspector(host, svc) {
         text: view.statusText }));
       if (view.cause) parts.push(causeLink(view.cause));
     }
+    if (view.note) {
+      parts.push(h('p', { class: 'mt-1 text-xs text-gray-600 dark:text-gray-400', role: 'note',
+        text: view.note }));
+    }
     parts.push(h('dl', { class: 'osc-si-dl', 'data-osc': 'studio.inspector.edge' }, [
       h('div', {}, [h('dt', { text: 'From' }), h('dd', { text: view.fromText })]),
       h('div', {}, [h('dt', { text: 'To' }), h('dd', { text: view.toText })]),
@@ -1474,6 +1375,8 @@ export function mountInspector(host, svc) {
     return false;
   }
 
+  // A rebuild waits while a pointer is down in the Inspector (inspector-press.js, T7).
+  const press = pressGuard(host, () => { if (host.isConnected) render(); });
   let said = null; // the runtime state last rendered
   function render() {
     const model = svc.store.getModel();
@@ -1519,6 +1422,7 @@ export function mountInspector(host, svc) {
         + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`);
       return;
     }
+    if (press.holds()) return;
     endSliderGesture();
     if (steps) steps.destroy();
     steps = null;
@@ -1581,6 +1485,7 @@ export function mountInspector(host, svc) {
       if (steps) steps.destroy();
       dropListGrids();
       replaceChildren(host, []);
+      press.destroy();
     },
   };
 }

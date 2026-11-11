@@ -11,12 +11,22 @@ why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the i
 scope:
   - "src/js/core/url-state-synth.js"
   - "src/js/synth/link.js"
+  - "src/js/synth/ui.js"
+  - "tests/unit/czech-prose-short-baseline.json"
+  - "tests/unit/czech-prose-baseline.json"
+  - "tests/browser/synth-engines.cjs"
+  - "tests/browser/synth.cjs"
+  - "src/js/synth/xy.js"
+  - "src/js/synth/normals.js"
   - "tests/unit/synth-link.test.mjs"
   - "dist"
   - ".ai/repo/project/issues/K239.yaml"
+current_state: "Built by oscilla-75 in task t-20261110071847-2fa7 on fix/k239-link-refused-at-decode from train/t6-sequencer 6c3b27df, on the coordinator's assignment (oscilla-43); unit side, for train T7. decodeSynthLink refuses, naming the jack, a link with two cables into an input that accepts one connection (the registry port is not multiple: hpf.audio, sh.trigger), a cable listed twice, and a cable canConnect refuses (a control into a trigger, which linkAction dropped in silence); its added sentences are Czech, and canConnect's own sentence is quoted inside one. link.js linkOmissions and linkOmissionText name what a copied link does not carry (Studio connections touching the panel, normals opened in the Studio), and Copy link says it after the copy. Language and apply time (task t-20261110073402-861b, after merging K238 cb4d2c20, which changes the same jackReason and patchCable lines): the decode, patchCable and jackReason refusals are Czech, xy.js compares the already-patched refusal by its constant ALREADY_PATCHED rather than its English words, linkPlan returns the skipped cables, and applyLink says them. The browser checks synth.cjs s-link and synth-engines.cjs read the Czech refusal; they were not run here (the synth browser suites wait for T5)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit (tests/unit/synth-link.test.mjs, fails on a7102358): decodeSynthLink of two cables into hpf.audio returns ok false with a reason naming the HPF audio input."
+  - "Language (added by oscilla-75, the builder, on oscilla-43's order of 2026-11-10): every refusal decodeSynthLink shows is Czech, the prefix 'Odkaz Synthu odmítnut:' included, and a canConnect refusal is shown by its code in Czech, never as canConnect's English sentence; the refusals patchCable and jackReason give a link cable are Czech; tests/unit/czech-prose-baseline.json and czech-prose-short-baseline.json do not rise (src/js/core/url-state-synth.js falls to 0 and 0, src/js/synth/normals.js from 10 to 5)."
+  - "Apply time (added by oscilla-75 on oscilla-43's order of 2026-11-10): a link cable that linkAction skips because patchCable refuses it on the receiver's state is returned by linkPlan with its reason, and the Synth says in one Czech sentence which cables were not applied and why (skippedText); fail-first in tests/unit/synth-link.test.mjs with mg.control -> sh.rate while Clock is normalled."
   - "Guarded (src/js/synth): a non-builder's verdict; every string it adds is Czech (project.czech-prose); dist is rebuilt and npm run build:check passes."
 validation:
   - "npm test"

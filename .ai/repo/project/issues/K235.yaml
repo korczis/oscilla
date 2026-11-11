@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "Lands as feat(studio). Review C1-K232-1 of oscilla-c1 (P3) on K232: computeBases holds the log cables into a low- or high-pass Q at or below the top of the knob's soft range (Q 30) and marks them in limited and scaled, but the runtime's limited-edge diagnostics are built for a frequency (frequency-limited, Hz text, the Nyquist or range bound), so a held Q cable is held silently. Before: a pad, a cable or an LFO on Peak stops rising at Q 30 with nothing said. After: one runtime diagnostic per held Q cable, in Czech and in Q terms, for example 'Kabel do Peak je omezen: Q nepřekročí 30 (horní mez knoflíku)', with its played and stored depth in octaves of Q, and the Inspector names it beside the cable as it names a frequency-limited one (project.no-silent-feedback)."
 why: "oscilla-c1's review of K232 at f06fcff5, 2026-11-10: 'give a capped Q cable a runtime diagnostic ... so the Inspector says why the CV stops; otherwise file it'. Filed because the frequency-limited diagnostic path is pinned by its own tests and its text, details and bound are Hz-shaped (compiler.js limitBoundText, bounded)."
-current_state: "Filed 2026-11-10 from oscilla-c1's review of K232; not started."
+current_state: "Filed 2026-11-10 from oscilla-c1's review of K232. Built by oscilla-ee in task t-20261110045859-77b8 on feat/k235-q-ceiling-diagnostic from T5 91838acb: runtime-trace.js qLimits gives one runtime q-limited warning per held log cable into a low- or high-pass Q, in Czech and in Q terms, entity the cable, with stored and played depth in octaves of Q; the Inspector names it beside the cable (entityNotes). For T6; verdict from oscilla-c1."
 scope:
   - "src/js/studio/compiler.js"
   - "src/js/studio/runtime.js"
