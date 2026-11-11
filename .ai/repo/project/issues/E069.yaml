@@ -20,4 +20,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-11'
-updated_at: '2026-11-11'
+updated_at: 2026-11-11T08:48:24Z
+started_at: 2026-11-11T08:47:21Z
+started_event: sha256:3dc081266b28bab91abf0cbb4a5247880f17c66b291131001d685335a0e0d36d
+verified_at: 2026-11-11T08:47:34Z
+verified_event: sha256:1e3753ed508b0a802922fb83187634d0cff4da3fba2db9d467133cf1a9534e29
+completed_at: 2026-11-11T08:48:24Z
+completed_event: sha256:68a622e5e5169d6b2f58121fcd60c7b56ec585bafa9d418a88e864830d008608
+evidence:
+  - covers: "verified"
+    type: test
+    command: "CI=1 node tests/browser/synth.cjs --browsers webkit --only s-feel (native linux/arm64 container, 10 busy loops)"
+    result: "PR #530 merged as 45db334e: 10 of 10 under load (main 0 of 6), quiet 3 of 3, chromium and firefox pass; the cause is named in b03b0d99"
+    artifact: "45db334e2032e6b528155937ea43c0135609c2b5"
+    commit: 45db334e2032e6b528155937ea43c0135609c2b5
+    recorded_at: 2026-11-11T08:48:17Z
