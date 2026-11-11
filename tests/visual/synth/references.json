@@ -449,7 +449,7 @@
         "desktop-xy-light": {
           "runs": 10,
           "px": 0,
-          "faint": 0
+          "faint": 10
         },
         "phone-panel-dark": {
           "runs": 10,
@@ -473,8 +473,8 @@
         },
         "phone-xy-dark": {
           "runs": 10,
-          "px": 0,
-          "faint": 0
+          "px": 2,
+          "faint": 4
         },
         "phone-xy-light": {
           "runs": 10,
@@ -528,7 +528,7 @@
             },
             "desktop-xy-light": {
               "px": 0,
-              "faint": 0
+              "faint": 10
             },
             "phone-panel-dark": {
               "px": 173,
@@ -547,8 +547,8 @@
               "faint": 360
             },
             "phone-xy-dark": {
-              "px": 0,
-              "faint": 0
+              "px": 2,
+              "faint": 4
             },
             "phone-xy-light": {
               "px": 0,
@@ -597,7 +597,7 @@
             },
             "desktop-xy-light": {
               "px": 0,
-              "faint": 0
+              "faint": 10
             },
             "phone-panel-dark": {
               "px": 97,
@@ -616,12 +616,12 @@
               "faint": 0
             },
             "phone-xy-dark": {
-              "px": 0,
-              "faint": 0
+              "px": 2,
+              "faint": 4
             },
             "phone-xy-light": {
-              "px": 0,
-              "faint": 0
+              "px": 3,
+              "faint": 7
             },
             "desktop-bay-dark": {
               "px": 1140,
@@ -666,7 +666,7 @@
             },
             "desktop-xy-light": {
               "px": 0,
-              "faint": 0
+              "faint": 10
             },
             "phone-panel-dark": {
               "px": 2,
@@ -735,7 +735,7 @@
             },
             "desktop-xy-light": {
               "px": 0,
-              "faint": 0
+              "faint": 10
             },
             "phone-panel-dark": {
               "px": 58,
@@ -754,8 +754,8 @@
               "faint": 28
             },
             "phone-xy-dark": {
-              "px": 0,
-              "faint": 0
+              "px": 2,
+              "faint": 4
             },
             "phone-xy-light": {
               "px": 0,
