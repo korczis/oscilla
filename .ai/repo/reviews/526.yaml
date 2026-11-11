@@ -1,0 +1,118 @@
+# Review verdict for pull request #526 (train/t7b): train T7b and release v3.33.0 (a minor:
+# K231 and K235 are feat).
+# Guarded members: K231 (REC on pad L, a take of the pad's own x and y through the one
+# recorder; pad L's timeline Play: 2c062c27, 14901b3b; d9's test fix 5165c8d3), K238 (the bay's
+# S&H Rate, VCO Tune and VCA gain jacks; VELOCITY as the gated tremolo: ceb99d8a, cb4d2c20),
+# K239 (a Synth link refused at decode, in Czech, naming what it leaves out: aec94cae,
+# e84b15ab), K240 (a range-fitted cable's line does not blame Nyquist, ad747cff), K235 (a Q
+# cable held at its knob's ceiling says so; the Runtime summary counts every limit: 2a36efad,
+# 49ee4991), K144 (the demo song plays its bass filter's Q lane, template v2, 039e1682), K236
+# (a mixed jack keeps its normals, a preset sets the remembered depth, Escape closes the connect
+# list: 6fef78db), the /lab/ bundle's guarded part (50eb63d6, 61b5fd2d, C1-517-1 ff2cd2ad) and the
+# integration fix 523a3012 (= f23a334e regenerated: pages.yml's install step equal to ci.yml's,
+# MJ 1.0.1 and R055's bounded curl; the jack verdicts moved to synth/jack-verdicts.js; the
+# landing's ratchet copy; release-publish's lost readFileSync restored). Unguarded members read
+# as members: d9's Inspector split c987031e with the press guard (4e50b6f3, 81424ef8, 43de47bf),
+# U101 (d294bea8), P019 (c022b95c), the v3.32.1 record, the 3.33 station (c81c1c2e, 6ffef32c,
+# 15af6af3) and chore(release): v3.33.0 (39e1ebe1).
+# C068 (6bda0205, a7a82766) was in the first assembly f23a334e and left this train on the
+# reviewer's R2-C068-1 (P1, below); it returns in T8.
+# Judged at 39e1ebe1 on base origin/main db95130e (v3.32.1, #525), 2026-11-11, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-526 (first assembly f23a334e, the rebuild
+# 69a17625, then 39e1ebe1).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: builders per each issue's current_state, oscilla-d9 (K231 with
+# 5165c8d3, the Inspector split and press guard), oscilla-75 (K238, K239, K240), oscilla-ee (K235,
+# K144), oscilla-04 (K236, U101), oscilla-0b (P019), oscilla-43 (integration, 523a3012, the
+# station and the stamp). No recorded
+# member judgment exists for this train but the reviewer's own of #517 (82633b7f, its P2s
+# verified at 50eb63d6): scripts/verify-deploy.mjs is byte-identical to 50eb63d6; everything else
+# was read by the reviewer.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list: 696c90f23d65e688...
+# over 29 guarded paths (.github ci, main-checks, pages; scripts release-publish, verify-deploy;
+# src/js/studio adapters/instrument, compiler, nodes/common, nodes/instrument, notes-record,
+# patches, runtime-trace, runtime, schema, templates/demo-song-score, templates/demo-song;
+# src/js/synth jack-verdicts, link, normals, panels/xy, presets, ui, view/bay, view/drums-tab,
+# view/timeline-play, view/xy-wiring, xy; tests/unit ci-workflows, release-publish). Every one is
+# byte-identical between f23a334e (where it was read) and 69a17625; the rebuild's tree differs
+# from f23a334e only by C068's removal (audio-engine.js and engine.test.mjs equal main's again),
+# 5165c8d3 (tests/browser/xy-pad.cjs) and K231's record. Equal at 39e1ebe1 (the stamp touches no
+# guarded path).
+#
+# How each member was judged (fail-first: the member's tests with main db95130e's copies of the
+# files it changed, run by the reviewer; every one fails, rc=1):
+# - 523a3012/f23a334e: the install step's text equals ci.yml's line for line (MJ_VERSION 1.0.1,
+#   its digest, --max-time 20, --retry 3, the API fallback); the jack verdicts moved unchanged
+#   but for explicit panel, registry and model arguments; the landing copy matches both
+#   baselines' notes; release-publish.test exercises majordomusPin on the real pages.yml, which is
+#   what caught the dropped import. R2-T7B-1 P3 below.
+# - K231: the rest sources gate against the touch (gate 1 -> 0 as the touch glides 0 -> x, and
+#   back on release): a crossfade, no step; x and y elided at their default from the text, the
+#   patch and the hash at every epoch; the take ramps from the lane's own value, thins to 20 ms,
+#   adds before it removes, one undo; one timeline Play (timeline-play.js) for the Drums bar and
+#   pad L. 5165c8d3 is a test fix (the tap waits until two reads agree and elementFromPoint hits
+#   the switch). k231-pad-take fails with main's sources.
+# - K238: a bipolar source into the VCA's gain refused in Czech; VELOCITY behind the closed VCA
+#   allowed (gatedUpstream); a muted Clock does not refuse Rate; Tune's depth capped at its 2400
+#   cents span, tuneNote's octave grammar right. synth-panel-normals fails with main's normals.js.
+# - K239: skipped link cables reported (skippedText), omissions named at copy. R2-T7B-2 P3.
+#   synth-link fails with main's link.js and url-state-synth.js.
+# - K240: an edge the fit held by its range has no Nyquist line. xy-default-patch fails 1 with
+#   main's compiler.js.
+# - K235: q-limited diagnostics per held log Q cable, in Czech; debugInfo.limits; the summary
+#   counts every kind. R2-T7B-3 P3. k235-q-ceiling-diagnostic fails 5 with main's runtime files.
+# - K144: the bass Q lane 1.2-7, template v2 re-pinned, v1's hashes kept as history. demo-song
+#   fails 4 with main's templates.
+# - K236: unpatch restores a mixed jack's normals and says what it did; presetAction writes the
+#   remembered depths in the same BATCH (METADATA_SET synthAmounts merges; a panel amount's key
+#   is its id). synth-k236-unpatch-preset fails with main's normals.js and presets.js.
+# - The /lab/ bundle: 61b5fd2d moves the Majordomus comparison to the knowledge job (setup-node,
+#   OSC_FACTS_MAJORDOMUS); ff2cd2ad refuses before the tag when the majordomus on PATH is not
+#   pages.yml's pin. release-publish fails with main's copy.
+# - Unguarded: the press guard removes every listener it adds and ends a press after 1 s idle;
+#   U101 folds the Synth's docked keys on a fine pointer below 760 px (keys-routes fails 2 with
+#   main's routes.js and dock-yield.js).
+# - R2-C068-1 (P1, closed by removal): every live Additive edit of a held note dipped to the
+#   floor for about 16 ms (the dip waits for _soon()'s lead), and a drag (onChange per input)
+#   held the note near silence: the reviewer's probe of the built dists (220 Hz, harmonic 2
+#   toggled 20 times 16 ms apart) measured 251 of 412 ms (chromium) and 268 of 421 ms (webkit)
+#   below -20 dB re steady RMS on f23a334e, 0 on main; one edit 16 ms against 0; a large jump
+#   clicks on main (step 0.10-0.13 against 0.0029) and not on f23a334e. Recorded in C068 for T8.
+#
+# THE CONDITION of this verdict (as for #509, #515, #522, #523 and #525): it binds once the
+# reviewer has read the six "Browser leg N (browser)" logs of this pull request's run and found
+# each leg's suite list equal to shards.cjs --plan at this head, "run-suites: all K suites
+# passed" and no FAIL line, AND has run the release CI receipt check against this run with the
+# base ci.yml (db95130e's). Auto-merge is armed only after the reviewer reports "legs OK";
+# otherwise a superseding verdict.
+#
+# Measured by the reviewer at 69a17625: GITHUB_BASE_REF=main npm test exit 0 (5749 tests, 5748
+# pass, 0 fail, 1 skipped), build:check up to date; browser suites (file), all exit 0 unless
+# said: xy-pad webkit 3 runs (x-padrec ok in all 3; desktop 12/12, 12/12, 11/12: run 3 failed
+# x-pointer) and chromium 12/12 with every size; drums 11/11 desktop and phone in chromium and
+# webkit; ui-current chromium 393/393 (U101's desktop-short-synth-panel at 1366x650). The
+# x-pointer red is main's: xy-pad --only x-pointer, webkit, 10 runs each, failed 1/10 on 69a17625
+# and 2/10 on main db95130e, one signature ("Y at the top opens the LPF ... not reached within
+# 8000 ms"); a plan record gives it one owner for T8. At 39e1ebe1: build:check up to date
+# (v3.33.0), about-stations --check (37 hold) and --check-station rc=0, release:analyze minor
+# (8 minor, 17 patch). The 3.33 station read as shown text against the members: C3-526-1 below,
+# closed at 15af6af3; every other claim holds (K231's take replays on a later pass, K238's
+# refusal, tremolo and Tune at most two octaves, K239, K235, K144, U101, the press guard).
+# Measured by others at 69a17625 (43): integration-map 408, synth 45/45 and 14/14, knob 16/16,
+# synth-engines 21/21 and 3/3 in chromium and webkit.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 526
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 39e1ebe1)
+content: 696c90f23d65e6880e0c0f1caf816bfbd85f8eaed936510c67f8af5d3169ec95
+findings:
+  - { id: R2-C068-1, severity: P1, status: closed, title: "C068's dip held a dragged Additive note near silence (251/412 ms below -20 dB) and gapped every edit; C068 removed from T7b, returns in T8 with a drag-rate level test" }
+  - { id: C3-526-1, severity: P3, status: closed, title: "the 3.33 station named /lab/'s sub-pages as changes, plan, trends and reviews; there is no trends page; 15af6af3 names the seven by their labels" }
+  - { id: R2-T7B-1, severity: P3, status: open, title: "release-publish majordomusPin's bare catch reads any failure as 'no pages.yml', which hid a ReferenceError; catch only ENOENT" }
+  - { id: R2-T7B-2, severity: P3, status: open, title: "skippedText names raw jack ids ('sh.rate -> ...') in a Czech sentence, as R2-T5-5" }
+  - { id: R2-T7B-3, severity: P3, status: open, title: "qLimits writes 'z 2,4 oktáv Q': a decimal takes the genitive singular, oktávy" }
