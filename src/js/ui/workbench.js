@@ -38,7 +38,7 @@ import {
 import { downloadBlob, readFileText } from './exporters.js';
 import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
-import { OWNER } from '../core/output-bus.js';
+import { OWNER, soundingOwner } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
 import { STATUS_PLAY_WORKSPACES } from './shortcuts.js';
 import { statusPlayHint } from '../core/play-hints.js';
@@ -170,8 +170,11 @@ export function createWorkbench(svc) {
      * the computer keys, a pointer or a MIDI input (midi/keyboard-ui.js kbdSounding).
      */
     get notesSounding() { return !!this.kbdSounding; },
-    /** The ceiling acts on what sounds now (idle shows nothing, whatever the tap read last). */
-    get ceilingActing() { return this.outputAtCeiling && this.isSounding; },
+    /**
+     * The ceiling acts on what sounds now, whoever sounds it (C069: the bus's soundingOwner,
+     * Keys, MIDI, the Studio and MEASURE included); idle shows nothing, whatever the tap read.
+     */
+    get ceilingActing() { return this.outputAtCeiling && !!soundingOwner(this); },
     /** The gain readout is the master setpoint, not the level the output carries. */
     get gainTitle() {
       return `Gain setpoint ${this.gainDbText} (logical gain ${this.gainLevel.toFixed(3)} re `
