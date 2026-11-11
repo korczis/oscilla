@@ -80,6 +80,12 @@
 //                               sink's held map is empty, the transport holds no live note
 //                               (its note census is idle) and the analyser falls below -70 dB
 //                               rel (peak). Fails on 447bb27b (the note keeps sounding)
+//   midi-seam-reroute           K173 (98's R6 on #410): in the Studio a stub Note On 60 sounds
+//                               on the Synth panel's Keys (node A); the keys are re-routed to an
+//                               FM voice (node B, METADATA_SET noteTarget); Note On 60 again
+//                               reaches B, then two Note Offs: the analyser falls below -70 dB
+//                               rel and the sink and the transport hold no note. With the
+//                               sink's re-press release removed, A's note hangs and it fails
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
@@ -1252,6 +1258,79 @@ async function keyboardStudioHeld(browser, b, origin, url) {
   }
 }
 
+// midi-seam-reroute (K173, 98's R6 on #410): a note pressed twice across a re-route releases on
+// both nodes it reached. A stub Note On 60 in the Studio sounds on the Synth panel's Keys (node
+// A); the keys are re-routed to another notes node (B, METADATA_SET noteTarget, the picker's
+// action); Note On 60 again, then Note Off 60 twice: nothing is left sounding, the sink and the
+// transport hold no note. Before the fix (15d1bc67) the second Note On moved the held map to B
+// and A's note hung.
+async function seamReroute(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-reroute';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: {} } });
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+      { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+  };
+  const read = () => page.evaluate(() => {
+    const sink = window.OSCILLA.app.studioSink();
+    const tr = window.OSCILLA.studio.transport;
+    return { held: sink && typeof sink.heldNotes === 'function' ? sink.heldNotes() : null,
+      notes: tr ? tr.heldNotes() : null };
+  });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+    await go('synth');
+    await until(() => page.evaluate(() => window.OSCILLA.app.synthDebug().present),
+      { ms: STEP_MS, what: `${leg}: the Synth panel is in the document` });
+    await go('studio');
+    await msg([0x90, 60, 100]);
+    const on = await heard(page, (x) => x.peak > 0.005, `${leg}: Note On 60 sounds on node A`);
+    const first = await read();
+    await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'BATCH',
+      label: 'Re-route the keys', steps: [
+        { type: 'NODE_ADD', id: 'fm-k173', nodeType: 'fm-voice', position: { x: 0, y: 560 },
+          params: {} },
+        { type: 'METADATA_SET', noteTarget: 'fm-k173' }] }));
+    await msg([0x90, 60, 100]);
+    const second = await until(async () => {
+      const r = await read();
+      return r.held && r.held.length === 1 && r.held[0].node === 'fm-k173' ? r : null;
+    }, { ms: STEP_MS, what: `${leg}: the second Note On 60 reaches node B` }).catch(read);
+    await msg([0x80, 60, 0]);
+    await msg([0x80, 60, 0]);
+    const off = await heard(page, (x) => x.peak < SILENT_PEAK,
+      `${leg}: after the re-route and two Note Offs nothing sounds (below -70 dB rel)`);
+    const after = await until(async () => {
+      const r = await read();
+      return r.held && !r.held.length && r.notes && !r.notes.length && r;
+    }, { ms: STEP_MS, what: `${leg}: the Studio sink and the transport hold no note` })
+      .catch(read);
+    const nodeA = first.held && first.held[0] ? first.held[0].node : null;
+    check(leg, id, 'a note pressed twice across a re-route releases on both nodes it reached: '
+      + 'nothing sounds after the two Note Offs, the sink and the transport hold no note (K173)',
+    !on.timedOut && nodeA && nodeA !== 'fm-k173' && second.held && second.held.length === 1
+      && second.held[0].node === 'fm-k173' && !off.timedOut && Array.isArray(after.held)
+      && !after.held.length && Array.isArray(after.notes) && !after.notes.length
+      && errors.length === 0,
+    JSON.stringify({ on: on.peak, nodeA, second, off: off.peak, after, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
 // keyboard-qwerty (K026): the computer and on-screen keyboard play the same note voices.
 async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
@@ -1489,6 +1568,7 @@ async function main() {
             await keyboardEverywhere(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);
             await keyboardStudioHeld(browser, b, origin, url);
+            await seamReroute(browser, b, origin, url);
           } catch (err) {
             check(`${b}/${origin}`, 'midi-run', 'run completed', false, err && err.stack);
           }
