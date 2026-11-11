@@ -26,6 +26,9 @@
 //   e-poly      N held notes (N = Q021's recorded answer, 8, read by tests/unit/owner-answer.mjs;
 //               K180): voice census N; one more: still N and the oldest note's line gone;
 //               all off: the runtime node census back to its count before the notes
+//   e-census-fm, e-census-am, e-census-wavetable, e-census-perc (K180): N notes of the engine
+//               build N voices (held N for the sustained ones), note-off and all-off: the
+//               runtime and engine node census back to their idle counts, no voice left
 //   e-nosource  every drawbar at 0: a held note sounds nothing and holds no voice (census 0)
 //   e-removed   the Additive engine removed in Studio: the panel's held note is silent (the
 //               chain into the Output is broken), the bay names ADDITIVE with Restore module and
@@ -411,6 +414,65 @@ function defineChecks() {
       return { ok: full === VOICES && still === VOICES, voices: VOICES, full, still, base,
         line: +lineDb(p, 783.99).toFixed(1) };
     });
+
+  // K180: every other engine's node census returns to idle after its voices stop, as e-poly
+  // shows for the additive one. The base is read once the arming note's voice has been cleaned
+  // up (the engine's own hits() is empty), so it is the idle census, not one voice above it.
+  const voiceHits = (page, eng) => page.evaluate((e) => {
+    const id = window.OSCILLA.app.synthDebug().nodes[e];
+    const h = id ? window.OSCILLA.studio.runtime.nodes.get(id) : null;
+    return h && h.info && typeof h.info.hits === 'function' ? h.info.hits().length : -1;
+  }, eng);
+  const CENSUS = { fm: { values: 'fm.release:0.05,fm.sustain:1', first: 48 },
+    am: { values: 'am.release:0.05,am.sustain:1', first: 48 },
+    wavetable: { values: 'wavetable.release:0.05,wavetable.sustain:1', first: 48 },
+    perc: { values: '', first: 60 } }; // perc: one-shots, C4 to G4 eight different voices
+  for (const [eng, { values, first }] of Object.entries(CENSUS)) {
+    def(`e-census-${eng}`, engines(eng, values), async ({ page }) => {
+      await sink(page, 'noteOn', first, 100);
+      await sound(page, (q) => q.rmsDb > -60, `${eng}: the engine is armed and sounds`);
+      await sink(page, 'noteOff', first);
+      await silent(page, `${eng}: released`);
+      await until(async () => (await voiceHits(page, eng)) === 0,
+        { ms: 10000, what: `${eng}: the arming note's voice is cleaned up` });
+      const base = await counts(page);
+      const notes = Array.from({ length: VOICES }, (_, i) => first + i);
+      const during = await page.evaluate(([ns, e]) => {
+        const s = window.OSCILLA.app.synthSink();
+        for (const n of ns) s.noteOn(n, 100);
+        const id = window.OSCILLA.app.synthDebug().nodes[e];
+        const h = window.OSCILLA.studio.runtime.nodes.get(id);
+        return { counts: window.OSCILLA.studio.counts(), voices: window.OSCILLA.app.synthDebug()
+          .voices, hits: h.info.hits().length };
+      }, [notes, eng]);
+      await sound(page, (q) => q.rmsDb > -60, `${eng}: the ${VOICES} notes sound`);
+      for (const n of notes) await sink(page, 'noteOff', n);
+      await sink(page, 'allOff');
+      await silent(page, `${eng}: all off`);
+      let after = null;
+      try {
+        await until(async () => {
+          after = await counts(page);
+          return after.runtimeNodes === base.runtimeNodes
+            && after.engineNodes === base.engineNodes;
+        }, { ms: 10000, what: `${eng}: the node census returns to its count before the notes` });
+      } catch (e) {
+        throw new Error(`${e.message}; runtime ${base.runtimeNodes} before, `
+          + `${during.counts.runtimeNodes} with the notes, ${after && after.runtimeNodes} after; `
+          + `engine ${base.engineNodes}, ${during.counts.engineNodes}, `
+          + `${after && after.engineNodes}`);
+      }
+      const left = await voiceHits(page, eng);
+      // A one-shot voice (perc) leaves the pool's count as it ends, so the census of held
+      // voices is asserted for the sustained engines; every engine built its VOICES voices.
+      const held = eng === 'perc' || during.voices === VOICES;
+      return { ok: during.hits === VOICES && held && left === 0
+        && during.counts.runtimeNodes > base.runtimeNodes,
+      voices: VOICES, held: during.voices, hits: during.hits, left,
+      runtime: [base.runtimeNodes, during.counts.runtimeNodes, after.runtimeNodes],
+      engine: [base.engineNodes, during.counts.engineNodes, after.engineNodes] };
+    });
+  }
 
   def('e-nosource', engines('additive', Array.from({ length: 12 }, (_, i) => `additive.h${i + 1}:0`)
     .join(',')), async ({ page }) => {
