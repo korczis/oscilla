@@ -51,7 +51,7 @@ import {
   smoothResponse, smoothFractionalOctave, normalizeResponse,
 } from '../smoothing.js';
 import { formatFrequencyWithResolution } from '../format.js';
-import { applyFrequencyCorrection } from '../../calibration/interpolate.js';
+import { applyFrequencyCorrection, correctionInEffect } from '../../calibration/interpolate.js';
 import { isValidLevelCalibration } from '../../calibration/level.js';
 import { TRANSFER_RATIO_UNIT } from '../../experiments/csv.js';
 import { PHASE_REASONS } from '../transfer.js';
@@ -280,10 +280,11 @@ export function buildResponseView(source, options = {}) {
   const n = f.length;
   const raw = s.rawDb;
   // A correction that covers no grid point corrects nothing (no extrapolation, ADR 0020): it is
-  // no correction, so RAW is primary and the view reads UNCALIBRATED and says why (T017).
-  const corrMask = s.correction ? maskOn(s.correction.covered, n) : null;
-  const corr = corrMask && corrMask.includes(1) ? s.correction : null;
-  const covered = corr ? corrMask : null;
+  // no correction, so RAW is primary and the view reads UNCALIBRATED and says why (T017). The
+  // predicate is correctionInEffect, the experiment CSV's too (T038).
+  const effect = correctionInEffect(s.correction, n);
+  const corr = effect ? s.correction : null;
+  const covered = effect ? effect.covered : null;
   const noCoverageNote = s.correction && !corr ? noCoverageText(f, s) : null;
   const base = corr ? corr.correctedDb : raw;
   const baseKind = corr ? K.CALIBRATED : K.OBSERVED;

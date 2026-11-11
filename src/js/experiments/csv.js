@@ -8,9 +8,13 @@
 // must say how it was derived and is labelled as not raw.
 //
 //   csvMeta(experiment) -> meta
-//   transferCsv(result, meta, { view, derivation, correctedDb, reliable, run })
+//   transferCsv(result, meta, { view, derivation, correctedDb, covered, reliable, run })
 //     columns frequency_hz, magnitude_db_relative, magnitude_db_corrected, snr_db, reliable,
 //     phase_deg (empty, with the reason in its column line, when the transfer has no phase)
+//     `correctedDb` comes with `covered` (applyFrequencyCorrection's two arrays): a corrected
+//     cell is written only where the profile covers the point, by correctionInEffect, the
+//     response view's predicate, and a profile covering no point leaves the column empty and
+//     says so (T038, project.no-fake-science).
 //     `reliable` is the quality assessment's mask (quality.mask.reliable) when the caller passes
 //     it — reliableFromQuality() takes it from an experiment only when the mask lies on the
 //     transfer's grid — else membership of the valid range, and the column line says which.
@@ -22,7 +26,7 @@
 //   irCsv(ir, meta, { view, derivation })            columns time_s, amplitude
 //     amplitude is the impulse response of the capture/stimulus transfer: a dimensionless
 //     ratio (a unity digital system peaks near 1), not a level re digital full scale
-//   rtaCsv(bands, meta, { view, derivation, correctedDb })
+//   rtaCsv(bands, meta, { view, derivation, correctedDb, covered })
 //     columns band_nominal_hz, band_lo_hz, band_hi_hz, level_db_relative
 //     [, level_db_corrected] [, level_db_spl]
 // meta: { oscillaVersion, oscillaCommit, experimentId, algorithm, sampleRate, calibration }
@@ -44,6 +48,7 @@
 // "SPL".
 
 import { UNKNOWN, describeCalibration } from './schema.js';
+import { correctionInEffect } from '../calibration/interpolate.js';
 import { ZERO_POWER_DB, PHASE_REASONS } from '../measurement/transfer.js';
 import {
   RELATIVE_SCALE_LABEL, RELATIVE_UNIT, SPL_UNIT, isValidLevelCalibration, levelOffsetWithProfile,
@@ -147,6 +152,35 @@ function checkLength(arr, n, what) {
   }
 }
 
+/** The refusal of corrected values passed without their coverage (T038). */
+const NEEDS_COVERED = (fn) => `${fn}: correctedDb potřebuje covered, pokrytí každého bodu `
+  + 'profilem (applyFrequencyCorrection().covered); nepokrytý bod se nekoriguje (T038)';
+
+/** The level_db_corrected column line of the RTA CSV (T038), as correctedColumn for bands. */
+function bandsCorrectedColumn(effect, cal, n) {
+  if (effect) {
+    return `${DB_RELATIVE}, korigováno frekvenčním profilem v ${effect.count} z ${n} pásem, `
+      + 'která profil pokrývá; jinde prázdné (bez extrapolace)';
+  }
+  const name = cal.frequency && cal.frequency.name ? ` "${cal.frequency.name}"` : '';
+  return `prázdné (frekvenční profil${name} nepokrývá žádné z ${n} pásem)`;
+}
+
+/**
+ * The magnitude_db_corrected column line: what the cells hold, so a reader never takes an empty
+ * or raw cell for a corrected one (T038). `effect` is correctionInEffect's answer, `given`
+ * whether corrected values were passed at all.
+ */
+function correctedColumn(effect, given, cal, n) {
+  if (effect) {
+    return `${TRANSFER_RATIO_UNIT}, korigováno frekvenčním profilem (odchylka mikrofonu odečtena) `
+      + `v ${effect.count} z ${n} bodů, které profil pokrývá; jinde prázdné (bez extrapolace)`;
+  }
+  if (!given) return 'empty (no frequency calibration applied)';
+  const name = cal.frequency && cal.frequency.name ? ` "${cal.frequency.name}"` : '';
+  return `prázdné (frekvenční profil${name} nepokrývá žádný z ${n} měřených bodů)`;
+}
+
 /**
  * Frequency response CSV from a TransferResult. `correctedDb` is the frequency-profile
  * corrected magnitude (applyFrequencyCorrection().correctedDb); it needs a frequency profile in
@@ -160,13 +194,21 @@ export function transferCsv(result, meta, opts = {}) {
     throw new TypeError('transferCsv: calibratedDb/calibratedUnit were replaced by correctedDb '
       + '(a transfer magnitude is a ratio, never dB SPL)');
   }
-  const corrected = opts.correctedDb ?? null;
-  if (corrected && !hasFrequencyCal(cal)) {
+  const given = opts.correctedDb ?? null;
+  if (given && !hasFrequencyCal(cal)) {
     throw new RangeError('corrected values given but the metadata names no frequency calibration');
   }
   checkLength(r.magnitudeDb, n, 'magnitudeDb');
   checkLength(r.snrDb, n, 'snrDb');
-  checkLength(corrected, n, 'correctedDb');
+  checkLength(given, n, 'correctedDb');
+  if (given && !opts.covered) {
+    throw new TypeError(NEEDS_COVERED('transferCsv'));
+  }
+  checkLength(given && opts.covered, n, 'covered');
+  // The correction as the response view counts it (T038): covered points only, none if none.
+  const effect = given ? correctionInEffect({ correctedDb: given, covered: opts.covered }, n)
+    : null;
+  const corrected = effect ? effect.correctedDb : null;
   checkLength(opts.reliable, n, 'reliable');
   checkLength(r.phaseDeg, n, 'phaseDeg');
   const [vLo, vHi] = r.validRange || [NaN, NaN];
@@ -188,9 +230,7 @@ export function transferCsv(result, meta, opts = {}) {
     opts, [
       ['frequency_hz', 'Hz'],
       ['magnitude_db_relative', `${TRANSFER_RATIO_UNIT}, uncorrected${centre}`],
-      ['magnitude_db_corrected', corrected
-        ? `${TRANSFER_RATIO_UNIT}, frequency-profile corrected (microphone deviation removed)`
-        : 'empty (no frequency calibration applied)'],
+      ['magnitude_db_corrected', correctedColumn(effect, given, cal, n)],
       ['snr_db', r.snrDb ? `dB, ESTIMATED signal-to-noise ratio${derived
         ? ', lowest of the runs' : ''}` : 'empty (not estimated)'],
       ['reliable', opts.reliable ? '1 = reliable, 0 = not (quality assessment mask)'
@@ -211,7 +251,8 @@ export function transferCsv(result, meta, opts = {}) {
   for (let i = 0; i < n; i++) {
     const f = r.frequencies[i];
     const rel = opts.reliable ? (opts.reliable[i] ? 1 : 0) : (f >= vLo && f <= vHi ? 1 : 0);
-    lines.push([num(f), num(r.magnitudeDb[i]), corrected ? num(corrected[i]) : '',
+    lines.push([num(f), num(r.magnitudeDb[i]), corrected && effect.covered[i] ? num(corrected[i])
+      : '',
       r.snrDb ? num(r.snrDb[i]) : '', rel, r.phaseDeg ? num(r.phaseDeg[i]) : ''].join(','));
   }
   return `${lines.join('\n')}\n`;
@@ -269,22 +310,31 @@ export function irCsv(ir, meta, opts = {}) {
 
 /**
  * RTA band CSV. `bands` is an RTA result { algorithm, sampleRate, resolution, bands, levelsDb }
- * or an array of { nominal, lo, hi, levelDb }. `correctedDb` (frequency-profile corrected band
- * levels, applyFrequencyCorrectionToBands().correctedDb) adds level_db_corrected and needs a
- * frequency profile in the metadata. Under a VALID level calibration level_db_spl is added:
- * the corrected level when given, else the relative level, plus the calibration offset.
+ * or an array of { nominal, lo, hi, levelDb }. `correctedDb` with `covered` (frequency-profile
+ * corrected band levels and their coverage, applyFrequencyCorrectionToBands()'s two arrays) adds
+ * level_db_corrected and needs a frequency profile in the metadata; a band's corrected cell is
+ * written only where correctionInEffect counts it covered, as for transferCsv (T038). Under a
+ * VALID level calibration level_db_spl is added: the corrected level when the full profile is
+ * known and the band was corrected (empty for a band it was not), else the relative level, plus
+ * the calibration offset.
  */
 export function rtaCsv(bands, meta, opts = {}) {
   const isResult = !Array.isArray(bands);
   const list = isResult ? bands.bands : bands;
   const levels = isResult ? bands.levelsDb : list.map((b) => b.levelDb);
   const cal = meta && meta.calibration;
-  const corrected = opts.correctedDb ?? null;
-  if (corrected && !hasFrequencyCal(cal)) {
+  const given = opts.correctedDb ?? null;
+  if (given && !hasFrequencyCal(cal)) {
     throw new RangeError('corrected values given but the metadata names no frequency calibration');
   }
-  checkLength(levels, list.length, 'levelsDb');
-  checkLength(corrected, list.length, 'correctedDb');
+  const n = list.length;
+  checkLength(levels, n, 'levelsDb');
+  checkLength(given, n, 'correctedDb');
+  if (given && !opts.covered) throw new TypeError(NEEDS_COVERED('rtaCsv'));
+  checkLength(given && opts.covered, n, 'covered');
+  const effect = given ? correctionInEffect({ correctedDb: given, covered: opts.covered }, n)
+    : null;
+  const corrected = effect ? effect.correctedDb : null;
   // Corrected levels take the offset without the profile's correction at the reference
   // frequency (level.js levelOffsetWithProfile, V382); that needs the profile's points, so
   // with only { id, name } level_db_spl is computed from the uncorrected level.
@@ -298,22 +348,21 @@ export function rtaCsv(bands, meta, opts = {}) {
     ['band_hi_hz', 'Hz (upper band edge)'],
     ['level_db_relative', DB_RELATIVE],
   ];
-  if (corrected) {
-    columns.push(['level_db_corrected', `${DB_RELATIVE}, frequency-profile corrected`]);
-  }
+  if (given) columns.push(['level_db_corrected', bandsCorrectedColumn(effect, cal, n)]);
   if (offset !== null) {
     const from = splFromCorrected ? 'level_db_corrected' : 'level_db_relative';
     columns.push(['level_db_spl', `${SPL_UNIT} (CALIBRATED: ${from} ${offset < 0 ? '−' : '+'} `
-      + `${num(Math.abs(offset))} dB level calibration offset)`]);
+      + `${num(Math.abs(offset))} dB level calibration offset)${splFromCorrected
+        && effect.count < n ? '; prázdné, kde je level_db_corrected prázdné' : ''}`]);
   }
   const lines = header(`real-time analyzer bands${isResult && bands.resolution
     ? ` (${bands.resolution === 'third' ? '1/3 octave' : 'octave'})` : ''}`, meta,
   isResult ? bands.algorithm : null, isResult ? bands.sampleRate : null, opts, columns);
   list.forEach((b, i) => {
     const row = [num(b.nominal), num(b.lo), num(b.hi), num(levels[i])];
-    if (corrected) row.push(num(corrected[i]));
+    if (given) row.push(corrected && effect.covered[i] ? num(corrected[i]) : '');
     if (offset !== null) {
-      const base = splFromCorrected ? corrected[i] : levels[i];
+      const base = splFromCorrected ? (effect.covered[i] ? corrected[i] : NaN) : levels[i];
       // Zero power (stored as ZERO_POWER_DB) has no sound pressure level: empty field.
       row.push(Number.isFinite(base) && base > ZERO_POWER_DB ? num(base + offset) : '');
     }
