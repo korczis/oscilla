@@ -6,7 +6,7 @@
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
       "done": 24,
-      "required": 52,
+      "required": 53,
       "phase": "now"
     },
     {
@@ -20,7 +20,7 @@
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
       "done": 32,
-      "required": 60,
+      "required": 63,
       "phase": "now"
     },
     {
@@ -118,7 +118,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 6,
-      "required": 44,
+      "required": 46,
       "phase": "now"
     },
     {
