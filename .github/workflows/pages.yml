@@ -41,9 +41,9 @@ jobs:
     timeout-minutes: 15
     env:
       OSC_LAB_REQUIRE_MAJORDOMUS: '1'
-      MJ_VERSION: 1.0.0
+      MJ_VERSION: 1.0.1
       MJ_TARGET: x86_64-unknown-linux-gnu
-      MJ_SHA256: 0fc3f6ad9ef2c4f1b5ff8454f6d6373d1b9d1c4732822ca5d06c4ce6c65cdd6e
+      MJ_SHA256: 524adfd3f2a3fdb3314f53f8c134e4050be5f9ebc31018b70fa9c7d5a940ae77
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
@@ -69,8 +69,11 @@ jobs:
           # The public download URL first; where it fails (the pinned release's returned 504 for hours on
           # 2026-11-08 while the API served the same asset), the same asset of the same tag and
           # repository through the API, three bounded attempts. Either way the digest decides.
-          if ! curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
-            -o "$RUNNER_TEMP/$a" \
+          # Each public attempt is bounded too (R055, project.ci-bounded): 4 x 20 s + 3 x 5 s,
+          # then the fallback's 3 x 60 s + 2 x 5 s, 285 s in all, inside the step's 5 minutes, so
+          # a stalled transfer cannot use the step before the API route gets its turn.
+          if ! curl -fsSL --proto '=https' --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            --max-time 20 -o "$RUNNER_TEMP/$a" \
             "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"; then
             echo "::warning::the release download URL failed; fetching $a through the GitHub API"
             for i in 1 2 3; do

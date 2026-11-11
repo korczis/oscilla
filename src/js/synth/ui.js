@@ -22,12 +22,14 @@ import { playedEngine, routedNode } from './picker.js';
 import { createDock } from './dock.js';
 import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
-  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, cableNote, jackReason, jackState,
+  STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, cableNote, jackState,
   panelCables, patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
   unpatchText,
 } from './normals.js';
 import { linkOf, linkOmissionText, linkOmissions, linkPlan, skippedText } from './link.js';
 import { splitJack } from './panel.js';
+import { jackOf as jackOfIn, portOf as portOfIn, verdictsFor as jackVerdicts }
+  from './jack-verdicts.js';
 import { esc, knobHtml, plateHtml, platesShown } from './view/face.js';
 import { knobModel, knobSvg } from './view/knob.js';
 import { createGestures } from './gestures.js';
@@ -36,7 +38,6 @@ import {
 } from './view/bay.js';
 import { panelTokens } from './view/tokens.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
-import { canConnect } from '../studio/ports.js';
 import { decodeSynthLink, encodeSynthLink } from '../core/url-state-synth.js';
 import { ENGINE_BLOCKED } from './panels/engines.js';
 import { CHIP, enginePickerHtml } from './view/engines.js';
@@ -161,39 +162,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   // ------------------------------------------------------------------ cables
 
-  /** A jack by its key ('module.port:in' | ':out'): a port id may name an input and an output. */
-  const jackOf = (key) => {
-    const { module } = splitJack(key);
-    return panel.jacksOf(module).find((j) => j.key === key) || null;
-  };
-  const portOf = (j) => registry.port(panel.module(j.module).node, j.port, j.direction);
-  /**
-   * Every other jack's verdict for a cable from or to `id`: { ok, reason } from the typed-port
-   * validator, then the panel's own refusals (normals.js patchCable: a jack where the cable
-   * would do nothing). A feedback loop is judged by the store at the drop, with its sentence.
-   */
-  function verdictsFor(id) {
-    const a = jackOf(id);
-    const out = new Map();
-    if (!a) return out;
-    const m = model();
-    for (const mod of panel.modules) {
-      for (const j of panel.jacksOf(mod.id)) {
-        if (j.direction === a.direction) continue;
-        if (j.module === a.module) {
-          out.set(j.key, { ok: false, reason: 'Modul nelze propojit sám se sebou.' });
-          continue;
-        }
-        const [s, t] = a.direction === 'out' ? [portOf(a), portOf(j)] : [portOf(j), portOf(a)];
-        const v = canConnect(s, t);
-        if (!v.allowed) { out.set(j.key, { ok: false, reason: v.reason }); continue; }
-        const [from, to] = a.direction === 'out' ? [a.id, j.id] : [j.id, a.id];
-        const why = jackReason(m, panel, to, from);
-        out.set(j.key, why ? { ok: false, reason: why } : { ok: true, reason: null });
-      }
-    }
-    return out;
-  }
+  const jackOf = (key) => jackOfIn(panel, key);
+  const portOf = (j) => portOfIn(panel, registry, j);
+  const verdictsFor = (id) => jackVerdicts(model(), panel, registry, id);
   const compatibleWith = (id) => new Set([...verdictsFor(id)].filter(([, v]) => v.ok)
     .map(([k]) => k));
 
