@@ -8,8 +8,8 @@
 //     pool.on(note, t)  -> { slot, steal: slot | null, retrigger: bool }
 //                          the same note held again retriggers its own slot; a free slot is
 //                          taken; when all `max` are in use the released voice that released
-//                          first is stolen, else the oldest held one (first and oldest: in
-//                          the order they reached the pool, never by time; E071)
+//                          first (by t, its release time, then release order) is stolen, else
+//                          the oldest held one (in the order notes reached the pool; E071)
 //     pool.off(note, t) -> slot | null      the slot now releasing (its end is set by end())
 //     pool.end(slot, t) -> void             the slot's release ends at t (free after it)
 //     pool.free(slot)   -> void             the slot is disposed: empty
@@ -27,10 +27,11 @@ export function createVoicePool({ max = MAX_VOICES } = {}) {
   const slots = Array.from({ length: n }, (_, i) => ({ slot: i, note: null, on: -Infinity,
     released: null, end: -Infinity }));
   const sounding = (s, t) => s.note !== null && (s.released === null || s.end > t);
-  // E071: age is the order notes arrived and were released in, kept beside the slots (slots()
-  // is unchanged), never their times: the engine's schedule time can tie across a burst and
+  // E071: a held voice's age is the order notes arrived in, kept beside the slots (slots() is
+  // unchanged), never their onset times: the engine's schedule time can tie across a burst and
   // step back (WebKit: 4-6 ties in 8 notes, one step 17 ms back), and a slot index is no age
-  // either (a released voice keeps the lowest slot until its release ends).
+  // either (a released voice keeps the lowest slot until its release ends). The timeline
+  // strikes onsets in time order and live keys arrive in order, so arrival is onset order.
   let clock = 0;
   const onAt = new Array(n).fill(0);
   const offAt = new Array(n).fill(0);
@@ -48,7 +49,11 @@ export function createVoicePool({ max = MAX_VOICES } = {}) {
       let released = null;
       let oldest = null;
       for (const s of slots) {
-        if (s.released !== null && (!released || offAt[s.slot] < offAt[released.slot])) {
+        // Released by t: the timeline schedules a note's off with its onset (note-player.js
+        // strike), so an off still ahead holds the voice (c3's R2-E071-1); first by the release
+        // time, release order breaking a tie.
+        if (s.released !== null && s.released <= t && (!released || s.released < released.released
+          || (s.released === released.released && offAt[s.slot] < offAt[released.slot]))) {
           released = s;
         }
         if (!oldest || onAt[s.slot] < onAt[oldest.slot]) oldest = s;

@@ -130,3 +130,24 @@ test('E071: notes at one time are stolen in the order they arrived, not by slot 
   r.on(36, 0.4470);
   assert.equal(r.on(79, 0.4700).steal, 0, 'the note that arrived first (84) is the oldest');
 });
+
+test('R2-E071-1: an off the timeline scheduled ahead holds the voice until its time', () => {
+  // note-player.js strike() calls noteOn(x.time) and noteOff(x.end) together at schedule time,
+  // so the call order is the strike order, not the order the voices release in audio time.
+  const p = createVoicePool({ max: 2 });
+  p.on(60, 0); // A: held until 4 s
+  p.off(60, 4);
+  p.end(0, 4.5);
+  p.on(62, 0.1); // B: released at 0.2 s
+  p.off(62, 0.2);
+  p.end(1, 0.7);
+  assert.deepEqual(p.on(64, 0.3), { slot: 1, steal: 1, retrigger: false },
+    'C steals B, which is releasing, never A, which is still held');
+  // Two releases due by t: the earlier release time goes first, whatever the call order.
+  const q = createVoicePool({ max: 2 });
+  q.on(50, 0);
+  q.off(50, 0.5);
+  q.on(51, 0.1);
+  q.off(51, 0.2);
+  assert.equal(q.on(52, 1).steal, 1, 'the voice whose release came first (51 at 0.2 s)');
+});
