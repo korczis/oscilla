@@ -15,6 +15,7 @@ scope:
   - "tests/browser/labs.cjs"
   - "tests/README.md"
   - "dist"
+current_state: "Landed by #386 (verdict 386.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first: tests/unit/charts.test.mjs imports the chart module's exported label function and fails on the merge base: on, it returns 'Harmonic amplitudes 1 to 10'; off, a different string that says additive synthesis is bypassed (project.fail-first)."
@@ -35,4 +36,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-10-30'
-updated_at: '2026-10-30'
+updated_at: 2026-11-11T18:41:47Z
+started_at: 2026-11-11T18:40:56Z
+started_event: sha256:b53ada8e0eb5a40c2b9e6db664c3d00ee71e6c15a986ed95f8c7bc6d76a40048
+verified_at: 2026-11-11T18:41:12Z
+verified_event: sha256:f7271bc44ddb1d5dff802e178a9943a2a0b8fa033d0a11d7485370f1e6807c27
+completed_at: 2026-11-11T18:41:47Z
+completed_event: sha256:4600033d9816904c5de239ef27c3d1530fc1ff99ceacd5d0e07c504b3d614918
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/charts.test.mjs; node tests/browser/labs.cjs; npm run build:check"
+    result: "On main 04d33aaf: charts 30/30 with ':379 additive: the chart names its bypassed state (U013)'. labs.cjs ALL PASS in the three engines: U013's checks (the off state's pixels, name and state differ with the same bars; toggling back restores the first drawing, whichever state the page starts in; a state restored with enabled false shows the bypassed chart). build:check is current."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:41:30Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 386 checks: gate, fail-first"
+    result: "landed by #386; gate success and fail-first success; review verdict .ai/repo/reviews/386.yaml"
+    artifact: ".ai/repo/reviews/386.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:41:39Z

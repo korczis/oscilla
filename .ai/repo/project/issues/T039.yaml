@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "src/js/measurement/capture.js:457-459 builds the capture worklet with channelCount 1, channelCountMode 'explicit' and channelInterpretation 'speakers', so a multi-channel input is downmixed before the peak and rail check: one channel at the rail can be halved below 0.98 and the quality bar then states that no sample reached 0.98 of digital full scale. Nothing states this limit. After: the check judges each channel's peak, or the quality bar says it judges the downmix."
 why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 307.yaml#R5 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
-current_state: "in progress (2026-11-10): built by oscilla-ce (proceed lane), tasks t-20261110070641-83d0, t-20261110071228-8a39 and t-20261110072859-aa64, as ff4e0d9b on fix/t039-clip-check-every-channel from T5 2aa5883a (local); the recorder takes every channel, the clip check judges each and names the worst; fail-first unit fails on 2aa5883a; awaits oscilla-c1's verdict, a train and the v3-measure browser check after T5 (oscilla-43)."
+current_state: "in progress (2026-11-10): built by oscilla-ce (proceed lane), tasks t-20261110070641-83d0, t-20261110071228-8a39 and t-20261110072859-aa64, as ff4e0d9b on fix/t039-clip-check-every-channel from T5 2aa5883a (local); the recorder takes every channel, the clip check judges each and names the worst; fail-first unit fails on 2aa5883a; awaits oscilla-c1's verdict, a train and the v3-measure browser check after T5 (oscilla-43). Landed by #525 (verdict 525.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 scope:
   - "src/js/measurement/capture.js"
   - "src/js/measurement/views/quality-bar.js"
@@ -24,4 +24,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T18:37:39Z
+started_at: 2026-11-11T18:36:52Z
+started_event: sha256:e410e1eea48c19108f8f8aadd71a6eccffd370ee9b1676ffb39ad897a0cd4c96
+verified_at: 2026-11-11T18:37:07Z
+verified_event: sha256:607e1d74e454f3cbcc26a6187d6dd16a52ee67c36a43df0cfa8042bd75dc2c10
+completed_at: 2026-11-11T18:37:39Z
+completed_event: sha256:c3d73c49cf95e49257eb107e33df23dedd69402e2fb4436d192370a30557187e
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/capture-channel-clipping.test.mjs; npm run build:check"
+    result: "On main 04d33aaf: capture-channel-clipping passes. :31 a stereo take whose left channel clips is clipping, named by channel; :57 mono judged as before; :87 the worklet takes every input channel; :134 the ScriptProcessor fallback keeps every channel. build:check is current."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:37:24Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 525 checks: gate, fail-first"
+    result: "landed by #525; gate success and fail-first success; review verdict .ai/repo/reviews/525.yaml"
+    artifact: ".ai/repo/reviews/525.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:37:31Z
