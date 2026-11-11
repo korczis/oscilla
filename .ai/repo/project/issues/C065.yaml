@@ -8,6 +8,7 @@ priority: p2
 profile: implementation
 objective: "Removing an automation lane while playing glides the parameter to the base value read at removal and keeps it in `released` (src/js/studio/transport.js:1199-1201); runtime.js heldKeys (:525-535, :584-590) skips the base write until releaseAt and nothing writes the base afterwards until the next apply. Before: a filter frequency set to 2000 Hz 5 ms after the lane is removed ends at the old 500 Hz. After: an edit inside the release window re-targets the glide, or is written once the window closes, so the played value is the edited base."
 why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 226.yaml#R-1 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+current_state: "Taken by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) on 2026-11-10 at oscilla-43's order; analysis sent to 43 before building; code from train T6's head 5e5a445f."
 scope:
   - "src/js/studio/transport.js"
   - "src/js/studio/runtime.js"
