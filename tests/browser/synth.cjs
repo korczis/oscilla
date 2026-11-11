@@ -222,6 +222,7 @@ const suite = require('./lib/suite.cjs');
 const { serveDist } = require('./lib/serve.cjs');
 const { until, bounded, WaitTimeout } = require('./lib/wait.cjs');
 const midiStub = require('./lib/midi-stub.cjs');
+const { watchTaps, markTap } = require('./lib/tap-meter.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -1148,28 +1149,17 @@ function defineChecks() {
   // deadline, and the voice is silent again before the next.
   def('s-tap', async ({ page }) => {
     await page.locator('#osc-synth-title').click();
-    // A tap lasts tens of ms, shorter than a probe round trip: the page holds the loudest RMS
-    // of the analyser's time-domain buffer (about 43 ms wide) every frame, so none is missed.
-    await page.evaluate(() => {
-      const a = window.OSCILLA.engine.analyser;
-      const t = new Float32Array(a.fftSize);
-      window.__tapMax = -Infinity;
-      const tick = () => {
-        a.getFloatTimeDomainData(t);
-        let s = 0;
-        for (const x of t) s += x * x;
-        window.__tapMax = Math.max(window.__tapMax, 10 * Math.log10(s / t.length + 1e-24));
-        requestAnimationFrame(tick);
-      };
-      requestAnimationFrame(tick);
-    });
+    // A tap lasts tens of ms, shorter than a probe round trip: the page measures it itself
+    // (lib/tap-meter.cjs), from the samples after each tap, so a stalled frame cannot miss one.
+    await page.evaluate(watchTaps);
     const heardTaps = [];
     for (let i = 0; i < 20; i += 1) {
+      await page.evaluate(markTap);
       await page.evaluate(() => {
-        window.__tapMax = -Infinity;
         const o = { code: 'KeyA', key: 'a', bubbles: true, cancelable: true };
         window.dispatchEvent(new KeyboardEvent('keydown', o));
         window.dispatchEvent(new KeyboardEvent('keyup', o));
+        window.__tapAttach(); // same task: the analyser is attached before the tap renders
       });
       const peak = await until(async () => {
         const m = await page.evaluate(() => window.__tapMax);

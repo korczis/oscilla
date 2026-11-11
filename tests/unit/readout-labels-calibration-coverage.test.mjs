@@ -144,10 +144,14 @@ function assertNoCoverage(v, label) {
   assert.equal(v.markers.calibratedRange, null, label);
   assert.ok(v.series.every((s) => s.kind !== common.QUANTITY_KINDS.CALIBRATED
     && !/CALIBRATED/.test(s.label)), `${label}: no series claims CALIBRATED`);
-  const note = v.notes.find((n) => /covers none of the measured range/.test(n));
+  // T037 (304.yaml#R2): the note says none of the measured points is covered, never that the
+  // profile lies outside the measured range (a 1 kHz point lies inside 100 Hz-10 kHz), in Czech
+  // (Q104). Fails on 42ee6c6e, whose note reads "covers none of the measured range".
+  const note = v.notes.find((n) => /nepokrývá žádný z 319 měřených bodů/.test(n));
   assert.ok(note, `${label}: ${v.notes.join(' | ')}`);
-  assert.match(note, /no extrapolation/);
-  assert.match(note, /RAW is shown, uncalibrated/);
+  assert.equal(v.notes.some((n) => /measured range/.test(n)), false, label);
+  assert.match(note, /bez extrapolace/);
+  assert.match(note, /zobrazeno RAW, nekalibrováno/);
   const r = v.readoutAt(1000);
   assert.equal(r.calibrated, false);
   assert.equal(r.corrected, 'not covered by the profile (uncalibrated)');
@@ -170,7 +174,7 @@ test('response view: a profile covering no measured point reads UNCALIBRATED (MS
     const plain = buildResponseView(r, { useCalibration: false });
     assert.ok(v.summary.includes(rawExtremesSummary(v, r.quality)), v.summary);
     assert.equal(v.summary, plain.summary, 'the RAW summary, as without the profile');
-    assert.match(v.notes.find((n) => /covers none/.test(n)), new RegExp(`"${p.name}"`));
+    assert.match(v.notes.find((n) => /nepokrývá žádný/.test(n)), new RegExp(`"${p.name}"`));
     // A derived view of it is a derived view of OBSERVED, not of CALIBRATED.
     const sm = buildResponseView(r, { smoothing: 6 });
     assert.ok(!sm.badges.includes(CAL));

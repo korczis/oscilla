@@ -119,9 +119,10 @@
   }
 }
 
-/* A phone shows the measurement steps folded to the current one (MEASURE shows all seven). */
+/* A phone shows the measurement steps folded to one (MEASURE shows all seven): the current
+   step, else the blocked one, else the last (U104: measure-flow.js `shown`, data-shown). */
 @media (max-width: 767.98px) {
-  .osc-app[data-mode="playground"] .osc-m-step:not(.is-current) {
+  .osc-app[data-mode="playground"] .osc-m-step:not([data-shown]) {
     display: none;
   }
 }

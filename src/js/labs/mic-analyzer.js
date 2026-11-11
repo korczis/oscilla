@@ -25,6 +25,9 @@
 // (MIC_CONTEXT_CLOSED, or MIC_ENGINE_DETACHED when another caller replaced its graph), so no
 // reading of a dead graph is presented as live. Its own Stop lets the analyser go before it
 // calls detachMicrophone(), whose 'user' event therefore names no analyser of the lab's.
+// A context the system suspends or interrupts (C067) delivers no input, so the analyser's
+// buffer freezes: adapter.onContextState(fn) tells the lab, which pauses (the microphone stays
+// on, the readout says why, no reading is taken) until the context runs again.
 
 import { createSpectrumChart } from '../charts/spectrum-chart.js';
 import { createSpectrogramView } from '../charts/spectrogram-view.js';
@@ -72,6 +75,14 @@ export const MIC_OFF = 'UNAVAILABLE (microphone off)';
 export const MIC_NOTE = 'Not a calibrated measurement. Microphone frequency response varies.';
 /** Readout when the engine discarded a closed audio context and detached the microphone. */
 export const MIC_CONTEXT_CLOSED = 'The audio context was closed; the microphone was stopped.';
+/**
+ * Readout while the audio context is suspended or interrupted (C067): the microphone delivers
+ * nothing, so the lab pauses rather than read a frozen buffer. Czech (Q104).
+ */
+export function micContextPausedText(state) {
+  return `Zvukový kontext je ${state === 'interrupted' ? 'přerušen' : 'pozastaven'}: mikrofon `
+    + 'nic nedodává, měření stojí, dokud zvuk znovu neběží.';
+}
 /** Readout when the engine detached the lab's microphone for any other reason. */
 export const MIC_ENGINE_DETACHED = 'The audio engine disconnected the microphone; it was stopped.';
 const READOUT_INTERVAL_MS = 100;
@@ -131,8 +142,11 @@ function layer(host) {
   return d;
 }
 
-/** mount(rootEl, adapter) → lab (see the return value). */
-export function mount(rootEl, adapter) {
+/**
+ * mount(rootEl, adapter, deps) → lab (see the return value). deps.chart replaces the spectrum
+ * chart (its readers, setPeak, refreshTheme, dispose): the seam a test reads frames through.
+ */
+export function mount(rootEl, adapter, deps = {}) {
   const q = (sel) => rootEl.querySelector(sel);
   const toggle = q('#osc-mic-toggle');
   const host = q('#osc-chart-mic');
@@ -147,6 +161,7 @@ export function mount(rootEl, adapter) {
   let lastReadout = -Infinity;
   let pitch = null;
   let estimate = null;
+  let paused = null; // the context state while it is suspended or interrupted (C067)
   let comparison = null;
   const opts = { freeze: false, average: false, peakHold: false };
 
@@ -154,7 +169,7 @@ export function mount(rootEl, adapter) {
   const spectrumLayer = host ? layer(host) : null;
   const spgLayer = host ? layer(host) : null;
   if (spgLayer) spgLayer.hidden = true;
-  const chart = spectrumLayer
+  const chart = deps.chart || (spectrumLayer
     ? createSpectrumChart(spectrumLayer, {
       mode: 'dual',
       minDb: -80,
@@ -170,7 +185,7 @@ export function mount(rootEl, adapter) {
       getAnalyser: () => adapter.getAnalyser(),
       getRequested: () => adapter.requestedFrequency(),
     })
-    : null;
+    : null);
   let spg = null;
   const toolbar = host ? makeToolbar(host, rootEl) : null;
 
@@ -224,7 +239,24 @@ export function mount(rootEl, adapter) {
     stop();
   }
 
+  // The context's state (C067): suspended or interrupted pauses a live lab, running resumes it;
+  // 'closed' is the engine's detach above.
+  function onContextState(state) {
+    if (state === 'suspended' || state === 'interrupted') {
+      if (!stream) return;
+      paused = state;
+      estimate = null;
+      comparison = null;
+      if (chart) chart.setPeak(null);
+      renderReadout(true);
+    } else if (state === 'running' && paused) {
+      paused = null;
+      renderReadout(true);
+    }
+  }
+
   function stop() {
+    paused = null;
     if (stream) {
       for (const t of stream.getTracks()) {
         t.onended = null;
@@ -292,6 +324,10 @@ export function mount(rootEl, adapter) {
       setText(detEl, error || MIC_OFF);
       return;
     }
+    if (paused) {
+      setText(detEl, micContextPausedText(paused));
+      return;
+    }
     if (!force && !estimate && !comparison) {
       setText(detEl, detectedText(null));
       return;
@@ -331,17 +367,21 @@ export function mount(rootEl, adapter) {
     if (chart) chart.setPeak(estimate ? { hz: estimate.frequencyHz, db: estimate.levelDb } : null);
   }
 
-  const stopFrames = onFrame((now) => {
+  // One frame of the lab: a reading at most every READOUT_INTERVAL_MS, none while the context
+  // is paused (C067) or Compare is frozen. The shared frame loop calls it; lab.step exposes it.
+  function frameStep(now) {
     if (now - lastReadout < READOUT_INTERVAL_MS) return;
     lastReadout = now;
-    if (stream && !(tab === 'compare' && opts.freeze)) measure(now);
+    if (stream && !paused && !(tab === 'compare' && opts.freeze)) measure(now);
     renderReadout();
-  });
+  }
+  const stopFrames = onFrame(frameStep);
 
   const offs = [
     stopFrames,
     on(toggle, 'click', () => (stream ? stop() : start())),
     (adapter.onMicDetached && adapter.onMicDetached(onEngineDetached)) || (() => {}),
+    (adapter.onContextState && adapter.onContextState(onContextState)) || (() => {}),
     onUi(rootEl, (d) => {
       if (d.kind === 'tab' && d.key === 'mic') {
         tab = d.value;
@@ -375,6 +415,13 @@ export function mount(rootEl, adapter) {
     get error() {
       return error;
     },
+    /** True while the audio context is suspended or interrupted under a live lab (C067). */
+    get paused() {
+      return !!paused;
+    },
+    get pauseReason() {
+      return paused ? micContextPausedText(paused) : '';
+    },
     get estimate() {
       return estimate ? { ...estimate } : null;
     },
@@ -389,6 +436,8 @@ export function mount(rootEl, adapter) {
     },
     start,
     stop,
+    /** One frame step at `now` (ms), as the frame loop runs it (tests drive it). */
+    step: frameStep,
     update(state = {}) {
       if (state.compare) Object.assign(opts, state.compare);
       applyView();

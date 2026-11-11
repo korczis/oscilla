@@ -219,6 +219,15 @@ export const stepModulator = defineNode({
 export const CLOCK_DEFAULT_DIVISION = '1/4';
 /** The gate a Clock trigger holds on an Envelope: this fraction of its period (a square). */
 export const CLOCK_GATE_FRACTION = 0.5;
+/**
+ * K241: what a Clock does to the run (clock.js freeRunLoop): without a loop of the user's, the
+ * document plays until STOP; after its content it repeats an empty bar and the Clock keeps
+ * ticking; an offline render ends with the content. tests/unit/studio-clock.test.mjs pins this
+ * text to freeRunLoop's behaviour.
+ */
+export const CLOCK_FREE_RUN_TEXT = 'Dokument s hodinami bez vlastní smyčky hraje, dokud ho '
+  + 'nezastavíte: po konci obsahu opakuje prázdný takt a hodiny dál tikají. Export bez '
+  + 'přehrávání končí s obsahem.';
 
 export const clock = defineNode({
   type: 'clock',
@@ -243,7 +252,7 @@ export const clock = defineNode({
     inputs: 'Žádné; tempo bere z transportu.',
     outputs: 'Trigger: hradlo obálky na polovinu periody, takt pro Random a Step Modulator.',
     constraints: 'Takty leží na mřížce dělení od začátku časové osy a ve smyčce se '
-      + 'opakují.',
+      + `opakují. ${CLOCK_FREE_RUN_TEXT}`,
   },
 });
 

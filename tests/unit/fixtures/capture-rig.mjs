@@ -57,9 +57,12 @@ export function audioSession(initial = 'playback', { refuse = null } = {}) {
  *   gum(stream)    replaces getUserMedia's answer (a pending prompt: a promise held open)
  *   abortOnHidden  passed to createCaptureIo
  *   timeout(ms)    maps the io's setTimeout delays (the watchdog test shortens them)
+ *   channels(block, level) the input's channels of one block (Float32Array[]), handed to the
+ *                  ScriptProcessor as an inputBuffer of that many channels (T039); absent: one
+ *                  channel at `level`, as before
  */
 export function rig({ background = 0.001, heard = 0.1, session = null, refuse = null,
-  gum = null, abortOnHidden = false, timeout = (ms) => ms } = {}) {
+  gum = null, abortOnHidden = false, timeout = (ms) => ms, channels = null } = {}) {
   const listeners = { engine: [], win: {}, doc: {} };
   // stall: the input renders nothing; drop(n): block n is lost (ScriptProcessor on WebKit).
   const ctl = { stall: false, drop: null, gumCalls: 0, blocks: 0 };
@@ -149,8 +152,10 @@ export function rig({ background = 0.001, heard = 0.1, session = null, refuse = 
         const t0 = (frame - BLOCK) / SR;
         const level = heard !== null && sounding(t0) ? heard : background;
         const data = new Float32Array(BLOCK).fill(level);
-        sp.onaudioprocess({ inputBuffer: { getChannelData: () => data },
-          playbackTime: frame / SR });
+        const chs = channels ? channels(ctl.blocks - 1, level) : null;
+        const inputBuffer = chs ? { numberOfChannels: chs.length, getChannelData: (c) => chs[c] }
+          : { getChannelData: () => data };
+        sp.onaudioprocess({ inputBuffer, playbackTime: frame / SR });
       }
     }
     assert.ok(settled, `the io settled within ${DRIVE_DEADLINE_MS} ms of wall clock`);

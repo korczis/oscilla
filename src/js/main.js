@@ -173,6 +173,11 @@ const adapter = {
   onMicDetached: (fn) => engine.on((type, d) => {
     if (type === 'micAttachment' && d && !d.attached) fn(d);
   }),
+  // The context's state (ctx.onstatechange): a suspended or interrupted context pauses the lab
+  // (C067), since its analyser then reads a frozen buffer.
+  onContextState: (fn) => engine.on((type, d) => {
+    if (type === 'context') fn(d);
+  }),
   ensureContext: () => {
     if (app) app.ensureAudio(); else engine.init();
     return engine.resume().then(() => engine.ctx);
@@ -801,7 +806,8 @@ function integrationInit() {
   engine.enableCeilingTap();
   bridge.onCeiling = (acting) => {
     cmp.outputAtCeiling = acting;
-    if (acting && cmp.isSounding) cmp.announceText = cmp.ceilingText;
+    // Announced for whichever owner sounds (C069): the indicator's own source.
+    if (cmp.ceilingActing) cmp.announceText = cmp.ceilingText;
   };
 
   cmp.$nextTick(() => {

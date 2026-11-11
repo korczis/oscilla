@@ -1,0 +1,29 @@
+id: T040
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The guided MEASURE Frequency indicator says a partial calibration in one language, and says it on a touch screen too"
+slug: measure-frequency-indicator-partial-wording-touch
+priority: p3
+profile: implementation
+objective: "C3-523-5 (P3), from oscilla-c3's review of #523 (T6), 2026-11-10. T036 (2001bfb5) made the Frequency indicator claim calibration only where the profile covers the measurement; its partial state reads 'CALIBRATED jen 12.5 kHz–16 kHz', mixing the English status word with Czech, and the reason why it is partial lives only in a title attribute, which a touch screen never shows. After: the partial state reads as one Czech phrase (the status words follow project.czech-prose, as the indicator's other Czech text does), and the covered band and the reason are in visible text or an accessible description that a touch user and a screen reader both get, not only on hover."
+why: "project.no-fake-science asks a calibration claim to be clear where it is shown; project.czech-prose asks shown English only to fall; a phone user must read the same limit a desktop user sees."
+current_state: "Filed 2026-11-10 by oscilla-43 from C3-523-5 in .ai/repo/reviews/523.yaml; not started. Lane: MEASURE (oscilla-04)."
+scope:
+  - "src/js/ui/measure/session.js"
+  - "src/index.html"
+  - "tests/unit/czech-prose-baseline.json"
+  - "tests/unit/czech-prose-short-baseline.json"
+depends_on:
+  - T036
+acceptance_criteria:
+  - "Fail-first unit: with a 12-16 kHz profile over a 20 Hz-20 kHz grid, the indicator's shown text is Czech only and names the covered band; its reason is in visible text or aria-describedby, not only title; on 2001bfb5 the text mixes 'CALIBRATED' with 'jen'."
+  - "The czech-prose and czech-prose-short baselines only fall."
+  - "v3-measure --app-only stays green in chromium, firefox and webkit."
+validation:
+  - "npm test"
+  - "node tests/browser/v3-measure.cjs --app-only"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

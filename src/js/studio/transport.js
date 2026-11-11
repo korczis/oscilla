@@ -144,16 +144,14 @@ import { createEngineHooks } from './adapters/engine-hooks.js';
 import { PARAM_TAU_S } from './adapters/nodes.js';
 import { createRamp } from './adapters/ramp.js';
 import { CLEANUP_MARGIN_S, ROUTE_FLOOR, STUDIO_XFADE_S } from './compiler.js';
-import {
-  applyAutomation, detuneCeiling, isExponentialLegal, mapEvents, paramBounds, scheduledValueAt,
-} from './automation.js';
+import { applyAutomation, scheduledValueAt } from './automation.js';
 import {
   LANE_GLIDE_S, anchorEndTime, createTimelineScheduler, frameCeil, holdEvents, resolveEscape,
   safeHorizon,
 } from './timeline-compiler.js';
 import { effectiveTarget } from './timeline.js';
 import { CLIP_TARGET_TEXT, clipTarget, clipUse } from './clip-targets.js';
-import { qLaneDest } from './q-lane.js';
+import { fit, fitted, laneDest } from './transport-lanes.js';
 import { studioDiagnostic } from './validate.js';
 import { NO_TRACE } from '../core/trace.js';
 import {
@@ -165,7 +163,8 @@ import {
 } from './trigger-fanout.js';
 import { transportClockOf } from '../audio/clock.js';
 import {
-  LINEAR, clamp, continueAt, fadeCurve, FADE_KNOTS, rampAcross, segRamp, segValue,
+  LINEAR, baseTarget, clamp, continueAt, createReleaseWindows, fadeCurve, FADE_KNOTS, glideAt,
+  rampAcross, segRamp, segValue,
 } from './transport-ramps.js';
 
 export { FADE_KNOTS, fadeCurve } from './transport-ramps.js';
@@ -215,6 +214,7 @@ export function clipPlayReason(model, clip, registry = NODE_REGISTRY) {
 export function createStudioTransport({
   runtime, engine, store, onClaimOutput = null, onMeasurement = null,
   registry = NODE_REGISTRY, lookAheadS = null, trace = NO_TRACE, testContext = () => false,
+  freeRun = true,
 } = {}) {
   if (!runtime || typeof runtime.apply !== 'function') {
     throw new TypeError('createStudioTransport: a Studio runtime is required');
@@ -235,6 +235,7 @@ export function createStudioTransport({
   const offsetSources = new WeakMap();
   // Lane AudioParam → { at, v, to }: a removed lane's glide from v back to the base `to`.
   const released = new WeakMap();
+  const windows = createReleaseWindows(); // C065, transport-ramps.js
   // oscillator id → { id, handle, bus, param, level, fadeAt (null: fresh), routes }
   const claims = new Map();
   // Carrier level AudioParam → the transport's last segment on it { t0, v0, t1, v1, reEnd }
@@ -903,57 +904,13 @@ export function createStudioTransport({
   function paramFor(target, reasonKey) {
     const n = nodeOf(model, target.node);
     const h = ready(target.node);
-    if (!n || !h) {
-      unplayed.set(reasonKey, { code: 'target-unavailable',
-        reason: TRANSPORT_TEXT.unavailable(n ? n.metadata.name : target.node) });
-      return null;
-    }
-    const v = clipTarget(n, { kind: 'automation', param: target.param }, registry);
-    if (!v.plays) {
-      unplayed.set(reasonKey, { code: 'no-parameter', reason: v.reason });
-      return null;
-    }
-    const def = registry.param(n.type, target.param);
-    const offsetOf = (key) => (typeof runtime.baseOffset === 'function'
-      ? runtime.baseOffset(target.node, key) : 0);
-    const offset = offsetOf(target.param);
-    const sr = hooks.ctx.sampleRate;
-    let bounds = def ? paramBounds(def, sr) : null;
-    const fDef = registry.param(n.type, 'frequency');
-    if (bounds && def.unit === 'cents' && fDef && fDef.unit === 'Hz') {
-      // A detune shifts the node's frequency: lane + offset stays below the cents that keep the
-      // frequency's base (or its lane's peak, offsets included) at 0.95 × Nyquist (V272 A7).
-      const fLane = model.timeline.automation.find((l) => l.target.node === target.node
-        && l.target.param === 'frequency');
-      const peak = fLane ? Math.max(...fLane.points.map((p) => p.value)) : -Infinity;
-      const ref = Math.min(paramBounds(fDef, sr).max, Math.max(n.params.frequency, peak)
-        + offsetOf('frequency'));
-      const max = Math.min(bounds.max, detuneCeiling(ref, sr));
-      bounds = { min: Math.min(bounds.min, max), max };
-    }
-    const c = claims.get(target.node);
-    if (c && c.handle === h && target.param === 'level') {
-      // A pattern-played oscillator: its level is the pattern bus (the voices).
-      return { param: c.bus.gain, handle: h, offset, bounds, mode: 'shift', scale: 1 };
-    }
-    // A low- or high-pass Q (K232): q-lane.js, on the biquad's dB Q.
-    const qDest = qLaneDest(def, n.params, h, target.param, { sampleRate: sr,
-      centsOf: () => (typeof runtime.baseCents === 'function'
-        ? runtime.baseCents(target.node, target.param) : 0) });
-    if (qDest) return qDest;
-    let t = null;
-    try { t = h.modTarget(target.param, 'linear'); } catch (e) { t = null; }
-    if (!t || !t.param) {
-      unplayed.set(reasonKey, { code: 'no-parameter', reason: (t && t.reason)
-        || TRANSPORT_TEXT.noParameter(n.metadata.name, target.param) });
-      return null;
-    }
-    const mode = isExponentialLegal(def) && h.acct
-      && typeof hooks.ctx.createConstantSource === 'function' ? 'source' : 'shift';
-    // The AudioParam's unit per the parameter's (modTarget scale: a Random / Step Modulator's
-    // rate in Hz drives playbackRate at 480 / sampleRate), as the static value and edges use it.
-    const scale = finite(t.scale) ? t.scale : 1;
-    return { param: t.param, handle: h, offset, bounds, mode, scale };
+    const d = n && h ? laneDest(n, h, target, { model, registry, runtime, ctx: hooks.ctx,
+      claim: claims.get(target.node), noParameter: TRANSPORT_TEXT.noParameter })
+      : { code: 'target-unavailable',
+        reason: TRANSPORT_TEXT.unavailable(n ? n.metadata.name : target.node) };
+    if (d.param) return d;
+    unplayed.set(reasonKey, { code: d.code, reason: d.reason });
+    return null;
   }
 
   /**
@@ -966,44 +923,6 @@ export function createStudioTransport({
       : events.map((e) => ({ ...e, value: e.value * dest.scale }));
     return applyAutomation(dest.param, evs, opts);
   }
-
-  /**
-   * Lane events as the param gets them. The modulation edges' constant offset (runtime.baseOffset)
-   * is part of the base (§103, automation.js combination rule). Mode 'shift' adds it to every
-   * value: exact on a parameter whose lanes are step and linear only (an affine map keeps those
-   * segments). Mode 'source', a strictly positive domain where exponential ramps are legal,
-   * keeps the authored values and sums the offset in through the param's offset source
-   * (moveOffset), because a geometric ramp between shifted ends is not the shifted ramp. Either
-   * way lane + offset stays inside the parameter's bounds (a detune's: below the cents that
-   * keep its frequency at 0.95 × Nyquist). `offset`: the one to fit with.
-   */
-  function fit(events, dest, offset = dest.offset) {
-    const evs = mapEvents(events, dest.map);
-    if (!offset && !dest.bounds) return evs;
-    return evs.map((e) => {
-      const total = e.value + offset;
-      const c = dest.bounds ? clamp(total, dest.bounds.min, dest.bounds.max) : total;
-      let v = c;
-      if (dest.mode === 'source') v = c === total ? e.value : c - offset;
-      if (e.method === 'exponentialRampToValueAtTime' && !(v > 0)) {
-        return { ...e, method: LINEAR, value: v };
-      }
-      return v === e.value ? e : { ...e, value: v };
-    });
-  }
-
-  /** True when `dest`'s bounds clamp any of the lane's events (debugInfo limitedLanes). */
-  const clampsAny = (events, dest) => !!dest.bounds && mapEvents(events, dest.map).some((e) => {
-    const total = e.value + dest.offset;
-    return total > dest.bounds.max || total < dest.bounds.min;
-  });
-  /** What a lane's events were fitted with: its offset, mode and bounds (reoffsetLanes). */
-  const fitted = (rec, dest) => {
-    rec.offset = dest.offset;
-    rec.mode = dest.mode;
-    rec.max = dest.bounds ? dest.bounds.max : null;
-    rec.limited = clampsAny(rec.raw, dest);
-  };
 
   /** An offset source's value at t from its events (set, setTargetAtTime). */
   function sourceValueAt(events, t) {
@@ -1076,6 +995,7 @@ export function createStudioTransport({
     fitted(rec, dest);
     lanes.set(laneId, rec);
     released.delete(dest.param);
+    windows.close(dest.param);
     if (evs.length && !offsetSources.has(dest.param)) {
       moveOffset(dest, evs[0].time, dest.offset, false);
     }
@@ -1157,12 +1077,11 @@ export function createStudioTransport({
    */
   function unownedValueAt(dest, target, t) {
     const r = released.get(dest.param);
-    if (r) return r.to + (r.v - r.to) * Math.exp(-Math.max(0, t - r.at) / PARAM_TAU_S);
+    if (r) return glideAt(r, t);
     const n = nodeOf(model, target.node);
     const base = n && n.params[target.param];
     if (!finite(base)) return null;
-    return dest.bounds ? clamp(base + dest.offset, dest.bounds.min, dest.bounds.max)
-      : base + dest.offset;
+    return baseTarget(dest, base);
   }
 
   function applyLaneEdit(a) {
@@ -1208,11 +1127,12 @@ export function createStudioTransport({
       const held = evs.length ? evs[evs.length - 1].value : null;
       let to = held;
       if (finite(base)) {
-        to = base + dest.offset;
-        if (dest.bounds) to = clamp(to, dest.bounds.min, dest.bounds.max);
+        to = baseTarget(dest, base);
         dest.param.setTargetAtTime(to * dest.scale, a.cancelFrom, PARAM_TAU_S);
       }
-      if (held !== null) released.set(dest.param, { at: a.cancelFrom, v: held, to });
+      if (held !== null) {
+        released.set(dest.param, windows.open(dest, a.target, { at: a.cancelFrom, v: held, to }));
+      }
       moveOffset(dest, a.cancelFrom, 0, true);
     } catch (e) {
       laneWarn(a.laneId, e);
@@ -1390,6 +1310,8 @@ export function createStudioTransport({
   /** Bring claims, envelope ownership and lanes in line with the runtime after an apply. */
   function afterApply(fresh) {
     const horizon = safeHorizon(ctxNow(), hooks.ctx.sampleRate);
+    windows.reaim(model, ctxNow(), horizon, typeof runtime.baseOffset === 'function'
+      ? (tg) => runtime.baseOffset(tg.node, tg.param) : null);
     const wantOsc = patternOscillators(model);
     for (const [id, c] of [...claims]) {
       const h = ready(id);
@@ -1692,7 +1614,7 @@ export function createStudioTransport({
     warnings.length = 0;
     playing = true;
     scheduler = createTimelineScheduler(m, { sampleRate: hooks.ctx.sampleRate, baseTime,
-      startPosition: pos, registry, lookAheadS });
+      startPosition: pos, registry, lookAheadS, freeRun });
     afterApply(fresh);
     emit('state', { playing: true });
     tick();

@@ -130,6 +130,15 @@ const CHECK_HF_SAMPLES = (() => {
   return x;
 })();
 const CHECK_HF = checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES });
+const CHECK_HF_V2 = checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES },
+  { algorithm: 'oscilla.clip.v2' });
+/** clip.v3 (T039): the HF input on the left channel, a silent right, analysed as 0.5 (L + R). */
+const STEREO_LEFT_CLIPS = (() => {
+  const L = CHECK_HF_SAMPLES;
+  const R = new Float64Array(L.length);
+  return { sampleRate: SR, samples: L.map((x) => 0.5 * x), channels: [L, R] };
+})();
+const CHECK_STEREO = checkCapture(STEREO_LEFT_CLIPS);
 
 /** Checks of the two sweep captures, the second with a step after the sweep (post-roll). */
 const SWEEP_CHECKS = (() => {
@@ -251,11 +260,21 @@ const CASES = {
   'oscilla.clip.v1': () => ({ id: CHECK_V1.algorithms.clip, output: {
     clipping: CHECK_V1.clipping, dropouts: CHECK_V1.dropouts, rms: CHECK_V1.rms,
     peak: CHECK_V1.peak, empty: CHECK_V1.empty, reasons: CHECK_V1.reasons.map((r) => r.code) } }),
+  'oscilla.clip.v2': () => ({ id: CHECK_HF_V2.algorithms.clip, output: {
+    clipping: CHECK_HF_V2.clipping, dropouts: CHECK_HF_V2.dropouts, rms: CHECK_HF_V2.rms,
+    peak: CHECK_HF_V2.peak, empty: CHECK_HF_V2.empty,
+    reasons: CHECK_HF_V2.reasons.map((r) => r.code),
+    v1Ratio: checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES },
+      { algorithm: 'oscilla.clip.v1' }).clipping.ratio } }),
+  // clip.v3 (T039): v2 on every channel. The mono input gives v2's numbers (the ID names the
+  // method, not the input); a stereo take whose left channel alone clips is clipping, named.
   [ALGORITHMS.clip]: () => ({ id: CHECK_HF.algorithms.clip, output: {
     clipping: CHECK_HF.clipping, dropouts: CHECK_HF.dropouts, rms: CHECK_HF.rms,
     peak: CHECK_HF.peak, empty: CHECK_HF.empty, reasons: CHECK_HF.reasons.map((r) => r.code),
-    v1Ratio: checkCapture({ sampleRate: SR, samples: CHECK_HF_SAMPLES },
-      { algorithm: 'oscilla.clip.v1' }).clipping.ratio } }),
+    stereo: { clipping: CHECK_STEREO.clipping, peak: CHECK_STEREO.peak,
+      reasons: CHECK_STEREO.reasons.map((r) => r.text) },
+    stereoV2Ratio: checkCapture(STEREO_LEFT_CLIPS, { algorithm: 'oscilla.clip.v2' })
+      .clipping.ratio } }),
   [ALGORITHMS.discontinuity]: () => ({ id: CHECK.algorithms.discontinuity,
     output: { discontinuities: CHECK.discontinuities,
       sweepChecks: SWEEP_CHECKS.map((c) => c.discontinuities) } }),

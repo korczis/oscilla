@@ -197,8 +197,10 @@ export function transferCsvOptions(e, profile = null) {
   if (reliable) opts.reliable = reliable;
   const ref = e.calibration && e.calibration.frequency;
   if (t && ref && profile && profile.id === ref.id) {
-    opts.correctedDb = applyFrequencyCorrection(t.magnitudeDb, t.frequencies, profile)
-      .correctedDb;
+    // Both arrays: the CSV writes a corrected cell only where the profile covers it (T038).
+    const c = applyFrequencyCorrection(t.magnitudeDb, t.frequencies, profile);
+    opts.correctedDb = c.correctedDb;
+    opts.covered = c.covered;
   }
   return opts;
 }

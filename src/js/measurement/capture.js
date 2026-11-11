@@ -100,9 +100,12 @@ import {
 import { MeasurementError, mapError } from './engine.js';
 import { captureAudioSession } from './audio-session.js';
 import { levelOf } from './input-level.js';
+import { CAPTURE_NODE_OPTIONS, speakersMono, writeCaptureChannels } from './capture-channels.js';
+import { buildLoopbackSystem } from './capture-loopback-system.js';
 
 export { captureAudioSession, CAPTURE_AUDIO_SESSION } from './audio-session.js';
 export { levelOf } from './input-level.js';
+export { CAPTURE_NODE_OPTIONS, speakersMono, writeCaptureChannels } from './capture-channels.js';
 
 export const CAPTURE_PROCESSOR_NAME = 'oscilla-capture-v1';
 /** Frames per posted chunk (≈ 43 ms at 48 kHz): progress cadence and message overhead. */
@@ -149,12 +152,14 @@ export const CLOCK_NOTE_LIMIT = 32;
  * stays a real gap, reported as missing frames (never silently relabelled audio).
  */
 export const CAPTURE_WORKLET_SOURCE = `
+const speakersMono = ${speakersMono.toString()};
 class OscillaCapture extends AudioWorkletProcessor {
   constructor(options) {
     super();
     const o = (options && options.processorOptions) || {};
     this.size = o.chunkFrames || ${CAPTURE_CHUNK_FRAMES};
     this.buf = new Float32Array(this.size);
+    this.chans = null; // per-channel buffers (T039)
     this.n = 0;
     this.f0 = 0;
     this.id = -1;
@@ -180,16 +185,35 @@ class OscillaCapture extends AudioWorkletProcessor {
   flush() {
     if (this.n > 0) {
       const data = this.buf.slice(0, this.n);
-      this.port.postMessage({ type: 'chunk', id: this.id, frame: this.f0, data }, [data.buffer]);
+      const m = { type: 'chunk', id: this.id, frame: this.f0, data };
+      const t = [data.buffer];
+      if (this.chans) {
+        m.channels = this.chans.map((c) => c.slice(0, this.n));
+        for (const c of m.channels) t.push(c.buffer);
+      }
+      this.port.postMessage(m, t);
       this.f0 += this.n;
       this.n = 0;
     }
   }
+  // T039: the speakers downmix (capture-channels.js).
+  mono(x, len) {
+    if (x.length === 1) return x[0];
+    if (!this.tmp || this.tmp.length !== len) this.tmp = new Float32Array(len);
+    return speakersMono(x, len, this.tmp);
+  }
   process(inputs) {
     if (!this.alive) return false;
     const input = inputs[0];
-    const ch = input && input.length ? input[0] : null;
-    const len = ch ? ch.length : 128;
+    const k = input ? input.length : 0;
+    const len = k ? input[0].length : 128;
+    const ch = k ? this.mono(input, len) : null;
+    // Each channel of a multichannel input is kept beside the downmix (T039).
+    const want = k > 1 ? k : 0;
+    if ((this.chans ? this.chans.length : 0) !== want) {
+      this.flush();
+      this.chans = want ? Array.from({ length: want }, () => new Float32Array(this.size)) : null;
+    }
     const reported = currentFrame;
     const expected = this.next;
     const frame = expected === null || reported > expected ? reported : expected;
@@ -208,10 +232,15 @@ class OscillaCapture extends AudioWorkletProcessor {
       let off = a - frame;
       let cnt = b - a;
       while (cnt > 0) {
-        const k = Math.min(cnt, this.size - this.n);
-        if (ch) this.buf.set(ch.subarray(off, off + k), this.n);
-        else this.buf.fill(0, this.n, this.n + k);
-        this.n += k; off += k; cnt -= k;
+        const q = Math.min(cnt, this.size - this.n);
+        if (ch) this.buf.set(ch.subarray(off, off + q), this.n);
+        else this.buf.fill(0, this.n, this.n + q);
+        if (this.chans) {
+          for (let c = 0; c < this.chans.length; c++) {
+            this.chans[c].set(input[c].subarray(off, off + q), this.n);
+          }
+        }
+        this.n += q; off += q; cnt -= q;
         if (this.n === this.size) this.flush();
       }
     }
@@ -444,9 +473,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     sink.gain.value = 0; // pulls the recorder; carries silence only
     let node;
     let port = null;
-    const deliver = (id, frame, data) => {
+    const deliver = (id, frame, data, channels) => {
       const w = windows.get(id);
-      if (w) writeWindow(w, frame, data);
+      if (w) {
+        writeWindow(w, frame, data);
+        writeCaptureChannels(w, frame, channels || null);
+      }
     };
     const finish = (id) => {
       const w = windows.get(id);
@@ -455,14 +487,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     let armed = null; // scriptprocessor window
     if (recorderMode === 'audioworklet') {
       node = register(new AudioWorkletNode(ctx, CAPTURE_PROCESSOR_NAME, {
-        numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1,
-        channelCountMode: 'explicit', channelInterpretation: 'speakers',
-        processorOptions: { chunkFrames: CAPTURE_CHUNK_FRAMES },
+        ...CAPTURE_NODE_OPTIONS, processorOptions: { chunkFrames: CAPTURE_CHUNK_FRAMES },
       }));
       port = node.port;
       port.onmessage = (e) => {
         const m = e.data || {};
-        if (m.type === 'chunk') deliver(m.id, m.frame, m.data);
+        if (m.type === 'chunk') deliver(m.id, m.frame, m.data, m.channels);
         else if (m.type === 'done') finish(m.id);
         else if (m.type === 'clock') {
           clockNotes.push({ id: m.id, reported: m.reported, expected: m.expected,
@@ -476,13 +506,18 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
         }
       };
     } else {
-      node = register(ctx.createScriptProcessor(SCRIPT_PROCESSOR_FRAMES, 1, 1));
+      // T039: two channels, stereo kept, mono upmixed to L = R (an exact downmix).
+      node = register(ctx.createScriptProcessor(SCRIPT_PROCESSOR_FRAMES, 2, 1));
       node.onaudioprocess = (e) => {
         if (!armed) return;
-        const data = e.inputBuffer.getChannelData(0);
+        const ib = e.inputBuffer;
+        const k = ib.numberOfChannels || 1;
+        const chs = k > 1 ? Array.from({ length: k }, (_, c) => ib.getChannelData(c)) : null;
+        const data = chs ? speakersMono(chs, chs[0].length, new Float32Array(chs[0].length))
+          : ib.getChannelData(0);
         const frame = Math.round(e.playbackTime * sr) - data.length;
         const w = armed;
-        deliver(w.id, frame, data);
+        deliver(w.id, frame, data, chs);
         if (frame + data.length >= w.endFrame && windows.get(w.id)) finish(w.id);
       };
     }
@@ -668,6 +703,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     return {
       sampleRate: ctx.sampleRate,
       samples: w.samples,
+      // T039: each channel of a multichannel input, beside the downmix.
+      ...(Array.isArray(w.channels) ? { channels: w.channels } : {}),
       startedAt: w.startFrame / ctx.sampleRate,
       constraints: input ? input.constraints : { requested: null, applied: null },
       device: input ? input.device : { label: null, id: null },
@@ -1122,47 +1159,6 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
 }
 
 // ------------------------------------------------------------------------------- loopback
-
-/** Describe and build a synthetic loopback system on ctx (TEST CONTEXT). */
-function buildLoopbackSystem(ctx, system, reg) {
-  const made = [];
-  const register = (n) => { made.push(n); return reg(n); };
-  const out = buildSystemNodes(ctx, system, register);
-  return { ...out, nodes: made };
-}
-
-function buildSystemNodes(ctx, system, register) {
-  const s = system || { type: 'biquad' };
-  if (s.type === 'biquad') {
-    const f = register(ctx.createBiquadFilter());
-    f.type = s.filter || 'lowpass';
-    f.frequency.value = s.frequency != null ? s.frequency : 1000;
-    f.Q.value = s.Q != null ? s.Q : Math.SQRT1_2;
-    f.gain.value = s.gain != null ? s.gain : 0;
-    return { input: f, output: f, node: f, describe: { type: 'biquad', filter: f.type,
-      frequency: f.frequency.value, Q: f.Q.value, gain: f.gain.value } };
-  }
-  if (s.type === 'gain') {
-    const g = register(ctx.createGain());
-    g.gain.value = s.gain != null ? s.gain : 1;
-    return { input: g, output: g, node: g, describe: { type: 'gain', gain: g.gain.value } };
-  }
-  if (s.type === 'delay') {
-    const d = register(ctx.createDelay(Math.max(1, (s.delayS || 0) * 2)));
-    d.delayTime.value = s.delayS || 0;
-    const g = register(ctx.createGain());
-    g.gain.value = s.gain != null ? s.gain : 1;
-    d.connect(g);
-    return { input: d, output: g, node: d, describe: { type: 'delay', delayS: s.delayS || 0,
-      gain: g.gain.value } };
-  }
-  if (s.type === 'custom' && typeof s.build === 'function') {
-    const b = s.build(ctx, register);
-    return { input: b.input, output: b.output, node: b.node || null,
-      describe: { type: 'custom', ...(b.describe || {}) } };
-  }
-  throw new TypeError(`unknown loopback system type ${s.type}`);
-}
 
 export const LOOPBACK_LABEL = 'TEST CONTEXT: digital loopback through a synthetic system '
   + '(no microphone, no acoustic path)';

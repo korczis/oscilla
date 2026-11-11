@@ -1,0 +1,88 @@
+# Review verdict for pull request #525 (train/t7a): train T7a and release v3.32.1 (a patch:
+# release:analyze at 990f9316 finds 15 patch-level commits since v3.32.0, no minor).
+# Guarded members: C065 (a base edit inside a removed lane's release window reaches the played
+# value; the re-aim takes the edges' live offset: 89a7e95b, 8f7a9119, 5bc846dc), K241 (a Clock
+# document free-runs until STOP, the head counts up, offline ends with its content: 27ad5ce1,
+# 7c05b53c, 029d44cb, d6ea2daf), C066 (tempo-locked blocks keep their beats; Studio opens the
+# Sequencer's save at a clamping tempo; the warning's 2 decimals: f362b238, a5e5b5dd, 4d0b0862),
+# T037 (the no-coverage note in Czech, f7cc126d), T038 (experiment and RTA band CSVs correct only
+# covered points, by the view's predicate: 6d5a3098, 23c3a647), T039 (a clip on any input channel
+# counts and names it, oscilla.clip.v3, the fallback's limit: ff4e0d9b, 0c3d42f5, d2c9ea4d) and
+# U104 (the phone measurement row always shows one step, e25ce98a). Unguarded members read as
+# members: C067 (the mic lab pauses while the context is suspended or interrupted: fca42e80,
+# 8cfb229d), C069 (the ceiling indicator for whichever owner sounds, 42ef97e6), the tap meter
+# (81abe3f4 + 185f73e8, R2-TAP-1), the plan records (b3a7002a, 15a845b8, 2ad626ba, 3fbe2d79), the
+# Q108 evidence (ae4d7088), the v3.32.0 record (f06cea53) and chore(release): v3.32.1 (no About
+# station: a patch keeps its line's 3.32).
+# Judged at 05ed3665 on base origin/main 5bbf69bc (v3.32.0, #523), 2026-11-11, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-524 (pre-stamp head 990f9316, then 05ed3665).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of the guarded content: builders oscilla-0b (C065, K241), oscilla-ce (C066, T037,
+# T038, T039, C067, C069), oscilla-75 (U104), oscilla-43 (the tap meter, integration
+# and the stamp), per each issue's current_state. Disclosure: the reviewer built ae4d7088 (Q108's
+# evidence) and reviewed 81abe3f4 and 185f73e8 (R2-TAP-1); none is a guarded path.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list: fb9ca2837c37df1c...
+# over 19 guarded paths (src/js/studio clock, nodes/modulation, offline, sequence-import,
+# timeline-compiler, timeline, transport-lanes, transport-ramps, transport; calibration/
+# interpolate; experiments/csv; measurement algorithms, capture-channels, capture-checks,
+# capture-loopback-system, capture, views/measure-flow, views/response-chart; ui/experiments).
+# Equal at 990f9316 and 05ed3665: the stamp touches no guarded path.
+#
+# c1's judgments (mesh messages to oscilla-43 and the builders, no files; relayed by 43), folded
+# in by name only where the train's files are byte-identical to the head c1 judged; every delta
+# past it was read and fail-first-checked by the reviewer:
+# - C065: c1 "merge" at 5bc846dc. transport-ramps.js and transport-lanes.js are byte-identical;
+#   transport.js differs only by K241's freeRun option (2 lines, fdf4693c), read under K241.
+# - T037: c1 "merge" at f7cc126d. response-chart.js differs only by T038's correctionInEffect
+#   (6 lines), read under T038.
+# - K241: c1 "merge" at 029d44cb; d6ea2daf (C1-K241-3) exports the one rateOf from timeline.js
+#   and drops the compiler's copy, no behaviour change. The reviewer also read the whole free
+#   run: freeRunLoop's bar after the content repeats an empty bar (E a bar line, every Clock
+#   division divides it), positionAt counts up linearly, a re-anchor after an edit keeps the head
+#   continuous, offline passes freeRun false.
+# - C066: c1 approved a5e5b5dd; 4d0b0862 (C1-C066-4) rounds the warning's beats to 2 decimals
+#   (round is imported; the file and comparisons keep 6). v31-studio-sequence-file fails 1 with
+#   a5e5b5dd's sequence-import.js.
+# - T038: c1 "merge" at 6d5a3098; 23c3a647 routes rtaCsv through correctionInEffect: a corrected
+#   band cell only where covered, needs covered with correctedDb, level_db_spl empty where the
+#   corrected cell is; splFromCorrected implies an effect, so effect.count cannot read null.
+#   v3-gaps fails 1 with 6d5a3098's csv.js.
+# - T039: c1 "merge" at 0c3d42f5 (C1-T039-1 closed); d2c9ea4d adds only docs (algorithms.md,
+#   architecture.md: the ScriptProcessor fallback's limit over two channels).
+# - U104 (no c1 judgment): measureFlow marks one step shown (the current, else the blocked, else
+#   the last), bound as data-shown; the phone rule hides the rest. first-screen-layout fails 1
+#   with main's measure-flow.js, index.html and instrument.css. The reviewer's own probe of the
+#   built dist at 390x844 (playground, chromium isMobile and webkit, touch, no microphone
+#   permission): after Check setup the flow is INVALID with input blocked; main 5bbf69bc's dist
+#   shows 0 steps, this head's shows 1 (input:is-blocked); before it, 1 (input:is-current).
+# - C067 and C069 (unguarded): the lab pauses on the engine's 'context' events (on() returns its
+#   unsubscribe), takes no reading while paused; soundingOwner is the indicator's one source.
+#   mic-detach-on-close fails 3 and readout-states-ceiling 1 with main's sources.
+#
+# THE CONDITION of this verdict (as for #509, #515, #522 and #523): it binds once the reviewer
+# has read the six "Browser leg N (browser)" logs of this pull request's run and found each
+# leg's suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed"
+# and no FAIL line, AND has run the release CI receipt check against this run with the base
+# ci.yml (5bbf69bc's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise
+# a superseding verdict.
+#
+# Measured by the reviewer at 990f9316: GITHUB_BASE_REF=main npm test exit 0 (5661 tests, 5660
+# pass, 0 fail, 1 skipped), build:check up to date; browser suites (file) exit 0: chromium and
+# webkit first-screen 106/106, v3-ui 37/37 file and http, labs 41/41, app 66/66, v3-measure 26 and
+# 29, sequencer 82/82, v31-studio-transport 44/44, v31-studio-workflows 15/15; firefox
+# v31-studio-transport 43/43. The Mac's load 3-6. At 05ed3665: build:check up to date (v3.32.1),
+# about-stations --check rc=0 and --check-station rc=0 (a patch: only the derived fields).
+# Measured by others at 990f9316 (43): v31-studio-runtime 18/18, -offline 66/66, -timeline 17/17,
+# step-grid 6/6, iphone chromium 61/61 and webkit 122/122, sequencer 240/240 in three engines,
+# s-tap 1/1 in three engines.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 525
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of the guarded content of 05ed3665)
+content: fb9ca2837c37df1c871a1917dbc3cf56e75773a44b469b96fb4f3327438604bd
+findings: []

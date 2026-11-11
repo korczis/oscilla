@@ -18,6 +18,7 @@ import {
 import { MAX_OUTPUT_GAIN, DEFAULT_GAIN } from '../../src/js/core/constants.js';
 import { VisualizationBridge } from '../../src/js/visualization/visualization-bridge.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
+import * as outputBus from '../../src/js/core/output-bus.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -167,7 +168,8 @@ test('T001: the UI shows the state while sounding; the gain readout is labelled 
   assert.equal(o.ceilingActing, false, 'idle shows nothing');
   o.outputAtCeiling = true;
   assert.equal(o.ceilingActing, false, 'idle shows nothing, whatever the tap read last');
-  o.playing = true;
+  o.playing = true; // the instrument's voice holds the bus (a claim before it sounds, C037)
+  o.playback = { owner: 'instrument', since: 1 };
   assert.equal(o.ceilingActing, true);
   assert.equal(o.ceilingText, 'OUTPUT AT CEILING (clipped)');
   assert.match(o.gainTitle, /setpoint/);
@@ -216,3 +218,38 @@ test('T001: the engine taps trim before the ceiling, read-only and only when ask
     late.init();
     assert.ok(late.snapshot().preCeiling, 'a rebuilt context gets the tap again');
   });
+
+// C069 (321.yaml#F2, 367.yaml#F7, audit-2026-11-10-p3): the ceiling indicator read
+// isSounding (the instrument and the sequencer only), so OUTPUT AT CEILING never showed while
+// held Keys or MIDI notes, the Studio, the riff audition or a measurement owned the output,
+// though the playback bus knows each. One source now: soundingOwner(cmp) in core/output-bus.js,
+// the owner the bus published (cmp.playback) or a running measurement; a microphone
+// level-reference capture keeps the output silent and is none. Fails on 2aa5883a.
+test('C069: the ceiling indicator shows for whichever owner the bus says sounds', () => {
+  assert.equal(typeof outputBus.soundingOwner, 'function', 'core/output-bus.js soundingOwner');
+  const cmp = createWorkbench({});
+  const o = Object.create(null);
+  Object.defineProperties(o, Object.getOwnPropertyDescriptors(cmp));
+  Object.assign(o, { gainLevel: DEFAULT_GAIN, playing: false, outputAtCeiling: true,
+    playback: { owner: null, since: 0 },
+    measureOwnsOutput: () => false, measureReferenceOwnsOutput: () => false });
+  assert.equal(o.ceilingActing, false, 'idle: nothing, whatever the tap read last');
+  for (const owner of ['instrument', 'sequencer', 'studio', 'notes', 'audition']) {
+    o.playback = { owner, since: 1 };
+    assert.equal(outputBus.soundingOwner(o), owner);
+    assert.equal(o.ceilingActing, true, `${owner}: the indicator shows`);
+    assert.match(o.gainTitle, /OUTPUT AT CEILING/, `${owner}: the title says so`);
+  }
+  o.playback = { owner: null, since: 2 };
+  o.measureOwnsOutput = () => true;
+  assert.equal(outputBus.soundingOwner(o), 'measurement');
+  assert.equal(o.ceilingActing, true, 'a running measurement: the indicator shows');
+  o.measureOwnsOutput = () => false;
+  o.measureReferenceOwnsOutput = () => true;
+  assert.equal(outputBus.soundingOwner(o), null, 'a reference capture keeps the output silent');
+  assert.equal(o.ceilingActing, false);
+  o.measureReferenceOwnsOutput = () => false;
+  o.outputAtCeiling = false;
+  o.playback = { owner: 'studio', since: 3 };
+  assert.equal(o.ceilingActing, false, 'nothing at the ceiling: nothing shown');
+});
