@@ -259,6 +259,10 @@
       "summary": "Pad L nahrává záběr své osy X a Y do automatizace během hraní a při dalším průchodu ho přehraje; konektory patch baye říkají, co kabel opravdu udělá: bipolární zdroj do zesílení VCA se odmítne, protože by VCA otevřel bez klávesy, do VELOCITY ho lze zapojit jako tremolo a ladění Tune posune nejvýš o dvě oktávy s odkazem na vstup Pitch; odkaz Synthu odmítne neplatný kabel česky a vyjmenuje, co nezapojil; kabel držený na stropu Q to řekne v Inspectoru; demo píseň má stopu rezonance basového filtru; stisk v Inspectoru se už neztratí, když se zobrazení uzlu překreslí; laboratoř /lab/ má nové podstránky Grafy, Tvrzení, Změny, Roadmapa, Dluh, Revize a ADR",
       "commit": "e647f09",
       "datetime": "2026-11-11T05:31:45+01:00"
+    },
+    {
+      "title": "Sekvencer vede ke krokovému sekvenceru a padům",
+      "summary": "Stránka Sekvencer odkazuje na krokový sekvencer s pady v Synthu (záložka Bicí) a na krokový modulátor ve Studiu (šablona Step Bass); projekty a experimenty s uzlem Keys uložené ve verzích 3.15 až 3.27 se znovu otevřou, protože kontrola otisku zná i podobu bez rozsahu kláves, a rozsah kláves změněný proti výchozímu se dál odmítá"
     }
   ]
 }
