@@ -845,3 +845,15 @@ test('#444: the toolbar a route keeps room under is observed; its layout judges 
     frames.shift()();
     assert.deepEqual(updates, ['viewport'], 'and the room is judged there');
   });
+
+test('a collapse with no named owner never reads null or undefined (visual audit 2026-11-11)',
+  async () => {
+  const { dockSentence } = await import('../../src/js/midi/dock-yield.js');
+  for (const owner of [null, undefined, '']) {
+    const s = dockSentence('collapsed', { yields: false, owner, why: 'owner' });
+    assert.doesNotMatch(s, /null|undefined/, `owner ${String(owner)}: ${s}`);
+    assert.match(s, /jiný ovladač/);
+  }
+  assert.match(dockSentence('collapsed', { yields: false, owner: 'xy-pad', why: 'owner' }),
+    /XY pad/);
+});
