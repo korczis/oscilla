@@ -413,13 +413,25 @@ test('K226 live (armed): a key\'s Gate steps it; trig2 opens only on step 2; the
     await stopped(rig);
   });
 
-test('K226 the Step button is refused while stopped and while the timeline\'s Clock owns its '
+test('K226 a Step press while stopped arms the transport and takes step 1 (oscilla-c3, '
+  + '2026-11-11)', async () => {
+    const doc = armedDoc();
+    const rig = armed(doc.st);
+    assert.equal(rig.transport.playing, false, 'stopped');
+    const r = ok(rig.transport.step(doc.svs), 'the Step button while stopped');
+    assert.equal(rig.transport.armed, true, 'the press armed the live model (K104)');
+    assert.equal(r.step, 0, 'the first press takes step 1 (0-based 0)');
+    const sets = rig.runtime.nodes.get(doc.svs).outputs.cvA.offset.events;
+    assert.ok(sets.length > 0, 'row A\'s output was set');
+    assert.equal(sets[sets.length - 1].value, Math.fround(ROW_A[0]),
+      'row A holds step 1\'s value');
+    const r2 = ok(rig.transport.step(doc.svs), 'a second press');
+    assert.equal(r2.step, 1, 'steps on to step 2');
+    await stopped(rig);
+  });
+
+test('K226 the Step button is refused while the timeline\'s Clock owns its '
   + 'clock input', async () => {
-  const doc = armedDoc();
-  const rig = armed(doc.st);
-  const stoppedR = rig.transport.step(doc.svs);
-  assert.equal(stoppedR.ok, false, 'stopped: refused');
-  assert.equal(stoppedR.code, 'not-armed');
   // A Clock drives the clock input while the timeline plays: the timeline owns it.
   const s = rig2();
   const clock = s.add('clock', { division: '1/8' });

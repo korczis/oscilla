@@ -378,9 +378,13 @@ export function createStudioUi(svc = {}) {
       openLibrary: () => cmp.patchLibraryOpen(),
       playhead: () => (ctx.transport ? ctx.transport.playhead() : null),
       liveTransport: () => ctx.transport || null, // K223: the step grid's Record switch
-      // K226: a step-voltage sequencer's manual step (transport.step: armed only).
-      stepNode: (id) => (ctx.transport ? ctx.transport.step(id)
-        : { ok: false, reason: 'Studio teď nehraje.' }),
+      // K226: a step-voltage sequencer's manual step; the press is a gesture, so stopped it
+      // sets audio up and transport.step arms the live model first.
+      stepNode: (id) => {
+        setupAudio();
+        return ctx.transport ? ctx.transport.step(id)
+          : { ok: false, reason: 'Studio teď nehraje.' };
+      },
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
