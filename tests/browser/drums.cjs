@@ -11,7 +11,8 @@
 //        [--only dr-mount,dr-steps]
 //
 // Checks:
-//   dr-mount    the tab makes its clip on request (one undo entry): a role=grid of six rows
+//   dr-mount    the tab makes its clip on request (one undo entry): a role=grid of six rows,
+//               the step-grid kind's (data-step-grid notes, as synth.cjs s-steps' strip),
 //               named in Czech (Kopák ... Tom střední), gridcells named "Kopák, krok 1, vypnuto",
 //               16 steps a page at 1536 px and 8 at 390 px, every one inside its card, no
 //               horizontal page scroll; a reload keeps yt=drums and the Drums tab selected
@@ -194,7 +195,11 @@ function defineChecks() {
       name: cells[0].getAttribute('aria-label'),
       cut: rects.filter((r) => r.left < card.left - 0.5 || r.right > card.right + 0.5).length,
       small: rects.filter((r) => r.width < 43.5 || r.height < 43.5).length,
-      scroll: document.scrollingElement.scrollWidth - window.innerWidth };
+      scroll: document.scrollingElement.scrollWidth - window.innerWidth,
+      // K221 (2): the step-grid kind, the one the Synth's strip mounts (synth.cjs s-steps).
+      kind: (g.closest('[data-step-grid]') || { getAttribute: () => null })
+        .getAttribute('data-step-grid'),
+      surface: g.hasAttribute('data-step-grid-surface') };
     }, GRID);
     // A reload keeps the tab (the address carries yt=drums). The Studio document lives in
     // memory until V604, so the clip is made again there (the integration map's reloadDebt).
@@ -209,7 +214,7 @@ function defineChecks() {
     return { ok: made === 1 && JSON.stringify(info.heads) === JSON.stringify(ROWS)
       && info.row === size.steps && info.name === 'Kopák, krok 1, vypnuto' && info.cut === 0
       && info.small === 0 && info.scroll <= 0 && !!id && /yt=drums/.test(hash)
-      && selected === 'true', made, selected,
+      && selected === 'true' && info.kind === 'notes' && info.surface, made, selected,
     ...info, hash, base: !!base };
   });
 
