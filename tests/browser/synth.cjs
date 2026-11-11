@@ -108,7 +108,8 @@
 //              Krokový sekvencer, and Enter on it adds the strip in one undo entry, shown above
 //              the face; a pointer on step 3 (a tap on the phone) puts its note (beat 0.5, C4)
 //              in the strip's notes clip on the panel's Keys; while the Studio plays the strip's
-//              playing step shows and moves; no horizontal page scroll
+//              playing step shows and moves; no horizontal page scroll; the strip is the
+//              step-grid kind (data-step-grid notes and its grid surface), as in drums dr-mount
 //   s-libinsert K225 (desktop and phone): in a changed document without the panel, the Synth's
 //              Library (the Studio's one patch library) inserts the panel from its Bass preset by
 //              pointer (a tap on the phone), one undo entry, the status naming the Master feed it
@@ -2039,8 +2040,16 @@ function defineChecks() {
     await page.evaluate(() => window.OSCILLA.app.studioStop());
     const narrow = await page.evaluate(() => document.scrollingElement.scrollWidth
       - window.innerWidth);
-    return { ok: hiddenFirst && narrow <= 0, hiddenFirst, first: first.v, moved: moved.v,
-      narrow, fitted };
+    // K221 (2): the strip mounts the step-grid kind (ui/kinds/step-grid.js), the one the Drums
+    // tab mounts (drums.cjs dr-mount): its root marker and its grid surface.
+    const kind = await page.evaluate(() => {
+      const g = document.querySelector('[data-osc="synth.steps"] [role="grid"]');
+      const root = g && g.closest('[data-step-grid]');
+      return { kind: root ? root.getAttribute('data-step-grid') : null,
+        surface: !!g && g.hasAttribute('data-step-grid-surface') };
+    });
+    return { ok: hiddenFirst && narrow <= 0 && kind.kind === 'notes' && kind.surface,
+      hiddenFirst, first: first.v, moved: moved.v, narrow, fitted, kind };
   });
 
   // K226: a step-voltage sequencer clocked by the panel's Keys Gate, its row A into VCO 1's
