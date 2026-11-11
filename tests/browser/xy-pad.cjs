@@ -1124,12 +1124,26 @@ function defineChecks() {
     const PLAY = '[data-pad-play]';
     await until(() => quiet((q) => !!document.querySelector(q), SW), { ms: LOAD_MS,
       what: 'x-padrec: pad L shows its Record switch' });
-    const point = (sel, fx, fy) => quiet(([q, x, y]) => {
-      const el = document.querySelector(q);
-      el.scrollIntoView({ block: 'center' });
-      const b = el.getBoundingClientRect();
-      return { x: b.left + x * b.width, y: b.top + (1 - y) * b.height };
-    }, [sel, fx, fy]);
+    // A settled point: the document edit below shrinks the Synth view a frame later, which
+    // clamps the scroll and moves the controls down (webkit renders that frame after the first
+    // read: a tap measured there landed on the block above the Record switch). The point is
+    // taken once two reads agree and the element is the one hit there.
+    const point = async (sel, fx, fy) => {
+      let prev = null;
+      return until(async () => {
+        const p = await quiet(([q, x, y]) => {
+          const el = document.querySelector(q);
+          el.scrollIntoView({ block: 'center' });
+          const b = el.getBoundingClientRect();
+          const at = { x: b.left + x * b.width, y: b.top + (1 - y) * b.height };
+          const hit = document.elementFromPoint(at.x, at.y);
+          return { ...at, hit: !!hit && el.contains(hit) };
+        }, [sel, fx, fy]);
+        const same = prev && p.hit && p.x === prev.x && p.y === prev.y;
+        prev = p;
+        return same ? { x: p.x, y: p.y } : null;
+      }, { ms: 10000, what: `x-padrec: ${sel} is settled where a press lands on it` });
+    };
     const tap = async (sel) => (await press(page, await point(sel, 0.5, 0.5),
       { touch: cdpTouch })).lift();
     // On the desktop a held key plays C4 through the presses: a click there moves no focus.
