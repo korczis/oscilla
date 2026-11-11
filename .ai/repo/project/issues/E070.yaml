@@ -1,0 +1,22 @@
+id: E070
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "xy-pad.cjs x-pointer's 'Y at the top opens the LPF' settles in WebKit instead of timing out"
+slug: x-pointer-lpf-band-settles-in-webkit
+priority: p3
+profile: implementation
+objective: "x-pointer intermittently fails in WebKit with 'Y at the top opens the LPF: the 10000-16000 Hz band 14.6 dB up: not reached within 8000 ms'. oscilla-c3's control (2026-11-11, 10 runs each, --only x-pointer): main db95130e failed 2 of 10, T7b 1 of 10, the same signature. Find whether the band reading or the pad's gesture is late (log the band level per poll and the pad's Y reaching the engine), and make the step wait on the applied parameter before reading the band."
+why: "An existing flake on main costs a rerun whenever it lands on a train's leg."
+current_state: "Filed 2026-11-11 by oscilla-43 from oscilla-c3's control on T7b; owner to be assigned."
+scope:
+  - "tests/browser/xy-pad.cjs"
+depends_on: []
+acceptance_criteria:
+  - "xy-pad.cjs --browsers webkit --only x-pointer passes 10 of 10 on the fixed head, and the late signal is named."
+validation:
+  - "node tests/browser/xy-pad.cjs --browsers webkit --only x-pointer"
+evidence_required:
+  - "verified"
+created_at: '2026-11-11'
+updated_at: '2026-11-11'

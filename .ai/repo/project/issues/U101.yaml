@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "Lands as fix(ui). Found by oscilla-c3's review of U100 (R2-U100-3, 2026-11-09): U100 keeps the Synth's docked keys on its Panel tab at every size (keepsDock, keptBy), because there the keys are the instrument; on a short desktop window (1366 x 650, the viewport a 1366 x 768 laptop gives) the Panel keeps 292 px of keys and leaves about 101 px between the page header and the dock. The coordinator oscilla-43 kept the keys docked on the desktop Panel and asked for this follow-up rather than a change inside U100. Before: on a short desktop window the Panel's knobs scroll in a strip about 100 px tall. After: a decision and a fix for the desktop short-window room (a lower dock on a fine pointer, a dock that folds where the computer keys play, or a recorded acceptance), with a check at 1366 x 650. Rollback: revert."
 why: "The phone-whole criterion and the owner's order of 2026-11-04 (no control hidden under another) apply to the desktop's short windows as well; U100 fixed the phones only, by its scope."
-current_state: "Filed 2026-11-09 from U100's review; not started. U100 is on fix/u100-phone-notices."
+current_state: "Built by oscilla-04 (d294bea8, 8225f755 on fix/u101-short-desktop-dock); the decision above holds. Taken out of train T7b on 2026-11-11 by oscilla-43: its ui-current check desktop-short-synth-panel fails on CI's bare ubuntu-24.04 runners in all three engines with identical numbers (folded room 120, band 116, handleH 44; then open null: no dockFacts evaluate returned within 10 s of the click on the Klávesy handle; runs 42951046627 and 42955686197), while it passes on the Mac, in native linux/arm64 and emulated amd64 playwright containers and under 6x CDP throttling (oscilla-c3's probe: one flip to docked, round trips <= 4 ms). Next: capture on CI inside the check (a timed evaluate around the click, a PerformanceObserver for longtask, the page console) before changing the product; then land U101 with its XY references re-accepted for the Klávesy label."
 scope:
   - "src/js/midi"
   - "src/js/ui"
@@ -26,4 +26,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-09'
+updated_at: '2026-11-11'

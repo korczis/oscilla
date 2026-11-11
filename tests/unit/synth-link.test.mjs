@@ -125,3 +125,11 @@ test('K239: a cable the receiver\'s patch refuses is named when the link applies
     assert.match(skippedText(two.skipped), /^Odkaz nezapojil 2 kabely: mg\.control → sh\.rate \(/);
     assert.equal(skippedText([]), null);
   });
+
+test('K243 (R2-T7B-2): the skipped-cable sentence names jacks as the bay does', () => {
+  const skipped = [{ from: 'mg.control', to: 'sh.rate', reason: 'S&H Rate nemá účinek.' }];
+  const names = { 'mg.control': 'MG Control', 'sh.rate': 'S&H Rate' };
+  const text = skippedText(skipped, (id) => names[id] || id);
+  assert.equal(text, 'Odkaz nezapojil 1 kabel: MG Control → S&H Rate (S&H Rate nemá účinek).');
+  assert.doesNotMatch(text, /mg\.control|sh\.rate/, 'no raw jack id in the sentence');
+});
