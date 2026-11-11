@@ -846,10 +846,14 @@ async function layoutOthers(ctx) {
 
 // Widths between the phone and the 1536 px reference, where the first row follows its content
 // (integration.css, responsive.css Touch): nothing of row 1 may sit under the measurement row.
+// pathMargin: the px the compact Studio's path keeps spare in its column (P011): 16 between the
+// phone and the reference, 0 at the 1536 px reference itself, whose column is the narrowest.
 const WIDTHS = [
-  { name: '1280x800', viewport: { width: 1280, height: 800 } },
-  { name: '1440x900', viewport: { width: 1440, height: 900 } },
-  { name: '1366x1024 touch', viewport: { width: 1366, height: 1024 }, touch: true },
+  { name: '1280x800', viewport: { width: 1280, height: 800 }, pathMargin: 16 },
+  { name: '1440x900', viewport: { width: 1440, height: 900 }, pathMargin: 16 },
+  { name: '1366x1024 touch', viewport: { width: 1366, height: 1024 }, touch: true,
+    pathMargin: 16 },
+  { name: '1536x1024', viewport: { width: 1536, height: 1024 }, pathMargin: 0 },
 ];
 const ROW1 = ['osc-panel-source', 'osc-panel-analysis', 'osc-panel-mic', 'osc-panel-device'];
 const PRESSABLE = ['#osc-hold-play', '#osc-trigger', '#osc-gain', '#osc-spec-log',
@@ -864,7 +868,7 @@ async function layoutWidths(ctx) {
     ctx.watch(c);
     try {
       const page = await H.open(c, ctx.base);
-      const f = await page.evaluate(({ row1 }) => {
+      const f = await page.evaluate(({ row1, pathMargin }) => {
         const shown = (el) => el.getClientRects().length > 0
           && getComputedStyle(el).visibility !== 'hidden';
         const flow = document.getElementById('osc-measure-flow').getBoundingClientRect();
@@ -881,31 +885,25 @@ async function layoutWidths(ctx) {
             }
           }
         }
-        // The compact Studio's signal path clips no node for good: whether it fits depends on
-        // the fonts (a Linux runner's render it 9 px wider than its 1280 px column), so where
-        // it does not, it scrolls, and each chip reached with Tab ends wholly inside it
-        // (compact.js keepInScrollerView; preventScroll leaves the scrolling to that alone).
+        // P011: the compact Studio's signal path is in view whole, with room to spare for the
+        // fonts. Its content (the node grid and the path's own padding) fits the column with
+        // pathMargin px left over: a linux runner's DejaVu Sans grid is 409.6 px against
+        // 383.6 px on macOS; a 1280 px view gives it a 482 px column (60 px spare), the
+        // 1536 px reference 429 px (7.4 px spare, so a render 9 px wider fails there).
         const sp = document.querySelector('#osc-panel-studio .osc-sc-path');
-        if (!sp) spill.push('compact Studio path missing');
-        else if (sp.scrollWidth > sp.clientWidth + 1) {
-          if (!/auto|scroll/.test(getComputedStyle(sp).overflowX)) {
-            spill.push(`compact Studio path ${sp.scrollWidth} > ${sp.clientWidth}, not a scroller`);
+        const grid = sp && sp.querySelector('.osc-sc-grid');
+        if (!sp || !grid) spill.push('compact Studio path missing');
+        else {
+          const cs = getComputedStyle(sp);
+          const need = grid.getBoundingClientRect().width
+            + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+          if (sp.scrollWidth > sp.clientWidth || need + pathMargin > sp.clientWidth) {
+            spill.push(`compact Studio path needs ${need.toFixed(1)} + ${pathMargin} px, `
+              + `its column gives ${sp.clientWidth} (scroll ${sp.scrollWidth})`);
           }
-          for (const chip of sp.querySelectorAll('[data-osc="studio.compact.node"]')) {
-            chip.focus({ preventScroll: true });
-            const b = chip.getBoundingClientRect();
-            const box = sp.getBoundingClientRect();
-            if (b.left < box.left - 1 || b.right > box.right + 1) {
-              spill.push(`compact Studio chip ${chip.textContent.trim()} `
-                + `${Math.round(b.left)}-${Math.round(b.right)} outside the path `
-                + `${Math.round(box.left)}-${Math.round(box.right)} when focused`);
-            }
-          }
-          document.activeElement.blur();
-          sp.scrollLeft = 0;
         }
         return { spill, coarse: matchMedia('(pointer: coarse)').matches };
-      }, { row1: ROW1 });
+      }, { row1: ROW1, pathMargin: w.pathMargin });
       const wrong = [...f.spill];
       for (const sel of PRESSABLE) {
         const hit = await page.evaluate((q) => {
@@ -919,7 +917,8 @@ async function layoutWidths(ctx) {
         if (hit) wrong.push(`${sel} is covered by ${hit}`);
       }
       check(ctx.leg, `layout widths ${w.name}${w.touch ? ` (coarse ${f.coarse})` : ''}: `
-        + 'row 1 keeps its controls above the measurement row, every compact Studio chip reachable',
+        + 'row 1 keeps its controls above the measurement row, the compact Studio path whole '
+        + `with ${w.pathMargin} px spare`,
       !wrong.length,
       wrong.slice(0, 8).join('; '));
     } finally {
