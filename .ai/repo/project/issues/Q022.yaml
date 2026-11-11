@@ -7,7 +7,7 @@ profile: routine
 owner: "repository owner"
 objective: "A full-range plucked string (Karplus-Strong) and FM operator feedback are recurrences inside one node's DSP; project.no-silent-feedback v1 refuses graph cycles and D8 waits on its v2 for feedback delay and chorus. The plan recommends a v2 that allows a recurrence inside one node only, with its loop gain clamped below 1 and proven by a unit test, still refusing every graph-level cycle; feedback delay and chorus stay with D8."
 why: "Asked by the connected-instrument plan (owner direction of 2026-10-29). .ai/repo/project/README.md: work that waits on an answer names the Q issue in depends_on."
-current_state: "Open on 2026-10-29. The plan's recommendation is not an answer. K094 name this issue in depends_on, so majordomus plan next does not hand them out before it is answered."
+current_state: "Decided on 2026-11-11 under Q090 by the coordinating sessions oscilla-43 and oscilla-c3 (project.no-silent-feedback v2 as amended by c3), recorded verbatim as this issue's owner_decision evidence; the owner may override it. The rule v2 lands with its first user, K094."
 scope:
   - ".ai/repo/project/issues/Q022.yaml"
 acceptance_criteria:
