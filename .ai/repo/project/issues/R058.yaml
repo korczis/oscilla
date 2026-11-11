@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "R2-T7B-1 (P3, oscilla-c3's review of T7b): majordomusPin (scripts/release-publish.mjs) wraps its read in a bare catch and returns null for any error, so in T7b a merge-dropped readFileSync import turned a ReferenceError into 'no pages.yml' and C1-517-1's pre-tag pin check silently never ran. After: only ENOENT means 'no pin'; any other error fails the publish naming the call."
 why: "A safety check that a typo can switch off is not a check."
-current_state: "Filed 2026-11-11 by oscilla-43 from R2-T7B-1; release-script lane (oscilla-75)."
+current_state: "Built by oscilla-43 on fix/t8-small-p3s (2026-11-11): majordomusPin returns null only for ENOENT and rethrows any other error; a pages.yml that is a directory now fails the publish (fail-first in release-publish.test.mjs)."
 scope:
   - "scripts/release-publish.mjs"
   - "tests/unit/release-publish.test.mjs"

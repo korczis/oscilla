@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "R2-T7B-2 (P3, oscilla-c3's review of T7b): K239's skippedText names raw jack ids ('sh.rate → …'), as R2-T5-5 found for another sentence. After: the sentence uses the jacks' shown names (the bay's labels), from the same source the bay uses."
 why: "Shown text speaks the panel's language (project.czech-prose)."
-current_state: "Filed 2026-11-11 by oscilla-43 from R2-T7B-2."
+current_state: "Built by oscilla-43 on fix/t8-small-p3s (2026-11-11): skippedText takes the bay's jack-naming function and ui.js passes jackName, so the sentence names jacks as the bay does (fail-first in synth-link.test.mjs)."
 scope:
   - "src/js/synth/link.js"
   - "tests/unit/synth-link.test.mjs"

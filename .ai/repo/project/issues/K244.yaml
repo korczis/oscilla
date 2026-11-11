@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "R2-T7B-3 (P3, oscilla-c3's review of T7b): K235's qLimits writes 'z 2,4 oktáv Q'; a decimal takes the genitive singular, 'z 2,4 oktávy'. After: one Czech plural helper (the one K238's tuneNote uses, if it fits) declines 'oktáva' for every number the diagnostic prints."
 why: "Shown Czech must be correct (project.czech-prose)."
-current_state: "Filed 2026-11-11 by oscilla-43 from R2-T7B-3."
+current_state: "Built by oscilla-43 on fix/t8-small-p3s (2026-11-11): octavesGen declines oktáva in the genitive after \"z\" by the printed number (1 and decimals oktávy, other whole numbers oktáv), used in both q-limited sentences (fail-first in k235-q-ceiling-diagnostic.test.mjs)."
 scope:
   - "src/js/studio/runtime-trace.js"
   - "tests/unit/k235-q-ceiling-diagnostic.test.mjs"

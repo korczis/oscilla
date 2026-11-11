@@ -1182,4 +1182,10 @@ test('C1-517-1: a majordomus on PATH other than pages.yml\'s pin refuses before 
   assert.deepEqual(pin, { pinned: PAGES_PIN, local: '9.9.9' });
   assert.equal(majordomusPin(os.tmpdir(), () => assert.fail('not asked')), null,
     'a root without pages.yml pins nothing');
+  // R058: only a missing pages.yml is "no pin"; any other read error fails loudly.
+  const odd = mkdtempSync(path.join(os.tmpdir(), 'osc-r058-'));
+  mkdirSync(path.join(odd, '.github', 'workflows', 'pages.yml'), { recursive: true });
+  assert.throws(() => majordomusPin(odd, () => assert.fail('not asked')), /EISDIR|illegal operation/,
+    'a pages.yml that cannot be read is an error, not "no pin"');
+  rmSync(odd, { recursive: true, force: true });
 });
