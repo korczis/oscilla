@@ -254,8 +254,11 @@
       "datetime": "2026-11-10T22:09:18+01:00"
     },
     {
+      "release": "3.33",
       "title": "Nahrávání padu L a poctivý patch bay",
-      "summary": "Pad L nahrává záběr své osy X a Y do automatizace během hraní a při dalším průchodu ho přehraje; konektory patch baye říkají, co kabel opravdu udělá: bipolární zdroj do zesílení VCA se odmítne, protože by VCA otevřel bez klávesy, do VELOCITY ho lze zapojit jako tremolo a ladění Tune posune nejvýš o dvě oktávy s odkazem na vstup Pitch; odkaz Synthu odmítne neplatný kabel česky a vyjmenuje, co nezapojil; kabel držený na stropu Q to řekne v Inspectoru; demo píseň má stopu rezonance basového filtru; stisk v Inspectoru se už neztratí, když se zobrazení uzlu překreslí; laboratoř /lab/ má nové podstránky Grafy, Tvrzení, Změny, Roadmapa, Dluh, Revize a ADR"
+      "summary": "Pad L nahrává záběr své osy X a Y do automatizace během hraní a při dalším průchodu ho přehraje; konektory patch baye říkají, co kabel opravdu udělá: bipolární zdroj do zesílení VCA se odmítne, protože by VCA otevřel bez klávesy, do VELOCITY ho lze zapojit jako tremolo a ladění Tune posune nejvýš o dvě oktávy s odkazem na vstup Pitch; odkaz Synthu odmítne neplatný kabel česky a vyjmenuje, co nezapojil; kabel držený na stropu Q to řekne v Inspectoru; demo píseň má stopu rezonance basového filtru; stisk v Inspectoru se už neztratí, když se zobrazení uzlu překreslí; laboratoř /lab/ má nové podstránky Grafy, Tvrzení, Změny, Roadmapa, Dluh, Revize a ADR",
+      "commit": "e647f09",
+      "datetime": "2026-11-11T05:31:45+01:00"
     }
   ]
 }
