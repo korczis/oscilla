@@ -10,9 +10,11 @@
 //
 // Durations: `durationMs` is always the authoritative, effective duration. A block may also be
 // tempo-locked: when `beats` is a positive number, normalisation derives
-// durationMs = beats * 60000 / tempoBpm (clamped to the type's bounds, after which `beats` is
-// re-derived so the two never disagree). `beats: null` means the block is in milliseconds and
-// is unaffected by tempo. setTempo() therefore rescales only tempo-locked blocks.
+// durationMs = beats * 60000 / tempoBpm, clamped to the type's bounds. The stored `beats` stay
+// when the clamp bites (C066), so a tempo excursion to a bound is undone by the tempo coming
+// back; soundingBeats() gives the beats that actually sound, and beats typed in are limited to
+// what fits at the current tempo. `beats: null` means the block is in milliseconds and is
+// unaffected by tempo. setTempo() therefore rescales only tempo-locked blocks.
 //
 // Frequencies are clamped to [SEQ_MIN_FREQUENCY, 0.95 * sampleRate / 2]. The sample rate comes
 // from the caller (the running AudioContext); before a context exists the V1 provisional rate
@@ -339,6 +341,23 @@ function msPerBeat(tempoBpm) {
   return 60000 / tempoBpm;
 }
 
+// The one wording of a block's place and of its clamped duration, shared by normalizeBlock and
+// updateBlockWithIssues (which reports a typed clamp and drops a repeated one, C066).
+const blockWhere = (index) => `Block ${index + 1}`;
+const durationLimited = (where, ms) => `${where}: duration limited to ${formatMs(ms)}.`;
+
+/**
+ * The beats a tempo-locked block sounds at `tempoBpm`: its stored beats, or fewer where the
+ * type's duration bound clamps them (C066). Null for a block in milliseconds.
+ */
+export function soundingBeats(block, tempoBpm) {
+  if (!block || block.beats === null || block.beats === undefined) return null;
+  const { min, max } = BLOCK_SCHEMA[block.type].durationMs;
+  const want = block.beats * msPerBeat(tempoBpm);
+  if (want >= min && want <= max) return block.beats;
+  return round(clamp(want, min, max) / msPerBeat(tempoBpm), 6);
+}
+
 /**
  * Validate one block. Returns { block, issues }. Unknown types become 'tone'.
  * opts: { sampleRate, tempoBpm, index }
@@ -346,7 +365,7 @@ function msPerBeat(tempoBpm) {
 export function normalizeBlock(raw, opts = {}) {
   const issues = [];
   const r = raw && typeof raw === 'object' ? raw : {};
-  const where = `Block ${(opts.index ?? 0) + 1}`;
+  const where = blockWhere(opts.index ?? 0);
   let type = r.type;
   if (!BLOCK_SCHEMA[type]) {
     issues.push(`${where}: unknown type “${String(type)}”; using Tone.`);
@@ -369,10 +388,9 @@ export function normalizeBlock(raw, opts = {}) {
   if (beats !== null) {
     const want = beats * msPerBeat(tempo);
     durationMs = clamp(want, min, max);
-    if (durationMs !== want) {
-      issues.push(`${where}: duration limited to ${formatMs(durationMs)}.`);
-      beats = durationMs / msPerBeat(tempo);
-    }
+    // The stored beats stay (C066): only the duration they derive is clamped, so a tempo that
+    // returns inside the bound restores the block's length.
+    if (durationMs !== want) issues.push(durationLimited(where, durationMs));
   } else {
     const n = toNumber(r.durationMs, NaN);
     if (!isNum(n)) {
@@ -380,7 +398,7 @@ export function normalizeBlock(raw, opts = {}) {
       durationMs = schema.durationMs.default;
     } else {
       durationMs = clamp(n, min, max);
-      if (durationMs !== n) issues.push(`${where}: duration limited to ${formatMs(durationMs)}.`);
+      if (durationMs !== n) issues.push(durationLimited(where, durationMs));
     }
   }
   const id = typeof r.id === 'string' && r.id.trim() !== '' ? r.id : null;
@@ -703,15 +721,37 @@ export function updateBlockWithIssues(model, id, patch = {}, opts = {}) {
   }
   let beats = cur.beats;
   let durationMs = cur.durationMs;
-  if (patch.beats !== undefined) beats = patch.beats;
+  let typedLimit = null; // the duration typed beats were limited to, reported as before C066
+  if (patch.beats !== undefined) {
+    // Beats typed in are limited to what fits the type's bound at this tempo; only beats
+    // already stored survive a later clamp (C066).
+    beats = patch.beats;
+    const n = toNumber(beats, null);
+    if (n !== null && n > 0) {
+      const { min, max } = BLOCK_SCHEMA[type].durationMs;
+      const fit = clamp(n * msPerBeat(model.tempoBpm), min, max);
+      // Rounded as normalizeBlock stores beats, so no float noise reaches a saved file.
+      if (fit !== n * msPerBeat(model.tempoBpm)) {
+        beats = round(fit / msPerBeat(model.tempoBpm), 6);
+        typedLimit = fit;
+      }
+    }
+  }
   if (patch.durationMs !== undefined) {
     durationMs = patch.durationMs;
     if (patch.beats === undefined) beats = null;
   }
-  const { block, issues } = normalizeBlock(
+  const { block, issues: all } = normalizeBlock(
     { id, type, durationMs, beats, params },
     { sampleRate: opts.sampleRate, tempoBpm: model.tempoBpm, index: i },
   );
+  // A params edit of a block the tempo already clamps renormalises it to the same duration:
+  // that clamp is not news, so it is not reported again (C1-C066-3).
+  const sameClamp = patch.beats === undefined && patch.durationMs === undefined && !typeChanged
+    && block.durationMs === cur.durationMs;
+  const limited = durationLimited(blockWhere(i), block.durationMs);
+  let issues = sameClamp ? all.filter((x) => x !== limited) : all;
+  if (typedLimit !== null && !issues.includes(limited)) issues = [limited, ...issues];
   const blocks = model.blocks.slice();
   blocks[i] = block;
   return { model: withBlocks(model, blocks), issues };
@@ -738,12 +778,9 @@ export function setTempo(model, bpm) {
   const blocks = model.blocks.map((b) => {
     if (b.beats === null) return b;
     const { min, max } = BLOCK_SCHEMA[b.type].durationMs;
+    // The beats stay the block's (C066); only the duration they derive is clamped.
     const durationMs = clamp(b.beats * msPerBeat(tempoBpm), min, max);
-    return {
-      ...b,
-      durationMs: round(durationMs, 3),
-      beats: round(durationMs / msPerBeat(tempoBpm), 6),
-    };
+    return { ...b, durationMs: round(durationMs, 3) };
   });
   return { ...model, tempoBpm, blocks };
 }

@@ -396,9 +396,8 @@ test('a tempo-locked durationMs outside the rounding of its beats is still refus
       'Block 1: durationMs is 5000.002 in the file but would open as 5000'],
     [at(20, 9.999, 0.003333),
       'Block 1: durationMs is 9.999 in the file but would open as 10'],
-    // Beats past a bound by more than their rounding are clamped, which changes them.
-    [at(20, 5000, 1.666668, 'chirp'),
-      'Block 1: beats is 1.666668 in the file but would open as 1.666667'],
+    // Beats past a bound (1.666668 at 20 BPM on a chirp) are no longer refused: since C066
+    // the Sequencer keeps them and saves them so (the next test).
   ];
   for (const [text, message] of cases) {
     assert.ok(text.includes('"beats": '), 'the fixture is tempo-locked');
@@ -410,6 +409,57 @@ test('a tempo-locked durationMs outside the rounding of its beats is still refus
     assert.equal(r.errors[0].message, `${message}; the file is refused.`);
   }
 });
+
+// C066: the Sequencer keeps a tempo-locked block's beats where its type's bound clamps the
+// duration, and saves them so. Such a file is one the app writes, so Studio opens it, as it
+// sounds: a Studio clip's seconds equal its beats at the tempo (validate.js checkMusical) and
+// Studio has no type bound, so the clip carries the beats that sound. The Sequencer's own file
+// keeps the stored beats; Studio's clip keeps what it plays.
+test('C066: a sequence the Sequencer saves at a clamping tempo opens in Studio as it sounds',
+  () => {
+    const at120 = createSequence({ tempoBpm: 120, blocks: [{ id: 'b1', type: 'chirp', beats: 8 },
+      { id: 'b2', type: 'tone', beats: 1 }] });
+    const saved = serializeSequence(setTempo(at120, 60)); // what the Sequencer writes at 60 BPM
+    assert.deepEqual([saved.blocks[0].durationMs, saved.blocks[0].beats], [5000, 8]);
+    // The Sequencer reopens its own file with the 8 beats, and at 120 BPM it is 4000 ms again.
+    const reopened = setTempo(parseSequence(fileText(saved)).model, 120);
+    assert.deepEqual([reopened.blocks[0].durationMs, reopened.blocks[0].beats], [4000, 8]);
+    // Studio opens the same file, with no refusal, as the Sequencer plays it at 60 BPM.
+    const r = importStudioFile(fileText(saved));
+    assert.equal(r.ok, true, JSON.stringify(r.errors));
+    const [chirp, tone] = r.model.timeline.clips;
+    assert.equal(chirp.duration, 5, 'the chirp sounds its 5 s cap');
+    assert.equal(chirp.musical.durationBeats, 5, 'a clip carries the beats that sound');
+    assert.equal(tone.start, 5, 'the next block starts where the chirp ends');
+    assert.equal(tone.musical.startBeats, 5);
+    // Studio's tempo change keeps the clip's beats: at 120 BPM the chirp is 5 beats, 2.5 s.
+    const store = createStudioStore(r.model, { idGenerator: createIdGenerator(r.model) });
+    assert.ok(store.dispatch({ type: 'TRANSPORT_SET', tempo: 120 }).ok);
+    assert.equal(store.getModel().timeline.clips[0].duration, 2.5);
+    // Studio's export writes what the clip holds, a file the Sequencer and Studio both open.
+    const out = JSON.parse(exportSequenceFile(r.model).text);
+    assert.deepEqual([out.blocks[0].durationMs, out.blocks[0].beats], [5000, 5]);
+    assert.equal(importStudioFile(exportSequenceFile(r.model).text).ok, true);
+    // The case the strict import used to refuse: 1.666668 beats of a chirp at 20 BPM.
+    const edge = serializeSequence(setTempo(createSequence({ tempoBpm: 120,
+      blocks: [{ id: 'b1', type: 'chirp', beats: 1.666668 }] }), 20));
+    assert.deepEqual([edge.blocks[0].durationMs, edge.blocks[0].beats], [5000, 1.666668]);
+    const e = importStudioFile(fileText(edge));
+    assert.equal(e.ok, true, JSON.stringify(e.errors));
+    assert.equal(e.model.timeline.clips[0].musical.durationBeats, 1.666667);
+    // Each such block is named in a Czech warning; an unclamped file has none.
+    assert.deepEqual(r.warnings, ['Blok 1: při 60 BPM zní jen 5 z uložených 8 dob; Studio '
+      + 'převezme znějící délku.']);
+    assert.deepEqual(importStudioFile(fileText(serializeSequence(at120))).warnings, []);
+    // oscilla-c1's probe (C1-C066-1): a 4-beat chirp at 120 BPM, then 40 BPM (the 5000 ms cap).
+    const probe = serializeSequence(setTempo(addBlock(createSequence({ tempoBpm: 120,
+      blocks: [] }), 'chirp', { beats: 4 }), 40));
+    const p = importSequenceDocument(probe);
+    assert.equal(p.ok, true, JSON.stringify(p.errors));
+    assert.equal(p.model.timeline.clips[0].musical.durationBeats, 3.333333);
+    assert.deepEqual(p.warnings, ['Blok 1: při 40 BPM zní jen 3,33 z uložených 4 dob; '
+      + 'Studio převezme znějící délku.']);
+  });
 
 test('a block type naming an Object.prototype member is refused, not thrown (F2)', () => {
   const ref = serializeSequence(referenceSequence());
