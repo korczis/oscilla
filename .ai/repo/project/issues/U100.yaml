@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as fix(ui). Found by K222's phone proof (tests/browser/iphone.cjs, sounds-drums-pad and sounds-drums-step, oscilla-ee 2026-11-09) and measured on main 7637039e in WebKit with Playwright's iPhone SE profiles, the Synth opened from a link (#m=synth&yt=engines): at 320 x 568 the app bar takes 65 px, the link notice 63, the listening safety notice 86 and the page header 57, so the main scroller is 235 px tall, and the docked keyboard inside it is 256 px (--osc-dock-h): no row of the tab's own content is left; at 375 x 667 the main is 351 px, the dock 256 and the Synth's sticky section chips 60, leaving 35 px. Closing both notices gives 68 px at 320 x 568. A control near the top of a tab (Engines' Expand all, the Drums tab's Vytvořit bicí klip) is covered whichever way it is scrolled into view: by the page header or by the dock; Playwright's tap refuses it, and iphone.cjs closes the notices first (CLOSE_NOTICES) so its Drums checks run. Before: on a short phone (a viewport height of 700 px or less) the Synth's tabs other than the keys have no usable content area. After: on a short phone the docked keys fold to their handle on the tabs other than Panel (whose keys are the instrument and stay docked), the notices take one line each, and Engines keeps at least three 44 px rows of its content in view with the notices open. Rollback: revert; the layout returns as it is."
 why: "Owner order of 2026-11-02 (the whole interface mobile-first, the phone-whole criterion) and 2026-11-04 (no control hidden under another), and project.a-phone-sounds (no sound on a phone must not happen: a sound the finger cannot reach is the same failure). Asked by the coordinator oscilla-43 on 2026-11-09 to be filed as its own issue for the UI lane, not fixed inside K222."
-current_state: "Filed 2026-11-09 from K222's iphone.cjs finding and measured on main 7637039e; built on fix/u100-phone-notices the same day. iphone.cjs's CLOSE_NOTICES step (feat/k222-drum-view, 600741c4) is the workaround this issue removes."
+current_state: "Filed 2026-11-09 from K222's iphone.cjs finding and measured on main 7637039e; built on fix/u100-phone-notices the same day. iphone.cjs's CLOSE_NOTICES step (feat/k222-drum-view, 600741c4) is the workaround this issue removes. Landed by #515 (verdict 515.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 scope:
   - "src/index.html"
   - "src/js/ui"
@@ -32,4 +32,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-09'
+updated_at: 2026-11-11T18:11:37Z
+started_at: 2026-11-11T18:10:49Z
+started_event: sha256:c8fdc075ef4615ca225b983c0b114924e5b8b2c4798d9a5bd9164b3d902077bb
+verified_at: 2026-11-11T18:11:04Z
+verified_event: sha256:5396d3932bb11a0e9bbd63221679db7cb4650f6a0deff2999fb52421b998c474
+completed_at: 2026-11-11T18:11:37Z
+completed_event: sha256:e6414769e106f2330931e24fd93e695bd2093eca9ddb6f33e94330ea9a9ecab4
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node tests/browser/ui-current.cjs; node tests/browser/iphone.cjs; node scripts/ui-flowbite-pro-record.mjs --check; npm test"
+    result: "On main 04d33aaf: ui-current.cjs exit 0, 392/392 in chromium, firefox and webkit, including phone-synth-room-320/375 and phone-synth-panel-keys-<w> at 320x568 and 375x667. iphone.cjs exit 0 (61/61, 61/61, 122/122). The Flowbite Pro record equals the tree (measure 4, debt 3603). npm test 0 fail."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:11:20Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 515 checks: gate, fail-first"
+    result: "landed by #515; gate success and fail-first success; review verdict .ai/repo/reviews/515.yaml"
+    artifact: ".ai/repo/reviews/515.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:11:28Z

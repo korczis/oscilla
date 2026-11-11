@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as fix(synth). The Synth bay's last English texts, the CABLES heading (src/js/synth/ui.js) and the cable rows with their Remove button (src/js/synth/view/bay.js cableItem), were kept English in 4aa056e8 because the Synth visual references (scripts/visual-synth.mjs, tests/visual/synth) draw them. Translate them and update the references through the visual gate with the recorded reason (the text changed language), per environment, so the gate stays on. Rollback: revert, which restores the previous references."
 why: "Owner order Q104 (Czech everywhere, enforced); review F-2 of #504 (oscilla-c1) and of 5a879cd0 (oscilla-c3), 2026-11-09; oscilla-43 placed it in train T4."
-current_state: "Filed 2026-11-09 by oscilla-2e; not started."
+current_state: "Filed 2026-11-09 by oscilla-2e; not started. Landed by #515 (verdict 515.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 scope:
   - "src/js/synth/ui.js"
   - "src/js/synth/view/bay.js"
@@ -30,4 +30,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-09
-updated_at: 2026-11-09
+updated_at: 2026-11-11T19:04:42Z
+started_at: 2026-11-11T19:03:25Z
+started_event: sha256:da54809506a427a8d9a15d920e38380904225a7d98772e02a61cc2029ede2513
+verified_at: 2026-11-11T19:03:51Z
+verified_event: sha256:6b8e12ba75a3904a8ac0312bba0710e6dfa921d480fab0d02cab99381c573448
+completed_at: 2026-11-11T19:04:42Z
+completed_event: sha256:de95b742c4895a9c5f644d676cd813b376364b3f526e3d6ccd8d26a5c872b72b
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-bay-czech.test.mjs tests/unit/visual-synth.test.mjs tests/unit/czech-prose-short.test.mjs; node tests/browser/synth.cjs; the Visual regression gate"
+    result: "On main 04d33aaf: synth-bay-czech 2/2. ui.js:327 has KABELY; bay.js:45 has Odpojit with aria-label 'Odpojit kabel A → B'; both cases fail on the fix's parent ee7227be^ (0/2), and moduleShort/moduleProse are empty for bay.js and ui.js. The Czech-prose tests pass. synth.cjs (s-cable clicks [data-remove-cable]) is green in the three engines, desktop and phone. The visual references were re-accepted through visual-synth.mjs --update-reference (darwin-arm64 and linux-x64, c2065cf8), not npm run visual's accept path, with the reason in visual-synth.test.mjs's STABILITY header and the commit body: met in substance. The Visual regression gate is green on #515 and on T11's head #533 (equal to main 04d33aaf)."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T19:04:17Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 515 checks: gate, fail-first"
+    result: "landed by #515; gate success, fail-first success (synth-bay-czech fails without the change); review verdict .ai/repo/reviews/515.yaml (merge)"
+    artifact: ".ai/repo/reviews/515.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T19:04:29Z

@@ -18,6 +18,7 @@ scope:
 - tests/README.md
 - .ai/repo/project/issues/V636.yaml
 - dist
+current_state: "Criteria audit on main 04d33aaf (2026-11-11) by oscilla-0b with a read-only audit agent, each finding read at its source: not stamped. Landed by train 3 #404 (16172059, 9d347125; verdict 404.yaml). Met: text at least 12 px, no label overlap, 44 px jacks, cards hidden behind the Patch bay chip, a module chip brings them back (synth.cjs s-mobile, synth-bay-phone 3/3). Not as written: (1) \"directly under the chip bar\": s-mobile computes gap (synth.cjs ~:2739) but never asserts it; (2) the Panel chip bringing the cards back is implied by s-look's later click, not asserted; (3) the xl negative case (both faces, Panel chip hidden) is proven only by class names (synth-bay-phone.test.mjs:84-86), with no rendered check at 1536 px."
 depends_on:
 - V635
 acceptance_criteria:
