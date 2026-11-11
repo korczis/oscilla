@@ -268,8 +268,11 @@
       "datetime": "2026-11-11T11:52:22+01:00"
     },
     {
+      "release": "3.35",
       "title": "Kroky modulátoru jako sloupce a krok i při zastavení",
-      "summary": "Krokový modulátor ve Studiu ukazuje hodnotu každého kroku jako sloupec v mřížce Inspektoru: u rozsahu přes nulu roste od středu nahoru nebo dolů, tah přes několik sloupců je jeden krok zpět a šipky dojdou na každý krok; tlačítko Krok krokového sekvenceru CV udělá krok i při zastaveném transportu a připraví ho ke hře stejně jako stisk klávesy"
+      "summary": "Krokový modulátor ve Studiu ukazuje hodnotu každého kroku jako sloupec v mřížce Inspektoru: u rozsahu přes nulu roste od středu nahoru nebo dolů, tah přes několik sloupců je jeden krok zpět a šipky dojdou na každý krok; tlačítko Krok krokového sekvenceru CV udělá krok i při zastaveném transportu a připraví ho ke hře stejně jako stisk klávesy",
+      "commit": "ca39ed3",
+      "datetime": "2026-11-11T13:59:40+01:00"
     }
   ]
 }
