@@ -30,3 +30,4 @@ evidence_required:
   - "verified"
 created_at: '2026-11-07'
 updated_at: '2026-11-09'
+current_state: "Landed on main but not done (criteria audit by oscilla-d9 on origin/main 45db334e, 2026-11-11, ~/dev/oscilla-wt/scratch-d9-stamp-audit.md): 2 of 4 not met: #2 the phone shows one pad behind an L/R toggle (R2-K220-2) and this record was not amended; #3 no control-census rows for synth.pads.*."

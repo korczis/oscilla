@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "The generated landing (P014-P017) is one index.html near 1 MB. Keep /oscilla/lab/ as the light front page (hero, playable frame whose poster loads lazily, workspace cards, gallery, the chart overview) and move the heavy dashboards into generated sub-pages under /oscilla/lab/: zmeny/ (per-release changes), roadmapa/ (roadmap), tvrzeni/ (claims explorer), dluh/ (ratchets), revize/ (reviews and audits), adr/ (ADRs), grafy/ (the interactive charts with their values and sources; the front page shows them as lazy images linking there), each a full self-contained page sharing the same inlined CSS and script bundle built once, with the same nav (links between pages, the current one marked), Czech, Flowbite Pro. Each sub-page keeps its own ceiling and the front page a much lower one. verify-deploy already compares every file the generator writes, so the sub-pages are verified without a change there; the README links the sub-pages where it names a dashboard."
 why: "The front page reached 999,753 B (133,617 B gzip) with P017 and grows with every release, review and audit; a phone visitor pays for every dashboard before seeing the instrument (project.a-phone-sounds puts the phone first)."
-current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261110033209-7eb2 on feat/lab-subpages, with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261110033209-7eb2 on feat/lab-subpages, with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns. Landed by PR #527 (ed6075b9, train T7b); done on 2026-11-11 after its builder re-checked every criterion on main 0e20f83c (evidence below)."
 scope:
   - "scripts/landing.mjs"
   - "scripts/landing"
@@ -29,4 +29,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T10:43:44Z
+started_at: 2026-11-11T10:42:56Z
+started_event: sha256:6e5483aed42ba9ede62000bea4ac85773a060c167d8074a93822289404716f98
+verified_at: 2026-11-11T10:43:15Z
+verified_event: sha256:1f03048e22014989131a29ccbda308cdabc29a09e419f79ee6e18a426bb78464
+completed_at: 2026-11-11T10:43:44Z
+completed_event: sha256:40ea62c8abaaefe680fcd0b5d05cae30d250ae65cbf3c51cf4bc3e2d15f9bcb1
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs tests/unit/readme-derived.test.mjs; npm test; node scripts/landing.mjs --out <dir> --commit 0e20f83c2966ce55b25a88dc7eed71c7a4480d66 + cmp with the live /lab/"
+    result: "On main 0e20f83c: landing-lab pins every page ceiling and walks every internal link, 61/61, npm test 5750/0; verify-deploy's lab list comes from the generator (35 files); landed in PR #527 (ed6075b9, verdict 527.yaml merge, fail-first success); lab: 35 file(s) regenerated at 0e20f83c2966 (Pages run 43004612892, attempt 1, linux runner); the same 35 files generated on macOS at 0e20f83c are byte-identical to the live ones (cmp 35/35); 32 page views (8 pages x 390/1536 px x light/dark) have no horizontal overflow, no request to another origin, lang cs, Tab reaches a control, and light/dark backgrounds differ (scratchpad probe, its negative control fails on a seeded overflow, foreign img and lang=en)"
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T10:43:34Z

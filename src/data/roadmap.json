@@ -83,13 +83,13 @@
       "id": "M058",
       "title": "Synth voice: audio-rate modulation, drive, macros, filters, templates, presets, mod matrix and one hash epoch",
       "done": 6,
-      "required": 9,
+      "required": 10,
       "phase": "now"
     },
     {
       "id": "M059",
       "title": "Sequencer: audible tempo, real editing and a Studio clock",
-      "done": 4,
+      "done": 5,
       "required": 7,
       "phase": "now"
     },
@@ -250,7 +250,7 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 25,
+      "done": 26,
       "required": 66,
       "phase": "now"
     },
@@ -299,7 +299,7 @@
     {
       "id": "M098",
       "title": "The public face: README front page, GitHub shell and a measured library decision",
-      "done": 5,
+      "done": 10,
       "required": 11,
       "phase": "now"
     },

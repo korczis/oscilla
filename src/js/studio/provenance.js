@@ -47,7 +47,7 @@ import { normalizeStimulus } from '../measurement/stimulus.js';
 import { DEFAULT_POINTS_PER_OCTAVE } from '../measurement/transfer.js';
 import { SWEEP_FADE_S } from './adapters/nodes.js';
 import {
-  STUDIO_HASH_VERSION, STUDIO_KIND, executionState, studioHash, studioHashAt,
+  STUDIO_HASH_VERSION, STUDIO_KIND, executionState, hashRecordsAt, studioHash,
 } from './schema.js';
 import { validateStudioModel } from './validate.js';
 import { importStudio } from './migrate.js';
@@ -127,10 +127,16 @@ export function verifyExperimentStudio(experiment) {
   const v = Number.isInteger(s.execution && s.execution.v) ? s.execution.v : STUDIO_HASH_VERSION;
   const known = v >= 1 && v <= STUDIO_HASH_VERSION;
   if (!known) errors.push(`studio.execution.v ${v}: neznámá hashová epocha`);
-  else if (canonicalJson(executionState(model, v)) !== canonicalJson(s.execution)) {
+  // The block's execution as that epoch recorded it, or as it recorded a model saved before an
+  // unepoched parameter existed (schema.js hashRecordsAt, K245); its hash is that record's.
+  const records = known ? hashRecordsAt(model, v) : [];
+  const recorded = canonicalJson(s.execution);
+  const match = records.find((r) => canonicalJson(r.execution) === recorded);
+  if (known && !match) {
     errors.push('studio.execution is not in the normalized form of its own model');
   }
-  if (known && studioHashAt(model, v) !== s.studioHash) {
+  const ref = match || records[0] || null;
+  if (known && (!ref || ref.hash !== s.studioHash)) {
     errors.push('studio.studioHash does not match');
   }
   const hashMigration = known && v !== STUDIO_HASH_VERSION

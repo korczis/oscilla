@@ -93,6 +93,17 @@ export const HASH_EPOCH_PARAMS = Object.freeze({
     envelope: Object.freeze(['delay', 'hold']),
   }),
 });
+/**
+ * Parameters added to a released node type without a hash epoch (K245). #447 (v3.28.0) gave the
+ * Keys node keyLow and keyHigh while the hash stayed at epoch 1, so a record saved with a Keys
+ * node in v3.15.0-v3.27.x hashed without them. Such a record matches its epoch's hash with these
+ * left out, only while the model holds them at their defaults. Closed: a new parameter goes into
+ * a hash epoch (HASH_EPOCH_PARAMS), never here.
+ */
+export const UNEPOCHED_PARAMS = Object.freeze([
+  Object.freeze({ epoch: 1,
+    params: Object.freeze({ keys: Object.freeze(['keyLow', 'keyHigh']) }) }),
+]);
 
 export { CLIP_KINDS };
 export const TRACK_KINDS = Object.freeze(['event', 'measurement']);
@@ -477,18 +488,23 @@ export function elideParams(type, params, registry = NODE_REGISTRY) {
 
 /**
  * The EXECUTION state (§163, §255): what the hash covers. Arrays of identified records are
- * sorted by id, so authoring order (z-order, list order) does not change the hash.
+ * sorted by id, so authoring order (z-order, list order) does not change the hash. `omit`
+ * (type -> keys, one UNEPOCHED_PARAMS entry's params) leaves those keys out as well (K245).
  */
-export function executionState(model, version = STUDIO_HASH_VERSION) {
+export function executionState(model, version = STUDIO_HASH_VERSION, { omit = null } = {}) {
   const g = model.graph;
   const t = model.timeline;
+  const params = (n) => {
+    const p = version === STUDIO_HASH_VERSION ? n.params : paramsAt(n, version);
+    const drop = omit && omit[n.type];
+    return elideParams(n.type, drop
+      ? Object.fromEntries(Object.entries(p).filter(([k]) => !drop.includes(k))) : p);
+  };
   return {
     v: version,
     kind: STUDIO_KIND,
     schemaVersion: model.schemaVersion,
-    nodes: byId(g.nodes).map((n) => ({ id: n.id, type: n.type,
-      params: elideParams(n.type, version === STUDIO_HASH_VERSION ? n.params
-        : paramsAt(n, version)) })),
+    nodes: byId(g.nodes).map((n) => ({ id: n.id, type: n.type, params: params(n) })),
     edges: byId(g.edges).map((e) => ({ id: e.id, from: e.from, to: e.to, props: e.props })),
     timeline: {
       tracks: byId(t.tracks).map((x) => ({ id: x.id, kind: x.kind, target: x.target })),
@@ -601,12 +617,42 @@ export function studioHashAt(model, version, { sha256Hex = defaultSha256Hex,
 }
 
 /**
+ * Every { execution, hash } hash epoch `version` could have recorded for `model` (K245): the
+ * epoch's own (studioHashAt), then the same without each UNEPOCHED_PARAMS entry of that epoch
+ * whose keys the model holds, all at their defaults. [] when the epoch could not record it.
+ */
+export function hashRecordsAt(model, version, { sha256Hex = defaultSha256Hex,
+  registry = NODE_REGISTRY } = {}) {
+  const hash = studioHashAt(model, version, { sha256Hex, registry });
+  if (hash === null) return [];
+  const out = [{ execution: executionState(model, version), hash }];
+  for (const { epoch, params: omit } of UNEPOCHED_PARAMS) {
+    if (epoch !== version) continue;
+    let held = false;
+    let atDefault = true;
+    for (const n of model.graph.nodes) {
+      for (const k of omit[n.type] || []) {
+        if (n.params[k] === undefined) continue;
+        held = true;
+        const def = registry.param(n.type, k);
+        if (!def || canonicalJson(n.params[k]) !== canonicalJson(def.default)) atDefault = false;
+      }
+    }
+    if (!held || !atDefault) continue;
+    const execution = executionState(model, version, { omit });
+    out.push({ execution, hash: sha256Hex(canonicalJson(execution)) });
+  }
+  return out;
+}
+
+/**
  * The hash epoch whose studioHash of `model` is `hash` (the current one first), or null: how a
- * saved record's stored hash is checked after an epoch bump.
+ * saved record's stored hash is checked after an epoch bump, or a record saved before an
+ * unepoched parameter existed (hashRecordsAt, K245).
  */
 export function hashEpochOf(model, hash, opts = {}) {
   for (let v = STUDIO_HASH_VERSION; v >= 1; v -= 1) {
-    if (studioHashAt(model, v, opts) === hash) return v;
+    if (hashRecordsAt(model, v, opts).some((r) => r.hash === hash)) return v;
   }
   return null;
 }

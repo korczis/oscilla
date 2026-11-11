@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "On top of P016, scripts/facts.mjs reads every .ai/repo/reviews/audit-*.yaml (schema review-audit/v1, parsed with scripts/yaml-subset.mjs; the <n>.yaml verdicts stay the only verdict source and are never edited) and joins each audited finding to the verdict record it names (source <pr>.yaml#<id>). The landing's reviews section shows, beside the raw verdict counts, the latest audit's base and date, its P0-P2 findings by class (fixed with the commit that fixed it, superseded with why, open with the plan issue that tracks it, linked), the P3 counts by class with the unclassified remainder named as such, and a finding still open in a verdict and not covered by any audit as 'neauditováno'. The reviews chart separates audited-open from audited-closed. Nothing is reclassified by the generator: every class comes from an audit record."
 why: "oscilla-c1 and oscilla-c3 (2026-11-10) record the review findings sweep as an audit beside the verdicts (PR #519); P016's view counted 381 open findings from statuses the verdicts froze at their heads, which the audit shows are mostly fixed or superseded."
-current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261110030204-d164 on feat/lab-audit, with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261110030204-d164 on feat/lab-audit, with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns. Landed by PR #527 (ed6075b9, train T7b); done on 2026-11-11 after its builder re-checked every criterion on main 0e20f83c (evidence below)."
 scope:
   - "scripts/facts.mjs"
   - "scripts/landing.mjs"
@@ -30,4 +30,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T10:42:23Z
+started_at: 2026-11-11T10:41:19Z
+started_event: sha256:1520c332f485309f1d5b17defe07d8bb8e38bec7d4b713fff3f7917f47af70bf
+verified_at: 2026-11-11T10:41:40Z
+verified_event: sha256:8335c9c4cc9cbe56e4a5fb8bb3aa9fa7039b49bc70529d450f40784c1f51f283
+completed_at: 2026-11-11T10:42:23Z
+completed_event: sha256:d219a351ccb62fcb1e6e2e228f87932b59ef9098701e2fc71094c99888b91bd5
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs tests/unit/readme-derived.test.mjs; npm test; node scripts/landing.mjs --out <dir> --commit 0e20f83c2966ce55b25a88dc7eed71c7a4480d66 + cmp with the live /lab/"
+    result: "On main 0e20f83c: the three files 61/61 (the audit join, latest-audit and ancestor-link fixtures), npm test 5750/0; landed in PR #527 (ed6075b9, verdict 527.yaml merge, fail-first success); lab: 35 file(s) regenerated at 0e20f83c2966 (Pages run 43004612892, attempt 1, linux runner); the same 35 files generated on macOS at 0e20f83c are byte-identical to the live ones (cmp 35/35); 32 page views (8 pages x 390/1536 px x light/dark) have no horizontal overflow, no request to another origin, lang cs, Tab reaches a control, and light/dark backgrounds differ (scratchpad probe, its negative control fails on a seeded overflow, foreign img and lang=en)"
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T10:42:03Z
