@@ -29,7 +29,7 @@
 //                   shipped Studio template that does their job; the link is hidden on the
 //                   Playground grid; Studio opens with that template and its Back button names
 //                   and returns to the lab (P8)
-//   seq-pattern     (P4) the Sequencer's "Open this pattern in Studio" opens a Studio document
+//   seq-pattern     (P4) the Sequencer's "Otevřít tuto sekvenci ve Studiu" opens a Studio document
 //                   made from the Sequencer's own pattern (one clip per block, title
 //                   "Sequencer pattern"), focus on the Studio heading, Back returns to the
 //                   Sequencer and Forward reopens Studio; with unsaved Studio changes nothing
@@ -45,8 +45,9 @@
 //                   the topic current; a topic without a tool has no link; A1: the topics the
 //                   page audit found unlinked (Nyquist, AM, Logarithmic perception, Ultrasound)
 //                   link to theirs
-//   synth-links     (A1) Filter Lab, Synthesis, the Sequencer and Presets each show "Open the
-//                   Synth" (ui/counterparts.js, read at start), hidden on the Playground grid;
+//   synth-links     (A1) Filter Lab, Synthesis, the Sequencer and Presets each show their Synth
+//                   link (ui/counterparts.js labels, read at start; the Sequencer's is Czech,
+//                   G013), hidden on the Playground grid;
 //                   it opens the Synth with focus on its heading, Back returns, Forward reopens
 //   about-workspaces (A1) every entry of About's workspace list but About's own is a link that
 //                   opens its workspace (WORKSPACES, read at start) with focus on its heading;
@@ -94,14 +95,15 @@ const NAV_MS = 10000;
 const ACTION_NOTICE_MS = 15000;
 const INPUTS = ['pointer', 'keyboard', 'touch'];
 
-// [data-osc, the workspace that shows it, Studio template id, template title, Back label]
+// [data-osc, the workspace that shows it, Studio template id, template title, Back label, the
+// link's text when it is not "Open <title> in Studio" (G013: the Sequencer's row is Czech)]
 const LAB_STUDIO = [
   ['filter.toStudio', 'filter', 'filter-automation', 'Filter Automation', 'Back to Filter Lab'],
   ['envelope.toStudio', 'synthesis', 'subtractive-synth', 'Subtractive Synth',
     'Back to Synthesis'],
   ['dual.toStudio', 'synthesis', 'stereo-beat', 'Stereo Beat', 'Back to Synthesis'],
   ['seq.toStudioTemplate', 'sequencer', 'sweep-sequence', 'Sweep Sequence',
-    'Back to the Sequencer'],
+    'Back to the Sequencer', 'Šablona Sweep Sequence ve Studiu'],
   ['measure.toStudio', 'measure', 'measurement-sweep', 'Measurement Sweep', 'Back to Measure'],
 ];
 
@@ -115,7 +117,8 @@ async function loadModel() {
   const { COUNTERPARTS } = await import(src('ui', 'counterparts.js'));
   for (const c of COUNTERPARTS.filter((x) => x.osc)) {
     for (const from of c.from) {
-      PANEL_COUNTERPARTS.push({ osc: c.osc[from], from, to: c.workspace, label: c.label });
+      PANEL_COUNTERPARTS.push({ osc: c.osc[from], from, to: c.workspace,
+        label: c.labels[from] });
     }
   }
 }
@@ -395,7 +398,7 @@ async function runLeg(name, origin) {
     if (want('lab-studio')) {
       const wrong = [];
       let i = 0;
-      for (const [osc, from, template, title, backName] of LAB_STUDIO) {
+      for (const [osc, from, template, title, backName, text] of LAB_STUDIO) {
         // One page per template: a later template link over an earlier one is the unsaved-work
         // case (links.md: the Templates dialog), which v31-studio-links.cjs owns.
         const page = await H.open(context, base);
@@ -410,7 +413,7 @@ async function runLeg(name, origin) {
         await H.setWorkspace(page, from);
         const link = await H.name(page, sel);
         if (!link || link.href !== `#m=studio&st=${template}`
-          || link.text !== `Open ${title} in Studio`) {
+          || link.text !== (text || `Open ${title} in Studio`)) {
           wrong.push(`${osc}: ${JSON.stringify(link)}`);
         }
         const s = await H.roundTrip(page, { label: osc, from, to: 'studio', selector: sel, input,
@@ -449,7 +452,7 @@ async function runLeg(name, origin) {
           return sq ? sq.editor.model.blocks.length : null;
         });
         const link = await H.name(page, sel);
-        if (!link || link.href !== '#m=studio' || link.text !== 'Open this pattern in Studio') {
+        if (!link || link.href !== '#m=studio' || link.text !== 'Otevřít tuto sekvenci ve Studiu') {
           wrong.push(`${input}: ${JSON.stringify(link)}`);
         }
         const s = await H.roundTrip(page, { label: 'seq.toStudio', from: 'sequencer',

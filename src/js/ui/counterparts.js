@@ -16,7 +16,7 @@
 // Kept by hand: the RTA counterpart. It opens MEASURE on its RTA result tab, which no route
 // selects (routeOfHash has no MEASURE tab key), so a `related` hash cannot express it; it stays
 // a row of its own, and Analyzer and Compare also relate to Measure plainly.
-// Not a counterpart either: the Sequencer's "Open this pattern in Studio" (seq.toStudio)
+// Not a counterpart either: the Sequencer's "Otevřít tuto sekvenci ve Studiu" (seq.toStudio)
 // converts the pattern into a Studio document on click, an action rather than an address.
 //
 // A counterpart is { id, workspace, measureTab, label, from, osc }: the workspace it opens, the
@@ -46,12 +46,13 @@ export const PANEL_LINKS = Object.freeze([
     text: 'Compare saved experiments' },
   { osc: 'filter.toSynth', from: ['filter'], to: 'synth' },
   { osc: 'dual.toSynth', from: ['synthesis'], to: 'synth' },
-  { osc: 'seq.toSynth', from: ['sequencer'], to: 'synth' },
+  { osc: 'seq.toSynth', from: ['sequencer'], to: 'synth', text: 'Otevřít Synth' }, // G013
   { osc: 'presets.toSynth', from: ['presets'], to: 'synth' },
   { osc: 'filter.toStudio', from: ['filter'], to: 'studio&st=filter-automation' },
   { osc: 'envelope.toStudio', from: ['synthesis'], to: 'studio&st=subtractive-synth' },
   { osc: 'dual.toStudio', from: ['synthesis'], to: 'studio&st=stereo-beat' },
-  { osc: 'seq.toStudioTemplate', from: ['sequencer'], to: 'studio&st=sweep-sequence' },
+  { osc: 'seq.toStudioTemplate', from: ['sequencer'], to: 'studio&st=sweep-sequence',
+    text: 'Šablona Sweep Sequence ve Studiu' }, // G013: the Sequencer's row is Czech
   { osc: 'measure.toStudio', from: ['measure'], to: 'studio&st=measurement-sweep' },
 ].map((l) => Object.freeze({ ...l, from: Object.freeze([...l.from]) })));
 
@@ -87,31 +88,37 @@ const MEASURE_RTA = Object.freeze({
   from: Object.freeze(['analyzer', 'compare']),
   osc: null,
 });
+const MEASURE_RTA_ENTRY = Object.freeze({ ...MEASURE_RTA, labels: Object.freeze(
+  Object.fromEntries(MEASURE_RTA.from.map((ws) => [ws, MEASURE_RTA.label]))) });
 
 /**
  * The counterparts generated from the registry: one per workspace a panel link leads to
  * (a Studio template is the Studio template table's, ui/cross-links.js), in PANEL_LINKS order.
+ * `labels` holds each source workspace's link text (G013: the Sequencer's is Czech), `label`
+ * the first.
  */
 export function counterpartsOf(links = livePanelLinks()) {
   const out = [];
   for (const l of links.filter((x) => !x.to.includes('&'))) {
     const line = l.osc === `counterpart.${l.to}`;
+    const text = l.text || `Open the ${WORKSPACE_LABELS[l.to]}`;
     let c = out.find((x) => x.id === l.to);
     if (!c) {
-      c = { id: l.to, workspace: l.to, measureTab: null,
-        label: l.text || `Open the ${WORKSPACE_LABELS[l.to]}`, from: [], osc: line ? null : {} };
+      c = { id: l.to, workspace: l.to, measureTab: null, label: text, labels: {}, from: [],
+        osc: line ? null : {} };
       out.push(c);
     }
     for (const ws of l.from) {
       if (!c.from.includes(ws)) c.from.push(ws);
+      c.labels[ws] = text;
       if (c.osc) c.osc[ws] = l.osc;
     }
   }
   return out.map((c) => Object.freeze({ ...c, from: Object.freeze(c.from),
-    osc: c.osc && Object.freeze(c.osc) }));
+    labels: Object.freeze(c.labels), osc: c.osc && Object.freeze(c.osc) }));
 }
 
-export const COUNTERPARTS = Object.freeze([MEASURE_RTA, ...counterpartsOf()]);
+export const COUNTERPARTS = Object.freeze([MEASURE_RTA_ENTRY, ...counterpartsOf()]);
 
 /** The counterpart with this id, or null. */
 export function counterpartOf(id) {

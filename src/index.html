@@ -1467,23 +1467,10 @@
               <svg aria-hidden="true"><use href="#s-loop"/></svg>
             </button>
           </div>
-          <!-- The workspace's links share the one flexible cell of the head grid with its spacer,
-               so Tempo keeps its own cell in the first row; on a phone they take a row (A1). -->
-          <!-- The unsaved note shares that cell: as a grid item of its own it pushed the
-               transport under the links. The head grows when the cell wraps. -->
+          <!-- The unsaved note and the spacer share one cell: Tempo keeps its own (A1). -->
           <div class="flex min-w-0 flex-wrap items-center gap-x-3 self-center max-md:col-span-full">
             <span data-osc="seq.unsaved" hidden :hidden="!seqUnsaved"
               title="Export config keeps the sequence; a reload asks first">unsaved sequence</span>
-            <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" data-osc-link="open-in" hidden
-              :hidden="workspace !== 'sequencer'">Open Sweep Sequence in Studio</a>
-            <a href="#m=studio" data-osc="seq.toStudio" data-osc-link="send-to" hidden :hidden="workspace !== 'sequencer'"
-              @click="studioOpenSequence($event)">Open this pattern in Studio</a>
-            <a href="#m=synth" data-osc="seq.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'sequencer'"
-              x-bind="counterpartLink('synth')">Open the Synth</a>
-            <a href="#m=synth&amp;yt=drums" data-osc="seq.toDrums" data-osc-link="jump" hidden
-              :hidden="workspace !== 'sequencer'">Krokový sekvencer a pady (Bicí)</a>
-            <a href="#m=studio&amp;st=step-bass" data-osc="seq.toStepBass" data-osc-link="open-in" hidden
-              :hidden="workspace !== 'sequencer'">Krokový modulátor ve Studiu</a>
             <span class="osc-spacer"></span>
           </div>
           <label class="osc-label osc-seq-tempo-label" for="osc-seq-tempo">Tempo</label>
@@ -1500,6 +1487,21 @@
               <option value="180">180 BPM</option>
             </select>
           </div>
+        </div>
+        <!-- G013 (Q035 2): the onward paths, Bicí the primary; the Playground grid hides it. -->
+        <div id="osc-seq-paths" class="flex flex-wrap items-center gap-2 px-3 py-2" role="group"
+          aria-labelledby="osc-seq-paths-title" hidden :hidden="workspace !== 'sequencer'">
+          <span id="osc-seq-paths-title" class="text-sm font-medium">Další cesty</span>
+          <a href="#m=synth&amp;yt=drums" data-osc="seq.toDrums" data-osc-link="jump" hidden
+            :hidden="workspace !== 'sequencer'" :class="PRO.btnPrimary">Krokový sekvencer a pady (Bicí)</a>
+          <a href="#m=studio&amp;st=step-bass" data-osc="seq.toStepBass" data-osc-link="open-in" hidden
+            :hidden="workspace !== 'sequencer'" :class="PRO.btnSecondary">Krokový modulátor ve Studiu</a>
+          <a href="#m=studio" data-osc="seq.toStudio" data-osc-link="send-to" hidden :hidden="workspace !== 'sequencer'"
+            @click="studioOpenSequence($event)" :class="PRO.btnSecondary">Otevřít tuto sekvenci ve Studiu</a>
+          <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" data-osc-link="open-in" hidden
+            :hidden="workspace !== 'sequencer'" :class="PRO.btnSecondary">Šablona Sweep Sequence ve Studiu</a>
+          <a href="#m=synth" data-osc="seq.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'sequencer'"
+            x-bind="counterpartLink('synth')" :class="PRO.btnSecondary">Otevřít Synth</a>
         </div>
 
         <div class="osc-seq-timeline-wrap">
