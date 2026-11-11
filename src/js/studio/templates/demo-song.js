@@ -3,12 +3,14 @@
 // filter, a square lead through a resonant filter with an LFO on its cutoff, drums built from
 // an Oscillator sweep (kick) and Noise through filters and envelopes (snare, hats), a mixer, the
 // Master Output and the four analysis taps. Every note is a tempo-linked pattern clip, every
-// drum hit a pattern or gate clip, the form is seven markers, and three lanes automate the
-// build and the outro. Pure; the model is built once, at module load, from the score alone.
+// drum hit a pattern or gate clip, the form is seven markers, and lanes automate the build
+// (the bass cutoff and its Q, the lead LFO's rate) and the outro (the mix fade). Pure; the model
+// is built once, at module load, from the score alone. Version 2 adds the bass filter's Q lane
+// (K144 gap G10, playable since K232: a low-pass Q lane plays on the biquad's dB Q).
 //
 // What the song asks for and the Studio cannot play yet is left out, never shipped inert:
-// velocity (a clip has no level), the bass filter Q lane (refused at PLAY) and the drive amount
-// (no Drive node). DEMO_SONG_OMITTED names them for the tests and the README.
+// velocity (a clip has no level) and the drive amount. DEMO_SONG_OMITTED names them for the
+// tests and the README.
 import { edge, lane, marker, node, track } from './data.js';
 import * as S from './demo-song-score.js';
 
@@ -28,7 +30,6 @@ const GATE_BEATS = Object.freeze({ [S.SNARE]: 0.1, [S.HAT]: 0.048, [S.OPEN_HAT]:
 /** What the score holds that the template does not play, and why (Learn text, README). */
 export const DEMO_SONG_OMITTED = Object.freeze([
   'velocity: a Studio clip has no level, so every note plays at its track\'s level',
-  'bass filter Q lane: a low-pass Q lane is refused at PLAY',
   'drive amount lane: the Studio has no Drive node yet (K012)',
 ]);
 
@@ -131,6 +132,7 @@ const laneOf = (id, nodeId, param, points, scale = 1) => lane(id, nodeId, param,
 const automation = [
   laneOf('lane-cutoff', 'bass-filter', 'frequency', S.AUTOMATION.bassCutoff),
   laneOf('lane-lfo-rate', 'lead-lfo', 'rate', S.AUTOMATION.leadLfoRate),
+  laneOf('lane-bass-q', 'bass-filter', 'Q', S.AUTOMATION.bassQ),
   ...Object.entries(MIX).map(([param, level], i) => laneOf(`lane-fade-${i + 1}`, 'main-mix',
     param, S.AUTOMATION.fade, level)),
 ];
@@ -143,7 +145,7 @@ export const DEMO_SONG_SECONDS = S.BARS * 4 * SPB;
 
 export default {
   id: 'demo-song',
-  version: 1,
+  version: 2,
   title: DEMO_SONG_TITLE,
   category: 'synthesis',
   learn: {
@@ -156,11 +158,11 @@ export default {
         + 'noise through envelopes. There is no drum kit node.',
       'Velocity is not represented: every note plays at its track\'s level, so the drums have '
         + 'no accents.',
-      'Automation opens the bass filter and speeds up the lead LFO in the build, and fades the '
-        + 'mix in the outro.',
+      'Automation opens the bass filter, raises its resonance (Q) and speeds up the lead LFO in '
+        + 'the build, and fades the mix in the outro.',
     ],
   },
-  studioHash: 'a93e800886ce42c6fee5da20290ed332caaf5aa15beead339b159fc98a9b51d9',
+  studioHash: '019d30d01b1ffb11708bfe80caec15a180951ba501936b9aa5e7934e0cc0bc04',
   model: {
     kind: 'oscilla-studio',
     schemaVersion: 1,
