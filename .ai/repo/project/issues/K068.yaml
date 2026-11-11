@@ -23,7 +23,7 @@ scope:
   - "tests/browser/steps.cjs"
   - "tests/README.md"
   - "dist"
-current_state: "Dependencies re-cut on 2026-11-06 (oscilla-21, recorded as a decision with oscilla-a3, reversible by refusing ADR 0086): K099 dropped because its part 1, the notes clip kind and payload (src/js/studio/notes.js), is on main and the playback core needs no piano-roll editor; W006 dropped because the shared transport labels are not needed to play notes on the audio clock; tap tempo goes to W006 or lands as a plain TRANSPORT_SET dispatch without the shared label. K067 (steps clip) is superseded by this issue under ADR 0086."
+current_state: "Dependencies re-cut on 2026-11-06 (oscilla-21, recorded as a decision with oscilla-a3, reversible by refusing ADR 0086): K099 dropped because its part 1, the notes clip kind and payload (src/js/studio/notes.js), is on main and the playback core needs no piano-roll editor; W006 dropped because the shared transport labels are not needed to play notes on the audio clock; tap tempo goes to W006 or lands as a plain TRANSPORT_SET dispatch without the shared label. K067 (steps clip) is superseded by this issue under ADR 0086. Landed on main but not done (criteria audit by oscilla-d9 on origin/main 45db334e, 2026-11-11, ~/dev/oscilla-wt/scratch-d9-stamp-audit.md): 6 of 9 not met: tap tempo is not in instrument-dsp; the Synth has no playhead of its own for st-linked documents; redo and the runtime after a refusal are untested; no peak or click check; synth-wording reads a fixed file list, so it proves nothing here; the PR body has no base and head size figures."
 depends_on:
   - "K060"
 acceptance_criteria:

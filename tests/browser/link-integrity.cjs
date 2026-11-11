@@ -189,6 +189,9 @@ async function loadModel() {
   }
   // A Studio template's deep link (#294, #278: "Open ... in Studio"), any shipped template.
   ALLOWED_HREF.push(new RegExp(`^#m=studio&st=(${TEMPLATES.join('|')})$`));
+  // A Synth tab's deep link (K106: `#m=synth&yt=<tab>`; the Sequencer's Bicí link), any tab.
+  const { SYNTH_TABS } = await import(src('core', 'url-state-synth.js'));
+  ALLOWED_HREF.push(new RegExp(`^#m=synth&yt=(${SYNTH_TABS.join('|')})$`));
 }
 // [hash, workspace (from the Playground or a fresh load), keys that must not stay in the
 //  address, the address it must end on: a hash without '#', a predicate over its parameters, or

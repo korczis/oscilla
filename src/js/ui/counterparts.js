@@ -64,6 +64,8 @@ export const PANEL_LINKS = Object.freeze([
 export const CONTENT_LINKS = Object.freeze([
   { osc: 'counterpart.measure-rta', from: ['analyzer', 'compare'], to: 'measure' },
   { osc: 'seq.toStudio', from: ['sequencer'], to: 'studio' },
+  { osc: 'seq.toDrums', from: ['sequencer'], to: 'synth&yt=drums' },
+  { osc: 'seq.toStepBass', from: ['sequencer'], to: 'studio&st=step-bass' },
   { osc: 'def.toMeasure', from: ['experiments'], to: 'measure' },
   { osc: 'exp.toMeasure', from: ['experiments'], to: 'measure' },
   { osc: 'presets.toPlayground', from: ['presets'], to: 'playground' },

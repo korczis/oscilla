@@ -96,8 +96,8 @@ export const WORKSPACE_REGISTRY = Object.freeze([
         hash: '&st=stereo-beat' },
     ] },
   { id: 'sequencer', label: 'Sequencer', group: 'synthesis', words: 'pattern steps blocks song',
-    summary: 'Block sequences of tones, sweeps, pulses and modulation, beside the compact '
-      + 'Studio.',
+    summary: 'Blokové sekvence tónů, přeletů, pulzů a modulace vedle kompaktního Studia; '
+      + 'krokový sekvencer s pady je v Synthu na záložce Bicí.',
     related: [
       { id: 'synth', why: 'A voice to play the notes from keys' },
       { id: 'studio', why: 'A sweep sequence as a Studio document', hash: '&st=sweep-sequence' },

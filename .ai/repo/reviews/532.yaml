@@ -1,0 +1,65 @@
+# Review verdict for pull request #532 (train/t10): train T10 and release v3.34.0 (a minor: the
+# Sequencer's new links are feat(ui); release:analyze finds 1 minor and 1 patch since v3.33.2).
+# Guarded member: K245 (128aa6ac, src/js/studio/schema.js and provenance.js: a record saved with
+# a Keys node in v3.15-v3.27 opens again). Unguarded members read as members: 2d801259 (the
+# Sequencer page's links seq.toDrums to #m=synth&yt=drums and seq.toStepBass to
+# #m=studio&st=step-bass, their catalogue entries, link-integrity's Synth-tab kind, the
+# Sequencer summary in Czech), the plan records baa943cb and cb3135f4 (K226 builds the manual
+# step while stopped, the reviewer's decision), 0b's plan stamps 48f83915 (P015-P019, C065, K241
+# done on 0e20f83c), the v3.33.2 record 0150f97a, the 3.34 station 17640b64 (reworded in
+# 2451ad72, C3-532-1) and chore(release): v3.34.0 b8ca9603.
+# Judged at b8ca9603 on base origin/main 0e20f83c (v3.33.2, #531), 2026-11-11, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-526 (pre-stamp head cae89ffa, then b8ca9603 and
+# 2451ad72, which adds only the station's rewording and the dist).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-d9 built K245, oscilla-43 the Sequencer links, the plan
+# records, the station and the stamp, oscilla-0b its plan stamps. Disclosure: cb3135f4 records
+# the reviewer's own decision on K226's criterion (build the stopped step); it is a plan record.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list: 0db1c07275826ab9...
+# over 2 guarded paths (src/js/studio/provenance.js, src/js/studio/schema.js), equal at cae89ffa
+# and b8ca9603.
+#
+# How it was judged:
+# - K245: #447 (v3.28.0) gave the Keys node keyLow and keyHigh with no hash epoch, so records
+#   saved with a Keys node in v3.15-v3.27 matched no epoch's hash. UNEPOCHED_PARAMS (closed,
+#   epoch 1 only: keys keyLow, keyHigh) and hashRecordsAt add the record without them only while
+#   every Keys node holds both at their defaults, so a legacy record verifies only for the
+#   execution it described, a key range off its default is refused for it, and v3.28+ records
+#   verify as before; hashEpochOf and verifyExperimentStudio check the matched record's own hash.
+#   Fail-first, run by the reviewer: k245-keys-legacy-hash fails 3 of 6 with main's schema.js and
+#   provenance.js and passes 6 of 6 at the head; its fixtures are what v3.27.0 and v3.28.0's own
+#   source saved.
+# - The Sequencer links (UI, the reviewer's lane): the reviewer's probe of the built dist in
+#   chromium (isMobile) and webkit at 390x844 with touch and at 1366x800: both links shown inside
+#   the viewport, hit at their centre, no page scroll, 44 px tall on the phone; a tap on
+#   seq.toDrums lands on #m=synth&yt=drums with the Drums tab shown, Enter on seq.toStepBass on
+#   #m=studio&st=step-bass with the "Step Bass" template loaded; no page error.
+# - The 3.34 station read as shown text: its claims hold (the two links and where they lead; Keys
+#   projects and experiments from 3.15-3.27 open again). C3-532-1 P3 below: the last sentence read
+#   as if any changed key range were refused; 2451ad72 says only such an older record needs the
+#   default key range (about-stations --check 38 hold, --check-station rc=0 there).
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (0e20f83c's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer: at cae89ffa GITHUB_BASE_REF=main npm test exit 0 (5759 tests, 5758
+# pass, 0 fail, 1 skipped), build:check up to date; at b8ca9603 build:check up to date (v3.34.0),
+# about-stations --check (38 hold) and --check-station rc=0, release:analyze minor. Measured by
+# others (43): npm test 5758/0 at b8ca9603; link-integrity, v31-studio-workflows,
+# v31-studio-graph and demo-song in chromium.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 532
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of b8ca9603)
+content: 0db1c07275826ab91ee516931b30352556a449a0532f06e4ec2f3d5510e19ec7
+findings:
+  - { id: C3-532-1, severity: P3, status: closed, title: "the 3.34 station's 'Rozsah kláves změněný proti výchozímu se dál odmítá' read as refusing any changed key range; 2451ad72: 'takový starší záznam se otevře, jen pokud má rozsah kláves výchozí'" }
