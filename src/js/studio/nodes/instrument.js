@@ -183,6 +183,12 @@ export const xyPad = defineNode({
     integerParam('octave', 'Octave', { min: 1, max: 5, default: 3 }),
     integerParam('span', 'Span', { min: 1, max: 4, unit: 'oct', default: 2 }),
     secondsParam('glide', 'Glide', 0, 0, 2, { step: 0.01 }),
+    // The outputs' value at rest (K231): a lane on them replays a recorded take of the pad, a
+    // touch overrides it while held. Elided at 0, so documents without a take are unchanged.
+    numberParam('x', 'X', { min: 0, max: 1, step: 0.01, default: 0, automatable: true,
+      live: 'glide', elide: true }),
+    numberParam('y', 'Y', { min: 0, max: 1, step: 0.01, default: 0, automatable: true,
+      live: 'glide', elide: true }),
   ],
   summary(p) {
     return parts(`${p.key} ${optionLabel(xyPad, 'mode', p.mode)}`, `${p.span} oct from ${p.key}`

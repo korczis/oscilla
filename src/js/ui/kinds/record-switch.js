@@ -7,9 +7,11 @@
 // CLIP_UPDATE when Record is switched off or the transport stops. Czech (Q104).
 //
 //   recordSwitchHtml(cls) -> markup of the switch (the caller's Pro button classes)
-//   bindRecordSwitch(btn, { transport, store, clipId, say }) -> { sync(), destroy() }
+//   bindRecordSwitch(btn, { transport, store, clipId, say, text }) -> { sync(), destroy() }
 //     transport() -> the Studio transport or null; store { getModel, dispatch }; clipId() -> id;
-//     say(text) the caller's polite announcement
+//     say(text) the caller's polite announcement; text: the sentences (RECORD_TEXT, or
+//     PAD_RECORD_TEXT for a pad's switch, K231: clipId() -> padTakeId(nodeId), the take
+//     written as automation of the pad's own X and Y)
 
 import { recorderOf } from '../../studio/notes-record.js';
 
@@ -25,6 +27,17 @@ export const RECORD_TEXT = Object.freeze({
   noTransport: 'Nahrávat lze až se zvukem Studia: stiskněte Přehrát.',
 });
 
+/** Czech count of a take's automation points: 1 bod, 2-4 body, 5 and more bodů (K231). */
+export const pointsText = (n) => `${n} ${n === 1 ? 'bod' : n >= 2 && n <= 4 ? 'body' : 'bodů'}`;
+
+export const PAD_RECORD_TEXT = Object.freeze({
+  ...RECORD_TEXT,
+  on: 'Nahrávání zapnuto: tahy padu se zapíší jako automatizace jeho X a Y, když transport '
+    + 'hraje.',
+  written: (n) => `Záznam zapsán: ${pointsText(n)} automatizace, jedna úprava.`,
+  refused: 'Pad se nahrává jen při přehrávání: stiskněte Přehrát.',
+});
+
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export function recordSwitchHtml(cls) {
@@ -32,7 +45,8 @@ export function recordSwitchHtml(cls) {
     + `data-notes-record="" class="${esc(cls)}">${RECORD_TEXT.label}</button>`;
 }
 
-export function bindRecordSwitch(btn, { transport, store, clipId, say = () => {} }) {
+export function bindRecordSwitch(btn, { transport, store, clipId, say = () => {},
+  text = RECORD_TEXT }) {
   let rec = null;
   let off = null;
   const recorder = () => {
@@ -53,17 +67,22 @@ export function bindRecordSwitch(btn, { transport, store, clipId, say = () => {}
   let switching = false;
   function onEvent(e) {
     sync();
+    // A pad touch while the timeline does not play (K231): said by the pad's switch armed.
+    if (e && e.type === 'refused' && text.refused && rec.clipId === clipId()) {
+      say(text.refused);
+      return;
+    }
     if (!e || e.type !== 'take') return;
     // Two switches may share the recorder (the Drums tab, the Studio Inspector): the one shown
     // says it, once.
     if (!btn.isConnected || !btn.getClientRects().length) return;
-    say(e.reason === 'disarm' && switching ? `${RECORD_TEXT.written(e.n)} ${RECORD_TEXT.off}`
-      : RECORD_TEXT.written(e.n));
+    say(e.reason === 'disarm' && switching ? `${text.written(e.n)} ${text.off}`
+      : text.written(e.n));
   }
   const onClick = () => {
     const r = recorder();
     if (!r) {
-      say(RECORD_TEXT.noTransport);
+      say(text.noTransport);
       return;
     }
     const on = r.armed && r.clipId === clipId();
@@ -71,8 +90,8 @@ export function bindRecordSwitch(btn, { transport, store, clipId, say = () => {}
     switching = true;
     try { r.toggle(clipId()); } finally { switching = false; }
     sync();
-    if (!on) say(RECORD_TEXT.on);
-    else if (!pending) say(RECORD_TEXT.off);
+    if (!on) say(text.on);
+    else if (!pending) say(text.off);
   };
   btn.addEventListener('click', onClick);
   sync();

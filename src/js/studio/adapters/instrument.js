@@ -357,6 +357,23 @@ export const xyPad = {
     let p = { ...params };
     const [x, y, pitch] = [0, 1, 2].map(() => started(acct, ctx.createConstantSource(), at));
     for (const n of [x, y, pitch]) n.offset.setValueAtTime(0, ctx.currentTime);
+    // K231: the rest value of X and of Y (the x and y parameters, which an automation lane of a
+    // recorded take drives) adds into the touch source's offset through a gate that a touch
+    // closes and a release opens, gliding as the touch does (τ 15 ms): a touch owns the output
+    // while held, and the output glides back to the lane's value on release, no step. At rest
+    // the touch sources hold 0, so an untouched pad without a lane is what it was.
+    const rests = {};
+    const gates = {};
+    for (const [key, live] of [['x', x], ['y', y]]) {
+      const rest = started(acct, ctx.createConstantSource(), at);
+      rest.offset.setValueAtTime(Number(p[key]) || 0, ctx.currentTime);
+      const gate = acct.track(ctx.createGain());
+      gate.gain.setValueAtTime(1, ctx.currentTime);
+      rest.connect(gate);
+      gate.connect(live.offset);
+      rests[key] = rest;
+      gates[key] = gate;
+    }
     return {
       inputs: {},
       outputs: { x, y, pitch },
@@ -364,11 +381,20 @@ export const xyPad = {
       // Performance outputs: a hand sweeps them, so their cables stay inside the target's
       // range (compiler.js computeBases, K183).
       fits: ['x', 'y'],
-      modTarget: (key) => ({ reason: `${key} is not modulatable` }),
-      applyBase() {},
+      // The rest values are what a lane drives (K231); nothing modulates the pad (no inputs).
+      modTarget: (key, mapping) => (key in rests ? linearOnly(rests[key].offset)(key, mapping)
+        : { reason: `${key} is not modulatable` }),
+      applyBase(b, immediate, owned, w) {
+        for (const key of Object.keys(rests)) {
+          if (b && b[key] && free(owned, key)) {
+            setParam(rests[key].offset, b[key].value, immediate, ctx.currentTime, w, key);
+          }
+        }
+      },
       update(changed, owned, w) {
         p = { ...p, ...changed };
-        did(w, changed, Object.keys(changed), 'next-note');
+        // x and y glide through applyBase; the scale applies from the next note.
+        did(w, changed, Object.keys(changed).filter((k) => !(k in rests)), 'next-note');
       },
       /** The pad at (fx, fy) from t: X and Y glide (τ 15 ms, no click), the pitch steps. */
       move(t, fx, fy, { legato = false } = {}) {
@@ -377,23 +403,29 @@ export const xyPad = {
         const d = xyDegree(cx, p);
         x.offset.setTargetAtTime(cx, t, PARAM_TAU_S);
         y.offset.setTargetAtTime(cy, t, PARAM_TAU_S);
+        for (const g of Object.values(gates)) g.gain.setTargetAtTime(0, t, PARAM_TAU_S);
         if (p.glide > 0 && legato) pitch.offset.setTargetAtTime(d.pitch, t, p.glide / 3);
         else pitch.offset.setValueAtTime(d.pitch, t);
         return { ...d, x: cx, y: cy };
       },
       /**
        * The pad let go from t: every output that sums into a control target (X and Y, `fits`)
-       * back to its rest, 0, gliding (τ 15 ms, no click), K183 N2; the ruling on review NF3:
-       * no Hold keeps them yet (Q099). The Pitch output ends with its note and is not rested.
+       * back to its rest, gliding (τ 15 ms, no click), K183 N2; the ruling on review NF3:
+       * no Hold keeps them yet (Q099). The rest is the x and y parameters, or their lanes
+       * (K231): the touch glides to 0 while the gate opens again. The Pitch output ends with
+       * its note and is not rested.
        */
       rest(t) {
         for (const n of [x, y]) n.offset.setTargetAtTime(0, t, PARAM_TAU_S);
+        for (const g of Object.values(gates)) g.gain.setTargetAtTime(1, t, PARAM_TAU_S);
       },
       stop(t) {
-        for (const n of [x, y, pitch]) { try { n.stop(t); } catch (e) { /* stopped */ } }
+        for (const n of [x, y, pitch, ...Object.values(rests)]) {
+          try { n.stop(t); } catch (e) { /* stopped */ }
+        }
       },
       dispose() {},
-      info: { pad: true },
+      info: { pad: true, rests, gates },
       status: 'ready',
       reason: null,
     };

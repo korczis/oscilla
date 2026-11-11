@@ -220,6 +220,15 @@ const ROWS = [
     param: (h) => h.info.stage.trim.gain, points: [[0, 0.25, 'step'], [1, 1, 'linear'], [2, 0, 'linear']],
     checks: () => [[0, 0.25], [0.5, 0.625], [1, 1], [1.5, 0.5], [2, 0]] },
   // K013: the Macro value is its ConstantSourceNode offset, 0..1.
+  // K231: the XY pad's rest values (a recorded take's lanes), each its rest source's offset.
+  { type: 'xy-pad', key: 'x', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: (h) => h.info.rests.x.offset,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
+  { type: 'xy-pad', key: 'y', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: (h) => h.info.rests.y.offset,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
   { type: 'macro', key: 'value', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
     param: (h) => h.info.source.offset,
     points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
