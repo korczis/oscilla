@@ -17,4 +17,12 @@ risks:
   - "Edge mute (K009) uses the muted property every edge already has (src/js/studio/ports.js EDGE_PROPERTY_FIELDS), so it adds no edge property and changes no pinned template studioHash."
   - "K004 and K009 both edit src/js/ui/studio/workspace.js, which E003 splits: whichever runs after E003 edits the module E003 names instead."
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-11T12:25:40Z
+evidence:
+  - covers: "milestone_verified"
+    type: test
+    command: "node --test tests/unit/studio-graph-rewire.test.mjs tests/unit/studio-graph-keys.test.mjs tests/unit/studio-graph-commands.test.mjs tests/unit/v4-shortcuts.test.mjs tests/unit/ui-flowbite-pro.test.mjs; node tests/browser/v31-studio-graph.cjs"
+    result: "M057's five issues K005-K009 are done; on main 0e20f83c their unit tests pass 70/70 and v31-studio-graph.cjs passes all six legs (oscilla-0b: file 41/41, http 6/6 each)"
+    artifact: "tests/browser/v31-studio-graph.cjs"
+    commit: 1a0196d7e00f9cb750f0c0d7538e472be8557e1d
+    recorded_at: 2026-11-11T12:25:40Z
