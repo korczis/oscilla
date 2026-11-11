@@ -901,6 +901,32 @@
       "id": "sequencer > page.relatedLink > presets"
     },
     {
+      "kind": "jump",
+      "from": "sequencer",
+      "control": "seq.toDrums",
+      "selector": "[data-osc=\"seq.toDrums\"]",
+      "role": "link",
+      "to": "synth",
+      "href": "#m=synth&yt=drums",
+      "template": null,
+      "source": "panel",
+      "studio": "voice",
+      "id": "sequencer > seq.toDrums > synth&yt=drums"
+    },
+    {
+      "kind": "open-in",
+      "from": "sequencer",
+      "control": "seq.toStepBass",
+      "selector": "[data-osc=\"seq.toStepBass\"]",
+      "role": "link",
+      "to": "studio",
+      "href": "#m=studio&st=step-bass",
+      "template": "step-bass",
+      "source": "panel",
+      "studio": "template",
+      "id": "sequencer > seq.toStepBass > studio&st=step-bass"
+    },
+    {
       "kind": "open-in",
       "from": "sequencer",
       "control": "seq.toStudioTemplate",

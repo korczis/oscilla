@@ -146,6 +146,23 @@ export default [
     effect: { route: 'synth' },
   }),
   defineComponent({
+    id: 'seq.toDrums',
+    kind: 'open',
+    label: 'Krokový sekvencer a pady (Bicí)',
+    docs: 'Otevře Synth na záložce Bicí, krokový sekvencer s pady, ze Sekvenceru.',
+    state: 'ui.workspace',
+    effect: { route: 'synth, tab drums' },
+  }),
+  defineComponent({
+    id: 'seq.toStepBass',
+    kind: 'open',
+    label: 'Krokový modulátor ve Studiu',
+    docs: 'Otevře Studio na šabloně Step Bass, jejíž krokový modulátor Inspektor upravuje '
+      + 'jako krokovou mřížku.',
+    state: 'studio.model',
+    effect: { route: 'studio, template step-bass' },
+  }),
+  defineComponent({
     id: 'filter.toSynth',
     kind: 'open',
     label: 'Open the Synth',

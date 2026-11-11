@@ -1480,6 +1480,10 @@
               @click="studioOpenSequence($event)">Open this pattern in Studio</a>
             <a href="#m=synth" data-osc="seq.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'sequencer'"
               x-bind="counterpartLink('synth')">Open the Synth</a>
+            <a href="#m=synth&amp;yt=drums" data-osc="seq.toDrums" data-osc-link="jump" hidden
+              :hidden="workspace !== 'sequencer'">Krokový sekvencer a pady (Bicí)</a>
+            <a href="#m=studio&amp;st=step-bass" data-osc="seq.toStepBass" data-osc-link="open-in" hidden
+              :hidden="workspace !== 'sequencer'">Krokový modulátor ve Studiu</a>
             <span class="osc-spacer"></span>
           </div>
           <label class="osc-label osc-seq-tempo-label" for="osc-seq-tempo">Tempo</label>
