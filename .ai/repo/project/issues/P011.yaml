@@ -31,4 +31,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-01
-updated_at: 2026-11-01
+updated_at: 2026-11-11T14:14:48Z
+started_at: 2026-11-11T14:14:05Z
+started_event: sha256:9f0ad18a00c62725e65937a340be50d285ab15b413f504341f03912c3619e17a
+verified_at: 2026-11-11T14:14:26Z
+verified_event: sha256:00102f45a12a74b2fe0b3ac5111172b987cf7f153d94c919d0569b8a979eb4dd
+completed_at: 2026-11-11T14:14:48Z
+completed_event: sha256:b9718897e05f7a865b02dbfa34bd58af93c4d3aa6414d24331dc822561099582
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node tests/browser/first-screen.cjs --only layout,compact-studio; the same in a native linux/arm64 ubuntu:24.04 container (DejaVu Sans) with chromium, on the base dist and on a dist whose .osc-sc-grid is 9 px wider; node --test tests/unit/ui-flowbite-pro.test.mjs; npm run build:check"
+    result: "Landed by train T11 #533 (main merge 04d33aaf, v3.35.0) as 903b3d91 (merged into the train as b2243e0b). On main 04d33aaf (macOS) exit 0, 78 PASS and 0 FAIL, with layout widths in all 24 legs: chromium, firefox and webkit, file and http, at 1280x800, 1440x900 and 1366x1024 touch with 16 px spare and at 1536x1024 with 0. The linux DejaVu run (the runner's font) passes all four widths on the base dist; the 9 px-padded dist fails at 1536 ('needs 430.6 + 0 px, its column gives 429'), the measured-excess run the criterion names. The Flowbite Pro record does not rise (31/31; no src, CSS or visual change, so the 1536 reference is unchanged). The tests/README first-screen row no longer names the 438 > 429 px relaxation. build:check is current. No guarded path, so no review verdict is needed."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T14:14:41Z
