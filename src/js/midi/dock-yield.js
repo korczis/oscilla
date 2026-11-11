@@ -75,6 +75,10 @@ export function claimNotes(win, { id, owner = null, home = null, el = null } = {
 export function dockSentence(state, { yields, owner, why }) {
   const who = OWNER_NAMES[owner] || owner;
   if (state === 'collapsed') {
+    if (!who) { // folded for the room it would take (routes.js roomFolds), no surface plays
+      return 'Klávesnice je složená do úchytu, aby zůstalo místo pro obsah; počítačové klávesy '
+        + 'dál hrají. Alt+K nebo úchyt ji zobrazí.';
+    }
     return `Klávesnice se složí do úchytu, zatímco noty hraje ${who}: Alt+K nebo úchyt ji `
       + 'zobrazí.';
   }
@@ -250,7 +254,7 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
   // 44 px tall (a touch target, #444 review by 21), with a light that shows a held note while
   // the keys are folded, so a played letter still answers on screen.
   handle.className = `${buttonClass} w-full gap-2 min-h-11`;
-  handle.innerHTML = `<span>Keyboard</span>${CHEVRON}`;
+  handle.innerHTML = `<span>Klávesy</span>${CHEVRON}`;
   const heldLight = doc.createElement('span');
   heldLight.setAttribute('data-osc', 'keyboard.handle.held');
   heldLight.setAttribute('aria-hidden', 'true');
@@ -369,7 +373,9 @@ export function mountDockYield({ win, doc, cmp, dock, band = () => {}, release,
     if (!dockedBand) return null;
     return { viewH: win.innerHeight, band: dockedBand, toolbarBottom: r.bottom,
       stacked: win.innerWidth < keep.stackedBelow,
-      kept: !!(keep.keptBy && doc.querySelector(keep.keptBy)) };
+      kept: !!(keep.keptBy && doc.querySelector(keep.keptBy)),
+      // U101: a fine primary pointer (a desktop), read at each judgement
+      fine: typeof win.matchMedia === 'function' && win.matchMedia('(pointer: fine)').matches };
   };
   const ctl = createDockYield({ release, apply,
     read: () => ({ workspace: cmp.workspace, room: measureRoom(cmp.workspace) }) });

@@ -59,6 +59,11 @@
 //                        opened from a link with both notices shown; on Engines the dock folds,
 //                        each notice is one line, Expand all takes a tap and three 44 px rows of
 //                        the tab show above the dock; the Panel tab keeps the keys docked.
+//     desktop-short-synth-panel U101, at 1366x650 under a fine pointer: the Synth opened from a
+//                        link (#m=synth, its Panel tab) folds the docked keys to the one-row
+//                        'Klávesy' toggle (aria-expanded false) and shows at least three 44 px
+//                        rows of the Panel between the page header and the dock; the toggle
+//                        expands the full dock, and folded again a computer key sounds a note.
 //     related-menu-phone at 390x844 under touch the page header's Related menu opens on a tap,
 //                        lists the workspace's related pages as 44 px items, and one tap on
 //                        the first opens it.
@@ -106,6 +111,8 @@ const FONT_MIN = 12;
 const TOUCH_MIN = 44;
 // U100: what a Synth tab keeps in view on a short phone (three 44 px rows).
 const SYNTH_ROOM_MIN = 3 * 44;
+/** U101: a held computer key is heard above this RMS of the output analyser (dB re full scale). */
+const HEARD_DB = -60;
 // A refusal's reason long enough to need more than one line on a phone (R2-U100-1).
 const LONG_REASON = 'Tento uzel nelze připojit: jeho výstup je zvuk a vstup, který jste '
   + 'zvolili, přijímá jen řídicí signál, proto spojení odmítám.';
@@ -493,6 +500,86 @@ async function setWorkspace(page, ws) {
     ws), { ms: SETTLE_MS, what: `ui-current: workspace ${ws} shown` });
 }
 
+/**
+ * U101 (oscilla-43's decision of 2026-11-10): on a fine pointer in a window shorter than 760 px
+ * the Synth's Panel folds its docked keys to the one-row 'Klávesy' toggle, keeps at least three
+ * 44 px rows of its content between the page header and the dock, expands to the full dock on
+ * the toggle, and a computer key sounds a note while the keys are folded. `p` shows #m=synth at
+ * 1366x650 (no touch: a fine pointer); `check` is the suite's.
+ */
+async function desktopShortSynthPanel(p, check) {
+  const name = 'desktop-short-synth-panel';
+  await until(() => p.evaluate(() => document.documentElement.dataset.ready === 'true'
+    && document.getElementById('osc-app').dataset.mode === 'synth'
+    && !!document.querySelector('[data-osc="synth.panel"][data-keeps-dock]')),
+  { ms: READY_MS, what: `ui-current: ${name}, the Synth's Panel tab shown` });
+  const dockFacts = () => p.evaluate(() => {
+    const dock = document.querySelector('[data-dock-state]');
+    const handle = document.querySelector('[data-osc="keyboard.handle"]');
+    const keys = document.querySelector('[data-osc="keyboard.keys"]');
+    const header = document.querySelector('[data-osc="page.header"]').getBoundingClientRect();
+    const panel = document.querySelector('[data-osc="synth.panel"]').getBoundingClientRect();
+    const main = document.getElementById('osc-main').getBoundingClientRect();
+    const shown = (el) => !!el && el.getClientRects().length > 0;
+    const hb = shown(handle) ? handle.getBoundingClientRect() : null;
+    const dockTop = Math.min(shown(dock) ? dock.getBoundingClientRect().top : Infinity,
+      hb ? hb.top : Infinity, main.bottom);
+    // The Panel's own content shown: below the page header (and the Panel's own top), above
+    // the dock (docked: the keys; folded: its toggle).
+    const room = Math.round(dockTop - Math.max(header.bottom, panel.top, main.top));
+    return { state: dock && dock.getAttribute('data-dock-state'),
+      label: hb ? handle.textContent.trim() : null,
+      expanded: handle ? handle.getAttribute('aria-expanded') : null,
+      handleH: hb ? Math.round(hb.height) : 0, room,
+      keys: shown(keys) && keys.getBoundingClientRect().height > 0,
+      band: Math.round(window.innerHeight - dockTop),
+      fine: window.matchMedia('(pointer: fine)').matches };
+  });
+  const folded = await pollFor(dockFacts, (m) => m.state === 'collapsed' && m.label === 'Klávesy'
+    && m.expanded === 'false' && m.handleH >= TOUCH_MIN - 0.5 && m.handleH < 2 * TOUCH_MIN
+    && m.room >= SYNTH_ROOM_MIN && !m.keys,
+  `ui-current: ${name}, the Panel's keys folded to the Klávesy toggle with three rows shown`);
+  let open = { ok: false, last: null };
+  let heard = { ok: false, last: null };
+  if (folded.ok) {
+    await p.click('[data-osc="keyboard.handle"]');
+    open = await pollFor(dockFacts, (m) => m.state === 'docked' && m.expanded === 'true'
+      && m.keys && m.band > m.handleH + 2 * TOUCH_MIN,
+    `ui-current: ${name}, the Klávesy toggle expands the full dock`);
+    await p.click('[data-osc="keyboard.handle"]');
+    const again = await pollFor(dockFacts, (m) => m.state === 'collapsed' && !m.keys,
+      `ui-current: ${name}, the toggle folds the keys again`);
+    if (open.ok && again.ok) {
+      // A gesture on no control, then the loudest RMS of the output analyser held every frame
+      // (a probe round trip is longer than an analyser buffer), as synth.cjs s-tap reads it.
+      await p.click('#osc-synth-title');
+      await p.evaluate(() => {
+        const a = window.OSCILLA.engine.analyser;
+        const t = new Float32Array(a.fftSize);
+        window.__u101Max = -Infinity;
+        const tick = () => {
+          a.getFloatTimeDomainData(t);
+          let sum = 0;
+          for (const x of t) sum += x * x;
+          window.__u101Max = Math.max(window.__u101Max, 10 * Math.log10(sum / t.length + 1e-24));
+          window.__u101Frame = requestAnimationFrame(tick);
+        };
+        window.__u101Frame = requestAnimationFrame(tick);
+      });
+      await p.keyboard.down('KeyA');
+      heard = await pollFor(() => p.evaluate(() => ({ held: window.OSCILLA.app.kbdHeld,
+        db: Math.round(window.__u101Max),
+        state: document.querySelector('[data-dock-state]').getAttribute('data-dock-state') })),
+      (m) => m.held && m.db > HEARD_DB && m.state === 'collapsed',
+      `ui-current: ${name}, a computer key sounds with the keys folded`);
+      await p.keyboard.up('KeyA');
+      await p.evaluate(() => cancelAnimationFrame(window.__u101Frame));
+    }
+  }
+  check(name, folded.ok && open.ok && heard.ok, JSON.stringify({ folded: folded.last,
+    open: open.last, heard: heard.last }));
+}
+
 /** Poll `measure` until `ok(value)`; the last value read is returned either way. */
 async function pollFor(measure, ok, what) {
   let last = null;
@@ -807,6 +894,7 @@ async function runOne(name) {
         return { text: text.slice(0, 60), whole };
       }), (m) => m.whole, 'ui-current: U100 the safety advice at 1366x650');
       check('desktop-short-safety-whole', r.ok, JSON.stringify(r.last));
+      await desktopShortSynthPanel(p, check);
       await desk.close();
     }
     // The page header's Related menu on a phone: a tap opens it, its items are the related

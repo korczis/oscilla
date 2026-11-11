@@ -19,7 +19,8 @@ test('one table: each workspace names its sink, its first arm state and its leav
   assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.synth)),
     { plays: 'synthSink', armed: true, leave: null, editors: null, yieldsTo: 'xy-pad',
       keepsRoom: { toolbar: '[data-osc="page.header"]', editorMin: mod.SYNTH_CONTENT_MIN_PX,
-        stackedBelow: 0, keptBy: '[data-osc="synth.panel"][data-keeps-dock]' } });
+        stackedBelow: 0, keptBy: '[data-osc="synth.panel"][data-keeps-dock]',
+        keptFineBelow: mod.SYNTH_KEPT_FINE_BELOW_PX } });
   assert.equal(mod.SYNTH_CONTENT_MIN_PX, 192);
   // The measured phones (U100): the dock folds on both iPhone SE sizes and stays on a 13.
   const synth = mod.KEY_ROUTES.synth;
@@ -46,6 +47,38 @@ test('one table: each workspace names its sink, its first arm state and its leav
   // Q105 (the owner's answer of 2026-11-04, 'Armed everywhere'): the keys play at once everywhere.
   assert.deepEqual(mod.armedDefaults(), { playground: true, synth: true, studio: true });
   assert.ok(Object.isFrozen(mod.KEY_ROUTES) && Object.isFrozen(mod.KEY_ROUTES.synth));
+});
+
+// U101 (oscilla-43's decision of 2026-11-10): "On a fine pointer, when the window is shorter
+// than 760 px, the Synth's Panel folds its docked keys to a one-row strip with a toggle (Czech
+// label 'Klávesy', aria-expanded), because on a desktop the computer keys play the notes;
+// expanding it restores U100's dock. Phones and coarse pointers keep U100 exactly as it is."
+// Fails on a7102358: a kept Panel never folds.
+test('U101 a kept Panel folds its keys on a fine pointer below 760 px, nowhere else', () => {
+  assert.equal(mod.SYNTH_KEPT_FINE_BELOW_PX, 760);
+  const synth = mod.KEY_ROUTES.synth;
+  const panel = (viewH, fine, extra = {}) => mod.roomFolds({ route: synth,
+    room: { viewH, band: 292, toolbarBottom: 150, stacked: false, kept: true, fine, ...extra } });
+  assert.equal(panel(650, true), true, '1366 x 650, a laptop window: folds');
+  assert.equal(panel(759, true), true, 'just below the line');
+  assert.equal(panel(760, true), false, 'at the line: U100 keeps the dock');
+  assert.equal(panel(1024, true), false, 'a tall desktop window');
+  // the decision folds whatever the room the dock would leave
+  assert.equal(panel(700, true, { band: 40, toolbarBottom: 0 }), true, 'room enough, still folds');
+  // phones and coarse pointers keep U100 exactly as it is
+  for (const [h, why] of [[568, 'iPhone SE (1st)'], [667, 'iPhone SE (3rd)'], [650, 'a tablet']]) {
+    assert.equal(panel(h, false), false, `${why}: a coarse pointer keeps the Panel's dock`);
+  }
+  assert.equal(panel(650, undefined), false, 'no pointer reading never folds');
+  assert.equal(mod.roomFolds({ route: synth, room: { band: 292, toolbarBottom: 150,
+    stacked: false, kept: true, fine: true } }), false, 'no viewport height never folds');
+  // and the dock's one rule: folded, unless the user expanded it (the 'Klávesy' toggle)
+  const room = { viewH: 650, band: 292, toolbarBottom: 150, stacked: false, kept: true,
+    fine: true };
+  assert.equal(mod.dockState({ route: synth, room }), 'collapsed');
+  assert.equal(mod.dockState({ route: synth, room, userExpanded: true }), 'docked');
+  // the Studio declares no kept surface: its rule is unchanged
+  assert.equal(mod.KEY_ROUTES.studio.keepsRoom.keptFineBelow, undefined);
 });
 
 test('no other module keeps its own workspace -> sink or arm map', () => {

@@ -45,6 +45,9 @@ export const STUDIO_EDITOR_MIN_PX = 360;
 /** The height the Synth keeps below the page header (keepsRoom, U100): its sticky section chips
  *  (60 px) and three 44 px rows of its tab's content. */
 export const SYNTH_CONTENT_MIN_PX = 60 + 3 * 44;
+/** U101: below this window height on a fine pointer the Synth's kept Panel folds its keys too
+ *  (keepsRoom.keptFineBelow; on a desktop the computer keys play the notes). */
+export const SYNTH_KEPT_FINE_BELOW_PX = 760;
 
 export const KEY_ROUTES = Object.freeze({
   playground: Object.freeze({ plays: null, armed: true, leave: null, editors: null,
@@ -56,9 +59,13 @@ export const KEY_ROUTES = Object.freeze({
     // three 44 px rows of its tab; never stacked (it scrolls, but its content must show). A tab
     // whose keys are its instrument declares keepsDock (panels/semi-mono.js: the Panel tab) and
     // the tab panel then carries data-keeps-dock: there the keys stay docked (keptBy).
+    // U101 (oscilla-43's decision of 2026-11-10): on a fine pointer in a window shorter than
+    // keptFineBelow the kept Panel folds them to the one-row handle, because on a desktop the
+    // computer keys play the notes; phones and coarse pointers keep U100 as it is.
     keepsRoom: Object.freeze({ toolbar: '[data-osc="page.header"]',
       editorMin: SYNTH_CONTENT_MIN_PX, stackedBelow: 0,
-      keptBy: '[data-osc="synth.panel"][data-keeps-dock]' }) }),
+      keptBy: '[data-osc="synth.panel"][data-keeps-dock]',
+      keptFineBelow: SYNTH_KEPT_FINE_BELOW_PX }) }),
   studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave',
     editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
     yieldsTo: null,
@@ -104,14 +111,22 @@ export const ROOM_EVENT = 'osc:room';
  * take docked (the dock and the status bar under it, as --osc-dock-h measures it while docked),
  * { toolbarBottom } the bottom of the toolbar keepsRoom names, { stacked } whether the
  * workspace is a stacked page that scrolls (a phone) rather than a grid that fills the
- * viewport, { kept } whether the surface shown keeps the keys docked (keepsRoom.keptBy). The keys fold where their top would sit above the toolbar's bottom plus, on a grid,
- * the editor's minimum. Unknown or incomplete input never folds.
+ * viewport, { kept } whether the surface shown keeps the keys docked (keepsRoom.keptBy),
+ * { fine } whether the primary pointer is fine (a desktop's mouse or trackpad). The keys fold
+ * where their top would sit above the toolbar's bottom plus, on a grid, the editor's minimum. A
+ * kept surface keeps them docked, except on a fine pointer in a viewport shorter than
+ * keepsRoom.keptFineBelow (U101), where it folds them whatever the room. Unknown or incomplete
+ * input never folds.
  */
 export function roomFolds({ route, room } = {}) {
   const keep = route && route.keepsRoom;
   if (!keep || !room) return false;
   const { viewH, band, toolbarBottom, stacked, kept } = room;
-  if (kept === true) return false; // the surface shown keeps the keys docked (keptBy, U100)
+  if (kept === true) { // the surface shown keeps the keys docked (keptBy, U100) ...
+    // ... unless a fine pointer plays the computer keys in a short window (U101)
+    return Number.isFinite(keep.keptFineBelow) && room.fine === true && Number.isFinite(viewH)
+      && viewH < keep.keptFineBelow;
+  }
   if (![viewH, band, toolbarBottom].every(Number.isFinite) || band <= 0) return false;
   const need = toolbarBottom + (stacked ? 0 : keep.editorMin);
   return viewH - band < need;
