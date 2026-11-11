@@ -23,7 +23,8 @@ import {
 } from '../../src/js/studio/schema.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { PAD_RECORD_TEXT, pointsText } from '../../src/js/ui/kinds/record-switch.js';
-import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
+import { renderStudioOffline } from '../../src/js/studio/offline.js';
+import { createFakeAudioEnv, fakeOfflineCtor } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
 
 const sha = (text) => createHash('sha256').update(text).digest('hex');
@@ -306,3 +307,79 @@ test('K231: a take stays the pad\'s own after a re-patch, and its lanes still pl
     assert.equal(clipTarget(node, { kind: 'automation', param: key }, NODE_REGISTRY).plays, true);
   }
 });
+
+/** Every AudioParam a fake source reaches through its outputs (node to node, into params). */
+function reached(source) {
+  const params = new Set();
+  const seen = new Set();
+  const walk = (n) => {
+    if (!n || seen.has(n)) return;
+    seen.add(n);
+    for (const d of n.outputs || []) {
+      if (Array.isArray(d.events)) params.add(d); else walk(d);
+    }
+  };
+  walk(source);
+  return params;
+}
+
+test('K231: after a re-patch the take moves the new target (pad L x into the HPF cutoff)',
+  async () => {
+  const st = panelStore();
+  const m0 = st.getModel();
+  const id = padL(m0).id;
+  const r = PANEL.resolve(m0);
+  const lpf = r.get('lpf').id;
+  const hpf = r.get('hpf').id;
+  assert.equal(st.dispatch(padTakeAction(m0, id, [touch(1, 1.2)])).ok, true);
+  const xEdge = st.getModel().graph.edges.find((e) => e.from.node === id && e.from.port === 'x');
+  assert.equal(xEdge.to.node, lpf, 'the normal: x into the LPF cutoff');
+  assert.equal(st.dispatch({ type: 'BATCH', label: 're-patch', steps: [
+    { type: 'EDGE_REMOVE', edgeId: xEdge.id },
+    { type: 'EDGE_ADD', from: { node: id, port: 'x' }, to: { node: hpf, port: 'frequency' },
+      props: xEdge.props }] }).ok, true);
+  const s = runtimeAt(48000);
+  assert.equal(s.runtime.apply(liveModel(st.getModel())).ok, true);
+  assert.equal(s.runtime.start().ok, true);
+  const h = s.runtime.nodes.get(id);
+  const lane = h.modTarget('x', 'linear').param;
+  assert.equal(lane, h.info.rests.x.offset, 'the take\'s x lane drives the pad\'s rest source');
+  // The rest source (the lane's) feeds pad output x through its gate; that output feeds the
+  // cable's target.
+  assert.ok(reached(h.info.rests.x).has(h.outputs.x.offset), 'the lane reaches pad output x');
+  const to = reached(h.outputs.x);
+  const cutoff = (n) => s.runtime.nodes.get(n).modTarget('frequency', 'log').param;
+  assert.ok(to.has(cutoff(hpf)), 'pad output x reaches the HPF cutoff, the new target');
+  assert.ok(!to.has(cutoff(lpf)), 'and no longer the LPF cutoff');
+  const done = s.runtime.stop();
+  s.advance(1);
+  assert.deepEqual(await done, { nodes: 0, sources: 0, engineNodes: 0, engineSources: 0 });
+});
+
+for (const sampleRate of [44100, 48000]) {
+  test(`K231 (${sampleRate} Hz): the offline render plays a take's lanes on the pad`, async () => {
+    const st = panelStore();
+    const id = padL(st.getModel()).id;
+    assert.equal(st.dispatch(padTakeAction(st.getModel(), id, [touch(1, 1.2)])).ok, true);
+    const m = st.getModel();
+    const lanes = m.timeline.automation.filter((l) => l.target.node === id);
+    assert.equal(lanes.length, 2);
+    const made = [];
+    const out = await renderStudioOffline(m, { sampleRate,
+      OfflineAudioContext: fakeOfflineCtor(made) });
+    assert.ok(out.ok, JSON.stringify(out.errors));
+    const ids = new Set(lanes.map((l) => l.id));
+    assert.deepEqual(out.debug.transport.unplayed.filter((u) => ids.has(u.id)), [],
+      'neither lane is unplayed');
+    const ctx = made[0];
+    const offsets = ctx.of('constant-source').map((c) => c.offset);
+    for (const l of lanes) {
+      const p = l.points[1]; // the ramp in, to the touch's first value
+      // On the render's frame grid: within one frame of the point's time.
+      const hit = offsets.find((o) => o.events.some((e) => e.ramp === 'linear'
+        && Math.abs(e.t - (out.startTime + p.time)) <= 1 / sampleRate
+        && Math.abs(e.value - p.value) < 1e-6));
+      assert.ok(hit, `the ${l.target.param} lane ramps a pad source to ${p.value} at ${p.time} s`);
+    }
+  });
+}

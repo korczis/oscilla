@@ -17,4 +17,12 @@ risks:
   - "K003 and K017 both edit src/js/sequencer/editor.js; K017 waits on F003 of #251."
   - "Step quantize is a new parameter on an existing type, so it lands in K022's epoch and K023 follows K022."
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-11T14:13:22Z
+evidence:
+  - covers: "milestone_verified"
+    type: test
+    command: "majordomus plan list (M059's seven issues); node --test tests/unit/ui-kind-step-grid.test.mjs; node tests/browser/step-grid.cjs"
+    result: "M059's seven issues are done: the last, K019 (the Step values as bars, one undo per drag, the arrows reach every step), landed with T11 #533 at 04d33aaf and is live in v3.35.0"
+    artifact: "tests/unit/ui-kind-step-grid.test.mjs"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T14:13:22Z
