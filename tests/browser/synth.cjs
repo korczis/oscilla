@@ -215,9 +215,14 @@
 //   s-mobile   390 x 844 with touch: no horizontal page scroll, every knob and jack box 44 px+,
 //              with six cables patched every jack and cable end scrolls clear of the dock,
 //              the Patch bay chip shows the bay at the card's width with the cards hidden, its
-//              text 12 px+ and no two jack labels overlapping (V636), a section chip brings the
-//              cards back and lands its plate's heading below the sticky chip bar, the docked
-//              keys are visible and a tap on them sounds
+//              text 12 px+ and no two jack labels overlapping (V636), its card directly under
+//              the chip bar (seen and in the flow: at most the bar's margin + 4 px), the Panel
+//              chip brings the cards back (aria-pressed) and hides the bay, a section chip
+//              brings the cards back and lands its plate's heading below the sticky chip bar,
+//              the docked keys are visible and a tap on them sounds
+//   s-xlfaces  V636 at 1536 x 1024: the cards and the bay side by side, each hit where drawn;
+//              no chip nav on the Panel tab, no Panel chip on the Engines tab, whose Patch bay
+//              chip hides no card
 'use strict';
 
 const fs = require('node:fs');
@@ -2726,12 +2731,28 @@ function defineChecks() {
         small, tiny, kb: { top: kb.top, bottom: kb.bottom, h: window.innerHeight } };
     });
     // The bay face (B2): the whole width under the chip bar, its text 12 px and up, every
-    // jack a 44 px target; a module chip brings the cards back.
+    // jack a 44 px target; the Panel chip and a module chip bring the cards back.
     await page.locator('[data-face="bay"]').tap();
     const bay = await page.evaluate(() => {
       const svg = document.querySelector('[data-osc="synth.bay.svg"]').getBoundingClientRect();
-      const bar = document.querySelector('nav[aria-label="Sekce Synthu"]')
-        .getBoundingClientRect();
+      const nav = document.querySelector('nav[aria-label="Sekce Synthu"]');
+      const bar = nav.getBoundingClientRect();
+      // "Directly under the chip bar" (V636), read twice. As seen after the tap: the chip's
+      // own scroll (gotoSection) lands the card 8 px under the bar. In the flow: with the view
+      // scrolled to its top, so the sticky bar sits in its own slot and no scroll can hide what
+      // lies between, the card follows the bar by the bar's margin (mb-3) alone, the hidden
+      // cards taking no room. The scroll is put back afterwards.
+      const bayCard = document.querySelector('[data-osc="synth.bay"]');
+      const seen = Math.round(bayCard.getBoundingClientRect().top - bar.bottom);
+      let sc = nav.parentElement;
+      while (sc && !(sc.scrollHeight > sc.clientHeight
+        && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+      sc = sc || document.scrollingElement;
+      const was = sc.scrollTop;
+      sc.scrollTop = 0;
+      const flow = Math.round(bayCard.getBoundingClientRect().top
+        - nav.getBoundingClientRect().bottom);
+      sc.scrollTop = was;
       const cards = document.querySelector('[data-face-of="panel"]').getBoundingClientRect();
       const fonts = [...document.querySelectorAll('[data-osc="synth.bay.svg"] text')]
         .map((t) => parseFloat(getComputedStyle(t).fontSize));
@@ -2745,7 +2766,8 @@ function defineChecks() {
       const card = document.querySelector('[data-osc="synth.bay"]');
       return { width: Math.round(svg.width), card: Math.round(card.clientWidth),
         inner: window.innerWidth,
-        gap: Math.round(svg.top - bar.bottom), cardsHidden: cards.height === 0,
+        gap: { seen, flow, margin: parseFloat(getComputedStyle(nav).marginBottom),
+          svg: Math.round(svg.top - bar.bottom) }, cardsHidden: cards.height === 0,
         minFont: Math.min(...fonts), small: jacks.length, overlaps,
         pressed: document.querySelector('[data-face="bay"]').getAttribute('aria-pressed') };
     });
@@ -2753,6 +2775,34 @@ function defineChecks() {
       && bay.minFont >= 12 && !bay.small
       && !bay.overlaps && bay.pressed === 'true')) {
       return { ok: false, detail: 'the bay face', bay };
+    }
+    // GAP_PX: the bar's own margin plus 4 px of rounding and sub-pixel slack. Measured in
+    // chromium, firefox and webkit on ee14479a (2026-11-11): seen 8, flow 12, margin 12, so the
+    // bound is 16. Room left above the bay (a card not hidden, a margin pushing it down)
+    // exceeds it; the bay's own heading and note (the svg sits 100 px under the bar) do not
+    // count, so the card's top is measured, not the svg's.
+    const GAP_PX = bay.gap.margin + 4;
+    if (!(bay.gap.seen >= 0 && bay.gap.seen <= GAP_PX && bay.gap.flow >= 0
+      && bay.gap.flow <= GAP_PX)) {
+      return { ok: false, detail: `the bay is not directly under the chip bar (${GAP_PX} px)`,
+        bay };
+    }
+    // The Panel chip brings the cards back and hides the bay (V636), asserted here rather than
+    // left to s-look's later click.
+    await page.locator('[data-face="panel"]').tap();
+    const back = await page.evaluate(() => {
+      const cards = document.querySelector('[data-face-of="panel"]').getBoundingClientRect();
+      const plate = document.querySelector('[data-osc="synth.modules"] [data-module]')
+        .getBoundingClientRect();
+      const bayCard = document.querySelector('[data-osc="synth.bay"]').getBoundingClientRect();
+      const pressed = (f) => document.querySelector(`[data-face="${f}"]`)
+        .getAttribute('aria-pressed');
+      return { cards: Math.round(cards.height), plate: Math.round(plate.height),
+        bay: Math.round(bayCard.height), panel: pressed('panel'), bayChip: pressed('bay') };
+    });
+    if (!(back.cards > 0 && back.plate > 0 && back.bay === 0 && back.panel === 'true'
+      && back.bayChip === 'false')) {
+      return { ok: false, detail: 'the Panel chip does not bring the cards back', back };
     }
     // No control may be covered (phone-whole): with six cables patched, every jack and every
     // cable end scrolls clear of the dock (the page pads its bottom by --osc-dock-h) and below
@@ -2814,7 +2864,63 @@ function defineChecks() {
     await silent(page, 'releasing the key silences it');
     return { ok: m.scroll <= m.inner && m.small.length === 0 && m.tiny.length === 0
       && m.kb.bottom <= m.kb.h
-      && m.kb.top > 0, ...m, bay, reach, chip, rmsDb: p.rmsDb };
+      && m.kb.top > 0, ...m, bay, back, reach, chip, rmsDb: p.rmsDb };
+  });
+
+  // V636's xl negative case, rendered at 1536 x 1024 (not read from class names): both faces
+  // show side by side, the cards and the bay each hit where they are drawn; on the Panel tab
+  // the chip nav is not shown, on the Engines tab (whose engine chips stay) the Panel chip is
+  // not shown, and pressing Patch bay there hides no card.
+  def('s-xlfaces', async ({ page }) => {
+    const faces = () => page.evaluate(() => {
+      const shown = (el) => {
+        if (!el) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && getComputedStyle(el).display !== 'none';
+      };
+      const hits = (el) => {
+        const h = el && el.querySelector('h3');
+        if (!h || !shown(h)) return false;
+        const r = h.getBoundingClientRect();
+        const at = document.elementFromPoint(r.left + Math.min(8, r.width / 2),
+          r.top + r.height / 2);
+        return !!at && el.contains(at);
+      };
+      const cards = document.querySelector('[data-face-of="panel"]');
+      const plate = document.querySelector('[data-osc="synth.modules"] [data-module]');
+      const bay = document.querySelector('[data-osc="synth.bay"]');
+      const c = cards.getBoundingClientRect();
+      const b = bay.getBoundingClientRect();
+      return { cards: shown(cards), plate: shown(plate) && hits(plate), bay: shown(bay)
+        && hits(bay) && shown(document.querySelector('[data-osc="synth.bay.svg"]')),
+      side: b.left >= c.right - 1,
+      nav: shown(document.querySelector('nav[aria-label="Sekce Synthu"]')) };
+    });
+    const both = (f) => f.cards && f.plate && f.bay && f.side;
+    const chip = (f) => page.locator(`[data-face="${f}"]`).isVisible();
+    const panelTab = { ...await faces(), panelChip: await chip('panel') };
+    if (!both(panelTab) || panelTab.nav || panelTab.panelChip) {
+      return { ok: false, detail: 'Panel tab at xl: both faces, no chip nav', panelTab };
+    }
+    await page.locator('#osc-synth-tab-engines').click();
+    // The tab's state flips before its view is rendered: wait for the Engines chip bar itself,
+    // or the Panel tab's hidden bar is read (control 2b passed in chromium on that race).
+    await until(async () => (await dbg(page)).tab === 'engines' && page.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="Enginy Synthu"]');
+      return !!nav && !document.querySelector('nav[aria-label="Sekce Synthu"]')
+        && !!nav.querySelector('[data-face="panel"]');
+    }), { ms: 10000, what: 'the engines tab and its chip bar render at xl' });
+    const enginesTab = { ...await faces(), panelChip: await chip('panel'),
+      bayChip: await chip('bay') };
+    if (!both(enginesTab) || enginesTab.panelChip || !enginesTab.bayChip) {
+      return { ok: false, detail: 'Engines tab at xl: both faces, no Panel chip', enginesTab };
+    }
+    await page.locator('[data-face="bay"]').click();
+    await until(() => page.evaluate(() => document.querySelector('[data-face="bay"]')
+      .getAttribute('aria-pressed') === 'true'), { ms: 10000,
+      what: 'the Patch bay chip is pressed at xl' });
+    const afterBay = await faces();
+    return { ok: both(afterBay), panelTab, enginesTab, afterBay };
   });
   return checks;
 }
