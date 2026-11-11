@@ -2046,7 +2046,8 @@ function defineChecks() {
   // K226: a step-voltage sequencer clocked by the panel's Keys Gate, its row A into VCO 1's
   // pitch, stepped by the Inspector's Krok button while the Studio plays (the timeline does not
   // own its clock input, so the live router takes the step): by pointer (a tap on the phone) and
-  // by keyboard, each step's value reaches the running CV at once. The node and its cables go in
+  // by keyboard, each step's value reaches the running CV at once; after Stop a press arms the
+  // transport and takes step 1 (oscilla-c3, 2026-11-11). The node and its cables go in
   // through the store (the actions the library and the connect picker dispatch, proven by their
   // own suites); the row's step grid is the kind's param-list lane (step-grid.cjs sg-list).
   def('s-svs', async ({ page, size }) => {
@@ -2121,8 +2122,19 @@ function defineChecks() {
     await announced(3, 'Krok again');
     const third = await holds(0.5, 'Krok again: row A holds step 3 (0.5)');
     await page.evaluate(() => window.OSCILLA.app.studioStop());
+    await until(() => page.evaluate(() => !window.OSCILLA.studio.transport.playing),
+      { ms: 10000, what: 'Stop stops the Studio' });
+    // Stopped, a press arms the transport (as a key strike does, K104) and takes step 1.
+    await press(step);
+    await announced(1, 'Krok while stopped');
+    const armed = await until(() => page.evaluate(() => window.OSCILLA.studio.transport.armed
+      || null), { ms: 5000, what: 'Krok while stopped: the press armed the transport' });
+    await holds(0, 'Krok while stopped: row A holds step 1 (0)');
+    await page.evaluate(() => window.OSCILLA.studio.transport.disarm());
+    await until(() => page.evaluate(() => !window.OSCILLA.studio.transport.playing),
+      { ms: 10000, what: 'the armed transport disarms' });
     await page.evaluate(() => window.OSCILLA.studio.store.undo()); // the loop, as it was
-    return { ok: true, second: second.v, third: third.v };
+    return { ok: true, second: second.v, third: third.v, armed };
   });
 
   // K225: the Studio's patch library inserts the Synth panel (a panel preset's Insert).
