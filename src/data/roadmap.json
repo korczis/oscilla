@@ -6,7 +6,7 @@
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
       "done": 24,
-      "required": 50,
+      "required": 52,
       "phase": "now"
     },
     {
@@ -139,7 +139,7 @@
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
       "done": 0,
-      "required": 24,
+      "required": 25,
       "phase": "next"
     },
     {
@@ -174,7 +174,7 @@
       "id": "M073",
       "title": "Measurement truth in the interface",
       "done": 9,
-      "required": 42,
+      "required": 43,
       "phase": "now"
     },
     {
