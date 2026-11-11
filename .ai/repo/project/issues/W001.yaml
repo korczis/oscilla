@@ -14,6 +14,7 @@ scope:
 - tests/unit/ui-kinds.test.mjs
 - tests/unit/ui-kinds-digest.json
 - tests/README.md
+current_state: "Criteria audit on main 04d33aaf (2026-11-11) by oscilla-0b with a read-only audit agent, each finding read at its source: not stamped. Landed through train #507 (7637039e, verdict 507.yaml; its own PR #467 went into the train), released in v3.29.0. Met or met in substance: ui-kinds 27/27, the eight negative fixtures, the digest pin, the static scan (the runtime frame checks are W008's, ui-kind-step-grid.test.mjs :272 and :338). Unmet: the docs criterion's docs/ui-catalog.md listing (it does not exist; it is G014's, BLOCKED). The rest of that criterion is met: shortcuts dialog, tests/README row, build:check. Fail-first was not judged by CI (#467 landed as test(ui))."
 depends_on:
 - J001
 acceptance_criteria:
