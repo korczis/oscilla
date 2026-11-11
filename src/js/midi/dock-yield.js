@@ -73,7 +73,8 @@ export function claimNotes(win, { id, owner = null, home = null, el = null } = {
 
 /** What the status line says of a state (said politely, once per change). */
 export function dockSentence(state, { yields, owner, why }) {
-  const who = OWNER_NAMES[owner] || owner;
+  // An unnamed owner (or none) reads as a generic one, never 'null' (visual audit, 2026-11-11).
+  const who = OWNER_NAMES[owner] || owner || 'jiný ovladač';
   if (state === 'collapsed') {
     return `Klávesnice se složí do úchytu, zatímco noty hraje ${who}: Alt+K nebo úchyt ji `
       + 'zobrazí.';
