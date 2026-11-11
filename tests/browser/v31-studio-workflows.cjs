@@ -97,6 +97,16 @@
 //                        armed run ends, the reason is in the alert region, the runtime census
 //                        is 0, and an edit after it leaves the Inspector 'not-applied', never
 //                        'behind' (K169)
+//   inspector-press-kept (T7, K226 R2-T5-7) a step-voltage sequencer clocked by a Keys Gate,
+//                        selected, the Studio playing: a mouse press on the Inspector's Krok
+//                        button with an edit that rebuilds the node view (a connection out of the
+//                        sequencer) between its down and its up still steps it ("Krok 1" in the
+//                        live region), and the deferred rebuild runs after it (the button is a
+//                        new element); before the fix the press was lost. A press whose up never
+//                        comes is ended by the window's blur (a selection change then shows) or
+//                        after 1 s with no move, and its deferred rebuild runs (C1-INSP-1); a
+//                        3 s slider drag with moves keeps its element while an edit lands
+//                        mid-drag, and the rebuild runs at the up
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -1431,6 +1441,131 @@ function defineChecks(fx) {
       notBehind: after.inspector === 'not-applied',
       refusalKept: after.lastError === 'claim-refused',
     }), outside, armed, edit, after: { ...after, live: after.live.slice(-3) } };
+  });
+
+  // T7 (K226 R2-T5-7): an Inspector rebuild between a press's down and up must not drop it.
+  def('inspector-press-kept', async ({ page }) => {
+    await H.fresh(page);
+    const made = await page.evaluate(() => {
+      const st = window.OSCILLA.studio.store;
+      const add = (nodeType, x) => {
+        const r = st.dispatch({ type: 'NODE_ADD', nodeType, position: { x, y: 600 } });
+        return r.ok ? r.created.nodes[0] : null;
+      };
+      const keys = add('keys', 40);
+      const svs = add('step-voltage-sequencer', 240);
+      const e = keys && svs && st.dispatch({ type: 'EDGE_ADD', from: { node: keys, port: 'gate' },
+        to: { node: svs, port: 'clock' } });
+      // A loop: the template's timeline is shorter than this check's deadlines (R2-T5-7).
+      st.dispatch({ type: 'LOOP_SET', enabled: true, start: 0, end: 4 });
+      st.dispatch({ type: 'SELECTION_CHANGE', selection: { nodes: svs ? [svs] : [] } });
+      return { keys, svs, ok: !!(e && e.ok), reason: e ? e.reason || null : 'no node' };
+    });
+    if (!made.ok) return { ok: false, detail: `the sequencer and its clock: ${made.reason}` };
+    const tab = page.locator('[data-osc="studio.subview"][data-value="inspector"]');
+    if (await tab.isVisible()) await tab.click();
+    const sel = '[data-osc="studio.inspector.svsStep"]';
+    await until(() => page.locator(sel).isVisible(), { ms: 10000,
+      what: 'inspector-press-kept: the Inspector shows the Krok button' });
+    await page.evaluate(() => window.OSCILLA.app.studioPlay());
+    await until(() => page.evaluate((id) => window.OSCILLA.studio.transport.playing
+      && window.OSCILLA.studio.runtime.nodes.has(id), made.svs), { ms: 10000,
+    what: 'inspector-press-kept: the Studio plays the sequencer' });
+    await H.recordLive(page);
+    // Focus in a field of the Inspector first: the press then moves focus (an element's blur,
+    // which must not end the press).
+    await page.evaluate(() => {
+      const f = document.querySelector('[data-osc="studio.inspector"] input');
+      if (f) f.focus();
+    });
+    await page.evaluate((s) => { window.__krokButton = document.querySelector(s); }, sel);
+    const b = await page.locator(sel).boundingBox();
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    await page.mouse.down();
+    // Mid-press: a connection out of the sequencer changes the node view's rebuild key.
+    const edit = await page.evaluate((id) => {
+      const st = window.OSCILLA.studio.store;
+      const r = st.dispatch({ type: 'EDGE_ADD', from: { node: id, port: 'cvB' },
+        to: { node: 'filter-1', port: 'frequency' } });
+      return { ok: r.ok, reason: r.reason || null };
+    }, made.svs);
+    await page.mouse.up();
+    let heard = [];
+    const stepped = await until(async () => ((heard = await H.live(page)).includes('Krok 1')
+      ? true : null), { ms: 5000, what: 'inspector-press-kept: the press steps the sequencer '
+      + '(Krok 1) although the node view rebuilt mid-press' }).catch(() => false);
+    const rebuilt = await until(() => page.evaluate((s) => {
+      const now = document.querySelector(s);
+      return !!now && now !== window.__krokButton;
+    }, sel), { ms: 5000, what: 'inspector-press-kept: the deferred rebuild runs after the '
+      + 'press' }).catch(() => false);
+    // A press whose up never comes is ended by the window's blur, or after 1 s (C1-INSP-1): the
+    // rebuild deferred by it runs, and a selection change after it is shown.
+    const pending = async (end, what) => {
+      await page.evaluate((s) => { window.__krokButton = document.querySelector(s); }, sel);
+      const c = await page.locator(sel).boundingBox();
+      await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
+      await page.mouse.down();
+      await page.evaluate(({ id, port }) => window.OSCILLA.studio.store.dispatch({
+        type: 'EDGE_ADD', from: { node: id, port }, to: { node: 'filter-1', port: 'frequency' } }),
+      { id: made.svs, port: end === 'blur' ? 'cvC' : 'cvA' });
+      if (end === 'blur') await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+      const ran = await until(() => page.evaluate((s) => {
+        const now = document.querySelector(s);
+        return !!now && now !== window.__krokButton;
+      }, sel), { ms: 5000, what }).catch(() => false);
+      await page.mouse.up();
+      return ran;
+    };
+    const afterBlur = await pending('blur', 'inspector-press-kept: the window\'s blur ends a '
+      + 'press with no up and the deferred rebuild runs');
+    const shown = await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({
+      type: 'SELECTION_CHANGE', selection: { nodes: [id] } }).ok, made.keys)
+      && await until(() => page.evaluate((s) => !document.querySelector(s), sel), { ms: 5000,
+        what: 'inspector-press-kept: a selection change after the blur is shown' })
+        .catch(() => false);
+    await page.evaluate((id) => window.OSCILLA.studio.store.dispatch({
+      type: 'SELECTION_CHANGE', selection: { nodes: [id] } }), made.svs);
+    await until(() => page.locator(sel).isVisible(), { ms: 5000,
+      what: 'inspector-press-kept: the sequencer is shown again' });
+    const afterCap = await pending('cap', 'inspector-press-kept: a press with no up and no blur '
+      + 'ends after 1 s and the deferred rebuild runs');
+    // A live drag over the 1 s cap keeps its control (the cap is idle-based): a 3 s slider drag
+    // with moves, an edit that rebuilds the node view landing mid-drag, the same slider element
+    // up to the up, and the rebuild at the up.
+    const slider = '[data-osc="studio.inspector"] input[type="range"]';
+    await page.evaluate((q) => { window.__dragged = document.querySelector(q); }, slider);
+    await page.locator(slider).first().scrollIntoViewIfNeeded();
+    const d = await page.locator(slider).first().boundingBox();
+    await page.mouse.move(d.x + d.width / 2, d.y + d.height / 2);
+    await page.mouse.down();
+    const t0 = Date.now();
+    let mid = null;
+    let step = 0;
+    await until(async () => {
+      step += 1;
+      await page.mouse.move(d.x + d.width / 2 + (step % 2 ? 6 : -6), d.y + d.height / 2);
+      if (!mid && Date.now() - t0 > 1500) {
+        mid = await page.evaluate((id) => {
+          const r = window.OSCILLA.studio.store.dispatch({ type: 'EDGE_ADD',
+            from: { node: id, port: 'cvB' }, to: { node: 'filter-1', port: 'Q' } });
+          return { ok: r.ok, reason: r.reason || null };
+        }, made.svs);
+      }
+      return Date.now() - t0 >= 3000;
+    }, { ms: 10000, what: 'inspector-press-kept: a 3 s slider drag with moves' });
+    const kept = await page.evaluate((q) => document.querySelector(q) === window.__dragged,
+      slider);
+    await page.mouse.up();
+    const atUp = await until(() => page.evaluate((q) => {
+      const now = document.querySelector(q);
+      return !!now && now !== window.__dragged;
+    }, slider), { ms: 5000, what: 'inspector-press-kept: the drag\'s deferred rebuild runs at '
+      + 'the up' }).catch(() => false);
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    return { ...H.verdict({ edited: edit.ok, stepped, rebuilt, afterBlur, shown, afterCap,
+      dragEdited: !!(mid && mid.ok), dragKept: kept, dragRebuilt: atUp }), edit,
+    drag: mid, heard: heard.slice(-4) };
   });
 
   def('no-console-errors', async ({ errors }) => ({ ok: errors.length === 0,

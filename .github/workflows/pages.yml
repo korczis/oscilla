@@ -31,8 +31,19 @@ defaults:
 
 jobs:
   deploy:
+    # The landing's milestone status is the one Majordomus derives (P015, oscilla-43 2026-11-10):
+    # the pinned majordomus is installed exactly as ci.yml's knowledge job installs it (same
+    # step, same pin, held equal by tests/unit/majordomus-pin-one-source.test.mjs), and
+    # OSC_LAB_REQUIRE_MAJORDOMUS makes the landing and verify-deploy fail by name without it
+    # rather than fall back to the committed src/data/roadmap.json. The job's budget is the
+    # former 10 minutes plus the install's 5.
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      OSC_LAB_REQUIRE_MAJORDOMUS: '1'
+      MJ_VERSION: 1.0.1
+      MJ_TARGET: x86_64-unknown-linux-gnu
+      MJ_SHA256: 524adfd3f2a3fdb3314f53f8c134e4050be5f9ebc31018b70fa9c7d5a940ae77
     outputs:
       page_url: ${{ steps.deployment.outputs.page_url }}
     environment:
@@ -49,6 +60,34 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
+          # The public download URL first; where it fails (the pinned release's returned 504 for hours on
+          # 2026-11-08 while the API served the same asset), the same asset of the same tag and
+          # repository through the API, three bounded attempts. Either way the digest decides.
+          # Each public attempt is bounded too (R055, project.ci-bounded): 4 x 20 s + 3 x 5 s,
+          # then the fallback's 3 x 60 s + 2 x 5 s, 285 s in all, inside the step's 5 minutes, so
+          # a stalled transfer cannot use the step before the API route gets its turn.
+          if ! curl -fsSL --proto '=https' --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            --max-time 20 -o "$RUNNER_TEMP/$a" \
+            "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"; then
+            echo "::warning::the release download URL failed; fetching $a through the GitHub API"
+            for i in 1 2 3; do
+              timeout 60 gh release download "v${MJ_VERSION}" -R korczis/prismatic-majordomus \
+                -p "$a" -D "$RUNNER_TEMP" --clobber && break
+              [ "$i" = 3 ] && exit 1
+              sleep 5
+            done
+          fi
+          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/mj" && tar -xzf "$RUNNER_TEMP/$a" -C "$RUNNER_TEMP/mj"
+          echo "$RUNNER_TEMP/mj/majordomus-v${MJ_VERSION}-${MJ_TARGET}/bin" >> "$GITHUB_PATH"
+      - name: The installed version is the pinned one
+        run: test "$(majordomus version)" = "majordomus ${MJ_VERSION}"
       - name: Committed dist/index.html matches a clean rebuild
         run: npm run build:check
       - run: npm run verify-dist
@@ -66,7 +105,7 @@ jobs:
           cp site/og-image.png site/apple-touch-icon.png _site/
           # The generated Czech landing at /lab/ (owner decision Q107): built from this commit,
           # self-contained, never loaded by the app (project.single-file-deliverable).
-          node scripts/landing.mjs --out _site/lab --commit "$GITHUB_SHA"
+          node scripts/landing.mjs --out _site/lab --commit "$GITHUB_SHA" --require-majordomus
           touch _site/.nojekyll
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
@@ -83,7 +122,7 @@ jobs:
         # every lab/ file (index.html, charts, shots) byte-equal to a regeneration at this commit.
         run: >-
           node scripts/verify-deploy.mjs --url "${{ steps.deployment.outputs.page_url }}"
-          --commit "$GITHUB_SHA" --attempts 10 --delay 10
+          --commit "$GITHUB_SHA" --attempts 10 --delay 10 --require-majordomus
 
   smoke:
     # The public smoke of the page deployed and verified above, one browser per job: Firefox

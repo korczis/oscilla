@@ -43,6 +43,7 @@
 // gives its depth, so one knob never sits over unequal depths. The source ranges are the
 // runtime adapters' (panel.source, proved equal in tests/unit/synth-review-329-round2).
 
+import { CENTS_PER_OCTAVE } from '../core/music.js';
 import { NODE_REGISTRY } from '../studio/registry.js';
 import { defaultEdgeProps } from '../studio/ports.js';
 import { splitJack } from './panel.js';
@@ -168,16 +169,75 @@ export const STATE_TEXT = Object.freeze({
 });
 
 /** Why a cable into `jack` would do nothing now (project.no-inert-surfaces), or null. */
-export function jackReason(model, panel, jack) {
+export function jackReason(model, panel, jack, from = null) {
   const { module, port } = splitJack(jack);
   const m = panel.module(module);
   const node = panel.resolve(model).get(module);
+  // K238: a muted Clock cable does not clock the S&H (the compiler's `clocked` skips muted
+  // TRIGGER edges, compiler.js), so Rate steps it then and is not refused.
   if (m && node && m.node === 'random' && port === 'rate'
-    && model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'trigger')) {
-    return `${m.label} Rate has no effect while Clock is patched (normalled to the keyboard `
-      + 'gate): each gate steps the value. Unpatch Clock first.';
+    && model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'trigger'
+      && !(e.props && e.props.muted))) {
+    return `${m.label} Rate nemá účinek, dokud je zapojený Clock (normálně brána klávesnice): `
+      + 'každá brána posune hodnotu. Nejdřív odpojte Clock.';
+  }
+  // K238: a gain stage that rests closed (the VCA: gain 0) adds its cables to 0, and a cable into
+  // its gain replaces its envelope normal. A bipolar source there (an LFO, the S&H) would make
+  // it sound with no key held, so it is refused; a unipolar one (an envelope) keeps it closed
+  // at rest and is allowed. A closed stage whose audio comes only through another closed one
+  // (VELOCITY after the VCA) cannot sound with no key: a bipolar source there is the gated
+  // tremolo, and it is allowed.
+  if (m && m.node === 'gain' && port === 'gain' && restsClosed(m) && from && bipolar(panel, from)
+    && !gatedUpstream(model, panel, module)) {
+    return `${m.label}: bipolární zdroj by otevřel VCA bez stisknuté klávesy. Do zesílení `
+      + 'patří unipolární zdroj, například obálka.';
   }
   return null;
+}
+
+/** A panel module of a gain node whose gain is 0 when nothing drives it (fixed or init). */
+const restsClosed = (m) => ((m.fixed || {}).gain ?? (m.init || {}).gain) === 0;
+
+/**
+ * Whether every audio edge into panel module `module` (in the model, as patched) comes from a
+ * closed gain stage of the panel, or from a module that is itself so gated: then it is silent
+ * with no key whatever drives its own gain. No audio input at all is not gated.
+ */
+function gatedUpstream(model, panel, module, seen = new Set()) {
+  if (seen.has(module)) return false;
+  seen.add(module);
+  const res = panel.resolve(model);
+  const node = res.get(module);
+  if (!node) return false;
+  const byNode = new Map([...res].filter(([, n]) => n).map(([mid, n]) => [n.id, mid]));
+  const into = model.graph.edges.filter((e) => e.to.node === node.id && e.to.port === 'audio'
+    && !(e.props && e.props.muted));
+  return into.length > 0 && into.every((e) => {
+    const mid = byNode.get(e.from.node);
+    const up = mid && panel.module(mid);
+    if (!up) return false;
+    if (up.node === 'gain' && restsClosed(up) && !driveOpens(model, panel, mid)) return true;
+    return gatedUpstream(model, panel, mid, seen);
+  });
+}
+
+/** Whether a closed gain stage is opened at rest by a bipolar cable into its gain. */
+function driveOpens(model, panel, module) {
+  const res = panel.resolve(model);
+  const node = res.get(module);
+  const byNode = new Map([...res].filter(([, n]) => n).map(([mid, n]) => [n.id, mid]));
+  return model.graph.edges.some((e) => e.to.node === node.id && e.to.port === 'gain'
+    && !(e.props && e.props.muted) && byNode.get(e.from.node)
+    && bipolar(panel, `${byNode.get(e.from.node)}.${e.from.port}`));
+}
+
+/** Whether the CONTROL output `jack` swings below 0 (its range starts under 0). */
+function bipolar(panel, jack) {
+  try {
+    return panel.source(jack).range[0] < 0;
+  } catch {
+    return false;
+  }
 }
 
 export function rememberAmounts(model, panel, steps) {
@@ -216,8 +276,15 @@ export function cableProps(model, panel, from, to, { registry = NODE_REGISTRY } 
   const [lo, hi] = src.range;
   const unipolar = lo >= 0;
   const tracks = src.unit === 'oct' && (log || (pd && pd.unit === 'oct'));
-  const fallback = tracks ? (unipolar ? hi - lo : (hi - lo) / 2)
-    : log ? 1 : defaultEdgeProps('CONTROL', inp, pd).depth;
+  // K238 (oscilla-43's decision): an octave source into cents (VCO Tune, fine tuning of +/-12
+  // semitones) is a modulation, not tracking, which is the Pitch jack's (n1/n2, 1:1). Its depth
+  // is what one octave per octave would need, at most the parameter's span (the validator's
+  // limit, ports.js validateEdgeProps): Tune's 2400 cents. tuneNote() says what that does.
+  const intoCents = src.unit === 'oct' && !log && pd && pd.unit === 'cents';
+  const half = unipolar ? hi - lo : (hi - lo) / 2;
+  const fallback = tracks ? half
+    : intoCents ? Math.min(half * CENTS_PER_OCTAVE, pd.max - pd.min)
+      : log ? 1 : defaultEdgeProps('CONTROL', inp, pd).depth;
   const rows = panel.normals.filter((n) => n.to === to);
   const same = rows.find((n) => n.from === from);
   const kin = rows.find((n) => sameRange(panel.sourceRange(n.from), src.range));
@@ -234,24 +301,58 @@ export function cableProps(model, panel, from, to, { registry = NODE_REGISTRY } 
   return props;
 }
 
+/** Czech count of octaves after "o": 1 oktávu, 2-4 or a fraction oktávy, 5 and more oktáv. */
+function octaves(n) {
+  const text = String(Math.round(n * 100) / 100).replace('.', ',');
+  const noun = n === 1 ? 'oktávu' : !Number.isInteger(n) || (n >= 2 && n <= 4) ? 'oktávy'
+    : 'oktáv';
+  return `${text} ${noun}`;
+}
+
+/**
+ * K238: what a linear cable from an octave source (`srcUnit` 'oct': Keys pitch, the pad's
+ * Pitch) into a cents parameter (VCO Tune) does, in Czech, or null for any other cable: how far
+ * it moves the tuning over the source's whole range (its depth in octaves), and that Pitch is
+ * the jack that tracks 1:1. The synth bay's cable list and the Studio Inspector show it.
+ */
+export function tuneNote(srcUnit, param, props) {
+  if (srcUnit !== 'oct' || !param || param.unit !== 'cents' || !props
+    || props.mapping === 'log' || !Number.isFinite(props.depth)) return null;
+  const sign = props.polarity === 'unipolar' ? '' : '±';
+  return `posune ladění až o ${sign}${octaves(Math.abs(props.depth) / CENTS_PER_OCTAVE)} přes `
+    + 'celý rozsah zdroje; pro sledování výšky použij vstup Pitch';
+}
+
+/** tuneNote of panel cable `c` ({ id, from, to }), read from its edge in `model`. */
+export function cableNote(model, panel, c, { registry = NODE_REGISTRY } = {}) {
+  const e = model.graph.edges.find((x) => x.id === c.id);
+  const inp = portOf(panel, c.to, 'in', registry);
+  if (!e || !inp || !inp.param) return null;
+  const pd = registry.param(panel.module(splitJack(c.to).module).node, inp.param.key);
+  return tuneNote(panel.source(c.from).unit, pd, e.props);
+}
+
 const portOf = (panel, jack, dir, registry) => {
   const { module, port } = splitJack(jack);
   const m = panel.module(module);
   return m ? registry.port(m.node, port, dir) : null;
 };
 
+/** patchCable's refusal of a cable that is already there (xy.js reads it as done). */
+export const ALREADY_PATCHED = 'Ten kabel už je zapojený.';
+
 export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY } = {}) {
   const { id } = nodeIds(model, panel);
   const a = splitJack(from);
   const b = splitJack(to);
-  if (!id(a.module) || !id(b.module)) return { reason: 'That module is not in the Studio.' };
+  if (!id(a.module) || !id(b.module)) return { reason: 'Ten modul není ve Studiu.' };
   const out = portOf(panel, from, 'out', registry);
   const inp = portOf(panel, to, 'in', registry);
   if (!out || !inp || !panel.jacksOf(b.module).some((j) => j.id === to && j.direction === 'in')
     || !panel.jacksOf(a.module).some((j) => j.id === from && j.direction === 'out')) {
-    return { reason: 'A cable runs from an output jack to an input jack.' };
+    return { reason: 'Kabel vede z výstupního konektoru do vstupního.' };
   }
-  const why = jackReason(model, panel, to);
+  const why = jackReason(model, panel, to, from);
   if (why) return { reason: why };
   const steps = [];
   const { normals } = panelEdges(model, panel);
@@ -261,7 +362,7 @@ export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY } 
     : cablesInto(model, panel, to, { foreign: true }).map((e) => e.id);
   const same = model.graph.edges.find((e) => startsAt(e, id(a.module), a.port)
     && endsAt(e, id(b.module), b.port) && !broken.includes(e.id));
-  if (same) return { reason: 'That cable is already patched.' };
+  if (same) return { reason: ALREADY_PATCHED };
   const gone = [...broken, ...replaced];
   if (gone.length) steps.push({ type: 'EDGE_REMOVE', edgeIds: gone });
   steps.push({ type: 'EDGE_ADD', from: { node: id(a.module), port: a.port },
@@ -293,6 +394,12 @@ export function normalSteps(model, panel, jack) {
   return steps;
 }
 
+/**
+ * Remove cable `edgeId`: { action, restored, cables, studio } | { reason }. Once no other panel
+ * cable feeds its jack the jack's normals come back (restored: how many), also beside a Studio
+ * edge into it (K236, 329 R4: a mixed jack patched and unpatched is mixed again, it lost its
+ * normals); cables and studio count what still feeds the jack (unpatchText says it).
+ */
 export function unpatch(model, panel, edgeId) {
   const e = model.graph.edges.find((x) => x.id === edgeId);
   if (!e) return { reason: 'That cable is not patched.' };
@@ -300,11 +407,26 @@ export function unpatch(model, panel, edgeId) {
   let jack = null;
   for (const [mid, node] of map) if (node && node.id === e.to.node) jack = `${mid}.${e.to.port}`;
   const steps = [{ type: 'EDGE_REMOVE', edgeIds: [edgeId] }];
+  const studioIds = new Set(panelEdges(model, panel).foreign.map((x) => x.id));
   const rest = jack ? cablesInto(model, panel, jack, { foreign: true })
-    .filter((x) => x.id !== edgeId && !addsEdge(model, panel, x)) : [1];
-  if (jack && !rest.length) steps.push(...normalSteps(model, panel, jack));
+    .filter((x) => x.id !== edgeId && !addsEdge(model, panel, x)) : [];
+  const studio = rest.filter((x) => studioIds.has(x.id)).length;
+  const cables = rest.length - studio;
+  const normal = jack && !cables ? normalSteps(model, panel, jack) : [];
+  steps.push(...normal);
   return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`,
-    steps: rememberAmounts(model, panel, steps) } };
+    steps: rememberAmounts(model, panel, steps) }, restored: normal.length, cables, studio };
+}
+
+/** What the Synth says once unpatch's action is applied (Czech, Q104), from what it did. */
+export function unpatchText({ restored = 0, cables = 0, studio = 0 } = {}) {
+  if (restored) {
+    return studio ? 'Kabel odpojen; normál je obnoven vedle propojení ze Studia.'
+      : 'Kabel odpojen; normál je obnoven.';
+  }
+  if (cables) return 'Kabel odpojen; vstup dál napájí jiný kabel.';
+  if (studio) return 'Kabel odpojen; vstup dál napájí propojení ze Studia.';
+  return 'Kabel odpojen.';
 }
 
 /** The edges from the switch's `from` jack to its `to` jack (K229 cable switches). */

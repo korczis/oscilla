@@ -8,10 +8,15 @@
 //     app (and its audio) cannot start before that press; a tab switch while the frame is live
 //     changes only the frame's fragment, so the one app routes to the new workspace;
 //   - the lightbox's previous/next, arrow keys and focus handling around Flowbite's modal;
-//   - the charts' readout: hover, or focus a chart and move with the arrow keys.
+//   - the charts' readout: hover, or focus a chart and move with the arrow keys;
+//   - the claims explorer's search and its status and area filters (without the script the
+//     table shows every claim and the controls stay hidden);
+//   - the roadmap's filter by milestone status (likewise hidden without the script);
+//   - the review audit's filter by class (likewise).
 import Collapse from 'flowbite/lib/esm/components/collapse';
 import Modal from 'flowbite/lib/esm/components/modal';
 import Tabs from 'flowbite/lib/esm/components/tabs';
+import { fmtInt, shownText } from './format.mjs';
 
 const THEME_KEY = 'oscilla-lab-theme';
 const root = document.documentElement;
@@ -56,7 +61,7 @@ function initMenu() {
   const collapse = new Collapse(menu, toggle);
   for (const a of $$('a', menu)) {
     a.addEventListener('click', () => {
-      if (window.matchMedia('(max-width: 1023px)').matches) collapse.collapse();
+      if (window.matchMedia('(max-width: 1279px)').matches) collapse.collapse();
     });
   }
 }
@@ -154,7 +159,7 @@ function initLightbox() {
     img.width = Number(s.dataset.width) || 0;
     img.height = Number(s.dataset.height) || 0;
     caption.textContent = s.dataset.caption;
-    count.textContent = `${index + 1} / ${shots.length}`;
+    count.textContent = `${fmtInt(index + 1)} / ${fmtInt(shots.length)}`;
   };
   const modal = new Modal(el, {
     placement: 'center', backdrop: 'dynamic', closable: true,
@@ -210,9 +215,10 @@ function initCharts() {
       const m = marks[i];
       m.setAttribute('data-active', 'true');
       box.append(tip);
-      tip.textContent = m.dataset.tip;
+      const text = m.querySelector('title').textContent;
+      tip.textContent = text;
       place(box, m.lastElementChild || m);
-      box.querySelector('[data-chart-live]').textContent = m.dataset.tip;
+      box.querySelector('[data-chart-live]').textContent = text;
     };
     const hide = () => {
       marks.forEach((m) => m.removeAttribute('data-active'));
@@ -235,8 +241,97 @@ function initCharts() {
   }
 }
 
+// Lower case, without diacritics, so "mereni" finds "měření".
+const fold = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+function initClaims() {
+  const section = $('[data-claims]');
+  if (!section) return;
+  const controls = $('[data-claims-controls]', section);
+  const q = $('#claims-q', section);
+  const status = $('#claims-status', section);
+  const area = $('#claims-area', section);
+  const count = $('[data-claims-count]', section);
+  const empty = $('[data-claims-empty]', section);
+  const rows = $$('tr[data-claim]', section).map((tr) => ({ tr, text: fold(tr.textContent) }));
+  const apply = () => {
+    const words = fold(q.value).split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const r of rows) {
+      const ok = (!status.value || r.tr.dataset.status === status.value)
+        && (!area.value || r.tr.dataset.area === area.value)
+        && words.every((w) => r.text.includes(w));
+      r.tr.hidden = !ok;
+      if (ok) shown += 1;
+    }
+    empty.hidden = shown > 0;
+    count.textContent = `${shownText(shown, rows.length, 'tvrzení')}.`;
+  };
+  q.addEventListener('input', apply);
+  status.addEventListener('change', apply);
+  area.addEventListener('change', apply);
+  controls.hidden = false;
+}
+
+function initRoadmap() {
+  const section = $('[data-roadmap]');
+  if (!section) return;
+  const controls = $('[data-roadmap-controls]', section);
+  const buttons = $$('[data-roadmap-filter]', controls);
+  const cards = $$('[data-intent]', section);
+  const apply = (value) => {
+    for (const b of buttons) {
+      b.setAttribute('aria-pressed', String(b.dataset.roadmapFilter === value));
+    }
+    for (const card of cards) {
+      let shown = 0;
+      for (const li of $$('li[data-status]', card)) {
+        li.hidden = Boolean(value) && li.dataset.status !== value;
+        if (!li.hidden) shown += 1;
+      }
+      $('[data-intent-empty]', card).hidden = shown > 0;
+      card.hidden = shown === 0;
+    }
+  };
+  for (const b of buttons) b.addEventListener('click', () => apply(b.dataset.roadmapFilter));
+  controls.hidden = false;
+}
+
+// The review audit's filter by class (Vše / Stále otevřené / Opraveno / Nahrazeno /
+// Neauditováno); hidden without the script, when the table shows every finding.
+const AUDIT_NAMES = { '': 'všechny třídy', open: 'stále otevřené', fixed: 'opraveno',
+  superseded: 'nahrazeno', unaudited: 'neauditováno' };
+
+function initAudit() {
+  const block = $('[data-audit]');
+  if (!block) return;
+  const controls = $('[data-audit-controls]', block);
+  const buttons = $$('[data-audit-filter]', controls);
+  const rows = $$('tr[data-class]', block);
+  const empty = $('[data-audit-empty]', block);
+  const count = $('[data-audit-count]', block);
+  const apply = (value) => {
+    let shown = 0;
+    for (const b of buttons) {
+      b.setAttribute('aria-pressed', String(b.dataset.auditFilter === value));
+    }
+    for (const tr of rows) {
+      tr.hidden = Boolean(value) && tr.dataset.class !== value;
+      if (!tr.hidden) shown += 1;
+    }
+    empty.hidden = shown > 0;
+    count.textContent = `${shownText(shown, rows.length, 'nálezů')}: `
+      + `${AUDIT_NAMES[value] ?? value}.`;
+  };
+  for (const b of buttons) b.addEventListener('click', () => apply(b.dataset.auditFilter));
+  controls.hidden = false;
+}
+
 initTheme();
 initMenu();
 initFrame();
 initLightbox();
 initCharts();
+initClaims();
+initRoadmap();
+initAudit();

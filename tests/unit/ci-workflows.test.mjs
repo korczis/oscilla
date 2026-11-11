@@ -148,8 +148,13 @@ test('mutation: an install, a download or a browser suite step without its own t
   assert.deepEqual(rules(ci(install)), ['step-timeout@leg-1']);
   const suite = setBound(CI, 'logs/leg-2-${{ matrix.browser }}.log\n        ', () => null);
   assert.deepEqual(rules(ci(suite)), ['step-timeout@leg-2']);
+  // the pinned Majordomus install: ci.yml's knowledge job, and the same step in pages.yml's
+  // deploy job (P015)
   const download = setBound(CI, '(pinned version and digest)\n        ', () => null);
   assert.deepEqual(rules(ci(download)), ['step-timeout@knowledge']);
+  const pagesDownload = setBound(PAGES, '(pinned version and digest)\n        ', () => null);
+  assert.deepEqual(rules(checkWorkflow('pages.yml', pagesDownload, SUITES)),
+    ['step-timeout@deploy']);
   const smoke = setBound(PAGES, '      - name: Public smoke of the deployed page (fatal)\n'
     + '        ', () => null);
   assert.deepEqual(rules(checkWorkflow('pages.yml', smoke, SUITES)), ['step-timeout@smoke']);
@@ -158,6 +163,8 @@ test('mutation: an install, a download or a browser suite step without its own t
 test('mutation: a curl without --retry or --connect-timeout', () => {
   const noRetry = mutate(CI, " --retry 3 --retry-all-errors --retry-delay 5", '');
   assert.deepEqual(rules(ci(noRetry)), ['curl-flags@knowledge']);
+  assert.deepEqual(rules(checkWorkflow('pages.yml', mutate(PAGES,
+    ' --retry 3 --retry-all-errors --retry-delay 5', ''), SUITES)), ['curl-flags@deploy']);
   assert.match(ci(noRetry)[0].message, /curl without --retry <n>/);
   const noConnect = mutate(CI, ' --connect-timeout 20', '');
   assert.deepEqual(rules(ci(noConnect)), ['curl-flags@knowledge']);
@@ -224,6 +231,9 @@ test('mutation: a download that is not checked against a pinned digest', () => {
   const unchecked = mutate(CI,
     '          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -\n', '');
   assert.deepEqual(rules(ci(unchecked)), ['download-digest@knowledge']);
+  assert.deepEqual(rules(checkWorkflow('pages.yml', mutate(PAGES,
+    '          echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -\n', ''), SUITES)),
+  ['download-digest@deploy']);
   const unpinned = CI.replace(/\n {6}MJ_SHA256: [0-9a-f]{64}\n/, '\n');
   assert.notEqual(unpinned, CI);
   assert.deepEqual(rules(ci(unpinned)), ['download-digest@knowledge']);

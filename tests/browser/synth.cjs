@@ -82,6 +82,10 @@
 //              Fails on 3c22d01a (the receiver brings it back at its declared 2)
 //   s-studio   Open in Studio: #m=studio, the panel's nodes selected, the same revision
 //   s-escape   Escape releases a held note; leaving the workspace disarms: runtime census 0
+//   s-connect-escape K236 (329 R6): a pending connect from MG CV, its connection list shown,
+//              then Escape: the list is hidden with no Patch button left, and Enter on LPF
+//              Cutoff starts a new connect from there instead of patching MG into it.
+//              Fails on c4a5d77a (the list stays open and the stale jack still connects)
 //   s-tap      K184: 20 QWERTY taps whose key-down and key-up share one task each sound
 //   s-armstop  the Arm button follows the transport (review S1): Arm, then a transport Stop
 //              made outside the Synth while it is shown (page hide; before any Studio visit):
@@ -1233,7 +1237,7 @@ function defineChecks() {
     await page.keyboard.up('KeyA');
     await page.goto(`${base}#m=synth&yp=nope`);
     await until(() => page.evaluate(() => window.location.hash.indexOf('yp=') < 0
-      && /no preset/.test(window.OSCILLA.app.synth.status)),
+      && /předvolba "nope" neexistuje/.test(window.OSCILLA.app.synth.status)),
     { ms: 15000, what: 'the malformed link is refused and its keys leave' });
     await page.close();
     return { ok: text.trim() === '300 Hz', knob: text, rmsDb: p.rmsDb };
@@ -2620,6 +2624,32 @@ function defineChecks() {
       && /can take the cable/.test(list.can) && /refused: /.test(list.no)
       && d.cables.some((c) => c.from === 'mg.control' && c.to === 'lpf.frequency'), list,
     cables: d.cables };
+  });
+
+  def('s-connect-escape', async ({ page }) => {
+    await page.locator('[data-jack="mg.control:out"]').focus();
+    await page.keyboard.press('Enter');
+    const listed = () => page.evaluate(() => {
+      const box = document.querySelector('[data-osc="synth.connect"]');
+      return { hidden: box.hidden, patch: box.querySelectorAll('[data-connect-to]').length };
+    });
+    const open = await until(() => listed().then((l) => (!l.hidden && l.patch > 0 ? l : null)),
+      { ms: 5000, what: 's-connect-escape: the connection list of MG CV opens' });
+    // Escape is the playback bus's stopAll (C050), which ends the Synth's pending connect.
+    await page.keyboard.press('Escape');
+    const closed = await until(() => listed().then((l) => (l.hidden && l.patch === 0 ? l : null)),
+      { ms: 5000, what: 's-connect-escape: Escape closes the connection list' })
+      .catch(() => null);
+    const before = (await dbg(page)).cables.length;
+    await page.locator('[data-jack="lpf.frequency:in"]').focus();
+    await page.keyboard.press('Enter');
+    const after = await listed();
+    const d = await dbg(page);
+    const stale = d.cables.some((c) => c.from === 'mg.control' && c.to === 'lpf.frequency');
+    // Enter on Cutoff opened its own list: a new connect, not the one Escape ended.
+    await page.keyboard.press('Escape');
+    return { ok: !!closed && !stale && d.cables.length === before && !after.hidden,
+      open, closed, after, stale, cables: d.cables.length, before };
   });
 
   def('s-mobile', async ({ page }) => {

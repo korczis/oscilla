@@ -288,14 +288,23 @@ Shown disabled, each with the reason it cannot be offered yet (`ENGINE_BLOCKED`)
 
 <!-- derived:live:begin (npm run readme) -->
 These charts are regenerated from the repository on every Pages deploy (release records,
-the plan, the claims ledger and git history, through `scripts/facts.mjs`), so they are
-current without a commit. The interactive versions are on the [landing page](https://korczis.github.io/oscilla/lab/).
+the plan, the claims ledger, the review records, git history and the trees of the release
+tags, read by `scripts/facts.mjs`), so they are current without a commit; nothing in them
+is estimated. The interactive versions are on the landing's [charts page](https://korczis.github.io/oscilla/lab/grafy/), and each dashboard of the [landing page](https://korczis.github.io/oscilla/lab/) has its
+own page: [claims explorer](https://korczis.github.io/oscilla/lab/tvrzeni/), [per-release changes](https://korczis.github.io/oscilla/lab/zmeny/), [roadmap](https://korczis.github.io/oscilla/lab/roadmapa/), [ratchets](https://korczis.github.io/oscilla/lab/dluh/), [reviews and audits](https://korczis.github.io/oscilla/lab/revize/) and [ADRs](https://korczis.github.io/oscilla/lab/adr/).
 
 <p><img src="https://korczis.github.io/oscilla/lab/charts/releases.svg" width="100%" alt="Release timeline: every published release of OSCILLA by its publication date"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/size.svg" width="100%" alt="The size of the single-file app (dist/index.html) in each published release"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/plan.svg" width="100%" alt="Plan progress: the issues done of each milestone, by milestone status"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/claims.svg" width="100%" alt="The claims of docs/CLAIMS.yaml by status"></p>
 <p><img src="https://korczis.github.io/oscilla/lab/charts/activity.svg" width="100%" alt="Commits per ISO week over the last 26 weeks of the repository"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/modules.svg" width="100%" alt="Source size of each src/js module at the deployed commit, largest first"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/growth.svg" width="100%" alt="Unit test files and browser suites in the tree of each release tag"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/burnup.svg" width="100%" alt="Plan burn-up: issues in the plan and issues done, cumulative per UTC day"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/claims-trend.svg" width="100%" alt="The claims of docs/CLAIMS.yaml by status at every release tag"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/ratchets.svg" width="100%" alt="Every ratchet baseline of the repository at each release tag, one panel each"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/reviews.svg" width="100%" alt="Review findings by severity per ISO week of the review record"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/cadence.svg" width="100%" alt="Hours between consecutive published releases, with their median"></p>
 <!-- derived:live:end -->
 
 ## Navigation
@@ -854,17 +863,15 @@ What it does not do yet, each named with the work that would fill it:
 - A MIDI performance cannot be recorded into the song (V505).
 - Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
   gap G4).
-- The song has no filter Q lane yet, so the build's rising resonance is in the score only (K144
-  gap G10): the Studio plays a low-pass Q lane since K232, and the template adds it in its next
-  version.
 - The Studio's view nodes draw nothing (K016).
 - After a reload the Studio opens the default template, not the last project (V604).
 - No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
   the speaker or loopback path a sound plays through, not the song.
 
-The score keeps the velocities and the Q lane, so each can join the template once the Studio
-can play it, and a drive lane, which the template does not use yet although the Drive node
-exists.
+The score keeps the velocities, so they can join the template once the Studio can play them,
+and a drive lane, which the template does not use yet although the Drive node exists. Its
+bass filter Q lane joined the template in version 2, once the Studio played a low-pass Q lane
+(K232; K144 gap G10).
 
 `tests/unit/demo-song.test.mjs` checks the song as data: one clip per note of the score, the
 pinned hash, an offline render plan of the whole song with no limitation, and that the six

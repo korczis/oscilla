@@ -95,6 +95,16 @@
 //              starts it running even under the gesture rule, so there the line must never say
 //              it); the lift silences, the line says the pad plays, a second held touch sounds
 //              and its release silences; no touch edits the document
+//   x-padrec   (K231; desktop and the phone-cold leg, the gesture rule ON there) REC on pad L
+//              under the Panel face, on the default document with its clips removed and a loop
+//              of 0-3 s: the Record switch on, the pad's timeline Play plays it, a press held on
+//              pad L's right edge for 0.8 s of audio clock, the switch off writes the take in
+//              one undo entry (lanes of the pad's own x and y, said "Záznam zapsán: ... bodů
+//              automatizace, jedna úprava."); on the desktop with QWERTY A held (VCO 2 silent)
+//              the press opens the low-pass (the 6-12 kHz band against C4, 6 dB+ over pad L at
+//              rest) and so does the next pass with no touch (the lane drives the cutoff through
+//              the pad's normal); on the phone the transport plays both lanes; one undo removes
+//              the take
 //   x-pads-cold   (K220; the phone-cold leg, the gesture rule ON) the Synth opened on its Panel
 //              tab with no user activation: the phone shows pad L first (the L/R toggle); its
 //              first touch starts the audio and holds its gate (aria-pressed), its lift closes it;
@@ -174,7 +184,7 @@ const LEG_OF = { 'x-touch': 'phone', 'x-chip-gap': 'phone', 'x-cold-touch': 'pho
 const CONTEXT_OF = { 'x-view-reduced': { reducedMotion: 'reduce' } };
 // x-first runs on the desktop and the phone legs; K171 holds at the iPhone 13 and SE sizes,
 // and at 1536 x 1024 and 1280 x 720 with a mouse.
-const LEGS_OF = { 'x-first': ['desktop', 'phone'],
+const LEGS_OF = { 'x-first': ['desktop', 'phone'], 'x-padrec': ['desktop', 'phone-cold'],
   'x-dock-yields': ['phone-dock', 'phone-dock-se'], 'x-dock-desktop': ['desktop', 'laptop'],
   'x-dock-handle-hold': ['phone-dock'] };
 // The legs with the browser's gesture rule on and mobile emulation where the engine has it.
@@ -186,7 +196,7 @@ const PRESET_OF = { 'x-link': 'xy-lead', 'x-pointer': 'xy-lead', 'x-view': 'xy-l
 // The tab a check opens the Synth on (default the XY tab): x-dock-yields starts on its Panel.
 const TAB_OF = { 'x-dock-yields': 'panel' };
 // Checks that open their own page (x-cold-touch: with no user activation before its touch).
-const SELF_OPEN = new Set(['x-cold-touch', 'x-pads-cold']);
+const SELF_OPEN = new Set(['x-cold-touch', 'x-pads-cold', 'x-padrec']);
 // Engines a check cannot run on, with the reason (reported as a skip, never as a check).
 const SKIP_OF = {
   'x-touch': { firefox: 'two touch points need the CDP touch input',
@@ -1097,6 +1107,163 @@ function defineChecks() {
   // K220 with project.a-phone-sounds: on a cold page (no activation, the gesture rule on) the
   // first touch on pad R under the Panel face sounds and its lift silences; a touch on pad L
   // arms and holds its gate; neither edits the document.
+  // K231: REC on pad L (see the header). The desktop judges the sound, the phone the take.
+  def('x-padrec', async ({ context, base, browserName, sizeName }) => {
+    const phone = sizeName === 'phone-cold';
+    const cdpTouch = phone && browserName === 'chromium';
+    let page = null;
+    if (cdpTouch) { // no wait of the harness may grant an activation before the first tap
+      page = await context.newPage();
+      await page.goto(`${base}#m=synth`);
+    } else {
+      page = await openXy(context, base, { tab: 'panel' });
+    }
+    const quiet = await quietOf(page, cdpTouch);
+    const L = '[data-osc="synth.pads.l"] [data-xy-surface]';
+    const SW = '[data-pad-record] [data-notes-record]';
+    const PLAY = '[data-pad-play]';
+    await until(() => quiet((q) => !!document.querySelector(q), SW), { ms: LOAD_MS,
+      what: 'x-padrec: pad L shows its Record switch' });
+    // A settled point: the document edit below shrinks the Synth view a frame later, which
+    // clamps the scroll and moves the controls down (webkit renders that frame after the first
+    // read: a tap measured there landed on the block above the Record switch). The point is
+    // taken once two reads agree and the element is the one hit there.
+    const point = async (sel, fx, fy) => {
+      let prev = null;
+      return until(async () => {
+        const p = await quiet(([q, x, y]) => {
+          const el = document.querySelector(q);
+          el.scrollIntoView({ block: 'center' });
+          const b = el.getBoundingClientRect();
+          const at = { x: b.left + x * b.width, y: b.top + (1 - y) * b.height };
+          const hit = document.elementFromPoint(at.x, at.y);
+          return { ...at, hit: !!hit && el.contains(hit) };
+        }, [sel, fx, fy]);
+        const same = prev && p.hit && p.x === prev.x && p.y === prev.y;
+        prev = p;
+        return same ? { x: p.x, y: p.y } : null;
+      }, { ms: 10000, what: `x-padrec: ${sel} is settled where a press lands on it` });
+    };
+    const tap = async (sel) => (await press(page, await point(sel, 0.5, 0.5),
+      { touch: cdpTouch })).lift();
+    // On the desktop a held key plays C4 through the presses: a click there moves no focus.
+    const click = (sel) => (phone ? tap(sel) : page.evaluate((q) => {
+      document.querySelector(q).click();
+    }, sel));
+    // The document: no template clip sounds in the band; a loop replays the take.
+    const id = await quiet(() => {
+      const st = window.OSCILLA.studio;
+      const m = st.model;
+      const n = m.graph.nodes.find((x) => x.type === 'xy-pad' && x.id.endsWith('-xyl'));
+      const mix = m.graph.nodes.find((x) => x.type === 'mixer');
+      const steps = [...m.timeline.clips.map((c) => ({ type: 'CLIP_REMOVE', clipId: c.id })),
+        { type: 'LOOP_SET', enabled: true, start: 0, end: 3 }];
+      if (mix) steps.push({ type: 'NODE_PARAM_SET', nodeId: mix.id, key: 'level2', value: 0 });
+      return n && st.store.dispatch({ type: 'BATCH', label: 'x-padrec', steps }).ok ? n.id : null;
+    });
+    if (!id) return { ok: false, detail: 'the document could not be prepared' };
+    const state = () => quiet((pad) => {
+      const st = window.OSCILLA.studio;
+      const t = st.transport;
+      const info = t ? t.debugInfo() : null;
+      return { playing: !!(t && t.playhead().playing), pass: t ? t.playhead().pass : null,
+        audio: window.OSCILLA.engine.ctx ? window.OSCILLA.engine.ctx.currentTime : null,
+        depth: st.store.debugInfo().undoDepth, status: window.OSCILLA.app.synth.status,
+        lanes: st.model.timeline.automation.filter((l) => l.target.node === pad)
+          .map((l) => [l.target.param, l.points.length]).sort(),
+        playedLanes: info ? info.lanes.filter((l) => l.target.node === pad)
+          .map((l) => l.target.param).sort() : [],
+        unplayed: info ? info.unplayed.length : null };
+    }, id);
+    await tap(SW);
+    await until(() => quiet((q) => document.querySelector(q).getAttribute('aria-checked')
+      === 'true', SW), { ms: 10000, what: 'x-padrec: the Record switch is on' });
+    await tap(PLAY);
+    await until(async () => (await state()).playing, { ms: SOUND_MS,
+      what: 'x-padrec: the pad\'s Play plays the timeline' });
+    const rel = (q) => bandDb(q, 6000, 12000) - levelAt(q, C4);
+    /** rel once two readings 0.3 s of audio clock apart agree within 0.5 dB. */
+    const steady = async (what) => {
+      let prev = null;
+      let now = null;
+      await until(async () => {
+        const [q, a] = [await read(page), (await state()).audio];
+        now = rel(q);
+        if (!prev || a - prev.a < 0.3) {
+          if (!prev) prev = { a, v: now };
+          return false;
+        }
+        const same = Math.abs(now - prev.v) < 0.5;
+        prev = { a, v: now };
+        return same;
+      }, { ms: SOUND_MS, what });
+      return now;
+    };
+    let rest = null;
+    if (!phone) {
+      await page.keyboard.down('KeyA');
+      await sound(page, (q) => q.rmsDb > -45 && peakAt(q, C4), 'x-padrec: QWERTY A sounds C4');
+      rest = await steady('x-padrec: the band with pad L at rest');
+    }
+    const s0 = await state();
+    const held = await press(page, await point(L, 0.97, 0.5), { touch: cdpTouch });
+    if (!phone) {
+      await until(async () => rel(await read(page)) - rest >= 6, { ms: SOUND_MS,
+        what: 'x-padrec: the press on pad L\'s right edge opens the low-pass' });
+    }
+    await until(async () => (await state()).audio - s0.audio >= 0.8, { ms: SOUND_MS,
+      what: 'x-padrec: the press is held for 0.8 s of audio clock' });
+    await held.lift();
+    if (!phone) {
+      await until(async () => Math.abs(rel(await read(page)) - rest) < 1.5, { ms: SOUND_MS,
+        what: 'x-padrec: the lift closes the low-pass again (within 1.5 dB of pad L at rest)' });
+    }
+    const lifted = await state();
+    const d0 = lifted.depth;
+    await click(SW);
+    // Switched off with the take pending, the one sentence also says Record is off.
+    const TAKE_SAID = new RegExp('^Záznam zapsán: \\d+ bod(y|ů)? automatizace, jedna úprava\\.'
+      + '( Nahrávání vypnuto\\.)?$');
+    // A press held still is a ramp in, the touch and a ramp out on each lane: 3 points.
+    let last = null;
+    const taken = await until(async () => {
+      const v = await state();
+      last = v;
+      return v.lanes.length === 2 && v.lanes.every(([, n]) => n >= 3)
+        && TAKE_SAID.test(v.status)
+        ? v : null;
+    }, { ms: 10000, what: 'x-padrec: the switch off writes the take and says so' })
+      .catch((e) => ({ failed: `${e.message.split('\n')[0]} ${JSON.stringify(last)}` }));
+    if (taken.failed) return { ok: false, detail: taken.failed };
+    const one = taken.depth === d0 + 1;
+    let replay = null;
+    if (!phone) {
+      // The next pass, no touch: the take's lane drives the cutoff through the pad's normal.
+      // A later pass than the take's, so what opens the band is the lane, not the touch.
+      replay = await until(async () => {
+        const q = await read(page);
+        const v = await state();
+        return v.pass > lifted.pass && rel(q) - rest >= 6
+          ? { pass: v.pass, db: Number((rel(q) - rest).toFixed(1)) } : null;
+      }, { ms: 2 * 3000 + SOUND_MS, what: 'x-padrec: a later pass replays the take (the band '
+        + 'opens with no touch)' });
+      await page.keyboard.up('KeyA');
+    } else {
+      replay = await until(async () => {
+        const v = await state();
+        return String(v.playedLanes) === 'x,y' && v.unplayed === 0 ? v.playedLanes : null;
+      }, { ms: SOUND_MS, what: 'x-padrec: the transport plays both lanes of the take' });
+    }
+    await click(PLAY); // Stop
+    await until(async () => !(await state()).playing, { ms: SOUND_MS,
+      what: 'x-padrec: Stop stops the timeline' });
+    await quiet(() => window.OSCILLA.studio.store.undo());
+    const undone = await until(async () => ((await state()).lanes.length === 0 ? true : null),
+      { ms: 10000, what: 'x-padrec: one undo removes the take' });
+    return { ok: !!(taken && one && replay && undone), lanes: taken.lanes, status: taken.status,
+      one, replay };
+  });
+
   def('x-pads-cold', async ({ context, base, browserName }) => {
     const chromium = browserName === 'chromium';
     const page = chromium ? await context.newPage()

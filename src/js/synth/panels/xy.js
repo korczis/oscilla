@@ -15,8 +15,10 @@ export const XY_TAB = Object.freeze({ id: 'xy', label: 'XY', title: 'XY performa
     + 'vede; starší dokumenty mají Y kabelem do LPF Cutoff. Nota zní, dokud se padu dotýkáte. '
     + 'XY preset je patch panelu se stupnicí.' });
 
+// The pad's own x and y (the outputs at rest, a recorded take's lanes, K231) are Studio-only:
+// the pad is their control, not a knob.
 export const XY_MODULE = Object.freeze({ id: 'xy', label: 'XY PAD', node: 'xy-pad',
-  tab: XY_TAB.id, adds: Object.freeze(['x', 'y']) });
+  tab: XY_TAB.id, adds: Object.freeze(['x', 'y']), studio: Object.freeze(['x', 'y']) });
 
 /**
  * Pad L of the Synth face (plan K220, Q103): a second xy-pad node of the panel, on the Panel tab
@@ -33,4 +35,4 @@ export const XY_MODULE = Object.freeze({ id: 'xy', label: 'XY PAD', node: 'xy-pa
  */
 export const XYL_MODULE = Object.freeze({ id: 'xyl', label: 'PAD L', node: 'xy-pad',
   tab: 'panel', optional: true, fixed: Object.freeze({ mode: 'chromatic', key: 'C', octave: 3, span: 1,
-    glide: 0 }) });
+    glide: 0 }), studio: Object.freeze(['x', 'y']) });

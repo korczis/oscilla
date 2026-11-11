@@ -18,6 +18,7 @@
 
 import { PATCH_KIND, PATCH_SCHEMA_VERSION, patchTargets } from '../studio/patches.js';
 import { STUDIO_SCHEMA_VERSION } from '../studio/schema.js';
+import { amountEdges } from './normals.js';
 
 export const PRESETS = Object.freeze([
   { id: 'init', title: 'Init: both filters open', values: {},
@@ -128,8 +129,30 @@ export function presetAction(model, panel, id, { all = false, modules = null } =
   if (!Object.keys(onto).length) {
     return { reason: `The ${panel.title} is not in this Studio document: insert it first.` };
   }
-  const action = { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` };
-  if (!presetOf(id).engine || all || modules || !model.metadata.noteTarget) return { action };
-  return { action: { type: 'BATCH', label: action.label,
-    steps: [action, { type: 'METADATA_SET', noteTarget: null }] } };
+  const replace = { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` };
+  const steps = [replace];
+  // K236 (329 R5): an amount whose edges are all broken (a cable replaced its normal) keeps its
+  // depth in metadata.synthAmounts, which the normal comes back at; the preset's depth goes
+  // there, in the same undo, or an unpatch would restore the depth from before the preset.
+  const remembered = rememberedDepths(model, panel, patch, presetOf(id));
+  if (remembered) steps.push({ type: 'METADATA_SET', synthAmounts: remembered });
+  if (presetOf(id).engine && !all && !modules && model.metadata.noteTarget) {
+    steps.push({ type: 'METADATA_SET', noteTarget: null });
+  }
+  return { action: steps.length === 1 ? replace
+    : { type: 'BATCH', label: replace.label, steps } };
+}
+
+/** The preset's depth of every amount in the patch's scope that has no edge now, or null. */
+function rememberedDepths(model, panel, patch, p) {
+  const ids = new Set(patch.graph.nodes.map((n) => n.id));
+  const had = (model.metadata || {}).synthAmounts || {};
+  const out = {};
+  for (const a of panel.amounts) {
+    if (!ids.has(a.source.split('.')[0]) || !a.to.some((t) => ids.has(t.split('.')[0]))) continue;
+    if (amountEdges(model, panel, a).length) continue;
+    const depth = p.amounts[a.id] ?? 0;
+    if (had[a.key] !== depth) out[a.key] = depth;
+  }
+  return Object.keys(out).length ? out : null;
 }

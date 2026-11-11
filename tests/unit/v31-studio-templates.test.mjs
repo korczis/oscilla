@@ -139,7 +139,8 @@ const PINNED_V1 = {
   'drive-lead': '24725ac1da7d547cd57e4a68e2c955dcf5893d6a10163b4eb33bfa6ebf298521',
   'macro-pad': '915a0e756f4a78226d903c349b6bc5e522812168f0a6d97cc8713702fcd4dbaf',
   'step-bass': '701d7e300d2c0307da24b0c8b75610e30de59c4d6da2a0e2e9fa2439cc5079fc',
-  'demo-song': '6af3c386ab88fe2c98d1a11a65d2f537fafbb3cd49b4aed7ca0a234e733405b6',
+  // demo-song version 2 (K144 G10: the bass Q lane); version 1's hashes: demo-song.test.mjs
+  'demo-song': '65de98eba81a1fa81d60d51d52e6afefe26d32497f61d7c6591f8d87cd5ee15d',
 };
 /** Epoch 2 (K022, before epoch 3). */
 const PINNED_V2 = {
@@ -156,7 +157,7 @@ const PINNED_V2 = {
   'drive-lead': '494d54a3ba1d2f3d51f5432a53f3fe5426633ecbb1ad16f5abe1cdeb891c77c4',
   'macro-pad': 'd907885f0f26bec7b3ecec3f7aeea594981a2433d10cf9b6781279124936e239',
   'step-bass': 'bf4ccc6463b4e3915c43563c41dc74a9b956980309f0b907b6f5d1477bad5330',
-  'demo-song': 'c44957c33f8a738ae8f4dceeecf2796f5804417a1494373068932bd32342b2c3',
+  'demo-song': '31ea9e48470c9385712153a7cf4960309d8edd857321dd3ae23bbddc197fa43b',
 };
 /** Epoch 3 (K071/K072, K229/K230): the current studioHash. */
 const PINNED = {
@@ -173,7 +174,7 @@ const PINNED = {
   'drive-lead': '8df349d9160942b5d4b0967ba83c206b5d66489d9c1baa73df82e2b486a7cb29',
   'macro-pad': '61472bb65ff35d98b25b05e90e37f68369ab3a85ab32a170d0a947013ed5aa78',
   'step-bass': '98d2e7036f0701fd4fbf462453feb1142afe6c72e3dbc7891756a65b1588a277',
-  'demo-song': 'a93e800886ce42c6fee5da20290ed332caaf5aa15beead339b159fc98a9b51d9',
+  'demo-song': '019d30d01b1ffb11708bfe80caec15a180951ba501936b9aa5e7934e0cc0bc04',
 };
 
 test('V617 every template keeps its pinned hash; the hashes are distinct', () => {

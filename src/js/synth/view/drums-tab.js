@@ -31,6 +31,9 @@ import { NEW_STEP_GRID } from '../../studio/notes-grid.js';
 import { PERC_VOICE_PARAMS, percParamKey } from '../perc-recipes.js';
 import { mountStepGrid } from '../../ui/kinds/step-grid.js';
 import { bindRecordSwitch, recordSwitchHtml } from '../../ui/kinds/record-switch.js';
+import {
+  PLAY_BUTTON, RECORD_BUTTON, bindTimelinePlay, timelinePlayHtml,
+} from './timeline-play.js';
 import { clipStepsView, playingStep } from '../../ui/studio/inspector-steps.js';
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -38,9 +41,7 @@ const BUTTON = 'inline-flex h-11 items-center gap-1 rounded-lg border border-sol
   + 'bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none '
   + 'focus-visible:ring-2 focus-visible:ring-primary-300 disabled:opacity-50 '
   + 'dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700';
-const PRIMARY = 'inline-flex h-11 items-center rounded-lg bg-primary-600 px-4 text-sm '
-  + 'font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 '
-  + 'focus-visible:ring-primary-300';
+const PRIMARY = PLAY_BUTTON;
 const PAD = 'h-11 w-full rounded-lg border border-solid border-gray-300 bg-gray-50 px-3 '
   + 'text-sm font-medium text-gray-900 active:bg-primary-600 active:text-white '
   + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 touch-none '
@@ -49,7 +50,7 @@ const SELECT = 'h-11 w-full rounded-lg border border-solid border-gray-300 bg-gr
   + 'text-sm text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 '
   + 'dark:border-gray-600 dark:bg-gray-700 dark:text-white';
 const TEXT = Object.freeze({
-  title: 'BICÍ', grid: 'Bicí kroky', play: 'Přehrát', stop: 'Zastavit', open: 'Otevřít ve Studiu',
+  title: 'BICÍ', grid: 'Bicí kroky', open: 'Otevřít ve Studiu',
   pads: 'Pady', voice: (name) => `Zvuk řady ${name}`, sound: 'ZVUK ŘADY',
   soundPick: 'Upravit zvuk řady', noKit: 'Tento dokument Studia nemá '
     + 'perkusní engine panelu.', empty: 'Bicí ještě nemají klip: vytvořte jeden takt kroků na '
@@ -91,8 +92,8 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
   function toolbar() {
     const playing = isPlaying();
     return '<div class="mb-2 flex flex-wrap items-center gap-2">'
-      + `<button type="button" class="${PRIMARY}" data-drums-play="" aria-pressed="${playing}">`
-      + `${playing ? TEXT.stop : TEXT.play}</button>${recordSwitchHtml(BUTTON)}`
+      + `${timelinePlayHtml({ hook: 'data-drums-play', playing })}`
+      + `${recordSwitchHtml(RECORD_BUTTON)}`
       + `<button type="button" class="${BUTTON}" data-drums-open="" `
       + `data-osc="synth.drums.studio" data-osc-link="open-in">${TEXT.open}</button></div>`;
   }
@@ -194,22 +195,16 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
     // K223: Record beside Play, the transport's one recorder armed for this clip.
     m.record = bindRecordSwitch(body.querySelector('[data-notes-record]'), { transport,
       store: { getModel: model, dispatch }, clipId: () => (m ? m.clipId : null), say });
+    // Play and Stop: the one timeline Play beside a Record switch (timeline-play.js, K231).
+    m.play = bindTimelinePlay(body.querySelector('[data-drums-play]'), { transport, say,
+      playhead, onChange: () => { if (m) m.playing = isPlaying(); } });
     listen(body);
   }
 
   function listen(body) {
     body.addEventListener('click', (e) => {
-      const t = transport();
-      if (e.target.closest('[data-drums-play]') && t) {
-        // The timeline runs iff the transport plays and is not merely armed: a pad strike arms
-        // it (K104, playing true), and Play must then start the timeline, not disarm (review
-        // R2-K222-5).
-        const r = t.playing && !t.armed ? t.stop() : t.start();
-        if (r && r.ok === false && r.reason) say(r.reason, true);
-        syncBar();
-      } else if (e.target.closest('[data-drums-open]') && m) {
-        openStudio(m.clipId);
-      }
+      // Play and Stop are timeline-play.js's (bound in mount).
+      if (e.target.closest('[data-drums-open]') && m) openStudio(m.clipId);
     });
     body.addEventListener('change', (e) => {
       const pick = e.target.closest('[data-drums-sound]');
@@ -274,12 +269,8 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
   /** The Play button says what a press does now, written only when that changes. */
   function syncBar() {
     if (!m) return;
-    const playing = isPlaying();
-    m.playing = playing;
-    const btn = m.root.querySelector('[data-drums-play]');
-    if (!btn) return;
-    btn.textContent = playing ? TEXT.stop : TEXT.play;
-    btn.setAttribute('aria-pressed', String(playing));
+    m.playing = isPlaying();
+    m.play.sync();
   }
 
   function mount() {
@@ -317,6 +308,7 @@ export function createDrumsTab({ nodes, model, dispatch, say, transport, playhea
     if (m) {
       m.grid.destroy();
       m.record.destroy();
+      m.play.destroy();
     }
     m = null;
   }

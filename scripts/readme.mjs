@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ACTIVITY_WEEKS, CHART_BASE, CHARTS, REPO_ROOT, collectFacts } from './facts.mjs';
+import { SUBPAGES } from './landing/page.mjs';
 
 export const README_PATH = path.join(REPO_ROOT, 'README.md');
 export const LANDING_URL = 'https://korczis.github.io/oscilla/lab/';
@@ -167,15 +168,30 @@ export const CHART_ALT = Object.freeze({
   plan: 'Plan progress: the issues done of each milestone, by milestone status',
   claims: 'The claims of docs/CLAIMS.yaml by status',
   activity: `Commits per ISO week over the last ${ACTIVITY_WEEKS} weeks of the repository`,
+  modules: 'Source size of each src/js module at the deployed commit, largest first',
+  growth: 'Unit test files and browser suites in the tree of each release tag',
+  burnup: 'Plan burn-up: issues in the plan and issues done, cumulative per UTC day',
+  'claims-trend': 'The claims of docs/CLAIMS.yaml by status at every release tag',
+  ratchets: 'Every ratchet baseline of the repository at each release tag, one panel each',
+  reviews: 'Review findings by severity per ISO week of the review record',
+  cadence: 'Hours between consecutive published releases, with their median',
 });
+
+/** The landing's dashboard sub-pages (plan P018), each by its own URL under LANDING_URL. */
+export const subpageUrl = (dir) => `${LANDING_URL}${dir}/`;
 
 function renderLive() {
   const imgs = CHARTS.map((name) => `<p><img src="${CHART_BASE}${name}.svg" width="100%" alt="${
     html(CHART_ALT[name] ?? name)}"></p>`);
+  const charts = SUBPAGES.find((p) => p.dir === 'grafy');
+  const pages = SUBPAGES.filter((p) => p !== charts).map((p) => `[${p.en}](${subpageUrl(p.dir)})`);
   return [
     'These charts are regenerated from the repository on every Pages deploy (release records,',
-    'the plan, the claims ledger and git history, through `scripts/facts.mjs`), so they are',
-    `current without a commit. The interactive versions are on the [landing page](${LANDING_URL}).`,
+    'the plan, the claims ledger, the review records, git history and the trees of the release',
+    'tags, read by `scripts/facts.mjs`), so they are current without a commit; nothing in them',
+    `is estimated. The interactive versions are on the landing's [${charts.en} page](${
+      subpageUrl(charts.dir)}), and each dashboard of the [landing page](${LANDING_URL}) has its`,
+    `own page: ${pages.slice(0, -1).join(', ')} and ${pages[pages.length - 1]}.`,
     '',
     ...imgs,
   ].join('\n');
