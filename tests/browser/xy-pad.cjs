@@ -400,12 +400,22 @@ async function padPoint(page, i, fy) {
     }
     (sc && sc !== document.body ? sc : window).scrollBy(0, -80);
   });
-  const b = await page.locator('[data-xy-surface]').boundingBox();
-  const p = { x: b.x + ((i + 0.5) / STEPS) * b.width, y: b.y + (1 - fy) * b.height };
-  const hit = await page.evaluate((q) => !!document.elementFromPoint(q.x, q.y)
-    .closest('[data-xy-surface]'), p);
-  if (!hit) throw new Error(`the pad point ${i}, ${fy} is covered`);
-  return p;
+  // E070: under load (linux WebKit, main as much as the fix) the surface had no box yet when
+  // it was read once ("Cannot read properties of null"), so the point waits for a box that two
+  // reads agree on and that elementFromPoint puts on the pad.
+  let seen = null;
+  return until(async () => {
+    const b = await page.locator('[data-xy-surface]').boundingBox();
+    const p = b && { x: b.x + ((i + 0.5) / STEPS) * b.width, y: b.y + (1 - fy) * b.height };
+    const same = p && seen && Math.abs(p.x - seen.x) < 0.5 && Math.abs(p.y - seen.y) < 0.5;
+    seen = p;
+    if (!same) return null;
+    const hit = await page.evaluate((q) => {
+      const at = document.elementFromPoint(q.x, q.y);
+      return !!(at && at.closest('[data-xy-surface]'));
+    }, p);
+    return hit ? p : null;
+  }, { ms: 5000, what: `the pad point ${i}, ${fy} is laid out, settled and uncovered` });
 }
 
 /** The pad's view (S3): the ring's centre, its readouts, the trail, the LED, the Y ends, the
@@ -572,7 +582,19 @@ function defineChecks() {
     p = await padPoint(page, 6, 0.05);
     await page.mouse.move(p.x, p.y, { steps: 4 });
     await sound(page, (q) => peakAt(q, EB4), 'the seventh step sounds Eb4');
-    const base = await sound(page, (q) => peakAt(q, EB4), 'Eb4 with Y at the bottom');
+    // E070: the reference is read once the band has settled. Right after Eb4 sounds, EG 2 is
+    // still decaying to its sustain (the derivation's operating point) and the analyser is
+    // smoothing: the band relative to Eb4 fell -25.8 -> -36.3 dB over six reads, and a base read
+    // at the top left the derived rise unreachable for the whole wait (WebKit, 1 of 8).
+    const BAND = [10000, 16000];
+    const rel = (q) => bandDb(q, BAND[0], BAND[1]) - levelAt(q, EB4);
+    const recent = [];
+    const base = await sound(page, (q) => {
+      if (!peakAt(q, EB4)) { recent.length = 0; return false; }
+      recent.push(rel(q));
+      const last = recent.slice(-3);
+      return last.length === 3 && Math.max(...last) - Math.min(...last) <= 0.5;
+    }, 'Eb4 with Y at the bottom, the band settled (three reads within 0.5 dB)');
     // What Y should do, derived from the document (K183 review F3: a preset keeps the LPF's
     // amount knobs, so EG 2 holds the cutoff up at its sustain): the cutoff of LPF Cutoff's
     // log cables, EG 2 at its sustain and Y at 0.05 or 0.95, all scaled by the one factor
@@ -603,7 +625,6 @@ function defineChecks() {
       : e.from === 'eg2' ? doc.sustain * e.depth : 0), 0) * kc;
     const fc = (y) => Math.min(cap, doc.f0) * 2 ** oct(y);
     const qDb = 20 * Math.log10(doc.q);
-    const BAND = [10000, 16000];
     let want = Infinity; // the least rise of the response over the band, 100 Hz steps
     for (let f = BAND[0]; f <= BAND[1]; f += 100) {
       want = Math.min(want, lowpassDb(f, fc(0.95), qDb, doc.sr) - lowpassDb(f, fc(0.05), qDb,
@@ -613,7 +634,6 @@ function defineChecks() {
       return { ok: false, detail: 'the derivation leaves Y no 6 dB to show in the band', want,
         doc, fc: [fc(0.05), fc(0.95)] };
     }
-    const rel = (q) => bandDb(q, BAND[0], BAND[1]) - levelAt(q, EB4);
     p = await padPoint(page, 6, 0.95);
     await page.mouse.move(p.x, p.y, { steps: 4 });
     // 2 dB under the derived least rise: the analyser's smoothing and the MG's vibrato.
@@ -1144,8 +1164,21 @@ function defineChecks() {
         return same ? { x: p.x, y: p.y } : null;
       }, { ms: 10000, what: `x-padrec: ${sel} is settled where a press lands on it` });
     };
-    const tap = async (sel) => (await press(page, await point(sel, 0.5, 0.5),
-      { touch: cdpTouch })).lift();
+    // E070: the view's reflow can come later than two agreeing reads (linux WebKit, 1 of 5 on
+    // main): the press then landed on the docked keyboard's bar below the moved switch. A tap
+    // records where its own pointerdown went; one that missed the target is made again, one that
+    // reached it (or left no pointerdown to judge) never is, so nothing toggles twice.
+    const tap = (sel) => until(async () => {
+      await quiet((q) => {
+        window.__tapHit = null;
+        document.addEventListener('pointerdown', (e) => {
+          const el = document.querySelector(q);
+          window.__tapHit = !!(el && el.contains(e.target));
+        }, { capture: true, once: true });
+      }, sel);
+      await (await press(page, await point(sel, 0.5, 0.5), { touch: cdpTouch })).lift();
+      return (await quiet(() => window.__tapHit)) === false ? null : true;
+    }, { ms: 25000, what: `x-padrec: a press lands on ${sel}` });
     // On the desktop a held key plays C4 through the presses: a click there moves no focus.
     const click = (sel) => (phone ? tap(sel) : page.evaluate((q) => {
       document.querySelector(q).click();

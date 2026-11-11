@@ -1,0 +1,60 @@
+# Review verdict for pull request #531 (test/e070-x-pointer): train T9 and release v3.33.2 (a
+# patch: release:analyze finds 2 patch-level commits since v3.33.1, no minor).
+# Guarded member: E071 (src/js/synth/voice-pool.js: a full pool steals by the order notes
+# arrived, 66b0c2c5, with the reviewer's R2-E071-1 fixed in 6e559f04). Unguarded members read as
+# members: E070 (tests/browser/xy-pad.cjs: x-pointer's band reference read settled and padPoint
+# waits for a settled, uncovered box, 1cf2239b; x-padrec repeats only a press that missed,
+# 85521c00), the plan records cf04978f (E069 done on 45db334e) and chore(release): v3.33.2
+# (d91a6696, f151a7f1, 1dab5d00's rebuild; no About station: a patch keeps its line's 3.33).
+# Judged at 1dab5d00 on base origin/main 45db334e (E069 and the v3.33.1 record, #530),
+# 2026-11-11, in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526 (first head
+# f151a7f1, then 1dab5d00).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-43 built E069, E070 and E071 (each issue's current_state) and
+# integrated it.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list: 3103e3cfdbfac329...
+# over 1 guarded path (src/js/synth/voice-pool.js).
+#
+# How it was judged:
+# - E071 at f151a7f1 (66b0c2c5) replaced every time comparison of the pool with call order
+#   (onAt, offAt). Right for onsets: live keys arrive in time order and note-player.js strikes
+#   onsets in time order (rebuild sorts the due hits). Wrong for releases: strike() calls
+#   noteOn(x.time) and noteOff(x.end) together at schedule time, so offAt was the order notes
+#   were scheduled, and a full pool stole a long note still held in audio time before a short
+#   one in its release. R2-E071-1 (P2): the reviewer's probe of the pool alone (max 2; A on 0,
+#   off 4, end 4.5; B on 0.1, off 0.2, end 0.7; C at 0.3) stole A (slot 0) on f151a7f1 and B
+#   (slot 1) on main. Fixed in 6e559f04: a slot counts as released only once s.released <= t,
+#   released voices are ordered by s.released with offAt breaking a tie, the oldest held voice
+#   stays arrival order; the probe steals B on 1dab5d00. Fail-first, run by the reviewer:
+#   synth-voice-pool fails 1 with main's pool (E071's tie test) and 1 with f151a7f1's pool (the
+#   new R2-E071-1 test), and passes with 1dab5d00's.
+# - E070 (test only): the band reference is read once three reads agree within 0.5 dB (the read
+#   right after Eb4 sounded was taken while EG 2 decayed); padPoint and x-padrec's point wait
+#   for a box two reads agree on that elementFromPoint puts on the target; a tap repeats only
+#   when its own pointerdown provably missed the target (no pointerdown is never repeated), and a
+#   stale once-listener cannot win (the newer one, registered later, overwrites __tapHit).
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run at 1dab5d00 and found
+# each leg's suite list equal to shards.cjs --plan at this head, "run-suites: all K suites
+# passed" and no FAIL line, AND has run the release CI receipt check against this run with the
+# base ci.yml (45db334e's). Auto-merge is armed only after the reviewer reports "legs OK";
+# otherwise a superseding verdict.
+#
+# Measured by the reviewer at 1dab5d00: GITHUB_BASE_REF=main npm test exit 0 (5752 tests, 5751
+# pass, 0 fail, 1 skipped), build:check up to date (v3.33.2), about-stations --check-station
+# rc=0, release:analyze patch. Measured by others (43): e-poly 15/15 in Mac WebKit,
+# synth-engines in chromium, webkit and firefox, drums webkit; on f151a7f1 synth.cjs and drums
+# in chromium and webkit, midi 164 in both, linux webkit x-pointer 10/10 and x-padrec 12/12.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 531
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 1dab5d00)
+content: 3103e3cfdbfac329d5166ac21c12535dc162db847adeefa1e4f6a220f64c74d8
+findings:
+  - { id: R2-E071-1, severity: P2, status: closed, title: "E071 ordered releases by call order; the note player schedules each off with its onset, so a full pool stole a timeline note still held; 6e559f04 counts a release only once its time has come, ordered by release time" }

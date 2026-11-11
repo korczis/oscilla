@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "e-poly (K180's voice cap) failed once in WebKit desktop on the Mac (2026-11-11, T7b's tree): 'the note past the cap takes the oldest voice: not reached within 8000 ms', then passed 3 of 3 alone; CI did not show it. Measure its rate on main in WebKit (10 runs) and, if it recurs, wait on the engine's own voice-steal signal rather than a level reading."
 why: "A rare flake is cheapest to pin down before it lands on a train's leg."
-current_state: "Filed 2026-11-11 by oscilla-43; measure first, owner to be assigned."
+current_state: "Built by oscilla-43 in task t-20261111084619-87fe (train T9). Measured on main in Mac WebKit: 5 of 56 runs failed. A probe of every engine _soon() value across the burst found 4-6 ties among the 8 notes (WebKit's clock moves in coarse steps) and in one run a step 17 ms back. The pool judged age by those times and broke ties by slot index, and a released voice keeps the lowest slot until its release ends, so a later note looked older than C6 and was stolen instead (a product defect, not the check's). Fix 66b0c2c5: the pool keeps the arrival and release order beside the slots and judges age by it alone; two unit tests fail on main's pool. After: e-poly 25 of 25. Observation, not changed: AudioEngine._soon() (clock.js renderedTimeAtLeast, readings only) can return an earlier time than it returned a moment before, because a reading ages out or a newer one tightens the bound; a floor there would mix the readings-only estimate with the output-timestamp one, so it is left to the clock's owner."
 scope:
   - "tests/browser/synth-engines.cjs"
 depends_on: []

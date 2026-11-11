@@ -101,3 +101,53 @@ test('voice peak: 1/8 of full scale at Level 4 and full velocity (Q021); N of th
   assert.equal(voicePeak(9, 127), Q021.gain, 'a Level above 4 is held at 4');
   assert.ok(Math.abs(N * voicePeak(4, 127) - 1) < 1e-12, 'N voices at 1/N sum to full scale');
 });
+
+test('E071: notes at one time are stolen in the order they arrived, not by slot index', () => {
+  // WebKit's coarse currentTime gives notes played in one burst the same `t`. A released voice
+  // whose release has not ended keeps its slot, so the burst's last note takes the lowest slot
+  // (the released one) and the burst's first note a higher one. With equal times the oldest is
+  // the one that arrived first, wherever it sits.
+  const p = createVoicePool({ max: 3 });
+  p.on(60, 0);
+  p.off(60, 0.1);
+  p.end(0, 0.5); // the release is still sounding at 0.3
+  assert.equal(p.on(84, 0.3).slot, 1, 'the first note of the burst: slot 0 still sounds');
+  assert.equal(p.on(36, 0.3).slot, 2);
+  assert.deepEqual(p.on(37, 0.3), { slot: 0, steal: 0, retrigger: false },
+    'the released voice is stolen first');
+  assert.deepEqual(p.on(79, 0.3), { slot: 1, steal: 1, retrigger: false },
+    'then the note that arrived first (84 in slot 1), not the lowest slot (37 in slot 0)');
+  // Released voices at one time go in the order they were released.
+  const q = createVoicePool({ max: 2 });
+  q.on(50, 0);
+  q.on(51, 0);
+  q.off(51, 1);
+  q.off(50, 1);
+  assert.equal(q.on(52, 1).steal, 1, 'the voice released first (51) is stolen first');
+  // A schedule time that steps back (the engine's estimate, WebKit) makes no note older.
+  const r = createVoicePool({ max: 2 });
+  r.on(84, 0.4644);
+  r.on(36, 0.4470);
+  assert.equal(r.on(79, 0.4700).steal, 0, 'the note that arrived first (84) is the oldest');
+});
+
+test('R2-E071-1: an off the timeline scheduled ahead holds the voice until its time', () => {
+  // note-player.js strike() calls noteOn(x.time) and noteOff(x.end) together at schedule time,
+  // so the call order is the strike order, not the order the voices release in audio time.
+  const p = createVoicePool({ max: 2 });
+  p.on(60, 0); // A: held until 4 s
+  p.off(60, 4);
+  p.end(0, 4.5);
+  p.on(62, 0.1); // B: released at 0.2 s
+  p.off(62, 0.2);
+  p.end(1, 0.7);
+  assert.deepEqual(p.on(64, 0.3), { slot: 1, steal: 1, retrigger: false },
+    'C steals B, which is releasing, never A, which is still held');
+  // Two releases due by t: the earlier release time goes first, whatever the call order.
+  const q = createVoicePool({ max: 2 });
+  q.on(50, 0);
+  q.off(50, 0.5);
+  q.on(51, 0.1);
+  q.off(51, 0.2);
+  assert.equal(q.on(52, 1).steal, 1, 'the voice whose release came first (51 at 0.2 s)');
+});
