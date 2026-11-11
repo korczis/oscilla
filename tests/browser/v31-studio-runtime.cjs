@@ -50,6 +50,8 @@
 //                        the steady windows' own); the model holds square and the runtime has
 //                        applied its revision
 //   waveform-live-phone  the same at 390 x 844 touch, the select in the Inspector subview
+//   trace-collapsed      the Trace list is a closed disclosure named "Operace (N)", and no
+//                        operation's summary reads null (visual audit 2026-11-11, finding 6)
 //   trace-edit           an edit while playing: the Trace section (a real h5 heading, an
 //                        ordered list) shows it first as "<op> · Change ... Detune · committed,
 //                        revision n"; opened from the keyboard (focus, Enter) its steps say in
@@ -202,7 +204,9 @@ const H = {
   }, TR),
   /** Open the first operation of the Trace section from the keyboard (focus, Enter). */
   openFirstOp: async (page) => {
-    await page.focus(`${TR} summary`);
+    // The Trace list sits in a closed disclosure (audit 2026-11-11, finding 6): open it first.
+    await page.evaluate((sel) => { document.querySelector(`${sel} details`).open = true; }, TR);
+    await page.focus(`${TR} [data-osc="studio.inspector.traceOps"] summary`);
     await page.keyboard.press('Enter');
     await H.frames(page);
   },
@@ -795,7 +799,10 @@ function defineChecks() {
       await page.evaluate(() => window.OSCILLA.app.studioSetSubview('inspector'));
       await H.frames(page);
       await page.evaluate((sel) => document.querySelector(sel).scrollIntoView(), TR);
-      await page.evaluate((sel) => { document.querySelector(`${sel} details`).open = true; }, TR);
+      // The list's own disclosure, then the first operation (the list is closed by default).
+      await page.evaluate((sel) => { document.querySelector(`${sel} details`).open = true;
+        const first = '[data-osc="studio.inspector.traceOps"] details';
+        document.querySelector(first).open = true; }, TR);
       await H.frames(page);
       const tr = await H.trace(page);
       const fit = await page.evaluate((sel) => {
@@ -884,12 +891,43 @@ function defineChecks() {
     }), r };
   });
 
+  // The live visual audit of 2026-11-11 (finding 6, oscilla-c3's amendment): the Trace list is a
+  // closed disclosure whose summary names the count, and no operation reads "null".
+  def('trace-collapsed', async ({ browser, baseUrl }) => {
+    // A page of its own: the default state, not one an earlier check opened.
+    const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
+    const page = await ctx.newPage();
+    try {
+    await page.goto(baseUrl, { waitUntil: 'load' });
+    await page.waitForSelector('html[data-ready="true"]', { timeout: 15000 });
+    await H.fresh(page);
+    await page.click('[data-osc="studio.play"]');
+    await H.waitState(page, 'in-sync');
+    await page.evaluate(() => window.OSCILLA.app.studioStop());
+    await H.frames(page);
+    const r = await page.evaluate((sel) => {
+      const d = document.querySelector(`${sel} details`);
+      return { open: d.open, summary: d.querySelector('summary').textContent,
+        ops: [...document.querySelectorAll('[data-osc="studio.inspector.traceOps"] summary')]
+          .map((x) => x.textContent) };
+    }, TR);
+    return { ...H.verdict({
+      closed: r.open === false,
+      counted: /^Operace \(\d+\)$/.test(r.summary) && Number(r.summary.match(/\d+/)[0]) >= 1,
+      noNull: r.ops.length >= 1 && !r.ops.some((t) => /null|undefined/.test(t)),
+    }), r };
+    } finally {
+      await ctx.close();
+    }
+  });
+
   def('trace-focus', async ({ page }) => {
     await H.fresh(page);
     await page.evaluate(() => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
       nodeId: 'osc-1', key: 'detune', value: 1 }));
     await H.frames(page);
-    await page.focus(`${TR} summary`);
+    await page.evaluate((sel) => { document.querySelector(`${sel} details`).open = true; }, TR);
+    await page.focus(`${TR} [data-osc="studio.inspector.traceOps"] summary`);
     const before = await page.evaluate(() => document.activeElement.getAttribute('data-key'));
     for (let i = 0; i < 13; i += 1) {
       await page.evaluate((v) => window.OSCILLA.studio.store.dispatch({ type: 'NODE_PARAM_SET',
