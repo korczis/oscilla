@@ -1164,8 +1164,21 @@ function defineChecks() {
         return same ? { x: p.x, y: p.y } : null;
       }, { ms: 10000, what: `x-padrec: ${sel} is settled where a press lands on it` });
     };
-    const tap = async (sel) => (await press(page, await point(sel, 0.5, 0.5),
-      { touch: cdpTouch })).lift();
+    // E070: the view's reflow can come later than two agreeing reads (linux WebKit, 1 of 5 on
+    // main): the press then landed on the docked keyboard's bar below the moved switch. A tap
+    // records where its own pointerdown went; one that missed the target is made again, one that
+    // reached it (or left no pointerdown to judge) never is, so nothing toggles twice.
+    const tap = (sel) => until(async () => {
+      await quiet((q) => {
+        window.__tapHit = null;
+        document.addEventListener('pointerdown', (e) => {
+          const el = document.querySelector(q);
+          window.__tapHit = !!(el && el.contains(e.target));
+        }, { capture: true, once: true });
+      }, sel);
+      await (await press(page, await point(sel, 0.5, 0.5), { touch: cdpTouch })).lift();
+      return (await quiet(() => window.__tapHit)) === false ? null : true;
+    }, { ms: 25000, what: `x-padrec: a press lands on ${sel}` });
     // On the desktop a held key plays C4 through the presses: a click there moves no focus.
     const click = (sel) => (phone ? tap(sel) : page.evaluate((q) => {
       document.querySelector(q).click();
