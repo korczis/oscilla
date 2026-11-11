@@ -1,0 +1,66 @@
+# Review verdict for pull request #533 (train/t11): train T11 and release v3.35.0 (a minor: K019
+# is feat; release:analyze finds 1 minor and 1 patch since v3.34.0).
+# Guarded member: K226 (2d527c52, src/js/studio/transport.js: a Krok press while stopped arms the
+# transport and takes the step). Unguarded members read as members: K019 (e3248e27, the Step
+# Modulator's steps as bars in the step-grid's list lane), P011 (903b3d91, first-screen.cjs: the
+# compact Studio path asserted whole), the plan stamps (K175, K008, K009, K020, K022, K023, Q022
+# under Q090 with the reviewer's text, M057 and M070 done; Q022's current_state b5e08f69), K226's
+# seat 32565d32, the v3.34.0 record 581f5f70, the 3.35 station (574ffffb, ca39ed30) and
+# chore(release): v3.35.0 ef7f6549.
+# Judged at ef7f6549 on base origin/main 1a0196d7 (v3.34.0, #532), 2026-11-11, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-526 (pre-stamp heads 574ffffb and ca39ed30, then
+# ef7f6549).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-d9 built K226, oscilla-43 K019 and the station, oscilla-0b
+# P011 and its plan stamps, per each issue's current_state. Disclosure: K226 builds the
+# reviewer's own decision on its criterion (cb3135f4), and Q022's evidence records the reviewer's
+# text as a coordinating session under Q090; both are decisions, not code.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list: 05a1083084f94e56...
+# over 1 guarded path (src/js/studio/transport.js), equal at ca39ed30 and ef7f6549.
+#
+# How it was judged:
+# - K226: step() arms through armLive() when stopped; armLive is synchronous (start() returns
+#   { ok } with playing set), so live.step runs right after it, as for a K104 key; a refused arm
+#   returns its own code and reason; a timeline that owns its clock still refuses; workspace
+#   stepNode sets audio up on the press, the gesture; arming starts from position 0 and the
+#   transport stays armed until STOP, as for keys. Fail-first, run by the reviewer:
+#   studio-step-voltage-sequencer fails 1 with main's transport.js (the stopped press) and passes
+#   at the head. R2-T5-3 (the refusal said only to screen readers) closes with it.
+# - K019 (the reviewer's lane): stepBar grows from the middle on a range through 0 and from the
+#   bottom otherwise, in tenths; list cells keep the beat tone, as "on" there only meant "not the
+#   off value", which a zero-height bar shows; the bar is aria-hidden and the cell's label keeps
+#   the value; the arbitrary heights are compiled into the dist. The reviewer's probe of the
+#   built dist (the Step Bass template's Step Modulator in the Inspector, chromium and webkit,
+#   390x844 touch and 1366x800): steps [1, -0.5, 0.25, -1, 0.75, -0.25, 0.5, -0.75] draw
+#   up:10, down:5, up:3, down:10, up:8, down:3, up:5, down:8, a full bar 21 px of the 44 px cell,
+#   no page scroll, no page error; the phone screenshot read: bars legible, focus ring shown.
+# - The 3.35 station read as shown text: the bars, one undo for a drag, the arrows reaching every
+#   step, and the Krok step while stopped arming the transport as a key does; every claim holds.
+# - Q022's recorded evidence was read against the reviewer's wording: it matches in full.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (1a0196d7's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer: at ef7f6549 GITHUB_BASE_REF=main npm test exit 0 (5761 tests, 5760
+# pass, 0 fail, 1 skipped), build:check up to date (v3.35.0), about-stations --check (39 hold) and
+# --check-station rc=0, release:analyze minor. At ca39ed30, before the stamp, npm test had 6
+# failures, all dist checks, because the station changed about-stations.json after the K226
+# merge's rebuild; the stamp's rebuild closes them. Measured by others (43) on ca39ed30 with a
+# working-tree rebuild: synth, v31-studio-workflows, studio-keys, step-grid, first-screen
+# 215/215 and drums in chromium and webkit.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 533
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of ef7f6549)
+content: 05a1083084f94e56bb22c81b258963aaaf541d0ab1292b5646784e2b729079ba
+findings:
+  - { id: R2-T5-3, severity: P3, status: closed, title: "Krok while stopped said its reason only to screen readers; K226 makes the stopped press arm the transport and step" }
