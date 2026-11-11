@@ -261,8 +261,11 @@
       "datetime": "2026-11-11T05:31:45+01:00"
     },
     {
+      "release": "3.34",
       "title": "Sekvencer vede ke krokovému sekvenceru a padům",
-      "summary": "Stránka Sekvencer odkazuje na krokový sekvencer s pady v Synthu (záložka Bicí) a na krokový modulátor ve Studiu (šablona Step Bass); projekty a experimenty s uzlem Keys uložené ve verzích 3.15 až 3.27 se znovu otevřou, protože kontrola otisku zná i podobu bez rozsahu kláves, a rozsah kláves změněný proti výchozímu se dál odmítá"
+      "summary": "Stránka Sekvencer odkazuje na krokový sekvencer s pady v Synthu (záložka Bicí) a na krokový modulátor ve Studiu (šablona Step Bass); projekty a experimenty s uzlem Keys uložené ve verzích 3.15 až 3.27 se znovu otevřou, protože kontrola otisku zná i podobu bez rozsahu kláves, a rozsah kláves změněný proti výchozímu se dál odmítá",
+      "commit": "4ae5b0d",
+      "datetime": "2026-11-11T11:52:22+01:00"
     }
   ]
 }
