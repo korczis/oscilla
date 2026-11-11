@@ -26,4 +26,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-11T14:12:48Z
+started_at: 2026-11-11T14:12:09Z
+started_event: sha256:f5e37ce87c69e9d9d59c6ab18fdba24d197ab363bd908f9f662c4f2033006d16
+verified_at: 2026-11-11T14:12:24Z
+verified_event: sha256:819a54ac34964b0801e173dde11c80abaff38915927063397dd6f9346a01f0cf
+completed_at: 2026-11-11T14:12:48Z
+completed_event: sha256:62cb04617991a57e2ab6b94190de38d114251d8bce40a0f1e794b0d494e38a38
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/ui-kind-step-grid.test.mjs tests/unit/ui-flowbite-pro.test.mjs; node tests/browser/step-grid.cjs; node tests/browser/drums.cjs; node tests/browser/v31-studio-workflows.cjs"
+    result: "On main 04d33aaf (T11 #533): 60 of 60 unit tests pass, among them K019's (one bar per step from its value, a drag across three bars is one NODE_PARAM_SET, the arrows reach every step; it fails without stepBar); the Pro ratchet is flat; step-grid, drums and v31-studio-workflows pass in chromium and webkit; oscilla-c3 probed the built dist in chromium and webkit at 390x844 touch and 1366x800 (bars up:10 down:5 ..., 21 px of a 44 px cell, no scroll, no page error); unguarded, no verdict needed (its criterion); PR #533 gate and fail-first green"
+    artifact: "tests/unit/ui-kind-step-grid.test.mjs"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T14:12:40Z
