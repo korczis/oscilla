@@ -119,7 +119,9 @@ test('K229 key sync: each trigger on reset starts the LFO afresh at its time; th
     const h = rig.runtime.nodes.get(lfo);
     assert.equal(typeof h.clock, 'function', 'a reset edge makes the LFO reset-capable');
     const starts = h.info.voices().map((v) => r9(v.start));
-    assert.deepEqual(starts.slice(-4), [0, 0.5, 1, 1.5].map(rig.at),
+    // A document with a Clock free-runs past its content (K241), so the look-ahead holds later
+    // resets too: the first four are the ones this checks.
+    assert.deepEqual(starts.slice(0, 4), [0, 0.5, 1, 1.5].map(rig.at),
       'a fresh voice from each reset (the first at the start of play)');
     // one shared rate source drives every voice: its offset holds the rate
     assert.equal(held(h.info.rate.offset), 3);
@@ -193,9 +195,10 @@ test('K229 C1-K229-1: a reset retires the stopped voice; the shared sources feed
   const now = rig.fx.ctx.currentTime;
   const voices = h.info.voices();
   const held = voices.length;
-  // The current voice and the resets still ahead of the clock may be held; nothing else.
+  // The current voice and the resets still ahead of the clock may be held; nothing else. The
+  // run free-runs past its content (K241), so the 3 s look-ahead holds up to 3 / 0.125 resets.
   const due = voices.filter((v) => v.start > now).length;
-  assert.ok(due <= 3, `the look-ahead holds only the last resets (${due})`);
+  assert.ok(due <= 3 / 0.125 + 1, `the look-ahead holds only the resets ahead (${due})`);
   assert.ok(held <= due + 1,
     `stopped voices are retired: ${held} of ${resets} still held, ${due} ahead of ${now}`);
   assert.ok(held >= 1, 'the current voice is held');

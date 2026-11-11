@@ -287,7 +287,7 @@ export async function renderStudioOffline(model, opts = {}) {
     const runtime = createStudioRuntime({ engine, registry: opts.registry });
     // The live transport, on the offline context: one start schedules the whole render.
     const transport = createStudioTransport({ runtime, engine, store: fixedStore(model),
-      registry: opts.registry, lookAheadS: duration });
+      registry: opts.registry, lookAheadS: duration, freeRun: false }); // ends with its content
     transport.on((type, d) => { if (type === 'warning') warnings.push(d.message); });
     const started = transport.start();
     if (!started.ok) throw new Error(started.reason);

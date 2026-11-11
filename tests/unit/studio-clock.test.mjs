@@ -23,6 +23,8 @@ import assert from 'node:assert/strict';
 
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import * as actions from '../../src/js/studio/actions.js';
+import * as clockModule from '../../src/js/studio/clock.js';
+import * as modulationNodes from '../../src/js/studio/nodes/modulation.js';
 import * as offline from '../../src/js/studio/offline.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
@@ -189,6 +191,116 @@ test('K023 a trigger clip advances a Step Modulator, a Random and an Envelope at
     assert.ok(Math.abs(release.t - ADSR.release - (at(1) + ADSR.attack + ADSR.decay)) < 1e-9,
       'a trigger is one pulse: attack and decay, then the release (not the clip\'s 0.5 s)');
     await stopped(rig);
+  });
+
+test('K241 a document with a Clock and no clips plays until STOP and its Clock ticks',
+  async () => {
+    // Clock 1/4 at 120 BPM (0.5 s) -> Step Modulator -> the oscillator's frequency; no clip,
+    // no automation, loop off. Before K241 the timeline ended at 0: the first pass had no
+    // frames, the Clock's ticks an empty pass, and the transport ended the run at once.
+    const s = voice();
+    const clock = s.add('clock', { division: '1/4' });
+    const steps = s.add('step-modulator', { steps: [1, -1, 0.5] });
+    s.edge(clock, 'trigger', steps, 'clock');
+    s.edge(steps, 'control', s.osc, 'frequency', { depth: 0.1 });
+    assert.equal(s.st.getModel().timeline.clips.length, 0, 'no clips');
+    assert.equal(s.st.getModel().timeline.loop.enabled, false, 'loop off');
+    const rig = playing(s.st);
+    let ended = 0;
+    const off = rig.transport.on((type) => { if (type === 'ended') ended++; });
+    rig.fx.advance(2.2); // 2.2 s of audio time: past four ticks and a bar
+    const sr = rig.fx.ctx.sampleRate;
+    const at = (pos) => (Math.round(rig.base * sr) + Math.round(pos * sr)) / sr;
+    assert.equal(ended, 0, 'the run has not ended');
+    assert.equal(rig.transport.debugInfo().playing, true, 'still playing after 2.2 s');
+    const h = rig.runtime.nodes.get(steps);
+    const ticks = h.outputs.control.offset.events.filter((e) => e.t >= rig.base - 1e-9)
+      .map((e) => e.t);
+    for (const pos of [0, 0.5, 1, 1.5, 2]) {
+      assert.ok(ticks.some((t) => Math.abs(t - at(pos)) < 1e-6),
+        `a clock tick steps the Step Modulator at ${pos} s (${ticks.length} steps scheduled)`);
+    }
+    off();
+    await stopped(rig);
+  });
+
+test('K241 a clip added while a Clock document free-runs: the run goes on and the Clock ticks '
+  + 'on its grid; the playhead counts up and keeps its value across the edit', async () => {
+    // oscilla-43's case: clock-only, PLAY, add a one-bar clip, advance three bars. c1's
+    // C1-K241-1: in a free run the head counts up (no wrap into the first bar) and the edit that
+    // puts something ahead leaves it where it was.
+    const s = voice();
+    const clock = s.add('clock', { division: '1/4' }); // 0.5 s at 120 BPM; a bar is 2 s
+    const steps = s.add('step-modulator', { steps: [1, -1, 0.5] });
+    s.edge(clock, 'trigger', steps, 'clock');
+    s.edge(steps, 'control', s.osc, 'frequency', { depth: 0.1 });
+    const rig = playing(s.st);
+    let ended = 0;
+    const off = rig.transport.on((type) => { if (type === 'ended') ended++; });
+    const heads = [];
+    for (let i = 0; i < 6; i++) { // 3.0 s in 0.5 s steps: across the first bar line
+      rig.fx.advance(0.5);
+      heads.push(rig.transport.playhead().position);
+    }
+    for (let i = 1; i < heads.length; i++) {
+      assert.ok(heads[i] > heads[i - 1], `the head counts up in a free run (${heads.join(', ')})`);
+    }
+    const before = rig.transport.playhead().position;
+    assert.ok(before > 2.5, `the head is past the first bar (${before})`);
+    eventClip(s, s.env, 4, 2, 'gate'); // one bar, ahead of the head
+    rig.transport.sync();
+    const after = rig.transport.playhead().position;
+    assert.ok(Math.abs(after - before) < 1e-6, `the edit keeps the head (${before} -> ${after})`);
+    rig.fx.advance(6); // three more bars: past the clip's end
+    const sr = rig.fx.ctx.sampleRate;
+    const at = (pos) => (Math.round(rig.base * sr) + Math.round(pos * sr)) / sr;
+    const vca = rig.runtime.nodes.get(s.env).inputs.audio.gain;
+    assert.ok(attacksOf(vca).some((t) => Math.abs(t - at(4)) < 1e-6),
+      'the added clip plays at its position (4 s)');
+    assert.equal(ended, 0, 'the run has not ended after the clip');
+    assert.equal(rig.transport.debugInfo().playing, true, 'still playing');
+    const ticks = rig.runtime.nodes.get(steps).outputs.control.offset.events.map((e) => e.t);
+    for (let pos = 0; pos <= 8.5; pos += 0.5) {
+      assert.ok(ticks.some((t) => Math.abs(t - at(pos)) < 1e-6),
+        `a clock tick on the grid at ${pos} s`);
+    }
+    off();
+    await stopped(rig);
+  });
+
+test('K241 the Clock\'s Czech help says what freeRunLoop does, and the two stay together',
+  () => {
+    // 43's order: the behaviour a user notices (a document with a Clock runs until STOP) is in
+    // the Clock's help; this case fails when either side changes without the other.
+    const text = modulationNodes.CLOCK_FREE_RUN_TEXT;
+    assert.equal(typeof text, 'string');
+    const help = NODE_REGISTRY.get('clock').help;
+    assert.ok(help.constraints.includes(text), 'the help states the free run');
+    for (const words of ['hraje, dokud ho nezastavíte', 'opakuje prázdný takt',
+      'hodiny dál tikají', 'končí s obsahem']) {
+      assert.ok(text.includes(words), `the help says "${words}"`);
+    }
+    const free = clockModule.freeRunLoop;
+    assert.equal(typeof free, 'function', 'clock.js freeRunLoop exists');
+    const s = voice();
+    assert.equal(free(s.st.getModel(), 0, 0), null, 'no Clock: the run ends with its content');
+    s.add('clock', { division: '1/4' });
+    eventClip(s, s.env, 0, 2.5, 'gate'); // content to 2.5 s; a bar is 2 s at 120 BPM
+    assert.deepEqual(free(s.st.getModel(), 0, 2.5), { start: 4, end: 6, freeRun: true },
+      'with a Clock: the empty bar after the content repeats until STOP');
+  });
+
+test('K241 an offline render of a Clock document ends with its content (no free run)',
+  async () => {
+    const s = voice();
+    const clock = s.add('clock', { division: '1/4' });
+    s.edge(clock, 'trigger', s.env, 'gate');
+    eventClip(s, s.env, 0.9, 0.1, 'gate'); // the content ends at 1 s
+    const made = [];
+    const r = await offline.renderStudioOffline(s.st.getModel(),
+      { sampleRate: 48000, OfflineAudioContext: fakeOfflineCtor(made) });
+    assert.ok(r.ok, JSON.stringify(r.errors));
+    assert.ok(r.debug.transport.loop === null, 'no free-run loop offline');
   });
 
 test('K023 the Step Modulator\'s Trigger relays each step it takes; a once run stops relaying '

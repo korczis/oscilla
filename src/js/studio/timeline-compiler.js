@@ -49,7 +49,7 @@ import {
   buildTimeline, planFromTimeline, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../sequencer/compiler.js';
 import {
-  BLOCK_SCHEMA, DEFAULT_SEED, PROVISIONAL_SAMPLE_RATE, WAVEFORMS, normalizeModel,
+  BLOCK_SCHEMA, DEFAULT_SEED, WAVEFORMS, normalizeModel,
 } from '../sequencer/model.js';
 import { LOOKAHEAD_S } from '../sequencer/editor.js';
 import { RENDER_QUANTUM } from '../core/constants.js';
@@ -59,7 +59,8 @@ import {
   compileLaneEvents, laneParamDef, laneValueAt, holdEvents, scheduledValueAt,
 } from './automation.js';
 import {
-  CONTIGUITY_TOLERANCE_S, MIN_LOOP_S, clipEnd, effectiveTarget, timelineEnd,
+  CONTIGUITY_TOLERANCE_S, anchorEndTime, audioTimeOf, clipEnd, createAnchor,
+  effectiveTarget, passInfo, positionAt, rateOf, timelineEnd,
 } from './timeline.js';
 import { STUDIO_XFADE_S } from './compiler.js';
 import { clipTarget } from './clip-targets.js';
@@ -127,7 +128,6 @@ export const ESCAPE_PRIORITY = Object.freeze(['cancel-gesture', 'close-popup',
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 /** Two lane values equal up to float rounding (relative 1e-9). */
 const sameValue = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
-const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
 
 /** Smallest whole-frame time >= t. */
 export function frameCeil(t, sampleRate) {
@@ -166,76 +166,9 @@ export function stopTime(now, sampleRate) {
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ---------------------------------------------------------------- transport anchor
-
-/**
- * The mapping between timeline positions and audio times for one playback.
- *   createAnchor(model, { baseTime, startPosition = 0, sampleRate, generation = 0 })
- * -> { sampleRate, baseFrame, baseTime, startPosition, loop: { start, end } | null, end,
- *      firstPassFrames, loopFrames, generation }
- * The loop applies when enabled, at least MIN_LOOP_S long and still ahead of startPosition.
- */
-export function createAnchor(model, { baseTime = 0, startPosition = 0, sampleRate,
-  generation = 0 } = {}) {
-  const sr = rateOf(sampleRate);
-  const baseFrame = Math.ceil(baseTime * sr - 1e-6);
-  const l = model.timeline.loop;
-  const loop = l.enabled && l.end - l.start >= MIN_LOOP_S && startPosition < l.end
-    ? { start: l.start, end: l.end } : null;
-  const end = timelineEnd(model);
-  const firstEnd = loop ? loop.end : end;
-  return {
-    sampleRate: sr,
-    baseFrame,
-    baseTime: baseFrame / sr,
-    startPosition,
-    loop,
-    end,
-    firstPassFrames: Math.max(0, Math.round((firstEnd - startPosition) * sr)),
-    loopFrames: loop ? Math.round((loop.end - loop.start) * sr) : 0,
-    generation,
-  };
-}
-
-/** Position range and first frame of pass k: { pass, posStart, posEnd, startFrame, endFrame }. */
-export function passInfo(anchor, k) {
-  const posStart = k === 0 ? anchor.startPosition : anchor.loop.start;
-  const posEnd = anchor.loop ? anchor.loop.end : anchor.end;
-  const startFrame = anchor.baseFrame + (k === 0 ? 0
-    : anchor.firstPassFrames + (k - 1) * anchor.loopFrames);
-  const endFrame = startFrame + (k === 0 ? anchor.firstPassFrames : anchor.loopFrames);
-  return { pass: k, posStart, posEnd, startFrame, endFrame,
-    startTime: startFrame / anchor.sampleRate, endTime: endFrame / anchor.sampleRate };
-}
-
-/** Audio time of a timeline position inside pass k (whole frames). */
-export function audioTimeOf(anchor, k, position) {
-  const p = passInfo(anchor, k);
-  return (p.startFrame + Math.round((position - p.posStart) * anchor.sampleRate))
-    / anchor.sampleRate;
-}
-
-/**
- * The playhead at audio time t (§94): { position, pass, playing } — before baseTime the head
- * waits at startPosition (playing false), after a non-looping end it returns null.
- */
-export function positionAt(anchor, t) {
-  const sr = anchor.sampleRate;
-  const frames = t * sr - anchor.baseFrame;
-  if (frames < 0) return { position: anchor.startPosition, pass: 0, playing: false };
-  if (frames < anchor.firstPassFrames) {
-    return { position: anchor.startPosition + frames / sr, pass: 0, playing: true };
-  }
-  if (!anchor.loop || anchor.loopFrames <= 0) return null;
-  const rest = frames - anchor.firstPassFrames;
-  const k = Math.floor(rest / anchor.loopFrames);
-  return { position: anchor.loop.start + (rest - k * anchor.loopFrames) / sr, pass: k + 1,
-    playing: true };
-}
-
-/** Audio time at which a non-looping playback ends (Infinity while a loop is active). */
-export function anchorEndTime(anchor) {
-  return anchor.loop ? Infinity : (anchor.baseFrame + anchor.firstPassFrames) / anchor.sampleRate;
-}
+// The anchor (createAnchor, passInfo, audioTimeOf, positionAt, anchorEndTime) is in timeline.js
+// since K241 (this file's size cap); re-exported here for its callers.
+export { anchorEndTime, audioTimeOf, createAnchor, passInfo, positionAt } from './timeline.js';
 
 /** Passes whose audio range intersects [from, until). */
 export function passesInWindow(anchor, from, until) {
@@ -488,8 +421,9 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     : TIMELINE_LOOKAHEAD_S;
   const playStart = finite(opts.startPosition) ? opts.startPosition : 0;
   let model = initialModel;
+  const freeRun = opts.freeRun === true; // K241
   let anchor = createAnchor(model, { baseTime: opts.baseTime || 0, startPosition: playStart,
-    sampleRate: sr });
+    sampleRate: sr, freeRun });
   let scheduledUntil = anchor.baseTime;
   let firstWindow = true;
   let stopped = false;
@@ -538,7 +472,7 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       const at = startLeadTime(now, sr);
       reanchored = { from: anchor.baseTime, to: at };
       anchor = createAnchor(model, { baseTime: at, startPosition: anchor.startPosition,
-        sampleRate: sr, generation: anchor.generation });
+        sampleRate: sr, generation: anchor.generation, freeRun });
       cache = new Map();
       scheduledUntil = anchor.baseTime;
     }
@@ -628,11 +562,12 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     model = nextModel;
     if (!sameJson(l0, l1) && pos) {
       anchor = createAnchor(model, { baseTime: horizon, startPosition: pos.position,
-        sampleRate: sr, generation: anchor.generation + 1 });
+        sampleRate: sr, generation: anchor.generation + 1, freeRun });
       plan.reanchored = true;
     } else {
       anchor = { ...createAnchor(model, { baseTime: anchor.baseTime,
-        startPosition: anchor.startPosition, sampleRate: sr, generation: anchor.generation }),
+        startPosition: anchor.startPosition, sampleRate: sr, generation: anchor.generation,
+        freeRun }),
       baseFrame: anchor.baseFrame, baseTime: anchor.baseTime };
     }
     cache = new Map();
