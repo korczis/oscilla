@@ -42,6 +42,6 @@ evidence:
     type: test
     command: "node --test tests/unit/synth-review-armed-sink-preset.test.mjs tests/unit/studio-sink.test.mjs; node tests/browser/midi.cjs --browsers chromium,webkit"
     result: "On main 0e20f83c: 17 of 17 unit tests pass (f118edc0's S2 routing tests, fail-first on 9cf786ac; studio-sink K175 held map); midi.cjs ALL PASS 164 in chromium and webkit, including the Playground note held across a switch to the Synth and keyboard-studio-held (K175, S18); CI's gate runs midi in every gate browser; verdict in .ai/repo/reviews/486.yaml (train C #486)"
-    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    artifact: ".ai/repo/reviews/486.yaml"
     commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
     recorded_at: 2026-11-11T11:35:34Z
