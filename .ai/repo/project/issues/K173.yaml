@@ -11,6 +11,7 @@ why: "project.no-silent-feedback and the held-notes-safe criterion: a note that 
 scope:
   - "src/js/synth/studio-sink.js"
   - "tests/unit/"
+current_state: "Landed in part by train 5 #413 (68b117f3). The unit behaviour is met by tests/unit/studio-sink.test.mjs:101; the browser criterion is midi-seam-reroute in tests/browser/midi.cjs (test/k173-midi-reroute, oscilla-0b, 2026-11-11): all six legs pass, and it fails with the sink's re-press release removed. The stamp follows its landing."
 depends_on: []
 acceptance_criteria:
   - "A unit test presses note N routed to node A, re-routes, presses N again (node B), releases N twice: A and B each receive one note-off; it fails on 15d1bc67."
