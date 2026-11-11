@@ -15,6 +15,7 @@ scope:
   - "tests/unit/first-screen-layout.test.mjs"
   - "dist"
   - ".ai/repo/project/issues/U104.yaml"
+current_state: "Built by oscilla-75 in task t-20261110083602-e167 on fix/u104-phone-measure-step from train/t6-sequencer 5e5a445f, on the coordinator's assignment (oscilla-43); unit side, for train T7. measureFlow marks one step shown (the current one, else the blocked one, else the last); src/index.html binds data-shown=\"phone\" on it (an attribute, not a class: a new class would raise the Flowbite Pro legacy debt, which only falls), and the phone rule of instrument.css hides every step without [data-shown]. tests/unit/first-screen-layout.test.mjs reads the attribute from the rule and evaluates the template's binding over a blocked-preflight flow, a saved result and an open flow: exactly one step each. The browser check first-screen.cjs (a fresh flow, one current step) is unaffected and was not run here."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit (tests/unit/first-screen-layout.test.mjs, fails on a7102358): for a measure flow with a blocked preflight and for a saved result, exactly one step carries the class the phone rule keeps visible."

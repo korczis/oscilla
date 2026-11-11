@@ -991,7 +991,7 @@
           <ol class="osc-m-steps" aria-label="Measurement steps">
             <template x-for="s in meas.flow.steps" :key="s.id">
               <li class="osc-m-step" :class="'is-' + s.status" data-osc="measure.step"
-                :data-step="s.id" :aria-current="s.status === 'current' ? 'step' : false">
+                :data-step="s.id" :data-shown="s.shown ? 'phone' : null" :aria-current="s.status === 'current' ? 'step' : false">
                 <span class="osc-m-step-n" aria-hidden="true">
                   <svg class="osc-m-step-icon" x-show="s.status !== 'todo' && s.status !== 'current'"><use :href="'#q-' + ({ done: 'ok', warn: 'warn', blocked: 'fail' }[s.status] || 'unknown')"/></svg>
                   <span x-show="s.status === 'todo' || s.status === 'current'" x-text="s.n"></span>

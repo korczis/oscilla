@@ -12,7 +12,8 @@
 //             error ({ code, message } | null), levelChecked = true (false: calibration.level
 //             waits for its input check, and the Calibration step says so) }
 //     Step = { id, n, label, status: 'todo'|'current'|'done'|'blocked'|'warn', detail,
-//              reasons: [{ code, text }] }
+//              reasons: [{ code, text }], shown }   shown: the one step a phone shows (U104:
+//              the current one, else the blocked one, else the last)
 //   The seven steps of §77: input, calibration, noise check, stimulus, measure, review, save.
 //   'warn' = passed with warnings (never blocking, §30); 'blocked' = a blocker or an invalid
 //   outcome stops the flow there; 'current' = the first step not yet done.
@@ -346,6 +347,11 @@ export function measureFlow(ctx = {}) {
   });
   const current = (steps.find((s) => s.status === 'current') || steps.find((s) => s.status
     === 'blocked') || null);
+  // U104: the one step a phone shows (the row folds to it below 768 px, instrument.css): the
+  // current one, else the blocked one, else the last. With a blocked step or every step done
+  // (saved) no step is current, and the folded row showed none, a blocked fail icon included.
+  const shown = current || steps[steps.length - 1];
+  for (const s of steps) s.shown = s === shown;
 
   return {
     steps,
