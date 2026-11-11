@@ -13,9 +13,9 @@ import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { collectFacts } from '../../scripts/facts.mjs';
+import { CHART_BASE, CHARTS, collectFacts } from '../../scripts/facts.mjs';
 import {
-  REGIONS, beginMarker, endMarker, renderRegions, staleRegions,
+  CHART_ALT, REGIONS, beginMarker, endMarker, renderRegions, staleRegions,
 } from '../../scripts/readme.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -90,6 +90,15 @@ test('every fact group names the source it was read from, and the source exists'
   assert.deepEqual(JSON.parse(JSON.stringify(FACTS)), FACTS, 'facts are plain JSON');
   assert.ok(FACTS.workspaces.items.length > 0 && FACTS.templates.items.length > 0
     && FACTS.engines.items.length > 0 && FACTS.releases.items.length > 0);
+});
+
+test('every chart of CHARTS is embedded in the live region with its own alt text', () => {
+  const live = README.slice(README.indexOf(beginMarker('live')), README.indexOf(endMarker('live')));
+  for (const name of CHARTS) {
+    assert.ok(CHART_ALT[name], `${name}: alt text in scripts/readme.mjs CHART_ALT`);
+    assert.ok(live.includes(`${CHART_BASE}${name}.svg" width="100%" alt="${CHART_ALT[name]}"`),
+      `${name}: embedded`);
+  }
 });
 
 test('the README carries no copy of the package version', () => {

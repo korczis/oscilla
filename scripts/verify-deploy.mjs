@@ -22,11 +22,14 @@
 //   lab       every file of <url>lab/ (index.html, charts/<name>.svg, shots/*.png) is byte-equal
 //             to scripts/landing.mjs regenerated at the expected commit (the generated landing,
 //             owner decision Q107); a commit other than HEAD is regenerated in a temporary
-//             detached worktree
+//             detached worktree; --require-majordomus (or OSC_LAB_REQUIRE_MAJORDOMUS=1, which
+//             pages.yml sets) regenerates its milestone status from majordomus as the deploy
+//             did, and a page whose status source (its meta oscilla-lab-status-source, e.g. the
+//             majordomus version) differs from the regeneration's is named as such
 //
 //   node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] [--attempts 10] [--delay 10]
 //        [--dist dist/index.html] [--site site] [--no-assets] [--no-lab] [--no-cache-bust]
-//        [--help]
+//        [--require-majordomus] [--help]
 //
 // The arguments are parsed against that list first (parseFlags of release-analyze.mjs): --help
 // prints the usage and exits 0; an unknown flag, a flag missing its value or a bad --attempts
@@ -173,10 +176,27 @@ export function checkLabFile({ name, status, contentType, body, expected }) {
     problems.push(`lab: ${name} content-type ${contentType}`);
   }
   if (!Buffer.from(body).equals(expected)) {
+    // a page built from another milestone-status source (another majordomus, or the committed
+    // roadmap.json) differs by that alone: name it before the bytes
+    const live = statusSourceOf(body);
+    const here = statusSourceOf(expected);
+    if (live !== here && (live || here)) {
+      problems.push(`lab: ${name} milestone status from "${live ?? 'none'}" on the live page, `
+        + `"${here ?? 'none'}" in this regeneration: regenerate with the same source (majordomus `
+        + 'version on PATH, --require-majordomus)');
+    }
     problems.push(`lab: ${name} (${body.length} B) differs from its regeneration at this commit `
       + `(${expected.length} B)`);
   }
   return problems;
+}
+
+/** The milestone-status source a lab page names in its meta (landing/page.mjs), or null. */
+export function statusSourceOf(body) {
+  if (!body) return null;
+  const m = /<meta name="oscilla-lab-status-source" content="([^"]*)">/
+    .exec(Buffer.from(body).toString('utf8'));
+  return m ? m[1] : null;
 }
 
 /**
@@ -187,14 +207,15 @@ export function checkLabFile({ name, status, contentType, body, expected }) {
  * node_modules, and only that worktree is removed afterwards; it is never skipped. A commit whose tree
  * has no scripts/landing.mjs (before Q107) deployed no landing: null, and nothing is compared.
  */
-export async function expectedLab({ root, commit, warn = (m) => console.error(m) }) {
+export async function expectedLab({ root, commit, warn = (m) => console.error(m),
+  requireMajordomus = process.env.OSC_LAB_REQUIRE_MAJORDOMUS === '1' }) {
   const git = (args, cwd = root) => execFileSync('git', args,
     { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   const head = git(['rev-parse', 'HEAD']);
   const want = git(['rev-parse', '--verify', `${commit}^{commit}`]);
   if (want === head && existsSync(path.join(root, 'scripts', 'landing.mjs'))) {
     const at = await import(new URL(`file://${path.join(root, 'scripts', 'landing.mjs')}`));
-    return at.generateLanding({ root, commit: want });
+    return at.generateLanding({ root, commit: want, requireMajordomus });
   }
   try {
     git(['cat-file', '-e', `${want}:scripts/landing.mjs`]);
@@ -209,7 +230,7 @@ export async function expectedLab({ root, commit, warn = (m) => console.error(m)
     if (existsSync(modules)) symlinkSync(modules, path.join(tree, 'node_modules'), 'dir');
     // The generator module of the commit itself, so the comparison is that commit's page.
     const at = await import(new URL(`file://${path.join(tree, 'scripts', 'landing.mjs')}`));
-    return await at.generateLanding({ root: tree, commit: want });
+    return await at.generateLanding({ root: tree, commit: want, requireMajordomus });
   } finally {
     // Only this run's own worktree is removed: no repository-wide prune, which on a shared
     // machine could drop another session's worktree record whose directory is briefly absent.
@@ -225,11 +246,11 @@ export async function expectedLab({ root, commit, warn = (m) => console.error(m)
 
 export const USAGE = 'usage: node scripts/verify-deploy.mjs [--url <url>] [--commit <rev>] '
   + '[--attempts 10] [--delay 10] [--dist dist/index.html] [--site site] [--no-assets] '
-  + '[--no-lab] [--no-cache-bust] [--help]';
+  + '[--no-lab] [--no-cache-bust] [--require-majordomus] [--help]';
 const FLAGS = {
   '--url': 'value', '--commit': 'value', '--attempts': 'value', '--delay': 'value',
   '--dist': 'value', '--site': 'value', '--no-assets': 'boolean', '--no-lab': 'boolean',
-  '--no-cache-bust': 'boolean',
+  '--no-cache-bust': 'boolean', '--require-majordomus': 'boolean',
 };
 
 /** The options of `argv` (parseFlags of release-analyze.mjs); throws exitCode 2 on misuse. */
@@ -243,6 +264,7 @@ function parseArgs(argv) {
     delay: '--delay' in f ? Number(f['--delay']) : 10,
     dist: f['--dist'] ?? 'dist/index.html', site: f['--site'] ?? 'site',
     assets: !f['--no-assets'], lab: !f['--no-lab'], bust: !f['--no-cache-bust'],
+    requireMajordomus: Boolean(f['--require-majordomus']),
   };
   if (!o.url.endsWith('/')) o.url += '/';
   if (!(Number.isInteger(o.attempts) && o.attempts >= 1)) {
@@ -359,7 +381,8 @@ async function verify(o, { root, run, env, log, err }) {
     + `source ${expected.sourceDigest}, artifact ${sha256(dist)}`);
 
   // The landing is regenerated once, before the attempts: a failed regeneration is fatal.
-  const lab = o.lab ? await expectedLab({ root, commit }) : null;
+  const lab = o.lab ? await expectedLab({ root, commit, requireMajordomus: o.requireMajordomus
+    || env.OSC_LAB_REQUIRE_MAJORDOMUS === '1' }) : null;
   if (lab) log(`  lab: ${lab.size} file(s) regenerated at ${commit.slice(0, 12)}`);
   else if (o.lab) log(`  lab: none at ${commit.slice(0, 12)} (its tree has no scripts/landing.mjs)`);
 

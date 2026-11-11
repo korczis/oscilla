@@ -106,6 +106,18 @@ jobs:
           echo "$RUNNER_TEMP/mj/majordomus-v${MJ_VERSION}-${MJ_TARGET}/bin" >> "$GITHUB_PATH"
       - name: The installed version is the pinned one
         run: test "$(majordomus version)" = "majordomus ${MJ_VERSION}"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # P015: the /lab/ milestone status is Majordomus's; here, with the pinned majordomus on
+      # PATH, the facts' status of every milestone is compared with `majordomus plan roadmap
+      # --json`. OSC_FACTS_MAJORDOMUS makes a missing majordomus a failure, never a skip
+      # (tests/unit/facts-majordomus.test.mjs, which also guards that this step exists).
+      - name: The /lab/ milestone status is majordomus plan roadmap --json's
+        timeout-minutes: 5
+        env:
+          OSC_FACTS_MAJORDOMUS: '1'
+        run: node --test tests/unit/facts-majordomus.test.mjs
       - name: majordomus doctor (git-hook wiring excepted)
         run: |
           set +e; majordomus doctor --json > doctor.jsonl; code=$?; set -e
