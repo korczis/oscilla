@@ -1,4 +1,4 @@
-# Review verdict for pull request #524 (train/t7a): train T7a and release v3.32.1 (a patch:
+# Review verdict for pull request #525 (train/t7a): train T7a and release v3.32.1 (a patch:
 # release:analyze at 990f9316 finds 15 patch-level commits since v3.32.0, no minor).
 # Guarded members: C065 (a base edit inside a removed lane's release window reaches the played
 # value; the re-aim takes the edges' live offset: 89a7e95b, 8f7a9119, 5bc846dc), K241 (a Clock
@@ -81,7 +81,7 @@
 #
 # Verdict: merge, under the condition above. No P0, P1 or P2 is open.
 schema: review-verdict/v1
-pr: 524
+pr: 525
 verdict: merge
 reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of the guarded content of 05ed3665)
 content: fb9ca2837c37df1c871a1917dbc3cf56e75773a44b469b96fb4f3327438604bd
