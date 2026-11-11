@@ -255,7 +255,7 @@
     },
     {
       "title": "Nahrávání padu L a poctivý patch bay",
-      "summary": "Pad L nahrává záběr své osy X a Y do automatizace během hraní a při dalším průchodu ho přehraje; konektory patch baye říkají, co kabel opravdu udělá: bipolární zdroj do zesílení VCA se odmítne, protože by VCA otevřel bez klávesy, do VELOCITY ho lze zapojit jako tremolo a ladění Tune posune nejvýš o dvě oktávy s odkazem na vstup Pitch; odkaz Synthu odmítne neplatný kabel česky a vyjmenuje, co nezapojil; kabel držený na stropu Q to řekne v Inspectoru; demo píseň má stopu rezonance basového filtru; krátké okno na ploše sbalí klávesy Synthu do lišty a stisk v Inspectoru se už neztratí, když se zobrazení uzlu překreslí; laboratoř /lab/ má podstránky grafů, tvrzení, změn, roadmapy, dluhu, recenzí a ADR"
+      "summary": "Pad L nahrává záběr své osy X a Y do automatizace během hraní a při dalším průchodu ho přehraje; konektory patch baye říkají, co kabel opravdu udělá: bipolární zdroj do zesílení VCA se odmítne, protože by VCA otevřel bez klávesy, do VELOCITY ho lze zapojit jako tremolo a ladění Tune posune nejvýš o dvě oktávy s odkazem na vstup Pitch; odkaz Synthu odmítne neplatný kabel česky a vyjmenuje, co nezapojil; kabel držený na stropu Q to řekne v Inspectoru; demo píseň má stopu rezonance basového filtru; krátké okno na ploše sbalí klávesy Synthu do lišty a stisk v Inspectoru se už neztratí, když se zobrazení uzlu překreslí; laboratoř /lab/ má nové podstránky Grafy, Tvrzení, Změny, Roadmapa, Dluh, Revize a ADR"
     }
   ]
 }
