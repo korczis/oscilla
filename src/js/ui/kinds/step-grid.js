@@ -45,6 +45,34 @@ const CELL_ACCENT = 'bg-primary-700';
 const CELL_OFF = 'bg-gray-50 dark:bg-gray-700';
 const CELL_BEAT = 'bg-gray-100 dark:bg-gray-800';
 const OFF_GRID = 'ml-2 rounded bg-yellow-50 px-1.5 py-0.5 text-xs font-medium text-yellow-800';
+// K019: a list step is drawn as a bar, the value's share of the parameter's range; on a range
+// that spans 0 (the bipolar Step Modulator) it grows up or down from the middle. Heights are
+// literal classes in tenths (no inline style), so the Pro ratchet stays flat.
+const BAR = 'pointer-events-none absolute inset-x-1 rounded-sm bg-primary-600 dark:bg-primary-400';
+const BAR_FULL = ['h-0', 'h-[10%]', 'h-[20%]', 'h-[30%]', 'h-[40%]', 'h-[50%]', 'h-[60%]',
+  'h-[70%]', 'h-[80%]', 'h-[90%]', 'h-full'];
+const BAR_HALF = ['h-0', 'h-[5%]', 'h-[10%]', 'h-[15%]', 'h-[20%]', 'h-[25%]', 'h-[30%]',
+  'h-[35%]', 'h-[40%]', 'h-[45%]', 'h-1/2'];
+
+/** A list step's bar: { dir: 'up' | 'down' | 'bottom', tenths 0..10 } (K019). */
+export function stepBar(param, v) {
+  const tenths = (f) => Math.max(0, Math.min(10, Math.round(f * 10)));
+  if (!param || !Number.isFinite(v)) return { dir: 'bottom', tenths: 0 };
+  if (param.min < 0 && param.max > 0) {
+    return v >= 0 ? { dir: 'up', tenths: tenths(v / param.max) }
+      : { dir: 'down', tenths: tenths(v / param.min) };
+  }
+  const span = param.max - param.min;
+  return { dir: 'bottom', tenths: tenths(span > 0 ? (v - param.min) / span : 0) };
+}
+
+function barHtml(param, v) {
+  const { dir, tenths } = stepBar(param, v);
+  const at = dir === 'up' ? 'bottom-1/2' : dir === 'down' ? 'top-1/2' : 'bottom-0';
+  const h = (dir === 'bottom' ? BAR_FULL : BAR_HALF)[tenths];
+  return `<span aria-hidden="true" data-step-bar="${dir}:${tenths}" class="${BAR} ${at} ${h}">`
+    + '</span>';
+}
 // The Pro secondary button of the Studio's preset menu (node-preset-menu.js), 44 px tall.
 const BUTTON = 'inline-flex h-11 items-center gap-1 rounded-lg border border-solid border-gray-300 '
   + 'bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none '
@@ -155,13 +183,15 @@ export function mountStepGrid(host, opts) {
       for (let step = from; step < to; step += 1) {
         const v = valueOf(st, lane, step);
         const on = isOn(st, lane, step);
-        const tone = !on ? (step % 4 === 0 ? CELL_BEAT : CELL_OFF)
-          : !list && v.vel >= 0.8 ? CELL_ACCENT : CELL_ON;
+        // A list step's value is its bar (K019), so its cell keeps the beat tone under it.
+        const tone = !on || list ? (step % 4 === 0 ? CELL_BEAT : CELL_OFF)
+          : v.vel >= 0.8 ? CELL_ACCENT : CELL_ON;
         const focused = st.focus.lane === lane && st.focus.step === step;
         cells.push(`<div role="gridcell" class="${CELL} ${tone}" data-lane="${lane}" `
           + `data-step="${step}" tabindex="${focused ? 0 : -1}" aria-selected="${lane
             === st.focus.lane && step >= a && step <= b}" aria-label="${esc(cellName(nameOf(lane),
-            step, list ? v : on && v, list ? 'param-list' : 'notes', on))}"></div>`);
+            step, list ? v : on && v, list ? 'param-list' : 'notes', on))}">${list
+            ? barHtml(opts.param, v) : ''}</div>`);
       }
       return `<div role="row" class="${wide ? ROW_WIDE : ROW_NARROW}">${head}`
         + `<div class="${STEPS}">${cells.join('')}</div></div>`;

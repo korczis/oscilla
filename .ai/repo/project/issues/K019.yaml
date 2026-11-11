@@ -13,8 +13,8 @@ scope:
   - "tests/unit/studio-step-bars.test.mjs"
   - "tests/README.md"
   - "dist"
-depends_on:
-  - "E004"
+depends_on: []
+current_state: "Built by oscilla-43 in task t-20261111123655-a2c2 (2026-11-11). E004 dropped from depends_on with this reason (principle 14): the bars live in the step-grid kind (src/js/ui/kinds/step-grid.js), not in inspector.js, so the inspector split E004 is no precondition; E004 stays in M046 as L work. The Step Modulator's steps were already edited through K221's param-list lane (one NODE_PARAM_SET per gesture, a vertical drag sets a value) but drawn only as on/off tones; K019 draws each step as a bar of its value."
 acceptance_criteria:
   - "A drag across several bars is one history entry and the keyboard reaches every step, in a unit test that fails on the merge base."
   - "Any new chrome is Flowbite Pro markup adapted from the matching Pro block and lowers or keeps the ratchet (project.ui-uses-flowbite-pro, ADR 0061; node --test tests/unit/ui-flowbite-pro.test.mjs); controls are Pro range sliders with number inputs; a continuous instrument parameter in the Synth workspace is the knob of K058 (D11, Q018, superseding D5 there)."

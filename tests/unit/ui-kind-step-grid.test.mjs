@@ -609,3 +609,47 @@ test('R2-K222-1: a page the user turns holds until the playhead enters it or a s
   assert.equal(grid.followPage(null), null, 'a stop releases the hold');
   assert.equal(grid.followPage(13), 3, 'the next run follows');
 });
+
+// ------------------------------------------------------------------------------ K019 bars
+test('K019: a list parameter is drawn as bars; a drag across bars is one entry; keys reach all',
+  async () => {
+    const { mountStepGrid, stepBar } = await import('../../src/js/ui/kinds/step-grid.js');
+    const bipolar = { key: 'steps', label: 'Kroky', type: 'list', min: -1, max: 1, minLength: 1,
+      maxLength: 16, step: 0.01 };
+    // The bar is the value's share of the range: up or down from the middle on a bipolar range.
+    assert.deepEqual(stepBar(bipolar, 1), { dir: 'up', tenths: 10 });
+    assert.deepEqual(stepBar(bipolar, 0.5), { dir: 'up', tenths: 5 });
+    assert.deepEqual(stepBar(bipolar, 0), { dir: 'up', tenths: 0 });
+    assert.deepEqual(stepBar(bipolar, -0.3), { dir: 'down', tenths: 3 });
+    const unipolar = { ...bipolar, min: 0, max: 8 };
+    assert.deepEqual(stepBar(unipolar, 6), { dir: 'bottom', tenths: 8 });
+    // The view writes one bar per step, from the values.
+    const host = fakeEl();
+    const root = fakeEl();
+    const find = root.querySelector;
+    root.querySelector = (sel) => (sel === '[data-step-detail]' ? null : find(sel)); // list: none
+    Object.defineProperty(host, 'firstElementChild', { get: () => root });
+    const surface = root.querySelector('[data-step-grid-surface]');
+    let html = '';
+    Object.defineProperty(surface, 'innerHTML', { set(v) { html = String(v); }, get: () => html });
+    const actions = [];
+    const view = mountStepGrid(host, { mode: 'param-list', nodeId: 'n', param: bipolar,
+      values: [1, -0.5, 0, 0.25], steps: 4, pageSteps: 16, label: 'Kroky', laneNames: ['Kroky'],
+      commit: (a) => { actions.push(a); view.set({ values: a.value }); return true; } });
+    const bars = [...html.matchAll(/data-step-bar="([a-z]+:\d+)"/g)].map((m) => m[1]);
+    assert.deepEqual(bars, ['up:10', 'down:5', 'up:0', 'up:3'], 'one bar per step, from its value');
+    // A drag across three bars is one NODE_PARAM_SET, one history entry.
+    const grid = view.model;
+    grid.down(0, 0);
+    grid.over(0, 1);
+    grid.over(0, 2);
+    grid.up();
+    assert.equal(actions.length, 1, 'one action for the drag');
+    assert.equal(actions[0].type, 'NODE_PARAM_SET');
+    // The keyboard reaches every step from the first.
+    grid.set({ focus: { lane: 0, step: 0 } });
+    const reached = new Set([grid.focus.step]);
+    for (let i = 0; i < 3; i += 1) { grid.key('ArrowRight'); reached.add(grid.focus.step); }
+    assert.deepEqual([...reached].sort(), [0, 1, 2, 3], 'arrows reach every step');
+    view.destroy();
+  });
