@@ -63,7 +63,7 @@
 // ECONNRESET, "can't assign requested address", an HTTP 5xx), and a call out of attempts
 // named in the refusal or failure with its reason. The publish of 2026-10-31: one gh run list sat
 // for 2 h 20 min, and local port exhaustion ended the wait for the dispatched Pages run.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -124,6 +124,10 @@ export const RATCHET_COPY = Object.freeze({
     short: 'telefon', counts: 'ovládací prvky mimo okraj, zakryté nebo příliš malé, po '
       + 'prohlížečích, telefonech a plochách (součet debt)',
     test: 'tests/browser/iphone.cjs', rule: null },
+  'tests/browser/timing-allow-baseline.json': { name: 'Výjimky z ohraničeného čekání',
+    short: 'výjimky čekání', counts: 'značky timing-allow v prohlížečových testech, každá s '
+      + 'důvodem, po souborech (počet smí jen klesat)',
+    test: 'tests/unit/browser-timing.test.mjs', rule: 'project.bounded-test-timing' },
   'tests/browser/timing-baseline.json': { name: 'Pevná čekání v prohlížečových testech',
     short: 'čekání', counts: 'nálezy skeneru časování (pevné uspání, počítané čekání) z doby před '
       + 'pravidlem, po souborech a druzích (součet debt)',
@@ -136,6 +140,10 @@ export const RATCHET_COPY = Object.freeze({
     short: 'angličtina', counts: 'anglické věty, které aplikace ještě zobrazuje (pole total, '
       + 'jehož rovnost se součtem po souborech hlídá test)',
     test: 'tests/unit/czech-prose.test.mjs', rule: 'project.czech-prose' },
+  'tests/unit/czech-prose-short-baseline.json': { name: 'Krátké anglické texty v aplikaci',
+    short: 'krátká angličtina', counts: 'krátké anglické texty (popisky, tlačítka), které '
+      + 'aplikace ještě zobrazuje (pole total)',
+    test: 'tests/unit/czech-prose-short.test.mjs', rule: 'project.czech-prose' },
   'tests/unit/key-listener-baseline.json': { name: 'Klávesové posluchače mimo registr',
     short: 'klávesy', counts: 'posluchače keydown a keyup mimo src/js/ui/keys/ (součet counts '
       + 'po souborech)',

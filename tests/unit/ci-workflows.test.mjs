@@ -164,7 +164,7 @@ test('mutation: a curl without --retry or --connect-timeout', () => {
   const noRetry = mutate(CI, " --retry 3 --retry-all-errors --retry-delay 5", '');
   assert.deepEqual(rules(ci(noRetry)), ['curl-flags@knowledge']);
   assert.deepEqual(rules(checkWorkflow('pages.yml', mutate(PAGES,
-    ' --retry 5 --retry-all-errors --retry-delay 5', ''), SUITES)), ['curl-flags@deploy']);
+    ' --retry 3 --retry-all-errors --retry-delay 5', ''), SUITES)), ['curl-flags@deploy']);
   assert.match(ci(noRetry)[0].message, /curl without --retry <n>/);
   const noConnect = mutate(CI, ' --connect-timeout 20', '');
   assert.deepEqual(rules(ci(noConnect)), ['curl-flags@knowledge']);
