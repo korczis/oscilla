@@ -99,7 +99,12 @@
 //   padTargets(model, panel, module = 'xyl') -> { x: [jack], y: [jack] }   what each output
 //     drives, normals and cables alike ('lpf.frequency'); muted edges left out
 //   mountPadL(host, { store, transport, panel, app, arm, say, jackName, mountPad, owner })
-//     -> { view, release(reason), destroy() }
+//     -> { view, record, release(reason), destroy() }
+//     Its Record switch (K231, ui/kinds/record-switch.js) arms the transport's one recorder
+//     (studio/notes-record.js) with padTakeId(pad L's node): a take of its X and Y is written as
+//     automation of the pad's own x and y while the timeline plays, which replays through
+//     whatever its normals or cables feed. Play beside it is the Studio transport's timeline
+//     Play and Stop, as on the Drums tab (the status bar's Play is the instrument's, ADR 0050).
 //   PADS_TEXT   the pads' sentences (Czech, Q104)
 
 import { mountXyPad } from '../../ui/kinds/xy-pad.js';
@@ -114,6 +119,11 @@ import { limitBoundText } from '../../studio/compiler.js';
 import { esc } from './face.js';
 import { claimNotes, hasBox } from '../../midi/dock-yield.js';
 import { knobModel } from './knob.js';
+import { padTakeId } from '../../studio/notes-record.js';
+import {
+  PAD_RECORD_TEXT, bindRecordSwitch, recordSwitchHtml,
+} from '../../ui/kinds/record-switch.js';
+import { RECORD_BUTTON, bindTimelinePlay, timelinePlayHtml } from './timeline-play.js';
 
 export const XY_TEXT = Object.freeze({
   missing: 'The XY pad is not in this Studio document: press Add the XY pad first.',
@@ -702,7 +712,9 @@ export function mountPadL(host, { store, transport = null, panel, app = null, ar
   host.innerHTML = `<p class="${PAD_LABEL}" data-pad-axes="">${esc(PADS_TEXT.axes(nx, ny))}</p>`
     + `<p id="${uid}-line" class="mt-1 text-sm font-semibold text-gray-900 dark:text-white" `
     + 'data-pad-line="" aria-live="polite"></p>'
-    + '<div class="mt-2" data-osc="synth.pads.l.pad"></div>';
+    + '<div class="mt-2" data-osc="synth.pads.l.pad"></div>'
+    + '<div class="mt-2 flex items-center gap-2" data-pad-record="">'
+    + `${timelinePlayHtml()}${recordSwitchHtml(RECORD_BUTTON)}</div>`;
   const line = host.querySelector('[data-pad-line]');
   const pct = (v) => Math.round(v * 100);
   view = mountPad(host.querySelector('[data-osc="synth.pads.l.pad"]'), {
@@ -740,14 +752,25 @@ export function mountPadL(host, { store, transport = null, panel, app = null, ar
       if (view && typeof view.model.place === 'function') view.model.place({ x: 0, y: 0 });
     },
   });
+  const play = bindTimelinePlay(host.querySelector('[data-pad-play]'), { transport: tp, say });
+  const record = bindRecordSwitch(host.querySelector('[data-pad-record] [data-notes-record]'), {
+    transport: tp, store, say, text: PAD_RECORD_TEXT,
+    clipId: () => {
+      const n = node();
+      return n ? padTakeId(n.id) : null;
+    },
+  });
   return {
     get view() { return view; },
+    record,
     release,
     destroy() {
       if (destroyed) return;
       if (view) view.destroy(); // the kind ends a held gate ('hide'): onGate releases it
       destroyed = true;
       view = null;
+      record.destroy();
+      play.destroy();
       paths.off();
     },
   };

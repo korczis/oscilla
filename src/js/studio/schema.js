@@ -452,11 +452,28 @@ export function createStudioModel(init = {}, opts = {}) {
  * normalized model; `space` > 0 pretty-prints the same key order.
  */
 export function serializeStudio(model, space = 0, opts = {}) {
-  const text = canonicalJson(normalizeStudio(model, opts));
+  const m = normalizeStudio(model, opts);
+  const registry = opts.registry || NODE_REGISTRY;
+  const text = canonicalJson({ ...m, graph: { ...m.graph, nodes: m.graph.nodes.map((n) => ({
+    ...n, params: elideParams(n.type, n.params, registry) })) } });
   return space ? JSON.stringify(JSON.parse(text), null, space) : text;
 }
 
 const byId = (list) => [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+/**
+ * `params` of a node of `type` without the ones its definition elides at their default (`elide`,
+ * K231: the xy-pad's x and y), so a model or patch that never moved them serialises and hashes,
+ * at every hash epoch, as before they existed; normalizeStudio gives them back on load.
+ */
+export function elideParams(type, params, registry = NODE_REGISTRY) {
+  const def = registry.get(type);
+  if (!def || !def.params.some((p) => p.elide)) return params;
+  return Object.fromEntries(Object.entries(params).filter(([k, v]) => {
+    const p = def.params.find((x) => x.key === k);
+    return !(p && p.elide && canonicalJson(v) === canonicalJson(p.default));
+  }));
+}
 
 /**
  * The EXECUTION state (§163, §255): what the hash covers. Arrays of identified records are
@@ -470,7 +487,8 @@ export function executionState(model, version = STUDIO_HASH_VERSION) {
     kind: STUDIO_KIND,
     schemaVersion: model.schemaVersion,
     nodes: byId(g.nodes).map((n) => ({ id: n.id, type: n.type,
-      params: version === STUDIO_HASH_VERSION ? n.params : paramsAt(n, version) })),
+      params: elideParams(n.type, version === STUDIO_HASH_VERSION ? n.params
+        : paramsAt(n, version)) })),
     edges: byId(g.edges).map((e) => ({ id: e.id, from: e.from, to: e.to, props: e.props })),
     timeline: {
       tracks: byId(t.tracks).map((x) => ({ id: x.id, kind: x.kind, target: x.target })),
