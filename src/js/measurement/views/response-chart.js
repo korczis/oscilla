@@ -549,17 +549,20 @@ function calibrationCoverageText(f, [lo, hi], s) {
 }
 
 /**
- * 'Frequency profile "X" (points 12 kHz–16 kHz) covers none of the measured range (100 Hz–
- * 9.9 kHz): …' — the profile's own point frequencies are stated as the file gives them.
+ * 'Frekvenční profil "X" (body 12 kHz–16 kHz) nepokrývá žádný z 319 měřených bodů (100 Hz–
+ * 9.9 kHz): …' — the profile's own point frequencies are stated as the file gives them. It
+ * names the measured points, not a range the profile would lie outside: a one-point 1 kHz
+ * profile lies inside a 100 Hz–10 kHz sweep and still covers none of its points (T037, Q104).
  */
 function noCoverageText(f, s) {
   const c = s.correction;
   const cov = Array.isArray(c.coverage) ? c.coverage : null;
-  const pts = !cov ? '' : cov[0] === cov[1] ? ` (one point, at ${hzText(cov[0])})`
-    : ` (points ${hzText(cov[0])}–${hzText(cov[1])})`;
-  return `Frequency profile "${c.name || UNAVAILABLE.UNKNOWN}"${pts} covers none of the measured `
-    + `range (${gridFrequencyText(f, 0, s.binHz)}–${gridFrequencyText(f, f.length - 1, s.binHz)})`
-    + ': no point is corrected (no extrapolation); RAW is shown, uncalibrated.';
+  const pts = !cov ? '' : cov[0] === cov[1] ? ` (jediný bod, ${hzText(cov[0])})`
+    : ` (body ${hzText(cov[0])}–${hzText(cov[1])})`;
+  return `Frekvenční profil "${c.name || UNAVAILABLE.UNKNOWN}"${pts} nepokrývá žádný z `
+    + `${f.length} měřených bodů (${gridFrequencyText(f, 0, s.binHz)}–`
+    + `${gridFrequencyText(f, f.length - 1, s.binHz)}): žádný bod není korigován (bez `
+    + 'extrapolace); zobrazeno RAW, nekalibrováno.';
 }
 
 /**
