@@ -803,9 +803,31 @@ function defineChecks() {
       max: el.getAttribute('aria-valuemax'),
       text: document.querySelector('[data-value="lpf.frequency"]').textContent }));
     const start = await pos();
-    const b = await knob.boundingBox();
-    const cx = b.x + b.width / 2;
-    const cy = b.y + b.height / 2;
+    // E069: the knob's centre is read where it has settled, before every gesture. Under load the
+    // page was still scrolling after scrollIntoViewIfNeeded, so a centre read once at the start
+    // went stale (the knob moved 40-100 px) and a wheel at it hit the value readout or a button,
+    // scrolled the page further, and never reached the knob. Two reads that agree, with the knob
+    // itself under the point, are the settled centre.
+    let cx = 0;
+    let cy = 0;
+    let seen = null;
+    const settle = (what) => until(async () => {
+      const b = await knob.boundingBox();
+      const c = b && { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+      const same = c && seen && Math.abs(c.x - seen.x) < 0.5 && Math.abs(c.y - seen.y) < 0.5;
+      seen = c;
+      if (!same) return null;
+      const onKnob = await page.evaluate(([x, y]) => {
+        const k = document.querySelector('[data-knob="lpf.frequency"]');
+        const at = document.elementFromPoint(x, y);
+        return !!(k && at && k.contains(at));
+      }, [c.x, c.y]);
+      if (!onKnob) return null;
+      cx = c.x;
+      cy = c.y;
+      return c;
+    }, { ms: 5000, what: `s-feel: the knob has settled under the pointer (${what})` });
+    await settle('the drag');
     // A drag: the ARIA position stays the 0..1000 travel while it moves (N003).
     await page.mouse.move(cx, cy);
     await page.mouse.down();
@@ -818,6 +840,7 @@ function defineChecks() {
     await page.keyboard.up('Shift');
     await page.mouse.up();
     // A double-click restores the initial value: the first click leaves the knob in place.
+    await settle('the double-click');
     await page.mouse.move(cx, cy);
     await knob.dblclick();
     await until(async () => (await pos()).text === start.text, { ms: 5000,
@@ -825,9 +848,16 @@ function defineChecks() {
     // The wheel turns the knob under the pointer; a burst is one undo entry.
     const before = await depth();
     const w0 = (await pos()).now;
-    await page.mouse.move(cx, cy);
-    await page.mouse.wheel(0, -100);
-    await page.mouse.wheel(0, -100);
+    // E069: both notches go in one page task. A burst ends GESTURE_IDLE_MS (400 ms) after its
+    // last notch, and two mouse.wheel round trips under load came farther apart than that: the
+    // product rightly made two entries, the poll below caught the instant between their commits,
+    // and the second burst, still open, landed inside the notch+drag window (d0 + 3).
+    await knob.evaluate((k) => {
+      for (let i = 0; i < 2; i += 1) {
+        k.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, deltaMode: 0, bubbles: true,
+          cancelable: true }));
+      }
+    });
     await until(async () => (await pos()).now > w0, { ms: 5000, what: 'the wheel turns it' });
     await until(async () => (await depth()) === before + 1, { ms: 5000,
       what: 'a wheel burst is one undo entry' });
@@ -839,6 +869,7 @@ function defineChecks() {
     // true at once.
     const d0 = await depth();
     const n0 = (await pos()).now;
+    await settle('the notch');
     await page.mouse.move(cx, cy);
     await page.mouse.wheel(0, -100);
     await until(async () => (await pos()).now !== n0, { ms: 5000,
@@ -864,6 +895,7 @@ function defineChecks() {
         if (e.ctrlKey) window.__pinch.push(e.defaultPrevented);
       });
     });
+    await settle('the pinch');
     await page.mouse.move(cx, cy);
     await page.keyboard.down('Control');
     await page.mouse.wheel(0, -100);
