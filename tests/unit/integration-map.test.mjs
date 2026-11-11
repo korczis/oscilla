@@ -229,3 +229,19 @@ test('reloadDebt and deferred rows name their issue or the suite that walks them
     assert.match(r.walk.covered, /^tests\/browser\/[\w-]+\.cjs/, r.id);
   }
 });
+
+test('G013: a menu item\'s producer names the button its menu is labelled by as its opener', () => {
+  const html = '<button type="button" id="b1" data-osc="lab.openMenu">Otevřít v…</button>'
+    + '<div id="m1" role="menu" aria-labelledby="b1">'
+    + '<a href="#m=synth" role="menuitem" data-osc="lab.toSynth" data-osc-link="jump">S</a></div>'
+    + '<a href="#m=studio" data-osc="lab.toStudio" data-osc-link="jump">T</a>';
+  const [item] = scanMarkup(html).filter((p) => p.control === 'lab.toSynth');
+  assert.equal(item.role, 'menuitem');
+  assert.equal(item.opener, '[data-osc="lab.openMenu"]');
+  const [plain] = scanMarkup(html).filter((p) => p.control === 'lab.toStudio');
+  assert.equal(plain.opener, undefined, 'a link outside a menu has no opener');
+  const rows = allRows(MAP).filter((r) => /^(seq|filter)\.to/.test(r.control)
+    && r.role === 'menuitem');
+  assert.ok(rows.length >= 6, `the labs' menu items are menu rows (${rows.length})`);
+  for (const r of rows) assert.match(r.opener, /^\[data-osc="(seq|filter)\.openMenu"\]$/, r.id);
+});

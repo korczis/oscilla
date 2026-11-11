@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 300000,
+    "src/index.html": 304000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -222,6 +222,12 @@
       "cap": 94000,
       "pr": 507,
       "reason": "the same raise as the entry naming pull request 506, which was a mis-numbered guess: train T2 (K068 + K104) lands as pull request 507; entries are added, never edited, so this one corrects it"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 304000,
+      "pr": 537,
+      "reason": "G013 (owner order 2026-11-11, visual audit finding 7): the Sequencer and Filter Lab link piles become one Pro row and one 'Otevřít v…' menu each; new markup only, no trim of unrelated surfaces"
     }
   ]
 }

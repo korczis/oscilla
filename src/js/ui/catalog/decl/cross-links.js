@@ -154,6 +154,21 @@ export default [
     effect: { route: 'synth, tab drums' },
   }),
   defineComponent({
+    id: 'seq.openMenu',
+    kind: 'open',
+    label: 'Otevřít v…',
+    docs: 'Otevře nabídku dalších cest ze Sekvenceru: Step Bass, tato sekvence a šablona ve '
+      + 'Studiu, Synth (G013).',
+    state: 'ui.menus',
+  }),
+  defineComponent({
+    id: 'filter.openMenu',
+    kind: 'open',
+    label: 'Otevřít v…',
+    docs: 'Otevře nabídku dalších cest z Filter Labu: šablona ve Studiu a Synth (G013).',
+    state: 'ui.menus',
+  }),
+  defineComponent({
     id: 'seq.toStepBass',
     kind: 'open',
     label: 'Krokový modulátor ve Studiu',

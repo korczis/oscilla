@@ -1488,20 +1488,27 @@
             </select>
           </div>
         </div>
-        <!-- G013 (Q035 2): the onward paths, Bicí the primary; the Playground grid hides it. -->
-        <div id="osc-seq-paths" class="flex flex-wrap items-center gap-2 px-3 py-2" role="group"
-          aria-labelledby="osc-seq-paths-title" hidden :hidden="workspace !== 'sequencer'">
-          <span id="osc-seq-paths-title" class="text-sm font-medium">Další cesty</span>
+        <!-- G013 (Q035 2): Bicí the primary, the rest in one menu; the Playground grid hides it. -->
+        <div id="osc-seq-paths" class="flex items-center gap-2 px-3 py-2" role="group"
+          aria-label="Další cesty" hidden :hidden="workspace !== 'sequencer'">
           <a href="#m=synth&amp;yt=drums" data-osc="seq.toDrums" data-osc-link="jump" hidden
             :hidden="workspace !== 'sequencer'" :class="PRO.btnPrimary">Krokový sekvencer a pady (Bicí)</a>
-          <a href="#m=studio&amp;st=step-bass" data-osc="seq.toStepBass" data-osc-link="open-in" hidden
-            :hidden="workspace !== 'sequencer'" :class="PRO.btnSecondary">Krokový modulátor ve Studiu</a>
-          <a href="#m=studio" data-osc="seq.toStudio" data-osc-link="send-to" hidden :hidden="workspace !== 'sequencer'"
-            @click="studioOpenSequence($event)" :class="PRO.btnSecondary">Otevřít tuto sekvenci ve Studiu</a>
-          <a href="#m=studio&amp;st=sweep-sequence" data-osc="seq.toStudioTemplate" data-osc-link="open-in" hidden
-            :hidden="workspace !== 'sequencer'" :class="PRO.btnSecondary">Šablona Sweep Sequence ve Studiu</a>
-          <a href="#m=synth" data-osc="seq.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'sequencer'"
-            x-bind="counterpartLink('synth')" :class="PRO.btnSecondary">Otevřít Synth</a>
+          <div class="relative" data-osc-menu-anchor>
+            <button type="button" id="osc-seq-open" data-osc="seq.openMenu" aria-haspopup="menu"
+              aria-controls="osc-seq-open-menu" x-bind="menuButton('seqOpen')" :class="PRO.btnSecondary"><span
+              class="sr-only sm:not-sr-only">Otevřít v…</span><svg class="w-5 h-5 sm:ml-1" aria-hidden="true"><use href="#i-down"/></svg></button>
+            <div id="osc-seq-open-menu" role="menu" hidden aria-labelledby="osc-seq-open"
+              x-bind="menuPanel('seqOpen')" class="left-0" :class="PRO.menu">
+              <a href="#m=studio&amp;st=step-bass" role="menuitem" data-osc="seq.toStepBass" data-osc-link="open-in" hidden
+                :hidden="workspace !== 'sequencer'" :class="PRO.menuItem">Krokový modulátor ve Studiu</a>
+              <a href="#m=studio" role="menuitem" data-osc="seq.toStudio" data-osc-link="send-to" hidden :hidden="workspace !== 'sequencer'"
+                @click="studioOpenSequence($event)" :class="PRO.menuItem">Otevřít tuto sekvenci ve Studiu</a>
+              <a href="#m=studio&amp;st=sweep-sequence" role="menuitem" data-osc="seq.toStudioTemplate" data-osc-link="open-in" hidden
+                :hidden="workspace !== 'sequencer'" :class="PRO.menuItem">Šablona Sweep Sequence ve Studiu</a>
+              <a href="#m=synth" role="menuitem" data-osc="seq.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'sequencer'"
+                x-bind="counterpartLink('synth')" :class="PRO.menuItem">Otevřít Synth</a>
+            </div>
+          </div>
         </div>
 
         <div class="osc-seq-timeline-wrap">
@@ -1624,10 +1631,18 @@
             <span class="osc-toggle-track" aria-hidden="true"></span>
           </button>
           <span class="osc-spacer"></span>
-          <a href="#m=studio&amp;st=filter-automation" data-osc="filter.toStudio" data-osc-link="open-in" hidden
-            :hidden="workspace !== 'filter'">Open Filter Automation in Studio</a>
-          <a href="#m=synth" data-osc="filter.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'filter'"
-            x-bind="counterpartLink('synth')">Open the Synth</a>
+          <div class="relative" data-osc-menu-anchor hidden :hidden="workspace !== 'filter'">
+            <button type="button" id="osc-filter-open" data-osc="filter.openMenu" aria-haspopup="menu"
+              aria-controls="osc-filter-open-menu" x-bind="menuButton('filterOpen')" :class="PRO.btnSecondary"><span
+              class="sr-only sm:not-sr-only">Otevřít v…</span><svg class="w-5 h-5 sm:ml-1" aria-hidden="true"><use href="#i-down"/></svg></button>
+            <div id="osc-filter-open-menu" role="menu" hidden aria-labelledby="osc-filter-open"
+              x-bind="menuPanel('filterOpen')" class="right-0" :class="PRO.menu">
+              <a href="#m=studio&amp;st=filter-automation" role="menuitem" data-osc="filter.toStudio" data-osc-link="open-in" hidden
+                :hidden="workspace !== 'filter'" :class="PRO.menuItem">Open Filter Automation in Studio</a>
+              <a href="#m=synth" role="menuitem" data-osc="filter.toSynth" data-osc-link="jump" hidden :hidden="workspace !== 'filter'"
+                x-bind="counterpartLink('synth')" :class="PRO.menuItem">Open the Synth</a>
+            </div>
+          </div>
           <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs max-md:order-first"
             id="osc-filter-fullscreen"
             data-osc="filter.fullscreen" data-osc-link="jump" aria-label="Open the Filter Lab page"

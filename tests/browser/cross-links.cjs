@@ -49,6 +49,10 @@
 //                   link (ui/counterparts.js labels, read at start; the Sequencer's is Czech,
 //                   G013), hidden on the Playground grid;
 //                   it opens the Synth with focus on its heading, Back returns, Forward reopens
+//   lab-menus       (G013) the Sequencer's and Filter Lab's "Otevřít v…" buttons open their
+//                   menus by pointer, keyboard and touch (expanded, items shown, the first
+//                   focused, ArrowDown moves on, Escape closes back onto the button); at 390 px
+//                   the Sequencer row is one line, 44 px targets under a coarse pointer
 //   about-workspaces (A1) every entry of About's workspace list but About's own is a link that
 //                   opens its workspace (WORKSPACES, read at start) with focus on its heading;
 //                   Back returns to About
@@ -184,8 +188,38 @@ const H = {
     await page.evaluate((x) => window.OSCILLA.app.setWorkspace(x), w);
     return H.until(page, w, (s) => s.workspace === w, `setWorkspace(${w})`);
   },
+  /** Press `selector` by pointer, keyboard (focus, then Enter) or touch (a tap). */
+  async press(page, selector, input) {
+    const el = page.locator(selector).first();
+    await el.waitFor({ state: 'visible', timeout: NAV_MS });
+    if (input === 'keyboard') {
+      await el.focus({ timeout: NAV_MS });
+      await page.keyboard.press('Enter');
+    } else if (input === 'touch') {
+      await el.tap({ timeout: NAV_MS });
+    } else {
+      await el.click({ timeout: NAV_MS });
+    }
+  },
+  /**
+   * A link inside its lab's closed "Otevřít v…" menu (G013): open the menu by the same input
+   * first, until the link is shown. False when it is in no closed menu.
+   */
+  async reveal(page, selector, input = 'pointer') {
+    const el = page.locator(selector).first(); // Playwright selectors (:text-is) included
+    if (!await el.count()) return false;
+    const opener = await el.evaluate((x) => {
+      const menu = x.closest('[role="menu"]');
+      return menu && menu.hidden ? menu.getAttribute('aria-labelledby') : null;
+    });
+    if (!opener) return false;
+    await H.press(page, `#${opener}`, input);
+    await until(() => el.isVisible(), { ms: NAV_MS, what: `the menu holding ${selector} opens` });
+    return true;
+  },
   /** Activate a control by pointer, keyboard (focus, then Enter) or touch (a tap). */
   async activate(page, selector, input) {
+    await H.reveal(page, selector, input);
     const el = page.locator(selector).first();
     await el.waitFor({ state: 'visible', timeout: NAV_MS });
     if (input === 'keyboard') {
@@ -682,6 +716,7 @@ async function runLeg(name, origin) {
         const grid = await H.name(page, sel);
         if (!grid || grid.shown) wrong.push(`${osc} is shown on the Playground grid`);
         await H.setWorkspace(page, from);
+        await H.reveal(page, sel, input);
         const link = await H.name(page, sel);
         if (!link || !link.shown || link.href !== `#m=${to}` || link.text !== label) {
           wrong.push(`${osc}: ${JSON.stringify(link)}`);
@@ -693,6 +728,73 @@ async function runLeg(name, origin) {
         + 'Back returns (A1)', PANEL_COUNTERPARTS.length >= 4 && !wrong.length,
       wrong.join(' | '));
       await page.close();
+    }
+
+    if (want('lab-menus')) {
+      // G013: a lab's "Otevřít v…" button opens its menu by pointer, keyboard and touch: it says
+      // it is expanded, the menu shows its items with the first focused, ArrowDown moves on, and
+      // Escape closes it with focus back on the button.
+      const wrong = [];
+      const probe = async (page, btn, n, input) => {
+        const s = await until(() => page.evaluate(([b, k]) => {
+          const el = document.querySelector(b);
+          const menu = document.getElementById(el.getAttribute('aria-controls'));
+          const items = [...menu.querySelectorAll('[role="menuitem"]')]
+            .filter((x) => x.getClientRects().length > 0);
+          return el.getAttribute('aria-expanded') === 'true' && items.length === k
+            && document.activeElement === items[0] ? { items: items.length } : null;
+        }, [btn, n]), { ms: NAV_MS, what: `${btn} (${input}) opens its menu` }).catch(() => null);
+        if (!s) {
+          wrong.push(`${btn} (${input}): the menu stayed shut, or not ${n} items with the first `
+            + 'focused');
+          return;
+        }
+        await page.keyboard.press('ArrowDown');
+        const second = await page.evaluate((b) => {
+          const el = document.querySelector(b);
+          const menu = document.getElementById(el.getAttribute('aria-controls'));
+          return document.activeElement === menu.querySelectorAll('[role="menuitem"]')[1];
+        }, btn);
+        if (!second) wrong.push(`${btn} (${input}): ArrowDown did not move to the second item`);
+        await page.keyboard.press('Escape');
+        const closed = await until(() => page.evaluate((b) => {
+          const el = document.querySelector(b);
+          return document.getElementById(el.getAttribute('aria-controls')).hidden
+            && document.activeElement === el && el.getAttribute('aria-expanded') === 'false';
+        }, btn), { ms: NAV_MS, what: `${btn} (${input}): Escape closes the menu` })
+          .catch(() => false);
+        if (!closed) wrong.push(`${btn} (${input}): Escape left the menu open or focus elsewhere`);
+      };
+      for (const input of INPUTS) {
+        const page = await H.open(context, base);
+        await H.setWorkspace(page, 'sequencer');
+        await H.press(page, '#osc-seq-open', input);
+        await probe(page, '#osc-seq-open', 4, input);
+        await H.setWorkspace(page, 'filter');
+        await H.press(page, '#osc-filter-open', input);
+        await probe(page, '#osc-filter-open', 2, input);
+        await page.close();
+      }
+      // On a phone the Sequencer's row is one line, Bicí and the menu button side by side, each
+      // 44 px tall under a coarse pointer.
+      const phone = await browser.newContext({ viewport: { width: 390, height: 844 },
+        hasTouch: true, ...(name === 'firefox' ? {} : { isMobile: true }) });
+      const pp = await H.open(phone, base);
+      await H.setWorkspace(pp, 'sequencer');
+      const row = await pp.evaluate(() => {
+        const kids = [...document.querySelectorAll('#osc-seq-paths > *')]
+          .map((k) => k.getBoundingClientRect());
+        const coarse = matchMedia('(pointer: coarse)').matches;
+        return { tops: kids.map((r) => Math.round(r.top)), heights: kids.map((r) => r.height),
+          coarse, scroll: document.scrollingElement.scrollWidth - window.innerWidth };
+      });
+      const oneLine = row.tops.length === 2 && Math.abs(row.tops[0] - row.tops[1]) <= 2;
+      const tall = row.heights.every((h) => h >= (row.coarse ? 44 : 36));
+      if (!oneLine || !tall || row.scroll > 0) wrong.push(`phone row ${JSON.stringify(row)}`);
+      await phone.close();
+      check(leg, 'the Sequencer\'s and Filter Lab\'s "Otevřít v…" menus open by pointer, '
+        + 'keyboard and touch, and the Sequencer row is one line on a phone (G013)',
+      !wrong.length, wrong.join(' | '));
     }
 
     if (want('about-workspaces')) {
