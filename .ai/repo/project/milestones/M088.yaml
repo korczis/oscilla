@@ -15,4 +15,12 @@ evidence_required:
 risks:
 - "Nobody asks the owner: the coordinator raises Q034-Q037."
 created_at: '2026-10-29'
-updated_at: '2026-10-29'
+updated_at: 2026-11-11T13:20:41Z
+evidence:
+  - covers: "milestone_verified"
+    type: manual
+    command: "majordomus plan list (M088's four Q issues)"
+    result: "Every decision of the component-system line is recorded with its evidence; the last two, Q034 (the catalogue may render Pro markup from declarations, nine conditions) and Q035 (the embedded Studio's edits; the Sequencer keeps one strip and reuses seq.toStudio), decided 2026-11-11 under Q090 by oscilla-43 and oscilla-c3"
+    artifact: ".ai/repo/project/issues/Q035.yaml"
+    commit: 1a0196d7e00f9cb750f0c0d7538e472be8557e1d
+    recorded_at: 2026-11-11T13:20:41Z
