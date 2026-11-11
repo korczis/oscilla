@@ -13,7 +13,7 @@ scope:
   - ".github/workflows/main-checks.yml"
   - "tests/unit/ci-knowledge-job.test.mjs"
   - ".ai/repo/project/issues/R055.yaml"
-current_state: "Built by oscilla-75 in task t-20261110054634-738e on fix/r055-majordomus-curl-max-time from ce's ee54c5b5, on the coordinator's assignment (oscilla-43); it lands in train T6 with the verdict from oscilla-c1. Each public attempt carries --max-time 20 and the retries fall from 5 to 3, giving a worst case of 285 s (4 x 20 + 3 x 5, then the fallback's 3 x 60 + 2 x 5) inside the 300 s step, in ci.yml and main-checks.yml alike; ci-workflows.test.mjs's curl mutation targets the new flags. Widened on oscilla-43's order: the ci-bounded checker requires a per-attempt bound on every curl and wget and a step budget; today it finds only these two curls, already fixed."
+current_state: "Built by oscilla-75 in task t-20261110054634-738e on fix/r055-majordomus-curl-max-time from ce's ee54c5b5, on the coordinator's assignment (oscilla-43); it lands in train T6 with the verdict from oscilla-c1. Each public attempt carries --max-time 20 and the retries fall from 5 to 3, giving a worst case of 285 s (4 x 20 + 3 x 5, then the fallback's 3 x 60 + 2 x 5) inside the 300 s step, in ci.yml and main-checks.yml alike; ci-workflows.test.mjs's curl mutation targets the new flags. Widened on oscilla-43's order: the ci-bounded checker requires a per-attempt bound on every curl and wget and a step budget; today it finds only these two curls, already fixed. Landed by #523 (verdict 523.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit (tests/unit/ci-knowledge-job.test.mjs, fails on a7102358): each Majordomus install step's public curl carries --max-time N, and N x (retries + 1) plus the retry delays plus the fallback's bound stays under the step's timeout-minutes."
@@ -24,4 +24,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T18:38:40Z
+started_at: 2026-11-11T18:37:54Z
+started_event: sha256:05c461248385bd4f6355a98b18e97c6029ed5e1eb04551ffdc5642634eb303fc
+verified_at: 2026-11-11T18:38:10Z
+verified_event: sha256:c076faf352c9a46e82e514c3bd23ee12a2d9e96695491bb438304ab6a8f0e4e1
+completed_at: 2026-11-11T18:38:40Z
+completed_event: sha256:9602bb8c5716d8615cb9f930350637238fc0590379d4e4e0aacf826b5ef01665
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/ci-knowledge-job.test.mjs tests/unit/ci-workflows.test.mjs"
+    result: "On main 04d33aaf: ci-knowledge-job 8/8, with ':123 R055: every public download attempt is bounded and both routes fit the step'. ci-workflows: the ci-bounded checker names curl-flags@<job> for a curl without its per-attempt bound or retries (:165-167)."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:38:25Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 523 checks: gate, fail-first"
+    result: "landed by #523; gate success and fail-first success; review verdict .ai/repo/reviews/523.yaml"
+    artifact: ".ai/repo/reviews/523.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:38:33Z

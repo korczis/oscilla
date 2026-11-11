@@ -33,4 +33,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-11T17:34:19Z
+started_at: 2026-11-11T17:33:39Z
+started_event: sha256:a879fe9ca16a67c28d6cf92a5e24347317b3669b52f082c6afcbb839c2705b12
+verified_at: 2026-11-11T17:33:53Z
+verified_event: sha256:e76e204384d127cf2c272e2ece6f717fc04976939a2d1e517cc4f13ef9e91f93
+completed_at: 2026-11-11T17:34:19Z
+completed_event: sha256:ca1e5ae9319dce57440d8775060e88132ecb207604a5398269014a984918d37c
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/workspace-play-visible.test.mjs; node tests/browser/navigation.cjs; npm test"
+    result: "On main 04d33aaf: workspace-play-visible 7/7. navigation.cjs exit 0, 25/25 checks in each of the six legs (chromium, firefox, webkit; file and http), including c030-visible-play: on Analyzer, Filter Lab, Compare and Presets the status bar's visible Play is clicked, the engine's active source count rises above 0 within its named until() deadline, and a second click returns it to 0. The suite runs through lib/suite.cjs and lib/wait.cjs, and npm test (timing baseline, wording, Flowbite Pro ratchet, iphone census) has 0 fail. Landed by train T5 #522: gate and fail-first success, verdict 522.yaml."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T17:34:06Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 522 checks: gate, fail-first"
+    result: "landed by train T5 #522 (main merge 7e77c8cd); gate success and fail-first success; review verdict .ai/repo/reviews/522.yaml"
+    artifact: ".ai/repo/reviews/522.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T17:34:12Z

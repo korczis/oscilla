@@ -11,6 +11,7 @@ why: "Owner, 2026-11-06: versions are to be derived, not inflated. Found by osci
 scope:
   - "scripts/release-analyze.mjs"
   - "tests/unit/release-analyze.test.mjs"
+current_state: "Landed by #480 (bcbb6799, verdict 480.yaml merge); done on 2026-11-11 after oscilla-0b re-checked every criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first: tests/unit/release-analyze.test.mjs gains a fixture whose only commits since the tag are a test(...) commit and two merges ('merge(main): ...', 'Merge branch x'): the proposal is no release; on the merge base it is a patch."
@@ -22,4 +23,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-07'
-updated_at: '2026-11-07'
+updated_at: 2026-11-11T17:26:15Z
+started_at: 2026-11-11T17:25:33Z
+started_event: sha256:fa53e79d65cd31d342b8197201c1529c770102abe1de84444fa640d1bac08d8c
+verified_at: 2026-11-11T17:25:48Z
+verified_event: sha256:b70edbe56e24e09ebe7126b8ec495d34da9dfbd811345b54a47915fc09573ef7
+completed_at: 2026-11-11T17:26:15Z
+completed_event: sha256:ea9500733378242710b0b1ec57c3514ddef6e74c979a5cfacbadd95d6ba537b5
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/release-analyze.test.mjs; npm run release:analyze"
+    result: "On main 04d33aaf: release-analyze 25/25. 'R051: a merge commit is counted by its members' (:79) gives none for a test commit and two merges, patch for a fix(...) PR merge, minor for a feat inside a merged branch, major for a breaking footer on a merge. readCommits counts parents. npm run release:analyze after v3.35.0 says no release (none)."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T17:26:01Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 480 checks: gate, fail-first"
+    result: "landed by #480 (main merge bcbb6799); gate success and fail-first success; review verdict .ai/repo/reviews/480.yaml (merge, a non-builder)"
+    artifact: ".ai/repo/reviews/480.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T17:26:08Z

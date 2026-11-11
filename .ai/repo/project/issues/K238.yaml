@@ -17,7 +17,7 @@ scope:
   - "tests/unit/synth-panel-normals.test.mjs"
   - "dist"
   - ".ai/repo/project/issues/K238.yaml"
-current_state: "Built by oscilla-75 in tasks t-20261110063913-c5fd, t-20261110064916-78ba (the scope widened for the Tune text) and t-20261110070524-8473 (the VELOCITY correction) on fix/k238-bay-jacks-honest from train/t6-sequencer 07bea3c1, on the coordinator's assignment (oscilla-43); unit side only (the synth browser suites wait for T5), for train T7. S&H Rate: jackReason refuses it only while an unmuted Clock cable clocks the S&H, as the compiler's clocked does. VCO Tune, decided by oscilla-43 on 2026-11-10 (option a of three; widening project.typed-ports and refusing octave sources were rejected): an octave source into a cents parameter defaults to its one-octave-per-octave depth capped at the parameter's span (keys.pitch and xy.pitch -> vco1.tune: 2400 cents, a third of an octave per octave), and normals.js tuneNote names it in the synth bay's cable list and the Studio Inspector: 'posune ladění až o ±2 oktávy přes celý rozsah zdroje; pro sledování výšky použij vstup Pitch', the number derived from the depth. VCA gain, decided by oscilla-43 on 2026-11-10 (option a of three): jackReason refuses a bipolar source into the gain of a gain stage that rests closed and would sound with no key (the VCA) with the reason 'bipolární zdroj by otevřel VCA bez stisknuté klávesy', because the cable replaces EG 2's normal and additive CV cannot keep the VCA closed without a gate; a unipolar envelope stays allowed and rests at gain 0. The criterion that an LFO leaves the VCA closed without a gate holds because that patch cannot be made. A bipolar source into VELOCITY gain is the gated tremolo: VELOCITY sits after the VCA (n27, ranked after it by the compiler), so it is silent with no key and a tremolo with one, and it is allowed (oscilla-43's correction, 2026-11-10)."
+current_state: "Built by oscilla-75 in tasks t-20261110063913-c5fd, t-20261110064916-78ba (the scope widened for the Tune text) and t-20261110070524-8473 (the VELOCITY correction) on fix/k238-bay-jacks-honest from train/t6-sequencer 07bea3c1, on the coordinator's assignment (oscilla-43); unit side only (the synth browser suites wait for T5), for train T7. S&H Rate: jackReason refuses it only while an unmuted Clock cable clocks the S&H, as the compiler's clocked does. VCO Tune, decided by oscilla-43 on 2026-11-10 (option a of three; widening project.typed-ports and refusing octave sources were rejected): an octave source into a cents parameter defaults to its one-octave-per-octave depth capped at the parameter's span (keys.pitch and xy.pitch -> vco1.tune: 2400 cents, a third of an octave per octave), and normals.js tuneNote names it in the synth bay's cable list and the Studio Inspector: 'posune ladění až o ±2 oktávy přes celý rozsah zdroje; pro sledování výšky použij vstup Pitch', the number derived from the depth. VCA gain, decided by oscilla-43 on 2026-11-10 (option a of three): jackReason refuses a bipolar source into the gain of a gain stage that rests closed and would sound with no key (the VCA) with the reason 'bipolární zdroj by otevřel VCA bez stisknuté klávesy', because the cable replaces EG 2's normal and additive CV cannot keep the VCA closed without a gate; a unipolar envelope stays allowed and rests at gain 0. The criterion that an LFO leaves the VCA closed without a gate holds because that patch cannot be made. A bipolar source into VELOCITY gain is the gated tremolo: VELOCITY sits after the VCA (n27, ranked after it by the compiler), so it is silent with no key and a tremolo with one, and it is allowed (oscilla-43's correction, 2026-11-10). Landed by #527 (verdict 527.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit (tests/unit/synth-panel-normals.test.mjs, fails on a7102358): with the S&H clock edge muted jackReason for sh.rate is null; keys.pitch -> vco1.tune: the default depth uses Tune's span and the jack's text names the resulting ratio and points to Pitch for 1:1 tracking (reworded by the coordinator oscilla-43 on 2026-11-10: Tune is fine tuning, +/-12 semitones, and Pitch, n1/n2, is the 1:1 tracking input, so an octave source into Tune is a modulation; one octave per octave would need 7200 cents, beyond the edge validator's limit of Tune's span, 2400); an LFO into VCA gain leaves the VCA closed without a gate."
@@ -27,4 +27,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T18:39:38Z
+started_at: 2026-11-11T18:38:55Z
+started_event: sha256:7ebb16e3304cf06040b875b9c4152e6adaee46007c3db959c132fc98991645a4
+verified_at: 2026-11-11T18:39:09Z
+verified_event: sha256:c8a3032482227295ec353c1c85862cf3cf9bc8c0a59e152f4d63202c899e9c21
+completed_at: 2026-11-11T18:39:38Z
+completed_event: sha256:73d34c978ba8c7709902cd572c927129188f2fa05a1f43b08069ca54596e539f
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-panel-normals.test.mjs; npm run build:check"
+    result: "On main 04d33aaf: synth-panel-normals 10/10. :201 'K238: S&H Rate is refused only while an unmuted Clock clocks it'; :218 'Keys pitch into VCO Tune modulates by Tune's span, and its text says so'; the bipolar VELOCITY gain case (cb4d2c20). build:check is current."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:39:23Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 527 checks: gate, fail-first"
+    result: "landed by #527; gate success and fail-first success; review verdict .ai/repo/reviews/527.yaml"
+    artifact: ".ai/repo/reviews/527.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:39:30Z

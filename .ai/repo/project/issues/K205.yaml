@@ -15,7 +15,7 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on: []
-current_state: "2026-11-09: the browser criterion restated by oscilla-43 (Ctrl+wheel and a trackpad pinch leave the value and history unchanged and the event to the browser; WCAG 1.4.4 page zoom is not blocked, so no zoom value is asserted); built on test/k205-knob-wheel by oscilla-ce. Was (2026-11-07): title \"Knob wheel: no turn without focus and Ctrl or Cmd, as K058 criterion 4 is written\"; the issue built a wheel that needs focus and Ctrl or Cmd, as K058 criterion 4 was written; re-scoped to pin the shipped wheel, decided with oscilla-a3 on 2026-11-07 (a Majordomus decision), on the owner's hardware direction of 2026-10-29 and .ai/repo/reviews/420.yaml R8."
+current_state: "2026-11-09: the browser criterion restated by oscilla-43 (Ctrl+wheel and a trackpad pinch leave the value and history unchanged and the event to the browser; WCAG 1.4.4 page zoom is not blocked, so no zoom value is asserted); built on test/k205-knob-wheel by oscilla-ce. Was (2026-11-07): title \"Knob wheel: no turn without focus and Ctrl or Cmd, as K058 criterion 4 is written\"; the issue built a wheel that needs focus and Ctrl or Cmd, as K058 criterion 4 was written; re-scoped to pin the shipped wheel, decided with oscilla-a3 on 2026-11-07 (a Majordomus decision), on the owner's hardware direction of 2026-10-29 and .ai/repo/reviews/420.yaml R8. Landed by train T5 #522 (verdict 522.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 acceptance_criteria:
   - "tests/unit/synth-knob-wheel.test.mjs, failing on the merge base: on the gesture handler of src/js/synth/gestures.js with a fake DOM, a plain wheel over a knob, focused or not, changes its value by the wheel step and is one history entry per burst; Ctrl or Cmd with the wheel and a horizontal swipe over a knob leave the value and the history unchanged and leave the event to the page (no preventDefault)."
   - "tests/browser/synth.cjs s-feel asserts the same in every gate browser: a plain wheel over a knob changes aria-valuenow; Ctrl+wheel over a knob (a trackpad pinch arrives as the same ctrlKey wheel) leaves aria-valuenow unchanged, opens no undo entry and is not preventDefault'ed, so the browser's own zoom acts; each within a named until() deadline. Restated 2026-11-09 by oscilla-43 (integrator), replacing 'the page zoom stays at 1': page zoom is an accessibility feature (WCAG 1.4.4, Resize Text) the instrument must not block, so a pinch is left to the browser and its zoom is not a requirement either way. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate, and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
@@ -28,4 +28,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-07
-updated_at: 2026-11-09
+updated_at: 2026-11-11T18:10:34Z
+started_at: 2026-11-11T18:09:45Z
+started_event: sha256:092cca5c5096c97d5d11709bdba0c2cbe5136bb92c674817f42456200a6cb131
+verified_at: 2026-11-11T18:10:00Z
+verified_event: sha256:867305aadc29dd7909df055d04f02bded014f6ad33078d32a6d9e18e2b5f8baa
+completed_at: 2026-11-11T18:10:34Z
+completed_event: sha256:c0e47388c4e8ebc6bfc7e226125ebe3df374d0ad53d7fb2ebe09fea842efe161
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-knob-wheel.test.mjs; node tests/browser/synth.cjs; npm run build:check"
+    result: "On main 04d33aaf: synth-knob-wheel 5/5. synth.cjs exit 0, desktop 45/45 and phone 14/14 in chromium, firefox and webkit, with s-feel: a plain wheel turns the knob under the pointer, and Ctrl+wheel, a trackpad pinch, leaves the value and history to the browser. The tests/README row exists; build:check is current."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:10:19Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 522 checks: gate, fail-first"
+    result: "landed by #522; gate success and fail-first success; review verdict .ai/repo/reviews/522.yaml"
+    artifact: ".ai/repo/reviews/522.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:10:26Z

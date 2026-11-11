@@ -27,5 +27,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-07'
-updated_at: '2026-11-09'
-current_state: "Landed on main but not done (criteria audit by oscilla-d9 on origin/main 45db334e, 2026-11-11, ~/dev/oscilla-wt/scratch-d9-stamp-audit.md): 1 of 3 not met: #2 no test asserts that the strip and the Drums view mount the same step-grid kind (no suite reads data-step-grid). #2 closed by oscilla-d9 in task t-20261111141237-25b0 on test/m064-stamp-gaps (from 04d33aaf): synth.cjs s-steps and drums.cjs dr-mount both assert the step-grid kind's root marker (data-step-grid notes) and its grid surface, so the strip and the Drums tab are proven to mount the same kind; chromium and webkit, desktop and phone, exit 0."
+updated_at: 2026-11-11T19:40:08Z
+current_state: "Landed on main but not done (criteria audit by oscilla-d9 on origin/main 45db334e, 2026-11-11, ~/dev/oscilla-wt/scratch-d9-stamp-audit.md): 1 of 3 not met: #2 no test asserts that the strip and the Drums view mount the same step-grid kind (no suite reads data-step-grid). #2 closed by oscilla-d9 in task t-20261111141237-25b0 on test/m064-stamp-gaps (from 04d33aaf): synth.cjs s-steps and drums.cjs dr-mount both assert the step-grid kind's root marker (data-step-grid notes) and its grid surface, so the strip and the Drums tab are proven to mount the same kind; chromium and webkit, desktop and phone, exit 0. 2026-11-11 (oscilla-43, main 98e5a5ba): every criterion is met and the verified evidence is recorded; the done stamp waits on its dependencies K068 and W008, which are not done (their unmet criteria are in their own current_state)."
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-step-strip.test.mjs; node tests/browser/synth.cjs; node tests/browser/drums.cjs"
+    result: "On main 98e5a5ba: synth-step-strip passes; s-steps (synth.cjs) and dr-mount (drums.cjs) assert the step-grid kind's data-step-grid root and surface, so the strip and the Drums view mount the same kind (oscilla-d9's #2 gap, landed with T12 #535), green in chromium and webkit; criteria #1 and #3 met per oscilla-d9's audit; verdict 515.yaml (T4 #515)"
+    artifact: ".ai/repo/reviews/515.yaml"
+    commit: 98e5a5ba9e1c4f3244c32bb79a318a134bb17d8b
+    recorded_at: 2026-11-11T19:40:07Z

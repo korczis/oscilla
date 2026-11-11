@@ -15,6 +15,7 @@ scope:
   - "tests/browser/v31-studio-graph.cjs"
   - "tests/README.md"
   - "dist"
+current_state: "Landed by #386 (verdict 386.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "tests/unit/studio-view-zoom.test.mjs, failing on the merge base: after a fresh Studio's first fit the model's graph zoom equals the editor's applied zoom, studioHash and the undo depth are unchanged and the document is not dirty; a later zoom gesture still commits as today."
@@ -30,4 +31,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-03
-updated_at: 2026-11-03
+updated_at: 2026-11-11T18:44:30Z
+started_at: 2026-11-11T18:43:37Z
+started_event: sha256:5b58f9b8a9db039b56703abda66684672e8d4b2b84c865df4405292f200b3016
+verified_at: 2026-11-11T18:43:56Z
+verified_event: sha256:f83a45737e1f4dd127be8915db6a7b80d658663e41fac1ef624ae5e8f3018334
+completed_at: 2026-11-11T18:44:30Z
+completed_event: sha256:e7e7f33245a801dce6f856ce7e81b88f4ed760a5d0d9a52cd22f1de4d0e7869c
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/studio-view-zoom.test.mjs; node tests/browser/v31-studio-graph.cjs; npm run build:check"
+    result: "On main 04d33aaf: studio-view-zoom 8/8. First fit commits the editor's zoom with hash, undo, revision and dirty kept; a hidden viewport fits on its first size; a resize in fit mode refits (the docked keys); a zoom gesture leaves fit mode; negative: a saved explicit zoom opens unrefitted. v31-studio-graph.cjs exit 0, file 41/41 and http 6/6 in chromium, firefox and webkit, including view-zoom (the model zoom equals --osc-sg-z at 1536x1024 and 390x844 touch). The tests/README row exists; build:check is current."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:44:13Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 386 checks: gate, fail-first"
+    result: "landed by #386; gate success and fail-first success; review verdict .ai/repo/reviews/386.yaml"
+    artifact: ".ai/repo/reviews/386.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:44:21Z
