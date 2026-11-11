@@ -34,6 +34,15 @@ export const paramUnit = (registry) => (type, k) => (registry.param(type, k) || 
  * ctx: { registry, ownedKeys(h), tracing, guard(step, id, fn), note, unit, now }. A modulatable
  * key is not live: its base is recomputed with the node's modulation (runtime.js `affected`).
  */
+/**
+ * The genitive of 'oktáva' after "z" agreeing with the printed number (K244, R2-T7B-3):
+ * "z 1 oktávy", "z 2,4 oktávy" (a decimal takes the singular), "z 2 oktáv", "z 5 oktáv".
+ */
+export function octavesGen(shown) {
+  const t = String(shown).trim();
+  return `${t} ${t.includes(',') || t === '1' || t === '-1' ? 'oktávy' : 'oktáv'}`;
+}
+
 export function liveUpdate(o, pn, h, { registry, ownedKeys, tracing, guard, note, unit, now }) {
   const live = o.keys.filter((k) => !(registry.param(pn.type, k) || {}).modulatable);
   if (live.length && h) {
@@ -140,11 +149,11 @@ export function qLimits(planNode, cb, { edges, nodes } = {}) {
       off.offsetStored = off.offsetPlayed + lc / CENTS_PER_OCTAVE;
     }
     const offText = lc > 0 ? `; konstantní posun kabelů do ${p.label} hraje `
-      + `${cz(off.offsetPlayed)} z ${cz(off.offsetStored)} oktáv ${p.label}` : '';
+      + `${cz(off.offsetPlayed)} z ${octavesGen(cz(off.offsetStored))} ${p.label}` : '';
     let text;
     if (scale > 0) {
       text = `je omezen: ${top}; hraje ${Math.round(scale * 100)} % své hloubky `
-        + `(${cz(played)} z ${cz(stored)} oktáv ${p.label})${offText}`;
+        + `(${cz(played)} z ${octavesGen(cz(stored))} ${p.label})${offText}`;
     } else {
       text = `nemá místo: ${top} a ${b.value >= ceiling ? `${q} už je ${cz(b.value)}`
         : 'základ s konstantním posunem kabelů na ni už dosahuje'}${offText}`;

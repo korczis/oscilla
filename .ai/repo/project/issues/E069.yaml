@@ -1,0 +1,23 @@
+id: E069
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "synth.cjs s-feel's wheel steps wait on the knob's own signal, not on wheel delivery, in linux WebKit"
+slug: s-feel-wheel-steps-wait-on-the-knob
+priority: p2
+profile: implementation
+objective: "s-feel's three wheel steps ('the notch lands (the knob moves) before the drag', 'a wheel burst is one undo entry', 'the wheel burst and the drag are two undo entries') miss intermittently in linux WebKit, on main as much as on trains: oscilla-ee's native linux/arm64 control failed main a7102358 4 of 5 and T5 2 of 5 (2026-11-10), and CI failed it on #523 and #527 attempt 1 (passed on the rerun, flake ledger). The same family as E059 (PR #493). Hypothesis (unverified): WebKit coalesces or drops page.mouse.wheel at an unchanged pointer, or delivers it after the burst window. After: instrument the steps (wheel events reaching the knob, timestamps against the burst window, elementFromPoint), then make each step wait on the knob's own signal (the notch applied, the undo entry recorded) through until(); if the product mishandles coalesced wheels, it is a product fix instead."
+why: "A check that fails 4 of 5 on main in linux WebKit costs a CI rerun on every train that runs it (project.bounded-test-timing)."
+current_state: "Filed 2026-11-11 by oscilla-43 (coordinator) from the T5-T7b runs; oscilla-ee owns it (it ran the control) when its budget returns."
+scope:
+  - "tests/browser/synth.cjs"
+depends_on: []
+acceptance_criteria:
+  - "In a native linux container, synth.cjs --browsers webkit --only s-feel passes 10 of 10 on the fixed head, and the instrumented cause is named in the commit."
+  - "No fixed sleep or frame count is added (project.bounded-test-timing)."
+validation:
+  - "node tests/browser/synth.cjs --browsers webkit --only s-feel"
+evidence_required:
+  - "verified"
+created_at: '2026-11-11'
+updated_at: '2026-11-11'

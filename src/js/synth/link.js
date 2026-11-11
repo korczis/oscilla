@@ -14,7 +14,7 @@
 //   linkPlan(model, panel, link, { registry, modules }) -> { action, skipped }   the BATCH and
 //     the link's cables it does not apply because patchCable refuses them on the receiver's
 //     state, [{ from, to, reason }] (K239: never dropped in silence; sh.rate while Clock clocks)
-//   skippedText(skipped) -> Czech sentence | null   what the Synth says after applying the link
+//   skippedText(skipped, name?) -> Czech sentence | null   what the Synth says after applying the link
 //   linkAction(model, panel, link, { registry, modules }) -> BATCH action   one history entry
 //     modules: the module ids the link may write (an XY preset, synth/xy.js xyScope); null,
 //     the default, is the whole panel. Outside them no value, preset or cable is touched.
@@ -135,9 +135,11 @@ export function linkOmissionText({ studio, open }) {
 /** Czech count of cables: 1 kabel, 2-4 kabely, 5 and more kabelů. */
 const cablesWord = (n) => (n === 1 ? 'kabel' : n >= 2 && n <= 4 ? 'kabely' : 'kabelů');
 
-export function skippedText(skipped) {
+export function skippedText(skipped, name = (id) => id) {
   if (!skipped.length) return null;
-  const which = skipped.map((x) => `${x.from} → ${x.to} (${x.reason.replace(/\.$/, '')})`);
+  // The jacks by the names the bay shows (K243, R2-T7B-2), not their ids.
+  const which = skipped.map((x) => `${name(x.from)} → ${name(x.to)} `
+    + `(${x.reason.replace(/\.$/, '')})`);
   return `Odkaz nezapojil ${skipped.length} ${cablesWord(skipped.length)}: ${which.join('; ')}.`;
 }
 

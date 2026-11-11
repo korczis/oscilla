@@ -157,3 +157,12 @@ test('the Runtime summary counts a fit cable held by its range (performance-limi
   assert.equal(rv.text, `Revize ${rv.applied.revision} hraje s omezením: Studio drží 1 `
     + 'hodnotu v rozsahu svého parametru; viz diagnostiky níže.');
 });
+
+test('K244 (R2-T7B-3): "z <n> oktáv" declines by the printed number', async () => {
+  const { octavesGen } = await import('../../src/js/studio/runtime-trace.js');
+  assert.equal(octavesGen('1'), '1 oktávy');
+  assert.equal(octavesGen('2,4'), '2,4 oktávy', 'a decimal takes the genitive singular');
+  assert.equal(octavesGen('0,585'), '0,585 oktávy');
+  assert.equal(octavesGen('2'), '2 oktáv');
+  assert.equal(octavesGen('5'), '5 oktáv');
+});

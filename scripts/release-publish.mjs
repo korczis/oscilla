@@ -267,7 +267,12 @@ export function majordomusPin(root, sh) {
   let text = '';
   try {
     text = readFileSync(path.join(root, '.github', 'workflows', 'pages.yml'), 'utf8');
-  } catch { return null; }
+  } catch (error) {
+    // Only a missing pages.yml means "no pin" (R058): any other error, a ReferenceError from a
+    // lost import included, fails the publish rather than switching the pin check off.
+    if (error && error.code === 'ENOENT') return null;
+    throw error;
+  }
   const pinned = pinnedVersion(text);
   if (!pinned) return null;
   const r = sh('majordomus', ['version']);

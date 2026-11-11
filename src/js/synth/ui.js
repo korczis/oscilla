@@ -698,7 +698,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     const r = dispatch(plan.action);
     if (r.ok && link.preset) cmp.synth.preset = link.preset;
     // K239: a cable the receiver's patch refuses is named, never dropped in silence.
-    const missed = r.ok ? skippedText(plan.skipped) : null;
+    const missed = r.ok ? skippedText(plan.skipped, jackName) : null;
     if (missed) say(missed, true);
     return r.ok;
   }
