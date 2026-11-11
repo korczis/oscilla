@@ -1233,7 +1233,7 @@ function defineChecks() {
     await page.keyboard.up('KeyA');
     await page.goto(`${base}#m=synth&yp=nope`);
     await until(() => page.evaluate(() => window.location.hash.indexOf('yp=') < 0
-      && /no preset/.test(window.OSCILLA.app.synth.status)),
+      && /předvolba "nope" neexistuje/.test(window.OSCILLA.app.synth.status)),
     { ms: 15000, what: 'the malformed link is refused and its keys leave' });
     await page.close();
     return { ok: text.trim() === '300 Hz', knob: text, rmsDb: p.rmsDb };

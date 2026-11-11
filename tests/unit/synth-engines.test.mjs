@@ -131,8 +131,10 @@ test('a link carries the tab and the engine, strictly', () => {
   const hash = encodeSynthLink(link);
   assert.match(hash, /yt=engines&ye=fm&yp=fm-bell/);
   assert.deepEqual(decodeSynthLink(`#${hash}`, PANEL, PRESETS), { ok: true, link });
-  assert.match(decodeSynthLink('#m=synth&ye=lpf', PANEL, PRESETS).reason, /no engine "lpf"/);
-  assert.match(decodeSynthLink('#m=synth&yt=mix', PANEL, PRESETS).reason, /no tab/);
+  assert.match(decodeSynthLink('#m=synth&ye=lpf', PANEL, PRESETS).reason,
+    /engine "lpf" na panelu není/);
+  assert.match(decodeSynthLink('#m=synth&yt=mix', PANEL, PRESETS).reason,
+    /karta "mix" neexistuje/);
   assert.equal(decodeSynthLink('#m=synth&yt=drums', PANEL, PRESETS).link.tab, 'drums'); // K222
   assert.equal(decodeSynthLink('#m=synth&ye=perc', PANEL, PRESETS).link.tab, 'engines');
 });

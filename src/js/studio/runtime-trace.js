@@ -13,10 +13,15 @@
 //                                when the op also names a modulatable key (its bases recompute)
 //   noteBaseWrites(id, planNode, base, prev, was, w, own, ctx)   the param steps of applyBase
 //   limitDiagnostics(bases, plan, owned) -> [Diagnostic]   the limits in effect, node by node
-//                                (frequency-limited, and performance-limited for a fit cable)
+//                                (frequency-limited, performance-limited for a fit cable and
+//                                q-limited for a log cable held at a Q knob's top)
+//   qLimits(planNode, cb, { edges, nodes }) -> [Diagnostic]   pure: the `q-limited` ones (K235)
 
 import { fitLimits } from './performance-fit.js';
 import { frequencyLimits } from './compiler.js';
+import { studioDiagnostic } from './validate.js';
+import { CENTS_PER_OCTAVE } from '../core/music.js';
+import { sig } from '../core/math.js';
 
 export const traceNote = (trace, rev, fresh) => (kind, id, outcome, detail = null,
   code = null) => (fresh && !code ? null
@@ -90,6 +95,64 @@ export function limitDiagnostics(bases, plan, owned) {
       if (!own || !own.has(d.details.param)) out.push(d);
     }
     out.push(...fitLimits(at, cb, { edges: plan.edges, nodes: plan.nodes }));
+    out.push(...qLimits(at, cb, { edges: plan.edges, nodes: plan.nodes }));
+  }
+  return out;
+}
+
+/** A number as Czech prose writes it: three significant digits, a decimal comma. */
+const cz = (v) => sig(v, 3).replace('.', ',');
+
+/**
+ * The `q-limited` diagnostics of one node (K235, review C1-K232-1 of oscilla-c1): computeBases
+ * holds the log cables into a low- or high-pass Q (the only log CV target that is not a
+ * frequency, K232) at or below the top of the Q knob's soft range, the ceiling, and marks each
+ * one it holds in `limited` (its factor in `scaled`). One warning per held cable, entity the
+ * cable, in Czech and in Q terms (project.no-silent-feedback): the ceiling, and what of its
+ * depth it plays, or that it has no room when the base already reaches the ceiling. Owner
+ * runtime. details = { node, param, unit: 'octaves', mapping: 'log', stored, played, scale,
+ * ceiling, base }, plus `offsetStored` and `offsetPlayed` (octaves of Q) when the log cables'
+ * constant offset into Q was lowered too. A linear cable into such a Q never plays
+ * (clip-targets.js filterQ), so it is never held here.
+ */
+export function qLimits(planNode, cb, { edges, nodes } = {}) {
+  const out = [];
+  const p = planNode && planNode.def.params.find((x) => x.key === 'Q');
+  const b = p && cb && cb.base && cb.base.Q;
+  if (!b || p.scale !== 'log' || !cb.limited) return out;
+  const ceiling = p.softRange ? p.softRange[1] : p.max;
+  const q = `${planNode.name} ${p.label}`;
+  const top = `${p.label} nepřekročí ${cz(ceiling)} (horní mez knoflíku)`;
+  const lc = (cb.loweredCents && cb.loweredCents.Q) || 0;
+  for (const id of cb.limited) {
+    const e = edges && edges.get(id);
+    if (!e || e.to.node !== planNode.id || e.to.port !== 'Q' || e.props.mapping !== 'log') {
+      continue;
+    }
+    const from = nodes && nodes.get(e.from.node);
+    const src = `${from ? from.name : e.from.node} ${e.from.port.toUpperCase()}`;
+    const scale = cb.scaled && cb.scaled.has(id) ? cb.scaled.get(id) : 1;
+    const stored = e.props.depth;
+    const played = stored * scale;
+    const off = {};
+    if (lc > 0) {
+      off.offsetPlayed = (b.cents || 0) / CENTS_PER_OCTAVE;
+      off.offsetStored = off.offsetPlayed + lc / CENTS_PER_OCTAVE;
+    }
+    const offText = lc > 0 ? `; konstantní posun kabelů do ${p.label} hraje `
+      + `${cz(off.offsetPlayed)} z ${cz(off.offsetStored)} oktáv ${p.label}` : '';
+    let text;
+    if (scale > 0) {
+      text = `je omezen: ${top}; hraje ${Math.round(scale * 100)} % své hloubky `
+        + `(${cz(played)} z ${cz(stored)} oktáv ${p.label})${offText}`;
+    } else {
+      text = `nemá místo: ${top} a ${b.value >= ceiling ? `${q} už je ${cz(b.value)}`
+        : 'základ s konstantním posunem kabelů na ni už dosahuje'}${offText}`;
+    }
+    out.push({ ...studioDiagnostic('runtime', 'q-limited', `Kabel ${src} → ${q} ${text}.`,
+      { kind: 'edge', id }),
+    details: { node: planNode.id, param: 'Q', unit: 'octaves', mapping: 'log', stored, played,
+      scale, ceiling, base: b.value, ...off } });
   }
   return out;
 }
