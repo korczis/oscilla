@@ -18,7 +18,7 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on: []
-current_state: "Built, landing with trains 5 and 6: S2 and S18 are fixed by 26's 3c22d01a (train 6), where midi/notes.js records at note-on, in its `via` map, the sink route() returned or the Playground engine, and routes the note-off there; this supersedes dev-53's 2124f226 (train 5, #413) for S18. tests/browser/midi.cjs:972-986 reproduces S18 and S19 (fails at 447bb27b, passes on feat/train-6-prep 9e4f1035 in three engines). Done with evidence once both are on main and the criteria below hold there."
+current_state: "Built, landing with trains 5 and 6: S2 and S18 are fixed by 26's 3c22d01a (train 6), where midi/notes.js records at note-on, in its `via` map, the sink route() returned or the Playground engine, and routes the note-off there; this supersedes dev-53's 2124f226 (train 5, #413) for S18. tests/browser/midi.cjs:972-986 reproduces S18 and S19 (fails at 447bb27b, passes on feat/train-6-prep 9e4f1035 in three engines). Done with evidence once both are on main and the criteria below hold there. Done 2026-11-11 (stamped by oscilla-43 after a per-criterion check on main 0e20f83c): the routing fix is f118edc0 (S2: the note layer keeps each key's sink from its note-on), not 3c22d01a, which moved the Synth note path out of ui.js; the S18 held-map check is e01be8b0; the verdict is 486.yaml."
 acceptance_criteria:
   - "Fail-first: a unit test holds a note through the Playground sink, switches the route to the Synth and releases it, and asserts the Playground voice is released; the same for a note held through the Studio sink; it fails on the merge base (project.fail-first)."
   - "Browser (every gate browser): a continuous Playground MIDI note held across a switch to the Synth, and a Studio-keyboard note held across leaving the Studio, each end on release; the engine's live note census returns to idle."
@@ -30,4 +30,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-04
-updated_at: 2026-11-04
+updated_at: 2026-11-11T11:35:49Z
+started_at: 2026-11-11T11:34:37Z
+started_event: sha256:4473312afd31e823702bdfb57cde097295bde7d5f1c3ee7b2046051098d0850f
+verified_at: 2026-11-11T11:35:00Z
+verified_event: sha256:81bcd62f9db46a7d286e8b1e2b3210037c8fa323eb38aace297a0f66591f0327
+completed_at: 2026-11-11T11:35:49Z
+completed_event: sha256:53356e116e053c8b213d6cd6140e6cbaca15d0f7363a5121687b3abff3e9421a
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-review-armed-sink-preset.test.mjs tests/unit/studio-sink.test.mjs; node tests/browser/midi.cjs --browsers chromium,webkit"
+    result: "On main 0e20f83c: 17 of 17 unit tests pass (f118edc0's S2 routing tests, fail-first on 9cf786ac; studio-sink K175 held map); midi.cjs ALL PASS 164 in chromium and webkit, including the Playground note held across a switch to the Synth and keyboard-studio-held (K175, S18); CI's gate runs midi in every gate browser; verdict in .ai/repo/reviews/486.yaml (train C #486)"
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T11:35:34Z
