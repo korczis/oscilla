@@ -661,6 +661,11 @@ export function frequencyLimits(planNode, cb, { sampleRate, safeMaximum, edges, 
   for (const id of cb.limited || []) {
     const e = edges && edges.get(id);
     if (!e) continue;
+    // K240 (444.yaml#NF7): a cable the performance fit held by its range is reported by
+    // fitLimits ('performance-limited', by 'range') and only there: the Nyquist cap did not hold
+    // it, so this line, which names the cap, would blame the wrong bound.
+    const fit = cb.fitted && cb.fitted.get(id);
+    if (fit && fit.by === 'range' && fit.factor < 1) continue;
     const key = e.to.port;
     const p = defs.get(key);
     const bd = bounded(key);

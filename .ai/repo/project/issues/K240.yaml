@@ -13,6 +13,7 @@ scope:
   - "tests/unit/xy-default-patch.test.mjs"
   - "dist"
   - ".ai/repo/project/issues/K240.yaml"
+current_state: "Built by oscilla-75 in task t-20261110074932-88fc on fix/k240-range-fit-not-nyquist from train/t6-sequencer 8a286119, on the coordinator's assignment (oscilla-43); unit side, for train T7. compiler.js frequencyLimits skips, in its cable loop, an edge the performance fit held by its range (cb.fitted by 'range', factor below 1), which fitLimits reports as performance-limited; a cable the Nyquist headroom held keeps its frequency-limited line (NF1's case, pinned in the same test)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit (tests/unit/xy-default-patch.test.mjs, fails on a7102358): in the case above no frequency-limited diagnostic for the Y -> Detune edge names Nyquist, while its performance-limited diagnostic has by 'range'."
