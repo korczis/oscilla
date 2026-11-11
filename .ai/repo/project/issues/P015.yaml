@@ -8,7 +8,7 @@ priority: p2
 profile: deep-work
 objective: "Extend scripts/facts.mjs and the generated landing (P014, Q107) with deeper, derived and retrospective views, each fact naming its source: per release, the commits between consecutive v* tags grouped by Conventional Commit type and scope, with the plan ids they name (inferred from subjects); the roadmap: intents, their milestones and done/total, ordered as majordomus plan roadmap orders them; a searchable, filterable claims explorer (status, area, the test that proves each claim, linked to GitHub); the ADRs with status and date; code size per src/js module and the test inventory per area over time (per release tag). New charts join CHARTS only when the README can embed them as well. Generation stays deterministic and byte-identical on macOS and linux; nothing is committed that drifts with every pull request."
 why: "The owner's loop order of 2026-11-09 asks to improve the extraction, dashboards and reports many times over, retrospectively and at top quality, after the landing went live (P014)."
-current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261109224239-52a2 on feat/lab-dashboards (#517), with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns. Decision on the roadmap's milestone status (review r517b P2-2), option B, by oscilla-43 (integrator), 2026-11-10, relayed by the coordinator: the status is the one `majordomus plan roadmap --json` derives, read at deploy (pages.yml installs the pinned majordomus and builds with --require-majordomus; verify-deploy regenerates the same way), with src/data/roadmap.json only as the local fallback. Reason, verbatim: \"the /lab/ page shows the tool's status, never a committed copy that a done-stamp PR would leave stale; A would put a new rebuild obligation on every plan PR\" (oscilla-43, 2026-11-10)."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261109224239-52a2 on feat/lab-dashboards (#517), with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns. Decision on the roadmap's milestone status (review r517b P2-2), option B, by oscilla-43 (integrator), 2026-11-10, relayed by the coordinator: the status is the one `majordomus plan roadmap --json` derives, read at deploy (pages.yml installs the pinned majordomus and builds with --require-majordomus; verify-deploy regenerates the same way), with src/data/roadmap.json only as the local fallback. Reason, verbatim: \"the /lab/ page shows the tool's status, never a committed copy that a done-stamp PR would leave stale; A would put a new rebuild obligation on every plan PR\" (oscilla-43, 2026-11-10). Landed by PR #527 (ed6075b9, train T7b); done on 2026-11-11 after its builder re-checked every criterion on main 0e20f83c (evidence below)."
 scope:
   - "scripts/facts.mjs"
   - "scripts/landing.mjs"
@@ -38,4 +38,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-09'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T10:39:31Z
+started_at: 2026-11-11T10:38:43Z
+started_event: sha256:bc982e59a24e934c312b7ac2dfaeceaa40f184b864fde5c8390880ea9de88ee0
+verified_at: 2026-11-11T10:39:02Z
+verified_event: sha256:b131ef84fa30cd445ecb902c0abea5feabc3229c8938af03d974c88bbc6555b7
+completed_at: 2026-11-11T10:39:31Z
+completed_event: sha256:a97ddabcf343af510f1a6403da3ce0d86539b036e81459dd9603dc77d25d2ec4
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs tests/unit/readme-derived.test.mjs; npm test; node scripts/landing.mjs --out <dir> --commit 0e20f83c2966ce55b25a88dc7eed71c7a4480d66 + cmp with the live /lab/"
+    result: "On main 0e20f83c: the three files 61/61, npm test 5752 tests 5750 pass 0 fail 2 skipped; landed in PR #527 (ed6075b9, verdict 527.yaml merge, fail-first success); lab: 35 file(s) regenerated at 0e20f83c2966 (Pages run 43004612892, attempt 1, linux runner); the same 35 files generated on macOS at 0e20f83c are byte-identical to the live ones (cmp 35/35); 32 page views (8 pages x 390/1536 px x light/dark) have no horizontal overflow, no request to another origin, lang cs, Tab reaches a control, and light/dark backgrounds differ (scratchpad probe, its negative control fails on a seeded overflow, foreign img and lang=en)"
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T10:39:21Z
