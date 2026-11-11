@@ -1,0 +1,23 @@
+id: R058
+milestone: M011
+serves:
+  - "release-provenance#public-release-verified"
+title: "release:publish's majordomusPin treats only a missing pages.yml as 'no pin'"
+slug: majordomus-pin-catches-only-enoent
+priority: p3
+profile: implementation
+objective: "R2-T7B-1 (P3, oscilla-c3's review of T7b): majordomusPin (scripts/release-publish.mjs) wraps its read in a bare catch and returns null for any error, so in T7b a merge-dropped readFileSync import turned a ReferenceError into 'no pages.yml' and C1-517-1's pre-tag pin check silently never ran. After: only ENOENT means 'no pin'; any other error fails the publish naming the call."
+why: "A safety check that a typo can switch off is not a check."
+current_state: "Filed 2026-11-11 by oscilla-43 from R2-T7B-1; release-script lane (oscilla-75)."
+scope:
+  - "scripts/release-publish.mjs"
+  - "tests/unit/release-publish.test.mjs"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit: majordomusPin with a reader that throws a non-ENOENT error rethrows; with ENOENT it returns null."
+validation:
+  - "node --test tests/unit/release-publish.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-11'
+updated_at: '2026-11-11'

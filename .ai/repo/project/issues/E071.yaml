@@ -1,0 +1,22 @@
+id: E071
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "synth-engines.cjs e-poly's 'the note past the cap takes the oldest voice' settles in WebKit"
+slug: e-poly-voice-steal-settles-in-webkit
+priority: p3
+profile: implementation
+objective: "e-poly (K180's voice cap) failed once in WebKit desktop on the Mac (2026-11-11, T7b's tree): 'the note past the cap takes the oldest voice: not reached within 8000 ms', then passed 3 of 3 alone; CI did not show it. Measure its rate on main in WebKit (10 runs) and, if it recurs, wait on the engine's own voice-steal signal rather than a level reading."
+why: "A rare flake is cheapest to pin down before it lands on a train's leg."
+current_state: "Filed 2026-11-11 by oscilla-43; measure first, owner to be assigned."
+scope:
+  - "tests/browser/synth-engines.cjs"
+depends_on: []
+acceptance_criteria:
+  - "Its rate on main in WebKit is recorded here; if above 0, a fix passes 10 of 10."
+validation:
+  - "node tests/browser/synth-engines.cjs --browsers webkit --only e-poly"
+evidence_required:
+  - "verified"
+created_at: '2026-11-11'
+updated_at: '2026-11-11'
