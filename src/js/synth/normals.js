@@ -394,6 +394,12 @@ export function normalSteps(model, panel, jack) {
   return steps;
 }
 
+/**
+ * Remove cable `edgeId`: { action, restored, cables, studio } | { reason }. Once no other panel
+ * cable feeds its jack the jack's normals come back (restored: how many), also beside a Studio
+ * edge into it (K236, 329 R4: a mixed jack patched and unpatched is mixed again, it lost its
+ * normals); cables and studio count what still feeds the jack (unpatchText says it).
+ */
 export function unpatch(model, panel, edgeId) {
   const e = model.graph.edges.find((x) => x.id === edgeId);
   if (!e) return { reason: 'That cable is not patched.' };
@@ -401,11 +407,26 @@ export function unpatch(model, panel, edgeId) {
   let jack = null;
   for (const [mid, node] of map) if (node && node.id === e.to.node) jack = `${mid}.${e.to.port}`;
   const steps = [{ type: 'EDGE_REMOVE', edgeIds: [edgeId] }];
+  const studioIds = new Set(panelEdges(model, panel).foreign.map((x) => x.id));
   const rest = jack ? cablesInto(model, panel, jack, { foreign: true })
-    .filter((x) => x.id !== edgeId && !addsEdge(model, panel, x)) : [1];
-  if (jack && !rest.length) steps.push(...normalSteps(model, panel, jack));
+    .filter((x) => x.id !== edgeId && !addsEdge(model, panel, x)) : [];
+  const studio = rest.filter((x) => studioIds.has(x.id)).length;
+  const cables = rest.length - studio;
+  const normal = jack && !cables ? normalSteps(model, panel, jack) : [];
+  steps.push(...normal);
   return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`,
-    steps: rememberAmounts(model, panel, steps) } };
+    steps: rememberAmounts(model, panel, steps) }, restored: normal.length, cables, studio };
+}
+
+/** What the Synth says once unpatch's action is applied (Czech, Q104), from what it did. */
+export function unpatchText({ restored = 0, cables = 0, studio = 0 } = {}) {
+  if (restored) {
+    return studio ? 'Kabel odpojen; normál je obnoven vedle propojení ze Studia.'
+      : 'Kabel odpojen; normál je obnoven.';
+  }
+  if (cables) return 'Kabel odpojen; vstup dál napájí jiný kabel.';
+  if (studio) return 'Kabel odpojen; vstup dál napájí propojení ze Studia.';
+  return 'Kabel odpojen.';
 }
 
 /** The edges from the switch's `from` jack to its `to` jack (K229 cable switches). */

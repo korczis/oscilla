@@ -23,8 +23,8 @@ import { createDock } from './dock.js';
 import { SYNTH_TEXT, feedNames, insertAction, insertDecision } from './insert.js';
 import {
   STATE_TEXT, amountEdges, breakNormals, brokenByRemoval, cableNote, jackReason, jackState,
-  panelCables,
-  patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
+  panelCables, patchCable, restoreNormals, setAmount, setCableSwitch, switchEdges, unpatch,
+  unpatchText,
 } from './normals.js';
 import { linkOf, linkOmissionText, linkOmissions, linkPlan, skippedText } from './link.js';
 import { splitJack } from './panel.js';
@@ -241,6 +241,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
   const ITEM = 'flex items-center justify-between gap-2 py-1 text-xs text-gray-700 '
     + 'dark:text-gray-300';
+
+  /** End a pending connect and draw it ended (K236, 329 R6: Escape left the connection list
+   *  open with its Patch buttons inert and the source jack drawn as pending). */
+  function endPending() {
+    if (!pending) return;
+    pending = null;
+    renderBay();
+  }
 
   function renderBay() {
     const el = host();
@@ -520,7 +528,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       const r = unpatch(model(), panel, d.removeCable);
       pending = null;
       if (r.reason) say(r.reason, true);
-      else if (dispatch(r.action).ok) say('Kabel odpojen; normál je obnoven.');
+      else if (dispatch(r.action).ok) say(unpatchText(r)); // what it did (K236, 329 R4)
     } else if (d.restoreNormal) {
       const r = restoreNormals(model(), panel, d.restoreNormal);
       if (r.reason) say(r.reason);
@@ -828,14 +836,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
 
     /** The bus's leave policy (C053): leaving the Synth ends a pending connect and disarms. */
     synthLeave() {
-      pending = null;
+      endPending();
       disarm(false);
     },
 
     /** The playback bus's stopAll (C050: Escape, a page hide): on the Synth, Arm is off. */
     synthStopped() {
       if (this.workspace !== 'synth') return;
-      pending = null;
+      endPending();
       disarm(true);
     },
 
