@@ -11,11 +11,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import {
-  PUBLIC_URL, REGION_CLOSE, REGION_OPEN, gitRunner,
+  PUBLIC_URL, REGION_CLOSE, REGION_OPEN, ROOT, gitRunner,
 } from '../../scripts/release-metadata.mjs';
+import { pinnedVersion } from '../../scripts/majordomus-pin-check.mjs';
 import {
   FROM_MAIN, PAGES_TIMEOUT_MIN, STUCK_AFTER_MIN, WAITING_STATUSES, defaultSh, diagnoseStuckRuns,
-  finishLine, jobStarted, preconditionProblems, publish, releaseCreateFlags, releaseNotes,
+  finishLine, jobStarted, majordomusPin, preconditionProblems, publish, releaseCreateFlags,
+  releaseNotes,
   runStarted, stuckPagesRuns, taggedPageProblem,
 } from '../../scripts/release-publish.mjs';
 import {
@@ -26,6 +28,9 @@ import {
   receiptProblems,
 } from '../../scripts/release-prepare.mjs';
 
+/** The majordomus pages.yml pins (C1-517-1): the fake `majordomus version` answers it. */
+const PAGES_PIN = pinnedVersion(readFileSync(path.join(ROOT, '.github', 'workflows',
+  'pages.yml'), 'utf8'));
 const HEAD = 'f187f664893ce0444c03629b0d8afa66d6d9f715';
 const OLDER = '0a1b2c3d4e5f60718293a4b5c6d7e8f901234567';
 const FP = { version: '40.0.0', sourceDigest: 'd'.repeat(64), distSha256: 'e'.repeat(64),
@@ -82,6 +87,9 @@ function fakes({ branch = 'main', dirty = '', originMain = HEAD, tagRemote = '',
   const notes = []; // the notes file's text, read when the Release is created (it is removed after)
   const sh = (cmd, args) => {
     calls.push([cmd, ...args]);
+    if (cmd === 'majordomus' && args[0] === 'version') {
+      return { status: 0, stdout: `majordomus ${PAGES_PIN}` };
+    }
     if (cmd === 'gh' && args[0] === 'release' && args[1] === 'create') {
       notes.push(readFileSync(args[args.indexOf('--notes-file') + 1], 'utf8'));
       uploads.push(readFileSync(args[3]));
@@ -1147,4 +1155,31 @@ test('2026-10-31: on a detached HEAD the refusal says to publish from main at or
     originMain: HEAD, tagLocal: false, tagRemote: false, receiptProblems: [], buildCheck: true,
     ghAuth: true, tag: 'v40.0.0' });
   assert.equal(q, `on branch release/x, releases are cut from main: ${FROM_MAIN}`);
+});
+
+test('C1-517-1: a majordomus on PATH other than pages.yml\'s pin refuses before any tag', () => {
+  assert.ok(PAGES_PIN, 'pages.yml pins MJ_VERSION (the live /lab/ page is made with it)');
+  const ok = { branch: 'main', dirty: false, head: HEAD, originMain: HEAD, tag: 'v40.0.1',
+    receiptProblems: [], buildCheck: true, ghAuth: true, stuckRuns: [] };
+  assert.deepEqual(preconditionProblems({ ...ok, majordomus: { pinned: '1.0.1',
+    local: '1.0.1' } }), [], 'the pinned version on PATH passes');
+  const [p] = preconditionProblems({ ...ok, majordomus: { pinned: '1.0.1', local: '1.0.0' } });
+  assert.match(p, /majordomus on PATH is 1\.0\.0, but /);
+  assert.match(p, /\.github\/workflows\/pages\.yml pins MJ_VERSION 1\.0\.1/);
+  assert.match(p, /versions\/1\.0\.1\/bin/, 'the remedy names the pinned binary');
+  assert.match(p, /before anything is tagged/);
+  const [q] = preconditionProblems({ ...ok, majordomus: { pinned: '1.0.1', local: null } });
+  assert.match(q, /unreadable/, 'no answer from majordomus refuses too');
+  assert.deepEqual(preconditionProblems({ ...ok, majordomus: null }), [],
+    'no pin in pages.yml: nothing to match');
+  // majordomusPin reads this repository's pages.yml and asks the tool on PATH.
+  const asked = [];
+  const pin = majordomusPin(ROOT, (cmd, args) => {
+    asked.push([cmd, ...args]);
+    return { status: 0, stdout: 'majordomus 9.9.9' };
+  });
+  assert.deepEqual(asked, [['majordomus', 'version']]);
+  assert.deepEqual(pin, { pinned: PAGES_PIN, local: '9.9.9' });
+  assert.equal(majordomusPin(os.tmpdir(), () => assert.fail('not asked')), null,
+    'a root without pages.yml pins nothing');
 });

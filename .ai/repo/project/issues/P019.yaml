@@ -1,0 +1,33 @@
+id: P019
+milestone: M098
+serves:
+  - "public-discoverability#lab-landing-live"
+title: "The /lab/ pages' deferred review findings: CSP hashes, grouped counts, the unknown-base commit rule, the ratchet framing and the surviving facts mutants"
+slug: lab-pages-deferred-review-findings
+priority: p3
+profile: implementation
+objective: "Close the findings oscilla-c3's independent review r517b of the P015-P018 bundle left for a follow-up (82633b7f; probes in c3's scratchpad r517b). P3-2: the pages' Content-Security-Policy allows script-src 'unsafe-inline'; both inline scripts are fixed bytes, so list their 'sha256-...' hashes instead, derived at generation. P3-5: client.js counts ('Zobrazeno ${shown} z ${n}') skip fmtInt's thousands grouping; directory links (zmeny/, ../) list folders from file://. P3-6: facts.mjs links any commit when an audit's base is not in the clone; P017 says links only for ancestors of base, so an unknown base (and an unknown judged_on) links nothing and says why. P3-7: the source-size ratchet sums byte caps over a changing file set (1454000 -> 1242000 with 8 rises), so dropping a cap reads as progress; show the cap sum and the file count side by side, or the per-file series, and word the trend so it does not overstate. P3-8: the facts.mjs mutants that survived c3's 26 (issueFile without existsSync, UNIT_FILE matching nested files, ratchets.firstTag from the last tag, p3_sample dropped from the latest-audit map, addedDates letting the newest add win, findingList unsorted) each get a test that kills it."
+why: "oscilla-c3 asked on 2026-11-10 that the r517b items deferred from the T7 landing of P015-P018 be tracked by their ids."
+current_state: "Filed by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) at c3's request; built by oscilla-0b on feat/lab-p019 (stacked on ff2cd2ad), uncommitted for the integrator. Lands after P015-P018 (train T7)."
+scope:
+  - "scripts/landing.mjs"
+  - "scripts/landing"
+  - "scripts/facts.mjs"
+  - "tests/unit/facts.test.mjs"
+  - "tests/unit/landing-lab.test.mjs"
+  - "tests/README.md"
+  - ".ai/repo/project/issues/P019.yaml"
+depends_on:
+  - "P018"
+acceptance_criteria:
+  - "P3-2: the CSP lists one 'sha256-...' per inline script, computed from the bytes it inlines, and no 'unsafe-inline' for scripts; a test recomputes each hash from the page."
+  - "P3-5 and P3-6: counts use fmtInt (the file:// directory listing of zmeny/ and ../ stays a known limit of file:// and is out of scope); an audit whose base (or judged_on) is unknown to the clone links no commit and its rule line says so; a fixture covers it."
+  - "P3-7: the source-size ratchet card shows the cap sum with its file count per tag, and its wording names the file-set change."
+  - "P3-8: each listed survivor is killed by a test; the mutation runs are named in the commit (these tests pass on the merge base too, because they guard code that is already right: they fail on the mutant, not on the base)."
+  - "Generation stays byte-identical on macOS and linux; every page within its ceiling."
+validation:
+  - "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

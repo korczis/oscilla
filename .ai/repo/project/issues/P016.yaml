@@ -1,0 +1,34 @@
+id: P016
+milestone: M098
+serves:
+  - "public-discoverability#lab-landing-live"
+title: "The /lab/ landing shows the project's history: plan burn-up, claims and ratchets per release, review findings, release cadence, all derived"
+slug: lab-landing-retrospective-trends
+priority: p2
+profile: deep-work
+objective: "On top of P015, extend scripts/facts.mjs and the generated landing with retrospective trends read only from the repository and its git history, each naming its source: the plan burn-up (issues done per day from completed_at against issues created per day from created_at); the claims by status at every release tag (docs/CLAIMS.yaml read with git show <tag>:path through the existing claims parser); every ratchet baseline the repository keeps (tests/unit/*-baseline.json, tests/browser/timing-baseline.json) at every release tag, as a downward trend with what each ratchet counts; the review verdicts under .ai/repo/reviews (verdicts and findings by severity and status per PR and over time); and the release cadence (hours between consecutive releases from the release records). New charts join CHARTS and the README embeds them; the page states each source and that nothing is estimated."
+why: "oscilla-43 (integrator) and the owner's loop order of 2026-11-09: keep going on retrospective per-release data, honest derived numbers, Czech, after P015."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261109233317-feba on feat/lab-trends (#518, to be superseded), with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns."
+scope:
+  - "scripts/facts.mjs"
+  - "scripts/landing.mjs"
+  - "scripts/landing"
+  - "scripts/readme.mjs"
+  - "README.md"
+  - "tests/unit/facts.test.mjs"
+  - "tests/unit/landing-lab.test.mjs"
+  - "tests/unit/readme-derived.test.mjs"
+  - "tests/README.md"
+  - ".ai/repo/project/issues/P016.yaml"
+depends_on:
+  - "P015"
+acceptance_criteria:
+  - "Every trend is computed by scripts/facts.mjs from a named file or git command; unit tests pin each derivation on fixtures (a fixture git repo with tags for the per-tag reads) and fail on the merge base."
+  - "Generation is byte-identical twice and between macOS and a linux node:22 container; the page stays at or under its size ceiling, or the ceiling is raised in the same change with the measured reason."
+  - "The new sections and charts are Czech, Flowbite Pro, keyboard-usable, readable at 390 px and 1536 px in dark and light themes, with a table view per chart and nothing loaded from another origin."
+validation:
+  - "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs tests/unit/readme-derived.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'
