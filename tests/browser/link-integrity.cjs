@@ -581,9 +581,11 @@ async function runLeg(name, origin) {
         // The rows a fresh page at the source shows: a row whose source needs a setup, a menu
         // or a phone width is the integration map suite's (its setup is a pointer gesture,
         // which unlocks audio before the link is followed).
-        const rows = [...MAP.rows, ...MAP.declared].filter((r) => r.from === from
-          && r.href === href && !r.walk && !r.setup && !r.opener && !r.viewport);
-        if (!rows.length) { bad.push(`${from} ${href}: no row of the integration map`); continue; }
+        const all = [...MAP.rows, ...MAP.declared].filter((r) => r.from === from
+          && r.href === href);
+        if (!all.length) { bad.push(`${from} ${href}: no row of the integration map`); continue; }
+        // A menu item's row (G013: an opener) and the others above are walked there only.
+        const rows = all.filter((r) => !r.walk && !r.setup && !r.opener && !r.viewport);
         for (const row of rows) {
           const obs = await walk.walkRow(context, base, row, { modes: ['script'] })
             .catch((e) => ({ modes: { script: { control: null } }, error: e.message }));
@@ -726,7 +728,13 @@ async function runLeg(name, origin) {
       const wrong = [];
       for (const [label, from, selector, to, opener] of ACTIONS) {
         await H.setWorkspace(page, from);
-        if (opener) await page.click(opener);
+        // A link inside a closed menu (G013, a lab's "Otevřít v…") is pressed after its button.
+        const menuButton = opener || await page.evaluate((s) => {
+          const el = document.querySelector(s);
+          const menu = el && el.closest('[role="menu"]');
+          return menu && menu.hidden ? `#${menu.getAttribute('aria-labelledby')}` : null;
+        }, selector);
+        if (menuButton) await page.click(menuButton);
         await page.click(selector, { timeout: NAV_MS });
         const s = await H.at(page, to, `${label} opens ${to}`).catch(() => null);
         if (!s) wrong.push(`${label}: did not open ${to}`);

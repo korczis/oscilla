@@ -150,8 +150,13 @@ const H = {
     .filter((a) => a.getClientRects().length > 0).map((a) => a.getAttribute('href'))),
   /** The visible workspace links of the content (<main>) and the breadcrumb's root. */
   contentLinks: (page) => page.evaluate(() => [...document.querySelectorAll(
-    'main a[href^="#m="], [data-osc="page.home"]')].filter((a) => a.getClientRects().length > 0)
-    .map((a) => a.getAttribute('href'))),
+    'main a[href^="#m="], [data-osc="page.home"]')].filter((a) => {
+    if (a.getClientRects().length > 0) return true;
+    // An item of a closed menu (G013, a lab's "Otevřít v…") is offered while its button shows.
+    const menu = a.closest('[role="menu"]');
+    const btn = menu && document.getElementById(menu.getAttribute('aria-labelledby'));
+    return !!btn && btn.getClientRects().length > 0 && !a.hidden;
+  }).map((a) => a.getAttribute('href'))),
   /** In-content controls (outside header and status bar) that name another workspace. */
   exits: (page) => page.evaluate(() => {
     const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|synthOpenStudio/;

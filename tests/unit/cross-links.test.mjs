@@ -184,7 +184,7 @@ test('the Sequencer offers its own pattern to Studio through importSequence (P4)
     'shown in the Sequencer only (the Playground grid keeps its layout)');
   const at = PAGE.indexOf(tag) + tag.length;
   assert.equal(PAGE.slice(at, PAGE.indexOf('</a>', at)).replace(/\s+/g, ' '),
-    'Open this pattern in Studio');
+    'Otevřít tuto sekvenci ve Studiu');
   const ws = readFileSync(new URL('../../src/js/ui/studio/workspace/files.js', import.meta.url),
     'utf8');
   const body = ws.slice(ws.indexOf('    studioOpenSequence(e) {'));

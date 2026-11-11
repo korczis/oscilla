@@ -21,6 +21,11 @@ export const PRO = Object.freeze({
     + 'dark:hover:bg-primary-800 dark:focus:ring-primary-800',
   /** Pro secondary (alternative) button. */
   btnSecondary: `${BTN} ${SECONDARY}`,
+  /** Pro dropdown panel (absolute under its button; the caller adds left-0 or right-0). */
+  menu: 'absolute z-50 py-1 mt-2 bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700',
+  /** Pro dropdown item, 44 px tall. */
+  menuItem: 'flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 '
+    + 'hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white',
   /** Pro secondary button, extra small (a 24 px toolbar; 44x44 on a coarse pointer). */
   btnSecondaryXs: `${BTN_XS} ${SECONDARY}`,
   /** Pro text link, 44 px tall on a coarse pointer. Dark text is primary-400: primary-500 is
