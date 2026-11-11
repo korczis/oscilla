@@ -17,6 +17,7 @@ scope:
 - tests/README.md
 - .ai/repo/project/issues/V635.yaml
 - dist
+current_state: "Landed by train 3 #404 (verdict 404.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on:
 - V634
 acceptance_criteria:
@@ -31,4 +32,25 @@ validation:
 evidence_required:
 - verified
 created_at: '2026-11-02'
-updated_at: '2026-11-02'
+updated_at: 2026-11-11T18:13:49Z
+started_at: 2026-11-11T18:13:00Z
+started_event: sha256:86655dc510ee667ee400f5d64754b2fd07dedf6b680480b1d0d49b736f0c728a
+verified_at: 2026-11-11T18:13:17Z
+verified_event: sha256:c0879f6691a2d9b35919c6aabd9c3bd1adc51e89e14121e39c5ed6669fd71cdf
+completed_at: 2026-11-11T18:13:49Z
+completed_event: sha256:69c1eece1f308ff340afdea8cb2fb8b264c11e7d13d295ebb768703d3ce24b69
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-phone.test.mjs; node scripts/ui-flowbite-pro-record.mjs --check; node tests/browser/synth.cjs"
+    result: "On main 04d33aaf: synth-phone 4/4. The Pro record equals the tree. synth.cjs exit 0, phone 14/14 and desktop 45/45 in chromium, firefox and webkit, including V635: on a phone the instrument row folds behind the dock's More, so the view's actions and tabs show above the dock."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:13:33Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 404 checks: gate, fail-first"
+    result: "landed by #404; gate success and fail-first success; review verdict .ai/repo/reviews/404.yaml"
+    artifact: ".ai/repo/reviews/404.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:13:41Z
