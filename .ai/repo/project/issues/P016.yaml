@@ -8,7 +8,7 @@ priority: p2
 profile: deep-work
 objective: "On top of P015, extend scripts/facts.mjs and the generated landing with retrospective trends read only from the repository and its git history, each naming its source: the plan burn-up (issues done per day from completed_at against issues created per day from created_at); the claims by status at every release tag (docs/CLAIMS.yaml read with git show <tag>:path through the existing claims parser); every ratchet baseline the repository keeps (tests/unit/*-baseline.json, tests/browser/timing-baseline.json) at every release tag, as a downward trend with what each ratchet counts; the review verdicts under .ai/repo/reviews (verdicts and findings by severity and status per PR and over time); and the release cadence (hours between consecutive releases from the release records). New charts join CHARTS and the README embeds them; the page states each source and that nothing is estimated."
 why: "oscilla-43 (integrator) and the owner's loop order of 2026-11-09: keep going on retrospective per-release data, honest derived numbers, Czech, after P015."
-current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261109233317-feba on feat/lab-trends (#518, to be superseded), with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) in task t-20261109233317-feba on feat/lab-trends (#518, to be superseded), with builder subagents; lands in the P015-P018 bundle after oscilla-c3's review, in the slot oscilla-43 assigns. Landed by PR #527 (ed6075b9, train T7b); done on 2026-11-11 after its builder re-checked every criterion on main 0e20f83c (evidence below)."
 scope:
   - "scripts/facts.mjs"
   - "scripts/landing.mjs"
@@ -31,4 +31,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T10:40:57Z
+started_at: 2026-11-11T10:39:49Z
+started_event: sha256:537d1daa63cc66032c10fb0c1d7e1cb34ea08d4a7473d60158bcefa8e484aefa
+verified_at: 2026-11-11T10:40:13Z
+verified_event: sha256:f5fd230be05b361418670df8f83736a045478f7f842416ca903f28608d207c86
+completed_at: 2026-11-11T10:40:57Z
+completed_event: sha256:79e64f40c427edde309cb23fc4e3f7a96c2f081c369a2d8b9f24711d4312a38b
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs tests/unit/readme-derived.test.mjs; npm test; node scripts/landing.mjs --out <dir> --commit 0e20f83c2966ce55b25a88dc7eed71c7a4480d66 + cmp with the live /lab/"
+    result: "On main 0e20f83c: the three files 61/61, npm test 5750/0; trends with a table view per chart (grafy/), landed in PR #527 (ed6075b9, verdict 527.yaml merge, fail-first success); lab: 35 file(s) regenerated at 0e20f83c2966 (Pages run 43004612892, attempt 1, linux runner); the same 35 files generated on macOS at 0e20f83c are byte-identical to the live ones (cmp 35/35); 32 page views (8 pages x 390/1536 px x light/dark) have no horizontal overflow, no request to another origin, lang cs, Tab reaches a control, and light/dark backgrounds differ (scratchpad probe, its negative control fails on a seeded overflow, foreign img and lang=en)"
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T10:40:39Z

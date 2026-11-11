@@ -168,6 +168,7 @@ const CONTRACT = [
   ['def.toMeasure', 'open', 'a'], ['exp.toMeasure', 'open', 'a'],
   ['fnd.toExperiments', 'open', 'a'], ['presets.toPlayground', 'open', 'a'],
   ['learn.tool', 'open', 'a'], ['learn.link', 'open', 'a'], ['seq.toSynth', 'open', 'a'],
+  ['seq.toDrums', 'open', 'a'], ['seq.toStepBass', 'open', 'a'],
   ['filter.toSynth', 'open', 'a'], ['dual.toSynth', 'open', 'a'],
   ['presets.toSynth', 'open', 'a'], ['presets.altPlayground', 'open', 'a'],
   ['source.ceiling', 'readout', 'p'], ['status.ceiling', 'readout', 'span'],

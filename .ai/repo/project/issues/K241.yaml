@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "timelineEnd (src/js/studio/timeline.js) counts only clips and automation points, so a document with a Clock ended at its content (at 0 with no clips): the Clock's ticks stopped and the transport ended the run by itself. After (scope widened by the integrator oscilla-43 and restated per C1-K241-2): a live document with a Clock and no loop of the user's plays until STOP, past its content: it plays the content, then repeats the empty bar after it (clock.js freeRunLoop, applied by createAnchor for PLAY and every re-anchor), so the Clock keeps its grid; a clip added during the run plays and the run goes on; the playhead counts up. A document without a Clock ends at its content as before; an offline render ends at its content. The Clock's Czech help states this (CLOCK_FREE_RUN_TEXT). No template or panel ships a Clock, so existing documents are unaffected."
 why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 509.yaml#K023-1 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
-current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) on fix/k241-clock-only-ticks off train T5 192a21fa, commit 27ad5ce1 (clock.js freeRunLoop applied by createAnchor); for train T6, judged by oscilla-c1."
+current_state: "Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) on fix/k241-clock-only-ticks off train T5 192a21fa, commit 27ad5ce1 (clock.js freeRunLoop applied by createAnchor); for train T6, judged by oscilla-c1. Landed by PR #525 (db95130e, train T7a); done on 2026-11-11 after its builder re-checked every criterion on main 0e20f83c (evidence below)."
 scope:
   - "src/js/studio/timeline.js"
   - "src/js/studio/timeline-compiler.js"
@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T10:46:41Z
+started_at: 2026-11-11T10:45:56Z
+started_event: sha256:90e48a8c1c9d795c838c8ed30cf67459deae9d030a5be3944be64591a199176f
+verified_at: 2026-11-11T10:46:18Z
+verified_event: sha256:02421e61dc6c21036f27bee472f9ed6c7f12a06c71b856db8bb293aac7db84b2
+completed_at: 2026-11-11T10:46:41Z
+completed_event: sha256:d05cd8cffd312f4247f1fc5d409a461018701d9180f23f9f5e64d909f774d98b
+evidence:
+  - covers: "verified"
+    type: test
+    command: "npm test (tests/unit/studio-clock.test.mjs)"
+    result: "On main 0e20f83c: npm test 5752 tests 5750 pass 0 fail; studio-clock passes (free run after PLAY, the clip added during the run, offline and no-Clock ends, CLOCK_FREE_RUN_TEXT pinned); landed in PR #525 (db95130e) with c1's verdict merge at 029d44cb + d6ea2daf in 525.yaml, fail-first success; the committed dist matches a clean rebuild (Pages run 43004612892)"
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T10:46:33Z

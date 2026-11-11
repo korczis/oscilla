@@ -8,7 +8,7 @@ priority: p3
 profile: implementation
 objective: "Close the findings oscilla-c3's independent review r517b of the P015-P018 bundle left for a follow-up (82633b7f; probes in c3's scratchpad r517b). P3-2: the pages' Content-Security-Policy allows script-src 'unsafe-inline'; both inline scripts are fixed bytes, so list their 'sha256-...' hashes instead, derived at generation. P3-5: client.js counts ('Zobrazeno ${shown} z ${n}') skip fmtInt's thousands grouping; directory links (zmeny/, ../) list folders from file://. P3-6: facts.mjs links any commit when an audit's base is not in the clone; P017 says links only for ancestors of base, so an unknown base (and an unknown judged_on) links nothing and says why. P3-7: the source-size ratchet sums byte caps over a changing file set (1454000 -> 1242000 with 8 rises), so dropping a cap reads as progress; show the cap sum and the file count side by side, or the per-file series, and word the trend so it does not overstate. P3-8: the facts.mjs mutants that survived c3's 26 (issueFile without existsSync, UNIT_FILE matching nested files, ratchets.firstTag from the last tag, p3_sample dropped from the latest-audit map, addedDates letting the newest add win, findingList unsorted) each get a test that kills it."
 why: "oscilla-c3 asked on 2026-11-10 that the r517b items deferred from the T7 landing of P015-P018 be tracked by their ids."
-current_state: "Filed by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) at c3's request; built by oscilla-0b on feat/lab-p019 (stacked on ff2cd2ad), uncommitted for the integrator. Lands after P015-P018 (train T7)."
+current_state: "Filed by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) at c3's request; built by oscilla-0b on feat/lab-p019 (stacked on ff2cd2ad), uncommitted for the integrator. Lands after P015-P018 (train T7). Landed by PR #527 (ed6075b9, train T7b); done on 2026-11-11 after its builder re-checked every criterion on main 0e20f83c (evidence below)."
 scope:
   - "scripts/landing.mjs"
   - "scripts/landing"
@@ -30,4 +30,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-11T10:44:43Z
+started_at: 2026-11-11T10:44:02Z
+started_event: sha256:e5095f930b93358f092949a17bb89a720dd0db6e39f032b5f6ccbbba1acf2ab6
+verified_at: 2026-11-11T10:44:19Z
+verified_event: sha256:174005bd111202f0cd1d1deb01cd5487dbc25a37f31b5226a9fabf73408ba461
+completed_at: 2026-11-11T10:44:43Z
+completed_event: sha256:15bdfde47245cce87ae1a5a884872c9686647a16e47617cb97839c53b3d44769
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/facts.test.mjs tests/unit/landing-lab.test.mjs tests/unit/readme-derived.test.mjs; npm test; node scripts/landing.mjs --out <dir> --commit 0e20f83c2966ce55b25a88dc7eed71c7a4480d66 + cmp with the live /lab/"
+    result: "On main 0e20f83c: CSP sha256 per inline script, fmtInt counts, unknown-base audits link nothing, the cap sum with file count, and the named mutants killed (c022b95c's message names the mutation runs); 61/61, npm test 5750/0; landed in PR #527 (ed6075b9, verdict 527.yaml merge, fail-first success); lab: 35 file(s) regenerated at 0e20f83c2966 (Pages run 43004612892, attempt 1, linux runner); the same 35 files generated on macOS at 0e20f83c are byte-identical to the live ones (cmp 35/35); 32 page views (8 pages x 390/1536 px x light/dark) have no horizontal overflow, no request to another origin, lang cs, Tab reaches a control, and light/dark backgrounds differ (scratchpad probe, its negative control fails on a seeded overflow, foreign img and lang=en)"
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T10:44:35Z
