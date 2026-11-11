@@ -73,23 +73,16 @@
       "phase": "now"
     },
     {
-      "id": "M057",
-      "title": "Box-system ergonomics: one-gesture patching with headroom in the editor modules",
-      "done": 3,
-      "required": 5,
-      "phase": "now"
-    },
-    {
       "id": "M058",
       "title": "Synth voice: audio-rate modulation, drive, macros, filters, templates, presets, mod matrix and one hash epoch",
-      "done": 6,
+      "done": 8,
       "required": 10,
       "phase": "now"
     },
     {
       "id": "M059",
       "title": "Sequencer: audible tempo, real editing and a Studio clock",
-      "done": 5,
+      "done": 6,
       "required": 7,
       "phase": "now"
     },
@@ -117,7 +110,7 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 6,
+      "done": 7,
       "required": 46,
       "phase": "now"
     },
@@ -336,13 +329,6 @@
       "title": "Owner decisions of the component-system line",
       "done": 2,
       "required": 4,
-      "phase": "now"
-    },
-    {
-      "id": "M070",
-      "title": "Owner decisions of the connected-instrument line",
-      "done": 7,
-      "required": 8,
       "phase": "now"
     },
     {

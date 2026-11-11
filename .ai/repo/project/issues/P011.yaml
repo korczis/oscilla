@@ -17,8 +17,8 @@ scope:
   - "tests/README.md"
   - "tests/unit/ui-flowbite-pro-baseline.json"
   - "dist"
-depends_on:
-  - "P002"
+current_state: "Rewired on 2026-11-11 by oscilla-0b with the integrator oscilla-43's agreement: P002 was cancelled on 2026-11-03 (superseded by M122 under Q089) without rewiring its dependants, so P011 derived BLOCKED forever (the K067 pattern). The compact Studio path on the Playground exists on main independent of Q004/Q089 and the fit is still owed: tests/browser/first-screen.cjs keeps ce543ef4's relaxation. Built by oscilla-0b (session bbcd8e21-77c5-407d-b96e-e2451f1cdee9) on fix/p011-compact-path-fit. The defect moved, the guard is restored: measured on 2026-11-11 (native linux/arm64 ubuntu:24.04 with DejaVu Sans, the runner's font; macOS), the 1280x800 path no longer overflows on main (its column is 482 px since the layout changed, the DejaVu grid 409.6 px, 60 px spare), so there was no product fix left to make; the tight case is now the 1536x1024 reference (429 px column, 7.4 px spare). tests/browser/first-screen.cjs drops ce543ef4's scroller relaxation and asserts the path whole with 16 px spare at 1280x800, 1440x900 and 1366x1024 touch and 0 at 1536x1024; a dist whose grid is 9 px wider fails it at 1536 (needs 430.6, column 429)."
+depends_on: []
 acceptance_criteria:
   - "Fail-first: the restored `layout widths` assertion (the path's scrollWidth within its clientWidth at 1280x800 with a 16 px margin) fails on the merge base on CI's chromium runner or in a run that pads the chips by the runner's measured 9 px, and passes on the head."
   - "The Flowbite Pro record does not rise (tests/unit/ui-flowbite-pro.test.mjs); a fit reached by moving the chips to Pro classes lowers it."

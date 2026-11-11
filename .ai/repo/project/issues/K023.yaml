@@ -29,5 +29,26 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-11T12:17:13Z
 current_state: "Landed in T3 (cb414b85). Criteria audit by oscilla-d9 on origin/main 45db334e (2026-11-11): 4 of 4 met (studio-clock.test.mjs:126-194, verdict 509.yaml; its legs-OK condition has no repository record). The stamp waits on K022, which landed in the same train and is not audited yet."
+started_at: 2026-11-11T12:16:08Z
+started_event: sha256:3e394677e92018d8353806b0b6d93faee8060d59b8a322a1894f3c7c16af34e1
+verified_at: 2026-11-11T12:16:30Z
+verified_event: sha256:ef05bd48eee18e9b8ae81347038eda672564c14b40303fb5905331e03ea506e0
+completed_at: 2026-11-11T12:17:13Z
+completed_event: sha256:96f3f75d0366f3de1dfee1c8931b2892b720f24e09e219c5927276e912acf6bf
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/studio-clock.test.mjs tests/unit/studio-hash-epoch.test.mjs; node tests/browser/v31-studio-timeline.cjs; npm run build:check"
+    result: "oscilla-d9's criteria audit on main 45db334e found 4 of 4 met (studio-clock.test.mjs:126-194: offline, a Clock at 1/4 of 120 BPM gates every 0.5 s within one render quantum at 44.1 and 48 kHz; the trigger clip advances Step, Random and Envelope; engine and runtime census 0 after stop). oscilla-0b re-ran on main 1a0196d7: unit 28/28, v31-studio-timeline all six legs PASS (chromium/firefox/webkit, file and http, 17/17 each), build:check up to date, the tests/README row; its dependency K022 is done in this branch."
+    artifact: "1a0196d7e00f9cb750f0c0d7538e472be8557e1d"
+    commit: 1a0196d7e00f9cb750f0c0d7538e472be8557e1d
+    recorded_at: 2026-11-11T12:16:53Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 509 checks: gate, fail-first"
+    result: "landed in train T3 by #509 (main merge commit cb414b85, release v3.30.0); gate success and fail-first success; review verdict .ai/repo/reviews/509.yaml (merge, oscilla-c1: clock.js grid per pass, triggerEdges with a seen-set, the trigger-fanout.js split read line by line)"
+    artifact: ".ai/repo/reviews/509.yaml"
+    commit: 1a0196d7e00f9cb750f0c0d7538e472be8557e1d
+    recorded_at: 2026-11-11T12:17:03Z

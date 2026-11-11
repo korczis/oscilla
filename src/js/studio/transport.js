@@ -35,7 +35,8 @@
 //                                                admitted as while playing; PLAY promotes it
 //   transport.disarm() -> Promise               every live note off; an armed run stops
 //   transport.live(keysId, { kind, note, velocity, at }) -> result, emitted as 'live' (K223)
-//   transport.step(id, at) -> result   K226: a manual step of a step-voltage sequencer (armed)
+//   transport.step(id, at) -> result   K226: a manual step of a step-voltage sequencer (stopped:
+//                                       arms first, as a key strike does)
 //   transport.debugInfo(), transport.on(fn) -> off ('state' | 'ended' | 'warning': a
 //                                                Diagnostic), transport.dispose(), .playing
 //   transport.debugRefuseNextPlay() -> boolean  INJECT hook (ADR 0052; K169, tests/browser/
@@ -1875,12 +1876,19 @@ export function createStudioTransport({
       return r;
     },
     /**
-     * K226: a manual step of step-voltage sequencer `id` (live-notes.js step): while armed it
-     * takes one step through the live router; while the timeline plays and owns its clock it is
-     * refused with its reason; stopped, it is refused as not armed.
+     * K226: a manual step of step-voltage sequencer `id` (live-notes.js step): stopped, the press
+     * arms the live model first (K104, as a key strike does; oscilla-c3, 2026-11-11: stepping
+     * while stopped is how each step is tuned), then it takes one step through the live router;
+     * while the timeline plays and owns its clock it is refused with its reason.
      */
     step(id, at) {
-      if (!playing) return { ok: false, code: 'not-armed', reason: LIVE_NOTES_TEXT.notRunning };
+      if (!playing) {
+        const a = armLive();
+        if (!a.ok) {
+          return { ok: false, code: a.code || 'not-armed',
+            reason: a.reason || LIVE_NOTES_TEXT.notRunning };
+        }
+      }
       return live.step(id, Number.isFinite(at) ? at : hooks.soon());
     },
     get armed() { return playing && armedOnly; },

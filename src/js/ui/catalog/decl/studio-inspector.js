@@ -69,7 +69,7 @@ export default [
     id: 'studio.inspector.svsStep',
     kind: 'action',
     label: 'Krok',
-    docs: 'Posune krokový sekvencer CV o jeden krok, když je Studio připravené ke hře.',
+    docs: 'Posune krokový sekvencer CV o jeden krok; zastavené Studio nejdřív připraví ke hře.',
     state: { none: 'počet kroků drží živý směrovač transportu, ne model' },
     effect: { command: 'jeden ruční krok vybraného krokového sekvenceru CV' },
   }),
