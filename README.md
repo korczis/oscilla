@@ -854,17 +854,15 @@ What it does not do yet, each named with the work that would fill it:
 - A MIDI performance cannot be recorded into the song (V505).
 - Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
   gap G4).
-- The song has no filter Q lane yet, so the build's rising resonance is in the score only (K144
-  gap G10): the Studio plays a low-pass Q lane since K232, and the template adds it in its next
-  version.
 - The Studio's view nodes draw nothing (K016).
 - After a reload the Studio opens the default template, not the last project (V604).
 - No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
   the speaker or loopback path a sound plays through, not the song.
 
-The score keeps the velocities and the Q lane, so each can join the template once the Studio
-can play it, and a drive lane, which the template does not use yet although the Drive node
-exists.
+The score keeps the velocities, so they can join the template once the Studio can play them,
+and a drive lane, which the template does not use yet although the Drive node exists. Its
+bass filter Q lane joined the template in version 2, once the Studio played a low-pass Q lane
+(K232; K144 gap G10).
 
 `tests/unit/demo-song.test.mjs` checks the song as data: one clip per note of the score, the
 pinned hash, an offline render plan of the whole song with no limitation, and that the six

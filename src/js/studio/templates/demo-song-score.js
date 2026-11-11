@@ -145,10 +145,9 @@ export function drumBar(bar) {
 
 // ---------------------------------------------------------------- automation, in beats
 // [beat, value, curve]: the build (beats 112-128) opens the bass filter and speeds up the lead
-// LFO; the outro fades the three mix inputs. The score also raises the bass filter's Q and a
-// drive amount in the build; the Studio cannot play either yet (a Q lane is refused at PLAY and
-// there is no Drive node), so demo-song.js leaves them out rather than ship a lane that does
-// nothing.
+// LFO and raises the bass filter's Q (demo-song.js plays it since its version 2, K232); the
+// outro fades the three mix inputs. The score also raises a drive amount in the build, which
+// demo-song.js leaves out rather than ship a lane that does nothing.
 export const AUTOMATION = Object.freeze({
   bassCutoff: [[0, 300, 'linear'], [16, 900, 'linear'], [48, 900, 'step'], [48, 1600, 'step'],
     [80, 1600, 'step'], [80, 900, 'step'], [112, 500, 'step'], [128, 6000, 'exponential'],
