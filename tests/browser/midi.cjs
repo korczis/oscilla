@@ -1364,7 +1364,8 @@ async function keyboardChecks(browser, b, origin, url) {
     const idle = (m) => m.live === 0 && m.nodes === 0 && m.sources === 0 && m.notes === 0;
     const k0 = await kbd();
     check(leg, id, 'the link #m=playground&kbd=1 arms the Playground keyboard',
-      k0.workspace === 'playground' && k0.armed && /^Armed in the Playground/.test(k0.readout),
+      k0.workspace === 'playground' && k0.armed
+        && /^Klávesy jsou připravené v Playgroundu/.test(k0.readout),
       JSON.stringify(k0));
     await page.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
     const CHORD = ['KeyA', 'KeyD', 'KeyG'];
@@ -1456,8 +1457,8 @@ async function keyboardChecks(browser, b, origin, url) {
     await page.keyboard.press('KeyV');
     const k2 = await kbd();
     check(leg, id, 'X raises the octave and V the velocity, and the readout says so',
-      k2.base === 72 && k2.velocity === 120 && /play C5 to F6/.test(k2.readout)
-      && /Velocity 120/.test(k2.readout), JSON.stringify(k2));
+      k2.base === 72 && k2.velocity === 120 && /hrají C5 až F6/.test(k2.readout)
+      && /Síla úhozu 120/.test(k2.readout), JSON.stringify(k2));
     await page.keyboard.press('KeyZ');
     await page.keyboard.press('KeyC');
     // The on-screen buttons do what Z, X, C and V do (one path, kbdControl).
@@ -1465,13 +1466,13 @@ async function keyboardChecks(browser, b, origin, url) {
     await page.locator('[data-osc="keyboard.velocity-up"]').click();
     const kUp = await kbd();
     check(leg, id, 'Octave + and Velocity + raise the octave and the velocity, and the readout '
-      + 'says so', kUp.base === 72 && kUp.velocity === 120 && /play C5 to F6/.test(kUp.readout)
-      && /Velocity 120/.test(kUp.readout), JSON.stringify(kUp));
+      + 'says so', kUp.base === 72 && kUp.velocity === 120 && /hrají C5 až F6/.test(kUp.readout)
+      && /Síla úhozu 120/.test(kUp.readout), JSON.stringify(kUp));
     await page.locator('[data-osc="keyboard.octave-down"]').click();
     await page.locator('[data-osc="keyboard.velocity-down"]').click();
     const kDown = await kbd();
     check(leg, id, 'Octave - and Velocity - lower them back, and the readout says so',
-      kDown.base === 60 && kDown.velocity === 100 && /Velocity 100/.test(kDown.readout),
+      kDown.base === 60 && kDown.velocity === 100 && /Síla úhozu 100/.test(kDown.readout),
       JSON.stringify(kDown));
     await page.locator('[data-osc="keyboard.readout"]').click(); // focus leaves the buttons
 
@@ -1531,7 +1532,8 @@ async function keyboardChecks(browser, b, origin, url) {
     const studio = await heard(page, (m) => m.notes === 1, `${leg}: A sounds in the Studio`);
     const k5 = await kbd();
     check(leg, id, 'the Studio is armed on its own (#m=studio&kbd=1) and A plays C4 there',
-      !studio.timedOut && k5.armed && k5.held === 'C4' && /^Armed in the Studio/.test(k5.readout),
+      !studio.timedOut && k5.armed && k5.held === 'C4'
+        && /^Klávesy jsou připravené ve Studiu/.test(k5.readout),
       JSON.stringify(k5));
     await page.keyboard.up('KeyA');
     const end = await heard(page, idle, `${leg}: the Studio note is freed`);

@@ -13,7 +13,7 @@ import { panelStore } from './synth-fixture.mjs';
 
 test('every module names a registry type; the face is its params less fixed and Studio-only, '
   + 'plus amounts', () => {
-  assert.equal(PANEL.title, 'Semi-modular mono voice');
+  assert.equal(PANEL.title, 'Semimodulární monofonní hlas');
   for (const m of PANEL.modules) {
     const def = NODE_REGISTRY.get(m.node);
     assert.ok(def, m.id);
@@ -61,7 +61,7 @@ test('the panel narrows the registry and never widens it', () => {
 
 test('the instantiated panel validates, is one entry, and its live model compiles', () => {
   const st = panelStore();
-  assert.equal(st.undoLabel(), 'Insert Semi-modular mono voice');
+  assert.equal(st.undoLabel(), `Vložit ${PANEL.title}`);
   const m = st.getModel();
   const res = PANEL.resolve(m);
   for (const mod of PANEL.modules) assert.ok(res.get(mod.id), mod.id);

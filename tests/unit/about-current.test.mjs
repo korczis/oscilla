@@ -545,7 +545,6 @@ function descriptions(markup, rows = WORKSPACE_REGISTRY) {
 export const CZECH_NAMES = {
   Frequency: 'frekvenc\\p{L}*',
   'Signal path': 'signálov\\p{L}* cest\\p{L}*',
-  'Semi-modular mono voice': 'semimodulární\\p{L}* monofonní\\p{L}* hlas\\p{L}*',
 };
 
 /**
@@ -623,10 +622,10 @@ test('mutation U085: a reverted summary is named', () => {
 });
 
 test('U085 Czech: the map names exactly the titles the data holds', () => {
-  const [voice] = SEMI_MONO.tabs;
+  // The Panel voice's title is Czech itself since Czech pass 2, so it needs no entry here.
   assert.deepEqual(Object.keys(CZECH_NAMES).sort(),
-    [LEARN_CARDS[0].title, LEARN_CARDS.at(-1).title, voice.title].sort(),
-    'a card or the Panel voice was renamed: update CZECH_NAMES with it');
+    [LEARN_CARDS[0].title, LEARN_CARDS.at(-1).title].sort(),
+    'a Learn card was renamed: update CZECH_NAMES with it');
 });
 
 test('U085 Czech: the phrases still find what the Czech summaries say (not vacuous)', () => {

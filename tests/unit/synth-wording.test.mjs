@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import SEMI_MONO from '../../src/js/synth/panels/semi-mono.js';
 
 const ROOT = new URL('../../', import.meta.url).pathname;
 const walk = (dir) => readdirSync(join(ROOT, dir)).flatMap((f) => {
@@ -41,8 +42,9 @@ test('no product name and no analog / vintage / warm / fat claim in Synth copy',
 test('the honest limits are stated with the controls they limit', () => {
   const all = SOURCES.map(([, t]) => t).join('\n');
   assert.match(all, /Pulse width is set, not modulated/);
-  assert.match(all, /does not self-oscillate/);
-  assert.match(all, /samples no input/);
+  // Czech since Czech pass 2 (Q104); the filter note is split over a string concatenation.
+  assert.match(all, /nepřejde[\s'+]*do samooscilace/);
+  assert.match(all, /nevzorkuje žádný vstup/);
   assert.match(all, /0\.95|SAFE_NYQUIST_FACTOR/);
-  assert.match(synthMarkup, /Semi-modular mono voice/);
+  assert.ok(synthMarkup.includes(`>${SEMI_MONO.title}<`), 'the markup states the voice title');
 });

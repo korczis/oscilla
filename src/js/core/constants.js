@@ -52,6 +52,11 @@ export const STORAGE_KEYS = {
 // V1: WAVEFORMS, WAVEFORM_LABELS, RANGE_MODES (index.html@a7b7a23)
 export const WAVEFORMS = ['sine', 'triangle', 'sawtooth', 'square'];
 export const WAVEFORM_LABELS = { sine: 'Sine', triangle: 'Triangle', sawtooth: 'Saw', square: 'Square' };
+// The names the app shows (rule project.czech-prose, Q104): WAVEFORM_LABELS above is V1 data the
+// freeze golden pins (tests/freeze), so the display reads these instead.
+export const WAVEFORM_NAMES = Object.freeze({
+  sine: 'Sinus', triangle: 'Trojúhelník', sawtooth: 'Pila', square: 'Obdélník',
+});
 
 export const RANGE_MODES = [
   { id: 'human', label: 'Human', hint: '20 Hz – 20 kHz' },

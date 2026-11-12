@@ -33,7 +33,7 @@
 import {
   APP_MODES, APP_VERSION, MAX_PROGRAMMED_S, MIN_FREQUENCY,
   PROVISIONAL_SAMPLE_RATE, RANGE_MODES, SAFE_NYQUIST_FACTOR,
-  SAFETY_LIMIT_OPTIONS, STORAGE_KEYS, VIZ_MODES, WAVEFORMS, WAVEFORM_LABELS,
+  SAFETY_LIMIT_OPTIONS, STORAGE_KEYS, VIZ_MODES, WAVEFORMS, WAVEFORM_LABELS, WAVEFORM_NAMES,
 } from './constants.js';
 import { clamp, isNum, pick, round, sig } from './math.js';
 import {
@@ -54,8 +54,8 @@ import {
   presetDisabledReason, representability, stereoBinauralCondition, sweepRepeatChoice,
 } from './safety.js';
 import {
-  ENV_PARAMS, PATTERN_BY_ID, PATTERN_GROUPS, PATTERNS, buildPlan, detunedFrequency,
-  sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
+  ENV_PARAMS, PATTERN_BY_ID, PATTERN_DESCS, PATTERN_GROUP_NAMES, PATTERN_GROUPS, PATTERN_NAMES,
+  PATTERNS, buildPlan, detunedFrequency, sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
 } from '../audio/patterns.js';
 import { micErrorMessage, MIC_PRIVACY_NOTICE } from '../audio/microphone.js';
 import { OWNER, playOwnerOf, requestMasterLevel } from './output-bus.js';
@@ -128,6 +128,8 @@ export function createInstrument(deps = {}) {
   return {
     // ---- constants exposed to templates
     WAVEFORMS, WAVEFORM_LABELS, RANGE_MODES, PATTERNS, PATTERN_GROUPS, NOTE_BUTTONS, VIZ_MODES, APP_MODES,
+    // The Czech display names (Q104); the V1 labels above stay the frozen data.
+    WAVEFORM_NAMES, PATTERN_NAMES, PATTERN_DESCS, PATTERN_GROUP_NAMES,
     PRESET_CATEGORIES, LEARN_TOPICS, SAFETY_LIMIT_OPTIONS, APP_VERSION,
     WAVE_PATHS: {
       sine: 'M1 8 Q5 0 9 8 T17 8 T25 8 T31 4',

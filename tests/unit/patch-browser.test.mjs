@@ -57,9 +57,9 @@ test('filters by instrument and by tag are exact, and the counts are the lists\'
     assert.ok(items.every((x) => x.tags.includes(t.id)), t.id);
   }
   const both = browseView(all, st.getModel(), { instrument: 'fm-voice', tag: 'engine' }).items;
-  assert.deepEqual(both.map((x) => x.name), ['FM bell', 'FM keys']);
-  assert.deepEqual(browseView(all, st.getModel(), { query: 'BELL' }).items.map((x) => x.name)
-    .sort(), ['FM bell', 'Ring bell']);
+  assert.deepEqual(both.map((x) => x.name), ['FM zvon', 'FM piano']);
+  assert.deepEqual(browseView(all, st.getModel(), { query: 'ZVON' }).items.map((x) => x.name)
+    .sort(), ['FM zvon', 'Kruhový zvon']);
   assert.equal(browseView(all, st.getModel(), { instrument: 'nope' }).items.length, 0);
 });
 
@@ -98,7 +98,8 @@ test('an inserted patch that plays notes is what the keys then play, in the same
   const added = done.created.nodes[0];
   const node = st.getModel().graph.nodes.find((n) => n.id === added);
   assert.equal(node.type, 'fm-voice');
-  assert.equal(node.metadata.name, 'FM keys');
+  assert.equal(node.metadata.name, e.name);
+  assert.equal(e.name, 'FM piano');
   assert.equal(st.getModel().metadata.noteTarget, added);
   st.undo();
   assert.equal(st.getModel().metadata.noteTarget, undefined);
@@ -168,8 +169,8 @@ test('negative: Apply refuses a selected node of another type, naming it and the
     const fm = PANEL.resolve(m).get('fm');
     const r = entryAction(m, keys, 'apply', { target: lpf.id });
     assert.equal(r.action, undefined);
-    assert.match(r.reason, new RegExp(`Vybraný uzel ${lpf.metadata.name} je typu .*; patch FM keys `
-      + `je určen pro modul ${fm.metadata.name} panelu Synth`));
+    assert.match(r.reason, new RegExp(`Vybraný uzel ${lpf.metadata.name} je typu .*; `
+      + `patch ${keys.name} je určen pro modul ${fm.metadata.name} panelu Synth`));
     const v = browseView([keys], m, { target: lpf.id }).items[0];
     assert.deepEqual([v.applicable, v.reason], [false, r.reason]);
     assert.equal(st.getModel(), m, 'the model is unchanged');

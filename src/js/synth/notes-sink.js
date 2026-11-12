@@ -39,8 +39,8 @@ export function createSynthNotes({ get, transport, ensurePanel, cmp, say, played
     }
     const target = played();
     if (!target) {
-      say(`${panel.module(playedModule()).label} was removed in Studio: Restore module first.`,
-        true);
+      say(`Modul ${panel.module(playedModule()).label} byl odstraněn ve Studiu: nejdřív `
+        + 'stiskněte Obnovit modul.', true);
       return { ok: false, reason: 'removed' };
     }
     const was = held.get(note);

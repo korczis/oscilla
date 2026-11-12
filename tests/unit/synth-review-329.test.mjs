@@ -82,7 +82,7 @@ test('S&H Rate and Smooth say why while Clock is patched', () => {
   const face = PANEL.faceOf('sh');
   for (const key of ['rate', 'smooth']) {
     assert.match(controlReason(sh, node, face.find((c) => c.key === key), m, PANEL) || '',
-      /without a clock/, key);
+      /nemá účinek, dokud je zapojený Clock/, key);
   }
   assert.equal(controlReason(sh, node, face.find((c) => c.key === 'seed'), m, PANEL), null);
   const html = plateHtml({ panel: PANEL, module: sh, node, model: m, tokens: new Proxy({},

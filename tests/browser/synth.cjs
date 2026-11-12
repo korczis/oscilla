@@ -135,8 +135,8 @@
 //              plate is shown, not ADDITIVE's; QWERTY A sounds and its release falls below
 //              -70 dB rel. Fails on 3c22d01a (ADDITIVE checked while the keys play FM)
 //   s-notice   K246 (desktop and phone): opening the Synth inserts its panel and the insert alert
-//              says so (no live role; the status line does not repeat it); Close (a tap on the
-//              phone) hides it with focus on the Synth view; an undo and a redo of that insert
+//              says so (no live role; the status line does not repeat it); Close (on the phone a
+//              touch tap, pointerType touch, on a 44 px target) hides it with focus on the view; an undo and a redo of that insert
 //              do not bring it back
 //   s-newvoice New Synth voice keeps the insert contract (review S5): the workspace's insert
 //              undone and a node of the user's added (Insert is offered), the dock's New Synth
@@ -268,7 +268,8 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg', 's-pads']);
+  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg',
+  's-pads', 's-notice']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -1556,7 +1557,8 @@ function defineChecks() {
     const dark = tilt(await steady(page, tilt, 'the dark low-pass settles'));
     await page.keyboard.up('KeyA');
     return { ok: after.depth === before.depth + 1 && after.edges === before.edges
-      && /^Preset Dark low-pass/.test(after.label) && dark <= open - 4, label: after.label,
+      && /^Předvolba Tmavá dolní propust/.test(after.label) && dark <= open - 4,
+    label: after.label,
     tilt: [open, dark] };
   });
 
@@ -1569,11 +1571,13 @@ function defineChecks() {
     await until(() => dlg.isVisible(), { ms: 10000, what: 'the patch library opens' });
     await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
     const list = page.locator('[data-osc="library.list"]');
+    // The FM engine presets' names (src/js/synth/presets.js, the title before its colon).
+    const [fmBell, fmKeys] = ['FM zvon', 'FM piano'];
     const names = await list.locator('[role="option"] span:first-child').allTextContents();
     await list.focus();
     await page.keyboard.press('ArrowDown');
     await until(async () => (await page.locator('[data-osc="library.name"]').textContent())
-      === 'FM keys', { ms: 5000, what: 'the arrow reaches FM keys' });
+      === fmKeys, { ms: 5000, what: 'the arrow reaches FM keys' });
     const before = await depth();
     await press(page.locator('[data-osc="library.insert"]'));
     await until(async () => (await depth()) === before + 1, { ms: 5000,
@@ -1602,10 +1606,11 @@ function defineChecks() {
     }
     await until(() => dlg.isVisible(), { ms: 10000, what: 'the library opens from the Studio' });
     await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
-    const row = list.locator('[role="option"]', { hasText: 'FM keys' });
+    const row = list.locator('[role="option"]', { hasText: fmKeys });
     await until(async () => /in use/.test(await row.textContent()), { ms: 5000,
       what: 'the Studio lists FM keys as in use' });
-    return { ok: JSON.stringify(names) === '["FM bell","FM keys"]' && inGraph, names, added };
+    return { ok: JSON.stringify(names) === JSON.stringify([fmBell, fmKeys]) && inGraph, names,
+      added };
   });
 
   def('s-libxy', async ({ page }) => {
@@ -1839,13 +1844,32 @@ function defineChecks() {
     const status = (await page.locator('[data-osc="synth.status"]').textContent()).trim();
     const roles = await alert.evaluate((el) => [el.getAttribute('role'),
       el.getAttribute('aria-live')]);
+    // The press's own pointer type: on the phone (hasTouch) a tap is a touch, not a mouse click
+    // in disguise (C3-539-1).
+    await page.evaluate(() => {
+      window.__noticePress = null;
+      document.querySelector('[data-osc="synth.notice.close"]').addEventListener('pointerdown',
+        (e) => { window.__noticePress = e.pointerType; }, { once: true });
+    });
+    // #540 (oscilla-c3): Close leaves the page where it was: no element's scrollTop and not the
+    // window's scrollY moves (WebKit's focus() scrolled #osc-app 185 px without preventScroll).
+    const scrolled = () => page.evaluate(() => [`window:${window.scrollY}`,
+      ...[...document.querySelectorAll('*')].filter((e) => e.scrollTop > 0)
+        .map((e) => `${e.id || e.dataset.osc || e.tagName}:${Math.round(e.scrollTop)}`)].join(' '));
+    const before = await scrolled();
+    // Pressed where it is, as a finger or mouse does: Playwright's tap() and click() scroll the
+    // target into view first, and osc-main's scroll padding (the dock) made that an 8 px scroll
+    // the user never makes (#540).
     const box = await page.locator('[data-osc="synth.notice.close"]').boundingBox();
-    if (size === 'phone') await page.locator('[data-osc="synth.notice.close"]').tap();
-    else await page.locator('[data-osc="synth.notice.close"]').click();
+    if (size === 'phone') await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    else await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    const pointer = await page.evaluate(() => window.__noticePress);
     await until(async () => !(await alert.isVisible()), { ms: 5000,
       what: 'Close hides the insert alert' });
     const focus = await page.evaluate(() => document.activeElement
       && document.activeElement.id);
+    const after = await scrolled();
+    const still = after === before;
     await page.evaluate(() => {
       window.OSCILLA.studio.store.undo();
       window.OSCILLA.studio.store.redo();
@@ -1853,9 +1877,12 @@ function defineChecks() {
     await until(async () => (await dbg(page)).present, { ms: 5000,
       what: 'the redo restores the panel' });
     const back = await alert.isVisible();
+    // 44 px under the coarse pointer, read at the layout suites' 43.5 (Firefox: 43.99997)
+    const touchOk = size === 'phone' ? pointer === 'touch' && box && box.height >= 43.5
+      && box.width >= 43.5 : pointer === 'mouse';
     return { ok: text.length > 20 && status !== text && roles.every((r) => r === null)
-      && focus === 'osc-view-synth' && !back && box && box.height >= 32,
-    text, status, roles, focus, back, closeBox: box };
+      && focus === 'osc-view-synth' && !back && box && box.height >= 32 && touchOk && still,
+    text, status, roles, focus, back, closeBox: box, pointer, scroll: { before, after } };
   });
 
   def('s-newvoice', async ({ page }) => {
@@ -2233,7 +2260,7 @@ function defineChecks() {
     await page.keyboard.press('Home');
     await page.keyboard.press('ArrowDown');
     await until(async () => (await page.locator('[data-osc="library.name"]').textContent())
-      === 'Bass', { ms: 5000, what: 'Home and the arrow reach Bass' });
+      === 'Bas', { ms: 5000, what: 'Home and the arrow reach Bass' });
     await page.keyboard.press('Enter');
     await until(async () => (await dbg(page)).present, { ms: 10000,
       what: 'Enter in the library inserts the panel' });
@@ -2418,9 +2445,10 @@ function defineChecks() {
     await sound(page, (q) => peakAt(q, f1 + f2) && peakAt(q, f1 - f2),
       'Ring bell: ring products at 196.2 and 850.3 Hz');
     await page.keyboard.up('KeyA');
-    return { ok: /^Preset Init$/.test(out.init) && /^Preset Bass$/.test(out.bass)
+    // The undo labels name the presets (src/js/synth/presets.js, the title before its colon).
+    return { ok: /^Předvolba Základ$/.test(out.init) && /^Předvolba Bas$/.test(out.bass)
       && out.bassKnob === '180 Hz' && out.leadScale === '8' && out.sweepKnob !== '0.00 oct'
-      && /^Preset Ring bell$/.test(out.ring) && out.ringKnob !== '0.00', ...out, ref,
+      && /^Předvolba Kruhový zvon$/.test(out.ring) && out.ringKnob !== '0.00', ...out, ref,
     bass: tilt(bass), swing };
   });
 

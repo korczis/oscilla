@@ -16,7 +16,7 @@ import { createFilterStage } from '../../src/js/audio/filters.js';
 import { createSequencerEditor } from '../../src/js/sequencer/editor.js';
 import { renderSequenceOffline } from '../../src/js/sequencer/compiler.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
-import { WAVEFORM_LABELS } from '../../src/js/core/constants.js';
+import { WAVEFORM_NAMES } from '../../src/js/core/constants.js';
 import { StudioFakeContext, createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -281,8 +281,8 @@ test('C003: the status bar names the sequence waveform, not Additive, while the 
   Object.defineProperties(cmp, Object.getOwnPropertyDescriptors(wb));
   Object.assign(cmp, { playback: { owner: 'sequencer', since: 1 }, playing: false, source: 'single', waveform: 'square',
     labFlags: { additive: true, envelope: true, filter: true } });
-  assert.equal(cmp.statusWaveText, WAVEFORM_LABELS.square,
+  assert.equal(cmp.statusWaveText, WAVEFORM_NAMES.square,
     'the sequence plays its own waveform: the additive lab is instrument-only');
   cmp.playback = { owner: null, since: 0 };
-  assert.equal(cmp.statusWaveText, 'Additive', 'the instrument still reports the additive wave');
+  assert.equal(cmp.statusWaveText, 'Aditivní', 'the instrument still reports the additive wave');
 });

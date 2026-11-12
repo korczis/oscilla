@@ -22,38 +22,40 @@ import { PRESETS, presetPatch } from '../synth/presets.js';
 
 export const FACTORY_NODE_PRESETS = Object.freeze({
   vco: [
-    { id: 'sub-saw', name: 'Sub saw', values: { waveform: 'sawtooth', scale: '32' } },
-    { id: 'hollow', name: 'Hollow square', values: { waveform: 'square', scale: '8' } },
-    { id: 'thin-pulse', name: 'Thin pulse', values: { waveform: 'pulse', width: 20 } },
-    { id: 'soft-sine', name: 'Soft sine', values: { waveform: 'sine', scale: '8' } },
+    { id: 'sub-saw', name: 'Hluboká pila', values: { waveform: 'sawtooth', scale: '32' } },
+    { id: 'hollow', name: 'Dutý obdélník', values: { waveform: 'square', scale: '8' } },
+    { id: 'thin-pulse', name: 'Úzký puls', values: { waveform: 'pulse', width: 20 } },
+    { id: 'soft-sine', name: 'Měkký sinus', values: { waveform: 'sine', scale: '8' } },
   ],
   filter: [
-    { id: 'dark', name: 'Dark low-pass', values: { type: 'lowpass', frequency: 400, Q: 0.7 } },
-    { id: 'bright', name: 'Bright low-pass', values: { type: 'lowpass', frequency: 4000,
+    { id: 'dark', name: 'Tmavá dolní propust', values: { type: 'lowpass', frequency: 400,
       Q: 0.7 } },
-    { id: 'resonant', name: 'Resonant peak', values: { type: 'lowpass', frequency: 900,
+    { id: 'bright', name: 'Jasná dolní propust', values: { type: 'lowpass', frequency: 4000,
+      Q: 0.7 } },
+    { id: 'resonant', name: 'Rezonanční špička', values: { type: 'lowpass', frequency: 900,
       Q: 12 } },
-    { id: 'thin', name: 'Thin high-pass', values: { type: 'highpass', frequency: 600, Q: 0.7 } },
+    { id: 'thin', name: 'Tenká horní propust', values: { type: 'highpass', frequency: 600,
+      Q: 0.7 } },
   ],
   envelope: [
-    { id: 'pluck', name: 'Pluck', values: { attack: 0.002, decay: 0.18, sustain: 0,
+    { id: 'pluck', name: 'Drnknutí', values: { attack: 0.002, decay: 0.18, sustain: 0,
       release: 0.12 } },
-    { id: 'pad', name: 'Slow pad', values: { attack: 0.8, decay: 0.6, sustain: 0.8,
+    { id: 'pad', name: 'Pomalý pad', values: { attack: 0.8, decay: 0.6, sustain: 0.8,
       release: 1.5 } },
-    { id: 'gate', name: 'Organ gate', values: { attack: 0.005, decay: 0.01, sustain: 1,
+    { id: 'gate', name: 'Varhanní brána', values: { attack: 0.005, decay: 0.01, sustain: 1,
       release: 0.02 } },
   ],
   lfo: [
-    { id: 'vibrato', name: 'Gentle vibrato', values: { shape: 'sine', rate: 5.5 } },
-    { id: 'drift', name: 'Slow drift', values: { shape: 'triangle', rate: 0.2 } },
+    { id: 'vibrato', name: 'Jemné vibrato', values: { shape: 'sine', rate: 5.5 } },
+    { id: 'drift', name: 'Pomalé kolísání', values: { shape: 'triangle', rate: 0.2 } },
   ],
   noise: [
-    { id: 'rain', name: 'Pink wash', values: { color: 'pink', level: 0.5 } },
-    { id: 'rumble', name: 'Brown rumble', values: { color: 'brown', level: 0.6 } },
+    { id: 'rain', name: 'Růžový závoj', values: { color: 'pink', level: 0.5 } },
+    { id: 'rumble', name: 'Hnědé dunění', values: { color: 'brown', level: 0.6 } },
   ],
 });
 
-const DEFAULT = Object.freeze({ id: 'default', name: 'Default', values: {} });
+const DEFAULT = Object.freeze({ id: 'default', name: 'Výchozí', values: {} });
 const cache = new Map();
 
 export function nodePresetPatch(type, preset) {
@@ -93,11 +95,11 @@ export function nodePresets(type, { user = [] } = {}) {
 
 export function nodePresetAction(model, nodeId, entry) {
   const node = model.graph.nodes.find((n) => n.id === nodeId);
-  if (!node) return { reason: `There is no node "${String(nodeId)}".` };
+  if (!node) return { reason: `Uzel „${String(nodeId)}“ neexistuje.` };
   if (singleNodeType(entry.patch) !== node.type) {
-    return { reason: `${entry.name} is a preset for another node type.` };
+    return { reason: `${entry.name} je předvolba pro jiný typ uzlu.` };
   }
   return { action: { type: 'PATCH_REPLACE', patch: entry.patch,
     onto: { [entry.patch.graph.nodes[0].id]: node.id },
-    label: `Preset ${entry.name} on ${node.metadata.name}`.slice(0, 64) } };
+    label: `Předvolba ${entry.name} pro ${node.metadata.name}`.slice(0, 64) } };
 }

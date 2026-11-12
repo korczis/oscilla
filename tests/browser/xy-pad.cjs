@@ -161,6 +161,10 @@ const arg = (name, fallback) => {
 };
 const ROOT = path.resolve(__dirname, '..', '..');
 const DIST = path.join(ROOT, 'dist', 'index.html');
+// The pad's first-touch lines, read from the source the dist is built from (XY_TEXT of
+// src/js/synth/view/xy-wiring.js), set before the first check runs.
+let XY_FIRST = null;
+let XY_COLD = null;
 const RUN = suite.open({ name: 'xy-pad', browsers: arg('browsers'), origins: arg('origins'),
   defaultOrigins: ['file'] });
 const playwright = RUN.playwright;
@@ -1101,17 +1105,17 @@ function defineChecks() {
     await heard((q) => q.rmsDb < -70, 'its lift silences');
     let after = null;
     await until(async () => (after = await look()).first
-      === 'Touch the pad to play. Nothing sounds until you do.', { ms: SOUND_MS,
+      === XY_FIRST, { ms: SOUND_MS,
       what: 'once audio runs the line says the pad plays' });
-    // A suspended context at the touch said "Tap once to start audio" until it ran. Chromium's
+    // A suspended context at the touch said XY_COLD until it ran. Chromium's
     // headless shell starts the context running under the gesture rule too: no suspended
     // moment to state there, and none may be stated; webkit and firefox start it suspended.
-    const coldSeen = after.lines.some(([t, st]) => t === 'Tap once to start audio.'
+    const coldSeen = after.lines.some(([t, st]) => t === XY_COLD
       && st !== 'running');
-    const wrong = after.lines.some(([t, st]) => t === 'Tap once to start audio.'
+    const wrong = after.lines.some(([t, st]) => t === XY_COLD
       && st === 'running' && !coldSeen);
     if ((!chromium && !coldSeen) || wrong) {
-      return { ok: false, detail: 'the cold first touch did not say Tap once to start audio '
+      return { ok: false, detail: `the cold first touch did not say "${XY_COLD}" `
         + 'while the context was suspended', lines: after.lines };
     }
     const again = await press(page, p, { touch: chromium });
@@ -1765,6 +1769,8 @@ async function runLeg(browserName, sizeName, base, leg) {
 }
 
 (async () => {
+  ({ first: XY_FIRST, cold: XY_COLD } = (await import(pathToFileURL(path.join(ROOT, 'src', 'js',
+    'synth', 'view', 'xy-wiring.js')).href)).XY_TEXT);
   const known = defineChecks().map((c) => c.name);
   const unknown = ONLY ? [...ONLY].filter((n) => !known.includes(n)) : [];
   if (unknown.length) {

@@ -763,7 +763,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       notice.dismiss();
       notice.into(this.synth);
       const v = document.getElementById('osc-view-synth');
-      if (v) v.focus();
+      if (v) v.focus({ preventScroll: true }); // Close never scrolls the page (#540)
     },
 
     synthInit() {

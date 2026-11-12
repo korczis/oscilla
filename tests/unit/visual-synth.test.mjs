@@ -11,7 +11,7 @@
 // --measure-noise), above a floor. The record at this acceptance (the W1b chain: the adoption
 // with the synth-theme core's S9/S10 and the knob's W1c, chromium 153.0.8010.12), the largest
 // count over every view, at threshold 0.05 / 0:
-//   STABILITY darwin-arm64 2 / 75 (10 runs), linux-x64 22 / 436 (10 runs)
+//   STABILITY darwin-arm64 2 / 75 (10 runs), linux-x64 16 / 402 (10 runs)
 // (train T5 re-accepted the eight XY and bay views over K220, K229 and K232 together: pad R's
 // default line and velocity readout, no default Y cable, PAD L's and VELOCITY's plates, the MG's
 // jacks and Morph label, the LPF/HPF Peak jacks; linux-x64 then, darwin on K229 alone;
