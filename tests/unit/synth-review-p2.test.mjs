@@ -154,7 +154,9 @@ test('S5: New Synth voice inserts as Insert does: below the user\'s nodes, with 
   const depth = st.debugInfo().undoDepth;
   assert.equal(cmp.synthPick(NEW_VOICE), true);
   assert.equal(st.debugInfo().undoDepth, depth + 1, 'one history entry');
-  assert.equal(cmp.synth.status, SYNTH_TEXT.took(names), 'the notice names the feed it took');
+  assert.deepEqual(cmp.synth.notice, { text: SYNTH_TEXT.took(names) },
+    'the insert alert names the feed it took (K246)');
+  assert.notEqual(cmp.synth.status, SYNTH_TEXT.took(names), 'the status line does not repeat it');
   const added = st.getModel().graph.nodes.filter((n) => !before.has(n.id));
   assert.ok(added.length > 10 && added.every((n) => n.position.y > top),
     'the panel is placed below the user\'s nodes');
