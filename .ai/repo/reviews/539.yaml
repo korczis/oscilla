@@ -1,0 +1,77 @@
+# Review verdict for pull request #539 (train/t16): train T16 and release v3.37.0 (a minor:
+# K246 is a feat; the 3.37 station "Upozornění na vložení panelu Synthu").
+# Guarded member: d9's K246 894380e7 (feat 28f6630a, main 35f0ca0b merged in 90a51ff0, the SYN
+# re-accept 894380e7), guarded in src/js/synth/dock.js, src/js/synth/insert-notice.js (new) and
+# src/js/synth/ui.js. Unguarded members read as members: K246's markup (src/index.html
+# synth.notice and synth.notice.close), PRO.alertInfo and PRO.alertClose, the catalogue
+# declarations and trace, the six linux-x64 SYN desktop views re-accepted on main 35f0ca0b; 0b's
+# plan records K180 497b8b33 and V636 c6ce2231; the v3.36.1 record cab86454; the K246 record
+# 0e09d0b3; the 3.37 station 3b3b2f9a; chore(release): v3.37.0 60227cfc.
+# Judged at 60227cfc on base origin/main 35f0ca0b (v3.36.1, #538), 2026-11-12, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-526 (pre-stamp head 3b3b2f9a, then 60227cfc).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-d9 built K246, oscilla-0b the K180 and V636 records,
+# oscilla-43 integrated, wrote the station and stamped. Disclosure: K246 implements the
+# reviewer's own decision (2b) of 2026-11-12 under Q090 (the synth.status insert sentence as a
+# dismissible Pro alert), and 0e09d0b3 records that decision verbatim. The reviewer judged the
+# build against the decision, not the decision again.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list: b8eecddf18f9b8d5...
+# over 3 guarded paths, equal at 3b3b2f9a and 60227cfc.
+#
+# How it was judged:
+# - The model (insert-notice.js) only hides on sync, so a redo (the panel back without an insert)
+#   never brings a closed or undone alert back, and a new insert after an undo shows its own
+#   alert although it reuses the deterministic Keys id: inserted() is called only by the two
+#   real inserts, ensurePanel (ui.js; its early return when the panel is present calls nothing)
+#   and the dock's New Synth voice (refused by picker.js while the panel is present). refresh()
+#   runs on every store change (handle().subscribe), before its workspace guard, so an undo made
+#   in the Studio hides the alert too. The status line no longer carries the insert sentence;
+#   a refused insert (no action) still says its reason there.
+# - The patch library's Insert with a preset (insertWithPreset) runs in the Studio's patch
+#   browser and reports there; it never reaches the Synth view, so it shows no Synth alert. That
+#   matches the station's "Když Synth vloží svůj panel".
+# - fail-first: with ui.js, dock.js, index.html and pro-classes.js from origin/main,
+#   synth-insert-notice fails 2 of 7 (the wiring cases); at the head 7/7.
+# - The reviewer's own probe of the built dist at 390x844 (scratchpad k246-phone.cjs), chromium
+#   (isMobile, touch) and webkit (touch), both at 3b3b2f9a (the same src as 60227cfc): the alert shows on opening the Synth
+#   with the took sentence (24..366 px, no horizontal overflow, scrollWidth 390), no role, the
+#   live region says it once, the status line does not repeat it; Close is 44x44 under the
+#   coarse pointer, named "Zavřít oznámení", reached by Tab (Alt+Tab in webkit) in 6 stops with
+#   a visible ring, Enter closes it with focus on #osc-view-synth; undo then redo keeps it closed;
+#   undo then Insert shows it again and says it once more; undo with it open hides it and a redo
+#   keeps it hidden; a tap on Close hides it with focus on #osc-view-synth. No page errors.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (35f0ca0b's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer: at 60227cfc GITHUB_BASE_REF=main npm test exit 0 (5784 tests, 5783
+# pass, 0 fail, 1 skipped), build:check up to date (v3.37.0), about-stations --check and
+# --check-station rc=0, release:analyze minor (1 minor commit since v3.36.1, K246's feat); units
+# synth-insert-notice, synth-review-p2 and ui-catalog 45/45; at 3b3b2f9a (the same src; the stamp
+# adds only the version, the station's derived fields, the roadmap and the rebuilt dist) every leg
+# exit 0 in chromium and webkit of synth (desktop 47/47 with s-notice, phone 14/14), synth-engines
+# (25/25, 3/3), drums (11/11, 11/11) and xy-pad (every leg), with OSC_LOAD_MAX=50 under a load of
+# about 42 on the shared Mac.
+#
+# C3-539-1 (P3, open): s-notice's header in tests/browser/synth.cjs says "(desktop and phone)"
+# and the check has a phone branch (a tap on Close), but 's-notice' is not in PHONE_CHECKS
+# (synth.cjs:270), so the suite runs it on desktop only (chromium and webkit phone 14/14, as
+# before K246). The phone path is proven here only by the reviewer's probe. Fix: add
+# 's-notice' to PHONE_CHECKS (the alert also clears 32 px there: it is 44 px under the coarse
+# pointer) in the next train that touches synth.cjs. Not blocking.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open; C3-539-1 is a P3.
+schema: review-verdict/v1
+pr: 539
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 60227cfc)
+content: b8eecddf18f9b8d5f9f2ae4e885502ca9fc296f835300b3017ba95b2c8574ab3
+findings:
+  - { id: C3-539-1, severity: P3, status: open, title: "s-notice claims desktop and phone but is not in PHONE_CHECKS, so the phone tap on Close runs only in the reviewer's probe" }
