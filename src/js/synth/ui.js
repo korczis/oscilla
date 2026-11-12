@@ -52,6 +52,7 @@ import { applyFace, faceChips, faceClass } from './view/faces.js';
 import { createArmedFollow } from './armed-follow.js';
 import { createStripView } from './step-strip-view.js';
 import { createSynthNotes } from './notes-sink.js';
+import { createInsertNotice } from './insert-notice.js';
 
 export const SYNTH_PANEL = SEMI_MONO;
 export { SYNTH_TEXT, insertDecision };
@@ -96,6 +97,14 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     if (cmp) cmp.synth.status = text;
     announce(text, { assertive });
   };
+  // K246: an insert's sentence is a closable alert, said once (insert-notice.js), never the
+  // status line's.
+  const notice = createInsertNotice({ announce: (text) => announce(text, { assertive: false }) });
+  const keysId = () => (present() ? nodes().get('keys').id : null);
+  const inserted = (text) => {
+    notice.inserted(keysId(), text);
+    if (cmp) cmp.synth.notice = notice.view();
+  };
   const studioSink = createStudioSink({ get, setupAudio, say, registry,
     ensureAudio: () => cmp && cmp.ensureAudio && cmp.ensureAudio() });
   const dispatch = (action) => {
@@ -122,7 +131,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     // a template link afterwards is not refused for unsaved changes (first-screen link:studio).
     const tracker = get().dirty;
     if (ok && !(opts && opts.explicit) && tracker) tracker.rebaseFresh(before, model());
-    if (ok || !r.action) say(ok ? r.text : r.reason);
+    if (ok) inserted(r.text);
+    else if (!r.action) say(r.reason);
     return ok;
   }
 
@@ -377,6 +387,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   function refresh() {
     dock.sync();
     follow(get().transport);
+    notice.sync(keysId()); // K246: an undo of the insert hides its alert
+    if (cmp) cmp.synth.notice = notice.view();
     if (!cmp || cmp.workspace !== 'synth') return;
     syncArmed();
     strip.sync(); // K221
@@ -723,7 +735,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   }
 
   const dock = createDock({ panel, registry, cmp: () => cmp, model, present, played,
-    ensurePanel, dispatch, say, allOff });
+    ensurePanel, dispatch, say, allOff, inserted });
   const strip = createStripView({ cmp: () => cmp, panel, model, present, handle, transport,
     ensurePanel, dispatch, say });
 
@@ -741,8 +753,17 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       armed: false,
       strip: false, // K221: the step-sequencer strip's clip exists (step-strip.js)
       status: '',
+      notice: null, // K246: { text } of the insert alert, or null
       link: '',
       dock: dock.state(), // K066, beside the piano (synth/dock.js)
+    },
+
+    /** K246: the insert alert's Close: gone for that insert; focus to the Synth view. */
+    synthNoticeClose() {
+      notice.dismiss();
+      this.synth.notice = null;
+      const v = document.getElementById('osc-view-synth');
+      if (v) v.focus();
     },
 
     synthInit() {

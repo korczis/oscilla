@@ -21,6 +21,14 @@ export const PRO = Object.freeze({
     + 'dark:hover:bg-primary-800 dark:focus:ring-primary-800',
   /** Pro secondary (alternative) button. */
   btnSecondary: `${BTN} ${SECONDARY}`,
+  /** Pro info alert, dismissible (K246: the Synth's insert notice). */
+  alertInfo: 'flex items-start gap-3 p-4 mb-3 text-sm rounded-lg text-primary-800 bg-primary-50 '
+    + 'dark:bg-gray-800 dark:text-primary-400',
+  /** The alert's close button: 32 px, 44 px under a coarse pointer. */
+  alertClose: 'ms-auto -mx-1.5 -my-1.5 inline-flex shrink-0 items-center justify-center w-8 h-8 '
+    + '[@media(pointer:coarse)]:w-11 [@media(pointer:coarse)]:h-11 p-1.5 rounded-lg '
+    + 'text-primary-500 bg-primary-50 hover:bg-primary-200 focus:outline-none focus:ring-2 '
+    + 'focus:ring-primary-400 dark:bg-gray-800 dark:text-primary-400 dark:hover:bg-gray-700',
   /** Pro dropdown panel (absolute under its button; the caller adds left-0 or right-0). */
   menu: 'absolute z-50 py-1 mt-2 bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700',
   /** Pro dropdown item, 44 px tall. */

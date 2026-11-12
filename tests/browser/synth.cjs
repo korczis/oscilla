@@ -134,11 +134,15 @@
 //              keys routed to FM (the dock's choice): FM is the one checked engine and its
 //              plate is shown, not ADDITIVE's; QWERTY A sounds and its release falls below
 //              -70 dB rel. Fails on 3c22d01a (ADDITIVE checked while the keys play FM)
+//   s-notice   K246 (desktop and phone): opening the Synth inserts its panel and the insert alert
+//              says so (no live role; the status line does not repeat it); Close (a tap on the
+//              phone) hides it with focus on the Synth view; an undo and a redo of that insert
+//              do not bring it back
 //   s-newvoice New Synth voice keeps the insert contract (review S5): the workspace's insert
 //              undone and a node of the user's added (Insert is offered), the dock's New Synth
-//              voice says the Master feed it took and places every node it adds below the
-//              user's; A sounds and its release falls below -70 dB rel. Fails on 3c22d01a
-//              ("The keys play KEYBOARD.", the panel at the top)
+//              voice says the Master feed it took (in the insert alert, K246) and places every
+//              node it adds below the user's; A sounds and its release falls below -70 dB rel.
+//              Fails on 3c22d01a ("The keys play KEYBOARD.", the panel at the top)
 //   s-keysilent a keyboard the pad's cables silenced says why (review S8): XY lead from the
 //              Preset menu cables Y alone (K183 review F3) and QWERTY A still sounds (RMS above
 //              -40 dB rel); the check then taps the pad's Gate into EG 1 and EG 2 itself, and
@@ -1825,6 +1829,35 @@ function defineChecks() {
   });
 
   // Review of src/js/synth (oscilla-21, S5): New Synth voice keeps the insert contract.
+  // K246 (oscilla-c3's 2b): opening the Synth inserted its panel; the insert alert says what it
+  // did to the Studio document, its Close hides it with focus on the Synth view, and neither an
+  // undo nor a redo of that insert brings it back; the status line never repeats it.
+  def('s-notice', async ({ page, size }) => {
+    const alert = page.locator('[data-osc="synth.notice"]');
+    const text = await until(async () => (await alert.isVisible()) && (await alert.textContent())
+      .trim(), { ms: 10000, what: 'the insert alert shows on opening the Synth' });
+    const status = (await page.locator('[data-osc="synth.status"]').textContent()).trim();
+    const roles = await alert.evaluate((el) => [el.getAttribute('role'),
+      el.getAttribute('aria-live')]);
+    const box = await page.locator('[data-osc="synth.notice.close"]').boundingBox();
+    if (size === 'phone') await page.locator('[data-osc="synth.notice.close"]').tap();
+    else await page.locator('[data-osc="synth.notice.close"]').click();
+    await until(async () => !(await alert.isVisible()), { ms: 5000,
+      what: 'Close hides the insert alert' });
+    const focus = await page.evaluate(() => document.activeElement
+      && document.activeElement.id);
+    await page.evaluate(() => {
+      window.OSCILLA.studio.store.undo();
+      window.OSCILLA.studio.store.redo();
+    });
+    await until(async () => (await dbg(page)).present, { ms: 5000,
+      what: 'the redo restores the panel' });
+    const back = await alert.isVisible();
+    return { ok: text.length > 20 && status !== text && roles.every((r) => r === null)
+      && focus === 'osc-view-synth' && !back && box && box.height >= 32,
+    text, status, roles, focus, back, closeBox: box };
+  });
+
   def('s-newvoice', async ({ page }) => {
     // A document without the panel whose own chain feeds Master Output, changed by the user:
     // the workspace's own insert undone, then a node of the user's.
@@ -1847,10 +1880,11 @@ function defineChecks() {
     await menu.locator('[data-pick="new-voice"]').focus();
     await page.keyboard.press('Enter');
     const took = await tookPrefix();
+    // K246: the insert's sentence is the insert alert's, not the status line's.
     const said = await until(async () => {
-      const t = await page.locator('[data-osc="synth.status"]').textContent();
+      const t = await page.locator('[data-osc="synth.notice"]').textContent();
       return took.length > 0 && t.includes(took) && t;
-    }, { ms: 10000, what: 'New Synth voice says the Master feed it took' });
+    }, { ms: 10000, what: 'New Synth voice says the Master feed it took, in the insert alert' });
     // The panel's own nodes: Master Output is the document's one, kept where it is.
     const placed = await page.evaluate((had) => window.OSCILLA.studio.model.graph.nodes
       .filter((n) => !had.includes(n.id)).map((n) => n.position.y), mine.map((n) => n.id));

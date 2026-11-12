@@ -7,7 +7,7 @@
 //     ctx: { panel, registry, cmp() -> component | null, model(), present(), played() -> node,
 //            ensurePanel(), dispatch(action), say(text, assertive), allOff() }
 
-import { WAVES, instrumentChoices, routeAction, waveAction, waveOf } from './picker.js';
+import { NEW_VOICE, WAVES, instrumentChoices, routeAction, waveAction, waveOf } from './picker.js';
 import { roving } from '../ui/keys/roving.js';
 import { STRIP_TEXT, stripOf } from './step-strip.js';
 
@@ -47,7 +47,9 @@ export function createDock(ctx) {
       ctx.allOff();
       const done = ctx.dispatch(r.action);
       const on = done.ok ? ctx.played() : null;
-      if (done.ok) ctx.say(r.text || `The keys play ${on ? on.metadata.name : 'nothing'}.`);
+      // K246: a New Synth voice is an insert: its sentence is the insert alert's.
+      if (done.ok && id === NEW_VOICE && r.text && ctx.inserted) ctx.inserted(r.text);
+      else if (done.ok) ctx.say(r.text || `The keys play ${on ? on.metadata.name : 'nothing'}.`);
       return done.ok;
     },
 
