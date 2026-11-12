@@ -27,7 +27,7 @@ pressure.
 4. From a lab: Filter Lab, Synthesis (Subtractive Synth, Stereo Beat), the Sequencer and
    Measure each link to the shipped template that does their job ("Open Filter Automation in
    Studio"). The template is a separate document; the lab's own settings stay in the lab.
-5. **Open this pattern in Studio** in the Sequencer opens a copy of the Sequencer's current
+5. **Otevřít tuto sekvenci ve Studiu** (the Sequencer's row Další cesty) opens a copy of the Sequencer's current
    pattern as a new document (one Sequence node, one clip per block), the same pipeline as
    importing a sequence file. With unsaved Studio changes nothing is replaced and the notice
    says so.

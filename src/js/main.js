@@ -909,7 +909,7 @@ function createOscillaComponent(ui) {
     claim: bus.claim, release: bus.release, // Studio PLAY and the Synth arm (C037)
     trace, onTraceIdle: (fn) => traceIdle.add(fn), // the one trace (C050)
     onPlayback: bus.subscribe, // the playing state (C051)
-    // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
+    // The Sequencer's pattern now, for its "Otevřít tuto sekvenci ve Studiu" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
     playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)
   });

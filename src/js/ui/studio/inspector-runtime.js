@@ -108,9 +108,12 @@ export function traceView(model, steps, opts = {}) {
       op,
       title: first.kind === 'undo' || first.kind === 'redo' ? `${first.kind} ${label || ''}`.trim()
         : title,
-      outcome: `${end.outcome}${code ? ` (${code})` : ''}${commit && commit.revision != null
-        ? `, revision ${commit.revision}` : ''}${failed.length ? ` · failed: ${failed.join(', ')}`
-        : ''}`,
+      // A step with no outcome (a bus leave, a plain stop) leaves it out instead of reading
+      // "null" (live visual audit 2026-11-11, finding 6).
+      outcome: [end.outcome != null ? `${end.outcome}${code ? ` (${code})` : ''}`
+        : code ? `(${code})` : '', commit && commit.revision != null
+        ? `revision ${commit.revision}` : ''].filter(Boolean).join(', ')
+        + (failed.length ? ` · failed: ${failed.join(', ')}` : ''),
       steps: list.map((x) => ({ text: traceText(model, x, registry), outcome: x.outcome,
         code: x.code })),
     };
@@ -132,6 +135,7 @@ function traceText(model, x, registry) {
   what.push(...Object.entries(d).filter(([, v]) => v !== null && v !== '').map(([k, v]) => (
     k === 'planHash' ? `plan ${shortHash(v)}` : typeof v === 'number' ? `${k} ${sig(v, 4)}${
       TRACE_SECONDS.includes(k) ? ' s' : ''}` : `${k} ${v}`)));
-  return `${x.owner} ${x.kind}: ${x.outcome}${x.code ? ` (${x.code})` : ''}${x.revision != null
+  return `${x.owner} ${x.kind}${x.outcome != null ? `: ${x.outcome}` : ''}${x.code
+    ? ` (${x.code})` : ''}${x.revision != null
     ? ` · rev ${x.revision}` : ''} · ${what.filter(Boolean).join(', ')}`.replace(/ · $/, '');
 }

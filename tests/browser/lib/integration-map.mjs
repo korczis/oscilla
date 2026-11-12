@@ -139,16 +139,24 @@ function roleOf(tag, attrs) {
 
 /**
  * The producers of the markup: [{ control, role, kind (its data-osc-link, or null), line,
- * reason, dynamicHref }].
+ * reason, dynamicHref, opener }]. A menu item's opener (G013) is the button its menu names by
+ * aria-labelledby: the nearest role="menu" before it, by that button's data-osc.
  */
 export function scanMarkup(html) {
   const out = [];
-  for (const { tag, attrs, line } of parseTags(html)) {
+  const tags = parseTags(html);
+  const oscById = new Map(tags.filter((t) => t.attrs.get('id') && t.attrs.get('data-osc'))
+    .map((t) => [t.attrs.get('id'), t.attrs.get('data-osc')]));
+  let menu = null;
+  for (const { tag, attrs, line } of tags) {
+    if (attrs.get('role') === 'menu') menu = oscById.get(attrs.get('aria-labelledby')) || null;
     const reason = producerReason(tag, attrs);
     if (!reason && !attrs.has('data-osc-link')) continue;
-    out.push({ control: controlOf(attrs), role: roleOf(tag, attrs),
+    const role = roleOf(tag, attrs);
+    out.push({ control: controlOf(attrs), role,
       kind: attrs.has('data-osc-link') ? attrs.get('data-osc-link') : null, line, reason,
-      dynamicHref: attrs.has(':href'), file: 'src/index.html' });
+      dynamicHref: attrs.has(':href'), file: 'src/index.html',
+      ...(role === 'menuitem' && menu ? { opener: `[data-osc="${menu}"]` } : {}) });
   }
   return out;
 }
@@ -286,6 +294,7 @@ export function deriveRows(model, producers) {
       control: r.control, selector: sel, role: p ? p.role : null, to,
       href: r.href || null, template: templateOf(r.href), source: r.source };
     if (r.text) row.text = r.text;
+    if (p && p.opener) row.opener = p.opener;
     row.studio = studioEffect(row);
     row.id = rowId(row);
     if (!rows.has(row.id)) rows.set(row.id, row);

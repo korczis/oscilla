@@ -5,7 +5,7 @@
     {
       "id": "M011",
       "title": "Release engineering, provenance and product graph",
-      "done": 24,
+      "done": 26,
       "required": 53,
       "phase": "now"
     },
@@ -19,7 +19,7 @@
     {
       "id": "M046",
       "title": "Engineering integrity: orchestration split, structural checks, measured costs",
-      "done": 33,
+      "done": 34,
       "required": 63,
       "phase": "now"
     },
@@ -45,13 +45,6 @@
       "phase": "later"
     },
     {
-      "id": "M050",
-      "title": "First-run experience chosen by the owner and built",
-      "done": 2,
-      "required": 3,
-      "phase": "now"
-    },
-    {
       "id": "M055",
       "title": "The whole interface on Flowbite Pro",
       "done": 1,
@@ -61,7 +54,7 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 10,
+      "done": 15,
       "required": 69,
       "phase": "now"
     },
@@ -80,13 +73,6 @@
       "phase": "now"
     },
     {
-      "id": "M059",
-      "title": "Sequencer: audible tempo, real editing and a Studio clock",
-      "done": 6,
-      "required": 7,
-      "phase": "now"
-    },
-    {
       "id": "M060",
       "title": "Audio-band signal lab: readable spectrogram, linked scrolling spectrogram, analytic signal",
       "done": 2,
@@ -96,7 +82,7 @@
     {
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
-      "done": 4,
+      "done": 5,
       "required": 7,
       "phase": "now"
     },
@@ -110,7 +96,7 @@
     {
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
-      "done": 7,
+      "done": 10,
       "required": 46,
       "phase": "now"
     },
@@ -131,9 +117,9 @@
     {
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
-      "done": 0,
+      "done": 1,
       "required": 25,
-      "phase": "next"
+      "phase": "now"
     },
     {
       "id": "M068",
@@ -166,7 +152,7 @@
     {
       "id": "M073",
       "title": "Measurement truth in the interface",
-      "done": 9,
+      "done": 11,
       "required": 43,
       "phase": "now"
     },
@@ -243,7 +229,7 @@
     {
       "id": "M090",
       "title": "One instrument, one coherent state",
-      "done": 26,
+      "done": 29,
       "required": 66,
       "phase": "now"
     },
@@ -322,13 +308,6 @@
       "title": "Owner decisions of the component follow-up",
       "done": 1,
       "required": 5,
-      "phase": "now"
-    },
-    {
-      "id": "M088",
-      "title": "Owner decisions of the component-system line",
-      "done": 2,
-      "required": 4,
       "phase": "now"
     },
     {

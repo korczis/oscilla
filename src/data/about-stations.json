@@ -273,6 +273,13 @@
       "summary": "Krokový modulátor ve Studiu ukazuje hodnotu každého kroku jako sloupec v mřížce Inspektoru: u rozsahu přes nulu roste od středu nahoru nebo dolů, tah přes několik sloupců je jeden krok zpět a šipky dojdou na každý krok; tlačítko Krok krokového sekvenceru CV udělá krok i při zastaveném transportu a připraví ho ke hře stejně jako stisk klávesy",
       "commit": "ca39ed3",
       "datetime": "2026-11-11T13:59:40+01:00"
+    },
+    {
+      "release": "3.36",
+      "title": "Sekvencer s jednou hlavní cestou a menu Otevřít v…",
+      "summary": "Stránka Sekvencer má jedno hlavní tlačítko Krokový sekvencer a pady (Bicí) a vedle něj menu Otevřít v… se šablonou Step Bass, touto sekvencí ve Studiu, šablonou Sweep Sequence a Synthem; Filter Lab má svoje odkazy také v jednom menu; na telefonu je řada na jednom řádku s dotykovými cíli 44 px; sekce Trace v Inspektoru Studia je zavřená a ukazuje počet operací a už nikde nečte null; stav klávesnice pro čtečku obrazovky nehlásí null",
+      "commit": "d45006a",
+      "datetime": "2026-11-12T00:00:56+01:00"
     }
   ]
 }

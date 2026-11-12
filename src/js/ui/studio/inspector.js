@@ -93,6 +93,7 @@ export {
   TRACE_OPS_SHOWN, runtimeDiagnostics, runtimeState, shortHash, traceView,
 } from './inspector-runtime.js';
 import { sliderFill } from '../app.js';
+import { opSummary, traceCount } from './trace-summary.js';
 // The pure helpers of the fields live in inspector-fields.js; re-exported, so callers keep their
 // import from this module.
 export {
@@ -1248,26 +1249,31 @@ export function mountInspector(host, svc) {
   let tr = null;
   const traceOpen = new Set();
   function buildTrace(tv, intro, nodeId = null) {
-    tr = { sig: '', note: h('p', { class: 'osc-si-note' }), list: h('ol', {
+    tr = { sig: '', count: h('summary', { class: 'flex min-h-11 cursor-pointer items-center '
+        + 'text-gray-700 dark:text-gray-300', text: traceCount(tv) }),
+      note: h('p', { class: 'osc-si-note' }), list: h('ol', {
       class: 'osc-si-conns osc-si-trace', 'aria-label': 'Operations',
       'data-osc': 'studio.inspector.traceOps' }), intro, nodeId };
     fillTrace(tv);
     return h('section', { class: 'osc-si-section', 'aria-label': 'Trace',
       'data-osc': 'studio.inspector.trace' }, [h('h5', { class: 'osc-si-h5', text: 'Trace' }),
-      tr.note, tr.list]);
+      // Closed by default, like Runtime details; its summary says how many operations it holds.
+      h('details', { class: 'text-xs text-gray-500 dark:text-gray-400' },
+        [tr.count, tr.note, tr.list])]);
   }
 
   function fillTrace(tv) {
     const sig = JSON.stringify(tv);
     if (!tr || tr.sig === sig) return;
     tr.sig = sig;
+    setText(tr.count, traceCount(tv));
     setText(tr.note, tv.total ? `${tr.intro} ${tv.shown} of ${tv.total} shown; kept in memory `
       + 'only, never saved.' : 'Nothing traced yet: edit, play or stop to see what happens.');
     const active = document.activeElement;
     const key = tr.list.contains(active) ? active.getAttribute('data-key') : null;
     replaceChildren(tr.list, tv.ops.map((o) => {
       const d = h('details', { class: 'osc-si-help', 'data-op': o.op }, [
-        h('summary', { 'data-key': `trace:${o.op}`, text: `${o.op} · ${o.title} · ${o.outcome}` }),
+        h('summary', { 'data-key': `trace:${o.op}`, text: opSummary(o) }),
         h('ol', { class: 'osc-si-trace-steps' }, o.steps.map((x) => h('li', {
           class: BAD.includes(x.outcome) ? 'is-error' : null, text: x.text })))]);
       d.open = traceOpen.has(o.op);

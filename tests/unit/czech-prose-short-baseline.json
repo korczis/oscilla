@@ -1,8 +1,8 @@
 {
   "note": "Short English the app still shows, per file: labels, buttons, headings and short announcements the sentence measure cannot see (scripts/czech-prose-short.mjs, plan U098, rule project.czech-prose, Q104). A count only falls and a file not listed has none. Lower it in the change that translates; never raise it.",
-  "total": 1883,
+  "total": 1879,
   "counts": {
-    "src/index.html": 285,
+    "src/index.html": 283,
     "src/js/analysis/compare.js": 2,
     "src/js/analysis/correlation.js": 2,
     "src/js/analysis/spectrogram.js": 2,
@@ -154,7 +154,7 @@
     "src/js/synth/xy.js": 7,
     "src/js/ui/app.js": 1,
     "src/js/ui/catalog/decl/about.js": 3,
-    "src/js/ui/catalog/decl/cross-links.js": 13,
+    "src/js/ui/catalog/decl/cross-links.js": 11,
     "src/js/ui/catalog/decl/filter-lab.js": 9,
     "src/js/ui/catalog/decl/keyboard.js": 7,
     "src/js/ui/catalog/decl/patch-browser.js": 8,

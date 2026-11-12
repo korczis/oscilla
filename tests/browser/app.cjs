@@ -1065,6 +1065,8 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.customPresets = []; window.OSCILLA.app.presetTab = 'reference'; });
     // The cross-links shown in one workspace only (U010): the Sequencer's and Filter Lab's
     // Studio links, and Experiments before anything is saved (its empty list leads to Measure).
+    // The labs' onward links are items of their "Otevřít v…" menu (G013): opened, collected.
+    const labMenu = { sequencer: '#osc-seq-open', filter: '#osc-filter-open' };
     for (const ws of ['sequencer', 'filter', 'experiments']) {
       await H.workspace(page, ws);
       if (ws === 'experiments') {
@@ -1072,6 +1074,11 @@ function defineChecks() {
           { timeout: 10000 }).catch(() => {});
       }
       await collect();
+      if (labMenu[ws]) {
+        await page.click(labMenu[ws]);
+        await collect();
+        await page.keyboard.press('Escape');
+      }
     }
     // The Synth workspace (#329): its header controls (preset, Arm keys, Studio, copy link).
     await H.workspace(page, 'synth');
