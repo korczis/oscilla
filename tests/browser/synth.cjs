@@ -135,8 +135,8 @@
 //              plate is shown, not ADDITIVE's; QWERTY A sounds and its release falls below
 //              -70 dB rel. Fails on 3c22d01a (ADDITIVE checked while the keys play FM)
 //   s-notice   K246 (desktop and phone): opening the Synth inserts its panel and the insert alert
-//              says so (no live role; the status line does not repeat it); Close (a tap on the
-//              phone) hides it with focus on the Synth view; an undo and a redo of that insert
+//              says so (no live role; the status line does not repeat it); Close (on the phone a
+//              touch tap, pointerType touch, on a 44 px target) hides it with focus on the view; an undo and a redo of that insert
 //              do not bring it back
 //   s-newvoice New Synth voice keeps the insert contract (review S5): the workspace's insert
 //              undone and a node of the user's added (Insert is offered), the dock's New Synth
@@ -268,7 +268,8 @@ const LAUNCH = {
 };
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
-  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg', 's-pads']);
+  's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg',
+  's-pads', 's-notice']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -1840,8 +1841,16 @@ function defineChecks() {
     const roles = await alert.evaluate((el) => [el.getAttribute('role'),
       el.getAttribute('aria-live')]);
     const box = await page.locator('[data-osc="synth.notice.close"]').boundingBox();
+    // The press's own pointer type: on the phone (hasTouch) a tap is a touch, not a mouse click
+    // in disguise (C3-539-1).
+    await page.evaluate(() => {
+      window.__noticePress = null;
+      document.querySelector('[data-osc="synth.notice.close"]').addEventListener('pointerdown',
+        (e) => { window.__noticePress = e.pointerType; }, { once: true });
+    });
     if (size === 'phone') await page.locator('[data-osc="synth.notice.close"]').tap();
     else await page.locator('[data-osc="synth.notice.close"]').click();
+    const pointer = await page.evaluate(() => window.__noticePress);
     await until(async () => !(await alert.isVisible()), { ms: 5000,
       what: 'Close hides the insert alert' });
     const focus = await page.evaluate(() => document.activeElement
@@ -1853,9 +1862,12 @@ function defineChecks() {
     await until(async () => (await dbg(page)).present, { ms: 5000,
       what: 'the redo restores the panel' });
     const back = await alert.isVisible();
+    // 44 px under the coarse pointer, read at the layout suites' 43.5 (Firefox: 43.99997)
+    const touchOk = size === 'phone' ? pointer === 'touch' && box && box.height >= 43.5
+      && box.width >= 43.5 : pointer === 'mouse';
     return { ok: text.length > 20 && status !== text && roles.every((r) => r === null)
-      && focus === 'osc-view-synth' && !back && box && box.height >= 32,
-    text, status, roles, focus, back, closeBox: box };
+      && focus === 'osc-view-synth' && !back && box && box.height >= 32 && touchOk,
+    text, status, roles, focus, back, closeBox: box, pointer };
   });
 
   def('s-newvoice', async ({ page }) => {
