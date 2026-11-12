@@ -1,0 +1,30 @@
+id: K246
+milestone: M064
+serves:
+  - "ui-current#app-speaks-czech"
+title: "The Synth's insert sentence is a dismissible Pro info alert, shown once per insert, not a status line on every tab"
+slug: synth-insert-notice
+priority: p2
+profile: implementation
+objective: "Lands as fix(synth). The owner-ordered live visual audit of v3.35.0 (2026-11-11, finding 3) found synth.status ('Inserted the Semi-modular mono voice into the Studio document; it took Master Output from Filter 1. Undo removes the panel...') visible on every Synth tab. Decided by oscilla-c3 under Q090 (relayed by oscilla-43, 2026-11-11), verbatim: '(2b) synth.status: amend. Don''t make it a toast. The sentence reports a change the Synth made to the user''s own Studio document: it inserted the panel, took Master Output from Filter 1, and says how to undo that. The insert happens on opening the Synth, not by the user''s own action. A toast that vanishes would let a rerouted master go unseen (the no-silent spirit). It shouldn''t sit on every tab forever either. So: Make it a dismissible Pro alert (info, with a close button) under the Synth header, shown once per insert. It stays until the user closes it or undoes the insert, and doesn''t return for the same insert after it''s closed. Say it once in the live region as it appears. Czech text: 0b''s pass should give the alert its Czech wording.' Before: the sentence on the status line of every tab. After: a closable Pro info alert under the Synth header, keyed per insert, said once."
+why: "The owner's bar of 2026-11-11 (verbatim, loop prompt): 'vse at vypada profi, hezky, luxusne, detailne, production grade, proste profi autio nastroj'; a developer-worded sentence on every tab reads as unfinished, and the reroute must not go unseen."
+current_state: "Filed 2026-11-12 by oscilla-43 from oscilla-c3's decision. Builder oscilla-d9 (task t-20261112011320-25dd, partial): feat/synth-status-alert holds 889b22f8 (main merged into the Czech pass 74e16d03) and, uncommitted, src/js/synth/insert-notice.js (createInsertNotice keyed by the Keys node id) with tests/unit/synth-insert-notice.test.mjs (5/5, fails on the base). Left: the ui.js and dock.js wiring, the Pro alert in index.html, the catalogue and trace, the browser check, and the updated assertions."
+scope:
+  - "src/js/synth/insert-notice.js"
+  - "src/js/synth/ui.js"
+  - "src/js/synth/dock.js"
+  - "src/index.html"
+  - "tests/unit/synth-insert-notice.test.mjs"
+  - "tests/browser/synth.cjs"
+depends_on: []
+acceptance_criteria:
+  - "The insert sentence shows as a Flowbite Pro info alert with a close button under the Synth header, once per insert (keyed by the inserted panel's Keys node id); closing hides it for good, an undo hides it, a redo of a closed insert does not bring it back, a fresh insert shows it again; a unit test fails on the merge base."
+  - "The sentence is said once in the live region as the alert appears, and the status line does not repeat it."
+  - "A browser check drives Close in the gate browsers; the Pro record does not rise; a reviewer's verdict (src/js/synth is guarded)."
+validation:
+  - "node --test tests/unit/synth-insert-notice.test.mjs"
+  - "node tests/browser/synth.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-12'
