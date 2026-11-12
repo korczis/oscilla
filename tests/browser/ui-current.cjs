@@ -126,10 +126,10 @@ const U108_DEBT = new Map([
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s '
-    + 'header buttons at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured '
-    + 'with the insert alert closed (U107, C3-539-2) and the page unscrolled (#540): 3 pairs in '
-    + 'every Mac engine (oscilla-c3) and in linux chromium and firefox (oscilla-0b, container), '
-    + 'none in linux webkit';
+  + 'header buttons or tabs at 375 x 667 since #385\'s train: the Synth lane, #385 and V635. '
+  + 'Measured unscrolled (#540) with the insert alert closed (U107); since U108 the link\'s '
+  + 'notice waits for the alert and shows as it closes, pushing the tabs under the dock in every '
+  + 'engine on the Mac and on linux (oscilla-0b, container): 4-6 pairs';
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -144,9 +144,7 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
-  ['darwin:@375:synth:overlap', R375],
-  ['linux:chromium@375:synth:overlap', R375],
-  ['linux:firefox@375:synth:overlap', R375],
+  ['@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
