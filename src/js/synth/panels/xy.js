@@ -9,7 +9,7 @@
 // their amount knobs as they were. A cable from its Pitch or Gate replaces the keyboard's, as
 // any cable does (no built-in XY preset patches them, K183 review F3).
 
-export const XY_TAB = Object.freeze({ id: 'xy', label: 'XY', title: 'XY performance pad',
+export const XY_TAB = Object.freeze({ id: 'xy', label: 'XY', title: 'XY pad pro živou hru',
   description: 'Dotkněte se padu a hraje hlas kláves: X volí notu stupnice, Y sílu úhozu (v '
     + 'novém dokumentu ji slyšíte přes modul VELOCITY) a s kabelem z Y i ovládání, kam kabel '
     + 'vede; starší dokumenty mají Y kabelem do LPF Cutoff. Nota zní, dokud se padu dotýkáte. '

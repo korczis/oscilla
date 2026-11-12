@@ -32,9 +32,9 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
       + 'data-osc="synth.xy" aria-labelledby="synth-xy-title"><h3 id="synth-xy-title" '
       + 'class="text-sm font-bold tracking-widest text-gray-900 dark:text-white">XY PAD</h3>';
     if (!nodes().get('xy')) {
-      return `${card}<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">This Studio `
-        + 'document has no XY pad.</p><button type="button" data-restore-module="xy" '
-        + `class="${BTN} mt-2">Add the XY pad</button></section>`;
+      return `${card}<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">Tento `
+        + 'dokument Studia nemá XY pad.</p><button type="button" data-restore-module="xy" '
+        + `class="${BTN} mt-2">Přidat XY pad</button></section>`;
     }
     return `${card}<div class="mt-2" data-xy-body=""></div></section>`;
   }

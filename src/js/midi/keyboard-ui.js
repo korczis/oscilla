@@ -168,16 +168,17 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     /** What the readout says: armed or not, the keys' range, the velocity. */
     get kbdReadout() {
       const range = this.kbdRange;
-      const where = { studio: 'Studio', synth: 'Synth' }[this.kbdView] || 'Playground';
+      const where = { studio: 've Studiu', synth: 'v Synthu' }[this.kbdView] || 'v Playgroundu';
       return this.kbdArmedHere
-        ? `Armed in the ${where}: keys A to ' play ${range}. Velocity ${this.kbdVelocity}. `
-          + 'Z / X octave, C / V velocity; Esc releases every note.'
-        : `Not armed in the ${where}: arm the keys to play ${range} from the computer keyboard. `
-          + `Velocity ${this.kbdVelocity}.`;
+        ? `Klávesy jsou připravené ${where}: A až ' hrají ${range}. `
+          + `Síla úhozu ${this.kbdVelocity}. Z / X oktáva, C / V síla úhozu; `
+          + 'Esc uvolní všechny noty.'
+        : `Klávesy nejsou připravené ${where}: připravte je a hrajte ${range} `
+          + `z klávesnice počítače. Síla úhozu ${this.kbdVelocity}.`;
     },
     /** The on-screen keys, for assistive technology (the canvas is an image of them). */
     get kbdLabel() {
-      return `On-screen keyboard; holding: ${this.kbdHeld || 'nothing'}.`;
+      return `Klávesy na obrazovce; držené: ${this.kbdHeld || 'žádné'}.`;
     },
 
     /** Called once by midiInit: the controller, the listeners, the link key, the views. */
@@ -199,7 +200,7 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
         cmp.kbdVelocity = kb.velocity;
         const lo = noteName(kb.base);
         const hi = noteName(kb.base + 17);
-        cmp.kbdRange = `${lo} to ${hi}`;
+        cmp.kbdRange = `${lo} až ${hi}`;
         cmp.kbdHeld = kb.held.map((h) => `${noteName(h.note)}${h.sources.includes('midi')
           && h.sources.length === 1 ? ' (MIDI)' : ''}`).join(', ');
         cmp.kbdSounding = kb.sounding;

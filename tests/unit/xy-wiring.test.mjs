@@ -223,7 +223,8 @@ test('the Y target and the presets: the XY tab\'s BATCH, one undo entry each', (
       xyPatchAction(st.getModel(), PANEL, xyPresetPatch(st.getModel(), PANEL, recipe)),
       `${recipe.id}: the presets path is xy.js's, one BATCH`);
   }
-  assert.match(xyPresetAction(st.getModel(), PANEL, 'nope').reason, /no XY preset/);
+  assert.match(xyPresetAction(st.getModel(), PANEL, 'nope').reason,
+    /Předvolba XY „nope“ neexistuje/);
   m.destroy();
 });
 
@@ -519,14 +520,14 @@ test('without the Y cable the pad plays its notes and says why Y drives nothing'
   stopNow(r);
 });
 
-test('the cold first touch: a suspended context says "Tap once to start audio"; once audio '
+test('the cold first touch: a suspended context says "Klepnutím spustíte zvuk"; once audio '
   + 'runs a note still held is played again', () => {
   const r = rig({ audioState: 'suspended' });
   const m = r.mount();
   const first = r.host.querySelector('[data-xy-first]');
   m.view.model.down(1, 0.5, 0.5);
   assert.equal(first.textContent, XY_TEXT.cold);
-  assert.equal(XY_TEXT.cold, 'Tap once to start audio.');
+  assert.equal(XY_TEXT.cold, 'Klepnutím spustíte zvuk.');
   const note = r.noted.at(-1)[1];
   r.app.audio('suspended');
   assert.equal(r.noted.length, 1, 'nothing replays while the context is suspended');

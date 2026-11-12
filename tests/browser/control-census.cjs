@@ -241,8 +241,8 @@ for (const w of ['square', 'triangle', 'sawtooth']) {
   row({ id: `source.wave.${w}.pointer`, ws: 'playground', control: `#osc-wave-${w}`,
     how: 'pointer', setup: S.latch(), act: D.click(`#osc-wave-${w}`),
     expect: (s) => s.app.waveform === w && s.engine.voice && s.engine.voice.wave === w
-      // the status bar abbreviates (Sawtooth -> "Saw")
-      && new RegExp(w.slice(0, 3), 'i').test(s.text.sbWave || '') });
+      // the status bar names it as the source does (WAVEFORM_NAMES: sawtooth -> "Pila")
+      && !!s.names.wave && (s.text.sbWave || '').includes(s.names.wave[w]) });
 }
 row({ id: 'source.wave.sine.pointer', ws: 'playground', control: '#osc-wave-sine', how: 'pointer',
   setup: seq(S.latch(), D.click('#osc-wave-square')), act: D.click('#osc-wave-sine'),
@@ -1768,8 +1768,9 @@ const openLibrary = async (page) => {
 };
 row({ id: 'library.search.keyboard', ws: 'synth', control: '[data-osc="library.search"]',
   how: 'keyboard', read: libraryRead, setup: openLibrary,
-  act: D.typeKeys('[data-osc="library.search"]', 'bell'),
-  expect: (s, b, x) => x.length > 0 && x.length < b.x.length && x.every((t) => /bell/i.test(t)) });
+  // 'zvon' (bell): FM zvon, Kruhový zvon, XY zvon (src/js/synth/presets.js, xy.js)
+  act: D.typeKeys('[data-osc="library.search"]', 'zvon'),
+  expect: (s, b, x) => x.length > 0 && x.length < b.x.length && x.every((t) => /zvon/i.test(t)) });
 row({ id: 'library.tag.pointer', ws: 'synth', control: '[data-osc="library.tag"]',
   how: 'pointer', read: libraryRead,
   setup: async (page) => {

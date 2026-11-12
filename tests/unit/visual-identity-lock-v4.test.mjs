@@ -446,7 +446,7 @@ export const HW_ALLOW = new Map([
   ['src/js/synth/perc-recipes.js', { words: ['metal'],
     why: "the hat recipes' 'metal' layer kind, a sound and not a surface" }],
   ['src/js/synth/presets.js', { words: ['metal'],
-    why: "the preset 'Ring metal: ratio 1.41', a timbre name and not a surface" }],
+    why: "the preset id 'ring-metal' ('Kruhový kov: poměr 1,41'), a timbre name, not a surface" }],
 ]);
 const HW_SCANNED = /\.(m?js|css|html)$/;
 

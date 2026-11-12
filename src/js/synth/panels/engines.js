@@ -21,10 +21,10 @@ const PERC_ROW_KEYS = Object.freeze(Object.keys(PERC_VOICES).flatMap((id) => PER
   .map((name) => percParamKey(id, name))));
 
 export const ENGINE_TAB = Object.freeze({ id: 'engines', label: 'Engines',
-  title: 'Synthesis engines',
-  description: `Polyphonic engines, up to ${MAX_VOICES} voices each, played by the same keys: `
-    + 'additive, FM, AM and ring, wavetable, hard sync and percussion. The keys play the engine '
-    + 'you choose; every engine sounds through the same output as the panel.' });
+  title: 'Syntézní enginy',
+  description: `Polyfonní enginy, každý až s ${MAX_VOICES} hlasy, hrají ze stejných kláves: `
+    + 'aditivní, FM, AM a kruhová modulace, wavetable, hard sync a perkuse. Klávesy hrají '
+    + 'engine, který zvolíte; každý engine zní stejným výstupem jako panel.' });
 
 export const ENGINE_MODULES = Object.freeze([
   { id: 'additive', label: 'ADDITIVE', node: 'additive-voice' },
@@ -37,9 +37,9 @@ export const ENGINE_MODULES = Object.freeze([
   { id: 'perc', label: 'PERCUSSION', node: 'perc-voice', studio: PERC_ROW_KEYS },
 ].map((m) => Object.freeze({ ...m, tab: ENGINE_TAB.id })));
 
-export const PLUCK_BLOCKED = 'The plucked string needs a short delay loop: a loop in the '
-  + 'audio graph, which project.no-silent-feedback v1 refuses, and a delay shorter than one '
-  + 'render quantum, which needs an AudioWorklet (owner question Q022, plan K094).';
+export const PLUCK_BLOCKED = 'Drnkaná struna potřebuje krátkou zpožďovací smyčku: smyčku ve '
+  + 'zvukovém grafu, kterou project.no-silent-feedback v1 odmítá, a zpoždění kratší než jedno '
+  + 'renderovací kvantum, které vyžaduje AudioWorklet (otázka vlastníka Q022, plán K094).';
 export const ENGINE_BLOCKED = Object.freeze([
   Object.freeze({ id: 'pluck', label: 'PLUCKED STRING', reason: PLUCK_BLOCKED }),
   Object.freeze({ id: 'fm-feedback', label: 'FM FEEDBACK', reason: FM_FEEDBACK_BLOCKED }),

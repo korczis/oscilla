@@ -11,14 +11,14 @@ export default [
   defineComponent({
     id: 'keyboard',
     kind: 'panel',
-    label: 'Keyboard',
+    label: 'Klávesy',
     docs: 'Holds the computer-keyboard controls and the on-screen keys of the view in sight.',
     state: { none: 'the panel holds the keys and owns no value' },
   }),
   defineComponent({
     id: 'keyboard.arm',
     kind: 'switch',
-    label: 'Arm keys',
+    label: 'Připravit klávesy',
     docs: 'Arms or disarms the computer keyboard in the view in sight, each view on its own.',
     state: 'ui.kbdArmed',
     in: 'keyboard',
@@ -26,7 +26,7 @@ export default [
   defineComponent({
     id: 'keyboard.octave-down',
     kind: 'action',
-    label: 'Octave −',
+    label: 'Oktáva −',
     docs: 'Moves the playable range of the keys one octave down (shortcut Z).',
     state: 'ui.kbdBase',
     in: 'keyboard',
@@ -34,7 +34,7 @@ export default [
   defineComponent({
     id: 'keyboard.octave-up',
     kind: 'action',
-    label: 'Octave +',
+    label: 'Oktáva +',
     docs: 'Moves the playable range of the keys one octave up (shortcut X).',
     state: 'ui.kbdBase',
     in: 'keyboard',
@@ -42,7 +42,7 @@ export default [
   defineComponent({
     id: 'keyboard.velocity-down',
     kind: 'action',
-    label: 'Velocity −',
+    label: 'Úhoz −',
     docs: 'Lowers the velocity the keys play their notes with (shortcut C).',
     state: 'ui.kbdVelocity',
     in: 'keyboard',
@@ -50,7 +50,7 @@ export default [
   defineComponent({
     id: 'keyboard.velocity-up',
     kind: 'action',
-    label: 'Velocity +',
+    label: 'Úhoz +',
     docs: 'Raises the velocity the keys play their notes with (shortcut V).',
     state: 'ui.kbdVelocity',
     in: 'keyboard',
@@ -66,7 +66,7 @@ export default [
   defineComponent({
     id: 'keyboard.held',
     kind: 'readout',
-    label: 'Holding',
+    label: 'Držené',
     docs: 'Lists the notes the keys or the pointers are holding down right now.',
     state: { none: 'it lists the sounding notes and edits nothing' },
     in: 'keyboard',

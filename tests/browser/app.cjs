@@ -698,7 +698,7 @@ function defineChecks() {
         && before.options.at(-1) === TC_LABEL && before.banner === null
         && before.chip === 'Microphone',
       entered: entered.loopback && entered.selected === TC_LABEL && !entered.disabled
-        && /^TEST CONTEXT\./.test(entered.banner || '')
+        && /^TESTOVACÍ KONTEXT\./.test(entered.banner || '')
         && entered.chip === 'TEST CONTEXT loopback'
         && /no input device is used\. Choose an input to leave TEST CONTEXT/
           .test(entered.status)
@@ -1800,11 +1800,13 @@ function defineChecks() {
     await sleep(700);
     const b = await page.evaluate(() => window.OSCILLA.engine.instantaneousFrequency());
     const fb = await H.peakHz(page);
-    const status = await page.evaluate(() => window.OSCILLA.app.statusPatternText);
+    // The status bar names the pattern by its display name (PATTERN_NAMES, Q104), read here.
+    const [status, sweepUpName] = await page.evaluate(() => [window.OSCILLA.app.statusPatternText,
+      window.OSCILLA.app.PATTERN_NAMES.sweepUp]);
     await page.keyboard.press('Escape');
     const zero = await H.waitNodes0(page);
     const ok = fields.includes('start') && a > 200 && b > a * 1.3 && fb.hz > fa.hz && zero
-      && /Sweep up/.test(status);
+      && !!sweepUpName && status.startsWith(sweepUpName);
     await page.selectOption('#osc-pattern-select', 'tone');
     await page.click('#osc-source-osc');
     return { ok, fields, instA: a && +a.toFixed(1), instB: b && +b.toFixed(1), fftA: fa.hz,
@@ -2273,7 +2275,8 @@ function defineChecks() {
         const realtime = window.__c004.types.filter((t) => !t.offline).map((t) => t.v);
         if (!O.app.seqPlaying || !realtime.length) return null;
         return { realtime, status: document.querySelector('[data-osc="status.waveform"]')
-          .textContent.trim(), model: O.labs.sequencer.editor.model.waveform,
+          .textContent.trim(), sineName: O.app.WAVEFORM_NAMES.sine,
+        model: O.labs.sequencer.editor.model.waveform,
         written: O.labs.sequencer.editor.serialize().waveform };
       }), { ms: 8000, what: what('the sequence plays') });
       await page.click('#osc-seq-stop');
@@ -2290,7 +2293,8 @@ function defineChecks() {
         .map((t) => t.v));
       const wav = parseWavHeader(buf);
       const harm = wav.ok ? toneHarmonicsDb(buf, 440) : null;
-      const ok = live.realtime.every((v) => v === 'sine') && live.status === 'Sine'
+      const ok = live.realtime.every((v) => v === 'sine') && !!live.sineName
+        && live.status === live.sineName
         && live.model === 'sine' && live.written === 'sine'
         && offline.length > 0 && offline.every((v) => v === 'sine')
         && !!harm && harm.h2 < -60 && harm.h3 < -60
@@ -3133,8 +3137,11 @@ function defineChecks() {
     await page.evaluate(() => window.OSCILLA.app.setFrequency(440));
     await U.latch(page);
     await step('a latched 440 Hz tone', (s) => s.voice && near(s.voice.f, 440, 0.5));
+    // The status bar's names (WAVEFORM_NAMES, PATTERN_NAMES of the source, Q104), read from it.
+    const names = await page.evaluate(() => ({ wave: window.OSCILLA.app.WAVEFORM_NAMES,
+      pattern: window.OSCILLA.app.PATTERN_NAMES }));
     const wave = (w) => step(`waveform ${w}`, (s) => s.waveform === w && s.voice
-      && s.voice.wave === w && new RegExp(w.slice(0, 3), 'i').test(s.sbWave || ''));
+      && s.voice.wave === w && !!names.wave[w] && (s.sbWave || '').includes(names.wave[w]));
     await page.click('#osc-wave-sawtooth');
     out.sawtooth = await wave('sawtooth');
     await page.click('#osc-wave-square');
@@ -3171,7 +3178,8 @@ function defineChecks() {
     await page.click('#osc-source-pattern');
     await page.selectOption('#osc-pattern-select', 'pulse');
     out.pattern = await step('pattern Pulse', (s) => s.sourceKind === 'pattern'
-      && s.pattern === 'pulse' && /pulse/i.test(s.sbPattern || ''));
+      && s.pattern === 'pulse' && !!names.pattern.pulse
+      && (s.sbPattern || '').includes(names.pattern.pulse));
     const param = page.locator('[data-osc="pattern.param"]').first();
     const key = await param.getAttribute('data-key');
     await param.fill('330');

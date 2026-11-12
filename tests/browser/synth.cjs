@@ -1557,7 +1557,8 @@ function defineChecks() {
     const dark = tilt(await steady(page, tilt, 'the dark low-pass settles'));
     await page.keyboard.up('KeyA');
     return { ok: after.depth === before.depth + 1 && after.edges === before.edges
-      && /^Preset Dark low-pass/.test(after.label) && dark <= open - 4, label: after.label,
+      && /^Předvolba Tmavá dolní propust/.test(after.label) && dark <= open - 4,
+    label: after.label,
     tilt: [open, dark] };
   });
 
@@ -1570,11 +1571,13 @@ function defineChecks() {
     await until(() => dlg.isVisible(), { ms: 10000, what: 'the patch library opens' });
     await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
     const list = page.locator('[data-osc="library.list"]');
+    // The FM engine presets' names (src/js/synth/presets.js, the title before its colon).
+    const [fmBell, fmKeys] = ['FM zvon', 'FM piano'];
     const names = await list.locator('[role="option"] span:first-child').allTextContents();
     await list.focus();
     await page.keyboard.press('ArrowDown');
     await until(async () => (await page.locator('[data-osc="library.name"]').textContent())
-      === 'FM keys', { ms: 5000, what: 'the arrow reaches FM keys' });
+      === fmKeys, { ms: 5000, what: 'the arrow reaches FM keys' });
     const before = await depth();
     await press(page.locator('[data-osc="library.insert"]'));
     await until(async () => (await depth()) === before + 1, { ms: 5000,
@@ -1603,10 +1606,11 @@ function defineChecks() {
     }
     await until(() => dlg.isVisible(), { ms: 10000, what: 'the library opens from the Studio' });
     await page.locator('[data-osc="library.instrument"]').selectOption('fm-voice');
-    const row = list.locator('[role="option"]', { hasText: 'FM keys' });
+    const row = list.locator('[role="option"]', { hasText: fmKeys });
     await until(async () => /in use/.test(await row.textContent()), { ms: 5000,
       what: 'the Studio lists FM keys as in use' });
-    return { ok: JSON.stringify(names) === '["FM bell","FM keys"]' && inGraph, names, added };
+    return { ok: JSON.stringify(names) === JSON.stringify([fmBell, fmKeys]) && inGraph, names,
+      added };
   });
 
   def('s-libxy', async ({ page }) => {
@@ -2245,7 +2249,7 @@ function defineChecks() {
     await page.keyboard.press('Home');
     await page.keyboard.press('ArrowDown');
     await until(async () => (await page.locator('[data-osc="library.name"]').textContent())
-      === 'Bass', { ms: 5000, what: 'Home and the arrow reach Bass' });
+      === 'Bas', { ms: 5000, what: 'Home and the arrow reach Bass' });
     await page.keyboard.press('Enter');
     await until(async () => (await dbg(page)).present, { ms: 10000,
       what: 'Enter in the library inserts the panel' });
@@ -2430,9 +2434,10 @@ function defineChecks() {
     await sound(page, (q) => peakAt(q, f1 + f2) && peakAt(q, f1 - f2),
       'Ring bell: ring products at 196.2 and 850.3 Hz');
     await page.keyboard.up('KeyA');
-    return { ok: /^Preset Init$/.test(out.init) && /^Preset Bass$/.test(out.bass)
+    // The undo labels name the presets (src/js/synth/presets.js, the title before its colon).
+    return { ok: /^Předvolba Základ$/.test(out.init) && /^Předvolba Bas$/.test(out.bass)
       && out.bassKnob === '180 Hz' && out.leadScale === '8' && out.sweepKnob !== '0.00 oct'
-      && /^Preset Ring bell$/.test(out.ring) && out.ringKnob !== '0.00', ...out, ref,
+      && /^Předvolba Kruhový zvon$/.test(out.ring) && out.ringKnob !== '0.00', ...out, ref,
     bass: tilt(bass), swing };
   });
 

@@ -110,7 +110,7 @@ const SEQUENCER_ROWS = Object.freeze([
 // The keyboard (K026, src/js/midi/keyboard.js) in the views it is armed in, by physical key
 // (the same places on QWERTZ and AZERTY). It never takes Space, nor a key with Ctrl, Meta or
 // Alt. Armed in Studio, these letters play instead of Studio's A, C, F and T.
-const KEYBOARD_WHERE = 'with the keyboard armed (Arm keys, or a link with kbd=1)';
+const KEYBOARD_WHERE = 'with the keyboard armed (Připravit klávesy, or a link with kbd=1)';
 const KEYBOARD_ROWS = Object.freeze([
   row('keyboard-notes', 'A W S E D F T G Y H U J K O L P ; \'',
     'Play notes, C to the next F: a note sounds while its key is held', KEYBOARD_WHERE),
