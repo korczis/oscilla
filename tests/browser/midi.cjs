@@ -1356,6 +1356,9 @@ async function keyboardChecks(browser, b, origin, url) {
       return { owner: a.outputOwner, drawn: window.OSCILLA.viz.state.outputOwner,
         label: host ? host.getAttribute('aria-label') : null,
         state: text('[data-osc="status.label"]'), pattern: text('[data-osc="status.pattern"]'),
+        // the status bar's state (its dot, anySounding) and the label statusLabel builds for it
+        built: a.statusLabel, sounding: !!a.anySounding,
+        dot: !!document.querySelector('#osc-status.is-playing'),
         frequency: text('[data-osc="status.frequency"]'), held: a.kbdHeld };
     });
     const idle = (m) => m.live === 0 && m.nodes === 0 && m.sources === 0 && m.notes === 0;
@@ -1391,10 +1394,12 @@ async function keyboardChecks(browser, b, origin, url) {
     const name = OUTPUT_OWNER_NAMES.notes;
     const named = (o) => o.owner === 'notes' && o.drawn === 'notes'
       && !!o.label && o.label.includes(`(${name})`) && !/not playing/.test(o.label)
-      && o.state === 'PLAYING' && !!o.pattern && o.pattern.toLowerCase() === name.toLowerCase()
+      && o.sounding && o.dot && !!o.state && o.state === o.built
+      && !!o.pattern && o.pattern.toLowerCase() === name.toLowerCase()
       && o.frequency === 'C4';
     const cleared = (o) => o.owner === null && o.drawn === null && o.held === ''
-      && !!o.label && /not playing/.test(o.label) && o.state !== 'PLAYING'
+      && !!o.label && /not playing/.test(o.label) && !o.sounding && !o.dot
+      && !!o.state && o.state === o.built
       && !!o.pattern && o.pattern.toLowerCase() !== name.toLowerCase();
     const waitOwner = async (pred, what) => {
       try {

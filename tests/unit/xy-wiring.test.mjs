@@ -623,6 +623,10 @@ function scaled(r, scale) {
   return r.mount();
 }
 
+/** X's aria-valuetext for a cell the pad names `note` ("C4", "posílá A4"; no regex
+ *  metacharacter in a note name): the note, then its scale degree, "C4, 1. stupeň". */
+const ariaOf = (note) => new RegExp(`^${note}, \\d+\\. stupeň$`);
+
 test('each cell is named by the note the runtime plays there, for every scale, key and span',
   () => {
     const SCALES = [
@@ -653,7 +657,7 @@ test('each cell is named by the note the runtime plays there, for every scale, k
         const heard = vcoNote(r, 'vco1', pitch);
         assert.equal(heard, midiToName(69 + 12 * pitch - 12), `${what}: 16' is an octave down`);
         assert.equal(opts.readout.x(i), heard, `${what}: the ring's note`);
-        assert.ok(model.text('x').startsWith(`${heard}, degree `), `${what}: X's aria-valuetext`);
+        assert.match(model.text('x'), ariaOf(heard), `${what}: X's aria-valuetext`);
         const c = opts.cells[i];
         assert.equal(c.label, steps <= 15 || c.root ? heard
           : NOTE_NAMES[NOTE_NAMES.indexOf(played.replace(/-?\d+$/, ''))], `${what}: its label`);
@@ -716,7 +720,7 @@ const octaveUnder = (a, b) => {
 /** The ring and X's aria-valuetext name `note`. */
 function names(v, note, what) {
   assert.equal(v.ring, note, `${what}: the ring`);
-  assert.ok(v.aria.startsWith(`${note}, degree `), `${what}: ${v.aria}`);
+  assert.match(v.aria, ariaOf(note), `${what}: ${v.aria}`);
 }
 
 test('XY bass names the note heard: both VCOs at 16\', an octave under the pad\'s Pitch', () => {
@@ -777,7 +781,7 @@ test('audible VCOs a fifth apart (an FM offset): the pad names the note it sends
     assert.equal(r.st.dispatch({ type: 'EDGE_UPDATE', edgeId: e.id,
       props: { offset: 7 / 12 } }).ok, true);
   });
-  names(v, `sends ${v.sent}`, 'a fifth apart');
+  names(v, `posílá ${v.sent}`, 'a fifth apart');
   assert.match(v.stated, /\(nota, kterou pad posílá\);/, v.stated);
 });
 

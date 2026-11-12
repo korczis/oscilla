@@ -801,7 +801,7 @@ async function runOne(name) {
         const spans = [...document.querySelectorAll('#osc-safety .osc-safety-text > span')]
           .filter((el) => el.getClientRects().length);
         const text = spans.map((el) => el.textContent.trim()).join(' ');
-        const whole = /Start low, especially with headphones\./.test(text)
+        const whole = /Začněte potichu, zvlášť se sluchátky\./.test(text)
           && spans.every((el) => getComputedStyle(el).display === 'inline'
             || el.scrollWidth <= el.clientWidth + 1);
         return { text: text.slice(0, 60), whole };

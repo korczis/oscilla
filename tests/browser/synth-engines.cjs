@@ -47,7 +47,9 @@
 //
 // Offline checks (review of #332; desktop leg): tests/browser/fixtures/synth-engines-offline-
 // entry.js, bundled in memory with esbuild, builds the real engine adapters on an
-// OfflineAudioContext and plays notes on them; these assert the rendered samples.
+// OfflineAudioContext and plays notes on them; these assert the rendered samples. Each renders at
+// 44.1 and 48 kHz (K180: the CI browsers' rate and the Mac's), passes only when both do, and its
+// data holds each rate's result under the rate.
 //   o-clap      the clap decays at -60 dB per 0.28 s (from its last burst) within 10 %
 //   o-perc      every pitch class (C4-B4): its voice decays at -60 dB per its longest layer's
 //               decay within 12 %, the slope fitted from -20 to -50 dB below the peak; ten
@@ -127,6 +129,9 @@ async function offline(context) {
 // plan record in main below (K180), never retyped.
 let VOICES = 0;
 let VOICE_GAIN = 0;
+// The OfflineAudioContext render rates of the offline checks (K180): the CI browsers' and the
+// Mac's.
+const RENDERS = [{ sr: 44100 }, { sr: 48000 }];
 const ALGORITHMS = ['2-op', '3-stack', '3-y', '4-stack', '4-pairs', '4-three', '4-parallel'];
 
 // ------------------------------------------------------------------------------ page probes
@@ -625,16 +630,27 @@ function defineChecks() {
   });
 
   // ---------------------------------------------------------------- offline (review of #332)
-  def('o-clap', null, async ({ context }) => {
+  // Each offline check renders at every rate of RENDERS (K180: the CI browsers run 44.1 kHz, the
+  // Mac 48 kHz) and passes only when every rate does; its data holds each rate's result and the
+  // rate the fixture's OfflineAudioContext reported for it.
+  const defOffline = (name, fn) => def(name, null, async ({ context }) => {
     const page = await offline(context);
+    const out = {};
+    for (const { sr } of RENDERS) {
+      const got = await page.evaluate((r) => window.E.setRate(r), sr);
+      const r = await fn(page);
+      out[sr] = { ...r, ok: r.ok && got === sr, rate: got };
+    }
+    return { ok: RENDERS.every(({ sr }) => out[sr].ok), ...out };
+  });
+  defOffline('o-clap', async (page) => {
     const r = await page.evaluate(() => window.E.decay(61, {}, { win: 0.01, hi: -20, lo: -50 }));
     const want = -60 / 0.28;
     return { ok: r.points >= 8 && Math.abs(r.slope / want - 1) <= 0.1, slope: r.slope && +r
       .slope.toFixed(1), want: +want.toFixed(1), points: r.points };
   });
 
-  def('o-perc', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-perc', async (page) => {
     const rows = await page.evaluate(async () => {
       const out = [];
       for (let n = 60; n < 72; n++) {
@@ -653,8 +669,7 @@ function defineChecks() {
       bad: bad.map((r) => r.n) };
   });
 
-  def('o-pitch', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-pitch', async (page) => {
     // The carrier's pitch (review of #332, round 3): the deviation into operator 1's frequency,
     // its 0 Hz line from 50 ms after the onset, at the bass notes too. A modulator's 0 Hz line
     // reaching it (a stack at commensurate ratios) is a pitch offset, which this reads directly.
@@ -700,8 +715,7 @@ function defineChecks() {
         .join('/')}`) };
   });
 
-  def('o-headroom', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-headroom', async (page) => {
     const r = await page.evaluate(async ([algs, voices]) => {
       const sum = {};
       const notes = Array.from({ length: voices }, (_, i) => 48 + i);
@@ -726,8 +740,7 @@ function defineChecks() {
       worstVoice: +Math.max(...r.one.map((x) => x[1] / VOICE_GAIN)).toFixed(3), over };
   });
 
-  def('o-morph', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-morph', async (page) => {
     const ms = Array.from({ length: 13 }, (_, i) => i * 0.25);
     const banks = await page.evaluate(async (m) => {
       const out = {};
@@ -750,16 +763,14 @@ function defineChecks() {
       peakRelVoice: +peak.toFixed(3) };
   });
 
-  def('o-retrig', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-retrig', async (page) => {
     const r = await page.evaluate(() => window.E.retrigger('wavetable-voice', { bank: 'formant',
       morph: 1.5, attack: 0.6, release: 1.2, sustain: 0.8 }));
     return { ok: r.results[1].retrigger === true && r.min >= r.held - 1, held: +r.held.toFixed(2),
       min: +r.min.toFixed(2) };
   });
 
-  def('o-choke', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-choke', async (page) => {
     const on = await page.evaluate(() => window.E.choke({ choke: true }));
     const off = await page.evaluate(() => window.E.choke({ choke: false }));
     // Choked: the open hat released in CHOKE_RELEASE_S under the closed hat's 0.06 s decay
@@ -768,8 +779,7 @@ function defineChecks() {
       ringS: +off.fallS.toFixed(3) };
   });
 
-  def('o-alloff', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-alloff', async (page) => {
     const r = await page.evaluate(() => window.E.allOff(70, { decay: 4 }));
     return { ok: r.before > -80 && r.after <= r.before - 60, before: +r.before.toFixed(1),
       after: +r.after.toFixed(1) };
@@ -846,7 +856,7 @@ async function runLeg(browserName, sizeName, base) {
           console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/synth-engines: ${names.length
             - bad.length}/${names.length} checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
           for (const n of names) {
-            console.log(`   ${res[n].ok ? 'ok' : 'x '} ${n}: ${JSON.stringify(res[n]).slice(0, 700)}`);
+            console.log(`   ${res[n].ok ? 'ok' : 'x '} ${n}: ${JSON.stringify(res[n]).slice(0, 1600)}`);
           }
         }
       }

@@ -545,13 +545,13 @@ test('N2: every release puts Y back at rest: the node, the cursor and the readou
       for (let i = 0; i < 90; i += 1) r.model.key('ArrowUp'); // Y to 0.9 while it sounds
       assert.ok(Math.abs(r.y() - 0.9) < 1e-9, `${how}: Y plays 0.9 while touched`);
       // The target's value follows its name (S3, xyYReading): `lpf.frequency 7.21 kHz`.
-      assert.match(r.readout(), /Y 90 % → lpf\.frequency [^·]+ · gate open/);
+      assert.match(r.readout(), /Y 90 % → lpf\.frequency [^·]+ · brána otevřená/);
       if (how === 'lift') r.model.end('release');
       else r.mount.release('owner'); // a forced release (the audio owner moved away)
       assert.equal(r.y(), 0, `${how}: the node's Y is back at its rest`);
       assert.equal(r.model.value.y, 0, `${how}: the cursor is drawn at Y 0`);
       assert.match(r.readout(), /Y 0 % → lpf\.frequency/, `${how}: the readout says what sounds`);
-      assert.doesNotMatch(r.readout(), /gate open/);
+      assert.doesNotMatch(r.readout(), /brána otevřená/);
       // A computer key after it: nothing of the touch stays on the filter.
       r.layer.noteOn(60, 100, 'kbd-key');
       assert.equal(r.y(), 0, `${how}: the key plays with Y at rest`);
@@ -869,7 +869,7 @@ test('NF5: after a lift the readout says what sounds, no stale next touch from t
     const r = await padRig();
     for (let i = 0; i < 90; i += 1) r.model.key('ArrowUp');
     r.model.gate(true);
-    assert.match(r.readout(), /Y 90 % → lpf\.frequency [^·]+ · gate open/);
+    assert.match(r.readout(), /Y 90 % → lpf\.frequency [^·]+ · brána otevřená/);
     r.model.end('release');
     assert.match(r.readout(), / Y 0 % → lpf\.frequency/);
     assert.doesNotMatch(r.readout(), /další dotek začne z Y/,

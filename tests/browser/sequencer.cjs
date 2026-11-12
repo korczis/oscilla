@@ -898,6 +898,7 @@ async function checkPlayheadAfterEdit(engine, browser) {
         under: under ? under.id : null, sounding: ed.model.blocks[ed.activeBlockIndex()].id,
         marked: blocks.filter((b) => b.current).map((b) => b.id),
         passT0: ed.currentPassTiming().t0, status: status ? status.textContent : null,
+        statusBuilt: window.OSCILLA.app.statusDurationText,
         msg: msg ? msg.textContent : null };
     }, PULSE_START_S), { ms: 10000, what: `${name}: the Pulse 1.2 kHz sounds in pass 1` });
     check(engine, `${name}: the playhead is over the block that sounds`,
@@ -910,7 +911,10 @@ async function checkPlayheadAfterEdit(engine, browser) {
       `pass t0 ${start.t0} -> ${snap.passT0}`);
     check(engine, `${name}: the message and the status bar describe what sounds`,
       /Changes apply from the next pass\./.test(snap.msg || '')
-        && snap.status === '6.5 s now, next 9 s',
+        // the sounding 6.5 s first, the next 9 s last, in statusDurationText's own words (unit
+        // C006 pins them)
+        && snap.status === snap.statusBuilt && /^6\.5 s\b/.test(snap.status || '')
+        && /\b9 s$/.test(snap.status || ''),
       `message "${snap.msg}", status "${snap.status}"`);
     await page.click('#osc-seq-stop');
     await until(() => page.evaluate(() => !window.OSCILLA.labs.sequencer.editor.playing),

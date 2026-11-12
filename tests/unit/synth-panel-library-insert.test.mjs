@@ -7,7 +7,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { registerSynthSources } from '../../src/js/synth/library.js';
-import { insertAction } from '../../src/js/synth/insert.js';
+import { SYNTH_TEXT, insertAction } from '../../src/js/synth/insert.js';
 import { presetOf } from '../../src/js/synth/presets.js';
 import { PANEL_PRESENT_TEXT, catalogEntries, entryAction }
   from '../../src/js/studio/patch-catalog.js';
@@ -39,7 +39,7 @@ test('a panel preset offers Insert, and Insert puts the panel in with its values
   const r = entryAction(st.getModel(), e, 'insert');
   assert.ok(r.action, r.reason);
   assert.equal(r.action.type, 'BATCH');
-  assert.match(r.text, /took Master Output from Oscillator 1/, 'it names the feed it takes');
+  assert.equal(r.text, SYNTH_TEXT.took('Oscillator 1'), 'it names the feed it takes');
   const depth = st.debugInfo().undoDepth;
   const rev = st.getRevision();
   const done = st.dispatch(r.action);

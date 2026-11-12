@@ -54,14 +54,14 @@ test('C051: a claim and a release change every mirror in the same event', () => 
     anySounding: cmp.anySounding, outputOwner: cmp.outputOwner, label: cmp.statusLabel,
     playback: cmp.playback.owner });
   assert.deepEqual(mirrors(), { seqPlaying: false, isSounding: false, anySounding: false,
-    outputOwner: null, label: 'READY', playback: null });
+    outputOwner: null, label: 'PŘIPRAVENO', playback: null });
   bus.claim('sequencer', 'play');
   assert.deepEqual(mirrors(), { seqPlaying: true, isSounding: true, anySounding: true,
-    outputOwner: 'sequencer', label: 'PLAYING', playback: 'sequencer' });
+    outputOwner: 'sequencer', label: 'HRAJE', playback: 'sequencer' });
   const before = cmp.playback.since;
   bus.release('sequencer');
   assert.deepEqual(mirrors(), { seqPlaying: false, isSounding: false, anySounding: false,
-    outputOwner: null, label: 'READY', playback: null });
+    outputOwner: null, label: 'PŘIPRAVENO', playback: null });
   assert.ok(cmp.playback.since > before, 'since counts the changes');
   // and the bus's subscribers hear the same state in the same event
   const heard = [];

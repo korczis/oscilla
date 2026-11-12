@@ -1353,15 +1353,19 @@ function defineChecks() {
     // the attack is a few ms; allow the analyser a generous 2 s to show the full level
     const peak = await H.until(() => H.peak(page), (p) => Math.abs(p - gain) < 0.01);
     const nodes = await H.nodes(page);
+    // The status bar by state (the instrument plays, not releasing; the dot is-playing) and its
+    // label the one statusLabel builds for that state, whatever its wording.
+    const playingShown = (st) => st.playing && !st.releasing && st.green && st.label === st.want;
     const status = await H.until(() => page.evaluate(() => ({
       label: document.querySelector('[data-osc="status.label"]').textContent,
+      want: window.OSCILLA.app.statusLabel, playing: !!window.OSCILLA.app.playing,
+      releasing: !!window.OSCILLA.app.releasing,
       green: document.querySelector('#osc-status').classList.contains('is-playing'),
       dot: getComputedStyle(document.querySelector('.osc-status-dot')).backgroundColor,
-    })), (st) => st.label === 'PLAYING' && st.green, 1000);
+    })), playingShown, 1000);
     await page.mouse.up();
     const zero = await H.waitNodes0(page);
-    const ok = Math.abs(peak - gain) < 0.01 && nodes > 0 && zero && status.label === 'PLAYING'
-      && status.green;
+    const ok = Math.abs(peak - gain) < 0.01 && nodes > 0 && zero && playingShown(status);
     return { ok, gain, peak: +peak.toFixed(4), nodesWhilePlaying: nodes, zeroAfter: zero, status };
   });
 
@@ -1420,11 +1424,17 @@ function defineChecks() {
       v.state.reducedMotion = true; // prefers-reduced-motion as the bridge reads it at start
       v.updateLoop();
     });
+    // The idle caption's state word ("not playing" in the scope's language) is read from the
+    // scope view's own caption (ui/p5-views.js; any idle frame drawn rewrites it), not copied.
     const read = () => page.evaluate(() => {
       const drawn = window.__c013Drawn.splice(0);
+      const O = window.OSCILLA;
+      const scope = O.host && O.host.views ? O.host.views.scope : null;
+      const word = scope && scope.caption ? scope.caption.split(' · ')[0] : null;
       return {
         live: drawn.filter((t) => t.startsWith('output analyser')),
-        idle: drawn.filter((t) => /not playing/.test(t)).length,
+        idle: word ? drawn.filter((t) => t === word || t.startsWith(`${word} · `)).length : 0,
+        word,
         aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label'),
         looping: window.OSCILLA.viz.looping,
       };
@@ -1448,6 +1458,11 @@ function defineChecks() {
     const out = {};
     try {
       out.reducedLoopIdle = (await read()).looping;
+      // the idle scope has drawn its caption, so an idle frame during a leg is counted
+      out.idleWord = (await until(async () => {
+        const r = await read();
+        return r.word ? r : null;
+      }, { ms: 6000, what: 'scope-follows-owner: the idle scope drew its caption' })).word;
       out.loopWas = await page.evaluate(() => {
         const ed = window.OSCILLA.labs.sequencer.editor;
         const was = !!ed.model.loop;
@@ -1494,7 +1509,7 @@ function defineChecks() {
       });
     }
     out.zeroAfter = await H.waitNodes0(page, 3000);
-    const ok = out.reducedLoopIdle === false
+    const ok = out.reducedLoopIdle === false && !!out.idleWord
       && out.seq.looping && out.seq.idle === 0 && out.seqOwner === 'sequencer' && out.seqStopped
       && out.studio.looping && out.studio.idle === 0 && out.studioOwner === 'studio'
       && out.studioStopped && /^Waveform, not playing/.test(out.idleAria) && out.zeroAfter;
@@ -2670,8 +2685,11 @@ function defineChecks() {
     await H.workspace(page, 'sequencer');
     await page.click('#osc-seq-play');
     out.seqPlaying = await U.poll(() => page.evaluate(() => ({ app: window.OSCILLA.app.seqPlaying,
-      label: document.querySelector('[data-osc="status.label"]').textContent })),
-    (s) => s.app && s.label === 'PLAYING', 'labs-basic: the sequence plays and the status says so');
+      label: document.querySelector('[data-osc="status.label"]').textContent,
+      want: window.OSCILLA.app.statusLabel,
+      green: document.querySelector('#osc-status').classList.contains('is-playing') })),
+    (s) => s.app && s.green && s.label === s.want,
+    'labs-basic: the sequence plays and the status says so');
     out.seqPeak = await U.poll(async () => +(await H.peak(page)).toFixed(4), (p) => p > 0.005,
       'labs-basic: the sequence sounds');
     await page.click('#osc-seq-stop');
@@ -4927,8 +4945,23 @@ function defineChecks() {
   // the next row and never scroll horizontally, in every status state, with and without the
   // microphone on (WebKit: without only, it has no fake capture device).
   def('a11y-phone-bars-every-state', async ({ page, browserName }) => {
-    const label = () => page.evaluate(() => document.querySelector('[data-osc="status.label"]')
-      .textContent.trim());
+    // The label shown, the label the status bar builds for the state (statusLabel, in the app's
+    // language) and the state itself: each case is checked by its state, not by its wording.
+    const label = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      return { shown: document.querySelector('[data-osc="status.label"]').textContent.trim(),
+        want: a.statusLabel, status: a.status, playing: !!a.playing, releasing: !!a.releasing,
+        sounding: !!a.anySounding };
+    });
+    /** Whether the app is in the state the case is named after. */
+    const IS = {
+      READY: (s) => s.status === 'READY' && !s.sounding,
+      PLAYING: (s) => s.playing && !s.releasing,
+      RELEASING: (s) => s.playing && s.releasing,
+      SUSPENDED: (s) => s.status === 'SUSPENDED',
+      STOPPED: (s) => s.status === 'STOPPED' && !s.sounding,
+      ERROR: (s) => s.status === 'ERROR',
+    };
     const set = (s) => page.evaluate((x) => { window.OSCILLA.app.status = x; }, s);
     const states = {
       READY: () => set('READY'),
@@ -4977,9 +5010,10 @@ function defineChecks() {
         for (const [name, enter] of Object.entries(states)) {
           await enter();
           await H.frames(page);
-          const shown = await label();
+          const st = await label();
           const r = await page.evaluate(phoneBars);
-          res[`${w}/${name}${mic ? '/mic' : ''}`] = { shown, bad: r.bad };
+          res[`${w}/${name}${mic ? '/mic' : ''}`] = { shown: st.shown, want: st.want,
+            state: IS[name](st), bad: r.bad };
           await reset();
         }
       }
@@ -4988,9 +5022,17 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     await page.setViewportSize({ width: 1536, height: 1024 });
     await sleep(150);
-    const bad = Object.entries(res).filter(([k, r]) => r.bad.length
-      || r.shown !== k.split('/')[1]);
-    return { ok: !bad.length, cases: Object.keys(res).length,
+    const bad = Object.entries(res).filter(([, r]) => r.bad.length || !r.state
+      || !r.shown || r.shown !== r.want);
+    // every state shows a label of its own, at every width, with and without the microphone
+    const rows = new Map();
+    for (const [k, r] of Object.entries(res)) {
+      const row = k.split('/').filter((x, i) => i !== 1).join('/');
+      rows.set(row, (rows.get(row) || new Set()).add(r.shown));
+    }
+    const merged = [...rows].filter(([, set]) => set.size !== Object.keys(states).length)
+      .map(([row, set]) => `${row}: ${[...set].join(', ')}`);
+    return { ok: !bad.length && !merged.length, cases: Object.keys(res).length, merged,
       bad: Object.fromEntries(bad.slice(0, 6)) };
   });
 
@@ -5288,11 +5330,15 @@ function defineChecks() {
       const a = O.app;
       return { bus: O.bus.owner(), playback: a.playback ? a.playback.owner : null,
         seq: !!a.seqPlaying, studio: !!a.studioOwnsOutput(), instrument: !!a.playing,
-        scope: O.viz.state.outputOwner, label: a.statusLabel, pattern: a.statusPatternText };
+        scope: O.viz.state.outputOwner, label: a.statusLabel, pattern: a.statusPatternText,
+        sounding: !!a.anySounding, releasing: !!(a.playing && a.releasing), status: a.status };
     });
+    // the status bar says it plays by its state (anySounding, its dot; no instrument release,
+    // no error or suspension, statusLabel's order), not by its wording
     const agree = (want) => (v) => v.bus === want && v.playback === want && v.scope === want
       && v.seq === (want === 'sequencer') && v.studio === (want === 'studio')
-      && v.instrument === (want === 'instrument') && v.label === 'PLAYING';
+      && v.instrument === (want === 'instrument') && v.sounding && !v.releasing
+      && v.status !== 'ERROR' && v.status !== 'SUSPENDED';
     const res = {};
     const settle = async (want, what) => {
       try {
