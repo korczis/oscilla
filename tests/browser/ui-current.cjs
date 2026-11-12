@@ -784,7 +784,7 @@ async function runOne(name) {
             await p.evaluate(() => document
               .querySelector('[data-osc="synth.notice.more"]')?.click());
           }
-          const r = await pollFor(() => p.evaluate((want) => {
+          const r = await pollFor(() => p.evaluate(([want, strict]) => {
             const al = document.querySelector('[data-osc="synth.notice"]');
             if (!al || !al.getClientRects().length) return { shown: false };
             const exp = al.querySelector('[data-osc="synth.notice.more"]');
@@ -805,9 +805,13 @@ async function runOne(name) {
             const line = sh && sh.getClientRects().length ? sh.textContent.replace(/\s+/g, ' ')
               : '';
             const facts = want || (/\(dosud: .+\)/.test(line) && /Zpět ho odebere/.test(line));
-            return { shown: true, alert: a, close: c, line, facts,
-              ok: facts && [...a, ...c].every((x) => x === 'self') };
-          }, more === 'expanded'), (m) => m.shown && m.ok,
+            // Condition 4 (strict at 375 and 390): the panel heading on the first screen too.
+            const h = document.getElementById('osc-synth-title').getBoundingClientRect();
+            const dock = document.querySelector('[data-osc="keyboard"]').getBoundingClientRect();
+            const heading = strict ? h.bottom <= dock.top : true;
+            return { shown: true, alert: a, close: c, line, facts, heading,
+              ok: facts && heading && [...a, ...c].every((x) => x === 'self') };
+          }, [more === 'expanded', size.width !== 320]), (m) => m.shown && m.ok,
           `ui-current: U108 insert alert on top at ${size.width} px (${safety}, ${more})`);
           const debt = U108_DEBT.get(`@${size.width}:${more}`);
           if (debt) {
@@ -819,6 +823,17 @@ async function runOne(name) {
             check(`u108-alert-on-top-${size.width}-${safety}-${more}`, r.ok,
               JSON.stringify(r.last));
           }
+        }
+        if (size.width === 320) {
+          // Condition 4 relaxed at 320 by oscilla-c3: once the alert is closed, the heading.
+          await p.evaluate(() => document.querySelector('[data-osc="synth.notice.close"]').click());
+          const hd = await pollFor(() => p.evaluate(() => {
+            const h = document.getElementById('osc-synth-title').getBoundingClientRect();
+            const dock = document.querySelector('[data-osc="keyboard"]').getBoundingClientRect();
+            return { top: Math.round(h.top), bottom: Math.round(h.bottom),
+              dock: Math.round(dock.top), ok: h.top >= 0 && h.bottom <= dock.top };
+          }), (m) => m.ok, `ui-current: U108 heading after Close at 320 px (${safety})`);
+          check(`u108-heading-after-close-320-${safety}`, hd.ok, JSON.stringify(hd.last));
         }
         await fresh.close();
       }

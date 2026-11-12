@@ -218,3 +218,39 @@ test('U108: the short line keeps the facts from the same names, and Více toggle
     n.more();
     assert.equal(n.view(), null, 'Více does nothing once closed');
   });
+
+// U108 (oscilla-c3's review points): below md the link's notice waits for the alert; it runs
+// exactly once when the alert closes or its insert is undone, and a second one while it waits
+// replaces it, never a stack. md and up it runs at once.
+test('U108: a waiting notice runs once on Close or undo, and the latest one wins', () => {
+  const prior = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: false }); // a phone
+  try {
+    const ran = [];
+    const n = createInsertNotice();
+    n.after(() => ran.push('none shown'));
+    assert.deepEqual(ran, ['none shown'], 'no alert: it runs at once');
+    n.inserted('keys-1', { text: 'Vloženo.', short: SYNTH_TEXT.short('Filter 1') });
+    n.after(() => ran.push('link 1'));
+    n.after(() => ran.push('link 2'));
+    n.sync('keys-1');
+    n.more();
+    assert.deepEqual(ran, ['none shown'], 'it waits while the alert shows');
+    n.sync(null); // the insert undone before Close
+    assert.deepEqual(ran, ['none shown', 'link 2'], 'the latest runs once, on the undo');
+    n.dismiss();
+    n.sync(null);
+    assert.equal(ran.length, 2, 'never again');
+    n.inserted('keys-1', { text: 'Vloženo.', short: SYNTH_TEXT.short('') });
+    n.after(() => ran.push('link 3'));
+    n.dismiss();
+    n.into({});
+    assert.deepEqual(ran.slice(2), ['link 3'], 'Close runs it once too');
+    globalThis.matchMedia = () => ({ matches: true }); // md and up
+    n.inserted('keys-1', { text: 'Vloženo.', short: null });
+    n.after(() => ran.push('desktop'));
+    assert.equal(ran.at(-1), 'desktop', 'md and up: at once, beside the alert');
+  } finally {
+    globalThis.matchMedia = prior;
+  }
+});
