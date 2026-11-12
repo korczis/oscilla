@@ -429,7 +429,7 @@
         "desktop-panel-light": {
           "runs": 10,
           "px": 0,
-          "faint": 11
+          "faint": 0
         },
         "desktop-engines-dark": {
           "runs": 10,
@@ -438,8 +438,8 @@
         },
         "desktop-engines-light": {
           "runs": 10,
-          "px": 3,
-          "faint": 30
+          "px": 0,
+          "faint": 13
         },
         "desktop-xy-dark": {
           "runs": 10,
@@ -448,8 +448,8 @@
         },
         "desktop-xy-light": {
           "runs": 10,
-          "px": 3,
-          "faint": 27
+          "px": 0,
+          "faint": 10
         },
         "phone-panel-dark": {
           "runs": 10,
@@ -507,20 +507,20 @@
           "change": "src/js/ui/synth/knob.js: KNOB.pointerW 2.5 -> 3.5 (the pointer 1 px wider)",
           "views": {
             "desktop-panel-dark": {
-              "px": 172,
-              "faint": 203
+              "px": 171,
+              "faint": 205
             },
             "desktop-panel-light": {
-              "px": 187,
-              "faint": 203
+              "px": 193,
+              "faint": 227
             },
             "desktop-engines-dark": {
               "px": 431,
-              "faint": 465
+              "faint": 442
             },
             "desktop-engines-light": {
-              "px": 427,
-              "faint": 468
+              "px": 430,
+              "faint": 448
             },
             "desktop-xy-dark": {
               "px": 0,
@@ -646,7 +646,7 @@
           "views": {
             "desktop-panel-dark": {
               "px": 0,
-              "faint": 39458
+              "faint": 39474
             },
             "desktop-panel-light": {
               "px": 0,
@@ -654,11 +654,11 @@
             },
             "desktop-engines-dark": {
               "px": 0,
-              "faint": 50985
+              "faint": 34109
             },
             "desktop-engines-light": {
               "px": 0,
-              "faint": 13
+              "faint": 0
             },
             "desktop-xy-dark": {
               "px": 0,
@@ -719,7 +719,7 @@
             },
             "desktop-panel-light": {
               "px": 0,
-              "faint": 11
+              "faint": 0
             },
             "desktop-engines-dark": {
               "px": 0,
@@ -727,7 +727,7 @@
             },
             "desktop-engines-light": {
               "px": 0,
-              "faint": 13
+              "faint": 0
             },
             "desktop-xy-dark": {
               "px": 0,
@@ -735,7 +735,7 @@
             },
             "desktop-xy-light": {
               "px": 0,
-              "faint": 0
+              "faint": 10
             },
             "phone-panel-dark": {
               "px": 56,
