@@ -1,7 +1,7 @@
 id: K246
 milestone: M064
 serves:
-  - "ui-current#app-speaks-czech"
+  - "connected-instrument#synth-panel"
 title: "The Synth's insert sentence is a dismissible Pro info alert, shown once per insert, not a status line on every tab"
 slug: synth-insert-notice
 priority: p2
