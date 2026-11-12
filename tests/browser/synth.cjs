@@ -2920,6 +2920,9 @@ function defineChecks() {
       const hits = (el) => {
         const h = el && el.querySelector('h3');
         if (!h || !shown(h)) return false;
+        // Hit where drawn once on screen: K246's insert alert moves the plate down, under the
+        // dock or past the fold, which is a scroll, not a lost face (#539's CI, chromium/firefox).
+        h.scrollIntoView({ block: 'center' });
         const r = h.getBoundingClientRect();
         const at = document.elementFromPoint(r.left + Math.min(8, r.width / 2),
           r.top + r.height / 2);

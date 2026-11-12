@@ -128,8 +128,6 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'Playground 63.8 % of the first screen: the first screen of P002, owned by the Playground'],
   ['@320:synth:overlap', 'the keyboard dock\'s arm, octave and velocity buttons overlap the Synth '
     + 'panel\'s header controls: the Synth lane, #385 and V635'],
-  ['@375:synth:overlap', 'the Synth picker (osc-synth-pick) and the docked keyboard\'s buttons '
-    + 'overlap the Synth tabs at 375 px since #385\'s train: the Synth lane, #385 and V635'],
   ['@320:studio:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Studio\'s '
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
