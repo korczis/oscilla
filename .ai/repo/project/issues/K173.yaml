@@ -11,7 +11,7 @@ why: "project.no-silent-feedback and the held-notes-safe criterion: a note that 
 scope:
   - "src/js/synth/studio-sink.js"
   - "tests/unit/"
-current_state: "Landed in part by train 5 #413 (68b117f3, fix/studio-keyboard 2124f226: \"the same note pressed on another node first releases the old one (covers K173)\"). Criteria audit by oscilla-0b on origin/main 04d33aaf (2026-11-11): 1 of 2 met. Met: the unit behaviour, tests/unit/studio-sink.test.mjs:101 (\"a note pressed again on another node releases it on the first one\"; 10/10 pass): A gets its note-off at the second press, B at the release, one each; the test releases once, not twice as the criterion words it. Unmet: no browser check in tests/browser/midi.cjs proves that no voice is left sounding after the press, re-route, press, release sequence in chromium, firefox and webkit. That check is what is left before the stamp. The missing check is midi-seam-reroute in tests/browser/midi.cjs (test/k173-midi-reroute, oscilla-0b, 2026-11-11): all six legs pass, and it fails with the sink's re-press release removed. The stamp follows its landing."
+current_state: "Landed in part by train 5 #413 (68b117f3, fix/studio-keyboard 2124f226: \"the same note pressed on another node first releases the old one (covers K173)\"). Criteria audit by oscilla-0b on origin/main 04d33aaf (2026-11-11): 1 of 2 met. Met: the unit behaviour, tests/unit/studio-sink.test.mjs:101 (\"a note pressed again on another node releases it on the first one\"; 10/10 pass): A gets its note-off at the second press, B at the release, one each; the test releases once, not twice as the criterion words it. Unmet: no browser check in tests/browser/midi.cjs proves that no voice is left sounding after the press, re-route, press, release sequence in chromium, firefox and webkit. That check is what is left before the stamp. The missing check is midi-seam-reroute in tests/browser/midi.cjs (test/k173-midi-reroute, oscilla-0b, 2026-11-11): all six legs pass, and it fails with the sink's re-press release removed. The stamp follows its landing. Done on 2026-11-11 on main 98e5a5ba (T12 #535 landed the check): both criteria met (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "A unit test presses note N routed to node A, re-routes, presses N again (node B), releases N twice: A and B each receive one note-off; it fails on 15d1bc67."
@@ -21,4 +21,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-04
-updated_at: 2026-11-04
+updated_at: 2026-11-11T19:49:47Z
+started_at: 2026-11-11T19:48:54Z
+started_event: sha256:bfeeb4ae5fae45e1833d39e92849365967f5e3605a4228febfd9d8d13a4932ca
+verified_at: 2026-11-11T19:49:13Z
+verified_event: sha256:26c0e3f718c549d9be21e443d3398660c8d9ca6f28312c1f8b1c38b097456559
+completed_at: 2026-11-11T19:49:47Z
+completed_event: sha256:2e3fe58ff5bed65f001b711740cf95220cccfe0aece706ba113b4038d3cbb793
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/studio-sink.test.mjs; node tests/browser/midi.cjs"
+    result: "On main 98e5a5ba: studio-sink 10/10 including :101 (a note pressed again on another node releases it on the first one: A gets its off at the re-press, B at the release, one each). midi.cjs exit 0, ALL PASS (540 checks), with midi-seam-reroute passing in all six legs (chromium, firefox, webkit; file and http): Note On 60 on the Synth panel Keys, the keys re-routed to an FM voice, Note On 60 again, two Note Offs, then below -70 dB rel and the sink and transport hold no note. Its negative control (the sink's re-press release removed) fails it, as recorded in 0ea51244."
+    artifact: "98e5a5ba9e1c4f3244c32bb79a318a134bb17d8b"
+    commit: 98e5a5ba9e1c4f3244c32bb79a318a134bb17d8b
+    recorded_at: 2026-11-11T19:49:30Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 535 checks: gate"
+    result: "the unit half landed in train 5 #413 (68b117f3, verdict 413.yaml); the browser check in T12 #535 (98e5a5ba), gate success"
+    artifact: ".ai/repo/reviews/413.yaml"
+    commit: 98e5a5ba9e1c4f3244c32bb79a318a134bb17d8b
+    recorded_at: 2026-11-11T19:49:38Z
