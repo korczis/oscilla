@@ -210,7 +210,7 @@ export function createWorkbench(svc) {
     },
     get statusLabel() {
       if (this.status === 'ERROR') return 'CHYBA';
-      if (this.status === 'SUSPENDED') return 'POZASTAVENO';
+      if (this.status === 'SUSPENDED') return 'PAUZA';
       if (this.playing) return this.releasing ? 'DOZNÍVÁ' : 'HRAJE';
       if (this.seqPlaying || this.studioPlaying || this.notesSounding) return 'HRAJE';
       return this.status === 'READY' ? 'PŘIPRAVENO' : 'ZASTAVENO';
