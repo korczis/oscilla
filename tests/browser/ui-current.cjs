@@ -128,10 +128,11 @@ const U108_DEBT = new Map([
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
-  + 'chips at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured in the '
-  + 'steady state, the insert alert closed (U107) and the link\'s notice gone (U108, oscilla-c3), '
-  + 'unscrolled (#540): 5 pairs in every Mac engine and in linux chromium and firefox; none in '
-  + 'linux webkit on CI (run 43298290862), where the container read 4: CI is the authority';
+  + 'chips at 375 x 667 on the Mac since #385\'s train: the Synth lane, #385 and V635; measured '
+  + 'in the steady state, the insert alert closed (U107) and the link\'s notice gone (U108, '
+  + 'oscilla-c3), unscrolled (#540): 5 pairs in every Mac engine. On CI linux U108\'s phone '
+  + 'padding left none (run 43318837248: MARGIN -3 px, within the 2 px tolerance), a near-zero '
+  + 'margin the MARGIN line shows';
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -147,8 +148,6 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
   ['darwin:@375:synth:overlap', R375],
-  ['linux:chromium@375:synth:overlap', R375],
-  ['linux:firefox@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
