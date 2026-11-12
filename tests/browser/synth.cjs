@@ -1844,7 +1844,6 @@ function defineChecks() {
     const status = (await page.locator('[data-osc="synth.status"]').textContent()).trim();
     const roles = await alert.evaluate((el) => [el.getAttribute('role'),
       el.getAttribute('aria-live')]);
-    const box = await page.locator('[data-osc="synth.notice.close"]').boundingBox();
     // The press's own pointer type: on the phone (hasTouch) a tap is a touch, not a mouse click
     // in disguise (C3-539-1).
     await page.evaluate(() => {
@@ -1852,13 +1851,26 @@ function defineChecks() {
       document.querySelector('[data-osc="synth.notice.close"]').addEventListener('pointerdown',
         (e) => { window.__noticePress = e.pointerType; }, { once: true });
     });
-    if (size === 'phone') await page.locator('[data-osc="synth.notice.close"]').tap();
-    else await page.locator('[data-osc="synth.notice.close"]').click();
+    // #540 (oscilla-c3): Close leaves the page where it was: no element's scrollTop and not the
+    // window's scrollY moves (WebKit's focus() scrolled #osc-app 185 px without preventScroll).
+    const scrolled = () => page.evaluate(() => [`window:${window.scrollY}`,
+      ...[...document.querySelectorAll('*')].filter((e) => e.scrollTop > 0)
+        .map((e) => `${e.id || e.dataset.osc || e.tagName}:${Math.round(e.scrollTop)}`)].join(' '));
+    const before = await scrolled();
+    const box = await page.locator('[data-osc="synth.notice.close"]').boundingBox();
+    // Pressed where it is, as a finger or mouse does: Playwright's tap() and click() scroll the
+    // target into view first, and osc-main's scroll padding (the dock) made that an 8 px scroll
+    // the user never makes (#540).
+    const at = [box.x + box.width / 2, box.y + box.height / 2];
+    if (size === 'phone') await page.touchscreen.tap(at[0], at[1]);
+    else await page.mouse.click(at[0], at[1]);
     const pointer = await page.evaluate(() => window.__noticePress);
     await until(async () => !(await alert.isVisible()), { ms: 5000,
       what: 'Close hides the insert alert' });
     const focus = await page.evaluate(() => document.activeElement
       && document.activeElement.id);
+    const after = await scrolled();
+    const still = after === before;
     await page.evaluate(() => {
       window.OSCILLA.studio.store.undo();
       window.OSCILLA.studio.store.redo();
@@ -1870,8 +1882,8 @@ function defineChecks() {
     const touchOk = size === 'phone' ? pointer === 'touch' && box && box.height >= 43.5
       && box.width >= 43.5 : pointer === 'mouse';
     return { ok: text.length > 20 && status !== text && roles.every((r) => r === null)
-      && focus === 'osc-view-synth' && !back && box && box.height >= 32 && touchOk,
-    text, status, roles, focus, back, closeBox: box, pointer };
+      && focus === 'osc-view-synth' && !back && box && box.height >= 32 && touchOk && still,
+    text, status, roles, focus, back, closeBox: box, pointer, scroll: { before, after } };
   });
 
   def('s-newvoice', async ({ page }) => {

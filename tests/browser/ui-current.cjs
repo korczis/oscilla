@@ -666,8 +666,18 @@ async function runOne(name) {
           // U107 (oscilla-c3's C3-539-2): the Synth is measured as the user keeps it, with K246's
           // insert alert closed by its own Close button. Open, the alert only pushes the tabs
           // down for the first screen, and the ratchet read an unpaid overlap as paid.
+          // Pressed where it is, a touch at its centre, when it is on top there: Playwright's
+          // click() scrolls the target into view first, and on linux WebKit that left the page
+          // measured scrolled (#540). Where the dock covers it (320x568, U108's defect) only the
+          // scrolling click reaches it; U108 removes that fallback.
           const close = p.locator('[data-osc="synth.notice.close"]');
-          if (await close.isVisible()) await close.click();
+          const cb = (await close.isVisible()) && await close.boundingBox();
+          const onTop = cb && await p.evaluate(([x, y]) => {
+            const e = document.elementFromPoint(x, y);
+            return !!e && !!e.closest('[data-osc="synth.notice.close"]');
+          }, [cb.x + cb.width / 2, cb.y + cb.height / 2]);
+          if (onTop) await p.touchscreen.tap(cb.x + cb.width / 2, cb.y + cb.height / 2);
+          else if (cb) await close.click();
           await until(() => p.evaluate(() => {
             const n = document.querySelector('[data-osc="synth.notice"]');
             return !n || n.hidden || n.getClientRects().length === 0;
