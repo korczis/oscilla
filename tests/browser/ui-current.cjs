@@ -118,6 +118,11 @@ const PHONE_SIZES = [{ width: 320, height: 568 }, { width: 375, height: 667 }, P
 // "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks. A key
 // may be scoped to a browser and a width: "<browser>@<width>:<ws>:<measure>",
 // "<browser>:<ws>:<measure>" or "@<width>:<ws>:<measure>"; the most specific listed key applies.
+const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s '
+    + 'header buttons at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured '
+    + 'with the insert alert closed (U107, C3-539-2) and the page unscrolled (#540): 3 pairs in '
+    + 'every Mac engine (oscilla-c3) and in linux chromium and firefox (oscilla-0b, container), '
+    + 'none in linux webkit';
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -132,9 +137,9 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
-  ['@375:synth:overlap', 'the Synth picker (osc-synth-pick) and the docked keyboard\'s buttons '
-    + 'overlap the Synth tabs at 375 px since #385\'s train: the Synth lane, #385 and V635; '
-    + 'measured with the insert alert closed (U107, C3-539-2)'],
+  ['darwin:@375:synth:overlap', R375],
+  ['linux:chromium@375:synth:overlap', R375],
+  ['linux:firefox@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
@@ -653,7 +658,11 @@ async function runOne(name) {
         try { sessionStorage.setItem(key, '1'); } catch { /* storage refused: notice shown */ }
       }, SAFETY_SEEN);
       const at = `${size.width}x${size.height}`;
-      const debtOf = (ws, k) => [`${name}@${size.width}:${ws}:${k}`, `${name}:${ws}:${k}`,
+      // A key may name the host too (`darwin:webkit@375:...`): the fonts differ between the
+      // Mac and CI's linux, and a debt measured on one is not paid on the other (#540).
+      const debtOf = (ws, k) => [`${process.platform}:${name}@${size.width}:${ws}:${k}`,
+        `${process.platform}:@${size.width}:${ws}:${k}`,
+        `${name}@${size.width}:${ws}:${k}`, `${name}:${ws}:${k}`,
         `@${size.width}:${ws}:${k}`, `${ws}:${k}`].find((key) => PHONE_WHOLE_DEBT.has(key));
       for (const ws of WORKSPACES) {
         const p = await ctx.newPage();
@@ -857,9 +866,12 @@ async function runOne(name) {
       check('related-menu-phone-opens', went.ok, `workspace ${went.last}`);
       await p.close();
     }
-    // A key scoped to another browser is judged by that browser's run.
-    const mine = [...PHONE_WHOLE_DEBT.keys()].filter((k) => !/^(chromium|firefox|webkit)[:@]/
-      .test(k) || k.startsWith(`${name}:`) || k.startsWith(`${name}@`));
+    // A key scoped to another browser, or to another host, is judged by that one's run.
+    const host = /^(darwin|linux|win32):/;
+    const mine = [...PHONE_WHOLE_DEBT.keys()].filter((k) => (host.test(k)
+      ? (k.startsWith(`${process.platform}:${name}@`) || k.startsWith(`${process.platform}:@`))
+      : (!/^(chromium|firefox|webkit)[:@]/
+        .test(k) || k.startsWith(`${name}:`) || k.startsWith(`${name}@`))));
     check('phone-whole-debt-current', mine.every((k) => seen.has(k)),
       `PHONE_WHOLE_DEBT names a key no run applied: ${mine.filter((k) => !seen.has(k))
         .join(', ')}`);
