@@ -1,0 +1,97 @@
+# Review verdict for pull request #541 (fix/u108-phone-insert-alert): train T18 and release
+# v3.37.2 (a patch: release:analyze derives patch from U108's two fix(ui) commits).
+# Guarded member: 43's U108, e26ed17f, 65b6a442, fe761817, d09e5dc7 and 3f0c20fd, guarded in 4
+# paths: src/js/synth/dock.js, insert-notice.js, insert.js and ui.js. Unguarded members read as
+# members: U108's markup (src/index.html: the Synth view's phone order, the alert's short line,
+# Více and the full sentence), the catalogue declarations and trace of synth.notice.short and
+# synth.notice.more, ui-current's u108-alert-on-top matrix, the notice wait and the debt keys,
+# the unit tests; the U108 plan record (309dc651); main 0a7f1847 merged in 9d9c4d8a; the v3.37.1
+# record b2f04be9; chore(release): v3.37.2 78bf3ffe; the roadmap re-derived at prepare 2d4d939f.
+# Judged at 2d4d939f on base origin/main 0a7f1847 (v3.37.1, #540), 2026-11-12, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-43 built U108, merged main, stamped and recorded; oscilla-0b
+# worded the short line and ran the linux container. Disclosure: U108 implements the reviewer's
+# own decisions under Q090 of 2026-11-12 (A+B with five conditions; at 320x568 the link notice
+# queued behind the alert and the compact layout without a key shrink; the steady-state
+# measure), its done criterion is the reviewer's, and it carries the reviewer's findings
+# C3-540-1, -2, -4 and -6. The reviewer judged the build against those decisions, not the
+# decisions again.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 2d4d939f:
+# 51e87b6694970a99... over 4 guarded paths (equal to the integrator's).
+#
+# How it was judged:
+# - One element. Below md the Synth view is a flex column and the alert is order-first, so it
+#   sits above the panel and clear of the dock; desktop keeps its place (md:block, md:order-none).
+#   The full sentence (osc-synth-notice-full) is the live region's text, said once; on a phone it
+#   is hidden behind a short line built by SYNTH_TEXT.short from the same names as the sentence.
+#   The source is truncated by CSS only, so its full text stays in the DOM for a screen reader,
+#   and the Více sentence names it too. Více is a button with aria-expanded and aria-controls,
+#   44 px under the coarse pointer, before Close. Both inserts carry the short line (ensurePanel
+#   and the dock's New Synth voice go through insertAction).
+# - The link notice: insert-notice.js after(fn) holds one waiting notice below md while the alert
+#   shows (the latest wins) and runs it when the alert hides (Close, or an undo through sync).
+#   A ResizeObserver on the notices' region dispatches the dock's ROOM_EVENT after that layout,
+#   not after a frame count. The reviewer's probe (scratchpad k541-queue.cjs, the link
+#   #m=synth&yp=bass and then a second link while the first waits): at 375x667 in chromium and
+#   webkit no link notice while the alert shows, none after the second link, exactly one after
+#   Close; at 1536x1024 each link's notice shows at once, as on main. Leaving for the Studio with
+#   the alert open keeps both; an undo there raised no notice out of context
+#   (k541-leave(-undo).cjs).
+# - The check: ui-current's u108-alert-on-top-{320,375,390}-{open,collapsed}-{collapsed,expanded}
+#   is the reviewer's criterion (elementFromPoint at 25/50/75/95 % of the alert and of Close) plus
+#   the short line's facts and the heading condition; '@320:expanded' is the declared debt the
+#   reviewer allowed (Více expanded may run under the dock at 320), reported KNOWN in every
+#   engine. The steady-state 375 overlap is one key with every host's counts.
+# - index.html is 303 976 of its 304 000 B cap (24 B left); the next string change owns a
+#   declared raise (the reviewer's Q090 decision for Czech pass 3, recorded with oscilla-0b).
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (0a7f1847's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer: at 2d4d939f GITHUB_BASE_REF=main npm test exit 0 (5788 tests, 5787
+# pass, 0 fail, 1 skipped), synth-insert-notice 11/11, build:check up to date (v3.37.2),
+# --check-station rc=0, release:analyze patch; ui-current 406/406 in chromium, webkit and firefox;
+# synth exit 0 in chromium (desktop 47/47, phone 15/15) and webkit (47/47, 15/15), s-notice's
+# scroll unchanged on both legs; with OSC_LOAD_MAX=50 under a load of about 23-30.
+#
+# C3-541-1 (P3, open): with no source on Master Output the full sentence says the panel "hraje do
+# Master Output", but the phone's short line still says "převzal vstup Master Output" (a takeover
+# that did not happen): SYNTH_TEXT.short('') keeps the lead and drops only "(dosud: ...)". Fix:
+# a lead of its own when names is empty ("Panel vložen do Studia, hraje do Master Output").
+#
+# C3-541-2 (P3, open; C3-540-2 not met): ui-current's close step still begins with
+# close.isVisible(), so an alert that shows after that moment is skipped without a word. The
+# fallback branch for a covered Close no longer runs (no "U108 fallback" line in any engine at any
+# size), and its comment says U108 removes it. Fix: wait (until) for the alert to show, tap Close
+# where it is, and drop the dead branch.
+#
+# C3-541-3 (P3, open; the rest of C3-540-1): at 320x568 the dock no longer covers the preset
+# picker, but it now covers synth.studio and synth.copy-link (4 pairs, up to 77x41), and U108's
+# acceptance line "the @320 debt key names its pairs instead of a boolean" is not built: one
+# boolean key still absorbs any change of pairs.
+#
+# C3-540-4 (P3, open): s-notice's no-scroll assertion still cannot fail on the base in its own
+# setup; U108 adds no variant that opens the Synth with nothing focused.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open: C3-540-6 (P2) and C3-540-1's
+# preset overlap are closed by U108. U108's record names C3-540-2 and the pair-named @320 key, so
+# it is done only when C3-541-2 and C3-541-3 are, or when they move to an issue of their own.
+schema: review-verdict/v1
+pr: 541
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 2d4d939f)
+content: 51e87b6694970a99e9f064eafb2b3e970d52d1c401ba12eda955a5d1bc91dacc
+findings:
+  - { id: C3-541-1, severity: P3, status: open, title: "with no prior source the phone's short line says the panel took over Master Output's input; the sentence says it plays into it" }
+  - { id: C3-541-2, severity: P3, status: open, title: "ui-current still skips an alert not yet visible, and the covered-Close fallback is dead code with a stale comment (C3-540-2 not met)" }
+  - { id: C3-541-3, severity: P3, status: open, title: "at 320 the dock now covers synth.studio and copy-link, and the @320 debt key is still a boolean, not its pairs" }
+  - { id: C3-540-4, severity: P3, status: open, title: "s-notice's no-scroll assertion still cannot fail on the base in its own setup" }
+  - { id: C3-540-6, severity: P2, status: closed, title: "the dock covered K246's insert alert on a phone; closed by U108 (alert first below md, the reviewer's criterion in ui-current)" }
