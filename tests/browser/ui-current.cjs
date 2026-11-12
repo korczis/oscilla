@@ -127,11 +127,11 @@ const U108_DEBT = new Map([
   ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
-const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s '
-  + 'header buttons or section chips at 375 x 667 since #385\'s train: the Synth lane, #385 and '
-  + 'V635; measured in the steady state, the insert alert closed (U107) and the link\'s notice '
-  + 'gone (U108, oscilla-c3), unscrolled (#540). Mac: 5 pairs in every engine (U108 tree); '
-  + 'linux chromium and firefox 3 pairs, webkit none (oscilla-0b, container, T17 tree)';
+const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
+  + 'chips at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured in the '
+  + 'steady state, the insert alert closed (U107) and the link\'s notice gone (U108, oscilla-c3), '
+  + 'unscrolled (#540): 5 pairs in every Mac engine, 5 in linux chromium and firefox, 4 in linux '
+  + 'webkit (oscilla-0b, container), so one key for every host and engine';
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -146,9 +146,7 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
-  ['darwin:@375:synth:overlap', R375],
-  ['linux:chromium@375:synth:overlap', R375],
-  ['linux:firefox@375:synth:overlap', R375],
+  ['@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
