@@ -684,8 +684,9 @@ async function runOne(name) {
           // down for the first screen, and the ratchet read an unpaid overlap as paid.
           // Pressed where it is, a touch at its centre, when it is on top there: Playwright's
           // click() scrolls the target into view first, and on linux WebKit that left the page
-          // measured scrolled (#540). Where the dock covers it (320x568, U108's defect) only the
-          // scrolling click reaches it; U108 removes that fallback.
+          // measured scrolled (#540). Where the dock covers it (320 and 375, U108's defect) its
+          // own handler closes it without a scroll, so every host and engine measures the page
+          // unscrolled; U108 puts the alert above the dock and removes this branch.
           const close = p.locator('[data-osc="synth.notice.close"]');
           const cb = (await close.isVisible()) && await close.boundingBox();
           const onTop = cb && await p.evaluate(([x, y]) => {
@@ -693,7 +694,10 @@ async function runOne(name) {
             return !!e && !!e.closest('[data-osc="synth.notice.close"]');
           }, [cb.x + cb.width / 2, cb.y + cb.height / 2]);
           if (onTop) await p.touchscreen.tap(cb.x + cb.width / 2, cb.y + cb.height / 2);
-          else if (cb) await close.click();
+          else if (cb) {
+            console.log(`  U108 fallback: ${name} ${at} closes the covered alert by its handler`);
+            await close.evaluate((el) => el.click());
+          }
           await until(() => p.evaluate(() => {
             const n = document.querySelector('[data-osc="synth.notice"]');
             return !n || n.hidden || n.getClientRects().length === 0;
