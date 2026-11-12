@@ -147,3 +147,47 @@ test('an undo of the Synth\'s insert hides the alert; a fresh insert shows it ag
     assert.equal(said.filter((t) => t === cmp.synth.notice.text).length, 2,
       'each insert said once');
   });
+
+// C3-539-3: refresh() runs on every store change; the alert's view keeps its identity while it
+// does not change, so a knob drag does not re-run the alert's bindings once per event.
+test('the view keeps its identity across syncs that change nothing, and changes when it should',
+  () => {
+    const n = createInsertNotice();
+    n.inserted('keys-1', 'Vloženo.');
+    const v = n.view();
+    for (let i = 0; i < 5; i += 1) n.sync('keys-1');
+    assert.equal(n.view(), v, 'the same object while nothing changed');
+    const st = { notice: null };
+    n.into(st);
+    assert.equal(st.notice, v);
+    const before = st;
+    n.into(st);
+    assert.equal(st.notice, before.notice, 'into() does not reassign an unchanged view');
+    n.sync(null);
+    assert.equal(n.view(), null, 'the panel gone hides it');
+    n.into(st);
+    assert.equal(st.notice, null);
+  });
+
+test('C3-539-3 drag-rate probe: 20 parameter edits leave the Synth\'s alert object untouched',
+  async () => {
+    const { cmp, st } = synthOnFresh();
+    assert.equal(cmp.synthPreset('init'), true, 'a preset inserts the panel');
+    await settle();
+    const first = cmp.synth.notice;
+    assert.ok(first && first.text, 'the alert is shown');
+    const node = st.getModel().graph.nodes.find((x) => x.params
+      && Object.values(x.params).some((v) => typeof v === 'number'));
+    const key = Object.keys(node.params).find((k) => typeof node.params[k] === 'number');
+    let writes = 0;
+    let held = cmp.synth.notice;
+    Object.defineProperty(cmp.synth, 'notice', { configurable: true, enumerable: true,
+      get: () => held, set: (v) => { writes += 1; held = v; } });
+    for (let i = 0; i < 20; i += 1) {
+      st.dispatch({ type: 'NODE_PARAM_SET', nodeId: node.id, key,
+        value: node.params[key] + (i % 2 ? 0.001 : -0.001) });
+      await settle();
+    }
+    assert.equal(cmp.synth.notice, first, 'the same alert object after 20 edits');
+    assert.equal(writes, 0, `no reassignment during the drag (got ${writes})`);
+  });

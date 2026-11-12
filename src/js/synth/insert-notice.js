@@ -9,22 +9,29 @@
 // the panel's deterministic ids, shows its own. Said once in the live region as it appears; the
 // alert itself has no live role.
 //
-//   createInsertNotice({ announce }) -> { inserted(key, text), dismiss(), sync(key), view() }
+//   createInsertNotice({ announce }) -> { inserted(key, text), dismiss(), sync(key), view(),
+//     into(state) }
 //     inserted: an insert of the panel whose Keys node is `key` (null: said, no alert)
 //     sync: the Keys node id the document holds now (null when the panel is gone)
-//     view() -> { text } | null, what the alert shows
+//     view() -> { text } | null, what the alert shows; the same object until it changes
 
 export function createInsertNotice({ announce = () => {} } = {}) {
   let shown = null; // { key, text }
+  // One view object per shown alert (C3-539-3): refresh() runs on every store change, a knob
+  // drag included, and a fresh object each time re-ran the alert's Alpine bindings per event.
+  let view = null;
+  const show = (s) => { shown = s; view = s ? { text: s.text } : null; };
   return {
     inserted(key, text) {
       announce(text);
-      shown = key ? { key, text } : null;
+      show(key ? { key, text } : null);
     },
-    dismiss() { shown = null; },
+    dismiss() { show(null); },
     sync(key) { // only ever hides: a panel coming back (a redo) is not an insert
-      if (shown && shown.key !== key) shown = null;
+      if (shown && shown.key !== key) show(null);
     },
-    view: () => (shown ? { text: shown.text } : null),
+    view: () => view,
+    /** Write the view into `state.notice` only when it changed (C3-539-3). */
+    into(state) { if (state && state.notice !== view) state.notice = view; },
   };
 }

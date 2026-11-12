@@ -103,7 +103,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   const keysId = () => (present() ? nodes().get('keys').id : null);
   const inserted = (text) => {
     notice.inserted(keysId(), text);
-    if (cmp) cmp.synth.notice = notice.view();
+    notice.into(cmp && cmp.synth);
   };
   const studioSink = createStudioSink({ get, setupAudio, say, registry,
     ensureAudio: () => cmp && cmp.ensureAudio && cmp.ensureAudio() });
@@ -388,7 +388,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     dock.sync();
     follow(get().transport);
     notice.sync(keysId()); // K246: an undo of the insert hides its alert
-    if (cmp) cmp.synth.notice = notice.view();
+    notice.into(cmp && cmp.synth);
     if (!cmp || cmp.workspace !== 'synth') return;
     syncArmed();
     strip.sync(); // K221
