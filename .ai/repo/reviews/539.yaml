@@ -6,20 +6,25 @@
 # synth.notice and synth.notice.close), PRO.alertInfo and PRO.alertClose, the catalogue
 # declarations and trace, the six linux-x64 SYN desktop views re-accepted on main 35f0ca0b; 0b's
 # plan records K180 497b8b33 and V636 c6ce2231; the v3.36.1 record cab86454; the K246 record
-# 0e09d0b3; the 3.37 station 3b3b2f9a; chore(release): v3.37.0 60227cfc.
-# Judged at 60227cfc on base origin/main 35f0ca0b (v3.36.1, #538), 2026-11-12, in the reviewer's
-# own detached worktree ~/dev/oscilla-wt/review-526 (pre-stamp head 3b3b2f9a, then 60227cfc).
+# 0e09d0b3; the 3.37 station 3b3b2f9a; chore(release): v3.37.0 60227cfc. Added after the first
+# verdict (72d86a69): 43's test-only ef0bdb91 (s-xlfaces hits a plate once scrolled into view;
+# '@375:synth:overlap' removed from PHONE_WHOLE_DEBT, see C3-539-2) and 43's C3-539-3 fix
+# decd6909 + 87de84c3 (guarded: insert-notice.js, ui.js), fast-forwarded, no merge commit.
+# First judged at 60227cfc; superseded and re-judged here at 87de84c3 on base origin/main
+# 35f0ca0b (v3.36.1, #538), 2026-11-12, in the reviewer's own detached worktree
+# ~/dev/oscilla-wt/review-526 (pre-stamp head 3b3b2f9a, then 60227cfc, ef0bdb91, 87de84c3).
 #
 # Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
 # standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
 # built none of this train: oscilla-d9 built K246, oscilla-0b the K180 and V636 records,
-# oscilla-43 integrated, wrote the station and stamped. Disclosure: K246 implements the
+# oscilla-43 integrated, wrote the station, stamped and built ef0bdb91 and the C3-539-3 fix. Disclosure: K246 implements the
 # reviewer's own decision (2b) of 2026-11-12 under Q090 (the synth.status insert sentence as a
 # dismissible Pro alert), and 0e09d0b3 records that decision verbatim. The reviewer judged the
 # build against the decision, not the decision again.
 #
-# The digest: origin/main's scripts/review-verdict.mjs --content --list: b8eecddf18f9b8d5...
-# over 3 guarded paths, equal at 3b3b2f9a and 60227cfc.
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 87de84c3:
+# 96f15938f8ca5548... over 3 guarded paths (it was b8eecddf at 3b3b2f9a, 60227cfc and ef0bdb91;
+# decd6909 and 87de84c3 changed insert-notice.js and ui.js).
 #
 # How it was judged:
 # - The model (insert-notice.js) only hides on sync, so a redo (the panel back without an insert)
@@ -43,6 +48,24 @@
 #   a visible ring, Enter closes it with focus on #osc-view-synth; undo then redo keeps it closed;
 #   undo then Insert shows it again and says it once more; undo with it open hides it and a redo
 #   keeps it hidden; a tap on Close hides it with focus on #osc-view-synth. No page errors.
+# - C3-539-3 and the A/B behind it: #539's run on ef0bdb91 failed webkit leg 1 twice with three
+#   different audio wall-time checks (c030-visible-play, s-feel, then s-pads) at T15's timings,
+#   and passed only on a third attempt. In the playwright noble container (amd64 emulated), webkit
+#   desktop synth, s-dadsr's drag ("a pointer drag turns EG 1's Delay up from 0: not reached")
+#   failed on ef0bdb91 3 of 8 (2/2 full suite, 1/6 --only), on main 35f0ca0b 0 of 12, on the fix
+#   87de84c3 0 of 11; a probe that waits 1 s before the drag turned the knob on all three. Cause:
+#   refresh() runs on every store change, a knob drag's NODE_PARAM_SETs included, and assigned a
+#   fresh notice.view() object each time, so Alpine re-ran the alert's bindings per event. The fix
+#   keeps one view object per shown alert and into() writes it only when it changed, comparing
+#   what it last wrote and where (an Alpine component is a proxy whose read-back never equals the
+#   raw view; @vue/reactivity 3.1.5's set trap compares toRaw values, so an unchanged view triggers
+#   nothing); Close writes through into() too. Its units (identity across no-op syncs; 20
+#   NODE_PARAM_SETs on the live store, zero reassignments) fail 2 of 9 with ef0bdb91's sources.
+#   Residual, not a finding: "a key held through the Delay stays silent" (-45..-53 dB rel) showed
+#   in the container on ef0bdb91 2/6 and 87de84c3 2/11, main 0/10, emulated and inconclusive; the
+#   reviewer reads every s-dadsr line of the six legs before legs OK.
+# - ef0bdb91: s-xlfaces still proves each face is drawn and topmost where it is hit (the scroll
+#   only takes the plate out from under the dock). The PHONE_WHOLE_DEBT removal: see C3-539-2.
 #
 # THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
 # read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
@@ -51,7 +74,11 @@
 # (35f0ca0b's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
 # superseding verdict.
 #
-# Measured by the reviewer: at 60227cfc GITHUB_BASE_REF=main npm test exit 0 (5784 tests, 5783
+# Measured by the reviewer: at 87de84c3 GITHUB_BASE_REF=main npm test exit 0 (5786 tests, 5785
+# pass, 0 fail, 1 skipped), build:check up to date (v3.37.0), --check-station rc=0; synth exit 0 in
+# chromium (desktop 47/47, phone 14/14) and webkit (47/47, 14/14), s-dadsr and s-notice ok in each;
+# fix units 23/23 (synth-insert-notice, synth-review-p2).
+# Earlier, at 60227cfc GITHUB_BASE_REF=main npm test exit 0 (5784 tests, 5783
 # pass, 0 fail, 1 skipped), build:check up to date (v3.37.0), about-stations --check and
 # --check-station rc=0, release:analyze minor (1 minor commit since v3.36.1, K246's feat); units
 # synth-insert-notice, synth-review-p2 and ui-catalog 45/45; at 3b3b2f9a (the same src; the stamp
@@ -67,11 +94,24 @@
 # 's-notice' to PHONE_CHECKS (the alert also clears 32 px there: it is 44 px under the coarse
 # pointer) in the next train that touches synth.cjs. Not blocking.
 #
-# Verdict: merge, under the condition above. No P0, P1 or P2 is open; C3-539-1 is a P3.
+# C3-539-2 (P2, open, U107 in T17): ef0bdb91 removed '@375:synth:overlap' from PHONE_WHOLE_DEBT
+# because ui-current reported it paid, but the alert only displaces the Synth tabs while it is
+# open: ui-current's own phoneWhole at 375x667 (chromium, webkit) finds no overlap with the alert
+# up and, after Close, the same six dock-button x tab overlaps (keyboard.octave-down x
+# osc-synth-tab-panel 68x40, ...). The overlap predates K246; the ledger records it as paid. U107
+# (filed by oscilla-43 on chore/plan-k246) measures the Synth with the alert closed and restores
+# the entry. Not blocking: no behaviour of the app is worse than on main.
+#
+# C3-539-3 (P2, closed in this train by decd6909 + 87de84c3): above.
+#
+# Verdict: merge, under the condition above. No P0 or P1 is open; C3-539-2 (P2) is filed as U107
+# for T17 and C3-539-1 is a P3.
 schema: review-verdict/v1
 pr: 539
 verdict: merge
-reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 60227cfc)
-content: b8eecddf18f9b8d5f9f2ae4e885502ca9fc296f835300b3017ba95b2c8574ab3
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 87de84c3)
+content: 96f15938f8ca554848f689ff5c9ab03e56bd116708e60482255e993abc59b3b0
 findings:
   - { id: C3-539-1, severity: P3, status: open, title: "s-notice claims desktop and phone but is not in PHONE_CHECKS, so the phone tap on Close runs only in the reviewer's probe" }
+  - { id: C3-539-2, severity: P2, status: open, title: "@375:synth:overlap left PHONE_WHOLE_DEBT as paid, but the overlap returns once the insert alert is closed (U107, T17)" }
+  - { id: C3-539-3, severity: P2, status: closed, title: "refresh() assigned a fresh alert view per store change; s-dadsr drags failed 3/8 in linux webkit; fixed by decd6909 + 87de84c3" }
