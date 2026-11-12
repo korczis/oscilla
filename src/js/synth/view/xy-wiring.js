@@ -420,8 +420,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
     const { steps, deg, sent, from, scale, target: to, cabled, params: p, reading } = spec;
     // K220: Y is the touch's velocity always, and with a cable also what it drives.
     const yDoes = cabled ? `Y řídí ${to} a sílu úhozu` : `Y je ${VELOCITY_NAME}`;
-    /** A cell's note as the pad names it: the note heard, else "sends D3" (xySounding). */
-    const noteText = (d) => (d.sends ? `sends ${d.name}` : d.name);
+    /** A cell's note as the pad names it: the note heard, else "posílá D3" (xySounding). */
+    const noteText = (d) => (d.sends ? `posílá ${d.name}` : d.name);
     /**
      * What Y's target plays at y, in the target knob's text; '' when Y drives nothing. `why`:
      * 'line' names the bound a held value stays under and its rate, 'aria' as the Inspector
@@ -482,8 +482,8 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       const pct = (y) => Math.round(y * 100);
       const room = typeof target.room === 'function' ? target.room() : null;
       const yv = yValue(on ? v.y : 0, 'line');
-      out.textContent = `${noteText(d)} · degree ${d.degree} of ${scale} · Y ${on ? pct(v.y) : 0}`
-        + ` % → ${to}${yv ? ` ${yv}` : ''}${on ? ' · gate open' : v.y > 0
+      out.textContent = `${noteText(d)} · ${d.degree}. stupeň ${scale} · Y ${on ? pct(v.y) : 0}`
+        + ` % → ${to}${yv ? ` ${yv}` : ''}${on ? ' · brána otevřená' : v.y > 0
           ? ` · další dotek začne z Y ${pct(v.y)} %` : ''}${room ? ` · ${room.text}` : ''}`;
     };
     // The pad's node hears X and Y only from a touch on (K183 review F1): until the first
@@ -562,7 +562,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
       // The kind names the axis itself ("Y: …", review R2-K220-3): the label is its target.
       y: { key: 'y', label: to, type: 'number', min: 0, max: 1, default: 0 },
       value: pos,
-      text: { x: (i) => `${noteText(deg(i))}, degree ${deg(i).degree}`,
+      text: { x: (i) => `${noteText(deg(i))}, ${deg(i).degree}. stupeň`,
         y: (v) => {
           const yv = yValue(v, 'aria');
           if (!cabled) return `${Math.round(v * 100)} %: ${VELOCITY_NAME} ${xyVelocity(v)}`;

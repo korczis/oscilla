@@ -51,8 +51,11 @@ test('mutation: a workspace added to the registry makes the workspaces region st
   assert.deepEqual(staleRegions(README, facts).map((s) => s.name), ['workspaces']);
   const next = renderRegions(README, facts);
   assert.ok(next.includes('| **Oscilloscope** |'), 'the table gains the row');
-  assert.match(next, /ws_oscilloscope -->\|"Back to the instrument"\| ws_playground/,
-    'the inferred map gains the edge');
+  assert.match(next, /ws_oscilloscope --> ws_playground/, 'the inferred map gains the edge');
+  // Q107: README stays English while the registry's summaries and reasons are the app's Czech
+  // prose (Q104), so neither reaches the README (P014).
+  assert.ok(!next.includes('A new workspace nobody regenerated'), 'no summary in the README');
+  assert.ok(!next.includes('Back to the instrument'), 'no reason in the README');
 });
 
 test('mutation: a missing marker is named, and rendering refuses it', () => {

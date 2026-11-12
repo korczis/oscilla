@@ -227,11 +227,11 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
         return false;
       }
       if (r.subview) this.studioSetSubview(r.subview);
-      const view = r.subview ? `${r.subview.charAt(0).toUpperCase()}${r.subview.slice(1)} view`
+      const view = r.subview ? `pohled ${r.subview.charAt(0).toUpperCase()}${r.subview.slice(1)}`
         : 'Studio';
       if (!r.templateId) {
-        this.notify('info', 'Studio opened from the link', `${view}. Nothing plays until you press `
-          + 'Play.');
+        this.notify('info', 'Studio otevřeno z odkazu', `Zobrazeno: ${view}. Nic nehraje, dokud `
+          + 'nestisknete Play.');
         return true;
       }
       const model = ctx.handle.getModel();
@@ -239,8 +239,8 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
       const already = ctx.templateId === r.templateId && ctx.templateBaseline
         && !ctx.templateBaseline.isDirty(model);
       if (already) {
-        this.notify('info', 'Studio opened from the link', `${t.title} is already open (${view}). `
-          + 'Nothing plays until you press Play.');
+        this.notify('info', 'Studio otevřeno z odkazu', `Šablona ${t.title} už je otevřená `
+          + `(${view}). Nic nehraje, dokud nestisknete Play.`);
         return true;
       }
       if (ctx.dirty && ctx.dirty.isDirty(model)) {
@@ -255,9 +255,9 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
         return true;
       }
       ops.openDocument(templateModel(r.templateId), { reason: 'link', templateId: r.templateId });
-      this.notify('info', 'Studio opened from the link', `Template ${t.title}, ${view}. Nothing `
-        + 'plays until you press Play.');
-      ops.announce(`Opened template ${t.title} from the link`);
+      this.notify('info', 'Studio otevřeno z odkazu', `Šablona ${t.title}, ${view}. Nic nehraje, `
+        + 'dokud nestisknete Play.');
+      ops.announce(`Šablona ${t.title} otevřena z odkazu`);
       return true;
     },
 

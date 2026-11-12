@@ -214,6 +214,10 @@ function snapshot() {
     studio,
     measure,
     unsaved: O.unsaved ? O.unsaved.armed : null,
+    // the status bar by state: its dot is-playing, the label shown and the one statusLabel
+    // builds for the app's state (its wording is the app's language)
+    sb: { playing: !!document.querySelector('[data-osc="status.state"].is-playing'),
+      label: txt('[data-osc="status.label"]'), built: a.statusLabel },
     dialogs: [...document.querySelectorAll('dialog[open]')].map((d) => d.id),
     themeAttr: document.documentElement.dataset.theme || null,
     hash: location.hash,

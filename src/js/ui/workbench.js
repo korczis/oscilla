@@ -209,14 +209,14 @@ export function createWorkbench(svc) {
       return 'Hold to Play';
     },
     get statusLabel() {
-      if (this.status === 'ERROR') return 'ERROR';
-      if (this.status === 'SUSPENDED') return 'SUSPENDED';
-      if (this.playing) return this.releasing ? 'RELEASING' : 'PLAYING';
-      if (this.seqPlaying || this.studioPlaying || this.notesSounding) return 'PLAYING';
-      return this.status === 'READY' ? 'READY' : 'STOPPED';
+      if (this.status === 'ERROR') return 'CHYBA';
+      if (this.status === 'SUSPENDED') return 'POZASTAVENO';
+      if (this.playing) return this.releasing ? 'DOZNÍVÁ' : 'HRAJE';
+      if (this.seqPlaying || this.studioPlaying || this.notesSounding) return 'HRAJE';
+      return this.status === 'READY' ? 'PŘIPRAVENO' : 'ZASTAVENO';
     },
     get statusFreqText() {
-      if (this.seqPlaying && !this.playing) return 'sequence';
+      if (this.seqPlaying && !this.playing) return 'sekvence';
       if (this.studioPlaying && !this.playing) return 'studio';
       if (this.outputOwner === 'notes') return this.kbdHeld || OUTPUT_OWNER_NAMES.notes;
       if (this.source === 'dual') return `${groupedHz(this.dualFa)} / ${groupedHz(this.dualFb)} Hz`;
@@ -254,25 +254,25 @@ export function createWorkbench(svc) {
         const seq = svc.labs && svc.labs.sequencer;
         const model = seq && seq.editor && seq.editor.model;
         if (model) {
-          const loop = model.loop ? ' (loop)' : '';
+          const loop = model.loop ? ' (smyčka)' : '';
           // Edits during playback apply from the next pass: while the sounding pass is longer
           // or shorter than the edited sequence, both lengths (sequencer-panel passStatus).
           const pass = typeof seq.passStatus === 'function' ? seq.passStatus() : null;
           const now = pass ? formatMs(pass.soundingS * 1000) : '';
           const next = formatMs(totalDurationMs(model));
-          if (pass && now !== next) return `${now} now, next ${next}${loop}`;
+          if (pass && now !== next) return `${now} teď, příště ${next}${loop}`;
           return `${next}${loop}`;
         }
       }
       if (this.outputOwner === 'notes') return 'po dobu držení';
       const p = this.planSummary;
-      if (p && p.kind === 'continuous') return 'until stopped';
+      if (p && p.kind === 'continuous') return 'do zastavení';
       if (p && p.kind === 'finite' && this.source === 'single' && this.pattern === 'finite'
         && !this.continuousAllowed && p.dur > this.safetyLimit) {
-        return `${this.safetyLimit} s (limited)`;
+        return `${this.safetyLimit} s (omezeno)`;
       }
       if (p && p.kind === 'finite' && Number.isFinite(p.dur)) return formatMs(p.dur * 1000);
-      if (this.continuousAllowed) return 'no limit';
+      if (this.continuousAllowed) return 'bez omezení';
       return `≤ ${this.safetyLimit} s`;
     },
     /**

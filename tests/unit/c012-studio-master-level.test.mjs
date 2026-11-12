@@ -137,13 +137,13 @@ function statusBar({ engine = { masterWrites: 7 } } = {}) {
 test('dup-stale-4: while the Studio plays the status bar says PLAYING and shows its Master level',
   () => {
     const { cmp, engine } = statusBar();
-    assert.equal(cmp.statusLabel, 'READY');
+    assert.equal(cmp.statusLabel, 'PŘIPRAVENO');
     assert.equal(cmp.statusGainText, 'Gain -21.9 dB');
     assert.equal(cmp.anySounding, false);
     cmp.studio.playing = true;
     cmp.studio.masterLevel = 0.05;
     cmp.studio.masterWrites = engine.masterWrites;
-    assert.equal(cmp.statusLabel, 'PLAYING');
+    assert.equal(cmp.statusLabel, 'HRAJE');
     assert.equal(cmp.anySounding, true, 'the status dot follows the Studio transport');
     assert.equal(cmp.statusGainText, 'Master -26.0 dB');
     assert.equal(cmp.statusPatternText, 'Studio');
@@ -159,7 +159,7 @@ test('dup-stale-4: while the Studio plays the status bar says PLAYING and shows 
     cmp.studio.playing = false;
     cmp.studio.masterLevel = 0.05;
     assert.equal(cmp.statusGainText, 'Gain -21.9 dB', 'stopped: the Playground gain');
-    assert.equal(cmp.statusLabel, 'READY');
+    assert.equal(cmp.statusLabel, 'PŘIPRAVENO');
   });
 
 test('dup-stale-4: the status bar never writes the Studio level into the Playground gain', () => {

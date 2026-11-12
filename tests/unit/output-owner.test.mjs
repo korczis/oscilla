@@ -221,7 +221,7 @@ test('C024: the description and the status bar name the notes while only notes s
   assert.ok(held.analysisCanvasLabel.includes(`(${name})`), held.analysisCanvasLabel);
   assert.doesNotMatch(held.analysisCanvasLabel, /not playing/);
   assert.match(held.analysisCanvasLabel, /relative to full scale/);
-  assert.strictEqual(held.statusLabel, 'PLAYING');
+  assert.strictEqual(held.statusLabel, 'HRAJE');
   assert.strictEqual(held.anySounding, true, 'the status dot shows the notes sounding');
   assert.strictEqual(held.statusPatternText.toLowerCase(), name.toLowerCase(),
     'the status bar names the owner the description names');
@@ -232,7 +232,7 @@ test('C024: the description and the status bar name the notes while only notes s
   const released = notesCmp({ kbdSounding: false, source: 'sweep', sweep: { curve: 'log' } });
   assert.strictEqual(released.outputOwner, null);
   assert.match(released.analysisCanvasLabel, /not playing/);
-  assert.strictEqual(released.statusLabel, 'READY');
+  assert.strictEqual(released.statusLabel, 'PŘIPRAVENO');
   assert.notStrictEqual(released.statusPatternText.toLowerCase(), name.toLowerCase());
 
   const both = notesCmp({ kbdSounding: true, playing: true });

@@ -302,7 +302,8 @@ function compactStudioClaims(markup, rows = WORKSPACE_REGISTRY) {
   const at = view.indexOf('data-osc="about.workspaces"');
   const list = view.slice(at, view.indexOf('</ul>', at));
   return [...list.matchAll(WORKSPACE_ITEM)]
-    .filter(([, id, , , , rest]) => /compact Studio/.test(text(rest)) && !modes.includes(id))
+    .filter(([, id, , , , rest]) => (/compact Studio/.test(text(rest))
+      || cz('kompaktní\\p{L}* Studi\\p{L}*').test(text(rest))) && !modes.includes(id))
     .map(([, id]) => id);
 }
 
@@ -459,30 +460,41 @@ test('A15: under release:prepare, the roadmap is the plan\'s open milestones', a
 // The descriptions are the registry's summaries (lane A wave 3: shell.js WORKSPACE_REGISTRY,
 // which the page header shows too), judged on the list rendered from them (renderAboutList).
 
+/**
+ * A phrase in English or in the registry's Czech (Q104): the Czech forms take any case ending
+ * (\\p{L}*) and are bounded by letters, not by \\b, which treats á, é, í, ... as non-word.
+ */
+const cz = (src) => new RegExp(`(?<!\\p{L})(?:${src})(?!\\p{L})`, 'iu');
+const either = (en, czech) => ({ en, czech: cz(czech),
+  [Symbol.match]: (s) => s.match(en) ?? s.match(cz(czech)) });
+
 /** [what the description says, the ids of the panels it names]. */
 export const PANEL_PHRASES = [
-  [/\bgenerator\b/i, ['osc-panel-source']],
-  [/\bsignal analysis\b/i, ['osc-panel-analysis']],
-  [/\bspectrogram of the output\b|\bmicrophone's live spectrum and spectrogram\b/i,
-    ['osc-panel-spectrogram']],
-  [/\bmicrophone analy[sz]er\b/i, ['osc-panel-mic']],
+  [either(/\bgenerator\b/i, 'generátor\\p{L}*'), ['osc-panel-source']],
+  [either(/\bsignal analysis\b/i, 'analýz\\p{L}* signálu'), ['osc-panel-analysis']],
+  [either(/\bspectrogram of the output\b|\bmicrophone's live spectrum and spectrogram\b/i,
+    'spektrogram\\p{L}* výstupu'), ['osc-panel-spectrogram']],
+  [either(/\bmicrophone analy[sz]er\b/i, 'analyzátor\\p{L}* mikrofonu'), ['osc-panel-mic']],
   [/\bDevice & Limits\b/, ['osc-panel-device']],
-  [/\bguided measurement\b/i, ['osc-measure-flow']],
-  [/\bpattern sequencer\b|\bblock sequences\b/i, ['osc-panel-sequencer']],
-  [/\bcompact Studio\b/, ['osc-panel-studio']],
-  [/\bbiquad filter\b/i, ['osc-panel-filter']],
-  [/\bADSR envelope\b/i, ['osc-panel-envelope']],
-  [/\badditive harmonics\b/i, ['osc-panel-additive']],
-  [/\bphase and stereo\b/i, ['osc-panel-phase']],
-  [/\bbioacoustics\b/i, ['osc-panel-bio']],
-  [/\bdual oscillator\b/i, ['osc-panel-dual']],
+  [either(/\bguided measurement\b/i, 'řízen\\p{L}* měřen\\p{L}*'), ['osc-measure-flow']],
+  [either(/\bpattern sequencer\b|\bblock sequences\b/i,
+    'sekvencer\\p{L}* vzorů|blokov\\p{L}* sekvenc\\p{L}*'), ['osc-panel-sequencer']],
+  [either(/\bcompact Studio\b/, 'kompaktní\\p{L}* Studi\\p{L}*'), ['osc-panel-studio']],
+  [either(/\bbiquad filter\b/i, 'bikvadratick\\p{L}* filtr\\p{L}*'), ['osc-panel-filter']],
+  [either(/\bADSR envelope\b/i, 'obálk\\p{L}* ADSR'), ['osc-panel-envelope']],
+  [either(/\badditive harmonics\b/i, 'aditivní\\p{L}* harmonick\\p{L}*'),
+    ['osc-panel-additive']],
+  [either(/\bphase and stereo\b/i, 'fáz\\p{L}* a stereo'), ['osc-panel-phase']],
+  [either(/\bbioacoustics\b/i, 'bioakustick\\p{L}*'), ['osc-panel-bio']],
+  [either(/\bdual oscillator\b/i, 'duální\\p{L}* oscilátor\\p{L}*'), ['osc-panel-dual']],
   [/\bthe labs\b/i, ['osc-panel-filter', 'osc-panel-envelope', 'osc-panel-additive',
     'osc-panel-phase', 'osc-panel-bio']],
 ];
 
 /** What a phrase claims about where a panel's signal comes from, checked in its source. */
 export const SOURCE_CLAIMS = [
-  [/\bspectrogram of the output\b/i, 'src/js/charts/spectrogram-panel.js', /main output analyser/],
+  [either(/\bspectrogram of the output\b/i, 'spektrogram\\p{L}* výstupu'),
+    'src/js/charts/spectrogram-panel.js', /main output analyser/],
   [/\bmicrophone's live spectrum and spectrogram\b/i, 'src/js/charts/spectrogram-panel.js',
     /\bmicrophone\b/],
 ];
@@ -527,6 +539,16 @@ function descriptions(markup, rows = WORKSPACE_REGISTRY) {
 }
 
 /**
+ * How the registry's Czech summaries (Q104) name titles the data still holds in English: the
+ * keys are pinned to the data (U085's map test), so a renamed card or tab fails, never drifts.
+ */
+export const CZECH_NAMES = {
+  Frequency: 'frekvenc\\p{L}*',
+  'Signal path': 'signálov\\p{L}* cest\\p{L}*',
+  'Semi-modular mono voice': 'semimodulární\\p{L}* monofonní\\p{L}* hlas\\p{L}*',
+};
+
+/**
  * What About's workspace descriptions claim that the workspace does not show, one string each:
  * a named panel off that workspace's screen, a source claim its code does not make, Learn's
  * range not its first and last card, a Synth tab left out.
@@ -552,15 +574,19 @@ export function workspaceTruthProblems(markup, rows = WORKSPACE_REGISTRY) {
   }
   const all = descriptions(markup, rows);
   const [first, last] = [LEARN_CARDS[0].title, LEARN_CARDS.at(-1).title];
-  if (!new RegExp(`\\bfrom ${first} to ${last}\\b`, 'i').test(all.learn ?? '')) {
+  const said = (title) => CZECH_NAMES[title] ?? title;
+  if (!new RegExp(`\\bfrom ${first} to ${last}\\b`, 'i').test(all.learn ?? '')
+    && !cz(`od ${said(first)} po ${said(last)}`).test(all.learn ?? '')) {
     problems.push(`learn does not run from its first card to its last: "${first}" to "${last}"`);
   }
   const [voice, ...tabs] = SEMI_MONO.tabs;
-  if (!new RegExp(`\\b${voice.title}\\b`, 'i').test(all.synth ?? '')) {
+  if (!new RegExp(`\\b${voice.title}\\b`, 'i').test(all.synth ?? '')
+    && !cz(said(voice.title)).test(all.synth ?? '')) {
     problems.push(`synth does not name its ${voice.label} tab's voice: "${voice.title}"`);
   }
   for (const tab of tabs) {
-    if (!(all.synth ?? '').includes(`${tab.label} tab`)) {
+    if (!(all.synth ?? '').includes(`${tab.label} tab`)
+      && !cz(`záložk\\p{L}* ${tab.label}`).test(all.synth ?? '')) {
       problems.push(`synth does not name its ${tab.label} tab`);
     }
   }
@@ -594,6 +620,42 @@ test('mutation U085: a reverted summary is named', () => {
     p.startsWith('learn does not run from its first card to its last')));
   assert.ok(swap('synth', 'A semi-modular mono voice, and an Engines tab.')
     .includes('synth does not name its XY tab'));
+});
+
+test('U085 Czech: the map names exactly the titles the data holds', () => {
+  const [voice] = SEMI_MONO.tabs;
+  assert.deepEqual(Object.keys(CZECH_NAMES).sort(),
+    [LEARN_CARDS[0].title, LEARN_CARDS.at(-1).title, voice.title].sort(),
+    'a card or the Panel voice was renamed: update CZECH_NAMES with it');
+});
+
+test('U085 Czech: the phrases still find what the Czech summaries say (not vacuous)', () => {
+  const all = Object.values(descriptions(html)).join(' ');
+  const named = PANEL_PHRASES.filter(([phrase]) => all.match(phrase)).flatMap(([, ids]) => ids);
+  for (const id of ['osc-panel-source', 'osc-panel-analysis', 'osc-panel-spectrogram',
+    'osc-panel-mic', 'osc-measure-flow', 'osc-panel-sequencer', 'osc-panel-studio',
+    'osc-panel-filter', 'osc-panel-envelope', 'osc-panel-additive', 'osc-panel-phase',
+    'osc-panel-bio', 'osc-panel-dual']) {
+    assert.ok(named.includes(id), `no summary phrase names #${id}: the check would be vacuous`);
+  }
+});
+
+test('mutation U085 Czech: a false claim in Czech is named as in English', () => {
+  const swap = (id, to) => workspaceTruthProblems(html,
+    WORKSPACE_REGISTRY.map((w) => (w.id === id ? { ...w, summary: to } : w)));
+  assert.ok(swap('synthesis', 'Aditivní harmonické s kompaktním Studiem.').some((p) =>
+    p.startsWith('synthesis names "kompaktním Studiem", but #osc-panel-studio')));
+  assert.ok(swap('playground', 'Nástroj a duální oscilátor.').some((p) =>
+    p.startsWith('playground names "duální oscilátor", but #osc-panel-dual')));
+  assert.ok(swap('learn', 'Karty pojmů od frekvence po limity reproduktorů.').some((p) =>
+    p.startsWith('learn does not run from its first card to its last')));
+  assert.ok(swap('synth', 'Semimodulární monofonní hlas se záložkou Engines.')
+    .includes('synth does not name its XY tab'));
+  assert.ok(swap('synth', 'Hlas se záložkami Engines, XY a Bicí.').some((p) =>
+    p.startsWith('synth does not name its Panel tab\'s voice')));
+  const claimed = WORKSPACE_REGISTRY.map((w) => (w.id === 'synthesis'
+    ? { ...w, summary: `${w.summary} S kompaktním Studiem.` } : w));
+  assert.deepEqual(compactStudioClaims(html, claimed), ['synthesis']);
 });
 
 // ------------------------------------------------- U086: the roadmap names its release

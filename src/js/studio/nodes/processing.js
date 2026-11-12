@@ -106,9 +106,9 @@ export const filter = defineNode({
   compiler: 'audio/filters.js#createFilterStage',
   reuses: ['audio/filters.js#normalizeFilter'],
   help: {
-    what: 'A biquad filter (low-pass, high-pass, band-pass, notch, peaking, low-shelf, '
-      + 'high-shelf, all-pass) with click-free bypass. '
-      + 'Sklon 24 dB/okt. (K022) platí jen pro dolní a horní propust: kaskáda dvou stejných '
+    what: 'Bikvadratický filtr (dolní, horní a pásmová propust, pásmová zádrž, špičkový, '
+      + 'dolní a horní šelf, všepropustný) s bypassem bez lupnutí. '
+      + 'Sklon 24 dB/okt. platí jen pro dolní a horní propust: kaskáda dvou stejných '
       + 'biquadů zdvojnásobí rezonanci a pokles o 3 dB leží pod mezní frekvencí.',
     inputs: 'Audio; cutoff, Q and gain accept modulation.',
     outputs: 'Audio.',

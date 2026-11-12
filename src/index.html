@@ -363,20 +363,20 @@
          window), collapsed, the notice is one line: its title, the advice's short form "Start
          low." whole, and More, which shows the whole advice; expanded it wraps as everywhere. -->
     <p class="osc-safety-text" :class="!safetyExpanded && '[@media(max-height:700px)_and_(pointer:coarse)]:flex [@media(max-height:700px)_and_(pointer:coarse)]:items-center [@media(max-height:700px)_and_(pointer:coarse)]:gap-1 [@media(max-height:700px)_and_(pointer:coarse)]:min-w-0'">
-      <strong id="osc-safety-title" class="shrink-0">Listening safety.</strong>
-      <span class="osc-safety-more" :class="{ 'is-open': safetyExpanded }">Audio can be
-        uncomfortable or harmful at excessive output levels.</span>
-      <span :class="!safetyExpanded && '[@media(max-height:700px)_and_(pointer:coarse)]:hidden'">Start low, especially with headphones.</span>
+      <strong id="osc-safety-title" class="shrink-0">Bezpečný poslech.</strong>
+      <span class="osc-safety-more" :class="{ 'is-open': safetyExpanded }">Při nadměrné
+        hlasitosti může být zvuk nepříjemný i škodlivý.</span>
+      <span :class="!safetyExpanded && '[@media(max-height:700px)_and_(pointer:coarse)]:hidden'">Začněte potichu, zvlášť se sluchátky.</span>
       <span class="hidden" :class="!safetyExpanded && '[@media(max-height:700px)_and_(pointer:coarse)]:inline'" data-safety-short="">Začněte potichu.</span>
       <span class="osc-safety-more" id="osc-safety-more" :class="{ 'is-open': safetyExpanded }">
-        Perceived loudness is not a reliable measure of acoustic output. Digital signal generation
-        does not guarantee that your hardware reproduces the requested frequency.</span>
-      <button type="button" class="osc-safety-toggle [@media(pointer:coarse)]:!inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:align-middle" aria-controls="osc-safety"
+        Vnímaná hlasitost není spolehlivou mírou skutečné akustické hladiny. Digitálně generovaný
+        signál nezaručuje, že váš hardware požadovanou frekvenci skutečně přehraje.</span>
+      <button type="button" class="osc-safety-toggle [@media(pointer:coarse)]:!inline-flex [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11 [@media(pointer:coarse)]:items-center [@media(pointer:coarse)]:justify-center [@media(pointer:coarse)]:align-middle [@media(pointer:coarse)]:-my-3" aria-controls="osc-safety"
         aria-expanded="false" :aria-expanded="String(safetyExpanded)"
-        @click="safetyExpanded = !safetyExpanded" x-text="safetyExpanded ? 'Less' : 'More'">More</button>
+        @click="safetyExpanded = !safetyExpanded" x-text="safetyExpanded ? 'Méně' : 'Více'">Více</button>
     </p>
     <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
-      id="osc-safety-dismiss" data-osc="safety.dismiss" aria-label="Dismiss the safety notice"
+      id="osc-safety-dismiss" data-osc="safety.dismiss" aria-label="Skrýt upozornění k bezpečnému poslechu"
       @click="dismissSafety()">
       <svg aria-hidden="true"><use href="#i-close"/></svg>
     </button>
@@ -447,7 +447,7 @@
         <!-- The notice reopens from here below 1536 px (Device & Limits' copy from 1536 px). -->
         <button type="button" id="osc-safety-reopen-phone" data-osc="safety.reopen"
           aria-controls="osc-safety" :aria-expanded="String(!safetyCollapsed)"
-          aria-label="Show the listening safety notice" title="Listening safety notice"
+          aria-label="Zobrazit upozornění k bezpečnému poslechu" title="Upozornění k bezpečnému poslechu"
           @click="reopenSafety()"
           class="inline-flex items-center justify-center flex-none w-8 h-8 text-gray-500 rounded-lg 2xl:hidden [@media(pointer:coarse)]:w-11 [@media(pointer:coarse)]:h-11 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
           <svg class="w-5 h-5" aria-hidden="true"><use href="#i-headphones"/></svg>
@@ -884,8 +884,8 @@
               <span class="osc-spacer"></span>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-safety-reopen
                 max-2xl:hidden" id="osc-safety-reopen" data-osc="safety.reopen" aria-controls="osc-safety"
-                :aria-expanded="String(!safetyCollapsed)" aria-label="Show the listening safety notice"
-                title="Listening safety notice" @click="reopenSafety()">
+                :aria-expanded="String(!safetyCollapsed)" aria-label="Zobrazit upozornění k bezpečnému poslechu"
+                title="Upozornění k bezpečnému poslechu" @click="reopenSafety()">
                 <svg aria-hidden="true"><use href="#i-headphones"/></svg>
               </button>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
@@ -3147,7 +3147,7 @@
         :title="'OSCILLA ' + BUILD.label + (BUILD.shortCommit ? ' (' + BUILD.shortCommit + ')' : '')
           + ': ' + BUILD.releaseText"></span>
       <span class="osc-sb-div" aria-hidden="true"></span>
-      <span class="osc-sb-sub">Interactive Sound &amp; Frequency Lab</span>
+      <span class="osc-sb-sub">Interaktivní laboratoř zvuku a frekvencí</span>
     </div>
 
     <button type="button" class="osc-icon-btn osc-sb-play" id="osc-sb-play" data-osc="status.play"
@@ -3167,7 +3167,7 @@
           'is-error': status === 'ERROR' || ceilingActing }">
         <span class="osc-status-dot" aria-hidden="true"></span>
         <span class="osc-status-label" data-osc="status.label" x-text="statusLabel"
-          x-show="!ceilingActing">READY</span>
+          x-show="!ceilingActing">PŘIPRAVENO</span>
         <span data-osc="status.ceiling" x-show="ceilingActing" x-cloak :title="gainTitle"><span
           aria-hidden="true">&#x26A0;&#xFE0E;</span> <span x-text="ceilingText">OUTPUT AT
           CEILING (clipped)</span></span>
@@ -3188,33 +3188,33 @@
 
     <div class="osc-sb-actions-wrap">
       <button type="button" class="osc-icon-btn osc-sb-menu-btn" id="osc-sb-actions-toggle"
-        data-osc="status.actionsMenu" aria-label="Actions" aria-haspopup="true"
+        data-osc="status.actionsMenu" aria-label="Akce" aria-haspopup="true"
         aria-expanded="false" aria-controls="osc-sb-actions" x-bind="menuButton('actions')">
         <svg aria-hidden="true"><use href="#i-more"/></svg>
       </button>
-      <div class="osc-sb-actions" id="osc-sb-actions" role="group" aria-label="Actions"
+      <div class="osc-sb-actions" id="osc-sb-actions" role="group" aria-label="Akce"
         :class="{ 'is-open': menus.actions }">
         <button type="button" class="osc-sb-action" id="osc-act-url" data-osc="action.copyUrl" data-osc-link="jump" @click="copyConfigUrl()"
-          aria-label="Copy config URL">
-          <svg aria-hidden="true"><use href="#i-link"/></svg><span>URL</span>
+          aria-label="Kopírovat odkaz na nastavení">
+          <svg aria-hidden="true"><use href="#i-link"/></svg><span>Odkaz</span>
         </button>
         <button type="button" class="osc-sb-action" id="osc-act-screenshot" data-osc="action.screenshot" @click="screenshot()"
-          aria-label="Screenshot of the visible charts (PNG)">
-          <svg aria-hidden="true"><use href="#i-camera"/></svg><span>Screenshot</span>
+          aria-label="Snímek viditelných grafů (PNG)">
+          <svg aria-hidden="true"><use href="#i-camera"/></svg><span>Snímek</span>
         </button>
         <button type="button" class="osc-sb-action" id="osc-act-export-audio" data-osc="action.exportAudio"
           @click="exportAudio()" :aria-disabled="String(exportBusy)" :aria-busy="String(exportBusy)"
-          :title="exportBusy ? 'An export is running: this one is offered again when it ends' : null" aria-label="Export audio (WAV)">
-          <svg aria-hidden="true"><use href="#i-upload"/></svg><span data-osc-reason x-text="exportBusy ? 'Exporting…' : 'Export Audio'">Export Audio</span>
+          :title="exportBusy ? 'Export už běží; tato volba bude znovu dostupná po jeho dokončení.' : null" aria-label="Exportovat zvuk (WAV)">
+          <svg aria-hidden="true"><use href="#i-upload"/></svg><span data-osc-reason x-text="exportBusy ? 'Exportuji…' : 'Export zvuku'">Export zvuku</span>
         </button>
         <button type="button" class="osc-sb-action" id="osc-act-save-preset" data-osc="action.savePreset" @click="openSave()"
-          aria-label="Save preset">
-          <svg aria-hidden="true"><use href="#i-save"/></svg><span>Save Preset</span>
+          aria-label="Uložit preset">
+          <svg aria-hidden="true"><use href="#i-save"/></svg><span>Uložit preset</span>
         </button>
         <button type="button" class="osc-sb-action osc-sb-action--icon" id="osc-act-settings"
-          data-osc="action.settings" aria-label="Settings"
+          data-osc="action.settings" aria-label="Nastavení"
           @click="openDialog('settings')">
-          <svg aria-hidden="true"><use href="#i-gear"/></svg><span class="osc-sb-action-label">Settings</span>
+          <svg aria-hidden="true"><use href="#i-gear"/></svg><span class="osc-sb-action-label">Nastavení</span>
         </button>
       </div>
     </div>

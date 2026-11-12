@@ -25,6 +25,7 @@ scope:
   - ".ai/repo/project/issues/Q107.yaml"
   - ".ai/repo/project/intents/public-discoverability.yaml"
   - ".ai/repo/rules/project/single-file-deliverable.v2.md"
+current_state: "2026-11-11 (oscilla-0b, agreed with oscilla-43): the workspace registry's summaries and related reasons became the app's Czech prose (Q104), and README stays English (Q107). So scripts/readme.mjs renders each workspace by name, its links and its Open link only, and the inferred map's arrows carry no label. A second English copy of the registry text would be the duplicate source that principle 1 forbids. readme-derived.test.mjs asserts that no registry summary or reason reaches the README."
 depends_on:
   - "Q107"
 acceptance_criteria:

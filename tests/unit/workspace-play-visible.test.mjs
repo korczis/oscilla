@@ -212,7 +212,7 @@ test('C030: the suspended notice and the idle scope read the hint of the workspa
     + "\\s*\\|\\| 'Audio is suspended', hint\\s*\\|\\| 'The browser"));
   // the scope the analysis tabs show (ui/p5-views.js), drawn and described (R2-C030-1)
   assert.match(read('src/js/ui/p5-views.js'),
-    /const press = st\.idleHint \|\| 'press Hold to Play for the live trace';/);
+    /const press = st\.idleHint \|\| 'živý průběh: podržte Hold to Play';/);
   assert.match(read('src/js/ui/workbench.js'),
     /statusPlayHint\(this\.workspace, 'scope'\)[^|]*\|\| 'Hold to Play shows the live output/);
   assert.match(read('src/js/main.js'),

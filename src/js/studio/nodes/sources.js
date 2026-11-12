@@ -53,8 +53,8 @@ export const oscillator = defineNode({
   compiler: 'audio/audio-engine.js#AudioEngine',
   reuses: ['audio/additive.js#createAdditiveOscillator', 'audio/patterns.js#buildPlan'],
   help: {
-    what: 'A periodic tone at a requested digital frequency. '
-      + 'Unison (K022) sčítá hlasy na 1/n, takže špička nepřesáhne jeden hlas; rozladěné hlasy '
+    what: 'Periodický tón na zadané digitální frekvenci. '
+      + 'Unison sčítá hlasy na 1/n, takže špička nepřesáhne jeden hlas; rozladěné hlasy '
       + 'proto zní tišeji (efektivní hodnota klesne asi o 10·log10(n) dB, 7 hlasů asi o 8,5 dB); '
       + 'nejvyšší hlas může při modulaci nebo automatizaci '
       + `frekvence přesáhnout ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquistova limitu o polovinu `

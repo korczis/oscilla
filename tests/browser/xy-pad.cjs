@@ -521,7 +521,8 @@ async function viewHeld(page, at, what) {
     }, { ms: SOUND_MS, what: `${what}: the Y value shown is what LPF Cutoff plays` });
   } catch (e) { /* the comparison below says what differs */ }
   const ok = want.mapping === 'log' && /^LPF Cutoff /.test(v.value) && near(shown, want.hz)
-    && v.xText.startsWith(`${v.note}, degree `) && v.yText.includes(`LPF Cutoff: `)
+    // X's aria-valuetext: the note, then its scale degree ("C4, 1. stupeň")
+    && new RegExp(`^${v.note}, \\d+\\. stupeň`).test(v.xText) && v.yText.includes(`LPF Cutoff: `)
     && near(hzOf(v.yText), want.hz);
   return { ok, v, pad: pad.pitch, want: Number(want.hz.toFixed(1)), shown,
     off: Number(Math.hypot(v.ring.x - at.x, v.ring.y - at.y).toFixed(2)) };

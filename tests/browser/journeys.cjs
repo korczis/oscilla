@@ -570,15 +570,20 @@ function defineChecks() {
     { ms: STEP_MS, what: 'journey-3: Signal Path and requested marker follow the instrument' });
     must(/880/.test(s.text.sbFreq || '') && /tri/i.test(s.text.sbWave || ''),
       'the status bar shows frequency and waveform', s.text);
-    must(/play|sound|hold/i.test(s.text.sbState || ''), 'the status bar says it plays', s.text);
+    // by state, not by wording: the dot is-playing and the label shown is statusLabel's for it
+    const playingSb = await waitSnap(page, (x) => x.sb.playing && !!x.sb.label
+      && x.sb.label === x.sb.built, 'the status bar says it plays');
+    must(playingSb.sb.playing, 'the status bar says it plays', playingSb.sb);
     const out = await until(async () => { const o = await op.output(page);
       return near(o.hz, 880, o.binHz * 1.5) ? o : null; },
     { ms: STEP_MS, what: 'journey-3: the Spectrum peak is the frequency the readouts show' });
     await releaseSpace(page);
-    const idle = await waitSnap(page, (x) => !x.app.playing && x.engine.nodes === 0,
+    await waitSnap(page, (x) => !x.app.playing && x.engine.nodes === 0,
       'after the hold the engine counts no node');
-    must(!/play/i.test(idle.text.sbState || '') || /stop|ready|idle/i.test(idle.text.sbState),
-      'the status bar returns from playing', idle.text);
+    const idleSb = await waitSnap(page, (x) => !x.sb.playing && !!x.sb.label
+      && x.sb.label === x.sb.built && x.sb.label !== playingSb.sb.label,
+    'the status bar returns from playing');
+    must(!idleSb.sb.playing, 'the status bar returns from playing', idleSb.sb);
     return { path: views.path, requested: views.requested, peakHz: +out.hz.toFixed(1),
       status: s.text.sbState };
   });
