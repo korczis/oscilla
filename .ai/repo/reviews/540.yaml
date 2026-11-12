@@ -9,8 +9,14 @@
 # workbench.js, the browser and unit tests it updates); U107 70db8a89 (43; C3-539-2); d9's
 # 14d79d90 (C3-539-1); 43's one rebuild and the Czech baselines c138671b; 0b's visual re-accept
 # 6645a1bf; main da54bdc8 merged in 350483a1; the v3.37.0 record 722b53fc; chore(release):
-# v3.37.1 d5682852. Judged at d5682852 on base origin/main da54bdc8 (v3.37.0, #539),
-# 2026-11-12, in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+# v3.37.1 d5682852. Added after the first verdict (5a04da7c): 43's ddba7ad7 (fix(ui), the phone
+# status bar hides the waveform up to 374.98 px; responsive.css and dist), 43's 8c8c8db3
+# (fix(synth), guarded: synth/ui.js, the insert alert's Close focuses the view with
+# preventScroll; s-notice and ui-current press Close where it is), b99f0670 (test, the press on
+# its own line for the control-drive census) and bb388574 (test, host-scoped phone-whole debt
+# keys), fast-forwarded, no merge commit. First judged at d5682852; superseded and re-judged here
+# at bb388574 on base origin/main da54bdc8 (v3.37.0, #539), 2026-11-12, in the reviewer's own
+# detached worktree ~/dev/oscilla-wt/review-526.
 #
 # Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
 # standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
@@ -19,8 +25,9 @@
 # C3-539-2 are this reviewer's own findings on #539; 14d79d90 and 70db8a89 are their fixes,
 # judged here against the findings, not re-litigated.
 #
-# The digest: origin/main's scripts/review-verdict.mjs --content --list at d5682852:
-# 2dbb15b3dd897e7e... over 15 guarded paths (equal to the integrator's).
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at bb388574:
+# 85399e82777b38cd... over 16 guarded paths (15 of Czech pass 2, plus synth/ui.js since 8c8c8db3) (equal to the integrator's; it was 2dbb15b3 at
+# d5682852 and ddba7ad7; 8c8c8db3 changed synth/ui.js).
 #
 # How it was judged:
 # - Czech pass 2 in the guarded paths changes strings only: panel and tab titles, descriptions,
@@ -50,6 +57,28 @@
 #   desktop bay grows 1536x2378 -> 1536x2394 from the Filter description wrapping in Czech; the
 #   two Studio phone views re-accepted carry T17's dock row and Sinus plus the 2033 px bisected
 #   to 7e77c8cd on main, as the commit says.
+# - ddba7ad7: run 43223915140 (5a04da7c) failed chromium leg 1's a11y-phone-bars-every-state at
+#   360/READY and 360/READY/mic only (status.waveform clipped 2.609375 px, Czech "Sinus" next to
+#   PŘIPRAVENO on linux fonts); the check also covers 375, which passed there, so the existing
+#   rule's new edge 374.98 px is the right one. Passes in chromium and webkit, file and http.
+# - C3-540-3 and 8c8c8db3: the same run and 43235344797 (ddba7ad7) failed linux webkit's
+#   ui-current phone-whole-reopen-synth-390 (the safety notice's reopen chip not hit), 2 of 2,
+#   while #539's run passed it; every linux webkit Synth measure read own work 100.0 % (78.1 % at
+#   390 elsewhere), i.e. measured scrolled after U107's Close. The reviewer's probe (scratchpad
+#   k540-scroll.cjs, 390x844, isMobile, touch, safety collapsed): Close through its own handler
+#   scrolls #osc-app 185 px in Mac webkit (2/2), 0 in chromium; with focus forced to
+#   preventScroll 0 (2/2), focus still on #osc-view-synth; on 8c8c8db3's dist 0 and 0. K246's
+#   synthNoticeClose now focuses with { preventScroll: true }. s-notice and ui-current press Close
+#   at its centre where it is on top (Playwright's click scrolls the target into view; at 320 x
+#   568 the dock covers it, so the scrolling click stays there until U108). s-notice asserts no
+#   element's scrollTop and not window.scrollY moves across Close (see C3-540-4).
+# - bb388574: unscrolled, linux webkit reads no 375 overlap (oscilla-0b, container) while every
+#   Mac engine (3 pairs, 77x39) and linux chromium and firefox (0b) still do. debtOf also tries
+#   "<platform>:<browser>@<width>" and "<platform>:@<width>", a host-scoped key is judged current
+#   only on that host, and '@375:synth:overlap' becomes 'darwin:@375:synth:overlap',
+#   'linux:chromium@375:synth:overlap' and 'linux:firefox@375:synth:overlap' with one reason. The
+#   ledger keeps the overlap wherever it is measured, "passes now" can still fire where it is
+#   paid, and neither CI nor the Mac gate is red.
 #
 # THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
 # read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
@@ -58,7 +87,13 @@
 # (da54bdc8's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
 # superseding verdict.
 #
-# Measured by the reviewer: at d5682852 GITHUB_BASE_REF=main npm test exit 0 (5786 tests, 5785
+# Measured by the reviewer: at bb388574 GITHUB_BASE_REF=main npm test exit 0 (5786 tests, 5785
+# pass, 0 fail, 1 skipped); ui-current 392/392 in chromium, webkit and firefox, each applying
+# darwin:@375. At b99f0670 (the same src) build:check up to date, synth exit 0 in chromium
+# (47/47, 15/15) and webkit (47/47, 15/15) with s-notice's scroll "window:0" -> "window:0" by
+# mouse and by touch, ui-current 392/392 in all three. At ddba7ad7 app's
+# a11y-phone-bars-every-state in chromium and webkit, file and http, exit 0.
+# Earlier, at d5682852 GITHUB_BASE_REF=main npm test exit 0 (5786 tests, 5785
 # pass, 0 fail, 1 skipped), build:check up to date (v3.37.1), --check-station rc=0,
 # release:analyze patch (v3.37.1 covers it); synth exit 0 in chromium (desktop 47/47, phone
 # 15/15) and webkit (47/47, 15/15), s-notice ok on both legs of each; ui-current 392/392 in
@@ -74,21 +109,46 @@
 # Synth lane's dock work (V635): give the dock room for the header or shorten the phone title, and
 # record each debt entry's pair set (or its count) so a worsening fails. Not blocking.
 #
-# C3-540-2 (P3, open): U107's close step runs only if the alert is visible at the moment it
+# C3-540-2 (P3, open, U108): U107's close step runs only if the alert is visible at the moment it
 # checks, and ensurePanel runs in the Synth's workspace $watch. An alert that appeared after that
 # check would be measured open, and the ratchet then fails loudly ("@375:synth:overlap passes
 # now: remove it"), never falsely green. It passed 392/392 in each run seen. Fix: wait for
 # synthDebug().present (and the alert's first show) before the close. Not blocking.
 #
-# Verdict: merge, under the condition above. No P0, P1 or P2 is open; C3-539-1 and C3-539-2 are
-# closed by this train; C3-540-1 and C3-540-2 are P3s.
+# C3-540-3 (P2, closed in this train by 8c8c8db3): above. WebKit (the iPhone's engine) scrolled
+# the Synth 185 px when the insert alert was closed; on main since #539.
+#
+# C3-540-4 (P3, open, U108): s-notice's scroll assertion does not fail on the base in its own
+# setup: openSynth clicks the Synth title first, so focus is already in the view and the base's
+# focus() scrolls nothing there. The fail-first proof is linux webkit's ui-current (2 of 2 on the
+# base) and the reviewer's probe. Fix: a variant that opens the Synth by its nav link with
+# nothing focused, failing on the base.
+#
+# C3-540-5 (P3, open): ddba7ad7 hides the status bar's waveform on 360-374 px phones (360 is the
+# commonest Android width) on every workspace, not only where the source panel shows it. A
+# shorter label could bring it back. Not blocking.
+#
+# C3-540-6 (P2, open, U108): measured by oscilla-43 on live v3.37.0 after the first verdict: the
+# fixed keyboard dock (258 px) covers K246's insert alert at 390x844 with the link and safety
+# notices open (its bottom 29 px) and at 320x568 whatever the notices do, so its Close cannot
+# be tapped on the first screen there. On main since #539 (the reviewer's #539 probe checked its
+# bounds, not elementFromPoint under the dock); T17 neither causes nor fixes it. U108 (decided by
+# oscilla-c3 under Q090: the alert takes the top notice slot below md, with a short line and a
+# "Více" disclosure) carries it with the reviewer's done criterion.
+#
+# Verdict: merge, under the condition above. No P0 or P1 is open; C3-539-1, C3-539-2 and
+# C3-540-3 are closed by this train; C3-540-6 (P2) is filed as U108, the rest are P3s.
 schema: review-verdict/v1
 pr: 540
 verdict: merge
-reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of d5682852)
-content: 2dbb15b3dd897e7ef2e3fafb94a34f1acea61bc5a2128710c212bbf8ce634828
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of bb388574)
+content: 85399e82777b38cd03acab638e4dd0fc9704661fe9b11ab526b3c6f0c78527f0
 findings:
+  - { id: C3-540-6, severity: P2, status: open, title: "the fixed keyboard dock covers K246's insert alert at 320x568 and at 390x844 with the notices open (U108); on main since #539" }
   - { id: C3-540-1, severity: P3, status: open, title: "at 320 px the Czech Synth title wraps and the dock also covers the preset picker; the boolean @320 debt key cannot see the worsening" }
   - { id: C3-540-2, severity: P3, status: open, title: "U107 closes the insert alert only if it is already visible; a late alert fails the ratchet loudly" }
+  - { id: C3-540-4, severity: P3, status: open, title: "s-notice's no-scroll assertion does not fail on the base in its own setup (focus already in the view)" }
+  - { id: C3-540-5, severity: P3, status: open, title: "the status bar hides the waveform on 360-374 px phones on every workspace (ddba7ad7)" }
+  - { id: C3-540-3, severity: P2, status: closed, title: "WebKit scrolled the Synth 185 px when the insert alert's Close focused the view; fixed by 8c8c8db3 (preventScroll)" }
   - { id: C3-539-1, severity: P3, status: closed, title: "s-notice not in PHONE_CHECKS; closed by 14d79d90 (phone leg, touch pointerType, 44 px target)" }
   - { id: C3-539-2, severity: P2, status: closed, title: "@375:synth:overlap left the debt as paid while the alert only displaced it; closed by U107 70db8a89" }
