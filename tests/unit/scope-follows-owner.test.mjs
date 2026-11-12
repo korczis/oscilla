@@ -55,9 +55,24 @@ function scopeState({ owner, playing = false, amp = 0.5 }) {
 
 function drawScope(st) {
   const host = scopeHost();
-  createScopeView({ getWindowMs: () => 5 }).draw(host.h, st);
-  return host;
+  const view = createScopeView({ getWindowMs: () => 5 });
+  view.draw(host.h, st);
+  return { ...host, caption: view.caption };
 }
+
+/** The idle scope's caption as the view builds it (its `caption`, read by navigation.cjs) and
+ *  its first field, the state word ("not playing" in the scope's own language): read from the
+ *  module, not copied, so the negative checks below follow its wording. */
+const IDLE = (() => {
+  const { drawn, caption } = drawScope(scopeState({ owner: null }));
+  const state = String(caption || '').split(' · ')[0];
+  assert.ok(state.length > 0 && drawn.some((t) => t.startsWith(`${state} · `)),
+    `the idle scope draws its caption (${JSON.stringify(drawn)})`);
+  return { caption, state };
+})();
+/** Whether any drawn text is the idle caption (it starts with the idle state word). */
+const saysIdle = (drawn) => drawn.some((t) => t === IDLE.state
+  || t.startsWith(`${IDLE.state} · `));
 
 test('scope: the sequencer owns the output: live trace, named, at full scale', () => {
   const { drawn, vertices, H } = drawScope(scopeState({ owner: 'sequencer' }));
@@ -65,7 +80,7 @@ test('scope: the sequencer owns the output: live trace, named, at full scale', (
   assert.ok(label, `a live label is drawn (drawn: ${JSON.stringify(drawn)})`);
   assert.match(label, /^output analyser · sequencer/);
   assert.match(label, /relative to full scale/);
-  assert.ok(!drawn.some((t) => /not playing/.test(t)), 'never "not playing"');
+  assert.ok(!saysIdle(drawn), 'never "not playing"');
   // full scale: a 0.5 sine fills half the ±1 lanes (not clamped against the instrument's gain)
   const ymid = (16 + (H - 14)) / 2;
   const hh = (H - 14 - 16) / 2 - 2;
@@ -79,7 +94,7 @@ test('scope: the Studio owns the output: live trace named Studio', () => {
   const label = drawn.find((t) => t.startsWith('output analyser'));
   assert.ok(label, `a live label is drawn (drawn: ${JSON.stringify(drawn)})`);
   assert.match(label, /^output analyser · Studio/);
-  assert.ok(!drawn.some((t) => /not playing/.test(t)));
+  assert.ok(!saysIdle(drawn), 'never "not playing"');
 });
 
 test('scope: the instrument keeps its own label (relative to set gain); idle stays computed', () => {
@@ -88,8 +103,11 @@ test('scope: the instrument keeps its own label (relative to set gain); idle sta
   assert.ok(label);
   assert.match(label, /relative to set gain/);
   assert.ok(!/sequencer|Studio/.test(label));
-  const idle = drawScope(scopeState({ owner: null })).drawn;
-  assert.ok(idle.some((t) => t.startsWith('not playing · computed')), JSON.stringify(idle));
+  assert.ok(!saysIdle(inst), 'the instrument sounding is never "not playing"');
+  const { drawn: idle, caption } = drawScope(scopeState({ owner: null }));
+  // idle stays computed: the caption drawn in full names the computed wave and its frequency
+  assert.ok(idle.includes(caption), JSON.stringify(idle));
+  assert.ok(caption.startsWith(`${IDLE.state} · `) && /\bsine 250 Hz\b/.test(caption), caption);
   assert.ok(!idle.some((t) => t.startsWith('output analyser')));
 });
 

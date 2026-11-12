@@ -56,7 +56,7 @@ test('every page has a one-sentence summary and one to three related pages', () 
   assert.deepEqual(IDS, WORKSPACES, 'the registry is the navigation');
   for (const w of WORKSPACE_REGISTRY) {
     assert.equal(typeof w.summary, 'string', `${w.id}: summary`);
-    assert.match(w.summary, /^[A-Z][^]*\.$/, `${w.id}: a sentence`);
+    assert.match(w.summary, /^\p{Lu}[^]*\.$/u, `${w.id}: a sentence`);
     assert.doesNotMatch(w.summary.slice(0, -1), /[.!?]\s/, `${w.id}: one sentence`);
     assert.ok(w.summary.split(/\s+/).length >= 6, `${w.id}: says what it is for`);
     const rel = relatedOf(w.id);

@@ -144,8 +144,8 @@ function defineChecks() {
       template: st.templateId === 'filter-automation' && st.title === 'Filter Automation'
         && !st.dirty,
       subview: st.subview === 'timeline',
-      said: st.alerts.some((a) => /Studio opened from the link: Template Filter Automation, /
-        .test(a) && /Nothing plays/.test(a)),
+      said: st.alerts.some((a) => /Studio otevřeno z odkazu: Šablona Filter Automation, /
+        .test(a) && /Nic nehraje/.test(a)),
       silent: H.silent(st),
       phone: phoneSt.workspace === 'studio' && phoneSt.templateId === 'basic-tone'
         && phoneSt.subview === 'inspector' && panels.length === 1 && panels[0] === 'inspector'

@@ -19,13 +19,13 @@ import { xyInsertAction } from './xy.js';
 import { presetAction } from './presets.js';
 
 export const SYNTH_TEXT = Object.freeze({
-  inserted: `Inserted the ${SEMI_MONO.title} into the Studio document; it feeds Master Output. `
-    + 'Undo removes it.',
+  inserted: `Panel ${SEMI_MONO.title} je vložen do dokumentu Studia a hraje do Master Output. `
+    + 'Příkaz Zpět ho odebere.',
   /** Master holds one input: inserting the panel takes it from the document's chain. */
-  takes: (names) => `Master Output is fed by ${names} in this Studio document. Inserting the `
-    + `${SEMI_MONO.title} takes Master Output from it (Undo gives it back).`,
-  took: (names) => `Inserted the ${SEMI_MONO.title} into the Studio document; it took Master `
-    + `Output from ${names}. Undo removes the panel and gives it back.`,
+  takes: (names) => `Master Output v tomto dokumentu Studia teď dostává signál z: ${names}. `
+    + `Vložený panel ${SEMI_MONO.title} tento vstup převezme (příkaz Zpět ho vrátí).`,
+  took: (names) => `Panel ${SEMI_MONO.title} je vložen do dokumentu Studia a převzal vstup Master `
+    + `Output od: ${names}. Příkaz Zpět panel odebere a vstup vrátí.`,
   notInserted: 'The Synth panel is not in this Studio document: press Insert first.',
   armed: 'Synth armed: the keys play the panel.',
   /** What the keys and the XY pad play, named from the route's node (K183 S6). */

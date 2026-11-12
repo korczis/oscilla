@@ -33,31 +33,15 @@ const html = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 /** A mermaid node id: the registry id with anything but letters and digits as `_`. */
 const nodeId = (id) => `ws_${id.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
-/** At most `max` characters, cut at a word, with an ellipsis when cut. */
-export function shorten(text, max = 32) {
-  const t = String(text).replace(/\s+/g, ' ').trim();
-  if (t.length <= max) return t;
-  const cut = t.slice(0, max + 1).replace(/\s+\S*$/, '').replace(/[\s,.;:]+$/, '');
-  return `${cut || t.slice(0, max)}…`;
-}
-
-// A mermaid edge label may not hold `|` or `"`; GitHub renders the rest as text.
-const edgeText = (s) => s.replace(/["|]/g, '\'');
-
-function edgeLabel(rel, templates) {
-  const st = /^&st=([a-z0-9-]+)/.exec(rel.hash ?? '');
-  const template = st && templates.find((t) => t.id === st[1]);
-  return edgeText(template ? `${template.label} template` : shorten(rel.why));
-}
-
 function renderWorkspaces(facts) {
   const ws = facts.workspaces.items;
   const label = new Map(ws.map((w) => [w.id, w.label]));
   const rows = ws.map((w) => {
     const name = w.groupLabel ? `**${w.label}** (${w.groupLabel})` : `**${w.label}**`;
-    const next = w.related.map((r) => `[${label.get(r.id) ?? r.id}](${r.deepLink} "${
-      cell(r.why).replace(/"/g, '\'')}")`).join(', ');
-    return `| ${name} | ${cell(w.summary)} | ${next || '-'} | [Open](${w.deepLink}) |`;
+    // The registry's summaries and reasons are the app's Czech prose (Q104); README stays
+    // English (Q107), so it names the workspaces and their links and quotes neither.
+    const next = w.related.map((r) => `[${label.get(r.id) ?? r.id}](${r.deepLink})`).join(', ');
+    return `| ${name} | ${next || '-'} | [Open](${w.deepLink}) |`;
   });
   const groups = [...new Set(ws.filter((w) => w.group).map((w) => w.group))];
   const graph = ['```mermaid', 'flowchart LR'];
@@ -70,8 +54,7 @@ function renderWorkspaces(facts) {
   }
   for (const w of ws) {
     for (const r of w.related) {
-      graph.push(`  ${nodeId(w.id)} -->|"${edgeLabel(r, facts.templates.items)}"| ${
-        nodeId(r.id)}`);
+      graph.push(`  ${nodeId(w.id)} --> ${nodeId(r.id)}`);
     }
   }
   graph.push('```');
@@ -80,12 +63,12 @@ function renderWorkspaces(facts) {
     `\`${facts.workspaces.source}\`. **Open** starts the live app in that workspace; the links`,
     'under *Leads on to* are the Related strip its page header shows.',
     '',
-    '| Workspace | What it does | Leads on to | Open |',
-    '| --- | --- | --- | --- |',
+    '| Workspace | Leads on to | Open |',
+    '| --- | --- | --- |',
     ...rows,
     '',
     'How the workspaces lead into each other, inferred from the same registry (each arrow is a',
-    '`related` entry, labelled with its reason or the Studio template it opens):',
+    '`related` entry; the app states each reason in Czech, so this English page omits them):',
     '',
     ...graph,
   ].join('\n');

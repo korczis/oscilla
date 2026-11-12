@@ -164,7 +164,7 @@ const ENTRIES = [
   ...Object.entries(TEMPLATES).map(([id, title]) => ({ id: `studio st=${id}`,
     hash: `m=studio&st=${id}`, workspace: 'studio',
     state: (s) => s.template === id && s.studioTitle === title && !s.dirty
-      && said(s, /^info: Studio opened from the link: /) })),
+      && said(s, /^info: Studio otevřeno z odkazu: /) })),
   ...['graph', 'timeline', 'inspector'].map((v) => ({ id: `studio sv=${v}`,
     hash: `m=studio&sv=${v}`, workspace: 'studio', state: (s) => s.subview === v })),
   { id: 'studio st+sv', hash: 'm=studio&st=filter-automation&sv=timeline', workspace: 'studio',

@@ -280,7 +280,8 @@ both({ id: 'source.trigger', ws: 'playground', control: '#osc-trigger',
   expect: (s) => s.engine.voice && near(s.engine.voice.len, s.app.duration / 1000, 0.05) });
 row({ id: 'source.hold.keyboard', ws: 'playground', control: '#osc-hold-play', how: 'keyboard',
   act: async (page) => { await page.focus('#osc-hold-play'); await page.keyboard.down('Space'); },
-  expect: (s) => !!s.engine.voice && s.app.playing && /PLAY/i.test(s.text.sbState || '') });
+  expect: (s) => !!s.engine.voice && s.app.playing && s.sb.playing && !!s.sb.label
+    && s.sb.label === s.sb.built });
 row({ id: 'source.hold.pointer', ws: 'playground', control: '#osc-hold-play', how: 'pointer',
   act: async (page) => {
     await page.locator('#osc-hold-play').scrollIntoViewIfNeeded();
@@ -1139,9 +1140,13 @@ row({ id: 'safety.dismiss.pointer', ws: 'playground', control: '#osc-safety-dism
   expect: (s, b, x) => x.collapsed, read: () => ({ collapsed: window.OSCILLA.app.safetyCollapsed }) });
 row({ id: 'safety.more.pointer', ws: 'playground', control: '.osc-safety-toggle', how: 'pointer',
   keepSafety: true, viewport: { width: 390, height: 844 }, act: D.click('.osc-safety-toggle'),
-  expect: (s, b, x) => x.open && /Less/.test(x.label), read: () => ({
+  // by state (aria-expanded), and the toggle's word changes with it (More to Less, whatever
+  // the language)
+  expect: (s, b, x) => x.open && x.expanded === 'true' && b.x.expanded === 'false'
+    && !!x.label && x.label !== b.x.label, read: () => ({
     open: window.OSCILLA.app.safetyExpanded,
-    label: document.querySelector('.osc-safety-toggle').textContent }) });
+    expanded: document.querySelector('.osc-safety-toggle').getAttribute('aria-expanded'),
+    label: document.querySelector('.osc-safety-toggle').textContent.trim() }) });
 for (const sel of ['#osc-safety-reopen', '#osc-safety-reopen-phone']) {
   row({ id: `safety.${sel.slice(1)}.pointer`, ws: 'playground', control: sel, how: 'pointer',
     viewport: sel.endsWith('phone') ? { width: 390, height: 844 } : undefined,

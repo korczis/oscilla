@@ -33,118 +33,118 @@ import { roving } from './keys/roving.js';
 /** The workspaces, in navigation order. group: the sidebar group holding it, or none. */
 export const WORKSPACE_REGISTRY = Object.freeze([
   { id: 'playground', label: 'Playground', words: 'instrument tone oscillator play hold',
-    summary: 'The instrument on one screen: generator, signal analysis, microphone analyzer, '
-      + 'guided measurement, pattern sequencer and compact Studio.',
+    summary: 'Nástroj na jedné obrazovce: generátor, analýza signálu, analyzátor mikrofonu, '
+      + 'řízené měření, sekvencer vzorů a kompaktní Studio.',
     related: [
-      { id: 'measure', why: 'Measure the speaker, room and microphone the tone plays through' },
-      { id: 'synth', why: 'A voice with filters, envelopes and keys' },
-      { id: 'learn', why: 'Concept cards whose demos play here' },
+      { id: 'measure', why: 'Změřte reproduktor, místnost a mikrofon, kterými tón prochází' },
+      { id: 'synth', why: 'Hlas s filtry, obálkami a klávesami' },
+      { id: 'learn', why: 'Karty pojmů, jejichž ukázky hrají tady' },
     ] },
   { id: 'measure', label: 'Measure', words: 'frequency response sweep impulse room test',
-    summary: 'A guided measurement of the speaker, room and microphone chain: frequency '
-      + 'response, impulse response and RTA, each run rated for quality.',
+    summary: 'Řízené měření řetězce reproduktoru, místnosti a mikrofonu: frekvenční '
+      + 'charakteristika, impulsní odezva a RTA, u každého běhu s hodnocením kvality.',
     related: [
-      { id: 'experiments', why: 'Keep a run as an experiment and compare it with others' },
-      { id: 'studio', why: 'The measurement sweep as a Studio document',
+      { id: 'experiments', why: 'Uložte běh jako experiment a porovnejte ho s ostatními' },
+      { id: 'studio', why: 'Měřicí sweep jako dokument Studia',
         hash: '&st=measurement-sweep' },
-      { id: 'learn', why: 'Logarithmic scales and speaker limits explained' },
+      { id: 'learn', why: 'Vysvětlení logaritmických stupnic a limitů reproduktorů' },
     ] },
   { id: 'experiments', label: 'Experiments', words: 'saved records findings compare history',
-    summary: 'Saved measurements as experiments: their definitions, a comparison against a '
-      + 'baseline, and the findings that cite them.',
+    summary: 'Uložená měření jako experimenty: jejich definice, porovnání s referenčním '
+      + 'měřením a zjištění, která se na ně odvolávají.',
     related: [
-      { id: 'measure', why: 'Run the measurement an experiment records' },
-      { id: 'analyzer', why: 'A live microphone spectrum, before a calibrated run' },
+      { id: 'measure', why: 'Spusťte měření, které experiment zaznamená' },
+      { id: 'analyzer', why: 'Živé spektrum mikrofonu ještě před kalibrovaným měřením' },
     ] },
   { id: 'analyzer', label: 'Analyzer', group: 'analyze', words: 'spectrum microphone fft rta',
-    summary: 'A spectrogram of the output and the microphone analyzer: live views, not a '
-      + 'calibrated measurement.',
+    summary: 'Spektrogram výstupu a analyzátor mikrofonu: živé pohledy, nikoli kalibrované '
+      + 'měření.',
     related: [
-      { id: 'measure', why: 'A calibrated RTA and frequency response' },
-      { id: 'experiments', why: 'Compare saved experiments' },
-      { id: 'learn', why: 'Harmonics, sampling and aliasing explained' },
+      { id: 'measure', why: 'Kalibrované RTA a frekvenční charakteristika' },
+      { id: 'experiments', why: 'Porovnejte uložené experimenty' },
+      { id: 'learn', why: 'Vysvětlení harmonických, vzorkování a aliasingu' },
     ] },
   { id: 'filter', label: 'Filter Lab', group: 'analyze', words: 'lowpass highpass eq curve',
-    summary: 'A biquad filter and the response the browser computes for it, set by type, '
-      + 'cutoff and Q.',
+    summary: 'Bikvadratický filtr a odezva, kterou pro něj spočítá prohlížeč; nastavuje se '
+      + 'typem, mezní frekvencí a Q.',
     related: [
-      { id: 'synth', why: 'The Synth\'s voice filters what you play on its keys' },
-      { id: 'studio', why: 'A cutoff automated over time, as a Studio document',
+      { id: 'synth', why: 'Hlas Synthu filtruje, co hrajete na jeho klávesách' },
+      { id: 'studio', why: 'Automatizace mezní frekvence v čase jako dokument Studia',
         hash: '&st=filter-automation' },
-      { id: 'analyzer', why: 'The spectrum of what the microphone hears' },
+      { id: 'analyzer', why: 'Spektrum toho, co slyší mikrofon' },
     ] },
   { id: 'compare', label: 'Compare', group: 'analyze', words: 'phase hearing ranges bio',
-    summary: 'The microphone analyzer beside the bioacoustics hearing ranges and the phase and '
-      + 'stereo views.',
+    summary: 'Analyzátor mikrofonu vedle bioakustických rozsahů slyšení a pohledů '
+      + 'na fázi a stereo.',
     related: [
-      { id: 'experiments', why: 'Compare saved experiments' },
-      { id: 'measure', why: 'A calibrated measurement of the chain' },
-      { id: 'learn', why: 'Hearing ranges and ultrasound explained' },
+      { id: 'experiments', why: 'Porovnejte uložené experimenty' },
+      { id: 'measure', why: 'Kalibrované měření celého řetězce' },
+      { id: 'learn', why: 'Vysvětlení rozsahů slyšení a ultrazvuku' },
     ],
     // Compare's own job is the generator against the microphone: entering it selects the
     // microphone panel's Compare tab (page audit, Compare fix 1).
     enter: { 'mic.tab': 'compare' } },
   { id: 'synthesis', label: 'Synthesis', group: 'synthesis',
     words: 'envelope adsr additive harmonics dual binaural',
-    summary: 'Additive harmonics, the ADSR envelope, the phase and stereo views and the dual '
-      + 'oscillator, beside the generator and its analysis.',
+    summary: 'Aditivní harmonické, obálka ADSR, pohledy na fázi a stereo a duální oscilátor, '
+      + 'vedle generátoru a jeho analýzy.',
     related: [
-      { id: 'synth', why: 'Envelopes and oscillators on a voice you play from keys' },
-      { id: 'studio', why: 'An enveloped, filtered voice as a Studio document',
+      { id: 'synth', why: 'Obálky a oscilátory hlasu, na který hrajete z kláves' },
+      { id: 'studio', why: 'Hlas s obálkou a filtrem jako dokument Studia',
         hash: '&st=subtractive-synth' },
-      { id: 'studio', why: 'Two detuned tones beating, as a Studio document',
+      { id: 'studio', why: 'Zázněje dvou rozladěných tónů jako dokument Studia',
         hash: '&st=stereo-beat' },
     ] },
   { id: 'sequencer', label: 'Sequencer', group: 'synthesis', words: 'pattern steps blocks song',
     summary: 'Blokové sekvence tónů, přeletů, pulzů a modulace vedle kompaktního Studia; '
       + 'krokový sekvencer s pady je v Synthu na záložce Bicí.',
     related: [
-      { id: 'synth', why: 'A voice to play the notes from keys' },
-      { id: 'studio', why: 'A sweep sequence as a Studio document', hash: '&st=sweep-sequence' },
-      { id: 'presets', why: 'Pattern presets to start from' },
+      { id: 'synth', why: 'Hlas, kterým noty zahrajete z kláves' },
+      { id: 'studio', why: 'Sekvence sweepů jako dokument Studia', hash: '&st=sweep-sequence' },
+      { id: 'presets', why: 'Presety vzorů jako výchozí bod' },
     ] },
   { id: 'presets', label: 'Presets', group: 'synthesis', words: 'library load sounds',
-    summary: 'Built-in and saved instrument settings, and the history of what was played.',
+    summary: 'Vestavěná i uložená nastavení nástroje a historie toho, co se hrálo.',
     related: [
-      { id: 'playground', why: 'Where a loaded preset plays: TRIGGER or hold to play' },
-      { id: 'synth', why: 'The Synth keeps its own patches' },
-      { id: 'synthesis', why: 'Where the dual-oscillator presets play' },
+      { id: 'playground', why: 'Tady načtený preset zazní: tlačítkem Trigger nebo podržením' },
+      { id: 'synth', why: 'Synth má vlastní patche' },
+      { id: 'synthesis', why: 'Tady hrají presety duálního oscilátoru' },
     ],
     empty: { when: 'presets.noCustom', title: 'No custom presets yet',
       body: 'Set a sound in the Playground, then keep it with Save current… here or Save '
         + 'Preset in the status bar.',
       action: { label: 'Open the Playground', to: 'playground' } } },
   { id: 'learn', label: 'Learn', words: 'lessons guide acoustics',
-    summary: 'Concept cards from frequency to signal path, most with a demo to play.',
+    summary: 'Karty pojmů od frekvence po signálovou cestu, většina s ukázkou k přehrání.',
     related: [
-      { id: 'analyzer', why: 'Waveforms, harmonics and aliasing in a live spectrum' },
-      { id: 'synth', why: 'Modulation, AM and FM on the Synth\'s engines' },
-      { id: 'measure', why: 'Logarithmic scales and speakers, measured' },
+      { id: 'analyzer', why: 'Tvary vln, harmonické a aliasing v živém spektru' },
+      { id: 'synth', why: 'Modulace, AM a FM na záložce Engines v Synthu' },
+      { id: 'measure', why: 'Logaritmické stupnice a reproduktory v reálném měření' },
     ] },
   { id: 'studio', label: 'Studio', words: 'graph nodes cables timeline patch',
-    summary: 'A signal graph you patch, with a timeline, transport and automation, run on Web '
-      + 'Audio.',
+    summary: 'Signálový graf, který propojujete kabely, s časovou osou, transportem '
+      + 'a automatizací, běžící na Web Audio.',
     related: [
-      { id: 'synth', why: 'A Studio document played from a panel and keys' },
-      { id: 'sequencer', why: 'Block sequences that open here as patterns' },
-      { id: 'filter', why: 'The filter response the templates automate' },
+      { id: 'synth', why: 'Dokument Studia hraný z panelu a kláves' },
+      { id: 'sequencer', why: 'Blokové sekvence, které se tu otevřou jako vzory' },
+      { id: 'filter', why: 'Odezva filtru, kterou automatizují šablony' },
     ] },
   // Synth (K058) is top level after Studio by the owner's decision Q019.
   { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch',
-    summary: 'A semi-modular mono voice on the Studio model with a patch bay and docked keys, '
-      + 'an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion '
-      + 'voices, an XY tab and a Bicí tab of drum steps.',
+    summary: 'Semimodulární monofonní hlas na modelu Studia s patch bayí a ukotvenými '
+      + 'klávesami; záložka Engines s hlasy aditivními, FM, AM / ring, wavetable, hard sync '
+      + 'a perkusními, záložka XY a záložka Bicí s kroky bicích.',
     related: [
-      { id: 'studio', why: 'The same document as a graph and a timeline' },
-      { id: 'sequencer', why: 'Block sequences of tones and sweeps' },
-      { id: 'learn', why: 'Modulation, AM and FM explained' },
+      { id: 'studio', why: 'Tentýž dokument jako graf a časová osa' },
+      { id: 'sequencer', why: 'Blokové sekvence tónů a sweepů' },
+      { id: 'learn', why: 'Vysvětlení modulace, AM a FM' },
     ] },
   { id: 'about', label: 'About', words: 'credits licence version',
-    summary: 'This page: what OSCILLA is, how it got here and what comes next.',
+    summary: 'Tato stránka: co je OSCILLA, jak vznikla a co přijde dál.',
     related: [
-      { id: 'playground', why: 'Start with the instrument' },
-      { id: 'learn', why: 'The concepts, each with a demo' },
-      { id: 'measure', why: 'A guided measurement of your speaker and room' },
+      { id: 'playground', why: 'Začněte u nástroje' },
+      { id: 'learn', why: 'Pojmy, každý s ukázkou' },
+      { id: 'measure', why: 'Řízené měření vašeho reproduktoru a místnosti' },
     ] },
 ].map((w) => Object.freeze({ ...w, icon: `i-ws-${w.id}`,
   ...(w.related ? { related: Object.freeze(w.related.map((r) => Object.freeze({ ...r }))) } : {}),

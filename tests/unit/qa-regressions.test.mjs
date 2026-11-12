@@ -310,7 +310,7 @@ test('status bar duration while the sequencer plays is the sequence length', () 
     continuousAllowed: false, safetyLimit: 2, source: 'single', pattern: 'tone' });
   const ms = totalDurationMs(model);
   assert.ok(ms > 2000);
-  const want = model.loop ? `${formatMs(ms)} (loop)` : formatMs(ms);
+  const want = model.loop ? `${formatMs(ms)} (smyčka)` : formatMs(ms);
   assert.equal(cmp.statusDurationText, want);
   cmp.playback = { owner: null, since: 0 };
   assert.equal(cmp.statusDurationText, '≤ 2 s');
@@ -366,15 +366,15 @@ test('C004: status bar duration follows sequence edits made while it plays', () 
   follow(proxy, editor); // what main.js wires
   const want = () => {
     const ms = totalDurationMs(editor.model);
-    return editor.model.loop ? `${formatMs(ms)} (loop)` : formatMs(ms);
+    return editor.model.loop ? `${formatMs(ms)} (smyčka)` : formatMs(ms);
   };
   assert.equal(editor.play(), true);
   proxy.playback = { owner: 'sequencer', since: 1 };
   assert.equal(read(), want());
-  assert.match(read(), /\(loop\)/);
+  assert.match(read(), /\(smyčka\)/);
   editor.setLoop(false);
   assert.equal(read(), want(), 'Loop off while playing');
-  assert.doesNotMatch(read(), /loop/);
+  assert.doesNotMatch(read(), /smyčka/);
   const before = read();
   editor.addBlock('tone');
   assert.equal(read(), want(), 'a block added while playing');
@@ -396,9 +396,9 @@ test('C006: while a stale pass sounds, the status bar shows the sounding and the
     // Block 1 lengthened to 3000 ms while pass 1 sounds: 2.25 s plays, 4.75 s comes next.
     model = { ...model, blocks: model.blocks.map((b, i) => (i ? b : { ...b, durationMs: 3000 })) };
     pass = { soundingS: 2.25, nextS: 4.75, current: false, layoutCurrent: false };
-    assert.equal(cmp.statusDurationText, '2.25 s now, next 4.75 s');
+    assert.equal(cmp.statusDurationText, '2.25 s teď, příště 4.75 s');
     model = { ...model, loop: true };
-    assert.equal(cmp.statusDurationText, '2.25 s now, next 4.75 s (loop)');
+    assert.equal(cmp.statusDurationText, '2.25 s teď, příště 4.75 s (smyčka)');
     pass = null; // stopped between frames: the edited length alone
-    assert.equal(cmp.statusDurationText, '4.75 s (loop)');
+    assert.equal(cmp.statusDurationText, '4.75 s (smyčka)');
   });

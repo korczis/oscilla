@@ -114,10 +114,12 @@ export const SEED_MARGIN = 1.5;
 export const PINNED_TEXT = [['[data-osc="status.version"]', 'v0.0.0'],
   // The page header's summary is the shell's copy, judged by the gate's pageHeader region; SYN
   // pins it to the text its references were taken with, so a wording edit (#437's U085) does not
-  // fail the 8 desktop views of the Synth panel it sits above.
-  ['[data-osc="page.summary"]', 'A semi-modular mono voice on the Studio model with a patch bay '
-    + 'and docked keys, and an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and '
-    + 'percussion voices.']];
+  // fail the 8 desktop views of the Synth panel it sits above. A fixed copy on purpose (not
+  // imported from ui/shell.js, which would make every wording edit move these views): the Czech
+  // summary of the Q104 translation, re-accepted with the references that translation retakes.
+  ['[data-osc="page.summary"]', 'Semimodulární monofonní hlas na modelu Studia s patch bayí '
+    + 'a ukotvenými klávesami; záložka Engines s hlasy aditivními, FM, AM / ring, wavetable, '
+    + 'hard sync a perkusními, záložka XY a záložka Bicí s kroky bicích.']];
 
 /** Set each pinned element's text in `doc`; the count pinned (runs in the page as well). */
 export function pinText(doc, pins) {

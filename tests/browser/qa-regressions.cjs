@@ -727,13 +727,13 @@ function defineChecks() {
     await context.close();
     const secs = (r.ms / 1000).toFixed(2).replace(/\.?0+$/, '');
     const ok = r.playing && r.text !== r.idle && r.text.includes(secs) && r.dom
-      && (!r.loop || /loop/.test(r.text));
+      && (!r.loop || /\(smyčka\)/.test(r.text));
     return { ok, ...r, expectSeconds: secs };
   });
 
   // C004 (finding dup-stale-6): the readout follows the sequence while it plays. Edits through
   // the Add menu and the Loop button change editor.model, which is not reactive; the drawn
-  // Duration must equal what the getter computes from the model now, with "(loop)" only while
+  // Duration must equal what the getter computes from the model now, with "(smyčka)" only while
   // the model loops, and not the length it had when playback started.
   def('seq-status-duration-follows-edits', async ({ browser }) => {
     const { page, context, errors } = await open(browser);
@@ -757,7 +757,7 @@ function defineChecks() {
       await page.evaluate(() => window.OSCILLA.app.collapseSafety()); // it covers the menu
       if (!(await read()).loop) await page.click('#osc-seq-record');
       await page.click('#osc-seq-play');
-      const s0 = await follows((s) => s.loop && /\(loop\)/.test(s.dom));
+      const s0 = await follows((s) => s.loop && /\(smyčka\)/.test(s.dom));
       await page.click('#osc-seq-add');
       // By keyboard: at 1536 x 1024 the menu opens upwards and its first row lies under the
       // sticky header, which takes a pointer click there (a layout defect outside C004).
@@ -765,7 +765,7 @@ function defineChecks() {
       await page.keyboard.press('Enter');
       const s1 = await follows((s) => s.blocks === s0.blocks + 1 && s.dom !== s0.dom);
       await page.click('#osc-seq-record'); // Loop off: the current pass still plays
-      const s2 = await follows((s) => !s.loop && !/loop/.test(s.dom));
+      const s2 = await follows((s) => !s.loop && !/smyčka/.test(s.dom));
       await stopAll(page);
       return { ok: !errors.length, s0, s1, s2, errors: errors.slice(0, 3) };
     } catch (e) {
@@ -1296,8 +1296,8 @@ function defineChecks() {
     phone.active = await ph.page.evaluate(() => (document.activeElement === document.body
       ? 'BODY' : document.activeElement.dataset.osc || document.activeElement.id));
     await ph.context.close();
-    const ok = first.shown && /harmful at excessive output levels/.test(first.text)
-      && /does not guarantee that your hardware reproduces/.test(first.text) && first.h <= 50
+    const ok = first.shown && /hlasitosti může být zvuk nepříjemný i škodlivý/.test(first.text)
+      && /nezaručuje, že váš hardware požadovanou frekvenci/.test(first.text) && first.h <= 50
       && !dismissed.shown && dismissed.active === 'safety.reopen' && dismissed.stored === '1'
       && reopened.shown && reopened.active === 'safety.dismiss'
       && !reloaded.shown && reloaded.stored === '1'

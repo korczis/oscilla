@@ -164,24 +164,24 @@ Every workspace of the app, in sidebar order, read from `WORKSPACE_REGISTRY` in
 `src/js/ui/shell.js`. **Open** starts the live app in that workspace; the links
 under *Leads on to* are the Related strip its page header shows.
 
-| Workspace | What it does | Leads on to | Open |
-| --- | --- | --- | --- |
-| **Playground** | The instrument on one screen: generator, signal analysis, microphone analyzer, guided measurement, pattern sequencer and compact Studio. | [Measure](https://korczis.github.io/oscilla/#m=measure "Measure the speaker, room and microphone the tone plays through"), [Synth](https://korczis.github.io/oscilla/#m=synth "A voice with filters, envelopes and keys"), [Learn](https://korczis.github.io/oscilla/#m=learn "Concept cards whose demos play here") | [Open](https://korczis.github.io/oscilla/#m=playground) |
-| **Measure** | A guided measurement of the speaker, room and microphone chain: frequency response, impulse response and RTA, each run rated for quality. | [Experiments](https://korczis.github.io/oscilla/#m=experiments "Keep a run as an experiment and compare it with others"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep "The measurement sweep as a Studio document"), [Learn](https://korczis.github.io/oscilla/#m=learn "Logarithmic scales and speaker limits explained") | [Open](https://korczis.github.io/oscilla/#m=measure) |
-| **Experiments** | Saved measurements as experiments: their definitions, a comparison against a baseline, and the findings that cite them. | [Measure](https://korczis.github.io/oscilla/#m=measure "Run the measurement an experiment records"), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer "A live microphone spectrum, before a calibrated run") | [Open](https://korczis.github.io/oscilla/#m=experiments) |
-| **Analyzer** (Analyze) | A spectrogram of the output and the microphone analyzer: live views, not a calibrated measurement. | [Measure](https://korczis.github.io/oscilla/#m=measure "A calibrated RTA and frequency response"), [Experiments](https://korczis.github.io/oscilla/#m=experiments "Compare saved experiments"), [Learn](https://korczis.github.io/oscilla/#m=learn "Harmonics, sampling and aliasing explained") | [Open](https://korczis.github.io/oscilla/#m=analyzer) |
-| **Filter Lab** (Analyze) | A biquad filter and the response the browser computes for it, set by type, cutoff and Q. | [Synth](https://korczis.github.io/oscilla/#m=synth "The Synth's voice filters what you play on its keys"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=filter-automation "A cutoff automated over time, as a Studio document"), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer "The spectrum of what the microphone hears") | [Open](https://korczis.github.io/oscilla/#m=filter) |
-| **Compare** (Analyze) | The microphone analyzer beside the bioacoustics hearing ranges and the phase and stereo views. | [Experiments](https://korczis.github.io/oscilla/#m=experiments "Compare saved experiments"), [Measure](https://korczis.github.io/oscilla/#m=measure "A calibrated measurement of the chain"), [Learn](https://korczis.github.io/oscilla/#m=learn "Hearing ranges and ultrasound explained") | [Open](https://korczis.github.io/oscilla/#m=compare) |
-| **Synthesis** (Synthesis) | Additive harmonics, the ADSR envelope, the phase and stereo views and the dual oscillator, beside the generator and its analysis. | [Synth](https://korczis.github.io/oscilla/#m=synth "Envelopes and oscillators on a voice you play from keys"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth "An enveloped, filtered voice as a Studio document"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat "Two detuned tones beating, as a Studio document") | [Open](https://korczis.github.io/oscilla/#m=synthesis) |
-| **Sequencer** (Synthesis) | Blokové sekvence tónů, přeletů, pulzů a modulace vedle kompaktního Studia; krokový sekvencer s pady je v Synthu na záložce Bicí. | [Synth](https://korczis.github.io/oscilla/#m=synth "A voice to play the notes from keys"), [Studio](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence "A sweep sequence as a Studio document"), [Presets](https://korczis.github.io/oscilla/#m=presets "Pattern presets to start from") | [Open](https://korczis.github.io/oscilla/#m=sequencer) |
-| **Presets** (Synthesis) | Built-in and saved instrument settings, and the history of what was played. | [Playground](https://korczis.github.io/oscilla/#m=playground "Where a loaded preset plays: TRIGGER or hold to play"), [Synth](https://korczis.github.io/oscilla/#m=synth "The Synth keeps its own patches"), [Synthesis](https://korczis.github.io/oscilla/#m=synthesis "Where the dual-oscillator presets play") | [Open](https://korczis.github.io/oscilla/#m=presets) |
-| **Learn** | Concept cards from frequency to signal path, most with a demo to play. | [Analyzer](https://korczis.github.io/oscilla/#m=analyzer "Waveforms, harmonics and aliasing in a live spectrum"), [Synth](https://korczis.github.io/oscilla/#m=synth "Modulation, AM and FM on the Synth's engines"), [Measure](https://korczis.github.io/oscilla/#m=measure "Logarithmic scales and speakers, measured") | [Open](https://korczis.github.io/oscilla/#m=learn) |
-| **Studio** | A signal graph you patch, with a timeline, transport and automation, run on Web Audio. | [Synth](https://korczis.github.io/oscilla/#m=synth "A Studio document played from a panel and keys"), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer "Block sequences that open here as patterns"), [Filter Lab](https://korczis.github.io/oscilla/#m=filter "The filter response the templates automate") | [Open](https://korczis.github.io/oscilla/#m=studio) |
-| **Synth** | A semi-modular mono voice on the Studio model with a patch bay and docked keys, an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and percussion voices, an XY tab and a Bicí tab of drum steps. | [Studio](https://korczis.github.io/oscilla/#m=studio "The same document as a graph and a timeline"), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer "Block sequences of tones and sweeps"), [Learn](https://korczis.github.io/oscilla/#m=learn "Modulation, AM and FM explained") | [Open](https://korczis.github.io/oscilla/#m=synth) |
-| **About** | This page: what OSCILLA is, how it got here and what comes next. | [Playground](https://korczis.github.io/oscilla/#m=playground "Start with the instrument"), [Learn](https://korczis.github.io/oscilla/#m=learn "The concepts, each with a demo"), [Measure](https://korczis.github.io/oscilla/#m=measure "A guided measurement of your speaker and room") | [Open](https://korczis.github.io/oscilla/#m=about) |
+| Workspace | Leads on to | Open |
+| --- | --- | --- |
+| **Playground** | [Measure](https://korczis.github.io/oscilla/#m=measure), [Synth](https://korczis.github.io/oscilla/#m=synth), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=playground) |
+| **Measure** | [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Studio](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=measure) |
+| **Experiments** | [Measure](https://korczis.github.io/oscilla/#m=measure), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=experiments) |
+| **Analyzer** (Analyze) | [Measure](https://korczis.github.io/oscilla/#m=measure), [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=analyzer) |
+| **Filter Lab** (Analyze) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=filter-automation), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=filter) |
+| **Compare** (Analyze) | [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Measure](https://korczis.github.io/oscilla/#m=measure), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=compare) |
+| **Synthesis** (Synthesis) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat) | [Open](https://korczis.github.io/oscilla/#m=synthesis) |
+| **Sequencer** (Synthesis) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence), [Presets](https://korczis.github.io/oscilla/#m=presets) | [Open](https://korczis.github.io/oscilla/#m=sequencer) |
+| **Presets** (Synthesis) | [Playground](https://korczis.github.io/oscilla/#m=playground), [Synth](https://korczis.github.io/oscilla/#m=synth), [Synthesis](https://korczis.github.io/oscilla/#m=synthesis) | [Open](https://korczis.github.io/oscilla/#m=presets) |
+| **Learn** | [Analyzer](https://korczis.github.io/oscilla/#m=analyzer), [Synth](https://korczis.github.io/oscilla/#m=synth), [Measure](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=learn) |
+| **Studio** | [Synth](https://korczis.github.io/oscilla/#m=synth), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer), [Filter Lab](https://korczis.github.io/oscilla/#m=filter) | [Open](https://korczis.github.io/oscilla/#m=studio) |
+| **Synth** | [Studio](https://korczis.github.io/oscilla/#m=studio), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=synth) |
+| **About** | [Playground](https://korczis.github.io/oscilla/#m=playground), [Learn](https://korczis.github.io/oscilla/#m=learn), [Measure](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=about) |
 
 How the workspaces lead into each other, inferred from the same registry (each arrow is a
-`related` entry, labelled with its reason or the Studio template it opens):
+`related` entry; the app states each reason in Czech, so this English page omits them):
 
 ```mermaid
 flowchart LR
@@ -202,44 +202,44 @@ flowchart LR
     ws_sequencer["Sequencer"]
     ws_presets["Presets"]
   end
-  ws_playground -->|"Measure the speaker, room and…"| ws_measure
-  ws_playground -->|"A voice with filters, envelopes…"| ws_synth
-  ws_playground -->|"Concept cards whose demos play…"| ws_learn
-  ws_measure -->|"Keep a run as an experiment and…"| ws_experiments
-  ws_measure -->|"Measurement Sweep template"| ws_studio
-  ws_measure -->|"Logarithmic scales and speaker…"| ws_learn
-  ws_experiments -->|"Run the measurement an…"| ws_measure
-  ws_experiments -->|"A live microphone spectrum…"| ws_analyzer
-  ws_analyzer -->|"A calibrated RTA and frequency…"| ws_measure
-  ws_analyzer -->|"Compare saved experiments"| ws_experiments
-  ws_analyzer -->|"Harmonics, sampling and aliasing…"| ws_learn
-  ws_filter -->|"The Synth's voice filters what…"| ws_synth
-  ws_filter -->|"Filter Automation template"| ws_studio
-  ws_filter -->|"The spectrum of what the…"| ws_analyzer
-  ws_compare -->|"Compare saved experiments"| ws_experiments
-  ws_compare -->|"A calibrated measurement of the…"| ws_measure
-  ws_compare -->|"Hearing ranges and ultrasound…"| ws_learn
-  ws_synthesis -->|"Envelopes and oscillators on a…"| ws_synth
-  ws_synthesis -->|"Subtractive Synth template"| ws_studio
-  ws_synthesis -->|"Stereo Beat template"| ws_studio
-  ws_sequencer -->|"A voice to play the notes from…"| ws_synth
-  ws_sequencer -->|"Sweep Sequence template"| ws_studio
-  ws_sequencer -->|"Pattern presets to start from"| ws_presets
-  ws_presets -->|"Where a loaded preset plays…"| ws_playground
-  ws_presets -->|"The Synth keeps its own patches"| ws_synth
-  ws_presets -->|"Where the dual-oscillator…"| ws_synthesis
-  ws_learn -->|"Waveforms, harmonics and…"| ws_analyzer
-  ws_learn -->|"Modulation, AM and FM on the…"| ws_synth
-  ws_learn -->|"Logarithmic scales and speakers…"| ws_measure
-  ws_studio -->|"A Studio document played from a…"| ws_synth
-  ws_studio -->|"Block sequences that open here…"| ws_sequencer
-  ws_studio -->|"The filter response the…"| ws_filter
-  ws_synth -->|"The same document as a graph and…"| ws_studio
-  ws_synth -->|"Block sequences of tones and…"| ws_sequencer
-  ws_synth -->|"Modulation, AM and FM explained"| ws_learn
-  ws_about -->|"Start with the instrument"| ws_playground
-  ws_about -->|"The concepts, each with a demo"| ws_learn
-  ws_about -->|"A guided measurement of your…"| ws_measure
+  ws_playground --> ws_measure
+  ws_playground --> ws_synth
+  ws_playground --> ws_learn
+  ws_measure --> ws_experiments
+  ws_measure --> ws_studio
+  ws_measure --> ws_learn
+  ws_experiments --> ws_measure
+  ws_experiments --> ws_analyzer
+  ws_analyzer --> ws_measure
+  ws_analyzer --> ws_experiments
+  ws_analyzer --> ws_learn
+  ws_filter --> ws_synth
+  ws_filter --> ws_studio
+  ws_filter --> ws_analyzer
+  ws_compare --> ws_experiments
+  ws_compare --> ws_measure
+  ws_compare --> ws_learn
+  ws_synthesis --> ws_synth
+  ws_synthesis --> ws_studio
+  ws_synthesis --> ws_studio
+  ws_sequencer --> ws_synth
+  ws_sequencer --> ws_studio
+  ws_sequencer --> ws_presets
+  ws_presets --> ws_playground
+  ws_presets --> ws_synth
+  ws_presets --> ws_synthesis
+  ws_learn --> ws_analyzer
+  ws_learn --> ws_synth
+  ws_learn --> ws_measure
+  ws_studio --> ws_synth
+  ws_studio --> ws_sequencer
+  ws_studio --> ws_filter
+  ws_synth --> ws_studio
+  ws_synth --> ws_sequencer
+  ws_synth --> ws_learn
+  ws_about --> ws_playground
+  ws_about --> ws_learn
+  ws_about --> ws_measure
 ```
 <!-- derived:workspaces:end -->
 

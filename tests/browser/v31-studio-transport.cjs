@@ -334,6 +334,8 @@ const statusBar = (page) => page.evaluate(() => {
   const shown = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility
     !== 'hidden';
   return { label: q('label').textContent.trim(), labelShown: shown(q('label')),
+    // the label statusLabel builds for the app's state (its wording is the app's language)
+    labelBuilt: window.OSCILLA.app.statusLabel,
     dot: q('state').classList.contains('is-playing'), gain: q('gain').textContent.trim(),
     gainShown: shown(q('gain')), pattern: q('pattern').textContent.trim(),
     playPressed: q('play').getAttribute('aria-pressed'),
@@ -376,12 +378,15 @@ async function statusBarStudio(key, page) {
   const { playground } = await loadStudio(page, 'subtractive-synth', STUDIO);
   await playStudio(page, STUDIO, 'status-bar-studio: PLAY at the Master level');
   const want = `Master ${dbText(STUDIO)}`;
-  const on = await until(() => statusBar(page).then((v) => (v.label === 'PLAYING'
+  // PLAYING by state: the Studio transport plays and the dot is-playing; the label shown is the
+  // one statusLabel builds for it (unit c012 pins its wording)
+  const says = (v) => v.playing && v.dot && v.label === v.labelBuilt;
+  const on = await until(() => statusBar(page).then((v) => (says(v)
     && v.gain === want ? v : null)), { ms: 5000, what: 'status-bar-studio: PLAYING and Master' })
     .catch(() => null);
   const bar = on || await statusBar(page);
   check(key, 'status-bar-studio: the visible state says PLAYING with the playing dot',
-    bar.labelShown && bar.label === 'PLAYING' && bar.dot, JSON.stringify(bar));
+    bar.labelShown && says(bar), JSON.stringify(bar));
   check(key, `status-bar-studio: the readout is the level in effect (${want}), `
     + (SB_EXTRAS_SHOWN ? 'shown' : 'hidden at this width by the responsive layout'),
   bar.gainShown === SB_EXTRAS_SHOWN && bar.gain === want && near(bar.engine, STUDIO, 1e-9),
@@ -400,7 +405,9 @@ async function statusBarStudio(key, page) {
   check(key, `status-bar-studio: a Playground gain set while playing reads ${wantGain}`,
     sb.gain === wantGain && near(sb.engine, PLAYGROUND, 1e-9) && sb.playing, JSON.stringify(sb));
   await page.evaluate(() => window.OSCILLA.app.studioStop());
-  const off = await until(() => statusBar(page).then((v) => (!v.playing && v.label !== 'PLAYING'
+  // not PLAYING: the label shown while it played (bar.label, read above) is gone
+  const off = await until(() => statusBar(page).then((v) => (!v.playing && !!bar.label
+    && v.label !== bar.label && v.label === v.labelBuilt
     && !v.dot && v.gain === wantGain ? v : null)), { ms: 10000,
     what: 'status-bar-studio: the state after STOP' }).catch(() => null);
   const ob = off || await statusBar(page);

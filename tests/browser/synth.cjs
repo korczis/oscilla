@@ -245,6 +245,10 @@ const DIST = path.join(ROOT, 'dist', 'index.html');
 const panelJacks = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'panels',
   'semi-mono.js')).href).then(({ default: p }) => p.modules
   .reduce((n, m) => n + p.jacksOf(m.id).length, 0));
+/** What the panel's Insert says when it takes Master Output (synth/insert.js SYNTH_TEXT.took), up
+ *  to the names it takes it from: read from the source, not copied, whatever its language. */
+const tookPrefix = () => import(pathToFileURL(path.join(ROOT, 'src', 'js', 'synth', 'insert.js'))
+  .href).then(({ SYNTH_TEXT }) => SYNTH_TEXT.took('\u0000').split('\u0000')[0]);
 const RUN = suite.open({ name: 'synth', browsers: arg('browsers'), origins: arg('origins'),
   defaultOrigins: ['file'] });
 const playwright = RUN.playwright;
@@ -1842,9 +1846,10 @@ function defineChecks() {
     // closes: Playwright waits on the detached item)
     await menu.locator('[data-pick="new-voice"]').focus();
     await page.keyboard.press('Enter');
+    const took = await tookPrefix();
     const said = await until(async () => {
       const t = await page.locator('[data-osc="synth.status"]').textContent();
-      return /took Master Output from/.test(t) && t;
+      return took.length > 0 && t.includes(took) && t;
     }, { ms: 10000, what: 'New Synth voice says the Master feed it took' });
     // The panel's own nodes: Master Output is the document's one, kept where it is.
     const placed = await page.evaluate((had) => window.OSCILLA.studio.model.graph.nodes
