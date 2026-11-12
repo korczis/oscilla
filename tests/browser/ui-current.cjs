@@ -119,10 +119,11 @@ const PHONE_SIZES = [{ width: 320, height: 568 }, { width: 375, height: 667 }, P
 // may be scoped to a browser and a width: "<browser>@<width>:<ws>:<measure>",
 // "<browser>:<ws>:<measure>" or "@<width>:<ws>:<measure>"; the most specific listed key applies.
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s '
-    + 'header buttons at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured '
-    + 'with the insert alert closed (U107, C3-539-2) and the page unscrolled (#540): 3 pairs in '
-    + 'every Mac engine (oscilla-c3) and in linux chromium and firefox (oscilla-0b, container), '
-    + 'none in linux webkit';
+  + 'header buttons or tabs at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; '
+  + 'measured with the insert alert closed (U107) and the page unscrolled (#540): 3 pairs in '
+  + 'every Mac engine (oscilla-c3), 3 in linux chromium and firefox (oscilla-0b, container) and '
+  + '6 in linux webkit once its fallback no longer scrolls (CI run 43266191509): every host and '
+  + 'engine, one key';
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -137,9 +138,7 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
-  ['darwin:@375:synth:overlap', R375],
-  ['linux:chromium@375:synth:overlap', R375],
-  ['linux:firefox@375:synth:overlap', R375],
+  ['@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
