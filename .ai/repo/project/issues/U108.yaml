@@ -19,7 +19,7 @@ scope:
 depends_on: []
 acceptance_criteria:
   - "oscilla-c3's done criterion, verbatim: elementFromPoint at 25/50/75/95 % of the alert returns the alert, and the same for Close, at 320x568, 375x667 and 390x844 with link+safety open and closed."
-  - "The check runs in ui-current or synth in chromium, webkit and firefox, fails on main 35f0ca0b-era trees (fail-first), and cannot pass when the alert is absent (C3-540-2: it waits for the alert, never skips it)."
+  - "The check runs in ui-current or synth in chromium, webkit and firefox, fails on a tree that has K246's alert (main da54bdc8 / v3.37.x, or main as it stands when T18 builds it) for the right reason, elementFromPoint returning a keyboard.* element at 320x568, never 'alert missing' (fail-first, oscilla-c3), and cannot pass when the alert is absent (C3-540-2: it waits for the alert, never skips it)."
   - "At 320x568 the dock no longer covers osc-synth-preset (C3-540-1); the @320 debt key names its pairs instead of a boolean, and the debt only falls."
   - "A reviewer's verdict; visual references re-accepted with the reason."
 validation:
