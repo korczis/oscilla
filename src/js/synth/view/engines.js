@@ -37,18 +37,18 @@ export function enginePickerHtml({ panel, ids, on, resolved }) {
 }
 
 /** The Engines tab while the keys play a node outside its engines (review S4). */
-export const ELSEWHERE = 'The keys play a node chosen in Plays, beside the piano: choose an '
-  + 'engine here to play it.';
+export const ELSEWHERE = 'Klávesy hrají uzel zvolený tlačítkem Hraje vedle klavíru; chcete-li '
+  + 'hrát engine, zvolte ho zde.';
 
 /** The status sentence for a note that left `dropped` items out (FM operators, AM's modulator). */
 export function droppedText(node, dropped) {
-  const limit = `${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit`;
+  const limit = `${SAFE_NYQUIST_FACTOR_TEXT} × digitální Nyquistovou mezí`;
   if (node.type === 'fm-voice') {
-    return `${dropped} operator(s) above ${limit} left out of this note.`;
+    return `Operátory nad ${limit} vynechané z této noty: ${dropped}.`;
   }
   if (node.type === 'am-voice') {
-    return `The modulator is above ${limit}: this note ${node.params.mode === 'ring'
-      ? 'is silent (ring)' : 'plays its carrier alone'}.`;
+    return `Modulátor je nad ${limit}: tato nota ${node.params.mode === 'ring'
+      ? 'mlčí (kruhová modulace)' : 'hraje jen nosnou'}.`;
   }
-  return `${dropped} harmonic(s) above ${limit} dropped from this note.`;
+  return `Harmonické nad ${limit} vypuštěné z této noty: ${dropped}.`;
 }

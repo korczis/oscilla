@@ -71,12 +71,12 @@ test('README.md and docs/ state the counts the code holds', () => {
 });
 
 test('the page builds its counts from the constants, never a literal', () => {
-  assert.match(ENGINE_TAB.description, new RegExp(`up to ${MAX_VOICES} voices each`));
+  assert.match(ENGINE_TAB.description, new RegExp(`každý až s ${MAX_VOICES} hlasy`));
   const card = LEARN_CARDS.find((c) => c.id === 'synthesis-engines');
   assert.match(card.body, new RegExp(`up to ${MAX_VOICES} voices each`));
   for (const rel of ['src/js/synth/panels/engines.js', 'src/js/data/learn.js']) {
     const code = read(rel).split('\n').filter((l) => !/^\s*(\/\/|\*)/.test(l)).join('\n');
-    assert.doesNotMatch(code, /up to \d+ voices/, `${rel} types the voice count`);
+    assert.doesNotMatch(code, /up to \d+ voices|až s \d+ hlasy/, `${rel} types the voice count`);
   }
 });
 

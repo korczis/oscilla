@@ -126,10 +126,10 @@ import {
 import { RECORD_BUTTON, bindTimelinePlay, timelinePlayHtml } from './timeline-play.js';
 
 export const XY_TEXT = Object.freeze({
-  missing: 'The XY pad is not in this Studio document: press Add the XY pad first.',
-  first: 'Touch the pad to play. Nothing sounds until you do.',
-  refused: 'The instrument did not start, so the pad plays nothing.',
-  cold: 'Tap once to start audio.',
+  missing: 'XY pad v tomto dokumentu Studia není: nejdřív stiskněte Přidat XY pad.',
+  first: 'Hrajte dotykem padu. Dokud se ho nedotknete, nic nezní.',
+  refused: 'Nástroj se nespustil, takže pad nic nehraje.',
+  cold: 'Klepnutím spustíte zvuk.',
   /** Y with no cable (the default since K220): the touch's velocity only, and how to add a
    *  target. */
   free: 'Y je síla úhozu: z jacku Y padu nevede žádný kabel. Cíl přidáte v poli Y drives.',
@@ -166,7 +166,7 @@ let mounts = 0;
 /** A built-in XY preset as one BATCH (xy.js: the recipe's patch on the document's panel). */
 export function xyPresetAction(model, panel, id) {
   const recipe = XY_RECIPES.find((x) => x.id === id);
-  if (!recipe) return { reason: `There is no XY preset "${id}".` };
+  if (!recipe) return { reason: `Předvolba XY „${id}“ neexistuje.` };
   try {
     return xyPatchAction(model, panel, xyPresetPatch(model, panel, recipe));
   } catch (e) {
@@ -267,7 +267,7 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
       const low = deg(0);
       const from = `${low.name}${low.sends ? ' (nota, kterou pad posílá)' : ''}`;
       const range = `${scale}, ${p.span} oct od ${from}`;
-      const tag = lead ? " (the XY lead's scale and target)" : '';
+      const tag = lead ? ' (stupnice a cíl předvolby XY sólo)' : '';
       // What Y's target plays, read from the document and the context's rate at each reading.
       let seen = { m: null, sr: null, r: null };
       const reading = () => {

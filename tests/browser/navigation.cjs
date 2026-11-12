@@ -45,7 +45,7 @@
 //   seq-unsaved-guard  (C019, finding persist-7) a fresh page and a lab-only edit (Filter,
 //                     Envelope, the instrument waveform the sequence follows) arm nothing; a
 //                     block added through the Add menu arms the guard with "sequencer: Unsaved
-//                     sequence", shows "unsaved sequence" in the panel, and a reload asks and
+//                     sequence", shows "neuložená sekvence" in the panel, and a reload asks and
 //                     keeps the block; Export config disarms it, a reload asks nothing, and the
 //                     exported file imported back restores the sequence with the guard quiet; a
 //                     Tempo change through its select arms it again, and choosing the saved tempo
@@ -1076,7 +1076,7 @@ function defineChecks() {
       cleanQuiet: quiet(clean),
       labOnlyQuiet: quiet(labOnly),
       addArms: !!added && added.blocks === clean.blocks + 1
-        && added.indicatorText === 'unsaved sequence',
+        && added.indicatorText === 'neuložená sekvence',
       reloadAsks: askReload.dialog === 'beforeunload' && askReload.stayed
         && afterAsk.blocks === addedNow.blocks && armedSeq(afterAsk),
       exportDisarms: !!exported && Array.isArray(doc.sequencer && doc.sequencer.blocks)

@@ -331,7 +331,7 @@ export function definePanel(decl, registry = NODE_REGISTRY) {
         steps.push({ type: 'EDGE_ADD', id: n.edgeId, from: { node: ids.get(x.module),
           port: x.port }, to: { node: ids.get(y.module), port: y.port }, props: n.props });
       }
-      return { type: 'BATCH', label: `Insert ${panel.title}`, steps };
+      return { type: 'BATCH', label: `Vložit ${panel.title}`, steps };
     },
   };
   return Object.freeze(panel);

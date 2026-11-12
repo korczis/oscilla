@@ -218,6 +218,8 @@ function snapshot() {
     // builds for the app's state (its wording is the app's language)
     sb: { playing: !!document.querySelector('[data-osc="status.state"].is-playing'),
       label: txt('[data-osc="status.label"]'), built: a.statusLabel },
+    // the names the status bar shows for a waveform (WAVEFORM_NAMES of the source, Q104)
+    names: { wave: a.WAVEFORM_NAMES ? { ...a.WAVEFORM_NAMES } : null },
     dialogs: [...document.querySelectorAll('dialog[open]')].map((d) => d.id),
     themeAttr: document.documentElement.dataset.theme || null,
     hash: location.hash,

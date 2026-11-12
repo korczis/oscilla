@@ -270,7 +270,7 @@ test('every preset writes its values and amounts, and differs from Init', () => 
     const done = st.dispatch(presetAction(st.getModel(), PANEL, p.id).action);
     assert.equal(done.ok, true, done.reason);
     assert.equal(st.debugInfo().undoDepth, before + 1, `${p.id}: one undo entry`);
-    assert.equal(st.undoLabel(), `Preset ${p.title.split(':')[0]}`);
+    assert.equal(st.undoLabel(), `Předvolba ${p.title.split(':')[0]}`);
     const m = st.getModel();
     const want = presetValues(PANEL, p);
     // A preset sets its own tab's modules (presets.js): a Panel preset the panel, an engine

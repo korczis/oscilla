@@ -87,13 +87,13 @@ export const XY_DEFAULT_Y = 'lpf.frequency';
 /** Built-in XY presets: a panel preset, the scale, the pad's values and the target of Y. */
 export const XY_RECIPES = Object.freeze([
   { id: 'xy-lead', base: 'lead', scale: { mode: 'minor-pentatonic', key: 'C' },
-    y: 'lpf.frequency', values: [], name: 'XY lead: C minor pentatonic, Y opens the low-pass' },
+    y: 'lpf.frequency', values: [], name: 'XY sólo: pentatonika c moll, Y otevírá dolní propust' },
   { id: 'xy-bass', base: 'bass', scale: { mode: 'dorian', key: 'D' }, y: 'lpf.frequency',
-    values: [['xy.octave', 2], ['xy.span', 1]], name: 'XY bass: D Dorian, Y opens the low-pass' },
+    values: [['xy.octave', 2], ['xy.span', 1]], name: 'XY bas: D dórská, Y otevírá dolní propust' },
   { id: 'xy-sweep', base: 'sweep', scale: { mode: 'minor', key: 'A' }, y: 'hpf.frequency',
-    values: [], name: 'XY sweep: A natural minor, Y raises the high-pass' },
+    values: [], name: 'XY rozmítání: přirozená a moll, Y zvedá horní propust' },
   { id: 'xy-bell', base: 'ring-bell', scale: { mode: 'major', key: 'E' }, y: 'vco2.tune',
-    values: [], name: 'XY bell: E major, Y detunes VCO 2 against the ring' },
+    values: [], name: 'XY zvon: E dur, Y rozlaďuje VCO 2 proti kruhové modulaci' },
 ].map((r) => Object.freeze(r)));
 
 export const xyScope = (panel) => [...panel.modulesOf(panel.tabs[0].id),
@@ -256,7 +256,7 @@ export function xyTargetAction(model, panel, to) {
 export function xyPatchOf(model, panel, { name, description = '' }) {
   const res = panel.resolve(model);
   const pad = res.get('xy');
-  if (!pad) throw new RangeError('The Synth panel has no XY pad: Restore module first.');
+  if (!pad) throw new RangeError('Panel Synthu nemá XY pad: nejdřív stiskněte Obnovit modul.');
   const ids = xyScope(panel).map((mid) => res.get(mid)).filter(Boolean).map((n) => n.id);
   return createPatch(model, ids, { name,
     description, category: XY_CATEGORY, scale: { mode: pad.params.mode, key: pad.params.key } });
@@ -319,7 +319,7 @@ export function xyPatchAction(model, panel, patch) {
   if (patch.scale && pad) {
     steps.push({ type: 'NODE_PARAM_SET', nodeId: pad.id, params: { ...patch.scale } });
   }
-  return { action: { type: 'BATCH', label: `XY preset ${patch.name.split(':')[0]}`, steps } };
+  return { action: { type: 'BATCH', label: `Předvolba XY ${patch.name.split(':')[0]}`, steps } };
 }
 
 export function xyInsertAction(model, panel, { at } = {}) {

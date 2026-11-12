@@ -13,7 +13,8 @@ import { DRUMS_TAB } from '../drums.js';
 
 // K022: the panel's filters are 12 dB/oct by design (its description and FILTER_NOTE).
 const FILTER_FIXED = { gain: 0, enabled: true, slope: '12' };
-const FILTER_NOTE = 'A 12 dB/oct biquad: the peak rings but does not self-oscillate.';
+const FILTER_NOTE = 'Bikvadratický filtr 12 dB/oct: rezonance (Peak) zvoní, ale filtr nepřejde '
+  + 'do samooscilace.';
 // Peak (Q) has a jack since K232: a low- or high-pass Q is a dB AudioParam in Web Audio, and a
 // log cable (octaves of Q, the knob's own scale) is linear in it (adapters/processing.js
 // modTarget, DB_PER_OCTAVE_Q), held at or below the knob's soft-range top (compiler.js
@@ -24,17 +25,17 @@ const FILTER_JACKS = { hide: ['gain'] };
 export default definePanel({
   id: 'semi-mono',
   version: 1,
-  title: 'Semi-modular mono voice',
+  title: 'Semimodulární monofonní hlas',
   // keepsDock (U100): the Panel tab's keys are its instrument; on a short phone they stay
   // docked here while the other tabs yield them (midi/routes.js keepsRoom.keptBy).
-  tabs: [{ id: 'panel', label: 'Panel', title: 'Semi-modular mono voice', keepsDock: true,
-    description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
-    + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
-    + 'with no cable, and a cable into a jack replaces what was normalled there.' }, ENGINE_TAB,
+  tabs: [{ id: 'panel', label: 'Panel', title: 'Semimodulární monofonní hlas', keepsDock: true,
+    description: 'Dva oscilátory a šum procházejí dvěma filtry 12 dB/oct v sérii, horní '
+    + 'propustí a za ní dolní propustí, do zesilovače řízeného obálkou. Každý vstup má normál: '
+    + 'panel hraje i bez kabelu a kabel zapojený do vstupu jeho normál nahradí.' }, ENGINE_TAB,
   XY_TAB, DRUMS_TAB],
-  description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
-    + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
-    + 'with no cable, and a cable into a jack replaces what was normalled there.',
+  description: 'Dva oscilátory a šum procházejí dvěma filtry 12 dB/oct v sérii, horní '
+    + 'propustí a za ní dolní propustí, do zesilovače řízeného obálkou. Každý vstup má normál: '
+    + 'panel hraje i bez kabelu a kabel zapojený do vstupu jeho normál nahradí.',
   modules: [
     // Key range stays in the Studio Inspector: the piano's zones edit it (K116).
     { id: 'keys', label: 'KEYBOARD', node: 'keys', studio: ['keyLow', 'keyHigh'] },
@@ -81,7 +82,7 @@ export default definePanel({
       jacks: { hide: ['depth'] },
       ranges: { rate: [0.01, 100] }, init: { rate: 5, morph: 0 } },
     { id: 'sh', label: 'S&H', node: 'random', fixed: { sync: 'off' },
-      note: 'Seeded random steps, one per gate; it samples no input.' },
+      note: 'Náhodné kroky z pevného semínka, jeden na každou bránu; nevzorkuje žádný vstup.' },
     { id: 'out', label: 'OUTPUT', node: 'master' },
     ...ENGINE_MODULES,
     XY_MODULE,

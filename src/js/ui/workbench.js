@@ -10,7 +10,7 @@
 //        applyLabSnapshot(cmp, record) -> { applied, issues }, labsMounted() -> boolean }
 
 import {
-  MAX_OUTPUT_GAIN, MAX_PROGRAMMED_S, STORAGE_KEYS, WAVEFORM_LABELS,
+  MAX_OUTPUT_GAIN, MAX_PROGRAMMED_S, STORAGE_KEYS, WAVEFORM_NAMES,
 } from '../core/constants.js';
 import { clamp, round } from '../core/math.js';
 import {
@@ -18,7 +18,7 @@ import {
 } from '../core/frequency.js';
 import { midiToFrequency, nearestNote, formatCents } from '../core/music.js';
 import { gainLevelDb } from '../core/config.js';
-import { SWEEP_PARAMS } from '../audio/patterns.js';
+import { PATTERN_NAMES, SWEEP_PARAMS } from '../audio/patterns.js';
 import { LEARN_CARDS, LEARN_VIZ_TARGETS } from '../data/learn.js';
 import { additiveHarmonicTable, harmonicTable } from '../visualization/harmonics.js';
 import { totalDurationMs } from '../sequencer/model.js';
@@ -228,24 +228,25 @@ export function createWorkbench(svc) {
         // C003: the sequence plays its own waveform; the Additive lab shapes the instrument only.
         const seq = svc.labs && svc.labs.sequencer;
         const w = seq && seq.editor && seq.editor.model ? seq.editor.model.waveform : this.waveform;
-        return WAVEFORM_LABELS[w] || 'Sine';
+        return WAVEFORM_NAMES[w] || WAVEFORM_NAMES.sine;
       }
       if (this.source === 'dual') {
-        return `${WAVEFORM_LABELS[this.dual.a.wave]} + ${WAVEFORM_LABELS[this.dual.b.wave]}`;
+        return `${WAVEFORM_NAMES[this.dual.a.wave]} + ${WAVEFORM_NAMES[this.dual.b.wave]}`;
       }
-      return this.additiveOn ? 'Additive' : (WAVEFORM_LABELS[this.waveform] || 'Sine');
+      return this.additiveOn ? 'Aditivní' : (WAVEFORM_NAMES[this.waveform] || WAVEFORM_NAMES.sine);
     },
     get statusPatternText() {
       if (this.seqPlaying && !this.playing) return 'Sequencer';
       if (this.studioPlaying && !this.playing) return 'Studio';
       // The owner the scope's description names (C024), capitalised as a status-bar label.
       if (this.outputOwner === 'notes') return 'Noty';
-      if (this.source === 'dual') return this.dual.stereo ? 'Dual (stereo)' : 'Dual (mono)';
+      if (this.source === 'dual') return this.dual.stereo ? 'Duální (stereo)' : 'Duální (mono)';
       if (this.source === 'sweep') return `Sweep (${this.sweep.curve})`;
       const p = this.currentPattern;
       const pp = this.pp[this.pattern];
-      if (pp && pp.curve) return `${p.label} (${pp.curve})`;
-      return p.label;
+      const name = PATTERN_NAMES[p.id] || p.label;
+      if (pp && pp.curve) return `${name} (${pp.curve})`;
+      return name;
     },
     get statusDurationText() {
       if (this.seqPlaying && !this.playing) {

@@ -11,9 +11,9 @@
 // one-sample loop needs an AudioWorklet (Q022, K094). FM_FEEDBACK_BLOCKED says so on the face.
 
 export const FM_OPERATORS = 4;
-export const FM_FEEDBACK_BLOCKED = 'Operator feedback is not offered: it is a loop in the audio '
-  + 'graph, which project.no-silent-feedback v1 refuses, and a one-sample loop needs an '
-  + 'AudioWorklet (owner question Q022, plan K094).';
+export const FM_FEEDBACK_BLOCKED = 'Zpětnou vazbu operátoru panel nenabízí: je to smyčka ve '
+  + 'zvukovém grafu, kterou project.no-silent-feedback v1 odmítá, a smyčka o jednom vzorku '
+  + 'vyžaduje AudioWorklet (otázka vlastníka Q022, plán K094).';
 
 export const FM_ALGORITHMS = Object.freeze([
   { id: '2-op', label: '2 → 1', ops: 2, edges: [[2, 1]], carriers: [1] },

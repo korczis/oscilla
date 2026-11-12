@@ -359,7 +359,8 @@ function defineChecks() {
       'the status bar shows the doubled frequency', s.text);
     await act.click(page, '#osc-wave-square');
     s = await waitSnap(page, (x) => x.engine.voice && x.engine.voice.wave === 'square'
-      && /squ/i.test(x.text.sbWave || ''), 'Square reaches the carrier and the status bar');
+      && !!x.names.wave && (x.text.sbWave || '').includes(x.names.wave.square),
+    'Square reaches the carrier and the status bar');
     await act.focus(page, '#osc-gain');
     for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
     s = await waitSnap(page, (x) => x.app.gainLevel < b.app.gainLevel
@@ -568,7 +569,8 @@ function defineChecks() {
     }).then((v) => (v.path.includes('FILTER') && v.path.includes('ADSR ENVELOPE')
       && /880/.test(v.requested) ? v : null)),
     { ms: STEP_MS, what: 'journey-3: Signal Path and requested marker follow the instrument' });
-    must(/880/.test(s.text.sbFreq || '') && /tri/i.test(s.text.sbWave || ''),
+    must(/880/.test(s.text.sbFreq || '') && !!s.names.wave
+      && (s.text.sbWave || '').includes(s.names.wave.triangle),
       'the status bar shows frequency and waveform', s.text);
     // by state, not by wording: the dot is-playing and the label shown is statusLabel's for it
     const playingSb = await waitSnap(page, (x) => x.sb.playing && !!x.sb.label

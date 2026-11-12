@@ -110,10 +110,10 @@ export const WORKSPACE_REGISTRY = Object.freeze([
       { id: 'synth', why: 'Synth má vlastní patche' },
       { id: 'synthesis', why: 'Tady hrají presety duálního oscilátoru' },
     ],
-    empty: { when: 'presets.noCustom', title: 'No custom presets yet',
-      body: 'Set a sound in the Playground, then keep it with Save current… here or Save '
-        + 'Preset in the status bar.',
-      action: { label: 'Open the Playground', to: 'playground' } } },
+    empty: { when: 'presets.noCustom', title: 'Zatím žádné vlastní presety',
+      body: 'Nastavte zvuk v Playgroundu a uložte ho tady tlačítkem Uložit aktuální… nebo '
+        + 'tlačítkem Uložit preset ve stavové liště.',
+      action: { label: 'Otevřít Playground', to: 'playground' } } },
   { id: 'learn', label: 'Learn', words: 'lessons guide acoustics',
     summary: 'Karty pojmů od frekvence po signálovou cestu, většina s ukázkou k přehrání.',
     related: [

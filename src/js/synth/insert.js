@@ -26,13 +26,13 @@ export const SYNTH_TEXT = Object.freeze({
     + `Vložený panel ${SEMI_MONO.title} tento vstup převezme (příkaz Zpět ho vrátí).`,
   took: (names) => `Panel ${SEMI_MONO.title} je vložen do dokumentu Studia a převzal vstup Master `
     + `Output od: ${names}. Příkaz Zpět panel odebere a vstup vrátí.`,
-  notInserted: 'The Synth panel is not in this Studio document: press Insert first.',
-  armed: 'Synth armed: the keys play the panel.',
+  notInserted: 'Panel Synthu v tomto dokumentu Studia není: nejdřív stiskněte Vložit.',
+  armed: 'Synth připraven: klávesy hrají panel.',
   /** What the keys and the XY pad play, named from the route's node (K183 S6). */
   plays: (name) => `Synth připraven: klávesy a XY pad hrají ${name}.`,
-  disarmed: 'Synth disarmed: no note sounds.',
-  refused: 'The Synth did not arm: the output belongs to the measurement. Stop it first (Esc).',
-  direction: 'A cable runs from an output jack to an input jack.',
+  disarmed: 'Synth vypnut: nezní žádná nota.',
+  refused: 'Synth se nepřipravil: výstup patří měření. Nejdřív měření zastavte (Esc).',
+  direction: 'Kabel vede z výstupního konektoru do vstupního.',
 });
 
 /**
@@ -87,6 +87,6 @@ export function insertWithPreset(model, panel = SEMI_MONO, presetId = 'init') {
   const pre = presetAction(projected, panel, presetId);
   if (!pre.action) return pre;
   const tail = pre.action.type === 'BATCH' ? pre.action.steps : [pre.action];
-  return { action: { type: 'BATCH', label: `Insert ${panel.title}`.slice(0, 64),
+  return { action: { type: 'BATCH', label: `Vložit ${panel.title}`.slice(0, 64),
     steps: [...ins.action.steps, ...tail] }, text: ins.text };
 }
