@@ -2742,6 +2742,15 @@
             class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Copy link</button>
         </div>
       </div>
+      <!-- K246 (oscilla-c3's 2b): what the Synth's insert did to the Studio document, a closable
+           Pro info alert, once per insert; the live region says it once, so no role here. -->
+      <div data-osc="synth.notice" x-show="synth.notice" x-cloak :class="PRO.alertInfo">
+        <svg class="h-5 w-5 shrink-0" aria-hidden="true"><use href="#i-info"/></svg>
+        <p class="m-0" x-text="synth.notice && synth.notice.text"></p>
+        <button type="button" data-osc="synth.notice.close" aria-label="Zavřít oznámení"
+          @click="synthNoticeClose()" :class="PRO.alertClose"><svg class="h-4 w-4"
+          aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
       <!-- Tabs (Q019): Panel, the semi-modular voice; Engines, the polyphonic engines; XY, the
            performance pad (K097, src/js/ui/kinds/xy-pad.js over the xy-pad node). -->
       <div class="mb-3 border-0 border-b border-solid border-gray-200 dark:border-gray-700">

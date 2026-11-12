@@ -54,7 +54,7 @@
     {
       "id": "M054",
       "title": "The whole interface shows the current product",
-      "done": 15,
+      "done": 16,
       "required": 71,
       "phase": "now"
     },
@@ -97,7 +97,7 @@
       "id": "M064",
       "title": "Instrument wave 1a: the integration map, the knob and the semi-modular Synth panel with patch cables",
       "done": 10,
-      "required": 46,
+      "required": 47,
       "phase": "now"
     },
     {
@@ -117,7 +117,7 @@
     {
       "id": "M067",
       "title": "Instrument wave 2: modulation everywhere, labs, probes, sequencer depth, follower and MEASURE",
-      "done": 1,
+      "done": 2,
       "required": 25,
       "phase": "now"
     },

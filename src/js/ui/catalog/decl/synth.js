@@ -87,6 +87,24 @@ export default [
     in: 'synth-view',
   }),
   defineComponent({
+    id: 'synth.notice',
+    kind: 'readout',
+    label: 'Oznámení o vložení',
+    docs: 'Říká, co vložení panelu Synthu udělalo s dokumentem Studia a jak to vrátit; '
+      + 'zavíratelné, jednou na vložení (K246).',
+    state: { none: 'ukazuje větu vložení a nic neupravuje' },
+    in: 'synth-view',
+  }),
+  defineComponent({
+    id: 'synth.notice.close',
+    kind: 'action',
+    label: 'Zavřít oznámení',
+    docs: 'Zavře oznámení o vložení; pro totéž vložení se už neukáže (K246).',
+    state: { none: 'skryje jen oznámení a dokument Studia nemění' },
+    effect: { command: 'zavřít oznámení o vložení' },
+    in: 'synth.notice',
+  }),
+  defineComponent({
     id: 'synth.link',
     kind: 'readout',
     label: 'Synth link',
