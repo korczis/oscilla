@@ -1857,13 +1857,12 @@ function defineChecks() {
       ...[...document.querySelectorAll('*')].filter((e) => e.scrollTop > 0)
         .map((e) => `${e.id || e.dataset.osc || e.tagName}:${Math.round(e.scrollTop)}`)].join(' '));
     const before = await scrolled();
-    const box = await page.locator('[data-osc="synth.notice.close"]').boundingBox();
     // Pressed where it is, as a finger or mouse does: Playwright's tap() and click() scroll the
     // target into view first, and osc-main's scroll padding (the dock) made that an 8 px scroll
     // the user never makes (#540).
-    const at = [box.x + box.width / 2, box.y + box.height / 2];
-    if (size === 'phone') await page.touchscreen.tap(at[0], at[1]);
-    else await page.mouse.click(at[0], at[1]);
+    const box = await page.locator('[data-osc="synth.notice.close"]').boundingBox();
+    if (size === 'phone') await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+    else await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     const pointer = await page.evaluate(() => window.__noticePress);
     await until(async () => !(await alert.isVisible()), { ms: 5000,
       what: 'Close hides the insert alert' });
