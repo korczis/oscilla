@@ -98,6 +98,8 @@ const COUNTERPART_LINKS = [
 const COUNTERPART_WORKSPACES = ['analyzer', 'compare'];
 const SETTLE_MS = 10000;
 const READY_MS = 30000;
+// Above NOTICE_MS (6 s, src/js/core/instrument.js): an info notice expires within it (U108).
+const LINK_NOTICE_GONE_MS = 15000;
 
 // ---- phone-whole (ui-current#phone-whole), see the header ----
 const WORK_SHARE = 2 / 3;
@@ -126,10 +128,10 @@ const U108_DEBT = new Map([
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s '
-  + 'header buttons or tabs at 375 x 667 since #385\'s train: the Synth lane, #385 and V635. '
-  + 'Measured unscrolled (#540) with the insert alert closed (U107); since U108 the link\'s '
-  + 'notice waits for the alert and shows as it closes, pushing the tabs under the dock in every '
-  + 'engine on the Mac and on linux (oscilla-0b, container): 4-6 pairs';
+  + 'header buttons or section chips at 375 x 667 since #385\'s train: the Synth lane, #385 and '
+  + 'V635; measured in the steady state, the insert alert closed (U107) and the link\'s notice '
+  + 'gone (U108, oscilla-c3), unscrolled (#540). Mac: 5 pairs in every engine (U108 tree); '
+  + 'linux chromium and firefox 3 pairs, webkit none (oscilla-0b, container, T17 tree)';
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -144,7 +146,9 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
-  ['@375:synth:overlap', R375],
+  ['darwin:@375:synth:overlap', R375],
+  ['linux:chromium@375:synth:overlap', R375],
+  ['linux:firefox@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
@@ -696,6 +700,13 @@ async function runOne(name) {
             const n = document.querySelector('[data-osc="synth.notice"]');
             return !n || n.hidden || n.getClientRects().length === 0;
           }), { ms: READY_MS, what: `ui-current: the Synth insert alert is closed before `
+            + `phone-whole measures it (${at})` });
+          // U108 (oscilla-c3): the link's notice waits for the alert and shows as it closes, for
+          // NOTICE_MS; phone-whole measures the steady state, once it is gone (its push is
+          // U108's own P3, not a debt here).
+          await until(() => p.evaluate(() => ![...document.querySelectorAll('[data-osc="alert"]')]
+            .some((t) => /Synth otevřen z odkazu/.test(t.textContent))),
+          { ms: LINK_NOTICE_GONE_MS, what: `ui-current: the Synth link's notice is gone before `
             + `phone-whole measures it (${at})` });
         }
         const r = await pollFor(() => p.evaluate(phoneWhole,
