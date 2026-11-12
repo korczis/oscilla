@@ -20,6 +20,8 @@ export function createInsertNotice({ announce = () => {} } = {}) {
   // One view object per shown alert (C3-539-3): refresh() runs on every store change, a knob
   // drag included, and a fresh object each time re-ran the alert's Alpine bindings per event.
   let view = null;
+  let target = null; // the state into() last wrote, and the view it wrote there
+  let written;
   const show = (s) => { shown = s; view = s ? { text: s.text } : null; };
   return {
     inserted(key, text) {
@@ -31,7 +33,14 @@ export function createInsertNotice({ announce = () => {} } = {}) {
       if (shown && shown.key !== key) show(null);
     },
     view: () => view,
-    /** Write the view into `state.notice` only when it changed (C3-539-3). */
-    into(state) { if (state && state.notice !== view) state.notice = view; },
+    /** Write the view into `state.notice` only when it changed (C3-539-3). It remembers what it
+     *  wrote and where: an Alpine component is a proxy, so reading `state.notice` back never
+     *  equals the raw view (oscilla-c3's note on decd6909). */
+    into(state) {
+      if (!state || (state === target && written === view)) return;
+      target = state;
+      written = view;
+      state.notice = view;
+    },
   };
 }

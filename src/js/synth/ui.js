@@ -761,7 +761,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     /** K246: the insert alert's Close: gone for that insert; focus to the Synth view. */
     synthNoticeClose() {
       notice.dismiss();
-      this.synth.notice = null;
+      notice.into(this.synth);
       const v = document.getElementById('osc-view-synth');
       if (v) v.focus();
     },
