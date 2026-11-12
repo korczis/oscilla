@@ -282,8 +282,11 @@
       "datetime": "2026-11-12T00:00:56+01:00"
     },
     {
+      "release": "3.37",
       "title": "Upozornění na vložení panelu Synthu",
-      "summary": "Když Synth vloží svůj panel do dokumentu Studia a převezme vstup Master Output, oznámí to jedno informační upozornění pod hlavičkou Synthu se zavíracím tlačítkem místo stavového řádku na každé záložce; čtečka obrazovky ho přečte jednou, po zavření nebo vrácení vložení zmizí a stejné vložení ho nevrátí, nové vložení ho ukáže znovu"
+      "summary": "Když Synth vloží svůj panel do dokumentu Studia a převezme vstup Master Output, oznámí to jedno informační upozornění pod hlavičkou Synthu se zavíracím tlačítkem místo stavového řádku na každé záložce; čtečka obrazovky ho přečte jednou, po zavření nebo vrácení vložení zmizí a stejné vložení ho nevrátí, nové vložení ho ukáže znovu",
+      "commit": "3b3b2f9",
+      "datetime": "2026-11-12T06:48:37+01:00"
     }
   ]
 }
