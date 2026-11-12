@@ -199,7 +199,7 @@ test('C3-539-3 drag-rate probe: 20 parameter edits leave the Synth\'s alert obje
 test('U108: the short line keeps the facts from the same names, and Více toggles the sentence',
   () => {
     const took = SYNTH_TEXT.short('Filter 1');
-    assert.deepEqual(took, { lead: 'Panel vložen do Studia, převzal vstup Master Output',
+    assert.deepEqual(took, { lead: 'Panel vložen, převzal vstup Master Output',
       source: 'Filter 1', tail: '. Zpět ho odebere.' });
     assert.equal(SYNTH_TEXT.short('').source, '', 'no previous source: no parentheses');
     const n = createInsertNotice();

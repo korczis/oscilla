@@ -2708,7 +2708,7 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="px-4 pt-6 max-md:pt-2 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
+    <section class="px-4 pt-6 max-md:pt-0 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
       <!-- U108: below md the insert alert comes first (order), clear of the dock. -->
@@ -2747,7 +2747,7 @@
       <!-- K246 (oscilla-c3's 2b): what the Synth's insert did to the Studio document, a closable
            Pro info alert, once per insert; the live region says it once, so no role here. -->
       <div data-osc="synth.notice" x-show="synth.notice" x-cloak :class="PRO.alertInfo"
-        class="order-first max-md:p-3 md:order-none">
+        class="order-first max-md:px-3 max-md:py-2 md:order-none">
         <svg class="h-5 w-5 shrink-0" aria-hidden="true"><use href="#i-info"/></svg>
         <div class="min-w-0 flex-1">
           <!-- U108: a phone's short line and Více, the whole sentence from md. -->

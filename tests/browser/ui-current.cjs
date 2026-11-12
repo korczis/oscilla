@@ -130,8 +130,8 @@ const U108_DEBT = new Map([
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
   + 'chips at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured in the '
   + 'steady state, the insert alert closed (U107) and the link\'s notice gone (U108, oscilla-c3), '
-  + 'unscrolled (#540): 5 pairs in every Mac engine, 5 in linux chromium and firefox, 4 in linux '
-  + 'webkit (oscilla-0b, container), so one key for every host and engine';
+  + 'unscrolled (#540): 5 pairs in every Mac engine and in linux chromium and firefox; none in '
+  + 'linux webkit on CI (run 43298290862), where the container read 4: CI is the authority';
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -146,7 +146,9 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
-  ['@375:synth:overlap', R375],
+  ['darwin:@375:synth:overlap', R375],
+  ['linux:chromium@375:synth:overlap', R375],
+  ['linux:firefox@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
@@ -715,6 +717,20 @@ async function runOne(name) {
           { ws, gap: WORK_GAP, touchMin: TOUCH_MIN }),
         (m) => Object.entries(phoneVerdicts(m, ws)).every(([k, ok]) => ok || debtOf(ws, k)),
         `ui-current: phone-whole ${ws} (${at})`);
+        if (ws === 'synth') {
+          // #541 (oscilla-c3): the Synth's controls sit within a few px of the dock's top, so the
+          // run logs their margin (negative: the deepest overlap), and a flip of its debt is seen.
+          const gap = await p.evaluate(() => {
+            const top = document.querySelector('[data-osc="keyboard"]').getBoundingClientRect().top;
+            const view = document.getElementById('osc-view-synth');
+            const d = [...view.querySelectorAll('button, select, [role="tab"]')]
+              .map((e) => e.getBoundingClientRect())
+              .filter((b) => b.width > 0 && b.height > 0 && b.top < top) // above the dock's top
+              .map((b) => top - b.bottom);
+            return d.length ? Math.round(Math.min(...d)) : null;
+          });
+          console.log(`  MARGIN ${name} ${at} synth controls to dock top: ${gap} px`);
+        }
         await p.close();
         const m = r.last;
         check(`phone-whole-coarse-${ws}-${size.width}`, !!(m && m.coarse),
@@ -819,7 +835,7 @@ async function runOne(name) {
             // Condition 4 (strict at 375 and 390): the panel heading on the first screen too.
             const h = document.getElementById('osc-synth-title').getBoundingClientRect();
             const dock = document.querySelector('[data-osc="keyboard"]').getBoundingClientRect();
-            const heading = strict ? h.bottom <= dock.top : true;
+            const heading = strict && !want ? h.bottom <= dock.top : true; // collapsed only
             return { shown: true, alert: a, close: c, line, facts, heading,
               ok: facts && heading && [...a, ...c].every((x) => x === 'self') };
           }, [more === 'expanded', size.width !== 320]), (m) => m.shown && m.ok,

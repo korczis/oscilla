@@ -27,8 +27,9 @@ export const SYNTH_TEXT = Object.freeze({
   took: (names) => `Panel ${SEMI_MONO.title} je vložen do dokumentu Studia a převzal vstup Master `
     + `Output od: ${names}. Příkaz Zpět panel odebere a vstup vrátí.`,
   /** U108: the phone's one line, worded by oscilla-0b; the source a nominative in parentheses
-   *  (a free node label cannot be declined after "od"), dropped when there was none. */
-  short: (names) => ({ lead: 'Panel vložen do Studia, převzal vstup Master Output',
+   *  (a free node label cannot be declined after "od"), dropped when there was none. Its 58-char
+   *  form, chosen once from CI's 320 x 568 measurement (#541; oscilla-c3's condition). */
+  short: (names) => ({ lead: 'Panel vložen, převzal vstup Master Output',
     source: names || '', tail: '. Zpět ho odebere.' }),
   notInserted: 'Panel Synthu v tomto dokumentu Studia není: nejdřív stiskněte Vložit.',
   armed: 'Synth připraven: klávesy hrají panel.',
