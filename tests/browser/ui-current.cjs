@@ -132,6 +132,9 @@ const PHONE_WHOLE_DEBT = new Map([
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
+  ['@375:synth:overlap', 'the Synth picker (osc-synth-pick) and the docked keyboard\'s buttons '
+    + 'overlap the Synth tabs at 375 px since #385\'s train: the Synth lane, #385 and V635; '
+    + 'measured with the insert alert closed (U107, C3-539-2)'],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
@@ -659,6 +662,18 @@ async function runOne(name) {
           && !!window.OSCILLA && !!window.OSCILLA.app
           && document.getElementById('osc-app').dataset.mode === w, ws),
         { ms: READY_MS, what: `ui-current: phone-whole ${ws} opened at #m=${ws} (${at})` });
+        if (ws === 'synth') {
+          // U107 (oscilla-c3's C3-539-2): the Synth is measured as the user keeps it, with K246's
+          // insert alert closed by its own Close button. Open, the alert only pushes the tabs
+          // down for the first screen, and the ratchet read an unpaid overlap as paid.
+          const close = p.locator('[data-osc="synth.notice.close"]');
+          if (await close.isVisible()) await close.click();
+          await until(() => p.evaluate(() => {
+            const n = document.querySelector('[data-osc="synth.notice"]');
+            return !n || n.hidden || n.getClientRects().length === 0;
+          }), { ms: READY_MS, what: `ui-current: the Synth insert alert is closed before `
+            + `phone-whole measures it (${at})` });
+        }
         const r = await pollFor(() => p.evaluate(phoneWhole,
           { ws, gap: WORK_GAP, touchMin: TOUCH_MIN }),
         (m) => Object.entries(phoneVerdicts(m, ws)).every(([k, ok]) => ok || debtOf(ws, k)),
