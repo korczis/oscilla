@@ -1,0 +1,32 @@
+id: U108
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "On a phone the Synth's insert alert and its Close are on the first screen, above the keyboard dock, with the other notices open or closed"
+slug: phone-insert-alert-above-dock
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Rated P2 by oscilla-c3 (2026-11-12): a K246 phone defect on main since #539; at 320 the alert is unreadable and its Close cannot be tapped on the first screen (only the live region says it), at 390 it depends on the notice stack. Absorbs C3-540-1 (at 320x568 the Czech Synth title wraps 28 -> 56 px and the dock covers osc-synth-preset, 6 pairs vs main's 3, hidden by the boolean @320 debt key) and C3-540-2 (U107 closes the alert only when it is already visible). Baseline measured by oscilla-43 on live v3.37.0 (chromium, touch, isMobile; elementFromPoint at 25/50/75/95 % of the alert's height): 390x844 with the link and safety notices open, dock top 588, alert 485..617, its bottom 29 px under the dock; 390x844 with safety closed, alert 429..561, clear; 320x568, dock top 312 (256 of 568 px), alert 480..652 behind the dock and off screen; with safety closed 424..596, still behind the keys."
+why: "Q104 and the owner's pro-audio bar (2026-11-11): a sentence that says the Synth rerouted the user's Master Output must be readable and closable where it appears; the dock taking 45 % of a 320 px phone hides it whatever the notices do."
+current_state: "Open. Filed 2026-11-12 by oscilla-43 from oscilla-c3's rating and the live measurement; builds after train T17 (#540, v3.37.1)."
+scope:
+  - "src/index.html"
+  - "src/js/ui/shell.js"
+  - "src/js/synth/ui.js"
+  - "src/css"
+  - "tests/browser/ui-current.cjs"
+  - "tests/browser/synth.cjs"
+depends_on: []
+acceptance_criteria:
+  - "oscilla-c3's done criterion, verbatim: elementFromPoint at 25/50/75/95 % of the alert returns the alert, and the same for Close, at 320x568, 375x667 and 390x844 with link+safety open and closed."
+  - "The check runs in ui-current or synth in chromium, webkit and firefox, fails on main 35f0ca0b-era trees (fail-first), and cannot pass when the alert is absent (C3-540-2: it waits for the alert, never skips it)."
+  - "At 320x568 the dock no longer covers osc-synth-preset (C3-540-1); the @320 debt key names its pairs instead of a boolean, and the debt only falls."
+  - "A reviewer's verdict; visual references re-accepted with the reason."
+validation:
+  - "npm test"
+  - "node tests/browser/ui-current.cjs"
+  - "node tests/browser/synth.cjs --only s-notice"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-12'
