@@ -29,11 +29,12 @@ test('an insert shows the alert with its sentence and says it once', () => {
   const { n, said } = rig();
   assert.equal(n.view(), null, 'nothing before an insert');
   n.inserted('keys-1', SYNTH_TEXT.inserted);
-  assert.deepEqual(n.view(), { text: SYNTH_TEXT.inserted });
+  assert.deepEqual(n.view(), { text: SYNTH_TEXT.inserted, short: null, more: false });
   assert.deepEqual(said, [SYNTH_TEXT.inserted], 'said once in the live region');
   n.sync('keys-1');
   n.sync('keys-1');
-  assert.deepEqual(n.view(), { text: SYNTH_TEXT.inserted }, 'it stays while the panel does');
+  assert.deepEqual(n.view(), { text: SYNTH_TEXT.inserted, short: null, more: false },
+    'it stays while the panel does');
   assert.equal(said.length, 1, 'a re-render says nothing again');
 });
 
@@ -64,7 +65,7 @@ test('a new insert shows its own sentence again, even with the same panel ids', 
   n.sync(null);
   const took = SYNTH_TEXT.took('Filtr 1');
   n.inserted('keys-1', took); // the panel's ids are deterministic: a re-insert reuses them
-  assert.deepEqual(n.view(), { text: took });
+  assert.deepEqual(n.view(), { text: took, short: null, more: false });
   assert.deepEqual(said, [SYNTH_TEXT.inserted, took]);
   n.sync('keys-3'); // another panel replaced it
   assert.equal(n.view(), null, 'shown for its own insert only');
@@ -121,7 +122,7 @@ test('the Synth\'s insert shows its sentence in the alert, said once, not on the
     assert.equal(said.filter((t) => t === text).length, 1, 'said once in the live region');
     assert.notEqual(cmp.synth.status, text, 'the status line does not repeat it');
     await settle();
-    assert.deepEqual(cmp.synth.notice, { text }, 'a refresh keeps it');
+    assert.equal(cmp.synth.notice.text, text, 'a refresh keeps it');
     cmp.synthNoticeClose();
     assert.equal(cmp.synth.notice, null, 'Close hides it');
     assert.deepEqual(focused, ['synth-view'], 'focus goes to the Synth view, not <body>');
@@ -190,4 +191,30 @@ test('C3-539-3 drag-rate probe: 20 parameter edits leave the Synth\'s alert obje
     }
     assert.equal(cmp.synth.notice, first, 'the same alert object after 20 edits');
     assert.equal(writes, 0, `no reassignment during the drag (got ${writes})`);
+  });
+
+// U108 (oscilla-c3 under Q090, oscilla-0b's wording): the phone's short line is built from the
+// same names as the sentence; the source is a nominative in parentheses, dropped when there was
+// none; Více toggles the whole sentence and leaves one view object per state.
+test('U108: the short line keeps the facts from the same names, and Více toggles the sentence',
+  () => {
+    const took = SYNTH_TEXT.short('Filter 1');
+    assert.deepEqual(took, { lead: 'Panel vložen do Studia, převzal vstup Master Output',
+      source: 'Filter 1', tail: '. Zpět ho odebere.' });
+    assert.equal(SYNTH_TEXT.short('').source, '', 'no previous source: no parentheses');
+    const n = createInsertNotice();
+    n.inserted('keys-1', { text: SYNTH_TEXT.took('Filter 1'), short: took });
+    const v = n.view();
+    assert.equal(v.more, false);
+    assert.equal(v.short, took);
+    n.sync('keys-1');
+    assert.equal(n.view(), v, 'a sync that changes nothing keeps the object');
+    n.more();
+    assert.equal(n.view().more, true, 'Více opens the sentence');
+    assert.notEqual(n.view(), v, 'a new state is a new object');
+    n.more();
+    assert.equal(n.view().more, false, 'Méně closes it');
+    n.dismiss();
+    n.more();
+    assert.equal(n.view(), null, 'Více does nothing once closed');
   });

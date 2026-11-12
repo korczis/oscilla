@@ -101,8 +101,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
   // status line's.
   const notice = createInsertNotice({ announce: (text) => announce(text, { assertive: false }) });
   const keysId = () => (present() ? nodes().get('keys').id : null);
-  const inserted = (text) => {
-    notice.inserted(keysId(), text);
+  const inserted = (r) => {
+    notice.inserted(keysId(), r);
     notice.into(cmp && cmp.synth);
   };
   const studioSink = createStudioSink({ get, setupAudio, say, registry,
@@ -131,7 +131,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
     // a template link afterwards is not refused for unsaved changes (first-screen link:studio).
     const tracker = get().dirty;
     if (ok && !(opts && opts.explicit) && tracker) tracker.rebaseFresh(before, model());
-    if (ok) inserted(r.text);
+    if (ok) inserted(r);
     else if (!r.action) say(r.reason);
     return ok;
   }
@@ -758,6 +758,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       dock: dock.state(), // K066, beside the piano (synth/dock.js)
     },
 
+    /** U108: the insert alert's Více / Méně on a phone. */
+    synthNoticeMore() { notice.more(); notice.into(this.synth); },
     /** K246: the insert alert's Close: gone for that insert; focus to the Synth view. */
     synthNoticeClose() {
       notice.dismiss();
@@ -904,8 +906,8 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       }
       const ok = applyLink(r.link);
       const p = ok && presetOf(r.link.preset); // a link is answered (surface-census routes)
-      if (ok && this.notify) this.notify('info', 'Synth otevřen z odkazu',
-        `${p ? p.title : this.synth.title}. Nic nehraje, dokud nezahrajete notu.`);
+      if (ok && this.notify) notice.after(() => this.notify('info', 'Synth otevřen z odkazu',
+        `${p ? p.title : this.synth.title}. Nic nehraje, dokud nezahrajete notu.`));
       return ok;
     },
 

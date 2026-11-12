@@ -118,6 +118,13 @@ const PHONE_SIZES = [{ width: 320, height: 568 }, { width: 375, height: 667 }, P
 // "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks. A key
 // may be scoped to a browser and a width: "<browser>@<width>:<ws>:<measure>",
 // "<browser>:<ws>:<measure>" or "@<width>:<ws>:<measure>"; the most specific listed key applies.
+// U108's one recorded debt, decided by oscilla-c3 (Q090, 2026-11-12): at 320 px the insert
+// alert with Více expanded (the whole sentence) may run under the keyboard dock; collapsed it
+// must not, at every size. Host- and engine-free; it only goes.
+const U108_DEBT = new Map([
+  ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
+    + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
+]);
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s '
     + 'header buttons at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured '
     + 'with the insert alert closed (U107, C3-539-2) and the page unscrolled (#540): 3 pairs in '
@@ -756,6 +763,66 @@ async function runOne(name) {
       check(`safety-more-target-${size.width}`, r.ok, JSON.stringify(r.last));
       await fresh.close();
     }
+    // U108 (oscilla-c3's criterion, Q090 2026-11-12): on a phone the Synth's insert alert and
+    // its Close are on top where they are drawn (elementFromPoint at 25/50/75/95 % of each), at
+    // 320, 375 and 390 px with the safety notice open (the first visit) and collapsed, with Více
+    // collapsed; expanded at 375 and 390 too (320 expanded is recorded debt, U108_DEBT). It waits
+    // for the alert: a missing alert fails here, it never passes for want of one (C3-540-2).
+    for (const size of PHONE_SIZES) {
+      for (const safety of ['open', 'collapsed']) {
+        const fresh = await browser.newContext({ viewport: size, hasTouch: true,
+          ...(name === 'firefox' ? {} : { isMobile: true }) });
+        if (safety === 'collapsed') {
+          await fresh.addInitScript((key) => {
+            try { sessionStorage.setItem(key, '1'); } catch { /* storage refused */ }
+          }, SAFETY_SEEN);
+        }
+        const p = await fresh.newPage();
+        await p.goto(`${URL}#m=synth`);
+        for (const more of ['collapsed', 'expanded']) {
+          if (more === 'expanded') {
+            await p.evaluate(() => document
+              .querySelector('[data-osc="synth.notice.more"]')?.click());
+          }
+          const r = await pollFor(() => p.evaluate((want) => {
+            const al = document.querySelector('[data-osc="synth.notice"]');
+            if (!al || !al.getClientRects().length) return { shown: false };
+            const exp = al.querySelector('[data-osc="synth.notice.more"]');
+            const state = exp ? exp.getAttribute('aria-expanded') : 'false';
+            if (state !== String(want)) return { shown: false };
+            const on = (sel) => {
+              const b = document.querySelector(sel).getBoundingClientRect();
+              return [0.25, 0.5, 0.75, 0.95].map((f) => {
+                const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height * f);
+                return e ? (e.closest(sel) ? 'self' : (e.closest('[data-osc]') || e).dataset.osc
+                  || e.tagName) : 'none';
+              });
+            };
+            const a = on('[data-osc="synth.notice"]');
+            const c = on('[data-osc="synth.notice.close"]');
+            // Collapsed, the short line keeps its facts: the previous source, and what Zpět does.
+            const sh = document.querySelector('[data-osc="synth.notice.short"]');
+            const line = sh && sh.getClientRects().length ? sh.textContent.replace(/\s+/g, ' ')
+              : '';
+            const facts = want || (/\(dosud: .+\)/.test(line) && /Zpět ho odebere/.test(line));
+            return { shown: true, alert: a, close: c, line, facts,
+              ok: facts && [...a, ...c].every((x) => x === 'self') };
+          }, more === 'expanded'), (m) => m.shown && m.ok,
+          `ui-current: U108 insert alert on top at ${size.width} px (${safety}, ${more})`);
+          const debt = U108_DEBT.get(`@${size.width}:${more}`);
+          if (debt) {
+            check(`u108-alert-on-top-${size.width}-${safety}-${more}`, !r.ok,
+              `@${size.width}:${more} passes now (${safety}): remove it from U108_DEBT`);
+            if (!r.ok) console.log(`  KNOWN ${name} U108 @${size.width}:${more} (${safety}): `
+              + `${JSON.stringify(r.last)} (${debt})`);
+          } else {
+            check(`u108-alert-on-top-${size.width}-${safety}-${more}`, r.ok,
+              JSON.stringify(r.last));
+          }
+        }
+        await fresh.close();
+      }
+    }
     // U100: on a short phone a Synth opened from a link, both notices shown, keeps room for its
     // tab. On Engines the docked keys fold to their handle (one rule, routes.js roomFolds), each
     // notice takes one line, Expand all takes a tap at its centre and SYNTH_ROOM_MIN px of the
@@ -769,6 +836,13 @@ async function runOne(name) {
       await until(() => p.evaluate(() => document.documentElement.dataset.ready === 'true'
         && document.getElementById('osc-app').dataset.mode === 'synth'),
       { ms: READY_MS, what: `ui-current: U100 Synth opened from a link at ${size.width} px` });
+      // U108: on a phone the link's notice waits for the insert alert; closed, both notices are
+      // shown as U100 measures them (the link's toast now, the safety strip).
+      await p.evaluate(() => window.OSCILLA.app.synthNoticeClose());
+      await until(() => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
+        .some((t) => /Synth otevřen z odkazu/.test(t.textContent))),
+      { ms: READY_MS, what: `ui-current: U100 the link's notice follows the insert alert at `
+        + `${size.width} px (U108)` });
       // A refusal's stated reason (project.no-silent-feedback): an error toast stays whole.
       await p.evaluate((text) => window.OSCILLA.app.notify('error', 'Odmítnuto', text),
         LONG_REASON);

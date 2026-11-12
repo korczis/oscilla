@@ -105,6 +105,24 @@ export default [
     in: 'synth.notice',
   }),
   defineComponent({
+    id: 'synth.notice.short',
+    kind: 'readout',
+    label: 'Krátké oznámení o vložení',
+    docs: 'Na telefonu jeden řádek oznámení o vložení: převzatý vstup Master Output, dosavadní '
+      + 'zdroj a co udělá Zpět (U108).',
+    state: { none: 'ukazuje krátký řádek a nic neupravuje' },
+    in: 'synth.notice',
+  }),
+  defineComponent({
+    id: 'synth.notice.more',
+    kind: 'action',
+    label: 'Více',
+    docs: 'Na telefonu rozbalí celou větu oznámení o vložení a znovu ji sbalí (U108).',
+    state: { none: 'mění jen rozbalení oznámení a dokument Studia nemění' },
+    effect: { command: 'rozbalit oznámení o vložení' },
+    in: 'synth.notice',
+  }),
+  defineComponent({
     id: 'synth.link',
     kind: 'readout',
     label: 'Synth link',

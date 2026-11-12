@@ -2708,9 +2708,11 @@
          src/js/ui/studio/workspace.js): every module plate, knob, switch and jack is generated
          from src/js/synth/panels/semi-mono.js and the registry's node descriptors. The keyboard
          docks at the bottom here and plays the panel. -->
-    <section class="px-4 pt-6 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
+    <section class="px-4 pt-6 max-md:pt-2 pb-[max(1.5rem,var(--osc-dock-h,20rem))]" id="osc-view-synth" data-osc="synth-view"
       data-osc-modes="synth" hidden :hidden="workspace !== 'synth'"
       aria-labelledby="osc-synth-title" tabindex="-1">
+      <!-- U108: below md the insert alert comes first (order), clear of the dock. -->
+      <div class="flex flex-col md:block">
       <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <nav aria-label="Breadcrumb" class="text-xs text-gray-500 dark:text-gray-400"
@@ -2744,12 +2746,29 @@
       </div>
       <!-- K246 (oscilla-c3's 2b): what the Synth's insert did to the Studio document, a closable
            Pro info alert, once per insert; the live region says it once, so no role here. -->
-      <div data-osc="synth.notice" x-show="synth.notice" x-cloak :class="PRO.alertInfo">
+      <div data-osc="synth.notice" x-show="synth.notice" x-cloak :class="PRO.alertInfo"
+        class="order-first max-md:p-3 md:order-none">
         <svg class="h-5 w-5 shrink-0" aria-hidden="true"><use href="#i-info"/></svg>
-        <p class="m-0" x-text="synth.notice && synth.notice.text"></p>
+        <div class="min-w-0 flex-1">
+          <!-- U108: a phone's short line and Více, the whole sentence from md. -->
+          <p class="m-0" id="osc-synth-notice-full"
+            :class="synth.notice && synth.notice.short && !synth.notice.more && 'hidden md:block'"
+            x-text="synth.notice && synth.notice.text"></p>
+          <template x-if="synth.notice && synth.notice.short"><span class="md:hidden"><p
+            class="m-0 inline" data-osc="synth.notice.short" x-show="!synth.notice.more"><span
+            x-text="synth.notice.short.lead"></span><span x-show="synth.notice.short.source">
+            (dosud: <span class="inline-block max-w-[9rem] truncate align-bottom"
+            :title="synth.notice.short.source" x-text="synth.notice.short.source"></span>)</span><span
+            x-text="synth.notice.short.tail"></span></p>
+            <button type="button" data-osc="synth.notice.more" aria-controls="osc-synth-notice-full"
+              :aria-expanded="String(synth.notice.more)" @click="synthNoticeMore()"
+              x-text="synth.notice.more ? 'Méně' : 'Více'"
+              class="ml-1 inline-flex items-center font-medium underline [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">Více</button></span></template>
+        </div>
         <button type="button" data-osc="synth.notice.close" aria-label="Zavřít oznámení"
           @click="synthNoticeClose()" :class="PRO.alertClose"><svg class="h-4 w-4"
           aria-hidden="true"><use href="#i-close"/></svg></button>
+      </div>
       </div>
       <!-- Tabs (Q019): Panel, the semi-modular voice; Engines, the polyphonic engines; XY, the
            performance pad (K097, src/js/ui/kinds/xy-pad.js over the xy-pad node). -->
