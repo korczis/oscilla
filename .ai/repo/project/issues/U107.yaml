@@ -1,0 +1,23 @@
+id: U107
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "ui-current's phone-whole measures the Synth with the insert alert closed, and @375:synth:overlap returns to its debt until it is really paid"
+slug: phone-whole-closes-insert-alert
+priority: p2
+profile: implementation
+objective: "Lands as test(ui). oscilla-c3's C3-539-2 (P2, review of #539's ef0bdb91, 2026-11-12): oscilla-43 removed '@375:synth:overlap' from PHONE_WHOLE_DEBT because ui-current reported it paid, but K246's insert alert only displaces the Synth tabs while it is open; after Close the six overlaps return (keyboard.octave-down x osc-synth-tab-panel 68x40, octave-up x tab-engines 67x40, more x tab-drums 35x40, ...), measured with ui-current's own phoneWhole at 375x667 in chromium and webkit. Before: the ratchet judges the first screen with the alert up and records a defect as paid. After: phone-whole closes (or seeds away) the insert alert before measuring the Synth, and '@375:synth:overlap' is back in PHONE_WHOLE_DEBT with its reason, until V635 or the Synth lane pays it."
+why: "A ratchet that records an unpaid defect as paid stops guarding it (principle 25: a fix that pays a ratchet's debt removes the entry; this one paid nothing)."
+current_state: "Filed 2026-11-12 by oscilla-43 from oscilla-c3's C3-539-2; the removal landed in train T16 (#539, ef0bdb91). Builder oscilla-43, in train T17."
+scope:
+  - "tests/browser/ui-current.cjs"
+depends_on: []
+acceptance_criteria:
+  - "phone-whole closes the insert alert before measuring the Synth; a check fails if the alert is still open when the Synth is measured."
+  - "'@375:synth:overlap' is back in PHONE_WHOLE_DEBT with its reason; ui-current passes in the gate browsers."
+validation:
+  - "node tests/browser/ui-current.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-12'
