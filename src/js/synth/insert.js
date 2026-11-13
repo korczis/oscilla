@@ -29,7 +29,10 @@ export const SYNTH_TEXT = Object.freeze({
   /** U108: the phone's one line, worded by oscilla-0b; the source a nominative in parentheses
    *  (a free node label cannot be declined after "od"), dropped when there was none. Its 58-char
    *  form, chosen once from CI's 320 x 568 measurement (#541; oscilla-c3's condition). */
-  short: (names) => ({ lead: 'Panel vložen, převzal vstup Master Output',
+  short: (names) => ({
+    // U111 (C3-541-1): with no previous source it says what the sentence says, that it plays
+    lead: names ? 'Panel vložen, převzal vstup Master Output'
+      : 'Panel vložen, hraje do Master Output',
     source: names || '', tail: '. Zpět ho odebere.' }),
   notInserted: 'Panel Synthu v tomto dokumentu Studia není: nejdřív stiskněte Vložit.',
   armed: 'Synth připraven: klávesy hrají panel.',

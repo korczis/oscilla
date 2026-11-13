@@ -202,6 +202,12 @@ test('U108: the short line keeps the facts from the same names, and Více toggle
     assert.deepEqual(took, { lead: 'Panel vložen, převzal vstup Master Output',
       source: 'Filter 1', tail: '. Zpět ho odebere.' });
     assert.equal(SYNTH_TEXT.short('').source, '', 'no previous source: no parentheses');
+    // U111 (C3-541-1): the short line says what its sentence says in both cases
+    assert.match(SYNTH_TEXT.inserted, /hraje do Master Output/);
+    assert.match(SYNTH_TEXT.short('').lead, /hraje do Master Output/);
+    assert.doesNotMatch(SYNTH_TEXT.short('').lead, /převzal/);
+    assert.match(SYNTH_TEXT.took('Filter 1'), /převzal vstup Master/);
+    assert.match(SYNTH_TEXT.short('Filter 1').lead, /převzal vstup Master Output/);
     const n = createInsertNotice();
     n.inserted('keys-1', { text: SYNTH_TEXT.took('Filter 1'), short: took });
     const v = n.view();
