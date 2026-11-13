@@ -1,0 +1,24 @@
+id: U112
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "The linux @320 Synth overlap names its pairs from CI's own run (U111's carried item)"
+slug: linux-320-pairs-from-ci
+priority: p3
+profile: implementation
+objective: "Lands as test(ui) in the next train after U111. oscilla-c3 (Q090, 2026-11-13): the linux @320 entries stay boolean in U111 and are named from CI's run, whose KNOWN lines log the full pair multiset with depths on every host; no container-derived names in any engine; near-zero pairs (above 2 and up to 6 px) are listed with '~' and do not fail."
+why: "U111's carried acceptance item (C3-541-3 for linux): CI is the authority; the container disagreed with it at this precision in all three engines."
+current_state: "Open. Filed 2026-11-13 by oscilla-43 with U111; waits for the first CI run on U111's head."
+scope:
+  - "tests/browser/ui-current.cjs"
+depends_on:
+  - "U111"
+acceptance_criteria:
+  - "linux:<engine>@320:synth:overlap (or one linux key where the engines agree) names its pairs from a named CI run's KNOWN lines; near-zero pairs carry '~<depth>'."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/ui-current.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-13'
+updated_at: '2026-11-13'

@@ -127,12 +127,56 @@ const U108_DEBT = new Map([
   ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
+const R320 = 'the keyboard dock\'s octave and More buttons overlap the Synth\'s header buttons '
+  + '(Open in Studio, Copy link) at 320 x 568, under U108\'s alert above them: the Synth lane, '
+  + '#385 and V635; the Mac\'s 4 pairs are named (PHONE_WHOLE_PAIRS), linux\'s stay boolean '
+  + 'until CI\'s own run names them (oscilla-c3, U111)';
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
   + 'chips at 375 x 667 on the Mac since #385\'s train: the Synth lane, #385 and V635; measured '
   + 'in the steady state, the insert alert closed (U107) and the link\'s notice gone (U108, '
   + 'oscilla-c3), unscrolled (#540): 5 pairs in every Mac engine. On CI linux U108\'s phone '
   + 'padding left none (run 43318837248: MARGIN -3 px, within the 2 px tolerance), a near-zero '
   + 'margin the MARGIN line shows';
+// U111 (C3-541-3, oscilla-c3): the pairs an overlap key owes, by identity (the px each pair
+// measured is logged on its KNOWN line); a key listed here fails when its pair set changes in
+// either direction. A key not listed is judged as a boolean, as before.
+// U111 (C3-541-3), decided by oscilla-c3 under Q090 (2026-11-13): a pair's depth is the smaller
+// side of its overlap; above 2 px it counts, and up to NEAR_PX it is near-zero: listed with '~'
+// (e.g. 'a x b ~5'), its appearing or going does not fail and is logged as 'near'. Every other
+// pair must match in either direction, as a multiset; px are logged, never compared.
+const NEAR_PX = 6;
+function comparePairs(measured, listed) {
+  const parse = (o) => {
+    const mm = / (\d+)x(\d+)$/.exec(o);
+    return { id: o.replace(/ \d+x\d+$/, ''), depth: mm ? Math.min(+mm[1], +mm[2]) : Infinity };
+  };
+  const got = measured.map(parse);
+  const want = listed.map((x) => {
+    const mm = / ~(\d+)$/.exec(x);
+    return { id: x.replace(/ ~\d+$/, ''), near: !!mm };
+  });
+  const tally = (list) => list.reduce((t, x) => t.set(x, (t.get(x) || 0) + 1), new Map());
+  const firmGot = tally(got.filter((g) => g.depth > NEAR_PX).map((g) => g.id));
+  const firmWant = tally(want.filter((w) => !w.near).map((w) => w.id));
+  const nearGot = got.filter((g) => g.depth <= NEAR_PX);
+  const extra = [...firmGot].filter(([x, n]) => n > (firmWant.get(x) || 0)).map(([x]) => x);
+  const gone = [];
+  const near = nearGot.map((g) => `${g.id} ${g.depth} px`);
+  for (const [x, n] of firmWant) {
+    const missing = n - (firmGot.get(x) || 0);
+    for (let q = 0; q < missing; q += 1) {
+      // a listed pair now in the deadband reports 'near', not 'gone'
+      if (nearGot.some((g) => g.id === x)) near.push(`${x} (listed, now near-zero)`);
+      else gone.push(x);
+    }
+  }
+  return { extra, gone, near };
+}
+const PHONE_WHOLE_PAIRS = new Map([
+  ['darwin:@320:synth:overlap', ['keyboard.octave-down x synth.studio',
+    'keyboard.octave-up x synth.studio', 'keyboard.octave-up x synth.copy-link',
+    'keyboard.more x synth.copy-link']],
+]);
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -141,8 +185,8 @@ const PHONE_WHOLE_DEBT = new Map([
   ['@320:playground:share', 'at 568 px of height the navbar, the page header and the Q002 '
     + 'sentence leading <main> (P002, Q004 option A: wrapped to five lines at 320 px) leave the '
     + 'Playground 63.8 % of the first screen: the first screen of P002, owned by the Playground'],
-  ['@320:synth:overlap', 'the keyboard dock\'s arm, octave and velocity buttons overlap the Synth '
-    + 'panel\'s header controls: the Synth lane, #385 and V635'],
+  ['darwin:@320:synth:overlap', R320],
+  ['linux:@320:synth:overlap', R320],
   ['@320:studio:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Studio\'s '
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
@@ -683,22 +727,21 @@ async function runOne(name) {
           // U107 (oscilla-c3's C3-539-2): the Synth is measured as the user keeps it, with K246's
           // insert alert closed by its own Close button. Open, the alert only pushes the tabs
           // down for the first screen, and the ratchet read an unpaid overlap as paid.
-          // Pressed where it is, a touch at its centre, when it is on top there: Playwright's
-          // click() scrolls the target into view first, and on linux WebKit that left the page
-          // measured scrolled (#540). Where the dock covers it (320 and 375, U108's defect) its
-          // own handler closes it without a scroll, so every host and engine measures the page
-          // unscrolled; U108 puts the alert above the dock and removes this branch.
-          const close = p.locator('[data-osc="synth.notice.close"]');
-          const cb = (await close.isVisible()) && await close.boundingBox();
-          const onTop = cb && await p.evaluate(([x, y]) => {
+          // U111 (C3-541-2, C3-540-2): wait for the alert and its Close on top where it is drawn
+          // (U108 put it above the dock at every phone size), then press it there, a touch at its
+          // centre: Playwright's tap() would scroll first (#540). A missing or covered Close fails
+          // here; it never closes by a path the user lacks.
+          const at0 = await until(() => p.evaluate(() => {
+            const el = document.querySelector('[data-osc="synth.notice.close"]');
+            if (!el || !el.getClientRects().length) return null;
+            const b = el.getBoundingClientRect();
+            const x = b.left + b.width / 2;
+            const y = b.top + b.height / 2;
             const e = document.elementFromPoint(x, y);
-            return !!e && !!e.closest('[data-osc="synth.notice.close"]');
-          }, [cb.x + cb.width / 2, cb.y + cb.height / 2]);
-          if (onTop) await p.touchscreen.tap(cb.x + cb.width / 2, cb.y + cb.height / 2);
-          else if (cb) {
-            console.log(`  U108 fallback: ${name} ${at} closes the covered alert by its handler`);
-            await close.evaluate((el) => el.click());
-          }
+            return e && e.closest('[data-osc="synth.notice.close"]') ? [x, y] : null;
+          }), { ms: READY_MS, what: `ui-current: the Synth insert alert's Close is shown and on `
+            + `top before phone-whole closes it (${at})` });
+          await p.touchscreen.tap(at0[0], at0[1]);
           await until(() => p.evaluate(() => {
             const n = document.querySelector('[data-osc="synth.notice"]');
             return !n || n.hidden || n.getClientRects().length === 0;
@@ -728,7 +771,12 @@ async function runOne(name) {
               .map((b) => top - b.bottom);
             return d.length ? Math.round(Math.min(...d)) : null;
           });
-          console.log(`  MARGIN ${name} ${at} synth controls to dock top: ${gap} px`);
+          // U111 (C3-541-4): the clearance of the lowest control above the dock, and the deepest
+          // overlap phone-whole measured (a pair's height in px), so a covered control shows too.
+          const deep = Math.max(0, ...((r.last && r.last.overlaps) || [])
+            .map((o) => Number((/ (\d+)x(\d+)$/.exec(o) || [])[2]) || 0));
+          console.log(`  MARGIN ${name} ${at} synth controls to dock top: ${gap} px; deepest `
+            + `overlap ${deep} px`);
         }
         await p.close();
         const m = r.last;
@@ -747,8 +795,9 @@ async function runOne(name) {
             + `${m.small.slice(0, 6).join('; ')}`,
           edge: m && `${m.offEdge.length} beyond the ${m.vw} px width, in no horizontal `
             + `scroller: ${m.offEdge.slice(0, 6).join('; ')}`,
+          // U111 (c3): every pair with its px, so CI's run states each host's set
           overlap: m && `${m.overlaps.length} pairs overlap by more than 2 px: `
-            + `${m.overlaps.slice(0, 6).join('; ')}`,
+            + `${m.overlaps.join('; ')}`,
         };
         for (const k of PHONE_MEASURES) {
           const key = debtOf(ws, k);
@@ -756,6 +805,16 @@ async function runOne(name) {
           if (key) {
             seen.add(key);
             check(id, !v[k], `${key} passes now at ${at}: remove it from PHONE_WHOLE_DEBT`);
+            // U111 (C3-541-3): an overlap key that names its pairs fails when the measured pair
+            // set changes in either direction, not only when it empties.
+            const named = k === 'overlap' && PHONE_WHOLE_PAIRS.get(key);
+            if (named && m && !v[k]) {
+              const cmp = comparePairs(m.overlaps, named);
+              if (cmp.near.length) console.log(`  near: ${key} at ${at}: ${cmp.near.join('; ')}`);
+              check(`${id}-pairs`, !cmp.extra.length && !cmp.gone.length, `${key} at ${at}: the `
+                + `pair set changed; new: ${cmp.extra.join('; ') || 'none'}; `
+                + `gone: ${cmp.gone.join('; ') || 'none'} (measured: ${m.overlaps.join('; ')})`);
+            }
             if (!v[k]) {
               console.log(`  KNOWN ${name} ${at} ${key}: ${detail[k]} `
                 + `(${PHONE_WHOLE_DEBT.get(key)})`);

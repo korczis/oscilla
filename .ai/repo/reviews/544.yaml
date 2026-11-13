@@ -1,0 +1,74 @@
+# Review verdict for pull request #544 (train/t19): train T19 and release v3.37.3 (a patch:
+# release:analyze derives patch from U111's fix(ui)).
+# Guarded member: 43's U111 75d8a533 (merged in 3fce06be), guarded in 1 path: src/js/synth/
+# insert.js (the no-source short line). Unguarded members read as members: U111's tests
+# (tests/browser/synth.cjs s-notice-cold, tests/browser/ui-current.cjs comparePairs,
+# PHONE_WHOLE_PAIRS, the close that waits, MARGIN, the pair multisets on every KNOWN line;
+# tests/unit/synth-insert-notice.test.mjs), the U111 record and the new U112; the v3.37.2 record
+# 0f97037b; chore(release): v3.37.3 698ee104. Judged at 698ee104 on base origin/main 7aefc37d
+# (v3.37.2), 2026-11-13, in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-43 built U111, integrated and stamped. Disclosure: U111
+# carries this reviewer's findings C3-541-1, -2, -3, -4 and C3-540-4 from #541, and its
+# C3-541-3 design (a deadband, the Mac's pairs named, linux boolean until CI names them) is this
+# reviewer's decision under Q090 of 2026-11-13. The build is judged against the findings and that
+# decision, not the decision again.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 698ee104:
+# 6984f0fbeb93f6cf... over 1 guarded path (equal to the integrator's).
+#
+# How it was judged:
+# - C3-541-1: SYNTH_TEXT.short leads "Panel vložen, hraje do Master Output" when nothing fed
+#   Master Output, as its sentence SYNTH_TEXT.inserted says, and "převzal vstup" only with a
+#   source; a unit test reads each lead against its sentence.
+# - C3-541-2 (C3-540-2): phone-whole waits (until, READY_MS) for Close shown and on top at its
+#   centre by elementFromPoint, then taps it there; no isVisible() first and no fallback, so a
+#   missing or covered Close fails instead of closing by a path the user lacks.
+# - C3-541-3: comparePairs takes a pair's depth as the smaller side of its overlap; above 2 px it
+#   counts, up to NEAR_PX 6 it is near-zero (listed with '~', logged as "near", never failing; a
+#   listed pair fallen into the deadband reports "(listed, now near-zero)"); every other pair
+#   matches as a multiset in either direction. The reviewer extracted it and ran 12 sample sets:
+#   the same set and its reverse pass; a new firm pair, a firm pair gone, a pair at 7 px, a
+#   listed '~5' pair grown to 9 px, a duplicate and a swapped pair each fail; a listed pair now at
+#   5 px, new pairs at 5 and 3 px and a listed '~5' pair gone each pass. darwin:@320 names the
+#   Mac's 4 pairs; linux:@320 stays boolean, and U112 names it from CI's run in the next train.
+#   Every KNOWN line now logs the whole pair multiset with px.
+# - C3-541-4: MARGIN logs the clearance and the deepest overlap (a pair's height): 375 x 667 on
+#   the Mac reads "25 px; deepest overlap 20-26 px", so a covered control shows. (Its "deepest"
+#   is a pair's height while comparePairs's depth is the smaller side; each says which it means.)
+# - C3-540-4: s-notice-cold opens the Synth cold from its address with the safety notice
+#   collapsed (isMobile where the engine has it), asserts nothing in the view holds focus, closes
+#   by the handler and requires no scroller and not the window to move. Fail-first by the
+#   reviewer: the head's synth.cjs against T16 da54bdc8's dist fails in webkit (#osc-app 150 px
+#   on the desktop leg, 185 on the phone; focus on #osc-view-synth) and passes in chromium; at
+#   698ee104 it passes in both.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (7aefc37d's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict. The linux @320 pair set CI states is read and named by U112, not here.
+#
+# Measured by the reviewer: at 698ee104 GITHUB_BASE_REF=main npm test exit 0 (5788 tests, 5787
+# pass, 0 fail, 1 skipped), build:check up to date (v3.37.3), --check-station rc=0,
+# release:analyze patch; ui-current 407/407 in chromium, webkit and firefox; synth exit 0 in
+# chromium (desktop 48/48, phone 16/16) and webkit (48/48, 16/16), s-notice and s-notice-cold ok
+# on every leg; with OSC_LOAD_MAX=50 under a load of about 21-26 on the shared Mac.
+#
+# Verdict: merge, under the condition above. No finding is open in this train: C3-541-1, -2, -4
+# and C3-540-4 are closed by U111, and C3-541-3 is closed for the Mac with its linux names carried
+# by U112, as decided.
+schema: review-verdict/v1
+pr: 544
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 698ee104)
+content: 6984f0fbeb93f6cfbcd664b6568dd480e620d518cb220959fc08f8524c2f8c05
+findings:
+  - { id: C3-541-1, severity: P3, status: closed, title: "the no-source short line claimed a takeover; closed by U111 (its own lead, unit-read against its sentence)" }
+  - { id: C3-541-2, severity: P3, status: closed, title: "ui-current skipped a late alert and kept a dead fallback; closed by U111 (waits for Close on top, then taps it)" }
+  - { id: C3-541-3, severity: P3, status: closed, title: "the boolean @320 key; closed by U111 for the Mac (pair multiset with a 2-6 px deadband), linux names carried by U112" }
+  - { id: C3-541-4, severity: P3, status: closed, title: "MARGIN left out covered controls; closed by U111 (clearance and deepest overlap)" }
+  - { id: C3-540-4, severity: P3, status: closed, title: "s-notice's no-scroll assertion could not fail on the base; closed by U111's s-notice-cold (fails on T16 webkit, 150/185 px)" }
