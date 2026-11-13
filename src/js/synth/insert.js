@@ -26,6 +26,11 @@ export const SYNTH_TEXT = Object.freeze({
     + `Vložený panel ${SEMI_MONO.title} tento vstup převezme (příkaz Zpět ho vrátí).`,
   took: (names) => `Panel ${SEMI_MONO.title} je vložen do dokumentu Studia a převzal vstup Master `
     + `Output od: ${names}. Příkaz Zpět panel odebere a vstup vrátí.`,
+  /** U108: the phone's one line, worded by oscilla-0b; the source a nominative in parentheses
+   *  (a free node label cannot be declined after "od"), dropped when there was none. Its 58-char
+   *  form, chosen once from CI's 320 x 568 measurement (#541; oscilla-c3's condition). */
+  short: (names) => ({ lead: 'Panel vložen, převzal vstup Master Output',
+    source: names || '', tail: '. Zpět ho odebere.' }),
   notInserted: 'Panel Synthu v tomto dokumentu Studia není: nejdřív stiskněte Vložit.',
   armed: 'Synth připraven: klávesy hrají panel.',
   /** What the keys and the XY pad play, named from the route's node (K183 S6). */
@@ -67,7 +72,8 @@ export function insertAction(model, panel = SEMI_MONO, { explicit = false, unrou
   if (unroute && model.metadata.noteTarget) {
     action.steps.push({ type: 'METADATA_SET', noteTarget: null });
   }
-  return { action, text: names ? SYNTH_TEXT.took(names) : SYNTH_TEXT.inserted };
+  return { action, text: names ? SYNTH_TEXT.took(names) : SYNTH_TEXT.inserted,
+    short: SYNTH_TEXT.short(names) };
 }
 
 /**
@@ -88,5 +94,5 @@ export function insertWithPreset(model, panel = SEMI_MONO, presetId = 'init') {
   if (!pre.action) return pre;
   const tail = pre.action.type === 'BATCH' ? pre.action.steps : [pre.action];
   return { action: { type: 'BATCH', label: `Vložit ${panel.title}`.slice(0, 64),
-    steps: [...ins.action.steps, ...tail] }, text: ins.text };
+    steps: [...ins.action.steps, ...tail] }, text: ins.text, short: ins.short };
 }

@@ -48,7 +48,7 @@ export function createDock(ctx) {
       const done = ctx.dispatch(r.action);
       const on = done.ok ? ctx.played() : null;
       // K246: a New Synth voice is an insert: its sentence is the insert alert's.
-      if (done.ok && id === NEW_VOICE && r.text && ctx.inserted) ctx.inserted(r.text);
+      if (done.ok && id === NEW_VOICE && r.text && ctx.inserted) ctx.inserted(r);
       else if (done.ok) ctx.say(r.text || `The keys play ${on ? on.metadata.name : 'nothing'}.`);
       return done.ok;
     },
