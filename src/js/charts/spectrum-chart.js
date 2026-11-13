@@ -203,8 +203,8 @@ export function createSpectrumChart(host, options = {}) {
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       const items = [
-        [theme.green, 'Microphone (live)'],
-        [theme.trace, 'Generator (target)'],
+        [theme.green, 'Mikrofon (živě)'],
+        [theme.trace, 'Generátor (cíl)'],
       ];
       let x = left + width * 0.22;
       const y = top + 9 * dpr;
@@ -321,7 +321,7 @@ export function createSpectrumChart(host, options = {}) {
       return [
         {},
         {
-          label: 'Spectrum',
+          label: 'Spektrum',
           width: 1,
           points: { show: false },
           stroke: (self) => gradients(self.ctx, self.bbox).strokeGrad,
@@ -333,7 +333,7 @@ export function createSpectrumChart(host, options = {}) {
     return [
       {},
       {
-        label: 'Microphone (live)',
+        label: 'Mikrofon (živě)',
         width: 1.25,
         points: { show: false },
         stroke: theme.green,
@@ -341,7 +341,7 @@ export function createSpectrumChart(host, options = {}) {
         fillTo: () => o.minDb,
       },
       {
-        label: 'Generator (target)',
+        label: 'Generátor (cíl)',
         width: 1.25,
         points: { show: false },
         stroke: theme.trace,
@@ -349,7 +349,7 @@ export function createSpectrumChart(host, options = {}) {
         fillTo: () => o.minDb,
       },
       {
-        label: 'Microphone peak hold',
+        label: 'Držené špičky mikrofonu',
         width: 1,
         dash: [3, 3],
         points: { show: false },
@@ -493,13 +493,13 @@ export function createSpectrumChart(host, options = {}) {
     if (!dual) {
       const r = readInto('main', o.getAnalyser && o.getAnalyser(), ys[0], nowMs);
       setShow([!!r]);
-      setNote(r ? null : 'Audio not started');
+      setNote(r ? null : 'Zvuk nespuštěn');
     } else {
       const rm = readInto('mic', o.getMicAnalyser && o.getMicAnalyser(), ys[0], nowMs);
       const rt = readInto('main', o.getAnalyser && o.getAnalyser(), ys[1], nowMs);
       if (rm && peakHold) sampleSpectrum(rm.peak, mapFor('mic', rm), ys[2], o.minDb);
       setShow([!!rm, !!rt, !!rm && peakHold]);
-      setNote(rm ? null : o.micOffText || 'Microphone off');
+      setNote(rm ? null : o.micOffText || 'Mikrofon vypnutý');
     }
     u.setData([xs, ...ys], false);
     u.redraw(true, false); // setData(…, false) alone does not repaint

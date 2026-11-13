@@ -187,7 +187,9 @@ test('review of #159: the stated rule is the one implemented', () => {
   const flatAdr = whole.replace(/\s+/g, ' ');
   assert.ok(!/status bar's Play is visible everywhere/.test(flatAdr), 'the status bar claim');
   assert.match(flatAdr, /narrow layout/);
-  assert.match(texts.dialog.replace(/\s+/g, ' '), /whether or not a Play control is on screen/);
+  // Czech since pass 3 (U109, Q104): the dialog still says Space plays with no Play shown.
+  assert.match(texts.dialog.replace(/\s+/g, ' '),
+    /ať je ovládání přehrávání na obrazovce, nebo ne/);
 });
 
 test('index.html: one shortcut dialog, opened by Help, the overflow menu and Studio', () => {

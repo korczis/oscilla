@@ -18,9 +18,9 @@ import { routedNode } from './picker.js';
 import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
 
 export const STUDIO_SINK_TEXT = Object.freeze({
-  none: 'Nothing in this Studio plays notes: add a Keys node or an engine to play from the keys.',
-  refused: 'A measurement owns the output: the keys play after it.',
-  unarmed: 'The Studio could not start for the keys: press Play or try again.',
+  none: 'V tomto Studiu nic nehraje noty: přidejte uzel Keys nebo engine, ať klávesy mají co hrát.',
+  refused: 'Výstup teď patří měření: klávesy zahrají, až skončí.',
+  unarmed: 'Studio se pro klávesy nespustilo: stiskněte Play nebo to zkuste znovu.',
 });
 
 export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () => {},

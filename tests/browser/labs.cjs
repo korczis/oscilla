@@ -351,10 +351,10 @@ async function runEngine(engine, base) {
     (m) => m.max === hz && (label === null || m.label === label), { ms: 5000, what });
   await setRate(null);
   await page.selectOption('#osc-spec-max', 'nyquist');
-  const pend = await maxIs(20000, 'Max: Nyquist (pending audio)',
+  const pend = await maxIs(20000, 'Max: Nyquist (čeká na zvuk)',
     'Nyquist before audio: axis at 20 kHz, option pending');
   check('T006: Nyquist before audio keeps 20 kHz and says it is pending',
-    pend.max === 20000 && pend.label === 'Max: Nyquist (pending audio)', JSON.stringify(pend));
+    pend.max === 20000 && pend.label === 'Max: Nyquist (čeká na zvuk)', JSON.stringify(pend));
   await setRate({ sampleRate: 48000 });
   const ny48 = await maxIs(24000, 'Max: Nyquist (24 kHz)', 'Nyquist follows a 48 kHz start');
   check('T006: Nyquist chosen before audio follows a 48 kHz context (24 kHz)',
@@ -794,7 +794,7 @@ async function runEngine(engine, base) {
       + `${mic.ref ? `${mic.ref.hz.toFixed(1)} Hz at ${mic.ref.db.toFixed(1)} dB` : 'none'}; `
       + `"${mic.text}"; device "${mic.label}"; after ${polls} polls`
       : `active ${mic.active} error "${mic.error}" text "${mic.text}"; after ${polls} polls`);
-  check('mic readout before enabling says it is off', /microphone off/i.test(micBefore), micBefore);
+  check('mic readout before enabling says it is off', /mikrofon vypnutý/i.test(micBefore), micBefore);
   await page.click('#osc-mtab-compare');
   const readCmp = () => page.evaluate(() => ({ text: document.querySelector('#osc-mic-detected')
     .textContent, cmp: window.__labs.labs.mic.comparison,

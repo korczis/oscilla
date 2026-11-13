@@ -165,7 +165,7 @@ export const STATE_TEXT = Object.freeze({
   normalled: 'normalled', patched: 'patched', free: 'free',
   summing: 'normalled, plus a performance cable',
   open: 'open: normal removed in Studio',
-  mixed: 'patched in Studio while its normal still sounds',
+  mixed: 'zapojeno ve Studiu a jeho normál přitom dál zní',
 });
 
 /** Why a cable into `jack` would do nothing now (project.no-inert-surfaces), or null. */
@@ -368,7 +368,7 @@ export function patchCable(model, panel, from, to, { registry = NODE_REGISTRY } 
   steps.push({ type: 'EDGE_ADD', from: { node: id(a.module), port: a.port },
     to: { node: id(b.module), port: b.port },
     props: cableProps(model, panel, from, to, { registry }) });
-  return { action: { type: 'BATCH', label: `Patch ${from} to ${to}`,
+  return { action: { type: 'BATCH', label: `Propojit ${from} → ${to}`,
     steps: rememberAmounts(model, panel, steps) } };
 }
 
@@ -402,7 +402,7 @@ export function normalSteps(model, panel, jack) {
  */
 export function unpatch(model, panel, edgeId) {
   const e = model.graph.edges.find((x) => x.id === edgeId);
-  if (!e) return { reason: 'That cable is not patched.' };
+  if (!e) return { reason: 'Ten kabel není zapojený.' };
   const map = panel.resolve(model);
   let jack = null;
   for (const [mid, node] of map) if (node && node.id === e.to.node) jack = `${mid}.${e.to.port}`;
@@ -414,7 +414,7 @@ export function unpatch(model, panel, edgeId) {
   const cables = rest.length - studio;
   const normal = jack && !cables ? normalSteps(model, panel, jack) : [];
   steps.push(...normal);
-  return { action: { type: 'BATCH', label: `Remove cable into ${jack || e.to.port}`,
+  return { action: { type: 'BATCH', label: `Odpojit kabel do ${jack || e.to.port}`,
     steps: rememberAmounts(model, panel, steps) }, restored: normal.length, cables, studio };
 }
 
@@ -449,8 +449,10 @@ export function setCableSwitch(model, panel, sw, on) {
 
 export function restoreNormals(model, panel, jack) {
   const steps = normalSteps(model, panel, jack);
-  if (!steps.length) return { reason: 'Nothing to restore: every normal of this jack is there.' };
-  return { action: { type: 'BATCH', label: `Restore normal into ${jack}`, steps } };
+  if (!steps.length) {
+    return { reason: 'Není co obnovit: všechny normály tohoto vstupu jsou na místě.' };
+  }
+  return { action: { type: 'BATCH', label: `Obnovit normál vstupu ${jack}`, steps } };
 }
 
 /** Remove the live normals of a jack something else feeds ('mixed' -> 'patched'). */
@@ -458,8 +460,8 @@ export function breakNormals(model, panel, jack) {
   const { normals } = panelEdges(model, panel);
   const ids = panel.normals.filter((n) => n.to === jack && normals.has(n.id))
     .map((n) => normals.get(n.id).id);
-  if (!ids.length) return { reason: 'No normal of this jack is sounding.' };
-  return { action: { type: 'BATCH', label: `Break normal into ${jack}`,
+  if (!ids.length) return { reason: 'Žádný normál tohoto vstupu nezní.' };
+  return { action: { type: 'BATCH', label: `Rozpojit normál vstupu ${jack}`,
     steps: rememberAmounts(model, panel, [{ type: 'EDGE_REMOVE', edgeIds: ids }]) } };
 }
 
@@ -477,7 +479,7 @@ export function amountEdges(model, panel, amount) {
 export function setAmount(model, panel, amount, depth) {
   const edges = amountEdges(model, panel, amount);
   if (!edges.length) return null;
-  return { type: 'BATCH', label: `Change ${amount.label}`,
+  return { type: 'BATCH', label: `Změnit ${amount.label}`,
     steps: edges.map((e) => ({ type: 'EDGE_UPDATE', edgeId: e.id, props: { depth } })) };
 }
 
@@ -485,6 +487,6 @@ export function setAmount(model, panel, amount, depth) {
 export function amountReason(model, panel, amount) {
   if (amountEdges(model, panel, amount).length) return null;
   const src = panel.module(splitJack(amount.source).module);
-  return `Nothing from ${src ? src.label : amount.source} is patched into `
-    + `${amount.to.join(' or ')}.`;
+  return `${src ? src.label : amount.source} není zapojený do `
+    + `${amount.to.join(' ani ')}.`;
 }

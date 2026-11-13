@@ -379,7 +379,7 @@ test('a saved XY patch loads back to the same panel state; one without a pad is 
     panelCables(saved, PANEL).map((c) => [c.from, c.to]).sort());
   const bare = { ...patch, graph: { ...patch.graph,
     nodes: patch.graph.nodes.filter((n) => n.type !== 'xy-pad') } };
-  assert.match(xyPatchAction(saved, PANEL, bare).reason, /holds no XY pad/);
+  assert.match(xyPatchAction(saved, PANEL, bare).reason, /neobsahuje XY pad/);
 });
 
 test('a patch envelope with a bad category or scale is refused with its sentence', () => {

@@ -23,13 +23,16 @@
 //     NODE_PARAM_SET, or ONE BATCH when a wave brings the oscillator's level back
 
 import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
+import { WAVEFORM_NAMES } from '../core/constants.js';
 import { insertAction } from './insert.js';
 
 export const NEW_VOICE = 'new-voice';
-export const NEW_VOICE_TAKEN = 'This Studio already holds the Synth panel, and Master Output '
-  + 'takes one cable: its Keys and engines are listed above.';
-export const WAVES = Object.freeze([['sine', 'Sine'], ['triangle', 'Triangle'],
-  ['sawtooth', 'Saw'], ['square', 'Square'], ['pulse', 'Pulse'], ['noise', 'Noise']]
+export const NEW_VOICE_TAKEN = 'Toto Studio už panel Synthu má a Master Output přijme jen '
+  + 'jeden kabel: jeho klávesy a enginy jsou v seznamu výše.';
+/** The dock's waves; the four oscillator shapes carry the one Czech name (WAVEFORM_NAMES). */
+export const WAVES = Object.freeze([['sine', WAVEFORM_NAMES.sine],
+  ['triangle', WAVEFORM_NAMES.triangle], ['sawtooth', WAVEFORM_NAMES.sawtooth],
+  ['square', WAVEFORM_NAMES.square], ['pulse', 'Pulz'], ['noise', 'Šum']]
   .map(([id, label]) => Object.freeze({ id, label })));
 /** The Mixer input each oscillator of the panel feeds (panels/semi-mono.js normals n5-n7). */
 const MIX = Object.freeze({ vco1: 'level1', vco2: 'level2', noise: 'level3' });
@@ -54,7 +57,7 @@ export function instrumentChoices(model, panel, { registry = NODE_REGISTRY, curr
     id: n.id, name: n.metadata.name, kind: registry.get(n.type).displayName,
     selected: n.id === current, disabled: false, reason: null }));
   const has = !!panel.resolve(model).get('keys');
-  out.push({ id: NEW_VOICE, name: 'New Synth voice', kind: panel.title, selected: false,
+  out.push({ id: NEW_VOICE, name: 'Nový hlas Synthu', kind: panel.title, selected: false,
     disabled: has, reason: has ? NEW_VOICE_TAKEN : null });
   return out;
 }
@@ -65,10 +68,10 @@ export function routeAction(model, panel, id, { registry = NODE_REGISTRY } = {})
     return insertAction(model, panel, { explicit: true, unroute: true });
   }
   const n = model.graph.nodes.find((x) => x.id === id);
-  if (!n) return { reason: `There is no node "${String(id)}".` };
+  if (!n) return { reason: `Uzel „${String(id)}“ neexistuje.` };
   if (!playsNotes(n.type, registry)) {
-    return { reason: `${n.metadata.name} does not play notes: the keys play a node with the `
-      + 'notes or hits capability.' };
+    return { reason: `${n.metadata.name} nehraje noty: klávesy hrají uzel se schopností notes `
+      + 'nebo hits.' };
   }
   const own = n === panel.resolve(model).get('keys');
   return { action: { type: 'METADATA_SET', noteTarget: own ? null : n.id } };

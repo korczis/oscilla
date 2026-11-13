@@ -58,7 +58,7 @@ export const LIVE_NOTES_TEXT = Object.freeze({
   // K226: the step-voltage sequencer's manual step.
   notClocked: 'Krokový sekvencer CV krokuje vlastní rychlostí: ruční krok potřebuje kabel do '
     + 'vstupu Takt (nebo spouštěcí klip).',
-  notRunning: 'Krokový sekvencer CV teď nehraje: zapněte Synth (Arm) nebo přehrávání.',
+  notRunning: 'Krokový sekvencer CV teď nehraje: zapněte Synth (Připravit) nebo přehrávání.',
 });
 /**
  * K226: how long a manual step's Gate and step trigger hold, in seconds (no key-up closes them);

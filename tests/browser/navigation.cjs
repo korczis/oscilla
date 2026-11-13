@@ -426,7 +426,7 @@ function defineChecks() {
     // described
     const home = await settle((s) => s.ws === 'playground' && s.shown === s.phone
       && s.idleHint == null && /Hold to Play\b/.test(s.caption || '')
-      && /Hold to Play shows/.test(s.desc),
+      && /ukáže Hold to Play/.test(s.desc),
     'the Playground shows one Play and its scope names Hold to Play');
     res.playgroundOnePlay = home;
     for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {

@@ -10,7 +10,7 @@ export default [
   defineComponent({
     id: 'source.ceiling',
     kind: 'readout',
-    label: 'Output at ceiling',
+    label: 'Výstup na stropu',
     docs: 'Warns beside the gain that the output is clipped at its ceiling while it sounds.',
     state: 'instrument.gainLevel',
   }),

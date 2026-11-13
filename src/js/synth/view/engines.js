@@ -17,7 +17,7 @@ export const CHIP = 'snap-start shrink-0 rounded-full border border-solid px-3 h
   + 'font-semibold tracking-wide';
 
 export function enginePickerHtml({ panel, ids, on, resolved }) {
-  return '<div role="radiogroup" aria-label="Engine the keys play" class="flex shrink-0 '
+  return '<div role="radiogroup" aria-label="Engine, který klávesy hrají" class="flex shrink-0 '
     + 'gap-2 lg:flex-wrap">' + ids.map((id) => {
     const x = panel.module(id);
     const sel = id === on;
@@ -25,7 +25,7 @@ export function enginePickerHtml({ panel, ids, on, resolved }) {
       + `class="${CHIP} ${sel ? 'border-primary-600 bg-primary-600 text-white '
         + 'dark:bg-primary-500' : 'border-gray-300 bg-white text-gray-800 '
         + 'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200'}">${esc(x.label)}`
-      + `${resolved.get(id) ? '' : ' (removed)'}</button>`;
+      + `${resolved.get(id) ? '' : ' (odebrán)'}</button>`;
   }).join('') + '</div>' + ENGINE_BLOCKED.map((b) => `<button type="button" aria-disabled="true" `
     + `aria-describedby="synth-blocked-${b.id}" data-blocked="${b.id}" class="${CHIP} `
     + 'cursor-not-allowed border-dashed border-gray-300 bg-gray-100 text-gray-500 '
