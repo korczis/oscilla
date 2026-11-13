@@ -269,7 +269,7 @@ const LAUNCH = {
 const SIZES = { desktop: { width: 1536, height: 1024 }, phone: { width: 390, height: 844 } };
 const PHONE_CHECKS = new Set(['s-sound', 's-cable', 's-mobile', 's-look', 's-dock',
   's-library', 's-choices', 's-armed', 's-normals', 's-steps', 's-libinsert', 's-dadsr', 's-mg',
-  's-pads', 's-notice']);
+  's-pads', 's-notice', 's-notice-cold']);
 const LOAD_MS = 60000;
 const SOUND_MS = 8000; // a note's attack, a knob change's glide and the analyser's smoothing
 const CHECK_MS = 120000;
@@ -1885,6 +1885,46 @@ function defineChecks() {
     text, status, roles, focus, back, closeBox: box, pointer, scroll: { before, after } };
   });
 
+  // U111 (oscilla-c3's C3-540-4): the Synth opened cold from its address, as a returning user
+  // has it (the safety notice collapsed), with nothing focused in it: openSynth's title click put
+  // focus in the view, so s-notice could not see a focus scroll. Close must leave every scroller
+  // and the window where they were; without preventScroll WebKit's focus of the Synth view
+  // scrolled #osc-app (C3-540-3, oscilla-c3's probe: 185 px). A nav link is no cold open: the
+  // navigation scrolls the workspace into view first (app.js focusWorkspaceHeading).
+  def('s-notice-cold', async ({ context, base, size }) => {
+    // c3's probe: a mobile viewport where the engine has one (Firefox has none), the safety notice
+    // collapsed, and Close run by its own handler (a DOM click), so only the handler's focus()
+    // can scroll; a pointer press would move focus to the button first and hide it.
+    const own = size === 'phone' && context.browser().browserType().name() !== 'firefox'
+      ? await context.browser().newContext({ viewport: SIZES.phone, hasTouch: true,
+        isMobile: true })
+      : context;
+    await own.addInitScript(() => {
+      try { sessionStorage.setItem('oscilla.safetyNoticeCollapsed', '1'); } catch { /* refused */ }
+    });
+    const page = await own.newPage();
+    await page.goto(`${base}#m=synth`);
+    const alert = page.locator('[data-osc="synth.notice"]');
+    await until(async () => alert.isVisible(), { ms: LOAD_MS,
+      what: 'the insert alert shows on opening the Synth from its address' });
+    const focused = await page.evaluate(() => {
+      const a = document.activeElement;
+      return !!a && a !== document.body && !!a.closest('#osc-view-synth');
+    });
+    const scrolled = () => page.evaluate(() => [`window:${window.scrollY}`,
+      ...[...document.querySelectorAll('*')].filter((e) => e.scrollTop > 0)
+        .map((e) => `${e.id || e.dataset.osc || e.tagName}:${Math.round(e.scrollTop)}`)].join(' '));
+    const before = await scrolled();
+    await page.evaluate(() => document.querySelector('[data-osc="synth.notice.close"]').click());
+    await until(async () => !(await alert.isVisible()), { ms: 5000,
+      what: 'Close hides the insert alert' });
+    const after = await scrolled();
+    const focus = await page.evaluate(() => document.activeElement && document.activeElement.id);
+    if (own !== context) await own.close();
+    return { ok: !focused && after === before && focus === 'osc-view-synth', focused,
+      scroll: { before, after }, focus };
+  });
+
   def('s-newvoice', async ({ page }) => {
     // A document without the panel whose own chain feeds Master Output, changed by the user:
     // the workspace's own insert undone, then a node of the user's.
@@ -3012,7 +3052,7 @@ async function runLeg(browserName, sizeName, base) {
       context.on('page', (pg) => pg.on('pageerror', (e) => errors.push(String(e))));
       const t0 = Date.now();
       try {
-        const own = ['s-midi', 's-link'].includes(name);
+        const own = ['s-midi', 's-link', 's-notice-cold'].includes(name);
         const page = own ? null : await openSynth(context, base);
         const v = await bounded(fn({ page, context, base, size: sizeName }),
           { ms: CHECK_MS, what: `${name} finishes` });
