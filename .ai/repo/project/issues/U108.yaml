@@ -29,4 +29,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-12'
-updated_at: '2026-11-12'
+updated_at: 2026-11-13T02:23:35Z
+started_at: 2026-11-13T02:21:56Z
+started_event: sha256:9057dcfea8b0f199c625733a50c96670030e2a73dfda79e7f98132d80daeafd3
+verified_at: 2026-11-13T02:22:21Z
+verified_event: sha256:49ccaa1c07e419889d7c2c160b05e07b8ad70118f3776da7690f38f949ed8d4c
+completed_at: 2026-11-13T02:23:35Z
+completed_event: sha256:798e9a6d00a289f2f1ab9667245282480f83a7b147bf81013b947f3d1f2eee53
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-insert-notice.test.mjs; node tests/browser/ui-current.cjs"
+    result: "On main 0f80b807 (T18 2885a94b): synth-insert-notice 11/11; ui-current 406/406 in chromium, webkit and firefox with u108-alert-on-top-{320,375,390}-{open,collapsed}-{collapsed,expanded} and u108-heading-after-close-320 (CI run 43328880551 attempt 2, legs read by oscilla-c3). Acceptance lines 2 (C3-540-2) and 3 (@320 pairs) moved to U111 under c3's rule."
+    artifact: "2885a94b4fa49e456fbeefc0d99ece3386a71e90"
+    commit: 0f80b807b8cb7f18f260f77a5d7c33eb3fa2e082
+    recorded_at: 2026-11-13T02:23:09Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 541 checks: gate, fail-first"
+    result: "landed by #541 (v3.37.2); gate success and fail-first success on attempt 2; review verdict .ai/repo/reviews/541.yaml"
+    artifact: ".ai/repo/reviews/541.yaml"
+    commit: 0f80b807b8cb7f18f260f77a5d7c33eb3fa2e082
+    recorded_at: 2026-11-13T02:23:22Z
