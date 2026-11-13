@@ -1,0 +1,33 @@
+id: U111
+milestone: M054
+serves:
+  - "ui-current#phone-whole"
+title: "U108's review follow-ups: the no-source short line, a close that waits for the alert, pair-named phone debt keys and a nav-link s-notice"
+slug: u108-review-follow-ups
+priority: p3
+profile: implementation
+objective: "Lands as fix(ui) and test(ui). U108's review follow-ups, moved here under oscilla-c3's done-criteria rule (2026-11-12): C3-541-1 (P3): with no prior source the short line says 'převzal vstup Master Output' while the sentence says 'hraje do'; give it its own lead. C3-541-2 (P3, C3-540-2 not met): ui-current's close still starts with isVisible(), and the U108 fallback is dead (no 'U108 fallback' line anywhere) with a comment saying U108 removes it. C3-541-3 (P3): at 320 the dock now covers synth.studio/copy-link, and the @320 key is still a boolean (U108 acceptance line 23). C3-540-4 (P3): s-notice's scroll assertion is vacuous in its own setup; add a variant that opens the Synth by its nav link with nothing focused, and make that one fail on the base. oscilla-c3 on the move, verbatim: \"U111 carrying C3-541-1, -2, -3 and C3-540-4 with their ids is acceptable under my rule, and so is stamping U108 only after U111 is filed with the move recorded in U108's record. For C3-541-3, a pair-named key must fail when its pair set changes in either direction, not only when it empties.\" C3-541-4 (P3, 2026-11-12, verbatim): \"MARGIN counts only controls whose top is above the keyboard's top (411 at 375), so the covered controls are left out. Every Mac engine logs +25 px at 375 while 5 pairs overlap; log the deepest overlap too.\" Wording fix from oscilla-c3 on 837c4b6e (2026-11-12), verbatim: \"-3 px is a 3 px intrusion, not \"within the 2 px tolerance\". It's the lowest control reaching 3 px into the dock's top padding: the keyboard element starts at 411 but its buttons at 420, so no control x dock-button pair exceeds 2 px. Say that, and it ties into C3-541-4: log the pair depth as well as the margin. Since the line sits within a few px on linux, expect U111's pair-named keys to need px in them.\""
+why: "oscilla-c3's done-criteria rule: U108 is done only once its open review findings are fixed or moved to an issue of their own; these are moved here."
+current_state: "Open. Filed 2026-11-12 by oscilla-43 (phone-shell lane A) after train T18 (#541, v3.37.2); built by oscilla-43."
+scope:
+  - "src/js/synth/insert.js"
+  - "tests/browser/ui-current.cjs"
+  - "tests/browser/synth.cjs"
+  - "tests/unit/synth-insert-notice.test.mjs"
+depends_on:
+  - "U108"
+acceptance_criteria:
+  - "C3-541-1: with no previous source the short line leads with what the sentence says (the panel plays into Master Output), from the same data; a unit test reads both."
+  - "C3-541-2: ui-current waits for the insert alert with until() and a named deadline before it closes it, never isVisible() first; the dead U108 fallback and its comment are gone."
+  - "C3-541-3: phone-whole debt keys can name their overlap pairs, and such a key fails when its pair set changes in either direction; @320:synth:overlap names its pairs, the dock's cover of synth.studio and synth.copy-link included, or that cover is fixed."
+  - "C3-540-4: an s-notice variant opens the Synth by its nav link with nothing focused and fails on the base without preventScroll."
+  - "C3-541-4: phone-whole logs the deepest overlap of the Synth's controls with the dock beside the clearance of the lowest control above it."
+  - "A reviewer's verdict."
+validation:
+  - "npm test"
+  - "node tests/browser/ui-current.cjs"
+  - "node tests/browser/synth.cjs --only s-notice"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-12'
