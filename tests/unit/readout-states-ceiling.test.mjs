@@ -17,7 +17,7 @@ import {
 } from '../../src/js/audio/output-ceiling.js';
 import { MAX_OUTPUT_GAIN, DEFAULT_GAIN } from '../../src/js/core/constants.js';
 import { VisualizationBridge } from '../../src/js/visualization/visualization-bridge.js';
-import { createWorkbench } from '../../src/js/ui/workbench.js';
+import { createWorkbench, CEILING_TEXT } from '../../src/js/ui/workbench.js';
 import * as outputBus from '../../src/js/core/output-bus.js';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 
@@ -171,20 +171,21 @@ test('T001: the UI shows the state while sounding; the gain readout is labelled 
   o.playing = true; // the instrument's voice holds the bus (a claim before it sounds, C037)
   o.playback = { owner: 'instrument', since: 1 };
   assert.equal(o.ceilingActing, true);
-  assert.equal(o.ceilingText, 'OUTPUT AT CEILING (clipped)');
-  assert.match(o.gainTitle, /setpoint/);
+  assert.equal(o.ceilingText, CEILING_TEXT);
+  assert.equal(CEILING_TEXT, 'VÝSTUP NA STROPU (oříznuto)');
+  assert.match(o.gainTitle, /Nastavené zesílení/);
   assert.match(o.gainTitle, /-21\.9 dB/);
   // The master gain sits after the envelope and the inserts and before the limiter and the
   // ceiling (audio-engine.js voice chain): the title must not place it before the filter.
-  assert.match(o.gainTitle, /not the output level/);
-  assert.match(o.gainTitle, /leaves out the envelope and filter before it/);
-  assert.match(o.gainTitle, /and the limiter and -12\.0 dBFS output ceiling after it/);
-  assert.doesNotMatch(o.gainTitle, /set before the filter/);
-  assert.match(o.gainTitle, /relative, not SPL/);
+  assert.match(o.gainTitle, /ne úroveň výstupu/);
+  assert.match(o.gainTitle, /nezahrnuje obálku a filtr před ním/);
+  assert.match(o.gainTitle, /ani limiter a strop výstupu -12\.0 dBFS za ním/);
+  assert.doesNotMatch(o.gainTitle, /před filtrem/);
+  assert.match(o.gainTitle, /relativní, ne SPL/);
   assert.doesNotMatch(o.gainTitle, /dB SPL/);
-  assert.match(o.gainTitle, /OUTPUT AT CEILING \(clipped\)/, 'the title says so while acting');
+  assert.ok(o.gainTitle.includes(CEILING_TEXT), 'the title says so while acting');
   o.outputAtCeiling = false;
-  assert.doesNotMatch(o.gainTitle, /clipped/);
+  assert.ok(!o.gainTitle.includes(CEILING_TEXT));
   assert.equal(o.gainDbText, '-21.9 dB', 'the readout value itself is unchanged');
 });
 
@@ -238,7 +239,7 @@ test('C069: the ceiling indicator shows for whichever owner the bus says sounds'
     o.playback = { owner, since: 1 };
     assert.equal(outputBus.soundingOwner(o), owner);
     assert.equal(o.ceilingActing, true, `${owner}: the indicator shows`);
-    assert.match(o.gainTitle, /OUTPUT AT CEILING/, `${owner}: the title says so`);
+    assert.ok(o.gainTitle.includes(CEILING_TEXT), `${owner}: the title says so`);
   }
   o.playback = { owner: null, since: 2 };
   o.measureOwnsOutput = () => true;

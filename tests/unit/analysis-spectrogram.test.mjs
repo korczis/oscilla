@@ -360,14 +360,14 @@ test('K015 label: relative dB, the bin and the newest column; never SPL', () => 
   assert.ok(text.includes(RELATIVE_UNIT), text);
   assert.match(text, /−42\.1 dB/);
   assert.match(text, /bin 171/);
-  assert.match(text, /newest column/);
+  assert.match(text, /nejnovější sloupec/);
   assert.doesNotMatch(text, /SPL/);
   const silent = readoutLines({
     rowHz: 1001, bin: 171, frequencyHz: 1002, binHz: 5.86, db: -Infinity,
   });
   assert.match(silent.join('\n'), /−∞ dB relative/);
   const empty = readoutLines({ rowHz: 1001, bin: null, frequencyHz: null, binHz: 5.86, db: null });
-  assert.match(empty.join('\n'), /No analyser data/);
+  assert.match(empty.join('\n'), /Žádná data analyzátoru/);
   assert.doesNotMatch(empty.join('\n'), /dB/);
 });
 

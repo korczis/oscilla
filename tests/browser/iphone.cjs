@@ -312,7 +312,7 @@ async function deniedJourney(browser, engine, device, phone, check) {
         mic = await pollFor(() => page.evaluate(() => ({
           text: document.getElementById('osc-mic-detected').textContent.trim(),
           pressed: document.getElementById('osc-mic-toggle').getAttribute('aria-pressed'),
-        })), (v) => /permission denied/.test(v.text), `iphone: the denied microphone says so`);
+        })), (v) => /přístup zamítnut/.test(v.text), `iphone: the denied microphone says so`);
       }
       check(`denied-mic@${phone}`, mic.ok && mic.last.pressed === 'false'
         && !/\d\s*Hz/.test(mic.last.text) && errors.length === 0,

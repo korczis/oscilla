@@ -20,7 +20,7 @@ import { PERC_VOICES, PERC_VOICE_PARAMS, percParamKey } from '../perc-recipes.js
 const PERC_ROW_KEYS = Object.freeze(Object.keys(PERC_VOICES).flatMap((id) => PERC_VOICE_PARAMS
   .map((name) => percParamKey(id, name))));
 
-export const ENGINE_TAB = Object.freeze({ id: 'engines', label: 'Engines',
+export const ENGINE_TAB = Object.freeze({ id: 'engines', label: 'Enginy',
   title: 'Syntézní enginy',
   description: `Polyfonní enginy, každý až s ${MAX_VOICES} hlasy, hrají ze stejných kláves: `
     + 'aditivní, FM, AM a kruhová modulace, wavetable, hard sync a perkuse. Klávesy hrají '

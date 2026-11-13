@@ -677,7 +677,7 @@ function defineChecks() {
     });
     await context.close();
     const ok = before === 'oscillator' && r.source === 'additive' && r.n === r.bars
-      && r.maxDiff < 1e-9 && /Additive synthesis spectrum/.test(r.label) && off === 'oscillator';
+      && r.maxDiff < 1e-9 && /Spektrum aditivní syntézy/.test(r.label) && off === 'oscillator';
     return { ok, before, ...r, off };
   });
 
@@ -701,8 +701,8 @@ function defineChecks() {
     // the analyser buffer (8192) holds 100 ms up to ~80 kHz; above that the label says so
     const fits = r.sr * 0.1 + Math.ceil(r.sr / 440) + 1 <= r.buffer;
     const ok = fits
-      ? Math.abs(r.shown - 100) < 1e-9 && /over a 100 ms window/.test(r.label)
-      : r.shown < 100 && /buffer limit/.test(r.label);
+      ? Math.abs(r.shown - 100) < 1e-9 && /v okně 100 ms/.test(r.label)
+      : r.shown < 100 && /limit bufferu/.test(r.label);
     return { ok, ...r, fits };
   });
 
@@ -854,7 +854,7 @@ function defineChecks() {
       return { ok, st, after };
     }
     // No microphone in this browser (WebKit has no fake device): the message must be accurate.
-    const ok = browserName === 'webkit' && /^Microphone unavailable here \(/.test(st.error)
+    const ok = browserName === 'webkit' && /^Mikrofon tu není k dispozici \(/.test(st.error)
       && !/file:\/\/ or permission/.test(st.error) && st.micNodes === 0;
     return { ok, st };
   });

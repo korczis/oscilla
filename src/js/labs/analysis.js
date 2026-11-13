@@ -18,7 +18,7 @@ export function maxFrequencyFor(value, sampleRate) {
 /** The Nyquist option's text: its value once a rate is known, pending before audio. */
 export function nyquistOptionLabel(sampleRate) {
   return sampleRate > 0 ? `Max: Nyquist (${formatHz(sampleRate / 2, 4)})`
-    : 'Max: Nyquist (pending audio)';
+    : 'Max: Nyquist (čeká na zvuk)';
 }
 
 /**

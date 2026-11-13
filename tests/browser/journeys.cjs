@@ -605,7 +605,7 @@ function defineChecks() {
         seqPlaying: window.OSCILLA.labs.sequencer.editor.playing,
         aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label') }))
         .then((r) => (r.owner === 'sequencer'
-          && /^Live output analyser waveform \(sequencer\)/.test(r.aria || '') ? r : null)),
+          && /^Živý průběh analyzátoru výstupu \(sequencer\)/.test(r.aria || '') ? r : null)),
       { ms: STEP_MS, what: 'journey-3: the output owner and the scope aria label name the '
         + 'sequencer while it plays' });
       must(v.seqPlaying && !v.instrumentPlaying, 'the sequencer plays, not the instrument', v);

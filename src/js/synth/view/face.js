@@ -160,7 +160,7 @@ function toggleHtml(cid, c, value, reason, tokens) {
     + `${selectorSvg({ value: !!value, param: c.param, tokens, disabled: !!reason })}`
     + `<button type="button" aria-pressed="${!!value}" data-toggle="${cid}" `
     + `${named(cid)}${disabled(cid, reason)} class="${SEG} rounded-lg `
-    + `${value ? SEG_ON : SEG_OFF}">${value ? 'On' : 'Off'}</button></div>`
+    + `${value ? SEG_ON : SEG_OFF}">${value ? 'Zap' : 'Vyp'}</button></div>`
     + `${why(cid, reason)}</div>`;
 }
 

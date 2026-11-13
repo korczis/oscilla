@@ -228,8 +228,8 @@ test('lab: the engine detaching its analyser on close stops it and says why', as
   assert.equal(lab.stream, null);
   assert.equal(lab.estimate, null, 'no detected frequency is kept from the closed graph');
   assert.equal(toggle.getAttribute('aria-pressed'), 'false');
-  assert.equal(toggle.textContent, 'Use microphone');
-  assert.match(String(micLab.MIC_CONTEXT_CLOSED), /audio context was closed/);
+  assert.equal(toggle.textContent, 'Zapnout mikrofon');
+  assert.match(String(micLab.MIC_CONTEXT_CLOSED), /kontext byl uzavřen/);
   assert.equal(lab.error, micLab.MIC_CONTEXT_CLOSED);
   assert.equal(detected.textContent, micLab.MIC_CONTEXT_CLOSED, 'the readout states the reason');
   assert.equal(stream.tracks[0].readyState, 'ended', 'its tracks are stopped');

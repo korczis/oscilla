@@ -83,7 +83,7 @@ export default [
   defineComponent({
     id: 'keyboard.more',
     kind: 'switch',
-    label: 'More, Fewer',
+    label: 'Další, Skrýt',
     docs: 'Shows the docked keyboard controls a phone folds away, or folds them again.',
     state: 'ui.kbdMore',
     in: 'keyboard',

@@ -471,23 +471,23 @@
           <section class="osc-panel osc-p-source" id="osc-panel-source" data-osc-panel="source"
             data-osc-modes="playground sequencer synthesis" aria-labelledby="osc-source-title">
             <div class="osc-panel-header">
-              <h2 class="osc-panel-title" id="osc-source-title">Source &amp; Pattern</h2>
+              <h2 class="osc-panel-title" id="osc-source-title">Zdroj a vzor</h2>
               <span class="osc-spacer"></span>
             </div>
 
             <div class="osc-seg osc-seg--split osc-source-kind" role="radiogroup"
-              aria-label="Source type">
+              aria-label="Druh zdroje">
               <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
                 tabindex="0" id="osc-source-osc" data-osc="source.kind" data-value="oscillator"
-                x-bind="choice('sourceKind', 'oscillator')">Oscillator</button>
+                x-bind="choice('sourceKind', 'oscillator')">Oscilátor</button>
               <button type="button" class="osc-seg-btn" role="radio" aria-checked="false"
                 tabindex="-1" id="osc-source-pattern" data-osc="source.kind" data-value="pattern"
-                x-bind="choice('sourceKind', 'pattern')">Pattern</button>
+                x-bind="choice('sourceKind', 'pattern')">Vzor</button>
             </div>
 
             <div class="osc-source-view osc-source-view--osc lg:h-auto lg:min-h-[204px]" id="osc-source-view-osc"
               data-osc="source.oscView" :hidden="sourceKind !== 'oscillator'">
-            <div class="osc-wave-tiles" role="radiogroup" aria-label="Waveform"
+            <div class="osc-wave-tiles" role="radiogroup" aria-label="Tvar vlny"
               data-osc="source.waveform">
               <button type="button" class="osc-wave-tile is-active" role="radio" aria-checked="true"
                 tabindex="0" id="osc-wave-sine" data-osc="source.waveform" data-value="sine"
@@ -520,7 +520,7 @@
             </div>
 
             <div class="osc-freq-slider-wrap">
-              <label class="osc-sr-only" for="osc-freq-slider">Frequency (logarithmic)</label>
+              <label class="osc-sr-only" for="osc-freq-slider">Frekvence (logaritmická stupnice)</label>
               <input class="osc-slider osc-freq-slider" id="osc-freq-slider" type="range"
                 min="0" max="1000" step="1" value="500" style="--osc-fill: 50%"
                 data-osc="source.freqSlider" aria-valuetext="440 Hz"
@@ -537,24 +537,24 @@
                  Q004 option A); from 768 px they stay open with the summary unseen (instrument.css).
                  A closed fold's content is display: none (WebKit kept its boxes in layout). -->
             <details id="osc-fine-fold" open x-init="foldOnPhone($el)">
-              <summary>Fine frequency steps</summary>
+              <summary>Jemné kroky frekvence</summary>
               <!-- Beside the desktop sidebar the panel can be narrower than the six buttons
                    (review #330 F1): from lg up one row while the row is 20rem or wider, three a
                    row below that; on any width the row wraps rather than leaving the panel, and
                    the view above grows from its 204 px to hold the second row (lg:h-auto). -->
-              <div class="osc-fine flex-wrap [details:not([open])>&]:hidden lg:*:basis-[clamp(0px,calc((20rem-100%)*999),calc(33.333%-4px))]" role="group" aria-label="Fine frequency steps">
+              <div class="osc-fine flex-wrap [details:not([open])>&]:hidden lg:*:basis-[clamp(0px,calc((20rem-100%)*999),calc(33.333%-4px))]" role="group" aria-label="Jemné kroky frekvence">
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-oct-down"
-                  data-osc="source.step" data-step="-1oct" @click="stepFine('-1oct')" aria-label="Down one octave">-1 oct</button>
+                  data-osc="source.step" data-step="-1oct" @click="stepFine('-1oct')" aria-label="O oktávu níž">-1 oct</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-st-down"
-                  data-osc="source.step" data-step="-1st" @click="stepFine('-1st')" aria-label="Down one semitone">-1 st</button>
+                  data-osc="source.step" data-step="-1st" @click="stepFine('-1st')" aria-label="O půltón níž">-1 st</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-10-down"
-                  data-osc="source.step" data-step="-10hz" @click="stepFine('-10hz')" aria-label="Down 10 hertz">-10 Hz</button>
+                  data-osc="source.step" data-step="-10hz" @click="stepFine('-10hz')" aria-label="O 10 Hz níž">-10 Hz</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-10-up"
-                  data-osc="source.step" data-step="+10hz" @click="stepFine('+10hz')" aria-label="Up 10 hertz">+10 Hz</button>
+                  data-osc="source.step" data-step="+10hz" @click="stepFine('+10hz')" aria-label="O 10 Hz výš">+10 Hz</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-st-up"
-                  data-osc="source.step" data-step="+1st" @click="stepFine('+1st')" aria-label="Up one semitone">+1 st</button>
+                  data-osc="source.step" data-step="+1st" @click="stepFine('+1st')" aria-label="O půltón výš">+1 st</button>
                 <button type="button" class="osc-btn osc-btn-secondary osc-fine-btn" id="osc-step-oct-up"
-                  data-osc="source.step" data-step="+1oct" @click="stepFine('+1oct')" aria-label="Up one octave">+1 oct</button>
+                  data-osc="source.step" data-step="+1oct" @click="stepFine('+1oct')" aria-label="O oktávu výš">+1 oct</button>
               </div>
             </details>
             </div>
@@ -562,7 +562,7 @@
             <div class="osc-source-view osc-source-view--pattern" id="osc-source-view-pattern"
               data-osc="source.patternView" hidden :hidden="sourceKind !== 'pattern'">
               <div class="osc-row-field osc-pattern-row">
-                <label class="osc-label" for="osc-pattern-select">Pattern</label>
+                <label class="osc-label" for="osc-pattern-select">Vzor</label>
                 <div class="osc-select osc-pattern-select">
                   <select id="osc-pattern-select" data-osc="pattern-select"
                     @change="onPatternSelect($event.target.value)">
@@ -583,7 +583,7 @@
                 data-osc="pattern-desc" aria-live="polite"
                 x-text="source === 'sweep' ? 'Sweep mezi dvěma frekvencemi (režim sweepu).' : (PATTERN_DESCS[currentPattern.id] || currentPattern.desc)"></p>
               <div class="osc-pattern-params" id="osc-pattern-params" data-osc="pattern-params"
-                role="group" aria-label="Pattern parameters">
+                role="group" aria-label="Parametry vzoru">
                 <div class="osc-pp-grid">
                   <template x-for="d in ppFields" :key="ppId(d)">
                     <div class="osc-pp-field" :class="{ 'osc-pp-field--wide': d.type === 'text' }">
@@ -614,13 +614,13 @@
                   </template>
                   <template x-if="ppSweep">
                     <div class="osc-pp-field">
-                      <label class="osc-label" for="sw-direction">Direction</label>
+                      <label class="osc-label" for="sw-direction">Směr</label>
                       <div class="osc-select">
                         <select id="sw-direction" data-osc="sweep.param" data-key="direction"
                           @change="sweep.direction = $event.target.value">
-                          <option value="up" :selected="sweep.direction === 'up'">Up</option>
-                          <option value="down" :selected="sweep.direction === 'down'">Down</option>
-                          <option value="pingpong" :selected="sweep.direction === 'pingpong'">Ping-pong</option>
+                          <option value="up" :selected="sweep.direction === 'up'">Nahoru</option>
+                          <option value="down" :selected="sweep.direction === 'down'">Dolů</option>
+                          <option value="pingpong" :selected="sweep.direction === 'pingpong'">Tam a zpět</option>
                         </select>
                       </div>
                     </div>
@@ -632,33 +632,33 @@
             </div>
 
             <details id="osc-mode-fold" open x-init="foldOnPhone($el)">
-              <summary>Mode: <span x-text="noteMode ? 'Note' : 'Frequency'">Frequency</span></summary>
+              <summary>Režim: <span x-text="noteMode ? 'Nota' : 'Frekvence'">Frekvence</span></summary>
               <div class="osc-row-field osc-mode-row [details:not([open])>&]:hidden">
-                <span class="osc-label" id="osc-mode-label">Mode</span>
+                <span class="osc-label" id="osc-mode-label">Režim</span>
                 <div class="osc-seg osc-mode-seg" role="radiogroup" aria-labelledby="osc-mode-label">
                   <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
                     tabindex="0" id="osc-mode-freq" data-osc="source.inputMode" data-value="frequency"
-                    x-bind="choice('inputMode', 'frequency')">Frequency</button>
+                    x-bind="choice('inputMode', 'frequency')">Frekvence</button>
                   <button type="button" class="osc-seg-btn" role="radio" aria-checked="false"
                     tabindex="-1" id="osc-mode-note" data-osc="source.inputMode" data-value="note"
-                    x-bind="choice('inputMode', 'note')">Note</button>
+                    x-bind="choice('inputMode', 'note')">Nota</button>
                 </div>
               </div>
             </details>
 
             <div class="osc-row-field osc-gain-row">
-              <label class="osc-label" for="osc-gain">Gain</label>
+              <label class="osc-label" for="osc-gain">Zesílení</label>
               <input class="osc-slider osc-slider--sm" id="osc-gain" type="range" min="0" max="100"
                 step="1" value="57" style="--osc-fill: 57%" data-osc="source.gain"
                 aria-valuetext="-21.9 dB" :value="gainPct" :style="'--osc-fill: ' + gainFill"
-                :aria-valuetext="gainDbText + ' (logical gain ' + gainLevel.toFixed(3) + ', ' + gainLabel + ')'"
+                :aria-valuetext="gainDbText + ' (logické zesílení ' + gainLevel.toFixed(3) + ', ' + gainLabel + ')'"
                 @input="setGainPct($event.target.value)">
               <output class="osc-gain-value osc-num" id="osc-gain-value" for="osc-gain"
                 data-osc="source.gainValue" x-text="gainDbText" :title="gainTitle">-21.9 dB</output>
             </div>
             <p data-osc="source.ceiling" x-show="ceilingActing" x-cloak
               :title="gainTitle"><span aria-hidden="true">&#x26A0;&#xFE0E;</span> <span
-              x-text="ceilingText">OUTPUT AT CEILING (clipped)</span></p>
+              x-text="ceilingText">VÝSTUP NA STROPU (oříznuto)</span></p>
 
             <div class="osc-play-row">
               <button type="button" class="osc-btn osc-btn-primary osc-btn-lg osc-hold" id="osc-hold-play"
@@ -672,58 +672,58 @@
               </button>
               <button type="button" class="osc-btn osc-btn-secondary osc-btn-lg osc-trigger" id="osc-trigger"
                 data-osc="source.trigger" @click="trigger()" @keydown.enter.prevent="triggerKey($event)"
-                :aria-label="isProgrammed ? 'Trigger the programmed pattern' : 'Trigger for the set duration'">Trigger</button>
+                :aria-label="isProgrammed ? 'Trigger: spustí naprogramovaný vzor' : 'Trigger: zazní po nastavenou dobu'">Trigger</button>
             </div>
             <p class="osc-sr-only" id="osc-transport-desc" x-text="transportText"></p>
           </section>
 
           <!-- ---------- Primary analysis ---------- -->
           <section class="osc-panel osc-p-analysis" id="osc-panel-analysis" data-osc-panel="analysis"
-            data-osc-modes="playground analyzer synthesis" aria-label="Signal analysis">
+            data-osc-modes="playground analyzer synthesis" aria-label="Analýza signálu">
             <div class="osc-analysis-head">
               <div class="osc-tabs osc-tabs--auto osc-analysis-tabs" role="tablist"
-                aria-label="Analysis view" id="osc-analysis-tabs">
+                aria-label="Pohled analýzy" id="osc-analysis-tabs">
                 <button type="button" class="osc-tab is-active" role="tab" aria-selected="true"
                   tabindex="0" id="osc-atab-waveform" aria-controls="osc-analysis-view"
                   data-osc="analysis.tab" data-value="waveform"
-                  x-bind="tab('analysis', 'waveform')">Waveform</button>
+                  x-bind="tab('analysis', 'waveform')">Průběh</button>
                 <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
                   id="osc-atab-spectrum" aria-controls="osc-analysis-view" data-osc="analysis.tab"
-                  data-value="spectrum" x-bind="tab('analysis', 'spectrum')">Spectrum</button>
+                  data-value="spectrum" x-bind="tab('analysis', 'spectrum')">Spektrum</button>
                 <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
                   id="osc-atab-spectrogram" aria-controls="osc-analysis-view" data-osc="analysis.tab"
-                  data-value="spectrogram" x-bind="tab('analysis', 'spectrogram')">Spectrogram</button>
+                  data-value="spectrogram" x-bind="tab('analysis', 'spectrogram')">Spektrogram</button>
                 <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
                   id="osc-atab-harmonics" aria-controls="osc-analysis-view" data-osc="analysis.tab"
-                  data-value="harmonics" x-bind="tab('analysis', 'harmonics')">Harmonics</button>
+                  data-value="harmonics" x-bind="tab('analysis', 'harmonics')">Harmonické</button>
                 <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
                   id="osc-atab-signalpath" aria-controls="osc-analysis-view" data-osc="analysis.tab"
-                  data-value="signalPath" x-bind="tab('analysis', 'signalPath')">Signal Path</button>
+                  data-value="signalPath" x-bind="tab('analysis', 'signalPath')">Signálová cesta</button>
               </div>
               <div class="osc-analysis-tools">
               <button type="button" data-osc="analysis.openInStudio" hidden
                 :hidden="tabs.analysis !== 'signalPath'" @click="studioOpenVoice()"
-                class="me-2 h-8 rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11">Open in Studio</button>
+                class="me-2 h-8 rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11">Otevřít ve Studiu</button>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-viz-pause"
-                id="osc-viz-pause" data-osc="analysis.pause" aria-label="Pause animation"
+                id="osc-viz-pause" data-osc="analysis.pause" aria-label="Pozastavit animaci"
                 title="Pozastavit animaci (při změně se pohled přesto překreslí)"
                 aria-pressed="false" :aria-pressed="String(vizPaused)" @click="vizPaused = !vizPaused">
                 <svg aria-hidden="true" x-show="!vizPaused"><use href="#i-pause"/></svg>
                 <svg aria-hidden="true" x-show="vizPaused" style="display: none"><use href="#i-play"/></svg>
               </button>
               <div class="osc-select osc-time-select">
-                <label class="osc-sr-only" for="osc-time-window">Time window</label>
+                <label class="osc-sr-only" for="osc-time-window">Časové okno</label>
                 <select id="osc-time-window" data-osc="analysis.timeWindow"
                   @change="timeWindowMs = Number($event.target.value)">
-                  <option value="5" selected>Time: 5 ms</option>
-                  <option value="10">Time: 10 ms</option>
-                  <option value="20">Time: 20 ms</option>
-                  <option value="50">Time: 50 ms</option>
-                  <option value="100">Time: 100 ms</option>
+                  <option value="5" selected>Čas: 5 ms</option>
+                  <option value="10">Čas: 10 ms</option>
+                  <option value="20">Čas: 20 ms</option>
+                  <option value="50">Čas: 50 ms</option>
+                  <option value="100">Čas: 100 ms</option>
                 </select>
               </div>
               <button type="button" class="osc-icon-btn osc-analysis-fs" id="osc-analysis-fullscreen"
-                data-osc="analysis.fullscreen" aria-label="Analysis fullscreen"
+                data-osc="analysis.fullscreen" aria-label="Analýza na celou obrazovku"
                 @click="toggleFullscreen('osc-panel-analysis')">
                 <svg aria-hidden="true"><use href="#i-expand"/></svg>
               </button>
@@ -735,7 +735,7 @@
               :data-tab="tabs.analysis" aria-labelledby="osc-atab-waveform"
               :aria-labelledby="'osc-atab-' + tabs.analysis.toLowerCase()">
               <div class="osc-chart-host osc-chart-inset osc-h-waveform" id="osc-chart-waveform"
-                data-osc-chart="waveform" role="img" aria-label="Waveform"
+                data-osc-chart="waveform" role="img" aria-label="Průběh"
                 :aria-label="analysisCanvasLabel"></div>
               <div class="osc-chart-host osc-h-spectrum" id="osc-chart-spectrum"
                 data-osc-chart="spectrum" role="img"
@@ -748,7 +748,7 @@
             <div class="osc-analysis-foot"
               :class="{ 'is-inert': !['waveform', 'spectrum'].includes(tabs.analysis) }">
               <div class="osc-seg osc-seg--primary osc-scale-seg" role="radiogroup"
-                aria-label="Frequency axis">
+                aria-label="Frekvenční osa">
                 <button type="button" class="osc-seg-btn is-active" role="radio" aria-checked="true"
                   tabindex="0" id="osc-spec-log" data-osc="analysis.freqScale" data-value="log"
                   x-bind="choice('specScale', 'log')">Log</button>
@@ -757,7 +757,7 @@
                   x-bind="choice('specScale', 'linear')">Linear</button>
               </div>
               <div class="osc-select osc-max-select">
-                <label class="osc-sr-only" for="osc-spec-max">Maximum frequency</label>
+                <label class="osc-sr-only" for="osc-spec-max">Nejvyšší frekvence</label>
                 <select id="osc-spec-max" data-osc="analysis.maxFreq">
                   <option value="2000">Max: 2 kHz</option>
                   <option value="5000">Max: 5 kHz</option>
@@ -766,9 +766,9 @@
                   <option value="nyquist">Max: Nyquist</option>
                 </select>
               </div>
-              <ul class="osc-legend osc-analysis-legend" aria-label="Legend">
-                <li class="osc-legend-item"><span class="osc-legend-dot osc-legend-dot--purple"></span>Spectrum</li>
-                <li class="osc-legend-item"><span class="osc-legend-dot osc-legend-dot--blue"></span>Requested frequency</li>
+              <ul class="osc-legend osc-analysis-legend" aria-label="Legenda">
+                <li class="osc-legend-item"><span class="osc-legend-dot osc-legend-dot--purple"></span>Spektrum</li>
+                <li class="osc-legend-item"><span class="osc-legend-dot osc-legend-dot--blue"></span>Požadovaná frekvence</li>
               </ul>
             </div>
           </section>
@@ -778,14 +778,14 @@
         <section class="osc-panel osc-p-spectrogram" id="osc-panel-spectrogram"
           data-osc-panel="spectrogram" data-osc-modes="analyzer" aria-labelledby="osc-spg-title">
           <div class="osc-panel-header">
-            <h2 class="osc-panel-title" id="osc-spg-title">Spectrogram</h2>
+            <h2 class="osc-panel-title" id="osc-spg-title">Spektrogram</h2>
             <span class="osc-spacer"></span>
             <button type="button" class="osc-toggle" role="switch" aria-checked="false"
               id="osc-spg-freeze" data-osc="spectrogram.freeze">
-              <span class="osc-toggle-track" aria-hidden="true"></span><span>Freeze</span>
+              <span class="osc-toggle-track" aria-hidden="true"></span><span>Zmrazit</span>
             </button>
             <div class="osc-select osc-spg-span">
-              <label class="osc-sr-only" for="osc-spg-span-select">Time span</label>
+              <label class="osc-sr-only" for="osc-spg-span-select">Časový rozsah</label>
               <select id="osc-spg-span-select" data-osc="spectrogram.span">
                 <option value="5">5 s</option>
                 <option value="10" selected>10 s</option>
@@ -793,14 +793,14 @@
               </select>
             </div>
             <div class="osc-select osc-spg-scale">
-              <label class="osc-sr-only" for="osc-spg-scale-select">Frequency axis</label>
+              <label class="osc-sr-only" for="osc-spg-scale-select">Frekvenční osa</label>
               <select id="osc-spg-scale-select" data-osc="spectrogram.freqScale">
                 <option value="log" selected>Log freq</option>
                 <option value="linear">Linear freq</option>
               </select>
             </div>
             <button type="button" class="osc-icon-btn osc-spg-fs" id="osc-spg-fullscreen"
-              data-osc="spectrogram.fullscreen" aria-label="Spectrogram fullscreen"
+              data-osc="spectrogram.fullscreen" aria-label="Spektrogram na celou obrazovku"
               @click="toggleFullscreen('osc-panel-spectrogram')">
               <svg aria-hidden="true"><use href="#i-expand"/></svg>
             </button>
@@ -827,60 +827,60 @@
           <section class="osc-panel osc-p-mic" id="osc-panel-mic" data-osc-panel="mic"
             data-osc-modes="analyzer compare" aria-labelledby="osc-mic-title">
             <div class="osc-panel-header osc-mic-head">
-              <h2 class="osc-panel-title" id="osc-mic-title">Microphone Analyzer</h2>
+              <h2 class="osc-panel-title" id="osc-mic-title">Analyzátor mikrofonu</h2>
               <span class="osc-spacer"></span>
               <button type="button" class="osc-btn osc-btn-success osc-mic-use" id="osc-mic-toggle"
-                data-osc="mic.toggle" aria-pressed="false">Use microphone</button>
+                data-osc="mic.toggle" aria-pressed="false">Zapnout mikrofon</button>
               <button type="button" class="osc-icon-btn osc-mic-settings" id="osc-mic-settings"
-                data-osc="mic.settings" aria-label="Microphone settings" aria-haspopup="dialog"
+                data-osc="mic.settings" aria-label="Nastavení mikrofonu" aria-haspopup="dialog"
                 @click="openDialog('osc-dlg-mic')">
                 <svg aria-hidden="true"><use href="#i-gear"/></svg>
               </button>
             </div>
-            <div class="osc-tabs osc-mic-tabs" role="tablist" aria-label="Microphone view">
+            <div class="osc-tabs osc-mic-tabs" role="tablist" aria-label="Pohled mikrofonu">
               <button type="button" class="osc-tab is-active" role="tab" aria-selected="true"
                 tabindex="0" id="osc-mtab-live" aria-controls="osc-mic-view" data-osc="mic.tab"
-                data-value="live" x-bind="tab('mic', 'live')">Live Spectrum</button>
+                data-value="live" x-bind="tab('mic', 'live')">Živé spektrum</button>
               <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
                 id="osc-mtab-spectrogram" aria-controls="osc-mic-view" data-osc="mic.tab"
-                data-value="spectrogram" x-bind="tab('mic', 'spectrogram')">Spectrogram</button>
+                data-value="spectrogram" x-bind="tab('mic', 'spectrogram')">Spektrogram</button>
               <button type="button" class="osc-tab" role="tab" aria-selected="false" tabindex="-1"
                 id="osc-mtab-compare" aria-controls="osc-mic-view" data-osc="mic.tab"
-                data-value="compare" x-bind="tab('mic', 'compare')">Compare</button>
+                data-value="compare" x-bind="tab('mic', 'compare')">Porovnání</button>
             </div>
             <hr class="osc-divider osc-mic-sep">
             <div class="osc-mic-view" id="osc-mic-view" role="tabpanel"
               aria-labelledby="osc-mtab-live" :aria-labelledby="'osc-mtab-' + tabs.mic">
-              <div class="osc-seg osc-mic-tools" role="group" aria-label="Compare options" hidden>
+              <div class="osc-seg osc-mic-tools" role="group" aria-label="Volby porovnání" hidden>
                 <button type="button" class="osc-seg-btn" role="switch" aria-checked="false"
-                  data-osc="mic.freeze">Freeze</button>
+                  data-osc="mic.freeze">Zmrazit</button>
                 <button type="button" class="osc-seg-btn" role="switch" aria-checked="false"
-                  data-osc="mic.average">Average</button>
+                  data-osc="mic.average">Průměr</button>
                 <button type="button" class="osc-seg-btn" role="switch" aria-checked="false"
-                  data-osc="mic.peakHold">Peak hold</button>
+                  data-osc="mic.peakHold">Držet špičky</button>
               </div>
               <div class="osc-chart-host osc-h-mic" id="osc-chart-mic" data-osc-chart="mic"
                 role="img" aria-label="Spektrum mikrofonu proti cílové frekvenci generátoru"></div>
             </div>
             <div class="osc-mic-readout" aria-live="polite">
-              <p><span class="osc-mic-k">Requested:</span>
+              <p><span class="osc-mic-k">Požadováno:</span>
                 <output class="osc-num" id="osc-mic-requested" data-osc="mic.requested">—</output></p>
-              <p><span class="osc-mic-k">Microphone detected:</span>
-                <output class="osc-num" id="osc-mic-detected" data-osc="mic.detected">UNAVAILABLE (microphone off)</output></p>
+              <p><span class="osc-mic-k">Mikrofon zachytil:</span>
+                <output class="osc-num" id="osc-mic-detected" data-osc="mic.detected">NEDOSTUPNÉ (mikrofon vypnutý)</output></p>
               <p class="osc-mic-note max-md:whitespace-normal">Nejde o kalibrované měření. Frekvenční charakteristika mikrofonů se liší.</p>
             </div>
             <p data-osc="mic.counterparts" hidden :hidden="!counterpartsShown()">Pro kalibrované měření:
               <a href="#m=measure" data-osc="counterpart.measure-rta" data-osc-link="jump"
                 x-bind="counterpartLink('measure-rta')">RTA in Measure</a> ·
               <a href="#m=experiments" data-osc="counterpart.experiments" data-osc-link="jump"
-                x-bind="counterpartLink('experiments')">Compare saved experiments</a></p>
+                x-bind="counterpartLink('experiments')">Porovnat uložené experimenty</a></p>
           </section>
 
           <!-- ---------- Device & Limits ---------- -->
           <section class="osc-panel osc-p-device" id="osc-panel-device" data-osc-panel="device"
             data-osc-modes="analyzer" aria-labelledby="osc-dev-title">
             <div class="osc-panel-header">
-              <h2 class="osc-panel-title" id="osc-dev-title">Device &amp; Limits</h2>
+              <h2 class="osc-panel-title" id="osc-dev-title">Zařízení a limity</h2>
               <span class="osc-spacer"></span>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm osc-safety-reopen
                 max-2xl:hidden" id="osc-safety-reopen" data-osc="safety.reopen" aria-controls="osc-safety"
@@ -890,21 +890,21 @@
               </button>
               <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
                 id="osc-dev-collapse" data-osc="device.collapse" aria-expanded="true"
-                aria-controls="osc-dev-body" aria-label="Hide Device and Limits details"
+                aria-controls="osc-dev-body" aria-label="Skrýt podrobnosti panelu Zařízení a limity"
                 x-bind="collapseButton('device')">
                 <svg aria-hidden="true"><use href="#i-close"/></svg>
               </button>
             </div>
             <div class="osc-dev-body" id="osc-dev-body" :hidden="collapsed.device">
               <dl class="osc-dev-metrics">
-                <div class="osc-metric"><dt>Sample rate</dt><dd id="osc-dev-sr" data-osc="device.sampleRate">—</dd></div>
+                <div class="osc-metric"><dt>Vzorkovací frekvence</dt><dd id="osc-dev-sr" data-osc="device.sampleRate">—</dd></div>
                 <div class="osc-metric"><dt>Nyquist</dt><dd id="osc-dev-nyquist" data-osc="device.nyquist">—</dd></div>
-                <div class="osc-metric"><dt>Safe max</dt><dd id="osc-dev-safemax" data-osc="device.safeMax">—</dd></div>
+                <div class="osc-metric"><dt>Bezpečné maximum</dt><dd id="osc-dev-safemax" data-osc="device.safeMax">—</dd></div>
               </dl>
               <div class="osc-dev-limits" role="group" aria-labelledby="osc-dev-limits-title">
-                <h3 class="osc-sr-only" id="osc-dev-limits-title">Limits</h3>
+                <h3 class="osc-sr-only" id="osc-dev-limits-title">Limity</h3>
                 <div class="osc-metric osc-dev-limit-row">
-                  <label for="osc-safety-limit" title="Limit plánují hodiny Web Audio, takže platí, i když se stránka zasekne. Nižší limit ukončí i právě znějící notu, a to v okamžiku jejího začátku plus nový limit. Vztahuje se i na Tón pevné délky. Ostatní programované vzory končí svým vlastním koncem (nejvýš 30 s) a smyčka sekvence v Pattern Sequenceru zní nejvýš 30 s; nepřetržité opakování sweepu nebo nekonečná smyčka sekvenceru potřebuje „Allow continuous playback“.">Hard limit</label>
+                  <label for="osc-safety-limit" title="Limit plánují hodiny Web Audio, takže platí, i když se stránka zasekne. Nižší limit ukončí i právě znějící notu, a to v okamžiku jejího začátku plus nový limit. Vztahuje se i na Tón pevné délky. Ostatní programované vzory končí svým vlastním koncem (nejvýš 30 s) a smyčka sekvence v Pattern Sequenceru zní nejvýš 30 s; nepřetržité opakování sweepu nebo nekonečná smyčka sekvenceru potřebuje „Allow continuous playback“.">Pevný limit</label>
                   <div class="osc-select osc-select--xs">
                     <select id="osc-safety-limit" data-osc="safety-limit"
                       @change="setSafetyLimit($event.target.value)" :disabled="continuousAllowed"
@@ -929,8 +929,8 @@
                 sekvence v Pattern Sequenceru zní nejvýš 30 s; nepřetržité opakování sweepu nebo
                 nekonečná smyčka sekvenceru potřebuje „Allow continuous playback“.</p>
               <hr class="osc-divider osc-dev-sep">
-              <p class="osc-dev-out-label">Output device</p>
-              <p class="osc-dev-out" id="osc-dev-output" data-osc="device.output">Default audio output</p>
+              <p class="osc-dev-out-label">Výstupní zařízení</p>
+              <p class="osc-dev-out" id="osc-dev-output" data-osc="device.output">Výchozí zvukový výstup</p>
               <div class="osc-warning osc-warning--info osc-dev-alert" role="note">
                 <svg aria-hidden="true"><use href="#i-info"/></svg>
                 <p>Web Audio generuje digitální signál v mezích vzorkování. Co skutečně zazní z reproduktoru, aplikace nezná.</p>
@@ -2092,7 +2092,7 @@
       <!-- K066, beside the piano in the Synth: a Pro dropdown of what the keys play, a Pro button
            group of the waveform, the quick presets (src/js/synth/picker.js, presets.js). -->
       <div class="mb-2 flex items-center gap-2" data-osc="synth.dock" id="osc-synth-dock"
-        x-show="kbdView === 'synth'" role="group" aria-label="Instrument"
+        x-show="kbdView === 'synth'" role="group" aria-label="Nástroj"
         :class="!kbdMore && 'max-sm:hidden'">
         <div class="relative" x-init="synthDockRoving($el, false)">
           <button type="button" id="osc-synth-pick" x-ref="pick" data-osc="synth.pick"
@@ -2114,7 +2114,7 @@
           </ul>
         </div>
         <div class="flex min-w-0 flex-1 gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
-        <template x-for="g in [{ id: 'osc', label: 'Oscillator', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Waveform', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Quick presets', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0] })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
+        <template x-for="g in [{ id: 'osc', label: 'Oscilátor', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Tvar vlny', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Rychlé předvolby', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0] })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
           <div role="radiogroup" :aria-label="g.label" :data-osc="'synth.dock.' + g.id"
             x-init="synthDockRoving($el, true)" class="inline-flex shrink-0 rounded-lg shadow-sm">
             <template x-for="(it, i) in g.items" :key="it.id">
@@ -2128,7 +2128,7 @@
         </template>
         </div>
       </div>
-      <div role="group" aria-label="Keyboard controls" aria-describedby="osc-kbd-readout"
+      <div role="group" aria-label="Ovládání kláves" aria-describedby="osc-kbd-readout"
         class="mb-2 flex flex-wrap gap-2">
         <button type="button"
           
@@ -2152,8 +2152,8 @@
           @click="kbdControl('velocity-up')">Úhoz +</button>
         <button type="button" data-osc="keyboard.more" x-show="kbdDocked"
           aria-controls="osc-synth-dock" :aria-expanded="String(kbdMore)" @click="kbdMore = !kbdMore"
-          x-text="kbdMore ? 'Méně' : 'Více'"
-          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">Více</button>
+          x-text="kbdMore ? 'Skrýt' : 'Další'"
+          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">Další</button>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
         :class="kbdDocked && 'sr-only sm:not-sr-only'"></p>
@@ -2722,26 +2722,26 @@
           <p class="hidden max-w-3xl text-sm text-gray-600 sm:block dark:text-gray-300"
             x-text="synth.description"></p>
         </div>
-        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Synth actions">
-          <label class="sr-only" for="osc-synth-preset">Preset</label>
+        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Akce Synthu">
+          <label class="sr-only" for="osc-synth-preset">Předvolba</label>
           <select id="osc-synth-preset" data-osc="synth.preset" x-model="synth.preset"
             @change="synthPreset($event.target.value)"
             class="h-11 w-full max-w-full rounded-lg sm:w-auto border border-solid border-gray-300 bg-gray-50 px-3 text-sm text-gray-900 dark:border-gray-600 dark:bg-gray-700 dark:text-white">
-            <option value="" hidden :selected="!synth.preset">Choose a preset</option>
+            <option value="" hidden :selected="!synth.preset">Vyberte předvolbu</option>
             <template x-for="p in synth.presets.filter((x) => x.tab === synth.tab)" :key="p.id">
               <option :value="p.id" :selected="p.id === synth.preset" x-text="p.title"></option>
             </template>
           </select>
           <button type="button" data-osc="synth.arm" role="switch" aria-checked="false"
             :aria-checked="String(synth.armed)"
-            @click="synth.armed ? synthDisarm() : synthArm()" x-text="synth.armed ? 'Disarm' : 'Arm'"
-            class="h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">Arm</button>
+            @click="synth.armed ? synthDisarm() : synthArm()" x-text="synth.armed ? 'Odpojit' : 'Připravit'"
+            class="h-11 rounded-lg bg-primary-600 px-4 text-sm font-medium text-white hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300">Připravit</button>
           <button type="button" data-osc="synth.library" @click="patchLibraryOpen()"
-            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Library</button>
+            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Knihovna</button>
           <button type="button" data-osc="synth.studio" data-osc-link="open-in" @click="synthOpenStudio()"
-            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Open in Studio</button>
+            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Otevřít ve Studiu</button>
           <button type="button" data-osc="synth.copy-link" data-osc-link="jump" @click="synthCopyLink()"
-            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Copy link</button>
+            class="h-11 rounded-lg border border-solid border-gray-300 bg-white px-4 text-sm font-medium text-gray-900 hover:bg-gray-100 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700">Kopírovat odkaz</button>
         </div>
       </div>
       <!-- K246 (oscilla-c3's 2b): what the Synth's insert did to the Studio document, a closable
@@ -2773,7 +2773,7 @@
       <!-- Tabs (Q019): Panel, the semi-modular voice; Engines, the polyphonic engines; XY, the
            performance pad (K097, src/js/ui/kinds/xy-pad.js over the xy-pad node). -->
       <div class="mb-3 border-0 border-b border-solid border-gray-200 dark:border-gray-700">
-        <ul class="-mb-px flex text-sm font-medium" role="tablist" aria-label="Synth instrument">
+        <ul class="-mb-px flex text-sm font-medium" role="tablist" aria-label="Nástroj Synthu">
           <template x-for="t in synth.tabs" :key="t.id">
             <li><button type="button" role="tab" :id="'osc-synth-tab-' + t.id" data-osc="synth.tab"
               :data-value="t.id" :data-synth-tab="t.id"
@@ -3214,8 +3214,8 @@
         <span class="osc-status-label" data-osc="status.label" x-text="statusLabel"
           x-show="!ceilingActing">PŘIPRAVENO</span>
         <span data-osc="status.ceiling" x-show="ceilingActing" x-cloak :title="gainTitle"><span
-          aria-hidden="true">&#x26A0;&#xFE0E;</span> <span x-text="ceilingText">OUTPUT AT
-          CEILING (clipped)</span></span>
+          aria-hidden="true">&#x26A0;&#xFE0E;</span> <span x-text="ceilingText">VÝSTUP NA
+          STROPU (oříznuto)</span></span>
       </span>
       <span class="osc-sb-readout osc-num" data-osc="status.readout" :title="statusReadoutTitle">
         <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
@@ -3361,15 +3361,16 @@
           <div :data-osc-shortcut="k.id"><dt><kbd x-text="k.keys"></kbd><span x-show="k.where" x-text="' ' + (k.where || '')"></span></dt><dd x-text="k.text"></dd></div>
         </template>
       </dl>
-      <p class="osc-muted osc-dialog-note">Space has one owner in each workspace. Where a
-        workspace plays, loads or analyses the instrument's signal, holding Space plays it,
-        whether or not a Play control is on screen. In Studio, Space starts or stops the Studio
-        transport. Elsewhere it starts nothing. A focused text field, button, link, slider or
-        open dialog keeps Space. Start at a low level: OSCILLA caps the logical gain at 0.25
-        and, unless continuous playback is allowed in Device &amp; Limits, stops every tone after
-        the hard limit and a looped Pattern Sequencer sequence at 30 s. A note held on the
-        keyboard or a MIDI key sounds while it is held, under the same gain cap, and stops on
-        release, Esc, or when the page loses the focus.</p>
+      <p class="osc-muted osc-dialog-note">Mezerník má v každé pracovní ploše jednoho vlastníka.
+        Kde pracovní plocha přehrává, načítá nebo analyzuje signál nástroje, podržený mezerník ho
+        přehraje, ať je ovládání přehrávání na obrazovce, nebo ne. Ve Studiu mezerník spouští
+        a zastavuje transport Studia. Jinde nespouští nic. Zaměřené textové pole, tlačítko,
+        odkaz, posuvník nebo otevřený dialog si mezerník ponechají. Začínejte na nízké úrovni:
+        OSCILLA omezuje logické zesílení na 0.25 a, pokud v panelu Zařízení a limity není
+        povolené nepřetržité přehrávání, zastaví každý tón po pevném limitu a smyčku sekvence
+        v Pattern Sequenceru po 30 s. Nota držená na klávesnici nebo klávese MIDI zní, dokud ji
+        držíte, pod stejným omezením zesílení, a zastaví se po uvolnění, Esc nebo když stránka
+        ztratí fokus.</p>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('help')">Close</button>
       </div>
@@ -3378,17 +3379,17 @@
 
   <dialog class="osc-dialog" id="osc-dlg-mic" data-oscilla-modal aria-labelledby="osc-dlg-mic-title">
     <div class="osc-dialog-body">
-      <h2 class="osc-dialog-title" id="osc-dlg-mic-title">Microphone</h2>
-      <p>The microphone starts only when you press “Use microphone”. Echo cancellation, noise
-        suppression and automatic gain are requested off, so the analyser sees the raw input.
-        Audio never leaves this page.</p>
-      <p>Detected frequencies come from the FFT peak (parabolic interpolation; autocorrelation
-        below 1 kHz) and are never shown finer than the bin resolution. Use the Compare tab for
-        freeze, averaging and peak hold.</p>
-      <p class="osc-muted">Not a calibrated measurement. From file:// some browsers refuse the
-        microphone; the panel then says so.</p>
+      <h2 class="osc-dialog-title" id="osc-dlg-mic-title">Mikrofon</h2>
+      <p>Mikrofon se spustí, až když stisknete „Zapnout mikrofon“. Potlačení ozvěny, potlačení
+        šumu a automatické zesílení se žádají vypnuté, takže analyzátor vidí nezpracovaný vstup.
+        Zvuk nikdy neopustí tuto stránku.</p>
+      <p>Zachycené frekvence pocházejí ze špičky FFT (parabolická interpolace; pod 1 kHz
+        autokorelace) a nikdy se neukazují jemněji, než dovoluje rozlišení binu. Zmrazení,
+        průměrování a držení špiček najdete na kartě Porovnání.</p>
+      <p class="osc-muted">Nejde o kalibrované měření. Ze souboru (file://) některé prohlížeče
+        mikrofon odmítnou; panel to pak řekne.</p>
       <div class="osc-dialog-actions">
-        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('osc-dlg-mic')">Close</button>
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('osc-dlg-mic')">Zavřít</button>
       </div>
     </div>
   </dialog>
@@ -3420,16 +3421,16 @@
         <label class="osc-label" for="osc-set-a4">A4 reference (Hz)</label>
         <input class="osc-number" id="osc-set-a4" type="number" min="432" max="445" step="1"
           :value="a4" data-osc="settings.a4" @change="setA4($event.target.value)">
-        <p class="osc-muted osc-dialog-note osc-settings-wide" id="osc-set-env-help">Hard limit
-          (Device &amp; Limits): scheduled on the audio clock, so it holds even if the page
-          stalls. It also caps the Finite tone. Other programmed patterns stop at their own end
-          (max 30 s); a continuous sweep repeat needs “Allow continuous playback”. A note held on
-          the keyboard or a MIDI key is exempt while it is held and stops on release, Esc, or
-          when the page loses the focus. Attack applies from the next note. Release, edited while
-          a note is held, is the fade when you let go of it (with the Envelope lab on, its
-          Release is the one used), shortened to end by the hard limit or a pattern’s own end; a
-          note that reaches either, or a Trigger note’s end, fades over the release it started
-          with.</p>
+        <p class="osc-muted osc-dialog-note osc-settings-wide" id="osc-set-env-help">Pevný limit
+          (Zařízení a limity) plánují hodiny Web Audio, takže platí, i když se stránka zasekne.
+          Vztahuje se i na Tón pevné délky. Ostatní programované vzory končí svým vlastním koncem
+          (nejvýš 30 s); nepřetržité opakování sweepu potřebuje „Allow continuous playback“. Nota
+          držená na klávesnici nebo klávese MIDI je po dobu držení výjimkou a zastaví se po
+          uvolnění, Esc nebo když stránka ztratí fokus. Attack platí od příští noty. Release
+          upravený během držení noty je doznění po jejím uvolnění (se zapnutou laboratoří Envelope
+          platí její Release), zkrácené tak, aby skončilo pevným limitem nebo vlastním koncem
+          vzoru; nota, která dosáhne jednoho z nich, nebo konec noty z Trigger doznívá po
+          Release, se kterým začala.</p>
         <label class="osc-label" for="osc-set-duration">Trigger duration (ms)</label>
         <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
           data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">

@@ -43,10 +43,10 @@ const DEFAULTS = {
  */
 export function readoutLines(r) {
   if (r.bin == null || r.db == null) {
-    return [`${formatFrequencyWithResolution(r.rowHz, r.binHz)} (row)`, 'No analyser data'];
+    return [`${formatFrequencyWithResolution(r.rowHz, r.binHz)} (řádek)`, 'Žádná data analyzátoru'];
   }
   const f = formatFrequencyWithResolution(r.frequencyHz, r.binHz);
-  return [`${f} \u00b7 bin ${r.bin} \u00b7 newest column`, formatDb(r.db)];
+  return [`${f} \u00b7 bin ${r.bin} \u00b7 nejnovější sloupec`, formatDb(r.db)];
 }
 
 /** theme.lutStops [{ pos, rgb }] → createSpectrogram stops [{ at, color }]. */

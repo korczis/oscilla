@@ -318,9 +318,9 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       + `>${faceChips(face)}${chips}</nav>`
       + '<div class="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">'
       + `<div data-face-of="panel" class="${faceClass(face, 'panel')}">`
-      + '<div class="mb-2 flex gap-2" role="group" aria-label="Module cards">'
-      + `<button type="button" class="${fold}" data-fold-all="open">Expand all</button>`
-      + `<button type="button" class="${fold}" data-fold-all="closed">Collapse all</button></div>`
+      + '<div class="mb-2 flex gap-2" role="group" aria-label="Karty modulů">'
+      + `<button type="button" class="${fold}" data-fold-all="open">Rozbalit vše</button>`
+      + `<button type="button" class="${fold}" data-fold-all="closed">Sbalit vše</button></div>`
       + xy.html() + drums.html()
       + `<div class="${engines ? 'grid grid-cols-1 gap-3' : PLATE_GRID}" `
       + `data-osc="synth.modules">${plates}</div>${pads.html()}</div>`

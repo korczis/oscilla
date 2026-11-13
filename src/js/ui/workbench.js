@@ -76,7 +76,7 @@ export function followSequenceEdits(app, editor) {
 }
 
 /** T001: the state shown while the output ceiling flattens the signal (ADR 0002). */
-export const CEILING_TEXT = 'OUTPUT AT CEILING (clipped)';
+export const CEILING_TEXT = 'VÝSTUP NA STROPU (oříznuto)';
 const CEILING_DB_TEXT = `${gainLevelDb(MAX_OUTPUT_GAIN).toFixed(1)} dBFS`;
 
 export function createWorkbench(svc) {
@@ -177,11 +177,10 @@ export function createWorkbench(svc) {
     get ceilingActing() { return this.outputAtCeiling && !!soundingOwner(this); },
     /** The gain readout is the master setpoint, not the level the output carries. */
     get gainTitle() {
-      return `Gain setpoint ${this.gainDbText} (logical gain ${this.gainLevel.toFixed(3)} re `
-        + `digital full scale), not the output level: it leaves out the envelope and filter `
-        + `before it and the limiter and ${CEILING_DB_TEXT} output ceiling after it; `
-        + 'relative, not SPL.'
-        + (this.ceilingActing ? ` Now: ${CEILING_TEXT}, the ceiling flattens the output.` : '');
+      return `Nastavené zesílení ${this.gainDbText} (logické zesílení ${this.gainLevel.toFixed(3)} `
+        + `vůči digitální plné škále), ne úroveň výstupu: nezahrnuje obálku a filtr před ním ani `
+        + `limiter a strop výstupu ${CEILING_DB_TEXT} za ním; relativní, ne SPL.`
+        + (this.ceilingActing ? ` Teď: ${CEILING_TEXT}, strop zplošťuje výstup.` : '');
     },
     /** Whether the Studio transport plays (cmp.studio, the workspace's plain view state). */
     get studioPlaying() { return !!(this.studio && this.studio.playing); },
@@ -203,9 +202,10 @@ export function createWorkbench(svc) {
       return s.masterLevel;
     },
     get holdLabel() {
-      if (this.status === 'SUSPENDED') return 'Waiting for audio';
-      if (this.playing && this.releasing) return 'Releasing';
-      if (this.playing) return this.latched ? 'Playing (latched)' : 'Playing';
+      // The idle name stays V1's: the frozen V1 notices (tests/freeze) quote HOLD TO PLAY.
+      if (this.status === 'SUSPENDED') return 'Čeká na zvuk';
+      if (this.playing && this.releasing) return 'Doznívá';
+      if (this.playing) return this.latched ? 'Hraje (zamčeno)' : 'Hraje';
       return 'Hold to Play';
     },
     get statusLabel() {
@@ -300,9 +300,9 @@ export function createWorkbench(svc) {
       void this.labRev;
       const add = svc.labs && svc.labs.additive;
       if (this.additiveOn && this.source !== 'dual' && add) {
-        return additiveHarmonicTable(add.coefficients(), f, this.nyquist).summary || 'unavailable';
+        return additiveHarmonicTable(add.coefficients(), f, this.nyquist).summary || 'nedostupné';
       }
-      return harmonicTable(wave, f, this.nyquist).summary || 'unavailable';
+      return harmonicTable(wave, f, this.nyquist).summary || 'nedostupné';
     },
     /** The scope window actually shown while playing (the analyser buffer may not fill it). */
     get scopeShownMs() {
@@ -322,17 +322,17 @@ export function createWorkbench(svc) {
       const tab = this.tabs.analysis;
       if (tab === 'harmonics') {
         if (this.additiveOn && this.source !== 'dual') {
-          return `Additive synthesis spectrum, the PeriodicWave coefficients that play, not `
-            + `measured: ${this.vizSummaryHarm}. Actual speaker output is unknown.`;
+          return `Spektrum aditivní syntézy, koeficienty PeriodicWave, které hrají, nikoli `
+            + `naměřené: ${this.vizSummaryHarm}. Co skutečně zazní z reproduktoru, aplikace nezná.`;
         }
-        return `Theoretical oscillator spectrum, computed from the waveform, not measured: ${
-          this.vizSummaryHarm}. Actual speaker output is unknown.`;
+        return `Teoretické spektrum oscilátoru, vypočtené z tvaru vlny, nikoli naměřené: ${
+          this.vizSummaryHarm}. Co skutečně zazní z reproduktoru, aplikace nezná.`;
       }
       if (tab === 'signalPath') {
-        return 'Active Web Audio processing graph. Speaker output is outside what the browser '
-          + 'can observe.';
+        return 'Aktivní graf zpracování Web Audio. Výstup reproduktoru je mimo to, co prohlížeč '
+          + 'vidí.';
       }
-      const w = `${this.timeWindowMs} ms window`;
+      const w = `okně ${this.timeWindowMs} ms`;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequency;
       const sr = this.effectiveSampleRate;
       const owner = this.outputOwner;
@@ -342,27 +342,28 @@ export function createWorkbench(svc) {
         const sw = scopeWindow({ requestedMs: this.timeWindowMs,
           bufferLength: an ? an.fftSize : 0, sampleRate: sr, freqHz: 0 });
         const lw = sw.limited
-          ? `${Math.round(sw.ms)} ms window (the analyser buffer limit; ${this.timeWindowMs} ms `
-            + 'requested)'
+          ? `okně ${Math.round(sw.ms)} ms (limit bufferu analyzátoru; požadováno `
+            + `${this.timeWindowMs} ms)`
           : w;
-        return `Live output analyser waveform (${OUTPUT_OWNER_NAMES[owner]}) over a ${lw}, `
-          + 'relative to full scale.';
+        return `Živý průběh analyzátoru výstupu (${OUTPUT_OWNER_NAMES[owner]}) v ${lw}, `
+          + 'vůči plné škále.';
       }
       if (owner !== 'instrument') {
         const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
-        return `Waveform, not playing: computed ${wave} at ${formatFrequency(f)} over a ${w}. `
+        return `Průběh, nehraje: vypočtená vlna ${(WAVEFORM_NAMES[wave] || wave).toLowerCase()} `
+          + `${formatFrequency(f)} v ${w}. `
           + (statusPlayHint(this.workspace, 'scope') // C030: the Play on screen there
-            || 'Hold to Play shows the live output analyser trace.');
+            || 'Živý průběh analyzátoru výstupu ukáže Hold to Play.');
       }
       const sparse = f > 0 && sr > 0 && sr / f < 4;
       const shown = this.scopeShownMs;
       const lw = shown < this.timeWindowMs - 0.05
-        ? `${Math.round(shown)} ms window (the analyser buffer limit; ${this.timeWindowMs} ms `
-          + 'requested)'
+        ? `okně ${Math.round(shown)} ms (limit bufferu analyzátoru; požadováno `
+          + `${this.timeWindowMs} ms)`
         : w;
-      return `Live output analyser waveform over a ${lw}, scaled to the set gain${sparse
-        ? `; drawn as a min/max band because ${formatFrequency(f)} has fewer than 4 samples `
-          + `per cycle at ${sr} Hz` : ''}.`;
+      return `Živý průběh analyzátoru výstupu v ${lw}, škálovaný na nastavené zesílení${sparse
+        ? `; kreslený jako pásmo min/max, protože ${formatFrequency(f)} má při ${sr} Hz méně `
+          + 'než 4 vzorky na periodu' : ''}.`;
     },
     get patternSelectValue() { return this.source === 'sweep' ? '__sweep' : this.pattern; },
     get additiveOn() { return !!this.labFlags.additive; },
@@ -459,11 +460,12 @@ export function createWorkbench(svc) {
       // C011: setContinuous tells the sequencer (main.js onContinuousChange): its loop follows
       // the permission and its Loop control restates the cap.
       this.setContinuous(!this.continuousAllowed);
-      this.notify('info', this.continuousAllowed ? 'Continuous playback allowed'
-        : 'Hard limit active', this.continuousAllowed
-        ? 'Hold, latch and a looped sequencer sequence play until stopped. Keep the level low.'
-        : `Hold, trigger and the finite tone stop after ${this.safetyLimit} s; a looped `
-          + `sequencer sequence stops at ${MAX_PROGRAMMED_S} s.`);
+      this.notify('info', this.continuousAllowed ? 'Nepřetržité přehrávání povoleno'
+        : 'Pevný limit platí', this.continuousAllowed
+        ? 'Držení, zamčení a smyčka sekvence v sekvenceru hrají, dokud je nezastavíte. Držte '
+          + 'nízkou úroveň.'
+        : `Držení, Trigger a Tón pevné délky skončí po ${this.safetyLimit} s; smyčka sekvence `
+          + `v sekvenceru skončí po ${MAX_PROGRAMMED_S} s.`);
     },
     // setSafetyLimit is the instrument's (core/instrument.js): it reaches the sounding voice.
 

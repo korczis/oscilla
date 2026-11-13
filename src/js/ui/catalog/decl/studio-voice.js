@@ -8,7 +8,7 @@ export default [
   defineComponent({
     id: 'analysis.openInStudio',
     kind: 'action',
-    label: 'Open in Studio',
+    label: 'Otevřít ve Studiu',
     docs: 'Opens the drawn Playground voice as one unsaved Studio document, without sound.',
     state: 'studio.model',
     effect: { route: '#m=studio' },

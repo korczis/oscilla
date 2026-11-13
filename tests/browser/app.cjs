@@ -1432,7 +1432,7 @@ function defineChecks() {
       const scope = O.host && O.host.views ? O.host.views.scope : null;
       const word = scope && scope.caption ? scope.caption.split(' · ')[0] : null;
       return {
-        live: drawn.filter((t) => t.startsWith('output analyser')),
+        live: drawn.filter((t) => t.startsWith('analyzátor výstupu')),
         idle: word ? drawn.filter((t) => t === word || t.startsWith(`${word} · `)).length : 0,
         word,
         aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label'),
@@ -1470,8 +1470,8 @@ function defineChecks() {
         return was;
       });
       await page.click('#osc-seq-play');
-      out.seq = await leg('sequencer', /^output analyser · sequencer/,
-        /^Live output analyser waveform \(sequencer\)/);
+      out.seq = await leg('sequencer', /^analyzátor výstupu · sequencer/,
+        /^Živý průběh analyzátoru výstupu \(sequencer\)/);
       out.seqOwner = await owner();
       await page.evaluate((was) => {
         const ed = window.OSCILLA.labs.sequencer.editor;
@@ -1484,8 +1484,8 @@ function defineChecks() {
           && window.OSCILLA.viz.state.outputOwner === null;
       }), { ms: 4000, what: 'scope-follows-owner: the sequencer stops and frees its nodes' });
       await page.click('[data-osc="studio.compact.play"]');
-      out.studio = await leg('Studio', /^output analyser · Studio/,
-        /^Live output analyser waveform \(Studio\)/);
+      out.studio = await leg('Studio', /^analyzátor výstupu · Studio/,
+        /^Živý průběh analyzátoru výstupu \(Studio\)/);
       out.studioOwner = await owner();
     } finally {
       await page.evaluate((was) => {
@@ -1512,7 +1512,7 @@ function defineChecks() {
     const ok = out.reducedLoopIdle === false && !!out.idleWord
       && out.seq.looping && out.seq.idle === 0 && out.seqOwner === 'sequencer' && out.seqStopped
       && out.studio.looping && out.studio.idle === 0 && out.studioOwner === 'studio'
-      && out.studioStopped && /^Waveform, not playing/.test(out.idleAria) && out.zeroAfter;
+      && out.studioStopped && /^Průběh, nehraje/.test(out.idleAria) && out.zeroAfter;
     return { ok, ...out };
   });
 
@@ -4058,14 +4058,14 @@ function defineChecks() {
         return v.acting && v.source.shown && v.status.shown && v.fraction > 0.5 ? v : null;
       }, { ms: 5000, what: `the ceiling indicator shows under a +24 dB boost at ${w}x${h}` });
       r.on = { status: on.status, source: on.source, labelHidden: !on.label.shown,
-        fraction: +on.fraction.toFixed(3), setpointTitle: /setpoint/.test(on.title)
-          && /OUTPUT AT CEILING \(clipped\)/.test(on.title), scroll: on.scroll <= on.width };
+        fraction: +on.fraction.toFixed(3), setpointTitle: /Nastavené zesílení/.test(on.title)
+          && /VÝSTUP NA STROPU \(oříznuto\)/.test(on.title), scroll: on.scroll <= on.width };
       await page.evaluate(() => window.OSCILLA.labs.filter.update({ enabled: false }));
       const off = await until(async () => {
         const v = await view();
         return none(v) && v.label.shown ? v : null;
       }, { ms: 2000, what: `the ceiling indicator clears within 2 s of the boost removed (${w})` });
-      r.cleared = off.playing && !/clipped/.test(off.title);
+      r.cleared = off.playing && !/oříznuto/.test(off.title);
       r.unboosted = await holdQuiet(`the unboosted 1 kHz sine sounds 0.6 s at ${w}`);
       await page.evaluate(() => window.OSCILLA.app.stopNow());
       await until(async () => {
@@ -4075,7 +4075,7 @@ function defineChecks() {
       r.idleAfter = true;
       r.ok = r.idle && r.idleAfter && r.cleared && r.on.status.inBar && r.on.status.inView
         && r.on.source.inView && r.on.labelHidden && r.on.setpointTitle && r.on.scroll
-        && r.on.status.text === '\u26A0\uFE0E OUTPUT AT CEILING (clipped)'
+        && r.on.status.text === '\u26A0\uFE0E VÝSTUP NA STROPU (oříznuto)'
         && r.on.source.text === r.on.status.text && r.on.fraction > 0.5
         && r.unboosted.flagged === 0 && r.unboosted.polls > 1;
       res.sizes[`${w}x${h}`] = r;
@@ -4868,8 +4868,8 @@ function defineChecks() {
       engineDetached: !c.engineCtx && c.engineMicNodes === 0 && !c.engineAttachment,
       tracksEnded: out.closedTracks.length > 0 && out.closedTracks.every((t) => t === 'ended'),
       labOffAfterClose: c.active === false && c.hasAnalyser === false,
-      buttonOffAfterClose: c.pressed === 'false' && c.label === 'Use microphone',
-      reasonStated: /audio context was closed/.test(c.error) && c.detected === c.error,
+      buttonOffAfterClose: c.pressed === 'false' && c.label === 'Zapnout mikrofon',
+      reasonStated: /kontext byl uzavřen/.test(c.error) && c.detected === c.error,
       restartOnNewContext: r.active === true && r.newCtx && r.analyserOnEngineCtx
         && r.pressed === 'true' && r.error === '',
       // The user's own Stop states no engine loss (review F1 of #289): the engine emits its
@@ -4877,7 +4877,7 @@ function defineChecks() {
       // call would read "The audio engine disconnected the microphone" here.
       stopAfterRestart: st.active === false && st.pressed === 'false'
         && st.engineMicNodes === 0 && st.error === ''
-        && st.detected === 'UNAVAILABLE (microphone off)',
+        && st.detected === 'NEDOSTUPNÉ (mikrofon vypnutý)',
       noPageErrors: errors.length === errorsBefore,
     };
     const ok = Object.values(v).every(Boolean);

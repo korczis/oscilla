@@ -1645,11 +1645,11 @@ function defineChecks() {
     .then((x) => x.trim());
   async function armedNow(page, what) {
     await page.locator('[data-osc="synth.arm"]').click();
-    await until(async () => (await dbg(page)).armed && (await armText(page)) === 'Disarm',
+    await until(async () => (await dbg(page)).armed && (await armText(page)) === 'Odpojit',
       { ms: 10000, what });
   }
   async function readsArm(page, what) {
-    await until(async () => !(await dbg(page)).armed && (await armText(page)) === 'Arm',
+    await until(async () => !(await dbg(page)).armed && (await armText(page)) === 'Připravit',
       { ms: 10000, what });
   }
   def('s-armstop', async ({ page }) => {
@@ -1963,7 +1963,7 @@ function defineChecks() {
     const quiet = await silent(page, 'the held key sounds nothing (the pad has the gates)');
     const said = await until(async () => {
       const t = await status();
-      return /The keys sound nothing/.test(t) && t;
+      return /Klávesy nic nehrají/.test(t) && t;
     }, { ms: 10000, what: 'the key says why it sounds nothing' });
     await page.keyboard.up('KeyA');
     await notice.locator('[data-xy-unpatch]').click();
@@ -1974,7 +1974,7 @@ function defineChecks() {
     const on = await sound(page, (q) => q.rmsDb > -40, 'the keys play the voice again');
     await page.keyboard.up('KeyA');
     const off = await silent(page, 'the key up releases the voice');
-    return { ok: /Unpatch the pad/.test(text), text, said, still: still.rmsDb,
+    return { ok: /Odpojit pad/.test(text), text, said, still: still.rmsDb,
       quiet: quiet.rmsDb, on: on.rmsDb, off: off.rmsDb };
   });
 

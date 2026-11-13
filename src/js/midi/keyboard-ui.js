@@ -185,7 +185,7 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     kbdInit({ notesFor }) {
       const cmp = this;
       notes = notesFor((by) => {
-        if (typeof cmp.notify === 'function') cmp.notify('info', 'Keyboard', KEYBOARD_REFUSED[by]);
+        if (typeof cmp.notify === 'function') cmp.notify('info', 'Klávesy', KEYBOARD_REFUSED[by]);
       });
       kb = createKeyboard({
         play: (note, velocity, source) => {
@@ -248,10 +248,10 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
           cmp.kbdArmed[v] = armed;
           // The domain answers, as every link does (surface-census routes).
           if (typeof cmp.notify === 'function') {
-            const where = v === 'studio' ? 'Studio' : 'Playground';
-            cmp.notify('info', `Keyboard ${armed ? 'armed' : 'disarmed'} from the link`, armed
-              ? `The computer keys play the ${where}. Nothing plays until you press a key.`
-              : `The computer keys no longer play the ${where}.`);
+            const where = { studio: 've Studiu', synth: 'v Synthu' }[v] || 'v Playgroundu';
+            cmp.notify('info', `Klávesy ${armed ? 'připravené' : 'odpojené'} z odkazu`, armed
+              ? `Klávesnice počítače hraje ${where}. Nic nezazní, dokud nestisknete klávesu.`
+              : `Klávesnice počítače už ${where} nehraje.`);
           }
           return true;
         });

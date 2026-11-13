@@ -43,7 +43,7 @@ import { relatedOf, relatedRef, WORKSPACE_LABELS } from './shell.js';
  */
 export const PANEL_LINKS = Object.freeze([
   { osc: 'counterpart.experiments', from: ['analyzer', 'compare'], to: 'experiments',
-    text: 'Compare saved experiments' },
+    text: 'Porovnat uložené experimenty' },
   { osc: 'filter.toSynth', from: ['filter'], to: 'synth' },
   { osc: 'dual.toSynth', from: ['synthesis'], to: 'synth' },
   { osc: 'seq.toSynth', from: ['sequencer'], to: 'synth', text: 'Otevřít Synth' }, // G013

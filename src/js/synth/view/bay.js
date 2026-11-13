@@ -52,7 +52,7 @@ export function connectListHtml({ pending, verdicts, cables, jackName, jackOf, i
   const name = (k) => `${jackName(k)} ${jackOf(k).direction === 'in' ? 'vstup' : 'výstup'}`;
   const ok = [...verdicts].filter(([, v]) => v.ok).map(([k]) => `<li class="${item}">`
     + `<span>${esc(name(k))}</span><button type="button" class="${btn}" data-connect-to=`
-    + `"${esc(k)}" aria-label="Patch ${esc(jackName(pending))} to ${esc(name(k))}">Patch`
+    + `"${esc(k)}" aria-label="Propojit ${esc(jackName(pending))} → ${esc(name(k))}">Propojit`
     + '</button></li>').join('');
   const no = [...verdicts].filter(([, v]) => !v.ok).map(([k, v]) => '<li class="py-1 text-xs '
     + `text-gray-600 dark:text-gray-400"><s>${esc(name(k))}</s>: ${esc(v.reason)}</li>`)

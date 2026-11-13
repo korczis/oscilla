@@ -75,7 +75,7 @@ test('a choice is one history entry; undo restores the previous route, redo the 
 test('negative: a target without the notes capability is refused with its sentence', () => {
   const st = panelStore();
   const vco = PANEL.resolve(st.getModel()).get('vco1');
-  assert.match(routeAction(st.getModel(), PANEL, vco.id).reason, /does not play notes/);
+  assert.match(routeAction(st.getModel(), PANEL, vco.id).reason, /nehraje noty/);
   const before = st.getModel();
   const depth = st.debugInfo().undoDepth;
   const r = st.dispatch({ type: 'METADATA_SET', noteTarget: vco.id });
