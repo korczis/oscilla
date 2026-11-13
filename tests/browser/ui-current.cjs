@@ -127,10 +127,11 @@ const U108_DEBT = new Map([
   ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
-const R320 = 'the keyboard dock\'s octave and More buttons overlap the Synth\'s header buttons '
-  + '(Open in Studio, Copy link) at 320 x 568, under U108\'s alert above them: the Synth lane, '
-  + '#385 and V635; the Mac\'s 4 pairs are named (PHONE_WHOLE_PAIRS), linux\'s stay boolean '
-  + 'until CI\'s own run names them (oscilla-c3, U111)';
+const R320 = 'the keyboard dock\'s octave buttons overlap the Synth\'s Open in Studio (33-39 px) '
+  + 'and graze Copy link (3 px, near-zero) at 320 x 568, under U108\'s alert: the Synth lane, #385 '
+  + 'and V635. Measured on train T20 with Czech pass 3 (the dock\'s Další moved More off Copy '
+  + 'link), alike in every Mac engine; CI linux had the same identities on T19 (run 43364860327, '
+  + 'oscilla-c3). Named in PHONE_WHOLE_PAIRS (U112)';
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
   + 'chips at 375 x 667 on the Mac since #385\'s train: the Synth lane, #385 and V635; measured '
   + 'in the steady state, the insert alert closed (U107) and the link\'s notice gone (U108, '
@@ -173,9 +174,9 @@ function comparePairs(measured, listed) {
   return { extra, gone, near };
 }
 const PHONE_WHOLE_PAIRS = new Map([
-  ['darwin:@320:synth:overlap', ['keyboard.octave-down x synth.studio',
-    'keyboard.octave-up x synth.studio', 'keyboard.octave-up x synth.copy-link',
-    'keyboard.more x synth.copy-link']],
+  ['@320:synth:overlap', ['keyboard.octave-down x synth.studio',
+    'keyboard.octave-up x synth.studio', 'keyboard.octave-down x synth.copy-link ~3',
+    'keyboard.octave-up x synth.copy-link ~3']],
 ]);
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
@@ -185,8 +186,7 @@ const PHONE_WHOLE_DEBT = new Map([
   ['@320:playground:share', 'at 568 px of height the navbar, the page header and the Q002 '
     + 'sentence leading <main> (P002, Q004 option A: wrapped to five lines at 320 px) leave the '
     + 'Playground 63.8 % of the first screen: the first screen of P002, owned by the Playground'],
-  ['darwin:@320:synth:overlap', R320],
-  ['linux:@320:synth:overlap', R320],
+  ['@320:synth:overlap', R320],
   ['@320:studio:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Studio\'s '
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '

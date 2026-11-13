@@ -6,9 +6,9 @@ title: "The linux @320 Synth overlap names its pairs from CI's own run (U111's c
 slug: linux-320-pairs-from-ci
 priority: p3
 profile: implementation
-objective: "Lands as test(ui) in the next train after U111. oscilla-c3 (Q090, 2026-11-13): the linux @320 entries stay boolean in U111 and are named from CI's run, whose KNOWN lines log the full pair multiset with depths on every host; no container-derived names in any engine; near-zero pairs (above 2 and up to 6 px) are listed with '~' and do not fail."
+objective: "Lands as test(ui) in the next train after U111. oscilla-c3 (Q090, 2026-11-13): the linux @320 entries stay boolean in U111 and are named from CI's run, whose KNOWN lines log the full pair multiset with depths on every host; no container-derived names in any engine; near-zero pairs (above 2 and up to 6 px) are listed with '~' and do not fail. oscilla-c3 on #544 (2026-11-13), verbatim: \"For U112, CI's linux @320 multiset, identical in chromium, firefox and webkit: keyboard.octave-down x synth.studio 84x33; keyboard.octave-up x synth.studio 45x33; keyboard.octave-up x synth.copy-link 39x33; keyboard.more x synth.copy-link 52x33. That's the same 4 identities as the Mac, all 33 px deep (firm, outside the deadband), and the container's 72x5 chromium pair is absent. So U112 can name one generic '@320:synth:overlap' with these 4 pairs and drop the host split, if the Mac's set stays equal.\""
 why: "U111's carried acceptance item (C3-541-3 for linux): CI is the authority; the container disagreed with it at this precision in all three engines."
-current_state: "Open. Filed 2026-11-13 by oscilla-43 with U111; waits for the first CI run on U111's head."
+current_state: "Built by oscilla-43 in train T20: one '@320:synth:overlap' names its pairs (c3's message quoted above). Measured on T20, where Czech pass 3's dock label 'Další' moved More off Copy link: 2 firm pairs (octave buttons x Open in Studio) and 2 near-zero (octave buttons x Copy link, 3 px), alike in every Mac engine; T20's CI run judges linux, and a differing linux set is a test-only commit."
 scope:
   - "tests/browser/ui-current.cjs"
 depends_on:
