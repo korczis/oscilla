@@ -127,11 +127,11 @@ const U108_DEBT = new Map([
   ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
-const R320 = 'the keyboard dock\'s octave buttons overlap the Synth\'s Open in Studio (33-39 px) '
-  + 'and graze Copy link (3 px, near-zero) at 320 x 568, under U108\'s alert: the Synth lane, #385 '
-  + 'and V635. Measured on train T20 with Czech pass 3 (the dock\'s Další moved More off Copy '
-  + 'link), alike in every Mac engine; CI linux had the same identities on T19 (run 43364860327, '
-  + 'oscilla-c3). Named in PHONE_WHOLE_PAIRS (U112)';
+const R320 = 'the keyboard dock\'s octave and More buttons overlap the Synth\'s header buttons '
+  + '(Open in Studio, Copy link) at 320 x 568, under U108\'s alert above them: the Synth lane, '
+  + '#385 and V635. The same 4 pairs, all firm (33-39 px deep), in every engine on the Mac and on '
+  + 'CI linux (run 43364860327, oscilla-c3), named in PHONE_WHOLE_PAIRS (U112); Czech pass 3\'s '
+  + 'dock labels will change them, and its train re-measures';
 const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
   + 'chips at 375 x 667 on the Mac since #385\'s train: the Synth lane, #385 and V635; measured '
   + 'in the steady state, the insert alert closed (U107) and the link\'s notice gone (U108, '
@@ -175,8 +175,8 @@ function comparePairs(measured, listed) {
 }
 const PHONE_WHOLE_PAIRS = new Map([
   ['@320:synth:overlap', ['keyboard.octave-down x synth.studio',
-    'keyboard.octave-up x synth.studio', 'keyboard.octave-down x synth.copy-link ~3',
-    'keyboard.octave-up x synth.copy-link ~3']],
+    'keyboard.octave-up x synth.studio', 'keyboard.octave-up x synth.copy-link',
+    'keyboard.more x synth.copy-link']],
 ]);
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
