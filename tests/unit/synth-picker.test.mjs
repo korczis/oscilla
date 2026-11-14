@@ -250,8 +250,8 @@ test('Q090: each dock wave\'s short label is a prefix of its full name, the radi
   const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
   const radio = html.match(/<button type="button" role="radio" :data-v="it\.id"[\s\S]*?<\/button>/);
   assert.ok(radio, 'the dock radio template');
-  // An item without a name (the oscillators, the presets) binds undefined: Alpine drops the
-  // attribute, so their name stays their text.
+  // Every item of the template carries a name (the waves their full name, the oscillators their
+  // module label in dock.js, the quick presets their whole title), so none binds an empty one.
   assert.match(radio[0], /:aria-label="it\.name"/);
   assert.match(radio[0], /:title="it\.name"/);
 });
