@@ -16,6 +16,7 @@
 
 import { clamp, sig } from '../core/math.js';
 import { formatFrequency } from '../core/frequency.js';
+import { WAVEFORM_NAMES } from '../core/constants.js';
 import { waveSample } from '../visualization/waveform.js';
 import { OUTPUT_OWNER_NAMES } from '../visualization/output-owner.js';
 import {
@@ -199,13 +200,13 @@ export function createScopeView({ getWindowMs }) {
         }
         const room = x1 - x0 - 4;
         const src = inst ? '' : ` · ${OUTPUT_OWNER_NAMES[owner]}`;
-        const head = `output analyser${src} · ${msLabel(windowMs)} window${sw.limited
-          ? ` (buffer limit; ${msLabel(requestedMs)} requested)` : ''}`;
-        const scale = inst ? 'relative to set gain' : 'relative to full scale';
+        const head = `analyzátor výstupu${src} · okno ${msLabel(windowMs)}${sw.limited
+          ? ` (limit bufferu; požadováno ${msLabel(requestedMs)})` : ''}`;
+        const scale = inst ? 'vůči nastavenému zesílení' : 'vůči plné škále';
         uiLabel(p, uiPickFit(p, [
-          `${head} · ${scale}${sparse ? ' · < 4 samples per cycle: min/max band' : ''}`,
-          `${head}${sparse ? ' · min/max band' : ''}`, head, `output analyser${src}`,
-          'output analyser'], 9, room),
+          `${head} · ${scale}${sparse ? ' · < 4 vzorky na periodu: pásmo min/max' : ''}`,
+          `${head}${sparse ? ' · pásmo min/max' : ''}`, head, `analyzátor výstupu${src}`,
+          'analyzátor výstupu'], 9, room),
         x0 + 2, 11, pal.muted, 9);
         return;
       }
@@ -235,7 +236,8 @@ export function createScopeView({ getWindowMs }) {
         drawBand(p, pal, x0, cols, bandMin, bandMax, pal.dim, pal.accentFaint);
       }
       const state = L.hasCtx ? 'nehraje' : 'zvuk nespuštěn';
-      const what = `vypočtená vlna ${shape} ${formatFrequency(f)}`;
+      const name = (WAVEFORM_NAMES[shape] || shape).toLowerCase();
+      const what = `vypočtená vlna ${name} ${formatFrequency(f)}`;
       // where the status bar's Play is the only one, the caption names it (C030, R2-C030-1)
       const press = st.idleHint || 'živý průběh: podržte Hold to Play';
       const caption = [`${state} · ${what} v okně ${msLabel(windowMs)} · ${press}`,
@@ -269,7 +271,7 @@ export function createHarmonicBarsView() {
       const y0 = 22;
       const y1 = H - 18;
       uiLabel(p, hm.title
-        || 'THEORETICAL OSCILLATOR SPECTRUM (computed from the waveform, not measured)',
+        || 'TEORETICKÉ SPEKTRUM OSCILÁTORU (vypočtené z tvaru vlny, nikoli naměřené)',
       x0, 13, pal.fg, 10);
       p.stroke(pal.gridSoft);
       p.strokeWeight(1);
@@ -280,14 +282,14 @@ export function createHarmonicBarsView() {
       }
       const axis = harmonicAxis(hm, hb);
       if (!axis) {
-        uiLabel(p, 'UNAVAILABLE', x0 + 4, (y0 + y1) / 2, pal.muted, 10);
+        uiLabel(p, 'NEDOSTUPNÉ', x0 + 4, (y0 + y1) / 2, pal.muted, 10);
         return;
       }
       const ny = st.nyquist;
       if (ny > axis.fmin && ny < axis.fmax) {
         const nx = logX(ny, axis.fmin, axis.fmax, x0, x1);
         dashedV(nx, y0, y1, pal.warn);
-        uiLabel(p, `Nyquist ${formatFrequency(ny)}${st.provisional ? ' (provisional)' : ''}`,
+        uiLabel(p, `Nyquist ${formatFrequency(ny)}${st.provisional ? ' (předběžně)' : ''}`,
           Math.min(nx - 4, x1 - 4), y0 + 9, pal.warn, 9, p.RIGHT);
       }
       drawSet(hm, pal.accent, -2);

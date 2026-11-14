@@ -35,7 +35,7 @@ export default [
   defineComponent({
     id: 'counterpart.experiments',
     kind: 'open',
-    label: 'Compare saved experiments',
+    label: 'Porovnat uložené experimenty',
     docs: 'Opens Experiments to compare saved measurements against a baseline.',
     state: 'ui.workspace',
     effect: { route: 'experiments' },

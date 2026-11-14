@@ -129,7 +129,7 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     const group = el.closest('[role="radiogroup"]');
     if (!group || group.getAttribute('aria-disabled') !== 'true') return false;
     const why = document.getElementById(`${cid}-why`);
-    say(why ? why.textContent : 'This control is disabled.');
+    say(why ? why.textContent : 'Tento ovladač je vypnutý.');
     return true;
   }
 

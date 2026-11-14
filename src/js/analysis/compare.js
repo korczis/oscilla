@@ -14,13 +14,13 @@ export const QUALITY = Object.freeze({
 });
 
 export const QUALITY_LABELS = Object.freeze({
-  unavailable: 'UNAVAILABLE',
-  'out-of-range': 'Above the digital Nyquist limit',
-  'no-signal': 'No peak above the noise floor',
-  match: 'Within analyser resolution',
-  close: 'Close, beyond analyser resolution',
-  harmonic: 'Strongest peak is a harmonic',
-  mismatch: 'Strongest peak differs from the request',
+  unavailable: 'NEDOSTUPNÉ',
+  'out-of-range': 'Nad digitálním limitem Nyquist',
+  'no-signal': 'Žádná špička nad šumovým dnem',
+  match: 'V mezích rozlišení analyzátoru',
+  close: 'Blízko, ale mimo rozlišení analyzátoru',
+  harmonic: 'Nejsilnější špička je harmonická',
+  mismatch: 'Nejsilnější špička se liší od požadované',
 });
 
 /** Interval from fRef to f in cents (1200·log2(f/fRef)); null for non-positive input. */

@@ -8,8 +8,11 @@ import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { PRESETS, presetAction, presetPatch } from '../../src/js/synth/presets.js';
 import {
-  NEW_VOICE, NEW_VOICE_TAKEN, instrumentChoices, routeAction, routedNode, waveAction, waveOf,
+  NEW_VOICE, NEW_VOICE_TAKEN, WAVES, instrumentChoices, routeAction, routedNode, waveAction,
+  waveOf,
 } from '../../src/js/synth/picker.js';
+import { readFileSync } from 'node:fs';
+import { WAVEFORM_NAMES } from '../../src/js/core/constants.js';
 import { importPatch, patchParams, patchTargets } from '../../src/js/studio/patches.js';
 import { NODE_REGISTRY, playsNotes } from '../../src/js/studio/registry.js';
 import { compileStudio } from '../../src/js/studio/compiler.js';
@@ -75,7 +78,7 @@ test('a choice is one history entry; undo restores the previous route, redo the 
 test('negative: a target without the notes capability is refused with its sentence', () => {
   const st = panelStore();
   const vco = PANEL.resolve(st.getModel()).get('vco1');
-  assert.match(routeAction(st.getModel(), PANEL, vco.id).reason, /does not play notes/);
+  assert.match(routeAction(st.getModel(), PANEL, vco.id).reason, /nehraje noty/);
   const before = st.getModel();
   const depth = st.debugInfo().undoDepth;
   const r = st.dispatch({ type: 'METADATA_SET', noteTarget: vco.id });
@@ -229,4 +232,26 @@ test('review R4: a route may name any valid node id, up to the id limit', () => 
   const back = importStudio(JSON.parse(serializeStudio(st.getModel())));
   assert.equal(back.ok, true, back.ok || back.errors[0].message);
   assert.equal(back.model.metadata.noteTarget, id);
+});
+
+test('Q090: each dock wave\'s short label is a prefix of its full name, the radio\'s name', () => {
+  // WCAG 2.5.3 Label in Name (oscilla-c3, Q090 2026-11-13): the button shows the short label
+  // so the dock keeps one row at 1536 px; its accessible name and title are the full name.
+  assert.deepEqual(WAVES.map((w) => w.id),
+    ['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'noise']);
+  for (const w of WAVES) {
+    assert.ok(w.name && w.label, `${w.id} has a name and a label`);
+    assert.ok(w.name.startsWith(w.label), `${w.id}: "${w.label}" is a prefix of "${w.name}"`);
+  }
+  for (const id of ['sine', 'triangle', 'sawtooth', 'square']) {
+    assert.equal(WAVES.find((w) => w.id === id).name, WAVEFORM_NAMES[id], `${id}: the one name`);
+  }
+  assert.deepEqual(WAVES.map((w) => w.label), ['Sin', 'Troj', 'Pila', 'Obd', 'Pulz', 'Šum']);
+  const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
+  const radio = html.match(/<button type="button" role="radio" :data-v="it\.id"[\s\S]*?<\/button>/);
+  assert.ok(radio, 'the dock radio template');
+  // An item without a name (the oscillators, the presets) binds undefined: Alpine drops the
+  // attribute, so their name stays their text.
+  assert.match(radio[0], /:aria-label="it\.name"/);
+  assert.match(radio[0], /:title="it\.name"/);
 });

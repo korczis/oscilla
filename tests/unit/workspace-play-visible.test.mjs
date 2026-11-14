@@ -214,7 +214,7 @@ test('C030: the suspended notice and the idle scope read the hint of the workspa
   assert.match(read('src/js/ui/p5-views.js'),
     /const press = st\.idleHint \|\| 'živý průběh: podržte Hold to Play';/);
   assert.match(read('src/js/ui/workbench.js'),
-    /statusPlayHint\(this\.workspace, 'scope'\)[^|]*\|\| 'Hold to Play shows the live output/);
+    /statusPlayHint\(this\.workspace, 'scope'\)[^|]*\|\| 'Živý průběh analyzátoru výstupu ukáže Hold to Play/);
   assert.match(read('src/js/main.js'),
     /bridge\.setIdleHint\(statusPlayHint\(cmp\.workspace, 'idle'\)\)/);
 });

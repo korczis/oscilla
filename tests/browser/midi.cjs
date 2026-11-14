@@ -1394,12 +1394,12 @@ async function keyboardChecks(browser, b, origin, url) {
     const NOTES_OWN_MS = 2000;
     const name = OUTPUT_OWNER_NAMES.notes;
     const named = (o) => o.owner === 'notes' && o.drawn === 'notes'
-      && !!o.label && o.label.includes(`(${name})`) && !/not playing/.test(o.label)
+      && !!o.label && o.label.includes(`(${name})`) && !/nehraje/.test(o.label)
       && o.sounding && o.dot && !!o.state && o.state === o.built
       && !!o.pattern && o.pattern.toLowerCase() === name.toLowerCase()
       && o.frequency === 'C4';
     const cleared = (o) => o.owner === null && o.drawn === null && o.held === ''
-      && !!o.label && /not playing/.test(o.label) && !o.sounding && !o.dot
+      && !!o.label && /nehraje/.test(o.label) && !o.sounding && !o.dot
       && !!o.state && o.state === o.built
       && !!o.pattern && o.pattern.toLowerCase() !== name.toLowerCase();
     const waitOwner = async (pred, what) => {
@@ -1429,7 +1429,7 @@ async function keyboardChecks(browser, b, origin, url) {
     await waitOwner(named, `${leg}: notes own the scope before Hold to Play`);
     await page.keyboard.down('Space');
     const took = await waitOwner((o) => o.owner === 'instrument' && o.drawn === 'instrument'
-      && o.held === '' && !!o.label && !/\(noty\)|not playing/.test(o.label)
+      && o.held === '' && !!o.label && !/\(noty\)|nehraje/.test(o.label)
       && o.pattern.toLowerCase() !== name.toLowerCase(),
     `${leg}: the instrument takes the output from the notes`);
     check(leg, 'notes-own-the-scope', 'Hold to Play over a held key releases the notes: the '

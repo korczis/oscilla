@@ -118,7 +118,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
     summary: 'Karty pojmů od frekvence po signálovou cestu, většina s ukázkou k přehrání.',
     related: [
       { id: 'analyzer', why: 'Tvary vln, harmonické a aliasing v živém spektru' },
-      { id: 'synth', why: 'Modulace, AM a FM na záložce Engines v Synthu' },
+      { id: 'synth', why: 'Modulace, AM a FM na záložce Enginy v Synthu' },
       { id: 'measure', why: 'Logaritmické stupnice a reproduktory v reálném měření' },
     ] },
   { id: 'studio', label: 'Studio', words: 'graph nodes cables timeline patch',
@@ -132,7 +132,7 @@ export const WORKSPACE_REGISTRY = Object.freeze([
   // Synth (K058) is top level after Studio by the owner's decision Q019.
   { id: 'synth', label: 'Synth', words: 'synthesizer engines voices keys midi patch',
     summary: 'Semimodulární monofonní hlas na modelu Studia s patch bayí a ukotvenými '
-      + 'klávesami; záložka Engines s hlasy aditivními, FM, AM / ring, wavetable, hard sync '
+      + 'klávesami; záložka Enginy s hlasy aditivními, FM, AM / ring, wavetable, hard sync '
       + 'a perkusními, záložka XY a záložka Bicí s kroky bicích.',
     related: [
       { id: 'studio', why: 'Tentýž dokument jako graf a časová osa' },

@@ -128,7 +128,7 @@ const plural = (n, one, few, many) => `${fmtInt(n)} ${n === 1 ? one : n >= 2 && 
   : many}`;
 
 const VIEW_CS = Object.freeze({ timeline: 'časová osa', bay: 'patch bay',
-  engines: 'záložka Engines', panel: 'panel', xy: 'záložka XY' });
+  engines: 'záložka Enginy', panel: 'panel', xy: 'záložka XY' });
 const VIEWPORT_CS = Object.freeze({ phone: 'na telefonu', desktop: 'na počítači',
   compact: 'v kompaktním rozvržení' });
 const THEME_CS = Object.freeze({ dark: 'tmavý motiv', light: 'světlý motiv' });
@@ -265,7 +265,7 @@ function libraries(m) {
   return `<section id="sablony" class="${SECTION_ALT}">
 <div class="${WRAP}">
 <h2 class="${H2}">Šablony Studia a enginy Synthu</h2>
-<p class="${LEAD}">Odkaz otevře šablonu jako dokument Studia, nebo engine na záložce Engines Synthu. Zdroj: <a class="${LINK}" href="${esc(m.blob(f.templates.source))}">${esc(f.templates.source)}</a> a <a class="${LINK}" href="${esc(m.blob(f.engines.source))}">${esc(f.engines.source)}</a>.</p>
+<p class="${LEAD}">Odkaz otevře šablonu jako dokument Studia, nebo engine na záložce Enginy Synthu. Zdroj: <a class="${LINK}" href="${esc(m.blob(f.templates.source))}">${esc(f.templates.source)}</a> a <a class="${LINK}" href="${esc(m.blob(f.engines.source))}">${esc(f.engines.source)}</a>.</p>
 <div class="grid gap-6 lg:grid-cols-2">
 <div class="${CARD}"><h3 class="mb-2 text-xl font-bold text-gray-900 dark:text-white">Šablony Studia (${fmtInt(f.templates.items.length)})</h3><ul>${templates}</ul></div>
 <div class="${CARD}"><h3 class="mb-2 text-xl font-bold text-gray-900 dark:text-white">Enginy Synthu (${fmtInt(f.engines.items.length)})</h3><ul>${engines}${blocked}</ul>${blocked ? '<p class="mt-3 text-sm text-gray-500 dark:text-gray-400">Šedé enginy aplikace ukazuje vypnuté a u každého uvádí, proč ho zatím nenabízí.</p>' : ''}</div>

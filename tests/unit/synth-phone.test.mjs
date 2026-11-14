@@ -4,7 +4,7 @@
 //   size under 12 px is written only as `xl:text-[Npx]` beside a phone size of at least
 //   text-xs, so a phone reads 12 px and the desktop keeps its measured size.
 // - The dock never buries the panel on a phone: in the Synth its instrument row, Arm and
-//   Velocity fold behind a More button below sm (keys and Octave stay), the keyboard component
+//   Velocity fold behind the Vše toggle below sm (keys and Octave stay), the keyboard component
 //   starts folded, and the Synth view's bottom padding reads the dock's published height
 //   (--osc-dock-h, one writer) instead of a fixed 20 rem.
 //

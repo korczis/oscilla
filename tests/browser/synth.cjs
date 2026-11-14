@@ -178,7 +178,8 @@
 //              lists every notes node (9, both XY pads too) and New Synth voice; arrows and
 //              Enter route the keys to the FM engine in one undo entry (a note then takes an FM voice) and undo
 //              routes them back; the waveform radiogroup by arrow keys turns VCO 1's saw into a
-//              square (its 2nd harmonic 30 dB+ below the 3rd); a quick preset by pointer (tap
+//              square (its 2nd harmonic 30 dB+ below the 3rd), the radio shown "Obd" read checked
+//              by role and its full name Obdélník (Q090); a quick preset by pointer (tap
 //              on the phone) is one entry and the Studio Inspector shows the same LPF cutoff at
 //              the same revision. Reload keeps nothing (the Synth stores nothing; the copied
 //              link, s-link, reopens a preset)
@@ -1436,7 +1437,7 @@ function defineChecks() {
     // The picker: a menu button; the keyboard walks its role=menu items, Enter routes.
     const d0 = await dbg(page);
     const fm = d0.nodes.fm;
-    // V635: on a phone the instrument row is folded behind the dock's More button.
+    // V635: on a phone the instrument row is folded behind the dock's Vše toggle.
     const more = page.locator('[data-osc="keyboard.more"]');
     if (await more.isVisible()) {
       await more.click();
@@ -1490,6 +1491,14 @@ function defineChecks() {
     await until(() => page.evaluate(() => window.OSCILLA.studio.model.graph.nodes
       .find((n) => n.metadata.panel && n.metadata.panel.module === 'vco1').params.waveform
       === 'square'), { ms: 5000, what: 'the arrow key chooses Square' });
+    // Q090 (oscilla-c3, 2026-11-13): the dock shows the short label "Obd"; the radio's
+    // accessible name is the full "Obdélník" (WCAG 2.5.3), and the a11y tree reads it checked.
+    const obd = page.locator('[data-osc="synth.dock.wave"]')
+      .getByRole('radio', { name: 'Obdélník', exact: true });
+    await until(async () => (await obd.getAttribute('aria-checked')) === 'true',
+      { ms: 5000, what: 'the radio named Obdélník reads checked' });
+    out.waveName = { count: await obd.count(), text: (await obd.textContent()).trim(),
+      title: await obd.getAttribute('title') };
     const sq = await sound(page, (q) => peakAt(q, 3 * f) && levelAt(q, 2 * f)
       <= levelAt(q, 3 * f) - 30, "the square's 2nd harmonic is 30 dB below its 3rd");
     out.square = [levelAt(sq, 2 * f), levelAt(sq, 3 * f)];
@@ -1517,7 +1526,9 @@ function defineChecks() {
     // Nine notes nodes (pad L too since K220, the same xy-pad kind as pad R), New Synth voice
     // and, since K221, Krokový sekvencer.
     return { ok: out.items === 11 && out.expanded === 'true' && out.routeEntries === 1
-      && /^Play .* from the keys$/.test(out.label) && out.sameRevision, ...out };
+      && /^Play .* from the keys$/.test(out.label) && out.sameRevision
+      && out.waveName.count === 1 && out.waveName.text === 'Obd'
+      && out.waveName.title === 'Obdélník', ...out };
   });
 
   def('s-nodepreset', async ({ page }) => {
@@ -1645,11 +1656,11 @@ function defineChecks() {
     .then((x) => x.trim());
   async function armedNow(page, what) {
     await page.locator('[data-osc="synth.arm"]').click();
-    await until(async () => (await dbg(page)).armed && (await armText(page)) === 'Disarm',
+    await until(async () => (await dbg(page)).armed && (await armText(page)) === 'Odpojit',
       { ms: 10000, what });
   }
   async function readsArm(page, what) {
-    await until(async () => !(await dbg(page)).armed && (await armText(page)) === 'Arm',
+    await until(async () => !(await dbg(page)).armed && (await armText(page)) === 'Připravit',
       { ms: 10000, what });
   }
   def('s-armstop', async ({ page }) => {
@@ -2003,7 +2014,7 @@ function defineChecks() {
     const quiet = await silent(page, 'the held key sounds nothing (the pad has the gates)');
     const said = await until(async () => {
       const t = await status();
-      return /The keys sound nothing/.test(t) && t;
+      return /Klávesy nic nehrají/.test(t) && t;
     }, { ms: 10000, what: 'the key says why it sounds nothing' });
     await page.keyboard.up('KeyA');
     await notice.locator('[data-xy-unpatch]').click();
@@ -2014,7 +2025,7 @@ function defineChecks() {
     const on = await sound(page, (q) => q.rmsDb > -40, 'the keys play the voice again');
     await page.keyboard.up('KeyA');
     const off = await silent(page, 'the key up releases the voice');
-    return { ok: /Unpatch the pad/.test(text), text, said, still: still.rmsDb,
+    return { ok: /Odpojit pad/.test(text), text, said, still: still.rmsDb,
       quiet: quiet.rmsDb, on: on.rmsDb, off: off.rmsDb };
   });
 
@@ -2103,7 +2114,7 @@ function defineChecks() {
       return c ? c.payload.notes.map((n) => [n.at, n.note]) : null;
     });
     const hiddenFirst = !(await strip.isVisible()) && (await notes()) === null;
-    // V635: on a phone the instrument row is folded behind the dock's More button.
+    // V635: on a phone the instrument row is folded behind the dock's Vše toggle.
     const more = page.locator('[data-osc="keyboard.more"]');
     if (await more.isVisible()) {
       await press(more);

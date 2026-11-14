@@ -132,7 +132,7 @@ export const XY_TEXT = Object.freeze({
   cold: 'Klepnutím spustíte zvuk.',
   /** Y with no cable (the default since K220): the touch's velocity only, and how to add a
    *  target. */
-  free: 'Y je síla úhozu: z jacku Y padu nevede žádný kabel. Cíl přidáte v poli Y drives.',
+  free: 'Y je síla úhozu: z jacku Y padu nevede žádný kabel. Cíl přidáte v poli Y ovládá.',
 });
 export const XY_LEAD = XY_RECIPES.find((r) => r.id === 'xy-lead');
 export const XY_OWNER = 'synth';
@@ -177,7 +177,7 @@ export function xyPresetAction(model, panel, id) {
 export function keysSilenceHtml(model, panel, buttonClass) {
   const q = keysSilence(model, panel);
   const undo = q && q.pad ? `<button type="button" data-xy-unpatch="" class="${buttonClass}">`
-    + 'Unpatch the pad</button>' : '';
+    + 'Odpojit pad</button>' : '';
   return q ? '<div class="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-yellow-50 p-3 '
     + 'text-sm text-yellow-800 dark:bg-gray-800 dark:text-yellow-300" role="alert" '
     + `data-osc="synth.keys-silent"><p>${esc(q.reason)}</p>${undo}</div>` : '';
@@ -238,13 +238,13 @@ function documentTarget({ store, panel, transport, owner, arm, say, jackName, di
       const m = model(); // read only: opening the pad edits nothing
       const to = xyTarget(m, panel);
       slot.innerHTML = '<label for="synth-xy-y" class="text-sm text-gray-700 dark:text-gray-300">'
-        + `Y drives</label><select id="synth-xy-y" data-osc="synth.xy.target" class="${SELECT}">`
-        + `<option value="">Nothing</option>${xyTargets(panel).map((t) => `<option value=`
+        + `Y ovládá</label><select id="synth-xy-y" data-osc="synth.xy.target" class="${SELECT}">`
+        + `<option value="">Nic</option>${xyTargets(panel).map((t) => `<option value=`
         + `"${t.id}"${t.id === to ? ' selected' : ''}>${esc(t.label)}</option>`).join('')}`
         + '</select>';
       const s = slot.querySelector('[data-osc="synth.xy.target"]');
       on(s, 'change', () => act(xyTargetAction(model(), panel, s.value || null),
-        s.value ? `Y drives ${s.selectedOptions[0].text}.` : XY_TEXT.free));
+        s.value ? `Y ovládá ${s.selectedOptions[0].text}.` : XY_TEXT.free));
       const p = pad().params;
       steps = xyDegree(1, p).steps;
       const scale = `${p.key} ${SCALE_LABELS[p.mode]}`;
@@ -557,7 +557,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
           root };
       }),
       disabled: null,
-      x: { key: 'x', label: 'Note', type: 'integer', min: 0, max: steps - 1, step: 1,
+      x: { key: 'x', label: 'Nota', type: 'integer', min: 0, max: steps - 1, step: 1,
         default: Math.floor(steps / 2) },
       // The kind names the axis itself ("Y: …", review R2-K220-3): the label is its target.
       y: { key: 'y', label: to, type: 'number', min: 0, max: 1, default: 0 },
@@ -566,7 +566,7 @@ export function mountSynthXy(host, { store, transport = null, panel, owner = XY_
         y: (v) => {
           const yv = yValue(v, 'aria');
           if (!cabled) return `${Math.round(v * 100)} %: ${VELOCITY_NAME} ${xyVelocity(v)}`;
-          return `${Math.round(v * 100)} % to ${to}${yv ? `: ${yv}${others()}` : ''}`;
+          return `${Math.round(v * 100)} % pro ${to}${yv ? `: ${yv}${others()}` : ''}`;
         } },
       readout: { x: (i) => noteText(deg(i)), y: (v) => (yValue(v) ? `${to} ${yValue(v)}` : null),
         yEnds: ends },
