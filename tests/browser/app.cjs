@@ -1020,7 +1020,12 @@ function defineChecks() {
       await page.keyboard.press('Escape');
     }
     await page.evaluate(() => { window.OSCILLA.app.explore = true; });
-    await sleep(80);
+    // The strip renders on Alpine's next tick; a fixed 80 ms sleep was too short for WebKit on a
+    // loaded linux runner (hints.close read never visible), so wait for the strip itself.
+    await until(() => page.evaluate(() => {
+      const b = document.querySelector('[data-osc="hints.close"]');
+      return !!b && b.getClientRects().length > 0 && b.getBoundingClientRect().width > 0;
+    }), { ms: 5000, what: 'the explore hints strip shows its close button' });
     await collect();
     await page.evaluate(() => { window.OSCILLA.app.explore = false; });
     // From 1280 px the Playground leaves Phase & Stereo and Filter Lab to their workspaces
@@ -1313,7 +1318,7 @@ function defineChecks() {
       .catch(() => {});
     await collect();
     await page.keyboard.press('Escape');
-    // V635: on a phone the Synth folds its instrument row behind the keyboard's More button.
+    // V635: on a phone the Synth folds its instrument row behind the keyboard's Vše toggle.
     await H.workspace(page, 'synth');
     await collect();
     await H.workspace(page, 'playground');

@@ -2121,6 +2121,7 @@
               <button type="button" role="radio" :data-v="it.id" :aria-checked="String(it.id === g.on)"
                 :tabindex="it.id === g.on || (i === 0 && !g.items.some((x) => x.id === g.on)) ? '0' : '-1'"
                 @click="g.pick(it.id)" x-text="it.label"
+                :aria-label="it.name" :title="it.name"
                 :class="it.id === g.on ? 'bg-primary-600 text-white dark:bg-primary-500' : 'bg-white text-gray-900 hover:bg-gray-100 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700'"
                 class="h-11 whitespace-nowrap border border-solid border-gray-200 px-3 text-sm font-medium first:rounded-s-lg last:rounded-e-lg focus:z-10 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600"></button>
             </template>
@@ -2152,8 +2153,8 @@
           @click="kbdControl('velocity-up')">Úhoz +</button>
         <button type="button" data-osc="keyboard.more" x-show="kbdDocked"
           aria-controls="osc-synth-dock" :aria-expanded="String(kbdMore)" @click="kbdMore = !kbdMore"
-          x-text="kbdMore ? 'Skrýt' : 'Další'"
-          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">Další</button>
+          x-text="kbdMore ? 'Skrýt' : 'Vše'"
+          class="inline-flex h-9 items-center justify-center rounded-lg border border-solid border-gray-300 bg-white px-3 text-sm font-medium text-gray-900 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 sm:hidden dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11 [@media(pointer:coarse)]:min-w-11">Vše</button>
       </div>
       <p id="osc-kbd-readout" data-osc="keyboard.readout" role="status" x-text="kbdReadout"
         :class="kbdDocked && 'sr-only sm:not-sr-only'"></p>
