@@ -1936,6 +1936,30 @@ function defineChecks() {
       scroll: { before, after }, focus };
   });
 
+  // Czech pass 3's dock fix (oscilla-c3, Q090 2026-11-13): the wave radios show a short label and
+  // carry the full name as their accessible name and title; every other item of the shared radio
+  // template has a name too (the oscillator its label), never an empty aria-label.
+  def('s-dock-names', async ({ page }) => {
+    const wave = page.locator('[data-osc="synth.dock.wave"] [role="radio"]');
+    const osc = page.locator('[data-osc="synth.dock.osc"] [role="radio"]').first();
+    await until(async () => (await wave.count()) >= 6 && (await osc.count()) > 0, { ms: LOAD_MS,
+      what: 'the dock shows its wave and oscillator radios' });
+    const read = (el) => el.evaluate((b) => ({ text: b.textContent.trim(),
+      label: b.getAttribute('aria-label'), title: b.getAttribute('title') }));
+    const sine = await read(wave.first());
+    const first = await read(osc);
+    // the accessibility tree's own name, as a screen reader reads it
+    const byName = await page.getByRole('radio', { name: 'Sinus', exact: true }).count();
+    const oscByName = await page.getByRole('radio', { name: first.text, exact: true }).count();
+    // a quick preset shows its short name and is named by its whole title
+    const pre = await page.locator('[data-osc="synth.dock.preset"] [role="radio"]').first()
+      .evaluate((el) => ({ text: el.textContent.trim(), label: el.getAttribute('aria-label') }));
+    return { ok: sine.text === 'Sin' && sine.label === 'Sinus' && sine.title === 'Sinus'
+      && byName >= 1 && !!first.text && first.label === first.text && first.title === first.text
+      && oscByName >= 1 && !!pre.label && pre.label.startsWith(pre.text), sine, first, byName,
+    oscByName, pre };
+  });
+
   def('s-newvoice', async ({ page }) => {
     // A document without the panel whose own chain feeds Master Output, changed by the user:
     // the workspace's own insert undone, then a node of the user's.

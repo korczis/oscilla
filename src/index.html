@@ -2114,7 +2114,7 @@
           </ul>
         </div>
         <div class="flex min-w-0 flex-1 gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
-        <template x-for="g in [{ id: 'osc', label: 'Oscilátor', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Tvar vlny', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Rychlé předvolby', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0] })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
+        <template x-for="g in [{ id: 'osc', label: 'Oscilátor', items: synth.dock.oscs, on: synth.dock.osc, pick: (id) => synthOsc(id) }, { id: 'wave', label: 'Tvar vlny', items: synth.dock.waves, on: synth.dock.wave, pick: (id) => synthWave(id) }, { id: 'preset', label: 'Rychlé předvolby', items: synth.presets.filter((x) => x.tab === synth.tab).map((x) => ({ id: x.id, label: x.title.split(':')[0], name: x.title })), on: synth.preset, pick: (id) => synthPreset(id) }]" :key="g.id">
           <div role="radiogroup" :aria-label="g.label" :data-osc="'synth.dock.' + g.id"
             x-init="synthDockRoving($el, true)" class="inline-flex shrink-0 rounded-lg shadow-sm">
             <template x-for="(it, i) in g.items" :key="it.id">

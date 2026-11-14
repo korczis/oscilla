@@ -17,7 +17,9 @@ export const STEPS_CHOICE = 'steps';
 export function createDock(ctx) {
   const { panel, registry } = ctx;
   const state = () => ({ open: false, choices: [], target: '', osc: 'vco1', wave: '',
-    oscs: ['vco1', 'vco2'].map((id) => ({ id, label: panel.module(id).label })), waves: WAVES });
+    // every item of the dock's radio template has a name, its accessible name and title (U109)
+    oscs: ['vco1', 'vco2'].map((id) => ({ id, label: panel.module(id).label,
+      name: panel.module(id).label })), waves: WAVES });
 
   function sync() {
     const cmp = ctx.cmp();
