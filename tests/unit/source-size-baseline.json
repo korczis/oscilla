@@ -234,6 +234,12 @@
       "cap": 305000,
       "pr": 542,
       "reason": "Czech pass 3 (U109, Q104) translates the Playground panels and the Synth header, dock and notices string-only; oscilla-c3 accepted the raise under Q090"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 305000,
+      "pr": 547,
+      "reason": "the PR of the entry above: Czech pass 3 landed in #547 (train T20); 542 was a placeholder written before the PR existed, and entries are added, never edited"
     }
   ]
 }
