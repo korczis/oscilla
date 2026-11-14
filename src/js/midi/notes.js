@@ -13,8 +13,14 @@
 //                                    player's release; a key not sounding changes nothing
 //   CC 120 All Sound Off             every note fades within ESCAPE_RELEASE_S
 //   CC 123 All Notes Off             every note releases with its release time
-//   anything else (CC 64 sustain     ignored: not part of the first version (ADR 0058, V502 note)
-//     included), or a message
+//   CC 64 Sustain (V506)             value 64-127 holds every key of that input and channel
+//                                    whose Note Off arrives while it is down; below 64 it
+//                                    releases them (a key pressed again meanwhile keeps sounding
+//                                    until its own Note Off)
+//   any other CC (V506)              { kind: 'control-change', channel, controller, value }:
+//                                    the caller decides (midi/ui.js: the Synth panel's knobs,
+//                                    synth/midi-cc.js)
+//   anything else, or a message      ignored
 //     without a status byte
 // A note is held (ADR 0062, amending ADR 0005): it sounds until its Note Off, past the safety
 // limit, under the same output ceiling. Everything stops (within ESCAPE_RELEASE_S) when any
@@ -45,6 +51,8 @@ export function velocityLevel(velocity) {
  * One MIDI message (a Uint8Array or array of bytes) as an event:
  *   { kind: 'note-on' | 'note-off', channel, note, velocity }
  *   { kind: 'all-sound-off' | 'all-notes-off', channel }
+ *   { kind: 'sustain', channel, down }                       CC 64 (V506)
+ *   { kind: 'control-change', channel, controller, value }   every other CC (V506)
  *   { kind: 'ignored' }
  */
 export function parseMidiMessage(data) {
@@ -58,6 +66,8 @@ export function parseMidiMessage(data) {
   if (type === 0x90 || type === 0x80) return { kind: 'note-off', channel, note: d1, velocity: d2 };
   if (type === 0xb0 && d1 === 120) return { kind: 'all-sound-off', channel };
   if (type === 0xb0 && d1 === 123) return { kind: 'all-notes-off', channel };
+  if (type === 0xb0 && d1 === 64) return { kind: 'sustain', channel, down: d2 >= 64 };
+  if (type === 0xb0) return { kind: 'control-change', channel, controller: d1, value: d2 };
   return ignored;
 }
 
@@ -86,6 +96,11 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   const ENGINE = Object.freeze({ noteOff: (note, info) => (engine
     ? engine.noteOff(info.key, { forced: forcedOff(info) }) : false) });
   const held = createHeldNotes();
+  // CC 64 (V506): the pedals down, `${source}:${channel}`, and the keys each one holds past their
+  // Note Off (the note key -> its note, source and channel).
+  const pedals = new Set();
+  const sustained = new Map();
+  const pedalOf = (source, channel) => `${source}:${channel}`;
   // The input a source belongs to: the keyboard's `kbd-<source>`, else a MIDI input's number.
   const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
     ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy' : 'midi');
@@ -105,6 +120,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
   function noteOn(note, velocity, source = 0, channel = 0) {
     const key = keyOf(source, channel, note);
+    sustained.delete(key); // pressed again: its own Note Off decides now
     const sink = route(); // the Synth panel plays the note instead (K065), one path for all
     const to = sink || ENGINE;
     // A re-press on the same player retriggers there (the engine fades the old note under the
@@ -169,6 +185,11 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   /** `forced` (blur, hide, Escape): a stop never deferred by the minimum gate (K184). */
   function noteOff(note, source = 0, channel = 0, { forced = false } = {}) {
     const key = keyOf(source, channel, note);
+    if (!forced && pedals.has(pedalOf(source, channel)) && held.sinkOf(key)) {
+      sustained.set(key, { note, source, channel });
+      return true;
+    }
+    sustained.delete(key);
     // A key not held here: where it would sound now.
     const sink = held.releaseKey(key) || route() || ENGINE;
     const off = sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
@@ -178,10 +199,22 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     return off;
   }
 
+  /** CC 64 (V506): the pedal of `source` and `channel` down or up; up releases what it held. */
+  function sustain(down, source = 0, channel = 0) {
+    const id = pedalOf(source, channel);
+    if (down) { pedals.add(id); return 0; }
+    pedals.delete(id);
+    const mine = [...sustained.values()].filter((k) => k.source === source
+      && k.channel === channel);
+    for (const k of mine) noteOff(k.note, k.source, k.channel);
+    return mine.length;
+  }
+
   return {
     noteOn,
     noteOff,
     legato,
+    sustain,
 
     /** A message from input `source` (any stable id of the input). Returns the event. */
     handle(data, source = 0) {
@@ -191,7 +224,10 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
         e.result = noteOn(e.note, e.velocity, source, e.channel);
       } else if (e.kind === 'note-off') {
         noteOff(e.note, source, e.channel);
+      } else if (e.kind === 'sustain') {
+        e.released = sustain(e.down, source, e.channel);
       } else if (e.kind === 'all-sound-off' || e.kind === 'all-notes-off') {
+        sustained.clear();
         const sink = route();
         if (sink) sink.allOff();
         engine.notesOff(e.kind === 'all-sound-off');
@@ -216,6 +252,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
 
     /** Every note off within ESCAPE_RELEASE_S; returns how many were sounding. */
     silence() {
+      sustained.clear();
       const sink = route();
       const n = sink ? sink.allOff() : 0;
       const sounding = engine ? engine.notesOff(true) : 0;

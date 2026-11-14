@@ -64,6 +64,10 @@
 //                               then the Synth workspace, then its Note Off: the note-off frees
 //                               the Playground note (zero live oscillators, zero engine notes)
 //                               instead of reaching the Synth and leaving it sounding
+//   midi-seam-cc                V506: CC 64 holds a Playground note past its Note Off until the
+//                               pedal comes up; a CC in the Playground moves no Synth knob; in
+//                               the Synth CC 74 moves the LPF cutoff to its range's ends (0 -> 10
+//                               Hz, 127 -> 20 kHz) and the Synth's status line names it
 //   keys-one-keyboard           K178: with the stub device, the Playground, the Synth and the
 //                               Studio take one octave, light and sound the same keys for QWERTY
 //                               and MIDI, and release them on Escape and on a workspace switch
@@ -972,6 +976,80 @@ async function seamSink(browser, b, origin, url) {
   }
 }
 
+// midi-seam-cc (V506): the controller's pedal and knobs (src/js/midi/notes.js sustain,
+// src/js/synth/midi-cc.js), driven through the stub device.
+async function seamCc(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-cc';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+
+    // The pedal: a Note Off under it leaves the note sounding; the pedal up releases it.
+    await msg([0xb0, 64, 127]);
+    await msg([0x90, 60, 100]);
+    const on = await heard(page, (m) => m.state === 'running' && m.notes === 1,
+      `${leg}: a Playground note sounds`);
+    // The stub dispatches synchronously: after msg() the page has handled the message. A held
+    // engine note is one that is neither releasing nor ended.
+    const holding = () => page.evaluate(() => [...window.OSCILLA.engine.notes.values()]
+      .filter((v) => !v.releasing && !v.ended).length);
+    await msg([0x80, 60, 0]);
+    const kept = await holding();
+    await msg([0xb0, 64, 0]);
+    const let_ = await holding();
+    const freed = await heard(page, (m) => m.notes === 0 && m.live === 0,
+      `${leg}: the pedal up releases the note`);
+    check(leg, id, 'CC 64 holds a note past its Note Off and its release frees it',
+      !on.timedOut && kept === 1 && let_ === 0 && !freed.timedOut,
+      JSON.stringify({ on: on.notes, kept, let: let_, freed }));
+
+    // A knob: nothing in the Playground, the LPF cutoff in the Synth.
+    const cutoff = () => page.evaluate(() => {
+      const n = window.OSCILLA.studio.model.graph.nodes.find((x) => x.metadata
+        && x.metadata.panel && x.metadata.panel.module === 'lpf');
+      return n ? n.params.frequency : null;
+    });
+    const before = await cutoff();
+    await msg([0xb0, 74, 0]);
+    const still = await cutoff();
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    const shown = await until(async () => ((await cutoff()) !== null ? true : null),
+      { ms: STEP_MS, what: `${leg}: the Synth panel is in the document` }).then(() => true,
+      () => false);
+    const start = await cutoff();
+    await msg([0xb0, 74, 0]);
+    const low = await until(async () => ((await cutoff()) === 10 ? true : null),
+      { ms: STEP_MS, what: `${leg}: CC 74 = 0 sets the cutoff to 10 Hz` }).then(() => true,
+      () => false);
+    await msg([0xb0, 74, 127]);
+    const high = await until(async () => ((await cutoff()) === 20000 ? true : null),
+      { ms: STEP_MS, what: `${leg}: CC 74 = 127 sets the cutoff to 20 kHz` }).then(() => true,
+      () => false);
+    const status = await page.locator('[data-osc="synth.status"]').textContent();
+    check(leg, id, 'a CC moves no Synth knob outside the Synth', still === before,
+      JSON.stringify({ before, still }));
+    check(leg, id, 'in the Synth CC 74 moves the LPF cutoff to both ends of its range',
+      shown && start === 1200 && low && high, JSON.stringify({ start, low, high }));
+    check(leg, id, 'the Synth\'s status line names the CC and the control',
+      /CC 74 → LPF Cutoff/.test(status || ''), status);
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 // keys-one-keyboard (K178, the owner's question of 2026-11-04: why does the keyboard behave
 // differently in every workspace): with the stub MIDI device connected, the Playground, the Synth
 // and the Studio (the Synth panel's nodes, visited first) each take the same octave (Z/X set once, in the Playground), light
@@ -1571,6 +1649,7 @@ async function main() {
             await seamChecks(browser, b, origin, url, site);
             await seamNotes(browser, b, origin, url);
             await seamSink(browser, b, origin, url);
+            await seamCc(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);

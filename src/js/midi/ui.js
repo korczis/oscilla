@@ -1,7 +1,8 @@
 // The MIDI part of the one OSCILLA Alpine component (plan issues V501, V502, K026; ADR 0058,
 // ADR 0062): the support state of src/js/midi/support.js as the status line and the Connect
 // MIDI control of the Settings dialog, the notes of the connected inputs sounding through the
-// AudioEngine (src/js/midi/notes.js), and the computer and on-screen keyboard
+// AudioEngine (src/js/midi/notes.js), their Control Changes moving the Synth panel's knobs
+// (V506, src/js/synth/midi-cc.js), and the computer and on-screen keyboard
 // (src/js/midi/keyboard-ui.js), which plays the same note voices and lights the MIDI notes too.
 // Composed by main.js; it touches nothing outside the MIDI surface but the engine's note voices
 // (and, for the keyboard, the link key `kbd` and the analysis views' live flag).
@@ -18,6 +19,9 @@ import { OWNER, notesRefusalOf, notesRefusedSentences } from '../core/output-bus
 /** What a refused MIDI note says, per owner: the one output-owner table's (C036). */
 export const MIDI_REFUSED = notesRefusedSentences('midi');
 
+/** The least time between two status lines of the same CC control (V506). */
+export const CC_STATUS_MS = 400;
+
 /**
  * `engine`: the AudioEngine the notes sound through. `sequencerPlaying()`: whether the
  * sequencer is playing now (main.js reads the editor itself, not the 150 ms `seqPlaying` copy);
@@ -26,6 +30,7 @@ export const MIDI_REFUSED = notesRefusedSentences('midi');
  */
 export function createMidiUi({ win = window, engine = null, sequencerPlaying = () => false,
   bus = null } = {}) {
+  let ccSaid = { cid: null, at: 0 }; // what the Synth's status line last said of a CC (V506)
   let support = null;
   let notes = null;
   const part = {
@@ -86,6 +91,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         onMessage(data, port) {
           if (!ids.has(port)) { inputs += 1; ids.set(port, inputs); }
           const e = notes.handle(data, ids.get(port));
+          if (e.kind === 'control-change') { cmp.midiControl(e); return; }
           // The on-screen keys light the note while it sounds (K026).
           if (typeof cmp.kbdLight !== 'function') return;
           if (e.kind === 'note-on' && e.result && e.result.ok) cmp.kbdLight(e.note, true);
@@ -110,6 +116,24 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
       const { plays, leave } = routeOf(old);
       const s = leave && typeof this[plays] === 'function' && this[plays]();
       if (s && typeof s[leave] === 'function') s[leave]();
+    },
+
+    /**
+     * A Control Change from an input (V506): while the Synth is shown, the panel's knob of its
+     * slot moves (synth/midi-cc.js) and the Synth's status line says what changed, without an
+     * announcement per message; elsewhere no surface reads a CC and it changes nothing.
+     */
+    midiControl(e) {
+      if (this.workspace !== 'synth' || typeof this.synthCc !== 'function') return null;
+      const r = this.synthCc(e.controller, e.value);
+      // The status line is a polite live region: a new control, or a turn's value at most every
+      // CC_STATUS_MS, so a fader's stream of messages is not read out message by message.
+      const now = Date.now();
+      if (r && this.synth && (r.cid !== ccSaid.cid || now - ccSaid.at >= CC_STATUS_MS)) {
+        this.synth.status = r.text;
+        ccSaid = { cid: r.cid, at: now };
+      }
+      return r;
     },
 
     /** Connect MIDI (the explicit user action): asks the browser for access. */

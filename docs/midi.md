@@ -2,12 +2,13 @@
 
 MIDI is an optional input layer over the audio engine (ADR 0058,
 `.ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md`). This page
-describes its first two pieces and the keyboard that shares their note voices. V501: OSCILLA
+describes its first pieces and the keyboard that shares their note voices. V501: OSCILLA
 detects Web MIDI and its permission at runtime, lists the connected inputs and states one support
 state. V502: the notes of the connected inputs sound through the audio engine (see "Playing
 notes" below). K026: the computer and on-screen keyboard plays the same note voices (see "The
 computer and on-screen keyboard"), and every key the page answers goes through one key registry
-(see "Keys"). When MIDI is missing, nothing outside the MIDI surface changes.
+(see "Keys"). V506: a controller's knobs, faders and sustain pedal play the Synth panel (see
+"Controllers"). When MIDI is missing, nothing outside the MIDI surface changes.
 
 ## Where it is
 
@@ -199,3 +200,55 @@ shown under it says so. It is not part of the page and does not ship in `dist/in
 check that uses it is a seam check and says "handles (stubbed API)"; only a measured check
 supports a statement about a gate build. In the gate builds that have the real interfaces, a
 measured check compares the members the page reads on the stub's objects with them.
+
+## Controllers: knobs, faders and the sustain pedal (V506)
+
+The decisions are ADR 0058's V506 note; the code is `src/js/midi/notes.js` (the pedal) and
+`src/js/synth/midi-cc.js` (the knobs), reached from `src/js/midi/ui.js` `midiControl`.
+
+**The pedal.** CC 64 at 64-127 holds every key of its input and channel whose Note Off arrives
+while it is down; below 64 releases them. A key pressed again under the pedal sounds until its
+own Note Off. Blur, page hide, Escape, a lost input, CC 120, CC 123 and every silence are never
+held. The pedal works in every workspace, wherever the keys play.
+
+**The knobs and faders.** Every other CC moves one control of the Synth panel, only while the
+Synth workspace is shown. The value v (0-127) is the position v / 127 along the control's own
+scale (a log cutoff sweeps in equal ratios); the first message of a turn jumps the control to
+the controller's position. A run of messages on one control is one undo entry. The Synth's
+status line says `CC 74 → LPF Cutoff: 1.2 kHz`, at most every 400 ms for the same control.
+
+| Controller (KeyLab mkII factory mode) | CC | Panel tab | Engines tab |
+|---|---|---|---|
+| Encoder 1 | 74 | LPF Cutoff | (same) |
+| Encoder 2 | 71 | LPF Peak | (same) |
+| Encoder 3 | 76 | MG / LFO Rate | (same) |
+| Encoder 4 | 77 | LPF MG → cutoff | (same) |
+| Encoder 5 | 93 | MG / LFO Morph | (same) |
+| Encoder 6 | 18 | LPF EG 2 → cutoff | (same) |
+| Encoder 7 | 19 | VCO 1 EG 1 → pitch | (same) |
+| Encoder 8 | 16 | HPF Cutoff | (same) |
+| Encoder 9 | 17 | HPF Peak | (same) |
+| Faders 1-4 (filter envelope) | 73, 75, 79, 72 | EG 2 attack, decay, sustain, release | the engine's attack, decay, sustain, release |
+| Faders 5-8 (second envelope) | 80, 81, 82, 83 | EG 1 attack, decay, sustain, release | (same) |
+| Fader 9 | 85 | OUTPUT Level | (same) |
+| Modulation wheel | 1 | VCO 1 MG → pitch (vibrato) | (same) |
+| Volume (General MIDI) | 7 | OUTPUT Level | (same) |
+| Sustain pedal | 64 | holds released keys | (same) |
+
+On this panel EG 2 is the filter envelope: it drives the LPF cutoff (normal n22) and the VCA
+(n24). EG 1 is heard through its pitch amount, which encoder 7 sets.
+
+**Where the layout comes from.** On 2026-11-14 the default MIDI configuration of the
+classic-synth plug-ins installed on the owner's Mac (`plugin.prefmidi.xml` read with
+`Reference_ParamNames.xml`, 20 instruments, read only) was compared slot by slot. The plug-ins
+agree on the roles: CC 74 the filter cutoff and CC 71 its resonance (or the first two macros,
+which are brightness and timbre), CC 73, 75, 79, 72 the filter envelope's attack, decay,
+sustain and release, CC 80-83 the amplifier envelope's, CC 76 the LFO rate, CC 85 the master
+volume, CC 16-19 secondary levels and amounts. The owner's KeyLab mkII 61 sent CC 71, 73-77 and
+93 on channel 1 that day. Nothing of the plug-ins is in this repository: only the numbers and
+the roles, which are facts of the controller's protocol.
+
+**What it is not.** The layout is the panel's front panel in the player's hand: it writes the
+stored value, as a drag does. A learned controller as a modulation source for any Studio
+parameter is K077 (a `midi-cc` node), still planned. Other CCs, pitch bend, aftertouch, MIDI
+clock and the controller's DAW port are not read yet.

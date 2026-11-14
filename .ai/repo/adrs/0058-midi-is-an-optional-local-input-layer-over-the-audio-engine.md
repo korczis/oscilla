@@ -480,3 +480,45 @@ decision 5 keeps out; Q062 asks the owner about those.
 What stays decided where it was: the knob's look, keys, touch and reduced-motion behaviour are
 K058's acceptance; the control menu is N004's; the `midi-cc` node type, its default depth and
 its tests are K077's. This note binds them to one route.
+
+### 2026-11-14: a controller's factory layout plays the Synth panel, and CC 64 (V506)
+
+**Note of 2026-11-14 (issue V506), no section above changes; the status stays `proposed`.**
+The owner connected a KeyLab mkII 61 and a BeatStep Pro to the live v3.37.3, heard both play
+and ordered, in session `cae276ab-2d90-45d2-babb-a1f8023668d2`: "jo, zvuk slysim, zacni s CC
+mapovanim" (yes, I hear the sound, start with the CC mapping). This note decides what a CC does
+before K077's learned route exists.
+
+1. **CC 64 is the sustain pedal.** The V502 note left it ignored in the first version; from
+   V506 a value of 64 to 127 holds every key of that input and channel whose Note Off arrives
+   while it is down, and a value below 64 releases them. A key pressed again under the pedal
+   sounds until its own Note Off. A forced stop (blur, hide, Escape, a lost input), CC 120,
+   CC 123 and every silence are never held, so ADR 0062's guarantee is unchanged.
+2. **A fixed factory layout, not learning.** The Synth panel reads the slots that controllers
+   of the KeyLab mkII family send in their factory mode, and that the classic-synth plug-ins of
+   the same maker map in their default MIDI configuration (derived from the plug-ins installed
+   on the owner's Mac; `docs/midi.md` "Controllers" lists the evidence): encoders CC 74, 71, 76,
+   77, 93 and 18, 19, 16, 17, faders CC 73, 75, 79, 72 (the filter envelope) and 80-83 (the
+   second envelope), CC 85 volume, plus the General MIDI CC 1 (modulation wheel) and CC 7
+   (volume). Each slot names one control of the panel's face (`src/js/synth/midi-cc.js`
+   `CC_SLOTS`); on the Engines tab the filter-envelope faders play the chosen engine's own
+   envelope (`ENGINE_ENV`).
+3. **The hand, not a modulation source.** A slot writes the control's stored value through the
+   panel's own `setControl`, exactly as a drag does, one undo entry per run of messages on one
+   control (closed `GESTURE_IDLE_MS` after the last). This differs from the 2026-10-29 note's
+   route, where a learned controller is a `midi-cc` node that modulates a parameter without
+   changing its stored base (K077). Both stand: the factory layout is the panel's front-panel
+   knob in the player's hand; K077 is a modulation source for any Studio parameter, learned from
+   the knob menu. K077 stays planned and unchanged.
+4. **The value follows the control's scale.** Value v is the position v / 127 along the
+   control (`ui/synth/knob.js` `fromNorm`), so a log cutoff sweeps in equal ratios. The first
+   message of a turn jumps the control to the controller's position (no pickup); the knob shows
+   the new value at once.
+5. **Only where it is seen.** A CC moves a panel control only while the Synth workspace is
+   shown; elsewhere no surface reads it. The Synth's status line names the CC and the control at
+   most every `CC_STATUS_MS` per control, so a fader's stream is not read out message by
+   message.
+6. **Nothing of the maker's is copied.** The plug-ins' files were read on the owner's Mac to
+   derive which slot means which role; no file, preset, sample, image or code of theirs is in
+   this repository, only the CC numbers and the roles, which are facts of the controller's
+   protocol.

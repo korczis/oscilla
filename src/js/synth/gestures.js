@@ -13,11 +13,14 @@
 //
 //   createGestures({ controlOf, valueOf, setControl, handle, say, label }) ->
 //     { press(cid, control, event) -> knob, drag(knob, event), wheel(event),
-//       choiceKey(event, host) -> handled, aria(el, value, param, text), refused(el, cid) }
+//       choiceKey(event, host) -> handled, aria(el, value, param, text), refused(el, cid),
+//       cc(cc, value, faceOf, played) -> { cid, value, text } | null }   a controller's knob
+//       (V506, midi-cc.js): its own undo burst; it closes a wheel burst first
 
 import { ariaAttrs, WHEEL_LINE_PX, WHEEL_NOTCH_PX, wheelValue } from '../ui/synth/knob.js';
 import { dragAnchor, dragAt, GESTURE_IDLE_MS, reanchorDrag } from '../ui/synth/feel.js';
 import { stepOption } from './view/knob.js';
+import { midiCc } from './midi-cc.js';
 
 const CHOICE_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End']);
 const ARIA = ['aria-valuemin', 'aria-valuemax', 'aria-valuenow', 'aria-valuetext'];
@@ -133,5 +136,11 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
     return true;
   }
 
-  return { press, drag, wheel, choiceKey, aria, refused, flush };
+  /** A controller's CC (V506): the open wheel burst ends first, then midi-cc.js's own. */
+  function cc(n, value, faceOf, played) {
+    flush();
+    return midiCc(n, value, { faceOf, played, controlOf, setControl, handle });
+  }
+
+  return { press, drag, wheel, choiceKey, aria, refused, flush, cc };
 }

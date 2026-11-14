@@ -814,6 +814,7 @@ export function createSynthUi({ get, setupAudio = () => {}, announce = () => {},
       return { noteOn, noteOff, allOff, legato };
     },
     studioSink: () => studioSink.active(),
+    synthCc: (cc, v) => gestures.cc(cc, v, panel.faceOf, playedModule), // V506
 
     synthArm() {
       const t = transport();

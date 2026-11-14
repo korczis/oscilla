@@ -30,3 +30,7 @@ satisfaction:
     criterion: "A jam is recorded as an editable event track that saves, reloads and replays identically"
     evidence: claim
     ref: "midi-jam-recorded"
+  - id: midi-controller-knobs
+    criterion: "A controller's knobs, faders and sustain pedal play the Synth panel: each slot of the controller's factory layout moves the control it names along that control's own scale, one undo entry per run of messages, and the pedal holds released keys until it comes up"
+    evidence: claim
+    ref: "midi-controller-knobs"
