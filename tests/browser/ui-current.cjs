@@ -127,7 +127,7 @@ const U108_DEBT = new Map([
   ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
-const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
+const R375 = 'the docked keyboard\'s octave and Vše buttons overlap the Synth\'s section '
   + 'chips at 375 x 667 since #385\'s train: the Synth lane, #385 and V635; measured in the '
   + 'steady state, the insert alert closed (U107) and the link\'s notice gone (U108, oscilla-c3), '
   + 'unscrolled (#540): 5 pairs in every Mac engine, 5 in linux chromium and firefox, 4 in linux '

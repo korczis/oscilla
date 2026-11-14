@@ -29,11 +29,15 @@ import { insertAction } from './insert.js';
 export const NEW_VOICE = 'new-voice';
 export const NEW_VOICE_TAKEN = 'Toto Studio už panel Synthu má a Master Output přijme jen '
   + 'jeden kabel: jeho klávesy a enginy jsou v seznamu výše.';
-/** The dock's waves; the four oscillator shapes carry the one Czech name (WAVEFORM_NAMES). */
-export const WAVES = Object.freeze([['sine', WAVEFORM_NAMES.sine],
-  ['triangle', WAVEFORM_NAMES.triangle], ['sawtooth', WAVEFORM_NAMES.sawtooth],
-  ['square', WAVEFORM_NAMES.square], ['pulse', 'Pulz'], ['noise', 'Šum']]
-  .map(([id, label]) => Object.freeze({ id, label })));
+/**
+ * The dock's waves: `name` is the full Czech name (the four oscillator shapes carry the one
+ * WAVEFORM_NAMES), the dock's accessible name and title; `label` is the short button text, a
+ * prefix of `name` (WCAG 2.5.3, Q090), so the dock keeps one row at desktop width.
+ */
+export const WAVES = Object.freeze([['sine', WAVEFORM_NAMES.sine, 'Sin'],
+  ['triangle', WAVEFORM_NAMES.triangle, 'Troj'], ['sawtooth', WAVEFORM_NAMES.sawtooth, 'Pila'],
+  ['square', WAVEFORM_NAMES.square, 'Obd'], ['pulse', 'Pulz', 'Pulz'], ['noise', 'Šum', 'Šum']]
+  .map(([id, name, label]) => Object.freeze({ id, name, label })));
 /** The Mixer input each oscillator of the panel feeds (panels/semi-mono.js normals n5-n7). */
 const MIX = Object.freeze({ vco1: 'level1', vco2: 'level2', noise: 'level3' });
 const NOISE_LEVEL = 0.7;

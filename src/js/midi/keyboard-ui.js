@@ -123,7 +123,7 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     kbdSounding: false,
     kbdRange: '',
     // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
-    // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
+    // row, Arm and Velocity unfold from its Vše toggle, so the dock never buries the panel.
     kbdMore: false,
     kbdBtn: KBD_BTN,
     // The note owner and the user's expansion as the dock last applied them (midi/dock-yield.js
