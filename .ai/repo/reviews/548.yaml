@@ -1,0 +1,86 @@
+# Review verdict for pull request #548 (feat/v506-midi-cc): V506, a controller's knobs, faders and
+# sustain pedal play the Synth panel (feat(midi); a minor when it is released).
+# Guarded content: oscilla-ff's f38e6c49 (V506), ab24e78a (C3-548-1..3) and 70ec5e74 (C3-548-4),
+# guarded in 5 paths: src/js/studio/actions.js (store.gestureId), src/js/studio/history.js (each
+# outermost gesture numbered), src/js/synth/gestures.js (one burst for the wheel and the
+# controller), src/js/synth/midi-cc.js (the CC slots and the edit, computed) and
+# src/js/synth/ui.js (synthCc). Unguarded members read as members: src/js/midi/notes.js (CC 64
+# sustain, control-change events, silence() forgetting pedals), src/js/midi/ui.js (midiControl and
+# its status line), src/js/ui/studio/workspace.js (handle.gestureId), the unit tests
+# (tests/unit/midi/cc.test.mjs, notes.test.mjs), tests/browser/midi.cjs midi-seam-cc, the V506
+# record, ADR note, docs/midi.md and CLAIMS; origin/main 9aadf51b merged in 1e6fee65. Judged at
+# 1e6fee65 on base origin/main 9aadf51b, 2026-11-15, in the reviewer's own detached worktree
+# ~/dev/oscilla-wt/review-526; the suites ran at #549's head 493837e2, which contains 1e6fee65
+# and the same guarded content.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-ff (p7, claude-code
+# cae276ab) built V506 and its fixes. Disclosure: the four findings below are this reviewer's,
+# found by its own probe; their fixes are judged here.
+#
+# The digest: origin/main's (9aadf51b; its scripts equal eb7e875e's) scripts/review-verdict.mjs
+# --content --list at 1e6fee65: 2862f20e5ab6adef... over 5 guarded paths. #549's head 493837e2
+# gives the same digest, its own content being unguarded; landed after this one, #549 carries no
+# guarded change.
+#
+# How it was judged (the reviewer's probe scratchpad k548-cc.cjs on the built dist, through the
+# MIDI test stub, at 1536x1024, chromium and webkit alike):
+# - C3-548-1 (P2): at dc1fdc60 CC 74 = 30 and, 100 ms later, a mouse drag on lpf.Q were one undo
+#   entry ("Změnit LPF Cutoff (MIDI CC 74)"): one Ctrl+Z took back both. midi-cc.js kept its own
+#   burst beside the wheel's, which press, wheel and choiceKey did not close, and history commits
+#   the outermost of nested gestures. Now midi-cc.js only computes the edit (ccEdit); gestures.js
+#   keeps one burst for the wheel and the controller, closed by press, wheel, choiceKey and flush,
+#   and its timer ends only the gesture it began (history's gestureId, store.gestureId,
+#   handle.gestureId). At 1e6fee65 the same steps make two entries and one undo takes back only
+#   the drag ("Změnit LPF Peak").
+# - C3-548-2 (P3): the status line dropped a run's last value (Q = 30, the line "24.724"); now a
+#   trailing write after CC_STATUS_MS: "CC 71 → LPF Peak: 30.00".
+# - C3-548-3 (P3): the sustain pedals survived silence() and a lost input; silence() now forgets
+#   them (a unit test: pedal down, silence, then a Note Off is not held).
+# - C3-548-4 (P3): after an undo inside a CC run, the run's remaining messages were one entry each
+#   (8 of 8); open() now drops a burst whose gesture is no longer the open one: 1 entry.
+# - The unit tests on a real createHistory (CC then press+drag = two entries; CC, undo, drag across
+#   the timer = the drag's own entry; wheel then CC = two; a run interrupted by an undo = one) fail
+#   on dc1fdc60, by the builder's revert and by CI's fail-first job.
+# - The sustain law (notes.js): a Note Off under a pedal of its input and channel is held, the
+#   pedal up releases what it held, a key pressed again decides by its own Note Off; on the mono
+#   panel a release order E, C under the pedal leaves nothing sounding after the pedal and no
+#   retrigger (the probe's held list). A CC moves the Synth only while the Synth is shown, through
+#   the same setControl a drag uses (the drag-rate path), as an absolute value (no soft takeover:
+#   the documented behaviour, not a finding).
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line (this pull request carries no release stamp, so no receipt check is owed; the release
+# that carries it is judged in its own verdict). Auto-merge is armed only after the reviewer
+# reports "legs OK"; otherwise a superseding verdict.
+#
+# Measured by the reviewer: at 493837e2 (#549's head, which holds 1e6fee65 and the same guarded
+#   content) GITHUB_BASE_REF=main npm test exit 0 (5815 tests, 5814 pass, 0 fail, 1 skipped),
+#   build:check up to date, release:analyze minor; each suite in chromium, firefox and webkit with
+#   OSC_LOAD_MAX=50 under a load of about 17-75: knob 16/16, ui-current 407/407, app 66/66 file
+#   and http, v31-studio-workflows 16/16 and 3/3, control-census chromium 340/0 (1 expected
+#   failure, C062); synth desktop 49/49 and phone 16/16 in chromium and webkit; midi: every
+#   midi-seam-cc check passes; its 3 failures are midi-measured-grant (chromium file and http:
+#   the shared Mac's physical KeyLab mkII 61 and BeatStep Pro make the grant end "connected") and
+#   firefox/http midi-measured-connect (pending 60 s on the native permission), the native group
+#   V506 does not change, as on main (#547's verdict). In that run, under a load of 25-28,
+#   firefox synth s-mg failed desktop and phone ("restarted": false, the MG triangle read off its
+#   phase) and firefox control-census stopped on a 100 s wait (row source.wave.keyboard); V506
+#   touches neither the MG, the transport nor the Playground's wave control. Reruns at 493837e2:
+#   synth --only s-mg in firefox, alternating with main 9aadf51b, 8/8 pass each (load 10-14; main
+#   never failed, so the cause stays undetermined, not V506's); control-census firefox 340/0 (1
+#   expected failure). The reviewer's probe (k548-cc.cjs) ran at 02fdd3a8 and 493837e2.
+#
+# Verdict: merge, under the condition above. No finding is open.
+schema: review-verdict/v1
+pr: 548
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 1e6fee65)
+content: 2862f20e5ab6adeff88fb810a6e853d98b9ad31f808d39da1fecf767ef2f433e
+findings:
+  - { id: C3-548-1, severity: P2, status: closed, title: "a CC burst folded the next mouse edit into its undo entry; closed by ab24e78a (one burst, gestureId)" }
+  - { id: C3-548-2, severity: P3, status: closed, title: "the Synth status line dropped a CC run's last value; closed by ab24e78a (a trailing write)" }
+  - { id: C3-548-3, severity: P3, status: closed, title: "sustain pedals survived silence() and a lost input; closed by ab24e78a" }
+  - { id: C3-548-4, severity: P3, status: closed, title: "after an undo inside a CC run each later message was its own entry; closed by 70ec5e74" }
