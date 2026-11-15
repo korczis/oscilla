@@ -34,3 +34,7 @@ satisfaction:
     criterion: "A controller's knobs, faders and sustain pedal play the Synth panel: each slot of the controller's factory layout moves the control it names along that control's own scale, one undo entry per run of messages, and the pedal holds released keys until it comes up"
     evidence: claim
     ref: "midi-controller-knobs"
+  - id: midi-devices-known
+    criterion: "A connected controller of a known family is recognised from its port name: the MIDI section lists it with its device and what each port is for, a DAW-control or editor port never sounds a note, and every message of every input is shown in a monitor naming the physical control that sent it, from profiles derived by tooling from the maker's own files, never hand-typed"
+    evidence: claim
+    ref: "midi-devices-known"

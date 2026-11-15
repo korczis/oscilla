@@ -31,9 +31,10 @@ Releases are bound by `project.release-receipt-binds-gate`, `project.release-flo
 (the flow, in order) and `project.deploy-often`. Four more bind how the repository is worked on:
 `project.rules-name-their-enforcement`, `project.no-conflict-markers`,
 `project.worktree-topology` (mechanism: `docs/WORKTREES.md`),
-`project.majordomus-layer-current`; `project.shared-machine-discipline` is the advisory
-session guidance (no pattern kills, no stash, no chained merge-and-commit, owner-only
-actions). Read those before the first command.
+`project.majordomus-layer-current`; `project.midi-profiles-derived` binds the MIDI device
+profiles (written by `scripts/midi/` tooling, no maker file committed);
+`project.shared-machine-discipline` is the advisory session guidance
+(no pattern kills, no stash, no chained merge-and-commit, owner-only actions). Read those before the first command.
 
 Two more bind `tests/browser/`: `project.bounded-test-timing` (a wait is a condition poll with
 a named wall-clock deadline through `tests/browser/lib/wait.cjs`; no new fixed sleep, frame count

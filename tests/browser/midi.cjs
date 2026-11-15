@@ -68,6 +68,12 @@
 //                               pedal comes up; a CC in the Playground moves no Synth knob; in
 //                               the Synth CC 74 moves the LPF cutoff to its range's ends (0 -> 10
 //                               Hz, 127 -> 20 kHz) and the Synth's status line names it
+//   midi-seam-monitor           V507: two stub inputs named after a KeyLab mkII 61's ports (the
+//                               stub's own name first) are listed in the Settings dialog with
+//                               the device and each port's role; a Note On from the DAW port
+//                               sounds nothing, one from the play port sounds; the monitor shows
+//                               the play port's CC 74 as Enkodér 1, newest first, and Vymazat
+//                               empties it
 //   keys-one-keyboard           K178: with the stub device, the Playground, the Synth and the
 //                               Studio take one octave, light and sound the same keys for QWERTY
 //                               and MIDI, and release them on Escape and on a workspace switch
@@ -1050,6 +1056,61 @@ async function seamCc(browser, b, origin, url) {
   }
 }
 
+// midi-seam-monitor (V507): see the header.
+async function seamMonitor(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-monitor';
+  const PLAY = `${midiStub.STUB_NAME} · KeyLab mkII 61 MIDI`;
+  const DAW = `${midiStub.STUB_NAME} · KeyLab mkII 61 DAW`;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [PLAY, DAW]);
+    await stateIs(page, ['connected'], `${leg}: the two ports connect`);
+    const list = page.locator('[data-osc="midi.devices"]');
+    const rows = await until(async () => {
+      const t = await list.evaluate((el) => (el.offsetParent ? el.innerText : ''));
+      return /KeyLab mkII · \d+ ovladačů/.test(t) && /ovládání DAW/.test(t) && /hraní/.test(t)
+        ? t : null;
+    }, { ms: STEP_MS, what: `${leg}: the device list names the device and the roles` })
+      .catch(() => null);
+    check(leg, id, 'the MIDI section lists both ports with the device and their roles', !!rows,
+      String(rows));
+    const msg = (name, bytes) => seam(page, 'message', name, bytes);
+    const live = () => page.evaluate(() => [...window.OSCILLA.engine.notes.values()]
+      .filter((v) => !v.releasing && !v.ended).length);
+    await msg(DAW, [0x90, 94, 127]); // the DAW port's Play button: Mackie Control, not a note
+    const dawNotes = await live();
+    await msg(DAW, [0x80, 94, 0]);
+    await msg(PLAY, [0x90, 60, 100]);
+    const on = await heard(page, (m) => m.state === 'running' && m.notes === 1,
+      `${leg}: the play port's note sounds`);
+    await msg(PLAY, [0x80, 60, 0]);
+    check(leg, id, 'the DAW port sounds no note and the play port does',
+      dawNotes === 0 && !on.timedOut, JSON.stringify({ dawNotes, on: on.notes }));
+    await msg(PLAY, [0xb0, 74, 64]);
+    const mon = page.locator('[data-osc="midi.monitor"] li');
+    const first = await until(async () => {
+      const t = await mon.first().textContent().catch(() => '');
+      return /Enkodér 1 · CC 74 = 64/.test(t || '') ? t : null;
+    }, { ms: STEP_MS, what: `${leg}: the monitor shows CC 74 as Enkodér 1` }).catch(() => null);
+    const count = await mon.count();
+    check(leg, id, 'the monitor shows the newest message first with its control',
+      !!first && /KeyLab mkII 61/.test(first) && count >= 3, JSON.stringify({ first, count }));
+    await page.locator('[data-osc="midi.monitor-clear"]').click();
+    const cleared = await until(async () => ((await mon.count()) === 0 ? true : null),
+      { ms: STEP_MS, what: `${leg}: Vymazat empties the monitor` }).then(() => true, () => false);
+    check(leg, id, 'Vymazat empties the monitor', cleared, String(await mon.count()));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 // keys-one-keyboard (K178, the owner's question of 2026-11-04: why does the keyboard behave
 // differently in every workspace): with the stub MIDI device connected, the Playground, the Synth
 // and the Studio (the Synth panel's nodes, visited first) each take the same octave (Z/X set once, in the Playground), light
@@ -1650,6 +1711,7 @@ async function main() {
             await seamNotes(browser, b, origin, url);
             await seamSink(browser, b, origin, url);
             await seamCc(browser, b, origin, url);
+            await seamMonitor(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);

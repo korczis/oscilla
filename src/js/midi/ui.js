@@ -7,12 +7,19 @@
 // Composed by main.js; it touches nothing outside the MIDI surface but the engine's note voices
 // (and, for the keyboard, the link key `kbd` and the analysis views' live flag).
 //
+// Each input is recognised by its port name (V507, src/js/midi/devices.js): a known device's
+// DAW-control and editor ports never play notes (their Note On messages are buttons), and every
+// message of every input is shown in the MIDI monitor (src/js/midi/monitor.js) with the physical
+// control that sent it, which the Synth's CC status line names too.
+//
 // The controllers and the platform objects stay out of reactive state; the component holds only
-// the plain values the markup reads (midiState, midiText, midiCanConnect).
+// the plain values the markup reads (midiState, midiText, midiCanConnect, midiInputs, midiLog).
 
 import { routeOf } from './routes.js';
 import { createMidiSupport, midiSite } from './support.js';
 import { createMidiNotes } from './notes.js';
+import { recognise, controlOf } from './devices.js';
+import { createMidiMonitor, decodeMidi, describeMidi } from './monitor.js';
 import { createKeyboardUi } from './keyboard-ui.js';
 import { OWNER, notesRefusalOf, notesRefusedSentences } from '../core/output-bus.js';
 
@@ -21,6 +28,18 @@ export const MIDI_REFUSED = notesRefusedSentences('midi');
 
 /** The least time between two status lines of the same CC control (V506). */
 export const CC_STATUS_MS = 400;
+
+/** What a port is for, as the MIDI section says it (V507). */
+export const ROLE_TEXT = Object.freeze({ play: 'hraní', daw: 'ovládání DAW',
+  editor: 'editor výrobce' });
+
+/** One row of the MIDI section's device list: an input's name and what OSCILLA knows of it. */
+export function inputRow(name) {
+  const w = recognise(name);
+  return { name, device: w.device ? w.device.name : '', role: w.role,
+    roleText: ROLE_TEXT[w.role], known: !!w.device,
+    controls: w.device ? w.device.controls.length : 0 };
+}
 
 /**
  * `engine`: the AudioEngine the notes sound through. `sequencerPlaying()`: whether the
@@ -33,10 +52,13 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
   let ccSaid = { cid: null, at: 0 }; // what the Synth's status line last said of a CC (V506)
   let support = null;
   let notes = null;
+  let monitor = null;
   const part = {
     midiState: null,
     midiText: '',
     midiCanConnect: false,
+    midiInputs: [],   // inputRow per connected input (V507)
+    midiLog: [],      // the monitor's rows, newest first (V507)
 
     /** Called once by the component's init: the load-time read, never a request. */
     midiInit() {
@@ -78,6 +100,8 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
       };
       if (typeof cmp.kbdInit === 'function') cmp.kbdInit({ notesFor });
       const ids = new WeakMap(); // input -> a number for the note keys, never shown or stored
+      const who = new WeakMap(); // input -> recognise(its name) (V507)
+      monitor = createMidiMonitor({ publish: (rows) => { cmp.midiLog = rows; } });
       let inputs = 0;
       support = createMidiSupport({
         navigator: win.navigator,
@@ -87,11 +111,22 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           cmp.midiState = s.state;
           cmp.midiText = s.text;
           cmp.midiCanConnect = s.canConnect;
+          cmp.midiInputs = (s.inputs || []).map(inputRow);
         },
         onMessage(data, port) {
           if (!ids.has(port)) { inputs += 1; ids.set(port, inputs); }
+          if (!who.has(port)) who.set(port, recognise(port && port.name));
+          const w = who.get(port);
+          const m = decodeMidi(data);
+          const control = controlOf(w.device, m);
+          if (m.kind !== 'clock' && m.kind !== 'active-sensing') {
+            monitor.add({ input: w.member || (port && port.name) || '', role: w.role,
+              kind: m.kind, text: describeMidi(m, control) });
+          }
+          // A DAW-control or editor port's notes are buttons, never notes to sound (V507).
+          if (w.role !== 'play') return;
           const e = notes.handle(data, ids.get(port));
-          if (e.kind === 'control-change') { cmp.midiControl(e); return; }
+          if (e.kind === 'control-change') { cmp.midiControl(e, control); return; }
           // The on-screen keys light the note while it sounds (K026).
           if (typeof cmp.kbdLight !== 'function') return;
           if (e.kind === 'note-on' && e.result && e.result.ok) cmp.kbdLight(e.note, true);
@@ -123,17 +158,22 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
      * slot moves (synth/midi-cc.js) and the Synth's status line says what changed, without an
      * announcement per message; elsewhere no surface reads a CC and it changes nothing.
      */
-    midiControl(e) {
+    midiControl(e, control = null) {
       if (this.workspace !== 'synth' || typeof this.synthCc !== 'function') return null;
       const r = this.synthCc(e.controller, e.value);
       // The status line is a polite live region: a new control, or a turn's value at most every
       // CC_STATUS_MS, so a fader's stream of messages is not read out message by message.
       const now = Date.now();
       if (r && this.synth && (r.cid !== ccSaid.cid || now - ccSaid.at >= CC_STATUS_MS)) {
-        this.synth.status = r.text;
+        this.synth.status = control ? `${control.label} · ${r.text}` : r.text;
         ccSaid = { cid: r.cid, at: now };
       }
       return r;
+    },
+
+    /** Empty the MIDI monitor (V507). */
+    midiLogClear() {
+      if (monitor) monitor.clear();
     },
 
     /** Connect MIDI (the explicit user action): asks the browser for access. */

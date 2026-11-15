@@ -522,3 +522,30 @@ before K077's learned route exists.
    derive which slot means which role; no file, preset, sample, image or code of theirs is in
    this repository, only the CC numbers and the roles, which are facts of the controller's
    protocol.
+
+### 2026-11-15: known devices, port roles and the monitor (V507)
+
+**Note of 2026-11-15 (issue V507), no section above changes; the status stays `proposed`.**
+
+1. **Profiles are derived, never typed.** `scripts/midi/derive-devices.mjs` reads the maker's
+   editor files where they are installed (device descriptions and factory templates; the
+   plug-ins' generic MIDI maps) and writes `src/data/midi-devices.json` and the generated region
+   of `docs/midi-devices.md`, with each source's sha256. Only facts are committed: names,
+   identity numbers, memory count, per control its kind, bank, message, channel and number
+   (rule `project.midi-profiles-derived`; procedure `.ai/repo/workflows/midi-device-import.md`).
+   No firmware or library is decompiled; a protocol fact the files do not give is measured on
+   the device (`scripts/midi/identity.swift`, `scripts/midi/listen.swift`).
+2. **An input is recognised by its port name.** The page asks for MIDI without SysEx (this
+   ADR's decision stands), so it never reads the identity reply; the operating system's
+   endpoint name contains the model ("KeyLab mkII 61 MIDI"), which `src/js/midi/devices.js`
+   matches against the profiles' names, the longest first.
+3. **A port has a role.** A known device's port whose name says DAW (or MCU, HUI) is a
+   DAW-control port: its Note On messages are buttons (Mackie Control), so it never sounds a
+   note; a port whose name says editor carries the maker's editor traffic and never sounds
+   either. Every other port, and every port of an unknown device, plays as before. What the DAW
+   port's buttons do is the next issue's (V508), not guessed here.
+4. **Everything is shown.** The Settings dialog's MIDI section lists the inputs with their
+   device and role, and a monitor shows every message of every input (every MIDI 1.0 kind,
+   clock and active sensing excepted), newest first, with the physical control that sent it,
+   redrawn at most every `MONITOR_FLUSH_MS`. The Synth's CC status line names the control too.
+   Nothing of it is stored.

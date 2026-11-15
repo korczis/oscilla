@@ -252,3 +252,16 @@ the roles, which are facts of the controller's protocol.
 stored value, as a drag does. A learned controller as a modulation source for any Studio
 parameter is K077 (a `midi-cc` node), still planned. Other CCs, pitch bend, aftertouch, MIDI
 clock and the controller's DAW port are not read yet.
+
+## Known devices and the MIDI monitor (V507)
+
+The Settings dialog's MIDI section lists every connected input with the known device it belongs
+to and what its port is for, and shows a monitor of every message (`src/js/midi/monitor.js`):
+notes, controllers, pitch bend, pressure, program changes, start, stop, song position and
+SysEx, newest first, at most `MONITOR_ROWS` rows, redrawn at most every `MONITOR_FLUSH_MS`, each
+row with the input and, for a known device, the physical control that sent it ("Enkodér 1 ·
+CC 74 = 64 · kanál 1", "Pad 1 · Nota C2 (36) stisk 100 · kanál 10"). Clock ticks and active
+sensing are not listed (they arrive 24 times a beat). Vymazat empties it. A DAW-control or editor
+port of a known device never sounds a note. The profiles, where they come from and what is
+measured on the devices are `docs/midi-devices.md`.
+
