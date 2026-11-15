@@ -29,5 +29,6 @@ from file:// and from a local `/oscilla/` sub-path.
 
 ## What it does not do
 
-It does not yet record which version and commit the public page serves: build provenance
-(ADR 0028) and deployment verification are peer issues R003 and R005, not shipped.
+Which version and commit the public page serves is answered by its build-metadata region
+(ADR 0028, R003) and checked by `scripts/verify-deploy.mjs` against the release (R005); each
+release's record is `.ai/repo/releases/v<version>.yaml`.

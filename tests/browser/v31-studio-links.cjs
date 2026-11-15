@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (Studio links; no audio judged)
 // OSCILLA V3.1 Studio deep links and browser fullscreen (spec §133-§135, §199-§200; plan V422)
 // on the built dist/index.html in chromium, firefox and webkit, from file:// and from a
 // GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/), every check on both.
@@ -143,8 +144,8 @@ function defineChecks() {
       template: st.templateId === 'filter-automation' && st.title === 'Filter Automation'
         && !st.dirty,
       subview: st.subview === 'timeline',
-      said: st.alerts.some((a) => /Studio opened from the link: Template Filter Automation, /
-        .test(a) && /Nothing plays/.test(a)),
+      said: st.alerts.some((a) => /Studio otevřeno z odkazu: Šablona Filter Automation, /
+        .test(a) && /Nic nehraje/.test(a)),
       silent: H.silent(st),
       phone: phoneSt.workspace === 'studio' && phoneSt.templateId === 'basic-tone'
         && phoneSt.subview === 'inspector' && panels.length === 1 && panels[0] === 'inspector'

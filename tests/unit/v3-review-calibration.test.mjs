@@ -550,3 +550,71 @@ test('m6: a file over the import limit is refused before it is read', async () =
       .test(e.message));
   assert.equal(read, false);
 });
+
+// ------------------------------------------------- T038 the CSV's corrected cells are covered ones
+
+// T038 (304.yaml#R6, audit-2026-11-10-p3; project.no-fake-science): an experiment's transfer CSV
+// fills magnitude_db_corrected only for the bins its frequency profile covers, by the predicate
+// the response view draws CALIBRATED with (calibration/interpolate.js correctionInEffect), and a
+// profile covering none of them claims no correction at all. Fixture: oscilla-04's T036 shape, a
+// 319-point log grid 100 Hz-10 kHz and a profile covering 12-16 kHz only.
+// Fail-first: on the base the CSV writes the raw value into every uncovered corrected cell and
+// labels the column "frequency-profile corrected (microphone deviation removed)".
+{
+  const GRID = Float64Array.from({ length: 319 }, (_, i) => 100 * 100 ** (i / 318));
+  const HIGH = createFrequencyProfile({ name: 'Covers 12-16 kHz only',
+    points: [[12000, 1], [16000, 2]] });
+  const PARTLY = createFrequencyProfile({ name: 'Covers 1-16 kHz',
+    points: [[1000, 0], [4000, 1], [16000, 2]] });
+  const onGrid = (profile) => ({ ...EXP,
+    results: { ...EXP.results, transfer: { ...EXP.results.transfer, frequencies: GRID,
+      magnitudeDb: Float64Array.from(GRID, (f) => -3 - f / 10000), snrDb: null, phaseDeg: null,
+      validRange: [100, 10000] } },
+    calibration: { ...EXP.calibration, frequency: { id: profile.id, name: profile.name } } });
+  const rows = (e, profile) => {
+    const csv = transferCsv(e.results.transfer, csvMeta(e), transferCsvOptions(e, profile))
+      .split('\n');
+    const head = csv.findIndex((l) => l.startsWith('frequency_hz,'));
+    return { csv, cells: csv.slice(head + 1, head + 1 + GRID.length).map((l) => l.split(',')[2]) };
+  };
+
+  test('T038: a profile covering 12-16 kHz over a 100 Hz-10 kHz sweep corrects no CSV cell',
+    () => {
+      const { csv, cells } = rows(onGrid(HIGH), HIGH);
+      assert.equal(cells.length, GRID.length);
+      assert.deepEqual(cells.filter((c) => c !== ''), [], 'no corrected cell');
+      assert.equal(csv.some((l) => /frequency-profile corrected|korigováno/.test(l)), false,
+        'no line claims a correction');
+      assert.ok(csv.includes('# column magnitude_db_corrected: prázdné (frekvenční profil '
+        + '"Covers 12-16 kHz only" nepokrývá žádný z 319 měřených bodů)'), csv.join('\n'));
+    });
+
+  test('T038: a partial profile corrects exactly the cells the view draws CALIBRATED', () => {
+    const e = onGrid(PARTLY);
+    const { csv, cells } = rows(e, PARTLY);
+    const v = buildResponseView(e, { profile: PARTLY });
+    // The CALIBRATED primary, reliable and unreliable parts (the view splits it at the mask).
+    const parts = v.series.filter((d) => d.id === 'corrected' || d.id === 'corrected-unreliable');
+    assert.equal(parts.length, 2, v.series.map((d) => d.id).join());
+    const drawn = Array.from(GRID, (_, i) => parts.some((d) => Number.isFinite(d.values[i])));
+    assert.deepEqual(cells.map((c) => c !== ''), drawn, 'the CSV and the view, bin by bin');
+    const n = drawn.filter(Boolean).length;
+    assert.ok(n > 0 && n < GRID.length, `a partial cover (${n} of ${GRID.length})`);
+    const t = e.results.transfer;
+    const c = applyFrequencyCorrection(t.magnitudeDb, GRID, PARTLY);
+    cells.forEach((cell, i) => {
+      if (cell !== '') assert.equal(Number(cell), c.correctedDb[i], `bin ${i}`);
+    });
+    assert.ok(csv.includes(`# column magnitude_db_corrected: dB re unity digital transfer `
+      + `(capture/stimulus ratio), korigováno frekvenčním profilem (odchylka mikrofonu odečtena) `
+      + `v ${n} z ${GRID.length} bodů, které profil pokrývá; jinde prázdné (bez extrapolace)`),
+    csv.find((l) => l.startsWith('# column magnitude_db_corrected')));
+  });
+
+  test('T038: corrected values without their coverage are refused, never assumed covered', () => {
+    const e = onGrid(PARTLY);
+    const t = e.results.transfer;
+    const { correctedDb } = applyFrequencyCorrection(t.magnitudeDb, GRID, PARTLY);
+    assert.throws(() => transferCsv(t, csvMeta(e), { correctedDb }), /potřebuje covered/);
+  });
+}

@@ -70,6 +70,18 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 // ---------------------------------------------------------------- parameter domain
 
 /** True when exponential ramps are legal for a parameter: its domain is strictly positive. */
+/**
+ * A lane's events in its AudioParam's own values (clip-targets.js laneMap, K232: a low- or
+ * high-pass Q's dB): each value through `map`, an exponential ramp a linear one (exponential in
+ * Q is linear in dB). No map: the events as they are.
+ */
+export function mapEvents(events, map) {
+  if (!map) return events;
+  const lin = { method: AUTOMATION_METHODS.linear };
+  return events.map((e) => ({ ...e, value: map(e.value),
+    ...(e.method === 'exponentialRampToValueAtTime' ? lin : {}) }));
+}
+
 export function isExponentialLegal(paramDef) {
   return !!paramDef && finite(paramDef.min) && paramDef.min > 0;
 }
@@ -238,6 +250,27 @@ export function toRampEvents(events) {
 /** Value of a compiled event list at audio time t (Web Audio semantics), or `defaultValue`. */
 export function scheduledValueAt(events, t, defaultValue = null) {
   return automationValueAt(toRampEvents(events), t, defaultValue);
+}
+
+/**
+ * Events that hold a param at `at` given what was scheduled (`scheduled`, compiled events in
+ * order): after cancelScheduledValues(at), a ramp that was in progress across `at` is re-ended
+ * at `at` with its exact value (same curve up to `at`), then the value is pinned. Returns
+ * { value, events }; value is null when nothing was scheduled.
+ */
+export function holdEvents(scheduled, at, defaultValue = null) {
+  const value = scheduledValueAt(scheduled, at, defaultValue);
+  if (value === null) return { value, events: [] };
+  let next = null;
+  for (const e of scheduled) if (e.time >= at && (!next || e.time < next.time)) next = e;
+  const events = [];
+  if (next && next.method === 'linearRampToValueAtTime') {
+    events.push({ method: 'linearRampToValueAtTime', value, time: at, hold: true });
+  } else if (next && next.method === 'exponentialRampToValueAtTime' && value > 0) {
+    events.push({ method: 'exponentialRampToValueAtTime', value, time: at, hold: true });
+  }
+  events.push({ method: 'setValueAtTime', value, time: at, hold: true });
+  return { value, events };
 }
 
 // ---------------------------------------------------------------- thin applier

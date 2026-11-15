@@ -1,0 +1,43 @@
+id: K230
+milestone: M067
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#modulation-everywhere"
+  - "connected-instrument#honest-instrument"
+title: "The envelope node gets a delay and a hold stage (DADSR, AHDSR); EG 1 shows Delay and EG 2 Hold on the Synth panel"
+slug: the-envelope-node-gets-a-delay-and-a-hold-stage
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). The Studio envelope node (nodes/modulation.js envelope, compiled by audio/envelope.js applyAdsr) gets two declared parameters: delay (0 to 10 s, default 0: the time from the gate to the start of the attack) and hold (0 to 10 s, default 0: the time the envelope stays at its peak before the decay). With both at 0 the envelope is exactly today's ADSR, so the defaults leave every sound unchanged. They are new parameters on an existing type, so they land in hash epoch 3 (schema.js HASH_EPOCH_PARAMS, STUDIO_HASH_VERSION 3) together with K229's LFO parameters, in one release (D2: every new parameter on an existing type lands in one epoch); a record hashed under epoch 2 still verifies while both are 0. Every place that reads the envelope's length reads the new stages: the gate unions and release of the transport, a trigger's pulse (transport.js pulseS: delay + attack + hold + decay), the live router's gates and the offline render. A gate that ends inside the delay releases without an attack, one that ends inside the hold releases from the peak. On the Synth panel EG 1 shows Delay and EG 2 shows Hold (D11 knobs, Czech labels), each with its range declared; the other stage stays at 0 and hidden on that module, by declaration. Before: the envelope is ADSR only, so a delayed attack or a held peak needs a second node. After: one envelope plays DADSR and AHDSR. Rollback: revert the pull request; a document saved with a delay or a hold is then refused by the import pipeline with its sentence, so after a release the epoch stays and only the panel knobs are removed."
+why: "Owner direction of 2026-11-09, relayed by the integrator oscilla-43: three more screenshots of the semi-modular tablet instrument the owner asked to split into functional components show its EG 1 with a delay stage and its EG 2 with a hold stage; functional only, no trade dress or labels (project.visual-identity-lock). The Studio envelope is ADSR only (nodes/modulation.js) and no issue adds the stages. Checked against train/t4-sequencer 0f9403d8."
+scope:
+  - "src/js/studio/nodes/modulation.js"
+  - "src/js/studio/adapters/modulation.js"
+  - "src/js/audio/envelope.js"
+  - "src/js/studio/schema.js"
+  - "src/js/studio/transport.js"
+  - "src/js/studio/live-notes.js"
+  - "src/js/synth/panels/semi-mono.js"
+  - "src/js/ui/synth"
+  - "tests/unit/studio-envelope-delay-hold.test.mjs"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K022"
+  - "K061"
+acceptance_criteria:
+  - "tests/unit/studio-envelope-delay-hold.test.mjs, failing on the merge base: the envelope type declares delay and hold (0 to 10 s, default 0) in hash epoch 3, and every record hashed under epoch 2 verifies through studioHashAt while both are 0; every pinned template studioHash is unchanged; with delay 0 and hold 0 the scheduled events equal today's ADSR events exactly; a delay of 0.2 s moves the attack's start 0.2 s after the gate, a hold of 0.3 s keeps the peak 0.3 s before the decay; a gate ending inside the delay schedules no attack and a release, one ending inside the hold releases from the peak; a trigger pulse holds delay + attack + hold + decay; the gate union of overlapping gates (V272 B9) still holds with both stages."
+  - "tests/browser/instrument-dsp.cjs renders offline at 44.1 kHz and 48 kHz an EG with delay 0.1 s and hold 0.2 s: the level is below -60 dB for the delay, at the peak within 0.5 dB for the hold, and the stages start within one frame of their computed times; no sample rate assumed."
+  - "A browser check in tests/browser/synth.cjs (run by npm run test:synth): EG 1's Delay and EG 2's Hold turn by pointer, keyboard and touch; each shows in the Studio graph and Inspector at the same revision; a key held through a delay sounds only after it, within a named until() deadline of tests/browser/lib/wait.cjs; inside tests/browser/lib/suite.cjs; tests/browser/timing-baseline.json does not grow."
+  - "Every edit is one undoable dispatch through the one Studio store (project.studio-model-is-canonical); envelopes stay click-free (segments at least 1 ms, ramps never reach exactly zero) and all timing is on the audio clock (project.audio-engine-discipline)."
+  - "Every string it adds is Czech (project.czech-prose) and passes tests/unit/synth-wording.test.mjs (no product, brand or model name); the UI is Flowbite Pro and the D11 knob; scripts/size-report.mjs shows at most 1 KB gzip added; a reviewer's verdict for the guarded paths (project.review-verdict); tests/README.md has a row for each new test; dist is rebuilt."
+validation:
+  - "node --test tests/unit/studio-envelope-delay-hold.test.mjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm run test:synth"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09

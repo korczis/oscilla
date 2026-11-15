@@ -101,6 +101,9 @@ export class VisualizationBridge {
       provisional: true, spectrumScale: 'log', overlays: { regions: true, notes: false, thirds: false },
       // outputOwner: what sounds through the output analyser ('instrument' | 'sequencer' |
       // 'studio' | null), set by the composition root through setOutputOwner (C013).
+      // idleHint: what the idle analyser panel says to press where HOLD TO PLAY is not on
+      // screen (core/play-hints.js, C030), set through setIdleHint; null keeps the V1 label.
+      idleHint: null,
       plan: null, playing: false, outputOwner: null, status: 'READY', a4: 440, source: 'single', reducedMotion: false, mic: false, paused: false,
       dual: { fa: 440, fb: 442, la: 0.8, lb: 0.8, stereo: false, waveA: 'sine', waveB: 'sine' },
       // Engine scalars copied by viz.pull() once per frame without allocating: the sketch reads
@@ -300,6 +303,17 @@ export class VisualizationBridge {
     if (o === this.state.outputOwner) return;
     this.state.outputOwner = o;
     this.updateLoop(); // redraws once when the loop stays stopped
+  }
+
+  /**
+   * What the idle analyser panel says to press (C030): a string where only the status bar's
+   * Play is on screen, null for the frozen V1 label. Redraws once on a change.
+   */
+  setIdleHint(text) {
+    const t = typeof text === 'string' && text ? text : null;
+    if (t === this.state.idleHint) return;
+    this.state.idleHint = t;
+    this.requestRedraw();
   }
 
   /** The wave view's layout for the current canvas size; notifies onWaveLayout on a change. */

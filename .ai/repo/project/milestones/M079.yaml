@@ -6,7 +6,7 @@ priority: p1
 problem: "The G1 coherence contract of 2026-10-29 reproduced two defects on main that no plan record names: a waveform change in the Studio Inspector while playing silences the oscillator (dead-controls-9), and a saved continuous repeat restores as once on every restore path without a word (persist-2). Their contract home, M090 of PR #280, is not on main, and both can be fixed now."
 outcome: "An Inspector edit of a structural parameter keeps a playing clip sounding, and every restore path names what it dropped."
 acceptance_criteria:
-  - "H001 and H002 are done with their evidence."
+  - "H001, H002 and H007 are done with their evidence."
 validation:
   - "npm run release-gate"
 evidence_required:

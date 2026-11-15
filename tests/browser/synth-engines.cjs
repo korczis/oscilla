@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (engine voices judged on the realtime analyser with deadlines)
 // OSCILLA Synth engines (plan K090-K092, K089 part, K121-K123; Q019, Q021) on the built
 // dist/index.html in chromium, firefox and webkit, at 1536 x 1024 and 390 x 844. Every check
 // asserts the sound read from the engine's analyser after the safety chain (line levels, peaks,
@@ -22,8 +23,12 @@
 //   e-perc      the kick (QWERTY A) decays at -60 dB per 0.5 s within 10 %, fitted from 6 to
 //               30 dB below its peak (the idle panel's floor is some 55 dB below it); the hat
 //               choke is o-choke (the hats sit too close to that floor live)
-//   e-poly      16 held notes: voice census 16; a 17th: still 16 and the oldest note's line gone;
+//   e-poly      N held notes (N = Q021's recorded answer, 8, read by tests/unit/owner-answer.mjs;
+//               K180): voice census N; one more: still N and the oldest note's line gone;
 //               all off: the runtime node census back to its count before the notes
+//   e-census-fm, e-census-am, e-census-wavetable, e-census-perc (K180): N notes of the engine
+//               build N voices (held N for the sustained ones), note-off and all-off: the
+//               runtime and engine node census back to their idle counts, no voice left
 //   e-nosource  every drawbar at 0: a held note sounds nothing and holds no voice (census 0)
 //   e-removed   the Additive engine removed in Studio: the panel's held note is silent (the
 //               chain into the Output is broken), the bay names ADDITIVE with Restore module and
@@ -37,15 +42,18 @@
 //               and sounds; the copied link names yt=engines&ye=fm; a bad ye is refused
 //   e-mobile    390 x 844 with touch: no horizontal page scroll, every tab, engine and knob 44 px+,
 //               a tap on an engine selects it and a tap on the docked keys sounds
-//   e-headroom  16 notes held at full velocity at the default Level with the Master Output at
+//   e-headroom  N notes held at full velocity at the default Level with the Master Output at
 //               its highest level: no sample of the output reaches the ceiling (MAX_OUTPUT_GAIN)
 //
 // Offline checks (review of #332; desktop leg): tests/browser/fixtures/synth-engines-offline-
 // entry.js, bundled in memory with esbuild, builds the real engine adapters on an
-// OfflineAudioContext and plays notes on them; these assert the rendered samples.
+// OfflineAudioContext and plays notes on them; these assert the rendered samples. Each renders at
+// 44.1 and 48 kHz (K180: the CI browsers' rate and the Mac's), passes only when both do, and its
+// data holds each rate's result under the rate.
 //   o-clap      the clap decays at -60 dB per 0.28 s (from its last burst) within 10 %
 //   o-perc      every pitch class (C4-B4): its voice decays at -60 dB per its longest layer's
-//               decay within 12 %, the slope fitted from -20 to -50 dB below the peak
+//               decay within 12 %, the slope fitted from -20 to -50 dB below the peak; ten
+//               voices, B the FM blip (K072)
 //   o-pitch     every FM algorithm, its default patch and every ratio at 1, at A0, E1, A1, A3 and
 //               A4: operator 1's pitch from what drives its frequency (the 0 Hz line of the
 //               deviation, a Hann mean over whole periods of the note) within 5 cents of the
@@ -58,11 +66,11 @@
 //               cosine tables stay in quadrature, so a stack's 0 Hz line becomes a slow line
 //               there; closing that needs sample-exact operators (an AudioWorklet), not a table.
 //               The result prints each browser's `margin` (5 cents minus the worst reading)
-//   o-headroom  16 notes at full velocity at the default Level, each engine: the sum peaks at
-//               or below digital full scale; one voice at Level 4 peaks at or below 1/16
+//   o-headroom  N notes at full velocity at the default Level, each engine: the sum peaks at
+//               or below digital full scale; one voice at Level 4 peaks at or below 1/N (Q021)
 //               (every FM algorithm, AM and ring, every percussion key, the additive shapes)
 //   o-morph     every wavetable bank at morph 0 to 3 in steps of 0.25: the level within 0.5 dB
-//               of its two tables' levels interpolated in dB, the peak at or below 1/16
+//               of its two tables' levels interpolated in dB, the peak at or below 1/N (Q021)
 //   o-retrig    a held formant pad retriggered: its level never falls more than 1 dB
 //   o-choke     a closed hat chokes an open one: 40 dB down within 0.1 s of it; with Hat choke
 //               off the open hat takes 0.3 s+ for those 40 dB (its 0.5 s decay: 0.33 s)
@@ -117,6 +125,13 @@ async function offline(context) {
   await until(() => page.evaluate(() => !!window.E), { ms: LOAD_MS, what: 'the fixture loads' });
   return page;
 }
+// Q021 (owner, 2026-11-03): an engine holds up to VOICES voices at VOICE_GAIN each; read from the
+// plan record in main below (K180), never retyped.
+let VOICES = 0;
+let VOICE_GAIN = 0;
+// The OfflineAudioContext render rates of the offline checks (K180): the CI browsers' and the
+// Mac's.
+const RENDERS = [{ sr: 44100 }, { sr: 48000 }];
 const ALGORITHMS = ['2-op', '3-stack', '3-y', '4-stack', '4-pairs', '4-three', '4-parallel'];
 
 // ------------------------------------------------------------------------------ page probes
@@ -179,8 +194,8 @@ async function openSynth(context, base, hash) {
     && window.OSCILLA.app.synthDebug && window.OSCILLA.app.synthDebug().present
     && document.querySelector('[data-osc="synth.bay.svg"]'))),
   { ms: LOAD_MS, what: 'the Synth is rendered' });
-  // The Master Output at its highest level: a voice peaks at 1/16 of full scale at Level 4
-  // (16 voices sum to full scale), so the checks read the engines 10 dB above the default.
+  // The Master Output at its highest level: a voice peaks at 1/VOICES of full scale at Level 4
+  // (VOICES voices sum to full scale), so the checks read the engines 10 dB above the default.
   const r = await page.evaluate((v) => {
     const st = window.OSCILLA.studio.store;
     const m = st.getModel().graph.nodes.find((n) => n.type === 'master');
@@ -384,25 +399,85 @@ function defineChecks() {
       await sink(page, 'noteOff', 60);
       await silent(page, 'released');
       const base = (await counts(page)).runtimeNodes;
-      // The oldest note, C6, is alone above 600 Hz: the 15 after it are 36-50 (four harmonics
-      // at most, the drawbar defaults) and the 17th is G5 (784 Hz).
-      const notes = [84, ...Array.from({ length: 15 }, (_, i) => 36 + i)];
+      // The oldest note, C6, is alone above 600 Hz: the VOICES - 1 after it start at 36 (four
+      // harmonics at most, the drawbar defaults, all below 600 Hz) and the one more is G5
+      // (784 Hz).
+      const notes = [84, ...Array.from({ length: VOICES - 1 }, (_, i) => 36 + i)];
       for (const n of notes) await sink(page, 'noteOn', n, 100);
-      const sixteen = (await dbg(page)).voices;
+      const full = (await dbg(page)).voices;
       const oldest = 1046.5;
       const before = await sound(page, (q) => peakAt(q, oldest), 'the oldest note sounds');
       await sink(page, 'noteOn', 79, 100);
       const p = await sound(page, (q) => peakAt(q, 783.99)
         && lineDb(q, oldest) <= lineDb(before, oldest) - 20,
-      'the 17th note takes the oldest voice');
+      'the note past the cap takes the oldest voice');
       const still = (await dbg(page)).voices;
       await sink(page, 'allOff');
       await silent(page, 'all off');
       await until(async () => (await counts(page)).runtimeNodes === base,
         { ms: 5000, what: 'the node census returns to its count before the notes' });
-      return { ok: sixteen === 16 && still === 16, sixteen, still, base,
+      return { ok: full === VOICES && still === VOICES, voices: VOICES, full, still, base,
         line: +lineDb(p, 783.99).toFixed(1) };
     });
+
+  // K180: every other engine's node census returns to idle after its voices stop, as e-poly
+  // shows for the additive one. The base is read once the arming note's voice has been cleaned
+  // up (the engine's own hits() is empty), so it is the idle census, not one voice above it.
+  const voiceHits = (page, eng) => page.evaluate((e) => {
+    const id = window.OSCILLA.app.synthDebug().nodes[e];
+    const h = id ? window.OSCILLA.studio.runtime.nodes.get(id) : null;
+    return h && h.info && typeof h.info.hits === 'function' ? h.info.hits().length : -1;
+  }, eng);
+  const CENSUS = { fm: { values: 'fm.release:0.05,fm.sustain:1', first: 48 },
+    am: { values: 'am.release:0.05,am.sustain:1', first: 48 },
+    wavetable: { values: 'wavetable.release:0.05,wavetable.sustain:1', first: 48 },
+    perc: { values: '', first: 60 } }; // perc: one-shots, C4 to G4 eight different voices
+  for (const [eng, { values, first }] of Object.entries(CENSUS)) {
+    def(`e-census-${eng}`, engines(eng, values), async ({ page }) => {
+      await sink(page, 'noteOn', first, 100);
+      await sound(page, (q) => q.rmsDb > -60, `${eng}: the engine is armed and sounds`);
+      await sink(page, 'noteOff', first);
+      await silent(page, `${eng}: released`);
+      await until(async () => (await voiceHits(page, eng)) === 0,
+        { ms: 10000, what: `${eng}: the arming note's voice is cleaned up` });
+      const base = await counts(page);
+      const notes = Array.from({ length: VOICES }, (_, i) => first + i);
+      const during = await page.evaluate(([ns, e]) => {
+        const s = window.OSCILLA.app.synthSink();
+        for (const n of ns) s.noteOn(n, 100);
+        const id = window.OSCILLA.app.synthDebug().nodes[e];
+        const h = window.OSCILLA.studio.runtime.nodes.get(id);
+        return { counts: window.OSCILLA.studio.counts(), voices: window.OSCILLA.app.synthDebug()
+          .voices, hits: h.info.hits().length };
+      }, [notes, eng]);
+      await sound(page, (q) => q.rmsDb > -60, `${eng}: the ${VOICES} notes sound`);
+      for (const n of notes) await sink(page, 'noteOff', n);
+      await sink(page, 'allOff');
+      await silent(page, `${eng}: all off`);
+      let after = null;
+      try {
+        await until(async () => {
+          after = await counts(page);
+          return after.runtimeNodes === base.runtimeNodes
+            && after.engineNodes === base.engineNodes;
+        }, { ms: 10000, what: `${eng}: the node census returns to its count before the notes` });
+      } catch (e) {
+        throw new Error(`${e.message}; runtime ${base.runtimeNodes} before, `
+          + `${during.counts.runtimeNodes} with the notes, ${after && after.runtimeNodes} after; `
+          + `engine ${base.engineNodes}, ${during.counts.engineNodes}, `
+          + `${after && after.engineNodes}`);
+      }
+      const left = await voiceHits(page, eng);
+      // A one-shot voice (perc) leaves the pool's count as it ends, so the census of held
+      // voices is asserted for the sustained engines; every engine built its VOICES voices.
+      const held = eng === 'perc' || during.voices === VOICES;
+      return { ok: during.hits === VOICES && held && left === 0
+        && during.counts.runtimeNodes > base.runtimeNodes,
+      voices: VOICES, held: during.voices, hits: during.hits, left,
+      runtime: [base.runtimeNodes, during.counts.runtimeNodes, after.runtimeNodes],
+      engine: [base.engineNodes, during.counts.engineNodes, after.engineNodes] };
+    });
+  }
 
   def('e-nosource', engines('additive', Array.from({ length: 12 }, (_, i) => `additive.h${i + 1}:0`)
     .join(',')), async ({ page }) => {
@@ -432,7 +507,7 @@ function defineChecks() {
     await sound(page, (q) => peakAt(q, C4 / 2), 'Restore module brings the panel back');
     await page.keyboard.up('KeyA');
     const back = (await dbg(page)).nodes.additive;
-    return { ok: r.ok && onPanel === 1 && /ADDITIVE removed in Studio/.test(row) && !!back,
+    return { ok: r.ok && onPanel === 1 && /ADDITIVE odstraněn ve Studiu/.test(row) && !!back,
       // timing-allow: 80 characters of the bay row's text, not frames
       gone: +gone.rmsDb.toFixed(1), row: row.slice(0, 80), onPanel };
   });
@@ -493,11 +568,11 @@ function defineChecks() {
     const p = await sound(page, (q) => peakAt(q, A4) && q.rmsDb > -55, 'the bell sounds');
     await page.keyboard.up('KeyH');
     const hash = await page.evaluate(() => window.OSCILLA.app.synthCopyLink());
-    await until(() => page.evaluate(() => /copied|Copy the link/.test(window.OSCILLA.app.synth
-      .status)), { ms: 10000, what: 'the copy settles before the next link' });
+    await until(() => page.evaluate(() => /zkopírován|Zkopírujte odkaz/.test(window.OSCILLA.app
+      .synth.status)), { ms: 10000, what: 'the copy settles before the next link' });
     await page.goto(`${base}#m=synth&ye=lpf`);
     await until(() => page.evaluate(() => window.location.hash.indexOf('ye=') < 0
-      && /no engine/.test(window.OSCILLA.app.synth.status)),
+      && /na panelu není/.test(window.OSCILLA.app.synth.status)),
     { ms: 15000, what: 'a bad engine is refused and its keys leave the address' });
     await page.close();
     return { ok: d.tab === 'engines' && d.engine === 'fm' && ratio === '3.50'
@@ -530,9 +605,9 @@ function defineChecks() {
       .find((n) => n.type === 'master').id);
     const set = await page.evaluate(([id, v]) => window.OSCILLA.studio.store.dispatch({
       type: 'NODE_PARAM_SET', nodeId: id, key: 'level', value: v }), [masterId, MAX_OUTPUT_GAIN]);
-    const notes = Array.from({ length: 16 }, (_, i) => 48 + i);
+    const notes = Array.from({ length: VOICES }, (_, i) => 48 + i);
     for (const n of notes) await sink(page, 'noteOn', n, 127);
-    await sound(page, (q) => q.rmsDb > -60, 'the 16 voices sound');
+    await sound(page, (q) => q.rmsDb > -60, 'the VOICES voices sound');
     // The output after the safety chain, frame by frame over 1 s of audio clock.
     const r = await page.evaluate(async () => {
       const e = window.OSCILLA.engine;
@@ -550,21 +625,32 @@ function defineChecks() {
       return { peak, frames, voices: window.OSCILLA.app.synthDebug().voices };
     });
     await sink(page, 'allOff');
-    return { ok: set.ok && r.voices === 16 && r.frames >= 5 && r.peak < MAX_OUTPUT_GAIN * 0.999,
+    return { ok: set.ok && r.voices === VOICES && r.frames >= 5 && r.peak < MAX_OUTPUT_GAIN * 0.999,
       peak: +r.peak.toFixed(4), ceiling: MAX_OUTPUT_GAIN, frames: r.frames, voices: r.voices };
   });
 
   // ---------------------------------------------------------------- offline (review of #332)
-  def('o-clap', null, async ({ context }) => {
+  // Each offline check renders at every rate of RENDERS (K180: the CI browsers run 44.1 kHz, the
+  // Mac 48 kHz) and passes only when every rate does; its data holds each rate's result and the
+  // rate the fixture's OfflineAudioContext reported for it.
+  const defOffline = (name, fn) => def(name, null, async ({ context }) => {
     const page = await offline(context);
+    const out = {};
+    for (const { sr } of RENDERS) {
+      const got = await page.evaluate((r) => window.E.setRate(r), sr);
+      const r = await fn(page);
+      out[sr] = { ...r, ok: r.ok && got === sr, rate: got };
+    }
+    return { ok: RENDERS.every(({ sr }) => out[sr].ok), ...out };
+  });
+  defOffline('o-clap', async (page) => {
     const r = await page.evaluate(() => window.E.decay(61, {}, { win: 0.01, hi: -20, lo: -50 }));
     const want = -60 / 0.28;
     return { ok: r.points >= 8 && Math.abs(r.slope / want - 1) <= 0.1, slope: r.slope && +r
       .slope.toFixed(1), want: +want.toFixed(1), points: r.points };
   });
 
-  def('o-perc', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-perc', async (page) => {
     const rows = await page.evaluate(async () => {
       const out = [];
       for (let n = 60; n < 72; n++) {
@@ -576,13 +662,14 @@ function defineChecks() {
     });
     const bad = rows.filter((r) => !(r.points >= 4
       && Math.abs(r.slope / (-60 / r.decayS) - 1) <= 0.12));
-    return { ok: bad.length === 0 && new Set(rows.map((r) => r.id)).size === 9,
+    // Ten voices: K123's nine and K072's FM blip, which took B (the second noise-hit key, D4).
+    return { ok: bad.length === 0 && new Set(rows.map((r) => r.id)).size === 10
+      && rows.find((r) => r.n === 71).id === 'blip',
       slopes: rows.map((r) => `${r.id}:${Math.round(r.slope)}/${Math.round(-60 / r.decayS)}`),
       bad: bad.map((r) => r.n) };
   });
 
-  def('o-pitch', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-pitch', async (page) => {
     // The carrier's pitch (review of #332, round 3): the deviation into operator 1's frequency,
     // its 0 Hz line from 50 ms after the onset, at the bass notes too. A modulator's 0 Hz line
     // reaching it (a stack at commensurate ratios) is a pitch offset, which this reads directly.
@@ -628,11 +715,10 @@ function defineChecks() {
         .join('/')}`) };
   });
 
-  def('o-headroom', null, async ({ context }) => {
-    const page = await offline(context);
-    const r = await page.evaluate(async (algs) => {
+  defOffline('o-headroom', async (page) => {
+    const r = await page.evaluate(async ([algs, voices]) => {
       const sum = {};
-      const notes = Array.from({ length: 16 }, (_, i) => 48 + i);
+      const notes = Array.from({ length: voices }, (_, i) => 48 + i);
       for (const t of ['additive-voice', 'fm-voice', 'am-voice', 'wavetable-voice',
         'perc-voice']) sum[t] = (await window.E.peak(t, { sustain: 1 }, notes)).peak;
       const one = [];
@@ -647,15 +733,14 @@ function defineChecks() {
       for (let n = 60; n < 72; n++) await voice('perc-voice', {}, n);
       for (const tone of [0, 1]) await voice('perc-voice', { tone }, 62);
       return { sum, one };
-    }, ALGORITHMS);
-    const over = r.one.filter(([, pk]) => pk > (1 / 16) * 1.001);
+    }, [ALGORITHMS, VOICES]);
+    const over = r.one.filter(([, pk]) => pk > VOICE_GAIN * 1.001);
     return { ok: Object.values(r.sum).every((x) => x <= 1) && over.length === 0,
       sum: Object.fromEntries(Object.entries(r.sum).map(([k, v]) => [k, +v.toFixed(3)])),
-      worstVoice: +Math.max(...r.one.map((x) => x[1] * 16)).toFixed(3), over };
+      worstVoice: +Math.max(...r.one.map((x) => x[1] / VOICE_GAIN)).toFixed(3), over };
   });
 
-  def('o-morph', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-morph', async (page) => {
     const ms = Array.from({ length: 13 }, (_, i) => i * 0.25);
     const banks = await page.evaluate(async (m) => {
       const out = {};
@@ -671,23 +756,21 @@ function defineChecks() {
         const x = r.m - i;
         const want = at(i).rmsDb + (at(i + 1).rmsDb - at(i).rmsDb) * x;
         worst = Math.max(worst, Math.abs(r.rmsDb - want));
-        peak = Math.max(peak, r.peak * 16);
+        peak = Math.max(peak, r.peak / VOICE_GAIN);
       }
     }
     return { ok: worst <= 0.5 && peak <= 1.001, worstDb: +worst.toFixed(3),
       peakRelVoice: +peak.toFixed(3) };
   });
 
-  def('o-retrig', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-retrig', async (page) => {
     const r = await page.evaluate(() => window.E.retrigger('wavetable-voice', { bank: 'formant',
       morph: 1.5, attack: 0.6, release: 1.2, sustain: 0.8 }));
     return { ok: r.results[1].retrigger === true && r.min >= r.held - 1, held: +r.held.toFixed(2),
       min: +r.min.toFixed(2) };
   });
 
-  def('o-choke', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-choke', async (page) => {
     const on = await page.evaluate(() => window.E.choke({ choke: true }));
     const off = await page.evaluate(() => window.E.choke({ choke: false }));
     // Choked: the open hat released in CHOKE_RELEASE_S under the closed hat's 0.06 s decay
@@ -696,8 +779,7 @@ function defineChecks() {
       ringS: +off.fallS.toFixed(3) };
   });
 
-  def('o-alloff', null, async ({ context }) => {
-    const page = await offline(context);
+  defOffline('o-alloff', async (page) => {
     const r = await page.evaluate(() => window.E.allOff(70, { decay: 4 }));
     return { ok: r.before > -80 && r.after <= r.before - 60, before: +r.before.toFixed(1),
       after: +r.after.toFixed(1) };
@@ -749,6 +831,8 @@ async function runLeg(browserName, sizeName, base) {
     process.exit(2);
   }
   const sizes = Object.keys(SIZES).filter((sz) => known.some((n) => runsAt(n, sz)));
+  ({ voices: VOICES, gain: VOICE_GAIN } = (await import(pathToFileURL(path.join(ROOT, 'tests',
+    'unit', 'owner-answer.mjs')).href)).engineVoices());
   await RUN.ready();
   if (!fs.existsSync(DIST)) {
     console.error(`missing ${DIST}: run npm run build`);
@@ -772,7 +856,7 @@ async function runLeg(browserName, sizeName, base) {
           console.log(`${bad.length ? 'FAIL' : 'PASS'} ${key}/synth-engines: ${names.length
             - bad.length}/${names.length} checks (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
           for (const n of names) {
-            console.log(`   ${res[n].ok ? 'ok' : 'x '} ${n}: ${JSON.stringify(res[n]).slice(0, 700)}`);
+            console.log(`   ${res[n].ok ? 'ok' : 'x '} ${n}: ${JSON.stringify(res[n]).slice(0, 1600)}`);
           }
         }
       }

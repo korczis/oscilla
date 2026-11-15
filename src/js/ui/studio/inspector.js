@@ -36,7 +36,8 @@
 //     mode, tempo, time signature, loop, length, notes; edited through TRANSPORT_SET, LOOP_SET
 //     and METADATA_SET like every other field (the store validates; a refusal is announced)
 //   formatParamValue(p, v), parseParamInput(p, text), sliderRange(p), valueToSlider(p, v),
-//   sliderToValue(p, pos)                                   pure helpers of the fields
+//   sliderToValue(p, pos), SLIDER_STEPS    pure helpers of the fields (inspector-fields.js,
+//                                          re-exported here)
 //   mountInspector(host, svc) -> { render(), renderTrace(), focusFirst(), focusHeading(),
 //                                  focusKey(key), destroy() } DOM (graph-dom.js, no innerHTML);
 //                                  renderTrace refreshes only the Trace section
@@ -49,13 +50,15 @@
 //            onAllowMicrophone(nodeId) (asks for permission, then enables Microphone nodes),
 //            micError(nodeId) -> text | '' (why that node's input is not open),
 //            micBusy() -> boolean (a permission request is in flight), userPatches() ->
-//            Promise<[{ id, patch }]> (the saved patches: the node preset dropdown, K020) }
+//            Promise<[{ id, patch }]> (the saved patches: the node preset dropdown, K020),
+//            playhead() -> the Studio transport's playhead (a notes clip's step grid, W008),
+//            stepNode(nodeId) -> result (K226: inspector-steps.js svsStepButton) }
 //   Focus (§142; V431 U2): a rebuilt Inspector puts focus back on the control with the same
 //   data-key; when the action replaced the view (a connection link, Select source, Delete)
 //   and that control is gone, focus goes to the new view's heading, never to <body>.
 
 import { clipTarget } from '../../studio/clip-targets.js';
-import { NODE_REGISTRY, validateParamValue } from '../../studio/registry.js';
+import { NODE_REGISTRY } from '../../studio/registry.js';
 import {
   MIN_CLIP_S, NOTES_MAX_CHARS, TEMPO_RANGE, TIME_SIGNATURE_DENOMINATORS,
 } from '../../studio/schema.js';
@@ -66,103 +69,42 @@ import {
 } from '../../studio/a11y.js';
 import { mountGraphSummary } from './graph-summary-view.js';
 import { presetMenu } from './node-preset-menu.js';
-import { formatFrequency, parseFrequency } from '../../core/frequency.js';
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { limitBoundText, limitValueText } from '../../studio/compiler.js';
 import { sig } from '../../core/math.js';
 import { CENTS_PER_OCTAVE } from '../../core/music.js';
+import { SOURCE_RANGES } from '../../synth/panel.js';
+import { tuneNote } from '../../synth/normals.js';
 import { CATEGORY_LABELS, STATUS_LABELS, edgeRoute, nodeConnections } from './graph-view.js';
 import { formatSecondsText } from './timeline-view.js';
+import {
+  clipStepsView, mountClipSteps, mountListSteps, svsStepButton,
+} from './inspector-steps.js';
+import {
+  SLIDER_STEPS, formatParamValue, parseParamInput, sliderToValue, valueToSlider,
+} from './inspector-fields.js';
 import { h, replaceChildren, setAttr, setText } from './graph-dom.js';
+import { pressGuard } from './inspector-press.js';
+import {
+  BAD, TRACE_OPS_SHOWN, causeRef, entityRef, nodeOf, paramText, runtimeDiagnostics, runtimeState,
+  shortHash, traceView,
+} from './inspector-runtime.js';
+export {
+  TRACE_OPS_SHOWN, runtimeDiagnostics, runtimeState, shortHash, traceView,
+} from './inspector-runtime.js';
 import { sliderFill } from '../app.js';
+import { opSummary, traceCount } from './trace-summary.js';
+// The pure helpers of the fields live in inspector-fields.js; re-exported, so callers keep their
+// import from this module.
+export {
+  SLIDER_STEPS, formatParamValue, parseParamInput, sliderRange, sliderToValue, valueToSlider,
+} from './inspector-fields.js';
 
-export const SLIDER_STEPS = 1000;
 
 /** Runtime states whose change Play and Stop already announce. */
 const QUIET = ['not-applied', 'in-sync'];
 
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
-
-/** The display text of a parameter value with its unit ("2.40 kHz", "0.707", "Low-pass"). */
-export function formatParamValue(p, v) {
-  switch (p.type) {
-    case 'boolean': return v ? 'On' : 'Off';
-    case 'enum': {
-      const o = (p.options || []).find((x) => x[0] === v);
-      return o ? o[1] : String(v);
-    }
-    case 'list': return Array.isArray(v) ? v.map((x) => sig(x, 4)).join(', ') : '';
-    case 'id': return v === null || v === undefined ? 'None' : `${String(v).slice(0, 12)}…`;
-    default:
-      if (!finite(v)) return '—';
-      if (p.unit === 'Hz') return formatFrequency(v);
-      return p.unit ? `${sig(v, 4)} ${p.unit}` : sig(v, 4);
-  }
-}
-
-/**
- * Parse what was typed into a parameter field. Frequencies accept "2400", "2.4k", "2.4 kHz";
- * other numbers may carry their unit ("120 ms" is not converted: the unit must match). Returns
- * { ok: true, value } or { ok: false, error } with the registry's own range text.
- */
-export function parseParamInput(p, text) {
-  const raw = String(text ?? '').trim();
-  const fail = (why) => ({ ok: false, error: `${p.label} ${why}.` });
-  let value;
-  if (p.type === 'number' || p.type === 'integer') {
-    if (p.unit === 'Hz') {
-      const r = parseFrequency(raw);
-      if (!r.ok) return { ok: false, error: r.error };
-      value = r.value;
-    } else {
-      const unit = p.unit ? p.unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : null;
-      const stripped = unit ? raw.replace(new RegExp(`\\s*${unit}$`, 'i'), '') : raw;
-      if (!/^[+-]?(\d+(\.\d*)?|\.\d+)(e[+-]?\d+)?$/i.test(stripped.replace(',', '.'))) {
-        return fail('must be a number');
-      }
-      value = Number(stripped.replace(',', '.'));
-    }
-  } else if (p.type === 'list') {
-    const parts = raw.split(/[,;\s]+/).filter(Boolean);
-    value = parts.map((x) => Number(x.replace(',', '.')));
-    if (value.some((x) => !finite(x))) return fail('must be numbers separated by commas');
-  } else {
-    return fail('cannot be typed');
-  }
-  const why = validateParamValue(p, value);
-  return why ? fail(why) : { ok: true, value };
-}
-
-/** The slider's range: the parameter's soft (display) range, else its full range. */
-export function sliderRange(p) {
-  const lo = p.softRange ? p.softRange[0] : p.min;
-  const hi = p.softRange ? p.softRange[1] : p.max;
-  return { lo, hi, log: p.scale === 'log' && lo > 0 };
-}
-
-/** Slider position 0..SLIDER_STEPS of a value (clamped to the slider range). */
-export function valueToSlider(p, v) {
-  const { lo, hi, log } = sliderRange(p);
-  if (!finite(v) || !(hi > lo)) return 0;
-  const x = Math.min(hi, Math.max(lo, v));
-  const t = log ? Math.log(x / lo) / Math.log(hi / lo) : (x - lo) / (hi - lo);
-  return Math.round(t * SLIDER_STEPS);
-}
-
-/** The value of a slider position, rounded to the parameter's step (4 significant digits). */
-export function sliderToValue(p, pos) {
-  const { lo, hi, log } = sliderRange(p);
-  const t = Math.min(1, Math.max(0, pos / SLIDER_STEPS));
-  let v = log ? lo * (hi / lo) ** t : lo + (hi - lo) * t;
-  if (p.type === 'integer') v = Math.round(v);
-  else if (p.step) v = Math.round(v / p.step) * p.step;
-  v = Number(v.toPrecision(4));
-  return Math.min(p.max, Math.max(p.min, v)) + 0;
-}
-
-function nodeOf(model, id) {
-  return model.graph.nodes.find((n) => n.id === id) || null;
-}
 
 /**
  * The runtime's `frequency-limited` diagnostic of a node's parameter (T023), when it is about
@@ -202,7 +144,11 @@ function fieldOf(model, node, p, registry, edgeStatus, truth = null) {
     : `${text}, plays ${playedText}`;
   return {
     key: p.key,
-    label: p.label,
+    // A boolean shown inverted under another name (the Filter's `enabled` as Bypass, K022): the
+    // switch reads `checked`, and setting it writes the opposite value.
+    label: p.shownAs || p.label,
+    invert: !!p.shownAs,
+    checked: p.type === 'boolean' ? (p.shownAs ? !value : !!value) : null,
     type: p.type,
     control,
     value,
@@ -290,68 +236,6 @@ export const RUNTIME_LABELS = Object.freeze({
   failed: 'Failed',
 });
 
-/** The divergence state, with a stopped runtime that refused PLAY as 'failed'. */
-export const runtimeState = (v) => (!v ? 'not-applied'
-  : v.state === 'not-applied' && v.reason ? 'failed' : v.state);
-
-/** The first 8 hex digits of a hash, '—' for none. */
-export const shortHash = (h) => (h ? h.slice(0, 8) : '—');
-
-export function runtimeDiagnostics(truth) {
-  const v = truth && truth.verdict;
-  if (!v) return [];
-  const of = (x) => (v.applied && x && x.diagnostics) || [];
-  // Once each: a degraded verdict's reason is also one of the runtime's diagnostics.
-  return [...new Set([...(v.reason ? [v.reason] : []), ...of(truth.runtime),
-    ...of(truth.transport)])];
-}
-
-/** A diagnostic's entity as the Inspector links it: its name and the selection showing it. */
-function entityRef(model, ent, registry) {
-  if (!ent) return null;
-  const { kind, id } = ent;
-  let label = null;
-  let selection = null;
-  if (kind === 'node') {
-    const n = nodeOf(model, id);
-    if (n) [label, selection] = [n.metadata.name, { nodes: [id] }];
-  } else if (kind === 'edge') {
-    if (model.graph.edges.some((e) => e.id === id)) {
-      const d = describeEdge(model, id, { registry });
-      [label, selection] = [`${d[0].toLowerCase()}${d.slice(1)}`, { edges: [id] }];
-    }
-  } else if (kind === 'clip') {
-    const c = model.timeline.clips.find((x) => x.id === id);
-    if (c) [label, selection] = [`${c.kind} clip`, { clips: [id] }];
-  } else if (kind === 'lane') {
-    const l = model.timeline.automation.find((x) => x.id === id);
-    if (l) {
-      label = `${paramText(model, l.target, registry)} lane`;
-      selection = { nodes: [l.target.node], points: l.points.map((p) => p.id) };
-    }
-  }
-  return { kind, id, label: label || id, selection };
-}
-
-/**
- * The entity a status's `cause` names (graph-view.js divergenceCause) as entityRef links it, or
- * null when there is none to select or it is `self`, the entity shown.
- */
-function causeRef(model, cause, self, registry) {
-  if (!cause) return null;
-  const kind = ['node', 'edge', 'clip', 'lane'].find((k) => cause[k]);
-  if (!kind || (kind === self.kind && cause[kind] === self.id)) return null;
-  const ref = entityRef(model, { kind, id: cause[kind] }, registry);
-  return ref && ref.selection ? ref : null;
-}
-
-/** "Filter Cutoff": a { node, param } target by name. */
-function paramText(model, t, registry) {
-  const n = nodeOf(model, t.node);
-  const p = n && registry.param(n.type, t.param);
-  return `${n ? n.metadata.name : t.node} ${p ? p.label : t.param}`;
-}
-
 export function runtimeView(model, truth, opts = {}) {
   const registry = opts.registry || NODE_REGISTRY;
   const v = (truth && truth.verdict) || null;
@@ -359,18 +243,26 @@ export function runtimeView(model, truth, opts = {}) {
   const a = v && v.applied;
   const d = v ? v.desired : { revision: null, studioHash: null };
   const why = v && v.reason ? v.reason.message : '';
-  // A value the runtime plays below the stored one is not "as edited" (T023).
-  const limits = runtimeDiagnostics(truth).filter((x) => x.code === 'frequency-limited');
+  // A value the runtime plays below the stored one is not "as edited" (T023): every limit
+  // diagnostic in effect counts, whatever its kind (K235: the runtime's `limits`, built by
+  // runtime-trace.js limitDiagnostics; a held Q cable and a fit cable included).
+  const limits = (v && v.applied && truth.runtime && truth.runtime.limits) || [];
   const lowered = limits.length;
   // Each one is a value (a parameter, a cable's depth), not a frequency of its own, and the
-  // reason is the cap that applied: a parameter's range, 0.95 × Nyquist, or both (review R1).
-  const bounds = new Set(limits.map((x) => (x.details && x.details.bound) || 'nyquist'));
-  const held = [bounds.has('range') ? 'within their parameters\' ranges' : null,
-    bounds.has('nyquist') ? `at or below ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist` : null]
-    .filter(Boolean).join(' and ');
-  const text = state === 'in-sync' ? (lowered ? `Revision ${a.revision} plays with ${lowered} `
-    + `value${lowered === 1 ? '' : 's'} lowered to keep ${bounds.has('range') ? 'them'
-      : 'frequencies'} ${held}; see the diagnostics below.`
+  // reason is the cap that applied: a parameter's range, 0.95 × Nyquist, a knob's top (a Q's
+  // ceiling), or several (review R1), read from the diagnostic's own details.
+  const bounds = new Set(limits.map(({ details: x = {} }) => x.bound || x.by
+    || (x.ceiling ? 'ceiling' : 'nyquist')));
+  // In Czech (project.czech-prose, Q104): "drží 1 hodnotu", "2 hodnoty", "5 hodnot".
+  const one = lowered === 1;
+  const held = [bounds.has('range') ? `v rozsahu ${one ? 'svého parametru'
+    : 'svých parametrů'}` : null,
+  bounds.has('ceiling') ? 'na horní mezi knoflíku nebo pod ní' : null,
+  bounds.has('nyquist') ? `na ${SAFE_NYQUIST_FACTOR_TEXT.replace('.', ',')} × Nyquistovy `
+    + 'frekvence nebo pod ní' : null].filter(Boolean).join(' a ');
+  const text = state === 'in-sync' ? (lowered ? `Revize ${a.revision} hraje s omezením: `
+    + `Studio drží ${lowered} ${one ? 'hodnotu' : lowered < 5 ? 'hodnoty' : 'hodnot'} ${held}; `
+    + 'viz diagnostiky níže.'
     : `Revision ${a.revision} plays as edited.`)
     : state === 'degraded' ? `Revision ${a.revision} plays, short of its plan: ${why}`
     : state === 'behind' ? `Revision ${a.revision} plays; revision ${d.revision} is not `
@@ -408,66 +300,6 @@ export function runtimeView(model, truth, opts = {}) {
     diagnostics: runtimeDiagnostics(truth).map((x) => ({ code: x.code, severity: x.severity,
       owner: x.owner, message: x.message, entity: entityRef(model, x.entity, registry) })),
   };
-}
-
-/** Operations the Trace section lists. */
-export const TRACE_OPS_SHOWN = 12;
-const TRACE_SECONDS = ['at', 'end', 'baseTime', 'fade', 'position'];
-const BAD = ['refused', 'failed', 'rejected'];
-
-export function traceView(model, steps, opts = {}) {
-  const registry = opts.registry || NODE_REGISTRY;
-  const byOp = new Map();
-  for (const st of steps || []) {
-    if (!byOp.has(st.op)) byOp.set(st.op, []);
-    byOp.get(st.op).push(st);
-  }
-  const all = [...byOp].reverse().filter(([, list]) => !opts.nodeId || list.some((x) =>
-    x.entity && x.entity.kind === 'node' && x.entity.id === opts.nodeId));
-  const ops = all.slice(0, TRACE_OPS_SHOWN).map(([op, list]) => {
-    const first = list.find((x) => x.owner === 'store') || list.find((x) => x.owner
-      === 'transport') || list[0];
-    const commit = list.find((x) => x.kind === 'commit');
-    // The headline is the store's verdict (else the first refusal, else the last step); a
-    // committed edit lists the steps that failed after it separately.
-    const bad = list.filter((x) => BAD.includes(x.outcome));
-    const end = commit || bad[0] || list[list.length - 1];
-    const ill = BAD.includes(end.outcome);
-    const code = end.code || (ill && bad[0] ? bad[0].code : null);
-    const failed = ill ? [] : bad.map((x) => x.code || x.kind);
-    const label = commit && commit.detail.label;
-    const title = first.owner === 'store' ? label || (first.detail && first.detail.type)
-      || first.kind : `${first.owner} ${first.kind}`;
-    return {
-      op,
-      title: first.kind === 'undo' || first.kind === 'redo' ? `${first.kind} ${label || ''}`.trim()
-        : title,
-      outcome: `${end.outcome}${code ? ` (${code})` : ''}${commit && commit.revision != null
-        ? `, revision ${commit.revision}` : ''}${failed.length ? ` · failed: ${failed.join(', ')}`
-        : ''}`,
-      steps: list.map((x) => ({ text: traceText(model, x, registry), outcome: x.outcome,
-        code: x.code })),
-    };
-  });
-  return { ops, shown: ops.length, total: all.length };
-}
-
-/** One step in words: owner, kind, outcome (code), what it names and its detail. */
-function traceText(model, x, registry) {
-  const n = x.entity && x.entity.kind === 'node' ? nodeOf(model, x.entity.id) : null;
-  const d = { ...x.detail };
-  const p = n && d.param ? registry.param(n.type, d.param) : null;
-  const what = [x.entity ? `${n ? n.metadata.name : `${x.entity.kind} ${x.entity.id}`}${d.param
-    ? ` ${p ? p.label : d.param}` : ''}` : ''];
-  if (p && typeof d.value === 'number') what[0] += ` ${formatParamValue(p, d.value)}`;
-  else if (d.param) what[0] += ` ${d.value} ${d.unit || ''}`.trimEnd();
-  if (d.param) for (const k of ['param', 'value', 'unit']) delete d[k];
-  if (!d.cents) delete d.cents;
-  what.push(...Object.entries(d).filter(([, v]) => v !== null && v !== '').map(([k, v]) => (
-    k === 'planHash' ? `plan ${shortHash(v)}` : typeof v === 'number' ? `${k} ${sig(v, 4)}${
-      TRACE_SECONDS.includes(k) ? ' s' : ''}` : `${k} ${v}`)));
-  return `${x.owner} ${x.kind}: ${x.outcome}${x.code ? ` (${x.code})` : ''}${x.revision != null
-    ? ` · rev ${x.revision}` : ''} · ${what.filter(Boolean).join(', ')}`.replace(/ · $/, '');
 }
 
 /** Codes of a Microphone node whose input the user can (re)allow. */
@@ -621,9 +453,14 @@ export function inspectorView(model, selection, opts = {}) {
       const code = route.state === 'no-route' && est ? est.code : null;
       const statusText = [code ? `${route.text} (${code})` : route.text,
         ...entityNotes(opts.truth, 'edge', e.id)].filter(Boolean).join(' · ');
+      // K238: what an octave source (Keys pitch, the pad's Pitch) does in a cents parameter.
+      const srcUnit = ((SOURCE_RANGES[a.type] || {})[e.from.port] || {}).unit || null;
+      const note = control && tgt.param ? tuneNote(srcUnit,
+        registry.param(b.type, tgt.param.key), e.props) : null;
       return {
         kind: 'edge',
-        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${statusText}`,
+        key: `edge:${e.id}:${control ? 'c' : 'a'}:${route.state}:${statusText}:${note || ''}`,
+        note,
         route: route.state,
         routeReason: route.reason,
         routeText: route.text,
@@ -671,6 +508,9 @@ export function inspectorView(model, selection, opts = {}) {
         targetName: target ? target.metadata.name : 'No target',
         detail: c.kind === 'pattern' ? c.payload.blockType : c.kind === 'measurement'
           ? c.payload.action : (c.payload && c.payload.action) || 'gate',
+        // W008: a notes clip is edited as a step grid (inspector-steps.js).
+        steps: c.kind === 'notes' ? clipStepsView(model, c, !!target
+          && clipTarget(target, { kind: 'notes' }, registry).plays) : null,
       };
     }
   }
@@ -740,6 +580,12 @@ export function mountInspector(host, svc) {
   let builtSig = ''; // inspectorRebuildKey of the rendered node view
   let refs = new Map(); // field key -> { input, slider, readout, error, field }
   let gestureOpen = false;
+  let steps = null; // the step grid of a shown notes clip (W008)
+  const listGrids = new Map(); // K221: param key -> its step grid
+  const dropListGrids = () => {
+    listGrids.forEach((g) => g.destroy());
+    listGrids.clear();
+  };
   // The graph summary of the Studio card (K168): one instance, so its open groups survive a
   // rebuild; a node selects, frames and focuses in the graph (Find node's path), Connect…
   // opens the connection list of the output port.
@@ -915,40 +761,36 @@ export function mountInspector(host, svc) {
 
   function toggleField(view, f) {
     const btn = h('button', { type: 'button', class: 'osc-toggle osc-si-toggle', role: 'switch',
-      'aria-checked': f.value ? 'true' : 'false', 'data-key': f.key,
+      'aria-checked': f.checked ? 'true' : 'false', 'data-key': f.key,
       'data-osc': 'studio.inspector.param' }, [
       h('span', { class: 'osc-toggle-track', 'aria-hidden': 'true' }),
       h('span', { class: 'osc-toggle-label', text: f.label }),
     ]);
     btn.addEventListener('click', () => {
-      dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key,
-        value: btn.getAttribute('aria-checked') !== 'true' });
+      const on = btn.getAttribute('aria-checked') !== 'true'; // the switch's new state
+      dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key, value: f.invert ? !on : on });
     });
     refs.set(f.key, { input: btn, field: f, toggle: true });
     return h('div', { class: 'osc-si-field', 'data-field': f.key }, [btn]);
   }
 
+  /** K221: a list parameter is a step grid (mountListSteps) and a count. */
   function listField(view, f) {
-    const id = `osc-si-${view.id}-${f.key}`;
-    const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
-      autocomplete: 'off', 'data-key': f.key, 'data-osc': 'studio.inspector.param',
-      value: f.input, 'aria-describedby': `${id}-err` });
-    const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
-    const r = { input, error, field: f };
-    input.addEventListener('change', () => {
-      const p = parseParamInput(f.param, input.value);
-      if (!p.ok) {
-        showError(r, p.error);
-        svc.announce(p.error, { assertive: true });
-        return;
-      }
-      const res = dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key,
-        value: p.value });
-      showError(r, res.ok ? '' : res.reason);
-    });
-    refs.set(f.key, r);
-    return h('div', { class: 'osc-si-field', 'data-field': f.key }, [
-      h('label', { class: 'osc-label osc-si-label', for: id, text: f.label }), input, error]);
+    const box = h('div', { class: 'mt-2', 'data-field': f.key });
+    const g = mountListSteps(box, { dispatch, say: (t) => svc.announce(t) },
+      { nodeId: view.id, param: f.param, values: f.value });
+    listGrids.set(f.key, g);
+    const count = numberInput(`osc-si-${view.id}-${f.key}-count`, 'Počet kroků', f.value.length,
+      '', (n) => {
+        const cur = svc.store.getModel().graph.nodes.find((x) => x.id === view.id);
+        const next = g.resize(n, cur ? cur.params[f.key] : f.value);
+        return next.reason ? { ok: false, reason: next.reason }
+          : dispatch({ type: 'NODE_PARAM_SET', nodeId: view.id, key: f.key, value: next });
+      }, 'studio.inspector.param', { key: `${f.key}.count`,
+      nan: 'Počet kroků musí být číslo.' });
+    g.count = refs.get(`${f.key}.count`);
+    return h('div', { class: 'osc-si-field' }, [
+      h('span', { class: 'osc-label osc-si-label', text: f.label }), box, count]);
   }
 
   function readonlyField(f) {
@@ -975,18 +817,20 @@ export function mountInspector(host, svc) {
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }), input, error]);
   }
 
-  function numberInput(id, label, value, unit, apply, dataOsc) {
+  // opts: key (data-key and refs key), nan (the not-a-number sentence).
+  function numberInput(id, label, value, unit, apply, dataOsc, opts = {}) {
+    const key = opts.key || dataOsc;
     const unitId = unit ? `${id}-unit` : null;
     const input = h('input', { class: 'osc-number osc-si-input osc-num', id, type: 'text',
       inputmode: 'decimal', autocomplete: 'off', value: String(value), 'data-osc': dataOsc,
-      'data-key': dataOsc, 'aria-describedby': describedBy(unitId, `${id}-err`) });
+      'data-key': key, 'aria-describedby': describedBy(unitId, `${id}-err`) });
     const error = h('p', { class: 'osc-si-error', id: `${id}-err`, hidden: true });
     const unitEl = unit ? h('span', { class: 'osc-si-unit', id: unitId, text: unit }) : null;
     const ref = { input, error, unit: unitEl, field: { input: String(value) } };
     input.addEventListener('change', () => {
       const v = Number(String(input.value).trim().replace(',', '.'));
       if (!finite(v)) {
-        const why = `${label} must be a number.`;
+        const why = opts.nan || `${label} must be a number.`;
         showError(ref, why);
         svc.announce(why, { assertive: true });
         return;
@@ -995,7 +839,7 @@ export function mountInspector(host, svc) {
       showError(ref, r && !r.ok ? r.reason : '');
     });
     keepModelValue(ref);
-    refs.set(dataOsc, ref);
+    refs.set(key, ref);
     return h('div', { class: 'osc-si-field osc-si-field--half' }, [
       h('label', { class: 'osc-label osc-si-label', for: id, text: label }),
       h('div', { class: 'osc-si-row osc-si-row--edit' }, [input, unitEl]),
@@ -1053,6 +897,7 @@ export function mountInspector(host, svc) {
           'data-osc': 'studio.inspector.micError', text: view.mic.error }) : null,
       ]));
     }
+    parts.push(svsStepButton(view, svc)); // K226: null for any other node
     if (typeof svc.userPatches === 'function') parts.push(presetMenu(view, svc)); // K020
     parts.push(textInput(`osc-si-${view.id}-name`, 'Name', view.name,
       (v) => dispatch({ type: 'NODE_RENAME', nodeId: view.id, name: v }),
@@ -1117,6 +962,10 @@ export function mountInspector(host, svc) {
         'data-osc': 'studio.inspector.edgeStatus', 'data-route': view.route,
         text: view.statusText }));
       if (view.cause) parts.push(causeLink(view.cause));
+    }
+    if (view.note) {
+      parts.push(h('p', { class: 'mt-1 text-xs text-gray-600 dark:text-gray-400', role: 'note',
+        text: view.note }));
     }
     parts.push(h('dl', { class: 'osc-si-dl', 'data-osc': 'studio.inspector.edge' }, [
       h('div', {}, [h('dt', { text: 'From' }), h('dd', { text: view.fromText })]),
@@ -1201,6 +1050,11 @@ export function mountInspector(host, svc) {
     parts.push(h('div', { class: 'osc-si-field' }, [
       h('label', { class: 'osc-label osc-si-label', for: `osc-si-${view.id}-track`,
         text: 'Track' }), h('div', { class: 'osc-select' }, [track])]));
+    if (view.steps) {
+      const box = h('div', { class: 'mt-2' });
+      steps = mountClipSteps(box, svc, view.steps);
+      parts.push(box);
+    }
     return parts;
   }
 
@@ -1395,26 +1249,31 @@ export function mountInspector(host, svc) {
   let tr = null;
   const traceOpen = new Set();
   function buildTrace(tv, intro, nodeId = null) {
-    tr = { sig: '', note: h('p', { class: 'osc-si-note' }), list: h('ol', {
+    tr = { sig: '', count: h('summary', { class: 'flex min-h-11 cursor-pointer items-center '
+        + 'text-gray-700 dark:text-gray-300', text: traceCount(tv) }),
+      note: h('p', { class: 'osc-si-note' }), list: h('ol', {
       class: 'osc-si-conns osc-si-trace', 'aria-label': 'Operations',
       'data-osc': 'studio.inspector.traceOps' }), intro, nodeId };
     fillTrace(tv);
     return h('section', { class: 'osc-si-section', 'aria-label': 'Trace',
       'data-osc': 'studio.inspector.trace' }, [h('h5', { class: 'osc-si-h5', text: 'Trace' }),
-      tr.note, tr.list]);
+      // Closed by default, like Runtime details; its summary says how many operations it holds.
+      h('details', { class: 'text-xs text-gray-500 dark:text-gray-400' },
+        [tr.count, tr.note, tr.list])]);
   }
 
   function fillTrace(tv) {
     const sig = JSON.stringify(tv);
     if (!tr || tr.sig === sig) return;
     tr.sig = sig;
+    setText(tr.count, traceCount(tv));
     setText(tr.note, tv.total ? `${tr.intro} ${tv.shown} of ${tv.total} shown; kept in memory `
       + 'only, never saved.' : 'Nothing traced yet: edit, play or stop to see what happens.');
     const active = document.activeElement;
     const key = tr.list.contains(active) ? active.getAttribute('data-key') : null;
     replaceChildren(tr.list, tv.ops.map((o) => {
       const d = h('details', { class: 'osc-si-help', 'data-op': o.op }, [
-        h('summary', { 'data-key': `trace:${o.op}`, text: `${o.op} · ${o.title} · ${o.outcome}` }),
+        h('summary', { 'data-key': `trace:${o.op}`, text: opSummary(o) }),
         h('ol', { class: 'osc-si-trace-steps' }, o.steps.map((x) => h('li', {
           class: BAD.includes(x.outcome) ? 'is-error' : null, text: x.text })))]);
       d.open = traceOpen.has(o.op);
@@ -1457,13 +1316,18 @@ export function mountInspector(host, svc) {
     const active = document.activeElement;
     if (view.kind === 'node') {
       for (const f of view.fields) {
+        const lg = listGrids.get(f.key); // K221
+        if (lg) lg.update(f.value);
+        if (lg && lg.count && lg.count.input !== active) {
+          lg.count.input.value = String(f.value.length);
+        }
         const r = refs.get(f.key);
         if (!r) continue;
         r.field = f;
         if (r.readout) setText(r.readout, f.readout || f.text);
         if (r.laneNote) setText(r.laneNote, f.laneNote || '');
         if (r.limitNote) setText(r.limitNote, f.limitNote || '');
-        if (r.toggle) setAttr(r.input, 'aria-checked', f.value ? 'true' : 'false');
+        if (r.toggle) setAttr(r.input, 'aria-checked', f.checked ? 'true' : 'false');
         else if (r.input && r.input !== active) {
           if (r.input.tagName === 'SELECT') r.input.value = f.value;
           else r.input.value = f.input;
@@ -1511,11 +1375,14 @@ export function mountInspector(host, svc) {
       }
       const t = refs.get('studio.inspector.track');
       if (t && t.input !== active) t.input.value = view.trackId;
+      if (steps && view.steps) steps.update(view.steps);
       return true;
     }
     return false;
   }
 
+  // A rebuild waits while a pointer is down in the Inspector (inspector-press.js, T7).
+  const press = pressGuard(host, () => { if (host.isConnected) render(); });
   let said = null; // the runtime state last rendered
   function render() {
     const model = svc.store.getModel();
@@ -1561,7 +1428,11 @@ export function mountInspector(host, svc) {
         + `${view.counts.clips} clips · ${view.counts.lanes} automation lanes`);
       return;
     }
+    if (press.holds()) return;
     endSliderGesture();
+    if (steps) steps.destroy();
+    steps = null;
+    dropListGrids();
     const hadFocus = host.contains(document.activeElement);
     const focusedKey = hadFocus ? document.activeElement.getAttribute('data-key') : null;
     const focusedOsc = hadFocus ? document.activeElement.getAttribute('data-osc') : null;
@@ -1617,7 +1488,10 @@ export function mountInspector(host, svc) {
     },
     destroy() {
       endSliderGesture();
+      if (steps) steps.destroy();
+      dropListGrids();
       replaceChildren(host, []);
+      press.destroy();
     },
   };
 }

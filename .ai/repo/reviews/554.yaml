@@ -1,0 +1,54 @@
+# Review verdict for pull request #554 (train/t21): train T21 and release v3.37.5 (a patch:
+# release:analyze derives patch from Czech pass 4's fix(i18n)).
+# Guarded member: oscilla-0b's Czech pass 4 36adec12 (merged in c15a0ee8), guarded in 2 paths:
+# src/js/studio/actions.js (METADATA_SET's three undo labels and the keys refusal) and
+# src/js/studio/validate.js (invalid-note-target, both sentences). Unguarded members read as
+# members: the readers moved with the strings (tests/unit/synth-picker.test.mjs at 54, 86 and 94;
+# tests/browser/synth.cjs s-pick's label), both czech-prose baselines (2928 / 1763), the
+# roadmap counts; main 5fea4df3 merged in e6f93c0a; chore(release): v3.37.5 d8f4f2e2. Judged at
+# d8f4f2e2 on base origin/main 5fea4df3, 2026-11-15, in the reviewer's own detached worktree
+# ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this train: oscilla-0b built pass
+# 4, oscilla-43 integrated and stamped.
+#
+# The digest: origin/main's (5fea4df3; its scripts equal eb7e875e's) scripts/review-verdict.mjs
+# --content --list at d8f4f2e2: d616edb5194f5f39... over 2 guarded paths (equal to the
+# integrator's).
+#
+# How it was judged:
+# - Strings only: the guarded diff changes four string literals and no logic; the keys refusal now
+#   reads as the Synth picker's (synth/picker.js routeAction, Czech pass 3): "<name> nehraje noty:
+#   klávesy hrají uzel se schopností notes nebo hits.", so the refusal the Studio store gives and
+#   the one the picker gives are the same sentence; the missing target "Klávesy hrají „<id>“,
+#   který v tomto Studiu není." with Czech quotes; the undo labels "Změnit podrobnosti Studia",
+#   "Hrát <name> z kláves", "Hrát panel Synthu z kláves".
+# - Readers: tests/, src/, scripts/ and docs/ hold no other copy of the four old strings ("from the
+#   keys" remains only in unrelated prose: offline.js's notes reason, comments); the readers that
+#   quoted them moved (synth-picker.test, s-pick). The other "does not play notes" readers
+#   (clip-targets.js, k172, studio-notes-clip, step-grid) are a different sentence, not this
+#   train's.
+# - src/index.html is untouched, so no cap or visual reference moves.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (5fea4df3's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer: at d8f4f2e2 GITHUB_BASE_REF=main npm test exit 0
+#   (5789 tests, 5788 pass, 0 fail, 1 skipped; a first run had 1 fail, version-authority reading
+#   the reviewer's own A/B tree of main left inside the worktree, removed before the rerun),
+#   build:check up to date (v3.37.5), release:analyze patch; each in chromium, firefox and webkit
+#   with OSC_LOAD_MAX=80 under a load of about 17-30: synth desktop 49/49 and phone 16/16 (s-pick
+#   reads "Hrát FM z kláves"), studio-keys 5/5, v31-studio-workflows 16/16 file and 3/3 http.
+#
+# Verdict: merge, under the condition above. No finding.
+schema: review-verdict/v1
+pr: 554
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of d8f4f2e2)
+content: d616edb5194f5f39a92fd779bc538ea8c52f79349e6a0e1533931d2c1017cc1e
+findings: []

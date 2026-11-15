@@ -7,6 +7,9 @@ const entry = (e) => ({ plan: ['G001'], intents: ['component-system#contract-and
   adrs: ['adr-0081'], ...e });
 
 export default {
+  'alert.undo': entry({ source: 'src/index.html', plan: ['G001', 'K247'],
+    intents: ['playable-instrument#one-keyboard-everywhere'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
   keyboard: entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/navigation.cjs'] }),
   'keyboard.arm': entry({ source: 'src/index.html',
@@ -30,4 +33,11 @@ export default {
   'keyboard.more': entry({ source: 'src/index.html', plan: ['G001', 'V635'],
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/synth.cjs',
       'tests/browser/control-census.cjs'] }),
+  'keyboard.handle': entry({ source: 'src/js/midi/dock-yield.js', plan: ['G001', 'K171'],
+    tests: ['tests/unit/keyboard-dock-yield.test.mjs', 'tests/browser/xy-pad.cjs',
+      'tests/browser/control-census.cjs'] }),
+  'keyboard.dock-status': entry({ source: 'src/js/midi/dock-yield.js', plan: ['G001', 'K171'],
+    tests: ['tests/unit/keyboard-dock-yield.test.mjs'] }),
+  'keyboard.handle.held': entry({ source: 'src/js/midi/dock-yield.js', plan: ['G001', 'K171'],
+    tests: ['tests/browser/iphone.cjs'] }),
 };

@@ -8,8 +8,11 @@ import assert from 'node:assert/strict';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
 import { PRESETS, presetAction, presetPatch } from '../../src/js/synth/presets.js';
 import {
-  NEW_VOICE, NEW_VOICE_TAKEN, instrumentChoices, routeAction, routedNode, waveAction, waveOf,
+  NEW_VOICE, NEW_VOICE_TAKEN, WAVES, instrumentChoices, routeAction, routedNode, waveAction,
+  waveOf,
 } from '../../src/js/synth/picker.js';
+import { readFileSync } from 'node:fs';
+import { WAVEFORM_NAMES } from '../../src/js/core/constants.js';
 import { importPatch, patchParams, patchTargets } from '../../src/js/studio/patches.js';
 import { NODE_REGISTRY, playsNotes } from '../../src/js/studio/registry.js';
 import { compileStudio } from '../../src/js/studio/compiler.js';
@@ -32,7 +35,7 @@ test('the picker lists exactly the nodes with the notes or hits capability, then
       return c.notes || c.hits;
     }).map((n) => n.id);
     assert.deepEqual(list.slice(0, -1).map((c) => c.id), want);
-    assert.equal(want.length, 8, 'the panel Keys, its six engines and the XY pad');
+    assert.equal(want.length, 9, 'the panel Keys, its six engines and the two XY pads (K220)');
     assert.ok(!list.some((c) => c.id === PANEL.resolve(m).get('vco1').id), 'a VCO plays no note');
     const last = list.at(-1);
     assert.equal(last.id, NEW_VOICE);
@@ -48,7 +51,7 @@ test('a choice is one history entry; undo restores the previous route, redo the 
   const done = st.dispatch(r.action);
   assert.equal(done.ok, true, done.reason);
   assert.equal(st.debugInfo().undoDepth, depth + 1);
-  assert.equal(st.undoLabel(), `Play ${fm.metadata.name} from the keys`);
+  assert.equal(st.undoLabel(), `Hrát ${fm.metadata.name} z kláves`);
   assert.equal(routedNode(st.getModel()).id, fm.id);
   assert.equal(instrumentChoices(st.getModel(), PANEL, { current: fm.id })
     .find((c) => c.selected).id, fm.id);
@@ -75,12 +78,12 @@ test('a choice is one history entry; undo restores the previous route, redo the 
 test('negative: a target without the notes capability is refused with its sentence', () => {
   const st = panelStore();
   const vco = PANEL.resolve(st.getModel()).get('vco1');
-  assert.match(routeAction(st.getModel(), PANEL, vco.id).reason, /does not play notes/);
+  assert.match(routeAction(st.getModel(), PANEL, vco.id).reason, /nehraje noty/);
   const before = st.getModel();
   const depth = st.debugInfo().undoDepth;
   const r = st.dispatch({ type: 'METADATA_SET', noteTarget: vco.id });
   assert.equal(r.ok, false);
-  assert.match(r.reason, /VCO 1 does not play notes: the keys play a node with the notes or hits/);
+  assert.match(r.reason, /VCO 1 nehraje noty: klávesy hrají uzel se schopností notes nebo hits/);
   assert.equal(st.getModel(), before, 'model unchanged');
   assert.equal(st.debugInfo().undoDepth, depth, 'history unchanged');
   // A tampered file that names a VCO as the target does not load.
@@ -88,7 +91,7 @@ test('negative: a target without the notes capability is refused with its senten
   doc.metadata.noteTarget = vco.id;
   const bad = importStudio(doc);
   assert.equal(bad.ok, false);
-  assert.match(bad.errors[0].message, /does not play notes/);
+  assert.match(bad.errors[0].message, /nehraje noty/);
 });
 
 test('removing the routed node clears the route in the same entry; undo restores both', () => {
@@ -110,7 +113,7 @@ test('New Synth voice inserts the panel in one entry when the document has none'
   assert.equal(st.dispatch(routeAction(st.getModel(), PANEL, NEW_VOICE).action).ok, true);
   assert.equal(st.debugInfo().undoDepth, depth + 1);
   assert.ok(PANEL.resolve(st.getModel()).get('keys'));
-  assert.equal(noteTypes(st.getModel()).length, 8);
+  assert.equal(noteTypes(st.getModel()).length, 9); // K220: pad L joins pad R
 });
 
 test('the waveform group: each wave one NODE_PARAM_SET; Noise is the Mixer\'s noise level', () => {
@@ -229,4 +232,26 @@ test('review R4: a route may name any valid node id, up to the id limit', () => 
   const back = importStudio(JSON.parse(serializeStudio(st.getModel())));
   assert.equal(back.ok, true, back.ok || back.errors[0].message);
   assert.equal(back.model.metadata.noteTarget, id);
+});
+
+test('Q090: each dock wave\'s short label is a prefix of its full name, the radio\'s name', () => {
+  // WCAG 2.5.3 Label in Name (oscilla-c3, Q090 2026-11-13): the button shows the short label
+  // so the dock keeps one row at 1536 px; its accessible name and title are the full name.
+  assert.deepEqual(WAVES.map((w) => w.id),
+    ['sine', 'triangle', 'sawtooth', 'square', 'pulse', 'noise']);
+  for (const w of WAVES) {
+    assert.ok(w.name && w.label, `${w.id} has a name and a label`);
+    assert.ok(w.name.startsWith(w.label), `${w.id}: "${w.label}" is a prefix of "${w.name}"`);
+  }
+  for (const id of ['sine', 'triangle', 'sawtooth', 'square']) {
+    assert.equal(WAVES.find((w) => w.id === id).name, WAVEFORM_NAMES[id], `${id}: the one name`);
+  }
+  assert.deepEqual(WAVES.map((w) => w.label), ['Sin', 'Troj', 'Pila', 'Obd', 'Pulz', 'Šum']);
+  const html = readFileSync(new URL('../../src/index.html', import.meta.url), 'utf8');
+  const radio = html.match(/<button type="button" role="radio" :data-v="it\.id"[\s\S]*?<\/button>/);
+  assert.ok(radio, 'the dock radio template');
+  // Every item of the template carries a name (the waves their full name, the oscillators their
+  // module label in dock.js, the quick presets their whole title), so none binds an empty one.
+  assert.match(radio[0], /:aria-label="it\.name"/);
+  assert.match(radio[0], /:title="it\.name"/);
 });

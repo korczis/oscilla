@@ -203,6 +203,97 @@
       "summary": "Nové texty aplikace jsou česky a anglických vět, které ještě ukazuje, po souborech jen ubývá: hlídá to pravidlo a test",
       "commit": "4ff09c1",
       "datetime": "2026-11-07T16:10:32+01:00"
+    },
+    {
+      "release": "3.26",
+      "title": "Noty a tempo",
+      "summary": "Pole frekvence v sekvenceru berou název noty a číslo MIDI, tempo mimo 20 až 300 BPM se odmítne s důvodem a ovladač tempa ukazuje načtenou hodnotu",
+      "commit": "37a64b2",
+      "datetime": "2026-11-08T01:54:54+01:00"
+    },
+    {
+      "release": "3.27",
+      "title": "Klávesy a pad",
+      "summary": "Klávesy hrají hned v každé pracovní ploše a ve Studiu se dok sbalí, kde by zabral editor; XY pad zní při prvním dotyku a jeho osa Y řídí filtr; druhá úprava obálky za běhu zachová tu první a nota se vždy uvolní na nástroji, který ji převzal",
+      "commit": "1f0263d",
+      "datetime": "2026-11-08T14:39:13+01:00"
+    },
+    {
+      "release": "3.28",
+      "title": "Uzel Keys",
+      "summary": "Uzel Keys je jediný zdroj not pro Synth i Studio: posílá přesnou výšku a gate na audio hodinách, klouže lineárně v přesném čase, drží rozsah kláves, noty mimo rozsah odmítne s důvodem a řekne, kde oscilátor drží výšku pod 0,95 × Nyquist",
+      "commit": "1790b64",
+      "datetime": "2026-11-09T12:24:14+01:00"
+    },
+    {
+      "release": "3.29",
+      "title": "Noty na audio hodinách",
+      "summary": "Notes clipy hrají na uzlu Keys na audio hodinách se swingem, ratchetem, slidem, seedovanou pravděpodobností a tap tempem; STOP nechá klávesy připravené a jejich hraní zní i při zastaveném transportu; hrané noty vlastní scope a stavový řádek a obnovený normal v Synthu se ohlásí",
+      "commit": "710d1da",
+      "datetime": "2026-11-09T14:17:46+01:00"
+    },
+    {
+      "release": "3.30",
+      "title": "Bicí, step grid a jedny hodiny",
+      "summary": "Záložka Bicí hraje šest řádků jednoho notes clipu se šesti pady a nahrává údery; pás krokového sekvenceru nad Synthem hraje klávesy panelu ve smyčce a notes clip se dá kreslit jako step grid v Inspectoru Studia; uzel Clock a trigger hrany rozvádějí takt, sekvencer i Studio běží z jedněch hodin a každé přehrávání se hlásí jedné sběrnici; oscilátory mají unisono a synchronizaci s tempem, filtry strmost 24 dB/okt",
+      "commit": "503bb9f",
+      "datetime": "2026-11-09T16:34:25+01:00"
+    },
+    {
+      "release": "3.31",
+      "title": "Dva pady",
+      "summary": "Pod panelem Synthu jsou dva pady jedné implementace: pad L ladí přes normály Cutoff LPF a HPF, pad R hraje noty zvolené tóniny a stupnice a jeho osa Y je nově síla úhozu, už ne filtr; sílu úhozu kláves i padu je slyšet přes nový modul VELOCITY za VCA (při síle 100 beze změny hlasitosti); nový dokument proto nevede kabel z osy Y do filtru a starší dokumenty si ho ponechají",
+      "commit": "72692c1",
+      "datetime": "2026-11-10T05:25:24+01:00"
+    },
+    {
+      "release": "3.32",
+      "title": "Kalibrace jen v pásmu profilu",
+      "summary": "Měření frekvenční odezvy hlásí kalibraci jen tam, kde ji profil mikrofonu opravdu pokrývá: profil pro 12–16 kHz nad měřením 20 Hz–20 kHz ukáže „CALIBRATED jen 12–16 kHz“, profil zcela mimo měřené pásmo zůstane nekalibrovaný s poznámkou „mimo pásmo“ a jen profil přes celé pásmo opraví každý bod; vydání nově před každým krokem ověřuje čistý strom a nahrává stránku přesně z vydaného commitu, kadence počítá jen vydání, která mají GitHub Release a záznam, a každý pokus o stažení v CI má časový limit",
+      "commit": "51b478f",
+      "datetime": "2026-11-10T22:09:18+01:00"
+    },
+    {
+      "release": "3.33",
+      "title": "Nahrávání padu L a poctivý patch bay",
+      "summary": "Pad L nahrává záběr své osy X a Y do automatizace během hraní a při dalším průchodu ho přehraje; konektory patch baye říkají, co kabel opravdu udělá: bipolární zdroj do zesílení VCA se odmítne, protože by VCA otevřel bez klávesy, do VELOCITY ho lze zapojit jako tremolo a ladění Tune posune nejvýš o dvě oktávy s odkazem na vstup Pitch; odkaz Synthu odmítne neplatný kabel česky a vyjmenuje, co nezapojil; kabel držený na stropu Q to řekne v Inspectoru; demo píseň má stopu rezonance basového filtru; stisk v Inspectoru se už neztratí, když se zobrazení uzlu překreslí; laboratoř /lab/ má nové podstránky Grafy, Tvrzení, Změny, Roadmapa, Dluh, Revize a ADR",
+      "commit": "e647f09",
+      "datetime": "2026-11-11T05:31:45+01:00"
+    },
+    {
+      "release": "3.34",
+      "title": "Sekvencer vede ke krokovému sekvenceru a padům",
+      "summary": "Stránka Sekvencer odkazuje na krokový sekvencer s pady v Synthu (záložka Bicí) a na krokový modulátor ve Studiu (šablona Step Bass); projekty a experimenty s uzlem Keys uložené ve verzích 3.15 až 3.27 se znovu otevřou, protože kontrola otisku zná i podobu bez rozsahu kláves; takový starší záznam se otevře, jen pokud má rozsah kláves výchozí",
+      "commit": "4ae5b0d",
+      "datetime": "2026-11-11T11:52:22+01:00"
+    },
+    {
+      "release": "3.35",
+      "title": "Kroky modulátoru jako sloupce a krok i při zastavení",
+      "summary": "Krokový modulátor ve Studiu ukazuje hodnotu každého kroku jako sloupec v mřížce Inspektoru: u rozsahu přes nulu roste od středu nahoru nebo dolů, tah přes několik sloupců je jeden krok zpět a šipky dojdou na každý krok; tlačítko Krok krokového sekvenceru CV udělá krok i při zastaveném transportu a připraví ho ke hře stejně jako stisk klávesy",
+      "commit": "ca39ed3",
+      "datetime": "2026-11-11T13:59:40+01:00"
+    },
+    {
+      "release": "3.36",
+      "title": "Sekvencer s jednou hlavní cestou a menu Otevřít v…",
+      "summary": "Stránka Sekvencer má jedno hlavní tlačítko Krokový sekvencer a pady (Bicí) a vedle něj menu Otevřít v… se šablonou Step Bass, touto sekvencí ve Studiu, šablonou Sweep Sequence a Synthem; Filter Lab má svoje odkazy také v jednom menu; na telefonu je řada na jednom řádku s dotykovými cíli 44 px; sekce Trace v Inspektoru Studia je zavřená a ukazuje počet operací a její texty už nikde neukazují null; stav klávesnice pro čtečku obrazovky nehlásí null",
+      "commit": "d45006a",
+      "datetime": "2026-11-12T00:00:56+01:00"
+    },
+    {
+      "release": "3.37",
+      "title": "Upozornění na vložení panelu Synthu",
+      "summary": "Když Synth vloží svůj panel do dokumentu Studia a převezme vstup Master Output, oznámí to jedno informační upozornění pod hlavičkou Synthu se zavíracím tlačítkem místo stavového řádku na každé záložce; čtečka obrazovky ho přečte jednou, po zavření nebo vrácení vložení zmizí a stejné vložení ho nevrátí, nové vložení ho ukáže znovu",
+      "commit": "3b3b2f9",
+      "datetime": "2026-11-12T06:48:37+01:00"
+    },
+    {
+      "release": "3.38",
+      "title": "Ovladač MIDI hraje celý nástroj",
+      "summary": "Knoby, fadery a sustain pedál ovladače MIDI hrají panel Synthu; sekce MIDI v Nastavení ukazuje známá zařízení s rolemi portů a monitor příchozích zpráv; jedna klávesnice hraje nástroj Studia na každé stránce, a když ho dokument ještě nemá, vloží panel Synthu s upozorněním a tlačítkem Zpět; Start, Stop a transport ovladače řídí Sekvencer a Studio a tempo příchozích hodin MIDI se měří a zobrazuje, nikdy se jím neřídí",
+      "commit": "e7c466a",
+      "datetime": "2026-11-15T07:57:42+01:00"
     }
   ]
 }

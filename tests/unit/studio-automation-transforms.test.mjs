@@ -180,10 +180,24 @@ const ROWS = [
   // K010: an audio-rate LFO; a lane above 0.95 x Nyquist is clamped there, as a frequency is.
   { type: 'lfo', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: FREQUENCY_MAX,
     display: 'log', param: (h) => osc(h).frequency, ...freqLane },
+  // K022: the LFO depth is the gain after its oscillator (its control output), linear 0..1.
+  { type: 'lfo', key: 'depth', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: (h) => h.outputs.control.gain,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
+  // K229: the morph of an LFO of the morph shape is its morph source's offset, linear 0..1.
+  { type: 'lfo', key: 'morph', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    node: { shape: 'morph' }, param: (h) => h.info.morph.offset,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
   { type: 'random', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100, display: 'log',
     param: (h) => h.outputs.control.playbackRate, toAudio: controlPlaybackRate, ...rateLane },
   { type: 'step-modulator', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,
     display: 'log', param: (h) => h.outputs.control.playbackRate,
+    toAudio: controlPlaybackRate, ...rateLane },
+  // K226: the step-voltage sequencer's free-running rows share one buffer source, its rate.
+  { type: 'step-voltage-sequencer', key: 'rate', unit: 'Hz', scale: 'log', min: 0.01, max: 100,
+    display: 'log', param: (h) => h.info.source.playbackRate,
     toAudio: controlPlaybackRate, ...rateLane },
   { type: 'gain', key: 'gain', unit: '', scale: 'linear', min: 0, max: 2, display: 'db',
     param: level, ...levelLane(2) },
@@ -206,6 +220,15 @@ const ROWS = [
     param: (h) => h.info.stage.trim.gain, points: [[0, 0.25, 'step'], [1, 1, 'linear'], [2, 0, 'linear']],
     checks: () => [[0, 0.25], [0.5, 0.625], [1, 1], [1.5, 0.5], [2, 0]] },
   // K013: the Macro value is its ConstantSourceNode offset, 0..1.
+  // K231: the XY pad's rest values (a recorded take's lanes), each its rest source's offset.
+  { type: 'xy-pad', key: 'x', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: (h) => h.info.rests.x.offset,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
+  { type: 'xy-pad', key: 'y', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
+    param: (h) => h.info.rests.y.offset,
+    points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],
+    checks: () => [[0, 0], [0.5, 0.5], [1, 1], [1.5, 0.625], [2, 0.25]] },
   { type: 'macro', key: 'value', unit: '', scale: 'linear', min: 0, max: 1, display: 'linear',
     param: (h) => h.info.source.offset,
     points: [[0, 0, 'step'], [1, 1, 'linear'], [2, 0.25, 'linear']],

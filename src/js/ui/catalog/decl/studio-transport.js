@@ -9,6 +9,24 @@ const SITE = 'src/js/ui/studio/transport-bar.js';
 
 export default [
   defineComponent({
+    id: 'studio.bar',
+    kind: 'panel',
+    label: 'Studio toolbar',
+    docs: 'Lišta Studia s přehráváním, soubory a přepínačem pohledů; ukotvená klávesnice ji nikdy '
+      + 'nezakryje (#444).',
+    state: { none: 'nese ovládání Studia; žádnou hodnotu nevlastní' },
+  }),
+  defineComponent({
+    id: 'studio.armed',
+    kind: 'readout',
+    label: 'Klávesy zapnuté',
+    docs: 'Ukazuje, že klávesy hrají běžící graf, i když časová osa stojí; Stop po Play je '
+      + 'nechá zapnuté (K104).',
+    state: 'studio.transport',
+    in: 'studio.bar',
+    related: ['synth.arm'],
+  }),
+  defineComponent({
     id: 'studio.toolbar.transport',
     pattern: { template: 'studio.tl.{key}', keys: ['return', 'play', 'stop'], sites: [SITE] },
     kind: 'transport',
@@ -27,6 +45,15 @@ export default [
     state: 'studio.model',
     in: 'studio.tl.transport',
     related: ['studio.compact.loop', 'studio.tl.loop-band'],
+  }),
+  defineComponent({
+    id: 'studio.tl.tap',
+    kind: 'action',
+    label: 'Tap tempo',
+    docs: 'Nastaví tempo ze čtyř ťuknutí: jejich průměrný interval, jedna úprava tempa za sérii '
+      + '(K068).',
+    state: 'studio.transport',
+    in: 'studio.tl.transport',
   }),
   defineComponent({
     id: 'studio.tl.transport',

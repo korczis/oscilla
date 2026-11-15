@@ -44,23 +44,28 @@
 // (§184): STOP_POLICY, scheduler.stop(); Escape (§185): resolveEscape(). docs/v31/timeline.md
 // documents all three.
 
+import { svsResetSources } from './step-voltage.js';
 import {
   buildTimeline, planFromTimeline, STOP_LEAD_S, STOP_PAD_S, STOP_RAMP_S,
 } from '../sequencer/compiler.js';
 import {
-  BLOCK_SCHEMA, DEFAULT_SEED, PROVISIONAL_SAMPLE_RATE, WAVEFORMS, normalizeModel,
+  BLOCK_SCHEMA, DEFAULT_SEED, WAVEFORMS, normalizeModel,
 } from '../sequencer/model.js';
 import { LOOKAHEAD_S } from '../sequencer/editor.js';
 import { RENDER_QUANTUM } from '../core/constants.js';
 import { SCHEDULE_LEAD_S, TOP_UP_EVERY_MS } from '../audio/scheduler.js';
 import { NODE_REGISTRY } from './registry.js';
 import {
-  compileLaneEvents, laneParamDef, laneValueAt, scheduledValueAt,
+  compileLaneEvents, laneParamDef, laneValueAt, holdEvents, scheduledValueAt,
 } from './automation.js';
 import {
-  CONTIGUITY_TOLERANCE_S, MIN_LOOP_S, clipEnd, effectiveTarget, timelineEnd,
+  CONTIGUITY_TOLERANCE_S, anchorEndTime, audioTimeOf, clipEnd, createAnchor,
+  effectiveTarget, passInfo, positionAt, rateOf, timelineEnd,
 } from './timeline.js';
 import { STUDIO_XFADE_S } from './compiler.js';
+import { clipTarget } from './clip-targets.js';
+import { clockTickHolds, clockTicks, firesTriggers, triggerEdges } from './clock.js';
+import { noteItems } from './notes.js';
 
 // ---------------------------------------------------------------- constants
 
@@ -123,7 +128,6 @@ export const ESCAPE_PRIORITY = Object.freeze(['cancel-gesture', 'close-popup',
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 /** Two lane values equal up to float rounding (relative 1e-9). */
 const sameValue = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
-const rateOf = (sr) => (finite(sr) && sr > 0 ? sr : PROVISIONAL_SAMPLE_RATE);
 
 /** Smallest whole-frame time >= t. */
 export function frameCeil(t, sampleRate) {
@@ -162,76 +166,9 @@ export function stopTime(now, sampleRate) {
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // ---------------------------------------------------------------- transport anchor
-
-/**
- * The mapping between timeline positions and audio times for one playback.
- *   createAnchor(model, { baseTime, startPosition = 0, sampleRate, generation = 0 })
- * -> { sampleRate, baseFrame, baseTime, startPosition, loop: { start, end } | null, end,
- *      firstPassFrames, loopFrames, generation }
- * The loop applies when enabled, at least MIN_LOOP_S long and still ahead of startPosition.
- */
-export function createAnchor(model, { baseTime = 0, startPosition = 0, sampleRate,
-  generation = 0 } = {}) {
-  const sr = rateOf(sampleRate);
-  const baseFrame = Math.ceil(baseTime * sr - 1e-6);
-  const l = model.timeline.loop;
-  const loop = l.enabled && l.end - l.start >= MIN_LOOP_S && startPosition < l.end
-    ? { start: l.start, end: l.end } : null;
-  const end = timelineEnd(model);
-  const firstEnd = loop ? loop.end : end;
-  return {
-    sampleRate: sr,
-    baseFrame,
-    baseTime: baseFrame / sr,
-    startPosition,
-    loop,
-    end,
-    firstPassFrames: Math.max(0, Math.round((firstEnd - startPosition) * sr)),
-    loopFrames: loop ? Math.round((loop.end - loop.start) * sr) : 0,
-    generation,
-  };
-}
-
-/** Position range and first frame of pass k: { pass, posStart, posEnd, startFrame, endFrame }. */
-export function passInfo(anchor, k) {
-  const posStart = k === 0 ? anchor.startPosition : anchor.loop.start;
-  const posEnd = anchor.loop ? anchor.loop.end : anchor.end;
-  const startFrame = anchor.baseFrame + (k === 0 ? 0
-    : anchor.firstPassFrames + (k - 1) * anchor.loopFrames);
-  const endFrame = startFrame + (k === 0 ? anchor.firstPassFrames : anchor.loopFrames);
-  return { pass: k, posStart, posEnd, startFrame, endFrame,
-    startTime: startFrame / anchor.sampleRate, endTime: endFrame / anchor.sampleRate };
-}
-
-/** Audio time of a timeline position inside pass k (whole frames). */
-export function audioTimeOf(anchor, k, position) {
-  const p = passInfo(anchor, k);
-  return (p.startFrame + Math.round((position - p.posStart) * anchor.sampleRate))
-    / anchor.sampleRate;
-}
-
-/**
- * The playhead at audio time t (§94): { position, pass, playing } — before baseTime the head
- * waits at startPosition (playing false), after a non-looping end it returns null.
- */
-export function positionAt(anchor, t) {
-  const sr = anchor.sampleRate;
-  const frames = t * sr - anchor.baseFrame;
-  if (frames < 0) return { position: anchor.startPosition, pass: 0, playing: false };
-  if (frames < anchor.firstPassFrames) {
-    return { position: anchor.startPosition + frames / sr, pass: 0, playing: true };
-  }
-  if (!anchor.loop || anchor.loopFrames <= 0) return null;
-  const rest = frames - anchor.firstPassFrames;
-  const k = Math.floor(rest / anchor.loopFrames);
-  return { position: anchor.loop.start + (rest - k * anchor.loopFrames) / sr, pass: k + 1,
-    playing: true };
-}
-
-/** Audio time at which a non-looping playback ends (Infinity while a loop is active). */
-export function anchorEndTime(anchor) {
-  return anchor.loop ? Infinity : (anchor.baseFrame + anchor.firstPassFrames) / anchor.sampleRate;
-}
+// The anchor (createAnchor, passInfo, audioTimeOf, positionAt, anchorEndTime) is in timeline.js
+// since K241 (this file's size cap); re-exported here for its callers.
+export { anchorEndTime, audioTimeOf, createAnchor, passInfo, positionAt } from './timeline.js';
 
 /** Passes whose audio range intersects [from, until). */
 export function passesInWindow(anchor, from, until) {
@@ -276,6 +213,11 @@ function nodeOf(model, id) {
   return id ? model.graph.nodes.find((n) => n.id === id) || null : null;
 }
 
+/** Whether a notes clip on `target` plays note by note (the clip-target policy). */
+function playsNotesClip(model, target, registry) {
+  return clipTarget(nodeOf(model, target), { kind: 'notes' }, registry).plays;
+}
+
 /** The one-block V2 sequence that plays a pattern clip (the sequencer's own model). */
 export function clipSequence(model, clip, { durationS = clip.duration, sampleRate } = {}) {
   const node = nodeOf(model, effectiveTarget(model, clip));
@@ -294,23 +236,18 @@ function clipSnapshot(model, clip) {
     target: effectiveTarget(model, clip), payload: clip.payload };
 }
 
-/** The TRIGGER edges leaving `id` (a pattern clip's target drives them at its start). */
-function triggerEdges(model, id) {
-  return model.graph.edges.filter((e) => e.from.node === id && e.from.port === 'trigger')
-    .map((e) => [e.id, e.to.node, e.to.port, !!(e.props && e.props.muted)]);
-}
-
 /**
  * Whether a scheduled item `a` (compiled from `prev`) plays exactly as `b` (compiled from
  * `next`, the same key): same times, target, clip, compiled sequence (waveform and tempo
- * included) and, for a pattern, the same TRIGGER edges from its target. An edit leaves such a
+ * included) and, for an item that fires its target's TRIGGER edges (a pattern, a Clock tick, a
+ * trigger event), the same edges from its target. An edit leaves such a
  * future item scheduled (EDIT_POLICY futureItem).
  */
 function sameItem(a, prev, b, next) {
   return a.type === b.type && a.startTime === b.startTime && a.endTime === b.endTime
     && a.target === b.target && a.action === b.action && a.truncated === b.truncated
     && sameJson(a.clip, b.clip) && sameJson(a.sequence, b.sequence)
-    && (a.type !== 'pattern' || sameJson(triggerEdges(prev, a.target),
+    && (!firesTriggers(a) || sameJson(triggerEdges(prev, a.target),
       triggerEdges(next, b.target)));
 }
 
@@ -322,6 +259,9 @@ function sameItem(a, prev, b, next) {
  *                events = the sequencer plan with absolute `time` (= startTime + t)
  *   event        { ..., action: 'gate' | 'trigger' }
  *   measurement  { ..., action } (seconds only; never musical)
+ *   note         one onset of a notes clip on a Keys node (K068, notes.js noteItems)
+ *   notes        a notes clip on a target that does not play it (reported unplayed)
+ *   clock        a Clock tick (clock.js clockTicks, K023)
  * Automation: [{ key, laneId, target, pass, events }] (automation.js compileLaneEvents).
  */
 export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {}) {
@@ -365,6 +305,10 @@ export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {})
       items.push({ ...base, type: 'pattern', duration: tl.duration,
         endTime: startTime + tl.duration, sequence, events,
         level: node && finite(node.params.level) ? node.params.level : 1 });
+    } else if (clip.kind === 'notes' && playsNotesClip(model, target, registry)) {
+      // K068: one item per onset, so an edit or a tempo change re-plans those after its horizon.
+      items.push(...noteItems(clip, base, { pass: k, tempo: model.transport.tempo,
+        cutS: truncated ? duration : null, toAudio: (pos) => audioTimeOf(anchor, k, pos) }));
     } else {
       const endTime = audioTimeOf(anchor, k, clip.start + duration);
       const action = clip.kind === 'event' ? (clip.payload.action || 'gate')
@@ -372,11 +316,16 @@ export function compilePass(model, anchor, k, { registry = NODE_REGISTRY } = {})
       items.push({ ...base, type: clip.kind, action, duration: endTime - startTime, endTime });
     }
   });
+  items.push(...clockTicks(model, info, (pos) => audioTimeOf(anchor, k, pos), {
+    pass: k, generation: gen, tolerance: CONTIGUITY_TOLERANCE_S, registry }));
   if (looping && k > 0 && model.timeline.clips.some((c) => c.kind === 'measurement'
     && c.start >= info.posStart - CONTIGUITY_TOLERANCE_S && c.start < info.posEnd)) {
     warnings.push('Measurement clips inside the loop region repeat on every pass.');
   }
-  items.sort((a, b) => a.startTime - b.startTime || a.order - b.order);
+  // K226: at one instant the items that drive a step-voltage sequencer's reset go first.
+  const resetting = svsResetSources(model);
+  const rank = (it) => (resetting.has(it.target) ? 0 : 1);
+  items.sort((a, b) => a.startTime - b.startTime || rank(a) - rank(b) || a.order - b.order);
   const automation = model.timeline.automation.map((lane) => ({
     key: `${lane.id}#${gen}.${k}`,
     laneId: lane.id,
@@ -448,26 +397,9 @@ export function compileTimeline(model, opts = {}) {
 
 // ---------------------------------------------------------------- holding automation
 
-/**
- * Events that hold a param at `at` given what was scheduled (`scheduled`, compiled events in
- * order): after cancelScheduledValues(at), a ramp that was in progress across `at` is re-ended
- * at `at` with its exact value (same curve up to `at`), then the value is pinned. Returns
- * { value, events }; value is null when nothing was scheduled.
- */
-export function holdEvents(scheduled, at, defaultValue = null) {
-  const value = scheduledValueAt(scheduled, at, defaultValue);
-  if (value === null) return { value, events: [] };
-  let next = null;
-  for (const e of scheduled) if (e.time >= at && (!next || e.time < next.time)) next = e;
-  const events = [];
-  if (next && next.method === 'linearRampToValueAtTime') {
-    events.push({ method: 'linearRampToValueAtTime', value, time: at, hold: true });
-  } else if (next && next.method === 'exponentialRampToValueAtTime' && value > 0) {
-    events.push({ method: 'exponentialRampToValueAtTime', value, time: at, hold: true });
-  }
-  events.push({ method: 'setValueAtTime', value, time: at, hold: true });
-  return { value, events };
-}
+// holdEvents lives in automation.js beside scheduledValueAt (split for the source budget, K023);
+// re-exported here, where the scheduler and the transport have always imported it.
+export { holdEvents } from './automation.js';
 
 // ---------------------------------------------------------------- scheduler
 
@@ -489,8 +421,9 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     : TIMELINE_LOOKAHEAD_S;
   const playStart = finite(opts.startPosition) ? opts.startPosition : 0;
   let model = initialModel;
+  const freeRun = opts.freeRun === true; // K241
   let anchor = createAnchor(model, { baseTime: opts.baseTime || 0, startPosition: playStart,
-    sampleRate: sr });
+    sampleRate: sr, freeRun });
   let scheduledUntil = anchor.baseTime;
   let firstWindow = true;
   let stopped = false;
@@ -539,7 +472,7 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       const at = startLeadTime(now, sr);
       reanchored = { from: anchor.baseTime, to: at };
       anchor = createAnchor(model, { baseTime: at, startPosition: anchor.startPosition,
-        sampleRate: sr, generation: anchor.generation });
+        sampleRate: sr, generation: anchor.generation, freeRun });
       cache = new Map();
       scheduledUntil = anchor.baseTime;
     }
@@ -586,6 +519,9 @@ export function createTimelineScheduler(initialModel, opts = {}) {
 
   /** Classify a scheduled item that sounds across the horizon against the edited model. */
   function decideCurrent(it, next, horizon) {
+    if (it.type === 'clock') {
+      return clockTickHolds(it, next) ? { decision: 'keep' } : { decision: 'release', at: horizon };
+    }
     const clip = next.timeline.clips.find((c) => c.id === it.clipId);
     if (!clip) return { decision: 'release', at: horizon };
     const snap = clipSnapshot(next, clip);
@@ -593,6 +529,8 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       return { decision: 'release', at: horizon };
     }
     if (sameJson(snap, it.clip)) return { decision: 'keep' };
+    // A sounding note onset (K068) plays as scheduled; the clip's later onsets are re-planned.
+    if (it.type === 'note') return { decision: 'keep-until-end' };
     const onlyDuration = snap.start === it.clip.start && snap.trackId === it.clip.trackId
       && sameJson(snap.payload, it.clip.payload);
     if (onlyDuration) {
@@ -624,11 +562,12 @@ export function createTimelineScheduler(initialModel, opts = {}) {
     model = nextModel;
     if (!sameJson(l0, l1) && pos) {
       anchor = createAnchor(model, { baseTime: horizon, startPosition: pos.position,
-        sampleRate: sr, generation: anchor.generation + 1 });
+        sampleRate: sr, generation: anchor.generation + 1, freeRun });
       plan.reanchored = true;
     } else {
       anchor = { ...createAnchor(model, { baseTime: anchor.baseTime,
-        startPosition: anchor.startPosition, sampleRate: sr, generation: anchor.generation }),
+        startPosition: anchor.startPosition, sampleRate: sr, generation: anchor.generation,
+        freeRun }),
       baseFrame: anchor.baseFrame, baseTime: anchor.baseTime };
     }
     cache = new Map();
@@ -680,7 +619,8 @@ export function createTimelineScheduler(initialModel, opts = {}) {
       // Clips that now cover the horizon but never started wait for their next trigger.
       for (const k of passesInWindow(anchor, horizon, horizon + 1e-9)) {
         for (const it of passCache(k).items) {
-          if (it.startTime < horizon && it.endTime > horizon && !kept.has(it.clipId)) {
+          if (it.type !== 'clock' && it.startTime < horizon && it.endTime > horizon
+            && !kept.has(it.clipId)) {
             plan.decisions.push({ key: it.key, clipId: it.clipId, decision: 'next-trigger' });
           }
         }

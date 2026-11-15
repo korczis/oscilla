@@ -18,52 +18,53 @@
 
 import { PATCH_KIND, PATCH_SCHEMA_VERSION, patchTargets } from '../studio/patches.js';
 import { STUDIO_SCHEMA_VERSION } from '../studio/schema.js';
+import { amountEdges } from './normals.js';
 
 export const PRESETS = Object.freeze([
-  { id: 'init', title: 'Init: both filters open', values: {},
+  { id: 'init', title: 'Základ: oba filtry otevřené', values: {},
     amounts: { 'lpf-eg2': 2 } },
-  { id: 'bass', title: "Bass: 16' saw, low-pass swept by EG 2",
+  { id: 'bass', title: "Bas: pila 16', dolní propust rozmítaná obálkou EG 2",
     values: { 'vco1.scale': '16', 'vco2.scale': '16', 'vco2.waveform': 'sawtooth',
       'vco2.tune': 7, 'lpf.frequency': 180, 'lpf.Q': 6, 'eg2.decay': 0.25, 'eg2.sustain': 0.4 },
     amounts: { 'lpf-eg2': 3 } },
-  { id: 'lead', title: 'Lead: VCO 2 a fifth up, vibrato from MG',
+  { id: 'lead', title: 'Sólo: VCO 2 o kvintu výš, vibrato z MG',
     values: { 'vco1.scale': '8', 'vco2.scale': '8', 'vco2.waveform': 'sawtooth',
       'vco2.tune': 702, 'mix.level2': 0.6, 'lpf.frequency': 2400, 'lpf.Q': 3, 'mg.rate': 5.5,
       'keys.glide': 0.06 },
     amounts: { 'vco-mg': 0.03, 'lpf-eg2': 1.5 } },
-  { id: 'sweep', title: 'Sweep: both filters resonant, MG on the low-pass',
+  { id: 'sweep', title: 'Rozmítání: oba filtry rezonují, MG na dolní propusti',
     values: { 'hpf.frequency': 200, 'hpf.Q': 8, 'lpf.frequency': 900, 'lpf.Q': 12,
       'mg.rate': 0.4, 'mix.level3': 0.15 },
     amounts: { 'lpf-mg': 2, 'lpf-eg2': 0 } },
-  { id: 'ring-bell', title: "Ring bell: ring modulator at 4', short EG 2",
+  { id: 'ring-bell', title: "Kruhový zvon: kruhový modulátor na 4', krátká obálka EG 2",
     values: { 'vco1.scale': '4', 'vco1.waveform': 'triangle', 'vco2.scale': '8',
       'vco2.waveform': 'sine', 'vco2.tune': 386, 'mix.level1': 0.1, 'mix.level2': 0,
       'mix.level4': 0.8, 'lpf.frequency': 6000, 'eg2.decay': 0.6, 'eg2.sustain': 0,
       'eg2.release': 0.8 },
     amounts: { 'lpf-eg2': 0 } },
   // Engines tab (plan K090-K092, K121, K123): each sets its engine's module only.
-  { id: 'organ', tab: 'engines', engine: 'additive', title: 'Organ: drawbars 16, 8, 4, 2',
+  { id: 'organ', tab: 'engines', engine: 'additive', title: 'Varhany: táhla 16, 8, 4, 2',
     values: { 'additive.h1': 1, 'additive.h2': 0.8, 'additive.h3': 0, 'additive.h4': 0.6,
       'additive.h5': 0, 'additive.h6': 0, 'additive.h8': 0.4, 'additive.attack': 0.005,
       'additive.sustain': 1, 'additive.release': 0.08 }, amounts: {} },
-  { id: 'fm-bell', tab: 'engines', engine: 'fm', title: 'FM bell: 2 → 1 at ratio 3.5',
+  { id: 'fm-bell', tab: 'engines', engine: 'fm', title: 'FM zvon: 2 → 1, poměr 3,5',
     values: { 'fm.algorithm': '2-op', 'fm.ratio2': 3.5, 'fm.index2': 3, 'fm.modDecay': 1.5,
       'fm.modSustain': 0.1, 'fm.decay': 2.5, 'fm.sustain': 0, 'fm.release': 1.5 }, amounts: {} },
-  { id: 'fm-keys', tab: 'engines', engine: 'fm', title: 'FM keys: two pairs, ratio 1 and 14',
+  { id: 'fm-keys', tab: 'engines', engine: 'fm', title: 'FM piano: dva páry, poměry 1 a 14',
     values: { 'fm.algorithm': '4-pairs', 'fm.ratio2': 1, 'fm.index2': 1.8, 'fm.ratio3': 1,
       'fm.ratio4': 14, 'fm.index4': 0.6, 'fm.level3': 0.4, 'fm.modDecay': 0.8,
       'fm.modSustain': 0.2, 'fm.decay': 1.6, 'fm.sustain': 0.2, 'fm.release': 0.5 },
     amounts: {} },
-  { id: 'ring-metal', tab: 'engines', engine: 'am', title: 'Ring metal: ratio 1.41',
+  { id: 'ring-metal', tab: 'engines', engine: 'am', title: 'Kruhový kov: poměr 1,41',
     values: { 'am.mode': 'ring', 'am.ratio': 1.41, 'am.decay': 1.2, 'am.sustain': 0,
       'am.release': 0.9 }, amounts: {} },
-  { id: 'formant-pad', tab: 'engines', engine: 'wavetable', title: 'Formant pad: slow attack',
+  { id: 'formant-pad', tab: 'engines', engine: 'wavetable', title: 'Formantový pad: pomalý náběh',
     values: { 'wavetable.bank': 'formant', 'wavetable.morph': 1.5, 'wavetable.attack': 0.6,
       'wavetable.sustain': 0.8, 'wavetable.release': 1.2 }, amounts: {} },
-  { id: 'sync-lead', tab: 'engines', engine: 'sync', title: 'Sync lead: ratio 3',
+  { id: 'sync-lead', tab: 'engines', engine: 'sync', title: 'Sync sólo: poměr 3',
     values: { 'sync.morph': 2, 'sync.attack': 0.005, 'sync.sustain': 0.9,
       'sync.release': 0.2 }, amounts: {} },
-  { id: 'kit', tab: 'engines', engine: 'perc', title: 'Kit: the percussion on the keys',
+  { id: 'kit', tab: 'engines', engine: 'perc', title: 'Sada: perkuse na klávesách',
     values: { 'perc.tune': 0, 'perc.decay': 1, 'perc.tone': 0.5 }, amounts: {} },
 ].map((p) => Object.freeze({ tab: 'panel', engine: null, ...p })));
 
@@ -123,13 +124,35 @@ export function presetPatch(panel, id, { all = false, modules = null } = {}) {
 
 export function presetAction(model, panel, id, { all = false, modules = null } = {}) {
   const patch = presetPatch(panel, id, { all, modules });
-  if (!patch) return { reason: `There is no preset "${id}".` };
+  if (!patch) return { reason: `Předvolba „${id}“ neexistuje.` };
   const { onto } = patchTargets(model, patch);
   if (!Object.keys(onto).length) {
-    return { reason: `The ${panel.title} is not in this Studio document: insert it first.` };
+    return { reason: `Panel ${panel.title} v tomto dokumentu Studia není: nejdřív ho vložte.` };
   }
-  const action = { type: 'PATCH_REPLACE', patch, onto, label: `Preset ${patch.name}` };
-  if (!presetOf(id).engine || all || modules || !model.metadata.noteTarget) return { action };
-  return { action: { type: 'BATCH', label: action.label,
-    steps: [action, { type: 'METADATA_SET', noteTarget: null }] } };
+  const replace = { type: 'PATCH_REPLACE', patch, onto, label: `Předvolba ${patch.name}` };
+  const steps = [replace];
+  // K236 (329 R5): an amount whose edges are all broken (a cable replaced its normal) keeps its
+  // depth in metadata.synthAmounts, which the normal comes back at; the preset's depth goes
+  // there, in the same undo, or an unpatch would restore the depth from before the preset.
+  const remembered = rememberedDepths(model, panel, patch, presetOf(id));
+  if (remembered) steps.push({ type: 'METADATA_SET', synthAmounts: remembered });
+  if (presetOf(id).engine && !all && !modules && model.metadata.noteTarget) {
+    steps.push({ type: 'METADATA_SET', noteTarget: null });
+  }
+  return { action: steps.length === 1 ? replace
+    : { type: 'BATCH', label: replace.label, steps } };
+}
+
+/** The preset's depth of every amount in the patch's scope that has no edge now, or null. */
+function rememberedDepths(model, panel, patch, p) {
+  const ids = new Set(patch.graph.nodes.map((n) => n.id));
+  const had = (model.metadata || {}).synthAmounts || {};
+  const out = {};
+  for (const a of panel.amounts) {
+    if (!ids.has(a.source.split('.')[0]) || !a.to.some((t) => ids.has(t.split('.')[0]))) continue;
+    if (amountEdges(model, panel, a).length) continue;
+    const depth = p.amounts[a.id] ?? 0;
+    if (had[a.key] !== depth) out[a.key] = depth;
+  }
+  return Object.keys(out).length ? out : null;
 }

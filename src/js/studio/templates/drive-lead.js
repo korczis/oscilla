@@ -22,7 +22,7 @@ export default {
       'The curve is a mathematical function: it does not model any circuit.',
     ],
   },
-  studioHash: '24725ac1da7d547cd57e4a68e2c955dcf5893d6a10163b4eb33bfa6ebf298521',
+  studioHash: '8df349d9160942b5d4b0967ba83c206b5d66489d9c1baa73df82e2b486a7cb29',
   model: studioDoc({
     title: 'Drive Lead',
     nodes: [

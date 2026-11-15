@@ -142,6 +142,13 @@ test('the markup scan sees the marker on templated controls and the JS scan on b
   assert.equal(nav.kind, 'jump');
   const built = scanJs(JS).producers.find((p) => p.control === 'studio.compact.expand');
   assert.equal(built.kind, 'open-in');
+  // K222: markup built in JS that carries data-osc-link beside its data-osc, in either order.
+  const drums = scanJs(JS).producers.find((p) => p.control === 'synth.drums.studio');
+  assert.deepEqual([drums.kind, drums.file], ['open-in', 'src/js/synth/view/drums-tab.js']);
+  const fixture = (line) => scanJs([{ file: 'f.js', text: line }]).producers[0];
+  assert.deepEqual([fixture('`<a data-osc-link="jump" data-osc="x.y">`').control,
+    fixture('`<a data-osc-link="jump" data-osc="x.y">`').kind], ['x.y', 'jump']);
+  assert.equal(fixture('`<b data-osc="x.y">`'), undefined, 'no marker, no producer');
 });
 
 // ------------------------------------------------------------------------------ the judge
@@ -221,4 +228,20 @@ test('reloadDebt and deferred rows name their issue or the suite that walks them
   for (const r of allRows(MAP).filter((x) => x.walk)) {
     assert.match(r.walk.covered, /^tests\/browser\/[\w-]+\.cjs/, r.id);
   }
+});
+
+test('G013: a menu item\'s producer names the button its menu is labelled by as its opener', () => {
+  const html = '<button type="button" id="b1" data-osc="lab.openMenu">Otevřít v…</button>'
+    + '<div id="m1" role="menu" aria-labelledby="b1">'
+    + '<a href="#m=synth" role="menuitem" data-osc="lab.toSynth" data-osc-link="jump">S</a></div>'
+    + '<a href="#m=studio" data-osc="lab.toStudio" data-osc-link="jump">T</a>';
+  const [item] = scanMarkup(html).filter((p) => p.control === 'lab.toSynth');
+  assert.equal(item.role, 'menuitem');
+  assert.equal(item.opener, '[data-osc="lab.openMenu"]');
+  const [plain] = scanMarkup(html).filter((p) => p.control === 'lab.toStudio');
+  assert.equal(plain.opener, undefined, 'a link outside a menu has no opener');
+  const rows = allRows(MAP).filter((r) => /^(seq|filter)\.to/.test(r.control)
+    && r.role === 'menuitem');
+  assert.ok(rows.length >= 6, `the labs' menu items are menu rows (${rows.length})`);
+  for (const r of rows) assert.match(r.opener, /^\[data-osc="(seq|filter)\.openMenu"\]$/, r.id);
 });

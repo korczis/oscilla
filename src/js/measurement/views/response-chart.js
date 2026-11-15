@@ -51,7 +51,7 @@ import {
   smoothResponse, smoothFractionalOctave, normalizeResponse,
 } from '../smoothing.js';
 import { formatFrequencyWithResolution } from '../format.js';
-import { applyFrequencyCorrection } from '../../calibration/interpolate.js';
+import { applyFrequencyCorrection, correctionInEffect } from '../../calibration/interpolate.js';
 import { isValidLevelCalibration } from '../../calibration/level.js';
 import { TRANSFER_RATIO_UNIT } from '../../experiments/csv.js';
 import { PHASE_REASONS } from '../transfer.js';
@@ -280,10 +280,11 @@ export function buildResponseView(source, options = {}) {
   const n = f.length;
   const raw = s.rawDb;
   // A correction that covers no grid point corrects nothing (no extrapolation, ADR 0020): it is
-  // no correction, so RAW is primary and the view reads UNCALIBRATED and says why (T017).
-  const corrMask = s.correction ? maskOn(s.correction.covered, n) : null;
-  const corr = corrMask && corrMask.includes(1) ? s.correction : null;
-  const covered = corr ? corrMask : null;
+  // no correction, so RAW is primary and the view reads UNCALIBRATED and says why (T017). The
+  // predicate is correctionInEffect, the experiment CSV's too (T038).
+  const effect = correctionInEffect(s.correction, n);
+  const corr = effect ? s.correction : null;
+  const covered = effect ? effect.covered : null;
   const noCoverageNote = s.correction && !corr ? noCoverageText(f, s) : null;
   const base = corr ? corr.correctedDb : raw;
   const baseKind = corr ? K.CALIBRATED : K.OBSERVED;
@@ -548,17 +549,20 @@ function calibrationCoverageText(f, [lo, hi], s) {
 }
 
 /**
- * 'Frequency profile "X" (points 12 kHz–16 kHz) covers none of the measured range (100 Hz–
- * 9.9 kHz): …' — the profile's own point frequencies are stated as the file gives them.
+ * 'Frekvenční profil "X" (body 12 kHz–16 kHz) nepokrývá žádný z 319 měřených bodů (100 Hz–
+ * 9.9 kHz): …' — the profile's own point frequencies are stated as the file gives them. It
+ * names the measured points, not a range the profile would lie outside: a one-point 1 kHz
+ * profile lies inside a 100 Hz–10 kHz sweep and still covers none of its points (T037, Q104).
  */
 function noCoverageText(f, s) {
   const c = s.correction;
   const cov = Array.isArray(c.coverage) ? c.coverage : null;
-  const pts = !cov ? '' : cov[0] === cov[1] ? ` (one point, at ${hzText(cov[0])})`
-    : ` (points ${hzText(cov[0])}–${hzText(cov[1])})`;
-  return `Frequency profile "${c.name || UNAVAILABLE.UNKNOWN}"${pts} covers none of the measured `
-    + `range (${gridFrequencyText(f, 0, s.binHz)}–${gridFrequencyText(f, f.length - 1, s.binHz)})`
-    + ': no point is corrected (no extrapolation); RAW is shown, uncalibrated.';
+  const pts = !cov ? '' : cov[0] === cov[1] ? ` (jediný bod, ${hzText(cov[0])})`
+    : ` (body ${hzText(cov[0])}–${hzText(cov[1])})`;
+  return `Frekvenční profil "${c.name || UNAVAILABLE.UNKNOWN}"${pts} nepokrývá žádný z `
+    + `${f.length} měřených bodů (${gridFrequencyText(f, 0, s.binHz)}–`
+    + `${gridFrequencyText(f, f.length - 1, s.binHz)}): žádný bod není korigován (bez `
+    + 'extrapolace); zobrazeno RAW, nekalibrováno.';
 }
 
 /**

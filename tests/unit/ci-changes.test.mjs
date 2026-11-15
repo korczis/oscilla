@@ -1,6 +1,6 @@
 // E026: path-gated CI. .github/scripts/ci-changes.mjs classifies a pull request as runtime
-// (every job of ci.yml runs) or non-runtime (the engine, suites, measure, studio, browser and
-// visual jobs are skipped), and ci.yml's `gate` accepts those skips only on the classifier's
+// (every job of ci.yml runs) or non-runtime (the browser legs leg-1, leg-2 and the visual job
+// are skipped), and ci.yml's `gate` accepts those skips only on the classifier's
 // `runtime=false`. Fail closed throughout: these tables hold every case that must run
 // everything (renamed, deleted, spaced and control-character names, a .md under tests/, an
 // empty diff, links and submodules, any event but a pull request and its merge-queue entry, a
@@ -42,11 +42,10 @@ const raw = (status, paths, { src = '100644', dst = '100644' } = {}) => {
 };
 const rec = (status, paths, modes) => parseRawZ(raw(status, paths, modes));
 
-test('the allowlist is exactly the five non-runtime path classes', () => {
+test('the allowlist is exactly the seven non-runtime path classes', () => {
   assert.deepEqual([...NON_RUNTIME], ['.ai/repo/project/', '.ai/repo/reviews/',
-    '.ai/repo/releases/', 'docs/', '*.md']);
-  assert.deepEqual([...GATED_JOBS], ['engine', 'suites', 'measure', 'studio', 'browser',
-    'census', 'visual']);
+    '.ai/repo/releases/', '.ai/repo/adrs/', '.ai/repo/knowledge/', 'docs/', '*.md']);
+  assert.deepEqual([...GATED_JOBS], ['leg-1', 'leg-2', 'visual']);
 });
 
 test('isNonRuntimePath: the allowlist, and every near miss is runtime', () => {
@@ -55,6 +54,10 @@ test('isNonRuntimePath: the allowlist, and every near miss is runtime', () => {
     ['.ai/repo/project/milestones/M046.yaml', false],
     ['.ai/repo/reviews/255.yaml', false],
     ['.ai/repo/releases/v3.11.0.yaml', false],
+    ['.ai/repo/adrs/0088-an-opt-in-loopback-bridge.md', false],
+    ['.ai/repo/adrs/README.md', false],
+    ['.ai/repo/knowledge/adr-exemptions.yaml', false],
+    ['.ai/repo/knowledge/curated/web-audio-scheduling-lateness.md', false],
     ['docs/GLOSSARY.md', false],
     ['docs/v4/performance.md', false],
     ['docs/my notes.md', false],
@@ -77,6 +80,9 @@ test('isNonRuntimePath: the allowlist, and every near miss is runtime', () => {
     ['.ai/repo/ci/gates.yaml', true],
     ['.ai/README.md', true],
     ['.ai/repo/projects/x.yaml', true],
+    ['.ai/repo/adr/0001-x.md', true],
+    ['.ai/repo/knowledge', true],
+    ['.ai/repo/knowledge-base/x.yaml', true],
     ['.ai/repo/project', true],
     ['docs', true],
     ['docsx/a.md', true],
@@ -120,6 +126,9 @@ test('classify: a table of changes, fail closed', () => {
     ['a plan record', rec('A', ['.ai/repo/project/issues/E026.yaml']), false],
     ['a review record', rec('A', ['.ai/repo/reviews/276.yaml']), false],
     ['a release record', rec('A', ['.ai/repo/releases/v3.12.0.yaml']), false],
+    ['an ADR with its exemption (E055)', [...rec('A', ['.ai/repo/adrs/0089-x.md']),
+      ...rec('M', ['.ai/repo/adrs/README.md']),
+      ...rec('M', ['.ai/repo/knowledge/adr-exemptions.yaml'])], false],
     ['top-level markdown', rec('M', ['README.md']), false],
     ['plan, review and docs together', [...rec('M', ['.ai/repo/project/intents/x.yaml']),
       ...rec('A', ['.ai/repo/reviews/1.yaml']), ...rec('M', ['docs/a.md'])], false],
@@ -385,7 +394,7 @@ test('the program writes runtime=<bool> for the job, and exits 1 without an answ
   assert.equal(r1.status, 0, r1.stderr);
   assert.equal(readFileSync(outDocs, 'utf8'), 'runtime=false\n');
   assert.match(r1.stdout, /runtime=false/);
-  assert.match(r1.stdout, /skipped for this pull request: engine, suites, measure, studio/);
+  assert.match(r1.stdout, /skipped for this pull request: leg-1, leg-2, visual/);
 
   const outPush = path.join(dir, 'push');
   const r2 = run(docs, ['--event', 'push'], outPush);
@@ -455,7 +464,7 @@ test('the gate verdict: a path-gated skip passes only on the classifier\'s runti
       ['one of the gated jobs skipped on runtime=false', needs({ runtime: 'false',
         gated: { visual: 'skipped' } }), true],
       ['skipped on runtime=true', needs({ gated: 'skipped' }), false],
-      ['one skipped on runtime=true', needs({ gated: { engine: 'skipped' } }), false],
+      ['one skipped on runtime=true', needs({ gated: { 'leg-1': 'skipped' } }), false],
       ['skipped with no runtime output', needs({ runtime: undefined, gated: 'skipped' }), false],
       ['skipped with an empty output', needs({ runtime: '', gated: 'skipped' }), false],
       ['skipped because changes failed', needs({ changes: 'failure', runtime: undefined,
@@ -465,10 +474,10 @@ test('the gate verdict: a path-gated skip passes only on the classifier\'s runti
       ['changes skipped', needs({ changes: 'skipped', runtime: 'false', gated: 'skipped' }),
         false],
       ['a gated job failed on runtime=false', needs({ runtime: 'false',
-        gated: { studio: 'failure' } }), false],
+        gated: { 'leg-2': 'failure' } }), false],
       ['a gated job cancelled on runtime=false', needs({ runtime: 'false',
-        gated: { browser: 'cancelled' } }), false],
-      ['a gated job failed on runtime=true', needs({ gated: { measure: 'failure' } }), false],
+        gated: { 'visual': 'cancelled' } }), false],
+      ['a gated job failed on runtime=true', needs({ gated: { 'leg-1': 'failure' } }), false],
       ...ALWAYS.flatMap((j) => [
         [`${j} skipped on runtime=false`, needs({ runtime: 'false', gated: 'skipped',
           always: { [j]: 'skipped' } }), false],
@@ -529,7 +538,7 @@ const browserLegs = (doc) => Object.entries(doc.jobs)
 
 test('every browser leg of ci.yml is path-gated, so a plan or record change runs none (#404 R1)', () => {
   const legs = browserLegs(CI);
-  assert.ok(legs.includes('browser') && legs.includes('census'), `browser legs found: ${legs}`);
+  assert.ok(['leg-1', 'leg-2'].every((k) => legs.includes(k)), `browser legs found: ${legs}`);
   for (const k of legs) assert.ok(GATED_JOBS.includes(k), `${k} runs a browser and is path-gated`);
 });
 

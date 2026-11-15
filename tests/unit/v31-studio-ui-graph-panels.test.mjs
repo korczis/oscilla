@@ -34,7 +34,11 @@ test('the Inspector follows the primary selection (§78)', () => {
   assert.equal(node.kind, 'node');
   assert.equal(node.name, 'Filter 1');
   assert.deepEqual(node.fields.map((f) => [f.key, f.control]), [['type', 'select'],
-    ['frequency', 'number'], ['Q', 'number'], ['gain', 'number'], ['enabled', 'toggle']]);
+    ['frequency', 'number'], ['Q', 'number'], ['gain', 'number'], ['enabled', 'toggle'],
+    ['slope', 'select']]);
+  // K022: the Filter's enabled is shown as the one Bypass switch, inverted (C043).
+  const bypass = node.fields.find((f) => f.key === 'enabled');
+  assert.deepEqual([bypass.label, bypass.invert, bypass.checked], ['Bypass', true, false]);
   const cutoff = node.fields.find((f) => f.key === 'frequency');
   assert.equal(cutoff.text, '500 Hz');
   assert.equal(cutoff.automated, true, 'the template automates the cutoff');

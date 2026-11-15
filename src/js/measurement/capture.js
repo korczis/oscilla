@@ -10,6 +10,11 @@
 //            → trim (cancels the compressor's automatic makeup gain)
 //            → ceiling (WaveShaper: identity up to ±0.25, flat beyond) → analyser → destination
 //
+// The setup check plays the same way (C033): preflight({ probe }) captures the background first
+// and then plays a shortened copy of the stimulus the engine renders, through the same source,
+// fade gain and master chain, while it reads the input again; so Check setup sounds, and the
+// engine can say whether the input heard it. It stops nothing (C016).
+//
 // Effect of the chain on a measurement (§207, gap G12) — decided: the chain is PART of the
 // measured system and is not compensated; it is never bypassed. The stimulus peak is `level`
 // ≤ 1 (digital, MEASUREMENT_LEVELS, never SPL, §208) times the master gain ≤ 0.25, so it never
@@ -93,6 +98,14 @@ import {
   stopStreamTracks,
 } from '../audio/microphone.js';
 import { MeasurementError, mapError } from './engine.js';
+import { captureAudioSession } from './audio-session.js';
+import { levelOf } from './input-level.js';
+import { CAPTURE_NODE_OPTIONS, speakersMono, writeCaptureChannels } from './capture-channels.js';
+import { buildLoopbackSystem } from './capture-loopback-system.js';
+
+export { captureAudioSession, CAPTURE_AUDIO_SESSION } from './audio-session.js';
+export { levelOf } from './input-level.js';
+export { CAPTURE_NODE_OPTIONS, speakersMono, writeCaptureChannels } from './capture-channels.js';
 
 export const CAPTURE_PROCESSOR_NAME = 'oscilla-capture-v1';
 /** Frames per posted chunk (≈ 43 ms at 48 kHz): progress cadence and message overhead. */
@@ -105,6 +118,8 @@ export const SCHEDULE_LEAD_S = 0.1;
 export const ABORT_FADE_S = 0.01;
 /** Input level read during preflight. */
 export const PREFLIGHT_LEVEL_S = 0.3;
+/** Capture after the setup check's probe ends (input latency and the room's decay). */
+export const PROBE_TAIL_S = 0.2;
 /** Extra wall-clock allowance before a capture is declared stalled. */
 export const WATCHDOG_SLACK_MS = 2500;
 
@@ -137,12 +152,14 @@ export const CLOCK_NOTE_LIMIT = 32;
  * stays a real gap, reported as missing frames (never silently relabelled audio).
  */
 export const CAPTURE_WORKLET_SOURCE = `
+const speakersMono = ${speakersMono.toString()};
 class OscillaCapture extends AudioWorkletProcessor {
   constructor(options) {
     super();
     const o = (options && options.processorOptions) || {};
     this.size = o.chunkFrames || ${CAPTURE_CHUNK_FRAMES};
     this.buf = new Float32Array(this.size);
+    this.chans = null; // per-channel buffers (T039)
     this.n = 0;
     this.f0 = 0;
     this.id = -1;
@@ -168,16 +185,35 @@ class OscillaCapture extends AudioWorkletProcessor {
   flush() {
     if (this.n > 0) {
       const data = this.buf.slice(0, this.n);
-      this.port.postMessage({ type: 'chunk', id: this.id, frame: this.f0, data }, [data.buffer]);
+      const m = { type: 'chunk', id: this.id, frame: this.f0, data };
+      const t = [data.buffer];
+      if (this.chans) {
+        m.channels = this.chans.map((c) => c.slice(0, this.n));
+        for (const c of m.channels) t.push(c.buffer);
+      }
+      this.port.postMessage(m, t);
       this.f0 += this.n;
       this.n = 0;
     }
   }
+  // T039: the speakers downmix (capture-channels.js).
+  mono(x, len) {
+    if (x.length === 1) return x[0];
+    if (!this.tmp || this.tmp.length !== len) this.tmp = new Float32Array(len);
+    return speakersMono(x, len, this.tmp);
+  }
   process(inputs) {
     if (!this.alive) return false;
     const input = inputs[0];
-    const ch = input && input.length ? input[0] : null;
-    const len = ch ? ch.length : 128;
+    const k = input ? input.length : 0;
+    const len = k ? input[0].length : 128;
+    const ch = k ? this.mono(input, len) : null;
+    // Each channel of a multichannel input is kept beside the downmix (T039).
+    const want = k > 1 ? k : 0;
+    if ((this.chans ? this.chans.length : 0) !== want) {
+      this.flush();
+      this.chans = want ? Array.from({ length: want }, () => new Float32Array(this.size)) : null;
+    }
     const reported = currentFrame;
     const expected = this.next;
     const frame = expected === null || reported > expected ? reported : expected;
@@ -196,10 +232,15 @@ class OscillaCapture extends AudioWorkletProcessor {
       let off = a - frame;
       let cnt = b - a;
       while (cnt > 0) {
-        const k = Math.min(cnt, this.size - this.n);
-        if (ch) this.buf.set(ch.subarray(off, off + k), this.n);
-        else this.buf.fill(0, this.n, this.n + k);
-        this.n += k; off += k; cnt -= k;
+        const q = Math.min(cnt, this.size - this.n);
+        if (ch) this.buf.set(ch.subarray(off, off + q), this.n);
+        else this.buf.fill(0, this.n, this.n + q);
+        if (this.chans) {
+          for (let c = 0; c < this.chans.length; c++) {
+            this.chans[c].set(input[c].subarray(off, off + q), this.n);
+          }
+        }
+        this.n += q; off += q; cnt -= q;
         if (this.n === this.size) this.flush();
       }
     }
@@ -333,7 +374,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   function interrupt(info) {
-    if (!busy() && !input) return;
+    // An input still opening (a permission prompt) is released too (98 F4): the epoch bump
+    // makes ensureInput close it when getUserMedia answers, so it never stays open.
+    if (!busy() && !input && !inputPending) return;
     const was = busy();
     if (typeof io.onInterrupt === 'function' && was) {
       try { io.onInterrupt(info); } catch (e) { /* engine handles it */ }
@@ -430,9 +473,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     sink.gain.value = 0; // pulls the recorder; carries silence only
     let node;
     let port = null;
-    const deliver = (id, frame, data) => {
+    const deliver = (id, frame, data, channels) => {
       const w = windows.get(id);
-      if (w) writeWindow(w, frame, data);
+      if (w) {
+        writeWindow(w, frame, data);
+        writeCaptureChannels(w, frame, channels || null);
+      }
     };
     const finish = (id) => {
       const w = windows.get(id);
@@ -441,14 +487,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     let armed = null; // scriptprocessor window
     if (recorderMode === 'audioworklet') {
       node = register(new AudioWorkletNode(ctx, CAPTURE_PROCESSOR_NAME, {
-        numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 1,
-        channelCountMode: 'explicit', channelInterpretation: 'speakers',
-        processorOptions: { chunkFrames: CAPTURE_CHUNK_FRAMES },
+        ...CAPTURE_NODE_OPTIONS, processorOptions: { chunkFrames: CAPTURE_CHUNK_FRAMES },
       }));
       port = node.port;
       port.onmessage = (e) => {
         const m = e.data || {};
-        if (m.type === 'chunk') deliver(m.id, m.frame, m.data);
+        if (m.type === 'chunk') deliver(m.id, m.frame, m.data, m.channels);
         else if (m.type === 'done') finish(m.id);
         else if (m.type === 'clock') {
           clockNotes.push({ id: m.id, reported: m.reported, expected: m.expected,
@@ -462,13 +506,18 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
         }
       };
     } else {
-      node = register(ctx.createScriptProcessor(SCRIPT_PROCESSOR_FRAMES, 1, 1));
+      // T039: two channels, stereo kept, mono upmixed to L = R (an exact downmix).
+      node = register(ctx.createScriptProcessor(SCRIPT_PROCESSOR_FRAMES, 2, 1));
       node.onaudioprocess = (e) => {
         if (!armed) return;
-        const data = e.inputBuffer.getChannelData(0);
+        const ib = e.inputBuffer;
+        const k = ib.numberOfChannels || 1;
+        const chs = k > 1 ? Array.from({ length: k }, (_, c) => ib.getChannelData(c)) : null;
+        const data = chs ? speakersMono(chs, chs[0].length, new Float32Array(chs[0].length))
+          : ib.getChannelData(0);
         const frame = Math.round(e.playbackTime * sr) - data.length;
         const w = armed;
-        deliver(w.id, frame, data);
+        deliver(w.id, frame, data, chs);
         if (frame + data.length >= w.endFrame && windows.get(w.id)) finish(w.id);
       };
     }
@@ -592,16 +641,17 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
   }
 
   // ---- input
-  // `since` is the session epoch the caller started in: a cancel() (release) while the caller
-  // was awaiting the context or the worklet module bumps the epoch, and nothing may be opened
-  // for a session that was already released (the input and the recorder would leak).
+  // `since` is the caller's session epoch: release() bumps it; nothing opens for a released
+  // session (it would leak). A pending open (a prompt) races release(), which
+  // rejects its callers at once (98 R1); a stream granted late is closed.
   const abortedSince = (since) => since !== epoch || disposed;
   async function ensureInput(ctx, since = epoch) {
     if (abortedSince(since)) throw new MeasurementError('ABORTED');
     if (input) return input;
-    if (inputPending) return inputPending;
+    if (inputPending) return inputPending.promise;
     const my = since;
-    inputPending = (async () => {
+    const pending = {};
+    const opening = (async () => {
       const opened = await openInput(ctx, { register, unregister });
       if (my !== epoch || disposed) {
         try { opened.close(); } catch (e) { /* ignore */ }
@@ -611,10 +661,12 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       input = opened;
       return input;
     })();
+    pending.promise = Promise.race([opening, new Promise((_, no) => { pending.abort = no; })]);
+    inputPending = pending;
     try {
-      return await inputPending;
+      return await pending.promise;
     } finally {
-      inputPending = null;
+      if (inputPending === pending) inputPending = null;
     }
   }
 
@@ -651,6 +703,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     return {
       sampleRate: ctx.sampleRate,
       samples: w.samples,
+      // T039: each channel of a multichannel input, beside the downmix.
+      ...(Array.isArray(w.channels) ? { channels: w.channels } : {}),
       startedAt: w.startFrame / ctx.sampleRate,
       constraints: input ? input.constraints : { requested: null, applied: null },
       device: input ? input.device : { label: null, id: null },
@@ -698,9 +752,35 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     stims.delete(st);
   }
 
+  // The ONE stimulus playback (a run's sweep, the setup check's probe; C033): see the header.
+  // The caller opens its capture window, then starts the source at `ssF` (frames).
+  function prepareStim(ctx, samples, ssF) {
+    const sr = ctx.sampleRate;
+    const buffer = ctx.createBuffer(1, samples.length, sr);
+    if (typeof buffer.copyToChannel === 'function') buffer.copyToChannel(samples, 0);
+    else buffer.getChannelData(0).set(samples);
+    const src = registerSource(ctx.createBufferSource());
+    src.buffer = buffer;
+    const fade = register(ctx.createGain());
+    fade.gain.value = 1;
+    src.connect(fade);
+    fade.connect(engine.master); // through the master safety chain, never around it
+    const st = { src, fade, startAt: ssF / sr, done: false, stopping: false };
+    src.onended = () => cleanupStim(st);
+    stims.add(st);
+    return st;
+  }
+  /** After its capture: free a stimulus that has ended, fade out one that still sounds. */
+  function settleStim(st, ctx, endAt) {
+    if (!st.done && ctx.currentTime >= endAt) cleanupStim(st);
+    else if (!st.done) stopStim(st, ctx, { fade: true });
+  }
+
   // ---- release everything of the current session
   function release(err) {
     epoch += 1;
+    if (inputPending) inputPending.abort(new MeasurementError('ABORTED'));
+    inputPending = null;
     const info = err && err.detail;
     dropLive(info && info.reason ? info.reason : (err && err.code) || 'released');
     const ctx = engine.ctx;
@@ -718,6 +798,42 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
     for (const st of [...stims]) {
       if (ctx) stopStim(st, ctx, { fade: true });
       else cleanupStim(st);
+    }
+  }
+
+  // ---- the setup check's probe (C033, see the header): render(sampleRate) → Float32Array.
+  // Resolves { played: true, seconds, startAt, inputLevel, frames } or { played: false, reason }.
+  async function playProbe(ctx, since, render) {
+    let samples = null;
+    let why = 'stimulus se nepodařilo vytvořit';
+    try {
+      samples = render(ctx.sampleRate);
+    } catch (e) {
+      why = e && e.message ? e.message : why;
+    }
+    if (!(samples instanceof Float32Array) || !samples.length) return { played: false,
+      reason: why };
+    let st = null;
+    try {
+      await freshClock(since);
+      if (windows.size || stims.size)
+        throw new MeasurementError('INTERNAL', 'Záznam už běží (bez překryvu).');
+      const sr = ctx.sampleRate;
+      const csF = ceilFrame(ctx.currentTime + SCHEDULE_LEAD_S, sr);
+      const endF = csF + samples.length + ceilFrame(PROBE_TAIL_S, sr);
+      st = prepareStim(ctx, samples, csF);
+      const p = openWindow(ctx, csF, endF - csF, null);
+      st.src.start(csF / sr);
+      const w = await p;
+      return { played: true, seconds: samples.length / sr, startAt: csF / sr,
+        inputLevel: levelOf(w.samples, w.received),
+        frames: { expected: w.frames, received: w.received, discontinuities: w.discontinuities } };
+    } catch (e) {
+      const me = mapError(e);
+      if (me.code === 'ABORTED') throw me;
+      return { played: false, reason: me.message };
+    } finally {
+      if (st) settleStim(st, ctx, st.startAt + samples.length / ctx.sampleRate);
     }
   }
 
@@ -792,6 +908,8 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       dropLive('measurement');
       const since = epoch;
       const given = opts ? opts.otherAudio : undefined;
+      const probe = opts && typeof opts.probe === 'function' ? opts.probe : null;
+      const onWaiting = opts && typeof opts.onWaiting === 'function' ? opts.onWaiting : null;
       let voices = null;
       let other = false;
       const sample = (t) => {
@@ -829,6 +947,10 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       facts.audioContext.state = ctx.state;
       facts.sampleRate = ctx.sampleRate;
       if (kind !== 'loopback') facts.permission = await queryMicPermission(env);
+      // The browser asks for the microphone now (a prompt): the caller says so (C033).
+      if (facts.permission === 'prompt' && onWaiting) {
+        try { onWaiting({ what: 'permission' }); } catch (e) { /* feedback only */ }
+      }
       try {
         const m = await ensureRecorderMode(ctx);
         facts.worklet = { supported: true, mode: m, error: workletError ? String(workletError
@@ -857,19 +979,14 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
           sample(start / sr); // what still sounds when the window opens
           const w = await p;
           sample(); // and what sounds after it (started during the reading)
-          let s = 0;
-          let peak = 0;
-          for (let i = 0; i < w.samples.length; i++) {
-            const v = w.samples[i];
-            s += v * v;
-            if (Math.abs(v) > peak) peak = Math.abs(v);
-          }
-          const rms = Math.sqrt(s / w.samples.length);
-          facts.inputLevel = { peak, rmsDb: rms > 0 ? 20 * Math.log10(rms) : -Infinity };
+          facts.inputLevel = levelOf(w.samples, w.received);
         } catch (e) {
           const me = mapError(e);
           if (me.code === 'ABORTED') throw me;
           facts.inputLevel = null;
+        }
+        if (typeof probe === 'function' && facts.inputLevel) {
+          facts.probe = await playProbe(ctx, since, probe);
         }
       }
       return done();
@@ -909,20 +1026,9 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       const preF = ceilFrame(preRollS, sr);
       const ssF = csF + preF;
       const ceF = ssF + samples.length + Math.round(postRollS * sr);
-      const buffer = ctx.createBuffer(1, samples.length, sr);
-      if (typeof buffer.copyToChannel === 'function') buffer.copyToChannel(samples, 0);
-      else buffer.getChannelData(0).set(samples);
-      const src = registerSource(ctx.createBufferSource());
-      src.buffer = buffer;
-      const fade = register(ctx.createGain());
-      fade.gain.value = 1;
-      src.connect(fade);
-      fade.connect(engine.master); // through the master safety chain, never around it
-      const st = { src, fade, startAt: ssF / sr, done: false, stopping: false };
-      src.onended = () => cleanupStim(st);
-      stims.add(st);
+      const st = prepareStim(ctx, samples, ssF);
       const p = openWindow(ctx, csF, ceF - csF, onChunk);
-      src.start(ssF / sr);
+      st.src.start(ssF / sr);
       const t = { captureStartAt: csF / sr, stimulusStartAt: ssF / sr,
         stimulusEndAt: (ssF + samples.length) / sr, captureEndAt: ceF / sr };
       if (onScheduled) onScheduled(t);
@@ -930,8 +1036,7 @@ function createIoCore({ engine, env = defaultEnv(), mode = 'auto', openInput, ki
       try {
         w = await p;
       } finally {
-        if (!st.done && ctx.currentTime >= t.stimulusEndAt) cleanupStim(st);
-        else if (!st.done) stopStim(st, ctx, { fade: true });
+        settleStim(st, ctx, t.stimulusEndAt);
       }
       return captureObject(ctx, w, { preRoll: preF / sr, postRoll: (ceF - ssF - samples.length)
         / sr, stimulusStartAt: t.stimulusStartAt });
@@ -1013,10 +1118,12 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
     if (!hasMicrophoneApi(nav)) throw new MeasurementError('NO_INPUT', MIC_UNAVAILABLE_TEXT);
     const audio = { ...REQUESTED_AUDIO_CONSTRAINTS };
     if (deviceId) audio.deviceId = { exact: deviceId };
+    const restoreSession = captureAudioSession(nav);
     let stream;
     try {
       stream = await nav.mediaDevices.getUserMedia({ audio });
     } catch (e) {
+      restoreSession();
       throw inputOpenError(e, deviceId);
     }
     try {
@@ -1034,6 +1141,7 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
           for (const x of stream.getTracks()) x.onended = null;
           stopStreamTracks(stream);
           unregister(node);
+          restoreSession();
         },
       };
       // A track that ends by itself: unplugged, permission revoked, device taken over.
@@ -1043,6 +1151,7 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
       return opened;
     } catch (e) {
       stopStreamTracks(stream);
+      restoreSession();
       throw e;
     }
   }
@@ -1050,47 +1159,6 @@ export function createCaptureIo({ engine, env = defaultEnv(), deviceId = null, m
 }
 
 // ------------------------------------------------------------------------------- loopback
-
-/** Describe and build a synthetic loopback system on ctx (TEST CONTEXT). */
-function buildLoopbackSystem(ctx, system, reg) {
-  const made = [];
-  const register = (n) => { made.push(n); return reg(n); };
-  const out = buildSystemNodes(ctx, system, register);
-  return { ...out, nodes: made };
-}
-
-function buildSystemNodes(ctx, system, register) {
-  const s = system || { type: 'biquad' };
-  if (s.type === 'biquad') {
-    const f = register(ctx.createBiquadFilter());
-    f.type = s.filter || 'lowpass';
-    f.frequency.value = s.frequency != null ? s.frequency : 1000;
-    f.Q.value = s.Q != null ? s.Q : Math.SQRT1_2;
-    f.gain.value = s.gain != null ? s.gain : 0;
-    return { input: f, output: f, node: f, describe: { type: 'biquad', filter: f.type,
-      frequency: f.frequency.value, Q: f.Q.value, gain: f.gain.value } };
-  }
-  if (s.type === 'gain') {
-    const g = register(ctx.createGain());
-    g.gain.value = s.gain != null ? s.gain : 1;
-    return { input: g, output: g, node: g, describe: { type: 'gain', gain: g.gain.value } };
-  }
-  if (s.type === 'delay') {
-    const d = register(ctx.createDelay(Math.max(1, (s.delayS || 0) * 2)));
-    d.delayTime.value = s.delayS || 0;
-    const g = register(ctx.createGain());
-    g.gain.value = s.gain != null ? s.gain : 1;
-    d.connect(g);
-    return { input: d, output: g, node: d, describe: { type: 'delay', delayS: s.delayS || 0,
-      gain: g.gain.value } };
-  }
-  if (s.type === 'custom' && typeof s.build === 'function') {
-    const b = s.build(ctx, register);
-    return { input: b.input, output: b.output, node: b.node || null,
-      describe: { type: 'custom', ...(b.describe || {}) } };
-  }
-  throw new TypeError(`unknown loopback system type ${s.type}`);
-}
 
 export const LOOPBACK_LABEL = 'TEST CONTEXT: digital loopback through a synthetic system '
   + '(no microphone, no acoustic path)';

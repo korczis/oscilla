@@ -1,0 +1,24 @@
+id: R053
+milestone: M011
+serves:
+  - "release-provenance#one-version-authority"
+title: "review-verdict guards package.json, or its rule says why it is left out"
+slug: review-verdict-guards-package-json
+priority: p3
+profile: implementation
+objective: "Since 4e1c8530 (V272 D5) review-verdict guards src/js/calibration and src/js/measurement, but package.json, whose scripts decide which suites the gate runs and how dependencies install, is neither guarded nor named as deliberately left out in review-verdict.v2.md (164 R3-P2-6). Add it to the guarded list in the next version of the rule (with R052's additions, or after it), or state the reason it is excluded."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 164.yaml#R3-P2-6 (P2, partly fixed by 4e1c8530) still open on main b8bfd3b6."
+scope:
+  - "scripts/review-verdict.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - ".ai/repo/rules/project"
+  - ".ai/repo/project/issues/R053.yaml"
+depends_on: []
+acceptance_criteria:
+  - "package.json is guarded with a unit case refusing a change to it without a verdict, or the rule text names it as excluded and why."
+validation:
+  - "node --test tests/unit/review-verdict.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

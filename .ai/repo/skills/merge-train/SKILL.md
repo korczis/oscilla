@@ -19,7 +19,7 @@ outputs:
 
 Turns N ready pull requests into one CI round and one `dist/index.html` rebuild instead of N
 ([ADR 0055](../../adrs/0055-merge-train-lands-by-one-merge-commit-after-one-rebuild.md)).
-It is for a batch; a single change still ships alone with `gh pr merge --auto --squash`. It
+It is for a batch; a single change still ships alone with `gh pr merge --auto --merge`. It
 does not replace the review of the included changes: the train's combined diff is reviewed
 once, with `review-a-guarded-pr`.
 
@@ -30,12 +30,11 @@ This skill is the one procedure for a train; `project.fail-first` judges what it
 - Several pull requests are ready at once and each one that changes `src/` would conflict on
   `dist/index.html` after the first lands; or
 - runners are slow or stalled and several pull requests wait for a CI round each. Branch
-  protection on `main` no longer requires an up-to-date branch (`strict: false` since the
-  owner's decision of 2026-10-30; read it with
-  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`), so a
-  green pull request merges without merging `main` again; under `strict: true` every merge
-  made every other one rerun CI (#248, 2026-10-28). A train still gives its members one run
-  on their combination, which separate merges no longer get (ADR 0009, note of 2026-10-30).
+  protection on `main` requires an up-to-date branch (`strict: true`; relaxed on 2026-10-30
+  and strict again since; read it with
+  `gh api repos/korczis/oscilla/branches/main/protection -q .required_status_checks`), so
+  every merge makes every other ready pull request merge `main` and rerun CI (#248,
+  2026-10-28); a train gives its members one run on their combination instead.
 
 # Who may join
 

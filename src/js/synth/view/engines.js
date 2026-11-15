@@ -17,7 +17,7 @@ export const CHIP = 'snap-start shrink-0 rounded-full border border-solid px-3 h
   + 'font-semibold tracking-wide';
 
 export function enginePickerHtml({ panel, ids, on, resolved }) {
-  return '<div role="radiogroup" aria-label="Engine the keys play" class="flex shrink-0 '
+  return '<div role="radiogroup" aria-label="Engine, který klávesy hrají" class="flex shrink-0 '
     + 'gap-2 lg:flex-wrap">' + ids.map((id) => {
     const x = panel.module(id);
     const sel = id === on;
@@ -25,7 +25,7 @@ export function enginePickerHtml({ panel, ids, on, resolved }) {
       + `class="${CHIP} ${sel ? 'border-primary-600 bg-primary-600 text-white '
         + 'dark:bg-primary-500' : 'border-gray-300 bg-white text-gray-800 '
         + 'dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200'}">${esc(x.label)}`
-      + `${resolved.get(id) ? '' : ' (removed)'}</button>`;
+      + `${resolved.get(id) ? '' : ' (odebrán)'}</button>`;
   }).join('') + '</div>' + ENGINE_BLOCKED.map((b) => `<button type="button" aria-disabled="true" `
     + `aria-describedby="synth-blocked-${b.id}" data-blocked="${b.id}" class="${CHIP} `
     + 'cursor-not-allowed border-dashed border-gray-300 bg-gray-100 text-gray-500 '
@@ -37,18 +37,18 @@ export function enginePickerHtml({ panel, ids, on, resolved }) {
 }
 
 /** The Engines tab while the keys play a node outside its engines (review S4). */
-export const ELSEWHERE = 'The keys play a node chosen in Plays, beside the piano: choose an '
-  + 'engine here to play it.';
+export const ELSEWHERE = 'Klávesy hrají uzel zvolený tlačítkem Hraje vedle klavíru; chcete-li '
+  + 'hrát engine, zvolte ho zde.';
 
 /** The status sentence for a note that left `dropped` items out (FM operators, AM's modulator). */
 export function droppedText(node, dropped) {
-  const limit = `${SAFE_NYQUIST_FACTOR_TEXT} × the digital Nyquist limit`;
+  const limit = `${SAFE_NYQUIST_FACTOR_TEXT} × digitální Nyquistovou mezí`;
   if (node.type === 'fm-voice') {
-    return `${dropped} operator(s) above ${limit} left out of this note.`;
+    return `Operátory nad ${limit} vynechané z této noty: ${dropped}.`;
   }
   if (node.type === 'am-voice') {
-    return `The modulator is above ${limit}: this note ${node.params.mode === 'ring'
-      ? 'is silent (ring)' : 'plays its carrier alone'}.`;
+    return `Modulátor je nad ${limit}: tato nota ${node.params.mode === 'ring'
+      ? 'mlčí (kruhová modulace)' : 'hraje jen nosnou'}.`;
   }
-  return `${dropped} harmonic(s) above ${limit} dropped from this note.`;
+  return `Harmonické nad ${limit} vypuštěné z této noty: ${dropped}.`;
 }

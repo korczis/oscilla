@@ -7,13 +7,19 @@
 //     ctx: { panel, registry, cmp() -> component | null, model(), present(), played() -> node,
 //            ensurePanel(), dispatch(action), say(text, assertive), allOff() }
 
-import { WAVES, instrumentChoices, routeAction, waveAction, waveOf } from './picker.js';
+import { NEW_VOICE, WAVES, instrumentChoices, routeAction, waveAction, waveOf } from './picker.js';
 import { roving } from '../ui/keys/roving.js';
+import { STRIP_TEXT, stripOf } from './step-strip.js';
+
+/** The picker's item that adds or shows the step-sequencer strip (K221). */
+export const STEPS_CHOICE = 'steps';
 
 export function createDock(ctx) {
   const { panel, registry } = ctx;
   const state = () => ({ open: false, choices: [], target: '', osc: 'vco1', wave: '',
-    oscs: ['vco1', 'vco2'].map((id) => ({ id, label: panel.module(id).label })), waves: WAVES });
+    // every item of the dock's radio template has a name, its accessible name and title (U109)
+    oscs: ['vco1', 'vco2'].map((id) => ({ id, label: panel.module(id).label,
+      name: panel.module(id).label })), waves: WAVES });
 
   function sync() {
     const cmp = ctx.cmp();
@@ -21,8 +27,12 @@ export function createDock(ctx) {
     const d = cmp.synth.dock;
     const m = ctx.model();
     const on = ctx.present() ? ctx.played() : null;
-    d.choices = instrumentChoices(m, panel, { registry, current: on && on.id });
-    d.target = on ? on.metadata.name : 'nothing';
+    // K221: the step-sequencer strip is found from here, the default view's picker.
+    const strip = ctx.present() ? stripOf(m, panel) : null;
+    d.choices = [...instrumentChoices(m, panel, { registry, current: on && on.id }),
+      { id: STEPS_CHOICE, name: STRIP_TEXT.title, kind: strip ? 'nad panelem' : 'přidat',
+        selected: false, disabled: false, reason: '' }];
+    d.target = on ? on.metadata.name : 'nic';
     d.wave = waveOf(m, panel, d.osc);
   }
 
@@ -30,6 +40,7 @@ export function createDock(ctx) {
     /** The instrument picker: route the keys to a node, or insert a New Synth voice. */
     synthPick(id) {
       this.synth.dock.open = false;
+      if (id === STEPS_CHOICE) return this.synthSteps();
       const r = routeAction(ctx.model(), panel, id, { registry });
       if (r.reason) {
         ctx.say(r.reason, true);
@@ -38,7 +49,10 @@ export function createDock(ctx) {
       ctx.allOff();
       const done = ctx.dispatch(r.action);
       const on = done.ok ? ctx.played() : null;
-      if (done.ok) ctx.say(r.text || `The keys play ${on ? on.metadata.name : 'nothing'}.`);
+      // K246: a New Synth voice is an insert: its sentence is the insert alert's.
+      if (done.ok && id === NEW_VOICE && r.text && ctx.inserted) ctx.inserted(r);
+      else if (done.ok) ctx.say(r.text || (on ? `Klávesy hrají ${on.metadata.name}.`
+        : 'Klávesy nehrají nic.'));
       return done.ok;
     },
 

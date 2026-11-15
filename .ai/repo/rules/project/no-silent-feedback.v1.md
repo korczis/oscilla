@@ -53,7 +53,7 @@ without a visible message, fails the rule.
   a control-cycle and a live-input-to-output model; each is refused in the validate phase, no
   audio node is created and the runtime's revision and nodes stay as they were.
 - `tests/browser/v31-studio-graph.cjs` check cable-reject, in `npm run test:studio` (CI's
-  `studio` job, three browsers): dragging a cable that closes an instantaneous feedback loop
+  browser legs, three browsers): dragging a cable that closes an instantaneous feedback loop
   in the editor adds no edge and announces the specification's sentence.
 
 Not machine-checked: the tests cover the entry points above. Code added later that changes

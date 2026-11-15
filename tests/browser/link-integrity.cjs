@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (routes and links; no audio judged)
 // OSCILLA link integrity on the built dist/index.html (UX audit 2026-10-29, links.md), in
 // chromium, firefox and webkit, from file:// and from the Pages sub-path
 // (http://127.0.0.1:<port>/oscilla/), every check on both.
@@ -188,6 +189,9 @@ async function loadModel() {
   }
   // A Studio template's deep link (#294, #278: "Open ... in Studio"), any shipped template.
   ALLOWED_HREF.push(new RegExp(`^#m=studio&st=(${TEMPLATES.join('|')})$`));
+  // A Synth tab's deep link (K106: `#m=synth&yt=<tab>`; the Sequencer's Bicí link), any tab.
+  const { SYNTH_TABS } = await import(src('core', 'url-state-synth.js'));
+  ALLOWED_HREF.push(new RegExp(`^#m=synth&yt=(${SYNTH_TABS.join('|')})$`));
 }
 // [hash, workspace (from the Playground or a fresh load), keys that must not stay in the
 //  address, the address it must end on: a hash without '#', a predicate over its parameters, or
@@ -377,13 +381,24 @@ async function runLeg(name, origin) {
     }
 
     if (want('routes-link') || want('garbage') || want('headings')) {
-      const page = await H.open(context, base, '');
       const wrong = [];
       const lists = [];
       const headingOf = {};
       if (want('routes-link') || want('headings')) lists.push(['link', ROUTES.filter(([h]) => h)]);
       if (want('garbage')) lists.push(['garbage', GARBAGE]);
+      // Each list walks on a page of its own. WebKit drops a navigation past its rate limit
+      // without an event ("Excessive navigation attempts blocked." on the console): with both
+      // lists on one page, the routes walk (a hash, Back and Forward each) spent that budget, so
+      // on a fast machine `location.hash = '#m=experiments&exp=../../etc'` did nothing and the
+      // check read the Playground it never left (main and T2 alike, 2026-11-09). A new document
+      // starts with its own budget; a blocked navigation is still named below, never read as
+      // the app's answer.
       for (const [kind, list] of lists) {
+        const page = await H.open(context, base, '');
+        const blocked = [];
+        page.on('console', (m) => {
+          if (/Excessive navigation attempts blocked/i.test(m.text())) blocked.push(m.text());
+        });
         for (const [hash, w, refusedKeys = [], expect = null] of list) {
           await H.setWorkspace(page, 'playground');
           // The last link's heading keeps focus (the Sequencer's is shown in the Playground too),
@@ -394,6 +409,12 @@ async function runLeg(name, origin) {
             `garbage #${hash.slice(0, 40)}`);
           if (!s) {
             const at = await H.state(page);
+            if (blocked.length) {
+              wrong.push(`${kind === 'garbage' ? 'garbage ' : ''}#${hash.slice(0, 40)}: the browser `
+                + `blocked the navigation (${blocked[0]}): the walk exceeded its navigation limit, `
+                + 'the app was never asked');
+              continue;
+            }
             wrong.push(`${kind} #${hash.slice(0, 40)} did not settle in ${w}: ${at.workspace} `
               + `${at.hash.slice(0, 60)}`);
             continue;
@@ -427,6 +448,7 @@ async function runLeg(name, origin) {
             if (fwd.workspace !== w) wrong.push(`#${hash}: Forward -> ${fwd.workspace}`);
           }
         }
+        await page.close();
       }
       if (want('headings')) {
         const ids = WORKSPACES.filter((w) => w !== 'playground').map((w) => [w, headingOf[w]]);
@@ -442,7 +464,6 @@ async function runLeg(name, origin) {
         check(leg, `${GARBAGE.length} garbage hashes fail gracefully`,
           !wrong.some((x) => x.startsWith('garbage')), wrong.filter((x) => x.startsWith('garbage')).join(' | '));
       }
-      await page.close();
     }
 
     if (want('garbage-reload')) {
@@ -560,9 +581,11 @@ async function runLeg(name, origin) {
         // The rows a fresh page at the source shows: a row whose source needs a setup, a menu
         // or a phone width is the integration map suite's (its setup is a pointer gesture,
         // which unlocks audio before the link is followed).
-        const rows = [...MAP.rows, ...MAP.declared].filter((r) => r.from === from
-          && r.href === href && !r.walk && !r.setup && !r.opener && !r.viewport);
-        if (!rows.length) { bad.push(`${from} ${href}: no row of the integration map`); continue; }
+        const all = [...MAP.rows, ...MAP.declared].filter((r) => r.from === from
+          && r.href === href);
+        if (!all.length) { bad.push(`${from} ${href}: no row of the integration map`); continue; }
+        // A menu item's row (G013: an opener) and the others above are walked there only.
+        const rows = all.filter((r) => !r.walk && !r.setup && !r.opener && !r.viewport);
         for (const row of rows) {
           const obs = await walk.walkRow(context, base, row, { modes: ['script'] })
             .catch((e) => ({ modes: { script: { control: null } }, error: e.message }));
@@ -705,7 +728,13 @@ async function runLeg(name, origin) {
       const wrong = [];
       for (const [label, from, selector, to, opener] of ACTIONS) {
         await H.setWorkspace(page, from);
-        if (opener) await page.click(opener);
+        // A link inside a closed menu (G013, a lab's "Otevřít v…") is pressed after its button.
+        const menuButton = opener || await page.evaluate((s) => {
+          const el = document.querySelector(s);
+          const menu = el && el.closest('[role="menu"]');
+          return menu && menu.hidden ? `#${menu.getAttribute('aria-labelledby')}` : null;
+        }, selector);
+        if (menuButton) await page.click(menuButton);
         await page.click(selector, { timeout: NAV_MS });
         const s = await H.at(page, to, `${label} opens ${to}`).catch(() => null);
         if (!s) wrong.push(`${label}: did not open ${to}`);

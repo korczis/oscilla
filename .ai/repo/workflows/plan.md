@@ -23,11 +23,11 @@ A repository with no `project/` section populated has no plan, and `plan` says s
 `majordomus plan evidence` writes the current HEAD into the entry's `commit:` (it has no
 option to name another commit). On a pull request the `V272 D4` test of
 `tests/unit/plan-evidence-commits.test.mjs` refuses every evidence commit that is not
-already on `main`, whatever the merge method, because a branch commit is lost to every clone
-once the branch is squashed or deleted (#238). So evidence is not recorded on the branch that
-does the work: it is recorded after that branch lands, in a follow-up `chore(plan)` pull
-request, and every entry is recorded **before that branch's first commit**, while HEAD is
-still a commit of `main`:
+already on `main`, whatever the merge method, because a commit of a branch that never lands,
+or is rewritten before it lands, is lost to every clone once the branch is deleted (#238). So
+evidence is not recorded on the branch that does the work: it is recorded after that branch
+lands, in a follow-up `chore(plan)` pull request, and every entry is recorded **before that
+branch's first commit**, while HEAD is still a commit of `main`:
 
 ```bash
 majordomus worktree create chore/plan-<id>

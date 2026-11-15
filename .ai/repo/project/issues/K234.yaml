@@ -1,0 +1,31 @@
+id: K234
+milestone: M064
+serves:
+  - "connected-instrument#honest-instrument"
+  - "connected-instrument#synth-panel"
+title: "A forced all-off releases a Contour from its current value at once; an ordinary key-up keeps its hold"
+slug: a-forced-all-off-releases-a-contour-at-once
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio). K207's Contour (src/js/studio/adapters/instrument.js) starts its release at max(gate end, gate open + Attack + Hold), so a short gate still reaches 1 and holds: right for an ordinary key-up, wrong for a panic. A forced all-off (Escape, a page hide, the playback bus's stopAll while the Synth is armed, a disarm) must release the Contour from the value it has at once, as K184's forced off does for notes (src/js/audio/gate.js forcedOff: a forced stop is never deferred). Today the live note router releases every gated node through release(at) with no way to tell a forced off from an ordinary one (src/js/studio/live-notes.js gate(keysId, at, false)), so a Contour mid-attack finishes its attack and hold before it falls. After: the gate fan-out passes the forced flag to release(t, { forced }); the Contour releases from its current value at t when forced and keeps the Attack + Hold rule otherwise; the Envelope ignores the flag (its release is already immediate). Before: an all-off during a 2 s attack lets the modulation climb to 1 and hold. After: it falls from where it is, within Release."
+why: "oscilla-c1's review of K207 (Contour at 5977c527, 2026-11-09, finding C1-K207-1 and its follow-up): a forced all-off is a panic, so the contour should release from its current value at once, as K184's forced off does for notes, instead of finishing attack + hold; an ordinary key-up keeps the hold. Filed by oscilla-ce (proceed lane) with the integrator oscilla-43's id approval the same day."
+scope:
+  - "src/js/studio/adapters/instrument.js"
+  - "src/js/studio/live-notes.js"
+  - "tests/unit/synth-contour-forced-off.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K207"
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/synth-contour-forced-off.test.mjs, fails on the merge base): on the recording fake context a Contour with Attack 2 s, Hold 0.5 s and Release 0.3 s is gated at t; an all-off at t + 0.5 (forced) schedules its release from t + 0.5, so the level is below the envelope floor by t + 0.5 + Release, never reaching 1; an ordinary key-up at t + 0.5 still releases at t + Attack + Hold (K207's rule unchanged)."
+  - "The forced flag reaches the release through the one fan-out: Escape, a page hide and the bus's stopAll while armed each release a Keys-gated Contour at once (a unit case per path through live-notes.js); an Envelope's schedule under the same forced release is unchanged."
+  - "Guarded (src/js/studio): a non-builder's verdict in .ai/repo/reviews/<pr>.yaml (project.review-verdict v2); every string it adds is Czech (project.czech-prose)."
+  - "tests/README.md has a row for the new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-contour-forced-off.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-09'
+updated_at: '2026-11-09'

@@ -1,0 +1,56 @@
+# Review verdict for pull request #538 (train/t15): train T15 and release v3.36.1 (a patch:
+# release:analyze finds 1 patch-level commit since v3.36.0; the 3.36 station stays).
+# Guarded member: 0b's Czech pass 74e16d03, string-only in its guarded files
+# (src/js/synth/insert.js, src/js/synth/view/xy-wiring.js, src/js/studio/nodes/processing.js,
+# src/js/studio/nodes/sources.js). Unguarded members read as members: the rest of 74e16d03 (the
+# shell's summaries and whys, the safety notice, footer, status labels, mixed strings, finding 8's
+# More toggle, U085's Czech forms, the lowered Czech-prose baselines 3063 and 1879), K180
+# 2aa9d4d0 (the offline o-* checks at 44.1 and 48 kHz; its validation names synth-engines.cjs),
+# the linux-x64 SYN re-accept 5e6696b9 with its noise record 134e889c, the plan records e757162c
+# (U105, U106: the reviewer's (2a) and (3)), the v3.36.0 record 802bdb86, C3-537-1's wording
+# 9f034810 and chore(release): v3.36.1 c6a04a72.
+# Judged at c6a04a72 on base origin/main ee14479a (v3.36.0, #537), 2026-11-12, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-526 (pre-stamp head 134e889c, then c6a04a72).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-0b built the Czech pass and the SYN re-accept, oscilla-43
+# integrated, recorded the plan and stamped. Disclosure: U105 and U106 record the reviewer's own
+# decisions (2a) and (3) of 2026-11-11, and 9f034810 its wording of C3-537-1.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list: 9a8446a97c5ef4ee...
+# over 4 guarded paths, equal at 134e889c and c6a04a72.
+#
+# How it was judged:
+# - The guarded diff is strings only: the Biquad and Oscillator help in Czech without the
+#   "(K022)" asides; the Synth insert notices ("Panel … je vložen do dokumentu Studia a hraje do
+#   Master Output. Příkaz Zpět ho odebere."; takes and took name the inputs taken and say how
+#   Zpět returns them); the XY readout ("posílá", "N. stupeň", "brána otevřená"). Every suite that
+#   reads them follows: synth.cjs reads SYNTH_TEXT.took from insert.js itself; xy-pad.cjs,
+#   ui-synth-xy and xy-default-patch expect the Czech forms.
+# - The SYN re-accept: desktop-panel-light old against new, pixel by pixel, differs only in rows
+#   80-93 (the breadcrumb description) and 991-1006 (the footer), the Czech chrome.
+# - A style nit only, not a finding: the Biquad's type list mixes nouns and adjectives; it goes
+#   to whoever touches that list next.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (ee14479a's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer: at c6a04a72 GITHUB_BASE_REF=main npm test exit 0 (5777 tests, 5776
+# pass, 0 fail, 1 skipped), build:check up to date (v3.36.1), about-stations --check (40 hold) and
+# --check-station rc=0, release:analyze patch; at 134e889c (the same dist bytes) synth chromium
+# 46/46 and 14/14, v31-studio-transport chromium 44/44, first-screen webkit 107/107, xy-pad webkit
+# every leg. The two webkit runs first failed at launch: the Mac's shared Playwright cache had
+# lost webkit-2359 to another project's install; reinstalled, they pass.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 538
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of c6a04a72)
+content: 9a8446a97c5ef4ee66f3c4f2b0c06f4fd9ad0ea2528c5b79b2225898a0ffe9ce
+findings: []

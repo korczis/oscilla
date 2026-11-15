@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (the shell and its current UI; no audio judged)
 // The current interface against the audit of 2026-10-28 (intent ui-current, docs/ui-audit.md).
 // U005 introduced it; U003, U004, U006, U007 and U008 extend it with their workspaces.
 //
@@ -54,6 +55,10 @@
 //                        strip (also with Presets' empty state shown);
 //     safety-more-target-<w> on a fresh page at each phone size the listening notice's More is
 //                        a 44 px target under a coarse pointer;
+//     phone-synth-room-<w>, phone-synth-panel-keys-<w>  U100, at 320x568 and 375x667: the Synth
+//                        opened from a link with both notices shown; on Engines the dock folds,
+//                        each notice is one line, Expand all takes a tap and three 44 px rows of
+//                        the tab show above the dock; the Panel tab keeps the keys docked.
 //     related-menu-phone at 390x844 under touch the page header's Related menu opens on a tap,
 //                        lists the workspace's related pages as 44 px items, and one tap on
 //                        the first opens it.
@@ -93,12 +98,19 @@ const COUNTERPART_LINKS = [
 const COUNTERPART_WORKSPACES = ['analyzer', 'compare'];
 const SETTLE_MS = 10000;
 const READY_MS = 30000;
+// Above NOTICE_MS (6 s, src/js/core/instrument.js): an info notice expires within it (U108).
+const LINK_NOTICE_GONE_MS = 15000;
 
 // ---- phone-whole (ui-current#phone-whole), see the header ----
 const WORK_SHARE = 2 / 3;
 const WORK_GAP = 16;
 const FONT_MIN = 12;
 const TOUCH_MIN = 44;
+// U100: what a Synth tab keeps in view on a short phone (three 44 px rows).
+const SYNTH_ROOM_MIN = 3 * 44;
+// A refusal's reason long enough to need more than one line on a phone (R2-U100-1).
+const LONG_REASON = 'Tento uzel nelze připojit: jeho výstup je zvuk a vstup, který jste '
+  + 'zvolili, přijímá jen řídicí signál, proto spojení odmítám.';
 // sessionStorage key of the dismissed listening notice (src/js/core/constants.js safetySeen).
 const SAFETY_SEEN = 'oscilla.safetyNoticeCollapsed';
 const PHONE_MEASURES = ['share', 'covered', 'font', 'target', 'reopen', 'labels', 'edge',
@@ -108,6 +120,64 @@ const PHONE_SIZES = [{ width: 320, height: 568 }, { width: 375, height: 667 }, P
 // "<workspace>:<measure>" -> why it is still short and whose lane fixes it. Only shrinks. A key
 // may be scoped to a browser and a width: "<browser>@<width>:<ws>:<measure>",
 // "<browser>:<ws>:<measure>" or "@<width>:<ws>:<measure>"; the most specific listed key applies.
+// U108's one recorded debt, decided by oscilla-c3 (Q090, 2026-11-12): at 320 px the insert
+// alert with Více expanded (the whole sentence) may run under the keyboard dock; collapsed it
+// must not, at every size. Host- and engine-free; it only goes.
+const U108_DEBT = new Map([
+  ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
+    + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
+]);
+const R320 = 'the keyboard dock\'s octave buttons overlap the Synth\'s Open in Studio (33-39 px) '
+  + 'and graze Copy link (3 px, near-zero) at 320 x 568, under U108\'s alert: the Synth lane, #385 '
+  + 'and V635. Measured with Czech pass 3\'s dock (its toggle Vše no longer reaches Copy link), '
+  + 'alike in every Mac engine; CI judges linux (T19\'s run had the More-era set). Named in '
+  + 'PHONE_WHOLE_PAIRS (U112)';
+const R375 = 'the docked keyboard\'s octave and Vše buttons overlap the Synth\'s section '
+  + 'chips at 375 x 667 on the Mac since #385\'s train: the Synth lane, #385 and V635; measured '
+  + 'in the steady state, the insert alert closed (U107) and the link\'s notice gone (U108, '
+  + 'oscilla-c3), unscrolled (#540): 5 pairs in every Mac engine. On CI linux U108\'s phone '
+  + 'padding left none (run 43318837248: MARGIN -3 px, within the 2 px tolerance), a near-zero '
+  + 'margin the MARGIN line shows';
+// U111 (C3-541-3, oscilla-c3): the pairs an overlap key owes, by identity (the px each pair
+// measured is logged on its KNOWN line); a key listed here fails when its pair set changes in
+// either direction. A key not listed is judged as a boolean, as before.
+// U111 (C3-541-3), decided by oscilla-c3 under Q090 (2026-11-13): a pair's depth is the smaller
+// side of its overlap; above 2 px it counts, and up to NEAR_PX it is near-zero: listed with '~'
+// (e.g. 'a x b ~5'), its appearing or going does not fail and is logged as 'near'. Every other
+// pair must match in either direction, as a multiset; px are logged, never compared.
+const NEAR_PX = 6;
+function comparePairs(measured, listed) {
+  const parse = (o) => {
+    const mm = / (\d+)x(\d+)$/.exec(o);
+    return { id: o.replace(/ \d+x\d+$/, ''), depth: mm ? Math.min(+mm[1], +mm[2]) : Infinity };
+  };
+  const got = measured.map(parse);
+  const want = listed.map((x) => {
+    const mm = / ~(\d+)$/.exec(x);
+    return { id: x.replace(/ ~\d+$/, ''), near: !!mm };
+  });
+  const tally = (list) => list.reduce((t, x) => t.set(x, (t.get(x) || 0) + 1), new Map());
+  const firmGot = tally(got.filter((g) => g.depth > NEAR_PX).map((g) => g.id));
+  const firmWant = tally(want.filter((w) => !w.near).map((w) => w.id));
+  const nearGot = got.filter((g) => g.depth <= NEAR_PX);
+  const extra = [...firmGot].filter(([x, n]) => n > (firmWant.get(x) || 0)).map(([x]) => x);
+  const gone = [];
+  const near = nearGot.map((g) => `${g.id} ${g.depth} px`);
+  for (const [x, n] of firmWant) {
+    const missing = n - (firmGot.get(x) || 0);
+    for (let q = 0; q < missing; q += 1) {
+      // a listed pair now in the deadband reports 'near', not 'gone'
+      if (nearGot.some((g) => g.id === x)) near.push(`${x} (listed, now near-zero)`);
+      else gone.push(x);
+    }
+  }
+  return { extra, gone, near };
+}
+const PHONE_WHOLE_PAIRS = new Map([
+  ['@320:synth:overlap', ['keyboard.octave-down x synth.studio',
+    'keyboard.octave-up x synth.studio', 'keyboard.octave-down x synth.copy-link ~3',
+    'keyboard.octave-up x synth.copy-link ~3']],
+]);
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '
     + '(studio.css, studio-timeline.css: SMALL_FONT_DEBT of tests/unit/phone-font-floor.test.mjs); '
@@ -116,16 +186,12 @@ const PHONE_WHOLE_DEBT = new Map([
   ['@320:playground:share', 'at 568 px of height the navbar, the page header and the Q002 '
     + 'sentence leading <main> (P002, Q004 option A: wrapped to five lines at 320 px) leave the '
     + 'Playground 63.8 % of the first screen: the first screen of P002, owned by the Playground'],
-  ['@320:synth:covered', 'the docked keyboard covers the Synth panel\'s header controls and tabs '
-    + '(synth.arm, synth.studio, synth.copy-link, the tabs): the Synth lane, #385 and V635'],
-  ['@320:synth:overlap', 'the keyboard dock\'s arm, octave and velocity buttons overlap the Synth '
-    + 'panel\'s header controls: the Synth lane, #385 and V635'],
-  ['@375:synth:overlap', 'the Synth picker (osc-synth-pick) and the docked keyboard\'s buttons '
-    + 'overlap the Synth tabs at 375 px since #385\'s train: the Synth lane, #385 and V635'],
+  ['@320:synth:overlap', R320],
   ['@320:studio:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Studio\'s '
     + 'header actions (copy link, fullscreen, templates, open, save, export) at 320 x 568, where '
     + 'the navbar, the safety strip, the page header, the dock and the status bar leave them under '
     + 'the dock; first measured when #386 met main\'s Studio dock (#410): the Studio lane, U097'],
+  ['darwin:@375:synth:overlap', R375],
   ['@390:synth:overlap', 'the keyboard dock\'s arm and octave buttons overlap the Synth\'s mobile '
     + 'keys toggle (synth-m-keys): the Synth lane, #385 and V635'],
 ]);
@@ -644,7 +710,11 @@ async function runOne(name) {
         try { sessionStorage.setItem(key, '1'); } catch { /* storage refused: notice shown */ }
       }, SAFETY_SEEN);
       const at = `${size.width}x${size.height}`;
-      const debtOf = (ws, k) => [`${name}@${size.width}:${ws}:${k}`, `${name}:${ws}:${k}`,
+      // A key may name the host too (`darwin:webkit@375:...`): the fonts differ between the
+      // Mac and CI's linux, and a debt measured on one is not paid on the other (#540).
+      const debtOf = (ws, k) => [`${process.platform}:${name}@${size.width}:${ws}:${k}`,
+        `${process.platform}:@${size.width}:${ws}:${k}`,
+        `${name}@${size.width}:${ws}:${k}`, `${name}:${ws}:${k}`,
         `@${size.width}:${ws}:${k}`, `${ws}:${k}`].find((key) => PHONE_WHOLE_DEBT.has(key));
       for (const ws of WORKSPACES) {
         const p = await ctx.newPage();
@@ -653,10 +723,61 @@ async function runOne(name) {
           && !!window.OSCILLA && !!window.OSCILLA.app
           && document.getElementById('osc-app').dataset.mode === w, ws),
         { ms: READY_MS, what: `ui-current: phone-whole ${ws} opened at #m=${ws} (${at})` });
+        if (ws === 'synth') {
+          // U107 (oscilla-c3's C3-539-2): the Synth is measured as the user keeps it, with K246's
+          // insert alert closed by its own Close button. Open, the alert only pushes the tabs
+          // down for the first screen, and the ratchet read an unpaid overlap as paid.
+          // U111 (C3-541-2, C3-540-2): wait for the alert and its Close on top where it is drawn
+          // (U108 put it above the dock at every phone size), then press it there, a touch at its
+          // centre: Playwright's tap() would scroll first (#540). A missing or covered Close fails
+          // here; it never closes by a path the user lacks.
+          const at0 = await until(() => p.evaluate(() => {
+            const el = document.querySelector('[data-osc="synth.notice.close"]');
+            if (!el || !el.getClientRects().length) return null;
+            const b = el.getBoundingClientRect();
+            const x = b.left + b.width / 2;
+            const y = b.top + b.height / 2;
+            const e = document.elementFromPoint(x, y);
+            return e && e.closest('[data-osc="synth.notice.close"]') ? [x, y] : null;
+          }), { ms: READY_MS, what: `ui-current: the Synth insert alert's Close is shown and on `
+            + `top before phone-whole closes it (${at})` });
+          await p.touchscreen.tap(at0[0], at0[1]);
+          await until(() => p.evaluate(() => {
+            const n = document.querySelector('[data-osc="synth.notice"]');
+            return !n || n.hidden || n.getClientRects().length === 0;
+          }), { ms: READY_MS, what: `ui-current: the Synth insert alert is closed before `
+            + `phone-whole measures it (${at})` });
+          // U108 (oscilla-c3): the link's notice waits for the alert and shows as it closes, for
+          // NOTICE_MS; phone-whole measures the steady state, once it is gone (its push is
+          // U108's own P3, not a debt here).
+          await until(() => p.evaluate(() => ![...document.querySelectorAll('[data-osc="alert"]')]
+            .some((t) => /Synth otevřen z odkazu/.test(t.textContent))),
+          { ms: LINK_NOTICE_GONE_MS, what: `ui-current: the Synth link's notice is gone before `
+            + `phone-whole measures it (${at})` });
+        }
         const r = await pollFor(() => p.evaluate(phoneWhole,
           { ws, gap: WORK_GAP, touchMin: TOUCH_MIN }),
         (m) => Object.entries(phoneVerdicts(m, ws)).every(([k, ok]) => ok || debtOf(ws, k)),
         `ui-current: phone-whole ${ws} (${at})`);
+        if (ws === 'synth') {
+          // #541 (oscilla-c3): the Synth's controls sit within a few px of the dock's top, so the
+          // run logs their margin (negative: the deepest overlap), and a flip of its debt is seen.
+          const gap = await p.evaluate(() => {
+            const top = document.querySelector('[data-osc="keyboard"]').getBoundingClientRect().top;
+            const view = document.getElementById('osc-view-synth');
+            const d = [...view.querySelectorAll('button, select, [role="tab"]')]
+              .map((e) => e.getBoundingClientRect())
+              .filter((b) => b.width > 0 && b.height > 0 && b.top < top) // above the dock's top
+              .map((b) => top - b.bottom);
+            return d.length ? Math.round(Math.min(...d)) : null;
+          });
+          // U111 (C3-541-4): the clearance of the lowest control above the dock, and the deepest
+          // overlap phone-whole measured (a pair's height in px), so a covered control shows too.
+          const deep = Math.max(0, ...((r.last && r.last.overlaps) || [])
+            .map((o) => Number((/ (\d+)x(\d+)$/.exec(o) || [])[2]) || 0));
+          console.log(`  MARGIN ${name} ${at} synth controls to dock top: ${gap} px; deepest `
+            + `overlap ${deep} px`);
+        }
         await p.close();
         const m = r.last;
         check(`phone-whole-coarse-${ws}-${size.width}`, !!(m && m.coarse),
@@ -674,8 +795,9 @@ async function runOne(name) {
             + `${m.small.slice(0, 6).join('; ')}`,
           edge: m && `${m.offEdge.length} beyond the ${m.vw} px width, in no horizontal `
             + `scroller: ${m.offEdge.slice(0, 6).join('; ')}`,
+          // U111 (c3): every pair with its px, so CI's run states each host's set
           overlap: m && `${m.overlaps.length} pairs overlap by more than 2 px: `
-            + `${m.overlaps.slice(0, 6).join('; ')}`,
+            + `${m.overlaps.join('; ')}`,
         };
         for (const k of PHONE_MEASURES) {
           const key = debtOf(ws, k);
@@ -683,6 +805,16 @@ async function runOne(name) {
           if (key) {
             seen.add(key);
             check(id, !v[k], `${key} passes now at ${at}: remove it from PHONE_WHOLE_DEBT`);
+            // U111 (C3-541-3): an overlap key that names its pairs fails when the measured pair
+            // set changes in either direction, not only when it empties.
+            const named = k === 'overlap' && PHONE_WHOLE_PAIRS.get(key);
+            if (named && m && !v[k]) {
+              const cmp = comparePairs(m.overlaps, named);
+              if (cmp.near.length) console.log(`  near: ${key} at ${at}: ${cmp.near.join('; ')}`);
+              check(`${id}-pairs`, !cmp.extra.length && !cmp.gone.length, `${key} at ${at}: the `
+                + `pair set changed; new: ${cmp.extra.join('; ') || 'none'}; `
+                + `gone: ${cmp.gone.join('; ') || 'none'} (measured: ${m.overlaps.join('; ')})`);
+            }
             if (!v[k]) {
               console.log(`  KNOWN ${name} ${at} ${key}: ${detail[k]} `
                 + `(${PHONE_WHOLE_DEBT.get(key)})`);
@@ -716,6 +848,173 @@ async function runOne(name) {
       check(`safety-more-target-${size.width}`, r.ok, JSON.stringify(r.last));
       await fresh.close();
     }
+    // U108 (oscilla-c3's criterion, Q090 2026-11-12): on a phone the Synth's insert alert and
+    // its Close are on top where they are drawn (elementFromPoint at 25/50/75/95 % of each), at
+    // 320, 375 and 390 px with the safety notice open (the first visit) and collapsed, with Více
+    // collapsed; expanded at 375 and 390 too (320 expanded is recorded debt, U108_DEBT). It waits
+    // for the alert: a missing alert fails here, it never passes for want of one (C3-540-2).
+    for (const size of PHONE_SIZES) {
+      for (const safety of ['open', 'collapsed']) {
+        const fresh = await browser.newContext({ viewport: size, hasTouch: true,
+          ...(name === 'firefox' ? {} : { isMobile: true }) });
+        if (safety === 'collapsed') {
+          await fresh.addInitScript((key) => {
+            try { sessionStorage.setItem(key, '1'); } catch { /* storage refused */ }
+          }, SAFETY_SEEN);
+        }
+        const p = await fresh.newPage();
+        await p.goto(`${URL}#m=synth`);
+        for (const more of ['collapsed', 'expanded']) {
+          if (more === 'expanded') {
+            await p.evaluate(() => document
+              .querySelector('[data-osc="synth.notice.more"]')?.click());
+          }
+          const r = await pollFor(() => p.evaluate(([want, strict]) => {
+            const al = document.querySelector('[data-osc="synth.notice"]');
+            if (!al || !al.getClientRects().length) return { shown: false };
+            const exp = al.querySelector('[data-osc="synth.notice.more"]');
+            const state = exp ? exp.getAttribute('aria-expanded') : 'false';
+            if (state !== String(want)) return { shown: false };
+            const on = (sel) => {
+              const b = document.querySelector(sel).getBoundingClientRect();
+              return [0.25, 0.5, 0.75, 0.95].map((f) => {
+                const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height * f);
+                return e ? (e.closest(sel) ? 'self' : (e.closest('[data-osc]') || e).dataset.osc
+                  || e.tagName) : 'none';
+              });
+            };
+            const a = on('[data-osc="synth.notice"]');
+            const c = on('[data-osc="synth.notice.close"]');
+            // Collapsed, the short line keeps its facts: the previous source, and what Zpět does.
+            const sh = document.querySelector('[data-osc="synth.notice.short"]');
+            const line = sh && sh.getClientRects().length ? sh.textContent.replace(/\s+/g, ' ')
+              : '';
+            const facts = want || (/\(dosud: .+\)/.test(line) && /Zpět ho odebere/.test(line));
+            // Condition 4 (strict at 375 and 390): the panel heading on the first screen too.
+            const h = document.getElementById('osc-synth-title').getBoundingClientRect();
+            const dock = document.querySelector('[data-osc="keyboard"]').getBoundingClientRect();
+            const heading = strict && !want ? h.bottom <= dock.top : true; // collapsed only
+            return { shown: true, alert: a, close: c, line, facts, heading,
+              ok: facts && heading && [...a, ...c].every((x) => x === 'self') };
+          }, [more === 'expanded', size.width !== 320]), (m) => m.shown && m.ok,
+          `ui-current: U108 insert alert on top at ${size.width} px (${safety}, ${more})`);
+          const debt = U108_DEBT.get(`@${size.width}:${more}`);
+          if (debt) {
+            check(`u108-alert-on-top-${size.width}-${safety}-${more}`, !r.ok,
+              `@${size.width}:${more} passes now (${safety}): remove it from U108_DEBT`);
+            if (!r.ok) console.log(`  KNOWN ${name} U108 @${size.width}:${more} (${safety}): `
+              + `${JSON.stringify(r.last)} (${debt})`);
+          } else {
+            check(`u108-alert-on-top-${size.width}-${safety}-${more}`, r.ok,
+              JSON.stringify(r.last));
+          }
+        }
+        if (size.width === 320) {
+          // Condition 4 relaxed at 320 by oscilla-c3: once the alert is closed, the heading.
+          await p.evaluate(() => document.querySelector('[data-osc="synth.notice.close"]').click());
+          const hd = await pollFor(() => p.evaluate(() => {
+            const h = document.getElementById('osc-synth-title').getBoundingClientRect();
+            const dock = document.querySelector('[data-osc="keyboard"]').getBoundingClientRect();
+            return { top: Math.round(h.top), bottom: Math.round(h.bottom),
+              dock: Math.round(dock.top), ok: h.top >= 0 && h.bottom <= dock.top };
+          }), (m) => m.ok, `ui-current: U108 heading after Close at 320 px (${safety})`);
+          check(`u108-heading-after-close-320-${safety}`, hd.ok, JSON.stringify(hd.last));
+        }
+        await fresh.close();
+      }
+    }
+    // U100: on a short phone a Synth opened from a link, both notices shown, keeps room for its
+    // tab. On Engines the docked keys fold to their handle (one rule, routes.js roomFolds), each
+    // notice takes one line, Expand all takes a tap at its centre and SYNTH_ROOM_MIN px of the
+    // tab show between the main scroller's top and the dock; its Panel tab, whose keys are its
+    // instrument, keeps them docked (keepsDock, oscilla-43's decision of 2026-11-09).
+    for (const size of PHONE_SIZES.filter((s) => s.height < 700)) {
+      const fresh = await browser.newContext({ viewport: size, hasTouch: true,
+        ...(name === 'firefox' ? {} : { isMobile: true }) });
+      const p = await fresh.newPage();
+      await p.goto(`${URL}#m=synth&yt=engines`);
+      await until(() => p.evaluate(() => document.documentElement.dataset.ready === 'true'
+        && document.getElementById('osc-app').dataset.mode === 'synth'),
+      { ms: READY_MS, what: `ui-current: U100 Synth opened from a link at ${size.width} px` });
+      // U108: on a phone the link's notice waits for the insert alert; closed, both notices are
+      // shown as U100 measures them (the link's toast now, the safety strip).
+      await p.evaluate(() => window.OSCILLA.app.synthNoticeClose());
+      await until(() => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
+        .some((t) => /Synth otevřen z odkazu/.test(t.textContent))),
+      { ms: READY_MS, what: `ui-current: U100 the link's notice follows the insert alert at `
+        + `${size.width} px (U108)` });
+      // A refusal's stated reason (project.no-silent-feedback): an error toast stays whole.
+      await p.evaluate((text) => window.OSCILLA.app.notify('error', 'Odmítnuto', text),
+        LONG_REASON);
+      const r = await pollFor(() => p.evaluate(({ min, room }) => {
+        const dock = document.querySelector('[data-dock-state]');
+        const handle = document.querySelector('[data-osc="keyboard.handle"]');
+        const main = document.getElementById('osc-main').getBoundingClientRect();
+        const toasts = [...document.querySelectorAll('[data-osc="alert"]')]
+          .map((t) => Math.round(t.getBoundingClientRect().height));
+        const safety = document.getElementById('osc-safety');
+        const sh = safety && safety.getClientRects().length
+          ? Math.round(safety.getBoundingClientRect().height) : 0;
+        const btn = document.querySelector('[data-fold-all="open"]');
+        let tap = false;
+        if (btn) {
+          btn.scrollIntoView({ block: 'center' });
+          const b = btn.getBoundingClientRect();
+          const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          tap = !!hit && (hit === btn || btn.contains(hit)) && b.height >= min - 0.5;
+        }
+        // The dock's own top (docked: the keys; folded: its handle), else the main's bottom.
+        const top = (el) => (el && el.getClientRects().length ? el.getBoundingClientRect().top
+          : Infinity);
+        const dockTop = Math.min(top(dock), top(handle), main.bottom);
+        const shown = Math.round(Math.min(dockTop, main.bottom) - main.top);
+        // Review R2-U100-1/2: no shown text of the notices is cut (an info toast may be one
+        // line; an error toast and the safety advice never lose their words).
+        // An inline box clips nothing (Firefox reports its scrollWidth over a 0 clientWidth).
+        const cut = (el) => getComputedStyle(el).display !== 'inline'
+          && el.scrollWidth > el.clientWidth + 1;
+        const errText = [...document.querySelectorAll('.osc-toast--error .osc-toast-text')];
+        const errWhole = errText.length > 0 && errText.every((el) => !cut(el));
+        const advice = [...document.querySelectorAll('#osc-safety .osc-safety-text > span')]
+          .filter((el) => el.getClientRects().length);
+        const adviceWhole = advice.length > 0 && advice.every((el) => !cut(el))
+          // every size here is a short touch phone (height < 700 px), so the one-line advice is
+          // shown, and it is Czech (Q104, T4's short-English ratchet; review C1-U100-5). The
+          // whole English sentence of a wider screen has its own check below.
+          && advice.some((el) => el.textContent.trim() === 'Začněte potichu.');
+        const m = { state: dock && dock.getAttribute('data-dock-state'), toasts, safety: sh, tap,
+          shown, errWhole, adviceWhole };
+        m.ok = m.state === 'collapsed' && toasts.length > 0 && sh > 0 && sh <= 56 && tap
+          && shown >= room && errWhole && adviceWhole;
+        return m;
+      }, { min: TOUCH_MIN, room: SYNTH_ROOM_MIN }), (m) => m.ok,
+      `ui-current: U100 the Synth's Engines tab keeps room at ${size.width} px`);
+      check(`phone-synth-room-${size.width}`, r.ok, JSON.stringify(r.last));
+      await p.tap('#osc-synth-tab-panel');
+      const kept = await pollFor(() => p.evaluate(() => document.querySelector('[data-dock-state]')
+        ?.getAttribute('data-dock-state')), (x) => x === 'docked',
+      `ui-current: U100 the Panel tab keeps the keys docked at ${size.width} px`);
+      check(`phone-synth-panel-keys-${size.width}`, kept.ok, `dock ${kept.last}`);
+      await fresh.close();
+    }
+    // Review R2-U100-2: a short desktop window (a fine pointer) keeps the safety notice as on any
+    // desktop: the whole advice shown, nothing cut (the one-line rule is a phone's only).
+    {
+      const desk = await browser.newContext({ viewport: { width: 1366, height: 650 } });
+      const p = await desk.newPage();
+      await p.goto(`${URL}#m=synth`);
+      const r = await pollFor(() => p.evaluate(() => {
+        const spans = [...document.querySelectorAll('#osc-safety .osc-safety-text > span')]
+          .filter((el) => el.getClientRects().length);
+        const text = spans.map((el) => el.textContent.trim()).join(' ');
+        const whole = /Začněte potichu, zvlášť se sluchátky\./.test(text)
+          && spans.every((el) => getComputedStyle(el).display === 'inline'
+            || el.scrollWidth <= el.clientWidth + 1);
+        return { text: text.slice(0, 60), whole };
+      }), (m) => m.whole, 'ui-current: U100 the safety advice at 1366x650');
+      check('desktop-short-safety-whole', r.ok, JSON.stringify(r.last));
+      await desk.close();
+    }
     // The page header's Related menu on a phone: a tap opens it, its items are the related
     // pages at 44 px, and a tap on the first opens that workspace.
     {
@@ -741,9 +1040,12 @@ async function runOne(name) {
       check('related-menu-phone-opens', went.ok, `workspace ${went.last}`);
       await p.close();
     }
-    // A key scoped to another browser is judged by that browser's run.
-    const mine = [...PHONE_WHOLE_DEBT.keys()].filter((k) => !/^(chromium|firefox|webkit)[:@]/
-      .test(k) || k.startsWith(`${name}:`) || k.startsWith(`${name}@`));
+    // A key scoped to another browser, or to another host, is judged by that one's run.
+    const host = /^(darwin|linux|win32):/;
+    const mine = [...PHONE_WHOLE_DEBT.keys()].filter((k) => (host.test(k)
+      ? (k.startsWith(`${process.platform}:${name}@`) || k.startsWith(`${process.platform}:@`))
+      : (!/^(chromium|firefox|webkit)[:@]/
+        .test(k) || k.startsWith(`${name}:`) || k.startsWith(`${name}@`))));
     check('phone-whole-debt-current', mine.every((k) => seen.has(k)),
       `PHONE_WHOLE_DEBT names a key no run applied: ${mine.filter((k) => !seen.has(k))
         .join(', ')}`);

@@ -57,6 +57,6 @@ test('amount knobs edit the depth of every edge from their source', () => {
   for (const e of amountEdges(st.getModel(), PANEL, a)) {
     st.dispatch({ type: 'EDGE_REMOVE', edgeId: e.id });
   }
-  assert.match(amountReason(st.getModel(), PANEL, a), /Nothing from MG \/ LFO is patched/);
+  assert.match(amountReason(st.getModel(), PANEL, a), /^MG \/ LFO není zapojený do /);
   assert.equal(setAmount(st.getModel(), PANEL, a, 1), null);
 });

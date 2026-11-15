@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (that a touch unlocks the context; no level or timing judged)
 // A phone sounds (owner report 2026-11-02: "on the phone it makes no sound").
 //
 // Browsers let a page start audio only inside a user activation, and for a touch the HTML

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (DSP modules on real Web Audio; seconds long, nothing gained by sharing)
 // Browser verification of the DSP modules (Chromium, Firefox and WebKit).
 //
 //   node tests/browser/dsp.cjs [--browser chromium|firefox|webkit] [--json]

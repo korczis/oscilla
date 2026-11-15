@@ -19,6 +19,7 @@ scope:
   - "tests/unit/ui-flowbite-pro-baseline.json"
   - "tests/README.md"
   - "dist"
+current_state: "Landed by #437 (verdict 437.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first: tests/unit/charts.test.mjs (beside the existing timelineWindow cases) fails on the merge base: for the default five-block sequence at laneW 350, the window's pixels per second give the shortest block at least 24 px (44 px with the coarse-pointer option) and maxScrollPx > 0; at laneW 1536 the window is unchanged from the merge base; for every case contentPx / spanS is one constant, so block widths stay proportional to their durations."
@@ -41,4 +42,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-10-30'
-updated_at: '2026-10-30'
+updated_at: 2026-11-11T18:12:43Z
+started_at: 2026-11-11T18:11:53Z
+started_event: sha256:a42ec3865a05907ceddd3f854f05555d894427cb31c917380e09aea787f4ce21
+verified_at: 2026-11-11T18:12:09Z
+verified_event: sha256:a6a70ba7fdd2e8aae02295e5f812a55f5590f443c3767c754d95091f76bf025b
+completed_at: 2026-11-11T18:12:43Z
+completed_event: sha256:99b382627396e0c890a8d0763c4bf944365e841238a6b0f6bb9feb4ae59c11fc
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/charts.test.mjs; node tests/browser/layout.cjs; node tests/browser/sequencer.cjs; npm run build:check"
+    result: "On main 04d33aaf: charts 30/30. layout.cjs exit 0, 107/107 in chromium, firefox and webkit, including the Sequencer block criterion at 390 and 768 px with a coarse pointer and the Silence block scrolled into view and tapped. sequencer.cjs 240/240 in the three engines at 1536x1024. The Pro record equals the tree. The tests/README layout row names the Sequencer block criterion; build:check is current."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:12:26Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 437 checks: gate, fail-first"
+    result: "landed by #437; gate success and fail-first success; review verdict .ai/repo/reviews/437.yaml"
+    artifact: ".ai/repo/reviews/437.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:12:35Z

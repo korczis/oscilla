@@ -78,6 +78,7 @@
 //   lab switched off while the voice sounded stays off on the replacement (C007).
 //   snapshot(out?)   plain read-only engine state for the visualization (risk 3).
 
+import { gateCloseAt } from './gate.js';
 import {
   DEFAULT_GAIN, GAIN_FLOOR, LIMITER_RATIO, LIMITER_THRESHOLD_DB, MAX_OUTPUT_GAIN,
   RENDER_QUANTUM, SAFE_NYQUIST_FACTOR, START_OFFSET_S,
@@ -696,11 +697,11 @@ export class AudioEngine {
    * before it rather than refused, so letting go always starts a fade and the voice never ends
    * later than it would have. Without `fit` such a fade is refused (V1).
    */
-  _releaseVoice(v, releaseS, silent = false, fit = false) {
+  _releaseVoice(v, releaseS, silent = false, fit = false, notBefore = 0) {
     if (!v || v.ended) return false;
     const ctx = v.ctx;
     if (ctx.state === 'closed') { this._cleanup(v); return true; }
-    const t = this._soon(ctx);
+    const t = Math.max(this._soon(ctx), notBefore);
     let rel = Math.max(0.005, releaseS);
     if (fit && t + rel + 0.01 >= v.endTime) rel = Math.max(0.005, v.endTime - t - 0.012);
     const stopAt = Math.max(t + rel + 0.01, v.t0 + 0.005);
@@ -1135,10 +1136,13 @@ export class AudioEngine {
   }
 
   /** Release note `key` with its own release time; false when it is not sounding. */
-  noteOff(key) {
+  noteOff(key, { forced = false } = {}) {
     const v = this.notes.get(key);
     this.notes.delete(key);
-    return !!v && this._releaseVoice(v, v.release, true);
+    // An ordinary note-off closes the gate no sooner than MIN_GATE_S after the note began
+    // (K184): a tap handled in one task still sounds. A forced stop (blur, hide, Escape) and
+    // notesOff are never deferred.
+    return !!v && this._releaseVoice(v, v.release, true, false, forced ? 0 : gateCloseAt(v.t0, 0));
   }
 
   /** Release every note, within ESCAPE_RELEASE_S when `fast`; returns how many were held. */

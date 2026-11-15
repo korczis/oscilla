@@ -1,0 +1,37 @@
+id: E069
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "synth.cjs s-feel's wheel steps wait on the knob's own signal, not on wheel delivery, in linux WebKit"
+slug: s-feel-wheel-steps-wait-on-the-knob
+priority: p2
+profile: implementation
+objective: "s-feel's three wheel steps ('the notch lands (the knob moves) before the drag', 'a wheel burst is one undo entry', 'the wheel burst and the drag are two undo entries') miss intermittently in linux WebKit, on main as much as on trains: oscilla-ee's native linux/arm64 control failed main a7102358 4 of 5 and T5 2 of 5 (2026-11-10), and CI failed it on #523 and #527 attempt 1 (passed on the rerun, flake ledger). The same family as E059 (PR #493). Hypothesis (unverified): WebKit coalesces or drops page.mouse.wheel at an unchanged pointer, or delivers it after the burst window. After: instrument the steps (wheel events reaching the knob, timestamps against the burst window, elementFromPoint), then make each step wait on the knob's own signal (the notch applied, the undo entry recorded) through until(); if the product mishandles coalesced wheels, it is a product fix instead."
+why: "A check that fails 4 of 5 on main in linux WebKit costs a CI rerun on every train that runs it (project.bounded-test-timing)."
+current_state: "Built by oscilla-43 in task t-20261111075938-d66c (oscilla-ee, its owner, is on the weekly limit). Instrumented cause, two parts: (1) under load the page scrolled after the knob's centre was read once, so later wheel steps hit OUTPUT and BUTTON elements (the knob's rect moved y 379 -> 339 -> 439); each gesture now waits for a settled centre that elementFromPoint puts on the knob. (2) The burst's two notches were two page.mouse.wheel round trips; under load they came more than GESTURE_IDLE_MS (400 ms) apart, the product rightly made two entries, the poll caught the instant between the commits, and the second burst, still open, landed in the notch+drag window (probe: depth d0 -> d0 + 3). Both notches now go in one page task. Native linux/arm64 WebKit with 10 busy loops: 10 of 10 (main: 0 of 6); quiet 3 of 3; chromium and firefox pass. No sleep or frame count added."
+scope:
+  - "tests/browser/synth.cjs"
+depends_on: []
+acceptance_criteria:
+  - "In a native linux container, synth.cjs --browsers webkit --only s-feel passes 10 of 10 on the fixed head, and the instrumented cause is named in the commit."
+  - "No fixed sleep or frame count is added (project.bounded-test-timing)."
+validation:
+  - "node tests/browser/synth.cjs --browsers webkit --only s-feel"
+evidence_required:
+  - "verified"
+created_at: '2026-11-11'
+updated_at: 2026-11-11T08:48:24Z
+started_at: 2026-11-11T08:47:21Z
+started_event: sha256:3dc081266b28bab91abf0cbb4a5247880f17c66b291131001d685335a0e0d36d
+verified_at: 2026-11-11T08:47:34Z
+verified_event: sha256:1e3753ed508b0a802922fb83187634d0cff4da3fba2db9d467133cf1a9534e29
+completed_at: 2026-11-11T08:48:24Z
+completed_event: sha256:68a622e5e5169d6b2f58121fcd60c7b56ec585bafa9d418a88e864830d008608
+evidence:
+  - covers: "verified"
+    type: test
+    command: "CI=1 node tests/browser/synth.cjs --browsers webkit --only s-feel (native linux/arm64 container, 10 busy loops)"
+    result: "PR #530 merged as 45db334e: 10 of 10 under load (main 0 of 6), quiet 3 of 3, chromium and firefox pass; the cause is named in b03b0d99"
+    artifact: "45db334e2032e6b528155937ea43c0135609c2b5"
+    commit: 45db334e2032e6b528155937ea43c0135609c2b5
+    recorded_at: 2026-11-11T08:48:17Z

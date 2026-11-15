@@ -33,7 +33,7 @@
 import {
   APP_MODES, APP_VERSION, MAX_PROGRAMMED_S, MIN_FREQUENCY,
   PROVISIONAL_SAMPLE_RATE, RANGE_MODES, SAFE_NYQUIST_FACTOR,
-  SAFETY_LIMIT_OPTIONS, STORAGE_KEYS, VIZ_MODES, WAVEFORMS, WAVEFORM_LABELS,
+  SAFETY_LIMIT_OPTIONS, STORAGE_KEYS, VIZ_MODES, WAVEFORMS, WAVEFORM_LABELS, WAVEFORM_NAMES,
 } from './constants.js';
 import { clamp, isNum, pick, round, sig } from './math.js';
 import {
@@ -54,15 +54,17 @@ import {
   presetDisabledReason, representability, stereoBinauralCondition, sweepRepeatChoice,
 } from './safety.js';
 import {
-  ENV_PARAMS, PATTERN_BY_ID, PATTERN_GROUPS, PATTERNS, buildPlan, detunedFrequency,
-  sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
+  ENV_PARAMS, PATTERN_BY_ID, PATTERN_DESCS, PATTERN_GROUP_NAMES, PATTERN_GROUPS, PATTERN_NAMES,
+  PATTERNS, buildPlan, detunedFrequency, sweepHzPerSec, sweepOctPerSec, sweepSpanOct,
 } from '../audio/patterns.js';
 import { micErrorMessage, MIC_PRIVACY_NOTICE } from '../audio/microphone.js';
+import { OWNER, playOwnerOf, requestMasterLevel } from './output-bus.js';
 import {
   BUILTIN_PRESETS, PRESET_CATEGORIES, describeConfig, presetMaxFrequency,
 } from '../data/presets.js';
 import { LEARN_TOPICS } from '../data/learn.js';
 import { presetLoadedNotice } from './preset-notice.js';
+import { statusPlayHint, statusPlayTitle } from './play-hints.js';
 import { V1_LAB_HOOKS, restoreRecordLabs } from './instrument-labs.js';
 
 let alertSeq = 0;
@@ -126,6 +128,8 @@ export function createInstrument(deps = {}) {
   return {
     // ---- constants exposed to templates
     WAVEFORMS, WAVEFORM_LABELS, RANGE_MODES, PATTERNS, PATTERN_GROUPS, NOTE_BUTTONS, VIZ_MODES, APP_MODES,
+    // The Czech display names (Q104); the V1 labels above stay the frozen data.
+    WAVEFORM_NAMES, PATTERN_NAMES, PATTERN_DESCS, PATTERN_GROUP_NAMES,
     PRESET_CATEGORIES, LEARN_TOPICS, SAFETY_LIMIT_OPTIONS, APP_VERSION,
     WAVE_PATHS: {
       sine: 'M1 8 Q5 0 9 8 T17 8 T25 8 T31 4',
@@ -419,7 +423,7 @@ export function createInstrument(deps = {}) {
       // running context would replace the level the Studio's Master Output set while it plays
       // (C012, engine-sync-2). The gainLevel $watch in main.js keeps a running engine in step,
       // and claimMasterLevel gives the Playground its level when it starts a voice.
-      if (first) engine.setMasterGain(this.gainLevel);
+      if (first) requestMasterLevel(engine, this.gainLevel, { owner: OWNER.instrument });
       if (!engine.init()) { this.status = 'ERROR'; return false; }
       this.sampleRate = engine.sampleRate;
       this.audioState = engine.state;
@@ -450,7 +454,11 @@ export function createInstrument(deps = {}) {
         engine.resume().then((ok) => {
           this.audioState = engine.state;
           if (!ok && this.playing) {
-            this.notify('warning', 'Audio is suspended', 'The browser has not allowed audio to start. Press HOLD TO PLAY again.');
+            // C030: where only the status bar's Play is on screen, its own sentence
+            const hint = statusPlayHint(this.workspace, 'suspended');
+            this.notify('warning', statusPlayTitle(this.workspace, 'suspended')
+              || 'Audio is suspended', hint
+              || 'The browser has not allowed audio to start. Press HOLD TO PLAY again.');
           }
         });
       }
@@ -492,7 +500,7 @@ export function createInstrument(deps = {}) {
      * ensureAudio claims nothing: a click or a key press elsewhere leaves the level alone.
      */
     claimMasterLevel() {
-      engine.setMasterGain(this.gainLevel);
+      requestMasterLevel(engine, this.gainLevel, { owner: OWNER.instrument }); // the bus (C052)
       if (this.studio && Number.isFinite(this.studio.masterLevel)) this.studio.masterLevel = null;
     },
 
@@ -1205,7 +1213,8 @@ export function createInstrument(deps = {}) {
       viz.sync(this.vizInputs(res));
       // A voice another owner started on the instrument's path (a riff audition, audition.js)
       // is not the instrument's plan: its live update leaves it alone.
-      const other = engine.voice && engine.voice.opts && engine.voice.opts.owner;
+      const other = !!engine.voice
+        && playOwnerOf(engine.voice.opts) !== OWNER.instrument; // the one table's (C036)
       if (this.playing && res.ok && !other) engine.updateLive(res.plan);
     },
     /** Plain values the visualization bridge needs (what V1 syncViz copied into viz.state). */

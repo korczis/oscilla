@@ -1,0 +1,28 @@
+id: K208
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#honest-instrument"
+title: "VCO, pulse, ring and contour figures on a real OfflineAudioContext in tests/browser/instrument-dsp.cjs"
+slug: vco-pulse-ring-and-contour-figures-on-a-real-offlineaudiocon
+priority: p1
+profile: implementation
+objective: "Lands as test(studio). K059's criterion 1 names figures checked offline in tests/browser/instrument-dsp.cjs, which exists only on K060's unmerged branch. Once K060 lands the suite and K207 the contour type, this adds K059's figures to it, rendered in Chromium, Firefox and WebKit at each context's own rate in the style of tests/browser/dsp.cjs. Before: the vco, ring and pulse shipped with their series checked only in unit tests (tests/unit/synth-nodes.test.mjs:43,77). After: their sound is measured. Rollback: revert; tests only."
+why: "Gap of K059 (criterion 1) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): tests/browser/instrument-dsp.cjs and its K059 figures are not on main. No owner direction re-scopes it, so it is its own issue and K059's criterion points here (chore/plan-m064-rescope). K059 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/README.md"
+depends_on:
+  - "K060"
+  - "K207"
+acceptance_criteria:
+  - "tests/browser/instrument-dsp.cjs, rendering a real OfflineAudioContext in Chromium, Firefox and WebKit at each context's own rate, checks: a vco saw at 220 Hz has its fundamental at 220 Hz within one FFT bin; one scale step up (16' to 8') doubles it within 0.1 cent; a pulse at width 25 % has its third harmonic within 1 dB of the analytic |sin(3 pi w)| / 3 relative to the fundamental's |sin(pi w)|, and its fourth harmonic at least 40 dB down, the same at A4, A5 and A6 played from a keys node (the width tracks pitch); a ring node in ring mode outputs the sample-wise product of its carrier and modulator inputs within 1e-6; a contour with attack 10 ms reaches 0.99 of 1 at 10 ms +- one render quantum and never steps by more than the click limit of the freeze suite at release. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Test-only: the pull request body says 'fail-first: n/a' with the reason (figures of shipped types); a figure that fails on main is fixed by its own fix(studio) change with a unit test that fails on the merge base and a reviewer's verdict (src/js/studio and src/js/audio are guarded)."
+  - "The suite's row in tests/README.md names the K059 cases."
+validation:
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

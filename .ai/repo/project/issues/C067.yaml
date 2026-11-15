@@ -1,0 +1,27 @@
+id: C067
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "The mic lab pauses its readout and says why while the audio context is suspended or interrupted"
+slug: mic-lab-follows-a-suspended-context
+priority: p2
+profile: implementation
+objective: "src/js/labs/mic-analyzer.js:219-225 stops the lab only on the engine's detach event (reason 'closed' or 'replaced'); a context the system suspends or interrupts is never forwarded, so the lab keeps 'Stop microphone' and measure() reads a frozen analyser buffer. Before: an interrupted context leaves a live-looking readout of stale data. After: the lab follows the context state as measurement/capture.js:385 already does: paused with a reason while suspended or interrupted, live again on resume."
+why: "Review-findings audit of 2026-11-10, P3 pass (oscilla-ce, ordered by the integrator oscilla-43, format agreed with oscilla-c3; record .ai/repo/reviews/audit-2026-11-10-p3.yaml): 289.yaml#F4 (P3), still open on main a7102358, checked by reading the code and, where noted, a probe or unit run; not re-measured in a browser."
+current_state: "in progress (2026-11-10): built by oscilla-ce (proceed lane), task t-20261110075047-7a52, as fca42e80 and 8cfb229d (task t-20261110080452-54b3) on fix/c067-mic-lab-follows-suspended-context from T5 2aa5883a (local); the lab pauses on a suspended or interrupted context and says why, and through its frame seam (lab.step, a stub chart) the unit test proves the reading is dropped and none is taken while paused; fail-first unit fails on 2aa5883a; awaits a train (oscilla-43)."
+scope:
+  - "src/js/labs/mic-analyzer.js"
+  - "src/js/main.js"
+  - "tests/unit/mic-detach-on-close.test.mjs"
+  - "dist"
+  - ".ai/repo/project/issues/C067.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Fail-first unit (tests/unit/mic-detach-on-close.test.mjs, fails on a7102358): a fake adapter emits the context state 'interrupted' while the lab is live; the lab is paused or stopped with a non-empty reason and measure() returns no reading."
+  - "Every string it adds is Czech (project.czech-prose); dist is rebuilt and npm run build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

@@ -25,14 +25,19 @@
 //     embedded graph through migrate.js importStudio with PATCH_IMPORT_LIMITS (§115, §159)
 //   serializePatch(patch, space?) -> canonical JSON text (§161)
 //   patchHash(patch) -> SHA-256 hex of the patch graph's execution state (schema.js studioHash)
+//   patchHashEpoch(patch, hash) -> the hash epoch `hash` was computed under, or null (K022)
 //   insertPatch(model, patch, at?, { newId, registry }) -> { model, created, idMap, skipped }
 //     new ids for every node, edge, lane and point; positions offset to `at` (§114)
 //   replaceWithPatch(model, patch, { newId, registry, at }) -> { model, created, idMap,
 //     skipped, removed }   the whole graph is replaced (explicit intent, §114)
-//   patchTargets(model, patch, { target }) -> { onto, missing }   which model node each patch
-//     node would set (K020, K066, K102): a node of a Synth panel module is found by its
-//     metadata.panel; else a one-node patch sets `target` (the selected node) or the only node
-//     of its type; `missing` lists the patch nodes with no such node
+//   patchTargets(model, patch, { target }) -> { onto, missing, refused }   which model node
+//     each patch node would set (K020, K066, K102, K186), in this order: a one-node patch sets
+//     `target` (the selected node) when it is of the patch's type and not another module of a
+//     Synth panel than the one the patch's metadata.panel names; else the node of that panel
+//     module; else a one-node patch sets the only node of its type. A target of another type,
+//     or another module of a panel, is refused: `refused` is the sentence naming the target
+//     and the panel module, and `onto` is empty. A several-node patch ignores `target`;
+//     `missing` lists the patch nodes with no such node
 //   patchParams(model, patch, onto) -> { model, changed: { nodes, edges }, skipped }
 //     parameters only: each mapped node takes its patch node's parameters, each model edge on
 //     the ports of a patch edge between two mapped nodes takes the properties that edge
@@ -51,9 +56,11 @@ import { createChecker } from '../experiments/schema.js';
 import { migrateExperiment } from '../experiments/migrate.js';
 import { scanUntrusted, utf8Length } from '../experiments/validate.js';
 import { NODE_REGISTRY } from './registry.js';
+import { article } from './a11y.js';
 import {
   DEFAULT_TRANSPORT, NAME_MAX_CHARS, POSITION_MESSAGE, STUDIO_KIND, STUDIO_SCHEMA_VERSION,
-  collectIds, copyPlain, isPosition, normalizeStudio, studioHash, withoutNodes,
+  collectIds, copyPlain, elideParams, hashEpochOf, isPosition, normalizeStudio, studioHash,
+  withoutNodes,
 } from './schema.js';
 import { validateStudioModel, STUDIO_IMPORT_LIMITS } from './validate.js';
 import { importStudio } from './migrate.js';
@@ -277,11 +284,15 @@ export function importPatch(input, opts = {}) {
   };
 }
 
-/** Deterministic text of a (valid) patch: canonical JSON, keys sorted (§161). */
+/**
+ * Deterministic text of a (valid) patch: canonical JSON, keys sorted (§161), the parameters a
+ * definition elides at their default left out (schema.js elideParams, K231).
+ */
 export function serializePatch(patch, space = 0) {
   const r = importPatch(patch);
   if (!r.ok) throw new PatchError(`Invalid patch: ${r.errors[0].message}`, r.errors);
-  const text = canonicalJson(r.patch);
+  const text = canonicalJson({ ...r.patch, graph: { ...r.patch.graph,
+    nodes: r.patch.graph.nodes.map((n) => ({ ...n, params: elideParams(n.type, n.params) })) } });
   return space ? JSON.stringify(JSON.parse(text), null, space) : text;
 }
 
@@ -290,6 +301,13 @@ export function patchHash(patch) {
   const r = importPatch(patch);
   if (!r.ok) throw new PatchError(`Invalid patch: ${r.errors[0].message}`, r.errors);
   return studioHash(normalizeStudio(asStudioDoc(r.patch)));
+}
+
+/** The hash epoch whose patchHash of `patch` is `hash`, or null (schema.js hashEpochOf, K022). */
+export function patchHashEpoch(patch, hash) {
+  const r = importPatch(patch);
+  if (!r.ok) return null;
+  return hashEpochOf(normalizeStudio(asStudioDoc(r.patch)), hash);
 }
 
 // ---------------------------------------------------------------- insert / replace (§114)
@@ -429,22 +447,48 @@ export function replaceWithPatch(model, patch, { newId = null, registry = NODE_R
 
 const samePanel = (a, b) => !!a && !!b && a.id === b.id && a.module === b.module;
 
-/** Which model node each node of `patch` sets: { onto: { patchId: nodeId }, missing }. */
+const nodeName = (n) => (n.metadata && n.metadata.name) || n.id;
+const typeName = (registry, type) => (registry.get(type) || {}).displayName || type;
+
+/** Why a one-node patch may not set the chosen node `t` (the order is in the header). */
+function refusalOf(model, p, src, t, registry) {
+  const ref = src.metadata.panel;
+  const tRef = t.metadata && t.metadata.panel;
+  if (t.type === src.type && !(ref && tRef && !samePanel(tRef, ref))) return null;
+  const home = ref && model.graph.nodes.find((n) => samePanel(n.metadata.panel, ref));
+  const module = ref && (home ? nodeName(home) : ref.module);
+  const what = t.type === src.type ? 'je jiný modul panelu Synth'
+    : `je typu ${typeName(registry, t.type)}, ne ${typeName(registry, src.type)}`;
+  const wants = module ? `modul ${module} panelu Synth: vyberte ho`
+    : `uzly typu ${typeName(registry, src.type)}: vyberte jeden`;
+  return `Vybraný uzel ${nodeName(t)} ${what}; patch ${p.name} je určen pro ${wants}, `
+    + 'nebo nevybírejte nic.';
+}
+
+/** Which model node each node of `patch` sets: { onto: { patchId: nodeId }, missing, refused }. */
 export function patchTargets(model, patch, { target = null, registry = NODE_REGISTRY } = {}) {
   const p = validPatch(patch, registry);
   const onto = {};
   const missing = [];
+  const chose = p.graph.nodes.length === 1 && target != null
+    ? model.graph.nodes.find((n) => n.id === target) : null;
   for (const src of p.graph.nodes) {
     const ref = src.metadata.panel;
     const same = model.graph.nodes.filter((n) => n.type === src.type);
     const one = registry.get(src.type).maxInstances === 1 ? same[0] : null;
+    // An explicit choice is never ignored: it is set, or refused with the reason.
+    if (chose) {
+      const refused = refusalOf(model, p, src, chose, registry);
+      if (refused) return { onto: {}, missing: [], refused };
+      onto[src.id] = chose.id;
+      continue;
+    }
     const hit = (ref && model.graph.nodes.find((n) => samePanel(n.metadata.panel, ref)))
-      || (p.graph.nodes.length !== 1 ? one
-        : same.find((n) => n.id === target) || (same.length === 1 ? same[0] : null));
+      || (p.graph.nodes.length !== 1 ? one : (same.length === 1 ? same[0] : null));
     if (hit) onto[src.id] = hit.id;
     else missing.push(src.id);
   }
-  return { onto, missing };
+  return { onto, missing, refused: null };
 }
 
 /** Set the parameters of existing nodes from `patch` (see the header); never adds an edge. */
@@ -458,8 +502,10 @@ export function patchParams(model, patch, onto, { registry = NODE_REGISTRY } = {
     const node = byId.get(map[src.id]);
     if (!node) throw new PatchError(`There is no node "${String(map[src.id])}".`);
     if (node.type !== src.type) {
-      throw new PatchError(`${node.metadata.name} is a ${registry.get(node.type).displayName}; `
-        + `the patch sets a ${registry.get(src.type).displayName}.`);
+      const was = registry.get(node.type).displayName;
+      const sets = registry.get(src.type).displayName;
+      throw new PatchError(`${node.metadata.name} is ${article(was)} ${was}; the patch sets `
+        + `${article(sets)} ${sets}.`);
     }
     params.set(node.id, src.params);
   }

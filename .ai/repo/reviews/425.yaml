@@ -1,0 +1,35 @@
+# Review verdict for pull request #425 (K171: the keyboard dock yields so it never covers the XY
+# pad), judged as the member head 2a3a3e6f (branch wip/k171-on-k183), whose member base is K183's
+# a31ad98c (wip/k183-conditions) in the keys+pad train (K178 -> K184 -> K183 -> K171 -> pad view).
+# Reviewer: seat af (session oscilla-af, claude-code 901211e2). Disclosure: af built none of this
+# change and wrote only this file, in a detached review worktree; the analysis ran as af's
+# workflows wf_bd31b32f-824 (first review, head 1481c386) and wf_ba216359-437 (re-review), two
+# judges each.
+#
+# The digest: origin/main's scripts/ extracted with git archive, run with --content --list
+# --base-branch a31ad98c at 2a3a3e6f: one guarded path, src/js/synth/view/xy-wiring.js. It is
+# the member's own change; the train verdict covers the merge delta onto main.
+#
+# Evidence at 2a3a3e6f: 251 unit tests across keyboard-dock-yield, keys-routes,
+# keyboard-held-notes, xy-pad, xy-wiring, keys-registry, the ui-flowbite-pro tests and the
+# enforcement tests pass; build:check is current. Fail-first: the head's tests on a31ad98c's
+# source fail keyboard-dock-yield 14/14 (missing dockState, createDockYield, mountDockYield,
+# dockSentence, keys.dock, the ROOM class) and keys-routes 1/2. No browser run by the reviewer
+# and no CI has run on this head: the merge depends on the train's green gate with xy-pad.cjs in
+# chromium, firefox and webkit (R1).
+schema: review-verdict/v1
+pr: 425
+verdict: merge
+reviewer: oscilla-af (claude-code 901211e2)
+content: 1e95a3e2e25bc914936ff3b95891ec405e29250d2cf44bd59590d7d5410d437d
+findings:
+  - { id: R1, severity: P1, status: open, title: "No CI has run on this head; the browser criteria (x-dock-yields at 390x844 and 375x667, x-dock-desktop at 1536x1024 and 1280x720, a held key sounding at C4 while the pad owns the notes) rest on the builder's local gates: the train's gate must be green with xy-pad.cjs in all three engines before this merges" }
+  - { id: R2, severity: P2, status: closed, title: "keysShown was a second rule that ignored the note owner: it is now dockState(...) === 'docked', SURFACE_TAB is gone, unit cases cover the XY tab with no owner, the pad owning, a user unfold and the disarmed Studio" }
+  - { id: R3, severity: P2, status: closed, title: "Computer keys silent while the pad owns the notes: on K183 the keys keep their normals, and x-dock-yields asserts a held KeyA above -45 dB peaking at C4, then silence" }
+  - { id: R4, severity: P2, status: closed, title: "Collision with K183: the claim holds whenever the pad is mounted, the fold releases only the keys' and pointer inputs (kbdReleaseKeys, pinned by a grep test), and x-dock-desktop holds a pad note through an unfold and a fold" }
+  - { id: R5, severity: P3, status: open, title: "PR body still says '13 tests, 7 failing', 'no on-screen keys on the XY tab', 'claim only while the pad is patched' and 'firefox skips the phone legs': correct it to the head" }
+  - { id: R6, severity: P3, status: open, title: "reveal snaps the page back to the pad on every window or dock resize while the dock yields, even when the pad is clear of the dock (dock-yield.js:269-281): re-place only when the dock covers the pad, or only on an orientation change" }
+  - { id: R7, severity: P3, status: open, title: "Below xl the BAY face hides the pad (max-xl:hidden) while it stays mounted and keeps its claim: the dock folds and says the pad plays with no pad on screen, and reveal runs on a zero-size rect (xy-wiring.js:388-393): claim only while the pad is shown, or skip reveal on an empty rect" }
+  - { id: R8, severity: P3, status: open, title: "A second finger tapping the dock handle while one holds the pad can cut the pad's note where the browser focuses a tapped button (xy-pad.js:248 ends the gate on focusout): preventDefault on the handle's pointerdown, or leave the handle out of the pad's blur release; Alt+K is unaffected" }
+  - { id: R9, severity: P3, status: open, title: "Where the room under the unfolded dock is below the 6rem minimum (a phone in landscape), the pad can sit partly under the dock; no test covers it" }
+  - { id: R10, severity: P3, status: closed, title: "K171's record moves onto the plan (#432) with depends_on K178 and K183; K167 joins after #420" }

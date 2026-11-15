@@ -32,7 +32,7 @@ export const STUDIO_TEMPLATE_LINKS = Object.freeze(livePanelLinks()
   .filter((l) => templateOfRef(l.to) && getTemplate(templateOfRef(l.to)))
   .map((l) => Object.freeze({ id: l.osc.split('.')[0], from: l.from[0],
     template: templateOfRef(l.to), title: getTemplate(templateOfRef(l.to)).title,
-    osc: l.osc })));
+    osc: l.osc, ...(l.text ? { text: l.text } : {}) })));
 
 /**
  * The text of a related entry's link in the page header: "Filter Automation in Studio" for a
@@ -49,9 +49,9 @@ export function studioTemplateHref(template) {
   return `#m=studio&st=${template}`;
 }
 
-/** The visible text (and accessible name) of a lab's Studio link. */
+/** The visible text (and accessible name) of a lab's Studio link: its own, else the default. */
 export function studioTemplateText(link) {
-  return `Open ${link.title} in Studio`;
+  return link.text || `Open ${link.title} in Studio`;
 }
 
 /**

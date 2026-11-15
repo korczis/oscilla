@@ -109,7 +109,7 @@ test('each counterpart routes to a workspace and, for MEASURE, to a result tab t
     }
   });
 
-test('the link text in the shell is the counterpart label', async () => {
+test('the link text in the shell is the counterpart label of that workspace', async () => {
   const { COUNTERPARTS, counterpartOsc } = await import('../../src/js/ui/counterparts.js');
   for (const c of COUNTERPARTS) {
     for (const ws of c.from) {
@@ -117,7 +117,7 @@ test('the link text in the shell is the counterpart label', async () => {
       const re = new RegExp(`data-osc="${osc.replace(/\./g, '\\.')}"[^>]*>([^<]*)</a>`);
       const m = re.exec(HTML);
       assert.ok(m, `${osc} is a link with text`);
-      assert.equal(m[1].trim(), c.label);
+      assert.equal(m[1].trim(), c.labels[ws], `${osc}'s text`);
     }
   }
 });

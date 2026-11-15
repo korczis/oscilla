@@ -24,6 +24,7 @@ import { createStudioTransport } from '../../src/js/studio/transport.js';
 import { serializeStudio } from '../../src/js/studio/schema.js';
 import { createFakeAudioEnv } from './sequencer-fake-audio.mjs';
 import { panelStore } from './synth-fixture.mjs';
+import { createOutputBus } from '../../src/js/core/output-bus.js';
 
 // ---------------------------------------------------------------- S1: armed follows the transport
 
@@ -44,9 +45,13 @@ function synthRig() {
   const cmp = Object.assign(part, { workspace: 'synth', ensureAudio() {},
     $watch(key, fn) { watches.push([key, fn]); } });
   cmp.synthInit();
+  // A workspace change as main.js makes it: the playback bus's leave policy (C053), then the
+  // part's own watchers.
+  const bus = createOutputBus({ app: () => cmp, sequencer: () => null });
   const go = (ws) => {
     const old = cmp.workspace;
     cmp.workspace = ws;
+    bus.leave(old, ws);
     for (const [k, fn] of watches) if (k === 'workspace') fn(ws, old);
   };
   return { cmp, transport, fx, go };

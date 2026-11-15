@@ -1,10 +1,15 @@
 // ADR 0082, rule project.release-receipt-binds-gate v3: the CI receipt. The CI run of the
 // release pull request is the gate verdict only for main's HEAD whose tree that run tested,
-// on its newest run and latest attempt, with every job ci.yml declares green.
+// on its newest run and latest attempt, with every job ci.yml declares green: the job set is
+// the base's ci.yml, read from the merge's first parent (R037), plus what the release tree's
+// own copy adds.
 //   node --test tests/unit/release-ci-receipt.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   CI_WORKFLOW, GH_ATTEMPTS, GH_TIMEOUT_MS, RERUN_ONLY_IF, ciReceiptProblems, expectedJobs,
   gatherCiReceipt, judgedRun,
@@ -25,13 +30,17 @@ const run = (over = {}) => ({ id: 900, name: WORKFLOW.name, event: 'pull_request
   head_branch: 'chore/release-v9.9.9',
   status: 'completed', conclusion: 'success', run_attempt: 1,
   created_at: '2026-11-02T10:00:00Z', ...over });
-const jobsOf = (r) => WORKFLOW.jobs.map((name, i) => ({ id: i + 1, name, run_id: r.id,
-  head_sha: PR, status: 'completed', conclusion: 'success', run_attempt: r.run_attempt }));
+const jobsOf = (r, names = WORKFLOW.jobs) => names.map((name, i) => ({ id: i + 1, name,
+  run_id: r.id, head_sha: PR, status: 'completed', conclusion: 'success',
+  run_attempt: r.run_attempt }));
 
+// workflow: the release tree's ci.yml (HEAD's); baseWorkflow: the base's, read from the merge's
+// first parent (R037). A release that changes no workflow has the same copy on both.
 function facts(over = {}) {
   const r = run();
   return { head: HEAD, parents: [BASE, PR], headTree: TREE, prTree: TREE, baseInPr: true,
-    workflow: WORKFLOW, pulls: [pull()], runs: [r], jobs: jobsOf(r), roadmap: true, ...over };
+    workflow: WORKFLOW, baseWorkflow: WORKFLOW, pulls: [pull()], runs: [r], jobs: jobsOf(r),
+    roadmap: true, ...over };
 }
 
 const only = (f, re) => {
@@ -45,9 +54,10 @@ test('the job list is derived from ci.yml: every matrix value, the visual gate, 
   assert.deepEqual(WORKFLOW.problems, []);
   assert.equal(WORKFLOW.name, 'CI');
   for (const b of ['chromium', 'firefox', 'webkit']) {
-    assert.ok(WORKFLOW.jobs.includes(`Browser gate (${b})`), b);
-    assert.ok(WORKFLOW.jobs.includes(`V1 engine checks (${b})`), b);
+    assert.ok(WORKFLOW.jobs.includes(`Browser leg 1 (${b})`), b);
+    assert.ok(WORKFLOW.jobs.includes(`Browser leg 2 (${b})`), b);
   }
+  assert.ok(!WORKFLOW.jobs.some((n) => /Browser leg 3/.test(n)), 'two legs a browser');
   assert.ok(WORKFLOW.jobs.includes('Visual regression gate'));
   assert.ok(WORKFLOW.jobs.includes('gate'));
   assert.ok(WORKFLOW.jobs.some((j) => j.startsWith('.ai layer (majordomus doctor')));
@@ -81,9 +91,9 @@ test('a job missing, skipped, cancelled or from another run or sha refuses', () 
   const r = run();
   const drop = jobsOf(r).filter((j) => j.name !== 'Visual regression gate');
   only(facts({ jobs: drop }), /no job "Visual regression gate"/);
-  const skipped = jobsOf(r).map((j) => (j.name === 'Browser gate (webkit)'
+  const skipped = jobsOf(r).map((j) => (j.name === 'Browser leg 2 (webkit)'
     ? { ...j, conclusion: 'skipped' } : j));
-  only(facts({ jobs: skipped }), /job "Browser gate \(webkit\)" of run 900 is completed\/skipped/);
+  only(facts({ jobs: skipped }), /job "Browser leg 2 \(webkit\)" of run 900 is completed\/skipped/);
   const cancelled = jobsOf(r).map((j) => (j.name === 'gate' ? { ...j, conclusion: 'cancelled' }
     : j));
   only(facts({ jobs: cancelled }), /job "gate" of run 900 is completed\/cancelled/);
@@ -115,9 +125,9 @@ test('from the second attempt the flake ledger must succeed; any other skip stil
   const skipLedger = jobsOf(r2).map((j) => (j.name === ledger ? { ...j, conclusion: 'skipped' } : j));
   only(facts({ runs: [r2], jobs: skipLedger }), /flake ledger.*completed\/skipped/i);
   const r1 = run({ run_attempt: 1 });
-  const other = WORKFLOW.jobs.find((n) => n !== ledger && /Browser gate/.test(n));
+  const other = WORKFLOW.jobs.find((n) => n !== ledger && /Browser leg/.test(n));
   const skipOther = jobsOf(r1).map((j) => (j.name === other ? { ...j, conclusion: 'skipped' } : j));
-  only(facts({ runs: [r1], jobs: skipOther }), /Browser gate.*completed\/skipped/);
+  only(facts({ runs: [r1], jobs: skipOther }), /Browser leg.*completed\/skipped/);
 });
 
 test('mutation-proven guard: on attempt 1 a cancelled, failed or running ledger refuses (#417 R1)',
@@ -258,6 +268,7 @@ test('gatherCiReceipt reads parents, trees, ancestry, the runs and the latest jo
     if (args[0] === 'rev-list') return { status: 0, stdout: `${HEAD} ${BASE} ${PR}` };
     if (args[0] === 'rev-parse') return { status: 0, stdout: TREE };
     if (args[0] === 'merge-base') return { status: 0, stdout: '' };
+    if (args[0] === 'show') return { status: 0, stdout: CI_TEXT };
     if (cmd === 'node') return { status: 0, stdout: '' };
     if (args[0] === 'api' && /\/pulls\?/.test(args[1])) {
       return { status: 0, stdout: JSON.stringify([pull()]) };
@@ -273,6 +284,10 @@ test('gatherCiReceipt reads parents, trees, ancestry, the runs and the latest jo
   assert.deepEqual(ciReceiptProblems(f), []);
   assert.ok(calls.some((c) => c[0] === 'node' && c.at(-1) === '1'),
     'the roadmap check runs with OSC_ROADMAP_CHECK=1');
+  // R037: the job set is read from the merge's first parent, never from the checkout alone
+  assert.ok(calls.some((c) => c[0] === 'git' && c[1] === 'show' && c[2] === `${BASE}:${CI_WORKFLOW}`),
+    'git show <first parent>:ci.yml');
+  assert.deepEqual(f.baseWorkflow?.jobs, WORKFLOW.jobs);
   assert.ok(calls.some((c) => c[1] === 'api' && c[2].includes(`head_sha=${PR}`)
     && c[2].includes('event=pull_request')));
   // every GitHub read is bounded (review F3 of #389)
@@ -357,6 +372,7 @@ test('review F5 (r8): gatherCiReceipt reads the queue runs of HEAD itself, event
       if (args[0] === 'rev-list') return { status: 0, stdout: `${HEAD} ${BASE} ${PR}` };
       if (args[0] === 'rev-parse') return { status: 0, stdout: TREE };
       if (args[0] === 'merge-base') return { status: 0, stdout: '' };
+      if (args[0] === 'show') return { status: 0, stdout: CI_TEXT };
       if (cmd === 'node') return { status: 0, stdout: '' };
       if (args[0] !== 'api') return { status: 1, stdout: '' };
       assert.equal(opts?.timeout, GH_TIMEOUT_MS, 'a bounded read');
@@ -417,13 +433,13 @@ test('ADR 0083 with #417: on merge_group too only the flake ledger\'s own first 
     /merge_group: job "flake ledger.*" of run 950 is completed\/skipped/i);
   assert.match(ciReceiptProblems(queued({ queueRuns: [q1],
     queueJobs: skipLedger(q1, { run_attempt: 2 }) })).join(), /flake ledger.*completed\/skipped/i);
-  // a path-gated job (E026) skipped in the queue run is not excused: the census, say
-  const census = WORKFLOW.jobs.find((n) => /census/i.test(n));
-  assert.ok(census, 'ci.yml declares a census leg');
-  const skipCensus = qjobs(q1).map((j) => (j.name === census ? { ...j, conclusion: 'skipped' }
+  // a path-gated job (E026) skipped in the queue run is not excused: a browser leg, say
+  const leg = WORKFLOW.jobs.find((n) => /Browser leg 2/i.test(n));
+  assert.ok(leg, 'ci.yml declares a third browser leg');
+  const skipLeg = qjobs(q1).map((j) => (j.name === leg ? { ...j, conclusion: 'skipped' }
     : j));
-  assert.match(ciReceiptProblems(queued({ queueRuns: [q1], queueJobs: skipCensus })).join(),
-    /merge_group: job ".*census.*" of run 950 is completed\/skipped/i);
+  assert.match(ciReceiptProblems(queued({ queueRuns: [q1], queueJobs: skipLeg })).join(),
+    /merge_group: job "Browser leg 2.*" of run 950 is completed\/skipped/i);
 });
 
 test('ADR 0083 mutation: a pull_request run does not stand in when the queue commit\'s tree'
@@ -439,4 +455,293 @@ test('release:prepare defaults to the CI path and keeps the full gate behind --l
   const local = prep.GATE_COMMANDS.map(([c, a]) => `${c} ${a.join(' ')}`);
   assert.ok(local.includes('npm run release-gate'));
   assert.match(prep.USAGE, /--local-gate/);
+});
+
+// R037: the job set a run must carry is the base's ci.yml, the gate main had when the release
+// branched, read from the merge's first parent; the release tree's own copy (the checkout's,
+// after the merge) may add jobs beyond it but never drop one. Two small workflows: the base
+// declares the visual gate, the release tree does not; or the release tree adds `extra`.
+const LEDGER = `  flake-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`;
+const VISUAL = '  visual:\n    name: Visual regression gate\n    runs-on: x\n';
+const EXTRA = '  extra:\n    runs-on: x\n';
+const SMALL = (jobs) => expectedJobs(`name: CI\njobs:\n  unit:\n    runs-on: x\n${LEDGER}${jobs}`);
+
+test('R037: a job the first parent\'s ci.yml declares that the merge\'s own ci.yml and run lack'
+  + ' refuses, naming it and the base', () => {
+  const base = SMALL(VISUAL);
+  const tree = SMALL('');
+  assert.deepEqual([base.problems, tree.problems], [[], []]);
+  const r = run();
+  // the run is of the release tree's workflow, so it has exactly that copy's jobs
+  const jobs = jobsOf(r, tree.jobs);
+  only(facts({ workflow: tree, baseWorkflow: base, jobs }), new RegExp('run 900 has no job '
+    + '"Visual regression gate" \\(\\.github/workflows/ci\\.yml of the base bbbbbbb '
+    + 'declares it\\)'));
+  // the same tree and run with a base that agrees verify
+  assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: tree, jobs })), []);
+  // on merge_group too
+  const q = qrun();
+  const qj = tree.jobs.map((name, i) => ({ id: 100 + i, name, run_id: q.id, head_sha: q.head_sha,
+    status: 'completed', conclusion: 'success', run_attempt: q.run_attempt }));
+  assert.match(ciReceiptProblems(queued({ workflow: tree, baseWorkflow: base, queueRuns: [q],
+    queueJobs: qj })).join(),
+  /merge_group: run 950 has no job "Visual regression gate" .*base bbbbbbb/);
+});
+
+test('R037 superset: a job the release tree adds beyond the base verifies green and refuses red;'
+  + ' a job neither copy declares refuses', () => {
+  const base = SMALL('');
+  const tree = SMALL(EXTRA);
+  const r = run();
+  const jobs = jobsOf(r, tree.jobs);
+  assert.ok(jobs.some((j) => j.name === 'extra'), 'the run carries the added job');
+  assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base, jobs })), []);
+  const red = jobs.map((j) => (j.name === 'extra' ? { ...j, conclusion: 'failure' } : j));
+  only(facts({ workflow: tree, baseWorkflow: base, jobs: red }),
+    /job "extra" of run 900 is completed\/failure/);
+  // an added job the run lacks still refuses, as today, naming the copy that declares it
+  only(facts({ workflow: tree, baseWorkflow: base, jobs: jobs.filter((j) => j.name !== 'extra') }),
+    /run 900 has no job "extra" \(\.github\/workflows\/ci\.yml declares it\)/);
+  // a run job in neither copy is undeclared, however the two copies differ
+  const alien = [...jobs, { ...jobs[0], id: 99, name: 'alien' }];
+  only(facts({ workflow: tree, baseWorkflow: base, jobs: alien }), new RegExp('run 900 has a '
+    + 'job "alien" that \\.github/workflows/ci\\.yml does not declare, at the base bbbbbbb or '
+    + 'at HEAD'));
+  // the ledger named by either copy keeps its first-attempt exemption
+  const skipLedger = jobs.map((j) => (j.name === 'flake-ledger' ? { ...j, conclusion: 'skipped' }
+    : j));
+  assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base,
+    jobs: skipLedger })), []);
+});
+
+// E060: a release that renames gate jobs (the CI legs of #509 replaced engine, suites, measure,
+// studio, browser and census) can carry its own receipt. A base job the release tree's ci.yml no
+// longer declares is accepted only when that copy provably replaces it: every npm script the
+// base job ran is run, for the same matrix value, by a job of the release tree's copy, by name
+// or through the browser legs (npm run test:leg runs every browser suite test:release names but
+// the visual gate, tests/browser/lib/shards.cjs, by the release tree's package.json). Anything
+// else the base job ran (a program, no npm script at all) cannot be replaced and still refuses.
+const BASE_LEGACY = `name: CI\njobs:\n  unit:\n    runs-on: x\n    steps:\n      - run: npm test\n${LEDGER}`
+  + '  engine:\n    name: V1 engine checks (${{ matrix.browser }})\n    runs-on: x\n'
+  + '    strategy:\n      matrix:\n        browser: [chromium, webkit]\n    steps:\n'
+  + '      - run: npm run test:engine\n'
+  + '  changes:\n    runs-on: x\n    steps:\n      - run: node .github/scripts/ci-changes.mjs\n';
+const legsOf = (browsers, script = 'test:leg') => `name: CI\njobs:\n  unit:\n    runs-on: x\n`
+  + `    steps:\n      - run: npm test\n${LEDGER}`
+  + '  leg-1:\n    name: Browser leg 1 (${{ matrix.browser }})\n    runs-on: x\n'
+  + `    strategy:\n      matrix:\n        browser: [${browsers.join(', ')}]\n    steps:\n`
+  + `      - run: npm run ${script}\n`
+  + '  changes:\n    runs-on: x\n    steps:\n      - run: node .github/scripts/ci-changes.mjs\n';
+const PKG_LEGS = { scripts: { 'test:release': 'npm run test:engine && npm run test:visual',
+  'test:engine': 'node tests/browser/engine-v1port.cjs',
+  'test:leg': 'node tests/browser/lib/shards.cjs', 'test:visual': 'node scripts/visual-gate.mjs' } };
+
+test('E060: a base job the release tree\'s legs provably replace is not required; the legs are',
+  () => {
+    const base = expectedJobs(BASE_LEGACY);
+    const tree = expectedJobs(legsOf(['chromium', 'webkit']));
+    assert.deepEqual([base.problems, tree.problems], [[], []]);
+    const jobs = jobsOf(run(), tree.jobs);
+    assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base, jobs,
+      pkg: PKG_LEGS })), [], 'V1 engine checks (chromium, webkit) are run by the legs');
+    // the legs themselves stay required: a red or missing leg refuses
+    const red = jobs.map((j) => (j.name === 'Browser leg 1 (webkit)' ? { ...j,
+      conclusion: 'failure' } : j));
+    only(facts({ workflow: tree, baseWorkflow: base, jobs: red, pkg: PKG_LEGS }),
+      /job "Browser leg 1 \(webkit\)" of run 900 is completed\/failure/);
+  });
+
+test('E060 mutations: a browser without its leg, a suite the legs do not run, a program job '
+  + 'dropped, or a leg running another script each still refuse', () => {
+  const base = expectedJobs(BASE_LEGACY);
+  const judge = (headText, pkg = PKG_LEGS, drop = null) => {
+    const tree = expectedJobs(headText);
+    const names = drop ? tree.jobs.filter((n) => n !== drop) : tree.jobs;
+    return ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base,
+      jobs: jobsOf(run(), names), pkg }));
+  };
+  const noWebkit = judge(legsOf(['chromium']));
+  assert.equal(noWebkit.length, 1, noWebkit.join('\n'));
+  assert.match(noWebkit[0], /run 900 has no job "V1 engine checks \(webkit\)" .*base bbbbbbb/);
+  const notInRelease = judge(legsOf(['chromium', 'webkit']), { scripts: { ...PKG_LEGS.scripts,
+    'test:release': 'npm run test:visual' } });
+  assert.equal(notInRelease.length, 2, notInRelease.join('\n'));
+  assert.ok(notInRelease.every((p) => /has no job "V1 engine checks \((chromium|webkit)\)"/
+    .test(p)), notInRelease.join('\n'));
+  const otherScript = judge(legsOf(['chromium', 'webkit'], 'test:browser'));
+  assert.equal(otherScript.length, 2, otherScript.join('\n'));
+  // without the release tree's package.json nothing is known to be replaced
+  assert.equal(judge(legsOf(['chromium', 'webkit']), null).length, 2);
+  // a job of programs, not npm scripts, cannot be replaced: dropping changes refuses
+  const noChanges = expectedJobs(legsOf(['chromium', 'webkit']).replace(/  changes:[\s\S]*$/, ''));
+  const r = ciReceiptProblems(facts({ workflow: noChanges, baseWorkflow: base,
+    jobs: jobsOf(run(), noChanges.jobs), pkg: PKG_LEGS }));
+  assert.equal(r.length, 1, r.join('\n'));
+  assert.match(r[0], /run 900 has no job "changes" .*base bbbbbbb/);
+});
+
+// E068 (C1-E060-1): a base job of no matrix runs its browser suites in every browser they
+// default to, so a head job for one matrix value (chromium only) does not replace it; head
+// jobs for every browser, or a head job of no matrix, do. Other scripts keep the wildcard.
+const BASE_NO_MATRIX = `name: CI\njobs:\n  unit:\n    runs-on: x\n    steps:\n      - run: npm test\n`
+  + `${LEDGER}  studio:\n    name: Studio suites\n    runs-on: x\n    steps:\n`
+  + '      - run: npm run test:studio\n      - run: npm run test:lint\n';
+const headWith = (job) => `name: CI\njobs:\n  unit:\n    runs-on: x\n    steps:\n`
+  + `      - run: npm test\n${LEDGER}${job}`;
+const perBrowser = (browsers, script = 'test:studio') => '  studio-b:\n    name: Studio '
+  + `(\${{ matrix.browser }})\n    runs-on: x\n    strategy:\n      matrix:\n        browser: `
+  + `[${browsers.join(', ')}]\n    steps:\n      - run: npm run ${script}\n      - run: npm run `
+  + 'test:lint\n';
+const PKG_STUDIO = { scripts: { 'test:release': 'npm run test:studio',
+  'test:studio': 'node tests/browser/v31-studio-graph.cjs && node tests/browser/v31-studio-audio.cjs',
+  'test:leg': 'node tests/browser/lib/shards.cjs', 'test:lint': 'node scripts/lint.mjs' } };
+
+test('E068: a no-matrix base job running browser suites is not replaced by a chromium-only job',
+  () => {
+    const base = expectedJobs(BASE_NO_MATRIX);
+    assert.deepEqual(base.problems, []);
+    const judge = (headText) => {
+      const tree = expectedJobs(headText);
+      assert.deepEqual(tree.problems, []);
+      return ciReceiptProblems(facts({ workflow: tree, baseWorkflow: base,
+        jobs: jobsOf(run(), tree.jobs), pkg: PKG_STUDIO }));
+    };
+    // the mutation of the criterion: chromium only drops firefox and webkit, and refuses
+    const chromium = judge(headWith(perBrowser(['chromium'])));
+    assert.equal(chromium.length, 1, chromium.join('\n'));
+    assert.match(chromium[0], /run 900 has no job "Studio suites" .*base bbbbbbb/);
+    assert.equal(judge(headWith(perBrowser(['chromium', 'webkit']))).length, 1, 'two of three');
+    // every browser the suites default to, or one job of no matrix, replaces it
+    assert.deepEqual(judge(headWith(perBrowser(['chromium', 'firefox', 'webkit']))), []);
+    assert.deepEqual(judge(headWith('  studio-all:\n    name: Studio, all browsers\n    runs-on: '
+      + 'x\n    steps:\n      - run: npm run test:studio\n      - run: npm run test:lint\n')), []);
+    // through the browser legs as well: all three legs replace it, a chromium leg does not
+    assert.deepEqual(judge(headWith(perBrowser(['chromium', 'firefox', 'webkit'], 'test:leg')
+      .replace('      - run: npm run test:lint\n', '') + '  lint:\n    runs-on: x\n    steps:\n'
+      + '      - run: npm run test:lint\n')), []);
+    assert.equal(judge(headWith(perBrowser(['chromium'], 'test:leg'))).length, 1);
+    // a script that names no browser suite keeps the wildcard: one matrix value serves it
+    const lintOnly = expectedJobs(BASE_NO_MATRIX.replace('      - run: npm run test:studio\n', ''));
+    const tree = expectedJobs(headWith(perBrowser(['chromium'])));
+    assert.deepEqual(ciReceiptProblems(facts({ workflow: tree, baseWorkflow: lintOnly,
+      jobs: jobsOf(run(), tree.jobs), pkg: PKG_STUDIO })), []);
+  });
+
+test('E060 on the real files: the legs of this ci.yml replace every per-category browser job '
+  + 'of the ci.yml before them (#509)', () => {
+  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const browsers = ['chromium', 'firefox', 'webkit'];
+  // The jobs ci.yml declared before the legs (7637039), each with the scripts it ran.
+  const legacy = [['V1 engine checks', ['test:engine']],
+    ['DSP, labs, sequencer', ['test:dsp', 'test:labs', 'test:sequencer']],
+    ['V3 measurement and UI', ['test:measure']], ['V3.1 Studio UI', ['test:studio', 'test:synth']],
+    ['Browser gate', ['test:browser']], ['Control census', ['test:census']]];
+  const job = ([name, scripts], key) => `  ${key}:\n    name: ${name} (\${{ matrix.browser }})\n`
+    + `    runs-on: x\n    strategy:\n      matrix:\n        browser: [${browsers.join(', ')}]\n`
+    + `    steps:\n${scripts.map((sc) => `      - run: npm run ${sc}\n`).join('')}`;
+  const baseText = CI_TEXT.replace(/\njobs:\n/, `\njobs:\n${legacy.map((l, i) => job(l, `old${i}`))
+    .join('')}`);
+  const base = expectedJobs(baseText);
+  assert.deepEqual(base.problems, []);
+  assert.equal(base.jobs.length, WORKFLOW.jobs.length + legacy.length * browsers.length);
+  assert.deepEqual(ciReceiptProblems(facts({ baseWorkflow: base, pkg })), [],
+    'every legacy job is replaced by the legs of the real ci.yml');
+});
+
+test('R037: an unreadable or broken base ci.yml refuses, naming the base', () => {
+  only(facts({ baseWorkflow: null }),
+    /\.github\/workflows\/ci\.yml of the base bbbbbbb could not be read/);
+  const broken = { ...WORKFLOW, problems: [`${CI_WORKFLOW} does not parse: x`] };
+  only(facts({ baseWorkflow: broken }),
+    /^base bbbbbbb: \.github\/workflows\/ci\.yml does not parse: x$/);
+  const twoLedgers = expectedJobs(`name: CI\njobs:\n  unit:\n    runs-on: x\n${LEDGER}`
+    + `  second-ledger:\n    if: ${RERUN_ONLY_IF}\n    runs-on: x\n`);
+  assert.match(ciReceiptProblems(facts({ baseWorkflow: twoLedgers })).join('\n'),
+    /^base bbbbbbb: .*exactly one re-run-only job/m);
+});
+
+// A real release merge on a throwaway repository: B (main, the base) declares `baseJobs`, H
+// (the pull request head, a child of B) declares `headJobs`, and HEAD is the merge of B and H
+// whose tree is H's. The checkout's ci.yml is therefore H's copy; the base's is only in git.
+function mergeRepo(t, baseJobs, headJobs) {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'oscilla-ci-receipt-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t',
+    '-c', 'commit.gpgsign=false', ...args], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })
+    .toString().trim();
+  const ci = (jobs) => `name: CI\njobs:\n  unit:\n    runs-on: x\n${LEDGER}${jobs}`;
+  mkdirSync(path.join(root, '.github/workflows'), { recursive: true });
+  git('init', '-q');
+  git('checkout', '-q', '-b', 'main');
+  writeFileSync(path.join(root, CI_WORKFLOW), ci(baseJobs));
+  git('add', '-A');
+  git('commit', '-q', '--no-verify', '-m', 'ci: the base');
+  const base = git('rev-parse', 'HEAD');
+  writeFileSync(path.join(root, CI_WORKFLOW), ci(headJobs));
+  // --allow-empty: a release tree that keeps the base's ci.yml is a head with the base's tree
+  git('commit', '-q', '--no-verify', '--allow-empty', '-am', 'chore(release): the release tree');
+  const pr = git('rev-parse', 'HEAD');
+  const head = git('commit-tree', `${pr}^{tree}`, '-p', base, '-p', pr, '-m', 'merge');
+  git('update-ref', 'HEAD', head);
+  return { root, base, pr, head, headJobs: expectedJobs(ci(headJobs)).jobs };
+}
+
+// Real git in the repository; gh and the roadmap check faked around one green run on H.
+function repoSh(repo) {
+  const calls = [];
+  const r = run({ head_sha: repo.pr });
+  const jobs = repo.headJobs.map((name, i) => ({ id: i + 1, name, run_id: r.id,
+    head_sha: repo.pr, status: 'completed', conclusion: 'success', run_attempt: 1 }));
+  const p = pull({ head: { sha: repo.pr, ref: 'chore/release-v9.9.9' },
+    merge_commit_sha: repo.head });
+  const sh = (cmd, args) => {
+    calls.push([cmd, ...args]);
+    if (cmd === 'git') {
+      const g = spawnSync('git', args, { cwd: repo.root, encoding: 'utf8' });
+      return { status: g.status, stdout: String(g.stdout || '').trim() };
+    }
+    if (cmd === 'node') return { status: 0, stdout: '' };
+    if (args[0] === 'api' && /\/pulls\?/.test(args[1])) {
+      return { status: 0, stdout: JSON.stringify([p]) };
+    }
+    if (args[0] === 'api' && /\/jobs\?filter=latest/.test(args[1])) {
+      return { status: 0, stdout: JSON.stringify({ jobs }) };
+    }
+    if (args[0] === 'api') return { status: 0, stdout: JSON.stringify({ workflow_runs: [r] }) };
+    return { status: 1, stdout: '' };
+  };
+  return { sh, calls };
+}
+
+test('R037: gatherCiReceipt reads the job set with git show from the merge\'s first parent, not'
+  + ' from the checkout', (t) => {
+  // the base declares the visual gate; the release tree (the checkout) and its run do not
+  const dropped = mergeRepo(t, VISUAL, '');
+  const { sh, calls } = repoSh(dropped);
+  const f = gatherCiReceipt({ sh, root: dropped.root, head: dropped.head });
+  assert.deepEqual(f.parents, [dropped.base, dropped.pr]);
+  assert.ok(calls.some((c) => c[0] === 'git' && c[1] === 'show'
+    && c[2] === `${dropped.base}:${CI_WORKFLOW}`), calls.map((c) => c.join(' ')).join('\n'));
+  assert.ok(f.baseWorkflow.jobs.includes('Visual regression gate'), 'the base copy was read');
+  assert.ok(!f.workflow.jobs.includes('Visual regression gate'), 'the checkout copy was read');
+  // the pull request's run does not verify, so the queue's runs are read too (ADR 0083) and
+  // both verdicts are reported: every other fact of the real merge holds
+  const problems = ciReceiptProblems(f);
+  assert.match(problems.join('\n'), new RegExp('pull_request: run 900 has no job "Visual '
+    + `regression gate" \\(\\.github/workflows/ci\\.yml of the base ${dropped.base.slice(0, 7)} `
+    + 'declares it\\)'));
+  assert.ok(problems.every((p) => /^(pull_request|merge_group): /.test(p)), problems.join('\n'));
+  // the release tree adds a job beyond the base, and its run carries it green: verifies
+  const added = mergeRepo(t, '', EXTRA);
+  const g = gatherCiReceipt({ sh: repoSh(added).sh, root: added.root, head: added.head });
+  assert.deepEqual(ciReceiptProblems(g), []);
+  assert.equal(judgedRun(g).id, 900);
+  // the base's copy missing from git is a refusal, never an empty job set
+  const none = mergeRepo(t, '', '');
+  const blind = repoSh(none);
+  const h = gatherCiReceipt({ sh: (c, a) => (c === 'git' && a[0] === 'show'
+    ? { status: 128, stdout: '' } : blind.sh(c, a)), root: none.root, head: none.head });
+  assert.equal(h.baseWorkflow, null);
+  assert.match(ciReceiptProblems(h).join(), new RegExp(`of the base ${none.base.slice(0, 7)} `
+    + 'could not be read'));
 });

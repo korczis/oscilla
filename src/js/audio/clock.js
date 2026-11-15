@@ -104,3 +104,90 @@ export function renderedTimeAtLeast(ctx, now = perfNow(), { outputTimestamp = tr
 export function glideStart(ctx) {
   return ctx.currentTime > 0 ? ctx.currentTime : RENDER_QUANTUM / ctx.sampleRate;
 }
+
+// ------------------------------------------------------------------ the one transport clock
+
+/**
+ * The one lookahead window of every scheduler that plays on an engine (C055): the sequencer's
+ * loop compiles its next pass this far ahead of the pass's start, and the Studio timeline
+ * schedules this far ahead of ctx.currentTime (timeline-compiler.js TIMELINE_LOOKAHEAD_S, the
+ * sequencer's LOOKAHEAD_S, both this value).
+ */
+export const TRANSPORT_LOOKAHEAD_S = 1.0;
+
+const transportClocks = new WeakMap(); // engine -> its transport clock
+
+/**
+ * The one transport clock (C055): one timer for every scheduler on an engine, so the
+ * sequencer's loop pump and the Studio transport's tick wake from the same timer instead of
+ * arming one each. A scheduler asks wake(key, ms, fn) for its next wake-up and cancel(key) to
+ * drop it; the clock keeps one timer, armed at the earliest wake-up asked for, and when it fires
+ * calls every scheduler that asked. A scheduler woken before its own time schedules nothing new:
+ * each one places its sound on ctx.currentTime with the one lookahead window and asks for its
+ * next wake-up again. The timer is UI bookkeeping, never the audio schedule (ADR 0001).
+ *   timers  { setTimeout, clearTimeout } (the engine's own), or null: no wake-up ever fires
+ *   nowMs   a millisecond clock for how long an earlier wake-up still has to wait
+ * -> { wake(key, ms, fn), cancel(key), has(key), pending (count), lookAheadS }
+ */
+export function createTransportClock(timers, nowMs = perfNow) {
+  const wakes = new Map(); // key -> { fn, at }
+  let timer = null;
+  const now = () => {
+    const t = nowMs();
+    return isNum(t) ? t : 0;
+  };
+  function rearm() {
+    if (timer !== null && timers) timers.clearTimeout(timer);
+    timer = null;
+    if (!wakes.size || !timers) return;
+    let at = Infinity;
+    for (const w of wakes.values()) at = Math.min(at, w.at);
+    timer = timers.setTimeout(fire, Math.max(1, Math.round(at - now())));
+  }
+  function fire() {
+    timer = null;
+    const due = [...wakes.values()];
+    wakes.clear();
+    let failure = null;
+    for (const w of due) {
+      try {
+        w.fn();
+      } catch (e) {
+        failure = failure || e; // the other schedulers still wake
+      }
+    }
+    rearm();
+    if (failure) throw failure;
+  }
+  return {
+    lookAheadS: TRANSPORT_LOOKAHEAD_S,
+    wake(key, ms, fn) {
+      wakes.set(key, { fn, at: now() + Math.max(0, Number(ms) || 0) });
+      rearm();
+    },
+    cancel(key) {
+      if (wakes.delete(key)) rearm();
+    },
+    has: (key) => wakes.has(key),
+    get pending() { return wakes.size; },
+  };
+}
+
+/** setTimeout and clearTimeout of the global scope, or null without them. */
+function globalTimers() {
+  if (typeof globalThis.setTimeout !== 'function') return null;
+  return { setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
+    clearTimeout: (id) => globalThis.clearTimeout(id) };
+}
+
+/**
+ * The transport clock of `engine` (an AudioEngine), made on first use from the engine's own
+ * timers (engine._timers, which a test may replace before), else the global ones. Every
+ * scheduler that plays on the engine shares it.
+ */
+export function transportClockOf(engine) {
+  if (!engine || typeof engine !== 'object') return null;
+  let c = transportClocks.get(engine);
+  if (!c) transportClocks.set(engine, (c = createTransportClock(engine._timers || globalTimers())));
+  return c;
+}

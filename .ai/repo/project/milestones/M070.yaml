@@ -15,4 +15,12 @@ evidence_required:
 risks:
   - "Nobody asks the owner: majordomus plan list --milestone M070 lists the questions, and the coordinator raises them; the plan cannot."
 created_at: 2026-10-29
-updated_at: 2026-11-02
+updated_at: 2026-11-11T12:26:25Z
+evidence:
+  - covers: "milestone_verified"
+    type: manual
+    command: "majordomus plan list (M070's eight Q issues)"
+    result: "Every owner decision of the connected-instrument line is recorded with its evidence: the last, Q022 (bounded recurrences inside one node, project.no-silent-feedback v2 as amended by oscilla-c3), decided 2026-11-11 under Q090"
+    artifact: ".ai/repo/project/issues/Q022.yaml"
+    commit: 1a0196d7e00f9cb750f0c0d7538e472be8557e1d
+    recorded_at: 2026-11-11T12:26:25Z

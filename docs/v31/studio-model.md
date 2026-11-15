@@ -83,6 +83,12 @@ authoring order does not matter. `STUDIO_HASH_VERSION` versions that selection.
 2)` pretty-prints the same key order. `isSemanticallyEqual(a, b)` compares execution and
 presentation and is what a dirty indicator should use.
 
+Normalization gives a node every parameter its type declares, at its default where the file has
+none, so a parameter added to an existing node type changes the studioHash of every document
+holding that type once (a hash epoch). K060 is one: Keys gained Key low (0) and Key high (127), so
+a document saved before it with a Keys node (the Synth panel's) hashes anew on load (K116's
+Chord, declared with the piano zones that play it, will be another); no pinned template holds a Keys node, so every template hash is unchanged.
+
 ## Ports
 
 | Type | Glyph | Cable | Roles |
@@ -135,7 +141,7 @@ parameters; depth and offset are octaves, |value| ≤ 10. New edges take the par
 `NODE_REGISTRY` holds frozen definitions, by category (held to `NODE_REGISTRY.list()` by
 `tests/unit/docs-derived.test.mjs`): Sources (Oscillator, Noise, Sweep, Sequence,
 Microphone, VCO, Additive engine, FM engine, AM/ring engine, Wavetable engine, Percussion
-engine), Modulation (LFO, Envelope, Random, Step Modulator, Macro, Keys, XY Pad), Processing
+engine), Modulation (LFO, Envelope, Random, Step Modulator, Macro, Clock, Krokový sekvencer CV, Keys, XY Pad, Contour), Processing
 (Gain, Filter, Pan, Stereo Split, Mixer, Drive, Ring), Analysis (Scope, Spectrum, Spectrogram, Meter, RTA), Output (Master Output,
 Recorder/Export), Measurement (Capture, Calibration, Transfer Analyzer, Measurement Result).
 

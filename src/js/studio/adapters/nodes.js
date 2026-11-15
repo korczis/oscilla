@@ -24,7 +24,9 @@
 //             update(changed, owned, w)   live change of non-modulatable, non-structural keys;
 //                                         each key it acts on is reported as w[key] = how:
 //                                         'set' | 'glide' (from now) | 'crossfade' |
-//                                         'next-gate'; a key it does not act on is not reported
+//                                         'next-gate' | 'next-note' (kept for the next gate
+//                                         or note: traced as stored, not scheduled); a key it
+//                                         does not act on is not reported
 //             (`w` is the operation trace's record, ADR 0042: optional, plain object)
 //             engage?()                   global side effects (the engine's master level), called
 //                                         by the runtime only once the transaction committed;
@@ -79,7 +81,8 @@ export const NODE_ADAPTERS = Object.freeze({
   oscillator: sources.oscillator, noise: sources.noise, sweep: sources.sweep,
   sequence: sources.sequence, microphone: sources.microphone,
   lfo: modulation.lfo, envelope: modulation.envelope, random: modulation.random,
-  'step-modulator': modulation.stepModulator, macro: modulation.macro,
+  'step-modulator': modulation.stepModulator, macro: modulation.macro, clock: modulation.clock,
+  'step-voltage-sequencer': modulation.stepVoltageSequencer,
   gain: processing.gain, filter: processing.filter, pan: processing.pan,
   'stereo-split': processing.stereoSplit, mixer: processing.mixer, drive: processing.drive,
   scope: analysis.scope, spectrum: analysis.spectrum, spectrogram: analysis.spectrogram,
@@ -90,6 +93,7 @@ export const NODE_ADAPTERS = Object.freeze({
   'transfer-analyzer': dataNode('measurement/transfer.js#computeTransfer'),
   'measurement-result': dataNode('experiments/schema.js#withResults'),
   keys: instrument.keys, vco: instrument.vco, ring: instrument.ring, 'xy-pad': instrument.xyPad,
+  contour: instrument.contour,
   'additive-voice': engines.additiveVoice, 'fm-voice': engines.fmVoice,
   'am-voice': engines.amVoice, 'wavetable-voice': engines.wavetableVoice,
   'perc-voice': engines.percVoice,

@@ -38,4 +38,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-03
-updated_at: 2026-11-05
+updated_at: 2026-11-08T21:49:49Z
+started_at: 2026-11-08T21:49:23Z
+started_event: sha256:23c4d8bfcf48f4f5123ffb29d1eff209827229a314cd8b2f48b891c3444ae96a
+verified_at: 2026-11-08T21:49:35Z
+verified_event: sha256:1a2e261062d08929eb45a0a655ea1e8233d4077b210db25e7caf2862515b1004
+completed_at: 2026-11-08T21:49:49Z
+completed_event: sha256:7f59e1f35dc6bcf5269a46641d156c2e028e1bc09406b00a78de4a37030695dc
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/keyboard-dock-yield.test.mjs tests/unit/keys-routes.test.mjs; node tests/browser/xy-pad.cjs; npm run build:check (re-run by oscilla-a3 on main f17a7c3e, 2026-11-08, darwin)"
+    result: "Landed in the keys+pad train #444 (merge 3a3a5a58, builders 2b and a3; K224's fold of #495 on top). Each criterion re-checked on main f17a7c3e: (1) and (2) keyboard-dock-yield and keys-routes 29 pass, 0 fail: the dock state a pure function of route and note owner, a pad owning the notes folds it at every size and pointer, a user's unfold kept until the owner changes, the keyboard's own held notes released on a fold (never the pad's), no surface setting the dock state directly (grep test); (3) xy-pad.cjs all pass in chromium, firefox and webkit at 390x844, 375x667, 1536x1024 and 1280x720: the whole pad inside the first viewport and uncovered at its corners and centre, the handle below it, the first tap and a held computer key sounding by the engine analyser, the handle unfolding by tap and keyboard, a held pad note sounding through an unfold and a fold, inside suite.cjs with named until() deadlines; (4) verdict .ai/repo/reviews/444.yaml by seat 7b, review-verdict and fail-first SUCCESS on #444, the Flowbite Pro baseline unchanged by #444; (5) tests/README.md rows present, build:check up to date."
+    artifact: ".ai/repo/reviews/444.yaml"
+    commit: 3a3a5a58bddf6c897732c2651b82df1741442b7e
+    recorded_at: 2026-11-08T19:35:06Z

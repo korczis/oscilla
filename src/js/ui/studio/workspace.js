@@ -39,7 +39,7 @@ import {
   REFERENCE_TEMPLATE_ID, listTemplates, templateModel,
 } from '../../studio/templates/index.js';
 import { createSynthUi } from '../../synth/ui.js';
-import { createDirtyTracker } from '../../studio/library.js';
+import { createDirtyTracker, hashMigrationText } from '../../studio/library.js';
 import { openModal, closeModal } from '../dialogs.js';
 import { createGraphEditor } from './graph-editor.js';
 import { createConnectDialog, createFindNode, createQuickAdd } from './graph-picker.js';
@@ -59,6 +59,7 @@ import { createWorkspaceFiles } from './workspace/files.js';
 import { createWorkspaceGraph } from './workspace/graph.js';
 import { createWorkspaceTimeline } from './workspace/timeline.js';
 import { createWorkspaceVoice } from './workspace/voice.js';
+import { createWorkspaceKeys } from './workspace/keys.js';
 import {
   FULLSCREEN_UNSUPPORTED, createWorkspaceNavigation, fullscreenElementOf, fullscreenSupport,
 } from './workspace/navigation.js';
@@ -75,11 +76,12 @@ export {
 export {
   studioStatus, compileWarningLine, MIC_SETTLE_MS, settleMicrophones, microphoneOutcome,
 } from './workspace/runtime.js';
+import { OWNER } from '../output-owner.js';
 
 /** The parts of the workspace (./workspace/*.js), in the order their functions join `ops`. */
 const PARTS = [createWorkspaceDocument, createWorkspaceRuntime, createWorkspaceMeasurement,
   createWorkspaceFiles, createWorkspaceGraph, createWorkspaceTimeline, createWorkspaceNavigation,
-  createWorkspaceVoice];
+  createWorkspaceKeys, createWorkspaceVoice];
 
 /**
  * A stable handle over the current store (§9): the same object for every projection, the
@@ -132,6 +134,7 @@ export function createStoreHandle(initialModel, {
     beginGesture: (label) => store.beginGesture(label),
     endGesture: () => store.endGesture(),
     cancelGesture: () => store.cancelGesture(),
+    gestureId: () => store.gestureId(),
     canUndo: () => store.canUndo(),
     canRedo: () => store.canRedo(),
     undoLabel: () => store.undoLabel(),
@@ -176,7 +179,34 @@ export function createStoreHandle(initialModel, {
   return Object.freeze(handle);
 }
 
-/** The Alpine part of the STUDIO workspace. svc: { engine, stopPlayback(cmp) }. */
+/**
+ * Studio PLAY's output claim (the transport's onClaimOutput): refused with the sentence of the
+ * row of OUTPUT_REFUSALS that holds the output (svc.outputRefusalOf, ui/output-owner.js: a
+ * measurement or a microphone level-reference capture, C024), the one table every claim reads;
+ * otherwise every other owner stops (svc.stopPlayback) and the Studio takes the output. With
+ * the playback bus (svc.claim, C037) it is the bus's one claim as the Studio.
+ */
+export function claimStudioOutput(cmp, svc, announce) {
+  // The playback bus's claim (C037, svc.claim from main.js): the same table, refusal and stops.
+  if (typeof svc.claim === 'function') {
+    const r = svc.claim(OWNER.studio, 'play', { notify: false });
+    if (!r.ok) announce(r.text, { assertive: true });
+    return r.ok;
+  }
+  const refusal = cmp && typeof svc.outputRefusalOf === 'function'
+    ? svc.outputRefusalOf(cmp) : null;
+  if (refusal) {
+    announce(refusal.text, { assertive: true });
+    return false;
+  }
+  if (cmp && svc.stopPlayback) svc.stopPlayback(cmp);
+  return true;
+}
+
+/**
+ * The Alpine part of the STUDIO workspace. svc: { engine, stopPlayback(cmp),
+ * outputRefusalOf(cmp) → the refusal row holding the output or null (Studio PLAY, the riffs) }.
+ */
 export function createStudioUi(svc = {}) {
   const registry = svc.registry || NODE_REGISTRY;
   const ctx = {
@@ -217,14 +247,21 @@ export function createStudioUi(svc = {}) {
     tracePending: false,
   };
   // The Inspector's Trace refreshes once an operation has ended (coalesced per task).
-  ctx.trace = createTrace({ now: Date.now, onIdle: () => {
+  const traceIdle = () => {
     if (ctx.tracePending) return;
     ctx.tracePending = true;
     queueMicrotask(() => {
       ctx.tracePending = false;
       if (ctx.inspector) ctx.inspector.renderTrace();
     });
-  } });
+  };
+  // The page's one trace (main.js, C050: the playback bus records in it too), else its own.
+  if (svc.trace) {
+    ctx.trace = svc.trace;
+    if (typeof svc.onTraceIdle === 'function') svc.onTraceIdle(traceIdle);
+  } else {
+    ctx.trace = createTrace({ now: Date.now, onIdle: traceIdle });
+  }
 
   const viewEl = () => document.getElementById('osc-view-studio');
   const compactEl = () => document.querySelector('[data-osc="studio.compact"]');
@@ -282,15 +319,7 @@ export function createStudioUi(svc = {}) {
       store: ctx.handle, registry, trace: ctx.trace,
       testContext: () => !!(ctx.cmp && ctx.cmp.meas && ctx.cmp.meas.loopback), // ADR 0052
       onMeasurement: (ev) => { if (ctx.measureRun) ctx.measureRun.hook(ev); },
-      onClaimOutput: () => {
-        const cmp = ctx.cmp;
-        if (cmp && typeof cmp.measureOwnsOutput === 'function' && cmp.measureOwnsOutput()) {
-          announce('The output belongs to the measurement: stop it first.', { assertive: true });
-          return false;
-        }
-        if (cmp && svc.stopPlayback) svc.stopPlayback(cmp);
-        return true;
-      } });
+      onClaimOutput: () => claimStudioOutput(ctx.cmp, svc, announce) });
     ctx.transport.on(onTransport);
   }
 
@@ -349,6 +378,15 @@ export function createStudioUi(svc = {}) {
       micBusy: () => ctx.micBusy,
       userPatches: () => library().then((l) => l.patches()),
       openLibrary: () => cmp.patchLibraryOpen(),
+      playhead: () => (ctx.transport ? ctx.transport.playhead() : null),
+      liveTransport: () => ctx.transport || null, // K223: the step grid's Record switch
+      // K226: a step-voltage sequencer's manual step; the press is a gesture, so stopped it
+      // sets audio up and transport.step arms the live model first.
+      stepNode: (id) => {
+        setupAudio();
+        return ctx.transport ? ctx.transport.step(id)
+          : { ok: false, reason: 'Studio teď nehraje.' };
+      },
     });
     const libHost = document.querySelector('[data-osc="studio.library"]');
     ctx.library = mountLibrary(libHost, {
@@ -384,7 +422,8 @@ export function createStudioUi(svc = {}) {
         if (ctx.dirty) ctx.dirty.markSaved(ctx.handle.getModel(), { id: r.summary.id,
           savedAt: r.summary.savedAt });
         refreshState();
-        announce(`Opened ${r.summary.name}`);
+        announce(r.hashMigration ? `Opened ${r.summary.name}. ${hashMigrationText(r.hashMigration)}`
+          : `Opened ${r.summary.name}`);
       },
       recordDeleted: (id) => detachDeleted(id),
       connections: (id) => (ctx.cmp && typeof ctx.cmp.connectionsOfStudioProject === 'function'
@@ -434,8 +473,10 @@ export function createStudioUi(svc = {}) {
   }
 
   // The Synth workspace (K058-K066) shares this part's ONE store and transport.
+  // sampleRate: the running context's (null before one), which sizes the XY pad's Y value.
   const synth = createSynthUi({
-    get: () => ({ handle: ctx.handle, transport: ctx.transport, dirty: ctx.dirty }),
+    get: () => ({ handle: ctx.handle, transport: ctx.transport, dirty: ctx.dirty,
+      sampleRate: svc.engine ? svc.engine.sampleRate : null }),
     setupAudio: () => setupAudio(), announce, registry });
 
   // ---------------------------------------------------------------- the Alpine part
@@ -449,6 +490,7 @@ export function createStudioUi(svc = {}) {
       memoryHeld: 0, // Studio projects and patches held by the memory fallback store
       storeNote: '',
       playing: false,
+      armed: false, // the keys play the running graph while the timeline is stopped (K104)
       // The Studio's Master Output level while it holds the engine's master stage (runtime
       // 'master' events) and engine.masterWrites after that write; null otherwise (C012).
       masterLevel: null,
@@ -491,7 +533,12 @@ export function createStudioUi(svc = {}) {
       window.addEventListener('keydown', onKeyDown);
       window.addEventListener('keyup', onKeyUp);
       this.$watch('playing', (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); });
-      this.$watch('seqPlaying', (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); });
+      // A sequence that takes the output stops the Studio: a subscription to the playback bus's
+      // state (C051; its claim already stops the Studio through its yields), else the old watch.
+      const seqTook = (on) => { if (on && ctx.transport && ctx.transport.playing) stopStudio(); };
+      if (typeof svc.onPlayback === 'function') {
+        svc.onPlayback((st) => seqTook(st.owner === OWNER.sequencer));
+      } else this.$watch('seqPlaying', seqTook);
       // A Studio measurement shows MEASURE's own state and progress in the Studio task strip.
       const follow = () => {
         if (ctx.measureRun && ctx.measureRun.busy) setTask(measureTaskView());
@@ -531,9 +578,7 @@ export function createStudioUi(svc = {}) {
       document.addEventListener('fullscreenchange', onFullscreen);
       document.addEventListener('webkitfullscreenchange', onFullscreen);
       // Deep links reach studioApplyLinkHash through the hash dispatcher (main.js).
-      const hide = () => { if (ctx.transport && ctx.transport.playing) stopStudio({ fast: true }); };
-      document.addEventListener('visibilitychange', () => { if (document.hidden) hide(); });
-      window.addEventListener('pagehide', hide);
+      // A page hide stops the Studio through the playback bus's stopAll (main.js, C050).
       this.$nextTick(() => {
         mount(this);
         library().catch(() => {});

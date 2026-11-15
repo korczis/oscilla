@@ -16,7 +16,7 @@ export default {
         + 'device and its volume.',
     ],
   },
-  studioHash: 'fbfe0905d6948e9e92418623fb0d53505b89706136fe0cbe3521a92d3b7edf92',
+  studioHash: '59dff06b79e068668072ef5593847473813c9bdf05b3d8ad3da01a1e4a027b5a',
   model: studioDoc({
     title: 'Basic Tone',
     nodes: [

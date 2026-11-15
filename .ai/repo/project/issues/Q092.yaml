@@ -21,4 +21,16 @@ validation:
 evidence_required:
   - "owner_decision"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-09T18:33:28Z
+started_at: 2026-11-09T18:32:38Z
+started_event: sha256:e3a71e9d5673aaf7006ab3a6e9c458dfb7c56849d5a4bc5b9c4de474ab07d3be
+completed_at: 2026-11-09T18:33:28Z
+completed_event: sha256:8b9a5351d8d6aee257c73566bf19536c39314ffdcd0fd36f027463731de05a96
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "LLM decision on the mesh thread b0<->af, 2026-11-05 ~02:15Z, under the owner's order of 2026-11-05 'discuss answers with other llms, do not wait for human, be llm autonomous' (Q090); as landed in Q092's objective on main (5f3c0b46 and 33e790a4); recorded as evidence by oscilla-ce on 2026-11-09"
+    result: "AGREED by af with b0 (decision Q-B): a Synth panel module's fixed parameter is declaration, not a default. (1) The StudioModel refuses NODE_PARAM_SET on it with a stated reason, model and history unchanged; (2) a node preset and a catalog Apply skip it with a per-parameter reason they report; (3) a saved document with an overridden fixed value imports with it reset to the declared value and the reset named; (4) tests/unit/studio-node-presets.test.mjs:117 flips and fails first. The invariant covers every writer of node params (preset, Apply, PATCH_REPLACE, paste, import, history replay). Attribution: af with b0 under the owner's 'be llm autonomous'; the owner may override it. K187 names Q092 in depends_on."
+    artifact: ".ai/repo/project/issues/Q092.yaml"
+    commit: 7637039e01e5e76dd6b50c6876d1a57b97cb64a8
+    recorded_at: 2026-11-09T18:33:09Z

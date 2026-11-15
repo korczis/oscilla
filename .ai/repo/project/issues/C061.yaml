@@ -24,4 +24,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-08T08:58:35Z
+started_at: 2026-11-08T08:56:45Z
+started_event: sha256:6299f25bc19ccf77792c2c7bd1f5232d3dd67a89972e38643485659a1d8ba6ad
+verified_at: 2026-11-08T08:56:57Z
+verified_event: sha256:38835e1d9d865e9ce7e4070846c5f593394edf1db6e4d1bcd3febc8739e79c00
+completed_at: 2026-11-08T08:58:35Z
+completed_event: sha256:2bd8f9962808df87be62839d0650ff89864b90e71dd5177a2bb1bf55cf4bd15c
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/c061-envelope-edits-accumulate.test.mjs (re-run by oscilla-a3 on main ee9bfd25, 2026-11-08, darwin)"
+    result: "Landed in train C #486 (merge ee9bfd25, member fix/c061-envelope-live-edits, built by oscilla-a3, judged by oscilla-21 in .ai/repo/reviews/486.yaml: merge). On main ee9bfd25: 4 pass, 0 fail: attack 1.5 then decay 0.7 ramp as set (criterion 1), sustain and release hold across further updates and one key's update leaves the others (criterion 2), a third edit, and the runtime path; fail-first held on #486 (4 of 4 failed on the base, 21's check); re-checked on a main commit (criterion 3)."
+    artifact: ".ai/repo/reviews/486.yaml"
+    commit: ee9bfd25df855b0d586e0a39a6e5b073128e36fd
+    recorded_at: 2026-11-08T08:57:10Z

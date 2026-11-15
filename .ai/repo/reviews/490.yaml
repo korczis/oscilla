@@ -1,0 +1,39 @@
+# Review verdict for pull request #490 (fix/ci-majordomus-download-fallback): the pinned
+# Majordomus download falls back to the GitHub API route when its public URL fails. Judged at
+# 835137c1 on base origin/main (merge base), 2026-11-08, in the reviewer's own detached worktree.
+# Reviewer: seat 7b (session prismatic-majordomus-7b, claude-code f9c3d552), which built none of it
+# (builder: oscilla-2b).
+#
+# What it fixes, reproduced by the reviewer at 09:13-09:19Z: the public browser_download_url of
+# prismatic-majordomus v1.0.0 (and v1.0.0-alpha.10) answers HTTP 504, the linux archive in 0.1 to
+# 11 s, while v1.0.0-alpha.9 answers 302 then 200 and the authenticated API route
+# (assets/{id}, Accept: application/octet-stream) serves the right SHA256SUMS. Every pull
+# request's knowledge job downloads the public URL and failed.
+#
+# Read: ci.yml's knowledge job and main-checks.yml carry the same step. The public URL is tried
+# first under its existing curl retries; on failure a ::warning:: names the fallback and
+# `gh release download "v${MJ_VERSION}" -R korczis/prismatic-majordomus -p "$a" -D "$RUNNER_TEMP"
+# --clobber` runs at most three times, each under `timeout 60`, 5 s apart, with GH_TOKEN the job's
+# github.token; --clobber replaces a partial file curl may have left. The unchanged
+# `sha256sum -c` against MJ_SHA256 follows either path, so the digest still decides; tag,
+# repository and asset name are the pinned ones, nothing else is fetched. Under the job's
+# `shell: bash` (-eo pipefail) the loop's `&& break` and `[ "$i" = 3 ] && exit 1` do not trip -e
+# (reproduced: retries twice, exits 1 only on the third failure). Both jobs run on ubuntu-24.04,
+# which ships gh. Worst case before the step's 5-minute bound: six 504s of about 11 s plus five
+# 5 s delays (about 95 s) and three 60 s attempts (about 190 s): about 285 s, inside it (F-1).
+#
+# Measured by the reviewer: node --test tests/unit/ci-knowledge-job.test.mjs 7/7 at the head;
+# fail-first: the same test file in a full worktree of origin/main fails exactly the new case
+# ("a failed public download falls back to the API route, same tag and repository"), 6 pass;
+# tests/unit/ci-workflows.test.mjs 35/35; tests/unit/majordomus-pin-one-source.test.mjs 3/3.
+# Not run by the reviewer: the workflow itself (the PR's own knowledge job exercises the
+# fallback live; CI is the receipt) and the full npm test (the builder's 5038/0).
+#
+# Verdict: merge. One P3 rides as a follow-up.
+schema: review-verdict/v1
+pr: 490
+verdict: merge
+reviewer: prismatic-majordomus-7b (claude-code f9c3d552; built none of 835137c1)
+content: 0ec745ee4187831b755676144c10ac5ecbd935bc5e2118763ce835d8513aa4e7
+findings:
+  - { id: F-1, severity: P3, status: open, title: "the public curl leg has --connect-timeout 20 and --retry 5 but no --max-time, so a slow 504 (11 s measured) times six attempts eats most of the step's 5-minute bound before the fallback starts; add --max-time 30 (or fewer retries) so the API leg always keeps its three 60 s attempts" }

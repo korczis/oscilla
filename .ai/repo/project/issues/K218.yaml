@@ -1,0 +1,32 @@
+id: K218
+milestone: M064
+serves:
+  - "connected-instrument#patch-cables"
+title: "Patch bay: a refused feedback cable highlights its cycle path on the bay"
+slug: patch-bay-a-refused-feedback-cable-highlights-its-cycle-path
+priority: p1
+profile: implementation
+objective: "Lands as feat(synth). K063 refuses feedback 'with the cycle path highlighted'; on main a feedback drop is refused with the store's sentence and nothing on the bay shows the loop. The bay highlights the edges and jacks of the cycle the validator found (analyzeCycles' cycles[].edges, src/js/studio/validate.js) by pattern and outline, not by colour alone, until the next drag or Escape. Before: the sentence names a loop the bay does not show. After: the loop is visible where it would close. Rollback: revert the pull request; no saved state depends on it."
+why: "Gap of K063 (criterion 2) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): a refused feedback cable does not highlight its cycle path. No owner direction re-scopes it, so it is its own issue and K063's criterion points here (chore/plan-m064-rescope). K063 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "src/js/synth/ui.js"
+  - "src/js/synth/view/bay.js"
+  - "src/js/ui/synth/cable.js"
+  - "tests/unit/synth-patch-bay.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K215"
+acceptance_criteria:
+  - "tests/unit/synth-patch-bay.test.mjs, failing on the merge base: a feedback drop is refused with the no-silent-feedback sentence, the model and history are unchanged, and the bay's drawing marks exactly the edges and jacks of the cycle analyzeCycles reports, by a dash pattern or outline as well as colour; the next drag clears the mark (project.fail-first)."
+  - "A browser check in tests/browser/synth.cjs, in every gate browser: a feedback cable dropped by pointer is refused, the sentence is in the live region and the cycle's cables carry the mark, within a named until() deadline. Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "src/js/synth is guarded (project.review-verdict v2): a non-builder's verdict; tests/README.md names the new checks; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-patch-bay.test.mjs"
+  - "node tests/browser/synth.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

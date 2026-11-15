@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 300000,
+    "src/index.html": 310000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -210,6 +210,48 @@
       "cap": 309000,
       "pr": 457,
       "reason": "the 3.23 About station (project.about-names-current-release) takes src/index.html 134 bytes past 308 000; the release adds no other markup, and R032 (the derived-versioning train, next) moves the timeline to data"
+    },
+    {
+      "file": "src/js/studio/transport.js",
+      "cap": 94000,
+      "pr": 506,
+      "reason": "train T2 lands K068 (notes clips play on the audio clock: note player, grid wake, tap tempo) and K104 (STOP keeps the keys armed) in the one transport; together they take it 1 386 bytes past 92 000, and splitting the note player out is follow-up work, not a train change"
+    },
+    {
+      "file": "src/js/studio/transport.js",
+      "cap": 94000,
+      "pr": 507,
+      "reason": "the same raise as the entry naming pull request 506, which was a mis-numbered guess: train T2 (K068 + K104) lands as pull request 507; entries are added, never edited, so this one corrects it"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 304000,
+      "pr": 537,
+      "reason": "G013 (owner order 2026-11-11, visual audit finding 7): the Sequencer and Filter Lab link piles become one Pro row and one 'Otevřít v…' menu each; new markup only, no trim of unrelated surfaces"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 305000,
+      "pr": 542,
+      "reason": "Czech pass 3 (U109, Q104) translates the Playground panels and the Synth header, dock and notices string-only; oscilla-c3 accepted the raise under Q090"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 305000,
+      "pr": 547,
+      "reason": "the PR of the entry above: Czech pass 3 landed in #547 (train T20); 542 was a placeholder written before the PR existed, and entries are added, never edited"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 309000,
+      "pr": 549,
+      "reason": "V507 (owner orders 2026-11-14/15): the Settings dialog's MIDI section gains the device list and the MIDI monitor; new markup only, no trim of unrelated surfaces"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 310000,
+      "pr": 555,
+      "reason": "V508 (owner orders 2026-11-14/15): the MIDI section shows the incoming MIDI clock's tempo (midi.clock) beside the monitor's title; new markup only, no trim of unrelated surfaces"
     }
   ]
 }

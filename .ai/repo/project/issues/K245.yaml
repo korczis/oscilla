@@ -1,0 +1,32 @@
+id: K245
+milestone: M058
+serves:
+  - "playable-instrument#hash-epoch"
+title: "A Studio record saved with a Keys node in v3.15-v3.27 opens again"
+slug: keys-legacy-hash
+priority: p1
+profile: implementation
+objective: "oscilla-d9's stamp audit of 45db334e (K060 criteria 3 and 11, verified by probe): #447 (v3.28.0) gave the released Keys node keyLow and keyHigh with no hash epoch, so every Studio project, patch and experiment Studio block saved with a Keys node in v3.15.0-v3.27.x matched no epoch's hash: loadProject throws 'its content does not match its stored studioHash' and verifyExperimentStudio refuses the block. After: such a record matches its epoch's hash with the unepoched keys left out while the model holds them at their defaults (schema.js UNEPOCHED_PARAMS, closed to the Keys key range at epoch 1), and opens migrated with its original hash kept; v3.28+ records verify as before."
+why: "Owner-visible data loss outranks stamping (oscilla-43, 2026-11-11): saved work must open (project.studio-model-is-canonical, D2 of K022)."
+current_state: "Built by oscilla-d9 in task t-20261111095329-dfc9 on fix/k245-keys-legacy-hash from origin/main 45db334e (assigned by oscilla-43, 2026-11-11, option: hashEpochOf also tries the epoch hash without keyLow/keyHigh at their defaults); judged by oscilla-c3 (guarded studio and storage paths); rides the train after T9 publishes."
+scope:
+  - "src/js/studio/schema.js"
+  - "src/js/studio/provenance.js"
+  - "tests/unit"
+  - "tests/README.md"
+  - "dist"
+  - ".ai/repo/project/issues/K245.yaml"
+depends_on:
+  - K060
+  - K022
+acceptance_criteria:
+  - "Fail-first unit: a project and an experiment Studio block exactly as v3.27.0 saved them with a Keys node (made by v3.27.0's own src) open and verify migrated from epoch 1, the original hash kept and the stored record unchanged; both are corrupt on 45db334e."
+  - "The same unit: v3.28.0's records still verify at epoch 1 and a record saved now opens unmigrated; a key range off its default, any other change, or another record's hash is still refused."
+  - "UNEPOCHED_PARAMS is closed (only the Keys key range at epoch 1); a new parameter on a released type still goes into a hash epoch."
+  - "A non-builder verdict (oscilla-c3) for the guarded studio paths; tests/README.md row; dist rebuilt; build:check passes."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-11'
+updated_at: '2026-11-11'

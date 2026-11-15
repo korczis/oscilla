@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (the Flowbite Pro surfaces; no audio judged)
 // The Flowbite Pro shell (issue F002, ADR 0061) on the built dist/index.html in chromium,
 // firefox and webkit, from file:// and from a GitHub-Pages-like sub-path
 // (http://127.0.0.1:<port>/oscilla/), every check on both.

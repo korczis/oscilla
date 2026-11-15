@@ -13,7 +13,7 @@ import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { definePort } from '../ports.js';
 import {
   CATEGORIES, FREQUENCY_MAX_HZ, boolParam, defineNode, enumParam, frequencyParam, hz,
-  levelParam, num, numberParam, optionLabel, parts, pct,
+  levelParam, num, numberParam, optionLabel, parts, pct, bypassParam,
 } from './common.js';
 
 const audioIn = definePort({ id: 'audio', direction: 'in', type: 'AUDIO', label: 'Audio' });
@@ -26,6 +26,12 @@ export const FILTER_TYPE_LABELS = Object.freeze({
 });
 export const MIXER_CHANNELS = 4;
 
+/**
+ * Filter types a 24 dB/oct slope cascades (K022): low- and high-pass only, where the order
+ * doubles the roll-off. A band-pass cascade is 12 dB/oct a side and a notch has no such slope
+ * (review of K022, P2-2): those, and the others, keep one biquad.
+ */
+export const CASCADES = Object.freeze(['lowpass', 'highpass']);
 const signedDb = (g) => `${g > 0 ? '+' : ''}${num(g, 3)} dB`;
 
 export const gain = defineNode({
@@ -41,8 +47,10 @@ export const gain = defineNode({
       min: 0, max: 2, step: 0.01, default: 1, automatable: true, modulatable: true,
       modDepth: 0.5,
     }),
+    bypassParam(), // K022
   ],
   summary(p) {
+    if (p.bypass) return 'bypassed';
     return p.gain > 0 ? signedDb(20 * Math.log10(p.gain)) : 'Muted';
   },
   capabilities: { realtime: true, offline: true },
@@ -71,18 +79,26 @@ export const filter = defineNode({
     frequencyParam('frequency', 'Cutoff', DEFAULT_FILTER.frequency, {
       min: 10, max: FREQUENCY_MAX_HZ, automatable: true, modulatable: true, modDepth: 1200,
     }),
+    // `lane`: a lane on a low- or high-pass Q is in Q and plays on the biquad's dB Q
+    // (clip-targets.js laneMap, K232); the other types' Q is linear on the node.
     numberParam('Q', 'Q', {
       min: 1e-4, max: 1000, scale: 'log', default: DEFAULT_FILTER.Q, automatable: true,
-      modulatable: true, modDepth: 0.5, softRange: [0.1, 30],
+      modulatable: true, modDepth: 0.5, softRange: [0.1, 30], lane: 'db-of-q',
     }),
     numberParam('gain', 'Gain', {
       min: -40, max: 40, step: 0.1, unit: 'dB', default: DEFAULT_FILTER.gain,
       automatable: true, modulatable: true, modDepth: 6,
     }),
-    boolParam('enabled', 'Enabled', DEFAULT_FILTER.enabled),
+    // Shown as Bypass (inverted), the one bypass control every processing node has (K022,
+    // C043); the model keeps `enabled`, so no saved Filter changes.
+    boolParam('enabled', 'Enabled', DEFAULT_FILTER.enabled, { shownAs: 'Bypass' }),
+    // K022: 24 dB/oct cascades a second identical biquad (low- and high-pass only).
+    enumParam('slope', 'Slope', [['12', '12 dB/oct'], ['24', '24 dB/oct (low-/high-pass)']], '12',
+      { live: 'crossfade' }),
   ],
   summary(p) {
     return parts(optionLabel(filter, 'type', p.type), hz(p.frequency),
+      p.slope === '24' && CASCADES.includes(p.type) ? '24 dB/oct' : null,
       usesGain(p.type) ? signedDb(p.gain) : `Q ${num(p.Q)}`,
       p.enabled ? null : 'bypassed');
   },
@@ -90,8 +106,10 @@ export const filter = defineNode({
   compiler: 'audio/filters.js#createFilterStage',
   reuses: ['audio/filters.js#normalizeFilter'],
   help: {
-    what: 'A biquad filter (low-pass, high-pass, band-pass, notch, peaking, low-shelf, '
-      + 'high-shelf, all-pass) with click-free bypass.',
+    what: 'Bikvadratický filtr (dolní, horní a pásmová propust, pásmová zádrž, špičkový, '
+      + 'dolní a horní šelf, všepropustný) s bypassem bez lupnutí. '
+      + 'Sklon 24 dB/okt. platí jen pro dolní a horní propust: kaskáda dvou stejných '
+      + 'biquadů zdvojnásobí rezonanci a pokles o 3 dB leží pod mezní frekvencí.',
     inputs: 'Audio; cutoff, Q and gain accept modulation.',
     outputs: 'Audio.',
     constraints: 'Q is linear for every type and ignored by the shelves; gain applies to '
@@ -113,8 +131,10 @@ export const pan = defineNode({
       min: -1, max: 1, step: 0.01, default: 0, automatable: true, modulatable: true,
       modDepth: 0.5,
     }),
+    bypassParam(), // K022: bypassed, the mono input is sent to both channels as at Centre
   ],
   summary(p) {
+    if (p.bypass) return 'bypassed';
     if (p.pan === 0) return 'Centre';
     return `${Math.round(Math.abs(p.pan) * 100)} % ${p.pan < 0 ? 'L' : 'R'}`;
   },
@@ -211,8 +231,10 @@ export const drive = defineNode({
   params: [
     numberParam('drive', 'Drive', { min: 0, max: 1, step: 0.01, default: 0.5 }),
     levelParam('trim', 'Trim', 0.5, { automatable: true, modulatable: true, modDepth: 0.25 }),
+    bypassParam(), // K022
   ],
   summary(p) {
+    if (p.bypass) return 'bypassed';
     return parts(`Drive ${pct(p.drive)}`,
       p.trim > 0 ? `trim ${signedDb(20 * Math.log10(p.trim))}` : 'muted');
   },

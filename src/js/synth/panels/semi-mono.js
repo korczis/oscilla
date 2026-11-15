@@ -4,33 +4,41 @@
 // source and the output. The whole panel is this one declaration (synth/panel.js): every knob,
 // switch and jack comes from the registry's node descriptors. The Engines tab's modules join it
 // (panels/engines.js): the panel's amplifier feeds their chain into the one Output. The XY tab's
-// pad (panels/xy.js, plan K097) joins it with no normals: its cables replace the keyboard's.
+// pad (panels/xy.js, plan K097, K183) joins it with no normals: its notes play the keys' voice.
 
 import { definePanel } from '../panel.js';
 import { ENGINE_MODULES, ENGINE_TAB, enginesChain } from './engines.js';
-import { XY_MODULE, XY_TAB } from './xy.js';
+import { XY_MODULE, XY_TAB, XYL_MODULE } from './xy.js';
+import { DRUMS_TAB } from '../drums.js';
 
-const FILTER_FIXED = { gain: 0, enabled: true };
-const FILTER_NOTE = 'A 12 dB/oct biquad: the peak rings but does not self-oscillate.';
-// Peak (Q) has a knob and no jack: a low- or high-pass Q is a dB AudioParam in Web Audio, so the
-// runtime refuses a linear Q modulation (clip-targets.js filterQ), and a jack that takes a cable
-// and does nothing is an inert surface (project.no-inert-surfaces).
-const FILTER_JACKS = { hide: ['gain', 'Q'] };
+// K022: the panel's filters are 12 dB/oct by design (its description and FILTER_NOTE).
+const FILTER_FIXED = { gain: 0, enabled: true, slope: '12' };
+const FILTER_NOTE = 'Bikvadratický filtr 12 dB/oct: rezonance (Peak) zvoní, ale filtr nepřejde '
+  + 'do samooscilace.';
+// Peak (Q) has a jack since K232: a low- or high-pass Q is a dB AudioParam in Web Audio, and a
+// log cable (octaves of Q, the knob's own scale) is linear in it (adapters/processing.js
+// modTarget, DB_PER_OCTAVE_Q), held at or below the knob's soft-range top (compiler.js
+// computeBases); a new cable into it is log (normals.js cableProps). Gain has no jack: the panel
+// fixes it at 0 dB and a low- or high-pass ignores it.
+const FILTER_JACKS = { hide: ['gain'] };
 
 export default definePanel({
   id: 'semi-mono',
   version: 1,
-  title: 'Semi-modular mono voice',
-  tabs: [{ id: 'panel', label: 'Panel', title: 'Semi-modular mono voice',
-    description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
-    + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
-    + 'with no cable, and a cable into a jack replaces what was normalled there.' }, ENGINE_TAB,
-  XY_TAB],
-  description: 'Two oscillators and noise through two 12 dB/oct filters in series, high-pass '
-    + 'then low-pass, into an envelope-driven amplifier. Every jack is normalled: it sounds '
-    + 'with no cable, and a cable into a jack replaces what was normalled there.',
+  title: 'Semimodulární monofonní hlas',
+  // keepsDock (U100): the Panel tab's keys are its instrument; on a short phone they stay
+  // docked here while the other tabs yield them (midi/routes.js keepsRoom.keptBy).
+  tabs: [{ id: 'panel', label: 'Panel', title: 'Semimodulární monofonní hlas', keepsDock: true,
+    description: 'Dva oscilátory a šum procházejí dvěma filtry 12 dB/oct v sérii, horní '
+    + 'propustí a za ní dolní propustí, do zesilovače řízeného obálkou. Každý vstup má normál: '
+    + 'panel hraje i bez kabelu a kabel zapojený do vstupu jeho normál nahradí.' }, ENGINE_TAB,
+  XY_TAB, DRUMS_TAB],
+  description: 'Dva oscilátory a šum procházejí dvěma filtry 12 dB/oct v sérii, horní '
+    + 'propustí a za ní dolní propustí, do zesilovače řízeného obálkou. Každý vstup má normál: '
+    + 'panel hraje i bez kabelu a kabel zapojený do vstupu jeho normál nahradí.',
   modules: [
-    { id: 'keys', label: 'KEYBOARD', node: 'keys' },
+    // Key range stays in the Studio Inspector: the piano's zones edit it (K116).
+    { id: 'keys', label: 'KEYBOARD', node: 'keys', studio: ['keyLow', 'keyHigh'] },
     { id: 'vco1', label: 'VCO 1', node: 'vco', fixed: { pitch: 0, fm: 0 },
       init: { waveform: 'sawtooth', scale: '16' } },
     { id: 'vco2', label: 'VCO 2', node: 'vco', fixed: { pitch: 0, fm: 0 },
@@ -48,19 +56,37 @@ export default definePanel({
       jacks: FILTER_JACKS,
       init: { frequency: 1200, Q: 1 }, labels: { frequency: 'Cutoff', Q: 'Peak' },
       ranges: { frequency: [10, 20000], Q: [0.5, 30] } },
-    { id: 'eg1', label: 'EG 1', node: 'envelope', jacks: { hide: ['audio'] },
+    // K230: EG 1 is a DADSR (its Delay on the face, its hold fixed at 0), EG 2 an AHDSR.
+    { id: 'eg1', label: 'EG 1', node: 'envelope', jacks: { hide: ['audio'] }, fixed: { hold: 0 },
       init: { attack: 0.005, decay: 0.3, sustain: 0.2, release: 0.3 } },
-    { id: 'eg2', label: 'EG 2', node: 'envelope', jacks: { hide: ['audio'] },
+    { id: 'eg2', label: 'EG 2', node: 'envelope', jacks: { hide: ['audio'] }, fixed: { delay: 0 },
       init: { attack: 0.005, decay: 0.2, sustain: 0.8, release: 0.25 } },
-    { id: 'vca', label: 'VCA', node: 'gain', init: { gain: 0 }, labels: { gain: 'Initial gain' },
+    { id: 'vca', label: 'VCA', node: 'gain', fixed: { bypass: false }, init: { gain: 0 },
+      labels: { gain: 'Initial gain' },
       ranges: { gain: [0, 1] } },
-    { id: 'mg', label: 'MG / LFO', node: 'lfo', options: { shape: ['triangle', 'square'] },
-      ranges: { rate: [0.01, 100] }, init: { shape: 'triangle', rate: 5 } },
-    { id: 'sh', label: 'S&H', node: 'random', note: 'Seeded random steps, one per gate; it '
-      + 'samples no input.' },
+    // VELOCITY (K220, review R2-K220-1 of oscilla-c3): the note's velocity scales the voice after
+    // the VCA, so a key's velocity and pad R's Y (the touch's velocity) are heard. A gain whose
+    // base is 0 and whose level is the keys' velocity normal n28 alone: linear, depth 1.27, so
+    // velocity 100 (the keys' default) is gain 1.00 and today's level, 127 is +2.08 dB, 40 is
+    // -7.96 dB and 1 is -40 dB. `optional`: a document made before it plays through the VCA as
+    // it did, offered VELOCITY to add.
+    { id: 'vel', label: 'VELOCITY', node: 'gain', optional: true,
+      fixed: { gain: 0, bypass: false } },
+    // K022's LFO depth stays at full depth here: the panel's amount knobs set each cable's
+    // depth. Its depth input is not a jack either (K022-3, decided with oscilla-43, c1 and c3):
+    // a jack beside the amount knobs would be a second path to it. K229: the MG follows the
+    // transport's divisions when Sync is not off (free by default), morphs its shape by Morph
+    // (0 a triangle, as the MG was, 0.5 a sawtooth, 1 a square) and restarts on each note while
+    // Key sync patches the Keys Gate into its reset (the cable switch below).
+    { id: 'mg', label: 'MG / LFO', node: 'lfo', fixed: { depth: 1, shape: 'morph' },
+      jacks: { hide: ['depth'] },
+      ranges: { rate: [0.01, 100] }, init: { rate: 5, morph: 0 } },
+    { id: 'sh', label: 'S&H', node: 'random', fixed: { sync: 'off' },
+      note: 'Náhodné kroky z pevného semínka, jeden na každou bránu; nevzorkuje žádný vstup.' },
     { id: 'out', label: 'OUTPUT', node: 'master' },
     ...ENGINE_MODULES,
     XY_MODULE,
+    XYL_MODULE,
   ],
   // [id, from jack, to jack, edge props]. A cable into a `to` jack breaks every normal of that
   // jack; removing the last cable restores them, with the same ids (synth/normals.js).
@@ -78,7 +104,11 @@ export default definePanel({
     ['n11', 'mix.audio', 'hpf.audio'],
     ['n12', 'hpf.audio', 'lpf.audio'],
     ['n13', 'lpf.audio', 'vca.audio'],
-    ...enginesChain('vca.audio', 'out.audio'), // e1: VCA into the engines' chain, then Output
+    ['n27', 'vca.audio', 'vel.audio'],
+    // e1: VELOCITY into the engines' chain, then Output (the VCA's before K220: normals.js reads
+    // such an older e1 as the normal, panel.js replaces it when VELOCITY is added).
+    ...enginesChain('vel.audio', 'out.audio'),
+    ['n28', 'keys.velocity', 'vel.gain', { depth: 1.27, polarity: 'unipolar', mapping: 'linear' }],
     ['n24', 'eg2.control', 'vca.gain', { depth: 1, polarity: 'unipolar', mapping: 'linear' }],
     ['n15', 'mg.control', 'vco1.fm', { depth: 0 }],
     ['n16', 'mg.control', 'vco2.fm', { depth: 0 }],
@@ -88,10 +118,19 @@ export default definePanel({
     ['n20', 'eg2.control', 'hpf.frequency', { depth: 0, mapping: 'log', polarity: 'unipolar' }],
     ['n21', 'mg.control', 'lpf.frequency', { depth: 0, mapping: 'log' }],
     ['n22', 'eg2.control', 'lpf.frequency', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
+    // Pad L (K220): X sweeps the LPF cutoff up 2 octaves (with EG 2's 2 from 1200 Hz that is the
+    // room to 20 kHz: nothing is scaled at the default amounts), Y the LPF peak up 2 octaves of Q
+    // (K232: from Q 1 to 4, +12 dB; held below the knob's soft-range top, 30).
+    ['n25', 'xyl.x', 'lpf.frequency', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
+    ['n26', 'xyl.y', 'lpf.Q', { depth: 2, mapping: 'log', polarity: 'unipolar' }],
     ['n23', 'keys.gate', 'sh.trigger'],
   ],
   // An amount knob is the depth of every edge from `source` into its `to` jacks, normalled or
   // patched; with none it is disabled and says why. One knob, one BATCH of EDGE_UPDATEs.
+  // K229: Key sync on the MG face patches the Keys Gate into the MG's reset (one cable, one
+  // history entry) and removes it; a cable the user patches there reads as on.
+  cableSwitches: [{ id: 'keysync', module: 'mg', label: 'Synchronizace s klávesou',
+    from: 'keys.gate', to: 'mg.reset' }],
   amounts: [
     { id: 'vco-mg', module: 'vco1', label: 'MG → pitch', source: 'mg.control',
       to: ['vco1.fm', 'vco2.fm'], range: [0, 2] },
@@ -107,5 +146,5 @@ export default definePanel({
       to: ['lpf.frequency'], range: [-4, 4] },
   ],
   layout: { desktop: [['vco1', 'vco2', 'ring', 'noise', 'mix', 'hpf', 'lpf'],
-    ['keys', 'eg1', 'eg2', 'vca', 'mg', 'sh', 'out'], ENGINE_MODULES.map((m) => m.id), ['xy']] },
+    ['keys', 'eg1', 'eg2', 'vca', 'vel', 'mg', 'sh', 'out'], ENGINE_MODULES.map((m) => m.id), ['xy']] },
 });

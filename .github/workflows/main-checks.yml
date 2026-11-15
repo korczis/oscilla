@@ -6,11 +6,14 @@
 # no gate job and requires nothing; a failure is a red check on the merge commit, and `report`
 # names the failed jobs in the run's summary.
 #
-# The jobs are ci.yml's `unit`, `knowledge` and `browser` jobs, the same definitions:
+# The `unit` and `knowledge` jobs are ci.yml's, the same definitions:
 # tests/unit/main-checks.test.mjs fails when one differs from its ci.yml job, so a change to a
 # job of ci.yml (a step, a budget, the Majordomus pin) is made here in the same pull request.
 # The one difference is the unit job's size report, which compares with the merge base of a
-# pull request and has none on a push; the test names it.
+# pull request and has none on a push; the test names it. The `browser` job is this
+# workflow's own since ci-speed (2026-11-09) dealt ci.yml's browser suites over its leg-1 and
+# leg-2 jobs: it runs `npm run test:browser` in each browser, as ci.yml's browser job did, and the
+# test holds it to that (every browser, the suite, no path gate).
 #
 # Cost, on an account whose CI minutes are scarce: one unit run, one doctor run and the
 # browser gate in chromium, firefox and webkit per merge, about the critical path of ci.yml's
@@ -68,25 +71,53 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      MJ_VERSION: 1.0.0
+      MJ_VERSION: 1.0.1
       MJ_TARGET: x86_64-unknown-linux-gnu
-      MJ_SHA256: 0fc3f6ad9ef2c4f1b5ff8454f6d6373d1b9d1c4732822ca5d06c4ce6c65cdd6e
+      MJ_SHA256: 524adfd3f2a3fdb3314f53f8c134e4050be5f9ebc31018b70fa9c7d5a940ae77
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Install Majordomus ${{ env.MJ_VERSION }} (pinned version and digest)
         timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           a="majordomus-v${MJ_VERSION}-${MJ_TARGET}.tar.gz"
-          curl -fsSL --proto '=https' --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
-            -o "$RUNNER_TEMP/$a" \
-            "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"
+          # The public download URL first; where it fails (the pinned release's returned 504 for hours on
+          # 2026-11-08 while the API served the same asset), the same asset of the same tag and
+          # repository through the API, three bounded attempts. Either way the digest decides.
+          # Each public attempt is bounded too (R055, project.ci-bounded): 4 x 20 s + 3 x 5 s,
+          # then the fallback's 3 x 60 s + 2 x 5 s, 285 s in all, inside the step's 5 minutes, so
+          # a stalled transfer cannot use the step before the API route gets its turn.
+          if ! curl -fsSL --proto '=https' --retry 3 --retry-all-errors --retry-delay 5 --connect-timeout 20 \
+            --max-time 20 -o "$RUNNER_TEMP/$a" \
+            "https://github.com/korczis/prismatic-majordomus/releases/download/v${MJ_VERSION}/$a"; then
+            echo "::warning::the release download URL failed; fetching $a through the GitHub API"
+            for i in 1 2 3; do
+              timeout 60 gh release download "v${MJ_VERSION}" -R korczis/prismatic-majordomus \
+                -p "$a" -D "$RUNNER_TEMP" --clobber && break
+              [ "$i" = 3 ] && exit 1
+              sleep 5
+            done
+          fi
           echo "${MJ_SHA256}  $RUNNER_TEMP/$a" | sha256sum -c -
           mkdir -p "$RUNNER_TEMP/mj" && tar -xzf "$RUNNER_TEMP/$a" -C "$RUNNER_TEMP/mj"
           echo "$RUNNER_TEMP/mj/majordomus-v${MJ_VERSION}-${MJ_TARGET}/bin" >> "$GITHUB_PATH"
       - name: The installed version is the pinned one
         run: test "$(majordomus version)" = "majordomus ${MJ_VERSION}"
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # P015: the /lab/ milestone status is Majordomus's; here, with the pinned majordomus on
+      # PATH, the facts' status of every milestone is compared with `majordomus plan roadmap
+      # --json`. OSC_FACTS_MAJORDOMUS makes a missing majordomus a failure, never a skip
+      # (tests/unit/facts-majordomus.test.mjs, which also guards that this step exists).
+      - name: The /lab/ milestone status is majordomus plan roadmap --json's
+        timeout-minutes: 5
+        env:
+          OSC_FACTS_MAJORDOMUS: '1'
+        run: node --test tests/unit/facts-majordomus.test.mjs
       - name: majordomus doctor (git-hook wiring excepted)
         run: |
           set +e; majordomus doctor --json > doctor.jsonl; code=$?; set -e

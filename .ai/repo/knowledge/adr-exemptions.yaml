@@ -1,0 +1,104 @@
+# The ADRs that add no capability of the page, each with its reason (V272 D8; E055).
+#
+# tests/unit/knowledge-integrity.test.mjs holds that every ADR from 0011 on is cited by a claim
+# in docs/CLAIMS.yaml (its source or its note), by a feature's front matter or by a use case, so
+# that a shipped capability a decision describes is claimed with the test that proves it. A
+# decision that adds no capability of the page (a release or repository process, a vocabulary,
+# a descoping, a product-path decision, a decision nothing implements yet) is listed here
+# instead, and the test reads this file. An entry is added, with its reason, in the pull request
+# that proposes the ADR. The test refuses an entry that is malformed, names an ADR that does not
+# exist under .ai/repo/adrs/ or is before 0011, repeats one, or names an ADR that has become
+# cited (the entry is stale then: remove it). The list lives here, outside tests/, so that
+# proposing an ADR changes no test file (E055).
+#
+# fields:
+#   adr      the ADR's four-digit number as a quoted string ("0028"): a plain 0028 is the
+#            number 28 to a YAML reader, and the test refuses it
+#   reason   why the decision adds no capability of the page, and what makes the entry stale
+#            (at least 30 characters; a folded scalar, `>-`, reads as one line)
+version: 1
+
+exemptions:
+  - adr: "0028"
+    reason: >-
+      release provenance (the source digest and the Pages stamp): intent release-provenance
+      and tests/unit/release-provenance.test.mjs hold it
+  - adr: "0029"
+    reason: >-
+      the release gate's visual regression check: a gate, not a capability of the page
+  - adr: "0047"
+    reason: >-
+      release process: a major release is preceded by a release candidate
+  - adr: "0051"
+    reason: >-
+      a descoping decision: no knowledge explorer is built, and the method claims it names
+      are not built yet (docs/v4/completion-ledger.md)
+  - adr: "0053"
+    reason: >-
+      vocabulary: the names the stored records and the page use, held by
+      tests/unit/vocabulary.test.mjs; it adds no capability
+  - adr: "0054"
+    reason: >-
+      repository operation: the Majordomus mesh of OSCILLA's runtimes
+  - adr: "0055"
+    reason: >-
+      repository operation: how a merge train lands
+  - adr: "0056"
+    reason: >-
+      repository operation: when the Majordomus CI pin moves
+  - adr: "0057"
+    reason: >-
+      release evidence: what proves a static Pages deployment
+  - adr: "0060"
+    reason: >-
+      a product-path decision (Q003): no commercial path before v4.0; it adds no capability
+      of the page
+  - adr: "0061"
+    reason: >-
+      the UI system (Flowbite Pro on Tailwind, built and inlined): rule
+      project.ui-uses-flowbite-pro and tests/unit/ui-flowbite-pro.test.mjs hold it; it adds
+      no capability of the page
+  - adr: "0063"
+    reason: >-
+      a proposed decision (G1 coherence contract): one output owner, value classes and
+      save-path scopes; nothing implements it yet, and the claims of C001-C003 (#280), T026
+      and H002 will cite it when they land; it adds no capability of the page today
+  - adr: "0080"
+    reason: >-
+      a dependency decision (Q070): Cytoscape.js is admitted for one explorer not built yet;
+      P010's claim cites it when the explorer ships, and this entry then fails as stale
+  - adr: "0081"
+    reason: >-
+      a proposed decision (J001): the component contract and its Majordomus projection;
+      nothing implements it yet, and G001's claim cites it when the catalogue ships, and this
+      entry then fails as stale
+  - adr: "0082"
+    reason: >-
+      release engineering: the gate verdict of a release is the CI run of its own pull
+      request (rule project.release-receipt-binds-gate v2,
+      tests/unit/release-ci-receipt.test.mjs); it adds no capability of the page
+  - adr: "0083"
+    reason: >-
+      landing engineering (E045): pull requests land through a merge queue instead of
+      racing armed auto-merges on a strict branch (rule project.ci-bounded v2, release receipt
+      v3); it adds no capability of the page
+  - adr: "0084"
+    reason: >-
+      a scope decision (Q062): notes clips, instrument tracks and a session grid on the
+      Studio timeline; nothing implements it yet, and K099's claim cites it when the notes clip
+      kind ships, and this entry then fails as stale
+  - adr: "0085"
+    reason: >-
+      an accepted decision (song-reconstruction critique, finding
+      lineage-and-acceptance-have-no-home): where reconstruction lineage and acceptance live;
+      nothing implements it yet, and the first issue of that intent cites it when it ships
+  - adr: "0086"
+    reason: >-
+      a proposed decision (programs B and C): one notes array edited by the step grid, the
+      piano roll and the beat machine; nothing implements it yet, and K099's claim cites it
+      when the notes clip kind ships, and this entry then fails as stale
+  - adr: "0088"
+    reason: >-
+      a proposed decision (Q100): an opt-in loopback bridge exports trace steps to a local
+      Majordomus and the default build stays offline; nothing implements it yet, and R046's
+      claim cites it when the bridge ships, and this entry then fails as stale

@@ -69,6 +69,18 @@ merge whatever `verdict` says; anything the program cannot read (another severit
 status, no list) refuses too. A finding is closed by the change that fixes it and the reviewer
 confirming it on the new content, not by editing the word.
 
+## What the reviewer checks
+
+Besides the change itself, three checks that past reviews missed:
+
+1. For an audio, studio or synth member, every allocation per event (a node built, a connect, a
+   push onto the handle's own state) has a release during play, not only at stop. The reviewer
+   drives N events (triggers, notes, resets) and an advance past their ends, then asserts the
+   handle's own bookkeeping and the shared sources' fan-out are bounded (O(live voices)), not
+   only the engine census.
+2. Run the release receipt against the base ci.yml when gate jobs change (the #509 miss).
+3. Run every suite that reads a changed string or a touched module (the F-2 and K104 misses).
+
 ## Trains
 
 A train's members are judged by their own verdicts (rule `project.review-verdict`). Each
@@ -83,6 +95,20 @@ members:                         # optional; only for members whose own verdict 
 
 Adding `members` does not change `content`: the verdict file is not a guarded path.
 
+A train goes in this order:
+
+1. The members are assembled.
+2. The pre-stamp head goes to the reviewer (fail-first, units, the guarded read) while peers run
+   the browser suites.
+3. Fixes.
+4. The release stamp.
+5. The verdict yaml on the stamped head, after checking the guarded digest is unchanged (the
+   stamp touches no guarded path).
+6. Push, the CI legs, "legs OK", arm.
+
+T5 was stamped first; stale assertions in three suites (v31-studio-graph, demo-song, app) and
+C1-K229-1 forced a rebuild and a re-stamp.
+
 ## Checking one locally
 
 ```bash
@@ -90,3 +116,14 @@ node scripts/review-verdict.mjs --pr <number>     # the committed head against o
 gh pr view <number> --json title,body,headRefName > pr.json
 node scripts/review-verdict.mjs --pr <number> --pr-json pr.json   # a train, with its members
 ```
+
+## Audits
+
+An audit of the findings still marked open lives here as `audit-<date>.yaml` (schema
+`review-audit/v1`): each P0-P2 finding classified against `main` as fixed (the verified commit),
+superseded (why) or open (the plan issue now tracking it), and the P3s counted. It never edits a
+verdict file; the verdict's `status` stays as written and the audit says what holds now. A later
+audit supersedes an earlier one by its date; the earlier one stays as the record of its base. An
+audit that only completes another (`audit-<date>-<part>.yaml`, such as the P3s an audit left
+unclassified) names it in `extends:` and the `main` it judged on in `judged_on:`; it covers only
+what that one left unclassified and replaces nothing in it. The first is `audit-2026-11-10.yaml`.

@@ -23,7 +23,7 @@ export default {
         + 'into the clock input steps them at the start of each of its clips instead.',
     ],
   },
-  studioHash: '701d7e300d2c0307da24b0c8b75610e30de59c4d6da2a0e2e9fa2439cc5079fc',
+  studioHash: '98d2e7036f0701fd4fbf462453feb1142afe6c72e3dbc7891756a65b1588a277',
   model: studioDoc({
     title: 'Step Bass',
     nodes: [

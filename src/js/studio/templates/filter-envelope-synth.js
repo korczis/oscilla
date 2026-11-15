@@ -24,7 +24,7 @@ export default {
       'Shorten the decay to make each note pluck; raise the sustain to keep the filter open.',
     ],
   },
-  studioHash: '00e35c1e1c620dbe754737bf81f27138a5c6d7dbfe166948652ecaef8b8b5779',
+  studioHash: '14e13e0ef12b77d7fcfca657d6d4566f6b6df2f249c8a7184e5c7552985cd02c',
   model: studioDoc({
     title: 'Filter Envelope Synth',
     nodes: [

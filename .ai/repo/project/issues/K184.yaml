@@ -17,6 +17,7 @@ scope:
   - "tests/browser/iphone.cjs"
   - "tests/README.md"
   - "dist"
+current_state: "Landed by the keys and pad train #444 (3a3a5a58, verdict 444.yaml), with the CI-engine tap meter 81abe3f4 from T5. Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "Forced stops are never deferred: Stop, Escape, page hide and a panic release end every gate at once, the minimum gate applies only to an ordinary note-off (98's review of #428, F5, 2026-11-05); a unit case holds a note shorter than the minimum, sends Stop, and sees the gate end at the stop time."
@@ -32,4 +33,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-11T17:35:17Z
+started_at: 2026-11-11T17:34:33Z
+started_event: sha256:83495b2610ecff494c8e14aa3110ae40227f94b021bdfab2392a488edd81d872
+verified_at: 2026-11-11T17:34:48Z
+verified_event: sha256:031c4609659013ef6c792d1692d65e4cd152ea84dc4b61d864f1f89d1b0268e0
+completed_at: 2026-11-11T17:35:17Z
+completed_event: sha256:783c78ab9a86bb9173de3b23f8e2f58dc147e1e29873c6c0b938f7618b60c6ab
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/min-gate.test.mjs; node tests/browser/iphone.cjs; node tests/browser/synth.cjs --only s-tap; npm test"
+    result: "On main 04d33aaf: min-gate 7/7. It covers same-time on and off closing at on + the minimum, forced stops (Stop, Escape, pagehide, panic) never deferred, and the mono keys and XY pad paths (21's T1 and T2). iphone.cjs exit 0: chromium 61/61, firefox 61/61, webkit 122/122, including tap-same-task-<surface>@<phone> on the XY pad, a Synth key and an on-screen piano key, on WebKit's phones with the gesture rule on. synth.cjs --only s-tap exit 0 in chromium, firefox and webkit at desktop size (1/1 each). Waits go through lib/wait.cjs; npm test (timing baseline) has 0 fail. Landed by #444: gate and fail-first success, verdict 444.yaml (src/js/audio and src/js/synth guarded)."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T17:35:03Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 444 checks: gate, fail-first"
+    result: "landed by the keys and pad train #444 (main merge 3a3a5a58); gate success and fail-first success; review verdict .ai/repo/reviews/444.yaml (merge)"
+    artifact: ".ai/repo/reviews/444.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T17:35:10Z

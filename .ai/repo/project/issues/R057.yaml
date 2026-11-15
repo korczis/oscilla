@@ -1,0 +1,24 @@
+id: R057
+milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
+title: "release-prepare --check-station finds the release commit by its subject, not by any line of a message"
+slug: check-station-release-commit-by-subject
+priority: p3
+profile: implementation
+objective: "C3-523-4 (P3), from oscilla-c3's review of #523 (T6), 2026-11-10. R032's releaseCommit (bfb28a42, scripts/about-stations.mjs) finds the newest `chore(release): v<version>` commit with `git log --grep`, which matches any line of a commit message. A merge or train commit whose body quotes 'chore(release): v3.32.0' (every train PR body and many merge messages do) can be taken for the release commit, and the station check then compares the wrong commit with its parent. After: the release commit is matched on its subject line only (for example `--format=%H %s` filtered to an exact subject), and a body that quotes the subject is never chosen."
+why: "--check-station proves the stamp changed only derived fields; it proves nothing if it judges the wrong commit."
+current_state: "Filed 2026-11-10 by oscilla-43 from C3-523-4 in .ai/repo/reviews/523.yaml; not started. Lane: release scripts (oscilla-75)."
+scope:
+  - "scripts/about-stations.mjs"
+  - "tests/unit/release-about-station.test.mjs"
+depends_on:
+  - R032
+acceptance_criteria:
+  - "Fail-first: a fixture repository where a later commit's body quotes 'chore(release): vX.Y.Z' makes --check-station pick the real release commit by its subject; on bfb28a42 it picks the quoting commit."
+validation:
+  - "node --test tests/unit/release-about-station.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

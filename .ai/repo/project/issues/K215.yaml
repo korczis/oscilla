@@ -1,0 +1,30 @@
+id: K215
+milestone: M064
+serves:
+  - "connected-instrument#patch-cables"
+title: "Patch bay jack verdicts judged on the whole batch, and tests/unit/synth-patch-bay.test.mjs"
+slug: patch-bay-jack-verdicts-judged-on-the-whole-batch-and-tests
+priority: p1
+profile: implementation
+objective: "Lands as fix(synth). The bay judges a drop by canConnect plus jackReason (src/js/synth/ui.js:150-170, src/js/synth/normals.js:135), not by full-model validation of the whole batch the drop would dispatch (the cable plus the normals it breaks), which K063's objective requires because a probe that adds the trial edge without removing the normal shows a single-input normalled jack as refused. Judges each jack pair once per drag on that batch and adds tests/unit/synth-patch-bay.test.mjs with K063's unit cases. Before: the verdicts are judged on the trial edge. After: on the batch the drop dispatches. Rollback: revert the pull request; no saved state depends on it."
+why: "Gap of K063 (criterion 1 and 2) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): tests/unit/synth-patch-bay.test.mjs does not exist and the jack verdicts are not judged on the whole batch. No owner direction re-scopes it, so it is its own issue and K063's criterion points here (chore/plan-m064-rescope). K063 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "src/js/synth/ui.js"
+  - "src/js/synth/normals.js"
+  - "src/js/synth/view/bay.js"
+  - "tests/unit/synth-patch-bay.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/synth-patch-bay.test.mjs, failing on the merge base where the behaviour is new: for every jack pair of the panel the verdict equals canConnect plus full-model validation of the batch the drop would dispatch, so the High-pass, Low-pass and Output audio inputs show as replaceable while normalled; the derived colour of two modules differs and is one of the validated set; a drop and a Delete each produce one BATCH with the normal change (project.fail-first; if every verdict already equals the batch's on main, the body says 'fail-first: n/a' with that measurement)."
+  - "Negative cases, each asserted in that file: an incompatible drop (refused with the validator's sentence, model unchanged); a feedback cable (refused with the no-silent-feedback sentence); a drop on empty panel (no action); a second cable into a single input (replaces the first, one BATCH)."
+  - "src/js/synth is guarded (project.review-verdict v2): a non-builder's verdict in .ai/repo/reviews/<pr>.yaml."
+  - "tests/README.md has a row for the new test; dist is rebuilt and npm run build:check passes."
+validation:
+  - "node --test tests/unit/synth-patch-bay.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

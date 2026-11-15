@@ -14,6 +14,22 @@
 # tests/unit/readout-provenance.test.mjs holds both to the markup.
 schema: readout-truth/v1
 readouts:
+  - key: midi.clock
+    audit: []
+    readout: "Hodiny MIDI: the tempo of an incoming MIDI clock in the Settings dialog's MIDI section"
+    quantity: Tempo of an incoming MIDI clock (24 ticks per quarter note)
+    unit: BPM
+    source: [src/js/midi/transport.js, src/js/midi/ui.js]
+    algorithm: >-
+      createClockMeter: 60000 / the time of the last whole beat (25 ticks, 24 intervals) on the
+      messages' own timeStamps; shown at most every CLOCK_SHOW_MS, cleared CLOCK_GAP_MS after the
+      last tick
+    resolution: 0.1 BPM
+    calibration: the sender's clock; jitter of the operating system's MIDI timestamps
+    limitations: >-
+      Averages one beat, so a tempo change shows within a beat; the transport never follows it
+    tests: [tests/unit/midi/transport.test.mjs, tests/browser/midi.cjs]
+    label: VERIFIED
   - key: source.freqValue
     audit: [GEN-06]
     readout: "Main frequency readout #osc-freq-value"

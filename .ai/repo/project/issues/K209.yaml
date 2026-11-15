@@ -1,0 +1,27 @@
+id: K209
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#honest-instrument"
+title: "Instrument wording test: fixtures, and the negation rules of no-fake-science on the shipped sources"
+slug: instrument-wording-test-fixtures-and-the-negation-rules-of-n
+priority: p2
+profile: implementation
+objective: "Lands as test(synth). tests/unit/synth-wording.test.mjs is a plain regex scan (two tests: no product name and no analog, vintage, warm or fat claim in Synth copy; the honest limits stated): it has no fixtures and refuses a negated claim. K059's criterion 2 asks for fixtures and the negation rules of tests/unit/no-fake-science.test.mjs applied to its scan of the shipped sources too. Adds them; if the negation rules are shared, they move to one helper both tests import. Before: a negated claim ('no analog warmth is modelled') is refused and nothing proves the scan refuses what it should. After: fixtures prove both directions. Rollback: revert; tests only."
+why: "Gap of K059 (criterion 2 and 3) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): the wording test has no fixtures and no negation rules. No owner direction re-scopes it, so it is its own issue and K059's criterion points here (chore/plan-m064-rescope). K059 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "tests/unit/synth-wording.test.mjs"
+  - "tests/unit/no-fake-science.test.mjs"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/synth-wording.test.mjs refuses a fixture string with a product name, one with 'analog warmth' and one that calls a biquad self-oscillating, and passes their negated forms, with the negation rules of tests/unit/no-fake-science.test.mjs applied to its scan of the shipped sources K059's objective lists; the fixture cases fail on the merge base (today's scan has no fixtures and refuses a negated claim)."
+  - "A refusal names the file, the line and the matched words; the scan of the shipped sources stays green on main."
+  - "Tests only and unguarded: no review verdict is needed; tests/README.md updates the test's row."
+validation:
+  - "node --test tests/unit/synth-wording.test.mjs tests/unit/no-fake-science.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

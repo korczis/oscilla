@@ -1,0 +1,30 @@
+id: U098
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "The czech-prose measure sees short English: labels, buttons and short announcements"
+slug: the-czech-prose-measure-sees-short-english-labels-buttons-and-short-announcements
+priority: p2
+profile: implementation
+objective: "Lands as fix(ci). scripts/czech-prose.mjs counts a string as English only with three or more words and two English function words (isEnglishProse), so labels, buttons, headings, aria-labels and short announcements ('Connection cancelled.', 'Restore normal', 'CABLES', 'Synth link copied.') are invisible to the ratchet of rule project.czech-prose. Found by oscilla-c3's review of the Synth bay translation (F-2 of #504, 2026-11-09): the file's count fell to 0 while sixteen short English texts remained. Measure short visible English in a second count per file (a word list or a dictionary check, not the function-word rule), with its own baseline that only falls, so the app's remaining English is visible and cannot grow. Rollback: revert; no product behaviour depends on it."
+why: "Owner order of 2026-11-07 recorded in Q104 ('odted ten artifakt musi mit ceskou prozu, vzdy a vsude, musi byt enforced'): the rule claims to enforce Czech, yet its measure cannot see short texts. oscilla-43 (integrator) asked on 2026-11-09 that the blind spot be filed as a plan issue and not changed inside a train."
+current_state: "Filed 2026-11-09 by oscilla-2e; not started. The Synth bay's short texts were translated by hand in 4aa056e8 (train T3); its CABLES heading and cable rows wait for U099."
+scope:
+  - "scripts/czech-prose.mjs"
+  - "tests/unit/czech-prose-short.test.mjs"
+  - "tests/unit/czech-prose-short-baseline.json"
+  - "tests/unit/czech-prose.test.mjs"
+  - ".ai/repo/rules/project/czech-prose.v1.md"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/czech-prose-short.test.mjs, failing on the merge base: the measure finds short visible English (a label, a button text, a heading, an aria-label, a one- or two-word announcement) in src/index.html and src/js, a Czech label and a technical term with no Czech equivalent in use (Studio, patch, MIDI) pass, and a hex digest or an identifier is not text; mutation cases prove each."
+  - "A per-file baseline of short English that only falls (the same ratchet rules as tests/unit/czech-prose-baseline.json), in npm test, verify and the gate; the rule project.czech-prose names the second count and its test in its Enforcement section."
+  - "tests/README.md has a row for the new test."
+validation:
+  - "node --test tests/unit/czech-prose-short.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09
+updated_at: 2026-11-09

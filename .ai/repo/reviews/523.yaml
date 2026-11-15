@@ -1,0 +1,92 @@
+# Review verdict for pull request #523 (train/t6-release): train T6 and release v3.32.0.
+# Guarded members: R034 (release:publish re-reads a clean tree and HEAD before the tag, before
+# verify-deploy and before the upload, and uploads git show <HEAD>:dist/index.html, effc3b20),
+# R035 (the cadence counts a tag only with its GitHub Release and its record or a young record
+# pull request, 3abe35bb), R032 (--check-station judges the release commit against its parent,
+# bfb28a42), E068 (a no-matrix base job's browser suites are replaced only for every browser,
+# 47cc3f32; C1-E060-1), R055 (each public Majordomus download attempt bounded, 9c86780e; the
+# ci-bounded checker's per-attempt bound and step budget, 526674bc; project.ci-bounded v3,
+# d24bb4e7) and T036 (the MEASURE header's Frequency indicator states what the profile covers,
+# 2001bfb5). The rest are plan records, reviewer docs, d9's s-svs check b9ad2043 (R2-T5-7), the
+# v3.31.0 record, the 3.32 station 51b478fe and chore(release): v3.32.0 5c265267.
+# Judged at 5c265267 on base origin/main 7e77c8cd (v3.31.0, #522), 2026-11-10, in the reviewer's
+# own detached worktree ~/dev/oscilla-wt/review-523 (pre-stamp head 60a44102, the first stamp
+# 5b1cec46, then 5c265267).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request, as Q108's
+# answer A requires. It built none of the guarded content: builders oscilla-75 (R034, R035, R032,
+# E068, R055), oscilla-04 (T036), oscilla-d9 (b9ad2043), oscilla-ce (the C066-C069/T037-T039
+# records and the P3 audit), oscilla-2e (the train df54da0a), oscilla-43 (integration, the
+# station and the stamp). Disclosure: the reviewer built, and does not judge here, #519's plan
+# records and reviewer docs riding in T6 (3598b5a6, dec08a02, 07b7b62e, 28efec3d, 90affebd,
+# c60cbb77, a5152ef5), fc545a9b, 6396ec6b (K237, E068 records), b012d994 (C070), 04fa924a and
+# 6100151e; none is a guarded path.
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list:
+# a68361833bda3b7d... over 16 guarded paths (.github cadence.yml, ci.yml, main-checks.yml;
+# scripts ci-workflow-rules.mjs, release-cadence.mjs, release-ci-receipt.mjs,
+# release-prepare.mjs, release-publish.mjs; src/js/measurement/views/calibration-indicator.js,
+# src/js/ui/measure/session.js; tests/unit ci-knowledge-job, ci-workflows, release-about-station,
+# release-cadence, release-ci-receipt, release-publish). Equal at 60a44102, 5b1cec46 and
+# 5c265267: the stamp and the station touch only dist, package.json, the lock file,
+# about-stations.json and roadmap.json.
+#
+# How each member was judged (fail-first: the member's new tests with main 7e77c8cd's copy of
+# its program, run by the reviewer; every one fails, exit 1):
+# - R034: checkoutDrift is pure; reassert reads HEAD and git status through gitRunner, which
+#   throws on a failed git, so an unreadable tree refuses (fails closed); a drift after the tag
+#   lands in the catch that says how to undo the tag; the asset is git show with binary stdout
+#   (boundedRunner opts.binary, untrimmed). release-publish 3 fail on main.
+# - R035: releaseGap pure; countedReleaseTag re-asks lastReleaseTag with refused tags filtered,
+#   so the SemVer order stays one; unreadable gh state exits 2; --report reads no GitHub state.
+#   C3-523-3 P3 below. release-cadence fails on main (the new exports).
+# - R032: stampCommitProblems recomputes the stamp from the parent; --check-station on 5c265267
+#   rc=0 ("changes only the derived fields the stamp writes, 3.32 at 51b478f"), --check rc=0.
+#   C3-523-4 P3 below. release-about-station fails on main.
+# - E068: a no-matrix base job running browser suites is replaced only by a no-matrix head job
+#   or by head jobs for each of shards.cjs BROWSERS; a matrix of another key never matches every
+#   browser, so it refuses (fails closed). release-ci-receipt 1 fail on main.
+# - R055: curl's --max-time bounds each attempt (--retry-max-time is the whole), so the public
+#   route is 4 x 20 s + 3 x 5 s and the API route 3 x 60 s + 2 x 5 s, 285 s inside the 300 s
+#   step; the install step took 2 s on #522's run (job 130055653963) against a 20.9 MB asset, a
+#   10x margin. ci-workflows 1 fail and ci-knowledge-job 2 fail with main's copies. C3-523-2 P3.
+# - T036: frequencyIndicator is pure and follows correctionCurve (no extrapolation); the
+#   session getter reads its reactive deps first. measure-freq-indicator-coverage 1 fail with
+#   main's session.js. v3-measure (file) rc=0 in chromium 27, firefox 29, webkit 30 PASS lines,
+#   0 FAIL, measure-freq-coverage passing in each over a real loopback run. Phone (390x844,
+#   chromium isMobile and webkit, touch; the reviewer's own probe of the built dist): the four
+#   states (off, partial "CALIBRATED jen 12 kHz–16 kHz", none, full) fit the header (right edge
+#   308 px), no page scroll, no overlap with Level, the Expert switch in view, no page error;
+#   the indicator is not interactive, so keyboard and touch have nothing to reach.
+# - The 3.32 station: C3-523-1 P2 (closed): 5f95d1d3's summary said a 12-16 kHz profile over a
+#   20 Hz-20 kHz measurement stays UNCALIBRATED (mimo pásmo); the code shows it partial
+#   ("CALIBRATED jen ..."), measured at 5b1cec46. 51b478fe restates it; 5c265267 re-stamps.
+# - b9ad2043 (R2-T5-7): synth.cjs webkit, see the measured line.
+#
+# THE CONDITION of this verdict (as for #509, #515 and #522): it binds once the reviewer has read
+# the six "Browser leg N (browser)" logs of this pull request's run and found each leg's shards
+# plan line, "run-suites: all K suites passed" and PASS lines equal to that leg's plan at this
+# head, AND has run the release CI receipt check against this run with the base ci.yml
+# (7e77c8cd's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer: at 60a44102 GITHUB_BASE_REF=main npm test exit 0 (5634 tests, 5633
+# pass, 0 fail, 1 skipped), build:check up to date; at 5c265267 build:check up to date (v3.32.0)
+# and --check-station rc=0. synth.cjs webkit (file) rc=0: desktop 44/44 and phone 14/14, s-svs ok
+# (b9ad2043, R2-T5-7). The Mac's load 13-20 throughout.
+# Not run by the reviewer: the other browser suites (the legs are their receipt) and the visual
+# gate.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 523
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of the guarded content of 5c265267)
+content: a68361833bda3b7d4454fa3f03fd633fa2a7ce072d335e45ee12bc832d0d1625
+findings:
+  - { id: C3-523-1, severity: P2, status: closed, title: "the 3.32 station said a 12-16 kHz profile over a 20 Hz-20 kHz measurement reads mimo pásmo; the code shows it partial; restated at 51b478fe" }
+  - { id: C3-523-2, severity: P3, status: open, title: "download-budget sums only curl lines: the install step's timeout 60 gh fallback loop (3 x 60 s + 2 x 5 s) is outside the checked budget, so its 285 s arithmetic is a comment, not a check" }
+  - { id: C3-523-3, severity: P3, status: open, title: "tagFacts takes any gh stderr matching /not found/ as no Release (gh missing, a 404 on the repo), so unreadable state reads overdue instead of exit 2; fails toward an alarm, not a hidden release" }
+  - { id: C3-523-4, severity: P3, status: open, title: "releaseCommit's --grep matches any message line, so a body line 'chore(release): vX.Y.Z' in a later non-merge commit would be judged as the release commit" }
+  - { id: C3-523-5, severity: P3, status: open, title: "the indicator reads 'CALIBRATED jen ...' and 'UNCALIBRATED (mimo pásmo)': an English token with Czech words (Q104 ratchet); its title, the only place the profile's span and the corrected count are named, is hover-only on touch" }

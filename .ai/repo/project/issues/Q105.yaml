@@ -1,0 +1,37 @@
+id: Q105
+milestone: M061
+serves:
+  - "playable-instrument#workspaces-exchange"
+title: "Owner decision: the computer keyboard plays at once in every workspace (Playground, Synth, Studio); Arm stays as a toggle to switch the keys off (K178)"
+slug: owner-decision-keys-armed-everywhere
+priority: p1
+profile: routine
+owner: "repository owner"
+objective: "Record the owner's answer of 2026-11-04 that K178 rests on, verbatim and in the repository, because until now its only trace was commit acdda780's message ('asked in session, answered \"armed everywhere\"'). Session 4fba4ca0-718c-46de-a520-c663ba68b324 (Claude Code project ~/dev, working directory /Users/korczis/dev/oscilla-wt/feat/train-6-prep). AskUserQuestion asked at 2026-11-04T22:24:06Z, header 'Keys arming'. The question, verbatim: 'K178: should the computer keyboard play immediately in every workspace (Playground, Synth, Studio), as it does in the Synth today, or keep the Arm button in the Playground and Studio?' The options, verbatim: (1) 'Armed everywhere (Recommended)': 'Letters A–' play in every workspace without pressing Arm, like the Synth. Arm stays as a toggle to switch the keys off. Typing in text fields, dialogs and Ctrl/Cmd shortcuts are still never captured.' (2) 'Keep Arm in Playground/Studio': 'Today's behaviour: only the Synth plays at once; the Playground and Studio need the Arm button, so plain letter keys keep their other shortcuts there.' (3) 'Disarmed everywhere': 'Every workspace, the Synth included, needs Arm before the letters play.' The answer, verbatim, recorded at 2026-11-04T23:07:30Z: 'Armed everywhere (Recommended)'. Meaning: KEY_ROUTES (src/js/midi/routes.js) carries armed: true for the Playground, the Synth and the Studio; a test or a visual reference that assumes a workspace first opens disarmed contradicts this decision and is the one to change."
+why: "Owner answers live in the repository (evolve principle 13): oscilla-a3 found on 2026-11-08, while #444 (the keys+pad train, which carries K178) was red in Studio UI and the visual gate, that the decision had no verbatim record anywhere in .ai/. oscilla-21 found the AskUserQuestion in the session transcript and recorded it here."
+current_state: "Decided 2026-11-04 (23:07:30Z). Implemented by K178 (acdda780, da4246f3) on the keys+pad train #444."
+scope:
+  - ".ai/repo/project/issues/Q105.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The decision is recorded as evidence (covers owner_decision) quoting the question, the options and the answer with the date, the time and the session id."
+validation:
+  - "manual"
+evidence_required:
+  - "owner_decision"
+created_at: '2026-11-08'
+updated_at: 2026-11-08T06:04:05Z
+started_at: 2026-11-08T06:03:35Z
+started_event: sha256:bef7c518d80599e708ae264336ba10dd3671e14c528aee0283a243c5fa116169
+verified_at: 2026-11-08T06:03:50Z
+verified_event: sha256:49c5ad70d381e70a3240ed013248577670a12d320e417f16fd4b99be16f86fba
+completed_at: 2026-11-08T06:04:05Z
+completed_event: sha256:3e28efac5f6d65c5edeb71a813ab59b85c6a90a080918891e9890aaf5b265550
+evidence:
+  - covers: "owner_decision"
+    type: manual
+    command: "AskUserQuestion in session 4fba4ca0-718c-46de-a520-c663ba68b324 (~/.claude/projects/-Users-korczis-dev/4fba4ca0-718c-46de-a520-c663ba68b324.jsonl), asked 2026-11-04T22:24:06Z, answered 2026-11-04T23:07:30Z"
+    result: "Question: 'K178: should the computer keyboard play immediately in every workspace (Playground, Synth, Studio), as it does in the Synth today, or keep the Arm button in the Playground and Studio?' Answer: 'Armed everywhere (Recommended)'. The options and their descriptions are in the objective, verbatim. Extracted from the session's tool_result and toolUseResult.answers by oscilla-21 on 2026-11-08."
+    artifact: "session:4fba4ca0-718c-46de-a520-c663ba68b324"
+    commit: 5d3ac24d0ad07c7168ba4acb0139c4ee195d3912
+    recorded_at: 2026-11-08T06:03:05Z

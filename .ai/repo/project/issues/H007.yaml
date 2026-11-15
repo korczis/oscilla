@@ -1,0 +1,30 @@
+id: H007
+milestone: M079
+serves:
+  - "v31-studio#click-free-live-edit"
+title: "A structural edit while playing leaves no silent seam when building the new node is slow"
+slug: a-structural-edit-while-playing-leaves-no-silent-seam-when-building-is-slow
+priority: p1
+profile: implementation
+objective: "Lands as fix(studio). Found on #515's CI run 42713534778 (train T4, firefox leg 1, tests/browser/v31-studio-runtime.cjs waveform-live: failed [noGap], seam low -106.8 dB at 3.551 s); logged by the review seat as C1-H001-2 (P2, pre-existing on main). runtime.apply read its crossfade time (hooks.soon()) before its prepare phase built the new nodes (src/js/studio/runtime.js transact), while the transport continues a sounding pattern voice on the rebuilt node (H001) from the soonest time it reads after apply returns (transport.js applyEdit resumeAt, from scheduler.edit's horizon). When the prepare takes longer than the 20 ms crossfade (STUDIO_XFADE_S) in audio time, the old routes have faded out before the continuation starts: CI measured the crossfade from 3.5236 s and the continuation at 3.5556 s, 32 ms later, against 0 or 2.9 ms in 36 local firefox runs on both T4 9fa580e0 and main b8bfd3b6. Before: a slow CPU, a phone or a starved runner hears a gap of silence when a structural parameter (a waveform) changes while a clip plays. After: the crossfade starts no earlier than the soonest time read after the prepare, so the old routes sound until the continuation starts. Rollback: revert."
+why: "oscilla-43, integrator (2026-11-10): 'It's a real audible gap that slow phones would hit too, so fix it now for T5'; oscilla-c1, review seat: 'take the crossfade's start and the continuation from one time read after prepare ... pin it fail-first with a unit case where prepare is made to take, say, 40 ms of fake audio time'."
+current_state: "Fixed on fix/h001-seam-after-prepare from train T4 9fa580e0: runtime.js takes the crossfade time as the later of the time read before the prepare and the one read after it; tests/unit/v31-studio-transport.test.mjs C1-H001-2 moves the audio clock 40 ms inside the prepare and fails on the base (the old route reads 0.0001 where the continuation starts, 40 ms after the crossfade)."
+scope:
+  - "src/js/studio/runtime.js"
+  - "tests/unit/v31-studio-transport.test.mjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - H001
+acceptance_criteria:
+  - "Fail-first: tests/unit/v31-studio-transport.test.mjs C1-H001-2, a prepare that moves the audio clock 40 ms, holds the old route above half its level where the continued voice starts and the old route plus the continued voice above half across the seam; on the merge base it fails."
+  - "tests/browser/v31-studio-runtime.cjs waveform-live and v31-studio-audio.cjs stay green in chromium, firefox and webkit."
+  - "Its change to src/js/studio/runtime.js carries a reviewer's verdict (project.review-verdict)."
+validation:
+  - "node --test tests/unit/v31-studio-transport.test.mjs"
+  - "node tests/browser/v31-studio-runtime.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

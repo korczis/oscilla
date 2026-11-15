@@ -85,25 +85,37 @@ function cellsOf(line) {
     .map((c) => c.trim().replace(/\\\|/g, '|'));
 }
 
+/** A GFM delimiter row: every cell dashes, with an optional colon at either end. */
+const DELIMITER = (line) => line.includes('-') && cellsOf(line).every((c) => /^:?-+:?$/.test(c));
+/** A line that starts another block, which ends a GFM table: heading, list, quote, rule, HTML. */
+const BLOCK_START = /^ {0,3}(?:#{1,6}(?:\s|$)|[-+*]\s|\d{1,9}[.)]\s|>|<|(?:[-*_]\s*){3,}$)/;
+
 /**
  * The rows of every `| member | what |` table of a train body ([{ member, what }]), or null when
- * the body's own prose has no such table.
+ * the body's own prose has no such table. A table is read as GFM renders it (252 R1): its header
+ * has the cells `member` and `what`, with or without the outer pipes; it runs to the first blank
+ * line or the first line that starts another block, and every line before that is a row, with
+ * or without a leading pipe. A line with no pipe is a row of one cell, its whole text the member,
+ * which judgeTrain refuses as no pull request number: no rendered row escapes the check.
  */
 export function trainMembers(body) {
   const lines = proseOf(body).split('\n');
-  const HEADER = /^\s*\|\s*member\s*\|\s*what\s*\|\s*$/i;
+  const isHeader = (line) => line.includes('|') && (() => {
+    const c = cellsOf(line);
+    return c.length === 2 && /^member$/i.test(c[0]) && /^what$/i.test(c[1]);
+  })();
   let rows = null;
   let inTable = false;
   for (const line of lines) {
-    if (HEADER.test(line)) {
+    if (isHeader(line)) {
       rows ??= [];
       inTable = true;
     } else if (!inTable) {
       continue;
-    } else if (!/^\s*\|/.test(line)) {
+    } else if (!line.trim() || BLOCK_START.test(line)) {
       inTable = false;
-    } else if (!/^\s*\|[\s:|-]+\|\s*$/.test(line)) {
-      const cells = cellsOf(line);
+    } else if (!DELIMITER(line)) {
+      const cells = line.includes('|') ? cellsOf(line) : [line.trim()];
       rows.push({ member: cells[0], what: cells.slice(1).join(' | ') });
     }
   }

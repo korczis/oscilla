@@ -7,6 +7,16 @@ import {
 import { RTA_MODE_LABELS, averagingLabel } from '../../measurement/views/rta-chart.js';
 import { UNAVAILABLE } from '../../measurement/views/common.js';
 import { RECIPE_WIRE_KEYS } from '../../core/url-state-measure.js';
+import { MIC_UNAVAILABLE_TEXT } from '../../audio/microphone.js';
+
+/**
+ * The live input's availability as the RTA tab shows it (C033): the "not available here"
+ * sentence only where the page has no microphone API. Where it has one (a granted microphone
+ * on file:// included) the sentence is not in the page at all, not even in its hidden alert.
+ */
+export function rtaLiveAvailability(available) {
+  return { available: !!available, unavailableText: available ? null : MIC_UNAVAILABLE_TEXT };
+}
 
 /** Result tabs (role=tab via the shell's tab binding is not used: these are measure-local). */
 export const MEASURE_RESULT_TABS = Object.freeze([

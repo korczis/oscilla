@@ -107,9 +107,24 @@ const H = {
     const step = (i) => (i ? requestAnimationFrame(() => step(i - 1)) : r());
     step(k);
   }), n),
+  /**
+   * Switch to workspace `w` and return once the app has also written its address: the router
+   * writes it from its $watch('workspace') a task later (ui/navigation.js), so a caller that
+   * set location.hash right after the workspace alone had changed could see that write land
+   * over its own (link-integrity's garbage hashes failed so under load on webkit). Settled:
+   * the router has routed `w` at the address shown (OSCILLA.navigation.routed), the very
+   * condition its watcher writes nothing on.
+   */
   async setWorkspace(page, w) {
     await page.evaluate((x) => window.OSCILLA.app.setWorkspace(x), w);
-    return H.at(page, w, `setWorkspace(${w})`);
+    return until(async () => {
+      const routed = await page.evaluate((x) => {
+        const r = window.OSCILLA.navigation && window.OSCILLA.navigation.routed;
+        return !!r && r.workspace === x && r.href === location.href;
+      }, w);
+      const s = routed ? await H.state(page) : null;
+      return s && s.workspace === w ? s : null;
+    }, { ms: NAV_MS, what: `setWorkspace(${w}) and its address` });
   },
   async navTo(page, w) {
     const item = `[data-osc="nav.${w}"]`;
@@ -135,8 +150,13 @@ const H = {
     .filter((a) => a.getClientRects().length > 0).map((a) => a.getAttribute('href'))),
   /** The visible workspace links of the content (<main>) and the breadcrumb's root. */
   contentLinks: (page) => page.evaluate(() => [...document.querySelectorAll(
-    'main a[href^="#m="], [data-osc="page.home"]')].filter((a) => a.getClientRects().length > 0)
-    .map((a) => a.getAttribute('href'))),
+    'main a[href^="#m="], [data-osc="page.home"]')].filter((a) => {
+    if (a.getClientRects().length > 0) return true;
+    // An item of a closed menu (G013, a lab's "Otevřít v…") is offered while its button shows.
+    const menu = a.closest('[role="menu"]');
+    const btn = menu && document.getElementById(menu.getAttribute('aria-labelledby'));
+    return !!btn && btn.getClientRects().length > 0 && !a.hidden;
+  }).map((a) => a.getAttribute('href'))),
   /** In-content controls (outside header and status bar) that name another workspace. */
   exits: (page) => page.evaluate(() => {
     const NAV = /setWorkspace|studioExpand|studioBack|experimentsShowInMeasure|experimentsRepeat|experimentsDefRun|runLearnDemo|connectionsFollow|findingsOpenRef|synthOpenStudio/;

@@ -1,12 +1,15 @@
-// The voice allocator of the Synth engines (Q021: 16 voices per engine; the semi-modular panel
-// stays mono). Pure bookkeeping: it decides which slot a note plays in and which voice it
+// The voice allocator of the Synth engines. Q021, the owner's answer of 2026-11-03 as recorded
+// on its evidence: "Up to 8 voices, 1/8 gain": an engine node holds up to 8 voices at 1/8 gain
+// each, as V502's note voices do, and the semi-modular panel stays monophonic (K180; the gain is
+// studio/adapters/voices.js's VOICE_LEVEL_SCALE). Pure bookkeeping: it decides which slot a note plays in and which voice it
 // steals; the Web Audio lifecycle of a voice is studio/adapters/voices.js.
 //
-//   createVoicePool({ max = 16 }) -> pool
+//   createVoicePool({ max = MAX_VOICES }) -> pool
 //     pool.on(note, t)  -> { slot, steal: slot | null, retrigger: bool }
 //                          the same note held again retriggers its own slot; a free slot is
 //                          taken; when all `max` are in use the released voice that released
-//                          first is stolen, else the oldest held one
+//                          first (by t, its release time, then release order) is stolen, else
+//                          the oldest held one (in the order notes reached the pool; E071)
 //     pool.off(note, t) -> slot | null      the slot now releasing (its end is set by end())
 //     pool.end(slot, t) -> void             the slot's release ends at t (free after it)
 //     pool.free(slot)   -> void             the slot is disposed: empty
@@ -17,18 +20,27 @@
 // Every loop runs over the `max` slots once: no loop depends on a side effect to terminate
 // (the lesson of #261's R-2).
 
-export const MAX_VOICES = 16;
+export const MAX_VOICES = 8;
 
 export function createVoicePool({ max = MAX_VOICES } = {}) {
   const n = Math.max(1, Math.min(64, Math.floor(max)));
   const slots = Array.from({ length: n }, (_, i) => ({ slot: i, note: null, on: -Infinity,
     released: null, end: -Infinity }));
   const sounding = (s, t) => s.note !== null && (s.released === null || s.end > t);
+  // E071: a held voice's age is the order notes arrived in, kept beside the slots (slots() is
+  // unchanged), never their onset times: the engine's schedule time can tie across a burst and
+  // step back (WebKit: 4-6 ties in 8 notes, one step 17 ms back), and a slot index is no age
+  // either (a released voice keeps the lowest slot until its release ends). The timeline
+  // strikes onsets in time order and live keys arrive in order, so arrival is onset order.
+  let clock = 0;
+  const onAt = new Array(n).fill(0);
+  const offAt = new Array(n).fill(0);
 
   function on(note, t) {
     const same = slots.find((s) => s.note === note && s.released === null);
     if (same) {
       same.on = t;
+      onAt[same.slot] = ++clock;
       return { slot: same.slot, steal: null, retrigger: true };
     }
     let pick = slots.find((s) => !sounding(s, t));
@@ -37,13 +49,20 @@ export function createVoicePool({ max = MAX_VOICES } = {}) {
       let released = null;
       let oldest = null;
       for (const s of slots) {
-        if (s.released !== null && (!released || s.released < released.released)) released = s;
-        if (!oldest || s.on < oldest.on) oldest = s;
+        // Released by t: the timeline schedules a note's off with its onset (note-player.js
+        // strike), so an off still ahead holds the voice (c3's R2-E071-1); first by the release
+        // time, release order breaking a tie.
+        if (s.released !== null && s.released <= t && (!released || s.released < released.released
+          || (s.released === released.released && offAt[s.slot] < offAt[released.slot]))) {
+          released = s;
+        }
+        if (!oldest || onAt[s.slot] < onAt[oldest.slot]) oldest = s;
       }
       pick = released || oldest;
       steal = pick.slot;
     }
     Object.assign(pick, { note, on: t, released: null, end: Infinity });
+    onAt[pick.slot] = ++clock;
     return { slot: pick.slot, steal, retrigger: false };
   }
 
@@ -51,6 +70,7 @@ export function createVoicePool({ max = MAX_VOICES } = {}) {
     const s = slots.find((x) => x.note === note && x.released === null);
     if (!s) return null;
     s.released = t;
+    offAt[s.slot] = ++clock;
     return s.slot;
   }
 
@@ -65,6 +85,7 @@ export function createVoicePool({ max = MAX_VOICES } = {}) {
       for (const s of slots) {
         if (s.note !== null && s.released === null) {
           s.released = t;
+          offAt[s.slot] = ++clock;
           out.push(s.slot);
         }
       }

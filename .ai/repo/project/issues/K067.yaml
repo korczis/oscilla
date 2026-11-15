@@ -6,6 +6,8 @@ title: "Steps clip: the step sequencer's pattern as Studio timeline data"
 slug: steps-clip-the-step-sequencer-s-pattern-as-studio-timeline-d
 priority: p1
 profile: implementation
+cancelled: true
+current_state: "Cancelled on 2026-11-09: superseded by K068 under ADR 0086 (proposed): one notes array, the step grid is a projection of the notes clip, there is no steps clip. Decided on the mesh by oscilla-21 and oscilla-a3 on 2026-11-06 (this record's evidence, commit 26399239); a build of K067 as written would create a second store of note data (project.studio-model-is-canonical). Applied by oscilla-d9 on the order of the sequencer-line integrator oscilla-43 (2026-11-09); its dependants K071 and U074 now depend on K068, and M065's acceptance no longer names it. Reversible by refusing ADR 0086: remove cancelled and restore the dependencies."
 objective: "Lands as feat(studio). A new clip kind steps on event tracks (enum option, D2), with a strict payload: length 1-64, division (1/8, 1/16, 1/32, 1/8t, 1/16t), swing 50-75 %, seed, scale { root, mode }, transpose -24..+24, and per step on, note 0-127, gate 0.05-1 or tie, velocity 0-1, accent, slide, ratchet 1-4 and probability 0-1. The registry capabilities notes and hits name the node types a steps clip may target (keys from K060; drum voices from K071; this slice introduces both capability names), and clipRules refuses any other target with a sentence. The clip-target policy (clip-targets.js, the one answer of store, timeline UI, transport and offline render) and its test gain the steps rows first, and offline.js planOfflineRender lists a steps clip as unplayed with its reason until K068. The import pipeline's limits cover it. This slice adds no playback (K068) and no chrome. Before: the Studio timeline has no step data. After: a steps clip validated as model data. User-value tier 1 of 4 (synth-design.md section 17). Rollback: revert the pull request; a document with a steps clip is then refused by the import pipeline with its sentence, so after a release the clip kind stays and the editor is removed instead."
 why: "Owner direction of 2026-10-29, relayed by the coordinator in English from the owner's Czech: a proper sequencer, a semi-modular synth of the genre the owner named with everything, dragging patch cables, maximally friendly; then every kind of synthesis, a beat machine, an XY performance pad, clip-based MIDI arrangement, a piano keyboard, all interlinked, connected to the LFO, the labs and the visualizations, linked, real-time, interactive and covered by tests. Rotary knobs (D11) and a new Synth workspace on the Studio model were answered by the owner through AskUserQuestion (Q018). Design: the connected-instrument spec of this plan change (synth-design.md), facts checked against the head of plan pull request #269 (a655cb1c) and the branches of #266, #267 and #268."
 scope:
@@ -41,7 +43,7 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-11-06T21:56:45Z
+updated_at: 2026-11-09T12:20:00Z
 evidence:
   - covers: verified
     type: manual

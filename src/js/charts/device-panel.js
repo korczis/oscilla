@@ -7,7 +7,7 @@ import { formatHzGrouped } from './axes.js';
 import { setText, onAdapterChange, on } from '../labs/dom.js';
 import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 
-export const DEFAULT_OUTPUT_LABEL = 'Default audio output';
+export const DEFAULT_OUTPUT_LABEL = 'Výchozí zvukový výstup';
 
 /** { sampleRate, nyquist, safeMax } from a sample rate, or nulls. */
 export function deviceLimits(sampleRate) {
@@ -31,7 +31,7 @@ export function outputLabel(devices, sinkId) {
     return match ? match.label : DEFAULT_OUTPUT_LABEL;
   }
   if (sinkId && typeof sinkId === 'object' && sinkId.type === 'none') {
-    return 'No output (silent sink)';
+    return 'Bez výstupu (tichý cíl)';
   }
   const def = outs.find((d) => d.deviceId === 'default');
   if (def) return def.label.replace(/^Default\s*-\s*/i, '');

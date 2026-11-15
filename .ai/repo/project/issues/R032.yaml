@@ -20,8 +20,10 @@ scope:
   - "tests/unit/source-size-baseline.json"
   - "tests/README.md"
   - "dist"
+current_state: "Built by oscilla-75 in task t-20261110050759-6988 on feat/r032-about-stations-data from main a7102358, on the coordinator's assignment (oscilla-43; lane b0 absent 2026-11-10); it lands in train T6 with the verdict from oscilla-c1. Most of R032 was already on main in 7ec17bf1 (feat(release): the About stations are data, 2026-11-06): src/data/about-stations.json, scripts/about-stations.mjs --stamp and --check, run by release:prepare, and the build expansion. This change adds --check-station (about-stations.mjs and release-prepare.mjs), which judges the release commit against its own parent rather than the pull request against its base, because a release pull request is often a train whose docs(about) members write the prose (oscilla-43's design correction). It also adds the test that a station storing X.Y.Z is a version:check hit, and the U086 edge. Measured from git on 2026-11-10: the dist <ol class=\"osc-about-timeline\"> before and after 7ec17bf1 is 8454 bytes both and equal after whitespace normalisation, but not byte for byte (each station's <time> attributes were wrapped across two lines and now sit on one); criterion 4 holds as DOM equality, not byte identity. Criterion 6 needed no lowering: the src/index.html cap of 300000 is below the headroom ceiling of its size (299062 bytes, ceiling 329000)."
 depends_on:
   - "Q091"
+  - "U086"
 acceptance_criteria:
   - "Precondition (U086, af, origin/chore/plan-about-truth): this issue starts only after U086 is DONE on main (majordomus plan show U086), and rebases onto its roadmap.mjs, about.js and index.html changes. plan validate refuses a depends_on edge to an id not on this branch, so the edge is added in the first plan change after U086 reaches main."
   - "Fail-first: tests/unit/release-about-station.test.mjs runs release:prepare's station step on a fixture repository with version 9.9.0, a pending station {title, summary} and a feat commit, and expects about-stations.json's pending station to carry release '9.9', the fixture's first-parent short id and committer datetime, and state current; on the merge base no such step exists."
@@ -38,4 +40,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-10

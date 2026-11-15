@@ -1,10 +1,15 @@
 #!/usr/bin/env node
+// suite-pace: solo (audio rows read a tone level on the realtime analyser, 10 s deadline)
 // OSCILLA control census (C021, PACK 03 "One Instrument, One Coherent State"): every control
 // of every workspace has a row, and every row round-trips. dist/index.html from file:// in
 // chromium, firefox and webkit.
 //
 //   node tests/browser/control-census.cjs [--dist dist/index.html] [--browsers chromium,...]
-//                                         [--only <row id>,...] [--unrowed]
+//                                         [--only <row id>,...] [--unrowed] [--part <i>/<n>]
+//
+// --part i/n runs the i-th of n parts (a CI leg each, tests/browser/lib/shards.cjs): the
+// discovery checks, then every family, then every row, are numbered in that order and dealt
+// round robin (lib/shards.cjs dealt()), so the n parts together run each check exactly once.
 //
 // The table is the census. A row names its control (a CSS selector), how it is driven, and the
 // effect read back. There are four kinds:
@@ -48,6 +53,7 @@ const suite = require('./lib/suite.cjs');
 const { until, bounded } = require('./lib/wait.cjs');
 const op = require('./lib/oscilla-page.cjs');
 const seam = require('./lib/measure-seam.cjs');
+const shards = require('./lib/shards.cjs');
 
 const argv = process.argv.slice(2);
 const arg = (name, fallback) => {
@@ -60,6 +66,19 @@ const RUN = suite.open({ name: 'control-census', browsers: arg('browsers') });
 const playwright = RUN.playwright;
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const UNROWED = argv.includes('--unrowed');
+let PART = null;
+try {
+  PART = shards.parsePart(argv);
+} catch (e) {
+  console.error(`[control-census] ${e.message}`);
+  process.exit(2);
+}
+if (PART && UNROWED) {
+  console.error('[control-census] --unrowed lists the discovery, which --part does not split');
+  process.exit(2);
+}
+/** Whether the check numbered `index` (discovery 0, then families, then rows) is this part's. */
+const mine = (index) => !PART || shards.dealt(index, PART);
 
 const ROW_MS = 10000;  // deadline of one row's expectation (a glide is 15-50 ms of audio)
 // A family's deadline unless it declares its own (ms).
@@ -222,8 +241,8 @@ for (const w of ['square', 'triangle', 'sawtooth']) {
   row({ id: `source.wave.${w}.pointer`, ws: 'playground', control: `#osc-wave-${w}`,
     how: 'pointer', setup: S.latch(), act: D.click(`#osc-wave-${w}`),
     expect: (s) => s.app.waveform === w && s.engine.voice && s.engine.voice.wave === w
-      // the status bar abbreviates (Sawtooth -> "Saw")
-      && new RegExp(w.slice(0, 3), 'i').test(s.text.sbWave || '') });
+      // the status bar names it as the source does (WAVEFORM_NAMES: sawtooth -> "Pila")
+      && !!s.names.wave && (s.text.sbWave || '').includes(s.names.wave[w]) });
 }
 row({ id: 'source.wave.sine.pointer', ws: 'playground', control: '#osc-wave-sine', how: 'pointer',
   setup: seq(S.latch(), D.click('#osc-wave-square')), act: D.click('#osc-wave-sine'),
@@ -261,7 +280,8 @@ both({ id: 'source.trigger', ws: 'playground', control: '#osc-trigger',
   expect: (s) => s.engine.voice && near(s.engine.voice.len, s.app.duration / 1000, 0.05) });
 row({ id: 'source.hold.keyboard', ws: 'playground', control: '#osc-hold-play', how: 'keyboard',
   act: async (page) => { await page.focus('#osc-hold-play'); await page.keyboard.down('Space'); },
-  expect: (s) => !!s.engine.voice && s.app.playing && /PLAY/i.test(s.text.sbState || '') });
+  expect: (s) => !!s.engine.voice && s.app.playing && s.sb.playing && !!s.sb.label
+    && s.sb.label === s.sb.built });
 row({ id: 'source.hold.pointer', ws: 'playground', control: '#osc-hold-play', how: 'pointer',
   act: async (page) => {
     await page.locator('#osc-hold-play').scrollIntoViewIfNeeded();
@@ -754,6 +774,12 @@ both({ id: 'studio.tempo', ws: 'studio', control: '[data-osc="studio.tl.tempo"]'
   pointer: D.type('[data-osc="studio.tl.tempo"]', '90'),
   keyboard: D.typeKeys('[data-osc="studio.tl.tempo"]', '90'),
   expect: (s) => s.studio.tempo === 90 });
+// K068: four taps in one series set the tempo by their mean interval, clamped to the tempo range
+// (taps this fast clamp at its maximum), one tempo edit per series.
+both({ id: 'studio.tap', ws: 'studio', control: '[data-osc="studio.tl.tap"]',
+  pointer: seq(...[1, 2, 3, 4].map(() => D.click('[data-osc="studio.tl.tap"]'))),
+  keyboard: seq(...[1, 2, 3, 4].map(() => D.keys('[data-osc="studio.tl.tap"]', 'Enter'))),
+  expect: (s, b) => s.studio.tempo !== b.studio.tempo });
 row({ id: 'studio.graph.node.pointer', ws: 'studio', control: '[data-osc="studio.graph.node"]',
   how: 'pointer', act: async (page) => { await S.studioNode('oscillator')(page); },
   expect: (s) => (s.studio.selection.nodes || []).length === 1 });
@@ -1114,9 +1140,13 @@ row({ id: 'safety.dismiss.pointer', ws: 'playground', control: '#osc-safety-dism
   expect: (s, b, x) => x.collapsed, read: () => ({ collapsed: window.OSCILLA.app.safetyCollapsed }) });
 row({ id: 'safety.more.pointer', ws: 'playground', control: '.osc-safety-toggle', how: 'pointer',
   keepSafety: true, viewport: { width: 390, height: 844 }, act: D.click('.osc-safety-toggle'),
-  expect: (s, b, x) => x.open && /Less/.test(x.label), read: () => ({
+  // by state (aria-expanded), and the toggle's word changes with it (More to Less, whatever
+  // the language)
+  expect: (s, b, x) => x.open && x.expanded === 'true' && b.x.expanded === 'false'
+    && !!x.label && x.label !== b.x.label, read: () => ({
     open: window.OSCILLA.app.safetyExpanded,
-    label: document.querySelector('.osc-safety-toggle').textContent }) });
+    expanded: document.querySelector('.osc-safety-toggle').getAttribute('aria-expanded'),
+    label: document.querySelector('.osc-safety-toggle').textContent.trim() }) });
 for (const sel of ['#osc-safety-reopen', '#osc-safety-reopen-phone']) {
   row({ id: `safety.${sel.slice(1)}.pointer`, ws: 'playground', control: sel, how: 'pointer',
     viewport: sel.endsWith('phone') ? { width: 390, height: 844 } : undefined,
@@ -1672,7 +1702,9 @@ for (const [c, by] of [['#osc-synth-pick', 'synth.cjs'],
   ['[data-osc="keyboard.octave-up"]', 'midi.cjs'],
   ['[data-osc="keyboard.velocity-down"]', 'midi.cjs'],
   ['[data-osc="keyboard.velocity-up"]', 'midi.cjs'],
-  ['[data-osc="keyboard.more"]', 'synth.cjs']]) {
+  ['[data-osc="keyboard.more"]', 'synth.cjs'],
+  // K171: the dock's handle where a pad owns the notes (made by midi/dock-yield.js)
+  ['[data-osc="keyboard.handle"]', 'xy-pad.cjs']]) {
   delegated(c, by, 'the Synth dock, its patch library and the on-screen keyboard');
 }
 // About's "What comes next": its Later list folds open and shut (app.cjs drives and judges it)
@@ -1736,8 +1768,9 @@ const openLibrary = async (page) => {
 };
 row({ id: 'library.search.keyboard', ws: 'synth', control: '[data-osc="library.search"]',
   how: 'keyboard', read: libraryRead, setup: openLibrary,
-  act: D.typeKeys('[data-osc="library.search"]', 'bell'),
-  expect: (s, b, x) => x.length > 0 && x.length < b.x.length && x.every((t) => /bell/i.test(t)) });
+  // 'zvon' (bell): FM zvon, Kruhový zvon, XY zvon (src/js/synth/presets.js, xy.js)
+  act: D.typeKeys('[data-osc="library.search"]', 'zvon'),
+  expect: (s, b, x) => x.length > 0 && x.length < b.x.length && x.every((t) => /zvon/i.test(t)) });
 row({ id: 'library.tag.pointer', ws: 'synth', control: '[data-osc="library.tag"]',
   how: 'pointer', read: libraryRead,
   setup: async (page) => {
@@ -1936,7 +1969,7 @@ if (require.main === module) {
         console.log(`  ${status.padEnd(5)}  ${name} ${id}${msg ? `  ${msg}` : ''}`);
       };
       try {
-        if (!ONLY || UNROWED) {
+        if ((!ONLY || UNROWED) && mine(0)) {
           const c = await bounded(census(browser), { ms: 240000, what: 'the control discovery' });
           if (UNROWED) {
             for (const k of c.unrowed) console.log(`  unrowed ${k}`);
@@ -1962,14 +1995,16 @@ if (require.main === module) {
           report(ledger.length ? 'FAIL' : 'PASS', 'census:ledger-holds',
             ledger.length ? ledger.join('; ') : `${LEDGER.length} delegated and debt row(s)`);
         }
-        for (const f of FAMILIES) {
+        for (const [fi, f] of FAMILIES.entries()) {
+          if (!mine(1 + fi)) continue;
           if (ONLY && !ONLY.has(f.id)) continue;
           const r = await bounded(runFamily(browser, f), { ms: f.ms || FAMILY_MS,
             what: `family ${f.id}` });
           report(r.ok ? 'PASS' : 'FAIL', `family:${f.id}`, r.ok ? JSON.stringify(r.detail)
             : r.error);
         }
-        for (const r of ROWS) {
+        for (const [ri, r] of ROWS.entries()) {
+          if (!mine(1 + FAMILIES.length + ri)) continue;
           if (ONLY && !ONLY.has(r.id)) continue;
           const res = await bounded(runRow(browser, r), { ms: (r.timeout || ROW_MS) * 4 + 60000,
             what: `row ${r.id}` });

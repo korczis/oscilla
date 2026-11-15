@@ -1,0 +1,47 @@
+id: V507
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-devices-known"
+title: "Known MIDI devices: derived profiles, port roles, the MIDI section's device list and monitor"
+slug: midi-devices-known
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi). scripts/midi/derive-devices.mjs reads the maker's editor files on a machine where they are installed (device descriptions and factory templates; the plug-ins' generic MIDI maps) and writes only derived facts: src/data/midi-devices.json (per device its names, SysEx identity numbers, memory count and per control its kind, bank, message, channel and number) and the generated region of docs/midi-devices.md. src/js/midi/devices.js recognises an input from its port name and names the control that sent a message; src/js/midi/monitor.js decodes every MIDI 1.0 message. midi/ui.js routes by port role (a DAW-control or editor port of a known device never sounds a note), feeds the monitor and names the control in the Synth's CC status line. The Settings dialog's MIDI section lists the devices and shows the monitor. Before: a KeyLab mkII's DAW-port buttons would sound as notes, and nothing says which device or control a message came from. After: the owner's KeyLab mkII 61 and BeatStep Pro are listed with their profiles and roles, and every message is shown with its control."
+why: "The owner's orders of 2026-11-14 and 2026-11-15 in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code): \"vse se da vytahnout z nainstalovaneho arturia sw ... mapping midi, features, protocol ... vse uloz do repo, dokumentuj, popis, integruj, napoj, rozsir ui / napoj cely midi stack / midi instrumenting ... pridej tooling\" (everything can be pulled from the installed maker's software ... MIDI mapping, features, protocol ... save it all in the repo, document, describe, integrate, connect, extend the UI / connect the whole MIDI stack / MIDI instrumenting ... add tooling), then \"dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze funguje, ne roubovani, ale realne napojeni, ciste\" and \"vse kodifikuj, vyuzij majordomus, popis struktury, sequence, procedury, enforce\". What is taken is bounded by rule project.midi-profiles-derived: derived facts only; no image, layout, template, preset, sample, firmware or key of the maker's is read into or committed to the repository, and no firmware or library is decompiled (copyright; OSCILLA is MIT and public)."
+current_state: "Built by oscilla-p7 (Claude Code session cae276ab-2d90-45d2-babb-a1f8023668d2) in task t-20261114234821-7e22 on feat/v507-midi-devices, stacked on V506 (feat/v506-midi-cc, PR 548). Derived on 2026-11-15 from MIDI Control Center 1.23.0.134 on the owner's Mac: 11 device profiles, 26 plug-in maps. The SysEx identity of the profile was checked against the owner's devices that day with a Universal Identity Request (scripts/midi/identity.swift): KeyLab mkII 61 answered 00 20 6B / 02 00 / 05 64, BeatStep Pro 00 20 6B / 02 00 / 07 00 with firmware 2.0.1.6 (version bytes least significant first)."
+scope:
+  - "scripts/midi"
+  - "src/data/midi-devices.json"
+  - "src/js/midi"
+  - "src/js/ui/catalog/decl/midi.js"
+  - "src/js/ui/catalog/registry.js"
+  - "scripts/ui-catalog"
+  - "src/index.html"
+  - "tests/unit/midi"
+  - "tests/unit/ui-catalog.test.mjs"
+  - "tests/unit/ui-catalog-allowance.json"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "docs/midi.md"
+  - "docs/midi-devices.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/rules/project"
+  - ".ai/repo/workflows"
+  - ".gitignore"
+  - "dist"
+depends_on:
+  - "V506"
+acceptance_criteria:
+  - "scripts/midi/derive-devices.mjs --check passes on the owner's Mac (the committed profile and docs region equal a fresh derivation) and passes, saying so, where the install is absent; its unit test derives a synthetic fixture and proves that no key, image or layout field reaches the output."
+  - "recognise() names the device and port role of the owner's port names (KeyLab mkII 61 MIDI / DAW, the BeatStep Pro's play and editor ports) and leaves an unknown name playing; controlOf() names Encoder 1 for CC 74, Fader 9 for CC 85 and Pad 1 for note 36 on channel 10 of a KeyLab mkII."
+  - "A DAW-control or editor port of a known device sounds no note; a play port and every unknown input play as before (tests/browser/midi.cjs)."
+  - "The Settings dialog lists each connected input with its device and port role, and the monitor shows each message newest first with the control that sent it, redrawn at most every MONITOR_FLUSH_MS; Vymazat empties it (tests/browser/midi.cjs midi-seam-monitor)."
+  - "Rule project.midi-profiles-derived holds, enforced by tests/unit/midi/devices.test.mjs; the procedure is .ai/repo/workflows/midi-device-import.md."
+validation:
+  - "node --test tests/unit/midi/*.test.mjs tests/unit/ui-catalog.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-15
+updated_at: 2026-11-15

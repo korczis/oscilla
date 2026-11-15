@@ -23,9 +23,11 @@ them". Until this rule the expectation lived in one worker's memory and nothing 
 
 # Required behaviour
 
-- A commit that needs a release is released within 24 hours of landing on main. The clock is
-  the oldest such commit since the last `v*` tag, by committer date (for a squash merge, the
-  time of the merge); a later fix does not restart it.
+- A commit that needs a release is released within 24 hours. The clock starts at the oldest
+  such commit in the range since the last `v*` tag, by committer date, merged branch commits
+  included: `readDatedCommits()` runs `git log` over the range without `--first-parent`, so a
+  commit a merge brought in counts from its own committer date on its branch, which can be
+  earlier than the merge; a later fix does not restart it.
 - What needs a release is decided by `scripts/release-analyze.mjs` and by nothing else: any
   commit it gives a level other than none. Commits that are only `build`, `chore`, `ci`,
   `docs`, `refactor`, `style` or `test` never make a release overdue, however old.
@@ -67,8 +69,11 @@ Not machine-checked: the commit type. The clock reads the subject line a commit 
 so the same change titled `chore` instead of `feat` or `fix` never becomes overdue (measured:
 an empty commit 48 hours old is `OVERDUE`, exit 1, as `feat(x): probe` and `release cadence:
 ok`, exit 0, as `chore(x): probe`). "Not by retitling commits" above is therefore a statement
-of intent that no script holds: whether a pull request's title names what it changes is the
-reviewer's, at the squash merge, where the title becomes the subject.
+of intent that no script holds. The subjects read are the merge commit's, which is the pull
+request's title (merge commits only; squash merging is disabled), and the subject of every
+branch commit the merge brought in: `readCommits()` of `scripts/release-analyze.mjs` runs
+`git log` over the whole range, not only main's first parents. Whether those subjects name
+what the change does is the reviewer's, at the merge.
 
 What this is not: a required check. The `gate` check that blocks a merge does not include the
 cadence, because the pull request that clears an overdue release is the release itself and a

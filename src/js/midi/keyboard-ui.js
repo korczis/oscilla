@@ -11,7 +11,13 @@
 // - Held notes sound past the safety limit while held and are released on window blur, page
 //   hide, Escape and when the view is left (ADR 0062).
 // - The keys light up whoever plays them: the computer keyboard, a pointer, a MIDI input.
-// - While a note sounds, the analysis views show the live output (vizInputs: playing).
+// - While a note sounds, the notes own the output (kbdSounding -> the one output-owner
+//   computation, workbench.js outputOwner; C024): the scope, its description and the status
+//   bar name them, as they name the instrument, the sequencer or the Studio.
+// - The XY pad is one more input of this note layer (K183, kbdPad): its notes are 'kbd-xy', and
+//   every forced release of the keys (blur, page hide, Escape, a workspace switch, All Notes
+//   Off) closes the pad's gate too and then releases whatever the 'xy' input still holds; a
+//   Disarm releases only the keys' own notes (kbdReleaseKeys): the pad is not the keys.
 // The controllers stay out of reactive state; the component holds plain values only.
 
 import {
@@ -20,14 +26,12 @@ import {
 } from './keyboard.js';
 import { drawKeys, keyColours, keyLayout, noteAt } from './keyboard-view.js';
 import { routeOfHash } from '../ui/navigation.js';
+import { armedDefaults, keysShown, routeOf } from './routes.js';
+import { mountDockYield } from './dock-yield.js';
+import { OWNER, notesRefusedSentences } from '../core/output-bus.js';
 
-export const KEYBOARD_REFUSED = Object.freeze({
-  measurement: 'Keyboard notes do not play while the measurement owns the output: stop it '
-    + '(Esc) first.',
-  reference: 'Keyboard notes do not play while the level reference is being captured.',
-  studio: 'Keyboard notes do not play while the Studio is playing: stop it first.',
-  sequencer: 'Keyboard notes do not play while the sequencer is playing: stop it (Esc) first.',
-});
+/** What a refused keyboard note says, per owner: the one output-owner table's (C036). */
+export const KEYBOARD_REFUSED = notesRefusedSentences('keyboard');
 
 const KEYS_HEIGHT = 132; // CSS px of the on-screen keys
 
@@ -94,32 +98,51 @@ export function takesText(el) {
  * `win`: the window. kbdInit({ notesFor }) takes `notesFor(refused)`, which returns a note
  * layer (createMidiNotes) whose refusals are said with the keyboard's sentences.
  */
-export function createKeyboardUi({ win = window } = {}) {
+export function createKeyboardUi({ win = window, bus = null } = {}) {
   let kb = null;
   let notes = null;
   let view = null; // { canvas, layout, octaves, draw() }
-  const kbdRelease = () => (kb ? kb.releaseAll() : 0);
+  let dock = null; // the dock's yield to the note owner (K171, midi/dock-yield.js)
+  const pads = new Set(); // the XY pads' gate releases (kbdPad, K183)
+  // Two releases (K183 review F4): the keys' own notes (the computer keys' and the on-screen
+  // keys', inputs 'keys' and 'pointer') for a Disarm and the dock's fold, which never cut the
+  // XY pad's note; and the panic (blur, page hide, Escape, a workspace switch, All Notes Off),
+  // which also closes every pad's gate and releases what the xy input still holds.
+  const kbdReleaseKeys = () => (kb ? kb.releaseAll() : 0);
+  const kbdRelease = () => {
+    let n = kbdReleaseKeys();
+    for (const release of [...pads]) n += release('keys') || 0;
+    return n + (notes ? notes.releaseInput('xy', 'all-off') : 0);
+  };
 
   return {
-    kbdArmed: { playground: false, studio: false, synth: true }, // the Synth plays from its keys
+    kbdArmed: armedDefaults(), // per workspace, from the one route table (midi/routes.js)
     kbdBase: 60,
     kbdVelocity: 100,
     kbdHeld: '',
     kbdSounding: false,
     kbdRange: '',
     // V635: on a phone the Synth's dock shows its keys and the Octave buttons; the instrument
-    // row, Arm and Velocity unfold from its More button, so the dock never buries the panel.
+    // row, Arm and Velocity unfold from its Vše toggle, so the dock never buries the panel.
     kbdMore: false,
     kbdBtn: KBD_BTN,
+    // The note owner and the user's expansion as the dock last applied them (midi/dock-yield.js
+    // sets both on a state change): what kbdKeysShown reads through routes.js keysShown.
+    kbdNoteOwner: null,
+    kbdDockExpanded: false,
+    // K224 F1: false until the dock has applied its first state (dock-yield.js), so no frame
+    // draws the keys docked over a room the dock then folds (read where the route keepsRoom).
+    kbdDockDecided: false,
 
-    /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
+    /** The view the keyboard belongs to now: every workspace (K247), else null. */
     get kbdView() {
       return KEYBOARD_VIEWS.includes(this.workspace) ? this.workspace : null;
     },
-    /** The keys dock over the page's bottom edge, the same component in the Synth and the
-     *  Studio (the owner's report of 2026-11-03); the Playground keeps them under its panels. */
+    /** The keys dock over the page's bottom edge, the same component in every workspace (the
+     *  owner's reports of 2026-11-03 and 2026-11-15, K247); the Playground keeps them under its
+     *  panels. On a page that is not an instrument the dock starts folded (routes.js folded). */
     get kbdDocked() {
-      return this.kbdView === 'synth' || this.kbdView === 'studio';
+      return !!this.kbdView && this.kbdView !== 'playground';
     },
     /** The docked keys' classes: over the page's bottom edge, beside the sidebar from lg up (it
      *  sits above them, z-40, and would take their clicks), as the workspace column is. */
@@ -127,10 +150,17 @@ export function createKeyboardUi({ win = window } = {}) {
       if (!this.kbdDocked) return '';
       return `${KBD_DOCK} ${this.sidebarCollapsed ? 'lg:left-16' : 'lg:left-64'}`;
     },
-    /** The on-screen keys show wherever they play; in the Studio only while armed, so the
-     *  disarmed dock is one row and the graph keeps the height (the owner's report). */
+    /** The on-screen keys show wherever the dock is docked (routes.js keysShown, the dock's one
+     *  rule, K171): folded where a pad owns the notes, they go with it; in the Studio only
+     *  while armed, so the disarmed dock is one row and the graph keeps the height. */
     get kbdKeysShown() {
-      return this.kbdView !== 'studio' || this.kbdArmedHere;
+      const route = routeOf(this.kbdView);
+      // K224 F1: where the room can fold the dock (keepsRoom, the Studio), the keys draw only
+      // once the dock has decided; elsewhere at once, as before (a later first draw there
+      // resized the dock inside a ResizeObserver delivery in WebKit's xy-pad run).
+      return (!route.keepsRoom || this.kbdDockDecided === true)
+        && keysShown({ route, owner: this.kbdNoteOwner, userExpanded: this.kbdDockExpanded })
+        && (this.kbdView !== 'studio' || this.kbdArmedHere);
     },
     get kbdArmedHere() {
       const v = this.kbdView;
@@ -139,30 +169,31 @@ export function createKeyboardUi({ win = window } = {}) {
     /** What the readout says: armed or not, the keys' range, the velocity. */
     get kbdReadout() {
       const range = this.kbdRange;
-      const where = { studio: 'Studio', synth: 'Synth' }[this.kbdView] || 'Playground';
+      // One instrument everywhere (K247): the readout names no page, only what the keys do.
       return this.kbdArmedHere
-        ? `Armed in the ${where}: keys A to ' play ${range}. Velocity ${this.kbdVelocity}. `
-          + 'Z / X octave, C / V velocity; Esc releases every note.'
-        : `Not armed in the ${where}: arm the keys to play ${range} from the computer keyboard. `
-          + `Velocity ${this.kbdVelocity}.`;
+        ? `Klávesy jsou připravené: A až ' hrají ${range} na nástroji Studia. `
+          + `Síla úhozu ${this.kbdVelocity}. Z / X oktáva, C / V síla úhozu; `
+          + 'Esc uvolní všechny noty.'
+        : `Klávesy nejsou na této stránce připravené: připravte je a hrajte ${range} `
+          + `z klávesnice počítače. Síla úhozu ${this.kbdVelocity}.`;
     },
     /** The on-screen keys, for assistive technology (the canvas is an image of them). */
     get kbdLabel() {
-      return `On-screen keyboard; holding: ${this.kbdHeld || 'nothing'}.`;
+      return `Klávesy na obrazovce; držené: ${this.kbdHeld || 'žádné'}.`;
     },
 
     /** Called once by midiInit: the controller, the listeners, the link key, the views. */
     kbdInit({ notesFor }) {
       const cmp = this;
       notes = notesFor((by) => {
-        if (typeof cmp.notify === 'function') cmp.notify('info', 'Keyboard', KEYBOARD_REFUSED[by]);
+        if (typeof cmp.notify === 'function') cmp.notify('info', 'Klávesy', KEYBOARD_REFUSED[by]);
       });
       kb = createKeyboard({
         play: (note, velocity, source) => {
           if (typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
           return notes.noteOn(note, velocity, `kbd-${source}`);
         },
-        release: (note, source) => notes.noteOff(note, `kbd-${source}`),
+        release: (note, source, opt) => notes.noteOff(note, `kbd-${source}`, 0, opt),
         changed: () => sync(),
       });
       const sync = () => {
@@ -170,7 +201,7 @@ export function createKeyboardUi({ win = window } = {}) {
         cmp.kbdVelocity = kb.velocity;
         const lo = noteName(kb.base);
         const hi = noteName(kb.base + 17);
-        cmp.kbdRange = `${lo} to ${hi}`;
+        cmp.kbdRange = `${lo} až ${hi}`;
         cmp.kbdHeld = kb.held.map((h) => `${noteName(h.note)}${h.sources.includes('midi')
           && h.sources.length === 1 ? ' (MIDI)' : ''}`).join(', ');
         cmp.kbdSounding = kb.sounding;
@@ -183,9 +214,11 @@ export function createKeyboardUi({ win = window } = {}) {
         && doc.querySelector('dialog[open], [data-oscilla-modal][aria-modal="true"]'));
       // Capture, so an armed key is the keyboard's before Studio's own letters (A, C, F, T).
       win.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') { kbdRelease(); return; }
         if (!cmp.kbdArmedHere || !playableEvent(e)) return;
         if (takesText(e.target) || takesText(doc && doc.activeElement) || modalOpen()) return;
+        // An editor that owns its letters keeps them while it has the focus (KEY_ROUTES).
+        const { editors } = routeOf(cmp.workspace);
+        if (editors && e.target && e.target.closest && e.target.closest(editors)) return;
         e.preventDefault();
         e.stopImmediatePropagation();
         kb.keyDown(e.code, e.repeat);
@@ -196,14 +229,12 @@ export function createKeyboardUi({ win = window } = {}) {
           e.stopImmediatePropagation();
         }
       }, { capture: true });
-      // The forced releases of ADR 0062: a key whose keyup may never come.
+      // The forced releases of ADR 0062: a key whose keyup may never come. A page hide and
+      // Escape are the playback bus's stopAll (C050), which releases the keys (kbdReleaseAll).
       win.addEventListener('blur', kbdRelease);
-      win.addEventListener('pagehide', kbdRelease);
-      if (doc && typeof doc.addEventListener === 'function') {
-        doc.addEventListener('visibilitychange', () => { if (doc.hidden) kbdRelease(); });
-      }
       if (typeof cmp.$watch === 'function') {
-        cmp.$watch('workspace', () => { kbdRelease(); if (view) view.resize(); });
+        // Leaving a workspace releases the keys through the bus's leave policy (C053).
+        cmp.$watch('workspace', () => { if (view) view.resize(); });
       }
 
       // The link key: `kbd=1` arms the view the link opens, `kbd=0` disarms it.
@@ -218,29 +249,50 @@ export function createKeyboardUi({ win = window } = {}) {
           cmp.kbdArmed[v] = armed;
           // The domain answers, as every link does (surface-census routes).
           if (typeof cmp.notify === 'function') {
-            const where = v === 'studio' ? 'Studio' : 'Playground';
-            cmp.notify('info', `Keyboard ${armed ? 'armed' : 'disarmed'} from the link`, armed
-              ? `The computer keys play the ${where}. Nothing plays until you press a key.`
-              : `The computer keys no longer play the ${where}.`);
+            cmp.notify('info', armed ? 'Klávesy připravené z odkazu' : 'Klávesy odpojené z odkazu',
+              armed ? 'Klávesy počítače hrají nástroj Studia; nic nezazní, dokud nestisknete '
+                + 'klávesu.' : 'Klávesy počítače na této stránce nehrají.');
           }
           return true;
         });
       }
 
-      // A sounding note is live output: the analysis views show it as they show a played tone.
-      const vizInputs = cmp.vizInputs;
-      if (typeof vizInputs === 'function') {
-        cmp.vizInputs = function vizInputsWithNotes(res) {
-          const u = vizInputs.call(this, res);
-          if (this.kbdSounding && u) u.playing = true;
-          return u;
-        };
-      }
-
       if (doc && typeof doc.querySelector === 'function') {
-        const mount = () => { view = mountKeys(win, doc, kb) || view; trackDockHeight(win, doc); };
+        const mount = () => {
+          view = mountKeys(win, doc, kb) || view;
+          dock = dock || mountDockYield({ win, doc, cmp, buttonClass: KBD_BTN,
+            dock: doc.querySelector('[data-osc="keyboard"]'), band: trackDockHeight(win, doc),
+            release: kbdReleaseKeys });
+        };
         if (typeof cmp.$nextTick === 'function') cmp.$nextTick(mount); else mount();
       }
+    },
+
+    /**
+     * The XY pad as one more input of the keys (K183): -> { noteOn(note, velocity, source),
+     * noteOff(note, source), legato(from, to, source), velocity(), off() } on this note layer,
+     * or null before kbdInit. `release(reason)` closes the pad's gate; the keys' forced
+     * releases call it until off().
+     */
+    kbdPad(release) {
+      if (!notes || typeof release !== 'function') return null;
+      const cmp = this;
+      pads.add(release);
+      return {
+        noteOn(note, velocity, source) {
+          if (typeof cmp.ensureAudio === 'function') cmp.ensureAudio();
+          return notes.noteOn(note, velocity, source);
+        },
+        noteOff: (note, source) => notes.noteOff(note, source),
+        legato: (from, to, source) => notes.legato(from, to, source),
+        velocity: () => (kb ? kb.velocity : 100),
+        off: () => { pads.delete(release); },
+      };
+    },
+
+    /** The keyboard's notes on the engine's own voices off, its keys kept (K247). */
+    kbdEngineOff() {
+      return notes ? notes.silenceEngine() : 0;
     },
 
     /** Arm or disarm the computer keyboard in the view in sight. */
@@ -248,7 +300,8 @@ export function createKeyboardUi({ win = window } = {}) {
       const v = this.kbdView;
       if (!v) return;
       this.kbdArmed[v] = !this.kbdArmed[v];
-      if (!this.kbdArmed[v]) kbdRelease();
+      if (bus) bus.armed(OWNER.notes, this.kbdArmed[v]); // a step of the bus's trace (C050)
+      if (!this.kbdArmed[v]) kbdReleaseKeys(); // the keys' notes, never a pad's
     },
 
     /** An on-screen control: 'octave-down' | 'octave-up' | 'velocity-down' | 'velocity-up'. */
@@ -266,7 +319,20 @@ export function createKeyboardUi({ win = window } = {}) {
       if (kb) kb.clear('midi');
     },
 
-    /** Let go of every note the keyboard plays; returns how many keys or pointers held one. */
+    /** The dock's handle (K171): unfold or fold the keys where a pad owns the notes. */
+    kbdDockToggle() {
+      return dock ? dock.toggle() : false;
+    },
+    get kbdDockYields() {
+      return !!dock && dock.yields;
+    },
+
+    /** Let go of the keys' own notes (Disarm, the dock's fold), never an XY pad's; returns how
+     *  many keys or pointers held one. */
+    kbdReleaseKeys() {
+      return kbdReleaseKeys();
+    },
+    /** The panic: every note the keyboard plays, the XY pads' with them; returns the count. */
     kbdReleaseAll() {
       return kbdRelease();
     },
@@ -277,12 +343,13 @@ export function createKeyboardUi({ win = window } = {}) {
  * The band the docked keyboard covers at the bottom of the viewport (the dock and the status
  * bar under it) as --osc-dock-h on the root, 0px unless the dock is fixed over the page (the
  * Synth dock): the Synth view reserves it below its content and the page keeps it as scroll
- * padding, so no control and no focused element ends under the dock (WCAG 2.4.11).
+ * padding, so no control and no focused element ends under the dock (WCAG 2.4.11). Returns
+ * the measurement, which the dock's yield runs again before it scrolls (K171).
  */
 function trackDockHeight(win, doc) {
   const dock = doc.querySelector('[data-osc="keyboard"]');
   const root = doc.documentElement;
-  if (!dock || !root || typeof win.ResizeObserver !== 'function') return;
+  if (!dock || !root || typeof win.ResizeObserver !== 'function') return () => {};
   const set = () => {
     const fixed = win.getComputedStyle(dock).position === 'fixed';
     const top = dock.getBoundingClientRect().top;
@@ -294,6 +361,7 @@ function trackDockHeight(win, doc) {
     new win.MutationObserver(set).observe(dock, { attributes: true, attributeFilter: ['class'] });
   }
   set();
+  return set;
 }
 
 /**

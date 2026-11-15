@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (MEASURE runs loopback measurements through the UI on the realtime engine)
 // OSCILLA V3 UI gate: the MEASURE and EXPERIMENTS workspaces of the built dist/index.html in
 // chromium, firefox and webkit, each from file:// AND from a GitHub-Pages-like sub-path
 // (http://127.0.0.1:<port>/oscilla/).

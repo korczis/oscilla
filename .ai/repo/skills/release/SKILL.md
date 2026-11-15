@@ -59,6 +59,18 @@ record is on main.
 
    `tests/unit/about.test.mjs` fails until the bump of step 4 names the same line.
 
+   The station may take `src/index.html` past its byte cap (`tests/unit/source-size-baseline.json`):
+   raise the cap in the same commit with a `raises` entry that names the release pull request's
+   number and the reason. Read the next number right before committing (the newest issue or pull
+   request number of the repository plus one); the ledger is append-only (an edited entry is
+   refused by `tests/unit/source-size-budget.test.mjs`), so a number taken by another pull request
+   in the meantime means redoing the station commit, not editing the entry (v3.22.0, 2026-11-06).
+
+   Before `release:publish` on the primary checkout, run `npm ci` there: its node_modules may be
+   older than the lock (the worktrees install fresh), and `build:check` then reports the committed
+   dist as stale although the tree is right ("BLOCKED npm run build:check failed: dist/index.html
+   is stale", v3.22.0, 2026-11-06; the same bytes passed after `npm ci`).
+
 4. Prepare on the clean tree. It bumps once, rebuilds and runs `npm run verify` with the
    roadmap check (ADR 0082: the gate verdict is the CI run of the release pull request, the
    CI receipt); on a failure it restores what it changed. `--local-gate` runs the full gate
@@ -115,7 +127,7 @@ record is on main.
      --verify-command "npm run release:record -- --version X.Y.Z --check" --note <file>
    git push -u origin chore/release-record-vX.Y.Z
    gh pr create --base main --title "chore(release): record vX.Y.Z" --body-file <file>
-   gh pr merge <n> --auto --squash
+   gh pr merge <n> --auto --merge
    ```
 
 8. Close the release task with the line `release:publish` printed:

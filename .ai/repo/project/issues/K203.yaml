@@ -1,0 +1,24 @@
+id: K203
+milestone: M064
+serves:
+  - "connected-instrument#knob-control"
+title: "ADR 0061's instrument-visuals note names the shipped knob: the one knob model and its panel skin"
+slug: adr-0061-s-instrument-visuals-note-names-the-shipped-knob-th
+priority: p2
+profile: implementation
+objective: "Lands as docs(adr). ADR 0061's resolution note of 2026-10-30 (.ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md, 'the instrument visuals, and the Synth panel surface narrows the skeuomorphism ban') says K058's own component, src/js/ui/kinds/param/knob.js, remains planned work and that the Synth panel's knob is panel-local until it lands. The knob shipped instead as the one knob model src/js/ui/synth/knob.js with src/js/synth/view/knob.js its panel skin (#367, #420), and the DRY-families decision of 2026-11-05 (M123, G021, G022) makes that core the one knob. An appended resolution note says so and names G022 as the owner of any later split of the model; every section above it and the record's status stay unchanged. Before: the ADR names a planned component that will not be built. After: it names the knob that ships. Rollback: revert; records only."
+why: "Gap of K058 (criterion 1) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): the ADR 0061 note on main calls K058's component planned, while the knob shipped as the one knob model. No owner direction re-scopes it, so it is its own issue and K058's criterion points here (chore/plan-m064-rescope). K058 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - ".ai/repo/adrs/0061-the-ui-is-built-on-flowbite-pro.md"
+depends_on: []
+acceptance_criteria:
+  - "An appended resolution note of ADR 0061 names src/js/ui/synth/knob.js as the one knob model and src/js/synth/view/knob.js as its panel skin, citing the DRY-families decision of 2026-11-05 (M123, G021, G022) and K058; git diff of the record shows additions only (every earlier section and the status unchanged), and the note names plan ids only, never a rule id that is not in force (project.rules-name-their-enforcement)."
+  - "majordomus adr check reports every identity unique, every status known and every reference resolving, and node --test tests/unit/knowledge-integrity.test.mjs passes (every path the note names exists)."
+  - "Docs-only: not a feat or fix change, so project.fail-first does not apply; .ai/repo/adrs is not guarded, so no review verdict is needed."
+validation:
+  - "majordomus adr check"
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

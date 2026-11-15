@@ -24,3 +24,12 @@ same order.
 the documentation, the source or the tests; those are referenced by the sources file and
 read where they live. Anything compiled from the sources — an index, a graph — is a
 rebuildable local product and belongs under `../../local/cache/`.
+
+`adr-exemptions.yaml` lists the ADRs that add no capability of the page, each with its
+reason. `tests/unit/knowledge-integrity.test.mjs` (V272 D8) holds that every ADR from 0011
+on is cited by a claim, a feature or a use case, or stands in that file; it refuses a
+malformed entry, one that names an ADR that does not exist, and one whose ADR has become
+cited (the entry is stale: remove it). The file is an input of that test, not a knowledge
+source: no class in `sources.yaml` discovers it. It lives here rather than inside the test
+so that a pull request proposing an ADR changes no file under `tests/` (E055); its header
+says what an entry is and that one is added with its reason.

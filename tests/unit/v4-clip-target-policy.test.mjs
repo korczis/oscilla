@@ -53,7 +53,7 @@ const policyModule = await import('../../src/js/studio/clip-targets.js').catch((
 const SR = 48000;
 /**
  * Every clip use: kind × action (pattern and notes clips have no action). Notes clips (K099
- * part 1) are held on a node that plays notes and played nowhere yet.
+ * part 1) are held on a node that plays notes and played on a Keys node (K068).
  */
 const CLIP_USES = [{ kind: 'pattern' }, { kind: 'event', action: 'gate' },
   { kind: 'event', action: 'trigger' },
@@ -120,10 +120,15 @@ function transportLane(model, id, key) {
   const started = transport.start();
   assert.ok(started.ok, `PLAY with a ${key} lane: ${JSON.stringify(started)}`);
   const un = transport.debugInfo().unplayed.find((u) => u.id === lane.id);
-  // What the node's adapter offers a linear owner (adapters/nodes.js modTarget).
+  // What the node's adapter offers the lane's owner (adapters/nodes.js modTarget): the linear
+  // AudioParam, or for a mapped lane (clip-targets.js laneMap, a low-/high-pass Q, K232) the
+  // log target its values reach in dB, as the runtime and the transport read it.
   const h = a.runtime.nodes.get(id);
+  const node = store.getModel().graph.nodes.find((n) => n.id === id);
+  const mapped = policyModule.laneMap
+    && policyModule.laneMap(NODE_REGISTRY.param(node.type, key), node.params);
   let t = null;
-  try { t = h ? h.modTarget(key, 'linear') : null; } catch (e) { t = null; }
+  try { t = h ? h.modTarget(key, mapped ? 'log' : 'linear') : null; } catch (e) { t = null; }
   transport.stop({ fast: true });
   return { holds: true, plays: !un, code: un ? un.code : null, reason: un ? un.reason : null,
     adapter: !!(t && t.param) };
@@ -304,11 +309,16 @@ test('R7 policy: the store still holds what it held, so saved files keep loading
   const lane = clipTarget(split.model.graph.nodes.find((n) => n.id === split.id),
     { kind: 'automation', param: 'panA' });
   assert.deepEqual([lane.holds, lane.plays, lane.code], [true, false, 'no-parameter']);
-  // The Inspector says why it offers no Automate on a parameter the registry calls automatable.
-  const lp = withNode('filter');
-  const q = inspector.inspectorView(lp.model, { nodes: [lp.id] }).fields.find((f) => f.key === 'Q');
+  // The Inspector says why it offers no Automate on a parameter the registry calls automatable:
+  // a shelf ignores Q. A low-pass Q is automated since K232 (laneMap: its lane plays in dB).
+  const sh = withNode('filter', { type: 'lowshelf' });
+  const q = inspector.inspectorView(sh.model, { nodes: [sh.id] }).fields.find((f) => f.key === 'Q');
   assert.equal(q.automatable, false);
-  assert.equal(q.automateReason, policyModule.CLIP_TARGET_TEXT.filterQ);
+  assert.equal(q.automateReason, policyModule.CLIP_TARGET_TEXT.filterQUnused);
+  const lp = withNode('filter');
+  const lq = inspector.inspectorView(lp.model, { nodes: [lp.id] }).fields
+    .find((f) => f.key === 'Q');
+  assert.deepEqual([lq.automatable, lq.automateReason], [true, null], 'a low-pass Q (K232)');
   const cutoff = inspector.inspectorView(lp.model, { nodes: [lp.id] }).fields
     .find((f) => f.key === 'frequency');
   assert.deepEqual([cutoff.automatable, cutoff.automateReason], [true, null]);
@@ -447,20 +457,26 @@ test('R7 lanes (B1): the offline render plan renders a lane exactly where the tr
     assert.deepEqual(wrong, []);
   });
 
-test('R7 lanes (B1): a band-pass Q lane after low-pass and a Stereo Split pan lane are not '
-  + 'rendered, with the reason', () => {
+test('R7 lanes (B1): a band-pass Q lane after a shelf and a Stereo Split pan lane are not '
+  + 'rendered, with the reason; after low-pass it is (K232)', () => {
   const text = policyModule.CLIP_TARGET_TEXT || {};
-  // Q lane added while the filter is band-pass (it plays), then the type changes to low-pass.
+  // Q lane added while the filter is band-pass (it plays), then the type changes to a shelf,
+  // which ignores Q (a low-pass Q lane plays in dB since K232, laneMap).
   const bp = withNode('filter', { type: 'bandpass' });
   const q = withLane(bp.model, bp.id, 'Q');
   assert.ok(q, 'a band-pass Q lane is held');
   const store = storeOf(q.model);
-  const r = store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id, params: { type: 'lowpass' } });
+  const lp = store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id, params: { type: 'lowpass' } });
+  assert.ok(lp.ok, lp.reason);
+  const lpRow = offline.planOfflineRender(store.getModel()).automation
+    .find((a) => a.id === q.laneId);
+  assert.deepEqual([lpRow.rendered, lpRow.reason], [true, null], 'after low-pass it renders');
+  const r = store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id, params: { type: 'lowshelf' } });
   assert.ok(r.ok, r.reason);
   const plan = offline.planOfflineRender(store.getModel());
   const row = plan.automation.find((a) => a.id === q.laneId);
-  assert.deepEqual([row.rendered, row.reason], [false, text.filterQ]);
-  assert.ok(plan.limitations.includes(`Automation ${q.laneId}: ${text.filterQ}`),
+  assert.deepEqual([row.rendered, row.reason], [false, text.filterQUnused]);
+  assert.ok(plan.limitations.includes(`Automation ${q.laneId}: ${text.filterQUnused}`),
     plan.limitations.join(' | '));
   const split = withNode('stereo-split');
   const pan = withLane(split.model, split.id, 'panA');
@@ -548,13 +564,21 @@ test('R7 clips (B2): a clip is offered, moved and nudged only onto tracks where 
     [f.envTrack, f.env2Track, f.noiseTrack]);
 });
 
-test('R7 clips (B2): the Action select offers Trigger only to a clip that already has it', () => {
+test('R7 clips (B2, K023): the Action select offers the actions that play on the clip\'s target, '
+  + 'and its own', () => {
   const ids = (o) => o.map((x) => x.id);
-  assert.deepEqual(ids(timelineView.eventActionOptions()), ['gate'],
-    'a new choice never offers an action the transport does not play');
-  assert.deepEqual(ids(timelineView.eventActionOptions('gate')), ['gate']);
-  assert.deepEqual(ids(timelineView.eventActionOptions('trigger')), ['gate', 'trigger'],
-    'a held trigger clip still shows its own action');
+  const node = (type) => withNode(type).model.graph.nodes.find((n) => n.type === type);
+  // Before K023 a trigger played nowhere, so it was offered only to a clip that had it.
+  assert.deepEqual(ids(timelineView.eventActionOptions()), ['gate', 'trigger'],
+    'without a target: every action that plays somewhere');
+  assert.deepEqual(ids(timelineView.eventActionOptions('gate', node('envelope'))),
+    ['gate', 'trigger'], 'an Envelope plays both');
+  assert.deepEqual(ids(timelineView.eventActionOptions(undefined, node('random'))), ['trigger'],
+    'Random plays only a trigger');
+  assert.deepEqual(ids(timelineView.eventActionOptions('gate', node('step-modulator'))),
+    ['gate', 'trigger'], 'a held gate on a Step Modulator still shows its own action');
+  assert.deepEqual(ids(timelineView.eventActionOptions('gate', node('oscillator'))), ['gate'],
+    'a node that plays no event keeps only the clip\'s own action');
 });
 
 test('R7 clips (P2): the clip form\'s target and track options follow the clip\'s action', () => {
@@ -567,8 +591,11 @@ test('R7 clips (P2): the clip form\'s target and track options follow the clip\'
   const ids = (o) => o.map((x) => x.id);
   const trig = timelineView.clipFormOptions(store.getModel(),
     timeline.findClip(store.getModel(), f.gate));
-  assert.deepEqual(ids(trig.targets), [''], 'a trigger clip plays nowhere: only "Track target"');
-  assert.deepEqual(ids(trig.tracks), [f.envTrack], 'and stays on its own track');
+  // K023: a trigger plays on an Envelope, Random and a Step Modulator (before: nowhere).
+  const triggered = store.getModel().graph.nodes.filter((n) => ['envelope', 'random',
+    'step-modulator'].includes(n.type)).map((n) => n.id);
+  assert.deepEqual(ids(trig.targets), ['', ...triggered], 'a trigger clip\'s targets');
+  assert.deepEqual(ids(trig.tracks), [f.envTrack, f.env2Track], 'the tracks where it plays');
   assert.deepEqual(ids(trig.actions), ['gate', 'trigger']);
   const back = store.dispatch({ type: 'CLIP_UPDATE', clipId: f.gate, payload: { action: 'gate' } });
   assert.ok(back.ok, back.reason);
@@ -577,7 +604,7 @@ test('R7 clips (P2): the clip form\'s target and track options follow the clip\'
   const envs = store.getModel().graph.nodes.filter((n) => n.type === 'envelope').map((n) => n.id);
   assert.deepEqual(ids(gate.targets), ['', ...envs]);
   assert.deepEqual(ids(gate.tracks), [f.envTrack, f.env2Track]);
-  assert.deepEqual(ids(gate.actions), ['gate']);
+  assert.deepEqual(ids(gate.actions), ['gate', 'trigger'], 'an Envelope plays both (K023)');
 });
 
 // ---------------------------------------------------------------- P2: the Inspector rebuild
@@ -591,19 +618,90 @@ test('R7 Inspector (P2): a filter type change rebuilds the Inspector, so the Q n
     const before = inspector.inspectorView(store.getModel(), { nodes: [bp.id] });
     const qBefore = before.fields.find((f) => f.key === 'Q');
     assert.deepEqual([qBefore.automatable, qBefore.automateReason], [true, null]);
+    // A shelf ignores Q (a low-pass Q is automated since K232, laneMap).
     assert.ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id,
-      params: { type: 'lowpass' } }).ok);
+      params: { type: 'lowshelf' } }).ok);
     const after = inspector.inspectorView(store.getModel(), { nodes: [bp.id] });
     const qAfter = after.fields.find((f) => f.key === 'Q');
     assert.deepEqual([qAfter.automatable, qAfter.automateReason],
-      [false, policyModule.CLIP_TARGET_TEXT.filterQ], 'the note appears, Automate goes');
+      [false, policyModule.CLIP_TARGET_TEXT.filterQUnused], 'the note appears, Automate goes');
     // The view keeps its key (same node), so only the rebuild key can make the panel rebuild.
     assert.equal(after.key, before.key);
     assert.notEqual(inspector.inspectorRebuildKey(after), inspector.inspectorRebuildKey(before),
-      'band-pass -> low-pass changes the rebuild key');
+      'band-pass -> low-shelf changes the rebuild key');
     // The reverse direction too (the browser check covers low-pass -> band-pass).
     assert.ok(store.dispatch({ type: 'NODE_PARAM_SET', nodeId: bp.id,
       params: { type: 'bandpass' } }).ok);
     const again = inspector.inspectorView(store.getModel(), { nodes: [bp.id] });
     assert.equal(inspector.inspectorRebuildKey(again), inspector.inspectorRebuildKey(before));
   });
+
+// ---------------------------------------------------------------- K060: the keys row
+
+test('R7 keys row (K060): an event clip gates a Keys node: held, offered, played and rendered '
+  + 'as a gate on the Envelopes its Gate reaches', async () => {
+  const clipTarget = policyOf();
+  const { panelStore } = await import('./synth-fixture.mjs');
+  const PANEL = (await import('../../src/js/synth/panels/semi-mono.js')).default;
+  const { gateTargets } = await import('../../src/js/studio/live-notes.js');
+  const st = panelStore();
+  const keys = PANEL.resolve(st.getModel()).get('keys');
+  const envs = gateTargets(st.getModel(), keys.id).envelopes;
+  assert.equal(envs.length, 2, 'the panel normals Gate into EG 1 and EG 2');
+  // The policy: a gate event plays on Keys (how keys-gate), a trigger event is held, unplayed.
+  const v = clipTarget(keys, { kind: 'event', action: 'gate' });
+  assert.deepEqual([v.holds, v.plays, v.how], [true, true, 'keys-gate']);
+  const trig = clipTarget(keys, { kind: 'event', action: 'trigger' });
+  assert.deepEqual([trig.holds, trig.plays, trig.code], [true, false, 'event-target']);
+  assert.equal(trig.reason, policyModule.CLIP_TARGET_TEXT.eventTarget(keys.metadata.name));
+  // The timeline UI offers it, as an event track's target and an event clip's.
+  const ids = (list) => list.map((n) => n.id);
+  assert.ok(ids(timelineView.trackTargetOptions(st.getModel(), 'event')).includes(keys.id));
+  assert.ok(ids(timelineView.clipTargetOptions(st.getModel(), 'event', NODE_REGISTRY, 'gate'))
+    .includes(keys.id));
+  // The store holds it; "add clip" on a Keys track proposes the gate event.
+  const track = st.dispatch({ type: 'TRACK_ADD', kind: 'event', target: keys.id });
+  assert.ok(track.ok, track.reason);
+  const add = timelineView.addClipAction(st.getModel(), track.created.tracks[0], 0.5);
+  assert.deepEqual([add.reason, add.action && add.action.kind,
+    add.action && add.action.payload.action], [undefined, 'event', 'gate']);
+  const clip = st.dispatch({ ...add.action, start: 0.5, duration: 0.5 });
+  assert.ok(clip.ok, clip.reason);
+  const m = st.getModel();
+  const c = m.timeline.clips.find((x) => x.id === clip.created.clips[0]);
+  assert.equal(transportModule.clipPlayReason(m, c), null, 'the transport plays it');
+  // The offline plan renders it.
+  const row = offline.planOfflineRender(m).clips.find((x) => x.id === c.id);
+  assert.deepEqual([row.rendered, row.reason], [true, null], 'the offline render plays it');
+  // PLAY: one gate record per Envelope the Gate reaches, at the clip's start.
+  const a = audio();
+  const transport = transportModule.createStudioTransport({ runtime: a.runtime,
+    engine: a.engine, store: storeOf(m) });
+  const started = transport.start();
+  assert.ok(started.ok, JSON.stringify(started));
+  const d = transport.debugInfo();
+  assert.equal(d.unplayed.find((u) => u.id === c.id), undefined, 'listed as played');
+  assert.equal(d.gateCount, envs.length, 'a gate on EG 1 and on EG 2');
+  for (const env of envs) assert.ok(d.gatedEnvelopes.includes(env), `${env} owned by the gate`);
+  const at = d.baseTime + c.start;
+  for (const env of envs) {
+    const h = a.runtime.nodes.get(env);
+    const evs = h.outputs.control.offset.events;
+    assert.ok(evs.some((e) => Math.abs(e.t - at) < 1e-9), `${env}: the contour starts at the `
+      + `clip start ${at}`);
+    assert.ok(evs.some((e) => Math.abs(e.t - (at + c.duration)) < 1e-9),
+      `${env}: and is released at its end`);
+  }
+  transport.stop({ fast: true });
+  // A muted Gate edge carries nothing: one Envelope fewer.
+  const gate = m.graph.edges.find((e) => e.from.node === keys.id && e.from.port === 'gate'
+    && e.to.node === envs[0]);
+  const ms = storeOf(m);
+  assert.ok(ms.dispatch({ type: 'EDGE_UPDATE', edgeId: gate.id, props: { muted: true } }).ok);
+  const b = audio();
+  const t2 = transportModule.createStudioTransport({ runtime: b.runtime, engine: b.engine,
+    store: ms });
+  assert.ok(t2.start().ok);
+  assert.equal(t2.debugInfo().gateCount, envs.length - 1, 'the muted edge gates nothing');
+  t2.stop({ fast: true });
+});

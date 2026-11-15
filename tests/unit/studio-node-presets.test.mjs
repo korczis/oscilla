@@ -14,6 +14,7 @@ import { serializeStudio } from '../../src/js/studio/schema.js';
 import { compileStudio } from '../../src/js/studio/compiler.js';
 import { liveModel } from '../../src/js/studio/live-notes.js';
 import PANEL from '../../src/js/synth/panels/semi-mono.js';
+import { PRESETS } from '../../src/js/synth/presets.js';
 import { panelStore } from './synth-fixture.mjs';
 
 const NOW = new Date('2026-11-01T10:00:00Z');
@@ -22,7 +23,7 @@ test('every node type has factory presets, each a valid one-node patch of its ow
   for (const d of NODE_DEFINITIONS) {
     const list = nodePresets(d.type);
     assert.ok(list.length >= 1, d.type);
-    assert.equal(list[0].name, 'Default', d.type);
+    assert.equal(list[0].name, 'Výchozí', d.type);
     for (const e of list) {
       const r = importPatch(e.patch);
       assert.equal(r.ok, true, `${d.type}/${e.id}: ${r.ok || r.errors[0].message}`);
@@ -40,7 +41,9 @@ test('every node type has factory presets, each a valid one-node patch of its ow
     }
   }
   // The Synth's engine presets are reused as the engines' node presets, not copied.
-  assert.deepEqual(nodePresets('fm-voice').map((e) => e.name), ['Default', 'FM bell', 'FM keys']);
+  const fm = PRESETS.filter((p) => p.engine === 'fm').map((p) => p.title.split(':')[0]);
+  assert.deepEqual(fm, ['FM zvon', 'FM piano']);
+  assert.deepEqual(nodePresets('fm-voice').map((e) => e.name), ['Výchozí', ...fm]);
 });
 
 test('applying a preset sets the node\'s parameters only, keeps its edges, one undo entry', () => {
@@ -58,7 +61,7 @@ test('applying a preset sets the node\'s parameters only, keeps its edges, one u
     const after = st.getModel();
     if (done.changed) {
       assert.equal(st.debugInfo().undoDepth, depth + 1, `${mid}/${id}`);
-      assert.match(st.undoLabel(), /^Preset /);
+      assert.match(st.undoLabel(), /^Předvolba /);
     }
     assert.deepEqual(after.graph.edges, before.graph.edges, `${mid}/${id}: every edge kept`);
     for (const n of after.graph.nodes) {
@@ -83,7 +86,7 @@ test('negative: a preset of another node type is refused, model and history unch
   const m = st.getModel();
   const vco = PANEL.resolve(m).get('vco1');
   const filterPreset = nodePresets('filter')[1];
-  assert.match(nodePresetAction(m, vco.id, filterPreset).reason, /another node type/);
+  assert.match(nodePresetAction(m, vco.id, filterPreset).reason, /předvolba pro jiný typ uzlu/);
   const depth = st.debugInfo().undoDepth;
   const r = st.dispatch({ type: 'PATCH_REPLACE', patch: filterPreset.patch,
     onto: { n: vco.id } });

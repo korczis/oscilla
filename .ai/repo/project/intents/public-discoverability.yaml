@@ -27,6 +27,10 @@ satisfaction:
     criterion: "Each library the owner named (Mermaid as a runtime, Chart.js, Cytoscape.js, Apache ECharts) is measured against uPlot and p5 and decided by the owner (Q070), any adoption carrying an ADR"
     evidence: "command"
     ref: "majordomus plan list | grep -Eq '^Q070 +DONE '"
+  - id: "lab-landing-live"
+    criterion: "The Pages site serves, beside the unchanged app, one landing at /oscilla/lab/ generated from the deployed commit (Q107): Czech, Flowbite Pro, derived facts with their sources, the real app in a frame, and nothing loaded from another origin; verify-deploy proves it equals a regeneration"
+    evidence: "command"
+    ref: "node --test tests/unit/landing-lab.test.mjs"
   - id: "live-and-accessible"
     criterion: "On the deployed Pages site the README's landing deep links open their workspaces, and the in-app entries are reachable by keyboard with visible focus in dark and light themes"
     evidence: "command"
@@ -46,10 +50,10 @@ governance:
   - "adr:adr-0051"
   - "adr:adr-0061"
 non_goals:
-  - "A second hosted website, a marketing page outside the application, a backend, analytics, accounts or a sales funnel"
+  - "A second hosted website or a marketing page outside the application, except the one generated landing at /oscilla/lab/ that Q107 (owner, 2026-11-09) decided; a backend, analytics, accounts or a sales funnel"
   - "A generic dashboard or a wall of feature counts"
   - "Changing the default route or the first screen's layout without a new owner decision superseding Q004"
   - "Bundling a visualization engine because it was named, or a second mutable Studio graph"
   - "Rewriting the positioning sentence or the tagline (Q002)"
 created_at: 2026-10-30
-updated_at: 2026-10-30
+updated_at: 2026-11-09

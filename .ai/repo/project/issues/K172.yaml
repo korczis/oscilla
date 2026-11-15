@@ -20,4 +20,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-04
-updated_at: 2026-11-04
+updated_at: 2026-11-08T08:58:22Z
+started_at: 2026-11-08T08:56:13Z
+started_event: sha256:3bcb0820e9efdaea84df87788e4ea6c2996aab963c3e29afa75f063de5973b5c
+verified_at: 2026-11-08T08:56:27Z
+verified_event: sha256:c53dc820de48a54eae4b9da39fed027ca884133507615b6a84f5a8167977905c
+completed_at: 2026-11-08T08:58:22Z
+completed_event: sha256:5755ffee891bba722a9ec67d30704fd36538136711fcc246673f26756238f5a1
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/k172-spoken-articles.test.mjs (re-run by oscilla-a3 on main ee9bfd25, 2026-11-08, darwin)"
+    result: "Landed in train C #486 (merge ee9bfd25, member fix/k172-spoken-articles, built by oscilla-a3, judged by oscilla-21 in .ai/repo/reviews/486.yaml: merge). On main ee9bfd25: 6 pass, 0 fail; one article() in studio/a11y.js; the table asserts an LFO, an RTA, a Filter, an Oscillator, a Unison (line 31); fail-first held on #486 (5 of 6 failed on the base, 21's check). 486.yaml's open P3s F1 F2 on article() ('11000', 'Euclidean') hit no current label."
+    artifact: ".ai/repo/reviews/486.yaml"
+    commit: ee9bfd25df855b0d586e0a39a6e5b073128e36fd
+    recorded_at: 2026-11-08T08:56:39Z

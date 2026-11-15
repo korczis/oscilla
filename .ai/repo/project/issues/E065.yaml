@@ -1,0 +1,26 @@
+id: E065
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "ci-bounded's workflow checker reads the downloads and fallbacks it misses and stops refusing legal workflows"
+slug: ci-bounded-checker-misses-and-false-refusals
+priority: p2
+profile: implementation
+objective: "scripts/ci-workflow-rules.mjs on main, each reproduced with checkWorkflow: misses: a downloaded SUMS file passes as the digest check and `gh release download`, `git clone`, `npx`, `aria2c` and `docker run` are not read as downloads (164 R2-P2-3); a file saved by curl and run later (`bash x.sh`) passes when the step checks another download's digest (164 R3-P2-4); a job named `gate` (not id gate) on a push trigger is not reported (164 R3-P2-2); `npm test || true` on the unit steps of ci.yml and main-checks.yml exits 0 (164 R3-P2-3). False refusals: `grep -q 'apt-get'` and `uses: docker://alpine:3.19` (164 R3-P2-10); YAML anchors and multi-line flow sequences in scripts/yaml-subset.mjs (164 R2-P2-5). Fix each or state it in rule project.ci-bounded's next version, with a unit case each."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 164.yaml#R2-P2-3, #R3-P2-4, #R3-P2-2, #R3-P2-3, #R3-P2-10 and #R2-P2-5 (P2) still open on main b8bfd3b6."
+scope:
+  - "scripts/ci-workflow-rules.mjs"
+  - "scripts/yaml-subset.mjs"
+  - "tests/unit"
+  - ".ai/repo/rules/project"
+  - ".ai/repo/project/issues/E065.yaml"
+depends_on: []
+acceptance_criteria:
+  - "Each of the six cases above has a unit case: the misses are reported and the legal workflows pass, or the rule text lists the case as a known limit and the case asserts that."
+validation:
+  - "node scripts/ci-workflow-rules.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

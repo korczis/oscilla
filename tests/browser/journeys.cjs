@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (tone levels and the audio clock read on the realtime engine against deadlines)
 // OSCILLA user journeys (C021, PACK 03 "One Instrument, One Coherent State") on the built
 // dist/index.html (file://) in chromium, firefox and webkit. One fresh page per check. Each
 // journey drives the controls a user drives (pointer and keyboard on the page; never a lab's
@@ -358,7 +359,8 @@ function defineChecks() {
       'the status bar shows the doubled frequency', s.text);
     await act.click(page, '#osc-wave-square');
     s = await waitSnap(page, (x) => x.engine.voice && x.engine.voice.wave === 'square'
-      && /squ/i.test(x.text.sbWave || ''), 'Square reaches the carrier and the status bar');
+      && !!x.names.wave && (x.text.sbWave || '').includes(x.names.wave.square),
+    'Square reaches the carrier and the status bar');
     await act.focus(page, '#osc-gain');
     for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowLeft');
     s = await waitSnap(page, (x) => x.app.gainLevel < b.app.gainLevel
@@ -567,17 +569,23 @@ function defineChecks() {
     }).then((v) => (v.path.includes('FILTER') && v.path.includes('ADSR ENVELOPE')
       && /880/.test(v.requested) ? v : null)),
     { ms: STEP_MS, what: 'journey-3: Signal Path and requested marker follow the instrument' });
-    must(/880/.test(s.text.sbFreq || '') && /tri/i.test(s.text.sbWave || ''),
+    must(/880/.test(s.text.sbFreq || '') && !!s.names.wave
+      && (s.text.sbWave || '').includes(s.names.wave.triangle),
       'the status bar shows frequency and waveform', s.text);
-    must(/play|sound|hold/i.test(s.text.sbState || ''), 'the status bar says it plays', s.text);
+    // by state, not by wording: the dot is-playing and the label shown is statusLabel's for it
+    const playingSb = await waitSnap(page, (x) => x.sb.playing && !!x.sb.label
+      && x.sb.label === x.sb.built, 'the status bar says it plays');
+    must(playingSb.sb.playing, 'the status bar says it plays', playingSb.sb);
     const out = await until(async () => { const o = await op.output(page);
       return near(o.hz, 880, o.binHz * 1.5) ? o : null; },
     { ms: STEP_MS, what: 'journey-3: the Spectrum peak is the frequency the readouts show' });
     await releaseSpace(page);
-    const idle = await waitSnap(page, (x) => !x.app.playing && x.engine.nodes === 0,
+    await waitSnap(page, (x) => !x.app.playing && x.engine.nodes === 0,
       'after the hold the engine counts no node');
-    must(!/play/i.test(idle.text.sbState || '') || /stop|ready|idle/i.test(idle.text.sbState),
-      'the status bar returns from playing', idle.text);
+    const idleSb = await waitSnap(page, (x) => !x.sb.playing && !!x.sb.label
+      && x.sb.label === x.sb.built && x.sb.label !== playingSb.sb.label,
+    'the status bar returns from playing');
+    must(!idleSb.sb.playing, 'the status bar returns from playing', idleSb.sb);
     return { path: views.path, requested: views.requested, peakHz: +out.hz.toFixed(1),
       status: s.text.sbState };
   });
@@ -597,7 +605,7 @@ function defineChecks() {
         seqPlaying: window.OSCILLA.labs.sequencer.editor.playing,
         aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label') }))
         .then((r) => (r.owner === 'sequencer'
-          && /^Live output analyser waveform \(sequencer\)/.test(r.aria || '') ? r : null)),
+          && /^Živý průběh analyzátoru výstupu \(sequencer\)/.test(r.aria || '') ? r : null)),
       { ms: STEP_MS, what: 'journey-3: the output owner and the scope aria label name the '
         + 'sequencer while it plays' });
       must(v.seqPlaying && !v.instrumentPlaying, 'the sequencer plays, not the instrument', v);

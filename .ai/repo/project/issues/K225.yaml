@@ -1,0 +1,31 @@
+id: K225
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "The Studio's patch library inserts the Synth panel"
+slug: the-studio-s-patch-library-inserts-the-synth-panel
+priority: p2
+profile: implementation
+objective: "Lands as feat(studio). The Studio's patches dialog (the one patch library, src/js/studio/patch-catalog.js) lists the Synth panel's presets with modes ['apply'] only, and on a document without the panel applyReason answers 'This Studio has no Synth panel: open the Synth, or Insert the panel there first.' The only way to insert the panel is the Synth workspace's own Insert (data-insert-panel, src/js/synth/ui.js, synth/insert.js insertAction). Add an Insert for the panel in the library, through the same insert contract (insertAction: the notice naming the Master feed it takes, placement below the user's nodes, one history entry), so a panel can be inserted from the Studio without leaving it. Before: the library can only apply a panel preset onto a panel already there. After: the library inserts the panel (with the chosen preset's values) when the document has none. Rollback: revert the pull request; no saved state depends on it."
+why: "K214's criterion 'a panel inserted through the Studio's patches dialog' (K061 criterion 3) has no product path on c589955b; found while building K214 (oscilla-2e, 2026-11-09) and agreed with the integrator oscilla-43: K214 checks the Synth's own Insert and this issue adds the library path, so the criterion is not claimed met by a test of a path that does not exist. K061 rests on the owner direction of 2026-10-29 (the connected instrument, everything linked) and Q018."
+scope:
+  - "src/js/studio/patch-catalog.js"
+  - "src/js/synth/insert.js"
+  - "src/js/ui/patch-browser.js"
+  - "tests/unit/synth-panel-library-insert.test.mjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/synth-panel-library-insert.test.mjs, failing on the merge base: on a document without the panel, the library's Synth panel entry offers Insert, and Insert dispatches the panel through synth/insert.js insertAction as one history entry, carrying the entry's preset values; with the panel present Insert is refused with a sentence and Apply still sets the panel's values; the inserted nodes carry metadata.panel as the Synth's own Insert gives them."
+  - "A browser check in tests/browser/synth.cjs (run by npm run test:synth): in a changed document without the panel, the Studio's patch library inserts it by pointer, keyboard and touch, the Studio graph draws its nodes and normal edges, the Synth shows the panel present, and a key sounds once armed; every wait through tests/browser/lib/wait.cjs until() with a named deadline, no sample rate assumed, tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Every string it adds is Czech (project.czech-prose) and passes tests/unit/synth-wording.test.mjs; scripts/size-report.mjs shows at most 1 KB gzip added; a reviewer's verdict for the guarded paths (project.review-verdict); tests/README.md has a row for each new test."
+validation:
+  - "node --test tests/unit/synth-panel-library-insert.test.mjs"
+  - "node tests/browser/synth.cjs --only s-normals"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09
+updated_at: 2026-11-09

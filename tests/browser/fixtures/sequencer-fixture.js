@@ -21,6 +21,11 @@ async function until(cond, ms) {
   while (!cond() && performance.now() - t0 < ms) await sleep(5);
   return Math.round(performance.now() - t0);
 }
+// Named deadlines of the realtime checks: generous on purpose, since each poll returns as soon
+// as its condition holds. A starved audio thread (load 25 on the shared Mac) delivered the
+// first 900 ms of playback and the `ended` events of a stop several hundred ms late.
+const PLAY_DEADLINE_MS = 10000;
+const TEARDOWN_DEADLINE_MS = 5000;
 
 // ---------------------------------------------------------------- source instrumentation
 // Wrap OscillatorNode start/stop and count `ended`: a source is live from start() until ended.
@@ -199,10 +204,13 @@ async function stopMidPlay(playMs) {
   editor.setLoop(false);
   const t0 = ctx.currentTime;
   editor.play();
-  await sleep(playMs);
+  // Condition, not wall time: under load the audio clock can lag the page clock, so wait until
+  // the context itself has played playMs (deadline PLAY_DEADLINE_MS) before reading `during`.
+  await until(() => ctx.currentTime - t0 >= playMs / 1000 && probe.live.size > 0,
+    PLAY_DEADLINE_MS);
   const during = { ...probeSnapshot(), stats: editor.stats(), ctxAdvanced: ctx.currentTime - t0 };
   editor.stop();
-  const waitedMs = await until(() => torn(editor), 400);
+  const waitedMs = await until(() => torn(editor), TEARDOWN_DEADLINE_MS);
   return { during, after: { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing, waitedMs } };
 }
 
@@ -262,11 +270,13 @@ async function loopThenStop(waitMs) {
       { sampleRate: ctx.sampleRate },
     ),
   );
+  const t0 = ctx.currentTime;
   editor.play();
-  await sleep(waitMs);
+  // The loop has played waitMs of audio-clock time (it wraps every 300 ms), not of page time.
+  await until(() => ctx.currentTime - t0 >= waitMs / 1000, PLAY_DEADLINE_MS);
   const during = { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing };
   editor.stop();
-  const waitedMs = await until(() => torn(editor), 400);
+  const waitedMs = await until(() => torn(editor), TEARDOWN_DEADLINE_MS);
   const after = { ...probeSnapshot(), stats: editor.stats(), playing: editor.playing, waitedMs };
   editor.load(saved);
   return { during, after };

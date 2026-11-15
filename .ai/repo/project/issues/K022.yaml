@@ -33,5 +33,27 @@ validation:
   - "npm run release-gate"
 evidence_required:
   - "verified"
+current_state: "Built by oscilla-2e (509.yaml); landed in T3 by PR #509 (cb414b85, release v3.30.0). Criteria audit by oscilla-0b on origin/main 0e20f83c (2026-11-11), at oscilla-43's order: 6 of 6 met (evidence below). K245 (train T10) later touches the same hash code; it was not judged here."
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-11T11:44:11Z
+started_at: 2026-11-11T11:41:27Z
+started_event: sha256:c7643f078aec82809f80997dbe161b4ca42cf3779c05318838c876bbc65fef31
+verified_at: 2026-11-11T11:41:51Z
+verified_event: sha256:2bbe6833660883da6c14614c331556658faa1eb4a128dd7e753f85e78de1d762
+completed_at: 2026-11-11T11:42:33Z
+completed_event: sha256:6e21ef5088c134e5bde5720c06e71b5ed56c9d17abde9144a20f5b48ca85a169
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/studio-hash-epoch.test.mjs tests/unit/v31-studio-templates.test.mjs tests/unit/ui-flowbite-pro.test.mjs tests/unit/studio-clock.test.mjs; npm run build:check; npm test"
+    result: "On main 0e20f83c: 111/111 (studio-hash-epoch covers the Macro driving LFO depth through a CONTROL edge with per-edge depth and polarity; STUDIO_HASH_VERSION bumped once with HASH_EPOCH_PARAMS[2] exactly the listed parameters; a project, a patch and an experiment saved under v1 open migrated with the original hash kept; the defaults build what the node built before), npm test 5752 tests 5750 pass 0 fail, build:check up to date. ADR 0030's 2026-11-09 note names the 14 re-pinned templates, which are every template in the tree at cb414b85 (comm of src/js/studio/templates against 49589646's changed files leaves only data, demo-song-score and index); the train PR #509 body itself lists none, while 509.yaml's '15 templates' counts the test file too. PR #509: verdict 509.yaml merge (oscilla-c1, K022-1..5 closed), gate and fail-first success; tests/README.md row for studio-hash-epoch."
+    artifact: "0e20f83c2966ce55b25a88dc7eed71c7a4480d66"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T11:42:20Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 509 checks: gate, fail-first"
+    result: "landed in train T3 by #509 (main merge commit cb414b85, release v3.30.0); gate success and fail-first success on the PR head; review verdict .ai/repo/reviews/509.yaml (merge, oscilla-c1; K022-1..5 closed)"
+    artifact: ".ai/repo/reviews/509.yaml"
+    commit: 0e20f83c2966ce55b25a88dc7eed71c7a4480d66
+    recorded_at: 2026-11-11T11:44:11Z

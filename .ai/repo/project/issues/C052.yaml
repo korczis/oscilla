@@ -23,7 +23,7 @@ depends_on:
   - "C037"
 acceptance_criteria:
   - "Fail-first, a scan that needs no new module: tests/unit/master-level-writer.test.mjs scans src/js (excluding src/js/studio/offline.js, named with its reason) for calls of setMasterGain and holdMasterGain and fails on every caller outside the bus, naming main.js:718, instrument.js:410 and :483 and engine-hooks.js:82 and :95 on the merge base; a mutation that adds one call elsewhere fails it."
-  - "The level that sounds is the owner's: with the Studio owning the output its Output level is applied, and a status-bar level change while the Studio owns it changes nothing until the instrument claims again (C012's rule), asserted in the same file on a fake engine."
+  - "The level that sounds is the owner's: with the Studio owning the output its Output level is applied; a deliberate status-bar level change while the Studio owns the output is applied at once and drops the Studio's saved level (newest level wins: docs/v31/compiler.md 244-250, #119 D2; C012 tests dup-stale-4, F4); an incidental write (ensureAudio) never moves it (C012); asserted in the same file on a fake engine. Restated 2026-11-09 by the rev-seat oscilla-c1's ruling to the builder oscilla-d9 (mesh message): the earlier wording (a status-bar change while the Studio owns it changes nothing until the instrument claims again) attributed to C012 a rule nobody decided."
   - "No status-bar level is lost at a hand-over: instrument -> Studio -> instrument returns to the status-bar level, and the Studio's saved level is restored when it releases (runtime.js:384-386's behaviour kept), one case each."
   - "The V1 freeze golden vectors (tests/unit/freeze.test.mjs) are unchanged with the labs off (ADR 0014)."
   - "Guarded paths marked: src/js/audio/* and src/js/studio/* (v2): prismatic-majordomus-98 writes the verdict; the rest is judged by the screens seat once R031 lands. Lane: dev-53 with oscilla-26 for the Studio part."
@@ -34,4 +34,4 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: 2026-11-09

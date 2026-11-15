@@ -1,0 +1,29 @@
+id: K211
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#honest-instrument"
+title: "VCO and contour in the browser: Signal Path, compact Studio, pulse width in debugInfo, added by pointer, N and touch"
+slug: vco-and-contour-in-the-browser-signal-path-compact-studio-pu
+priority: p1
+profile: implementation
+objective: "Lands as test(studio). K059's criterion 4 names browser checks that tests/browser/synth.cjs does not run: a vco and a contour added in the Studio shown in the Signal Path and in the compact Studio of the Playground as the same nodes; a vco pulse width changed in the Inspector reaching the runtime's rebuilt pulse wave (read from debugInfo: the width shapes a PeriodicWave, it is not an AudioParam) and the Studio spectrum node's summary; each type added from the library by pointer, by the keyboard quick add (N) and by touch; ports with their accessible names ('Pitch control input'). Adds them once K207 lands the contour type. Rollback: revert; tests only."
+why: "Gap of K059 (criterion 4) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): K059's browser checks are not in tests/browser/synth.cjs. No owner direction re-scopes it, so it is its own issue and K059's criterion points here (chore/plan-m064-rescope). K059 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "tests/browser/synth.cjs"
+  - "src/js/studio/runtime.js"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K207"
+acceptance_criteria:
+  - "A browser check in tests/browser/synth.cjs (or a new suite added to the test:studio script of package.json), run by npm run test:studio so CI and the release gate run it. Linked: a vco and a contour added in the Studio show in the Signal Path and the compact Studio of the Playground as the same nodes. Real-time: a vco pulse width changed in the Inspector reaches the runtime's rebuilt pulse wave (the width read from the runtime's debugInfo) and the Studio spectrum node's summary, each within a named until() deadline. Interactive: each type is added from the library by pointer, by the keyboard quick add (N) and by touch, and its ports have their accessible names ('Pitch control input'). Browser checks run inside tests/browser/lib/suite.cjs, wait through tests/browser/lib/wait.cjs until() with a named deadline, assume no sample rate (44.1 kHz in CI, 48 kHz on the Mac), and tests/browser/timing-baseline.json does not grow (project.suite-harness, project.bounded-test-timing)."
+  - "Test-only unless debugInfo lacks the pulse width: exposing it is a feat(studio) change with a unit test that fails on the merge base and a reviewer's verdict (src/js/studio is guarded); otherwise the body says 'fail-first: n/a' with the reason."
+  - "tests/README.md names the new checks in the suite's row."
+validation:
+  - "node tests/browser/synth.cjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

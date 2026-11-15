@@ -9,17 +9,18 @@
 // falls back when route() gives no sink). midi/ui.js routes the Studio workspace to it.
 //
 //   createStudioSink({ get, setupAudio, ensureAudio, say, registry }) -> { noteOn, noteOff,
-//     allOff, leave(), active() -> this sink | null, heldNotes() -> [note] }   get() -> {
-//     handle, transport }, as the Synth's; heldNotes is a test and debug read of the held map
-//     (K175)
+//     allOff, leave(), active() -> this sink | null, heldNotes() -> [{ note, node }] }   get()
+//     -> { handle, transport }, as the Synth's; heldNotes is a test and debug read of the held
+//     map: each note still held, on the node it went to, in the order pressed (K175, S18)
 
+import { forcedOff } from '../audio/gate.js';
 import { routedNode } from './picker.js';
 import { NODE_REGISTRY, playsNotes } from '../studio/registry.js';
 
 export const STUDIO_SINK_TEXT = Object.freeze({
-  none: 'Nothing in this Studio plays notes: add a Keys node or an engine to play from the keys.',
-  refused: 'A measurement owns the output: the keys play after it.',
-  unarmed: 'The Studio could not start for the keys: press Play or try again.',
+  none: 'V tomto Studiu nic nehraje noty: přidejte uzel Keys nebo engine, ať klávesy mají co hrát.',
+  refused: 'Výstup teď patří měření: klávesy zahrají, až skončí.',
+  unarmed: 'Studio se pro klávesy nespustilo: stiskněte Play nebo to zkuste znovu.',
 });
 
 export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () => {},
@@ -58,14 +59,17 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     const was = held.get(note);
     if (was && was !== n.id) t.live(was, { kind: 'off', note });
     held.set(note, n.id);
-    return t.live(n.id, { kind: 'on', note, velocity });
+    const r = t.live(n.id, { kind: 'on', note, velocity });
+    if (r && r.ok === false && /range$/.test(r.code || '')) say(r.reason, true); // K060
+    if (r && r.owned) say(r.owned.reason); // K103: the timeline owns that gate while it plays
+    return r;
   }
 
-  function noteOff(note) {
+  function noteOff(note, info) {
     const { t, m } = parts();
     const id = held.has(note) ? held.get(note) : (t && m && (target(m) || {}).id);
     held.delete(note);
-    return t && id ? t.live(id, { kind: 'off', note }).ok : false;
+    return t && id ? t.live(id, { kind: 'off', note, forced: forcedOff(info) }).ok : false;
   }
 
   function allOff() {
@@ -91,7 +95,12 @@ export function createStudioSink({ get, setupAudio = () => {}, ensureAudio = () 
     return true;
   }
 
-  const sink = { noteOn, noteOff, allOff, leave, heldNotes: () => [...held.keys()] };
+  /** A test and debug read (synthDebug().sinkHeld, midi.cjs keyboard-studio-held; not a
+   *  contract): each note still held, on the node it went to, in the order pressed. Empty after
+   *  leaving the Studio (K175, S18). */
+  const heldNotes = () => [...held].map(([note, node]) => ({ note, node }));
+
+  const sink = { noteOn, noteOff, allOff, leave, heldNotes };
   sink.active = () => {
     const { handle } = get();
     return handle && target(handle.getModel()) ? sink : null;

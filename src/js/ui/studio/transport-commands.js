@@ -4,10 +4,12 @@
 // announced once through ctx.announce (§144).
 //
 //   createTransportCommands(ctx) -> { playStop, play, stop, returnToStart, locate, toggleLoop,
-//                                     setLoop, escape, position, playing }
+//                                     setLoop, escape, tap, tapCount, position, playing }
 //   ctx = { store, transport, announce? }
+// tap(now) is tap tempo (K068): the commands hold the tap series (transport-view.js tapTempo),
+// and the series' fourth tap sets the tempo with ONE TRANSPORT_SET and ends the series.
 
-import { transportAnnouncement } from './transport-view.js';
+import { TAP_COUNT, tapTempo, transportAnnouncement } from './transport-view.js';
 
 export function createTransportCommands(ctx) {
   const { store, transport } = ctx;
@@ -20,8 +22,11 @@ export function createTransportCommands(ctx) {
     return p && Number.isFinite(p.position) ? p.position : 0;
   };
 
+  /** The timeline plays (an armed run alone is stopped: its keys sound, K104). */
+  const timelinePlaying = () => !!transport.playing && !transport.armed;
+
   function play() {
-    if (transport.playing) return { ok: true, already: true };
+    if (timelinePlaying()) return { ok: true, already: true };
     const pos = position();
     const r = transport.start({ position: pos });
     if (r && r.ok) say(transportAnnouncement('play', { position: pos }, model()));
@@ -29,16 +34,19 @@ export function createTransportCommands(ctx) {
     return r;
   }
 
-  /** STOP (§184): releases everything; resolves with the transport's counts. */
+  /**
+   * STOP (§184): releases everything; resolves with the transport's counts. A run that began
+   * armed stays armed (K104, the owner's 'STOP keeps it armed'); Escape (fast) disarms.
+   */
   function stop({ fast = false, silent = false } = {}) {
-    const was = transport.playing;
-    const p = transport.stop({ fast });
+    const was = timelinePlaying();
+    const p = transport.stop({ fast, keepArmed: !fast });
     if (was && !silent) say(transportAnnouncement(fast ? 'escape' : 'stop', {}, model()));
     return p;
   }
 
   function playStop() {
-    return transport.playing ? stop() : play();
+    return timelinePlaying() ? stop() : play();
   }
 
   function locate(p) {
@@ -79,6 +87,31 @@ export function createTransportCommands(ctx) {
     return action;
   }
 
+  let taps = [];
+  /**
+   * One tap at `now` (ms): the series grows until its TAP_COUNT-th tap, which dispatches one
+   * TRANSPORT_SET with the series' tempo (clamped to the tempo range) and ends the series.
+   * -> { ok, taps, bpm, clamped?, changed? }
+   */
+  function tap(now) {
+    const t = tapTempo(taps, now);
+    if (t.bpm === null) {
+      taps = t.taps;
+      say(`Tap ${t.taps.length} of ${TAP_COUNT}`);
+      return { ok: true, taps: t.taps.length, bpm: null };
+    }
+    taps = [];
+    const r = store.dispatch({ type: 'TRANSPORT_SET', tempo: t.bpm });
+    if (!r.ok) {
+      say(`Not done: ${r.reason}`);
+      return { ...r, taps: TAP_COUNT, bpm: t.bpm, clamped: t.clamped };
+    }
+    if (r.changed && transport.playing) transport.sync();
+    say(`Tempo ${t.bpm} BPM z ${TAP_COUNT} ťuknutí${t.clamped ? ', drženo v rozsahu tempa' : ''}`);
+    return { ok: true, changed: !!r.changed, taps: TAP_COUNT, bpm: t.bpm, clamped: t.clamped };
+  }
+
   return Object.freeze({ play, stop, playStop, locate, returnToStart, setLoop, toggleLoop,
-    escape, position, get playing() { return transport.playing; } });
+    escape, tap, tapCount: () => taps.length, position,
+    get playing() { return transport.playing; } });
 }

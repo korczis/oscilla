@@ -448,6 +448,16 @@ test('#367: a train whose member\'s own verdict is changes is refused', (t) => {
   assert.match(env.stdout, /REFUSED: train member #303/);
 });
 
+test('252 R1: a member after a row without a leading pipe is still judged', (t) => {
+  const { repo, digest } = train(t, { 303: 'changes' });
+  repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest) });
+  const body = ['## Members', '', '| member | what |', '|---|---|',
+    '#304 | chore(x): member 304', '| #303 | chore(x): member 303 |', ''].join('\n');
+  const r = trainCheck(repo, prJson(t, { body }));
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /REFUSED: train member #303/);
+});
+
 test('#367: the same train passes when its own verdict names and judges that member', (t) => {
   const { repo, digest } = train(t, { 303: 'changes' });
   repo.commit('train verdict', { [VERDICT_FILE]: trainVerdict(digest,

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (judges a rendered WAV download, not the realtime output)
 // The demo song as a vertical slice (plan issue K144): one user journey through every part of
 // OSCILLA that exists, on the built dist/index.html from file:// in chromium, firefox and
 // webkit. The song is "Lantern in the Slag Yard", an original piece (src/js/studio/templates/
@@ -107,7 +108,6 @@ const EXPECTED = Object.freeze({
   'midi-records': 'V505: a MIDI performance records into an editable track; a MIDI note '
     + 'playing a Studio voice has no plan yet (K144 gap G2)',
   'drum-accents': 'K144 gap G4 (no plan yet): a Studio clip has no level, so velocity is lost',
-  'resonance-lane': 'K144 gap G10 (no plan yet): the Studio does not automate a filter Q',
   'node-views-draw': 'K016: the Scope, Spectrum, Spectrogram and Meter node cards paint live',
   'restore-last': 'V604: after the page is closed the Studio offers back the last working draft',
 });
@@ -609,15 +609,15 @@ async function journey(browser, leg) {
       'main-mix.level2', 'main-mix.level3'].every((l) => songLanes.includes(l))
       && shown.length === cutoff.points.length, `${songLanes.join(', ')}; ${shown.length} `
       + 'cutoff points selected');
-    await expected(leg, 'resonance-lane', 'the bass filter Q can be automated for the build',
-      async () => {
-        const r = await page.evaluate(() => ({
-          offered: !!document.querySelector('[data-osc="studio.inspector.automate"]'
-            + '[data-key="Q"]'),
-          note: [...document.querySelectorAll('[data-osc="studio.inspector.no-automate"]')]
-            .map((n) => n.textContent.trim()).find((t) => /Q/.test(t)) || '' }));
-        return { ok: r.offered, detail: r.note || 'no Automate control on Q' };
-      });
+    // K144 gap G10, filled by K232: a low-pass Q lane plays on the biquad's dB Q, so the bass
+    // filter (a low-pass) offers Automate on Q and gives no reason against it.
+    const qLane = await page.evaluate(() => ({
+      offered: !!document.querySelector('[data-osc="studio.inspector.automate"][data-key="Q"]'),
+      note: [...document.querySelectorAll('[data-osc="studio.inspector.no-automate"]')]
+        .map((n) => n.textContent.trim()).find((t) => /Q/.test(t)) || '' }));
+    check(leg, 'resonance-lane', 'the bass filter Q can be automated for the build',
+      qLane.offered && !qLane.note, qLane.note || (qLane.offered ? 'Automate offered on Q'
+        : 'no Automate control on Q'));
 
     // 8. PLAY. First the Analyzer as it is before anything plays: its empty spectrogram. What
     // an earlier step sounded (the MIDI riff, once V502 plays it) may still be in its history,

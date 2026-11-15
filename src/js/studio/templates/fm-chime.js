@@ -23,7 +23,7 @@ export default {
       'The index is fixed here; only the level decays, over the Envelope decay of 1.6 s.',
     ],
   },
-  studioHash: '769f2b8653d020e4ce0376848a097aa0216ea1c30ec18e856563b88e7aeae237',
+  studioHash: 'dc74b847f9f747a32a21e9b926ed83fb60cb530cfc103b9ce57289bdcd6859fa',
   model: studioDoc({
     title: 'FM Chime',
     nodes: [

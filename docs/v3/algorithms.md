@@ -24,7 +24,7 @@ listed under [Gaps](#gaps), not resolved here.
 | --- | --- | --- |
 | (none; recorded through the recipe) | `measurement/stimulus.js` | [Stimuli](#stimuli) |
 | `oscilla.window.hann.v1`, `oscilla.window.blackman-harris.v1` | `measurement/spectrum.js` | [Windows, spectra, Welch](#windows) |
-| `oscilla.clip.v2` (retained `oscilla.clip.v1`), `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
+| `oscilla.clip.v3` (retained `oscilla.clip.v1`, `.v2`), `oscilla.discontinuity.v1` | `measurement/capture-checks.js` | [Capture checks](#capture-checks) |
 | `oscilla.align.xcorr.v2` (retained `.v1`) | `measurement/align.js` | [Alignment](#alignment) |
 | `oscilla.transfer.v3` (retained `.v1`, `.v2`) | `measurement/transfer.js` | [Transfer function](#transfer) |
 | (none) | `measurement/analysis-task.js`, `analysis-runner.js`, `analysis-worker.js` | [Analysis execution and memory](#analysis-memory) |
@@ -307,7 +307,7 @@ sidelobes ≈ −72 dB there, Blackman-Harris −92 dB: < 1e-6 of the power), th
 non-bin-centred tone (< 1e-6) and float32 input rounding (≈ −150 dB).
 
 <a id="capture-checks"></a>
-## Capture checks — `oscilla.clip.v2`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
+## Capture checks — `oscilla.clip.v3`, `oscilla.discontinuity.v1` (`measurement/capture-checks.js`)
 
 `checkCapture(capture, opts) → { algorithms: { clip, discontinuity }, clipping: { ratio,
 regions }, dropouts, discontinuities, rms, peak, empty, invalid, reasons }`. Digital integrity
@@ -326,6 +326,23 @@ only; a capture that passes can still be acoustically wrong. Regions are half-op
   `checkCapture(c, { algorithm: 'oscilla.clip.v1' })`) required consecutive rail samples; it
   is the same rule with a window of `CLIP_MIN_RUN − 1` samples and reproduces v1 exactly
   (0 differences in 3000 fuzzed captures).
+  `oscilla.clip.v3` (T039, the current ID) is v2 on every input channel. The recorder takes
+  all channels of the input (the worklet node with channelCountMode 'max', the ScriptProcessor
+  fallback with two input channels, a mono input upmixed to L = R) and makes the analysed mono
+  downmix itself with `speakersMono` (`measurement/capture-channels.js`, the Web Audio speakers
+  rules: stereo `0.5·(L + R)`, quad, 5.1, else channel 0; the worklet embeds the same
+  function's source), so a clip on one channel is not halved under the rail. A multichannel
+  capture carries `channels` beside `samples`; v3 runs the v2 rule on each channel, the worst
+  channel (when worse than the downmix) gives `clipping.ratio` and `regions`,
+  `clipping.channel` names it ("kanál 1 (levý)" in its reason) and `clipping.channels` holds
+  every channel's result, and `peak` is over every channel (the quality bar's AT RAIL). A mono
+  capture gives the same numbers under v2 and v3 (the ID names the method, not the input); v2
+  and v1 judge the downmix only, so a stored v2 result stays reproducible (C1-T039-1).
+  Limit of the fallback (C1-T039-2): its two input channels are fixed ('explicit'), so the
+  browser first mixes an input of more than two channels to stereo; a quad input still comes
+  out exact, but a 5.1 input reaches `speakersMono` as L' = L + √½(C + SL), R' = R + √½(C + SR),
+  and its analysed mono is 0.5(L + R) + √½·C + (√½/2)(SL + SR), not the worklet's
+  √½(L + R) + C + 0.5(SL + SR). Only a browser without AudioWorklet analyses a 5.1 input so.
 - **Dropout**: a run of at least `max(2, ceil(DROPOUT_MIN_S·sr))` samples
   (`DROPOUT_MIN_S = 0.02` s) whose peak-to-peak spread stays within
   `CONSTANT_TOLERANCE = 2^−20` (≈ −120 dBFS), that touches neither the first nor the last
@@ -1593,15 +1610,23 @@ bits set); the module uses no randomness or clock of its own.
 
 A transfer magnitude is a ratio (capture / stimulus), never a level. `transferCsv` columns are
 frequency_hz, magnitude_db_relative ("dB re unity digital transfer (capture/stimulus ratio),
-uncorrected"), **magnitude_db_corrected** (option `correctedDb` =
-`applyFrequencyCorrection().correctedDb`, "…, frequency-profile corrected (microphone deviation
-removed)"; requires a frequency profile in the metadata), snr_db, reliable. A level
+uncorrected"), **magnitude_db_corrected** (options `correctedDb` and `covered` =
+`applyFrequencyCorrection()`'s two arrays, "…, korigováno frekvenčním profilem (odchylka
+mikrofonu odečtena) v N z M bodů, které profil pokrývá; jinde prázdné (bez extrapolace)", Czech
+since T038 (Q104);
+requires a frequency profile in the metadata; a cell is written only where
+`correctionInEffect` (calibration/interpolate.js), the response view's predicate, counts the
+point covered, and a profile covering no point leaves the column empty and says so, T038;
+`correctedDb` without `covered` is refused), snr_db, reliable. A level
 calibration never turns a transfer column into "dB SPL" (with the offset added |H| would be the
 SPL a full-scale digital stimulus would produce, which the file does not claim); the old
 `calibratedDb`/`calibratedUnit` options throw a TypeError naming the replacement. Absolute
-level belongs to level outputs: `rtaCsv` adds level_db_corrected (option `correctedDb`, needs a
-frequency profile) and, only under a VALID LevelCalibration, level_db_spl = (corrected or
-relative band level) + offset, its unit line naming the base column and the offset; zero power
+level belongs to level outputs: `rtaCsv` adds level_db_corrected (options `correctedDb` and
+`covered` = `applyFrequencyCorrectionToBands()`'s two arrays, needs a frequency profile; a band's
+cell is written only where `correctionInEffect` counts it covered, and a profile covering no band
+leaves the column empty and says so, T038) and, only under a VALID LevelCalibration,
+level_db_spl = (corrected or relative band level) + offset, its unit line naming the base column
+and the offset, empty for a band that was not corrected when it follows the corrected levels; zero power
 (−300 dB) has an empty SPL field. `aggregateCsv` is described under [Aggregation](#aggregate).
 The specification's column list (§164, "magnitude_db_calibrated") predates this split; it is not
 edited here.

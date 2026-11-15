@@ -19,10 +19,11 @@ acceptance_criteria:
   - "Under (a): a fixture with a 2:1 text contrast fails the axe pass in CI; the CI log of the qa-regressions job shows the axe pass ran (not skipped)."
   - "No declared check of qa-regressions.cjs is skipped in CI without a reason string in the suite; contrast runs in chromium, firefox and webkit or names the engine it skips and why."
   - "package.json is a build input of dist (plan-yaml-strict.test.mjs notes it): the devDependency changes no dist byte (npm run build:check passes). fail-first: n/a, a test(browser) change. Not guarded under v2; prismatic-majordomus-98 is asked for a critique (CI)."
+  - "Q097 as decided on 2026-11-09 (oscilla-43, oscilla-c1, oscilla-ce; the owner may override): axe-core is an exactly pinned devDependency with lockfile integrity (no range), loaded into the page from node_modules by the suite, never from a CDN; contrast and its axe pass run in chromium, firefox and webkit, an engine excluded only with a reason recorded in the suite; its measured seconds are added to tests/browser/shard-weights.json so the legs stay within LEG_BUDGET_S; the install stays inside the existing npm ci step (project.ci-bounded); a change that touches .github or the build scripts to add it carries its own reviewer verdict."
 validation:
   - "node tests/browser/qa-regressions.cjs"
   - "npm run build:check"
 evidence_required:
   - "verified"
 created_at: 2026-11-05
-updated_at: 2026-11-05
+updated_at: '2026-11-09'

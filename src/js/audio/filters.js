@@ -53,6 +53,13 @@ export function usesGain(type) {
 }
 
 /** Web Audio Q value for a linear Q: dB for lowpass/highpass, linear otherwise. */
+/**
+ * The dB a low- or high-pass biquad's Q moves per octave of the linear Q (K232): nodeQ is
+ * 20 * log10(Q), so Q * 2^c is nodeQ(Q) + c * DB_PER_OCTAVE_Q, and a log-mapped CV in octaves of
+ * Q is exactly linear in the biquad's dB.
+ */
+export const DB_PER_OCTAVE_Q = 20 * Math.log10(2);
+
 export function nodeQ(type, qLinear) {
   const q = Math.max(1e-4, Number(qLinear) || DEFAULT_FILTER.Q);
   return type === 'lowpass' || type === 'highpass' ? 20 * Math.log10(q) : q;

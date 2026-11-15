@@ -159,6 +159,26 @@ export function applyFrequencyCorrection(magnitudeDb, frequencies, profile, opts
 }
 
 /**
+ * correctionInEffect(correction, n) → { correctedDb, covered, count } | null
+ * The frequency correction as it counts for a grid of n points: a point is corrected only where
+ * the profile covers it (covered = 1, no extrapolation, ADR 0020), and a correction covering no
+ * point is no correction (null; T017). `correction` is applyFrequencyCorrection's result or any
+ * { correctedDb, covered } of the grid; a missing or misfitting mask is no correction. The one
+ * predicate of the response view and the experiment CSV (T038), so they never disagree.
+ */
+export function correctionInEffect(correction, n) {
+  const c = correction;
+  if (!c || !c.correctedDb || !c.covered || c.covered.length !== n) return null;
+  const covered = new Uint8Array(n);
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    covered[i] = c.covered[i] ? 1 : 0;
+    count += covered[i];
+  }
+  return count > 0 ? { correctedDb: c.correctedDb, covered, count } : null;
+}
+
+/**
  * previewConvention(profile, { hz, observedDb = 0 }) → { hz, statedDb, addedDb, observedDb,
  *   correctedDb, convention, text } | null
  * The one-point preview shown at import (M4): what the profile does to a reading at hz under

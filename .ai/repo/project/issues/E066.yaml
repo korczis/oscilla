@@ -1,0 +1,24 @@
+id: E066
+milestone: M046
+serves:
+  - "engineering-integrity#copied-facts-held"
+title: "The rules index, CLAUDE.md and the reviews README say what the gate programs actually do"
+slug: rule-docs-say-what-the-gate-programs-do
+priority: p3
+profile: implementation
+objective: "Three documents misstate the gate programs on main: .ai/repo/rules/project/README.md:66 says a branch that has not merged main is not judged, while every pull_request run checks out the merge with main (164 R3-P2-8); CLAUDE.md:54 says the base branch's copy of each program judges, which holds for fail-first and review-verdict but not ci-bounded (base-rule.sh accepts only those two; 164 R3-P2-9); .ai/repo/reviews/README.md does not say that a local `review-verdict.mjs --content --list` uses the checkout's GUARDED list, which differs from CI's base copy for a pull request that edits it (164 R3-P2-12). Correct the three texts (CLAUDE.md outside its majordomus region)."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 164.yaml#R3-P2-8, #R3-P2-9 and #R3-P2-12 (P2) still open on main b8bfd3b6."
+scope:
+  - ".ai/repo/rules/project/README.md"
+  - "CLAUDE.md"
+  - ".ai/repo/reviews/README.md"
+  - ".ai/repo/project/issues/E066.yaml"
+depends_on: []
+acceptance_criteria:
+  - "The three sentences state what the programs do on main; knowledge-integrity stays green."
+validation:
+  - "node --test tests/unit/knowledge-integrity.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

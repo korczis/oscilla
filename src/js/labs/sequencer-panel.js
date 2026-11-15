@@ -37,8 +37,11 @@ import {
   insertionMarkerX,
 } from '../sequencer/timeline.js';
 import { onFrame } from '../charts/frame-loop.js';
+import { parseFrequencyEntry } from '../sequencer/entry.js';
+import { syncTempoSelect } from '../sequencer/tempo-select.js';
 import { observeSize } from '../charts/chart-theme.js';
 import { on, setText, setAttr } from './dom.js';
+import { transportClockOf } from '../audio/clock.js';
 
 export const TIMELINE_OPTIONS = Object.freeze({ minSpanS: 3.75, headroomRatio: 0.1, blockY: 5,
   blockH: 40, gapPx: 4, minPxPerS: 66, phoneBlockPx: 72, phoneMaxPxPerS: 480 });
@@ -151,7 +154,8 @@ function buildField(d, value, safeMax) {
   if (d.unit) box.dataset.unit = d.unit;
   const input = document.createElement('input');
   input.className = 'osc-number';
-  input.type = 'number';
+  // K017: a frequency field is text, so a note name (A4, C#3) or a MIDI number (m69) parses too.
+  input.type = d.kind === 'freq' ? 'text' : 'number';
   input.id = fieldId(d.key);
   input.dataset.osc = 'seq.field';
   input.dataset.field = d.key;
@@ -178,6 +182,8 @@ function buildField(d, value, safeMax) {
 export function sequencerEngine(adapter) {
   const getCtx = () => (adapter.getContext ? adapter.getContext() : null);
   return {
+    // The engine's one transport clock (C055): the loop wakes from the Studio transport's timer.
+    clock: adapter.audioEngine ? transportClockOf(adapter.audioEngine) : null,
     getContext: getCtx,
     getDestination: () => {
       const d = adapter.getDestination ? adapter.getDestination() : null;
@@ -195,12 +201,18 @@ export function sequencerEngine(adapter) {
     accounting: adapter.sequencerAccounting || null,
     // One output owner at a time (C002): the app decides before anything is scheduled.
     claimOutput: () => (adapter.claimSequencerOutput ? adapter.claimSequencerOutput() : true),
+    // Each loop pass asks only whether the sequence still holds it (C037: one claim per start).
+    holdOutput: () => (adapter.holdSequencerOutput ? adapter.holdSequencerOutput()
+      : adapter.claimSequencerOutput ? adapter.claimSequencerOutput() : true),
     // C011: read-only; without it the loop keeps to the cap (LOOP_CAP_S).
     continuousAllowed: () => !!(adapter.continuousAllowed && adapter.continuousAllowed()),
     // A started sequence takes the output at the Playground gain, also over a playing Studio
     // (C012 F1); the editor calls it only once a pass is scheduled, so a refused PLAY claims
     // nothing.
     onStart: () => { if (adapter.claimOutput) adapter.claimOutput(); },
+    // The playback bus learns at once that the sequence stopped or ended (C051: no poll).
+    onStopped: () => { if (adapter.releaseSequencerOutput) adapter.releaseSequencerOutput(); },
+    onEnded: () => { if (adapter.releaseSequencerOutput) adapter.releaseSequencerOutput(); },
   };
 }
 
@@ -509,12 +521,10 @@ export function mount(rootEl, adapter) {
    * no option names selects none, so choosing any option is a change again.
    */
   function syncTempo() {
-    if (!tempoSel) return;
-    const v = String(editor.model.tempoBpm);
-    if (tempoSel.value === v) return;
-    const i = Array.from(tempoSel.options).findIndex((o) => o.value === v);
-    tempoSel.selectedIndex = i;
+    // K017: the control shows model.tempoBpm, an off-step tempo included (sequencer/tempo-select.js).
+    syncTempoSelect(tempoSel, editor.model.tempoBpm, document);
   }
+
 
   function renderScrollbar() {
     if (!scrollEl || !thumbEl) return;
@@ -608,8 +618,26 @@ export function mount(rootEl, adapter) {
     const t = e.target;
     if (!t.matches || !t.matches('[data-osc="seq.field"]')) return;
     const key = t.dataset.field;
-    const v = t.tagName === 'SELECT' ? t.value : Number(t.value);
-    if (t.tagName !== 'SELECT' && !Number.isFinite(v)) {
+    if (t.tagName === 'SELECT') {
+      editor.updateParam(key, t.value);
+      render();
+      return;
+    }
+    if (t.closest('[data-unit="Hz"]')) {
+      // K017: note names, MIDI numbers and every frequency form; a refusal is said, not swallowed.
+      const r = parseFrequencyEntry(t.value);
+      if (!r.ok) {
+        editor.error = r.error;
+        render();
+        return;
+      }
+      editor.error = '';
+      editor.updateParam(key, r.hz);
+      render();
+      return;
+    }
+    const v = Number(t.value);
+    if (!Number.isFinite(v)) {
       render();
       return;
     }

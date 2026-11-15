@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (tone and release checks on the realtime engine, read on its analyser)
 // OSCILLA dist release gate: the built dist/index.html in chromium, firefox and webkit, each
 // from file:// AND from a GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/ served by
 // python3 -m http.server).
@@ -16,7 +17,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const shell = require('./lib/shell.cjs');
-const { until } = require('./lib/wait.cjs');
+const { until, WaitTimeout } = require('./lib/wait.cjs');
 const seam = require('./lib/measure-seam.cjs');
 
 const argv = process.argv.slice(2);
@@ -554,7 +555,7 @@ function defineChecks() {
   // `studioTimeline` left the list with ledger W7a: it built a second Studio store and
   // transport, and the timeline suite now drives the canonical ones.
   def('seam-surface-pinned', async ({ page }) => {
-    const OSCILLA_KEYS = ['engine', 'viz', 'adapter', 'labs', 'labErrors', 'app', 'host',
+    const OSCILLA_KEYS = ['engine', 'viz', 'adapter', 'labs', 'labErrors', 'app', 'host', 'bus',
       'measure', 'experiments', 'studio', 'navigation', 'unsaved', 'buildPlan', 'planFreqAt',
       'parseFrequency', 'parseFrequencyList', 'formatFrequency', 'formatPeriod',
       'formatWavelength', 'frequencyToNormalized', 'normalizedToFrequency', 'nearestNote',
@@ -572,7 +573,7 @@ function defineChecks() {
       'projectId', 'templateId', 'measurementRun', 'rendering', 'trace', 'library', 'counts'];
     const TRANSPORT_KEYS = ['start', 'stop', 'arm', 'disarm', 'live', 'armed', 'liveVoices',
       'heldNotes', 'locate', 'returnToStart', 'setLoop', 'sync', 'admit', 'escape', 'playhead',
-      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing'];
+      'debugInfo', 'debugRefuseNextPlay', 'dispose', 'on', 'playing', 'step'];
     const got = await page.evaluate(() => {
       const O = window.OSCILLA;
       const m = O.measure;
@@ -697,7 +698,7 @@ function defineChecks() {
         && before.options.at(-1) === TC_LABEL && before.banner === null
         && before.chip === 'Microphone',
       entered: entered.loopback && entered.selected === TC_LABEL && !entered.disabled
-        && /^TEST CONTEXT\./.test(entered.banner || '')
+        && /^TESTOVACÍ KONTEXT\./.test(entered.banner || '')
         && entered.chip === 'TEST CONTEXT loopback'
         && /no input device is used\. Choose an input to leave TEST CONTEXT/
           .test(entered.status)
@@ -1019,7 +1020,12 @@ function defineChecks() {
       await page.keyboard.press('Escape');
     }
     await page.evaluate(() => { window.OSCILLA.app.explore = true; });
-    await sleep(80);
+    // The strip renders on Alpine's next tick; a fixed 80 ms sleep was too short for WebKit on a
+    // loaded linux runner (hints.close read never visible), so wait for the strip itself.
+    await until(() => page.evaluate(() => {
+      const b = document.querySelector('[data-osc="hints.close"]');
+      return !!b && b.getClientRects().length > 0 && b.getBoundingClientRect().width > 0;
+    }), { ms: 5000, what: 'the explore hints strip shows its close button' });
     await collect();
     await page.evaluate(() => { window.OSCILLA.app.explore = false; });
     // From 1280 px the Playground leaves Phase & Stereo and Filter Lab to their workspaces
@@ -1064,6 +1070,8 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.customPresets = []; window.OSCILLA.app.presetTab = 'reference'; });
     // The cross-links shown in one workspace only (U010): the Sequencer's and Filter Lab's
     // Studio links, and Experiments before anything is saved (its empty list leads to Measure).
+    // The labs' onward links are items of their "Otevřít v…" menu (G013): opened, collected.
+    const labMenu = { sequencer: '#osc-seq-open', filter: '#osc-filter-open' };
     for (const ws of ['sequencer', 'filter', 'experiments']) {
       await H.workspace(page, ws);
       if (ws === 'experiments') {
@@ -1071,6 +1079,11 @@ function defineChecks() {
           { timeout: 10000 }).catch(() => {});
       }
       await collect();
+      if (labMenu[ws]) {
+        await page.click(labMenu[ws]);
+        await collect();
+        await page.keyboard.press('Escape');
+      }
     }
     // The Synth workspace (#329): its header controls (preset, Arm keys, Studio, copy link).
     await H.workspace(page, 'synth');
@@ -1287,6 +1300,14 @@ function defineChecks() {
       timeout: 5000 }).catch(() => {});
     await collect();
     await page.click('[data-osc="presets.tab"][data-value="reference"]');
+    // K171: on the Synth's XY tab the pad owns the notes and the docked keyboard folds to its
+    // handle, the one state that shows keyboard.handle.
+    await H.workspace(page, 'synth');
+    await page.click('#osc-synth-tab-xy');
+    await page.waitForSelector('[data-osc="keyboard.handle"]', { state: 'visible', timeout: 5000 })
+      .catch(() => {});
+    await collect();
+    await page.click('#osc-synth-tab-panel');
     await H.workspace(page, 'playground');
     await page.setViewportSize({ width: 375, height: 800 });
     await H.workspace(page, 'measure');
@@ -1297,7 +1318,7 @@ function defineChecks() {
       .catch(() => {});
     await collect();
     await page.keyboard.press('Escape');
-    // V635: on a phone the Synth folds its instrument row behind the keyboard's More button.
+    // V635: on a phone the Synth folds its instrument row behind the keyboard's Vše toggle.
     await H.workspace(page, 'synth');
     await collect();
     await H.workspace(page, 'playground');
@@ -1319,7 +1340,12 @@ function defineChecks() {
     // where the page does not offer it (WebKit, Firefox on file://) its hidden row is correct.
     const midiOffered = await page.evaluate(() => !!(window.OSCILLA.app
       && window.OSCILLA.app.midiCanConnect));
-    const notOffered = midiOffered ? [] : ['midi.connect'];
+    // V507: the MIDI monitor and its Vymazat exist only while MIDI is connected, a state this
+    // audit never sets up (no device); tests/browser/midi.cjs midi-seam-monitor shows and clicks it.
+    const midiConnected = await page.evaluate(() => !!(window.OSCILLA.app
+      && window.OSCILLA.app.midiState === 'connected'));
+    const notOffered = [...(midiOffered ? [] : ['midi.connect']),
+      ...(midiConnected ? [] : ['midi.monitor-clear'])];
     const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
       .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).
@@ -1337,15 +1363,19 @@ function defineChecks() {
     // the attack is a few ms; allow the analyser a generous 2 s to show the full level
     const peak = await H.until(() => H.peak(page), (p) => Math.abs(p - gain) < 0.01);
     const nodes = await H.nodes(page);
+    // The status bar by state (the instrument plays, not releasing; the dot is-playing) and its
+    // label the one statusLabel builds for that state, whatever its wording.
+    const playingShown = (st) => st.playing && !st.releasing && st.green && st.label === st.want;
     const status = await H.until(() => page.evaluate(() => ({
       label: document.querySelector('[data-osc="status.label"]').textContent,
+      want: window.OSCILLA.app.statusLabel, playing: !!window.OSCILLA.app.playing,
+      releasing: !!window.OSCILLA.app.releasing,
       green: document.querySelector('#osc-status').classList.contains('is-playing'),
       dot: getComputedStyle(document.querySelector('.osc-status-dot')).backgroundColor,
-    })), (st) => st.label === 'PLAYING' && st.green, 1000);
+    })), playingShown, 1000);
     await page.mouse.up();
     const zero = await H.waitNodes0(page);
-    const ok = Math.abs(peak - gain) < 0.01 && nodes > 0 && zero && status.label === 'PLAYING'
-      && status.green;
+    const ok = Math.abs(peak - gain) < 0.01 && nodes > 0 && zero && playingShown(status);
     return { ok, gain, peak: +peak.toFixed(4), nodesWhilePlaying: nodes, zeroAfter: zero, status };
   });
 
@@ -1404,11 +1434,17 @@ function defineChecks() {
       v.state.reducedMotion = true; // prefers-reduced-motion as the bridge reads it at start
       v.updateLoop();
     });
+    // The idle caption's state word ("not playing" in the scope's language) is read from the
+    // scope view's own caption (ui/p5-views.js; any idle frame drawn rewrites it), not copied.
     const read = () => page.evaluate(() => {
       const drawn = window.__c013Drawn.splice(0);
+      const O = window.OSCILLA;
+      const scope = O.host && O.host.views ? O.host.views.scope : null;
+      const word = scope && scope.caption ? scope.caption.split(' · ')[0] : null;
       return {
-        live: drawn.filter((t) => t.startsWith('output analyser')),
-        idle: drawn.filter((t) => /not playing/.test(t)).length,
+        live: drawn.filter((t) => t.startsWith('analyzátor výstupu')),
+        idle: word ? drawn.filter((t) => t === word || t.startsWith(`${word} · `)).length : 0,
+        word,
         aria: document.getElementById('osc-chart-waveform').getAttribute('aria-label'),
         looping: window.OSCILLA.viz.looping,
       };
@@ -1432,6 +1468,11 @@ function defineChecks() {
     const out = {};
     try {
       out.reducedLoopIdle = (await read()).looping;
+      // the idle scope has drawn its caption, so an idle frame during a leg is counted
+      out.idleWord = (await until(async () => {
+        const r = await read();
+        return r.word ? r : null;
+      }, { ms: 6000, what: 'scope-follows-owner: the idle scope drew its caption' })).word;
       out.loopWas = await page.evaluate(() => {
         const ed = window.OSCILLA.labs.sequencer.editor;
         const was = !!ed.model.loop;
@@ -1439,8 +1480,8 @@ function defineChecks() {
         return was;
       });
       await page.click('#osc-seq-play');
-      out.seq = await leg('sequencer', /^output analyser · sequencer/,
-        /^Live output analyser waveform \(sequencer\)/);
+      out.seq = await leg('sequencer', /^analyzátor výstupu · sequencer/,
+        /^Živý průběh analyzátoru výstupu \(sequencer\)/);
       out.seqOwner = await owner();
       await page.evaluate((was) => {
         const ed = window.OSCILLA.labs.sequencer.editor;
@@ -1453,8 +1494,8 @@ function defineChecks() {
           && window.OSCILLA.viz.state.outputOwner === null;
       }), { ms: 4000, what: 'scope-follows-owner: the sequencer stops and frees its nodes' });
       await page.click('[data-osc="studio.compact.play"]');
-      out.studio = await leg('Studio', /^output analyser · Studio/,
-        /^Live output analyser waveform \(Studio\)/);
+      out.studio = await leg('Studio', /^analyzátor výstupu · Studio/,
+        /^Živý průběh analyzátoru výstupu \(Studio\)/);
       out.studioOwner = await owner();
     } finally {
       await page.evaluate((was) => {
@@ -1478,10 +1519,10 @@ function defineChecks() {
       });
     }
     out.zeroAfter = await H.waitNodes0(page, 3000);
-    const ok = out.reducedLoopIdle === false
+    const ok = out.reducedLoopIdle === false && !!out.idleWord
       && out.seq.looping && out.seq.idle === 0 && out.seqOwner === 'sequencer' && out.seqStopped
       && out.studio.looping && out.studio.idle === 0 && out.studioOwner === 'studio'
-      && out.studioStopped && /^Waveform, not playing/.test(out.idleAria) && out.zeroAfter;
+      && out.studioStopped && /^Průběh, nehraje/.test(out.idleAria) && out.zeroAfter;
     return { ok, ...out };
   });
 
@@ -1769,11 +1810,13 @@ function defineChecks() {
     await sleep(700);
     const b = await page.evaluate(() => window.OSCILLA.engine.instantaneousFrequency());
     const fb = await H.peakHz(page);
-    const status = await page.evaluate(() => window.OSCILLA.app.statusPatternText);
+    // The status bar names the pattern by its display name (PATTERN_NAMES, Q104), read here.
+    const [status, sweepUpName] = await page.evaluate(() => [window.OSCILLA.app.statusPatternText,
+      window.OSCILLA.app.PATTERN_NAMES.sweepUp]);
     await page.keyboard.press('Escape');
     const zero = await H.waitNodes0(page);
     const ok = fields.includes('start') && a > 200 && b > a * 1.3 && fb.hz > fa.hz && zero
-      && /Sweep up/.test(status);
+      && !!sweepUpName && status.startsWith(sweepUpName);
     await page.selectOption('#osc-pattern-select', 'tone');
     await page.click('#osc-source-osc');
     return { ok, fields, instA: a && +a.toFixed(1), instB: b && +b.toFixed(1), fftA: fa.hz,
@@ -2020,6 +2063,22 @@ function defineChecks() {
     const DROP = 'Continuous repeat not restored';
     const inPage = (fn, arg) => page.evaluate(fn, arg);
     /** The notices the page shows, as "title: message", read from the DOM. */
+    // The restored-link notice's title by the link's workspace, read from the source that sets
+    // it (core/play-hints.js), so the check follows the list instead of copying it (R2-C030-5).
+    const hints = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'js', 'core',
+      'play-hints.js'), 'utf8');
+    // A source whose shape changed fails by name, not as an undefined further on (R2-C030-6).
+    const fromHints = (re, what) => {
+      const m = re.exec(hints);
+      if (!m) throw new Error(`${what} not found in src/js/core/play-hints.js (its shape changed)`);
+      return m[1];
+    };
+    const playWs = JSON.parse(fromHints(/STATUS_PLAY_WORKSPACES = Object\.freeze\((\[[^\]]*\])\)/,
+      'STATUS_PLAY_WORKSPACES').replace(/'/g, '"'));
+    const czechTitle = fromHints(/STATUS_PLAY_TITLES = Object\.freeze\(\{[^}]*?restored: '([^']+)'/,
+      'STATUS_PLAY_TITLES.restored');
+    const restoredTitle = (m) => (playWs.includes(m) ? czechTitle
+      : 'Configuration restored from link');
     const shown = (p) => p.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
       .filter((el) => el.getClientRects().length > 0)
       .map((el) => `${el.querySelector('strong').textContent}: `
@@ -2105,7 +2164,12 @@ function defineChecks() {
           await p2.goto(url);
           await H.ready(p2);
           leg.link = await told(p2, `link restore names the drop at ${w}px`);
-          leg.link.summary = leg.link.notices.find((t) => t.startsWith('Configuration restored'));
+          // The link's workspace (its m key) picks the notice's title: Czech where the status
+          // bar's Play is the only one (C030, core/play-hints.js), V1's elsewhere.
+          const m = (/(?:^|&)m=([^&]+)/.exec(hash) || [])[1] || null;
+          leg.link.m = m;
+          leg.link.title = restoredTitle(m);
+          leg.link.summary = leg.link.notices.find((t) => t.startsWith(`${leg.link.title}: `));
         } finally {
           await p2.close();
         }
@@ -2132,7 +2196,9 @@ function defineChecks() {
         && l[k].allowed === false)
       && !/All settings were restored/.test(l.import.summary)
       && /Not restored: continuous repeat/.test(l.import.summary)
-      && /Not restored: continuous repeat/.test(l.link.summary || '');
+      && /Not restored: continuous repeat/.test(l.link.summary || '')
+      && typeof czechTitle === 'string'
+      && (!playWs.includes(l.link.m) || l.link.summary.startsWith(`${czechTitle}: `));
     const ok = Object.keys(legs).length === 2 && Object.values(legs).every(legOk);
     return { ok, legs };
   });
@@ -2219,7 +2285,8 @@ function defineChecks() {
         const realtime = window.__c004.types.filter((t) => !t.offline).map((t) => t.v);
         if (!O.app.seqPlaying || !realtime.length) return null;
         return { realtime, status: document.querySelector('[data-osc="status.waveform"]')
-          .textContent.trim(), model: O.labs.sequencer.editor.model.waveform,
+          .textContent.trim(), sineName: O.app.WAVEFORM_NAMES.sine,
+        model: O.labs.sequencer.editor.model.waveform,
         written: O.labs.sequencer.editor.serialize().waveform };
       }), { ms: 8000, what: what('the sequence plays') });
       await page.click('#osc-seq-stop');
@@ -2236,7 +2303,8 @@ function defineChecks() {
         .map((t) => t.v));
       const wav = parseWavHeader(buf);
       const harm = wav.ok ? toneHarmonicsDb(buf, 440) : null;
-      const ok = live.realtime.every((v) => v === 'sine') && live.status === 'Sine'
+      const ok = live.realtime.every((v) => v === 'sine') && !!live.sineName
+        && live.status === live.sineName
         && live.model === 'sine' && live.written === 'sine'
         && offline.length > 0 && offline.every((v) => v === 'sine')
         && !!harm && harm.h2 < -60 && harm.h3 < -60
@@ -2631,8 +2699,11 @@ function defineChecks() {
     await H.workspace(page, 'sequencer');
     await page.click('#osc-seq-play');
     out.seqPlaying = await U.poll(() => page.evaluate(() => ({ app: window.OSCILLA.app.seqPlaying,
-      label: document.querySelector('[data-osc="status.label"]').textContent })),
-    (s) => s.app && s.label === 'PLAYING', 'labs-basic: the sequence plays and the status says so');
+      label: document.querySelector('[data-osc="status.label"]').textContent,
+      want: window.OSCILLA.app.statusLabel,
+      green: document.querySelector('#osc-status').classList.contains('is-playing') })),
+    (s) => s.app && s.green && s.label === s.want,
+    'labs-basic: the sequence plays and the status says so');
     out.seqPeak = await U.poll(async () => +(await H.peak(page)).toFixed(4), (p) => p > 0.005,
       'labs-basic: the sequence sounds');
     await page.click('#osc-seq-stop');
@@ -3076,8 +3147,11 @@ function defineChecks() {
     await page.evaluate(() => window.OSCILLA.app.setFrequency(440));
     await U.latch(page);
     await step('a latched 440 Hz tone', (s) => s.voice && near(s.voice.f, 440, 0.5));
+    // The status bar's names (WAVEFORM_NAMES, PATTERN_NAMES of the source, Q104), read from it.
+    const names = await page.evaluate(() => ({ wave: window.OSCILLA.app.WAVEFORM_NAMES,
+      pattern: window.OSCILLA.app.PATTERN_NAMES }));
     const wave = (w) => step(`waveform ${w}`, (s) => s.waveform === w && s.voice
-      && s.voice.wave === w && new RegExp(w.slice(0, 3), 'i').test(s.sbWave || ''));
+      && s.voice.wave === w && !!names.wave[w] && (s.sbWave || '').includes(names.wave[w]));
     await page.click('#osc-wave-sawtooth');
     out.sawtooth = await wave('sawtooth');
     await page.click('#osc-wave-square');
@@ -3114,7 +3188,8 @@ function defineChecks() {
     await page.click('#osc-source-pattern');
     await page.selectOption('#osc-pattern-select', 'pulse');
     out.pattern = await step('pattern Pulse', (s) => s.sourceKind === 'pattern'
-      && s.pattern === 'pulse' && /pulse/i.test(s.sbPattern || ''));
+      && s.pattern === 'pulse' && !!names.pattern.pulse
+      && (s.sbPattern || '').includes(names.pattern.pulse));
     const param = page.locator('[data-osc="pattern.param"]').first();
     const key = await param.getAttribute('data-key');
     await param.fill('330');
@@ -3383,10 +3458,12 @@ function defineChecks() {
     return { ok, ...res };
   });
 
-  // The status-bar transport key (shown below 768 px) reads "Stop playback" while the sequence
+  // The status-bar transport key (shown below 768 px) reads STOP_NAME while the sequence
   // plays: one press (click or Enter) stops it and starts no instrument voice. Pressed inside
   // the poll window it still stops the sequence (the live state); its label returns to Play.
   def('status-key-stops-only', async ({ page }) => {
+    // the status Play's name while something sounds (ui/workbench.js statusPlayName, C030)
+    const STOP_NAME = 'Zastavit přehrávání';
     const res = {};
     const st = () => page.evaluate(() => {
       const a = window.OSCILLA.app;
@@ -3398,7 +3475,7 @@ function defineChecks() {
     const quiet = (what) => until(async () => {
       const s = await st();
       return !s.editor && !s.mirror && !s.instrument && !s.voice && s.nodes === 0
-        && s.label !== 'Stop playback' ? s : null;
+        && s.label !== STOP_NAME ? s : null;
     }, { ms: 6000, what });
     await page.setViewportSize({ width: 390, height: 844 });
     try {
@@ -3408,8 +3485,8 @@ function defineChecks() {
         await page.click('#osc-seq-play');
         const before = await until(async () => {
           const s = await st();
-          return s.label === 'Stop playback' && s.editor ? s : null;
-        }, { ms: 6000, what: `status key (${how}) reads Stop playback while the sequence plays` });
+          return s.label === STOP_NAME && s.editor ? s : null;
+        }, { ms: 6000, what: `status key (${how}) reads ${STOP_NAME} while the sequence plays` });
         res[how] = { before };
         if (how === 'click') {
           await page.click('#osc-sb-play');
@@ -3418,7 +3495,7 @@ function defineChecks() {
           await page.keyboard.press('Enter');
         }
         res[how].after = await st();
-        res[how].quiet = await quiet(`status key (${how}): nothing sounds after Stop playback`);
+        res[how].quiet = await quiet(`status key (${how}): nothing sounds after the Stop`);
       }
       res.pollWindow = await seqPollWindow(page, 'status-key');
       res.pollWindow.quiet = await quiet('status key in the poll window: nothing sounds');
@@ -3426,7 +3503,7 @@ function defineChecks() {
       await page.setViewportSize({ width: 1536, height: 1024 });
       await seqDone(page);
     }
-    const pressed = (r) => r.before.label === 'Stop playback' && !r.after.editor
+    const pressed = (r) => r.before.label === STOP_NAME && !r.after.editor
       && !r.after.instrument && !r.after.voice && !!r.quiet;
     const pw = res.pollWindow;
     // pw.at.mirror may already be true: C002's claim sets the mirror in the play (see above).
@@ -3991,14 +4068,14 @@ function defineChecks() {
         return v.acting && v.source.shown && v.status.shown && v.fraction > 0.5 ? v : null;
       }, { ms: 5000, what: `the ceiling indicator shows under a +24 dB boost at ${w}x${h}` });
       r.on = { status: on.status, source: on.source, labelHidden: !on.label.shown,
-        fraction: +on.fraction.toFixed(3), setpointTitle: /setpoint/.test(on.title)
-          && /OUTPUT AT CEILING \(clipped\)/.test(on.title), scroll: on.scroll <= on.width };
+        fraction: +on.fraction.toFixed(3), setpointTitle: /Nastavené zesílení/.test(on.title)
+          && /VÝSTUP NA STROPU \(oříznuto\)/.test(on.title), scroll: on.scroll <= on.width };
       await page.evaluate(() => window.OSCILLA.labs.filter.update({ enabled: false }));
       const off = await until(async () => {
         const v = await view();
         return none(v) && v.label.shown ? v : null;
       }, { ms: 2000, what: `the ceiling indicator clears within 2 s of the boost removed (${w})` });
-      r.cleared = off.playing && !/clipped/.test(off.title);
+      r.cleared = off.playing && !/oříznuto/.test(off.title);
       r.unboosted = await holdQuiet(`the unboosted 1 kHz sine sounds 0.6 s at ${w}`);
       await page.evaluate(() => window.OSCILLA.app.stopNow());
       await until(async () => {
@@ -4008,7 +4085,7 @@ function defineChecks() {
       r.idleAfter = true;
       r.ok = r.idle && r.idleAfter && r.cleared && r.on.status.inBar && r.on.status.inView
         && r.on.source.inView && r.on.labelHidden && r.on.setpointTitle && r.on.scroll
-        && r.on.status.text === '\u26A0\uFE0E OUTPUT AT CEILING (clipped)'
+        && r.on.status.text === '\u26A0\uFE0E VÝSTUP NA STROPU (oříznuto)'
         && r.on.source.text === r.on.status.text && r.on.fraction > 0.5
         && r.unboosted.flagged === 0 && r.unboosted.polls > 1;
       res.sizes[`${w}x${h}`] = r;
@@ -4801,8 +4878,8 @@ function defineChecks() {
       engineDetached: !c.engineCtx && c.engineMicNodes === 0 && !c.engineAttachment,
       tracksEnded: out.closedTracks.length > 0 && out.closedTracks.every((t) => t === 'ended'),
       labOffAfterClose: c.active === false && c.hasAnalyser === false,
-      buttonOffAfterClose: c.pressed === 'false' && c.label === 'Use microphone',
-      reasonStated: /audio context was closed/.test(c.error) && c.detected === c.error,
+      buttonOffAfterClose: c.pressed === 'false' && c.label === 'Zapnout mikrofon',
+      reasonStated: /kontext byl uzavřen/.test(c.error) && c.detected === c.error,
       restartOnNewContext: r.active === true && r.newCtx && r.analyserOnEngineCtx
         && r.pressed === 'true' && r.error === '',
       // The user's own Stop states no engine loss (review F1 of #289): the engine emits its
@@ -4810,7 +4887,7 @@ function defineChecks() {
       // call would read "The audio engine disconnected the microphone" here.
       stopAfterRestart: st.active === false && st.pressed === 'false'
         && st.engineMicNodes === 0 && st.error === ''
-        && st.detected === 'UNAVAILABLE (microphone off)',
+        && st.detected === 'NEDOSTUPNÉ (mikrofon vypnutý)',
       noPageErrors: errors.length === errorsBefore,
     };
     const ok = Object.values(v).every(Boolean);
@@ -4886,8 +4963,23 @@ function defineChecks() {
   // the next row and never scroll horizontally, in every status state, with and without the
   // microphone on (WebKit: without only, it has no fake capture device).
   def('a11y-phone-bars-every-state', async ({ page, browserName }) => {
-    const label = () => page.evaluate(() => document.querySelector('[data-osc="status.label"]')
-      .textContent.trim());
+    // The label shown, the label the status bar builds for the state (statusLabel, in the app's
+    // language) and the state itself: each case is checked by its state, not by its wording.
+    const label = () => page.evaluate(() => {
+      const a = window.OSCILLA.app;
+      return { shown: document.querySelector('[data-osc="status.label"]').textContent.trim(),
+        want: a.statusLabel, status: a.status, playing: !!a.playing, releasing: !!a.releasing,
+        sounding: !!a.anySounding };
+    });
+    /** Whether the app is in the state the case is named after. */
+    const IS = {
+      READY: (s) => s.status === 'READY' && !s.sounding,
+      PLAYING: (s) => s.playing && !s.releasing,
+      RELEASING: (s) => s.playing && s.releasing,
+      SUSPENDED: (s) => s.status === 'SUSPENDED',
+      STOPPED: (s) => s.status === 'STOPPED' && !s.sounding,
+      ERROR: (s) => s.status === 'ERROR',
+    };
     const set = (s) => page.evaluate((x) => { window.OSCILLA.app.status = x; }, s);
     const states = {
       READY: () => set('READY'),
@@ -4936,9 +5028,10 @@ function defineChecks() {
         for (const [name, enter] of Object.entries(states)) {
           await enter();
           await H.frames(page);
-          const shown = await label();
+          const st = await label();
           const r = await page.evaluate(phoneBars);
-          res[`${w}/${name}${mic ? '/mic' : ''}`] = { shown, bad: r.bad };
+          res[`${w}/${name}${mic ? '/mic' : ''}`] = { shown: st.shown, want: st.want,
+            state: IS[name](st), bad: r.bad };
           await reset();
         }
       }
@@ -4947,9 +5040,17 @@ function defineChecks() {
     await page.evaluate(() => { window.OSCILLA.app.alerts = []; });
     await page.setViewportSize({ width: 1536, height: 1024 });
     await sleep(150);
-    const bad = Object.entries(res).filter(([k, r]) => r.bad.length
-      || r.shown !== k.split('/')[1]);
-    return { ok: !bad.length, cases: Object.keys(res).length,
+    const bad = Object.entries(res).filter(([, r]) => r.bad.length || !r.state
+      || !r.shown || r.shown !== r.want);
+    // every state shows a label of its own, at every width, with and without the microphone
+    const rows = new Map();
+    for (const [k, r] of Object.entries(res)) {
+      const row = k.split('/').filter((x, i) => i !== 1).join('/');
+      rows.set(row, (rows.get(row) || new Set()).add(r.shown));
+    }
+    const merged = [...rows].filter(([, set]) => set.size !== Object.keys(states).length)
+      .map(([row, set]) => `${row}: ${[...set].join(', ')}`);
+    return { ok: !bad.length && !merged.length, cases: Object.keys(res).length, merged,
       bad: Object.fromEntries(bad.slice(0, 6)) };
   });
 
@@ -5232,6 +5333,242 @@ function defineChecks() {
     }
   });
 
+  // C051, one playing state: after each hand-over (the sequencer, then the Studio, then the
+  // sequencer again, then the instrument) the status bar, the scope's owner (the bridge), the
+  // bus and the Studio transport agree, read in one evaluate (one frame), within a named
+  // deadline: no 150 ms poll window in which they disagree.
+  def('one-playing-state', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    /** Every view of who plays, read in the same frame. */
+    const views = () => inPage(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      return { bus: O.bus.owner(), playback: a.playback ? a.playback.owner : null,
+        seq: !!a.seqPlaying, studio: !!a.studioOwnsOutput(), instrument: !!a.playing,
+        scope: O.viz.state.outputOwner, label: a.statusLabel, pattern: a.statusPatternText,
+        sounding: !!a.anySounding, releasing: !!(a.playing && a.releasing), status: a.status };
+    });
+    // the status bar says it plays by its state (anySounding, its dot; no instrument release,
+    // no error or suspension, statusLabel's order), not by its wording
+    const agree = (want) => (v) => v.bus === want && v.playback === want && v.scope === want
+      && v.seq === (want === 'sequencer') && v.studio === (want === 'studio')
+      && v.instrument === (want === 'instrument') && v.sounding && !v.releasing
+      && v.status !== 'ERROR' && v.status !== 'SUSPENDED';
+    const res = {};
+    const settle = async (want, what) => {
+      try {
+        return await until(async () => {
+          const v = await views();
+          return agree(want)(v) ? v : null;
+        }, { ms: 6000, what: `one-playing-state: ${what}` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        return { timedOut: true, ...(await views()) };
+      }
+    };
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      await inPage(() => window.OSCILLA.app.setWorkspace('sequencer'));
+      await until(() => inPage(() => document.querySelector('#osc-app').dataset.mode
+        === 'sequencer'), { ms: 8000, what: 'one-playing-state: the Sequencer opens' });
+      await p.click('#osc-seq-play');
+      res.sequencer = await settle('sequencer', 'the sequence plays, every view says so');
+      await inPage(() => window.OSCILLA.app.studioPlay());
+      res.studio = await settle('studio', 'Studio PLAY takes over, every view says so');
+      await p.click('#osc-seq-play');
+      res.sequencerAgain = await settle('sequencer', 'the sequence takes it back');
+      await inPage(() => {
+        window.OSCILLA.app.setContinuous(true);
+        window.OSCILLA.app.toggleLatch();
+      });
+      res.instrument = await settle('instrument', 'the instrument takes over');
+      await inPage(() => window.dispatchEvent(new Event('pagehide'))); // leave nothing playing
+      const failed = Object.keys(res).filter((k) => res[k].timedOut);
+      if (errs.length) failed.push('pageerror');
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
+  // C050, one stop path: each player is started, then stopped by Escape, a page hide and (for
+  // the instrument and the sequencer, the owners the status-bar key stops, ADR 0050) the
+  // status-bar stop; after each stop the page waits, against a named deadline, for nothing
+  // playing: no bus owner, no sequence, no Studio, no note, an engine census of 0.
+  def('stop-path-one-stopall', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const workspace = async (ws) => {
+      await inPage((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => inPage((w) => document.querySelector('#osc-app').dataset.mode === w, ws),
+        { ms: 8000, what: `stop-path-one-stopall: the ${ws} workspace opens` });
+    };
+    /** What still plays, from each owner and the engine's own census. */
+    const sounding = () => inPage(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      return { owner: O.bus.owner(), instrument: !!a.playing,
+        sequence: !!O.labs.sequencer.editor.playing, studio: !!a.studioOwnsOutput(),
+        notes: O.engine.noteCount, nodes: O.engine.activeNodeCount,
+        seqSources: O.labs.sequencer.editor.stats().activeSourceCount };
+    });
+    const silent = (s) => s.owner === null && !s.instrument && !s.sequence && !s.studio
+      && s.notes === 0 && s.nodes === 0 && s.seqSources === 0;
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await sounding(); return pred(s) ? s : null; },
+          { ms: 6000, what: `stop-path-one-stopall: ${what}` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        return { timedOut: true, ...(await sounding()) };
+      }
+    };
+    const PLAYERS = {
+      instrument: { ws: 'playground', start: () => inPage(() => {
+        window.OSCILLA.app.setContinuous(true);
+        window.OSCILLA.app.toggleLatch();
+      }), on: (s) => s.instrument },
+      sequencer: { ws: 'sequencer', start: () => p.click('#osc-seq-play'),
+        on: (s) => s.sequence },
+      studio: { ws: 'studio', start: () => inPage(() => window.OSCILLA.app.studioPlay()),
+        on: (s) => s.studio },
+      synth: { ws: 'synth', start: () => inPage(() => window.OSCILLA.app.synthArm()),
+        on: (s) => s.studio },
+      // K247: a held key plays the one instrument, the Studio transport (its claim), not an
+      // engine voice of the Playground's own.
+      notes: { ws: 'playground', start: async () => {
+        await p.locator('[data-osc="keyboard.readout"]').click();
+        await p.keyboard.down('KeyA');
+      }, on: (s) => s.studio, after: () => p.keyboard.up('KeyA') },
+    };
+    const STOPS = {
+      escape: () => p.keyboard.press('Escape'),
+      pagehide: () => inPage(() => window.dispatchEvent(new Event('pagehide'))),
+      // the status-bar key's own action (the key shows at narrow widths; status-key-stops-only)
+      'status-stop': () => inPage(() => window.OSCILLA.app.statusPlay()),
+    };
+    const res = {};
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      for (const [stop, doStop] of Object.entries(STOPS)) {
+        for (const [name, pl] of Object.entries(PLAYERS)) {
+          if (stop === 'status-stop' && !['instrument', 'sequencer'].includes(name)) continue;
+          const key = `${name}/${stop}`;
+          await workspace(pl.ws);
+          await pl.start();
+          const on = await settle(pl.on, `${key}: the ${name} plays`);
+          await doStop();
+          const off = await settle(silent, `${key}: nothing plays and the census is 0`);
+          if (pl.after) await pl.after();
+          res[key] = { on: !on.timedOut, off: !off.timedOut, left: off.timedOut ? off : null };
+        }
+      }
+      const failed = Object.keys(res).filter((k) => !res[k].on || !res[k].off);
+      if (errs.length) failed.push('pageerror');
+      return { ok: failed.length === 0, failed, errs, res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
+  // C037, the playback bus: each player is started through its own entry (a latched tone, the
+  // sequencer's Play, Studio PLAY, the Synth's Arm, a held computer key, Listen on a riff) and
+  // the bus names it as the owner within a named deadline; after its stop the bus names nobody.
+  def('bus-names-each-player', async ({ context, baseUrl }) => {
+    const p = await context.newPage();
+    const errs = [];
+    p.on('pageerror', (e) => errs.push(e.message));
+    const inPage = (fn, arg) => p.evaluate(fn, arg);
+    const res = {};
+    /** The bus's owner, polled until it is `want` (null: nobody) or the named deadline. */
+    const owned = async (want, label) => {
+      try {
+        return await until(() => inPage((w) => {
+          const o = window.OSCILLA.bus.owner();
+          return o === w ? { owner: o } : null;
+        }, want), { ms: 6000, what: `bus-names-each-player: ${label}` });
+      } catch (e) {
+        if (!(e instanceof WaitTimeout)) throw e;
+        return { timedOut: true, owner: await inPage(() => window.OSCILLA.bus.owner()) };
+      }
+    };
+    const workspace = async (ws) => {
+      await inPage((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => inPage((w) => document.querySelector('#osc-app').dataset.mode === w, ws),
+        { ms: 8000, what: `bus-names-each-player: the ${ws} workspace opens` });
+    };
+    try {
+      await p.goto(baseUrl, { waitUntil: 'load' });
+      await H.ready(p);
+      // the instrument: a latched tone
+      await workspace('playground');
+      await inPage(() => {
+        window.OSCILLA.app.setContinuous(true);
+        window.OSCILLA.app.toggleLatch();
+      });
+      res.instrument = await owned('instrument', 'a latched tone is the instrument');
+      await inPage(() => window.OSCILLA.app.stopNow());
+      res.instrumentOff = await owned(null, 'the stopped tone gives the output back');
+      // the sequencer: its Play button
+      await workspace('sequencer');
+      await p.click('#osc-seq-play');
+      res.sequencer = await owned('sequencer', 'the sequencer\'s Play is the sequencer');
+      await inPage(() => window.OSCILLA.labs.sequencer.editor.stop());
+      res.sequencerOff = await owned(null, 'the stopped sequence gives the output back');
+      // the Studio: PLAY
+      await workspace('studio');
+      await inPage(() => window.OSCILLA.app.studioPlay());
+      res.studio = await owned('studio', 'Studio PLAY is the Studio');
+      await inPage(() => window.OSCILLA.app.studioStop());
+      res.studioOff = await owned(null, 'the stopped Studio gives the output back');
+      // the Synth: Arm (the Studio transport's claim)
+      await workspace('synth');
+      await inPage(() => window.OSCILLA.app.synthArm());
+      res.synth = await owned('studio', 'the Synth\'s Arm claims as the Studio');
+      await inPage(() => window.OSCILLA.app.synthDisarm());
+      res.synthOff = await owned(null, 'the disarmed Synth gives the output back');
+      // the notes: a held computer key in the Playground (armed there by default)
+      await workspace('playground');
+      await p.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
+      // K247: the key arms the one instrument, so the bus names the Studio transport's claim;
+      // the armed run holds the output after the key is up, until Escape (or leaving) ends it.
+      await p.keyboard.down('KeyA');
+      res.notes = await owned('studio', 'a held key arms the one instrument (the Studio claim)');
+      await p.keyboard.up('KeyA');
+      await p.keyboard.press('Escape');
+      res.notesOff = await owned(null, 'Escape ends the keys\' run and gives the output back');
+      // the riff audition: Listen in the patch library
+      await workspace('synth');
+      await inPage(() => window.OSCILLA.app.patchLibraryOpen());
+      const list = p.locator('[data-osc="library.list"]');
+      await until(() => list.isVisible(), { ms: 10000,
+        what: 'bus-names-each-player: the patch library opens' });
+      const inst = p.locator('[data-osc="library.instrument"]');
+      await until(async () => (await inst.locator('option[value="riffs"]').count()) === 1,
+        { ms: 10000, what: 'bus-names-each-player: the Riffs category is offered' });
+      await inst.selectOption('riffs');
+      const listen = p.locator('[data-osc="library.listen"]');
+      await listen.click();
+      res.audition = await owned('audition', 'Listen is the audition');
+      await listen.click();
+      res.auditionOff = await owned(null, 'the stopped Listen gives the output back');
+      const players = ['instrument', 'sequencer', 'studio', 'synth', 'notes', 'audition'];
+      const failed = players.flatMap((k) => [k, `${k}Off`])
+        .filter((k) => !res[k] || res[k].timedOut);
+      if (errs.length) failed.push('pageerror');
+      return { ok: failed.length === 0, failed, errs, ...res };
+    } finally {
+      await p.close({ runBeforeUnload: false }).catch(() => {});
+    }
+  });
+
   // C002 (finding coupling-1): while a measurement owns the output the sequencer is refused
   // exactly like the instrument, with the same notice, and the measurement goes on. The Studio
   // template Measurement Sweep hands the output to MEASURE from the Sequencer workspace, where
@@ -5282,7 +5619,7 @@ function defineChecks() {
         return O.engine.activeNodeCount === 0 && !O.app.measureOwnsOutput()
           && O.labs.sequencer.editor.stats().activeSourceCount === 0 ? true : null;
       }), { ms: 10000, what: 'seq-refused-during-measure: every node released after the abort' });
-      const REFUSAL = /^The output belongs to the measurement/;
+      const REFUSAL = /^Výstup patří měření/; // OUTPUT_REFUSAL (core/output-bus.js, Q104)
       const v = {
         opened: res.opened === true,
         owns: res.owns === true,

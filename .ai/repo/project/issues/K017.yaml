@@ -34,4 +34,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-10-29
+updated_at: 2026-11-08T03:30:13Z
+started_at: 2026-11-08T03:28:27Z
+started_event: sha256:c803323755e6c04d4f6165bc42acf9af2e8742a69e33a441738680dc0cd80853
+verified_at: 2026-11-08T03:29:11Z
+verified_event: sha256:1c56b46f3f8a32f3e79d9c7020534d3484ae1511cf28dffca09fefaf1783a6d4
+completed_at: 2026-11-08T03:30:13Z
+completed_event: sha256:cf66d15abe7cfbd1bf61d97638bf1cfea36bf24afa0b110d6772286a1885d02b
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/sequencer-chrome.test.mjs tests/unit/ui-flowbite-pro.test.mjs; npm run build:check; node tests/browser/sequencer.cjs (re-run by oscilla-a3 on main 09635381, 2026-11-08, darwin; in CI as the sequencer suite of the DSP, labs, sequencer jobs)"
+    result: "Landed in #445 (merge 710b1d46: note names, MIDI numbers, the 20-300 BPM refusal, the loaded tempo shown) and #478 (merge 09635381: criterion 3, syncTempoSelect in sequencer/tempo-select.js, unit-tested on a fake select with an off-step 97 BPM), both built by oscilla-a3. On main 09635381: sequencer-chrome 6 tests and ui-flowbite-pro 37 pass, 0 fail; build:check dist up to date; sequencer.cjs 80/80 in chromium. No verdict needed: scripts/review-verdict.mjs --content found no guarded path for either PR (e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855). tests/README.md row for sequencer-chrome; fail-first held for both PRs."
+    artifact: "https://github.com/korczis/oscilla/pull/478"
+    commit: 096353817d535ebd933682b4728a7bb26d1bcc8d
+    recorded_at: 2026-11-08T03:29:36Z

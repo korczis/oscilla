@@ -136,11 +136,13 @@ test('a cable an amount knob covers takes the knob depth; unpatching keeps the k
   step(patchCable(st.getModel(), PANEL, 'eg2.control', 'lpf.frequency').action);
   assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5']);
   step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id).action);
-  assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5', 'mg.control@1']);
+  assert.deepEqual(into(st.getModel(), 'lpf.frequency'),
+    ['eg2.control@3.5', 'mg.control@1', 'xyl.x@2']); // K220: pad L's X normal restored too
   // A cable from another source: both knobs come back as they were.
   step(patchCable(st.getModel(), PANEL, 'eg1.control', 'lpf.frequency').action);
   step(unpatch(st.getModel(), PANEL, panelCables(st.getModel(), PANEL)[0].id).action);
-  assert.deepEqual(into(st.getModel(), 'lpf.frequency'), ['eg2.control@3.5', 'mg.control@1']);
+  assert.deepEqual(into(st.getModel(), 'lpf.frequency'),
+    ['eg2.control@3.5', 'mg.control@1', 'xyl.x@2']); // K220: pad L's X normal restored too
   // One knob, equal depths: MG into VCO 1 FM next to the VCO 2 FM normal.
   step(setAmount(st.getModel(), PANEL, amount('vco-mg'), 0.5));
   step(patchCable(st.getModel(), PANEL, 'mg.control', 'vco1.fm').action);
@@ -150,9 +152,11 @@ test('a cable an amount knob covers takes the knob depth; unpatching keeps the k
 
 // ------------------------------------------------------------------ no inert jack (P1)
 
-test('the filters show no Peak (Q) jack: low- and high-pass Q cannot be modulated', () => {
+test('the filters show their Peak (Q) jack since K232 (a log cable is linear in the node\'s '
+  + 'dB), and no Gain jack', () => {
   for (const mid of ['hpf', 'lpf']) {
-    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'Q'), false, mid);
+    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'Q'), true, mid);
+    assert.equal(PANEL.jacksOf(mid).some((j) => j.port === 'gain'), false, mid);
     assert.ok(PANEL.faceOf(mid).some((c) => c.key === 'Q'), `${mid} keeps its Peak knob`);
   }
 });
@@ -167,8 +171,12 @@ test('every input jack a cable reaches is active in the runtime, or the cable is
       const st = panelStore();
       const r = patchCable(st.getModel(), PANEL, from, j.id);
       if (r.reason) {
-        assert.equal(j.id, 'sh.rate', `only a clocked S&H Rate refuses: ${j.id} ${r.reason}`);
-        assert.match(r.reason, /Clock is patched/);
+        // A clocked S&H Rate refuses, and (K238) a bipolar source into the VCA's gain, which
+        // would open it with no key held (VELOCITY, after the VCA, takes it: gated tremolo).
+        const closed = j.id === 'vca.gain';
+        assert.ok(j.id === 'sh.rate' || closed, `only those refuse: ${j.id} ${r.reason}`);
+        assert.match(r.reason, closed ? /bipolární zdroj by otevřel VCA/
+          : /dokud je zapojený Clock/);
         continue;
       }
       const done = st.dispatch(r.action);
@@ -262,7 +270,7 @@ test('every preset writes its values and amounts, and differs from Init', () => 
     const done = st.dispatch(presetAction(st.getModel(), PANEL, p.id).action);
     assert.equal(done.ok, true, done.reason);
     assert.equal(st.debugInfo().undoDepth, before + 1, `${p.id}: one undo entry`);
-    assert.equal(st.undoLabel(), `Preset ${p.title.split(':')[0]}`);
+    assert.equal(st.undoLabel(), `Předvolba ${p.title.split(':')[0]}`);
     const m = st.getModel();
     const want = presetValues(PANEL, p);
     // A preset sets its own tab's modules (presets.js): a Panel preset the panel, an engine

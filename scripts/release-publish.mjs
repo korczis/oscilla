@@ -39,8 +39,12 @@
 //   release `tagged` for HEAD (verify-deploy alone also accepts the untagged page of the
 //   release commit); gh release create
 //   with notes generated from the commits since the previous tag and the committed
-//   dist/index.html attached as oscilla-v<version>.html (the artifact the release record of
-//   scripts/release-record.mjs names); a SemVer prerelease (X.Y.Z-rc.N) is created with
+//   dist/index.html (git show <HEAD>:dist/index.html, never the working tree) attached as
+//   oscilla-v<version>.html (the artifact the release record of scripts/release-record.mjs
+//   names). Before the tag, before verify-deploy and before the upload the run re-reads git
+//   status and HEAD and refuses, naming what changed, when the tree is no longer clean or HEAD
+//   is no longer the commit the preconditions judged (R034: up to three --pages-timeout waits
+//   lie between the clean check and the upload); a SemVer prerelease (X.Y.Z-rc.N) is created with
 //   --prerelease --latest=false, so GitHub never shows it as the latest release and its record
 //   lands on the prerelease channel. A failure after the push stops before the GitHub Release
 //   and says how to undo the tag. Both modes print the `majordomus finish` line that closes
@@ -71,6 +75,7 @@ import { PUBLIC_URL, REPO_URL, ROOT, findRegion, gitRunner } from './release-met
 import { currentFingerprint, readReceipt, receiptProblems } from './release-prepare.mjs';
 import { ciReceiptProblems, gatherCiReceipt, judgedRun } from './release-ci-receipt.mjs';
 import { DIST_PATH, channelFor, releaseAssetName } from './release-record.mjs';
+import { pinnedVersion, reportedVersion } from './majordomus-pin-check.mjs';
 
 /**
  * The gh release create flags after the tag and the asset: a SemVer prerelease is marked
@@ -258,6 +263,26 @@ export function resumable(f) {
     && (!f.tagLocal || f.tagLocalCommit === f.head);
 }
 
+/**
+ * The majordomus pages.yml pins (it makes the live /lab/ page) and the one on PATH:
+ * { pinned, local }, or null when pages.yml pins none (nothing on the page to match).
+ */
+export function majordomusPin(root, sh) {
+  let text = '';
+  try {
+    text = readFileSync(path.join(root, '.github', 'workflows', 'pages.yml'), 'utf8');
+  } catch (error) {
+    // Only a missing pages.yml means "no pin" (R058): any other error, a ReferenceError from a
+    // lost import included, fails the publish rather than switching the pin check off.
+    if (error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+  const pinned = pinnedVersion(text);
+  if (!pinned) return null;
+  const r = sh('majordomus', ['version']);
+  return { pinned, local: r && r.status === 0 ? reportedVersion(r.stdout) : null };
+}
+
 /** Pure precondition check over gathered facts. */
 export function preconditionProblems(f) {
   const problems = [];
@@ -298,6 +323,15 @@ export function preconditionProblems(f) {
     problems.push(`gh is not authenticated (${f.ghAuthWhy || 'gh auth status'})`);
   }
   problems.push(...(f.stuckRuns || []));
+  // C1-517-1: verify-deploy regenerates /lab/ with the majordomus on PATH, and the live page was
+  // made by pages.yml's pinned one; a different local version would fail it only after the tag.
+  if (f.majordomus && f.majordomus.pinned && f.majordomus.local !== f.majordomus.pinned) {
+    problems.push(`majordomus on PATH is ${f.majordomus.local || 'unreadable (`majordomus '
+      + 'version` gave no version)'}, but .github/workflows/pages.yml pins MJ_VERSION `
+      + `${f.majordomus.pinned}, which made the live /lab/ page: put the pinned one first on PATH `
+      + `(PATH="$HOME/.local/share/majordomus/versions/${f.majordomus.pinned}/bin:$PATH") and `
+      + 're-run, before anything is tagged');
+  }
   return problems;
 }
 
@@ -308,6 +342,28 @@ export function preconditionProblems(f) {
  */
 export function defaultSh(root, o = {}) {
   return boundedRunner({ cwd: root, ...o });
+}
+
+/**
+ * Pure (R034): why the checkout is no longer the one the preconditions judged, or null. The
+ * publish reads the tree clean and HEAD at `head` once at the start, then waits up to three
+ * times --pages-timeout before verify-deploy and the upload; a file rewritten or a commit made
+ * in that time must not reach the Release unnoticed. `status` is git status --porcelain.
+ */
+export function checkoutDrift({ head, now, status, stage }) {
+  const problems = [];
+  if (now !== head) {
+    problems.push(`HEAD moved from ${head} to ${now || 'an unreadable commit'}`);
+  }
+  if (status) {
+    const lines = status.split('\n').filter(Boolean);
+    const shown = lines.slice(0, 5).map((l) => l.trim()).join('; ');
+    problems.push(`the working tree is no longer clean (${shown}`
+      + `${lines.length > 5 ? `; and ${lines.length - 5} more` : ''})`);
+  }
+  if (!problems.length) return null;
+  return `${stage}: ${problems.join(', and ')}; the publish judged a clean tree at ${head} `
+    + '(R034)';
 }
 
 export const USAGE = 'usage: node scripts/release-publish.mjs [--yes] '
@@ -432,6 +488,7 @@ export async function publish({
     ghAuth: ghAuth.status === 0,
     ghAuthWhy: ghAuth.status === 0 ? null : failure('gh', ['auth', 'status'], ghAuth),
     stuckRuns: diagnose(STUCK_AFTER_MIN),
+    majordomus: majordomusPin(root, sh),
   };
   const local = receiptProblems(receipt === undefined ? readReceipt(run, root) : receipt, now);
   // The CI receipt is gathered (gh api, a short unit test) only when the local one fails.
@@ -498,9 +555,16 @@ export async function publish({
     if (r.status !== 0) throw new Error(`${what} failed (${failure(cmd, args, r)})`);
     return r;
   };
+  // R034: the tree must still be the clean one at `head` that the preconditions judged.
+  const reassert = (stage) => {
+    const drift = checkoutDrift({ head, stage, now: run(['rev-parse', 'HEAD']),
+      status: run(['status', '--porcelain', '--untracked-files=normal']) });
+    if (drift) throw new Error(drift);
+  };
   let pushed = resume;
   try {
     if (!resume) {
+      reassert('before the tag');
       must('git', ['tag', '-a', tag, '-m', `OSCILLA ${tag}`, head], 'tagging');
       must('git', ['push', 'origin', `refs/tags/${tag}`], 'pushing the tag');
       pushed = true;
@@ -586,6 +650,7 @@ export async function publish({
           + `'${redeploy.conclusion}'. Inspect: gh run view ${redeploy.databaseId}`);
       }
     }
+    reassert('before deployment verification');
     must('node', ['scripts/verify-deploy.mjs', '--commit', head], 'deployment verification');
     let tagged = 'not read';
     for (let n = 1; n <= TAGGED_ATTEMPTS; n++) {
@@ -605,9 +670,16 @@ export async function publish({
     try {
       const notesFile = path.join(dir, 'notes.md');
       writeFileSync(notesFile, notes);
-      // The clean tree and build:check above make the working-tree dist the committed one.
+      // R034: the asset is the dist of the published commit, read from git, never the working
+      // tree, which the waits above leave open to change for up to three --pages-timeouts.
+      reassert('before the upload');
+      const shown = sh('git', ['show', `${head}:${DIST_PATH}`], { binary: true });
+      if (shown.status !== 0) {
+        throw new Error(`reading ${DIST_PATH} at ${head} failed `
+          + `(${failure('git', ['show', `${head}:${DIST_PATH}`], shown)})`);
+      }
       const assetFile = path.join(dir, asset);
-      writeFileSync(assetFile, readFileSync(path.join(root, DIST_PATH)));
+      writeFileSync(assetFile, shown.stdout);
       must('gh', ['release', 'create', tag, assetFile, ...releaseCreateFlags(version, notesFile)],
         'creating the GitHub Release');
     } finally {

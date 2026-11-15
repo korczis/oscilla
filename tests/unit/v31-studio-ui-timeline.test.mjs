@@ -144,7 +144,8 @@ test('a clip the transport would not play lists the reason as a problem', () => 
   assert.ok(r.ok, r.reason);
   const m = s.getModel();
   const v = clipView(m, m.timeline.clips.find((c) => c.id === r.created.clips[0]));
-  assert.ok(v.problems.some((p) => /Only gate events on an Envelope/.test(p)),
+  // The policy's reason (clip-targets.js eventTarget; Czech since K023, Q104).
+  assert.ok(v.problems.some((p) => /Událostní klip hraje jako hradlo nebo spouštěč/.test(p)),
     v.problems.join(' | '));
   assert.match(v.aria, /problem/);
 });

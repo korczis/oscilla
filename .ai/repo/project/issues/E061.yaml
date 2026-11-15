@@ -1,0 +1,25 @@
+id: E061
+milestone: M046
+serves:
+  - "engineering-integrity#queue-lands-tested-tree"
+title: "Train member tables fail closed: trainMembers reads every GFM row or refuses the table, never truncates it"
+slug: train-member-tables-fail-closed
+priority: p1
+profile: implementation
+objective: "scripts/fail-first.mjs trainMembers ends a train's `| member | what |` table at the first line without a leading pipe, so a row GitHub renders (the leading pipe is optional in GFM, e.g. `#2 | feat(y): b |`) is dropped, and every row after it with it; review-verdict.mjs imports the same function, so the dropped members escape both the no-feat/fix-member check and the member-verdict check, silently. Make trainMembers read every row GFM renders as one (leading and trailing pipes optional, an escaped pipe kept in its cell), or refuse with a named error a table it cannot read; it never returns a shorter list than the rendered table. Fix this first among the audit's gate issues (oscilla-43, 2026-11-10: a gate must fail closed)."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 252.yaml#R1 (P2, kept at P2 by oscilla-43) still open on main b8bfd3b6. Reproduced: the body \"| member | what |\\n|---|---|\\n| #1 | chore(x): a |\\n#2 | feat(y): b |\\n| #3 | docs(z): c |\" gives [#1] only."
+scope:
+  - "scripts/fail-first.mjs"
+  - "tests/unit/fail-first.test.mjs"
+  - "tests/unit/review-verdict.test.mjs"
+  - ".ai/repo/project/issues/E061.yaml"
+depends_on: []
+acceptance_criteria:
+  - "trainMembers returns every row of a GFM table whose rows lack a leading pipe, a trailing pipe or both, and refuses (an error naming the line) a table it cannot read; it never stops at a row early."
+  - "Mutation cases: restoring the leading-pipe test, or dropping the refusal, each fails a unit test of fail-first.test.mjs, and a train body with a pipe-less feat member is refused by both fail-first and review-verdict in a unit case."
+validation:
+  - "node --test tests/unit/fail-first.test.mjs tests/unit/review-verdict.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

@@ -1,0 +1,40 @@
+# Review verdict for pull request #504 (test/k214-panel-normals-browser): K214, Restore normal
+# on the Synth panel announces the restored normal in the polite live region; the panel normals
+# browser check s-normals. Judged at df5c2ab1 on base c589955b (merge base = origin/main then),
+# 2026-11-09, in the reviewer's own detached worktree ~/dev/oscilla-wt/review-504.
+# Reviewer: rev-seat (session oscilla-c1, claude-code 7cad3015), which built none of it
+# (builder: oscilla-2e).
+#
+# Guarded content: src/js/synth/ui.js only (base main's review-verdict.mjs --content --list).
+#
+# Read: ui.js's restoreNormal branch now says `Normál vstupu ${jackName(id)} je obnoven.` through
+# say() with assertive false, only when dispatch(r.action).ok; a refused dispatch still says its
+# reason assertively through dispatch() itself, and a restoreNormals refusal still says r.reason.
+# jackName and say are the part's existing helpers (the Break normal and Cable removed branches
+# use them the same way). No engine, transport or model change. tests/browser/synth.cjs s-normals
+# (desktop and phone) waits only through until() with named 10 s deadlines, no fixed sleep, no
+# sample-rate assumption; it inserts the panel by pointer/tap and by keyboard, checks the Studio
+# graph draws the panel nodes and normal edges, deletes VCO 2 Pitch's normal in the Studio,
+# restores it from the Synth bay (same id, one history entry, polite announcement), then, armed,
+# shows a Studio cable beside the normal is active with it and Break normal drops the normal from
+# the runtime edge list while the cable drives an audible voice.
+#
+# Measured by the reviewer (Node 22.20.0):
+# - tests/unit/synth-restore-normal-announce.test.mjs: 1/1 at df5c2ab1; with c589955b's
+#   src/js/synth/ui.js swapped in, it fails ("one announcement: []"): fail-first holds.
+# - node --test tests/unit/synth-*.test.mjs: 185/185.
+# - npm run build:check: dist/index.html up to date at the head.
+# - node tests/browser/synth.cjs --only s-normals: PASS 6/6 legs (chromium, firefox, webkit x
+#   desktop 1536x1024, phone 390x844, file origin), run three times, 18/18; voice -35 dBFS RMS.
+# Not run by the reviewer: the full npm test and release gate (the builder's verify exit 0 and
+# CI are the receipt), and s-normals against the base build.
+#
+# Verdict: merge. Two P3 ride as follow-ups.
+schema: review-verdict/v1
+pr: 504
+verdict: merge
+reviewer: oscilla-c1 rev-seat (claude-code 7cad3015; built none of df5c2ab1)
+content: ed6df5f78d95b64b268b2f59f169cbc2048f4a493fbfbd7cf383f541ed2d231f
+findings:
+  - { id: F-1, severity: P3, status: open, title: "K214's criterion says a Studio cable patched over a normal removes the normal from the runtime edge list; s-normals proves instead that the cable is active beside the normal and Break normal removes it. Restate the criterion (or record why the behaviour differs) before plan done K214" }
+  - { id: F-2, severity: P3, status: open, title: "the neighbouring bay announcements (Cable removed; the normal is restored. / The normal of X is broken. / Cable selected) stay English beside the new Czech sentence; a project.czech-prose follow-up for synth/ui.js" }

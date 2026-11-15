@@ -8,7 +8,7 @@ priority: p2
 profile: implementation
 objective: "Lands as feat(studio). Each node type offers factory presets and the person's single-node patches in a Pro dropdown; applying one sets parameters only (one undo entry) and keeps every edge. Preset names name sounds, never products (D1). It waits on F001, F002 and F008 of plan pull request #251 (intent ui-flowbite-pro), which are not on main yet; depends_on names them in the plan change after #251 lands. It also waits on E004."
 why: "Owner direction of 2026-10-29 (session oscilla-b0): OSCILLA becomes a playable, patchable instrument and an audio-band signal lab; the plan checked every fact it relies on against main at 8b5792cd, and the sizes it quotes are unchanged at e2720e07."
-current_state: "Built on 2026-11-01 ahead of its dependencies E004 and K014 and of F002 and F008 named in its objective (BLOCKED), the order inverted by the owner's direction ('dotahuj presety a synth library taky, paralelne'): the Presets dropdown is a Flowbite Pro component placed in the Inspector as it is today (src/js/ui/studio/node-preset-menu.js) and moves with E004's split. Factory presets are one-node patches (studio/node-presets.js; the Synth's engine presets reused), saved single-node patches come from studio/library.js patches(), and applying one is PATCH_REPLACE { onto }."
+current_state: "Built on 2026-11-01 ahead of its dependencies E004 and K014 and of F002 and F008 named in its objective (BLOCKED), the order inverted by the owner's direction ('dotahuj presety a synth library taky, paralelne'): the Presets dropdown is a Flowbite Pro component placed in the Inspector as it is today (src/js/ui/studio/node-preset-menu.js) and moves with E004's split. Factory presets are one-node patches (studio/node-presets.js; the Synth's engine presets reused), saved single-node patches come from studio/library.js patches(), and applying one is PATCH_REPLACE { onto }. Dependency E004 dropped on 2026-11-11 by oscilla-0b with the integrator oscilla-43's agreement (principle 14): K020 was built ahead of E004 by the owner's order, all five of its criteria are met on main 1a0196d7, none of them needs the Inspector split, and E004 stays in M046 as real L work (inspector.js 74,140 B against modules under 40,000 B). Landed by PR #385 (743f8566); done on 2026-11-11 after the criteria were re-checked on main (evidence below)."
 scope:
   - "src/js/studio"
   - "src/js/ui/studio"
@@ -16,7 +16,6 @@ scope:
   - "tests/README.md"
   - "dist"
 depends_on:
-  - "E004"
   - "K014"
 acceptance_criteria:
   - "Applying a preset changes only the node's parameters, keeps its edges and is one undo entry, in a unit test that fails on the merge base."
@@ -30,4 +29,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-10-29
-updated_at: 2026-11-01
+updated_at: 2026-11-11T12:24:18Z
+started_at: 2026-11-11T12:23:12Z
+started_event: sha256:733cda4fa856b56b18cfd02f2665e376bf662ff372ed4d9abb96ea27def57ffd
+verified_at: 2026-11-11T12:23:37Z
+verified_event: sha256:fb7a821fbe6305c374fcbd2120cd3df075ce8982413f3b94f8dd59412c010c66
+completed_at: 2026-11-11T12:24:18Z
+completed_event: sha256:5937d16bd8463d857cf63356109b6d86fc7358e38a5531759742ef1dc41a3838
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/studio-node-presets.test.mjs tests/unit/ui-flowbite-pro.test.mjs; npm run build:check; npm test"
+    result: "On main 1a0196d7 (this tree's src, dist and tests are identical to it): 35/35. Every node type has factory presets, each a valid one-node patch of its own type. Applying a preset sets only the node's parameters, keeps its edges and is one undo entry. A preset of another type is refused with the model and history unchanged. The person's single-node patches join only their type's dropdown. The Flowbite Pro ratchet holds. build:check is current, and the tests/README row for studio-node-presets exists."
+    artifact: "1a0196d7e00f9cb750f0c0d7538e472be8557e1d"
+    commit: 1a0196d7e00f9cb750f0c0d7538e472be8557e1d
+    recorded_at: 2026-11-11T12:23:57Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 385 checks: gate, fail-first"
+    result: "landed in the synth train 2026-11-02 by #385 (main merge commit 743f8566, v3.17.0); gate success and fail-first success; review verdicts .ai/repo/reviews/385.yaml (merge) and 375.yaml (K066, K020, K102 presets and patch library)"
+    artifact: ".ai/repo/reviews/385.yaml"
+    commit: 1a0196d7e00f9cb750f0c0d7538e472be8557e1d
+    recorded_at: 2026-11-11T12:24:07Z

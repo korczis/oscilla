@@ -278,7 +278,8 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     filterType: 'lowpass',
     stereoRoute: 'mono',
     dualRoute: 'mono',
-    menus: { overflow: false, export: false, addBlock: false, actions: false, related: false },
+    menus: { overflow: false, export: false, addBlock: false, actions: false, related: false,
+      seqOpen: false, filterOpen: false },
     collapsed: { device: false, phase: false, bio: false },
 
     init() {

@@ -42,6 +42,7 @@ import { encodeWav, parseWav } from './audio/wav.js';
 import { buildPlan, planFreqAt, PATTERNS } from './audio/patterns.js';
 import { createVisualizationBridge } from './visualization/visualization-bridge.js';
 import { requestedFrequencyFor } from './visualization/output-owner.js';
+import { statusPlayHint } from './core/play-hints.js';
 import { startVisualizer, createDefaultViews } from './visualization/p5-host.js';
 import { harmonicTable } from './visualization/harmonics.js';
 import { createInstrument } from './core/instrument.js';
@@ -67,7 +68,8 @@ import { createKeyRegistry } from './ui/keys/registry.js';
 import { createKeyDispatcher } from './ui/keys/dispatcher.js';
 import { bindPageKeys, pageKeyContext } from './ui/keys/clients.js';
 import { createWorkbench, followSequenceEdits } from './ui/workbench.js';
-import { createOutputOwner } from './ui/output-owner.js';
+import { createOutputBus, OWNER, outputRefusalOf, playOwnerOf } from './core/output-bus.js';
+import { createTrace } from './core/trace.js';
 import { createNavigation, v1ModeFor } from './ui/navigation.js';
 import { createUnsavedGuard } from './ui/unsaved.js';
 import { sequenceDigest } from './sequencer/editor.js';
@@ -133,7 +135,9 @@ const adapter = {
   // in a gap hides the marker and its chip), else the instrument's idle frequency. Read every
   // frame: currentFrequency() reads the audio clock and allocates nothing.
   requestedFrequency: () => {
-    if (!app) return null;
+    // Held notes (C024) request no one frequency: the marker and its chip hide while they own
+    // the output.
+    if (!app || app.outputOwner === 'notes') return null;
     const ed = labs.sequencer ? labs.sequencer.editor : null;
     const seq = !!(ed && ed.playing);
     return requestedFrequencyFor(app.playing,
@@ -141,6 +145,7 @@ const adapter = {
       seq ? ed.currentFrequency() : null);
   },
   isPlaying: () => !!(app && (app.playing || app.seqPlaying)),
+  audioEngine: engine, // the sequencer's loop wakes from its one transport clock (C055)
   // C011: read-only; the sequencer's loop keeps to its cap without the permission.
   continuousAllowed: () => !!(app && app.continuousAllowed),
   getA4: () => (app && app.a4) || 440,
@@ -157,6 +162,8 @@ const adapter = {
   sequencerAccounting: engine.stageAccounting(),
   // The sequencer takes the output through the one owner table (ui/output-owner.js, C002).
   claimSequencerOutput: () => claimOutput('sequencer'),
+  releaseSequencerOutput: () => bus.release(OWNER.sequencer), // stopped or ended (C051)
+  holdSequencerOutput: () => bus.holds(OWNER.sequencer), // a loop pass (C037)
   getStereoRouter: () => (liveRouter ? liveRouter.router : null),
   // The mic lab's nodes are built and accounted by the engine (audio-engine-discipline).
   attachMicrophone: (stream, opts) => engine.attachMicrophone(stream, opts),
@@ -165,6 +172,11 @@ const adapter = {
   // hears of it here, because a stopped track dispatches no 'ended'.
   onMicDetached: (fn) => engine.on((type, d) => {
     if (type === 'micAttachment' && d && !d.attached) fn(d);
+  }),
+  // The context's state (ctx.onstatechange): a suspended or interrupted context pauses the lab
+  // (C067), since its analyser then reads a frozen buffer.
+  onContextState: (fn) => engine.on((type, d) => {
+    if (type === 'context') fn(d);
   }),
   ensureContext: () => {
     if (app) app.ensureAudio(); else engine.init();
@@ -268,19 +280,29 @@ function playgroundVoiceInput() {
   return voiceInputFrom(app, labVizInputs);
 }
 
-// One output owner at a time (C002, C016): instrument, sequencer, Studio, a measurement.
-// stopPlayback also frees the MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
-const {
-  claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy,
-} = createOutputOwner({
+// The playback bus (C002, C016, C037; core/output-bus.js): one output owner at a time, one
+// claim every player starts through and a release when it ends. stopPlayback also frees the
+// MIDI notes (V502); outputBusy is MEASURE's other-audio probe.
+// The one operation trace (core/trace.js, ADR 0042): the bus records every claim, release,
+// stop, owner change, note and arm in it (C050), the Studio its store, runtime and transport
+// steps; the Inspector's Trace reads it.
+const traceIdle = new Set();
+const trace = createTrace({ now: Date.now, onIdle: () => { for (const fn of traceIdle) fn(); } });
+const bus = createOutputBus({
+  trace,
+  engine, // the bus is the one writer of its master level (C052)
   app: () => app,
   sequencer: () => (labs.sequencer ? labs.sequencer.editor : null), changed: notifyAdapter });
+const { claimOutput, stopPlayback, stopSequence, sequencerPlaying, outputBusy } = bus;
 
-withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), () => {
+withLabOptions(engine, (plan) => v2PlayOptions(plan, engine.ctx, true), (plan, o) => {
   // Playground and Measure share one output (spec §74): no instrument voice while a measurement
-  // owns it (capture.js schedules its own source). claimOutput raises the notice and refuses
-  // then (C002); otherwise it takes the output from the sequencer (and Studio).
-  return claimOutput('instrument') !== true;
+  // or a microphone level reference owns it (capture.js schedules its own source). claimOutput
+  // raises the notice and refuses then (C002, C024); otherwise it takes the output from the
+  // sequencer (and Studio). The riff audition claims under its own name (playOwnerOf).
+  // The newest action wins for the notes too (C024): the claim releases held notes, whose
+  // voices the engine fades under a play() voice (ADR 0002; OUTPUT_YIELDS.instrument).
+  return !bus.claim(playOwnerOf(o), 'play').ok;
 });
 
 /** Revert the sounding voice from a PeriodicWave to its oscillator type (additive off). */
@@ -597,14 +619,8 @@ function mountLabs(root) {
       if (app && typeof app.midiAllOff === 'function') app.midiAllOff();
       return playSequence.apply(this, args);
     };
-    // UI bookkeeping only (the sequencer schedules on the audio clock itself).
-    setInterval(() => {
-      const on = !!labs.sequencer.editor.playing;
-      if (app && app.seqPlaying !== on) {
-        app.seqPlaying = on;
-        notifyAdapter();
-      }
-    }, 150);
+    // The sequencer's playing state is the playback bus's (C051): its claim, its stop and its
+    // end publish it in the same event; there is no poll.
   }
   syncLabFlags();
 }
@@ -660,6 +676,10 @@ function integrationInit() {
   if (cmp.source !== 'single' || cmp.pattern !== 'tone') cmp.sourceKind = 'pattern';
   engine.on((type, d) => {
     cmp.onEngine(type, d);
+    if (type === 'ended') { // the play() voice ended: the instrument's or the audition's (C037)
+      bus.release(OWNER.instrument);
+      bus.release(OWNER.audition);
+    }
     notifyAdapter();
   });
   if (!engine.isSupported()) {
@@ -676,19 +696,18 @@ function integrationInit() {
   // The page's keys (Escape stops, Space is Hold to Play where the instrument owns it) are
   // bound through the one key registry and its one dispatcher (ui/keys/, K153).
   const keys = createKeyRegistry();
-  bindPageKeys({ keys, cmp, stopSequencer });
+  bindPageKeys({ keys, cmp, stopSequencer, stopAll: bus.stopAll }); // Escape (C050)
   createKeyDispatcher({ registry: keys, context: () => pageKeyContext(cmp) }).attach();
   cmp.keys = keys;
   window.addEventListener('blur', () => cmp.releaseHold());
-  const hide = () => {
-    cmp.releaseHold();
-    stopSequencer();
-    cmp.measureAbort('pagehide'); // spec §169 (the capture io also aborts on its own)
-    if (!cmp.latched) return;
-    cmp.stop();
-  };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) hide(); });
-  window.addEventListener('pagehide', hide);
+  // A page hide is the playback bus's stopAll (C050): the one listener pair. Every owner stops,
+  // a measurement aborts (spec §169; the capture io also aborts on its own).
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) bus.stopAll('hidden');
+  });
+  window.addEventListener('pagehide', () => bus.stopAll('pagehide'));
+  // The Synth's own reaction to a stop (its pending arm, the Arm button's state).
+  bus.onStop((why) => { if (typeof cmp.synthStopped === 'function') cmp.synthStopped(why); });
   document.addEventListener('fullscreenchange', () => {
     requestAnimationFrame(() => { if (host) host.resize(); });
     repairCharts();
@@ -699,12 +718,20 @@ function integrationInit() {
   // C013: the views of the one output follow its owner (instrument, sequencer or Studio), handed
   // to the bridge as a plain string on every play, stop and Studio transport state change.
   Alpine.effect(() => bridge.setOutputOwner(cmp.outputOwner));
+  // C030: the idle analyser panel names the Play that is on screen in this workspace
+  Alpine.effect(() => bridge.setIdleHint(statusPlayHint(cmp.workspace, 'idle')));
   // ... and the release a held note will use when let go (C009), next to updateLive above
   Alpine.effect(() => syncNoteOffRelease(cmp));
   // Calm announcements (V1 a7b7a23): only PLAYING, SUSPENDED, STOPPED and ERROR, kept until the
   // next one; RELEASING/READY and readout changes are not announced.
+  // Said once per change: since seqPlaying reads the playback bus's state (C051), this effect
+  // also re-runs when another owner changes (a released note), and a repeated "Playback
+  // STOPPED" would drown the newer sentence (the leave policy's, C053).
+  let announced = null;
   Alpine.effect(() => {
     const st = cmp.seqPlaying && !cmp.playing ? 'PLAYING' : cmp.status;
+    if (st === announced) return;
+    announced = st;
     if (st === 'SUSPENDED') cmp.announceText = 'Playback SUSPENDED: tap or press a key to start audio';
     else if (['PLAYING', 'STOPPED', 'ERROR'].includes(st)) cmp.announceText = `Playback ${st}`;
   });
@@ -725,7 +752,7 @@ function integrationInit() {
     notifyAdapter();
   });
   cmp.$watch('gainLevel', (g) => {
-    engine.setMasterGain(g);
+    bus.setMaster(g, { owner: OWNER.instrument }); // the status-bar level (C052)
     // The newer level: the status bar drops the Studio's Master (C012; kept at STOP, #119 D2).
     if (cmp.studio && cmp.studio.masterLevel !== null) cmp.studio.masterLevel = null;
   });
@@ -747,8 +774,7 @@ function integrationInit() {
     }
   };
   cmp.$watch('workspace', (ws) => {
-    // A measurement does not keep running unseen: leaving MEASURE stops it.
-    if (ws !== 'measure') cmp.measureAbort('workspace');
+    // (leaving a workspace: the bus's leave policy, registered first in init, C053)
     loadExperiments(ws);
     repairCharts();
   });
@@ -780,7 +806,8 @@ function integrationInit() {
   engine.enableCeilingTap();
   bridge.onCeiling = (acting) => {
     cmp.outputAtCeiling = acting;
-    if (acting && cmp.isSounding) cmp.announceText = cmp.ceilingText;
+    // Announced for whichever owner sounds (C069): the indicator's own source.
+    if (cmp.ceilingActing) cmp.announceText = cmp.ceilingText;
   };
 
   cmp.$nextTick(() => {
@@ -869,7 +896,7 @@ function createOscillaComponent(ui) {
     engine, bridge, labs, exportConfigDoc, applyImport, renderWav, screenshot,
     labSnapshot: () => snapshotLabs(labs), applyLabSnapshot, labsMounted,
     relayout: () => { if (host) host.resize(); repairCharts(); },
-    stopPlayback, sequencerPlaying,
+    stopPlayback, sequencerPlaying, stopAll: bus.stopAll, // the status-bar stop (C050)
   });
   const measure = createMeasureUi({
     engine, build: BUILD, stopPlayback, outputBusy,
@@ -878,17 +905,30 @@ function createOscillaComponent(ui) {
   const experiments = createExperimentsUi();
   const findings = createFindingsUi();
   const connections = createConnectionsUi();
-  const studio = createStudioUi({ engine, stopPlayback,
-    // The Sequencer's pattern now, for Studio's "Open this pattern in Studio" (U010, P4).
+  const studio = createStudioUi({ engine, stopPlayback, outputRefusalOf,
+    claim: bus.claim, release: bus.release, // Studio PLAY and the Synth arm (C037)
+    trace, onTraceIdle: (fn) => traceIdle.add(fn), // the one trace (C050)
+    onPlayback: bus.subscribe, // the playing state (C051)
+    // The Sequencer's pattern now, for its "Otevřít tuto sekvenci ve Studiu" (U010, P4).
     currentSequence: () => (labs.sequencer ? serializeSequence(labs.sequencer.editor.model) : null),
     playgroundVoice: playgroundVoiceInput, // the Signal Path's "Open in Studio" (V605)
   });
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
-  const midi = createMidiUi({ engine, sequencerPlaying });
+  // V508: a controller's Start, Continue, Stop and DAW buttons drive the Sequencer's own
+  // transport in the Sequencer (its panel's play, stop and loop, as its buttons do).
+  const sequencerTransport = {
+    play() { if (!labs.sequencer) return false; labs.sequencer.editor.play();
+      labs.sequencer.render(); return true; },
+    stop() { if (!labs.sequencer) return false; labs.sequencer.editor.stop(); return true; },
+    loop() { if (!labs.sequencer) return false; const ed = labs.sequencer.editor;
+      ed.setLoop(!ed.model.loop); labs.sequencer.render(); return true; },
+    playing: () => !!(labs.sequencer && labs.sequencer.editor.playing),
+  };
+  const midi = createMidiUi({ engine, sequencerPlaying, bus, sequencerTransport });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
-    TEMPLATE_HELPERS);
+    TEMPLATE_HELPERS, { busArmed: (owner, on) => bus.armed(owner, on) });
   cmp.dismissAlert = focusSafeDismiss(cmp.dismissAlert);
   const baseRefreshDebug = cmp.refreshDebug;
   Object.defineProperty(cmp, 'refreshDebug', {
@@ -903,6 +943,12 @@ function createOscillaComponent(ui) {
   });
   Object.defineProperty(cmp, 'init', {
     value() {
+      // What leaving a workspace does to each owner is the playback bus's one table (C053:
+      // core/output-bus.js LEAVE_POLICY): a measurement stops, held keys are released, an
+      // armed-only Synth or Studio run is disarmed, the rest sounds on and the status bar says
+      // so. Registered first, so it reads every owner before another watcher of the workspace
+      // (the keys' dock folding releases them too) has changed it.
+      this.$watch('workspace', (ws, old) => bus.leave(old, ws));
       shellInit.call(this);
       this.measureInit();
       this.experimentsInit();
@@ -990,6 +1036,8 @@ window.OSCILLA = {
   labErrors,
   get app() { return app; },
   get host() { return host; },
+  // OBSERVES the playback bus (C037): which player holds the output now, or null.
+  bus: Object.freeze({ owner: () => bus.owner() }),
   get measure() { return app ? app.measureTestSeam() : null; },
   get experiments() { return app ? app.experimentsTestSeam() : null; },
   get studio() { return app ? app.studioTestSeam() : null; },

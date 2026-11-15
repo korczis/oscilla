@@ -7,7 +7,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GRAPH, browseView, captureSources, catalogEntries, entryAction, registerPatchSource,
+  GRAPH, browseView, captureSources, catalogEntries, entryAction, registerPanelInsert,
+  registerPatchSource,
 } from '../../src/js/studio/patch-catalog.js';
 import { createPatch, importPatch } from '../../src/js/studio/patches.js';
 import { nodePresetPatch } from '../../src/js/studio/node-presets.js';
@@ -56,9 +57,9 @@ test('filters by instrument and by tag are exact, and the counts are the lists\'
     assert.ok(items.every((x) => x.tags.includes(t.id)), t.id);
   }
   const both = browseView(all, st.getModel(), { instrument: 'fm-voice', tag: 'engine' }).items;
-  assert.deepEqual(both.map((x) => x.name), ['FM bell', 'FM keys']);
-  assert.deepEqual(browseView(all, st.getModel(), { query: 'BELL' }).items.map((x) => x.name)
-    .sort(), ['FM bell', 'Ring bell']);
+  assert.deepEqual(both.map((x) => x.name), ['FM zvon', 'FM piano']);
+  assert.deepEqual(browseView(all, st.getModel(), { query: 'ZVON' }).items.map((x) => x.name)
+    .sort(), ['FM zvon', 'Kruhový zvon']);
   assert.equal(browseView(all, st.getModel(), { instrument: 'nope' }).items.length, 0);
 });
 
@@ -97,7 +98,8 @@ test('an inserted patch that plays notes is what the keys then play, in the same
   const added = done.created.nodes[0];
   const node = st.getModel().graph.nodes.find((n) => n.id === added);
   assert.equal(node.type, 'fm-voice');
-  assert.equal(node.metadata.name, 'FM keys');
+  assert.equal(node.metadata.name, e.name);
+  assert.equal(e.name, 'FM piano');
   assert.equal(st.getModel().metadata.noteTarget, added);
   st.undo();
   assert.equal(st.getModel().metadata.noteTarget, undefined);
@@ -116,7 +118,15 @@ test('negative: a patch for an instrument the model lacks says so; Insert still 
   assert.match(entryAction(empty, fm, 'apply').reason, /has no FM engine: Insert adds one/);
   const st = store(empty);
   assert.equal(st.dispatch(entryAction(empty, fm, 'insert').action).ok, true);
-  assert.equal(entryAction(empty, panel, 'insert').reason, 'Bass cannot be loaded that way.');
+  // K225: a panel preset inserts the panel itself through the inserter synth/library.js
+  // registers; the registration is module-global, so both states are set here, not inherited
+  // from another test. The insert itself is tests/unit/synth-panel-library-insert.test.mjs.
+  registerPanelInsert(null);
+  assert.equal(entryAction(empty, panel, 'insert').reason, 'Panel Synthu sem nelze vložit.');
+  registerSynthSources();
+  const ins = entryAction(empty, panel, 'insert');
+  assert.equal(ins.action && ins.action.type, 'BATCH', 'registered, Insert builds the panel');
+  registerPanelInsert(null);
   // Several of the type and nothing selected: choose one; selected: it applies to that one.
   const p = panelStore().getModel();
   const dark = all.find((e) => e.id === 'node-filter-dark');
@@ -124,6 +134,92 @@ test('negative: a patch for an instrument the model lacks says so; Insert still 
   const lpf = PANEL.resolve(p).get('lpf').id;
   assert.deepEqual(entryAction(p, dark, 'apply', { target: lpf }).action.onto, { n: lpf });
 });
+
+test('Apply sets the selected engine, not the panel\'s module its patch names', () => {
+  const st = panelStore();
+  const all = catalogEntries();
+  const bell = all.find((e) => e.id === 'synth-fm-bell');
+  const keys = all.find((e) => e.id === 'synth-fm-keys');
+  const added = st.dispatch(entryAction(st.getModel(), bell, 'insert').action).created.nodes[0];
+  const panelFm = PANEL.resolve(st.getModel()).get('fm').id;
+  assert.notEqual(added, panelFm);
+  const m = st.getModel();
+  // Nothing selected: the engine preset still finds the Synth panel's FM module.
+  assert.deepEqual(entryAction(m, keys, 'apply').action.onto, { fm: panelFm });
+  // The person selected the inserted FM engine: that node is the one it sets.
+  const v = browseView([keys], m, { target: added }).items[0];
+  assert.deepEqual([v.applicable, v.reason], [true, null]);
+  const r = entryAction(m, keys, 'apply', { target: added });
+  assert.deepEqual(r.action.onto, { fm: added });
+  const before = m.graph.nodes.find((n) => n.id === panelFm).params;
+  assert.equal(st.dispatch(r.action).ok, true);
+  const params = (id) => st.getModel().graph.nodes.find((n) => n.id === id).params;
+  const want = keys.patch.graph.nodes[0].params;
+  for (const k of Object.keys(want)) assert.deepEqual(params(added)[k], want[k], k);
+  assert.deepEqual(params(panelFm), before, 'the panel\'s FM module is untouched');
+});
+
+test('negative: Apply refuses a selected node of another type, naming it and the panel module',
+  () => {
+    // K186 criterion 2: before, the LPF selected sent FM keys to the panel's FM module unsaid.
+    const st = panelStore();
+    const keys = catalogEntries().find((e) => e.id === 'synth-fm-keys');
+    const m = st.getModel();
+    const lpf = PANEL.resolve(m).get('lpf');
+    const fm = PANEL.resolve(m).get('fm');
+    const r = entryAction(m, keys, 'apply', { target: lpf.id });
+    assert.equal(r.action, undefined);
+    assert.match(r.reason, new RegExp(`Vybraný uzel ${lpf.metadata.name} je typu .*; `
+      + `patch ${keys.name} je určen pro modul ${fm.metadata.name} panelu Synth`));
+    const v = browseView([keys], m, { target: lpf.id }).items[0];
+    assert.deepEqual([v.applicable, v.reason], [false, r.reason]);
+    assert.equal(st.getModel(), m, 'the model is unchanged');
+  });
+
+test('negative: Apply refuses another module of the patch\'s own panel (HARD SYNC, WAVETABLE)',
+  () => {
+    const st = panelStore();
+    const all = catalogEntries();
+    const m = st.getModel();
+    const res = PANEL.resolve(m);
+    const wt = res.get('wavetable');
+    const sync = res.get('sync');
+    assert.equal(wt.type, sync.type, 'two modules of one type');
+    const params = (id) => st.getModel().graph.nodes.find((n) => n.id === id).params;
+    const before = { [wt.id]: params(wt.id), [sync.id]: params(sync.id) };
+    const cases = [['synth-formant-pad', sync, wt], ['synth-sync-lead', wt, sync]];
+    for (const [id, sel, home] of cases) {
+      const e = all.find((x) => x.id === id);
+      assert.deepEqual(entryAction(m, e, 'apply').action.onto, { [e.patch.graph.nodes[0].id]:
+        home.id }, `${id}: nothing selected sets its own module`);
+      assert.deepEqual(entryAction(m, e, 'apply', { target: home.id }).action.onto,
+        { [e.patch.graph.nodes[0].id]: home.id }, `${id}: its own module selected`);
+      const r = entryAction(m, e, 'apply', { target: sel.id });
+      assert.equal(r.action, undefined, id);
+      assert.match(r.reason, new RegExp(`Vybraný uzel ${sel.metadata.name} je jiný modul `
+        + `panelu Synth; .* je určen pro modul ${home.metadata.name} panelu Synth`), id);
+      assert.equal(browseView([e], m, { target: sel.id }).items[0].reason, r.reason, id);
+    }
+    assert.equal(st.getModel(), m, 'the model is unchanged');
+    assert.equal(params(sync.id).bank, 'sync', 'HARD SYNC keeps its bank');
+    assert.deepEqual(params(wt.id), before[wt.id], 'WAVETABLE is untouched');
+    assert.deepEqual(params(sync.id), before[sync.id], 'HARD SYNC is untouched');
+  });
+
+test('negative: a panel preset (several nodes) ignores the selected node, module by module',
+  () => {
+    const m = panelStore().getModel();
+    const bass = catalogEntries().find((e) => e.id === 'synth-bass');
+    assert.ok(bass.patch.graph.nodes.length > 1, 'a panel preset has several nodes');
+    const res = PANEL.resolve(m);
+    const plain = entryAction(m, bass, 'apply').action.onto;
+    assert.equal(plain.hpf, res.get('hpf').id);
+    // The LPF is selected: the preset's HPF still sets the panel's HPF, not the selection.
+    for (const sel of ['lpf', 'vco2']) {
+      const r = entryAction(m, bass, 'apply', { target: res.get(sel).id });
+      assert.deepEqual(r.action.onto, plain, sel);
+    }
+  });
 
 test('the saved patches and a registered source (the XY pad hook) join the same library', () => {
   const st = panelStore();

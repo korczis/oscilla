@@ -3,6 +3,7 @@
 // owns playback; this module only says what the transport strip shows, which command a key
 // means, and what to announce (§144: semantic actions, never per-frame chatter).
 
+import { TEMPO_RANGE } from '../../studio/schema.js';
 import { describeTime, formatSecondsText, formatTransportTime } from './timeline-view.js';
 
 /** Transport readout refresh while playing (ms): text is not rewritten every frame. */
@@ -25,6 +26,30 @@ export function transportStrip(model, playhead) {
     readout: formatTransportTime(pos, model.transport),
     mode: model.transport.timeMode === 'musical' ? 'musical' : 'seconds',
   };
+}
+
+/** Taps that set the tempo: the fourth tap of a series sets it (K068, W006). */
+export const TAP_COUNT = 4;
+/** A tap later than this after the previous one starts a new series (ms). */
+export const TAP_GAP_MS = 2000;
+
+/**
+ * Tap tempo (K068; the transport kind's pure model, W006): `taps`, the series so far (ms, the
+ * owner holds it), and a tap at `now` (ms) -> { taps, bpm, clamped }. A tap more than
+ * TAP_GAP_MS after the previous one, or not after it, starts a new series; the series keeps its
+ * last TAP_COUNT taps. bpm is null until the series has TAP_COUNT taps, then 60000 over the
+ * mean interval of those taps, to 0.1 BPM, clamped to `range` (clamped: true when it was).
+ */
+export function tapTempo(taps, now, range = TEMPO_RANGE) {
+  const prev = Array.isArray(taps) ? taps.filter((t) => Number.isFinite(t)) : [];
+  const last = prev.length ? prev[prev.length - 1] : null;
+  const fresh = last === null || !(now > last) || now - last > TAP_GAP_MS;
+  const series = (fresh ? [now] : prev.concat(now)).slice(-TAP_COUNT);
+  if (series.length < TAP_COUNT) return { taps: series, bpm: null, clamped: false };
+  const mean = (series[series.length - 1] - series[0]) / (series.length - 1);
+  const raw = 60000 / mean;
+  const bpm = Math.min(range[1], Math.max(range[0], Math.round(raw * 10) / 10));
+  return { taps: series, bpm, clamped: raw < range[0] || raw > range[1] };
 }
 
 /** Live-region text of a transport event (§144). */

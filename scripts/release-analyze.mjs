@@ -10,7 +10,11 @@
 //   minor  feat: a new compatible capability
 //   patch  fix, perf, revert; and any commit that is not a conventional commit (it may change
 //          the artifact, so it is never silently dropped)
-//   none   build, chore, ci, docs, refactor, style, test only
+//   none   build, chore, ci, docs, refactor, style, test only; and a merge commit (two or more
+//          parents) that is not itself a conventional feat/fix/perf/revert or breaking: its
+//          members are commits of the same walk and are each counted (R051). A change made
+//          by hand inside a merge (beyond rebuilding dist) is thereby uncounted: land it as
+//          its own conventional commit, never in a merge's conflict resolution
 // The proposal: when package.json already carries an untagged version that satisfies the
 // required level (the initial V2 major after v1.0.0 covers any level), the release confirms
 // it; otherwise the version is bumped once from the last tag (or from package.json when that
@@ -31,18 +35,22 @@ const NONE_TYPES = new Set(['build', 'chore', 'ci', 'docs', 'refactor', 'style',
 const HEADER = /^(?<type>[a-z]+)(?:\((?<scope>[^()\r\n]*)\))?(?<bang>!)?: (?<desc>\S.*)$/i;
 const BREAKING_FOOTER = /^BREAKING[ -]CHANGE: *(\S.*)$/m;
 
-/** Parse one commit message ({ sha, subject, body }). */
-export function parseCommit({ sha = '', subject = '', body = '' }) {
+/** Parse one commit message ({ sha, subject, body, parents }). */
+export function parseCommit({ sha = '', subject = '', body = '', parents = 1 }) {
   const m = HEADER.exec(subject.trim());
   const footer = BREAKING_FOOTER.exec(body || '');
+  const merge = parents >= 2;
   if (!m) {
-    return { sha, subject, conventional: false, type: null, scope: null,
+    return { sha, subject, conventional: false, type: null, scope: null, merge,
       breaking: !!footer, breakingNote: footer ? footer[1] : null };
   }
   const { type, scope, bang, desc } = m.groups;
   return { sha, subject, conventional: true, type: type.toLowerCase(), scope: scope ?? null,
-    description: desc, breaking: !!bang || !!footer, breakingNote: footer ? footer[1] : null };
+    merge, description: desc, breaking: !!bang || !!footer,
+    breakingNote: footer ? footer[1] : null };
 }
+
+const MERGE_WHY = 'a merge: its members are counted';
 
 /** SemVer level and the reason for one parsed commit. */
 export function commitLevel(c) {
@@ -51,11 +59,13 @@ export function commitLevel(c) {
       : `breaking change marker "!" on ${c.type}` };
   }
   if (!c.conventional) {
+    if (c.merge) return { level: 'none', why: MERGE_WHY };
     return { level: 'patch', why: 'not a conventional commit; counted as patch' };
   }
   if (c.type === 'feat') return { level: 'minor', why: 'feat: new capability' };
   if (PATCH_TYPES.has(c.type)) return { level: 'patch', why: `${c.type}: fix-level change` };
   if (NONE_TYPES.has(c.type)) return { level: 'none', why: `${c.type}: no release impact` };
+  if (c.merge) return { level: 'none', why: `${MERGE_WHY} (type "${c.type}")` };
   return { level: 'patch', why: `unknown type "${c.type}"; counted as patch` };
 }
 
@@ -171,14 +181,18 @@ export function lastReleaseTag(run = gitRunner(), { exclude = null } = {}) {
   return valid[0] || null;
 }
 
-/** Commits in (since, HEAD], newest first; all of history when since is null. */
+/**
+ * Commits in (since, HEAD], newest first; all of history when since is null. `parents` is the
+ * number of parents (2 or more: a merge, R051); an output without the field reads as 1.
+ */
 export function readCommits(since, run = gitRunner()) {
   const range = since ? `${since}..HEAD` : 'HEAD';
-  const out = run(['log', '--format=%H%x1f%s%x1f%b%x1e', range]);
+  const out = run(['log', '--format=%H%x1f%s%x1f%b%x1f%P%x1e', range]);
   return out.split('\x1e').map((r) => r.replace(/^\n/, '')).filter((r) => r.trim())
     .map((r) => {
-      const [sha, subject, body] = r.split('\x1f');
-      return { sha, subject, body: (body || '').trim() };
+      const [sha, subject, body, parents] = r.split('\x1f');
+      const n = (parents || '').trim().split(/\s+/).filter(Boolean).length;
+      return { sha, subject, body: (body || '').trim(), parents: n || 1 };
     });
 }
 

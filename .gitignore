@@ -4,3 +4,7 @@
 node_modules/
 .debug/
 tests/visual/out*/
+_site/
+
+# Local derivations from installed software (scripts/midi): never committed
+.local/

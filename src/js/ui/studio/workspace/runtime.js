@@ -22,6 +22,7 @@ import {
 import { announceAction } from '../../../studio/a11y.js';
 import { compiledEdgeStatus, compiledStatus, nodeWarnings, runtimeStatus } from '../graph-view.js';
 import { compactTime } from '../compact.js';
+import { OWNER } from '../../output-owner.js';
 
 /**
  * The node and edge status the Studio shows (§170-§171): from the running runtime while it plays
@@ -232,9 +233,13 @@ export function createWorkspaceRuntime(ctx, svc, ops) {
     if (!cmp) return;
     if (type === 'state' || type === 'ended') {
       const playing = !!ctx.transport.playing;
-      cmp.studio.playing = playing;
+      // Armed (K104): the runtime runs for the keys while the timeline is stopped; PLAY reads
+      // the timeline, the armed indicator the keys.
+      const armed = !!ctx.transport.armed;
+      cmp.studio.playing = playing && !armed;
+      cmp.studio.armed = armed;
       if (ctx.editor) ctx.editor.setRunning(playing);
-      if (ctx.compact) ctx.compact.setTransport({ playing });
+      if (ctx.compact) ctx.compact.setTransport({ playing: playing && !armed });
       if (playing && !ctx.raf) ctx.raf = requestAnimationFrame(tick);
       if (ctx.handle && ctx.mounted) {
         // Status follows the runtime while it plays and the compile while stopped.
@@ -245,6 +250,8 @@ export function createWorkspaceRuntime(ctx, svc, ops) {
       }
       if (!playing) {
         tick();
+        // The playback bus (C037): the Studio no longer holds the output.
+        if (typeof svc.release === 'function') svc.release(OWNER.studio);
         if (detail && detail.reason === 'end') ops.announce('Studio playback ended');
       }
     } else if (type === 'warning') {
@@ -266,9 +273,10 @@ export function createWorkspaceRuntime(ctx, svc, ops) {
     }
   }
 
-  function stopStudio({ fast = false } = {}) {
+  /** keepArmed: the user's STOP, which leaves a run that began armed armed (K104). */
+  function stopStudio({ fast = false, keepArmed = false } = {}) {
     if (!ctx.transport) return Promise.resolve(null);
-    const p = ctx.transport.stop({ fast });
+    const p = ctx.transport.stop({ fast, keepArmed });
     onTransport('state', { reason: 'stop' });
     return p;
   }
@@ -300,18 +308,22 @@ export function createWorkspaceRuntime(ctx, svc, ops) {
       return true;
     },
 
-    studioStop() {
+    /** keepArmed: the Stop button and the toggle (K104); another owner's stop passes none.
+     *  fast: the bus's stopAll for Escape and a page hide (C050), an 8 ms stop (§185). */
+    studioStop({ keepArmed = false, fast = false } = {}) {
       const run = ctx.measureRun;
       if (run && run.view.state === 'running' && typeof this.measureAbort === 'function') {
         this.measureAbort('user');
       }
-      const p = stopStudio();
-      ops.announce('Studio stopped');
+      const p = stopStudio({ keepArmed: keepArmed === true, fast: fast === true });
+      ops.announce(ctx.transport && ctx.transport.armed
+        ? 'Studio zastaveno, klávesy dál hrají (zapnuté).' : 'Studio stopped');
       return p;
     },
 
     studioTogglePlay() {
-      return ctx.transport && ctx.transport.playing ? this.studioStop() : this.studioPlay();
+      const t = ctx.transport;
+      return t && t.playing && !t.armed ? this.studioStop({ keepArmed: true }) : this.studioPlay();
     },
 
     studioToggleLoop() {

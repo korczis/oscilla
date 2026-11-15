@@ -1182,7 +1182,8 @@ test('unsupported modulation targets compile to inactive routes with a reason (�
   assert.strictEqual(s.runtime.start().ok, true);
   const eh = s.runtime.edges.get(q);
   assert.strictEqual(eh.status, 'inactive');
-  assert.match(eh.reason, /dB AudioParam/);
+  // A linear cable into a low-pass Q stays refused (K232: only a log one is linear in its dB).
+  assert.match(eh.reason, /v dB: lineární kabel/);
   assert.deepStrictEqual(s.runtime.debugInfo().inactiveEdges.map((x) => x.id), [q]);
   // a band-pass Q is linear: the same edge routes after the replacement
   b.set(f, 'type', 'bandpass');

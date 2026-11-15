@@ -1,0 +1,27 @@
+id: K237
+milestone: M066
+serves:
+  - "connected-instrument#drum-machine"
+title: "The Drums help says the hats choke each other both ways, and that a new open hat cuts the one before"
+slug: drums-help-says-the-hats-choke-both-ways
+priority: p3
+profile: implementation
+objective: "C1-K071-1 (P3, oscilla-c1's review of train T5). Since K071 (4df3fc85) hatClosed and hatOpen share choke group 1 by default (perc-recipes.js), and voices.js chokes every sounding voice of the group on a hit in it. Before, only a closed hat cut an open one (chokes: 'hatOpen'). Now an open hat also cuts a ringing closed hat, and a repeated open hat cuts its predecessor. That's a default sound change on existing documents (the demo song plays notes 42 and 46). State it in the Czech help of the Drums row's choke knob and of perc-voice, or choose one-way choking for the default."
+why: "oscilla-c1, rev-seat, finding C1-K071-1 (P3) in the T5 train review (2026-11-10); filed by rev-seat-2 oscilla-c3 on oscilla-43's order. K071 lands with train T5."
+scope:
+  - "src/js/synth/perc-recipes.js"
+  - "src/js/studio/nodes/engines.js"
+  - "src/js/studio/adapters/voices.js"
+  - "src/js/synth/view/drums-tab.js"
+  - "tests/unit"
+  - ".ai/repo/project/issues/K237.yaml"
+depends_on:
+  - "K071"
+acceptance_criteria:
+  - "A unit case pins the default behaviour named in the help."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

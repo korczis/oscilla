@@ -1,0 +1,100 @@
+# Review verdict for pull request #555 (feat/v508-midi-transport): train T22 and release v3.38.0
+# (a minor: release:analyze derives minor from the four feat(midi) members).
+# Members: oscilla-ff's V506 (#548: a controller's CC knobs and sustain play the Synth panel;
+# f38e6c49, ab24e78a, 70ec5e74, with this reviewer's 548.yaml 4892ea9a), V507 (#549: device
+# profiles derived by scripts/midi/derive-devices.mjs, port roles, the MIDI section's device list
+# and monitor, one MIDI 1.0 decoder; head 0f829efb), K247 (#553: one keyboard plays the one Studio
+# instrument in every workspace; head 7145ecde) and V508 (#555: MIDI Start/Continue/Stop, the DAW
+# port's Mackie buttons and the measured clock); main 1f1b33e6 (T21, v3.37.5) merged; oscilla-43's
+# chore(release): record v3.37.5 1a19608b, docs(about) 3.38 station e7c466a8 and chore(release):
+# v3.38.0 0860f888, and its test(iphone) f0d04d30 for C3-555-2. The heads of #548, #549 and #553 are ancestors of 0860f888 (checked by the
+# reviewer). Guarded in 5 paths, all V506's: src/js/studio/actions.js (store.gestureId),
+# src/js/studio/history.js (each outermost gesture numbered), src/js/synth/gestures.js,
+# src/js/synth/midi-cc.js and src/js/synth/ui.js. K247's src/js/ui/studio/workspace.js,
+# workspace/keys.js and src/js/core/output-bus.js, V507's src/js/midi and src/data, and V508's
+# src/js/main.js are unguarded and were read as members. Judged at f0d04d30 (the suites at
+# 0860f888, then iphone and npm test again at f0d04d30) on base origin/main 1f1b33e6, 2026-11-15, in the reviewer's own detached worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-ff (p7, claude-code
+# cae276ab) built the four members, oscilla-43 integrated and stamped. Disclosure: every finding
+# below is this reviewer's, found by its own probes; one design choice on C3-553-1 is oscilla-43's
+# under Q090 on the owner's words (K247), within this reviewer's condition that the insert be
+# announced, never silent. The train in one pull request is this reviewer's agreement with
+# oscilla-43 (2026-11-15), on the owner's order "pokracuj, dotahni K247 PR a V508".
+#
+# The digest: origin/main's (1f1b33e6) scripts/review-verdict.mjs --content --list at 0860f888
+# and at f0d04d30: 8e3e7bbc8fffc095... over 5 guarded paths (equal to the integrator's). It was 2862f20e at the
+# members' heads on main 5fea4df3; the paths' diff against main is the same V506 content (main's
+# actions.js moved under it with Czech pass 4).
+#
+# How it was judged:
+# - V506, the reviewer's probe scratchpad k548-cc.cjs on the built dist through the MIDI test stub,
+#   chromium and webkit: C3-548-1 (P2), a CC burst folded the next mouse drag into its undo entry
+#   (one Ctrl+Z took back CC 74 and a drag on lpf.Q; label "Změnit LPF Cutoff (MIDI CC 74)"); now
+#   one burst for the wheel and the controller in gestures.js, closed by press, wheel, choiceKey and
+#   flush, its timer ending only the gesture it began (history gestureId): two entries, one undo
+#   takes back only the drag. C3-548-2, the status line dropped a run's last value; now a trailing
+#   write ("CC 71 → LPF Peak: 30.00"). C3-548-3, sustain pedals survived silence(); cleared.
+#   C3-548-4, after an undo inside a CC run each later message was an entry (8 of 8); now 1.
+# - V507: derive-devices.mjs --check exits 0 on the owner's Mac with the maker's editor installed
+#   (the rule project.midi-profiles-derived asks the reviewer to run it there); the decoder and
+#   notes.js parse agree on every case notes.test covers; the monitor publishes at most every
+#   100 ms and keeps the last row.
+# - K247, probes k553-keys.cjs, k553-undo.cjs and k553-phone.cjs: C3-553-1 (P2), one key press in
+#   the Playground or Measure inserted the Synth panel (6 -> 28 nodes) with only "Synth připraven"
+#   said; now a warning notice with K246's whole sentence, once per insert, with its own Zpět:
+#   clicked, the document is back to 6 nodes with filter-1 feeding Master Output; on top at
+#   25/50/75/95 % of its height at 320x568, 375x667 and 390x844 in chromium and webkit, Zpět
+#   57 x 44 px; in the Studio nothing is inserted. C3-553-2 (P3), after Zpět the next key inserts
+#   again: the follow-up now names the way out ("... vypnete je tlačítkem Odpojit klávesy").
+# - V508: C3-555-1 (P3), a Start or Continue the Studio refused (a measurement owning the output)
+#   still moved the playhead and wrote "→ Studio" in the monitor; now nothing moves and nothing is
+#   said. The clock is measured on event.timeStamp, kept out of the monitor, published at most
+#   every 500 ms and cleared 500 ms after the ticks stop; the transport never follows it.
+# - C3-555-2 (P1, the gate): webkit/iphone reach-compare@iPhone SE "covered 2 > 1" (PubMed
+#   17203911 under CANVAS, ResearchGate 220008865 under status.label) failed 4 of 4 at 0860f888
+#   on the Mac while main 1f1b33e6 passed 3 of 3 alternated in one window (load 11-16), and in
+#   #553's own CI run 43686980362, Browser leg 1 (webkit). The reviewer's probe k555-reach.cjs
+#   found both links in Compare's OL#osc-bio-source-list and K247's dock lifting it; the
+#   reviewer took the list for an unscrolled scroller, oscilla-43 found the true cause: it is the
+#   body of the closed <details> "Sources", which every engine still gives a box. Not a product
+#   defect: nothing a finger reaches is covered. f0d04d30 makes reach() skip a control inside
+#   details:not([open]) unless it is in that details' own summary (src/index.html holds no nested
+#   details); the baseline only falls (compare covered 2 -> 0 on chromium/Pixel 7,
+#   firefox/390x844 and webkit/iPhone 13, 1 -> 0 on webkit/iPhone SE).
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (1f1b33e6's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer (Node 22.20.0, OSC_LOAD_MAX=80, physical KeyLab mkII 61 and BeatStep
+# Pro attached): at 0860f888 GITHUB_BASE_REF=main npm test exit 0 (5829 tests, 5828 pass, 0
+# fail), build:check 0, release:analyze 0 (minor: v3.38.0), scripts/midi/derive-devices.mjs
+# --check 0, src/index.html 309121 B (cap 310000); in chromium, firefox and webkit: synth 0, knob
+# 0, ui-current 0, app 0 (66/66 x 6), navigation 0 (25/25 x 6), v31-studio-workflows 0,
+# control-census 0 (340 pass, 1 expected failure, 0 fail per engine; #553's CI firefox timeout
+# on envelope.attackSlider.pointer did not reproduce), midi exit 1 with 649 passed and only the
+# three hardware results (chromium file/http midi-measured-grant "ends connected" with the real
+# KeyLab and BeatStep, firefox/http midi-measured-connect pending 60 s), environmental and not
+# this train's (as at #547-#554); iphone exit 1 (C3-555-2). At f0d04d30: iphone exit 0 (chromium
+# 61/61, firefox 61/61, webkit 122/122), npm test exit 0 (5829 tests, 5828 pass, 0 fail).
+#
+# Verdict: merge, under the condition above. No finding is open.
+schema: review-verdict/v1
+pr: 555
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of f0d04d30)
+content: 8e3e7bbc8fffc09527cc35c55e3703785ec2b8d5eff3c45b24d36102af1cf026
+findings:
+  - { id: C3-555-2, severity: P1, status: closed, title: "webkit iphone reach-compare@iPhone SE counted the closed Sources details' links covered once K247's dock lifted them (gate red); closed by f0d04d30" }
+  - { id: C3-548-1, severity: P2, status: closed, title: "a CC burst folded the next mouse edit into its undo entry; closed by ab24e78a (one burst, gestureId)" }
+  - { id: C3-553-1, severity: P2, status: closed, title: "a key press outside the Synth and Studio inserted the Synth panel unannounced; closed by 1939f3d5 (K246's sentence with its own Zpět)" }
+  - { id: C3-548-2, severity: P3, status: closed, title: "the Synth status line dropped a CC run's last value; closed by ab24e78a" }
+  - { id: C3-548-3, severity: P3, status: closed, title: "sustain pedals survived silence() and a lost input; closed by ab24e78a" }
+  - { id: C3-548-4, severity: P3, status: closed, title: "after an undo inside a CC run each later message was its own entry; closed by 70ec5e74" }
+  - { id: C3-553-2, severity: P3, status: closed, title: "after Zpět the next key inserted again without naming the way out; closed by e1d7eeb5" }
+  - { id: C3-555-1, severity: P3, status: closed, title: "a refused Start or Continue still moved the playhead and wrote '→ Studio'; closed by a7bf87ca" }

@@ -18,6 +18,7 @@ import crossLinks from './decl/cross-links.js';
 import filterLab from './decl/filter-lab.js';
 import keyboard from './decl/keyboard.js';
 import mic from './decl/mic.js';
+import midi from './decl/midi.js';
 import navigation from './decl/navigation.js';
 import patchBrowser from './decl/patch-browser.js';
 import patternParams from './decl/pattern-params.js';
@@ -36,7 +37,7 @@ import synth from './decl/synth.js';
 export const DECLARATIONS = Object.freeze([...studioTransport, ...studioTimeline,
   ...studioCompact, ...filterLab, ...mic, ...navigation, ...records, ...studioGraph,
   ...studioPatches, ...studioInspector, ...synth, ...keyboard, ...crossLinks, ...status,
-  ...about, ...patternParams, ...shell, ...patchBrowser, ...studioVoice]);
+  ...about, ...patternParams, ...shell, ...patchBrowser, ...studioVoice, ...midi]);
 
 /** The node face of a node definition: its name, its help sentence, the model as its state. */
 export function nodeFaceOf(def) {

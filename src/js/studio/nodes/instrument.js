@@ -1,9 +1,12 @@
 // Studio node types of the Synth panel (plan K059, K060; design synth-design.md §1, §4): Keys
 // (the note source the keyboard, MIDI and the panel's gate fan-out drive), VCO (an oscillator
 // whose pitch is a linear octave input, so a keyboard tracks it exactly) and Ring (ring and
-// amplitude modulation of two audio signals), and the XY Pad (plan K097: X, Y and a pitch
-// quantised to a scale of core/music.js, gated while touched). New types only: no existing definition changes,
-// so every pinned template hash and saved studioHash stays as it is (design D2).
+// amplitude modulation of two audio signals), the XY Pad (plan K097: X, Y and a pitch
+// quantised to a scale of core/music.js, gated while touched) and Contour (plan K207: a
+// gate-driven attack, hold and release control, 0 to 1, with invert; adapters/instrument.js
+// schedules it with audio/envelope.js). K060 added Key low and Key high
+// to Keys: a saved document holding a Keys node takes their defaults on load, so its
+// studioHash changes once (a hash epoch for documents with Keys; no pinned template holds one).
 //
 // Pitch is "requested digital frequency" (project.no-fake-science): a VCO's pitch and FM inputs
 // add in octaves (1.00 oct per unit, exact in the digital domain) and the sum is clipped so the
@@ -12,9 +15,10 @@
 import { SAFE_NYQUIST_FACTOR_TEXT } from '../../core/constants.js';
 import { NOTE_NAMES, SCALE_LABELS, SCALE_MODES, midiToName, scaleNote } from '../../core/music.js';
 import { definePort } from '../ports.js';
+import { MIN_SEGMENT_S } from '../../audio/envelope.js';
 import {
-  CATEGORIES, defineNode, enumParam, integerParam, numberParam, optionLabel, parts, secondsParam,
-  secs,
+  CATEGORIES, boolParam, defineNode, enumParam, integerParam, numberParam, optionLabel, parts,
+  secondsParam, secs,
 } from './common.js';
 
 /** The Keys pitch output: octaves from A4, the range its edges are sized from. */
@@ -46,24 +50,37 @@ export const keys = defineNode({
     integerParam('transpose', 'Transpose', { min: -24, max: 24, unit: 'st', default: 0 }),
     enumParam('priority', 'Priority', [['last', 'Last'], ['low', 'Low'], ['high', 'High']],
       'last'),
+    // live: an edit applies from the next note (the adapter's update reports 'next-note').
+    integerParam('keyLow', 'Key low', { min: 0, max: 127, default: 0, live: 'next-note' }),
+    integerParam('keyHigh', 'Key high', { min: 0, max: 127, default: 127, live: 'next-note' }),
   ],
+  clipKinds: ['event'],
   summary(p) {
+    const lo = Math.min(p.keyLow, p.keyHigh);
+    const hi = Math.max(p.keyLow, p.keyHigh);
+    const full = lo === 0 && hi === 127;
     return parts(optionLabel(keys, 'priority', p.priority),
       p.glide > 0 ? `glide ${secs(p.glide)}` : null,
-      p.transpose ? `${p.transpose > 0 ? '+' : ''}${p.transpose} st` : null);
+      p.transpose ? `${p.transpose > 0 ? '+' : ''}${p.transpose} st` : null,
+      full ? null : `keys ${midiToName(lo)}-${midiToName(hi)}`,
+      `clamp ${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist`);
   },
   capabilities: { realtime: true, offline: true, notes: true },
   compiler: 'audio/audio-engine.js#AudioEngine',
   help: {
-    what: 'The note source of a monophonic voice: the on-screen and computer keyboard and MIDI '
-      + 'notes play it while the Synth is armed.',
-    inputs: 'None: notes arrive from the keyboard, MIDI or the Synth workspace.',
-    outputs: 'Pitch, in octaves from A4 (−6 to 6, 1.00 oct per octave of the note, exact in '
-      + 'the digital domain); Gate, a trigger at every new top note and a release when the '
-      + 'last key lifts; Velocity, 0 to 1.',
-    constraints: 'One note at a time (last, lowest or highest held key). Glide moves the pitch '
-      + 'with a time constant of Glide / 3, so after Glide less than a twentieth of the step '
-      + 'remains. A released top note returns to the note still held without a new gate.',
+    what: 'Zdroj not monofonního hlasu: hraje ho klávesnice na obrazovce, klávesnice počítače '
+      + 'a noty MIDI, když je Synth připravený ke hře, a klip událostí na něm spouští obálky, '
+      + 'kam vede jeho Gate.',
+    inputs: 'Žádné: noty přicházejí z klávesnice, z MIDI nebo z pracovní plochy Synth.',
+    outputs: 'Pitch v oktávách od A4 (−6 až 6, 1,00 okt. na oktávu noty, v digitální doméně '
+      + 'přesně); Gate, spouštěč při každé nové nejvyšší notě a uvolnění, když se zvedne '
+      + 'poslední klávesa; Velocity, 0 až 1.',
+    constraints: 'Jedna nota najednou (poslední, nejnižší nebo nejvyšší držená klávesa). Glide '
+      + 'je lineární v přesném čase: výška dorazí k nové notě přesně za dobu Glide. Uvolněná '
+      + 'nejvyšší nota se vrátí k notě stále držené bez nové brány. Noty mimo 0 až 127 nebo '
+      + 'mimo Key low až Key high se odmítnou s důvodem. Výška hraná z něj se omezí na '
+      + `${SAFE_NYQUIST_FACTOR_TEXT} × Nyquist běžícího zvukového kontextu a každá nota pod `
+      + 'hranicí ladí přesně.',
   },
 });
 
@@ -166,6 +183,12 @@ export const xyPad = defineNode({
     integerParam('octave', 'Octave', { min: 1, max: 5, default: 3 }),
     integerParam('span', 'Span', { min: 1, max: 4, unit: 'oct', default: 2 }),
     secondsParam('glide', 'Glide', 0, 0, 2, { step: 0.01 }),
+    // The outputs' value at rest (K231): a lane on them replays a recorded take of the pad, a
+    // touch overrides it while held. Elided at 0, so documents without a take are unchanged.
+    numberParam('x', 'X', { min: 0, max: 1, step: 0.01, default: 0, automatable: true,
+      live: 'glide', elide: true }),
+    numberParam('y', 'Y', { min: 0, max: 1, step: 0.01, default: 0, automatable: true,
+      live: 'glide', elide: true }),
   ],
   summary(p) {
     return parts(`${p.key} ${optionLabel(xyPad, 'mode', p.mode)}`, `${p.span} oct from ${p.key}`
@@ -185,4 +208,42 @@ export const xyPad = defineNode({
   },
 });
 
-export default [keys, vco, ring, xyPad];
+export const contour = defineNode({
+  type: 'contour',
+  displayName: 'Contour',
+  idPrefix: 'contour',
+  category: CATEGORIES.MODULATION,
+  aliases: ['ahr', 'ar', 'gate contour', 'obrys', 'řídicí obálka', 'náběh držení doznění'],
+  inputs: [definePort({ id: 'gate', direction: 'in', type: 'TRIGGER', label: 'Brána',
+    channels: 1, rate: 'event', unconnected: 'brána otevřená od startu grafu', monitor: false,
+    compact: false, version: 1 })],
+  outputs: [definePort({ id: 'control', direction: 'out', type: 'CONTROL', label: 'Řízení',
+    channels: 1, rate: 'a-rate', monitor: false, compact: false, version: 1 })],
+  params: [
+    secondsParam('attack', 'Náběh', 0.01, MIN_SEGMENT_S, 10, { live: 'next-gate' }),
+    secondsParam('hold', 'Držení', 0, 0, 10, { live: 'next-gate' }),
+    secondsParam('release', 'Doznění', 0.3, MIN_SEGMENT_S, 10, { live: 'next-gate' }),
+    // structural: the adapter rebuilds the node (crossfaded), never a step on a running output
+    boolParam('invert', 'Obrátit', false, { live: 'crossfade' }),
+  ],
+  summary(p) {
+    return parts(`A ${secs(p.attack)}`, p.hold > 0 ? `H ${secs(p.hold)}` : null,
+      `R ${secs(p.release)}`, p.invert ? 'obráceně' : null);
+  },
+  clipKinds: ['event'],
+  capabilities: { realtime: true, offline: true },
+  compiler: 'audio/envelope.js#applyAdsr',
+  reuses: ['audio/envelope.js#releaseAt'],
+  help: {
+    what: 'Řídicí obrys spouštěný bránou: po otevření brány stoupne lineárně za dobu Náběh '
+      + 'k 1, drží se, a po zavření brány klesne za dobu Doznění k dolní mezi obálky.',
+    inputs: 'Brána, spouštěč (brána uzlu Keys nebo XY Pad, klip událostí jeho stopy).',
+    outputs: 'Řízení, 0 až 1; s volbou Obrátit 1 minus obrys.',
+    constraints: 'Doznění začne se zavřením brány, nejdřív ale po uplynutí Náběhu a Držení, '
+      + 'takže i krátký ťuk dojde k 1 a vydrží Držení. Náběh a Doznění trvají aspoň 1 ms; '
+      + 'uvolnění končí na dolní mezi obálky (−80 dB), ne přesně v nule. Hodnoty se počítají '
+      + 'v digitální doméně a jsou relativní.',
+  },
+});
+
+export default [keys, vco, ring, xyPad, contour];

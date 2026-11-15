@@ -1,7 +1,8 @@
-// The Synth workspace's XY tab (plan K097, K167): a Flowbite Pro card over the panel's xy-pad
-// node. Its wiring, the pad, the "Y drives" target, Patch the pad into the voice, the presets'
-// BATCH and every release path, is the one shared mount of view/xy-wiring.js (mountSynthXy),
-// which the live landing calls too; this file keeps none of its own. Composed by synth/ui.js,
+// The Synth workspace's XY tab (plan K097, K167, K183): a Flowbite Pro card over the panel's
+// xy-pad node. Its wiring, the pad (one more note input of the keys, enabled from the first
+// open), the "Y drives" target, the presets' BATCH and every release path, is the one shared
+// mount of view/xy-wiring.js (mountSynthXy), which the live landing calls too; this file keeps
+// none of its own. Composed by synth/ui.js,
 // which renders the card into the panel view and mounts the pad after it.
 //
 // While the panel's keys sound nothing (xy.js keysSilence: the pad's cables replaced their gate
@@ -10,7 +11,8 @@
 // says it (notes-sink.js).
 //
 //   createXyTab({ panel, get, host, nodes, model, dispatch, say, jackName, tab, showTab, BTN,
-//     cmp }) -> { presets, has(id), html(), mount(), destroy(), preset(id) }
+//     cmp }) -> { presets, has(id), html(), mount(), destroy(), preset(id), arm() }
+//     arm() is the first touch's arm, which the pads under the face (view/pads.js) share
 //     html() is the tab's markup: the notice on the Panel tab, the card on XY
 
 import { XY_RECIPES } from '../xy.js';
@@ -30,9 +32,9 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
       + 'data-osc="synth.xy" aria-labelledby="synth-xy-title"><h3 id="synth-xy-title" '
       + 'class="text-sm font-bold tracking-widest text-gray-900 dark:text-white">XY PAD</h3>';
     if (!nodes().get('xy')) {
-      return `${card}<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">This Studio `
-        + 'document has no XY pad.</p><button type="button" data-restore-module="xy" '
-        + `class="${BTN} mt-2">Add the XY pad</button></section>`;
+      return `${card}<p class="mt-2 text-sm text-gray-700 dark:text-gray-300">Tento `
+        + 'dokument Studia nemá XY pad.</p><button type="button" data-restore-module="xy" '
+        + `class="${BTN} mt-2">Přidat XY pad</button></section>`;
     }
     return `${card}<div class="mt-2" data-xy-body=""></div></section>`;
   }
@@ -62,7 +64,8 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     if (!body || !nodes().get('xy')) return;
     const c = cmp();
     mounted = mountSynthXy(body, { store: get().handle, transport: () => get().transport, panel,
-      owner: 'synth', app: c, arm, say, jackName, dispatch, buttonClass: BTN });
+      owner: 'synth', app: c, arm, say, jackName, dispatch,
+      sampleRate: () => get().sampleRate || null });
   }
 
   function preset(id) {
@@ -80,7 +83,7 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     if (done.ok) {
       showTab('xy');
       cmp().synth.preset = id;
-      say(`XY preset ${recipe.name}.`);
+      say(`Předvolba XY ${recipe.name}.`);
     }
     return done.ok;
   }
@@ -92,5 +95,6 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     mount,
     destroy,
     preset,
+    arm,
   };
 }

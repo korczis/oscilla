@@ -38,7 +38,7 @@ import { NODE_REGISTRY } from '../../studio/registry.js';
 import { CLIP_TARGET_TEXT, gainIsUsed, qIsUsed } from '../../studio/clip-targets.js';
 import { PORT_VISUALS, canConnect, validateEdgeProps } from '../../studio/ports.js';
 import { validateStudioModel } from '../../studio/validate.js';
-import { describeEdge, describeNode, describePortLabel } from '../../studio/a11y.js';
+import { article, describeEdge, describeNode, describePortLabel } from '../../studio/a11y.js';
 import { studioDivergence } from '../../studio/runtime.js';
 import { liveModel } from '../../studio/live-notes.js';
 
@@ -248,15 +248,18 @@ export function runtimeStatus(model, runtime, revision = null) {
   return { nodes, edges };
 }
 
-/** The filter adapter's reason for not applying Q modulation (adapters/processing.js modTarget). */
-export const FILTER_Q_NOT_APPLIED = 'Low-/high-pass Q is a dB AudioParam in Web Audio; a linear Q '
-  + 'modulation would be mis-scaled, so it is not applied.';
+/**
+ * The filter adapter's reason for not applying a linear Q cable (adapters/processing.js
+ * modTarget): the one text, clip-targets.js filterQ (a log cable plays since K232).
+ */
+export const FILTER_Q_NOT_APPLIED = CLIP_TARGET_TEXT.filterQ;
 
 /**
  * Why a modulation the compiler routes cannot be heard, or null (§237: a graph must not look
  * live when it is not). Three rules, all from the node's own model:
- *   - Filter Q on a low-pass or high-pass filter: the adapter does not apply it (Q is a dB
- *     AudioParam there; adapters/processing.js filter.modTarget, the same reason text; the parity
+ *   - A linear cable into Filter Q on a low-pass or high-pass filter: the adapter does not
+ *     apply it (Q is a dB AudioParam there; a log cable, octaves of Q, is linear in it and plays
+ *     since K232; adapters/processing.js filter.modTarget, the same reason text; the parity
  *     with the runtime's inactive edges is a unit test).
  *   - Filter Q on a low-shelf or high-shelf filter: Web Audio ignores it (clip-targets.js
  *     qIsUsed, the adapter's reason).
@@ -271,15 +274,15 @@ export function edgeEffectReason(model, edge, registry = NODE_REGISTRY) {
   if (!tgt || tgt.role !== 'PARAMETER') return null;
   const type = b.params && b.params.type;
   if (edge.to.port === 'Q' && (type === 'lowpass' || type === 'highpass')) {
-    return FILTER_Q_NOT_APPLIED;
+    return edge.props && edge.props.mapping === 'log' ? null : FILTER_Q_NOT_APPLIED;
   }
   if (edge.to.port === 'Q' && !qIsUsed(type)) return CLIP_TARGET_TEXT.filterQUnused;
   if (edge.to.port === 'gain' && !gainIsUsed(type)) {
     const p = registry.param(b.type, 'type');
     const o = p && (p.options || []).find((x) => x[0] === type);
     const label = o ? o[1] : String(type);
-    return `Filter gain applies to peaking and the shelves only; ${/^[aeiou]/i.test(label)
-      ? 'an' : 'a'} ${label} filter ignores it.`;
+    return `Filter gain applies to peaking and the shelves only; ${article(label)} ${label} `
+      + 'filter ignores it.';
   }
   return null;
 }

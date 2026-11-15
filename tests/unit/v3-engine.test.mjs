@@ -524,11 +524,12 @@ test('C016: OTHER_AUDIO is raised by any output owner the caller reports, not on
   async () => {
     // The caller's fact reaches the io, which reports it as output.otherAudio.
     const passed = makeEngine();
+    // (C033 adds the setup check's stimulus, `probe`, and `onWaiting` beside it.)
     await passed.engine.preflight(sweepRecipe(), { otherAudio: true });
-    assert.deepEqual(passed.io.preflightOpts, { otherAudio: true });
+    assert.equal(passed.io.preflightOpts.otherAudio, true);
     passed.engine.reset();
     await passed.engine.preflight(sweepRecipe());
-    assert.deepEqual(passed.io.preflightOpts, { otherAudio: false }, 'absent means false');
+    assert.equal(passed.io.preflightOpts.otherAudio, false, 'absent means false');
 
     const codes = (rep) => rep.warnings.map((w) => w.code);
     // A sequencer or Studio source: no engine voice, the io reports otherAudio.

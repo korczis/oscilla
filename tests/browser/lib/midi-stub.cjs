@@ -17,7 +17,8 @@
 //   reject(i, name, message)   reject request i with a DOMException of that name
 //   plug(name) / unplug(name)  an input appears / is disconnected on the latest access; a
 //                              statechange with its port is dispatched on the access and port
-//   message(name, bytes)       a midimessage with a Uint8Array data and a timeStamp on an input
+//   message(name, bytes[, ts]) a midimessage with a Uint8Array data and a timeStamp (now, or ts)
+//                              on an input
 //   port(name)                 the stub input itself (in the page), to listen on it
 //   delivered(i)               true once request i's settlement has reached the page: the
 //                              stub's own reaction, attached at settle time after the page's,
@@ -201,11 +202,13 @@ function install(cfg) {
       latest.emit(port);
       return true;
     },
-    message(name, bytes) {
+    message(name, bytes, stamp) {
       const port = find(name);
       const ev = new Event('midimessage');
       Object.defineProperty(ev, 'data', { value: Uint8Array.from(bytes), enumerable: true });
-      Object.defineProperty(ev, 'timeStamp', { value: performance.now(), enumerable: true });
+      // The message's own time: now, or the given one (V508: a clock at a known tempo).
+      Object.defineProperty(ev, 'timeStamp', { value: Number.isFinite(stamp) ? stamp
+        : performance.now(), enumerable: true });
       port.dispatchEvent(ev);
       return true;
     },

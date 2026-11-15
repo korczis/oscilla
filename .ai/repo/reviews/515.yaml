@@ -1,0 +1,86 @@
+# Review verdict for pull request #515 (train/t4-sequencer): train T4 of the sequencer line,
+# shipped with T3 as v3.30.0 (v3.30.0 was never tagged on #509's run: the release receipt reads
+# the base ci.yml's job names, which #509 renamed into browser legs; a miss of this reviewer).
+# Members: the playback bus C037, C055, C050, C051, C052, C053 (+ da7ae30c held-key guard), K103
+# trigger gates along TRIGGER edges with one ownership rule (+ ce109589, 0f3568be), K221 Synth
+# step strip (b23ed69a, df157abf), K222 Drums view and percussion engine (44a1ca6a, 1db843e7, the
+# transport-ramps.js split 6ce039dc), K223 Record (a50b14c6), U100 phone room (4e292e95, merged by
+# f75a30de, c08d0f1f), U099 Czech cables (c2065cf8), U098 the short-English ratchet (cd8e339c),
+# the XY owner re-notify fix (6e4b0b3c), the synth/ui split (f2858915), the one-shot hold fix
+# C1-K222-7 (2467bbcc), the link-integrity fixes, plans K226-K230 and Q106; main (#509, #512)
+# merged, record and stamp v3.30.0.
+# Judged at 73ac5768 on base origin/main b8bfd3b6, 2026-11-09, in the reviewer's own detached
+# worktree ~/dev/oscilla-wt/review-515 (member heads in review-506).
+# Reviewers: rev-seat (session oscilla-c1, claude-code 7cad3015) for audio, Studio core,
+# transport, the bus and the Synth's guarded modules; rev-seat-2 (session oscilla-c3) for UI and
+# screens, whose findings are folded in by name. Neither built any of it (builders: oscilla-d9
+# the bus and K103 fixes, oscilla-75 K222/K223 and the U100 merge, oscilla-2e K221/U099/split and
+# the one-shot fix, oscilla-ee U100/W008-line and the XY fix, oscilla-04 K103 base and link
+# fixes; integrator oscilla-43).
+#
+# The digest: origin/main's scripts/review-verdict.mjs --content --list at 73ac5768:
+# d791799a... over 26 guarded paths (audio/clock.js, audio/envelope.js; studio adapters
+# engine-hooks, engines, voices; clip-targets, live-notes, nodes/engines, note-player,
+# notes-record, riffs/audition, riffs/source, transport-ramps, transport, trigger-fanout; synth
+# dock, drums, notes-sink, panels/semi-mono, step-strip-view, step-strip, studio-sink, ui,
+# view/bay, view/drums-tab, view/xy-wiring). All 26 are byte-identical at 73ac5768 and 6adc8d09.
+#
+# How each member was judged (fail-first: the member's new test fails with its predecessor's
+# sources, run by the reviewer unless marked):
+# - Bus stack: output-bus.js claim/yield/stopAll/release/writeMaster/leave read; the shared
+#   transport clock (wakes every scheduler, documented); C052's single master writer (scan test
+#   5/6 fail on 9da4b781); C053 leave policy (4/6 fail on 8681d9b6); master-level AC2 restated
+#   per c1's ruling (newest level wins, compiler.md 244-250, #119 D2).
+# - K103: one fan-out and one ownership rule; C1-K103-1 P2 (a live key bent a playing clip's
+#   pitch) fixed at ce109589 (6/1 on fa43a607); C1-K103-2 P3 fixed at 0f3568be.
+# - K221: C1-K221-1 P2 (the strip played once) and C1-K221-3 fixed at b23ed69a (3 fail with
+#   7521fc69's step-strip.js); c3's R2-K221-1/-2/-3 P2 and the latent R2-K221-8 closed (c3).
+# - K222: C1-K222-5 P2 (an edit cut ringing drums) fixed by cancelFrom (4/3 with d9050229's
+#   files), C1-K222-6 by the clip tag (6/2); c3's R2-K222-1/-2/-5 P2 closed; the transport-ramps
+#   split checked line by line as a move; C1-K222-7 P1 (a cut one-shot held the gain's default 1,
+#   bursting to full scale on choke, steal, all-off and edit-cancel) fixed by 2467bbcc (setAt
+#   through the envelope record; fails "held at 1, not 0.0388" on fa43a607).
+# - K223: C1-K223-1 P2 (hits outside the clip were folded into it) fixed at a50b14c6 (3 fail with
+#   c8fbd0a5's notes-record.js); c3's R2-K223-1/-2 closed.
+# - U100: guarded part (keepsDock, ROOM_EVENT) judged at 0057852e and identical after the T4
+#   merge f75a30de; c3's R2-U100-1/-2 (toasts and the safety advice cut on short screens)
+#   closed at 4e292e95; C1-U100-5 closed at c08d0f1f.
+# - U099 (bay strings Czech; 0/2 with 450ab7ae's synth), the XY re-notify fix (c3: 30/1 -> 31/31),
+#   the synth/ui split (verbatim move), U098 (no guarded path).
+#
+# THE CONDITION of this verdict (as for #509): it binds once the reviewer has read the six
+# "Browser leg N (browser)" logs of this pull request's run and found each leg's shards plan
+# line, "run-suites: all K suites passed" and PASS lines equal to that leg's plan at this head
+# (shards.cjs --plan: chromium 22 + 20, firefox 21 + 21, webkit 20 + 22; 42 units a browser),
+# AND has run the release CI receipt check against this run with the base ci.yml (the #509 miss).
+# Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a superseding verdict.
+#
+# Measured by the reviewer: at 73ac5768 npm test exit 0 (5490 tests, 5488 pass, 0 fail, 2
+# skipped), build:check up to date (v3.30.0), the leg plans above; at 6adc8d09 (guarded content
+# identical) chromium 16/16 suites PASS: v31-studio transport, workflows, audio; instrument-dsp;
+# steps; studio-keys; studio-trigger-gates; step-grid; drums; synth; synth-engines; xy-pad; midi;
+# touch-audio; app; navigation. Not run by the reviewers on the whole set: firefox and webkit
+# (the legs are their receipt) and the visual gate (references re-accepted by the integrator for
+# the Bicí tab; c1 spot-checked the linux desktop panel: only the new tab).
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 515
+verdict: merge
+reviewer: oscilla-c1 rev-seat with oscilla-c3 rev-seat-2 (claude-code 7cad3015; built none of 73ac5768)
+content: d791799a358eba163b5645dabc4f3057a24058d22a761d77fa444f2170651015
+findings:
+  - { id: C1-K222-7, severity: P1, status: closed, title: "a cut one-shot held the gain's default 1 (level set behind the envelope record): choke, steal, all-off and edit-cancel burst to full scale; 2467bbcc" }
+  - { id: C1-K222-5, severity: P2, status: closed, title: "an edit while the drums played cut every ringing voice (allOff); cancelFrom drops only voices not yet started" }
+  - { id: C1-K103-1, severity: P2, status: closed, title: "a live key on a Keys node whose notes clip played bent the clip's pitch without a gate; the Keys node is timeline-owned at ce109589" }
+  - { id: C1-K221-1, severity: P2, status: closed, title: "the step strip played once (4-beat clip, loop off); LOOP_SET in the same BATCH at b23ed69a" }
+  - { id: C1-K223-1, severity: P2, status: closed, title: "Record folded hits played outside the armed clip into it; dropped outside the span at a50b14c6" }
+  - { id: R2-K221-2, severity: P2, status: closed, title: "Delete wrote -1 on the bipolar Step Modulator (full negative modulation); 0 at b23ed69a (c3)" }
+  - { id: R2-K222-5, severity: P2, status: closed, title: "after a pad strike the Drums tab's Play only disarmed (two taps); 1db843e7 (c3)" }
+  - { id: R2-U100-2, severity: P2, status: closed, title: "the safety advice was cut on short screens with no way to read it; whole at 4e292e95 (c3)" }
+  - { id: R2-K223-1, severity: P2, status: closed, title: "a take written at Stop was not announced and Record-off said nothing was written (c3)" }
+  - { id: C1-K221-4, severity: P3, status: open, title: "the strip's loop is set in seconds at the creation tempo; a later tempo change leaves loop and strip out of step" }
+  - { id: C1-K221-2, severity: P3, status: open, title: "K221.yaml's objective still describes a Step Modulator face with three lanes; restate before plan done" }
+  - { id: R2-K221-9, severity: P3, status: open, title: "no value readout during a step value drag (c3)" }
+  - { id: R2-F2-4, severity: P3, status: open, title: "Expand all / Collapse all still English (c3, carried from T3)" }
+  - { id: K023-1, severity: P3, status: open, title: "a Clock with no clips ends at once (carried from T3)" }

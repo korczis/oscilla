@@ -906,7 +906,7 @@ test('transferCsv: corrected column and labelled derived view', () => {
   const csv = transferCsv(SHORT(), meta, {
     view: 'derived', derivation: { smoothing: '1/6 octave (oscilla.smoothing.fractional-octave.v1)',
       normalization: null },
-    correctedDb: Float64Array.from([-2, 1, 0.5]), reliable: [1, 1, 0],
+    correctedDb: Float64Array.from([-2, 1, 0.5]), covered: [1, 1, 1], reliable: [1, 1, 0],
   });
   const lines = csv.split('\n');
   assert.strictEqual(lines[6], '# calibration: frequency profile "UMIK-1 #7001", '
@@ -915,7 +915,8 @@ test('transferCsv: corrected column and labelled derived view', () => {
     + '(oscilla.smoothing.fractional-octave.v1); normalization: none)');
   // G19: under a valid level calibration the transfer columns stay ratios, never dB SPL.
   assert.strictEqual(lines[10], '# column magnitude_db_corrected: dB re unity digital transfer '
-    + '(capture/stimulus ratio), frequency-profile corrected (microphone deviation removed)');
+    + '(capture/stimulus ratio), korigováno frekvenčním profilem (odchylka mikrofonu odečtena) '
+    + 'v 3 z 3 bodů, které profil pokrývá; jinde prázdné (bez extrapolace)');
   assert.strictEqual(lines[12],
     '# column reliable: 1 = reliable, 0 = not (quality assessment mask)');
   assert.strictEqual(lines[14],

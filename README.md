@@ -13,6 +13,11 @@ runtime: no install, no account, nothing sent anywhere, and the same file runs w
 [`dist/index.html`](dist/index.html) from disk (claims `dist-self-contained`,
 `opens-from-file-and-subpath`).
 
+**Landing page:** <https://korczis.github.io/oscilla/lab/>, an interactive overview in Czech
+with the app in a playable frame, cards that open each workspace, the screenshots below and
+charts of the releases, the plan and the claims. It is generated from this repository on every
+Pages deploy, beside the unchanged app.
+
 ### Three things to try first
 
 Each link opens its workspace and starts nothing until you press a button.
@@ -54,7 +59,10 @@ From one static file and with no account:
   difference between their records named;
 - save an experiment and repeat it later from its recipe;
 - generate tones, sweeps and sequences and see them as waveform, spectrum and spectrogram;
-- patch a signal graph in the Studio and run it.
+- patch a signal graph in the Studio and run it;
+- play the Synth, a semi-modular voice with polyphonic engines and an XY pad, from its keyboard,
+  the computer keys or a MIDI keyboard, and keep sounds in one patch library shared with the
+  Studio.
 
 ### From a tone to a result you can trust
 
@@ -72,6 +80,51 @@ The illustration above is drawn, not measured. The screenshot below is the real 
 captured by `npm run social` from `dist/index.html`:
 
 ![OSCILLA playing a 440 Hz sine: source, waveform, relative spectrum, spectrogram, microphone analyzer, sequencer and device limits](site/og-image.png)
+
+### Screenshots
+
+<!-- derived:screenshots:begin (npm run readme) -->
+These are the visual-gate references of the built app, not mock-ups: CI renders
+`dist/index.html` and the visual scripts (`scripts/visual-*.mjs`) fail the build when a
+render drifts from them. They are read from
+`tests/visual/reference.png + tests/visual/*/linux-x64-*.png`.
+
+<table>
+<tr>
+<td align="center"><a href="tests/visual/reference.png"><img src="tests/visual/reference.png" width="400" alt="Playground on a desktop: the visual-gate reference of the built app"></a><br><sub>Playground</sub></td>
+<td align="center"><a href="tests/visual/measure/linux-x64-desktop.png"><img src="tests/visual/measure/linux-x64-desktop.png" width="400" alt="Measure on a desktop: the visual-gate reference of the built app"></a><br><sub>Measure</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-desktop.png"><img src="tests/visual/studio/linux-x64-desktop.png" width="400" alt="Studio on a desktop: the visual-gate reference of the built app"></a><br><sub>Studio</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="tests/visual/studio/linux-x64-desktop-timeline.png"><img src="tests/visual/studio/linux-x64-desktop-timeline.png" width="400" alt="Studio, timeline on a desktop: the visual-gate reference of the built app"></a><br><sub>Studio, timeline</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-compact.png"><img src="tests/visual/studio/linux-x64-compact.png" width="400" alt="Studio in the compact layout: the visual-gate reference of the built app"></a><br><sub>Studio, compact layout</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-bay-dark.png"><img src="tests/visual/synth/linux-x64-desktop-bay-dark.png" width="400" alt="Synth, patch bay on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, patch bay, dark theme</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-engines-dark.png"><img src="tests/visual/synth/linux-x64-desktop-engines-dark.png" width="400" alt="Synth, Engines tab on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, Engines tab, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-panel-dark.png"><img src="tests/visual/synth/linux-x64-desktop-panel-dark.png" width="400" alt="Synth, panel on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, panel, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-desktop-xy-dark.png"><img src="tests/visual/synth/linux-x64-desktop-xy-dark.png" width="400" alt="Synth, XY tab on a desktop, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, XY tab, dark theme</sub></td>
+</tr>
+</table>
+
+On a phone, 390 px wide:
+
+<table>
+<tr>
+<td align="center"><a href="tests/visual/measure/linux-x64-phone.png"><img src="tests/visual/measure/linux-x64-phone.png" width="150" alt="Measure on a phone: the visual-gate reference of the built app"></a><br><sub>Measure</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-phone.png"><img src="tests/visual/studio/linux-x64-phone.png" width="150" alt="Studio on a phone: the visual-gate reference of the built app"></a><br><sub>Studio</sub></td>
+<td align="center"><a href="tests/visual/studio/linux-x64-phone-timeline.png"><img src="tests/visual/studio/linux-x64-phone-timeline.png" width="150" alt="Studio, timeline on a phone: the visual-gate reference of the built app"></a><br><sub>Studio, timeline</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-bay-dark.png"><img src="tests/visual/synth/linux-x64-phone-bay-dark.png" width="150" alt="Synth, patch bay on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, patch bay, dark theme</sub></td>
+</tr>
+<tr>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-engines-dark.png"><img src="tests/visual/synth/linux-x64-phone-engines-dark.png" width="150" alt="Synth, Engines tab on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, Engines tab, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-panel-dark.png"><img src="tests/visual/synth/linux-x64-phone-panel-dark.png" width="150" alt="Synth, panel on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, panel, dark theme</sub></td>
+<td align="center"><a href="tests/visual/synth/linux-x64-phone-xy-dark.png"><img src="tests/visual/synth/linux-x64-phone-xy-dark.png" width="150" alt="Synth, XY tab on a phone, dark theme: the visual-gate reference of the built app"></a><br><sub>Synth, XY tab, dark theme</sub></td>
+</tr>
+</table>
+
+The same views in the light theme: [Synth, patch bay, light theme, desktop](tests/visual/synth/linux-x64-desktop-bay-light.png), [Synth, Engines tab, light theme, desktop](tests/visual/synth/linux-x64-desktop-engines-light.png), [Synth, panel, light theme, desktop](tests/visual/synth/linux-x64-desktop-panel-light.png), [Synth, XY tab, light theme, desktop](tests/visual/synth/linux-x64-desktop-xy-light.png), [Synth, patch bay, light theme, phone](tests/visual/synth/linux-x64-phone-bay-light.png), [Synth, Engines tab, light theme, phone](tests/visual/synth/linux-x64-phone-engines-light.png), [Synth, panel, light theme, phone](tests/visual/synth/linux-x64-phone-panel-light.png), [Synth, XY tab, light theme, phone](tests/visual/synth/linux-x64-phone-xy-light.png).
+<!-- derived:screenshots:end -->
 
 ## What it does
 
@@ -91,10 +144,168 @@ from C to the next C, black keys on W E T Y U, Z / X for the octave and C / V fo
 by physical key, so a QWERTZ or AZERTY keyboard works too. Space stays the play key. The
 on-screen keys under them play with a pointer and light up whatever plays them, a MIDI keyboard
 included. The Studio has its own switch (`#m=studio&kbd=1`). The details are in
-[docs/midi.md](docs/midi.md) and in the Keyboard shortcuts dialog (**?**).
+[docs/midi.md](docs/midi.md) and in the Keyboard shortcuts dialog (**?**). The dialog lists,
+for the workspace it opens in, the rows of the key tables `src/js/ui/shortcuts.js` holds (the
+global keys, the instrument, Sequencer timeline and armed-keyboard rows, Measure's Esc and the
+Studio's own tables); it does not read the key registry of `src/js/ui/keys/`. Armed, the
+keyboard takes A, C, F and T ahead of the Studio's own letters.
 
 The words OSCILLA uses for its objects (project, Studio, runtime, measurement, run, experiment,
 definition, calibration, trace) are defined in the [glossary](docs/GLOSSARY.md).
+
+## Workspaces, templates and engines
+
+The lists in this section are generated: `npm run readme` renders them from the registries in
+`src/` through `scripts/facts.mjs`, and `npm run readme:check` (part of `npm run verify`) fails
+when one of them is edited by hand or a registry changes without them (claim `readme-derived`).
+
+<!-- derived:workspaces:begin (npm run readme) -->
+Every workspace of the app, in sidebar order, read from `WORKSPACE_REGISTRY` in
+`src/js/ui/shell.js`. **Open** starts the live app in that workspace; the links
+under *Leads on to* are the Related strip its page header shows.
+
+| Workspace | Leads on to | Open |
+| --- | --- | --- |
+| **Playground** | [Measure](https://korczis.github.io/oscilla/#m=measure), [Synth](https://korczis.github.io/oscilla/#m=synth), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=playground) |
+| **Measure** | [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Studio](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=measure) |
+| **Experiments** | [Measure](https://korczis.github.io/oscilla/#m=measure), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=experiments) |
+| **Analyzer** (Analyze) | [Measure](https://korczis.github.io/oscilla/#m=measure), [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=analyzer) |
+| **Filter Lab** (Analyze) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=filter-automation), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=filter) |
+| **Compare** (Analyze) | [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Measure](https://korczis.github.io/oscilla/#m=measure), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=compare) |
+| **Synthesis** (Synthesis) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat) | [Open](https://korczis.github.io/oscilla/#m=synthesis) |
+| **Sequencer** (Synthesis) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence), [Presets](https://korczis.github.io/oscilla/#m=presets) | [Open](https://korczis.github.io/oscilla/#m=sequencer) |
+| **Presets** (Synthesis) | [Playground](https://korczis.github.io/oscilla/#m=playground), [Synth](https://korczis.github.io/oscilla/#m=synth), [Synthesis](https://korczis.github.io/oscilla/#m=synthesis) | [Open](https://korczis.github.io/oscilla/#m=presets) |
+| **Learn** | [Analyzer](https://korczis.github.io/oscilla/#m=analyzer), [Synth](https://korczis.github.io/oscilla/#m=synth), [Measure](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=learn) |
+| **Studio** | [Synth](https://korczis.github.io/oscilla/#m=synth), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer), [Filter Lab](https://korczis.github.io/oscilla/#m=filter) | [Open](https://korczis.github.io/oscilla/#m=studio) |
+| **Synth** | [Studio](https://korczis.github.io/oscilla/#m=studio), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=synth) |
+| **About** | [Playground](https://korczis.github.io/oscilla/#m=playground), [Learn](https://korczis.github.io/oscilla/#m=learn), [Measure](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=about) |
+
+How the workspaces lead into each other, inferred from the same registry (each arrow is a
+`related` entry; the app states each reason in Czech, so this English page omits them):
+
+```mermaid
+flowchart LR
+  ws_playground["Playground"]
+  ws_measure["Measure"]
+  ws_experiments["Experiments"]
+  ws_learn["Learn"]
+  ws_studio["Studio"]
+  ws_synth["Synth"]
+  ws_about["About"]
+  subgraph grp_analyze["Analyze"]
+    ws_analyzer["Analyzer"]
+    ws_filter["Filter Lab"]
+    ws_compare["Compare"]
+  end
+  subgraph grp_synthesis["Synthesis"]
+    ws_synthesis["Synthesis"]
+    ws_sequencer["Sequencer"]
+    ws_presets["Presets"]
+  end
+  ws_playground --> ws_measure
+  ws_playground --> ws_synth
+  ws_playground --> ws_learn
+  ws_measure --> ws_experiments
+  ws_measure --> ws_studio
+  ws_measure --> ws_learn
+  ws_experiments --> ws_measure
+  ws_experiments --> ws_analyzer
+  ws_analyzer --> ws_measure
+  ws_analyzer --> ws_experiments
+  ws_analyzer --> ws_learn
+  ws_filter --> ws_synth
+  ws_filter --> ws_studio
+  ws_filter --> ws_analyzer
+  ws_compare --> ws_experiments
+  ws_compare --> ws_measure
+  ws_compare --> ws_learn
+  ws_synthesis --> ws_synth
+  ws_synthesis --> ws_studio
+  ws_synthesis --> ws_studio
+  ws_sequencer --> ws_synth
+  ws_sequencer --> ws_studio
+  ws_sequencer --> ws_presets
+  ws_presets --> ws_playground
+  ws_presets --> ws_synth
+  ws_presets --> ws_synthesis
+  ws_learn --> ws_analyzer
+  ws_learn --> ws_synth
+  ws_learn --> ws_measure
+  ws_studio --> ws_synth
+  ws_studio --> ws_sequencer
+  ws_studio --> ws_filter
+  ws_synth --> ws_studio
+  ws_synth --> ws_sequencer
+  ws_synth --> ws_learn
+  ws_about --> ws_playground
+  ws_about --> ws_learn
+  ws_about --> ws_measure
+```
+<!-- derived:workspaces:end -->
+
+### Studio templates
+
+<!-- derived:templates:begin (npm run readme) -->
+The Studio templates, in library order, read from `STUDIO_TEMPLATES` in
+`src/js/studio/templates/index.js`. Each link opens the template in the live Studio; nothing
+plays until you press Play.
+
+| Template | Category | What it is | Open |
+| --- | --- | --- | --- |
+| **Basic Tone** | synthesis | One oscillator into the Master Output: the shortest signal path a Studio can have. | [Open](https://korczis.github.io/oscilla/#m=studio&st=basic-tone) |
+| **Subtractive Synth** | synthesis | A bright sawtooth shaped by an envelope, then darkened by a low-pass filter whose cutoff an LFO and an automation lane move. | [Open](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth) |
+| **Sweep Sequence** | synthesis | A rising sweep, a short silence and a falling sweep, played by the existing sequencer from pattern clips on the timeline. | [Open](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence) |
+| **Stereo Beat** | synthesis | Two sine tones, 200 Hz on the left and 204 Hz on the right, routed by a Stereo Split. | [Open](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat) |
+| **Filter Automation** | synthesis | Noise through a band-pass filter; an automation lane moves the centre frequency from 200 Hz to 4 kHz and back over 8 seconds. | [Open](https://korczis.github.io/oscilla/#m=studio&st=filter-automation) |
+| **Measurement Sweep** | measurement | A transfer measurement: a logarithmic sweep plays through the output while the microphone records, and the Transfer Analyzer compares the two. | [Open](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep) |
+| **First Patch** | synthesis | A sawtooth Oscillator into the Master Output, with five timeline markers that name the first steps: play, add a Filter, move its cutoff, add a Spectrum, save. | [Open](https://korczis.github.io/oscilla/#m=studio&st=first-patch) |
+| **Filter Envelope Synth** | synthesis | A sawtooth through an Envelope and a resonant low-pass filter; the Envelope shapes the level of each note and, through its control output, sweeps the cutoff. | [Open](https://korczis.github.io/oscilla/#m=studio&st=filter-envelope-synth) |
+| **FM Chime** | synthesis | An inharmonic FM tone: a 440 Hz sine whose frequency an LFO at 616 Hz (ratio 1.4) modulates by ±616 Hz, struck by an Envelope that decays. | [Open](https://korczis.github.io/oscilla/#m=studio&st=fm-chime) |
+| **Ring Mod** | synthesis | A triangle line multiplied by a 470 Hz sine: a Gain at 0 with a bipolar LFO edge of depth 1 on its gain, so the gain runs from -1 to 1. | [Open](https://korczis.github.io/oscilla/#m=studio&st=ring-mod) |
+| **Drive Lead** | synthesis | A sawtooth lead through the Drive, a tanh soft-saturation curve, then a low-pass filter at 3.2 kHz. | [Open](https://korczis.github.io/oscilla/#m=studio&st=drive-lead) |
+| **Macro Pad** | synthesis | An A minor chord of three sawtooth Oscillators; one Macro opens the filter and brings in the fifth, and an automation lane moves the Macro from 0 to 1 and back. | [Open](https://korczis.github.io/oscilla/#m=studio&st=macro-pad) |
+| **Step Bass** | synthesis | A sawtooth bass line through a low-pass filter whose cutoff a Step Modulator moves by up to 1.5 octaves, one step per 16th note. | [Open](https://korczis.github.io/oscilla/#m=studio&st=step-bass) |
+| **Demo song: Lantern in the Slag Yard** | synthesis | An original slow riff-rock song in A minor at 96 BPM: 44 bars of bass riff, lead line and drums, played by Studio nodes from tempo-linked clips (110 s). | [Open](https://korczis.github.io/oscilla/#m=studio&st=demo-song) |
+<!-- derived:templates:end -->
+
+### Synth engines
+
+<!-- derived:engines:begin (npm run readme) -->
+The polyphonic engines of the Synth's Engines tab, in picker order, read from
+`ENGINE_MODULES` in `src/js/synth/panels/engines.js` ([open the Synth](https://korczis.github.io/oscilla/#m=synth)):
+
+- **ADDITIVE** (`additive`)
+- **FM** (`fm`)
+- **AM / RING** (`am`)
+- **WAVETABLE** (`wavetable`)
+- **HARD SYNC** (`sync`)
+- **PERCUSSION** (`perc`)
+
+Shown disabled, each with the reason it cannot be offered yet (`ENGINE_BLOCKED`): **PLUCKED STRING**, **FM FEEDBACK**.
+<!-- derived:engines:end -->
+
+### Live charts
+
+<!-- derived:live:begin (npm run readme) -->
+These charts are regenerated from the repository on every Pages deploy (release records,
+the plan, the claims ledger, the review records, git history and the trees of the release
+tags, read by `scripts/facts.mjs`), so they are current without a commit; nothing in them
+is estimated. The interactive versions are on the landing's [charts page](https://korczis.github.io/oscilla/lab/grafy/), and each dashboard of the [landing page](https://korczis.github.io/oscilla/lab/) has its
+own page: [claims explorer](https://korczis.github.io/oscilla/lab/tvrzeni/), [per-release changes](https://korczis.github.io/oscilla/lab/zmeny/), [roadmap](https://korczis.github.io/oscilla/lab/roadmapa/), [ratchets](https://korczis.github.io/oscilla/lab/dluh/), [reviews and audits](https://korczis.github.io/oscilla/lab/revize/) and [ADRs](https://korczis.github.io/oscilla/lab/adr/).
+
+<p><img src="https://korczis.github.io/oscilla/lab/charts/releases.svg" width="100%" alt="Release timeline: every published release of OSCILLA by its publication date"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/size.svg" width="100%" alt="The size of the single-file app (dist/index.html) in each published release"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/plan.svg" width="100%" alt="Plan progress: the issues done of each milestone, by milestone status"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/claims.svg" width="100%" alt="The claims of docs/CLAIMS.yaml by status"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/activity.svg" width="100%" alt="Commits per ISO week over the last 26 weeks of the repository"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/modules.svg" width="100%" alt="Source size of each src/js module at the deployed commit, largest first"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/growth.svg" width="100%" alt="Unit test files and browser suites in the tree of each release tag"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/burnup.svg" width="100%" alt="Plan burn-up: issues in the plan and issues done, cumulative per UTC day"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/claims-trend.svg" width="100%" alt="The claims of docs/CLAIMS.yaml by status at every release tag"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/ratchets.svg" width="100%" alt="Every ratchet baseline of the repository at each release tag, one panel each"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/reviews.svg" width="100%" alt="Review findings by severity per ISO week of the review record"></p>
+<p><img src="https://korczis.github.io/oscilla/lab/charts/cadence.svg" width="100%" alt="Hours between consecutive published releases, with their median"></p>
+<!-- derived:live:end -->
 
 ## Navigation
 
@@ -157,7 +368,8 @@ entries come from one registry (`src/js/ui/shell.js`), so adding a workspace is 
   marked: the instrument's, or while only the sequencer plays the sequence's (hidden in its
   silences). The waveform scope traces the output analyser whenever the instrument, the
   sequencer or the Studio plays, and names which one.
-- **Spectrogram:** a scrolling time-frequency view, with level shown as colour. Freeze,
+- **Spectrogram:** a scrolling time-frequency view, with level shown as colour, fed by the
+  unsmoothed spectrum; hovering it reads the frequency and the relative level in dB. Freeze,
   Pause animation and a hidden page pause its time axis: the paused interval is left unwritten,
   never filled with the first spectrum read afterwards.
 - **Microphone analyzer and compare:** your microphone's spectrum and spectrogram, the detected
@@ -343,8 +555,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
   whose setup was changed, records a definition derived from the recipe it played and marked
   as derived, never as authored. An experiment is shown under a stored definition's name only
   when that definition has its version with its hash
-  ([ADR 0043](.ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md),
-  proposed).
+  ([ADR 0043](.ai/repo/adrs/0043-runs-executed-from-versioned-experiment-definitions.md)).
 - **Recorded as measured.** The calibration saved is the one the measurement applied, and the
   notes are those at its start. A profile loaded, a correction switched or a level calibration
   made after the measurement never becomes part of its record, and the Experiment panel says so; notes
@@ -365,8 +576,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
   it covers; the algorithm ids, environment notes and lineage are covered by no result hash.
   The raw capture is never retained: OSCILLA stores the
   derived result (see [Privacy](#privacy)). Anything the record does not store reads "not recorded"
-  ([ADR 0044](.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md),
-  proposed).
+  ([ADR 0044](.ai/repo/adrs/0044-evidence-on-a-run-lineage-and-reproducibility-checklist.md)).
 - **Findings.** A finding is your interpretation, linked to the evidence it rests on, and kept
   apart from what was measured: a measurement is what was observed or computed, an observation
   is what you recorded, and a finding interprets evidence. Its status is one of observation,
@@ -400,7 +610,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
   status, references and notes). Findings export as `.oscilla-findings.json` with
   that identity; an import is validated whole before anything is stored, a newer schema is
   refused, and a cited experiment that is not in this browser reads "not stored here"
-  ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md), proposed).
+  ([ADR 0046](.ai/repo/adrs/0046-findings-interpretation-linked-to-evidence.md)).
 - **Connected records.** An experiment's detail, each definition and each finding (and each
   saved project in Studio's Projects and patches dialog) answer two questions: what is this
   connected to, and what depends on it. Every entry comes from one field a record stores, and
@@ -422,15 +632,14 @@ filter class is claimed. An experiment saved from Measure does not store band le
   is a link; an experiment shown as stored here is read again before its link is followed,
   also from Studio's dialog, the record opened is the one that was read, and one that changed
   since the list was read is not opened
-  ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md), proposed).
+  ([ADR 0048](.ai/repo/adrs/0048-connected-records-over-stored-fields.md)).
 - **A completed experiment cannot be changed.** Only the name, the annotation notes and the baseline
   mark of a saved
   experiment can be edited, and no hash covers them. The store refuses any other change to a
   completed experiment, and rename edits only the name. A duplicate is the same experiment
   under a new ID,
   with the same hashes and creation time, and it records which experiment it was copied from
-  ([ADR 0040](.ai/repo/adrs/0040-completed-experiment-run-immutable-metadata-separate.md),
-  proposed).
+  ([ADR 0040](.ai/repo/adrs/0040-completed-experiment-run-immutable-metadata-separate.md)).
 - **Repeats.** With two or more runs, the stored response is the aggregate: a power mean with
   a standard-deviation envelope, or a median with a 10th-90th percentile band, plus a
   repeatability figure in dB. The stored transfer is the aggregate's centre, marked as
@@ -447,7 +656,7 @@ filter class is claimed. An experiment saved from Measure does not store band le
   unknown algorithm IDs, a future schema version and a result-hash mismatch are all refused,
   each with its reason. The file format has its own schema version, independent of the
   product version
-  ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md), proposed).
+  ([ADR 0023](.ai/repo/adrs/0023-schema-versions-independent-of-product-version.md)).
   Schema 1 files import through a migration that adds the run ids and keeps their hash.
   Schema 2 files import through a migration that gives the experiment the definition derived from
   its own recipe (marked as derived) and keeps their hash.
@@ -465,8 +674,8 @@ filter class is claimed. An experiment saved from Measure does not store band le
   One experiment can be marked as the baseline: Compare then shows it first and compares a
   single selected experiment with it. The mark is metadata, kept in the file, and at most one
   experiment carries it
-  ([ADR 0041](.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md),
-  proposed). A minus B is shown only for equivalent experiments, and only
+  ([ADR 0041](.ai/repo/adrs/0041-run-comparison-semantic-execution-vs-presentation.md)).
+  A minus B is shown only for equivalent experiments, and only
   over their overlapping valid range. Equivalent experiments also get an impulse-response
   overlay, each response drawn from its own direct peak on its original scale (there is no A
   minus B of impulse responses).
@@ -484,7 +693,7 @@ discontinuities, frequency coverage and resolution, repeatability, and calibrati
 rating comes with its reasons, and each reason carries its value and unit. A check that was
 not made reads NOT MEASURED. Severe clipping, an empty capture, or a dropout or discontinuity
 inside the sweep makes a run INVALID; milder clipping lowers the rating. Statuses are shown with text, a glyph and a shape, never colour alone. The rationale
-is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reasons.md).
+is in [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reasons.md).
 
 ### Scientific limitations
 
@@ -497,12 +706,12 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 - **SPL needs a level calibration.** Without a valid absolute level calibration, nothing is
   labelled dB SPL. A frequency profile alone never gives SPL
   ([ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md),
-  [ADR 0020](.ai/repo/adrs/0020-calibration-semantics.md), both proposed).
+  [ADR 0020](.ai/repo/adrs/0020-calibration-semantics.md)).
 - **Results come from captured PCM.** Every result is computed from captured PCM by
   deterministic offline DSP. The live analyser is feedback only
-  ([ADR 0018](.ai/repo/adrs/0018-measurement-from-captured-pcm-offline-dsp.md), proposed).
+  ([ADR 0018](.ai/repo/adrs/0018-measurement-from-captured-pcm-offline-dsp.md)).
   Each stored result names its algorithm by a versioned ID
-  ([ADR 0024](.ai/repo/adrs/0024-versioned-algorithm-ids.md), proposed).
+  ([ADR 0024](.ai/repo/adrs/0024-versioned-algorithm-ids.md)).
 - **The analysis runs in a Worker.** It is one serializable task, run in a Worker started from a
   `data:` URL of the page's own analysis script so that no step blocks the page; without Worker
   support the same code runs inline and yields between steps, with identical results (gap G21
@@ -516,15 +725,22 @@ is in the proposed [ADR 0025](.ai/repo/adrs/0025-data-driven-quality-with-reason
 ## The Synth
 
 **Synth** (`#m=synth`) is a playable semi-modular mono voice with a docked keyboard: two VCOs, a
-ring modulator and noise into a mixer, a high-pass and a low-pass 12 dB/oct filter in series,
-two envelopes, a VCA, a modulation generator and a sample-and-hold, every jack normalled so it
-sounds with no cable, and a patch bay to re-route it. The panel is generated from one data
-declaration and the Studio node registry, and it is the same document as Studio: **Open in
-Studio** shows its nodes. Its **Engines** tab adds polyphonic engines, up to 16 voices each:
-additive (drawbars), FM (2-4 operators, 7 algorithms), AM and ring, wavetable with morph, hard
-sync at set ratios and a percussion kit on the keys. The keyboard, the computer keys and MIDI
-play the panel or the chosen engine; presets and **Copy link** keep a sound. Details, cables
-and the honest limits: [docs/synth.md](docs/synth.md).
+ring modulator and noise into a mixer, a high-pass and a low-pass 12 dB/oct filter in series, two
+envelopes, a VCA, a modulation generator and a sample-and-hold, every jack normalled so it sounds
+with no cable, and a patch bay to re-route it. The panel is generated from one data declaration and
+the Studio node registry, and it is the same document as Studio: **Open in Studio** shows its nodes.
+Its **Engines** tab adds polyphonic engines, up to 8 voices each: additive (drawbars), FM (2-4
+operators, 7 algorithms), AM and ring, wavetable with morph, hard sync at set ratios and a
+percussion kit on the keys. The keyboard, the computer keys and MIDI play the panel or the chosen
+engine; presets and **Copy link** keep a sound. Beside the piano, a picker chooses what the keys
+play, with an oscillator's waveform and quick presets. The **XY** tab is a module of the same panel:
+a touch plays the scale note under X on the keys at Y's velocity, a cable from its Y drives the
+timbre target it names, and its presets patch it. Under the panel's cards two pads share the same
+pad kind: pad L, whose X and Y are normalled into the LPF cutoff and its peak (resonance, since
+K232; a cable replaces either), and pad R, the XY pad with its key and scale beside it; Stop and
+leaving the Synth release both. The Synth's sounds and the XY presets sit in the one patch library
+the Studio also opens, each loading as one undoable step. Details, cables and the honest limits:
+[docs/synth.md](docs/synth.md).
 
 ## The V3.1 Studio
 
@@ -544,31 +760,34 @@ release and deployment are evidenced is the [final report](docs/v31/studio-repor
 - **Graph editor.** Nodes look like the Signal Path boxes, joined by cables drawn in one SVG
   layer. Port glyphs show the signal type, and only compatible ports connect. A rejected
   connection, including a feedback loop without a delay, says why in words. The editor offers:
-  - pan, zoom, and frame all or the selection
+  - pan, zoom, and frame all or the selection: wheel pan, Ctrl+wheel and pinch zoom, and a
+    minimap of the whole patch
   - a node library
   - dropping a cable on empty canvas to pick a compatible node
   - rectangle selection, copy, paste, duplicate and delete
   - an inspector generated from each node's parameter schema, with units; with nothing
     selected it edits the transport and document settings (tempo, time signature, loop, notes)
   - search: `/` finds a node by name, type or category and frames it
+  - dragging a cable's end re-routes or replaces it; Shift+Delete deletes a node and bridges
+    its cable; L tidies the whole graph and M mutes or unmutes the selected cables
+  - node presets in the inspector
 - **Timeline, transport and automation.** Tracks hold clips that you create, move, resize,
-  split and delete with snapping. The timeline also has a loop region, markers, a playhead that
-  follows the audio clock, and automation lanes in each parameter's own scale. STOP and Escape
-  release every node and source.
+  split and delete with snapping, and the timeline zooms by pinch. The timeline also has a loop
+  region, markers, a playhead that follows the audio clock, and automation lanes in each
+  parameter's own scale. STOP and Escape release every node and source.
 - **What runs, and what each edit did.** With nothing selected, the Inspector's Runtime section
   says whether the graph on screen is the one that plays: running, not applied, a previous
   configuration still running, refused or failed, with the diagnostic codes
-  ([ADR 0039](.ai/repo/adrs/0039-studio-runtime-truth-plan-identity-applied-record-divergence.md),
-  proposed). Its Trace section follows each recent edit, undo, Play and Stop under one
+  ([ADR 0039](.ai/repo/adrs/0039-studio-runtime-truth-plan-identity-applied-record-divergence.md)).
+  Its Trace section follows each recent edit, undo, Play and Stop under one
   operation id. It shows the action, the compiled plan with its hash, whether the running graph
   applied it, and each parameter value and connection gain the audio nodes report they were
   given, at its audio time. A setting that changes nothing audible at once is shown as stored. A
   refused edit shows its code, an edit made while stopped says it was not applied, and a
   parameter an automation lane drives is shown as owned. A selected node's Inspector lists only
   the operations that touched it. The trace is kept in memory for the session and is never saved
-  or hashed
-  ([ADR 0042](.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md),
-  proposed).
+  or hashed ([ADR
+  0042](.ai/repo/adrs/0042-studio-operation-trace-one-correlation-id-bounded-not-evidence.md)).
 - **Keyboard and touch.** Every editor has a keyboard path: a "Connect…" dialog instead of
   dragging a cable, a details panel instead of dragging a clip, and arrow-key nudges. Changes
   are announced to screen readers. On coarse pointers the targets are 44 px. Below 768 px the
@@ -644,16 +863,15 @@ What it does not do yet, each named with the work that would fill it:
 - A MIDI performance cannot be recorded into the song (V505).
 - Velocity is not represented, so the drums have no accents: a Studio clip has no level (K144
   gap G4).
-- A filter's Q cannot be automated, so the build's rising resonance is in the score only (K144
-  gap G10).
 - The Studio's view nodes draw nothing (K016).
 - After a reload the Studio opens the default template, not the last project (V604).
 - No MEASURE or Experiments step is part of the slice: the Studio's measurement clips measure
   the speaker or loopback path a sound plays through, not the song.
 
-The score keeps the velocities and the Q lane, so each can join the template once the Studio
-can play it, and a drive lane, which the template does not use yet although the Drive node
-exists.
+The score keeps the velocities, so they can join the template once the Studio can play them,
+and a drive lane, which the template does not use yet although the Drive node exists. Its
+bass filter Q lane joined the template in version 2, once the Studio played a low-pass Q lane
+(K232; K144 gap G10).
 
 `tests/unit/demo-song.test.mjs` checks the song as data: one clip per note of the score, the
 pinned hash, an offline render plan of the whole song with no limitation, and that the six
@@ -726,14 +944,16 @@ steps of the journey. The notes beside the spectrum and waveform (V504) have not
   individual. Each entry cites its source (for example Heffner & Heffner 2007) and lists
   differing published values.
 
-The reasoning is in the proposed [ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md)
+The reasoning is in [ADR 0017](.ai/repo/adrs/0017-relative-levels-spl-only-when-calibrated.md)
 and the rule [`project.no-fake-science`](.ai/repo/rules/project/no-fake-science.v2.md).
 
 ## Architecture
 
 ```text
-src/  (ES modules, plain CSS, the src/index.html shell)
-  -> scripts/build.mjs              esbuild (pinned): one IIFE app bundle + one stylesheet
+src/  (ES modules, token CSS, Tailwind with Flowbite, the src/index.html shell)
+  -> scripts/build.mjs              esbuild (pinned): one IIFE app bundle + one stylesheet;
+                                    Tailwind compiles src/styles/tailwind.css with the
+                                    flowbite plugin (ADR 0061), inlined with the rest
      scripts/build-analysis-worker.mjs   the analysis library (one IIFE), imported by the app
   -> scripts/pack-single-file.mjs   pure string assembly; drops developer comments and
                                     markup indentation (pre, textarea, script, style verbatim)
@@ -829,9 +1049,11 @@ and CI fail.
 The browser suites need Playwright's browsers (`npx playwright install chromium firefox
 webkit`). Work lands through small pull requests. CI runs the gate on every pull request,
 branch protection requires the `gate` check, and a merge to `main` redeploys Pages. The branch
-need not be up to date with `main` (`strict: false`, the owner's decision of 2026-10-30), so a
-pull request merges on its last green run and the gate's suites never run on `main` itself:
-ADR 0009's note of that date says what still catches a stale run or a red combination.
+must be up to date with `main` (`strict: true`; relaxed on 2026-10-30 and strict again since),
+so a pull request merges only on a run of a head that contains `main` as it stands, by merge
+commit (squash merging is disabled). After each merge, `.github/workflows/main-checks.yml` runs
+the unit, `.ai` doctor and browser-gate jobs on `main` itself, so a red combination shows on
+the merge commit (E044).
 
 Two of the gate's jobs check the pull request rather than the product. `fail-first`: when the
 title starts with `feat` or `fix`, a unit test the pull request adds or changes must fail on
@@ -860,6 +1082,14 @@ Edge have not been tried for sound starting only after a tap, resuming after the
 from the background, or hold-to-play by touch. The owner declined real-device checks for now on
 2026-10-29 (plan issue S071).
 
+Phones get two things a desktop does not need (rule `project.a-phone-sounds`): the page asks iOS
+for a playback audio session where `navigator.audioSession` exists, so the ringer switch does not
+mute it, and audio starts at a phone's first gesture, at the end of a touch as the HTML standard
+grants it (`src/js/ui/audio-unlock.js`). `tests/browser/touch-audio.cjs` holds both with
+Chromium's user-gesture rule left on, where every other suite switches it off, and with a
+stand-in for `navigator.audioSession`. Not checked by a machine: a real iPhone's ringer switch
+and a real touch screen.
+
 ## Testing
 
 | Layer | Where | What it covers |
@@ -871,8 +1101,8 @@ from the background, or hold-to-play by touch. The owner declined real-device ch
 | V3 unit | `tests/unit/v3-*.test.mjs` | Measurement core, transfer and impulse response on synthetic systems with known answers, RTA and aggregation, calibration, quality, experiments (schema, round trip, corrupt imports, store), goldens per algorithm ID, the engine on a fake io and the view models, all in `npm test` |
 | V3 browser | `npm run test:measure` | `tests/browser/v3-measure.cjs`: the measurement engine on real Web Audio, a recovered digital loopback response, limiter transparency, 0 nodes after finish and abort. `tests/browser/analysis-worker.cjs`: the offline analysis in its Worker against the inline run, identical results, no inline fallback, abort. `tests/browser/v3-ui.cjs`: Measure and Experiments of the built page, guided flow, abort at every stage, calibration, experiment import, compare and export, and no "SPL" without a level calibration. All run in Chromium, Firefox and WebKit, from `file://` and `/oscilla/` |
 | V3 visual | `scripts/visual-measure.mjs`, `tests/visual/measure/` | Measure at 1536x1024 and 390x844 showing a deterministic TEST CONTEXT experiment, against the accepted reference for each environment (part of `npm run test:visual`) |
-| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`) |
-| Synth line browser | `npm run test:synth` | The integration map first: every link between workspaces, instruments and labs of `tests/browser/integration-map.json`, walked by pointer, keyboard and touch with Back, Forward and a reload (`tests/browser/integration-map.cjs`); then the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`), the Synth XY pad's scale steps, timbre axis, presets, keys and touch (`tests/browser/xy-pad.cjs`) and the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`) |
+| Studio browser | `npm run test:studio` | The Studio of the built page: the graph editor (`tests/browser/v31-studio-graph.cjs`), the timeline editor (`tests/browser/v31-studio-timeline.cjs`), the compiler and runtime on the real engine (`tests/browser/v31-studio-audio.cjs`), the transport on the audio clock (`tests/browser/v31-studio-transport.cjs`), offline rendering of the templates (`tests/browser/v31-studio-offline.cjs`), the transport Inspector, Find node, Render WAV and a measurement from Studio (`tests/browser/v31-studio-workflows.cjs`), deep links and fullscreen (`tests/browser/v31-studio-links.cjs`), and the Inspector's Runtime and Trace sections (`tests/browser/v31-studio-runtime.cjs`); the Keys node's pitch CV rendered at 44.1 and 48 kHz: tracking, the 4' clamp and the linear glide, and notes clips on the audio clock: onsets within a frame with swing, ratchets, slides and seeded chance (`tests/browser/instrument-dsp.cjs`), the Keys node added, named, linked and played in the Studio (`tests/browser/studio-keys.cjs`), and a selected notes clip edited as a step grid in the Inspector by pointer, touch and keys, its playing step following the transport (`tests/browser/step-grid.cjs`), and gates along TRIGGER edges: a Keys Gate cable made by pointer, keyboard and touch, a key and a gate clip relayed through a Step Modulator to an Envelope, and a live gate refused on an input the playing timeline owns (`tests/browser/studio-trigger-gates.cjs`) |
+| Synth line browser | `npm run test:synth` | The integration map first: every link between workspaces, instruments and labs of `tests/browser/integration-map.json`, walked by pointer, keyboard and touch with Back, Forward and a reload (`tests/browser/integration-map.cjs`); then the Synth panel's sound, cables, links and phone layout (`tests/browser/synth.cjs`), the knob contract on a fixture store: the value shown in step with the model after a drag, a key, a typed value and a touch drag, and kept across a reload (`tests/browser/knob.cjs`), the Synth engines' spectra, decays, voice census, routing, links and phone layout (`tests/browser/synth-engines.cjs`), the Synth XY pad's scale steps, timbre axis, presets, keys and touch (`tests/browser/xy-pad.cjs`), the Synth's Drums tab: one bar of drum steps on the percussion engine by pointer, touch and keys, its pads, Play and Open in Studio (`tests/browser/drums.cjs`), the MIDI support state, MIDI notes and the keyboard (`tests/browser/midi.cjs`), and notes clips with a grid on the panel's Keys node played from the one transport in the Studio and the Synth workspace: the step under the playhead, a tempo change while playing, Play, Stop and Tap by pointer, keyboard and touch (`tests/browser/steps.cjs`) |
 | Studio visual | `scripts/visual-studio.mjs`, `tests/visual/studio/` | Studio at 1536x1024 and its GRAPH and TIMELINE subviews at 390x844, against the accepted reference for each environment (part of `npm run test:visual`) |
 | Synth visual | `scripts/visual-synth.mjs`, `tests/visual/synth/` | The Synth's Panel, Engines and XY tabs at 1536x1024 and 390x844 (on a phone, the tab's content scrolled above the docked keyboard) in the dark and the light theme, and its patch bay with six cables seen whole (1536x1280, 390x1400), against the accepted reference for each environment (part of `npm run test:visual`) |
 
@@ -1088,7 +1318,7 @@ device's label and a one-way hash of the browser's device ID, when the browser r
 along with your notes. All of it goes into an exported file, so check it before you share it.
 Calibration profiles and level calibrations are kept in page memory only. The policy, its
 reasons and the tests that hold the code to it are
-[ADR 0049](.ai/repo/adrs/0049-raw-capture-retention.md) (proposed).
+[ADR 0049](.ai/repo/adrs/0049-raw-capture-retention.md).
 
 Browser storage holds only these keys and one database, `oscilla-experiments` (version 4):
 

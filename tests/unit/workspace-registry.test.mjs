@@ -56,7 +56,7 @@ test('every page has a one-sentence summary and one to three related pages', () 
   assert.deepEqual(IDS, WORKSPACES, 'the registry is the navigation');
   for (const w of WORKSPACE_REGISTRY) {
     assert.equal(typeof w.summary, 'string', `${w.id}: summary`);
-    assert.match(w.summary, /^[A-Z][^]*\.$/, `${w.id}: a sentence`);
+    assert.match(w.summary, /^\p{Lu}[^]*\.$/u, `${w.id}: a sentence`);
     assert.doesNotMatch(w.summary.slice(0, -1), /[.!?]\s/, `${w.id}: one sentence`);
     assert.ok(w.summary.split(/\s+/).length >= 6, `${w.id}: says what it is for`);
     const rel = relatedOf(w.id);
@@ -297,5 +297,26 @@ test('About\'s list and the shortcut dialog\'s names are the registry, not a cop
   assert.equal((ul.match(/<li\b/g) || []).length, 1, 'one templated entry, no static one');
   for (const w of WORKSPACE_REGISTRY) {
     assert.ok(!ul.includes(`>${w.label}<`), `About writes ${w.label} by hand`);
+  }
+});
+
+test('the Sequencer leads to the step sequencer with pads and the Studio step modulator',
+  async () => {
+  // The owner looked for the new sequencer and pads on the Sequencer page, which showed only the
+  // block sequencer: its panel now links to the Synth's Bicí tab and to the Step Bass template.
+  const { SYNTH_TABS } = await import('../../src/js/core/url-state-synth.js');
+  const { getTemplate } = await import('../../src/js/studio/templates/index.js');
+  const to = Object.fromEntries(CONTENT_LINKS.filter((l) => l.from.includes('sequencer'))
+    .map((l) => [l.osc, l.to]));
+  assert.equal(to['seq.toDrums'], 'synth&yt=drums');
+  assert.equal(to['seq.toStepBass'], 'studio&st=step-bass');
+  assert.ok(SYNTH_TABS.includes('drums'), 'the Bicí tab is a Synth link tab');
+  assert.equal(routeOfHash('#m=synth&yt=drums').workspace, 'synth');
+  assert.equal(routeOfHash('#m=studio&st=step-bass').workspace, 'studio');
+  assert.ok(getTemplate('step-bass'), 'the Step Bass template is shipped');
+  for (const osc of ['seq.toDrums', 'seq.toStepBass']) {
+    const tag = new RegExp(`<a\\b[^>]*data-osc="${osc.replace('.', '\\.')}"[^>]*>`).exec(HTML);
+    assert.ok(tag, `${osc} is written in src/index.html`);
+    assert.ok(tag[0].includes(`:hidden="workspace !== 'sequencer'"`), `${osc}: the Sequencer only`);
   }
 });

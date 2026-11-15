@@ -1,0 +1,24 @@
+id: E072
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "s-feel's wheel-then-drag waits fail under load in linux webkit (C3-541-5): the notch driven by the knob's own WheelEvent and waited on its value"
+slug: s-feel-wheel-drag-load-race
+priority: p2
+profile: implementation
+objective: "Finding C3-541-5 (P2), classified by oscilla-c3 on #541, verbatim: \"s-feel's wheel-then-drag waits ('the notch lands (the knob moves) before the drag' and 'the wheel burst and the drag are two undo entries', 5000 ms each) fail under host load in linux webkit. CI webkit leg 1: 2 of 6 runs since T17 (79bb6ebb, 837c4b6e), passing in T15 and T16's runs. oscilla-c3's container A/B (playwright noble amd64, synth.cjs --only s-feel, fresh context each, 2026-11-13): round 1 T16 da54bdc8 6/6, T17 0a7f1847 6/6, head 837c4b6e 5/6; round 2 (alternating, higher load) T17 6/20 fail, head 3/20, the failures clustered in runs 8-14 for both trees; round 3 (alternating, load ~15) T16 15/15, T17 15/15. It is on main (T17) and not caused by #541/U108. Whether it predates T17 is not determined: T16 was never sampled in round 2's load window. A load-sensitive race of the E059 family (#490): a wheel notch that does not reach the knob, or that folds into the drag's gesture, within the wall-clock deadline. P2 for the Synth lane: it fails a required CI leg about 1 run in 3 on a slow runner. Fix: drive the notch with the knob's own WheelEvent, as the burst above it already does, and wait on the knob's value with a load-scaled deadline, then A/B T16 and the fix under the same load.\""
+why: "A required CI leg (webkit leg 1) fails about 1 run in 3 on a slow runner; every train after T17 pays a rerun or a review round for it (#540, #541)."
+current_state: "Open. Filed 2026-11-13 by oscilla-43 from oscilla-c3's classification of C3-541-5; the Synth lane builds it. The flake ledger of #541's run 43328880551 (attempt 2) holds its row: Browser leg 1 (webkit), 1: failure, 2: success, unclassified; its cause is this issue."
+scope:
+  - "tests/browser/synth.cjs"
+depends_on: []
+acceptance_criteria:
+  - "s-feel drives the wheel notch with the knob's own WheelEvent, as its burst does, and waits on the knob's value through tests/browser/lib/wait.cjs with a load-scaled deadline (project.bounded-test-timing)."
+  - "A container A/B under the same load: T16 da54bdc8, main and the fix, alternating, at least 20 runs each; the fix fails none, and the round counts only when main reproduces in it (at least 3 fails); otherwise it is rerun under load (a parallel CPU hog or the full synth suite), with the load averages recorded beside each round (oscilla-c3)."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/synth.cjs --browsers webkit --only s-feel"
+evidence_required:
+  - "verified"
+created_at: '2026-11-13'
+updated_at: '2026-11-13'

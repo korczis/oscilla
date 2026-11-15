@@ -63,16 +63,24 @@ export function normalizeAdsr(adsr = {}) {
 /**
  * Events that applyAdsr schedules, as plain data: [{ kind: 'set' | 'linear' | 'exp', time,
  * value }]. startValue defaults to the floor.
+ * K230: adsr.delay (s, from t0 to the start of the attack, a flat 'set' at its end) and
+ * adsr.hold (s, at the peak before the decay, a flat 'linear' at its end) are scheduled only
+ * when longer than 0, so with both at 0 (or absent) the events are exactly the ADSR's.
  */
 export function adsrEvents(t0, adsr, peak = 1, { floor = ENVELOPE_FLOOR, startValue } = {}) {
   const e = normalizeAdsr(adsr);
+  const delay = Math.max(0, num(adsr && adsr.delay, 0));
+  const hold = Math.max(0, num(adsr && adsr.hold, 0));
   const p = Math.max(floor, peak);
   const sustain = Math.max(floor, e.s * p);
   const start = Math.max(floor, startValue != null ? startValue : floor);
+  const a0 = t0 + delay;
   return [
     { kind: 'set', time: t0, value: start },
-    { kind: 'linear', time: t0 + e.a, value: p },
-    { kind: 'exp', time: t0 + e.a + e.d, value: sustain },
+    ...(delay > 0 ? [{ kind: 'set', time: a0, value: start }] : []),
+    { kind: 'linear', time: a0 + e.a, value: p },
+    ...(hold > 0 ? [{ kind: 'linear', time: a0 + e.a + hold, value: p }] : []),
+    { kind: 'exp', time: a0 + e.a + hold + e.d, value: sustain },
   ];
 }
 
@@ -141,6 +149,18 @@ export function getSchedule(param) {
   return (schedules.get(param) || []).map((e) => ({ ...e }));
 }
 
+/**
+ * setAt(param, t, value): a level set at t through this module's record, so a later holdAt or
+ * releaseAt starts from it (review C1-K222-7: a one-shot's level, which a choke, a steal or a
+ * stop then releases without a step; set behind the record's back, holdAt held param.value, the
+ * gain's default 1, and the release began with a jump to full scale).
+ */
+export function setAt(param, t, value) {
+  const e = { kind: 'set', time: t, value };
+  apply(param, e);
+  schedules.set(param, [...(schedules.get(param) || []).filter((x) => x.time < t), e]);
+}
+
 /** Drop the recorded schedule (call when the param's node is discarded or reused). */
 export function forgetParam(param) {
   schedules.delete(param);
@@ -200,12 +220,14 @@ export function applyAdsr(param, t0, adsr, peak = 1, options = {}) {
   // A retrigger already holds at t0; re-setting the same value there is harmless.
   for (const e of ev) apply(param, e);
   schedules.set(param, kept.concat(ev));
+  const peakAt = ev.find((x) => x.kind === 'linear'); // the attack's end (K230: after a delay)
+  const decay = ev.at(-1);
   return {
     start: t0,
-    attackEnd: ev[1].time,
-    decayEnd: ev[2].time,
-    sustainLevel: ev[2].value,
-    peak: ev[1].value,
+    attackEnd: peakAt.time,
+    decayEnd: decay.time,
+    sustainLevel: decay.value,
+    peak: peakAt.value,
   };
 }
 

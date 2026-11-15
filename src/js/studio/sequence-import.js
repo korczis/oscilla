@@ -31,7 +31,11 @@
 // and derives its durationMs from the unrounded beats, so its own save of a slow tempo-locked
 // block (100 ms at 20 BPM is 0.033333 beats, which re-derive 99.999 ms) is not a fixed point.
 // Such a durationMs is accepted when some beats value that rounds to the file's beats derives
-// it, and the block opens as the sequencer opens it, from the beats. Frequencies are checked at
+// it, and the block opens as the sequencer opens it, from the beats. A second (C066): the
+// sequencer keeps a tempo-locked block's stored beats where its type's bound clamps the
+// duration, and saves them so; such a block opens as it sounds (its clip carries soundingBeats,
+// since a Studio clip's seconds equal its beats at the tempo and Studio has no type bound), with
+// a warning naming both, and its export writes the sounding beats. Frequencies are checked at
 // the rate the file was saved at (a configuration file's sampleRateRequested), else at the
 // Studio's (`sampleRate`; 44.1 kHz before audio, as the sequencer itself reads it). A seed
 // other than DEFAULT_SEED is refused: the app never writes one, and the Studio keeps no seed
@@ -41,7 +45,7 @@ import { ID_PATTERN } from '../experiments/schema.js';
 import {
   BLOCK_SCHEMA, DEFAULT_SEED, MAX_BLOCKS, MAX_BLOCK_MS, MIN_BLOCK_MS, PROVISIONAL_SAMPLE_RATE,
   SEQUENCE_VERSION, clamp, formatCompactFrequency, formatMs, isNum, nextBlockId, normalizeModel,
-  paramSchema, parseSequence, round, safeMaximum, serializeSequence,
+  paramSchema, parseSequence, round, safeMaximum, serializeSequence, soundingBeats,
 } from '../sequencer/model.js';
 import { createStudioModel } from './schema.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
@@ -84,7 +88,9 @@ export function sequenceToTimeline(input, { trackId = IMPORT_IDS.track, startAt 
       payload: { blockType: b.type, params: { ...b.params } },
     };
     if (b.beats !== null) {
-      clip.musical = { startBeats: start * seq.tempoBpm / 60, durationBeats: b.beats };
+      // The beats that sound: a clip has no type bound to clamp its stored beats (C066).
+      clip.musical = { startBeats: start * seq.tempoBpm / 60,
+        durationBeats: soundingBeats(b, seq.tempoBpm) };
     }
     clips.push(clip);
   });
@@ -439,6 +445,10 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
     return refuse(at('blocks'), `The sequencer could not read the sequence (${
       String((e && e.message) || e).slice(0, 80)})`);
   }
+  // Since C066 the Sequencer keeps a block's stored beats where its type's bound clamps the
+  // duration, and saves them so: such a file is one the app writes, so it opens. Its clip
+  // carries the beats that sound (sequenceToTimeline: soundingBeats), since a Studio clip's
+  // seconds equal its beats at the tempo and Studio has no type bound to clamp them against.
   const canon = serializeSequence(parsed);
   const diff = firstDifference(seq, canon, rate);
   if (diff) return refuse(at(diff.path), diff.message);
@@ -460,5 +470,23 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
     : 'Imported sequence' });
   if (!imp.ok) return { ok: false, warnings: [], errors: imp.errors };
   return { ok: true, model: imp.model, source: config ? 'config' : 'sequence', sampleRate: rate,
-    warnings: [] };
+    warnings: clampWarnings(canon) };
+}
+
+// For people: at most 2 decimals (C1-C066-4); the file and every comparison keep 6.
+const czNumber = (n) => String(round(n, 2)).replace('.', ',');
+
+/**
+ * One warning (Czech, Q104) per tempo-locked block whose stored beats its type's bound clamps at
+ * the file's tempo: Studio takes the sounding length (C066, oscilla-c1's C1-C066-1).
+ */
+function clampWarnings(canon) {
+  const out = [];
+  canon.blocks.forEach((c, i) => {
+    const sounding = soundingBeats(c, canon.tempoBpm);
+    if (c.beats === null || sounding === c.beats) return;
+    out.push(`Blok ${i + 1}: při ${czNumber(canon.tempoBpm)} BPM zní jen ${czNumber(sounding)} `
+      + `z uložených ${czNumber(c.beats)} dob; Studio převezme znějící délku.`);
+  });
+  return out;
 }

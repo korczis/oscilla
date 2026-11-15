@@ -6,7 +6,7 @@ title: "A step-sequencer strip above the Synth face plays the panel's Keys from 
 slug: a-step-sequencer-strip-above-the-synth-face
 priority: p2
 profile: implementation
-objective: "Lands as feat(synth). Q103 (2): a strip of 8 or 16 steps above the Synth panel, each with a pitch, a gate and an on-light, playing the panel's Keys on the transport. It is the Step Modulator node's face with three lanes (pitch and two control voltages, as the reference's 16 steps by three channels), its outputs typed control ports a cable patches to the Keys or any parameter, and its steps a grid projection (ADR 0086), mounted through the one step-grid kind (W008) that the drum machine (K073) mounts too, never a second grid model; until W008 exists it waits."
+objective: "Lands as feat(synth). Q103 (2): a step-sequencer strip above the Synth panel plays the panel's Keys on the transport. As built (restated 2026-11-09 after oscilla-c1's review C1-K221-2 of 7521fc69; the criteria are unchanged): the strip is a notes clip of 16 steps of 1/16 on its own event track (synth-steps) targeting the panel's Keys, its steps a grid projection (ADR 0086) drawn and edited by the one step-grid kind (W008) through the Studio Inspector's clip-steps mount, never a second grid model, and played by the transport's notes path (K068) in a loop the strip sets when the document has none. Known limit (oscilla-c1, C1-K221-4): that loop is written in seconds at the tempo of the moment it is created; a later tempo change rescales the tempo-linked clip but not the loop, so the two diverge until the loop is set again (a tempo-linked loop is follow-up work, not this issue). It shows only once its clip exists and is added from the dock's instrument picker (Krokový sekvencer), so the default Synth view and its visual references are unchanged. The Step Modulator's steps in the Studio Inspector are edited through the same kind's param-list mode. The earlier wording (the Step Modulator node's face with three lanes, pitch and two control voltages with typed control outputs, 8 or 16 steps) is not built here; a three-lane modulator face would be its own issue."
 why: "Owner direction Q103 (the analog sequencer above the semi-modular face)."
 scope:
   - "src/js/synth/ui.js"
@@ -27,4 +27,13 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-07'
-updated_at: '2026-11-07'
+updated_at: 2026-11-11T19:40:08Z
+current_state: "Landed on main but not done (criteria audit by oscilla-d9 on origin/main 45db334e, 2026-11-11, ~/dev/oscilla-wt/scratch-d9-stamp-audit.md): 1 of 3 not met: #2 no test asserts that the strip and the Drums view mount the same step-grid kind (no suite reads data-step-grid). #2 closed by oscilla-d9 in task t-20261111141237-25b0 on test/m064-stamp-gaps (from 04d33aaf): synth.cjs s-steps and drums.cjs dr-mount both assert the step-grid kind's root marker (data-step-grid notes) and its grid surface, so the strip and the Drums tab are proven to mount the same kind; chromium and webkit, desktop and phone, exit 0. 2026-11-11 (oscilla-43, main 98e5a5ba): every criterion is met and the verified evidence is recorded; the done stamp waits on its dependencies K068 and W008, which are not done (their unmet criteria are in their own current_state)."
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/synth-step-strip.test.mjs; node tests/browser/synth.cjs; node tests/browser/drums.cjs"
+    result: "On main 98e5a5ba: synth-step-strip passes; s-steps (synth.cjs) and dr-mount (drums.cjs) assert the step-grid kind's data-step-grid root and surface, so the strip and the Drums view mount the same kind (oscilla-d9's #2 gap, landed with T12 #535), green in chromium and webkit; criteria #1 and #3 met per oscilla-d9's audit; verdict 515.yaml (T4 #515)"
+    artifact: ".ai/repo/reviews/515.yaml"
+    commit: 98e5a5ba9e1c4f3244c32bb79a318a134bb17d8b
+    recorded_at: 2026-11-11T19:40:07Z

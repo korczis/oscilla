@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (layout at phone sizes; no audio judged)
 // OSCILLA on a phone (owner, 2026-11-02: "on the iPhone OSCILLA practically does not work;
 // verify every route and element, cover it with tests"). Every workspace of the surface census
 // (tests/unit/surface-census.json) opens fresh at its deep link on an emulated phone, and the
@@ -12,14 +13,17 @@
 //   loads-<ws>       the workspace opens at its deep link with no page error
 //   no-overflow-<ws> the page does not scroll sideways
 //   reach-<ws>       interactive controls that are off the screen's edge (and not inside a
-//                    horizontally scrollable ancestor, which a swipe reaches), covered at their
+//                    horizontally scrollable ancestor, which a swipe reaches; the folded body of
+//                    a closed <details> is not shown and is not counted), covered at their
 //                    centre by another element once scrolled into view, or smaller than 24 px
 //                    (WCAG 2.5.8; a range, checkbox, radio and a link inside running text are
 //                    exempt) are counted; the count may not exceed tests/browser/iphone-baseline.json,
 //                    a debt that only shrinks (`--record` rewrites it from a passing run)
 //   sounds-<what>    after one tap on the page (the gesture unlock), HOLD TO PLAY held, TRIGGER,
-//                    the sequencer's play, the Studio's play and a key of the Synth keyboard each
-//                    leave the engine running with an active source
+//                    the sequencer's play, the Studio's play, a key of the Synth keyboard and a
+//                    key of the Studio's keyboard, unfolded from its handle first (#444), and on
+//                    the Synth's Drums tab (K222, its clip made by a tap) a pad and a step tapped
+//                    on then Play, each leave the engine running with an active source
 //   stops-on-hide-<what>  then the page is hidden (visibilitychange, as a phone's lock or app
 //                    switch sends it) with a held control's finger still down: within HIDE_MS
 //                    the engine is left with no active source and no surface still claims to
@@ -33,6 +37,16 @@
 //                    accessible name, and letting go stops within HIDE_MS and says false
 //   escape-stops-sequencer  the sequencer started by a tap stops at Escape within HIDE_MS and
 //                    its Play control stops saying pressed
+//   tap-same-task-<what>  K184 (the minimum gate, src/js/audio/gate.js): after the gesture
+//                    unlock, 20 taps whose finger down and up (touch pointerdown and pointerup,
+//                    what the surfaces listen to) are dispatched in one task, on a key of the
+//                    Synth's on-screen piano and on the Synth's XY pad: each raises the engine's
+//                    analyser (the destination tap) above TAP_HEARD_DB within TAP_MS, and the
+//                    output falls below TAP_QUIET_DB before the next; the analyser is read every
+//                    frame because a tap lasts less than a probe's round trip. Desktop QWERTY taps
+//                    are s-tap of tests/browser/synth.cjs
+//   records-drums-take  K223: on the Drums tab, after one tap on the page, Record and Play
+//                    tapped, two pads tapped and Stop tapped: the clip holds the two hits
 //
 // Every wait is a condition poll with a named wall-clock deadline (tests/browser/lib/wait.cjs).
 //
@@ -43,6 +57,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const suite = require('./lib/suite.cjs');
 const { until, WaitTimeout } = require('./lib/wait.cjs');
+const { watchTaps, markTap } = require('./lib/tap-meter.cjs');
 
 const args = process.argv.slice(2);
 const arg = (name, def) => {
@@ -62,6 +77,13 @@ const SETTLE_MS = 8000;
 // a hidden page stops with a fast fade, well inside this; a control that ends on its own (a
 // trigger's note, a transport's last step) takes longer, so it cannot pass for a stop
 const HIDE_MS = 1500;
+// K184: a same-task tap is heard within TAP_MS above TAP_HEARD_DB (dB re digital full scale, the
+// loudest 2048-sample RMS of the output after the tap, lib/tap-meter.cjs) and is over below
+// TAP_QUIET_DB (the engine analyser's RMS); TAP_COUNT taps per surface
+const TAP_MS = 3000;
+const TAP_HEARD_DB = -60;
+const TAP_QUIET_DB = -70;
+const TAP_COUNT = 20;
 const PHONES = {
   webkit: ['iPhone 13', 'iPhone SE'],
   chromium: ['Pixel 7'],
@@ -94,6 +116,11 @@ function reach() {
     if (cs.visibility === 'hidden' || cs.display === 'none') continue;
     if (!el.offsetParent && cs.position !== 'fixed') continue;
     if (el.closest('dialog:not([open]), [hidden], [aria-hidden="true"]')) continue;
+    // A closed <details> shows only its summary; every engine still gives the rest a box
+    // (C3-555-2: Compare's folded Sources list, counted "covered" in webkit once K247's dock
+    // lifted it into the viewport), but no finger can reach what is not shown.
+    const folded = el.closest('details:not([open])');
+    if (folded && el.closest('summary')?.parentElement !== folded) continue;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
     controls.push({ el, r });
@@ -168,6 +195,10 @@ const sounding = (page) => page.evaluate(() => {
 });
 const isSounding = (s) => !!s && s.running && s.sources > 0;
 
+// The notices a finger closes before it reaches a tab's content on a small phone (if shown).
+const CLOSE_NOTICES = [{ sel: '[data-osc="safety.dismiss"]', optional: true },
+  { sel: 'button[aria-label="Dismiss notification"]', optional: true }];
+
 // What each sounding control is, where it lives and how a finger drives it.
 const SOUNDS = [
   { id: 'hold-to-play', ws: 'playground', sel: '#osc-hold-play', how: 'hold' },
@@ -178,6 +209,19 @@ const SOUNDS = [
   // the keys are drawn on one canvas: a finger holds the low part of a white key near its left
   { id: 'synth-key', ws: 'synth', sel: '[data-osc="keyboard.keys"]', how: 'hold-at',
     at: { x: 0.06, y: 0.85 } },
+  // #444: on a phone the Studio opens armed (Q105) with its keys folded to the dock's handle,
+  // so the toolbar stays clear; a tap on the handle unfolds them and a held key sounds
+  { id: 'studio-key', ws: 'studio', unfold: '[data-osc="keyboard.handle"]',
+    sel: '[data-osc="keyboard.keys"]', how: 'hold-at', at: { x: 0.06, y: 0.85 } },
+  // K222: the Synth's Drums tab. A finger closes the notices that bury the tab on an iPhone
+  // SE (if shown), makes the clip by a tap; a pad strikes its row's hit, which decays by itself
+  // (no hide proof), and a step tapped on then Play sounds it.
+  { id: 'drums-pad', ws: 'synth', hash: '#m=synth&yt=drums', prep: [...CLOSE_NOTICES,
+    { sel: '[data-drums-new]' }], sel: '[data-drum-pad="0"]', how: 'tap', endsByItself: true },
+  { id: 'drums-step', ws: 'synth', hash: '#m=synth&yt=drums', prep: [...CLOSE_NOTICES,
+    { sel: '[data-drums-new]' },
+    { sel: '[data-drums-grid] [role="gridcell"][data-lane="0"][data-step="0"]' }],
+    sel: '[data-drums-play]', how: 'tap' },
 ];
 
 async function openAt(browser, engine, device, hash, init = null) {
@@ -213,6 +257,50 @@ function denyCapabilities() {
   }
 }
 
+/**
+ * K223: a take recorded by fingers on the Drums tab, with the browser's own gesture rule. A
+ * tap on an inert spot unlocks audio; the notices close and the clip is made by taps; Record and
+ * Play are tapped, then two pads, then Stop: the clip holds the two hits.
+ */
+async function recordJourney(browser, engine, device, phone, check) {
+  const { context, page, errors } = await openAt(browser, engine, device, '#m=synth&yt=drums');
+  const tap = async (sel, optional = false) => {
+    const el = page.locator(sel).locator('visible=true').first();
+    if (optional && !(await el.count())) return true;
+    const shown = await pollFor(() => el.count(), (n) => n > 0, `iphone: record shows ${sel}`);
+    if (!shown.ok) return false;
+    await el.scrollIntoViewIfNeeded({ timeout: 5000 });
+    await el.tap({ timeout: 5000 });
+    return true;
+  };
+  const notes = () => page.evaluate(() => {
+    const c = window.OSCILLA.studio.model.timeline.clips.find((x) => x.kind === 'notes');
+    return c ? c.payload.notes.length : -1;
+  });
+  let detail = '';
+  try {
+    const spot = await page.evaluate(inertSpot);
+    if (spot) await page.touchscreen.tap(spot.x, spot.y);
+    for (const { sel } of CLOSE_NOTICES) await tap(sel, true);
+    if (!(await tap('[data-drums-new]', true))) detail = 'no clip';
+    const sw = '[data-drums-bar] [data-notes-record]';
+    const armed = (await tap(sw)) && (await pollFor(() => page.getAttribute(sw, 'aria-checked'),
+      (v) => v === 'true', 'iphone: record the switch is on')).ok;
+    const played = armed && (await tap('[data-drums-play]')) && (await pollFor(() => page
+      .evaluate(() => window.OSCILLA.studio.transport.playhead().playing), (v) => v === true,
+    'iphone: record Play plays the timeline')).ok;
+    const struck = played && (await tap('[data-drum-pad="0"]')) && (await tap('[data-drum-pad="1"]'));
+    const stopped = struck && (await tap('[data-drums-play]'));
+    const take = stopped ? await pollFor(notes, (n) => n === 2, 'iphone: record take in model')
+      : { ok: false, last: null };
+    detail = detail || `armed ${armed}, played ${played}, struck ${struck}, notes ${take.last}`;
+    check(`records-drums-take@${phone}`, take.ok && errors.length === 0,
+      `${detail}; ${errors.join(' | ')}`);
+  } finally {
+    await context.close();
+  }
+}
+
 /** Journey 22: each denied capability says so where it is offered, and nothing invents data. */
 async function deniedJourney(browser, engine, device, phone, check) {
   // the microphone: the readout states the denial, never a detected frequency
@@ -230,7 +318,7 @@ async function deniedJourney(browser, engine, device, phone, check) {
         mic = await pollFor(() => page.evaluate(() => ({
           text: document.getElementById('osc-mic-detected').textContent.trim(),
           pressed: document.getElementById('osc-mic-toggle').getAttribute('aria-pressed'),
-        })), (v) => /permission denied/.test(v.text), `iphone: the denied microphone says so`);
+        })), (v) => /přístup zamítnut/.test(v.text), `iphone: the denied microphone says so`);
       }
       check(`denied-mic@${phone}`, mic.ok && mic.last.pressed === 'false'
         && !/\d\s*Hz/.test(mic.last.text) && errors.length === 0,
@@ -296,6 +384,62 @@ const announced = (page, sel) => page.evaluate((q) => {
  * pressed; letting go stops within HIDE_MS and says not pressed. The sequencer started by a tap
  * stops at Escape, and its Play control stops saying pressed.
  */
+// K184: the surfaces a same-task tap is proven on; `at` is where a finger lands, as fractions of
+// the control's box (a white key's low part; the pad's middle, where Y opens the filter)
+const TAPS = [
+  { id: 'synth-key', hash: '#m=synth', sel: '[data-osc="keyboard.keys"]',
+    at: { x: 0.06, y: 0.85 } },
+  { id: 'xy-pad', hash: '#m=synth&yt=xy', sel: '[data-osc="synth.xy"] [data-xy-surface]',
+    at: { x: 0.5, y: 0.6 } },
+];
+
+/** In the page: one tap, its finger down and up dispatched in this one task (K184). */
+function sameTaskTap([sel, at]) {
+  const el = [...document.querySelectorAll(sel)].find((e) => e.getClientRects().length);
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  const o = { clientX: r.left + r.width * at.x, clientY: r.top + r.height * at.y,
+    pointerType: 'touch', pointerId: 7, isPrimary: true, bubbles: true, cancelable: true };
+  el.dispatchEvent(new PointerEvent('pointerdown', { ...o, buttons: 1 }));
+  el.dispatchEvent(new PointerEvent('pointerup', { ...o, buttons: 0 }));
+  window.__tapAttach(); // same task: a tap that builds the analyser is metered from its start
+  return true;
+}
+
+async function sameTaskTapJourney(browser, engine, device, phone, check) {
+  for (const s of TAPS) {
+    const { context, page, errors } = await openAt(browser, engine, device, s.hash);
+    try {
+      const spot = await page.evaluate(inertSpot);
+      if (spot) await page.touchscreen.tap(spot.x, spot.y);
+      const target = page.locator(s.sel).locator('visible=true').first();
+      const shown = await target.count() > 0;
+      if (shown) await target.scrollIntoViewIfNeeded({ timeout: 5000 });
+      await page.evaluate(watchTaps);
+      const heard = [];
+      for (let i = 0; shown && i < TAP_COUNT; i += 1) {
+        const quiet = await pollFor(() => page.evaluate(() => window.__tapNow),
+          (db) => db !== undefined && db < TAP_QUIET_DB,
+          `iphone: ${s.id} quiet before tap ${i + 1}`, TAP_MS);
+        if (!quiet.ok) {
+          heard.push(`not quiet ${quiet.last}`);
+          break;
+        }
+        await page.evaluate(markTap);
+        await page.evaluate(sameTaskTap, [s.sel, s.at]);
+        const peak = await pollFor(() => page.evaluate(() => window.__tapMax),
+          (db) => db > TAP_HEARD_DB, `iphone: same-task tap ${i + 1} on ${s.id} sounds`, TAP_MS);
+        heard.push(peak.ok ? Number(peak.last.toFixed(1)) : null);
+      }
+      const ok = shown && heard.length === TAP_COUNT && heard.every((x) => typeof x === 'number')
+        && errors.length === 0;
+      check(`tap-same-task-${s.id}@${phone}`, ok, JSON.stringify({ shown, heard, errors }));
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 async function sameActionJourney(browser, engine, device, phone, check) {
   const { context, page, errors } = await openAt(browser, engine, device, '#m=playground');
   try {
@@ -399,18 +543,42 @@ async function runOne(engine, baseline, recorded) {
         await context.close();
       }
       for (const s of SOUNDS) {
-        const { context, page } = await openAt(browser, engine, device, `#m=${s.ws}`);
+        const { context, page } = await openAt(browser, engine, device, s.hash || `#m=${s.ws}`);
         await pollFor(() => page.evaluate(() => document.getElementById('osc-app')?.dataset.mode),
           (m) => m === s.ws, `iphone: ${s.ws} shown for ${s.id}`);
         // the first gesture unlocks audio: a real tap, on a spot that starts nothing
         const spot = await page.evaluate(inertSpot);
         if (spot) await page.touchscreen.tap(spot.x, spot.y);
+        // a surface made by taps first (K222: the Drums tab's clip, then a step on)
+        let prepped = null;
+        for (const { sel, optional } of s.prep || []) {
+          const el = page.locator(sel).locator('visible=true').first();
+          if (optional && !(await el.count())) continue;
+          const shown = await pollFor(() => el.count(), (n) => n > 0, `iphone: ${s.id} shows ${sel}`);
+          if (!shown.ok) {
+            prepped = `${sel} never shown`;
+            break;
+          }
+          await el.scrollIntoViewIfNeeded({ timeout: 5000 });
+          await el.tap({ timeout: 5000 }).catch((e) => { prepped = `${sel}: ${e.message.split('\n')[0]}`; });
+          if (prepped) break;
+        }
+        // a folded dock is unfolded by its handle first, as a finger would (#444)
+        if (s.unfold) {
+          const handle = page.locator(s.unfold).locator('visible=true').first();
+          if (await handle.count()) {
+            await handle.tap({ timeout: 5000 });
+            await pollFor(() => page.evaluate((sel) => document.querySelector(sel)
+              ?.getAttribute('aria-expanded'), s.unfold), (x) => x === 'true',
+            `iphone: ${s.id} the dock unfolds`);
+          }
+        }
         // the first match a finger can see: a hidden copy of the control is no control
         const target = page.locator(s.sel).locator('visible=true').first();
-        let result = { ok: false, last: 'no visible control' };
+        let result = { ok: false, last: prepped ? `prep failed: ${prepped}` : 'no visible control' };
         let lift = null; // a held control's finger stays down until the page has been hidden
         try {
-          if (await target.count()) {
+          if (!prepped && await target.count()) {
             await target.scrollIntoViewIfNeeded({ timeout: 5000 });
             if (s.how === 'tap') {
               await target.tap({ timeout: 5000 });
@@ -435,6 +603,13 @@ async function runOne(engine, baseline, recorded) {
         } catch (error) {
           result = { ok: false, last: `the control did not take the gesture: ${error.message.split('\n')[0]}` };
         }
+        // the handle's light shows the held note (#444): a played key answers on the strip too
+        if (s.unfold && result.ok) {
+          const lit = await pollFor(() => page.evaluate(() => document.querySelector(
+            '[data-osc="keyboard.handle.held"]')?.getAttribute('data-held')), (x) => x === 'true',
+          `iphone: ${s.id} the handle's light shows the held key`);
+          if (!lit.ok) result = { ok: false, last: `sounding, but the handle's light is ${lit.last}` };
+        }
         check(`sounds-${s.id}@${phone}`, result.ok, JSON.stringify(result.last));
         // Journey 21 (One Living System, G): a page the phone hides (lock, switch app) stops
         // everything it plays, with the finger still on a held control: no live source is left
@@ -456,6 +631,8 @@ async function runOne(engine, baseline, recorded) {
       }
       await deniedJourney(browser, engine, device, phone, check);
       await sameActionJourney(browser, engine, device, phone, check);
+      await sameTaskTapJourney(browser, engine, device, phone, check);
+      await recordJourney(browser, engine, device, phone, check);
     }
   } finally {
     await browser.close();

@@ -1,0 +1,44 @@
+id: K229
+milestone: M067
+serves:
+  - "connected-instrument#modulation-everywhere"
+  - "connected-instrument#synth-panel"
+  - "connected-instrument#one-transport"
+title: "The Synth panel's MG gets key sync, tempo sync and a continuous waveform morph"
+slug: the-synth-panel-mg-gets-key-sync-tempo-sync-and-a-waveform-morph
+priority: p2
+profile: implementation
+objective: "Lands as feat(synth). Three things the panel's MG (an LFO node, src/js/synth/panels/semi-mono.js) lacks. (1) Key sync: the LFO node gets a reset TRIGGER input (a new port, which leaves every pinned studioHash unchanged, D2); a trigger on it restarts the LFO's phase at that time on the audio clock. On the panel a Key sync switch (Czech label) adds or removes the normal from the Keys Gate to mg.reset, one undoable dispatch, so each note-on restarts the MG; a cable the user patches into the jack does the same. (2) Tempo sync: the panel stops fixing sync to 'off' and shows K022's sync divisions (syncParam, 1/1 to 1/32 of transport.tempo) beside the rate, so the MG follows the one transport; free (off) stays the default. (3) A continuous morph: the LFO node gets a shape option 'morph' (a new enum option, no epoch) and a morph parameter (0..1, triangle at 0, sawtooth at 0.5, square at 1, linear crossfade between neighbours, modulatable through a CONTROL input). The parameter is new on an existing type, so it lands in hash epoch 3 (schema.js HASH_EPOCH_PARAMS, STUDIO_HASH_VERSION 3) together with K230's envelope parameters, in one release (D2: every new parameter on an existing type lands in one epoch). The panel's MG shows the Morph knob in place of the two-shape enum. Before: the MG free-runs from PLAY, cannot follow the tempo and has two shapes. After: it restarts on each note when asked, follows a tempo division and morphs continuously. Rollback: revert the pull request; a document saved with morph, the new shape or a reset edge is then refused by the import pipeline with its sentence, so after a release the epoch stays and only the panel controls are removed."
+why: "Owner direction of 2026-11-09, relayed by the integrator oscilla-43: three more screenshots of the semi-modular tablet instrument the owner asked to split into functional components show its modulation generator with key sync, tempo sync and a continuous waveform morph; functional only, no trade dress or labels (project.visual-identity-lock). Today the panel fixes the MG's sync to 'off' (K022-3) and offers two shapes. No issue covers it (K092's morph is the wavetable engine's). Checked against train/t4-sequencer 0f9403d8."
+scope:
+  - "src/js/studio/nodes/modulation.js"
+  - "src/js/studio/adapters/modulation.js"
+  - "src/js/audio/modulation.js"
+  - "src/js/studio/schema.js"
+  - "src/js/studio/trigger-fanout.js"
+  - "src/js/synth/panels/semi-mono.js"
+  - "src/js/synth/normals.js"
+  - "src/js/ui/synth"
+  - "tests/unit/synth-mg-sync-morph.test.mjs"
+  - "tests/browser/instrument-dsp.cjs"
+  - "tests/browser/synth.cjs"
+  - "tests/README.md"
+  - "dist"
+depends_on:
+  - "K022"
+  - "K023"
+  - "K061"
+acceptance_criteria:
+  - "tests/unit/synth-mg-sync-morph.test.mjs, failing on the merge base: the LFO type has a reset TRIGGER input, a 'morph' shape option and a morph parameter listed in hash epoch 3; every record hashed under epoch 2 still verifies through studioHashAt while morph is at its default, and every pinned template studioHash is unchanged; a Keys gate fanned to mg.reset restarts the phase at the gate's audio time (the scheduled phase reset lands at that time, on a Clock-driven gate and on a live key alike); the panel's Key sync switch adds and removes the Keys Gate to mg.reset normal as one history entry, undo restores the model exactly; the panel no longer fixes sync and its MG declares the sync divisions; the morph curve at 0, 0.25, 0.5, 0.75 and 1 equals triangle, the triangle-saw mix, sawtooth, the saw-square mix and square within a stated tolerance."
+  - "tests/browser/instrument-dsp.cjs renders offline at 44.1 kHz and 48 kHz: an MG synced to 1/4 at 120 BPM has a 0.5 s period within one frame; key-synced, two notes 0.3 s apart start the MG at the same phase; morph 0 and 1 give a triangle's and a square's odd-harmonic ratios within a stated tolerance; no sample rate assumed."
+  - "A browser check in tests/browser/synth.cjs (run by npm run test:synth): Key sync, the sync division and the Morph knob work by pointer, keyboard and touch; each shows in the Studio graph and Inspector at the same revision; a key pressed twice restarts the MG audibly in the scope probe within a named until() deadline of tests/browser/lib/wait.cjs; inside tests/browser/lib/suite.cjs; tests/browser/timing-baseline.json does not grow."
+  - "Every edit is one undoable dispatch through the one Studio store (project.studio-model-is-canonical); every node it plays is built through the engine with track()/source() accounting, all timing on the audio clock, census 0 after stop (project.audio-engine-discipline)."
+  - "Every string it adds is Czech (project.czech-prose) and passes tests/unit/synth-wording.test.mjs (no product, brand or model name); the UI is Flowbite Pro and the D11 knob; scripts/size-report.mjs shows at most 2 KB gzip added; a reviewer's verdict for the guarded paths (project.review-verdict); tests/README.md has a row for each new test; dist is rebuilt."
+validation:
+  - "node --test tests/unit/synth-mg-sync-morph.test.mjs"
+  - "node tests/browser/instrument-dsp.cjs"
+  - "npm run test:synth"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-09

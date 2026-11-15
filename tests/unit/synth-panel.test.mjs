@@ -11,16 +11,21 @@ import { compileStudio } from '../../src/js/studio/compiler.js';
 import { liveModel } from '../../src/js/studio/live-notes.js';
 import { panelStore } from './synth-fixture.mjs';
 
-test('every module names a registry type; the face is its params less fixed, plus amounts', () => {
-  assert.equal(PANEL.title, 'Semi-modular mono voice');
+test('every module names a registry type; the face is its params less fixed and Studio-only, '
+  + 'plus amounts', () => {
+  assert.equal(PANEL.title, 'Semimodulární monofonní hlas');
   for (const m of PANEL.modules) {
     const def = NODE_REGISTRY.get(m.node);
     assert.ok(def, m.id);
     const face = PANEL.faceOf(m.id);
-    const fixed = Object.keys(m.fixed || {});
+    // K060: a module's `studio` params (Keys' key range) are the Inspector's only.
+    const fixed = [...Object.keys(m.fixed || {}), ...(m.studio || [])];
+    for (const k of m.studio || []) assert.ok(!face.some((c) => c.key === k), `${m.id}.${k}`);
     const amounts = PANEL.amounts.filter((a) => a.module === m.id);
-    assert.equal(face.length, def.params.length - fixed.length + amounts.length, m.id);
-    for (const c of face.filter((x) => x.kind !== 'amount')) {
+    const cables = PANEL.cableSwitches.filter((s) => s.module === m.id); // K229 Key sync
+    assert.equal(face.length, def.params.length - fixed.length + amounts.length + cables.length,
+      m.id);
+    for (const c of face.filter((x) => x.kind !== 'amount' && x.kind !== 'cable')) {
       assert.ok(def.params.some((p) => p.key === c.key), `${m.id}.${c.key}`);
     }
     const ports = [...def.inputs, ...def.outputs].map((p) => p.id);
@@ -46,15 +51,17 @@ test('the panel narrows the registry and never widens it', () => {
   const lpf = PANEL.module('lpf');
   const q = lpf.params.find((p) => p.key === 'Q');
   assert.deepEqual([q.min, q.max, q.label], [0.5, 30, 'Peak']);
-  const mg = PANEL.module('mg').params.find((p) => p.key === 'shape');
-  assert.deepEqual(mg.options.map((o) => o[0]), ['triangle', 'square']);
+  // K229: the MG's shape is fixed ('morph'); the wavetable bank is the panel's narrowed enum.
+  const bank = PANEL.module('wavetable').params.find((p) => p.key === 'bank');
+  assert.deepEqual(bank.options.map((o) => o[0]), ['basic', 'formant', 'pulse']);
+  assert.ok(NODE_REGISTRY.param('wavetable-voice', 'bank').options.length > bank.options.length);
   assert.throws(() => definePanel({ id: 'w', title: 'W', normals: [], modules: [
     { id: 'f', label: 'F', node: 'filter', ranges: { Q: [0, 2000] } }] }), /range/);
 });
 
 test('the instantiated panel validates, is one entry, and its live model compiles', () => {
   const st = panelStore();
-  assert.equal(st.undoLabel(), 'Insert Semi-modular mono voice');
+  assert.equal(st.undoLabel(), `Vložit ${PANEL.title}`);
   const m = st.getModel();
   const res = PANEL.resolve(m);
   for (const mod of PANEL.modules) assert.ok(res.get(mod.id), mod.id);

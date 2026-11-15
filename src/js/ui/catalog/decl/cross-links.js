@@ -35,7 +35,7 @@ export default [
   defineComponent({
     id: 'counterpart.experiments',
     kind: 'open',
-    label: 'Compare saved experiments',
+    label: 'Porovnat uložené experimenty',
     docs: 'Opens Experiments to compare saved measurements against a baseline.',
     state: 'ui.workspace',
     effect: { route: 'experiments' },
@@ -52,7 +52,7 @@ export default [
   defineComponent({
     id: 'seq.toStudioTemplate',
     kind: 'open',
-    label: 'Open Sweep Sequence in Studio',
+    label: 'Šablona Sweep Sequence ve Studiu',
     docs: 'Opens the Studio on its Sweep Sequence template.',
     state: 'studio.model',
     effect: { route: 'studio, template sweep-sequence' },
@@ -60,7 +60,7 @@ export default [
   defineComponent({
     id: 'seq.toStudio',
     kind: 'open',
-    label: 'Open this pattern in Studio',
+    label: 'Otevřít tuto sekvenci ve Studiu',
     docs: 'Imports the current sequence into the Studio as a document and opens it.',
     state: 'studio.model',
     effect: { route: 'studio' },
@@ -140,10 +140,42 @@ export default [
   defineComponent({
     id: 'seq.toSynth',
     kind: 'open',
-    label: 'Open the Synth',
+    label: 'Otevřít Synth',
     docs: 'Opens the Synth from the Sequencer to play the pattern ideas on a voice.',
     state: 'ui.workspace',
     effect: { route: 'synth' },
+  }),
+  defineComponent({
+    id: 'seq.toDrums',
+    kind: 'open',
+    label: 'Krokový sekvencer a pady (Bicí)',
+    docs: 'Otevře Synth na záložce Bicí, krokový sekvencer s pady, ze Sekvenceru.',
+    state: 'ui.workspace',
+    effect: { route: 'synth, tab drums' },
+  }),
+  defineComponent({
+    id: 'seq.openMenu',
+    kind: 'open',
+    label: 'Otevřít v…',
+    docs: 'Otevře nabídku dalších cest ze Sekvenceru: Step Bass, tato sekvence a šablona ve '
+      + 'Studiu, Synth (G013).',
+    state: 'ui.menus',
+  }),
+  defineComponent({
+    id: 'filter.openMenu',
+    kind: 'open',
+    label: 'Otevřít v…',
+    docs: 'Otevře nabídku dalších cest z Filter Labu: šablona ve Studiu a Synth (G013).',
+    state: 'ui.menus',
+  }),
+  defineComponent({
+    id: 'seq.toStepBass',
+    kind: 'open',
+    label: 'Krokový modulátor ve Studiu',
+    docs: 'Otevře Studio na šabloně Step Bass, jejíž krokový modulátor Inspektor upravuje '
+      + 'jako krokovou mřížku.',
+    state: 'studio.model',
+    effect: { route: 'studio, template step-bass' },
   }),
   defineComponent({
     id: 'filter.toSynth',

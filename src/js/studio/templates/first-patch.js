@@ -38,7 +38,7 @@ export default {
       'The notes of the Inspector, with nothing selected, say each step in full.',
     ],
   },
-  studioHash: '847a4cfd83a66ea94bcdccff48fdcfbf2c72f2697aa7b0840bbb6d69d5cffa2c',
+  studioHash: '606db03955e838fb4a5ded74b120ee3641fc6aa6958b6e5b52999cce6a517c4a',
   model: studioDoc({
     title: 'First Patch',
     notes: NOTES,

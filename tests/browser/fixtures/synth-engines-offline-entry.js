@@ -8,9 +8,11 @@ import { NODE_ADAPTERS } from '../../../src/js/studio/adapters/nodes.js';
 import { NODE_REGISTRY } from '../../../src/js/studio/registry.js';
 import { percNote } from '../../../src/js/synth/perc-recipes.js';
 
-// The rate these renders request; every measure reads the rendered buffer's own sampleRate.
+// The rate these renders request, set by the runner (E.setRate) to each rate it judges: the CI
+// browsers run 44.1 kHz and the Mac 48 kHz (K180). Every measure reads the rendered buffer's own
+// sampleRate.
 // timing-allow: the OfflineAudioContext render rate these renders request
-const SR = 48000;
+let SR = 48000;
 
 const defaults = (type) => Object.fromEntries(NODE_REGISTRY.get(type).params
   .map((p) => [p.key, p.default]));
@@ -138,6 +140,12 @@ function lineCents(x, f0, sr, range = 300) {
 
 window.E = {
   defaults,
+
+  /** The rate the next renders request -> the rate an OfflineAudioContext at it reports. */
+  setRate(sr) {
+    SR = sr;
+    return new OfflineAudioContext(1, 128, SR).sampleRate;
+  },
 
   /** The voice a key plays and its longest layer's decay (the recipe the face prints). */
   percVoice: (note) => {

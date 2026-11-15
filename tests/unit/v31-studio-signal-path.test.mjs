@@ -275,7 +275,7 @@ test('the Playground voice graph is the voice the engine builds', () => {
     filter: filterOf('notch', 3000, 2) } }).model;
   assert.deepEqual(chainOf(m), ['oscillator', 'envelope', 'filter']);
   assert.deepEqual(nodeOf(m, ID.envelope).params,
-    { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.4 });
+    { attack: 0.02, decay: 0.1, sustain: 0.5, release: 0.4, delay: 0, hold: 0 }); // K230
   assert.equal(nodeOf(m, ID.master).params.level, i.gain);
 });
 

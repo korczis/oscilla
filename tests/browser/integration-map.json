@@ -44,6 +44,11 @@
       "row": "sequencer > seq.toStudio > studio",
       "issue": "V604",
       "why": "the Studio document lives in memory: a reload of #m=studio opens the default template, so the voice the Synth instantiated (or the converted pattern) is gone; V604 saves the working draft and restores it"
+    },
+    {
+      "row": "synth > synth.drums.studio > studio",
+      "issue": "V604",
+      "why": "the Studio document lives in memory: a reload of #m=studio opens the default template, so the Drums tab's clip and the panel it plays on are gone; V604 saves the working draft and restores it"
     }
   ],
   "rows": [
@@ -390,11 +395,12 @@
       "from": "filter",
       "control": "filter.toStudio",
       "selector": "[data-osc=\"filter.toStudio\"]",
-      "role": "link",
+      "role": "menuitem",
       "to": "studio",
       "href": "#m=studio&st=filter-automation",
       "template": "filter-automation",
       "source": "panel",
+      "opener": "[data-osc=\"filter.openMenu\"]",
       "studio": "template",
       "id": "filter > filter.toStudio > studio&st=filter-automation"
     },
@@ -403,11 +409,12 @@
       "from": "filter",
       "control": "filter.toSynth",
       "selector": "[data-osc=\"filter.toSynth\"]",
-      "role": "link",
+      "role": "menuitem",
       "to": "synth",
       "href": "#m=synth",
       "template": null,
       "source": "panel",
+      "opener": "[data-osc=\"filter.openMenu\"]",
       "studio": "voice",
       "id": "filter > filter.toSynth > synth"
     },
@@ -896,15 +903,43 @@
       "id": "sequencer > page.relatedLink > presets"
     },
     {
+      "kind": "jump",
+      "from": "sequencer",
+      "control": "seq.toDrums",
+      "selector": "[data-osc=\"seq.toDrums\"]",
+      "role": "link",
+      "to": "synth",
+      "href": "#m=synth&yt=drums",
+      "template": null,
+      "source": "panel",
+      "studio": "voice",
+      "id": "sequencer > seq.toDrums > synth&yt=drums"
+    },
+    {
+      "kind": "open-in",
+      "from": "sequencer",
+      "control": "seq.toStepBass",
+      "selector": "[data-osc=\"seq.toStepBass\"]",
+      "role": "menuitem",
+      "to": "studio",
+      "href": "#m=studio&st=step-bass",
+      "template": "step-bass",
+      "source": "panel",
+      "opener": "[data-osc=\"seq.openMenu\"]",
+      "studio": "template",
+      "id": "sequencer > seq.toStepBass > studio&st=step-bass"
+    },
+    {
       "kind": "open-in",
       "from": "sequencer",
       "control": "seq.toStudioTemplate",
       "selector": "[data-osc=\"seq.toStudioTemplate\"]",
-      "role": "link",
+      "role": "menuitem",
       "to": "studio",
       "href": "#m=studio&st=sweep-sequence",
       "template": "sweep-sequence",
       "source": "panel",
+      "opener": "[data-osc=\"seq.openMenu\"]",
       "studio": "template",
       "id": "sequencer > seq.toStudioTemplate > studio&st=sweep-sequence"
     },
@@ -913,11 +948,12 @@
       "from": "sequencer",
       "control": "seq.toSynth",
       "selector": "[data-osc=\"seq.toSynth\"]",
-      "role": "link",
+      "role": "menuitem",
       "to": "synth",
       "href": "#m=synth",
       "template": null,
       "source": "panel",
+      "opener": "[data-osc=\"seq.openMenu\"]",
       "studio": "voice",
       "id": "sequencer > seq.toSynth > synth"
     },
@@ -1209,6 +1245,26 @@
       "why": "Open in Studio is a button (synthOpenStudio) showing the same document in Studio; the registry's Synth -> Studio entry is the strip link"
     },
     {
+      "id": "synth > synth.drums.studio > studio",
+      "kind": "open-in",
+      "from": "synth",
+      "control": "synth.drums.studio",
+      "selector": "[data-osc=\"synth.drums.studio\"]",
+      "role": "button",
+      "to": "studio",
+      "href": null,
+      "template": null,
+      "studio": "same",
+      "source": "declared",
+      "setup": {
+        "open": "m=synth&yt=drums",
+        "click": [
+          "[data-drums-new]"
+        ]
+      },
+      "why": "the Drums tab's Open in Studio is a button (synth/view/drums-tab.js openStudio) selecting its notes clip in the same document's Studio timeline; the tab's clip is made by Vytvořit bicí klip first (K222)"
+    },
+    {
       "id": "playground > studio.compact.expand > studio",
       "kind": "open-in",
       "from": "playground",
@@ -1270,13 +1326,14 @@
       "from": "sequencer",
       "control": "seq.toStudio",
       "selector": "[data-osc=\"seq.toStudio\"]",
-      "role": "link",
+      "role": "menuitem",
       "to": "studio",
       "href": "#m=studio",
       "template": null,
       "studio": "converted",
       "source": "declared",
-      "why": "Open this pattern in Studio converts the pattern into a Studio document on click (studioOpenSequence): a send, not the plain address its href names"
+      "opener": "[data-osc=\"seq.openMenu\"]",
+      "why": "Otevřít tuto sekvenci ve Studiu converts the pattern into a Studio document on click (studioOpenSequence): a send, not the plain address its href names"
     },
     {
       "id": "learn > learn.demo > playground",

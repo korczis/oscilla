@@ -8,18 +8,33 @@
 //     'instrument.space'  Space, Hold to Play in the workspaces whose Space owner is the
 //                         instrument (ui/shortcuts.js SPACE_OWNER, ADR 0050): held it plays,
 //                         released it stops, a programmed pattern triggers once
+//     'keys.dock'         Alt+K, where the docked keyboard yields to a pad that owns the notes
+//                         (K171, midi/dock-yield.js): unfold or fold the keys, as its handle does
+//     'notes.record'      R, while a Record switch is shown (K223, ui/kinds/record-switch.js: the
+//                         Drums tab, a notes clip's step grid in the Studio): it presses it
 //   pageKeyContext(cmp) -> { workspace, view }   what the dispatcher scopes keys by; the
 //     Synth's view is its tab ('panel', 'engines', 'xy')
 import { instrumentTakesSpace } from '../shortcuts.js';
+import { DOCK_KEY } from '../../midi/dock-yield.js';
 
 export const pageKeyContext = (cmp) => ({ workspace: cmp.workspace,
   view: cmp.workspace === 'synth' && cmp.synth ? cmp.synth.tab || null : null });
 
-export function bindPageKeys({ keys, cmp, stopSequencer }) {
+/** The Record switch on screen (K223), or null. */
+const shownRecordSwitch = () => (typeof document === 'undefined' ? null
+  : [...document.querySelectorAll('[data-notes-record]')]
+    .find((b) => b.getClientRects().length > 0) || null);
+
+export function bindPageKeys({ keys, cmp, stopSequencer, stopAll = null }) {
   const offs = [
+    // Escape is the playback bus's stopAll (C050): every owner stops in this one binding.
     keys.bind({ id: 'page.escape', keys: ['Escape'], scope: { workspace: '*', focus: '*' },
       prevent: false, label: 'Stop: the instrument, a sequence, a measurement', group: 'Page',
       run: (e) => {
+        if (typeof stopAll === 'function') {
+          stopAll('escape');
+          return;
+        }
         stopSequencer();
         cmp.measureAbort('escape');
         cmp.onKeyDown(e);
@@ -28,6 +43,14 @@ export function bindPageKeys({ keys, cmp, stopSequencer }) {
       when: () => instrumentTakesSpace(cmp.workspace), group: 'Instrument',
       label: 'Hold to Play (a programmed pattern triggers once)',
       run: (e) => cmp.onKeyDown(e), up: (e) => cmp.onKeyUp(e) }),
+    keys.bind({ id: 'keys.dock', keys: [DOCK_KEY], scope: { workspace: '*' },
+      when: () => !!cmp.kbdDockYields, group: 'Keyboard',
+      label: 'Rozložit nebo složit klávesnici tam, kde noty hraje pad (její úchyt)',
+      run: () => cmp.kbdDockToggle() }),
+    keys.bind({ id: 'notes.record', keys: ['KeyR'], scope: { workspace: '*' },
+      when: () => !!shownRecordSwitch(), group: 'Kroková mřížka',
+      label: 'Nahrávání živých úderů do notového klipu: zapnout nebo vypnout',
+      run: () => shownRecordSwitch().click() }),
   ];
   return () => offs.forEach((off) => off());
 }

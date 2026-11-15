@@ -1,0 +1,25 @@
+id: C064
+milestone: M090
+serves:
+  - "coherent-state#views-describe-what-sounds"
+title: "The spectrogram writes no ghost columns after a resume and keeps its time axis true below 4 fps"
+slug: spectrogram-true-after-resume-and-at-low-fps
+priority: p2
+profile: implementation
+objective: "Two open findings of #288 on main: after a pause the first columns repaint the pre-pause spectrum through the AnalyserNode's smoothing (0.55), because nothing resets or bypasses it on resume and the view's default feed is still the smoothed analyser one (src/js/charts/spectrogram-view.js:36, :231; 288 R1: 11-13 ghost 1 kHz columns after a 2 s pause at 5 kHz, measured then); and MAX_PUSH_GAP_MS = 250 (src/js/analysis/spectrogram.js:43, push at :370) treats every slow frame as a restart, so below 4 fps each frame writes one column and the 10 s axis spans minutes (288 R2). Flush or bypass the smoothing on the first resumed frame, and bound the restart by the pause signal or the frame interval."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 288.yaml#R1 and #R2 (P2); checked by reading the code (unchanged since 3020041e), not re-measured in a browser still open on main b8bfd3b6."
+scope:
+  - "src/js/charts/spectrogram-view.js"
+  - "src/js/analysis/spectrogram.js"
+  - "tests/unit"
+  - "tests/browser"
+  - ".ai/repo/project/issues/C064.yaml"
+depends_on: []
+acceptance_criteria:
+  - "After a 2 s pause no column written after the resume shows the pre-pause tone; at a 2 fps frame rate the columns span wall time as the axis states. Each has a check that fails on b8bfd3b6."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

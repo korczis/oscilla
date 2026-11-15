@@ -410,6 +410,88 @@ test('every timing-allow marker of tests/browser gives its reason, printed for r
   assert.equal(scanner.RULE, 'project.bounded-test-timing');
 });
 
+// E053 (Q097 answer 1, decided 2026-11-09 by oscilla-43, oscilla-c1 and oscilla-ce): every
+// timing-allow marker is listed, per file with its reason, in tests/browser/timing-allow-
+// baseline.json, a record that only shrinks. A new marker is refused until it is listed with a
+// raises entry; a marker that is gone is refused until the record drops it and lowers its seed.
+const ALLOW_REL = 'tests/browser/timing-allow-baseline.json';
+
+test('E053: every timing-allow marker is listed in the allow record, and the record adds up',
+  (t) => {
+    const record = scanner.readAllowBaseline();
+    const listed = Object.values(record.markers).reduce((n, r) => n + r.length, 0);
+    t.diagnostic(`allow record: ${listed} markers in ${Object.keys(record.markers).length} files `
+      + `(seed ${record.seed}, ${record.raises.length} raised)`);
+    const r = scanner.compareMarkers(scanner.treeMarkers(ROOT), record);
+    assert.deepEqual(r.unlisted, [], 'a timing-allow marker the record does not list: list it '
+      + `with a raises entry { file, reason, why, by } in ${ALLOW_REL}`);
+    assert.deepEqual(r.stale, [], `a listed marker is gone: drop it from ${ALLOW_REL} and lower `
+      + 'its seed');
+    assert.equal(r.unraised, null, 'the listed total is seed + raises');
+    assert.deepEqual(r.badRaises, [], 'each raises entry names a listed marker, why and by whom');
+    assert.ok(Number.isInteger(record.seed) && record.seed > 0, 'a positive seed');
+  });
+
+test('mutation E053: a new marker, a vanished one and an unrecorded seed are each refused', () => {
+  const m = (file, reason) => ({ file, line: 1, reason });
+  const found = [m('a.cjs', 'one reason here'), m('a.cjs', 'two reason here'),
+    m('b.cjs', 'three reason here')];
+  const record = { seed: 3, raises: [], markers: scanner.markerListing(found) };
+  const clean = scanner.compareMarkers(found, record);
+  assert.deepEqual([clean.unlisted, clean.stale, clean.unraised, clean.badRaises],
+    [[], [], null, []], 'the record of the tree it was made from holds');
+  // A new marker fails with its file named, however its line moved.
+  const added = scanner.compareMarkers([...found, m('b.cjs', 'a new reason here')], record);
+  assert.deepEqual(added.unlisted, [{ file: 'b.cjs', reason: 'a new reason here' }]);
+  // Listed with no raises entry, the total no longer adds up.
+  const listedOnly = { ...record, markers: scanner.markerListing([...found,
+    m('b.cjs', 'a new reason here')]) };
+  assert.deepEqual(scanner.compareMarkers([...found, m('b.cjs', 'a new reason here')], listedOnly)
+    .unraised, { listed: 4, seed: 3, raises: 0 });
+  // With its raises entry it holds; a raises entry naming no listed marker does not.
+  const raised = { ...listedOnly, raises: [{ file: 'b.cjs', reason: 'a new reason here',
+    why: 'a deliberate window', by: '#999' }] };
+  const ok = scanner.compareMarkers([...found, m('b.cjs', 'a new reason here')], raised);
+  assert.deepEqual([ok.unlisted, ok.stale, ok.unraised, ok.badRaises], [[], [], null, []]);
+  assert.equal(scanner.compareMarkers(found, { ...record, seed: 2, raises: [{ file: 'c.cjs',
+    reason: 'x y z', why: 'w', by: '#1' }] }).badRaises.length, 1, 'a raises entry for nothing');
+  // An unrecorded fall: the marker is gone but still listed, and the seed was not lowered.
+  const fell = scanner.compareMarkers(found.slice(1), record);
+  assert.deepEqual(fell.stale, [{ file: 'a.cjs', reason: 'one reason here' }]);
+  const dropped = { ...record, markers: scanner.markerListing(found.slice(1)) };
+  assert.deepEqual(scanner.compareMarkers(found.slice(1), dropped).unraised,
+    { listed: 2, seed: 3, raises: 0 }, 'dropped from the list but the seed kept: refused');
+  // The same reason twice in one file counts twice.
+  const twice = [...found, m('a.cjs', 'one reason here')];
+  assert.deepEqual(scanner.compareMarkers(twice, record).unlisted,
+    [{ file: 'a.cjs', reason: 'one reason here' }]);
+});
+
+/** Each [seed, earlier seed, sha] where the allow record's seed is above an earlier version. */
+export function raisedSeed(seed, history) {
+  return history.filter((h) => seed > h.seed).map((h) => [seed, h.seed, h.sha]);
+}
+
+test('E053: the allow record\'s seed only falls over its git history', (t) => {
+  const git = (...args) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+  if (git('rev-parse', '--verify', '-q', 'HEAD').status !== 0) {
+    t.skip('no git history here');
+    return;
+  }
+  const log = git('log', '--format=%H', '--', ALLOW_REL);
+  const history = log.status === 0 ? log.stdout.split('\n').filter(Boolean).map((sha) => ({
+    sha: sha.slice(0, 12), seed: JSON.parse(git('show', `${sha}:${ALLOW_REL}`).stdout).seed }))
+    : [];
+  if (!history.length) {
+    t.skip(`no commit holds ${ALLOW_REL} yet (the commit that adds it is its own baseline)`);
+    return;
+  }
+  const raised = raisedSeed(scanner.readAllowBaseline().seed, history);
+  assert.deepEqual(raised, [], 'the seed rose: a new marker goes in raises, never in the seed');
+  assert.deepEqual(raisedSeed(27, [{ sha: 'b', seed: 28 }]), [], 'a fall is allowed');
+  assert.deepEqual(raisedSeed(29, [{ sha: 'b', seed: 28 }]), [[29, 28, 'b']], 'a rise is not');
+});
+
 // The record only shrinks: no count of tests/browser/timing-baseline.json is above its value in
 // any commit that changed the file (a file and kind absent there counts 0, so nothing is added
 // after the record was made). The scan's --write-baseline never raises a count; this holds a

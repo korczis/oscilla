@@ -23,15 +23,117 @@
 // cadence() is a pure function over (last tag, dated commits, now); the level comes from
 // release-analyze.mjs, so this script and release:analyze cannot disagree about what is
 // releasable.
+//
+// R035: a tag alone is not a release. A publish that fails after pushing its tag leaves no
+// deploy and no Release, and counting that tag cleared the cadence. The last release is the
+// newest v* tag reachable from HEAD (lastReleaseTag, unchanged and shared with release:analyze
+// and release:publish) that has a GitHub Release (gh release view, not a draft) and either its
+// record .ai/repo/releases/<tag>.yaml on HEAD or, while that lands, an open record pull request
+// (branch chore/release-record-<tag>, the flow's last step) younger than RECORD_PR_HOURS. A tag
+// before the record floor (release-record.mjs) needs only its Release. Each newer tag that
+// fails is named with what it lacks, and the lag is measured from the release before it.
+// GitHub state that cannot be read is no verdict (exit 2). --report reads no GitHub state: it
+// measures from the newest tag, as before, and says so.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyzeCommits, lastReleaseTag, parseFlags } from './release-analyze.mjs';
 import { boundedRunner, failureReason } from './release-bounded.mjs';
 import { ROOT, gitRunner } from './release-metadata.mjs';
+import { RECORDS_DIR, needsRecord, recordOnRef } from './release-record.mjs';
 
 export const MAX_AGE_HOURS = 24;
 export const ISSUE_TITLE = 'release overdue';
 const HOUR = 3_600_000;
+// How long an open record pull request stands in for the record (R035): long enough for the
+// record PR to land behind a busy queue, not so long that a forgotten one hides a release
+// that never finished.
+export const RECORD_PR_HOURS = 24;
+export const recordBranch = (tag) => `chore/release-record-${tag}`;
+
+/**
+ * Pure: why `tag` is not a counted release, or null when it is.
+ * @param {{ tag: string, release: boolean, record: boolean,
+ *   recordPr?: { number: number, createdAt: string }|null, now: number,
+ *   prHours?: number }} f  record: the record is on HEAD (or the tag needs none);
+ *   recordPr: the open record pull request, null when there is none
+ */
+export function releaseGap({ tag, release, record, recordPr = null, now,
+  prHours = RECORD_PR_HOURS }) {
+  const missing = [];
+  if (!release) missing.push('no GitHub Release');
+  if (!record) {
+    const file = `${RECORDS_DIR}/${tag}.yaml`;
+    if (!recordPr) {
+      missing.push(`no record ${file} on HEAD and no open record pull request `
+        + `(${recordBranch(tag)})`);
+    } else {
+      const age = (now - Date.parse(recordPr.createdAt)) / HOUR;
+      if (!(age <= prHours)) {
+        missing.push(`no record ${file} on HEAD, and its record pull request #${recordPr.number} `
+          + `has been open ${Math.round(age * 10) / 10} h (limit ${prHours} h)`);
+      }
+    }
+  }
+  return missing.length ? `${tag} is not counted as a release: ${missing.join('; ')}` : null;
+}
+
+/**
+ * The newest tag lastReleaseTag returns that `gap` counts, and the newer ones it does not
+ * (newest first). lastReleaseTag is asked again with each refused tag filtered out of the
+ * tag list, so the order and the SemVer filter stay its own.
+ * @param {{ run: Function, gap: (tag: string) => string|null }} o
+ * @returns {{ tag: string|null, skipped: { tag: string, why: string }[] }}
+ */
+export function countedReleaseTag({ run, gap }) {
+  const hidden = new Set();
+  const filtered = (args) => {
+    const out = run(args);
+    return args[0] === 'tag' ? out.split('\n').filter((t) => !hidden.has(t)).join('\n') : out;
+  };
+  const skipped = [];
+  for (let tag = lastReleaseTag(filtered); tag; tag = lastReleaseTag(filtered)) {
+    const why = gap(tag);
+    if (!why) return { tag, skipped };
+    skipped.push({ tag, why });
+    hidden.add(tag);
+  }
+  return { tag: null, skipped };
+}
+
+/**
+ * What GitHub and HEAD say about `tag`, read through `run` (git) and `sh` (gh, bounded).
+ * Throws when GitHub cannot be read: an unread Release is not a missing one.
+ */
+export function tagFacts(tag, { run, sh, now }) {
+  const view = sh('gh', ['release', 'view', tag, '--json', 'tagName,isDraft']);
+  let release;
+  if (view.status === 0) {
+    let parsed = null;
+    try { parsed = JSON.parse(view.stdout || 'null'); } catch { /* below */ }
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error(`gh release view ${tag}: the output is not a JSON object`);
+    }
+    release = parsed.isDraft !== true;
+  } else if (/release not found|not found/i.test(String(view.stderr || ''))) {
+    release = false;
+  } else {
+    throw new Error(`gh release view ${tag} failed: ${failureReason(view)}`);
+  }
+  const record = !needsRecord(tag) || recordOnRef(tag, run, 'HEAD');
+  let recordPr = null;
+  if (!record) {
+    const args = ['pr', 'list', '--state', 'open', '--head', recordBranch(tag), '--json',
+      'number,createdAt', '--limit', '5'];
+    const list = sh('gh', args);
+    if (list.status !== 0) throw new Error(`gh pr list failed: ${failureReason(list)}`);
+    let prs;
+    try { prs = JSON.parse(list.stdout || '[]'); } catch { prs = null; }
+    if (!Array.isArray(prs)) throw new Error('gh pr list: the output is not a JSON list');
+    // The youngest, if several: it is the one still being landed.
+    recordPr = prs.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0] || null;
+  }
+  return { tag, release, record, recordPr, now };
+}
 
 /**
  * Pure verdict.
@@ -56,9 +158,9 @@ export function cadence({ lastTag, commits, now, maxAgeHours = MAX_AGE_HOURS }) 
   };
 }
 
-/** Commits in (since, HEAD] with their committer dates, newest first. */
+/** Commits in (since, HEAD] with their committer dates, newest first; all of HEAD's when null. */
 export function readDatedCommits(since, run = gitRunner()) {
-  const out = run(['log', '--format=%H%x1f%ct%x1f%s%x1f%b%x1e', `${since}..HEAD`]);
+  const out = run(['log', '--format=%H%x1f%ct%x1f%s%x1f%b%x1e', since ? `${since}..HEAD` : 'HEAD']);
   return out.split('\x1e').map((r) => r.replace(/^\n/, '')).filter((r) => r.trim())
     .map((r) => {
       const [sha, seconds, subject, body] = r.split('\x1f');
@@ -66,18 +168,22 @@ export function readDatedCommits(since, run = gitRunner()) {
     });
 }
 
+const since = (c) => c.lastTag || 'the start of history (no counted release)';
+const skippedLines = (c) => (c.skipped || []).map((s) => `  ${s.why}`);
+
 export function formatCadence(c) {
   if (!c.oldest) {
-    return `release cadence: nothing releasable since ${c.lastTag} `
-      + `(${c.commits} commit(s), level none)`;
+    return [`release cadence: nothing releasable since ${since(c)} `
+      + `(${c.commits} commit(s), level none)`, ...skippedLines(c)].join('\n');
   }
   const o = c.oldest;
   return [
     `release cadence: ${c.overdue ? 'OVERDUE' : 'ok'}; ${c.relevant} releasable commit(s) since `
-      + `${c.lastTag} need a ${c.level} release`,
+      + `${since(c)} need a ${c.level} release`,
     `  oldest unreleased: ${o.sha.slice(0, 7)} ${o.subject}`,
     `  landed ${o.date}, ${o.ageHours} h ago (limit ${c.maxAgeHours} h, rule `
       + 'project.deploy-often)',
+    ...skippedLines(c),
     ...(c.overdue ? ['  ship it: npm run release:prepare, land the chore(release) PR, '
       + 'npm run release:publish -- --yes, npm run release:record'] : []),
   ].join('\n');
@@ -89,7 +195,8 @@ export function issueBody(c) {
     `Releasable commits have sat on \`main\` for more than ${c.maxAgeHours} hours `
       + '(rule `project.deploy-often`).',
     '',
-    `- Last release: \`${c.lastTag}\``,
+    `- Last release: \`${c.lastTag || '(none counted)'}\``,
+    ...(c.skipped || []).map((s) => `- ${s.why}`),
     `- Required level: **${c.level}** (${c.relevant} releasable of ${c.commits} commit(s))`,
     `- Oldest unreleased commit: \`${o.sha.slice(0, 7)}\` ${o.subject}`,
     `- Landed: ${o.date} (${o.ageHours} h ago)`,
@@ -168,16 +275,33 @@ export function main({
     err('release-cadence: --max-age-hours needs a positive number');
     return 2;
   }
-  const lastTag = lastReleaseTag(run);
-  if (!lastTag) {
+  const newest = lastReleaseTag(run);
+  if (!newest) {
     // A shallow clone or one without tags: the unreleased range is unknown, so no verdict.
     const why = 'release cadence: no v* tag is reachable from HEAD (a shallow clone, or tags '
       + 'not fetched): the lag cannot be measured here';
     (report ? log : err)(why);
     return report ? 0 : 2;
   }
-  const result = cadence({ lastTag, commits: readDatedCommits(lastTag, run), now, maxAgeHours });
+  // R035: judged runs count only a recorded, released tag; --report reads no GitHub state.
+  let counted = { tag: newest, skipped: [] };
+  if (!report) {
+    try {
+      counted = countedReleaseTag({ run,
+        gap: (tag) => releaseGap(tagFacts(tag, { run, sh, now })) });
+    } catch (e) {
+      err(`release cadence: the releases cannot be read, so the lag is not measured: ${e.message}`);
+      return 2;
+    }
+  }
+  const lastTag = counted.tag;
+  const result = { ...cadence({ lastTag, commits: readDatedCommits(lastTag, run), now,
+    maxAgeHours }), skipped: counted.skipped };
   log(o['--json'] ? JSON.stringify(result, null, 2) : formatCadence(result));
+  if (report) {
+    log('  (--report: measured from the newest tag; whether it has its Release and record is '
+      + 'judged on main by .github/workflows/cadence.yml, R035)');
+  }
   if (o['--issue']) log(`release overdue issue: ${syncIssue({ result, sh })}`);
   return result.overdue && !report ? 1 : 0;
 }

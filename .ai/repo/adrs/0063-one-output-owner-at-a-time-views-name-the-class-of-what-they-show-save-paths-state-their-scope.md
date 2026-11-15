@@ -151,4 +151,19 @@ here rather than in each issue.
 
 ## Resolution notes
 
-(none)
+### 2026-11-09: the open questions as the work answered them (C053; the status stays the owner's)
+
+- Q-a, the newest action wins: answered by C002 (DONE; landed in #367, main merge commit
+  11cc9fbc, member #305). One output-owner table decides every claim: a newer Play takes the
+  output from the instrument, the sequencer or the Studio in the action itself, and only a
+  measurement or a microphone level-reference capture refuses it (src/js/core/output-bus.js
+  OUTPUT_OWNER_TABLE since C036/C037; tests/unit/output-owner.test.mjs,
+  tests/unit/output-claims.test.mjs). What leaving a workspace does to each owner is stated in
+  the same module's LEAVE_POLICY (C053).
+- Q-b, presets and History carry the lab settings: answered by C018 (DONE; landed as #314 with
+  the review verdict .ai/repo/reviews/314.yaml, carried into main by merge train 3, #404).
+  Custom presets, History entries and the config link store the Filter, Envelope, Additive and
+  Phase & Stereo state with the instrument keys (tests/unit/lab-state-round-trip.test.mjs).
+
+Accepting this ADR remains the owner's act (.ai/repo/adrs/README.md lists the accepted ones);
+no question id is minted here.

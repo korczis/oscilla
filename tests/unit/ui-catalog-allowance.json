@@ -1173,18 +1173,6 @@
       "reason": "The mic hooks are not declared yet; a later catalogue slice declares them."
     },
     {
-      "id": "midi.actions",
-      "reason": "The midi hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "midi.connect",
-      "reason": "The midi hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
-      "id": "midi.status",
-      "reason": "The midi hooks are not declared yet; a later catalogue slice declares them."
-    },
-    {
       "id": "pattern-desc",
       "reason": "The pattern hooks are not declared yet; a later catalogue slice declares them."
     },

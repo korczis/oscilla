@@ -1,0 +1,25 @@
+id: R056
+milestone: M011
+serves:
+  - "release-provenance#majordomus-knows-the-product"
+title: "The release cadence reads a missing GitHub Release from gh's own answer, not from any stderr that says 'not found'"
+slug: release-cadence-missing-release-from-gh-answer
+priority: p3
+profile: implementation
+objective: "C3-523-3 (P3), from oscilla-c3's review of #523 (T6), 2026-11-10. scripts/release-cadence.mjs, as R035 left it (3abe35bb), reads any stderr matching /not found/ from `gh release view` as 'this tag has no Release'. A transient or unrelated gh error whose text happens to contain 'not found' (a missing auth scope, a repository lookup) would then count a released tag as unreleased and report the cadence wrong instead of exiting 2 as R035 says for unreadable gh state. After: a missing Release is recognised only from gh's own not-found answer (its exit status and the HTTP 404 it reports, or the API's JSON), and every other gh failure exits 2 naming the call."
+why: "R035 made the cadence count only recorded releases; its honesty depends on telling 'no Release' apart from 'could not read'."
+current_state: "Filed 2026-11-10 by oscilla-43 from C3-523-3 in .ai/repo/reviews/523.yaml; not started. Lane: release scripts (oscilla-75)."
+scope:
+  - "scripts/release-cadence.mjs"
+  - "tests/unit/release-cadence.test.mjs"
+depends_on:
+  - R035
+acceptance_criteria:
+  - "Fail-first: a stubbed gh failing with an unrelated stderr that contains 'not found' (for example an auth or scope error) makes the cadence exit 2 naming the call; on 3abe35bb it counts the tag as unreleased."
+  - "A real missing Release (gh's 404 answer) is still read as 'no Release', as R035's tests pin."
+validation:
+  - "node --test tests/unit/release-cadence.test.mjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

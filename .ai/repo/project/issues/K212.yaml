@@ -1,0 +1,26 @@
+id: K212
+milestone: M064
+serves:
+  - "connected-instrument#synth-panel"
+title: "Panel normals unit test: a cutoff cable in one history entry, a wrong type, an occupied jack, a refused second step"
+slug: panel-normals-unit-test-a-cutoff-cable-in-one-history-entry
+priority: p1
+profile: implementation
+objective: "Lands as test(synth). K061's criterion 1 names tests/unit/synth-panel-normals.test.mjs, which does not exist. Parts of the criterion are met elsewhere (the panel validates and compiles, tests/unit/synth-panel.test.mjs:55; a cable breaks a normal and its removal restores it by id, synth-normals.test.mjs:14; a loop is refused, :31; metadata.panel round-trips and PASTE and DUPLICATE drop it, synth-metadata-panel.test.mjs:17,33,47; a generic BATCH is one entry and one gate call, studio-batch-action.test.mjs:17,34). The file adds what is missing on the inserted panel itself. The design's N12 ('Low-pass cutoff') is numbered differently in the shipped table (src/js/synth/panels/semi-mono.js: n12 is hpf.audio into lpf.audio; the cutoff jack's normals are n21 and n22), so the cases name the jack, not the number. Rollback: revert; tests only."
+why: "Gap of K061 (criterion 1 and 2) found by the M064 audit of origin/main 37c52bee (oscilla-a3 with the plan coordinator, 2026-11-07, tests run): tests/unit/synth-panel-normals.test.mjs does not exist; the cutoff cable's undo, the wrong-type and occupied-jack cases, a panel BATCH's refused second step and PATCH_INSERT's drop of the tag are untested. No owner direction re-scopes it, so it is its own issue and K061's criterion points here (chore/plan-m064-rescope). K061 rests on the owner direction of 2026-10-29 (the connected instrument) and Q018 (knobs with a number shown, a new Synth workspace)."
+scope:
+  - "tests/unit/synth-panel-normals.test.mjs"
+  - "src/js/synth/normals.js"
+  - "tests/README.md"
+depends_on: []
+acceptance_criteria:
+  - "tests/unit/synth-panel-normals.test.mjs, on the inserted panel: a cable into the Low-pass cutoff removes the normals into that jack in the same history entry (one revision, one undo step) and its undo restores them with their ids; a cable of the wrong type is refused with canConnect's sentence and leaves the normals as they were; deleting a normal while a cable occupies its jack leaves the cable and the jack patched and never re-adds the normal; PATCH_INSERT of a patch whose nodes carry metadata.panel drops it (src/js/studio/patches.js copies only metadata.name); a panel BATCH that patches over a normal while the fake transport plays calls transport.admit exactly once, and a panel BATCH whose second step is refused leaves model, history and runtime unchanged."
+  - "Test-only while the behaviour holds: the pull request body says 'fail-first: n/a' with the reason that the cases pin existing behaviour; a case that fails on main makes it a fix(synth) whose case fails on the merge base, with a reviewer's verdict (src/js/synth and src/js/studio are guarded)."
+  - "tests/README.md has a row for the new test."
+validation:
+  - "node --test tests/unit/synth-panel-normals.test.mjs"
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: 2026-11-07
+updated_at: 2026-11-07

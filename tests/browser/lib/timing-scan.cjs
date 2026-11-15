@@ -5,8 +5,10 @@
 //   const { scan } = require('./timing-scan.cjs');
 //   scan(sourceText, { file: 'tests/browser/dsp.cjs' })  ->  [{ file, line, kind, message }]
 //
-// A finding is silenced only by `// timing-allow: <reason>` on its line, or on a line directly
-// above that holds nothing but that comment. The reason is required: at least three words.
+// A finding is silenced only by a timing-allow marker comment (the word timing-allow, a colon,
+// then the reason) on its line, or on a line directly above that holds nothing but that comment.
+// The reason is required: at least three words. This text spells the marker without its colon,
+// so the scan does not read its own documentation as a marker (E053, the allow record).
 'use strict';
 
 const RULE = 'project.bounded-test-timing';
@@ -755,6 +757,10 @@ const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const BASELINE = path.join(__dirname, '..', 'timing-baseline.json');
+// E053 (Q097 answer 1): every timing-allow marker, per file with its reason, in a record that
+// only shrinks. `seed` is the count it was made with; a marker added later is listed and has a
+// `raises` entry naming its file, its reason and why; seed + raises is the listed total.
+const ALLOW_BASELINE = path.join(__dirname, '..', 'timing-allow-baseline.json');
 
 // Every source under tests/browser: the entry suites, lib/ and the fixtures pages run.
 function sources(root = ROOT) {
@@ -826,6 +832,49 @@ function readBaseline(file = BASELINE) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
+/** The markers per file, each file's reasons sorted: the shape the allow record lists. */
+function markerListing(found) {
+  const out = {};
+  for (const m of found) (out[m.file] = out[m.file] || []).push(m.reason);
+  for (const file of Object.keys(out)) out[file].sort();
+  return Object.fromEntries(Object.keys(out).sort().map((f) => [f, out[f]]));
+}
+
+/**
+ * The tree's markers against the allow record -> { unlisted, stale, unraised, badRaises }.
+ * unlisted: a marker the record does not list (a new one: list it with a raises entry);
+ * stale: a listed marker no longer in its file (an unrecorded fall: drop it, lower `seed`);
+ * unraised: the listed total is not seed + raises (a marker added without its raises entry,
+ * or a fall that left `seed` as it was); badRaises: a raises entry naming no listed marker.
+ */
+function compareMarkers(found, record) {
+  const now = markerListing(found);
+  const listed = record.markers || {};
+  const take = (bag, x) => {
+    const i = bag.indexOf(x);
+    if (i >= 0) bag.splice(i, 1);
+    return i >= 0;
+  };
+  const unlisted = [];
+  const stale = [];
+  for (const file of new Set([...Object.keys(now), ...Object.keys(listed)])) {
+    const left = [...(listed[file] || [])];
+    for (const reason of now[file] || []) if (!take(left, reason)) unlisted.push({ file, reason });
+    for (const reason of left) stale.push({ file, reason });
+  }
+  const total = Object.values(listed).reduce((n, r) => n + r.length, 0);
+  const raises = record.raises || [];
+  const unraised = total === record.seed + raises.length ? null
+    : { listed: total, seed: record.seed, raises: raises.length };
+  const badRaises = raises.filter((r) => !(listed[r.file] || []).includes(r.reason)
+    || !r.why || !r.by);
+  return { unlisted, stale, unraised, badRaises };
+}
+
+function readAllowBaseline(file = ALLOW_BASELINE) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
 function report({ excess }) {
   const lines = [];
   for (const e of excess) {
@@ -839,7 +888,8 @@ function report({ excess }) {
 }
 
 module.exports = { RULE, scan, mask, format, KINDS, sources, scanTree, tally, compare,
-  readBaseline, report, markers, treeMarkers, helperNames, BASELINE };
+  readBaseline, report, markers, treeMarkers, helperNames, BASELINE, ALLOW_BASELINE,
+  markerListing, compareMarkers, readAllowBaseline };
 
 //   node tests/browser/lib/timing-scan.cjs                    findings beyond the recorded debt
 //   node tests/browser/lib/timing-scan.cjs --write-baseline   lower the record to today's counts

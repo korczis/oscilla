@@ -8,24 +8,31 @@
 // was drawn as "not playing" over a computed instrument wave, and the Spectrum marked the idle
 // instrument frequency beside the real peak.
 
-/** The owners a view can name; null is "nothing owns the output". */
-export const OUTPUT_OWNERS = Object.freeze(['instrument', 'sequencer', 'studio']);
-
-/** How a view names each owner in its label. */
-export const OUTPUT_OWNER_NAMES = Object.freeze({
-  instrument: 'instrument', sequencer: 'sequencer', studio: 'Studio',
-});
+import { VIEW_OWNER_ROWS } from '../core/output-bus.js';
 
 /**
- * The output owner from the three playing flags: 'instrument' | 'sequencer' | 'studio' | null.
- * The instrument first, then the sequencer, then the Studio, the precedence the composition root
- * (main.js) already uses for what counts as playing.
+ * The owners a view can name, in precedence order; null is "nothing owns the output". A
+ * projection of the one output-owner table (ui/output-owner.js OUTPUT_OWNER_TABLE, C036):
+ * the instrument, the sequencer, the Studio and the held keyboard and MIDI notes (C024).
  */
-export function outputOwnerOf({ instrument = false, sequencer = false, studio = false } = {}) {
-  if (instrument) return 'instrument';
-  if (sequencer) return 'sequencer';
-  if (studio) return 'studio';
-  return null;
+export const OUTPUT_OWNERS = Object.freeze(VIEW_OWNER_ROWS.map((r) => r.owner));
+
+/** How a view names each owner in its label (the table's `view`). */
+export const OUTPUT_OWNER_NAMES = Object.freeze(Object.fromEntries(VIEW_OWNER_ROWS
+  .map((r) => [r.owner, r.view])));
+
+/**
+ * The output owner from the playing flags, keyed by owner ({ instrument, sequencer, studio,
+ * notes }): the first owner of OUTPUT_OWNERS whose flag is set, or null. The table's order is
+ * the precedence: the instrument, the sequencer, the Studio (the order the composition root
+ * already uses for what counts as playing), held notes last: they are refused while the
+ * sequencer or the Studio owns the output, and a note and an instrument voice never sound
+ * together (the newer fades the older out, ADR 0002; the instrument's claim releases the
+ * notes), so they meet only inside that fade.
+ */
+export function outputOwnerOf(flags = {}) {
+  const f = flags || {};
+  return OUTPUT_OWNERS.find((o) => !!f[o]) || null;
 }
 
 /** Validate an owner value (typed port of bridge.setOutputOwner): returns it or throws. */

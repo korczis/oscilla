@@ -43,6 +43,8 @@ test('the measure: English sentences are found, Czech ones and short labels are 
   assert.equal(isEnglishProse('Play'), false);
   assert.equal(isEnglishProse('Kick'), false);
   assert.equal(isEnglishProse('Open in Studio'), false, 'a three-word label, one function word');
+  assert.equal(isEnglishProse('df0e4cf3bb9a9f8ceafbbaf5cbbeb9aa334ae018733474a083e45f806884a9d7'),
+    false, 'a SHA-256 hex digest is no sentence (its letters read "a", "be", ...)');
   assert.deepEqual(htmlProse('<p>Press Play to hear the tone.</p><b>Přehrát</b>'
     + '<button aria-label="Close the dialog and return">x</button>'),
   ['Press Play to hear the tone.', 'Close the dialog and return']);

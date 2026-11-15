@@ -277,3 +277,29 @@ the hardware treatment is a skin of the domain views and of Pro components, it r
 component, adds no UI kit and no legacy selector, and the ratchet only falls. No product's
 mark, name, colourway, layout or face is imported on any surface. The status of this record
 is unchanged.
+
+### 2026-11-07: the remaining instrument visuals are domain views too
+
+The note of 2026-10-30 named the knob's arc, the patch bay's jacks and cables and the piano keys.
+Plan issue J001 planned one note for every instrument view, and the views it named but that note
+left out are covered here: the step cells of the step grid, the piano roll, the XY pad's surface,
+the meter bar and the scope trace. Each is a domain view inside a Pro card, drawn with inline SVG
+or canvas and literal Tailwind utilities, with no stylesheet, no osc-* class name and no
+`el.style`, and every colour is an OSCILLA token. Their chrome (cards, buttons, button groups,
+tabs, dropdowns, inputs, toolbars) is Pro and the ratchet counts it like any other surface. The
+domain-view exemption of `project.ui-uses-flowbite-pro` is not widened, and the hardware
+treatment of the 2026-11-02 note applies to these views as to the others. Plan issues W008 and
+K222 (the step grid in the Drums view) are the first to rely on it. The status of this record is
+unchanged.
+
+### 2026-11-09: the knob that ships is the one knob model and its panel skin
+
+The note of 2026-10-30 called K058's own component (`src/js/ui/kinds/param/knob.js`) planned
+work and the Synth panel's knob a panel-local view until it lands. The knob shipped another
+way (pull requests #367 and #420): the one knob model is the synth-theme layer's control core,
+`src/js/ui/synth/knob.js` (value mapping, keys, drag, typed entry, text and the drawing), and
+`src/js/synth/view/knob.js` is its panel skin, a thin adapter under the names the panel and
+the XY pad import. The DRY-families decision of 2026-11-05 (M123, G021, G022) makes that core
+the one knob everywhere; no separate K058 component will be built, and any later split of the
+model is G022's to decide. This note names what ships (plan issue K203, the gap of K058's first
+criterion); it changes no decision above, and the status of this record is unchanged.

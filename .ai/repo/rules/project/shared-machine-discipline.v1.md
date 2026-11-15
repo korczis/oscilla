@@ -75,10 +75,12 @@ Majordomus
 
 Shipping
 
-12. Ship through small pull requests with `gh pr merge --auto --squash`, gated on `gate`;
+12. Ship through small pull requests with `gh pr merge --auto --merge` (merge commits only;
+    squash merging is disabled), gated on `gate`;
     open long work as an early draft. Record plan evidence at a commit of main, in a
-    follow-up `chore(plan)` pull request, never at a branch commit: a branch commit is lost
-    to every clone once the branch is squashed or deleted (#238), and the `V272 D4` test
+    follow-up `chore(plan)` pull request, never at a branch commit: a commit of a branch
+    that never lands, or is rewritten before it lands, is lost to every clone once the
+    branch is deleted (#238), and the `V272 D4` test
     refuses it on the pull request whatever the merge method. `plan evidence` records HEAD,
     so record every entry on a fresh branch from `origin/main` before its first commit
     (`.ai/repo/workflows/plan.md`, "Evidence names a commit of main", has the commands).
@@ -86,8 +88,8 @@ Shipping
     merge commit (skill `merge-train`). Read release and deploy state from GitHub
     (`gh release list`, `npm run release:verify-deploy`), never from memory.
 13. Land dist-changing pull requests one at a time, each merged up to date with main and
-    rebuilt; branch protection no longer asks for that (`strict: false` since 2026-10-30),
-    so it is this item and the `dist/index.html` conflict that hold it. Before arming
+    rebuilt; branch protection asks for that (`strict: true`, again after the relaxation of
+    2026-10-30), and this item and the `dist/index.html` conflict hold it as well. Before arming
     auto-merge on a pull request whose last run predates a change on `main` to a rule, to
     `scripts/fail-first.mjs`, `scripts/review-verdict.mjs` or a guarded file it builds on,
     merge `main` into it so the gate runs once more on the combination. Do not arm
@@ -101,6 +103,20 @@ Shipping
     the permission system blocked.
 15. A worker session reports a visual-reference change; it does not accept one. A reference
     is re-accepted on macOS and in the Linux CI container together, after review.
+
+16. Never act on another session's CI run: no rerun, cancel or re-trigger of a run on a pull
+    request you do not own, and no automatic rerun from an unattended watcher even on your own.
+    A rerun of a stale attempt shares the workflow's concurrency group (`ci-<ref>`) with the
+    builder's newer push and cancels it: on 2026-11-05 a watcher's `gh run rerun --failed` on
+    #386's old attempt killed 24 jobs of its fresh run. A watcher on a peer's pull request reads
+    `gh pr view` only; a rerun of your own is by hand, after `gh pr view --json headRefOid` shows
+    the run's head and the builder has said they are not pushing.
+17. A CI bound is raised to the measured run, never to a guess, and every copy follows: when every
+    check of a step passes and the step is cut at its `timeout-minutes`, read the cut job's log,
+    raise the step and its job to the measured span plus headroom, keep `main-checks.yml` in parity
+    with `ci.yml` (`tests/unit/main-checks.test.mjs` refuses drift), and name the run and the span
+    in the commit (2026-11-06, #443: webkit's Browser gate ran about 46 minutes against 45 after the
+    Pro shell; two numbers, and its mirror, were the whole fix).
 
 # Why advisory
 

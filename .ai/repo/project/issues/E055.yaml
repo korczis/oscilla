@@ -12,6 +12,7 @@ scope:
   - "tests/unit/knowledge-integrity.test.mjs"
   - ".ai/repo/knowledge"
   - "tests/README.md"
+current_state: "Landed by train C #486 (verdict 486.yaml). Done on 2026-11-11 after oscilla-0b re-checked each criterion on main 04d33aaf (evidence below)."
 depends_on: []
 acceptance_criteria:
   - "Fail-first unit: the exemption map is read from the data file; a fixture data file with an exemption for a cited ADR reports it stale, and one for an uncited ADR silences it; moving the current entries out of the test leaves V272 D8 green."
@@ -23,4 +24,25 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-11T18:09:30Z
+started_at: 2026-11-11T18:08:46Z
+started_event: sha256:dd863333b3d50b5cc103f571b55addacda836d4b857c51e6ed5ba40e78958494
+verified_at: 2026-11-11T18:09:00Z
+verified_event: sha256:7b0634459517f1ab7de7d35cd6f1b2a86d3a619afdb92da10363610e88157efd
+completed_at: 2026-11-11T18:09:30Z
+completed_event: sha256:de12e1f4c1d93ed787e0cb42847dd7cfe7fcf59f1c50e14c570ace853dcd882a
+evidence:
+  - covers: "verified"
+    type: test
+    command: "node --test tests/unit/knowledge-integrity.test.mjs tests/unit/ci-changes.test.mjs; npm test"
+    result: "On main 04d33aaf: knowledge-integrity 36/36. The V272 D8 cases read the exemptions from .ai/repo/knowledge/adr-exemptions.yaml; a fixture file silences an uncited ADR and reports a cited one as stale. ci-changes 16/16: an ADR or the knowledge data file alone is not a runtime change, so a plan-only PR stays path-gated. The rule rules-name-their-enforcement.v1.md (:85) names the data file. npm test 0 fail."
+    artifact: "04d33aaff7a859a5c7c86bf8b57a7540e6a39d17"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:09:15Z
+  - covers: "verified"
+    type: ci
+    command: "gh pr view 486 checks: gate, fail-first"
+    result: "landed by #486; gate success and fail-first success; review verdict .ai/repo/reviews/486.yaml"
+    artifact: ".ai/repo/reviews/486.yaml"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T18:09:21Z

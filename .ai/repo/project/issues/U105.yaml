@@ -1,0 +1,29 @@
+id: U105
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "The Studio Inspector's Trace is a closed disclosure named with its count, and no trace text reads null"
+slug: inspector-trace-collapsed
+priority: p2
+profile: implementation
+objective: "Lands as fix(studio-ui). The owner-ordered live visual audit of v3.35.0 (2026-11-11, finding 6) found the Studio Inspector's ADR 0042 Trace on the default screen reading 'op-1 · bus leave · null'. Decided by oscilla-c3 under Q090 (relayed by oscilla-43, 2026-11-11), verbatim: '(2a) Trace in the Studio Inspector: agree, a closed \"Trace\" disclosure by default, like the \"Runtime details\" one above it. Two amendments: The raw \"null\" in \"op-1 · bus leave · null\" is a defect in its own right, even when collapsed. An absent field is omitted, or written as \"—\", in the trace view and its Czech text. The disclosure''s summary names the count (\"Trace (1)\") so it doesn''t hide that something happened.' Before: the trace list open on the default screen with null texts. After: a closed disclosure 'Operace (N)', no null in any operation or step text."
+why: "The owner's bar of 2026-11-11 (verbatim, loop prompt): 'vse at vypada profi, hezky, luxusne, detailne, production grade, proste profi autio nastroj'; developer output on the default screen and a literal null read as unfinished."
+current_state: "Built by oscilla-43 in task t-20261111202013-df77 (bb4dc4c0), landed in train T14 (#537, 3dfe1985, v3.36.0). Recorded here after the fact (d9 found the decision in no repository record); the done stamp follows with evidence on main."
+scope:
+  - "src/js/ui/studio/inspector.js"
+  - "src/js/ui/studio/inspector-runtime.js"
+  - "src/js/ui/studio/trace-summary.js"
+  - "tests/unit/studio-trace-summary.test.mjs"
+  - "tests/browser/v31-studio-runtime.cjs"
+depends_on: []
+acceptance_criteria:
+  - "The Trace list is a closed disclosure by default; its summary names how many operations it holds ('Operace (N)')."
+  - "No operation summary or step text reads null or undefined; a unit test over traceView and opSummary fails on the merge base."
+  - "v31-studio-runtime trace-collapsed checks the default state in a fresh page; the Pro record does not rise."
+validation:
+  - "node --test tests/unit/studio-trace-summary.test.mjs"
+  - "node tests/browser/v31-studio-runtime.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-12'

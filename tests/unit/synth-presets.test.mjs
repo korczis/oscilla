@@ -41,7 +41,8 @@ test('each preset is one PATCH_REPLACE, one undo entry, and the result still com
     const done = st.dispatch(r.action);
     assert.equal(done.ok, true, `${p.id}: ${done.reason}`);
     assert.equal(compileStudio(liveModel(st.getModel())).ok, true, p.id);
-    if (done.changed) assert.match(st.undoLabel(), /^Preset /);
+    if (done.changed) assert.match(st.undoLabel(), /^Předvolba /);
   }
-  assert.match(presetAction(panelStore().getModel(), PANEL, 'x').reason, /no preset/);
+  assert.match(presetAction(panelStore().getModel(), PANEL, 'x').reason,
+    /Předvolba „x“ neexistuje/);
 });

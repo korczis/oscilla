@@ -765,8 +765,12 @@ test('V382 clip.v2: a high-frequency overload is clipping, a lone rail sample is
   });
   const hf = overload(5000, 20001);
   const v1 = checkCapture({ sampleRate: sr, samples: hf }, { algorithm: 'oscilla.clip.v1' });
-  const v2 = checkCapture({ sampleRate: sr, samples: hf });
+  const v2 = checkCapture({ sampleRate: sr, samples: hf }, { algorithm: 'oscilla.clip.v2' });
   assert.equal(v2.algorithms.clip, 'oscilla.clip.v2');
+  // clip.v3 (T039, the current ID) is v2 on every channel: a mono capture gives v2's numbers.
+  const v3 = checkCapture({ sampleRate: sr, samples: hf });
+  assert.equal(v3.algorithms.clip, 'oscilla.clip.v3');
+  assert.equal(v3.clipping.ratio, v2.clipping.ratio);
   assert.equal(v1.algorithms.clip, 'oscilla.clip.v1');
   assert.ok(v1.clipping.ratio < 0.01, `v1 misses most of it: ${v1.clipping.ratio}`);
   assert.ok(v2.clipping.ratio > 0.01, `v2 sees it (≥ clipInvalidRatio): ${v2.clipping.ratio}`);

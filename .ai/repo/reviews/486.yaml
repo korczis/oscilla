@@ -1,0 +1,46 @@
+# Review verdict for pull request #486 (branch train/2026-11-05-c, train C): K172 spoken a/an,
+# C061 envelope live edits accumulate, T028 the IR stimulus length at the IR's rate, E055 ADRs and
+# knowledge data are not a runtime change, R037 the CI receipt reads the base's ci.yml, K175 + H001
+# the Studio sink's held map is empty after leaving. Reviewed head acb93a5d (main b80ec516 merged).
+# Reviewer: oscilla-21 (claude-code 603baa3d). Disclosure: the reviewer built none of the members
+# and not the merge (oscilla-a3 did) and wrote only this file, in a detached review worktree.
+#
+# The digest. origin/main's scripts/review-verdict.mjs --content --list --base origin/main at
+# acb93a5d: 6f608220a3e71913b609b26d4f842e309e09a4e2af9d6438341417bf35bbe1a7 over 11 guarded paths
+# (.github/scripts/ci-changes.mjs, .github/workflows/ci.yml, scripts/release-ci-receipt.mjs,
+# src/js/studio/{a11y,adapters/modulation,clip-targets,patches}.js, src/js/synth/{studio-sink,ui}.js,
+# src/js/ui/measure/views.js, tests/unit/release-ci-receipt.test.mjs), equal to the builder's.
+#
+# Read, path by path:
+# - a11y.js article(): one decision for a/an by how the first word is said (initialism by its
+#   first letter's name unless said as a word, numbers by their first digits, listed exceptions);
+#   clip-targets notesTarget and patches' type-mismatch sentence call it instead of /^[AEIOU]/.
+# - adapters/modulation.js envelope update(): params now accumulate ({...params, ...changed});
+#   before, a later edit of another key rebuilt the ADSR from the defaults of the keys not sent.
+#   Reassigning the destructured create() parameter is sound; every reader is in the closure.
+# - ui/measure/views.js irStimulusFrames(src, sampleRate): a saved recipe's stimulus is read at the
+#   IR's rate; a live capture keeps its rendered frames; no rate gives no length (stated).
+# - synth/studio-sink.js heldNotes() returns { note, node } in press order; synth/ui.js exposes it
+#   as synthDebug().sinkHeld, a debug read, not a contract.
+# - ci-changes.mjs NON_RUNTIME adds .ai/repo/adrs/ and .ai/repo/knowledge/: no build input, page,
+#   browser or visual suite reads either (git grep over src, the build and pack scripts,
+#   tests/browser, tests/visual); the unit and knowledge jobs that read them always run.
+# - release-ci-receipt.mjs (R037): the required job set is the base's ci.yml (git show B:ci.yml)
+#   plus what the release tree adds; a base job the release dropped still refuses, naming the base;
+#   an unreadable base copy is a problem of its own (fail closed). ci.yml's comment matches.
+#
+# Evidence at acb93a5d: npm test (GITHUB_EVENT_NAME=pull_request GITHUB_BASE_REF=main) 5038 pass,
+# 0 fail; c061-envelope-edits-accumulate, ci-changes, k172-spoken-articles, release-ci-receipt,
+# studio-sink and audio-envelope 78/0; readout-labels-ir-tail (T028) 13/0. Fail-first checked by the
+# reviewer on origin/main for two members: c061-envelope-edits-accumulate 0 pass 4 fail,
+# k172-spoken-articles 1 pass 5 fail (the builder reports 7/7 for all members).
+#
+# Verdict: merge, with two P3 findings on article(), neither reached by any label today.
+schema: review-verdict/v1
+pr: 486
+verdict: merge
+reviewer: oscilla-21 (claude-code 603baa3d)
+content: 6f608220a3e71913b609b26d4f842e309e09a4e2af9d6438341417bf35bbe1a7
+findings:
+  - { id: F1, severity: P3, status: open, title: "article() reads only 8..., exact 11 and exact 18 as vowel-sound numbers: '11000' and '1100' get 'a' (said 'eleven thousand', 'eleven hundred'); no label carries such a number today" }
+  - { id: F2, severity: P3, status: open, title: "article() has no rule for a 'eu' or 'uni'-like consonant-sound word outside its list: 'Euclidean' gets 'an' (said 'yoo-'); no node or option label starts with Eu today (registry displayNames checked)" }

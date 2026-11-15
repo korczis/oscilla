@@ -30,23 +30,26 @@
 //     with no preset, so its pad is shown disabled), <theme> is dark or light.
 //   desktop-bay-<theme>    1536 wide, the Panel tab scrolled so the bay's card is at the top of
 //   phone-bay-<theme>      the scroller (390 wide with touch: the bay's own face, V636, shown
-//            through its PATCH BAY chip, 8 px under the sticky section nav). The bay's card (its
-//            21 plates and the CABLES list) is taller than the agreed heights leave above the
-//            docked keyboard (at 1536x1400 and 390x1400 the dock covered six to eight plates),
-//            so the bay is seen whole in a taller view at the agreed width. Its height is derived,
-//            not pinned: the view grows until the lowest edge it shows (the bay's card, its
-//            plates and every module card whose top is above the dock) sits BAY_MARGIN above the
-//            docked keyboard (nextBayHeight), so a longer bay (a seventh cable listed) makes a
-//            taller picture and fails the size compare instead of slipping under the dock. The
-//            capture fails closed unless the bay's card, every plate of the bay ([data-plate])
-//            and every module card shown ([data-module]) sit below the section nav and above
-//            the docked keyboard (each bay view prints its height and spare pixels), and unless
-//            all 12 cable ends are hit-testable (nothing covers them).
+//            through its PATCH BAY chip, 8 px under the sticky section nav). The bay's card (its 22
+//            plates, PAD L's since K220, and the CABLES list) is taller than the agreed heights
+//            leave above the docked keyboard (at 1536x1400 and 390x1400 the dock covered six to
+//            eight plates), so the bay is seen whole in a taller view at the agreed width. Its
+//            height is derived, not pinned: the view grows until the lowest edge it shows (the
+//            bay's card, its plates and every module card whose top is above the dock) sits
+//            BAY_MARGIN above the docked keyboard (nextBayHeight), so a longer bay (a seventh cable
+//            listed) makes a taller picture and fails the size compare instead of slipping under
+//            the dock. The capture fails closed unless the bay's card,
+//            every plate of the bay ([data-plate]) and every module card shown ([data-module])
+//            sit below the section nav and above the docked keyboard (each bay view prints its
+//            height and spare pixels), and unless all 12 cable ends are hit-testable (nothing
+//            covers them).
 // Below xl the bay is a face of its own (V636): the cables are patched on it, through its chip,
 // and the tab views come back to the module cards through the PANEL chip.
-// Every capture fails closed unless the Synth reports the view's tab, exactly the six cables,
-// six drawn cables, no armed engine and no voice, the view's theme on <html>, and the parked
-// pointer lands on nothing interactive.
+// Every capture fails closed unless the Synth reports the view's tab, exactly the cables the
+// document held before the patch (the default Synth document's own: none since K220) and the
+// six patched, a drawn cable for each cable the document has (counted from the document under
+// capture, never a literal), no armed engine and no voice, the view's theme on <html>, and the
+// parked pointer lands on nothing interactive.
 // target: 'dist' (default) -> dist/index.html; any other path or http(s) URL as is.
 // --view limits the run to the named views; with --update-reference it accepts only those views
 // and leaves every other reference file untouched, and it is refused when this environment's
@@ -111,10 +114,12 @@ export const SEED_MARGIN = 1.5;
 export const PINNED_TEXT = [['[data-osc="status.version"]', 'v0.0.0'],
   // The page header's summary is the shell's copy, judged by the gate's pageHeader region; SYN
   // pins it to the text its references were taken with, so a wording edit (#437's U085) does not
-  // fail the 8 desktop views of the Synth panel it sits above.
-  ['[data-osc="page.summary"]', 'A semi-modular mono voice on the Studio model with a patch bay '
-    + 'and docked keys, and an Engines tab of additive, FM, AM and ring, wavetable, hard-sync and '
-    + 'percussion voices.']];
+  // fail the 8 desktop views of the Synth panel it sits above. A fixed copy on purpose (not
+  // imported from ui/shell.js, which would make every wording edit move these views): the Czech
+  // summary of the Q104 translation, re-accepted with the references that translation retakes.
+  ['[data-osc="page.summary"]', 'Semimodulární monofonní hlas na modelu Studia s patch bayí '
+    + 'a ukotvenými klávesami; záložka Engines s hlasy aditivními, FM, AM / ring, wavetable, '
+    + 'hard sync a perkusními, záložka XY a záložka Bicí s kroky bicích.']];
 
 /** Set each pinned element's text in `doc`; the count pinned (runs in the page as well). */
 export function pinText(doc, pins) {
@@ -343,7 +348,7 @@ function resetScroll() {
 function scrollToTop(sel) {
   const main = document.querySelector('.osc-main');
   const target = document.querySelector(`#osc-view-synth ${sel}`);
-  const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+  const nav = document.querySelector('#osc-view-synth nav[aria-label$=" Synthu"]');
   const shown = nav && getComputedStyle(nav).display !== 'none';
   if (!main || !target) return;
   main.scrollTop = Math.round(main.scrollTop + target.getBoundingClientRect().top
@@ -388,19 +393,21 @@ export const FREE_JACK = 'mg.rate:in';
 
 /**
  * The bay redrawn for the view: theme on <html>, the free ring's stroke = --osc-text-dim, the
- * tab, 6 cables drawn. One check for the wait and its observation: whether it holds, or, with
- * `observe`, what was seen.
+ * tab, and a drawn cable for each cable the document now has, once it has the `cables` the
+ * capture expects (its own and the six patched). One check for the wait and its observation:
+ * whether it holds, or, with `observe`, what was seen. Runs in the page.
  */
-function redrawState(v) {
+export function redrawState(v) {
   const doc = document.documentElement;
   const dim = getComputedStyle(doc).getPropertyValue('--osc-text-dim').trim();
   const ring = document.querySelector(`[data-jack="${v.free}"] [data-ring]`);
   const state = { theme: doc.dataset.theme, want: v.theme,
     ring: ring ? ring.getAttribute('stroke') : null, dim,
     tab: window.OSCILLA.app.synthDebug().tab, wantTab: v.tab,
+    cables: window.OSCILLA.app.synthDebug().cables.length, wantCables: v.cables,
     drawn: document.querySelectorAll('[data-osc="synth.bay.svg"] [data-cable]').length };
   const ok = state.theme === v.theme && state.ring === dim && state.tab === v.tab
-    && state.drawn === 6;
+    && state.cables === v.cables && state.drawn === state.cables;
   return v.observe ? state : ok;
 }
 
@@ -447,7 +454,7 @@ function inspect({ pairs, bay, park, content }) {
   let unseen = null;
   if (content) {
     const el = document.querySelector(`#osc-view-synth ${content}`);
-    const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+    const nav = document.querySelector('#osc-view-synth nav[aria-label$=" Synthu"]');
     const navBottom = nav && getComputedStyle(nav).display !== 'none'
       ? nav.getBoundingClientRect().bottom : 0;
     const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
@@ -481,7 +488,7 @@ function inspect({ pairs, bay, park, content }) {
   let fit = null;
   if (bay) {
     const card = document.querySelector('[data-osc="synth.bay"]');
-    const nav = document.querySelector('#osc-view-synth nav[aria-label^="Synth "]');
+    const nav = document.querySelector('#osc-view-synth nav[aria-label$=" Synthu"]');
     const navBottom = nav && getComputedStyle(nav).display !== 'none'
       ? nav.getBoundingClientRect().bottom : 0;
     const dock = document.getElementById('osc-keyboard').getBoundingClientRect();
@@ -568,6 +575,10 @@ async function captureOn(page, view, out, target) {
   // cards unless the view is the bay's.
   const faced = !(await ev('read whether the bay face is shown', faceShown, 'bay'));
   if (faced) await showFace(page, id, 'bay');
+  // The cables the document has before the patch (none by default since K220): expected beside it.
+  const own = await ev('read the cables the document already has',
+    () => window.OSCILLA.app.synthDebug().cables.map((c) => `${c.from} -> ${c.to}`));
+  const want = [...own, ...CABLES.map(([a, b]) => `${a} -> ${b}`)].sort();
   for (const [a, b] of CABLES) {
     await tapJack(page, id, `${a}:out`);
     await tapJack(page, id, `${b}:in`);
@@ -581,10 +592,10 @@ async function captureOn(page, view, out, target) {
   }, view.theme);
   // The bay is redrawn from the theme's tokens: a free jack's ring (its data-ring hook, the
   // stroke the 3:1 check reads) is --osc-text-dim; the tab is rendered on a frame. Wait for both,
-  // and for the six cables to be drawn.
-  const redraw = { theme: view.theme, tab: view.tab, free: FREE_JACK };
+  // and for every cable the document has to be drawn.
+  const redraw = { theme: view.theme, tab: view.tab, free: FREE_JACK, cables: want.length };
   const redrawn = () => namedWait(page, id,
-    'theme redraw (free ring = --osc-text-dim, tab, 6 cables drawn)',
+    `theme redraw (free ring = --osc-text-dim, tab, ${want.length} cables drawn)`,
     (timeout) => page.waitForFunction(redrawState, redraw, { timeout }),
     { observe: redrawState, arg: { ...redraw, observe: true } });
   await redrawn();
@@ -631,14 +642,18 @@ async function captureOn(page, view, out, target) {
   await frames(page, id);
   const s = await ev('inspect the view', inspect, { pairs: CABLES, bay: view.bay,
     park: [0, height - 1], content: view.content });
-  const want = CABLES.map(([a, b]) => `${a} -> ${b}`).sort();
   if (s.tab !== view.tab) problems.push(`the Synth shows the ${s.tab} tab, not ${view.tab}`);
   if (s.engine !== ENGINE) problems.push(`the Engines tab's engine is ${s.engine}, not ${ENGINE}`);
   if (JSON.stringify(s.cables) !== JSON.stringify(want)) {
-    problems.push(`the patch holds ${s.cables.length} cables (${s.cables.join(', ')}), not the six`);
+    problems.push(`the patch holds ${s.cables.length} cables (${s.cables.join(', ')}), not the `
+      + `${want.length} expected (${want.join(', ')})`);
   }
-  if (s.drawn !== 6) problems.push(`${s.drawn} cables drawn in the bay, not 6`);
-  if (s.armed || s.voices) problems.push(`the engine is armed (${s.armed}) or sounds (${s.voices})`);
+  if (s.drawn !== s.cables.length) {
+    problems.push(`${s.drawn} cables drawn in the bay for the document's ${s.cables.length}`);
+  }
+  if (s.armed || s.voices) {
+    problems.push(`the engine is armed (${s.armed}) or sounds (${s.voices})`);
+  }
   if (s.theme !== view.theme) problems.push(`the page is in the ${s.theme} theme`);
   if (s.hidden.length) problems.push(`cable ends not visible: ${s.hidden.join(', ')}`);
   if (s.plates.length) problems.push(`bay plates not seen whole above the docked keyboard: `

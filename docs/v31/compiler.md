@@ -446,7 +446,7 @@ Diagnostic code from the table above whenever a step is a refusal or a failure.
 | runtime | `apply` | `applied`: `at` (the crossfade time), ops, nodes, edges; `presentation-only`: no compile and no transaction, the record takes the revision (R9); `not-applied`: the runtime `state` (stopped: the plan is kept for PLAY); `refused`: `prepare-failed` or `disposed` with the entity that threw |
 | runtime | `node` | `built`, `replaced`, `retired` |
 | runtime | `route` | `scheduled`: the edge `gain`, from `at`, reached at `end` (the value `ramp.to` returned) |
-| runtime | `param` | `scheduled`: `param`, `value`, `unit`, `via` and `at` for `set` and `glide` (none for a `crossfade`); `stored`: not written now (`via` `next-gate` for an Envelope, else `null`), no `at`; `owned`: not written, another owner drives it |
+| runtime | `param` | `scheduled`: `param`, `value`, `unit`, `via` and `at` for `set` and `glide` (none for a `crossfade`); `stored`: not written now (`via` `next-gate` for an Envelope, `next-note` for an engine, Keys or the XY pad, else `null`), no `at`; `owned`: not written, another owner drives it |
 | runtime | `update`, `parameters`, `output`, `stop`, `route` | `failed`, with its `<step>-failed` code |
 | runtime | `start`, `stop` | `start` refused (`start-failed`, `nothing-compiled`); `stop`: `at`, `fade` |
 | transport | `play`, `stop` | `playing`: `position`, `baseTime`; `refused`: the failed `phase` and reason; `stopped`: the reason; `aborted`: the context closed or the runtime stopped elsewhere |
@@ -460,9 +460,10 @@ A `param` step is what the node's adapter reports it did (the optional report ar
   Oscillator's clamped frequency, a Filter's normalized frequency and node Q, and a log edge's
   cents as `detune`. A write that differs from the node's previous write is a `scheduled` glide
   from `at`.
-- **`update`** reports how it acted on each live key: `set`, `glide`, `crossfade` or
-  `next-gate`. A key the adapter did not act on is `stored`, with no audio time. A Spectrum's
-  scale, for example, is read by the view from the plan.
+- **`update`** reports how it acted on each live key: `set`, `glide`, `crossfade`,
+  `next-gate` or `next-note`. The last two write nothing now. Such a key, and a key the adapter
+  did not act on, has no audio time: it is `owned` when another owner drives it, else `stored`.
+  A Spectrum's scale, for example, is read by the view from the plan.
 
 It is not a read-back of what the AudioParam renders. A PLAY records `apply` with its counts, not every node and route it builds, so a large
 Studio does not flush the ring. The timeline's wake-ups (clips, lanes) run outside any operation
@@ -517,6 +518,19 @@ method (an engine change, out of this issue's scope):
   and uses the start's crossfade time as the timeline's `baseTime`, applies every model change
   with `runtime.apply` before `scheduler.edit`, and stops the Studio output with
   `runtime.stop()`.
+- **Armed monitoring** (K104): `transport.arm()` claims the output once (`onClaimOutput`, so a
+  playing Playground voice stops through the output owner) and starts the runtime on the live
+  model (`live-notes.js` `liveModel`: everything connected to a Keys node, no timeline), so a
+  key sounds while the timeline is stopped. PLAY while armed applies the whole document to the
+  same running runtime. The user's STOP (`transport.stop({ keepArmed: true })`: the Studio's
+  Stop button, its Play/Stop toggle and the timeline's transport commands) of a run that began
+  armed stops the timeline and applies the live model again, still on the same runtime, so the
+  keys stay armed and sounding (the owner's 'STOP keeps it armed (Recommended)', 2026-11-03);
+  the end of the timeline of such a run does the same, and clock triggers count from 0 again
+  at the next PLAY, as after a whole STOP;
+  the transport bar shows it (`data-osc="studio.armed"`). Disarm, Escape, page hide, leaving
+  the workspace and another owner taking the output stop it whole: every note released and
+  the node census back to 0 (`tests/unit/studio-armed-monitoring.test.mjs`).
 - **Owned parameters** (the decision "Automated parameters belong to their lane", wired):
   `runtime.setOwnedParams([{ node, param }])` names the parameters another owner drives (the
   transport: every automation lane's target, and the `level` of a pattern-played Oscillator);

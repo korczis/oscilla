@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: solo (stereo analysers on the realtime output against the audio clock)
 // OSCILLA V2 final-QA regressions on the built dist/index.html (file://), in chromium, firefox
 // and webkit. One fresh page per check. The pure halves are tests/unit/qa-regressions.test.mjs.
 //
@@ -15,7 +16,10 @@
 //   seq-status-duration-follows-edits [C004]  and follows the Add menu and the Loop button
 //                                 while it plays (dup-stale-6)
 //   contrast [9]                  computed contrast of the fixed fills/texts >= 4.5:1, and
-//                                 axe-core color-contrast (wcag2a/aa/21aa) when installed
+//                                 axe-core color-contrast (wcag2a/aa/21aa), in chromium,
+//                                 firefox and webkit (E054, Q097 answer 2): axe-core is an exactly
+//                                 pinned devDependency read from node_modules; without it the
+//                                 check fails, and a 2:1 fixture must be flagged first
 //   analysis-header-no-overlap [12]  tabs vs Pause/Time/fullscreen at 1280-1536 px
 //   tablet-nav-focus [13]         768-1279 px: the nav scrolls and rings the workspace panels
 //   correlation-states [14]       mono "1.00 mono", stereo "… est." (visible), idle "—"
@@ -95,10 +99,28 @@ const CATALOG_ALLOWANCE = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests', 'u
 const WORKSPACES = ['playground', 'analyzer', 'sequencer', 'filter', 'synthesis', 'compare',
   'presets', 'learn'];
 
+// E054 (Q097 answer 2): axe-core is a devDependency pinned exactly in package.json, installed by
+// npm ci and read here from node_modules, never from a CDN. Missing, the contrast check fails.
 let axeSource = null;
+let axeMissing = null;
 try {
   axeSource = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
-} catch (e) { /* optional: npm i --no-save axe-core */ }
+} catch (e) {
+  axeMissing = `axe-core is not installed (${e.code || e.message}): run npm ci`;
+}
+/**
+ * Known color-contrast violations, each with the plan issue that fixes it (E054). A violation not
+ * listed fails the check; a listed one that no longer occurs in an engine fails it too, so the
+ * entry is dropped in the change that fixes it. `where` is theme/width/workspace, `target` a
+ * fragment of axe's selector for the node.
+ */
+// U103 fixed the one entry this list started with (the Learn tool links at 3.99:1 in the dark
+// theme, PRO.link's primary-500): an entry is added only with the plan issue that fixes it.
+const AXE_KNOWN = Object.freeze([]);
+/** A 2:1 text contrast (#aaa on #fff is 2.32:1) that axe's color-contrast must flag. */
+const AXE_FIXTURE = '<!doctype html><html lang="en"><head><title>axe fixture</title></head>'
+  + '<body style="background:#fff"><p style="color:#aaa;font-size:14px">Low contrast</p>'
+  + '</body></html>';
 
 // ------------------------------------------------------------------------------ page helpers
 /** Reach a workspace through the sidebar (lib/shell.cjs: the drawer and a group as needed). */
@@ -655,7 +677,7 @@ function defineChecks() {
     });
     await context.close();
     const ok = before === 'oscillator' && r.source === 'additive' && r.n === r.bars
-      && r.maxDiff < 1e-9 && /Additive synthesis spectrum/.test(r.label) && off === 'oscillator';
+      && r.maxDiff < 1e-9 && /Spektrum aditivní syntézy/.test(r.label) && off === 'oscillator';
     return { ok, before, ...r, off };
   });
 
@@ -679,8 +701,8 @@ function defineChecks() {
     // the analyser buffer (8192) holds 100 ms up to ~80 kHz; above that the label says so
     const fits = r.sr * 0.1 + Math.ceil(r.sr / 440) + 1 <= r.buffer;
     const ok = fits
-      ? Math.abs(r.shown - 100) < 1e-9 && /over a 100 ms window/.test(r.label)
-      : r.shown < 100 && /buffer limit/.test(r.label);
+      ? Math.abs(r.shown - 100) < 1e-9 && /v okně 100 ms/.test(r.label)
+      : r.shown < 100 && /limit bufferu/.test(r.label);
     return { ok, ...r, fits };
   });
 
@@ -705,13 +727,13 @@ function defineChecks() {
     await context.close();
     const secs = (r.ms / 1000).toFixed(2).replace(/\.?0+$/, '');
     const ok = r.playing && r.text !== r.idle && r.text.includes(secs) && r.dom
-      && (!r.loop || /loop/.test(r.text));
+      && (!r.loop || /\(smyčka\)/.test(r.text));
     return { ok, ...r, expectSeconds: secs };
   });
 
   // C004 (finding dup-stale-6): the readout follows the sequence while it plays. Edits through
   // the Add menu and the Loop button change editor.model, which is not reactive; the drawn
-  // Duration must equal what the getter computes from the model now, with "(loop)" only while
+  // Duration must equal what the getter computes from the model now, with "(smyčka)" only while
   // the model loops, and not the length it had when playback started.
   def('seq-status-duration-follows-edits', async ({ browser }) => {
     const { page, context, errors } = await open(browser);
@@ -735,7 +757,7 @@ function defineChecks() {
       await page.evaluate(() => window.OSCILLA.app.collapseSafety()); // it covers the menu
       if (!(await read()).loop) await page.click('#osc-seq-record');
       await page.click('#osc-seq-play');
-      const s0 = await follows((s) => s.loop && /\(loop\)/.test(s.dom));
+      const s0 = await follows((s) => s.loop && /\(smyčka\)/.test(s.dom));
       await page.click('#osc-seq-add');
       // By keyboard: at 1536 x 1024 the menu opens upwards and its first row lies under the
       // sticky header, which takes a pointer click there (a layout defect outside C004).
@@ -743,7 +765,7 @@ function defineChecks() {
       await page.keyboard.press('Enter');
       const s1 = await follows((s) => s.blocks === s0.blocks + 1 && s.dom !== s0.dom);
       await page.click('#osc-seq-record'); // Loop off: the current pass still plays
-      const s2 = await follows((s) => !s.loop && !/loop/.test(s.dom));
+      const s2 = await follows((s) => !s.loop && !/smyčka/.test(s.dom));
       await stopAll(page);
       return { ok: !errors.length, s0, s1, s2, errors: errors.slice(0, 3) };
     } catch (e) {
@@ -832,7 +854,7 @@ function defineChecks() {
       return { ok, st, after };
     }
     // No microphone in this browser (WebKit has no fake device): the message must be accurate.
-    const ok = browserName === 'webkit' && /^Microphone unavailable here \(/.test(st.error)
+    const ok = browserName === 'webkit' && /^Mikrofon tu není k dispozici \(/.test(st.error)
       && !/file:\/\/ or permission/.test(st.error) && st.micNodes === 0;
     return { ok, st };
   });
@@ -1274,8 +1296,8 @@ function defineChecks() {
     phone.active = await ph.page.evaluate(() => (document.activeElement === document.body
       ? 'BODY' : document.activeElement.dataset.osc || document.activeElement.id));
     await ph.context.close();
-    const ok = first.shown && /harmful at excessive output levels/.test(first.text)
-      && /does not guarantee that your hardware reproduces/.test(first.text) && first.h <= 50
+    const ok = first.shown && /hlasitosti může být zvuk nepříjemný i škodlivý/.test(first.text)
+      && /nezaručuje, že váš hardware požadovanou frekvenci/.test(first.text) && first.h <= 50
       && !dismissed.shown && dismissed.active === 'safety.reopen' && dismissed.stored === '1'
       && reopened.shown && reopened.active === 'safety.dismiss'
       && !reloaded.shown && reloaded.stored === '1'
@@ -1367,11 +1389,22 @@ function defineChecks() {
       await context.close();
     }
     const low = Object.entries(res).filter(([, v]) => v == null || v < 4.5);
-    // axe-core, when installed (npm i --no-save axe-core): color-contrast across workspaces.
-    let axe = 'skipped (axe-core not installed)';
+    // axe-core color-contrast across workspaces (E054): it runs in every engine, and it proves
+    // first that it flags a 2:1 fixture, so a pass that checks nothing cannot pass.
+    let axe = axeMissing;
     const axeBad = [];
-    if (!axeSource) RUN.skip(browserName, 'contrast-axe', 'axe-core is not installed');
+    let fixtureFlagged = false;
+    const seenKnown = new Set();
     if (axeSource) {
+      const fx = await browser.newContext();
+      const fp = await fx.newPage();
+      await fp.setContent(AXE_FIXTURE);
+      await fp.addScriptTag({ content: axeSource });
+      fixtureFlagged = await fp.evaluate(async () => {
+        const r = await window.axe.run(document, { runOnly: ['wcag2aa'] });
+        return r.violations.some((x) => x.id === 'color-contrast');
+      });
+      await fx.close();
       let runs = 0;
       for (const theme of ['dark', 'light']) {
         for (const w of [375, 768, 1280, 1536]) {
@@ -1388,15 +1421,28 @@ function defineChecks() {
                 n.any[0] && n.any[0].data ? n.any[0].data.contrastRatio : ''}`) : [];
             });
             runs++;
-            if (v.length) axeBad.push(`${theme}/${w}/${ws}: ${v.slice(0, 3).join(' | ')}`);
+            const where = `${theme}/${w}/${ws}`;
+            for (const node of v) {
+              const k = AXE_KNOWN.find((x) => x.where === where && node.includes(x.target));
+              if (k) seenKnown.add(k);
+              else axeBad.push(`${where}: ${node}`);
+            }
           }
           await context.close();
         }
       }
-      axe = `${runs} runs, ${axeBad.length} with color-contrast`;
+      axe = `${runs} runs, ${axeBad.length} unlisted color-contrast node(s), `
+        + `${seenKnown.size}/${AXE_KNOWN.length} known; the 2:1 fixture `
+        + `${fixtureFlagged ? 'flagged' : 'NOT flagged'}`;
     }
-    return { ok: low.length === 0 && axeBad.length === 0, res, low, axe, axeBad: axeBad.slice(0, 5) };
-  }, { browsers: ['chromium'] });
+    // A known violation that no longer occurs is fixed: drop its AXE_KNOWN entry with the fix.
+    const goneKnown = axeSource ? AXE_KNOWN.filter((k) => !seenKnown.has(k))
+      .map((k) => `${k.where} ${k.target} (${k.issue}) no longer occurs: drop it from AXE_KNOWN`)
+      : [];
+    return { ok: !!axeSource && fixtureFlagged && low.length === 0 && axeBad.length === 0
+      && goneKnown.length === 0, browserName, axe, axeBad: axeBad.slice(0, 5), goneKnown, low,
+    res };
+  });
 
   return checks;
 }
@@ -1416,10 +1462,8 @@ function defineChecks() {
     const bad = [];
     for (const c of defineChecks()) {
       if (ONLY && !ONLY.has(c.name)) continue;
-      if (c.browsers && !c.browsers.includes(name)) {
-        RUN.skip(name, c.name, `defined for ${c.browsers.join(', ')} only`);
-        continue;
-      }
+      // Every check runs in every engine (E054 removed the last engine-only check, contrast);
+      // a check restricted again needs its skip back here and declared in tests/README.md.
       n++;
       let r;
       try {

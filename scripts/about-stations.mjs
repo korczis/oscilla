@@ -27,6 +27,21 @@
 //   node scripts/about-stations.mjs --stamp   stamp the pending station for package.json's line
 //   node scripts/about-stations.mjs --check   exit 1 naming each station whose derived fields
 //                                             (release order, commit, datetime) are wrong
+//   node scripts/about-stations.mjs --check-station [<rev>]
+//                                             (also release-prepare.mjs --check-station) judge
+//                                             the release commit against its own parent
+//
+// --check-station (R032, Q091 part 3) is what lets a base branch judge a release pull request:
+// in the release commit (subject `chore(release): v<package.json version>`, the commit made of
+// release:prepare's output; HEAD's newest such commit when <rev> is not given) the stations
+// may differ from its parent's only by the stamp of the one pending station, recomputed here
+// from the same inputs (the parent's file, the release commit's version, the parent's short
+// id and committer date in STATION_ZONE). A changed title or summary there is prose and needs
+// a reviewer's verdict; a derived field that is not the stamp's is hand-edited; both are
+// named and exit 1. The commit is compared with its parent and not the pull request with its
+// base: a release pull request is often a train whose docs(about) members write or merge the
+// pending station's prose, and they are reviewed as members. Exit 2 when the release commit or
+// its files cannot be read.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -213,10 +228,99 @@ const git = (root, ...args) => execFileSync('git', args, { cwd: root, encoding: 
 export const STATION_ZONE = 'Europe/Prague';
 
 /** HEAD as a station names it: its 7-character id and its committer date with offset. */
-export function headStamp(root = ROOT, zone = STATION_ZONE) {
+export function headStamp(root = ROOT, zone = STATION_ZONE, rev = 'HEAD') {
   const datetime = execFileSync('git', ['show', '-s', '--format=%cd', '--date=iso-strict-local',
-    'HEAD'], { cwd: root, encoding: 'utf8', env: { ...process.env, TZ: zone } }).trim();
-  return { commit: git(root, 'rev-parse', '--short=7', 'HEAD'), datetime };
+    rev], { cwd: root, encoding: 'utf8', env: { ...process.env, TZ: zone } }).trim();
+  return { commit: git(root, 'rev-parse', '--short=7', rev), datetime };
+}
+
+const PROSE = ['title', 'summary'];
+export const releaseSubject = (version) => `chore(release): v${version}`;
+
+/**
+ * Pure (R032 --check-station): why the stations of a release commit are not its parent's
+ * with only the pending station stamped, or [] when they are. `stamp` is what --stamp writes
+ * at the parent ({ commit, datetime }); a patch release (its line already has a station)
+ * changes nothing.
+ * @param {{ parent: object, release: object, version: string,
+ *   stamp: { commit: string, datetime: string } }} o
+ * @returns {string[]}
+ */
+export function stampCommitProblems({ parent, release, version, stamp }) {
+  const problems = stationsShapeProblems(release).map((p) => `the release commit: ${p}`);
+  let expected;
+  try {
+    expected = stampStations(parent, version, stamp).doc;
+  } catch (e) {
+    return [...problems, `the stamp cannot be recomputed from the parent: ${e.message}`];
+  }
+  const want = expected.stations;
+  const got = release.stations || [];
+  if (got.length !== want.length) {
+    problems.push(`the release commit has ${got.length} station(s), its parent's file stamped `
+      + `has ${want.length}: a station is added or removed only by a docs(about) commit`);
+  }
+  for (let i = 0; i < Math.min(got.length, want.length); i++) {
+    for (const f of FIELDS) {
+      if (got[i][f] === want[i][f]) continue;
+      problems.push(PROSE.includes(f)
+        ? `station ${i + 1}: the ${f} changed in the release commit; prose is reviewed, never `
+          + 'generated: land it as a docs(about) commit with a verdict'
+        : `station ${i + 1}: ${f} is ${JSON.stringify(got[i][f])}, the stamp writes `
+          + `${JSON.stringify(want[i][f])} (a hand-edited derived field)`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * The release commit of `version` in HEAD's history: the newest non-merge commit whose
+ * subject is releaseSubject(version), or null.
+ */
+export function releaseCommit(root, version) {
+  const subject = releaseSubject(version).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const sha = git(root, 'log', '-1', '--no-merges', '--format=%H', '-E', `--grep=^${subject}$`,
+    'HEAD');
+  return sha || null;
+}
+
+/**
+ * --check-station: judge the release commit `rev` (default: releaseCommit of package.json's
+ * version) against its parent. Returns the exit code: 0 holds, 1 problems, 2 unreadable.
+ */
+export function checkStation(root = ROOT, rev = null, { log = console.log,
+  err = console.error, zone = STATION_ZONE } = {}) {
+  let commit;
+  let parent;
+  let release;
+  let version;
+  let stamp;
+  try {
+    version = readVersion(root);
+    commit = rev ? git(root, 'rev-parse', '--verify', `${rev}^{commit}`)
+      : releaseCommit(root, version);
+    if (!commit) {
+      err(`about-stations: no commit "${releaseSubject(version)}" in HEAD's history: nothing `
+        + 'to judge (name it: --check-station <rev>)');
+      return 2;
+    }
+    const at = (r, rel) => git(root, 'show', `${r}:${rel}`);
+    version = JSON.parse(at(commit, 'package.json')).version;
+    release = JSON.parse(at(commit, STATIONS_REL));
+    parent = JSON.parse(at(`${commit}^1`, STATIONS_REL));
+    stamp = headStamp(root, zone, `${commit}^1`);
+  } catch (e) {
+    err(`about-stations: --check-station cannot read the release commit: ${e.message}`);
+    return 2;
+  }
+  const problems = stampCommitProblems({ parent, release, version, stamp });
+  const short = commit.slice(0, 7);
+  for (const p of problems) err(`about-stations: ${short} ${p}`);
+  if (!problems.length) {
+    log(`about-stations: ${short} (${releaseSubject(version)}) changes only the derived fields `
+      + `the stamp writes (${lineOf(version)} at ${stamp.commit} ${stamp.datetime})`);
+  }
+  return problems.length ? 1 : 0;
 }
 
 /** The derived fields judged against git (empty = they hold). */
@@ -255,6 +359,13 @@ export function main(argv = process.argv.slice(2), root = ROOT) {
       + `${s.datetime}`);
     return 0;
   }
+  if (flag === '--check-station') {
+    if (argv.length > 2) {
+      console.error('usage: node scripts/about-stations.mjs --check-station [<rev>]');
+      return 2;
+    }
+    return checkStation(root, argv[1] || null);
+  }
   if (flag === '--check') {
     const problems = [...stationsShapeProblems(doc), ...stationsGitProblems(doc, root)];
     try {
@@ -267,7 +378,8 @@ export function main(argv = process.argv.slice(2), root = ROOT) {
     return problems.length ? 1 : 0;
   }
   if (flag) {
-    console.error('usage: node scripts/about-stations.mjs [--stamp | --check]');
+    console.error('usage: node scripts/about-stations.mjs [--stamp | --check | --check-station '
+      + '[<rev>]]');
     return 2;
   }
   console.log(renderStations(doc, version));

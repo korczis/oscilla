@@ -1,0 +1,29 @@
+id: K242
+milestone: M067
+serves:
+  - "connected-instrument#piano-keyboard"
+title: "In Firefox a same-task tap still sounds when the main thread stalls right after it"
+slug: firefox-same-task-tap-survives-a-main-thread-stall
+priority: p2
+profile: implementation
+objective: "Found 2026-11-10 by oscilla-43 while fixing the K184 tap meter (81abe3f4, 185f73e8) and confirmed by oscilla-c3's review probes. In Firefox, a tap whose key-down and key-up (or pointerdown and pointerup) are handled in one task, followed by a main-thread stall of 150-450 ms, plays nothing at all: synth.cjs s-tap and iphone.cjs tap-same-task read the first tap as null under the stall with both the old and the new meter, while chromium and webkit sound it. So the stall silences the tap itself, not only its reading. K184's minimum gate (src/js/audio/gate.js) schedules the gate open and close at audio times taken in the tap's task; if Firefox delivers those messages to the audio thread only after the task ends, both times can be in the past by then and the note never opens. A phone's main thread stalls routinely (layout, GC), so this is project.a-phone-sounds territory on Firefox for Android. Before: under a stall after a same-task tap Firefox plays nothing. After: the gate's open and close are anchored at an audio time the audio thread has not passed when it receives them (for example re-anchored from the context's currentTime when the scheduled time has already passed), so the tap sounds for its minimum gate in every engine."
+why: "project.a-phone-sounds: the instrument sounds on a phone; K184 made same-task taps audible, and a stall must not undo that in one engine."
+current_state: "Filed 2026-11-10 by oscilla-43 (coordinator) from the tap-meter work and oscilla-c3's review of 185f73e8; not started. Owner to be assigned (the audio lane). Reproduction: a scratch copy of synth.cjs s-tap with `while (performance.now() - t0 < 450) {}` after the first tap's key-up, --browsers firefox."
+scope:
+  - "src/js/audio/gate.js"
+  - "src/js/audio/audio-engine.js"
+  - "tests/unit"
+  - "tests/browser/synth.cjs"
+depends_on:
+  - K184
+acceptance_criteria:
+  - "Fail-first: a browser check (synth.cjs) taps once in one task, stalls the main thread 450 ms, and hears the tap above -60 dB in firefox; it fails on main 5bbf69bc in firefox and passes in chromium, firefox and webkit after the fix."
+  - "A unit case pins the re-anchoring: a gate whose open time has already passed when it is applied opens at the next render time and keeps its minimum length."
+  - "iphone.cjs and synth.cjs stay green in all three engines."
+validation:
+  - "npm test"
+  - "node tests/browser/synth.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

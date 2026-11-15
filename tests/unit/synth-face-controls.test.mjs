@@ -59,10 +59,10 @@ test('the census: knobs, switches, rotary selectors and toggles on the panel', (
   assert.ok(knobs.length > 90, `${knobs.length} knobs`);
   const by = (style) => switches.filter((x) => switchStyle(x.c.param) === style)
     .map((x) => x.cid).sort();
-  assert.deepEqual(by('toggle'), ['am.mode', 'mg.shape', 'ring.mode'], 'two positions: a lever');
+  assert.deepEqual(by('toggle'), ['am.mode', 'ring.mode'], 'two positions: a lever');
   assert.deepEqual(by('slide'), ['additive.shape', 'am.carrier', 'am.modulator', 'keys.priority',
     'noise.color', 'vco1.scale', 'vco2.scale', 'wavetable.bank'], 'three or four: a slide');
-  assert.deepEqual(by('rotary'), ['fm.algorithm', 'vco1.waveform', 'vco2.waveform'],
+  assert.deepEqual(by('rotary'), ['fm.algorithm', 'mg.sync', 'vco1.waveform', 'vco2.waveform'],
     'five to eight: a detented rotary');
   assert.deepEqual(by('window'), ['xy.key', 'xy.mode'], 'nine to twelve: a rotary with a window');
   assert.deepEqual(toggles.map((x) => x.cid).sort(), ['perc.choke', 'sh.smooth']);

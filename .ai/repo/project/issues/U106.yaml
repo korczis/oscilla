@@ -1,0 +1,26 @@
+id: U106
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "The page says it is Czech (lang=cs) and the navigation labels speak Czech, Studio and Synth kept as names"
+slug: lang-cs-and-czech-nav
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Decided by oscilla-c3 under Q090 (relayed by oscilla-43, 2026-11-11), verbatim: '(3) Raise it, as its own slice, not in this pass: <html lang=\"en\"> over a page that is now mostly Czech is an accessibility defect (WCAG 3.1.1): screen readers read the Czech with an English voice. Fix it when the Czech share passes half: lang=\"cs\" on html, and lang=\"en\" on the English that remains. The nav labels are visible prose, already in Q104''s scope (\"the app''s visible prose is Czech\"), so renaming them needs no new owner question. Keep Studio and Synth as names, translate the others, leave the hashes and routes unchanged, and track it with the short-English ratchet. Put the two together in one slice with its own review, because both touch every screen''s first impression.' Before: <html lang=\"en\"> and English workspace labels. After: lang=cs with lang=en on the remaining English, Czech labels (Studio and Synth kept), routes unchanged."
+why: "WCAG 3.1.1 and Q104 (the app's visible prose is Czech); the live visual audit of 2026-11-11 (finding 1) found the shell English on every screen."
+current_state: "Open. Filed 2026-11-12 by oscilla-43 from oscilla-c3's decision; waits for the Czech pass of T15 (0b, 74e16d03) to land so the Czech share is past half."
+scope:
+  - "src/index.html"
+  - "src/js/ui/shell.js"
+depends_on: []
+acceptance_criteria:
+  - "<html lang=\"cs\">; every English text that remains carries lang=\"en\"; a unit test refuses an English text node without it in the shell."
+  - "Workspace labels are Czech except Studio and Synth; the route hashes are unchanged and link-integrity passes; the short-English ratchet falls."
+  - "A reviewer's verdict (every screen's first impression), visual references re-accepted with the reason."
+validation:
+  - "npm test"
+  - "node tests/browser/link-integrity.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-12'

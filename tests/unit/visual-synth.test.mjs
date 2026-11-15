@@ -11,8 +11,16 @@
 // --measure-noise), above a floor. The record at this acceptance (the W1b chain: the adoption
 // with the synth-theme core's S9/S10 and the knob's W1c, chromium 153.0.8010.12), the largest
 // count over every view, at threshold 0.05 / 0:
-//   STABILITY darwin-arm64 2 / 113 (10 runs), linux-x64 9 / 184 (10 runs)
-// (lane A re-accepted all 16 views: the Pro shell's sidebar and page header, and the plates
+//   STABILITY darwin-arm64 2 / 75 (10 runs), linux-x64 21 / 400 (10 runs)
+// (K247 re-accepted the six desktop panel, engines and bay views on linux-x64, where the keys
+// readout no longer names a page; 20 noise runs each, desktop-bay-light's 21 / 400 the largest)
+// (train T5 re-accepted the eight XY and bay views over K220, K229 and K232 together: pad R's
+// default line and velocity readout, no default Y cable, PAD L's and VELOCITY's plates, the MG's
+// jacks and Morph label, the LPF/HPF Peak jacks; linux-x64 then, darwin on K229 alone;
+// before, darwin 2 / 654 and linux 19 / 433 over 10 runs; U099 re-accepted the four bay views: the CABLES heading and the cable rows in Czech; before
+// it, darwin 2 / 77 and linux 19 / 412 over 10 runs; #444, the keys+pad train, re-accepted the eight XY and bay views: K183's pad view and K171's
+// folded dock; before it, darwin 2 / 113 and linux 9 / 184 over 10 runs; lane A re-accepted
+// all 16 views: the Pro shell's sidebar and page header, and the plates
 // filling their column at 264 px rather than four viewport columns; before it, Train 6 re-accepted all 16 views: K167's flush chip bar moved each 7 px up, and every capture
 // pins the status bar's version label; before it, W1b's hardware look, the rack bay with nuts
 // and plugs, re-accepted ten views; its noisiest
@@ -671,3 +679,35 @@ test('a failure line cut short says how many failures it left out', () => {
   assert.doesNotMatch(src, /bad\.slice\(0, \d+\)\.join/, 'no failure line cuts silently');
   assert.match(src, /failures\.push\(`synth \$\{w\}x\$\{h\} \$\{tab\}: \$\{firstOf\(bad, 8\)\}`\)/);
 });
+
+test('the redraw waits for a drawn cable per cable the document has, never a literal six',
+  async () => {
+    const { redrawState } = await load();
+    assert.equal(typeof redrawState, 'function', 'scripts/visual-synth.mjs exports redrawState');
+    // A document's own cables count too (K183's default held a Y cable, six patched made seven;
+    // since K220 it holds none): the count comes from the document, never a literal.
+    const page = ({ cables, drawn }) => {
+      const saved = { document: globalThis.document, window: globalThis.window,
+        getComputedStyle: globalThis.getComputedStyle };
+      globalThis.document = { documentElement: { dataset: { theme: 'dark' } },
+        querySelector: () => ({ getAttribute: () => '#66798d' }),
+        querySelectorAll: () => ({ length: drawn }) };
+      globalThis.getComputedStyle = () => ({ getPropertyValue: () => ' #66798d ' });
+      globalThis.window = { OSCILLA: { app: { synthDebug: () => ({ tab: 'panel',
+        cables: Array.from({ length: cables }, (_, i) => ({ from: `a${i}`, to: `b${i}` })) }) } } };
+      return () => Object.assign(globalThis, saved);
+    };
+    const v = { theme: 'dark', tab: 'panel', free: 'mg.rate:in', cables: 7 };
+    for (const [cables, drawn, ok, why] of [[7, 7, true, 'seven cables, seven drawn'],
+      [7, 6, false, 'one not drawn yet'], [6, 6, false, 'the patch is not complete'],
+      [8, 8, false, 'a cable the capture does not expect']]) {
+      const restore = page({ cables, drawn });
+      try {
+        assert.equal(redrawState(v), ok, why);
+        assert.deepEqual([redrawState({ ...v, observe: true }).drawn,
+          redrawState({ ...v, observe: true }).cables], [drawn, cables]);
+      } finally { restore(); }
+    }
+    const src = read('scripts/visual-synth.mjs');
+    assert.doesNotMatch(src, /drawn (?:===|!==) 6\b/, 'no literal count of drawn cables');
+  });

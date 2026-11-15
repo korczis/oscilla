@@ -1,0 +1,25 @@
+id: T036
+milestone: M073
+serves:
+  - "v3-measure#readout-labels"
+title: "The guided MEASURE header's Frequency indicator says CALIBRATED only where the profile covers the measurement"
+slug: measure-header-frequency-indicator-honest
+priority: p1
+profile: implementation
+objective: "measureFreqIndicator (src/js/ui/measure/session.js:402-404, shown as data-osc measure.freqIndicator, src/index.html:964-967) returns CALIBRATED whenever a frequency profile is selected and in use, with no coverage check, so a profile that covers no measured point or band reads CALIBRATED (304 R1). T017 fixed the charts only. Make the indicator follow the coverage the charts use (UNCALIBRATED, or a partial state, where the profile covers nothing measured), under rule project.no-fake-science."
+why: "Review-findings audit of 2026-11-10 (rev-seat-2 oscilla-c3, ordered by oscilla-43 with oscilla-c1; record .ai/repo/reviews/audit-2026-11-10.yaml): 304.yaml#R1 (P2; priority p1 because a calibration claim that does not hold breaks project.no-fake-science) still open on main b8bfd3b6."
+scope:
+  - "src/js/ui/measure/session.js"
+  - "src/index.html"
+  - "tests/unit"
+  - "tests/browser"
+  - ".ai/repo/project/issues/T036.yaml"
+depends_on: []
+acceptance_criteria:
+  - "With a profile covering none of the measured points the header reads UNCALIBRATED (or a stated partial state), with a check that fails on b8bfd3b6."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-10'
+updated_at: '2026-11-10'

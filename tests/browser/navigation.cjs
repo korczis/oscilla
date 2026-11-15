@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// suite-pace: shared (navigation, history and focus; no audio judged)
 // OSCILLA unsaved-work guard and workspace navigation history (ledger W2, W4; ADR 0045) on the
 // built dist/index.html in chromium, firefox and webkit, from file:// and from a
 // GitHub-Pages-like sub-path (http://127.0.0.1:<port>/oscilla/), every check on both.
@@ -44,7 +45,7 @@
 //   seq-unsaved-guard  (C019, finding persist-7) a fresh page and a lab-only edit (Filter,
 //                     Envelope, the instrument waveform the sequence follows) arm nothing; a
 //                     block added through the Add menu arms the guard with "sequencer: Unsaved
-//                     sequence", shows "unsaved sequence" in the panel, and a reload asks and
+//                     sequence", shows "neuložená sekvence" in the panel, and a reload asks and
 //                     keeps the block; Export config disarms it, a reload asks nothing, and the
 //                     exported file imported back restores the sequence with the guard quiet; a
 //                     Tempo change through its select arms it again, and choosing the saved tempo
@@ -80,10 +81,13 @@
 //   experiment-row-keyboard  (H004 B14) a saved experiment's row body is a focusable button:
 //                     Enter opens the record in the detail, Space opens it too
 //   keyboard-link     (K026) the link key `kbd` arms the keyboard of the view a link opens:
-//                     `#m=playground&kbd=1` arms the Playground only (Arm keys pressed, the keys
+//                     `#m=playground&kbd=1` arms the Playground (Arm keys pressed, the keys
 //                     shown) and the key leaves the address with the first workspace change;
-//                     `#m=studio&kbd=1` arms the Studio only, and a link set in the page arms
-//                     the Playground beside it; `#m=measure&kbd=1` arms nothing and shows no keys
+//                     `#m=studio&kbd=1` arms the Studio, and a link set in the page arms the
+//                     Playground beside it; `#m=measure&kbd=1` arms Measure, whose keyboard is
+//                     shown (K247: the one keyboard in every workspace);
+//                     every other workspace keeps the state it opens with (read from a plain
+//                     page: armed everywhere since Q105), so a link changes only its own
 //   no-console-errors
 'use strict';
 const { serveDist } = require('./lib/serve.cjs');
@@ -288,6 +292,205 @@ const H = {
 function defineChecks() {
   const checks = [];
   const def = (name, fn) => checks.push({ name, fn });
+
+  // C053: leaving a workspace applies the playback bus's leave policy (core/output-bus.js
+  // LEAVE_POLICY): the instrument and the sequence sound on, held keys are released, the Synth's
+  // Arm goes off, and the status bar's live region says each row's sentence; every wait is a
+  // condition poll with a named deadline (lib/wait.cjs until()).
+  def('leave-policy', async (ctx) => {
+    const { LEAVE_POLICY } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'core',
+      'output-bus.js')).href);
+    const sentence = (owner) => LEAVE_POLICY.find((r) => r.owner === owner).sentence;
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const read = () => ev(() => {
+      const O = window.OSCILLA;
+      const a = O.app;
+      return { ws: a.workspace, playing: !!a.playing, seq: !!O.labs.sequencer.editor.playing,
+        armed: !!(a.synth && a.synth.armed), notes: O.engine.noteCount,
+        studioHeld: O.studio && O.studio.transport ? O.studio.transport.heldNotes().length : 0,
+        said: (window.__said || []).join(' | '), nodes: O.engine.activeNodeCount,
+        kbd: !!a.notesSounding, status: a.status };
+    });
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await read(); return pred(s) ? s : null; },
+          { ms: 6000, what: `leave-policy: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    const go = async (ws) => {
+      await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: `leave-policy: the ${ws} workspace opens` });
+    };
+    // stopAll, then wait until the stop's fade has ended and its own announcement was made, so
+    // it cannot land over the next leave's sentence
+    const quiet = async (what) => {
+      await ev(() => window.dispatchEvent(new Event('pagehide')));
+      await settle((s) => !s.playing && !s.seq && !s.armed && s.notes === 0 && s.nodes === 0
+        && s.status !== 'PLAYING' && s.status !== 'RELEASING', `quiet after ${what}`);
+    };
+    // Every sentence the status bar's live region says, in order: a later status announcement
+    // (the stopped voice's "Playback STOPPED") may follow the leave sentence at once.
+    await ev(() => {
+      window.__said = [];
+      window.OSCILLA.app.$watch('announceText', (v) => { if (v) window.__said.push(v); });
+    });
+    const forget = () => ev(() => { window.__said.length = 0; });
+    const res = {};
+    await go('playground');
+    await ev(() => { window.OSCILLA.app.setContinuous(true); window.OSCILLA.app.toggleLatch(); });
+    await settle((s) => s.playing, 'the tone plays');
+    await forget();
+    await go('studio');
+    res.instrumentKeeps = await settle((s) => s.playing && s.said.includes(sentence('instrument')),
+      'leaving the Playground, the tone sounds on and the status bar says so');
+    await quiet('the tone');
+    await go('sequencer');
+    await page.click('#osc-seq-play');
+    await settle((s) => s.seq, 'the sequence plays');
+    await forget();
+    await go('playground');
+    res.sequenceKeeps = await settle((s) => s.seq && s.said.includes(sentence('sequencer')),
+      'leaving the Sequencer, the sequence sounds on and the status bar says so');
+    await quiet('the sequence');
+    await page.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
+    await page.keyboard.down('KeyA');
+    // K247: the key plays the one instrument (the Studio transport), lit on the keys; the
+    // engine's own note count stays 0.
+    res.keyHeld = await settle((s) => s.kbd && s.studioHeld > 0, 'a held key sounds and is lit');
+    await forget();
+    await go('studio'); // the keys' dock folds there too: the bus's leave reads them first
+    res.keysReleased = await settle((s) => s.studioHeld === 0 && s.said.includes(sentence('notes')),
+      'leaving with a key held releases it and the status bar says so');
+    await page.keyboard.up('KeyA');
+    await quiet('the keys');
+    await go('synth');
+    await ev(() => window.OSCILLA.app.synthArm());
+    await settle((s) => s.armed, 'the Synth is armed');
+    await forget();
+    await go('playground');
+    res.synthDisarmed = await settle((s) => !s.armed && s.said.includes(sentence('synth')),
+      'leaving the Synth turns Arm off and the status bar says so');
+    await quiet('the Synth');
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
+
+  // C030: a visible Play on every workspace that should sound. At the desktop width (the suite's
+  // default viewport) Analyzer, Filter Lab, Compare and Presets lay out no Hold or Trigger, so
+  // the status bar's Play is theirs: announced as "Přehrát…", named by the idle scope's drawn
+  // caption (Analyzer) and its description, a real click on it sounds the instrument (the
+  // engine's active source count rises above 0) and a second click stops it (back to 0). The
+  // Playground keeps its own Hold and Trigger, no second Play above the phone width, and the V1
+  // words. Every wait is a condition poll with a named deadline (lib/wait.cjs until()).
+  def('c030-visible-play', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const read = () => ev(() => {
+      const O = window.OSCILLA;
+      const b = document.getElementById('osc-sb-play');
+      const r = b.getBoundingClientRect();
+      const scope = O.host && O.host.views ? O.host.views.scope : null;
+      return { ws: O.app.workspace, sources: O.engine.activeSourceCount,
+        nodes: O.engine.activeNodeCount, pressed: b.getAttribute('aria-pressed'),
+        idleHint: O.viz.state.idleHint, name: b.getAttribute('aria-label'),
+        // what the idle scope draws in full, and the scope canvas's description
+        caption: scope ? scope.caption : null,
+        desc: document.querySelector('[data-osc-chart="waveform"]').getAttribute('aria-label'),
+        phone: window.innerWidth < 768,
+        shown: getComputedStyle(b).display !== 'none' && r.width > 0 && r.height > 0
+          && r.bottom <= window.innerHeight && r.right <= window.innerWidth };
+    });
+    const settle = async (pred, what) => {
+      try {
+        return await until(async () => { const s = await read(); return pred(s) ? s : null; },
+          { ms: 6000, what: `c030-visible-play: ${what}` });
+      } catch (e) {
+        if (e.name !== 'WaitTimeout') throw e;
+        return { timedOut: true, ...(await read()) };
+      }
+    };
+    const go = async (ws) => {
+      await ev((w) => window.OSCILLA.app.setWorkspace(w), ws);
+      await until(() => ev((w) => window.OSCILLA.app.workspace === w, ws),
+        { ms: 8000, what: `c030-visible-play: the ${ws} workspace opens` });
+    };
+    const res = {};
+    const NAMED = /Přehrát ve stavovém řádku/;
+    await ev(() => window.OSCILLA.app.setTab('analysis', 'waveform'));
+    await go('playground');
+    // The Playground lays out Hold and Trigger: above the phone width no second Play (on a
+    // phone the status Play is the bar's transport key everywhere, by design), and its idle
+    // scope keeps its own fallback (no workspace hint) and names Hold to Play, drawn and
+    // described
+    const home = await settle((s) => s.ws === 'playground' && s.shown === s.phone
+      && s.idleHint == null && /Hold to Play\b/.test(s.caption || '')
+      && /ukáže Hold to Play/.test(s.desc),
+    'the Playground shows one Play and its scope names Hold to Play');
+    res.playgroundOnePlay = home;
+    for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
+      await go(ws);
+      // the status Play is on screen, announced by the word the prompts use, and the idle scope
+      // (drawn in Analyzer, described in each) names it (core/play-hints.js)
+      const seen = await settle((s) => s.shown && /^Přehrát/.test(s.name || '')
+        && NAMED.test(s.desc) && (ws !== 'analyzer' || NAMED.test(s.caption || '')),
+      `${ws}: the status Play is on screen and the idle scope names it`);
+      if (seen.timedOut) { res[ws] = seen; continue; }
+      await page.click('#osc-sb-play');
+      const on = await settle((s) => s.sources > 0, `${ws}: its Play sounds the instrument`);
+      // the second click is the Stop only while it still sounds (a trigger ends on its own)
+      const stopped = on.pressed === 'true'
+        ? (await page.click('#osc-sb-play'), true) : false;
+      const off = await settle((s) => s.sources === 0 && s.nodes === 0,
+        `${ws}: Stop returns the engine to silence`);
+      res[ws] = { ...off, timedOut: !!(on.timedOut || off.timedOut), rose: on.sources, stopped };
+    }
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
+
+  // C030 (oscilla-43's ruling): the status readout shows every field at 1536 px and on a phone.
+  // A field the bar has no room for (the 1536 px bar with the status Play, a phone that drops
+  // the secondary fields) is still in the readout's title, which carries the whole readout; a
+  // field cut by the bar's edge and missing from the title fails. Workspaces with and without
+  // the status Play, at both sizes, each read after a named-deadline poll for the workspace.
+  def('status-readout-fields', async (ctx) => {
+    const page = await H.open(ctx, ctx.baseUrl);
+    const ev = (fn, arg) => page.evaluate(fn, arg);
+    const res = {};
+    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+      await page.setViewportSize({ width: w, height: h });
+      for (const ws of ['playground', 'analyzer', 'presets', 'measure', 'studio']) {
+        await ev((x) => window.OSCILLA.app.setWorkspace(x), ws);
+        await until(() => ev(([x, width]) => window.OSCILLA.app.workspace === x
+          && window.innerWidth === width, [ws, w]),
+        { ms: 8000, what: `status-readout-fields: ${ws} at ${w}` });
+        res[`${ws}@${w}`] = await ev(() => {
+          const ro = document.querySelector('[data-osc="status.readout"]');
+          const box = document.querySelector('.osc-sb-state').getBoundingClientRect();
+          const title = ro.getAttribute('title') || '';
+          const fields = ['frequency', 'waveform', 'pattern', 'duration', 'gain']
+            .map((f) => ro.querySelector(`[data-osc="status.${f}"]`));
+          const lost = fields.filter((e) => {
+            const r = e.getBoundingClientRect();
+            const whole = getComputedStyle(e).display !== 'none' && r.width > 0
+              && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+            return !whole && !title.includes(e.textContent.trim());
+          }).map((e) => e.dataset.osc);
+          return { lost, title, fields: fields.length, timedOut: lost.length > 0 || !title };
+        });
+      }
+    }
+    await page.close();
+    return { ...H.verdict(Object.fromEntries(Object.entries(res).map(([k, v]) => [k,
+      !v.timedOut]))), ...res };
+  });
 
   def('guard-studio', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
@@ -877,7 +1080,7 @@ function defineChecks() {
       cleanQuiet: quiet(clean),
       labOnlyQuiet: quiet(labOnly),
       addArms: !!added && added.blocks === clean.blocks + 1
-        && added.indicatorText === 'unsaved sequence',
+        && added.indicatorText === 'neuložená sekvence',
       reloadAsks: askReload.dialog === 'beforeunload' && askReload.stayed
         && afterAsk.blocks === addedNow.blocks && armedSeq(afterAsk),
       exportDisarms: !!exported && Array.isArray(doc.sequencer && doc.sequencer.blocks)
@@ -1326,6 +1529,12 @@ function defineChecks() {
         shown: !!el && el.getClientRects().length > 0,
         pressed: arm ? arm.getAttribute('aria-pressed') : null, hash: window.location.hash };
     });
+    // The arm state each workspace opens with (Q105: armed everywhere, read from the page, not
+    // assumed): a kbd=1 link arms the workspace it names and leaves every other one as it was.
+    const plain = await H.open(ctx, `${ctx.baseUrl}#m=measure`);
+    const def = (await read(plain)).armed;
+    await plain.close();
+    const same = (armed, ws) => armed[ws] === def[ws];
     const play = await H.open(ctx, `${ctx.baseUrl}#m=playground&kbd=1`);
     const p1 = await read(play);
     await H.navTo(play, 'measure');
@@ -1341,14 +1550,15 @@ function defineChecks() {
     await none.close();
     return { ...H.verdict({
       playgroundArmed: p1.workspace === 'playground' && p1.here && p1.shown
-        && p1.pressed === 'true' && !p1.armed.studio,
-      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && !away.shown,
+        && p1.pressed === 'true' && same(p1.armed, 'studio'),
+      // K247: Measure has the same keyboard (docked, folded to its handle), armed by default.
+      leavesTheAddress: away.workspace === 'measure' && !/kbd=/.test(away.hash) && away.shown,
       studioArmed: s1.workspace === 'studio' && s1.here && s1.armed.studio
-        && !s1.armed.playground && s1.shown,
+        && same(s1.armed, 'playground') && s1.shown,
       linkInPage: s2.workspace === 'playground' && s2.armed.playground && s2.armed.studio,
-      measureNone: m1.workspace === 'measure' && !m1.here && !m1.armed.playground
-        && !m1.armed.studio && !m1.shown,
-    }), p1, away, s1, s2, m1 };
+      measureArmed: m1.workspace === 'measure' && m1.here && m1.armed.measure
+        && same(m1.armed, 'playground') && same(m1.armed, 'studio') && m1.shown,
+    }), def, p1, away, s1, s2, m1 };
   });
 
   def('no-console-errors', async (ctx) => ({ ok: ctx.errors.length === 0,

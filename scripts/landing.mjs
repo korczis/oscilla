@@ -1,0 +1,380 @@
+#!/usr/bin/env node
+// The generated landing at /oscilla/lab/ (plan P014, owner decision Q107): static Czech pages
+// on Flowbite Pro beside the app, built at deploy time from the deployed commit and never
+// committed. The app at /oscilla/ stays the one self-contained dist/index.html and never loads
+// these pages (project.single-file-deliverable, its /lab/ exception).
+//
+//   node scripts/landing.mjs --out <dir> [--app-href ../] [--commit <sha>] [--require-majordomus]
+//     writes <dir>/index.html (the light front page), <dir>/<sub>/index.html for every
+//     dashboard sub-page of SUBPAGES (plan P018: grafy, tvrzeni, zmeny, roadmapa, dluh, revize,
+//     adr), <dir>/charts/<name>.svg for every name of CHARTS, and <dir>/shots/*.png, copies of
+//     the committed visual references the front page shows.
+//
+// Self-contained: Tailwind with the flowbite plugin compiled once over the markup of every page
+// and inlined into each (the same bytes in every page, so the policy below stays inline-only
+// and each page renders alone), the one script (scripts/landing/client.js with three flowbite
+// components) bundled once and inlined into each, icons inlined, images only from shots/ and
+// charts/ under lab/; a Content-Security-Policy meta refuses every other origin and runs only
+// the two inline scripts it names by their SHA-256 (the head's theme script and the client).
+// Deterministic for a commit: every fact comes from scripts/facts.mjs, and the only date is the
+// commit's own; a rerun writes identical bytes, which scripts/verify-deploy.mjs relies on (it
+// regenerates the page and compares the live one).
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as esbuild from 'esbuild';
+import postcss from 'postcss';
+import tailwindcss from 'tailwindcss';
+import { CHARTS, REPO_ROOT, REQUIRE_MAJORDOMUS_ENV, collectFacts } from './facts.mjs';
+import { parseFlags } from './release-analyze.mjs';
+import { guardRawText, inlineIcon } from './pack-single-file.mjs';
+import { TARGETS } from './build-config.mjs';
+import { ICON_SVG } from './social-assets.mjs';
+import { fmtDate, renderCharts } from './landing/charts.mjs';
+import { FRAME_TABS, checkCopy } from './landing/copy.mjs';
+import {
+  LINK_SHA, REPO_URL, SCRIPT_HASHES_MARKER, SCRIPT_MARKER, STYLE_MARKER, THEME_SCRIPT,
+  renderPages, scriptHash, shotText,
+} from './landing/page.mjs';
+
+const require = createRequire(import.meta.url);
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const CLIENT = path.join(HERE, 'landing', 'client.js');
+export const TIMELINE_LENGTH = 8;
+/** The flowbite components the client imports; Tailwind scans them for the classes they add. */
+const FLOWBITE_COMPONENTS = ['collapse', 'modal', 'tabs'];
+const NOTICE_PACKAGES = ['flowbite', 'lucide-static', 'tailwindcss'];
+
+// The long lists (the changelog's commits, the claims and the roadmap) style their links once
+// here instead of on each of thousands of elements: the same Pro link classes, by @apply.
+// The `hidden` attribute wins over a display utility (a filtered table row is `block` on a
+// phone), so the script's filters can toggle it on any element.
+const LIST_CSS = `@layer base {
+  [hidden]:where(:not([hidden="until-found"])) { display: none !important; }
+}
+@layer components {
+  .lab-links a { @apply rounded font-medium text-primary-700 underline-offset-2 hover:underline
+    focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
+    dark:text-primary-400; }
+  .lab-commits a { @apply font-mono text-xs; }
+  .lab-chips a { @apply inline-flex rounded bg-gray-100 px-2 py-0.5 font-mono text-xs font-medium
+    text-gray-800 hover:bg-primary-100 hover:text-primary-800 focus:outline-none
+    focus-visible:ring-2 focus-visible:ring-primary-500 dark:bg-gray-700 dark:text-gray-200
+    dark:hover:bg-primary-900 dark:hover:text-primary-200; }
+  .lab-group { @apply border-t border-gray-200 py-2 dark:border-gray-700; }
+  .lab-group > summary { @apply flex cursor-pointer list-none items-center gap-2 rounded-lg py-1
+    text-sm font-semibold text-gray-900 focus:outline-none focus-visible:ring-2
+    focus-visible:ring-primary-500 dark:text-white; }
+  .lab-group > summary::-webkit-details-marker { display: none; }
+  .lab-group > summary::before { content: ''; @apply ms-1 me-1 h-2 w-2 shrink-0 -rotate-45
+    border-b-2 border-r-2 border-gray-500 transition-transform dark:border-gray-400; }
+  .lab-group[open] > summary::before { @apply rotate-45; }
+  .lab-group > summary code { @apply text-xs font-normal text-gray-500 dark:text-gray-400; }
+  .lab-group > summary span { @apply ms-auto text-xs font-normal tabular-nums text-gray-500
+    dark:text-gray-400; }
+  .lab-rel > summary { @apply flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2
+    rounded-lg p-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500; }
+  .lab-rel > summary::-webkit-details-marker { display: none; }
+  .lab-rel > summary::before { content: ''; @apply ms-1 h-2.5 w-2.5 shrink-0 rotate-45
+    border-b-2 border-r-2 border-gray-500 transition-transform dark:border-gray-400; }
+  .lab-rel[open] > summary::before { @apply -rotate-[135deg]; }
+  .lab-badge { @apply me-2 inline-flex items-center rounded px-2.5 py-0.5 text-xs font-medium; }
+  .lab-badge-blue { @apply bg-primary-100 text-primary-800 dark:bg-primary-900
+    dark:text-primary-300; }
+  .lab-badge-gray { @apply bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300; }
+  .lab-badge-green { @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300; }
+  .lab-badge-indigo { @apply bg-indigo-100 text-indigo-800 dark:bg-indigo-900
+    dark:text-indigo-300; }
+  .lab-badge-pink { @apply bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300; }
+  .lab-badge-yellow { @apply bg-yellow-100 text-yellow-800 dark:bg-yellow-900
+    dark:text-yellow-300; }
+  .lab-ctable tbody tr { @apply border-b border-gray-200 dark:border-gray-700; }
+  .lab-ctable td, .lab-ctable tbody th { @apply whitespace-nowrap px-3 py-2; }
+  .lab-ctable tbody th { @apply font-medium text-gray-900 dark:text-white; }
+  .lab-rows > tr { @apply border-b border-gray-200 bg-white align-top last:border-0
+    dark:border-gray-700 dark:bg-gray-800; }
+  .lab-claims > tr { @apply block py-2 md:table-row md:py-0; }
+  .lab-claims > tr > * { @apply block px-4 py-1 md:table-cell md:py-3; }
+  .lab-adr > tr > * { @apply px-4 py-3; }
+  .lab-paths span { @apply text-gray-400 dark:text-gray-500; }
+  .lab-paths a { @apply break-all; }
+  .lab-types > span { @apply me-2 inline-flex items-center rounded px-2.5 py-0.5 text-xs
+    font-medium; }
+  .lab-types > span:not([class]) { @apply bg-gray-100 text-gray-800 dark:bg-gray-700
+    dark:text-gray-300; }
+  .lab-bar { @apply w-full rounded-full bg-gray-200 dark:bg-gray-700; }
+  .lab-bar > div { @apply h-full rounded-full bg-primary-600 dark:bg-primary-500; }
+  .lab-rel > div { @apply border-t border-gray-200 p-4 dark:border-gray-700; }
+  .lab-rel h4 { @apply mb-1 text-sm font-medium text-gray-900 dark:text-white; }
+  .lab-rel .lab-meta { @apply mb-3 text-sm text-gray-500 dark:text-gray-400; }
+  .lab-rel .lab-ver { @apply text-lg font-semibold; }
+  .lab-rel .lab-when { @apply text-sm text-gray-500 dark:text-gray-400; }
+  .lab-ms > li { @apply py-2; }
+  .lab-ms-row { @apply mb-1 flex items-start justify-between gap-3 text-sm; }
+  .lab-ms-row > span:first-child { @apply min-w-0; }
+  .lab-ms-row > span:first-child > a { @apply font-mono; }
+  .lab-ms-row > span:first-child > span { @apply text-gray-600 dark:text-gray-300; }
+  .lab-ms-row > span:last-child { @apply flex shrink-0 items-center; }
+  .lab-ms-row > span:last-child > span:last-child { @apply tabular-nums text-gray-500
+    dark:text-gray-400; }
+  .lab-src { @apply mt-2 break-words text-xs text-gray-500 dark:text-gray-400; }
+  .lab-rv th, .lab-rv td { @apply whitespace-nowrap px-3 py-2; }
+  .lab-rv td { @apply tabular-nums; }
+  .lab-rv tbody th { @apply font-medium; }
+  .lab-rv tbody th > span { @apply text-xs text-gray-500 dark:text-gray-400; }
+  .lab-rv td > span + span { @apply ms-1; }
+  .lab-au > tr > th { @apply font-normal md:whitespace-nowrap; }
+  .lab-au > tr > td:nth-child(2) { @apply whitespace-nowrap; }
+  .lab-au > tr > th code { @apply text-xs; }
+  .lab-au > tr > th > span { @apply text-xs text-gray-500 dark:text-gray-400; }
+  .lab-au > tr > td:nth-child(3) { @apply break-words text-gray-600 dark:text-gray-300; }
+  .lab-au > tr > td:last-child { @apply whitespace-nowrap text-xs; }
+  .lab-au > tr > td:last-child span { @apply text-gray-400 dark:text-gray-500; }
+  .lab-au > tr > td:last-child a { @apply font-mono; }
+  .lab-au > tr > td:last-child > p + p { @apply mt-1; }
+  .lab-filter > button { @apply rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm
+    font-medium text-gray-900 hover:bg-gray-100 hover:text-primary-700 focus:z-10
+    focus:outline-none focus:ring-2 focus:ring-primary-500 aria-pressed:bg-primary-700
+    aria-pressed:text-white sm:rounded-none sm:first:rounded-s-lg sm:last:rounded-e-lg
+    dark:border-gray-700 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700
+    dark:aria-pressed:bg-primary-600; }
+  .lab-filter > button > span { @apply tabular-nums opacity-80; }
+  [data-chart-box] .mark[data-active] > :nth-child(2) { fill: rgb(255 255 255 / 0.07); }
+}`;
+
+const LUCIDE_PAINT = 'fill="none" stroke="currentColor" stroke-width="2" '
+  + 'stroke-linecap="round" stroke-linejoin="round"';
+
+/** A Lucide icon (lucide-static, as the app inlines them) with its paint and `cls`. */
+function icons(name, cls) {
+  return inlineIcon(name).replace('class="lucide" width="24" height="24"',
+    `class="${cls}" ${LUCIDE_PAINT}`);
+}
+
+/** The app's own workspace icon (the sprite of src/index.html), as an inline SVG. */
+function workspaceIconOf(root) {
+  const html = readFileSync(path.join(root, 'src/index.html'), 'utf8');
+  return (id) => {
+    const m = new RegExp(`<symbol id="i-ws-${id}" viewBox="0 0 24 24">([\\s\\S]*?)</symbol>`)
+      .exec(html);
+    if (!m) return icons('layout-grid', 'h-6 w-6');
+    const marker = /^<!-- @icon:([a-z0-9-]+) -->$/.exec(m[1].trim());
+    if (marker) return icons(marker[1], 'h-6 w-6');
+    return `<svg aria-hidden="true" focusable="false" class="h-6 w-6" viewBox="0 0 24 24" `
+      + `${LUCIDE_PAINT}>${m[1].trim()}</svg>`;
+  };
+}
+
+const RULES_DIR = '.ai/repo/rules/project';
+
+/**
+ * The file of a project rule (`project.<name>` -> .ai/repo/rules/project/<name>.v<N>.md, the
+ * highest N); throws for a rule with no file, so the page never links a rule that is not there.
+ */
+export function ruleFileOf(root) {
+  const dir = path.join(root, RULES_DIR);
+  const files = existsSync(dir) ? readdirSync(dir) : [];
+  return (id) => {
+    const name = String(id).replace(/^project\./, '');
+    const versions = /^[a-z0-9-]+$/.test(name) ? files.map((f) => f.startsWith(`${name}.v`)
+      && /^\.v(\d+)\.md$/.exec(f.slice(name.length))).filter(Boolean).map((x) => Number(x[1]))
+      : [];
+    if (!versions.length) throw new Error(`landing: rule ${id} has no file under ${RULES_DIR}`);
+    return `${RULES_DIR}/${name}.v${Math.max(...versions)}.md`;
+  };
+}
+
+/** The wave mark (scripts/social-assets.mjs ICON_SVG), each copy with its own gradient id. */
+function markFactory() {
+  let n = 0;
+  return (cls) => {
+    n += 1;
+    return ICON_SVG.replace('<svg ', `<svg aria-hidden="true" focusable="false" class="${cls}" `)
+      .replace('id="g"', `id="oscilla-mark-${n}"`).replace('url(#g)', `url(#oscilla-mark-${n})`);
+  };
+}
+
+const shotFile = (p) => p.replace(/^tests\/visual\//, '').replace(/\//g, '-');
+
+/** The gallery: the committed references in the dark (or only) theme, desktop and phone. */
+export function galleryShots(facts) {
+  return facts.screenshots.items
+    .filter((s) => s.theme !== 'light' && (s.viewport === 'desktop' || s.viewport === 'phone'))
+    .map((s) => ({ ...s, file: shotFile(s.path), ...shotText(s, facts.workspaces.items) }));
+}
+
+function licenceText(pkg) {
+  const dir = path.dirname(require.resolve(`${pkg}/package.json`));
+  for (const name of ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'license']) {
+    try {
+      return readFileSync(path.join(dir, name), 'utf8').replace(/\r\n/g, '\n').trim();
+    } catch { /* next name */ }
+  }
+  throw new Error(`landing: no licence text for ${pkg}`);
+}
+
+function notice(pkgs) {
+  const own = readFileSync(path.join(REPO_ROOT, 'LICENSE'), 'utf8').replace(/\r\n/g, '\n').trim();
+  const parts = [...new Set(pkgs)].sort().map((pkg) => {
+    const meta = require(`${pkg}/package.json`);
+    return `== ${pkg}@${meta.version} - ${meta.license}\n\n${licenceText(pkg)}`;
+  });
+  const text = `OSCILLA lab page - MIT\n\n${own}\n\n=====\n\nThird-party software in this page.\n\n`
+    + parts.join('\n\n-----\n\n');
+  return `<!--\n${text.replace(/--/g, '- -')}\n-->`;
+}
+
+async function bundleClient() {
+  const result = await esbuild.build({
+    entryPoints: [CLIENT], bundle: true, write: false, metafile: true, minify: true,
+    format: 'iife', platform: 'browser', target: TARGETS, legalComments: 'none',
+    charset: 'utf8', logLevel: 'warning', absWorkingDir: REPO_ROOT,
+  });
+  const pkgs = Object.keys(result.metafile.inputs)
+    .map((i) => (i.match(/node_modules\/((?:@[^/]+\/)?[^/]+)\//) || [])[1]).filter(Boolean);
+  return { code: result.outputFiles[0].text.trim(), pkgs };
+}
+
+async function compileCss(htmls, js) {
+  const flowbiteDir = path.dirname(require.resolve('flowbite/package.json'));
+  const config = {
+    content: [
+      ...htmls.map((raw) => ({ raw, extension: 'html' })),
+      { raw: js, extension: 'js' },
+      ...FLOWBITE_COMPONENTS.map((c) => path.join(flowbiteDir, 'lib/esm/components', c,
+        'index.js')),
+    ],
+    darkMode: 'class',
+    theme: {
+      extend: {
+        colors: { primary: require('tailwindcss/colors').blue },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"',
+            'Roboto', 'sans-serif'],
+        },
+      },
+    },
+    plugins: [require('flowbite/plugin')({ forms: false })],
+  };
+  const input = `@tailwind base;\n@tailwind components;\n${LIST_CSS}\n@tailwind utilities;\n`;
+  const result = await postcss([tailwindcss(config)]).process(input, { from: undefined });
+  const out = await esbuild.transform(result.css, {
+    loader: 'css', minify: true, target: TARGETS, legalComments: 'none', charset: 'utf8',
+    logLevel: 'warning',
+  });
+  return out.code.trim();
+}
+
+/**
+ * The landing's files for the checkout at `root`: { 'index.html': Buffer, '<sub>/index.html':
+ * Buffer, 'charts/<n>.svg': Buffer, 'shots/<f>.png': Buffer }, in a fixed order.
+ * `requireMajordomus` (default: OSC_LAB_REQUIRE_MAJORDOMUS=1, which pages.yml sets) makes the
+ * milestone status come from `majordomus plan roadmap --json` or fail by name, never from the
+ * committed src/data/roadmap.json (facts.mjs milestoneStatuses).
+ * @param {{ root?: string, appHref?: string, facts?: object, commit?: string,
+ *   requireMajordomus?: boolean, majordomus?: boolean }} [o]  majordomus: false reads only
+ *   the committed roadmap.json (tests)
+ */
+export async function generateLanding({ root = REPO_ROOT, appHref = '../', facts, commit,
+  requireMajordomus = process.env[REQUIRE_MAJORDOMUS_ENV] === '1', majordomus = true } = {}) {
+  const f = facts ?? await collectFacts({ root, git: true, majordomus, requireMajordomus });
+  if (!f.git) throw new Error('landing: the facts carry no git group (collectFacts git: true)');
+  if (commit && commit !== f.git.head) {
+    throw new Error(`landing: --commit ${commit} is not the checkout's HEAD ${f.git.head}`);
+  }
+  checkCopy({ workspaces: f.workspaces.items, engines: f.engines.items,
+    ratchets: f.ratchets?.items });
+  const sha = f.git.head;
+  const charts = renderCharts(f);
+  const all = f.screenshots.items.map((s) => ({ ...s, file: shotFile(s.path),
+    ...shotText(s, f.workspaces.items) }));
+  const frameTabs = FRAME_TABS.map((t) => ({ ...t, shot: all.find((s) => t.shot.test(s.path))
+    ?? null }));
+  const shots = galleryShots(f);
+  const timeline = f.releases.items.filter((r) => r.published_at).slice()
+    .sort((a, b) => (a.published_at < b.published_at ? 1 : -1)).slice(0, TIMELINE_LENGTH);
+  const model = {
+    facts: f, appHref, charts, chartNames: CHARTS, shots, frameTabs, timeline,
+    latestRelease: f.releases.items[f.releases.items.length - 1] ?? null,
+    sha, shortSha: sha.slice(0, 7), commitDay: fmtDate(f.git.headDate),
+    commitUrl: `${REPO_URL}/commit/${sha}`,
+    blob: (p) => `${REPO_URL}/blob/${sha.slice(0, LINK_SHA)}/${p}`,
+    tree: (p) => `${REPO_URL}/tree/${sha.slice(0, LINK_SHA)}/${p}`,
+    icons, newMark: markFactory, workspaceIcon: workspaceIconOf(root), rule: ruleFileOf(root),
+    favicon: `data:image/svg+xml,${encodeURIComponent(ICON_SVG)}`,
+  };
+  const pages = renderPages(model);
+  const client = await bundleClient();
+  const css = await compileCss(pages.map(([, page]) => page), readFileSync(CLIENT, 'utf8'));
+  const style = `<style>${guardRawText(css, 'style', 'landing css')}</style>`;
+  const code = guardRawText(client.code, 'script', 'landing js');
+  const script = `<script>${code}</script>`;
+  // the CSP names each inline script by the hash of the very bytes inlined (P3-2)
+  const hashes = [THEME_SCRIPT, code].map(scriptHash).join(' ');
+  const head = `${notice([...NOTICE_PACKAGES, ...client.pkgs])}\n<html lang="cs"`;
+  const files = new Map();
+  for (const [name, page] of pages) {
+    files.set(name, Buffer.from(page.replace(STYLE_MARKER, () => style)
+      .replace(SCRIPT_MARKER, () => script).replace(SCRIPT_HASHES_MARKER, () => hashes)
+      .replace('<html lang="cs"', () => head), 'utf8'));
+  }
+  for (const name of CHARTS) files.set(`charts/${name}.svg`, Buffer.from(charts[name], 'utf8'));
+  const copied = new Map();
+  for (const s of [...frameTabs.map((t) => t.shot).filter(Boolean), ...shots]) {
+    copied.set(s.file, s.path);
+  }
+  for (const [file, rel] of [...copied].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    files.set(`shots/${file}`, readFileSync(path.join(root, rel)));
+  }
+  return files;
+}
+
+/** Write the files of generateLanding under `out`. */
+export function writeLanding(out, files) {
+  for (const [rel, body] of files) {
+    const file = path.join(out, rel);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, body);
+  }
+}
+
+export const USAGE = 'usage: node scripts/landing.mjs --out <dir> [--app-href ../] '
+  + '[--commit <sha>] [--require-majordomus] [--help]';
+const FLAGS = { '--out': 'value', '--app-href': 'value', '--commit': 'value',
+  '--require-majordomus': 'boolean' };
+
+export async function main({ argv = process.argv.slice(2), root = REPO_ROOT, log = console.log,
+  err = console.error } = {}) {
+  let f;
+  try {
+    f = parseFlags(argv, FLAGS, USAGE);
+  } catch (e) {
+    err(`landing: ${e.message}`);
+    return e.exitCode ?? 2;
+  }
+  if (f.help) {
+    log(USAGE);
+    return 0;
+  }
+  if (!f['--out']) {
+    err(`landing: --out is required\n${USAGE}`);
+    return 2;
+  }
+  try {
+    const files = await generateLanding({ root, appHref: f['--app-href'] ?? '../',
+      commit: f['--commit'], requireMajordomus: Boolean(f['--require-majordomus'])
+        || process.env[REQUIRE_MAJORDOMUS_ENV] === '1' });
+    writeLanding(path.resolve(f['--out']), files);
+    const bytes = [...files.values()].reduce((s, b) => s + b.length, 0);
+    log(`landing: wrote ${files.size} files (${bytes} B) to ${f['--out']}`);
+    return 0;
+  } catch (e) {
+    err(`landing: ${e.message}`);
+    return 1;
+  }
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().then((code) => { process.exitCode = code; });
+}

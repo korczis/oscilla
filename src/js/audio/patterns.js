@@ -103,6 +103,41 @@ export const PATTERNS = [
 export const PATTERN_BY_ID = Object.fromEntries(PATTERNS.map((p) => [p.id, p]));
 export const PATTERN_GROUPS = ['Tones', 'Rhythmic', 'Sweeps', 'Modulated', 'Sequences'];
 
+// What the pattern picker, its description and the status bar show (rule project.czech-prose,
+// Q104). PATTERNS above stays the V1 data the freeze golden pins (tests/freeze) and the source
+// of plan.label, which history entries store (K13); the display reads these by id instead.
+export const PATTERN_GROUP_NAMES = Object.freeze({
+  Tones: 'Tóny', Rhythmic: 'Rytmické', Sweeps: 'Sweepy', Modulated: 'Modulované',
+  Sequences: 'Sekvence',
+});
+export const PATTERN_NAMES = Object.freeze({
+  tone: 'Spojitý tón', finite: 'Tón pevné délky', pulse: 'Pulzy', burst: 'Shluky',
+  sweepUp: 'Sweep nahoru', sweepDown: 'Sweep dolů', pingpong: 'Sweep tam a zpět',
+  chirp: 'Chirp', siren: 'Siréna', alternating: 'Střídavé tóny', wobble: 'Kolísání',
+  am: 'AM tremolo', fm: 'FM', random: 'Náhodné tóny', octave: 'Oktávové kroky',
+  sequence: 'Vlastní sekvence',
+});
+export const PATTERN_DESCS = Object.freeze({
+  tone: 'Tón zní, dokud ho držíte; frekvence, tvar vlny a zesílení reagují živě.',
+  finite: 'Jeden tón nastavené délky s náběhem a dozněním.',
+  pulse: 'Opakované tónové pulzy oddělené pauzami.',
+  burst: 'Krátké tónové shluky s pevným intervalem od nástupu k nástupu.',
+  sweepUp: 'Stoupající sweep od nižší k vyšší frekvenci.',
+  sweepDown: 'Klesající sweep od vyšší k nižší frekvenci.',
+  pingpong: 'Nahoru a dolů mezi dvěma frekvencemi, bez mezery.',
+  chirp: 'Krátký, rychlý sweep.',
+  siren: 'Frekvenci mezi dvěma mezemi posouvá nízkofrekvenční oscilátor (LFO).',
+  alternating: 'Dvě frekvence střídavě.',
+  wobble: 'Pomalá sinusová odchylka frekvence kolem střední frekvence.',
+  am: 'Amplitudová modulace: úroveň periodicky stoupá a klesá.',
+  fm: 'Frekvenční modulace: druhý oscilátor rozkmitává frekvenci nosné.',
+  random: 'Náhodné frekvence rovnoměrně rozložené na logaritmické stupnici; každé přehrání '
+    + 'vytvoří novou sekvenci.',
+  octave: 'Kroky po oktávách, výchozí rozsah 125 Hz až 16 kHz; kroky nad digitálním limitem '
+    + 'se vynechají.',
+  sequence: 'Vlastní frekvence oddělené čárkou, např. 440, 880, 660, 1.32k.',
+});
+
 export const DEFAULT_PATTERN_PARAMS = {
   pulse: { pulseMs: 150, pauseMs: 150, reps: 4 },
   burst: { burstMs: 30, intervalMs: 200, count: 6 },

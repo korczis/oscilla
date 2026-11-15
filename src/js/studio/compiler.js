@@ -15,7 +15,7 @@
 //     PlanNode = { id, type, name, def, adapter, params, status: 'ready' | 'degraded' |
 //                  'offline-only' | 'data', code, reason, clocked }
 //                clocked: an unmuted TRIGGER edge reaches the adapter's `clock` input (Random,
-//                Step Modulator): the node steps on the transport's triggers (adapters/nodes.js)
+//                Step Modulator) or a trigger clip targets it: it steps on the transport's ticks
 //     PlanEdge = { id, kind: 'audio' | 'control' | 'trigger' | 'analysis', from, to, fromPort,
 //                  toPort, paramDef, props (complete), status: 'active' | 'inactive' |
 //                  'logical' | 'data', code, reason }
@@ -39,7 +39,7 @@
 //                                                      target (an owner wires it, runtime.js)
 //   computeBases(planNode, incoming, hooks, peaks) -> { base, gains, limited, scaled,
 //                                                      clamped, lowered, loweredCents, caps,
-//                                                      exceeds }
+//                                                      exceeds, fitted }
 //   frequencyLimits(planNode, cb, ctx) -> [Diagnostic]   pure: the `frequency-limited`
 //                                                      diagnostics of one node's bases (T023)
 //   disposeHandle(handle, acct)                       stop, disconnect, untrack
@@ -68,7 +68,8 @@
 //     the static value and is bounded on its own (V272 review R-1), and the headroom an owned
 //     detune spends is its lane's peak alone (#197 R-7).
 //     Other parameters may exceed their range through
-//     modulation; that is reported (`exceeds`), never hidden (§242).
+//     modulation; that is reported (`exceeds`), never hidden (§242), except a performance
+//     output's cables (`fit`), held inside the range (performance-fit.js; `fitted`).
 //   - TRIGGER and ANALYSIS edges have no Web Audio connection: they are logical bindings for
 //     the timeline/scheduler and the measurement engine.
 //
@@ -76,7 +77,10 @@
 // handle's dispose leaves zero of its nodes in engine.nodes.
 
 import { NODE_REGISTRY } from './registry.js';
-import { validateEdgeProps } from './ports.js';
+import { triggerClipTargets } from './clip-targets.js';
+import { syncedParams } from './nodes/common.js'; // K022 tempo sync
+import { controlLine, validateEdgeProps } from './ports.js';
+import { fitCables } from './performance-fit.js';
 import { studioDiagnostic, validateStudioModel } from './validate.js';
 import { studioHash } from './schema.js';
 import { canonicalJson } from '../experiments/canonical-json.js';
@@ -144,6 +148,7 @@ export function compileStudio(model, {
   if (!report.ok) return refused(report.errors, report.warnings);
   const caps = studioCapabilities(engine, options);
   const byId = new Map(model.graph.nodes.map((n) => [n.id, n]));
+  const clips = triggerClipTargets(model);
   const nodes = new Map();
   let masterId = null;
   for (const id of report.order) {
@@ -177,10 +182,10 @@ export function compileStudio(model, {
       reason = why.reason || why;
     } else status = 'ready';
     if (node.type === 'master') masterId = id;
-    const clocked = !!(adapter && adapter.clock) && model.graph.edges.some((e) => e.to.node === id
-      && e.to.port === adapter.clock && !(e.props && e.props.muted));
+    const clocked = !!(adapter && adapter.clock) && (clips.has(id) || model.graph.edges.some(
+      (e) => e.to.node === id && e.to.port === adapter.clock && !(e.props && e.props.muted)));
     nodes.set(id, Object.freeze({ id, type: node.type, name: nameOf(node, def), def, adapter,
-      params: node.params, status, code, reason, clocked }));
+      params: syncedParams(node.params, model.transport), status, code, reason, clocked }));
   }
   const rank = new Map(report.order.map((id, i) => [id, i]));
   const edges = new Map();
@@ -260,80 +265,7 @@ export function planHash(plan) {
 
 // ---------------------------------------------------------------- diff (§44)
 
-function sameValue(a, b) {
-  if (Array.isArray(a) || Array.isArray(b)) {
-    return Array.isArray(a) && Array.isArray(b) && a.length === b.length
-      && a.every((x, i) => x === b[i]);
-  }
-  return a === b;
-}
-
-const changedKeys = (a, b) => [...new Set([...Object.keys(a), ...Object.keys(b)])]
-  .filter((k) => !sameValue(a[k], b[k])).sort();
-
-/**
- * The minimal patch from `prev` to `next` (both plans). A parameter change on a running node
- * is `node-params` unless it touches a structural key of its adapter (`node-replace`), as a
- * node that becomes clocked or free-running is (`clocked`, another builder); edges of
- * a replaced node are `edge-rewire` (rebuilt and crossfaded); a modulation edge whose mapping
- * changes is rewired (it targets another AudioParam); other edge property changes are
- * `edge-props`. `owned` (Map node id → Set of owned parameter keys): on a node with an owned
- * parameter, a change of one of its adapter's `rebuildWhenOwned` keys is a `node-replace` too —
- * the builder's live update for that key rewrites every parameter and cannot skip an owned one
- * (adapters/nodes.js, the owned-parameter contract). `replace` (Set of node ids): nodes rebuilt
- * although their plan entry is unchanged (runtime setOptions: a Microphone whose input failed).
- */
-export function diffPlans(prev, next, { owned = null, replace = null } = {}) {
-  const ops = [];
-  const replaced = new Set();
-  const removed = new Set();
-  for (const [id, n] of next.nodes) {
-    const p = prev.nodes.get(id);
-    if (!p) { ops.push({ op: 'node-add', id }); continue; }
-    if (p.type !== n.type || p.status !== n.status || p.reason !== n.reason
-      || p.clocked !== n.clocked || (replace && replace.has(id))) {
-      replaced.add(id);
-      ops.push({ op: 'node-replace', id, keys: [] });
-      continue;
-    }
-    const keys = changedKeys(p.params, n.params);
-    if (!keys.length) continue;
-    const ownedHere = !!(owned && owned.get(id) && owned.get(id).size);
-    const rebuild = ownedHere && n.adapter ? n.adapter.rebuildWhenOwned || [] : [];
-    const structural = n.adapter ? keys.filter((k) => n.adapter.structural.includes(k)
-      || rebuild.includes(k)) : keys;
-    if (structural.length) {
-      replaced.add(id);
-      ops.push({ op: 'node-replace', id, keys });
-    } else {
-      ops.push({ op: 'node-params', id, keys });
-    }
-  }
-  for (const id of prev.nodes.keys()) {
-    if (!next.nodes.has(id)) { removed.add(id); ops.push({ op: 'node-remove', id }); }
-  }
-  for (const [id, e] of next.edges) {
-    const p = prev.edges.get(id);
-    if (!p) { ops.push({ op: 'edge-add', id }); continue; }
-    const moved = p.from.node !== e.from.node || p.from.port !== e.from.port
-      || p.to.node !== e.to.node || p.to.port !== e.to.port || p.kind !== e.kind;
-    if (moved) {
-      ops.push({ op: 'edge-remove', id }, { op: 'edge-add', id });
-      continue;
-    }
-    if (replaced.has(e.from.node) || replaced.has(e.to.node) || p.status !== e.status
-      || p.props.mapping !== e.props.mapping) {
-      ops.push({ op: 'edge-rewire', id });
-      continue;
-    }
-    const keys = changedKeys(p.props, e.props);
-    if (keys.length) ops.push({ op: 'edge-props', id, keys });
-  }
-  for (const id of prev.edges.keys()) {
-    if (!next.edges.has(id)) ops.push({ op: 'edge-remove', id });
-  }
-  return ops;
-}
+export { diffPlans } from './plan-diff.js';
 
 // ---------------------------------------------------------------- instantiation
 
@@ -441,6 +373,9 @@ export function createEdgeHandle(planEdge, fromHandle, toHandle, ctxEnv,
     scale,
     range: planEdge.kind === 'control'
       ? (fromHandle.outputRange[planEdge.from.port] || DEFAULT_RANGE) : null,
+    // A performance output (its handle's `fits`): held inside the range (computeBases).
+    fit: planEdge.kind === 'control' && Array.isArray(fromHandle.fits)
+      && fromHandle.fits.includes(planEdge.from.port),
     nodes: own.nodes,
     dispose() {
       try { out.disconnect(gain); } catch (e) { /* already disconnected */ }
@@ -500,6 +435,7 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     base[key].value = to;
   };
   const exceeds = [];
+  const fitted = new Map(); // fit edge id -> { factor, key }
   const groups = new Map();
   for (const { edge, handle } of incoming) {
     if (!handle || handle.status !== 'active' || edge.kind !== 'control') continue;
@@ -508,15 +444,13 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     const pr = edge.props;
     if (pr.muted) { gains.set(edge.id, 0); continue; }
     const [lo, hi] = handle.range || DEFAULT_RANGE;
-    const t0 = pr.polarity === 'unipolar' ? 0 : -pr.depth;
-    const a = (pr.depth - t0) / (hi - lo);
-    const b = t0 - a * lo + pr.offset;
+    const { a, b } = controlLine(pr, [lo, hi]);
     const log = pr.mapping === 'log';
     if (log) base[key].cents += CENTS_PER_OCTAVE * b;
     else base[key].value += b;
     if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push({ id: edge.id, a, up: Math.max(a * lo, a * hi),
-      down: Math.min(a * lo, a * hi), log, scale: handle.scale });
+    groups.get(key).push({ id: edge.id, a, c: b, up: Math.max(a * lo, a * hi),
+      down: Math.min(a * lo, a * hi), log, scale: handle.scale, fit: !!handle.fit });
   }
   const offsetOf = (key) => {
     const d = base[key].value + (lowered[key] || 0) - planNode.params[key];
@@ -533,6 +467,8 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
   // frequency's headroom (#197 R-7); a static detune without a lane is sized from itself.
   const detuneOwned = detunePeak > -Infinity;
   let detuneK = 1;
+  let detTop = Infinity; // the static detune the frequency's room was sized for (a lane's: none)
+  let detRoom = 0; // the cents the detune's cables may sweep above detTop (review RK-2)
   // Frequencies first: a detune's room is decided while its frequency is sized.
   const keys = Object.keys(base).sort((x, y) => (defs.get(y).unit === 'Hz')
     - (defs.get(x).unit === 'Hz'));
@@ -561,10 +497,18 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
         clamped.add('detune');
       }
       const stat = (detuneOwned ? detunePeak : detune.value) + detune.cents;
-      capF = cap / 2 ** (Math.max(0, Math.min(room0, stat)) / CENTS_PER_OCTAVE);
+      const top = Math.max(0, Math.min(room0, stat));
+      if (!detuneOwned) detTop = top;
+      capF = cap / 2 ** (top / CENTS_PER_OCTAVE);
     }
     const lin = list.filter((x) => !x.log);
     const logs = list.filter((x) => x.log);
+    // A log-scaled parameter that is not a frequency (a low- or high-pass Q, K232, whose biquad
+    // AudioParam is in dB and so never passes through nodeQ's clamp) holds its log cables' sum
+    // at or below the top of its knob's soft range, the CV ceiling; unlike a frequency, its own
+    // base is never lowered: a base above the ceiling leaves the cables no room upward.
+    const logCapped = !isFreq && p.scale === 'log' && logs.length > 0;
+    const logCap = logCapped ? (p.softRange ? p.softRange[1] : p.max) : capF;
     let up = lin.reduce((s, x) => s + x.up, 0);
     let k = key === 'detune' && detune ? detuneK : 1;
     if (isFreq && up > 0 && ref + up > capF) {
@@ -573,19 +517,26 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
     }
     if (k !== 1) for (const x of lin) if (limited.has(x.id)) scaled.set(x.id, k);
     up *= k;
-    for (const x of lin) gains.set(x.id, x.a * k * x.scale);
+    // Performance cables (fit): inside the range, never above k (performance-fit.js fitCables).
+    const ceil = key === 'detune' ? { top: detTop, room: detRoom } : { top: Infinity, room: 0 };
+    const { kOf, up: upF } = fitCables(lin, k, b, p, key, isFreq, ceil, lower,
+      { limited, scaled, fitted });
+    up = upF;
+    for (const x of lin) gains.set(x.id, x.a * kOf(x) * x.scale);
     let kc = 1;
     let usedC = 0;
     if (logs.length) {
       const top = Math.max(ref + up, 1e-9);
-      const room = CENTS_PER_OCTAVE * Math.log2(capF / top);
+      const room0 = CENTS_PER_OCTAVE * Math.log2((logCapped ? logCap : capF) / top);
+      const room = logCapped ? Math.max(0, room0) : room0;
       const upC = logs.reduce((s, x) => s + CENTS_PER_OCTAVE * x.up, 0);
-      if (isFreq && b.cents > room) {
+      const capped = isFreq || logCapped;
+      if (capped && b.cents > room) {
         loweredCents[key] = (loweredCents[key] || 0) + b.cents - room;
         b.cents = room;
         for (const x of logs) limited.add(x.id);
       }
-      if (isFreq && upC > 0 && b.cents + upC > room) {
+      if (capped && upC > 0 && b.cents + upC > room) {
         kc = Math.max(0, room - b.cents) / upC;
         for (const x of logs) limited.add(x.id);
       }
@@ -598,19 +549,20 @@ export function computeBases(planNode, incoming, hooks, peaks = null) {
       const dl = (groups.get('detune') || []).filter((x) => !x.log);
       const upD = dl.reduce((s, x) => s + x.up, 0);
       const roomD = CENTS_PER_OCTAVE * Math.log2(capF / Math.max(ref + up, 1e-9)) - usedC;
+      detRoom = Math.max(0, roomD);
       if (upD > 0 && upD > roomD) {
         detuneK = Math.max(0, roomD) / upD;
         for (const x of dl) limited.add(x.id);
       }
     }
     if (!isFreq && list.length) {
-      const down = lin.reduce((s, x) => s + x.down, 0);
+      const down = lin.reduce((s, x) => s + x.down * (x.fit ? kOf(x) : 1), 0);
       if (b.value + up > p.max || b.value + down < p.min) exceeds.push(key);
     } else if (!isFreq && (b.value > p.max || b.value < p.min)) {
       exceeds.push(key);
     }
   }
-  return { base, gains, limited, scaled, clamped, lowered, loweredCents, caps, exceeds };
+  return { base, gains, limited, scaled, clamped, lowered, loweredCents, caps, exceeds, fitted };
 }
 
 /**
@@ -709,6 +661,11 @@ export function frequencyLimits(planNode, cb, { sampleRate, safeMaximum, edges, 
   for (const id of cb.limited || []) {
     const e = edges && edges.get(id);
     if (!e) continue;
+    // K240 (444.yaml#NF7): a cable the performance fit held by its range is reported by
+    // fitLimits ('performance-limited', by 'range') and only there: the Nyquist cap did not hold
+    // it, so this line, which names the cap, would blame the wrong bound.
+    const fit = cb.fitted && cb.fitted.get(id);
+    if (fit && fit.by === 'range' && fit.factor < 1) continue;
     const key = e.to.port;
     const p = defs.get(key);
     const bd = bounded(key);

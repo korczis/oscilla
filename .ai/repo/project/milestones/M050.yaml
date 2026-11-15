@@ -17,4 +17,12 @@ risks:
   - "Q004 is an owner question in a live milestone, so majordomus plan next can nominate it once P001 is done; its owner field and acceptance say a worker never answers it, which is a convention, not a mechanism."
   - "P002's scope is all of src until Q004's answer names the layout's files, so in the wave where it becomes READY it collides with any open src issue (simulated 2026-10-18: P005 and V501 on src and src/index.html); when Q004 is answered, the plan narrows P002 to the files the layout names or chains it after the src issues still open."
 created_at: 2026-10-18
-updated_at: 2026-10-18
+updated_at: 2026-11-11T14:19:01Z
+evidence:
+  - covers: "milestone_verified"
+    type: ci
+    command: "majordomus plan show P001 Q004 P002 P011; node tests/browser/first-screen.cjs --only layout,compact-studio; gh pr checks 533 (gate, fail-first)"
+    result: "M050's criterion holds on main 04d33aaf: P001 and Q004 are done with their evidence, P002 is cancelled (Q089 superseded Q004 on 2026-11-03; M122 builds the first screen), and the last open issue, P011 (rewired off the cancelled P002), is done on 04d33aaf. The release gate is the CI run of train T11 #533 (ADR 0082): gate and fail-first success, run 43027581386; T11 releases as v3.35.0. first-screen.cjs layout and compact-studio give 78 PASS, 0 FAIL on 04d33aaf."
+    artifact: "tests/browser/first-screen.cjs"
+    commit: 04d33aaff7a859a5c7c86bf8b57a7540e6a39d17
+    recorded_at: 2026-11-11T14:19:01Z
