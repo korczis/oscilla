@@ -190,9 +190,9 @@ export function shortcutHelp(workspace) {
   }
   if (workspace === 'studio') rows.push(...STEP_GRID_ROWS, RECORD_ROW);
   if (workspace === 'synth') rows.push(...STEP_GRID_ROWS, DRUM_PAD_ROW, RECORD_ROW);
-  if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS); else if (workspace === 'measure') {
-    rows = [...MEASURE_ROWS];
-  }
+  if (workspace === 'measure') rows = [...MEASURE_ROWS];
+  // The one keyboard plays in every workspace (K247): its rows are in every view.
+  if (KEYBOARD_VIEWS.includes(workspace)) rows.push(...KEYBOARD_ROWS);
   const own = new Set(rows.map(shown));
   return {
     workspace,

@@ -30,6 +30,14 @@ export const MIDI_REFUSED = notesRefusedSentences('midi');
 /** The least time between two status lines of the same CC control (V506). */
 export const CC_STATUS_MS = 400;
 
+/** The one instrument the keys play now (K247): the workspace's sink, else the Synth panel. */
+export function centralSink(cmp) {
+  const own = routeOf(cmp.workspace).plays;
+  const sink = own && typeof cmp[own] === 'function' ? cmp[own]() : null;
+  if (sink) return sink;
+  return own !== 'synthSink' && typeof cmp.synthSink === 'function' ? cmp.synthSink() : null;
+}
+
 /** What a port is for, as the MIDI section says it (V507). */
 export const ROLE_TEXT = Object.freeze({ play: 'hraní', daw: 'ovládání DAW',
   editor: 'editor výrobce' });
@@ -83,11 +91,11 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         noted: bus ? (on, note, source) => bus.note(on, { note, input: String(source) })
           : () => {},
         refused,
-        // What the workspace's keys play: its row of the one table (midi/routes.js, K178).
-        route: () => {
-          const sink = routeOf(cmp.workspace).plays;
-          return sink && typeof cmp[sink] === 'function' ? cmp[sink]() : null;
-        },
+        // What the keys play: the one instrument (K247). The workspace's row of the one table
+        // names its sink (midi/routes.js, K178): the Studio document's note target, or the Synth
+        // panel in the Synth; where it gives none, the Synth panel, which lives in the same
+        // document. Only a page without the Synth (a unit rig) falls to the engine's voice.
+        route: () => centralSink(cmp),
       });
       notes = notesFor((by) => {
         if (typeof cmp.notify === 'function') cmp.notify('info', 'MIDI', MIDI_REFUSED[by]);

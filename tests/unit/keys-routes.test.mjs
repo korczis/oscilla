@@ -3,6 +3,7 @@
 // src/js/midi/routes.js, and no other module keeps its own workspace -> sink or arm map.
 //
 //   node --test tests/unit/keys-routes.test.mjs
+import { WORKSPACE_IDS } from '../../src/js/ui/shell.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -41,10 +42,20 @@ test('one table: each workspace names its sink, its first arm state and its leav
       yieldsTo: null,
       keepsRoom: { toolbar: '[data-osc="studio.bar"]', editorMin: mod.STUDIO_EDITOR_MIN_PX,
         stackedBelow: 768 } });
-  assert.equal(mod.KEY_ROUTES.playground.plays, null, 'the Playground voice plays');
-  assert.equal(mod.routeOf('measure'), mod.KEY_ROUTES.playground, 'an unlisted workspace');
-  // Q105 (the owner's answer of 2026-11-04, 'Armed everywhere'): the keys play at once everywhere.
-  assert.deepEqual(mod.armedDefaults(), { playground: true, synth: true, studio: true });
+  // K247 (the owner's order of 2026-11-15): one instrument everywhere. The Playground and every
+  // unlisted workspace play the Studio document's note target (midi/ui.js centralSink falls back
+  // to the Synth panel), never a voice of their own; an unlisted page starts with the dock folded.
+  assert.deepEqual(JSON.parse(JSON.stringify(mod.KEY_ROUTES.playground)),
+    { plays: 'studioSink', armed: true, leave: 'leave', editors: null, yieldsTo: null });
+  assert.deepEqual(JSON.parse(JSON.stringify(mod.DEFAULT_ROUTE)),
+    { plays: 'studioSink', armed: true, leave: 'leave', editors: null, yieldsTo: null,
+      folded: true });
+  assert.equal(mod.routeOf('measure'), mod.DEFAULT_ROUTE, 'an unlisted workspace');
+  assert.equal(mod.dockState({ route: mod.DEFAULT_ROUTE }), 'collapsed');
+  assert.equal(mod.dockState({ route: mod.DEFAULT_ROUTE, userExpanded: true }), 'docked');
+  // Q105 (the owner's answer of 2026-11-04, 'Armed everywhere'), now in every workspace (K247).
+  assert.deepEqual(mod.armedDefaults(), Object.fromEntries(WORKSPACE_IDS.map((w) => [w, true])));
+  assert.ok(Object.isFrozen(mod.DEFAULT_ROUTE));
   assert.ok(Object.isFrozen(mod.KEY_ROUTES) && Object.isFrozen(mod.KEY_ROUTES.synth));
 });
 

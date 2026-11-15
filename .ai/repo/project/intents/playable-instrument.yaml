@@ -89,6 +89,10 @@ satisfaction:
     criterion: "Every chart host in the census has a host-clipped reference in light and in dark for darwin-arm64 and linux-x64, captured from a frozen scene within its measured variance, beside the full-page references of F011; the light mark colours sampled from full-coverage pixels equal frozen expected values within CIEDE2000 1, so a role that drifts in its palette source fails; and the owner's acceptance of the light per-host references is bound to the owner's act: tests/visual/charts/accepted-light.json lists every current light reference with its hash and names a completed M063 question (Q017, or the question a later change opened to re-accept) whose owner_decision evidence quotes the same digest"
     evidence: "command"
     ref: "node --test tests/unit/chart-light-references.test.mjs && node scripts/visual-charts.mjs && node scripts/visual-charts.mjs --check-accepted"
+  - id: "one-keyboard-everywhere"
+    criterion: "In every workspace the computer keys, the on-screen keys and MIDI play the one instrument, the Studio document's note target and else the Synth panel in the same document, never a voice of the page's own; the keys are armed at once in every workspace with one Arm switch per page, the same docked keyboard is in every workspace (folded to its handle on a page that is not an instrument, unfolded by the user), the readout names no page, and leaving any workspace ends the keys' armed-only run"
+    evidence: claim
+    ref: "one-keyboard-everywhere"
 governance:
   - "rule:project.studio-model-is-canonical"
   - "rule:project.typed-ports"

@@ -549,3 +549,23 @@ before K077's learned route exists.
    clock and active sensing excepted), newest first, with the physical control that sent it,
    redrawn at most every `MONITOR_FLUSH_MS`. The Synth's CC status line names the control too.
    Nothing of it is stored.
+
+### 2026-11-15: one keyboard plays the one instrument everywhere (K247)
+
+**Note of 2026-11-15 (issue K247), amending the V502 note's route for the keys and MIDI; the
+status stays `proposed`.**
+
+1. **One instrument.** The computer keys, the on-screen keys and MIDI play, in every workspace,
+   the Studio document's note target (its routed node, else its first node that plays notes),
+   and where it has none the Synth panel, which lives in the same document (`midi/ui.js`
+   `centralSink`). No workspace has a voice of its own for the keys any more: the Playground's
+   engine voice still plays its own Play and Hold, and plays keys only on a page without the
+   Synth (a unit rig). The engine stays the one audio owner: the Studio transport is its graph.
+2. **Armed everywhere.** Every workspace is a keyboard view, armed when it first opens, with
+   one Arm switch per page (Q105's answer, which the route table had applied to three pages).
+3. **One dock.** The same keyboard docks over the bottom edge of every workspace but the
+   Playground, whose keys stay under its panels; on a page that is not an instrument it starts
+   folded to its handle and the user unfolds it (`routes.js` `folded`, the one dock rule).
+4. **The run ends with the page.** Leaving any workspace ends the keys' armed-only runs (the
+   Studio document's out of every workspace but the Synth, the Synth panel's out of every
+   workspace); a run started with PLAY sounds on.

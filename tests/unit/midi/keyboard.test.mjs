@@ -12,6 +12,7 @@
 //   the Keyboard shortcuts dialog lists the keys in the Playground and the Studio only.
 //
 //   node --test tests/unit/midi/keyboard.test.mjs
+import { WORKSPACE_IDS } from '../../../src/js/ui/shell.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -146,7 +147,7 @@ test('the on-screen keys: 2 or 3 octaves that follow the octave, black keys hit 
 
 test('the link key arms the view a link opens and leaves with the first workspace change', () => {
   assert.equal(KEYBOARD_LINK_KEY, 'kbd');
-  assert.deepEqual([...KEYBOARD_VIEWS], ['playground', 'studio', 'synth']);
+  assert.deepEqual([...KEYBOARD_VIEWS], [...WORKSPACE_IDS], 'every workspace (K247)');
   assert.ok(HASH_DOMAINS.includes('keyboard'), 'one dispatcher reads it (ADR 0045)');
   assert.equal(new URLSearchParams(hashForWorkspace('m=playground&kbd=1', 'playground'))
     .get('kbd'), '1', 'kept while the workspace stays');
@@ -156,7 +157,7 @@ test('the link key arms the view a link opens and leaves with the first workspac
     .get('kbd'), null);
 });
 
-test('the shortcuts dialog lists the keyboard in the Playground and the Studio only', () => {
+test('the shortcuts dialog lists the keyboard in every keyboard view', () => {
   for (const ws of WORKSPACES) {
     const ids = shortcutHelp(ws).rows.map((r) => r.id).filter((id) => id.startsWith('keyboard-'));
     const want = KEYBOARD_VIEWS.includes(ws)

@@ -1,0 +1,39 @@
+id: K247
+milestone: M061
+serves:
+  - "playable-instrument#one-keyboard-everywhere"
+title: "One keyboard, centrally driven: every workspace's keys play the one Studio instrument, armed and docked everywhere"
+slug: one-keyboard-plays-the-one-instrument-everywhere
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi). Measured before (2026-11-15, the owner's Mac build of feat/v507-midi-devices, keyboard code as on main fba40f4d): an armed A played the Playground's own sine voice in the Playground and, with the default document, in the Studio; the Synth panel in the Synth; and nothing in the ten other workspaces, which were not armed and showed no keys while the readout said \"v Playgroundu\". Cause: midi/routes.js listed only playground, synth and studio and routeOf() gave every other workspace the Playground row; KEYBOARD_VIEWS named the same three. After: KEYBOARD_VIEWS is every workspace (WORKSPACE_IDS); the Playground row and DEFAULT_ROUTE (every unlisted workspace) play the Studio document's note target (studioSink); midi/ui.js centralSink falls back to the Synth panel (synthSink, the same document) and never to the engine's voice (that stays only for a page without the Synth, a unit rig); every workspace is armed at once (Q105 'Armed everywhere', now really everywhere); the same docked keyboard is in every workspace but the Playground (whose keys stay under its panels), folded to its handle on a page that is not an instrument (route.folded) and unfolded by the user; the readout and the link notice name no page; leaving any workspace ends the keys' armed-only runs (LEAVE_POLICY: the Studio row out of every workspace but the Synth, the Synth row out of every workspace)."
+why: "The owner's order of 2026-11-15 in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code), verbatim: \"stale je bordel v klavesnicich, na kazde strance se chova jinak, neni napojene na centralni studio syntr,h vsude se chova jinak, neni stejna component, centralne rizena ...\" (the keyboards are still a mess, they behave differently on every page, they are not connected to the central Studio synth, the same component, centrally driven). The proposal (every workspace plays the central synth; the Playground's keys lose their own tone) was put to the owner in the same session with an explicit invitation to object; the owner answered by restarting the work loop with the same order, without objecting."
+current_state: "Built by oscilla-p7 (Claude Code session cae276ab-2d90-45d2-babb-a1f8023668d2) in task started 2026-11-15 on feat/k247-one-central-keyboard, stacked on V507 (PR 549). The audit after the change: in all 13 workspaces an armed A arms the Studio transport and plays, no engine voice sounds, the handle shows on every folded page and unfolds the same keys. Coordination: the dock rule change (dock-yield.js foldable reads route.folded) touches the file of oscilla-p3's U101."
+scope:
+  - "src/js/midi"
+  - "src/js/core/output-bus.js"
+  - "src/js/ui"
+  - "src/index.html"
+  - "tests/unit"
+  - "tests/browser"
+  - "tests/README.md"
+  - "docs"
+  - ".ai/repo/adrs"
+  - "dist"
+depends_on:
+  - "K178"
+  - "V507"
+acceptance_criteria:
+  - "KEYBOARD_VIEWS is WORKSPACE_IDS; routeOf() of an unlisted workspace is DEFAULT_ROUTE (plays studioSink, armed, leave, folded); armedDefaults() names every workspace armed (tests/unit/keys-routes.test.mjs)."
+  - "midi/ui.js centralSink gives the workspace's sink, else the Synth panel; the engine voice plays only where neither exists (tests/unit/midi)."
+  - "In every workspace an armed computer key arms the Studio transport and sounds through it, no Playground engine voice sounds, the dock (or its handle on a folded page) is shown and unfolds the same keys (tests/browser/midi.cjs keys-everywhere-central)."
+  - "LEAVE_POLICY ends the keys' armed-only runs out of every workspace (tests/unit/leave-policy.test.mjs)."
+  - "ADR 0058 records the K247 note; docs/midi.md and the Settings copy no longer say the keys play the Playground's voice."
+validation:
+  - "node --test tests/unit/midi/*.test.mjs tests/unit/keys-routes.test.mjs tests/unit/leave-policy.test.mjs tests/unit/keyboard*.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-15
+updated_at: 2026-11-15
