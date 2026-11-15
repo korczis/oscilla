@@ -75,13 +75,19 @@ test('C053: one table, a row per owner, each with its effect and sentence', () =
 test('C053: a workspace change applies every row in the same event', () => {
   const fromStudio = sounding();
   fromStudio.b.leave('studio', 'playground');
+  // K247: every workspace's keys play the one instrument, so leaving any workspace ends the
+  // keys' armed-only run, the Studio document's (but out of the Synth) and the Synth panel's.
   assert.deepEqual(fromStudio.log, ['measure.abort workspace', 'measure.abort workspace',
-    'route.leave studio', 'keys.release'], 'stop the measurement, disarm the Studio keys, '
-    + 'release held keys; the instrument and the sequence sound on');
+    'route.leave studio', 'synth.disarm', 'keys.release'], 'stop the measurement, disarm the '
+    + 'keys\' runs, release held keys; the instrument and the sequence sound on');
   const fromSynth = sounding();
   fromSynth.b.leave('synth', 'measure');
   assert.deepEqual(fromSynth.log, ['synth.disarm', 'keys.release'],
     'into MEASURE: no abort; out of the Synth: Arm off');
+  const fromMeasure = sounding();
+  fromMeasure.b.leave('measure', 'filter');
+  assert.deepEqual(fromMeasure.log, ['measure.abort workspace', 'measure.abort workspace',
+    'route.leave measure', 'synth.disarm', 'keys.release'], 'out of Measure: the keys\' runs end');
   const same = sounding();
   assert.deepEqual(same.b.leave('studio', 'studio'), [], 'no change, nothing applies');
   assert.deepEqual(same.log, []);

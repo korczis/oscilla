@@ -94,7 +94,7 @@ function assertClickFree(param, what) {
 }
 
 // ---------------------------------------------------------------------------- the messages
-test('MIDI messages: Note On, Note Off, velocity 0, the two controllers, the rest ignored', () => {
+test('MIDI messages: Note On, Note Off, velocity 0, the controllers, the rest ignored', () => {
   assert.deepEqual(parseMidiMessage(Uint8Array.from([0x93, 60, 100])),
     { kind: 'note-on', channel: 3, note: 60, velocity: 100 });
   assert.deepEqual(parseMidiMessage([0x80, 60, 64]),
@@ -102,7 +102,12 @@ test('MIDI messages: Note On, Note Off, velocity 0, the two controllers, the res
   assert.equal(parseMidiMessage([0x90, 60, 0]).kind, 'note-off', 'velocity 0 is a Note Off');
   assert.deepEqual(parseMidiMessage([0xb1, 120, 0]), { kind: 'all-sound-off', channel: 1 });
   assert.deepEqual(parseMidiMessage([0xb0, 123, 0]), { kind: 'all-notes-off', channel: 0 });
-  for (const m of [[0xb0, 64, 127], [0xc0, 5], [60, 100, 0], [0x90, 60], [0x90, 200, 1],
+  // V506: CC 64 is the sustain pedal, every other controller a control-change event.
+  assert.deepEqual(parseMidiMessage([0xb2, 64, 127]), { kind: 'sustain', channel: 2, down: true });
+  assert.deepEqual(parseMidiMessage([0xb0, 64, 63]), { kind: 'sustain', channel: 0, down: false });
+  assert.deepEqual(parseMidiMessage([0xb0, 74, 90]),
+    { kind: 'control-change', channel: 0, controller: 74, value: 90 });
+  for (const m of [[0xc0, 5], [60, 100, 0], [0x90, 60], [0x90, 200, 1], [0xb0, 74, 128],
     [0xe0, 0, 64], [], null]) {
     assert.equal(parseMidiMessage(m).kind, 'ignored', JSON.stringify(m));
   }
@@ -664,4 +669,58 @@ test('all-off and silence release a note held on the sink a switch left behind',
     notes.handle([0x80, 60, 0], 1); // its note-off afterwards never reaches the Studio again
     assert.deepEqual(log.filter((l) => l.startsWith('studio')), []);
   }
+});
+
+test('K247: the one instrument is refused by a measurement, a reference or the sequencer, never '
+  + 'by the Studio it is', () => {
+  const played = [];
+  const said = [];
+  let owner = null;
+  const sink = { noteOn: (note) => { played.push(note); return { ok: true }; },
+    noteOff: () => true };
+  const notes = createMidiNotes({ engine: null, route: () => sink, ownedBy: () => owner,
+    refused: (by) => said.push(by) });
+  owner = 'studio'; // the keys' own armed run, or PLAY: the instrument plays on
+  assert.equal(notes.noteOn(60, 100, 1).ok, true);
+  for (const by of ['sequencer', 'measurement', 'reference']) {
+    owner = by;
+    assert.deepEqual(notes.noteOn(62, 100, 1), { ok: false, reason: by });
+    assert.deepEqual(notes.noteOn(64, 100, 1), { ok: false, reason: by });
+  }
+  assert.deepEqual(said, ['sequencer', 'measurement', 'reference'], 'said once per run');
+  owner = null;
+  assert.equal(notes.noteOn(65, 100, 1).ok, true, 'once the owner is gone it sounds again');
+  assert.deepEqual(played, [60, 65]);
+});
+
+test('K247: the note that arms the instrument is held after the instrument took it, so the '
+  + 'arming silence cannot drop it and the pedal holds it', () => {
+  const log = [];
+  let armed = false;
+  let notes;
+  const sink = {
+    noteOn: (n) => {
+      // The bus yields the notes as it arms; while a note is being taken, midi/ui.js midiAllOff
+      // lets only the engine's voices go (silenceEngine), and the held map must not lose it.
+      if (!armed) { armed = true; notes.silenceEngine(); }
+      log.push(`on ${n}`);
+      return { ok: true };
+    },
+    noteOff: (n) => { log.push(`off ${n}`); return true; },
+    allOff: () => 0,
+  };
+  const engine = { noteOn: () => ({ ok: true }), noteOff: () => true, notesOff: () => 0 };
+  notes = createMidiNotes({ engine, route: () => sink });
+  notes.handle([0xb0, 64, 127], 1);
+  notes.handle([0x90, 60, 100], 1);
+  notes.handle([0x80, 60, 0], 1);
+  assert.deepEqual(log, ['on 60'], 'the pedal holds the arming note past its Note Off');
+  notes.handle([0xb0, 64, 0], 1);
+  assert.deepEqual(log, ['on 60', 'off 60'], 'the pedal up releases it');
+  const refusing = { noteOn: () => ({ ok: false, reason: 'range' }), noteOff: () => {
+    log.push('stray off'); return true; }, allOff: () => 0 };
+  const n2 = createMidiNotes({ engine, route: () => refusing });
+  n2.handle([0x90, 127, 100], 2);
+  n2.handle([0xb0, 123, 0], 2); // All Notes Off: a refused note was never held
+  assert.ok(!log.includes('stray off'), 'a refused note is not held, so nothing releases it');
 });

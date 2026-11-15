@@ -15,6 +15,8 @@
 // release (blur, hide, Escape) lets go of every note.
 
 /** Physical key -> semitones above the octave's C (the A key). */
+import { WORKSPACE_IDS } from '../ui/shell.js';
+
 export const NOTE_KEYS = Object.freeze({
   KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 6, KeyG: 7, KeyY: 8, KeyH: 9,
   KeyU: 10, KeyJ: 11, KeyK: 12, KeyO: 13, KeyL: 14, KeyP: 15, Semicolon: 16, Quote: 17,
@@ -31,8 +33,9 @@ export const KEY_LABELS = Object.freeze(Object.fromEntries(
     code.startsWith('Key') ? code.slice(3) : { Semicolon: ';', Quote: '\'' }[code]]),
 ));
 
-/** The views the keyboard is armed in, each with its own switch. */
-export const KEYBOARD_VIEWS = Object.freeze(['playground', 'studio', 'synth']);
+/** The views the keyboard plays in, each with its own Arm switch: every workspace (K247, the
+ *  owner's order of 2026-11-15: one keyboard, the same everywhere, playing the one instrument). */
+export const KEYBOARD_VIEWS = WORKSPACE_IDS;
 /** The link key that arms (1) or disarms (0) the keyboard of the view a link opens. */
 export const KEYBOARD_LINK_KEY = 'kbd';
 

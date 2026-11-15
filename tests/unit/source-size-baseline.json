@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 305000,
+    "src/index.html": 310000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -240,6 +240,18 @@
       "cap": 305000,
       "pr": 547,
       "reason": "the PR of the entry above: Czech pass 3 landed in #547 (train T20); 542 was a placeholder written before the PR existed, and entries are added, never edited"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 309000,
+      "pr": 549,
+      "reason": "V507 (owner orders 2026-11-14/15): the Settings dialog's MIDI section gains the device list and the MIDI monitor; new markup only, no trim of unrelated surfaces"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 310000,
+      "pr": 555,
+      "reason": "V508 (owner orders 2026-11-14/15): the MIDI section shows the incoming MIDI clock's tempo (midi.clock) beside the monitor's title; new markup only, no trim of unrelated surfaces"
     }
   ]
 }

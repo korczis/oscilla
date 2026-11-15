@@ -1340,7 +1340,12 @@ function defineChecks() {
     // where the page does not offer it (WebKit, Firefox on file://) its hidden row is correct.
     const midiOffered = await page.evaluate(() => !!(window.OSCILLA.app
       && window.OSCILLA.app.midiCanConnect));
-    const notOffered = midiOffered ? [] : ['midi.connect'];
+    // V507: the MIDI monitor and its Vymazat exist only while MIDI is connected, a state this
+    // audit never sets up (no device); tests/browser/midi.cjs midi-seam-monitor shows and clicks it.
+    const midiConnected = await page.evaluate(() => !!(window.OSCILLA.app
+      && window.OSCILLA.app.midiState === 'connected'));
+    const notOffered = [...(midiOffered ? [] : ['midi.connect']),
+      ...(midiConnected ? [] : ['midi.monitor-clear'])];
     const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
       .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).
@@ -5435,10 +5440,12 @@ function defineChecks() {
         on: (s) => s.studio },
       synth: { ws: 'synth', start: () => inPage(() => window.OSCILLA.app.synthArm()),
         on: (s) => s.studio },
+      // K247: a held key plays the one instrument, the Studio transport (its claim), not an
+      // engine voice of the Playground's own.
       notes: { ws: 'playground', start: async () => {
         await p.locator('[data-osc="keyboard.readout"]').click();
         await p.keyboard.down('KeyA');
-      }, on: (s) => s.notes > 0, after: () => p.keyboard.up('KeyA') },
+      }, on: (s) => s.studio, after: () => p.keyboard.up('KeyA') },
     };
     const STOPS = {
       escape: () => p.keyboard.press('Escape'),
@@ -5530,10 +5537,13 @@ function defineChecks() {
       // the notes: a held computer key in the Playground (armed there by default)
       await workspace('playground');
       await p.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
+      // K247: the key arms the one instrument, so the bus names the Studio transport's claim;
+      // the armed run holds the output after the key is up, until Escape (or leaving) ends it.
       await p.keyboard.down('KeyA');
-      res.notes = await owned('notes', 'a held key is the notes');
+      res.notes = await owned('studio', 'a held key arms the one instrument (the Studio claim)');
       await p.keyboard.up('KeyA');
-      res.notesOff = await owned(null, 'the released key gives the output back');
+      await p.keyboard.press('Escape');
+      res.notesOff = await owned(null, 'Escape ends the keys\' run and gives the output back');
       // the riff audition: Listen in the patch library
       await workspace('synth');
       await inPage(() => window.OSCILLA.app.patchLibraryOpen());

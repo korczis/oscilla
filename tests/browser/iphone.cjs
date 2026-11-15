@@ -13,7 +13,8 @@
 //   loads-<ws>       the workspace opens at its deep link with no page error
 //   no-overflow-<ws> the page does not scroll sideways
 //   reach-<ws>       interactive controls that are off the screen's edge (and not inside a
-//                    horizontally scrollable ancestor, which a swipe reaches), covered at their
+//                    horizontally scrollable ancestor, which a swipe reaches; the folded body of
+//                    a closed <details> is not shown and is not counted), covered at their
 //                    centre by another element once scrolled into view, or smaller than 24 px
 //                    (WCAG 2.5.8; a range, checkbox, radio and a link inside running text are
 //                    exempt) are counted; the count may not exceed tests/browser/iphone-baseline.json,
@@ -115,6 +116,11 @@ function reach() {
     if (cs.visibility === 'hidden' || cs.display === 'none') continue;
     if (!el.offsetParent && cs.position !== 'fixed') continue;
     if (el.closest('dialog:not([open]), [hidden], [aria-hidden="true"]')) continue;
+    // A closed <details> shows only its summary; every engine still gives the rest a box
+    // (C3-555-2: Compare's folded Sources list, counted "covered" in webkit once K247's dock
+    // lifted it into the viewport), but no finger can reach what is not shown.
+    const folded = el.closest('details:not([open])');
+    if (folded && el.closest('summary')?.parentElement !== folded) continue;
     const r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
     controls.push({ el, r });

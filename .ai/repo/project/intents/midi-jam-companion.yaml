@@ -30,3 +30,15 @@ satisfaction:
     criterion: "A jam is recorded as an editable event track that saves, reloads and replays identically"
     evidence: claim
     ref: "midi-jam-recorded"
+  - id: midi-controller-knobs
+    criterion: "A controller's knobs, faders and sustain pedal play the Synth panel: each slot of the controller's factory layout moves the control it names along that control's own scale, one undo entry per run of messages, and the pedal holds released keys until it comes up"
+    evidence: claim
+    ref: "midi-controller-knobs"
+  - id: midi-devices-known
+    criterion: "A connected controller of a known family is recognised from its port name: the MIDI section lists it with its device and what each port is for, a DAW-control or editor port never sounds a note, and every message of every input is shown in a monitor naming the physical control that sent it, from profiles derived by tooling from the maker's own files, never hand-typed"
+    evidence: claim
+    ref: "midi-devices-known"
+  - id: midi-transport-clock
+    criterion: "A controller's transport plays the workspace in view: MIDI Start, Continue and Stop from any input and a DAW-control port's Play, Stop, Rewind and Cycle buttons act on the Sequencer's own transport in the Sequencer and on the Studio's elsewhere, the monitor saying what each did; an incoming MIDI clock's tempo is measured over the last whole beat and shown, and cleared when the clock stops, without the transport following it by itself"
+    evidence: claim
+    ref: "midi-transport-clock"

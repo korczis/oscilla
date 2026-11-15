@@ -836,6 +836,42 @@ claims:
     responsibility: product
     note: 'Issue V502; the decisions are the ADR''s V502 note (NOTE_POLYPHONY 8, each note at level / NOTE_POLYPHONY, velocity amplitude (v / 127)^2, the session safety limit, refusal at or above 0.95 x Nyquist). The note voices are src/js/audio/audio-engine.js noteOn / noteOff / notesOff, proven on the fake audio context. tests/browser/midi.cjs (midi-seam-notes) plays synthetic MIDI events from the stub in Chromium, Firefox and WebKit, from file:// and the /oscilla/ sub-path, with an independent oscillator count. No check plays a real MIDI device; latency is not measured.'
 
+  - id: midi-controller-knobs
+    claim: 'A MIDI controller plays the Synth panel: CC 64 holds released keys until the pedal comes up, and the knobs and faders of the KeyLab mkII family''s factory layout move the panel control of their slot along its own scale, one undo entry per run of messages, only while the Synth is shown.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: src/js/synth/midi-cc.js
+    test: tests/unit/midi/cc.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue V506; the decisions are the ADR''s V506 note. The slot table (CC_SLOTS, ENGINE_ENV) follows the factory layout the installed classic-synth plug-ins of the controller''s maker read (docs/midi.md, "Controllers"); the pedal is src/js/midi/notes.js sustain. tests/browser/midi.cjs (midi-seam-cc) drives both through the stub device. A real KeyLab mkII 61 and BeatStep Pro were heard on the owner''s Mac on 2026-11-14 (notes); no check plays a real device.'
+
+  - id: midi-devices-known
+    claim: 'A connected controller of a known family is recognised from its port name: the Settings dialog lists it with its device and each port''s role, a DAW-control or editor port never sounds a note, and a monitor shows every message of every input with the physical control that sent it, from profiles derived by tooling from the maker''s own files.'
+    source: .ai/repo/rules/project/midi-profiles-derived.v1.md
+    implementation: src/js/midi/devices.js
+    test: tests/unit/midi/devices.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue V507; the decisions are ADR 0058''s V507 note. The profiles (src/data/midi-devices.json) are written by scripts/midi/derive-devices.mjs; the monitor is src/js/midi/monitor.js; tests/browser/midi.cjs (midi-seam-monitor) drives the dialog through stub inputs named after a KeyLab mkII 61''s ports. The owner''s KeyLab mkII 61 and BeatStep Pro were listed live with their roles on 2026-11-15; their SysEx identity replies match the profiles.'
+
+  - id: one-keyboard-everywhere
+    claim: 'In every workspace the computer keys, the on-screen keys and MIDI play the one instrument (the Studio document''s note target, else the Synth panel in the same document), armed at once with one Arm switch per page, from the same docked keyboard (folded to its handle on a page that is not an instrument); leaving a workspace ends the keys'' armed-only run.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: src/js/midi/routes.js
+    test: tests/unit/keys-routes.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue K247 (the owner''s order of 2026-11-15); the decisions are ADR 0058''s K247 note. midi/ui.js centralSink resolves the instrument; tests/browser/midi.cjs (midi-seam-notes, keyboard-qwerty, keyboard-everywhere, midi-seam-sink) drive it in the page. Measured before: 4 behaviours in 13 workspaces, 10 of them playing nothing.'
+
+  - id: midi-transport-clock
+    claim: 'A controller''s transport plays the workspace in view: MIDI Start, Continue and Stop and a DAW port''s Play, Stop, Rewind and Cycle drive the Sequencer''s own transport in the Sequencer and the Studio''s elsewhere, and an incoming MIDI clock''s tempo is measured and shown without the transport following it.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: src/js/midi/transport.js
+    test: tests/unit/midi/transport.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue V508; the decisions are ADR 0058''s V508 note. tests/browser/midi.cjs (midi-seam-transport) drives it through stub inputs. The KeyLab mkII DAW buttons follow the Mackie Control numbers of its default DAW map, to be confirmed on the device (scripts/midi/listen.swift).'
+
   - id: keyboard-held-notes
     claim: 'A note held on the computer keyboard, the on-screen keyboard or a MIDI key sounds past the playback limit only while it is held, under the output ceiling, and is released on blur, page hide and Escape.'
     source: .ai/repo/adrs/0062-a-held-key-or-midi-note-is-exempt-from-the-playback-limit-while-held.md

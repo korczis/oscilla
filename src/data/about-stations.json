@@ -287,6 +287,13 @@
       "summary": "Když Synth vloží svůj panel do dokumentu Studia a převezme vstup Master Output, oznámí to jedno informační upozornění pod hlavičkou Synthu se zavíracím tlačítkem místo stavového řádku na každé záložce; čtečka obrazovky ho přečte jednou, po zavření nebo vrácení vložení zmizí a stejné vložení ho nevrátí, nové vložení ho ukáže znovu",
       "commit": "3b3b2f9",
       "datetime": "2026-11-12T06:48:37+01:00"
+    },
+    {
+      "release": "3.38",
+      "title": "Ovladač MIDI hraje celý nástroj",
+      "summary": "Knoby, fadery a sustain pedál ovladače MIDI hrají panel Synthu; sekce MIDI v Nastavení ukazuje známá zařízení s rolemi portů a monitor příchozích zpráv; jedna klávesnice hraje nástroj Studia na každé stránce, a když ho dokument ještě nemá, vloží panel Synthu s upozorněním a tlačítkem Zpět; Start, Stop a transport ovladače řídí Sekvencer a Studio a tempo příchozích hodin MIDI se měří a zobrazuje, nikdy se jím neřídí",
+      "commit": "e7c466a",
+      "datetime": "2026-11-15T07:57:42+01:00"
     }
   ]
 }

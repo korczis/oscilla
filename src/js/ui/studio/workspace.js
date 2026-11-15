@@ -59,6 +59,7 @@ import { createWorkspaceFiles } from './workspace/files.js';
 import { createWorkspaceGraph } from './workspace/graph.js';
 import { createWorkspaceTimeline } from './workspace/timeline.js';
 import { createWorkspaceVoice } from './workspace/voice.js';
+import { createWorkspaceKeys } from './workspace/keys.js';
 import {
   FULLSCREEN_UNSUPPORTED, createWorkspaceNavigation, fullscreenElementOf, fullscreenSupport,
 } from './workspace/navigation.js';
@@ -80,7 +81,7 @@ import { OWNER } from '../output-owner.js';
 /** The parts of the workspace (./workspace/*.js), in the order their functions join `ops`. */
 const PARTS = [createWorkspaceDocument, createWorkspaceRuntime, createWorkspaceMeasurement,
   createWorkspaceFiles, createWorkspaceGraph, createWorkspaceTimeline, createWorkspaceNavigation,
-  createWorkspaceVoice];
+  createWorkspaceKeys, createWorkspaceVoice];
 
 /**
  * A stable handle over the current store (§9): the same object for every projection, the
@@ -133,6 +134,7 @@ export function createStoreHandle(initialModel, {
     beginGesture: (label) => store.beginGesture(label),
     endGesture: () => store.endGesture(),
     cancelGesture: () => store.cancelGesture(),
+    gestureId: () => store.gestureId(),
     canUndo: () => store.canUndo(),
     canRedo: () => store.canRedo(),
     undoLabel: () => store.undoLabel(),

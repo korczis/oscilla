@@ -335,6 +335,11 @@
             <a :href="a.action.href" data-osc="alert.action" data-osc-link="jump" @click="alertActionFollowed(a.id)"
               x-text="a.action.text"></a>
           </template>
+          <!-- K247 (C3-553-1): the keys' insert of the Synth panel, undone right where it was said -->
+          <template x-if="a.undo">
+            <button type="button" data-osc="alert.undo" @click="alertUndo(a.id)"
+              class="ms-2 inline-flex items-center h-8 px-3 text-sm font-medium text-gray-900 bg-white border border-gray-300 border-solid rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11">Zpět</button>
+          </template>
         </div>
         <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
           @click="dismissAlertFocus(a.id, $event)" aria-label="Dismiss notification">
@@ -456,7 +461,10 @@
     </div>
 
   <!-- ================= Main grid ================= -->
-  <main class="osc-main scroll-pb-[var(--osc-dock-h,0px)]" id="osc-main" tabindex="-1" :class="workspace === 'synth' && '!block !pt-0 scroll-pt-[var(--osc-synth-nav-h,0px)]'">
+  <!-- K247: a workspace the docked keys cover (every one but the Playground, whose keys stay
+       under its panels; the Synth and the Studio reserve the band in their own views) keeps the
+       band below its content, so no control ends under the dock or its folded handle. -->
+  <main class="osc-main scroll-pb-[var(--osc-dock-h,0px)]" id="osc-main" tabindex="-1" :class="[workspace === 'synth' && '!block !pt-0 scroll-pt-[var(--osc-synth-nav-h,0px)]', kbdDocked && workspace !== 'synth' && workspace !== 'studio' && '!mb-[max(0px,calc(var(--osc-dock-h,0px)_-_var(--osc-statusbar-h)))]']">
     <!-- The first screen (P002, Q004 option A): the positioning sentence of Q002 leads the
          Playground; the other workspaces lead with their own heading and keep it unseen. -->
     <h1 class="max-sm:-mt-1" :class="{ 'osc-sr-only': workspace !== 'playground' }">A zero-install, scientifically
@@ -2079,9 +2087,9 @@
       </section>
     </div>
 
-    <!-- ---------- Keyboard (K026; ADR 0058, ADR 0062): the computer keyboard and the
-         on-screen keys play the note voices of the AudioEngine (src/js/midi/keyboard-ui.js), in
-         the Playground and the Studio, each armed on its own. The keys are a canvas domain view;
+    <!-- ---------- Keyboard (K026, K247; ADR 0058, ADR 0062): the computer keyboard and the
+         on-screen keys play the one instrument (src/js/midi/keyboard-ui.js) in every workspace,
+         each armed on its own, docked everywhere but the Playground. The keys are a canvas domain view;
          the controls are Pro buttons, 44 px on a coarse pointer (the touch-target rule,
          V634), until the keyboard moves into its Pro card (plan F001
          to F003). -->
@@ -3460,6 +3468,51 @@
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="midi.connect"
           aria-describedby="osc-midi-status" @click="midiConnect()">Connect MIDI</button>
       </div>
+      <!-- V507: the connected inputs as OSCILLA knows them (src/js/midi/devices.js: the profile
+           derived from the maker's own files, and what each port is for), and the monitor of
+           every message (src/js/midi/monitor.js), newest first, ten redraws a second at most. -->
+      <section class="mt-3" data-osc="midi.devices" x-show="midiInputs.length"
+        aria-labelledby="osc-midi-devices-title">
+        <h4 id="osc-midi-devices-title"
+          class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">Zařízení</h4>
+        <ul class="text-sm bg-white border border-gray-200 divide-y divide-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:divide-gray-700">
+          <template x-for="d in midiInputs" :key="d.name">
+            <li class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+              <span class="min-w-0 font-medium text-gray-900 break-words dark:text-white"
+                x-text="d.name"></span>
+              <span class="flex flex-wrap items-center gap-1">
+                <span class="bg-primary-100 text-primary-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-primary-900 dark:text-primary-300"
+                  x-show="d.known" x-text="d.device + ' · ' + d.controls + ' ovladačů'"></span>
+                <span class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300"
+                  x-text="d.known ? 'Port: ' + d.roleText : 'Neznámé zařízení: hraje noty a CC'"></span>
+              </span>
+            </li>
+          </template>
+        </ul>
+      </section>
+      <section class="mt-3" data-osc="midi.monitor" x-show="midiState === 'connected'"
+        aria-labelledby="osc-midi-monitor-title">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <h4 id="osc-midi-monitor-title"
+            class="text-sm font-semibold text-gray-900 dark:text-white">Monitor MIDI</h4>
+          <span data-osc="midi.clock" x-show="midiClockBpm" role="status"
+            class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300"
+            x-text="'Hodiny MIDI: ' + midiClockBpm + ' BPM'"></span>
+          <button type="button" data-osc="midi.monitor-clear" @click="midiLogClear()"
+            class="inline-flex items-center h-9 px-3 text-sm font-medium text-gray-900 bg-white border border-gray-300 border-solid rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11">Vymazat</button>
+        </div>
+        <p class="text-sm text-gray-500 dark:text-gray-400" x-show="!midiLog.length">Zatím nic
+          nepřišlo: zahrajte notu nebo otočte ovladačem.</p>
+        <ol class="overflow-y-auto font-mono text-xs text-gray-900 border border-gray-200 divide-y divide-gray-200 rounded-lg max-h-56 bg-gray-50 dark:bg-gray-900 dark:text-white dark:border-gray-700 dark:divide-gray-700"
+          x-show="midiLog.length" aria-label="Poslední zprávy MIDI, nejnovější nahoře">
+          <template x-for="r in midiLog" :key="r.n">
+            <li class="flex flex-wrap gap-x-2 px-3 py-1">
+              <span class="text-gray-500 dark:text-gray-400" x-text="r.input"></span>
+              <span x-text="r.text"></span>
+            </li>
+          </template>
+        </ol>
+      </section>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="settings.reset"
           @click="resetDefaults()">Reset instrument</button>

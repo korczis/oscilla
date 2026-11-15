@@ -3,8 +3,14 @@
 // (midi/ui.js) and by the keyboard's arm switch (midi/keyboard-ui.js), so no surface decides on
 // its own. A workspace switch changes only the route; octave, velocity and lights stay.
 //
-//   plays     the component method that gives the workspace's note sink (null: the Playground
-//             voice of the AudioEngine plays the note)
+//   plays     the component method that gives the workspace's note sink. Every workspace plays
+//             the one instrument (K247, the owner's order of 2026-11-15): keysInstrument (the
+//             Studio part) gives the document's note target, else the Synth panel in the same
+//             document where it is there or may be inserted by itself; the Synth plays its panel
+//             (synthSink). Only a document of the user's that plays no notes and that the panel
+//             may not rewire by itself leaves the keys to the engine's own voice
+//   folded    the dock starts folded to its handle (the keys still armed and playing): a page
+//             that is not an instrument keeps its content; the user unfolds it
 //   armed     whether the computer keyboard is armed when the workspace first opens: armed
 //             everywhere, so the keys play at once in every workspace as in the Synth (the
 //             owner's decision of 2026-11-05 on K178); Arm switches them off and on
@@ -27,7 +33,7 @@
 //             starts folded to its handle: the computer keys stay armed and play (Q105 is
 //             about the keys being armed, not about the on-screen keys showing). null: no rule
 //
-//   routeOf(workspace) -> its row (the Playground's for a workspace not listed)
+//   routeOf(workspace) -> its row (DEFAULT_ROUTE for a workspace not listed)
 //   dockState({ route, owner, userExpanded, room }) -> 'docked' | 'collapsed'
 //             the one rule of the dock (K171), applied by midi/dock-yield.js alone
 //   roomFolds({ route, room }) -> whether the docked keys would take the room keepsRoom keeps
@@ -40,14 +46,21 @@
 //             where the owner's surface goes against the dock: the scroll that puts it whole
 //             above the dock's top, or its top at the top of the room (dock-yield.js reveal)
 
+import { WORKSPACE_IDS } from '../ui/shell.js';
+
 /** The height the Studio's editor keeps below its toolbar on a desktop grid (keepsRoom). */
 export const STUDIO_EDITOR_MIN_PX = 360;
 /** The height the Synth keeps below the page header (keepsRoom, U100): its sticky section chips
  *  (60 px) and three 44 px rows of its tab's content. */
 export const SYNTH_CONTENT_MIN_PX = 60 + 3 * 44;
 
+/** Every workspace that is not listed: the one instrument, armed, the dock folded (K247). */
+export const DEFAULT_ROUTE = Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave',
+  editors: null, yieldsTo: null, folded: true });
+
 export const KEY_ROUTES = Object.freeze({
-  playground: Object.freeze({ plays: null, armed: true, leave: null, editors: null,
+  // The Playground keeps the keys under its panels (not docked): they play the one instrument.
+  playground: Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave', editors: null,
     yieldsTo: null }),
   synth: Object.freeze({ plays: 'synthSink', armed: true, leave: null, editors: null,
     yieldsTo: 'xy-pad',
@@ -59,7 +72,7 @@ export const KEY_ROUTES = Object.freeze({
     keepsRoom: Object.freeze({ toolbar: '[data-osc="page.header"]',
       editorMin: SYNTH_CONTENT_MIN_PX, stackedBelow: 0,
       keptBy: '[data-osc="synth.panel"][data-keeps-dock]' }) }),
-  studio: Object.freeze({ plays: 'studioSink', armed: true, leave: 'leave',
+  studio: Object.freeze({ plays: 'keysInstrument', armed: true, leave: 'leave',
     editors: '[data-osc="studio.graph.viewport"], [data-osc="studio.timeline"]',
     yieldsTo: null,
     // The Studio's toolbar and its editor: the graph's header and two rows of node cards over
@@ -70,11 +83,11 @@ export const KEY_ROUTES = Object.freeze({
       stackedBelow: 768 }) }),
 });
 
-export const routeOf = (workspace) => KEY_ROUTES[workspace] || KEY_ROUTES.playground;
+export const routeOf = (workspace) => KEY_ROUTES[workspace] || DEFAULT_ROUTE;
 
-/** The keyboard's arm state when each listed workspace first opens. */
-export const armedDefaults = () => Object.fromEntries(Object.entries(KEY_ROUTES)
-  .map(([ws, r]) => [ws, r.armed]));
+/** The keyboard's arm state when each workspace first opens: every workspace (K247). */
+export const armedDefaults = () => Object.fromEntries(WORKSPACE_IDS
+  .map((ws) => [ws, routeOf(ws).armed]));
 
 /**
  * Whether the dock yields: the workspace's route names a surface that yields the dock and that
@@ -87,11 +100,13 @@ export function dockYields({ route, owner } = {}) {
 }
 
 /**
- * The dock's state, the one rule (K171): folded to its handle where it yields, unless the user
+ * The dock's state, the one rule (K171): folded to its handle where it yields, where the room
+ * folds it, and on a page that is not an instrument (route.folded, K247), unless the user
  * expanded it (the caller resets userExpanded when the owner changes); docked otherwise.
  */
 export function dockState({ route, owner, userExpanded = false, room = null } = {}) {
-  const folds = dockYields({ route, owner }) || roomFolds({ route, room });
+  const folds = !!(route && route.folded) || dockYields({ route, owner })
+    || roomFolds({ route, room });
   return folds && userExpanded !== true ? 'collapsed' : 'docked';
 }
 

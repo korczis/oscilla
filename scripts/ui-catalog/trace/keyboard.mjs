@@ -7,6 +7,9 @@ const entry = (e) => ({ plan: ['G001'], intents: ['component-system#contract-and
   adrs: ['adr-0081'], ...e });
 
 export default {
+  'alert.undo': entry({ source: 'src/index.html', plan: ['G001', 'K247'],
+    intents: ['playable-instrument#one-keyboard-everywhere'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
   keyboard: entry({ source: 'src/index.html',
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/navigation.cjs'] }),
   'keyboard.arm': entry({ source: 'src/index.html',

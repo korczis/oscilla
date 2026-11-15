@@ -127,14 +127,17 @@ export const LEAVE_POLICY = Object.freeze([
   Object.freeze({ owner: 'sequencer', effect: 'keep', applies: () => true,
     sounding: (cmp, bus) => bus.sequencerPlaying(), act: null,
     sentence: 'Sekvence hraje dál; zastavíte ji klávesou Esc.' }),
-  // Leaving the Studio: its live notes off and an armed-only run disarmed (the key route's own
-  // leave, midi/routes.js KEY_ROUTES, run by midi/ui.js midiRouteLeave; studio-sink.js, K176);
-  // a run the user started with PLAY sounds on.
-  Object.freeze({ owner: 'studio', effect: 'disarm', applies: (from) => from === 'studio',
+  // Leaving a workspace whose keys play the Studio document (every workspace but the Synth,
+  // K247): its live notes off and an armed-only run disarmed (the key route's own leave,
+  // midi/routes.js, run by midi/ui.js midiRouteLeave; studio-sink.js, K176); a run the user
+  // started with PLAY sounds on.
+  Object.freeze({ owner: 'studio', effect: 'disarm', applies: (from) => from !== 'synth',
     sounding: (cmp) => call(cmp, 'studioOwnsOutput'),
     act: (cmp, from) => call(cmp, 'midiRouteLeave', from),
-    sentence: 'Studio: zapnuté klávesy se vypnuly; přehrávání spuštěné tlačítkem hraje dál.' }),
-  Object.freeze({ owner: 'synth', effect: 'disarm', applies: (from) => from === 'synth',
+    sentence: 'Klávesy přestaly hrát Studio; přehrávání spuštěné tlačítkem hraje dál.' }),
+  // Leaving any workspace: the Synth panel's armed-only run ends, whether the Synth's own keys
+  // armed it or the keys of another workspace did (midi/ui.js falls back to it, K247).
+  Object.freeze({ owner: 'synth', effect: 'disarm', applies: () => true,
     sounding: (cmp) => !!(cmp.synth && cmp.synth.armed),
     act: (cmp) => call(cmp, 'synthLeave'),
     sentence: 'Syntezátor se vypnul: jeho klávesy po odchodu nehrají.' }),

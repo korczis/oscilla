@@ -119,9 +119,10 @@ export function createDockYield({ read, apply, release = () => 0, defer = queueM
       room: v.room || null };
     const next = dockState(input);
     const y = dockYields(input);
-    // The keys fold where the workspace keeps room they would take (routes.js roomFolds, #444):
-    // the handle shows and toggles as where a surface yields, but no surface is placed.
-    const f = y || roomFolds(input);
+    // The keys fold where the workspace keeps room they would take (routes.js roomFolds, #444)
+    // and on a page that is not an instrument (route.folded, K247): the handle shows and toggles
+    // as where a surface yields, but no surface is placed.
+    const f = y || roomFolds(input) || !!input.route.folded;
     const el = c ? c.el : null;
     // The same state with a new surface (a re-mount while the dock yields): placed again.
     const replace = next === state && y === yields && y && !!el && el !== surface;

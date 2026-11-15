@@ -39,8 +39,9 @@ test('the rule: a pad owning the notes folds the dock at every size and pointer'
         for (const width of widths) {
           for (const userExpanded of [false, true]) {
             // Neither the pointer nor the width enters the rule: the dock never covers the pad.
-            const want = ws === 'synth' && owner === 'xy-pad' && !userExpanded
-              ? 'collapsed' : 'docked';
+            // A page that is not an instrument (Measure) starts folded (route.folded, K247).
+            const folds = (ws === 'synth' && owner === 'xy-pad') || ws === 'measure';
+            const want = folds && !userExpanded ? 'collapsed' : 'docked';
             const input = { route, owner, coarse, width, userExpanded };
             assert.equal(routes.dockState(input), want, JSON.stringify(input));
             assert.equal(routes.dockYields(input), ws === 'synth' && owner === 'xy-pad',

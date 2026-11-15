@@ -13,7 +13,7 @@
       "id": "M045",
       "title": "MIDI jam companion: first usable version",
       "done": 3,
-      "required": 6,
+      "required": 9,
       "phase": "now"
     },
     {
@@ -83,7 +83,7 @@
       "id": "M061",
       "title": "Interconnection: live analysis views, sequence exchange, workspace bridges and one keyboard",
       "done": 5,
-      "required": 7,
+      "required": 8,
       "phase": "now"
     },
     {

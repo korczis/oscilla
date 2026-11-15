@@ -94,7 +94,7 @@ test('V502: main.js hands the engine to the MIDI part, and taking the output sto
   () => {
     const main = code(read('src/js/main.js'));
     // C037: the MIDI part gets the playback bus, whose claim each note on the engine makes.
-    assert.match(main, /const midi = createMidiUi\(\{ engine, sequencerPlaying, bus \}\);/);
+    assert.match(main, /const midi = createMidiUi\(\{ engine, sequencerPlaying, bus, sequencerTransport \}\);/);
     // stopPlayback is the playback bus's (core/output-bus.js, C002, C037), composed in main.js.
     assert.match(main, /const bus = createOutputBus\(\{/);
     assert.match(main, /const \{[^}]*\bstopPlayback\b[^}]*\} = bus;/);

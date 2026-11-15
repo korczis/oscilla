@@ -1,0 +1,38 @@
+id: V506
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-controller-knobs"
+title: "A MIDI controller's knobs, faders and sustain pedal play the Synth panel"
+slug: midi-controller-knobs
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi). CC 64 holds every released key of its input and channel until the pedal comes up; every other Control Change moves the Synth panel control its slot names, in the factory layout of the KeyLab mkII family (encoders CC 74, 71, 76, 77, 93 and 18, 19, 16, 17; faders CC 73, 75, 79, 72 and 80-83; CC 85 and 7 volume; CC 1 the modulation wheel), along that control's own scale, through the panel's own setControl, one undo entry per run of messages, and only while the Synth is shown. Before: a CC from a controller changes nothing and CC 64 is ignored. After: the owner's KeyLab mkII 61 plays the panel with its knobs, faders and pedal."
+why: "The owner's order of 2026-11-14 in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code), after hearing the KeyLab mkII 61 and the BeatStep Pro play the live v3.37.3: \"jo, zvuk slysim, zacni s CC mapovanim\" (yes, I hear the sound, start with the CC mapping). The same session's later orders (connect the whole MIDI stack, a MIDI instruments section, device profiles, tooling, documentation) are planned as the issues after this one."
+current_state: "Built by oscilla-p7 (Claude Code session cae276ab-2d90-45d2-babb-a1f8023668d2) in task t-20261114222114-d487 on feat/v506-midi-cc from main fba40f4d. The slot table was derived on 2026-11-14 from the default MIDI configuration of the classic-synth plug-ins installed on the owner's Mac (plugin.prefmidi.xml with Reference_ParamNames.xml of 20 instruments, read only, nothing copied; docs/midi.md lists the agreement) and matches the messages the owner's KeyLab mkII 61 sent that day (CC 71, 73-77, 93, 112, 113 on channel 1). The direct mapping writes the panel's stored value as the hand on the knob does; K077's learned midi-cc node, a modulation source for any Studio parameter, stays planned and separate (ADR 0058, its V506 note)."
+scope:
+  - "src/js/midi"
+  - "src/js/synth/midi-cc.js"
+  - "src/js/synth/gestures.js"
+  - "src/js/synth/ui.js"
+  - "tests/unit/midi"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "docs/midi.md"
+  - "docs/CLAIMS.yaml"
+  - "dist"
+depends_on:
+  - "V502"
+acceptance_criteria:
+  - "CC 64 at 64-127 holds every key of its input and channel whose Note Off arrives while it is down; below 64 it releases them; a key pressed again meanwhile sounds until its own Note Off; a forced stop, All Notes Off and silence() are never held."
+  - "Every CC of CC_SLOTS (src/js/synth/midi-cc.js) names a knob or an amount on the Synth panel's face (a unit test reads the panel declaration), and on the Engines tab the filter-envelope faders play the chosen engine's own envelope."
+  - "A CC value v is the control's value at position v / 127 along its own scale (a log cutoff: 0 -> 10 Hz, 127 -> 20 kHz, the middle the geometric mean), set through the panel's setControl; a run of messages on one control is one undo entry, closed GESTURE_IDLE_MS after its last message or by another control."
+  - "A CC moves no panel control outside the Synth workspace; in it the Synth's status line names the CC and the control, at most every CC_STATUS_MS for the same control."
+  - "tests/browser/midi.cjs midi-seam-cc proves the pedal and CC 74 through the stub device; ADR 0058 records the V506 note; docs/midi.md documents the layout and its derivation."
+validation:
+  - "node --test tests/unit/midi/*.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-14
+updated_at: 2026-11-14

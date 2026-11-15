@@ -134,14 +134,15 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     // draws the keys docked over a room the dock then folds (read where the route keepsRoom).
     kbdDockDecided: false,
 
-    /** The view the keyboard belongs to now ('playground' | 'studio'), else null. */
+    /** The view the keyboard belongs to now: every workspace (K247), else null. */
     get kbdView() {
       return KEYBOARD_VIEWS.includes(this.workspace) ? this.workspace : null;
     },
-    /** The keys dock over the page's bottom edge, the same component in the Synth and the
-     *  Studio (the owner's report of 2026-11-03); the Playground keeps them under its panels. */
+    /** The keys dock over the page's bottom edge, the same component in every workspace (the
+     *  owner's reports of 2026-11-03 and 2026-11-15, K247); the Playground keeps them under its
+     *  panels. On a page that is not an instrument the dock starts folded (routes.js folded). */
     get kbdDocked() {
-      return this.kbdView === 'synth' || this.kbdView === 'studio';
+      return !!this.kbdView && this.kbdView !== 'playground';
     },
     /** The docked keys' classes: over the page's bottom edge, beside the sidebar from lg up (it
      *  sits above them, z-40, and would take their clicks), as the workspace column is. */
@@ -168,12 +169,12 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
     /** What the readout says: armed or not, the keys' range, the velocity. */
     get kbdReadout() {
       const range = this.kbdRange;
-      const where = { studio: 've Studiu', synth: 'v Synthu' }[this.kbdView] || 'v Playgroundu';
+      // One instrument everywhere (K247): the readout names no page, only what the keys do.
       return this.kbdArmedHere
-        ? `Klávesy jsou připravené ${where}: A až ' hrají ${range}. `
+        ? `Klávesy jsou připravené: A až ' hrají ${range} na nástroji Studia. `
           + `Síla úhozu ${this.kbdVelocity}. Z / X oktáva, C / V síla úhozu; `
           + 'Esc uvolní všechny noty.'
-        : `Klávesy nejsou připravené ${where}: připravte je a hrajte ${range} `
+        : `Klávesy nejsou na této stránce připravené: připravte je a hrajte ${range} `
           + `z klávesnice počítače. Síla úhozu ${this.kbdVelocity}.`;
     },
     /** The on-screen keys, for assistive technology (the canvas is an image of them). */
@@ -248,10 +249,9 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
           cmp.kbdArmed[v] = armed;
           // The domain answers, as every link does (surface-census routes).
           if (typeof cmp.notify === 'function') {
-            const where = { studio: 've Studiu', synth: 'v Synthu' }[v] || 'v Playgroundu';
-            cmp.notify('info', `Klávesy ${armed ? 'připravené' : 'odpojené'} z odkazu`, armed
-              ? `Klávesnice počítače hraje ${where}. Nic nezazní, dokud nestisknete klávesu.`
-              : `Klávesnice počítače už ${where} nehraje.`);
+            cmp.notify('info', armed ? 'Klávesy připravené z odkazu' : 'Klávesy odpojené z odkazu',
+              armed ? 'Klávesy počítače hrají nástroj Studia; nic nezazní, dokud nestisknete '
+                + 'klávesu.' : 'Klávesy počítače na této stránce nehrají.');
           }
           return true;
         });
@@ -288,6 +288,11 @@ export function createKeyboardUi({ win = window, bus = null } = {}) {
         velocity: () => (kb ? kb.velocity : 100),
         off: () => { pads.delete(release); },
       };
+    },
+
+    /** The keyboard's notes on the engine's own voices off, its keys kept (K247). */
+    kbdEngineOff() {
+      return notes ? notes.silenceEngine() : 0;
     },
 
     /** Arm or disarm the computer keyboard in the view in sight. */

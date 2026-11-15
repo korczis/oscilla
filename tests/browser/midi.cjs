@@ -45,35 +45,52 @@
 //                               failed with the name; a newer request wins over an older one
 //                               (polled until the older settlement has reached the page, and
 //                               nothing listens to its access)
-//   midi-seam-notes             V502, synthetic MIDI events from the stub into the AudioEngine,
-//                               the context forced to NOTES_RATE: a Note On sounds (one live
-//                               oscillator counted by the page's own probe, the analyser's peak
-//                               under the master level / NOTE_POLYPHONY); a chord of more than
-//                               NOTE_POLYPHONY notes keeps at most NOTE_POLYPHONY, the peak under
-//                               one voice's level; Note Off and velocity 0 leave zero oscillators
-//                               and zero engine nodes; no gain set to 0 or ramped exponentially
-//                               to 0 (automation only: a rendered one-sample step is measured by
-//                               the engine suites, not here); a note at or above 0.95 x Nyquist of
-//                               the running context is refused; held notes stop when their input
-//                               is unplugged and on Escape; a held note sounds past the session
-//                               safety limit while held and a window blur releases it (ADR 0062);
-//                               the on-screen keys light a MIDI note while it sounds (K026);
-//                               starting the sequencer stops held notes, a Note On while it plays
-//                               is refused and said once, and after it stops a note sounds again
-//   midi-seam-sink              review of src/js/synth (S2): a stub Note On in the Playground,
-//                               then the Synth workspace, then its Note Off: the note-off frees
-//                               the Playground note (zero live oscillators, zero engine notes)
-//                               instead of reaching the Synth and leaving it sounding
+//   midi-seam-notes             V502 on K247's one instrument: synthetic MIDI events from the
+//                               stub, the context forced to NOTES_RATE: a Note On plays the
+//                               Studio transport (it holds the note, the analyser sounds, no
+//                               voice of the page's own); velocity 127 and a chord of more than
+//                               NOTE_POLYPHONY notes peak at or under the safety chain's ceiling
+//                               (MAX_OUTPUT_GAIN); Note Off and velocity 0 leave the transport
+//                               holding nothing and the output below -70 dB rel; a note at or
+//                               above 0.95 x Nyquist sounds at most at the bound (the analyser's
+//                               spectral peak; the voices clamp it), the note below it plays;
+//                               held notes stop when their input is unplugged and on Escape; a
+//                               held note sounds past the session safety limit while held and a
+//                               window blur releases it (ADR 0062); the on-screen keys light a
+//                               MIDI note while it sounds (K026); starting the sequencer
+//                               releases held notes, a Note On while it plays is refused and said
+//                               once (C036), and after it stops a note sounds again. The engine
+//                               voice's own laws (velocity, polyphony, click-free automation)
+//                               are unit/midi/notes.test.mjs's, on the fake audio context
+//   midi-seam-sink              review of src/js/synth (S2), K247: a stub note held on the
+//                               instrument in the Playground stops with the switch to the Synth
+//                               (leaving ends the keys' armed run) and its late Note Off leaves
+//                               nothing sounding; a note in the Synth then sounds and is freed
+//   midi-seam-cc                V506: CC 64 holds a note on the instrument past its Note Off until the
+//                               pedal comes up; a CC in the Playground moves no Synth knob; in
+//                               the Synth CC 74 moves the LPF cutoff to its range's ends (0 -> 10
+//                               Hz, 127 -> 20 kHz) and the Synth's status line names it
+//   midi-seam-monitor           V507: two stub inputs named after a KeyLab mkII 61's ports (the
+//                               stub's own name first) are listed in the Settings dialog with
+//                               the device and each port's role; a Note On from the DAW port
+//                               sounds nothing, one from the play port sounds; the monitor shows
+//                               the play port's CC 74 as Enkodér 1, newest first, and Vymazat
+//                               empties it
+//   midi-seam-transport         V508: a stub DAW port (named after a KeyLab mkII 61's) presses
+//                               Play (Note On 94): the Studio's transport plays and the monitor
+//                               says so; a stub play port's Stop (FC) stops it; in the Sequencer
+//                               a Start (FA) plays the sequence and Stop stops it; a stub clock
+//                               at 120 BPM shows "Hodiny MIDI: 120.0 BPM" in the MIDI section
 //   keys-one-keyboard           K178: with the stub device, the Playground, the Synth and the
 //                               Studio take one octave, light and sound the same keys for QWERTY
 //                               and MIDI, and release them on Escape and on a workspace switch
-//   keyboard-everywhere         M086: the same A plays the Playground (a note voice), the Synth
-//                               panel and the Studio graph (its Keys node through the Studio
-//                               transport, no Playground voice), the keys docked in both; a key
-//                               held in the Studio and released after leaving it stops, leaving
-//                               disarms the keys' run, and the Studio sink's held map
-//                               (synthDebug().sinkHeld) reads empty after leaving, the key still
-//                               down and after its release (K175, S18)
+//   keyboard-everywhere         M086, K247: the same A plays the one instrument from the
+//                               Playground (the Studio transport armed, no page voice), the Synth
+//                               panel and the Studio graph (its Keys node), the keys docked in
+//                               both; a key held in the Studio and released after leaving it
+//                               stops, leaving disarms the keys' run, and the Studio sink's held
+//                               map (synthDebug().sinkHeld) reads empty after leaving, the key
+//                               still down and after its release (K175, S18)
 //   keyboard-studio-held        K175, review S18 (af's criterion): A held on the Studio
 //                               keyboard (the Synth panel's Keys, the Studio transport), the
 //                               workspace switched to the Playground, then A up: the Studio
@@ -86,11 +103,17 @@
 //                               reaches B, then two Note Offs: the analyser falls below -70 dB
 //                               rel and the sink and the transport hold no note. With the
 //                               sink's re-press release removed, A's note hangs and it fails
+//   keys-insert-notice          K247, review C3-553-1: on a fresh page (the untouched default
+//                               document, 6 nodes) a key in the Playground inserts the Synth
+//                               panel into the Studio document and says K246's sentence once,
+//                               as a warning notice with its own Zpět (a second key raises no
+//                               second one); Zpět there undoes it (6 nodes, Master Output fed
+//                               as before); the same in Measure
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
-//                               E4 and G4 through the AudioEngine (live oscillators counted by the
-//                               page's probe) and the analysis views show the live output; held
+//                               E4 and G4 on the one instrument (K247: the Studio transport holds
+//                               three notes, no page voice) and the analysis views show it; held
 //                               keys sound past the safety limit while held; releasing them, a
 //                               window blur and Escape free every note; X / V raise the octave
 //                               and the velocity and the readout says so, and so do the Octave
@@ -183,6 +206,7 @@ const NOTES_RATE = 22050;
 const NYQUIST_NOTE = 124;
 const LIMIT_MARGIN_S = 2;    // a note at the safety limit is freed within its release + this
 let NOTE_POLYPHONY;
+let MAX_OUTPUT_GAIN; // the safety chain's ceiling (core/constants.js), loaded in main()
 let MIDI_REFUSED;
 let OUTPUT_OWNER_NAMES; // src/js/visualization/output-owner.js (C024)
 
@@ -254,7 +278,10 @@ const readMidi = (page) => page.evaluate(() => {
     offered: !!btn && !!row && row.contains(btn) && row.style.display !== 'none'
       && btn.style.display !== 'none',
     lastError: app && app.lastError ? app.lastError.message : null,
-    alerts: document.querySelectorAll('[data-osc="alerts"] .osc-toast').length };
+    // The keys' insert of the Synth panel is said by a notice of its own (K247, C3-553-1, its
+    // own Zpět): not a MIDI notification, and keys-insert-notice proves it.
+    alerts: [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
+      .filter((el) => !el.querySelector('[data-osc="alert.undo"]')).length };
 });
 
 // What the page itself can see of MIDI: which group this context is in, and the platform.
@@ -775,95 +802,115 @@ async function seamNotes(browser, b, origin, url) {
     await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
     await seam(page, 'resolve', 0, [NAME]);
     await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape'); // the dialog closes (Escape also frees nothing yet)
     const msg = (bytes) => seam(page, 'message', NAME, bytes);
-    const idle = (m) => m.live === 0 && m.nodes === 0 && m.sources === 0 && m.notes === 0;
+    // K247: the notes play the one instrument, the Studio transport (its live notes and the
+    // analyser), never an engine voice of the page's own (notes and voices stay 0).
+    const sounding = (m) => m.state === 'running' && m.peak > 0.005 && m.notes === 0;
+    const silent = async (what) => until(async () => {
+      const [m, t] = [await sound(page), await instrument(page)];
+      return m.peak < SILENT_PEAK && t.held.length === 0 && m.notes === 0 ? { ...m, ...t } : null;
+    }, { ms: STEP_MS, what }).catch(async (error) => ({ ...await sound(page),
+      ...await instrument(page), timedOut: error.message }));
 
-    // One note (the clicks are counted from here: nothing before it is a MIDI note).
-    await page.evaluate(() => window.__oscMidiAudio.reset());
     await msg([0x90, 60, 127]);
-    const one = await heard(page, (m) => m.state === 'running' && m.live === 1 && m.notes === 1
-      && m.peak > 0.2 * m.gain / NOTE_POLYPHONY,
-    `${leg}: a Note On sounds through the engine`);
-    check(leg, id, 'handles (stubbed API): a Note On sounds through the AudioEngine (one live '
-      + `oscillator, ${one.rate} Hz context, the forced ${NOTES_RATE})`, !one.timedOut
-      && one.rate === NOTES_RATE, JSON.stringify(one));
-    check(leg, id, 'velocity 127 peaks under the master level / NOTE_POLYPHONY',
-      one.peak <= one.gain / NOTE_POLYPHONY * 1.05 + 1e-4,
-      `peak ${one.peak} vs ${one.gain / NOTE_POLYPHONY} (${one.gain} / ${NOTE_POLYPHONY})`);
+    const one = await heard(page, sounding, `${leg}: a Note On sounds on the instrument`);
+    const t1 = await instrument(page);
+    check(leg, id, 'handles (stubbed API): a Note On plays the one instrument (the Studio '
+      + `transport holds it, ${one.rate} Hz context, the forced ${NOTES_RATE}), no page voice`,
+    !one.timedOut && one.rate === NOTES_RATE && t1.playing && t1.held.includes(60)
+      && one.voices === 0, JSON.stringify({ ...one, ...t1 }));
+    // The instrument's voice may pass the user's master level (a resonant filter, K247); the
+    // guarantee is the safety chain's ceiling, MAX_OUTPUT_GAIN, which the engine enforces (T001).
+    check(leg, id, 'velocity 127 peaks at or under the output ceiling (MAX_OUTPUT_GAIN)',
+      one.peak <= MAX_OUTPUT_GAIN + 1e-4, `peak ${one.peak} vs ${MAX_OUTPUT_GAIN}`);
     const lit = await page.evaluate(() => window.OSCILLA.app.kbdHeld);
     check(leg, id, 'the on-screen keys light the MIDI note while it sounds (K026)',
       lit === 'C4 (MIDI)', lit);
 
-    // A chord of more than NOTE_POLYPHONY notes.
+    // A chord of more notes than the Playground's old polyphony: the instrument's own voices.
     const chord = Array.from({ length: NOTE_POLYPHONY + 4 }, (_, i) => 48 + 2 * i);
-    for (const n of chord) await msg([0x90, n, 127]);
     let loudest = 0;
-    const full = await heard(page, (m) => {
-      loudest = Math.max(loudest, m.peak);
-      return m.started === chord.length + 1 && m.live === NOTE_POLYPHONY;
-    }, `${leg}: the chord settles to NOTE_POLYPHONY live oscillators`);
-    check(leg, id, `a chord of ${chord.length} notes: at most ${NOTE_POLYPHONY} oscillators `
-      + 'overlap on the audio clock, and the stolen ones have ended', !full.timedOut
-      && full.overlap === NOTE_POLYPHONY, JSON.stringify(full));
-    check(leg, id, 'the chord peaks under one voice\'s level (the master level)',
-      loudest <= full.gain * 1.05 + 1e-4 && loudest > 0, `${loudest} vs ${full.gain}`);
+    for (const n of chord) await msg([0x90, n, 127]);
+    const full = await heard(page, (m) => { loudest = Math.max(loudest, m.peak); return sounding(m); },
+      `${leg}: the chord sounds`);
+    check(leg, id, `a chord of ${chord.length} notes peaks at or under the output ceiling`,
+      !full.timedOut && loudest > 0 && loudest <= MAX_OUTPUT_GAIN + 1e-4,
+      `${loudest} vs ${MAX_OUTPUT_GAIN}`);
 
     // Note Off and velocity 0 release everything.
     for (const [i, n] of [60, ...chord].entries()) {
       await msg(i % 2 ? [0x90, n, 0] : [0x80, n, 64]);
     }
-    const gone = await heard(page, idle, `${leg}: Note Off frees every note`);
-    check(leg, id, 'Note Off and velocity 0 leave zero live oscillators and zero engine nodes',
-      !gone.timedOut, JSON.stringify(gone));
-    check(leg, id, 'no gain was set to 0 or ramped exponentially to 0',
-      gone.clicks.length === 0, gone.clicks.join(' | '));
+    const gone = await silent(`${leg}: Note Off frees every note`);
+    check(leg, id, 'Note Off and velocity 0 leave the instrument holding no note and the '
+      + 'output below -70 dB rel', !gone.timedOut, JSON.stringify(gone));
 
-    // The 0.95 x Nyquist bound of the running context.
-    const before = gone.started;
+    // The 0.95 x Nyquist bound of the running context: the instrument's voices clamp every
+    // frequency to it (studio/adapters/engine-hooks.js clampFrequency), so a note above the bound
+    // sounds at it, never above; read from the analyser's spectrum, as the oscillator probe does
+    // not see a frequency set by automation.
+    const peakHz = () => page.evaluate(() => {
+      const e = window.OSCILLA.engine;
+      const a = e.analyser;
+      const bins = new Float32Array(a.frequencyBinCount);
+      a.getFloatFrequencyData(bins);
+      let at = 0;
+      for (let i = 1; i < bins.length; i++) if (bins[i] > bins[at]) at = i;
+      return { hz: at * e.sampleRate / a.fftSize, db: bins[at] };
+    });
     const above = NYQUIST_NOTE;
-    await msg([0x90, above, 100]);
-    await msg([0x90, above - 1, 100]);
-    const ny = await heard(page, (m) => m.started === before + 1 && m.live === 1,
-      `${leg}: only the note below the bound starts`);
-    check(leg, id, `note ${above} (at or above 0.95 x Nyquist at ${NOTES_RATE} Hz) is refused, `
-      + `${above - 1} plays below it`, !ny.timedOut && ny.maxFreq < ny.safe && !ny.lastError,
-    JSON.stringify(ny));
-    await msg([0x80, above - 1, 0]);
-    await heard(page, idle, `${leg}: the note below the bound is released`);
+    const safeHz = (await sound(page)).safe;
+    const loudAt = async (note, what) => {
+      await msg([0x90, note, 100]);
+      await heard(page, sounding, what);
+      const p = await until(async () => { const x = await peakHz(); return x.db > -100 ? x : null; },
+        { ms: STEP_MS, what }).catch(peakHz);
+      await msg([0x80, note, 0]);
+      await silent(`${what}: released`);
+      return p;
+    };
+    const hi = await loudAt(above, `${leg}: note ${above} sounds clamped`);
+    const lo = await loudAt(above - 1, `${leg}: note ${above - 1} sounds`);
+    const bin = NOTES_RATE / 2048; // the analyser's resolution at its smallest fftSize, a bound
+    check(leg, id, `note ${above} (at or above 0.95 x Nyquist at ${NOTES_RATE} Hz) sounds at most `
+      + `at the bound (${Math.round(safeHz)} Hz), ${above - 1} below it`,
+    hi.hz <= safeHz + bin && lo.hz <= safeHz + bin && lo.hz > 1000,
+    JSON.stringify({ hi, lo, safeHz }));
 
     // Unplugging with keys down, then Escape with keys down.
     await msg([0x90, 60, 100]);
     await msg([0x90, 67, 100]);
-    await heard(page, (m) => m.live === 2, `${leg}: two held notes sound`);
+    await heard(page, sounding, `${leg}: two held notes sound`);
     await seam(page, 'unplug', NAME);
-    const unplugged = await heard(page, idle, `${leg}: unplugging frees the held notes`);
+    const unplugged = await silent(`${leg}: unplugging frees the held notes`);
     check(leg, id, 'held notes stop when their input is unplugged', !unplugged.timedOut,
       JSON.stringify(unplugged));
     const SECOND = `${NAME} 2`;
     await seam(page, 'plug', SECOND);
     await stateIs(page, ['connected'], `${leg}: a device plugged in connects`);
     await seam(page, 'message', SECOND, [0x90, 64, 100]);
-    await heard(page, (m) => m.live === 1, `${leg}: the new input's note sounds`);
+    await heard(page, sounding, `${leg}: the new input's note sounds`);
     await page.keyboard.press('Escape');
-    const escaped = await heard(page, idle, `${leg}: Escape frees the held note`);
+    const escaped = await silent(`${leg}: Escape frees the held note`);
     check(leg, id, 'a held note stops on Escape', !escaped.timedOut, JSON.stringify(escaped));
 
-    // The session safety limit (ADR 0062): a held note sounds past it while its key is down,
-    // until the audio clock is LIMIT_MARGIN_S past the limit and the release; a window blur
-    // (a Note Off may never come while another window has the focus) releases it.
+    // The session safety limit (ADR 0062): a held note sounds past it while its key is down;
+    // a window blur (a Note Off may never come while another window has the focus) releases it.
     const { limitS, releaseS } = await page.evaluate(() => ({
       limitS: window.OSCILLA.app.safetyLimit, releaseS: window.OSCILLA.app.release / 1000 }));
-    const sent = (await sound(page)).time; // the audio clock before the Note On: <= its start
+    const sent = (await sound(page)).time;
     await seam(page, 'message', SECOND, [0x90, 72, 100]);
-    const held = await heard(page, (m) => m.live === 1, `${leg}: a held note sounds`);
+    const held = await heard(page, sounding, `${leg}: a held note sounds`);
     const past = await heard(page, (m) => m.time - sent > limitS + releaseS + LIMIT_MARGIN_S,
       `${leg}: the audio clock passes the safety limit`,
       (limitS + releaseS + LIMIT_MARGIN_S + 10) * 1000);
+    const tPast = await instrument(page);
     check(leg, id, `a held note sounds past the session safety limit (${limitS} s) while held`,
-      !held.timedOut && !past.timedOut && past.live === 1 && past.notes === 1,
-      JSON.stringify({ sent, at: past.time, live: past.live, notes: past.notes, limitS }));
+      !held.timedOut && !past.timedOut && past.peak > 0.005 && tPast.held.includes(72),
+      JSON.stringify({ sent, at: past.time, peak: past.peak, held: tPast.held, limitS }));
     await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-    const blurred = await heard(page, idle, `${leg}: a window blur frees the held note`);
+    const blurred = await silent(`${leg}: a window blur frees the held note`);
     check(leg, id, 'a window blur releases the held note', !blurred.timedOut,
       JSON.stringify(blurred));
     const end = await readMidi(page);
@@ -871,38 +918,34 @@ async function seamNotes(browser, b, origin, url) {
       !end.lastError && end.alerts === 0 && errors.length === 0,
       JSON.stringify({ lastError: end.lastError, alerts: end.alerts, errors }));
 
-    // The sequencer plays into the master outside the engine's voices (review of #261, P2-1):
-    // starting a sequence stops every note first, and while it plays a Note On is refused and
+    // The sequencer plays into the master outside the instrument (review of #261, P2-1, C036):
+    // starting a sequence releases every held note, and while it plays a Note On is refused and
     // said once. It loops, so it is still playing however long the checks take.
-    // The longest safety limit, so the held notes cannot end by themselves meanwhile; whether
-    // the start released them is read in the same task as the start, not after a wait.
     await page.evaluate(() => window.OSCILLA.app.setSafetyLimit(5));
     await seam(page, 'message', SECOND, [0x90, 60, 100]);
     await seam(page, 'message', SECOND, [0x90, 64, 100]);
-    await heard(page, (m) => m.notes === 2, `${leg}: two held notes before the sequence`);
+    await until(async () => ((await instrument(page)).held.length === 2 ? true : null),
+      { ms: STEP_MS, what: `${leg}: two held notes before the sequence` }).catch(() => null);
     const start = await page.evaluate(() => {
-      const e = window.OSCILLA.engine;
       const ed = window.OSCILLA.labs.sequencer.editor;
-      const held = [...e.voices].filter((v) => v.note !== undefined && !v.releasing);
       ed.setLoop(true);
-      const started = ed.play();
-      const soon = e.ctx.currentTime + 0.5;
-      return { started, held: held.length,
-        released: held.filter((v) => v.releasing && v.endTime < soon).length };
+      return { started: ed.play() };
     });
-    const hushed = await heard(page, (m) => m.notes === 0 && m.voices === 0,
-      `${leg}: starting the sequence frees the notes`);
-    check(leg, id, 'starting the sequencer stops every held MIDI note (released as it starts)',
-      start.started === true && start.held === 2 && start.released === 2 && !hushed.timedOut,
-      JSON.stringify({ ...start, notes: hushed.notes, voices: hushed.voices }));
-    await page.evaluate((s) => window.OSCILLA.app.setSafetyLimit(s), limitS);
+    const hushed = await silent(`${leg}: starting the sequence frees the notes`)
+      .then((x) => x, () => null);
+    const tStart = await instrument(page);
+    check(leg, id, 'starting the sequencer releases every held MIDI note',
+      start.started === true && tStart.held.length === 0,
+      JSON.stringify({ ...start, held: tStart.held, hushed: hushed && hushed.timedOut }));
+    await page.evaluate((x) => window.OSCILLA.app.setSafetyLimit(x), limitS);
     await seam(page, 'message', SECOND, [0x90, 67, 100]);
     await seam(page, 'message', SECOND, [0x90, 69, 100]);
-    const during = await sound(page); // read at once: a note let through would still sound
+    const tDuring = await instrument(page); // read at once: a note let through would be held
     let said = null;
     try {
       said = await until(() => page.evaluate(() => {
         const t = [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
+          .filter((el) => !el.querySelector('[data-osc="alert.undo"]')) // the insert's (K247)
           .map((el) => el.textContent.replace(/\s+/g, ' ').trim());
         return t.length ? t : null;
       }), { ms: STEP_MS, what: `${leg}: the refused note is said` });
@@ -911,28 +954,39 @@ async function seamNotes(browser, b, origin, url) {
     }
     const playing = await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.playing);
     check(leg, id, 'while the sequencer plays a Note On is refused, and said once',
-      playing === true && during.notes === 0 && during.voices === 0 && !!said
-      && said.length === 1 && said[0].includes(MIDI_REFUSED.sequencer),
-    JSON.stringify({ playing, notes: during.notes, voices: during.voices, said }));
+      playing === true && tDuring.held.length === 0 && !!said && said.length === 1
+      && said[0].includes(MIDI_REFUSED.sequencer),
+    JSON.stringify({ playing, held: tDuring.held, said }));
     await page.evaluate(() => window.OSCILLA.labs.sequencer.editor.stop());
     await seam(page, 'message', SECOND, [0x90, 72, 100]);
-    const again = await heard(page, (m) => m.notes === 1,
-      `${leg}: a note sounds once the sequence has stopped`);
+    const again = await heard(page, sounding, `${leg}: a note sounds once the sequence stopped`);
     check(leg, id, 'once the sequencer stops, a Note On sounds again', !again.timedOut,
-      JSON.stringify({ notes: again.notes }));
+      JSON.stringify({ peak: again.peak }));
     await seam(page, 'message', SECOND, [0x80, 72, 0]);
-    const quiet = await heard(page, idle, `${leg}: the sequence and the notes are freed`);
-    check(leg, id, 'the sequence and the notes leave zero oscillators and zero engine nodes, '
-      + 'with no error', !quiet.timedOut && !quiet.lastError && errors.length === 0,
-    JSON.stringify({ ...quiet, errors }));
+    const quiet = await silent(`${leg}: the sequence and the notes are freed`);
+    check(leg, id, 'the sequence and the notes leave the instrument holding nothing and the '
+      + 'output silent, with no error', !quiet.timedOut && !quiet.lastError
+      && errors.length === 0, JSON.stringify({ ...quiet, errors }));
   } finally {
     await context.close();
   }
 }
 
-// midi-seam-sink (review of src/js/synth, S2): a note-off goes where its note-on sounded. A
-// Playground note held across a switch to the Synth workspace is released on the Playground
-// (before, the note-off was routed at release time to the Synth and the note kept sounding).
+/** The one instrument's state (K247): the Studio transport's armed run and held notes. */
+async function instrument(page) {
+  return page.evaluate(() => {
+    const t = window.OSCILLA.studio && window.OSCILLA.studio.transport;
+    const held = t && typeof t.heldNotes === 'function' ? t.heldNotes() : [];
+    return { armed: !!(t && t.armed), playing: !!(t && t.playing),
+      held: held.map((h) => (typeof h === 'number' ? h : h.note)) };
+  });
+}
+
+// midi-seam-sink (review of src/js/synth, S2; K247): a note-off goes where its note-on sounded.
+// A note held on the one instrument in the Playground, then a switch to the Synth: leaving the
+// Playground ends the keys' armed-only run (LEAVE_POLICY), so the note stops with the switch;
+// its later Note Off finds it released and leaves nothing sounding, and a note in the Synth then
+// sounds and is freed by its own Note Off.
 async function seamSink(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'midi-seam-sink';
@@ -951,22 +1005,223 @@ async function seamSink(browser, b, origin, url) {
       { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
     const msg = (bytes) => seam(page, 'message', NAME, bytes);
     const ws = () => page.evaluate(() => window.OSCILLA.app.workspace);
+    const quiet = (what) => until(async () => {
+      const [m, t] = [await sound(page), await instrument(page)];
+      return m.peak < SILENT_PEAK && !t.held.length ? { ...m, ...t } : null;
+    }, { ms: STEP_MS, what }).catch(async (e) => ({ ...await sound(page),
+      ...await instrument(page), timedOut: e.message }));
     const from = await ws();
     await msg([0x90, 60, 100]);
-    const on = await heard(page, (m) => m.state === 'running' && m.live === 1 && m.notes === 1,
-      `${leg}: a Playground note sounds`);
+    const on = await heard(page, (m) => m.state === 'running' && m.peak > 0.005,
+      `${leg}: a note sounds on the instrument in the Playground`);
+    const tOn = await instrument(page);
     await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
     await until(async () => (await ws()) === 'synth', { ms: STEP_MS,
       what: `${leg}: the Synth workspace opens` });
-    const held = await heard(page, (m) => m.notes === 1 && m.live === 1,
-      `${leg}: the switch itself leaves the held note sounding`);
+    const left = await quiet(`${leg}: leaving the Playground ends the keys' run`);
     await msg([0x80, 60, 0]);
-    const off = await heard(page, (m) => m.notes === 0 && m.live === 0,
-      `${leg}: the note-off frees the Playground note`);
-    check(leg, id, 'a Playground note held across a switch to the Synth is released by its '
-      + 'Note Off on the Playground', from === 'playground' && !on.timedOut && !held.timedOut
-      && !off.timedOut && errors.length === 0,
-    JSON.stringify({ from, on: on.notes, held: held.notes, off, errors }));
+    const after = await quiet(`${leg}: the late Note Off leaves nothing sounding`);
+    check(leg, id, 'a note held on the instrument in the Playground stops with the switch to the '
+      + 'Synth, and its late Note Off leaves nothing sounding', from === 'playground'
+      && !on.timedOut && tOn.held.includes(60) && !left.timedOut && !after.timedOut,
+    JSON.stringify({ from, on: on.peak, held: tOn.held, left, after }));
+    await msg([0x90, 62, 100]);
+    const synthOn = await heard(page, (m) => m.peak > 0.005, `${leg}: a note sounds in the Synth`);
+    await msg([0x80, 62, 0]);
+    const synthOff = await quiet(`${leg}: its Note Off frees it`);
+    check(leg, id, 'in the Synth a note sounds on the same instrument and its Note Off frees it',
+      !synthOn.timedOut && !synthOff.timedOut && errors.length === 0,
+      JSON.stringify({ on: synthOn.peak, off: synthOff, errors }));
+  } finally {
+    await context.close();
+  }
+}
+
+// midi-seam-cc (V506): the controller's pedal and knobs (src/js/midi/notes.js sustain,
+// src/js/synth/midi-cc.js), driven through the stub device.
+async function seamCc(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-cc';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    const msg = (bytes) => seam(page, 'message', NAME, bytes);
+
+    // The pedal: a Note Off under it leaves the note sounding; the pedal up releases it. The
+    // note plays the one instrument (K247): the Studio transport holds it.
+    await msg([0xb0, 64, 127]);
+    await msg([0x90, 60, 100]);
+    const on = await heard(page, (m) => m.state === 'running' && m.peak > 0.005,
+      `${leg}: a note sounds on the instrument`);
+    // The stub dispatches synchronously: after msg() the page has handled the message.
+    const holding = async () => (await instrument(page)).held.filter((n) => n === 60).length;
+    await msg([0x80, 60, 0]);
+    const kept = await holding();
+    await msg([0xb0, 64, 0]);
+    const let_ = await holding();
+    const freed = await heard(page, (m) => m.peak < SILENT_PEAK,
+      `${leg}: the pedal up releases the note`);
+    check(leg, id, 'CC 64 holds a note past its Note Off and its release frees it',
+      !on.timedOut && kept === 1 && let_ === 0 && !freed.timedOut,
+      JSON.stringify({ on: on.peak, kept, let: let_, freed: freed.peak }));
+
+    // A knob: nothing in the Playground, the LPF cutoff in the Synth.
+    const cutoff = () => page.evaluate(() => {
+      const n = window.OSCILLA.studio.model.graph.nodes.find((x) => x.metadata
+        && x.metadata.panel && x.metadata.panel.module === 'lpf');
+      return n ? n.params.frequency : null;
+    });
+    const before = await cutoff();
+    await msg([0xb0, 74, 0]);
+    const still = await cutoff();
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('synth'));
+    const shown = await until(async () => ((await cutoff()) !== null ? true : null),
+      { ms: STEP_MS, what: `${leg}: the Synth panel is in the document` }).then(() => true,
+      () => false);
+    const start = await cutoff();
+    await msg([0xb0, 74, 0]);
+    const low = await until(async () => ((await cutoff()) === 10 ? true : null),
+      { ms: STEP_MS, what: `${leg}: CC 74 = 0 sets the cutoff to 10 Hz` }).then(() => true,
+      () => false);
+    await msg([0xb0, 74, 127]);
+    const high = await until(async () => ((await cutoff()) === 20000 ? true : null),
+      { ms: STEP_MS, what: `${leg}: CC 74 = 127 sets the cutoff to 20 kHz` }).then(() => true,
+      () => false);
+    const status = await page.locator('[data-osc="synth.status"]').textContent();
+    check(leg, id, 'a CC moves no Synth knob outside the Synth', still === before,
+      JSON.stringify({ before, still }));
+    check(leg, id, 'in the Synth CC 74 moves the LPF cutoff to both ends of its range',
+      shown && start === 1200 && low && high, JSON.stringify({ start, low, high }));
+    check(leg, id, 'the Synth\'s status line names the CC and the control',
+      /CC 74 → LPF Cutoff/.test(status || ''), status);
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
+// midi-seam-monitor (V507): see the header.
+async function seamMonitor(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-monitor';
+  const PLAY = `${midiStub.STUB_NAME} · KeyLab mkII 61 MIDI`;
+  const DAW = `${midiStub.STUB_NAME} · KeyLab mkII 61 DAW`;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [PLAY, DAW]);
+    await stateIs(page, ['connected'], `${leg}: the two ports connect`);
+    const list = page.locator('[data-osc="midi.devices"]');
+    const rows = await until(async () => {
+      const t = await list.evaluate((el) => (el.offsetParent ? el.innerText : ''));
+      return /KeyLab mkII · \d+ ovladačů/.test(t) && /ovládání DAW/.test(t) && /hraní/.test(t)
+        ? t : null;
+    }, { ms: STEP_MS, what: `${leg}: the device list names the device and the roles` })
+      .catch(() => null);
+    check(leg, id, 'the MIDI section lists both ports with the device and their roles', !!rows,
+      String(rows));
+    const msg = (name, bytes) => seam(page, 'message', name, bytes);
+    const live = async () => (await instrument(page)).held.length;
+    await msg(DAW, [0x90, 94, 127]); // the DAW port's Play button: Mackie Control, not a note
+    const dawNotes = await live();
+    await msg(DAW, [0x80, 94, 0]);
+    await msg(PLAY, [0x90, 60, 100]);
+    const on = await heard(page, (m) => m.state === 'running' && m.peak > 0.005,
+      `${leg}: the play port's note sounds`);
+    const playNotes = await live();
+    await msg(PLAY, [0x80, 60, 0]);
+    check(leg, id, 'the DAW port sounds no note and the play port does',
+      dawNotes === 0 && playNotes === 1 && !on.timedOut,
+      JSON.stringify({ dawNotes, playNotes, on: on.peak }));
+    await msg(PLAY, [0xb0, 74, 64]);
+    const mon = page.locator('[data-osc="midi.monitor"] li');
+    const first = await until(async () => {
+      const t = await mon.first().textContent().catch(() => '');
+      return /Enkodér 1 · CC 74 = 64/.test(t || '') ? t : null;
+    }, { ms: STEP_MS, what: `${leg}: the monitor shows CC 74 as Enkodér 1` }).catch(() => null);
+    const count = await mon.count();
+    check(leg, id, 'the monitor shows the newest message first with its control',
+      !!first && /KeyLab mkII 61/.test(first) && count >= 3, JSON.stringify({ first, count }));
+    await page.locator('[data-osc="midi.monitor-clear"]').click();
+    const cleared = await until(async () => ((await mon.count()) === 0 ? true : null),
+      { ms: STEP_MS, what: `${leg}: Vymazat empties the monitor` }).then(() => true, () => false);
+    check(leg, id, 'Vymazat empties the monitor', cleared, String(await mon.count()));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
+// midi-seam-transport (V508): see the header.
+async function seamTransport(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-transport';
+  const DAW = `${midiStub.STUB_NAME} · KeyLab mkII 61 DAW`;
+  const PLAY = `${midiStub.STUB_NAME} · Arturia BeatStep Pro Arturia BeatStepPro`;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [DAW, PLAY]);
+    await stateIs(page, ['connected'], `${leg}: the two ports connect`);
+    const msg = (name, bytes) => seam(page, 'message', name, bytes);
+    const studioPlaying = () => page.evaluate(() => !!window.OSCILLA.app.studio.playing);
+    const until2 = (fn, what) => until(async () => ((await fn()) ? true : null),
+      { ms: STEP_MS, what }).then(() => true, () => false);
+    // The clock first, with the dialog open: 25 ticks a beat apart at 120 BPM (the stub stamps
+    // each message with its own time, so the tempo is read from the stamps).
+    for (let i = 0; i < 25; i += 1) {
+      await page.evaluate(([n, t]) => window.__oscMidiSeam.message(n, [0xf8], t), [PLAY,
+        1000 + i * (500 / 24)]);
+    }
+    const shown = await until(async () => {
+      const t = await page.locator('[data-osc="midi.clock"]').textContent().catch(() => '');
+      return /Hodiny MIDI: 120\.0 BPM/.test(t || '') ? t : null;
+    }, { ms: STEP_MS, what: `${leg}: the clock's tempo is shown` }).catch(() => null);
+    check(leg, id, 'a MIDI clock at 120 BPM shows its tempo in the MIDI section', !!shown,
+      String(shown));
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+    await msg(DAW, [0x90, 94, 127]); // the DAW port's Play button
+    await msg(DAW, [0x80, 94, 0]);
+    const played = await until2(studioPlaying, `${leg}: the DAW Play starts the Studio`);
+    const row = await page.evaluate(() => window.OSCILLA.app.midiLog.map((r) => r.text));
+    await msg(PLAY, [0xfc]); // a realtime Stop
+    const stopped = await until2(async () => !(await studioPlaying()),
+      `${leg}: Stop stops the Studio`);
+    check(leg, id, 'a DAW port\'s Play starts the Studio\'s transport and a MIDI Stop stops it, '
+      + 'the monitor saying what Play did', played && stopped
+      && row.some((t) => / → Studio: přehrát od začátku$/.test(t)),
+    JSON.stringify({ played, stopped, row: row.slice(0, 3) }));
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    const seqPlaying = () => page.evaluate(() => !!window.OSCILLA.labs.sequencer.editor.playing);
+    await msg(PLAY, [0xfa]);
+    const seqOn = await until2(seqPlaying, `${leg}: Start plays the sequence`);
+    const studioIdle = !(await studioPlaying());
+    await msg(PLAY, [0xfc]);
+    const seqOff = await until2(async () => !(await seqPlaying()), `${leg}: Stop stops it`);
+    check(leg, id, 'in the Sequencer a MIDI Start plays the sequence (not the Studio) and Stop '
+      + 'stops it', seqOn && studioIdle && seqOff, JSON.stringify({ seqOn, studioIdle, seqOff }));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
   } finally {
     await context.close();
   }
@@ -1084,14 +1339,17 @@ async function keyboardEverywhere(browser, b, origin, url) {
       return { armed: !!(tr && tr.armed), held: window.OSCILLA.app.kbdHeld };
     });
     await page.keyboard.up('KeyA');
-    await heard(page, (x) => x.notes === 0, `${leg}: A released in ${ws}`);
+    await until(async () => ((await instrument(page)).held.length === 0 ? true : null),
+      { ms: STEP_MS, what: `${leg}: A released in ${ws}` }).catch(() => null);
     return { ...m, docked, ...t };
   };
   try {
     await go('playground');
-    const pg = await press('playground', (x) => x.notes === 1);
-    check(leg, id, 'A plays C4 on the Playground (a note voice of the AudioEngine)',
-      !pg.timedOut && pg.held === 'C4', JSON.stringify(pg));
+    // K247: the Playground's A plays the one instrument (the Studio transport), no page voice.
+    const pg = await press('playground', (x) => x.notes === 0);
+    check(leg, id, 'A plays C4 on the one instrument from the Playground (the Studio transport '
+      + 'armed, no voice of the page)', !pg.timedOut && pg.held === 'C4' && pg.armed
+      && pg.notes === 0, JSON.stringify(pg));
     await go('synth');
     const sy = await press('synth', () => true);
     check(leg, id, 'the same A plays the Synth panel through the Studio transport, the keys '
@@ -1145,9 +1403,9 @@ async function keyboardEverywhere(browser, b, origin, url) {
       && !leftHeld.timedOut && tr.sinkHeld.length === 0,
     JSON.stringify({ inStudio, left: leftHeld, afterUp: tr.sinkHeld }));
     await go('playground');
-    const pg2 = await press('playground', (x) => x.notes === 1);
+    const pg2 = await press('playground', (x) => x.notes === 0);
     check(leg, id, 'after the Studio, the Playground\'s A sounds again (not refused)',
-      !pg2.timedOut && pg2.held === 'C4', JSON.stringify(pg2));
+      !pg2.timedOut && pg2.held === 'C4' && pg2.armed, JSON.stringify(pg2));
     await go('studio');
     // Where the Studio's room folds the docked keys (#444 keepsRoom) the user unfolds them by
     // the handle first, as the check below needs the armed keys shown.
@@ -1332,6 +1590,59 @@ async function seamReroute(browser, b, origin, url) {
 }
 
 // keyboard-qwerty (K026): the computer and on-screen keyboard play the same note voices.
+// keys-insert-notice (K247, C3-553-1): see the header.
+async function keysInsertNotice(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keys-insert-notice';
+  const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
+    { also: { fn: audioProbe, arg: {} } });
+  const doc = () => page.evaluate(() => {
+    const m = window.OSCILLA.studio.model;
+    const master = m.graph.nodes.find((n) => n.type === 'master');
+    return { nodes: m.graph.nodes.length,
+      feeds: m.graph.edges.filter((e) => master && e.to.node === master.id)
+        .map((e) => e.from.node).sort() };
+  });
+  const notices = () => page.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
+    .filter((el) => el.querySelector('[data-osc="alert.undo"]'))
+    .map((el) => el.textContent.replace(/\s+/g, ' ').trim()));
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+      { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+    await page.locator('#osc-main').click({ position: { x: 4, y: 4 } }); // a gesture
+    await focusOffEditors(page);
+  };
+  try {
+    const before = await doc();
+    for (const ws of ['playground', 'measure']) {
+      await go(ws);
+      await page.keyboard.press('KeyA');
+      await page.keyboard.press('KeyS'); // a second key: no second notice
+      const said = await until(async () => {
+        const n = await notices();
+        return n.length ? n : null;
+      }, { ms: STEP_MS, what: `${leg}: ${ws}: the insert is said` }).catch(() => []);
+      const inserted = await doc();
+      await page.locator('[data-osc="alert.undo"]').first().click();
+      const undone = await until(async () => {
+        const d = await doc();
+        return d.nodes === before.nodes ? d : null;
+      }, { ms: STEP_MS, what: `${leg}: ${ws}: Zpět undoes the insert` }).catch(doc);
+      check(leg, id, `${ws}: a key inserts the Synth panel, says K246's sentence once with its `
+        + 'own Zpět, and Zpět there gives the document back whole', before.nodes === 6
+        && inserted.nodes > before.nodes && said.length === 1 && /Master Output/.test(said[0])
+        && undone.nodes === before.nodes
+        && JSON.stringify(undone.feeds) === JSON.stringify(before.feeds)
+        && (await notices()).length === 0,
+      JSON.stringify({ before, inserted: inserted.nodes, said, undone }));
+    }
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'keyboard-qwerty';
@@ -1361,33 +1672,49 @@ async function keyboardChecks(browser, b, origin, url) {
         dot: !!document.querySelector('#osc-status.is-playing'),
         frequency: text('[data-osc="status.frequency"]'), held: a.kbdHeld };
     });
-    const idle = (m) => m.live === 0 && m.nodes === 0 && m.sources === 0 && m.notes === 0;
+    // K247: the keys play the one instrument; idle is the instrument holding nothing, the
+    // output silent and no voice of the page's own.
+    const idle = (m) => m.peak < SILENT_PEAK && m.notes === 0 && m.instHeld === 0;
+    const heardI = async (pred, what, ms) => {
+      try {
+        return await until(async () => {
+          const [m, t] = [await sound(page), await instrument(page)];
+          const x = { ...m, instHeld: t.held.length, armedI: t.armed };
+          return pred(x) ? x : null;
+        }, { ms: ms || STEP_MS, what });
+      } catch (error) {
+        if (!(error instanceof WaitTimeout)) throw error;
+        const [m, t] = [await sound(page), await instrument(page)];
+        return { ...m, instHeld: t.held.length, timedOut: error.message };
+      }
+    };
     const k0 = await kbd();
     check(leg, id, 'the link #m=playground&kbd=1 arms the Playground keyboard',
       k0.workspace === 'playground' && k0.armed
-        && /^Klávesy jsou připravené v Playgroundu/.test(k0.readout),
+        && /^Klávesy jsou připravené: /.test(k0.readout),
       JSON.stringify(k0));
     await page.locator('[data-osc="keyboard.readout"]').click(); // a gesture, on no control
     const CHORD = ['KeyA', 'KeyD', 'KeyG'];
     for (const k of CHORD) await page.keyboard.down(k);
-    const chord = await heard(page, (m) => m.notes === 3 && m.live === 3,
+    const chord = await heardI((m) => m.instHeld === 3 && m.peak > 0.005,
       `${leg}: A, D and G sound`);
     const k1 = await kbd();
-    check(leg, id, 'A, D and G held play C4, E4 and G4 through the AudioEngine (three live '
-      + 'oscillators)', !chord.timedOut && k1.held === 'C4, E4, G4',
-    JSON.stringify({ held: k1.held, live: chord.live, notes: chord.notes }));
+    check(leg, id, 'A, D and G held play C4, E4 and G4 on the one instrument (the Studio '
+      + 'transport holds three notes, no voice of the page)', !chord.timedOut
+      && k1.held === 'C4, E4, G4' && chord.notes === 0,
+    JSON.stringify({ held: k1.held, inst: chord.instHeld, notes: chord.notes }));
     check(leg, id, 'while notes sound, they own the output the analysis views show',
       k1.owner === 'notes' && !k1.playing, JSON.stringify(k1));
     const { limitS, releaseS } = await page.evaluate(() => ({
       limitS: window.OSCILLA.app.safetyLimit, releaseS: window.OSCILLA.app.release / 1000 }));
-    const past = await heard(page, (m) => m.time - chord.time > limitS + releaseS
+    const past = await heardI((m) => m.time - chord.time > limitS + releaseS
       + LIMIT_MARGIN_S, `${leg}: the audio clock passes the safety limit`,
     (limitS + releaseS + LIMIT_MARGIN_S + 10) * 1000);
     check(leg, id, `held keys sound past the session safety limit (${limitS} s) while held `
-      + '(ADR 0062)', !past.timedOut && past.notes === 3 && past.live === 3,
-    JSON.stringify({ from: chord.time, at: past.time, live: past.live, notes: past.notes }));
+      + '(ADR 0062)', !past.timedOut && past.instHeld === 3 && past.peak > 0.005,
+    JSON.stringify({ from: chord.time, at: past.time, inst: past.instHeld, peak: past.peak }));
     for (const k of CHORD) await page.keyboard.up(k);
-    const up = await heard(page, idle, `${leg}: releasing the keys frees the notes`);
+    const up = await heardI(idle, `${leg}: releasing the keys frees the notes`);
 
     // C024: a held computer key alone owns the output; the drawing, the canvas description and
     // the status bar name the same owner, and all three clear after the release.
@@ -1422,7 +1749,7 @@ async function keyboardChecks(browser, b, origin, url) {
     const freedOwner = await waitOwner(cleared, `${leg}: notes own the scope (released)`);
     check(leg, 'notes-own-the-scope', 'after the release the drawing, the description and the '
       + 'status bar name no owner', !freedOwner.timedOut, JSON.stringify(freedOwner));
-    await heard(page, idle, `${leg}: the key's note is freed`);
+    await heardI(idle, `${leg}: the key's note is freed`);
     // The newest action wins (C002 for the notes): Hold to Play over a held key releases the
     // notes, and the instrument is the one owner all three name.
     await page.keyboard.down('KeyA');
@@ -1438,16 +1765,16 @@ async function keyboardChecks(browser, b, origin, url) {
     await page.keyboard.up('KeyA');
     await heard(page, (m) => m.live === 0 && m.voices === 0 && m.notes === 0,
       `${leg}: Hold to Play and the key are let go`);
-    check(leg, id, 'releasing the keys frees every note (zero oscillators and engine nodes)',
+    check(leg, id, 'releasing the keys frees every note (the instrument holds none, silent)',
       !up.timedOut && (await kbd()).held === '', JSON.stringify(up));
 
     for (const [how, release] of [
       ['a window blur', () => page.evaluate(() => window.dispatchEvent(new Event('blur')))],
       ['Escape', () => page.keyboard.press('Escape')]]) {
       await page.keyboard.down('KeyS');
-      await heard(page, (m) => m.notes === 1, `${leg}: S sounds before ${how}`);
+      await heardI((m) => m.instHeld === 1, `${leg}: S sounds before ${how}`);
       await release();
-      const freed = await heard(page, idle, `${leg}: ${how} frees the held key`);
+      const freed = await heardI(idle, `${leg}: ${how} frees the held key`);
       check(leg, id, `${how} releases a held key`, !freed.timedOut
         && (await kbd()).held === '', JSON.stringify(freed));
       await page.keyboard.up('KeyS');
@@ -1507,21 +1834,21 @@ async function keyboardChecks(browser, b, origin, url) {
     }, box.width);
     await page.mouse.move(box.x + at.x, box.y + at.y);
     await page.mouse.down();
-    const ptr = await heard(page, (m) => m.notes === 1 && m.live === 1,
+    const ptr = await heardI((m) => m.instHeld === 1 && m.peak > 0.005,
       `${leg}: a pointer on C4 sounds`);
     const k3 = await kbd();
     check(leg, id, 'a pointer on the on-screen C4 plays it and lights it',
-      !ptr.timedOut && k3.held === 'C4', JSON.stringify({ held: k3.held, live: ptr.live }));
+      !ptr.timedOut && k3.held === 'C4', JSON.stringify({ held: k3.held, inst: ptr.instHeld }));
     await page.mouse.up();
-    const ptrUp = await heard(page, idle, `${leg}: the pointer up frees the note`);
+    const ptrUp = await heardI(idle, `${leg}: the pointer up frees the note`);
     check(leg, id, 'the pointer up releases the note', !ptrUp.timedOut, JSON.stringify(ptrUp));
 
     await page.locator('[data-osc="keyboard.arm"]').click();
     await page.keyboard.down('KeyA');
-    const off = await sound(page); // read at once: a note let through would still sound
+    const offI = await instrument(page); // read at once: a note let through would be held
     const k4 = await kbd();
-    check(leg, id, 'disarmed, the keys play nothing', off.notes === 0 && !k4.armed,
-      JSON.stringify({ notes: off.notes, armed: k4.armed }));
+    check(leg, id, 'disarmed, the keys play nothing', offI.held.length === 0 && !k4.armed,
+      JSON.stringify({ held: offI.held, armed: k4.armed }));
     await page.keyboard.up('KeyA');
 
     await page.evaluate(() => { window.location.hash = 'm=studio&kbd=1'; });
@@ -1529,14 +1856,14 @@ async function keyboardChecks(browser, b, origin, url) {
       { ms: STEP_MS, what: `${leg}: the Studio link opens the Studio` });
     await focusOffEditors(page);
     await page.keyboard.down('KeyA');
-    const studio = await heard(page, (m) => m.notes === 1, `${leg}: A sounds in the Studio`);
+    const studio = await heardI((m) => m.instHeld === 1, `${leg}: A sounds in the Studio`);
     const k5 = await kbd();
     check(leg, id, 'the Studio is armed on its own (#m=studio&kbd=1) and A plays C4 there',
       !studio.timedOut && k5.armed && k5.held === 'C4'
-        && /^Klávesy jsou připravené ve Studiu/.test(k5.readout),
+        && /^Klávesy jsou připravené: /.test(k5.readout),
       JSON.stringify(k5));
     await page.keyboard.up('KeyA');
-    const end = await heard(page, idle, `${leg}: the Studio note is freed`);
+    const end = await heardI(idle, `${leg}: the Studio note is freed`);
     check(leg, id, 'every note freed, with no error', !end.timedOut && !end.lastError
       && errors.length === 0, JSON.stringify({ ...end, errors }));
   } finally {
@@ -1550,6 +1877,8 @@ async function main() {
     'support.js')).href));
   ({ NOTE_POLYPHONY } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'audio',
     'audio-engine.js')).href));
+  ({ MAX_OUTPUT_GAIN } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'core',
+    'constants.js')).href));
   ({ MIDI_REFUSED } = await import(pathToFileURL(path.join(ROOT, 'src', 'js', 'midi',
     'ui.js')).href));
   ({ OUTPUT_OWNER_NAMES } = await import(pathToFileURL(path.join(ROOT, 'src', 'js',
@@ -1571,7 +1900,11 @@ async function main() {
             await seamChecks(browser, b, origin, url, site);
             await seamNotes(browser, b, origin, url);
             await seamSink(browser, b, origin, url);
+            await seamCc(browser, b, origin, url);
+            await seamMonitor(browser, b, origin, url);
+            await seamTransport(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
+            await keysInsertNotice(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);
             await keyboardStudioHeld(browser, b, origin, url);

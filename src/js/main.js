@@ -915,7 +915,17 @@ function createOscillaComponent(ui) {
   });
   const navigation = createNavigation();
   // Optional input (ADR 0058): reads support at load, never requests; notes sound through engine.
-  const midi = createMidiUi({ engine, sequencerPlaying, bus });
+  // V508: a controller's Start, Continue, Stop and DAW buttons drive the Sequencer's own
+  // transport in the Sequencer (its panel's play, stop and loop, as its buttons do).
+  const sequencerTransport = {
+    play() { if (!labs.sequencer) return false; labs.sequencer.editor.play();
+      labs.sequencer.render(); return true; },
+    stop() { if (!labs.sequencer) return false; labs.sequencer.editor.stop(); return true; },
+    loop() { if (!labs.sequencer) return false; const ed = labs.sequencer.editor;
+      ed.setLoop(!ed.model.loop); labs.sequencer.render(); return true; },
+    playing: () => !!(labs.sequencer && labs.sequencer.editor.playing),
+  };
+  const midi = createMidiUi({ engine, sequencerPlaying, bus, sequencerTransport });
   const cmp = compose(instrument, ui, workbench, measure, experiments, findings, connections,
     studio, navigation, midi, createCrossLinksUi(), provenancePart(), aboutPart(), proClassesPart(),
     TEMPLATE_HELPERS, { busArmed: (owner, on) => bus.armed(owner, on) });

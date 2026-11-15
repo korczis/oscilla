@@ -1,0 +1,3859 @@
+{
+ "schema": 1,
+ "derivedBy": "scripts/midi/derive-devices.mjs",
+ "editor": {
+  "name": "MIDI Control Center",
+  "version": "1.23.0.134"
+ },
+ "channels": "number 1-16, or user (the device-wide user channel), part1, part2, both",
+ "devices": [
+  {
+   "id": "beatstep",
+   "name": "BeatStep",
+   "names": [
+    "BeatStep"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      6,
+      0
+     ]
+    ]
+   },
+   "memories": 0,
+   "controls": [
+    {
+     "id": "knob1",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 10
+    },
+    {
+     "id": "knob2",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 74
+    },
+    {
+     "id": "knob3",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 71
+    },
+    {
+     "id": "knob4",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 76
+    },
+    {
+     "id": "knob5",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 77
+    },
+    {
+     "id": "knob6",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 93
+    },
+    {
+     "id": "knob7",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 73
+    },
+    {
+     "id": "knob8",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 75
+    },
+    {
+     "id": "knob9",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 114
+    },
+    {
+     "id": "knob10",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 18
+    },
+    {
+     "id": "knob11",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 19
+    },
+    {
+     "id": "knob12",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 16
+    },
+    {
+     "id": "knob13",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 17
+    },
+    {
+     "id": "knob14",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 91
+    },
+    {
+     "id": "knob15",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 79
+    },
+    {
+     "id": "knob16",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 72
+    },
+    {
+     "id": "knob17",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 7
+    }
+   ],
+   "source": {
+    "description": "Resources/BeatStep.json",
+    "descriptionSha256": "b8dee5b57a7db1ded175ab536b77f9b97bc31803769814a62fd8b0f3e5313912",
+    "template": "Templates/BeatStep/Factory/Default.beatstep",
+    "templateSha256": "f0a63c61ffc84075c44ab2cffd2f23aa7963de01a3992879c47dedc0a4887595"
+   }
+  },
+  {
+   "id": "beatsteppro",
+   "name": "BeatStepPro",
+   "names": [
+    "BeatStepPro"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      7,
+      0
+     ]
+    ]
+   },
+   "memories": 0,
+   "controls": [
+    {
+     "id": "knob1",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 10
+    },
+    {
+     "id": "knob2",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 74
+    },
+    {
+     "id": "knob3",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 71
+    },
+    {
+     "id": "knob4",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 76
+    },
+    {
+     "id": "knob5",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 77
+    },
+    {
+     "id": "knob6",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 93
+    },
+    {
+     "id": "knob7",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 73
+    },
+    {
+     "id": "knob8",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 75
+    },
+    {
+     "id": "knob9",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 114
+    },
+    {
+     "id": "knob10",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 18
+    },
+    {
+     "id": "knob11",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 19
+    },
+    {
+     "id": "knob12",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 16
+    },
+    {
+     "id": "knob13",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 17
+    },
+    {
+     "id": "knob14",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 91
+    },
+    {
+     "id": "knob15",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 79
+    },
+    {
+     "id": "knob16",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 72
+    },
+    {
+     "id": "step1",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 20
+    },
+    {
+     "id": "step2",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 21
+    },
+    {
+     "id": "step3",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 22
+    },
+    {
+     "id": "step4",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 23
+    },
+    {
+     "id": "step5",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 24
+    },
+    {
+     "id": "step6",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 25
+    },
+    {
+     "id": "step7",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 26
+    },
+    {
+     "id": "step8",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 27
+    },
+    {
+     "id": "step9",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 28
+    },
+    {
+     "id": "step10",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 29
+    },
+    {
+     "id": "step11",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 30
+    },
+    {
+     "id": "step12",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 31
+    },
+    {
+     "id": "step13",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 52
+    },
+    {
+     "id": "step14",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 53
+    },
+    {
+     "id": "step15",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 54
+    },
+    {
+     "id": "step16",
+     "kind": "step",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 55
+    }
+   ],
+   "source": {
+    "description": "Resources/BeatStepPro.json",
+    "descriptionSha256": "a179741920276c5684a92082364b76187a4270d53943453152de96e5ca1ef7bc",
+    "template": "Templates/BeatStepPro/Factory/Default.beatsteppro",
+    "templateSha256": "72f79bfd47afef394eec06fff72af1af9910255f27351a9be698e76ab2a90794"
+   }
+  },
+  {
+   "id": "keylab-25",
+   "name": "KeyLab 25",
+   "names": [
+    "KeyLab 25"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      5,
+      0
+     ]
+    ]
+   },
+   "memories": 0,
+   "controls": [
+    {
+     "id": "cutoff",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 74
+    },
+    {
+     "id": "cutoff",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 35
+    },
+    {
+     "id": "resonance",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 71
+    },
+    {
+     "id": "resonance",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 36
+    },
+    {
+     "id": "rate",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 76
+    },
+    {
+     "id": "rate",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 37
+    },
+    {
+     "id": "amount",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 77
+    },
+    {
+     "id": "amount",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 38
+    },
+    {
+     "id": "param1",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 18
+    },
+    {
+     "id": "param1",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 40
+    },
+    {
+     "id": "param2",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 19
+    },
+    {
+     "id": "param2",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 41
+    },
+    {
+     "id": "param3",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 16
+    },
+    {
+     "id": "param3",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 42
+    },
+    {
+     "id": "param4",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 17
+    },
+    {
+     "id": "param4",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 43
+    },
+    {
+     "id": "chorus",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 93
+    },
+    {
+     "id": "chorus",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 39
+    },
+    {
+     "id": "delay",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 91
+    },
+    {
+     "id": "delay",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 44
+    },
+    {
+     "id": "attack1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 73
+    },
+    {
+     "id": "attack1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 67
+    },
+    {
+     "id": "decay1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 75
+    },
+    {
+     "id": "decay1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 68
+    },
+    {
+     "id": "sustain1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 79
+    },
+    {
+     "id": "sustain1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 69
+    },
+    {
+     "id": "release1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 72
+    },
+    {
+     "id": "release1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 70
+    },
+    {
+     "id": "attack2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 80
+    },
+    {
+     "id": "attack2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 87
+    },
+    {
+     "id": "decay2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 81
+    },
+    {
+     "id": "decay2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 88
+    },
+    {
+     "id": "sustain2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 82
+    },
+    {
+     "id": "sustain2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 89
+    },
+    {
+     "id": "release2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 83
+    },
+    {
+     "id": "release2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 90
+    },
+    {
+     "id": "tempo",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 85
+    },
+    {
+     "id": "tempo",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 92
+    },
+    {
+     "id": "sound",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 118
+    },
+    {
+     "id": "multi",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 119
+    },
+    {
+     "id": "volume",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 7
+    },
+    {
+     "id": "category",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 113
+    },
+    {
+     "id": "preset",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 115
+    },
+    {
+     "id": "modwheel",
+     "kind": "modwheel",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 1
+    },
+    {
+     "id": "sustain",
+     "kind": "on/off_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 64
+    },
+    {
+     "id": "expression",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 11
+    },
+    {
+     "id": "breath",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 2
+    },
+    {
+     "id": "aux",
+     "kind": "on/off_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 12
+    },
+    {
+     "id": "loop",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 55
+    },
+    {
+     "id": "bank1",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 47
+    },
+    {
+     "id": "bank2",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 2,
+     "number": 46
+    }
+   ],
+   "source": {
+    "description": "Resources/KeyLab_25.json",
+    "descriptionSha256": "17040ded391e2a672323a8cd96143c6cda1ceee1258fded4da73c07ae51ec5d2",
+    "template": "Templates/Keylab 25/Factory/Default.keylab25",
+    "templateSha256": "943a8c6e586c5d92d8fbd87c07904858666911055680d055a72675c8a8277475"
+   }
+  },
+  {
+   "id": "keylab-49-61",
+   "name": "KeyLab 49-61",
+   "names": [
+    "KeyLab 49-61",
+    "Keylab 49",
+    "Keylab 61"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      5,
+      2
+     ],
+     [
+      5,
+      4
+     ]
+    ]
+   },
+   "memories": 0,
+   "controls": [
+    {
+     "id": "cutoff",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 74
+    },
+    {
+     "id": "cutoff",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 35
+    },
+    {
+     "id": "resonance",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 71
+    },
+    {
+     "id": "resonance",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 36
+    },
+    {
+     "id": "rate",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 76
+    },
+    {
+     "id": "rate",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 37
+    },
+    {
+     "id": "amount",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 77
+    },
+    {
+     "id": "amount",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 38
+    },
+    {
+     "id": "param1",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 18
+    },
+    {
+     "id": "param1",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 40
+    },
+    {
+     "id": "param2",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 19
+    },
+    {
+     "id": "param2",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 41
+    },
+    {
+     "id": "param3",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 16
+    },
+    {
+     "id": "param3",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 42
+    },
+    {
+     "id": "param4",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 17
+    },
+    {
+     "id": "param4",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 43
+    },
+    {
+     "id": "chorus",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 93
+    },
+    {
+     "id": "chorus",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 39
+    },
+    {
+     "id": "delay",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 91
+    },
+    {
+     "id": "delay",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 44
+    },
+    {
+     "id": "attack1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 73
+    },
+    {
+     "id": "attack1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 67
+    },
+    {
+     "id": "decay1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 75
+    },
+    {
+     "id": "decay1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 68
+    },
+    {
+     "id": "sustain1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 79
+    },
+    {
+     "id": "sustain1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 69
+    },
+    {
+     "id": "release1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 72
+    },
+    {
+     "id": "release1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 70
+    },
+    {
+     "id": "attack2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 80
+    },
+    {
+     "id": "attack2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 87
+    },
+    {
+     "id": "decay2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 81
+    },
+    {
+     "id": "decay2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 88
+    },
+    {
+     "id": "sustain2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 82
+    },
+    {
+     "id": "sustain2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 89
+    },
+    {
+     "id": "release2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 83
+    },
+    {
+     "id": "release2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 90
+    },
+    {
+     "id": "tempo",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 85
+    },
+    {
+     "id": "tempo",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 92
+    },
+    {
+     "id": "sound",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 118
+    },
+    {
+     "id": "multi",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 119
+    },
+    {
+     "id": "volume",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 7
+    },
+    {
+     "id": "category",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 113
+    },
+    {
+     "id": "preset",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 115
+    },
+    {
+     "id": "modwheel",
+     "kind": "modwheel",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 1
+    },
+    {
+     "id": "sustain",
+     "kind": "on/off_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 64
+    },
+    {
+     "id": "expression",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 11
+    },
+    {
+     "id": "breath",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 2
+    },
+    {
+     "id": "aux",
+     "kind": "on/off_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 12
+    },
+    {
+     "id": "loop",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 55
+    },
+    {
+     "id": "bank1",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 47
+    },
+    {
+     "id": "bank2",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 2,
+     "number": 46
+    }
+   ],
+   "source": {
+    "description": "Resources/KeyLab_49_61.json",
+    "descriptionSha256": "1adcb88b95ae1c4e91fe027506a209a28e1022410d28374a1a624f7d6f459f65",
+    "template": "Templates/Keylab 49-61/Factory/Default.keylab4961",
+    "templateSha256": "7d092e79d43a90d5b8406a235b07ec307b58b29b2532d6cc9ef1c6ceeaf14052"
+   }
+  },
+  {
+   "id": "keylab-88",
+   "name": "KeyLab 88",
+   "names": [
+    "KeyLab 88",
+    "Keylab 88"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      5,
+      72
+     ]
+    ]
+   },
+   "memories": 0,
+   "controls": [
+    {
+     "id": "cutoff",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 74
+    },
+    {
+     "id": "cutoff",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 35
+    },
+    {
+     "id": "resonance",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 71
+    },
+    {
+     "id": "resonance",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 36
+    },
+    {
+     "id": "rate",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 76
+    },
+    {
+     "id": "rate",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 37
+    },
+    {
+     "id": "amount",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 77
+    },
+    {
+     "id": "amount",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 38
+    },
+    {
+     "id": "param1",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 18
+    },
+    {
+     "id": "param1",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 40
+    },
+    {
+     "id": "param2",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 19
+    },
+    {
+     "id": "param2",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 41
+    },
+    {
+     "id": "param3",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 16
+    },
+    {
+     "id": "param3",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 42
+    },
+    {
+     "id": "param4",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 17
+    },
+    {
+     "id": "param4",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 43
+    },
+    {
+     "id": "chorus",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 93
+    },
+    {
+     "id": "chorus",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 39
+    },
+    {
+     "id": "delay",
+     "kind": "bank_knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 91
+    },
+    {
+     "id": "delay",
+     "kind": "bank_knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 44
+    },
+    {
+     "id": "attack1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 73
+    },
+    {
+     "id": "attack1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 67
+    },
+    {
+     "id": "decay1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 75
+    },
+    {
+     "id": "decay1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 68
+    },
+    {
+     "id": "sustain1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 79
+    },
+    {
+     "id": "sustain1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 69
+    },
+    {
+     "id": "release1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 72
+    },
+    {
+     "id": "release1",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 70
+    },
+    {
+     "id": "attack2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 80
+    },
+    {
+     "id": "attack2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 87
+    },
+    {
+     "id": "decay2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 81
+    },
+    {
+     "id": "decay2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 88
+    },
+    {
+     "id": "sustain2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 82
+    },
+    {
+     "id": "sustain2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 89
+    },
+    {
+     "id": "release2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 83
+    },
+    {
+     "id": "release2",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 90
+    },
+    {
+     "id": "tempo",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 85
+    },
+    {
+     "id": "tempo",
+     "kind": "slider",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 92
+    },
+    {
+     "id": "sound",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 118
+    },
+    {
+     "id": "multi",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 119
+    },
+    {
+     "id": "volume",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 7
+    },
+    {
+     "id": "category",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 114
+    },
+    {
+     "id": "category",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 113
+    },
+    {
+     "id": "preset",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 114
+    },
+    {
+     "id": "preset",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 115
+    },
+    {
+     "id": "modwheel",
+     "kind": "modwheel",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 1
+    },
+    {
+     "id": "sustain",
+     "kind": "sustain_pedal",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 64
+    },
+    {
+     "id": "expression",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 11
+    },
+    {
+     "id": "breath",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 2
+    },
+    {
+     "id": "aux",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 12
+    },
+    {
+     "id": "loop",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 55
+    },
+    {
+     "id": "bank1",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 47
+    },
+    {
+     "id": "bank2",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": 2,
+     "number": 46
+    }
+   ],
+   "source": {
+    "description": "Resources/KeyLab_88.json",
+    "descriptionSha256": "1b8b63f6e004d7cbab89ba293b85716bd50c3d4348778b94de963440579bbd65",
+    "template": "Templates/Keylab 88/Factory/Default.keylab88",
+    "templateSha256": "715f961071be649f09b5cbd5e13be5e5b3a48de01ca8458dcaea92eb13a3b81e"
+   }
+  },
+  {
+   "id": "keylab-essential",
+   "name": "KeyLab Essential",
+   "names": [
+    "KeyLab Essential",
+    "Keylab Essential 49",
+    "Keylab Essential 61",
+    "Keylab Essential 88"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      5,
+      82
+     ],
+     [
+      5,
+      82
+     ],
+     [
+      5,
+      84
+     ],
+     [
+      5,
+      84
+     ],
+     [
+      5,
+      88
+     ],
+     [
+      5,
+      88
+     ]
+    ]
+   },
+   "memories": 8,
+   "controls": [
+    {
+     "id": "sustain",
+     "kind": "sustain",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 64
+    },
+    {
+     "id": "knob1",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 74
+    },
+    {
+     "id": "knob2",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 71
+    },
+    {
+     "id": "knob3",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 76
+    },
+    {
+     "id": "knob4",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 77
+    },
+    {
+     "id": "knob5",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 93
+    },
+    {
+     "id": "knob6",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 18
+    },
+    {
+     "id": "knob7",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 19
+    },
+    {
+     "id": "knob8",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 16
+    },
+    {
+     "id": "knob9",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 17
+    },
+    {
+     "id": "fader1",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 73
+    },
+    {
+     "id": "fader2",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 75
+    },
+    {
+     "id": "fader3",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 79
+    },
+    {
+     "id": "fader4",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 72
+    },
+    {
+     "id": "fader5",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 80
+    },
+    {
+     "id": "fader6",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 81
+    },
+    {
+     "id": "fader7",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 82
+    },
+    {
+     "id": "fader8",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 83
+    },
+    {
+     "id": "fader9",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 85
+    }
+   ],
+   "source": {
+    "description": "Resources/KeyLab_Essential.json",
+    "descriptionSha256": "75b1e5436ea3ff49cdb29107a487b6c2120d5ec0d7a1dcee80f1c3fe9468091e",
+    "template": "Templates/KeyLab Essential/Factory/Default.keylabessential",
+    "templateSha256": "cec60601f0e8da0e4e96688bef076d925dcd88dff6381ae70273538581ccfeff"
+   }
+  },
+  {
+   "id": "keylab-mkii",
+   "name": "KeyLab mkII",
+   "names": [
+    "KeyLab mkII",
+    "KeyLab mkII 49",
+    "KeyLab mkII 61",
+    "KeyLab mkII 88"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      5,
+      98
+     ],
+     [
+      5,
+      100
+     ],
+     [
+      5,
+      104
+     ]
+    ]
+   },
+   "memories": 12,
+   "controls": [
+    {
+     "id": "encoder1",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 74
+    },
+    {
+     "id": "encoder1",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 35
+    },
+    {
+     "id": "encoder1",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 35
+    },
+    {
+     "id": "encoder2",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 71
+    },
+    {
+     "id": "encoder2",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 36
+    },
+    {
+     "id": "encoder2",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 36
+    },
+    {
+     "id": "encoder3",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 76
+    },
+    {
+     "id": "encoder3",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 37
+    },
+    {
+     "id": "encoder3",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 37
+    },
+    {
+     "id": "encoder4",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 77
+    },
+    {
+     "id": "encoder4",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 38
+    },
+    {
+     "id": "encoder4",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 38
+    },
+    {
+     "id": "encoder5",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 93
+    },
+    {
+     "id": "encoder5",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 39
+    },
+    {
+     "id": "encoder5",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 39
+    },
+    {
+     "id": "encoder6",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 18
+    },
+    {
+     "id": "encoder6",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 40
+    },
+    {
+     "id": "encoder6",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 40
+    },
+    {
+     "id": "encoder7",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 19
+    },
+    {
+     "id": "encoder7",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 41
+    },
+    {
+     "id": "encoder7",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 41
+    },
+    {
+     "id": "encoder8",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 16
+    },
+    {
+     "id": "encoder8",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 42
+    },
+    {
+     "id": "encoder8",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 42
+    },
+    {
+     "id": "encoder9",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 17
+    },
+    {
+     "id": "encoder9",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 43
+    },
+    {
+     "id": "encoder9",
+     "kind": "knob",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 43
+    },
+    {
+     "id": "fader1",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 73
+    },
+    {
+     "id": "fader1",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 67
+    },
+    {
+     "id": "fader1",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 67
+    },
+    {
+     "id": "fader2",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 75
+    },
+    {
+     "id": "fader2",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 68
+    },
+    {
+     "id": "fader2",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 68
+    },
+    {
+     "id": "fader3",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 79
+    },
+    {
+     "id": "fader3",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 69
+    },
+    {
+     "id": "fader3",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 69
+    },
+    {
+     "id": "fader4",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 72
+    },
+    {
+     "id": "fader4",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 70
+    },
+    {
+     "id": "fader4",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 70
+    },
+    {
+     "id": "fader5",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 80
+    },
+    {
+     "id": "fader5",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 87
+    },
+    {
+     "id": "fader5",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 87
+    },
+    {
+     "id": "fader6",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 81
+    },
+    {
+     "id": "fader6",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 88
+    },
+    {
+     "id": "fader6",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 88
+    },
+    {
+     "id": "fader7",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 82
+    },
+    {
+     "id": "fader7",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 89
+    },
+    {
+     "id": "fader7",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 89
+    },
+    {
+     "id": "fader8",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 83
+    },
+    {
+     "id": "fader8",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 90
+    },
+    {
+     "id": "fader8",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 90
+    },
+    {
+     "id": "fader9",
+     "kind": "fader",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 85
+    },
+    {
+     "id": "fader9",
+     "kind": "fader",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 92
+    },
+    {
+     "id": "fader9",
+     "kind": "fader",
+     "bank": 3,
+     "message": "cc",
+     "channel": "user",
+     "number": 92
+    },
+    {
+     "id": "select1",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 22
+    },
+    {
+     "id": "select1",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 22
+    },
+    {
+     "id": "select1",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 22
+    },
+    {
+     "id": "select2",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 23
+    },
+    {
+     "id": "select2",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 23
+    },
+    {
+     "id": "select2",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 23
+    },
+    {
+     "id": "select3",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 24
+    },
+    {
+     "id": "select3",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 24
+    },
+    {
+     "id": "select3",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 24
+    },
+    {
+     "id": "select4",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 25
+    },
+    {
+     "id": "select4",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 25
+    },
+    {
+     "id": "select4",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 25
+    },
+    {
+     "id": "select5",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 26
+    },
+    {
+     "id": "select5",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 26
+    },
+    {
+     "id": "select5",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 26
+    },
+    {
+     "id": "select6",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 27
+    },
+    {
+     "id": "select6",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 27
+    },
+    {
+     "id": "select6",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 27
+    },
+    {
+     "id": "select7",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 28
+    },
+    {
+     "id": "select7",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 28
+    },
+    {
+     "id": "select7",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 28
+    },
+    {
+     "id": "select8",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 29
+    },
+    {
+     "id": "select8",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 29
+    },
+    {
+     "id": "select8",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 29
+    },
+    {
+     "id": "select9",
+     "kind": "select_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 30
+    },
+    {
+     "id": "select9",
+     "kind": "select_button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 30
+    },
+    {
+     "id": "select9",
+     "kind": "select_button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 30
+    },
+    {
+     "id": "modwheel",
+     "kind": "mod_wheel",
+     "bank": 1,
+     "message": "cc",
+     "channel": "part1",
+     "number": 1
+    },
+    {
+     "id": "sustain",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 64
+    },
+    {
+     "id": "expression",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 11
+    },
+    {
+     "id": "cvIn",
+     "kind": "cv_in",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 20
+    },
+    {
+     "id": "aux1",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 12
+    },
+    {
+     "id": "aux2",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 13
+    },
+    {
+     "id": "aux3",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 14
+    },
+    {
+     "id": "solo",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 52
+    },
+    {
+     "id": "mute",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 53
+    },
+    {
+     "id": "rec",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 54
+    },
+    {
+     "id": "read",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 55
+    },
+    {
+     "id": "off",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 56
+    },
+    {
+     "id": "save",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 57
+    },
+    {
+     "id": "in",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 58
+    },
+    {
+     "id": "out",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 59
+    },
+    {
+     "id": "marker",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 60
+    },
+    {
+     "id": "undo",
+     "kind": "daw_button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 61
+    },
+    {
+     "id": "pad1",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 36
+    },
+    {
+     "id": "pad2",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 37
+    },
+    {
+     "id": "pad3",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 38
+    },
+    {
+     "id": "pad4",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 39
+    },
+    {
+     "id": "pad5",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 40
+    },
+    {
+     "id": "pad6",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 41
+    },
+    {
+     "id": "pad7",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 42
+    },
+    {
+     "id": "pad8",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 43
+    },
+    {
+     "id": "pad9",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 44
+    },
+    {
+     "id": "pad10",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 45
+    },
+    {
+     "id": "pad11",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 46
+    },
+    {
+     "id": "pad12",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 47
+    },
+    {
+     "id": "pad13",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 48
+    },
+    {
+     "id": "pad14",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 49
+    },
+    {
+     "id": "pad15",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 50
+    },
+    {
+     "id": "pad16",
+     "kind": "pad",
+     "bank": 1,
+     "message": "note",
+     "channel": 10,
+     "number": 51
+    }
+   ],
+   "source": {
+    "description": "Resources/KeyLab_mkII.json",
+    "descriptionSha256": "8e8515146d5d6f29a21b350789cdfd6dc54941c756f34e34842b1d0692e0424e",
+    "template": "Templates/KeyLab mkII/Factory/Default.keylabmkII",
+    "templateSha256": "24eac8f91ee091abf22c2fe8e73d6323bad33159b0dd8326f945048125827bf0"
+   }
+  },
+  {
+   "id": "microlab",
+   "name": "MicroLab",
+   "names": [
+    "MicroLab"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      4,
+      3
+     ]
+    ]
+   },
+   "memories": 1,
+   "controls": [
+    {
+     "id": "modwheel",
+     "kind": "modwheel",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 1
+    }
+   ],
+   "source": {
+    "description": "Resources/MicroLab.json",
+    "descriptionSha256": "1ed6acff710f650f8990daeeea5e197eed743c320edc8c98e09841fa1e444f77",
+    "template": "Templates/Microlab/Factory/Default.microLab",
+    "templateSha256": "4c3fdf9952090e0ec4f57faca54107cd35a7ed4a037819249d3b00ed587c0b3e"
+   }
+  },
+  {
+   "id": "minilab-mkii",
+   "name": "MiniLab mkII",
+   "names": [
+    "MiniLab mkII"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      4,
+      2
+     ],
+     [
+      4,
+      2
+     ]
+    ]
+   },
+   "memories": 8,
+   "controls": [
+    {
+     "id": "knob1",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 112
+    },
+    {
+     "id": "knob1",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 7
+    },
+    {
+     "id": "knob1",
+     "kind": "Button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 113
+    },
+    {
+     "id": "knob2",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 74
+    },
+    {
+     "id": "knob3",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 71
+    },
+    {
+     "id": "knob4",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 76
+    },
+    {
+     "id": "knob5",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 77
+    },
+    {
+     "id": "knob6",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 93
+    },
+    {
+     "id": "knob7",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 73
+    },
+    {
+     "id": "knob8",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 75
+    },
+    {
+     "id": "knob9",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 114
+    },
+    {
+     "id": "knob9",
+     "kind": "knob",
+     "bank": 2,
+     "message": "cc",
+     "channel": "user",
+     "number": 116
+    },
+    {
+     "id": "knob9",
+     "kind": "Button",
+     "bank": 3,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 115
+    },
+    {
+     "id": "knob10",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 18
+    },
+    {
+     "id": "knob11",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 19
+    },
+    {
+     "id": "knob12",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 16
+    },
+    {
+     "id": "knob13",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 17
+    },
+    {
+     "id": "knob14",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 91
+    },
+    {
+     "id": "knob15",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 79
+    },
+    {
+     "id": "knob16",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 72
+    },
+    {
+     "id": "modwheel",
+     "kind": "modwheel",
+     "bank": 1,
+     "message": "cc",
+     "channel": "user",
+     "number": 1
+    },
+    {
+     "id": "sustain_pedal",
+     "kind": "sustain",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": "user",
+     "number": 64
+    }
+   ],
+   "source": {
+    "description": "Resources/MiniLabMK2.json",
+    "descriptionSha256": "9c7d0b9e5b92078a5cd2a44117c82258caa12539db990211518498a0a76fe087",
+    "template": "Templates/MiniLab mkII/Factory/Default.minilabmk2",
+    "templateSha256": "f12cbd796ae31d6f876fb62b3a8399a9b6e2fb79d4eb3bd96c440b1d12f5d40a"
+   }
+  },
+  {
+   "id": "sparkle",
+   "name": "SparkLE",
+   "names": [
+    "SparkLE"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     3,
+     0
+    ],
+    "members": [
+     [
+      2,
+      1
+     ]
+    ]
+   },
+   "memories": 0,
+   "controls": [
+    {
+     "id": "bank",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 20
+    },
+    {
+     "id": "pattern",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 21
+    },
+    {
+     "id": "seq",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 22
+    },
+    {
+     "id": "tune",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 23
+    },
+    {
+     "id": "select",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 121
+    },
+    {
+     "id": "one_eight_nine_sixteen",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 123
+    },
+    {
+     "id": "mute",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 120
+    },
+    {
+     "id": "solo",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 122
+    },
+    {
+     "id": "loop_on",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 26
+    },
+    {
+     "id": "copy",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 24
+    },
+    {
+     "id": "erase",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 25
+    },
+    {
+     "id": "filter_global",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 66
+    },
+    {
+     "id": "slicer",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 67
+    },
+    {
+     "id": "roller",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 68
+    },
+    {
+     "id": "filter_instru",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 69
+    },
+    {
+     "id": "send",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 70
+    },
+    {
+     "id": "pan_level",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 71
+    },
+    {
+     "id": "instr",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 76
+    },
+    {
+     "id": "kit",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 77
+    },
+    {
+     "id": "proj",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 78
+    },
+    {
+     "id": "volume",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 7
+    },
+    {
+     "id": "tempo",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 10
+    },
+    {
+     "id": "p1",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 16
+    },
+    {
+     "id": "p2",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 17
+    },
+    {
+     "id": "p3",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 18
+    },
+    {
+     "id": "divide",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 12
+    },
+    {
+     "id": "move",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 13
+    },
+    {
+     "id": "move",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 80
+    },
+    {
+     "id": "data_dial",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 19
+    },
+    {
+     "id": "data_dial",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 90
+    },
+    {
+     "id": "touchpad",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc-switch",
+     "channel": 1,
+     "number": 79
+    },
+    {
+     "id": "touchpad",
+     "kind": "touchpad",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 8
+    },
+    {
+     "id": "touchpad",
+     "kind": "touchpad",
+     "bank": 3,
+     "message": "cc",
+     "channel": 1,
+     "number": 1
+    }
+   ],
+   "source": {
+    "description": "Resources/SparkLE.json",
+    "descriptionSha256": "92aa792cefff65f0f1338fe24843bd49bba14f51b7bbdc1b049f3e40e4560375",
+    "template": "Templates/SparkLE/Factory/Default.sparkLE",
+    "templateSha256": "31d3bcb192a947a7de9590e73749409979ca7feb301a3fb586dd00dc5d9a32f2"
+   }
+  },
+  {
+   "id": "the-laboratory",
+   "name": "The Laboratory",
+   "names": [
+    "The Laboratory"
+   ],
+   "identity": {
+    "manufacturer": [
+     0,
+     32,
+     107
+    ],
+    "family": [
+     2,
+     0
+    ],
+    "members": [
+     [
+      3,
+      0
+     ]
+    ]
+   },
+   "memories": 0,
+   "controls": [
+    {
+     "id": "cutoff",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 74
+    },
+    {
+     "id": "resonance",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 71
+    },
+    {
+     "id": "rate",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 76
+    },
+    {
+     "id": "amount",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 77
+    },
+    {
+     "id": "param1",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 18
+    },
+    {
+     "id": "param2",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 19
+    },
+    {
+     "id": "param3",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 16
+    },
+    {
+     "id": "param4",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 17
+    },
+    {
+     "id": "chorus",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 93
+    },
+    {
+     "id": "delay",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 91
+    },
+    {
+     "id": "attack1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 73
+    },
+    {
+     "id": "decay1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 75
+    },
+    {
+     "id": "sustain1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 79
+    },
+    {
+     "id": "release1",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 72
+    },
+    {
+     "id": "attack2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 80
+    },
+    {
+     "id": "decay2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 81
+    },
+    {
+     "id": "sustain2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 82
+    },
+    {
+     "id": "release2",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 83
+    },
+    {
+     "id": "tempo",
+     "kind": "slider",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 85
+    },
+    {
+     "id": "sound",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 118
+    },
+    {
+     "id": "scene",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 119
+    },
+    {
+     "id": "level",
+     "kind": "knob",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 7
+    },
+    {
+     "id": "category",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 113
+    },
+    {
+     "id": "preset",
+     "kind": "button",
+     "bank": 2,
+     "message": "cc",
+     "channel": 1,
+     "number": 115
+    },
+    {
+     "id": "modwheel",
+     "kind": "modwheel",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 1
+    },
+    {
+     "id": "sustain",
+     "kind": "on/off_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 64
+    },
+    {
+     "id": "expression",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 11
+    },
+    {
+     "id": "breath",
+     "kind": "control_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 2
+    },
+    {
+     "id": "aux",
+     "kind": "on/off_pedal",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 12
+    },
+    {
+     "id": "loop",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 55
+    },
+    {
+     "id": "stop",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 51
+    },
+    {
+     "id": "record",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 52
+    },
+    {
+     "id": "rewind",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 53
+    },
+    {
+     "id": "play",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 50
+    },
+    {
+     "id": "fast_forward",
+     "kind": "transport_button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 54
+    },
+    {
+     "id": "upper",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 1,
+     "number": 47
+    },
+    {
+     "id": "lower",
+     "kind": "button",
+     "bank": 1,
+     "message": "cc",
+     "channel": 2,
+     "number": 46
+    }
+   ],
+   "source": {
+    "description": "Resources/The_Laboratory.json",
+    "descriptionSha256": "6480837e00cb1f66534aa1988579ab9331da51a99e21a99d71e6e9d9c1f987bf",
+    "template": "Templates/The Laboratory/Factory/Default.laboratory",
+    "templateSha256": "31936ba1b4d6b2f83bb62225b5714d98352015ebd06046a49c4270e2fd59450c"
+   }
+  }
+ ]
+}

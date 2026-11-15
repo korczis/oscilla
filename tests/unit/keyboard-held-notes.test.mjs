@@ -256,9 +256,14 @@ test('component: armed per view, never Space, never while typing', async () => {
   assert.equal(e.stopped, true, 'armed in the Studio: before Studio\'s own A');
   assert.equal(r.engine.noteCount, 1);
   cmp.workspace = 'measure';
-  assert.equal(cmp.kbdArmedHere, false, 'Measure has no keyboard');
+  assert.equal(cmp.kbdArmedHere, true, 'Measure plays the same keys (K247)');
   e = key('keydown', 'KeyS');
-  assert.equal(e.defaultPrevented, false);
+  assert.equal(e.stopped, true, 'armed in Measure: the key is the keyboard\'s');
+  cmp.kbdToggle(); // switched off in Measure only
+  e = key('keydown', 'KeyD');
+  assert.equal(e.defaultPrevented, false, 'switched off in Measure, the others unchanged');
+  cmp.workspace = 'studio';
+  assert.equal(cmp.kbdArmedHere, true, 'the Studio is still armed');
   cmp.kbdReleaseAll();
   r.fake.advance(1);
   assert.deepEqual(census(r), ZERO);

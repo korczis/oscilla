@@ -480,3 +480,121 @@ decision 5 keeps out; Q062 asks the owner about those.
 What stays decided where it was: the knob's look, keys, touch and reduced-motion behaviour are
 K058's acceptance; the control menu is N004's; the `midi-cc` node type, its default depth and
 its tests are K077's. This note binds them to one route.
+
+### 2026-11-14: a controller's factory layout plays the Synth panel, and CC 64 (V506)
+
+**Note of 2026-11-14 (issue V506), no section above changes; the status stays `proposed`.**
+The owner connected a KeyLab mkII 61 and a BeatStep Pro to the live v3.37.3, heard both play
+and ordered, in session `cae276ab-2d90-45d2-babb-a1f8023668d2`: "jo, zvuk slysim, zacni s CC
+mapovanim" (yes, I hear the sound, start with the CC mapping). This note decides what a CC does
+before K077's learned route exists.
+
+1. **CC 64 is the sustain pedal.** The V502 note left it ignored in the first version; from
+   V506 a value of 64 to 127 holds every key of that input and channel whose Note Off arrives
+   while it is down, and a value below 64 releases them. A key pressed again under the pedal
+   sounds until its own Note Off. A forced stop (blur, hide, Escape, a lost input), CC 120,
+   CC 123 and every silence are never held, so ADR 0062's guarantee is unchanged.
+2. **A fixed factory layout, not learning.** The Synth panel reads the slots that controllers
+   of the KeyLab mkII family send in their factory mode, and that the classic-synth plug-ins of
+   the same maker map in their default MIDI configuration (derived from the plug-ins installed
+   on the owner's Mac; `docs/midi.md` "Controllers" lists the evidence): encoders CC 74, 71, 76,
+   77, 93 and 18, 19, 16, 17, faders CC 73, 75, 79, 72 (the filter envelope) and 80-83 (the
+   second envelope), CC 85 volume, plus the General MIDI CC 1 (modulation wheel) and CC 7
+   (volume). Each slot names one control of the panel's face (`src/js/synth/midi-cc.js`
+   `CC_SLOTS`); on the Engines tab the filter-envelope faders play the chosen engine's own
+   envelope (`ENGINE_ENV`).
+3. **The hand, not a modulation source.** A slot writes the control's stored value through the
+   panel's own `setControl`, exactly as a drag does, one undo entry per run of messages on one
+   control (closed `GESTURE_IDLE_MS` after the last). The run shares the one undo burst the
+   wheel keeps (`synth/gestures.js`): a press, a wheel turn, a choice key or another control
+   closes it, and its timer ends only the gesture it began (`history.gestureId`), so an undo
+   inside it never lets the timer commit a later drag (review C3-548-1). This differs from the 2026-10-29 note's
+   route, where a learned controller is a `midi-cc` node that modulates a parameter without
+   changing its stored base (K077). Both stand: the factory layout is the panel's front-panel
+   knob in the player's hand; K077 is a modulation source for any Studio parameter, learned from
+   the knob menu. K077 stays planned and unchanged.
+4. **The value follows the control's scale.** Value v is the position v / 127 along the
+   control (`ui/synth/knob.js` `fromNorm`), so a log cutoff sweeps in equal ratios. The first
+   message of a turn jumps the control to the controller's position (no pickup); the knob shows
+   the new value at once.
+5. **Only where it is seen.** A CC moves a panel control only while the Synth workspace is
+   shown; elsewhere no surface reads it. The Synth's status line names the CC and the control at
+   most every `CC_STATUS_MS` per control, so a fader's stream is not read out message by
+   message.
+6. **Nothing of the maker's is copied.** The plug-ins' files were read on the owner's Mac to
+   derive which slot means which role; no file, preset, sample, image or code of theirs is in
+   this repository, only the CC numbers and the roles, which are facts of the controller's
+   protocol.
+
+### 2026-11-15: known devices, port roles and the monitor (V507)
+
+**Note of 2026-11-15 (issue V507), no section above changes; the status stays `proposed`.**
+
+1. **Profiles are derived, never typed.** `scripts/midi/derive-devices.mjs` reads the maker's
+   editor files where they are installed (device descriptions and factory templates; the
+   plug-ins' generic MIDI maps) and writes `src/data/midi-devices.json` and the generated region
+   of `docs/midi-devices.md`, with each source's sha256. Only facts are committed: names,
+   identity numbers, memory count, per control its kind, bank, message, channel and number
+   (rule `project.midi-profiles-derived`; procedure `.ai/repo/workflows/midi-device-import.md`).
+   No firmware or library is decompiled; a protocol fact the files do not give is measured on
+   the device (`scripts/midi/identity.swift`, `scripts/midi/listen.swift`).
+2. **An input is recognised by its port name.** The page asks for MIDI without SysEx (this
+   ADR's decision stands), so it never reads the identity reply; the operating system's
+   endpoint name contains the model ("KeyLab mkII 61 MIDI"), which `src/js/midi/devices.js`
+   matches against the profiles' names, the longest first.
+3. **A port has a role.** A known device's port whose name says DAW (or MCU, HUI) is a
+   DAW-control port: its Note On messages are buttons (Mackie Control), so it never sounds a
+   note; a port whose name says editor carries the maker's editor traffic and never sounds
+   either. Every other port, and every port of an unknown device, plays as before. What the DAW
+   port's buttons do is the next issue's (V508), not guessed here.
+4. **Everything is shown.** The Settings dialog's MIDI section lists the inputs with their
+   device and role, and a monitor shows every message of every input (every MIDI 1.0 kind,
+   clock and active sensing excepted), newest first, with the physical control that sent it,
+   redrawn at most every `MONITOR_FLUSH_MS`. The Synth's CC status line names the control too.
+   Nothing of it is stored.
+
+### 2026-11-15: one keyboard plays the one instrument everywhere (K247)
+
+**Note of 2026-11-15 (issue K247), amending the V502 note's route for the keys and MIDI; the
+status stays `proposed`.**
+
+1. **One instrument.** The computer keys, the on-screen keys and MIDI play, in every workspace,
+   the Studio document's note target (its routed node, else its first node that plays notes),
+   and where it has none the Synth panel, which lives in the same document, when the document
+   holds it or may take it by itself (it cuts nothing of the user's: `synth/insert.js`
+   `insertDecision`). No workspace has a voice of its own for the keys any more. The one
+   exception: a document of the user's that plays no notes and whose Master Output the panel
+   would have to take is never rewired from a key; there the keys play the engine's own voice,
+   as before K247, and the Insert button puts the panel in. In the Studio workspace itself,
+   where the document is in sight, a key inserts nothing (M086's decision stands): only the
+   document's note target plays there, else the engine's voice. Elsewhere an insert a key makes
+   is said where it happens (review C3-553-1, decided by oscilla-43 under Q090 on the owner's
+   words): K246's whole sentence as a warning notice in that workspace, once per insert, with its
+   own Zpět, which undoes the insert while it is still the document's last change. The engine
+   stays the one audio owner: the Studio transport is its graph.
+2. **Armed everywhere.** Every workspace is a keyboard view, armed when it first opens, with
+   one Arm switch per page (Q105's answer, which the route table had applied to three pages).
+3. **One dock.** The same keyboard docks over the bottom edge of every workspace but the
+   Playground, whose keys stay under its panels; on a page that is not an instrument it starts
+   folded to its handle and the user unfolds it (`routes.js` `folded`, the one dock rule).
+4. **The run ends with the page.** Leaving any workspace ends the keys' armed-only runs (the
+   Studio document's out of every workspace but the Synth, the Synth panel's out of every
+   workspace); a run started with PLAY sounds on.
+
+### 2026-11-15: a controller's transport plays the workspace in view; the clock is shown (V508)
+
+**Note of 2026-11-15 (issue V508), amending this ADR's "no MIDI clock in the first version"; the
+status stays `proposed`.**
+
+1. **Transport messages act.** MIDI Start, Continue and Stop from any input, and a DAW-control
+   port's Mackie Control Play, Stop, Rewind and Cycle buttons, act on the transport of the
+   workspace in view: the Sequencer's own in the Sequencer, the Studio's everywhere else (the one
+   instrument's timeline, K247). Start plays from the start, Continue from where it is, Stop keeps
+   the keys' armed run. Record, Fast forward and every other button act on nothing; the monitor
+   shows them.
+2. **The clock is measured, not followed.** MIDI clock's tempo is read over the last whole beat on
+   the messages' own timestamps and shown in the MIDI section; it clears when the clock stops.
+   The transport keeps its own tempo: following an external clock (drift, jitter, the audio
+   clock's own time) is a decision of its own, not taken here.
+3. **No output.** OSCILLA still sends no MIDI (no MMC answer, no clock out, no display or LEDs);
+   that is V510's question.

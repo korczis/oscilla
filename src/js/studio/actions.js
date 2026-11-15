@@ -1086,6 +1086,7 @@ export function createStudioStore(initialModel, {
         return { ok: true, revision };
       }).ok;
     },
+    gestureId: () => history.gestureId(),
     canUndo: () => history.canUndo(),
     canRedo: () => history.canRedo(),
     undoLabel: () => history.undoLabel(),
