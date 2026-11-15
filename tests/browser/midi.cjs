@@ -167,14 +167,29 @@ const STEP_MS = 15000;       // a state change the test drives through the stub
 // The disarmed dock's one row (the owner's 'a third of the height'; Train 4's demo-song check).
 const ONE_ROW_PX = 120;
 /**
- * Take the focus out of the editors (an armed key pressed inside one is the editor's) by a click
- * on the keys' readout, a gesture on no control; where the room folds the docked keys (the
- * Studio, #444 keepsRoom) the readout is hidden, and the focus is put on the page itself.
+ * Take the focus out of the editors (an armed key pressed inside one is the editor's) without
+ * scrolling the page (E073): a click on the keys' readout, a gesture on no control, only where the
+ * readout is wholly inside the viewport; elsewhere (the Playground's static keys sit ~2000 px down
+ * #osc-app at 1280 x 720, and the room folds the Studio's docked keys, #444 keepsRoom) the focused
+ * element is blurred, so nothing depends on Playwright scrolling a control into view.
  */
 async function focusOffEditors(page) {
-  const readout = page.locator('[data-osc="keyboard.readout"]');
-  if (await readout.isVisible()) {
-    await readout.click({ force: true });
+  const onScreen = await page.evaluate(() => {
+    const el = document.querySelector('[data-osc="keyboard.readout"]');
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const st = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'
+      && r.top >= 0 && r.left >= 0 && r.bottom <= window.innerHeight
+      && r.right <= window.innerWidth;
+  });
+  if (onScreen) {
+    const before = await page.evaluate(() => [window.scrollX, window.scrollY]);
+    await page.locator('[data-osc="keyboard.readout"]').click({ force: true });
+    const after = await page.evaluate(() => [window.scrollX, window.scrollY]);
+    if (before[0] !== after[0] || before[1] !== after[1]) {
+      throw new Error(`focusOffEditors scrolled the page ${before} -> ${after} (E073)`);
+    }
     return;
   }
   await page.evaluate(() => {
