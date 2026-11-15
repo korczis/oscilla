@@ -102,13 +102,13 @@ const INPUTS = ['pointer', 'keyboard', 'touch'];
 // [data-osc, the workspace that shows it, Studio template id, template title, Back label, the
 // link's text when it is not "Open <title> in Studio" (G013: the Sequencer's row is Czech)]
 const LAB_STUDIO = [
-  ['filter.toStudio', 'filter', 'filter-automation', 'Filter Automation', 'Back to Filter Lab'],
+  ['filter.toStudio', 'filter', 'filter-automation', 'Filter Automation', 'Zpět na Filtry'],
   ['envelope.toStudio', 'synthesis', 'subtractive-synth', 'Subtractive Synth',
-    'Back to Synthesis'],
-  ['dual.toStudio', 'synthesis', 'stereo-beat', 'Stereo Beat', 'Back to Synthesis'],
+    'Zpět na Syntézu'],
+  ['dual.toStudio', 'synthesis', 'stereo-beat', 'Stereo Beat', 'Zpět na Syntézu'],
   ['seq.toStudioTemplate', 'sequencer', 'sweep-sequence', 'Sweep Sequence',
-    'Back to the Sequencer', 'Šablona Sweep Sequence ve Studiu'],
-  ['measure.toStudio', 'measure', 'measurement-sweep', 'Measurement Sweep', 'Back to Measure'],
+    'Zpět na Sekvencer', 'Šablona Sweep Sequence ve Studiu'],
+  ['measure.toStudio', 'measure', 'measurement-sweep', 'Measurement Sweep', 'Zpět na Měření'],
 ];
 
 // Read from their sources at start (loadModel), so a list written here cannot go stale:
@@ -300,8 +300,8 @@ async function runLeg(name, origin) {
       const help = await H.name(page, '[data-osc="header.help"]');
       const brand = await H.name(page, '[data-osc="header.brand"]');
       check(leg, 'the skip link, the "?" button and the logo say what they do',
-        skip && skip.text === 'Skip to main content: Playground'
-        && help && help.label === 'Keyboard shortcuts' && help.title === 'Keyboard shortcuts'
+        skip && skip.text === 'Přeskočit na hlavní obsah: Playground'
+        && help && help.label === 'Klávesové zkratky' && help.title === 'Klávesové zkratky'
         && brand && brand.href === '#m=playground' && /OSCILLA/.test(brand.label)
         && brand.title === 'Open the Playground',
         JSON.stringify({ skip, help, brand }));
@@ -325,8 +325,8 @@ async function runLeg(name, origin) {
         await until(() => page.evaluate(() => !document.querySelector('dialog[open]')),
           { ms: NAV_MS, what: 'the shortcuts dialog closes on Escape' });
       }
-      check(leg, 'the "Keyboard shortcuts" button opens the keyboard shortcuts dialog',
-        opened.every((t) => t && /keyboard shortcuts/i.test(t)), JSON.stringify(opened));
+      check(leg, 'the "Klávesové zkratky" button opens the keyboard shortcuts dialog',
+        opened.every((t) => t && /^Klávesové zkratky$/.test(t)), JSON.stringify(opened));
       await page.close();
     }
 
@@ -343,7 +343,7 @@ async function runLeg(name, origin) {
         await openWorkspace(page, 'filter', 'cross-links');
         const there = await until(async () => {
           const n = await H.name(page, sel);
-          return n && n.shown && n.label === 'Back to the Playground' && n.title === n.label
+          return n && n.shown && n.label === 'Zpět na Playground' && n.title === n.label
             ? n : null;
         }, { ms: NAV_MS, what: 'the ⤢ button is named for the way back in Filter Lab' })
           .catch(() => null);
@@ -373,9 +373,9 @@ async function runLeg(name, origin) {
       const page = await H.open(context, base);
       const wrong = [];
       const label = await H.name(page, '[data-osc="measure.toExperiments"]');
-      if (!label || label.text !== 'Open Experiments') wrong.push(JSON.stringify(label));
+      if (!label || label.text !== 'Otevřít Experimenty') wrong.push(JSON.stringify(label));
       for (const input of INPUTS) {
-        await H.roundTrip(page, { label: 'Open Experiments', from: 'measure', to: 'experiments',
+        await H.roundTrip(page, { label: 'Otevřít Experimenty', from: 'measure', to: 'experiments',
           selector: '[data-osc="measure.toExperiments"]', input }, wrong);
       }
       check(leg, 'Measure\'s "Open Experiments" lands focus on the Experiments heading (B2)',
@@ -491,7 +491,7 @@ async function runLeg(name, origin) {
         }
         const s = await H.roundTrip(page, { label: 'seq.toStudio', from: 'sequencer',
           to: 'studio', selector: sel, input,
-          ok: (x) => x.studioTitle === 'Sequencer pattern' }, wrong);
+          ok: (x) => x.studioTitle === 'Vzor ze Sekvenceru' }, wrong);
         if (s) {
           const clips = await page.evaluate(() => window.OSCILLA.studio.model.timeline.clips
             .length);
@@ -539,7 +539,7 @@ async function runLeg(name, origin) {
         if (!s) { wrong.push(`${input}: Expand did not open Studio; ${H.seen(page)}`); continue; }
         const n = await until(async () => {
           const x = await H.name(page, '[data-osc="studio.back"]');
-          return x && x.label === 'Back to the Sequencer' && x.text === 'Sequencer' ? x : null;
+          return x && x.label === 'Zpět na Sekvencer' && x.text === 'Sekvencer' ? x : null;
         }, { ms: NAV_MS, what: 'Studio Back names the Sequencer' }).catch(() => null);
         if (!n) {
           wrong.push(`${input}: ${JSON.stringify(await H.name(page, '[data-osc="studio.back"]'))}`);
@@ -836,10 +836,10 @@ async function runLeg(name, origin) {
             coarse: matchMedia('(pointer: coarse)').matches } : null;
         }), { ms: NAV_MS, what: `Load (${input}) announces the preset` }).catch(() => null);
         // A keyboard plays it with Space; a coarse pointer (no Space) is sent to the tap.
-        const words = said && (said.coarse ? /^Open the Playground to play it with /
-          : /^(Press|Hold) Space to play it here/);
+        const words = said && (said.coarse ? /^Otevřete Playground a zahrajte ho tlačítkem /
+          : /^(Stiskněte|Podržte) mezerník a zazní tady/);
         if (!said || said.workspace !== 'presets' || !words.test(said.message)
-          || /^Press TRIGGER/.test(said.message) || said.action !== 'Open the Playground') {
+          || /^Press TRIGGER/.test(said.message) || said.action !== 'Otevřít Playground') {
           wrong.push(`${input}: ${JSON.stringify(said)}`);
           await page.close();
           continue;

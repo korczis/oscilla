@@ -58,7 +58,7 @@ test('B8: the header help control is named for the dialog it opens', () => {
   const dialog = one('id', MODAL_IDS[m[1]] || m[1]);
   assert.equal(dialog.tag, 'dialog');
   const title = contentOf(one('id', dialog.attrs['aria-labelledby']));
-  assert.equal(title, 'Keyboard shortcuts');
+  assert.equal(title, 'Klávesové zkratky');
   assert.equal(btn.attrs['aria-label'], title, 'its accessible name is the dialog title');
   assert.ok(!('title' in btn.attrs) || btn.attrs.title === title, 'no other name on hover');
 });
@@ -75,7 +75,7 @@ test('B13: the Export menu holds no Import item; More holds the one import', () 
   for (const t of exportItems) {
     assert.ok(!/import/i.test(contentOf(t)), `Export menu item "${contentOf(t)}" imports`);
     assert.ok(!/import/i.test(t.attrs['@click'] || ''), `${t.attrs['data-osc']} imports`);
-    assert.match(contentOf(t), /^(Export|Copy) /, 'every Export item exports or copies');
+    assert.match(contentOf(t), /^(Exportovat|Kopírovat) /, 'every Export item exports or copies');
   }
   const imports = TAGS.filter((t) => /importConfigClick\(/.test(t.attrs['@click'] || ''));
   assert.deepEqual(imports.map((t) => t.attrs['data-osc']), ['config.import'],

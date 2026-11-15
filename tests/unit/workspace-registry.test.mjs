@@ -247,9 +247,13 @@ test('the page header renders the registry: summary, Related strip and menu, act
   assert.equal(ui.workspaceSummary(), WORKSPACE_REGISTRY.find((w) => w.id === 'filter').summary);
   // Filter Lab's panel already links to the Synth and to Filter Automation: the strip does not.
   assert.deepEqual(ui.workspaceRelated().map((r) => r.href), ['#m=analyzer']);
-  assert.deepEqual(ui.workspaceRelated().map((r) => r.text), ['Analyzer']);
+  assert.deepEqual(ui.workspaceRelated().map((r) => r.text), [WORKSPACE_LABELS.analyzer]);
+  assert.deepEqual(ui.workspaceRelated().map((r) => r.lang), [null], 'a Czech label has no lang');
   ui.workspace = 'studio';
-  assert.deepEqual(ui.workspaceRelated().map((r) => r.text), ['Synth', 'Sequencer', 'Filter Lab']);
+  assert.deepEqual(ui.workspaceRelated().map((r) => r.text),
+    ['synth', 'sequencer', 'filter'].map((id) => WORKSPACE_LABELS[id]));
+  // U106 (c3, Q090 point 2): a kept name standing alone says it is English.
+  assert.deepEqual(ui.workspaceRelated().map((r) => r.lang), ['en', null, null]);
   assert.match(header, /<nav data-osc="page\.related"[^>]*x-show="workspaceRelated\(\)\.length"/,
     'an empty strip is not shown');
 });

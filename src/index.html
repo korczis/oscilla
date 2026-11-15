@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="cs" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -33,7 +33,7 @@
   <!-- @inline-css -->
 </head>
 <body>
-<a class="osc-skip" href="#osc-main">Skip to main content: Playground</a>
+<a class="osc-skip" href="#osc-main">Přeskočit na hlavní obsah: Playground</a>
 
 <!-- Icon sprite: hand-drawn 24x24 strokes, currentColor. -->
 <svg class="osc-sr-only" aria-hidden="true" focusable="false">
@@ -136,16 +136,16 @@
       <div class="flex items-center justify-start min-w-0">
         <button type="button" id="osc-sidebar-toggle" data-osc="header.sidebar"
           aria-controls="osc-sidebar" aria-expanded="true" :aria-expanded="String(!sidebarCollapsed)"
-          :aria-label="sidebarCollapsed ? 'Expand the workspace sidebar' : 'Collapse the workspace sidebar to icons'"
-          aria-label="Collapse the workspace sidebar to icons" @click="toggleSidebar()"
+          :aria-label="sidebarCollapsed ? 'Rozbalit postranní panel pracovních ploch' : 'Sbalit postranní panel na ikony'"
+          aria-label="Sbalit postranní panel na ikony" @click="toggleSidebar()"
           class="hidden items-center justify-center flex-none w-11 h-11 mr-2 text-gray-600 rounded-lg cursor-pointer lg:inline-flex hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
           <svg class="w-6 h-6" aria-hidden="true" x-show="!sidebarCollapsed"><use href="#i-ws-collapse"/></svg>
           <svg class="w-6 h-6" aria-hidden="true" x-show="sidebarCollapsed" x-cloak><use href="#i-ws-expand"/></svg>
         </button>
         <button type="button" id="osc-drawer-toggle" data-osc="header.menu"
           aria-controls="osc-sidebar" aria-expanded="false" :aria-expanded="String(drawerOpen)"
-          :aria-label="drawerOpen ? 'Close the workspace menu' : 'Open the workspace menu'"
-          aria-label="Open the workspace menu" @click="toggleDrawer()"
+          :aria-label="drawerOpen ? 'Zavřít nabídku pracovních ploch' : 'Otevřít nabídku pracovních ploch'"
+          aria-label="Otevřít nabídku pracovních ploch" @click="toggleDrawer()"
           class="inline-flex items-center justify-center flex-none w-11 h-11 mr-1 text-gray-600 rounded-lg cursor-pointer lg:hidden hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
           <svg class="w-6 h-6" aria-hidden="true" x-show="!drawerOpen"><use href="#i-menu"/></svg>
           <svg class="w-6 h-6" aria-hidden="true" x-show="drawerOpen" x-cloak><use href="#i-close"/></svg>
@@ -154,7 +154,7 @@
              never drawing over a control) and drops the wordmark below 375 px, where it
              collides on wider fonts (review #330 F2); the mark always stays. -->
         <a href="#m=playground" x-bind="homeLink()" data-osc="header.brand" data-osc-link="jump" title="Open the Playground"
-          aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"
+          lang="en" aria-label="OSCILLA · Interactive Sound &amp; Frequency Lab"
           class="flex items-center min-w-0 overflow-hidden min-h-11 mr-3 rounded-lg lg:flex-none lg:mr-10 focus:outline-none focus:ring-2 focus:ring-primary-500">
           <svg class="osc-logo flex-none mr-2.5" viewBox="0 0 50 36" aria-hidden="true" focusable="false">
             <defs>
@@ -175,35 +175,35 @@
           </span>
         </a>
         <form class="hidden lg:block lg:pl-2" role="search" @submit.prevent="navSearchGo()">
-          <label for="osc-nav-search" class="sr-only">Find a workspace</label>
+          <label for="osc-nav-search" class="sr-only">Najít pracovní plochu</label>
           <div class="relative lg:w-64 xl:w-80">
             <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
               <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" aria-hidden="true"><use href="#s-search"/></svg>
             </div>
             <input type="search" id="osc-nav-search" data-osc="header.search" autocomplete="off"
-              placeholder="Find a workspace" x-model="navQuery"
+              placeholder="Najít pracovní plochu" x-model="navQuery"
               aria-describedby="osc-nav-search-result"
               class="block w-full h-11 p-2.5 pl-10 text-sm text-gray-900 border border-gray-300 rounded-lg bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-300 dark:text-white">
           </div>
         </form>
         <p class="sr-only" id="osc-nav-search-result" role="status" aria-live="polite"
-          x-text="navQuery.trim() ? navSearchResults().length + ' workspaces found; Enter opens the first' : ''"></p>
+          x-text="navQuery.trim() ? 'Nalezené pracovní plochy: ' + navSearchResults().length + '; Enter otevře první' : ''"></p>
       </div>
       <div class="flex items-center flex-none gap-1" data-osc="header.actions">
         <button type="button" id="osc-theme-toggle" data-osc="header.theme"
-          aria-label="Switch to light theme" @click="toggleTheme()"
-          :aria-label="theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+          aria-label="Přepnout na světlý motiv" @click="toggleTheme()"
+          :aria-label="theme === 'dark' ? 'Přepnout na světlý motiv' : 'Přepnout na tmavý motiv'"
           class="inline-flex items-center justify-center w-11 h-11 text-gray-500 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white">
           <svg class="w-5 h-5" aria-hidden="true" x-show="theme === 'dark'"><use href="#i-sun"/></svg>
           <svg class="w-5 h-5" aria-hidden="true" x-show="theme !== 'dark'" x-cloak><use href="#i-moon"/></svg>
         </button>
-        <button type="button" id="osc-help" data-osc="header.help" aria-label="Keyboard shortcuts"
-          title="Keyboard shortcuts" aria-haspopup="dialog" @click="openDialog('help')"
+        <button type="button" id="osc-help" data-osc="header.help" aria-label="Klávesové zkratky"
+          title="Klávesové zkratky" aria-haspopup="dialog" @click="openDialog('help')"
           class="items-center justify-center hidden w-11 h-11 text-gray-500 rounded-lg sm:inline-flex hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
           <svg class="w-6 h-6" aria-hidden="true"><use href="#i-help"/></svg>
         </button>
         <div class="relative" data-osc-menu-anchor>
-          <button type="button" id="osc-overflow" data-osc="header.overflow" aria-label="More actions"
+          <button type="button" id="osc-overflow" data-osc="header.overflow" aria-label="Další akce"
             aria-haspopup="menu" aria-expanded="false" aria-controls="osc-overflow-menu"
             x-bind="menuButton('overflow')"
             class="inline-flex items-center justify-center w-11 h-11 text-gray-500 rounded-lg hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-400 dark:hover:text-white dark:hover:bg-gray-700">
@@ -212,14 +212,14 @@
           <div id="osc-overflow-menu" role="menu" hidden aria-labelledby="osc-overflow"
             x-bind="menuPanel('overflow')"
             class="absolute right-0 z-50 w-56 py-1 mt-2 text-base list-none bg-white rounded-lg shadow-lg top-full dark:bg-gray-700">
-            <button type="button" role="menuitem" data-osc="config.import" @click="importConfigClick()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Import config…</button>
-            <button type="button" role="menuitem" data-osc="config.export" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export config</button>
+            <button type="button" role="menuitem" data-osc="config.import" @click="importConfigClick()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Importovat nastavení…</button>
+            <button type="button" role="menuitem" data-osc="config.export" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Exportovat nastavení</button>
             <button type="button" role="menuitemcheckbox" data-osc="header.explore"
-              :aria-checked="String(explore)" aria-checked="false" @click="explore = !explore" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Explore hints</button>
-            <button type="button" role="menuitem" data-osc="header.settings" @click="openDialog('settings')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Settings…</button>
-            <button type="button" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Keyboard shortcuts</button>
-            <button type="button" role="menuitem" data-osc="header.about" data-osc-link="jump" @click="setWorkspace('about')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">About OSCILLA</button>
-            <button type="button" role="menuitem" data-osc="safety.reopenMenu" @click="reopenSafety()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Safety notice</button>
+              :aria-checked="String(explore)" aria-checked="false" @click="explore = !explore" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Tipy k prozkoumání</button>
+            <button type="button" role="menuitem" data-osc="header.settings" @click="openDialog('settings')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Nastavení…</button>
+            <button type="button" role="menuitem" data-osc="header.shortcuts" @click="openDialog('help')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Klávesové zkratky</button>
+            <button type="button" role="menuitem" data-osc="header.about" data-osc-link="jump" @click="setWorkspace('about')" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">O aplikaci OSCILLA</button>
+            <button type="button" role="menuitem" data-osc="safety.reopenMenu" @click="reopenSafety()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Upozornění k bezpečnému poslechu</button>
           </div>
         </div>
         <div class="relative" data-osc-menu-anchor>
@@ -227,16 +227,16 @@
             aria-expanded="false" aria-controls="osc-export-menu" x-bind="menuButton('export')"
             class="inline-flex items-center justify-center h-11 min-w-11 px-3 ml-1 text-sm font-medium text-center text-white rounded-lg bg-primary-700 hover:bg-primary-800 focus:outline-none focus:ring-4 focus:ring-primary-300 dark:bg-primary-700 dark:hover:bg-primary-800 dark:focus:ring-primary-800">
             <svg class="w-5 h-5 sm:mr-2 sm:-ml-1" aria-hidden="true"><use href="#i-export"/></svg>
-            <span class="sr-only sm:not-sr-only">Export</span>
+            <span class="sr-only sm:not-sr-only">Exportovat</span>
           </button>
           <div id="osc-export-menu" role="menu" hidden aria-labelledby="osc-export"
             x-bind="menuPanel('export')"
             class="absolute right-0 z-50 py-1 mt-2 text-base list-none bg-white rounded-lg shadow-lg w-72 top-full dark:bg-gray-700">
-            <button type="button" role="menuitem" data-osc="export.wav" @click="exportAudio('pattern')" :aria-disabled="String(exportBusy)" :title="exportBusy ? 'An export is running: this one is offered again when it ends' : null" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export tone / pattern (WAV)<span class="ml-1 text-xs text-gray-500 dark:text-gray-300" data-osc-reason x-show="exportBusy" x-cloak>(an export is running)</span></button>
-            <button type="button" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)" :title="exportBusy ? 'An export is running: this one is offered again when it ends' : null" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export sequence (WAV)<span class="ml-1 text-xs text-gray-500 dark:text-gray-300" data-osc-reason x-show="exportBusy" x-cloak>(an export is running)</span></button>
-            <button type="button" role="menuitem" data-osc="export.png" @click="screenshot()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export graph (PNG)</button>
-            <button type="button" role="menuitem" data-osc="export.config" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Export config (JSON)</button>
-            <button type="button" role="menuitem" data-osc="export.url" data-osc-link="jump" @click="copyConfigUrl()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Copy config URL</button>
+            <button type="button" role="menuitem" data-osc="export.wav" @click="exportAudio('pattern')" :aria-disabled="String(exportBusy)" :title="exportBusy ? 'Export už běží; tato volba bude znovu dostupná po jeho dokončení.' : null" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Exportovat tón / vzor (WAV)<span class="ml-1 text-xs text-gray-500 dark:text-gray-300" data-osc-reason x-show="exportBusy" x-cloak>(export už běží)</span></button>
+            <button type="button" role="menuitem" data-osc="export.seqWav" @click="exportAudio('sequence')" :aria-disabled="String(exportBusy)" :title="exportBusy ? 'Export už běží; tato volba bude znovu dostupná po jeho dokončení.' : null" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Exportovat sekvenci (WAV)<span class="ml-1 text-xs text-gray-500 dark:text-gray-300" data-osc-reason x-show="exportBusy" x-cloak>(export už běží)</span></button>
+            <button type="button" role="menuitem" data-osc="export.png" @click="screenshot()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Exportovat graf (PNG)</button>
+            <button type="button" role="menuitem" data-osc="export.config" @click="exportConfig()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Exportovat nastavení (JSON)</button>
+            <button type="button" role="menuitem" data-osc="export.url" data-osc-link="jump" @click="copyConfigUrl()" class="flex items-center w-full px-4 py-2 text-sm text-left text-gray-700 min-h-11 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-600 dark:hover:text-white">Kopírovat odkaz na nastavení</button>
           </div>
         </div>
       </div>
@@ -249,30 +249,30 @@
        Phones and tablets: a drawer behind the hamburger, over a backdrop. The entries are
        rendered from the one registry, src/js/ui/shell.js WORKSPACE_REGISTRY. -->
   <div class="relative flex flex-1 min-h-0" data-osc="shell">
-    <aside id="osc-sidebar" aria-label="Sidebar" data-osc="sidebar" x-bind="sidebar()"
+    <aside id="osc-sidebar" aria-label="Postranní panel" data-osc="sidebar" x-bind="sidebar()"
       class="fixed top-0 left-0 z-40 flex-col flex-shrink-0 hidden w-64 h-full pt-16 duration-75 transition-width lg:absolute lg:flex lg:pt-0">
       <div class="relative flex flex-col flex-1 min-h-0 bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700">
         <div class="flex flex-col flex-1 pt-4 pb-4 overflow-x-hidden overflow-y-auto">
           <div class="flex-1 px-3">
             <form class="pb-3 lg:hidden" role="search" @submit.prevent="navSearchGo()">
-              <label for="osc-nav-search-drawer" class="sr-only">Find a workspace</label>
+              <label for="osc-nav-search-drawer" class="sr-only">Najít pracovní plochu</label>
               <div class="relative">
                 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
                   <svg class="w-5 h-5 text-gray-500 dark:text-gray-400" aria-hidden="true"><use href="#s-search"/></svg>
                 </div>
                 <input type="search" id="osc-nav-search-drawer" data-osc="sidebar.search"
-                  autocomplete="off" placeholder="Find a workspace" x-model="navQuery"
+                  autocomplete="off" placeholder="Najít pracovní plochu" x-model="navQuery"
                   aria-describedby="osc-nav-search-result"
                   class="block w-full p-2.5 pl-10 text-base text-gray-900 border border-gray-300 rounded-lg bg-gray-50 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-300 dark:text-white">
               </div>
             </form>
-            <nav aria-label="Workspaces">
+            <nav aria-label="Pracovní plochy">
             <ul class="space-y-1" id="osc-nav">
               <template x-for="entry in navTree" :key="entry.id">
                 <li :data-osc-nav-group="entry.kind === 'group' ? entry.id : null"
                   x-show="entry.kind === 'group' ? navGroupMatches(entry.id) : navShown(entry.id)">
                   <template x-if="entry.kind === 'item'">
-                    <a :href="'#m=' + entry.id" :data-osc="'nav.' + entry.id" data-osc-link="jump" x-bind="navItem(entry.id)"
+                    <a :href="'#m=' + entry.id" :data-osc="'nav.' + entry.id" data-osc-link="jump" x-bind="navItem(entry.id)" :lang="entry.lang"
                       :title="sidebarIcons ? entry.label : null"
                       class="flex items-center p-2 text-base font-normal text-gray-900 rounded-lg min-h-11 group hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-gray-700">
                       <svg class="flex-shrink-0 w-6 h-6 text-gray-500 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white" aria-hidden="true"><use :href="'#' + entry.icon"/></svg>
@@ -295,7 +295,7 @@
                       x-bind="navGroupPanel(entry.id)" class="py-1 space-y-1">
                       <template x-for="w in entry.items" :key="w.id">
                         <li x-show="navShown(w.id)">
-                          <a :href="'#m=' + w.id" :data-osc="'nav.' + w.id" data-osc-link="jump" x-bind="navItem(w.id, true)"
+                          <a :href="'#m=' + w.id" :data-osc="'nav.' + w.id" data-osc-link="jump" x-bind="navItem(w.id, true)" :lang="w.lang"
                             :title="sidebarIcons ? w.label : null"
                             class="flex items-center p-2 pl-6 text-base font-normal text-gray-900 rounded-lg min-h-11 group hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-200 dark:hover:bg-gray-700">
                             <svg class="flex-shrink-0 w-5 h-5 text-gray-500 transition duration-75 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white" aria-hidden="true"><use :href="'#' + w.icon"/></svg>
@@ -310,7 +310,7 @@
             </ul>
             </nav>
             <p class="px-2 py-3 text-sm text-gray-500 dark:text-gray-400" data-osc="sidebar.noMatch"
-              x-show="navQuery.trim() && !navSearchResults().length" x-cloak>No workspace matches.</p>
+              x-show="navQuery.trim() && !navSearchResults().length" x-cloak>Žádná pracovní plocha neodpovídá.</p>
           </div>
         </div>
       </div>
@@ -387,7 +387,7 @@
     <div data-osc="page.header"
       class="flex items-center flex-none min-w-0 gap-3 px-4 py-1.5 bg-white border-b border-gray-200 dark:bg-gray-800 dark:border-gray-700"
       :class="workspace === 'playground' && 'max-sm:py-0.5'">
-      <nav class="flex min-w-0" aria-label="Breadcrumb">
+      <nav class="flex min-w-0" aria-label="Drobečková navigace">
         <ol class="inline-flex items-center min-w-0 space-x-1 md:space-x-2">
           <li class="inline-flex items-center flex-none max-md:hidden">
             <a href="#m=playground" data-osc="page.home" data-osc-link="jump" x-bind="crumbHome()"
@@ -404,20 +404,20 @@
             <div class="flex items-center min-w-0">
               <svg class="flex-none w-5 h-5 text-gray-400 max-md:hidden" aria-hidden="true"><use href="#i-right"/></svg>
               <p class="text-sm font-semibold text-gray-900 truncate md:ml-2 dark:text-white"
-                data-osc="page.title" x-text="workspaceLabel()">Playground</p>
+                data-osc="page.title" x-text="workspaceLabel()" lang="en" :lang="workspaceLang()">Playground</p>
             </div>
           </li>
         </ol>
       </nav>
       <p data-osc="page.summary" x-text="workspaceSummary()" :title="workspaceSummary()"
         class="flex-1 hidden min-w-0 text-sm text-gray-500 truncate xl:block dark:text-gray-400"></p>
-      <nav data-osc="page.related" aria-label="Related pages" x-show="workspaceRelated().length"
+      <nav data-osc="page.related" aria-label="Související stránky" x-show="workspaceRelated().length"
         class="items-center flex-none hidden gap-1 ml-auto md:flex">
-        <span class="mr-1 text-sm text-gray-500 dark:text-gray-400">Related</span>
+        <span class="mr-1 text-sm text-gray-500 dark:text-gray-400">Související</span>
         <template x-for="r in workspaceRelated()" :key="r.key">
           <a :href="r.href" data-osc="page.relatedLink" data-osc-link="jump open-in" :id="'osc-related-' + r.key.replace(':', '-')"
             :data-to="r.id" :title="r.why"
-            x-bind="relatedLink(r)" x-text="r.text"
+            x-bind="relatedLink(r)" x-text="r.text" :lang="r.lang"
             class="inline-flex items-center px-2 text-sm font-medium rounded-lg text-primary-700 min-h-8 [@media(pointer:coarse)]:min-h-11 hover:underline hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-primary-400 dark:hover:bg-gray-700"></a>
         </template>
       </nav>
@@ -427,7 +427,7 @@
           aria-haspopup="menu" aria-expanded="false" aria-controls="osc-related-menu-panel"
           x-bind="menuButton('related')"
           class="inline-flex items-center justify-center h-8 px-3 text-sm font-medium text-gray-700 rounded-lg [@media(pointer:coarse)]:h-11 hover:text-gray-900 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-gray-300 dark:hover:text-white dark:hover:bg-gray-700">
-          Related<svg class="w-5 h-5 ml-1" aria-hidden="true"><use href="#i-down"/></svg>
+          Související<svg class="w-5 h-5 ml-1" aria-hidden="true"><use href="#i-down"/></svg>
         </button>
         <div id="osc-related-menu-panel" role="menu" hidden aria-labelledby="osc-related-menu"
           x-bind="menuPanel('related')"
@@ -437,7 +437,7 @@
               :id="'osc-related-item-' + r.key.replace(':', '-')"
               x-bind="relatedLink(r)"
               class="flex flex-col justify-center w-full px-4 py-2 text-left min-h-11 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:hover:bg-gray-600">
-              <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="r.text"></span>
+              <span class="text-sm font-medium text-gray-900 dark:text-white" x-text="r.text" :lang="r.lang"></span>
               <span class="text-xs text-gray-500 dark:text-gray-300" x-text="r.why"></span>
             </a>
           </template>
@@ -871,7 +871,7 @@
             </div>
             <p data-osc="mic.counterparts" hidden :hidden="!counterpartsShown()">Pro kalibrované měření:
               <a href="#m=measure" data-osc="counterpart.measure-rta" data-osc-link="jump"
-                x-bind="counterpartLink('measure-rta')">RTA in Measure</a> ·
+                x-bind="counterpartLink('measure-rta')">RTA v Měření</a> ·
               <a href="#m=experiments" data-osc="counterpart.experiments" data-osc-link="jump"
                 x-bind="counterpartLink('experiments')">Porovnat uložené experimenty</a></p>
           </section>
@@ -953,7 +953,7 @@
       data-osc-modes="measure" hidden
       :hidden="workspace !== 'measure' && workspace !== 'playground'"
       aria-labelledby="osc-measure-title" tabindex="-1">
-      <h2 class="osc-sr-only" id="osc-measure-title">Measure</h2>
+      <h2 class="osc-sr-only" id="osc-measure-title">Měření</h2>
       <p class="osc-sr-only" role="status" aria-live="polite" aria-atomic="true"
         data-osc="measure.live" x-text="meas.live.polite"></p>
       <p class="osc-sr-only" aria-live="assertive" aria-atomic="true" data-osc="measure.alert"
@@ -1420,7 +1420,7 @@
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.repeat"
               :disabled="meas.state !== 'COMPLETE'" @click="measureRepeat()">Repeat (new experiment)</button>
             <button type="button" class="osc-btn osc-btn-secondary" data-osc="measure.toExperiments" data-osc-link="jump"
-              @click="setWorkspace('experiments', { focusHeading: true })">Open Experiments</button>
+              @click="setWorkspace('experiments', { focusHeading: true })">Otevřít Experimenty</button>
             <a href="#m=studio&amp;st=measurement-sweep" data-osc="measure.toStudio" data-osc-link="open-in">Open Measurement Sweep in Studio</a>
           </div>
           <div class="osc-m-defnote" data-osc="measure.definition" x-show="meas.definition" style="display: none">
@@ -1625,7 +1625,7 @@
       <section class="osc-panel osc-p-filter" id="osc-panel-filter" data-osc-panel="filter"
         data-osc-modes="filter" aria-labelledby="osc-filter-title">
         <div class="osc-panel-header max-md:flex-wrap">
-          <h2 class="osc-panel-title" id="osc-filter-title">Filter Lab</h2>
+          <h2 class="osc-panel-title" id="osc-filter-title">Filtry</h2>
           <button type="button" class="osc-toggle osc-toggle--lg" role="switch" aria-checked="false"
             id="osc-filter-enable" data-osc="filter.enable" aria-label="Filter enabled">
             <span class="osc-toggle-track" aria-hidden="true"></span>
@@ -1645,8 +1645,8 @@
           </div>
           <button type="button" class="osc-icon-btn osc-icon-btn--sm osc-panel-fs max-md:order-first"
             id="osc-filter-fullscreen"
-            data-osc="filter.fullscreen" data-osc-link="jump" aria-label="Open the Filter Lab page"
-            title="Open the Filter Lab page" :aria-label="filterLabToggle().label"
+            data-osc="filter.fullscreen" data-osc-link="jump" aria-label="Otevřít stránku Filtry"
+            title="Otevřít stránku Filtry" :aria-label="filterLabToggle().label"
             :title="filterLabToggle().label" @click="setWorkspace(filterLabToggle().to)">
             <svg aria-hidden="true"><use href="#i-expand" :href="filterLabToggle().icon"/></svg>
           </button>
@@ -1704,7 +1704,7 @@
         <div class="osc-panel-header max-md:flex-wrap">
           <h2 class="osc-panel-title" id="osc-env-title">Envelope (ADSR)<span
             data-osc="envelope.scope" hidden :hidden="workspace !== 'sequencer' && !seqPlaying"
-            title="The sequence keeps its blocks' envelopes and waveform; the Filter Lab shapes it."
+            title="Sekvence si ponechá obálky a tvar vlny svých bloků; tvaruje ji filtr stránky Filtry."
             > · instrument only</span></h2>
           <a href="#m=studio&amp;st=subtractive-synth" data-osc="envelope.toStudio" data-osc-link="open-in" hidden
             :hidden="workspace !== 'synthesis'">Open Subtractive Synth in Studio</a>
@@ -1766,7 +1766,7 @@
         <div class="osc-panel-header">
           <h2 class="osc-panel-title" id="osc-add-title">Additive Synthesis<span
             data-osc="additive.scope" hidden :hidden="workspace !== 'sequencer' && !seqPlaying"
-            title="The sequence keeps its blocks' envelopes and waveform; the Filter Lab shapes it."
+            title="Sekvence si ponechá obálky a tvar vlny svých bloků; tvaruje ji filtr stránky Filtry."
             > · instrument only</span></h2>
           <span class="osc-spacer"></span>
           <div class="osc-select osc-add-preset">
@@ -2177,7 +2177,7 @@
     <section class="osc-view osc-view--experiments" id="osc-view-experiments" data-osc="experiments-view"
       data-osc-modes="experiments" hidden :hidden="workspace !== 'experiments'"
       aria-labelledby="osc-exp-title" tabindex="-1">
-      <h2 class="osc-sr-only" id="osc-exp-title">Experiments</h2>
+      <h2 class="osc-sr-only" id="osc-exp-title">Experimenty</h2>
       <div class="osc-experiments">
         <div class="osc-x-side">
         <section class="osc-panel osc-x-defs" id="osc-exp-defs" data-osc="exp.defs" aria-labelledby="osc-x-defs-title">
@@ -2186,7 +2186,7 @@
             <span class="osc-m-chip osc-num" x-text="exps.defs.length"></span>
             <span class="osc-spacer"></span>
             <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="def.new"
-              @click="experimentsDefAsk()">New from Measure setup…</button>
+              @click="experimentsDefAsk()">Nová z nastavení Měření…</button>
           </div>
           <p class="osc-m-hint" role="note" data-osc="exp.defsNote" x-show="exps.defsNote" style="display: none" x-text="exps.defsNote"></p>
           <ul class="osc-x-rows" role="list">
@@ -2226,7 +2226,7 @@
                 </details>
               </li>
             </template>
-            <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every experiment started from it records its version. <a href="#m=measure" data-osc="def.toMeasure" data-osc-link="jump">Set up a measurement in Measure</a></li>
+            <li class="osc-x-empty" x-show="exps.loaded && !exps.defs.length">No definitions yet. A definition fixes what to measure and how; every experiment started from it records its version. <a href="#m=measure" data-osc="def.toMeasure" data-osc-link="jump">Nastavit měření na stránce Měření</a></li>
           </ul>
         </section>
         <section class="osc-panel osc-x-list" id="osc-exp-list" aria-labelledby="osc-x-list-title">
@@ -2265,7 +2265,7 @@
               </li>
             </template>
             <li class="osc-x-empty" x-show="exps.loaded && !exps.rows.length"><span x-text="exps.empty"></span>
-              <a href="#m=measure" data-osc="exp.toMeasure" data-osc-link="jump">Open Measure</a></li>
+              <a href="#m=measure" data-osc="exp.toMeasure" data-osc-link="jump">Otevřít Měření</a></li>
           </ul>
         </section>
         <!-- FINDINGS (ADR 0046): interpretations linked to the experiments they rest on; never an experiment. -->
@@ -2379,7 +2379,7 @@
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.repeat" data-osc-link="jump"
                 @click="experimentsRepeat(exps.detail.id)">Repeat (new experiment)</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.inspect" data-osc-link="jump"
-                @click="experimentsShowInMeasure(exps.detail.id)">Show in Measure</button>
+                @click="experimentsShowInMeasure(exps.detail.id)">Zobrazit v Měření</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.export"
                 @click="experimentsExport(exps.detail.id)">Export .oscilla.json</button>
               <button type="button" class="osc-btn osc-btn-secondary osc-m-small" data-osc="exp.csvTransfer"
@@ -2567,7 +2567,7 @@
     <section class="px-4 pt-6 pb-6" id="osc-view-learn" data-osc="learn-view"
       data-osc-modes="learn" hidden :hidden="mode !== 'learn'" aria-labelledby="osc-learn-title"
       tabindex="-1">
-      <h2 :class="PRO.pageTitle" id="osc-learn-title">Learn</h2>
+      <h2 :class="PRO.pageTitle" id="osc-learn-title">Výuka</h2>
       <div data-osc="learn-content">
         <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="list">
           <template x-for="t in LEARN_CARDS" :key="t.id">
@@ -2607,7 +2607,7 @@
     <section class="px-4 pt-6 pb-6" id="osc-view-presets" data-osc="presets-view"
       data-osc-modes="presets" hidden :hidden="mode !== 'presets'"
       aria-labelledby="osc-presets-title" tabindex="-1">
-      <h2 :class="PRO.pageTitle" id="osc-presets-title">Presets</h2>
+      <h2 :class="PRO.pageTitle" id="osc-presets-title">Předvolby</h2>
       <div data-osc="presets-content">
         <div class="flex flex-wrap mb-4 text-sm font-medium text-center border-b border-gray-200
           dark:border-gray-700" role="tablist" aria-label="Preset categories">
@@ -2813,7 +2813,7 @@
         <header class="osc-panel osc-st-bar" data-osc="studio.bar" role="group" aria-label="Studio toolbar">
           <div class="osc-st-row">
             <button type="button" class="osc-btn osc-btn-secondary osc-st-back" data-osc="studio.back" data-osc-link="jump"
-              @click="studioBack()" aria-label="Back to the Playground" title="Back to the Playground"
+              @click="studioBack()" aria-label="Zpět na Playground" title="Zpět na Playground"
               :aria-label="studioBackText()" :title="studioBackText()">
               <svg aria-hidden="true"><use href="#s-back"/></svg><span class="osc-st-lbl"
                 x-text="studioBackLabel()">Playground</span>
@@ -2979,8 +2979,8 @@
           <path d="M0.0 32.0 L2.0 32.0 L4.0 31.9 L6.0 31.9 L8.0 31.9 L10.0 31.9 L12.0 31.9 L14.0 31.9 L16.0 31.8 L18.0 31.8 L20.0 31.8 L22.0 31.8 L24.0 31.8 L26.0 31.7 L28.0 31.7 L30.0 31.7 L32.0 31.7 L34.0 31.7 L36.0 31.7 L38.0 31.6 L40.0 31.6 L42.0 31.5 L44.0 31.5 L46.0 31.4 L48.0 31.3 L50.0 31.3 L52.0 31.2 L54.0 31.1 L56.0 31.1 L58.0 31.0 L60.0 30.9 L62.0 30.8 L64.0 30.7 L66.0 30.6 L68.0 30.6 L70.0 30.5 L72.0 30.4 L74.0 30.2 L76.0 30.1 L78.0 30.0 L80.0 29.9 L82.0 29.8 L84.0 29.7 L86.0 29.5 L88.0 29.4 L90.0 29.3 L92.0 29.2 L94.0 29.0 L96.0 28.9 L98.0 28.7 L100.0 28.6 L102.0 28.4 L104.0 28.3 L106.0 28.1 L108.0 28.0 L110.0 27.8 L112.0 27.7 L114.0 27.5 L116.0 27.3 L118.0 27.2 L120.0 27.0 L122.0 26.8 L124.0 26.7 L126.0 26.5 L128.0 26.3 L130.0 26.1 L132.0 26.0 L134.0 25.8 L136.0 25.6 L138.0 25.4 L140.0 25.3 L142.0 25.1 L144.0 24.9 L146.0 24.7 L148.0 24.5 L150.0 24.3 L152.0 24.2 L154.0 24.0 L156.0 23.8 L158.0 23.6 L160.0 23.5 L162.0 23.3 L164.0 23.1 L166.0 22.9 L168.0 22.8 L170.0 22.6 L172.0 22.4 L174.0 22.3 L176.0 22.1 L178.0 21.9 L180.0 21.8 L182.0 21.6 L184.0 21.5 L186.0 21.3 L188.0 21.2 L190.0 21.1 L192.0 20.9 L194.0 20.8 L196.0 20.7 L198.0 20.6 L200.0 20.5 L202.0 20.4 L204.0 20.3 L206.0 20.2 L208.0 20.1 L210.0 20.0 L212.0 19.9 L214.0 19.9 L216.0 19.8 L218.0 19.8 L220.0 19.7 L222.0 19.7 L224.0 19.7 L226.0 19.6 L228.0 19.6 L230.0 19.6 L232.0 19.7 L234.0 19.7 L236.0 19.7 L238.0 19.8 L240.0 19.8 L242.0 19.9 L244.0 19.9 L246.0 20.0 L248.0 20.1 L250.0 20.2 L252.0 20.4 L254.0 20.5 L256.0 20.7 L258.0 20.8 L260.0 21.0 L262.0 21.2 L264.0 21.4 L266.0 21.6 L268.0 21.8 L270.0 22.0 L272.0 22.3 L274.0 22.6 L276.0 22.8 L278.0 23.1 L280.0 23.4 L282.0 23.8 L284.0 24.1 L286.0 24.5 L288.0 24.8 L290.0 25.2 L292.0 25.6 L294.0 26.0 L296.0 26.4 L298.0 26.8 L300.0 27.3 L302.0 27.8 L304.0 28.2 L306.0 28.7 L308.0 29.2 L310.0 29.7 L312.0 30.2 L314.0 30.8 L316.0 31.3 L318.0 31.9 L320.0 32.5 L322.0 33.0 L324.0 33.6 L326.0 34.2 L328.0 34.8 L330.0 35.4 L332.0 36.1 L334.0 36.7 L336.0 37.3 L338.0 38.0 L340.0 38.6 L342.0 39.3 L344.0 39.9 L346.0 40.6 L348.0 41.3 L350.0 41.9 L352.0 42.6 L354.0 43.2 L356.0 43.9 L358.0 44.6 L360.0 45.2 L362.0 45.9 L364.0 46.5 L366.0 47.2 L368.0 47.8 L370.0 48.4 L372.0 49.0 L374.0 49.6 L376.0 50.2 L378.0 50.8 L380.0 51.4 L382.0 51.9 L384.0 52.4 L386.0 52.9 L388.0 53.4 L390.0 53.9 L392.0 54.3 L394.0 54.7 L396.0 55.1 L398.0 55.5 L400.0 55.8 L402.0 56.2 L404.0 56.4 L406.0 56.7 L408.0 56.9 L410.0 57.1 L412.0 57.2 L414.0 57.3 L416.0 57.4 L418.0 57.4 L420.0 57.4 L422.0 57.4 L424.0 57.3 L426.0 57.2 L428.0 57.0 L430.0 56.8 L432.0 56.5 L434.0 56.2 L436.0 55.8 L438.0 55.4 L440.0 55.0 L442.0 54.5 L444.0 54.0 L446.0 53.4 L448.0 52.8 L450.0 52.1 L452.0 51.4 L454.0 50.6 L456.0 49.8 L458.0 48.9 L460.0 48.0 L462.0 47.1 L464.0 46.1 L466.0 45.1 L468.0 44.0 L470.0 42.9 L472.0 41.8 L474.0 40.6 L476.0 39.4 L478.0 38.2 L480.0 37.0 L482.0 35.7 L484.0 34.4 L486.0 33.1 L488.0 31.8 L490.0 30.4 L492.0 29.1 L494.0 27.7 L496.0 26.4 L498.0 25.0 L500.0 23.7 L502.0 22.3 L504.0 21.0 L506.0 19.7 L508.0 18.4 L510.0 17.1 L512.0 15.9 L514.0 14.7 L516.0 13.5 L518.0 12.4 L520.0 11.3 L522.0 10.3 L524.0 9.3 L526.0 8.4 L528.0 7.5 L530.0 6.7 L532.0 6.0 L534.0 5.3 L536.0 4.8 L538.0 4.3 L540.0 3.9 L542.0 3.5 L544.0 3.3 L546.0 3.1 L548.0 3.1 L550.0 3.1 L552.0 3.3 L554.0 3.5 L556.0 3.8 L558.0 4.3 L560.0 4.8 L562.0 5.4 L564.0 6.1 L566.0 7.0 L568.0 7.9 L570.0 8.9 L572.0 10.0 L574.0 11.2 L576.0 12.5 L578.0 13.9 L580.0 15.3 L582.0 16.8 L584.0 18.4 L586.0 20.1 L588.0 21.8 L590.0 23.5 L592.0 25.3 L594.0 27.2 L596.0 29.0 L598.0 30.9 L600.0 32.8 L602.0 34.7 L604.0 36.6 L606.0 38.5 L608.0 40.4 L610.0 42.2 L612.0 44.0 L614.0 45.8 L616.0 47.5 L618.0 49.1 L620.0 50.6 L622.0 52.1 L624.0 53.4 L626.0 54.7 L628.0 55.8 L630.0 56.9 L632.0 57.8 L634.0 58.5 L636.0 59.2 L638.0 59.6 L640.0 60.0 L642.0 60.2 L644.0 60.2 L646.0 60.1 L648.0 59.8 L650.0 59.3 L652.0 58.7 L654.0 58.0 L656.0 57.0 L658.0 56.0 L660.0 54.8 L662.0 53.4 L664.0 51.9 L666.0 50.3 L668.0 48.6 L670.0 46.7 L672.0 44.8 L674.0 42.8 L676.0 40.7 L678.0 38.6 L680.0 36.4 L682.0 34.1 L684.0 31.9 L686.0 29.6 L688.0 27.4 L690.0 25.2 L692.0 23.1 L694.0 21.0 L696.0 19.0 L698.0 17.1 L700.0 15.3 L702.0 13.6 L704.0 12.1 L706.0 10.7 L708.0 9.5 L710.0 8.5 L712.0 7.7 L714.0 7.0 L716.0 6.6 L718.0 6.3 L720.0 6.3 L722.0 6.5 L724.0 6.9 L726.0 7.5 L728.0 8.3 L730.0 9.3 L732.0 10.5 L734.0 11.9 L736.0 13.5 L738.0 15.2 L740.0 17.1 L742.0 19.1 L744.0 21.2 L746.0 23.5 L748.0 25.8 L750.0 28.1 L752.0 30.5 L754.0 32.9 L756.0 35.2 L758.0 37.6 L760.0 39.8 L762.0 42.0 L764.0 44.1 L766.0 46.0 L768.0 47.8 L770.0 49.4 L772.0 50.8 L774.0 52.0 L776.0 53.0 L778.0 53.7 L780.0 54.2 L782.0 54.5 L784.0 54.5 L786.0 54.2 L788.0 53.7 L790.0 53.0 L792.0 52.0 L794.0 50.8 L796.0 49.4 L798.0 47.7 L800.0 45.9 L802.0 43.9 L804.0 41.8 L806.0 39.6 L808.0 37.3 L810.0 35.0 L812.0 32.6 L814.0 30.3 L816.0 27.9 L818.0 25.7 L820.0 23.6 L822.0 21.5 L824.0 19.7 L826.0 18.0 L828.0 16.5 L830.0 15.3 L832.0 14.3 L834.0 13.6 L836.0 13.1 L838.0 12.9 L840.0 13.0 L842.0 13.4 L844.0 14.0 L846.0 14.9 L848.0 16.1 L850.0 17.4 L852.0 19.0 L854.0 20.8 L856.0 22.7 L858.0 24.8 L860.0 26.9 L862.0 29.2 L864.0 31.4 L866.0 33.6 L868.0 35.7 L870.0 37.8 L872.0 39.8 L874.0 41.6 L876.0 43.2 L878.0 44.6 L880.0 45.7 L882.0 46.6 L884.0 47.3 L886.0 47.6 L888.0 47.7 L890.0 47.5 L892.0 47.0 L894.0 46.2 L896.0 45.2 L898.0 43.9 L900.0 42.4 L902.0 40.8 L904.0 39.0 L906.0 37.1 L908.0 35.2 L910.0 33.2 L912.0 31.2 L914.0 29.2 L916.0 27.4 L918.0 25.7 L920.0 24.1 L922.0 22.7 L924.0 21.6 L926.0 20.7 L928.0 20.0 L930.0 19.6 L932.0 19.5 L934.0 19.7 L936.0 20.1 L938.0 20.8 L940.0 21.8 L942.0 22.9 L944.0 24.2 L946.0 25.7 L948.0 27.3 L950.0 29.0 L952.0 30.7 L954.0 32.4 L956.0 34.0 L958.0 35.6 L960.0 37.0 L962.0 38.3 L964.0 39.4 L966.0 40.3 L968.0 40.9 L970.0 41.3 L972.0 41.5 L974.0 41.4 L976.0 41.1 L978.0 40.5 L980.0 39.7 L982.0 38.8 L984.0 37.6 L986.0 36.4 L988.0 35.1 L990.0 33.7 L992.0 32.3 L994.0 31.0 L996.0 29.7 L998.0 28.6 L1000.0 27.5 L1002.0 26.7 L1004.0 26.0 L1006.0 25.5 L1008.0 25.2 L1010.0 25.2 L1012.0 25.3 L1014.0 25.7 L1016.0 26.2 L1018.0 26.9 L1020.0 27.7 L1022.0 28.6 L1024.0 29.6 L1026.0 30.7 L1028.0 31.7 L1030.0 32.7 L1032.0 33.6 L1034.0 34.5 L1036.0 35.2 L1038.0 35.8 L1040.0 36.2 L1042.0 36.4 L1044.0 36.5 L1046.0 36.5 L1048.0 36.3 L1050.0 35.9 L1052.0 35.4 L1054.0 34.8 L1056.0 34.2 L1058.0 33.5 L1060.0 32.8 L1062.0 32.1 L1064.0 31.5 L1066.0 30.9 L1068.0 30.4 L1070.0 30.0 L1072.0 29.7 L1074.0 29.5 L1076.0 29.4 L1078.0 29.4 L1080.0 29.6 L1082.0 29.8 L1084.0 30.1 L1086.0 30.4 L1088.0 30.8 L1090.0 31.2 L1092.0 31.6 L1094.0 32.0 L1096.0 32.3 L1098.0 32.6 L1100.0 32.8 L1102.0 33.0 L1104.0 33.1 L1106.0 33.1 L1108.0 33.2 L1110.0 33.2 L1112.0 33.1 L1114.0 33.0 L1116.0 32.9 L1118.0 32.7 L1120.0 32.5 L1122.0 32.3 L1124.0 32.0 L1126.0 31.8 L1128.0 31.5 L1130.0 31.3 L1132.0 31.1 L1134.0 31.0 L1136.0 30.9 L1138.0 30.8 L1140.0 30.9 L1142.0 30.9 L1144.0 31.1 L1146.0 31.2 L1148.0 31.4 L1150.0 31.7 L1152.0 31.9 L1154.0 32.2 L1156.0 32.5 L1158.0 32.7 L1160.0 32.9 L1162.0 33.0 L1164.0 33.1 L1166.0 33.2 L1168.0 33.1 L1170.0 33.0 L1172.0 32.9 L1174.0 32.7 L1176.0 32.5 L1178.0 32.2 L1180.0 31.9 L1182.0 31.7 L1184.0 31.4 L1186.0 31.2 L1188.0 31.0 L1190.0 30.9 L1192.0 30.8 L1194.0 30.9 L1196.0 30.9 L1198.0 31.1 L1200.0 31.3"/>
         </svg>
         <div class="osc-about-intro">
-          <p class="osc-about-label">About · OSCILLA</p>
-          <h2 class="osc-about-name" id="osc-about-title"><span class="osc-sr-only">About </span>OSCILLA</h2>
+          <p class="osc-about-label">O aplikaci · OSCILLA</p>
+          <h2 class="osc-about-name" id="osc-about-title"><span class="osc-sr-only">O aplikaci </span>OSCILLA</h2>
           <p class="osc-about-tagline">See sound. Shape frequency.</p>
           <p class="osc-about-lede" data-osc="about.lede">A zero-install, scientifically honest
             acoustic laboratory in your browser: generate, measure and reproduce sound experiments,
@@ -3185,7 +3185,7 @@
   </aside>
 
   <!-- Status bar -->
-  <footer class="osc-statusbar" aria-label="Status and actions"
+  <footer class="osc-statusbar" aria-label="Stavový řádek"
     :class="statusPlayShown && '[@media(min-width:1536px)]:![grid-template-columns:auto_minmax(58px,134fr)_auto_auto_minmax(16px,213fr)_auto]'">
     <div class="osc-sb-brand">
       <span class="osc-sb-name">OSCILLA</span>
@@ -3221,14 +3221,14 @@
       <span class="osc-sb-readout osc-num" data-osc="status.readout" :title="statusReadoutTitle">
         <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
         <span class="osc-sb-dot" aria-hidden="true">•</span>
-        <span data-osc="status.waveform" x-text="statusWaveText">Sine</span>
+        <span data-osc="status.waveform" x-text="statusWaveText">Sinus</span>
         <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.pattern" x-text="statusPatternText">Continuous tone</span>
+        <span class="osc-sb-extra" data-osc="status.pattern" x-text="statusPatternText">Spojitý tón</span>
         <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
         <span class="osc-sb-extra" data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span>
         <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
         <span class="osc-sb-extra" data-osc="status.gain" x-text="statusGainText"
-          :title="gainTitle">Gain -21.9 dB</span>
+          :title="gainTitle">Zesílení -21.9 dB</span>
       </span>
     </div>
 
@@ -3251,7 +3251,7 @@
         <button type="button" class="osc-sb-action" id="osc-act-export-audio" data-osc="action.exportAudio"
           @click="exportAudio()" :aria-disabled="String(exportBusy)" :aria-busy="String(exportBusy)"
           :title="exportBusy ? 'Export už běží; tato volba bude znovu dostupná po jeho dokončení.' : null" aria-label="Exportovat zvuk (WAV)">
-          <svg aria-hidden="true"><use href="#i-upload"/></svg><span data-osc-reason x-text="exportBusy ? 'Exportuji…' : 'Export zvuku'">Export zvuku</span>
+          <svg aria-hidden="true"><use href="#i-upload"/></svg><span data-osc-reason x-text="exportBusy ? 'Exportuji…' : 'Exportovat zvuk'">Exportovat zvuk</span>
         </button>
         <button type="button" class="osc-sb-action" id="osc-act-save-preset" data-osc="action.savePreset" @click="openSave()"
           aria-label="Uložit preset">
@@ -3339,7 +3339,7 @@
   <dialog class="osc-dialog" id="osc-dlg-help" data-oscilla-modal aria-labelledby="osc-dlg-help-title"
     :class="{ 'osc-dialog--wide': keyHelp().timeline }">
     <div class="osc-dialog-body">
-      <h2 class="osc-dialog-title" id="osc-dlg-help-title">Keyboard shortcuts</h2>
+      <h2 class="osc-dialog-title" id="osc-dlg-help-title">Klávesové zkratky</h2>
       <h3 class="osc-shortcuts-head">In <span data-osc="help.title" x-text="keyHelp().title">Playground</span></h3>
       <dl class="osc-shortcuts" data-osc="help.workspace">
         <div data-osc="help.space" data-osc-shortcut="space"><dt><kbd x-text="keyHelp().space.keys">Space</kbd><span x-show="keyHelp().space.where" x-text="' ' + (keyHelp().space.where || '')"> (hold)</span></dt><dd x-text="keyHelp().space.text">Hold to play: sounds while held, stops on release (a programmed pattern: trigger once)</dd></div>
@@ -3608,9 +3608,9 @@
           <template x-for="q in ACCEPTANCE_LEVELS" :key="q"><option :value="q" x-text="q"></option></template>
         </select>
       </div>
-      <p class="osc-dialog-note osc-num" x-text="(exps.defForm.mode === 'edit' ? 'Recipe of the latest version: ' + exps.defForm.recipeText : 'Recipe from the Measure setup: ' + exps.defForm.setupText)"></p>
+      <p class="osc-dialog-note osc-num" x-text="(exps.defForm.mode === 'edit' ? 'Recept poslední verze: ' + exps.defForm.recipeText : 'Recept z nastavení Měření: ' + exps.defForm.setupText)"></p>
       <label class="osc-dialog-note" x-show="exps.defForm.mode === 'edit'"><input type="checkbox" data-osc="def.useSetup"
-        x-model="exps.defForm.useSetup"> Use the Measure setup instead (<span class="osc-num" x-text="exps.defForm.setupText"></span>)</label>
+        x-model="exps.defForm.useSetup"> Použít místo toho nastavení Měření (<span class="osc-num" x-text="exps.defForm.setupText"></span>)</label>
       <p class="osc-dialog-note">Changing the recipe, the conditions or the acceptance creates a new version; experiments keep the version they used.</p>
       <p class="osc-dialog-note" role="alert" data-osc="def.error" x-show="exps.defForm.error" x-text="exps.defForm.error"></p>
       <div class="osc-dialog-actions">

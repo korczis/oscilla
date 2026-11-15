@@ -111,7 +111,7 @@ test('the sidebar is rendered from the registry, with the hooks the suites addre
   // The backdrop and the drawer appear in one frame: a class binding, never x-show (which
   // defers a show to a later task, so a first tap on the backdrop missed it).
   assert.doesNotMatch(html, /data-osc="sidebar\.backdrop"[^>]*x-show/);
-  assert.match(html, /<p [^>]*data-osc="page\.title" x-text="workspaceLabel\(\)">/);
+  assert.match(html, /<p [^>]*data-osc="page\.title" x-text="workspaceLabel\(\)"[^>]*>/);
   // One h1: the Q002 sentence leading <main> (P002, Q004 option A); the page header names the
   // workspace in its breadcrumb, and each workspace leads with its own heading.
   assert.equal((html.match(/<h1\b/g) || []).length, 1, 'one H1, in <main>');
@@ -181,7 +181,7 @@ test('the shell state persists through storage and reads a damaged value as the 
 test('the workspace list is a navigation landmark and the open drawer holds the keyboard', () => {
   // The legacy tab bar was <nav aria-label="Workspace">; the Pro sidebar is an <aside>
   // (complementary), so the list inside it is the navigation landmark a screen reader jumps to.
-  assert.match(sidebar, /<nav aria-label="Workspaces">\s*<ul class="space-y-1" id="osc-nav">/);
+  assert.match(sidebar, /<nav aria-label="Pracovní plochy">\s*<ul class="space-y-1" id="osc-nav">/);
   assert.match(html, /id="osc-main-content"\s+data-osc="shell\.content" x-bind="shellContent\(\)"/);
   // While the phone drawer is open, the workspace column behind its backdrop is inert.
   const shell = createShell({ get: () => null, set: () => {} });
@@ -302,8 +302,8 @@ test('#330 F6: the sidebar and the workspace list are two distinct landmarks by 
   const asideName = aside.match(/aria-label="([^"]*)"/)[1];
   const navName = sidebar
     .match(/<nav aria-label="([^"]*)">\s*<ul class="space-y-1" id="osc-nav">/)[1];
-  assert.equal(asideName, 'Sidebar');
-  assert.equal(navName, 'Workspaces');
+  assert.equal(asideName, 'Postranní panel');
+  assert.equal(navName, 'Pracovní plochy');
   const norm = (s) => s.toLowerCase().replace(/s$/, '');
   assert.notEqual(norm(asideName), norm(navName), 'not the same name but for a plural s');
 });

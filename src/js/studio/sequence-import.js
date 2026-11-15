@@ -416,7 +416,7 @@ export function importSequenceDocument(doc, { sampleRate } = {}) {
   const at = (key) => (config ? `sequencer.${key}` : key);
   if (!isPlain(seq)) {
     return refuse(config ? 'sequencer' : '', config
-      ? 'This configuration file holds no Sequencer sequence to open in Studio'
+      ? 'This configuration file holds no Sekvencer sequence to open in Studio'
       : 'The file does not contain a sequence object');
   }
   if (seq.version !== SEQUENCE_VERSION) {

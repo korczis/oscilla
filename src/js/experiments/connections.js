@@ -292,14 +292,14 @@ function profileUp(e, v, me) {
   // A profile id is the SHA-256 of its points (calibration/profile.js): equal ids are equal
   // profiles.
   if (v.profile && v.profile.id === f.id) {
-    return connection(...args, ['present', `the profile loaded in Measure now has this id (the `
+    return connection(...args, ['present', `the profile loaded in Měření now has this id (the `
       + `hash of its points); a profile is kept only while it is loaded, never stored${also}`],
     target,
     // data-osc-link: cnx.link
     { href: '#m=measure' });
   }
   return connection(...args, ['missing', `OSCILLA keeps a frequency profile only while it is `
-    + `loaded in Measure, and the one loaded now (if any) has another id; load its file to check `
+    + `loaded in Měření, and the one loaded now (if any) has another id; load its file to check `
     + `it${also}`], target);
 }
 

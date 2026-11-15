@@ -98,14 +98,15 @@ const INSTRUMENT_ROWS = Object.freeze([
   row('trigger', 'Enter', 'Trigger once', 'on Hold or Trigger, where shown'),
   row('octave', 'PgUp / PgDn', 'One octave up / down', 'on the frequency slider, where shown'),
 ]);
+// The Sequencer's timeline rows are Czech (U106, Q104) and name it as the navigation does.
+const SEQUENCER_WHERE = 'na časové ose Sekvenceru';
 const SEQUENCER_ROWS = Object.freeze([
-  row('sequencer-space', 'Space', 'Play / stop the sequence', 'on the Sequencer timeline'),
-  row('sequencer-timeline', 'Arrows, Alt + arrows, Del, Ctrl/⌘ D',
-    'Select, move, delete, duplicate blocks', 'on the Sequencer timeline'),
-  row('sequencer-history', 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z', 'Undo, redo',
-    'on the Sequencer timeline'),
-  row('sequencer-clipboard', 'Ctrl/⌘ C, Ctrl/⌘ V', 'Copy the selected block, paste it after the '
-    + 'selection', 'on the Sequencer timeline'),
+  row('sequencer-space', 'Space', 'Přehrání / zastavení sekvence', SEQUENCER_WHERE),
+  row('sequencer-timeline', 'Šipky, Alt + šipky, Del, Ctrl/⌘ D',
+    'Výběr, posun, smazání a duplikace bloků', SEQUENCER_WHERE),
+  row('sequencer-history', 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z', 'Zpět, znovu', SEQUENCER_WHERE),
+  row('sequencer-clipboard', 'Ctrl/⌘ C, Ctrl/⌘ V', 'Kopírování vybraného bloku a vložení za '
+    + 'výběr', SEQUENCER_WHERE),
 ]);
 // The keyboard (K026, src/js/midi/keyboard.js) in the views it is armed in, by physical key
 // (the same places on QWERTZ and AZERTY). It never takes Space, nor a key with Ctrl, Meta or

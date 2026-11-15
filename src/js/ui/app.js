@@ -14,9 +14,9 @@ import { shortcutHelp } from './shortcuts.js';
 import { counterpartOf, showsCounterparts } from './counterparts.js';
 import {
   createShell, GROUP_REGISTRY, NAV_GROUPS, navGroupOf, phonePrimaryOf, relatedHref,
-  WORKSPACE_IDS, WORKSPACE_LABELS, WORKSPACE_REGISTRY, workspaceOf,
+  WORKSPACE_IDS, WORKSPACE_LABELS, WORKSPACE_REGISTRY, workspaceLang, workspaceOf,
 } from './shell.js';
-import { pageRelatedOf, relatedText } from './cross-links.js';
+import { pageRelatedOf, relatedLang, relatedText } from './cross-links.js';
 import { emptyPredicateHolds } from './empty-states.js';
 
 const THEME_KEY = 'oscilla.v2.theme';
@@ -243,7 +243,7 @@ export function focusWorkspaceHeading(root, mode) {
  */
 export function skipLinkLabel(mode) {
   const name = WORKSPACE_LABELS[mode] || WORKSPACE_LABELS.playground;
-  return `Skip to main content: ${name}`;
+  return `Přeskočit na hlavní obsah: ${name}`;
 }
 
 /**
@@ -439,6 +439,10 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     workspaceLabel() {
       return WORKSPACE_LABELS[this.workspace] || '';
     },
+    /** The page title's language: 'en' for a kept name (Studio, Synth, Playground), else none. */
+    workspaceLang() {
+      return workspaceLang(this.workspace);
+    },
     workspaceGroupLabel() {
       const g = navGroupOf(this.workspace);
       return g ? GROUP_REGISTRY[g].label : '';
@@ -460,7 +464,7 @@ export function createOscillaUi({ storedAnalysisTab = storageGet(ANALYSIS_TAB_KE
     workspaceRelated() {
       return pageRelatedOf(this.workspace).slice(0, 3).map((r, i) => ({
         key: `${this.workspace}:${i}`, id: r.id, why: r.why, href: relatedHref(r),
-        text: relatedText(r) }));
+        text: relatedText(r), lang: relatedLang(r) }));
     },
     /**
      * A Related link: its href is the target's address, so a modified click opens it as the

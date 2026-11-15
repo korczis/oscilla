@@ -137,7 +137,8 @@ test('C030: a prompt names a control on its workspace, or the workspace that has
   const panel = sourcePanel().modes;
   const sb = statusPlay();
   const NAMES = /TRIGGER|HOLD TO PLAY/;
-  const OTHER = { playground: /in the Playground/, synthesis: /in Synthesis/ };
+  const OTHER = { playground: /in the Playground|v Playgroundu/,
+    synthesis: /in Synthesis|v Syntéze/ };
   // a preset loaded in each workspace that lists presets (the panel of each Load button)
   const loaders = new Set();
   for (const m of HTML.matchAll(/loadPresetFromView\(/g)) {
