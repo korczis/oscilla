@@ -24,4 +24,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-15T17:13:18Z
+started_at: 2026-11-15T17:11:53Z
+started_event: sha256:646fd1d4b9b104a82a18d96c55f0098da4e14ac5c6f23ccc8f90376e368d3d1a
+verified_at: 2026-11-15T17:12:29Z
+verified_event: sha256:414c7b7cd497bc16cedbef431a851a9984b0f37b6f3bbdd19fd7d30e95565f3e
+completed_at: 2026-11-15T17:13:18Z
+completed_event: sha256:2d41eb57c8ce42b5678006c8a19762090cfa20bf6e31b5a134c04bdd0af1b3d2
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/mic-detach-on-close.test.mjs"
+    result: "On main 474ce9c3, tests/unit/mic-detach-on-close.test.mjs (10/10; cases 8-10 fail on a7102358) proves the mic lab pauses with a Czech reason and takes no reading while the context is suspended or interrupted, build:check is up to date, landed in T7a (#525), and 525.yaml judges it merge. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/525.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:13:05Z

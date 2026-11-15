@@ -27,4 +27,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-09
-updated_at: 2026-11-09
+updated_at: 2026-11-15T17:40:07Z
+started_at: 2026-11-15T17:38:37Z
+started_event: sha256:8da042df271210c2f55ea21eddd05594b2215bfa8dc25c81796579f2e8ea8b52
+verified_at: 2026-11-15T17:39:26Z
+verified_event: sha256:a8ee68abd4e3afaa7176c7d02f09893057233d12f2986a270926ff888e6cccba
+completed_at: 2026-11-15T17:40:07Z
+completed_event: sha256:c4bb527f188d1658859e1dfe53bd6719f573a26b48bcb7711f7debe8988f5f38
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/czech-prose-short.test.mjs"
+    result: "On main 474ce9c3 scripts/czech-prose-short.mjs counts short English per file into a baseline that only falls, held by tests/unit/czech-prose-short.test.mjs (4/4, mutation cases both ways), named in czech-prose.v1.md's Enforcement section and tests/README.md, landed in T4 (#515) with 515.yaml judging it merge. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/515.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:39:54Z

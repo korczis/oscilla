@@ -21,10 +21,11 @@ export const STRIP_TEXT = Object.freeze({
   title: 'Krokový sekvencer',
   noKeys: 'Panel Synthu tu nemá klávesy (uzel Keys), takže sekvencer nemá co hrát.',
   exists: 'Krokový sekvencer už v tomto dokumentu je.',
-  created: 'Krokový sekvencer přidán: 16 kroků po šestnáctinách hraje klávesy panelu ve smyčce, '
-    + 'když běží Play.',
-  createdKeptLoop: 'Krokový sekvencer přidán: 16 kroků po šestnáctinách hraje klávesy panelu, '
-    + 'když běží Play; smyčka dokumentu zůstává, jak byla.',
+  // The count is the grid's own (R050: a number the code holds is never retyped).
+  created: `Krokový sekvencer přidán: ${NEW_STEP_GRID.steps} kroků po šestnáctinách hraje klávesy `
+    + 'panelu ve smyčce, když běží Play.',
+  createdKeptLoop: `Krokový sekvencer přidán: ${NEW_STEP_GRID.steps} kroků po šestnáctinách `
+    + 'hraje klávesy panelu, když běží Play; smyčka dokumentu zůstává, jak byla.',
 });
 
 const STRIP_TRACK = 'synth-steps';

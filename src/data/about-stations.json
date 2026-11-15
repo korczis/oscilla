@@ -294,6 +294,13 @@
       "summary": "Knoby, fadery a sustain pedál ovladače MIDI hrají panel Synthu; sekce MIDI v Nastavení ukazuje známá zařízení s rolemi portů a monitor příchozích zpráv; jedna klávesnice hraje nástroj Studia na každé stránce, a když ho dokument ještě nemá, vloží panel Synthu s upozorněním a tlačítkem Zpět; Start, Stop a transport ovladače řídí Sekvencer a Studio a tempo příchozích hodin MIDI se měří a zobrazuje, nikdy se jím neřídí",
       "commit": "e7c466a",
       "datetime": "2026-11-15T07:57:42+01:00"
+    },
+    {
+      "release": "3.39",
+      "title": "Nastavení a MIDI česky, krokový sekvencer říká, co hraje",
+      "summary": "Dialog Nastavení a stavové texty MIDI mluví česky (Frekvenční rozsah, Vstup MIDI, Připojit MIDI, Obnovit nástroj); karta krokového sekvenceru napětí, jehož kroky jsou všechny přeskočené, řekne, že nic nehraje, a počet kroků na kartě odpovídá tomu, co zní; počty kroků v syntezátoru se odvozují z jejich zdroje; jedna klávesnice je ověřená na každé pracovní ploše",
+      "commit": "e68d582",
+      "datetime": "2026-11-15T22:15:07+01:00"
     }
   ]
 }

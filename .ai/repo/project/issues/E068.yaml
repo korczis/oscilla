@@ -21,4 +21,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-15T17:22:21Z
+started_at: 2026-11-15T17:21:07Z
+started_event: sha256:f95b70e2659942dc45df2efae0770338059a6e0f3b5fe6ddb57370d60da68612
+verified_at: 2026-11-15T17:21:36Z
+verified_event: sha256:03bf0fe77e563aacf11b32e2036a5c0c1dc0d316a3c6a196e1dc21f222f3cc9a
+completed_at: 2026-11-15T17:22:21Z
+completed_event: sha256:367781acc6f8ea9c8699933d9f0f253ada260b9b71052bd353621d5d6703073d
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/release-ci-receipt.test.mjs"
+    result: "On main 474ce9c3, tests/unit/release-ci-receipt.test.mjs case 33 refuses a no-matrix test:studio base job replaced by a chromium-only head job (passes on main, fails on 689b2a33), landed in T6 (#523) and judged merge in 523.yaml. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/523.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:22:06Z

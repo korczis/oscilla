@@ -130,12 +130,15 @@ const D = {
     await page.keyboard.type(text);
     await page.keyboard.press('Enter');
   },
-  /** A slider moved by pointer: a click on the track at the fraction `at` of its width. */
+  /** A slider moved by pointer: a click on the track at the fraction `at` of its width.
+   *  The locator's own click reads the box when it clicks and refuses a point that another
+   *  element covers (E075: a box read once, then page.mouse.click, missed Firefox's envelope
+   *  sliders on T23 while the row said only "not reached"). */
   slide: (sel, at) => async (page) => {
     const l = page.locator(sel).first();
     await l.scrollIntoViewIfNeeded();
     const b = await l.boundingBox();
-    await page.mouse.click(b.x + b.width * at, b.y + b.height / 2);
+    await l.click({ position: { x: b.width * at, y: b.height / 2 }, timeout: ROW_MS });
   },
   select: (sel, value) => async (page) => { await page.selectOption(sel, value); },
 };
@@ -284,9 +287,8 @@ row({ id: 'source.hold.keyboard', ws: 'playground', control: '#osc-hold-play', h
     && s.sb.label === s.sb.built });
 row({ id: 'source.hold.pointer', ws: 'playground', control: '#osc-hold-play', how: 'pointer',
   act: async (page) => {
-    await page.locator('#osc-hold-play').scrollIntoViewIfNeeded();
-    const b = await page.locator('#osc-hold-play').boundingBox();
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    // hover: the pointer reaches PLAY only where PLAY itself receives it (E075)
+    await page.locator('#osc-hold-play').hover({ timeout: ROW_MS });
     await page.mouse.down();
   },
   expect: (s) => !!s.engine.voice && s.app.playing });
@@ -350,9 +352,8 @@ row({ id: 'device.safetyLimit.pointer', ws: 'playground', control: '#osc-safety-
     await page.selectOption('#osc-safety-limit', '0.5');
     await page.evaluate(LIMIT_PROBE);
     const hold = page.locator('#osc-hold-play');
-    await hold.scrollIntoViewIfNeeded(); // choosing the limit may have scrolled PLAY away
-    const b = await hold.boundingBox();
-    await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+    // choosing the limit may have scrolled PLAY away; hover scrolls back and checks the hit
+    await hold.hover({ timeout: ROW_MS });
     await page.mouse.down();
   },
   read: () => window.__oscCensusVoices || null,
@@ -955,7 +956,7 @@ row({ id: 'studio.graph.minimapToggle.pointer', ws: 'studio',
 row({ id: 'studio.graph.minimap.pointer', ws: 'studio', control: '[data-osc="studio.graph.minimap"]',
   how: 'pointer', setup: D.click('[data-osc="studio.graph.minimapToggle"]'),
   act: async (page) => { const l = page.locator('[data-osc="studio.graph.minimap"]');
-    const b = await l.boundingBox(); await page.mouse.click(b.x + 4, b.y + 4); },
+    await l.click({ position: { x: 4, y: 4 }, timeout: ROW_MS }); },
   expect: (s, b, x) => x.v !== b.x.v,
   read: () => ({ v: JSON.stringify(window.OSCILLA.studio.model.view.graph) }) });
 

@@ -26,3 +26,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-09
+started_at: 2026-11-15T17:19:25Z
+started_event: sha256:39783f4baa0907c47d65edf14a0bf37116da8aacd403fffda6f1b7e485a4b406
+updated_at: 2026-11-15T17:20:37Z
+verified_at: 2026-11-15T17:19:54Z
+verified_event: sha256:6889562ac62a988465b4d5c4936ba5e86a521a3febb5ebe6fe4b4feb9efb82fe
+completed_at: 2026-11-15T17:20:37Z
+completed_event: sha256:74e51d95938ce307ea01460ffb919e0317258ce30e24375c8c0651278b46bdfb
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/release-ci-receipt.test.mjs tests/unit/release-publish.test.mjs"
+    result: "On main 474ce9c3, scripts/release-ci-receipt.mjs replacedJob accepts a base job the release tree's legs provably replace and refuses each mutation with job and base named (release-ci-receipt + release-publish 80/80; the E060 cases fail on cb414b85), rule release-receipt-binds-gate v3 states it with its 2026-11-09 amendment, landed in T5 (#522), and 522.yaml judges it merge. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/522.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:20:23Z
