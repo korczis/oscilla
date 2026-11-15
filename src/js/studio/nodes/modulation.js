@@ -343,8 +343,10 @@ export const stepVoltageSequencer = defineNode({
     inputs: 'Takt posune o krok (první takt hraje krok 1); Na začátek vrátí na krok 1 na příští '
       + 'hranici kroku, nebo na takt ve stejném okamžiku. Bez taktu krokuje rychlostí Rate a '
       + 'výstupy TRIGGER mlčí.',
-    outputs: 'CV A, B, C: řízení −1 až 1. Hradlo a Krok 1 až 16: TRIGGER.',
-    constraints: 'Délka 8 nebo 16 kroků; kroky za délkou a přeskočené kroky se nehrají a '
+    // The counts are the node's own (R050): SVS_MAX_STEPS and SVS_LENGTHS, never retyped.
+    outputs: `CV A, B, C: řízení −1 až 1. Hradlo a Krok 1 až ${SVS_MAX_STEPS}: TRIGGER.`,
+    constraints: `Délka ${SVS_LENGTHS.join(' nebo ')} kroků; kroky za délkou a přeskočené kroky `
+      + 'se nehrají a '
       + 'jejich Krok mlčí. Role řady určuje, co nese její výstup: CV, výšku v půltónech, '
       + 'oktávu, délku hradla kroku nebo sílu úhozu (0 až 1).',
   },
