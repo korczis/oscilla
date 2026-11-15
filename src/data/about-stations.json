@@ -296,8 +296,11 @@
       "datetime": "2026-11-15T07:57:42+01:00"
     },
     {
+      "release": "3.39",
       "title": "Nastavení a MIDI česky, krokový sekvencer říká, co hraje",
-      "summary": "Dialog Nastavení a stavové texty MIDI mluví česky (Frekvenční rozsah, Vstup MIDI, Připojit MIDI, Obnovit nástroj); karta krokového sekvenceru napětí, jehož kroky jsou všechny přeskočené, řekne, že nic nehraje, a počet kroků na kartě odpovídá tomu, co zní; počty kroků v syntezátoru se odvozují z jejich zdroje; jedna klávesnice je ověřená na každé pracovní ploše"
+      "summary": "Dialog Nastavení a stavové texty MIDI mluví česky (Frekvenční rozsah, Vstup MIDI, Připojit MIDI, Obnovit nástroj); karta krokového sekvenceru napětí, jehož kroky jsou všechny přeskočené, řekne, že nic nehraje, a počet kroků na kartě odpovídá tomu, co zní; počty kroků v syntezátoru se odvozují z jejich zdroje; jedna klávesnice je ověřená na každé pracovní ploše",
+      "commit": "e68d582",
+      "datetime": "2026-11-15T22:15:07+01:00"
     }
   ]
 }
