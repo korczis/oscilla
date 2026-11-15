@@ -19,7 +19,8 @@ import { routeOf } from './routes.js';
 import { createMidiSupport, midiSite } from './support.js';
 import { createMidiNotes } from './notes.js';
 import { recognise, controlOf } from './devices.js';
-import { createMidiMonitor, decodeMidi, describeMidi } from './monitor.js';
+import { decodeMidi } from './message.js';
+import { createMidiMonitor, describeMidi } from './monitor.js';
 import { createKeyboardUi } from './keyboard-ui.js';
 import { OWNER, notesRefusalOf, notesRefusedSentences } from '../core/output-bus.js';
 

@@ -10,7 +10,8 @@
 //   - recognise() names device and port role from the owner's port names, an unknown name plays;
 //   - controlOf() names Encoder 1 (CC 74), Fader 9 (CC 85), Pad 1 (note 36, channel 10) of a
 //     KeyLab mkII, and nothing for a note on channel 1;
-//   - decodeMidi()/describeMidi() read every MIDI 1.0 kind; the monitor keeps MONITOR_ROWS rows,
+//   - decodeMidi() (message.js, the one decoder, notes.js parses through it) and describeMidi()
+//     read every MIDI 1.0 kind and refuse a short or malformed message; the monitor keeps MONITOR_ROWS rows,
 //     newest first, and publishes at most once per MONITOR_FLUSH_MS, the last one never lost;
 //   - midi/ui.js: a known device's DAW port sounds no note, its play port and an unknown input
 //     do, every message reaches the monitor, the CC status line names the control.
@@ -174,6 +175,10 @@ test('decodeMidi and describeMidi read every MIDI 1.0 message kind', () => {
     [[0x12], 'Neznámá zpráva 12'],
   ];
   for (const [bytes, text] of lines) assert.equal(describeMidi(decodeMidi(bytes)), text);
+  // The one decoder (message.js) refuses a message short of its data bytes or with a bad one.
+  for (const bytes of [[0x90, 60], [0xb0, 74, 128], [0xc0], [0x90, 0x80, 1], [], null]) {
+    assert.equal(decodeMidi(bytes).kind, 'unknown', JSON.stringify(bytes));
+  }
   assert.equal(describeMidi(decodeMidi([0xb0, 74, 9]), { label: 'Enkodér 1' }),
     'Enkodér 1 · CC 74 = 9 · kanál 1');
 });

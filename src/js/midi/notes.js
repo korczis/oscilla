@@ -36,6 +36,7 @@ import { clamp } from '../core/math.js';
 import { midiToFrequency } from '../core/music.js';
 import { WAVEFORMS } from '../core/constants.js';
 import { createHeldNotes, sameSink } from './held-notes.js';
+import { decodeMidi } from './message.js';
 
 /**
  * The velocity law: amplitude (velocity / 127)^2, that is 40 log10(velocity / 127) dB. The
@@ -56,19 +57,14 @@ export function velocityLevel(velocity) {
  *   { kind: 'ignored' }
  */
 export function parseMidiMessage(data) {
-  const ignored = { kind: 'ignored' };
-  if (!data || data.length < 3) return ignored;
-  const [status, d1, d2] = data;
-  if (status < 0x80 || d1 > 0x7f || d2 > 0x7f) return ignored;
-  const type = status & 0xf0;
-  const channel = status & 0x0f;
-  if (type === 0x90 && d2 > 0) return { kind: 'note-on', channel, note: d1, velocity: d2 };
-  if (type === 0x90 || type === 0x80) return { kind: 'note-off', channel, note: d1, velocity: d2 };
-  if (type === 0xb0 && d1 === 120) return { kind: 'all-sound-off', channel };
-  if (type === 0xb0 && d1 === 123) return { kind: 'all-notes-off', channel };
-  if (type === 0xb0 && d1 === 64) return { kind: 'sustain', channel, down: d2 >= 64 };
-  if (type === 0xb0) return { kind: 'control-change', channel, controller: d1, value: d2 };
-  return ignored;
+  const m = decodeMidi(data);
+  if (m.kind === 'note-on' || m.kind === 'note-off') return m;
+  if (m.kind !== 'control-change') return { kind: 'ignored' };
+  const { channel, controller, value } = m;
+  if (controller === 120) return { kind: 'all-sound-off', channel };
+  if (controller === 123) return { kind: 'all-notes-off', channel };
+  if (controller === 64) return { kind: 'sustain', channel, down: value >= 64 };
+  return m;
 }
 
 /**
