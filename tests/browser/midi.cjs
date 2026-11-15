@@ -1142,6 +1142,106 @@ async function seamResponse(browser, b, origin, url) {
   }
 }
 
+// midi-seam-response-keys (V503, A7; oscilla-c3's review probes 1 and 3): the switch is reached
+// and toggled by the keyboard, with a visible focus ring, in every engine (Tab where the engine
+// tabs to checkboxes; WebKit, which does not by default, by the input's own focus, so the input is
+// focusable and named either way), and on a phone at 320 and 390 px the switch row and its Czech
+// label are whole inside the dialog and nothing else is on top of the switch.
+async function seamResponseKeys(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-response-keys';
+  const NAME = midiStub.STUB_NAME;
+  for (const vp of [{ width: 1280, height: 800 }, { width: 390, height: 844 },
+    { width: 320, height: 568 }]) {
+    const context = await browser.newContext({ viewport: vp, hasTouch: vp.width < 500,
+      isMobile: false });
+    await context.addInitScript(midiStub.install, {});
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+    try {
+      await page.goto(`${url}#m=playground`, { waitUntil: 'load' });
+      await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
+        { ms: LOAD_MS, what: `${leg}: the page is ready` });
+      // On a phone Settings sits in the status bar's Actions menu: opened the way a finger does.
+      const settings = page.locator('[data-osc="action.settings"]').locator('visible=true');
+      if (!(await settings.count())) {
+        await page.locator('[data-osc="status.actionsMenu"]').locator('visible=true').first()
+          .click();
+      }
+      await settings.first().click();
+      await until(() => page.evaluate(() => document.getElementById('osc-dlg-settings').open),
+        { ms: STEP_MS, what: `${leg}: the Settings dialog opens` });
+      const connect = page.locator('[data-osc="midi.connect"]');
+      await connect.scrollIntoViewIfNeeded();
+      await connect.click();
+      await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+      await seam(page, 'resolve', 0, [NAME]);
+      await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+      const sw = page.locator('[data-osc="midi.response"]');
+      const at = `${vp.width} px`;
+      if (vp.width >= 1000) {
+        // The keyboard: Tab from Connect MIDI's row until the switch has the focus (bounded).
+        await page.locator('[data-osc="midi.status"]').scrollIntoViewIfNeeded();
+        let reached = false;
+        if (b !== 'webkit') {
+          await page.evaluate(() => document.getElementById('osc-midi-title').focus?.());
+          for (let i = 0; i < 40 && !reached; i += 1) {
+            await page.keyboard.press('Tab');
+            reached = await page.evaluate(() => document.activeElement
+              && document.activeElement.dataset.osc === 'midi.response');
+          }
+        } else {
+          // WebKit tabs to checkboxes only with Option: the platform's own keyboard path.
+          await page.evaluate(() => document.getElementById('osc-midi-title').focus?.());
+          for (let i = 0; i < 40 && !reached; i += 1) {
+            await page.keyboard.press('Alt+Tab');
+            reached = await page.evaluate(() => document.activeElement
+              && document.activeElement.dataset.osc === 'midi.response');
+          }
+        }
+        const ring = await page.evaluate(() => getComputedStyle(document.querySelector(
+          '[data-osc="midi.response"] + span')).boxShadow);
+        await page.keyboard.press('Space');
+        const onByKey = await until(() => page.evaluate(() => (window.OSCILLA.app.midiResponse
+          && document.querySelector('[data-osc="midi.response"]').checked ? true : null)),
+        { ms: STEP_MS, what: `${leg}: Space turns the switch on` }).catch(() => false);
+        await page.keyboard.press('Space');
+        const offByKey = await until(() => page.evaluate(() => (!window.OSCILLA.app.midiResponse
+          && !document.querySelector('[data-osc="midi.response"]').checked ? true : null)),
+        { ms: STEP_MS, what: `${leg}: Space turns it off again` }).catch(() => false);
+        check(leg, id, `${at}: the switch is reached by the keyboard (${b === 'webkit' ? 'Option+Tab'
+          : 'Tab'}) with a visible focus ring, and Space turns it on and off`,
+        reached && ring && ring !== 'none' && onByKey === true && offByKey === true,
+        JSON.stringify({ reached, ring, onByKey, offByKey }));
+      } else {
+        await sw.scrollIntoViewIfNeeded();
+        const fit = await page.evaluate(() => {
+          const input = document.querySelector('[data-osc="midi.response"]');
+          const label = input.closest('label');
+          const text = document.getElementById('osc-midi-response-title');
+          const dlg = document.getElementById('osc-dlg-settings').getBoundingClientRect();
+          const r = label.getBoundingClientRect();
+          const knob = input.nextElementSibling.getBoundingClientRect();
+          const cx = knob.left + knob.width / 2;
+          const cy = knob.top + knob.height / 2;
+          const top = document.elementFromPoint(cx, cy);
+          return { inDialog: r.left >= dlg.left - 0.5 && r.right <= dlg.right + 0.5,
+            textWhole: text.scrollWidth <= text.clientWidth + 1,
+            onTop: !!top && (top === input || label.contains(top)), h: Math.round(r.height) };
+        });
+        check(leg, id, `${at}: the switch row and its Czech label are whole inside the dialog `
+          + 'and nothing is on top of the switch', fit.inDialog && fit.textWhole && fit.onTop
+          && fit.h >= 44, JSON.stringify(fit));
+      }
+      check(leg, id, `${at}: no page error`, errors.length === 0, errors.join(' | '));
+    } finally {
+      await context.close();
+    }
+  }
+}
+
 async function seamCc(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'midi-seam-cc';
@@ -2066,6 +2166,7 @@ async function main() {
             await seamSink(browser, b, origin, url);
             await seamCc(browser, b, origin, url);
             await seamResponse(browser, b, origin, url);
+            await seamResponseKeys(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
             await seamTransport(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
