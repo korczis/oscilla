@@ -1,0 +1,27 @@
+id: E075
+milestone: M046
+serves:
+  - "engineering-integrity#browser-suites-harnessed"
+title: "Firefox's envelope controls miss their 10 s wait since T22 (#osc-env-enable switch, envelope sliders by pointer)"
+slug: firefox-envelope-controls-wait
+priority: p2
+profile: implementation
+objective: "Pin and fix why, in Firefox only, the Envelope lab's controls intermittently do not reach their state within the 10 000 ms step deadline: journeys.cjs's setSwitch('#osc-env-enable', true) ('#osc-env-enable switched on: not reached within 10000 ms') and control-census's envelope.sustainSlider.pointer and envelope.attackSlider.pointer ('not reached within 10000 ms of wall time'). Log the click or pointer events and the switch's aria-checked with their stacks, as was done for E074, then fix the product or the harness, whichever the log names."
+why: "Required firefox legs went red on unrelated branches in one afternoon (2026-11-15): T22's members 87826c4d (attempt 1) and 7145ecde, #560 attempt 1 (journeys journey-5-persist:url), and #558's run 43716604765 at 4c40b17b (journeys journey-3-views:instrument; control-census 2/2 envelope.sustainSlider.pointer). oscilla-c3 classified them as main's since T22 and asked for an E id on #558. Each cost a rerun or a legs-not-OK round on a release train."
+current_state: "Open. Filed 2026-11-15 by oscilla-43 at oscilla-c3's request on #558; cause not pinned. Reruns that pass go in the flake ledger naming E075."
+scope:
+  - "tests/browser/journeys.cjs"
+  - "tests/browser/control-census.cjs"
+  - "src/js/labs/envelope.js"
+depends_on: []
+acceptance_criteria:
+  - "The cause is pinned from a Firefox failure log (events and state with their stacks), stated in this issue's current_state."
+  - "journeys.cjs and control-census.cjs's envelope checks pass 20 alternated Firefox rounds in a row under load, with main failing at least once in the same window (or the fix is a product change with a unit test that fails on main)."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/journeys.cjs"
+  - "node tests/browser/control-census.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-15'
+updated_at: '2026-11-15'
