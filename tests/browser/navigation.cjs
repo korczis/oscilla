@@ -463,10 +463,72 @@ function defineChecks() {
   // U114 (oscilla-43, 2026-11-15): no field is cut by the readout's own clip either. A field is
   // inside the readout whole or out of its visible box whole (wrapped away, in the title); v3.38.1
   // showed "Zesí" at 1536 px because the check above measured only the bar's edge.
+  // The states walked (oscilla-c3's condition): ready, the instrument playing, the longest
+  // instrument fields (two waveforms in stereo), a sweep, and the Studio playing at its Master.
+  const READOUT_STATES = [
+    ['ready', 'playground', null],
+    ['playing', 'playground', 'playing'],
+    ['dual-long', 'playground', 'dual'],
+    ['sweep', 'playground', 'sweep'],
+    ['studio-master', 'studio', 'studio'],
+  ];
   def('status-readout-fields', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     const ev = (fn, arg) => page.evaluate(fn, arg);
     const res = {};
+    const measure = () => ev(() => {
+      const ro = document.querySelector('[data-osc="status.readout"]');
+      const box = document.querySelector('.osc-sb-state').getBoundingClientRect();
+      const title = ro.getAttribute('title') || '';
+      const fields = ['frequency', 'waveform', 'pattern', 'duration', 'gain']
+        .map((f) => ro.querySelector(`[data-osc="status.${f}"]`));
+      const lost = fields.filter((e) => {
+        const r = e.getBoundingClientRect();
+        const whole = getComputedStyle(e).display !== 'none' && r.width > 0
+          && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
+        return !whole && !title.includes(e.textContent.trim());
+      }).map((e) => e.dataset.osc);
+      // cut: drawn partly inside the readout's clip box and partly outside it
+      const rb = ro.getBoundingClientRect();
+      const cut = fields.filter((e) => {
+        const r = e.getBoundingClientRect();
+        if (getComputedStyle(e).display === 'none' || !(r.width > 0)) return false;
+        const meets = r.right > rb.left + 0.5 && r.left < rb.right - 0.5
+          && r.bottom > rb.top + 0.5 && r.top < rb.bottom - 0.5;
+        const inside = r.left >= rb.left - 0.5 && r.right <= rb.right + 0.5
+          && r.top >= rb.top - 0.5 && r.bottom <= rb.bottom + 0.5;
+        return meets && !inside;
+      }).map((e) => `${e.dataset.osc} "${e.textContent.trim()}"`);
+      return { lost, cut, title, fields: fields.length,
+        timedOut: lost.length > 0 || cut.length > 0 || !title };
+    });
+    const enter = (state) => ev((st) => {
+      const a = window.OSCILLA.app;
+      if (st === 'playing') { a.setContinuous(true); if (!a.latched) a.toggleLatch(); }
+      if (st === 'dual') {
+        a.setDualSource(true);
+        a.setStereo(true);
+        a.dual.a.wave = 'sawtooth';
+        a.dual.b.wave = 'triangle';
+      }
+      if (st === 'sweep') a.source = 'sweep';
+      if (st === 'studio') window.OSCILLA.studio.transport.start();
+    }, state);
+    const reached = (state) => ev((st) => {
+      const a = window.OSCILLA.app;
+      if (st === 'playing') return a.playing;
+      if (st === 'dual') return a.source === 'dual' && a.dual.stereo;
+      if (st === 'sweep') return a.source === 'sweep';
+      if (st === 'studio') return a.studioPlaying;
+      return true;
+    }, state);
+    const leave = () => ev(() => {
+      const a = window.OSCILLA.app;
+      if (a.studioPlaying) window.OSCILLA.studio.transport.stop();
+      if (a.latched) a.toggleLatch();
+      a.setDualSource(false);
+      if (a.source === 'sweep') a.source = 'single';
+    });
     for (const [w, h] of [[1280, 800], [1536, 1024], [1920, 1080], [390, 844]]) {
       await page.setViewportSize({ width: w, height: h });
       for (const ws of ['playground', 'analyzer', 'presets', 'measure', 'studio']) {
@@ -474,32 +536,16 @@ function defineChecks() {
         await until(() => ev(([x, width]) => window.OSCILLA.app.workspace === x
           && window.innerWidth === width, [ws, w]),
         { ms: 8000, what: `status-readout-fields: ${ws} at ${w}` });
-        res[`${ws}@${w}`] = await ev(() => {
-          const ro = document.querySelector('[data-osc="status.readout"]');
-          const box = document.querySelector('.osc-sb-state').getBoundingClientRect();
-          const title = ro.getAttribute('title') || '';
-          const fields = ['frequency', 'waveform', 'pattern', 'duration', 'gain']
-            .map((f) => ro.querySelector(`[data-osc="status.${f}"]`));
-          const lost = fields.filter((e) => {
-            const r = e.getBoundingClientRect();
-            const whole = getComputedStyle(e).display !== 'none' && r.width > 0
-              && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
-            return !whole && !title.includes(e.textContent.trim());
-          }).map((e) => e.dataset.osc);
-          // cut: drawn partly inside the readout's clip box and partly outside it
-          const rb = ro.getBoundingClientRect();
-          const cut = fields.filter((e) => {
-            const r = e.getBoundingClientRect();
-            if (getComputedStyle(e).display === 'none' || !(r.width > 0)) return false;
-            const meets = r.right > rb.left + 0.5 && r.left < rb.right - 0.5
-              && r.bottom > rb.top + 0.5 && r.top < rb.bottom - 0.5;
-            const inside = r.left >= rb.left - 0.5 && r.right <= rb.right + 0.5
-              && r.top >= rb.top - 0.5 && r.bottom <= rb.bottom + 0.5;
-            return meets && !inside;
-          }).map((e) => `${e.dataset.osc} "${e.textContent.trim()}"`);
-          return { lost, cut, title, fields: fields.length,
-            timedOut: lost.length > 0 || cut.length > 0 || !title };
-        });
+        res[`${ws}@${w}`] = await measure();
+      }
+      for (const [name, ws, state] of READOUT_STATES) {
+        if (!state) continue;
+        await ev((x) => window.OSCILLA.app.setWorkspace(x), ws);
+        await enter(state);
+        await until(() => reached(state), { ms: 8000,
+          what: `status-readout-fields: ${name} at ${w}` });
+        res[`${name}@${w}`] = await measure();
+        await leave();
       }
     }
     await page.close();
