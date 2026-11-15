@@ -19,4 +19,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-11'
-updated_at: '2026-11-11'
+updated_at: 2026-11-15T17:24:09Z
+started_at: 2026-11-15T17:22:50Z
+started_event: sha256:f635923ef4437035693911711bb9086f6bde8c7127c3af7fc7e8a5e741db4f99
+verified_at: 2026-11-15T17:23:22Z
+verified_event: sha256:cd6025e23b16d5b9a714e5a6f2c58f7ce387c76569b90d1ceec853ccda9b0a72
+completed_at: 2026-11-15T17:24:09Z
+completed_event: sha256:c7fb6a72b830536d6abccd9f8ce45b3a6dd662a42b8718054ea0a3cd7e7aef79
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/synth-voice-pool.test.mjs"
+    result: "On main 474ce9c3, the voice pool judges age by arrival order (tests/unit/synth-voice-pool.test.mjs 9/9, case 8 fails on 66b0c2c5^; e-poly in tests/browser/synth-engines.cjs runs in test:synth); E071 records the WebKit rate 5/56 before and e-poly 25/25 after, landed in T9 (#531), and 531.yaml records 15/15 at the T9 head with verdict merge. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/531.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:23:54Z
