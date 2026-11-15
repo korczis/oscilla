@@ -84,7 +84,7 @@ const MEASURE_RTA = Object.freeze({
   id: 'measure-rta',
   workspace: 'measure',
   measureTab: 'rta',
-  label: 'RTA in Measure',
+  label: 'RTA v Měření',
   from: Object.freeze(['analyzer', 'compare']),
   osc: null,
 });

@@ -644,7 +644,7 @@ function defineChecks() {
       await page.close();
     }
     const bad = rows.filter((r) => r.workspace !== r.ws || r.dataMode !== r.ws
-      || (r.ws === 'experiments' && !r.loaded) || (r.ws === 'about' && !/About/.test(r.title)));
+      || (r.ws === 'experiments' && !r.loaded) || (r.ws === 'about' && !/O aplikaci/.test(r.title)));
     return { ok: bad.length === 0, bad };
   });
 
@@ -1287,8 +1287,8 @@ function defineChecks() {
     return { ...H.verdict({
       staysInPresets: loaded.workspace === 'presets',
       // A coarse pointer has no Space: the notice sends the tap to the Playground (A1).
-      noticeNamesSpace: loaded.coarse ? /Open the Playground to play it/.test(loaded.said)
-        : /Space/.test(loaded.said),
+      noticeNamesSpace: loaded.coarse ? /Otevřete Playground a zahrajte ho/.test(loaded.said)
+        : /mezerník/.test(loaded.said),
       spacePlaysIt: space.heard === 'instrument',
     }), loaded, controls, space };
   });
@@ -1386,7 +1386,7 @@ function defineChecks() {
         && ['quick-add', 'connect', 'find', 'undo'].every((k) => studio.rows.includes(k))
         && !studio.rows.includes('trigger') && /^Space play or stop/.test(studio.timeline || ''),
       studioViaHelp: JSON.stringify(studioHelp) === JSON.stringify(studio),
-      measure: measure.title === 'Measure' && /^Nothing/.test(measure.space || '')
+      measure: measure.title === 'Měření' && /^Nothing/.test(measure.space || '')
         && measure.rows.includes('measure-abort') && !measure.rows.includes('trigger')
         && !measure.rows.includes('quick-add'),
     }), repeated, prose, lists, play, studio, measure };
@@ -1467,15 +1467,15 @@ function defineChecks() {
     return { ...H.verdict({
       logoNamed: /^OSCILLA · /.test(logo.name || '') && logo.title === 'Open the Playground',
       logoOpensPlayground: logo.reached === 'playground',
-      skipNamed: skip.playground.name === 'Skip to main content: Playground'
-        && skip.measure.name === 'Skip to main content: Measure'
-        && skip.studio.name === 'Skip to main content: Studio',
+      skipNamed: skip.playground.name === 'Přeskočit na hlavní obsah: Playground'
+        && skip.measure.name === 'Přeskočit na hlavní obsah: Měření'
+        && skip.studio.name === 'Přeskočit na hlavní obsah: Studio',
       skipLands: ['playground', 'measure', 'studio'].every((w) => skip[w].landed === 'osc-main'),
-      helpNamed: helpName === 'Keyboard shortcuts',
+      helpNamed: helpName === 'Klávesové zkratky',
       helpOpensIt: !!help && help.id === 'osc-dlg-help' && help.title === helpName
         && help.focusInside,
       exportHasNoImport: exportItems.length > 0 && !exportItems.some((t) => /import/i.test(t)),
-      importOpensPicker: /^Import config/.test(importName || '') && picker === 'osc-import-file',
+      importOpensPicker: /^Importovat nastavení/.test(importName || '') && picker === 'osc-import-file',
     }), logo, skip, helpShown, helpName, help, exportItems, importName, picker };
   });
 

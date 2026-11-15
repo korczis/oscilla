@@ -166,19 +166,19 @@ under *Leads on to* are the Related strip its page header shows.
 
 | Workspace | Leads on to | Open |
 | --- | --- | --- |
-| **Playground** | [Measure](https://korczis.github.io/oscilla/#m=measure), [Synth](https://korczis.github.io/oscilla/#m=synth), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=playground) |
-| **Measure** | [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Studio](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=measure) |
-| **Experiments** | [Measure](https://korczis.github.io/oscilla/#m=measure), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=experiments) |
-| **Analyzer** (Analyze) | [Measure](https://korczis.github.io/oscilla/#m=measure), [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=analyzer) |
-| **Filter Lab** (Analyze) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=filter-automation), [Analyzer](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=filter) |
-| **Compare** (Analyze) | [Experiments](https://korczis.github.io/oscilla/#m=experiments), [Measure](https://korczis.github.io/oscilla/#m=measure), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=compare) |
-| **Synthesis** (Synthesis) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat) | [Open](https://korczis.github.io/oscilla/#m=synthesis) |
-| **Sequencer** (Synthesis) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence), [Presets](https://korczis.github.io/oscilla/#m=presets) | [Open](https://korczis.github.io/oscilla/#m=sequencer) |
-| **Presets** (Synthesis) | [Playground](https://korczis.github.io/oscilla/#m=playground), [Synth](https://korczis.github.io/oscilla/#m=synth), [Synthesis](https://korczis.github.io/oscilla/#m=synthesis) | [Open](https://korczis.github.io/oscilla/#m=presets) |
-| **Learn** | [Analyzer](https://korczis.github.io/oscilla/#m=analyzer), [Synth](https://korczis.github.io/oscilla/#m=synth), [Measure](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=learn) |
-| **Studio** | [Synth](https://korczis.github.io/oscilla/#m=synth), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer), [Filter Lab](https://korczis.github.io/oscilla/#m=filter) | [Open](https://korczis.github.io/oscilla/#m=studio) |
-| **Synth** | [Studio](https://korczis.github.io/oscilla/#m=studio), [Sequencer](https://korczis.github.io/oscilla/#m=sequencer), [Learn](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=synth) |
-| **About** | [Playground](https://korczis.github.io/oscilla/#m=playground), [Learn](https://korczis.github.io/oscilla/#m=learn), [Measure](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=about) |
+| **Playground** | [Měření](https://korczis.github.io/oscilla/#m=measure), [Synth](https://korczis.github.io/oscilla/#m=synth), [Výuka](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=playground) |
+| **Měření** | [Experimenty](https://korczis.github.io/oscilla/#m=experiments), [Studio](https://korczis.github.io/oscilla/#m=studio&st=measurement-sweep), [Výuka](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=measure) |
+| **Experimenty** | [Měření](https://korczis.github.io/oscilla/#m=measure), [Analyzátor](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=experiments) |
+| **Analyzátor** (Analýza) | [Měření](https://korczis.github.io/oscilla/#m=measure), [Experimenty](https://korczis.github.io/oscilla/#m=experiments), [Výuka](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=analyzer) |
+| **Filtry** (Analýza) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=filter-automation), [Analyzátor](https://korczis.github.io/oscilla/#m=analyzer) | [Open](https://korczis.github.io/oscilla/#m=filter) |
+| **Porovnání** (Analýza) | [Experimenty](https://korczis.github.io/oscilla/#m=experiments), [Měření](https://korczis.github.io/oscilla/#m=measure), [Výuka](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=compare) |
+| **Syntéza** (Syntéza) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=subtractive-synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=stereo-beat) | [Open](https://korczis.github.io/oscilla/#m=synthesis) |
+| **Sekvencer** (Syntéza) | [Synth](https://korczis.github.io/oscilla/#m=synth), [Studio](https://korczis.github.io/oscilla/#m=studio&st=sweep-sequence), [Předvolby](https://korczis.github.io/oscilla/#m=presets) | [Open](https://korczis.github.io/oscilla/#m=sequencer) |
+| **Předvolby** (Syntéza) | [Playground](https://korczis.github.io/oscilla/#m=playground), [Synth](https://korczis.github.io/oscilla/#m=synth), [Syntéza](https://korczis.github.io/oscilla/#m=synthesis) | [Open](https://korczis.github.io/oscilla/#m=presets) |
+| **Výuka** | [Analyzátor](https://korczis.github.io/oscilla/#m=analyzer), [Synth](https://korczis.github.io/oscilla/#m=synth), [Měření](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=learn) |
+| **Studio** | [Synth](https://korczis.github.io/oscilla/#m=synth), [Sekvencer](https://korczis.github.io/oscilla/#m=sequencer), [Filtry](https://korczis.github.io/oscilla/#m=filter) | [Open](https://korczis.github.io/oscilla/#m=studio) |
+| **Synth** | [Studio](https://korczis.github.io/oscilla/#m=studio), [Sekvencer](https://korczis.github.io/oscilla/#m=sequencer), [Výuka](https://korczis.github.io/oscilla/#m=learn) | [Open](https://korczis.github.io/oscilla/#m=synth) |
+| **O aplikaci** | [Playground](https://korczis.github.io/oscilla/#m=playground), [Výuka](https://korczis.github.io/oscilla/#m=learn), [Měření](https://korczis.github.io/oscilla/#m=measure) | [Open](https://korczis.github.io/oscilla/#m=about) |
 
 How the workspaces lead into each other, inferred from the same registry (each arrow is a
 `related` entry; the app states each reason in Czech, so this English page omits them):
@@ -186,21 +186,21 @@ How the workspaces lead into each other, inferred from the same registry (each a
 ```mermaid
 flowchart LR
   ws_playground["Playground"]
-  ws_measure["Measure"]
-  ws_experiments["Experiments"]
-  ws_learn["Learn"]
+  ws_measure["Měření"]
+  ws_experiments["Experimenty"]
+  ws_learn["Výuka"]
   ws_studio["Studio"]
   ws_synth["Synth"]
-  ws_about["About"]
-  subgraph grp_analyze["Analyze"]
-    ws_analyzer["Analyzer"]
-    ws_filter["Filter Lab"]
-    ws_compare["Compare"]
+  ws_about["O aplikaci"]
+  subgraph grp_analyze["Analýza"]
+    ws_analyzer["Analyzátor"]
+    ws_filter["Filtry"]
+    ws_compare["Porovnání"]
   end
-  subgraph grp_synthesis["Synthesis"]
-    ws_synthesis["Synthesis"]
-    ws_sequencer["Sequencer"]
-    ws_presets["Presets"]
+  subgraph grp_synthesis["Syntéza"]
+    ws_synthesis["Syntéza"]
+    ws_sequencer["Sekvencer"]
+    ws_presets["Předvolby"]
   end
   ws_playground --> ws_measure
   ws_playground --> ws_synth
@@ -309,10 +309,11 @@ own page: [claims explorer](https://korczis.github.io/oscilla/lab/tvrzeni/), [pe
 
 ## Navigation
 
-The sidebar has these entries: **Playground**, **Measure**, **Experiments**, **Analyze**,
-**Synthesis**, **Learn**, **Studio**, **Synth** and **About**, in that order. Analyze and Synthesis are
-groups. Analyze opens Analyzer, Filter Lab and Compare; Synthesis opens Synthesis, Sequencer and
-Presets. Every workspace is one tap away: the groups start expanded, and a group's button
+The sidebar has these entries: **Playground**, **Měření**, **Experimenty**, **Analýza**,
+**Syntéza**, **Výuka**, **Studio**, **Synth** and **O aplikaci**, in that order. The app names
+its workspaces in Czech; Playground, Studio and Synth stay as names. Analýza and Syntéza are
+groups. Analýza opens Analyzátor, Filtry and Porovnání; Syntéza opens Syntéza, Sekvencer and
+Předvolby. Every workspace is one tap away: the groups start expanded, and a group's button
 collapses or expands its list (the choice is kept). On a desktop (1024 px and wider) the sidebar
 sits beside the workspace and its button in the top bar collapses it to icons (kept too; it
 expands while the pointer or focus is in it); on a phone or tablet it is a drawer behind the
