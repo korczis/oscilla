@@ -131,9 +131,10 @@ const D = {
     await page.keyboard.press('Enter');
   },
   /** A slider moved by pointer: a click on the track at the fraction `at` of its width.
-   *  The locator's own click reads the box when it clicks and refuses a point that another
-   *  element covers (E075: a box read once, then page.mouse.click, missed Firefox's envelope
-   *  sliders on T23 while the row said only "not reached"). */
+   *  The locator's own click reads the box when it clicks, waits until it is stable and
+   *  refuses a point that another element covers, failing the row with its own message.
+   *  E075: with a box read once and page.mouse.click, Firefox's envelope sliders sometimes
+   *  never moved (main and T23 alike); why is not pinned, so a failure here names it. */
   slide: (sel, at) => async (page) => {
     const l = page.locator(sel).first();
     await l.scrollIntoViewIfNeeded();
