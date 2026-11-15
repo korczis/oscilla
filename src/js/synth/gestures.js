@@ -33,12 +33,17 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
   let burst = null;
   let own = false; // the burst's own setControl: not a gesture that flushes it
 
-  /** End burst b's gesture, if it is still the open one: an undo closes every gesture, and a
-   *  gesture begun after it (a drag) is not b's to end (C3-548-1). */
+  /** Whether burst b's gesture is still the open one: an undo closes every gesture. */
+  const live = (b) => {
+    const h = handle();
+    return typeof h.gestureId !== 'function' || h.gestureId() === b.id;
+  };
+
+  /** End burst b's gesture, if it is still the open one: a gesture begun after an undo closed
+   *  b's (a drag) is not b's to end (C3-548-1). */
   function close(b) {
     clearTimeout(b.timer);
-    const h = handle();
-    if (typeof h.gestureId !== 'function' || h.gestureId() === b.id) h.endGesture();
+    if (live(b)) handle().endGesture();
   }
 
   /** Close the open burst now (21's R3): history nests gestures and commits the outermost, so
@@ -53,6 +58,11 @@ export function createGestures({ controlOf, valueOf, setControl, handle, say, la
 
   /** The burst of control `cid` (`text` its undo label): the open one, or a new one. */
   function open(cid, text) {
+    // A burst whose gesture an undo closed is gone: the run goes on in a new one (C3-548-4).
+    if (burst && !live(burst)) {
+      clearTimeout(burst.timer);
+      burst = null;
+    }
     if (!burst || burst.cid !== cid) {
       flush();
       const h = handle();
