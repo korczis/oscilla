@@ -190,8 +190,8 @@ test('S8: after an XY preset and Panel Init, a key says why the keys sound nothi
   assert.equal(cmp.synthPreset('init'), true);
   assert.equal(keysEnvelopes(st.getModel()), 0, 'the pad\'s cables took both EG gates');
   sink.noteOn(60, 100);
-  assert.match(cmp.synth.status,
-    /The keys sound nothing: the XY pad's cables into EG 1 Gate and EG 2 Gate/);
+  assert.ok(cmp.synth.status.startsWith(XY.KEYS_SILENT.pad('EG 1 Gate a EG 2 Gate')),
+    cmp.synth.status);
   sink.noteOff(60);
 });
 
@@ -210,7 +210,7 @@ test('S8: the Panel tab shows the reason with Unpatch the pad, one BATCH that re
     assert.equal(takeGates(st).ok, true, 'the pad\'s Gate taken into both EG gates explicitly');
     const html = XYTAB.html();
     assert.match(html, /data-osc="synth.keys-silent"/);
-    assert.match(html, /data-xy-unpatch=""[^>]*>Unpatch the pad</);
+    assert.match(html, /data-xy-unpatch=""[^>]*>Odpojit pad</);
     const depth = st.debugInfo().undoDepth;
     const a = XY.xyUnpatchAction(st.getModel(), PANEL);
     assert.equal(a.action.type, 'BATCH');

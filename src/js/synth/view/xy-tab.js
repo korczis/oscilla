@@ -83,7 +83,7 @@ export function createXyTab({ panel, get, host, nodes, model, dispatch, say, jac
     if (done.ok) {
       showTab('xy');
       cmp().synth.preset = id;
-      say(`XY preset ${recipe.name}.`);
+      say(`Předvolba XY ${recipe.name}.`);
     }
     return done.ok;
   }

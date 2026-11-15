@@ -201,5 +201,5 @@ export function linkPlan(model0, panel, link, { registry = NODE_REGISTRY, module
     panel, a)]).filter(([, edges]) => edges.length && edges.every((e) => removed.has(e.id)))
     .map(([a]) => [a.key, given.get(`${a.module}.${a.key}`) ?? p.amounts[a.key] ?? 0]);
   if (kept.length) steps.push({ type: 'METADATA_SET', synthAmounts: Object.fromEntries(kept) });
-  return { action: { type: 'BATCH', label: 'Apply link to Synth panel', steps }, skipped };
+  return { action: { type: 'BATCH', label: 'Použít odkaz na panel Synthu', steps }, skipped };
 }
