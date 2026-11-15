@@ -15,7 +15,8 @@
 # declarations, scripts/landing/copy.mjs, scripts/ui-flowbite-pro-measure.mjs, README.md,
 # docs/v31/user-guide.md, the new tests/unit/shell-lang.test.mjs and the readers that moved.
 # Judged at 84460015 on base origin/main 474ce9c3, 2026-11-15, in the reviewer's own detached
-# worktree ~/dev/oscilla-wt/review-526.
+# worktree ~/dev/oscilla-wt/review-526; superseded at 85412d57 (oscilla-43's
+# test(studio) fix for C3-558-1, below), the same digest.
 #
 # Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
 # acting as rev-seat for every train (Q108 A). It built none of this: oscilla-0b built U106 and
@@ -90,10 +91,31 @@
 # learn-demo-back as above, main's) and ui-flowbite-pro exit 1 (11/12 once, 12/12 x 5, as
 # above, undetermined).
 #
-# Verdict: merge, under the condition above. No finding.
+# Superseding (2026-11-15): the pull request's run 43716604765 on 4c40b17b (this file's first
+# version) was red. Each leg's suite list equals shards.cjs --plan (control-census split 1/2 and
+# 2/2 per engine); legs 2 chromium, 1 webkit and 2 firefox failed tests/browser/
+# v31-studio-transport.cjs: status-bar-studio (2 checks) and reset-over-studio read
+# "Zesílení -30.5 dB" / "Zesílení -21.9 dB" where the suite still built `Gain ${dbText(...)}`.
+# U106 renamed the status bar's gain label (src/index.html, app.js statusGainText and its unit
+# tests) and left this browser reader: C3-558-1, P1, gate red. The reviewer had not run
+# v31-studio-transport locally (its own miss: the suite reads the renamed text). Reproduced:
+# chromium at 84460015 exit 1 (3 failures, 41 passed), at main 474ce9c3 exit 0 (44 passed).
+# Closed by 85412d57 (oscilla-43; the two readers and the header comment, the only file); at
+# 85412d57 v31-studio-transport in chromium, firefox and webkit exit 0 (131 checks), and no other
+# `Gain ${` or "Gain -" reader in tests/browser or tests/unit. Digest at 85412d57 unchanged
+# (cec49b6a, the same 2 guarded paths).
+# The run's firefox reds are not this train's: leg 1 journeys journey-3-views:instrument and
+# leg 2 control-census envelope.sustainSlider.pointer, both an envelope control not switching
+# within 10 s. The same shape failed firefox on 87826c4d attempt 1 (journey-5-persist:url,
+# "#osc-env-enable switched on"), on 7145ecde (envelope.attackSlider.pointer) and on #560's first
+# attempt; U106 changes no envelope or input code (its src diff there is two title strings).
+# Main's since T22, undetermined in cause; the flake ledger row names it.
+#
+# Verdict: merge, under the condition above, at 85412d57. One finding, closed.
 schema: review-verdict/v1
 pr: 558
 verdict: merge
-reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 84460015)
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 85412d57)
 content: cec49b6a2297c9f39430da834dd6b9360c48f3c5d99a0e91e3abc8d706a85b3a
-findings: []
+findings:
+  - { id: C3-558-1, severity: P1, status: closed, title: "v31-studio-transport still read the status bar's gain as \"Gain <dB>\" after U106 renamed it Zesílení (gate red in all three engines); closed by 85412d57" }
