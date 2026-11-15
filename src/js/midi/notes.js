@@ -108,7 +108,8 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   const pedalOf = (source, channel) => `${source}:${channel}`;
   // The input a source belongs to: the keyboard's `kbd-<source>`, else a MIDI input's number.
   const inputOf = (source) => (typeof source === 'string' && source.startsWith('kbd-')
-    ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy' : 'midi');
+    ? source.slice(4) : typeof source === 'string' && source.startsWith('xy') ? 'xy'
+      : source === 'answer' ? 'answer' : 'midi');
 
   /** Who refuses a note that would start on the engine now: the bus's claim, else ownedBy(). */
   function refusedBy() {
@@ -122,8 +123,12 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     if (!held.held().length) release();
   }
 
-  /** Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. */
-  function noteOn(note, velocity, source = 0, channel = 0) {
+  /**
+   * Note `note` (0-127) at `velocity` (1-127) from `source`: { ok, reason? | id, ... }. `at`, a
+   * context time, plans it on the audio clock (V503's answer); only the one instrument takes a
+   * planned note, so without a sink it is refused (the engine's own voice starts now or never).
+   */
+  function noteOn(note, velocity, source = 0, channel = 0, { at } = {}) {
     const key = keyOf(source, channel, note);
     sustained.delete(key); // pressed again: its own Note Off decides now
     const sink = route(); // the one instrument plays the note (K065, K247), one path for all
@@ -138,6 +143,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       }
       refusing = null;
     }
+    if (!sink && at !== undefined) return { ok: false, reason: 'no-instrument' };
     const to = sink || ENGINE;
     // A re-press on the same player retriggers there (the engine fades the old note under the
     // new one); on another player hold() first releases it where it sounded.
@@ -155,7 +161,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
       }
       let r;
       starting(true);
-      try { r = sink.noteOn(note, velocity); } finally { starting(false); }
+      try { r = sink.noteOn(note, velocity, { at }); } finally { starting(false); }
       if (r && r.ok !== false) held.hold(key, { sink, note, velocity, input: inputOf(source) });
       return played(r, note, source);
     }
@@ -215,7 +221,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
 
   /** Release note `note` from `source` with its release time; false when it is not sounding. */
   /** `forced` (blur, hide, Escape): a stop never deferred by the minimum gate (K184). */
-  function noteOff(note, source = 0, channel = 0, { forced = false } = {}) {
+  function noteOff(note, source = 0, channel = 0, { forced = false, at } = {}) {
     const key = keyOf(source, channel, note);
     if (!forced && pedals.has(pedalOf(source, channel)) && held.sinkOf(key)) {
       sustained.set(key, { note, source, channel });
@@ -225,7 +231,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     // A key not held here: where it would sound now.
     const sink = held.releaseKey(key) || route() || ENGINE;
     const off = sink === ENGINE ? ENGINE.noteOff(note, { key, forced })
-      : sink.noteOff(note, { key, forced });
+      : sink.noteOff(note, { key, forced, at });
     noted(false, note, source);
     releaseIfIdle();
     return off;

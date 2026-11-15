@@ -43,8 +43,8 @@ export function createWorkspaceKeys(ctx) {
       // The panel goes in with this note: said here, once (C3-553-1).
       const synth = this.synthSink();
       const cmp = this;
-      return { ...synth, noteOn(note, velocity) {
-        const r = synth.noteOn(note, velocity);
+      return { ...synth, noteOn(note, velocity, o) {
+        const r = synth.noteOn(note, velocity, o);
         if (holdsPanel(ctx.handle.getModel())) cmp.keysInserted();
         return r;
       } };
