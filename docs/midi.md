@@ -292,8 +292,9 @@ A controller's transport plays the workspace in view (`src/js/midi/transport.js`
 | Clock (`F8`, 24 per quarter note) | any input | measured: the MIDI section shows **Hodiny MIDI: … BPM** |
 
 The transport is the Sequencer's own in the Sequencer and the Studio's everywhere else. A message
-with nothing to do (Stop when stopped, Continue while playing) does nothing, and the monitor row
-says what each message did (`… → Studio: přehrát od začátku`). Record, Fast forward and the other
+with nothing to do (Stop when stopped, Continue while playing) does nothing, nor does a Start or
+Continue the Studio refuses (a measurement owns the output: the playhead stays where it was), and
+the monitor row says only what each message did (`… → Studio: přehrát od začátku`). Record, Fast forward and the other
 DAW buttons act on nothing. The clock's tempo is read over the last whole beat on the messages'
 own timestamps and clears half a second after the clock stops; the transport never follows it by
 itself (ADR 0058, its V508 note). OSCILLA sends no MIDI.

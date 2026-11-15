@@ -98,6 +98,18 @@ test('midiTransport drives the Studio\'s transport outside the Sequencer', () =>
   assert.deepEqual(calls, ['studio.play', 'studio.return', 'studio.loop']);
 });
 
+test('C3-555-1: a refused Start or Continue moves nothing and says nothing', () => {
+  const { ui, calls } = rig();
+  ui.measureOwnsOutput = () => true; // a measurement holds the output
+  assert.equal(ui.midiTransport('start'), null);
+  assert.equal(ui.midiTransport('continue'), null);
+  assert.deepEqual(calls, [], 'no rewind, no play');
+  ui.measureOwnsOutput = () => false;
+  ui.studioPlay = function refuse() { calls.push('studio.play:refused'); return false; };
+  assert.equal(ui.midiTransport('continue'), null, 'the transport refused: nothing is said');
+  assert.deepEqual(calls, ['studio.play:refused']);
+});
+
 test('midiTransport drives the Sequencer\'s own transport in the Sequencer', () => {
   const { ui, calls } = rig({ workspace: 'sequencer' });
   assert.deepEqual(ui.midiTransport('start'), { target: 'sequencer' });

@@ -245,8 +245,19 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
       if (act === 'stop') { if (!playing) return null; this.studioStop({ keepArmed: true }); }
       else if (act === 'rewind') this.studioReturn();
       else if (act === 'loop') this.studioToggleLoop();
-      else if (act === 'start') { this.studioReturn(); if (!playing) this.studioPlay(); }
-      else if (act === 'continue') { if (playing) return null; this.studioPlay(); }
+      else if (act === 'start' || act === 'continue') {
+        if (playing) {
+          if (act === 'continue') return null;
+          this.studioReturn();
+          return { target };
+        }
+        // A measurement owns the output: the Studio would refuse, so nothing moves (C3-555-1).
+        const owned = typeof this.measureOwnsOutput === 'function' && this.measureOwnsOutput();
+        if (owned) return null;
+        if (act === 'start') this.studioReturn();
+        // Said only when the Studio played (studioPlay says its own refusal).
+        if (!this.studioPlay()) return null;
+      }
       return { target };
     },
 
