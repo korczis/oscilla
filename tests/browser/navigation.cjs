@@ -426,12 +426,12 @@ function defineChecks() {
     await go('playground');
     // The Playground lays out Hold and Trigger: above the phone width no second Play (on a
     // phone the status Play is the bar's transport key everywhere, by design), and its idle
-    // scope keeps its own fallback (no workspace hint) and names Hold to Play, drawn and
+    // scope keeps its own fallback (no workspace hint) and names Podržet a hrát (U114), drawn and
     // described
     const home = await settle((s) => s.ws === 'playground' && s.shown === s.phone
-      && s.idleHint == null && /Hold to Play\b/.test(s.caption || '')
-      && /ukáže Hold to Play/.test(s.desc),
-    'the Playground shows one Play and its scope names Hold to Play');
+      && s.idleHint == null && /Podržet a hrát/.test(s.caption || '')
+      && /ukáže tlačítko Podržet a hrát/.test(s.desc),
+    'the Playground shows one Play and its scope names Podržet a hrát');
     res.playgroundOnePlay = home;
     for (const ws of ['analyzer', 'filter', 'compare', 'presets']) {
       await go(ws);

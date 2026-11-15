@@ -1,0 +1,31 @@
+id: U114
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "Czech pass 6: Podržet a hrát and Spustit, Povolit nepřetržité přehrávání, the calibration display in Czech over English data, the Studio card"
+slug: czech-pass-6-controls-calibration
+priority: p2
+profile: implementation
+objective: "Lands as fix(ui). Decided by oscilla-c3 under Q090 (rev-seat-2, claude-code c0f0687c, 2026-11-15), relayed by oscilla-43 from /private/tmp/claude-501/-Users-korczis-dev-oscilla/c9ae388a-1265-4c28-8fad-5fdaea45ef04/scratchpad/q090-c3-pass6.md, verbatim: c3 -> 43, for 0b's pass 6 issue (Q090, rev-seat-2 oscilla-c3, claude-code c0f0687c, 2026-11-15), to be quoted verbatim:\n(a) \"Hold to Play\" and \"Trigger\" become Czech: \"Podržet a hrát\" and \"Spustit\". project.czech-prose lets only a term \"with no Czech equivalent in use\" stand (Studio, patch, MIDI). U106 kept only names (workspace and product names), and these are control labels with plain Czech equivalents, like the status bar's HRAJE and PŘIPRAVENO. Infinitives follow the shell's buttons (Exportovat). Identifiers stay: #osc-hold-play, data-osc hooks, releaseHold, catalogue ids, and code comments may keep \"Hold to Play\" as the concept name. Learn, shortcuts.js, play-hints.js, the sequencer editor and keys/clients.js quote the Czech label. English developer docs quote it as \"Podržet a hrát\" (Hold to Play) once per page.\n(b) Data stays English, and the display becomes Czech. 'UNCALIBRATED'/'CALIBRATED' as values (level.js indicator, view badges, reasons in saved experiments and exports) are data the honesty tests (ADR 0017, readout-labels-calibration-coverage, v3-calibration) and stored records rely on. They don't change. What the user sees goes through one label map: NEKALIBROVÁNO, KALIBROVÁNO, the reason sentence in Czech starting \"NEKALIBROVÁNO: …\", and CHARACTERIZE PLAYBACK CHAIN shown as \"PROMĚŘIT ŘETĚZEC PŘEHRÁVÁNÍ\" (its preset id unchanged). Sign-off is this Q090 decision plus a no-fake-science v3 that lists the Czech display forms beside the English data values under \"Preferred wording\". Its enforcement test is extended so every shown calibration badge is read through the map and no shown badge is bare English. The pass 6 verdict judges both.\n(c) Two parts. The switch label in src/index.html becomes \"Povolit nepřetržité přehrávání\", and every Czech sentence quoting it (index.html :938, :3436, instrument.js :865's notice) quotes that. The V1 strings pinned by tests/freeze/golden-a7b7a23.json (patterns.js \"Continuous repeat needs “Allow continuous playback”; playing once.\") stay byte-exact, since the freeze binds them. The UI shows such a pinned warning through a display map keyed by the exact frozen string, giving one Czech sentence naming the Czech switch, so the user never sees two names for one switch. A unit test asserts that every warning string the golden pins and the UI can show has a Czech display form.\nIf 0b sees a reason to keep any of these in English, raise it before building. Otherwise this stands. Also in this slice, on oscilla-43's word (2026-11-15): the compact Studio's Expand Studio and the Studio counts line (compact and Inspector) in Czech. Out of it: the Q002 positioning sentence (positioning-consistency, first-screen) and the Pattern Sequencer heading, which Czech prose names as a name; a Czech positioning sentence is its own question for oscilla-c3."
+why: "Q104 (the app's visible prose is Czech): the first screen of v3.38.1 still showed Hold to Play, Trigger, Allow continuous playback, UNCALIBRATED, CHARACTERIZE PLAYBACK CHAIN and Expand Studio in English (live check by oscilla-0b, 2026-11-15)."
+current_state: "Started 2026-11-15 by oscilla-0b in fix/czech-pass-6, stacked on Czech pass 5 (8b91dd57), for train T25; built by oscilla-0b in task t-20261115204514-c051."
+scope:
+  - "src/index.html"
+  - "src/js/core/frozen-display.js"
+  - "src/js/ui/studio/counts-text.js"
+  - "src/js/calibration"
+  - ".ai/repo/rules/project/no-fake-science.v3.md"
+depends_on: []
+acceptance_criteria:
+  - "Podržet a hrát and Spustit are the labels; every quote in the app, Learn, shortcuts, hints and the English docs (once per page) follows; identifiers unchanged."
+  - "Every frozen V1 sentence the page can show that names an old label or the old switch is shown in Czech through one display map keyed by the exact frozen text; the golden stays byte-exact; a unit test derives the sentences from the golden."
+  - "Calibration states stay English as data; the shown badges, reason sentence and the preset title go through one Czech label map; project.no-fake-science v3 lists the Czech display forms and its test refuses a bare English badge."
+  - "The czech-prose ratchets fall; index.html within its cap; a reviewer's verdict; visual references re-accepted with the reason on the train head."
+validation:
+  - "npm test"
+  - "node tests/browser/navigation.cjs"
+  - "node tests/browser/cross-links.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-15'
+updated_at: '2026-11-15'

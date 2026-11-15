@@ -336,8 +336,8 @@ dialog, and it lists the keys of the workspace in view and the keys that work ev
 (ADR 0050).
 
 Space has one owner in each workspace, the same at every window width. In the workspaces that
-play, load or analyse the instrument's signal it is the instrument's Hold to Play, whether or
-not Hold or Trigger is on screen there. In Studio it is the Studio transport's. Elsewhere it
+play, load or analyse the instrument's signal it is the instrument's "Podržet a hrát" (Hold to
+Play), whether or not that button or "Spustit" (Trigger) is on screen there. In Studio it is the Studio transport's. Elsewhere it
 starts nothing. A focused text field, native button, link, slider or tab, or an open dialog,
 keeps Space instead. A focused timeline item (clip, marker, point, loop handle) is not such a
 control: Enter activates it, and Space plays or stops Studio there, as the timeline keys below

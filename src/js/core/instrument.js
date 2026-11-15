@@ -35,6 +35,7 @@ import {
   PROVISIONAL_SAMPLE_RATE, RANGE_MODES, RANGE_NAMES, SAFE_NYQUIST_FACTOR,
   SAFETY_LIMIT_OPTIONS, STORAGE_KEYS, VIZ_MODES, WAVEFORMS, WAVEFORM_LABELS, WAVEFORM_NAMES,
 } from './constants.js';
+import { shownText } from './frozen-display.js';
 import { clamp, isNum, pick, round, sig } from './math.js';
 import {
   formatFrequency, formatMs, formatPeriod, formatWavelength, frequencyToNormalized, mapRegions,
@@ -130,6 +131,8 @@ export function createInstrument(deps = {}) {
     WAVEFORMS, WAVEFORM_LABELS, RANGE_MODES, PATTERNS, PATTERN_GROUPS, NOTE_BUTTONS, VIZ_MODES, APP_MODES,
     // The Czech display names (Q104); the V1 labels above stay the frozen data.
     WAVEFORM_NAMES, PATTERN_NAMES, PATTERN_DESCS, PATTERN_GROUP_NAMES, RANGE_NAMES,
+    // the Czech sentence the page shows for a frozen V1 one (U114, core/frozen-display.js)
+    shownText,
     PRESET_CATEGORIES, LEARN_TOPICS, SAFETY_LIMIT_OPTIONS, APP_VERSION,
     WAVE_PATHS: {
       sine: 'M1 8 Q5 0 9 8 T17 8 T25 8 T31 4',
@@ -457,8 +460,8 @@ export function createInstrument(deps = {}) {
             // C030: where only the status bar's Play is on screen, its own sentence
             const hint = statusPlayHint(this.workspace, 'suspended');
             this.notify('warning', statusPlayTitle(this.workspace, 'suspended')
-              || 'Audio is suspended', hint
-              || 'The browser has not allowed audio to start. Press HOLD TO PLAY again.');
+              || 'Zvuk je pozastaven', hint
+              || 'Prohlížeč zatím nepovolil spuštění zvuku. Stiskněte znovu Podržet a hrát.');
           }
         });
       }

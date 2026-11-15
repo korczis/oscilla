@@ -329,8 +329,8 @@
         <!-- U100: on a short phone an info or success toast is one line; a warning or an error
              (a refusal's stated reason, project.no-silent-feedback) always wraps whole. -->
         <div class="osc-toast-text min-w-0" :class="(a.level === 'info' || a.level === 'success') && '[@media(max-height:700px)_and_(pointer:coarse)]:truncate'">
-          <strong x-text="a.title"></strong>
-          <span x-text="a.message"></span>
+          <strong x-text="shownText(a.title)"></strong>
+          <span x-text="shownText(a.message)"></span>
           <template x-if="a.action">
             <a :href="a.action.href" data-osc="alert.action" data-osc-link="jump" @click="alertActionFollowed(a.id)"
               x-text="a.action.text"></a>
@@ -635,7 +635,7 @@
                   </template>
                 </div>
                 <p class="osc-pp-error" role="alert" x-show="planError" x-text="planError"></p>
-                <p class="osc-pp-warn" x-show="planWarnings.length" x-text="planWarnings.join(' ')"></p>
+                <p class="osc-pp-warn" x-show="planWarnings.length" x-text="planWarnings.map(shownText).join(' ')"></p>
               </div>
             </div>
 
@@ -676,11 +676,11 @@
                 @lostpointercapture="keyHolding || holdEnd()" @pointerleave="keyHolding || holdLeave($event)"
                 @keydown.space.prevent="holdKey($event)" @keyup.space.prevent="holdEnd()"
                 @blur="holdEnd()" @keydown.enter.prevent="triggerKey($event)" @contextmenu.prevent>
-                <svg aria-hidden="true"><use href="#i-play"/></svg><span x-text="holdLabel">Hold to Play</span>
+                <svg aria-hidden="true"><use href="#i-play"/></svg><span x-text="holdLabel">Podržet a hrát</span>
               </button>
               <button type="button" class="osc-btn osc-btn-secondary osc-btn-lg osc-trigger" id="osc-trigger"
                 data-osc="source.trigger" @click="trigger()" @keydown.enter.prevent="triggerKey($event)"
-                :aria-label="isProgrammed ? 'Trigger: spustí naprogramovaný vzor' : 'Trigger: zazní po nastavenou dobu'">Trigger</button>
+                :aria-label="isProgrammed ? 'Spustit: přehraje naprogramovaný vzor' : 'Spustit: zazní po nastavenou dobu'">Spustit</button>
             </div>
             <p class="osc-sr-only" id="osc-transport-desc" x-text="transportText"></p>
           </section>
@@ -3438,9 +3438,9 @@
           uvolnění, Esc nebo když stránka ztratí fokus. Náběh platí od příští noty. Doznění
           upravené během držení noty platí po jejím uvolnění (se zapnutou laboratoří Envelope
           platí její Release), zkrácené tak, aby skončilo pevným limitem nebo vlastním koncem
-          vzoru; nota, která dosáhne jednoho z nich, nebo nota z Triggeru na svém konci doznívá
+          vzoru; nota, která dosáhne jednoho z nich, nebo nota spuštěná tlačítkem Spustit na svém konci doznívá
           s Dozněním, se kterým začala.</p>
-        <label class="osc-label" for="osc-set-duration">Délka Triggeru (ms)</label>
+        <label class="osc-label" for="osc-set-duration">Délka spuštění (ms)</label>
         <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
           data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">
         <label class="osc-label" for="osc-set-attack">Náběh (ms, bez ADSR)</label>
