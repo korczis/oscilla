@@ -25,7 +25,7 @@
     }
   },
   "caps": {
-    "src/index.html": 305000,
+    "src/index.html": 306000,
     "src/js/audio/audio-engine.js": 73000,
     "src/js/core/instrument.js": 64000,
     "src/js/experiments/validate.js": 64000,
@@ -240,6 +240,12 @@
       "cap": 305000,
       "pr": 547,
       "reason": "the PR of the entry above: Czech pass 3 landed in #547 (train T20); 542 was a placeholder written before the PR existed, and entries are added, never edited"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 306000,
+      "pr": 556,
+      "reason": "U106 (oscilla-c3 Q090 2026-11-15): lang=\"cs\", lang=\"en\" on the shell's remaining English and the Czech workspace labels; measured 304601 -> 305066 B, next 1 000 above"
     }
   ]
 }
