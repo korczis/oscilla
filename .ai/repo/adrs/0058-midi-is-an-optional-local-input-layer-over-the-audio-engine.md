@@ -639,6 +639,15 @@ with its amendments A1-A7, on 2026-11-15; oscilla-43 added the two acceptance as
 7. **No inference (A6).** `midi/response.js` imports only `core/music.js` and references no timer,
    randomness, wall clock, `fetch`, `XMLHttpRequest`, `WebSocket`, `Worker` or `import()`; a unit
    test reads its source.
-8. **The switch (A7).** One control in the MIDI section, "Otázka a odpověď", declared in the UI
+8. **Who is the player, what takes over, what inserts (oscilla-c3's review questions).** In the
+   first version the player is a MIDI play port only: the computer keys and the on-screen keys
+   (a phone's touch keyboard among them) still play the instrument but are not heard as a phrase,
+   since the mode is part of the MIDI section. An output owner taking over mid-answer (Measure,
+   Studio PLAY, the sequencer starting) goes through `midiAllOff`, which cuts the answer: nothing
+   more is planned and what sounds is released, so nothing hangs; only the answer's own first
+   note arming the instrument does not cut it. An answer plays through the same route as a key
+   (`centralSink`, the Studio part's `keysInstrument`), so if it is the note that inserts the
+   Synth panel, K246's sentence and its own Zpět say so exactly as for a key (C3-553-1).
+9. **The switch (A7).** One control in the MIDI section, "Otázka a odpověď", declared in the UI
    catalogue with its `data-osc` hook, trace and control-census row; off on every load and never
    persisted in the first version, so V503 changes no URL or storage contract.

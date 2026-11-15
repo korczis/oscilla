@@ -242,3 +242,23 @@ test('midi/ui.js: on the engine fallback with the switch on, one refusal line an
     assert.equal(engineCalls.filter((c) => c[0] === 'on').length, 1, 'only the player\'s note sounded');
     assert.equal(ui.midiResponseToggle(false), false);
   });
+
+test('an owner taking the output mid-answer cuts it through midiAllOff; nothing hangs', () => {
+  const { mode, log, run, at } = rig({ offset: 0 });
+  mode.setOn(true);
+  for (const [n, on, off] of [[60, 0, 400], [62, 400, 800], [64, 800, 1200]]) {
+    at(on); mode.player('on', n, 100, on);
+    at(off); mode.player('off', n, 0, off);
+  }
+  run(1200 + PHRASE_GAP_MS + 50);
+  assert.equal(mode.answering(), true);
+  const before = log.length;
+  mode.cut(); // what midi/ui.js midiAllOff does when Measure, Studio PLAY or the sequencer starts
+  assert.equal(mode.answering(), false);
+  const sounding = log.slice(0, before).filter((e) => e.k === 'on').map((e) => e.note);
+  const released = log.slice(before).filter((e) => e.k === 'off').map((e) => e.note);
+  assert.deepEqual(released.sort(), sounding.filter((n) => !log.slice(0, before)
+    .some((e) => e.k === 'off' && e.note === n)).sort(), 'every sounding answer note released');
+  run(20000);
+  assert.equal(log.filter((e) => e.k === 'on').length, sounding.length, 'nothing more is planned');
+});
