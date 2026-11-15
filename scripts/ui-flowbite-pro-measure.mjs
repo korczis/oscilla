@@ -265,11 +265,17 @@ const isExpression = (name) => (isBound(name) && !ID_REFERENCE.test(bound(name))
 function surfaceOf(tag, attrs) {
   const id = attrs.id || '';
   if (attrs.role === 'banner') return ['navbar', 'shell:navbar'];
-  // The Pro shell's <aside aria-label="Sidebar"> (review #330 F6: its list is the navigation
-  // landmark "Workspaces"); "Workspace" named the legacy tab bar the records before F002 read.
-  if (['Sidebar', 'Workspace'].includes(attrs['aria-label'])) return ['sidebar', 'shell:sidebar'];
+  // The Pro shell's <aside aria-label="Postranní panel"> (review #330 F6: its list is the
+  // navigation landmark "Pracovní plochy"; Czech since U106, "Sidebar" before it); "Workspace"
+  // named the legacy tab bar the records before F002 read.
+  if (['Postranní panel', 'Sidebar', 'Workspace'].includes(attrs['aria-label'])) {
+    return ['sidebar', 'shell:sidebar'];
+  }
   if (tag === 'main') return ['main', 'shell:main'];
-  if (attrs['aria-label'] === 'Status and actions') return ['footer', 'shell:footer'];
+  // The status bar: "Stavový řádek" since U106, "Status and actions" before it.
+  if (['Stavový řádek', 'Status and actions'].includes(attrs['aria-label'])) {
+    return ['footer', 'shell:footer'];
+  }
   if (id.startsWith('osc-view-')) return ['page', `page#${id}`];
   if (tag === 'section' && id) return ['card', `card#${id}`];
   if (tag === 'dialog' && id) return ['modal', `modal#${id}`];

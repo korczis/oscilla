@@ -40,7 +40,7 @@ import { focusSafely, isFocusable } from './dialogs.js';
 import { sessionStore } from '../core/storage.js';
 import { OWNER, soundingOwner } from '../core/output-bus.js';
 import { learnReturnAction, learnToolOf } from './cross-links.js';
-import { STATUS_PLAY_WORKSPACES } from './shortcuts.js';
+import { STATUS_PLAY_WORKSPACES, WORKSPACE_LABELS } from './shortcuts.js';
 import { statusPlayHint } from '../core/play-hints.js';
 import { registerEmptyPredicate } from './empty-states.js';
 
@@ -236,7 +236,7 @@ export function createWorkbench(svc) {
       return this.additiveOn ? 'Aditivní' : (WAVEFORM_NAMES[this.waveform] || WAVEFORM_NAMES.sine);
     },
     get statusPatternText() {
-      if (this.seqPlaying && !this.playing) return 'Sequencer';
+      if (this.seqPlaying && !this.playing) return WORKSPACE_LABELS.sequencer;
       if (this.studioPlaying && !this.playing) return 'Studio';
       // The owner the scope's description names (C024), capitalised as a status-bar label.
       if (this.outputOwner === 'notes') return 'Noty';
@@ -290,7 +290,7 @@ export function createWorkbench(svc) {
       // (C012), otherwise the Playground gain. Never written into gainLevel: the gainLevel $watch
       // would echo it into the engine and end the Studio's hold on it.
       const m = this.studioMasterLevel;
-      if (m === null) return `Gain ${this.gainDbText}`;
+      if (m === null) return `Zesílení ${this.gainDbText}`;
       const db = gainLevelDb(m);
       return `Master ${Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB'}`;
     },

@@ -354,24 +354,24 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 5.61,
-      "totalExclData": 5.52,
+      "total": 5.66,
+      "totalExclData": 5.58,
       "regions": {
         "header": {
-          "mismatch": 15.74,
-          "mismatchExclData": 15.74,
+          "mismatch": 16.4,
+          "mismatchExclData": 16.4,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "sidebar": {
-          "mismatch": 5.62,
-          "mismatchExclData": 5.62,
+          "mismatch": 5.65,
+          "mismatchExclData": 5.65,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "pageHeader": {
-          "mismatch": 9.23,
-          "mismatchExclData": 9.23,
+          "mismatch": 9.45,
+          "mismatchExclData": 9.45,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -412,8 +412,8 @@
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 6.35,
-          "mismatchExclData": 2.34,
+          "mismatch": 6.29,
+          "mismatchExclData": 2.25,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -424,21 +424,21 @@
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 4.44,
-          "mismatchExclData": 4.44,
+          "mismatch": 4.29,
+          "mismatchExclData": 4.29,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
       },
       "controls": {
         "export": [
-          1429.97,
+          1404.25,
           10,
-          86.03,
+          111.75,
           44
         ],
         "theme": [
-          1281.97,
+          1256.25,
           10,
           44,
           44

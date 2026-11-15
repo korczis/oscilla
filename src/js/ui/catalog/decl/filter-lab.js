@@ -16,7 +16,7 @@ export default [
     id: 'filter.enable',
     kind: 'switch',
     label: 'Filter enabled',
-    docs: 'Puts the Filter Lab biquad into the instrument voice, or takes it out.',
+    docs: 'Puts the Filtry biquad into the instrument voice, or takes it out.',
     param: boolParam('enabled', 'Enabled', FILTER_DEFAULTS.enabled),
     state: 'lab.filter.enabled',
   }),
@@ -63,8 +63,8 @@ export default [
   defineComponent({
     id: 'filter.fullscreen',
     kind: 'fullscreen',
-    label: 'Open Filter Lab page',
-    docs: 'Switches between the Filter Lab page and the Playground.',
+    label: 'Otevřít stránku Filtry',
+    docs: 'Switches between the Filtry page and the Playground.',
     state: 'ui.workspace',
   }),
 ];

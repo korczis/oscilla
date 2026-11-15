@@ -12,7 +12,9 @@
 
 import { WORKSPACE_LABELS } from './shortcuts.js';
 import { CONTENT_LINKS, livePanelLinks } from './counterparts.js';
-import { WORKSPACE_IDS, relatedOf, relatedRef, workspaceOf } from './shell.js';
+import {
+  WORKSPACE_IDS, relatedOf, relatedRef, workspaceAccusative, workspaceLang, workspaceOf,
+} from './shell.js';
 import { getTemplate } from '../studio/templates/index.js';
 
 /** The template id a related entry's address names (`studio&st=<id>`), or null. */
@@ -41,7 +43,12 @@ export const STUDIO_TEMPLATE_LINKS = Object.freeze(livePanelLinks()
 export function relatedText(r) {
   const t = templateOfRef(`${r.id}${r.hash || ''}`);
   const tpl = t ? getTemplate(t) : null;
-  return tpl ? `${tpl.title} in Studio` : (WORKSPACE_LABELS[r.id] || r.id);
+  return tpl ? `Šablona ${tpl.title} ve Studiu` : (WORKSPACE_LABELS[r.id] || r.id);
+}
+
+/** The language of a related entry's text: a kept name standing alone is 'en' (U106). */
+export function relatedLang(r) {
+  return templateOfRef(`${r.id}${r.hash || ''}`) ? null : workspaceLang(r.id);
 }
 
 /** The address of a Studio template link. */
@@ -115,13 +122,12 @@ export function learnToolOf(topicId) {
   const workspace = Object.hasOwn(LEARN_TOOLS, topicId) ? LEARN_TOOLS[topicId] : null;
   if (!workspace) return null;
   // data-osc-link: learn.tool
-  return { workspace, href: `#m=${workspace}`, text: `Open ${WORKSPACE_LABELS[workspace]}` };
+  return { workspace, href: `#m=${workspace}`, text: `Otevřít ${workspaceAccusative(workspace)}` };
 }
 
-/** "the Playground", "the Sequencer", "Filter Lab": a workspace as a sentence names it. */
+/** "Playground", "Sekvencer", "Syntézu": a workspace as the object of a Czech sentence. */
 export function workspacePhrase(workspace) {
-  const label = WORKSPACE_LABELS[workspace] || WORKSPACE_LABELS.playground;
-  return workspace === 'playground' || workspace === 'sequencer' ? `the ${label}` : label;
+  return workspaceAccusative(workspace);
 }
 
 /**
@@ -138,8 +144,8 @@ export function studioBackTarget(from) {
  */
 export function filterLabToggle(workspace) {
   return workspace === 'filter'
-    ? { to: 'playground', label: 'Back to the Playground', icon: '#i-left' }
-    : { to: 'filter', label: 'Open the Filter Lab page', icon: '#i-expand' };
+    ? { to: 'playground', label: 'Zpět na Playground', icon: '#i-left' }
+    : { to: 'filter', label: 'Otevřít stránku Filtry', icon: '#i-expand' };
 }
 
 /** The action a Learn demo's notice carries: back to the lesson it came from. */

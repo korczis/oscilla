@@ -252,6 +252,12 @@
       "cap": 310000,
       "pr": 555,
       "reason": "V508 (owner orders 2026-11-14/15): the MIDI section shows the incoming MIDI clock's tempo (midi.clock) beside the monitor's title; new markup only, no trim of unrelated surfaces"
+    },
+    {
+      "file": "src/index.html",
+      "cap": 306000,
+      "pr": 556,
+      "reason": "U106 (oscilla-c3 Q090 2026-11-15): lang=\"cs\", lang=\"en\" on the shell's remaining English and the Czech workspace labels; measured 304601 -> 305066 B, next 1 000 above"
     }
   ]
 }
