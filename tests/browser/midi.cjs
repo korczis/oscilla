@@ -1164,6 +1164,7 @@ async function seamResponseKeys(browser, b, origin, url) {
       await page.goto(`${url}#m=playground`, { waitUntil: 'load' });
       await until(() => page.evaluate(() => document.documentElement.dataset.ready === 'true'),
         { ms: LOAD_MS, what: `${leg}: the page is ready` });
+      await assertGroup(leg, id, page, 'seam');
       // On a phone Settings sits in the status bar's Actions menu: opened the way a finger does.
       const settings = page.locator('[data-osc="action.settings"]').locator('visible=true');
       if (!(await settings.count())) {
