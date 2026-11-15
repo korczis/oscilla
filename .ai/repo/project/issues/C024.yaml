@@ -36,4 +36,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-01
-updated_at: 2026-11-05
+updated_at: 2026-11-15T16:53:27Z
+started_at: 2026-11-15T16:52:24Z
+started_event: sha256:04dee290e37517f6c4220079ae0021d0cc3848482be81d68e8343bccc223e1d5
+verified_at: 2026-11-15T16:52:50Z
+verified_event: sha256:25297dda8f749cc5c82b4d0b798e66f20895e8da3e2b700a102d6ee6e9e2a493
+completed_at: 2026-11-15T16:53:27Z
+completed_event: sha256:0ace628585a2d04798435d4ca150bf066a1c1ddc13f097713974d3d49038a173
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/output-owner.test.mjs; node tests/browser/midi.cjs"
+    result: "landed in train T2, PR 507 (main 7637039e, member fix 79690181 merged by fe233861 for PR 501); re-checked on main 474ce9c3 on 2026-11-15 by oscilla-ff on the owner's order to finish unfinished work: tests/unit/output-owner.test.mjs C024 cases (held notes alone own the output after the instrument, sequencer and Studio; the description and the status bar name the notes) and its static scan that no file but core/instrument.js assigns vizInputs, with the mutation case, pass 17/0; tests/browser/midi.cjs keyboard-qwerty's notes-own-the-scope (deadline 'notes own the scope') passed in chromium, firefox and webkit, file and http, in the full runs of 2026-11-15 (733 checks passed, only the Mac's 3 hardware checks failing). Review verdict .ai/repo/reviews/507.yaml (train T2)"
+    artifact: ".ai/repo/reviews/507.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T16:53:16Z
