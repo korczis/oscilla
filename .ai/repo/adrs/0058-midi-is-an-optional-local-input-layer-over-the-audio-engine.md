@@ -567,8 +567,11 @@ status stays `proposed`.**
    would have to take is never rewired from a key; there the keys play the engine's own voice,
    as before K247, and the Insert button puts the panel in. In the Studio workspace itself,
    where the document is in sight, a key inserts nothing (M086's decision stands): only the
-   document's note target plays there, else the engine's voice. The engine stays the one audio
-   owner: the Studio transport is its graph.
+   document's note target plays there, else the engine's voice. Elsewhere an insert a key makes
+   is said where it happens (review C3-553-1, decided by oscilla-43 under Q090 on the owner's
+   words): K246's whole sentence as a warning notice in that workspace, once per insert, with its
+   own Zpět, which undoes the insert while it is still the document's last change. The engine
+   stays the one audio owner: the Studio transport is its graph.
 2. **Armed everywhere.** Every workspace is a keyboard view, armed when it first opens, with
    one Arm switch per page (Q105's answer, which the route table had applied to three pages).
 3. **One dock.** The same keyboard docks over the bottom edge of every workspace but the

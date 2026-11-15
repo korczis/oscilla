@@ -149,7 +149,7 @@ function traceProblems(decl, entry, { census, testCorpus, read }) {
     const [intent, criterion] = String(ref).split('#');
     const yaml = read(`.ai/repo/project/intents/${intent}.yaml`);
     if (yaml === null || !criterion
-      || !new RegExp(`^\\s*- id: ${escape(criterion)}\\s*$`, 'm').test(yaml)) {
+      || !new RegExp(`^\\s*- id: "?${escape(criterion)}"?\\s*$`, 'm').test(yaml)) {
       bad(`intent criterion ${ref} does not exist`);
     }
   }
