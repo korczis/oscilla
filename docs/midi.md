@@ -87,23 +87,26 @@ seam below.
 
 ## Playing notes
 
-Once Connect MIDI has connected an input, its notes sound through the one audio engine, with the
-Playground's waveform, attack, release and A4 tuning. The Labs stages a Playground tone passes
-through (the filter, the ADSR envelope and additive synthesis) do not apply to MIDI notes. There
-is no second synthesizer; the decisions are the V502 note of ADR 0058.
+Once Connect MIDI has connected an input, its notes play the one instrument (K247, ADR 0058's
+K247 note): in every workspace the Studio document's note target (its routed node, else its first
+node that plays notes), and where it has none the Synth panel, which lives in the same document.
+The computer keys and the on-screen keys play the same instrument. There is no second
+synthesizer and no voice of a page's own: the Studio transport is a graph of the one audio
+engine. The Playground's engine voice still plays its own Play and Hold, and plays notes only on
+a page without the Synth (a unit test rig); its laws, as V502 set them, are below for that case.
 
-- **Polyphony.** Up to 8 notes (`NOTE_POLYPHONY`) sound at once. Each is scaled to one eighth of
-  a full voice, so a full chord never exceeds the level of one Playground tone at the same
-  output level; one note is therefore 18 dB quieter than a Playground tone. A ninth note fades
-  out the oldest note (one already releasing first) and starts when that fade has ended.
-- **Velocity.** Amplitude `(velocity / 127)^2`: velocity 127 is full level, 64 about -12 dB,
-  32 about -24 dB. The engine never sets a note below its gain floor (-80 dB), so velocities 1
-  to 3 all sound at that floor, louder than the law gives; from velocity 4 the law holds.
+- **The instrument's voices.** The Keys node of the Synth panel is monophonic (the last key
+  wins); an engine routed as the note target plays its own polyphony. Velocity reaches the node
+  the keys play. Every voice is under the safety chain's output ceiling (`MAX_OUTPUT_GAIN`), and
+  a frequency at or above 95 % of the context's Nyquist frequency is clamped to it, never played
+  above it.
+- **The engine voice (a page without the Synth).** Up to 8 notes (`NOTE_POLYPHONY`), each one
+  eighth of a full voice; amplitude `(velocity / 127)^2`; a note at or above 95 % of Nyquist is
+  not played; the Playground's waveform, attack, release and A4 tuning apply.
 - **Messages.** Every channel is heard. Note On with velocity 0 is a Note Off. Playing a key that
   is still sounding restarts it. CC 120 (All Sound Off) stops every note at once; CC 123 (All
-  Notes Off) releases them. Sustain (CC 64) and every other message are ignored for now.
-- **Safety.** A note that would sound at or above 95 % of the context's Nyquist frequency is not
-  played. A held note is exempt from the safety limit while its key is down (ADR 0062, amending
+  Notes Off) releases them. Sustain (CC 64) holds released keys (V506); the controllers are below.
+- **Safety.** A held note is exempt from the safety limit while its key is down (ADR 0062, amending
   ADR 0005): it sounds until its Note Off, under the same output ceiling, and never louder for
   being held.
 - **Stopping.** Every note stops within a few milliseconds when any connected input is
@@ -131,16 +134,19 @@ and latency is not measured.
 
 ## The computer and on-screen keyboard
 
-The Playground, the Studio and the Synth each have a keyboard (plan issue K026). It plays the same
-note voices as a MIDI input, through the same engine and with the same Playground settings, limits
-and refusals; a refusal says "Noty z klávesnice nehrají, dokud …" instead of "MIDI noty".
+Every workspace has the same keyboard (plan issues K026, K178, K247): it plays the one
+instrument a MIDI input plays, with the same limits and refusals; a refusal says "Noty z
+klávesnice nehrají, dokud …" instead of "MIDI noty".
 
-- **Arm it.** **Arm keys** under the Playground's panels (and under the Studio) arms the
-  computer keyboard in that view only; a link with `kbd=1` (`#m=playground&kbd=1`,
-  `#m=studio&kbd=1`) arms the view it opens. The key leaves the address with the next workspace
-  change. The Synth's keys are armed when it opens (the Synth plays from its keys; docs/synth.md),
-  and its **Disarm keys** turns them off. In any other workspace the computer keyboard plays
-  nothing.
+- **Armed everywhere.** The keys are armed when a workspace first opens (Q105); **Odpojit
+  klávesy** switches them off in that workspace only, and a link with `kbd=1` or `kbd=0` arms
+  or disarms the workspace it opens. The key leaves the address with the next workspace change.
+- **One dock.** The keyboard docks over the bottom edge of every workspace but the Playground,
+  whose keys stay under its panels. On a page that is not an instrument (Measure, the labs,
+  About and the others) it starts folded to its handle, **Keyboard**, and the computer keys
+  still play; the handle unfolds the same keys.
+- **The run ends with the page.** The first key arms the instrument; leaving the workspace ends
+  that armed run (a run started with PLAY sounds on).
 - **The keys**, by physical position (`KeyboardEvent.code`), so QWERTZ and AZERTY keyboards play
   from the same places: A W S E D F T G Y H U J K play C up to the next C (black keys on W E T
   Y U), O L P ; ' go on to F. Z and X move the octave down and up (C0 to C8), C and V the
@@ -152,7 +158,7 @@ and refusals; a refusal says "Noty z klávesnice nehrají, dokud …" instead of
   key with Ctrl, Meta or Alt. Armed in the Studio, A, C, F and T play notes instead of their
   Studio meanings; Studio's Ctrl / ⌘ shortcuts are unchanged.
 - **Held.** A note sounds while its key or pointer is down, past the safety limit, and stops on
-  release, Escape, a window blur, a hidden page, or when the view is left or disarmed.
+  release, Escape, a window blur, a hidden page, or when the workspace is left or disarmed.
 - **On screen.** Two or three octaves (by width) that follow the octave. A pointer plays the key
   under it and a drag glides from key to key. A key lights up while it sounds, whoever plays it:
   the computer keyboard or a pointer in the accent colour, a MIDI input in green. While a note

@@ -1,5 +1,12 @@
 // MIDI notes sound through the AudioEngine (plan issue V502; ADR 0058 and its V502 note).
 //
+// Since K247 (ADR 0058, its K247 note) every note of the keys and of MIDI goes to the one
+// instrument that route() gives (midi/ui.js centralSink: the Studio document's note target, else
+// the Synth panel); the engine voices below play a note only on a page without that instrument
+// (a unit rig). The owner table still refuses a note while a measurement, a level reference
+// capture or the sequencer owns the output; the Studio row does not, the Studio being the
+// instrument.
+//
 // A message from an input becomes a note event, and a note event becomes a note voice of the
 // one engine (engine.noteOn / noteOff / notesOff): no second graph, no synth of its own. What
 // the engine guarantees (level cap, NOTE_POLYPHONY, click-free envelopes, the 0.95 x Nyquist
@@ -117,13 +124,38 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   function noteOn(note, velocity, source = 0, channel = 0) {
     const key = keyOf(source, channel, note);
     sustained.delete(key); // pressed again: its own Note Off decides now
-    const sink = route(); // the Synth panel plays the note instead (K065), one path for all
+    const sink = route(); // the one instrument plays the note (K065, K247), one path for all
+    // The instrument is the Studio document, so the Studio row of the owner table never refuses
+    // its keys; a measurement, a level reference capture and the sequencer still do (C036).
+    if (sink) {
+      const by = ownedBy();
+      if (by && by !== 'studio') {
+        if (refusing !== by) refused(by);
+        refusing = by;
+        return { ok: false, reason: by };
+      }
+      refusing = null;
+    }
     const to = sink || ENGINE;
     // A re-press on the same player retriggers there (the engine fades the old note under the
     // new one); on another player hold() first releases it where it sounded.
     if (sameSink(held.sinkOf(key), to)) held.releaseKey(key, 're-press');
+    if (sink) {
+      // Held only once the instrument took it: the note that arms the instrument makes the
+      // playback bus silence the notes before it starts (the transport claims the output), and a
+      // key held before that would be released unseen and its Note Off, the pedal and a switch
+      // would no longer find it (K247).
+      // A key still held on another player is released there first, as hold() would (K178).
+      const before = held.sinkOf(key);
+      if (before) {
+        held.releaseKey(key, 're-press');
+        before.noteOff(note, { key, reason: 're-press' });
+      }
+      const r = sink.noteOn(note, velocity);
+      if (r && r.ok !== false) held.hold(key, { sink, note, velocity, input: inputOf(source) });
+      return played(r, note, source);
+    }
     held.hold(key, { sink: to, note, velocity, input: inputOf(source) });
-    if (sink) return played(sink.noteOn(note, velocity), note, source);
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = refusedBy();
     if (by) {
