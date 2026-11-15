@@ -132,7 +132,9 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
   function noteOn(note, velocity, source = 0, channel = 0, { at } = {}) {
     const key = keyOf(source, channel, note);
     sustained.delete(key); // pressed again: its own Note Off decides now
-    const sink = route(); // the one instrument plays the note (K065, K247), one path for all
+    // The one instrument plays the note (K065, K247), one path for all; the source lets it
+    // refuse what only a player may do (V503: an answer never inserts the Synth panel).
+    const sink = route(source);
     // The instrument is the Studio document, so the Studio row of the owner table never refuses
     // its keys; a measurement, a level reference capture and the sequencer still do (C036).
     if (sink) {

@@ -17,7 +17,8 @@
 //     begins at now + START_OFFSET_S and the later notes keep their relative onsets (A3).
 //
 //   createResponseMode(deps) -> { on, setOn(on), player(kind, note, velocity, atMs), tick(),
-//     cut(), answering(), planned() }
+//     interrupt(), cut(), answering(), planned() }   interrupt: another player's note started
+//     (the computer or on-screen keys, the pad): it cuts a playing answer, the player wins
 //   deps: { notes, clock: { wake(key, ms, fn), cancel(key) }, offsetS() (s, or null),
 //     ctxNow() (s), perfNow() (ms), safeMax() (Hz), a4() (Hz), polyphony,
 //     say(reason) (the answer is refused: once per answer, the rest of it dropped) }
@@ -107,6 +108,12 @@ export function createResponseMode({ notes, clock, offsetS, ctxNow, perfNow, saf
       if (!queue.length && phrase.ended(perfNow())) plan();
       if (queue.length) schedule();
       if (busy() || phrase.endsAt() !== null || queue.length) wake();
+    },
+    /** A note of another player started: a playing answer is cut (the player always wins). */
+    interrupt() {
+      if (!busy()) return false;
+      mode.cut();
+      return true;
     },
     /** The answer stops: nothing more is planned, what sounds is released now. */
     cut() {

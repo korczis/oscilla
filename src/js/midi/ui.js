@@ -52,7 +52,11 @@ export const CC_STATUS_MS = 400;
  * part's keysInstrument, or the Synth panel in the Synth), or null where the page has none and
  * the engine's own voice plays (midi/notes.js).
  */
-export function centralSink(cmp) {
+export function centralSink(cmp, source) {
+  // An answer of call and response never brings the Synth panel in (oscilla-c3 on V503, item
+  // 8 (i)): a Zpět in the phrase's gap is the user removing it, and the answer may not undo that.
+  if (source === ANSWER_SOURCE && typeof cmp.keysPanelMissing === 'function'
+    && cmp.keysPanelMissing()) return null;
   const own = routeOf(cmp.workspace).plays;
   return own && typeof cmp[own] === 'function' ? cmp[own]() || null : null;
 }
@@ -121,13 +125,17 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         // claims the output as the notes, and the last released note gives it back.
         claim: bus ? (reason) => bus.claim(OWNER.notes, reason) : null,
         release: bus ? () => bus.release(OWNER.notes) : () => {},
-        noted: bus ? (on, note, source) => bus.note(on, { note, input: String(source) })
-          : () => {},
+        noted: (on, note, source) => {
+          // Any other player's note cuts an answer, the computer and on-screen keys and the pad
+          // too (oscilla-c3 on V503, item 8 (iii)): they share the one instrument.
+          if (on && response && source !== ANSWER_SOURCE) response.interrupt();
+          if (bus) bus.note(on, { note, input: String(source) });
+        },
         refused,
         starting: (on) => { arming += on ? 1 : -1; },
         // What the keys play: the one instrument (K247), named by the workspace's row of the one
         // table (midi/routes.js, K178).
-        route: () => centralSink(cmp),
+        route: (source) => centralSink(cmp, source),
       });
       notes = notesFor((by, source) => {
         if (source === ANSWER_SOURCE) return; // the answer says its own refusal (V503)

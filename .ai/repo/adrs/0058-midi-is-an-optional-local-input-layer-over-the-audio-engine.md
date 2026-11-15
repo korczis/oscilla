@@ -645,9 +645,14 @@ with its amendments A1-A7, on 2026-11-15; oscilla-43 added the two acceptance as
    since the mode is part of the MIDI section. An output owner taking over mid-answer (Measure,
    Studio PLAY, the sequencer starting) goes through `midiAllOff`, which cuts the answer: nothing
    more is planned and what sounds is released, so nothing hangs; only the answer's own first
-   note arming the instrument does not cut it. An answer plays through the same route as a key
-   (`centralSink`, the Studio part's `keysInstrument`), so if it is the note that inserts the
-   Synth panel, K246's sentence and its own Zpět say so exactly as for a key (C3-553-1).
+   note arming the instrument does not cut it. Settled under Q090 by oscilla-c3: (i) an answer
+   never brings the Synth panel in (`centralSink` gives it no instrument where a key would have
+   to insert the panel, the Studio part's `keysPanelMissing`): a Zpět in the phrase's gap is the
+   user removing the panel, and an answer that put it back would undo the user's own undo; the
+   answer is refused instead and says why. (iii) A note of any other player starts, the computer
+   keys, the on-screen or touch keys and the pad included, cuts a playing answer (the note
+   layers' `noted` hook, `response-mode.js` `interrupt`): they share the one instrument and its
+   polyphony, and the player always wins.
 9. **The switch (A7).** One control in the MIDI section, "Otázka a odpověď", declared in the UI
    catalogue with its `data-osc` hook, trace and control-census row; off on every load and never
    persisted in the first version, so V503 changes no URL or storage contract.

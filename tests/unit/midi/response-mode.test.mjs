@@ -262,3 +262,87 @@ test('an owner taking the output mid-answer cuts it through midiAllOff; nothing 
   run(20000);
   assert.equal(log.filter((e) => e.k === 'on').length, sounding.length, 'nothing more is planned');
 });
+
+/** midi/ui.js on a stub window, port and engine; the keys' route is `sink` (or the fallback). */
+async function uiRig(t, { sink = null, panelMissing = false } = {}) {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const { createMidiUi, RESPONSE_TEXT } = await import('../../../src/js/midi/ui.js');
+  const ls = new Set();
+  const winLs = new Map();
+  const port = { name: 'KeyLab mkII 61 MIDI', state: 'connected', type: 'input',
+    open: () => Promise.resolve(),
+    addEventListener: (k, fn) => { if (k === 'midimessage') ls.add(fn); },
+    removeEventListener: (k, fn) => ls.delete(fn),
+    send: (b) => { for (const fn of ls) fn({ data: Uint8Array.from(b), timeStamp: Date.now() }); } };
+  const access = { inputs: { forEach: (fn) => fn(port) }, addEventListener() {},
+    removeEventListener() {} };
+  const win = { navigator: { requestMIDIAccess: () => Promise.resolve(access),
+    permissions: { query: () => Promise.resolve({ state: 'granted', addEventListener() {} }) } },
+  isSecureContext: true, location: { protocol: 'https:', host: 'x' },
+  addEventListener: (k, fn) => winLs.set(k, [...(winLs.get(k) || []), fn]) };
+  const engine = { ctx: { get currentTime() { return Date.now() / 1000; }, sampleRate: 48000,
+    getOutputTimestamp: () => ({ contextTime: Date.now() / 1000, performanceTime: Date.now() }) },
+  safeMaximum: 22800,
+  _timers: { setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) },
+  noteOn: () => ({ ok: true }), noteOff: () => true, notesOff: () => 0 };
+  const notified = [];
+  const ui = createMidiUi({ win, engine, now: () => Date.now() });
+  Object.assign(ui, { workspace: 'playground', keysInstrument: () => sink,
+    keysPanelMissing: () => panelMissing,
+    notify: (kind, title, text) => notified.push({ title, text }), a4: 440, waveform: 'sine',
+    attack: 10, release: 30, safetyLimit: 2, continuousAllowed: false });
+  await ui.midiInit();
+  ui.midiConnect();
+  await t.mock.timers.runAll();
+  await new Promise((r) => setImmediate(r));
+  const key = (code) => {
+    for (const fn of winLs.get('keydown') || []) {
+      fn({ code, key: code.slice(-1).toLowerCase(), repeat: false, target: null,
+        preventDefault() {}, stopImmediatePropagation() {} });
+    }
+  };
+  const phrase = () => {
+    port.send([0x90, 60, 100]);
+    t.mock.timers.tick(400);
+    port.send([0x80, 60, 0]);
+  };
+  return { ui, port, notified, key, phrase, RESPONSE_TEXT, tick: (ms) => t.mock.timers.tick(ms) };
+}
+
+function sinkLog() {
+  const log = [];
+  return { log, sink: { noteOn: (n, v, o) => { log.push(['on', n, o && o.at]); return { ok: true }; },
+    noteOff: (n, i) => { log.push(['off', n, i && i.at]); return true; }, allOff: () => 0 } };
+}
+
+test('item 8 (i): an answer never brings the Synth panel back; it says why instead', async (t) => {
+  const { log, sink } = sinkLog();
+  let missing = false;
+  const r = await uiRig(t, { sink });
+  r.ui.keysPanelMissing = () => missing;
+  r.ui.midiResponseToggle(true);
+  r.phrase(); // the player's key took the instrument (the panel is in)
+  missing = true; // a Zpět in the gap took the panel out again
+  for (let i = 0; i < 30; i += 1) r.tick(50);
+  const answers = log.filter((e) => e[0] === 'on' && e[2] !== undefined);
+  assert.deepEqual(answers, [], 'no answer note reached the instrument: nothing inserted');
+  assert.deepEqual(r.notified.filter((n) => n.title === r.RESPONSE_TEXT.title).map((n) => n.text),
+    [r.RESPONSE_TEXT.refused(r.RESPONSE_TEXT.noInstrument)]);
+});
+
+test('item 8 (iii): a computer key or the pad during an answer cuts it', async (t) => {
+  for (const by of ['keys', 'pad']) {
+    const { log, sink } = sinkLog();
+    const r = await uiRig(t, { sink });
+    r.ui.midiResponseToggle(true);
+    r.phrase();
+    for (let i = 0; i < 14; i += 1) r.tick(50); // the gap, then the answer begins
+    assert.equal(r.ui.midiAnswering(), true, `${by}: the answer plays`);
+    assert.ok(log.some((e) => e[0] === 'on' && e[1] === 67), `${by}: G4 planned`);
+    if (by === 'keys') r.key('KeyJ');
+    else r.ui.kbdPad(() => {}).noteOn(72, 100, 'xy');
+    assert.equal(r.ui.midiAnswering(), false, `${by}: the answer is cut`);
+    assert.ok(log.some((e) => e[0] === 'off' && e[1] === 67), `${by}: its note released`);
+    t.mock.timers.reset();
+  }
+});

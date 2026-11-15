@@ -50,6 +50,14 @@ export function createWorkspaceKeys(ctx) {
       } };
     },
 
+    /**
+     * True when a key would have to bring the Synth panel in to sound (no Studio note target,
+     * no panel in the document): what an answer of call and response may never do (V503).
+     */
+    keysPanelMissing() {
+      return !this.studioSink() && !holdsPanel(ctx.handle.getModel());
+    },
+
     /** Say the insert the keys just made, with its own Zpět (K246's sentence). */
     keysInserted() {
       const text = this.synth && this.synth.notice && this.synth.notice.text;
