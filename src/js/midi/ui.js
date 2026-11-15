@@ -313,6 +313,11 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
      * Every MIDI note off: Measure or Studio PLAY takes the output (main.js stopPlayback), or
      * the sequencer starts (main.js, around the editor's play).
      */
+    /** True while an answer of call and response plays or is planned (V503). */
+    midiAnswering() {
+      return !!(response && response.answering());
+    },
+
     /** Call and response on or off (V503): the MIDI section's switch; off on every load. */
     midiResponseToggle(on = !this.midiResponse) {
       this.midiResponse = response ? response.setOn(on) : false;

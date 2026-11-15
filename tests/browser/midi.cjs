@@ -1039,6 +1039,82 @@ async function seamSink(browser, b, origin, url) {
 
 // midi-seam-cc (V506): the controller's pedal and knobs (src/js/midi/notes.js sustain,
 // src/js/synth/midi-cc.js), driven through the stub device.
+// midi-seam-response (V503, ADR 0058's V503 note; oscilla-c3's condition (1)): on a fresh page
+// in the Playground, the entry route, call and response switched on answers a stub phrase
+// audibly on the one instrument: after the phrase's last Note Off the Studio transport holds the
+// answer at the fifth (G4 for C4) and the analyser sounds while the player holds nothing, then it
+// ends by itself; a player's Note On during an answer cuts it (the player always wins).
+async function seamResponse(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-response';
+  const NAME = midiStub.STUB_NAME;
+  const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [NAME]);
+    await stateIs(page, ['connected'], `${leg}: the stub device connects`);
+    await page.keyboard.press('Escape');
+    // Each message carries its own time (the stub's timeStamp), as a device's do: the phrase is
+    // timed by its events, so its notes are as long as their stamps say, whatever the host's pace.
+    const msg = (bytes, stamp) => seam(page, 'message', NAME, bytes, stamp);
+    const pnow = () => page.evaluate(() => performance.now());
+    const answering = () => page.evaluate(() => window.OSCILLA.app.midiAnswering());
+    const on = await page.evaluate(() => window.OSCILLA.app.midiResponseToggle(true));
+    // The phrase: C4 for 300 ms; its answer is G4, PHRASE_GAP_MS after the Note Off.
+    let t0 = await pnow();
+    await msg([0x90, 60, 100], t0);
+    await heard(page, (m) => m.peak > 0.005, `${leg}: the player's note sounds`);
+    await msg([0x80, 60, 0], t0 + 300);
+    let answered;
+    try {
+      answered = await until(async () => {
+        const i = await instrument(page);
+        const m = await sound(page);
+        return i.held.includes(67) && !i.held.includes(60) && m.peak > 0.005 ? { i, m } : null;
+      }, { ms: STEP_MS, what: `${leg}: the answer sounds on the instrument` });
+    } catch (error) {
+      if (!(error instanceof WaitTimeout)) throw error;
+      answered = { timedOut: error.message, i: await instrument(page), m: await sound(page) };
+    }
+    const ended = await until(async () => {
+      const i = await instrument(page);
+      return i.held.length === 0 ? i : null;
+    }, { ms: STEP_MS, what: `${leg}: the answer ends by itself` }).catch(() => null);
+    check(leg, id, 'call and response on the entry route: after the phrase the one instrument '
+      + 'holds the answer at the fifth and the analyser sounds while the player holds nothing; '
+      + 'it ends by itself', on === true && !answered.timedOut && ended !== null,
+    JSON.stringify({ on, held: answered.i && answered.i.held,
+      peak: answered.m && answered.m.peak, timedOut: answered.timedOut, ended: !!ended }));
+    // The player always wins: a phrase of four notes 300 ms apart (by their stamps), then a Note
+    // On during its answer.
+    t0 = await pnow();
+    for (const [k, n] of [60, 62, 64, 65].entries()) {
+      await msg([0x90, n, 100], t0 + k * 300);
+      await msg([0x80, n, 0], t0 + k * 300 + 250);
+    }
+    const playing = await until(async () => ((await answering())
+      && (await instrument(page)).held.some((n) => [67, 69, 71, 72].includes(n)) ? true : null),
+    { ms: STEP_MS, what: `${leg}: the second answer sounds` }).catch(() => false);
+    await msg([0x90, 84, 100], await pnow()); // C6: no note of the answer (G4, A4, B4, C5)
+    const cut = await until(async () => {
+      const i = await instrument(page);
+      return !i.held.some((n) => [67, 69, 71, 72].includes(n)) && !(await answering()) ? i
+        : null;
+    }, { ms: STEP_MS, what: `${leg}: the player's note cuts the answer` }).catch(() => null);
+    await msg([0x80, 84, 0], await pnow());
+    check(leg, id, 'a Note On of the player during an answer cuts it', playing === true
+      && cut !== null, JSON.stringify({ playing, cut: cut && cut.held }));
+    await page.evaluate(() => window.OSCILLA.app.midiResponseToggle(false));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function seamCc(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'midi-seam-cc';
@@ -1901,6 +1977,7 @@ async function main() {
             await seamNotes(browser, b, origin, url);
             await seamSink(browser, b, origin, url);
             await seamCc(browser, b, origin, url);
+            await seamResponse(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
             await seamTransport(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
