@@ -98,6 +98,12 @@
 //                               reaches B, then two Note Offs: the analyser falls below -70 dB
 //                               rel and the sink and the transport hold no note. With the
 //                               sink's re-press release removed, A's note hangs and it fails
+//   keys-insert-notice          K247, review C3-553-1: on a fresh page (the untouched default
+//                               document, 6 nodes) a key in the Playground inserts the Synth
+//                               panel into the Studio document and says K246's sentence once,
+//                               as a warning notice with its own Zpět (a second key raises no
+//                               second one); Zpět there undoes it (6 nodes, Master Output fed
+//                               as before); the same in Measure
 //   keyboard-qwerty             K026, no MIDI involved (a context without the seam, so it is in
 //                               neither group and says nothing about MIDI support): the link
 //                               #m=playground&kbd=1 arms the Playground; A, D and G held play C4,
@@ -267,7 +273,10 @@ const readMidi = (page) => page.evaluate(() => {
     offered: !!btn && !!row && row.contains(btn) && row.style.display !== 'none'
       && btn.style.display !== 'none',
     lastError: app && app.lastError ? app.lastError.message : null,
-    alerts: document.querySelectorAll('[data-osc="alerts"] .osc-toast').length };
+    // The keys' insert of the Synth panel is said by a notice of its own (K247, C3-553-1, its
+    // own Zpět): not a MIDI notification, and keys-insert-notice proves it.
+    alerts: [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
+      .filter((el) => !el.querySelector('[data-osc="alert.undo"]')).length };
 });
 
 // What the page itself can see of MIDI: which group this context is in, and the platform.
@@ -931,6 +940,7 @@ async function seamNotes(browser, b, origin, url) {
     try {
       said = await until(() => page.evaluate(() => {
         const t = [...document.querySelectorAll('[data-osc="alerts"] .osc-toast')]
+          .filter((el) => !el.querySelector('[data-osc="alert.undo"]')) // the insert's (K247)
           .map((el) => el.textContent.replace(/\s+/g, ' ').trim());
         return t.length ? t : null;
       }), { ms: STEP_MS, what: `${leg}: the refused note is said` });
@@ -1514,6 +1524,59 @@ async function seamReroute(browser, b, origin, url) {
 }
 
 // keyboard-qwerty (K026): the computer and on-screen keyboard play the same note voices.
+// keys-insert-notice (K247, C3-553-1): see the header.
+async function keysInsertNotice(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'keys-insert-notice';
+  const { context, page, errors } = await openPage(browser, `${url}#m=playground`,
+    { also: { fn: audioProbe, arg: {} } });
+  const doc = () => page.evaluate(() => {
+    const m = window.OSCILLA.studio.model;
+    const master = m.graph.nodes.find((n) => n.type === 'master');
+    return { nodes: m.graph.nodes.length,
+      feeds: m.graph.edges.filter((e) => master && e.to.node === master.id)
+        .map((e) => e.from.node).sort() };
+  });
+  const notices = () => page.evaluate(() => [...document.querySelectorAll('[data-osc="alert"]')]
+    .filter((el) => el.querySelector('[data-osc="alert.undo"]'))
+    .map((el) => el.textContent.replace(/\s+/g, ' ').trim()));
+  const go = async (ws) => {
+    await page.evaluate((w) => window.OSCILLA.app.setWorkspace(w), ws);
+    await until(() => page.evaluate((w) => window.OSCILLA.app.workspace === w, ws),
+      { ms: STEP_MS, what: `${leg}: ${ws} opens` });
+    await page.locator('#osc-main').click({ position: { x: 4, y: 4 } }); // a gesture
+    await focusOffEditors(page);
+  };
+  try {
+    const before = await doc();
+    for (const ws of ['playground', 'measure']) {
+      await go(ws);
+      await page.keyboard.press('KeyA');
+      await page.keyboard.press('KeyS'); // a second key: no second notice
+      const said = await until(async () => {
+        const n = await notices();
+        return n.length ? n : null;
+      }, { ms: STEP_MS, what: `${leg}: ${ws}: the insert is said` }).catch(() => []);
+      const inserted = await doc();
+      await page.locator('[data-osc="alert.undo"]').first().click();
+      const undone = await until(async () => {
+        const d = await doc();
+        return d.nodes === before.nodes ? d : null;
+      }, { ms: STEP_MS, what: `${leg}: ${ws}: Zpět undoes the insert` }).catch(doc);
+      check(leg, id, `${ws}: a key inserts the Synth panel, says K246's sentence once with its `
+        + 'own Zpět, and Zpět there gives the document back whole', before.nodes === 6
+        && inserted.nodes > before.nodes && said.length === 1 && /Master Output/.test(said[0])
+        && undone.nodes === before.nodes
+        && JSON.stringify(undone.feeds) === JSON.stringify(before.feeds)
+        && (await notices()).length === 0,
+      JSON.stringify({ before, inserted: inserted.nodes, said, undone }));
+    }
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 async function keyboardChecks(browser, b, origin, url) {
   const leg = `${b}/${origin}`;
   const id = 'keyboard-qwerty';
@@ -1774,6 +1837,7 @@ async function main() {
             await seamCc(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
+            await keysInsertNotice(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);
             await keyboardStudioHeld(browser, b, origin, url);

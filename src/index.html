@@ -335,6 +335,11 @@
             <a :href="a.action.href" data-osc="alert.action" data-osc-link="jump" @click="alertActionFollowed(a.id)"
               x-text="a.action.text"></a>
           </template>
+          <!-- K247 (C3-553-1): the keys' insert of the Synth panel, undone right where it was said -->
+          <template x-if="a.undo">
+            <button type="button" data-osc="alert.undo" @click="alertUndo(a.id)"
+              class="ms-2 inline-flex items-center h-8 px-3 text-sm font-medium text-gray-900 bg-white border border-gray-300 border-solid rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11">Zpět</button>
+          </template>
         </div>
         <button type="button" class="osc-icon-btn osc-icon-btn--ghost osc-icon-btn--sm"
           @click="dismissAlertFocus(a.id, $event)" aria-label="Dismiss notification">
