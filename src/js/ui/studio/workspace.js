@@ -81,7 +81,7 @@ import { OWNER } from '../output-owner.js';
 /** The parts of the workspace (./workspace/*.js), in the order their functions join `ops`. */
 const PARTS = [createWorkspaceDocument, createWorkspaceRuntime, createWorkspaceMeasurement,
   createWorkspaceFiles, createWorkspaceGraph, createWorkspaceTimeline, createWorkspaceNavigation,
-  createWorkspaceVoice, createWorkspaceKeys];
+  createWorkspaceKeys, createWorkspaceVoice];
 
 /**
  * A stable handle over the current store (§9): the same object for every projection, the
