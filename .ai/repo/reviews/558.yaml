@@ -1,0 +1,99 @@
+# Review verdict for pull request #558 (train/t23): train T23 and release v3.38.1 (a patch:
+# release:analyze derives patch from U106's fix(ui)).
+# Member: oscilla-0b's U106 (#556: 81350f63, the page is lang="cs", the shell's remaining English
+# carries lang="en", the workspaces have Czech names with Studio, Synth and Playground kept as
+# names; bde33eb1, its size raise entry), merged into the train in 59a8dc35 on main 474ce9c3
+# (T22, v3.38.0) with one rebuild; oscilla-0b's linux-x64 re-accept 8cd09f5a; oscilla-43's
+# chore(release): record v3.38.0 c4a41d76 and chore(release): v3.38.1 84460015. bde33eb1 and
+# 474ce9c3 are ancestors of 84460015 (checked by the reviewer). Guarded in 2 paths, both string
+# literals that quote a renamed label: src/js/experiments/connections.js ("loaded in Měření")
+# and src/js/studio/sequence-import.js ("holds no Sekvencer sequence"). Unguarded and read as
+# members: src/js/ui/shell.js (the registry's Czech labels and lang: 'en' on the kept names),
+# src/index.html (lang="cs", the bound :lang of the nav, page header and Related links),
+# src/js/ui/app.js, cross-links.js, counterparts.js, shortcuts.js, workbench.js,
+# ui/studio/workspace/files.js and navigation.js, core/preset-notice.js, main.js, the catalogue
+# declarations, scripts/landing/copy.mjs, scripts/ui-flowbite-pro-measure.mjs, README.md,
+# docs/v31/user-guide.md, the new tests/unit/shell-lang.test.mjs and the readers that moved.
+# Judged at 84460015 on base origin/main 474ce9c3, 2026-11-15, in the reviewer's own detached
+# worktree ~/dev/oscilla-wt/review-526.
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# acting as rev-seat for every train (Q108 A). It built none of this: oscilla-0b built U106 and
+# re-accepted the references, oscilla-43 integrated and stamped. Disclosure: U106's naming and
+# scope are this reviewer's own Q090 decision (2026-11-15, recorded verbatim in U106.yaml); the
+# builder implemented it and this verdict judges the implementation against it.
+#
+# The digest: origin/main's (474ce9c3) scripts/review-verdict.mjs --content --list at 84460015:
+# cec49b6a2297c9f3... over 2 guarded paths (equal to the integrator's).
+#
+# How it was judged, condition by condition (Q090 on U106):
+# - (1) Labels: Měření, Experimenty, Analyzátor, Filtry, Porovnání, Syntéza, Sekvencer,
+#   Předvolby, Výuka, O aplikaci; groups Analýza and Syntéza. Hashes, routes, data-osc hooks and
+#   catalogue ids unchanged. The English left in src/, scripts/ and tests/browser that still
+#   reads Measure, Compare, Presets or Learn is not a workspace label (core/constants.js
+#   APP_MODES is read only for its ids; the Experiments panel "Compare", measure-flow's step, the
+#   Studio inspector's "Presets" menu, scripts/facts.mjs's directory map), so it stays under the
+#   czech-prose ratchet. English sentences quoting a renamed workspace now name it as shown
+#   ("loaded in Měření", "Sekvencer is not available here"), which condition (1) asks; they are
+#   still English, and later Czech passes translate them.
+# - (2) Playground, Studio and Synth carry lang="en" only where they stand alone (the nav item,
+#   the page header, the Related links), bound from the registry's lang; declined Czech sentences
+#   carry none; shell-lang.test.mjs states the rule in its header. The reviewer's probe
+#   k558-shell.cjs (chromium, keyboard Tab at 1536 px): Playground{en}, Studio{en}, Synth{en},
+#   every other nav stop Czech, and the brand link {en} (Q002).
+# - (3) Syntéza group and item stay parallel. The aria snapshot at 1536 px (chromium and webkit)
+#   reads button "Syntéza" [expanded], list "Syntéza", link "Syntéza": the follow-up is #556's
+#   body and U113 (plan PR #559), which must tell all three apart.
+# - (4) shell-lang.test.mjs derives its regions from the shell's catalogue declaration
+#   (decl/shell.js) and the contentinfo landmark, no hand count; fail-first run by the reviewer:
+#   OSC_SHELL_LANG_ROOT over origin/main 474ce9c3's src/ fails 4 of 6 (the page is not cs,
+#   unmarked English, the labels, the unbound lang); at 84460015 6 of 6 pass.
+# - (5) Size: #556's raise entry (cap 306000, 304601 -> 305066 B, +465) is that step's history
+#   on its old base; raises are added, never edited, so it stays behind #555's. The cap in force
+#   is 310000 (caps), src/index.html 309121 -> 309586 B (+465), under it.
+# - The page title follows the workspace's Czech label ("OSCILLA · O aplikaci") while the static
+#   <title>, og/twitter and the brand's aria-label stay English (Q002): accepted.
+# - The visual re-accept 8cd09f5a states its reasons per gate (header chrome 16.39 vs 16.24 % from
+#   "Exportovat" and the Czech search placeholder; MEASURE 0.553 %; all 16 SYN views; STUDIO
+#   unchanged); the SYN noise re-measured over 10 runs, the tool's minimum (NOISE_RUNS) and the
+#   count every view used until today.
+# - Phone and keyboard (probe k558-shell.cjs, 320x568, 375x667 and 1536x1024, chromium and
+#   webkit): no shell text clipped by the longer labels (the hits are screen-reader-only spans);
+#   the page summary's ellipsis at 1536 px is main's too (title fallback).
+#
+# Seen while judging, not this train's:
+# - cross-links learn-demo-back (chromium, keyboard) failed 2 of 2 origins in the suite run.
+#   Alternated with --only, 15 rounds each: head 2, main 474ce9c3 1, same signature (focus on
+#   source.hold, not #osc-main > h1); CI chromium passed it 16 of 16 in the 8 runs before. The
+#   unchanged suite instrumented with a focusin hook caught it on run 16 of 52: runLearnDemo's
+#   $nextTick focus to #osc-hold-play (src/js/ui/workbench.js) fired 52 ms after the demo, after
+#   the notice had been followed and Back pressed, and took focus from the Playground heading.
+#   Filed by oscilla-43 as E074 (plan PR #559).
+# - ui-flowbite-pro shell-a11y failed once in chromium/file (390 dark: ArrowDown had not yet
+#   moved focus from nav.playground when read); 10 of 10 on head and 10 of 10 on main alternated
+#   at load 25-37; undetermined. U106's shell.js diff touches no key or focus handling.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (474ce9c3's). Auto-merge is armed only after the reviewer reports "legs OK"; otherwise a
+# superseding verdict.
+#
+# Measured by the reviewer (Node 22.20.0, OSC_LOAD_MAX=80): at 84460015 GITHUB_BASE_REF=main npm
+# test exit 0 (5835 tests, 5834 pass, 0 fail), build:check 0, release:analyze 0 (patch:
+# v3.38.1), src/index.html 309586 B (cap 310000); in chromium, firefox and webkit: navigation 0
+# (25/25 x 6), link-integrity 0 (126 checks), ui-current 0 (407/407 x 3), app 0 (66/66 x 6),
+# first-screen 0 (645 checks), journeys 0 (38 x 3), iphone 0 (61/61, 61/61, 122/122),
+# surface-census 0 (9/9 x 6), layout 0 (107/107 x 3), qa-regressions 0 (19/19 x 3), synth 0,
+# v31-studio-workflows 0, v31-studio-links 0 (8/8 x 6), control-census 0 (340 pass, 1 expected failure, 0 fail per engine); cross-links exit 1 (106 passed,
+# learn-demo-back as above, main's) and ui-flowbite-pro exit 1 (11/12 once, 12/12 x 5, as
+# above, undetermined).
+#
+# Verdict: merge, under the condition above. No finding.
+schema: review-verdict/v1
+pr: 558
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 84460015)
+content: cec49b6a2297c9f39430da834dd6b9360c48f3c5d99a0e91e3abc8d706a85b3a
+findings: []
