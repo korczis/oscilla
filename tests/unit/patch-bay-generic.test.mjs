@@ -69,3 +69,21 @@ test('a StudioModel is a source: node ports are jacks, document edges are cables
   assert.equal(one.groups.length, 1);
   assert.deepEqual(ss.studioCables(model, one), [], 'an edge leaving the source is not drawn');
 });
+
+test('K150 negative case: a node type the registry does not know is left out, and its edges', () => {
+  const base = templateModel(REFERENCE_TEMPLATE_ID);
+  const known = base.graph.nodes[0];
+  const model = { ...base, graph: { ...base.graph,
+    nodes: [...base.graph.nodes, { id: 'ghost', type: 'no-such-node-type', params: {},
+      position: { x: 0, y: 0 } }],
+    edges: [...base.graph.edges, { id: 'to-ghost', from: { node: known.id, port: 'out' },
+      to: { node: 'ghost', port: 'in' } }] } };
+  assert.equal(NODE_REGISTRY.has('no-such-node-type'), false);
+  const source = ss.studioSource(model);
+  assert.equal(source.groups.some((g) => g.id === 'ghost'), false, 'the unknown node has no group');
+  assert.equal(source.groups.length, base.graph.nodes.length, 'every known node still has one');
+  assert.equal(ss.studioCables(model, source).some((c) => c.id === 'to-ghost'), false,
+    'an edge to the unknown node is not drawn');
+  // Named explicitly, it is still left out (the registry decides, not the caller's list).
+  assert.deepEqual(ss.studioSource(model, { nodes: ['ghost'] }).groups, []);
+});
