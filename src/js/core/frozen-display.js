@@ -14,7 +14,7 @@ export const FROZEN_DISPLAY = Object.freeze({
     'Nic nehraje, dokud nestisknete Podržet a hrát nebo Spustit.',
   'Press and hold HOLD TO PLAY.': 'Stiskněte a držte Podržet a hrát.',
   'Press TRIGGER (or Space) to hear it.': 'Stiskněte Spustit (nebo mezerník) a uslyšíte to.',
-  'Trigger duration': 'Délka spuštění',
+  'Trigger duration': 'Délka spuštěné noty',
   'Continuous repeat needs “Allow continuous playback”; playing once.':
     'Nepřetržité opakování potřebuje „Povolit nepřetržité přehrávání“; zazní jednou.',
 });

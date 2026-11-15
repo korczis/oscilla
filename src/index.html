@@ -3438,9 +3438,9 @@
           uvolnění, Esc nebo když stránka ztratí fokus. Náběh platí od příští noty. Doznění
           upravené během držení noty platí po jejím uvolnění (se zapnutou laboratoří Envelope
           platí její Release), zkrácené tak, aby skončilo pevným limitem nebo vlastním koncem
-          vzoru; nota, která dosáhne jednoho z nich, nebo nota spuštěná tlačítkem Spustit na svém konci doznívá
-          s Dozněním, se kterým začala.</p>
-        <label class="osc-label" for="osc-set-duration">Délka spuštění (ms)</label>
+          vzoru; nota, která dosáhne jednoho z nich, nebo nota spuštěná tlačítkem Spustit na svém
+          konci doznívá s Dozněním, se kterým začala.</p>
+        <label class="osc-label" for="osc-set-duration">Délka spuštěné noty (ms)</label>
         <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
           data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">
         <label class="osc-label" for="osc-set-attack">Náběh (ms, bez ADSR)</label>
