@@ -35,4 +35,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: 2026-11-14
-updated_at: 2026-11-14
+updated_at: 2026-11-15T10:59:41Z
+started_at: 2026-11-15T10:59:05Z
+started_event: sha256:99e2b44fdcf9cde98abacc0304097f1235da7471e74c7b7c4cb56c0c3928e230
+verified_at: 2026-11-15T10:59:19Z
+verified_event: sha256:12fe34a1adeac70ca841c95bea3826b437ba47c7c9c94f70c6068ce360e7f0db
+completed_at: 2026-11-15T10:59:41Z
+completed_event: sha256:119f4578f6a8602c56842c99270cd0c535fbd8588649b09b41f077a204a15275
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/midi/cc.test.mjs tests/unit/midi/notes.test.mjs; node tests/browser/midi.cjs"
+    result: "landed in train T22, PR 555 (main merge commit 474ce9c351e979bac15bcfd77f9a8c6ca638f16b, member PR 548), released as v3.38.0 (Pages serves it, verify-deploy green). Criteria re-checked on main: CC 64 holds and releases (notes.test, midi-seam-cc); CC_SLOTS name Synth face controls (cc.test reads the panel declaration); CC value along the control's scale with one undo per burst (cc.test on a real createHistory, C3-548-1..4); no panel control moves outside the Synth and the status line names the CC (midi-seam-cc); ADR 0058 V506 note and docs/midi.md layout. npm test 5827/0 at 474ce9c3; the deciding CI run 43694410257 green on the train head 9a175f9d (unit and the browser gate in chromium, firefox and webkit, file:// and /oscilla/). Review verdict .ai/repo/reviews/555.yaml (merge), member review .ai/repo/reviews/548.yaml"
+    artifact: ".ai/repo/reviews/555.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T10:59:34Z
