@@ -145,9 +145,9 @@ export function createWorkspaceNavigation(ctx, svc, ops) {
       });
     },
 
-    /** "Back to the Sequencer": the Studio's Back button's name; its label is the workspace's. */
+    /** "Zpět na Sekvencer": the Studio's Back button's name; its label is the workspace's. */
     studioBackText() {
-      return `Back to ${workspacePhrase(studioBackTarget(this.studio.backTo))}`;
+      return `Zpět na ${workspacePhrase(studioBackTarget(this.studio.backTo))}`;
     },
     studioBackLabel() {
       return WORKSPACE_LABELS[studioBackTarget(this.studio.backTo)];

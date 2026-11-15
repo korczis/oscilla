@@ -44,7 +44,7 @@ test('About is the last workspace and the last primary navigation item', () => {
   assert.equal(WORKSPACES.at(-1), 'about');
   // The sidebar is rendered from the registry (shell.js NAV_TREE, issue F002).
   assert.equal(NAV_TREE.at(-1).id, 'about');
-  assert.equal(NAV_TREE.at(-1).label, 'About');
+  assert.equal(NAV_TREE.at(-1).label, 'O aplikaci'); // Czech since U106 (c3, Q090)
   assert.equal(new Set(WORKSPACES).size, WORKSPACES.length);
   assert.match(html, /<template x-for="entry in navTree" :key="entry\.id">/);
 });
@@ -79,9 +79,9 @@ test('decorative visuals are hidden from assistive technology', () => {
 });
 
 test('every workspace has a document title of its own (link audit B9)', () => {
-  assert.equal(workspaceTitle('about', 'BASE'), 'OSCILLA · About');
-  assert.equal(workspaceTitle('measure', 'BASE'), 'OSCILLA · Measure');
-  assert.equal(workspaceTitle('filter', 'BASE'), 'OSCILLA · Filter Lab');
+  assert.equal(workspaceTitle('about', 'BASE'), 'OSCILLA · O aplikaci');
+  assert.equal(workspaceTitle('measure', 'BASE'), 'OSCILLA · Měření');
+  assert.equal(workspaceTitle('filter', 'BASE'), 'OSCILLA · Filtry');
   // The Playground keeps the product title (the page's own <title>).
   assert.equal(workspaceTitle('playground', 'BASE'), 'BASE');
   const titles = WORKSPACES.map((ws) => workspaceTitle(ws, 'BASE'));

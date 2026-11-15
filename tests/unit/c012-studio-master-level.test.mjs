@@ -138,7 +138,7 @@ test('dup-stale-4: while the Studio plays the status bar says PLAYING and shows 
   () => {
     const { cmp, engine } = statusBar();
     assert.equal(cmp.statusLabel, 'PŘIPRAVENO');
-    assert.equal(cmp.statusGainText, 'Gain -21.9 dB');
+    assert.equal(cmp.statusGainText, 'Zesílení -21.9 dB');
     assert.equal(cmp.anySounding, false);
     cmp.studio.playing = true;
     cmp.studio.masterLevel = 0.05;
@@ -152,13 +152,13 @@ test('dup-stale-4: while the Studio plays the status bar says PLAYING and shows 
     assert.equal(cmp.isSounding, false);
     // A level written since (the Playground's gain, resetDefaults) supersedes the Studio's.
     engine.masterWrites += 1;
-    assert.equal(cmp.statusGainText, 'Gain -21.9 dB');
+    assert.equal(cmp.statusGainText, 'Zesílení -21.9 dB');
     engine.masterWrites -= 1;
     cmp.studio.masterLevel = null;
-    assert.equal(cmp.statusGainText, 'Gain -21.9 dB', 'no Studio level held: the Playground gain');
+    assert.equal(cmp.statusGainText, 'Zesílení -21.9 dB', 'no Studio level held: the Playground gain');
     cmp.studio.playing = false;
     cmp.studio.masterLevel = 0.05;
-    assert.equal(cmp.statusGainText, 'Gain -21.9 dB', 'stopped: the Playground gain');
+    assert.equal(cmp.statusGainText, 'Zesílení -21.9 dB', 'stopped: the Playground gain');
     assert.equal(cmp.statusLabel, 'PŘIPRAVENO');
   });
 
@@ -249,7 +249,7 @@ test('F2: Reset instrument with the gain already at its default gives the output
   assert.deepEqual(engine.writes.slice(before), [gain], 'one write, of the restored gain');
   assert.equal(app.studio.masterLevel, null,
     'the reactive Studio level is cleared, so the status bar is re-read');
-  assert.equal(app.statusGainText, 'Gain -21.9 dB');
+  assert.equal(app.statusGainText, 'Zesílení -21.9 dB');
 });
 
 test('F2: Reset instrument with a changed gain leaves the write to the gainLevel $watch', () => {
@@ -284,7 +284,7 @@ test('F4: the Studio readout is re-read when the Playground gain is written', ()
   // the gain changes; the Studio's mirror is not cleared here.
   engine.masterWrites += 1;
   r.gainLevel = 0.03;
-  assert.equal(seen.at(-1), `Gain ${r.gainDbText}`,
+  assert.equal(seen.at(-1), `Zesílení ${r.gainDbText}`,
     `the readout went on showing the Studio level after the Playground gain was written: ${seen}`);
   stop(runner);
 });

@@ -103,7 +103,7 @@ test('a workspace lists only its own shortcuts, plus the global ones', () => {
   // plays and stops the sequence, undoes and redoes, copies and pastes blocks.
   const seq = Object.fromEntries(shortcutHelp('sequencer').rows.map((r) => [r.id, r]));
   assert.deepEqual(seq['sequencer-space'], { id: 'sequencer-space', keys: 'Space',
-    where: 'on the Sequencer timeline', text: 'Play / stop the sequence' });
+    where: 'na časové ose Sekvenceru', text: 'Přehrání / zastavení sekvence' });
   assert.equal(seq['sequencer-history'].keys, 'Ctrl/⌘ Z, Shift + Ctrl/⌘ Z');
   assert.equal(seq['sequencer-clipboard'].keys, 'Ctrl/⌘ C, Ctrl/⌘ V');
   assert.equal(shortcutHelp('sequencer').space, SPACE_MEANING.instrument,

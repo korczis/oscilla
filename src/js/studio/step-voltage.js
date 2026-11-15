@@ -21,22 +21,18 @@
 // A skipped step (params.skip[i] === 1) is passed over: the steps played are those within the
 // length that are not skipped, in the playback's order; with none left nothing plays.
 
-import { SVS_LENGTHS, SVS_MAX_STEPS, SVS_ROWS } from './nodes/modulation.js';
+import { SVS_LENGTHS, SVS_MAX_STEPS, SVS_ROWS, svsLength, svsPlayable }
+  from './nodes/modulation.js';
 
-export function svsLength(params) {
-  const n = Number(params && params.length);
-  return SVS_LENGTHS.includes(String(n)) ? n : Number(SVS_LENGTHS[0]);
-}
+// The length and the playable steps are the node definition's (nodes/modulation.js), one rule
+// the card's summary and the sound share (review C3-565-1); re-exported for this module's readers.
+export { svsLength };
 
 /** One back-and-forth cycle of `n` steps: 0 .. n-1 .. 1 (n = 1: just 0). */
 const pingpong = (n) => (n > 1
   ? [...Array(n).keys(), ...Array.from({ length: n - 2 }, (_, i) => n - 2 - i)] : [0]);
 
-/** The steps that play, in order: within the length and not skipped. */
-function playable(params) {
-  const skip = (params && params.skip) || [];
-  return [...Array(svsLength(params)).keys()].filter((i) => skip[i] !== 1);
-}
+const playable = svsPlayable;
 
 export function svsStep(params, k) {
   if (!Number.isInteger(k) || k < 0) return null;

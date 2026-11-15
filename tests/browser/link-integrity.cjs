@@ -514,7 +514,7 @@ async function runLeg(name, origin) {
       const filterTitle = await reloaded.evaluate(() => document.title);
       await reloaded.close();
       check(leg, 'every workspace has a document title of its own',
-        !shared.length && filterTitle === titleOf.filter && /Filter Lab/.test(filterTitle),
+        !shared.length && filterTitle === titleOf.filter && /Filtry/.test(filterTitle),
         JSON.stringify({ shared: shared.map((w) => [w, titleOf[w]]), filterTitle }));
     }
 
