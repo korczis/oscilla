@@ -16,7 +16,8 @@
 # docs/v31/user-guide.md, the new tests/unit/shell-lang.test.mjs and the readers that moved.
 # Judged at 84460015 on base origin/main 474ce9c3, 2026-11-15, in the reviewer's own detached
 # worktree ~/dev/oscilla-wt/review-526; superseded at 85412d57 (oscilla-43's
-# test(studio) fix for C3-558-1, below), the same digest.
+# test(studio) fix for C3-558-1, below), and again at 85662bf6 (oscilla-0b's census driver
+# change for E075, below), the same digest.
 #
 # Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
 # acting as rev-seat for every train (Q108 A). It built none of this: oscilla-0b built U106 and
@@ -111,11 +112,42 @@
 # attempt; U106 changes no envelope or input code (its src diff there is two title strings).
 # Main's since T22, undetermined in cause; the flake ledger row names it.
 #
-# Verdict: merge, under the condition above, at 85412d57. One finding, closed.
+# Superseding again (2026-11-15): run 43725597787 on ad446314 (the version above) was red in
+# Browser leg 2 (firefox) only, control-census --part 2/2, attempt 1 envelope.sustainSlider.pointer
+# and attempt 2 (rerun agreed with oscilla-43, ledger row E075) envelope.attackSlider.pointer,
+# "not reached within 10000 ms"; the other five legs equal shards.cjs --plan, "all K suites
+# passed", no FAIL; v31-studio-transport passed in every engine. Firefox leg 2 on T23 was red
+# 3 of 3 against 1 of 6 on the other K247/T22 descendants (job logs read by the reviewer), so
+# it was judged as a suspect, not rerun again. Probed: the reviewer's and oscilla-0b's linux
+# firefox and chromium probes (mcr playwright 1.63 image) found every envelope slider hit at
+# the census click point on a fresh page, nothing fixed over it, scrollY 0, and every click
+# moved the value, on main's and T23's dist alike; with lang="cs" Firefox reflows (release
+# slider y 715 -> 720, attack 584 -> 583), Chromium identical. oscilla-0b's three slider rows
+# --only passed 12 of 12 in the container on both dists. The reviewer's hooked full part 2/2 in
+# the container was inconclusive (amd64 emulation: page.goto timed out at row 18). Classified by
+# oscilla-43's alternated Mac A/B of the full part in firefox: main's tree (474ce9c3) round 1
+# red on envelope.attackSlider.pointer, T23 round 1 green; so it is E075 (plan PR #559), main's,
+# not U106's. The rate difference stays a note: lang="cs" moves Firefox's layout and can raise a
+# settle race's odds; it is not shown to cause it.
+# 85662bf6 (oscilla-0b, tests/browser/control-census.cjs only): D.slide, the two hold rows and
+# the minimap row click through the locator (position, timeout ROW_MS), which re-reads the box
+# at the click, waits for stability and refuses a covered point with Playwright's own message;
+# no catch; no census row keeps a box-then-page.mouse drive (reviewer's grep). The commit
+# message states the evidence as above and keeps E075 open for journeys' #osc-env-enable. The
+# D.slide comment states the race as the cause, which is not pinned: C3-558-2, P3, open, to be
+# corrected under E075. At 85662bf6 (reviewer, Node 22.20.0, OSC_LOAD_MAX=80, load 46):
+# GITHUB_BASE_REF=main npm test exit 0 (5835 tests, 5834 pass, 0 fail); control-census in
+# firefox and chromium exit 0 (340 pass, 1 expected failure, 0 fail each). Not run by the
+# reviewer: control-census in webkit (the CI webkit legs run it). Digest at 85662bf6 unchanged
+# (cec49b6a, the same 2 guarded paths).
+#
+# Verdict: merge, under the condition above, at 85662bf6. Two findings: C3-558-1 closed,
+# C3-558-2 (P3) open.
 schema: review-verdict/v1
 pr: 558
 verdict: merge
-reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 85412d57)
+reviewer: oscilla-c3 rev-seat-2 (claude-code c0f0687c, a separate top-level session; built none of 85662bf6)
 content: cec49b6a2297c9f39430da834dd6b9360c48f3c5d99a0e91e3abc8d706a85b3a
 findings:
   - { id: C3-558-1, severity: P1, status: closed, title: "v31-studio-transport still read the status bar's gain as \"Gain <dB>\" after U106 renamed it Zesílení (gate red in all three engines); closed by 85412d57" }
+  - { id: C3-558-2, severity: P3, status: open, title: "control-census D.slide's comment states the box-then-click race as E075's cause, which is not pinned; correct it under E075" }
