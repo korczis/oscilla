@@ -8,7 +8,7 @@ priority: p0
 profile: implementation
 objective: "Lands as fix(measure). The audit found MEASURE's Check setup emits nothing ('no input signal'), Start and Measure again are silent with a fake microphone, on file:// with a granted fake mic the page says 'Microphone input is not available here' (wrong), and Firefox announces nothing (src/js/measurement/capture.js:349-477, src/js/ui/measure/run.js:73, src/js/ui/measure/session.js:460, src/js/measurement/views/announcements.js:42; the cause is not yet pinned to a line). After: the setup check and the run produce the stimulus at the output, and every refusal is announced in all three engines with its true reason."
 why: "The owner, in the af session on 2026-11-04 ~23:3xZ: 'play na vetsine stranek nefunguje / neni to centralne propojene pres bus / dupliukuje se to / nefunguje to jak ma, jak popsano v .ai/' (Play does not work on most pages; not centrally connected through a bus; duplicated; not working as .ai/ describes). Measured by af's audit workflow wf_99782352-a93 on origin/main 6d5efa89 (v3.19.0) and the live site, in Chromium, Firefox and WebKit, desktop 1536x1024 and WebKit 390x844: the engine is sound (one AudioContext, no errors, every Stop silent within 0.2-1.2 s), but 8 of 13 workspaces have no working visible Play on desktop."
-current_state: "Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed but not done. All but one criterion met (measure-stimulus-emits 13/13, v3-measure.cjs measure-check-sounds and measure-refusal-announced in test:measure, 444.yaml merge); criterion 4's browser fail-first on 5fdf8d13^ is not recorded (the unit test fails there 11/13; the browser failure is only inferred from the audit wf_99782352-a93). Next: run measure-check-sounds on the base tree and record it, then stamp."
+current_state: "Audit 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on main 474ce9c3, on the owner's order to finish unfinished work: landed; done the same day once criterion 4 was recorded (see its evidence). All but one criterion met then (measure-stimulus-emits 13/13, v3-measure.cjs measure-check-sounds and measure-refusal-announced in test:measure, 444.yaml merge); criterion 4's browser fail-first on 5fdf8d13^ is not recorded (the unit test fails there 11/13; the browser failure is only inferred from the audit wf_99782352-a93). Recorded: measure-check-sounds fails in chromium/file on the pre-C033 build (6d5efa89's dist) and passes on main's."
 scope:
   - "src/js/measurement"
   - "src/js/ui/measure"
@@ -31,4 +31,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-05'
-updated_at: '2026-11-05'
+updated_at: 2026-11-15T18:27:47Z
+started_at: 2026-11-15T18:25:15Z
+started_event: sha256:cd85b1852e12929840f51606cf6ed16b49f284fdf2c32d62e3b03bf1707f74d1
+verified_at: 2026-11-15T18:26:26Z
+verified_event: sha256:7c1e0f7660e8fc39513cfbd6769766fb2bfead0b0d1fee66ee4c2c663cfe80d0
+completed_at: 2026-11-15T18:27:47Z
+completed_event: sha256:e732dffeb33a5e2a36ded3fe1440ae7626588605a16ddf762149be712ed7c5c1
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/measure-stimulus-emits.test.mjs; node tests/browser/v3-measure.cjs --browsers chromium --origins file"
+    result: "Landed in coherence train B (5fdf8d13 + 1dcc8c13, merged 3a3a5a58, PR 444, member verdict merge in .ai/repo/reviews/444.yaml). Re-checked on main 474ce9c3 on 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work: tests/unit/measure-stimulus-emits.test.mjs passes 13/13 (fails 11/13 on 5fdf8d13^); criterion 4's browser fail-first is now recorded: tests/browser/v3-measure.cjs on main's tests run against the pre-C033 build (dist of 6d5efa89) FAILS measure-check-sounds in chromium/file ('tap silent', the destination tap below -60 dBFS while the check reports ready) and against main's build PASSES it (26/26 ALL PASS); measure-refusal-announced present; the suite runs in test:measure of the release gate."
+    artifact: ".ai/repo/reviews/444.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T18:27:29Z
