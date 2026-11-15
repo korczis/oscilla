@@ -22,4 +22,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-15T17:35:50Z
+started_at: 2026-11-15T17:34:25Z
+started_event: sha256:ebd77b49ed434e15ae7276b6c25e9a228117f682a6209b20815c137319e6fbca
+verified_at: 2026-11-15T17:35:00Z
+verified_event: sha256:564a93d99b0f71119c7b14b4f7d196a40839b910995b098f14839f6df21670b4
+completed_at: 2026-11-15T17:35:50Z
+completed_event: sha256:cfba0d38d5e3e26b057065fb40fdc8a207020ae2abc3800adeba140d6882bee5
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/measure-freq-indicator-coverage.test.mjs"
+    result: "On main 474ce9c3 the MEASURE header reads UNCALIBRATED (mimo pásmo) for a profile that covers none of the measured points (tests/unit/measure-freq-indicator-coverage.test.mjs 5/5, fails on b8bfd3b6; tests/browser/v3-measure.cjs measure-freq-coverage in test:measure), landed in T6 (#523) and judged merge in 523.yaml. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/523.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:35:34Z

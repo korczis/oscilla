@@ -23,4 +23,18 @@ validation:
 evidence_required:
   - "verified"
 created_at: '2026-11-10'
-updated_at: '2026-11-10'
+updated_at: 2026-11-15T17:31:39Z
+started_at: 2026-11-15T17:30:06Z
+started_event: sha256:c2f17df80de44b6109dcff6f3f001dd41ea1a6813b80a152ee8fd8952fa273cf
+verified_at: 2026-11-15T17:30:46Z
+verified_event: sha256:4856083016648925d8ddc9c83df10403b3f0e882f1f1d0cd60297c43bc8c3395
+completed_at: 2026-11-15T17:31:39Z
+completed_event: sha256:a818c72ada6dad3d8792289d1c0106aff238d2ffef460d4556e3ca2dda65a971
+evidence:
+  - covers: "verified"
+    type: ci
+    command: "node --test tests/unit/xy-default-patch.test.mjs"
+    result: "On main 474ce9c3, tests/unit/xy-default-patch.test.mjs \"K240: a range-fitted cable reports only its range fit, never Nyquist\" passes (30/30), npm run build:check passes, landed in T7b (#527), and 527.yaml (reviewer oscilla-c3, rev-seat-2; builder oscilla-75) records its fail-first against main's compiler.js with verdict merge. Audit of 2026-11-15 by oscilla-ff (session cae276ab-2d90-45d2-babb-a1f8023668d2) on the owner's order to finish unfinished work, criterion by criterion."
+    artifact: ".ai/repo/reviews/527.yaml"
+    commit: 474ce9c351e979bac15bcfd77f9a8c6ca638f16b
+    recorded_at: 2026-11-15T17:31:21Z
