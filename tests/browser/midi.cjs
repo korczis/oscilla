@@ -536,8 +536,11 @@ async function measured(browser, b, origin, url, site) {
           check(leg, id, `${build}: Connect MIDI is still ${pendingAt(ms)} (recorded off darwin), `
             + 'with the ADR\'s copy', m.text === midiText('pending', { site }), m.text);
         } else {
+          // the failed copy names the browser's error: the ADR's text with any word for {error}
+          const failedCopy = new RegExp(`^${midiText('failed', { site, error: '\u0000' })
+            .replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace('\u0000', '\\w+')}$`);
           const copyOk = m.state === 'failed'
-            ? /^MIDI could not start on this computer \(the browser reported \w+\)\.$/.test(m.text)
+            ? failedCopy.test(m.text)
             : m.text === midiText(m.state, { site });
           check(leg, id, `${build}: Connect MIDI ends ${m.state}, with the ADR's copy`,
             g.ok && copyOk, `${m.text} (${Date.now() - t0} ms)`);
@@ -715,14 +718,15 @@ async function seamChecks(browser, b, origin, url, site) {
       await seam(page, 'resolve', 0, [NAME]);
       const c = await stateIs(page, ['connected'], `${leg}: the stub device connects`);
       check(leg, id, 'handles (stubbed API): connected names the self-naming stub device',
-        c.text === `MIDI is on: ${NAME}.`, c.text);
+        c.text === midiText('connected', { names: [NAME] }), c.text);
       await seam(page, 'plug', SECOND);
-      const two = await view(page, (m) => m.text === `MIDI is on: ${NAME}, ${SECOND}.`,
+      const two = await view(page,
+        (m) => m.text === midiText('connected', { names: [NAME, SECOND] }),
         `${leg}: a second input is listed`);
       check(leg, id, 'handles (stubbed API): a second input joins the names', !two.timedOut,
         two.text);
       await seam(page, 'unplug', NAME);
-      const one = await view(page, (m) => m.text === `MIDI is on: ${SECOND}.`,
+      const one = await view(page, (m) => m.text === midiText('connected', { names: [SECOND] }),
         `${leg}: one of two inputs leaves`);
       check(leg, id, 'handles (stubbed API): one of two leaves, still connected',
         !one.timedOut && one.state === 'connected', one.text);
@@ -733,7 +737,7 @@ async function seamChecks(browser, b, origin, url, site) {
       await seam(page, 'plug', THIRD);
       const back = await stateIs(page, ['connected'], `${leg}: a device plugged in connects`);
       check(leg, id, 'handles (stubbed API): a device plugged in after it connects',
-        back.text === `MIDI is on: ${THIRD}.`, back.text);
+        back.text === midiText('connected', { names: [THIRD] }), back.text);
       const msg = await page.evaluate((name) => {
         let got = null;
         const port = window.__oscMidiSeam.port(name);
@@ -761,7 +765,7 @@ async function seamChecks(browser, b, origin, url, site) {
       await seam(page, 'plug', midiStub.STUB_NAME);
       const c = await stateIs(page, ['connected'], `${leg}: a device after no-devices`);
       check(leg, id, 'handles (stubbed API): a device plugged in connects',
-        c.text === `MIDI is on: ${midiStub.STUB_NAME}.`, c.text);
+        c.text === midiText('connected', { names: [midiStub.STUB_NAME] }), c.text);
     }
 
     // midi-seam-rejections
@@ -1969,7 +1973,8 @@ async function main() {
       try {
         for (const origin of RUN.origins) {
           const url = origin === 'http' ? server.url : pathToFileURL(DIST).href;
-          const site = origin === 'http' ? new URL(server.url).host : 'this page';
+          // On file:// no site: midiText puts in its own.
+          const site = origin === 'http' ? new URL(server.url).host : undefined;
           console.log(`  origin [${b}/${origin}] ${originLabel(origin, url)}`);
           try {
             await measured(browser, b, origin, url, site);

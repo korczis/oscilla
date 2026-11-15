@@ -38,37 +38,41 @@ export const MIDI_STATES = Object.freeze([
 ]);
 
 export const MIDI_COPY = Object.freeze({
-  insecure: 'MIDI is unavailable: this page is not in a secure context. Open it over https.',
-  unsupported: 'MIDI is unavailable: this browser offers no Web MIDI here.',
-  pending: 'Waiting for the browser\'s answer about MIDI access. The rest of OSCILLA keeps '
-    + 'working.',
-  blocked: 'MIDI is blocked for {site}: the browser or the site\'s settings do not let this page '
-    + 'use MIDI. Some browsers allow it only after a site permission add-on is installed.',
-  denied: 'MIDI access is not allowed for {site}. Allow MIDI in the browser\'s site settings, '
-    + 'then choose Connect MIDI again.',
-  failed: 'MIDI could not start on this computer (the browser reported {error}).',
-  revoked: 'MIDI access was withdrawn for {site}. Choose Connect MIDI to ask again.',
-  connected: 'MIDI is on: {names}.',
-  disconnected: 'MIDI input disconnected: {name}. No MIDI input is connected.',
-  'no-devices': 'MIDI is on. No MIDI input is connected; plug one in and it appears here.',
-  unknown: 'MIDI is off. The browser does not say whether MIDI is allowed for {site}; Connect '
-    + 'MIDI asks it.',
-  'needs-permission': 'MIDI is off. Connect MIDI asks the browser for access to MIDI devices '
-    + 'for {site}.',
-  allowed: 'MIDI is allowed for {site}. Choose Connect MIDI to start listening.',
+  insecure: 'MIDI není k dispozici: tato stránka neběží v zabezpečeném kontextu. Otevřete ji '
+    + 'přes https.',
+  unsupported: 'MIDI není k dispozici: tento prohlížeč tu Web MIDI nenabízí.',
+  pending: 'Čeká se na odpověď prohlížeče o přístupu k MIDI. Zbytek aplikace OSCILLA funguje '
+    + 'dál.',
+  blocked: 'MIDI je pro {site} blokované: prohlížeč nebo nastavení webu této stránce MIDI '
+    + 'nedovolí. Některé prohlížeče ho povolí až po instalaci doplňku s oprávněním pro web.',
+  denied: 'Přístup k MIDI není pro {site} povolený. Povolte MIDI v nastavení webu v prohlížeči '
+    + 'a pak znovu zvolte „Připojit MIDI“.',
+  failed: 'MIDI se na tomto počítači nepodařilo spustit (prohlížeč ohlásil {error}).',
+  revoked: 'Přístup k MIDI byl pro {site} odebrán. Zvolte „Připojit MIDI“ a požádejte o něj '
+    + 'znovu.',
+  connected: 'MIDI je zapnuté: {names}.',
+  disconnected: 'Vstup MIDI odpojen: {name}. Není připojený žádný vstup MIDI.',
+  'no-devices': 'MIDI je zapnuté. Není připojený žádný vstup MIDI; připojte ho a objeví se tady.',
+  unknown: 'MIDI je vypnuté. Prohlížeč neříká, zda je MIDI pro {site} povolené; „Připojit MIDI“ '
+    + 'se ho zeptá.',
+  'needs-permission': 'MIDI je vypnuté. „Připojit MIDI“ požádá prohlížeč o přístup k zařízením '
+    + 'MIDI pro {site}.',
+  allowed: 'MIDI je pro {site} povolené. Zvolte „Připojit MIDI“ a OSCILLA začne poslouchat.',
 });
 
-const UNNAMED = 'unnamed input';
+const UNNAMED = 'nepojmenovaný vstup';
+/** `{site}` on file://: the copy claims no reach (which origin keys a file was not measured). */
+const FILE_SITE = 'tuto stránku';
 const portName = (name) => (typeof name === 'string' && name ? name : UNNAMED);
 
-/** `{site}` of the copy: the host over http(s), "this page" on file:// (reach not measured). */
+/** `{site}` of the copy: the host over http(s), FILE_SITE on file:// (reach not measured). */
 export function midiSite(location) {
-  if (!location || location.protocol === 'file:' || !location.host) return 'this page';
+  if (!location || location.protocol === 'file:' || !location.host) return FILE_SITE;
   return location.host;
 }
 
 /** The exact copy of `state`, its placeholders filled. */
-export function midiText(state, { site = 'this page', names = [], name = '', error = '' } = {}) {
+export function midiText(state, { site = FILE_SITE, names = [], name = '', error = '' } = {}) {
   const copy = MIDI_COPY[state];
   if (copy === undefined) throw new Error(`unknown MIDI state ${JSON.stringify(state)}`);
   const values = {
@@ -102,7 +106,7 @@ const REJECTED = { SecurityError: 'blocked', NotAllowedError: 'denied' };
  * The support state of one page. `navigator` and `isSecureContext` are the page's;
  * `onChange(snapshot)` is called after every change of the state or of the input names.
  */
-export function createMidiSupport({ navigator: nav, isSecureContext, site = 'this page',
+export function createMidiSupport({ navigator: nav, isSecureContext, site = FILE_SITE,
   onChange = () => {}, onMessage = () => {}, onSilence = () => {},
   queryTimeoutMs = MIDI_QUERY_TIMEOUT_MS } = {}) {
   let state = null;
