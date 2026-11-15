@@ -3226,17 +3226,17 @@
           aria-hidden="true">&#x26A0;&#xFE0E;</span> <span x-text="ceilingText">VÝSTUP NA
           STROPU (oříznuto)</span></span>
       </span>
-      <span class="osc-sb-readout osc-num" data-osc="status.readout" :title="statusReadoutTitle">
+      <span class="osc-sb-readout osc-num flex-wrap content-start h-[1lh]" data-osc="status.readout"
+        :title="statusReadoutTitle">
         <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
-        <span class="osc-sb-dot" aria-hidden="true">•</span>
-        <span data-osc="status.waveform" x-text="statusWaveText">Sinus</span>
-        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.pattern" x-text="statusPatternText">Spojitý tón</span>
-        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span>
-        <span class="osc-sb-dot osc-sb-extra" aria-hidden="true">•</span>
-        <span class="osc-sb-extra" data-osc="status.gain" x-text="statusGainText"
-          :title="gainTitle">Zesílení -21.9 dB</span>
+        <span class="inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.waveform" x-text="statusWaveText">Sinus</span></span>
+        <span class="osc-sb-extra inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.pattern" x-text="statusPatternText">Spojitý tón</span></span>
+        <span class="osc-sb-extra inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span></span>
+        <span class="osc-sb-extra inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.gain" x-text="statusGainText" :title="gainTitle">Zesílení -21.9 dB</span></span>
       </span>
     </div>
 

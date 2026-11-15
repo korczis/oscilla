@@ -460,11 +460,14 @@ function defineChecks() {
   // the secondary fields) is still in the readout's title, which carries the whole readout; a
   // field cut by the bar's edge and missing from the title fails. Workspaces with and without
   // the status Play, at both sizes, each read after a named-deadline poll for the workspace.
+  // U114 (oscilla-43, 2026-11-15): no field is cut by the readout's own clip either. A field is
+  // inside the readout whole or out of its visible box whole (wrapped away, in the title); v3.38.1
+  // showed "Zesí" at 1536 px because the check above measured only the bar's edge.
   def('status-readout-fields', async (ctx) => {
     const page = await H.open(ctx, ctx.baseUrl);
     const ev = (fn, arg) => page.evaluate(fn, arg);
     const res = {};
-    for (const [w, h] of [[1536, 1024], [390, 844]]) {
+    for (const [w, h] of [[1280, 800], [1536, 1024], [1920, 1080], [390, 844]]) {
       await page.setViewportSize({ width: w, height: h });
       for (const ws of ['playground', 'analyzer', 'presets', 'measure', 'studio']) {
         await ev((x) => window.OSCILLA.app.setWorkspace(x), ws);
@@ -483,7 +486,19 @@ function defineChecks() {
               && r.left >= box.left - 0.5 && r.right <= box.right + 0.5;
             return !whole && !title.includes(e.textContent.trim());
           }).map((e) => e.dataset.osc);
-          return { lost, title, fields: fields.length, timedOut: lost.length > 0 || !title };
+          // cut: drawn partly inside the readout's clip box and partly outside it
+          const rb = ro.getBoundingClientRect();
+          const cut = fields.filter((e) => {
+            const r = e.getBoundingClientRect();
+            if (getComputedStyle(e).display === 'none' || !(r.width > 0)) return false;
+            const meets = r.right > rb.left + 0.5 && r.left < rb.right - 0.5
+              && r.bottom > rb.top + 0.5 && r.top < rb.bottom - 0.5;
+            const inside = r.left >= rb.left - 0.5 && r.right <= rb.right + 0.5
+              && r.top >= rb.top - 0.5 && r.bottom <= rb.bottom + 0.5;
+            return meets && !inside;
+          }).map((e) => `${e.dataset.osc} "${e.textContent.trim()}"`);
+          return { lost, cut, title, fields: fields.length,
+            timedOut: lost.length > 0 || cut.length > 0 || !title };
         });
       }
     }
