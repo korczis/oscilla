@@ -1335,7 +1335,12 @@ function defineChecks() {
     // where the page does not offer it (WebKit, Firefox on file://) its hidden row is correct.
     const midiOffered = await page.evaluate(() => !!(window.OSCILLA.app
       && window.OSCILLA.app.midiCanConnect));
-    const notOffered = midiOffered ? [] : ['midi.connect'];
+    // V507: the MIDI monitor and its Vymazat exist only while MIDI is connected, a state this
+    // audit never sets up (no device); tests/browser/midi.cjs midi-seam-monitor shows and clicks it.
+    const midiConnected = await page.evaluate(() => !!(window.OSCILLA.app
+      && window.OSCILLA.app.midiState === 'connected'));
+    const notOffered = [...(midiOffered ? [] : ['midi.connect']),
+      ...(midiConnected ? [] : ['midi.monitor-clear'])];
     const neverVisible = list.filter((c) => !c.visible && !notOffered.includes(c.osc))
       .map((c) => c.osc);
     // Controls the audit must have met (they exist only in a state the audit sets up).
