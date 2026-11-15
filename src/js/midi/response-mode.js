@@ -19,7 +19,8 @@
 //   createResponseMode(deps) -> { on, setOn(on), player(kind, note, velocity, atMs), tick(),
 //     cut(), answering(), planned() }
 //   deps: { notes, clock: { wake(key, ms, fn), cancel(key) }, offsetS() (s, or null),
-//     ctxNow() (s), perfNow() (ms), safeMax() (Hz), a4() (Hz), polyphony }
+//     ctxNow() (s), perfNow() (ms), safeMax() (Hz), a4() (Hz), polyphony,
+//     say(reason) (the answer is refused: once per answer, the rest of it dropped) }
 
 import { START_OFFSET_S } from '../core/constants.js';
 import { perfToContextS } from '../audio/clock.js';
@@ -32,7 +33,7 @@ export const RESPONSE_TICK_MS = 50;
 const WAKE_KEY = 'midi-response';
 
 export function createResponseMode({ notes, clock, offsetS, ctxNow, perfNow, safeMax,
-  a4 = () => 440, polyphony = 8 }) {
+  a4 = () => 440, polyphony = 8, say = () => {} }) {
   const phrase = createPhrase();
   let on = false;
   let queue = []; // { note, velocity, onAt, offAt, started, ended } in context seconds
@@ -61,7 +62,14 @@ export function createResponseMode({ notes, clock, offsetS, ctxNow, perfNow, saf
       if (!n.started && n.onAt < until) {
         n.started = true;
         const r = notes.noteOn(n.note, n.velocity, ANSWER_SOURCE, 0, { at: n.onAt });
-        if (!r || r.ok === false) n.ended = true; // refused (an owner, no instrument): silent
+        if (!r || r.ok === false) {
+          // Refused (an owner holds the output, or no instrument can plan it): said once for
+          // this answer, and the rest of it is not tried (C3 on V503, (a)).
+          n.ended = true; // it never sounded: nothing to release
+          say((r && r.reason) || 'refused');
+          mode.cut();
+          return;
+        }
       }
       if (n.started && !n.ended && n.offAt < until) {
         n.ended = true;

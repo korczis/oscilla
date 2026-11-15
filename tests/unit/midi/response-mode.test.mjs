@@ -36,9 +36,10 @@ function rig({ offset = 10, refuse = false } = {}) {
   };
   const clock = { wake: (key, ms, fn) => wakes.set(key, { at: perf + ms, fn }),
     cancel: (key) => wakes.delete(key) };
+  const said = [];
   const mode = createResponseMode({ notes, clock, offsetS: () => offset,
     ctxNow: () => perf / 1000 + offset, perfNow: () => perf, safeMax: () => 20000,
-    polyphony: 8 });
+    polyphony: 8, say: (reason) => said.push(reason) });
   /** Advance the fake clock to `ms`, firing every wake-up that falls due on the way. */
   const run = (ms) => {
     for (;;) {
@@ -52,7 +53,7 @@ function rig({ offset = 10, refuse = false } = {}) {
     perf = ms;
   };
   const at = (ms) => { perf = ms; };
-  return { mode, log, wakes, run, at, now: () => perf };
+  return { mode, log, wakes, run, at, said, now: () => perf };
 }
 
 const near = (a, b, what) => assert.ok(Math.abs(a - b) < 1e-9, `${what}: ${a} vs ${b}`);
@@ -156,8 +157,17 @@ test('a refused note leaves the answer silent; switching off cuts and cancels th
   r.mode.setOn(true);
   r.at(0); r.mode.player('on', 60, 100, 0);
   r.at(100); r.mode.player('off', 60, 0, 100);
+  r.at(200); r.mode.player('on', 62, 100, 200);
+  r.at(300); r.mode.player('off', 62, 0, 300);
   r.run(5000);
   assert.equal(r.log.filter((e) => e.k === 'off').length, 0, 'refused: nothing to release');
+  assert.equal(r.log.filter((e) => e.k === 'on').length, 1, 'the rest of the answer not tried');
+  assert.deepEqual(r.said, ['measurement'], 'said once for the answer');
+  // A next phrase is refused again and said again: once per phrase.
+  r.at(6000); r.mode.player('on', 64, 100, 6000);
+  r.at(6100); r.mode.player('off', 64, 0, 6100);
+  r.run(9000);
+  assert.deepEqual(r.said, ['measurement', 'measurement']);
   assert.equal(r.mode.answering(), false);
   const s = rig();
   s.mode.setOn(true);
@@ -186,3 +196,49 @@ test('the note layer plans an answer note on the one instrument, never on the en
   assert.deepEqual(calls, [], 'the engine voice starts now or never: a planned note is refused');
   assert.notEqual(bare.noteOn(60, 80, 'kbd-a').reason, 'no-instrument', 'a key still plays it');
 });
+
+test('midi/ui.js: on the engine fallback with the switch on, one refusal line and no answer note',
+  async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const { createMidiUi, RESPONSE_TEXT } = await import('../../../src/js/midi/ui.js');
+    const ls = new Set();
+    const port = { name: 'KeyLab mkII 61 MIDI', state: 'connected', type: 'input',
+      open: () => Promise.resolve(),
+      addEventListener: (k, fn) => { if (k === 'midimessage') ls.add(fn); },
+      removeEventListener: (k, fn) => ls.delete(fn),
+      send: (b, stamp) => { for (const fn of ls) fn({ data: Uint8Array.from(b), timeStamp: stamp }); } };
+    const access = { inputs: { forEach: (fn) => fn(port) }, addEventListener() {},
+      removeEventListener() {} };
+    const win = { navigator: { requestMIDIAccess: () => Promise.resolve(access),
+      permissions: { query: () => Promise.resolve({ state: 'granted', addEventListener() {} }) } },
+    isSecureContext: true, location: { protocol: 'https:', host: 'x' }, addEventListener() {} };
+    const engineCalls = [];
+    const engine = { ctx: { get currentTime() { return Date.now() / 1000; }, sampleRate: 48000,
+      getOutputTimestamp: () => ({ contextTime: Date.now() / 1000, performanceTime: Date.now() }) },
+    safeMaximum: 22800,
+    _timers: { setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: (id) => clearTimeout(id) },
+    noteOn: (key, o) => { engineCalls.push(['on', key, o.freq]); return { ok: true }; },
+    noteOff: () => true, notesOff: () => 0 };
+    const notified = [];
+    const ui = createMidiUi({ win, engine, now: () => Date.now() });
+    // A workspace whose row plays the one instrument, here with none (a document of the user's
+    // that cannot take the panel): the keys fall back to the page's own voice (K247).
+    Object.assign(ui, { workspace: 'measure', keysInstrument: () => null,
+      notify: (kind, title, text) => notified.push({ title, text }), a4: 440, waveform: 'sine',
+      attack: 10, release: 30, safetyLimit: 2, continuousAllowed: false });
+    await ui.midiInit();
+    ui.midiConnect();
+    await t.mock.timers.runAll();
+    await new Promise((r) => setImmediate(r));
+    assert.equal(ui.midiResponseToggle(true), true);
+    t.mock.timers.tick(1000);
+    port.send([0x90, 60, 100], Date.now());
+    t.mock.timers.tick(200);
+    port.send([0x80, 60, 0], Date.now());
+    for (let i = 0; i < 40; i += 1) t.mock.timers.tick(50); // the gap and the answer's ticks
+    const mine = notified.filter((n) => n.title === RESPONSE_TEXT.title);
+    assert.deepEqual(mine.map((n) => n.text), [RESPONSE_TEXT.refused(RESPONSE_TEXT.noInstrument)],
+      'one refusal line, in Czech');
+    assert.equal(engineCalls.filter((c) => c[0] === 'on').length, 1, 'only the player\'s note sounded');
+    assert.equal(ui.midiResponseToggle(false), false);
+  });

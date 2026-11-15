@@ -83,7 +83,8 @@ export function parseMidiMessage(data) {
  * note is gone; `noted(on, note, source)` tells it each note that starts or ends (its trace,
  * C050). Without a claim, `ownedBy()` names who owns the output ('measurement',
  * 'reference', 'studio', 'sequencer') or returns null, as before the bus. `refused(by)`
- * is told once per run of refused notes (the caller says so to the user).
+ * is told once per run of refused notes, with the refused note's source (the caller says so to
+ * the user; V503's answer says its own refusal, midi/response-mode.js).
  * The MIDI inputs and the on-screen and computer keyboard (K026, src/js/midi/keyboard.js) play
  * through the same layer, each with its own `source` in the note key. `starting(on)` is told
  * around each note the instrument takes (K247): the note that arms it makes the playback bus
@@ -137,7 +138,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     if (sink) {
       const by = ownedBy();
       if (by && by !== 'studio') {
-        if (refusing !== by) refused(by);
+        if (refusing !== by) refused(by, source);
         refusing = by;
         return { ok: false, reason: by };
       }
@@ -169,7 +170,7 @@ export function createMidiNotes({ engine, settings = () => ({}), ownedBy = () =>
     if (!engine) return { ok: false, reason: 'no-audio' };
     const by = refusedBy();
     if (by) {
-      if (refusing !== by) refused(by);
+      if (refusing !== by) refused(by, source);
       refusing = by;
       return { ok: false, reason: by };
     }
