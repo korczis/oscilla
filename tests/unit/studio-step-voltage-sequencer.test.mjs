@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import { AudioEngine } from '../../src/js/audio/audio-engine.js';
 import * as actions from '../../src/js/studio/actions.js';
 import { NODE_REGISTRY } from '../../src/js/studio/registry.js';
+import { SVS_ALL_SKIPPED_TEXT } from '../../src/js/studio/nodes/modulation.js';
 import { createStudioRuntime } from '../../src/js/studio/runtime.js';
 import * as schema from '../../src/js/studio/schema.js';
 import * as transportModule from '../../src/js/studio/transport.js';
@@ -349,6 +350,11 @@ test('K226 a skipped step is passed over and its trigger stays silent; all skipp
     const rig2b = playing(t.st);
     assert.deepEqual(attacksOf(rig2b.runtime.nodes.get(t.env).inputs.audio.gain), [],
       'every step skipped: no Gate');
+    // The card says why it plays nothing (registry.summarize, the text the node card shows).
+    const card = NODE_REGISTRY.summarize(t.st.getModel().graph.nodes.find((n) => n.id === all));
+    assert.match(card, new RegExp(SVS_ALL_SKIPPED_TEXT), 'the card names the cause');
+    const one = NODE_REGISTRY.summarize(s.st.getModel().graph.nodes.find((n) => n.id === svs));
+    assert.doesNotMatch(one, new RegExp(SVS_ALL_SKIPPED_TEXT), 'one skipped step is no such card');
     await stopped(rig2b);
   });
 

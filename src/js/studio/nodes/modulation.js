@@ -259,6 +259,8 @@ export const clock = defineNode({
 /** K226: the step-voltage sequencer's steps per row, and the lengths it plays. */
 export const SVS_MAX_STEPS = 16;
 export const SVS_LENGTHS = Object.freeze(['8', '16']);
+/** What the card of a step-voltage sequencer with every step skipped says (K226). */
+export const SVS_ALL_SKIPPED_TEXT = 'všechny kroky přeskočené, nic nehraje';
 /** The three rows of the step-voltage sequencer: parameter key and CONTROL output id. */
 export const SVS_ROWS = Object.freeze([['rowA', 'cvA', 'A'], ['rowB', 'cvB', 'B'],
   ['rowC', 'cvC', 'C']]);
@@ -332,6 +334,11 @@ export const stepVoltageSequencer = defineNode({
     syncParam(),
   ],
   summary(p) {
+    // K226 criterion 2: every step within the length skipped plays nothing, and the card says so.
+    const len = Number(p.length) || SVS_MAX_STEPS;
+    if (Array.isArray(p.skip) && p.skip.slice(0, len).every((v) => v)) {
+      return parts(`${p.length} kroků`, SVS_ALL_SKIPPED_TEXT);
+    }
     return parts(`${p.length} kroků`, p.playback,
       p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`);
   },
