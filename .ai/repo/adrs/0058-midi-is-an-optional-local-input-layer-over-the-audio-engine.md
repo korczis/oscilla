@@ -505,7 +505,10 @@ before K077's learned route exists.
    envelope (`ENGINE_ENV`).
 3. **The hand, not a modulation source.** A slot writes the control's stored value through the
    panel's own `setControl`, exactly as a drag does, one undo entry per run of messages on one
-   control (closed `GESTURE_IDLE_MS` after the last). This differs from the 2026-10-29 note's
+   control (closed `GESTURE_IDLE_MS` after the last). The run shares the one undo burst the
+   wheel keeps (`synth/gestures.js`): a press, a wheel turn, a choice key or another control
+   closes it, and its timer ends only the gesture it began (`history.gestureId`), so an undo
+   inside it never lets the timer commit a later drag (review C3-548-1). This differs from the 2026-10-29 note's
    route, where a learned controller is a `midi-cc` node that modulates a parameter without
    changing its stored base (K077). Both stand: the factory layout is the panel's front-panel
    knob in the player's hand; K077 is a modulation source for any Studio parameter, learned from

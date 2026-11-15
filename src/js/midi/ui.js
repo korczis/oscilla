@@ -50,7 +50,7 @@ export function inputRow(name) {
  */
 export function createMidiUi({ win = window, engine = null, sequencerPlaying = () => false,
   bus = null } = {}) {
-  let ccSaid = { cid: null, at: 0 }; // what the Synth's status line last said of a CC (V506)
+  let ccSaid = { cid: null, at: 0, timer: 0 }; // the Synth's status line's last CC (V506)
   let support = null;
   let notes = null;
   let monitor = null;
@@ -164,10 +164,21 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
       const r = this.synthCc(e.controller, e.value);
       // The status line is a polite live region: a new control, or a turn's value at most every
       // CC_STATUS_MS, so a fader's stream of messages is not read out message by message.
+      // The last value of a run is never lost (C3-548-2): a value held back is written once
+      // CC_STATUS_MS has passed since the line last changed.
+      if (!r || !this.synth) return r;
       const now = Date.now();
-      if (r && this.synth && (r.cid !== ccSaid.cid || now - ccSaid.at >= CC_STATUS_MS)) {
-        this.synth.status = control ? `${control.label} · ${r.text}` : r.text;
-        ccSaid = { cid: r.cid, at: now };
+      clearTimeout(ccSaid.timer);
+      const text = control ? `${control.label} · ${r.text}` : r.text;
+      if (r.cid !== ccSaid.cid || now - ccSaid.at >= CC_STATUS_MS) {
+        this.synth.status = text;
+        ccSaid = { cid: r.cid, at: now, timer: 0 };
+      } else {
+        const synth = this.synth;
+        ccSaid.timer = setTimeout(() => {
+          synth.status = text;
+          ccSaid = { cid: r.cid, at: Date.now(), timer: 0 };
+        }, CC_STATUS_MS - (now - ccSaid.at));
       }
       return r;
     },

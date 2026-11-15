@@ -23,6 +23,9 @@
 //   history.beginGesture(label, model), history.endGesture(model) -> entry | null
 //   history.cancelGesture() -> model at gesture begin | null
 //   history.gestureStart() -> model at the open gesture's begin | null (nothing changes)
+//   history.gestureId() -> the open outermost gesture's serial number | null: a caller that began
+//     a gesture can tell whether that gesture is still the open one (an undo closes every
+//     gesture, and the model at a later gesture's begin may be the same object; V506)
 //   history.undo() -> entry | null (caller restores entry.before); history.redo() -> entry | null
 //   history.canUndo(), canRedo(), undoLabel(), redoLabel(), depth() -> { undo, redo },
 //   history.inGesture(), history.clear()
@@ -38,6 +41,7 @@ export function createHistory({ limit = STUDIO_HISTORY_LIMIT } = {}) {
   const undoStack = [];
   const redoStack = [];
   let gesture = null;
+  let serial = 0; // numbers each outermost gesture (gestureId)
 
   const push = (entry) => {
     undoStack.push(Object.freeze(entry));
@@ -63,7 +67,7 @@ export function createHistory({ limit = STUDIO_HISTORY_LIMIT } = {}) {
         gesture.depth++;
         return;
       }
-      gesture = { label: label || null, before: model, depth: 1, changed: false,
+      gesture = { id: ++serial, label: label || null, before: model, depth: 1, changed: false,
         actionType: null, clearedRedo: [] };
     },
     endGesture(model) {
@@ -87,6 +91,7 @@ export function createHistory({ limit = STUDIO_HISTORY_LIMIT } = {}) {
       return g.before;
     },
     gestureStart: () => (gesture ? gesture.before : null),
+    gestureId: () => (gesture ? gesture.id : null),
     inGesture: () => !!gesture,
     undo() {
       const e = undoStack.pop();

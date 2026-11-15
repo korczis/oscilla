@@ -133,6 +133,7 @@ export function createStoreHandle(initialModel, {
     beginGesture: (label) => store.beginGesture(label),
     endGesture: () => store.endGesture(),
     cancelGesture: () => store.cancelGesture(),
+    gestureId: () => store.gestureId(),
     canUndo: () => store.canUndo(),
     canRedo: () => store.canRedo(),
     undoLabel: () => store.undoLabel(),
