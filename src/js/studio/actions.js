@@ -728,14 +728,14 @@ const REDUCERS = {
       && JSON.stringify(amounts) === JSON.stringify(cur.synthAmounts)) {
       return { model, label: '' };
     }
-    if (target === was) return { model: { ...model, metadata }, label: 'Change Studio details' };
+    if (target === was) return { model: { ...model, metadata }, label: 'Změnit podrobnosti Studia' };
     const n = target ? requireNode(model, target) : null;
     if (n && !playsNotes(n.type, ctx.registry)) {
-      reject(`${n.metadata.name} does not play notes: the keys play a node with the notes or `
-        + 'hits capability.');
+      reject(`${n.metadata.name} nehraje noty: klávesy hrají uzel se schopností notes nebo `
+        + 'hits.');
     }
     return { model: { ...model, metadata },
-      label: n ? `Play ${n.metadata.name} from the keys` : 'Play the Synth panel from the keys' };
+      label: n ? `Hrát ${n.metadata.name} z kláves` : 'Hrát panel Synthu z kláves' };
   },
 
   PASTE(model, a, ctx) {

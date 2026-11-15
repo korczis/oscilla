@@ -631,9 +631,9 @@ function validateRest(model, sink, registry = NODE_REGISTRY) {
   if (meta.noteTarget !== undefined) {
     const n = model.graph.nodes.find((x) => x.id === meta.noteTarget);
     if (!n || !playsNotes(n.type, registry)) {
-      sink.error('invalid-note-target', n ? `${n.metadata.name} does not play notes: the keys `
-        + 'play a node with the notes or hits capability.' : `The keys play "${
-        String(meta.noteTarget)}", which is not in this Studio.`, { path: 'metadata.noteTarget' });
+      sink.error('invalid-note-target', n ? `${n.metadata.name} nehraje noty: klávesy `
+        + 'hrají uzel se schopností notes nebo hits.' : `Klávesy hrají „${
+        String(meta.noteTarget)}“, který v tomto Studiu není.`, { path: 'metadata.noteTarget' });
     }
   }
   // Review S10 of src/js/synth: the depth each Synth amount knob comes back at (schema.js).

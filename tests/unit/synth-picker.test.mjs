@@ -51,7 +51,7 @@ test('a choice is one history entry; undo restores the previous route, redo the 
   const done = st.dispatch(r.action);
   assert.equal(done.ok, true, done.reason);
   assert.equal(st.debugInfo().undoDepth, depth + 1);
-  assert.equal(st.undoLabel(), `Play ${fm.metadata.name} from the keys`);
+  assert.equal(st.undoLabel(), `Hrát ${fm.metadata.name} z kláves`);
   assert.equal(routedNode(st.getModel()).id, fm.id);
   assert.equal(instrumentChoices(st.getModel(), PANEL, { current: fm.id })
     .find((c) => c.selected).id, fm.id);
@@ -83,7 +83,7 @@ test('negative: a target without the notes capability is refused with its senten
   const depth = st.debugInfo().undoDepth;
   const r = st.dispatch({ type: 'METADATA_SET', noteTarget: vco.id });
   assert.equal(r.ok, false);
-  assert.match(r.reason, /VCO 1 does not play notes: the keys play a node with the notes or hits/);
+  assert.match(r.reason, /VCO 1 nehraje noty: klávesy hrají uzel se schopností notes nebo hits/);
   assert.equal(st.getModel(), before, 'model unchanged');
   assert.equal(st.debugInfo().undoDepth, depth, 'history unchanged');
   // A tampered file that names a VCO as the target does not load.
@@ -91,7 +91,7 @@ test('negative: a target without the notes capability is refused with its senten
   doc.metadata.noteTarget = vco.id;
   const bad = importStudio(doc);
   assert.equal(bad.ok, false);
-  assert.match(bad.errors[0].message, /does not play notes/);
+  assert.match(bad.errors[0].message, /nehraje noty/);
 });
 
 test('removing the routed node clears the route in the same entry; undo restores both', () => {
