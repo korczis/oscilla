@@ -863,6 +863,15 @@ claims:
     responsibility: product
     note: 'Issue K247 (the owner''s order of 2026-11-15); the decisions are ADR 0058''s K247 note. midi/ui.js centralSink resolves the instrument; tests/browser/midi.cjs (midi-seam-notes, keyboard-qwerty, keyboard-everywhere, midi-seam-sink) drive it in the page. Measured before: 4 behaviours in 13 workspaces, 10 of them playing nothing.'
 
+  - id: midi-transport-clock
+    claim: 'A controller''s transport plays the workspace in view: MIDI Start, Continue and Stop and a DAW port''s Play, Stop, Rewind and Cycle drive the Sequencer''s own transport in the Sequencer and the Studio''s elsewhere, and an incoming MIDI clock''s tempo is measured and shown without the transport following it.'
+    source: .ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md
+    implementation: src/js/midi/transport.js
+    test: tests/unit/midi/transport.test.mjs
+    status: guaranteed
+    responsibility: product
+    note: 'Issue V508; the decisions are ADR 0058''s V508 note. tests/browser/midi.cjs (midi-seam-transport) drives it through stub inputs. The KeyLab mkII DAW buttons follow the Mackie Control numbers of its default DAW map, to be confirmed on the device (scripts/midi/listen.swift).'
+
   - id: keyboard-held-notes
     claim: 'A note held on the computer keyboard, the on-screen keyboard or a MIDI key sounds past the playback limit only while it is held, under the output ceiling, and is released on blur, page hide and Escape.'
     source: .ai/repo/adrs/0062-a-held-key-or-midi-note-is-exempt-from-the-playback-limit-while-held.md

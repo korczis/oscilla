@@ -76,6 +76,11 @@
 //                               sounds nothing, one from the play port sounds; the monitor shows
 //                               the play port's CC 74 as Enkodér 1, newest first, and Vymazat
 //                               empties it
+//   midi-seam-transport         V508: a stub DAW port (named after a KeyLab mkII 61's) presses
+//                               Play (Note On 94): the Studio's transport plays and the monitor
+//                               says so; a stub play port's Stop (FC) stops it; in the Sequencer
+//                               a Start (FA) plays the sequence and Stop stops it; a stub clock
+//                               at 120 BPM shows "Hodiny MIDI: 120.0 BPM" in the MIDI section
 //   keys-one-keyboard           K178: with the stub device, the Playground, the Synth and the
 //                               Studio take one octave, light and sound the same keys for QWERTY
 //                               and MIDI, and release them on Escape and on a workspace switch
@@ -1151,6 +1156,67 @@ async function seamMonitor(browser, b, origin, url) {
   }
 }
 
+// midi-seam-transport (V508): see the header.
+async function seamTransport(browser, b, origin, url) {
+  const leg = `${b}/${origin}`;
+  const id = 'midi-seam-transport';
+  const DAW = `${midiStub.STUB_NAME} · KeyLab mkII 61 DAW`;
+  const PLAY = `${midiStub.STUB_NAME} · Arturia BeatStep Pro Arturia BeatStepPro`;
+  const { context, page, errors } = await openPage(browser, url,
+    { init: { fn: midiStub.install, arg: {} }, also: { fn: audioProbe, arg: { sr: NOTES_RATE } } });
+  try {
+    await assertGroup(leg, id, page, 'seam');
+    await openSettings(page);
+    await page.locator('[data-osc="midi.connect"]').click(); // the gesture also starts audio
+    await stateIs(page, ['pending'], `${leg}: Connect MIDI asks`);
+    await seam(page, 'resolve', 0, [DAW, PLAY]);
+    await stateIs(page, ['connected'], `${leg}: the two ports connect`);
+    const msg = (name, bytes) => seam(page, 'message', name, bytes);
+    const studioPlaying = () => page.evaluate(() => !!window.OSCILLA.app.studio.playing);
+    const until2 = (fn, what) => until(async () => ((await fn()) ? true : null),
+      { ms: STEP_MS, what }).then(() => true, () => false);
+    // The clock first, with the dialog open: 25 ticks a beat apart at 120 BPM (the stub stamps
+    // each message with its own time, so the tempo is read from the stamps).
+    for (let i = 0; i < 25; i += 1) {
+      await page.evaluate(([n, t]) => window.__oscMidiSeam.message(n, [0xf8], t), [PLAY,
+        1000 + i * (500 / 24)]);
+    }
+    const shown = await until(async () => {
+      const t = await page.locator('[data-osc="midi.clock"]').textContent().catch(() => '');
+      return /Hodiny MIDI: 120\.0 BPM/.test(t || '') ? t : null;
+    }, { ms: STEP_MS, what: `${leg}: the clock's tempo is shown` }).catch(() => null);
+    check(leg, id, 'a MIDI clock at 120 BPM shows its tempo in the MIDI section', !!shown,
+      String(shown));
+    await page.keyboard.press('Escape');
+    await until(() => page.evaluate(() => !document.getElementById('osc-dlg-settings').open),
+      { ms: STEP_MS, what: `${leg}: the Settings dialog closes` });
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('studio'));
+    await msg(DAW, [0x90, 94, 127]); // the DAW port's Play button
+    await msg(DAW, [0x80, 94, 0]);
+    const played = await until2(studioPlaying, `${leg}: the DAW Play starts the Studio`);
+    const row = await page.evaluate(() => window.OSCILLA.app.midiLog.map((r) => r.text));
+    await msg(PLAY, [0xfc]); // a realtime Stop
+    const stopped = await until2(async () => !(await studioPlaying()),
+      `${leg}: Stop stops the Studio`);
+    check(leg, id, 'a DAW port\'s Play starts the Studio\'s transport and a MIDI Stop stops it, '
+      + 'the monitor saying what Play did', played && stopped
+      && row.some((t) => / → Studio: přehrát od začátku$/.test(t)),
+    JSON.stringify({ played, stopped, row: row.slice(0, 3) }));
+    await page.evaluate(() => window.OSCILLA.app.setWorkspace('sequencer'));
+    const seqPlaying = () => page.evaluate(() => !!window.OSCILLA.labs.sequencer.editor.playing);
+    await msg(PLAY, [0xfa]);
+    const seqOn = await until2(seqPlaying, `${leg}: Start plays the sequence`);
+    const studioIdle = !(await studioPlaying());
+    await msg(PLAY, [0xfc]);
+    const seqOff = await until2(async () => !(await seqPlaying()), `${leg}: Stop stops it`);
+    check(leg, id, 'in the Sequencer a MIDI Start plays the sequence (not the Studio) and Stop '
+      + 'stops it', seqOn && studioIdle && seqOff, JSON.stringify({ seqOn, studioIdle, seqOff }));
+    check(leg, id, 'no console or page error', errors.length === 0, errors.join(' | '));
+  } finally {
+    await context.close();
+  }
+}
+
 // keys-one-keyboard (K178, the owner's question of 2026-11-04: why does the keyboard behave
 // differently in every workspace): with the stub MIDI device connected, the Playground, the Synth
 // and the Studio (the Synth panel's nodes, visited first) each take the same octave (Z/X set once, in the Playground), light
@@ -1773,6 +1839,7 @@ async function main() {
             await seamSink(browser, b, origin, url);
             await seamCc(browser, b, origin, url);
             await seamMonitor(browser, b, origin, url);
+            await seamTransport(browser, b, origin, url);
             await keyboardChecks(browser, b, origin, url);
             await keyboardEverywhere(browser, b, origin, url);
             await keysOneKeyboard(browser, b, origin, url);

@@ -3490,6 +3490,9 @@
         <div class="flex items-center justify-between gap-2 mb-2">
           <h4 id="osc-midi-monitor-title"
             class="text-sm font-semibold text-gray-900 dark:text-white">Monitor MIDI</h4>
+          <span data-osc="midi.clock" x-show="midiClockBpm" role="status"
+            class="bg-gray-100 text-gray-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-gray-700 dark:text-gray-300"
+            x-text="'Hodiny MIDI: ' + midiClockBpm + ' BPM'"></span>
           <button type="button" data-osc="midi.monitor-clear" @click="midiLogClear()"
             class="inline-flex items-center h-9 px-3 text-sm font-medium text-gray-900 bg-white border border-gray-300 border-solid rounded-lg hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-300 dark:border-gray-600 dark:bg-gray-800 dark:text-white dark:hover:bg-gray-700 [@media(pointer:coarse)]:min-h-11">Vymazat</button>
         </div>

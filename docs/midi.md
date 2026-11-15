@@ -274,3 +274,22 @@ sensing are not listed (they arrive 24 times a beat). Vymazat empties it. A DAW-
 port of a known device never sounds a note. The profiles, where they come from and what is
 measured on the devices are `docs/midi-devices.md`.
 
+## Transport and clock (V508)
+
+A controller's transport plays the workspace in view (`src/js/midi/transport.js`):
+
+| Message | From | Action |
+|---|---|---|
+| Start (`FA`) | any input | the transport plays from the start |
+| Continue (`FB`) | any input | the transport plays on from where it is |
+| Stop (`FC`) | any input | the transport stops (the keys' armed run is kept) |
+| Note On 94 / 93 / 91 / 86 (velocity > 0) | a DAW-control port (Mackie Control) | Play / Stop / Rewind to the start / Cycle (loop on or off) |
+| Clock (`F8`, 24 per quarter note) | any input | measured: the MIDI section shows **Hodiny MIDI: … BPM** |
+
+The transport is the Sequencer's own in the Sequencer and the Studio's everywhere else. A message
+with nothing to do (Stop when stopped, Continue while playing) does nothing, and the monitor row
+says what each message did (`… → Studio: přehrát od začátku`). Record, Fast forward and the other
+DAW buttons act on nothing. The clock's tempo is read over the last whole beat on the messages'
+own timestamps and clears half a second after the clock stops; the transport never follows it by
+itself (ADR 0058, its V508 note). OSCILLA sends no MIDI.
+

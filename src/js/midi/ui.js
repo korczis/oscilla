@@ -21,6 +21,7 @@ import { createMidiNotes } from './notes.js';
 import { recognise, controlOf } from './devices.js';
 import { decodeMidi } from './message.js';
 import { createMidiMonitor, describeMidi } from './monitor.js';
+import { createClockMeter, transportAction, transportTarget, CLOCK_GAP_MS } from './transport.js';
 import { createKeyboardUi } from './keyboard-ui.js';
 import { OWNER, notesRefusalOf, notesRefusedSentences } from '../core/output-bus.js';
 
@@ -39,6 +40,16 @@ export function centralSink(cmp) {
   const own = routeOf(cmp.workspace).plays;
   return own && typeof cmp[own] === 'function' ? cmp[own]() || null : null;
 }
+
+/** The least time between two shown readings of the clock's tempo (V508). */
+export const CLOCK_SHOW_MS = 500;
+/** What a transport action did, as the monitor says it (V508). */
+export const ACTION_TEXT = Object.freeze({ start: 'přehrát od začátku', continue: 'pokračovat',
+  stop: 'zastavit', rewind: 'na začátek', loop: 'smyčka' });
+/** Whose transport a message moved, by name: the Sequencer's own, else the Studio's. */
+const transportName = (target) => (target === transportTarget('sequencer') ? 'Sekvencer'
+  : 'Studio');
+const perf = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 /** What a port is for, as the MIDI section says it (V507). */
 export const ROLE_TEXT = Object.freeze({ play: 'hraní', daw: 'ovládání DAW',
@@ -59,7 +70,7 @@ export function inputRow(name) {
  * kept apart here: a note is refused while it plays, and main.js stops the notes when it starts.
  */
 export function createMidiUi({ win = window, engine = null, sequencerPlaying = () => false,
-  bus = null } = {}) {
+  bus = null, sequencerTransport = null, now = perf } = {}) {
   let ccSaid = { cid: null, at: 0, timer: 0 }; // the Synth's status line's last CC (V506)
   let support = null;
   let notes = null;
@@ -71,6 +82,7 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
     midiCanConnect: false,
     midiInputs: [],   // inputRow per connected input (V507)
     midiLog: [],      // the monitor's rows, newest first (V507)
+    midiClockBpm: null, // the tempo of an incoming MIDI clock, or null (V508)
 
     /** Called once by the component's init: the load-time read, never a request. */
     midiInit() {
@@ -113,6 +125,21 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
       const ids = new WeakMap(); // input -> a number for the note keys, never shown or stored
       const who = new WeakMap(); // input -> recognise(its name) (V507)
       monitor = createMidiMonitor({ publish: (rows) => { cmp.midiLog = rows; } });
+      // The clock's tempo, published at most every CLOCK_SHOW_MS and cleared once it stops.
+      const clock = createClockMeter();
+      let shownAt = -Infinity;
+      let gone = 0;
+      const clockTick = (stamp) => {
+        const at = Number.isFinite(stamp) && stamp > 0 ? stamp : now();
+        clock.tick(at);
+        clearTimeout(gone);
+        gone = setTimeout(() => { clock.reset(); cmp.midiClockBpm = null; }, CLOCK_GAP_MS);
+        if (at - shownAt < CLOCK_SHOW_MS) return;
+        const bpm = clock.bpm(at);
+        if (bpm === null) return;
+        shownAt = at;
+        cmp.midiClockBpm = bpm.toFixed(1);
+      };
       let inputs = 0;
       support = createMidiSupport({
         navigator: win.navigator,
@@ -124,15 +151,19 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
           cmp.midiCanConnect = s.canConnect;
           cmp.midiInputs = (s.inputs || []).map(inputRow);
         },
-        onMessage(data, port) {
+        onMessage(data, port, stamp) {
           if (!ids.has(port)) { inputs += 1; ids.set(port, inputs); }
           if (!who.has(port)) who.set(port, recognise(port && port.name));
           const w = who.get(port);
           const m = decodeMidi(data);
+          if (m.kind === 'clock') { clockTick(stamp); return; } // 24 a beat: measured, unlisted
           const control = controlOf(w.device, m);
-          if (m.kind !== 'clock' && m.kind !== 'active-sensing') {
+          const act = transportAction(m, w.role); // V508: Start, Stop, the DAW buttons
+          const did = act ? cmp.midiTransport(act) : null;
+          if (m.kind !== 'active-sensing') {
             monitor.add({ input: w.member || (port && port.name) || '', role: w.role,
-              kind: m.kind, text: describeMidi(m, control) });
+              kind: m.kind, text: describeMidi(m, control)
+                + (did ? ` → ${transportName(did.target)}: ${ACTION_TEXT[act]}` : '') });
           }
           // A DAW-control or editor port's notes are buttons, never notes to sound (V507).
           if (w.role !== 'play') return;
@@ -191,6 +222,32 @@ export function createMidiUi({ win = window, engine = null, sequencerPlaying = (
         }, CC_STATUS_MS - (now - ccSaid.at));
       }
       return r;
+    },
+
+    /**
+     * A controller's transport action (V508, midi/transport.js) on the transport of the
+     * workspace in view: the Sequencer's own there, the Studio's everywhere else. Start plays
+     * from the start, Continue from where it is, Stop stops (the keys' armed run is kept),
+     * Rewind returns to the start, Cycle switches the loop. -> { target } | null (nothing done)
+     */
+    midiTransport(act) {
+      const target = transportTarget(this.workspace);
+      if (target === 'sequencer') {
+        const s = sequencerTransport;
+        if (!s) return null;
+        const ok = act === 'stop' ? s.stop() : act === 'loop' ? s.loop()
+          : (act === 'start' || act === 'continue') && !s.playing() ? s.play() : false;
+        return ok ? { target } : null;
+      }
+      if (typeof this.studioPlay !== 'function') return null;
+      // The timeline plays (studio.playing; an armed run of the keys alone is not, K104).
+      const playing = !!(this.studio && this.studio.playing);
+      if (act === 'stop') { if (!playing) return null; this.studioStop({ keepArmed: true }); }
+      else if (act === 'rewind') this.studioReturn();
+      else if (act === 'loop') this.studioToggleLoop();
+      else if (act === 'start') { this.studioReturn(); if (!playing) this.studioPlay(); }
+      else if (act === 'continue') { if (playing) return null; this.studioPlay(); }
+      return { target };
     },
 
     /** Empty the MIDI monitor (V507). */

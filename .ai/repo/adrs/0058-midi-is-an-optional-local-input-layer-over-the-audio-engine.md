@@ -577,3 +577,21 @@ status stays `proposed`.**
 4. **The run ends with the page.** Leaving any workspace ends the keys' armed-only runs (the
    Studio document's out of every workspace but the Synth, the Synth panel's out of every
    workspace); a run started with PLAY sounds on.
+
+### 2026-11-15: a controller's transport plays the workspace in view; the clock is shown (V508)
+
+**Note of 2026-11-15 (issue V508), amending this ADR's "no MIDI clock in the first version"; the
+status stays `proposed`.**
+
+1. **Transport messages act.** MIDI Start, Continue and Stop from any input, and a DAW-control
+   port's Mackie Control Play, Stop, Rewind and Cycle buttons, act on the transport of the
+   workspace in view: the Sequencer's own in the Sequencer, the Studio's everywhere else (the one
+   instrument's timeline, K247). Start plays from the start, Continue from where it is, Stop keeps
+   the keys' armed run. Record, Fast forward and every other button act on nothing; the monitor
+   shows them.
+2. **The clock is measured, not followed.** MIDI clock's tempo is read over the last whole beat on
+   the messages' own timestamps and shown in the MIDI section; it clears when the clock stops.
+   The transport keeps its own tempo: following an external clock (drift, jitter, the audio
+   clock's own time) is a decision of its own, not taken here.
+3. **No output.** OSCILLA still sends no MIDI (no MMC answer, no clock out, no display or LEDs);
+   that is V510's question.

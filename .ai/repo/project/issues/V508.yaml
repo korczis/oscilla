@@ -1,0 +1,41 @@
+id: V508
+milestone: M045
+serves:
+  - "midi-jam-companion#midi-transport-clock"
+title: "A controller's transport and clock: Start, Continue, Stop and the DAW buttons play the workspace in view; the clock's tempo is shown"
+slug: midi-transport-clock
+priority: p1
+profile: implementation
+objective: "Lands as feat(midi). src/js/midi/transport.js maps MIDI realtime Start (FA), Continue (FB) and Stop (FC) from any input, and the DAW-control port's Mackie Control buttons (a Note On with velocity > 0: Play 94, Stop 93, Rewind 91, Cycle 86, the published protocol's numbers) to transport actions, and measures MIDI clock (F8, 24 per quarter note) over the last whole beat on the messages' own timestamps. midi/ui.js midiTransport acts on the transport of the workspace in view: the Sequencer's own in the Sequencer (its panel's play, stop and loop, handed in by main.js), the Studio's everywhere else (Start from the start, Continue from where it is, Stop keeping the keys' armed run, Rewind, Cycle). The monitor row says what each message did; the MIDI section shows the clock's tempo (midi.clock) and clears it when the clock stops. The transport never follows the clock by itself. Before: Start, Stop, the DAW buttons and the clock changed nothing (the DAW port's notes were silenced by V507 and did nothing else). After: the owner's BeatStep Pro's transport and the KeyLab mkII's DAW buttons play and stop OSCILLA."
+why: "The owner's orders of 2026-11-14 and 2026-11-15 in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code): \"cilem oscilla ... je ovladat to pres midi vcetne jam\" and \"napoj cely midi stack ... dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze funguje\". ADR 0058 kept MIDI clock out of its first version; this note takes the transport and a measured clock in, and keeps following the clock out."
+current_state: "Built by oscilla-p7/ff (Claude Code session cae276ab-2d90-45d2-babb-a1f8023668d2) on feat/v508-midi-transport, stacked on K247 (PR 553). The owner's BeatStep Pro sent FA/FC with its transport and F8 clock, and MMC SysEx, on 2026-11-14 (observed with scripts/midi/listen.swift); the KeyLab mkII's DAW port's buttons follow the Mackie Control protocol in its default DAW map (the editor's DAW Map field: Default MCU) and are to be confirmed on the device with scripts/midi/listen.swift (.ai/repo/workflows/midi-device-import.md step 4)."
+scope:
+  - "src/js/midi"
+  - "src/js/main.js"
+  - "src/index.html"
+  - "src/js/ui/catalog/decl/midi.js"
+  - "scripts/ui-catalog/trace/midi.mjs"
+  - "tests/unit/midi"
+  - "tests/unit/ui-catalog.test.mjs"
+  - "tests/browser/midi.cjs"
+  - "tests/README.md"
+  - "docs/midi.md"
+  - "docs/CLAIMS.yaml"
+  - ".ai/repo/adrs"
+  - "dist"
+depends_on:
+  - "V507"
+  - "K247"
+acceptance_criteria:
+  - "transportAction maps FA, FB, FC from any port and the DAW port's Note On 94, 93, 91, 86 (velocity > 0), and nothing else (tests/unit/midi/transport.test.mjs)."
+  - "midiTransport acts on the Sequencer's own transport in the Sequencer and on the Studio's elsewhere; Start plays from the start, Continue from where it is, Stop keeps the keys' armed run; nothing happens where there is nothing to do."
+  - "The clock meter reads BPM over the last whole beat on the messages' timestamps, null before it and after CLOCK_GAP_MS; the MIDI section shows it and clears it."
+  - "tests/browser/midi.cjs midi-seam-transport: a stub DAW port's Play starts the Studio, a stub Stop stops it, in the Sequencer Start plays the sequence, and a stub clock shows its tempo."
+validation:
+  - "node --test tests/unit/midi/*.test.mjs"
+  - "node tests/browser/midi.cjs"
+  - "npm run verify"
+evidence_required:
+  - "verified"
+created_at: 2026-11-15
+updated_at: 2026-11-15

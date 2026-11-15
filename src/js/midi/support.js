@@ -27,7 +27,7 @@
 // state / type / addEventListener / removeEventListener / open.
 //
 // Messages (V502): each connected input of the open access is listened to for `midimessage`,
-// and `onMessage(data, port)` receives its bytes. `onSilence()` is called when an input that was
+// and `onMessage(data, port, timeStamp)` receives its bytes and the message's time. `onSilence()` is called when an input that was
 // listened to leaves, and when the access is withdrawn or replaced by a new Connect MIDI; it
 // names no port, and the note layer stops every note, not only the leaving input's
 // (src/js/midi/notes.js).
@@ -141,7 +141,11 @@ export function createMidiSupport({ navigator: nav, isSecureContext, site = 'thi
       if (port.state !== 'connected' || port.type === 'output') return;
       connected.add(port);
       if (live.heard.has(port)) return;
-      const fn = (event) => { if (event && event.data) onMessage(event.data, port); };
+      // The message's own time (DOMHighResTimeStamp), which the clock's tempo is measured on
+      // (V508): the handler runs later than the message arrived, by however busy the page is.
+      const fn = (event) => {
+        if (event && event.data) onMessage(event.data, port, event.timeStamp);
+      };
       live.heard.set(port, fn);
       port.addEventListener('midimessage', fn);
       // Opened explicitly: an added listener is not relied on to open the port implicitly.

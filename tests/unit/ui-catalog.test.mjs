@@ -164,6 +164,7 @@ const CONTRACT = [
   ['midi.status', 'readout', 'p'], ['midi.actions', 'panel', 'div'],
   ['midi.connect', 'action', 'button'], ['midi.devices', 'readout', 'section'],
   ['midi.monitor', 'readout', 'section'], ['midi.monitor-clear', 'action', 'button'],
+  ['midi.clock', 'readout', 'span'],
   ['studio.armed', 'readout', 'span'],
   ['alert.action', 'open', 'a'], ['mic.counterparts', 'panel', 'p'],
   ['counterpart.measure-rta', 'open', 'a'], ['counterpart.experiments', 'open', 'a'],

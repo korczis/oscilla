@@ -45,6 +45,13 @@ export default [
     state: { none: 'ukazuje, co vstupy posílají, a nic neuchová déle než stránka' },
   }),
   defineComponent({
+    id: 'midi.clock',
+    kind: 'readout',
+    label: 'Hodiny MIDI',
+    docs: 'Ukazuje tempo hodin MIDI, které vstup posílá, změřené z posledního celého taktu.',
+    state: { none: 'jen měří příchozí hodiny a tempo transportu nemění' },
+  }),
+  defineComponent({
     id: 'midi.monitor-clear',
     kind: 'action',
     label: 'Vymazat',
