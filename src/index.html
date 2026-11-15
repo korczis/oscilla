@@ -3381,7 +3381,7 @@
         držíte, pod stejným omezením zesílení, a zastaví se po uvolnění, Esc nebo když stránka
         ztratí fokus.</p>
       <div class="osc-dialog-actions">
-        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('help')">Close</button>
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('help')">Zavřít</button>
       </div>
     </div>
   </dialog>
@@ -3406,13 +3406,13 @@
   <dialog class="osc-dialog osc-dialog--wide" id="osc-dlg-settings" data-oscilla-modal
     aria-labelledby="osc-dlg-settings-title">
     <div class="osc-dialog-body">
-      <h2 class="osc-dialog-title" id="osc-dlg-settings-title">Settings</h2>
+      <h2 class="osc-dialog-title" id="osc-dlg-settings-title">Nastavení</h2>
       <div class="osc-settings-grid">
-        <label class="osc-label" for="osc-set-range">Frequency range</label>
+        <label class="osc-label" for="osc-set-range">Frekvenční rozsah</label>
         <div class="osc-select">
           <select id="osc-set-range" data-osc="settings.range" @change="setRangeMode($event.target.value)">
             <template x-for="r in RANGE_MODES" :key="r.id">
-              <option :value="r.id" x-text="r.label + ' (' + r.hint + ')'" :selected="rangeMode === r.id"></option>
+              <option :value="r.id" x-text="RANGE_NAMES[r.id]" :selected="rangeMode === r.id"></option>
             </template>
           </select>
         </div>
@@ -3427,7 +3427,7 @@
           </div>
         </template>
         <p class="osc-pp-error" role="alert" x-show="rangeError" x-text="rangeError"></p>
-        <label class="osc-label" for="osc-set-a4">A4 reference (Hz)</label>
+        <label class="osc-label" for="osc-set-a4">Ladění A4 (Hz)</label>
         <input class="osc-number" id="osc-set-a4" type="number" min="432" max="445" step="1"
           :value="a4" data-osc="settings.a4" @change="setA4($event.target.value)">
         <p class="osc-muted osc-dialog-note osc-settings-wide" id="osc-set-env-help">Pevný limit
@@ -3435,38 +3435,38 @@
           Vztahuje se i na Tón pevné délky. Ostatní programované vzory končí svým vlastním koncem
           (nejvýš 30 s); nepřetržité opakování sweepu potřebuje „Allow continuous playback“. Nota
           držená na klávesnici nebo klávese MIDI je po dobu držení výjimkou a zastaví se po
-          uvolnění, Esc nebo když stránka ztratí fokus. Attack platí od příští noty. Release
-          upravený během držení noty je doznění po jejím uvolnění (se zapnutou laboratoří Envelope
+          uvolnění, Esc nebo když stránka ztratí fokus. Náběh platí od příští noty. Doznění
+          upravené během držení noty platí po jejím uvolnění (se zapnutou laboratoří Envelope
           platí její Release), zkrácené tak, aby skončilo pevným limitem nebo vlastním koncem
-          vzoru; nota, která dosáhne jednoho z nich, nebo konec noty z Trigger doznívá po
-          Release, se kterým začala.</p>
-        <label class="osc-label" for="osc-set-duration">Trigger duration (ms)</label>
+          vzoru; nota, která dosáhne jednoho z nich, nebo nota z Triggeru na svém konci doznívá
+          s Dozněním, se kterým začala.</p>
+        <label class="osc-label" for="osc-set-duration">Délka Triggeru (ms)</label>
         <input class="osc-number" id="osc-set-duration" type="text" :value="duration"
           data-osc="settings.duration" @change="setEnv('duration', $event.target.value)">
-        <label class="osc-label" for="osc-set-attack">Attack (ms, ADSR off)</label>
+        <label class="osc-label" for="osc-set-attack">Náběh (ms, bez ADSR)</label>
         <input class="osc-number" id="osc-set-attack" type="text" :value="attack"
           aria-describedby="osc-set-env-help"
           data-osc="settings.attack" @change="setEnv('attack', $event.target.value)">
-        <label class="osc-label" for="osc-set-release">Release (ms, ADSR off)</label>
+        <label class="osc-label" for="osc-set-release">Doznění (ms, bez ADSR)</label>
         <input class="osc-number" id="osc-set-release" type="text" :value="release"
           aria-describedby="osc-set-env-help"
           data-osc="settings.release" @change="setEnv('release', $event.target.value)">
       </div>
       <p class="osc-pp-error" role="alert" x-show="Object.keys(paramErrors).length"
         x-text="Object.values(paramErrors).join(' ')"></p>
-      <p class="osc-muted osc-dialog-note">Browser: <span x-text="browserText"></span> ·
-        Platform: <span x-text="platformText"></span> · Audio: <span x-text="audioState"></span>
+      <p class="osc-muted osc-dialog-note">Prohlížeč: <span x-text="browserText"></span> ·
+        Platforma: <span x-text="platformText"></span> · Zvuk: <span x-text="audioState"></span>
         <span x-show="!provisional" x-text="' · ' + effectiveSampleRate + ' Hz'"></span></p>
       <!-- MIDI input (V501, ADR 0058): optional. The support state is read at load; access is
            asked for only by Connect MIDI, which is not offered without a secure context or
            Web MIDI (its whole actions row is hidden, so no empty row keeps its margin). The copy of every state is MIDI_COPY in src/js/midi/support.js. -->
       <hr class="osc-divider">
-      <h3 class="osc-label" id="osc-midi-title">MIDI input</h3>
+      <h3 class="osc-label" id="osc-midi-title">Vstup MIDI</h3>
       <p id="osc-midi-status" data-osc="midi.status" role="status"
         :data-midi-state="midiState" x-text="midiText"></p>
       <div class="osc-dialog-actions" data-osc="midi.actions" x-show="midiCanConnect">
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="midi.connect"
-          aria-describedby="osc-midi-status" @click="midiConnect()">Connect MIDI</button>
+          aria-describedby="osc-midi-status" @click="midiConnect()">Připojit MIDI</button>
       </div>
       <!-- V507: the connected inputs as OSCILLA knows them (src/js/midi/devices.js: the profile
            derived from the maker's own files, and what each port is for), and the monitor of
@@ -3515,8 +3515,8 @@
       </section>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary" data-osc="settings.reset"
-          @click="resetDefaults()">Reset instrument</button>
-        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('settings')">Close</button>
+          @click="resetDefaults()">Obnovit nástroj</button>
+        <button type="button" class="osc-btn osc-btn-primary" @click="closeDialog('settings')">Zavřít</button>
       </div>
     </div>
   </dialog>
@@ -3809,7 +3809,7 @@
       </ul>
       <div class="osc-dialog-actions">
         <button type="button" class="osc-btn osc-btn-secondary"
-          @click="closeDialog('osc-dlg-studio-templates')">Close</button>
+          @click="closeDialog('osc-dlg-studio-templates')">Zavřít</button>
       </div>
     </div>
   </dialog>

@@ -24,6 +24,17 @@ const ADR = readFileSync(new URL(
   '.ai/repo/adrs/0058-midi-is-an-optional-local-input-layer-over-the-audio-engine.md', root),
 'utf8');
 
+// What the ADR's prose says an empty port name and the file:// {site} read as.
+const UNNAMED = /An empty name reads "([^"]+)"/.exec(ADR)[1];
+const FILE_SITE = /and "([^"]+)" on `file:\/\/`/.exec(ADR)[1];
+
+/**
+ * The copy of `state` with each placeholder of `values` put in by split and join, a second way
+ * of filling it (midiText's is one regular-expression pass): the expected text of a check.
+ */
+const fill = (state, values) => Object.entries(values)
+  .reduce((t, [k, v]) => t.split(`{${k}}`).join(v), MIDI_COPY[state]);
+
 /** The support-state table of ADR 0058: [{ n, state, copy }] in the ADR's order. */
 function adrTable() {
   const rows = [];
@@ -156,13 +167,12 @@ test('the thirteen states and their exact copy are the table of ADR 0058', () =>
 test('the copy fills {site}, {names}, {name} and {error}, and names no browser', () => {
   const site = 'korczis.github.io';
   assert.equal(midiText('connected', { site, names: ['Keys', ''] }),
-    'MIDI is on: Keys, unnamed input.');
+    fill('connected', { names: `Keys, ${UNNAMED}` }));
   assert.equal(midiText('disconnected', { site, name: '' }),
-    'MIDI input disconnected: unnamed input. No MIDI input is connected.');
+    fill('disconnected', { name: UNNAMED }));
   assert.equal(midiText('failed', { site, error: 'NotSupportedError' }),
-    'MIDI could not start on this computer (the browser reported NotSupportedError).');
-  assert.equal(midiText('denied', { site }), 'MIDI access is not allowed for korczis.github.io. '
-    + 'Allow MIDI in the browser\'s site settings, then choose Connect MIDI again.');
+    fill('failed', { error: 'NotSupportedError' }));
+  assert.equal(midiText('denied', { site }), fill('denied', { site: 'korczis.github.io' }));
   for (const state of MIDI_STATES) {
     const t = midiText(state, { site, names: ['K'], name: 'K', error: 'E' });
     assert.doesNotMatch(t, /[{}]/, `${state}: every placeholder is filled`);
@@ -174,22 +184,22 @@ test('the copy fills {site}, {names}, {name} and {error}, and names no browser',
 test('a value is inserted verbatim and never read as a placeholder or a $ pattern', () => {
   // String.prototype.replace with a string expands $& / $' / $` / $$ in the replacement, and a
   // chain of replaces searches each inserted value for the placeholders that follow.
-  assert.equal(midiText('connected', { names: ['Pads $& X'] }), 'MIDI is on: Pads $& X.');
-  assert.equal(midiText('connected', { names: ['{error}'] }), 'MIDI is on: {error}.');
+  assert.equal(midiText('connected', { names: ['Pads $& X'] }),
+    fill('connected', { names: 'Pads $& X' }));
+  assert.equal(midiText('connected', { names: ['{error}'] }),
+    fill('connected', { names: '{error}' }));
   assert.equal(midiText('connected', { names: ['{name}', "$' $` $$"] }),
-    "MIDI is on: {name}, $' $` $$.");
+    fill('connected', { names: "{name}, $' $` $$" }));
   assert.equal(midiText('disconnected', { name: '{error} $&' }),
-    'MIDI input disconnected: {error} $&. No MIDI input is connected.');
-  assert.equal(midiText('failed', { error: '$&{site}' }),
-    'MIDI could not start on this computer (the browser reported $&{site}).');
-  assert.equal(midiText('denied', { site: '{names}$&' }), 'MIDI access is not allowed for '
-    + '{names}$&. Allow MIDI in the browser\'s site settings, then choose Connect MIDI again.');
+    fill('disconnected', { name: '{error} $&' }));
+  assert.equal(midiText('failed', { error: '$&{site}' }), fill('failed', { error: '$&{site}' }));
+  assert.equal(midiText('denied', { site: '{names}$&' }), fill('denied', { site: '{names}$&' }));
 });
 
-test('{site} is location.host over http(s) and "this page" on file://', () => {
+test('{site} is location.host over http(s) and FILE_SITE on file://', () => {
   assert.equal(midiSite({ protocol: 'https:', host: 'korczis.github.io' }), 'korczis.github.io');
   assert.equal(midiSite({ protocol: 'http:', host: '127.0.0.1:5173' }), '127.0.0.1:5173');
-  assert.equal(midiSite({ protocol: 'file:', host: '' }), 'this page');
+  assert.equal(midiSite({ protocol: 'file:', host: '' }), FILE_SITE);
 });
 
 // ---------------------------------------------------------------------------------- at load
@@ -332,18 +342,17 @@ test('no-devices, then connected with the names; disconnected names the last por
   access.plug('Keys');
   assert.equal(midi.snapshot().state, 'connected');
   access.plug('');
-  assert.equal(midi.snapshot().text, 'MIDI is on: Keys, unnamed input.');
-  assert.deepEqual(midi.snapshot().inputs, ['Keys', 'unnamed input']);
+  assert.equal(midi.snapshot().text, fill('connected', { names: `Keys, ${UNNAMED}` }));
+  assert.deepEqual(midi.snapshot().inputs, ['Keys', UNNAMED]);
   access.unplug('Keys');
   assert.equal(midi.snapshot().state, 'connected', 'one of two left: still connected');
-  assert.equal(midi.snapshot().text, 'MIDI is on: unnamed input.');
+  assert.equal(midi.snapshot().text, fill('connected', { names: UNNAMED }));
   access.unplug('');
   assert.equal(midi.snapshot().state, 'disconnected');
-  assert.equal(midi.snapshot().text,
-    'MIDI input disconnected: unnamed input. No MIDI input is connected.');
+  assert.equal(midi.snapshot().text, fill('disconnected', { name: UNNAMED }));
   access.plug('Pads');
   assert.equal(midi.snapshot().state, 'connected');
-  assert.equal(midi.snapshot().text, 'MIDI is on: Pads.');
+  assert.equal(midi.snapshot().text, fill('connected', { names: 'Pads' }));
 });
 
 test('inputs present but not connected when access resolves read as no-devices', async () => {
