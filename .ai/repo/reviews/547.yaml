@@ -1,0 +1,94 @@
+# Review verdict for pull request #547 (train/t20): train T20 and release v3.37.4 (a patch:
+# release:analyze derives patch from U109's fix(i18n) commits).
+# Guarded members: oscilla-0b's U109 Czech pass 3 ef45ca22 (merged in 712f9102) and its dock fix
+# 70bdcec0 (merged in 57080373), oscilla-43's 9a2c7400 (every item of the dock's radio template
+# named), guarded in 17 paths: src/js/analysis/compare.js, src/js/studio/live-notes.js,
+# playground-voice-open.js, src/js/synth/dock.js, gestures.js, link.js, normals.js,
+# panels/engines.js, picker.js, studio-sink.js, ui.js, view/bay.js, view/engines.js, view/face.js,
+# view/xy-tab.js, view/xy-wiring.js and xy.js. Unguarded members read as members: U109's markup
+# and the other src/js prose (src/index.html, charts, labs, midi/keyboard-ui.js, the catalogue
+# declarations, p5-views, shell, workbench, counterparts), scripts/landing, the tests that read
+# the changed strings, both czech-prose baselines, the raises ledger (two entries), the U109 and
+# U110 records; U112 (72c13c8c, 01a9d32b, with #546's 63a35929 merged from main in 9e4906c4); the
+# v3.37.3 record; the linux-x64 visual re-accept d9f29007; 879623a8 (this reviewer's pre-review
+# P3, a comment); chore(release): v3.37.4 2eabb407; the ledger's #547 entry 06fef281. Judged at
+# 06fef281 on base origin/main fba40f4d (#546), 2026-11-14, in the reviewer's own detached
+# worktree ~/dev/oscilla-wt/review-526; pre-reviewed at d9f29007 (the same guarded content).
+#
+# Reviewer: rev-seat-2 (session oscilla-c3, claude-code c0f0687c), a separate top-level session
+# standing in for rev-seat oscilla-c1 (at its weekly limit) on oscilla-43's request (Q108 A). It
+# built none of this train: oscilla-0b built pass 3 and its dock fix, oscilla-43 took it over,
+# named the radios, integrated and stamped. Disclosure: pass 3's headroom (a declared raise,
+# translation only, five conditions) and the dock fix (short wave labels with the full name as
+# accessible name and title, the condition-2 exception, Vše/Skrýt) are this reviewer's decisions
+# under Q090 of 2026-11-12 and 2026-11-13, recorded verbatim in U109. The build is judged against
+# them, not the decisions again.
+#
+# The digest: origin/main's (fba40f4d) scripts/review-verdict.mjs --content --list at 06fef281:
+# 5eac642970b5f511... over 17 guarded paths (equal to the integrator's, and to d9f29007's).
+#
+# How it was judged:
+# - Translation only. The guarded diff is string literals (labels, reasons, history labels,
+#   QUALITY_LABELS, the dock's target "nic"), plus the dock fix's granted structure: picker.js
+#   WAVES carries { id, name, label } with the four oscillator shapes' names taken from the one
+#   WAVEFORM_NAMES, dock.js gives each oscillator its module label as name, the preset items
+#   their whole title. QUALITY_LABELS feed only compare.js's result label (not a stored key).
+# - Headroom condition 1: src/index.html 303 989 B on main, 304 601 B here (+612), cap 304 000 ->
+#   305 000 (the next 1 000 above), one declared raise. The ledger is append-only: its first
+#   entry names pr 542, which is #542 chore/plan-u111-e072 (merged, unrelated), written before
+#   #547 existed; the second entry names #547 as the PR of the first (C3-547-1, P3, no change).
+#   Condition 5: U110 is filed for the file's structure. Condition 2: the only markup change
+#   beyond text is the granted pair :aria-label="it.name" :title="it.name" on the existing radio.
+# - Dock conditions: the unit test asserts every short label a prefix of its full name and the
+#   four shapes' names are WAVEFORM_NAMES, over picker.js WAVES; s-dock-names reads the wave
+#   (Sinus), the oscillator and a preset by role and name and asserts each name starts with its
+#   label; s-pick reads the radio named Obdélník checked after the arrow keys, its text "Obd"
+#   and title "Obdélník". "Vše"/"Skrýt" keeps aria-expanded and aria-controls; the catalogue
+#   label is "Vše, Skrýt". visual-synth.test.mjs changes only its STABILITY comment line
+#   (10 / 190), so the seed contract (knob-pointer-wider moving desktop-engines) holds unchanged.
+# - The reviewer's probe (scratchpad k-t20-dock.cjs, the built dist), in chromium, webkit and
+#   firefox alike: at 1536x1024 the docked keyboard is 292 px with the Synth's dock one 44 px
+#   row; at 390x844 and 320x568 the dock folds behind Vše (aria-expanded false), a touch tap at its
+#   centre (50 x 44 px) makes it Skrýt (true) and the dock one row (44 px, scrolling sideways);
+#   all six waves are found by role and full name, the oscillators named VCO 1/VCO 2, the
+#   presets their whole title (Základ: oba filtry otevřené); ArrowRight from the checked Pila
+#   moves focus and the check to Obdélník; no page error. In the Studio at 390 the disarmed
+#   keyboard is one 61 px row.
+# - The 320 pairs: U112's '@320:synth:overlap' now names 2 firm pairs (the octaves x Otevřít ve
+#   Studiu) and 2 near-zero (x Kopírovat odkaz, ~3) on every host, re-measured on the Vše dock;
+#   CI's linux legs judge them in this run.
+#
+# THE CONDITION of this verdict (as for the trains since #509): it binds once the reviewer has
+# read the six "Browser leg N (browser)" logs of this pull request's run and found each leg's
+# suite list equal to shards.cjs --plan at this head, "run-suites: all K suites passed" and no
+# FAIL line, AND has run the release CI receipt check against this run with the base ci.yml
+# (fba40f4d's), AND the PR body states condition 1's byte delta, the desktop dock height before,
+# broken and after, the 390 Studio dock's rows, and the English strings a test pins. Auto-merge is
+# armed only after the reviewer reports "legs OK"; otherwise a superseding verdict.
+#
+# Measured by the reviewer: at d9f29007 (pre-review) GITHUB_BASE_REF=main npm test
+#   exit 0 (5789 tests, 5788 pass, 0 fail, 1 skipped), build:check up to date, release:analyze
+#   patch. Browser suites, each in chromium, firefox and webkit (the suites take every engine),
+#   OSC_LOAD_MAX=50 under a load of about 8-49: ui-current 407/407 (run three times), synth
+#   desktop 49/49 and phone 16/16 (twice; s-dock-names, s-pick, s-notice, s-notice-cold ok),
+#   app 66/66 file and http (twice), navigation 25/25, cross-links ALL PASS (108), first-screen
+#   ALL PASS (645), live-smoke 18/18, journeys 38/0, labs ALL PASS, iphone 61/61/122,
+#   qa-regressions 19/19. midi: the first run 3 FAILURE(S) (535 passed): midi-measured-grant in
+#   chromium file and http ended "connected" because the shared Mac had a physical KeyLab mkII 61
+#   attached ("MIDI is on: KeyLab mkII 61 MIDI, KeyLab mkII 61 DAW"), and firefox/http
+#   midi-measured-connect stayed pending 60 s on the native permission; both are the native
+#   (measured) group, which T20 does not change (its midi.cjs diff is three "nehraje" regexes);
+#   the second run ALL PASS (540 checks, no device: "ends no-devices"). The tree moved from
+#   d9f29007 to 06fef281 during the browser runs; the two dists differ in 124 bytes (the version
+#   stamp and the roadmap count), the same size, so the runs stand for 06fef281. The webkit and
+#   firefox probes ran at 06fef281.
+#
+# Verdict: merge, under the condition above. No P0, P1 or P2 is open.
+schema: review-verdict/v1
+pr: 547
+verdict: merge
+reviewer: oscilla-c3 rev-seat-2 standing in for oscilla-c1 rev-seat (claude-code c0f0687c, a separate top-level session; built none of 06fef281)
+content: 5eac642970b5f51121e7cfadfbfc37c0375b29d37ae076b15a630726e93ce01a
+findings:
+  - { id: C3-547-1, severity: P3, status: open, title: "the raises ledger's first pass 3 entry names #542, an unrelated merged PR; the appended #547 entry repairs it (append-only, no change)" }
+  - { id: C3-547-2, severity: P3, status: closed, title: "synth-picker.test.mjs said the oscillators and presets bind no name after 9a2c7400 named them; closed by 879623a8" }

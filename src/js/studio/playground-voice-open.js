@@ -219,8 +219,8 @@ export function playgroundVoiceDocument(input = {}, { registry = NODE_REGISTRY }
   timeline.clips = clips;
   const doc = createStudioModel({ graph, timeline,
     metadata: { title: PLAYGROUND_VOICE_TITLE,
-      notes: `Opened from the Playground's Signal Path: ${plan.label || plan.type}. A copy: `
-        + 'editing it here leaves the Playground as it is.' } }, { registry });
+      notes: `Otevřeno ze Signálové cesty Playgroundu: ${plan.label || plan.type}. Kopie: `
+        + 'úpravy zde Playground nezmění.' } }, { registry });
   // A value the Studio cannot hold is named before a tone too short for its envelope.
   const report = validateStudioModel(doc, { registry });
   if (!report.ok) {

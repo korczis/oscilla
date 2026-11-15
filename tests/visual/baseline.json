@@ -354,8 +354,8 @@
       },
       "reference": "sha256:9810048c8325f6dedc0b9c1e584bdaa2a1484c1ee91ece7c5177601337cf725b",
       "runs": 3,
-      "total": 5.84,
-      "totalExclData": 5.81,
+      "total": 5.61,
+      "totalExclData": 5.52,
       "regions": {
         "header": {
           "mismatch": 15.74,
@@ -370,8 +370,8 @@
           "dataPp": 0.5
         },
         "pageHeader": {
-          "mismatch": 9.03,
-          "mismatchExclData": 9.03,
+          "mismatch": 9.23,
+          "mismatchExclData": 9.23,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
@@ -382,50 +382,50 @@
           "dataPp": 0.5
         },
         "source": {
-          "mismatch": 3.84,
-          "mismatchExclData": 3.84,
+          "mismatch": 4.05,
+          "mismatchExclData": 4.05,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "analysis": {
-          "mismatch": 2.1,
-          "mismatchExclData": 2.43,
+          "mismatch": 2.14,
+          "mismatchExclData": 2.53,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "mic": {
-          "mismatch": 3.8,
-          "mismatchExclData": 4.12,
+          "mismatch": 4.28,
+          "mismatchExclData": 4.72,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "device": {
-          "mismatch": 20.36,
-          "mismatchExclData": 20.36,
+          "mismatch": 12.14,
+          "mismatchExclData": 12.14,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "measure": {
-          "mismatch": 3.46,
-          "mismatchExclData": 3.46,
+          "mismatch": 3.59,
+          "mismatchExclData": 3.59,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "sequencer": {
-          "mismatch": 6.3,
-          "mismatchExclData": 2.26,
+          "mismatch": 6.35,
+          "mismatchExclData": 2.34,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "studio": {
-          "mismatch": 4.13,
-          "mismatchExclData": 4.57,
+          "mismatch": 4.14,
+          "mismatchExclData": 4.58,
           "runToRunPct": 0,
           "dataPp": 0.5
         },
         "statusbar": {
-          "mismatch": 4.56,
-          "mismatchExclData": 4.56,
+          "mismatch": 4.44,
+          "mismatchExclData": 4.44,
           "runToRunPct": 0,
           "dataPp": 0.5
         }
@@ -500,7 +500,7 @@
         "analysisTabs": [
           548.11,
           151.88,
-          420.61,
+          436.83,
           32
         ],
         "timeSelect": [
@@ -559,49 +559,49 @@
         ],
         "devAlert": [
           1395.02,
-          428.22,
+          470.22,
           124.98,
           111
         ],
         "seqTransport": [
           474,
-          779.89,
+          780.23,
           117,
           32
         ],
         "seqTempo": [
           944.14,
-          779.89,
+          780.23,
           108,
           32
         ],
         "seqAdd": [
           944.14,
-          906.89,
+          907.23,
           108,
           30
         ],
         "seqEditor": [
           276,
-          944.89,
+          945.23,
           776.14,
           96
         ],
         "measureSteps": [
           279,
-          641.88,
+          642.22,
           1236,
           74.02
         ],
         "measurePrimary": [
           279,
-          723.89,
+          724.23,
           150,
           28
         ],
         "studioExpand": [
           1242.72,
-          818.89,
+          819.23,
           104.13,
           30
         ]

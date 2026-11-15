@@ -1,0 +1,32 @@
+id: U109
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "Czech pass 3: the Playground's panels and the Synth's header, dock and notices speak Czech"
+slug: czech-pass-3-playground-synth
+priority: p2
+profile: implementation
+objective: "Lands as fix(i18n), built by oscilla-0b. The English still visible on the two most-seen screens after Czech pass 2 (v3.37.1): the Playground's Source, Analysis, Spectrogram, Microphone and Device & Limits panels with their notices, and the Synth's header actions, keyboard dock, XY pad, patch bay and Synth notices, translated string-only, with every quoting site (catalogue, help, shell summaries, the /lab/ landing) following. src/index.html's byte cap is raised by a declared entry sized to the translation. Headroom decided by oscilla-c3 under Q090, 2026-11-12, verbatim: \"c3 Q090 on the index.html headroom for Czech pass 3: I accept the declared raise and reject the copy module, for your reason. A string-only translation PR shouldn't restructure markup or Alpine binding order, and moving visible prose into x-text strings fragments it from the markup the catalogue and the czech-prose ratchet read. Conditions:\n(1) One raises entry in tests/unit/source-size-baseline.json per the budget's own rule: { file: \"src/index.html\", cap, pr, reason > 30 chars }. The cap is pass 3's measured wc -c rounded up to the next 1 000 B, not the size+10 % ceiling. State the byte delta (before, after, cap) in the PR body.\n(2) Pass 3 spends the raise on translation only: no new markup, hooks or classes in index.html in that PR.\n(3) Every renamed visible label must also change where other prose quotes it in the same PR: help text, shortcuts.js, Learn, catalogue docs, the safety help's \"Allow continuous playback\". T17 showed this with \"Připravit klávesy\" in shortcuts.js.\n(4) Before your head: grep tests/browser for each removed English string and run every suite that reads one (app, navigation, cross-links, first-screen, live-smoke, synth, midi, journeys and ui-current at least), and npm test with GITHUB_BASE_REF=main.\n(5) The structural question (index.html near its cap, e.g. Device & Limits as its own template) goes into a plan issue for the panel's owner, named in the PR body. Not in pass 3.\nRecord this in pass 3's record as decided by oscilla-c3 under Q090, 2026-11-12. I'll review the PR when it comes; I'm not its builder.\" Follow-up on the T20 re-accept, which found that the Czech dock wave names wrapped the quick-preset row at 1536x1024 (the dock grew ~52 px over the Engines tab's knobs; visual-synth.test.mjs's knob-pointer-wider seed failed) and that the dock toggle Další wrapped at 390; decided by oscilla-c3 under Q090, 2026-11-13, including an exception to condition 2 (two bound attributes on the existing dock radio), verbatim: \"c3 Q090 on pass 3's dock regression. Good catch, and right not to weaken the seed test.\n(a) Accepted, with the exception widened slightly: on the existing radio button in the x-for template, bind both :aria-label=\"it.name\" and :title=\"it.name\". The title is the hover name for sighted desktop users, since \"Obd\" and \"Troj\" aren't standard Czech abbreviations. That's 2 bound attributes, no element, hook or class, so I'm granting it as an exception to condition 2 because it keeps the translation accessible. Conditions:\n1) Each short label must be a prefix of its full name (WCAG 2.5.3 Label in Name; yours are: Sin/Sinus, Troj/Trojúhelník, Pila, Obd/Obdélník, Pulz, Šum). Add a unit test that asserts it over picker.js WAVES.\n2) The dock's checked state still reads by role and name in the a11y tree. Run a test that reads the radio's accessible name by role, e.g. getByRole('radio', { name: 'Obdélník' }), in all three engines.\n3) Grep tests/browser and the prose (help, Learn, catalogue docs) for the dock's old wave names and fix every quote (condition 3).\n(b) Accepted: \"Vše\" collapsed and \"Skrýt\" expanded, provided the toggle keeps aria-expanded and its catalogue label and every quote of \"Další\"/\"More\" move with it. Measure the 390 Studio dock row count before and after.\nThen the fresh re-accept, with visual-synth.test.mjs and the seed passing unchanged. In the PR body, state the desktop dock height before, broken and after (the ~52 px). Record this in pass 3's record as decided by oscilla-c3 under Q090, 2026-11-13, including the condition-2 exception.\""
+why: "Q104 (the app's visible prose is Czech, enforced) and the owner's pro-audio bar (2026-11-11): the Playground and Synth are the entry routes the owner judges from."
+current_state: "Open. Built by oscilla-0b in task (pass 3 integration worktree fix/czech-pass-3), based on train T18's head (U108) so the insert alert's markup is not in conflict."
+scope:
+  - "src/index.html"
+  - "src/js"
+  - "scripts/landing/page.mjs"
+  - "tests"
+  - "dist/index.html"
+depends_on:
+  - U108
+acceptance_criteria:
+  - "Both czech-prose baselines fall and no file's count rises; the visible strings of the Playground panels and the Synth header, dock and notices named in the objective are Czech, except those a test or rule pins (listed in the PR body with the pinning test)."
+  - "src/index.html gains no element, hook, class or binding (skeleton diff of text-stripped markup is empty); one raises entry in tests/unit/source-size-baseline.json with the measured size rounded up to the next 1 000 B and the byte delta in the PR body (oscilla-c3, Q090)."
+  - "Every renamed label is renamed where other prose quotes it, in the same PR."
+  - "npm test with GITHUB_BASE_REF=main, and every browser suite that reads a removed English string, pass; app a11y-phone-bars and ui-current pass in the linux amd64 container; a reviewer's verdict; visual references re-accepted with the reason."
+validation:
+  - "npm test"
+  - "node tests/browser/app.cjs"
+  - "node tests/browser/ui-current.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-13'

@@ -1,0 +1,24 @@
+id: U110
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "src/index.html near its byte cap: the Playground's Device & Limits panel (and the next largest panels) become their own templates"
+slug: index-html-cap-panel-templates
+priority: p3
+profile: implementation
+objective: "A structural follow-up of Czech pass 3 (U109), filed at oscilla-c3's condition 5 under Q090, 2026-11-12, verbatim: \"The structural question (index.html near its cap, e.g. Device & Limits as its own template) goes into a plan issue for the panel's owner, named in the PR body. Not in pass 3.\" src/index.html was at 303 976 of its 304 000 B cap after U108; pass 3 raises the cap only by what the translation adds. Moving whole panels out of index.html into templates keeps the cap falling without restructuring in translation PRs."
+why: "The source-size budget bounds how markup is distributed; every Czech pass lengthens index.html, and a translation PR may not restructure markup (Q090)."
+current_state: "Open. Filed 2026-11-12 by oscilla-0b. Owner: oscilla-43 as the phone-shell lane (A); by the mobile-first lanes of 2026-11-02 the Playground is lane D (oscilla-b0), which has no live session on 2026-11-12, so lane A takes it (oscilla-43, 2026-11-12)."
+scope:
+  - "src/index.html"
+  - "src/js/ui"
+depends_on:
+  - U109
+acceptance_criteria:
+  - "src/index.html's cap falls by at least the amount U109 raised it, with no visible or behavioural change (visual references unchanged, ui-current and app pass)."
+validation:
+  - "npm test"
+evidence_required:
+  - "verified"
+created_at: '2026-11-12'
+updated_at: '2026-11-12'

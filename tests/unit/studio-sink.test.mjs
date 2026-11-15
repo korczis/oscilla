@@ -31,7 +31,8 @@ test('a document with nothing that plays notes: the sink steps aside', () => {
   assert.equal(sink.active(), null, 'the Playground voice keeps the keys');
   assert.deepEqual(sink.noteOn(60, 100), { ok: false, reason: 'no-target' });
   assert.deepEqual(log, [], 'nothing armed, nothing inserted');
-  assert.match(said[0], /Nothing in this Studio plays notes/);
+  assert.equal(said[0], mod.STUDIO_SINK_TEXT.none);
+  assert.match(said[0], /V tomto Studiu nic nehraje noty/);
 });
 
 test('the first note arms the transport, plays the Keys node live; off and all-off follow', () => {
@@ -75,7 +76,8 @@ test('a measurement owning the output refuses the arm, said', () => {
   const { sink, log, said } = fixture([node('keys-1', 'keys')], { armOk: false });
   assert.deepEqual(sink.noteOn(60, 100), { ok: false, reason: 'measurement' });
   assert.deepEqual(log, [['arm']]);
-  assert.match(said[0], /measurement owns the output/);
+  assert.equal(said[0], mod.STUDIO_SINK_TEXT.refused);
+  assert.match(said[0], /patří měření/);
 });
 
 // 21's R2: leaving the Studio disarms an armed-only run (the keys armed it), so the transport no
@@ -127,5 +129,6 @@ test('a refused arm without a reason says why the keys did not start', () => {
   const { sink, transport, said } = fixture([node('keys-1', 'keys')]);
   transport.arm = () => ({ ok: false, code: 'x' });
   sink.noteOn(60, 100);
-  assert.match(said.at(-1), /could not start/);
+  assert.equal(said.at(-1), mod.STUDIO_SINK_TEXT.unarmed);
+  assert.match(said.at(-1), /nespustilo/);
 });
