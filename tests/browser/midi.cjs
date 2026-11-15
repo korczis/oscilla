@@ -1083,7 +1083,14 @@ async function seamResponse(browser, b, origin, url) {
     const msg = (bytes, stamp) => seam(page, 'message', NAME, bytes, stamp);
     const pnow = () => page.evaluate(() => performance.now());
     const answering = () => page.evaluate(() => window.OSCILLA.app.midiAnswering());
-    const on = await page.evaluate(() => window.OSCILLA.app.midiResponseToggle(true));
+    // The switch in the MIDI section turns it on (data-osc midi.response, A7), as a player does.
+    await openSettings(page);
+    // The player clicks the visible switch (its label); the input itself is sr-only.
+    await page.locator('label:has([data-osc="midi.response"])').click();
+    await page.keyboard.press('Escape');
+    const on = await until(() => page.evaluate(() => (window.OSCILLA.app.midiResponse ? true
+      : null)), { ms: STEP_MS, what: `${leg}: the switch turns call and response on` })
+      .catch(() => false);
     // The phrase: C4 for 300 ms; its answer is G4, PHRASE_GAP_MS after the Note Off.
     let t0 = await pnow();
     await msg([0x90, 60, 100], t0);

@@ -52,6 +52,14 @@ export default [
     state: { none: 'jen měří příchozí hodiny a tempo transportu nemění' },
   }),
   defineComponent({
+    id: 'midi.response',
+    kind: 'switch',
+    label: 'Otázka a odpověď',
+    docs: 'Zapne režim otázky a odpovědi: po frázi hráče zahraje OSCILLA odpověď o kvintu výš na '
+      + 'tomtéž nástroji; další nota hráče ji utne. Při každém načtení vypnuto.',
+    state: 'ui.midiResponse',
+  }),
+  defineComponent({
     id: 'midi.monitor-clear',
     kind: 'action',
     label: 'Vymazat',

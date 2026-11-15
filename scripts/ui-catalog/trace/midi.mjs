@@ -17,6 +17,9 @@ export default {
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
   'midi.clock': entry({ plan: ['G001', 'V508'], intents: ['midi-jam-companion#midi-transport-clock'],
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
+  'midi.response': entry({ plan: ['G001', 'V503'],
+    intents: ['midi-jam-companion#midi-response-deterministic'],
+    tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
   'midi.monitor-clear': entry({ ...v507,
     tests: ['tests/unit/ui-catalog.test.mjs', 'tests/browser/midi.cjs'] }),
 };
