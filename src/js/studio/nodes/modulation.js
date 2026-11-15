@@ -259,6 +259,23 @@ export const clock = defineNode({
 /** K226: the step-voltage sequencer's steps per row, and the lengths it plays. */
 export const SVS_MAX_STEPS = 16;
 export const SVS_LENGTHS = Object.freeze(['8', '16']);
+/** The length a step-voltage sequencer plays: its own if in SVS_LENGTHS, else the first. */
+export function svsLength(params) {
+  const n = Number(params && params.length);
+  return SVS_LENGTHS.includes(String(n)) ? n : Number(SVS_LENGTHS[0]);
+}
+
+/**
+ * The steps that play, in order: within the length and not skipped. The one rule the sound
+ * (studio/step-voltage.js) and the card's summary read (review C3-565-1).
+ */
+export function svsPlayable(params) {
+  const skip = (params && params.skip) || [];
+  return [...Array(svsLength(params)).keys()].filter((i) => skip[i] !== 1);
+}
+
+/** What the card of a step-voltage sequencer with every step skipped says (K226). */
+export const SVS_ALL_SKIPPED_TEXT = 'všechny kroky přeskočené, nic nehraje';
 /** The three rows of the step-voltage sequencer: parameter key and CONTROL output id. */
 export const SVS_ROWS = Object.freeze([['rowA', 'cvA', 'A'], ['rowB', 'cvB', 'B'],
   ['rowC', 'cvC', 'C']]);
@@ -332,6 +349,8 @@ export const stepVoltageSequencer = defineNode({
     syncParam(),
   ],
   summary(p) {
+    // K226 criterion 2: every step within the length skipped plays nothing, and the card says so.
+    if (svsPlayable(p).length === 0) return parts(`${p.length} kroků`, SVS_ALL_SKIPPED_TEXT);
     return parts(`${p.length} kroků`, p.playback,
       p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`);
   },
@@ -343,8 +362,10 @@ export const stepVoltageSequencer = defineNode({
     inputs: 'Takt posune o krok (první takt hraje krok 1); Na začátek vrátí na krok 1 na příští '
       + 'hranici kroku, nebo na takt ve stejném okamžiku. Bez taktu krokuje rychlostí Rate a '
       + 'výstupy TRIGGER mlčí.',
-    outputs: 'CV A, B, C: řízení −1 až 1. Hradlo a Krok 1 až 16: TRIGGER.',
-    constraints: 'Délka 8 nebo 16 kroků; kroky za délkou a přeskočené kroky se nehrají a '
+    // The counts are the node's own (R050): SVS_MAX_STEPS and SVS_LENGTHS, never retyped.
+    outputs: `CV A, B, C: řízení −1 až 1. Hradlo a Krok 1 až ${SVS_MAX_STEPS}: TRIGGER.`,
+    constraints: `Délka ${SVS_LENGTHS.join(' nebo ')} kroků; kroky za délkou a přeskočené kroky `
+      + 'se nehrají a '
       + 'jejich Krok mlčí. Role řady určuje, co nese její výstup: CV, výšku v půltónech, '
       + 'oktávu, délku hradla kroku nebo sílu úhozu (0 až 1).',
   },
