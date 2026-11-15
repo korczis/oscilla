@@ -473,8 +473,10 @@ test('C3-565-1: the card and the sound read one skip rule, on every 8-step patte
     }
     assert.equal(cases, 1024);
     // A length outside SVS_LENGTHS plays the first length (8): skipping 0-7 silences it.
-    const eight = { ...defaults, length: '12', skip: [...Array(8).fill(1), ...Array(8).fill(0)] };
+    const eight = { ...defaults, length: '12',
+      skip: [...Array(8).fill(1), ...Array(8).fill(0)] };
     assert.equal(silentSound(eight), true);
     assert.equal(silentCard(eight), true, 'the card says so, though steps 8-11 are not skipped');
+    assert.match(card(eight), /^8 kroků/, 'the card counts the steps the sound plays, not the stored 12');
   });
 
