@@ -598,3 +598,47 @@ status stays `proposed`.**
    clock's own time) is a decision of its own, not taken here.
 3. **No output.** OSCILLA still sends no MIDI (no MMC answer, no clock out, no display or LEDs);
    that is V510's question.
+
+**Note of 2026-11-15 (issue V503), deciding decision 3's response mode; the status stays
+`proposed`.** The owner's orders in session cae276ab-2d90-45d2-babb-a1f8023668d2 (Claude Code),
+verbatim: "dotahni veskere issues souvisejici s midi, napoj na ui, otestuj, vyzkousej, over, ze
+funguje" and "pokracuj s implementaci dalsich nedokoncenych veci - trains/prs/issuessession-contexts".
+Proposed by oscilla-ff and agreed under Q090 by oscilla-c3 (rev-seat-2, claude-code c0f0687c),
+with its amendments A1-A7, on 2026-11-15; oscilla-43 added the two acceptance asks marked (43).
+
+1. **Call and response, not drone plus answer.** A drone meets the session safety limit (the V502
+   note leaves the drone undecided) and never ends by itself; call and response is bounded by
+   construction. It is the one response mode of the first version.
+2. **The phrase.** The play port's Note Ons and Note Offs (DAW and editor ports never, V507) on
+   the events' own timeline (`event.timeStamp`). The phrase ends at its last Note Off with no key
+   held; it is answered once PHRASE_GAP_MS (600 ms) passed since then. The end is decided by a
+   pure check (`midi/response.js` `createPhrase().ended(now)`) polled by the mode's own
+   bookkeeping tick, which runs only while the mode is on and a phrase is open (A2): it decides
+   and schedules no sound, so no timer is in the event path (project.audio-engine-discipline),
+   and a unit test fails if the check uses one (43).
+3. **The answer**, a pure function of the phrase (`answer`): the phrase answered at the fifth
+   (+7 semitones, the classical answer at the dominant), the same onsets, lengths and order,
+   velocity max(1, round(v × 0.8)). Bounded: the phrase's first 16 notes (RESPONSE_MAX_NOTES),
+   within 8 s of its start (RESPONSE_MAX_MS: later onsets dropped, lengths cut), no note above
+   MIDI 127 or at or above the running context's `safeMaximum` (dropped, never moved).
+4. **No feedback (A1).** An answer's notes carry the source `answer` and the phrase recorder takes
+   only `player` events, so an answer is never heard as the next call, never sent to a MIDI
+   output and never recorded as the player's input.
+5. **The same path as the player's notes (A5; 43).** Answer notes go through `notes.js`'s owner
+   table and the one instrument the keys play (K247): one polyphony pool shared with the held keys
+   (NOTE_POLYPHONY), the session safety limit as for a key, refused while a measurement,
+   reference, the Studio or the sequencer owns the output, and cut when the player plays again
+   (the player always wins, one owner of that rule).
+6. **The clock (A3, A4).** The answer starts at the phrase end + PHRASE_GAP_MS on the performance
+   timeline, mapped to context time by the clock owner `audio/clock.js` from one
+   `getOutputTimestamp()` reading per answer (offset contextTime − performanceTime / 1000, no
+   latency added again; `ctx.currentTime` and the performance offset where it is missing). A start
+   already past begins at now + START_OFFSET_S (20 ms) and keeps the later notes' relative onsets.
+   The budget: mapping error 0 on a fake clock; lateness at most START_OFFSET_S plus one
+   bookkeeping tick.
+7. **No inference (A6).** `midi/response.js` imports only `core/music.js` and references no timer,
+   randomness, wall clock, `fetch`, `XMLHttpRequest`, `WebSocket`, `Worker` or `import()`; a unit
+   test reads its source.
+8. **The switch (A7).** One control in the MIDI section, "Otázka a odpověď", declared in the UI
+   catalogue with its `data-osc` hook, trace and control-census row; off on every load and never
+   persisted in the first version, so V503 changes no URL or storage contract.
