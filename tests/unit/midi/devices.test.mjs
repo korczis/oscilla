@@ -378,6 +378,8 @@ test('C3-553-1: a key\'s insert outside the Synth and Studio is said once with i
   assert.equal(cmp.alertUndo(a.id), true);
   assert.deepEqual(undone, ['Vložit Semimodulární monofonní hlas']);
   assert.equal(model.graph.nodes.length, 0, 'the document is back');
+  assert.ok(cmp.alerts.some((x) => x.message === KEYS_INSERT_TEXT.undone),
+    'the follow-up names the way out (C3-553-2)');
   // Another change after the insert: Zpět no longer undoes the wrong thing.
   cmp.keysInstrument().noteOn(64, 100);
   const b = cmp.alerts.find((x) => x.undo);

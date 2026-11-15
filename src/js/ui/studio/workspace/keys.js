@@ -26,6 +26,9 @@ export const holdsPanel = (model) => model.graph.nodes.some((n) => n.metadata
 export const KEYS_INSERT_TEXT = Object.freeze({
   title: 'Klávesy vložily panel Synthu do dokumentu Studia.',
   later: 'Vložení panelu už není poslední změnou dokumentu: vraťte ho ve Studiu (Zpět).',
+  // C3-553-2: after Zpět the next note inserts the panel again; the way out is named.
+  undone: 'Vložení je vrácené. Klávesy panel vloží znovu při další notě; vypnete je tlačítkem '
+    + 'Odpojit klávesy.',
 });
 
 export function createWorkspaceKeys(ctx) {
@@ -69,6 +72,7 @@ export function createWorkspaceKeys(ctx) {
         return false;
       }
       this.studioUndo();
+      this.notify('info', KEYS_INSERT_TEXT.title, KEYS_INSERT_TEXT.undone);
       return true;
     },
   };
