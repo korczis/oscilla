@@ -11,8 +11,13 @@ import assert from 'node:assert';
 import { createScopeView } from '../../src/js/ui/p5-views.js';
 import { VisualizationBridge } from '../../src/js/visualization/visualization-bridge.js';
 import { createWorkbench } from '../../src/js/ui/workbench.js';
+import { WAVEFORM_NAMES } from '../../src/js/core/constants.js';
+import { OUTPUT_OWNER_NAMES } from '../../src/js/visualization/output-owner.js';
 
 const SR = 48000;
+/** The scope's live label starts with its source (Czech since pass 3, U109, Q104). */
+const LIVE = 'analyzátor výstupu';
+const SINE = WAVEFORM_NAMES.sine.toLowerCase();
 
 /** A p5 stand-in for the scope: records the label text and the trace's vertices. */
 function scopeHost() {
@@ -76,10 +81,10 @@ const saysIdle = (drawn) => drawn.some((t) => t === IDLE.state
 
 test('scope: the sequencer owns the output: live trace, named, at full scale', () => {
   const { drawn, vertices, H } = drawScope(scopeState({ owner: 'sequencer' }));
-  const label = drawn.find((t) => t.startsWith('output analyser'));
+  const label = drawn.find((t) => t.startsWith(LIVE));
   assert.ok(label, `a live label is drawn (drawn: ${JSON.stringify(drawn)})`);
-  assert.match(label, /^output analyser · sequencer/);
-  assert.match(label, /relative to full scale/);
+  assert.ok(label.startsWith(`${LIVE} · ${OUTPUT_OWNER_NAMES.sequencer}`), label);
+  assert.match(label, /vůči plné škále/);
   assert.ok(!saysIdle(drawn), 'never "not playing"');
   // full scale: a 0.5 sine fills half the ±1 lanes (not clamped against the instrument's gain)
   const ymid = (16 + (H - 14)) / 2;
@@ -91,24 +96,24 @@ test('scope: the sequencer owns the output: live trace, named, at full scale', (
 
 test('scope: the Studio owns the output: live trace named Studio', () => {
   const { drawn } = drawScope(scopeState({ owner: 'studio' }));
-  const label = drawn.find((t) => t.startsWith('output analyser'));
+  const label = drawn.find((t) => t.startsWith(LIVE));
   assert.ok(label, `a live label is drawn (drawn: ${JSON.stringify(drawn)})`);
-  assert.match(label, /^output analyser · Studio/);
+  assert.ok(label.startsWith(`${LIVE} · ${OUTPUT_OWNER_NAMES.studio}`), label);
   assert.ok(!saysIdle(drawn), 'never "not playing"');
 });
 
 test('scope: the instrument keeps its own label (relative to set gain); idle stays computed', () => {
   const inst = drawScope(scopeState({ owner: 'instrument', playing: true, amp: 0.08 })).drawn;
-  const label = inst.find((t) => t.startsWith('output analyser'));
+  const label = inst.find((t) => t.startsWith(LIVE));
   assert.ok(label);
-  assert.match(label, /relative to set gain/);
+  assert.match(label, /vůči nastavenému zesílení/);
   assert.ok(!/sequencer|Studio/.test(label));
   assert.ok(!saysIdle(inst), 'the instrument sounding is never "not playing"');
   const { drawn: idle, caption } = drawScope(scopeState({ owner: null }));
   // idle stays computed: the caption drawn in full names the computed wave and its frequency
   assert.ok(idle.includes(caption), JSON.stringify(idle));
-  assert.ok(caption.startsWith(`${IDLE.state} · `) && /\bsine 250 Hz\b/.test(caption), caption);
-  assert.ok(!idle.some((t) => t.startsWith('output analyser')));
+  assert.ok(caption.startsWith(`${IDLE.state} · `) && caption.includes(`${SINE} 250 Hz`), caption);
+  assert.ok(!idle.some((t) => t.startsWith(LIVE)));
 });
 
 function stubEnv() {
@@ -156,19 +161,22 @@ function workbenchCmp(fields) {
 test('workbench: outputOwner and the canvas label name the source that sounds', () => {
   const seq = workbenchCmp({ playback: { owner: 'sequencer', since: 1 } });
   assert.strictEqual(seq.outputOwner, 'sequencer');
-  assert.match(seq.analysisCanvasLabel, /^Live output analyser waveform \(sequencer\)/);
-  assert.match(seq.analysisCanvasLabel, /relative to full scale/);
-  assert.doesNotMatch(seq.analysisCanvasLabel, /not playing/);
+  assert.ok(seq.analysisCanvasLabel.startsWith(
+    `Živý průběh analyzátoru výstupu (${OUTPUT_OWNER_NAMES.sequencer})`), seq.analysisCanvasLabel);
+  assert.match(seq.analysisCanvasLabel, /vůči plné škále/);
+  assert.doesNotMatch(seq.analysisCanvasLabel, /nehraje/);
 
   const studio = workbenchCmp({ studio: { playing: true } });
   assert.strictEqual(studio.outputOwner, 'studio');
-  assert.match(studio.analysisCanvasLabel, /^Live output analyser waveform \(Studio\)/);
+  assert.ok(studio.analysisCanvasLabel.startsWith(
+    `Živý průběh analyzátoru výstupu (${OUTPUT_OWNER_NAMES.studio})`), studio.analysisCanvasLabel);
 
   const inst = workbenchCmp({ playing: true, playback: { owner: 'sequencer', since: 1 } });
   assert.strictEqual(inst.outputOwner, 'instrument');
-  assert.match(inst.analysisCanvasLabel, /scaled to the set gain/);
+  assert.match(inst.analysisCanvasLabel, /škálovaný na nastavené zesílení/);
 
   const idle = workbenchCmp({});
   assert.strictEqual(idle.outputOwner, null);
-  assert.match(idle.analysisCanvasLabel, /^Waveform, not playing: computed sine/);
+  assert.ok(idle.analysisCanvasLabel.startsWith(`Průběh, nehraje: vypočtená vlna ${SINE}`),
+    idle.analysisCanvasLabel);
 });

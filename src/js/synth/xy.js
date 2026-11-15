@@ -233,7 +233,7 @@ export function xyYReading(model, panel, { sampleRate = null } = {}) {
 export const xyPatched = (model, panel) => ['xy.pitch', 'xy.gate']
   .every((j) => cablesFrom(model, panel, j).length);
 
-export function xyCablesAction(model, panel, pairs, label = 'Patch the XY pad') {
+export function xyCablesAction(model, panel, pairs, label = 'Zapojit XY pad') {
   const steps = [];
   for (const [from, to] of pairs) {
     const r = patchCable(model, panel, from, to);
@@ -249,7 +249,7 @@ export function xyTargetAction(model, panel, to) {
     .flatMap((c) => unpatch(model, panel, c.id).action.steps);
   const r = to && !old.some((c) => c.to === to) ? patchCable(model, panel, 'xy.y', to) : null;
   if (r && r.reason) return r;
-  return { action: { type: 'BATCH', label: 'Change XY Y target',
+  return { action: { type: 'BATCH', label: 'Změnit cíl osy Y XY padu',
     steps: [...steps, ...(r ? r.action.steps : [])] } };
 }
 
@@ -311,7 +311,7 @@ export function xyPatchAction(model, panel, patch) {
     panel: { id: panel.instance, module: byId.get(n.id) } } } : n));
   const doc = { graph: { nodes, edges: patch.graph.edges } };
   if (!panel.resolve(doc).get('xy')) {
-    return { reason: `"${patch.name}" holds no XY pad of the ${panel.title}.` };
+    return { reason: `„${patch.name}“ neobsahuje XY pad pro ${panel.title}.` };
   }
   const steps = linkAction(model, panel, linkOf(doc, panel, 'init'),
     { modules: xyScope(panel) }).steps;
@@ -327,11 +327,11 @@ export function xyInsertAction(model, panel, { at } = {}) {
 }
 
 export const KEYS_SILENT = Object.freeze({
-  pad: (names) => `The keys sound nothing: the XY pad's cables into ${names} replace the `
-    + "keyboard's gate normals. Unpatch the pad (Panel tab) to play the keys.",
-  open: (names) => `The keys sound nothing: their Gate reaches no envelope (${names} take no `
-    + 'keyboard gate). Restore those normals in the patch bay.',
-  unpatched: 'The XY pad is unpatched: the keys play the voice again.',
+  pad: (names) => `Klávesy nic nehrají: kabely XY padu do ${names} nahrazují normály gate `
+    + 'z klávesnice. Klávesy rozezníte tlačítkem Odpojit pad (karta Panel).',
+  open: (names) => `Klávesy nic nehrají: jejich Gate nedojde do žádné obálky (${names} `
+    + 'nedostávají gate z klávesnice). Obnovte ty normály v patch bayi.',
+  unpatched: 'XY pad je odpojený: klávesy zase hrají hlas.',
 });
 
 export function keysSilence(model, panel) {
@@ -344,14 +344,14 @@ export function keysSilence(model, panel) {
     const j = panel.jacksOf(module).find((x) => x.port === port && x.direction === 'in');
     return `${panel.module(module).label} ${j ? j.label : port}`;
   };
-  const names = gates.map(name).join(' and ');
+  const names = gates.map(name).join(' a ');
   const pad = panelCables(model, panel).some((c) => c.fromModule === 'xy' && gates.includes(c.to));
   return { pad, reason: pad ? KEYS_SILENT.pad(names) : KEYS_SILENT.open(names) };
 }
 
 export function xyUnpatchAction(model, panel) {
   const cables = panelCables(model, panel).filter((c) => c.fromModule === 'xy');
-  if (!cables.length) return { reason: 'The XY pad has no cables to remove.' };
-  return { action: { type: 'BATCH', label: 'Unpatch the XY pad',
+  if (!cables.length) return { reason: 'XY pad nemá žádný kabel k odpojení.' };
+  return { action: { type: 'BATCH', label: 'Odpojit XY pad',
     steps: cables.flatMap((c) => unpatch(model, panel, c.id).action.steps) } };
 }

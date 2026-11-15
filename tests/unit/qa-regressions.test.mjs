@@ -264,14 +264,14 @@ test('correlation display: idle, mono, silent and a visible estimate', () => {
 
 test('mic unavailable text says why (no more "file:// or permission" for every case)', () => {
   const t = (e, env) => micUnavailableText(e, env);
-  assert.match(t({ name: 'NotAllowedError' }, { hasApi: true }), /permission denied/);
-  assert.match(t({ name: 'NotFoundError' }, { hasApi: true }), /no microphone found/);
+  assert.match(t({ name: 'NotAllowedError' }, { hasApi: true }), /přístup zamítnut/);
+  assert.match(t({ name: 'NotFoundError' }, { hasApi: true }), /žádný mikrofon nenalezen/);
   assert.match(t(new Error('x'), { hasApi: false, secure: false, protocol: 'http:' }),
-    /secure page/);
+    /zabezpečenou stránku/);
   assert.match(t(new Error('x'), { hasApi: false, secure: true, protocol: 'file:' }),
-    /local files/);
+    /místním souborům/);
   assert.match(t(new Error('x'), { hasApi: false, secure: true, protocol: 'https:' }),
-    /no microphone API/);
+    /nemá rozhraní pro mikrofon/);
   for (const s of [t(null, { hasApi: true }), t({ name: 'NotAllowedError' }, {})]) {
     assert.ok(s.startsWith(MIC_UNAVAILABLE));
     assert.doesNotMatch(s, /file:\/\/ or permission/);

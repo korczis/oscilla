@@ -127,12 +127,12 @@ const U108_DEBT = new Map([
   ['@320:expanded', 'the whole insert sentence at 320 x 568 is taller than the room above the '
     + 'dock; the short line and Close are on top collapsed (U108, oscilla-c3)'],
 ]);
-const R320 = 'the keyboard dock\'s octave and More buttons overlap the Synth\'s header buttons '
-  + '(Open in Studio, Copy link) at 320 x 568, under U108\'s alert above them: the Synth lane, '
-  + '#385 and V635. The same 4 pairs, all firm (33-39 px deep), in every engine on the Mac and on '
-  + 'CI linux (run 43364860327, oscilla-c3), named in PHONE_WHOLE_PAIRS (U112); Czech pass 3\'s '
-  + 'dock labels will change them, and its train re-measures';
-const R375 = 'the docked keyboard\'s octave and More buttons overlap the Synth\'s section '
+const R320 = 'the keyboard dock\'s octave buttons overlap the Synth\'s Open in Studio (33-39 px) '
+  + 'and graze Copy link (3 px, near-zero) at 320 x 568, under U108\'s alert: the Synth lane, #385 '
+  + 'and V635. Measured with Czech pass 3\'s dock (its toggle Vše no longer reaches Copy link), '
+  + 'alike in every Mac engine; CI judges linux (T19\'s run had the More-era set). Named in '
+  + 'PHONE_WHOLE_PAIRS (U112)';
+const R375 = 'the docked keyboard\'s octave and Vše buttons overlap the Synth\'s section '
   + 'chips at 375 x 667 on the Mac since #385\'s train: the Synth lane, #385 and V635; measured '
   + 'in the steady state, the insert alert closed (U107) and the link\'s notice gone (U108, '
   + 'oscilla-c3), unscrolled (#540): 5 pairs in every Mac engine. On CI linux U108\'s phone '
@@ -175,8 +175,8 @@ function comparePairs(measured, listed) {
 }
 const PHONE_WHOLE_PAIRS = new Map([
   ['@320:synth:overlap', ['keyboard.octave-down x synth.studio',
-    'keyboard.octave-up x synth.studio', 'keyboard.octave-up x synth.copy-link',
-    'keyboard.more x synth.copy-link']],
+    'keyboard.octave-up x synth.studio', 'keyboard.octave-down x synth.copy-link ~3',
+    'keyboard.octave-up x synth.copy-link ~3']],
 ]);
 const PHONE_WHOLE_DEBT = new Map([
   ['studio:font', 'the Studio editor\'s graph, library and timeline labels are 9-10.5 px '

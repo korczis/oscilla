@@ -40,7 +40,7 @@ export const WORKSPACE_COPY = Object.freeze({
       + 'spuštěný na Web Audio.' },
   synth: { name: 'Synth',
     text: 'Semimodulární monofonní hlas na modelu Studia s patch bayí a klávesami, záložka '
-      + 'Engines s aditivními, FM, AM a ring, wavetable, hard sync a perkusními hlasy a záložka '
+      + 'Enginy s aditivními, FM, AM a ring, wavetable, hard sync a perkusními hlasy a záložka '
       + 'XY.' },
   about: { name: 'O aplikaci',
     text: 'Co OSCILLA je, jak vznikla a co přijde dál.' },

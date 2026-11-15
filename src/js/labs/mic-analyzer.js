@@ -1,6 +1,6 @@
 // Microphone analyzer controller.
 //
-// The microphone is requested ONLY when the user presses "Use microphone" (getUserMedia with
+// The microphone is requested ONLY when the user presses "Zapnout mikrofon" (getUserMedia with
 // echo cancellation, noise suppression and AGC off). On failure the panel says why, as far as
 // the browser tells (micUnavailableText: no secure context, no API, permission denied, no
 // device). Toggling off, or the track ending (device unplugged, permission revoked), stops every
@@ -42,7 +42,7 @@ import { onFrame } from '../charts/frame-loop.js';
 import { SAFE_NYQUIST_FACTOR } from '../core/constants.js';
 import { on, onUi, setText, setAttr, activeValue } from './dom.js';
 
-export const MIC_UNAVAILABLE = 'Microphone unavailable here';
+export const MIC_UNAVAILABLE = 'Mikrofon tu není k dispozici';
 
 /**
  * The unavailable text for a failed start, from what the browser reports: e (the error, if
@@ -52,29 +52,29 @@ export const MIC_UNAVAILABLE = 'Microphone unavailable here';
 export function micUnavailableText(e, env = {}) {
   const name = e && e.name;
   if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return `${MIC_UNAVAILABLE} (permission denied)`;
+    return `${MIC_UNAVAILABLE} (přístup zamítnut)`;
   }
   if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-    return `${MIC_UNAVAILABLE} (no microphone found)`;
+    return `${MIC_UNAVAILABLE} (žádný mikrofon nenalezen)`;
   }
   if (name === 'NotReadableError' || name === 'AbortError') {
-    return `${MIC_UNAVAILABLE} (the device is busy or failed)`;
+    return `${MIC_UNAVAILABLE} (zařízení je obsazené nebo selhalo)`;
   }
   if (!env.hasApi) {
     if (env.secure === false) {
-      return `${MIC_UNAVAILABLE} (needs a secure page, such as HTTPS)`;
+      return `${MIC_UNAVAILABLE} (potřebuje zabezpečenou stránku, například HTTPS)`;
     }
     if (env.protocol === 'file:') {
-      return `${MIC_UNAVAILABLE} (this browser offers no microphone to local files)`;
+      return `${MIC_UNAVAILABLE} (tento prohlížeč místním souborům mikrofon nenabízí)`;
     }
-    return `${MIC_UNAVAILABLE} (this browser offers no microphone API)`;
+    return `${MIC_UNAVAILABLE} (tento prohlížeč nemá rozhraní pro mikrofon)`;
   }
-  return `${MIC_UNAVAILABLE} (the microphone could not be opened)`;
+  return `${MIC_UNAVAILABLE} (mikrofon se nepodařilo otevřít)`;
 }
-export const MIC_OFF = 'UNAVAILABLE (microphone off)';
-export const MIC_NOTE = 'Not a calibrated measurement. Microphone frequency response varies.';
+export const MIC_OFF = 'NEDOSTUPNÉ (mikrofon vypnutý)';
+export const MIC_NOTE = 'Nejde o kalibrované měření. Frekvenční charakteristika mikrofonů se liší.';
 /** Readout when the engine discarded a closed audio context and detached the microphone. */
-export const MIC_CONTEXT_CLOSED = 'The audio context was closed; the microphone was stopped.';
+export const MIC_CONTEXT_CLOSED = 'Zvukový kontext byl uzavřen; mikrofon se zastavil.';
 /**
  * Readout while the audio context is suspended or interrupted (C067): the microphone delivers
  * nothing, so the lab pauses rather than read a frozen buffer. Czech (Q104).
@@ -84,16 +84,16 @@ export function micContextPausedText(state) {
     + 'nic nedodává, měření stojí, dokud zvuk znovu neběží.';
 }
 /** Readout when the engine detached the lab's microphone for any other reason. */
-export const MIC_ENGINE_DETACHED = 'The audio engine disconnected the microphone; it was stopped.';
+export const MIC_ENGINE_DETACHED = 'Zvukový engine mikrofon odpojil; mikrofon se zastavil.';
 const READOUT_INTERVAL_MS = 100;
 const MIC_FFT_SIZE = 8192;
 
 /** Detected-frequency readout text from an estimate (or null) and an optional comparison. */
 export function detectedText(est, cmp = null) {
-  if (!est) return 'no clear peak (signal too weak or noisy)';
+  if (!est) return 'žádná zřetelná špička (signál je příliš slabý nebo zašuměný)';
   const step = displayStepHz(est.uncertaintyHz);
   const level = Number.isFinite(est.levelDb)
-    ? ` (relative level ${Math.round(est.levelDb)} dB)`
+    ? ` (relativní úroveň ${Math.round(est.levelDb)} dB)`
     : '';
   const f = formatHzStep(est.frequencyHz, step);
   let text = `${f} ${formatUncertainty(est.uncertaintyHz)}${level}`;
@@ -115,7 +115,7 @@ function makeToolbar(host, rootEl) {
   const bar = document.createElement('div');
   bar.className = 'osc-seg';
   bar.setAttribute('role', 'group');
-  bar.setAttribute('aria-label', 'Compare options');
+  bar.setAttribute('aria-label', 'Volby porovnání');
   Object.assign(bar.style, { position: 'absolute', top: '2px', right: '6px', zIndex: '3' });
   const mk = (key, label) => {
     const b = document.createElement('button');
@@ -128,8 +128,8 @@ function makeToolbar(host, rootEl) {
     bar.appendChild(b);
     return b;
   };
-  const buttons = { freeze: mk('freeze', 'Freeze'), average: mk('average', 'Average'),
-    peakHold: mk('peakHold', 'Peak hold') };
+  const buttons = { freeze: mk('freeze', 'Zmrazit'), average: mk('average', 'Průměr'),
+    peakHold: mk('peakHold', 'Držet špičky') };
   bar.hidden = true;
   host.appendChild(bar);
   return { bar, buttons };
@@ -180,7 +180,7 @@ export function mount(rootEl, adapter, deps = {}) {
       xAxisSize: 32,
       xAxisGap: 14,
       padding: [15, 15, 0, 0],
-      micOffText: 'Microphone off',
+      micOffText: 'Mikrofon vypnutý',
       getMicAnalyser: micAnalyser,
       getAnalyser: () => adapter.getAnalyser(),
       getRequested: () => adapter.requestedFrequency(),
@@ -213,7 +213,7 @@ export function mount(rootEl, adapter, deps = {}) {
   function setButton(on) {
     if (!toggle) return;
     setAttr(toggle, 'aria-pressed', on ? 'true' : 'false');
-    setText(toggle, on ? 'Stop microphone' : 'Use microphone');
+    setText(toggle, on ? 'Vypnout mikrofon' : 'Zapnout mikrofon');
   }
 
   function releaseNodes() {

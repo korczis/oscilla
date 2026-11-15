@@ -10,7 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { mount, maxFrequencyFor } from '../../src/js/labs/analysis.js';
+import { mount, maxFrequencyFor, nyquistOptionLabel } from '../../src/js/labs/analysis.js';
 
 function fakeEl(props = {}) {
   const listeners = new Map();
@@ -115,7 +115,8 @@ for (const [value, hz] of [['20000', 20000], ['2000', 2000]]) {
 
 test('T006: until a rate is known the Nyquist option says it is pending', () => {
   const t = setup();
-  assert.equal(t.nyquist.textContent, 'Max: Nyquist (pending audio)');
+  assert.equal(t.nyquist.textContent, nyquistOptionLabel(0));
+  assert.equal(nyquistOptionLabel(0), 'Max: Nyquist (čeká na zvuk)');
   t.startAudio(48000);
   assert.equal(t.nyquist.textContent, 'Max: Nyquist (24 kHz)');
   t.startAudio(44100);

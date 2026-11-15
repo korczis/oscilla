@@ -10,7 +10,7 @@ export default [
     pattern: { template: 'mic.{key}', keys: ['freeze', 'average', 'peakHold'],
       sites: ['src/js/labs/mic-analyzer.js'] },
     kind: 'switch',
-    label: 'Freeze, Average, Peak hold',
+    label: 'Zmrazit, Průměr, Držet špičky',
     docs: 'Holds, averages or keeps the peaks of the microphone spectrum on screen.',
     state: 'ui.micCompare',
   }),

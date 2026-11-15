@@ -222,7 +222,7 @@ test('the ratchet: the navbar and the sidebar are migrated and the legacy header
 test('#330 F1: the fine-step row wraps rather than leaving the Source panel beside the sidebar',
   () => {
     const row = tagOf(
-      /<div class="osc-fine\b[^"]*" role="group" aria-label="Fine frequency steps">/);
+      /<div class="osc-fine\b[^"]*" role="group" aria-label="Jemné kroky frekvence">/);
     const classes = classesOf(row);
     assert.ok(classes.has('flex-wrap'), 'the row wraps when its six buttons do not fit');
     // From lg up, beside the sidebar: one row while the row is at least 20rem wide, and three
