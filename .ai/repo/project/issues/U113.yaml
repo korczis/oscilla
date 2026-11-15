@@ -1,0 +1,26 @@
+id: U113
+milestone: M054
+serves:
+  - "ui-current#app-speaks-czech"
+title: "A screen reader hears the nav group button, its list and its item apart (three names Syntéza, U106's follow-up)"
+slug: nav-group-and-item-names-apart
+priority: p3
+profile: implementation
+objective: "U106 named the navigation group Syntéza and its item Syntéza, so a screen reader can announce 'Syntéza, Syntéza': the group button (aria-expanded) and the item share one accessible name and differ only by role and context. oscilla-c3's aria snapshot of the nav at 1536 px (chromium and webkit, 2026-11-15) shows three, not two: button 'Syntéza' [expanded], list 'Syntéza', link 'Syntéza'. Give all three distinct accessible names, keeping ids, hashes, routes, data-osc hooks and catalogue ids unchanged."
+why: "oscilla-c3's point 3 on #556 (Q090, 2026-11-15), carried as a follow-up in #556's body and not fixed there: 'čtečka obrazovky může slyšet „Syntéza, Syntéza“ – skupina (aria-expanded) i položka mají stejné přístupné jméno; liší je jen role a kontext. Issue pro vlastníka navigace.' Filed by oscilla-43 at oscilla-c3's request on #558 (T23)."
+current_state: "Open, unclaimed: for the navigation's owner. U106 lands in T23 (#558, v3.38.1) with both names 'Syntéza'."
+scope:
+  - "src/index.html"
+  - "tests/browser/navigation.cjs"
+depends_on:
+  - "U106"
+acceptance_criteria:
+  - "No navigation group's button, its list and an item it contains share one accessible name, proven by a check that reads the accessible names of every group button, group list and item and fails on main after U106."
+  - "Ids, hashes, routes, data-osc hooks and catalogue ids are unchanged."
+  - "A reviewer's verdict."
+validation:
+  - "node tests/browser/navigation.cjs"
+evidence_required:
+  - "verified"
+created_at: '2026-11-15'
+updated_at: '2026-11-15'
