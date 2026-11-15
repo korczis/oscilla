@@ -350,8 +350,8 @@ export const stepVoltageSequencer = defineNode({
   ],
   summary(p) {
     // K226 criterion 2: every step within the length skipped plays nothing, and the card says so.
-    if (svsPlayable(p).length === 0) return parts(`${p.length} kroků`, SVS_ALL_SKIPPED_TEXT);
-    return parts(`${p.length} kroků`, p.playback,
+    if (svsPlayable(p).length === 0) return parts(`${svsLength(p)} kroků`, SVS_ALL_SKIPPED_TEXT);
+    return parts(`${svsLength(p)} kroků`, p.playback,
       p.sync && p.sync !== 'off' ? p.sync : `${num(p.rate)} Hz`);
   },
   capabilities: { realtime: true, offline: true },
