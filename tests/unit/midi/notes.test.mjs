@@ -700,7 +700,9 @@ test('K247: the note that arms the instrument is held after the instrument took 
   let notes;
   const sink = {
     noteOn: (n) => {
-      if (!armed) { armed = true; notes.silence(); } // the bus silences the notes as it arms
+      // The bus yields the notes as it arms; while a note is being taken, midi/ui.js midiAllOff
+      // lets only the engine's voices go (silenceEngine), and the held map must not lose it.
+      if (!armed) { armed = true; notes.silenceEngine(); }
       log.push(`on ${n}`);
       return { ok: true };
     },
