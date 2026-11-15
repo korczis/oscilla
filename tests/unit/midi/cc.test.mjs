@@ -236,6 +236,20 @@ test('C3-548-1: an undo inside a CC burst leaves a later drag to its own gesture
   assert.equal(r.model().params.lpf.frequency, 1200);
 });
 
+test('C3-548-4: a CC run interrupted by an undo goes on as one entry, not one per message',
+  async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const r = panelRig();
+    const cc = (v) => r.g.cc(74, v, SEMI_MONO.faceOf, () => 'keys');
+    for (let v = 10; v < 15; v += 1) cc(v);
+    r.store.undo(); // the run's gesture is closed and its edit taken back
+    const before = r.labels();
+    for (let v = 20; v < 28; v += 1) { cc(v); t.mock.timers.tick(50); }
+    t.mock.timers.tick(GESTURE_IDLE_MS);
+    assert.equal(r.labels(), before + 1, 'the rest of the run is one undo entry');
+    assert.equal(r.history.undoLabel(), 'Změnit LPF Cutoff (MIDI CC 74)');
+  });
+
 test('C3-548-1: a wheel burst and a CC on another control are two entries', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const r = panelRig();
