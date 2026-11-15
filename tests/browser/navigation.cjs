@@ -476,7 +476,8 @@ function defineChecks() {
     const page = await H.open(ctx, ctx.baseUrl);
     const ev = (fn, arg) => page.evaluate(fn, arg);
     const res = {};
-    const measure = () => ev(() => {
+    // gain: the level in effect is visible whole at 1280 px and wider, in every state (c3, 1)
+    const measure = (width) => ev((wide) => {
       const ro = document.querySelector('[data-osc="status.readout"]');
       const box = document.querySelector('.osc-sb-state').getBoundingClientRect();
       const title = ro.getAttribute('title') || '';
@@ -492,16 +493,20 @@ function defineChecks() {
       const rb = ro.getBoundingClientRect();
       const cut = fields.filter((e) => {
         const r = e.getBoundingClientRect();
-        if (getComputedStyle(e).display === 'none' || !(r.width > 0)) return false;
+        // display none, or visually hidden (sr-only, the phone's labelled level): not drawn
+        if (getComputedStyle(e).display === 'none' || !(r.width > 1)) return false;
         const meets = r.right > rb.left + 0.5 && r.left < rb.right - 0.5
           && r.bottom > rb.top + 0.5 && r.top < rb.bottom - 0.5;
         const inside = r.left >= rb.left - 0.5 && r.right <= rb.right + 0.5
           && r.top >= rb.top - 0.5 && r.bottom <= rb.bottom + 0.5;
         return meets && !inside;
       }).map((e) => `${e.dataset.osc} "${e.textContent.trim()}"`);
-      return { lost, cut, title, fields: fields.length,
-        timedOut: lost.length > 0 || cut.length > 0 || !title };
-    });
+      const g = fields[4].getBoundingClientRect();
+      const gainShown = getComputedStyle(fields[4]).display !== 'none' && g.width > 0
+        && g.left >= rb.left - 0.5 && g.right <= rb.right + 0.5 && g.bottom <= rb.bottom + 0.5;
+      return { lost, cut, title, gainShown, fields: fields.length,
+        timedOut: lost.length > 0 || cut.length > 0 || !title || (wide && !gainShown) };
+    }, width >= 1280);
     const enter = (state) => ev((st) => {
       const a = window.OSCILLA.app;
       if (st === 'playing') { a.setContinuous(true); if (!a.latched) a.toggleLatch(); }
@@ -536,7 +541,7 @@ function defineChecks() {
         await until(() => ev(([x, width]) => window.OSCILLA.app.workspace === x
           && window.innerWidth === width, [ws, w]),
         { ms: 8000, what: `status-readout-fields: ${ws} at ${w}` });
-        res[`${ws}@${w}`] = await measure();
+        res[`${ws}@${w}`] = await measure(w);
       }
       for (const [name, ws, state] of READOUT_STATES) {
         if (!state) continue;
@@ -544,7 +549,7 @@ function defineChecks() {
         await enter(state);
         await until(() => reached(state), { ms: 8000,
           what: `status-readout-fields: ${name} at ${w}` });
-        res[`${name}@${w}`] = await measure();
+        res[`${name}@${w}`] = await measure(w);
         await leave();
       }
     }

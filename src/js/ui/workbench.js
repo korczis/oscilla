@@ -284,8 +284,8 @@ export function createWorkbench(svc) {
      * the full readout is still there to read.
      */
     get statusReadoutTitle() {
-      return [this.statusFreqText, this.statusWaveText, this.statusPatternText,
-        this.statusDurationText, this.statusGainText].join(' · ');
+      return [this.statusFreqText, this.statusGainText, this.statusDurationText,
+        this.statusWaveText, this.statusPatternText].join(' · ');
     },
     get statusGainText() {
       // The level actually in effect: the Studio's Master Output while it holds the master stage
@@ -296,6 +296,8 @@ export function createWorkbench(svc) {
       const db = gainLevelDb(m);
       return `Master ${Number.isFinite(db) ? `${db.toFixed(1)} dB` : '-∞ dB'}`;
     },
+    // the phone bar's dB alone; the labelled level stays for screen readers (U114, c3)
+    get statusGainValue() { return this.statusGainText.replace(/^\S+ /, ''); },
     get vizSummaryHarm() {
       const wave = this.source === 'dual' ? this.dual.a.wave : this.waveform;
       const f = this.source === 'dual' ? this.dualFa : this.metricFrequencyIdle;

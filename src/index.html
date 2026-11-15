@@ -3230,13 +3230,14 @@
         :title="statusReadoutTitle">
         <span data-osc="status.frequency" x-text="statusFreqText">440 Hz</span>
         <span class="inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          class="max-md:sr-only" data-osc="status.gain" x-text="statusGainText" :title="gainTitle">Zesílení -21.9 dB</span><span
+          class="md:hidden" aria-hidden="true" x-text="statusGainValue"></span></span>
+        <span class="inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
+          data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span></span>
+        <span class="osc-sb-extra inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
           data-osc="status.waveform" x-text="statusWaveText">Sinus</span></span>
         <span class="osc-sb-extra inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
           data-osc="status.pattern" x-text="statusPatternText">Spojitý tón</span></span>
-        <span class="osc-sb-extra inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
-          data-osc="status.duration" x-text="statusDurationText">≤ 2 s</span></span>
-        <span class="osc-sb-extra inline-flex items-center gap-2"><span class="osc-sb-dot" aria-hidden="true">•</span><span
-          data-osc="status.gain" x-text="statusGainText" :title="gainTitle">Zesílení -21.9 dB</span></span>
       </span>
     </div>
 
