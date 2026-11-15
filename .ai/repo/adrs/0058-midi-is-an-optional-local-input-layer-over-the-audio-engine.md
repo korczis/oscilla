@@ -562,7 +562,9 @@ status stays `proposed`.**
    `insertDecision`). No workspace has a voice of its own for the keys any more. The one
    exception: a document of the user's that plays no notes and whose Master Output the panel
    would have to take is never rewired from a key; there the keys play the engine's own voice,
-   as before K247, and the Insert button puts the panel in. The engine stays the one audio
+   as before K247, and the Insert button puts the panel in. In the Studio workspace itself,
+   where the document is in sight, a key inserts nothing (M086's decision stands): only the
+   document's note target plays there, else the engine's voice. The engine stays the one audio
    owner: the Studio transport is its graph.
 2. **Armed everywhere.** Every workspace is a keyboard view, armed when it first opens, with
    one Arm switch per page (Q105's answer, which the route table had applied to three pages).

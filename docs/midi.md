@@ -95,6 +95,8 @@ synthesizer and no voice of a page's own: the Studio transport is a graph of the
 engine. The one exception is a Studio document of the user's that plays no notes and whose
 Master Output the Synth panel would have to take: a key never rewires it, so there the keys play
 the engine's own voice (its laws, as V502 set them, are below) until **Vložit** puts the panel in.
+In the Studio workspace a key never inserts the panel into the document in sight: there the keys
+play the document's note target, else the engine's voice.
 
 - **The instrument's voices.** The Keys node of the Synth panel is monophonic (the last key
   wins); an engine routed as the note target plays its own polyphony. Velocity reaches the node
