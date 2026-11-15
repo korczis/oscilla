@@ -131,8 +131,7 @@ export function createInstrument(deps = {}) {
     WAVEFORMS, WAVEFORM_LABELS, RANGE_MODES, PATTERNS, PATTERN_GROUPS, NOTE_BUTTONS, VIZ_MODES, APP_MODES,
     // The Czech display names (Q104); the V1 labels above stay the frozen data.
     WAVEFORM_NAMES, PATTERN_NAMES, PATTERN_DESCS, PATTERN_GROUP_NAMES, RANGE_NAMES,
-    // the Czech sentence the page shows for a frozen V1 one (U114, core/frozen-display.js)
-    shownText,
+    shownText, // U114: a frozen V1 sentence as the page shows it
     PRESET_CATEGORIES, LEARN_TOPICS, SAFETY_LIMIT_OPTIONS, APP_VERSION,
     WAVE_PATHS: {
       sine: 'M1 8 Q5 0 9 8 T17 8 T25 8 T31 4',
@@ -865,7 +864,8 @@ export function createInstrument(deps = {}) {
     setSweepRepeat(v) {
       const choice = sweepRepeatChoice(v, this.continuousAllowed, this.sweep.repeat);
       if (choice.locked) {
-        this.notify('info', 'Continuous repeat is locked', 'Enable “Allow continuous playback” in Playback safety first.');
+        this.notify('info', 'Nepřetržité opakování je zamčené',
+          'Nejdřív zapněte „Povolit nepřetržité přehrávání“ v panelu Zařízení a limity.');
         return;
       }
       this.sweep.repeat = choice.repeat;

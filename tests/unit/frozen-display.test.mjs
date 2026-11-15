@@ -12,7 +12,7 @@ const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const GOLDEN = JSON.parse(readFileSync(`${ROOT}tests/freeze/golden-a7b7a23.json`, 'utf8'));
 
 /** The old labels of controls that are now Czech on screen (U114). */
-const OLD_LABELS = /HOLD TO PLAY|TRIGGER|^Trigger duration$/;
+const OLD_LABELS = /HOLD TO PLAY|TRIGGER|^Trigger duration$|Allow continuous playback/;
 
 /** Every string value of the golden, recursively. */
 function strings(v, out = new Set()) {
@@ -25,7 +25,7 @@ function strings(v, out = new Set()) {
 const FROZEN = [...strings(GOLDEN)].filter((s) => OLD_LABELS.test(s));
 
 test('the golden pins sentences that name the old labels (the derivation reads something)', () => {
-  assert.ok(FROZEN.length >= 4, FROZEN.join(' | '));
+  assert.ok(FROZEN.length >= 5, FROZEN.join(' | '));
 });
 
 test('every frozen sentence naming an old label has its Czech form, and only those are mapped',
@@ -41,7 +41,7 @@ test('the shown text never names an old label, alone or inside a longer notice',
     assert.doesNotMatch(shownText(s), OLD_LABELS, s);
     const joined = shownText(`Odkaz neobsahoval 2 položky. ${s}`);
     assert.ok(joined.startsWith('Odkaz neobsahoval 2 položky. '), joined);
-    assert.doesNotMatch(joined, /HOLD TO PLAY|TRIGGER/, joined);
+    assert.doesNotMatch(joined, /HOLD TO PLAY|TRIGGER|Allow continuous playback/, joined);
   }
   assert.equal(shownText('Hraje'), 'Hraje');
   assert.equal(shownText(''), '');
